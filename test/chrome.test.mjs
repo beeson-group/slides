@@ -2,7 +2,7 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { spawn } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -71,4 +71,18 @@ test('a profile is removed while a helper process of Chrome still writes to it',
   await removeProfile(profile);
   await exited;
   assert.ok(!existsSync(profile));
+});
+
+test('an early exit of Chrome is reported', (t) => {
+  const out = mkdtempSync(join(tmpdir(), 'slides-check-'));
+  t.after(() => rmSync(out, { recursive: true, force: true }));
+
+  // node is used as the executable, since it exits at once on the flags of Chrome
+  const { status, stderr } = spawnSync(process.execPath, ['scripts/check.mjs', '--out', out], {
+    env: { ...process.env, CHROME_PATH: process.execPath },
+    encoding: 'utf8',
+  });
+
+  assert.match(stderr, /Chrome exited/);
+  assert.equal(status, 1);
 });
