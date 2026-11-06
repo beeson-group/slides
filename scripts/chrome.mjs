@@ -7,15 +7,28 @@
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, resolve } from 'node:path';
+import { delimiter, join, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
-const macChrome = '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome';
+function chromePaths(env, platform) {
+  if (platform === 'darwin') return ['/Applications/Google Chrome.app/Contents/MacOS/Google Chrome'];
+  if (platform === 'win32') {
+    const roots = [env.PROGRAMFILES, env['PROGRAMFILES(X86)'], env.LOCALAPPDATA].filter(Boolean);
+    return [
+      ...roots.map((root) => join(root, 'Google', 'Chrome', 'Application', 'chrome.exe')),
+      ...roots.map((root) => join(root, 'Microsoft', 'Edge', 'Application', 'msedge.exe')),
+    ];
+  }
+  const names = ['google-chrome', 'google-chrome-stable', 'chromium', 'chromium-browser'];
+  return (env.PATH ?? '').split(delimiter).flatMap((dir) => names.map((name) => join(dir, name)));
+}
 
-export function findChrome() {
-  const path = process.env.CHROME_PATH || macChrome;
-  if (!existsSync(path)) {
-    throw new Error(`Chrome not found at ${path}. Set CHROME_PATH to the Chrome executable.`);
+export function findChrome({ env = process.env, platform = process.platform } = {}) {
+  const paths = env.CHROME_PATH ? [env.CHROME_PATH] : chromePaths(env, platform);
+  const path = paths.find((candidate) => existsSync(candidate));
+  if (!path) {
+    const where = env.CHROME_PATH ? ` at ${env.CHROME_PATH}` : '';
+    throw new Error(`Chrome not found${where}. Set CHROME_PATH to the Chrome executable.`);
   }
   return path;
 }
