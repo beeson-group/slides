@@ -23,21 +23,10 @@ jobs:
       - run: npm run build
       - run: npm run typecheck
       - run: npm test
-      - id: chrome
-        uses: browser-actions/setup-chrome@v1
-        with:
-          # the default snapshot of Chromium is run with test-only field trials, under which WebGL
-          # fails on Windows without a GPU
-          chrome-version: stable
-          install-dependencies: true
-      # CHROME_PATH is read in scripts/chrome.mjs, and the path is given only as an output of setup-chrome
+      # the Chrome preinstalled on each runner is found in scripts/chrome.mjs
       - run: npm run check
-        env:
-          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
       - run: npm run pdf
         if: ${{ !cancelled() }}
-        env:
-          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
