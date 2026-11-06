@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync 
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { setTimeout as sleep } from 'node:timers/promises';
-import { findChrome, removeProfile } from '../scripts/chrome.mjs';
+import { findChrome, launch, removeProfile } from '../scripts/chrome.mjs';
 
 function standIn(t, path) {
   const root = mkdtempSync(join(tmpdir(), 'slides-chrome-'));
@@ -85,4 +85,19 @@ test('an early exit of Chrome is reported', (t) => {
 
   assert.match(stderr, /Chrome exited/);
   assert.equal(status, 1);
+});
+
+test('a Chrome that does not answer is reported', { skip: process.platform === 'win32', timeout: 5000 }, async (t) => {
+  const root = mkdtempSync(join(tmpdir(), 'slides-silent-'));
+  t.after(() => {
+    delete process.env.CHROME_PATH;
+    rmSync(root, { recursive: true, force: true });
+  });
+  process.env.CHROME_PATH = join(root, 'chrome');
+  writeFileSync(process.env.CHROME_PATH, '#!/bin/sh\nexec sleep 30\n', { mode: 0o755 });
+
+  const browser = await launch({ timeout: 200 });
+
+  await assert.rejects(browser.newPage(), /did not answer/);
+  await browser.close();
 });
