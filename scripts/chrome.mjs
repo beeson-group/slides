@@ -72,8 +72,6 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
     // WebGL is required in the tycho viewer, and without a GPU it is not available in Chromium 159
     // unless this flag is set
     '--enable-unsafe-swiftshader',
-    // a prompt of the macOS keychain is never answered on a machine without a login session
-    '--use-mock-keychain',
     // the sandbox of Chrome cannot be started on the Ubuntu runners of GitHub, and the pages are local
     ...(process.platform === 'linux' ? ['--no-sandbox'] : []),
     ...(offline ? ['--host-resolver-rules=MAP * ~NOTFOUND'] : []),
