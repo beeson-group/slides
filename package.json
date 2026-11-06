@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "description": "The HTML slide template of the Beeson group, a reveal.js theme with its demo deck and tooling",
   "scripts": {
-    "test": "node --test test/",
+    "test": "node --test \"test/*.test.mjs\"",
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "vendor": "node scripts/vendor.mjs",

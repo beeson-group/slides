@@ -1,4 +1,4 @@
-// checks of the orbit engine and the scenes, run by `node --test test/` with type stripping
+// checks of the orbit engine and the scenes, run by `npm test` with type stripping
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
