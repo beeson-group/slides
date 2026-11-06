@@ -1,0 +1,344 @@
+/* beeson.css, the Beeson group's reveal.js theme. Design size 1920 by 1080, STIX Two Text,
+   black by default with a warm paper light mode. The layout classes are documented in index.html. */
+
+:root,
+html[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #050505;
+  --text: #f2f2ef;
+  --subtle: #a6a6a0;
+  --muted: #7c7c76;
+  --line: #232320;
+  --accent: #f08050;
+  --violet: #c94fe6;
+  --stroke: rgba(242, 242, 239, 0.17);
+  --body: rgba(242, 242, 239, 0.55);
+  --panel: #050505;
+  --panel-text: #f2f2ef;
+  --paper: #ffffff;
+}
+html[data-theme="light"] {
+  color-scheme: light;
+  --bg: #faf8f3;
+  --text: #141413;
+  --subtle: #55554f;
+  --muted: #8a8a84;
+  --line: #e3e0d8;
+  --accent: #c8571e;
+  --violet: #8a2be2;
+  --stroke: rgba(20, 20, 19, 0.14);
+  --body: rgba(20, 20, 19, 0.5);
+}
+/* the Okabe–Ito set for data, the same in both modes */
+:root {
+  --data-1: #e69f00;
+  --data-2: #56b4e9;
+  --data-3: #009e73;
+  --data-4: #f0e442;
+  --data-5: #0072b2;
+  --data-6: #d55e00;
+  --data-7: #cc79a7;
+  --data-8: #000000;
+}
+html[data-theme="dark"] { --data-8: #f2f2ef; }
+
+/* ---- canvas ---- */
+html, body, .reveal-viewport { background: var(--bg); }
+.reveal {
+  font-family: "STIX Two Text", Georgia, "Times New Roman", serif;
+  font-size: 36px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--text);
+}
+.reveal .slides { text-align: left; }
+.reveal .slides section,
+.reveal .slides section > section {
+  box-sizing: border-box;
+  height: 100%;
+  padding: 0;
+  text-align: left;
+  line-height: 1.4;
+  font-weight: inherit;
+  overflow: hidden;
+}
+.reveal .slides section .backdrop,
+.reveal .slides section .zone,
+.reveal .slides section .run,
+.reveal .slides section .foot,
+.reveal .slides section .lockup,
+.reveal .slides section .block,
+.reveal .slides section .sec,
+.reveal .slides section .caption,
+.reveal .slides section .panel { position: absolute; }
+
+/* ---- type ---- */
+.reveal h1, .reveal h2, .reveal h3, .reveal h4 {
+  margin: 0;
+  font-family: inherit;
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: normal;
+  text-transform: none;
+  text-shadow: none;
+  word-wrap: normal;
+}
+.reveal h1 { font-size: 96px; line-height: 1.06; letter-spacing: -0.012em; }
+.reveal h2 { font-size: 48px; line-height: 1.18; }
+.reveal h3 { font-size: 36px; line-height: 1.3; }
+.reveal section.section h2 { font-size: 64px; line-height: 1.14; }
+.reveal p { margin: 0 0 24px; }
+.reveal p:last-child { margin-bottom: 0; }
+.reveal .sub { font-size: 36px; font-style: italic; color: var(--subtle); line-height: 1.3; }
+.reveal .caption { font-size: 28px; line-height: 1.38; font-style: italic; color: var(--subtle); }
+.reveal .small { font-size: 28px; line-height: 1.4; color: var(--muted); }
+.reveal em { font-style: italic; }
+.reveal strong { font-weight: 500; }
+.reveal a { color: inherit; text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 0.14em; transition: text-decoration-color 200ms ease-out, color 200ms ease-out; }
+.reveal a:hover { color: var(--accent); }
+.reveal sub, .reveal sup { font-size: 0.7em; line-height: 0; }
+
+/* lists: a short orange dash in place of a bullet, numbers in grey */
+.reveal ul, .reveal ol { display: block; margin: 24px 0 0; padding: 0; list-style: none; }
+.reveal li { position: relative; margin: 0 0 14px; padding-left: 54px; }
+.reveal ul > li::before { content: ""; position: absolute; left: 0; top: 0.72em; width: 28px; height: 2px; background: var(--accent); }
+.reveal ol { counter-reset: item; }
+.reveal ol > li { counter-increment: item; }
+.reveal ol > li::before { content: counter(item); position: absolute; left: 0; top: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+.reveal li ul, .reveal li ol { margin-top: 10px; font-size: 32px; }
+.reveal .outline { font-size: 28px; line-height: 1.7; color: var(--muted); margin: 48px 0 0; }
+.reveal .outline > li { margin: 0; padding-left: 42px; }
+.reveal .outline > li::before { display: none; }
+.reveal .outline > li.now { color: var(--text); }
+.reveal .outline > li.now::before { content: ""; display: block; position: absolute; left: 0; top: 0.78em; width: 22px; height: 2px; background: var(--violet); }
+
+/* math: MathJax inherits the size, a display block sits a little larger and left aligned */
+.reveal .math { margin: 28px 0 4px; font-size: 40px; }
+.reveal mjx-container[display="true"] { margin: 0 !important; text-align: left !important; }
+.reveal mjx-container { color: inherit; }
+
+/* code: the system monospace, since the theme vendors no monospace face */
+.reveal pre, .reveal code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
+.reveal code { font-size: 0.86em; color: var(--subtle); }
+.reveal pre { margin: 24px 0; padding: 24px 32px; font-size: 26px; line-height: 1.45; color: var(--text); background: color-mix(in srgb, var(--line) 45%, transparent); border-left: 2px solid var(--line); overflow: hidden; width: auto; box-shadow: none; }
+.reveal pre code { display: block; padding: 0; color: inherit; font-size: inherit; max-height: none; overflow: hidden; white-space: pre; }
+
+/* tables: hairlines, no fills */
+.reveal table { margin: 24px 0 0; border-collapse: collapse; font-size: 28px; line-height: 1.4; }
+.reveal th, .reveal td { padding: 10px 40px 10px 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); font-weight: inherit; }
+.reveal th { color: var(--subtle); font-style: italic; }
+.reveal tr:last-child td { border-bottom: 0; }
+
+/* ---- chrome inside the slide ---- */
+.reveal .run { left: 120px; top: 44px; font-size: 22px; font-style: italic; color: var(--muted); }
+.reveal .foot { left: 120px; bottom: 50px; max-width: 1100px; font-size: 22px; line-height: 1.4; color: var(--muted); }
+.reveal .foot a { text-decoration-thickness: 1px; }
+.reveal .lockup { height: 72px; width: auto; }
+html:not([data-theme="light"]) .reveal .for-light, html[data-theme="light"] .reveal .for-dark { display: none !important; }
+
+/* brand marks: the group logo at the top right of every slide but the title and closing ones,
+   the Princeton Engineering lockup at the top left of those. body.no-logo and body.no-lockup switch them off. */
+.reveal .slides section::after {
+  content: "";
+  position: absolute;
+  right: 120px;
+  top: 44px;
+  width: 44px;
+  height: 44px;
+  background: url("../brand/logo.png") center / contain no-repeat;
+  opacity: 0.9;
+  pointer-events: none;
+}
+.reveal .slides section.title::after,
+.reveal .slides section.closing::after,
+body.no-logo .reveal .slides section::after { content: none; }
+.reveal .slides section.title::before,
+.reveal .slides section.closing::before {
+  content: "";
+  position: absolute;
+  left: 120px;
+  top: 60px;
+  width: 440px;
+  height: 72px;
+  background: url("../brand/lockup-dark.png") left center / contain no-repeat;
+  pointer-events: none;
+}
+html[data-theme="light"] .reveal .slides section.title::before,
+html[data-theme="light"] .reveal .slides section.closing::before { background-image: url("../brand/lockup-light.png"); }
+body.no-lockup .reveal .slides section.title::before,
+body.no-lockup .reveal .slides section.closing::before { content: none; }
+
+/* ---- backdrops, drawn by beeson.js ---- */
+.reveal .backdrop { pointer-events: auto; }
+.reveal .backdrop canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+.reveal .backdrop .lab { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; line-height: 1; font-size: 22px; font-style: italic; color: var(--subtle); }
+.reveal .backdrop .lab sub { font-size: 0.7em; font-style: normal; vertical-align: -0.25em; }
+
+/* ---- layouts ---- */
+/* content, the default: a text column at the left margin, a figure zone at the right */
+.reveal .slides section { padding: 120px 120px 0 120px; }
+.reveal .slides section > h2 { width: 1100px; margin: 0 0 42px; }
+.reveal .slides section > p,
+.reveal .slides section > ul,
+.reveal .slides section > ol,
+.reveal .slides section > table,
+.reveal .slides section > pre,
+.reveal .slides section > .math,
+.reveal .slides section > .col { max-width: 1000px; }
+.reveal .slides section > .col { margin: 0; }
+.reveal .slides section .zone,
+.reveal .slides section .backdrop { left: 1200px; top: 120px; width: 600px; height: 800px; }
+.reveal .slides section .zone > img,
+.reveal .slides section .zone > svg,
+.reveal .slides section .zone > video { display: block; width: 100%; height: 100%; object-fit: contain; }
+.reveal .slides section tycho-viewer.zone { display: block; }
+.reveal .slides section .zone > figcaption,
+.reveal .slides section .zone > .caption { position: absolute; left: 0; right: 0; top: 100%; margin-top: 16px; }
+.reveal .slides section.narrow > h2,
+.reveal .slides section.narrow > p,
+.reveal .slides section.narrow > ul,
+.reveal .slides section.narrow > ol,
+.reveal .slides section.narrow > table,
+.reveal .slides section.narrow > .math,
+.reveal .slides section.narrow > .col { max-width: 760px; width: auto; }
+.reveal .slides section.wide > h2,
+.reveal .slides section.wide > p,
+.reveal .slides section.wide > ul,
+.reveal .slides section.wide > ol,
+.reveal .slides section.wide > table,
+.reveal .slides section.wide > .math,
+.reveal .slides section.wide > .col { max-width: 1680px; width: auto; }
+
+/* title and closing, plate: the backdrop fills the slide, the words sit as a block at the lower left */
+.reveal .slides section.title,
+.reveal .slides section.closing,
+.reveal .slides section.figure,
+.reveal .slides section.section,
+.reveal .slides section.split { padding: 0; }
+.reveal .slides section.title .backdrop,
+.reveal .slides section.closing .backdrop,
+.reveal .slides section.figure .backdrop,
+.reveal .slides section.figure .plate { left: 0; top: 0; width: 1920px; height: 1080px; }
+.reveal .slides section.title .block,
+.reveal .slides section.closing .block { left: 120px; bottom: 150px; width: 1240px; }
+.reveal .slides section.title .block h1,
+.reveal .slides section.closing .block h1 { margin: 0; }
+.reveal .slides section.title .sub,
+.reveal .slides section.closing .sub { margin: 30px 0 0; }
+.reveal .slides section.title .who,
+.reveal .slides section.closing .who { margin: 44px 0 0; font-size: 28px; line-height: 1.5; color: var(--subtle); }
+.reveal .slides section.title .who strong,
+.reveal .slides section.closing .who strong { color: var(--text); font-weight: 400; }
+
+/* section: the words at the left, the talk's outline under them, the backdrop at the right */
+.reveal .slides section.section .sec { left: 120px; top: 360px; width: 900px; }
+.reveal .slides section.section .sec h2 { width: auto; margin: 0; }
+.reveal .slides section.section .backdrop { left: 1040px; top: 0; width: 880px; height: 1080px; }
+
+/* figure, plate: a figure or backdrop fills the slide, the head at the top left, the caption at the lower left */
+.reveal .slides section.figure > h2 { position: absolute; left: 120px; top: 100px; width: 1200px; margin: 0; }
+.reveal .slides section.figure .caption { left: 120px; bottom: 130px; width: 900px; margin: 0; }
+.reveal .slides section.figure .plate { display: block; padding: 200px 120px 220px; box-sizing: border-box; }
+.reveal .slides section.figure .plate > img,
+.reveal .slides section.figure .plate > svg,
+.reveal .slides section.figure .plate > video { display: block; width: 100%; height: 100%; object-fit: contain; object-position: right center; }
+
+/* split: the black panel of the group deck, dark in both modes, with a figure at the right */
+.reveal .slides section.split .panel { left: 0; top: 0; width: 760px; height: 1080px; padding: 120px 80px 0 120px; box-sizing: border-box; background: var(--panel); color: var(--panel-text); }
+.reveal .slides section.split .panel h2 { width: auto; color: inherit; font-size: 44px; margin-bottom: 28px; }
+.reveal .slides section.split .panel p, .reveal .slides section.split .panel li { font-size: 32px; }
+.reveal .slides section.split .panel .foot { color: #7c7c76; }
+/* on the black canvas the panel is told apart by a hairline */
+html:not([data-theme="light"]) .reveal .slides section.split .panel { box-shadow: 1px 0 0 var(--line); }
+.reveal .slides section.split .zone { left: 880px; top: 120px; width: 920px; height: 800px; }
+.reveal .slides section.split .run { display: none; }
+.reveal .slides section.split::after { right: 120px; }
+
+/* figure treatments: a white raster figure framed as paper, and a black-on-white line plot inverted in dark mode */
+.reveal img { margin: 0; border: 0; box-shadow: none; background: none; max-width: 100%; max-height: 100%; }
+.reveal .paper { background: var(--paper); padding: 24px; border-radius: 2px; box-sizing: border-box; }
+.reveal .paper > img { background: var(--paper); }
+html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); }
+.reveal img:hover, .reveal .zone:hover > img { transition: filter 200ms ease-out; }
+
+/* ---- steps: a new element fades in, the earlier ones dim until the slide is complete ---- */
+.reveal .slides section .fragment { transition: opacity 400ms ease-out; }
+.reveal .slides section:not([data-complete]) .fragment.visible:not(.current-fragment) { opacity: 0.45; }
+.reveal .slides section .fragment.visible.current-fragment,
+.reveal .slides section[data-complete] .fragment.visible { opacity: 1; }
+.reveal .slides section .fragment.visible .fragment.visible { opacity: 1; }
+
+/* ---- the slide change: a 400 ms fade ---- */
+.reveal.fade .slides section:not([data-transition]),
+.reveal.fade .slides > section > section:not([data-transition]) { transition: opacity 400ms ease-out; transform: none; }
+
+/* ---- chrome outside the slide, placed in slide coordinates through --slide-scale ---- */
+.reveal .progress { height: 3px; background: transparent; left: calc(50% - 960px * var(--slide-scale, 1)); width: calc(1920px * var(--slide-scale, 1)); }
+.reveal .progress span { background: var(--accent); transition: width 400ms ease-out; }
+.reveal .slide-number {
+  right: calc(50% - 840px * var(--slide-scale, 1));
+  bottom: calc(50% - 490px * var(--slide-scale, 1));
+  padding: 0;
+  font-family: inherit;
+  font-size: calc(22px * var(--slide-scale, 1));
+  line-height: 1;
+  color: var(--muted);
+  background: transparent;
+  font-variant-numeric: tabular-nums;
+}
+.reveal .slide-number a { color: inherit; text-decoration: none; }
+.reveal .slide-number-delimiter { margin: 0 0.2em; }
+.theme-switch {
+  position: absolute;
+  z-index: 40;
+  right: calc(50% - 920px * var(--slide-scale, 1));
+  top: calc(50% - 500px * var(--slide-scale, 1));
+  width: calc(28px * var(--slide-scale, 1));
+  height: calc(28px * var(--slide-scale, 1));
+  padding: 0;
+  border: 2px solid var(--muted);
+  border-radius: 50%;
+  background: linear-gradient(90deg, var(--muted) 0 50%, transparent 50% 100%);
+  opacity: 0.45;
+  cursor: pointer;
+  transition: opacity 200ms ease-out;
+}
+.theme-switch:hover, .theme-switch:focus-visible { opacity: 1; outline: none; }
+.pointer-dot {
+  position: fixed;
+  z-index: 50;
+  width: 14px;
+  height: 14px;
+  margin: -7px 0 0 -7px;
+  border: 2px solid var(--accent);
+  border-radius: 50%;
+  pointer-events: none;
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+/* the mode flip of antfu.me: a circle from the click point */
+::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
+::view-transition-old(root) { z-index: 1; }
+::view-transition-new(root) { z-index: 9999; }
+html.to-dark::view-transition-old(root) { z-index: 9999; }
+html.to-dark::view-transition-new(root) { z-index: 1; }
+
+/* ---- print (?print-pdf) and stills (?still): everything drawn complete, no chrome outside the slide ---- */
+html.reveal-print .theme-switch, html.reveal-print .pointer-dot { display: none; }
+html.reveal-print .reveal .slides section { height: 1080px !important; padding: 120px 120px 0 120px !important; }
+html.reveal-print .reveal .slides section.title,
+html.reveal-print .reveal .slides section.closing,
+html.reveal-print .reveal .slides section.figure,
+html.reveal-print .reveal .slides section.section,
+html.reveal-print .reveal .slides section.split { padding: 0 !important; }
+html.reveal-print .reveal .slide-number-pdf { right: 120px; bottom: 50px; font-size: 22px; color: var(--muted); background: transparent; padding: 0; font-family: inherit; }
+html.reveal-print .reveal .slides section .fragment { transition: none; }
+
+/* reduced motion: no transitions anywhere */
+@media (prefers-reduced-motion: reduce) {
+  .reveal .slides section .fragment,
+  .reveal.fade .slides > section,
+  .reveal .progress span,
+  .reveal a,
+  .theme-switch { transition: none; }
+}
