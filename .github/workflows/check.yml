@@ -1,0 +1,40 @@
+name: check
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run vendor
+      - run: npm run build
+      - run: npm run typecheck
+      - run: npm test
+      - id: chrome
+        uses: browser-actions/setup-chrome@v1
+        with:
+          install-dependencies: true
+      # scripts/chrome.mjs reads CHROME_PATH, and setup-chrome gives the path only as an output
+      - run: npm run check
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+      - run: npm run pdf
+        if: ${{ !cancelled() }}
+        env:
+          CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: slides
+          path: |
+            check/*.png
+            slides.pdf
+          if-no-files-found: warn
