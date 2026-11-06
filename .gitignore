@@ -1,0 +1,5 @@
+node_modules/
+check/
+*.pdf
+.DS_Store
+__pycache__/
