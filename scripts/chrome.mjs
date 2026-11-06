@@ -39,8 +39,18 @@ export function deckUrl(deck, query = '', hash = '') {
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
+// after the browser has exited, files can still be written to the profile, hence the whole removal
+// is retried. The retries of rmSync are not enough, since only the last rmdir is repeated with them
 export async function removeProfile(profile) {
-  rmSync(profile, { recursive: true, force: true });
+  for (let attempt = 1; ; attempt++) {
+    try {
+      rmSync(profile, { recursive: true, force: true });
+      return;
+    } catch (error) {
+      if (attempt === 25) throw error;
+      await sleep(200);
+    }
+  }
 }
 
 /**
