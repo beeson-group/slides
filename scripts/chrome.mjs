@@ -77,8 +77,19 @@ export async function launch({ offline = true } = {}) {
     'about:blank',
   ];
   const child = spawn(chrome, args, { stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] });
-  child.stderr.resume();
+  let stderr = '';
+  child.stderr.setEncoding('utf8');
+  child.stderr.on('data', (chunk) => {
+    stderr = `${stderr}${chunk}`.slice(-2000);
+  });
   const exited = new Promise((done) => child.once('exit', done));
+  // rejected when Chrome exits, so that a request in flight is not left unsettled
+  const crashed = new Promise((_, fail) => {
+    child.once('exit', (code, signal) => fail(new Error(`Chrome exited with ${signal ?? `code ${code}`}\n${stderr}`)));
+  });
+  crashed.catch(() => {});
+  // a write after an exit of Chrome fails, and the exit is reported with crashed
+  child.stdio[3].on('error', () => {});
 
   let nextId = 1;
   const pending = new Map();
@@ -105,7 +116,7 @@ export async function launch({ offline = true } = {}) {
   function send(method, params = {}, sessionId) {
     const id = nextId++;
     child.stdio[3].write(`${JSON.stringify({ id, method, params, sessionId })}\0`);
-    return new Promise((done, fail) => pending.set(id, { done, fail }));
+    return Promise.race([new Promise((done, fail) => pending.set(id, { done, fail })), crashed]);
   }
 
   async function newPage({ width = 1920, height = 1080 } = {}) {
@@ -154,7 +165,7 @@ export async function launch({ offline = true } = {}) {
         });
         const { errorText } = await call('Page.navigate', { url });
         if (errorText) throw new Error(`${url}: ${errorText}`);
-        await loaded;
+        await Promise.race([loaded, crashed]);
       },
       // polls the expression every 50 ms until it is truthy, and fails after timeout ms
       async waitFor(expression, timeout = 15000) {
@@ -191,7 +202,7 @@ export async function launch({ offline = true } = {}) {
 
   async function close() {
     try {
-      await Promise.race([send('Browser.close'), sleep(2000)]);
+      await Promise.race([send('Browser.close').catch(() => {}), sleep(2000)]);
     } finally {
       child.kill();
       await exited;
