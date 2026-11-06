@@ -39,6 +39,10 @@ export function deckUrl(deck, query = '', hash = '') {
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
+export async function removeProfile(profile) {
+  rmSync(profile, { recursive: true, force: true });
+}
+
 /**
  * Starts Chrome and returns an object with newPage() and close(). With offline set, every host
  * name is mapped to a failed lookup, thus each network load of a deck is reported as an error.
@@ -181,7 +185,7 @@ export async function launch({ offline = true } = {}) {
     } finally {
       child.kill();
       await exited;
-      rmSync(profile, { recursive: true, force: true });
+      await removeProfile(profile);
     }
   }
 
