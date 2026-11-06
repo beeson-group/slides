@@ -54,6 +54,9 @@ export async function launch({ offline = true } = {}) {
     '--no-default-browser-check',
     '--hide-scrollbars',
     '--mute-audio',
+    // WebGL is required in the tycho viewer, and without a GPU it is not available in Chromium 159
+    // unless this flag is set
+    '--enable-unsafe-swiftshader',
     // the sandbox of Chrome cannot be started on the Ubuntu runners of GitHub, and the pages are local
     ...(process.platform === 'linux' ? ['--no-sandbox'] : []),
     ...(offline ? ['--host-resolver-rules=MAP * ~NOTFOUND'] : []),
