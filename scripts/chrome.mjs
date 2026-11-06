@@ -55,9 +55,10 @@ export async function removeProfile(profile) {
 
 /**
  * Starts Chrome and returns an object with newPage() and close(). With offline set, every host
- * name is mapped to a failed lookup, thus each network load of a deck is reported as an error.
+ * name is mapped to a failed lookup, thus each network load of a deck is reported as an error. A
+ * request that is not answered within timeout ms fails.
  */
-export async function launch({ offline = true } = {}) {
+export async function launch({ offline = true, timeout = 120000 } = {}) {
   const chrome = findChrome();
   const profile = mkdtempSync(join(tmpdir(), 'beeson-chrome-'));
   const args = [
@@ -91,6 +92,14 @@ export async function launch({ offline = true } = {}) {
   // a write after an exit of Chrome fails, and the exit is reported with crashed
   child.stdio[3].on('error', () => {});
 
+  function answered(promise, what) {
+    let timer;
+    const late = new Promise((_, fail) => {
+      timer = setTimeout(() => fail(new Error(`Chrome did not answer ${what} within ${timeout} ms\n${stderr}`)), timeout);
+    });
+    return Promise.race([promise, late, crashed]).finally(() => clearTimeout(timer));
+  }
+
   let nextId = 1;
   const pending = new Map();
   const listeners = new Set();
@@ -116,7 +125,7 @@ export async function launch({ offline = true } = {}) {
   function send(method, params = {}, sessionId) {
     const id = nextId++;
     child.stdio[3].write(`${JSON.stringify({ id, method, params, sessionId })}\0`);
-    return Promise.race([new Promise((done, fail) => pending.set(id, { done, fail })), crashed]);
+    return answered(new Promise((done, fail) => pending.set(id, { done, fail })), method);
   }
 
   async function newPage({ width = 1920, height = 1080 } = {}) {
@@ -165,7 +174,7 @@ export async function launch({ offline = true } = {}) {
         });
         const { errorText } = await call('Page.navigate', { url });
         if (errorText) throw new Error(`${url}: ${errorText}`);
-        await Promise.race([loaded, crashed]);
+        await answered(loaded, `the load of ${url}`);
       },
       // polls the expression every 50 ms until it is truthy, and fails after timeout ms
       async waitFor(expression, timeout = 15000) {
