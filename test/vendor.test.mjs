@@ -12,7 +12,7 @@ test('the tycho runtime, which is copied by hand, is kept when the vendor script
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, 'scripts'));
   cpSync(resolve('scripts/vendor.mjs'), join(root, 'scripts/vendor.mjs'));
-  symlinkSync(resolve('node_modules'), join(root, 'node_modules'));
+  symlinkSync(resolve('node_modules'), join(root, 'node_modules'), 'junction');
   const runtime = join(root, 'theme/vendor/tycho/tycho.js');
   mkdirSync(join(root, 'theme/vendor/tycho'), { recursive: true });
   writeFileSync(runtime, '');
