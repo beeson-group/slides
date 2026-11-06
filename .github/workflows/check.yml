@@ -25,6 +25,9 @@ jobs:
       - id: chrome
         uses: browser-actions/setup-chrome@v1
         with:
+          # the default snapshot of Chromium is run with test-only field trials, under which WebGL
+          # fails on Windows without a GPU
+          chrome-version: stable
           install-dependencies: true
       # CHROME_PATH is read in scripts/chrome.mjs, and the path is given only as an output of setup-chrome
       - run: npm run check
