@@ -2,7 +2,7 @@
 
 The scene holds two periodic orbits of the Earth-Moon circular restricted three-body problem, a
 distant retrograde orbit and a planar Lyapunov orbit about L1, drawn in the rotating frame and in
-the barycentric inertial frame. Both orbits are found here by a secant correction of the initial
+the barycentric inertial frame. Both orbits are found here by a bracketed root search on the initial
 velocity on the x axis, with the mass ratio mu = 0.01215, in nondimensional units. The script
 needs pytycho with build_embed, and SciPy. Run it as
 
