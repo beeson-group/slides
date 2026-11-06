@@ -1,0 +1,2 @@
+# kept byte for byte, since the vendored files and theme/beeson.js are written with LF on every OS
+theme/** -text
