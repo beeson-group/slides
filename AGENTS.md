@@ -23,7 +23,7 @@ This repository is the slide template of the Beeson group. The reveal.js theme `
 
 ```sh
 npm ci && npm run vendor && npm run build   # dependencies, vendored files, theme/beeson.js
-npm run typecheck && npm test               # types, then the orbit engine and the vendor script under node --test
+npm run typecheck && npm test               # types, then the orbit engine, the build, the vendor script, and the Chrome lookup under node --test
 npm run check                               # screenshots of every slide in both modes, console errors
 npm run pdf                                 # slides.pdf, one page per step, with a page count check
 ```
