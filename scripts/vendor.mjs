@@ -1,5 +1,6 @@
 // Copies into theme/vendor/ the files from node_modules that a deck needs to run offline, each
-// package with its license. Run it after `npm ci`, since theme/vendor/ is rebuilt from scratch.
+// package with its license. Run it after `npm ci`. The tycho runtime in theme/vendor/tycho/ is not
+// in node_modules, hence it is copied by hand and left in place here.
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -13,7 +14,7 @@ function copy(from, to) {
   cpSync(join(modules, from), join(out, to), { recursive: true });
 }
 
-rmSync(out, { recursive: true, force: true });
+for (const dir of ['reveal', 'fonts', 'mathjax']) rmSync(join(out, dir), { recursive: true, force: true });
 
 // the speaker-view page of the notes plugin is written into an about:blank popup, and the deck
 // itself is loaded in the iframes of this popup. thus a file beyond notes.js is not needed
