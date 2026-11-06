@@ -1,16 +1,17 @@
-// orbits of the CR3BP of the Earth–Moon system, computed by a short propagator and corrector and
+// orbits of the CR3BP of the Earth–Moon system, computed with a short propagator and corrector and
 // traced on two canvases of a `.backdrop` element. the engine is ported from orbits.ts of Claudio
-// Vestini's website (MIT) and reduced to the families that the slides draw. all quantities are
+// Vestini's website (MIT) and reduced to the families drawn on the slides. all quantities are
 // nondimensional, in the rotating frame
 
 import { scene } from './scenes.ts';
 
 export type Member = { s: Float64Array; path: number[]; times: number[]; t: number };
-// in pts, x and y alternate. times are the flight times of the points, and T is the last of them
+// pts is a list of alternating x and y values. times are the flight times of the points, and T is
+// the last of them
 export type Strand = { pts: Float64Array; times: Float32Array; T: number };
 
 export const MU = 0.01215;
-// step() shortens the step within this distance of a body
+// the distance to a body within which the step is shortened in step()
 const NEAR = 0.15;
 // seconds in which the longest flight of a scene is traced
 const DURATION = 12;
@@ -18,7 +19,7 @@ const DURATION = 12;
 const LOOP = 9;
 
 // writes the time derivative of the state s into a. returns the smaller of the distance to the Moon
-// and 0.4 times the distance to the Earth, by which step() shortens the step
+// and 0.4 times the distance to the Earth, which is used in step() to shorten the step
 export function accel(s: Float64Array, a: Float64Array): number {
   const x = s[0], y = s[1], z = s[2];
   const dx1 = x + MU, dx2 = x - 1 + MU;
@@ -92,8 +93,8 @@ export function propagate(s0: Float64Array, h: number, tmax: number, path: numbe
 }
 
 // Newton correction of a symmetric orbit. the entries free of s0 are adjusted until the entries
-// target of the state at the crossing vanish within 1e-6. returns null when the orbit does not
-// cross or a Newton step exceeds 0.1, which is how a singular Jacobian shows up
+// target of the state at the crossing vanish within 1e-6. returns null when a crossing is not found
+// or a Newton step is larger than 0.1, which is the symptom of a singular Jacobian
 export function correct(s0: Float64Array, free: number[], target: number[], h: number, tmin: number, tmax: number, iters: number, count = 1, axis = 1): Member | null {
   const s = Float64Array.from(s0);
   let path: number[] = [], times: number[] = [];
@@ -126,10 +127,11 @@ export function correct(s0: Float64Array, free: number[], target: number[], h: n
   return r.hit ? { s, path, times, t: r.t } : null;
 }
 
-// a family continued over the values of the state entry p. each member is seeded by a linear
-// extrapolation from the two previous ones, or by guess(v) when that fails. a member whose half
-// period jumps by more than a third has left the branch, and the family is ended there. the first
-// skip members are the ramp from the seed and are left out
+// a family continued over the values of the state entry p. each member is seeded with a linear
+// extrapolation from the two previous ones, or with guess(v) when the correction from this
+// extrapolation fails. a member with a jump of more than a third in its half period is off the
+// branch, and the family is ended there. the first skip members are the ramp from the seed and are
+// left out
 export function family(guess: (v: number) => Float64Array, p: number, values: number[], free: number[], target: number[], h: number, tmin: (v: number) => number, tmax: (v: number) => number, skip: number, count = 1, axis = 1): Member[] {
   const out: Member[] = [];
   let prev: Member | null = null, prev2: Member | null = null;
@@ -158,7 +160,7 @@ export function ramp(a: number, b: number, factor: number): number[] {
   return out;
 }
 
-// count values from a to b, crowded toward a by the exponent p
+// count values from a to b, crowded toward a with the exponent p
 export function spaced(a: number, b: number, count: number, p: number): number[] {
   const out: number[] = [];
   for (let i = 0; i < count; i++) out.push(a + (b - a) * Math.pow(i / (count - 1), p));
@@ -289,7 +291,8 @@ export class Orbits {
     this.cy = +(el.dataset.cy ?? 0);
     this.half = +(el.dataset.half ?? 0.5);
     this.loop = el.hasAttribute('data-loop');
-    // canvases cloned with a slide are blank, and reveal's print view clones a page per fragment
+    // canvases cloned with a slide are blank, and a page per fragment is cloned in the print view
+    // of reveal.js
     for (const old of el.querySelectorAll(':scope > canvas.orbits-base, :scope > canvas.orbits-head')) old.remove();
     this.base = document.createElement('canvas');
     this.head = document.createElement('canvas');
@@ -323,8 +326,8 @@ export class Orbits {
   }
 
   fit(): void {
-    // reveal scales the slide by a transform, hence the canvas is sized from the screen rectangle
-    // and the labels are placed in the slide's own pixels
+    // the slide is scaled with a transform in reveal.js, hence the canvas is sized from the screen
+    // rectangle and the labels are placed in the pixels of the slide
     const r = this.el.getBoundingClientRect(), dpr = devicePixelRatio || 1;
     const w = this.el.offsetWidth, h = this.el.offsetHeight;
     if (r.width === 0 || r.height === 0 || w === 0 || h === 0) return;
@@ -458,7 +461,7 @@ export class Orbits {
     const tau = this.raf && this.t0 !== null ? ((((now - this.t0) / 1000) % LOOP) / LOOP) * s.T : this.finished ? 0.37 * s.T : 0;
     let j = 0;
     while (j < n - 1 && s.times[j + 1] <= tau) j++;
-    // a trail over the last tenth of the period, brightening toward the head
+    // a trail over the last tenth of the period, brighter toward the head
     const back = 0.1 * s.T;
     ctx.lineWidth = this.lw * 1.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = c.accent;
     for (let k = j; k > 0 && s.times[k] > tau - back; k--) {
@@ -476,7 +479,7 @@ export class Orbits {
     ctx.fillStyle = c.accent;
     this.strands.forEach((s, i) => {
       const j = this.idx[i];
-      // a strand that departs later has no head before its first time
+      // the head of a strand is not drawn before times[0] of this strand
       if (j >= s.times.length - 1 || tau < s.times[0]) return;
       const [X, Y] = this.at(i, j, tau);
       ctx.beginPath(); ctx.arc(X, Y, 2.2 * this.lw, 0, 2 * Math.PI); ctx.fill();

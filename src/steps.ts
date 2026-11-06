@@ -1,5 +1,5 @@
-// marks the current slide with data-complete once its last fragment is shown, so that the theme
-// stops dimming the earlier fragments
+// marks the current slide with data-complete once its last fragment is shown, so that the earlier
+// fragments are not dimmed any more
 
 import type { Deck } from './reveal.d.ts';
 

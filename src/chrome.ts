@@ -4,7 +4,8 @@ import type { Deck } from './reveal.d.ts';
 
 const OWN = ['title', 'section', 'closing'];
 
-// a section slide's data-run replaces the text of its heading, e.g. where the heading holds math
+// the data-run of a section slide is used in place of the text of its heading, e.g. for a heading
+// with math
 const heading = (slide: HTMLElement): string =>
   slide.dataset.run ?? (slide.querySelector('h2') ?? slide.querySelector('h1'))?.textContent?.trim() ?? '';
 

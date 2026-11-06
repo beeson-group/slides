@@ -1,4 +1,4 @@
-// the globals of a deck page: reveal.js and its notes plugin, loaded by script tags before beeson.js
+// the globals of a deck page: reveal.js and its notes plugin, loaded with script tags before beeson.js
 
 import type { RevealApi, RevealConfig, RevealPlugin } from 'reveal.js';
 
@@ -14,6 +14,6 @@ declare global {
     Reveal: Deck;
     RevealNotes?: () => RevealPlugin;
   }
-  // the version of package.json, defined by build.mjs
+  // the version of package.json, defined in build.mjs
   const __VERSION__: string;
 }

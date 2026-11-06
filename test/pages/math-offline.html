@@ -11,7 +11,7 @@
 <script src="../../theme/macros.js"></script>
 <script src="../../theme/mathjax-config.js"></script>
 <script>
-  // the page reports in #status whether MathJax typeset with the STIX Two Math font
+  // the result of typesetting with the STIX Two Math font is written to #status
   window.MathJax.startup = {
     pageReady() {
       return MathJax.startup.defaultPageReady().then(() => {
@@ -31,6 +31,6 @@
 <p>The collinear point \(L_1\) of the Earth–Moon system, in italic <em>STIX Two Text</em>.</p>
 \[\ddot x - 2\dot y = \partial U/\partial x,\quad \mu = 0.01215\]
 <p>Macros: \(\vb{r} \in \R^3\) and \(\int_0^T f(t) \dd t\).</p>
-<p id="status">MathJax did not finish.</p>
+<p id="status">Typesetting is not finished.</p>
 </body>
 </html>

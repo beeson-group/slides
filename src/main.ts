@@ -1,5 +1,6 @@
-// the entry point of beeson.js: window.Beeson.start() initializes reveal.js with the theme's
-// defaults and drives the orbit backdrops, the fragment steps, the theme switch, and the pointer
+// the entry point of beeson.js. window.Beeson.start() is called in a deck to initialize reveal.js
+// with the defaults of the theme, and to start the orbit backdrops, the fragment steps, the mode
+// switch, and the pointer
 
 import { Orbits, mount } from './orbits.ts';
 import { initChrome } from './chrome.ts';
@@ -47,8 +48,8 @@ function show(slide: HTMLElement): void {
     if (still()) { o.complete(); continue; }
     const loop = o.el.hasAttribute('data-loop');
     if (glide) {
-      // reveal glides a matched backdrop between two frames, hence it is shown complete and
-      // measured again after the glide
+      // a matched backdrop is moved between two frames in a reveal.js auto-animate, hence it is
+      // shown complete and measured again after the move
       o.complete();
       const seconds = Number(slide.dataset.autoAnimateDuration ?? window.Reveal.getConfig().autoAnimateDuration ?? 1);
       setTimeout(() => {
@@ -73,7 +74,8 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   const plugins = [...(options.plugins ?? [])];
   if (window.RevealNotes && !plugins.includes(window.RevealNotes)) plugins.push(window.RevealNotes);
   initSwitcher();
-  // the print view clones a page per fragment state after ready, and the clones are mounted here
+  // in the print view, a page is cloned per fragment state after ready, and the clones are
+  // mounted here
   deck.on('pdf-ready', completeAll);
   await deck.initialize({ ...DEFAULTS, ...options, plugins });
 
@@ -99,7 +101,8 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   });
 }
 
-// a tycho viewer takes the mode of the deck through its theme attribute, which it reads at any time
+// the mode of the deck is passed to a tycho viewer through its theme attribute, which can be
+// changed at any time
 function syncViewers(theme: string): void {
   for (const viewer of document.querySelectorAll('tycho-viewer')) viewer.setAttribute('theme', theme);
 }

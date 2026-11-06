@@ -1,4 +1,4 @@
-/* beeson.css, the Beeson group's reveal.js theme. Design size 1920 by 1080, STIX Two Text,
+/* beeson.css, the reveal.js theme of the Beeson group. Design size 1920 by 1080, STIX Two Text,
    black by default with a warm paper light mode. The layout classes are documented in index.html. */
 
 :root,
@@ -98,7 +98,7 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal a:hover { color: var(--accent); }
 .reveal sub, .reveal sup { font-size: 0.7em; line-height: 0; }
 
-/* lists: a short orange dash in place of a bullet, numbers in grey */
+/* lists: a short orange dash in place of a bullet, numbers in gray */
 .reveal ul, .reveal ol { display: block; margin: 24px 0 0; padding: 0; list-style: none; }
 .reveal li { position: relative; margin: 0 0 14px; padding-left: 54px; }
 .reveal ul > li::before { content: ""; position: absolute; left: 0; top: 0.72em; width: 28px; height: 2px; background: var(--accent); }
@@ -112,18 +112,18 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal .outline > li.now { color: var(--text); }
 .reveal .outline > li.now::before { content: ""; display: block; position: absolute; left: 0; top: 0.78em; width: 22px; height: 2px; background: var(--violet); }
 
-/* math: MathJax inherits the size, a display block sits a little larger and left aligned */
+/* math: the size of the MathJax output is inherited, and a display block is a little larger and left aligned */
 .reveal .math { margin: 28px 0 4px; font-size: 40px; }
 .reveal mjx-container[display="true"] { margin: 0 !important; text-align: left !important; }
 .reveal mjx-container { color: inherit; }
 
-/* code: the system monospace, since the theme vendors no monospace face */
+/* code: the system monospace, since a monospace face is not vendored with the theme */
 .reveal pre, .reveal code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
 .reveal code { font-size: 0.86em; color: var(--subtle); }
 .reveal pre { margin: 24px 0; padding: 24px 32px; font-size: 26px; line-height: 1.45; color: var(--text); background: color-mix(in srgb, var(--line) 45%, transparent); border-left: 2px solid var(--line); overflow: hidden; width: auto; box-shadow: none; }
 .reveal pre code { display: block; padding: 0; color: inherit; font-size: inherit; max-height: none; overflow: hidden; white-space: pre; }
 
-/* tables: hairlines, no fills */
+/* tables: hairlines, without fills */
 .reveal table { margin: 24px 0 0; border-collapse: collapse; font-size: 28px; line-height: 1.4; }
 .reveal th, .reveal td { padding: 10px 40px 10px 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); font-weight: inherit; }
 .reveal th { color: var(--subtle); font-style: italic; }
@@ -137,7 +137,7 @@ html, body, .reveal-viewport { background: var(--bg); }
 html:not([data-theme="light"]) .reveal .for-light, html[data-theme="light"] .reveal .for-dark { display: none !important; }
 
 /* brand marks: the group logo at the top right of every slide but the title and closing ones,
-   the Princeton Engineering lockup at the top left of those. body.no-logo and body.no-lockup switch them off. */
+   the Princeton Engineering lockup at the top left of those. They are switched off with body.no-logo and body.no-lockup. */
 .reveal .slides section::after {
   content: "";
   position: absolute;
@@ -168,7 +168,7 @@ html[data-theme="light"] .reveal .slides section.closing::before { background-im
 body.no-lockup .reveal .slides section.title::before,
 body.no-lockup .reveal .slides section.closing::before { content: none; }
 
-/* ---- backdrops, drawn by beeson.js ---- */
+/* ---- backdrops, drawn with beeson.js ---- */
 .reveal .backdrop { pointer-events: auto; }
 .reveal .backdrop canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
 .reveal .backdrop .lab { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; line-height: 1; font-size: 22px; font-style: italic; color: var(--subtle); }
@@ -209,7 +209,7 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section.wide > .math,
 .reveal .slides section.wide > .col { max-width: 1680px; width: auto; }
 
-/* title and closing, plate: the backdrop fills the slide, the words sit as a block at the lower left */
+/* title and closing, plate: the backdrop over the whole slide, the words in a block at the lower left */
 .reveal .slides section.title,
 .reveal .slides section.closing,
 .reveal .slides section.figure,
@@ -230,12 +230,12 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section.title .who strong,
 .reveal .slides section.closing .who strong { color: var(--text); font-weight: 400; }
 
-/* section: the words at the left, the talk's outline under them, the backdrop at the right */
+/* section: the words at the left, the outline of the talk under them, the backdrop at the right */
 .reveal .slides section.section .sec { left: 120px; top: 360px; width: 900px; }
 .reveal .slides section.section .sec h2 { width: auto; margin: 0; }
 .reveal .slides section.section .backdrop { left: 1040px; top: 0; width: 880px; height: 1080px; }
 
-/* figure, plate: a figure or backdrop fills the slide, the head at the top left, the caption at the lower left */
+/* figure, plate: a figure or backdrop over the whole slide, the head at the top left, the caption at the lower left */
 .reveal .slides section.figure > h2 { position: absolute; left: 120px; top: 100px; width: 1200px; margin: 0; }
 .reveal .slides section.figure .caption { left: 120px; bottom: 130px; width: 900px; margin: 0; }
 .reveal .slides section.figure .plate { display: block; padding: 200px 120px 220px; box-sizing: border-box; }
@@ -248,7 +248,7 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section.split .panel h2 { width: auto; color: inherit; font-size: 44px; margin-bottom: 28px; }
 .reveal .slides section.split .panel p, .reveal .slides section.split .panel li { font-size: 32px; }
 .reveal .slides section.split .panel .foot { color: #7c7c76; }
-/* on the black canvas the panel is told apart by a hairline */
+/* on the black canvas the edge of the panel is marked with a hairline */
 html:not([data-theme="light"]) .reveal .slides section.split .panel { box-shadow: 1px 0 0 var(--line); }
 .reveal .slides section.split .zone { left: 880px; top: 120px; width: 920px; height: 800px; }
 .reveal .slides section.split .run { display: none; }
@@ -261,7 +261,7 @@ html:not([data-theme="light"]) .reveal .slides section.split .panel { box-shadow
 html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); }
 .reveal img:hover, .reveal .zone:hover > img { transition: filter 200ms ease-out; }
 
-/* ---- steps: a new element fades in, the earlier ones dim until the slide is complete ---- */
+/* ---- steps: a new element is faded in, the earlier ones are dimmed until the slide is complete ---- */
 .reveal .slides section .fragment { transition: opacity 400ms ease-out; }
 .reveal .slides section:not([data-complete]) .fragment.visible:not(.current-fragment) { opacity: 0.45; }
 .reveal .slides section .fragment.visible.current-fragment,
@@ -323,7 +323,7 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
 html.to-dark::view-transition-old(root) { z-index: 9999; }
 html.to-dark::view-transition-new(root) { z-index: 1; }
 
-/* ---- print (?print-pdf) and stills (?still): everything drawn complete, no chrome outside the slide ---- */
+/* ---- print (?print-pdf) and stills (?still): everything drawn complete, without the chrome outside the slide ---- */
 html.reveal-print .theme-switch, html.reveal-print .pointer-dot { display: none; }
 html.reveal-print .reveal .slides section { height: 1080px !important; padding: 120px 120px 0 120px !important; }
 html.reveal-print .reveal .slides section.title,
@@ -334,7 +334,7 @@ html.reveal-print .reveal .slides section.split { padding: 0 !important; }
 html.reveal-print .reveal .slide-number-pdf { right: 120px; bottom: 50px; font-size: 22px; color: var(--muted); background: transparent; padding: 0; font-family: inherit; }
 html.reveal-print .reveal .slides section .fragment { transition: none; }
 
-/* reduced motion: no transitions anywhere */
+/* reduced motion: transitions are turned off */
 @media (prefers-reduced-motion: reduce) {
   .reveal .slides section .fragment,
   .reveal.fade .slides > section,

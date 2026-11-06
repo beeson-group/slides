@@ -1,4 +1,5 @@
-// bundles src/main.ts into theme/beeson.js, which is committed so that a talk needs no toolchain
+// bundles src/main.ts into theme/beeson.js, which is committed so that a toolchain is not required
+// for a talk
 
 import { readFileSync } from 'node:fs';
 import { build } from 'esbuild';

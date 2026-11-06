@@ -3,8 +3,8 @@
 //   node scripts/check.mjs [--deck index.html] [--themes dark,light] [--out check]
 //
 // For each theme, the deck is opened offline at ?theme=<theme>&still#/<h>/<v> once for each slide,
-// at 1920 by 1080 px, and saved as <out>/<theme>-<nn>.png, where nn counts the slides from 01 in
-// reading order. The slides are listed by the page itself: each top-level section of
+// at 1920 by 1080 px, and saved as <out>/<theme>-<nn>.png, where nn is the number of the slide from
+// 01 in reading order. The list of slides is read from the page itself: each top-level section of
 // .reveal .slides, or each child of one that is a vertical stack. The deck is then opened without
 // `still`, i.e. with its animations, and stepped through to the last fragment of the last slide.
 // A page error is an uncaught exception, a console.error, or a failed load, e.g. of a missing file
@@ -65,7 +65,7 @@ try {
     await animated.waitFor(deckSettled);
     let steps = 1;
     const atEnd = 'Reveal.isLastSlide() && !Reveal.availableFragments().next';
-    // the cap ends the run in a deck that sets loop: true
+    // the run is ended at the cap in a deck with loop: true
     while (steps < 1000 && !(await animated.evaluate(atEnd))) {
       await animated.evaluate('Reveal.next()');
       await new Promise((done) => setTimeout(done, stepDelay));

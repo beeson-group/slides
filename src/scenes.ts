@@ -1,4 +1,5 @@
-// the scenes that a `.backdrop` names in data-scene, computed on first use and cached
+// the scenes selected with the data-scene attribute of a `.backdrop`, computed on first use and
+// cached
 
 import { MU, closed, droFamily, lyapunovFamily, open, propagate, ramp, spaced, step } from './orbits.ts';
 import type { Member, Strand } from './orbits.ts';
@@ -6,15 +7,16 @@ import type { Member, Strand } from './orbits.ts';
 // the integration step, nondimensional
 const H = 0.004;
 
-// a trajectory is cut where it leaves this window of the rotating frame or reaches the surface of a
-// body. the radii of the Earth and the Moon are 6378 km and 1738 km over 384400 km
+// a trajectory is cut outside this window of the rotating frame or at the surface of a body. the
+// radii of the Earth and the Moon are 6378 km and 1738 km over 384400 km
 const outside = (s: Float64Array): boolean =>
   Math.abs(s[0] - 0.85) > 0.6 || Math.abs(s[1]) > 0.5 || Math.hypot(s[0] + MU, s[1]) < 0.0166 || Math.hypot(s[0] - 1 + MU, s[1]) < 0.0045;
 
-// the unstable manifold of the L1 Lyapunov orbit of amplitude 0.05, in its two branches. each copy of
-// the orbit's state is kicked by plus or minus 1e-5 along its own velocity at one of count phases
-// spread over the period, and flown for 2.5 periods. a strand's times start at its phase, hence its
-// head leaves the orbit's head where the two meet. the orbit itself is the first strand
+// the unstable manifold of the L1 Lyapunov orbit of amplitude 0.05, in its two branches. each copy
+// of the state of the orbit is kicked by plus or minus 1e-5 along its velocity at one of count
+// phases spread over the period, and flown for 2.5 periods. times[0] of a strand is its phase,
+// hence the head of the strand is first drawn on the head of the orbit. the orbit itself is the
+// first strand
 function manifold(count = 14): Strand[] {
   const orbit: Member | undefined = lyapunovFamily(1, [0.05], H)[0];
   if (!orbit) return [];
@@ -59,7 +61,7 @@ export const SCENE_NAMES = Object.keys(SCENES) as SceneName[];
 
 const cache = new Map<string, Strand[]>();
 
-// the strands of the scene name, or none for an unknown name
+// the strands of the scene name, or an empty list for an unknown name
 export function scene(name: string): Strand[] {
   let out = cache.get(name);
   if (!out) {

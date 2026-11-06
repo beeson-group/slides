@@ -1,5 +1,6 @@
-// the dark and light themes, kept on the dataset of the root element and flipped by the key d or
-// the button .theme-switch, as a circle that grows from the click point (the transition of antfu.me)
+// the dark and light modes, kept on the dataset of the root element and flipped with the key d or
+// the button .theme-switch. the flip is a circle grown from the click point (the transition of
+// antfu.me)
 
 import { Orbits } from './orbits.ts';
 
@@ -7,7 +8,8 @@ export type Theme = 'dark' | 'light';
 
 const KEY = 'beeson-theme';
 const root = document.documentElement;
-// a theme given in the URL is not stored, so that a link with ?theme= does not change the default
+// a theme given in the URL is not stored, so that the default is not changed when a link with
+// ?theme= is opened
 let pinned = false;
 let button: HTMLButtonElement | null = null;
 
@@ -21,7 +23,7 @@ function apply(theme: Theme): void {
   root.dataset.theme = theme;
   if (button) button.setAttribute('aria-label', theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
   // the event is dispatched inside the update of the view transition, thus the canvases redrawn
-  // by its listeners are captured in the new view
+  // in its listeners are captured in the new view
   document.dispatchEvent(new CustomEvent('beeson:theme', { detail: { theme } }));
 }
 
@@ -44,7 +46,7 @@ export function set(theme: Theme, at?: { x: number; y: number }): void {
   const x = at?.x ?? (b ? b.left + b.width / 2 : innerWidth), y = at?.y ?? (b ? b.top + b.height / 2 : 0);
   const r = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
   const toLight = theme === 'light';
-  // going to dark, the old light view is put on top and shrinks onto the point
+  // on a flip to dark, the old light view is put on top and shrunk onto the point
   root.classList.toggle('to-dark', !toLight);
   const tr = doc.startViewTransition(() => apply(theme));
   tr.ready.then(() => {
@@ -77,7 +79,7 @@ export function initTheme(): void {
   root.dataset.theme = theme;
 }
 
-// the stacking of the two views during the flip, which the clip animation needs
+// the stacking of the two views during the flip, which is required for the clip animation
 const VIEW_TRANSITION_CSS = `
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 ::view-transition-old(root) { z-index: 1; }
@@ -100,15 +102,16 @@ export function initSwitcher(): void {
   button.type = 'button';
   button.setAttribute('aria-label', get() === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
   button.addEventListener('click', (ev) => {
-    // a keyboard click has no point, hence the flip starts from the button
+    // the click point is not defined for a keyboard click, hence the flip is started from the
+    // button
     toggle(ev.detail > 0 ? { x: ev.clientX, y: ev.clientY } : undefined);
-    // a focused button would take the space bar from the slide navigation
+    // while the button is in focus, the space bar is not available to the slide navigation
     button?.blur();
   });
   deck.append(button);
 }
 
-// whether a key press is for the deck, rather than for a field or a viewer that takes keys
+// whether a key press is for the deck, rather than for a field or for a viewer
 export function forDeck(ev: KeyboardEvent): boolean {
   if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey) return false;
   const target = (ev.target instanceof Element ? ev.target : null) ?? document.activeElement;

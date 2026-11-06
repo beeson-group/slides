@@ -1,8 +1,8 @@
 """Draws the demo figures of the slide template.
 
-Two figures show the zero-velocity curves of the Earth-Moon CR3BP in the dark and light slide
-styles, and a third shows the pseudo-potential along the x axis as a journal figure in black on
-white, for the paper class of the theme. Lengths are in Earth-Moon rotating-frame units. Run it as
+Two figures show the zero-velocity curves of the Earth–Moon CR3BP in the dark and light slide
+styles. A third figure shows the pseudo-potential along the x axis as a journal figure in black on
+white, for the paper class of the theme. Lengths are in Earth–Moon rotating-frame units. Run it as
 
     uv run --with matplotlib,numpy,scipy python demo/figures.py .
 

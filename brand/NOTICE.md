@@ -1,6 +1,6 @@
 # Brand files
 
-The files in this folder are trademarks of Princeton University and of the Beeson group, and they are not covered by the MIT license in the `LICENSE` file at the root of this repository.
+The files in this folder are trademarks of Princeton University and of the Beeson group, and they are outside the MIT license in the `LICENSE` file at the root of this repository.
 
 - `logo.png` is the logo of the Beeson group.
 - `lockup-dark.png` and `lockup-light.png` are the Princeton Engineering lockups for dark and light backgrounds, respectively.

@@ -22,7 +22,7 @@ jobs:
         uses: browser-actions/setup-chrome@v1
         with:
           install-dependencies: true
-      # scripts/chrome.mjs reads CHROME_PATH, and setup-chrome gives the path only as an output
+      # CHROME_PATH is read in scripts/chrome.mjs, and the path is given only as an output of setup-chrome
       - run: npm run check
         env:
           CHROME_PATH: ${{ steps.chrome.outputs.chrome-path }}

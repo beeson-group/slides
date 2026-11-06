@@ -1,5 +1,5 @@
-// two pointer effects: the strands near the pointer are tinted in the accent color, and the key p
-// toggles a ring that follows the pointer for pointing during a talk
+// two pointer effects: the strands near the pointer are tinted in the accent color, and a dot
+// at the pointer is toggled with the key p, for pointing during a talk
 
 import { Orbits } from './orbits.ts';
 
@@ -21,7 +21,7 @@ export function togglePointer(): void {
   document.body.append(dot);
 }
 
-// orbits gives the mounted drawings and slide the current slide
+// orbits returns the mounted drawings, and slide returns the current slide
 export function initCursor(orbits: () => Orbits[], slide: () => HTMLElement | null): void {
   let last: { x: number; y: number } | null = null, frame = 0;
   const lit = new Set<Orbits>();

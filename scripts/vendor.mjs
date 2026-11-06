@@ -1,6 +1,6 @@
-// Copies into theme/vendor/ the files from node_modules that a deck needs to run offline, each
-// package with its license. Run it after `npm ci`. The tycho runtime in theme/vendor/tycho/ is not
-// in node_modules, hence it is copied by hand and left in place here.
+// Copies into theme/vendor/ the files from node_modules that are required to run a deck offline,
+// each package with its license. Run it after `npm ci`. The tycho runtime in theme/vendor/tycho/ is
+// not in node_modules, hence it is copied by hand and left in place here.
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -52,17 +52,17 @@ writeFileSync(
 );
 copy(`${fontsource}/LICENSE`, 'fonts/LICENSE');
 
-// tex-svg.js loads the STIX Two Math font from output.fontPath in theme/mathjax-config.js: svg.js
-// at startup, then one file of svg/dynamic/ for each character range that a formula uses. it is
-// copied from the nofont build, which is 1 MB smaller, since the default New Computer Modern font of
-// MathJax is left out of it
-// TeX packages outside the core, e.g. boldsymbol, are autoloaded by tex-svg.js at their first macro
+// the STIX Two Math font is loaded from output.fontPath in theme/mathjax-config.js, i.e. svg.js at
+// startup, then one file of svg/dynamic/ for each character range used in a formula. tex-svg.js is
+// copied from the nofont build, which is 1 MB smaller without the default New Computer Modern font
+// of MathJax
+// TeX packages outside the core, e.g. boldsymbol, are autoloaded at their first macro
 copy('mathjax/tex-svg-nofont.js', 'mathjax/tex-svg.js');
 copy('mathjax/input/tex/extensions', 'mathjax/input/tex/extensions');
 copy('mathjax/LICENSE', 'mathjax/LICENSE');
 copy('@mathjax/mathjax-stix2-font/svg.js', 'mathjax/mathjax-stix2-font/svg.js');
 copy('@mathjax/mathjax-stix2-font/svg/dynamic', 'mathjax/mathjax-stix2-font/svg/dynamic');
-// the font package does not ship a license file, and its package.json declares Apache-2.0
+// a license file is not in the font package, and Apache-2.0 is declared in its package.json
 copy('mathjax/LICENSE', 'mathjax/mathjax-stix2-font/LICENSE');
 
 function size(path) {

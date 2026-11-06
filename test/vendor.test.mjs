@@ -7,7 +7,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeF
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
-test('the vendor script keeps the tycho runtime, which is copied by hand', (t) => {
+test('the tycho runtime, which is copied by hand, is kept when the vendor script is run', (t) => {
   const root = mkdtempSync(join(tmpdir(), 'slides-vendor-'));
   t.after(() => rmSync(root, { recursive: true, force: true }));
   mkdirSync(join(root, 'scripts'));

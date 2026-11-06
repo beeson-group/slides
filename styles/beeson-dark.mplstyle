@@ -1,6 +1,6 @@
-# Matplotlib style for figures on the dark theme of the Beeson slides. Load it with
+# Matplotlib style for figures in the dark mode of the Beeson slides. Load it with
 # plt.style.use('styles/beeson-dark.mplstyle'). The backgrounds are transparent, hence the slide
-# shows through, and line widths are 1.8 times the defaults of Matplotlib.
+# is visible behind the figure, and line widths are 1.8 times the defaults of Matplotlib.
 
 figure.facecolor: none
 axes.facecolor: none
@@ -11,7 +11,7 @@ figure.figsize: 8, 4.5
 # with constrained layout, the labels of 18 pt text are fitted inside the figure at its set size
 figure.constrained_layout.use: True
 
-# STIXGeneral, which ships with Matplotlib, is used where STIX Two Text is not installed
+# STIXGeneral, which is included in Matplotlib, is used where STIX Two Text is not installed
 font.family: serif
 font.serif: STIX Two Text, STIXGeneral, DejaVu Serif
 mathtext.fontset: stix
@@ -39,5 +39,5 @@ axes.spines.top: False
 axes.spines.right: False
 legend.frameon: False
 
-# the Okabe-Ito palette for color vision deficiency, with the text color in place of black
+# the Okabe–Ito palette for color vision deficiency, with the text color in place of black
 axes.prop_cycle: cycler('color', ['E69F00', '56B4E9', '009E73', 'F0E442', '0072B2', 'D55E00', 'CC79A7', 'f2f2ef'])

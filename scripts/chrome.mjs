@@ -1,8 +1,8 @@
-// Headless Chrome driven over the DevTools protocol, shared by scripts/check.mjs and
+// Headless Chrome driven over the DevTools protocol, used in scripts/check.mjs and
 // scripts/export-pdf.mjs. The protocol is used in place of the --dump-dom, --screenshot, and
 // --print-to-pdf flags, since requestAnimationFrame is stopped after one or two frames under these
-// flags, and the print layout of reveal.js awaits it. The messages are sent over
-// --remote-debugging-pipe as JSON terminated by a NUL byte, on file descriptors 3 and 4, hence an
+// flags, and it is awaited in the print layout of reveal.js. The messages are sent over
+// --remote-debugging-pipe as JSON terminated with a NUL byte, on file descriptors 3 and 4, hence an
 // npm package is not required.
 import { spawn } from 'node:child_process';
 import { existsSync, mkdtempSync, rmSync } from 'node:fs';
@@ -41,7 +41,7 @@ export async function launch({ offline = true } = {}) {
     '--no-default-browser-check',
     '--hide-scrollbars',
     '--mute-audio',
-    // the sandbox of Chrome cannot start on the Ubuntu runners of GitHub, and the pages are local
+    // the sandbox of Chrome cannot be started on the Ubuntu runners of GitHub, and the pages are local
     ...(process.platform === 'linux' ? ['--no-sandbox'] : []),
     ...(offline ? ['--host-resolver-rules=MAP * ~NOTFOUND'] : []),
     'about:blank',
@@ -172,8 +172,8 @@ export async function launch({ offline = true } = {}) {
   return { newPage, close };
 }
 
-// resolves once reveal.js is ready, the web fonts are loaded, and MathJax, if the deck loads it,
-// has typeset every formula
+// resolves once reveal.js is ready, the web fonts are loaded, and, in a deck with MathJax, every
+// formula is typeset
 export const deckSettled = `(async () => {
   if (!window.Reveal?.isReady()) return false;
   await document.fonts.ready;

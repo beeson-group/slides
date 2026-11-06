@@ -1,4 +1,4 @@
-// TeX macros of a deck, read by theme/mathjax-config.js, hence this file is loaded first. each
+// TeX macros of a deck, read in theme/mathjax-config.js, hence this file is loaded first. each
 // value is a replacement string, or [replacement, number of arguments]
 window.beesonMacros = {
   vb: ['\\boldsymbol{#1}', 1],
