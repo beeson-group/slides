@@ -2,10 +2,12 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { spawn } from 'node:child_process';
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { findChrome } from '../scripts/chrome.mjs';
+import { setTimeout as sleep } from 'node:timers/promises';
+import { findChrome, removeProfile } from '../scripts/chrome.mjs';
 
 function standIn(t, path) {
   const root = mkdtempSync(join(tmpdir(), 'slides-chrome-'));
@@ -50,4 +52,23 @@ test('Edge is used on Windows when Chrome is missing', (t) => {
 
 test('CHROME_PATH is named in the error when a browser is not found', () => {
   assert.throws(() => findChrome({ env: {}, platform: 'linux' }), /Set CHROME_PATH/);
+});
+
+test('a profile is removed while a helper process of Chrome still writes to it', async (t) => {
+  const profile = mkdtempSync(join(tmpdir(), 'slides-profile-'));
+  t.after(() => rmSync(profile, { recursive: true, force: true }));
+  const writer = spawn(process.execPath, [
+    '-e',
+    `const { writeFileSync } = require('node:fs');
+     const end = Date.now() + 300;
+     for (let i = 0; Date.now() < end; i++) {
+       try { writeFileSync(${JSON.stringify(profile)} + '/' + i, ''); } catch {}
+     }`,
+  ]);
+  const exited = new Promise((done) => writer.once('exit', done));
+  while (readdirSync(profile).length === 0) await sleep(5);
+
+  await removeProfile(profile);
+  await exited;
+  assert.ok(!existsSync(profile));
 });
