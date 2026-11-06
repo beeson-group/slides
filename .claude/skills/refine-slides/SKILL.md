@@ -9,7 +9,7 @@ Find the problems by looking at the deck, then fix them with the layout classes.
 
 ## Look at the complete slides
 
-Run `npm run pdf`, and read the last page of each slide in `slides.pdf`. If you cannot read a PDF with your tools, turn the pages into images first, e.g. with `pdftoppm` or PyMuPDF. The screenshots of `npm run check` show each slide before its first step, hence they are not enough, and text past the edge of a slide is cut off without an error. Open the light PNGs of `npm run check` as well, since a figure may be visible in one mode only.
+Run `npm run pdf`, and read the last page of each slide in `slides.pdf`. If you cannot read a PDF with your tools, turn the pages into images first, e.g. with `pdftoppm` or PyMuPDF. In the screenshots of `npm run check`, each slide is shown before its first step, and text past the edge of a slide is cut off without an error. Open the light PNGs of `npm run check` as well, since a figure may be visible in one mode only.
 
 List what you find, slide by slide, before you change anything. Look for these problems.
 
@@ -17,7 +17,7 @@ List what you find, slide by slide, before you change anything. Look for these p
 - A figure that is invisible or boxed in white in one mode. Fix it with `for-dark` and `for-light`, `paper`, or `invert`.
 - A figure without a caption.
 - Equations shown in red, which is a MathJax error and is not reported in the console.
-- A heading that is repeated on another slide, or a topic as the heading of a slide with a finding. Write a finding only if it is shown on the slide, and otherwise a more specific topic.
+- A repeated heading, or a topic in place of a finding. Write a finding only if it is shown on the slide, and otherwise a more specific topic.
 - More than about 50 words on a slide, or two ideas on a slide. Count the words rather than estimate them.
 - Hand-written `style` attributes. Replace them with `narrow`, `wide`, `figure`, or `split`.
 
@@ -27,7 +27,9 @@ When the talk is too long, count one slide per minute, find the slides that are 
 
 ## Write in the voice of the group
 
-Write slide text with a person as the subject, or with "is", "becomes", or a passive. Write "We continue the family through the fold", not "The method tracks the fold". Do not use semicolons, em dashes, or bold labels in front of a list item.
+Make a person the subject of every active verb in the text that you write, headings included. A thing may be the subject only of "is", "becomes", or a passive, and a passive with a thing after "by" is the same fault. Write "We continue the family through the fold", not "The method tracks the fold", and "We stop the run early with the certificate", not "The run is ended early by the certificate". Write "the period of the orbit", not "the orbit's period". The common forms "Figure 3 shows" and "the bound holds" are fine.
+
+Reread every sentence that you wrote with a thing as its subject, and do not repair one by swapping its active verb for another. Do not use semicolons, em dashes, or bold labels in front of a list item.
 
 ## Report
 
