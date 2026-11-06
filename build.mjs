@@ -2,14 +2,15 @@
 // for a talk
 
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { build } from 'esbuild';
 
 const root = new URL('.', import.meta.url);
 const { version } = JSON.parse(readFileSync(new URL('package.json', root), 'utf8'));
 
 await build({
-  entryPoints: [new URL('src/main.ts', root).pathname],
-  outfile: new URL('theme/beeson.js', root).pathname,
+  entryPoints: [fileURLToPath(new URL('src/main.ts', root))],
+  outfile: fileURLToPath(new URL('theme/beeson.js', root)),
   bundle: true,
   format: 'iife',
   target: 'es2020',
