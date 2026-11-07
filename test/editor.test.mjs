@@ -170,6 +170,27 @@ test('the keys of reveal.js do not fire while a block is typed into', async (t) 
   assert.deepEqual(page.errors, []);
 });
 
+test('the video slide and the viewer are left alone, and the deck is still while it is edited', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  // without ?still, hence the backdrops are still by the editor alone
+  const page = await editorPage(browser, 'edit');
+  const status = await page.evaluate(openDeck);
+  assert.deepEqual(status.problems, []);
+  assert.equal(await page.evaluate(`document.querySelectorAll('video[contenteditable], tycho-viewer[contenteditable], .zone[contenteditable], img[contenteditable]').length`), 0);
+  assert.equal(await page.evaluate(`!!document.querySelector('.reveal section:has(video) > h2[contenteditable="true"]')`), true);
+  assert.equal(await page.evaluate('Reveal.getIndices().h'), 0);
+  assert.equal(await page.evaluate('Beeson.backdrops.every((o) => !o.raf)'), true);
+  await page.evaluate(`(async () => {
+    const r = document.querySelector('.reveal section.present .backdrop').getBoundingClientRect();
+    document.dispatchEvent(new PointerEvent('pointermove', { clientX: r.left + r.width / 2, clientY: r.top + r.height / 2, bubbles: true }));
+    await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+  })()`);
+  assert.equal(await page.evaluate('Beeson.backdrops.every((o) => !o.pointer)'), true);
+  assert.deepEqual(await page.evaluate('({ transition: Reveal.getConfig().transition, fragments: Reveal.getConfig().fragments })'), { transition: 'none', fragments: false });
+  assert.deepEqual(page.errors, []);
+});
+
 test('the print view of the PDF and of PowerPoint does not load the editor', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
