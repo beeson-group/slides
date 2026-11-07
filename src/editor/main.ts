@@ -14,6 +14,9 @@ import { parseSource, type Source } from './source.ts';
 import { pair, renderDeck, type Pairing } from './render.ts';
 import { contentWithTex, mathLookup, mathReady, previewTex, retypeset, setContentWithTex } from './math.ts';
 import { History } from './history.ts';
+import { Nav } from './nav.ts';
+import { Steps } from './steps.ts';
+import { Move } from './move.ts';
 import type { TagEdit } from './tags.ts';
 import { CSS } from './styles.ts';
 
@@ -162,8 +165,20 @@ const history = new History({
     if (dirty) cleanIfSaved();
   },
 });
+const relayout = () => {
+  deck()?.layout();
+  layout();
+};
+const nav = new Nav({ slides: () => [...slides().querySelectorAll(':scope > section')], current, go: showSlide, layout: relayout });
+const steps = new Steps({ pairing: () => pairing, slide: current, edits: tagEdits, markDirty, layout: relayout, show: showSlide, record: (e) => history.push(e), tex: (el) => mathLookup()(el)?.tex ?? null });
+const move = new Move({ pairing: () => pairing, slide: current, scale: () => deck()?.getScale() ?? 1, edits: tagEdits, markDirty, onChange: () => steps.refresh(), show: showSlide, record: (e) => history.push(e) });
+bottom.append(prevButton, countEl, nextButton, hintEl, nav.button, steps.button, notesButton);
+
 // the frames, the numbers, the list, and the overflow marks follow the slide after a change
 function follow(): void {
+  steps.refresh();
+  move.refresh();
+  nav.refresh();
 }
 
 // the pane under the slide, which the notes of the current slide are laid over, and the strip
@@ -309,6 +324,7 @@ function attach(): void {
   for (const h of next) if (h.getAttribute('contenteditable') !== 'true') h.setAttribute('contenteditable', 'true');
   hosts = next;
   for (const h of next) if (h.matches('aside.notes')) h.setAttribute('aria-label', 'Speaker notes');
+  move.mark(pairing);
   markMath(slides());
   document.documentElement.classList.toggle('beeson-editing', hosts.length > 0);
 }
@@ -341,6 +357,7 @@ function open(text: string, fresh = true): ReturnType<typeof status> {
   tagEdits.clear();
   if (fresh) {
     history.clear();
+    move.select(null);
   }
   try {
     source = parseSource(text);
@@ -661,6 +678,7 @@ async function init(): Promise<void> {
   style.id = 'beeson-editor';
   style.textContent = CSS;
   document.head.append(style);
+  document.body.append(top, bottom, pane, resizer, nav.pane, steps.pane, steps.badges, move.frame, move.selectedFrame, move.handle, move.guideV, move.guideH, move.offset, card, recover, ask, problemsCard);
   document.documentElement.classList.add('beeson-editor');
   // a pointer click leaves the focus on the slide, and Enter or Space on a focused button keeps it
   const wire = (el: HTMLButtonElement, action: () => unknown) => el.addEventListener('click', (ev) => {
