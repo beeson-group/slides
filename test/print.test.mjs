@@ -72,6 +72,37 @@ test('a tycho viewer is printed with its scene', { timeout: 60000 }, async (t) =
   assert.ok(scene.colors > 100, `the largest image of the page has ${scene.colors} colors, and it is ${scene.width} by ${scene.height}`);
 });
 
+// a viewer is cloned for each step, and only 16 WebGL contexts are kept by Chrome, hence a deck of
+// more steps was printed with empty panels on most of them. the stills are read in the page, since
+// an image shared by the pages is stored once in the PDF, outside the dictionaries of the pages
+test('a tycho viewer is printed with its scene on every step of its slide', { timeout: 120000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await printView(page, deckUrl('test/pages/viewer-steps.html', 'print-pdf&still'));
+
+  // the painted pixels of the still of each page, where a still of a lost context has none
+  const stills = await page.evaluate(`[...document.querySelectorAll('.pdf-page')].map((p) => {
+    const image = p.querySelector('img[alt="A still of a tycho scene"]');
+    if (!image) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = image.naturalWidth;
+    canvas.height = image.naturalHeight;
+    const context = canvas.getContext('2d');
+    context.drawImage(image, 0, 0);
+    const data = context.getImageData(0, 0, canvas.width, canvas.height).data;
+    let painted = 0;
+    for (let i = 3; i < data.length; i += 4) if (data[i]) painted++;
+    return { width: image.naturalWidth, height: image.naturalHeight, painted };
+  })`);
+
+  // 17 fragments, the slide before them, and the step that restores the dimmed fragments
+  assert.equal(stills.length, 19);
+  const empty = stills.map((still, i) => [i + 1, still]).filter(([, still]) => !still || still.painted < still.width * still.height);
+  assert.deepEqual(empty, []);
+  assert.equal(new Set(stills.map((still) => `${still.width}x${still.height}`)).size, 1, 'the still has one size on every step');
+});
+
 test('the check fails on a video without a poster', () => {
   const out = mkdtempSync(join(tmpdir(), 'beeson-poster-'));
   try {

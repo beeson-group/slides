@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Viewer deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+</head>
+<body>
+<!-- a tycho viewer on a slide of 18 steps, which is cloned for each step in the print view of
+     reveal.js. a page keeps 16 WebGL contexts in Chrome, hence a clone that loads its scene loses
+     the context of an older one. the scene is one loop of 48 samples, written with pytycho -->
+<div class="reveal">
+  <div class="slides">
+    <section>
+      <h2>A viewer in a zone</h2>
+      <p class="fragment">Step 1</p>
+      <p class="fragment">Step 2</p>
+      <p class="fragment">Step 3</p>
+      <p class="fragment">Step 4</p>
+      <p class="fragment">Step 5</p>
+      <p class="fragment">Step 6</p>
+      <p class="fragment">Step 7</p>
+      <p class="fragment">Step 8</p>
+      <p class="fragment">Step 9</p>
+      <p class="fragment">Step 10</p>
+      <p class="fragment">Step 11</p>
+      <p class="fragment">Step 12</p>
+      <p class="fragment">Step 13</p>
+      <p class="fragment">Step 14</p>
+      <p class="fragment">Step 15</p>
+      <p class="fragment">Step 16</p>
+      <p class="fragment">Step 17</p>
+      <tycho-viewer theme="dark" class="zone">
+      <script type="application/octet-stream" data-tycho="scene" data-encoding="base64">eyJmb3JtYXQiOiJ0eWNoby1zY2VuZSIsInZlcnNpb24iOiIwLjMiLCJnZW5lcmF0b3IiOiJweXR5Y2hvIDAuMi4wIiwidGl0bGUiOiJhIGxvb3AiLCJmcmFtZXMiOnsicm90YXRpbmciOnsiYXhlcyI6WyJ4IiwieSIsInoiXX19LCJ0cmFja19zZXRzIjp7Imxvb3AiOnsiZnJhbWUiOiJyb3RhdGluZyIsInRyYWNrcyI6MSwib2Zmc2V0cyI6Imxvb3Avb2Zmc2V0cyIsInBvc2l0aW9ucyI6Imxvb3AvcG9zaXRpb25zIiwiY2hhbm5lbHMiOnsiYW5nbGUiOnsidmlldyI6Imxvb3AvY2hhbm5lbHMvYW5nbGUifX0sInBlcmlvZGljIjp0cnVlfX0sImNsb2NrIjp7Im1vZGUiOiJmcmFjdGlvbiIsImNoYW5uZWxzIjpbImFuZ2xlIl0sInN0ZXBzIjoyNH0sInZpZXdzIjp7Im1haW4iOnsiZnJhbWUiOiJyb3RhdGluZyIsImRyaXZlciI6eyJzZXRzIjp7InNldCI6Imxvb3AifSwibWVtYmVyIjp7ImluZGV4IjowfX0sImxheWVycyI6W3sia2luZCI6InRyYWNrIiwic2V0cyI6eyJzZXQiOiJsb29wIn0sIm1lbWJlcnMiOiJhbGwiLCJyZXZlYWwiOiJub25lIn0seyJraW5kIjoidHJhY2siLCJzZXRzIjp7InNldCI6Imxvb3AifSwibWVtYmVycyI6eyJpbmRleCI6MH0sInJldmVhbCI6InRyYWlsIiwidHJhaWwiOnsiZnJhY3Rpb24iOjAuM30sImhlYWQiOnRydWUsIndpZHRoIjoyLjB9LHsia2luZCI6ImF4ZXMifV19fSwiY29udHJvbHMiOlt7ImtpbmQiOiJ0cmFuc3BvcnQifV0sImluaXRpYWwiOnsidmFyaWFibGVzIjp7fSwiY2xvY2siOnsiY2hhbm5lbCI6ImFuZ2xlIn0sInBhbmVscyI6eyJwMSI6eyJ2aWV3IjoibWFpbiJ9fSwibGF5b3V0Ijp7ImtpbmQiOiJwYW5lbCIsImlkIjoicDEifX19</script>
+      <script type="application/octet-stream" data-tycho="data" data-encoding="base64">VFlDRAEAAAADAgAAeyJmb3JtYXQiOiJ0eWNoby1kYXRhIiwidmVyc2lvbiI6MSwiZ2VuZXJhdG9yIjoicHl0eWNobyAwLjIuMCIsIm1ldGEiOnsiY2FzdHMiOnsibG9vcC9vZmZzZXRzIjoiaW50NjQiLCJsb29wL3Bvc2l0aW9ucyI6ImZsb2F0NjQiLCJsb29wL2NoYW5uZWxzL2FuZ2xlIjoiZmxvYXQ2NCJ9fSwidmlld3MiOnsibG9vcC9vZmZzZXRzIjp7ImR0eXBlIjoidWludDMyIiwic2hhcGUiOlsyXSwiZW5jb2RpbmciOiJyYXciLCJvZmZzZXQiOjAsImxlbmd0aCI6OH0sImxvb3AvcG9zaXRpb25zIjp7ImR0eXBlIjoiZmxvYXQzMiIsInNoYXBlIjpbNDgsMl0sImVuY29kaW5nIjoic2h1ZmZsZS1kZWx0YS1kZWZsYXRlIiwiY2h1bmtfcm93cyI6MTMxMDcyLCJjaHVua3MiOltbOCwzMzZdXX0sImxvb3AvY2hhbm5lbHMvYW5nbGUiOnsiZHR5cGUiOiJmbG9hdDMyIiwic2hhcGUiOls0OF0sImVuY29kaW5nIjoic2h1ZmZsZS1kZWx0YS1kZWZsYXRlIiwiY2h1bmtfcm93cyI6MjYyMTQ0LCJjaHVua3MiOltbMzQ0LDc1XV19fX0AAAAAADAAAAB4nGNgcEwwtneqnqgUtqn1Wb2d/o4a5e8nt2rodkpuNqwPaWZcJ/WG59qG2ObHO0Q+dD7UZmCQvypQ7vGmVjZg8RetZyL/g9bUnm987nu53PsGp3nL3YsejYeqpVb55d/b13r24P5LDAzbawxOnJgzeepSQ/6YRyImaV9TYxXnbLivUjI5XujyVusJHdumWhpq5nJEcnCw9F1mYCjU+f572fdJ389dyzpW7nkkX8drwdvuHIXbyf6L7nHNOj1T9vWHxVHncrLMk8+be2xpYPjb8bPui8MHqzcyLyWfit0TOsi3lSue1ZpR8U/uD/vPRu+lX0u8EH0qeI33IOcSFhsGht+Hv0V/snun+UrqufgTkbMCB3gmsd9jPvJvwS+vr3YfFd9KvRR7JvyY/yj3frZGphZ7hv+2/xkwYT0DIzbh/wwN2AT/YRf+z/AcALXVuUt4nGNYzRC6Wktbu2Hq1GlAZOrt5Y2EXquqqaIihicMRb2WlpYhMmBwrA8FmLujAwaOBhdrJSUlSUEwEOBABSzogMGOgSQAAEzkIdQAAAAAAA==</script>
+      </tycho-viewer>
+    </section>
+  </div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/vendor/tycho/tycho.js"></script>
+<script src="../../theme/vendor/three/three.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>
