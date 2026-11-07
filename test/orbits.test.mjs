@@ -8,9 +8,9 @@ import { SCENE_NAMES, scene } from '../src/scenes.ts';
 const H = 0.004;
 // the smallest number of strands expected in each scene. the L2 family of nest is ended after 7 of
 // its 12 members
-const FEWEST = { nest: 24, dro: 9, l1: 26, l2: 20, lyapunovs: 32, mark: 1, tubes: 114, halo: 74, rosette: 13, hill: 15, transfer: 25 };
+const FEWEST = { nest: 24, dro: 9, l1: 26, l2: 20, lyapunovs: 32, mark: 1, tubes: 114, halo: 74, rosette: 13, hill: 15, transfer: 25, ribbon: 181, wideRibbon: 241 };
 // the scenes with strands that are not periodic orbits
-const FLIGHTS = ['tubes', 'transfer', 'hill'];
+const FLIGHTS = ['tubes', 'transfer', 'hill', 'ribbon', 'wideRibbon'];
 
 test('the collinear points L1 and L2 are at the Earth–Moon values', () => {
   assert.ok(Math.abs(lagrange(1) - 0.8369) < 5e-4);
@@ -64,6 +64,19 @@ test('an unstable tube leaves its orbit, a stable tube arrives on it, and both r
   const reach = strands.filter((s) => s.tone === 'orange').map((s) => s.pts[s.pts.length - 2]);
   assert.ok(reach.some((x) => x < 0.5), 'a strand toward the Earth');
   assert.ok(reach.some((x) => x > 1.3), 'a strand past L2');
+});
+
+test('a ribbon runs from its orbit around the Earth, with its stable tube the mirror image', () => {
+  for (const name of ['ribbon', 'wideRibbon']) {
+    const strands = scene(name), [orbit] = strands, orange = strands.filter((s) => s.tone === 'orange');
+    const left = (s) => { let x = Infinity; for (let i = 0; i < s.pts.length; i += 2) x = Math.min(x, s.pts[i]); return x; };
+    assert.equal(orbit.tone, 'text');
+    assert.equal(strands.filter((s) => s.tone === 'violet').length, orange.length);
+    for (const s of orange) {
+      assert.ok(Math.hypot(s.pts[0] - lagrange(1), s.pts[1]) < 0.1, `${name} starts near L1`);
+      assert.ok(left(s) < -0.3, `${name} passes the far side of the Earth`);
+    }
+  }
 });
 
 test('the transfer is one unbroken path from near the Earth to near the Moon', () => {
