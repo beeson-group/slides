@@ -1,12 +1,13 @@
 // the entry point of beeson.js. window.Beeson.start() is called in a deck to initialize reveal.js
-// with the defaults of the theme, and to start the orbit backdrops, the fragment steps, the mode
-// switch, and the pointer
+// with the defaults of the theme, and to start the orbit backdrops, the plots, the fragment steps,
+// the mode switch, and the pointer
 
 import { Orbits, mount } from './orbits.ts';
 import { initChrome } from './chrome.ts';
 import { initCursor, togglePointer } from './cursor.ts';
+import { mountPlots, type PlotView } from './plot.ts';
 import { stillViewers } from './print.ts';
-import { applyAll, initSteps, typeset } from './steps.ts';
+import { applyAll, applySteps, initSteps, typeset } from './steps.ts';
 import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.ts';
 import type { RevealOptions, SlideEvent } from './reveal.d.ts';
 
@@ -36,16 +37,29 @@ const DEFAULTS: RevealOptions = {
 const TRACED = ['title', 'section', 'closing'];
 
 const backdrops: Orbits[] = [];
+const plots: PlotView[] = [];
 
 const still = () => Orbits.reduced() || window.Reveal.isPrintView() || /print-pdf/.test(location.search);
 
 function remount(): void {
   for (const o of mount(document)) if (!backdrops.includes(o)) backdrops.push(o);
+  for (const p of mountPlots(document)) if (!plots.includes(p)) plots.push(p);
 }
 
 const within = (slide: Element | null | undefined) => (slide ? backdrops.filter((o) => slide.contains(o.el)) : []);
+const plotsIn = (slide: Element | null | undefined) => (slide ? plots.filter((p) => slide.contains(p.el)) : []);
+
+// a plot is laid out and set to the steps of its slide, and the highlights of the slide are applied
+// again to the marks it has drawn
+function stepPlots(slide: Element): void {
+  const own = plotsIn(slide);
+  for (const p of own) { p.fit(); p.syncSteps(); }
+  if (own.length) applySteps(slide);
+}
 
 function show(slide: HTMLElement): void {
+  stepPlots(slide);
+  for (const p of plotsIn(slide)) if (still()) p.still(); else p.start();
   const glide = slide.hasAttribute('data-auto-animate');
   for (const o of within(slide)) {
     o.fit();
@@ -71,6 +85,7 @@ function show(slide: HTMLElement): void {
 function completeAll(): void {
   remount();
   for (const o of backdrops) { o.fit(); o.complete(); }
+  for (const p of plots) { p.fit(); p.syncSteps(); p.still(); }
   applyAll(document);
 }
 
@@ -101,9 +116,14 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   deck.on('slidechanged', (event) => {
     const ev = event as SlideEvent;
     if (!still()) for (const o of within(ev.previousSlide)) if (!ev.currentSlide.contains(o.el)) o.reset();
+    for (const p of plotsIn(ev.previousSlide)) if (!ev.currentSlide.contains(p.el)) p.pause();
     show(ev.currentSlide);
   });
-  deck.on('resize', () => { for (const o of backdrops) o.fit(); });
+  for (const type of ['fragmentshown', 'fragmenthidden']) deck.on(type, () => stepPlots(deck.getCurrentSlide()));
+  deck.on('resize', () => {
+    for (const o of backdrops) o.fit();
+    stepPlots(deck.getCurrentSlide());
+  });
   syncViewers(get());
   document.addEventListener('beeson:theme', () => {
     for (const o of backdrops) o.redraw();
@@ -126,6 +146,7 @@ const Beeson = {
   start,
   theme: { get, set: (theme: 'dark' | 'light') => set(theme), toggle: () => toggle() },
   backdrops,
+  plots,
   version: __VERSION__,
 };
 

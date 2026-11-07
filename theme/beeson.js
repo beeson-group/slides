@@ -142,12 +142,12 @@
   }
   function lap(orbit, ax, ay, bx, by) {
     const n = orbit.times.length - 1;
-    const nearest = (x, y) => {
+    const nearest2 = (x, y) => {
       let best = 0;
       for (let i = 1; i < n; i++) if (Math.hypot(orbit.pts[2 * i] - x, orbit.pts[2 * i + 1] - y) < Math.hypot(orbit.pts[2 * best] - x, orbit.pts[2 * best + 1] - y)) best = i;
       return best;
     };
-    const from = nearest(ax, ay), count = n + (nearest(bx, by) - from + n) % n + 1;
+    const from = nearest2(ax, ay), count = n + (nearest2(bx, by) - from + n) % n + 1;
     const pts = new Float64Array(2 * count), times = new Float32Array(count);
     for (let k = 0; k < count; k++) {
       const i = (from + k) % n;
@@ -442,7 +442,7 @@
     for (let i = 0; i < 6; i++) s[i] += dt / 6 * (K1[i] + 2 * K2[i] + 2 * K3[i] + K4[i]);
     return dt;
   }
-  function toCrossing(s0, h, tmin, tmax, path, times, count = 1, axis = 1) {
+  function toCrossing(s0, h, tmin, tmax, path, times, count = 1, axis2 = 1) {
     const s = Float64Array.from(s0);
     let t = 0;
     const record = () => {
@@ -450,11 +450,11 @@
       if (times) times.push(t);
     };
     record();
-    let prev = s[axis], left = count;
+    let prev = s[axis2], left = count;
     for (let n = 0; n < 1e5; n++) {
       t += step(s, h);
-      if (t > tmin && (s[axis] === 0 || s[axis] > 0 !== prev > 0) && --left === 0) {
-        const dtc = -s[axis] / s[axis + 3];
+      if (t > tmin && (s[axis2] === 0 || s[axis2] > 0 !== prev > 0) && --left === 0) {
+        const dtc = -s[axis2] / s[axis2 + 3];
         const a = new Float64Array(6);
         accel(s, a);
         for (let i = 0; i < 6; i++) s[i] += dtc * a[i];
@@ -462,7 +462,7 @@
         record();
         return { s, t, hit: true };
       }
-      prev = s[axis];
+      prev = s[axis2];
       record();
       if (t > tmax) return { s, t, hit: false };
     }
@@ -481,13 +481,13 @@
     }
     return s;
   }
-  function correct(s0, free, target, h, tmin, tmax, iters, count = 1, axis = 1) {
+  function correct(s0, free, target, h, tmin, tmax, iters, count = 1, axis2 = 1) {
     const s = Float64Array.from(s0);
     let path = [], times = [];
     for (let it = 0; it < iters; it++) {
       path = [];
       times = [];
-      const base = toCrossing(s, h, tmin, tmax, path, times, count, axis);
+      const base = toCrossing(s, h, tmin, tmax, path, times, count, axis2);
       if (!base.hit) return null;
       const f = target.map((i) => base.s[i]);
       if (f.every((v) => Math.abs(v) < 1e-6)) return { s, path, times, t: base.t };
@@ -496,7 +496,7 @@
         const d = 1e-6;
         const sp = Float64Array.from(s);
         sp[free[j]] += d;
-        const r2 = toCrossing(sp, h, tmin, tmax, void 0, void 0, count, axis);
+        const r2 = toCrossing(sp, h, tmin, tmax, void 0, void 0, count, axis2);
         if (!r2.hit) return null;
         J.push(target.map((i, k) => (r2.s[i] - f[k]) / d));
       }
@@ -511,10 +511,10 @@
     }
     path = [];
     times = [];
-    const r = toCrossing(s, h, tmin, tmax, path, times, count, axis);
+    const r = toCrossing(s, h, tmin, tmax, path, times, count, axis2);
     return r.hit ? { s, path, times, t: r.t } : null;
   }
-  function family(guess, p, values, free, target, h, tmin, tmax, skip, count = 1, axis = 1) {
+  function family(guess, p, values, free, target, h, tmin, tmax, skip, count = 1, axis2 = 1) {
     const out = [];
     let prev = null, prev2 = null;
     const accept = (r) => r && (!prev || Math.abs(r.t - prev.t) < prev.t / 3) ? r : null;
@@ -524,9 +524,9 @@
         const s0 = Float64Array.from(prev.s);
         s0[p] = v;
         for (const i of free) s0[i] = prev.s[i] + (prev.s[i] - prev2.s[i]) / (prev.s[p] - prev2.s[p]) * (v - prev.s[p]);
-        r = accept(correct(s0, free, target, h, tmin(v), tmax(v), 6, count, axis));
+        r = accept(correct(s0, free, target, h, tmin(v), tmax(v), 6, count, axis2));
       }
-      if (!r) r = accept(correct(guess(v), free, target, h, tmin(v), tmax(v), 8, count, axis));
+      if (!r) r = accept(correct(guess(v), free, target, h, tmin(v), tmax(v), 8, count, axis2));
       if (!r) break;
       out.push(r);
       prev2 = prev;
@@ -936,9 +936,9 @@
       run.textContent = text;
       slide.append(run);
     }
-    for (const list of document.querySelectorAll(".reveal ul.outline[data-auto]")) {
-      const home = list.closest("section");
-      list.replaceChildren(
+    for (const list2 of document.querySelectorAll(".reveal ul.outline[data-auto]")) {
+      const home = list2.closest("section");
+      list2.replaceChildren(
         ...sections.map((s) => {
           const li = document.createElement("li");
           li.textContent = heading(s);
@@ -1013,6 +1013,784 @@
     });
   }
 
+  // src/plot.ts
+  var KINDS = ["points", "trace", "label", "events"];
+  function fail(path, what) {
+    throw new Error(`${path}: ${what}`);
+  }
+  var isObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+  function num(v, path, fallback) {
+    if (v === void 0 && fallback !== void 0) return fallback;
+    if (typeof v !== "number" || !Number.isFinite(v)) fail(path, "a number is expected");
+    return v;
+  }
+  function str(v, path, fallback) {
+    if (v === void 0 && fallback !== void 0) return fallback;
+    if (typeof v !== "string") fail(path, "a string is expected");
+    return v;
+  }
+  function list(v, path, fallback) {
+    if (v === void 0 && fallback !== void 0) return fallback;
+    if (!Array.isArray(v)) fail(path, "a list is expected");
+    return v;
+  }
+  function pair(v, path) {
+    const a = list(v, path);
+    if (a.length !== 2) fail(path, "a pair [x, y] is expected");
+    return [num(a[0], `${path}[0]`), num(a[1], `${path}[1]`)];
+  }
+  var pairs = (v, path) => list(v, path).map((p, i) => pair(p, `${path}[${i}]`));
+  function anchor(v, path) {
+    const a = str(v, path, "middle");
+    if (a !== "start" && a !== "middle" && a !== "end") fail(path, "start, middle, or end is expected");
+    return a;
+  }
+  function item(o, path, tone) {
+    const cls = str(o.class, `${path}.class`, "").split(/\s+/).filter(Boolean);
+    return { id: o.id === void 0 ? null : str(o.id, `${path}.id`), tone: str(o.tone, `${path}.tone`, tone), cls };
+  }
+  function axis(v, path) {
+    if (!isObject(v)) fail(path, "an axis { range, ticks, title } is expected");
+    const range = pair(v.range, `${path}.range`);
+    if (!(range[1] > range[0])) fail(`${path}.range`, "the second end must be larger than the first");
+    return { range, ticks: list(v.ticks, `${path}.ticks`, []).map((t, i) => num(t, `${path}.ticks[${i}]`)), title: str(v.title, `${path}.title`, "") };
+  }
+  function panel(v, path) {
+    if (!isObject(v)) fail(path, "a panel is expected");
+    const regions = list(v.regions, `${path}.regions`, []).map((r, i) => {
+      const p = `${path}.regions[${i}]`;
+      if (!isObject(r)) fail(p, "a region is expected");
+      return { ...item(r, p, "violet"), points: pairs(r.points, `${p}.points`), opacity: num(r.opacity, `${p}.opacity`, 0.12) };
+    });
+    const curves = list(v.curves, `${path}.curves`, []).map((c, i) => {
+      const p = `${path}.curves[${i}]`;
+      if (!isObject(c)) fail(p, "a curve is expected");
+      let circle = null;
+      if (c.circle !== void 0) {
+        const a = list(c.circle, `${p}.circle`);
+        if (a.length !== 3) fail(`${p}.circle`, "a circle [cx, cy, r] is expected");
+        circle = [num(a[0], `${p}.circle[0]`), num(a[1], `${p}.circle[1]`), num(a[2], `${p}.circle[2]`)];
+      } else if (c.points === void 0) fail(p, "points or circle is expected");
+      const dash = c.dash === void 0 ? null : list(c.dash, `${p}.dash`).map((d, j) => num(d, `${p}.dash[${j}]`));
+      return { ...item(c, p, "subtle"), points: circle ? null : pairs(c.points, `${p}.points`), circle, width: num(c.width, `${p}.width`, 2), dash };
+    });
+    const labels = list(v.labels, `${path}.labels`, []).map((l, i) => {
+      const p = `${path}.labels[${i}]`;
+      if (!isObject(l)) fail(p, "a label is expected");
+      return { ...item(l, p, "subtle"), at: pair(l.at, `${p}.at`), text: str(l.text, `${p}.text`), anchor: anchor(l.anchor, `${p}.anchor`), dx: num(l.dx, `${p}.dx`, 0), dy: num(l.dy, `${p}.dy`, 0) };
+    });
+    return {
+      id: str(v.id, `${path}.id`),
+      x: axis(v.x, `${path}.x`),
+      y: axis(v.y, `${path}.y`),
+      equal: v.equal === true,
+      axes: v.axes !== false,
+      title: str(v.title, `${path}.title`, ""),
+      regions,
+      curves,
+      labels
+    };
+  }
+  function markData(m, v, frames, path) {
+    const perFrame = (n) => n === 1 || n === frames || fail(path, `${n} frames are given, and the tab has ${frames} values`);
+    if (m.kind === "points") {
+      const a = list(v, path).map((f, i) => list(f, `${path}[${i}]`).map((x, j) => num(x, `${path}[${i}][${j}]`)));
+      perFrame(a.length);
+      a.forEach((f, i) => f.length % 2 === 0 || fail(`${path}[${i}]`, "pairs of x and y are expected"));
+      return a;
+    }
+    if (m.kind === "trace") {
+      const a = pairs(v, path);
+      perFrame(a.length);
+      return a;
+    }
+    if (m.kind === "label") {
+      if (!isObject(v)) fail(path, "a label { at, text } is expected");
+      const at = Array.isArray(v.at) && Array.isArray(v.at[0]) ? pairs(v.at, `${path}.at`) : [pair(v.at, `${path}.at`)];
+      const text = Array.isArray(v.text) ? v.text.map((t, i) => str(t, `${path}.text[${i}]`)) : [str(v.text, `${path}.text`)];
+      perFrame(at.length);
+      perFrame(text.length);
+      return { at, text };
+    }
+    return list(v, path).map((e, i) => {
+      const p = `${path}[${i}]`;
+      if (!isObject(e)) fail(p, "an event { frame, at, text } is expected");
+      const frame = num(e.frame, `${p}.frame`);
+      if (frame < 0 || frame > frames - 1) fail(`${p}.frame`, `a frame from 0 to ${frames - 1} is expected`);
+      return { frame, at: pair(e.at, `${p}.at`), text: str(e.text, `${p}.text`, "") };
+    });
+  }
+  function parsePlot(input) {
+    const v = typeof input === "string" ? JSON.parse(input) : input;
+    if (!isObject(v)) fail("plot", "an object is expected");
+    const panels = list(v.panels, "panels").map((p, i) => panel(p, `panels[${i}]`));
+    if (!panels.length) fail("panels", "at least one panel is expected");
+    const ids = new Set(panels.map((p) => p.id));
+    if (ids.size !== panels.length) fail("panels", "the ids of the panels must differ");
+    const marks = list(v.marks, "marks", []).map((m, i) => {
+      const p = `marks[${i}]`;
+      if (!isObject(m)) fail(p, "a mark is expected");
+      const kind = str(m.kind, `${p}.kind`);
+      if (!KINDS.includes(kind)) fail(`${p}.kind`, `one of ${KINDS.join(", ")} is expected`);
+      const at = str(m.panel, `${p}.panel`);
+      if (!ids.has(at)) fail(`${p}.panel`, `the panel ${at} is not declared`);
+      const base = item(m, p, "accent");
+      return {
+        ...base,
+        id: str(m.id, `${p}.id`),
+        panel: at,
+        kind,
+        tone: base.tone,
+        size: num(m.size, `${p}.size`, kind === "events" ? 16 : 10),
+        width: num(m.width, `${p}.width`, 3),
+        hollow: m.hollow === true,
+        anchor: anchor(m.anchor, `${p}.anchor`),
+        dx: num(m.dx, `${p}.dx`, 0),
+        dy: num(m.dy, `${p}.dy`, 0)
+      };
+    });
+    const tabs = list(v.tabs, "tabs").map((t, i) => {
+      const p = `tabs[${i}]`;
+      if (!isObject(t)) fail(p, "a tab is expected");
+      const name = str(t.name, `${p}.name`);
+      const values = list(t.values, `${p}.values`).map((x, j) => num(x, `${p}.values[${j}]`));
+      if (!values.length) fail(`${p}.values`, "at least one value is expected");
+      const raw = t.data === void 0 ? {} : t.data;
+      if (!isObject(raw)) fail(`${p}.data`, "an object of mark ids is expected");
+      const data = {};
+      for (const key of Object.keys(raw)) {
+        const m = marks.find((mark) => mark.id === key) ?? fail(`${p}.data.${key}`, "the mark is not declared");
+        data[key] = markData(m, raw[key], values.length, `${p}.data.${key}`);
+      }
+      let active = null;
+      if (t.active !== void 0) {
+        active = list(t.active, `${p}.active`).map((f, j) => typeof f === "string" ? [f] : list(f, `${p}.active[${j}]`).map((s, k) => str(s, `${p}.active[${j}][${k}]`)));
+        if (active.length !== values.length) fail(`${p}.active`, `${active.length} frames are given, and the tab has ${values.length} values`);
+      }
+      return { name, label: str(t.label, `${p}.label`, name), values, data, active };
+    });
+    if (!tabs.length) fail("tabs", "at least one tab is expected");
+    const parameter = isObject(v.parameter) ? v.parameter : {};
+    const layout = v.layout === void 0 ? null : str(v.layout, "layout");
+    if (layout !== null && layout !== "row" && layout !== "column") fail("layout", "row or column is expected");
+    return {
+      parameter: { label: str(parameter.label, "parameter.label", ""), digits: num(parameter.digits, "parameter.digits", 3) },
+      duration: num(v.duration, "duration", 8),
+      hold: num(v.hold, "hold", 1),
+      layout,
+      panels,
+      marks,
+      tabs
+    };
+  }
+  var clamp = (x, a, b) => Math.min(b, Math.max(a, x));
+  function valueAt(values, u) {
+    const n = values.length;
+    if (n === 1) return values[0];
+    const v = clamp(u, 0, n - 1), i = Math.min(n - 2, Math.floor(v)), f = v - i;
+    return values[i] + f * (values[i + 1] - values[i]);
+  }
+  function nearest(frames, u) {
+    return frames[clamp(Math.round(u), 0, frames.length - 1)];
+  }
+  function framesAt(frames, u) {
+    const n = frames.length;
+    if (n === 1) return frames[0];
+    const v = clamp(u, 0, n - 1), i = Math.min(n - 2, Math.floor(v)), f = v - i;
+    const a = frames[i], b = frames[i + 1];
+    if (a.length !== b.length) return nearest(frames, v);
+    return a.map((x, k) => x + f * (b[k] - x));
+  }
+  function traceTo(path, u) {
+    const n = path.length, v = clamp(u, 0, n - 1), i = Math.floor(v), f = v - i;
+    const out = path.slice(0, i + 1);
+    if (f > 0 && i < n - 1) out.push([path[i][0] + f * (path[i + 1][0] - path[i][0]), path[i][1] + f * (path[i + 1][1] - path[i][1])]);
+    return out;
+  }
+  function loopFrame(t, n, duration, hold) {
+    if (n < 2) return 0;
+    const tau = (t % (duration + hold) + duration + hold) % (duration + hold);
+    return Math.min(1, tau / duration) * (n - 1);
+  }
+  var MINUS = "\u2212";
+  function formatNumber(x, digits) {
+    const s = digits === void 0 ? String(Number(x.toPrecision(6))) : x.toFixed(digits);
+    return s.replace(/^-(?=.*[1-9])/, MINUS).replace(/^-/, "");
+  }
+  var SYMBOLS = {
+    alpha: "\u03B1",
+    beta: "\u03B2",
+    gamma: "\u03B3",
+    delta: "\u03B4",
+    epsilon: "\u03B5",
+    varepsilon: "\u03B5",
+    zeta: "\u03B6",
+    eta: "\u03B7",
+    theta: "\u03B8",
+    iota: "\u03B9",
+    kappa: "\u03BA",
+    lambda: "\u03BB",
+    mu: "\u03BC",
+    nu: "\u03BD",
+    xi: "\u03BE",
+    pi: "\u03C0",
+    rho: "\u03C1",
+    sigma: "\u03C3",
+    tau: "\u03C4",
+    upsilon: "\u03C5",
+    phi: "\u03C6",
+    varphi: "\u03C6",
+    chi: "\u03C7",
+    psi: "\u03C8",
+    omega: "\u03C9",
+    Gamma: "\u0393",
+    Delta: "\u0394",
+    Theta: "\u0398",
+    Lambda: "\u039B",
+    Xi: "\u039E",
+    Pi: "\u03A0",
+    Sigma: "\u03A3",
+    Phi: "\u03A6",
+    Psi: "\u03A8",
+    Omega: "\u03A9",
+    pm: "\xB1",
+    mp: "\u2213",
+    infty: "\u221E",
+    cdot: "\xB7",
+    times: "\xD7",
+    approx: "\u2248",
+    le: "\u2264",
+    ge: "\u2265",
+    ne: "\u2260",
+    to: "\u2192",
+    in: "\u2208"
+  };
+  function parseMarkup(src) {
+    const runs = [];
+    const push = (text, italic, shift) => {
+      const last = runs.at(-1);
+      if (last && last.italic === italic && last.shift === shift) last.text += text;
+      else runs.push({ text, italic, shift });
+    };
+    const parts = src.split("$");
+    parts.forEach((part, k) => {
+      if (k % 2 === 0) {
+        if (part) push(part, false, null);
+        return;
+      }
+      math(part, false, null);
+    });
+    function group(s, i) {
+      if (s[i] === "{") {
+        let depth = 0, j = i;
+        for (; j < s.length; j++) {
+          if (s[j] === "{") depth++;
+          else if (s[j] === "}" && --depth === 0) break;
+        }
+        return [s.slice(i + 1, j), j + 1];
+      }
+      if (s[i] === "\\") {
+        const m = /^\\[A-Za-z]+/.exec(s.slice(i));
+        if (m) return [m[0], i + m[0].length];
+      }
+      return [s[i] ?? "", i + 1];
+    }
+    function math(s, upright, shift) {
+      let i = 0;
+      while (i < s.length) {
+        const c = s[i];
+        if (c === "\\") {
+          const m = /^\\([A-Za-z]+)/.exec(s.slice(i));
+          if (!m) {
+            push(s[i + 1] ?? "", false, shift);
+            i += 2;
+            continue;
+          }
+          i += m[0].length;
+          if (m[1] === "mathrm" || m[1] === "text") {
+            const [g, j] = group(s, i);
+            i = j;
+            math(g, true, shift);
+          } else {
+            const sym = SYMBOLS[m[1]] ?? m[0];
+            push(sym, !upright && /^[a-z]+$/.test(m[1]) && /[α-ω]/.test(sym), shift);
+          }
+        } else if (c === "_" || c === "^") {
+          const [g, j] = group(s, i + 1);
+          i = j;
+          math(g, upright, c === "_" ? "sub" : "sup");
+        } else if (c === "{" || c === "}") {
+          i++;
+        } else {
+          push(c === "-" ? MINUS : c, !upright && /[A-Za-zα-ω]/.test(c), shift);
+          i++;
+        }
+      }
+    }
+    return runs;
+  }
+  function setMarkup(el, src) {
+    el.replaceChildren(...parseMarkup(src).map((r) => {
+      let node = document.createTextNode(r.text);
+      if (r.italic) {
+        const i = document.createElement("i");
+        i.append(node);
+        node = i;
+      }
+      if (r.shift) {
+        const s = document.createElement(r.shift);
+        s.append(node);
+        node = s;
+      }
+      return node;
+    }));
+  }
+  var SVG = "http://www.w3.org/2000/svg";
+  function svg(tag, attrs, parent) {
+    const el = document.createElementNS(SVG, tag);
+    for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
+    parent?.append(el);
+    return el;
+  }
+  var toneColor = (tone) => /^[a-z][a-z0-9-]*$/.test(tone) ? `var(--${tone})` : tone;
+  var words = (s) => (s ?? "").split(/\s+/).filter(Boolean);
+  var MARGIN = { left: 76, right: 20, top: 52, bottom: 84 };
+  var GAP = 56;
+  var serial = 0;
+  var reduced = () => typeof window === "undefined" || matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var CACHE2 = /* @__PURE__ */ new WeakMap();
+  var PlotView = class {
+    constructor(el) {
+      this.spec = null;
+      this.panels = [];
+      this.tab = 0;
+      this.u = 0;
+      this.raf = 0;
+      this.t0 = 0;
+      this.W = 0;
+      this.H = 0;
+      this.uid = ++serial;
+      this.tabButtons = [];
+      this.boxes = /* @__PURE__ */ new Map();
+      this.gated = [];
+      this.emphasized = [];
+      this.drawers = [];
+      this.eventFrames = [];
+      this.shown = /* @__PURE__ */ new Set();
+      this.steps = /* @__PURE__ */ new Set();
+      this.stepTab = null;
+      this.el = el;
+      CACHE2.set(el, this);
+      for (const old of el.querySelectorAll(":scope > .plot-body, :scope > .plot-error")) old.remove();
+      try {
+        const id = el.dataset.plot ?? "";
+        const block = id ? document.getElementById(id) : null;
+        if (!block) throw new Error(`the JSON block with the id "${id}" is not found`);
+        this.spec = parsePlot(block.textContent ?? "");
+      } catch (error) {
+        const message = `plot ${el.dataset.plot ?? ""}: ${error.message}`;
+        const box = document.createElement("div");
+        box.className = "plot-error";
+        box.textContent = message;
+        el.append(box);
+        console.error(message);
+        return;
+      }
+      const only = words(el.dataset.plotPanels);
+      this.panels = only.length ? this.spec.panels.filter((p) => only.includes(p.id)) : this.spec.panels;
+      const start2 = this.spec.tabs.findIndex((t) => t.name === el.dataset.plotTab);
+      this.tab = Math.max(0, start2);
+      this.build();
+    }
+    get plot() {
+      return this.spec;
+    }
+    get frames() {
+      return this.plot.tabs[this.tab].values.length;
+    }
+    build() {
+      const plot = this.plot;
+      this.body = document.createElement("div");
+      this.body.className = "plot-body";
+      if (plot.tabs.length > 1) {
+        const bar = document.createElement("div");
+        bar.className = "plot-tabs";
+        bar.setAttribute("role", "tablist");
+        this.tabButtons = plot.tabs.map((t, i) => {
+          const b = document.createElement("button");
+          b.type = "button";
+          b.setAttribute("role", "tab");
+          setMarkup(b, t.label);
+          b.addEventListener("click", () => {
+            b.blur();
+            this.setTab(i);
+          });
+          bar.append(b);
+          return b;
+        });
+        this.body.append(bar);
+      }
+      this.area = document.createElement("div");
+      this.area.className = "plot-area";
+      this.svgEl = svg("svg", { "aria-hidden": "true" });
+      this.overlay = document.createElement("div");
+      this.overlay.className = "plot-labels";
+      this.area.append(this.svgEl, this.overlay);
+      this.body.append(this.area);
+      const controls = document.createElement("div");
+      controls.className = "plot-bar";
+      this.playButton = document.createElement("button");
+      this.playButton.type = "button";
+      this.playButton.className = "plot-play";
+      this.playButton.addEventListener("click", () => {
+        this.playButton.blur();
+        if (this.raf) this.pause();
+        else this.play();
+      });
+      this.scrub = document.createElement("div");
+      this.scrub.className = "plot-scrub";
+      this.scrub.setAttribute("data-prevent-swipe", "");
+      this.fill = document.createElement("div");
+      this.fill.className = "plot-fill";
+      this.knob = document.createElement("div");
+      this.knob.className = "plot-knob";
+      this.ticks = document.createElement("div");
+      this.ticks.className = "plot-ticks";
+      this.scrub.append(this.ticks, this.fill, this.knob);
+      const seek = (ev) => {
+        const r = this.scrub.getBoundingClientRect();
+        if (!r.width) return;
+        this.u = clamp((ev.clientX - r.left) / r.width, 0, 1) * (this.frames - 1);
+        this.draw();
+      };
+      this.scrub.addEventListener("pointerdown", (ev) => {
+        this.pause();
+        this.scrub.setPointerCapture(ev.pointerId);
+        seek(ev);
+      });
+      this.scrub.addEventListener("pointermove", (ev) => {
+        if (this.scrub.hasPointerCapture(ev.pointerId)) seek(ev);
+      });
+      const readout = document.createElement("div");
+      readout.className = "plot-readout";
+      if (plot.parameter.label) {
+        const name = document.createElement("span");
+        setMarkup(name, plot.parameter.label);
+        readout.append(name, " = ");
+      }
+      this.value = document.createElement("span");
+      this.value.className = "plot-value";
+      readout.append(this.value);
+      controls.append(this.playButton, this.scrub, readout);
+      this.body.append(controls);
+      this.el.append(this.body);
+      this.setPlaying(false);
+      this.markTabs();
+    }
+    setPlaying(on) {
+      if (!this.spec) return;
+      this.playButton.setAttribute("aria-label", on ? "Pause" : "Play");
+      this.playButton.classList.toggle("playing", on);
+    }
+    markTabs() {
+      this.tabButtons.forEach((b, i) => b.setAttribute("aria-selected", String(i === this.tab)));
+    }
+    /** Lays the panels out in the size of the element, which is measured in slide pixels. */
+    fit() {
+      if (!this.spec) return;
+      const W = this.area.offsetWidth, H2 = this.area.offsetHeight;
+      if (!W || !H2) return;
+      if (W === this.W && H2 === this.H) return;
+      this.W = W;
+      this.H = H2;
+      this.svgEl.setAttribute("viewBox", `0 0 ${W} ${H2}`);
+      this.layout();
+      this.drawStatic();
+      this.buildMarks();
+    }
+    layout() {
+      const n = this.panels.length, row = (this.plot.layout ?? (this.W >= this.H ? "row" : "column")) === "row";
+      const cw = row ? (this.W - GAP * (n - 1)) / n : this.W, ch = row ? this.H : (this.H - GAP * (n - 1)) / n;
+      this.boxes.clear();
+      this.panels.forEach((p, i) => {
+        const cx = row ? i * (cw + GAP) : 0, cy = row ? 0 : i * (ch + GAP);
+        let x = cx + MARGIN.left, y = cy + MARGIN.top, w = cw - MARGIN.left - MARGIN.right, h = ch - MARGIN.top - MARGIN.bottom;
+        const dx = p.x.range[1] - p.x.range[0], dy = p.y.range[1] - p.y.range[0];
+        if (p.equal) {
+          const s = Math.min(w / dx, h / dy);
+          x += (w - s * dx) / 2;
+          y += (h - s * dy) / 2;
+          w = s * dx;
+          h = s * dy;
+        }
+        this.boxes.set(p.id, { x, y, w, h, sx: w / dx, sy: h / dy, panel: p });
+      });
+    }
+    X(b, x) {
+      return b.x + (x - b.panel.x.range[0]) * b.sx;
+    }
+    Y(b, y) {
+      return b.y + b.h - (y - b.panel.y.range[0]) * b.sy;
+    }
+    path(b, pts) {
+      return pts.map(([x, y], i) => `${i ? "L" : "M"}${this.X(b, x).toFixed(1)} ${this.Y(b, y).toFixed(1)}`).join("");
+    }
+    label(text, left, top, a, cls, names, tone) {
+      const el = document.createElement("div");
+      el.className = `plot-label ${cls}`.trim();
+      setMarkup(el, text);
+      this.place(el, left, top, a);
+      if (tone) el.style.color = toneColor(tone);
+      this.overlay.append(el);
+      this.gate(el, names);
+      return el;
+    }
+    place(el, left, top, a) {
+      el.style.left = `${left}px`;
+      el.style.top = `${top}px`;
+      el.style.transform = `translate(${a === "start" ? 0 : a === "end" ? -100 : -50}%, -50%)`;
+    }
+    gate(node, names) {
+      const n = names.filter((s) => !!s);
+      if (n.length) this.gated.push({ node, names: n });
+    }
+    styleItem(node, it, names) {
+      node.style.color = toneColor(it.tone);
+      node.classList.add(...it.cls);
+      this.gate(node, names);
+      if (it.id) this.emphasized.push({ node, id: it.id });
+    }
+    drawStatic() {
+      this.svgEl.replaceChildren();
+      this.overlay.replaceChildren();
+      this.gated = [];
+      this.emphasized = [];
+      const defs = svg("defs", {}, this.svgEl);
+      for (const b of this.boxes.values()) {
+        const p = b.panel;
+        const g = svg("g", { class: "plot-panel" }, this.svgEl);
+        this.gate(g, [p.id]);
+        for (const [suffix, pad] of [["", 0], ["-marks", 14]]) {
+          const clip = svg("clipPath", { id: `plot-${this.uid}-${p.id}${suffix}` }, defs);
+          svg("rect", { x: b.x - pad, y: b.y - pad, width: b.w + 2 * pad, height: b.h + 2 * pad }, clip);
+        }
+        const statics = svg("g", { "clip-path": `url(#plot-${this.uid}-${p.id})` }, g);
+        for (const r of p.regions) {
+          const node = svg("path", { class: "plot-region", d: `${this.path(b, r.points)}Z`, "fill-opacity": r.opacity }, statics);
+          this.styleItem(node, r, [p.id, r.id]);
+        }
+        for (const c of p.curves) {
+          const attrs = { class: "plot-curve", "stroke-width": c.width };
+          if (c.dash) attrs["stroke-dasharray"] = c.dash.join(" ");
+          const node = c.circle ? svg("ellipse", { ...attrs, cx: this.X(b, c.circle[0]), cy: this.Y(b, c.circle[1]), rx: c.circle[2] * b.sx, ry: c.circle[2] * b.sy }, statics) : svg("path", { ...attrs, d: this.path(b, c.points ?? []) }, statics);
+          this.styleItem(node, c, [p.id, c.id]);
+        }
+        if (p.axes) {
+          const axes = svg("g", { class: "plot-axes" }, g);
+          svg("path", { d: `M${b.x} ${b.y}V${b.y + b.h}H${b.x + b.w}` }, axes);
+          for (const t of p.x.ticks) {
+            const X = this.X(b, t);
+            svg("path", { d: `M${X} ${b.y + b.h}v10` }, axes);
+            this.label(formatNumber(t), X, b.y + b.h + 32, "middle", "plot-tick", [p.id]);
+          }
+          for (const t of p.y.ticks) {
+            const Y = this.Y(b, t);
+            svg("path", { d: `M${b.x} ${Y}h-10` }, axes);
+            this.label(formatNumber(t), b.x - 18, Y, "end", "plot-tick", [p.id]);
+          }
+          if (p.x.title) this.label(p.x.title, b.x + b.w / 2, b.y + b.h + 70, "middle", "plot-title", [p.id]);
+          if (p.y.title) this.label(p.y.title, b.x, b.y - 30, "middle", "plot-title", [p.id]);
+        }
+        if (p.title) this.label(p.title, b.x + b.w, b.y - 30, "end", "plot-title", [p.id]);
+        for (const l of p.labels) {
+          const node = this.label(l.text, this.X(b, l.at[0]) + l.dx, this.Y(b, l.at[1]) + l.dy, l.anchor, "", []);
+          this.styleItem(node, l, [p.id, l.id]);
+        }
+        svg("g", { class: "plot-marks", "data-panel": p.id, "clip-path": `url(#plot-${this.uid}-${p.id}-marks)` }, g);
+      }
+    }
+    // the nodes of the marks of the current tab, with one drawer per mark that sets them at a frame
+    buildMarks() {
+      for (const g of this.svgEl.querySelectorAll(".plot-marks")) g.replaceChildren();
+      for (const old of this.overlay.querySelectorAll(".plot-mark")) old.remove();
+      this.gated = this.gated.filter((e) => e.node.isConnected);
+      this.drawers = [];
+      this.eventFrames = [];
+      const tab = this.plot.tabs[this.tab];
+      for (const m of this.plot.marks) {
+        const b = this.boxes.get(m.panel), data = tab.data[m.id];
+        const g = this.svgEl.querySelector(`.plot-marks[data-panel="${m.panel}"]`);
+        if (!b || !g || data === void 0) continue;
+        const group = svg("g", {}, g);
+        this.styleItem(group, m, [m.panel, m.id]);
+        if (m.kind === "points") {
+          const frames = data;
+          const dots = [];
+          this.drawers.push((u) => {
+            const at = framesAt(frames, u);
+            while (dots.length < at.length / 2) dots.push(svg("circle", { r: m.size / 2, class: m.hollow ? "plot-hollow" : "plot-dot", "stroke-width": m.width }, group));
+            dots.forEach((d, k) => {
+              const on = 2 * k < at.length;
+              d.style.display = on ? "" : "none";
+              if (on) {
+                d.setAttribute("cx", this.X(b, at[2 * k]).toFixed(1));
+                d.setAttribute("cy", this.Y(b, at[2 * k + 1]).toFixed(1));
+              }
+            });
+          });
+        } else if (m.kind === "trace") {
+          const pts = data;
+          svg("path", { class: "plot-ghost", d: this.path(b, pts), "stroke-width": m.width }, group);
+          const done = svg("path", { class: "plot-trace", "stroke-width": m.width }, group);
+          const head = svg("circle", { class: "plot-dot", r: m.size / 2 }, group);
+          this.drawers.push((u) => {
+            const p = traceTo(pts, u), [x, y] = p[p.length - 1];
+            done.setAttribute("d", this.path(b, p));
+            head.setAttribute("cx", this.X(b, x).toFixed(1));
+            head.setAttribute("cy", this.Y(b, y).toFixed(1));
+          });
+        } else if (m.kind === "label") {
+          const d = data;
+          const el = this.label(d.text[0], 0, 0, m.anchor, "plot-mark", [m.panel, m.id], m.tone);
+          el.classList.add(...m.cls);
+          let shown = d.text[0];
+          this.drawers.push((u) => {
+            const [x, y] = d.at.length === 1 ? d.at[0] : framesAt(d.at, u);
+            this.place(el, this.X(b, x) + m.dx, this.Y(b, y) + m.dy, m.anchor);
+            const text = nearest(d.text, u);
+            if (text !== shown) {
+              setMarkup(el, text);
+              shown = text;
+            }
+          });
+        } else {
+          const events = data;
+          const nodes = events.map((e) => {
+            const X = this.X(b, e.at[0]), Y = this.Y(b, e.at[1]);
+            const ring = svg("circle", { class: "plot-ring", cx: X, cy: Y, r: m.size / 2, "stroke-width": m.width }, group);
+            const text = e.text ? this.label(e.text, X + m.dx, Y + m.dy, m.anchor, "plot-mark", [m.panel, m.id], m.tone) : null;
+            text?.classList.add(...m.cls);
+            this.eventFrames.push({ frame: e.frame, names: [m.panel, m.id] });
+            return { frame: e.frame, nodes: [ring, text].filter((n) => !!n) };
+          });
+          this.drawers.push((u) => {
+            for (const e of nodes) for (const n of e.nodes) n.classList.toggle("plot-later", u < e.frame - 1e-6);
+          });
+        }
+      }
+      this.applyGates();
+      this.draw();
+    }
+    draw() {
+      if (!this.spec || !this.W) return;
+      const tab = this.plot.tabs[this.tab], u = this.u, n = this.frames;
+      for (const d of this.drawers) d(u);
+      this.value.textContent = formatNumber(valueAt(tab.values, u), this.plot.parameter.digits);
+      const at = `${(n > 1 ? u / (n - 1) : 0) * 100}%`;
+      this.fill.style.width = at;
+      this.knob.style.left = at;
+      if (tab.active) {
+        const on = nearest(tab.active, u), all = new Set(tab.active.flat());
+        for (const { node, id } of this.emphasized) {
+          node.classList.toggle("plot-on", on.includes(id));
+          node.classList.toggle("plot-off", all.has(id) && !on.includes(id));
+        }
+      } else for (const { node } of this.emphasized) node.classList.remove("plot-on", "plot-off");
+    }
+    hidden(names) {
+      return names.some((s) => this.steps.has(s) && !this.shown.has(s));
+    }
+    applyGates() {
+      for (const { node, names } of this.gated) node.classList.toggle("plot-hidden", this.hidden(names));
+      const n = this.frames;
+      this.ticks.replaceChildren(...this.eventFrames.filter((e) => !this.hidden(e.names)).map((e) => {
+        const t = document.createElement("div");
+        t.className = "plot-tick-mark";
+        t.style.left = `${(n > 1 ? e.frame / (n - 1) : 0) * 100}%`;
+        return t;
+      }));
+    }
+    /** Reads the fragments of the slide: the names of data-plot-show, and the tab of the last visible data-plot-tab. */
+    syncSteps() {
+      if (!this.spec) return;
+      const slide = this.el.closest("section");
+      const frags = slide ? [...slide.querySelectorAll(".fragment")] : [];
+      this.steps = new Set(frags.flatMap((f) => words(f.dataset.plotShow)));
+      const visible = frags.filter((f) => f.classList.contains("visible"));
+      this.shown = new Set(visible.flatMap((f) => words(f.dataset.plotShow)));
+      const tabbed = visible.filter((f) => f.dataset.plotTab).sort((a, b) => +(a.dataset.fragmentIndex ?? 0) - +(b.dataset.fragmentIndex ?? 0));
+      const name = tabbed.at(-1)?.dataset.plotTab ?? this.el.dataset.plotTab ?? null;
+      if (name !== this.stepTab) {
+        this.stepTab = name;
+        const i = this.plot.tabs.findIndex((t) => t.name === name);
+        if (i >= 0 && i !== this.tab) {
+          this.setTab(i);
+          return;
+        }
+      }
+      this.applyGates();
+    }
+    /** Shows the tab i, from its first frame while the plot is played, and at its still frame otherwise. */
+    setTab(i) {
+      if (!this.spec || i === this.tab) return;
+      this.tab = i;
+      this.markTabs();
+      this.u = this.raf ? 0 : this.stillFrame();
+      this.t0 = performance.now();
+      if (this.W) this.buildMarks();
+    }
+    /** The frame of a still, from data-plot-frame, where a negative frame is counted from the end. The default is the last frame. */
+    stillFrame() {
+      const f = Number(this.el.dataset.plotFrame ?? -1), n = this.frames;
+      return clamp(Number.isFinite(f) ? f < 0 ? n + f : f : n - 1, 0, n - 1);
+    }
+    /** Draws the still frame, without the animation. */
+    still() {
+      if (!this.spec) return;
+      this.pause();
+      this.u = this.stillFrame();
+      this.draw();
+    }
+    /** Starts the loop from the first frame, unless data-plot-paused is set or the motion is reduced. */
+    start() {
+      if (!this.spec) return;
+      if (this.el.hasAttribute("data-plot-paused") || reduced()) {
+        this.still();
+        return;
+      }
+      this.u = 0;
+      this.play();
+    }
+    play() {
+      if (!this.spec || this.raf) return;
+      const { duration } = this.plot, n = this.frames;
+      if (this.u >= n - 1) this.u = 0;
+      this.t0 = performance.now() - (n > 1 ? this.u / (n - 1) : 0) * duration * 1e3;
+      const tick = (now) => {
+        this.u = loopFrame((now - this.t0) / 1e3, this.frames, this.plot.duration, this.plot.hold);
+        this.draw();
+        this.raf = requestAnimationFrame(tick);
+      };
+      this.raf = requestAnimationFrame(tick);
+      this.setPlaying(true);
+    }
+    pause() {
+      if (this.raf) cancelAnimationFrame(this.raf);
+      this.raf = 0;
+      this.setPlaying(false);
+    }
+    get playing() {
+      return this.raf !== 0;
+    }
+    /** The fractional frame shown. */
+    get frame() {
+      return this.u;
+    }
+  };
+  function mountPlots(root2) {
+    return [...root2.querySelectorAll(".plot")].map((el) => CACHE2.get(el) ?? new PlotView(el));
+  }
+
   // src/print.ts
   var sleep = (ms) => new Promise((done) => setTimeout(done, ms));
   async function stillViewers() {
@@ -1047,10 +1825,10 @@
     });
     return { held, lit };
   }
-  var words = (s) => (s ?? "").split(/\s+/).filter(Boolean);
+  var words2 = (s) => (s ?? "").split(/\s+/).filter(Boolean);
   function applySteps(slide) {
     const frags = [...slide.querySelectorAll(".fragment")];
-    const names = [...new Set(frags.flatMap((f) => words(f.dataset.highlight)))];
+    const names = [...new Set(frags.flatMap((f) => words2(f.dataset.highlight)))];
     if (!names.length && !frags.some((f) => f.hasAttribute("data-keep"))) return;
     const select = (name) => `.${CSS.escape(name)}`;
     const steps = frags.map((f) => {
@@ -1059,7 +1837,7 @@
         index: Number(f.dataset.fragmentIndex ?? 0),
         visible: f.classList.contains("visible"),
         keep: keep === null ? null : keep.trim() === "" ? "next" : Number(keep),
-        highlight: words(f.dataset.highlight),
+        highlight: words2(f.dataset.highlight),
         tone: f.dataset.tone === "violet" ? "violet" : "accent",
         holds: names.filter((name) => f.matches(select(name)) || f.querySelector(select(name)))
       };
@@ -1196,12 +1974,26 @@
   };
   var TRACED = ["title", "section", "closing"];
   var backdrops = [];
+  var plots = [];
   var still = () => Orbits.reduced() || window.Reveal.isPrintView() || /print-pdf/.test(location.search);
   function remount() {
     for (const o of mount(document)) if (!backdrops.includes(o)) backdrops.push(o);
+    for (const p of mountPlots(document)) if (!plots.includes(p)) plots.push(p);
   }
   var within = (slide) => slide ? backdrops.filter((o) => slide.contains(o.el)) : [];
+  var plotsIn = (slide) => slide ? plots.filter((p) => slide.contains(p.el)) : [];
+  function stepPlots(slide) {
+    const own = plotsIn(slide);
+    for (const p of own) {
+      p.fit();
+      p.syncSteps();
+    }
+    if (own.length) applySteps(slide);
+  }
   function show(slide) {
+    stepPlots(slide);
+    for (const p of plotsIn(slide)) if (still()) p.still();
+    else p.start();
     const glide = slide.hasAttribute("data-auto-animate");
     for (const o of within(slide)) {
       o.fit();
@@ -1229,6 +2021,11 @@
     for (const o of backdrops) {
       o.fit();
       o.complete();
+    }
+    for (const p of plots) {
+      p.fit();
+      p.syncSteps();
+      p.still();
     }
     applyAll(document);
   }
@@ -1261,10 +2058,13 @@
       if (!still()) {
         for (const o of within(ev.previousSlide)) if (!ev.currentSlide.contains(o.el)) o.reset();
       }
+      for (const p of plotsIn(ev.previousSlide)) if (!ev.currentSlide.contains(p.el)) p.pause();
       show(ev.currentSlide);
     });
+    for (const type of ["fragmentshown", "fragmenthidden"]) deck.on(type, () => stepPlots(deck.getCurrentSlide()));
     deck.on("resize", () => {
       for (const o of backdrops) o.fit();
+      stepPlots(deck.getCurrentSlide());
     });
     syncViewers(get());
     document.addEventListener("beeson:theme", () => {
@@ -1283,6 +2083,7 @@
     start,
     theme: { get, set: (theme) => set(theme), toggle: () => toggle() },
     backdrops,
+    plots,
     version: "1.0.0"
   };
   window.Beeson = Beeson;
