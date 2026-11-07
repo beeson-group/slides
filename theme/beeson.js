@@ -1015,6 +1015,7 @@
 
   // src/plot.ts
   var KINDS = ["points", "trace", "label", "events"];
+  var PATCH = ["x", "y", "title", "regions", "curves", "labels"];
   var MARGIN = [52, 20, 84, 76];
   function fail(path, what) {
     throw new Error(`${path}: ${what}`);
@@ -1122,6 +1123,18 @@
       margin
     };
   }
+  function patch(v, path) {
+    if (!isObject(v)) fail(path, "a panel is expected");
+    for (const key of Object.keys(v)) if (!PATCH.includes(key)) fail(`${path}.${key}`, `one of ${PATCH.join(", ")} is expected`);
+    const out = {};
+    if (v.x !== void 0) out.x = axis(v.x, `${path}.x`);
+    if (v.y !== void 0) out.y = axis(v.y, `${path}.y`);
+    if (v.title !== void 0) out.title = str(v.title, `${path}.title`);
+    if (v.regions !== void 0) out.regions = regions(v.regions, `${path}.regions`);
+    if (v.curves !== void 0) out.curves = curves(v.curves, `${path}.curves`);
+    if (v.labels !== void 0) out.labels = labels(v.labels, `${path}.labels`);
+    return out;
+  }
   function markData(m, v, frames, path) {
     const perFrame = (n) => n === 1 || n === frames || fail(path, `${n} frames are given, and the tab has ${frames} values`);
     if (m.kind === "points") {
@@ -1198,7 +1211,14 @@
         active = list(t.active, `${p}.active`).map((f, j) => typeof f === "string" ? [f] : list(f, `${p}.active[${j}]`).map((s, k) => str(s, `${p}.active[${j}][${k}]`)));
         if (active.length !== values.length) fail(`${p}.active`, `${active.length} frames are given, and the tab has ${values.length} values`);
       }
-      return { name, label: str(t.label, `${p}.label`, name), values, data, active };
+      const given = t.panels === void 0 ? {} : t.panels;
+      if (!isObject(given)) fail(`${p}.panels`, "an object of panel ids is expected");
+      const patches = {};
+      for (const key of Object.keys(given)) {
+        if (!ids.has(key)) fail(`${p}.panels.${key}`, `the panel ${key} is not declared`);
+        patches[key] = patch(given[key], `${p}.panels.${key}`);
+      }
+      return { name, label: str(t.label, `${p}.label`, name), values, data, active, panels: patches };
     });
     if (!tabs.length) fail("tabs", "at least one tab is expected");
     const parameter = isObject(v.parameter) ? v.parameter : {};
@@ -1548,11 +1568,16 @@
       this.drawStatic();
       this.buildMarks();
     }
+    // the panels of the tab shown, with the keys that the tab replaces
+    panelsNow() {
+      const patches = this.plot.tabs[this.tab].panels;
+      return this.panels.map((p) => ({ ...p, ...patches[p.id] }));
+    }
     layout() {
-      const row = (this.plot.layout ?? (this.W >= this.H ? "row" : "column")) === "row";
-      const along = cells(this.panels.map((p) => p.size), row ? this.W : this.H, GAP);
+      const panels = this.panelsNow(), row = (this.plot.layout ?? (this.W >= this.H ? "row" : "column")) === "row";
+      const along = cells(panels.map((p) => p.size), row ? this.W : this.H, GAP);
       this.boxes.clear();
-      this.panels.forEach((p, i) => {
+      panels.forEach((p, i) => {
         const [at, share] = along[i];
         const cx = row ? at : 0, cy = row ? 0 : at, cw = row ? share : this.W, ch = row ? this.H : share;
         const [top, right, bottom, left] = p.margin;
@@ -1796,7 +1821,10 @@
       this.markTabs();
       this.u = this.raf ? 0 : this.stillFrame();
       this.t0 = performance.now();
-      if (this.W) this.buildMarks();
+      if (!this.W) return;
+      this.layout();
+      this.drawStatic();
+      this.buildMarks();
     }
     /** The frame of a still, from data-plot-frame, where a negative frame is counted from the end. The default is the last frame. */
     stillFrame() {

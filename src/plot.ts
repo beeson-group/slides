@@ -21,15 +21,18 @@ export type Label = Item & { at: Pair; text: string; anchor: Anchor; dx: number;
 // the margin of a panel in px, from the top clockwise as in CSS
 export type Margin = [number, number, number, number];
 export type Panel = { id: string; x: Axis; y: Axis; equal: boolean; axes: boolean; title: string; regions: Region[]; curves: Curve[]; labels: Label[]; size: number; margin: Margin };
+// the keys of a panel that a tab may replace
+export type PanelPatch = Partial<Pick<Panel, 'x' | 'y' | 'title' | 'regions' | 'curves' | 'labels'>>;
 export type Mark = Item & { id: string; panel: string; kind: Kind; size: number; width: number; hollow: boolean; anchor: Anchor; dx: number; dy: number };
 export type PlotEvent = { frame: number; at: Pair; text: string };
 // a label mark with one position or one text is held there for every frame
 export type LabelData = { at: Pair[]; text: string[] };
 export type MarkData = number[][] | Pair[] | LabelData | PlotEvent[];
-export type Tab = { name: string; label: string; values: number[]; data: Record<string, MarkData>; active: string[][] | null };
+export type Tab = { name: string; label: string; values: number[]; data: Record<string, MarkData>; active: string[][] | null; panels: Record<string, PanelPatch> };
 export type Plot = { parameter: { label: string; digits: number }; duration: number; hold: number; layout: 'row' | 'column' | null; panels: Panel[]; marks: Mark[]; tabs: Tab[] };
 
 const KINDS: Kind[] = ['points', 'trace', 'label', 'events'];
+const PATCH = ['x', 'y', 'title', 'regions', 'curves', 'labels'];
 const MARGIN: Margin = [52, 20, 84, 76];
 
 function fail(path: string, what: string): never {
@@ -154,6 +157,20 @@ function panel(v: unknown, path: string): Panel {
   };
 }
 
+// the keys of a panel given in a tab, which replace those of the panel while the tab is shown
+function patch(v: unknown, path: string): PanelPatch {
+  if (!isObject(v)) fail(path, 'a panel is expected');
+  for (const key of Object.keys(v)) if (!PATCH.includes(key)) fail(`${path}.${key}`, `one of ${PATCH.join(', ')} is expected`);
+  const out: PanelPatch = {};
+  if (v.x !== undefined) out.x = axis(v.x, `${path}.x`);
+  if (v.y !== undefined) out.y = axis(v.y, `${path}.y`);
+  if (v.title !== undefined) out.title = str(v.title, `${path}.title`);
+  if (v.regions !== undefined) out.regions = regions(v.regions, `${path}.regions`);
+  if (v.curves !== undefined) out.curves = curves(v.curves, `${path}.curves`);
+  if (v.labels !== undefined) out.labels = labels(v.labels, `${path}.labels`);
+  return out;
+}
+
 function markData(m: Mark, v: unknown, frames: number, path: string): MarkData {
   const perFrame = (n: number) => n === 1 || n === frames || fail(path, `${n} frames are given, and the tab has ${frames} values`);
   if (m.kind === 'points') {
@@ -232,7 +249,14 @@ export function parsePlot(input: unknown): Plot {
       active = list(t.active, `${p}.active`).map((f, j) => (typeof f === 'string' ? [f] : list(f, `${p}.active[${j}]`).map((s, k) => str(s, `${p}.active[${j}][${k}]`))));
       if (active.length !== values.length) fail(`${p}.active`, `${active.length} frames are given, and the tab has ${values.length} values`);
     }
-    return { name, label: str(t.label, `${p}.label`, name), values, data, active };
+    const given = t.panels === undefined ? {} : t.panels;
+    if (!isObject(given)) fail(`${p}.panels`, 'an object of panel ids is expected');
+    const patches: Record<string, PanelPatch> = {};
+    for (const key of Object.keys(given)) {
+      if (!ids.has(key)) fail(`${p}.panels.${key}`, `the panel ${key} is not declared`);
+      patches[key] = patch(given[key], `${p}.panels.${key}`);
+    }
+    return { name, label: str(t.label, `${p}.label`, name), values, data, active, panels: patches };
   });
   if (!tabs.length) fail('tabs', 'at least one tab is expected');
   const parameter = isObject(v.parameter) ? v.parameter : {};
@@ -582,11 +606,17 @@ export class PlotView {
     this.buildMarks();
   }
 
+  // the panels of the tab shown, with the keys that the tab replaces
+  private panelsNow(): Panel[] {
+    const patches = this.plot.tabs[this.tab].panels;
+    return this.panels.map((p) => ({ ...p, ...patches[p.id] }));
+  }
+
   private layout(): void {
-    const row = (this.plot.layout ?? (this.W >= this.H ? 'row' : 'column')) === 'row';
-    const along = cells(this.panels.map((p) => p.size), row ? this.W : this.H, GAP);
+    const panels = this.panelsNow(), row = (this.plot.layout ?? (this.W >= this.H ? 'row' : 'column')) === 'row';
+    const along = cells(panels.map((p) => p.size), row ? this.W : this.H, GAP);
     this.boxes.clear();
-    this.panels.forEach((p, i) => {
+    panels.forEach((p, i) => {
       const [at, share] = along[i];
       const cx = row ? at : 0, cy = row ? 0 : at, cw = row ? share : this.W, ch = row ? this.H : share;
       const [top, right, bottom, left] = p.margin;
@@ -842,7 +872,11 @@ export class PlotView {
     this.markTabs();
     this.u = this.raf ? 0 : this.stillFrame();
     this.t0 = performance.now();
-    if (this.W) this.buildMarks();
+    if (!this.W) return;
+    // a tab may replace the axes and the elements of a panel
+    this.layout();
+    this.drawStatic();
+    this.buildMarks();
   }
 
   /** The frame of a still, from data-plot-frame, where a negative frame is counted from the end. The default is the last frame. */
