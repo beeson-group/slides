@@ -124,6 +124,10 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
     for (const o of backdrops) o.fit();
     stepPlots(deck.getCurrentSlide());
   });
+  document.addEventListener('beeson:plot-drawn', (ev) => {
+    const slide = (ev.target as Element).closest('.reveal .slides section');
+    if (slide) applySteps(slide);
+  });
   syncViewers(get());
   document.addEventListener('beeson:theme', () => {
     for (const o of backdrops) o.redraw();

@@ -1853,6 +1853,7 @@
       this.layout();
       this.drawStatic();
       this.buildMarks();
+      this.el.dispatchEvent(new CustomEvent("beeson:plot-drawn", { bubbles: true }));
     }
     /** The frame of a still, from data-plot-frame, where a negative frame is counted from the end. The default is the last frame, which is also the still of a plot whose cue is shown. */
     stillFrame() {
@@ -2189,6 +2190,10 @@
     deck.on("resize", () => {
       for (const o of backdrops) o.fit();
       stepPlots(deck.getCurrentSlide());
+    });
+    document.addEventListener("beeson:plot-drawn", (ev) => {
+      const slide = ev.target.closest(".reveal .slides section");
+      if (slide) applySteps(slide);
     });
     syncViewers(get());
     document.addEventListener("beeson:theme", () => {

@@ -902,10 +902,12 @@ export class PlotView {
     this.u = this.raf ? 0 : this.stillFrame();
     this.t0 = performance.now();
     if (!this.W) return;
-    // a tab may replace the axes and the elements of a panel
+    // a tab may replace the axes and the elements of a panel. the elements are drawn again, hence
+    // the slide is told to apply its highlights to them
     this.layout();
     this.drawStatic();
     this.buildMarks();
+    this.el.dispatchEvent(new CustomEvent('beeson:plot-drawn', { bubbles: true }));
   }
 
   /** The frame of a still, from data-plot-frame, where a negative frame is counted from the end. The default is the last frame, which is also the still of a plot whose cue is shown. */
