@@ -455,7 +455,9 @@ export class PlotView {
   private area!: HTMLElement;
   private svgEl!: SVGSVGElement;
   private overlay!: HTMLElement;
-  private tabButtons: HTMLButtonElement[] = [];
+  // the buttons of the tabs offered by data-plot-tabs, with the index of each tab
+  private tabButtons: { b: HTMLButtonElement; i: number }[] = [];
+  private offered: number[] = [];
   private playButton!: HTMLButtonElement;
   private scrub!: HTMLElement;
   private fill!: HTMLElement;
@@ -494,8 +496,11 @@ export class PlotView {
     }
     const only = words(el.dataset.plotPanels);
     this.panels = only.length ? this.spec.panels.filter((p) => only.includes(p.id)) : this.spec.panels;
+    const names = words(el.dataset.plotTabs);
+    this.offered = this.spec.tabs.map((_, i) => i).filter((i) => !names.length || names.includes(this.spec!.tabs[i].name));
+    if (!this.offered.length) this.offered = [0];
     const start = this.spec.tabs.findIndex((t) => t.name === el.dataset.plotTab);
-    this.tab = Math.max(0, start);
+    this.tab = start >= 0 ? start : this.offered[0];
     this.emphasis = new Set(this.spec.tabs.flatMap((t) => t.active?.flat() ?? []));
     this.build();
   }
@@ -512,18 +517,18 @@ export class PlotView {
     const plot = this.plot;
     this.body = document.createElement('div');
     this.body.className = 'plot-body';
-    if (plot.tabs.length > 1) {
+    if (this.offered.length > 1) {
       const bar = document.createElement('div');
       bar.className = 'plot-tabs';
       bar.setAttribute('role', 'tablist');
-      this.tabButtons = plot.tabs.map((t, i) => {
+      this.tabButtons = this.offered.map((i) => {
         const b = document.createElement('button');
         b.type = 'button';
         b.setAttribute('role', 'tab');
-        setMarkup(b, t.label);
+        setMarkup(b, plot.tabs[i].label);
         b.addEventListener('click', () => { b.blur(); this.setTab(i); });
         bar.append(b);
-        return b;
+        return { b, i };
       });
       this.body.append(bar);
     }
@@ -592,7 +597,7 @@ export class PlotView {
   }
 
   private markTabs(): void {
-    this.tabButtons.forEach((b, i) => b.setAttribute('aria-selected', String(i === this.tab)));
+    for (const { b, i } of this.tabButtons) b.setAttribute('aria-selected', String(i === this.tab));
   }
 
   /** Lays the panels out in the size of the element, which is measured in slide pixels. */
