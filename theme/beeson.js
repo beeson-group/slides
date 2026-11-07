@@ -3,34 +3,44 @@
 (() => {
   // src/scenes.ts
   var H = 4e-3;
-  var outside = (s) => Math.abs(s[0] - 0.85) > 0.6 || Math.abs(s[1]) > 0.5 || Math.hypot(s[0] + MU, s[1]) < 0.0166 || Math.hypot(s[0] - 1 + MU, s[1]) < 45e-4;
-  function manifold(count = 14) {
-    const orbit = lyapunovFamily(1, [0.05], H)[0];
-    if (!orbit) return [];
-    const first = closed(orbit), T = first.T;
-    const times = [], states = [];
-    const s = Float64Array.from(orbit.s);
-    for (let t = 0; t < T; t += step(s, H)) {
-      states.push(Float64Array.from(s));
-      times.push(t);
+  var stopped = (u) => Math.hypot(u[0] + MU, u[1]) < 0.0166 || Math.hypot(u[0] - 1 + MU, u[1]) < 45e-4 || Math.hypot(u[0] - 0.8, u[1]) > 2.4;
+  var toned = (s, tone) => ({ ...s, tone });
+  function mirrored(s) {
+    const n = s.times.length, pts = new Float64Array(2 * n), times = new Float32Array(n);
+    const end = s.times[n - 1];
+    for (let i = 0; i < n; i++) {
+      pts[2 * i] = s.pts[2 * (n - 1 - i)];
+      pts[2 * i + 1] = -s.pts[2 * (n - 1 - i) + 1];
+      times[i] = end - s.times[n - 1 - i];
     }
-    const strands = [first];
-    const phases = count / 2;
+    return { pts, times, T: end };
+  }
+  function sampled(orbit, T) {
+    const states = [], s = Float64Array.from(orbit.s);
+    for (let t = 0; t < T; t += step(s, H)) states.push(Float64Array.from(s));
+    return states;
+  }
+  function kicked(s0, sign) {
+    const v = Math.hypot(s0[3], s0[4]), k = Float64Array.from(s0);
+    k[3] += sign * 1e-5 * s0[3] / v;
+    k[4] += sign * 1e-5 * s0[4] / v;
+    return k;
+  }
+  function tubes(n, A, phases, span) {
+    const orbit = lyapunovFamily(n, [A], H)[0];
+    if (!orbit) return [];
+    const first = closed(orbit), states = sampled(orbit, first.T);
+    const out = [toned(first, "text")];
     for (let k = 0; k < phases; k++) {
-      const target = k / phases * T;
-      let i = 0;
-      while (i < times.length - 1 && times[i + 1] <= target) i++;
-      const s0 = states[i], v = Math.hypot(s0[3], s0[4]);
+      const i = Math.floor(k / phases * states.length);
       for (const sign of [1, -1]) {
-        const kicked = Float64Array.from(s0);
-        kicked[3] += sign * 1e-5 * s0[3] / v;
-        kicked[4] += sign * 1e-5 * s0[4] / v;
         const p = [], q = [];
-        propagate(kicked, H, 2.5 * T, p, q, outside, times[i]);
-        strands.push(open(p, q));
+        propagate(kicked(states[i], sign), H, span * first.T, p, q, stopped, 0);
+        const u = open(p, q);
+        out.push(toned(u, "orange"), toned(mirrored(u), "violet"));
       }
     }
-    return strands;
+    return out;
   }
   var SCENES = {
     nest: () => [...lyapunovFamily(1, spaced(0.012, 0.12, 12, 1.5), H), ...lyapunovFamily(2, spaced(0.012, 0.14, 12, 1.5), H), ...droFamily(ramp(0.03, 0.09, 1.2), H)].map(closed),
@@ -39,7 +49,7 @@
     l2: () => lyapunovFamily(2, spaced(6e-3, 0.17, 24, 1.35), H).map(closed),
     lyapunovs: () => [...lyapunovFamily(1, spaced(6e-3, 0.1, 16, 1.3), H), ...lyapunovFamily(2, spaced(6e-3, 0.11, 16, 1.3), H)].map(closed),
     mark: () => droFamily([0.1], H).map(closed),
-    manifold: () => manifold()
+    tubes: () => [...tubes(1, 0.0313, 14, 2.2), ...tubes(2, 0.0408, 14, 2.2)]
   };
   var SCENE_NAMES = Object.keys(SCENES);
   var cache = /* @__PURE__ */ new Map();
