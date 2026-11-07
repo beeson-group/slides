@@ -85,7 +85,7 @@ const headPixels = `(() => {
 test('a head is drawn on the path of a spacecraft alone', { timeout: 60000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
-  const page = await browser.newPage();
+  const page = await browser.newPage({ motion: true });
   await page.goto(deckUrl('index.html'));
   await page.waitFor(deckSettled);
   await new Promise((done) => setTimeout(done, 800));
@@ -107,7 +107,7 @@ test('a head is drawn on the path of a spacecraft alone', { timeout: 60000 }, as
 test('the strands of a backdrop with data-stagger are started one after another', { timeout: 60000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
-  const page = await browser.newPage();
+  const page = await browser.newPage({ motion: true });
   await page.goto(deckUrl('index.html'));
   await page.waitFor(deckSettled);
   const stagger = await page.evaluate(`(() => {
