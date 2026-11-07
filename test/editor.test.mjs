@@ -268,6 +268,104 @@ async function until(page, expression, timeout = 15000) {
 }
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
+test('one history undoes and redoes the typing, a formula, a step, and a move, with ⌘Z and ⌘⇧Z', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  const status = () => page.evaluate('window.BeesonEditor.status()');
+  const render = () => page.evaluate('window.BeesonEditor.render()');
+  const key = (key, extra = '') => page.evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, metaKey: true, ${extra} bubbles: true, cancelable: true }))`);
+  assert.deepEqual([(await status()).undo, (await status()).redo], [false, false]);
+  // the typing into a heading, as the keys type it
+  const h2 = 'Period of the families';
+  await page.evaluate(`(() => {
+    const h = [...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === ${JSON.stringify(h2)});
+    Reveal.slide(Reveal.getIndices(h.closest('section')).h);
+    h.focus();
+    const r = document.createRange(); r.selectNodeContents(h); r.collapse(false);
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    document.execCommand('insertText', false, ' now');
+  })()`);
+  const typed = replaced(`<h2>${h2}</h2>`, `<h2>${h2} now</h2>`);
+  assert.equal(await render(), typed);
+  assert.equal((await status()).undo, true);
+  await key('z');
+  await sleep(200);
+  assert.equal(await render(), deckText);
+  assert.deepEqual([(await status()).undo, (await status()).redo], [false, true]);
+  await key('z', 'shiftKey: true,');
+  await sleep(200);
+  assert.equal(await render(), typed);
+  // the caret is in the heading after the redo
+  assert.equal(await page.evaluate('document.activeElement.textContent'), `${h2} now`);
+  await key('z');
+  await sleep(200);
+  assert.equal(await render(), deckText);
+  // a formula, from another slide
+  const tex = 'C = 2U - v^2';
+  const applied = replaced(tex, `${tex} + 1`);
+  await page.evaluate(`(async () => {
+    const items = MathJax.startup.document.getMathItemsWithin([document.body]);
+    const item = items.find((i) => i.math === ${JSON.stringify(tex)});
+    await window.BeesonEditor.setMath(item.typesetRoot, ${JSON.stringify(tex + ' + 1')});
+    Reveal.slide(0);
+  })()`);
+  assert.equal(await render(), applied);
+  await page.evaluate('window.BeesonEditor.undo()');
+  assert.equal(await render(), deckText);
+  // the undo showed the slide of the formula
+  assert.equal(await page.evaluate(`!!document.querySelector('.reveal section.present li mjx-container')`), true);
+  await page.evaluate('window.BeesonEditor.redo()');
+  assert.equal(await render(), applied);
+  await page.evaluate('window.BeesonEditor.undo()');
+  assert.equal(await render(), deckText);
+  // a step, from the pane
+  await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .zone > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
+  await sleep(200);
+  await page.evaluate(`(() => { const sel = document.querySelectorAll('.beeson-edit-side .row select')[3]; sel.value = [...sel.options].at(-1).value; sel.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  const stepped = replaced('<li>Give a white raster figure the class <code>paper</code> to frame it.</li>', '<li class="fragment" data-fragment-index="1">Give a white raster figure the class <code>paper</code> to frame it.</li>');
+  assert.equal(await render(), stepped);
+  await page.evaluate('window.BeesonEditor.undo()');
+  assert.equal(await render(), deckText);
+  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row select')].map((s) => s.value)`), ['', '', '', '', '', '']);
+  await page.evaluate('window.BeesonEditor.redo()');
+  assert.equal(await render(), stepped);
+  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-badge')].map((b) => b.textContent)`), ['1']);
+  await page.evaluate('window.BeesonEditor.undo()');
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
+  // a drag, with Alt so that the figure does not snap, and a nudge
+  await page.evaluate(`(() => {
+    const img = document.querySelector('.reveal section.present .zone > img');
+    const r = img.getBoundingClientRect();
+    const x = r.left + r.width / 2, y = r.top + r.height / 2;
+    const at = (type, cx, cy) => document.elementFromPoint(cx, cy).dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: cx, clientY: cy, button: 0, pointerId: 1, altKey: true }));
+    const scale = Reveal.getScale();
+    at('pointermove', x, y);
+    at('pointerdown', x, y);
+    at('pointermove', x + 60 * scale, y + 40 * scale);
+    at('pointerup', x + 60 * scale, y + 40 * scale);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true }));
+  })()`);
+  const translate = () => page.evaluate(`document.querySelector('.reveal section.present .zone').style.translate`);
+  assert.equal(await translate(), '59px 40px');
+  await page.evaluate('window.BeesonEditor.undo()');
+  assert.equal(await translate(), '60px 40px');
+  await page.evaluate('window.BeesonEditor.undo()');
+  assert.equal(await translate(), '');
+  assert.equal(await render(), deckText);
+  await page.evaluate('window.BeesonEditor.redo()');
+  assert.equal(await translate(), '60px 40px');
+  assert.notEqual(await render(), deckText);
+  // the Undo button of the toolbar
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Undo').click()`);
+  await sleep(100);
+  assert.equal(await render(), deckText);
+  assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Undo').disabled`), true);
+  assert.deepEqual(page.errors, []);
+});
+
 test('E opens the slide in the editor', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
@@ -298,6 +396,62 @@ test('with nothing selected, Esc and B do not open the overview or black out the
   assert.equal(await page.evaluate('Reveal.isOverview()'), false);
   await press('b', 66);
   assert.equal(await page.evaluate('Reveal.isPaused()'), false);
+  assert.deepEqual(page.errors, []);
+});
+
+test('an undo puts the caret at the change, and ⌘B and ⌘I write strong and em', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  const render = () => page.evaluate('window.BeesonEditor.render()');
+  const h2 = 'Period of the families';
+  await page.evaluate(`(() => {
+    const h = [...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === ${JSON.stringify(h2)});
+    Reveal.slide(Reveal.getIndices(h.closest('section')).h);
+    h.focus();
+    const r = document.createRange(); r.setStart(h.firstChild, 6); r.collapse(true);
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    document.execCommand('insertText', false, 'X');
+  })()`);
+  const caret = () => page.evaluate(`(() => { const s = getSelection(); const h = document.activeElement; const r = document.createRange(); r.setStart(h, 0); r.setEnd(s.anchorNode, s.anchorOffset); return [h.textContent, r.toString().length]; })()`);
+  await page.evaluate('window.BeesonEditor.undo()');
+  assert.deepEqual(await caret(), [h2, 6]);
+  await page.evaluate('window.BeesonEditor.redo()');
+  assert.deepEqual(await caret(), ['PeriodX of the families', 7]);
+  await page.evaluate('window.BeesonEditor.undo()');
+  assert.equal(await render(), deckText);
+  // a word of a list item is made bold and italic, and the selection is kept
+  const li = [...deckText.matchAll(/<li>([A-Za-z][^<\\&]+)<\/li>/g)].find((m) => deckText.split(m[0]).length === 2);
+  const word = li[1].split(' ')[0];
+  const format = (type) => page.evaluate(`(() => {
+    const li = [...document.querySelectorAll('.reveal li')].find((l) => l.textContent === ${JSON.stringify(li[1])});
+    Reveal.slide(Reveal.getIndices(li.closest('section')).h);
+    li.focus();
+    let node = li.firstChild;
+    while (node.nodeType !== 3) node = node.firstChild;
+    const r = document.createRange(); r.setStart(node, 0); r.setEnd(node, ${word.length});
+    const s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    const ev = new InputEvent('beforeinput', { inputType: ${JSON.stringify(type)}, bubbles: true, cancelable: true });
+    li.dispatchEvent(ev);
+    if (!ev.defaultPrevented) document.execCommand(${JSON.stringify(type === 'formatBold' ? 'bold' : type === 'formatItalic' ? 'italic' : 'underline')});
+    return getSelection().toString();
+  })()`);
+  assert.equal(await format('formatBold'), word);
+  assert.equal(await render(), replaced(li[0], li[0].replace(word, `<strong>${word}</strong>`)));
+  assert.equal(await format('formatItalic'), word);
+  assert.equal(await render(), replaced(li[0], li[0].replace(word, `<strong><em>${word}</em></strong>`)));
+  // a second Cmd+B takes the bold off again
+  await format('formatBold');
+  assert.equal(await render(), replaced(li[0], li[0].replace(word, `<em>${word}</em>`)));
+  await page.evaluate('window.BeesonEditor.undo()');
+  await page.evaluate('window.BeesonEditor.undo()');
+  assert.equal(await render(), replaced(li[0], li[0].replace(word, `<strong>${word}</strong>`)));
+  await page.evaluate('window.BeesonEditor.undo()');
+  assert.equal(await render(), deckText);
+  // underline stays blocked
+  await format('formatUnderline');
+  assert.equal(await render(), deckText);
   assert.deepEqual(page.errors, []);
 });
 
