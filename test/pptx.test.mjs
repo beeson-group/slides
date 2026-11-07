@@ -2,7 +2,10 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { dirname, posix } from 'node:path';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join, posix } from 'node:path';
 import { inflateRawSync } from 'node:zlib';
 import { pptx, zip } from '../scripts/pptx.mjs';
 
@@ -65,6 +68,19 @@ function assertPackage(parts) {
   for (const [, name] of types.matchAll(/PartName="\/([^"]+)"/g)) assert.ok(parts.has(name), `${name} of the content types exists`);
 }
 
+function exportDeck(deck) {
+  const folder = mkdtempSync(join(tmpdir(), 'beeson-pptx-'));
+  try {
+    const output = join(folder, 'deck.pptx');
+    const run = spawnSync(process.execPath, ['scripts/export-pptx.mjs', deck, output], { encoding: 'utf8' });
+    assert.equal(run.status, 0, run.stderr);
+    return unzip(readFileSync(output));
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+}
+
+const slideCount = (parts) => [...parts.keys()].filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name)).length;
 const box = (px) => `<a:off x="${px.x * EMU_PER_PX}" y="${px.y * EMU_PER_PX}"/><a:ext cx="${px.width * EMU_PER_PX}" cy="${px.height * EMU_PER_PX}"/>`;
 
 test('a zip is read back with its names and contents', () => {
@@ -90,4 +106,37 @@ test('a video that is shown on two steps is embedded once, and it starts by itse
   assert.match(slide, /<p:cMediaNode vol="80000" mute="1"><p:cTn id="\d+" repeatCount="indefinite"/);
   const ids = [...slide.matchAll(/<p:cTn id="(\d+)"/g)].map((m) => Number(m[1]));
   assert.deepEqual(ids, ids.map((_, n) => n + 1));
+});
+
+test('videos are placed on their steps of a deck, in the box of their picture', () => {
+  const parts = exportDeck('test/pages/video-placed.html');
+  assertPackage(parts);
+  assert.equal(slideCount(parts), 4);
+  const slides = [1, 2, 3, 4].map((n) => text(parts, `ppt/slides/slide${n}.xml`));
+  assert.deepEqual(slides.map((slide) => slide.match(/<a:videoFile /g)?.length ?? 0), [1, 0, 0, 1]);
+  // a square clip in a plate of 1680 by 630 px is at its right, as in object-position
+  assert.ok(slides[0].includes(box({ x: 1170, y: 200, width: 630, height: 630 })));
+  assert.ok(slides[0].includes('repeatCount="indefinite"') && slides[0].includes('mute="1"'));
+  assert.ok(!slides[3].includes('repeatCount') && !slides[3].includes('mute="1"'));
+  // the videos of the for-light class are hidden, hence one clip is in the file
+  assert.equal([...parts.keys()].filter((name) => name.endsWith('.mp4')).length, 1);
+  const notes = text(parts, 'ppt/notesSlides/notesSlide1.xml');
+  assert.ok(notes.includes('<a:t>The first paragraph &lt;of the notes&gt;.</a:t>'), notes);
+  assert.ok(notes.includes('<a:t>The second paragraph.</a:t>'), notes);
+  assert.ok(!parts.has('ppt/notesSlides/notesSlide2.xml'));
+});
+
+test('the demo deck is exported with a slide for each page of its PDF', () => {
+  const parts = exportDeck('index.html');
+  assertPackage(parts);
+  const folder = mkdtempSync(join(tmpdir(), 'beeson-pdf-'));
+  try {
+    const run = spawnSync(process.execPath, ['scripts/export-pdf.mjs', 'index.html', join(folder, 'deck.pdf')], { encoding: 'utf8' });
+    assert.equal(run.status, 0, run.stderr);
+    assert.equal(slideCount(parts), Number(run.stdout.match(/(\d+) pages/)[1]));
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
+  assert.equal(text(parts, 'ppt/presentation.xml').match(/<p:sldId /g).length, slideCount(parts));
+  assert.ok([...parts.keys()].some((name) => name.endsWith('.mp4')));
 });
