@@ -193,3 +193,75 @@ test('a plot is printed at its last frame, with the panels and the tab of each s
   ]);
   assert.equal(await page.evaluate('Beeson.plots.some((p) => p.playing)'), false);
 });
+
+const reveals = (id) => `(() => {
+  const view = Beeson.plots.find((p) => p.el.id === '${id}');
+  const buttons = [...view.el.querySelectorAll('.plot-tabs button')];
+  const panels = [...view.el.querySelectorAll('.plot-panel')];
+  const label = (text) => [...view.el.querySelectorAll('.plot-label')].find((l) => l.textContent === text);
+  return {
+    playing: view.playing,
+    frame: view.frame,
+    panels: panels.length,
+    tabs: buttons.map((b) => [b.textContent, b.disabled, b.classList.contains('plot-hidden')]),
+    tab: buttons.find((b) => b.getAttribute('aria-selected') === 'true')?.textContent ?? null,
+    title: [...view.el.querySelectorAll('.plot-title')].map((t) => t.textContent),
+    ticks: [...view.el.querySelectorAll('.plot-tick-mark')].map((t) => t.style.background),
+    dimmed: ['a', 'b'].map((t) => label(t)?.classList.contains('plot-off') ?? null),
+    dot: Number(view.el.querySelector('.plot-dot')?.getAttribute('cx')),
+    at: ['−100', 'zero', '100'].map((t) => parseFloat(label(t)?.style.left)),
+  };
+})()`;
+
+test('a plot is held until its cue, offers the tabs of its element and of the steps shown, and draws a tab with its own axis', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl('test/pages/plot-reveals.html'));
+  await page.waitFor(deckSettled);
+
+  const held = await page.evaluate(reveals('held'));
+  assert.equal(held.playing, false);
+  assert.equal(held.frame, 0);
+  assert.equal(held.panels, 1);
+  assert.deepEqual(held.tabs, []);
+  // the dot at 10 on an axis from -100 to 100 in asinh is drawn between the ticks at asinh(10)
+  const [lo, zero, hi] = held.at;
+  assert.ok(Math.abs(zero - (lo + hi) / 2) < 1);
+  assert.ok(Math.abs(held.dot - (zero + ((hi - zero) * Math.asinh(10)) / Math.asinh(100))) < 1);
+  // a, active on the tab one, is emphasized, and b, active on the tab two only, is dimmed
+  assert.deepEqual(held.dimmed, [false, true]);
+
+  await page.evaluate('Reveal.next()');
+  assert.equal((await page.evaluate(reveals('held'))).playing, true);
+  await page.evaluate('Reveal.prev()');
+  const back = await page.evaluate(reveals('held'));
+  assert.equal(back.playing, false);
+  assert.equal(back.frame, 0);
+
+  await page.evaluate('Reveal.next(); Reveal.next()');
+  const offered = await page.evaluate(reveals('offered'));
+  assert.equal(offered.playing, true);
+  assert.equal(offered.panels, 2);
+  assert.deepEqual(offered.tabs, [['one', false, false], ['two', false, false], ['three', true, true]]);
+  assert.deepEqual(offered.ticks, ['var(--violet)']);
+  assert.equal((await page.evaluate(reveals('held'))).playing, false);
+
+  await page.evaluate('Reveal.next()');
+  assert.deepEqual((await page.evaluate(reveals('offered'))).tabs[2], ['three', false, false]);
+  await page.evaluate('Reveal.next()');
+  const third = await page.evaluate(reveals('offered'));
+  assert.equal(third.tab, 'three');
+  assert.ok(third.title.includes('y'));
+  assert.ok(!third.title.includes('x'));
+  assert.deepEqual(page.errors, []);
+});
+
+test('a held plot is printed at its still frame before its cue and at its last frame from the cue on', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await printView(page, deckUrl('test/pages/plot-reveals.html', 'print-pdf'));
+  const values = await page.evaluate(`[...document.querySelectorAll('.pdf-page #held .plot-value')].map((v) => v.textContent)`);
+  assert.deepEqual(values, ['0.00', '1.00']);
+});

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Plot reveals</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+</head>
+<body>
+<!-- one JSON block shown on two slides. on the first, one panel and one tab are held at frame 0
+     until a fragment with data-plot-play is shown. on the second, the tab three is offered at a
+     step and then shown, and its axis replaces the axis of the panel left -->
+<div class="reveal">
+  <div class="slides">
+    <section>
+      <h2>A plot held until a step</h2>
+      <div class="plot zone" id="held" data-plot="shared" data-plot-panels="left" data-plot-tabs="one" data-plot-frame="0"></div>
+      <span class="fragment" data-plot-play></span>
+      <script type="application/json" id="shared">{
+        "parameter": { "label": "$t$", "digits": 2 },
+        "duration": 2,
+        "hold": 0.5,
+        "panels": [
+          { "id": "left", "x": { "range": [-100, 100], "scale": "asinh", "ticks": [-100, { "at": 0, "text": "zero" }, 100], "title": "$x$" }, "y": { "range": [0, 1] },
+            "labels": [{ "id": "a", "at": [0, 0.5], "text": "a" }, { "id": "b", "at": [0, 0.8], "text": "b" }] },
+          { "id": "right", "size": 2, "x": { "range": [0, 1] }, "y": { "range": [0, 1] } }
+        ],
+        "marks": [
+          { "id": "dot", "panel": "left", "kind": "points" },
+          { "id": "fold", "panel": "right", "kind": "events", "tone": "violet" }
+        ],
+        "tabs": [
+          { "name": "one", "values": [0, 0.5, 1], "data": { "dot": [[10, 0.5]], "fold": [{ "frame": 1, "at": [0.5, 0.5] }] }, "active": [["a"], ["a"], ["a"]] },
+          { "name": "two", "values": [0, 1], "data": { "dot": [[0, 0.5]] }, "active": [["b"], ["b"]] },
+          { "name": "three", "values": [0, 1], "data": { "dot": [[0, 0.5]] }, "panels": { "left": { "x": { "range": [-1, 1], "title": "$y$" } } } }
+        ]
+      }</script>
+    </section>
+    <section>
+      <h2>A plot whose tab is offered at a step</h2>
+      <div class="plot zone" id="offered" data-plot="shared"></div>
+      <span class="fragment" data-plot-show="three"></span>
+      <span class="fragment" data-plot-tab="three"></span>
+    </section>
+  </div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>
