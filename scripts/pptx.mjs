@@ -84,6 +84,56 @@ const NOTES_MASTER = `${HEADER}<p:notesMaster ${NAMESPACES}><p:cSld><p:bg><p:bgR
 const notesSlide = (paragraphs) => `${HEADER}<p:notes ${NAMESPACES}><p:cSld><p:spTree>${GROUP}${SLIDE_IMAGE}${notesBody(paragraphs)}</p:spTree></p:cSld>`
   + '<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:notes>';
 
+const frame = ({ x, y, width, height }) => `<p:spPr><a:xfrm><a:off x="${emu(x)}" y="${emu(y)}"/><a:ext cx="${emu(width)}" cy="${emu(height)}"/></a:xfrm>`
+  + '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr>';
+
+const blip = (rel) => `<p:blipFill><a:blip r:embed="${rel}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>`;
+
+const stepPicture = (name, rel) => `<p:pic><p:nvPicPr><p:cNvPr id="2" name="Step" descr="${escape(name)}"/>`
+  + '<p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr>'
+  + `${blip(rel)}${frame({ x: 0, y: 0, ...SLIDE })}</p:pic>`;
+
+// a:videoFile names the video for PowerPoint 2007, and p14:media embeds it in later versions. The
+// picture is the poster frame, shown until the video plays
+const videoPicture = (video, id, rels) => `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="Video ${id - 2}">`
+  + '<a:hlinkClick r:id="" action="ppaction://media"/></p:cNvPr><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr>'
+  + `<p:nvPr><a:videoFile r:link="${rels.link}"/><p:extLst><p:ext uri="{DAA4B4D4-6D71-4841-9C94-3DE7FCFB9230}">`
+  + `<p14:media xmlns:p14="${NS_P14}" r:embed="${rels.media}"/></p:ext></p:extLst></p:nvPr></p:nvPicPr>`
+  + `${blip(rels.poster)}${frame(video)}</p:pic>`;
+
+// the videos are started by the main sequence when the slide is shown, each with the previous one.
+// a click on a slide with a video is thus the next step, as on any other slide
+function timing(videos) {
+  let id = 3;
+  const next = () => ++id;
+  const inner = next();
+  const start = videos.map((video, n) => {
+    const node = n === 0 ? 'afterEffect' : 'withEffect';
+    return `<p:par><p:cTn id="${next()}" presetID="1" presetClass="mediacall" presetSubtype="0" fill="hold" nodeType="${node}">`
+      + '<p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst><p:cmd type="call" cmd="playFrom(0.0)"><p:cBhvr>'
+      + `<p:cTn id="${next()}" dur="${Math.max(1, Math.round(video.duration))}" fill="hold"/>`
+      + `<p:tgtEl><p:spTgt spid="${video.shape}"/></p:tgtEl></p:cBhvr></p:cmd></p:childTnLst></p:cTn></p:par>`;
+  }).join('');
+  const media = videos.map((video) => (
+    `<p:video><p:cMediaNode vol="80000"${video.muted ? ' mute="1"' : ''}>`
+    + `<p:cTn id="${next()}"${video.loop ? ' repeatCount="indefinite"' : ''} fill="hold" display="0"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst></p:cTn>`
+    + `<p:tgtEl><p:spTgt spid="${video.shape}"/></p:tgtEl></p:cMediaNode></p:video>`
+  )).join('');
+  return '<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>'
+    + '<p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>'
+    + '<p:par><p:cTn id="3" fill="hold"><p:stCondLst><p:cond delay="indefinite"/><p:cond evt="onBegin" delay="0"><p:tn val="2"/></p:cond></p:stCondLst>'
+    + `<p:childTnLst><p:par><p:cTn id="${inner}" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>${start}</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>`
+    + '</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>'
+    + '<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst></p:seq>'
+    + `${media}</p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>`;
+}
+
+function slideXml(step, imageRel, videos) {
+  return `${HEADER}<p:sld ${NAMESPACES}><p:cSld><p:spTree>${GROUP}${stepPicture(step.name, imageRel)}`
+    + `${videos.map((video) => videoPicture(video, video.shape, video.rels)).join('')}</p:spTree></p:cSld>`
+    + `<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>${videos.length ? timing(videos) : ''}</p:sld>`;
+}
+
 /** Packs parts, a list of [name, data], into a zip, with XML deflated and media stored. */
 export function zip(parts) {
   const local = [];
