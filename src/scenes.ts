@@ -1,7 +1,7 @@
 // the scenes selected with the data-scene attribute of a `.backdrop`, computed on first use and
 // cached
 
-import { MU, closed, droFamily, family, lyapunovFamily, open, propagate, ramp, spaced, step } from './orbits.ts';
+import { MU, closed, correct, droFamily, family, lyapunovFamily, open, propagate, ramp, spaced, step } from './orbits.ts';
 import type { Member, Strand, Tone } from './orbits.ts';
 
 // the integration step, nondimensional
@@ -87,6 +87,20 @@ function halos(tilt: number): Strand[] {
   return f.flatMap((m, i) => [toned(viewed(m, tilt), i === f.length - 1 ? 'hero' : 'line'), toned(viewed(m, tilt, -1), 'line')]);
 }
 
+// resonant orbits of p revolutions in q lunar periods, from Keplerian seeds at the perigee on the
+// far side of the Earth
+function resonant(p: number, q: number, eccentricities: number[]): Strand[] {
+  const a = Math.pow(q / p, 2 / 3), out: Strand[] = [];
+  for (const e of eccentricities) {
+    const r = a * (1 - e), v = Math.sqrt((1 - MU) * (2 / r - 1 / a));
+    const s = new Float64Array(6);
+    s[0] = -r - MU; s[4] = r - v;
+    const m = correct(s, [4], [3], H, Math.PI * q * 0.85, Math.PI * q * 1.15, 12);
+    if (m) out.push(toned(closed(m), 'line'));
+  }
+  return out;
+}
+
 const SCENES = {
   nest: () => [...lyapunovFamily(1, spaced(0.012, 0.12, 12, 1.5), H), ...lyapunovFamily(2, spaced(0.012, 0.14, 12, 1.5), H), ...droFamily(ramp(0.03, 0.09, 1.2), H)].map(closed),
   dro: () => droFamily(ramp(0.02, 0.32, 1.12), H).filter((_, i) => i % 3 === 0).map(closed),
@@ -96,6 +110,7 @@ const SCENES = {
   mark: () => droFamily([0.1], H).map(closed),
   tubes: () => [...tubes(1, 0.0313, 14, 2.2), ...tubes(2, 0.0408, 14, 2.2)],
   halo: () => halos(1.2),
+  rosette: () => resonant(7, 2, spaced(0.04, 0.7, 14, 1)),
 } satisfies Record<string, () => Strand[]>;
 
 export type SceneName = keyof typeof SCENES;

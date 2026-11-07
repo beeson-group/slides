@@ -76,6 +76,18 @@
     const f = [...a, ...family(again, 0, spaced(last.s[0], 1.015, 20, 1), [2, 4], [3, 5], H / 2, () => 0.3, () => 6, 1)];
     return f.flatMap((m, i) => [toned(viewed(m, tilt), i === f.length - 1 ? "hero" : "line"), toned(viewed(m, tilt, -1), "line")]);
   }
+  function resonant(p, q, eccentricities) {
+    const a = Math.pow(q / p, 2 / 3), out = [];
+    for (const e of eccentricities) {
+      const r = a * (1 - e), v = Math.sqrt((1 - MU) * (2 / r - 1 / a));
+      const s = new Float64Array(6);
+      s[0] = -r - MU;
+      s[4] = r - v;
+      const m = correct(s, [4], [3], H, Math.PI * q * 0.85, Math.PI * q * 1.15, 12);
+      if (m) out.push(toned(closed(m), "line"));
+    }
+    return out;
+  }
   var SCENES = {
     nest: () => [...lyapunovFamily(1, spaced(0.012, 0.12, 12, 1.5), H), ...lyapunovFamily(2, spaced(0.012, 0.14, 12, 1.5), H), ...droFamily(ramp(0.03, 0.09, 1.2), H)].map(closed),
     dro: () => droFamily(ramp(0.02, 0.32, 1.12), H).filter((_, i) => i % 3 === 0).map(closed),
@@ -84,7 +96,8 @@
     lyapunovs: () => [...lyapunovFamily(1, spaced(6e-3, 0.1, 16, 1.3), H), ...lyapunovFamily(2, spaced(6e-3, 0.11, 16, 1.3), H)].map(closed),
     mark: () => droFamily([0.1], H).map(closed),
     tubes: () => [...tubes(1, 0.0313, 14, 2.2), ...tubes(2, 0.0408, 14, 2.2)],
-    halo: () => halos(1.2)
+    halo: () => halos(1.2),
+    rosette: () => resonant(7, 2, spaced(0.04, 0.7, 14, 1))
   };
   var SCENE_NAMES = Object.keys(SCENES);
   var cache = /* @__PURE__ */ new Map();
