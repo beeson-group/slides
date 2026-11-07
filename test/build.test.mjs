@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, rmSync, symlinkSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -18,4 +18,12 @@ test('the theme is built in a folder with a space in its name', (t) => {
   execFileSync(process.execPath, [join(root, 'build.mjs')], { stdio: 'pipe' });
 
   assert.ok(existsSync(join(root, 'theme/beeson.js')));
+  assert.ok(existsSync(join(root, 'theme/editor.js')));
+});
+
+test('the theme bundle carries none of the editor, which is all in theme/editor.js', () => {
+  const theme = readFileSync(resolve('theme/beeson.js'), 'utf8');
+  const editor = readFileSync(resolve('theme/editor.js'), 'utf8');
+  for (const mark of ['BeesonEditor', 'beeson-edit', 'showOpenFilePicker']) assert.ok(!theme.includes(mark), `${mark} is in theme/beeson.js`);
+  assert.ok(editor.includes('BeesonEditor'));
 });
