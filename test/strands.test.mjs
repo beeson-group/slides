@@ -5,7 +5,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { deckSettled, deckUrl, launch } from '../scripts/chrome.mjs';
-import { FILL, bodiesOf, fitView, mix, parse, select, strandsOf } from '../src/strands.ts';
+import { FILL, bodiesOf, fitView, mix, parse, select, shadeOf, strandsOf } from '../src/strands.ts';
 
 // the sample of the demo deck is a JSON object wrapped in Beeson.strands( and );
 const text = readFileSync(new URL('../demo/broucke-sample.js', import.meta.url), 'utf8');
@@ -122,6 +122,7 @@ test('a strand is colored by the pair of its family and the ramp along e', () =>
     eleven.map((s) => +s.ink.at.toFixed(3)),
     [0, 0.177, 0.276, 0.453, 0.541, 0.728, 0.817, 1],
   );
+  assert.ok(eleven.every((s) => s.ink.shade === undefined));
   assert.ok(eleven.every((s) => s.alpha > 0 && s.alpha < 1));
   const both = strandsOf(sample, select(sample.families, 'frame=inertial'), 'family');
   assert.deepEqual(
@@ -129,6 +130,21 @@ test('a strand is colored by the pair of its family and the ramp along e', () =>
     [...Array(8).fill(0), ...Array(8).fill(1)],
   );
   assert.ok(both.every((s) => s.ink.at === 0));
+});
+
+test('a strand is drawn in a shade of the first color of its pair along e, lighter at the smallest e', () => {
+  const shaded = strandsOf(sample, select(sample.families, 'frame=pulsating'), 'family', undefined, 'e');
+  assert.deepEqual(
+    shaded.map((s) => [s.ink.pair, +s.ink.at.toFixed(3), s.ink.shade]),
+    [0, 0.18, 0.27, 0.45, 0.55, 0.73, 0.82, 1].map((at) => [0, at, true]).concat(
+      [0, 0.177, 0.276, 0.453, 0.541, 0.728, 0.817, 1].map((at) => [1, at, true]),
+    ),
+  );
+  // the middle shade is the color itself, and the ends differ in OKLCH lightness alone
+  assert.equal(shadeOf('#3d8bff', 0.5), '#3d8bff');
+  assert.equal(shadeOf('#3d8bff', 0), '#70bfff');
+  assert.equal(shadeOf('#3d8bff', 1), '#0058c8');
+  assert.equal(shadeOf('red', 0), null);
 });
 
 test('a record with craft set to true is the path of a spacecraft', () => {

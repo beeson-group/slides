@@ -469,13 +469,14 @@
       };
     });
   }
-  function strandsOf(file, chosen, color, ramp2) {
+  function strandsOf(file, chosen, color, ramp2, shade) {
+    const along = shade ?? ramp2;
     const order = color ? [...new Set(file.families.map((r) => String(r[color])))] : [];
     const pairOf = (r) => color ? order.indexOf(String(r[color])) : 0;
     const range = /* @__PURE__ */ new Map();
-    if (ramp2) {
+    if (along) {
       for (const r of chosen) {
-        const v = r[ramp2];
+        const v = r[along];
         if (typeof v !== "number") continue;
         const [lo, hi] = range.get(pairOf(r)) ?? [v, v];
         range.set(pairOf(r), [Math.min(lo, v), Math.max(hi, v)]);
@@ -493,9 +494,10 @@
       }
       const strand = { pts, times, T: times[n - 1] };
       if (r.craft === true) strand.craft = true;
-      if (color || ramp2) {
-        const pair2 = pairOf(r), [lo, hi] = range.get(pair2) ?? [0, 0], v = ramp2 ? r[ramp2] : void 0;
+      if (color || along) {
+        const pair2 = pairOf(r), [lo, hi] = range.get(pair2) ?? [0, 0], v = along ? r[along] : void 0;
         strand.ink = { pair: pair2, at: typeof v === "number" && hi > lo ? (v - lo) / (hi - lo) : 0 };
+        if (shade) strand.ink.shade = true;
         strand.alpha = INK_ALPHA;
       }
       return strand;
@@ -598,6 +600,14 @@
     const L = L1 + (L2 - L1) * at, C = C1 + (C2 - C1) * at, h = h1 + dh * at;
     return hex(rgbFromLab([L, C * Math.cos(h), C * Math.sin(h)]));
   }
+  var SHADES = 0.16;
+  function shadeOf(color, at) {
+    const c = rgbOf(color);
+    if (!c) return null;
+    const [L, C, h] = lch(c);
+    const shaded = Math.min(0.95, Math.max(0.2, L + SHADES * (1 - 2 * at)));
+    return hex(rgbFromLab([shaded, C * Math.cos(h), C * Math.sin(h)]));
+  }
   function rgbOf(color) {
     const c = color.trim();
     let m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c);
@@ -683,7 +693,13 @@
       if (!chosen.length)
         console.warn(`beeson: data-strands-select="${el.dataset.strandsSelect}" does not match a record of ${path}`);
       return {
-        strands: strandsOf(file, chosen, el.dataset.strandsColor || void 0, el.dataset.strandsRamp || void 0),
+        strands: strandsOf(
+          file,
+          chosen,
+          el.dataset.strandsColor || void 0,
+          el.dataset.strandsRamp || void 0,
+          el.dataset.strandsShade || void 0
+        ),
         dots: bodiesOf(file, chosen)
       };
     } catch (error) {
@@ -1003,7 +1019,7 @@
       this.inks = this.strands.map((s) => {
         if (!s.ink) return "";
         const k = 2 * s.ink.pair % PALETTE;
-        return mix(palette[k], palette[k + 1], s.ink.at) ?? c.stroke;
+        return (s.ink.shade ? shadeOf(palette[k], s.ink.at) : mix(palette[k], palette[k + 1], s.ink.at)) ?? c.stroke;
       });
     }
     X(x) {

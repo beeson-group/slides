@@ -85,14 +85,17 @@ function group(spec: string): ((r: StrandRecord) => boolean)[] {
 // the strands of the records chosen from file. with color, the key of data-strands-color, each value
 // of this key takes a pair of colors of the palette, in the order of its first record in the file.
 // with ramp, the key of data-strands-ramp, a strand is colored from the first color of its pair at the
-// smallest value of ramp among the chosen records of its pair to the second at the largest
-export function strandsOf(file: StrandFile, chosen: StrandRecord[], color?: string, ramp?: string): Strand[] {
+// smallest value of ramp among the chosen records of its pair to the second at the largest. with
+// shade, the key of data-strands-shade, which is used in place of ramp, a strand is drawn in a shade of
+// the first color of its pair, from a lighter shade at the smallest value to a darker at the largest
+export function strandsOf(file: StrandFile, chosen: StrandRecord[], color?: string, ramp?: string, shade?: string): Strand[] {
+  const along = shade ?? ramp;
   const order = color ? [...new Set(file.families.map((r) => String(r[color])))] : [];
   const pairOf = (r: StrandRecord) => (color ? order.indexOf(String(r[color])) : 0);
   const range = new Map<number, [number, number]>();
-  if (ramp) {
+  if (along) {
     for (const r of chosen) {
-      const v = r[ramp];
+      const v = r[along];
       if (typeof v !== 'number') continue;
       const [lo, hi] = range.get(pairOf(r)) ?? [v, v];
       range.set(pairOf(r), [Math.min(lo, v), Math.max(hi, v)]);
@@ -113,11 +116,12 @@ export function strandsOf(file: StrandFile, chosen: StrandRecord[], color?: stri
     }
     const strand: Strand = { pts, times, T: times[n - 1] };
     if (r.craft === true) strand.craft = true;
-    if (color || ramp) {
+    if (color || along) {
       const pair = pairOf(r),
         [lo, hi] = range.get(pair) ?? [0, 0],
-        v = ramp ? r[ramp] : undefined;
+        v = along ? r[along] : undefined;
       strand.ink = { pair, at: typeof v === 'number' && hi > lo ? (v - lo) / (hi - lo) : 0 };
+      if (shade) strand.ink.shade = true;
       strand.alpha = INK_ALPHA;
     }
     return strand;
@@ -259,6 +263,20 @@ export function mix(from: string, to: string, at: number): string | null {
   return hex(rgbFromLab([L, C * Math.cos(h), C * Math.sin(h)]));
 }
 
+// the change of OKLCH lightness from the middle shade to either end of the shades of a color
+const SHADES = 0.16;
+
+// the shade at the fraction at of a color, from a lighter shade at 0 to a darker at 1, by a change of
+// its OKLCH lightness at the same chroma and hue. the color is #rrggbb or rgb(r, g, b), and the
+// result is #rrggbb. null when the color is of another form
+export function shadeOf(color: string, at: number): string | null {
+  const c = rgbOf(color);
+  if (!c) return null;
+  const [L, C, h] = lch(c);
+  const shaded = Math.min(0.95, Math.max(0.2, L + SHADES * (1 - 2 * at)));
+  return hex(rgbFromLab([shaded, C * Math.cos(h), C * Math.sin(h)]));
+}
+
 function rgbOf(color: string): [number, number, number] | null {
   const c = color.trim();
   let m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c);
@@ -361,7 +379,8 @@ export function load(path: string): Promise<StrandFile | null> {
 }
 
 // the strands and bodies of the backdrop el, from its attributes data-strands, data-strands-select,
-// data-strands-color, and data-strands-ramp. never throws, and gives empty lists after a warning
+// data-strands-color, data-strands-ramp, and data-strands-shade. never throws, and gives empty lists
+// after a warning
 export async function strandsFor(el: HTMLElement): Promise<{ strands: Strand[]; dots: Dot[] }> {
   const path = el.dataset.strands ?? '';
   const file = await load(path);
@@ -371,7 +390,13 @@ export async function strandsFor(el: HTMLElement): Promise<{ strands: Strand[]; 
     if (!chosen.length)
       console.warn(`beeson: data-strands-select="${el.dataset.strandsSelect}" does not match a record of ${path}`);
     return {
-      strands: strandsOf(file, chosen, el.dataset.strandsColor || undefined, el.dataset.strandsRamp || undefined),
+      strands: strandsOf(
+        file,
+        chosen,
+        el.dataset.strandsColor || undefined,
+        el.dataset.strandsRamp || undefined,
+        el.dataset.strandsShade || undefined,
+      ),
       dots: bodiesOf(file, chosen),
     };
   } catch (error) {

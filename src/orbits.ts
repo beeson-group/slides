@@ -4,7 +4,7 @@
 // nondimensional, in the rotating frame
 
 import { scene, seconds } from './scenes.ts';
-import { fitView, mix, strandsFor } from './strands.ts';
+import { fitView, mix, shadeOf, strandsFor } from './strands.ts';
 import type { Dot } from './strands.ts';
 
 export type Member = { s: Float64Array; path: number[]; times: number[]; t: number };
@@ -12,9 +12,10 @@ export type Tone = 'orange' | 'violet' | 'text' | 'hero' | 'line';
 // pts is a list of alternating x and y values. times are the flight times of the points, and T is
 // the last of them. alpha, when set, replaces the opacity of the tone. ink, when set, replaces the
 // color of the tone with the color at the fraction at between the two colors of the pair of the
-// palette --strand-1 to --strand-8 in theme/beeson.css, i.e. --strand-1 and --strand-2 for pair 0.
-// craft, when true, marks the path of a spacecraft, whose head is drawn without data-heads
-export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; alpha?: number; ink?: { pair: number; at: number }; craft?: boolean };
+// palette --strand-1 to --strand-8 in theme/beeson.css, i.e. --strand-1 and --strand-2 for pair 0,
+// or with shade the shade at the fraction at of the first color of the pair. craft, when true, marks
+// the path of a spacecraft, whose head is drawn without data-heads
+export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; alpha?: number; ink?: { pair: number; at: number; shade?: boolean }; craft?: boolean };
 
 export const MU = 0.01215;
 // the distance to a body within which the step is shortened in step()
@@ -396,7 +397,7 @@ export class Orbits {
     this.inks = this.strands.map((s) => {
       if (!s.ink) return '';
       const k = (2 * s.ink.pair) % PALETTE;
-      return mix(palette[k], palette[k + 1], s.ink.at) ?? c.stroke;
+      return (s.ink.shade ? shadeOf(palette[k], s.ink.at) : mix(palette[k], palette[k + 1], s.ink.at)) ?? c.stroke;
     });
   }
 
