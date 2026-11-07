@@ -63,6 +63,69 @@ test('every block of the demo deck is paired, and a save without an edit is byte
   assert.deepEqual(page.errors, []);
 });
 
+test('one edit of a text, a formula, the notes, or a line changes only that text', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  const h2 = 'Period of the families';
+  assert.equal(deckText.includes(`<h2>${h2}</h2>`), true);
+  // typing changes the data of the text node
+  await page.evaluate(`[...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === ${JSON.stringify(h2)}).firstChild.data = 'Period of the families now'`);
+  assert.equal(await page.evaluate('window.BeesonEditor.render()'), replaced(`<h2>${h2}</h2>`, '<h2>Period of the families now</h2>'));
+  await page.evaluate(`[...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === 'Period of the families now').firstChild.data = ${JSON.stringify(h2)}`);
+  assert.equal(await page.evaluate('window.BeesonEditor.render()'), deckText);
+
+  // a character that must be escaped, and the no-break space that Chrome types at the end of a line
+  await page.evaluate(`[...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === ${JSON.stringify(h2)}).firstChild.data = 'a < b &\\u00a0c'`);
+  assert.equal(await page.evaluate('window.BeesonEditor.render()'), replaced(`<h2>${h2}</h2>`, '<h2>a &lt; b &amp; c</h2>'));
+  await page.evaluate(`[...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === 'a < b &\\u00a0c').firstChild.data = ${JSON.stringify(h2)}`);
+
+  // a formula, through the field of the editor, which typesets the block again
+  const tex = 'C = 2U - v^2';
+  assert.equal(deckText.split(tex).length, 2);
+  await page.evaluate(`(async () => {
+    const items = MathJax.startup.document.getMathItemsWithin([document.body]);
+    const item = items.find((i) => i.math === ${JSON.stringify(tex)});
+    await window.BeesonEditor.setMath(item.typesetRoot, ${JSON.stringify(tex + ' + 1')});
+  })()`);
+  assert.equal(await page.evaluate('window.BeesonEditor.render()'), replaced(tex, `${tex} + 1`));
+  assert.equal((await page.evaluate('window.BeesonEditor.status()')).dirty, true);
+  await page.evaluate(`(async () => {
+    const items = MathJax.startup.document.getMathItemsWithin([document.body]);
+    const item = items.find((i) => i.math === ${JSON.stringify(tex + ' + 1')});
+    await window.BeesonEditor.setMath(item.typesetRoot, ${JSON.stringify(tex)});
+  })()`);
+  assert.equal(await page.evaluate('window.BeesonEditor.render()'), deckText);
+
+  // the notes of a slide, and new notes on a slide without any
+  const notes = [...deckText.matchAll(/<aside class="notes">([^<]*)<\/aside>/g)];
+  assert.ok(notes.length > 0);
+  const note = notes.find((m) => !m[1].includes('\\'));
+  await page.evaluate(`[...document.querySelectorAll('.reveal aside.notes')].find((a) => a.textContent === ${JSON.stringify(note[1])}).firstChild.data = 'Changed notes.'`);
+  assert.equal(await page.evaluate('window.BeesonEditor.render()'), replaced(note[0], '<aside class="notes">Changed notes.</aside>'));
+  await page.evaluate(`[...document.querySelectorAll('.reveal aside.notes')].find((a) => a.textContent === 'Changed notes.').firstChild.data = ${JSON.stringify(note[1])}`);
+  await page.evaluate(`{
+    const slide = [...document.querySelectorAll('.reveal .slides > section')].find((s) => !s.querySelector('aside.notes'));
+    const aside = document.createElement('aside'); aside.className = 'notes'; aside.textContent = 'New notes.';
+    slide.append(aside);
+  }`);
+  const rendered = await page.evaluate('window.BeesonEditor.render()');
+  assert.equal(rendered.split('<aside class="notes">New notes.</aside>\n').length, 2);
+  assert.equal(rendered.replace('  <aside class="notes">New notes.</aside>\n', ''), deckText);
+  await page.evaluate(`[...document.querySelectorAll('.reveal aside.notes')].find((a) => a.textContent === 'New notes.').remove()`);
+
+  // a line break inserted on the page is written as a br
+  const li = [...deckText.matchAll(/<li[^>]*>([^<]+)<\/li>/g)].find((m) => deckText.split(m[0]).length === 2);
+  await page.evaluate(`{
+    const li = [...document.querySelectorAll('.reveal li')].find((l) => l.textContent === ${JSON.stringify(li[1])});
+    li.firstChild.data = 'one';
+    li.append(document.createElement('br'), 'two');
+  }`);
+  assert.equal(await page.evaluate('window.BeesonEditor.render()'), replaced(li[0], li[0].replace(li[1], 'one<br>two')));
+  assert.deepEqual(page.errors, []);
+});
+
 test('a save is paired again, and a second save is byte-exact', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
