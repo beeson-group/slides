@@ -1,5 +1,6 @@
-/* beeson.css, the reveal.js theme of the Beeson group. Design size 1920 by 1080, STIX Two Text,
-   black by default with a warm paper light mode. The layout classes are documented in index.html. */
+/* beeson.css, the reveal.js theme of the Beeson group. Design size 1920 by 1080, Latin Modern
+   Roman, black by default with a warm paper light mode. The layout classes are documented in
+   index.html. */
 
 :root,
 html[data-theme="dark"] {
@@ -62,9 +63,40 @@ html[data-theme="light"] {
 html[data-theme="dark"] { --data-8: #f2f2ef; }
 
 /* ---- canvas ---- */
+/* Latin Modern Roman 2.005 of TeX Live, converted to WOFF2 with fontTools. LM Roman 10 is set at
+   400, and LM Roman Demi 10 at 500, whose italic is its oblique. A Greek letter in prose is set in
+   the Greek of STIX Two Text, from theme/vendor/fonts/stix-two-text.css */
+@font-face {
+  font-family: "Latin Modern Roman";
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url(vendor/latin-modern/latin-modern-roman-400-normal.woff2) format("woff2");
+}
+@font-face {
+  font-family: "Latin Modern Roman";
+  font-style: italic;
+  font-weight: 400;
+  font-display: block;
+  src: url(vendor/latin-modern/latin-modern-roman-400-italic.woff2) format("woff2");
+}
+@font-face {
+  font-family: "Latin Modern Roman";
+  font-style: normal;
+  font-weight: 500;
+  font-display: block;
+  src: url(vendor/latin-modern/latin-modern-roman-500-normal.woff2) format("woff2");
+}
+@font-face {
+  font-family: "Latin Modern Roman";
+  font-style: italic;
+  font-weight: 500;
+  font-display: block;
+  src: url(vendor/latin-modern/latin-modern-roman-500-italic.woff2) format("woff2");
+}
 html, body, .reveal-viewport { background: var(--bg); }
 .reveal {
-  font-family: "STIX Two Text", Georgia, "Times New Roman", serif;
+  font-family: "Latin Modern Roman", "STIX Two Text", Georgia, "Times New Roman", serif;
   font-size: 48px;
   font-weight: 400;
   line-height: 1.4;

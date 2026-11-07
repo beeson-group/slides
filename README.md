@@ -55,6 +55,8 @@ Set the drawing of a `backdrop` with its attribute `data-scene`. Each drawing is
 | `torus` | Quasi-periodic strands about distant retrograde orbits |
 | a file in `data-strands` | The polylines of a file next to the deck, described below |
 
+Label a point of a named drawing with a `lab` span inside the backdrop, whose `data-at` is `L1`, `L2`, `moon`, or `earth`, and shift the label from the point by `data-dx` and `data-dy` pixels. A label is typeset with MathJax. Write a libration point as `\(\LL{1}\)`, i.e. a calligraphic L with its index, with the macro `\LL` of `theme/macros.js`, and write it in the same way in a heading, a caption, and the notes.
+
 A backdrop can also be drawn from a file of polylines, e.g. the members of families computed elsewhere. Name the file in `data-strands` in place of `data-scene`, with its path relative to the deck. The demo deck draws `demo/broucke-sample.js`, a few members of Broucke's families 7 and 11 of the elliptic restricted three-body problem, which is also the example to start from.
 
 The file is a JSON object with a list `families` of records and an optional list `bodies`. Each record is an object with a list `points` of `[x, y]` pairs, and optionally with a list `t` or `theta` of the time or the true anomaly at each point. The strand of a record is traced on this clock, or at a uniform speed along its length without one. The other keys of a record are free, e.g. `family`, `branch`, `frame`, and `e` in the sample, and you select and color the records by them. Each entry of `bodies` has the positions of the primary and the secondary as `m1` and `m2` in an object per frame, and the mass ratio as `mu`, e.g. `{"family": 7, "mu": 0.012155, "pulsating": {"m1": [-0.01215, 0], "m2": [0.98784, 0]}}`. A body entry is matched to every record with the same values for the numbers and strings of the entry. A body is drawn as a dot only where it is fixed in the frame of the drawn records, hence the primary and the secondary are left out of the inertial frame.
@@ -97,7 +99,7 @@ Each video is placed over its image as a PowerPoint video, and it is started whe
 
 For a figure made with matplotlib, use the styles `beeson-dark.mplstyle` and `beeson-light.mplstyle` in `styles/`. The palette, the typeface, and a transparent background are set in these styles. Export one file per mode and mark the images `for-dark` and `for-light`, so that the right one is shown in each mode. Give a white raster figure the class `paper`, and it is framed. Give a black-on-white line plot the class `invert`, and it is inverted in dark mode.
 
-Math is typeset in SVG with MathJax 4 and the STIX Two Math font, both vendored. The macros of a deck are defined in `theme/macros.js`.
+Math is typeset in SVG with MathJax 4 and its TeX font, i.e. Computer Modern, and the text is set in Latin Modern Roman, all vendored. The macros of a deck are defined in `theme/macros.js`.
 
 To show a video, put it in a `zone` or a `plate`, and add `data-autoplay` to play it while its slide is shown. Give every video a `poster`, since the poster is printed in the PDF and `npm run check` fails without one. Run `demo/clip.py` to redraw the clip of the demo deck, which is also the example to start from.
 
@@ -153,7 +155,7 @@ The theme is maintained with npm and Node 22 or later, on macOS, Linux, or Windo
 
 ```sh
 npm ci                 # the dependencies
-npm run vendor         # reveal.js, the notes plugin, the fonts, MathJax, and three.js into theme/vendor/ (tycho is copied by hand)
+npm run vendor         # reveal.js, the notes plugin, the fonts, MathJax, and three.js into theme/vendor/ (tycho and Latin Modern Roman are copied by hand)
 npm run build          # src/*.ts into theme/beeson.js and src/editor/*.ts into theme/editor.js with esbuild
 npm run typecheck      # tsc --noEmit
 npm test               # the orbit engine, the surfaces, the backdrops from files, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, the PowerPoint file, the plots, the stepped math, and the editor under node --test

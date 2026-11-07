@@ -5,4 +5,6 @@ window.beesonMacros = {
   // upright d with the spacing of an operator, as in \int f(x) \dd x
   dd: '\\mathop{}\\!\\mathrm{d}',
   R: '\\mathbb{R}',
+  // a libration point, as in \LL{1}
+  LL: ['\\mathcal{L}_{#1}', 1],
 };
