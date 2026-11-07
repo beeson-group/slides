@@ -222,6 +222,37 @@ const askRow = make('div', 'row');
 askRow.append(askSave, askDiscard, askCancel);
 ask.append(make('h3', '', 'The deck has unsaved changes'), askText, askRow);
 ask.hidden = true;
+let asking: ((choice: 'save' | 'discard' | null) => void) | null = null;
+const ASK = {
+  open: {
+    text: 'Save them into the file first, open a file without them, or go on editing.',
+    save: ['Save and open…', 'Save the edits into the file, then choose a file'],
+    discard: ['Open without saving', 'Put the slides back as saved, then choose a file'],
+  },
+  present: {
+    text: 'Save them into the file first, present the saved file without them, or go on editing.',
+    save: ['Save and present', 'Save the edits into the file, then show the deck in a new tab'],
+    discard: ['Present the saved file', 'Show the deck as saved in a new tab, and keep the edits here'],
+  },
+};
+
+function askFirst(action: keyof typeof ASK): Promise<'save' | 'discard' | null> {
+  const words = ASK[action];
+  askText.textContent = words.text;
+  [askSave.textContent, askSave.title] = words.save;
+  [askDiscard.textContent, askDiscard.title] = words.discard;
+  return new Promise((done) => {
+    asking = done;
+    ask.hidden = false;
+    askCancel.focus();
+  });
+}
+
+function answer(choice: 'save' | 'discard' | null): void {
+  ask.hidden = true;
+  asking?.(choice);
+  asking = null;
+}
 
 // the card that lists the texts that cannot be edited, opened with Which? after the state
 const problemsCard = make('div', 'beeson-edit-card problems');
@@ -413,10 +444,29 @@ function pickFile(): Promise<File | null> {
   });
 }
 
+// the edits since the last save are undone, so that the page reads as the saved file again
+async function discardEdits(): Promise<void> {
+  while (history.canUndo) await history.undo();
+  history.clear();
+  move.select(null);
+  if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+  window.clearTimeout(autosaveTimer);
+  dropDraft();
+  dirty = false;
+  report();
+}
 
 // with unsaved changes, the user is asked first, as in PowerPoint: a save, a discard, or no open
 async function openFile(): Promise<void> {
   note = null;
+  if (dirty) {
+    const choice = await askFirst('open');
+    if (!choice) return;
+    if (choice === 'save') {
+      await save();
+      if (dirty) return;
+    } else await discardEdits();
+  }
   if (canPick() && pickers.showOpenFilePicker) {
     let picked: FileSystemFileHandle[];
     try {
@@ -641,6 +691,14 @@ function toggleAutosave(): void {
 
 // the saved deck in a new tab, without the editor. with unsaved changes, the user is asked first
 async function present(): Promise<void> {
+  if (dirty) {
+    const choice = await askFirst('present');
+    if (!choice) return;
+    if (choice === 'save') {
+      await save();
+      if (dirty) return;
+    }
+  }
   const params = new URLSearchParams(location.search);
   params.delete('edit');
   // a parameter without a value, such as still, is kept without an equals sign
@@ -985,6 +1043,9 @@ function onKeyDown(ev: KeyboardEvent): void {
     ev.preventDefault();
     ev.stopPropagation();
     openMath(active);
+  } else if (ev.key === 'Escape' && !ask.hidden) {
+    answer(null);
+    ev.stopPropagation();
   } else if (ev.key === 'Escape') {
     const host = hostOf(active);
     if (popover) {
@@ -1055,6 +1116,9 @@ async function init(): Promise<void> {
   wire(restoreButton, restoreDraft);
   wire(copyButton, copyDraft);
   wire(discardButton, discardDraft);
+  wire(askSave, () => answer('save'));
+  wire(askDiscard, () => answer('discard'));
+  wire(askCancel, () => answer(null));
   resizer.addEventListener('keydown', (ev) => {
     const step = ev.key === 'ArrowUp' ? 20 : ev.key === 'ArrowDown' ? -20 : 0;
     if (!step) return;
