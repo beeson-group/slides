@@ -506,6 +506,52 @@ test('one history undoes and redoes the typing, a formula, a step, and a move, w
   assert.deepEqual(page.errors, []);
 });
 
+test('the list of the slides at the left jumps to a slide, and G jumps to a slide by its number', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  const rows = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-nav .row')].map((r) => [r.querySelector('.num').textContent, r.querySelector('.title').textContent, r.querySelector('.kind').textContent, r.getAttribute('aria-current')])`);
+  const first = await rows();
+  assert.equal(first.length, await page.evaluate('Reveal.getTotalSlides()'));
+  assert.deepEqual(first[0], ['1', 'Transit orbits of the Earth–Moon system', 'title', 'true']);
+  assert.deepEqual(first[1].slice(0, 3), ['2', 'What is in a talk', 'section']);
+  assert.ok(first.every((r) => r[1].length > 0));
+  // the pane is beside the slide, and the slide is not under it
+  const box = () => page.evaluate(`(() => { const nav = document.querySelector('.beeson-edit-nav'); const n = nav.getBoundingClientRect(); const s = document.querySelector('.reveal .slides').getBoundingClientRect(); return { display: getComputedStyle(nav).display, navRight: n.right, slideLeft: s.left, slideRight: s.right }; })()`);
+  let b = await box();
+  assert.equal(b.display, 'flex');
+  assert.ok(b.slideLeft >= b.navRight && b.slideRight <= 1920, JSON.stringify(b));
+  await page.evaluate(`document.querySelectorAll('.beeson-edit-nav .row')[4].click()`);
+  assert.equal(await page.evaluate('Reveal.getIndices().h'), 4);
+  assert.equal((await rows())[4][3], 'true');
+  assert.equal((await rows())[0][3], 'false');
+  // the arrows move within the list
+  await page.evaluate(`(() => { const r = document.querySelectorAll('.beeson-edit-nav .row')[4]; r.focus(); r.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true })); })()`);
+  assert.equal(await page.evaluate('Reveal.getIndices().h'), 5);
+  assert.equal(await page.evaluate(`document.activeElement === document.querySelectorAll('.beeson-edit-nav .row')[5]`), true);
+  // the title in the list follows the heading
+  await page.evaluate(`(() => { const h = document.querySelector('.reveal section.present h2'); h.firstChild.data = 'Renamed'; h.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  assert.equal((await rows())[5][1], 'Renamed');
+  // the Slides button hides the list, and the choice is kept
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Slides').click()`);
+  b = await box();
+  assert.equal(b.display, 'none');
+  assert.ok(b.slideLeft < 100, JSON.stringify(b));
+  assert.equal(await page.evaluate(`localStorage.getItem('beeson-nav')`), '0');
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Slides').click()`);
+  assert.equal((await box()).display, 'flex');
+  // G of reveal.js asks for a number
+  await page.evaluate(`document.activeElement.blur(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', keyCode: 71, which: 71, bubbles: true, cancelable: true }))`);
+  assert.equal(await page.evaluate(`document.activeElement.className`), 'jump-to-slide-input');
+  await page.evaluate(`(() => { const i = document.querySelector('.jump-to-slide-input'); i.value = '12'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await page.evaluate(`document.querySelector('.jump-to-slide-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true, cancelable: true }))`);
+  await sleep(300);
+  assert.equal(await page.evaluate('Reveal.getIndices().h'), 11);
+  assert.equal((await rows())[11][3], 'true');
+  assert.deepEqual(page.errors, []);
+});
+
 test('a formula is reached with Tab and opened with Enter, and the controls carry labels', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
@@ -821,6 +867,55 @@ test('the notes fill the width of the pane when the pane is tall', async (t) => 
   assert.ok(Math.abs(result.left - result.revealLeft) < 2, JSON.stringify(result));
   assert.ok(result.textLeft - result.paneLeft >= 0 && result.textLeft - result.paneLeft < 40, JSON.stringify(result));
   assert.equal(result.hit, true, 'the notes at the left of the pane are clipped');
+  assert.deepEqual(page.errors, []);
+});
+
+test('a row of the slide list rested on shows a preview of its slide, which is hidden when the pointer leaves', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  const at = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s, i) => i > 0 && s.querySelector('.backdrop canvas') && s.querySelector('h2'))`);
+  assert.ok(at > 0);
+  const peek = () => page.evaluate(`(() => {
+    const p = document.querySelector('.beeson-edit-peek');
+    if (!p) return null;
+    const box = p.getBoundingClientRect();
+    const list = document.querySelector('.beeson-edit-nav .rows').getBoundingClientRect();
+    const clone = p.querySelector('section');
+    const canvas = clone?.querySelector('.backdrop canvas');
+    let painted = false;
+    if (canvas && canvas.width) {
+      const data = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+      for (let i = 3; i < data.length; i += 4) if (data[i]) { painted = true; break; }
+    }
+    return { shown: !p.hidden && getComputedStyle(p).display !== 'none', width: box.width, right: box.left >= list.right, hidden: p.getAttribute('aria-hidden'), focusable: p.querySelectorAll('[tabindex], [contenteditable]').length, title: clone?.querySelector('h2')?.textContent ?? null, painted, fragments: [...(clone?.querySelectorAll('.fragment') ?? [])].every((f) => getComputedStyle(f).opacity === '1') };
+  })()`);
+  const row = (type) => page.evaluate(`document.querySelectorAll('.beeson-edit-nav .row')[${at}].dispatchEvent(new PointerEvent('${type}', { bubbles: false, pointerId: 1 }))`);
+  await row('pointerenter');
+  await sleep(100);
+  assert.notEqual((await peek())?.shown, true, 'the preview waits for the pointer to rest');
+  await sleep(400);
+  const shown = await peek();
+  const title = await page.evaluate(`document.querySelectorAll('.reveal .slides > section')[${at}].querySelector('h2').textContent`);
+  assert.equal(shown.shown, true);
+  assert.ok(Math.abs(shown.width - 320) < 2, `the preview is ${shown.width} px wide`);
+  assert.equal(shown.right, true);
+  assert.equal(shown.hidden, 'true');
+  assert.equal(shown.focusable, 0);
+  assert.equal(shown.title, title);
+  assert.equal(shown.painted, true);
+  assert.equal(shown.fragments, true);
+  await row('pointerleave');
+  assert.notEqual((await peek())?.shown, true);
+  // a click on the row hides the preview and moves to the slide
+  await row('pointerenter');
+  await sleep(500);
+  assert.equal((await peek()).shown, true);
+  await page.evaluate(`document.querySelectorAll('.beeson-edit-nav .row')[${at}].click()`);
+  assert.notEqual((await peek())?.shown, true);
+  assert.equal(await page.evaluate('Reveal.getIndices().h'), at);
+  assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-peek section').length`), 0);
   assert.deepEqual(page.errors, []);
 });
 
