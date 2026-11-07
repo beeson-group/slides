@@ -1,14 +1,15 @@
 // the entry point of beeson.js. window.Beeson.start() is called in a deck to initialize reveal.js
-// with the defaults of the theme, and to start the orbit backdrops, the surfaces, the fragment steps,
+// with the defaults of the theme, and to start the orbit backdrops, the surfaces, the plots, the fragment steps,
 // the mode switch, and the pointer
 
 import { Orbits, mount } from './orbits.ts';
 import { initChrome } from './chrome.ts';
 import { initCursor, togglePointer } from './cursor.ts';
+import { mountPlots, type PlotView } from './plot.ts';
 import { stillViewers } from './print.ts';
 import { mount as mountSurfaces } from './surface.ts';
 import type { Surface } from './surface.ts';
-import { initSteps } from './steps.ts';
+import { applyAll, applySteps, initSteps, typeset } from './steps.ts';
 import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.ts';
 import type { RevealOptions, SlideEvent } from './reveal.d.ts';
 
@@ -39,6 +40,7 @@ const TRACED = ['title', 'section', 'closing'];
 
 const backdrops: Orbits[] = [];
 const surfaces: Surface[] = [];
+const plots: PlotView[] = [];
 
 // with the URL parameter edit, the in-place editor is loaded, and the deck is drawn still while it
 // is edited, without the traced backdrops and the tint at the pointer
@@ -55,12 +57,24 @@ const still = () => EDITING || Orbits.reduced() || window.Reveal.isPrintView() |
 function remount(): void {
   for (const o of mount(document)) if (!backdrops.includes(o)) backdrops.push(o);
   if (document.querySelector('.surface')) for (const s of mountSurfaces(document)) if (!surfaces.includes(s)) surfaces.push(s);
+  for (const p of mountPlots(document)) if (!plots.includes(p)) plots.push(p);
 }
 
 const within = (slide: Element | null | undefined) => (slide ? backdrops.filter((o) => slide.contains(o.el)) : []);
 const surfacesOf = (slide: Element | null | undefined) => (slide ? surfaces.filter((s) => slide.contains(s.el)) : []);
+const plotsIn = (slide: Element | null | undefined) => (slide ? plots.filter((p) => slide.contains(p.el)) : []);
+
+// a plot is laid out and set to the steps of its slide, and the highlights of the slide are applied
+// again to the marks it has drawn
+function stepPlots(slide: Element): void {
+  const own = plotsIn(slide);
+  for (const p of own) { p.fit(); p.syncSteps(); }
+  if (own.length) applySteps(slide);
+}
 
 function show(slide: HTMLElement): void {
+  stepPlots(slide);
+  for (const p of plotsIn(slide)) if (still()) p.still(); else p.start();
   const glide = slide.hasAttribute('data-auto-animate');
   for (const o of within(slide)) {
     o.fit();
@@ -92,6 +106,8 @@ function completeAll(): void {
   remount();
   for (const o of backdrops) { o.fit(); o.complete(); }
   for (const s of surfaces) { s.fit(); s.sync(false); s.draw(); }
+  for (const p of plots) { p.fit(); p.syncSteps(); p.still(); }
+  applyAll(document);
 }
 
 async function start(options: Partial<RevealOptions> = {}): Promise<void> {
@@ -103,6 +119,7 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   // mounted here
   deck.on('pdf-ready', () => {
     completeAll();
+    void typeset().then(() => applyAll(document));
     syncViewers(get());
     void stillViewers();
   });
@@ -123,15 +140,20 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
     const ev = event as SlideEvent;
     if (!still()) for (const o of within(ev.previousSlide)) if (!ev.currentSlide.contains(o.el)) o.reset();
     for (const s of surfacesOf(ev.previousSlide)) s.stop();
+    for (const p of plotsIn(ev.previousSlide)) if (!ev.currentSlide.contains(p.el)) p.pause();
     show(ev.currentSlide);
   });
-  // a step of a slide may set the stage of a surface on it
-  const step = () => { for (const s of surfacesOf(deck.getCurrentSlide())) s.sync(!still()); };
+  // a step of a slide may set the stage of a surface on it, or the steps of a plot
+  const step = () => {
+    for (const s of surfacesOf(deck.getCurrentSlide())) s.sync(!still());
+    stepPlots(deck.getCurrentSlide());
+  };
   deck.on('fragmentshown', step);
   deck.on('fragmenthidden', step);
   deck.on('resize', () => {
     for (const o of backdrops) o.fit();
     for (const s of surfaces) s.fit();
+    stepPlots(deck.getCurrentSlide());
   });
   syncViewers(get());
   // the backdrops of the current slide are redrawn inside the flip, and the others after it, since
@@ -172,6 +194,7 @@ const Beeson = {
   theme: { get, set: (theme: 'dark' | 'light') => set(theme), toggle: () => toggle() },
   backdrops,
   surfaces,
+  plots,
   version: __VERSION__,
 };
 

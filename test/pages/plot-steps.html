@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Plot deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+</head>
+<body>
+<!-- a plot of two panels with a step that shows the second panel and a step that switches its tab,
+     then a plot whose JSON block is missing -->
+<div class="reveal">
+  <div class="slides">
+    <section>
+      <h2>Before the plot</h2>
+    </section>
+    <section>
+      <h2>A plot in a zone</h2>
+      <div class="plot zone" data-plot="data"></div>
+      <span class="fragment" data-plot-show="right"></span>
+      <span class="fragment" data-plot-tab="two"></span>
+      <script type="application/json" id="data">{
+        "parameter": { "label": "$t$", "digits": 2 },
+        "duration": 2,
+        "hold": 0.5,
+        "panels": [
+          { "id": "left", "x": { "range": [0, 1], "ticks": [0, 1] }, "y": { "range": [0, 1], "ticks": [0, 1] } },
+          { "id": "right", "x": { "range": [0, 1] }, "y": { "range": [-1, 1] } }
+        ],
+        "marks": [
+          { "id": "dot", "panel": "left", "kind": "points" },
+          { "id": "path", "panel": "right", "kind": "trace" }
+        ],
+        "tabs": [
+          { "name": "one", "values": [0, 0.5, 1], "data": { "dot": [[0, 0], [0.5, 0.5], [1, 1]], "path": [[0, 0], [0.5, 1], [1, 0]] } },
+          { "name": "two", "values": [0, 0.5, 1], "data": { "dot": [[1, 0], [0.5, 0.5], [0, 1]], "path": [[0, 0], [0.5, -1], [1, 0]] } }
+        ]
+      }</script>
+    </section>
+    <section>
+      <h2>A plot without data</h2>
+      <div class="plot zone" data-plot="missing"></div>
+    </section>
+  </div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

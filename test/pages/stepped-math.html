@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Stepped math deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- a display held through the sentence after it, two steps that highlight a symbol each, and two
+     steps after them, so that the slide is not complete at the fifth step -->
+<div class="reveal">
+  <div class="slides">
+    <section>
+      <h2>Stepped math</h2>
+      <div class="math fragment" data-keep>\[\class{first}{a} + \class{second}{b} = c\]</div>
+      <p class="fragment">The sentence that explains the display.</p>
+      <p class="fragment" data-highlight="first">The <span class="first">first term</span> in orange.</p>
+      <p class="fragment" data-highlight="second" data-tone="violet">The second term in violet.</p>
+      <p class="fragment">A sentence after the highlights.</p>
+      <p class="fragment">The last sentence.</p>
+    </section>
+  </div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>
