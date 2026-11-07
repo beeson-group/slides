@@ -1227,7 +1227,12 @@
     });
     syncViewers(get());
     document.addEventListener("beeson:theme", () => {
-      for (const o of backdrops) o.redraw();
+      const now = window.Reveal.isPrintView() ? backdrops : within(deck.getCurrentSlide());
+      for (const o of now) o.redraw();
+      const later = backdrops.filter((o) => !now.includes(o));
+      if (later.length) setTimeout(() => {
+        for (const o of later) o.redraw();
+      }, 600);
       syncViewers(get());
     });
   }

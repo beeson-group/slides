@@ -323,12 +323,14 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
 
 /* the mode flip of antfu.me: a circle at the click point, grown over the old view on a flip to light and shrunk off the
    new view on a flip to dark. It is a CSS animation, since a script animation started from the ready promise of the view
-   transition is not applied in the first frame in Firefox. --flip-x, --flip-y, and --flip-r are set in src/switcher.ts. */
+   transition is not applied in the first frame in Firefox. --flip-x, --flip-y, and --flip-r are set in src/switcher.ts.
+   The circle starts after 50 ms, because the first composite of the new view is slow on a large display. In Zen, the
+   second or third frame is then late, where the eased circle moves the most. */
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 ::view-transition-old(root) { z-index: 1; }
 ::view-transition-new(root) { z-index: 9999; }
-html.to-light::view-transition-new(root) { animation: flip-open 400ms ease-out both; }
-html.to-dark::view-transition-old(root) { z-index: 9999; animation: flip-close 400ms ease-out both; }
+html.to-light::view-transition-new(root) { animation: flip-open 400ms ease-out 50ms both; }
+html.to-dark::view-transition-old(root) { z-index: 9999; animation: flip-close 400ms ease-out 50ms both; }
 html.to-dark::view-transition-new(root) { z-index: 1; }
 @keyframes flip-open {
   from { clip-path: circle(0px at var(--flip-x) var(--flip-y)); }
