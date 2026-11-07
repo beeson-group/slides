@@ -186,8 +186,9 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section > .math,
 .reveal .slides section > .col { max-width: 1000px; }
 .reveal .slides section > .col { margin: 0; }
-.reveal .slides section .zone,
-.reveal .slides section .backdrop { left: 1200px; top: 120px; width: 600px; height: 800px; }
+.reveal .slides section .zone { left: 1200px; top: 120px; width: 600px; height: 800px; }
+.reveal .slides section .backdrop { left: 1200px; top: 0; width: 720px; height: 1080px; }
+.reveal .slides section.narrow .backdrop { left: 920px; width: 1000px; }
 .reveal .slides section .zone > img,
 .reveal .slides section .zone > svg,
 .reveal .slides section .zone > video { display: block; width: 100%; height: 100%; object-fit: contain; }
