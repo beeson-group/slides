@@ -4,10 +4,38 @@
 // the check of a deck is made in the page itself. geckodriver and safaridriver are preinstalled on
 // the runners of GitHub. On a Mac, safaridriver has to be enabled once with `safaridriver --enable`.
 import { spawn } from 'node:child_process';
+import { readFile } from 'node:fs/promises';
+import { createServer as createHttpServer } from 'node:http';
 import { createServer } from 'node:net';
-import { join } from 'node:path';
+import { extname, join, resolve, sep } from 'node:path';
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+
+const contentTypes = { '.css': 'text/css', '.html': 'text/html', '.js': 'text/javascript', '.svg': 'image/svg+xml' };
+
+/** Serves the files of a folder on a local port, and returns its origin and close(). */
+export async function serve(folder) {
+  const root = resolve(folder);
+  const server = createHttpServer(async (request, response) => {
+    const path = join(root, decodeURIComponent(new URL(request.url, 'http://localhost').pathname));
+    try {
+      if (!path.startsWith(root + sep)) throw new Error(`${path} is outside ${root}`);
+      const body = await readFile(path);
+      response.writeHead(200, { 'Content-Type': contentTypes[extname(path)] ?? 'application/octet-stream' });
+      response.end(body);
+    } catch {
+      response.writeHead(404).end();
+    }
+  });
+  await new Promise((done) => server.listen(0, '127.0.0.1', done));
+  return {
+    origin: `http://127.0.0.1:${server.address().port}`,
+    close() {
+      server.close();
+      server.closeAllConnections();
+    },
+  };
+}
 
 function freePort() {
   return new Promise((done, fail) => {
