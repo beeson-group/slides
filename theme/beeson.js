@@ -88,6 +88,58 @@
     }
     return out;
   }
+  function zeroVelocity(C) {
+    const x0 = -1.75, y0 = -1.45, d = 8e-3, nx = 438, ny = 363;
+    const f = (x, y) => {
+      const r1 = Math.hypot(x + MU, y), r2 = Math.hypot(x - 1 + MU, y);
+      return x * x + y * y + 2 * (1 - MU) / r1 + 2 * MU / r2 - C;
+    };
+    const g = new Float64Array((nx + 1) * (ny + 1));
+    for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) g[j * (nx + 1) + i] = f(x0 + i * d, y0 + j * d);
+    const at = (i, j) => g[j * (nx + 1) + i];
+    const links = /* @__PURE__ */ new Map(), where = /* @__PURE__ */ new Map();
+    const edge = (i, j, h) => {
+      const key = `${h ? "h" : "v"}${i},${j}`;
+      if (!where.has(key)) {
+        const a = at(i, j), b = h ? at(i + 1, j) : at(i, j + 1), t = a / (a - b);
+        where.set(key, h ? [x0 + (i + t) * d, y0 + j * d] : [x0 + i * d, y0 + (j + t) * d]);
+      }
+      return key;
+    };
+    const link = (a, b) => {
+      if (!links.has(a)) links.set(a, []);
+      if (!links.has(b)) links.set(b, []);
+      links.get(a)?.push(b);
+      links.get(b)?.push(a);
+    };
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const hits = [];
+      if (at(i, j) > 0 !== at(i + 1, j) > 0) hits.push(edge(i, j, true));
+      if (at(i + 1, j) > 0 !== at(i + 1, j + 1) > 0) hits.push(edge(i + 1, j, false));
+      if (at(i, j + 1) > 0 !== at(i + 1, j + 1) > 0) hits.push(edge(i, j + 1, true));
+      if (at(i, j) > 0 !== at(i, j + 1) > 0) hits.push(edge(i, j, false));
+      if (hits.length === 2) link(hits[0], hits[1]);
+      else if (hits.length === 4) {
+        link(hits[0], hits[1]);
+        link(hits[2], hits[3]);
+      }
+    }
+    const out = [], seen = /* @__PURE__ */ new Set();
+    for (const start2 of links.keys()) {
+      if (seen.has(start2)) continue;
+      const p = [], t = [];
+      let cur = start2;
+      while (cur && !seen.has(cur)) {
+        seen.add(cur);
+        const [x, y] = where.get(cur) ?? [0, 0];
+        p.push(x, y, 0);
+        t.push(t.length * 4e-3);
+        cur = links.get(cur)?.find((k) => !seen.has(k));
+      }
+      if (t.length > 8) out.push(toned(open(p, t), "line"));
+    }
+    return out;
+  }
   var SCENES = {
     nest: () => [...lyapunovFamily(1, spaced(0.012, 0.12, 12, 1.5), H), ...lyapunovFamily(2, spaced(0.012, 0.14, 12, 1.5), H), ...droFamily(ramp(0.03, 0.09, 1.2), H)].map(closed),
     dro: () => droFamily(ramp(0.02, 0.32, 1.12), H).filter((_, i) => i % 3 === 0).map(closed),
@@ -97,7 +149,8 @@
     mark: () => droFamily([0.1], H).map(closed),
     tubes: () => [...tubes(1, 0.0313, 14, 2.2), ...tubes(2, 0.0408, 14, 2.2)],
     halo: () => halos(1.2),
-    rosette: () => resonant(7, 2, spaced(0.04, 0.7, 14, 1))
+    rosette: () => resonant(7, 2, spaced(0.04, 0.7, 14, 1)),
+    hill: () => [3.25, 3.2, 3.188, 3.172, 3.15, 3.12, 3.08, 3.05, 3.012, 2.99, 2.97, 2.95, 2.93, 2.91, 2.89].flatMap(zeroVelocity)
   };
   var SCENE_NAMES = Object.keys(SCENES);
   var cache = /* @__PURE__ */ new Map();
