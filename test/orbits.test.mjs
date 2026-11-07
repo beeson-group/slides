@@ -8,9 +8,9 @@ import { SCENE_NAMES, scene } from '../src/scenes.ts';
 const H = 0.004;
 // the smallest number of strands expected in each scene. the L2 family of nest is ended after 7 of
 // its 12 members
-const FEWEST = { nest: 24, dro: 9, l1: 26, l2: 20, lyapunovs: 32, mark: 1, tubes: 114, halo: 74, rosette: 13, hill: 15, transfer: 25, ribbon: 181, wideRibbon: 241, spiral: 4, torus: 5 };
+const FEWEST = { nest: 24, dro: 9, l1: 26, l2: 20, lyapunovs: 32, mark: 1, tubes: 114, halo: 74, rosette: 13, hill: 15, transfer: 25, ribbon: 181, wideRibbon: 241, spiral: 4, lace: 82, torus: 5 };
 // the scenes with strands that are not periodic orbits
-const FLIGHTS = ['tubes', 'transfer', 'hill', 'ribbon', 'wideRibbon', 'spiral', 'torus'];
+const FLIGHTS = ['tubes', 'transfer', 'hill', 'ribbon', 'wideRibbon', 'spiral', 'lace', 'torus'];
 
 test('the collinear points L1 and L2 are at the Earth–Moon values', () => {
   assert.ok(Math.abs(lagrange(1) - 0.8369) < 5e-4);

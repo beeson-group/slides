@@ -357,6 +357,33 @@ function tori(tilt: number): Strand[] {
   });
 }
 
+// the unstable tube of an L1 orbit and the stable tube of an L2 orbit, interlaced about the Moon
+function lace(A1: number, A2: number, phases: number, span: number): Strand[] {
+  const out: Strand[] = [];
+  for (const [n, A] of [[1, A1], [2, A2]] as const) {
+    const orbit = lyapunovFamily(n, [A], H)[0];
+    if (!orbit) continue;
+    const first = closed(orbit), { states, dirs } = unstable(orbit, first.T), xL = lagrange(n);
+    out.push(toned(first, 'text'));
+    // the branch toward the Moon is chosen from a trial flight
+    const toMoon = (sign: number) => {
+      const u = Float64Array.from(states[0]);
+      for (let i = 0; i < 6; i++) u[i] += sign * 1e-5 * dirs[0][i];
+      const p: number[] = [], q: number[] = [];
+      propagate(u, H, 12, p, q, (v) => Math.abs(v[0] - xL) > 0.1, 0);
+      return Math.abs(p[p.length - 3] - (1 - MU)) < Math.abs(xL - (1 - MU));
+    };
+    const sign = toMoon(1) ? 1 : -1;
+    for (let k = 0; k < phases; k++) {
+      const i = Math.floor((k / phases) * states.length), u = Float64Array.from(states[i]);
+      for (let j = 0; j < 6; j++) u[j] += sign * 1e-5 * dirs[i][j];
+      const s = flown(u, H, span, 0, (v) => Math.hypot(v[0] - 1 + MU, v[1]) < 0.008 || Math.hypot(v[0] - 1 + MU, v[1]) > 0.5);
+      out.push(n === 1 ? { ...toned(s, 'orange'), alpha: 0.3 } : { ...toned(mirrored(s), 'violet'), alpha: 0.3 });
+    }
+  }
+  return out;
+}
+
 const SCENES = {
   nest: () => [...lyapunovFamily(1, spaced(0.012, 0.12, 12, 1.5), H), ...lyapunovFamily(2, spaced(0.012, 0.14, 12, 1.5), H), ...droFamily(ramp(0.03, 0.09, 1.2), H)].map(closed),
   dro: () => droFamily(ramp(0.02, 0.32, 1.12), H).filter((_, i) => i % 3 === 0).map(closed),
@@ -373,6 +400,7 @@ const SCENES = {
   wideRibbon: () => ribbon(0.016, 120, 3, 0.12),
   spiral: () => spiral(0.11, 0.07, 0.42, 0.92, 0.44, 60),
   torus: () => tori(1),
+  lace: () => lace(0.05, 0.06, 40, 9),
 } satisfies Record<string, () => Strand[]>;
 
 export type SceneName = keyof typeof SCENES;
