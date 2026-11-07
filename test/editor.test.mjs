@@ -47,6 +47,37 @@ test('a deck without ?edit does not load the editor, with ?edit it does on file:
   assert.deepEqual(page.errors, []);
 });
 
+test('every block of the demo deck is paired, and a save without an edit is byte-exact', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  const status = await page.evaluate(openDeck);
+  assert.deepEqual(status.problems, []);
+  assert.ok(status.blocks > 30, `${status.blocks} blocks`);
+  assert.equal(status.sections, (deckText.match(/<section/g) ?? []).length);
+  assert.equal(await page.evaluate('window.BeesonEditor.render()'), deckText);
+  // the same file with Windows line endings is written back with them
+  const crlf = deckText.replace(/\n/g, '\r\n');
+  assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(crlf)})`)).problems, []);
+  assert.equal(await page.evaluate('window.BeesonEditor.render()'), crlf);
+  assert.deepEqual(page.errors, []);
+});
+
+test('a save is paired again, and a second save is byte-exact', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  const h2 = 'Period of the families';
+  await page.evaluate(`[...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === ${JSON.stringify(h2)}).firstChild.data = 'Changed'`);
+  const once = await page.evaluate('window.BeesonEditor.render()');
+  assert.equal(once, replaced(`<h2>${h2}</h2>`, '<h2>Changed</h2>'));
+  const status = await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(once)})`);
+  assert.deepEqual(status.problems, []);
+  assert.equal(await page.evaluate('window.BeesonEditor.render()'), once);
+  assert.deepEqual(page.errors, []);
+});
+
 test('the print view of the PDF and of PowerPoint does not load the editor', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
