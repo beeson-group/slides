@@ -1436,6 +1436,8 @@
       this.emphasized = [];
       this.drawers = [];
       this.eventFrames = [];
+      // the ids named in the active list of any tab, which are dimmed while another id is active
+      this.emphasis = /* @__PURE__ */ new Set();
       this.shown = /* @__PURE__ */ new Set();
       this.steps = /* @__PURE__ */ new Set();
       this.stepTab = null;
@@ -1460,6 +1462,7 @@
       this.panels = only.length ? this.spec.panels.filter((p) => only.includes(p.id)) : this.spec.panels;
       const start2 = this.spec.tabs.findIndex((t) => t.name === el.dataset.plotTab);
       this.tab = Math.max(0, start2);
+      this.emphasis = new Set(this.spec.tabs.flatMap((t) => t.active?.flat() ?? []));
       this.build();
     }
     get plot() {
@@ -1774,10 +1777,10 @@
       this.fill.style.width = at;
       this.knob.style.left = at;
       if (tab.active) {
-        const on = nearest(tab.active, u), all = new Set(tab.active.flat());
+        const on = nearest(tab.active, u);
         for (const { node, id } of this.emphasized) {
           node.classList.toggle("plot-on", on.includes(id));
-          node.classList.toggle("plot-off", all.has(id) && !on.includes(id));
+          node.classList.toggle("plot-off", this.emphasis.has(id) && !on.includes(id));
         }
       } else for (const { node } of this.emphasized) node.classList.remove("plot-on", "plot-off");
     }

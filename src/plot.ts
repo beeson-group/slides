@@ -467,6 +467,8 @@ export class PlotView {
   private emphasized: { node: Element; id: string }[] = [];
   private drawers: ((u: number) => void)[] = [];
   private eventFrames: { frame: number; names: string[] }[] = [];
+  // the ids named in the active list of any tab, which are dimmed while another id is active
+  private emphasis = new Set<string>();
   private shown = new Set<string>();
   private steps = new Set<string>();
   private stepTab: string | null = null;
@@ -494,6 +496,7 @@ export class PlotView {
     this.panels = only.length ? this.spec.panels.filter((p) => only.includes(p.id)) : this.spec.panels;
     const start = this.spec.tabs.findIndex((t) => t.name === el.dataset.plotTab);
     this.tab = Math.max(0, start);
+    this.emphasis = new Set(this.spec.tabs.flatMap((t) => t.active?.flat() ?? []));
     this.build();
   }
 
@@ -824,10 +827,10 @@ export class PlotView {
     this.fill.style.width = at;
     this.knob.style.left = at;
     if (tab.active) {
-      const on = nearest(tab.active, u), all = new Set(tab.active.flat());
+      const on = nearest(tab.active, u);
       for (const { node, id } of this.emphasized) {
         node.classList.toggle('plot-on', on.includes(id));
-        node.classList.toggle('plot-off', all.has(id) && !on.includes(id));
+        node.classList.toggle('plot-off', this.emphasis.has(id) && !on.includes(id));
       }
     } else for (const { node } of this.emphasized) node.classList.remove('plot-on', 'plot-off');
   }
