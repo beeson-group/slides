@@ -126,6 +126,18 @@ test('videos are placed on their steps of a deck, in the box of their picture', 
   assert.ok(!parts.has('ppt/notesSlides/notesSlide2.xml'));
 });
 
+// a video is restarted on a new PowerPoint slide, and a later step is shown on a click in its place
+test('a video is played through the steps of its slide', () => {
+  const parts = exportDeck('test/pages/video-steps.html');
+  assertPackage(parts);
+  assert.equal(slideCount(parts), 1, 'a video on more than one slide is restarted at each step');
+  const slide = text(parts, 'ppt/slides/slide1.xml');
+  assert.deepEqual([...slide.matchAll(/<p:pic><p:nvPicPr><p:cNvPr id="(\d+)" name="(\w+)/g)].map((m) => m.slice(1)),
+    [['2', 'Step'], ['3', 'Step'], ['4', 'Step'], ['5', 'Video']]);
+  assert.deepEqual([...slide.matchAll(/nodeType="clickEffect".*?<p:spTgt spid="(\d+)"/g)].map((m) => m[1]), ['3', '4']);
+  assert.ok(slide.indexOf('nodeType="afterEffect"') < slide.indexOf('nodeType="clickEffect"'));
+});
+
 test('the demo deck is exported with a slide for each page of its PDF', () => {
   const parts = exportDeck('index.html');
   assertPackage(parts);
