@@ -2,14 +2,14 @@
 "use strict";
 (() => {
   // src/contour.ts
-  function isolines(g, nx, ny, x0, y0, d) {
+  function isolines(g, nx, ny, x0, y0, dx, dy = dx, close = false) {
     const at = (i, j) => g[j * (nx + 1) + i];
     const links = /* @__PURE__ */ new Map(), where = /* @__PURE__ */ new Map();
     const edge = (i, j, h) => {
       const key = `${h ? "h" : "v"}${i},${j}`;
       if (!where.has(key)) {
         const a = at(i, j), b = h ? at(i + 1, j) : at(i, j + 1), t = a / (a - b);
-        where.set(key, h ? [x0 + (i + t) * d, y0 + j * d] : [x0 + i * d, y0 + (j + t) * d]);
+        where.set(key, h ? [x0 + (i + t) * dx, y0 + j * dy] : [x0 + i * dx, y0 + (j + t) * dy]);
       }
       return key;
     };
@@ -40,7 +40,9 @@
         seen.add(cur);
         const [x, y] = where.get(cur) ?? [0, 0];
         p.push(x, y);
-        cur = links.get(cur)?.find((k) => !seen.has(k));
+        const next = links.get(cur)?.find((k) => !seen.has(k));
+        if (!next && close && p.length > 4 && links.get(cur)?.includes(start2)) p.push(p[0], p[1]);
+        cur = next;
       }
       out.push(p);
     }
