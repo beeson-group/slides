@@ -557,12 +557,12 @@
     for (let i = 0; i < count; i++) out.push(a + (b - a) * Math.pow(i / (count - 1), p));
     return out;
   }
-  function lagrange(n) {
-    let x = n === 1 ? 1 - MU - Math.cbrt(MU / 3) : n === 2 ? 1 - MU + Math.cbrt(MU / 3) : -1 - 5 * MU / 12;
+  function lagrange(n, mu = MU) {
+    let x = n === 1 ? 1 - mu - Math.cbrt(mu / 3) : n === 2 ? 1 - mu + Math.cbrt(mu / 3) : -1 - 5 * mu / 12;
     for (let i = 0; i < 30; i++) {
-      const d1 = x + MU, d2 = x - 1 + MU;
-      const f = x - (1 - MU) * Math.sign(d1) / (d1 * d1) - MU * Math.sign(d2) / (d2 * d2);
-      const df = 1 + 2 * (1 - MU) / Math.abs(d1 * d1 * d1) + 2 * MU / Math.abs(d2 * d2 * d2);
+      const d1 = x + mu, d2 = x - 1 + mu;
+      const f = x - (1 - mu) * Math.sign(d1) / (d1 * d1) - mu * Math.sign(d2) / (d2 * d2);
+      const df = 1 + 2 * (1 - mu) / Math.abs(d1 * d1 * d1) + 2 * mu / Math.abs(d2 * d2 * d2);
       x -= f / df;
     }
     return x;
