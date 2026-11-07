@@ -103,3 +103,23 @@ test('a head is drawn on the path of a spacecraft alone', { timeout: 60000 }, as
   // a disk of 2.2 line widths of 1 px, and its antialiased rim
   assert.ok(pixels > 5 && pixels < 60, `${pixels} pixels`);
 });
+
+test('the strands of a backdrop with data-stagger are started one after another', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl('index.html'));
+  await page.waitFor(deckSettled);
+  const stagger = await page.evaluate(`(() => {
+    const el = document.querySelector('.backdrop[data-stagger]');
+    const { h, v } = Reveal.getIndices(el.closest('section'));
+    Reveal.slide(h, v);
+    return +el.dataset.stagger;
+  })()`);
+  await new Promise((done) => setTimeout(done, 1300));
+  const started = await page.evaluate(`Beeson.backdrops.find((b) => b.el.hasAttribute('data-stagger')).idx.map((j) => j > 0)`);
+  const count = started.filter(Boolean).length;
+  // the strands are started in the order of the file, hence the started ones come first
+  assert.deepEqual(started, started.map((_, i) => i < count));
+  assert.ok(count >= 2 && count <= Math.ceil(1.6 / stagger) + 1, `${count} of ${started.length} strands started`);
+});
