@@ -291,6 +291,7 @@ html:not([data-theme="light"]) .reveal .slides section.split .panel { box-shadow
 .reveal .plot-tabs { display: flex; flex: none; gap: 40px; }
 .reveal .plot-tabs button { padding: 2px 0 6px; border-bottom: 2px solid transparent; color: var(--muted); transition: color 200ms ease-out, border-color 200ms ease-out; }
 .reveal .plot-tabs button:hover { color: var(--text); }
+.reveal .plot-tabs button:disabled { cursor: default; }
 .reveal .plot-tabs button[aria-selected="true"] { color: var(--text); border-bottom-color: var(--violet); }
 .reveal .plot-area { position: relative; flex: 1 1 auto; min-height: 0; }
 .reveal .plot-area > svg,

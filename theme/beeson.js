@@ -1383,6 +1383,8 @@
 
   // src/plot.ts
   var KINDS = ["points", "trace", "label", "events"];
+  var PATCH = ["x", "y", "title", "regions", "curves", "labels"];
+  var MARGIN2 = [52, 20, 84, 76];
   function fail(path, what) {
     throw new Error(`${path}: ${what}`);
   }
@@ -1421,17 +1423,32 @@
     if (!isObject2(v)) fail(path, "an axis { range, ticks, title } is expected");
     const range = pair(v.range, `${path}.range`);
     if (!(range[1] > range[0])) fail(`${path}.range`, "the second end must be larger than the first");
-    return { range, ticks: list(v.ticks, `${path}.ticks`, []).map((t, i) => num(t, `${path}.ticks[${i}]`)), title: str(v.title, `${path}.title`, "") };
+    const scale = str(v.scale, `${path}.scale`, "linear");
+    if (scale !== "linear" && scale !== "asinh") fail(`${path}.scale`, "linear or asinh is expected");
+    const unit = num(v.unit, `${path}.unit`, 1);
+    if (!(unit > 0)) fail(`${path}.unit`, "a positive number is expected");
+    const ticks = list(v.ticks, `${path}.ticks`, []).map((t, i) => {
+      const p = `${path}.ticks[${i}]`;
+      if (typeof t === "number") return { at: num(t, p), text: formatNumber(t) };
+      if (!isObject2(t)) fail(p, "a number or a tick { at, text } is expected");
+      const at = num(t.at, `${p}.at`);
+      return { at, text: str(t.text, `${p}.text`, formatNumber(at)) };
+    });
+    return { range, ticks, title: str(v.title, `${path}.title`, ""), scale, unit };
   }
-  function panel(v, path) {
-    if (!isObject2(v)) fail(path, "a panel is expected");
-    const regions = list(v.regions, `${path}.regions`, []).map((r, i) => {
-      const p = `${path}.regions[${i}]`;
+  function scaled(a, v) {
+    return a.scale === "asinh" ? Math.asinh(v / a.unit) : v;
+  }
+  function regions(v, path) {
+    return list(v, path, []).map((r, i) => {
+      const p = `${path}[${i}]`;
       if (!isObject2(r)) fail(p, "a region is expected");
       return { ...item(r, p, "violet"), points: pairs(r.points, `${p}.points`), opacity: num(r.opacity, `${p}.opacity`, 0.12) };
     });
-    const curves = list(v.curves, `${path}.curves`, []).map((c, i) => {
-      const p = `${path}.curves[${i}]`;
+  }
+  function curves(v, path) {
+    return list(v, path, []).map((c, i) => {
+      const p = `${path}[${i}]`;
       if (!isObject2(c)) fail(p, "a curve is expected");
       let circle = null;
       if (c.circle !== void 0) {
@@ -1442,11 +1459,24 @@
       const dash = c.dash === void 0 ? null : list(c.dash, `${p}.dash`).map((d, j) => num(d, `${p}.dash[${j}]`));
       return { ...item(c, p, "subtle"), points: circle ? null : pairs(c.points, `${p}.points`), circle, width: num(c.width, `${p}.width`, 2), dash };
     });
-    const labels = list(v.labels, `${path}.labels`, []).map((l, i) => {
-      const p = `${path}.labels[${i}]`;
+  }
+  function labels(v, path) {
+    return list(v, path, []).map((l, i) => {
+      const p = `${path}[${i}]`;
       if (!isObject2(l)) fail(p, "a label is expected");
       return { ...item(l, p, "subtle"), at: pair(l.at, `${p}.at`), text: str(l.text, `${p}.text`), anchor: anchor(l.anchor, `${p}.anchor`), dx: num(l.dx, `${p}.dx`, 0), dy: num(l.dy, `${p}.dy`, 0) };
     });
+  }
+  function panel(v, path) {
+    if (!isObject2(v)) fail(path, "a panel is expected");
+    let margin = [...MARGIN2];
+    if (v.margin !== void 0) {
+      const m = list(v.margin, `${path}.margin`).map((x, i) => num(x, `${path}.margin[${i}]`));
+      if (m.length !== 4) fail(`${path}.margin`, "a margin [top, right, bottom, left] is expected");
+      margin = [m[0], m[1], m[2], m[3]];
+    }
+    const size = num(v.size, `${path}.size`, 1);
+    if (!(size > 0)) fail(`${path}.size`, "a positive number is expected");
     return {
       id: str(v.id, `${path}.id`),
       x: axis(v.x, `${path}.x`),
@@ -1454,10 +1484,24 @@
       equal: v.equal === true,
       axes: v.axes !== false,
       title: str(v.title, `${path}.title`, ""),
-      regions,
-      curves,
-      labels
+      regions: regions(v.regions, `${path}.regions`),
+      curves: curves(v.curves, `${path}.curves`),
+      labels: labels(v.labels, `${path}.labels`),
+      size,
+      margin
     };
+  }
+  function patch(v, path) {
+    if (!isObject2(v)) fail(path, "a panel is expected");
+    for (const key of Object.keys(v)) if (!PATCH.includes(key)) fail(`${path}.${key}`, `one of ${PATCH.join(", ")} is expected`);
+    const out = {};
+    if (v.x !== void 0) out.x = axis(v.x, `${path}.x`);
+    if (v.y !== void 0) out.y = axis(v.y, `${path}.y`);
+    if (v.title !== void 0) out.title = str(v.title, `${path}.title`);
+    if (v.regions !== void 0) out.regions = regions(v.regions, `${path}.regions`);
+    if (v.curves !== void 0) out.curves = curves(v.curves, `${path}.curves`);
+    if (v.labels !== void 0) out.labels = labels(v.labels, `${path}.labels`);
+    return out;
   }
   function markData(m, v, frames, path) {
     const perFrame = (n) => n === 1 || n === frames || fail(path, `${n} frames are given, and the tab has ${frames} values`);
@@ -1535,7 +1579,14 @@
         active = list(t.active, `${p}.active`).map((f, j) => typeof f === "string" ? [f] : list(f, `${p}.active[${j}]`).map((s, k) => str(s, `${p}.active[${j}][${k}]`)));
         if (active.length !== values.length) fail(`${p}.active`, `${active.length} frames are given, and the tab has ${values.length} values`);
       }
-      return { name, label: str(t.label, `${p}.label`, name), values, data, active };
+      const given2 = t.panels === void 0 ? {} : t.panels;
+      if (!isObject2(given2)) fail(`${p}.panels`, "an object of panel ids is expected");
+      const patches = {};
+      for (const key of Object.keys(given2)) {
+        if (!ids.has(key)) fail(`${p}.panels.${key}`, `the panel ${key} is not declared`);
+        patches[key] = patch(given2[key], `${p}.panels.${key}`);
+      }
+      return { name, label: str(t.label, `${p}.label`, name), values, data, active, panels: patches };
     });
     if (!tabs.length) fail("tabs", "at least one tab is expected");
     const parameter = isObject2(v.parameter) ? v.parameter : {};
@@ -1720,10 +1771,19 @@
     parent?.append(el);
     return el;
   }
+  var circlePoints = ([cx, cy, r]) => Array.from({ length: 181 }, (_, i) => [cx + r * Math.cos(i * Math.PI / 90), cy + r * Math.sin(i * Math.PI / 90)]);
   var toneColor = (tone) => /^[a-z][a-z0-9-]*$/.test(tone) ? `var(--${tone})` : tone;
   var words = (s) => (s ?? "").split(/\s+/).filter(Boolean);
-  var MARGIN2 = { left: 76, right: 20, top: 52, bottom: 84 };
   var GAP = 56;
+  function cells(sizes, total, gap) {
+    const free = total - gap * (sizes.length - 1), sum = sizes.reduce((a, b) => a + b, 0);
+    let at = 0;
+    return sizes.map((size) => {
+      const cell = [at, free * size / sum];
+      at += cell[1] + gap;
+      return cell;
+    });
+  }
   var serial = 0;
   var reduced = () => typeof window === "undefined" || matchMedia("(prefers-reduced-motion: reduce)").matches;
   var CACHE2 = /* @__PURE__ */ new WeakMap();
@@ -1738,15 +1798,23 @@
       this.W = 0;
       this.H = 0;
       this.uid = ++serial;
+      // the buttons of the tabs offered by data-plot-tabs, with the index of each tab
       this.tabButtons = [];
+      this.offered = [];
       this.boxes = /* @__PURE__ */ new Map();
       this.gated = [];
       this.emphasized = [];
       this.drawers = [];
       this.eventFrames = [];
+      // the ids named in the active list of any tab, which are dimmed while another id is active
+      this.emphasis = /* @__PURE__ */ new Set();
       this.shown = /* @__PURE__ */ new Set();
       this.steps = /* @__PURE__ */ new Set();
       this.stepTab = null;
+      // a plot whose slide has a fragment with data-plot-play is held until that fragment is shown
+      this.cue = "none";
+      // the slide of the plot is shown, and the plot may move
+      this.live = false;
       this.el = el;
       CACHE2.set(el, this);
       for (const old of el.querySelectorAll(":scope > .plot-body, :scope > .plot-error")) old.remove();
@@ -1766,8 +1834,12 @@
       }
       const only = words(el.dataset.plotPanels);
       this.panels = only.length ? this.spec.panels.filter((p) => only.includes(p.id)) : this.spec.panels;
+      const names = words(el.dataset.plotTabs);
+      this.offered = this.spec.tabs.map((_, i) => i).filter((i) => !names.length || names.includes(this.spec.tabs[i].name));
+      if (!this.offered.length) this.offered = [0];
       const start2 = this.spec.tabs.findIndex((t) => t.name === el.dataset.plotTab);
-      this.tab = Math.max(0, start2);
+      this.tab = start2 >= 0 ? start2 : this.offered[0];
+      this.emphasis = new Set(this.spec.tabs.flatMap((t) => t.active?.flat() ?? []));
       this.build();
     }
     get plot() {
@@ -1780,21 +1852,21 @@
       const plot = this.plot;
       this.body = document.createElement("div");
       this.body.className = "plot-body";
-      if (plot.tabs.length > 1) {
+      if (this.offered.length > 1) {
         const bar = document.createElement("div");
         bar.className = "plot-tabs";
         bar.setAttribute("role", "tablist");
-        this.tabButtons = plot.tabs.map((t, i) => {
+        this.tabButtons = this.offered.map((i) => {
           const b = document.createElement("button");
           b.type = "button";
           b.setAttribute("role", "tab");
-          setMarkup(b, t.label);
+          setMarkup(b, plot.tabs[i].label);
           b.addEventListener("click", () => {
             b.blur();
             this.setTab(i);
           });
           bar.append(b);
-          return b;
+          return { b, i };
         });
         this.body.append(bar);
       }
@@ -1861,7 +1933,7 @@
       this.playButton.classList.toggle("playing", on);
     }
     markTabs() {
-      this.tabButtons.forEach((b, i) => b.setAttribute("aria-selected", String(i === this.tab)));
+      for (const { b, i } of this.tabButtons) b.setAttribute("aria-selected", String(i === this.tab));
     }
     /** Lays the panels out in the size of the element, which is measured in slide pixels. */
     fit() {
@@ -1876,14 +1948,22 @@
       this.drawStatic();
       this.buildMarks();
     }
+    // the panels of the tab shown, with the keys that the tab replaces
+    panelsNow() {
+      const patches = this.plot.tabs[this.tab].panels;
+      return this.panels.map((p) => ({ ...p, ...patches[p.id] }));
+    }
     layout() {
-      const n = this.panels.length, row = (this.plot.layout ?? (this.W >= this.H ? "row" : "column")) === "row";
-      const cw = row ? (this.W - GAP * (n - 1)) / n : this.W, ch = row ? this.H : (this.H - GAP * (n - 1)) / n;
+      const panels = this.panelsNow(), row = (this.plot.layout ?? (this.W >= this.H ? "row" : "column")) === "row";
+      const along = cells(panels.map((p) => p.size), row ? this.W : this.H, GAP);
       this.boxes.clear();
-      this.panels.forEach((p, i) => {
-        const cx = row ? i * (cw + GAP) : 0, cy = row ? 0 : i * (ch + GAP);
-        let x = cx + MARGIN2.left, y = cy + MARGIN2.top, w = cw - MARGIN2.left - MARGIN2.right, h = ch - MARGIN2.top - MARGIN2.bottom;
-        const dx = p.x.range[1] - p.x.range[0], dy = p.y.range[1] - p.y.range[0];
+      panels.forEach((p, i) => {
+        const [at, share] = along[i];
+        const cx = row ? at : 0, cy = row ? 0 : at, cw = row ? share : this.W, ch = row ? this.H : share;
+        const [top, right, bottom, left] = p.margin;
+        let x = cx + left, y = cy + top, w = cw - left - right, h = ch - top - bottom;
+        const x0 = scaled(p.x, p.x.range[0]), y0 = scaled(p.y, p.y.range[0]);
+        const dx = scaled(p.x, p.x.range[1]) - x0, dy = scaled(p.y, p.y.range[1]) - y0;
         if (p.equal) {
           const s = Math.min(w / dx, h / dy);
           x += (w - s * dx) / 2;
@@ -1891,17 +1971,32 @@
           w = s * dx;
           h = s * dy;
         }
-        this.boxes.set(p.id, { x, y, w, h, sx: w / dx, sy: h / dy, panel: p });
+        this.boxes.set(p.id, { x, y, w, h, x0, y0, sx: w / dx, sy: h / dy, panel: p });
       });
     }
+    // the pixel of a coordinate along an axis, i.e. of a value after its scale
+    XS(b, x) {
+      return b.x + (x - b.x0) * b.sx;
+    }
+    YS(b, y) {
+      return b.y + b.h - (y - b.y0) * b.sy;
+    }
     X(b, x) {
-      return b.x + (x - b.panel.x.range[0]) * b.sx;
+      return this.XS(b, scaled(b.panel.x, x));
     }
     Y(b, y) {
-      return b.y + b.h - (y - b.panel.y.range[0]) * b.sy;
+      return this.YS(b, scaled(b.panel.y, y));
+    }
+    // the coordinates of a point of the data, in which the marks are interpolated between frames, so
+    // that a mark between two frames is on the straight line drawn between them
+    toAxes(b, [x, y]) {
+      return [scaled(b.panel.x, x), scaled(b.panel.y, y)];
     }
     path(b, pts) {
-      return pts.map(([x, y], i) => `${i ? "L" : "M"}${this.X(b, x).toFixed(1)} ${this.Y(b, y).toFixed(1)}`).join("");
+      return this.pathS(b, pts.map((p) => this.toAxes(b, p)));
+    }
+    pathS(b, pts) {
+      return pts.map(([x, y], i) => `${i ? "L" : "M"}${this.XS(b, x).toFixed(1)} ${this.YS(b, y).toFixed(1)}`).join("");
     }
     label(text, left, top, a, cls, names, tone) {
       const el = document.createElement("div");
@@ -1950,21 +2045,22 @@
         for (const c of p.curves) {
           const attrs = { class: "plot-curve", "stroke-width": c.width };
           if (c.dash) attrs["stroke-dasharray"] = c.dash.join(" ");
-          const node = c.circle ? svg("ellipse", { ...attrs, cx: this.X(b, c.circle[0]), cy: this.Y(b, c.circle[1]), rx: c.circle[2] * b.sx, ry: c.circle[2] * b.sy }, statics) : svg("path", { ...attrs, d: this.path(b, c.points ?? []) }, statics);
+          const linear2 = p.x.scale === "linear" && p.y.scale === "linear";
+          const node = c.circle && linear2 ? svg("ellipse", { ...attrs, cx: this.X(b, c.circle[0]), cy: this.Y(b, c.circle[1]), rx: c.circle[2] * b.sx, ry: c.circle[2] * b.sy }, statics) : svg("path", { ...attrs, d: this.path(b, c.circle ? circlePoints(c.circle) : c.points ?? []) }, statics);
           this.styleItem(node, c, [p.id, c.id]);
         }
         if (p.axes) {
           const axes = svg("g", { class: "plot-axes" }, g);
           svg("path", { d: `M${b.x} ${b.y}V${b.y + b.h}H${b.x + b.w}` }, axes);
           for (const t of p.x.ticks) {
-            const X = this.X(b, t);
+            const X = this.X(b, t.at);
             svg("path", { d: `M${X} ${b.y + b.h}v10` }, axes);
-            this.label(formatNumber(t), X, b.y + b.h + 32, "middle", "plot-tick", [p.id]);
+            this.label(t.text, X, b.y + b.h + 32, "middle", "plot-tick", [p.id]);
           }
           for (const t of p.y.ticks) {
-            const Y = this.Y(b, t);
+            const Y = this.Y(b, t.at);
             svg("path", { d: `M${b.x} ${Y}h-10` }, axes);
-            this.label(formatNumber(t), b.x - 18, Y, "end", "plot-tick", [p.id]);
+            this.label(t.text, b.x - 18, Y, "end", "plot-tick", [p.id]);
           }
           if (p.x.title) this.label(p.x.title, b.x + b.w / 2, b.y + b.h + 70, "middle", "plot-title", [p.id]);
           if (p.y.title) this.label(p.y.title, b.x, b.y - 30, "middle", "plot-title", [p.id]);
@@ -1992,7 +2088,7 @@
         const group2 = svg("g", {}, g);
         this.styleItem(group2, m, [m.panel, m.id]);
         if (m.kind === "points") {
-          const frames = data;
+          const frames = data.map((f) => f.map((v, k) => scaled(k % 2 ? b.panel.y : b.panel.x, v)));
           const dots = [];
           this.drawers.push((u) => {
             const at = framesAt(frames, u);
@@ -2001,30 +2097,30 @@
               const on = 2 * k < at.length;
               d.style.display = on ? "" : "none";
               if (on) {
-                d.setAttribute("cx", this.X(b, at[2 * k]).toFixed(1));
-                d.setAttribute("cy", this.Y(b, at[2 * k + 1]).toFixed(1));
+                d.setAttribute("cx", this.XS(b, at[2 * k]).toFixed(1));
+                d.setAttribute("cy", this.YS(b, at[2 * k + 1]).toFixed(1));
               }
             });
           });
         } else if (m.kind === "trace") {
-          const pts = data;
-          svg("path", { class: "plot-ghost", d: this.path(b, pts), "stroke-width": m.width }, group2);
+          const pts = data.map((q) => this.toAxes(b, q));
+          svg("path", { class: "plot-ghost", d: this.pathS(b, pts), "stroke-width": m.width }, group2);
           const done = svg("path", { class: "plot-trace", "stroke-width": m.width }, group2);
           const head = svg("circle", { class: "plot-dot", r: m.size / 2 }, group2);
           this.drawers.push((u) => {
             const p = traceTo(pts, u), [x, y] = p[p.length - 1];
-            done.setAttribute("d", this.path(b, p));
-            head.setAttribute("cx", this.X(b, x).toFixed(1));
-            head.setAttribute("cy", this.Y(b, y).toFixed(1));
+            done.setAttribute("d", this.pathS(b, p));
+            head.setAttribute("cx", this.XS(b, x).toFixed(1));
+            head.setAttribute("cy", this.YS(b, y).toFixed(1));
           });
         } else if (m.kind === "label") {
-          const d = data;
+          const d = data, at = d.at.map((q) => this.toAxes(b, q));
           const el = this.label(d.text[0], 0, 0, m.anchor, "plot-mark", [m.panel, m.id], m.tone);
           el.classList.add(...m.cls);
           let shown = d.text[0];
           this.drawers.push((u) => {
-            const [x, y] = d.at.length === 1 ? d.at[0] : framesAt(d.at, u);
-            this.place(el, this.X(b, x) + m.dx, this.Y(b, y) + m.dy, m.anchor);
+            const [x, y] = at.length === 1 ? at[0] : framesAt(at, u);
+            this.place(el, this.XS(b, x) + m.dx, this.YS(b, y) + m.dy, m.anchor);
             const text = nearest(d.text, u);
             if (text !== shown) {
               setMarkup(el, text);
@@ -2038,7 +2134,7 @@
             const ring = svg("circle", { class: "plot-ring", cx: X, cy: Y, r: m.size / 2, "stroke-width": m.width }, group2);
             const text = e.text ? this.label(e.text, X + m.dx, Y + m.dy, m.anchor, "plot-mark", [m.panel, m.id], m.tone) : null;
             text?.classList.add(...m.cls);
-            this.eventFrames.push({ frame: e.frame, names: [m.panel, m.id] });
+            this.eventFrames.push({ frame: e.frame, names: [m.panel, m.id], tone: m.tone });
             return { frame: e.frame, nodes: [ring, text].filter((n) => !!n) };
           });
           this.drawers.push((u) => {
@@ -2058,10 +2154,10 @@
       this.fill.style.width = at;
       this.knob.style.left = at;
       if (tab.active) {
-        const on = nearest(tab.active, u), all = new Set(tab.active.flat());
+        const on = nearest(tab.active, u);
         for (const { node, id } of this.emphasized) {
           node.classList.toggle("plot-on", on.includes(id));
-          node.classList.toggle("plot-off", all.has(id) && !on.includes(id));
+          node.classList.toggle("plot-off", this.emphasis.has(id) && !on.includes(id));
         }
       } else for (const { node } of this.emphasized) node.classList.remove("plot-on", "plot-off");
     }
@@ -2070,15 +2166,21 @@
     }
     applyGates() {
       for (const { node, names } of this.gated) node.classList.toggle("plot-hidden", this.hidden(names));
+      for (const { b, i } of this.tabButtons) {
+        const off = this.hidden([this.plot.tabs[i].name]);
+        b.classList.toggle("plot-hidden", off);
+        b.disabled = off;
+      }
       const n = this.frames;
       this.ticks.replaceChildren(...this.eventFrames.filter((e) => !this.hidden(e.names)).map((e) => {
         const t = document.createElement("div");
         t.className = "plot-tick-mark";
         t.style.left = `${(n > 1 ? e.frame / (n - 1) : 0) * 100}%`;
+        t.style.background = toneColor(e.tone);
         return t;
       }));
     }
-    /** Reads the fragments of the slide: the names of data-plot-show, and the tab of the last visible data-plot-tab. */
+    /** Reads the fragments of the slide: the names of data-plot-show, the tab of the last visible data-plot-tab, and the cue of data-plot-play. */
     syncSteps() {
       if (!this.spec) return;
       const slide = this.el.closest("section");
@@ -2086,17 +2188,27 @@
       this.steps = new Set(frags.flatMap((f) => words(f.dataset.plotShow)));
       const visible = frags.filter((f) => f.classList.contains("visible"));
       this.shown = new Set(visible.flatMap((f) => words(f.dataset.plotShow)));
+      const cues = frags.filter((f) => f.hasAttribute("data-plot-play"));
+      const cue = !cues.length ? "none" : cues.some((f) => visible.includes(f)) ? "shown" : "held";
       const tabbed = visible.filter((f) => f.dataset.plotTab).sort((a, b) => +(a.dataset.fragmentIndex ?? 0) - +(b.dataset.fragmentIndex ?? 0));
       const name = tabbed.at(-1)?.dataset.plotTab ?? this.el.dataset.plotTab ?? null;
+      let tab = this.tab;
       if (name !== this.stepTab) {
         this.stepTab = name;
         const i = this.plot.tabs.findIndex((t) => t.name === name);
-        if (i >= 0 && i !== this.tab) {
-          this.setTab(i);
-          return;
-        }
+        if (i >= 0) tab = i;
       }
-      this.applyGates();
+      const cued = cue !== this.cue;
+      this.cue = cue;
+      if (tab !== this.tab) this.setTab(tab);
+      else this.applyGates();
+      if (cued && this.live) {
+        if (cue === "shown" && this.moves()) {
+          this.pause();
+          this.u = 0;
+          this.play();
+        } else this.still();
+      }
     }
     /** Shows the tab i, from its first frame while the plot is played, and at its still frame otherwise. */
     setTab(i) {
@@ -2105,11 +2217,15 @@
       this.markTabs();
       this.u = this.raf ? 0 : this.stillFrame();
       this.t0 = performance.now();
-      if (this.W) this.buildMarks();
+      if (!this.W) return;
+      this.layout();
+      this.drawStatic();
+      this.buildMarks();
+      this.el.dispatchEvent(new CustomEvent("beeson:plot-drawn", { bubbles: true }));
     }
-    /** The frame of a still, from data-plot-frame, where a negative frame is counted from the end. The default is the last frame. */
+    /** The frame of a still, from data-plot-frame, where a negative frame is counted from the end. The default is the last frame, which is also the still of a plot whose cue is shown. */
     stillFrame() {
-      const f = Number(this.el.dataset.plotFrame ?? -1), n = this.frames;
+      const f = Number(this.cue === "shown" ? -1 : this.el.dataset.plotFrame ?? -1), n = this.frames;
       return clamp(Number.isFinite(f) ? f < 0 ? n + f : f : n - 1, 0, n - 1);
     }
     /** Draws the still frame, without the animation. */
@@ -2119,15 +2235,24 @@
       this.u = this.stillFrame();
       this.draw();
     }
-    /** Starts the loop from the first frame, unless data-plot-paused is set or the motion is reduced. */
+    moves() {
+      return !this.el.hasAttribute("data-plot-paused") && !reduced();
+    }
+    /** Starts the loop from the first frame as the slide is shown, unless data-plot-paused is set, the motion is reduced, or the cue of the slide is not shown yet. */
     start() {
       if (!this.spec) return;
-      if (this.el.hasAttribute("data-plot-paused") || reduced()) {
+      this.live = true;
+      if (!this.moves() || this.cue === "held") {
         this.still();
         return;
       }
       this.u = 0;
       this.play();
+    }
+    /** Stops the loop as the slide is left. */
+    leave() {
+      this.live = false;
+      this.pause();
     }
     play() {
       if (!this.spec || this.raf) return;
@@ -2772,8 +2897,8 @@ void main() {
       const key = this.shown.cut > 0 ? `${this.shown.level}|${this.mix}|${this.markLayer}` : "";
       if (key === this.drawn) return;
       this.drawn = key;
-      const curves = key ? levelCurves(this.current(), this.fn.x, this.fn.y, CELLS, CELLS, this.shown.level) : [];
-      const count = curves.reduce((total, c) => total + Math.max(0, c.length / 2 - 1), 0);
+      const curves2 = key ? levelCurves(this.current(), this.fn.x, this.fn.y, CELLS, CELLS, this.shown.level) : [];
+      const count = curves2.reduce((total, c) => total + Math.max(0, c.length / 2 - 1), 0);
       const geometry = this.curve.geometry, THREE = this.THREE;
       if (count > this.capacity) {
         this.capacity = Math.max(1024, 2 * count);
@@ -2788,7 +2913,7 @@ void main() {
       const start2 = geometry.getAttribute("start"), end = geometry.getAttribute("end");
       const a = start2.array, b = end.array, z = this.shown.level * this.zscale;
       let k = 0;
-      for (const c of curves) {
+      for (const c of curves2) {
         for (let i = 0; i + 3 < c.length; i += 2) {
           for (let v = 0; v < 6; v++, k += 3) {
             a[k] = c[i];
@@ -3215,7 +3340,7 @@ void main() {
         for (const o of within(ev.previousSlide)) if (!ev.currentSlide.contains(o.el)) o.reset();
       }
       for (const s of surfacesOf(ev.previousSlide)) s.stop();
-      for (const p of plotsIn(ev.previousSlide)) if (!ev.currentSlide.contains(p.el)) p.pause();
+      for (const p of plotsIn(ev.previousSlide)) if (!ev.currentSlide.contains(p.el)) p.leave();
       show(ev.currentSlide);
     });
     const step2 = () => {
@@ -3228,6 +3353,10 @@ void main() {
       for (const o of backdrops) o.fit();
       for (const s of surfaces) s.fit();
       stepPlots(deck.getCurrentSlide());
+    });
+    document.addEventListener("beeson:plot-drawn", (ev) => {
+      const slide = ev.target.closest(".reveal .slides section");
+      if (slide) applySteps(slide);
     });
     syncViewers(get());
     document.addEventListener("beeson:theme", () => {

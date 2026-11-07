@@ -141,7 +141,7 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
     const ev = event as SlideEvent;
     if (!still()) for (const o of within(ev.previousSlide)) if (!ev.currentSlide.contains(o.el)) o.reset();
     for (const s of surfacesOf(ev.previousSlide)) s.stop();
-    for (const p of plotsIn(ev.previousSlide)) if (!ev.currentSlide.contains(p.el)) p.pause();
+    for (const p of plotsIn(ev.previousSlide)) if (!ev.currentSlide.contains(p.el)) p.leave();
     show(ev.currentSlide);
   });
   // a step of a slide may set the stage of a surface on it, or the steps of a plot
@@ -155,6 +155,10 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
     for (const o of backdrops) o.fit();
     for (const s of surfaces) s.fit();
     stepPlots(deck.getCurrentSlide());
+  });
+  document.addEventListener('beeson:plot-drawn', (ev) => {
+    const slide = (ev.target as Element).closest('.reveal .slides section');
+    if (slide) applySteps(slide);
   });
   syncViewers(get());
   // the backdrops of the current slide are redrawn inside the flip, and the others after it, since
