@@ -50,7 +50,7 @@ Set the drawing of a `backdrop` with its attribute `data-scene`. Each drawing is
 | `lace` | The unstable tube of an L1 orbit and the stable tube of an L2 orbit about the Moon |
 | `ribbon`, `wideRibbon` | The tubes of a small and a larger L1 orbit toward the Earth, after Amlan Sinha's figures in the group deck and in [Phantom Pathways](https://amlan-sinha.github.io/art-of-science/art-1/) |
 | `spiral` | An illustrative low-thrust flight and a near rectilinear orbit in the inertial frame, after [Cosmic Choreography](https://amlan-sinha.github.io/art-of-science/art-2/) by Amlan Sinha |
-| `transfer` | A low-energy transfer through L1 |
+| `transfer` | A low-energy transfer through an L2 Lyapunov orbit, with its manifolds drawn first and a head on the spacecraft alone |
 | `sheaf` | Lunar transfers from a low Earth orbit |
 | `torus` | Quasi-periodic strands about distant retrograde orbits |
 | a file in `data-strands` | The polylines of a file next to the deck, described below |
