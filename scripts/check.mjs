@@ -152,15 +152,16 @@ async function checkEditor() {
 }
 
 // read during a trace, since the heads of a backdrop are cleared at its end. a backdrop drawn without
-// heads, e.g. with data-heads="none", is skipped
+// heads, e.g. with data-heads="none", is skipped, and the first head of a backdrop of a file may be
+// due later in its trace, e.g. after the tubes of a transfer
 async function checkHeads() {
   const page = await browser.newPage();
   await page.goto(deckAt());
   await page.waitFor(deckSettled);
-  await new Promise((done) => setTimeout(done, 1000));
-  const blank = await page.evaluate(`(() => {
-    const live = Beeson.backdrops.find((backdrop) => backdrop.raf && backdrop.headSize > 0);
+  const blank = await page.evaluate(`(async () => {
+    const live = Beeson.backdrops.find((backdrop) => backdrop.raf && backdrop.headed);
     if (!live) return false;
+    await new Promise((done) => setTimeout(done, live.headAfter * 1000 + 1000));
     const { width, height } = live.head;
     return !live.head.getContext('2d').getImageData(0, 0, width, height).data.some(Boolean);
   })()`);
