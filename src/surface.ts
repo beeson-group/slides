@@ -1,13 +1,13 @@
 // a `.surface`: the graph z = f(x, y) of a function of surfaces.ts over its rectangle, drawn with
 // three.js under an orbit camera that turns slowly. its stage is set by the fragments of its slide
-// with data-surface-stage, and a change of stage is animated. the heights are morphed, and the
-// marks are raised into place. three.js is the global THREE of theme/vendor/three/three.js. one
-// WebGL renderer is shared by every surface of the page, and its image is copied to a 2D canvas in
-// each element. hence the page of each step in the print view does not hold a WebGL context of its
-// own
+// with data-surface-stage, and a change of stage is animated. the heights are morphed, the marks
+// are raised into place, and the cutting plane is slid to its level, where the curve of
+// intersection is drawn. three.js is the global THREE of theme/vendor/three/three.js. one WebGL
+// renderer is shared by every surface of the page, and its image is copied to a 2D canvas in each
+// element. hence the page of each step in the print view does not hold a WebGL context of its own
 
 import type * as Three from 'three';
-import { FUNCTION_NAMES, clamped, sample, surfaceFunction } from './surfaces.ts';
+import { FUNCTION_NAMES, clamped, levelCurves, sample, surfaceFunction } from './surfaces.ts';
 import type { Stage, SurfaceFunction } from './surfaces.ts';
 
 declare global {
@@ -17,19 +17,21 @@ declare global {
 }
 
 type RGB = [number, number, number];
-// the values drawn at a frame: the color range of the heights in world units, and the progress of
-// the marks from 0 to 1
-type Shown = { lo: number; hi: number; marks: number };
+// the values drawn at a frame: the color range of the heights in world units, the progress of the
+// marks and of the cut from 0 to 1, and the height of the cutting plane, nondimensional
+type Shown = { lo: number; hi: number; marks: number; cut: number; level: number };
 
 // cells along each side of the rectangle
 const CELLS = 200;
-// milliseconds of a change of stage
+// milliseconds of a change of stage, and of a change that slides the cutting plane
 const MORPH = 1400;
+const SLIDE = 2600;
 // the default seconds per turn of the camera
 const TURN = 90;
 // world units by which a mark is raised into place
 const RISE = 0.4;
-// the width of a mark in slide pixels
+// widths in slide pixels: the curve of intersection and the marks
+const CURVE_WIDTH = 3.5;
 const MARK_SIZE = 22;
 
 const ease = (t: number): number => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
@@ -89,6 +91,56 @@ void main() {
   vec2 a = abs(fract(q - 0.5) - 0.5) / max(fwidth(q), vec2(1e-4));
   c = mix(c, uGroove, 0.45 * (1.0 - min(min(a.x, a.y), 1.0)));
   gl_FragColor = vec4(c, 1.0);
+}`;
+
+const PLANE_VERTEX = /* glsl */ `
+void main() {
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`;
+
+const PLANE_FRAGMENT = /* glsl */ `
+uniform vec3 uColor;
+uniform float uAlpha;
+void main() {
+  gl_FragColor = vec4(uColor, uAlpha);
+}`;
+
+// a segment from start to end drawn as a quad of uWidth pixels on the screen, lengthened by half
+// its width at both ends so that the segments of a curve overlap at their joints. the depth is
+// moved toward the camera by uBias, since the curve lies on the surface
+const LINE_VERTEX = /* glsl */ `
+attribute vec3 start;
+attribute vec3 end;
+attribute vec2 corner;
+uniform vec2 uViewport;
+uniform float uWidth;
+uniform float uBias;
+varying float vSide;
+void main() {
+  vec4 a = projectionMatrix * modelViewMatrix * vec4(start, 1.0);
+  vec4 b = projectionMatrix * modelViewMatrix * vec4(end, 1.0);
+  vec2 half_ = 0.5 * uViewport;
+  vec2 d = b.xy / b.w * half_ - a.xy / a.w * half_;
+  float len = length(d);
+  vec2 dir = len > 1e-6 ? d / len : vec2(1.0, 0.0);
+  vec2 normal = vec2(-dir.y, dir.x);
+  vec4 p = corner.x < 0.5 ? a : b;
+  vec2 offset = 0.5 * uWidth * (normal * corner.y + dir * (corner.x < 0.5 ? -1.0 : 1.0));
+  p.xy += offset / half_ * p.w;
+  p.z -= uBias * p.w;
+  vSide = corner.y;
+  gl_Position = p;
+}`;
+
+const LINE_FRAGMENT = /* glsl */ `
+uniform vec3 uColor;
+uniform float uAlpha;
+uniform float uWidth;
+varying float vSide;
+void main() {
+  float s = abs(vSide);
+  float edge = 1.0 - smoothstep(1.0 - 2.0 / uWidth, 1.0, s);
+  gl_FragColor = vec4(uColor, uAlpha * edge);
 }`;
 
 // a mark is raised into place by RISE world units, and is grown while it is faded in. a saddle is
@@ -173,7 +225,11 @@ export class Surface {
   private scene: Three.Scene;
   private camera: Three.PerspectiveCamera;
   private surface: Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial>;
+  private plane: Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial>;
+  private curve: Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial>;
   private points: Three.Points<Three.BufferGeometry, Three.ShaderMaterial>;
+  private capacity = 0;
+  private drawn = '';
   private A: Float64Array;
   private B: Float64Array;
   private mix = 1;
@@ -183,6 +239,7 @@ export class Surface {
   private from: Shown;
   private to: Shown;
   private t0 = 0;
+  private duration = MORPH;
   private moving = false;
   private active = false;
   private raf = 0;
@@ -219,14 +276,16 @@ export class Surface {
     }
     this.A = this.B = this.grids.get(fn.initial) ?? new Float64Array((CELLS + 1) ** 2);
     const [lo, hi] = this.ranges.get(fn.initial) ?? [0, 1];
-    this.shown = this.from = this.to = { lo, hi, marks: 0 };
+    this.shown = this.from = this.to = { lo, hi, marks: 0, cut: 0, level: fn.floor };
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(26, 1, 0.1, 100);
     this.camera.up.set(0, 0, 1);
     this.surface = this.makeSurface();
+    this.plane = this.makePlane();
+    this.curve = this.makeCurve(CURVE_WIDTH);
     this.points = this.makeMarks();
-    this.scene.add(this.surface, this.points);
+    this.scene.add(this.surface, this.plane, this.curve, this.points);
     this.recolor();
     CACHE.set(el, this);
     this.sync(false);
@@ -282,6 +341,47 @@ export class Surface {
     return mesh;
   }
 
+  private makePlane(): Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial> {
+    const THREE = this.THREE, [x0, x1] = this.fn.x, [y0, y1] = this.fn.y;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array([x0, y0, 0, x1, y0, 0, x1, y1, 0, x0, y1, 0]), 3));
+    geometry.setIndex([0, 1, 2, 0, 2, 3]);
+    const material = new THREE.ShaderMaterial({
+      vertexShader: PLANE_VERTEX,
+      fragmentShader: PLANE_FRAGMENT,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      uniforms: { uColor: { value: new THREE.Vector3() }, uAlpha: { value: 0 } },
+    });
+    const mesh = new THREE.Mesh(geometry, material);
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 1;
+    return mesh;
+  }
+
+  // the segments of a curve as quads of width pixels
+  private makeCurve(width: number): Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial> {
+    const THREE = this.THREE;
+    const material = new THREE.ShaderMaterial({
+      vertexShader: LINE_VERTEX,
+      fragmentShader: LINE_FRAGMENT,
+      transparent: true,
+      depthWrite: false,
+      uniforms: {
+        uColor: { value: new THREE.Vector3() },
+        uAlpha: { value: 0 },
+        uWidth: { value: width },
+        uViewport: { value: new THREE.Vector2(1, 1) },
+        uBias: { value: 0.004 },
+      },
+    });
+    const mesh = new THREE.Mesh(new THREE.BufferGeometry(), material);
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 2;
+    return mesh;
+  }
+
   private makeMarks(): Three.Points<Three.BufferGeometry, Three.ShaderMaterial> {
     const THREE = this.THREE, marks = this.fn.marks;
     const geometry = new THREE.BufferGeometry();
@@ -311,7 +411,7 @@ export class Surface {
   recolor(): void {
     const cs = getComputedStyle(this.el), css = (name: string, fallback: RGB) => rgb(cs.getPropertyValue(name), fallback);
     const bg = css('--bg', [0.02, 0.02, 0.02]), text = css('--text', [0.95, 0.95, 0.94]);
-    const violet = css('--violet', [0.79, 0.31, 0.9]);
+    const violet = css('--violet', [0.79, 0.31, 0.9]), accent = css('--accent', [0.94, 0.5, 0.31]);
     const blue = css('--data-5', [0, 0.45, 0.7]);
     const u = this.surface.material.uniforms, set = (target: Three.Vector3, c: RGB) => target.set(c[0], c[1], c[2]);
     // in either mode, the deep part of the surface is shaded through blue into the background, and
@@ -319,6 +419,8 @@ export class Surface {
     const ramp: RGB[] = [mix3(blue, bg, 0.7), mix3(blue, violet, 0.35), violet, mix3(violet, text, 0.55)];
     ramp.forEach((c, i) => set(u.uRamp.value[i], c));
     set(u.uGroove.value, bg);
+    set(this.plane.material.uniforms.uColor.value, accent);
+    set(this.curve.material.uniforms.uColor.value, mix3(accent, text, 0.35));
     set(this.points.material.uniforms.uFill.value, text);
     set(this.points.material.uniforms.uRing.value, bg);
   }
@@ -348,7 +450,7 @@ export class Surface {
     this.el.dataset.shown = name;
     const grid = this.grids.get(stage.layer) ?? this.B;
     const [lo, hi] = this.ranges.get(stage.layer) ?? [this.shown.lo, this.shown.hi];
-    const to: Shown = { lo, hi, marks: stage.marks ? 1 : 0 };
+    const to: Shown = { lo, hi, marks: stage.marks ? 1 : 0, cut: stage.level === null ? 0 : 1, level: stage.level ?? this.fn.floor };
     this.placeMarks(stage.layer);
     if (!animate || first) {
       this.A = this.B = grid;
@@ -359,8 +461,10 @@ export class Surface {
       this.A = this.current();
       this.B = grid;
       this.mix = 0;
-      this.from = this.shown;
+      // a plane not shown before is slid up from the floor, and a plane that is removed is slid down
+      this.from = { ...this.shown, level: this.shown.cut > 0 ? this.shown.level : this.fn.floor };
       this.to = to;
+      this.duration = this.from.level !== to.level ? SLIDE : MORPH;
       this.t0 = performance.now();
       this.moving = true;
     }
@@ -426,6 +530,8 @@ export class Surface {
     this.canvas.width = this.W;
     this.canvas.height = this.H;
     const px = (dpr * r.height) / h;
+    this.curve.material.uniforms.uViewport.value.set(this.W, this.H);
+    this.curve.material.uniforms.uWidth.value = CURVE_WIDTH * px;
     this.points.material.uniforms.uSize.value = MARK_SIZE * px;
     this.camera.aspect = this.W / this.H;
     this.draw();
@@ -447,6 +553,44 @@ export class Surface {
     this.camera.updateProjectionMatrix();
   }
 
+  // the curve of intersection of the plane at the level shown, recomputed when the level or the
+  // heights have changed
+  private trace(): void {
+    const key = this.shown.cut > 0 ? `${this.shown.level}|${this.mix}|${this.markLayer}` : '';
+    if (key === this.drawn) return;
+    this.drawn = key;
+    const curves = key ? levelCurves(this.current(), this.fn.x, this.fn.y, CELLS, CELLS, this.shown.level) : [];
+    const count = curves.reduce((total, c) => total + Math.max(0, c.length / 2 - 1), 0);
+    const geometry = this.curve.geometry, THREE = this.THREE;
+    if (count > this.capacity) {
+      this.capacity = Math.max(1024, 2 * count);
+      const corner = new Float32Array(12 * this.capacity);
+      const quad = [0, -1, 1, -1, 1, 1, 0, -1, 1, 1, 0, 1];
+      for (let i = 0; i < this.capacity; i++) corner.set(quad, 12 * i);
+      geometry.setAttribute('corner', new THREE.BufferAttribute(corner, 2));
+      geometry.setAttribute('start', new THREE.BufferAttribute(new Float32Array(18 * this.capacity), 3).setUsage(THREE.DynamicDrawUsage));
+      geometry.setAttribute('end', new THREE.BufferAttribute(new Float32Array(18 * this.capacity), 3).setUsage(THREE.DynamicDrawUsage));
+    }
+    if (!this.capacity) return;
+    const start = geometry.getAttribute('start') as Three.BufferAttribute, end = geometry.getAttribute('end') as Three.BufferAttribute;
+    const a = start.array, b = end.array, z = this.shown.level * this.zscale;
+    let k = 0;
+    for (const c of curves) {
+      for (let i = 0; i + 3 < c.length; i += 2) {
+        for (let v = 0; v < 6; v++, k += 3) {
+          a[k] = c[i]; a[k + 1] = c[i + 1]; a[k + 2] = z;
+          b[k] = c[i + 2]; b[k + 1] = c[i + 3]; b[k + 2] = z;
+        }
+      }
+    }
+    for (const attribute of [start, end]) {
+      attribute.clearUpdateRanges();
+      attribute.addUpdateRange(0, k);
+      attribute.needsUpdate = true;
+    }
+    geometry.setDrawRange(0, 6 * count);
+  }
+
   /** Draws the surface at the stage and the camera of now, and places the labels. */
   draw(): void {
     if (!this.W) return;
@@ -455,8 +599,14 @@ export class Surface {
     const shown = this.shown, u = this.surface.material.uniforms;
     u.uMix.value = this.mix;
     u.uRange.value.set(shown.lo, shown.hi);
+    this.plane.position.z = shown.level * this.zscale;
+    this.plane.material.uniforms.uAlpha.value = 0.2 * shown.cut;
+    this.plane.visible = shown.cut > 0;
+    this.curve.material.uniforms.uAlpha.value = Math.min(1, 2 * shown.cut);
+    this.curve.visible = shown.cut > 0;
     this.points.material.uniforms.uRise.value = shown.marks;
     this.points.visible = shown.marks > 0;
+    this.trace();
     this.aim();
     if (r.domElement.width !== this.W || r.domElement.height !== this.H) r.setSize(this.W, this.H, false);
     r.render(this.scene, this.camera);
@@ -514,11 +664,11 @@ export class Surface {
     const dt = this.last ? Math.min(0.1, (now - this.last) / 1000) : 0;
     this.last = now;
     if (this.moving) {
-      const k = Math.min(1, (now - this.t0) / MORPH), e = ease(k), a = this.from, b = this.to;
+      const k = Math.min(1, (now - this.t0) / this.duration), e = ease(k), a = this.from, b = this.to;
       this.mix = e;
       // the marks are raised in the last part of a change, once the surface has nearly settled
       const late = ease(clamp((k - 0.35) / 0.65, 0, 1));
-      this.shown = { lo: lerp(a.lo, b.lo, e), hi: lerp(a.hi, b.hi, e), marks: lerp(a.marks, b.marks, b.marks > a.marks ? late : e) };
+      this.shown = { lo: lerp(a.lo, b.lo, e), hi: lerp(a.hi, b.hi, e), marks: lerp(a.marks, b.marks, b.marks > a.marks ? late : e), cut: lerp(a.cut, b.cut, e), level: lerp(a.level, b.level, e) };
       if (k >= 1) this.moving = false;
     }
     if (this.rate) this.azimuth += dt * this.rate;
