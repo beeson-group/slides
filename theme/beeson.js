@@ -1443,6 +1443,10 @@
       this.shown = /* @__PURE__ */ new Set();
       this.steps = /* @__PURE__ */ new Set();
       this.stepTab = null;
+      // a plot whose slide has a fragment with data-plot-play is held until that fragment is shown
+      this.cue = "none";
+      // the slide of the plot is shown, and the plot may move
+      this.live = false;
       this.el = el;
       CACHE2.set(el, this);
       for (const old of el.querySelectorAll(":scope > .plot-body, :scope > .plot-error")) old.remove();
@@ -1808,7 +1812,7 @@
         return t;
       }));
     }
-    /** Reads the fragments of the slide: the names of data-plot-show, and the tab of the last visible data-plot-tab. */
+    /** Reads the fragments of the slide: the names of data-plot-show, the tab of the last visible data-plot-tab, and the cue of data-plot-play. */
     syncSteps() {
       if (!this.spec) return;
       const slide = this.el.closest("section");
@@ -1816,17 +1820,27 @@
       this.steps = new Set(frags.flatMap((f) => words(f.dataset.plotShow)));
       const visible = frags.filter((f) => f.classList.contains("visible"));
       this.shown = new Set(visible.flatMap((f) => words(f.dataset.plotShow)));
+      const cues = frags.filter((f) => f.hasAttribute("data-plot-play"));
+      const cue = !cues.length ? "none" : cues.some((f) => visible.includes(f)) ? "shown" : "held";
       const tabbed = visible.filter((f) => f.dataset.plotTab).sort((a, b) => +(a.dataset.fragmentIndex ?? 0) - +(b.dataset.fragmentIndex ?? 0));
       const name = tabbed.at(-1)?.dataset.plotTab ?? this.el.dataset.plotTab ?? null;
+      let tab = this.tab;
       if (name !== this.stepTab) {
         this.stepTab = name;
         const i = this.plot.tabs.findIndex((t) => t.name === name);
-        if (i >= 0 && i !== this.tab) {
-          this.setTab(i);
-          return;
-        }
+        if (i >= 0) tab = i;
       }
-      this.applyGates();
+      const cued = cue !== this.cue;
+      this.cue = cue;
+      if (tab !== this.tab) this.setTab(tab);
+      else this.applyGates();
+      if (cued && this.live) {
+        if (cue === "shown" && this.moves()) {
+          this.pause();
+          this.u = 0;
+          this.play();
+        } else this.still();
+      }
     }
     /** Shows the tab i, from its first frame while the plot is played, and at its still frame otherwise. */
     setTab(i) {
@@ -1840,9 +1854,9 @@
       this.drawStatic();
       this.buildMarks();
     }
-    /** The frame of a still, from data-plot-frame, where a negative frame is counted from the end. The default is the last frame. */
+    /** The frame of a still, from data-plot-frame, where a negative frame is counted from the end. The default is the last frame, which is also the still of a plot whose cue is shown. */
     stillFrame() {
-      const f = Number(this.el.dataset.plotFrame ?? -1), n = this.frames;
+      const f = Number(this.cue === "shown" ? -1 : this.el.dataset.plotFrame ?? -1), n = this.frames;
       return clamp(Number.isFinite(f) ? f < 0 ? n + f : f : n - 1, 0, n - 1);
     }
     /** Draws the still frame, without the animation. */
@@ -1852,15 +1866,24 @@
       this.u = this.stillFrame();
       this.draw();
     }
-    /** Starts the loop from the first frame, unless data-plot-paused is set or the motion is reduced. */
+    moves() {
+      return !this.el.hasAttribute("data-plot-paused") && !reduced();
+    }
+    /** Starts the loop from the first frame as the slide is shown, unless data-plot-paused is set, the motion is reduced, or the cue of the slide is not shown yet. */
     start() {
       if (!this.spec) return;
-      if (this.el.hasAttribute("data-plot-paused") || reduced()) {
+      this.live = true;
+      if (!this.moves() || this.cue === "held") {
         this.still();
         return;
       }
       this.u = 0;
       this.play();
+    }
+    /** Stops the loop as the slide is left. */
+    leave() {
+      this.live = false;
+      this.pause();
     }
     play() {
       if (!this.spec || this.raf) return;
@@ -2159,7 +2182,7 @@
       if (!still()) {
         for (const o of within(ev.previousSlide)) if (!ev.currentSlide.contains(o.el)) o.reset();
       }
-      for (const p of plotsIn(ev.previousSlide)) if (!ev.currentSlide.contains(p.el)) p.pause();
+      for (const p of plotsIn(ev.previousSlide)) if (!ev.currentSlide.contains(p.el)) p.leave();
       show(ev.currentSlide);
     });
     for (const type of ["fragmentshown", "fragmenthidden"]) deck.on(type, () => stepPlots(deck.getCurrentSlide()));

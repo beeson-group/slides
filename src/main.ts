@@ -116,7 +116,7 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   deck.on('slidechanged', (event) => {
     const ev = event as SlideEvent;
     if (!still()) for (const o of within(ev.previousSlide)) if (!ev.currentSlide.contains(o.el)) o.reset();
-    for (const p of plotsIn(ev.previousSlide)) if (!ev.currentSlide.contains(p.el)) p.pause();
+    for (const p of plotsIn(ev.previousSlide)) if (!ev.currentSlide.contains(p.el)) p.leave();
     show(ev.currentSlide);
   });
   for (const type of ['fragmentshown', 'fragmenthidden']) deck.on(type, () => stepPlots(deck.getCurrentSlide()));
