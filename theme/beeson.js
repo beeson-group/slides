@@ -1055,15 +1055,16 @@
     if (!(range[1] > range[0])) fail(`${path}.range`, "the second end must be larger than the first");
     return { range, ticks: list(v.ticks, `${path}.ticks`, []).map((t, i) => num(t, `${path}.ticks[${i}]`)), title: str(v.title, `${path}.title`, "") };
   }
-  function panel(v, path) {
-    if (!isObject(v)) fail(path, "a panel is expected");
-    const regions = list(v.regions, `${path}.regions`, []).map((r, i) => {
-      const p = `${path}.regions[${i}]`;
+  function regions(v, path) {
+    return list(v, path, []).map((r, i) => {
+      const p = `${path}[${i}]`;
       if (!isObject(r)) fail(p, "a region is expected");
       return { ...item(r, p, "violet"), points: pairs(r.points, `${p}.points`), opacity: num(r.opacity, `${p}.opacity`, 0.12) };
     });
-    const curves = list(v.curves, `${path}.curves`, []).map((c, i) => {
-      const p = `${path}.curves[${i}]`;
+  }
+  function curves(v, path) {
+    return list(v, path, []).map((c, i) => {
+      const p = `${path}[${i}]`;
       if (!isObject(c)) fail(p, "a curve is expected");
       let circle = null;
       if (c.circle !== void 0) {
@@ -1074,11 +1075,16 @@
       const dash = c.dash === void 0 ? null : list(c.dash, `${p}.dash`).map((d, j) => num(d, `${p}.dash[${j}]`));
       return { ...item(c, p, "subtle"), points: circle ? null : pairs(c.points, `${p}.points`), circle, width: num(c.width, `${p}.width`, 2), dash };
     });
-    const labels = list(v.labels, `${path}.labels`, []).map((l, i) => {
-      const p = `${path}.labels[${i}]`;
+  }
+  function labels(v, path) {
+    return list(v, path, []).map((l, i) => {
+      const p = `${path}[${i}]`;
       if (!isObject(l)) fail(p, "a label is expected");
       return { ...item(l, p, "subtle"), at: pair(l.at, `${p}.at`), text: str(l.text, `${p}.text`), anchor: anchor(l.anchor, `${p}.anchor`), dx: num(l.dx, `${p}.dx`, 0), dy: num(l.dy, `${p}.dy`, 0) };
     });
+  }
+  function panel(v, path) {
+    if (!isObject(v)) fail(path, "a panel is expected");
     return {
       id: str(v.id, `${path}.id`),
       x: axis(v.x, `${path}.x`),
@@ -1086,9 +1092,9 @@
       equal: v.equal === true,
       axes: v.axes !== false,
       title: str(v.title, `${path}.title`, ""),
-      regions,
-      curves,
-      labels
+      regions: regions(v.regions, `${path}.regions`),
+      curves: curves(v.curves, `${path}.curves`),
+      labels: labels(v.labels, `${path}.labels`)
     };
   }
   function markData(m, v, frames, path) {
