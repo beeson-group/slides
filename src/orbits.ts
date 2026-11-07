@@ -20,7 +20,7 @@ export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?:
 export const MU = 0.01215;
 // the distance to a body within which the step is shortened in step()
 const NEAR = 0.15;
-// seconds in which the longest flight of a scene is traced
+// seconds in which the longest flight of a scene is traced, when data-duration is not set
 const DURATION = 12;
 // seconds per revolution of a looping mark
 const LOOP = 9;
@@ -301,6 +301,8 @@ export class Orbits {
   // true when start() was called before the strands of a file were loaded
   private pending = false;
   private headSize: number;
+  // the seconds in which the longest strand is traced
+  readonly duration: number;
   // the colors of the strands with an ink, resolved in redraw() for the current mode
   private inks: string[] = [];
   // resolved when the strands are in place, at once for a named scene and after the load of a file
@@ -320,6 +322,7 @@ export class Orbits {
     this.loaded = !file;
     this.fitted = file && el.dataset.half === undefined;
     this.headSize = HEADS[el.dataset.heads ?? (file ? FILE_HEADS : 'full')] ?? HEADS.full;
+    this.duration = +(el.dataset.duration ?? 0) || DURATION;
     this.cx = +(el.dataset.cx ?? 0);
     this.cy = +(el.dataset.cy ?? 0);
     this.half = +(el.dataset.half ?? 0.5);
@@ -599,12 +602,12 @@ export class Orbits {
   // the seconds into the trace at which its first head is drawn, e.g. after the tubes of a transfer
   get headAfter(): number {
     const first = Math.min(...this.strands.filter((_, i) => this.headOf(i) > 0).map((s) => s.times[0]));
-    return Number.isFinite(first) && this.Tmax > 0 ? (first / this.Tmax) * DURATION : 0;
+    return Number.isFinite(first) && this.Tmax > 0 ? (first / this.Tmax) * this.duration : 0;
   }
 
   // the clock of the trace at the time now, in the units of the strands
   private tau(now: number): number {
-    return ((now - (this.t0 ?? now)) / 1000 / DURATION) * this.Tmax;
+    return ((now - (this.t0 ?? now)) / 1000 / this.duration) * this.Tmax;
   }
 
   private heads(ctx: CanvasRenderingContext2D, c: Colors, now: number): void {

@@ -949,6 +949,7 @@
       this.loaded = !file;
       this.fitted = file && el.dataset.half === void 0;
       this.headSize = HEADS[el.dataset.heads ?? (file ? FILE_HEADS : "full")] ?? HEADS.full;
+      this.duration = +(el.dataset.duration ?? 0) || DURATION;
       this.cx = +(el.dataset.cx ?? 0);
       this.cy = +(el.dataset.cy ?? 0);
       this.half = +(el.dataset.half ?? 0.5);
@@ -1237,11 +1238,11 @@
     // the seconds into the trace at which its first head is drawn, e.g. after the tubes of a transfer
     get headAfter() {
       const first = Math.min(...this.strands.filter((_, i) => this.headOf(i) > 0).map((s) => s.times[0]));
-      return Number.isFinite(first) && this.Tmax > 0 ? first / this.Tmax * DURATION : 0;
+      return Number.isFinite(first) && this.Tmax > 0 ? first / this.Tmax * this.duration : 0;
     }
     // the clock of the trace at the time now, in the units of the strands
     tau(now) {
-      return (now - (this.t0 ?? now)) / 1e3 / DURATION * this.Tmax;
+      return (now - (this.t0 ?? now)) / 1e3 / this.duration * this.Tmax;
     }
     heads(ctx, c, now) {
       if (!this.headed) return;
