@@ -42,6 +42,40 @@
     }
     return out;
   }
+  function viewed(m, tilt, flip2 = 1) {
+    const n = m.times.length, N = 2 * n - 1, c = Math.cos(tilt), d = Math.sin(tilt);
+    const pts = new Float64Array(2 * N), tt = new Float32Array(N);
+    for (let i = 0; i < n; i++) {
+      const x = m.path[3 * i], y = m.path[3 * i + 1], z = flip2 * m.path[3 * i + 2];
+      pts[2 * i] = x;
+      pts[2 * i + 1] = y * c + z * d;
+      tt[i] = m.times[i];
+      const k = N - 1 - i;
+      pts[2 * k] = x;
+      pts[2 * k + 1] = -y * c + z * d;
+      tt[k] = 2 * m.t - m.times[i];
+    }
+    return { pts, times: tt, T: 2 * m.t };
+  }
+  function halos(tilt) {
+    const seed = (z) => {
+      const s = new Float64Array(6);
+      s[0] = 1.18;
+      s[2] = z;
+      s[4] = -0.1568;
+      return s;
+    };
+    const a = family(seed, 2, spaced(0.0139, 0.09, 18, 1), [0, 4], [3, 5], H / 2, () => 0.3, () => 6, 0);
+    const last = a[a.length - 1];
+    if (!last) return [];
+    const again = (x) => {
+      const s = Float64Array.from(last.s);
+      s[0] = x;
+      return s;
+    };
+    const f = [...a, ...family(again, 0, spaced(last.s[0], 1.015, 20, 1), [2, 4], [3, 5], H / 2, () => 0.3, () => 6, 1)];
+    return f.flatMap((m, i) => [toned(viewed(m, tilt), i === f.length - 1 ? "hero" : "line"), toned(viewed(m, tilt, -1), "line")]);
+  }
   var SCENES = {
     nest: () => [...lyapunovFamily(1, spaced(0.012, 0.12, 12, 1.5), H), ...lyapunovFamily(2, spaced(0.012, 0.14, 12, 1.5), H), ...droFamily(ramp(0.03, 0.09, 1.2), H)].map(closed),
     dro: () => droFamily(ramp(0.02, 0.32, 1.12), H).filter((_, i) => i % 3 === 0).map(closed),
@@ -49,7 +83,8 @@
     l2: () => lyapunovFamily(2, spaced(6e-3, 0.17, 24, 1.35), H).map(closed),
     lyapunovs: () => [...lyapunovFamily(1, spaced(6e-3, 0.1, 16, 1.3), H), ...lyapunovFamily(2, spaced(6e-3, 0.11, 16, 1.3), H)].map(closed),
     mark: () => droFamily([0.1], H).map(closed),
-    tubes: () => [...tubes(1, 0.0313, 14, 2.2), ...tubes(2, 0.0408, 14, 2.2)]
+    tubes: () => [...tubes(1, 0.0313, 14, 2.2), ...tubes(2, 0.0408, 14, 2.2)],
+    halo: () => halos(1.2)
   };
   var SCENE_NAMES = Object.keys(SCENES);
   var cache = /* @__PURE__ */ new Map();
