@@ -64,6 +64,11 @@ copy('@mathjax/mathjax-stix2-font/svg.js', 'mathjax/mathjax-stix2-font/svg.js');
 copy('@mathjax/mathjax-stix2-font/svg/dynamic', 'mathjax/mathjax-stix2-font/svg/dynamic');
 // a license file is not in the font package, and Apache-2.0 is declared in its package.json
 copy('mathjax/LICENSE', 'mathjax/mathjax-stix2-font/LICENSE');
+// the font of the TeX package mhchem is loaded at the first \ce, from loader.paths.fonts in
+// theme/mathjax-config.js. The fonts of bbm, bboldx, and dsfont are left out, since these packages
+// are not autoloaded and are 1.7 MB in all
+copy('@mathjax/mathjax-mhchem-font-extension/svg.js', 'mathjax/mathjax-mhchem-font-extension/svg.js');
+copy('mathjax/LICENSE', 'mathjax/mathjax-mhchem-font-extension/LICENSE');
 
 function size(path) {
   const stat = statSync(path);
