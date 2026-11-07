@@ -99,7 +99,7 @@ Each video is placed over its image as a PowerPoint video, and it is started whe
 
 For a figure made with matplotlib, use the styles `beeson-dark.mplstyle` and `beeson-light.mplstyle` in `styles/`. The palette, the typeface, and a transparent background are set in these styles. Export one file per mode and mark the images `for-dark` and `for-light`, so that the right one is shown in each mode. Give a white raster figure the class `paper`, and it is framed. Give a black-on-white line plot the class `invert`, and it is inverted in dark mode.
 
-Math is typeset in SVG with MathJax 4 and the STIX Two Math font, both vendored. The macros of a deck are defined in `theme/macros.js`.
+Math is typeset in SVG with MathJax 4 and its TeX font, i.e. Computer Modern, and the text is set in Latin Modern Roman, all vendored. The macros of a deck are defined in `theme/macros.js`.
 
 To show a video, put it in a `zone` or a `plate`, and add `data-autoplay` to play it while its slide is shown. Give every video a `poster`, since the poster is printed in the PDF and `npm run check` fails without one. Run `demo/clip.py` to redraw the clip of the demo deck, which is also the example to start from.
 
@@ -155,7 +155,7 @@ The theme is maintained with npm and Node 22 or later, on macOS, Linux, or Windo
 
 ```sh
 npm ci                 # the dependencies
-npm run vendor         # reveal.js, the notes plugin, the fonts, MathJax, and three.js into theme/vendor/ (tycho is copied by hand)
+npm run vendor         # reveal.js, the notes plugin, the fonts, MathJax, and three.js into theme/vendor/ (tycho and Latin Modern Roman are copied by hand)
 npm run build          # src/*.ts into theme/beeson.js and src/editor/*.ts into theme/editor.js with esbuild
 npm run typecheck      # tsc --noEmit
 npm test               # the orbit engine, the surfaces, the backdrops from files, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, the PowerPoint file, the plots, the stepped math, and the editor under node --test

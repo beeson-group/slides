@@ -44,7 +44,7 @@ npm run pptx                                # slides.pptx, one click per step, w
 - Everything loaded in a deck is vendored under `theme/vendor/` with its license, and nothing is fetched from the network at show time.
 - The orbit engine is a port of `orbits.ts` of claudiovestini.com (MIT). Do not derive anything in this repository from DyLAN code.
 - The Princeton marks and the group logo in `brand/` are outside the MIT license, see `brand/NOTICE.md`.
-- Colors are the custom properties in `theme/beeson.css`: `--bg`, `--text`, `--subtle`, `--muted`, `--line`, `--accent`, `--violet`, and `--data-1` to `--data-8`. The typeface is STIX Two Text at 22, 28, 36, 48, 64, and 96 px on the 1920 by 1080 design size. Body text is 48 px, i.e. the 24 points asked for by the AIAA on a slide 7.5 in high, and captions, tables, and code are 36 px. Orange is used for motion and progress, and violet for structure.
+- Colors are the custom properties in `theme/beeson.css`: `--bg`, `--text`, `--subtle`, `--muted`, `--line`, `--accent`, `--violet`, and `--data-1` to `--data-8`. The typeface is Latin Modern Roman at 22, 28, 36, 48, 64, and 96 px on the 1920 by 1080 design size, and math is set in the TeX font of MathJax, i.e. Computer Modern, as in a LaTeX document. Body text is 48 px, i.e. the 24 points asked for by the AIAA on a slide 7.5 in high, and captions, tables, and code are 36 px. Orange is used for motion and progress, and violet for structure.
 - Write a talk over the demo deck in `index.html`, and do not copy `theme/` or `brand/` into another folder, since `index.html` is the default deck of `npm run check`, `npm run pdf`, and `npm run pptx`.
 - Read a PowerPoint file from its XML, and do not script PowerPoint, Keynote, or any other desktop app.
 
