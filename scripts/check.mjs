@@ -51,6 +51,20 @@ async function checkPhone() {
     return !!at?.closest('.theme-switch');
   })()`);
   if (!reached) failures.push('phone: a tap 15 px from the mode button does not reach it');
+  const swiped = await page.evaluate(`(() => {
+    const viewer = document.querySelector('tycho-viewer');
+    if (!viewer) return false;
+    const { h, v } = Reveal.getIndices(viewer.closest('section'));
+    Reveal.slide(h, v);
+    const drag = (type, clientX) => {
+      viewer.dispatchEvent(new PointerEvent(type, { pointerType: 'touch', clientX, clientY: 300, bubbles: true }));
+    };
+    drag('pointerdown', 300);
+    drag('pointermove', 100);
+    drag('pointerup', 100);
+    return Reveal.getIndices().h !== h;
+  })()`);
+  if (swiped) failures.push('phone: a drag in the viewer changes the slide');
   for (const error of page.errors) failures.push(`phone: ${error}`);
   await page.close();
 }
