@@ -1149,6 +1149,11 @@
   var TRACED = ["title", "section", "closing"];
   var backdrops = [];
   var EDITING = new URLSearchParams(location.search).has("edit");
+  function edit() {
+    const params = new URLSearchParams(location.search);
+    params.set("edit", "");
+    location.href = `${location.href.split(/[?#]/)[0]}?${params.toString().replace(/=(?=&|$)/g, "")}${location.hash}`;
+  }
   var still = () => EDITING || Orbits.reduced() || window.Reveal.isPrintView() || /print-pdf/.test(location.search);
   function remount() {
     for (const o of mount(document)) if (!backdrops.includes(o)) backdrops.push(o);
@@ -1205,6 +1210,9 @@
     deck.addKeyBinding({ keyCode: 80, key: "P", description: "Pointer" }, (ev) => {
       if (forDeck(ev)) togglePointer();
     });
+    if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: "E", description: "Edit the deck" }, (ev) => {
+      if (forDeck(ev)) edit();
+    });
     if (still()) completeAll();
     else show(deck.getCurrentSlide());
     deck.on("slidechanged", (event) => {
@@ -1230,6 +1238,12 @@
     }
   }
   initTheme();
+  var self = document.currentScript;
+  if (EDITING) {
+    const script = document.createElement("script");
+    script.src = self?.src ? new URL("editor.js", self.src).href : "theme/editor.js";
+    document.head.append(script);
+  }
   var Beeson = {
     start,
     theme: { get, set: (theme) => set(theme), toggle: () => toggle() },

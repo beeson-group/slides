@@ -41,6 +41,12 @@ const backdrops: Orbits[] = [];
 // is edited, without the traced backdrops and the tint at the pointer
 const EDITING = new URLSearchParams(location.search).has('edit');
 
+function edit(): void {
+  const params = new URLSearchParams(location.search);
+  params.set('edit', '');
+  location.href = `${location.href.split(/[?#]/)[0]}?${params.toString().replace(/=(?=&|$)/g, '')}${location.hash}`;
+}
+
 const still = () => EDITING || Orbits.reduced() || window.Reveal.isPrintView() || /print-pdf/.test(location.search);
 
 function remount(): void {
@@ -97,6 +103,8 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   initCursor(() => backdrops, () => deck.getCurrentSlide(), !EDITING);
   deck.addKeyBinding({ keyCode: 68, key: 'D', description: 'Switch dark and light' }, (ev) => { if (forDeck(ev)) toggle(); });
   deck.addKeyBinding({ keyCode: 80, key: 'P', description: 'Pointer' }, (ev) => { if (forDeck(ev)) togglePointer(); });
+  // E opens the same slide in the editor, and the other parameters of the address are kept
+  if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: 'E', description: 'Edit the deck' }, (ev) => { if (forDeck(ev)) edit(); });
 
   if (still()) completeAll();
   else show(deck.getCurrentSlide());
@@ -126,6 +134,15 @@ function syncViewers(theme: string): void {
 }
 
 initTheme();
+
+// the editor, editor.js next to this script, is loaded after the deck. without the parameter, a
+// deck does not load it
+const self = document.currentScript as HTMLScriptElement | null;
+if (EDITING) {
+  const script = document.createElement('script');
+  script.src = self?.src ? new URL('editor.js', self.src).href : 'theme/editor.js';
+  document.head.append(script);
+}
 
 const Beeson = {
   start,
