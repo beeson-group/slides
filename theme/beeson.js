@@ -3088,8 +3088,24 @@ void main() {
     return { held, lit };
   }
   var words2 = (s) => (s ?? "").split(/\s+/).filter(Boolean);
+  var hasContent = (f) => f.children.length > 0 || (f.textContent ?? "").trim() !== "";
+  function addRestoreSteps(root2) {
+    for (const slide of root2.querySelectorAll(".reveal .slides section")) {
+      if (slide.querySelector("section, .fragment[data-restore]")) continue;
+      const frags = [...slide.querySelectorAll(".fragment")];
+      const unindexed = frags.filter((f) => !f.hasAttribute("data-fragment-index"));
+      const last = unindexed.length ? [unindexed[unindexed.length - 1]] : frags.filter((f) => Number(f.dataset.fragmentIndex) === Math.max(...frags.map((g) => Number(g.dataset.fragmentIndex))));
+      if (!frags.some((f) => !last.includes(f) && hasContent(f))) continue;
+      const restore = document.createElement("span");
+      restore.className = "fragment";
+      restore.setAttribute("data-restore", "");
+      restore.setAttribute("aria-hidden", "true");
+      slide.append(restore);
+    }
+  }
   function applySteps(slide) {
     const frags = [...slide.querySelectorAll(".fragment")];
+    if (!slide.querySelector("section")) slide.toggleAttribute("data-complete", frags.every((f) => f.classList.contains("visible")));
     const names = [...new Set(frags.flatMap((f) => words2(f.dataset.highlight)))];
     if (!names.length && !frags.some((f) => f.hasAttribute("data-keep"))) return;
     const select2 = (name) => `.${CSS.escape(name)}`;
@@ -3122,9 +3138,7 @@ void main() {
   function initSteps(deck) {
     const mark = () => {
       const slide = deck.getCurrentSlide();
-      if (!slide) return;
-      slide.toggleAttribute("data-complete", !deck.availableFragments().next);
-      applySteps(slide);
+      if (slide) applySteps(slide);
     };
     for (const type of ["fragmentshown", "fragmenthidden", "slidechanged"]) deck.on(type, mark);
     mark();
@@ -3323,6 +3337,7 @@ void main() {
       syncViewers(get());
       void stillViewers();
     });
+    if (!EDITING) addRestoreSteps(document);
     await deck.initialize({ ...DEFAULTS, ...options, plugins });
     initChrome(deck);
     initSteps(deck);

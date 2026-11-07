@@ -124,9 +124,13 @@ test('the surface of the demo deck is drawn at each of its stages, live and in t
   await printView(print, deckUrl('index.html', 'print-pdf&still'));
   const pages = await print.evaluate(surfaces);
   assert.deepEqual(print.errors, []);
-  assert.deepEqual(pages.map((s) => s.stage), stages);
+  // the last page is the step that restores the dimmed fragments, at the last stage
+  assert.deepEqual(pages.map((s) => s.stage), [...stages, 'cut']);
   assert.equal(new Set(pages.map((s) => s.digest)).size, stages.length);
   // the pixels are not compared one by one, since a canvas read back a few times is moved to the
   // processor by Chrome, and the copy of the WebGL image is then rounded differently
-  pages.forEach((s, i) => assert.ok(Math.abs(s.drawn - live[i].drawn) < 0.002, `the page of the stage ${s.stage} is drawn over ${s.drawn}, and the slide over ${live[i].drawn}`));
+  pages.forEach((s, i) => {
+    const slide = live[Math.min(i, live.length - 1)];
+    assert.ok(Math.abs(s.drawn - slide.drawn) < 0.002, `the page of the stage ${s.stage} is drawn over ${s.drawn}, and the slide over ${slide.drawn}`);
+  });
 });

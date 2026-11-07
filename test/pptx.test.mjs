@@ -133,8 +133,9 @@ test('a video is played through the steps of its slide', () => {
   assert.equal(slideCount(parts), 1, 'a video on more than one slide is restarted at each step');
   const slide = text(parts, 'ppt/slides/slide1.xml');
   assert.deepEqual([...slide.matchAll(/<p:pic><p:nvPicPr><p:cNvPr id="(\d+)" name="(\w+)/g)].map((m) => m.slice(1)),
-    [['2', 'Step'], ['3', 'Step'], ['4', 'Step'], ['5', 'Video']]);
-  assert.deepEqual([...slide.matchAll(/nodeType="clickEffect".*?<p:spTgt spid="(\d+)"/g)].map((m) => m[1]), ['3', '4']);
+    [['2', 'Step'], ['3', 'Step'], ['4', 'Step'], ['5', 'Step'], ['6', 'Video']]);
+  // the last click is the step that restores the dimmed fragments
+  assert.deepEqual([...slide.matchAll(/nodeType="clickEffect".*?<p:spTgt spid="(\d+)"/g)].map((m) => m[1]), ['3', '4', '5']);
   assert.ok(slide.indexOf('nodeType="afterEffect"') < slide.indexOf('nodeType="clickEffect"'));
 });
 
