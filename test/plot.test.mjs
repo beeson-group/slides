@@ -265,3 +265,18 @@ test('a held plot is printed at its still frame before its cue and at its last f
   const values = await page.evaluate(`[...document.querySelectorAll('.pdf-page #held .plot-value')].map((v) => v.textContent)`);
   assert.deepEqual(values, ['0.00', '1.00']);
 });
+
+test('a curve of a plot keeps the color of a highlight when a tab is chosen', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl('test/pages/plot-highlight.html'));
+  await page.waitFor(deckSettled);
+  const lit = `document.querySelector('#lit .plot-curve.edge').classList.contains('hl-accent')`;
+  assert.equal(await page.evaluate(lit), false);
+  await page.evaluate('Reveal.next()');
+  assert.equal(await page.evaluate(lit), true);
+  await page.evaluate(`document.querySelectorAll('#lit .plot-tabs button')[1].click()`);
+  assert.equal(await page.evaluate(lit), true);
+  assert.deepEqual(page.errors, []);
+});

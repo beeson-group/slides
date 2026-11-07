@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Plot highlight</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+</head>
+<body>
+<!-- a curve of the class edge is colored at a step and keeps its color when a tab is chosen, which
+     draws the panel again -->
+<div class="reveal">
+  <div class="slides">
+    <section>
+      <h2>A plot whose curve is highlighted</h2>
+      <div class="plot zone" id="lit" data-plot="two-tabs" data-plot-paused></div>
+      <span class="fragment" data-highlight="edge"></span>
+      <script type="application/json" id="two-tabs">{
+        "parameter": { "label": "$t$" },
+        "panels": [
+          { "id": "only", "x": { "range": [0, 1] }, "y": { "range": [0, 1] },
+            "curves": [{ "id": "line", "class": "edge", "points": [[0, 0], [1, 1]] }] }
+        ],
+        "marks": [{ "id": "dot", "panel": "only", "kind": "points" }],
+        "tabs": [
+          { "name": "one", "values": [0, 1], "data": { "dot": [[0.2, 0.5], [0.4, 0.5]] } },
+          { "name": "two", "values": [0, 1], "data": { "dot": [[0.6, 0.5], [0.8, 0.5]] } }
+        ]
+      }</script>
+    </section>
+  </div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>
