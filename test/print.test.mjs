@@ -51,3 +51,17 @@ test('a video without a poster is printed with its frame on every step', { timeo
 
   assert.deepEqual(frames, [1, 1, 1]);
 });
+
+test('a tycho viewer is printed with its scene', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await printView(page, deckUrl('index.html', 'print-pdf&still'));
+  const step = await page.evaluate(`[...document.querySelectorAll('.pdf-page')]
+    .findIndex((p) => p.querySelector('h2')?.textContent === 'Tycho on a slide')`);
+
+  const images = pageImages(await page.pdf())[step];
+
+  const scene = images.reduce((a, b) => (a.width * a.height > b.width * b.height ? a : b));
+  assert.ok(scene.colors > 100, `the largest image of the page has ${scene.colors} colors, and it is ${scene.width} by ${scene.height}`);
+});
