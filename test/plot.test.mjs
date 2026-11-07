@@ -1,8 +1,10 @@
 // checks of the plot element of src/plot.ts, i.e. the parser of the JSON block, the interpolation
-// between frames, the loop, and the markup of the labels
+// between frames, the loop, and the markup of the labels. a plot of a test deck is then played and
+// printed in Chrome
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { deckSettled, deckUrl, launch, printView } from '../scripts/chrome.mjs';
 import { formatNumber, framesAt, loopFrame, nearest, parseMarkup, parsePlot, traceTo, valueAt } from '../src/plot.ts';
 
 const minimal = () => ({
@@ -94,4 +96,58 @@ test('a number is written with a minus sign, and without the sign of a zero', ()
   assert.equal(formatNumber(0.1 + 0.2), '0.3');
   assert.equal(formatNumber(-0.25, 1), '−0.3');
   assert.equal(formatNumber(-0.001, 2), '0.00');
+});
+
+const state = `(() => {
+  const view = Beeson.plots.find((p) => p.el.dataset.plot === 'data');
+  return {
+    playing: view.playing,
+    frame: view.frame,
+    hidden: [...view.el.querySelectorAll('.plot-panel')].map((g) => g.classList.contains('plot-hidden')),
+    tab: view.el.querySelector('[aria-selected="true"]').textContent,
+  };
+})()`;
+
+test('a plot is played while its slide is shown, and its steps show a panel and switch its tab', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl('test/pages/plot-steps.html', '', '/1'));
+  await page.waitFor(deckSettled);
+
+  const first = await page.evaluate(state);
+  assert.equal(first.playing, true);
+  assert.deepEqual(first.hidden, [false, true]);
+  assert.equal(first.tab, 'one');
+  await page.waitFor(`${state}.frame > ${first.frame}`);
+
+  await page.evaluate('Reveal.next()');
+  assert.deepEqual((await page.evaluate(state)).hidden, [false, false]);
+  await page.evaluate('Reveal.next()');
+  assert.equal((await page.evaluate(state)).tab, 'two');
+
+  await page.evaluate('Reveal.next()');
+  assert.equal((await page.evaluate(state)).playing, false);
+  const error = await page.evaluate(`document.querySelector('[data-plot="missing"] .plot-error').textContent`);
+  assert.match(error, /the JSON block with the id "missing" is not found/);
+  assert.deepEqual(page.errors.filter((e) => !e.includes('"missing"')), []);
+});
+
+test('a plot is printed at its last frame, with the panels and the tab of each step', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await printView(page, deckUrl('test/pages/plot-steps.html', 'print-pdf'));
+
+  const pages = await page.evaluate(`[...document.querySelectorAll('.pdf-page [data-plot="data"]')].map((el) => ({
+    hidden: [...el.querySelectorAll('.plot-panel')].map((g) => g.classList.contains('plot-hidden')),
+    tab: el.querySelector('[aria-selected="true"]').textContent,
+    value: el.querySelector('.plot-value').textContent,
+  }))`);
+  assert.deepEqual(pages, [
+    { hidden: [false, true], tab: 'one', value: '1.00' },
+    { hidden: [false, false], tab: 'one', value: '1.00' },
+    { hidden: [false, false], tab: 'two', value: '1.00' },
+  ]);
+  assert.equal(await page.evaluate('Beeson.plots.some((p) => p.playing)'), false);
 });
