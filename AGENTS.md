@@ -15,6 +15,7 @@ This repository is the slide template of the Beeson group. The reveal.js theme `
 - Use one `h2` per slide, and an `h1` on a title slide. Keep the text column under 66 characters per line, and prefer one paragraph and a few list items to many items.
 - Give an image for each mode with `for-dark` and `for-light`, a white raster figure the class `paper`, and a black-on-white line plot the class `invert`.
 - Write math in MathJax delimiters, `\(` `\)` inline and `\[` `\]` display, inside a `div.math` for a display, and put shared macros into `theme/macros.js`.
+- Reveal a display in four steps: the lead-in sentence, the display, the sentence in which it is explained, and a step in which a symbol is colored. Mark the symbol with `\class{name}{...}`, and give the later fragment `data-highlight="name"`, so that the class is colored orange once the fragment is shown, or violet with `data-tone="violet"`. Give the display `data-keep` to hold it at full opacity through the next step, or `data-keep="N"` to hold it through the step of index N.
 - Put speaker notes in an `aside.notes`.
 - Put a video in a `zone` or a `plate`, with a `poster` and an MP4 source, and add `data-autoplay` to play it while its slide is shown.
 - To glide an element between two slides, give both slides `data-auto-animate`, and give the element the same `data-id` on each.
@@ -24,7 +25,7 @@ This repository is the slide template of the Beeson group. The reveal.js theme `
 
 ```sh
 npm ci && npm run vendor && npm run build   # dependencies, vendored files, theme/beeson.js
-npm run typecheck && npm test               # types, then the orbit engine, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, and the PowerPoint file under node --test
+npm run typecheck && npm test               # types, then the orbit engine, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, the PowerPoint file, and the stepped math under node --test
 npm run check                               # screenshots of every slide in both modes, console errors, problems in the page, a poster on every video, the phone layout, a pixel ratio of 1.25
 npm run check -- --browser firefox          # the same in Firefox or Safari over WebDriver, without the console, the phone layout, and the pixel ratio
 npm run pdf                                 # slides.pdf, one page per step, with a page count check

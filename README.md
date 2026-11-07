@@ -60,6 +60,12 @@ To show a video, put it in a `zone` or a `plate`, and add `data-autoplay` to pla
 
 To embed a scene of tycho, the Typed Celestial HTML Observer, call `build_embed` of pytycho, the Python package of tycho, and paste the inline `tycho-viewer` element into a slide. The scene and its data are in two inline blocks of this element. The runtime is vendored once in `theme/vendor/tycho/`, copied by hand from a build of pytycho, since tycho is not on npm. The viewer is set to the mode of the deck, the scene is played only while its slide is shown, and the keys used in the viewer are not passed to the deck. In a PDF and in PowerPoint, the viewer is replaced by a still of the scene. Pass `kiosk=True` for a viewer without controls. Run `demo/tycho-scene.py` to write the viewer of the demo deck. This script is also the example to start from.
 
+## Stepped math
+
+A display is revealed in four steps: the lead-in sentence, the display, the sentence in which it is explained, and a step in which a symbol of the display is colored. Mark the symbol in the TeX with `\class{name}{...}`, and give a later fragment the attribute `data-highlight="name"`. Once this fragment is shown, the symbols of the class are drawn in orange, or in violet with `data-tone="violet"`. Any element of the slide with the class `name` is colored as well, e.g. a `span` around the words that name the symbol. Use orange for motion and violet for structure, as in the rest of the theme, and separate several classes with spaces.
+
+An earlier fragment is dimmed to 45 percent once a later one is shown. Give the display the attribute `data-keep` to hold it at full opacity through the next step, or `data-keep="4"` to hold it through the step of index 4. A display is also held at full opacity while a class in it is colored at the current step. The demo slide "Motion in the rotating frame" is an example of every step.
+
 ## Agent skills
 
 The skill `refine-slides` is in `.claude/skills/`, and you do not have to install anything. Open Claude Code or Codex in a clone of this repository, and ask in plain words, e.g. "the slides are too wordy, tighten them up" or "go through the deck and fix whatever looks off". With this skill, an agent looks at every slide at its last step, and moves what it cuts into the speaker notes or into backup slides. In Claude Code the skill is read from this folder, and in Codex or any other agent it is reached through the pointer in `AGENTS.md`.
@@ -75,7 +81,7 @@ npm ci                 # the dependencies
 npm run vendor         # reveal.js, the notes plugin, the fonts, and MathJax into theme/vendor/ (tycho is copied by hand)
 npm run build          # src/*.ts into theme/beeson.js with esbuild
 npm run typecheck      # tsc --noEmit
-npm test               # the orbit engine, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, and the PowerPoint file under node --test
+npm test               # the orbit engine, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, the PowerPoint file, and the stepped math under node --test
 npm run check          # every slide of index.html in both modes, screenshots, console errors, and a poster on every video
 npm run pdf            # index.html to slides.pdf, with a check of the page count
 npm run pptx           # index.html to slides.pptx, with one click per step
