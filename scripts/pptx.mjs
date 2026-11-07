@@ -2,6 +2,7 @@
 // package. A file is a zip of the parts of ECMA-376, and pptxgenjs does not write the timing of a
 // video, which is required for a video to start by itself. The file is written in the form that
 // PowerPoint writes, and the schema order of each element is significant.
+import { readFileSync } from 'node:fs';
 import { crc32, deflateRawSync } from 'node:zlib';
 
 const SLIDE = { width: 1920, height: 1080 };
@@ -170,4 +171,120 @@ export function zip(parts) {
   end.writeUInt32LE(directory.length, 12);
   end.writeUInt32LE(offset, 16);
   return Buffer.concat([...local, directory, end]);
+}
+
+/**
+ * Returns a PowerPoint file with one slide for each step.
+ *
+ * Each step has a name, used as the alternative text, an image, the PNG of the whole slide, and
+ * notes, a list of paragraphs. Each of its videos has a path to an MP4 file, a poster, a PNG, the
+ * box x, y, width, and height in px of a slide of 1920 by 1080, a duration in ms, loop, and muted.
+ */
+export function pptx(steps) {
+  const parts = [];
+  const media = new Map();
+  let images = 0;
+  const image = (data) => {
+    parts.push([`ppt/media/image${++images}.png`, data]);
+    return `../media/image${images}.png`;
+  };
+  const clip = (path) => {
+    if (!media.has(path)) {
+      media.set(path, `../media/video${media.size + 1}.mp4`);
+      parts.push([`ppt/media/video${media.size}.mp4`, readFileSync(path)]);
+    }
+    return media.get(path);
+  };
+
+  const overrides = [];
+  const presentationRels = [
+    { id: 'rId1', type: officeRel('slideMaster'), target: 'slideMasters/slideMaster1.xml' },
+    { id: 'rId2', type: officeRel('notesMaster'), target: 'notesMasters/notesMaster1.xml' },
+    { id: 'rId3', type: officeRel('theme'), target: 'theme/theme1.xml' },
+  ];
+  const slideIds = [];
+
+  steps.forEach((step, index) => {
+    const n = index + 1;
+    const slideName = `ppt/slides/slide${n}.xml`;
+    const rels = [
+      { id: 'rId1', type: officeRel('slideLayout'), target: '../slideLayouts/slideLayout1.xml' },
+      { id: 'rId2', type: officeRel('image'), target: image(step.image) },
+    ];
+    const addRel = (type, target) => {
+      const id = `rId${rels.length + 1}`;
+      rels.push({ id, type, target });
+      return id;
+    };
+    const videos = step.videos.map((video, v) => {
+      const target = clip(video.path);
+      return {
+        ...video,
+        shape: 3 + v,
+        rels: {
+          link: addRel(officeRel('video'), target),
+          media: addRel('http://schemas.microsoft.com/office/2007/relationships/media', target),
+          poster: addRel(officeRel('image'), image(video.poster)),
+        },
+      };
+    });
+    if (step.notes.length) {
+      addRel(officeRel('notesSlide'), `../notesSlides/notesSlide${n}.xml`);
+      parts.push([`ppt/notesSlides/notesSlide${n}.xml`, notesSlide(step.notes)]);
+      parts.push([`ppt/notesSlides/_rels/notesSlide${n}.xml.rels`, relationships([
+        { id: 'rId1', type: officeRel('notesMaster'), target: '../notesMasters/notesMaster1.xml' },
+        { id: 'rId2', type: officeRel('slide'), target: `../slides/slide${n}.xml` },
+      ])]);
+      overrides.push([`/ppt/notesSlides/notesSlide${n}.xml`, `${CONTENT}.notesSlide+xml`]);
+    }
+    parts.push([slideName, slideXml(step, 'rId2', videos)]);
+    parts.push([`ppt/slides/_rels/slide${n}.xml.rels`, relationships(rels)]);
+    overrides.push([`/${slideName}`, `${CONTENT}.slide+xml`]);
+    const id = `rId${presentationRels.length + 1}`;
+    presentationRels.push({ id, type: officeRel('slide'), target: `slides/slide${n}.xml` });
+    slideIds.push(`<p:sldId id="${255 + n}" r:id="${id}"/>`);
+  });
+
+  const presentation = `${HEADER}<p:presentation ${NAMESPACES}>`
+    + '<p:sldMasterIdLst><p:sldMasterId id="2147483648" r:id="rId1"/></p:sldMasterIdLst>'
+    + '<p:notesMasterIdLst><p:notesMasterId r:id="rId2"/></p:notesMasterIdLst>'
+    + `<p:sldIdLst>${slideIds.join('')}</p:sldIdLst>`
+    + `<p:sldSz cx="${emu(SLIDE.width)}" cy="${emu(SLIDE.height)}"/><p:notesSz cx="6858000" cy="9144000"/></p:presentation>`;
+
+  const fixed = [
+    ['/ppt/presentation.xml', `${CONTENT}.presentation.main+xml`],
+    ['/ppt/slideMasters/slideMaster1.xml', `${CONTENT}.slideMaster+xml`],
+    ['/ppt/slideLayouts/slideLayout1.xml', `${CONTENT}.slideLayout+xml`],
+    ['/ppt/notesMasters/notesMaster1.xml', `${CONTENT}.notesMaster+xml`],
+    ['/ppt/theme/theme1.xml', 'application/vnd.openxmlformats-officedocument.theme+xml'],
+    ['/ppt/theme/theme2.xml', 'application/vnd.openxmlformats-officedocument.theme+xml'],
+  ];
+  const types = `${HEADER}<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">`
+    + '<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>'
+    + '<Default Extension="xml" ContentType="application/xml"/><Default Extension="png" ContentType="image/png"/>'
+    + '<Default Extension="mp4" ContentType="video/mp4"/>'
+    + `${[...fixed, ...overrides].map(([name, type]) => `<Override PartName="${name}" ContentType="${type}"/>`).join('')}</Types>`;
+
+  return zip([
+    ['[Content_Types].xml', types],
+    ['_rels/.rels', relationships([{ id: 'rId1', type: officeRel('officeDocument'), target: 'ppt/presentation.xml' }])],
+    ['ppt/presentation.xml', presentation],
+    ['ppt/_rels/presentation.xml.rels', relationships(presentationRels)],
+    ['ppt/slideMasters/slideMaster1.xml', MASTER],
+    ['ppt/slideMasters/_rels/slideMaster1.xml.rels', relationships([
+      { id: 'rId1', type: officeRel('slideLayout'), target: '../slideLayouts/slideLayout1.xml' },
+      { id: 'rId2', type: officeRel('theme'), target: '../theme/theme1.xml' },
+    ])],
+    ['ppt/slideLayouts/slideLayout1.xml', LAYOUT],
+    ['ppt/slideLayouts/_rels/slideLayout1.xml.rels', relationships([
+      { id: 'rId1', type: officeRel('slideMaster'), target: '../slideMasters/slideMaster1.xml' },
+    ])],
+    ['ppt/notesMasters/notesMaster1.xml', NOTES_MASTER],
+    ['ppt/notesMasters/_rels/notesMaster1.xml.rels', relationships([
+      { id: 'rId1', type: officeRel('theme'), target: '../theme/theme2.xml' },
+    ])],
+    ['ppt/theme/theme1.xml', THEME],
+    ['ppt/theme/theme2.xml', THEME],
+    ...parts,
+  ]);
 }
