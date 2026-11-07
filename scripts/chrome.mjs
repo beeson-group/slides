@@ -190,8 +190,9 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
           await sleep(50);
         }
       },
-      async screenshot() {
-        const { data } = await call('Page.captureScreenshot', { format: 'png' });
+      // clip is a box of the document, with x, y, width, height, and scale
+      async screenshot(clip) {
+        const { data } = await call('Page.captureScreenshot', { format: 'png', ...(clip ? { clip } : {}) });
         return Buffer.from(data, 'base64');
       },
       async pdf() {
@@ -245,7 +246,8 @@ export async function printView(page, url) {
   await page.waitFor(deckSettled);
   // reveal.js clones a slide for each of its steps after the load event, which does not wait for
   // the clones, and a video that has not loaded a frame is printed as a black panel. A hidden video
-  // is not printed, and it may not load a frame at all
+  // is not printed, and it may not load a frame at all. A tycho viewer is replaced by its still in
+  // src/print.ts, unless it shows an error
   await page.evaluate(`document.querySelectorAll('video[preload="none"]').forEach((video) => {
     video.preload = 'auto';
     video.load();
