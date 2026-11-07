@@ -233,6 +233,8 @@ export const deckSettled = `(async () => {
   if (!window.Reveal?.isReady()) return false;
   await document.fonts.ready;
   await window.MathJax?.startup?.promise;
+  // a backdrop drawn from a file of polylines is loaded after the start of the deck
+  await Promise.all((window.Beeson?.backdrops ?? []).map((backdrop) => backdrop.ready));
   await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
   return true;
 })()`;
