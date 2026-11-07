@@ -8,7 +8,7 @@ The demo deck, `index.html`, is also the documentation of every layout class. Op
 
 1. Press "Use this template" on GitHub, or copy the folders `theme/` and `brand/` next to a new `index.html`.
 2. Write the slides in `index.html` as `section` elements, one per slide, with the layout classes listed in the demo and in `AGENTS.md`. Link the theme, the vendored fonts, and MathJax in the head of the file, and call `Beeson.start({})` with the options of reveal.js in the foot.
-3. Give each element its step once the slide is complete: `class="fragment"` with a `data-fragment-index`. During the talk, a new element is faded in, and the earlier ones are dimmed to 45 percent. All of them are restored to full opacity once the slide is complete.
+3. Give each element its step once the slide is complete: `class="fragment"` with a `data-fragment-index`. During the talk, a new element is faded in, and the earlier ones are dimmed to 45 percent. The last element is also shown alone at first, and all of them are restored to full opacity at one more step, which is added to every slide with a dimmed element. A slide whose fragments are empty, e.g. the steps of a plot, is not given this step.
 4. Export the PDF with `npm run pdf` after `npm ci`, or open `index.html?print-pdf` in a browser on a computer and print to PDF. The PDF is printed with one page per step.
 
 The mode is kept per browser in local storage. To fix it for a venue, add the URL parameter `?theme=light`. To draw every backdrop complete at once for a screenshot, add `?still`.
@@ -107,7 +107,7 @@ To embed a scene of tycho, the Typed Celestial HTML Observer, call `build_embed`
 
 A display is revealed in four steps: the lead-in sentence, the display, the sentence in which it is explained, and a step in which a symbol of the display is colored. Mark the symbol in the TeX with `\class{name}{...}`, and give a later fragment the attribute `data-highlight="name"`. Once this fragment is shown, the symbols of the class are drawn in orange, or in violet with `data-tone="violet"`. Any element of the slide with the class `name` is colored as well, e.g. a `span` around the words that name the symbol. Use orange for motion and violet for structure, as in the rest of the theme, and separate several classes with spaces.
 
-An earlier fragment is dimmed to 45 percent once a later one is shown. Give the display the attribute `data-keep` to hold it at full opacity through the next step, or `data-keep="4"` to hold it through the step of index 4. A display is also held at full opacity while a class in it is colored at the current step. The demo slide "Motion in the rotating frame" is an example of every step.
+An earlier fragment is dimmed to 45 percent once a later one is shown, and every fragment is restored at the step added after the last one. Give the display the attribute `data-keep` to hold it at full opacity through the next step, or `data-keep="4"` to hold it through the step of index 4. A display is also held at full opacity while a class in it is colored at the current step. The demo slide "Motion in the rotating frame" is an example of every step.
 
 ## Plots
 
