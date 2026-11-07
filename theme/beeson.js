@@ -404,9 +404,8 @@
       if (this.raf || this.finished && !this.loop) return;
       this.t0 = performance.now();
       const tick = (now) => {
-        this.raf = 0;
         this.frame(now);
-        if (!this.finished || this.loop) this.raf = requestAnimationFrame(tick);
+        this.raf = !this.finished || this.loop ? requestAnimationFrame(tick) : 0;
       };
       this.raf = requestAnimationFrame(tick);
     }
@@ -769,7 +768,10 @@ html.to-dark::view-transition-new(root) { z-index: 1; }
     slideNumber: "c/t",
     controls: false,
     center: false,
-    pdfSeparateFragments: true
+    pdfSeparateFragments: true,
+    // off with 0, since the chrome, the mode button, and the viewer are lost in the scroll view that
+    // reveal.js would start in a narrow window
+    scrollActivationWidth: 0
   };
   var TRACED = ["title", "section", "closing"];
   var backdrops = [];
@@ -844,7 +846,10 @@ html.to-dark::view-transition-new(root) { z-index: 1; }
     });
   }
   function syncViewers(theme) {
-    for (const viewer of document.querySelectorAll("tycho-viewer")) viewer.setAttribute("theme", theme);
+    for (const viewer of document.querySelectorAll("tycho-viewer")) {
+      viewer.setAttribute("theme", theme);
+      viewer.setAttribute("data-prevent-swipe", "");
+    }
   }
   initTheme();
   var Beeson = {

@@ -304,12 +304,16 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
   transition: opacity 200ms ease-out;
 }
 .theme-switch:hover, .theme-switch:focus-visible { opacity: 1; outline: none; }
+/* the button is scaled with the slide, to a few pixels on a phone, and a finger needs about 44.
+   hover: none is added, since Firefox on Android reports a fine pointer on a screen with a stylus */
+@media (pointer: coarse), (hover: none) {
+  .theme-switch::after { content: ''; position: absolute; inset: calc(50% - 22px); }
+}
 .pointer-dot {
   position: fixed;
   z-index: 50;
   width: 14px;
   height: 14px;
-  margin: -7px 0 0 -7px;
   border: 2px solid var(--accent);
   border-radius: 50%;
   pointer-events: none;

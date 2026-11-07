@@ -128,7 +128,9 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
     return answered(new Promise((done, fail) => pending.set(id, { done, fail })), method);
   }
 
-  async function newPage({ width = 1920, height = 1080 } = {}) {
+  // with mobile set, the page is laid out as on a phone, with touch and a coarse pointer, and scale
+  // is the device pixel ratio
+  async function newPage({ width = 1920, height = 1080, mobile = false, scale = 1 } = {}) {
     const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
     const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
     const call = (method, params) => send(method, params, sessionId);
@@ -140,14 +142,16 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
         errors.push(details.exception?.description ?? details.text);
       } else if (method === 'Runtime.consoleAPICalled' && ['error', 'assert'].includes(params.type)) {
         errors.push(`console.${params.type}: ${params.args.map((a) => a.value ?? a.description).join(' ')}`);
-      } else if (method === 'Log.entryAdded' && params.entry.level === 'error') {
-        // failed loads of scripts, styles, fonts, and images are reported here
+      } else if (method === 'Log.entryAdded' && (params.entry.level === 'error' || params.entry.text.includes('GL_INVALID'))) {
+        // failed loads of scripts, styles, fonts, and images are reported here, and an invalid call
+        // of WebGL only as a warning
         errors.push(`${params.entry.text} ${params.entry.url ?? ''}`.trim());
       }
     };
     listeners.add(onEvent);
     await Promise.all([call('Page.enable'), call('Runtime.enable'), call('Log.enable')]);
-    await call('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    await call('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: scale, mobile });
+    if (mobile) await call('Emulation.setTouchEmulationEnabled', { enabled: true });
 
     async function evaluate(expression) {
       const { result, exceptionDetails } = await call('Runtime.evaluate', {

@@ -26,6 +26,9 @@ const DEFAULTS: RevealOptions = {
   controls: false,
   center: false,
   pdfSeparateFragments: true,
+  // off with 0, since the chrome, the mode button, and the viewer are lost in the scroll view that
+  // reveal.js would start in a narrow window
+  scrollActivationWidth: 0,
 };
 
 // the slides whose backdrop is traced when shown, rather than shown complete
@@ -102,9 +105,12 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
 }
 
 // the mode of the deck is passed to a tycho viewer through its theme attribute, which can be
-// changed at any time
+// changed at any time. a drag in a viewer moves the camera, and it is not a swipe of the deck
 function syncViewers(theme: string): void {
-  for (const viewer of document.querySelectorAll('tycho-viewer')) viewer.setAttribute('theme', theme);
+  for (const viewer of document.querySelectorAll('tycho-viewer')) {
+    viewer.setAttribute('theme', theme);
+    viewer.setAttribute('data-prevent-swipe', '');
+  }
 }
 
 initTheme();

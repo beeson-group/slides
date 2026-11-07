@@ -2,6 +2,10 @@
 // theme/vendor/mathjax/tex-svg.js. the font path is resolved against the URL of this script, hence
 // the same file is used for index.html and for pages in subfolders such as check/
 window.MathJax = {
+  loader: {
+    // the font of a TeX package is loaded from this folder, in place of the CDN of MathJax
+    paths: { fonts: new URL('vendor/mathjax', document.currentScript.src).href },
+  },
   tex: {
     inlineMath: [['\\(', '\\)']],
     displayMath: [['\\[', '\\]']],
