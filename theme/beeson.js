@@ -948,6 +948,7 @@
       this.headSize = HEADS[el.dataset.heads ?? "full"] ?? HEADS.full;
       this.everyHead = el.dataset.heads !== void 0;
       this.duration = (file ? void 0 : seconds(el.dataset.scene ?? "")) ?? DURATION;
+      this.stagger = Math.max(0, Number(el.dataset.stagger) || 0);
       this.cx = +(el.dataset.cx ?? 0);
       this.cy = +(el.dataset.cy ?? 0);
       this.half = +(el.dataset.half ?? 0.5);
@@ -1226,12 +1227,15 @@
       ctx.arc(X, Y, 3 * this.lw, 0, 2 * Math.PI);
       ctx.fill();
     }
+    // the flight time reached by strand i at the time now, which is negative before its start
+    clock(i, now) {
+      return ((now - (this.t0 ?? now)) / 1e3 - i * this.stagger) / this.duration * this.Tmax;
+    }
     heads(ctx, c, now) {
       if (!this.headSize) return;
-      const tau = (now - (this.t0 ?? now)) / 1e3 / this.duration * this.Tmax;
       ctx.fillStyle = c.accent;
       this.strands.forEach((s, i) => {
-        const j = this.idx[i];
+        const j = this.idx[i], tau = this.clock(i, now);
         if (!this.everyHead && !s.craft || j >= s.times.length - 1 || tau < s.times[0]) return;
         const [X, Y] = this.at(i, j, tau);
         ctx.beginPath();
@@ -1281,7 +1285,6 @@
         this.paintHead(now);
         return;
       }
-      const tau = (now - (this.t0 ?? now)) / 1e3 / this.duration * this.Tmax;
       const ctx = this.base.getContext("2d");
       if (!ctx) return;
       const c = this.colors();
@@ -1290,7 +1293,7 @@
       ctx.strokeStyle = c.stroke;
       let flying = 0;
       this.strands.forEach((s, i) => {
-        const n = s.times.length;
+        const n = s.times.length, tau = this.clock(i, now);
         let j = this.idx[i];
         while (j < n - 1 && s.times[j + 1] <= tau) j++;
         this.pen(ctx, c, s.tone);
