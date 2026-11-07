@@ -8,7 +8,7 @@ import { SCENE_NAMES, scene } from '../src/scenes.ts';
 const H = 0.004;
 // the smallest number of strands expected in each scene. the L2 family of nest is ended after 7 of
 // its 12 members
-const FEWEST = { nest: 24, dro: 9, l1: 26, l2: 20, lyapunovs: 32, mark: 1, tubes: 114, halo: 74, rosette: 13, hill: 15, transfer: 25, ribbon: 181, wideRibbon: 241, spiral: 4, lace: 82, torus: 5, sheaf: 36 };
+const FEWEST = { nest: 24, dro: 9, l1: 26, l2: 20, lyapunovs: 32, mark: 1, tubes: 114, halo: 74, rosette: 13, hill: 15, transfer: 500, ribbon: 181, wideRibbon: 241, spiral: 4, lace: 82, torus: 5, sheaf: 36 };
 // the scenes with strands that are not periodic orbits
 const FLIGHTS = ['tubes', 'transfer', 'hill', 'ribbon', 'wideRibbon', 'spiral', 'lace', 'torus', 'sheaf'];
 
@@ -89,12 +89,35 @@ test('the band of the spiral stays near the distance of the Moon, and the flight
   assert.ok(Math.hypot(start.pts[0] + MU, start.pts[1]) < 0.1);
 });
 
-test('the transfer is one unbroken path from near the Earth to near the Moon', () => {
+test('the transfer is one unbroken path from a perigee through the neck at L1 to a close pass of the Moon', () => {
   const { pts, times } = scene('transfer').find((s) => s.tone === 'hero'), n = pts.length;
-  assert.ok(Math.hypot(pts[0] + MU, pts[1]) < 0.3);
-  assert.ok(Math.hypot(pts[n - 2] - 1 + MU, pts[n - 1]) < 0.05);
+  assert.ok(Math.hypot(pts[0] + MU, pts[1]) < 0.4);
+  assert.ok(pts[0] < lagrange(1));
+  let far = 0;
+  for (let i = 0; i < n; i += 2) far = Math.max(far, pts[i]);
+  assert.ok(far > lagrange(2), 'the path goes around the L2 orbit');
+  // above the surface of the Moon, of radius 0.0045
+  const r = Math.hypot(pts[n - 2] - 1 + MU, pts[n - 1]);
+  assert.ok(r > 0.0045 && r < 0.01, `perilune ${r}`);
   for (let i = 2; i < n; i += 2) assert.ok(Math.hypot(pts[i] - pts[i - 2], pts[i + 1] - pts[i - 1]) < 0.05, `gap at point ${i / 2}`);
   for (let i = 1; i < times.length; i++) assert.ok(times[i] >= times[i - 1], `time at point ${i}`);
+});
+
+test('the manifolds of the transfer grow from the orbit after it is traced and end before the flight starts', () => {
+  const strands = scene('transfer'), orbit = strands.find((s) => s.tone === 'text'), hero = strands.find((s) => s.tone === 'hero');
+  const manifolds = strands.filter((s) => s.tone === 'orange' || s.tone === 'violet');
+  assert.ok(manifolds.filter((s) => s.tone === 'orange').length >= 300 && manifolds.filter((s) => s.tone === 'violet').length >= 100);
+  for (const s of manifolds) {
+    assert.ok(s.times[0] >= orbit.T - 1e-5 && s.T <= hero.times[0] + 1e-5);
+    let d = 9;
+    for (let i = 0; i < orbit.pts.length; i += 2) d = Math.min(d, Math.hypot(s.pts[0] - orbit.pts[i], s.pts[1] - orbit.pts[i + 1]));
+    assert.ok(d < 2e-3, `first point ${d} off the orbit`);
+  }
+});
+
+test('the path of the spacecraft is the only strand of the transfer with a head', () => {
+  const strands = scene('transfer');
+  for (const s of strands) assert.equal(s.head, s.tone === 'hero');
 });
 
 test('a scene is computed in under 150 ms', async () => {
