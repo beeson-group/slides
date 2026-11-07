@@ -66,6 +66,38 @@ A display is revealed in four steps: the lead-in sentence, the display, the sent
 
 An earlier fragment is dimmed to 45 percent once a later one is shown. Give the display the attribute `data-keep` to hold it at full opacity through the next step, or `data-keep="4"` to hold it through the step of index 4. A display is also held at full opacity while a class in it is colored at the current step. The demo slide "Motion in the rotating frame" is an example of every step.
 
+## Plots
+
+A plot is an animated 2D figure, drawn as SVG from a block of JSON in the deck. Put a `div` with the class `plot` in a `zone`, or with the classes `plot plate` on a `figure` slide, and give it the id of the block in `data-plot`. Write the block next to it as `<script type="application/json" id="...">`. The block is inline, since fetching a file is blocked for a deck opened with a double click. Run `node demo/multipliers.mjs index.html` to write the plot of the demo deck, the Floquet multipliers of the Lyapunov families of L1 and L2, which is also the example to start from.
+
+The plot is played in a loop while its slide is shown, and it is paused when the slide is left. Under the plot, a button to play and pause, a scrubber with a tick at each event, and the value of the parameter are shown, and the plot is paused when you drag the scrubber. In the PDF and in PowerPoint, the plot is printed at its last frame. Set another frame with `data-plot-frame`, where a negative frame is counted from the end, and set `data-plot-paused` to show the still in the slides as well. Under reduced motion, the plot is not played.
+
+To reveal a plot in steps, give a fragment of its slide the attribute `data-plot-show` with the ids of panels, marks, or elements, separated by spaces. Each of these is hidden until its fragment is shown. With `data-plot-tab` on a fragment, the plot is switched to the named tab, hence each tab is given a page of its own in the PDF. An empty `span` is enough for a fragment without text.
+
+These keys are read from the block.
+
+| Key | Value |
+|---|---|
+| `panels` | A list of panels, each with an `id`, the axes `x` and `y`, and an optional `title`, `regions`, `curves`, and `labels`. An axis is `{ "range": [a, b], "ticks": [...], "title": "..." }`. Set `"equal": true` for one scale on both axes, and `"axes": false` to leave the axes out. |
+| `marks` | A list of the animated marks, each with an `id`, a `panel`, and a `kind`. The data of a mark are given in each tab. |
+| `tabs` | A list of named data sets, each with a `name`, a `label` for its button, the `values` of the parameter at the frames, the `data` of the marks by their ids, and an optional `active` list. |
+| `parameter` | `{ "label": "$A$", "digits": 3 }`, the name of the parameter and the digits of its value. |
+| `duration`, `hold` | The length of a loop, 8 s by default, and the time for which the last frame is held, 1 s by default. |
+| `layout` | `row` or `column`, the direction of the panels. By default, the panels are in a row in a wide box and in a column in a tall one. |
+
+The data of a mark are given with one entry per value of the tab, or with one entry for a mark that does not move. Between two frames, the positions are interpolated, and a text is taken from the nearest frame.
+
+| Kind | Entry | Drawing |
+|---|---|---|
+| `points` | A flat list `[x1, y1, x2, y2, ...]` | A dot at each point, filled, or a ring with `"hollow": true` |
+| `trace` | A point `[x, y]` | The whole path in a faint line, and the path up to the current frame in full with a dot at its end |
+| `label` | `{ "at": [x, y], "text": "..." }`, with one position and one text, or a list of each | The text at the position |
+| `events` | A list of `{ "frame": n, "at": [x, y], "text": "..." }`, not one per frame | A ring and its text from the frame on, and a tick on the scrubber |
+
+A region is a polygon of `points`, filled at `opacity`. A curve is a polyline of `points` or a `circle` `[cx, cy, r]`, with a `width` and a `dash`. A label is a `text` at `at`, with an `anchor` (`start`, `middle`, or `end`) and an offset `dx`, `dy` in pixels. A mark is drawn with a `size`, a `width`, an `anchor`, `dx`, and `dy` as well. Give each element and mark a `tone`, i.e. a color of the theme without its dashes (`accent`, `violet`, `text`, `subtle`, `muted`, or `data-1` to `data-8`), and the plot is drawn right in both modes. A `class` on an element or a mark is a target of `data-highlight`, as in stepped math. In `active`, list the ids of the elements emphasized at each frame. The other ids named in the list are dimmed at the same frame.
+
+Text in the JSON is set in a small markup rather than with MathJax, so that a plot is drawn the same in the slides, the PDF, and PowerPoint. Math is written between `$` signs, with italic letters, `_` and `^`, braces, `\mathrm{}`, `\text{}`, Greek letters, and a few symbols such as `\to`, and a hyphen is set as a minus sign there. A fault in the block is shown in place of the plot with its path, e.g. `tabs[0].data.m: 3 frames are given, and the tab has 2 values`, and `npm run check` fails on it.
+
 ## Agent skills
 
 The skill `refine-slides` is in `.claude/skills/`, and you do not have to install anything. Open Claude Code or Codex in a clone of this repository, and ask in plain words, e.g. "the slides are too wordy, tighten them up" or "go through the deck and fix whatever looks off". With this skill, an agent looks at every slide at its last step, and moves what it cuts into the speaker notes or into backup slides. In Claude Code the skill is read from this folder, and in Codex or any other agent it is reached through the pointer in `AGENTS.md`.
@@ -81,7 +113,7 @@ npm ci                 # the dependencies
 npm run vendor         # reveal.js, the notes plugin, the fonts, and MathJax into theme/vendor/ (tycho is copied by hand)
 npm run build          # src/*.ts into theme/beeson.js with esbuild
 npm run typecheck      # tsc --noEmit
-npm test               # the orbit engine, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, the PowerPoint file, and the stepped math under node --test
+npm test               # the orbit engine, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, the PowerPoint file, the plots, and the stepped math under node --test
 npm run check          # every slide of index.html in both modes, screenshots, console errors, and a poster on every video
 npm run pdf            # index.html to slides.pdf, with a check of the page count
 npm run pptx           # index.html to slides.pptx, with one click per step
