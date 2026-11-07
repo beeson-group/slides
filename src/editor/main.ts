@@ -304,6 +304,13 @@ function layout(): void {
   document.documentElement.style.setProperty('--beeson-side', `${side}px`);
 }
 
+function setPane(height: number): void {
+  paneHeight = Math.max(120, Math.min(600, Math.round(height)));
+  document.documentElement.style.setProperty('--beeson-pane', `${paneHeight}px`);
+  resizer.setAttribute('aria-valuenow', String(paneHeight));
+  relayout();
+  follow();
+}
 
 // each formula is one unit that the caret skips, reached with Tab and opened with Enter
 function markMath(root: Element): void {
@@ -327,6 +334,7 @@ function attach(): void {
   move.mark(pairing);
   markMath(slides());
   document.documentElement.classList.toggle('beeson-editing', hosts.length > 0);
+  ensureNotes();
 }
 
 function status() {
@@ -538,10 +546,47 @@ function cleanIfSaved(): void {
 }
 
 
+// the saved deck in a new tab, without the editor. with unsaved changes, the user is asked first
+async function present(): Promise<void> {
+  const params = new URLSearchParams(location.search);
+  params.delete('edit');
+  // a parameter without a value, such as still, is kept without an equals sign
+  const query = params.toString().replace(/=(?=&|$)/g, '');
+  window.open(`${location.href.split(/[?#]/)[0]}${query ? `?${query}` : ''}${location.hash}`, '_blank');
+}
+
+// the notes of the current slide are laid over the pane under the slide while the Notes button is
+// on
+function toggleNotes(): void {
+  const on = document.documentElement.classList.toggle('beeson-notes');
+  notesButton.classList.toggle('on', on);
+  notesButton.setAttribute('aria-pressed', String(on));
+  relayout();
+  follow();
+  if (on) ensureNotes()?.focus({ preventScroll: true });
+}
+
+// while the notes are shown, a slide without notes gets an empty aside to type into. an aside
+// without text is not written into the file, hence it does not make the deck dirty
+function ensureNotes(): HTMLElement | null {
+  const slide = current();
+  if (!slide || !pairing?.blocks.length || !document.documentElement.classList.contains('beeson-notes')) return null;
+  let aside = slide.querySelector<HTMLElement>(':scope > aside.notes');
+  if (!aside) {
+    aside = make('aside', 'notes');
+    aside.setAttribute('contenteditable', 'true');
+    aside.setAttribute('aria-label', 'Speaker notes');
+    slide.append(aside);
+  }
+  return aside;
+}
+
+
 // a block is put back to a content of the history, on its slide, with the caret at the end of the
 // text that changed
 async function restoreHost(host: Element, content: string): Promise<void> {
   showSlide(host);
+  if (host.matches('aside.notes') && !document.documentElement.classList.contains('beeson-notes')) toggleNotes();
   const before = host.textContent ?? '';
   await setContentWithTex(host, content);
   markMath(host);
@@ -766,6 +811,7 @@ async function init(): Promise<void> {
   document.head.append(style);
   document.body.append(top, bottom, pane, resizer, nav.pane, steps.pane, steps.badges, move.frame, move.selectedFrame, move.handle, move.guideV, move.guideH, move.offset, card, recover, ask, problemsCard);
   document.documentElement.classList.add('beeson-editor');
+  setPane(Number(stored(PANE_KEY)) || 200);
   // a pointer click leaves the focus on the slide, and Enter or Space on a focused button keeps it
   const wire = (el: HTMLButtonElement, action: () => unknown) => el.addEventListener('click', (ev) => {
     if (ev.detail > 0) el.blur();
@@ -775,10 +821,33 @@ async function init(): Promise<void> {
   wire(cardButton, openFile);
   wire(saveButton, save);
   wire(saveAsButton, saveAs);
+  wire(presentButton, present);
   wire(undoButton, () => history.undo());
   wire(redoButton, () => history.redo());
   wire(prevButton, () => deck()?.left());
   wire(nextButton, () => deck()?.right());
+  wire(notesButton, toggleNotes);
+  resizer.addEventListener('keydown', (ev) => {
+    const step = ev.key === 'ArrowUp' ? 20 : ev.key === 'ArrowDown' ? -20 : 0;
+    if (!step) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    setPane(paneHeight + step);
+    store(PANE_KEY, String(paneHeight));
+  });
+  resizer.addEventListener('pointerdown', (ev) => {
+    ev.preventDefault();
+    const startY = ev.clientY;
+    const startHeight = paneHeight;
+    const onMove = (e: PointerEvent) => setPane(startHeight + startY - e.clientY);
+    const onUp = () => {
+      document.removeEventListener('pointermove', onMove);
+      document.removeEventListener('pointerup', onUp);
+      store(PANE_KEY, String(paneHeight));
+    };
+    document.addEventListener('pointermove', onMove);
+    document.addEventListener('pointerup', onUp);
+  });
   document.addEventListener('beforeinput', onBeforeInput);
   document.addEventListener('input', (ev) => {
     const host = hostOf(ev.target);
@@ -825,6 +894,7 @@ const BeesonEditor = {
   saveAs,
   undo: () => history.undo(),
   redo: () => history.redo(),
+  setPane,
   // the file written by save, for a test with a handle of the origin private file system
   attach: (h: FileSystemFileHandle) => { handle = h; },
   version: __VERSION__,
