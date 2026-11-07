@@ -420,11 +420,283 @@
     return out;
   }
 
+  // src/strands.ts
+  var FILL = 0.93;
+  var MARGIN = 40;
+  var INK_ALPHA = 0.6;
+  var isPair = (p) => Array.isArray(p) && p.length === 2 && Number.isFinite(p[0]) && Number.isFinite(p[1]);
+  var isObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+  function parse(data) {
+    const records = isObject(data) ? data.families : void 0;
+    if (!Array.isArray(records)) throw new Error('it does not have a list "families"');
+    records.forEach((r, i) => {
+      if (!isObject(r) || !Array.isArray(r.points) || r.points.length < 2 || !r.points.every(isPair)) {
+        throw new Error(`its record ${i} does not have a list "points" of at least two [x, y] pairs`);
+      }
+      for (const key of ["t", "theta"]) {
+        const clock = r[key];
+        if (clock !== void 0 && (!Array.isArray(clock) || clock.length !== r.points.length || !clock.every(Number.isFinite))) {
+          throw new Error(`the list "${key}" of its record ${i} does not have one number per point`);
+        }
+      }
+    });
+    const bodies = isObject(data) && Array.isArray(data.bodies) ? data.bodies.filter(isObject) : [];
+    return { families: records, bodies };
+  }
+  var TERM = /^\s*([^=<>\s]+)\s*(<=|>=|=|<|>)\s*(.*?)\s*$/;
+  function select(records, spec) {
+    if (!spec?.trim()) return records;
+    const groups = spec.split(";").map(group);
+    return records.filter((r) => groups.some((tests) => tests.every((test) => test(r))));
+  }
+  function group(spec) {
+    return spec.split(",").map((term) => {
+      const m = TERM.exec(term);
+      if (!m || m[3] === "") throw new Error(`"${term.trim()}" is not a term key=value, key<number, or key>number`);
+      const [, key, op, value] = m;
+      if (op === "=") {
+        const values = value.split("|").map((v2) => v2.trim());
+        return (r) => values.includes(String(r[key]));
+      }
+      const v = Number(value);
+      if (!Number.isFinite(v)) throw new Error(`"${value}" in "${term.trim()}" is not a number`);
+      return (r) => {
+        const x = r[key];
+        if (typeof x !== "number") return false;
+        return op === "<" ? x < v : op === "<=" ? x <= v : op === ">" ? x > v : x >= v;
+      };
+    });
+  }
+  function strandsOf(file, chosen, color, ramp2) {
+    const order = color ? [...new Set(file.families.map((r) => String(r[color])))] : [];
+    const pairOf = (r) => color ? order.indexOf(String(r[color])) : 0;
+    const range = /* @__PURE__ */ new Map();
+    if (ramp2) {
+      for (const r of chosen) {
+        const v = r[ramp2];
+        if (typeof v !== "number") continue;
+        const [lo, hi] = range.get(pairOf(r)) ?? [v, v];
+        range.set(pairOf(r), [Math.min(lo, v), Math.max(hi, v)]);
+      }
+    }
+    return chosen.map((r) => {
+      const n = r.points.length, pts = new Float64Array(2 * n), times = new Float32Array(n);
+      const clock = r.t ?? r.theta;
+      let length = 0;
+      for (let i = 0; i < n; i++) {
+        pts[2 * i] = r.points[i][0];
+        pts[2 * i + 1] = r.points[i][1];
+        if (i > 0 && !clock) length += Math.hypot(pts[2 * i] - pts[2 * i - 2], pts[2 * i + 1] - pts[2 * i - 1]);
+        times[i] = clock ? clock[i] - clock[0] : length;
+      }
+      const strand = { pts, times, T: times[n - 1] };
+      if (color || ramp2) {
+        const pair2 = pairOf(r), [lo, hi] = range.get(pair2) ?? [0, 0], v = ramp2 ? r[ramp2] : void 0;
+        strand.ink = { pair: pair2, at: typeof v === "number" && hi > lo ? (v - lo) / (hi - lo) : 0 };
+        strand.alpha = INK_ALPHA;
+      }
+      return strand;
+    });
+  }
+  function bodiesOf(file, chosen) {
+    const places = /* @__PURE__ */ new Map(), dots = /* @__PURE__ */ new Map();
+    for (const r of chosen) {
+      for (const body of file.bodies) {
+        const own = Object.entries(body).filter(([, v]) => ["number", "string", "boolean"].includes(typeof v));
+        if (!own.every(([k, v]) => !(k in r) || r[k] === v)) continue;
+        const at = r.frame === void 0 ? body : body[String(r.frame)];
+        if (!isObject(at)) continue;
+        const mu = typeof body.mu === "number" ? body.mu : typeof r.mu === "number" ? r.mu : void 0;
+        for (const [name, p] of Object.entries(at)) {
+          if (!isPair(p)) continue;
+          const who = `${name} ${mu} ${r.frame}`;
+          places.set(who, (places.get(who) ?? /* @__PURE__ */ new Set()).add(`${p[0]},${p[1]}`));
+          const mass = mu === void 0 ? void 0 : name === "m1" ? 1 - mu : name === "m2" ? mu : void 0;
+          dots.set(who, { x: p[0], y: p[1], mass });
+        }
+      }
+    }
+    return [...dots].filter(([who]) => places.get(who)?.size === 1).map(([, dot2]) => dot2);
+  }
+  function fitView(strands, box, slide) {
+    const xs = [], ys = [], ws = [];
+    let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+    for (const s of strands) {
+      const p = s.pts, n = p.length / 2;
+      let length = 0;
+      for (let i = 1; i < n; i++) length += Math.hypot(p[2 * i] - p[2 * i - 2], p[2 * i + 1] - p[2 * i - 1]);
+      for (let i = 0; i < n; i++) {
+        x0 = Math.min(x0, p[2 * i]);
+        x1 = Math.max(x1, p[2 * i]);
+        y0 = Math.min(y0, p[2 * i + 1]);
+        y1 = Math.max(y1, p[2 * i + 1]);
+      }
+      for (let i = 1; i < n; i++) {
+        const d = Math.hypot(p[2 * i] - p[2 * i - 2], p[2 * i + 1] - p[2 * i - 1]);
+        xs.push((p[2 * i] + p[2 * i - 2]) / 2);
+        ys.push((p[2 * i + 1] + p[2 * i - 1]) / 2);
+        ws.push(length > 0 ? d / length : 1 / (n - 1));
+      }
+    }
+    if (!ws.length || !(box.width > 0) || !(box.height > 0)) return null;
+    const total = ws.reduce((a2, b2) => a2 + b2, 0);
+    const quantile = (v, q) => {
+      const order = v.map((_, i) => i).sort((a2, b2) => v[a2] - v[b2]);
+      let held2 = 0;
+      for (const i of order) {
+        held2 += ws[i];
+        if (held2 >= q * total) return v[i];
+      }
+      return v[order[order.length - 1]];
+    };
+    const lo = (1 - FILL) / 2, hi = 1 - lo;
+    const qx = [quantile(xs, lo), quantile(xs, hi)], qy = [quantile(ys, lo), quantile(ys, hi)];
+    let cx = (qx[0] + qx[1]) / 2, cy = (qy[0] + qy[1]) / 2;
+    const aspect = box.width / box.height;
+    const held = (half2) => {
+      let k = 0;
+      for (let i = 0; i < ws.length; i++)
+        if (Math.abs(xs[i] - cx) <= half2 * aspect && Math.abs(ys[i] - cy) <= half2) k += ws[i];
+      return k / total;
+    };
+    let a = 0, b = Math.max(Math.max(cx - x0, x1 - cx) / aspect, Math.max(cy - y0, y1 - cy), 1e-9);
+    for (let i = 0; i < 50; i++) {
+      const m2 = (a + b) / 2;
+      if (held(m2) >= FILL) b = m2;
+      else a = m2;
+    }
+    let half = b;
+    const inner = {
+      left: box.left > 0.5,
+      right: box.left + box.width < slide.width - 0.5,
+      top: box.top > 0.5,
+      bottom: box.top + box.height < slide.height - 0.5
+    };
+    const g = 2 * MARGIN / box.height;
+    const need = (span, sides, width) => span / Math.max(width - sides * g, 1e-9);
+    half = Math.max(
+      half,
+      need((inner.right ? x1 : qx[1]) - (inner.left ? x0 : qx[0]), +inner.left + +inner.right, 2 * aspect),
+      need((inner.top ? y1 : qy[1]) - (inner.bottom ? y0 : qy[0]), +inner.top + +inner.bottom, 2)
+    );
+    const m = half * g, w = half * aspect;
+    const clamp3 = (v, low, high) => Math.min(Math.max(v, low), high);
+    cx = clamp3(cx, inner.right ? x1 + m - w : -Infinity, inner.left ? x0 - m + w : Infinity);
+    cy = clamp3(cy, inner.top ? y1 + m - half : -Infinity, inner.bottom ? y0 - m + half : Infinity);
+    return { cx, cy, half };
+  }
+  function mix(from, to, at) {
+    const a = rgbOf(from), b = rgbOf(to);
+    if (!a || !b) return null;
+    const [L1, C1, h1] = lch(a), [L2, C2, h2] = lch(b);
+    let dh = h2 - h1;
+    if (dh > Math.PI) dh -= 2 * Math.PI;
+    if (dh < -Math.PI) dh += 2 * Math.PI;
+    const L = L1 + (L2 - L1) * at, C = C1 + (C2 - C1) * at, h = h1 + dh * at;
+    return hex(rgbFromLab([L, C * Math.cos(h), C * Math.sin(h)]));
+  }
+  function rgbOf(color) {
+    const c = color.trim();
+    let m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c);
+    if (m) return [parseInt(m[1], 16) / 255, parseInt(m[2], 16) / 255, parseInt(m[3], 16) / 255];
+    m = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(c);
+    if (m) return [parseInt(m[1], 16) / 15, parseInt(m[2], 16) / 15, parseInt(m[3], 16) / 15];
+    m = /^rgba?\(\s*([\d.]+)[\s,]+([\d.]+)[\s,]+([\d.]+)/i.exec(c);
+    if (m) return [+m[1] / 255, +m[2] / 255, +m[3] / 255];
+    return null;
+  }
+  var linear = (c) => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  var gamma = (c) => c <= 31308e-7 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055;
+  function lch([R, G, B]) {
+    const r = linear(R), g = linear(G), b = linear(B);
+    const l = Math.cbrt(0.4122214708 * r + 0.5363325363 * g + 0.0514459929 * b);
+    const m = Math.cbrt(0.2119034982 * r + 0.6806995451 * g + 0.1073969566 * b);
+    const s = Math.cbrt(0.0883024619 * r + 0.2817188376 * g + 0.6299787005 * b);
+    const L = 0.2104542553 * l + 0.793617785 * m - 0.0040720468 * s;
+    const A = 1.9779984951 * l - 2.428592205 * m + 0.4505937099 * s;
+    const Bb = 0.0259040371 * l + 0.7827717662 * m - 0.808675766 * s;
+    return [L, Math.hypot(A, Bb), Math.atan2(Bb, A)];
+  }
+  function rgbFromLab([L, A, B]) {
+    const l = (L + 0.3963377774 * A + 0.2158037573 * B) ** 3;
+    const m = (L - 0.1055613458 * A - 0.0638541728 * B) ** 3;
+    const s = (L - 0.0894841775 * A - 1.291485548 * B) ** 3;
+    return [
+      gamma(4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * s),
+      gamma(-1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * s),
+      gamma(-0.0041960863 * l - 0.7034186147 * m + 1.707614701 * s)
+    ];
+  }
+  var hex = (c) => `#${c.map(
+    (v) => Math.round(Math.min(1, Math.max(0, v)) * 255).toString(16).padStart(2, "0")
+  ).join("")}`;
+  var given = /* @__PURE__ */ new Map();
+  var files = /* @__PURE__ */ new Map();
+  function register(data) {
+    const script = document.currentScript;
+    if (script instanceof HTMLScriptElement && script.src) given.set(script.src, data);
+  }
+  function read(url, path) {
+    if (!/\.js$/i.test(new URL(url).pathname)) {
+      if (location.protocol === "file:") {
+        return Promise.reject(
+          new Error(
+            `a JSON file cannot be read in a deck opened from the disk. Wrap it in Beeson.strands( and ); and name the .js file in data-strands`
+          )
+        );
+      }
+      return fetch(url).then((r) => {
+        if (!r.ok) throw new Error(`it was answered with HTTP ${r.status}`);
+        return r.json();
+      });
+    }
+    if (given.has(url)) return Promise.resolve(given.get(url));
+    return new Promise((done, fail2) => {
+      const script = document.createElement("script");
+      script.src = url;
+      script.onload = () => given.has(url) ? done(given.get(url)) : fail2(new Error(`${path} does not call Beeson.strands`));
+      script.onerror = () => fail2(new Error("it was not found"));
+      document.head.append(script);
+    });
+  }
+  function load(path) {
+    const url = new URL(path, document.baseURI).href;
+    let out = files.get(url);
+    if (!out) {
+      out = read(url, path).then(parse).catch((error) => {
+        console.warn(`beeson: the backdrop file ${path} is not drawn, since ${error.message}`);
+        return null;
+      });
+      files.set(url, out);
+    }
+    return out;
+  }
+  async function strandsFor(el) {
+    const path = el.dataset.strands ?? "";
+    const file = await load(path);
+    if (!file) return { strands: [], dots: [] };
+    try {
+      const chosen = select(file.families, el.dataset.strandsSelect);
+      if (!chosen.length)
+        console.warn(`beeson: data-strands-select="${el.dataset.strandsSelect}" does not match a record of ${path}`);
+      return {
+        strands: strandsOf(file, chosen, el.dataset.strandsColor || void 0, el.dataset.strandsRamp || void 0),
+        dots: bodiesOf(file, chosen)
+      };
+    } catch (error) {
+      console.warn(`beeson: the backdrop of ${path} is not drawn, since ${error.message}`);
+      return { strands: [], dots: [] };
+    }
+  }
+
   // src/orbits.ts
   var MU = 0.01215;
   var NEAR = 0.15;
   var DURATION = 12;
   var LOOP = 9;
+  var HEADS = { full: 2.2, small: 0.55, none: 0 };
+  var FILE_HEADS = "none";
+  var PALETTE = 8;
   function accel(s, a) {
     const x = s[0], y = s[1], z = s[2];
     const dx1 = x + MU, dx2 = x - 1 + MU;
@@ -643,8 +915,19 @@
       this.px = [];
       // the pointer in canvas pixels, and the glow radius there
       this.pointer = null;
+      // the box and the slide for which the window was last fitted, in slide pixels
+      this.fittedFor = "";
+      // true when start() was called before the strands of a file were loaded
+      this.pending = false;
+      // the colors of the strands with an ink, resolved in redraw() for the current mode
+      this.inks = [];
       this.el = el;
-      this.strands = scene(el.dataset.scene ?? "");
+      const file = el.dataset.strands !== void 0;
+      this.strands = file ? [] : scene(el.dataset.scene ?? "");
+      this.dots = file ? [] : null;
+      this.loaded = !file;
+      this.fitted = file && el.dataset.half === void 0;
+      this.headSize = HEADS[el.dataset.heads ?? (file ? FILE_HEADS : "full")] ?? HEADS.full;
       this.cx = +(el.dataset.cx ?? 0);
       this.cy = +(el.dataset.cy ?? 0);
       this.half = +(el.dataset.half ?? 0.5);
@@ -662,11 +945,29 @@
       this.idx = this.strands.map(() => 0);
       CACHE.set(el, this);
       this.fit();
+      this.ready = file ? strandsFor(el).then(({ strands, dots }) => this.install(strands, dots)) : Promise.resolve();
     }
     static reduced() {
       if (typeof window === "undefined") return true;
       const q = location.search;
       return matchMedia("(prefers-reduced-motion: reduce)").matches || document.documentElement.hasAttribute("data-still") || /[?&]still\b/.test(q) || /print-pdf/.test(q);
+    }
+    install(strands, dots) {
+      this.strands = strands;
+      this.dots = dots;
+      this.Tmax = Math.max(...strands.map((s) => s.T));
+      this.idx = strands.map(() => 0);
+      this.loaded = true;
+      this.fittedFor = "";
+      this.fit();
+      if (this.pending) {
+        this.pending = false;
+        this.start();
+      }
+    }
+    // the window in the units of the strands: its center and its half height
+    get view() {
+      return { cx: this.cx, cy: this.cy, half: this.half };
     }
     get done() {
       return this.finished || this.loop;
@@ -674,6 +975,28 @@
     colors() {
       const cs = getComputedStyle(this.el);
       return { stroke: cs.getPropertyValue("--stroke").trim(), body: cs.getPropertyValue("--body").trim(), accent: cs.getPropertyValue("--accent").trim(), violet: cs.getPropertyValue("--violet").trim(), text: cs.getPropertyValue("--text").trim() };
+    }
+    // the colors of the strands with an ink in the current mode. a color of the palette is serialized
+    // by the canvas as #rrggbb or rgba(), which mix() reads, and a strand is given the stroke color
+    // when its colors are missing or of another form
+    paint(ctx, c) {
+      if (!this.strands.some((s) => s.ink)) {
+        this.inks = [];
+        return;
+      }
+      const cs = getComputedStyle(this.el);
+      const palette = Array.from({ length: PALETTE }, (_, i) => {
+        const value = cs.getPropertyValue(`--strand-${i + 1}`).trim();
+        if (!value) return "";
+        ctx.fillStyle = "#000000";
+        ctx.fillStyle = value;
+        return String(ctx.fillStyle);
+      });
+      this.inks = this.strands.map((s) => {
+        if (!s.ink) return "";
+        const k = 2 * s.ink.pair % PALETTE;
+        return mix(palette[k], palette[k + 1], s.ink.at) ?? c.stroke;
+      });
     }
     X(x) {
       return (x - this.cx) * this.scale + this.W / 2;
@@ -685,6 +1008,17 @@
       const r = this.el.getBoundingClientRect(), dpr = devicePixelRatio || 1;
       const w = this.el.offsetWidth, h = this.el.offsetHeight;
       if (r.width === 0 || r.height === 0 || w === 0 || h === 0) return;
+      if (this.fitted && this.strands.length) {
+        const section = this.el.closest("section");
+        const box = { left: this.el.offsetLeft, top: this.el.offsetTop, width: w, height: h };
+        const slide = { width: section?.offsetWidth || w, height: section?.offsetHeight || h };
+        const key = [box.left, box.top, w, h, slide.width, slide.height].join();
+        if (key !== this.fittedFor) {
+          const view = fitView(this.strands, box, slide);
+          if (view) ({ cx: this.cx, cy: this.cy, half: this.half } = view);
+          this.fittedFor = key;
+        }
+      }
       this.W = Math.max(1, Math.round(r.width * dpr));
       this.H = Math.max(1, Math.round(r.height * dpr));
       for (const c of [this.base, this.head]) {
@@ -715,6 +1049,16 @@
     bodies(ctx, c) {
       const shown = (name) => this.labels.some((l) => l.dataset.at === name);
       ctx.fillStyle = c.body;
+      if (this.dots) {
+        for (const d of this.dots) {
+          const X = this.X(d.x), Y = this.Y(d.y);
+          if (X < -10 || X > this.W + 10 || Y < -10 || Y > this.H + 10) continue;
+          ctx.beginPath();
+          ctx.arc(X, Y, (2.2 + 2.8 * Math.cbrt(d.mass ?? 0.1)) * this.lw, 0, 2 * Math.PI);
+          ctx.fill();
+        }
+        return;
+      }
       for (const name of ["moon", "earth"]) {
         if (name === "earth" && !shown(name)) continue;
         const [x, y] = POINTS[name]();
@@ -756,6 +1100,7 @@
       if (!ctx) return;
       const c = this.colors();
       ctx.clearRect(0, 0, this.W, this.H);
+      this.paint(ctx, c);
       ctx.lineWidth = this.lw;
       ctx.lineJoin = "round";
       ctx.strokeStyle = c.stroke;
@@ -763,6 +1108,7 @@
       this.strands.forEach((s, i) => {
         this.pen(ctx, c, s.tone);
         if (s.alpha) ctx.globalAlpha = s.alpha;
+        if (s.ink) ctx.strokeStyle = this.inks[i];
         this.segments(ctx, i, 0, this.drawn(i));
       });
       ctx.globalAlpha = 1;
@@ -770,6 +1116,7 @@
     }
     reset() {
       this.stop();
+      this.pending = false;
       this.t0 = null;
       this.finished = false;
       this.idx = this.strands.map(() => 0);
@@ -778,6 +1125,10 @@
     start() {
       if (_Orbits.reduced()) {
         this.complete();
+        return;
+      }
+      if (!this.loaded) {
+        this.pending = true;
         return;
       }
       if (this.raf || this.finished && !this.loop) return;
@@ -790,12 +1141,14 @@
     }
     complete() {
       this.stop();
+      this.pending = false;
       this.finished = true;
       this.t0 = null;
       this.redraw();
     }
     destroy() {
       this.stop();
+      this.pending = false;
       this.base.remove();
       this.head.remove();
       CACHE.delete(this.el);
@@ -850,6 +1203,7 @@
       ctx.fill();
     }
     heads(ctx, c, now) {
+      if (!this.headSize) return;
       const tau = (now - (this.t0 ?? now)) / 1e3 / DURATION * this.Tmax;
       ctx.fillStyle = c.accent;
       this.strands.forEach((s, i) => {
@@ -857,7 +1211,7 @@
         if (j >= s.times.length - 1 || tau < s.times[0]) return;
         const [X, Y] = this.at(i, j, tau);
         ctx.beginPath();
-        ctx.arc(X, Y, 2.2 * this.lw, 0, 2 * Math.PI);
+        ctx.arc(X, Y, this.headSize * this.lw, 0, 2 * Math.PI);
         ctx.fill();
       });
     }
@@ -917,6 +1271,7 @@
         while (j < n - 1 && s.times[j + 1] <= tau) j++;
         this.pen(ctx, c, s.tone);
         if (s.alpha) ctx.globalAlpha = s.alpha;
+        if (s.ink) ctx.strokeStyle = this.inks[i];
         this.segments(ctx, i, this.idx[i], j);
         this.idx[i] = j;
         if (j < n - 1) flying++;
@@ -1031,7 +1386,7 @@
   function fail(path, what) {
     throw new Error(`${path}: ${what}`);
   }
-  var isObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+  var isObject2 = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
   function num(v, path, fallback) {
     if (v === void 0 && fallback !== void 0) return fallback;
     if (typeof v !== "number" || !Number.isFinite(v)) fail(path, "a number is expected");
@@ -1063,21 +1418,21 @@
     return { id: o.id === void 0 ? null : str(o.id, `${path}.id`), tone: str(o.tone, `${path}.tone`, tone), cls };
   }
   function axis(v, path) {
-    if (!isObject(v)) fail(path, "an axis { range, ticks, title } is expected");
+    if (!isObject2(v)) fail(path, "an axis { range, ticks, title } is expected");
     const range = pair(v.range, `${path}.range`);
     if (!(range[1] > range[0])) fail(`${path}.range`, "the second end must be larger than the first");
     return { range, ticks: list(v.ticks, `${path}.ticks`, []).map((t, i) => num(t, `${path}.ticks[${i}]`)), title: str(v.title, `${path}.title`, "") };
   }
   function panel(v, path) {
-    if (!isObject(v)) fail(path, "a panel is expected");
+    if (!isObject2(v)) fail(path, "a panel is expected");
     const regions = list(v.regions, `${path}.regions`, []).map((r, i) => {
       const p = `${path}.regions[${i}]`;
-      if (!isObject(r)) fail(p, "a region is expected");
+      if (!isObject2(r)) fail(p, "a region is expected");
       return { ...item(r, p, "violet"), points: pairs(r.points, `${p}.points`), opacity: num(r.opacity, `${p}.opacity`, 0.12) };
     });
     const curves = list(v.curves, `${path}.curves`, []).map((c, i) => {
       const p = `${path}.curves[${i}]`;
-      if (!isObject(c)) fail(p, "a curve is expected");
+      if (!isObject2(c)) fail(p, "a curve is expected");
       let circle = null;
       if (c.circle !== void 0) {
         const a = list(c.circle, `${p}.circle`);
@@ -1089,7 +1444,7 @@
     });
     const labels = list(v.labels, `${path}.labels`, []).map((l, i) => {
       const p = `${path}.labels[${i}]`;
-      if (!isObject(l)) fail(p, "a label is expected");
+      if (!isObject2(l)) fail(p, "a label is expected");
       return { ...item(l, p, "subtle"), at: pair(l.at, `${p}.at`), text: str(l.text, `${p}.text`), anchor: anchor(l.anchor, `${p}.anchor`), dx: num(l.dx, `${p}.dx`, 0), dy: num(l.dy, `${p}.dy`, 0) };
     });
     return {
@@ -1118,7 +1473,7 @@
       return a;
     }
     if (m.kind === "label") {
-      if (!isObject(v)) fail(path, "a label { at, text } is expected");
+      if (!isObject2(v)) fail(path, "a label { at, text } is expected");
       const at = Array.isArray(v.at) && Array.isArray(v.at[0]) ? pairs(v.at, `${path}.at`) : [pair(v.at, `${path}.at`)];
       const text = Array.isArray(v.text) ? v.text.map((t, i) => str(t, `${path}.text[${i}]`)) : [str(v.text, `${path}.text`)];
       perFrame(at.length);
@@ -1127,7 +1482,7 @@
     }
     return list(v, path).map((e, i) => {
       const p = `${path}[${i}]`;
-      if (!isObject(e)) fail(p, "an event { frame, at, text } is expected");
+      if (!isObject2(e)) fail(p, "an event { frame, at, text } is expected");
       const frame = num(e.frame, `${p}.frame`);
       if (frame < 0 || frame > frames - 1) fail(`${p}.frame`, `a frame from 0 to ${frames - 1} is expected`);
       return { frame, at: pair(e.at, `${p}.at`), text: str(e.text, `${p}.text`, "") };
@@ -1135,14 +1490,14 @@
   }
   function parsePlot(input) {
     const v = typeof input === "string" ? JSON.parse(input) : input;
-    if (!isObject(v)) fail("plot", "an object is expected");
+    if (!isObject2(v)) fail("plot", "an object is expected");
     const panels = list(v.panels, "panels").map((p, i) => panel(p, `panels[${i}]`));
     if (!panels.length) fail("panels", "at least one panel is expected");
     const ids = new Set(panels.map((p) => p.id));
     if (ids.size !== panels.length) fail("panels", "the ids of the panels must differ");
     const marks = list(v.marks, "marks", []).map((m, i) => {
       const p = `marks[${i}]`;
-      if (!isObject(m)) fail(p, "a mark is expected");
+      if (!isObject2(m)) fail(p, "a mark is expected");
       const kind = str(m.kind, `${p}.kind`);
       if (!KINDS.includes(kind)) fail(`${p}.kind`, `one of ${KINDS.join(", ")} is expected`);
       const at = str(m.panel, `${p}.panel`);
@@ -1164,12 +1519,12 @@
     });
     const tabs = list(v.tabs, "tabs").map((t, i) => {
       const p = `tabs[${i}]`;
-      if (!isObject(t)) fail(p, "a tab is expected");
+      if (!isObject2(t)) fail(p, "a tab is expected");
       const name = str(t.name, `${p}.name`);
       const values = list(t.values, `${p}.values`).map((x, j) => num(x, `${p}.values[${j}]`));
       if (!values.length) fail(`${p}.values`, "at least one value is expected");
       const raw = t.data === void 0 ? {} : t.data;
-      if (!isObject(raw)) fail(`${p}.data`, "an object of mark ids is expected");
+      if (!isObject2(raw)) fail(`${p}.data`, "an object of mark ids is expected");
       const data = {};
       for (const key of Object.keys(raw)) {
         const m = marks.find((mark) => mark.id === key) ?? fail(`${p}.data.${key}`, "the mark is not declared");
@@ -1183,7 +1538,7 @@
       return { name, label: str(t.label, `${p}.label`, name), values, data, active };
     });
     if (!tabs.length) fail("tabs", "at least one tab is expected");
-    const parameter = isObject(v.parameter) ? v.parameter : {};
+    const parameter = isObject2(v.parameter) ? v.parameter : {};
     const layout = v.layout === void 0 ? null : str(v.layout, "layout");
     if (layout !== null && layout !== "row" && layout !== "column") fail("layout", "row or column is expected");
     return {
@@ -1293,7 +1648,7 @@
       }
       math(part, false, null);
     });
-    function group(s, i) {
+    function group2(s, i) {
       if (s[i] === "{") {
         let depth = 0, j = i;
         for (; j < s.length; j++) {
@@ -1321,7 +1676,7 @@
           }
           i += m[0].length;
           if (m[1] === "mathrm" || m[1] === "text") {
-            const [g, j] = group(s, i);
+            const [g, j] = group2(s, i);
             i = j;
             math(g, true, shift);
           } else {
@@ -1329,7 +1684,7 @@
             push(sym, !upright && /^[a-z]+$/.test(m[1]) && /[α-ω]/.test(sym), shift);
           }
         } else if (c === "_" || c === "^") {
-          const [g, j] = group(s, i + 1);
+          const [g, j] = group2(s, i + 1);
           i = j;
           math(g, upright, c === "_" ? "sub" : "sup");
         } else if (c === "{" || c === "}") {
@@ -1367,7 +1722,7 @@
   }
   var toneColor = (tone) => /^[a-z][a-z0-9-]*$/.test(tone) ? `var(--${tone})` : tone;
   var words = (s) => (s ?? "").split(/\s+/).filter(Boolean);
-  var MARGIN = { left: 76, right: 20, top: 52, bottom: 84 };
+  var MARGIN2 = { left: 76, right: 20, top: 52, bottom: 84 };
   var GAP = 56;
   var serial = 0;
   var reduced = () => typeof window === "undefined" || matchMedia("(prefers-reduced-motion: reduce)").matches;
@@ -1527,7 +1882,7 @@
       this.boxes.clear();
       this.panels.forEach((p, i) => {
         const cx = row ? i * (cw + GAP) : 0, cy = row ? 0 : i * (ch + GAP);
-        let x = cx + MARGIN.left, y = cy + MARGIN.top, w = cw - MARGIN.left - MARGIN.right, h = ch - MARGIN.top - MARGIN.bottom;
+        let x = cx + MARGIN2.left, y = cy + MARGIN2.top, w = cw - MARGIN2.left - MARGIN2.right, h = ch - MARGIN2.top - MARGIN2.bottom;
         const dx = p.x.range[1] - p.x.range[0], dy = p.y.range[1] - p.y.range[0];
         if (p.equal) {
           const s = Math.min(w / dx, h / dy);
@@ -1634,14 +1989,14 @@
         const b = this.boxes.get(m.panel), data = tab.data[m.id];
         const g = this.svgEl.querySelector(`.plot-marks[data-panel="${m.panel}"]`);
         if (!b || !g || data === void 0) continue;
-        const group = svg("g", {}, g);
-        this.styleItem(group, m, [m.panel, m.id]);
+        const group2 = svg("g", {}, g);
+        this.styleItem(group2, m, [m.panel, m.id]);
         if (m.kind === "points") {
           const frames = data;
           const dots = [];
           this.drawers.push((u) => {
             const at = framesAt(frames, u);
-            while (dots.length < at.length / 2) dots.push(svg("circle", { r: m.size / 2, class: m.hollow ? "plot-hollow" : "plot-dot", "stroke-width": m.width }, group));
+            while (dots.length < at.length / 2) dots.push(svg("circle", { r: m.size / 2, class: m.hollow ? "plot-hollow" : "plot-dot", "stroke-width": m.width }, group2));
             dots.forEach((d, k) => {
               const on = 2 * k < at.length;
               d.style.display = on ? "" : "none";
@@ -1653,9 +2008,9 @@
           });
         } else if (m.kind === "trace") {
           const pts = data;
-          svg("path", { class: "plot-ghost", d: this.path(b, pts), "stroke-width": m.width }, group);
-          const done = svg("path", { class: "plot-trace", "stroke-width": m.width }, group);
-          const head = svg("circle", { class: "plot-dot", r: m.size / 2 }, group);
+          svg("path", { class: "plot-ghost", d: this.path(b, pts), "stroke-width": m.width }, group2);
+          const done = svg("path", { class: "plot-trace", "stroke-width": m.width }, group2);
+          const head = svg("circle", { class: "plot-dot", r: m.size / 2 }, group2);
           this.drawers.push((u) => {
             const p = traceTo(pts, u), [x, y] = p[p.length - 1];
             done.setAttribute("d", this.path(b, p));
@@ -1680,7 +2035,7 @@
           const events = data;
           const nodes = events.map((e) => {
             const X = this.X(b, e.at[0]), Y = this.Y(b, e.at[1]);
-            const ring = svg("circle", { class: "plot-ring", cx: X, cy: Y, r: m.size / 2, "stroke-width": m.width }, group);
+            const ring = svg("circle", { class: "plot-ring", cx: X, cy: Y, r: m.size / 2, "stroke-width": m.width }, group2);
             const text = e.text ? this.label(e.text, X + m.dx, Y + m.dy, m.anchor, "plot-mark", [m.panel, m.id], m.tone) : null;
             text?.classList.add(...m.cls);
             this.eventFrames.push({ frame: e.frame, names: [m.panel, m.id] });
@@ -2607,7 +2962,7 @@ void main() {
     const frags = [...slide.querySelectorAll(".fragment")];
     const names = [...new Set(frags.flatMap((f) => words2(f.dataset.highlight)))];
     if (!names.length && !frags.some((f) => f.hasAttribute("data-keep"))) return;
-    const select = (name) => `.${CSS.escape(name)}`;
+    const select2 = (name) => `.${CSS.escape(name)}`;
     const steps = frags.map((f) => {
       const keep = f.getAttribute("data-keep");
       return {
@@ -2616,14 +2971,14 @@ void main() {
         keep: keep === null ? null : keep.trim() === "" ? "next" : Number(keep),
         highlight: words2(f.dataset.highlight),
         tone: f.dataset.tone === "violet" ? "violet" : "accent",
-        holds: names.filter((name) => f.matches(select(name)) || f.querySelector(select(name)))
+        holds: names.filter((name) => f.matches(select2(name)) || f.querySelector(select2(name)))
       };
     });
     const current = Math.max(-1, ...steps.filter((s) => s.visible).map((s) => s.index));
     const { held, lit } = resolve(steps, current);
     frags.forEach((f, i) => f.toggleAttribute("data-held", held[i]));
     const tones = /* @__PURE__ */ new Map();
-    for (const name of names) for (const el of slide.querySelectorAll(select(name))) tones.set(el, lit.get(name) ?? tones.get(el));
+    for (const name of names) for (const el of slide.querySelectorAll(select2(name))) tones.set(el, lit.get(name) ?? tones.get(el));
     for (const [el, tone] of tones) {
       el.classList.add("hl-target");
       el.classList.toggle("hl-accent", tone === "accent");
@@ -2908,6 +3263,8 @@ void main() {
     backdrops,
     surfaces,
     plots,
+    // called in a script file of polylines named in data-strands, see src/strands.ts
+    strands: register,
     version: "1.0.0"
   };
   window.Beeson = Beeson;

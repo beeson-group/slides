@@ -9,6 +9,7 @@ import { mountPlots, type PlotView } from './plot.ts';
 import { stillViewers } from './print.ts';
 import { mount as mountSurfaces } from './surface.ts';
 import type { Surface } from './surface.ts';
+import { register } from './strands.ts';
 import { applyAll, applySteps, initSteps, typeset } from './steps.ts';
 import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.ts';
 import type { RevealOptions, SlideEvent } from './reveal.d.ts';
@@ -195,6 +196,8 @@ const Beeson = {
   backdrops,
   surfaces,
   plots,
+  // called in a script file of polylines named in data-strands, see src/strands.ts
+  strands: register,
   version: __VERSION__,
 };
 

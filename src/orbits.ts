@@ -4,12 +4,16 @@
 // nondimensional, in the rotating frame
 
 import { scene } from './scenes.ts';
+import { fitView, mix, strandsFor } from './strands.ts';
+import type { Dot } from './strands.ts';
 
 export type Member = { s: Float64Array; path: number[]; times: number[]; t: number };
 export type Tone = 'orange' | 'violet' | 'text' | 'hero' | 'line';
 // pts is a list of alternating x and y values. times are the flight times of the points, and T is
-// the last of them. alpha, when set, replaces the opacity of the tone
-export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; alpha?: number };
+// the last of them. alpha, when set, replaces the opacity of the tone. ink, when set, replaces the
+// color of the tone with the color at the fraction at between the two colors of the pair of the
+// palette --strand-1 to --strand-8 in theme/beeson.css, i.e. --strand-1 and --strand-2 for pair 0
+export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; alpha?: number; ink?: { pair: number; at: number } };
 
 export const MU = 0.01215;
 // the distance to a body within which the step is shortened in step()
@@ -18,6 +22,12 @@ const NEAR = 0.15;
 const DURATION = 12;
 // seconds per revolution of a looping mark
 const LOOP = 9;
+// the radii of the heads of a trace for each value of the attribute data-heads, in line widths
+const HEADS: Record<string, number> = { full: 2.2, small: 0.55, none: 0 };
+// the heads of a backdrop drawn from a file of polylines, when data-heads is not set
+const FILE_HEADS = 'none';
+// the number of colors of the palette of theme/beeson.css, in pairs
+const PALETTE = 8;
 
 // writes the time derivative of the state s into a. returns the smaller of the distance to the Moon
 // and 0.4 times the distance to the Earth, which is used in step() to shorten the step
@@ -279,6 +289,20 @@ export class Orbits {
   private px: Float32Array[] = [];
   // the pointer in canvas pixels, and the glow radius there
   private pointer: { x: number; y: number; r: number } | null = null;
+  // the bodies of a file of polylines, drawn in place of the Moon and the Earth, or null
+  private dots: Dot[] | null;
+  // true when the window is fitted to the strands of a file, i.e. without data-half
+  private fitted: boolean;
+  // the box and the slide for which the window was last fitted, in slide pixels
+  private fittedFor = '';
+  private loaded: boolean;
+  // true when start() was called before the strands of a file were loaded
+  private pending = false;
+  private headSize: number;
+  // the colors of the strands with an ink, resolved in redraw() for the current mode
+  private inks: string[] = [];
+  // resolved when the strands are in place, at once for a named scene and after the load of a file
+  readonly ready: Promise<void>;
 
   static reduced(): boolean {
     if (typeof window === 'undefined') return true;
@@ -288,7 +312,12 @@ export class Orbits {
 
   constructor(el: HTMLElement) {
     this.el = el;
-    this.strands = scene(el.dataset.scene ?? '');
+    const file = el.dataset.strands !== undefined;
+    this.strands = file ? [] : scene(el.dataset.scene ?? '');
+    this.dots = file ? [] : null;
+    this.loaded = !file;
+    this.fitted = file && el.dataset.half === undefined;
+    this.headSize = HEADS[el.dataset.heads ?? (file ? FILE_HEADS : 'full')] ?? HEADS.full;
     this.cx = +(el.dataset.cx ?? 0);
     this.cy = +(el.dataset.cy ?? 0);
     this.half = +(el.dataset.half ?? 0.5);
@@ -308,6 +337,26 @@ export class Orbits {
     this.idx = this.strands.map(() => 0);
     CACHE.set(el, this);
     this.fit();
+    this.ready = file ? strandsFor(el).then(({ strands, dots }) => this.install(strands, dots)) : Promise.resolve();
+  }
+
+  private install(strands: Strand[], dots: Dot[]): void {
+    this.strands = strands;
+    this.dots = dots;
+    this.Tmax = Math.max(...strands.map((s) => s.T));
+    this.idx = strands.map(() => 0);
+    this.loaded = true;
+    this.fittedFor = '';
+    this.fit();
+    if (this.pending) {
+      this.pending = false;
+      this.start();
+    }
+  }
+
+  // the window in the units of the strands: its center and its half height
+  get view(): { cx: number; cy: number; half: number } {
+    return { cx: this.cx, cy: this.cy, half: this.half };
   }
 
   get done(): boolean {
@@ -317,6 +366,26 @@ export class Orbits {
   private colors(): Colors {
     const cs = getComputedStyle(this.el);
     return { stroke: cs.getPropertyValue('--stroke').trim(), body: cs.getPropertyValue('--body').trim(), accent: cs.getPropertyValue('--accent').trim(), violet: cs.getPropertyValue('--violet').trim(), text: cs.getPropertyValue('--text').trim() };
+  }
+
+  // the colors of the strands with an ink in the current mode. a color of the palette is serialized
+  // by the canvas as #rrggbb or rgba(), which mix() reads, and a strand is given the stroke color
+  // when its colors are missing or of another form
+  private paint(ctx: CanvasRenderingContext2D, c: Colors): void {
+    if (!this.strands.some((s) => s.ink)) { this.inks = []; return; }
+    const cs = getComputedStyle(this.el);
+    const palette = Array.from({ length: PALETTE }, (_, i) => {
+      const value = cs.getPropertyValue(`--strand-${i + 1}`).trim();
+      if (!value) return '';
+      ctx.fillStyle = '#000000';
+      ctx.fillStyle = value;
+      return String(ctx.fillStyle);
+    });
+    this.inks = this.strands.map((s) => {
+      if (!s.ink) return '';
+      const k = (2 * s.ink.pair) % PALETTE;
+      return mix(palette[k], palette[k + 1], s.ink.at) ?? c.stroke;
+    });
   }
 
   private X(x: number): number {
@@ -333,6 +402,17 @@ export class Orbits {
     const r = this.el.getBoundingClientRect(), dpr = devicePixelRatio || 1;
     const w = this.el.offsetWidth, h = this.el.offsetHeight;
     if (r.width === 0 || r.height === 0 || w === 0 || h === 0) return;
+    if (this.fitted && this.strands.length) {
+      const section = this.el.closest('section');
+      const box = { left: this.el.offsetLeft, top: this.el.offsetTop, width: w, height: h };
+      const slide = { width: section?.offsetWidth || w, height: section?.offsetHeight || h };
+      const key = [box.left, box.top, w, h, slide.width, slide.height].join();
+      if (key !== this.fittedFor) {
+        const view = fitView(this.strands, box, slide);
+        if (view) ({ cx: this.cx, cy: this.cy, half: this.half } = view);
+        this.fittedFor = key;
+      }
+    }
     this.W = Math.max(1, Math.round(r.width * dpr));
     this.H = Math.max(1, Math.round(r.height * dpr));
     for (const c of [this.base, this.head]) { c.width = this.W; c.height = this.H; }
@@ -358,6 +438,15 @@ export class Orbits {
   private bodies(ctx: CanvasRenderingContext2D, c: Colors): void {
     const shown = (name: string) => this.labels.some((l) => l.dataset.at === name);
     ctx.fillStyle = c.body;
+    if (this.dots) {
+      // a radius of 5 line widths for the Earth and of about 2.6 for the Moon, as below
+      for (const d of this.dots) {
+        const X = this.X(d.x), Y = this.Y(d.y);
+        if (X < -10 || X > this.W + 10 || Y < -10 || Y > this.H + 10) continue;
+        ctx.beginPath(); ctx.arc(X, Y, (2.2 + 2.8 * Math.cbrt(d.mass ?? 0.1)) * this.lw, 0, 2 * Math.PI); ctx.fill();
+      }
+      return;
+    }
     for (const name of ['moon', 'earth'] as const) {
       if (name === 'earth' && !shown(name)) continue;
       const [x, y] = POINTS[name]();
@@ -398,11 +487,13 @@ export class Orbits {
     if (!ctx) return;
     const c = this.colors();
     ctx.clearRect(0, 0, this.W, this.H);
+    this.paint(ctx, c);
     ctx.lineWidth = this.lw; ctx.lineJoin = 'round'; ctx.strokeStyle = c.stroke;
     this.bodies(ctx, c);
     this.strands.forEach((s, i) => {
       this.pen(ctx, c, s.tone);
       if (s.alpha) ctx.globalAlpha = s.alpha;
+      if (s.ink) ctx.strokeStyle = this.inks[i];
       this.segments(ctx, i, 0, this.drawn(i));
     });
     ctx.globalAlpha = 1;
@@ -411,6 +502,7 @@ export class Orbits {
 
   reset(): void {
     this.stop();
+    this.pending = false;
     this.t0 = null;
     this.finished = false;
     this.idx = this.strands.map(() => 0);
@@ -419,6 +511,7 @@ export class Orbits {
 
   start(): void {
     if (Orbits.reduced()) { this.complete(); return; }
+    if (!this.loaded) { this.pending = true; return; }
     if (this.raf || (this.finished && !this.loop)) return;
     this.t0 = performance.now();
     const tick = (now: number) => {
@@ -430,6 +523,7 @@ export class Orbits {
 
   complete(): void {
     this.stop();
+    this.pending = false;
     this.finished = true;
     this.t0 = null;
     this.redraw();
@@ -437,6 +531,7 @@ export class Orbits {
 
   destroy(): void {
     this.stop();
+    this.pending = false;
     this.base.remove();
     this.head.remove();
     CACHE.delete(this.el);
@@ -488,6 +583,7 @@ export class Orbits {
   }
 
   private heads(ctx: CanvasRenderingContext2D, c: Colors, now: number): void {
+    if (!this.headSize) return;
     const tau = (((now - (this.t0 ?? now)) / 1000) / DURATION) * this.Tmax;
     ctx.fillStyle = c.accent;
     this.strands.forEach((s, i) => {
@@ -495,7 +591,7 @@ export class Orbits {
       // the head of a strand is not drawn before times[0] of this strand
       if (j >= s.times.length - 1 || tau < s.times[0]) return;
       const [X, Y] = this.at(i, j, tau);
-      ctx.beginPath(); ctx.arc(X, Y, 2.2 * this.lw, 0, 2 * Math.PI); ctx.fill();
+      ctx.beginPath(); ctx.arc(X, Y, this.headSize * this.lw, 0, 2 * Math.PI); ctx.fill();
     });
   }
 
@@ -546,6 +642,7 @@ export class Orbits {
       while (j < n - 1 && s.times[j + 1] <= tau) j++;
       this.pen(ctx, c, s.tone);
       if (s.alpha) ctx.globalAlpha = s.alpha;
+      if (s.ink) ctx.strokeStyle = this.inks[i];
       this.segments(ctx, i, this.idx[i], j);
       this.idx[i] = j;
       if (j < n - 1) flying++;
