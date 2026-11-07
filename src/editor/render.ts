@@ -151,3 +151,71 @@ function piecesOf(live: LivePiece[]): Piece[] {
 }
 
 // the end of the last token inside s, for an element without an end tag
+function lastEnd(s: SrcEl): number {
+  const last = s.children[s.children.length - 1];
+  if (!last) return s.open?.end ?? -1;
+  if (last.kind === 'element') return last.close ? last.close.end : lastEnd(last);
+  return last.range.end;
+}
+
+// the range of the content of s in the file
+export function innerRange(s: SrcEl): Range | null {
+  if (!s.open) return null;
+  const start = s.open.end;
+  const end = s.close ? s.close.start : Math.max(start, lastEnd(s));
+  return { start, end };
+}
+
+export function escape(source: Source, text: string, keepNbsp: boolean): string {
+  let s = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  // a no-break space is typed by the browser at the end of a line, and it is kept only where the
+  // file had one
+  s = keepNbsp ? s.replace(/ /g, '&nbsp;') : s.replace(/ /g, ' ');
+  return source.crlf ? s.replace(/\n/g, '\r\n') : s;
+}
+
+// an element that is not in the file, e.g. a br inserted on the page
+function serializeNew(source: Source, el: Element, math: MathLookup): string {
+  const tag = el.localName;
+  const attrs = [...el.attributes]
+    .map((a) => (a.value === '' ? ` ${a.name}` : ` ${a.name}="${a.value.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`))
+    .join('');
+  if (VOID.has(tag)) return `<${tag}${attrs}>`;
+  return `<${tag}${attrs}>${serializeNewChildren(source, el, math)}</${tag}>`;
+}
+
+export function serializeNewChildren(source: Source, el: Element, math: MathLookup): string {
+  return virtualChildren(el, math)
+    .map((it) => (it.kind === 'text' ? escape(source, it.text, false) : it.kind === 'element' ? serializeNew(source, it.el, math) : `<!--${it.node.data}-->`))
+    .join('');
+}
+
+// a text node: copied from the file when unchanged, else piece by piece when the page still splits
+// it as the file was paired, else written whole
+function serializeText(source: Source, s: SrcText, it: Item & { kind: 'text' }): string {
+  const text = source.text;
+  if (shown(it.text, s.decoded) === s.decoded) return text.slice(s.range.start, s.range.end);
+  const keepNbsp = s.decoded.includes('\u00a0');
+  const lead = text.slice(s.range.start, s.range.start + s.lead);
+  const live = it.pieces;
+  if (s.pieces && s.pieces.length === live.length && s.pieces.every((p, i) => p.kind === live[i].kind)) {
+    const parts = s.pieces.map((p, i) => {
+      const lp = live[i];
+      const r = rawRange(s, p.dec);
+      if (p.kind === 'text' || lp.kind !== 'math') {
+        const old = s.decoded.slice(p.dec.start, p.dec.end);
+        const now = lp.kind === 'text' ? lp.text : lp.open + lp.tex + lp.close;
+        return shown(now, old) === old ? text.slice(r.start, r.end) : escape(source, now, keepNbsp);
+      }
+      const inner = rawRange(s, p.inner);
+      const old = s.decoded.slice(p.inner.start, p.inner.end);
+      const tex = shown(lp.tex, old) === old ? text.slice(inner.start, inner.end) : escape(source, lp.tex, keepNbsp);
+      return text.slice(r.start, inner.start) + tex + text.slice(inner.end, r.end);
+    });
+    return lead + parts.join('');
+  }
+  return lead + escape(source, it.text, keepNbsp);
+}
+
+// the content of el as it is written into the file. each child of el is matched to the next child
+// of s of its kind, and a matched child is copied from the file where it is unchanged
