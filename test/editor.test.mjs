@@ -141,6 +141,35 @@ test('a save is paired again, and a second save is byte-exact', async (t) => {
   assert.deepEqual(page.errors, []);
 });
 
+test('the keys of reveal.js do not fire while a block is typed into', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  const press = (key, keyCode) => page.evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, keyCode: ${keyCode}, which: ${keyCode}, bubbles: true, cancelable: true }))`);
+  const slide = () => page.evaluate('Reveal.getIndices().h');
+  assert.equal(await slide(), 0);
+  await page.evaluate(`document.querySelector('.reveal h1').focus()`);
+  assert.equal(await page.evaluate('document.activeElement.isContentEditable'), true);
+  await press('ArrowRight', 39);
+  await press(' ', 32);
+  await press('n', 78);
+  await press('d', 68);
+  assert.equal(await slide(), 0);
+  assert.equal(await page.evaluate(`document.documentElement.dataset.theme || 'dark'`), 'dark');
+  // Esc leaves the text, without the overview of reveal.js, and selects its block, and after a
+  // second Esc the arrows move the slides again
+  await press('Escape', 27);
+  assert.equal(await page.evaluate('document.activeElement.isContentEditable'), false);
+  assert.equal(await page.evaluate('Reveal.isOverview()'), false);
+  assert.equal(await page.evaluate(`!document.querySelector('.beeson-frame.selected').hidden`), true);
+  await press('Escape', 27);
+  assert.equal(await page.evaluate(`document.querySelector('.beeson-frame.selected').hidden`), true);
+  await press('ArrowRight', 39);
+  assert.equal(await slide(), 1);
+  assert.deepEqual(page.errors, []);
+});
+
 test('the print view of the PDF and of PowerPoint does not load the editor', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
@@ -181,6 +210,20 @@ test('E opens the slide in the editor', async (t) => {
   await page.evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', keyCode: 69, which: 69, bubbles: true, cancelable: true }))`);
   await sleep(200);
   assert.equal(await page.evaluate('location.search'), '?still&edit');
+  assert.deepEqual(page.errors, []);
+});
+
+test('with nothing selected, Esc and B do not open the overview or black out the slide', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  const press = (key, keyCode) => page.evaluate(`document.body.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, keyCode: ${keyCode}, which: ${keyCode}, bubbles: true, cancelable: true }))`);
+  await page.evaluate('document.activeElement.blur()');
+  await press('Escape', 27);
+  assert.equal(await page.evaluate('Reveal.isOverview()'), false);
+  await press('b', 66);
+  assert.equal(await page.evaluate('Reveal.isPaused()'), false);
   assert.deepEqual(page.errors, []);
 });
 
