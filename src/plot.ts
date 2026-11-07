@@ -8,7 +8,10 @@ type Pair = [number, number];
 type Anchor = 'start' | 'middle' | 'end';
 type Kind = 'points' | 'trace' | 'label' | 'events';
 
-export type Axis = { range: Pair; ticks: number[]; title: string };
+// a tick at a value of its axis, labeled with text in the markup
+export type Tick = { at: number; text: string };
+export type Scale = 'linear' | 'asinh';
+export type Axis = { range: Pair; ticks: Tick[]; title: string; scale: Scale; unit: number };
 // an element of a panel or a mark. id names it in data-plot-show and in the active list of a tab,
 // and the classes of cls are the targets of a data-highlight of the slide
 type Item = { id: string | null; tone: string; cls: string[] };
@@ -73,7 +76,23 @@ function axis(v: unknown, path: string): Axis {
   if (!isObject(v)) fail(path, 'an axis { range, ticks, title } is expected');
   const range = pair(v.range, `${path}.range`);
   if (!(range[1] > range[0])) fail(`${path}.range`, 'the second end must be larger than the first');
-  return { range, ticks: list(v.ticks, `${path}.ticks`, []).map((t, i) => num(t, `${path}.ticks[${i}]`)), title: str(v.title, `${path}.title`, '') };
+  const scale = str(v.scale, `${path}.scale`, 'linear');
+  if (scale !== 'linear' && scale !== 'asinh') fail(`${path}.scale`, 'linear or asinh is expected');
+  const unit = num(v.unit, `${path}.unit`, 1);
+  if (!(unit > 0)) fail(`${path}.unit`, 'a positive number is expected');
+  const ticks = list(v.ticks, `${path}.ticks`, []).map((t, i): Tick => {
+    const p = `${path}.ticks[${i}]`;
+    if (typeof t === 'number') return { at: num(t, p), text: formatNumber(t) };
+    if (!isObject(t)) fail(p, 'a number or a tick { at, text } is expected');
+    const at = num(t.at, `${p}.at`);
+    return { at, text: str(t.text, `${p}.text`, formatNumber(at)) };
+  });
+  return { range, ticks, title: str(v.title, `${path}.title`, ''), scale, unit };
+}
+
+/** The coordinate of the value v along an axis, i.e. v on a linear scale and asinh(v / unit) on an asinh scale. */
+export function scaled(a: Axis, v: number): number {
+  return a.scale === 'asinh' ? Math.asinh(v / a.unit) : v;
 }
 
 function regions(v: unknown, path: string): Region[] {
@@ -352,12 +371,17 @@ function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string,
   return el;
 }
 
+// a circle as a closed polyline, for an axis on which it is not an ellipse
+const circlePoints = ([cx, cy, r]: [number, number, number]): Pair[] =>
+  Array.from({ length: 181 }, (_, i) => [cx + r * Math.cos((i * Math.PI) / 90), cy + r * Math.sin((i * Math.PI) / 90)]);
+
 // a tone is the name of a custom property of the theme, e.g. accent or data-3, or a CSS color
 const toneColor = (tone: string) => (/^[a-z][a-z0-9-]*$/.test(tone) ? `var(--${tone})` : tone);
 
 const words = (s: string | undefined | null) => (s ?? '').split(/\s+/).filter(Boolean);
 
-type Box = { x: number; y: number; w: number; h: number; sx: number; sy: number; panel: Panel };
+// the box of a panel in px, with the scaled coordinates x0 and y0 of the lower left corner
+type Box = { x: number; y: number; w: number; h: number; x0: number; y0: number; sx: number; sy: number; panel: Panel };
 
 const MARGIN = { left: 76, right: 20, top: 52, bottom: 84 };
 const GAP = 56;
@@ -542,7 +566,8 @@ export class PlotView {
     this.panels.forEach((p, i) => {
       const cx = row ? i * (cw + GAP) : 0, cy = row ? 0 : i * (ch + GAP);
       let x = cx + MARGIN.left, y = cy + MARGIN.top, w = cw - MARGIN.left - MARGIN.right, h = ch - MARGIN.top - MARGIN.bottom;
-      const dx = p.x.range[1] - p.x.range[0], dy = p.y.range[1] - p.y.range[0];
+      const x0 = scaled(p.x, p.x.range[0]), y0 = scaled(p.y, p.y.range[0]);
+      const dx = scaled(p.x, p.x.range[1]) - x0, dy = scaled(p.y, p.y.range[1]) - y0;
       if (p.equal) {
         const s = Math.min(w / dx, h / dy);
         x += (w - s * dx) / 2;
@@ -550,20 +575,39 @@ export class PlotView {
         w = s * dx;
         h = s * dy;
       }
-      this.boxes.set(p.id, { x, y, w, h, sx: w / dx, sy: h / dy, panel: p });
+      this.boxes.set(p.id, { x, y, w, h, x0, y0, sx: w / dx, sy: h / dy, panel: p });
     });
   }
 
+  // the pixel of a coordinate along an axis, i.e. of a value after its scale
+  private XS(b: Box, x: number): number {
+    return b.x + (x - b.x0) * b.sx;
+  }
+
+  private YS(b: Box, y: number): number {
+    return b.y + b.h - (y - b.y0) * b.sy;
+  }
+
   private X(b: Box, x: number): number {
-    return b.x + (x - b.panel.x.range[0]) * b.sx;
+    return this.XS(b, scaled(b.panel.x, x));
   }
 
   private Y(b: Box, y: number): number {
-    return b.y + b.h - (y - b.panel.y.range[0]) * b.sy;
+    return this.YS(b, scaled(b.panel.y, y));
+  }
+
+  // the coordinates of a point of the data, in which the marks are interpolated between frames, so
+  // that a mark between two frames is on the straight line drawn between them
+  private toAxes(b: Box, [x, y]: Pair): Pair {
+    return [scaled(b.panel.x, x), scaled(b.panel.y, y)];
   }
 
   private path(b: Box, pts: Pair[]): string {
-    return pts.map(([x, y], i) => `${i ? 'L' : 'M'}${this.X(b, x).toFixed(1)} ${this.Y(b, y).toFixed(1)}`).join('');
+    return this.pathS(b, pts.map((p) => this.toAxes(b, p)));
+  }
+
+  private pathS(b: Box, pts: Pair[]): string {
+    return pts.map(([x, y], i) => `${i ? 'L' : 'M'}${this.XS(b, x).toFixed(1)} ${this.YS(b, y).toFixed(1)}`).join('');
   }
 
   private label(text: string, left: number, top: number, a: Anchor, cls: string, names: string[], tone?: string): HTMLElement {
@@ -618,23 +662,24 @@ export class PlotView {
       for (const c of p.curves) {
         const attrs: Record<string, string | number> = { class: 'plot-curve', 'stroke-width': c.width };
         if (c.dash) attrs['stroke-dasharray'] = c.dash.join(' ');
-        const node = c.circle
+        const linear = p.x.scale === 'linear' && p.y.scale === 'linear';
+        const node = c.circle && linear
           ? svg('ellipse', { ...attrs, cx: this.X(b, c.circle[0]), cy: this.Y(b, c.circle[1]), rx: c.circle[2] * b.sx, ry: c.circle[2] * b.sy }, statics)
-          : svg('path', { ...attrs, d: this.path(b, c.points ?? []) }, statics);
+          : svg('path', { ...attrs, d: this.path(b, c.circle ? circlePoints(c.circle) : (c.points ?? [])) }, statics);
         this.styleItem(node, c, [p.id, c.id]);
       }
       if (p.axes) {
         const axes = svg('g', { class: 'plot-axes' }, g);
         svg('path', { d: `M${b.x} ${b.y}V${b.y + b.h}H${b.x + b.w}` }, axes);
         for (const t of p.x.ticks) {
-          const X = this.X(b, t);
+          const X = this.X(b, t.at);
           svg('path', { d: `M${X} ${b.y + b.h}v10` }, axes);
-          this.label(formatNumber(t), X, b.y + b.h + 32, 'middle', 'plot-tick', [p.id]);
+          this.label(t.text, X, b.y + b.h + 32, 'middle', 'plot-tick', [p.id]);
         }
         for (const t of p.y.ticks) {
-          const Y = this.Y(b, t);
+          const Y = this.Y(b, t.at);
           svg('path', { d: `M${b.x} ${Y}h-10` }, axes);
-          this.label(formatNumber(t), b.x - 18, Y, 'end', 'plot-tick', [p.id]);
+          this.label(t.text, b.x - 18, Y, 'end', 'plot-tick', [p.id]);
         }
         if (p.x.title) this.label(p.x.title, b.x + b.w / 2, b.y + b.h + 70, 'middle', 'plot-title', [p.id]);
         if (p.y.title) this.label(p.y.title, b.x, b.y - 30, 'middle', 'plot-title', [p.id]);
@@ -663,7 +708,7 @@ export class PlotView {
       const group = svg('g', {}, g);
       this.styleItem(group, m, [m.panel, m.id]);
       if (m.kind === 'points') {
-        const frames = data as number[][];
+        const frames = (data as number[][]).map((f) => f.map((v, k) => scaled(k % 2 ? b.panel.y : b.panel.x, v)));
         const dots: SVGCircleElement[] = [];
         this.drawers.push((u) => {
           const at = framesAt(frames, u);
@@ -671,28 +716,28 @@ export class PlotView {
           dots.forEach((d, k) => {
             const on = 2 * k < at.length;
             d.style.display = on ? '' : 'none';
-            if (on) { d.setAttribute('cx', this.X(b, at[2 * k]).toFixed(1)); d.setAttribute('cy', this.Y(b, at[2 * k + 1]).toFixed(1)); }
+            if (on) { d.setAttribute('cx', this.XS(b, at[2 * k]).toFixed(1)); d.setAttribute('cy', this.YS(b, at[2 * k + 1]).toFixed(1)); }
           });
         });
       } else if (m.kind === 'trace') {
-        const pts = data as Pair[];
-        svg('path', { class: 'plot-ghost', d: this.path(b, pts), 'stroke-width': m.width }, group);
+        const pts = (data as Pair[]).map((q) => this.toAxes(b, q));
+        svg('path', { class: 'plot-ghost', d: this.pathS(b, pts), 'stroke-width': m.width }, group);
         const done = svg('path', { class: 'plot-trace', 'stroke-width': m.width }, group);
         const head = svg('circle', { class: 'plot-dot', r: m.size / 2 }, group);
         this.drawers.push((u) => {
           const p = traceTo(pts, u), [x, y] = p[p.length - 1];
-          done.setAttribute('d', this.path(b, p));
-          head.setAttribute('cx', this.X(b, x).toFixed(1));
-          head.setAttribute('cy', this.Y(b, y).toFixed(1));
+          done.setAttribute('d', this.pathS(b, p));
+          head.setAttribute('cx', this.XS(b, x).toFixed(1));
+          head.setAttribute('cy', this.YS(b, y).toFixed(1));
         });
       } else if (m.kind === 'label') {
-        const d = data as LabelData;
+        const d = data as LabelData, at = d.at.map((q) => this.toAxes(b, q));
         const el = this.label(d.text[0], 0, 0, m.anchor, 'plot-mark', [m.panel, m.id], m.tone);
         el.classList.add(...m.cls);
         let shown = d.text[0];
         this.drawers.push((u) => {
-          const [x, y] = d.at.length === 1 ? d.at[0] : (framesAt(d.at, u) as Pair);
-          this.place(el, this.X(b, x) + m.dx, this.Y(b, y) + m.dy, m.anchor);
+          const [x, y] = at.length === 1 ? at[0] : (framesAt(at, u) as Pair);
+          this.place(el, this.XS(b, x) + m.dx, this.YS(b, y) + m.dy, m.anchor);
           const text = nearest(d.text, u);
           if (text !== shown) { setMarkup(el, text); shown = text; }
         });

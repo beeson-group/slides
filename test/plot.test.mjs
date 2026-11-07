@@ -19,7 +19,7 @@ test('a plot is read with its defaults', () => {
   assert.equal(plot.duration, 8);
   assert.equal(plot.hold, 1);
   assert.equal(plot.layout, null);
-  assert.deepEqual(plot.panels[0].x, { range: [0, 1], ticks: [], title: '' });
+  assert.deepEqual(plot.panels[0].x, { range: [0, 1], ticks: [], title: '', scale: 'linear', unit: 1 });
   assert.equal(plot.panels[0].axes, true);
   assert.equal(plot.marks[0].tone, 'accent');
   assert.equal(plot.tabs[0].label, 'a');
