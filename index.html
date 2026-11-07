@@ -61,20 +61,21 @@ try {
   <aside class="notes">A new element is faded in, and the earlier ones are dimmed until the slide is complete. Fragments are dimmed to 45 percent once a later one is shown. When the last fragment is shown, data-complete is set on the section, and everything is restored to full opacity.</aside>
 </section>
 
+<!-- stepped math: a display held with data-keep through the sentence after it, and symbols set with \class
+     colored by a later step with data-highlight, orange for motion and violet with data-tone="violet" for structure -->
 <section>
   <h2>Motion in the rotating frame</h2>
-  <div class="math">\[\ddot x - 2\dot y = \frac{\partial U}{\partial x},\qquad \ddot y + 2\dot x = \frac{\partial U}{\partial y},\]</div>
-  <div class="math" style="margin-top: 0">\[U = \frac{x^2 + y^2}{2} + \frac{1-\mu}{r_1} + \frac{\mu}{r_2}.\]</div>
-  <ul>
-    <li>At a given Jacobi constant \(C = 2U - v^2\), the motion is confined to the Hill region.</li>
-    <li>The collinear points \(L_1\) and \(L_2\) are saddles, with one unstable direction each.</li>
-  </ul>
+  <p>In the frame that turns with the primary and the secondary, the motion obeys</p>
+  <div class="math fragment" data-fragment-index="1" data-keep>\[\ddot x - \class{coriolis}{2\dot y} = \frac{\partial \class{potential}{U}}{\partial x},\qquad \ddot y + \class{coriolis}{2\dot x} = \frac{\partial \class{potential}{U}}{\partial y},\]</div>
+  <p class="fragment" data-fragment-index="2">where \(U\) is the effective potential.</p>
+  <p class="fragment" data-fragment-index="3" data-highlight="coriolis">The <span class="coriolis">Coriolis terms</span> couple \(x\) and \(y\).</p>
+  <p class="fragment" data-fragment-index="4" data-highlight="potential" data-tone="violet">The <span class="potential">potential</span> bounds the Hill region.</p>
   <div class="backdrop" data-scene="l2" data-cx="1.06" data-cy="0" data-half="0.60">
     <span class="lab" data-at="L2" data-dy="-34">L<sub>2</sub></span>
     <span class="lab" data-at="moon" data-dy="36">Moon</span>
   </div>
   <div class="foot">Szebehely, Theory of Orbits, 1967, chapter 1.</div>
-  <aside class="notes">In the rotating frame of the primary and the secondary, the motion is autonomous, and the Jacobi constant is an integral of the motion. In the Earth–Moon system \(\mu = 0.01215\), and the \(L_1\) gateway is open at \(C < 3.188\).</aside>
+  <aside class="notes">In the rotating frame of the primary and the secondary, the motion is autonomous, and the Jacobi constant \(C = 2U - v^2\) is an integral of the motion, with \(U = (x^2 + y^2)/2 + (1-\mu)/r_1 + \mu/r_2\). At a given \(C\), the motion is confined to the Hill region. The collinear points \(L_1\) and \(L_2\) are saddles, with one unstable direction each. In the Earth–Moon system \(\mu = 0.01215\), and the \(L_1\) gateway is open at \(C < 3.188\). The display is held at full opacity through the next step with data-keep, and while a symbol in it is colored at a later step.</aside>
 </section>
 
 <!-- figure: a plate, with the backdrop or figure over the whole slide and the caption at the lower left.
