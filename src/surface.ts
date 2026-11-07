@@ -30,8 +30,9 @@ const SLIDE = 2600;
 const TURN = 90;
 // world units by which a mark is raised into place
 const RISE = 0.4;
-// widths in slide pixels: the curve of intersection and the marks
+// widths in slide pixels: the curve of intersection, its glow, and the marks
 const CURVE_WIDTH = 3.5;
+const GLOW_WIDTH = 18;
 const MARK_SIZE = 22;
 
 const ease = (t: number): number => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
@@ -136,10 +137,11 @@ const LINE_FRAGMENT = /* glsl */ `
 uniform vec3 uColor;
 uniform float uAlpha;
 uniform float uWidth;
+uniform float uSoft;
 varying float vSide;
 void main() {
   float s = abs(vSide);
-  float edge = 1.0 - smoothstep(1.0 - 2.0 / uWidth, 1.0, s);
+  float edge = mix(1.0 - smoothstep(1.0 - 2.0 / uWidth, 1.0, s), (1.0 - s) * (1.0 - s), uSoft);
   gl_FragColor = vec4(uColor, uAlpha * edge);
 }`;
 
@@ -227,6 +229,7 @@ export class Surface {
   private surface: Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial>;
   private plane: Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial>;
   private curve: Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial>;
+  private glow: Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial>;
   private points: Three.Points<Three.BufferGeometry, Three.ShaderMaterial>;
   private capacity = 0;
   private drawn = '';
@@ -283,9 +286,13 @@ export class Surface {
     this.camera.up.set(0, 0, 1);
     this.surface = this.makeSurface();
     this.plane = this.makePlane();
-    this.curve = this.makeCurve(CURVE_WIDTH);
+    this.curve = this.makeCurve(CURVE_WIDTH, 0);
+    // a glow of the curve under it, drawn from the same segments
+    this.glow = this.makeCurve(GLOW_WIDTH, 1);
+    this.glow.geometry = this.curve.geometry;
+    this.glow.renderOrder = 1.5;
     this.points = this.makeMarks();
-    this.scene.add(this.surface, this.plane, this.curve, this.points);
+    this.scene.add(this.surface, this.plane, this.glow, this.curve, this.points);
     this.recolor();
     CACHE.set(el, this);
     this.sync(false);
@@ -360,8 +367,8 @@ export class Surface {
     return mesh;
   }
 
-  // the segments of a curve as quads of width pixels
-  private makeCurve(width: number): Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial> {
+  // the segments of a curve as quads of width pixels, with a hard edge, or with soft set a falloff
+  private makeCurve(width: number, soft: number): Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial> {
     const THREE = this.THREE;
     const material = new THREE.ShaderMaterial({
       vertexShader: LINE_VERTEX,
@@ -372,6 +379,7 @@ export class Surface {
         uColor: { value: new THREE.Vector3() },
         uAlpha: { value: 0 },
         uWidth: { value: width },
+        uSoft: { value: soft },
         uViewport: { value: new THREE.Vector2(1, 1) },
         uBias: { value: 0.004 },
       },
@@ -421,6 +429,7 @@ export class Surface {
     set(u.uGroove.value, bg);
     set(this.plane.material.uniforms.uColor.value, accent);
     set(this.curve.material.uniforms.uColor.value, mix3(accent, text, 0.35));
+    set(this.glow.material.uniforms.uColor.value, accent);
     set(this.points.material.uniforms.uFill.value, text);
     set(this.points.material.uniforms.uRing.value, bg);
   }
@@ -532,6 +541,8 @@ export class Surface {
     const px = (dpr * r.height) / h;
     this.curve.material.uniforms.uViewport.value.set(this.W, this.H);
     this.curve.material.uniforms.uWidth.value = CURVE_WIDTH * px;
+    this.glow.material.uniforms.uViewport.value.set(this.W, this.H);
+    this.glow.material.uniforms.uWidth.value = GLOW_WIDTH * px;
     this.points.material.uniforms.uSize.value = MARK_SIZE * px;
     this.camera.aspect = this.W / this.H;
     this.draw();
@@ -604,6 +615,8 @@ export class Surface {
     this.plane.visible = shown.cut > 0;
     this.curve.material.uniforms.uAlpha.value = Math.min(1, 2 * shown.cut);
     this.curve.visible = shown.cut > 0;
+    this.glow.material.uniforms.uAlpha.value = 0.45 * Math.min(1, 2 * shown.cut);
+    this.glow.visible = shown.cut > 0;
     this.points.material.uniforms.uRise.value = shown.marks;
     this.points.visible = shown.marks > 0;
     this.trace();
