@@ -26,6 +26,9 @@ const DEFAULTS: RevealOptions = {
   controls: false,
   center: false,
   pdfSeparateFragments: true,
+  // off with 0, since the chrome, the mode button, and the viewer are lost in the scroll view that
+  // reveal.js would start in a narrow window
+  scrollActivationWidth: 0,
 };
 
 // the slides whose backdrop is traced when shown, rather than shown complete

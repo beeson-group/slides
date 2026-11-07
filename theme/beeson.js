@@ -769,7 +769,10 @@ html.to-dark::view-transition-new(root) { z-index: 1; }
     slideNumber: "c/t",
     controls: false,
     center: false,
-    pdfSeparateFragments: true
+    pdfSeparateFragments: true,
+    // off with 0, since the chrome, the mode button, and the viewer are lost in the scroll view that
+    // reveal.js would start in a narrow window
+    scrollActivationWidth: 0
   };
   var TRACED = ["title", "section", "closing"];
   var backdrops = [];
