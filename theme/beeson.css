@@ -314,7 +314,6 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
   z-index: 50;
   width: 14px;
   height: 14px;
-  margin: -7px 0 0 -7px;
   border: 2px solid var(--accent);
   border-radius: 50%;
   pointer-events: none;
