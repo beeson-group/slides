@@ -349,6 +349,137 @@ function render(): string {
   return renderDeck(source, pairing, mathLookup(), tagEdits).text;
 }
 
+// a file chosen with the input element, in a browser without the open picker
+function pickFile(): Promise<File | null> {
+  return new Promise((done) => {
+    const input = make('input');
+    input.type = 'file';
+    input.accept = '.html,.htm,text/html';
+    input.style.display = 'none';
+    const finish = (file: File | null) => {
+      input.remove();
+      done(file);
+    };
+    input.addEventListener('change', () => finish(input.files?.[0] ?? null));
+    input.addEventListener('cancel', () => finish(null));
+    document.body.append(input);
+    input.click();
+  });
+}
+
+
+// with unsaved changes, the user is asked first, as in PowerPoint: a save, a discard, or no open
+async function openFile(): Promise<void> {
+  note = null;
+  if (canPick() && pickers.showOpenFilePicker) {
+    let picked: FileSystemFileHandle[];
+    try {
+      picked = await pickers.showOpenFilePicker({ types: FILE_TYPES, multiple: false });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') return;
+      throw error;
+    }
+    const text = await (await picked[0].getFile()).text();
+    handle = picked[0];
+    open(text);
+    return;
+  }
+  const file = await pickFile();
+  if (!file) return;
+  handle = null;
+  open(await file.text());
+}
+
+// a copy of the file for a browser that cannot write it in place
+function download(name: string, text: string): void {
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/html' }));
+  const a = make('a');
+  a.href = url;
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+async function write(to: FileSystemFileHandle, text: string): Promise<void> {
+  const writable = await to.createWritable();
+  await writable.write(text);
+  await writable.close();
+}
+
+// the file is asked for with the save picker, and false is returned when the picker is dismissed
+async function pickTarget(): Promise<boolean> {
+  if (!pickers.showSaveFilePicker) return false;
+  try {
+    handle = await pickers.showSaveFilePicker({ suggestedName: handle?.name ?? fileName(), types: FILE_TYPES });
+    return true;
+  } catch (error) {
+    if (error instanceof DOMException && error.name === 'AbortError') return false;
+    throw error;
+  }
+}
+
+// writes the rendered text to the file, asking for the file at the first save of a deck opened
+// from a server. the saved text is then paired again, so that the next save starts from it. a
+// save asked for while one is in flight is run after it
+async function save(): Promise<void> {
+  if (saving) {
+    again = true;
+    return;
+  }
+  saving = true;
+  try {
+    await doSave();
+  } finally {
+    saving = false;
+  }
+  if (again) {
+    again = false;
+    if (dirty) await save();
+  }
+}
+
+async function doSave(): Promise<void> {
+  if (!source || !pairing) {
+    note = { text: 'Choose the file of this deck first', warn: true };
+    report();
+    return;
+  }
+  const rendered = renderDeck(source, pairing, mathLookup(), tagEdits);
+  if (!handle && canWrite() && !(await pickTarget())) return;
+  const n = rendered.edits.length;
+  const edits = plural(n, 'edit');
+  let text: string;
+  if (handle) {
+    await write(handle, rendered.text);
+    text = n ? `Saved ${edits} to ${handle.name} at ${clock()}` : `Saved ${handle.name} at ${clock()}`;
+  } else {
+    download(fileName(), rendered.text);
+    text = n ? `Saved a copy with ${edits} to your downloads. Replace ${fileName()} with it to keep them` : `Saved a copy of ${fileName()} to your downloads`;
+  }
+  const warnings = rendered.warnings.length ? `, ${rendered.warnings.join(', ')}` : '';
+  note = { text: `${text}${warnings}`, warn: rendered.warnings.length > 0 };
+  // an edit made while the file was written is kept for the next save, since the page no longer
+  // reads as the saved text
+  if (render() === rendered.text) {
+    open(rendered.text, false);
+  } else {
+    report();
+  }
+}
+
+// the deck is written into a file chosen with the picker, and where there is no picker a save is
+// a download anyway
+async function saveAs(): Promise<void> {
+  if (!source || !pairing) {
+    note = { text: 'Choose the file of this deck first', warn: true };
+    report();
+    return;
+  }
+  if (canWrite() && !(await pickTarget())) return;
+  await save();
+}
 
 // every change passes here: the state is shown, the edits are kept in the storage after a pause,
 // and an autosave is started
@@ -395,6 +526,21 @@ function onBeforeInput(ev: InputEvent): void {
   }
 }
 
+// before the listeners of reveal.js: ⌘S or Ctrl+S saves, with Shift into another file, ⌘Z and
+// ⌘⇧Z or Ctrl+Z and Ctrl+Y move in the history, Enter on a formula opens its TeX, and Esc leaves
+// the text that is being edited, so that the arrow keys move between the slides again
+function onKeyDown(ev: KeyboardEvent): void {
+  const mod = ev.metaKey || ev.ctrlKey;
+  const key = ev.key.toLowerCase();
+  const target = ev.target instanceof Element ? ev.target : null;
+  const inField = !!target?.closest('.beeson-math, input, textarea, select');
+  const active = document.activeElement;
+  if (mod && !ev.altKey && key === 's') {
+    ev.preventDefault();
+    void (ev.shiftKey ? saveAs() : save()).catch(fail);
+  }
+}
+
 
 const revealReady = (): Promise<void> =>
   new Promise((done) => {
@@ -426,6 +572,10 @@ async function init(): Promise<void> {
     if (ev.detail > 0) el.blur();
     Promise.resolve().then(action).catch(fail);
   });
+  wire(openButton, openFile);
+  wire(cardButton, openFile);
+  wire(saveButton, save);
+  wire(saveAsButton, saveAs);
   wire(prevButton, () => deck()?.left());
   wire(nextButton, () => deck()?.right());
   document.addEventListener('beforeinput', onBeforeInput);
@@ -440,6 +590,7 @@ async function init(): Promise<void> {
     follow();
   });
   document.addEventListener('focusout', () => setTimeout(follow, 0));
+  window.addEventListener('keydown', onKeyDown, true);
   window.addEventListener('beforeunload', (ev) => { if (dirty) ev.preventDefault(); });
   report();
   await revealReady();
@@ -467,6 +618,10 @@ const BeesonEditor = {
   open,
   render,
   status,
+  save,
+  saveAs,
+  // the file written by save, for a test with a handle of the origin private file system
+  attach: (h: FileSystemFileHandle) => { handle = h; },
   version: __VERSION__,
 };
 
