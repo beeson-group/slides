@@ -89,10 +89,10 @@ test('a zip is read back with its names and contents', () => {
   assert.deepEqual([...parts.get('b/c.png')], [1, 2, 3]);
 });
 
-test('a video that is shown on two steps is embedded once, and it starts by itself', () => {
+test('a video that is shown on two slides is embedded once, and it starts by itself', () => {
   const video = { path: 'demo/clip-dark.mp4', poster: Buffer.from([1]), x: 10, y: 20, width: 30, height: 40, duration: 6000, loop: true, muted: true };
-  const step = { name: 'A & B', image: Buffer.from([2]), notes: ['One'], videos: [video] };
-  const parts = unzip(pptx([step, step]));
+  const deckSlide = { name: 'A & B', images: [Buffer.from([2])], notes: ['One'], videos: [video] };
+  const parts = unzip(pptx([deckSlide, deckSlide]));
   assertPackage(parts);
   assert.equal([...parts.keys()].filter((name) => name.endsWith('.mp4')).length, 1);
   const slide = text(parts, 'ppt/slides/slide2.xml');
@@ -138,14 +138,16 @@ test('a video is played through the steps of its slide', () => {
   assert.ok(slide.indexOf('nodeType="afterEffect"') < slide.indexOf('nodeType="clickEffect"'));
 });
 
-test('the demo deck is exported with a slide for each page of its PDF', () => {
+test('the demo deck is exported with a step for each page of its PDF', () => {
   const parts = exportDeck('index.html');
   assertPackage(parts);
+  const steps = [...parts.keys()].filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
+    .reduce((total, name) => total + text(parts, name).match(/name="Step /g).length, 0);
   const folder = mkdtempSync(join(tmpdir(), 'beeson-pdf-'));
   try {
     const run = spawnSync(process.execPath, ['scripts/export-pdf.mjs', 'index.html', join(folder, 'deck.pdf')], { encoding: 'utf8' });
     assert.equal(run.status, 0, run.stderr);
-    assert.equal(slideCount(parts), Number(run.stdout.match(/(\d+) pages/)[1]));
+    assert.equal(steps, Number(run.stdout.match(/(\d+) pages/)[1]));
   } finally {
     rmSync(folder, { recursive: true, force: true });
   }

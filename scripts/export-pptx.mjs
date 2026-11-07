@@ -1,11 +1,14 @@
-// Exports a deck to PowerPoint, one slide for each step, so that a click is a step of the deck.
+// Exports a deck to PowerPoint, so that a click is a step of the deck.
 //
 //   node scripts/export-pptx.mjs [deck] [output]
 //
-// The default deck is index.html, and the default output is slides.pptx. Each slide is an image of
+// The default deck is index.html, and the default output is slides.pptx. Each step is an image of
 // the print view of the deck, the same view as in scripts/export-pdf.mjs, hence the text is not
-// editable and the backdrops are static. A video is placed over its image as a PowerPoint video,
-// and it is started when its step is shown. The notes of a slide are copied to each of its steps.
+// editable and the backdrops are static. Each step is a PowerPoint slide of its own, except on a
+// slide with a video. A video is placed over its image as a PowerPoint video, and it would be
+// restarted on a new PowerPoint slide, hence the steps that show it are stacked on one PowerPoint
+// slide under the video, and each later step is shown on a click. The notes of a slide are copied
+// to each of its PowerPoint slides.
 // Keynote opens this file too. The script exits nonzero on a JavaScript error in the page, and on a
 // video without an MP4 source, since MP4 is the one format that plays in every version of PowerPoint.
 import { writeFileSync } from 'node:fs';
@@ -42,8 +45,27 @@ const listSteps = `[...document.querySelectorAll('.pdf-page')].map((step) => {
         muted: video.defaultMuted,
       };
     });
-  return { top: window.scrollY + page.y, name: step.querySelector('h1, h2')?.textContent ?? '', notes, videos };
+  return {
+    top: window.scrollY + page.y,
+    // the first step of a slide does not show a fragment
+    continues: !!step.querySelector('.fragment.visible'),
+    name: step.querySelector('h1, h2')?.textContent ?? '',
+    notes,
+    videos,
+  };
 })`;
+
+// joins each step to the slide before it if both are of one slide of the deck and show the same videos
+function stackSteps(steps) {
+  const slides = [];
+  for (const { top, continues, ...step } of steps) {
+    const last = slides.at(-1);
+    const same = step.videos.length && JSON.stringify(step.videos) === JSON.stringify(last?.videos);
+    if (continues && same) last.tops.push(top);
+    else slides.push({ ...step, tops: [top] });
+  }
+  return slides;
+}
 
 function localFile(video) {
   const source = video.sources.find((url) => new URL(url).pathname.toLowerCase().endsWith('.mp4'));
@@ -59,19 +81,23 @@ try {
   const page = await browser.newPage({ scale: 2 });
   await printView(page, deckUrl(deck, 'print-pdf&still'));
   const steps = await page.evaluate(listSteps);
-  for (const step of steps) {
-    await page.evaluate(`window.scrollTo(0, ${step.top})`);
-    await page.waitFor(`new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(true))))`);
-    step.image = await page.screenshot();
-    for (const video of step.videos) {
+  const slides = stackSteps(steps);
+  for (const slide of slides) {
+    slide.images = [];
+    for (const top of slide.tops) {
+      await page.evaluate(`window.scrollTo(0, ${top})`);
+      await page.waitFor(`new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(true))))`);
+      slide.images.push(await page.screenshot());
+    }
+    for (const video of slide.videos) {
       video.path = localFile(video);
       const { x, y, width, height } = video;
-      video.poster = await page.screenshot({ x, y: step.top + y, width, height, scale: 1 });
+      video.poster = await page.screenshot({ x, y: slide.tops.at(-1) + y, width, height, scale: 1 });
     }
   }
-  writeFileSync(output, pptx(steps));
-  const videos = steps.reduce((total, step) => total + step.videos.length, 0);
-  console.log(`${output}: ${steps.length} slides for the steps of ${deck}, with ${videos} placed videos`);
+  writeFileSync(output, pptx(slides));
+  const videos = slides.reduce((total, slide) => total + slide.videos.length, 0);
+  console.log(`${output}: ${slides.length} slides for ${steps.length} steps of ${deck}, placed videos: ${videos}`);
   for (const error of page.errors) console.error(`page error: ${error}`);
   if (page.errors.length) failed = true;
 } finally {

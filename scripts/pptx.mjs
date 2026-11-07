@@ -90,21 +90,21 @@ const frame = ({ x, y, width, height }) => `<p:spPr><a:xfrm><a:off x="${emu(x)}"
 
 const blip = (rel) => `<p:blipFill><a:blip r:embed="${rel}"/><a:stretch><a:fillRect/></a:stretch></p:blipFill>`;
 
-const stepPicture = (name, rel) => `<p:pic><p:nvPicPr><p:cNvPr id="2" name="Step" descr="${escape(name)}"/>`
+const stepPicture = (name, rel, id) => `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="Step ${id - 1}" descr="${escape(name)}"/>`
   + '<p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr><p:nvPr/></p:nvPicPr>'
   + `${blip(rel)}${frame({ x: 0, y: 0, ...SLIDE })}</p:pic>`;
 
 // a:videoFile names the video for PowerPoint 2007, and p14:media embeds it in later versions. The
 // picture is the poster frame, shown until the video plays
-const videoPicture = (video, id, rels) => `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="Video ${id - 2}">`
+const videoPicture = (video, id, rels) => `<p:pic><p:nvPicPr><p:cNvPr id="${id}" name="Video ${id}">`
   + '<a:hlinkClick r:id="" action="ppaction://media"/></p:cNvPr><p:cNvPicPr><a:picLocks noChangeAspect="1"/></p:cNvPicPr>'
   + `<p:nvPr><a:videoFile r:link="${rels.link}"/><p:extLst><p:ext uri="{DAA4B4D4-6D71-4841-9C94-3DE7FCFB9230}">`
   + `<p14:media xmlns:p14="${NS_P14}" r:embed="${rels.media}"/></p:ext></p:extLst></p:nvPr></p:nvPicPr>`
   + `${blip(rels.poster)}${frame(video)}</p:pic>`;
 
 // the videos are started by the main sequence when the slide is shown, each with the previous one.
-// a click on a slide with a video is thus the next step, as on any other slide
-function timing(videos) {
+// each later step is then shown on a click, with the Appear effect, while the videos go on playing
+function timing(videos, steps) {
   let id = 3;
   const next = () => ++id;
   const inner = next();
@@ -115,6 +115,16 @@ function timing(videos) {
       + `<p:cTn id="${next()}" dur="${Math.max(1, Math.round(video.duration))}" fill="hold"/>`
       + `<p:tgtEl><p:spTgt spid="${video.shape}"/></p:tgtEl></p:cBhvr></p:cmd></p:childTnLst></p:cTn></p:par>`;
   }).join('');
+  const clicks = steps.map((shape) => {
+    const [outer, middle, effect, set] = [next(), next(), next(), next()];
+    return `<p:par><p:cTn id="${outer}" fill="hold"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst><p:childTnLst>`
+      + `<p:par><p:cTn id="${middle}" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>`
+      + `<p:par><p:cTn id="${effect}" presetID="1" presetClass="entr" presetSubtype="0" fill="hold" nodeType="clickEffect">`
+      + '<p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst><p:set><p:cBhvr>'
+      + `<p:cTn id="${set}" dur="1" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst></p:cTn>`
+      + `<p:tgtEl><p:spTgt spid="${shape}"/></p:tgtEl><p:attrNameLst><p:attrName>style.visibility</p:attrName></p:attrNameLst></p:cBhvr>`
+      + '<p:to><p:strVal val="visible"/></p:to></p:set></p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>';
+  }).join('');
   const media = videos.map((video) => (
     `<p:video><p:cMediaNode vol="80000"${video.muted ? ' mute="1"' : ''}>`
     + `<p:cTn id="${next()}"${video.loop ? ' repeatCount="indefinite"' : ''} fill="hold" display="0"><p:stCondLst><p:cond delay="indefinite"/></p:stCondLst></p:cTn>`
@@ -123,16 +133,19 @@ function timing(videos) {
   return '<p:timing><p:tnLst><p:par><p:cTn id="1" dur="indefinite" restart="never" nodeType="tmRoot"><p:childTnLst>'
     + '<p:seq concurrent="1" nextAc="seek"><p:cTn id="2" dur="indefinite" nodeType="mainSeq"><p:childTnLst>'
     + '<p:par><p:cTn id="3" fill="hold"><p:stCondLst><p:cond delay="indefinite"/><p:cond evt="onBegin" delay="0"><p:tn val="2"/></p:cond></p:stCondLst>'
-    + `<p:childTnLst><p:par><p:cTn id="${inner}" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>${start}</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>`
+    + `<p:childTnLst><p:par><p:cTn id="${inner}" fill="hold"><p:stCondLst><p:cond delay="0"/></p:stCondLst><p:childTnLst>${start}</p:childTnLst></p:cTn></p:par></p:childTnLst></p:cTn></p:par>${clicks}`
     + '</p:childTnLst></p:cTn><p:prevCondLst><p:cond evt="onPrev" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:prevCondLst>'
     + '<p:nextCondLst><p:cond evt="onNext" delay="0"><p:tgtEl><p:sldTgt/></p:tgtEl></p:cond></p:nextCondLst></p:seq>'
     + `${media}</p:childTnLst></p:cTn></p:par></p:tnLst></p:timing>`;
 }
 
-function slideXml(step, imageRel, videos) {
-  return `${HEADER}<p:sld ${NAMESPACES}><p:cSld><p:spTree>${GROUP}${stepPicture(step.name, imageRel)}`
+// the videos are above the steps, hence a step shown on a click does not cover them
+function slideXml(slide, imageRels, videos) {
+  const steps = imageRels.map((rel, n) => stepPicture(slide.name, rel, 2 + n)).join('');
+  const later = imageRels.slice(1).map((_, n) => 3 + n);
+  return `${HEADER}<p:sld ${NAMESPACES}><p:cSld><p:spTree>${GROUP}${steps}`
     + `${videos.map((video) => videoPicture(video, video.shape, video.rels)).join('')}</p:spTree></p:cSld>`
-    + `<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>${videos.length ? timing(videos) : ''}</p:sld>`;
+    + `<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr>${videos.length ? timing(videos, later) : ''}</p:sld>`;
 }
 
 /** Packs parts, a list of [name, data], into a zip, with XML deflated and media stored. */
@@ -174,13 +187,14 @@ export function zip(parts) {
 }
 
 /**
- * Returns a PowerPoint file with one slide for each step.
+ * Returns a PowerPoint file of slides.
  *
- * Each step has a name, used as the alternative text, an image, the PNG of the whole slide, and
- * notes, a list of paragraphs. Each of its videos has a path to an MP4 file, a poster, a PNG, the
- * box x, y, width, and height in px of a slide of 1920 by 1080, a duration in ms, loop, and muted.
+ * Each slide has a name, used as the alternative text, images, the PNGs of the whole slide of which
+ * each one after the first is shown on a click, and notes, a list of paragraphs. Each of its videos
+ * has a path to an MP4 file, a poster, a PNG, the box x, y, width, and height in px of a slide of
+ * 1920 by 1080, a duration in ms, loop, and muted.
  */
-export function pptx(steps) {
+export function pptx(slides) {
   const parts = [];
   const media = new Map();
   let images = 0;
@@ -204,23 +218,23 @@ export function pptx(steps) {
   ];
   const slideIds = [];
 
-  steps.forEach((step, index) => {
+  slides.forEach((slide, index) => {
     const n = index + 1;
     const slideName = `ppt/slides/slide${n}.xml`;
     const rels = [
       { id: 'rId1', type: officeRel('slideLayout'), target: '../slideLayouts/slideLayout1.xml' },
-      { id: 'rId2', type: officeRel('image'), target: image(step.image) },
     ];
     const addRel = (type, target) => {
       const id = `rId${rels.length + 1}`;
       rels.push({ id, type, target });
       return id;
     };
-    const videos = step.videos.map((video, v) => {
+    const imageRels = slide.images.map((data) => addRel(officeRel('image'), image(data)));
+    const videos = slide.videos.map((video, v) => {
       const target = clip(video.path);
       return {
         ...video,
-        shape: 3 + v,
+        shape: 2 + imageRels.length + v,
         rels: {
           link: addRel(officeRel('video'), target),
           media: addRel('http://schemas.microsoft.com/office/2007/relationships/media', target),
@@ -228,16 +242,16 @@ export function pptx(steps) {
         },
       };
     });
-    if (step.notes.length) {
+    if (slide.notes.length) {
       addRel(officeRel('notesSlide'), `../notesSlides/notesSlide${n}.xml`);
-      parts.push([`ppt/notesSlides/notesSlide${n}.xml`, notesSlide(step.notes)]);
+      parts.push([`ppt/notesSlides/notesSlide${n}.xml`, notesSlide(slide.notes)]);
       parts.push([`ppt/notesSlides/_rels/notesSlide${n}.xml.rels`, relationships([
         { id: 'rId1', type: officeRel('notesMaster'), target: '../notesMasters/notesMaster1.xml' },
         { id: 'rId2', type: officeRel('slide'), target: `../slides/slide${n}.xml` },
       ])]);
       overrides.push([`/ppt/notesSlides/notesSlide${n}.xml`, `${CONTENT}.notesSlide+xml`]);
     }
-    parts.push([slideName, slideXml(step, 'rId2', videos)]);
+    parts.push([slideName, slideXml(slide, imageRels, videos)]);
     parts.push([`ppt/slides/_rels/slide${n}.xml.rels`, relationships(rels)]);
     overrides.push([`/${slideName}`, `${CONTENT}.slide+xml`]);
     const id = `rId${presentationRels.length + 1}`;
