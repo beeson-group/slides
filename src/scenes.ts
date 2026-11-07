@@ -240,10 +240,10 @@ function transfer(A: number, phases: number): Strand[] {
   const path = joined([inbound, lap(first, inbound.pts[end], inbound.pts[end + 1], outbound.pts[0], outbound.pts[1]), outbound]);
   const longest = Math.max(...[...unstableArcs, ...stableArcs].map((s) => s.T)), unit = path.T / 6;
   return [
-    { ...toned(retimed(first, 0, unit / first.T), 'text'), head: false },
-    ...unstableArcs.map((s) => ({ ...toned(retimed(s, unit, (3 * unit) / longest), 'orange'), alpha: 0.2, head: false })),
-    ...stableArcs.map((s) => ({ ...toned(retimed(s, unit, (3 * unit) / longest), 'violet'), alpha: 0.2, head: false })),
-    { ...toned(retimed(path, 4 * unit, 1), 'hero'), head: true },
+    { ...toned(retimed(first, 0, unit / first.T), 'text') },
+    ...unstableArcs.map((s) => ({ ...toned(retimed(s, unit, (3 * unit) / longest), 'orange'), alpha: 0.2 })),
+    ...stableArcs.map((s) => ({ ...toned(retimed(s, unit, (3 * unit) / longest), 'violet'), alpha: 0.2 })),
+    { ...toned(retimed(path, 4 * unit, 1), 'hero'), craft: true },
   ];
 }
 
@@ -444,6 +444,11 @@ const SCENES = {
 
 export type SceneName = keyof typeof SCENES;
 export const SCENE_NAMES = Object.keys(SCENES) as SceneName[];
+
+// the seconds in which the longest flight of a scene is traced, where they differ from the 12 of
+// src/orbits.ts. a strand of torus winds 22 times about its orbit, and it is traced more slowly
+const SECONDS: Partial<Record<SceneName, number>> = { torus: 18 };
+export const seconds = (name: string): number | undefined => SECONDS[name as SceneName];
 
 const cache = new Map<string, Strand[]>();
 

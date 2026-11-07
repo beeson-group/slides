@@ -3,8 +3,8 @@
 // Vestini's website (MIT) and reduced to the families drawn on the slides. all quantities are
 // nondimensional, in the rotating frame
 
-import { scene } from './scenes.ts';
-import { fitView, mix, strandsFor } from './strands.ts';
+import { scene, seconds } from './scenes.ts';
+import { fitView, mix, shadeOf, strandsFor } from './strands.ts';
 import type { Dot } from './strands.ts';
 
 export type Member = { s: Float64Array; path: number[]; times: number[]; t: number };
@@ -12,21 +12,22 @@ export type Tone = 'orange' | 'violet' | 'text' | 'hero' | 'line';
 // pts is a list of alternating x and y values. times are the flight times of the points, and T is
 // the last of them. alpha, when set, replaces the opacity of the tone. ink, when set, replaces the
 // color of the tone with the color at the fraction at between the two colors of the pair of the
-// palette --strand-1 to --strand-8 in theme/beeson.css, i.e. --strand-1 and --strand-2 for pair 0.
-// head, when false, leaves the strand without a moving head
-export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; alpha?: number; ink?: { pair: number; at: number }; head?: boolean };
+// palette --strand-1 to --strand-8 in theme/beeson.css, i.e. --strand-1 and --strand-2 for pair 0,
+// or with shade the shade at the fraction at of the first color of the pair. craft, when true, marks
+// the path of a spacecraft, whose head is drawn without data-heads
+export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; alpha?: number; ink?: { pair: number; at: number; shade?: boolean }; craft?: boolean };
 
 export const MU = 0.01215;
 // the distance to a body within which the step is shortened in step()
 const NEAR = 0.15;
-// seconds in which the longest flight of a scene is traced
+// seconds in which the longest flight of a backdrop is traced, unless a scene sets its own in
+// src/scenes.ts
 const DURATION = 12;
 // seconds per revolution of a looping mark
 const LOOP = 9;
-// the radii of the heads of a trace for each value of the attribute data-heads, in line widths
+// the radii of the heads of a trace for each value of the attribute data-heads, in line widths.
+// without data-heads, a head of full size is drawn on each strand of a spacecraft alone
 const HEADS: Record<string, number> = { full: 2.2, small: 0.55, none: 0 };
-// the heads of a backdrop drawn from a file of polylines, when data-heads is not set
-const FILE_HEADS = 'none';
 // the number of colors of the palette of theme/beeson.css, in pairs
 const PALETTE = 8;
 
@@ -300,6 +301,12 @@ export class Orbits {
   // true when start() was called before the strands of a file were loaded
   private pending = false;
   private headSize: number;
+  // seconds in which the longest strand is traced
+  private duration: number;
+  // seconds between the starts of two strands one after the other, from data-stagger
+  private stagger: number;
+  // true when a head is drawn on every strand, and false when on the strands of a spacecraft alone
+  private everyHead: boolean;
   // the colors of the strands with an ink, resolved in redraw() for the current mode
   private inks: string[] = [];
   // resolved when the strands are in place, at once for a named scene and after the load of a file
@@ -318,7 +325,10 @@ export class Orbits {
     this.dots = file ? [] : null;
     this.loaded = !file;
     this.fitted = file && el.dataset.half === undefined;
-    this.headSize = HEADS[el.dataset.heads ?? (file ? FILE_HEADS : 'full')] ?? HEADS.full;
+    this.headSize = HEADS[el.dataset.heads ?? 'full'] ?? HEADS.full;
+    this.everyHead = el.dataset.heads !== undefined;
+    this.duration = (file ? undefined : seconds(el.dataset.scene ?? '')) ?? DURATION;
+    this.stagger = Math.max(0, Number(el.dataset.stagger) || 0);
     this.cx = +(el.dataset.cx ?? 0);
     this.cy = +(el.dataset.cy ?? 0);
     this.half = +(el.dataset.half ?? 0.5);
@@ -360,6 +370,11 @@ export class Orbits {
     return { cx: this.cx, cy: this.cy, half: this.half };
   }
 
+  // true when a head is drawn on at least one strand during a trace
+  get headed(): boolean {
+    return this.headSize > 0 && (this.everyHead || this.strands.some((s) => s.craft));
+  }
+
   get done(): boolean {
     return this.finished || this.loop;
   }
@@ -385,7 +400,7 @@ export class Orbits {
     this.inks = this.strands.map((s) => {
       if (!s.ink) return '';
       const k = (2 * s.ink.pair) % PALETTE;
-      return mix(palette[k], palette[k + 1], s.ink.at) ?? c.stroke;
+      return (s.ink.shade ? shadeOf(palette[k], s.ink.at) : mix(palette[k], palette[k + 1], s.ink.at)) ?? c.stroke;
     });
   }
 
@@ -583,14 +598,18 @@ export class Orbits {
     ctx.fillStyle = c.accent; ctx.beginPath(); ctx.arc(X, Y, 3 * this.lw, 0, 2 * Math.PI); ctx.fill();
   }
 
+  // the flight time reached by strand i at the time now, which is negative before its start
+  private clock(i: number, now: number): number {
+    return (((now - (this.t0 ?? now)) / 1000 - i * this.stagger) / this.duration) * this.Tmax;
+  }
+
   private heads(ctx: CanvasRenderingContext2D, c: Colors, now: number): void {
     if (!this.headSize) return;
-    const tau = (((now - (this.t0 ?? now)) / 1000) / DURATION) * this.Tmax;
     ctx.fillStyle = c.accent;
     this.strands.forEach((s, i) => {
-      const j = this.idx[i];
+      const j = this.idx[i], tau = this.clock(i, now);
       // the head of a strand is not drawn before times[0] of this strand
-      if (s.head === false || j >= s.times.length - 1 || tau < s.times[0]) return;
+      if ((!this.everyHead && !s.craft) || j >= s.times.length - 1 || tau < s.times[0]) return;
       const [X, Y] = this.at(i, j, tau);
       ctx.beginPath(); ctx.arc(X, Y, this.headSize * this.lw, 0, 2 * Math.PI); ctx.fill();
     });
@@ -631,14 +650,13 @@ export class Orbits {
 
   private frame(now: number): void {
     if (this.loop || !this.W) { this.paintHead(now); return; }
-    const tau = (((now - (this.t0 ?? now)) / 1000) / DURATION) * this.Tmax;
     const ctx = this.base.getContext('2d');
     if (!ctx) return;
     const c = this.colors();
     ctx.lineWidth = this.lw; ctx.lineJoin = 'round'; ctx.strokeStyle = c.stroke;
     let flying = 0;
     this.strands.forEach((s, i) => {
-      const n = s.times.length;
+      const n = s.times.length, tau = this.clock(i, now);
       let j = this.idx[i];
       while (j < n - 1 && s.times[j + 1] <= tau) j++;
       this.pen(ctx, c, s.tone);

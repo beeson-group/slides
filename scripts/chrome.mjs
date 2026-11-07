@@ -129,8 +129,9 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
   }
 
   // with mobile set, the page is laid out as on a phone, with touch and a coarse pointer, and scale
-  // is the device pixel ratio
-  async function newPage({ width = 1920, height = 1080, mobile = false, scale = 1 } = {}) {
+  // is the device pixel ratio. with motion set, the page is shown without reduced motion, which is
+  // the setting of the macOS and Windows runners of GitHub, hence a backdrop is traced there too
+  async function newPage({ width = 1920, height = 1080, mobile = false, scale = 1, motion = false } = {}) {
     const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
     const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
     const call = (method, params) => send(method, params, sessionId);
@@ -152,6 +153,7 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
     await Promise.all([call('Page.enable'), call('Runtime.enable'), call('Log.enable')]);
     await call('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: scale, mobile });
     if (mobile) await call('Emulation.setTouchEmulationEnabled', { enabled: true });
+    if (motion) await call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
 
     async function evaluate(expression) {
       const { result, exceptionDetails } = await call('Runtime.evaluate', {

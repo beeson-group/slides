@@ -101,3 +101,12 @@ test('a Chrome that does not answer is reported', { skip: process.platform === '
   await assert.rejects(browser.newPage(), /did not answer/);
   await browser.close();
 });
+
+test('a page opened with motion is shown without reduced motion', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage({ motion: true });
+
+  assert.equal(await page.evaluate(`matchMedia('(prefers-reduced-motion: reduce)').matches`), false);
+  assert.equal(await page.evaluate(`matchMedia('(prefers-reduced-motion: no-preference)').matches`), true);
+});

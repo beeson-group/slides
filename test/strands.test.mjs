@@ -5,19 +5,19 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { deckSettled, deckUrl, launch } from '../scripts/chrome.mjs';
-import { FILL, bodiesOf, fitView, mix, parse, select, strandsOf } from '../src/strands.ts';
+import { FILL, bodiesOf, fitView, mix, parse, select, shadeOf, strandsOf } from '../src/strands.ts';
 
 // the sample of the demo deck is a JSON object wrapped in Beeson.strands( and );
 const text = readFileSync(new URL('../demo/broucke-sample.js', import.meta.url), 'utf8');
 const sample = parse(JSON.parse(text.slice(text.indexOf('(') + 1, text.lastIndexOf(')'))));
 const keys = (records) => records.map((r) => `${r.family} ${r.frame} ${r.e}`);
 
-test('the sample is parsed into twelve members of families 7 and 11 with their bodies', () => {
-  assert.equal(sample.families.length, 12);
+test('the sample is parsed into eight members of each of families 7 and 11 in two frames, with their bodies', () => {
+  assert.equal(sample.families.length, 32);
   assert.deepEqual([...new Set(sample.families.map((r) => r.family))], [7, 11]);
   assert.deepEqual([...new Set(sample.families.map((r) => r.frame))], ['pulsating', 'inertial']);
   for (const r of sample.families) assert.equal(r.points.length, r.theta.length);
-  assert.equal(sample.bodies.length, 6);
+  assert.equal(sample.bodies.length, 16);
 });
 
 test('a malformed file is rejected with the reason', () => {
@@ -69,21 +69,33 @@ test('a malformed file is rejected with the reason', () => {
 
 test('records are selected by equal values, alternatives, bounds, and groups', () => {
   const all = sample.families;
-  assert.equal(select(all, undefined).length, 12);
-  assert.equal(select(all, ' ').length, 12);
+  assert.equal(select(all, undefined).length, 32);
+  assert.equal(select(all, ' ').length, 32);
   assert.deepEqual(keys(select(all, 'family=7, frame=pulsating')), [
     '7 pulsating 0',
+    '7 pulsating 0.09',
+    '7 pulsating 0.135',
     '7 pulsating 0.225',
+    '7 pulsating 0.275',
+    '7 pulsating 0.365',
+    '7 pulsating 0.41',
     '7 pulsating 0.5',
   ]);
-  assert.equal(select(all, 'family=7|11,frame=inertial').length, 6);
+  assert.equal(select(all, 'family=7|11,frame=inertial').length, 16);
   assert.deepEqual(keys(select(all, 'frame=pulsating,e>0.2,e<=0.453')), [
     '7 pulsating 0.225',
+    '7 pulsating 0.275',
+    '7 pulsating 0.365',
+    '7 pulsating 0.41',
+    '11 pulsating 0.205',
     '11 pulsating 0.245',
+    '11 pulsating 0.33',
+    '11 pulsating 0.37',
     '11 pulsating 0.453',
   ]);
   assert.deepEqual(keys(select(all, 'family=7,frame=pulsating,e<0.1; family=11,frame=pulsating,e>=0.45')), [
     '7 pulsating 0',
+    '7 pulsating 0.09',
     '11 pulsating 0.453',
   ]);
   assert.equal(select(all, 'family=8').length, 0);
@@ -104,19 +116,43 @@ test('a strand is colored by the pair of its family and the ramp along e', () =>
   const eleven = strandsOf(sample, select(sample.families, 'family=11,frame=pulsating'), 'family', 'e');
   assert.deepEqual(
     eleven.map((s) => s.ink.pair),
-    [1, 1, 1],
+    [1, 1, 1, 1, 1, 1, 1, 1],
   );
   assert.deepEqual(
     eleven.map((s) => +s.ink.at.toFixed(3)),
-    [0, 0.541, 1],
+    [0, 0.177, 0.276, 0.453, 0.541, 0.728, 0.817, 1],
   );
+  assert.ok(eleven.every((s) => s.ink.shade === undefined));
   assert.ok(eleven.every((s) => s.alpha > 0 && s.alpha < 1));
   const both = strandsOf(sample, select(sample.families, 'frame=inertial'), 'family');
   assert.deepEqual(
     both.map((s) => s.ink.pair),
-    [0, 0, 0, 1, 1, 1],
+    [...Array(8).fill(0), ...Array(8).fill(1)],
   );
   assert.ok(both.every((s) => s.ink.at === 0));
+});
+
+test('a strand is drawn in a shade of the first color of its pair along e, lighter at the smallest e', () => {
+  const shaded = strandsOf(sample, select(sample.families, 'frame=pulsating'), 'family', undefined, 'e');
+  assert.deepEqual(
+    shaded.map((s) => [s.ink.pair, +s.ink.at.toFixed(3), s.ink.shade]),
+    [0, 0.18, 0.27, 0.45, 0.55, 0.73, 0.82, 1].map((at) => [0, at, true]).concat(
+      [0, 0.177, 0.276, 0.453, 0.541, 0.728, 0.817, 1].map((at) => [1, at, true]),
+    ),
+  );
+  // the middle shade is the color itself, and the ends differ in OKLCH lightness alone
+  assert.equal(shadeOf('#3d8bff', 0.5), '#3d8bff');
+  assert.equal(shadeOf('#3d8bff', 0), '#70bfff');
+  assert.equal(shadeOf('#3d8bff', 1), '#0058c8');
+  assert.equal(shadeOf('red', 0), null);
+});
+
+test('a record with craft set to true is the path of a spacecraft', () => {
+  const file = parse({ families: [{ points: [[0, 0], [1, 0]], craft: true }, { points: [[0, 0], [1, 1]], craft: 'yes' }, { points: [[0, 0], [0, 1]] }] });
+  assert.deepEqual(
+    strandsOf(file, file.families).map((s) => s.craft),
+    [true, undefined, undefined],
+  );
 });
 
 test('colors are mixed in OKLCH along the shorter arc of hue', () => {

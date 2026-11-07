@@ -53,7 +53,8 @@ test('a video without a poster is printed with its frame on every step', { timeo
 
   const frames = pageImages(await page.pdf()).map((images) => images.filter((i) => i.width === 600 && i.height === 600).length);
 
-  assert.deepEqual(frames, [1, 1, 1]);
+  // the last page is the step that restores the dimmed fragments
+  assert.deepEqual(frames, [1, 1, 1, 1]);
 });
 
 test('a tycho viewer is printed with its scene', { timeout: 60000 }, async (t) => {

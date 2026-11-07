@@ -1,5 +1,7 @@
-// the steps of a slide. the current slide is marked with data-complete once its last fragment is
-// shown, so that the earlier fragments are not dimmed any more. a fragment with data-highlight
+// the steps of a slide. a slide is marked with data-complete once every fragment is shown, so that
+// the earlier fragments are not dimmed any more. a step without content is added after the last
+// step of a slide that dims a fragment, hence the last fragment is first shown alone, and every
+// fragment is restored at the added step. a fragment with data-highlight
 // colors the elements of the classes it names once it is shown, e.g. a symbol set with
 // \class{name}{...} in MathJax, in orange or, with data-tone="violet", in violet. a fragment with
 // data-keep is held at full opacity through the next step, or through the step of its value, and a
@@ -43,9 +45,37 @@ export function resolve(steps: Step[], current: number): { held: boolean[]; lit:
 
 const words = (s: string | null | undefined) => (s ?? '').split(/\s+/).filter(Boolean);
 
-/** Marks the held fragments of a slide with data-held, and colors the elements of its highlighted classes. */
+const hasContent = (f: Element) => f.children.length > 0 || (f.textContent ?? '').trim() !== '';
+
+/**
+ * Appends the step that restores the dimmed fragments to every slide under root whose last step
+ * dims a fragment with content. A fragment without data-fragment-index is placed by reveal.js after
+ * every indexed one, in the order of the page, hence the added step is the last of its slide.
+ */
+export function addRestoreSteps(root: ParentNode): void {
+  for (const slide of root.querySelectorAll<HTMLElement>('.reveal .slides section')) {
+    if (slide.querySelector('section, .fragment[data-restore]')) continue;
+    const frags = [...slide.querySelectorAll<HTMLElement>('.fragment')];
+    const unindexed = frags.filter((f) => !f.hasAttribute('data-fragment-index'));
+    const last = unindexed.length
+      ? [unindexed[unindexed.length - 1]]
+      : frags.filter((f) => Number(f.dataset.fragmentIndex) === Math.max(...frags.map((g) => Number(g.dataset.fragmentIndex))));
+    if (!frags.some((f) => !last.includes(f) && hasContent(f))) continue;
+    const restore = document.createElement('span');
+    restore.className = 'fragment';
+    restore.setAttribute('data-restore', '');
+    restore.setAttribute('aria-hidden', 'true');
+    slide.append(restore);
+  }
+}
+
+/**
+ * Marks a slide complete when every fragment is shown, marks its held fragments with data-held, and
+ * colors the elements of its highlighted classes.
+ */
 export function applySteps(slide: Element): void {
   const frags = [...slide.querySelectorAll<HTMLElement>('.fragment')];
+  if (!slide.querySelector('section')) slide.toggleAttribute('data-complete', frags.every((f) => f.classList.contains('visible')));
   const names = [...new Set(frags.flatMap((f) => words(f.dataset.highlight)))];
   if (!names.length && !frags.some((f) => f.hasAttribute('data-keep'))) return;
   const select = (name: string) => `.${CSS.escape(name)}`;
@@ -83,9 +113,7 @@ export const typeset = (): Promise<unknown> => window.MathJax?.startup?.promise 
 export function initSteps(deck: Deck): void {
   const mark = () => {
     const slide = deck.getCurrentSlide();
-    if (!slide) return;
-    slide.toggleAttribute('data-complete', !deck.availableFragments().next);
-    applySteps(slide);
+    if (slide) applySteps(slide);
   };
   for (const type of ['fragmentshown', 'fragmenthidden', 'slidechanged']) deck.on(type, mark);
   mark();

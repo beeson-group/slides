@@ -250,10 +250,10 @@
     const path = joined([inbound, lap(first, inbound.pts[end], inbound.pts[end + 1], outbound.pts[0], outbound.pts[1]), outbound]);
     const longest = Math.max(...[...unstableArcs, ...stableArcs].map((s) => s.T)), unit = path.T / 6;
     return [
-      { ...toned(retimed(first, 0, unit / first.T), "text"), head: false },
-      ...unstableArcs.map((s) => ({ ...toned(retimed(s, unit, 3 * unit / longest), "orange"), alpha: 0.2, head: false })),
-      ...stableArcs.map((s) => ({ ...toned(retimed(s, unit, 3 * unit / longest), "violet"), alpha: 0.2, head: false })),
-      { ...toned(retimed(path, 4 * unit, 1), "hero"), head: true }
+      { ...toned(retimed(first, 0, unit / first.T), "text") },
+      ...unstableArcs.map((s) => ({ ...toned(retimed(s, unit, 3 * unit / longest), "orange"), alpha: 0.2 })),
+      ...stableArcs.map((s) => ({ ...toned(retimed(s, unit, 3 * unit / longest), "violet"), alpha: 0.2 })),
+      { ...toned(retimed(path, 4 * unit, 1), "hero"), craft: true }
     ];
   }
   function unstable(orbit, T) {
@@ -441,6 +441,8 @@
     sheaf: () => sheaf(36)
   };
   var SCENE_NAMES = Object.keys(SCENES);
+  var SECONDS = { torus: 18 };
+  var seconds = (name) => SECONDS[name];
   var cache = /* @__PURE__ */ new Map();
   function scene(name) {
     let out = cache.get(name);
@@ -498,13 +500,14 @@
       };
     });
   }
-  function strandsOf(file, chosen, color, ramp2) {
+  function strandsOf(file, chosen, color, ramp2, shade) {
+    const along = shade ?? ramp2;
     const order = color ? [...new Set(file.families.map((r) => String(r[color])))] : [];
     const pairOf = (r) => color ? order.indexOf(String(r[color])) : 0;
     const range = /* @__PURE__ */ new Map();
-    if (ramp2) {
+    if (along) {
       for (const r of chosen) {
-        const v = r[ramp2];
+        const v = r[along];
         if (typeof v !== "number") continue;
         const [lo, hi] = range.get(pairOf(r)) ?? [v, v];
         range.set(pairOf(r), [Math.min(lo, v), Math.max(hi, v)]);
@@ -521,9 +524,11 @@
         times[i] = clock ? clock[i] - clock[0] : length;
       }
       const strand = { pts, times, T: times[n - 1] };
-      if (color || ramp2) {
-        const pair2 = pairOf(r), [lo, hi] = range.get(pair2) ?? [0, 0], v = ramp2 ? r[ramp2] : void 0;
+      if (r.craft === true) strand.craft = true;
+      if (color || along) {
+        const pair2 = pairOf(r), [lo, hi] = range.get(pair2) ?? [0, 0], v = along ? r[along] : void 0;
         strand.ink = { pair: pair2, at: typeof v === "number" && hi > lo ? (v - lo) / (hi - lo) : 0 };
+        if (shade) strand.ink.shade = true;
         strand.alpha = INK_ALPHA;
       }
       return strand;
@@ -626,6 +631,14 @@
     const L = L1 + (L2 - L1) * at, C = C1 + (C2 - C1) * at, h = h1 + dh * at;
     return hex(rgbFromLab([L, C * Math.cos(h), C * Math.sin(h)]));
   }
+  var SHADES = 0.16;
+  function shadeOf(color, at) {
+    const c = rgbOf(color);
+    if (!c) return null;
+    const [L, C, h] = lch(c);
+    const shaded = Math.min(0.95, Math.max(0.2, L + SHADES * (1 - 2 * at)));
+    return hex(rgbFromLab([shaded, C * Math.cos(h), C * Math.sin(h)]));
+  }
   function rgbOf(color) {
     const c = color.trim();
     let m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(c);
@@ -711,7 +724,13 @@
       if (!chosen.length)
         console.warn(`beeson: data-strands-select="${el.dataset.strandsSelect}" does not match a record of ${path}`);
       return {
-        strands: strandsOf(file, chosen, el.dataset.strandsColor || void 0, el.dataset.strandsRamp || void 0),
+        strands: strandsOf(
+          file,
+          chosen,
+          el.dataset.strandsColor || void 0,
+          el.dataset.strandsRamp || void 0,
+          el.dataset.strandsShade || void 0
+        ),
         dots: bodiesOf(file, chosen)
       };
     } catch (error) {
@@ -726,7 +745,6 @@
   var DURATION = 12;
   var LOOP = 9;
   var HEADS = { full: 2.2, small: 0.55, none: 0 };
-  var FILE_HEADS = "none";
   var PALETTE = 8;
   function accel(s, a) {
     const x = s[0], y = s[1], z = s[2];
@@ -958,7 +976,10 @@
       this.dots = file ? [] : null;
       this.loaded = !file;
       this.fitted = file && el.dataset.half === void 0;
-      this.headSize = HEADS[el.dataset.heads ?? (file ? FILE_HEADS : "full")] ?? HEADS.full;
+      this.headSize = HEADS[el.dataset.heads ?? "full"] ?? HEADS.full;
+      this.everyHead = el.dataset.heads !== void 0;
+      this.duration = (file ? void 0 : seconds(el.dataset.scene ?? "")) ?? DURATION;
+      this.stagger = Math.max(0, Number(el.dataset.stagger) || 0);
       this.cx = +(el.dataset.cx ?? 0);
       this.cy = +(el.dataset.cy ?? 0);
       this.half = +(el.dataset.half ?? 0.5);
@@ -1000,6 +1021,10 @@
     get view() {
       return { cx: this.cx, cy: this.cy, half: this.half };
     }
+    // true when a head is drawn on at least one strand during a trace
+    get headed() {
+      return this.headSize > 0 && (this.everyHead || this.strands.some((s) => s.craft));
+    }
     get done() {
       return this.finished || this.loop;
     }
@@ -1026,7 +1051,7 @@
       this.inks = this.strands.map((s) => {
         if (!s.ink) return "";
         const k = 2 * s.ink.pair % PALETTE;
-        return mix(palette[k], palette[k + 1], s.ink.at) ?? c.stroke;
+        return (s.ink.shade ? shadeOf(palette[k], s.ink.at) : mix(palette[k], palette[k + 1], s.ink.at)) ?? c.stroke;
       });
     }
     X(x) {
@@ -1233,13 +1258,16 @@
       ctx.arc(X, Y, 3 * this.lw, 0, 2 * Math.PI);
       ctx.fill();
     }
+    // the flight time reached by strand i at the time now, which is negative before its start
+    clock(i, now) {
+      return ((now - (this.t0 ?? now)) / 1e3 - i * this.stagger) / this.duration * this.Tmax;
+    }
     heads(ctx, c, now) {
       if (!this.headSize) return;
-      const tau = (now - (this.t0 ?? now)) / 1e3 / DURATION * this.Tmax;
       ctx.fillStyle = c.accent;
       this.strands.forEach((s, i) => {
-        const j = this.idx[i];
-        if (s.head === false || j >= s.times.length - 1 || tau < s.times[0]) return;
+        const j = this.idx[i], tau = this.clock(i, now);
+        if (!this.everyHead && !s.craft || j >= s.times.length - 1 || tau < s.times[0]) return;
         const [X, Y] = this.at(i, j, tau);
         ctx.beginPath();
         ctx.arc(X, Y, this.headSize * this.lw, 0, 2 * Math.PI);
@@ -1288,7 +1316,6 @@
         this.paintHead(now);
         return;
       }
-      const tau = (now - (this.t0 ?? now)) / 1e3 / DURATION * this.Tmax;
       const ctx = this.base.getContext("2d");
       if (!ctx) return;
       const c = this.colors();
@@ -1297,7 +1324,7 @@
       ctx.strokeStyle = c.stroke;
       let flying = 0;
       this.strands.forEach((s, i) => {
-        const n = s.times.length;
+        const n = s.times.length, tau = this.clock(i, now);
         let j = this.idx[i];
         while (j < n - 1 && s.times[j + 1] <= tau) j++;
         this.pen(ctx, c, s.tone);
@@ -3321,8 +3348,24 @@ void main() {
     return { held, lit };
   }
   var words2 = (s) => (s ?? "").split(/\s+/).filter(Boolean);
+  var hasContent = (f) => f.children.length > 0 || (f.textContent ?? "").trim() !== "";
+  function addRestoreSteps(root2) {
+    for (const slide of root2.querySelectorAll(".reveal .slides section")) {
+      if (slide.querySelector("section, .fragment[data-restore]")) continue;
+      const frags = [...slide.querySelectorAll(".fragment")];
+      const unindexed = frags.filter((f) => !f.hasAttribute("data-fragment-index"));
+      const last = unindexed.length ? [unindexed[unindexed.length - 1]] : frags.filter((f) => Number(f.dataset.fragmentIndex) === Math.max(...frags.map((g) => Number(g.dataset.fragmentIndex))));
+      if (!frags.some((f) => !last.includes(f) && hasContent(f))) continue;
+      const restore = document.createElement("span");
+      restore.className = "fragment";
+      restore.setAttribute("data-restore", "");
+      restore.setAttribute("aria-hidden", "true");
+      slide.append(restore);
+    }
+  }
   function applySteps(slide) {
     const frags = [...slide.querySelectorAll(".fragment")];
+    if (!slide.querySelector("section")) slide.toggleAttribute("data-complete", frags.every((f) => f.classList.contains("visible")));
     const names = [...new Set(frags.flatMap((f) => words2(f.dataset.highlight)))];
     if (!names.length && !frags.some((f) => f.hasAttribute("data-keep"))) return;
     const select2 = (name) => `.${CSS.escape(name)}`;
@@ -3355,9 +3398,7 @@ void main() {
   function initSteps(deck) {
     const mark = () => {
       const slide = deck.getCurrentSlide();
-      if (!slide) return;
-      slide.toggleAttribute("data-complete", !deck.availableFragments().next);
-      applySteps(slide);
+      if (slide) applySteps(slide);
     };
     for (const type of ["fragmentshown", "fragmenthidden", "slidechanged"]) deck.on(type, mark);
     mark();
@@ -3510,12 +3551,12 @@ void main() {
       const loop = o.el.hasAttribute("data-loop");
       if (glide) {
         o.complete();
-        const seconds = Number(slide.dataset.autoAnimateDuration ?? window.Reveal.getConfig().autoAnimateDuration ?? 1);
+        const seconds2 = Number(slide.dataset.autoAnimateDuration ?? window.Reveal.getConfig().autoAnimateDuration ?? 1);
         setTimeout(() => {
           if (window.Reveal.getCurrentSlide() !== slide) return;
           o.fit();
           if (loop) o.start();
-        }, seconds * 1e3 + 50);
+        }, seconds2 * 1e3 + 50);
       } else if (loop || o.el.hasAttribute("data-live") || TRACED.some((c) => slide.classList.contains(c))) {
         o.reset();
         o.start();
@@ -3556,6 +3597,7 @@ void main() {
       syncViewers(get());
       void stillViewers();
     });
+    if (!EDITING) addRestoreSteps(document);
     await deck.initialize({ ...DEFAULTS, ...options, plugins });
     initChrome(deck);
     initSteps(deck);

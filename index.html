@@ -58,7 +58,7 @@ try {
     <span class="lab" data-at="moon" data-dy="36">Moon</span>
   </div>
   <div class="foot">The backdrop of a content slide is drawn complete. Add <code>data-live</code> to animate it.</div>
-  <aside class="notes">A new element is faded in, and the earlier ones are dimmed until the slide is complete. Fragments are dimmed to 45 percent once a later one is shown. When the last fragment is shown, data-complete is set on the section, and everything is restored to full opacity.</aside>
+  <aside class="notes">A new element is faded in, and the earlier ones are dimmed to 45 percent. The last element is first shown alone, and every element is restored to full opacity at one more step, which is added by the theme. At this step, data-complete is set on the section.</aside>
 </section>
 
 <section>
@@ -130,10 +130,10 @@ try {
 </section>
 
 <section class="figure">
-  <div class="plate"><img class="paper" src="demo/figure-paper.png" alt="A figure with a white background, framed as paper"></div>
+  <div class="plate"><img class="paper" src="demo/figure-paper.png" alt="The northern halo family of the Earth–Moon L2 point in the xy, xz, and yz projections, colored by the Jacobi constant"></div>
   <h2>A white figure, framed as paper</h2>
-  <p class="caption">A raster figure from a paper keeps its white background, framed with the <code>paper</code> class.</p>
-  <aside class="notes">The figure is drawn over the whole slide in the plate layout.</aside>
+  <p class="caption">The northern halo family of \(\mathcal L_2\), from a figure on white framed with the <code>paper</code> class.</p>
+  <aside class="notes">The figure is drawn in the plate layout, and the paper is cut to the size of the image. The family is continued from small halo orbits to a near-rectilinear halo orbit, and each member is colored by its Jacobi constant.</aside>
 </section>
 
 <section class="figure">
@@ -158,10 +158,10 @@ try {
 </section>
 
 <section class="figure">
-  <div class="backdrop" data-strands="demo/broucke-sample.js" data-strands-select="frame=pulsating" data-strands-color="family" data-strands-ramp="e" data-live></div>
+  <div class="backdrop" data-strands="demo/broucke-sample.js" data-strands-select="frame=pulsating" data-strands-color="family" data-strands-shade="e" data-stagger="0.4" data-live></div>
   <h2>A backdrop from a file of polylines</h2>
-  <p class="caption">Members of Broucke's families 7 and 11 of the elliptic problem in the rotating-pulsating frame, read from <code>demo/broucke-sample.js</code>, with a hue per family and a ramp along the eccentricity.</p>
-  <aside class="notes">The file is named in data-strands, the records are chosen with data-strands-select, and the colors are keyed with data-strands-color and data-strands-ramp. The window is fitted to the strands, since data-half is not given.</aside>
+  <p class="caption">Members of Broucke's families 7 and 11 of the elliptic problem in the rotating-pulsating frame, read from <code>demo/broucke-sample.js</code>, with a color per family in a shade per eccentricity.</p>
+  <aside class="notes">The file is named in data-strands, the records are chosen with data-strands-select, and the colors are keyed with data-strands-color and data-strands-shade. With data-stagger, the strands are started 0.4 s apart. The window is fitted to the strands, since data-half is not given.</aside>
 </section>
 
 <!-- split: the black panel of the group deck, dark in both modes -->

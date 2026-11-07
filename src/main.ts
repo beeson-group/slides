@@ -10,7 +10,7 @@ import { stillViewers } from './print.ts';
 import { mount as mountSurfaces } from './surface.ts';
 import type { Surface } from './surface.ts';
 import { register } from './strands.ts';
-import { applyAll, applySteps, initSteps, typeset } from './steps.ts';
+import { addRestoreSteps, applyAll, applySteps, initSteps, typeset } from './steps.ts';
 import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.ts';
 import type { RevealOptions, SlideEvent } from './reveal.d.ts';
 
@@ -124,6 +124,8 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
     syncViewers(get());
     void stillViewers();
   });
+  // the editor lists the steps written in the file, and it does not show the added ones
+  if (!EDITING) addRestoreSteps(document);
   await deck.initialize({ ...DEFAULTS, ...options, plugins });
 
   initChrome(deck);
