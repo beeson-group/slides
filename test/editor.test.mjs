@@ -244,6 +244,30 @@ test('the video slide and the viewer are left alone, and the deck is still while
   assert.deepEqual(page.errors, []);
 });
 
+test('the notes are laid in a pane under the slide, and Present opens the deck without the editor', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  assert.match(await page.evaluate(`document.querySelector('.beeson-edit-bottom .count').textContent`), /^Slide 1 of \d+$/);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Notes').click()`);
+  const boxes = await page.evaluate(`(() => {
+    const slide = document.querySelector('.reveal .slides').getBoundingClientRect();
+    const aside = document.querySelector('.reveal section.present > aside.notes');
+    const box = aside.getBoundingClientRect();
+    return { display: getComputedStyle(aside).display, slideBottom: slide.bottom, top: box.top, bottom: box.bottom, height: innerHeight, focused: document.activeElement === aside };
+  })()`);
+  assert.equal(boxes.display, 'block');
+  assert.ok(Math.abs(boxes.top - boxes.slideBottom) < 2, `the notes start at ${boxes.top}, the slide ends at ${boxes.slideBottom}`);
+  assert.ok(boxes.bottom <= boxes.height - 35, `the notes end at ${boxes.bottom} in a window of ${boxes.height}`);
+  assert.equal(boxes.focused, true);
+  await page.evaluate(`window.open = (url) => { window.__opened = url; }`);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Present').click()`);
+  const opened = await page.evaluate('window.__opened');
+  assert.ok(!/[?&]edit/.test(opened) && opened.endsWith('index.html?still'), opened);
+  assert.deepEqual(page.errors, []);
+});
+
 test('the print view of the PDF and of PowerPoint does not load the editor', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
@@ -366,6 +390,35 @@ test('one history undoes and redoes the typing, a formula, a step, and a move, w
   assert.deepEqual(page.errors, []);
 });
 
+test('the notes pane is resized by dragging the strip above it, and the height is kept', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Notes').click()`);
+  const result = await page.evaluate(`(() => {
+    const strip = document.querySelector('.beeson-edit-resize');
+    const r = strip.getBoundingClientRect();
+    const paneTop = document.querySelector('.beeson-edit-pane').getBoundingClientRect().top;
+    const at = (type, y) => strip.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: r.left + 100, clientY: y, button: 0, pointerId: 1 }));
+    const y = r.top + r.height / 2;
+    at('pointerdown', y);
+    at('pointermove', y - 50);
+    at('pointermove', y - 100);
+    at('pointerup', y - 100);
+    const aside = document.querySelector('.reveal section.present > aside.notes').getBoundingClientRect();
+    const slide = document.querySelector('.reveal .slides').getBoundingClientRect();
+    return { display: getComputedStyle(strip).display, stripAtPane: Math.abs(y - paneTop) < 6, pane: window.BeesonEditor.status().pane, stored: localStorage.getItem('beeson-pane'), asideHeight: aside.height, asideAtSlide: Math.abs(aside.top - slide.bottom) < 2 };
+  })()`);
+  assert.equal(result.display, 'block');
+  assert.equal(result.stripAtPane, true);
+  assert.equal(result.pane, 300);
+  assert.equal(result.stored, '300');
+  assert.ok(Math.abs(result.asideHeight - 300) < 2, `the notes are ${result.asideHeight} px high`);
+  assert.equal(result.asideAtSlide, true);
+  assert.deepEqual(page.errors, []);
+});
+
 test('E opens the slide in the editor', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
@@ -382,6 +435,30 @@ test('E opens the slide in the editor', async (t) => {
   await page.evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', keyCode: 69, which: 69, bubbles: true, cancelable: true }))`);
   await sleep(200);
   assert.equal(await page.evaluate('location.search'), '?still&edit');
+  assert.deepEqual(page.errors, []);
+});
+
+test('with Notes on, a slide without notes gets an empty aside to type into, which is saved once it has text', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  const status = () => page.evaluate('window.BeesonEditor.status()');
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Notes').click()`);
+  assert.equal(await page.evaluate(`!!document.querySelector('.reveal .slides > section:nth-of-type(2) > aside.notes')`), false);
+  await page.evaluate(`document.activeElement.blur(); document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowRight', keyCode: 39, which: 39, bubbles: true, cancelable: true }))`);
+  assert.equal(await page.evaluate('Reveal.getIndices().h'), 1);
+  const aside = await page.evaluate(`(() => { const a = document.querySelector('.reveal section.present > aside.notes'); return a && { editable: a.isContentEditable, label: a.getAttribute('aria-label'), text: a.textContent }; })()`);
+  assert.deepEqual(aside, { editable: true, label: 'Speaker notes', text: '' });
+  assert.equal((await status()).dirty, false);
+  assert.equal(await page.evaluate('window.BeesonEditor.render()'), deckText);
+  await page.evaluate(`(() => { const a = document.querySelector('.reveal section.present > aside.notes'); a.focus(); document.execCommand('insertText', false, 'New notes.'); })()`);
+  assert.equal((await status()).dirty, true);
+  const rendered = await page.evaluate('window.BeesonEditor.render()');
+  const line = '  <aside class="notes">New notes.</aside>\n';
+  assert.equal(rendered.replace(line, ''), deckText);
+  // the notes are written into the second slide
+  assert.equal(rendered.slice(0, rendered.indexOf(line)).split('<section').length - 1, 2);
   assert.deepEqual(page.errors, []);
 });
 
@@ -452,6 +529,39 @@ test('an undo puts the caret at the change, and ⌘B and ⌘I write strong and e
   // underline stays blocked
   await format('formatUnderline');
   assert.equal(await render(), deckText);
+  assert.deepEqual(page.errors, []);
+});
+
+test('the notes fill the width of the pane when the pane is tall', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Notes').click()`);
+  const result = await page.evaluate(`(async () => {
+    const strip = document.querySelector('.beeson-edit-resize');
+    const r = strip.getBoundingClientRect();
+    const at = (type, y) => strip.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: r.left + 100, clientY: y, button: 0, pointerId: 1 }));
+    const y = r.top + r.height / 2;
+    at('pointerdown', y);
+    at('pointermove', y - 300);
+    at('pointerup', y - 300);
+    await new Promise((d) => setTimeout(d, 100));
+    const aside = document.querySelector('.reveal section.present > aside.notes');
+    const a = aside.getBoundingClientRect();
+    const reveal = document.querySelector('.reveal').getBoundingClientRect();
+    const pane = document.querySelector('.beeson-edit-pane').getBoundingClientRect();
+    const range = document.createRange();
+    range.selectNodeContents(aside);
+    const text = range.getClientRects()[0];
+    const hit = document.elementFromPoint(pane.left + 30, text.top + text.height / 2);
+    return { pane: window.BeesonEditor.status().pane, aside: a.width, reveal: reveal.width, left: a.left, revealLeft: reveal.left, textLeft: text.left, paneLeft: pane.left, hit: !!hit && aside.contains(hit) };
+  })()`);
+  assert.equal(result.pane, 500);
+  assert.ok(Math.abs(result.aside - result.reveal) < 2, `the notes are ${result.aside} px wide in a pane of ${result.reveal} px`);
+  assert.ok(Math.abs(result.left - result.revealLeft) < 2, JSON.stringify(result));
+  assert.ok(result.textLeft - result.paneLeft >= 0 && result.textLeft - result.paneLeft < 40, JSON.stringify(result));
+  assert.equal(result.hit, true, 'the notes at the left of the pane are clipped');
   assert.deepEqual(page.errors, []);
 });
 
