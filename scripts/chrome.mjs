@@ -251,6 +251,7 @@ export async function printView(page, url) {
     video.load();
   })`);
   await page.waitFor(`[...document.querySelectorAll('video')].every((video) => video.readyState >= 2 || video.error || !video.getClientRects().length)
+    && [...document.querySelectorAll('tycho-viewer')].every((viewer) => viewer.shadowRoot?.querySelector('.status.error'))
     && [...document.images].every((image) => image.complete)`, 60000);
   await page.waitFor(deckSettled);
 }

@@ -5,6 +5,7 @@
 import { Orbits, mount } from './orbits.ts';
 import { initChrome } from './chrome.ts';
 import { initCursor, togglePointer } from './cursor.ts';
+import { stillViewers } from './print.ts';
 import { initSteps } from './steps.ts';
 import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.ts';
 import type { RevealOptions, SlideEvent } from './reveal.d.ts';
@@ -79,7 +80,11 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   initSwitcher();
   // in the print view, a page is cloned per fragment state after ready, and the clones are
   // mounted here
-  deck.on('pdf-ready', completeAll);
+  deck.on('pdf-ready', () => {
+    completeAll();
+    syncViewers(get());
+    void stillViewers();
+  });
   await deck.initialize({ ...DEFAULTS, ...options, plugins });
 
   initChrome(deck);
