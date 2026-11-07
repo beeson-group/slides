@@ -1794,6 +1794,11 @@
     }
     applyGates() {
       for (const { node, names } of this.gated) node.classList.toggle("plot-hidden", this.hidden(names));
+      for (const { b, i } of this.tabButtons) {
+        const off = this.hidden([this.plot.tabs[i].name]);
+        b.classList.toggle("plot-hidden", off);
+        b.disabled = off;
+      }
       const n = this.frames;
       this.ticks.replaceChildren(...this.eventFrames.filter((e) => !this.hidden(e.names)).map((e) => {
         const t = document.createElement("div");
