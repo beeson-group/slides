@@ -40,6 +40,12 @@ async function checkPhone() {
   await page.goto(deckUrl(options.deck));
   await page.waitFor(deckSettled);
   if (await page.evaluate('Reveal.isScrollView()')) failures.push('phone: the scroll view of reveal.js is on');
+  const reached = await page.evaluate(`(() => {
+    const box = document.querySelector('.theme-switch').getBoundingClientRect();
+    const at = document.elementFromPoint(box.x + box.width / 2 - 15, box.y + box.height / 2 + 15);
+    return !!at?.closest('.theme-switch');
+  })()`);
+  if (!reached) failures.push('phone: a tap 15 px from the mode button does not reach it');
   for (const error of page.errors) failures.push(`phone: ${error}`);
   await page.close();
 }
