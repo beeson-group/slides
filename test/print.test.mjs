@@ -3,6 +3,10 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { inflateSync } from 'node:zlib';
 import { deckUrl, launch, printView } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
@@ -64,4 +68,15 @@ test('a tycho viewer is printed with its scene', { timeout: 60000 }, async (t) =
 
   const scene = images.reduce((a, b) => (a.width * a.height > b.width * b.height ? a : b));
   assert.ok(scene.colors > 100, `the largest image of the page has ${scene.colors} colors, and it is ${scene.width} by ${scene.height}`);
+});
+
+test('the check fails on a video without a poster', () => {
+  const out = mkdtempSync(join(tmpdir(), 'beeson-poster-'));
+  try {
+    const run = spawnSync(process.execPath, ['scripts/check.mjs', '--deck', 'test/pages/video-steps.html', '--out', out], { encoding: 'utf8' });
+    assert.equal(run.status, 1);
+    assert.match(run.stderr, /video without a poster: \.\.\/\.\.\/demo\/clip-dark\.mp4/);
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
 });
