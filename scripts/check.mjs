@@ -14,11 +14,12 @@
 // With --browser firefox or --browser safari, the deck is driven over WebDriver. The console is not
 // read in these browsers, hence a page error is then what is found in the page, with deckProblems.
 // A phone and a pixel ratio cannot be emulated in these browsers, thus they are checked only in Chrome.
+// Automation in Safari refuses a page from file://, hence the deck is served from a local port there.
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { deckSettled, deckUrl, launch } from './chrome.mjs';
-import { launch as launchWebDriver } from './webdriver.mjs';
+import { launch as launchWebDriver, serve } from './webdriver.mjs';
 
 const { values: options } = parseArgs({
   options: {
@@ -43,16 +44,22 @@ const deckProblems = `[
   ...[...document.fonts].filter((face) => face.status === 'error').map((face) => 'font not loaded: ' + face.family),
   ...[...document.querySelectorAll('mjx-merror')].map((error) => 'formula not typeset: ' + error.textContent),
   ...[...document.querySelectorAll('tycho-viewer')].map((viewer) => viewer.shadowRoot?.querySelector('.status.error')?.textContent).filter(Boolean),
-  ...performance.getEntriesByType('resource').map((entry) => entry.name).filter((name) => /^https?:/.test(name)).map((name) => 'network load: ' + name),
+  ...performance.getEntriesByType('resource').map((entry) => entry.name).filter((name) => /^https?:/.test(name) && !name.startsWith(location.origin)).map((name) => 'network load: ' + name),
 ]`;
 
 mkdirSync(options.out, { recursive: true });
 const failures = [];
 const browser = await (options.browser === 'chrome' ? launch() : launchWebDriver(options.browser));
+const server = options.browser === 'safari' ? await serve(dirname(options.deck)) : null;
+
+function deckAt(query, hash) {
+  const url = new URL(deckUrl(options.deck, query, hash));
+  return server ? `${server.origin}/${basename(options.deck)}${url.search}${url.hash}` : url.href;
+}
 
 async function checkPhone() {
   const page = await browser.newPage({ width: 390, height: 844, mobile: true });
-  await page.goto(deckUrl(options.deck));
+  await page.goto(deckAt());
   await page.waitFor(deckSettled);
   if (await page.evaluate('Reveal.isScrollView()')) failures.push('phone: the scroll view of reveal.js is on');
   const reached = await page.evaluate(`(() => {
@@ -81,7 +88,7 @@ async function checkPhone() {
 
 async function checkDesktop() {
   const page = await browser.newPage();
-  await page.goto(deckUrl(options.deck, 'still'));
+  await page.goto(deckAt('still'));
   await page.waitFor(deckSettled);
   const offset = await page.evaluate(`(() => {
     Reveal.triggerKey(80);
@@ -102,7 +109,7 @@ async function checkDesktop() {
 // Windows laptops, and a viewer that overruns its canvas in this way loses its static layers
 async function checkScaled() {
   const page = await browser.newPage({ scale: 1.25 });
-  await page.goto(deckUrl(options.deck, 'still'));
+  await page.goto(deckAt('still'));
   await page.waitFor(deckSettled);
   await page.evaluate(`(() => {
     const viewer = document.querySelector('tycho-viewer');
@@ -118,7 +125,7 @@ async function checkScaled() {
 // read during a trace, since the heads of a backdrop are cleared at its end
 async function checkHeads() {
   const page = await browser.newPage();
-  await page.goto(deckUrl(options.deck));
+  await page.goto(deckAt());
   await page.waitFor(deckSettled);
   await new Promise((done) => setTimeout(done, 1000));
   const blank = await page.evaluate(`(() => {
@@ -138,7 +145,7 @@ try {
     }
 
     const first = await browser.newPage();
-    await first.goto(deckUrl(options.deck, `theme=${theme}&still`));
+    await first.goto(deckAt(`theme=${theme}&still`));
     await first.waitFor(deckSettled);
     const slides = await first.evaluate(listSlides);
     await first.close();
@@ -146,7 +153,7 @@ try {
     for (const [n, [h, v]] of slides.entries()) {
       const name = `${theme}-${String(n + 1).padStart(2, '0')}.png`;
       const page = await browser.newPage();
-      await page.goto(deckUrl(options.deck, `theme=${theme}&still`, `/${h}/${v}`));
+      await page.goto(deckAt(`theme=${theme}&still`, `/${h}/${v}`));
       await page.waitFor(deckSettled);
       const at = await page.evaluate('Reveal.getIndices()');
       if (at.h !== h || (at.v ?? 0) !== v) {
@@ -161,7 +168,7 @@ try {
     console.log(`${theme}: ${slides.length} slides saved to ${options.out}/${theme}-*.png`);
 
     const animated = await browser.newPage();
-    await animated.goto(deckUrl(options.deck, `theme=${theme}`));
+    await animated.goto(deckAt(`theme=${theme}`));
     await animated.waitFor(deckSettled);
     let steps = 1;
     const atEnd = 'Reveal.isLastSlide() && !Reveal.availableFragments().next';
@@ -184,6 +191,7 @@ try {
   await checkHeads();
 } finally {
   await browser.close();
+  server?.close();
 }
 
 if (failures.length) {
