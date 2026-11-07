@@ -1,6 +1,7 @@
 // the scenes selected with the data-scene attribute of a `.backdrop`, computed on first use and
 // cached
 
+import { isolines } from './contour.ts';
 import { MU, closed, correct, droFamily, family, lagrange, lyapunovFamily, open, propagate, ramp, spaced, step } from './orbits.ts';
 import type { Member, Strand, Tone } from './orbits.ts';
 
@@ -110,44 +111,11 @@ function zeroVelocity(C: number): Strand[] {
   };
   const g = new Float64Array((nx + 1) * (ny + 1));
   for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) g[j * (nx + 1) + i] = f(x0 + i * d, y0 + j * d);
-  const at = (i: number, j: number) => g[j * (nx + 1) + i];
-  const links = new Map<string, string[]>(), where = new Map<string, [number, number]>();
-  const edge = (i: number, j: number, h: boolean): string => {
-    const key = `${h ? 'h' : 'v'}${i},${j}`;
-    if (!where.has(key)) {
-      const a = at(i, j), b = h ? at(i + 1, j) : at(i, j + 1), t = a / (a - b);
-      where.set(key, h ? [x0 + (i + t) * d, y0 + j * d] : [x0 + i * d, y0 + (j + t) * d]);
-    }
-    return key;
-  };
-  const link = (a: string, b: string) => {
-    if (!links.has(a)) links.set(a, []);
-    if (!links.has(b)) links.set(b, []);
-    links.get(a)?.push(b); links.get(b)?.push(a);
-  };
-  for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
-    const hits: string[] = [];
-    if (at(i, j) > 0 !== at(i + 1, j) > 0) hits.push(edge(i, j, true));
-    if (at(i + 1, j) > 0 !== at(i + 1, j + 1) > 0) hits.push(edge(i + 1, j, false));
-    if (at(i, j + 1) > 0 !== at(i + 1, j + 1) > 0) hits.push(edge(i, j + 1, true));
-    if (at(i, j) > 0 !== at(i, j + 1) > 0) hits.push(edge(i, j, false));
-    if (hits.length === 2) link(hits[0], hits[1]);
-    else if (hits.length === 4) { link(hits[0], hits[1]); link(hits[2], hits[3]); }
-  }
-  const out: Strand[] = [], seen = new Set<string>();
-  for (const start of links.keys()) {
-    if (seen.has(start)) continue;
+  return isolines(g, nx, ny, x0, y0, d).filter((c) => c.length > 16).map((c) => {
     const p: number[] = [], t: number[] = [];
-    let cur: string | undefined = start;
-    while (cur && !seen.has(cur)) {
-      seen.add(cur);
-      const [x, y] = where.get(cur) ?? [0, 0];
-      p.push(x, y, 0); t.push(t.length * 0.004);
-      cur = links.get(cur)?.find((k) => !seen.has(k));
-    }
-    if (t.length > 8) out.push(toned(open(p, t), 'line'));
-  }
-  return out;
+    for (let k = 0; k < c.length; k += 2) { p.push(c[k], c[k + 1], 0); t.push(t.length * 0.004); }
+    return toned(open(p, t), 'line');
+  });
 }
 
 // the arc of a closed orbit from the point nearest a to the point nearest b, after one full lap

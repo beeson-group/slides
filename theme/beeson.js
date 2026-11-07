@@ -1,6 +1,52 @@
 /*! beeson.js 1.0.0, the reveal.js theme of the Beeson group. MIT license. The orbit engine is ported from src/lib/orbits.ts of https://github.com/ClouD-161803/ClouD-161803.github.io (MIT). */
 "use strict";
 (() => {
+  // src/contour.ts
+  function isolines(g, nx, ny, x0, y0, d) {
+    const at = (i, j) => g[j * (nx + 1) + i];
+    const links = /* @__PURE__ */ new Map(), where = /* @__PURE__ */ new Map();
+    const edge = (i, j, h) => {
+      const key = `${h ? "h" : "v"}${i},${j}`;
+      if (!where.has(key)) {
+        const a = at(i, j), b = h ? at(i + 1, j) : at(i, j + 1), t = a / (a - b);
+        where.set(key, h ? [x0 + (i + t) * d, y0 + j * d] : [x0 + i * d, y0 + (j + t) * d]);
+      }
+      return key;
+    };
+    const link = (a, b) => {
+      if (!links.has(a)) links.set(a, []);
+      if (!links.has(b)) links.set(b, []);
+      links.get(a)?.push(b);
+      links.get(b)?.push(a);
+    };
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const hits = [];
+      if (at(i, j) > 0 !== at(i + 1, j) > 0) hits.push(edge(i, j, true));
+      if (at(i + 1, j) > 0 !== at(i + 1, j + 1) > 0) hits.push(edge(i + 1, j, false));
+      if (at(i, j + 1) > 0 !== at(i + 1, j + 1) > 0) hits.push(edge(i, j + 1, true));
+      if (at(i, j) > 0 !== at(i, j + 1) > 0) hits.push(edge(i, j, false));
+      if (hits.length === 2) link(hits[0], hits[1]);
+      else if (hits.length === 4) {
+        link(hits[0], hits[1]);
+        link(hits[2], hits[3]);
+      }
+    }
+    const out = [], seen = /* @__PURE__ */ new Set();
+    for (const start2 of links.keys()) {
+      if (seen.has(start2)) continue;
+      const p = [];
+      let cur = start2;
+      while (cur && !seen.has(cur)) {
+        seen.add(cur);
+        const [x, y] = where.get(cur) ?? [0, 0];
+        p.push(x, y);
+        cur = links.get(cur)?.find((k) => !seen.has(k));
+      }
+      out.push(p);
+    }
+    return out;
+  }
+
   // src/scenes.ts
   var H = 4e-3;
   var stopped = (u) => Math.hypot(u[0] + MU, u[1]) < 0.0166 || Math.hypot(u[0] - 1 + MU, u[1]) < 45e-4 || Math.hypot(u[0] - 0.8, u[1]) > 2.4;
@@ -96,49 +142,14 @@
     };
     const g = new Float64Array((nx + 1) * (ny + 1));
     for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) g[j * (nx + 1) + i] = f(x0 + i * d, y0 + j * d);
-    const at = (i, j) => g[j * (nx + 1) + i];
-    const links = /* @__PURE__ */ new Map(), where = /* @__PURE__ */ new Map();
-    const edge = (i, j, h) => {
-      const key = `${h ? "h" : "v"}${i},${j}`;
-      if (!where.has(key)) {
-        const a = at(i, j), b = h ? at(i + 1, j) : at(i, j + 1), t = a / (a - b);
-        where.set(key, h ? [x0 + (i + t) * d, y0 + j * d] : [x0 + i * d, y0 + (j + t) * d]);
-      }
-      return key;
-    };
-    const link = (a, b) => {
-      if (!links.has(a)) links.set(a, []);
-      if (!links.has(b)) links.set(b, []);
-      links.get(a)?.push(b);
-      links.get(b)?.push(a);
-    };
-    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
-      const hits = [];
-      if (at(i, j) > 0 !== at(i + 1, j) > 0) hits.push(edge(i, j, true));
-      if (at(i + 1, j) > 0 !== at(i + 1, j + 1) > 0) hits.push(edge(i + 1, j, false));
-      if (at(i, j + 1) > 0 !== at(i + 1, j + 1) > 0) hits.push(edge(i, j + 1, true));
-      if (at(i, j) > 0 !== at(i, j + 1) > 0) hits.push(edge(i, j, false));
-      if (hits.length === 2) link(hits[0], hits[1]);
-      else if (hits.length === 4) {
-        link(hits[0], hits[1]);
-        link(hits[2], hits[3]);
-      }
-    }
-    const out = [], seen = /* @__PURE__ */ new Set();
-    for (const start2 of links.keys()) {
-      if (seen.has(start2)) continue;
+    return isolines(g, nx, ny, x0, y0, d).filter((c) => c.length > 16).map((c) => {
       const p = [], t = [];
-      let cur = start2;
-      while (cur && !seen.has(cur)) {
-        seen.add(cur);
-        const [x, y] = where.get(cur) ?? [0, 0];
-        p.push(x, y, 0);
+      for (let k = 0; k < c.length; k += 2) {
+        p.push(c[k], c[k + 1], 0);
         t.push(t.length * 4e-3);
-        cur = links.get(cur)?.find((k) => !seen.has(k));
       }
-      if (t.length > 8) out.push(toned(open(p, t), "line"));
-    }
-    return out;
+      return toned(open(p, t), "line");
+    });
   }
   function lap(orbit, ax, ay, bx, by) {
     const n = orbit.times.length - 1;
