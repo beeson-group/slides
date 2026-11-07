@@ -88,6 +88,22 @@ async function checkDesktop() {
   await page.close();
 }
 
+// read during a trace, since the heads of a backdrop are cleared at its end
+async function checkHeads() {
+  const page = await browser.newPage();
+  await page.goto(deckUrl(options.deck));
+  await page.waitFor(deckSettled);
+  await new Promise((done) => setTimeout(done, 1000));
+  const blank = await page.evaluate(`(() => {
+    const live = Beeson.backdrops.find((backdrop) => backdrop.raf);
+    if (!live) return false;
+    const { width, height } = live.head;
+    return !live.head.getContext('2d').getImageData(0, 0, width, height).data.some(Boolean);
+  })()`);
+  if (blank) failures.push('backdrop: the heads are not painted during a trace');
+  await page.close();
+}
+
 try {
   for (const theme of themes) {
     for (const file of readdirSync(options.out)) {
@@ -133,6 +149,7 @@ try {
   }
   await checkPhone();
   await checkDesktop();
+  await checkHeads();
 } finally {
   await browser.close();
 }
