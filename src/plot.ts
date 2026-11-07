@@ -18,7 +18,9 @@ type Item = { id: string | null; tone: string; cls: string[] };
 export type Region = Item & { points: Pair[]; opacity: number };
 export type Curve = Item & { points: Pair[] | null; circle: [number, number, number] | null; width: number; dash: number[] | null };
 export type Label = Item & { at: Pair; text: string; anchor: Anchor; dx: number; dy: number };
-export type Panel = { id: string; x: Axis; y: Axis; equal: boolean; axes: boolean; title: string; regions: Region[]; curves: Curve[]; labels: Label[] };
+// the margin of a panel in px, from the top clockwise as in CSS
+export type Margin = [number, number, number, number];
+export type Panel = { id: string; x: Axis; y: Axis; equal: boolean; axes: boolean; title: string; regions: Region[]; curves: Curve[]; labels: Label[]; size: number; margin: Margin };
 export type Mark = Item & { id: string; panel: string; kind: Kind; size: number; width: number; hollow: boolean; anchor: Anchor; dx: number; dy: number };
 export type PlotEvent = { frame: number; at: Pair; text: string };
 // a label mark with one position or one text is held there for every frame
@@ -28,6 +30,7 @@ export type Tab = { name: string; label: string; values: number[]; data: Record<
 export type Plot = { parameter: { label: string; digits: number }; duration: number; hold: number; layout: 'row' | 'column' | null; panels: Panel[]; marks: Mark[]; tabs: Tab[] };
 
 const KINDS: Kind[] = ['points', 'trace', 'label', 'events'];
+const MARGIN: Margin = [52, 20, 84, 76];
 
 function fail(path: string, what: string): never {
   throw new Error(`${path}: ${what}`);
@@ -128,6 +131,14 @@ function labels(v: unknown, path: string): Label[] {
 
 function panel(v: unknown, path: string): Panel {
   if (!isObject(v)) fail(path, 'a panel is expected');
+  let margin: Margin = [...MARGIN];
+  if (v.margin !== undefined) {
+    const m = list(v.margin, `${path}.margin`).map((x, i) => num(x, `${path}.margin[${i}]`));
+    if (m.length !== 4) fail(`${path}.margin`, 'a margin [top, right, bottom, left] is expected');
+    margin = [m[0], m[1], m[2], m[3]];
+  }
+  const size = num(v.size, `${path}.size`, 1);
+  if (!(size > 0)) fail(`${path}.size`, 'a positive number is expected');
   return {
     id: str(v.id, `${path}.id`),
     x: axis(v.x, `${path}.x`),
@@ -138,6 +149,8 @@ function panel(v: unknown, path: string): Panel {
     regions: regions(v.regions, `${path}.regions`),
     curves: curves(v.curves, `${path}.curves`),
     labels: labels(v.labels, `${path}.labels`),
+    size,
+    margin,
   };
 }
 
@@ -383,8 +396,18 @@ const words = (s: string | undefined | null) => (s ?? '').split(/\s+/).filter(Bo
 // the box of a panel in px, with the scaled coordinates x0 and y0 of the lower left corner
 type Box = { x: number; y: number; w: number; h: number; x0: number; y0: number; sx: number; sy: number; panel: Panel };
 
-const MARGIN = { left: 76, right: 20, top: 52, bottom: 84 };
 const GAP = 56;
+
+/** The start and the length of the cell of each panel along a side of length total, in shares of their sizes, with a gap between two cells. */
+export function cells(sizes: number[], total: number, gap: number): Pair[] {
+  const free = total - gap * (sizes.length - 1), sum = sizes.reduce((a, b) => a + b, 0);
+  let at = 0;
+  return sizes.map((size) => {
+    const cell: Pair = [at, (free * size) / sum];
+    at += cell[1] + gap;
+    return cell;
+  });
+}
 
 let serial = 0;
 
@@ -560,12 +583,14 @@ export class PlotView {
   }
 
   private layout(): void {
-    const n = this.panels.length, row = (this.plot.layout ?? (this.W >= this.H ? 'row' : 'column')) === 'row';
-    const cw = row ? (this.W - GAP * (n - 1)) / n : this.W, ch = row ? this.H : (this.H - GAP * (n - 1)) / n;
+    const row = (this.plot.layout ?? (this.W >= this.H ? 'row' : 'column')) === 'row';
+    const along = cells(this.panels.map((p) => p.size), row ? this.W : this.H, GAP);
     this.boxes.clear();
     this.panels.forEach((p, i) => {
-      const cx = row ? i * (cw + GAP) : 0, cy = row ? 0 : i * (ch + GAP);
-      let x = cx + MARGIN.left, y = cy + MARGIN.top, w = cw - MARGIN.left - MARGIN.right, h = ch - MARGIN.top - MARGIN.bottom;
+      const [at, share] = along[i];
+      const cx = row ? at : 0, cy = row ? 0 : at, cw = row ? share : this.W, ch = row ? this.H : share;
+      const [top, right, bottom, left] = p.margin;
+      let x = cx + left, y = cy + top, w = cw - left - right, h = ch - top - bottom;
       const x0 = scaled(p.x, p.x.range[0]), y0 = scaled(p.y, p.y.range[0]);
       const dx = scaled(p.x, p.x.range[1]) - x0, dy = scaled(p.y, p.y.range[1]) - y0;
       if (p.equal) {

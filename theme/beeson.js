@@ -1015,6 +1015,7 @@
 
   // src/plot.ts
   var KINDS = ["points", "trace", "label", "events"];
+  var MARGIN = [52, 20, 84, 76];
   function fail(path, what) {
     throw new Error(`${path}: ${what}`);
   }
@@ -1099,6 +1100,14 @@
   }
   function panel(v, path) {
     if (!isObject(v)) fail(path, "a panel is expected");
+    let margin = [...MARGIN];
+    if (v.margin !== void 0) {
+      const m = list(v.margin, `${path}.margin`).map((x, i) => num(x, `${path}.margin[${i}]`));
+      if (m.length !== 4) fail(`${path}.margin`, "a margin [top, right, bottom, left] is expected");
+      margin = [m[0], m[1], m[2], m[3]];
+    }
+    const size = num(v.size, `${path}.size`, 1);
+    if (!(size > 0)) fail(`${path}.size`, "a positive number is expected");
     return {
       id: str(v.id, `${path}.id`),
       x: axis(v.x, `${path}.x`),
@@ -1108,7 +1117,9 @@
       title: str(v.title, `${path}.title`, ""),
       regions: regions(v.regions, `${path}.regions`),
       curves: curves(v.curves, `${path}.curves`),
-      labels: labels(v.labels, `${path}.labels`)
+      labels: labels(v.labels, `${path}.labels`),
+      size,
+      margin
     };
   }
   function markData(m, v, frames, path) {
@@ -1375,8 +1386,16 @@
   var circlePoints = ([cx, cy, r]) => Array.from({ length: 181 }, (_, i) => [cx + r * Math.cos(i * Math.PI / 90), cy + r * Math.sin(i * Math.PI / 90)]);
   var toneColor = (tone) => /^[a-z][a-z0-9-]*$/.test(tone) ? `var(--${tone})` : tone;
   var words = (s) => (s ?? "").split(/\s+/).filter(Boolean);
-  var MARGIN = { left: 76, right: 20, top: 52, bottom: 84 };
   var GAP = 56;
+  function cells(sizes, total, gap) {
+    const free = total - gap * (sizes.length - 1), sum = sizes.reduce((a, b) => a + b, 0);
+    let at = 0;
+    return sizes.map((size) => {
+      const cell = [at, free * size / sum];
+      at += cell[1] + gap;
+      return cell;
+    });
+  }
   var serial = 0;
   var reduced = () => typeof window === "undefined" || matchMedia("(prefers-reduced-motion: reduce)").matches;
   var CACHE2 = /* @__PURE__ */ new WeakMap();
@@ -1530,12 +1549,14 @@
       this.buildMarks();
     }
     layout() {
-      const n = this.panels.length, row = (this.plot.layout ?? (this.W >= this.H ? "row" : "column")) === "row";
-      const cw = row ? (this.W - GAP * (n - 1)) / n : this.W, ch = row ? this.H : (this.H - GAP * (n - 1)) / n;
+      const row = (this.plot.layout ?? (this.W >= this.H ? "row" : "column")) === "row";
+      const along = cells(this.panels.map((p) => p.size), row ? this.W : this.H, GAP);
       this.boxes.clear();
       this.panels.forEach((p, i) => {
-        const cx = row ? i * (cw + GAP) : 0, cy = row ? 0 : i * (ch + GAP);
-        let x = cx + MARGIN.left, y = cy + MARGIN.top, w = cw - MARGIN.left - MARGIN.right, h = ch - MARGIN.top - MARGIN.bottom;
+        const [at, share] = along[i];
+        const cx = row ? at : 0, cy = row ? 0 : at, cw = row ? share : this.W, ch = row ? this.H : share;
+        const [top, right, bottom, left] = p.margin;
+        let x = cx + left, y = cy + top, w = cw - left - right, h = ch - top - bottom;
         const x0 = scaled(p.x, p.x.range[0]), y0 = scaled(p.y, p.y.range[0]);
         const dx = scaled(p.x, p.x.range[1]) - x0, dy = scaled(p.y, p.y.range[1]) - y0;
         if (p.equal) {
