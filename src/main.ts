@@ -6,7 +6,7 @@ import { Orbits, mount } from './orbits.ts';
 import { initChrome } from './chrome.ts';
 import { initCursor, togglePointer } from './cursor.ts';
 import { stillViewers } from './print.ts';
-import { initSteps } from './steps.ts';
+import { applyAll, initSteps, typeset } from './steps.ts';
 import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.ts';
 import type { RevealOptions, SlideEvent } from './reveal.d.ts';
 
@@ -71,6 +71,7 @@ function show(slide: HTMLElement): void {
 function completeAll(): void {
   remount();
   for (const o of backdrops) { o.fit(); o.complete(); }
+  applyAll(document);
 }
 
 async function start(options: Partial<RevealOptions> = {}): Promise<void> {
@@ -82,6 +83,7 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   // mounted here
   deck.on('pdf-ready', () => {
     completeAll();
+    void typeset().then(() => applyAll(document));
     syncViewers(get());
     void stillViewers();
   });

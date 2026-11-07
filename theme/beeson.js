@@ -1033,14 +1033,62 @@
   }
 
   // src/steps.ts
+  function resolve(steps, current) {
+    const indices = [...new Set(steps.map((s) => s.index))].sort((a, b) => a - b);
+    const lit = /* @__PURE__ */ new Map();
+    const order = steps.map((_, i) => i).sort((a, b) => steps[a].index - steps[b].index);
+    for (const i of order) if (steps[i].visible) for (const name of steps[i].highlight) lit.set(name, steps[i].tone);
+    const named = new Set(steps.filter((s) => s.visible && s.index === current).flatMap((s) => s.highlight));
+    const held = steps.map((s) => {
+      if (!s.visible || s.index === current) return false;
+      const through = s.keep === "next" ? indices.find((k) => k > s.index) ?? s.index : s.keep;
+      if (through !== null && current <= through) return true;
+      return s.holds.some((name) => named.has(name));
+    });
+    return { held, lit };
+  }
+  var words = (s) => (s ?? "").split(/\s+/).filter(Boolean);
+  function applySteps(slide) {
+    const frags = [...slide.querySelectorAll(".fragment")];
+    const names = [...new Set(frags.flatMap((f) => words(f.dataset.highlight)))];
+    if (!names.length && !frags.some((f) => f.hasAttribute("data-keep"))) return;
+    const select = (name) => `.${CSS.escape(name)}`;
+    const steps = frags.map((f) => {
+      const keep = f.getAttribute("data-keep");
+      return {
+        index: Number(f.dataset.fragmentIndex ?? 0),
+        visible: f.classList.contains("visible"),
+        keep: keep === null ? null : keep.trim() === "" ? "next" : Number(keep),
+        highlight: words(f.dataset.highlight),
+        tone: f.dataset.tone === "violet" ? "violet" : "accent",
+        holds: names.filter((name) => f.matches(select(name)) || f.querySelector(select(name)))
+      };
+    });
+    const current = Math.max(-1, ...steps.filter((s) => s.visible).map((s) => s.index));
+    const { held, lit } = resolve(steps, current);
+    frags.forEach((f, i) => f.toggleAttribute("data-held", held[i]));
+    const tones = /* @__PURE__ */ new Map();
+    for (const name of names) for (const el of slide.querySelectorAll(select(name))) tones.set(el, lit.get(name) ?? tones.get(el));
+    for (const [el, tone] of tones) {
+      el.classList.add("hl-target");
+      el.classList.toggle("hl-accent", tone === "accent");
+      el.classList.toggle("hl-violet", tone === "violet");
+    }
+  }
+  function applyAll(root2) {
+    for (const slide of root2.querySelectorAll(".reveal .slides section")) applySteps(slide);
+  }
+  var typeset = () => window.MathJax?.startup?.promise ?? Promise.resolve();
   function initSteps(deck) {
     const mark = () => {
       const slide = deck.getCurrentSlide();
       if (!slide) return;
       slide.toggleAttribute("data-complete", !deck.availableFragments().next);
+      applySteps(slide);
     };
     for (const type of ["fragmentshown", "fragmenthidden", "slidechanged"]) deck.on(type, mark);
     mark();
+    void typeset().then(mark);
   }
 
   // src/switcher.ts
@@ -1182,6 +1230,7 @@
       o.fit();
       o.complete();
     }
+    applyAll(document);
   }
   async function start(options = {}) {
     const deck = window.Reveal;
@@ -1190,6 +1239,7 @@
     initSwitcher();
     deck.on("pdf-ready", () => {
       completeAll();
+      void typeset().then(() => applyAll(document));
       syncViewers(get());
       void stillViewers();
     });
