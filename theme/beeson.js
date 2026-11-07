@@ -1208,7 +1208,7 @@
       ctx.fillStyle = c.accent;
       this.strands.forEach((s, i) => {
         const j = this.idx[i];
-        if (j >= s.times.length - 1 || tau < s.times[0]) return;
+        if (s.head === false || j >= s.times.length - 1 || tau < s.times[0]) return;
         const [X, Y] = this.at(i, j, tau);
         ctx.beginPath();
         ctx.arc(X, Y, this.headSize * this.lw, 0, 2 * Math.PI);
