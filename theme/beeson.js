@@ -325,6 +325,20 @@
     const [p0, p1, p2] = parts;
     return [toned(band(laps, tilt), "line"), { ...toned(open(p2.p, p2.q), "violet"), alpha: 0.85 }, { ...toned(open(p1.p, p1.q), "violet"), alpha: 0.85 }, { ...toned(open(p0.p, p0.q), "orange"), alpha: 0.85 }].filter((x) => x.times.length > 1);
   }
+  function flown(s, h, T, tilt = 0, stop) {
+    const p = [], q = [], c = Math.cos(tilt), d = Math.sin(tilt);
+    propagate(s, h, T, p, q, stop, 0);
+    for (let i = 0; i < q.length; i++) p[3 * i + 1] = p[3 * i + 1] * c + p[3 * i + 2] * d;
+    return open(p, q);
+  }
+  function tori(tilt) {
+    return droFamily(spaced(0.07, 0.42, 25, 1.2), H).filter((_, i) => i % 5 === 0).map((m, i) => {
+      const s = Float64Array.from(m.s);
+      s[4] *= 1.006;
+      s[2] = i % 2 ? 0.014 : -0.014;
+      return toned(flown(s, 0.01, 22 * m.t, tilt), i % 2 ? "violet" : "orange");
+    });
+  }
   var SCENES = {
     nest: () => [...lyapunovFamily(1, spaced(0.012, 0.12, 12, 1.5), H), ...lyapunovFamily(2, spaced(0.012, 0.14, 12, 1.5), H), ...droFamily(ramp(0.03, 0.09, 1.2), H)].map(closed),
     dro: () => droFamily(ramp(0.02, 0.32, 1.12), H).filter((_, i) => i % 3 === 0).map(closed),
@@ -339,7 +353,8 @@
     transfer: () => transfer(0.03),
     ribbon: () => ribbon(6e-3, 90, 3, 0.16),
     wideRibbon: () => ribbon(0.016, 120, 3, 0.12),
-    spiral: () => spiral(0.11, 0.07, 0.42, 0.92, 0.44, 60)
+    spiral: () => spiral(0.11, 0.07, 0.42, 0.92, 0.44, 60),
+    torus: () => tori(1)
   };
   var SCENE_NAMES = Object.keys(SCENES);
   var cache = /* @__PURE__ */ new Map();

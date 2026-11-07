@@ -337,6 +337,26 @@ function spiral(acc: number, r0: number, a1: number, a2: number, tilt: number, l
   return [toned(band(laps, tilt), 'line'), { ...toned(open(p2.p, p2.q), 'violet'), alpha: 0.85 }, { ...toned(open(p1.p, p1.q), 'violet'), alpha: 0.85 }, { ...toned(open(p0.p, p0.q), 'orange'), alpha: 0.85 }].filter((x) => x.times.length > 1);
 }
 
+// the flight from the state s for the time T, as a strand seen from tilt rad above the xy plane
+function flown(s: Float64Array, h: number, T: number, tilt = 0, stop?: (u: Float64Array) => boolean): Strand {
+  const p: number[] = [], q: number[] = [], c = Math.cos(tilt), d = Math.sin(tilt);
+  propagate(s, h, T, p, q, stop, 0);
+  for (let i = 0; i < q.length; i++) p[3 * i + 1] = p[3 * i + 1] * c + p[3 * i + 2] * d;
+  return open(p, q);
+}
+
+const fraction = (v: number): number => v - Math.floor(v);
+
+// quasi-periodic strands hugging distant retrograde orbits: an orbit with a small perturbation in and
+// out of the plane, flown for many revolutions, winds a narrow torus around itself
+function tori(tilt: number): Strand[] {
+  return droFamily(spaced(0.07, 0.42, 25, 1.2), H).filter((_, i) => i % 5 === 0).map((m, i) => {
+    const s = Float64Array.from(m.s);
+    s[4] *= 1.006; s[2] = i % 2 ? 0.014 : -0.014;
+    return toned(flown(s, 0.01, 22 * m.t, tilt), i % 2 ? 'violet' : 'orange');
+  });
+}
+
 const SCENES = {
   nest: () => [...lyapunovFamily(1, spaced(0.012, 0.12, 12, 1.5), H), ...lyapunovFamily(2, spaced(0.012, 0.14, 12, 1.5), H), ...droFamily(ramp(0.03, 0.09, 1.2), H)].map(closed),
   dro: () => droFamily(ramp(0.02, 0.32, 1.12), H).filter((_, i) => i % 3 === 0).map(closed),
@@ -352,6 +372,7 @@ const SCENES = {
   ribbon: () => ribbon(0.006, 90, 3, 0.16),
   wideRibbon: () => ribbon(0.016, 120, 3, 0.12),
   spiral: () => spiral(0.11, 0.07, 0.42, 0.92, 0.44, 60),
+  torus: () => tori(1),
 } satisfies Record<string, () => Strand[]>;
 
 export type SceneName = keyof typeof SCENES;
