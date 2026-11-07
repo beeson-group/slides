@@ -1,11 +1,13 @@
 // the entry point of beeson.js. window.Beeson.start() is called in a deck to initialize reveal.js
-// with the defaults of the theme, and to start the orbit backdrops, the fragment steps, the mode
-// switch, and the pointer
+// with the defaults of the theme, and to start the orbit backdrops, the surfaces, the fragment steps,
+// the mode switch, and the pointer
 
 import { Orbits, mount } from './orbits.ts';
 import { initChrome } from './chrome.ts';
 import { initCursor, togglePointer } from './cursor.ts';
 import { stillViewers } from './print.ts';
+import { mount as mountSurfaces } from './surface.ts';
+import type { Surface } from './surface.ts';
 import { initSteps } from './steps.ts';
 import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.ts';
 import type { RevealOptions, SlideEvent } from './reveal.d.ts';
@@ -36,14 +38,17 @@ const DEFAULTS: RevealOptions = {
 const TRACED = ['title', 'section', 'closing'];
 
 const backdrops: Orbits[] = [];
+const surfaces: Surface[] = [];
 
 const still = () => Orbits.reduced() || window.Reveal.isPrintView() || /print-pdf/.test(location.search);
 
 function remount(): void {
   for (const o of mount(document)) if (!backdrops.includes(o)) backdrops.push(o);
+  if (document.querySelector('.surface')) for (const s of mountSurfaces(document)) if (!surfaces.includes(s)) surfaces.push(s);
 }
 
 const within = (slide: Element | null | undefined) => (slide ? backdrops.filter((o) => slide.contains(o.el)) : []);
+const surfacesOf = (slide: Element | null | undefined) => (slide ? surfaces.filter((s) => slide.contains(s.el)) : []);
 
 function show(slide: HTMLElement): void {
   const glide = slide.hasAttribute('data-auto-animate');
@@ -66,11 +71,17 @@ function show(slide: HTMLElement): void {
       o.start();
     } else o.complete();
   }
+  for (const s of surfacesOf(slide)) {
+    s.fit();
+    s.sync(false);
+    if (!still()) s.start();
+  }
 }
 
 function completeAll(): void {
   remount();
   for (const o of backdrops) { o.fit(); o.complete(); }
+  for (const s of surfaces) { s.fit(); s.sync(false); s.draw(); }
 }
 
 async function start(options: Partial<RevealOptions> = {}): Promise<void> {
@@ -99,12 +110,21 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   deck.on('slidechanged', (event) => {
     const ev = event as SlideEvent;
     if (!still()) for (const o of within(ev.previousSlide)) if (!ev.currentSlide.contains(o.el)) o.reset();
+    for (const s of surfacesOf(ev.previousSlide)) s.stop();
     show(ev.currentSlide);
   });
-  deck.on('resize', () => { for (const o of backdrops) o.fit(); });
+  // a step of a slide may set the stage of a surface on it
+  const step = () => { for (const s of surfacesOf(deck.getCurrentSlide())) s.sync(!still()); };
+  deck.on('fragmentshown', step);
+  deck.on('fragmenthidden', step);
+  deck.on('resize', () => {
+    for (const o of backdrops) o.fit();
+    for (const s of surfaces) s.fit();
+  });
   syncViewers(get());
   document.addEventListener('beeson:theme', () => {
     for (const o of backdrops) o.redraw();
+    for (const s of surfaces) { s.recolor(); s.draw(); }
     syncViewers(get());
   });
 }
@@ -124,6 +144,7 @@ const Beeson = {
   start,
   theme: { get, set: (theme: 'dark' | 'light') => set(theme), toggle: () => toggle() },
   backdrops,
+  surfaces,
   version: __VERSION__,
 };
 
