@@ -1,4 +1,4 @@
-// the JSON of an animated 2D plot and its parser
+// the JSON of an animated 2D plot, i.e. its parser and the interpolation between its frames
 
 type Pair = [number, number];
 type Anchor = 'start' | 'middle' | 'end';
@@ -202,4 +202,52 @@ export function parsePlot(input: unknown): Plot {
     marks,
     tabs,
   };
+}
+
+const clamp = (x: number, a: number, b: number) => Math.min(b, Math.max(a, x));
+
+/** The value at the fractional frame u, linear between two frames. */
+export function valueAt(values: number[], u: number): number {
+  const n = values.length;
+  if (n === 1) return values[0];
+  const v = clamp(u, 0, n - 1), i = Math.min(n - 2, Math.floor(v)), f = v - i;
+  return values[i] + f * (values[i + 1] - values[i]);
+}
+
+/** The entry of the frame nearest to u. */
+export function nearest<T>(frames: T[], u: number): T {
+  return frames[clamp(Math.round(u), 0, frames.length - 1)];
+}
+
+/** The coordinates at the fractional frame u, linear between two frames of the same length and the nearest frame otherwise. */
+export function framesAt(frames: number[][], u: number): number[] {
+  const n = frames.length;
+  if (n === 1) return frames[0];
+  const v = clamp(u, 0, n - 1), i = Math.min(n - 2, Math.floor(v)), f = v - i;
+  const a = frames[i], b = frames[i + 1];
+  if (a.length !== b.length) return nearest(frames, v);
+  return a.map((x, k) => x + f * (b[k] - x));
+}
+
+/** The path of a trace from its first frame to the fractional frame u, which ends between two frames. */
+export function traceTo(path: Pair[], u: number): Pair[] {
+  const n = path.length, v = clamp(u, 0, n - 1), i = Math.floor(v), f = v - i;
+  const out = path.slice(0, i + 1);
+  if (f > 0 && i < n - 1) out.push([path[i][0] + f * (path[i + 1][0] - path[i][0]), path[i][1] + f * (path[i + 1][1] - path[i][1])]);
+  return out;
+}
+
+/** The fractional frame at t seconds into a loop that runs over n frames in duration seconds and then holds the last frame for hold seconds. */
+export function loopFrame(t: number, n: number, duration: number, hold: number): number {
+  if (n < 2) return 0;
+  const tau = ((t % (duration + hold)) + duration + hold) % (duration + hold);
+  return Math.min(1, tau / duration) * (n - 1);
+}
+
+const MINUS = '−';
+
+/** A number for a tick or a readout, with a minus sign in place of the hyphen. */
+export function formatNumber(x: number, digits?: number): string {
+  const s = digits === undefined ? String(Number(x.toPrecision(6))) : x.toFixed(digits);
+  return s.replace(/^-(?=.*[1-9])/, MINUS).replace(/^-/, '');
 }
