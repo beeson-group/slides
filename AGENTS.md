@@ -16,6 +16,7 @@ This repository is the slide template of the Beeson group. The reveal.js theme `
 - Give an image for each mode with `for-dark` and `for-light`, a white raster figure the class `paper`, and a black-on-white line plot the class `invert`.
 - Write math in MathJax delimiters, `\(` `\)` inline and `\[` `\]` display, inside a `div.math` for a display, and put shared macros into `theme/macros.js`.
 - Put speaker notes in an `aside.notes`.
+- Put a video in a `zone` or a `plate`, with a `poster` and an MP4 source, and add `data-autoplay` to play it while its slide is shown.
 - To glide an element between two slides, give both slides `data-auto-animate`, and give the element the same `data-id` on each.
 - Embed a tycho scene with the element from `build_embed` of pytycho, as in `demo/tycho-scene.py`, and vendor the runtime once in `theme/vendor/tycho/`.
 
@@ -23,10 +24,11 @@ This repository is the slide template of the Beeson group. The reveal.js theme `
 
 ```sh
 npm ci && npm run vendor && npm run build   # dependencies, vendored files, theme/beeson.js
-npm run typecheck && npm test               # types, then the orbit engine, the build, the vendor script, the browser lookup, the mode flip, and the crop of the backdrops under node --test
-npm run check                               # screenshots of every slide in both modes, console errors, problems in the page, the phone layout, a pixel ratio of 1.25
+npm run typecheck && npm test               # types, then the orbit engine, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, and the PowerPoint file under node --test
+npm run check                               # screenshots of every slide in both modes, console errors, problems in the page, a poster on every video, the phone layout, a pixel ratio of 1.25
 npm run check -- --browser firefox          # the same in Firefox or Safari over WebDriver, without the console, the phone layout, and the pixel ratio
 npm run pdf                                 # slides.pdf, one page per step, with a page count check
+npm run pptx                                # slides.pptx, one slide per step, with videos and speaker notes
 ```
 
 ## Conventions
@@ -36,7 +38,7 @@ npm run pdf                                 # slides.pdf, one page per step, wit
 - The orbit engine is a port of `orbits.ts` of claudiovestini.com (MIT). Do not derive anything in this repository from DyLAN code.
 - The Princeton marks and the group logo in `brand/` are outside the MIT license, see `brand/NOTICE.md`.
 - Colors are the custom properties in `theme/beeson.css`: `--bg`, `--text`, `--subtle`, `--muted`, `--line`, `--accent`, `--violet`, and `--data-1` to `--data-8`. The typeface is STIX Two Text at 22, 28, 36, 48, 64, and 96 px on the 1920 by 1080 design size. Body text is 48 px, i.e. the 24 points asked for by the AIAA on a slide 7.5 in high, and captions, tables, and code are 36 px. Orange is used for motion and progress, and violet for structure.
-- Write a talk over the demo deck in `index.html`, and do not copy `theme/` or `brand/` into another folder, since `index.html` is the default deck of `npm run check` and `npm run pdf`.
+- Write a talk over the demo deck in `index.html`, and do not copy `theme/` or `brand/` into another folder, since `index.html` is the default deck of `npm run check`, `npm run pdf`, and `npm run pptx`.
 - Read a PowerPoint file from its XML, and do not script PowerPoint, Keynote, or any other desktop app.
 
 ## Skills
