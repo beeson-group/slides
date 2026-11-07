@@ -263,3 +263,75 @@ export function renderBlock(source: Source, block: Block, math: MathLookup): str
 }
 
 // the range of an element removed on the page, with its line when nothing else is on it
+function deletionRange(text: string, s: SrcEl): Range | null {
+  if (!s.open) return null;
+  let start = s.open.start;
+  let end = s.close ? s.close.end : lastEnd(s);
+  let a = start;
+  while (a > 0 && (text[a - 1] === ' ' || text[a - 1] === '\t')) a--;
+  let b = end;
+  while (b < text.length && (text[b] === ' ' || text[b] === '\t')) b++;
+  const lineStart = a === 0 || text[a - 1] === '\n';
+  const lineEnd = b === text.length || text[b] === '\n' || text.startsWith('\r\n', b);
+  if (lineStart && lineEnd) {
+    start = a;
+    end = b === text.length ? b : text[b] === '\n' ? b + 1 : b + 2;
+  }
+  return { start, end };
+}
+
+export type Edit = { start: number; end: number; text: string };
+export type Rendered = { text: string; edits: Edit[]; changed: Block[]; warnings: string[] };
+
+// the text of the file with the edits of the page. a block whose content differs from the file is
+// replaced, a block removed from the page is removed, notes added to a slide without any are
+// inserted before its end tag, and the start tag of an element in tags is written with its step
+// or its translation
+export function renderDeck(source: Source, pairing: Pairing, math: MathLookup, tags: Map<Element, TagEdit> = new Map()): Rendered {
+  const edits: Edit[] = [];
+  const changed: Block[] = [];
+  const warnings: string[] = [];
+  for (const [el, edit] of tags) {
+    const s = pairing.elements.get(el);
+    if (!s?.open || !el.isConnected) continue;
+    const tag = renderTag(source.text, s.open, s.attrs, edit);
+    if (tag !== null) edits.push({ start: s.open.start, end: s.open.end, text: tag });
+  }
+  for (const b of pairing.blocks) {
+    const range = innerRange(b.src);
+    if (!range) continue;
+    if (!b.live.isConnected) {
+      const d = deletionRange(source.text, b.src);
+      if (d) {
+        edits.push({ ...d, text: '' });
+        changed.push(b);
+      }
+      continue;
+    }
+    const inner = renderBlock(source, b, math);
+    if (inner !== source.text.slice(range.start, range.end)) {
+      edits.push({ start: range.start, end: range.end, text: inner });
+      changed.push(b);
+    }
+  }
+  for (const { src, live } of pairing.sections) {
+    for (const aside of live.querySelectorAll(':scope > aside.notes')) {
+      if (pairing.byLive.has(aside)) continue;
+      const inner = serializeNewChildren(source, aside, math);
+      if (!inner.trim()) continue;
+      if (!src.close) {
+        warnings.push('the notes of a slide without an end tag are not saved');
+        continue;
+      }
+      const eol = source.crlf ? '\r\n' : '\n';
+      edits.push({ start: src.close.start, end: src.close.start, text: `  <aside class="notes">${inner}</aside>${eol}` });
+    }
+  }
+  edits.sort((a, b) => b.start - a.start || b.end - a.end);
+  for (let i = 1; i < edits.length; i++) {
+    if (edits[i].end > edits[i - 1].start) throw new Error('two edits overlap in the file');
+  }
+  let text = source.text;
+  for (const e of edits) text = text.slice(0, e.start) + e.text + text.slice(e.end);
+  return { text, edits, changed, warnings };
+}
