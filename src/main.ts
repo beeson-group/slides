@@ -6,7 +6,7 @@ import { Orbits, mount } from './orbits.ts';
 import { initChrome } from './chrome.ts';
 import { initCursor, togglePointer } from './cursor.ts';
 import { mountPlots, type PlotView } from './plot.ts';
-import { stillViewers } from './print.ts';
+import { markViewers, stillViewers } from './print.ts';
 import { mount as mountSurfaces } from './surface.ts';
 import type { Surface } from './surface.ts';
 import { register } from './strands.ts';
@@ -117,7 +117,8 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   if (window.RevealNotes && !plugins.includes(window.RevealNotes)) plugins.push(window.RevealNotes);
   initSwitcher();
   // in the print view, a page is cloned per fragment state after ready, and the clones are
-  // mounted here
+  // mounted here. the viewers are numbered before the clones are made
+  markViewers();
   deck.on('pdf-ready', () => {
     completeAll();
     void typeset().then(() => applyAll(document));

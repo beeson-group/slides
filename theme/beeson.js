@@ -575,7 +575,7 @@
     }
     return [...dots].filter(([who]) => places.get(who)?.size === 1).map(([, dot2]) => dot2);
   }
-  function fitView(strands, box, slide) {
+  function fitView(strands, box2, slide) {
     const xs = [], ys = [], ws = [];
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
     for (const s of strands) {
@@ -595,7 +595,7 @@
         ws.push(length > 0 ? d / length : 1 / (n - 1));
       }
     }
-    if (!ws.length || !(box.width > 0) || !(box.height > 0)) return null;
+    if (!ws.length || !(box2.width > 0) || !(box2.height > 0)) return null;
     const total = ws.reduce((a2, b2) => a2 + b2, 0);
     const quantile = (v, q) => {
       const order = v.map((_, i) => i).sort((a2, b2) => v[a2] - v[b2]);
@@ -609,7 +609,7 @@
     const lo = (1 - FILL) / 2, hi = 1 - lo;
     const qx = [quantile(xs, lo), quantile(xs, hi)], qy = [quantile(ys, lo), quantile(ys, hi)];
     let cx = (qx[0] + qx[1]) / 2, cy = (qy[0] + qy[1]) / 2;
-    const aspect = box.width / box.height;
+    const aspect = box2.width / box2.height;
     const held = (half2) => {
       let k = 0;
       for (let i = 0; i < ws.length; i++)
@@ -624,12 +624,12 @@
     }
     let half = b;
     const inner = {
-      left: box.left > 0.5,
-      right: box.left + box.width < slide.width - 0.5,
-      top: box.top > 0.5,
-      bottom: box.top + box.height < slide.height - 0.5
+      left: box2.left > 0.5,
+      right: box2.left + box2.width < slide.width - 0.5,
+      top: box2.top > 0.5,
+      bottom: box2.top + box2.height < slide.height - 0.5
     };
-    const g = 2 * MARGIN / box.height;
+    const g = 2 * MARGIN / box2.height;
     const need = (span, sides, width) => span / Math.max(width - sides * g, 1e-9);
     half = Math.max(
       half,
@@ -1084,11 +1084,11 @@
       if (r.width === 0 || r.height === 0 || w === 0 || h === 0) return;
       if (this.fitted && this.strands.length) {
         const section = this.el.closest("section");
-        const box = { left: this.el.offsetLeft, top: this.el.offsetTop, width: w, height: h };
+        const box2 = { left: this.el.offsetLeft, top: this.el.offsetTop, width: w, height: h };
         const slide = { width: section?.offsetWidth || w, height: section?.offsetHeight || h };
-        const key = [box.left, box.top, w, h, slide.width, slide.height].join();
+        const key = [box2.left, box2.top, w, h, slide.width, slide.height].join();
         if (key !== this.fittedFor) {
-          const view = fitView(this.strands, box, slide);
+          const view = fitView(this.strands, box2, slide);
           if (view) ({ cx: this.cx, cy: this.cy, half: this.half } = view);
           this.fittedFor = key;
         }
@@ -1919,10 +1919,10 @@
         this.spec = parsePlot(block.textContent ?? "");
       } catch (error) {
         const message = `plot ${el.dataset.plot ?? ""}: ${error.message}`;
-        const box = document.createElement("div");
-        box.className = "plot-error";
-        box.textContent = message;
-        el.append(box);
+        const box2 = document.createElement("div");
+        box2.className = "plot-error";
+        box2.textContent = message;
+        el.append(box2);
         console.error(message);
         return;
       }
@@ -2380,20 +2380,49 @@
 
   // src/print.ts
   var sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+  var written = /* @__PURE__ */ new WeakSet();
+  function markViewers() {
+    document.querySelectorAll("tycho-viewer").forEach((viewer, i) => {
+      viewer.setAttribute("data-still", String(i));
+      written.add(viewer);
+    });
+  }
+  function box(viewer) {
+    const still3 = document.createElement("div");
+    still3.className = viewer.className;
+    still3.style.cssText = viewer.style.cssText;
+    viewer.replaceWith(still3);
+    return still3;
+  }
+  async function still(viewer) {
+    const failed = () => viewer.shadowRoot?.querySelector(".status.error");
+    while (!viewer.renderer && !failed()) await sleep(50);
+    if (!viewer.canvas || !viewer.renderer) return null;
+    viewer.pause();
+    viewer.draw();
+    const image = new Image();
+    image.src = viewer.canvas.toDataURL("image/png");
+    image.alt = "A still of a tycho scene";
+    const host = viewer.getBoundingClientRect();
+    const canvas = viewer.canvas.getBoundingClientRect();
+    const scale = host.width / (viewer.offsetWidth || 1);
+    const px = (n) => `${Math.round(n / scale)}px`;
+    image.style.cssText = `position: absolute; left: ${px(canvas.left - host.left)}; top: ${px(canvas.top - host.top)}; width: ${px(canvas.width)}; height: ${px(canvas.height)}; object-fit: fill`;
+    return image;
+  }
   async function stillViewers() {
+    const viewers = [];
+    const clones = /* @__PURE__ */ new Map();
     for (const viewer of document.querySelectorAll("tycho-viewer")) {
-      const failed = () => viewer.shadowRoot?.querySelector(".status.error");
-      while (!viewer.renderer && !failed()) await sleep(50);
-      if (!viewer.canvas || !viewer.renderer) continue;
-      viewer.pause();
-      viewer.draw();
-      const image = new Image();
-      image.src = viewer.canvas.toDataURL("image/png");
-      image.alt = "A still of a tycho scene";
-      const still2 = document.createElement("div");
-      still2.className = viewer.className;
-      still2.append(image);
-      viewer.replaceWith(still2);
+      const id = viewer.dataset.still;
+      if (id === void 0 || written.has(viewer)) viewers.push(viewer);
+      else clones.set(id, [...clones.get(id) ?? [], box(viewer)]);
+    }
+    for (const viewer of viewers) {
+      const image = await still(viewer);
+      if (image === null) continue;
+      box(viewer).append(image);
+      for (const clone of clones.get(viewer.dataset.still ?? "") ?? []) clone.append(image.cloneNode());
     }
   }
 
@@ -2754,8 +2783,8 @@ void main() {
       this.markA = new Float64Array(fn.marks.length);
       this.markB = new Float64Array(fn.marks.length);
       this.seen = new Float32Array(fn.marks.length).fill(1);
-      const still2 = { marks: 0, cut: 0, level: fn.floor, low: this.zmin * this.zscale, high: this.zmax * this.zscale };
-      this.shown = this.from = this.to = still2;
+      const still3 = { marks: 0, cut: 0, level: fn.floor, low: this.zmin * this.zscale, high: this.zmax * this.zscale };
+      this.shown = this.from = this.to = still3;
       this.scene = new THREE.Scene();
       this.camera = new THREE.PerspectiveCamera(26, 1, 0.1, 100);
       this.camera.up.set(0, 0, 1);
@@ -3554,7 +3583,7 @@ void main() {
     params.set("edit", "");
     location.href = `${location.href.split(/[?#]/)[0]}?${params.toString().replace(/=(?=&|$)/g, "")}${location.hash}`;
   }
-  var still = () => EDITING || Orbits.reduced() || window.Reveal.isPrintView() || /print-pdf/.test(location.search);
+  var still2 = () => EDITING || Orbits.reduced() || window.Reveal.isPrintView() || /print-pdf/.test(location.search);
   function remount() {
     for (const o of mount(document)) if (!backdrops.includes(o)) backdrops.push(o);
     if (document.querySelector(".surface")) {
@@ -3575,12 +3604,12 @@ void main() {
   }
   function show(slide) {
     stepPlots(slide);
-    for (const p of plotsIn(slide)) if (still()) p.still();
+    for (const p of plotsIn(slide)) if (still2()) p.still();
     else p.start();
     const glide = slide.hasAttribute("data-auto-animate");
     for (const o of within(slide)) {
       o.fit();
-      if (still()) {
+      if (still2()) {
         o.complete();
         continue;
       }
@@ -3601,7 +3630,7 @@ void main() {
     for (const s of surfacesOf(slide)) {
       s.fit();
       s.sync(false);
-      if (!still()) s.start();
+      if (!still2()) s.start();
     }
   }
   function completeAll() {
@@ -3627,6 +3656,7 @@ void main() {
     const plugins = [...options.plugins ?? []];
     if (window.RevealNotes && !plugins.includes(window.RevealNotes)) plugins.push(window.RevealNotes);
     initSwitcher();
+    markViewers();
     deck.on("pdf-ready", () => {
       completeAll();
       void typeset().then(() => applyAll(document));
@@ -3648,11 +3678,11 @@ void main() {
     if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: "E", description: "Edit the deck" }, (ev) => {
       if (forDeck(ev)) edit();
     });
-    if (still()) completeAll();
+    if (still2()) completeAll();
     else show(deck.getCurrentSlide());
     deck.on("slidechanged", (event) => {
       const ev = event;
-      if (!still()) {
+      if (!still2()) {
         for (const o of within(ev.previousSlide)) if (!ev.currentSlide.contains(o.el)) o.reset();
       }
       for (const s of surfacesOf(ev.previousSlide)) s.stop();
@@ -3660,7 +3690,7 @@ void main() {
       show(ev.currentSlide);
     });
     const step2 = () => {
-      for (const s of surfacesOf(deck.getCurrentSlide())) s.sync(!still());
+      for (const s of surfacesOf(deck.getCurrentSlide())) s.sync(!still2());
       stepPlots(deck.getCurrentSlide());
     };
     deck.on("fragmentshown", step2);
