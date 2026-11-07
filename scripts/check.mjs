@@ -88,6 +88,23 @@ async function checkDesktop() {
   await page.close();
 }
 
+// a viewport of WebGL is rounded at a device pixel ratio such as 1.25, the display scaling of many
+// Windows laptops, and a viewer that overruns its canvas in this way loses its static layers
+async function checkScaled() {
+  const page = await browser.newPage({ scale: 1.25 });
+  await page.goto(deckUrl(options.deck, 'still'));
+  await page.waitFor(deckSettled);
+  await page.evaluate(`(() => {
+    const viewer = document.querySelector('tycho-viewer');
+    if (!viewer) return;
+    const { h, v } = Reveal.getIndices(viewer.closest('section'));
+    Reveal.slide(h, v);
+  })()`);
+  await new Promise((done) => setTimeout(done, 1000));
+  for (const error of page.errors) failures.push(`scaled: ${error}`);
+  await page.close();
+}
+
 // read during a trace, since the heads of a backdrop are cleared at its end
 async function checkHeads() {
   const page = await browser.newPage();
@@ -148,6 +165,7 @@ try {
     await animated.close();
   }
   await checkPhone();
+  await checkScaled();
   await checkDesktop();
   await checkHeads();
 } finally {
