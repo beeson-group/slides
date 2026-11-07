@@ -8,9 +8,9 @@ import { SCENE_NAMES, scene } from '../src/scenes.ts';
 const H = 0.004;
 // the smallest number of strands expected in each scene. the L2 family of nest is ended after 7 of
 // its 12 members
-const FEWEST = { nest: 24, dro: 9, l1: 26, l2: 20, lyapunovs: 32, mark: 1, tubes: 114, halo: 74, rosette: 13, hill: 15, transfer: 25, ribbon: 181, wideRibbon: 241 };
+const FEWEST = { nest: 24, dro: 9, l1: 26, l2: 20, lyapunovs: 32, mark: 1, tubes: 114, halo: 74, rosette: 13, hill: 15, transfer: 25, ribbon: 181, wideRibbon: 241, spiral: 4 };
 // the scenes with strands that are not periodic orbits
-const FLIGHTS = ['tubes', 'transfer', 'hill', 'ribbon', 'wideRibbon'];
+const FLIGHTS = ['tubes', 'transfer', 'hill', 'ribbon', 'wideRibbon', 'spiral'];
 
 test('the collinear points L1 and L2 are at the Earth–Moon values', () => {
   assert.ok(Math.abs(lagrange(1) - 0.8369) < 5e-4);
@@ -77,6 +77,16 @@ test('a ribbon runs from its orbit around the Earth, with its stable tube the mi
       assert.ok(left(s) < -0.3, `${name} passes the far side of the Earth`);
     }
   }
+});
+
+test('the band of the spiral stays near the distance of the Moon, and the flight starts near the Earth', () => {
+  const [band, ...flight] = scene('spiral'), start = flight[flight.length - 1];
+  assert.equal(band.tone, 'line');
+  for (let i = 0; i < band.pts.length; i += 2) {
+    const r = Math.hypot(band.pts[i] + MU, band.pts[i + 1]);
+    assert.ok(r > 0.75 && r < 1.3, `radius ${r}`);
+  }
+  assert.ok(Math.hypot(start.pts[0] + MU, start.pts[1]) < 0.1);
 });
 
 test('the transfer is one unbroken path from near the Earth to near the Moon', () => {

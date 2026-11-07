@@ -282,6 +282,61 @@ function ribbon(A: number, phases: number, crossings: number, alpha: number, kic
   return [toned(first, 'text'), ...out];
 }
 
+// the southern L2 near rectilinear halo orbit of period 1.53, flown for the given number of periods
+// in the Earth-centered inertial frame, where the orbit about the Moon is drawn out into a band
+function band(laps: number, tilt: number): Strand {
+  const seed = new Float64Array(6);
+  seed[0] = 1.0232; seed[2] = 0.1829; seed[4] = -0.1058;
+  const m = correct(seed, [2, 4], [3, 5], H / 2, 0.3, 6, 12);
+  if (!m) return { pts: new Float64Array(0), times: new Float32Array(0), T: 0 };
+  const c = Math.cos(tilt), d = Math.sin(tilt), n = m.times.length, pts: number[] = [], times: number[] = [];
+  const put = (i: number, sign: number, t: number) => {
+    const x = m.path[3 * i] + MU, y = sign * m.path[3 * i + 1], z = -m.path[3 * i + 2];
+    pts.push(x * Math.cos(t) - y * Math.sin(t) - MU, (x * Math.sin(t) + y * Math.cos(t)) * c + z * d);
+    times.push(t);
+  };
+  for (let lap = 0; lap < laps; lap++) {
+    const t0 = 2 * m.t * lap;
+    for (let i = 0; i < n; i++) put(i, 1, t0 + m.times[i]);
+    for (let i = n - 2; i > 0; i--) put(i, -1, t0 + 2 * m.t - m.times[i]);
+  }
+  return { pts: Float64Array.from(pts), times: Float32Array.from(times), T: times[times.length - 1] };
+}
+
+// a low-thrust flight from the Earth out to the Moon in the inertial frame, viewed from tilt rad above
+// the plane of the Moon: a spiral with continuous tangential thrust up to the semimajor axis a1, then
+// thrust on the perigee half of each revolution up to a2, then a coast until the flight falls back to
+// the distance of the Moon. this flight is illustrative and is not an optimal transfer
+function spiral(acc: number, r0: number, a1: number, a2: number, tilt: number, laps: number): Strand[] {
+  const c = Math.cos(tilt), mu = 1 - MU;
+  const s = [r0, 0, 0, Math.sqrt(mu / r0)];
+  let t = 0, phase = 0, out = false, end = Infinity;
+  const parts: { p: number[]; q: number[] }[] = [{ p: [], q: [] }, { p: [], q: [] }, { p: [], q: [] }];
+  const f = (u: number[], tt: number, A: number): number[] => {
+    const r = Math.hypot(u[0], u[1]), mx = Math.cos(tt), my = Math.sin(tt);
+    const dx = u[0] - mx, dy = u[1] - my, d = Math.hypot(dx, dy), v = Math.hypot(u[2], u[3]);
+    return [u[2], u[3], -mu * u[0] / r ** 3 - MU * dx / d ** 3 - MU * mx + A * u[2] / v, -mu * u[1] / r ** 3 - MU * dy / d ** 3 - MU * my + A * u[3] / v];
+  };
+  for (let n = 0; n < 300000; n++) {
+    const r = Math.hypot(s[0], s[1]), d = Math.hypot(s[0] - Math.cos(t), s[1] - Math.sin(t));
+    if (r < 0.0166 || d < 0.0045 || r > 2.6) break;
+    if (phase === 2 && r > 1.15) out = true;
+    if ((out && r < 1) || t > end) break;
+    const E = (s[2] ** 2 + s[3] ** 2) / 2 - mu / r, sma = E < 0 ? -mu / (2 * E) : 9;
+    if (phase === 0 && sma > a1) phase = 1;
+    if (phase === 1 && sma > a2) { phase = 2; end = t + 14; }
+    const A = phase === 0 || (phase === 1 && r < sma) ? acc : 0;
+    const h = 0.05 * Math.min(r ** 1.5, 4 * d ** 1.5);
+    parts[phase].p.push(s[0] - MU, s[1] * c, 0); parts[phase].q.push(t);
+    const k1 = f(s, t, A), k2 = f(s.map((v, i) => v + 0.5 * h * k1[i]), t + h / 2, A);
+    const k3 = f(s.map((v, i) => v + 0.5 * h * k2[i]), t + h / 2, A), k4 = f(s.map((v, i) => v + h * k3[i]), t + h, A);
+    for (let i = 0; i < 4; i++) s[i] += (h / 6) * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]);
+    t += h;
+  }
+  const [p0, p1, p2] = parts;
+  return [toned(band(laps, tilt), 'line'), { ...toned(open(p2.p, p2.q), 'violet'), alpha: 0.85 }, { ...toned(open(p1.p, p1.q), 'violet'), alpha: 0.85 }, { ...toned(open(p0.p, p0.q), 'orange'), alpha: 0.85 }].filter((x) => x.times.length > 1);
+}
+
 const SCENES = {
   nest: () => [...lyapunovFamily(1, spaced(0.012, 0.12, 12, 1.5), H), ...lyapunovFamily(2, spaced(0.012, 0.14, 12, 1.5), H), ...droFamily(ramp(0.03, 0.09, 1.2), H)].map(closed),
   dro: () => droFamily(ramp(0.02, 0.32, 1.12), H).filter((_, i) => i % 3 === 0).map(closed),
@@ -296,6 +351,7 @@ const SCENES = {
   transfer: () => transfer(0.03),
   ribbon: () => ribbon(0.006, 90, 3, 0.16),
   wideRibbon: () => ribbon(0.016, 120, 3, 0.12),
+  spiral: () => spiral(0.11, 0.07, 0.42, 0.92, 0.44, 60),
 } satisfies Record<string, () => Strand[]>;
 
 export type SceneName = keyof typeof SCENES;
