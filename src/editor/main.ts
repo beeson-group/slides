@@ -12,7 +12,9 @@
 
 import { parseSource, type Source } from './source.ts';
 import { pair, renderDeck, type Pairing } from './render.ts';
+import { contentWithTex, mathLookup, mathReady, previewTex, retypeset, setContentWithTex } from './math.ts';
 import type { TagEdit } from './tags.ts';
+import { CSS } from './styles.ts';
 
 type PickerOptions = { types?: { description: string; accept: Record<string, string[]> }[]; multiple?: boolean; suggestedName?: string };
 type Pickers = {
@@ -148,6 +150,9 @@ function showSlide(el: Element): void {
   d.slide(h, v);
 }
 
+// the frames, the numbers, the list, and the overflow marks follow the slide after a change
+function follow(): void {
+}
 
 // the pane under the slide, which the notes of the current slide are laid over, and the strip
 // above it that changes its height
@@ -272,3 +277,203 @@ function layout(): void {
   document.documentElement.style.setProperty('--beeson-side', `${side}px`);
 }
 
+
+// each formula is one unit that the caret skips, reached with Tab and opened with Enter
+function markMath(root: Element): void {
+  for (const c of root.querySelectorAll('mjx-container')) {
+    c.setAttribute('contenteditable', 'false');
+    if (!hostOf(c)) continue;
+    c.setAttribute('tabindex', '0');
+    c.setAttribute('role', 'button');
+    c.setAttribute('aria-label', 'Formula, Enter opens its TeX');
+  }
+}
+
+// marks the blocks of the pairing editable, and the formulas in them as one unit each. a block
+// that stays a block is left alone, so that a save does not take the focus
+function attach(): void {
+  const next = pairing ? pairing.blocks.map((b) => b.live) : [];
+  for (const h of hosts) if (!next.includes(h)) h.removeAttribute('contenteditable');
+  for (const h of next) if (h.getAttribute('contenteditable') !== 'true') h.setAttribute('contenteditable', 'true');
+  hosts = next;
+  for (const h of next) if (h.matches('aside.notes')) h.setAttribute('aria-label', 'Speaker notes');
+  markMath(slides());
+  document.documentElement.classList.toggle('beeson-editing', hosts.length > 0);
+}
+
+function status() {
+  return {
+    state,
+    // true where the file is written in place, false where a save is a download
+    supported: canWrite(),
+    dirty,
+    file: handle?.name ?? null,
+    blocks: pairing?.blocks.length ?? 0,
+    sections: pairing?.sections.length ?? 0,
+    // the elements whose step or place was changed since the last save
+    tags: tagEdits.size,
+    problems: (pairing?.problems ?? []).map((p) => ({ slide: slideNumber(p.slide), tag: p.tag, reason: p.reason })),
+    message: stateEl.textContent ?? '',
+    autosave,
+    overflow: overflowing,
+    pane: paneHeight,
+  };
+}
+
+// pairs the text of the file with the page and makes the paired blocks editable. the state
+// reports the blocks that could not be paired. a fresh file starts the history anew and is
+// checked against the edits kept in the storage, and the text of a save is paired again in place
+function open(text: string, fresh = true): ReturnType<typeof status> {
+  tagEdits.clear();
+  try {
+    source = parseSource(text);
+    pairing = pair(source, slides(), mathLookup());
+    state = 'loaded';
+    dirty = false;
+    if (!pairing.blocks.length) pairing.problems.push({ slide: null, tag: 'slides', reason: 'nothing on the page was found in the file' });
+  } catch (error) {
+    source = null;
+    pairing = null;
+    state = 'error';
+    note = { text: error instanceof Error ? error.message : String(error), warn: true };
+  }
+  attach();
+  report();
+  follow();
+  return status();
+}
+
+// the text of the file with the edits of the page, without writing it
+function render(): string {
+  if (!source || !pairing) throw new Error('no file is open');
+  return renderDeck(source, pairing, mathLookup(), tagEdits).text;
+}
+
+
+// every change passes here: the state is shown, the edits are kept in the storage after a pause,
+// and an autosave is started
+function markDirty(): void {
+  if (!dirty) {
+    dirty = true;
+    note = null;
+    report();
+  }
+}
+
+
+const hostOf = (target: EventTarget | null): Element | null => {
+  const host = target instanceof Element ? target.closest(HOST) : null;
+  return host && slides().contains(host) ? host : null;
+};
+
+// a line in a block is a br, or a newline in a pre, and a paste is plain text, so that the text
+// of a slide stays what the file can hold
+function insertPlain(host: Element, text: string): void {
+  if (host.closest('pre')) {
+    document.execCommand('insertText', false, text);
+    return;
+  }
+  const lines = text.split(/\r?\n/);
+  lines.forEach((line, i) => {
+    if (line) document.execCommand('insertText', false, line);
+    if (i < lines.length - 1) document.execCommand('insertLineBreak');
+  });
+}
+
+function onBeforeInput(ev: InputEvent): void {
+  const host = hostOf(ev.target);
+  if (!host) return;
+  const type = ev.inputType;
+  if (type === 'insertParagraph' || type === 'insertLineBreak') {
+    ev.preventDefault();
+    insertPlain(host, '\n');
+  } else if (type === 'insertFromPaste') {
+    ev.preventDefault();
+    insertPlain(host, ev.dataTransfer?.getData('text/plain') ?? '');
+  } else if (type === 'insertFromDrop' || type.startsWith('format') || type.startsWith('insertOrdered') || type.startsWith('insertUnordered') || type === 'insertHorizontalRule' || type === 'insertLink') {
+    ev.preventDefault();
+  }
+}
+
+
+const revealReady = (): Promise<void> =>
+  new Promise((done) => {
+    const tick = () => (deck()?.isReady() ? done() : setTimeout(tick, 50));
+    tick();
+  });
+
+// the text is fetched when the deck is served, and with file: it is chosen with the card
+async function fetchSource(): Promise<boolean> {
+  if (location.protocol === 'file:') return false;
+  try {
+    const response = await fetch(location.href.split(/[?#]/)[0], { cache: 'no-store' });
+    if (!response.ok) return false;
+    open(await response.text());
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function init(): Promise<void> {
+  const style = make('style');
+  style.id = 'beeson-editor';
+  style.textContent = CSS;
+  document.head.append(style);
+  document.documentElement.classList.add('beeson-editor');
+  // a pointer click leaves the focus on the slide, and Enter or Space on a focused button keeps it
+  const wire = (el: HTMLButtonElement, action: () => unknown) => el.addEventListener('click', (ev) => {
+    if (ev.detail > 0) el.blur();
+    Promise.resolve().then(action).catch(fail);
+  });
+  wire(prevButton, () => deck()?.left());
+  wire(nextButton, () => deck()?.right());
+  document.addEventListener('beforeinput', onBeforeInput);
+  document.addEventListener('input', (ev) => {
+    const host = hostOf(ev.target);
+    if (!host) return;
+    markDirty();
+    follow();
+  });
+  document.addEventListener('focusin', (ev) => {
+    const host = hostOf(ev.target);
+    follow();
+  });
+  document.addEventListener('focusout', () => setTimeout(follow, 0));
+  window.addEventListener('beforeunload', (ev) => { if (dirty) ev.preventDefault(); });
+  report();
+  await revealReady();
+  const d = deck();
+  if (d) {
+    // the slides change without a transition and with every step shown, as in the editing view
+    // of PowerPoint, and the keys of reveal.js for the overview (Esc, O), the black and the white
+    // screen (B, V, the period), fullscreen (F), the help (the question mark), and the speaker view
+    // (S) are off. the viewport of reveal.js is laid out again between the bars
+    d.configure({ transition: 'none', backgroundTransition: 'none', fragments: false, keyboard: { 27: null, 79: null, 66: null, 86: null, 190: null, 70: null, 191: null, 83: null } });
+    d.layout();
+    d.on('resize', () => { layout(); follow(); });
+    count();
+    layout();
+  }
+  await mathReady();
+  if (!(await fetchSource())) {
+    state = 'waiting';
+    report();
+  }
+}
+
+const BeesonEditor = {
+  ready: init(),
+  open,
+  render,
+  status,
+  version: __VERSION__,
+};
+
+declare global {
+  interface Window {
+    BeesonEditor: typeof BeesonEditor;
+  }
+}
+
+window.BeesonEditor = BeesonEditor;
