@@ -695,6 +695,63 @@ test('E opens the slide in the editor', async (t) => {
   assert.deepEqual(page.errors, []);
 });
 
+test('Open with unsaved changes asks first: Cancel keeps them, Open without saving puts the slide back as saved, and Save and open saves them', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  const h2 = 'Period of the families';
+  // stubs of the pickers: both give one handle of a file, read as last written
+  await page.evaluate(`window.pickerCalls = 0; window.written = null;
+    const handle = { name: 'index.html', getFile: async () => new File([window.written ?? ${JSON.stringify(deckText)}], 'index.html', { type: 'text/html' }), createWritable: async () => ({ write: async (text) => { window.written = text; }, close: async () => {} }) };
+    window.showOpenFilePicker = async () => { window.pickerCalls += 1; return [handle]; };
+    window.showSaveFilePicker = async () => handle;`);
+  const type = (text) => page.evaluate(`(() => { const h = [...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === ${JSON.stringify(h2)}); Reveal.slide(Reveal.getIndices(h.closest('section')).h); h.focus(); const r = document.createRange(); r.selectNodeContents(h); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); document.execCommand('insertText', false, ${JSON.stringify(text)}); })()`);
+  const open = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Open…').click()`);
+  const choose = (text) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-card.ask button')].find((b) => b.textContent === ${JSON.stringify(text)}).click()`);
+  await type(' edited');
+  assert.equal((await page.evaluate('window.BeesonEditor.status()')).dirty, true);
+  await open();
+  await sleep(100);
+  const card = await page.evaluate(`(() => { const c = document.querySelector('.beeson-edit-card.ask'); return { hidden: c.hidden, title: c.querySelector('h3').textContent, buttons: [...c.querySelectorAll('button')].map((b) => b.textContent), focused: document.activeElement.textContent }; })()`);
+  assert.deepEqual(card, { hidden: false, title: 'The deck has unsaved changes', buttons: ['Save and open…', 'Open without saving', 'Cancel'], focused: 'Cancel' });
+  await choose('Cancel');
+  await sleep(100);
+  assert.equal((await page.evaluate('window.BeesonEditor.status()')).dirty, true);
+  assert.equal(await page.evaluate('window.pickerCalls'), 0);
+  assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-card.ask').hidden`), true);
+  // Escape on the card is Cancel too
+  await open();
+  await sleep(100);
+  await page.evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true, cancelable: true }))`);
+  assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-card.ask').hidden`), true);
+  assert.equal((await page.evaluate('window.BeesonEditor.status()')).dirty, true);
+  // Open without saving undoes the typing, so that the page reads as the file chosen
+  await open();
+  await sleep(100);
+  await choose('Open without saving');
+  await until(page, 'window.pickerCalls === 1');
+  await sleep(200);
+  let status = await page.evaluate('window.BeesonEditor.status()');
+  assert.deepEqual({ dirty: status.dirty, problems: status.problems, undo: status.undo, draft: status.draft }, { dirty: false, problems: [], undo: false, draft: false });
+  assert.equal(await page.evaluate(`[...document.querySelectorAll('.reveal h2')].some((h) => h.textContent === ${JSON.stringify(h2)})`), true);
+  assert.equal(await page.evaluate('window.BeesonEditor.render()'), deckText);
+  // Save and open writes the edits first, and the file opened then holds them
+  await type(' edited');
+  assert.equal((await page.evaluate('window.BeesonEditor.status()')).dirty, true);
+  await open();
+  await sleep(100);
+  assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-card.ask').hidden`), false);
+  await choose('Save and open…');
+  await until(page, 'window.pickerCalls === 2');
+  await sleep(200);
+  assert.equal(await page.evaluate('window.written'), replaced(`<h2>${h2}</h2>`, `<h2>${h2} edited</h2>`));
+  status = await page.evaluate('window.BeesonEditor.status()');
+  assert.deepEqual({ dirty: status.dirty, problems: status.problems }, { dirty: false, problems: [] });
+  assert.equal(await page.evaluate('window.BeesonEditor.render()'), await page.evaluate('window.written'));
+  assert.deepEqual(page.errors, []);
+});
+
 test('Esc leaves a text and selects its block for the arrow keys, Tab reaches a figure, and a dragged figure snaps to the edge of a block with a guide', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
@@ -791,6 +848,55 @@ test('with nothing selected, Esc and B do not open the overview or black out the
   assert.equal(await page.evaluate('Reveal.isOverview()'), false);
   await press('b', 66);
   assert.equal(await page.evaluate('Reveal.isPaused()'), false);
+  assert.deepEqual(page.errors, []);
+});
+
+test('an undo back to the saved text leaves the deck clean, and Present with unsaved changes asks first', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  const status = () => page.evaluate('window.BeesonEditor.status()');
+  const h2 = 'Period of the families';
+  const type = (text) => page.evaluate(`(() => { const h = [...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === ${JSON.stringify(h2)}); Reveal.slide(Reveal.getIndices(h.closest('section')).h); h.focus(); const r = document.createRange(); r.selectNodeContents(h); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); document.execCommand('insertText', false, ${JSON.stringify(text)}); })()`);
+  await type(' edited');
+  assert.equal((await status()).dirty, true);
+  await page.evaluate('window.BeesonEditor.undo()');
+  let s = await status();
+  assert.deepEqual({ dirty: s.dirty, draft: s.draft, undo: s.undo }, { dirty: false, draft: false, undo: false });
+  assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Save').classList.contains('on')`), false);
+  // Present asks while there are unsaved changes
+  await page.evaluate(`window.written = null; window.__opened = null; window.open = (url) => { window.__opened = url; };
+    const handle = { name: 'index.html', getFile: async () => new File([window.written ?? ${JSON.stringify(deckText)}], 'index.html'), createWritable: async () => ({ write: async (text) => { window.written = text; }, close: async () => {} }) };
+    window.showSaveFilePicker = async () => handle;`);
+  const present = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Present').click()`);
+  const choose = (text) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-card.ask button')].find((b) => b.textContent === ${JSON.stringify(text)}).click()`);
+  await type(' edited');
+  await present();
+  await sleep(100);
+  const card = await page.evaluate(`(() => { const c = document.querySelector('.beeson-edit-card.ask'); return { hidden: c.hidden, buttons: [...c.querySelectorAll('button')].map((b) => b.textContent), focused: document.activeElement.textContent }; })()`);
+  assert.deepEqual(card, { hidden: false, buttons: ['Save and present', 'Present the saved file', 'Cancel'], focused: 'Cancel' });
+  await choose('Cancel');
+  await sleep(100);
+  assert.equal(await page.evaluate('window.__opened'), null);
+  await present();
+  await sleep(100);
+  await choose('Present the saved file');
+  await until(page, '!!window.__opened');
+  s = await status();
+  assert.deepEqual({ dirty: s.dirty, written: await page.evaluate('window.written') }, { dirty: true, written: null });
+  await page.evaluate('window.__opened = null');
+  await present();
+  await sleep(100);
+  await choose('Save and present');
+  await until(page, '!!window.__opened');
+  assert.equal(await page.evaluate('window.written'), replaced(`<h2>${h2}</h2>`, `<h2>${h2} edited</h2>`));
+  assert.equal((await status()).dirty, false);
+  // Present without unsaved changes does not ask
+  await page.evaluate('window.__opened = null');
+  await present();
+  await until(page, '!!window.__opened');
+  assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-card.ask').hidden`), true);
   assert.deepEqual(page.errors, []);
 });
 
