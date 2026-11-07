@@ -51,7 +51,8 @@ test('a video without a poster is printed with its frame on every step', { timeo
   const page = await browser.newPage();
   await printView(page, `${server.origin}/test/pages/video-steps.html?print-pdf&still`);
 
-  const frames = pageImages(await page.pdf()).map((images) => images.filter((i) => i.width === 600 && i.height === 600).length);
+  const [width, height] = await page.evaluate(`[document.querySelector('video').videoWidth, document.querySelector('video').videoHeight]`);
+  const frames = pageImages(await page.pdf()).map((images) => images.filter((i) => i.width === width && i.height === height).length);
 
   // the last page is the step that restores the dimmed fragments
   assert.deepEqual(frames, [1, 1, 1, 1]);
