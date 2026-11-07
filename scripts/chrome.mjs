@@ -243,4 +243,14 @@ export async function printView(page, url) {
   await page.waitFor(`!!document.querySelector('.pdf-page')
     && !document.querySelector('.reveal-viewport.loading-scroll-mode')`);
   await page.waitFor(deckSettled);
+  // reveal.js clones a slide for each of its steps after the load event, which does not wait for
+  // the clones, and a video that has not loaded a frame is printed as a black panel. A hidden video
+  // is not printed, and it may not load a frame at all
+  await page.evaluate(`document.querySelectorAll('video[preload="none"]').forEach((video) => {
+    video.preload = 'auto';
+    video.load();
+  })`);
+  await page.waitFor(`[...document.querySelectorAll('video')].every((video) => video.readyState >= 2 || video.error || !video.getClientRects().length)
+    && [...document.images].every((image) => image.complete)`, 60000);
+  await page.waitFor(deckSettled);
 }
