@@ -1,4 +1,6 @@
-// the JSON of an animated 2D plot, i.e. its parser and the interpolation between its frames
+// the JSON of an animated 2D plot, i.e. its parser, the interpolation between its frames, and the
+// small markup of its text, in which $...$ is math with italic letters, sub- and superscripts, and
+// TeX names of symbols
 
 type Pair = [number, number];
 type Anchor = 'start' | 'middle' | 'end';
@@ -250,4 +252,82 @@ const MINUS = '−';
 export function formatNumber(x: number, digits?: number): string {
   const s = digits === undefined ? String(Number(x.toPrecision(6))) : x.toFixed(digits);
   return s.replace(/^-(?=.*[1-9])/, MINUS).replace(/^-/, '');
+}
+
+const SYMBOLS: Record<string, string> = {
+  alpha: 'α', beta: 'β', gamma: 'γ', delta: 'δ', epsilon: 'ε', varepsilon: 'ε', zeta: 'ζ', eta: 'η', theta: 'θ', iota: 'ι', kappa: 'κ', lambda: 'λ', mu: 'μ', nu: 'ν', xi: 'ξ', pi: 'π', rho: 'ρ', sigma: 'σ', tau: 'τ', upsilon: 'υ', phi: 'φ', varphi: 'φ', chi: 'χ', psi: 'ψ', omega: 'ω',
+  Gamma: 'Γ', Delta: 'Δ', Theta: 'Θ', Lambda: 'Λ', Xi: 'Ξ', Pi: 'Π', Sigma: 'Σ', Phi: 'Φ', Psi: 'Ψ', Omega: 'Ω',
+  pm: '±', mp: '∓', infty: '∞', cdot: '·', times: '×', approx: '≈', le: '≤', ge: '≥', ne: '≠', to: '→', in: '∈',
+};
+
+export type Run = { text: string; italic: boolean; shift: 'sub' | 'sup' | null };
+
+/** Splits a text of the markup into runs, i.e. pieces of one style. */
+export function parseMarkup(src: string): Run[] {
+  const runs: Run[] = [];
+  const push = (text: string, italic: boolean, shift: Run['shift']) => {
+    const last = runs.at(-1);
+    if (last && last.italic === italic && last.shift === shift) last.text += text;
+    else runs.push({ text, italic, shift });
+  };
+  const parts = src.split('$');
+  parts.forEach((part, k) => {
+    if (k % 2 === 0) { if (part) push(part, false, null); return; }
+    math(part, false, null);
+  });
+  // a group in braces, a command, or one character, starting at i
+  function group(s: string, i: number): [string, number] {
+    if (s[i] === '{') {
+      let depth = 0, j = i;
+      for (; j < s.length; j++) {
+        if (s[j] === '{') depth++;
+        else if (s[j] === '}' && --depth === 0) break;
+      }
+      return [s.slice(i + 1, j), j + 1];
+    }
+    if (s[i] === '\\') {
+      const m = /^\\[A-Za-z]+/.exec(s.slice(i));
+      if (m) return [m[0], i + m[0].length];
+    }
+    return [s[i] ?? '', i + 1];
+  }
+  function math(s: string, upright: boolean, shift: Run['shift']): void {
+    let i = 0;
+    while (i < s.length) {
+      const c = s[i];
+      if (c === '\\') {
+        const m = /^\\([A-Za-z]+)/.exec(s.slice(i));
+        if (!m) { push(s[i + 1] ?? '', false, shift); i += 2; continue; }
+        i += m[0].length;
+        if (m[1] === 'mathrm' || m[1] === 'text') {
+          const [g, j] = group(s, i);
+          i = j;
+          math(g, true, shift);
+        } else {
+          const sym = SYMBOLS[m[1]] ?? m[0];
+          push(sym, !upright && /^[a-z]+$/.test(m[1]) && /[α-ω]/.test(sym), shift);
+        }
+      } else if (c === '_' || c === '^') {
+        const [g, j] = group(s, i + 1);
+        i = j;
+        math(g, upright, c === '_' ? 'sub' : 'sup');
+      } else if (c === '{' || c === '}') {
+        i++;
+      } else {
+        push(c === '-' ? MINUS : c, !upright && /[A-Za-zα-ω]/.test(c), shift);
+        i++;
+      }
+    }
+  }
+  return runs;
+}
+
+/** Fills el with the runs of a text of the markup. */
+export function setMarkup(el: HTMLElement, src: string): void {
+  el.replaceChildren(...parseMarkup(src).map((r) => {
+    let node: Node = document.createTextNode(r.text);
+    if (r.italic) { const i = document.createElement('i'); i.append(node); node = i; }
+    if (r.shift) { const s = document.createElement(r.shift); s.append(node); node = s; }
+    return node;
+  }));
 }
