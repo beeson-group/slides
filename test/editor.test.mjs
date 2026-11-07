@@ -552,6 +552,77 @@ test('the list of the slides at the left jumps to a slide, and G jumps to a slid
   assert.deepEqual(page.errors, []);
 });
 
+test('Save as writes a chosen file, autosave saves after a pause, and unsaved edits are offered again after a reload', async (t) => {
+  const browser = await launch({ offline: false });
+  t.after(() => browser.close());
+  const server = await serve('.');
+  t.after(() => server.close());
+  const page = await browser.newPage();
+  const url = `${server.origin}/index.html?edit&still`;
+  const status = () => page.evaluate('window.BeesonEditor.status()');
+  const load = async () => {
+    await page.goto(url);
+    await page.waitFor(deckSettled);
+    await page.waitFor(ready);
+    await page.waitFor('window.BeesonEditor.status().blocks > 0');
+  };
+  // the guard against leaving with unsaved changes would hold the navigation of the test
+  const leave = () => page.evaluate(`window.addEventListener('beforeunload', (e) => e.stopImmediatePropagation(), true)`);
+  await load();
+  const h2 = 'Period of the families';
+  const type = (from, to) => page.evaluate(`(() => { const h = [...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === ${JSON.stringify(from)}); h.firstChild.data = ${JSON.stringify(to)}; h.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  const file = (name) => page.evaluate(`(async () => { const root = await navigator.storage.getDirectory(); const h = await root.getFileHandle(${JSON.stringify(name)}, { create: true }); return (await h.getFile()).text(); })()`);
+  // Save as, with the picker giving a file of the private file system of the browser
+  await page.evaluate(`window.showSaveFilePicker = async (o) => { window.__suggested = o.suggestedName; const root = await navigator.storage.getDirectory(); return root.getFileHandle('saved-as.html', { create: true }); }`);
+  await type(h2, 'Saved as');
+  await page.evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 's', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }))`);
+  await page.waitFor('!window.BeesonEditor.status().dirty');
+  assert.equal(await page.evaluate('window.__suggested'), 'index.html');
+  assert.equal(await file('saved-as.html'), replaced(`<h2>${h2}</h2>`, '<h2>Saved as</h2>'));
+  let s = await status();
+  assert.equal(s.file, 'saved-as.html');
+  assert.match(s.message, /^Saved 1 edit to saved-as\.html at \d/);
+  // autosave, after the pause that follows the last change
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Autosave').click()`);
+  s = await status();
+  assert.equal(s.autosave, true);
+  await type('Saved as', 'Autosaved');
+  assert.equal((await status()).dirty, true);
+  await page.waitFor('!window.BeesonEditor.status().dirty', 6000);
+  assert.equal(await file('saved-as.html'), replaced(`<h2>${h2}</h2>`, '<h2>Autosaved</h2>'));
+  assert.equal(await page.evaluate(`localStorage.getItem('beeson-autosave')`), '1');
+  await page.evaluate('window.BeesonEditor.toggleAutosave()');
+  assert.equal((await status()).autosave, false);
+  // the edits are kept in the browser after a pause, and offered after a reload
+  await type('Autosaved', 'Drafted');
+  await page.waitFor('window.BeesonEditor.status().draft', 6000);
+  await leave();
+  await load();
+  s = await status();
+  assert.equal(s.recover, true);
+  assert.equal(s.dirty, false);
+  assert.match(await page.evaluate(`document.querySelector('.beeson-edit-card.recover p').textContent`), /^Edits of index\.html from .* were kept in this browser/);
+  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-card.recover button')].map((b) => b.textContent)`), ['Restore and save', 'Download a copy', 'Discard']);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-card.recover button')].find((b) => b.textContent === 'Discard').click()`);
+  s = await status();
+  assert.deepEqual([s.recover, s.draft], [false, false]);
+  // Restore writes the edits into the file and shows the page again
+  await type(h2, 'Drafted twice');
+  await page.waitFor('window.BeesonEditor.status().draft', 6000);
+  await leave();
+  await load();
+  assert.equal((await status()).recover, true);
+  await page.evaluate(`(async () => { window.__before = true; const root = await navigator.storage.getDirectory(); window.BeesonEditor.attach(await root.getFileHandle('restored.html', { create: true })); })()`);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-card.recover button')].find((b) => b.textContent === 'Restore and save').click()`);
+  await until(page, '!window.__before && !!window.BeesonEditor && window.BeesonEditor.status().blocks > 0');
+  assert.equal(await file('restored.html'), replaced(`<h2>${h2}</h2>`, '<h2>Drafted twice</h2>'));
+  s = await status();
+  assert.deepEqual([s.recover, s.draft, s.dirty], [false, false, false]);
+  // the guard against leaving with unsaved changes fired at each reload of the test, and headless
+  // Chrome logs that it did not show the panel, since the page had no user gesture
+  assert.deepEqual(page.errors.filter((e) => !e.includes('favicon.ico') && !e.includes('beforeunload')), []);
+});
+
 test('a formula is reached with Tab and opened with Enter, and the controls carry labels', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
