@@ -4,6 +4,86 @@
 // PowerPoint writes, and the schema order of each element is significant.
 import { crc32, deflateRawSync } from 'node:zlib';
 
+const SLIDE = { width: 1920, height: 1080 };
+// 13.333 by 7.5 in, the widescreen slide of PowerPoint
+const EMU_PER_PX = 6350;
+
+const NS_A = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+const NS_P = 'http://schemas.openxmlformats.org/presentationml/2006/main';
+const NS_R = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
+const NS_P14 = 'http://schemas.microsoft.com/office/powerpoint/2010/main';
+const NS_PKG = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const NAMESPACES = `xmlns:a="${NS_A}" xmlns:r="${NS_R}" xmlns:p="${NS_P}"`;
+const HEADER = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+const CONTENT = 'application/vnd.openxmlformats-officedocument.presentationml';
+
+const emu = (px) => Math.round(px * EMU_PER_PX);
+
+// a control character other than a tab or a line break is not allowed in XML 1.0
+const escape = (text) => String(text)
+  .replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+const relationships = (rels) => `${HEADER}<Relationships xmlns="${NS_PKG}">${rels.map(({ id, type, target }) => (
+  `<Relationship Id="${id}" Type="${type}" Target="${target}"/>`
+)).join('')}</Relationships>`;
+
+const officeRel = (name) => `${NS_R}/${name}`;
+
+const GROUP = '<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr>'
+  + '<p:grpSpPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/><a:chOff x="0" y="0"/><a:chExt cx="0" cy="0"/></a:xfrm></p:grpSpPr>';
+
+const COLOR_MAP = '<p:clrMap bg1="lt1" tx1="dk1" bg2="lt2" tx2="dk2" accent1="accent1" accent2="accent2" accent3="accent3" '
+  + 'accent4="accent4" accent5="accent5" accent6="accent6" hlink="hlink" folHlink="folHlink"/>';
+
+const placeholder = (id, name, locks, ph, body = '') => `<p:sp><p:nvSpPr><p:cNvPr id="${id}" name="${name}"/>`
+  + `<p:cNvSpPr><a:spLocks ${locks}/></p:cNvSpPr><p:nvPr><p:ph ${ph}/></p:nvPr></p:nvSpPr><p:spPr/>${body}</p:sp>`;
+
+const SLIDE_IMAGE = placeholder(2, 'Slide Image Placeholder 1', 'noGrp="1" noRot="1" noChangeAspect="1"', 'type="sldImg"');
+
+const notesBody = (paragraphs) => placeholder(3, 'Notes Placeholder 2', 'noGrp="1"', 'type="body" idx="1"',
+  `<p:txBody><a:bodyPr/><a:lstStyle/>${paragraphs.map((text) => (
+    `<a:p><a:r><a:rPr lang="en-US"/><a:t>${escape(text)}</a:t></a:r></a:p>`
+  )).join('')}</p:txBody>`);
+
+const fillLine = (n) => '<a:solidFill><a:schemeClr val="phClr"/></a:solidFill>'.repeat(n);
+
+// the least that the schema allows, since every slide is covered by its image
+const THEME = `${HEADER}<a:theme xmlns:a="${NS_A}" name="Beeson"><a:themeElements>`
+  + '<a:clrScheme name="Beeson"><a:dk1><a:srgbClr val="050505"/></a:dk1><a:lt1><a:srgbClr val="FAF8F3"/></a:lt1>'
+  + '<a:dk2><a:srgbClr val="232320"/></a:dk2><a:lt2><a:srgbClr val="E3E0D8"/></a:lt2>'
+  + '<a:accent1><a:srgbClr val="F08050"/></a:accent1><a:accent2><a:srgbClr val="C94FE6"/></a:accent2>'
+  + '<a:accent3><a:srgbClr val="A6A6A0"/></a:accent3><a:accent4><a:srgbClr val="7C7C76"/></a:accent4>'
+  + '<a:accent5><a:srgbClr val="55554F"/></a:accent5><a:accent6><a:srgbClr val="8A8A84"/></a:accent6>'
+  + '<a:hlink><a:srgbClr val="F08050"/></a:hlink><a:folHlink><a:srgbClr val="C94FE6"/></a:folHlink></a:clrScheme>'
+  + '<a:fontScheme name="Beeson"><a:majorFont><a:latin typeface="Times New Roman"/><a:ea typeface=""/><a:cs typeface=""/></a:majorFont>'
+  + '<a:minorFont><a:latin typeface="Times New Roman"/><a:ea typeface=""/><a:cs typeface=""/></a:minorFont></a:fontScheme>'
+  + `<a:fmtScheme name="Beeson"><a:fillStyleLst>${fillLine(3)}</a:fillStyleLst>`
+  + `<a:lnStyleLst>${`<a:ln w="9525">${fillLine(1)}</a:ln>`.repeat(3)}</a:lnStyleLst>`
+  + `<a:effectStyleLst>${'<a:effectStyle><a:effectLst/></a:effectStyle>'.repeat(3)}</a:effectStyleLst>`
+  + `<a:bgFillStyleLst>${fillLine(3)}</a:bgFillStyleLst></a:fmtScheme></a:themeElements></a:theme>`;
+
+const MASTER = `${HEADER}<p:sldMaster ${NAMESPACES}><p:cSld><p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg>`
+  + `<p:spTree>${GROUP}</p:spTree></p:cSld>${COLOR_MAP}`
+  + '<p:sldLayoutIdLst><p:sldLayoutId id="2147483649" r:id="rId1"/></p:sldLayoutIdLst>'
+  + '<p:txStyles><p:titleStyle/><p:bodyStyle/><p:otherStyle/></p:txStyles></p:sldMaster>';
+
+const LAYOUT = `${HEADER}<p:sldLayout ${NAMESPACES} type="blank" preserve="1"><p:cSld name="Blank"><p:spTree>${GROUP}</p:spTree></p:cSld>`
+  + '<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:sldLayout>';
+
+const NOTES_MASTER = `${HEADER}<p:notesMaster ${NAMESPACES}><p:cSld><p:bg><p:bgRef idx="1001"><a:schemeClr val="bg1"/></p:bgRef></p:bg>`
+  + `<p:spTree>${GROUP}`
+  + '<p:sp><p:nvSpPr><p:cNvPr id="2" name="Slide Image Placeholder 1"/><p:cNvSpPr><a:spLocks noGrp="1" noRot="1" noChangeAspect="1"/></p:cNvSpPr>'
+  + '<p:nvPr><p:ph type="sldImg" idx="2"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="685800" y="1143000"/><a:ext cx="5486400" cy="3086100"/></a:xfrm>'
+  + '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr></p:sp>'
+  + '<p:sp><p:nvSpPr><p:cNvPr id="3" name="Notes Placeholder 2"/><p:cNvSpPr><a:spLocks noGrp="1"/></p:cNvSpPr>'
+  + '<p:nvPr><p:ph type="body" sz="quarter" idx="3"/></p:nvPr></p:nvSpPr><p:spPr><a:xfrm><a:off x="685800" y="4400550"/><a:ext cx="5486400" cy="3600450"/></a:xfrm>'
+  + '<a:prstGeom prst="rect"><a:avLst/></a:prstGeom></p:spPr><p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:endParaRPr lang="en-US"/></a:p></p:txBody></p:sp>'
+  + `</p:spTree></p:cSld>${COLOR_MAP}</p:notesMaster>`;
+
+const notesSlide = (paragraphs) => `${HEADER}<p:notes ${NAMESPACES}><p:cSld><p:spTree>${GROUP}${SLIDE_IMAGE}${notesBody(paragraphs)}</p:spTree></p:cSld>`
+  + '<p:clrMapOvr><a:masterClrMapping/></p:clrMapOvr></p:notes>';
+
 /** Packs parts, a list of [name, data], into a zip, with XML deflated and media stored. */
 export function zip(parts) {
   const local = [];
