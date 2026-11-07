@@ -1,7 +1,9 @@
-// checks of the surfaces: the effective potential of src/surfaces.ts and its libration points
+// checks of the surfaces: the effective potential of src/surfaces.ts and its libration points, and the
+// surface of the demo deck in Chrome, stepped through its stages live and in the print view
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { deckSettled, deckUrl, launch, printView } from '../scripts/chrome.mjs';
 import { effectivePotential, levelCurves, librationPoints, sample, surfaceFunction } from '../src/surfaces.ts';
 
 const MU = 0.05;
@@ -73,4 +75,58 @@ test('the cut of the effective potential is at -C/2, with C from data-C or else 
   assert.equal(f.stages.cut({}).level, sum(librationPoints(MU)[0].x, 0));
   assert.deepEqual(Object.keys(f.stages), ['flat', 'wells', 'bowl', 'sum', 'extrema', 'cut']);
   assert.equal(surfaceFunction('nothing', {}), null);
+});
+
+// the stage of the surface and a digest of its canvas, on the slide of the surface or on each of its
+// pages in the print view
+const surfaces = `Promise.all([...document.querySelectorAll('.surface')].filter((s) => s.getClientRects().length).map(async (s) => {
+  const canvas = s.querySelector('canvas'), ctx = canvas.getContext('2d');
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  let drawn = 0;
+  for (let i = 3; i < data.length; i += 4) if (data[i] > 0) drawn++;
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', data));
+  return { stage: s.dataset.shown, drawn: drawn / (data.length / 4), digest: [...digest.slice(0, 8)].join('.') };
+}))`;
+
+test('the surface of the demo deck is drawn at each of its stages, live and in the print view', { timeout: 120000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const stages = ['flat', 'wells', 'bowl', 'sum', 'extrema', 'cut'];
+
+  const page = await browser.newPage();
+  await page.goto(deckUrl('index.html', 'still'));
+  await page.waitFor(deckSettled);
+  const h = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.surface'))`);
+  const live = [];
+  for (let f = -1; f < stages.length - 1; f++) {
+    await page.evaluate(`Reveal.slide(${h}, 0, ${f})`);
+    live.push(...(await page.evaluate(surfaces)));
+  }
+  // a drag turns the surface, and the slide is not changed by it as by a swipe
+  const turned = await page.evaluate(`(async () => {
+    const s = document.querySelector('.surface'), r = s.getBoundingClientRect();
+    const drag = (type, x) => s.dispatchEvent(new PointerEvent(type, { pointerType: 'touch', isPrimary: true, clientX: x, clientY: r.top + r.height / 2, bubbles: true }));
+    drag('pointerdown', r.left + 500);
+    drag('pointermove', r.left + 300);
+    drag('pointerup', r.left + 300);
+    return { h: Reveal.getIndices().h, surface: (await ${surfaces})[0] };
+  })()`);
+  assert.equal(turned.h, h);
+  assert.notEqual(turned.surface.digest, live.at(-1).digest);
+  await page.evaluate(`Reveal.slide(${h}, 0, ${stages.length - 2})`);
+
+  assert.deepEqual(page.errors, []);
+  assert.deepEqual(live.map((s) => s.stage), stages);
+  for (const s of live) assert.ok(s.drawn > 0.1, `${(100 * s.drawn).toFixed(1)}% of the canvas is drawn at the stage ${s.stage}`);
+  assert.equal(new Set(live.map((s) => s.digest)).size, stages.length);
+
+  const print = await browser.newPage();
+  await printView(print, deckUrl('index.html', 'print-pdf&still'));
+  const pages = await print.evaluate(surfaces);
+  assert.deepEqual(print.errors, []);
+  assert.deepEqual(pages.map((s) => s.stage), stages);
+  assert.equal(new Set(pages.map((s) => s.digest)).size, stages.length);
+  // the pixels are not compared one by one, since a canvas read back a few times is moved to the
+  // processor by Chrome, and the copy of the WebGL image is then rounded differently
+  pages.forEach((s, i) => assert.ok(Math.abs(s.drawn - live[i].drawn) < 0.002, `the page of the stage ${s.stage} is drawn over ${s.drawn}, and the slide over ${live[i].drawn}`));
 });
