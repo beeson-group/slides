@@ -1,9 +1,9 @@
-// checks of the driver lookup in scripts/webdriver.mjs
+// checks of the driver lookup and the local server in scripts/webdriver.mjs
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { join } from 'node:path';
-import { driverOf } from '../scripts/webdriver.mjs';
+import { driverOf, serve } from '../scripts/webdriver.mjs';
 
 const firefoxOptions = (env) => driverOf('firefox', env).capabilities['moz:firefoxOptions'];
 
@@ -28,4 +28,17 @@ test('Safari is driven by the safaridriver of the system', () => {
 
 test('an unknown browser is an error', () => {
   assert.throws(() => driverOf('edge', {}), /unknown browser edge/);
+});
+
+test('a folder is served on a local port, without the files outside it', async () => {
+  const { origin, close } = await serve('theme');
+  try {
+    const page = await fetch(`${origin}/beeson.css?still`);
+    assert.equal(page.status, 200);
+    assert.equal(page.headers.get('content-type'), 'text/css');
+    assert.equal((await fetch(`${origin}/missing.js`)).status, 404);
+    assert.equal((await fetch(`${origin}/..%2fpackage.json`)).status, 404);
+  } finally {
+    close();
+  }
 });
