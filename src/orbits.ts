@@ -6,9 +6,10 @@
 import { scene } from './scenes.ts';
 
 export type Member = { s: Float64Array; path: number[]; times: number[]; t: number };
+export type Tone = 'orange' | 'violet' | 'text' | 'hero' | 'line';
 // pts is a list of alternating x and y values. times are the flight times of the points, and T is
-// the last of them
-export type Strand = { pts: Float64Array; times: Float32Array; T: number };
+// the last of them. alpha, when set, replaces the opacity of the tone
+export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; alpha?: number };
 
 export const MU = 0.01215;
 // the distance to a body within which the step is shortened in step()
@@ -249,7 +250,7 @@ export const POINTS = {
 type Point = keyof typeof POINTS;
 const isPoint = (v: string | undefined): v is Point => v !== undefined && v in POINTS;
 
-type Colors = { stroke: string; body: string; accent: string };
+type Colors = { stroke: string; body: string; accent: string; violet: string; text: string };
 
 const CACHE = new WeakMap<HTMLElement, Orbits>();
 
@@ -314,7 +315,7 @@ export class Orbits {
 
   private colors(): Colors {
     const cs = getComputedStyle(this.el);
-    return { stroke: cs.getPropertyValue('--stroke').trim(), body: cs.getPropertyValue('--body').trim(), accent: cs.getPropertyValue('--accent').trim() };
+    return { stroke: cs.getPropertyValue('--stroke').trim(), body: cs.getPropertyValue('--body').trim(), accent: cs.getPropertyValue('--accent').trim(), violet: cs.getPropertyValue('--violet').trim(), text: cs.getPropertyValue('--text').trim() };
   }
 
   private X(x: number): number {
@@ -370,6 +371,13 @@ export class Orbits {
     }
   }
 
+  // the color, opacity, and width of a strand of the given tone
+  private pen(ctx: CanvasRenderingContext2D, c: Colors, tone: Tone | undefined): void {
+    ctx.strokeStyle = tone === 'orange' || tone === 'hero' ? c.accent : tone === 'violet' ? c.violet : tone === 'text' || tone === 'line' ? c.text : c.stroke;
+    ctx.globalAlpha = tone === 'orange' || tone === 'violet' ? 0.42 : tone === 'text' ? 0.8 : tone === 'line' ? 0.36 : 1;
+    ctx.lineWidth = tone === 'hero' ? this.lw * 2.2 : tone === 'text' ? this.lw * 1.3 : this.lw;
+  }
+
   private segments(ctx: CanvasRenderingContext2D, i: number, from: number, to: number): void {
     const p = this.px[i];
     if (to <= from) return;
@@ -391,7 +399,12 @@ export class Orbits {
     ctx.clearRect(0, 0, this.W, this.H);
     ctx.lineWidth = this.lw; ctx.lineJoin = 'round'; ctx.strokeStyle = c.stroke;
     this.bodies(ctx, c);
-    this.strands.forEach((_, i) => this.segments(ctx, i, 0, this.drawn(i)));
+    this.strands.forEach((s, i) => {
+      this.pen(ctx, c, s.tone);
+      if (s.alpha) ctx.globalAlpha = s.alpha;
+      this.segments(ctx, i, 0, this.drawn(i));
+    });
+    ctx.globalAlpha = 1;
     this.paintHead(performance.now(), c);
   }
 
@@ -531,10 +544,13 @@ export class Orbits {
       const n = s.times.length;
       let j = this.idx[i];
       while (j < n - 1 && s.times[j + 1] <= tau) j++;
+      this.pen(ctx, c, s.tone);
+      if (s.alpha) ctx.globalAlpha = s.alpha;
       this.segments(ctx, i, this.idx[i], j);
       this.idx[i] = j;
       if (j < n - 1) flying++;
     });
+    ctx.globalAlpha = 1;
     if (flying === 0) this.finished = true;
     this.paintHead(now, c);
   }

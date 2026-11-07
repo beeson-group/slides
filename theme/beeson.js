@@ -305,7 +305,7 @@
     }
     colors() {
       const cs = getComputedStyle(this.el);
-      return { stroke: cs.getPropertyValue("--stroke").trim(), body: cs.getPropertyValue("--body").trim(), accent: cs.getPropertyValue("--accent").trim() };
+      return { stroke: cs.getPropertyValue("--stroke").trim(), body: cs.getPropertyValue("--body").trim(), accent: cs.getPropertyValue("--accent").trim(), violet: cs.getPropertyValue("--violet").trim(), text: cs.getPropertyValue("--text").trim() };
     }
     X(x) {
       return (x - this.cx) * this.scale + this.W / 2;
@@ -364,6 +364,12 @@
         ctx.fill();
       }
     }
+    // the color, opacity, and width of a strand of the given tone
+    pen(ctx, c, tone) {
+      ctx.strokeStyle = tone === "orange" || tone === "hero" ? c.accent : tone === "violet" ? c.violet : tone === "text" || tone === "line" ? c.text : c.stroke;
+      ctx.globalAlpha = tone === "orange" || tone === "violet" ? 0.42 : tone === "text" ? 0.8 : tone === "line" ? 0.36 : 1;
+      ctx.lineWidth = tone === "hero" ? this.lw * 2.2 : tone === "text" ? this.lw * 1.3 : this.lw;
+    }
     segments(ctx, i, from, to) {
       const p = this.px[i];
       if (to <= from) return;
@@ -386,7 +392,12 @@
       ctx.lineJoin = "round";
       ctx.strokeStyle = c.stroke;
       this.bodies(ctx, c);
-      this.strands.forEach((_, i) => this.segments(ctx, i, 0, this.drawn(i)));
+      this.strands.forEach((s, i) => {
+        this.pen(ctx, c, s.tone);
+        if (s.alpha) ctx.globalAlpha = s.alpha;
+        this.segments(ctx, i, 0, this.drawn(i));
+      });
+      ctx.globalAlpha = 1;
       this.paintHead(performance.now(), c);
     }
     reset() {
@@ -537,10 +548,13 @@
         const n = s.times.length;
         let j = this.idx[i];
         while (j < n - 1 && s.times[j + 1] <= tau) j++;
+        this.pen(ctx, c, s.tone);
+        if (s.alpha) ctx.globalAlpha = s.alpha;
         this.segments(ctx, i, this.idx[i], j);
         this.idx[i] = j;
         if (j < n - 1) flying++;
       });
+      ctx.globalAlpha = 1;
       if (flying === 0) this.finished = true;
       this.paintHead(now, c);
     }
