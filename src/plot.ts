@@ -466,7 +466,7 @@ export class PlotView {
   private gated: { node: Element; names: string[] }[] = [];
   private emphasized: { node: Element; id: string }[] = [];
   private drawers: ((u: number) => void)[] = [];
-  private eventFrames: { frame: number; names: string[] }[] = [];
+  private eventFrames: { frame: number; names: string[]; tone: string }[] = [];
   // the ids named in the active list of any tab, which are dimmed while another id is active
   private emphasis = new Set<string>();
   private shown = new Set<string>();
@@ -806,7 +806,7 @@ export class PlotView {
           const ring = svg('circle', { class: 'plot-ring', cx: X, cy: Y, r: m.size / 2, 'stroke-width': m.width }, group);
           const text = e.text ? this.label(e.text, X + m.dx, Y + m.dy, m.anchor, 'plot-mark', [m.panel, m.id], m.tone) : null;
           text?.classList.add(...m.cls);
-          this.eventFrames.push({ frame: e.frame, names: [m.panel, m.id] });
+          this.eventFrames.push({ frame: e.frame, names: [m.panel, m.id], tone: m.tone });
           return { frame: e.frame, nodes: [ring, text].filter((n): n is SVGCircleElement | HTMLElement => !!n) };
         });
         this.drawers.push((u) => {
@@ -846,6 +846,7 @@ export class PlotView {
       const t = document.createElement('div');
       t.className = 'plot-tick-mark';
       t.style.left = `${(n > 1 ? e.frame / (n - 1) : 0) * 100}%`;
+      t.style.background = toneColor(e.tone);
       return t;
     }));
   }
