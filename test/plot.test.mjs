@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { deckSettled, deckUrl, launch, printView } from '../scripts/chrome.mjs';
-import { formatNumber, framesAt, loopFrame, nearest, parseMarkup, parsePlot, traceTo, valueAt } from '../src/plot.ts';
+import { cells, formatNumber, framesAt, loopFrame, nearest, parseMarkup, parsePlot, scaled, traceTo, valueAt } from '../src/plot.ts';
 
 const minimal = () => ({
   panels: [{ id: 'p', x: { range: [0, 1] }, y: { range: [0, 1] } }],
@@ -21,9 +21,35 @@ test('a plot is read with its defaults', () => {
   assert.equal(plot.layout, null);
   assert.deepEqual(plot.panels[0].x, { range: [0, 1], ticks: [], title: '', scale: 'linear', unit: 1 });
   assert.equal(plot.panels[0].axes, true);
+  assert.equal(plot.panels[0].size, 1);
+  assert.deepEqual(plot.panels[0].margin, [52, 20, 84, 76]);
   assert.equal(plot.marks[0].tone, 'accent');
   assert.equal(plot.tabs[0].label, 'a');
   assert.equal(plot.tabs[0].active, null);
+  assert.deepEqual(plot.tabs[0].panels, {});
+});
+
+test('an axis is read with its scale and the text of its ticks, and a tab replaces the keys of a panel', () => {
+  const spec = minimal();
+  spec.panels[0].x = { range: [-100, 100], scale: 'asinh', unit: 2, ticks: [-10, { at: 0, text: '$0$' }] };
+  spec.panels[0].size = 2;
+  spec.panels[0].margin = [0, 1, 2, 3];
+  spec.tabs[0].panels = { p: { y: { range: [0, 5] }, title: 'b' } };
+  const plot = parsePlot(spec);
+  assert.deepEqual(plot.panels[0].x.ticks, [{ at: -10, text: '−10' }, { at: 0, text: '$0$' }]);
+  assert.equal(plot.panels[0].x.scale, 'asinh');
+  assert.equal(scaled(plot.panels[0].x, 4), Math.asinh(2));
+  assert.equal(scaled(plot.panels[0].y, 4), 4);
+  assert.equal(plot.panels[0].size, 2);
+  assert.deepEqual(plot.panels[0].margin, [0, 1, 2, 3]);
+  assert.deepEqual(Object.keys(plot.tabs[0].panels.p), ['y', 'title']);
+  assert.deepEqual(plot.tabs[0].panels.p.y.range, [0, 5]);
+});
+
+test('the panels share a side in proportion to their sizes, with a gap between two panels', () => {
+  assert.deepEqual(cells([1, 1], 1056, 56), [[0, 500], [556, 500]]);
+  assert.deepEqual(cells([1, 3], 456, 56), [[0, 100], [156, 300]]);
+  assert.deepEqual(cells([2], 300, 56), [[0, 300]]);
 });
 
 test('a fault in a plot is reported with its path', () => {
@@ -38,6 +64,13 @@ test('a fault in a plot is reported with its path', () => {
     [(p) => (p.tabs[0].data.m = [[0, 0, 1]]), /^tabs\[0\]\.data\.m\[0\]: pairs of x and y are expected/],
     [(p) => (p.tabs[0].active = [['m']]), /^tabs\[0\]\.active: 1 frames are given, and the tab has 2 values/],
     [(p) => { p.marks[0].kind = 'events'; p.tabs[0].data.m = [{ frame: 2, at: [0, 0] }]; }, /^tabs\[0\]\.data\.m\[0\]\.frame: a frame from 0 to 1 is expected/],
+    [(p) => (p.panels[0].x.scale = 'log'), /^panels\[0\]\.x\.scale: linear or asinh is expected/],
+    [(p) => (p.panels[0].x.unit = 0), /^panels\[0\]\.x\.unit: a positive number is expected/],
+    [(p) => (p.panels[0].x.ticks = ['a']), /^panels\[0\]\.x\.ticks\[0\]: a number or a tick \{ at, text \} is expected/],
+    [(p) => (p.panels[0].margin = [1, 2]), /^panels\[0\]\.margin: a margin \[top, right, bottom, left\] is expected/],
+    [(p) => (p.panels[0].size = -1), /^panels\[0\]\.size: a positive number is expected/],
+    [(p) => (p.tabs[0].panels = { q: {} }), /^tabs\[0\]\.panels\.q: the panel q is not declared/],
+    [(p) => (p.tabs[0].panels = { p: { equal: true } }), /^tabs\[0\]\.panels\.p\.equal: one of x, y, title, regions, curves, labels is expected/],
   ];
   for (const [change, message] of faults) {
     const plot = minimal();
