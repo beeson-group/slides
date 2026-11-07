@@ -1,6 +1,8 @@
 // Copies into theme/vendor/ the files from node_modules that are required to run a deck offline,
-// each package with its license. Run it after `npm ci`. The tycho runtime in theme/vendor/tycho/ is
-// not in node_modules, hence it is copied by hand and left in place here.
+// each package with its license, and bundles three.js into a classic script. Run it after `npm ci`.
+// The tycho runtime in theme/vendor/tycho/ is not in node_modules, hence it is copied by hand and
+// left in place here.
+import { buildSync } from 'esbuild';
 import { cpSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,7 +16,7 @@ function copy(from, to) {
   cpSync(join(modules, from), join(out, to), { recursive: true });
 }
 
-for (const dir of ['reveal', 'fonts', 'mathjax']) rmSync(join(out, dir), { recursive: true, force: true });
+for (const dir of ['reveal', 'fonts', 'mathjax', 'three']) rmSync(join(out, dir), { recursive: true, force: true });
 
 // the speaker-view page of the notes plugin is written into an about:blank popup, and the deck
 // itself is loaded in the iframes of this popup. thus a file beyond notes.js is not needed
@@ -69,6 +71,24 @@ copy('mathjax/LICENSE', 'mathjax/mathjax-stix2-font/LICENSE');
 // are not autoloaded and are 1.7 MB in all
 copy('@mathjax/mathjax-mhchem-font-extension/svg.js', 'mathjax/mathjax-mhchem-font-extension/svg.js');
 copy('mathjax/LICENSE', 'mathjax/mathjax-mhchem-font-extension/LICENSE');
+
+// three.js is published as ES modules only, and a module script is not loaded from a deck opened
+// as a file. it is bundled here into a classic script that defines the global THREE, which is read
+// by the surfaces of src/surface.ts
+const three = JSON.parse(readFileSync(join(modules, 'three/package.json'), 'utf8')).version;
+buildSync({
+  stdin: { contents: "export * from 'three';", resolveDir: root, loader: 'js' },
+  outfile: join(out, 'three/three.js'),
+  bundle: true,
+  format: 'iife',
+  globalName: 'THREE',
+  target: 'es2020',
+  minify: true,
+  legalComments: 'none',
+  banner: { js: `/*! three.js ${three}, https://threejs.org, MIT license, bundled by scripts/vendor.mjs. */` },
+  logLevel: 'warning',
+});
+copy('three/LICENSE', 'three/LICENSE');
 
 function size(path) {
   const stat = statSync(path);
