@@ -13,6 +13,7 @@
 import { parseSource, type Source } from './source.ts';
 import { pair, renderDeck, type Pairing } from './render.ts';
 import { contentWithTex, mathLookup, mathReady, previewTex, retypeset, setContentWithTex } from './math.ts';
+import { History } from './history.ts';
 import type { TagEdit } from './tags.ts';
 import { CSS } from './styles.ts';
 
@@ -150,6 +151,17 @@ function showSlide(el: Element): void {
   d.slide(h, v);
 }
 
+// the history of the changes, the list of the slides at the left, the steps of the current slide
+// in a pane at the right, and the moving of its figures and blocks
+const history = new History({
+  snapshot: contentWithTex,
+  restore: restoreHost,
+  onChange: () => {
+    undoButton.disabled = !history.canUndo;
+    redoButton.disabled = !history.canRedo;
+    if (dirty) cleanIfSaved();
+  },
+});
 // the frames, the numbers, the list, and the overflow marks follow the slide after a change
 function follow(): void {
 }
@@ -314,6 +326,8 @@ function status() {
     tags: tagEdits.size,
     problems: (pairing?.problems ?? []).map((p) => ({ slide: slideNumber(p.slide), tag: p.tag, reason: p.reason })),
     message: stateEl.textContent ?? '',
+    undo: history.canUndo,
+    redo: history.canRedo,
     autosave,
     overflow: overflowing,
     pane: paneHeight,
@@ -325,6 +339,9 @@ function status() {
 // checked against the edits kept in the storage, and the text of a save is paired again in place
 function open(text: string, fresh = true): ReturnType<typeof status> {
   tagEdits.clear();
+  if (fresh) {
+    history.clear();
+  }
   try {
     source = parseSource(text);
     pairing = pair(source, slides(), mathLookup());
@@ -491,6 +508,71 @@ function markDirty(): void {
   }
 }
 
+// a deck whose text is the file again, e.g. after its edits were undone, is clean
+function cleanIfSaved(): void {
+  if (!source || !pairing) return;
+  try {
+    if (render() !== source.text) return;
+  } catch {
+    return;
+  }
+  dirty = false;
+  report();
+}
+
+
+// a block is put back to a content of the history, on its slide, with the caret at the end of the
+// text that changed
+async function restoreHost(host: Element, content: string): Promise<void> {
+  showSlide(host);
+  const before = host.textContent ?? '';
+  await setContentWithTex(host, content);
+  markMath(host);
+  history.track(host);
+  markDirty();
+  placeCaret(host, changeEnd(before, host.textContent ?? ''));
+  follow();
+}
+
+// the end of the part of after that differs from before, as an offset into after, i.e. the first
+// character that differs after an undo of typing. null when the texts are the same
+function changeEnd(before: string, after: string): number | null {
+  if (before === after) return null;
+  let head = 0;
+  while (head < before.length && head < after.length && before[head] === after[head]) head++;
+  let tail = 0;
+  while (tail < before.length - head && tail < after.length - head && before[before.length - 1 - tail] === after[after.length - 1 - tail]) tail++;
+  return after.length - tail;
+}
+
+// the caret is put at the offset into the text of host, or at its end. an offset inside a formula
+// puts it after the formula
+function placeCaret(host: Element, offset: number | null = null): void {
+  if (!(host instanceof HTMLElement)) return;
+  host.focus({ preventScroll: true });
+  const selection = window.getSelection();
+  if (!selection) return;
+  const range = document.createRange();
+  range.selectNodeContents(host);
+  range.collapse(false);
+  if (offset !== null) {
+    const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+    let left = offset;
+    for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+      if (left <= node.length) {
+        const math = node.parentElement?.closest('mjx-container');
+        if (math && host.contains(math)) range.setStartAfter(math);
+        else range.setStart(node, left);
+        range.collapse(true);
+        break;
+      }
+      left -= node.length;
+    }
+  }
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
 
 const hostOf = (target: EventTarget | null): Element | null => {
   const host = target instanceof Element ? target.closest(HOST) : null;
@@ -511,10 +593,19 @@ function insertPlain(host: Element, text: string): void {
   });
 }
 
+// the undo of the browser, e.g. from its Edit menu, is taken by the history
 function onBeforeInput(ev: InputEvent): void {
   const host = hostOf(ev.target);
   if (!host) return;
   const type = ev.inputType;
+  if (type === 'historyUndo' || type === 'historyRedo') {
+    ev.preventDefault();
+    void (type === 'historyUndo' ? history.undo() : history.redo()).catch(fail);
+    return;
+  }
+  // a new line starts a new entry of the history, as in a text editor
+  if (type === 'insertParagraph' || type === 'insertLineBreak') history.break();
+  history.beforeTyping(host);
   if (type === 'insertParagraph' || type === 'insertLineBreak') {
     ev.preventDefault();
     insertPlain(host, '\n');
@@ -538,6 +629,10 @@ function onKeyDown(ev: KeyboardEvent): void {
   if (mod && !ev.altKey && key === 's') {
     ev.preventDefault();
     void (ev.shiftKey ? saveAs() : save()).catch(fail);
+  } else if (mod && !ev.altKey && !inField && (key === 'z' || (key === 'y' && !ev.shiftKey))) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    void (key === 'y' || ev.shiftKey ? history.redo() : history.undo()).catch(fail);
   }
 }
 
@@ -576,17 +671,21 @@ async function init(): Promise<void> {
   wire(cardButton, openFile);
   wire(saveButton, save);
   wire(saveAsButton, saveAs);
+  wire(undoButton, () => history.undo());
+  wire(redoButton, () => history.redo());
   wire(prevButton, () => deck()?.left());
   wire(nextButton, () => deck()?.right());
   document.addEventListener('beforeinput', onBeforeInput);
   document.addEventListener('input', (ev) => {
     const host = hostOf(ev.target);
     if (!host) return;
+    history.afterTyping(host);
     markDirty();
     follow();
   });
   document.addEventListener('focusin', (ev) => {
     const host = hostOf(ev.target);
+    if (host) history.track(host);
     follow();
   });
   document.addEventListener('focusout', () => setTimeout(follow, 0));
@@ -620,6 +719,8 @@ const BeesonEditor = {
   status,
   save,
   saveAs,
+  undo: () => history.undo(),
+  redo: () => history.redo(),
   // the file written by save, for a test with a handle of the origin private file system
   attach: (h: FileSystemFileHandle) => { handle = h; },
   version: __VERSION__,
