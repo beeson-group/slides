@@ -8,8 +8,10 @@ import { scene } from './scenes.ts';
 export type Member = { s: Float64Array; path: number[]; times: number[]; t: number };
 export type Tone = 'orange' | 'violet' | 'text' | 'hero' | 'line';
 // pts is a list of alternating x and y values. times are the flight times of the points, and T is
-// the last of them. alpha, when set, replaces the opacity of the tone
-export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; alpha?: number };
+// the last of them. alpha, when set, replaces the opacity of the tone. ink, when set, replaces the
+// color of the tone with the color at the fraction at between the two colors of the pair of the
+// palette --strand-1 to --strand-8 in theme/beeson.css, i.e. --strand-1 and --strand-2 for pair 0
+export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; alpha?: number; ink?: { pair: number; at: number } };
 
 export const MU = 0.01215;
 // the distance to a body within which the step is shortened in step()
