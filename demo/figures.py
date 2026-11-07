@@ -49,13 +49,13 @@ def zvc(style, out):
     colors = plt.rcParams["axes.prop_cycle"].by_key()["color"]
     for name, col in zip(["L1", "L2", "L3"], colors[:3]):
         ax.contour(X, Y, Z, levels=[C[name]], colors=[col], linewidths=2.2)
-        ax.plot([], [], color=col, label=f"$C = C_{{\\mathrm{{{name}}}}}$")
+        ax.plot([], [], color=col, label=f"$C = C_{{\\mathcal{{L}}_{name[1]}}}$")
     text = plt.rcParams["text.color"]
     ax.plot([-mu], [0], "o", color=text, ms=7)
     ax.plot([1 - mu], [0], "o", color=text, ms=4)
     for name, v in dict(L1=L1, L2=L2, L3=L3).items():
         ax.plot([v], [0], "+", color=text, ms=9, mew=1.6)
-        ax.annotate(f"$\\mathrm{{{name}}}$", (v, 0), xytext=(0, 9), textcoords="offset points",
+        ax.annotate(f"$\\mathcal{{L}}_{name[1]}$", (v, 0), xytext=(0, 9), textcoords="offset points",
                     ha="center", fontsize=14)
     ax.set_aspect("equal")
     ax.set_xlim(-1.6, 1.6)
@@ -71,7 +71,8 @@ for mode in ("dark", "light"):
     zvc(f"{root}/styles/beeson-{mode}.mplstyle", f"{root}/demo/figure-{mode}.png")
 
 plt.style.use("default")
-plt.rcParams.update({"font.family": "serif", "font.serif": ["STIXGeneral"], "mathtext.fontset": "stix",
+plt.rcParams.update({"font.family": "serif", "font.serif": ["cmr10"], "mathtext.fontset": "cm",
+                     "axes.formatter.use_mathtext": True,
                      "font.size": 12, "savefig.dpi": 200})
 fig, ax = plt.subplots(figsize=(7, 4.2), constrained_layout=True)
 xs = np.linspace(-1.6, 1.6, 4000)
@@ -82,11 +83,11 @@ U[np.abs(xs - 1 + mu) < 0.012] = np.nan
 ax.plot(xs, U, color="k", lw=1.2)
 for name, v in dict(L1=L1, L2=L2, L3=L3).items():
     ax.plot([v], [-C[name]], "o", color="k", ms=4)
-    ax.annotate(f"$\\mathrm{{{name}}}$", (v, -C[name]), xytext=(0, 7), textcoords="offset points",
+    ax.annotate(f"$\\mathcal{{L}}_{name[1]}$", (v, -C[name]), xytext=(0, 7), textcoords="offset points",
                 ha="center")
 ax.set_ylim(-3.6, -2.95)
 ax.set_xlim(-1.6, 1.6)
-ax.set_xlabel("$x$ (rotating frame, Earth–Moon units)")
+ax.set_xlabel("$x$ (rotating frame, nondimensional)")
 ax.set_ylabel("$-2\\,\\Omega(x, 0)$")
 ax.set_title("Pseudo-potential along the $x$ axis, $\\mu = 0.01215$")
 ax.grid(True, lw=0.4, color="0.85")
