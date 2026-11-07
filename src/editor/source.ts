@@ -56,6 +56,89 @@ export function decode(raw: string): string {
   return box.value.slice(1);
 }
 
+const short = (s: string) => (s.length > 40 ? `${s.slice(0, 40)}…` : s).replace(/\n/g, '\\n');
+
+export function parseSource(text: string): Source {
+  const tokens = tokenize(text);
+  const doc = new DOMParser().parseFromString(text, 'text/html');
+  const slides = doc.querySelector('.reveal .slides') ?? doc.querySelector('.slides');
+  if (!slides) throw new Error('the file does not have a div.slides element');
+  const index = [...doc.querySelectorAll(`${slides.localName}.slides`)].indexOf(slides);
+  let seen = -1, at = -1;
+  tokens.forEach((t, i) => {
+    if (t.type === 'start' && t.name === slides.localName && classesOf(t).includes('slides')) {
+      seen += 1;
+      if (seen === index) at = i;
+    }
+  });
+  if (at < 0) throw new Error('the start tag of div.slides was not found in the file');
+  const root: SrcEl = { kind: 'element', node: slides, tag: slides.localName, open: tokens[at], attrs: [], close: null, children: [] };
+  const cursor = { i: at + 1 };
+  walkChildren(slides, root, cursor, tokens, text);
+  const end = tokens[cursor.i];
+  if (end?.type === 'end' && end.name === root.tag) root.close = end;
+  return { text, crlf: text.includes('\r\n'), doc, slides: root };
+}
+
+function fail(text: string, at: number, what: string): never {
+  const line = text.slice(0, at).split('\n').length;
+  throw new Error(`the file could not be matched to the page at line ${line}: ${what}`);
+}
+
+function walkChildren(el: Element, out: SrcEl, cursor: { i: number }, tokens: Token[], text: string): void {
+  const raw = RAW_TEXT.has(el.localName);
+  for (const child of el.childNodes) {
+    // a token without a node, e.g. a doctype in the body, is skipped
+    while (tokens[cursor.i]?.type === 'other' && child.nodeType !== Node.COMMENT_NODE) cursor.i += 1;
+    const token = tokens[cursor.i];
+    if (child.nodeType === Node.ELEMENT_NODE) {
+      const e = child as Element;
+      const tag = e.localName;
+      let open: Range | null = null;
+      let attrs: Attr[] = [];
+      if (token?.type === 'start' && token.name === tag.toLowerCase()) {
+        open = token;
+        attrs = token.attrs;
+        cursor.i += 1;
+      }
+      const node: SrcEl = { kind: 'element', node: e, tag, open, attrs, close: null, children: [] };
+      out.children.push(node);
+      walkChildren(e, node, cursor, tokens, text);
+      const after = tokens[cursor.i];
+      if (after?.type === 'end' && after.name === tag.toLowerCase()) {
+        node.close = after;
+        cursor.i += 1;
+      }
+    } else if (child.nodeType === Node.TEXT_NODE) {
+      const data = (child as Text).data;
+      if (token?.type !== 'text') fail(text, token?.start ?? text.length, `the text "${short(data)}" is not in the file`);
+      const rawText = text.slice(token.start, token.end);
+      const decoded = raw || token.raw ? rawText.replace(/\r\n?/g, '\n') : decode(rawText);
+      let lead = 0;
+      if (decoded !== data) {
+        const stripped = PRE_LIKE.has(el.localName) && decoded.startsWith('\n') && decoded.slice(1) === data;
+        if (!stripped) fail(text, token.start, `the text "${short(data)}" reads "${short(decoded)}" in the file`);
+        lead = rawText.startsWith('\r\n') ? 2 : 1;
+      }
+      cursor.i += 1;
+      const start = token.start + lead;
+      out.children.push({
+        kind: 'text',
+        node: child as Text,
+        range: { start: token.start, end: token.end },
+        lead,
+        decoded: data,
+        segments: segmentsOf(text.slice(start, token.end), start, raw || token.raw, data),
+        pieces: null,
+      });
+    } else if (child.nodeType === Node.COMMENT_NODE) {
+      if (token?.type !== 'comment' && token?.type !== 'other') fail(text, token?.start ?? text.length, 'a comment is not in the file');
+      cursor.i += 1;
+      out.children.push({ kind: 'comment', node: child as Comment, range: token });
+    }
+  }
+}
+
 const REFERENCE = /&(?:#[xX][0-9a-fA-F]+;?|#[0-9]+;?|[A-Za-z][A-Za-z0-9]*;?)/y;
 
 // splits the raw text of a node into segments, so that a range of the decoded text can be traced
