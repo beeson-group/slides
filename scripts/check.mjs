@@ -50,6 +50,21 @@ async function checkPhone() {
   await page.close();
 }
 
+async function checkDesktop() {
+  const page = await browser.newPage();
+  await page.goto(deckUrl(options.deck, 'still'));
+  await page.waitFor(deckSettled);
+  const offset = await page.evaluate(`(() => {
+    Reveal.triggerKey(80);
+    document.dispatchEvent(new PointerEvent('pointermove', { clientX: 400, clientY: 300 }));
+    const box = document.querySelector('.pointer-dot').getBoundingClientRect();
+    return Math.hypot(box.x + box.width / 2 - 400, box.y + box.height / 2 - 300);
+  })()`);
+  if (offset > 1) failures.push(`pointer: the dot is ${offset.toFixed(1)} px from the pointer`);
+  for (const error of page.errors) failures.push(`behaviors: ${error}`);
+  await page.close();
+}
+
 try {
   for (const theme of themes) {
     for (const file of readdirSync(options.out)) {
@@ -94,6 +109,7 @@ try {
     await animated.close();
   }
   await checkPhone();
+  await checkDesktop();
 } finally {
   await browser.close();
 }
