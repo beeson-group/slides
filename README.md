@@ -1,6 +1,6 @@
 # slides
 
-This repository is an HTML slide template for the talks of the Beeson group, built on reveal.js 6 with the theme `beeson`. A deck is one `index.html`, and you open it with a double click, without a server or a toolchain. The same file is exported to a PDF with one page per step, exported to PowerPoint with one slide per step, and published as a GitHub Pages site. The theme is black by default, and you switch to a warm paper light mode with the key `d`. Behind the slides are orbits of the circular restricted three-body problem, computed with a small engine ported from Claudio Vestini's website.
+This repository is an HTML slide template for the talks of the Beeson group, built on reveal.js 6 with the theme `beeson`. A deck is one `index.html`, and you open it with a double click, without a server or a toolchain. The same file is exported to a PDF with one page per step, exported to PowerPoint with one click per step, and published as a GitHub Pages site. The theme is black by default, and you switch to a warm paper light mode with the key `d`. Behind the slides are orbits of the circular restricted three-body problem, computed with a small engine ported from Claudio Vestini's website.
 
 The demo deck, `index.html`, is also the documentation of every layout class. Open it, and press `s` for the speaker view.
 
@@ -46,9 +46,9 @@ You can show a deck in the current Chrome, Edge, Firefox, and Safari, and in the
 
 ## PowerPoint
 
-At some conferences, a speaker is given a laptop that shows only PowerPoint and PDF files. For such a room, run `npm run pptx`, which writes `slides.pptx` next to `slides.pdf`. Each step of the deck is one slide with a full-slide image, thus a click in PowerPoint is a step of the deck. The text cannot be edited in this file, and the backdrops are static.
+At some conferences, a speaker is given a laptop that shows only PowerPoint and PDF files. For such a room, run `npm run pptx`, which writes `slides.pptx` next to `slides.pdf`. Each step of the deck is a full-slide image, and a click in PowerPoint is a step of the deck. The text cannot be edited in this file, and the backdrops are static.
 
-Each video is placed over its image as a PowerPoint video, and it is started when its step is shown. A video on a slide of several steps is therefore restarted at each of these steps. PowerPoint needs an MP4 file, and the export fails on a video without one. The speaker notes are copied to every step of their slide. Keynote opens a `.pptx`, hence a separate Keynote export is not needed.
+Each video is placed over its image as a PowerPoint video, and it is started when its step is shown. The steps with a video are placed on one PowerPoint slide, hence the video goes on playing through them. PowerPoint needs an MP4 file, and the export fails on a video without one. The speaker notes are copied to the PowerPoint notes. Keynote opens a `.pptx`, hence a separate Keynote export is not needed.
 
 ## Figures
 
@@ -78,7 +78,7 @@ npm run typecheck      # tsc --noEmit
 npm test               # the orbit engine, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, and the PowerPoint file under node --test
 npm run check          # every slide of index.html in both modes, screenshots, console errors, and a poster on every video
 npm run pdf            # index.html to slides.pdf, with a check of the page count
-npm run pptx           # index.html to slides.pptx, with one slide per step
+npm run pptx           # index.html to slides.pptx, with one click per step
 ```
 
 For `npm test`, `npm run check`, `npm run pdf`, and `npm run pptx`, Chrome is looked up at its default location on macOS and Windows, and on the `PATH` on Linux. Edge is used on Windows when Chrome is missing. To use another browser build, set `CHROME_PATH` to its executable.
