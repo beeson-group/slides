@@ -1,9 +1,9 @@
 // checks of the plot element of src/plot.ts, i.e. the parser of the JSON block, the interpolation
-// between frames, and the loop
+// between frames, the loop, and the markup of the labels
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { framesAt, loopFrame, nearest, parsePlot, traceTo, valueAt } from '../src/plot.ts';
+import { formatNumber, framesAt, loopFrame, nearest, parseMarkup, parsePlot, traceTo, valueAt } from '../src/plot.ts';
 
 const minimal = () => ({
   panels: [{ id: 'p', x: { range: [0, 1] }, y: { range: [0, 1] } }],
@@ -68,4 +68,30 @@ test('the loop runs over the frames, holds the last one, and starts again', () =
   assert.equal(loopFrame(2.5, 11, 2, 1), 10);
   assert.equal(loopFrame(4, 11, 2, 1), 5);
   assert.equal(loopFrame(7, 1, 2, 1), 0);
+});
+
+test('a label is set in runs of the markup', () => {
+  assert.deepEqual(parseMarkup('$\\lambda_h = 3$'), [
+    { text: 'λ', italic: true, shift: null },
+    { text: 'h', italic: true, shift: 'sub' },
+    { text: ' = 3', italic: false, shift: null },
+  ]);
+  assert.deepEqual(parseMarkup('$\\mathrm{L}_{12}$ family'), [
+    { text: 'L', italic: false, shift: null },
+    { text: '12', italic: false, shift: 'sub' },
+    { text: ' family', italic: false, shift: null },
+  ]);
+  assert.deepEqual(parseMarkup('$-1$ and -1'), [{ text: '−1 and -1', italic: false, shift: null }]);
+  assert.deepEqual(parseMarkup('$x^{2}$'), [
+    { text: 'x', italic: true, shift: null },
+    { text: '2', italic: false, shift: 'sup' },
+  ]);
+});
+
+test('a number is written with a minus sign, and without the sign of a zero', () => {
+  assert.equal(formatNumber(-2), '−2');
+  assert.equal(formatNumber(0.05), '0.05');
+  assert.equal(formatNumber(0.1 + 0.2), '0.3');
+  assert.equal(formatNumber(-0.25, 1), '−0.3');
+  assert.equal(formatNumber(-0.001, 2), '0.00');
 });
