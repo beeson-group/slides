@@ -35,6 +35,16 @@ Set the drawing of a `backdrop` with its attribute `data-scene`. Each drawing is
 | `sheaf` | Lunar transfers from a low Earth orbit |
 | `torus` | Quasi-periodic strands about distant retrograde orbits |
 
+## Surfaces
+
+A `surface` is the graph of a function $z = f(x, y)$ over a rectangle, drawn in 3D with three.js under a camera that turns slowly and can be turned with a drag. Set the function with `data-function`, and its parameters with further data attributes. Each function is defined in `src/surfaces.ts` with its stages, i.e. what is drawn at each step of the slide. Give a fragment of the same slide the attribute `data-surface-stage`, and the surface is moved to this stage when the fragment is shown, and back when it is hidden. A change of stage is animated: the heights are morphed, the marks are raised into place, and a cutting plane is slid to its height. Label a mark with a `lab` span whose `data-at` is the name of the mark. In a deck with a surface, load `theme/vendor/three/three.js` before `theme/beeson.js`.
+
+| Function | Attributes | Stages |
+|---|---|---|
+| `effective-potential` | `data-mu`, the mass ratio $\mu$ of the circular restricted three-body problem, 0.05 by default, and `data-C` on the fragment of the cut, the Jacobi constant $C$, that of L1 by default | `wells`, `bowl`, `sum`, `extrema` with L1 to L5 marked, and `cut` with the plane at $-C/2$ and the zero-velocity curve |
+
+The camera is set with `data-azimuth` and `data-elevation` in degrees, `data-turn` in seconds per turn (0 for a still camera), and `data-zoom`, and the heights are scaled with `data-zscale`. With `?still`, a stage is drawn at once and the camera is not turned. In a PDF and in PowerPoint, each step is printed with a still of its stage.
+
 ## Browsers
 
 You can show a deck in the current Chrome, Edge, Firefox, and Safari, and in the browsers built on their engines, on a computer, a phone, or a tablet. This holds for both modes, the steps, the speaker view, and the viewer of tycho, whether you open the file with a double click or from a web server. All browsers on iOS are built on the engine of Safari. These are the limits.
@@ -72,10 +82,10 @@ The theme is maintained with npm and Node 22 or later, on macOS, Linux, or Windo
 
 ```sh
 npm ci                 # the dependencies
-npm run vendor         # reveal.js, the notes plugin, the fonts, and MathJax into theme/vendor/ (tycho is copied by hand)
+npm run vendor         # reveal.js, the notes plugin, the fonts, MathJax, and three.js into theme/vendor/ (tycho is copied by hand)
 npm run build          # src/*.ts into theme/beeson.js with esbuild
 npm run typecheck      # tsc --noEmit
-npm test               # the orbit engine, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, and the PowerPoint file under node --test
+npm test               # the orbit engine, the surfaces, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, and the PowerPoint file under node --test
 npm run check          # every slide of index.html in both modes, screenshots, console errors, and a poster on every video
 npm run pdf            # index.html to slides.pdf, with a check of the page count
 npm run pptx           # index.html to slides.pptx, with one click per step
