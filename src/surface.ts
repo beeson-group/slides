@@ -163,6 +163,7 @@ export class Surface {
   private elevation: number;
   private zoom: number;
   private canvas: HTMLCanvasElement;
+  private labels: HTMLElement[];
   private grids = new Map<string, Float64Array>();
   private normals = new WeakMap<Float64Array, Float32Array>();
   private ranges = new Map<string, [number, number]>();
@@ -188,6 +189,8 @@ export class Surface {
   private last = 0;
   private W = 0;
   private H = 0;
+  private w = 0;
+  private h = 0;
 
   constructor(el: HTMLElement, fn: SurfaceFunction, THREE: typeof Three) {
     this.el = el;
@@ -206,6 +209,7 @@ export class Surface {
     this.canvas.className = 'surface-image';
     this.canvas.setAttribute('aria-hidden', 'true');
     el.prepend(this.canvas);
+    this.labels = [...el.querySelectorAll<HTMLElement>('.lab')];
 
     for (const [name, f] of Object.entries(fn.layers)) {
       const g = sample(f, fn.x, fn.y, CELLS, CELLS, fn.floor);
@@ -411,12 +415,14 @@ export class Surface {
   /** Sizes the canvas from the box of the element on the screen, and draws. */
   fit(): void {
     // the slide is scaled with a transform in reveal.js, hence the canvas is sized from the screen
-    // rectangle and the marks are sized in the pixels of the slide
+    // rectangle and the labels are placed in the pixels of the slide
     const r = this.el.getBoundingClientRect(), dpr = devicePixelRatio || 1;
     const w = this.el.offsetWidth, h = this.el.offsetHeight;
     if (!r.width || !r.height || !w || !h) return;
     this.W = Math.max(1, Math.round(r.width * dpr));
     this.H = Math.max(1, Math.round(r.height * dpr));
+    this.w = w;
+    this.h = h;
     this.canvas.width = this.W;
     this.canvas.height = this.H;
     const px = (dpr * r.height) / h;
@@ -441,7 +447,7 @@ export class Surface {
     this.camera.updateProjectionMatrix();
   }
 
-  /** Draws the surface at the stage and the camera of now. */
+  /** Draws the surface at the stage and the camera of now, and places the labels. */
   draw(): void {
     if (!this.W) return;
     const r = renderer();
@@ -459,6 +465,44 @@ export class Surface {
     // in the same task as the render, since the drawing buffer of WebGL is cleared after a frame
     ctx.clearRect(0, 0, this.W, this.H);
     ctx.drawImage(r.domElement, 0, 0);
+    this.place();
+  }
+
+  // the labels at their marks, in the pixels of the slide, faded with the marks and dimmed behind
+  // the surface
+  private place(): void {
+    const THREE = this.THREE, p = new THREE.Vector3(), lift = (1 - this.shown.marks) * RISE;
+    const position = this.points.geometry.getAttribute('position') as Three.BufferAttribute;
+    for (const lab of this.labels) {
+      const i = this.fn.marks.findIndex((m) => m.name === lab.dataset.at);
+      if (i < 0) continue;
+      p.set(position.getX(i), position.getY(i), position.getZ(i) - lift);
+      const hidden = this.behind(p);
+      p.project(this.camera);
+      lab.style.left = `${((p.x + 1) / 2) * this.w + num(lab.dataset.dx, 0)}px`;
+      lab.style.top = `${((1 - p.y) / 2) * this.h + num(lab.dataset.dy, -34)}px`;
+      lab.style.opacity = String(this.shown.marks ** 2 * (hidden ? 0.3 : 1));
+    }
+  }
+
+  // whether the surface is between the world point p, a little above it, and the camera
+  private behind(p: Three.Vector3): boolean {
+    const fn = this.fn, g = this.current(), n = CELLS + 1, cam = this.camera.position;
+    const height = (x: number, y: number): number | null => {
+      const u = ((x - fn.x[0]) / (fn.x[1] - fn.x[0])) * CELLS, v = ((y - fn.y[0]) / (fn.y[1] - fn.y[0])) * CELLS;
+      if (u < 0 || v < 0 || u > CELLS || v > CELLS) return null;
+      const i = Math.min(CELLS - 1, Math.floor(u)), j = Math.min(CELLS - 1, Math.floor(v)), s = u - i, t = v - j;
+      const z = (1 - t) * ((1 - s) * g[j * n + i] + s * g[j * n + i + 1]) + t * ((1 - s) * g[(j + 1) * n + i] + s * g[(j + 1) * n + i + 1]);
+      return z * this.zscale;
+    };
+    for (let k = 1; k <= 80; k++) {
+      const t = 0.01 + (k / 80) * 0.99;
+      const x = p.x + (cam.x - p.x) * t, y = p.y + (cam.y - p.y) * t, z = p.z + 0.03 + (cam.z - p.z) * t;
+      const zs = height(x, y);
+      if (zs === null) return false;
+      if (zs > z) return true;
+    }
+    return false;
   }
 
   private kick(): void {
