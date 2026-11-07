@@ -46,7 +46,7 @@ try {
 <!-- content, the default layout: a text column at the left, a backdrop or figure zone at the right -->
 <section>
   <h2>Steps are shown one at a time</h2>
-  <p>Design the complete slide first, then give each element its step. A new element is faded in, and the earlier ones are dimmed until the slide is complete.</p>
+  <p>Design the complete slide first, then give each element its step.</p>
   <ul>
     <li class="fragment" data-fragment-index="1">A step is a reveal.js fragment, i.e. <code>class="fragment"</code> with a <code>data-fragment-index</code>.</li>
     <li class="fragment" data-fragment-index="2">Two elements with the same index are shown together.</li>
@@ -58,24 +58,23 @@ try {
     <span class="lab" data-at="moon" data-dy="36">Moon</span>
   </div>
   <div class="foot">The backdrop of a content slide is drawn complete. Add <code>data-live</code> to animate it.</div>
-  <aside class="notes">Fragments are dimmed to 45 percent once a later one is shown. When the last fragment is shown, data-complete is set on the section, and everything is restored to full opacity.</aside>
+  <aside class="notes">A new element is faded in, and the earlier ones are dimmed until the slide is complete. Fragments are dimmed to 45 percent once a later one is shown. When the last fragment is shown, data-complete is set on the section, and everything is restored to full opacity.</aside>
 </section>
 
 <section>
-  <h2>Equations of motion in the rotating frame</h2>
-  <p>In the rotating frame of the primary and the secondary, the motion is autonomous, and the Jacobi constant is an integral of the motion.</p>
+  <h2>Motion in the rotating frame</h2>
   <div class="math">\[\ddot x - 2\dot y = \frac{\partial U}{\partial x},\qquad \ddot y + 2\dot x = \frac{\partial U}{\partial y},\]</div>
   <div class="math" style="margin-top: 0">\[U = \frac{x^2 + y^2}{2} + \frac{1-\mu}{r_1} + \frac{\mu}{r_2}.\]</div>
   <ul>
     <li>At a given Jacobi constant \(C = 2U - v^2\), the motion is confined to the Hill region.</li>
     <li>The collinear points \(L_1\) and \(L_2\) are saddles, with one unstable direction each.</li>
-    <li>In the Earth–Moon system \(\mu = 0.01215\), and the \(L_1\) gateway is open at \(C < 3.188\).</li>
   </ul>
   <div class="backdrop" data-scene="l2" data-cx="1.06" data-cy="0" data-half="0.60">
     <span class="lab" data-at="L2" data-dy="-34">L<sub>2</sub></span>
     <span class="lab" data-at="moon" data-dy="36">Moon</span>
   </div>
   <div class="foot">Szebehely, Theory of Orbits, 1967, chapter 1.</div>
+  <aside class="notes">In the rotating frame of the primary and the secondary, the motion is autonomous, and the Jacobi constant is an integral of the motion. In the Earth–Moon system \(\mu = 0.01215\), and the \(L_1\) gateway is open at \(C < 3.188\).</aside>
 </section>
 
 <!-- figure: a plate, with the backdrop or figure over the whole slide and the caption at the lower left.
@@ -91,8 +90,8 @@ try {
 </section>
 
 <section class="narrow" data-auto-animate>
-  <h2>Period along the two families</h2>
-  <p>In both families, the period of the smallest members is close to the linear period of the libration point, and the period is longer outward. Hence the inner members are complete first in the drawing.</p>
+  <h2>Period of the families</h2>
+  <p>The period of the smallest members is close to the linear period of the libration point.</p>
   <ul>
     <li>The period of a member is longer at a larger amplitude.</li>
     <li>The larger members are bent toward the Moon, where the continuation is stopped in this drawing.</li>
@@ -103,6 +102,7 @@ try {
     <span class="lab" data-at="moon" data-dy="36">Moon</span>
   </div>
   <div class="foot">Hénon, Generating Families in the Restricted Three-Body Problem, 1997.</div>
+  <aside class="notes">In both families the period is longer outward, hence the inner members are complete first in the drawing.</aside>
 </section>
 
 <section class="section">
@@ -115,7 +115,7 @@ try {
 
 <section>
   <h2>A figure in the zone</h2>
-  <p>A figure exported with the matplotlib styles of the template is transparent and set in the typeface of the slides, hence it is shown on the canvas without a frame.</p>
+  <p>A figure exported with the matplotlib styles of the template is shown without a frame.</p>
   <ul>
     <li>Export one file per mode and mark them <code>for-dark</code> and <code>for-light</code>.</li>
     <li>Give a white raster figure the class <code>paper</code> to frame it.</li>
@@ -124,14 +124,16 @@ try {
   <figure class="zone">
     <img class="for-dark" src="demo/figure-dark.png" alt="Zero-velocity curves of the Earth–Moon system, dark version">
     <img class="for-light" src="demo/figure-light.png" alt="Zero-velocity curves of the Earth–Moon system, light version">
-    <figcaption class="caption">Zero-velocity curves at the Jacobi constants of L1, L2, and L3, drawn with the styles in <code>styles/</code>.</figcaption>
+    <figcaption class="caption">Zero-velocity curves at the Jacobi constants of L1, L2, and L3.</figcaption>
   </figure>
+  <aside class="notes">A figure exported with the styles in styles/ is transparent and set in the typeface of the slides.</aside>
 </section>
 
 <section class="figure">
   <div class="plate"><img class="paper" src="demo/figure-paper.png" alt="A figure with a white background, framed as paper"></div>
   <h2>A white figure, framed as paper</h2>
-  <p class="caption">A raster figure from a paper is shown with its white background. It is framed with the <code>paper</code> class and drawn over the whole slide in the plate layout.</p>
+  <p class="caption">A raster figure from a paper keeps its white background, framed with the <code>paper</code> class.</p>
+  <aside class="notes">The figure is drawn over the whole slide in the plate layout.</aside>
 </section>
 
 <section class="figure">
@@ -167,7 +169,7 @@ try {
 
 <section>
   <h2>Tycho on a slide</h2>
-  <p>A tycho scene is embedded as an inline viewer. The runtime is vendored once in the theme, and the scene and its data are in the slide as two inline blocks.</p>
+  <p>A tycho scene is embedded as an inline viewer.</p>
   <ul>
     <li>The mode of the deck is passed to the viewer through its <code>theme</code> attribute.</li>
     <li>The scene is played only while its slide is shown, and the keys of the viewer are active only while it is in focus.</li>
@@ -179,7 +181,8 @@ try {
 <script type="application/octet-stream" data-tycho="data" data-encoding="base64">VFlDRAEAAAB7AgAAeyJmb3JtYXQiOiJ0eWNoby1kYXRhIiwidmVyc2lvbiI6MSwiZ2VuZXJhdG9yIjoicHl0eWNobyAwLjIuMCIsIm1ldGEiOnsiY2FzdHMiOnsib3JiaXRzL29mZnNldHMiOiJpbnQ2NCIsIm9yYml0cy9wb3NpdGlvbnMiOiJmbG9hdDY0Iiwib3JiaXRzL2NoYW5uZWxzL3RpbWUiOiJmbG9hdDY0In19LCJ2aWV3cyI6eyJvcmJpdHMvb2Zmc2V0cyI6eyJkdHlwZSI6InVpbnQzMiIsInNoYXBlIjpbM10sImVuY29kaW5nIjoicmF3Iiwib2Zmc2V0IjowLCJsZW5ndGgiOjEyfSwib3JiaXRzL3Bvc2l0aW9ucyI6eyJkdHlwZSI6ImZsb2F0MzIiLCJzaGFwZSI6WzEyMDAsM10sImVuY29kaW5nIjoic2h1ZmZsZS1kZWx0YS1kZWZsYXRlIiwiY2h1bmtfcm93cyI6ODczODEsImNodW5rcyI6W1sxNiw2MDg2XV19LCJvcmJpdHMvY2hhbm5lbHMvdGltZSI6eyJkdHlwZSI6ImZsb2F0MzIiLCJzaGFwZSI6WzEyMDBdLCJlbmNvZGluZyI6InNodWZmbGUtZGVsdGEtZGVmbGF0ZSIsImNodW5rX3Jvd3MiOjI2MjE0NCwiY2h1bmtzIjpbWzYxMDQsMzA2XV19LCJvcmJpdHMvcGFyYW1ldGVycy9wZXJpb2QiOnsiZHR5cGUiOiJmbG9hdDY0Iiwic2hhcGUiOlsyXSwiZW5jb2RpbmciOiJyYXciLCJvZmZzZXQiOjY0MTYsImxlbmd0aCI6MTZ9fX0AAAAAAFgCAACwBAAAAAAAAHic7ZplVBXqurYvukW6S2CqiIktBrBAsWspKmJgY2EHWNiBBSbYiq2IBSKoYGInE6S7QTrnmZPvW9/Y+zvn7LPGXnsP9z5jveP6weAH8Mb93PfzMC3B8wWCmRQGckOa5Z3oeYOGUzzKwe8OA1NRnsXrQezdxkg9NPz5FMHBQMaYozmZ9+LvZzOsG0rdeZrPhlH0mUdlHNc9mFmHiTefY9lRRt86ytI4e4ZfHZCL4rYuniPQ8CTSjdnt0EgiYhFTU1G04+osRqyhfBEHB2InxcdgFpqgsp7zz+h3nq8wvx6pXAKfIzjOvWkMNOTTC6bOo6CJZTuol2fTahTS2NEXlb3s+oqyFludkV6Iz24qzuB1lZQbjLnI08N0X8+5yWh0xVeK7OeM2MydPhjl4buP1E4MeMGJidRnMm4uN7NRnMyUd4T1Rv4E40WEuFF5FccGdrvwdScmcXjKE9KX/EW0C2bec0IKyWiBaXvGubDHg5jFVG2kjT9uR9h2kttnST2H0jk6n2L8cXwOcnIHj31JXUzTNAxH0K0vI2yYqc1aEXtzOPOeW3d5fIJ3fiTMI3M4RV0pN6CmkfoMGl/SeJ2GAKp9KPekcAgZ3Ugw440yj6oJzcLyC8+e8TCc0OtcOM/RYHYfxTeQhYfwOMLwIPqcp+0NdCKRfkthGl9ridbioh17x7JiLZPO4/AJa3kUxRtcxetwrjayZyBehxicT+tfkDlDqgLh3gSksWA8zp8w+ZXyZF4u5IQMS07j7IxeCXlniXBnpwluObS+R8V+Hi9hjzvjh9PKlYJhhE3AZxGO/ije400eB6wZNw/9ByToELSayXkYe5KYw9FVjNdEO4J3Xuyywbkc0UvuX2HxMdoEkhJMYCiDPyHaTpgPs1tiEE3cTny9ab+M5AD2vMe+HflnONIT50LKojhxk0HRVJQQ3J+B1yjry9EiHKLIu8G+GHpUkzSMTc9oM403JixpQleO8GFMToMHnEnC2YXsGnaUY9ODuFjmH0P1AdcEDEukSI7dQ2i/krjeeAWgvIVLmxnkTs4bti7GSo2Ym0xrh3id/ELfkXwvZ80+DOy4f47xPlStJXA+3Z7xaQfL7qBVT5g1YxKocCZgFt3s+fqSlWoYKvIgAg9LcOasGQPDyK/HXxq7DOJPsq43lmG8VGJxX/RGEe3IbC3UYwgfg+djVDW478D0kag78kCbOS/Q9SD2C0s70Wo+n3bjt5duK8hx4GgpwzYjtYq77fEagYUn8V7sm8WgX5HqwQM1ln+lcyCFLlwqZvZ2rA3IDOasHjO2ISgg15nLh1iYiJ0eNa5ELWHzfoaFoBNG8j0u3WLpOfr7o7oIoSsXDViRgcs59CaTp8GDB/hPYXojPQ6g1oqMKzxoz8FLzBdvdi/mtTR6IIzkri6B81gazlgZug5Edzs1MSTWEd2e85PYuQXvq7i9waEIGwW0zWjqQsEvfBvF00ncmsGZORyYh58Xy2Yz25OJkxgxGqeB9O5NUjtGGDFACbsqBGkSvWvfQS0Ypc3IzkdmNDI9kDNBUQa1HLReY3wLwSE6+9J/OsMH49EJbwO2SHG8kNCvxMWQHYr0Scz30d+PaSvZvIBLM3k3lWp3zN0ZOpnV07g4h/glKK+n7z6WnuFyBOliZf1ggjaHevHFE939TIghuE6id5sVLIsgShaVsUy4yCUp6qYz7BmnO1NzlpGGXD6MnDHTL/CoJ+bv8VtMlh5DnhLqg2Ev/ESUvMb9LK820mcu19ywGEXgWFQ92LyMpgOseUBVEcttqPRmZQy1Zqzbhlwdu1eiI82pQ7TvSXg2ridJmIlXL0T6BMhhA08mMak3lRs5kEEHT96IWBCO2n5CtzL2GDVvOGWOy35KLDn6hV8uUhJMcChD86l35Eo0kz1QNyNGnpXq2NqTsZfj8ow+g0o3nh5iww366FL9irA4vA3pdJ/is1xLZYEX7V0oWcLNPLxX0/U+VccIN8d3CAMMkJ3Ki1Hses+oJrS9SDhOcDEqg3E24t1xyfFmjmfBXqq7sGE5yts4GINxa85XY3uPO5ex70LMSFzleTeWX3uRcBePt2R4MjOLHDfmHSP/El7bye/G3FByRMwwIlWZSS/4OoERkbwoo38dd77SbisnldGcyZaDVJ5lVm8+6+Ao5PpuDNvid5uidozZT0Q65pZsGkXWAgau4sISZCcxzY6HDejfZrE7LyoxXc/SOp7NQj+WOdrcG4fcTkbd4ngcWUJsE1jyjnv3qAvAfhY+tkTkUnMEu34sSOTCfL5XorkUlzxWjeNiOPHayM+mSyjuFWzpyDVPPopP4zYGH+mdz8TVrJIhYCs35HixkZQGqpainIPxRDq8ol8Php7FTRXPpcyPZ5k9a4JZ38hGd/zusUmbjfPxfcYqY5YsYe5zphgxVryvaHq1pM1U9G4i00TxEOKPEZ3NBTt2rWPhK0bq0nEqLa5SUMlzB07tYvUXRphj5UXNHV6JODaEeYF0T0OmPW9WcegpHppYepBzlSu1eA3C9jB52YT0YPpWjOP53JbdPji8o7IVISuYEIeSBfdXMOMtLa2JWIfnN1Q6EbqTcdnUOhB0Avt6ktxYcw99XW6vYPhXcruz4Qj69Vxzx/ERX62Ys426QnaNwvAuF43ovoknOYwYTvwdPI0p3MTSPBpGsfEeiqb4e6ARz6HzGHoT1BdzRU5/xDKIczMQ2HLhB23EP2QNbey5XI9NBFdWYtuFa/l0PMWtcXRVkNyp+EIftcQlnNdTGStL0gVmOVOewXpf1HQ5cY2OjpJ6PmE2P6rZs422urw8j5cdGk8kFjAjE63VPFNn7WW6D+JHIXcOs3YgzlLoxJC7j0e2nDjFxp3MDWBcLIONcAhiwHCcOjNMbILnWWKPvz43+/MtDFkfegZJlHizgQpb+leyx5l0P+zvc6yEho54buRtDH2auOZNK0cO+6DRjl2Xkb+OXw+JD/q+pG40y8dR8oW5m0mOYsxenkrTpS/B65H9wCwNYgdh6svSBzxWQfUzI2UlKfTFDBo203YYIx+zJBf/WM5OIiyMh+94dIvoGdzN4rI9h+ezfgXTpzLgM/qLKejLAxFbwhkylxbavLrPlnH0LqNoG0HGkjBQ0o/AN/SYxLd8lq6mhRIhRyX54UMU08dQns9GP9RMOPYAy4lcbaDrKSIGMqCU2GO4uvK6luGX+TCVMbp8fsuvO/jqwjg54mNx20r8YCa2IOEz7kEkzWBKB1JrmCF2h73Mm0RJG5acoSad9a7I3mCPHtrrCM6kzRBCb9HPgFfrcMsiezDLbyCvzZHV2HwnagBjzpErx4Y56L/ilg1Dd5Kbz1ZXLC8SK8eM6ShEc9mQESuofE9wW1w2UZpIUBcG7aQ6hZBuTNiJSjLRnVm2GdtvZLbhxBomvETPkM9zCbzPrwoYjCXpDGeKmdcHu+00fuKVGYe8mHWH7lIoDuF7IKGpbGvH1OX0ikZHhR9j+XCKm/kc6M7yTUwUe7EhbWaheYdGafJGEn+K56WEO3D1IKezONwLf3+2Z+LXm/UBrCvE15X159gow1ZPdscS0IbgPVys4PZknrzkY3cyL1BlgPIeLGTpuZ5R9cxfw/ZGLmzjmS45HVAaSgdvxgSz9gPnVHk7grqjtCnEbSDbLxOhR/EerFSYGMBBa948QXEOLvps/iy5UPn5kjv178xnAUatmdmNG8OpX4HrZY4UkmtP72PskSd9Iz1V2Ce+haE4yXLyDQ3nmehP+HaMDrLuBqlJuJhybRFaX/AdSvY3Ri8jqjW2BRx7hspk1i6g+DjTqviyhiE2PJanpzqhv2ATwnmxfVcRlIWBFIdHoBtH4Cp0x3NoFgYXOW6ESTBnuiAYzJXndL7KvTr63iT2LUPG8dmVSUpkClnQl6rVbNiF0lsOemN8SdKwdJ7JAz8Gi0W4CqlGpLoi/RgZDWSVke2LnA/yK1HwRtELxRkouaPchMp5VE6hehy1Q7TYR4udqPvR0heNFWgsRHM2WlPQmoq2OOadQfcEukfRC0B/L/o7MdiC4QaM1mC0HONFmMzFxBPTyZiNw2wk5q5YOGFhT6tutOqAZWusxNVeH2sNBEoIpGhdQ+ta2lTQtpS2hdjkYpNJu1TaJUperO1H2r+l/Ss6PKXjIzpG0ukenW7R+TqdL9HlHF1O0uUYdoHY7aPrLrpupdtGuvnQfSXdl9B9Pj1m02M6Pd3pOZ6eo+k1lF4D6eVAb/Etd6dPZ/q0o48Ae3PsDbHXwV6dvkr0laVvE/1q6FdOvyL65dA/jf6J9P9C//cMeMWAWAZEMeA+A27hcBWHCzicwuEYDgGSxsdxO46bcPTBcQWOi3Gch+MMnDxwcsNJnEXFz8kZp/449cLJDqf2OLXGyQInI5x0cFLHSREnaZwacKrCqRSnfJwycUrGKR6njzi9xukpTtG0D8ciDItrWIRgcRqL41gEYrEXix1Y+GHhi8VKLLyx8MJiJuZTMJ+A+VjMh2M+CHNHzO0x7455Z8zbYWaNmRlmBphpY9YCM0XMZDBrxLQG0x+YFmKag2kapt8x+YrJB0xeY/IMk8eYPMD4LsahGF/F+ALGpzEKwugwRgcw2oPRdgz9MFyH4WoMl2G4CIN5GIhf+DQM3NF3Q38M+sPRH4yeuLV0QE/c2vREtyu6ndBth05rdCzRMUPHCG1x2dRCWx2tdmi1REsJLSk069AsR7MQjSw0kiUu3PIDLeNoGYt6FOr3Ub8lCRstQmhxGrUgyfMWR1bV3ahuQ3UTKutQWY2KOBx6ozwf5TcovULpCUoPULyN4nUUQlA4jUIQ8oeQ34/8buS2I+eHrBGyNciWIVOATBYyqUjvQPomUpeQOofUMZgDPSU+KHqO6DBNM2maRNM4GkfQuIIGMxoMadCmvgX1CpLpRJ0PdSupXUrtQmrnUuNJjQc1blSPonoI1b9QJVZ6Nyq7UCkOmf5U7KRiKxUbKfelfBXlS/mxkB9z+eFJmQdlbpSNoXQYpQMpdaCkDyVdKelAcWuKLSg2pEiLIlVJV1vYRGEVhSUUfqaglIJCCnLJzyQ/lfzv5MeT95m8d+TFkfuc3CfkRpEbQc4dckIlkSwnhOyzZJ8g+yjZgWTtI2sXWVvJ2kiWD5kryVxC5gIy55DpSYYHGRPIGEPGcDJcSf+F9H6k9yLdjvQOpLclzZI0U9L0SdMiTY00BVKlSW0gtZrUMlILSM0mNZXUBFI+k/KWlJekxJDykJR7pISScoWUC6ScIvmYZD6Q7E/ydpI3kexD8gqSF5M8j+QZJHuQ7EbyaJKH8tGFyAFE9ibSjsj2RLYm0oJIIyJ1iFQnUolIGSIbiawmspTIfCIziUwmMp7Ij0S+JvIZkY+IjCAyjMhrRIYQeZqHx3kYyMO9PNzBQz8e+vJwJQ+9ifIiaiZRU4iaQNQYoocRPZBoB6L7EN2NRx15ZMMjKx6Z8lifx5o8VuWxAk+keFLPkypiSonJJyaLmBRihcR+lnjB05c8jeFZFM/u8yyM59d4fpHnZ3kRzIsjvDzIyz283M4rP0nGiFtN3DJeL+L1PN7M5M1U3kzi7TjejuLdMN4N4r0T7/vzoTcfu/GxM5/a86kNn634bMYXI77o8VWLr+p8UyFeQYKwCWEVCcWSYU5iCt/jSfpA0iuSY0iOJOUuqWKLvETaGdKDSD9Exj4yd5K5haz1ZK8hZzk5i8n1Im8WedPIn0yBG4UnKTxF0RGK91O8gxJxpPGhbDlliyTPu3wGFVOomEilFFVnqT5OdQA1/tRup86P+ifUV9JQTGM/muJokkbUmkFTkLSvDUj9QAqka5EuQWYpsguQnYXcFOTGIX8B+WaZKxxCcR+KO1DahNIalMVte5ikfVCxRbU1qq0kEVFNnxaatFBFXQF1KVrW0bICjSI0stFMQTMerQ9ovUL7iWS0pX0TnS/ofED3Nbov0ItFLxq9B+jfRT8Ug2sSrzc4i+EJDI9iFIDRXox2YLwZ4/UYr8ZkGSYLJZZqKrZUD0zdMBuN2VDMXDAbgHlvzLti3gHzNli0wsIYCx0s1GmlRCtpWjXQqhLLEixzsUzHMlEyP7R6i9VzrB5hFYFVGFZXsTqP9QmsD2NdgvVTrB9jHYV1BNZ3sQ5DcAPBVQQXEZxHcBrBCQTHJCMRwUEEexHsQrAdwWYEGxH4IliNYAWCJQgWIvBCMBuBJ4KpCNwRuCEYi/UorIdh7Yq1C9aOWPfDug/WPbC2w6ojVrZYtcHKCisLrEywNMBSB0tx99cCS2UsFWglQytR875qsKjAohSLIizyMM/CXNxcJ2OegNk3zD5h9g7T15i+wDQWU7FJPcQkHJO7knmO8XWMr2AUgpH42E9hGIThEQwCMdiPgb8kz+hvRc8PvfXorUVXHMmWoeONzgK056I9C+3pzVloEprj0RyLxkg0htHSlZbOksmbej/U+9DCmBazUZuK2gRUR6M6BBUnVOxR7oayOLgKUDJDUR9FDRSUUJBGvh75CuQKkctCNhnZb8i8Q+aFJLZJhyN1C6krcBaCEAUg2oNoK03raFpJ4yIa59AwlYYJNIymfjD1TtT3oa4rdbbUWVNrSq0uterUKFADNbXU/KAmn+oMqs9RfZnqIKr9qd5A9VKqZ1Lt1mw3/ajuTLU11QZUq1EtRU0VNQXUpFHzlZqx1G6jdgW1M6n7lToX6npRb0v9HRpsJb7WqExjA00TaXqPyAbREIkPchu+INURqfNIyyBd2eybn5AdjOwn5J4hF46cuH8Uh/MdyK9C4QoKbVEwRUFbckqKTSj+QDEbxQQU36L4uNmgQ1A8huJuFNejKA60nij+iuIkFI1R0EFBDQV5FEQo1CBfinwe8mnIJSAn/nVxyMYiG4nsHWSuIXMBmZNIH0Z6H1LbkdoIq2EJeCHyRORO01iahtHoIiksDT1o6ER9G+otqDOkTotaFWplJTN88SlVF1OdQ1UqVUIqP1D5iooYKiIpv035NX5c4MdJyo5QlkFpLKWPKX1ISQQldym+RfENiq5QdJHCc5IaWBBMwVEKDpF/gHx/8naRt43czeRuINeHnNWS+pntTfZCsueRNZssT7KmkOlOphsZY8kYRcYw0sU+60K6I2n9SOtDWg/S7CT/Fkm1JbUNKdakWJBiQoohyboka5KsTrIKSQokyZAESQ18r5GMlb6X8b2I7/l8zyYxncRkEhNJ/EbiJxLfk/CahBckxJLwmISHJIRLhmkJt0i4jvAKwhCEZxGeRBiE8AjCAIT7Ee5BuAPhVoSbEK5DuBbhSoTLEC5GOB/hXIQzEU5D6IFwIsLxCMcgHEnCUBJcSXAmwYGEfiT0JqElCXNImEbiRBLHkDiURGcS+5PYk8TOfLfhuxXfTfiux/eWJCk376uRpCqSS0nOJzmD5CRSvpHygZQ4Up6SGk1qOKlhpF4jLYS006Q1m1f6ftJ3kbGVjA1krCVzBZmLyfQiaxZZ08h2J3s82aPJGU6OK7m/kDuA3D7k9SDPjvwO5NtQMIICZ8mkorAbhR0oak2ROcUGFGtSokKJHKVNlNZQVk5ZET9y+JFOeRLl8VR8ouIdlUOp3EPVFqp8qV5B9SJqmoNirQe1E6i7RN0p6o9Sf4CG3TS2pFGeJhFNaohkEGXhiaSAsB6GQ2do3YwpaP0nlEHpd6AAsv8EZJD49L8gP32JfjZN/5I0StLd/6X+H4rYMqt+H8VQ+NfkgfA3wuEC2DXf4WtEExC5IBL8hi4irb9GA5HS70MBkew/FJnfEIdnqX9JfrYIRKKfTdO/JA2I6v8J1CCq+h1UIir8T6Qhim/mLaJQRBsQzZR8woTXzT44tFmSXcDgr1ED1f8esevJ/03k/iZig5P+Sfzb+d3vWT+/HPwTrLPx9yL6gzT8BXWIan83NX9BOaKy/4pSROm/IVZiHKIYRCcQ2TdfXAxMA/HXXZtTqMlvqEOL/4r/I73/x9/W4P+nR5m/4I+JSPT7+fcytX8X7/tn+OMf19HfR32z6P4G/6MGy/97fiDK/mveNIfPsGYfHEx/sQZ7/9za/ef6Y+vnl4M/+WNs+Pl/wp/8UX663/3J3403ok9/+uD/ovXzy8HP5OcL6u9C7IP/putnX/jP5me/nD/5x1DKfwBHDKfHAAB4nGN4zVDabW31bu7ceXPnzvf384ehCnV1DawoQFhEhCTkxsXJBQLEkyRrsGFlZWFFAGQ2TglS2TQ3yJKZCQSZmJEgdibpiuhqKIhjf4nhpXhpyV0rK2srqwOyYCAHIgz7+4AQTCAx+vuyjh8/AUZIFKYIErU4OSUFCeHkka3s46ZNGzeBABJJkDmolM2IBIOISDhAYuIQJpNJL9MYWBiY/jY22hwAgTsJCLDGAAeomUEiMPChOXiybBiAicHDCBzdyBCxXEdnghgIsHYjwAFX7EB2EYmgKpDG4OKKoQ5qQ4YdYFBrCNbR1JQQAQFeLgTgYMUBgLUniYCR5oBhFAwyYLuiIURbS0tMFAR4kNIVG45kxTLoUtVAB+EowAasB9oBo2A4ggOj6WoU0AAAAA8TdqAAAAAAAAA2tTIcWEf4P9RtbCiBqwhA</script>
 </tycho-viewer>
 <!-- tycho-viewer end -->
-  <div class="foot">A distant retrograde orbit and an L1 Lyapunov orbit of the Earth–Moon system, written into this file with <code>demo/tycho-scene.py</code>.</div>
+  <div class="foot">Written into this file with <code>demo/tycho-scene.py</code>.</div>
+  <aside class="notes">The runtime is vendored once in the theme, and the scene and its data are in the slide as two inline blocks. The viewer shows a distant retrograde orbit and an L1 Lyapunov orbit of the Earth–Moon system.</aside>
 </section>
 
 <section class="section">
@@ -196,13 +199,13 @@ try {
     <tr><th>Class</th><th>What it is</th></tr>
     <tr><td><code>title</code>, <code>closing</code></td><td>A plate with the backdrop behind a block of words at the lower left, and the lockup at the top left.</td></tr>
     <tr><td><code>section</code></td><td>The words at the left, the outline of the talk under them, the backdrop at the right.</td></tr>
-    <tr><td>no class</td><td>A content slide: a text column of 1000 px at the left margin, a <code>zone</code> or <code>backdrop</code> at the right. The width of the column is set with <code>narrow</code> or <code>wide</code>.</td></tr>
+    <tr><td>no class</td><td>A content slide: a text column of 1000 px at the left margin, a <code>zone</code> or <code>backdrop</code> at the right, with <code>narrow</code> or <code>wide</code>.</td></tr>
     <tr><td><code>figure</code></td><td>A plate with a <code>backdrop</code> or a <code>plate</code> figure, the head at the top, the <code>caption</code> at the lower left.</td></tr>
     <tr><td><code>split</code></td><td>The black <code>panel</code> at the left, a <code>zone</code> at the right.</td></tr>
     <tr><td><code>backdrop</code></td><td>An orbit drawing: <code>data-scene</code>, <code>data-cx</code>, <code>data-cy</code>, <code>data-half</code>, <code>data-live</code>, labels in <code>lab</code> spans.</td></tr>
     <tr><td><code>fragment</code></td><td>A step, with <code>data-fragment-index</code>. Earlier steps are dimmed until the slide is complete.</td></tr>
-    <tr><td><code>run</code>, <code>foot</code></td><td>The running head, filled automatically from the last section slide, and the footnote line.</td></tr>
   </table>
+  <aside class="notes">The chrome is the running head, filled automatically from the last section slide, and the footnote line, with the classes run and foot.</aside>
 </section>
 
 <section>
@@ -212,11 +215,10 @@ try {
     <li>Add <code>?theme=light</code> to fix the mode for a venue.</li>
     <li>Press <strong>s</strong> for the speaker view with the notes, and <strong>p</strong> for the pointer dot.</li>
     <li>Press <strong>f</strong> for fullscreen, and <strong>esc</strong> for the overview.</li>
-    <li>Add <code>?print-pdf</code> to lay the deck out for printing, or run <code>npm run pdf</code> to write the PDF, one page per step.</li>
-    <li>Add <code>?still</code> to draw every backdrop complete at once, for screenshots.</li>
+    <li>Run <code>npm run pdf</code> to write the PDF, one page per step.</li>
   </ul>
   <div class="backdrop" data-scene="rosette" data-cx="-0.105" data-cy="0" data-half="1.1" data-live></div>
-  <aside class="notes">This backdrop is marked data-live, hence it is animated when the slide is shown, like the backdrop of the title slide.</aside>
+  <aside class="notes">This backdrop is marked data-live, hence it is animated when the slide is shown, like the backdrop of the title slide. Add ?print-pdf to lay the deck out for printing, and ?still to draw every backdrop complete at once, for screenshots.</aside>
 </section>
 
 <section class="closing">
