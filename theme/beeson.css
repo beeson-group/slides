@@ -63,6 +63,7 @@ html, body, .reveal-viewport { background: var(--bg); }
   overflow: hidden;
 }
 .reveal .slides section .backdrop,
+.reveal .slides section .surface,
 .reveal .slides section .zone,
 .reveal .slides section .run,
 .reveal .slides section .foot,
@@ -174,6 +175,12 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .backdrop .lab { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; line-height: 1; font-size: 28px; font-style: italic; color: var(--subtle); }
 .reveal .backdrop .lab sub { font-size: 0.7em; font-style: normal; vertical-align: -0.25em; }
 
+/* ---- surfaces, drawn with beeson.js and three.js, and turned with a drag ---- */
+.reveal .surface { pointer-events: auto; cursor: grab; touch-action: none; user-select: none; }
+.reveal .surface.dragging { cursor: grabbing; }
+.reveal .surface canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+.reveal .surface .lab { position: absolute; transform: translate(-50%, -50%); white-space: nowrap; line-height: 1; font-size: 36px; color: var(--text); opacity: 0; pointer-events: none; filter: drop-shadow(0 0 3px var(--bg)) drop-shadow(0 0 1px var(--bg)); }
+
 /* ---- layouts ---- */
 /* content, the default: a text column at the left margin, a figure zone at the right */
 .reveal .slides section { padding: 120px 120px 0 120px; }
@@ -189,6 +196,8 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section .zone { left: 1200px; top: 120px; width: 600px; height: 800px; }
 .reveal .slides section .backdrop { left: 1200px; top: 0; width: 720px; height: 1080px; }
 .reveal .slides section.narrow .backdrop { left: 920px; width: 1000px; }
+.reveal .slides section .surface { left: 1120px; top: 0; width: 800px; height: 1080px; }
+.reveal .slides section.narrow .surface { left: 880px; width: 1040px; }
 .reveal .slides section .zone > img,
 .reveal .slides section .zone > svg,
 .reveal .slides section .zone > video { display: block; width: 100%; height: 100%; object-fit: contain; }
@@ -219,6 +228,7 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section.title .backdrop,
 .reveal .slides section.closing .backdrop,
 .reveal .slides section.figure .backdrop,
+.reveal .slides section.figure .surface,
 .reveal .slides section.figure .plate { left: 0; top: 0; width: 1920px; height: 1080px; }
 .reveal .slides section.title .block,
 .reveal .slides section.closing .block { left: 120px; bottom: 150px; width: 1240px; }

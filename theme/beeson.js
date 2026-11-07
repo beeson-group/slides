@@ -1,6 +1,54 @@
 /*! beeson.js 1.0.0, the reveal.js theme of the Beeson group. MIT license. The orbit engine is ported from src/lib/orbits.ts of https://github.com/ClouD-161803/ClouD-161803.github.io (MIT). */
 "use strict";
 (() => {
+  // src/contour.ts
+  function isolines(g, nx, ny, x0, y0, dx, dy = dx, close = false) {
+    const at = (i, j) => g[j * (nx + 1) + i];
+    const links = /* @__PURE__ */ new Map(), where = /* @__PURE__ */ new Map();
+    const edge = (i, j, h) => {
+      const key = `${h ? "h" : "v"}${i},${j}`;
+      if (!where.has(key)) {
+        const a = at(i, j), b = h ? at(i + 1, j) : at(i, j + 1), t = a / (a - b);
+        where.set(key, h ? [x0 + (i + t) * dx, y0 + j * dy] : [x0 + i * dx, y0 + (j + t) * dy]);
+      }
+      return key;
+    };
+    const link = (a, b) => {
+      if (!links.has(a)) links.set(a, []);
+      if (!links.has(b)) links.set(b, []);
+      links.get(a)?.push(b);
+      links.get(b)?.push(a);
+    };
+    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      const hits = [];
+      if (at(i, j) > 0 !== at(i + 1, j) > 0) hits.push(edge(i, j, true));
+      if (at(i + 1, j) > 0 !== at(i + 1, j + 1) > 0) hits.push(edge(i + 1, j, false));
+      if (at(i, j + 1) > 0 !== at(i + 1, j + 1) > 0) hits.push(edge(i, j + 1, true));
+      if (at(i, j) > 0 !== at(i, j + 1) > 0) hits.push(edge(i, j, false));
+      if (hits.length === 2) link(hits[0], hits[1]);
+      else if (hits.length === 4) {
+        link(hits[0], hits[1]);
+        link(hits[2], hits[3]);
+      }
+    }
+    const out = [], seen = /* @__PURE__ */ new Set();
+    for (const start2 of links.keys()) {
+      if (seen.has(start2)) continue;
+      const p = [];
+      let cur = start2;
+      while (cur && !seen.has(cur)) {
+        seen.add(cur);
+        const [x, y] = where.get(cur) ?? [0, 0];
+        p.push(x, y);
+        const next = links.get(cur)?.find((k) => !seen.has(k));
+        if (!next && close && p.length > 4 && links.get(cur)?.includes(start2)) p.push(p[0], p[1]);
+        cur = next;
+      }
+      out.push(p);
+    }
+    return out;
+  }
+
   // src/scenes.ts
   var H = 4e-3;
   var stopped = (u) => Math.hypot(u[0] + MU, u[1]) < 0.0166 || Math.hypot(u[0] - 1 + MU, u[1]) < 45e-4 || Math.hypot(u[0] - 0.8, u[1]) > 2.4;
@@ -96,49 +144,14 @@
     };
     const g = new Float64Array((nx + 1) * (ny + 1));
     for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) g[j * (nx + 1) + i] = f(x0 + i * d, y0 + j * d);
-    const at = (i, j) => g[j * (nx + 1) + i];
-    const links = /* @__PURE__ */ new Map(), where = /* @__PURE__ */ new Map();
-    const edge = (i, j, h) => {
-      const key = `${h ? "h" : "v"}${i},${j}`;
-      if (!where.has(key)) {
-        const a = at(i, j), b = h ? at(i + 1, j) : at(i, j + 1), t = a / (a - b);
-        where.set(key, h ? [x0 + (i + t) * d, y0 + j * d] : [x0 + i * d, y0 + (j + t) * d]);
-      }
-      return key;
-    };
-    const link = (a, b) => {
-      if (!links.has(a)) links.set(a, []);
-      if (!links.has(b)) links.set(b, []);
-      links.get(a)?.push(b);
-      links.get(b)?.push(a);
-    };
-    for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
-      const hits = [];
-      if (at(i, j) > 0 !== at(i + 1, j) > 0) hits.push(edge(i, j, true));
-      if (at(i + 1, j) > 0 !== at(i + 1, j + 1) > 0) hits.push(edge(i + 1, j, false));
-      if (at(i, j + 1) > 0 !== at(i + 1, j + 1) > 0) hits.push(edge(i, j + 1, true));
-      if (at(i, j) > 0 !== at(i, j + 1) > 0) hits.push(edge(i, j, false));
-      if (hits.length === 2) link(hits[0], hits[1]);
-      else if (hits.length === 4) {
-        link(hits[0], hits[1]);
-        link(hits[2], hits[3]);
-      }
-    }
-    const out = [], seen = /* @__PURE__ */ new Set();
-    for (const start2 of links.keys()) {
-      if (seen.has(start2)) continue;
+    return isolines(g, nx, ny, x0, y0, d).filter((c) => c.length > 16).map((c) => {
       const p = [], t = [];
-      let cur = start2;
-      while (cur && !seen.has(cur)) {
-        seen.add(cur);
-        const [x, y] = where.get(cur) ?? [0, 0];
-        p.push(x, y, 0);
+      for (let k = 0; k < c.length; k += 2) {
+        p.push(c[k], c[k + 1], 0);
         t.push(t.length * 4e-3);
-        cur = links.get(cur)?.find((k) => !seen.has(k));
       }
-      if (t.length > 8) out.push(toned(open(p, t), "line"));
-    }
-    return out;
+      return toned(open(p, t), "line");
+    });
   }
   function lap(orbit, ax, ay, bx, by) {
     const n = orbit.times.length - 1;
@@ -544,12 +557,12 @@
     for (let i = 0; i < count; i++) out.push(a + (b - a) * Math.pow(i / (count - 1), p));
     return out;
   }
-  function lagrange(n) {
-    let x = n === 1 ? 1 - MU - Math.cbrt(MU / 3) : n === 2 ? 1 - MU + Math.cbrt(MU / 3) : -1 - 5 * MU / 12;
+  function lagrange(n, mu = MU) {
+    let x = n === 1 ? 1 - mu - Math.cbrt(mu / 3) : n === 2 ? 1 - mu + Math.cbrt(mu / 3) : -1 - 5 * mu / 12;
     for (let i = 0; i < 30; i++) {
-      const d1 = x + MU, d2 = x - 1 + MU;
-      const f = x - (1 - MU) * Math.sign(d1) / (d1 * d1) - MU * Math.sign(d2) / (d2 * d2);
-      const df = 1 + 2 * (1 - MU) / Math.abs(d1 * d1 * d1) + 2 * MU / Math.abs(d2 * d2 * d2);
+      const d1 = x + mu, d2 = x - 1 + mu;
+      const f = x - (1 - mu) * Math.sign(d1) / (d1 * d1) - mu * Math.sign(d2) / (d2 * d2);
+      const df = 1 + 2 * (1 - mu) / Math.abs(d1 * d1 * d1) + 2 * mu / Math.abs(d2 * d2 * d2);
       x -= f / df;
     }
     return x;
@@ -1032,6 +1045,770 @@
     }
   }
 
+  // src/surfaces.ts
+  var num = (value, fallback) => value !== void 0 && value.trim() !== "" && Number.isFinite(Number(value)) ? Number(value) : fallback;
+  function effectivePotential(mu) {
+    const wells = (x, y) => -(1 - mu) / Math.hypot(x + mu, y) - mu / Math.hypot(x - 1 + mu, y);
+    const bowl = (x, y) => -(x * x + y * y) / 2;
+    return { wells, bowl, sum: (x, y) => wells(x, y) + bowl(x, y) };
+  }
+  function librationPoints(mu) {
+    const h = Math.sqrt(3) / 2;
+    return [
+      { name: "L1", x: lagrange(1, mu), y: 0, kind: "saddle" },
+      { name: "L2", x: lagrange(2, mu), y: 0, kind: "saddle" },
+      { name: "L3", x: lagrange(3, mu), y: 0, kind: "saddle" },
+      { name: "L4", x: 0.5 - mu, y: h, kind: "maximum" },
+      { name: "L5", x: 0.5 - mu, y: -h, kind: "maximum" }
+    ];
+  }
+  function clamped(f, floor) {
+    const w = 0.06;
+    return (x, y) => {
+      const s = (f(x, y) - floor) / w;
+      return floor + w * (s > 0 ? s + Math.log1p(Math.exp(-s)) : Math.log1p(Math.exp(s)));
+    };
+  }
+  function sample(f, x, y, nx, ny, floor) {
+    const g = new Float64Array((nx + 1) * (ny + 1)), c = clamped(f, floor);
+    const dx = (x[1] - x[0]) / nx, dy = (y[1] - y[0]) / ny;
+    for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) g[j * (nx + 1) + i] = c(x[0] + i * dx, y[0] + j * dy);
+    return g;
+  }
+  function levelCurves(g, x, y, nx, ny, level) {
+    const d = g.map((z) => z - level);
+    return isolines(d, nx, ny, x[0], y[0], (x[1] - x[0]) / nx, (y[1] - y[0]) / ny, true);
+  }
+  var FUNCTIONS = {
+    // the effective potential of the CR3BP at data-mu, assembled from its wells and its bowl, with the
+    // libration points marked and a cut at the height -C/2 of the Jacobi constant C of data-C. the
+    // intersection of this plane with the surface is the zero-velocity curve, and Hill's region is
+    // where the surface is under the plane. C is the value at L1 when data-C is not given
+    "effective-potential": (attributes) => {
+      const mu = num(attributes.mu, 0.05);
+      const { wells, bowl, sum } = effectivePotential(mu);
+      const marks = librationPoints(mu);
+      const C1 = -2 * sum(marks[0].x, 0);
+      const plain = (layer) => () => ({ layer, marks: false, level: null });
+      return {
+        x: [-1.5, 1.5],
+        y: [-1.5, 1.5],
+        floor: -3.2,
+        zscale: 1,
+        layers: { flat: () => 0, wells, bowl, sum },
+        marks,
+        initial: "flat",
+        stages: {
+          flat: plain("flat"),
+          wells: plain("wells"),
+          bowl: plain("bowl"),
+          sum: plain("sum"),
+          extrema: () => ({ layer: "sum", marks: true, level: null }),
+          cut: (a) => ({ layer: "sum", marks: true, level: -num(a.c, C1) / 2 })
+        }
+      };
+    }
+  };
+  var FUNCTION_NAMES = Object.keys(FUNCTIONS);
+  function surfaceFunction(name, attributes) {
+    return name in FUNCTIONS ? FUNCTIONS[name](attributes) : null;
+  }
+
+  // src/surface.ts
+  var CELLS = 200;
+  var MORPH = 1400;
+  var SLIDE = 2600;
+  var TURN = 90;
+  var RISE = 0.4;
+  var CURVE_WIDTH = 3.5;
+  var GLOW_WIDTH = 18;
+  var MARK_SIZE = 22;
+  var ease = (t) => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
+  var lerp = (a, b, t) => a + (b - a) * t;
+  var clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+  var num2 = (v, fallback) => v !== void 0 && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : fallback;
+  var mix3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
+  function rgb(css, fallback) {
+    const s = css.trim();
+    const short = /^#([0-9a-f])([0-9a-f])([0-9a-f])$/i.exec(s);
+    if (short) return [1, 2, 3].map((i) => parseInt(short[i] + short[i], 16) / 255);
+    const long = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})/i.exec(s);
+    if (long) return [1, 2, 3].map((i) => parseInt(long[i], 16) / 255);
+    const fn = /^rgba?\(([^)]*)\)/i.exec(s);
+    if (fn) {
+      const v = fn[1].split(/[\s,/]+/).filter(Boolean).map(Number);
+      if (v.length >= 3 && v.every(Number.isFinite)) return [v[0] / 255, v[1] / 255, v[2] / 255];
+    }
+    return fallback;
+  }
+  var SURFACE_VERTEX = (
+    /* glsl */
+    `
+attribute float zA;
+attribute float zB;
+attribute vec3 nA;
+attribute vec3 nB;
+uniform float uMix;
+varying vec3 vNormal;
+varying vec2 vXY;
+varying float vZ;
+void main() {
+  vZ = mix(zA, zB, uMix);
+  vNormal = mix(nA, nB, uMix);
+  vXY = position.xy;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position.xy, vZ, 1.0);
+}`
+  );
+  var SURFACE_FRAGMENT = (
+    /* glsl */
+    `
+uniform vec3 uRamp[4];
+uniform vec3 uGroove;
+uniform vec2 uRange;
+uniform vec3 uLight;
+uniform vec2 uGrid;
+varying vec3 vNormal;
+varying vec2 vXY;
+varying float vZ;
+void main() {
+  float t = clamp((vZ - uRange.x) / max(uRange.y - uRange.x, 1e-6), 0.0, 1.0);
+  float k = t * 3.0;
+  vec3 c = k < 1.0 ? mix(uRamp[0], uRamp[1], k) : k < 2.0 ? mix(uRamp[1], uRamp[2], k - 1.0) : mix(uRamp[2], uRamp[3], k - 2.0);
+  c *= 0.58 + 0.42 * abs(dot(normalize(vNormal), uLight));
+  vec2 q = vXY / uGrid;
+  vec2 a = abs(fract(q - 0.5) - 0.5) / max(fwidth(q), vec2(1e-4));
+  c = mix(c, uGroove, 0.45 * (1.0 - min(min(a.x, a.y), 1.0)));
+  gl_FragColor = vec4(c, 1.0);
+}`
+  );
+  var PLANE_VERTEX = (
+    /* glsl */
+    `
+void main() {
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+}`
+  );
+  var PLANE_FRAGMENT = (
+    /* glsl */
+    `
+uniform vec3 uColor;
+uniform float uAlpha;
+void main() {
+  gl_FragColor = vec4(uColor, uAlpha);
+}`
+  );
+  var LINE_VERTEX = (
+    /* glsl */
+    `
+attribute vec3 start;
+attribute vec3 end;
+attribute vec2 corner;
+uniform vec2 uViewport;
+uniform float uWidth;
+uniform float uBias;
+varying float vSide;
+void main() {
+  vec4 a = projectionMatrix * modelViewMatrix * vec4(start, 1.0);
+  vec4 b = projectionMatrix * modelViewMatrix * vec4(end, 1.0);
+  vec2 half_ = 0.5 * uViewport;
+  vec2 d = b.xy / b.w * half_ - a.xy / a.w * half_;
+  float len = length(d);
+  vec2 dir = len > 1e-6 ? d / len : vec2(1.0, 0.0);
+  vec2 normal = vec2(-dir.y, dir.x);
+  vec4 p = corner.x < 0.5 ? a : b;
+  vec2 offset = 0.5 * uWidth * (normal * corner.y + dir * (corner.x < 0.5 ? -1.0 : 1.0));
+  p.xy += offset / half_ * p.w;
+  p.z -= uBias * p.w;
+  vSide = corner.y;
+  gl_Position = p;
+}`
+  );
+  var LINE_FRAGMENT = (
+    /* glsl */
+    `
+uniform vec3 uColor;
+uniform float uAlpha;
+uniform float uWidth;
+uniform float uSoft;
+varying float vSide;
+void main() {
+  float s = abs(vSide);
+  float edge = mix(1.0 - smoothstep(1.0 - 2.0 / uWidth, 1.0, s), (1.0 - s) * (1.0 - s), uSoft);
+  gl_FragColor = vec4(uColor, uAlpha * edge);
+}`
+  );
+  var MARK_VERTEX = (
+    /* glsl */
+    `
+attribute float kind;
+uniform float uRise;
+uniform float uLift;
+uniform float uSize;
+uniform float uBias;
+varying float vKind;
+void main() {
+  vec3 p = position;
+  p.z -= (1.0 - uRise) * uLift;
+  vec4 c = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+  c.z -= uBias * c.w;
+  gl_Position = c;
+  gl_PointSize = uSize * (0.35 + 0.65 * uRise);
+  vKind = kind;
+}`
+  );
+  var MARK_FRAGMENT = (
+    /* glsl */
+    `
+uniform vec3 uFill;
+uniform vec3 uRing;
+uniform float uRise;
+uniform float uSize;
+varying float vKind;
+void main() {
+  float r = length(gl_PointCoord * 2.0 - 1.0);
+  float aa = 2.0 / uSize;
+  float outer = 1.0 - smoothstep(1.0 - aa, 1.0, r);
+  if (outer <= 0.0) discard;
+  float fill = 1.0 - smoothstep(0.7 - aa, 0.7, r);
+  if (vKind < 0.5) fill *= smoothstep(0.36 - aa, 0.36, r);
+  gl_FragColor = vec4(mix(uRing, uFill, fill), outer * uRise);
+}`
+  );
+  var shared;
+  function renderer() {
+    if (shared !== void 0) return shared;
+    shared = null;
+    const THREE = window.THREE;
+    if (!THREE) {
+      console.error('beeson: a .surface needs three.js, loaded with <script src="theme/vendor/three/three.js"> before beeson.js');
+      return null;
+    }
+    try {
+      const r = new THREE.WebGLRenderer({ antialias: true, alpha: true, premultipliedAlpha: true });
+      r.setPixelRatio(1);
+      r.setClearColor(0, 0);
+      r.outputColorSpace = THREE.LinearSRGBColorSpace;
+      shared = r;
+    } catch (error) {
+      console.warn(`beeson: WebGL is not available for the surfaces, ${String(error)}`);
+    }
+    return shared;
+  }
+  var CACHE2 = /* @__PURE__ */ new WeakMap();
+  var Surface = class {
+    constructor(el, fn, THREE) {
+      this.grids = /* @__PURE__ */ new Map();
+      this.normals = /* @__PURE__ */ new WeakMap();
+      this.ranges = /* @__PURE__ */ new Map();
+      this.zmin = 0;
+      this.zmax = 0;
+      this.capacity = 0;
+      this.drawn = "";
+      this.mix = 1;
+      this.stageName = "";
+      this.markLayer = "";
+      this.t0 = 0;
+      this.duration = MORPH;
+      this.moving = false;
+      this.active = false;
+      this.raf = 0;
+      this.last = 0;
+      this.resume = 0;
+      this.drag = null;
+      this.W = 0;
+      this.H = 0;
+      this.w = 0;
+      this.h = 0;
+      this.tick = (now) => {
+        this.raf = 0;
+        const dt = this.last ? Math.min(0.1, (now - this.last) / 1e3) : 0;
+        this.last = now;
+        if (this.moving) {
+          const k = Math.min(1, (now - this.t0) / this.duration), e = ease(k), a = this.from, b = this.to;
+          this.mix = e;
+          const late = ease(clamp((k - 0.35) / 0.65, 0, 1));
+          this.shown = { lo: lerp(a.lo, b.lo, e), hi: lerp(a.hi, b.hi, e), marks: lerp(a.marks, b.marks, b.marks > a.marks ? late : e), cut: lerp(a.cut, b.cut, e), level: lerp(a.level, b.level, e) };
+          if (k >= 1) this.moving = false;
+        }
+        if (this.rate && !this.drag && now > this.resume) this.azimuth += dt * this.rate;
+        this.draw();
+        if (this.moving || this.rate) this.kick();
+      };
+      this.el = el;
+      this.fn = fn;
+      this.THREE = THREE;
+      this.zscale = num2(el.dataset.zscale, fn.zscale);
+      const turn = num2(el.dataset.turn, TURN);
+      this.rate = turn > 0 ? 2 * Math.PI / turn : 0;
+      this.azimuth = num2(el.dataset.azimuth, -60) * Math.PI / 180;
+      this.elevation = num2(el.dataset.elevation, 32) * Math.PI / 180;
+      this.zoom = num2(el.dataset.zoom, 1);
+      for (const old of el.querySelectorAll(":scope > canvas.surface-image")) old.remove();
+      this.canvas = document.createElement("canvas");
+      this.canvas.className = "surface-image";
+      this.canvas.setAttribute("aria-hidden", "true");
+      el.prepend(this.canvas);
+      el.setAttribute("data-prevent-swipe", "");
+      this.labels = [...el.querySelectorAll(".lab")];
+      for (const [name, f] of Object.entries(fn.layers)) {
+        const g = sample(f, fn.x, fn.y, CELLS, CELLS, fn.floor);
+        this.grids.set(name, g);
+        this.ranges.set(name, this.range(g));
+        for (const z of g) {
+          if (z < this.zmin) this.zmin = z;
+          if (z > this.zmax) this.zmax = z;
+        }
+      }
+      this.A = this.B = this.grids.get(fn.initial) ?? new Float64Array((CELLS + 1) ** 2);
+      const [lo, hi] = this.ranges.get(fn.initial) ?? [0, 1];
+      this.shown = this.from = this.to = { lo, hi, marks: 0, cut: 0, level: fn.floor };
+      this.scene = new THREE.Scene();
+      this.camera = new THREE.PerspectiveCamera(26, 1, 0.1, 100);
+      this.camera.up.set(0, 0, 1);
+      this.surface = this.makeSurface();
+      this.plane = this.makePlane();
+      this.curve = this.makeCurve(CURVE_WIDTH, 0);
+      this.glow = this.makeCurve(GLOW_WIDTH, 1);
+      this.glow.geometry = this.curve.geometry;
+      this.glow.renderOrder = 1.5;
+      this.points = this.makeMarks();
+      this.scene.add(this.surface, this.plane, this.glow, this.curve, this.points);
+      this.recolor();
+      this.bindDrag();
+      CACHE2.set(el, this);
+      this.sync(false);
+      this.fit();
+    }
+    // the color range of a layer: from its 5th percentile, so that the deep wells do not take the
+    // whole ramp, to its maximum, in world units. a flat layer is drawn in the middle of the ramp
+    range(g) {
+      const sorted = Float64Array.from(g).sort();
+      const lo = sorted[Math.floor(0.05 * (sorted.length - 1))] * this.zscale, hi = sorted[sorted.length - 1] * this.zscale;
+      return hi - lo > 1e-9 ? [lo, hi] : [hi - 1, hi + 1];
+    }
+    makeSurface() {
+      const THREE = this.THREE, n = CELLS + 1, fn = this.fn;
+      const position = new Float32Array(3 * n * n);
+      const dx = (fn.x[1] - fn.x[0]) / CELLS, dy = (fn.y[1] - fn.y[0]) / CELLS;
+      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+        position[3 * (j * n + i)] = fn.x[0] + i * dx;
+        position[3 * (j * n + i) + 1] = fn.y[0] + j * dy;
+      }
+      const index = new Uint32Array(6 * CELLS * CELLS);
+      let k = 0;
+      for (let j = 0; j < CELLS; j++) for (let i = 0; i < CELLS; i++) {
+        const a = j * n + i, b = a + 1, c = a + n, d = c + 1;
+        index.set([a, b, d, a, d, c], k);
+        k += 6;
+      }
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(position, 3));
+      for (const [name, size] of [["zA", 1], ["zB", 1], ["nA", 3], ["nB", 3]]) {
+        geometry.setAttribute(name, new THREE.BufferAttribute(new Float32Array(size * n * n), size).setUsage(THREE.DynamicDrawUsage));
+      }
+      geometry.setIndex(new THREE.BufferAttribute(index, 1));
+      const light = new THREE.Vector3(-0.45, -0.35, 0.82).normalize();
+      const cell = Math.max(fn.x[1] - fn.x[0], fn.y[1] - fn.y[0]) / 24;
+      const material = new THREE.ShaderMaterial({
+        vertexShader: SURFACE_VERTEX,
+        fragmentShader: SURFACE_FRAGMENT,
+        side: THREE.DoubleSide,
+        uniforms: {
+          uMix: { value: 1 },
+          uRamp: { value: [0, 1, 2, 3].map(() => new THREE.Vector3()) },
+          uGroove: { value: new THREE.Vector3() },
+          uRange: { value: new THREE.Vector2(0, 1) },
+          uLight: { value: light },
+          uGrid: { value: new THREE.Vector2(cell, cell) }
+        }
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.frustumCulled = false;
+      return mesh;
+    }
+    makePlane() {
+      const THREE = this.THREE, [x0, x1] = this.fn.x, [y0, y1] = this.fn.y;
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array([x0, y0, 0, x1, y0, 0, x1, y1, 0, x0, y1, 0]), 3));
+      geometry.setIndex([0, 1, 2, 0, 2, 3]);
+      const material = new THREE.ShaderMaterial({
+        vertexShader: PLANE_VERTEX,
+        fragmentShader: PLANE_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+        uniforms: { uColor: { value: new THREE.Vector3() }, uAlpha: { value: 0 } }
+      });
+      const mesh = new THREE.Mesh(geometry, material);
+      mesh.frustumCulled = false;
+      mesh.renderOrder = 1;
+      return mesh;
+    }
+    // the segments of a curve as quads of width pixels, with a hard edge, or with soft set a falloff
+    makeCurve(width, soft) {
+      const THREE = this.THREE;
+      const material = new THREE.ShaderMaterial({
+        vertexShader: LINE_VERTEX,
+        fragmentShader: LINE_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        uniforms: {
+          uColor: { value: new THREE.Vector3() },
+          uAlpha: { value: 0 },
+          uWidth: { value: width },
+          uSoft: { value: soft },
+          uViewport: { value: new THREE.Vector2(1, 1) },
+          uBias: { value: 4e-3 }
+        }
+      });
+      const mesh = new THREE.Mesh(new THREE.BufferGeometry(), material);
+      mesh.frustumCulled = false;
+      mesh.renderOrder = 2;
+      return mesh;
+    }
+    makeMarks() {
+      const THREE = this.THREE, marks = this.fn.marks;
+      const geometry = new THREE.BufferGeometry();
+      geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * marks.length), 3));
+      geometry.setAttribute("kind", new THREE.BufferAttribute(Float32Array.from(marks, (m) => m.kind === "saddle" ? 0 : 1), 1));
+      const material = new THREE.ShaderMaterial({
+        vertexShader: MARK_VERTEX,
+        fragmentShader: MARK_FRAGMENT,
+        transparent: true,
+        depthWrite: false,
+        uniforms: {
+          uFill: { value: new THREE.Vector3() },
+          uRing: { value: new THREE.Vector3() },
+          uRise: { value: 0 },
+          uLift: { value: RISE },
+          uSize: { value: MARK_SIZE },
+          uBias: { value: 6e-3 }
+        }
+      });
+      const points = new THREE.Points(geometry, material);
+      points.frustumCulled = false;
+      points.renderOrder = 3;
+      return points;
+    }
+    /** Reads the colors of the theme from the custom properties of the element, e.g. after a flip of the mode. */
+    recolor() {
+      const cs = getComputedStyle(this.el), css = (name, fallback) => rgb(cs.getPropertyValue(name), fallback);
+      const bg = css("--bg", [0.02, 0.02, 0.02]), text = css("--text", [0.95, 0.95, 0.94]);
+      const violet = css("--violet", [0.79, 0.31, 0.9]), accent = css("--accent", [0.94, 0.5, 0.31]);
+      const blue = css("--data-5", [0, 0.45, 0.7]);
+      const u = this.surface.material.uniforms, set2 = (target, c) => target.set(c[0], c[1], c[2]);
+      const ramp2 = [mix3(blue, bg, 0.7), mix3(blue, violet, 0.35), violet, mix3(violet, text, 0.55)];
+      ramp2.forEach((c, i) => set2(u.uRamp.value[i], c));
+      set2(u.uGroove.value, bg);
+      set2(this.plane.material.uniforms.uColor.value, accent);
+      set2(this.curve.material.uniforms.uColor.value, mix3(accent, text, 0.35));
+      set2(this.glow.material.uniforms.uColor.value, accent);
+      set2(this.points.material.uniforms.uFill.value, text);
+      set2(this.points.material.uniforms.uRing.value, bg);
+    }
+    // the stage set by the visible fragment of the slide with data-surface-stage and the highest
+    // fragment index, or the data-stage of the element, or the initial stage of the function
+    target() {
+      let best = null, index = -Infinity;
+      for (const f of this.el.closest("section")?.querySelectorAll(".fragment.visible[data-surface-stage]") ?? []) {
+        const i = num2(f.dataset.fragmentIndex, 0);
+        if (i >= index) {
+          best = f;
+          index = i;
+        }
+      }
+      let name = best?.dataset.surfaceStage ?? this.el.dataset.stage ?? this.fn.initial;
+      if (!(name in this.fn.stages)) {
+        console.error(`beeson: unknown surface stage "${name}" of ${this.el.dataset.function}, known: ${Object.keys(this.fn.stages).join(", ")}`);
+        name = this.fn.initial;
+      }
+      return { name, stage: this.fn.stages[name]({ ...this.el.dataset, ...best?.dataset }) };
+    }
+    /** Sets the stage from the fragments of the slide, animated or at once. */
+    sync(animate) {
+      const { name, stage } = this.target();
+      if (name === this.stageName) return;
+      const first = !this.stageName;
+      this.stageName = name;
+      this.el.dataset.shown = name;
+      const grid = this.grids.get(stage.layer) ?? this.B;
+      const [lo, hi] = this.ranges.get(stage.layer) ?? [this.shown.lo, this.shown.hi];
+      const to = { lo, hi, marks: stage.marks ? 1 : 0, cut: stage.level === null ? 0 : 1, level: stage.level ?? this.fn.floor };
+      this.placeMarks(stage.layer);
+      if (!animate || first) {
+        this.A = this.B = grid;
+        this.mix = 1;
+        this.shown = this.from = this.to = to;
+        this.moving = false;
+      } else {
+        this.A = this.current();
+        this.B = grid;
+        this.mix = 0;
+        this.from = { ...this.shown, level: this.shown.cut > 0 ? this.shown.level : this.fn.floor };
+        this.to = to;
+        this.duration = this.from.level !== to.level ? SLIDE : MORPH;
+        this.t0 = performance.now();
+        this.moving = true;
+      }
+      this.upload();
+      if (this.moving) this.kick();
+      else this.draw();
+    }
+    // the heights drawn now, nondimensional
+    current() {
+      if (this.mix >= 1 || this.A === this.B) return this.B;
+      const a = this.A, b = this.B, t = this.mix;
+      return a.map((z, i) => z + (b[i] - z) * t);
+    }
+    // the unit normals of the heights g in world units, by central differences
+    normalsOf(g) {
+      const cached = this.normals.get(g);
+      if (cached) return cached;
+      const n = CELLS + 1, out = new Float32Array(3 * n * n), s = this.zscale;
+      const dx = (this.fn.x[1] - this.fn.x[0]) / CELLS, dy = (this.fn.y[1] - this.fn.y[0]) / CELLS;
+      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
+        const at = (a, b) => g[clamp(b, 0, CELLS) * n + clamp(a, 0, CELLS)];
+        const gx = s * (at(i + 1, j) - at(i - 1, j)) / ((Math.min(i + 1, CELLS) - Math.max(i - 1, 0)) * dx);
+        const gy = s * (at(i, j + 1) - at(i, j - 1)) / ((Math.min(j + 1, CELLS) - Math.max(j - 1, 0)) * dy);
+        const r = Math.hypot(gx, gy, 1), k = 3 * (j * n + i);
+        out[k] = -gx / r;
+        out[k + 1] = -gy / r;
+        out[k + 2] = 1 / r;
+      }
+      this.normals.set(g, out);
+      return out;
+    }
+    upload() {
+      const geometry = this.surface.geometry, s = this.zscale;
+      const zA = geometry.getAttribute("zA"), zB = geometry.getAttribute("zB");
+      for (let i = 0; i < this.A.length; i++) {
+        zA.array[i] = this.A[i] * s;
+        zB.array[i] = this.B[i] * s;
+      }
+      geometry.getAttribute("nA").set(this.normalsOf(this.A));
+      geometry.getAttribute("nB").set(this.normalsOf(this.B));
+      for (const name of ["zA", "zB", "nA", "nB"]) geometry.getAttribute(name).needsUpdate = true;
+    }
+    // the marks on the layer, in world units
+    placeMarks(layer) {
+      if (layer === this.markLayer) return;
+      this.markLayer = layer;
+      const f = clamped(this.fn.layers[layer] ?? (() => 0), this.fn.floor);
+      const position = this.points.geometry.getAttribute("position");
+      this.fn.marks.forEach((m, i) => position.setXYZ(i, m.x, m.y, f(m.x, m.y) * this.zscale));
+      position.needsUpdate = true;
+    }
+    /** Sizes the canvas from the box of the element on the screen, and draws. */
+    fit() {
+      const r = this.el.getBoundingClientRect(), dpr = devicePixelRatio || 1;
+      const w = this.el.offsetWidth, h = this.el.offsetHeight;
+      if (!r.width || !r.height || !w || !h) return;
+      this.W = Math.max(1, Math.round(r.width * dpr));
+      this.H = Math.max(1, Math.round(r.height * dpr));
+      this.w = w;
+      this.h = h;
+      this.canvas.width = this.W;
+      this.canvas.height = this.H;
+      const px = dpr * r.height / h;
+      this.curve.material.uniforms.uViewport.value.set(this.W, this.H);
+      this.curve.material.uniforms.uWidth.value = CURVE_WIDTH * px;
+      this.glow.material.uniforms.uViewport.value.set(this.W, this.H);
+      this.glow.material.uniforms.uWidth.value = GLOW_WIDTH * px;
+      this.points.material.uniforms.uSize.value = MARK_SIZE * px;
+      this.camera.aspect = this.W / this.H;
+      this.draw();
+    }
+    // the camera on a sphere about the middle of the box of the surface, at a distance at which the
+    // sphere around the box fits the narrower field of view, divided by data-zoom
+    aim() {
+      const fn = this.fn, s = this.zscale;
+      const cx = (fn.x[0] + fn.x[1]) / 2, cy = (fn.y[0] + fn.y[1]) / 2, cz = (this.zmin + this.zmax) / 2 * s;
+      const R = 0.5 * Math.hypot(fn.x[1] - fn.x[0], fn.y[1] - fn.y[0], (this.zmax - this.zmin) * s);
+      const v = this.camera.fov * Math.PI / 360, half = Math.min(v, Math.atan(Math.tan(v) * this.camera.aspect));
+      const d = R / Math.sin(half) * 0.86 / this.zoom;
+      const c = Math.cos(this.elevation);
+      this.camera.position.set(cx + d * c * Math.cos(this.azimuth), cy + d * c * Math.sin(this.azimuth), cz + d * Math.sin(this.elevation));
+      this.camera.near = Math.max(0.01, d - 2 * R);
+      this.camera.far = d + 2 * R;
+      this.camera.lookAt(cx, cy, cz);
+      this.camera.updateProjectionMatrix();
+    }
+    // the curve of intersection of the plane at the level shown, recomputed when the level or the
+    // heights have changed
+    trace() {
+      const key = this.shown.cut > 0 ? `${this.shown.level}|${this.mix}|${this.markLayer}` : "";
+      if (key === this.drawn) return;
+      this.drawn = key;
+      const curves = key ? levelCurves(this.current(), this.fn.x, this.fn.y, CELLS, CELLS, this.shown.level) : [];
+      const count = curves.reduce((total, c) => total + Math.max(0, c.length / 2 - 1), 0);
+      const geometry = this.curve.geometry, THREE = this.THREE;
+      if (count > this.capacity) {
+        this.capacity = Math.max(1024, 2 * count);
+        const corner = new Float32Array(12 * this.capacity);
+        const quad = [0, -1, 1, -1, 1, 1, 0, -1, 1, 1, 0, 1];
+        for (let i = 0; i < this.capacity; i++) corner.set(quad, 12 * i);
+        geometry.setAttribute("corner", new THREE.BufferAttribute(corner, 2));
+        geometry.setAttribute("start", new THREE.BufferAttribute(new Float32Array(18 * this.capacity), 3).setUsage(THREE.DynamicDrawUsage));
+        geometry.setAttribute("end", new THREE.BufferAttribute(new Float32Array(18 * this.capacity), 3).setUsage(THREE.DynamicDrawUsage));
+      }
+      if (!this.capacity) return;
+      const start2 = geometry.getAttribute("start"), end = geometry.getAttribute("end");
+      const a = start2.array, b = end.array, z = this.shown.level * this.zscale;
+      let k = 0;
+      for (const c of curves) {
+        for (let i = 0; i + 3 < c.length; i += 2) {
+          for (let v = 0; v < 6; v++, k += 3) {
+            a[k] = c[i];
+            a[k + 1] = c[i + 1];
+            a[k + 2] = z;
+            b[k] = c[i + 2];
+            b[k + 1] = c[i + 3];
+            b[k + 2] = z;
+          }
+        }
+      }
+      for (const attribute of [start2, end]) {
+        attribute.clearUpdateRanges();
+        attribute.addUpdateRange(0, k);
+        attribute.needsUpdate = true;
+      }
+      geometry.setDrawRange(0, 6 * count);
+    }
+    /** Draws the surface at the stage and the camera of now, and places the labels. */
+    draw() {
+      if (!this.W) return;
+      const r = renderer();
+      if (!r) return;
+      const shown = this.shown, u = this.surface.material.uniforms;
+      u.uMix.value = this.mix;
+      u.uRange.value.set(shown.lo, shown.hi);
+      this.plane.position.z = shown.level * this.zscale;
+      this.plane.material.uniforms.uAlpha.value = 0.2 * shown.cut;
+      this.plane.visible = shown.cut > 0;
+      this.curve.material.uniforms.uAlpha.value = Math.min(1, 2 * shown.cut);
+      this.curve.visible = shown.cut > 0;
+      this.glow.material.uniforms.uAlpha.value = 0.45 * Math.min(1, 2 * shown.cut);
+      this.glow.visible = shown.cut > 0;
+      this.points.material.uniforms.uRise.value = shown.marks;
+      this.points.visible = shown.marks > 0;
+      this.trace();
+      this.aim();
+      if (r.domElement.width !== this.W || r.domElement.height !== this.H) r.setSize(this.W, this.H, false);
+      r.render(this.scene, this.camera);
+      const ctx = this.canvas.getContext("2d");
+      if (!ctx) return;
+      ctx.clearRect(0, 0, this.W, this.H);
+      ctx.drawImage(r.domElement, 0, 0);
+      this.place();
+    }
+    // the labels at their marks, in the pixels of the slide, faded with the marks and dimmed behind
+    // the surface
+    place() {
+      const THREE = this.THREE, p = new THREE.Vector3(), lift = (1 - this.shown.marks) * RISE;
+      const position = this.points.geometry.getAttribute("position");
+      for (const lab of this.labels) {
+        const i = this.fn.marks.findIndex((m) => m.name === lab.dataset.at);
+        if (i < 0) continue;
+        p.set(position.getX(i), position.getY(i), position.getZ(i) - lift);
+        const hidden = this.behind(p);
+        p.project(this.camera);
+        lab.style.left = `${(p.x + 1) / 2 * this.w + num2(lab.dataset.dx, 0)}px`;
+        lab.style.top = `${(1 - p.y) / 2 * this.h + num2(lab.dataset.dy, -34)}px`;
+        lab.style.opacity = String(this.shown.marks ** 2 * (hidden ? 0.3 : 1));
+      }
+    }
+    // whether the surface is between the world point p, a little above it, and the camera
+    behind(p) {
+      const fn = this.fn, g = this.current(), n = CELLS + 1, cam = this.camera.position;
+      const height = (x, y) => {
+        const u = (x - fn.x[0]) / (fn.x[1] - fn.x[0]) * CELLS, v = (y - fn.y[0]) / (fn.y[1] - fn.y[0]) * CELLS;
+        if (u < 0 || v < 0 || u > CELLS || v > CELLS) return null;
+        const i = Math.min(CELLS - 1, Math.floor(u)), j = Math.min(CELLS - 1, Math.floor(v)), s = u - i, t = v - j;
+        const z = (1 - t) * ((1 - s) * g[j * n + i] + s * g[j * n + i + 1]) + t * ((1 - s) * g[(j + 1) * n + i] + s * g[(j + 1) * n + i + 1]);
+        return z * this.zscale;
+      };
+      for (let k = 1; k <= 80; k++) {
+        const t = 0.01 + k / 80 * 0.99;
+        const x = p.x + (cam.x - p.x) * t, y = p.y + (cam.y - p.y) * t, z = p.z + 0.03 + (cam.z - p.z) * t;
+        const zs = height(x, y);
+        if (zs === null) return false;
+        if (zs > z) return true;
+      }
+      return false;
+    }
+    bindDrag() {
+      const el = this.el;
+      el.addEventListener("pointerdown", (ev) => {
+        if (ev.button !== 0) return;
+        this.drag = { x: ev.clientX, y: ev.clientY };
+        try {
+          el.setPointerCapture(ev.pointerId);
+        } catch {
+        }
+        el.classList.add("dragging");
+      });
+      el.addEventListener("pointermove", (ev) => {
+        if (!this.drag) return;
+        const scale = el.getBoundingClientRect().width / (el.offsetWidth || 1) || 1;
+        const dx = (ev.clientX - this.drag.x) / scale, dy = (ev.clientY - this.drag.y) / scale;
+        this.drag = { x: ev.clientX, y: ev.clientY };
+        this.azimuth -= dx * 5e-3;
+        this.elevation = clamp(this.elevation + dy * 4e-3, 0.12, 1.45);
+        if (!this.raf) this.draw();
+      });
+      const end = () => {
+        if (!this.drag) return;
+        this.drag = null;
+        el.classList.remove("dragging");
+        this.resume = performance.now() + 1500;
+      };
+      el.addEventListener("pointerup", end);
+      el.addEventListener("pointercancel", end);
+    }
+    kick() {
+      if (this.active && !this.raf) this.raf = requestAnimationFrame(this.tick);
+    }
+    // the end of a change of stage, at once
+    settle() {
+      if (!this.moving) return;
+      this.moving = false;
+      this.mix = 1;
+      this.shown = this.to;
+    }
+    /** Starts the turning of the camera and the animation of a change of stage, while the slide is shown. */
+    start() {
+      this.active = true;
+      this.last = 0;
+      if (this.moving || this.rate) this.kick();
+      else this.draw();
+    }
+    /** Stops the animation, and ends a change of stage at once. */
+    stop() {
+      this.active = false;
+      cancelAnimationFrame(this.raf);
+      this.raf = 0;
+      this.settle();
+    }
+  };
+  function mount2(root2) {
+    const out = [];
+    for (const el of root2.querySelectorAll(".surface")) {
+      const known = CACHE2.get(el);
+      if (known) {
+        out.push(known);
+        continue;
+      }
+      const fn = surfaceFunction(el.dataset.function ?? "", el.dataset);
+      if (!fn) {
+        console.error(`beeson: unknown surface function "${el.dataset.function ?? ""}", known: ${FUNCTION_NAMES.join(", ")}`);
+        continue;
+      }
+      if (!renderer() || !window.THREE) continue;
+      out.push(new Surface(el, fn, window.THREE));
+    }
+    return out;
+  }
+
   // src/steps.ts
   function initSteps(deck) {
     const mark = () => {
@@ -1148,6 +1925,7 @@
   };
   var TRACED = ["title", "section", "closing"];
   var backdrops = [];
+  var surfaces = [];
   var EDITING = new URLSearchParams(location.search).has("edit");
   function edit() {
     const params = new URLSearchParams(location.search);
@@ -1157,8 +1935,12 @@
   var still = () => EDITING || Orbits.reduced() || window.Reveal.isPrintView() || /print-pdf/.test(location.search);
   function remount() {
     for (const o of mount(document)) if (!backdrops.includes(o)) backdrops.push(o);
+    if (document.querySelector(".surface")) {
+      for (const s of mount2(document)) if (!surfaces.includes(s)) surfaces.push(s);
+    }
   }
   var within = (slide) => slide ? backdrops.filter((o) => slide.contains(o.el)) : [];
+  var surfacesOf = (slide) => slide ? surfaces.filter((s) => slide.contains(s.el)) : [];
   function show(slide) {
     const glide = slide.hasAttribute("data-auto-animate");
     for (const o of within(slide)) {
@@ -1181,12 +1963,22 @@
         o.start();
       } else o.complete();
     }
+    for (const s of surfacesOf(slide)) {
+      s.fit();
+      s.sync(false);
+      if (!still()) s.start();
+    }
   }
   function completeAll() {
     remount();
     for (const o of backdrops) {
       o.fit();
       o.complete();
+    }
+    for (const s of surfaces) {
+      s.fit();
+      s.sync(false);
+      s.draw();
     }
   }
   async function start(options = {}) {
@@ -1220,10 +2012,17 @@
       if (!still()) {
         for (const o of within(ev.previousSlide)) if (!ev.currentSlide.contains(o.el)) o.reset();
       }
+      for (const s of surfacesOf(ev.previousSlide)) s.stop();
       show(ev.currentSlide);
     });
+    const step2 = () => {
+      for (const s of surfacesOf(deck.getCurrentSlide())) s.sync(!still());
+    };
+    deck.on("fragmentshown", step2);
+    deck.on("fragmenthidden", step2);
     deck.on("resize", () => {
       for (const o of backdrops) o.fit();
+      for (const s of surfaces) s.fit();
     });
     syncViewers(get());
     document.addEventListener("beeson:theme", () => {
@@ -1233,6 +2032,10 @@
       if (later.length) setTimeout(() => {
         for (const o of later) o.redraw();
       }, 600);
+      for (const s of surfaces) {
+        s.recolor();
+        s.draw();
+      }
       syncViewers(get());
     });
   }
@@ -1253,6 +2056,7 @@
     start,
     theme: { get, set: (theme) => set(theme), toggle: () => toggle() },
     backdrops,
+    surfaces,
     version: "1.0.0"
   };
   window.Beeson = Beeson;

@@ -185,6 +185,25 @@ try {
   <aside class="notes">The runtime is vendored once in the theme, and the scene and its data are in the slide as two inline blocks. The viewer shows a distant retrograde orbit and an L1 Lyapunov orbit of the Earth–Moon system.</aside>
 </section>
 
+<!-- a surface: the graph of a function of src/surfaces.ts, whose stage is set by the steps with data-surface-stage -->
+<section>
+  <h2>The effective potential</h2>
+  <p>Its parts are the wells and the centrifugal bowl:</p>
+  <div class="math fragment" data-fragment-index="1" data-surface-stage="wells">\[U_g = -(1-\mu)/\rho_1 - \mu/\rho_2,\]</div>
+  <div class="math fragment" data-fragment-index="2" data-surface-stage="bowl" style="margin-top: 0">\[U_c = -(x^2 + y^2)/2,\]</div>
+  <div class="math fragment" data-fragment-index="3" data-surface-stage="sum" style="margin-top: 0">\[\tilde U = U_g + U_c.\]</div>
+  <p class="fragment" data-fragment-index="4" data-surface-stage="extrema">Its extrema are the libration points \(\mathcal L_1\) to \(\mathcal L_5\): three saddles and two maxima.</p>
+  <p class="fragment" data-fragment-index="5" data-surface-stage="cut" data-C="3.39">The cut at \(-C/2\) is the zero-velocity curve, the boundary of Hill's region, where \(-2\tilde U \ge C\).</p>
+  <div class="surface" data-function="effective-potential" data-mu="0.05">
+    <span class="lab" data-at="L1">\(\mathcal L_1\)</span>
+    <span class="lab" data-at="L2">\(\mathcal L_2\)</span>
+    <span class="lab" data-at="L3">\(\mathcal L_3\)</span>
+    <span class="lab" data-at="L4">\(\mathcal L_4\)</span>
+    <span class="lab" data-at="L5">\(\mathcal L_5\)</span>
+  </div>
+  <aside class="notes">The mass ratio is \(\mu = 0.05\), with the primary at \((-\mu, 0)\) and the secondary at \((1 - \mu, 0)\), hence the saddles are seen at the scale of a slide. The distances from the primary and the secondary are \(\rho_1\) and \(\rho_2\), and \(C\) is the Jacobi constant. The wells are unbounded below at the primary and the secondary, hence the surface is clamped at a floor. At \(C = 3.39\), the neck at \(\mathcal L_1\) is open and the neck at \(\mathcal L_2\) is closed. Drag the surface to turn it.</aside>
+</section>
+
 <section>
   <h2>A video on a slide</h2>
   <p>A video is shown in a <code>zone</code> or a <code>plate</code>, and it is played while its slide is shown.</p>
@@ -250,6 +269,7 @@ try {
 <script src="theme/vendor/reveal/reveal.js"></script>
 <script src="theme/vendor/reveal/notes.js"></script>
 <script src="theme/vendor/tycho/tycho.js"></script>
+<script src="theme/vendor/three/three.js"></script>
 <script src="theme/beeson.js"></script>
 <script>Beeson.start({});</script>
 </body>
