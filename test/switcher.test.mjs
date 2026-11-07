@@ -37,12 +37,20 @@ const clipAtReady = `(async () => {
   return clip;
 })()`;
 
+// the flip is skipped under reduced motion, which is the setting of the macOS and Windows runners
+// of GitHub
+const motion = `{
+  const query = window.matchMedia;
+  window.matchMedia = (q) => (q.includes('reduced-motion') ? { matches: false } : query.call(window, q));
+}`;
+
 async function openDeck(t, theme) {
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
   await page.goto(deckUrl('index.html', `theme=${theme}`));
   await page.waitFor(deckSettled);
+  await page.evaluate(motion);
   return page;
 }
 
