@@ -12,8 +12,8 @@ window.MathJax = {
     macros: window.beesonMacros ?? {},
   },
   output: {
-    font: 'mathjax-stix2',
-    fontPath: new URL('vendor/mathjax/mathjax-stix2-font', document.currentScript.src).href,
+    font: 'mathjax-tex',
+    fontPath: new URL('vendor/mathjax/mathjax-tex-font', document.currentScript.src).href,
     // an inline formula is kept on one line, since MathJax 4 would otherwise break it at a
     // relation, as in "e" at the end of one line and "= 0.295" at the start of the next
     linebreaks: { inline: false },
