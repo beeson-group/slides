@@ -316,12 +316,23 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 35%, transparent);
 }
 
-/* the mode flip of antfu.me: a circle from the click point */
+/* the mode flip of antfu.me: a circle at the click point, grown over the old view on a flip to light and shrunk off the
+   new view on a flip to dark. It is a CSS animation, since a script animation started from the ready promise of the view
+   transition is not applied in the first frame in Firefox. --flip-x, --flip-y, and --flip-r are set in src/switcher.ts. */
 ::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
 ::view-transition-old(root) { z-index: 1; }
 ::view-transition-new(root) { z-index: 9999; }
-html.to-dark::view-transition-old(root) { z-index: 9999; }
+html.to-light::view-transition-new(root) { animation: flip-open 400ms ease-out both; }
+html.to-dark::view-transition-old(root) { z-index: 9999; animation: flip-close 400ms ease-out both; }
 html.to-dark::view-transition-new(root) { z-index: 1; }
+@keyframes flip-open {
+  from { clip-path: circle(0px at var(--flip-x) var(--flip-y)); }
+  to { clip-path: circle(var(--flip-r) at var(--flip-x) var(--flip-y)); }
+}
+@keyframes flip-close {
+  from { clip-path: circle(var(--flip-r) at var(--flip-x) var(--flip-y)); }
+  to { clip-path: circle(0px at var(--flip-x) var(--flip-y)); }
+}
 
 /* ---- print (?print-pdf) and stills (?still): everything drawn complete, without the chrome outside the slide ---- */
 html.reveal-print .theme-switch, html.reveal-print .pointer-dot { display: none; }

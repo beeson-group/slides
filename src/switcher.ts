@@ -12,6 +12,7 @@ const root = document.documentElement;
 // ?theme= is opened
 let pinned = false;
 let button: HTMLButtonElement | null = null;
+let flip: unknown = null;
 
 const isTheme = (v: unknown): v is Theme => v === 'dark' || v === 'light';
 
@@ -40,23 +41,20 @@ function store(theme: Theme): void {
 export function set(theme: Theme, at?: { x: number; y: number }): void {
   if (!isTheme(theme) || theme === get()) return;
   store(theme);
-  const doc = document as Document & { startViewTransition?: (update: () => void) => { ready: Promise<void>; finished: Promise<void> } };
+  const doc = document as Document & { startViewTransition?: (update: () => void) => { finished: Promise<void> } };
   if (!doc.startViewTransition || Orbits.reduced()) { apply(theme); return; }
   const b = button?.getBoundingClientRect();
   const x = at?.x ?? (b ? b.left + b.width / 2 : innerWidth), y = at?.y ?? (b ? b.top + b.height / 2 : 0);
-  const r = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
-  const toLight = theme === 'light';
-  // on a flip to dark, the old light view is put on top and shrunk onto the point
-  root.classList.toggle('to-dark', !toLight);
+  // the flip itself is the animation of the views in theme/beeson.css, set off with these classes
+  root.style.setProperty('--flip-x', `${x}px`);
+  root.style.setProperty('--flip-y', `${y}px`);
+  root.style.setProperty('--flip-r', `${Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))}px`);
+  root.classList.toggle('to-dark', theme === 'dark');
+  root.classList.toggle('to-light', theme === 'light');
   const tr = doc.startViewTransition(() => apply(theme));
-  tr.ready.then(() => {
-    const clip = [`circle(0px at ${x}px ${y}px)`, `circle(${r}px at ${x}px ${y}px)`];
-    root.animate(
-      { clipPath: toLight ? clip : [...clip].reverse() },
-      { duration: 400, easing: 'ease-out', pseudoElement: toLight ? '::view-transition-new(root)' : '::view-transition-old(root)' },
-    );
-  }).catch(() => {});
-  tr.finished.finally(() => root.classList.remove('to-dark')).catch(() => {});
+  flip = tr;
+  // a flip started during this one ends it early, and its classes are then left in place
+  tr.finished.finally(() => { if (flip === tr) root.classList.remove('to-dark', 'to-light'); }).catch(() => {});
 }
 
 export function toggle(at?: { x: number; y: number }): void {
@@ -79,22 +77,7 @@ export function initTheme(): void {
   root.dataset.theme = theme;
 }
 
-// the stacking of the two views during the flip, which is required for the clip animation
-const VIEW_TRANSITION_CSS = `
-::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
-::view-transition-old(root) { z-index: 1; }
-::view-transition-new(root) { z-index: 9999; }
-html.to-dark::view-transition-old(root) { z-index: 9999; }
-html.to-dark::view-transition-new(root) { z-index: 1; }
-`;
-
 export function initSwitcher(): void {
-  if (!document.querySelector('style[data-beeson="view-transition"]')) {
-    const style = document.createElement('style');
-    style.dataset.beeson = 'view-transition';
-    style.textContent = VIEW_TRANSITION_CSS;
-    document.head.append(style);
-  }
   const deck = document.querySelector('.reveal');
   if (!deck || button) return;
   button = document.createElement('button');

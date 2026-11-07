@@ -661,6 +661,7 @@
   var root = document.documentElement;
   var pinned = false;
   var button = null;
+  var flip = null;
   var isTheme = (v) => v === "dark" || v === "light";
   function get() {
     return root.dataset.theme === "light" ? "light" : "dark";
@@ -687,19 +688,16 @@
     }
     const b = button?.getBoundingClientRect();
     const x = at?.x ?? (b ? b.left + b.width / 2 : innerWidth), y = at?.y ?? (b ? b.top + b.height / 2 : 0);
-    const r = Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y));
-    const toLight = theme === "light";
-    root.classList.toggle("to-dark", !toLight);
+    root.style.setProperty("--flip-x", `${x}px`);
+    root.style.setProperty("--flip-y", `${y}px`);
+    root.style.setProperty("--flip-r", `${Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))}px`);
+    root.classList.toggle("to-dark", theme === "dark");
+    root.classList.toggle("to-light", theme === "light");
     const tr = doc.startViewTransition(() => apply(theme));
-    tr.ready.then(() => {
-      const clip = [`circle(0px at ${x}px ${y}px)`, `circle(${r}px at ${x}px ${y}px)`];
-      root.animate(
-        { clipPath: toLight ? clip : [...clip].reverse() },
-        { duration: 400, easing: "ease-out", pseudoElement: toLight ? "::view-transition-new(root)" : "::view-transition-old(root)" }
-      );
+    flip = tr;
+    tr.finished.finally(() => {
+      if (flip === tr) root.classList.remove("to-dark", "to-light");
     }).catch(() => {
-    });
-    tr.finished.finally(() => root.classList.remove("to-dark")).catch(() => {
     });
   }
   function toggle(at) {
@@ -720,20 +718,7 @@
     }
     root.dataset.theme = theme;
   }
-  var VIEW_TRANSITION_CSS = `
-::view-transition-old(root), ::view-transition-new(root) { animation: none; mix-blend-mode: normal; }
-::view-transition-old(root) { z-index: 1; }
-::view-transition-new(root) { z-index: 9999; }
-html.to-dark::view-transition-old(root) { z-index: 9999; }
-html.to-dark::view-transition-new(root) { z-index: 1; }
-`;
   function initSwitcher() {
-    if (!document.querySelector('style[data-beeson="view-transition"]')) {
-      const style = document.createElement("style");
-      style.dataset.beeson = "view-transition";
-      style.textContent = VIEW_TRANSITION_CSS;
-      document.head.append(style);
-    }
     const deck = document.querySelector(".reveal");
     if (!deck || button) return;
     button = document.createElement("button");
