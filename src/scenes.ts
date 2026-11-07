@@ -388,6 +388,11 @@ const SCENES = {
 export type SceneName = keyof typeof SCENES;
 export const SCENE_NAMES = Object.keys(SCENES) as SceneName[];
 
+// the seconds in which the longest flight of a scene is traced, where they differ from the 12 of
+// src/orbits.ts. a strand of torus winds 22 times about its orbit, and it is traced more slowly
+const SECONDS: Partial<Record<SceneName, number>> = { torus: 18 };
+export const seconds = (name: string): number | undefined => SECONDS[name as SceneName];
+
 const cache = new Map<string, Strand[]>();
 
 // the strands of the scene name, or an empty list for an unknown name

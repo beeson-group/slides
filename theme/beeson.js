@@ -410,6 +410,8 @@
     sheaf: () => sheaf(36)
   };
   var SCENE_NAMES = Object.keys(SCENES);
+  var SECONDS = { torus: 18 };
+  var seconds = (name) => SECONDS[name];
   var cache = /* @__PURE__ */ new Map();
   function scene(name) {
     let out = cache.get(name);
@@ -929,6 +931,7 @@
       this.fitted = file && el.dataset.half === void 0;
       this.headSize = HEADS[el.dataset.heads ?? "full"] ?? HEADS.full;
       this.everyHead = el.dataset.heads !== void 0;
+      this.duration = (file ? void 0 : seconds(el.dataset.scene ?? "")) ?? DURATION;
       this.cx = +(el.dataset.cx ?? 0);
       this.cy = +(el.dataset.cy ?? 0);
       this.half = +(el.dataset.half ?? 0.5);
@@ -1209,7 +1212,7 @@
     }
     heads(ctx, c, now) {
       if (!this.headSize) return;
-      const tau = (now - (this.t0 ?? now)) / 1e3 / DURATION * this.Tmax;
+      const tau = (now - (this.t0 ?? now)) / 1e3 / this.duration * this.Tmax;
       ctx.fillStyle = c.accent;
       this.strands.forEach((s, i) => {
         const j = this.idx[i];
@@ -1262,7 +1265,7 @@
         this.paintHead(now);
         return;
       }
-      const tau = (now - (this.t0 ?? now)) / 1e3 / DURATION * this.Tmax;
+      const tau = (now - (this.t0 ?? now)) / 1e3 / this.duration * this.Tmax;
       const ctx = this.base.getContext("2d");
       if (!ctx) return;
       const c = this.colors();
@@ -3291,12 +3294,12 @@ void main() {
       const loop = o.el.hasAttribute("data-loop");
       if (glide) {
         o.complete();
-        const seconds = Number(slide.dataset.autoAnimateDuration ?? window.Reveal.getConfig().autoAnimateDuration ?? 1);
+        const seconds2 = Number(slide.dataset.autoAnimateDuration ?? window.Reveal.getConfig().autoAnimateDuration ?? 1);
         setTimeout(() => {
           if (window.Reveal.getCurrentSlide() !== slide) return;
           o.fit();
           if (loop) o.start();
-        }, seconds * 1e3 + 50);
+        }, seconds2 * 1e3 + 50);
       } else if (loop || o.el.hasAttribute("data-live") || TRACED.some((c) => slide.classList.contains(c))) {
         o.reset();
         o.start();

@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MU, lagrange, lyapunovFamily, spaced, toCrossing } from '../src/orbits.ts';
-import { SCENE_NAMES, scene } from '../src/scenes.ts';
+import { SCENE_NAMES, scene, seconds } from '../src/scenes.ts';
 
 const H = 0.004;
 // the smallest number of strands expected in each scene. the L2 family of nest is ended after 7 of
@@ -58,6 +58,10 @@ const distance = (s, x, y) => {
 test('the transfer is the one strand of a spacecraft in the scenes, hence a manifold is drawn without a head', () => {
   for (const name of SCENE_NAMES) assert.equal(scene(name).filter((s) => s.craft).length, name === 'transfer' ? 1 : 0, name);
   assert.equal(scene('transfer').find((s) => s.craft).tone, 'hero');
+});
+
+test('the torus is traced in 18 s, and every other scene in the 12 s of the engine', () => {
+  assert.deepEqual(SCENE_NAMES.filter((name) => seconds(name) !== undefined).map((name) => [name, seconds(name)]), [['torus', 18]]);
 });
 
 test('an unstable tube leaves its orbit, a stable tube arrives on it, and both run past the orbit', () => {

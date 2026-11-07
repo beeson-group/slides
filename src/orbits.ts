@@ -3,7 +3,7 @@
 // Vestini's website (MIT) and reduced to the families drawn on the slides. all quantities are
 // nondimensional, in the rotating frame
 
-import { scene } from './scenes.ts';
+import { scene, seconds } from './scenes.ts';
 import { fitView, mix, strandsFor } from './strands.ts';
 import type { Dot } from './strands.ts';
 
@@ -19,7 +19,8 @@ export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?:
 export const MU = 0.01215;
 // the distance to a body within which the step is shortened in step()
 const NEAR = 0.15;
-// seconds in which the longest flight of a scene is traced
+// seconds in which the longest flight of a backdrop is traced, unless a scene sets its own in
+// src/scenes.ts
 const DURATION = 12;
 // seconds per revolution of a looping mark
 const LOOP = 9;
@@ -299,6 +300,8 @@ export class Orbits {
   // true when start() was called before the strands of a file were loaded
   private pending = false;
   private headSize: number;
+  // seconds in which the longest strand is traced
+  private duration: number;
   // true when a head is drawn on every strand, and false when on the strands of a spacecraft alone
   private everyHead: boolean;
   // the colors of the strands with an ink, resolved in redraw() for the current mode
@@ -321,6 +324,7 @@ export class Orbits {
     this.fitted = file && el.dataset.half === undefined;
     this.headSize = HEADS[el.dataset.heads ?? 'full'] ?? HEADS.full;
     this.everyHead = el.dataset.heads !== undefined;
+    this.duration = (file ? undefined : seconds(el.dataset.scene ?? '')) ?? DURATION;
     this.cx = +(el.dataset.cx ?? 0);
     this.cy = +(el.dataset.cy ?? 0);
     this.half = +(el.dataset.half ?? 0.5);
@@ -592,7 +596,7 @@ export class Orbits {
 
   private heads(ctx: CanvasRenderingContext2D, c: Colors, now: number): void {
     if (!this.headSize) return;
-    const tau = (((now - (this.t0 ?? now)) / 1000) / DURATION) * this.Tmax;
+    const tau = (((now - (this.t0 ?? now)) / 1000) / this.duration) * this.Tmax;
     ctx.fillStyle = c.accent;
     this.strands.forEach((s, i) => {
       const j = this.idx[i];
@@ -638,7 +642,7 @@ export class Orbits {
 
   private frame(now: number): void {
     if (this.loop || !this.W) { this.paintHead(now); return; }
-    const tau = (((now - (this.t0 ?? now)) / 1000) / DURATION) * this.Tmax;
+    const tau = (((now - (this.t0 ?? now)) / 1000) / this.duration) * this.Tmax;
     const ctx = this.base.getContext('2d');
     if (!ctx) return;
     const c = this.colors();
