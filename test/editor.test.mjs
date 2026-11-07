@@ -298,6 +298,45 @@ test('an invalid TeX is refused in the field with an error, and the formula on t
   assert.deepEqual(page.errors, []);
 });
 
+test('a step set in the Steps pane writes the class and the index into the tag of the element, and nothing else', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .zone > img'); const { h, v } = Reveal.getIndices(img.closest('section')); Reveal.slide(h, v); })()`);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
+  await new Promise((done) => setTimeout(done, 300));
+  const pick = (i, value) => page.evaluate(`(() => { const sel = document.querySelectorAll('.beeson-edit-side .row select')[${i}]; sel.value = ${value === undefined ? '[...sel.options].at(-1).value' : JSON.stringify(value)}; sel.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  // the heading is the first row, with the slide. the second and the third item get steps of
+  // their own, and the figure joins the first one
+  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row .kind')].map((k) => k.textContent)`), ['Heading', 'Paragraph', 'Item', 'Item', 'Item', 'Figure']);
+  await pick(3);
+  await pick(4);
+  await pick(5, '0');
+  const rows = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row select')].map((s) => s.value)`);
+  assert.deepEqual(rows, ['', '', '', '0', '1', '0']);
+  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-badge')].map((b) => b.textContent)`), ['1', '2', '1']);
+  let expected = replaced('<li>Give a white raster figure the class <code>paper</code> to frame it.</li>', '<li class="fragment" data-fragment-index="1">Give a white raster figure the class <code>paper</code> to frame it.</li>');
+  expected = expected.replace('<li>Give a black-on-white line plot the class <code>invert</code> to invert it in dark mode.</li>', '<li class="fragment" data-fragment-index="2">Give a black-on-white line plot the class <code>invert</code> to invert it in dark mode.</li>');
+  expected = expected.replace('<figure class="zone">', '<figure class="zone fragment" data-fragment-index="1">');
+  assert.notEqual(expected, deckText);
+  assert.equal(await page.evaluate('window.BeesonEditor.render()'), expected);
+  // the element goes back with the slide, and the figure is alone in the first step
+  await pick(3, '');
+  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row select')].map((s) => s.value)`), ['', '', '', '', '1', '0']);
+  // the saved text is paired again, and the steps are read from it
+  const text = await page.evaluate('window.BeesonEditor.render()');
+  assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(text)})`)).problems, []);
+  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row select')].map((s) => s.value)`), ['', '', '', '', '1', '0']);
+  // One by one steps every element but the heading, and All at once takes every step away
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .head button')].find((b) => b.textContent === 'One by one').click()`);
+  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row select')].map((s) => s.value)`), ['', '0', '1', '2', '3', '4']);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .head button')].find((b) => b.textContent === 'All at once').click()`);
+  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row select')].map((s) => s.value)`), ['', '', '', '', '', '']);
+  assert.equal(await page.evaluate('window.BeesonEditor.render()'), deckText);
+  assert.deepEqual(page.errors, []);
+});
+
 // polls an expression across a navigation that the page starts itself
 async function until(page, expression, timeout = 15000) {
   const start = Date.now();
@@ -595,6 +634,43 @@ test('an empty TeX is refused in the field, and a save without an edit does not 
     return window.BeesonEditor.status().message;
   })()`);
   assert.match(message, /^Saved unchanged\.html at \d/);
+  assert.deepEqual(page.errors, []);
+});
+
+test('a step is inserted before the others as one entry of the history, and a formula is listed by its TeX in the Steps pane', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .zone > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
+  await sleep(300);
+  const values = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row select')].map((s) => s.value)`);
+  const pick = (i, value) => page.evaluate(`(() => { const sel = document.querySelectorAll('.beeson-edit-side .row select')[${i}]; sel.value = ${value === undefined ? '[...sel.options].at(-1).value' : JSON.stringify(value)}; sel.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await pick(3);
+  await pick(4);
+  assert.deepEqual(await values(), ['', '', '', '0', '1', '']);
+  const before = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row select')[2].options].map((o) => [o.value, o.textContent])`);
+  assert.deepEqual(before[1], ['before', 'Step 1, new, before the others']);
+  await pick(2, 'before');
+  assert.deepEqual(await values(), ['', '', '0', '1', '2', '']);
+  let expected = replaced('<li>Export one file per mode and mark them <code>for-dark</code> and <code>for-light</code>.</li>', '<li class="fragment" data-fragment-index="1">Export one file per mode and mark them <code>for-dark</code> and <code>for-light</code>.</li>');
+  expected = expected.replace('<li>Give a white raster figure the class <code>paper</code> to frame it.</li>', '<li class="fragment" data-fragment-index="2">Give a white raster figure the class <code>paper</code> to frame it.</li>');
+  expected = expected.replace('<li>Give a black-on-white line plot the class <code>invert</code> to invert it in dark mode.</li>', '<li class="fragment" data-fragment-index="3">Give a black-on-white line plot the class <code>invert</code> to invert it in dark mode.</li>');
+  assert.equal(await page.evaluate('window.BeesonEditor.render()'), expected);
+  // one undo takes the new step away and puts the other steps back
+  await page.evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }))`);
+  assert.deepEqual(await values(), ['', '', '', '0', '1', '']);
+  // a display formula is listed by its TeX, and an inline formula is shown in place in its item
+  await page.evaluate(`(() => { const c = document.querySelector('.reveal .slides .math mjx-container'); Reveal.slide(Reveal.getIndices(c.closest('section')).h); })()`);
+  await sleep(300);
+  const texts = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row')].map((r) => [r.querySelector('.kind').textContent, r.querySelector('.text').textContent])`);
+  const formulas = texts.filter(([kind]) => kind === 'Formula').map(([, text]) => text);
+  assert.equal(formulas.length, 2);
+  assert.ok(formulas[0].startsWith('\\ddot x - 2\\dot y = \\frac{\\partial U}'), formulas[0]);
+  assert.ok(formulas[1].startsWith('U = \\frac{x^2 + y^2}{2}'), formulas[1]);
+  const item = texts.find(([kind, text]) => kind === 'Item' && text.startsWith('At a given'));
+  assert.ok(item && item[1].startsWith('At a given Jacobi constant C = 2U - v^2, the motion'), JSON.stringify(texts));
   assert.deepEqual(page.errors, []);
 });
 
