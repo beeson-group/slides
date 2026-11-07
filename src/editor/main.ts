@@ -180,6 +180,7 @@ function follow(): void {
   steps.refresh();
   move.refresh();
   nav.refresh();
+  checkOverflow();
 }
 
 // the pane under the slide, which the notes of the current slide are laid over, and the strip
@@ -265,6 +266,17 @@ problemsCard.append(make('h3', '', 'Texts that cannot be edited'), problemsList,
 problemsCard.hidden = true;
 
 const problemText = (p: Pairing['problems'][number]): string => `slide ${slideNumber(p.slide) ?? '?'}, ${p.tag}: ${p.reason}`;
+
+function showProblems(): void {
+  problemsList.replaceChildren(...(pairing?.problems ?? []).map((p) => make('li', '', problemText(p))));
+  problemsCard.hidden = false;
+  problemsClose.focus();
+}
+
+function closeProblems(): void {
+  problemsCard.hidden = true;
+  if (!whichButton.hidden) whichButton.focus();
+}
 
 function setState(text: string, warn = false, title = ''): void {
   stateEl.textContent = text;
@@ -1043,13 +1055,24 @@ function onKeyDown(ev: KeyboardEvent): void {
     ev.preventDefault();
     ev.stopPropagation();
     openMath(active);
+  } else if (ev.key === 'Escape' && !problemsCard.hidden) {
+    closeProblems();
+    ev.stopPropagation();
   } else if (ev.key === 'Escape' && !ask.hidden) {
     answer(null);
+    ev.stopPropagation();
+  } else if (!popover && move.onKey(ev)) {
+    ev.preventDefault();
     ev.stopPropagation();
   } else if (ev.key === 'Escape') {
     const host = hostOf(active);
     if (popover) {
       closeMath();
+      ev.stopPropagation();
+    } else if (host) {
+      // the block is selected, as the text box in PowerPoint, and the arrow keys nudge it
+      (host as HTMLElement).blur();
+      move.select(move.movableOf(host));
       ev.stopPropagation();
     }
   }
@@ -1064,6 +1087,30 @@ function onClick(ev: MouseEvent): void {
   } else if (popover && target && !popover.contains(target)) closeMath(false);
 }
 
+// a text of the current slide that runs past the edge of the slide, or into the footnote line
+// at its bottom, is marked, as the bounds of a text box in PowerPoint, and counted in the state
+function checkOverflow(): void {
+  const slide = current();
+  const box = slides().getBoundingClientRect();
+  let n = 0;
+  if (slide && box.width > 0) {
+    const foot = slide.querySelector(':scope > .foot');
+    const f = foot?.getBoundingClientRect();
+    const past = (r: DOMRect) => r.right > box.right + 1 || r.bottom > box.bottom + 1 || r.left < box.left - 1 || r.top < box.top - 1;
+    const intoFoot = (r: DOMRect) => !!f && f.height > 0 && r.bottom > f.top + 1 && r.top < f.bottom - 1 && r.right > f.left + 1 && r.left < f.right - 1;
+    for (const el of slide.querySelectorAll(HOST)) {
+      if (el.closest('aside.notes, .backdrop')) continue;
+      const r = el.getBoundingClientRect();
+      const out = r.width > 0 && r.height > 0 && (past(r) || (el !== foot && !foot?.contains(el) && intoFoot(r)));
+      el.classList.toggle('beeson-overflow', out);
+      if (out) n += 1;
+    }
+  }
+  if (n !== overflowing) {
+    overflowing = n;
+    report();
+  }
+}
 
 const revealReady = (): Promise<void> =>
   new Promise((done) => {
@@ -1119,6 +1166,8 @@ async function init(): Promise<void> {
   wire(askSave, () => answer('save'));
   wire(askDiscard, () => answer('discard'));
   wire(askCancel, () => answer(null));
+  wire(whichButton, showProblems);
+  wire(problemsClose, closeProblems);
   resizer.addEventListener('keydown', (ev) => {
     const step = ev.key === 'ArrowUp' ? 20 : ev.key === 'ArrowDown' ? -20 : 0;
     if (!step) return;
