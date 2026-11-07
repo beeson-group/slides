@@ -13,6 +13,28 @@ The demo deck, `index.html`, is also the documentation of every layout class. Op
 
 The mode is kept per browser in local storage. To fix it for a venue, add the URL parameter `?theme=light`. To draw every backdrop complete at once for a screenshot, add `?still`.
 
+## Backdrops
+
+Set the drawing of a `backdrop` with its attribute `data-scene`. Each drawing is computed in the browser by the code in `src/scenes.ts`, and the demo deck shows most of them.
+
+| Name | Drawing |
+|---|---|
+| `nest` | The Lyapunov families of L1 and L2 with the distant retrograde orbits about the Moon |
+| `dro` | The distant retrograde family |
+| `mark` | One distant retrograde orbit |
+| `l1`, `l2` | The Lyapunov family of one libration point |
+| `lyapunovs` | The Lyapunov families of L1 and L2 |
+| `halo` | The L2 halo family continued to a near rectilinear orbit |
+| `rosette` | A family of 7:2 resonant orbits |
+| `hill` | Zero-velocity curves of the Jacobi constant |
+| `tubes` | The stable and unstable tubes of orbits at L1 and L2 |
+| `lace` | The unstable tube of an L1 orbit and the stable tube of an L2 orbit about the Moon |
+| `ribbon`, `wideRibbon` | The tubes of a small and a larger L1 orbit toward the Earth, after Amlan Sinha's figures in the group deck and in [Phantom Pathways](https://amlan-sinha.github.io/art-of-science/art-1/) |
+| `spiral` | An illustrative low-thrust flight and a near rectilinear orbit in the inertial frame, after [Cosmic Choreography](https://amlan-sinha.github.io/art-of-science/art-2/) by Amlan Sinha |
+| `transfer` | A low-energy transfer through L1 |
+| `sheaf` | Lunar transfers from a low Earth orbit |
+| `torus` | Quasi-periodic strands about distant retrograde orbits |
+
 ## Figures
 
 For a figure made with matplotlib, use the styles `beeson-dark.mplstyle` and `beeson-light.mplstyle` in `styles/`. The palette, the typeface, and a transparent background are set in these styles. Export one file per mode and mark the images `for-dark` and `for-light`, so that the right one is shown in each mode. Give a white raster figure the class `paper`, and it is framed. Give a black-on-white line plot the class `invert`, and it is inverted in dark mode.
