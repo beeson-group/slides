@@ -268,6 +268,11 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
 .reveal .slides section .fragment.visible.current-fragment,
 .reveal .slides section[data-complete] .fragment.visible { opacity: 1; }
 .reveal .slides section .fragment.visible .fragment.visible { opacity: 1; }
+/* stepped math: a held fragment is not dimmed, and the classes named by a shown data-highlight are colored */
+.reveal .slides section:not([data-complete]) .fragment.visible[data-held]:not(.current-fragment) { opacity: 1; }
+.reveal .hl-target { transition: color 400ms ease-out; }
+.reveal .hl-accent { color: var(--accent); }
+.reveal .hl-violet { color: var(--violet); }
 
 /* ---- the slide change: a 400 ms fade ---- */
 .reveal.fade .slides section:not([data-transition]),
@@ -348,11 +353,13 @@ html.reveal-print .reveal .slides section.figure,
 html.reveal-print .reveal .slides section.section,
 html.reveal-print .reveal .slides section.split { padding: 0 !important; }
 html.reveal-print .reveal .slide-number-pdf { right: 120px; bottom: 50px; font-size: 22px; color: var(--muted); background: transparent; padding: 0; font-family: inherit; }
-html.reveal-print .reveal .slides section .fragment { transition: none; }
+html.reveal-print .reveal .slides section .fragment,
+html.reveal-print .reveal .hl-target { transition: none; }
 
 /* reduced motion: transitions are turned off */
 @media (prefers-reduced-motion: reduce) {
   .reveal .slides section .fragment,
+  .reveal .hl-target,
   .reveal.fade .slides > section,
   .reveal .progress span,
   .reveal a,
