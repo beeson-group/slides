@@ -4,7 +4,8 @@
 import type { Strand } from './orbits.ts';
 
 // one polyline of a file, e.g. one member of a family in one frame. t or theta, when given, is the
-// clock of each point, e.g. the time or the true anomaly, and the other keys are free
+// clock of each point, e.g. the time or the true anomaly. craft, when true, marks the path of a
+// spacecraft, and the other keys are free
 export type StrandRecord = { points: [number, number][]; t?: number[]; theta?: number[]; [key: string]: unknown };
 export type StrandFile = { families: StrandRecord[]; bodies: Record<string, unknown>[] };
 // a body drawn as a dot, with the fraction of the total mass that sets its radius when it is known
@@ -111,6 +112,7 @@ export function strandsOf(file: StrandFile, chosen: StrandRecord[], color?: stri
       times[i] = clock ? clock[i] - clock[0] : length;
     }
     const strand: Strand = { pts, times, T: times[n - 1] };
+    if (r.craft === true) strand.craft = true;
     if (color || ramp) {
       const pair = pairOf(r),
         [lo, hi] = range.get(pair) ?? [0, 0],

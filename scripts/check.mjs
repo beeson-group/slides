@@ -151,20 +151,30 @@ async function checkEditor() {
   await page.close();
 }
 
-// read during a trace, since the heads of a backdrop are cleared at its end. a backdrop drawn without
-// heads, e.g. with data-heads="none", is skipped
+// read during a trace on the first slide with a backdrop that draws a head, since the heads of a
+// backdrop are cleared at its end. a head is drawn on the path of a spacecraft, or on every strand
+// with data-heads set to full or small
 async function checkHeads() {
   const page = await browser.newPage();
   await page.goto(deckAt());
   await page.waitFor(deckSettled);
-  await new Promise((done) => setTimeout(done, 1000));
-  const blank = await page.evaluate(`(() => {
-    const live = Beeson.backdrops.find((backdrop) => backdrop.raf && backdrop.headSize > 0);
-    if (!live) return false;
-    const { width, height } = live.head;
-    return !live.head.getContext('2d').getImageData(0, 0, width, height).data.some(Boolean);
+  const found = await page.evaluate(`(() => {
+    const headed = Beeson.backdrops.find((backdrop) => backdrop.headed);
+    if (!headed) return false;
+    const { h, v } = Reveal.getIndices(headed.el.closest('section'));
+    Reveal.slide(h, v);
+    return true;
   })()`);
-  if (blank) failures.push('backdrop: the heads are not painted during a trace');
+  if (found) {
+    await new Promise((done) => setTimeout(done, 1000));
+    const blank = await page.evaluate(`(() => {
+      const live = Beeson.backdrops.find((backdrop) => backdrop.raf && backdrop.headed);
+      if (!live) return true;
+      const { width, height } = live.head;
+      return !live.head.getContext('2d').getImageData(0, 0, width, height).data.some(Boolean);
+    })()`);
+    if (blank) failures.push('backdrop: the heads are not painted during a trace');
+  }
   await page.close();
 }
 

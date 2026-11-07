@@ -70,3 +70,36 @@ test('no backdrop is cut at an edge of its box inside the slide', { timeout: 600
     [],
   );
 });
+
+// the number of painted pixels of the head canvas of the backdrop of the current slide, read during
+// its trace
+const headPixels = `(() => {
+  const b = Beeson.backdrops.find((o) => Reveal.getCurrentSlide().contains(o.el));
+  const { width, height } = b.head;
+  const data = b.head.getContext('2d').getImageData(0, 0, width, height).data;
+  let n = 0;
+  for (let i = 3; i < data.length; i += 4) if (data[i]) n++;
+  return [b.raf > 0, n];
+})()`;
+
+test('a head is drawn on the path of a spacecraft alone', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl('index.html'));
+  await page.waitFor(deckSettled);
+  await new Promise((done) => setTimeout(done, 800));
+  const [titleRunning, titlePixels] = await page.evaluate(headPixels);
+  assert.ok(titleRunning, 'the backdrop of the title slide is traced');
+  assert.equal(titlePixels, 0);
+
+  await page.evaluate(`(() => {
+    const { h, v } = Reveal.getIndices(document.querySelector('.backdrop[data-scene="transfer"]').closest('section'));
+    Reveal.slide(h, v);
+  })()`);
+  await new Promise((done) => setTimeout(done, 1500));
+  const [running, pixels] = await page.evaluate(headPixels);
+  assert.ok(running, 'the transfer is traced');
+  // a disk of 2.2 line widths of 1 px, and its antialiased rim
+  assert.ok(pixels > 5 && pixels < 60, `${pixels} pixels`);
+});

@@ -55,6 +55,11 @@ const distance = (s, x, y) => {
   return best;
 };
 
+test('the transfer is the one strand of a spacecraft in the scenes, hence a manifold is drawn without a head', () => {
+  for (const name of SCENE_NAMES) assert.equal(scene(name).filter((s) => s.craft).length, name === 'transfer' ? 1 : 0, name);
+  assert.equal(scene('transfer').find((s) => s.craft).tone, 'hero');
+});
+
 test('an unstable tube leaves its orbit, a stable tube arrives on it, and both run past the orbit', () => {
   const strands = scene('tubes'), orbits = strands.filter((s) => s.tone === 'text');
   assert.equal(orbits.length, 2);

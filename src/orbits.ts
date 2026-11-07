@@ -12,8 +12,9 @@ export type Tone = 'orange' | 'violet' | 'text' | 'hero' | 'line';
 // pts is a list of alternating x and y values. times are the flight times of the points, and T is
 // the last of them. alpha, when set, replaces the opacity of the tone. ink, when set, replaces the
 // color of the tone with the color at the fraction at between the two colors of the pair of the
-// palette --strand-1 to --strand-8 in theme/beeson.css, i.e. --strand-1 and --strand-2 for pair 0
-export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; alpha?: number; ink?: { pair: number; at: number } };
+// palette --strand-1 to --strand-8 in theme/beeson.css, i.e. --strand-1 and --strand-2 for pair 0.
+// craft, when true, marks the path of a spacecraft, whose head is drawn without data-heads
+export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; alpha?: number; ink?: { pair: number; at: number }; craft?: boolean };
 
 export const MU = 0.01215;
 // the distance to a body within which the step is shortened in step()
@@ -22,10 +23,9 @@ const NEAR = 0.15;
 const DURATION = 12;
 // seconds per revolution of a looping mark
 const LOOP = 9;
-// the radii of the heads of a trace for each value of the attribute data-heads, in line widths
+// the radii of the heads of a trace for each value of the attribute data-heads, in line widths.
+// without data-heads, a head of full size is drawn on each strand of a spacecraft alone
 const HEADS: Record<string, number> = { full: 2.2, small: 0.55, none: 0 };
-// the heads of a backdrop drawn from a file of polylines, when data-heads is not set
-const FILE_HEADS = 'none';
 // the number of colors of the palette of theme/beeson.css, in pairs
 const PALETTE = 8;
 
@@ -299,6 +299,8 @@ export class Orbits {
   // true when start() was called before the strands of a file were loaded
   private pending = false;
   private headSize: number;
+  // true when a head is drawn on every strand, and false when on the strands of a spacecraft alone
+  private everyHead: boolean;
   // the colors of the strands with an ink, resolved in redraw() for the current mode
   private inks: string[] = [];
   // resolved when the strands are in place, at once for a named scene and after the load of a file
@@ -317,7 +319,8 @@ export class Orbits {
     this.dots = file ? [] : null;
     this.loaded = !file;
     this.fitted = file && el.dataset.half === undefined;
-    this.headSize = HEADS[el.dataset.heads ?? (file ? FILE_HEADS : 'full')] ?? HEADS.full;
+    this.headSize = HEADS[el.dataset.heads ?? 'full'] ?? HEADS.full;
+    this.everyHead = el.dataset.heads !== undefined;
     this.cx = +(el.dataset.cx ?? 0);
     this.cy = +(el.dataset.cy ?? 0);
     this.half = +(el.dataset.half ?? 0.5);
@@ -357,6 +360,11 @@ export class Orbits {
   // the window in the units of the strands: its center and its half height
   get view(): { cx: number; cy: number; half: number } {
     return { cx: this.cx, cy: this.cy, half: this.half };
+  }
+
+  // true when a head is drawn on at least one strand during a trace
+  get headed(): boolean {
+    return this.headSize > 0 && (this.everyHead || this.strands.some((s) => s.craft));
   }
 
   get done(): boolean {
@@ -589,7 +597,7 @@ export class Orbits {
     this.strands.forEach((s, i) => {
       const j = this.idx[i];
       // the head of a strand is not drawn before times[0] of this strand
-      if (j >= s.times.length - 1 || tau < s.times[0]) return;
+      if ((!this.everyHead && !s.craft) || j >= s.times.length - 1 || tau < s.times[0]) return;
       const [X, Y] = this.at(i, j, tau);
       ctx.beginPath(); ctx.arc(X, Y, this.headSize * this.lw, 0, 2 * Math.PI); ctx.fill();
     });

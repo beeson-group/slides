@@ -119,6 +119,14 @@ test('a strand is colored by the pair of its family and the ramp along e', () =>
   assert.ok(both.every((s) => s.ink.at === 0));
 });
 
+test('a record with craft set to true is the path of a spacecraft', () => {
+  const file = parse({ families: [{ points: [[0, 0], [1, 0]], craft: true }, { points: [[0, 0], [1, 1]], craft: 'yes' }, { points: [[0, 0], [0, 1]] }] });
+  assert.deepEqual(
+    strandsOf(file, file.families).map((s) => s.craft),
+    [true, undefined, undefined],
+  );
+});
+
 test('colors are mixed in OKLCH along the shorter arc of hue', () => {
   assert.equal(mix('#000000', '#ffffff', 0), '#000000');
   assert.equal(mix('#000', 'rgb(255, 255, 255)', 1), '#ffffff');

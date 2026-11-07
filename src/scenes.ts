@@ -151,8 +151,8 @@ function joined(parts: Strand[]): Strand {
 // a low-energy transfer at the Jacobi constant of the L1 Lyapunov orbit of amplitude A: from a perigee
 // along the stable manifold, once around the orbit, and along the unstable manifold to a close pass
 // of the Moon. a flight of each branch is cut at its first apse within reach of its body, and every
-// tenth flight is kept as a faint strand. the path in the accent color is made of the flights with
-// the lowest perigee and perilune
+// tenth flight is kept as a faint strand. the path of the spacecraft, in the accent color, is made of
+// the flights with the lowest perigee and perilune
 function transfer(A: number): Strand[] {
   const orbit = lyapunovFamily(1, [A], H)[0];
   if (!orbit) return [];
@@ -187,7 +187,7 @@ function transfer(A: number): Strand[] {
   if (!inbound || !outbound) return [];
   const end = inbound.pts.length - 2;
   const around = lap(first, inbound.pts[end], inbound.pts[end + 1], outbound.pts[0], outbound.pts[1]);
-  return [...faint, toned(joined([inbound, around, outbound]), 'hero')];
+  return [...faint, { ...toned(joined([inbound, around, outbound]), 'hero'), craft: true }];
 }
 
 // unit directions of the unstable manifold along a Lyapunov orbit, one per sampled state: a small

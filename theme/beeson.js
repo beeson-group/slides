@@ -223,7 +223,7 @@
     if (!inbound || !outbound) return [];
     const end = inbound.pts.length - 2;
     const around = lap(first, inbound.pts[end], inbound.pts[end + 1], outbound.pts[0], outbound.pts[1]);
-    return [...faint, toned(joined([inbound, around, outbound]), "hero")];
+    return [...faint, { ...toned(joined([inbound, around, outbound]), "hero"), craft: true }];
   }
   function unstable(orbit, T) {
     const e = 1e-7;
@@ -490,6 +490,7 @@
         times[i] = clock ? clock[i] - clock[0] : length;
       }
       const strand = { pts, times, T: times[n - 1] };
+      if (r.craft === true) strand.craft = true;
       if (color || ramp2) {
         const pair2 = pairOf(r), [lo, hi] = range.get(pair2) ?? [0, 0], v = ramp2 ? r[ramp2] : void 0;
         strand.ink = { pair: pair2, at: typeof v === "number" && hi > lo ? (v - lo) / (hi - lo) : 0 };
@@ -695,7 +696,6 @@
   var DURATION = 12;
   var LOOP = 9;
   var HEADS = { full: 2.2, small: 0.55, none: 0 };
-  var FILE_HEADS = "none";
   var PALETTE = 8;
   function accel(s, a) {
     const x = s[0], y = s[1], z = s[2];
@@ -927,7 +927,8 @@
       this.dots = file ? [] : null;
       this.loaded = !file;
       this.fitted = file && el.dataset.half === void 0;
-      this.headSize = HEADS[el.dataset.heads ?? (file ? FILE_HEADS : "full")] ?? HEADS.full;
+      this.headSize = HEADS[el.dataset.heads ?? "full"] ?? HEADS.full;
+      this.everyHead = el.dataset.heads !== void 0;
       this.cx = +(el.dataset.cx ?? 0);
       this.cy = +(el.dataset.cy ?? 0);
       this.half = +(el.dataset.half ?? 0.5);
@@ -968,6 +969,10 @@
     // the window in the units of the strands: its center and its half height
     get view() {
       return { cx: this.cx, cy: this.cy, half: this.half };
+    }
+    // true when a head is drawn on at least one strand during a trace
+    get headed() {
+      return this.headSize > 0 && (this.everyHead || this.strands.some((s) => s.craft));
     }
     get done() {
       return this.finished || this.loop;
@@ -1208,7 +1213,7 @@
       ctx.fillStyle = c.accent;
       this.strands.forEach((s, i) => {
         const j = this.idx[i];
-        if (j >= s.times.length - 1 || tau < s.times[0]) return;
+        if (!this.everyHead && !s.craft || j >= s.times.length - 1 || tau < s.times[0]) return;
         const [X, Y] = this.at(i, j, tau);
         ctx.beginPath();
         ctx.arc(X, Y, this.headSize * this.lw, 0, 2 * Math.PI);
