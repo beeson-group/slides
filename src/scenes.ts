@@ -384,6 +384,19 @@ function lace(A1: number, A2: number, phases: number, span: number): Strand[] {
   return out;
 }
 
+// a sheaf of lunar transfers from a low Earth orbit, with a spread of apogees and departure angles
+function sheaf(count: number): Strand[] {
+  const rp = 0.02, out: Strand[] = [];
+  for (let i = 0; i < count; i++) {
+    const ra = 0.92 + 0.2 * fraction(i * 0.618), a = (rp + ra) / 2, v = Math.sqrt((1 - MU) * (2 / rp - 1 / a));
+    const al = -2 + 0.4 * (fraction(i * 0.382) - 0.5), s = new Float64Array(6);
+    s[0] = -MU + rp * Math.cos(al); s[1] = rp * Math.sin(al);
+    s[3] = -(v - rp) * Math.sin(al); s[4] = (v - rp) * Math.cos(al);
+    out.push(toned(flown(s, 0.004, 3.5, 0, (q) => Math.hypot(q[0] + MU, q[1]) < 0.015 || Math.hypot(q[0] - 1 + MU, q[1]) < 0.005 || Math.hypot(q[0], q[1]) > 2), 'orange'));
+  }
+  return out;
+}
+
 const SCENES = {
   nest: () => [...lyapunovFamily(1, spaced(0.012, 0.12, 12, 1.5), H), ...lyapunovFamily(2, spaced(0.012, 0.14, 12, 1.5), H), ...droFamily(ramp(0.03, 0.09, 1.2), H)].map(closed),
   dro: () => droFamily(ramp(0.02, 0.32, 1.12), H).filter((_, i) => i % 3 === 0).map(closed),
@@ -401,6 +414,7 @@ const SCENES = {
   spiral: () => spiral(0.11, 0.07, 0.42, 0.92, 0.44, 60),
   torus: () => tori(1),
   lace: () => lace(0.05, 0.06, 40, 9),
+  sheaf: () => sheaf(36),
 } satisfies Record<string, () => Strand[]>;
 
 export type SceneName = keyof typeof SCENES;

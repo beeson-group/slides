@@ -331,6 +331,7 @@
     for (let i = 0; i < q.length; i++) p[3 * i + 1] = p[3 * i + 1] * c + p[3 * i + 2] * d;
     return open(p, q);
   }
+  var fraction = (v) => v - Math.floor(v);
   function tori(tilt) {
     return droFamily(spaced(0.07, 0.42, 25, 1.2), H).filter((_, i) => i % 5 === 0).map((m, i) => {
       const s = Float64Array.from(m.s);
@@ -363,6 +364,19 @@
     }
     return out;
   }
+  function sheaf(count) {
+    const rp = 0.02, out = [];
+    for (let i = 0; i < count; i++) {
+      const ra = 0.92 + 0.2 * fraction(i * 0.618), a = (rp + ra) / 2, v = Math.sqrt((1 - MU) * (2 / rp - 1 / a));
+      const al = -2 + 0.4 * (fraction(i * 0.382) - 0.5), s = new Float64Array(6);
+      s[0] = -MU + rp * Math.cos(al);
+      s[1] = rp * Math.sin(al);
+      s[3] = -(v - rp) * Math.sin(al);
+      s[4] = (v - rp) * Math.cos(al);
+      out.push(toned(flown(s, 4e-3, 3.5, 0, (q) => Math.hypot(q[0] + MU, q[1]) < 0.015 || Math.hypot(q[0] - 1 + MU, q[1]) < 5e-3 || Math.hypot(q[0], q[1]) > 2), "orange"));
+    }
+    return out;
+  }
   var SCENES = {
     nest: () => [...lyapunovFamily(1, spaced(0.012, 0.12, 12, 1.5), H), ...lyapunovFamily(2, spaced(0.012, 0.14, 12, 1.5), H), ...droFamily(ramp(0.03, 0.09, 1.2), H)].map(closed),
     dro: () => droFamily(ramp(0.02, 0.32, 1.12), H).filter((_, i) => i % 3 === 0).map(closed),
@@ -379,7 +393,8 @@
     wideRibbon: () => ribbon(0.016, 120, 3, 0.12),
     spiral: () => spiral(0.11, 0.07, 0.42, 0.92, 0.44, 60),
     torus: () => tori(1),
-    lace: () => lace(0.05, 0.06, 40, 9)
+    lace: () => lace(0.05, 0.06, 40, 9),
+    sheaf: () => sheaf(36)
   };
   var SCENE_NAMES = Object.keys(SCENES);
   var cache = /* @__PURE__ */ new Map();
