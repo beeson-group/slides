@@ -28,7 +28,7 @@ npm run typecheck && npm test               # types, then the orbit engine, the 
 npm run check                               # screenshots of every slide in both modes, console errors, problems in the page, a poster on every video, the phone layout, a pixel ratio of 1.25
 npm run check -- --browser firefox          # the same in Firefox or Safari over WebDriver, without the console, the phone layout, and the pixel ratio
 npm run pdf                                 # slides.pdf, one page per step, with a page count check
-npm run pptx                                # slides.pptx, one slide per step, with videos and speaker notes
+npm run pptx                                # slides.pptx, one click per step, with videos and speaker notes
 ```
 
 ## Conventions
