@@ -22,8 +22,8 @@ jobs:
       - run: npm run vendor
       - run: npm run build
       - run: npm run typecheck
-      - run: npm test
       # the Chrome preinstalled on each runner is found in scripts/chrome.mjs
+      - run: npm test
       - run: npm run check
       - run: npm run pdf
         if: ${{ !cancelled() }}

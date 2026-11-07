@@ -58,12 +58,12 @@ npm ci                 # the dependencies
 npm run vendor         # reveal.js, the notes plugin, the fonts, and MathJax into theme/vendor/ (tycho is copied by hand)
 npm run build          # src/*.ts into theme/beeson.js with esbuild
 npm run typecheck      # tsc --noEmit
-npm test               # the orbit engine, the build, the vendor script, and the Chrome lookup under node --test
+npm test               # the orbit engine, the build, the vendor script, the Chrome lookup, the mode flip, and the crop of the backdrops under node --test
 npm run check          # every slide of index.html in both modes, screenshots and console errors
 npm run pdf            # index.html to slides.pdf, with a check of the page count
 ```
 
-For `npm run check` and `npm run pdf`, Chrome is looked up at its default location on macOS and Windows, and on the `PATH` on Linux. Edge is used on Windows when Chrome is missing. To use another browser build, set `CHROME_PATH` to its executable.
+For `npm test`, `npm run check`, and `npm run pdf`, Chrome is looked up at its default location on macOS and Windows, and on the `PATH` on Linux. Edge is used on Windows when Chrome is missing. To use another browser build, set `CHROME_PATH` to its executable.
 
 The compiled `theme/beeson.js` is committed, hence none of this is required for a talk. The same commands are run on Ubuntu, macOS, and Windows on every push with the workflow `.github/workflows/check.yml`, and the repository root is published on GitHub Pages with `pages.yml`.
 
