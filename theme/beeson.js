@@ -681,6 +681,8 @@
   var NEAR = 0.15;
   var DURATION = 12;
   var LOOP = 9;
+  var HEADS = { full: 2.2, small: 0.55, none: 0 };
+  var FILE_HEADS = "none";
   var PALETTE = 8;
   function accel(s, a) {
     const x = s[0], y = s[1], z = s[2];
@@ -912,6 +914,7 @@
       this.dots = file ? [] : null;
       this.loaded = !file;
       this.fitted = file && el.dataset.half === void 0;
+      this.headSize = HEADS[el.dataset.heads ?? (file ? FILE_HEADS : "full")] ?? HEADS.full;
       this.cx = +(el.dataset.cx ?? 0);
       this.cy = +(el.dataset.cy ?? 0);
       this.half = +(el.dataset.half ?? 0.5);
@@ -1187,6 +1190,7 @@
       ctx.fill();
     }
     heads(ctx, c, now) {
+      if (!this.headSize) return;
       const tau = (now - (this.t0 ?? now)) / 1e3 / DURATION * this.Tmax;
       ctx.fillStyle = c.accent;
       this.strands.forEach((s, i) => {
@@ -1194,7 +1198,7 @@
         if (j >= s.times.length - 1 || tau < s.times[0]) return;
         const [X, Y] = this.at(i, j, tau);
         ctx.beginPath();
-        ctx.arc(X, Y, 2.2 * this.lw, 0, 2 * Math.PI);
+        ctx.arc(X, Y, this.headSize * this.lw, 0, 2 * Math.PI);
         ctx.fill();
       });
     }

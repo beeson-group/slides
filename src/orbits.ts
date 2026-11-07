@@ -22,6 +22,10 @@ const NEAR = 0.15;
 const DURATION = 12;
 // seconds per revolution of a looping mark
 const LOOP = 9;
+// the radii of the heads of a trace for each value of the attribute data-heads, in line widths
+const HEADS: Record<string, number> = { full: 2.2, small: 0.55, none: 0 };
+// the heads of a backdrop drawn from a file of polylines, when data-heads is not set
+const FILE_HEADS = 'none';
 // the number of colors of the palette of theme/beeson.css, in pairs
 const PALETTE = 8;
 
@@ -293,6 +297,7 @@ export class Orbits {
   private loaded: boolean;
   // true when start() was called before the strands of a file were loaded
   private pending = false;
+  private headSize: number;
   // the colors of the strands with an ink, resolved in redraw() for the current mode
   private inks: string[] = [];
   // resolved when the strands are in place, at once for a named scene and after the load of a file
@@ -311,6 +316,7 @@ export class Orbits {
     this.dots = file ? [] : null;
     this.loaded = !file;
     this.fitted = file && el.dataset.half === undefined;
+    this.headSize = HEADS[el.dataset.heads ?? (file ? FILE_HEADS : 'full')] ?? HEADS.full;
     this.cx = +(el.dataset.cx ?? 0);
     this.cy = +(el.dataset.cy ?? 0);
     this.half = +(el.dataset.half ?? 0.5);
@@ -576,6 +582,7 @@ export class Orbits {
   }
 
   private heads(ctx: CanvasRenderingContext2D, c: Colors, now: number): void {
+    if (!this.headSize) return;
     const tau = (((now - (this.t0 ?? now)) / 1000) / DURATION) * this.Tmax;
     ctx.fillStyle = c.accent;
     this.strands.forEach((s, i) => {
@@ -583,7 +590,7 @@ export class Orbits {
       // the head of a strand is not drawn before times[0] of this strand
       if (j >= s.times.length - 1 || tau < s.times[0]) return;
       const [X, Y] = this.at(i, j, tau);
-      ctx.beginPath(); ctx.arc(X, Y, 2.2 * this.lw, 0, 2 * Math.PI); ctx.fill();
+      ctx.beginPath(); ctx.arc(X, Y, this.headSize * this.lw, 0, 2 * Math.PI); ctx.fill();
     });
   }
 

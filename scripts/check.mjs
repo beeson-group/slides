@@ -129,14 +129,15 @@ async function checkScaled() {
   await page.close();
 }
 
-// read during a trace, since the heads of a backdrop are cleared at its end
+// read during a trace, since the heads of a backdrop are cleared at its end. a backdrop drawn without
+// heads, e.g. with data-heads="none", is skipped
 async function checkHeads() {
   const page = await browser.newPage();
   await page.goto(deckAt());
   await page.waitFor(deckSettled);
   await new Promise((done) => setTimeout(done, 1000));
   const blank = await page.evaluate(`(() => {
-    const live = Beeson.backdrops.find((backdrop) => backdrop.raf);
+    const live = Beeson.backdrops.find((backdrop) => backdrop.raf && backdrop.headSize > 0);
     if (!live) return false;
     const { width, height } = live.head;
     return !live.head.getContext('2d').getImageData(0, 0, width, height).data.some(Boolean);
