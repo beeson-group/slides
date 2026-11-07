@@ -977,7 +977,7 @@
     });
     document.body.append(dot);
   }
-  function initCursor(orbits, slide) {
+  function initCursor(orbits, slide, tintOn = true) {
     let last = null, frame = 0;
     const lit = /* @__PURE__ */ new Set();
     const update = () => {
@@ -995,7 +995,7 @@
         }
       }
     };
-    const tint = !Orbits.reduced();
+    const tint = tintOn && !Orbits.reduced();
     document.addEventListener("pointermove", (ev) => {
       if (dot) {
         dot.style.display = "block";
@@ -1148,7 +1148,8 @@
   };
   var TRACED = ["title", "section", "closing"];
   var backdrops = [];
-  var still = () => Orbits.reduced() || window.Reveal.isPrintView() || /print-pdf/.test(location.search);
+  var EDITING = new URLSearchParams(location.search).has("edit");
+  var still = () => EDITING || Orbits.reduced() || window.Reveal.isPrintView() || /print-pdf/.test(location.search);
   function remount() {
     for (const o of mount(document)) if (!backdrops.includes(o)) backdrops.push(o);
   }
@@ -1197,7 +1198,7 @@
     initChrome(deck);
     initSteps(deck);
     remount();
-    initCursor(() => backdrops, () => deck.getCurrentSlide());
+    initCursor(() => backdrops, () => deck.getCurrentSlide(), !EDITING);
     deck.addKeyBinding({ keyCode: 68, key: "D", description: "Switch dark and light" }, (ev) => {
       if (forDeck(ev)) toggle();
     });

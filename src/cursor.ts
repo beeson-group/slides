@@ -21,8 +21,9 @@ export function togglePointer(): void {
   document.body.append(dot);
 }
 
-// orbits returns the mounted drawings, and slide returns the current slide
-export function initCursor(orbits: () => Orbits[], slide: () => HTMLElement | null): void {
+// orbits returns the mounted drawings, slide returns the current slide, and the tint is off with
+// tintOn false, as well as under reduced motion
+export function initCursor(orbits: () => Orbits[], slide: () => HTMLElement | null, tintOn = true): void {
   let last: { x: number; y: number } | null = null, frame = 0;
   const lit = new Set<Orbits>();
   const update = () => {
@@ -35,7 +36,7 @@ export function initCursor(orbits: () => Orbits[], slide: () => HTMLElement | nu
       else if (lit.has(o)) { o.glow(null); lit.delete(o); }
     }
   };
-  const tint = !Orbits.reduced();
+  const tint = tintOn && !Orbits.reduced();
   document.addEventListener('pointermove', (ev) => {
     if (dot) {
       dot.style.display = 'block';
