@@ -28,6 +28,9 @@ const BY_ITSELF = 'img, video, figure, .zone, .plate';
 const OUTSIDE = 'aside.notes, .backdrop';
 // a drag shorter than this, in screen pixels, is a click
 const CLICK = 3;
+// a dragged element snaps within this many screen pixels to an edge or the center of another
+// element of the slide, of the slide itself, or of its own place in the file, unless Alt is held
+const SNAP = 8;
 // the nudges of one element closer than this, in ms, are one entry of the history
 const PAUSE = 1000;
 
@@ -158,10 +161,19 @@ export class Move {
       const scale = this.ctx.scale() || 1;
       let dx = (ev.clientX - this.drag.x) / scale;
       let dy = (ev.clientY - this.drag.y) / scale;
+      // with Shift, the drag is locked to the axis of its larger offset, as in Keynote
+      const lock = ev.shiftKey ? (Math.abs(dx) >= Math.abs(dy) ? 'y' : 'x') : null;
+      if (lock === 'y') dy = 0;
+      if (lock === 'x') dx = 0;
       let x = this.drag.from.x + dx;
       let y = this.drag.from.y + dy;
       if (Math.hypot(ev.clientX - this.drag.x, ev.clientY - this.drag.y) >= CLICK) this.drag.moved = true;
       if (this.drag.moved) {
+        const snapped = ev.altKey ? null : this.snap(this.drag.el, this.drag.base, x, y, scale);
+        // the locked axis is not snapped, since a snap would move the element off it
+        if (snapped && lock !== 'x') x = snapped.x;
+        if (snapped && lock !== 'y') y = snapped.y;
+        this.guides(lock === 'x' ? null : (snapped?.gx ?? null), lock === 'y' ? null : (snapped?.gy ?? null));
         (this.drag.el as HTMLElement).style.translate = `${Math.round(x)}px ${Math.round(y)}px`;
         this.moving = this.drag.el;
       }
@@ -215,8 +227,55 @@ export class Move {
     this.drag = null;
     this.moving = null;
     document.documentElement.classList.remove('beeson-dragging');
+    this.guides(null, null);
     if (ev && drag.moved) this.commit(drag.el, drag.from);
     this.select(drag.el);
+  }
+
+  // the offset x, y moved to the nearest edge or center of another element of the slide, of the
+  // slide, or of the place of el in the file, within SNAP screen pixels of an edge or the center of
+  // el, as the alignment guides of Keynote and PowerPoint. gx and gy are the screen coordinates
+  // of the lines snapped to
+  private snap(el: Element, base: Box, x: number, y: number, scale: number): { x: number; y: number; gx: number | null; gy: number | null } | null {
+    const slide = this.ctx.slide();
+    const pairing = this.ctx.pairing();
+    if (!slide || !pairing) return null;
+    const box = slide.getBoundingClientRect();
+    const xs = [box.left, box.left + box.width / 2, box.right, base.left];
+    const ys = [box.top, box.top + box.height / 2, box.bottom, base.top];
+    for (const other of slide.querySelectorAll(MOVABLE)) {
+      if (other === el || other.contains(el) || el.contains(other) || other.closest(OUTSIDE) || !pairing.elements.get(other)?.open) continue;
+      const up = other.parentElement?.closest(MOVABLE);
+      if (up && slide.contains(up)) continue;
+      const r = other.getBoundingClientRect();
+      if (!r.width || !r.height) continue;
+      xs.push(r.left, r.left + r.width / 2, r.right);
+      ys.push(r.top, r.top + r.height / 2, r.bottom);
+    }
+    const nearest = (edges: number[], targets: number[]) => {
+      let best: { d: number; shift: number; to: number } | null = null;
+      for (const edge of edges) {
+        for (const to of targets) {
+          const d = Math.abs(to - edge);
+          if (d <= SNAP && (!best || d < best.d)) best = { d, shift: to - edge, to };
+        }
+      }
+      return best;
+    };
+    const left = base.left + x * scale, top = base.top + y * scale;
+    const bx = nearest([left, left + base.width / 2, left + base.width], xs);
+    const by = nearest([top, top + base.height / 2, top + base.height], ys);
+    return { x: bx ? x + bx.shift / scale : x, y: by ? y + by.shift / scale : y, gx: bx?.to ?? null, gy: by?.to ?? null };
+  }
+
+  // the guide lines across the slide at the screen coordinates snapped to, or none
+  private guides(gx: number | null, gy: number | null): void {
+    const box = this.ctx.slide()?.getBoundingClientRect();
+    this.guideV.hidden = gx === null || !box;
+    this.guideH.hidden = gy === null || !box;
+    if (!box) return;
+    if (gx !== null) Object.assign(this.guideV.style, { left: `${gx}px`, top: `${box.top}px`, height: `${box.height}px` });
+    if (gy !== null) Object.assign(this.guideH.style, { top: `${gy}px`, left: `${box.left}px`, width: `${box.width}px` });
   }
 
   // a figure, which has no text to click into, is put into the tab order, so that it is selected
