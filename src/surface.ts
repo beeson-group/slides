@@ -57,6 +57,17 @@ function rgb(css: string, fallback: RGB): RGB {
   return fallback;
 }
 
+// the height of the sampled heights g of the function fn at (x, y), nondimensional, interpolated on
+// the triangles of the mesh drawn in Surface, i.e. each cell split on its diagonal from (i, j) to
+// (i + 1, j + 1). a point outside the rectangle takes the height of the nearest edge
+function heightAt(g: Float64Array, fn: SurfaceFunction, x: number, y: number): number {
+  const n = CELLS + 1;
+  const u = clamp(((x - fn.x[0]) / (fn.x[1] - fn.x[0])) * CELLS, 0, CELLS), v = clamp(((y - fn.y[0]) / (fn.y[1] - fn.y[0])) * CELLS, 0, CELLS);
+  const i = Math.min(CELLS - 1, Math.floor(u)), j = Math.min(CELLS - 1, Math.floor(v)), s = u - i, t = v - j;
+  const a = g[j * n + i], b = g[j * n + i + 1], c = g[(j + 1) * n + i], d = g[(j + 1) * n + i + 1];
+  return s >= t ? a + s * (b - a) + t * (d - b) : a + t * (c - a) + s * (d - c);
+}
+
 const SURFACE_VERTEX = /* glsl */ `
 attribute float zA;
 attribute float zB;
@@ -528,6 +539,21 @@ export class Surface {
     const position = this.points.geometry.getAttribute('position') as Three.BufferAttribute;
     this.fn.marks.forEach((m, i) => position.setXYZ(i, m.x, m.y, f(m.x, m.y) * this.zscale));
     position.needsUpdate = true;
+  }
+
+  /**
+   * The marks as drawn now, read by the tests: for each mark, the height at which it is drawn and
+   * the height of the drawn surface under it, both in world units, and its fade, from 0 when it is
+   * hidden to 1. With settled, the change of stage has ended.
+   */
+  probe(): { stage: string; settled: boolean; marks: { name: string; z: number; surface: number; fade: number }[] } {
+    const position = this.points.geometry.getAttribute('position') as Three.BufferAttribute, g = this.current();
+    const lift = (1 - this.shown.marks) * RISE, fade = this.points.visible ? this.shown.marks : 0;
+    return {
+      stage: this.stageName,
+      settled: !this.moving,
+      marks: this.fn.marks.map((m, i) => ({ name: m.name, z: position.getZ(i) - lift, surface: heightAt(g, this.fn, m.x, m.y) * this.zscale, fade })),
+    };
   }
 
   /** Sizes the canvas from the box of the element on the screen, and draws. */
