@@ -2,7 +2,7 @@
 // returned by launch() has the shape of the one in scripts/chrome.mjs, hence an npm package is not
 // required. WebDriver has no access to the console in Safari, thus page.errors stays empty here, and
 // the check of a deck is made in the page itself. geckodriver and safaridriver are preinstalled on
-// the runners of GitHub. On a Mac, safaridriver has to be enabled once with `safaridriver --enable`.
+// the runners of GitHub. On a Mac, safaridriver has to be enabled once with `sudo safaridriver --enable`.
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { createServer as createHttpServer } from 'node:http';
