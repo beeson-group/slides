@@ -2,15 +2,15 @@
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { lagrange, lyapunovFamily, spaced, toCrossing } from '../src/orbits.ts';
+import { MU, lagrange, lyapunovFamily, spaced, toCrossing } from '../src/orbits.ts';
 import { SCENE_NAMES, scene } from '../src/scenes.ts';
 
 const H = 0.004;
 // the smallest number of strands expected in each scene. the L2 family of nest is ended after 7 of
 // its 12 members
-const FEWEST = { nest: 24, dro: 9, l1: 26, l2: 20, lyapunovs: 32, mark: 1, tubes: 114, halo: 74, rosette: 13, hill: 15 };
+const FEWEST = { nest: 24, dro: 9, l1: 26, l2: 20, lyapunovs: 32, mark: 1, tubes: 114, halo: 74, rosette: 13, hill: 15, transfer: 25 };
 // the scenes with strands that are not periodic orbits
-const FLIGHTS = ['tubes', 'hill'];
+const FLIGHTS = ['tubes', 'transfer', 'hill'];
 
 test('the collinear points L1 and L2 are at the Earth–Moon values', () => {
   assert.ok(Math.abs(lagrange(1) - 0.8369) < 5e-4);
@@ -64,4 +64,20 @@ test('an unstable tube leaves its orbit, a stable tube arrives on it, and both r
   const reach = strands.filter((s) => s.tone === 'orange').map((s) => s.pts[s.pts.length - 2]);
   assert.ok(reach.some((x) => x < 0.5), 'a strand toward the Earth');
   assert.ok(reach.some((x) => x > 1.3), 'a strand past L2');
+});
+
+test('the transfer is one unbroken path from near the Earth to near the Moon', () => {
+  const { pts, times } = scene('transfer').find((s) => s.tone === 'hero'), n = pts.length;
+  assert.ok(Math.hypot(pts[0] + MU, pts[1]) < 0.3);
+  assert.ok(Math.hypot(pts[n - 2] - 1 + MU, pts[n - 1]) < 0.05);
+  for (let i = 2; i < n; i += 2) assert.ok(Math.hypot(pts[i] - pts[i - 2], pts[i + 1] - pts[i - 1]) < 0.05, `gap at point ${i / 2}`);
+  for (let i = 1; i < times.length; i++) assert.ok(times[i] >= times[i - 1], `time at point ${i}`);
+});
+
+test('a scene is computed in under 150 ms', async () => {
+  // a fresh module instance, so that the cache of the scenes above is empty
+  const fresh = await import(`../src/scenes.ts?fresh=${Date.now()}`);
+  const t = performance.now();
+  fresh.scene('nest');
+  assert.ok(performance.now() - t < 150);
 });

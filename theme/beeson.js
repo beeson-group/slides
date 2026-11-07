@@ -140,6 +140,78 @@
     }
     return out;
   }
+  function lap(orbit, ax, ay, bx, by) {
+    const n = orbit.times.length - 1;
+    const nearest = (x, y) => {
+      let best = 0;
+      for (let i = 1; i < n; i++) if (Math.hypot(orbit.pts[2 * i] - x, orbit.pts[2 * i + 1] - y) < Math.hypot(orbit.pts[2 * best] - x, orbit.pts[2 * best + 1] - y)) best = i;
+      return best;
+    };
+    const from = nearest(ax, ay), count = n + (nearest(bx, by) - from + n) % n + 1;
+    const pts = new Float64Array(2 * count), times = new Float32Array(count);
+    for (let k = 0; k < count; k++) {
+      const i = (from + k) % n;
+      pts[2 * k] = orbit.pts[2 * i];
+      pts[2 * k + 1] = orbit.pts[2 * i + 1];
+      if (k) times[k] = times[k - 1] + (orbit.times[i || n] - orbit.times[(i || n) - 1]);
+    }
+    return { pts, times, T: times[count - 1] };
+  }
+  function joined(parts) {
+    const pts = [], times = [];
+    let t0 = 0;
+    for (const part of parts) {
+      pts.push(...part.pts);
+      for (const t of part.times) times.push(t0 + t);
+      t0 += part.T;
+    }
+    return { pts: Float64Array.from(pts), times: Float32Array.from(times), T: t0 };
+  }
+  function transfer(A) {
+    const orbit = lyapunovFamily(1, [A], H)[0];
+    if (!orbit) return [];
+    const first = closed(orbit), states = sampled(orbit, first.T), xL = lagrange(1);
+    let inbound = null, outbound = null, perigee = 9, perilune = 9;
+    const faint = [];
+    for (let k = 0; k < 120; k++) {
+      const i = Math.floor(k / 120 * states.length);
+      for (const sign of [1, -1]) {
+        const p = [], q = [];
+        propagate(kicked(states[i], sign), H, 5 * first.T, p, q, stopped, 0);
+        const n = q.length;
+        let side = 0;
+        for (let j = 0; j < n && !side; j++) if (Math.abs(p[3 * j] - xL) > 2 * A) side = Math.sign(p[3 * j] - xL);
+        const body = side < 0 ? -MU : 1 - MU, reach = side < 0 ? 0.3 : 0.05;
+        const r = (j) => Math.hypot(p[3 * j] - body, p[3 * j + 1]);
+        let best = 9, cut = n - 1;
+        for (let j = 1; j < n - 1; j++) {
+          if (r(j) < r(j - 1) && r(j) < r(j + 1) && r(j) < reach) {
+            best = r(j);
+            cut = j;
+            break;
+          }
+        }
+        const piece = open(p.slice(0, 3 * (cut + 1)), q.slice(0, cut + 1));
+        if (side < 0) {
+          if (k % 10 === 0) faint.push(toned(mirrored(piece), "violet"));
+          if (best < perigee) {
+            perigee = best;
+            inbound = mirrored(piece);
+          }
+        } else {
+          if (k % 10 === 0) faint.push(toned(piece, "orange"));
+          if (best < perilune) {
+            perilune = best;
+            outbound = piece;
+          }
+        }
+      }
+    }
+    if (!inbound || !outbound) return [];
+    const end = inbound.pts.length - 2;
+    const around = lap(first, inbound.pts[end], inbound.pts[end + 1], outbound.pts[0], outbound.pts[1]);
+    return [...faint, toned(joined([inbound, around, outbound]), "hero")];
+  }
   var SCENES = {
     nest: () => [...lyapunovFamily(1, spaced(0.012, 0.12, 12, 1.5), H), ...lyapunovFamily(2, spaced(0.012, 0.14, 12, 1.5), H), ...droFamily(ramp(0.03, 0.09, 1.2), H)].map(closed),
     dro: () => droFamily(ramp(0.02, 0.32, 1.12), H).filter((_, i) => i % 3 === 0).map(closed),
@@ -150,7 +222,8 @@
     tubes: () => [...tubes(1, 0.0313, 14, 2.2), ...tubes(2, 0.0408, 14, 2.2)],
     halo: () => halos(1.2),
     rosette: () => resonant(7, 2, spaced(0.04, 0.7, 14, 1)),
-    hill: () => [3.25, 3.2, 3.188, 3.172, 3.15, 3.12, 3.08, 3.05, 3.012, 2.99, 2.97, 2.95, 2.93, 2.91, 2.89].flatMap(zeroVelocity)
+    hill: () => [3.25, 3.2, 3.188, 3.172, 3.15, 3.12, 3.08, 3.05, 3.012, 2.99, 2.97, 2.95, 2.93, 2.91, 2.89].flatMap(zeroVelocity),
+    transfer: () => transfer(0.03)
   };
   var SCENE_NAMES = Object.keys(SCENES);
   var cache = /* @__PURE__ */ new Map();
