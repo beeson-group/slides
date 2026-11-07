@@ -277,6 +277,27 @@ test('the print view of the PDF and of PowerPoint does not load the editor', asy
   assert.deepEqual(page.errors, []);
 });
 
+test('an invalid TeX is refused in the field with an error, and the formula on the slide is kept', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  await page.evaluate(`(() => { const c = document.querySelector('.reveal .slides .math mjx-container'); const { h, v } = Reveal.getIndices(c.closest('section')); Reveal.slide(h, v); })()`);
+  const before = await page.evaluate(`document.querySelector('.reveal section.present .math').innerHTML`);
+  await page.evaluate(`document.querySelector('.reveal section.present mjx-container').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))`);
+  await page.evaluate(`(() => { const f = document.querySelector('.beeson-math textarea'); f.value = f.value + ' \\\\frac{'; f.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await new Promise((done) => setTimeout(done, 600));
+  // the error of MathJax is shown under the field, and Apply is off
+  assert.notEqual(await page.evaluate(`document.querySelector('.beeson-math .error').textContent`), '', 'the error is empty');
+  assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-math button')].find((b) => b.textContent === 'Apply').disabled`), true);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-math button')].find((b) => b.textContent === 'Apply').click()`);
+  await new Promise((done) => setTimeout(done, 300));
+  assert.ok(await page.evaluate(`!!document.querySelector('.beeson-math')`), 'the field is closed');
+  assert.equal(await page.evaluate(`document.querySelector('.reveal section.present .math').innerHTML`), before);
+  assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present [data-mjx-error]').length`), 0);
+  assert.deepEqual(page.errors, []);
+});
+
 // polls an expression across a navigation that the page starts itself
 async function until(page, expression, timeout = 15000) {
   const start = Date.now();
@@ -387,6 +408,30 @@ test('one history undoes and redoes the typing, a formula, a step, and a move, w
   await sleep(100);
   assert.equal(await render(), deckText);
   assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Undo').disabled`), true);
+  assert.deepEqual(page.errors, []);
+});
+
+test('a formula is reached with Tab and opened with Enter, and the controls carry labels', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  await page.evaluate(`(() => { const c = document.querySelector('.reveal .slides .math mjx-container'); Reveal.slide(Reveal.getIndices(c.closest('section')).h); })()`);
+  const info = await page.evaluate(`(() => { const c = document.querySelector('.reveal section.present .math mjx-container'); c.focus(); return { tabindex: c.getAttribute('tabindex'), role: c.getAttribute('role'), label: c.getAttribute('aria-label'), focused: document.activeElement === c }; })()`);
+  assert.deepEqual(info, { tabindex: '0', role: 'button', label: 'Formula, Enter opens its TeX', focused: true });
+  await page.evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true, cancelable: true }))`);
+  assert.equal(await page.evaluate(`document.querySelector('.beeson-math textarea')?.getAttribute('aria-label')`), 'TeX of the formula');
+  assert.equal(await page.evaluate(`document.activeElement === document.querySelector('.beeson-math textarea')`), true);
+  assert.equal(await page.evaluate(`document.querySelector('.beeson-math').getAttribute('role')`), 'dialog');
+  await page.evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true, cancelable: true }))`);
+  assert.equal(await page.evaluate(`!!document.querySelector('.beeson-math')`), false);
+  // the arrows of the status bar are named, and the notes show their focus
+  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].slice(0, 2).map((b) => b.getAttribute('aria-label'))`), ['Previous slide', 'Next slide']);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Notes').click()`);
+  const outline = await page.evaluate(`(() => { const a = document.querySelector('.reveal section.present > aside.notes'); const s = getComputedStyle(a); return { focused: document.activeElement === a, style: s.outlineStyle, width: s.outlineWidth, color: s.outlineColor }; })()`);
+  assert.equal(outline.focused, true);
+  assert.equal(outline.style, 'solid');
+  assert.notEqual(outline.color, 'rgba(0, 0, 0, 0)');
   assert.deepEqual(page.errors, []);
 });
 
@@ -529,6 +574,27 @@ test('an undo puts the caret at the change, and ⌘B and ⌘I write strong and e
   // underline stays blocked
   await format('formatUnderline');
   assert.equal(await render(), deckText);
+  assert.deepEqual(page.errors, []);
+});
+
+test('an empty TeX is refused in the field, and a save without an edit does not count edits', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  await page.evaluate(`(() => { const c = document.querySelector('.reveal .slides .math mjx-container'); Reveal.slide(Reveal.getIndices(c.closest('section')).h); })()`);
+  await page.evaluate(`document.querySelector('.reveal section.present mjx-container').dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true }))`);
+  await page.evaluate(`(() => { const f = document.querySelector('.beeson-math textarea'); f.value = '  '; f.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await sleep(600);
+  assert.equal(await page.evaluate(`document.querySelector('.beeson-math .error').textContent`), 'The formula is empty');
+  assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-math button')].find((b) => b.textContent === 'Apply').disabled`), true);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-math button')].find((b) => b.textContent === 'Cancel').click()`);
+  const message = await page.evaluate(`(async () => {
+    window.BeesonEditor.attach({ name: 'unchanged.html', createWritable: async () => ({ write: async () => {}, close: async () => {} }) });
+    await window.BeesonEditor.save();
+    return window.BeesonEditor.status().message;
+  })()`);
+  assert.match(message, /^Saved unchanged\.html at \d/);
   assert.deepEqual(page.errors, []);
 });
 
