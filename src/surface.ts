@@ -1,14 +1,17 @@
 // a `.surface`: the graph z = f(x, y) of a function of surfaces.ts over its rectangle, drawn with
 // three.js under an orbit camera that turns slowly and is turned by a drag. its stage is set by the
-// fragments of its slide with data-surface-stage, and a change of stage is animated. the heights
-// are morphed, the marks are raised into place, and the cutting plane is slid to its level, where
-// the curve of intersection is drawn. three.js is the global THREE of theme/vendor/three/three.js.
-// one WebGL renderer is shared by every surface of the page, and its image is copied to a 2D canvas
-// in each element. hence the page of each step in the print view does not hold a WebGL context of
-// its own
+// fragments of its slide with data-surface-stage, and a change of stage is animated. a stage shows
+// one or more sheets, i.e. layers of the function, each raised by its own lift and colored with the
+// ramp of its layer. the heights and the lift of a sheet are morphed, and its colors are blended
+// into those of its next layer. a sheet that is added or removed is faded, and the camera is moved
+// to frame the sheets shown. the marks are faded in on the first sheet, and the cutting plane is
+// slid to its level, where the curve of intersection is drawn. three.js is the global THREE of
+// theme/vendor/three/three.js. one WebGL renderer is shared by every surface of the page, and its
+// image is copied to a 2D canvas in each element. hence the page of each step in the print view
+// does not hold a WebGL context of its own
 
 import type * as Three from 'three';
-import { FUNCTION_NAMES, clamped, levelCurves, sample, surfaceFunction } from './surfaces.ts';
+import { FUNCTION_NAMES, RAMPS, levelCurves, sample, surfaceFunction } from './surfaces.ts';
 import type { Stage, SurfaceFunction } from './surfaces.ts';
 
 declare global {
@@ -18,23 +21,56 @@ declare global {
 }
 
 type RGB = [number, number, number];
-// the values drawn at a frame: the color range of the heights in world units, the progress of the
-// marks and of the cut from 0 to 1, and the height of the cutting plane, nondimensional
-type Shown = { lo: number; hi: number; marks: number; cut: number; level: number };
+// the values drawn at a frame: the progress of the marks and of the cut from 0 to 1, the height of
+// the cutting plane, nondimensional, and the lowest and highest heights framed by the camera, in
+// world units
+type Shown = { marks: number; cut: number; level: number; low: number; high: number };
+// the lift of a sheet in world units, and its opacity
+type Pose = { lift: number; alpha: number };
+// a color ramp of a sheet, keyed by its name and range: its texture, and the heights in world units
+// at its two ends
+type Paint = { key: string; texture: Three.DataTexture; range: [number, number] };
+
+// one sheet of a surface. the mesh is drawn after the depth mesh, which writes only the depth of
+// the same triangles, so that a sheet faded out shows its nearest side alone. A and B are the
+// heights at the start and the end of a change, nondimensional, paintA and paintB are blended by
+// tone, which is moved from toneFrom to 1, and layer is the layer of the stage, empty when the
+// sheet is not part of it
+type SheetMesh = {
+  group: Three.Group;
+  mesh: Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial>;
+  depth: Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial>;
+  layer: string;
+  A: Float64Array;
+  B: Float64Array;
+  from: Pose;
+  to: Pose;
+  shown: Pose;
+  paintA: Paint;
+  paintB: Paint;
+  toneFrom: number;
+  tone: number;
+  now: { a: Float64Array; b: Float64Array; mix: number; grid: Float64Array } | null;
+};
 
 // cells along each side of the rectangle
 const CELLS = 200;
-// milliseconds of a change of stage, and of a change that slides the cutting plane
+// milliseconds of a change of stage, and of a change that slides the cutting plane or adds or
+// removes a sheet
 const MORPH = 1400;
 const SLIDE = 2600;
 // the default seconds per turn of the camera
 const TURN = 90;
-// world units by which a mark is raised into place
-const RISE = 0.4;
 // widths in slide pixels: the curve of intersection, its glow, and the marks
 const CURVE_WIDTH = 3.5;
 const GLOW_WIDTH = 18;
 const MARK_SIZE = 22;
+// the opacity of a mark and of its label behind the surface, and the seconds in which a mark is
+// dimmed or brightened when the surface is turned in front of it or away
+const BEHIND = 0.3;
+const DIMMING = 0.12;
+// texels of the texture of a color ramp
+const RAMP_TEXELS = 256;
 
 const ease = (t: number): number => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
@@ -57,6 +93,29 @@ function rgb(css: string, fallback: RGB): RGB {
   return fallback;
 }
 
+// the texels of a ramp through the colors stops at even steps, interpolated linearly in sRGB as in
+// plotly, as RGBA bytes
+function rampTexels(stops: RGB[]): Uint8Array {
+  const out = new Uint8Array(4 * RAMP_TEXELS);
+  for (let i = 0; i < RAMP_TEXELS; i++) {
+    const p = (i / (RAMP_TEXELS - 1)) * (stops.length - 1), j = Math.min(stops.length - 2, Math.floor(p));
+    const c = mix3(stops[j], stops[j + 1], p - j);
+    out.set([...c.map((v) => Math.round(255 * v)), 255], 4 * i);
+  }
+  return out;
+}
+
+// the height of the sampled heights g of the function fn at (x, y), nondimensional, interpolated on
+// the triangles of the mesh drawn in Surface, i.e. each cell split on its diagonal from (i, j) to
+// (i + 1, j + 1). a point outside the rectangle takes the height of the nearest edge
+function heightAt(g: Float64Array, fn: SurfaceFunction, x: number, y: number): number {
+  const n = CELLS + 1;
+  const u = clamp(((x - fn.x[0]) / (fn.x[1] - fn.x[0])) * CELLS, 0, CELLS), v = clamp(((y - fn.y[0]) / (fn.y[1] - fn.y[0])) * CELLS, 0, CELLS);
+  const i = Math.min(CELLS - 1, Math.floor(u)), j = Math.min(CELLS - 1, Math.floor(v)), s = u - i, t = v - j;
+  const a = g[j * n + i], b = g[j * n + i + 1], c = g[(j + 1) * n + i], d = g[(j + 1) * n + i + 1];
+  return s >= t ? a + s * (b - a) + t * (d - b) : a + t * (c - a) + s * (d - c);
+}
+
 const SURFACE_VERTEX = /* glsl */ `
 attribute float zA;
 attribute float zB;
@@ -73,26 +132,33 @@ void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position.xy, vZ, 1.0);
 }`;
 
-// the color ramp of the heights through the four colors uRamp, a Lambert shade under a fixed light,
-// and grid lines of constant x and y, antialiased over one pixel
+// the color of the height in the ramps A and B, each spread over its range of heights and blended
+// by uTone, a Lambert shade under a fixed light, and grid lines of constant x and y, antialiased
+// over one pixel. the height is that of the layer, before the lift of the sheet
 const SURFACE_FRAGMENT = /* glsl */ `
-uniform vec3 uRamp[4];
+uniform sampler2D uRampA;
+uniform sampler2D uRampB;
+uniform vec2 uRangeA;
+uniform vec2 uRangeB;
+uniform float uTone;
+uniform float uAlpha;
 uniform vec3 uGroove;
-uniform vec2 uRange;
 uniform vec3 uLight;
 uniform vec2 uGrid;
 varying vec3 vNormal;
 varying vec2 vXY;
 varying float vZ;
+vec3 ramp(sampler2D r, vec2 range) {
+  float t = clamp((vZ - range.x) / max(range.y - range.x, 1e-6), 0.0, 1.0);
+  return texture2D(r, vec2((t * ${RAMP_TEXELS - 1}.0 + 0.5) / ${RAMP_TEXELS}.0, 0.5)).rgb;
+}
 void main() {
-  float t = clamp((vZ - uRange.x) / max(uRange.y - uRange.x, 1e-6), 0.0, 1.0);
-  float k = t * 3.0;
-  vec3 c = k < 1.0 ? mix(uRamp[0], uRamp[1], k) : k < 2.0 ? mix(uRamp[1], uRamp[2], k - 1.0) : mix(uRamp[2], uRamp[3], k - 2.0);
+  vec3 c = mix(ramp(uRampA, uRangeA), ramp(uRampB, uRangeB), uTone);
   c *= 0.58 + 0.42 * abs(dot(normalize(vNormal), uLight));
   vec2 q = vXY / uGrid;
   vec2 a = abs(fract(q - 0.5) - 0.5) / max(fwidth(q), vec2(1e-4));
   c = mix(c, uGroove, 0.45 * (1.0 - min(min(a.x, a.y), 1.0)));
-  gl_FragColor = vec4(c, 1.0);
+  gl_FragColor = vec4(c, uAlpha);
 }`;
 
 const PLANE_VERTEX = /* glsl */ `
@@ -146,23 +212,21 @@ void main() {
   gl_FragColor = vec4(uColor, uAlpha * edge);
 }`;
 
-// a mark is raised into place by RISE world units, and is grown while it is faded in. a saddle is
-// drawn as a ring, and a maximum or a minimum as a disc, each outlined in the background color
+// a mark is drawn over the surface without the depth test, at the opacity seen, which is dimmed on
+// the processor when the surface is in front of it, and it is grown while it is faded in. a saddle
+// is drawn as a ring, and a maximum or a minimum as a disc, each outlined in the background color
 const MARK_VERTEX = /* glsl */ `
 attribute float kind;
+attribute float seen;
 uniform float uRise;
-uniform float uLift;
 uniform float uSize;
-uniform float uBias;
 varying float vKind;
+varying float vSeen;
 void main() {
-  vec3 p = position;
-  p.z -= (1.0 - uRise) * uLift;
-  vec4 c = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
-  c.z -= uBias * c.w;
-  gl_Position = c;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   gl_PointSize = uSize * (0.35 + 0.65 * uRise);
   vKind = kind;
+  vSeen = seen;
 }`;
 
 const MARK_FRAGMENT = /* glsl */ `
@@ -171,6 +235,7 @@ uniform vec3 uRing;
 uniform float uRise;
 uniform float uSize;
 varying float vKind;
+varying float vSeen;
 void main() {
   float r = length(gl_PointCoord * 2.0 - 1.0);
   float aa = 2.0 / uSize;
@@ -178,7 +243,7 @@ void main() {
   if (outer <= 0.0) discard;
   float fill = 1.0 - smoothstep(0.7 - aa, 0.7, r);
   if (vKind < 0.5) fill *= smoothstep(0.36 - aa, 0.36, r);
-  gl_FragColor = vec4(mix(uRing, uFill, fill), outer * uRise);
+  gl_FragColor = vec4(mix(uRing, uFill, fill), outer * uRise * vSeen);
 }`;
 
 let shared: Three.WebGLRenderer | null | undefined;
@@ -222,23 +287,30 @@ export class Surface {
   private grids = new Map<string, Float64Array>();
   private normals = new WeakMap<Float64Array, Float32Array>();
   private ranges = new Map<string, [number, number]>();
+  private textures = new Map<string, Three.DataTexture>();
+  private zeros = new Float64Array((CELLS + 1) ** 2);
+  // the color of the grid lines of every sheet
+  private groove: Three.Vector3;
   private zmin = 0;
   private zmax = 0;
   private THREE: typeof Three;
   private scene: Three.Scene;
   private camera: Three.PerspectiveCamera;
-  private surface: Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial>;
+  private sheets: SheetMesh[] = [];
   private plane: Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial>;
   private curve: Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial>;
   private glow: Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial>;
   private points: Three.Points<Three.BufferGeometry, Three.ShaderMaterial>;
+  // the heights of the first sheet at the marks at the start and the end of a change,
+  // nondimensional, and the opacity of each mark behind the surface or in front of it
+  private markA: Float64Array;
+  private markB: Float64Array;
+  private seen: Float32Array;
+  private seenAt = 0;
   private capacity = 0;
   private drawn = '';
-  private A: Float64Array;
-  private B: Float64Array;
   private mix = 1;
   private stageName = '';
-  private markLayer = '';
   private shown: Shown;
   private from: Shown;
   private to: Shown;
@@ -259,6 +331,7 @@ export class Surface {
     this.el = el;
     this.fn = fn;
     this.THREE = THREE;
+    this.groove = new THREE.Vector3();
     this.zscale = num(el.dataset.zscale, fn.zscale);
     const turn = num(el.dataset.turn, TURN);
     this.rate = turn > 0 ? (2 * Math.PI) / turn : 0;
@@ -281,14 +354,15 @@ export class Surface {
       this.ranges.set(name, this.range(g));
       for (const z of g) { if (z < this.zmin) this.zmin = z; if (z > this.zmax) this.zmax = z; }
     }
-    this.A = this.B = this.grids.get(fn.initial) ?? new Float64Array((CELLS + 1) ** 2);
-    const [lo, hi] = this.ranges.get(fn.initial) ?? [0, 1];
-    this.shown = this.from = this.to = { lo, hi, marks: 0, cut: 0, level: fn.floor };
+    this.markA = new Float64Array(fn.marks.length);
+    this.markB = new Float64Array(fn.marks.length);
+    this.seen = new Float32Array(fn.marks.length).fill(1);
+    const still: Shown = { marks: 0, cut: 0, level: fn.floor, low: this.zmin * this.zscale, high: this.zmax * this.zscale };
+    this.shown = this.from = this.to = still;
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(26, 1, 0.1, 100);
     this.camera.up.set(0, 0, 1);
-    this.surface = this.makeSurface();
     this.plane = this.makePlane();
     this.curve = this.makeCurve(CURVE_WIDTH, 0);
     // a glow of the curve under it, drawn from the same segments
@@ -296,7 +370,7 @@ export class Surface {
     this.glow.geometry = this.curve.geometry;
     this.glow.renderOrder = 1.5;
     this.points = this.makeMarks();
-    this.scene.add(this.surface, this.plane, this.glow, this.curve, this.points);
+    this.scene.add(this.plane, this.glow, this.curve, this.points);
     this.recolor();
     this.bindDrag();
     CACHE.set(el, this);
@@ -312,20 +386,51 @@ export class Surface {
     return hi - lo > 1e-9 ? [lo, hi] : [hi - 1, hi + 1];
   }
 
-  private makeSurface(): Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial> {
+  // the texture of a ramp of RAMPS, or of the ramp theme, which is filled in recolor()
+  private texture(name: string): Three.DataTexture {
+    const known = this.textures.get(name);
+    if (known) return known;
+    const THREE = this.THREE;
+    const t = new THREE.DataTexture(new Uint8Array(4 * RAMP_TEXELS), RAMP_TEXELS, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+    t.magFilter = t.minFilter = THREE.LinearFilter;
+    t.generateMipmaps = false;
+    const stops = RAMPS[name];
+    if (stops) {
+      (t.image.data as Uint8Array).set(rampTexels(stops.map((c) => rgb(c, [0.5, 0.5, 0.5]))));
+      t.needsUpdate = true;
+    }
+    this.textures.set(name, t);
+    return t;
+  }
+
+  // the ramp of a layer and its range in world units. an unknown ramp is reported, and the ramp
+  // theme is drawn in its place
+  private paintOf(layer: string): Paint {
+    let { ramp, range } = this.fn.tones[layer] ?? { ramp: 'theme' };
+    if (ramp !== 'theme' && !(ramp in RAMPS)) {
+      console.error(`beeson: unknown ramp "${ramp}" of the layer ${layer} of ${this.el.dataset.function}, known: theme, ${Object.keys(RAMPS).join(', ')}`);
+      ramp = 'theme';
+    }
+    const world: [number, number] = range ? [range[0] * this.zscale, range[1] * this.zscale] : (this.ranges.get(layer) ?? [-1, 1]);
+    return { key: `${ramp}|${world.join('|')}`, texture: this.texture(ramp), range: world };
+  }
+
+  // a sheet, made hidden on first use. the sheets are drawn in their order, before the plane
+  private sheet(i: number): SheetMesh {
+    if (this.sheets[i]) return this.sheets[i];
     const THREE = this.THREE, n = CELLS + 1, fn = this.fn;
     const position = new Float32Array(3 * n * n);
     const dx = (fn.x[1] - fn.x[0]) / CELLS, dy = (fn.y[1] - fn.y[0]) / CELLS;
-    for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-      position[3 * (j * n + i)] = fn.x[0] + i * dx;
-      position[3 * (j * n + i) + 1] = fn.y[0] + j * dy;
+    for (let j = 0; j < n; j++) for (let k = 0; k < n; k++) {
+      position[3 * (j * n + k)] = fn.x[0] + k * dx;
+      position[3 * (j * n + k) + 1] = fn.y[0] + j * dy;
     }
     const index = new Uint32Array(6 * CELLS * CELLS);
-    let k = 0;
-    for (let j = 0; j < CELLS; j++) for (let i = 0; i < CELLS; i++) {
-      const a = j * n + i, b = a + 1, c = a + n, d = c + 1;
-      index.set([a, b, d, a, d, c], k);
-      k += 6;
+    let m = 0;
+    for (let j = 0; j < CELLS; j++) for (let k = 0; k < CELLS; k++) {
+      const a = j * n + k, b = a + 1, c = a + n, d = c + 1;
+      index.set([a, b, d, a, d, c], m);
+      m += 6;
     }
     const geometry = new THREE.BufferGeometry();
     geometry.setAttribute('position', new THREE.BufferAttribute(position, 3));
@@ -333,24 +438,43 @@ export class Surface {
       geometry.setAttribute(name, new THREE.BufferAttribute(new Float32Array(size * n * n), size).setUsage(THREE.DynamicDrawUsage));
     }
     geometry.setIndex(new THREE.BufferAttribute(index, 1));
-    const light = new THREE.Vector3(-0.45, -0.35, 0.82).normalize();
     const cell = Math.max(fn.x[1] - fn.x[0], fn.y[1] - fn.y[0]) / 24;
-    const material = new THREE.ShaderMaterial({
+    const paint = this.paintOf(fn.initial);
+    // the two materials share their uniforms, and their shaders are compiled into one program,
+    // thus the depth mesh writes the depths at which the mesh is drawn
+    const uniforms = {
+      uMix: { value: 1 },
+      uRampA: { value: paint.texture },
+      uRampB: { value: paint.texture },
+      uRangeA: { value: new THREE.Vector2(...paint.range) },
+      uRangeB: { value: new THREE.Vector2(...paint.range) },
+      uTone: { value: 1 },
+      uAlpha: { value: 1 },
+      uGroove: { value: this.groove },
+      uLight: { value: new THREE.Vector3(-0.45, -0.35, 0.82).normalize() },
+      uGrid: { value: new THREE.Vector2(cell, cell) },
+    };
+    const material = (colorWrite: boolean) => new THREE.ShaderMaterial({
       vertexShader: SURFACE_VERTEX,
       fragmentShader: SURFACE_FRAGMENT,
       side: THREE.DoubleSide,
-      uniforms: {
-        uMix: { value: 1 },
-        uRamp: { value: [0, 1, 2, 3].map(() => new THREE.Vector3()) },
-        uGroove: { value: new THREE.Vector3() },
-        uRange: { value: new THREE.Vector2(0, 1) },
-        uLight: { value: light },
-        uGrid: { value: new THREE.Vector2(cell, cell) },
-      },
+      transparent: true,
+      colorWrite,
+      uniforms,
     });
-    const mesh = new THREE.Mesh(geometry, material);
-    mesh.frustumCulled = false;
-    return mesh;
+    const mesh = new THREE.Mesh(geometry, material(true)), depth = new THREE.Mesh(geometry, material(false));
+    const group = new THREE.Group();
+    for (const [k, o] of [depth, mesh].entries()) {
+      o.frustumCulled = false;
+      o.renderOrder = i * 0.1 + k * 0.01;
+      group.add(o);
+    }
+    group.visible = false;
+    this.scene.add(group);
+    const hidden: Pose = { lift: 0, alpha: 0 };
+    const s: SheetMesh = { group, mesh, depth, layer: '', A: this.zeros, B: this.zeros, from: hidden, to: hidden, shown: hidden, paintA: paint, paintB: paint, toneFrom: 1, tone: 1, now: null };
+    this.sheets[i] = s;
+    return s;
   }
 
   private makePlane(): Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial> {
@@ -398,20 +522,20 @@ export class Surface {
   private makeMarks(): Three.Points<Three.BufferGeometry, Three.ShaderMaterial> {
     const THREE = this.THREE, marks = this.fn.marks;
     const geometry = new THREE.BufferGeometry();
-    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * marks.length), 3));
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * marks.length), 3).setUsage(THREE.DynamicDrawUsage));
     geometry.setAttribute('kind', new THREE.BufferAttribute(Float32Array.from(marks, (m) => (m.kind === 'saddle' ? 0 : 1)), 1));
+    geometry.setAttribute('seen', new THREE.BufferAttribute(new Float32Array(marks.length).fill(1), 1).setUsage(THREE.DynamicDrawUsage));
     const material = new THREE.ShaderMaterial({
       vertexShader: MARK_VERTEX,
       fragmentShader: MARK_FRAGMENT,
       transparent: true,
+      depthTest: false,
       depthWrite: false,
       uniforms: {
         uFill: { value: new THREE.Vector3() },
         uRing: { value: new THREE.Vector3() },
         uRise: { value: 0 },
-        uLift: { value: RISE },
         uSize: { value: MARK_SIZE },
-        uBias: { value: 0.006 },
       },
     });
     const points = new THREE.Points(geometry, material);
@@ -426,12 +550,13 @@ export class Surface {
     const bg = css('--bg', [0.02, 0.02, 0.02]), text = css('--text', [0.95, 0.95, 0.94]);
     const violet = css('--violet', [0.79, 0.31, 0.9]), accent = css('--accent', [0.94, 0.5, 0.31]);
     const blue = css('--data-5', [0, 0.45, 0.7]);
-    const u = this.surface.material.uniforms, set = (target: Three.Vector3, c: RGB) => target.set(c[0], c[1], c[2]);
-    // in either mode, the deep part of the surface is shaded through blue into the background, and
-    // its high part is shaded through violet up to the color of the text
-    const ramp: RGB[] = [mix3(blue, bg, 0.7), mix3(blue, violet, 0.35), violet, mix3(violet, text, 0.55)];
-    ramp.forEach((c, i) => set(u.uRamp.value[i], c));
-    set(u.uGroove.value, bg);
+    const set = (target: Three.Vector3, c: RGB) => target.set(c[0], c[1], c[2]);
+    // in the ramp theme, in either mode, the deep part of the surface is shaded through blue into
+    // the background, and its high part is shaded through violet up to the color of the text
+    const theme = this.texture('theme');
+    (theme.image.data as Uint8Array).set(rampTexels([mix3(blue, bg, 0.7), mix3(blue, violet, 0.35), violet, mix3(violet, text, 0.55)]));
+    theme.needsUpdate = true;
+    set(this.groove, bg);
     set(this.plane.material.uniforms.uColor.value, accent);
     set(this.curve.material.uniforms.uColor.value, mix3(accent, text, 0.35));
     set(this.glow.material.uniforms.uColor.value, accent);
@@ -455,43 +580,119 @@ export class Surface {
     return { name, stage: this.fn.stages[name]({ ...this.el.dataset, ...best?.dataset }) };
   }
 
+  // the ramp p set as the end of a change of the sheet s. a ramp drawn at the start is kept, so
+  // that the colors drawn now are not changed at once when a change is reversed or redirected
+  private repaint(s: SheetMesh, p: Paint): void {
+    if (p.key === s.paintB.key) s.toneFrom = s.tone;
+    else if (p.key === s.paintA.key) { s.paintA = s.paintB; s.toneFrom = 1 - s.tone; s.paintB = p; }
+    else { s.paintA = s.tone < 0.5 ? s.paintA : s.paintB; s.paintB = p; s.toneFrom = 0; }
+    const u = s.mesh.material.uniforms;
+    u.uRampA.value = s.paintA.texture;
+    u.uRampB.value = s.paintB.texture;
+    u.uRangeA.value.set(...s.paintA.range);
+    u.uRangeB.value.set(...s.paintB.range);
+  }
+
   /** Sets the stage from the fragments of the slide, animated or at once. */
   sync(animate: boolean): void {
     const { name, stage } = this.target();
     if (name === this.stageName) return;
-    const first = !this.stageName;
+    const jump = !animate || !this.stageName;
     this.stageName = name;
     this.el.dataset.shown = name;
-    const grid = this.grids.get(stage.layer) ?? this.B;
-    const [lo, hi] = this.ranges.get(stage.layer) ?? [this.shown.lo, this.shown.hi];
-    const to: Shown = { lo, hi, marks: stage.marks ? 1 : 0, cut: stage.level === null ? 0 : 1, level: stage.level ?? this.fn.floor };
-    this.placeMarks(stage.layer);
-    if (!animate || first) {
-      this.A = this.B = grid;
+    const s = this.zscale, sheets = stage.sheets.length ? stage.sheets : [{ layer: this.fn.initial, lift: 0 }], main = sheets[0];
+    const grid = (layer: string) => this.grids.get(layer) ?? this.zeros;
+    // a sheet added or removed while the first sheet is given another layer is split from it or
+    // merged into it, and otherwise it is grown from a flat sheet at the lift of the first sheet or
+    // flattened onto it, so that it is raised or lowered together with the framing of the camera
+    const first = this.sheets[0];
+    const merge = !first || first.layer !== main.layer;
+    const was = first ? { heights: this.current(first), lift: first.shown.lift, paint: first.tone < 0.5 ? first.paintA : first.paintB } : null;
+    const lifts: number[] = [];
+    for (let i = 0; i < Math.max(this.sheets.length, sheets.length); i++) {
+      const sheet = this.sheet(i), next = sheets[i], seen = sheet.shown.alpha > 0;
+      if (!next && !seen) {
+        sheet.layer = '';
+        sheet.from = sheet.to = sheet.shown;
+        continue;
+      }
+      const heights = this.current(sheet);
+      if (next) {
+        const paint = this.paintOf(next.layer);
+        if (seen) {
+          sheet.A = heights;
+          sheet.from = sheet.shown;
+        } else if (i > 0 && merge && was) {
+          sheet.A = was.heights;
+          sheet.from = { lift: was.lift, alpha: 0 };
+          sheet.paintA = sheet.paintB = was.paint;
+          sheet.tone = 1;
+        } else {
+          sheet.A = this.zeros;
+          sheet.from = { lift: (i > 0 && first ? first.shown.lift : next.lift * s), alpha: 0 };
+          sheet.paintA = sheet.paintB = paint;
+          sheet.tone = 1;
+        }
+        sheet.B = grid(next.layer);
+        sheet.to = { lift: next.lift * s, alpha: 1 };
+        sheet.layer = next.layer;
+        this.repaint(sheet, paint);
+        lifts.push(next.lift * s);
+      } else {
+        sheet.A = heights;
+        sheet.from = sheet.shown;
+        sheet.layer = '';
+        sheet.B = merge ? grid(main.layer) : this.zeros;
+        sheet.to = { lift: main.lift * s, alpha: 0 };
+        this.repaint(sheet, merge ? this.paintOf(main.layer) : sheet.paintB);
+      }
+    }
+    const to: Shown = {
+      marks: stage.marks ? 1 : 0,
+      cut: stage.level === null ? 0 : 1,
+      level: stage.level ?? this.fn.floor,
+      low: this.zmin * s + Math.min(...lifts),
+      high: this.zmax * s + Math.max(...lifts),
+    };
+    const counted = (shown: (sheet: SheetMesh) => boolean) => this.sheets.filter(shown).length;
+    const regrouped = counted((sheet) => sheet.from.alpha > 0) !== counted((sheet) => sheet.to.alpha > 0);
+    if (jump) {
       this.mix = 1;
+      for (const sheet of this.sheets) {
+        sheet.A = sheet.B;
+        sheet.from = sheet.shown = sheet.to;
+        sheet.toneFrom = sheet.tone = 1;
+      }
       this.shown = this.from = this.to = to;
       this.moving = false;
     } else {
-      this.A = this.current();
-      this.B = grid;
       this.mix = 0;
+      for (const sheet of this.sheets) sheet.tone = sheet.toneFrom;
       // a plane not shown before is slid up from the floor, and a plane that is removed is slid down
       this.from = { ...this.shown, level: this.shown.cut > 0 ? this.shown.level : this.fn.floor };
       this.to = to;
-      this.duration = this.from.level !== to.level ? SLIDE : MORPH;
+      this.duration = this.from.level !== to.level || regrouped ? SLIDE : MORPH;
       this.t0 = performance.now();
       this.moving = true;
     }
-    this.upload();
+    const lead = this.sheet(0);
+    this.fn.marks.forEach((m, i) => {
+      this.markA[i] = heightAt(lead.A, this.fn, m.x, m.y);
+      this.markB[i] = heightAt(lead.B, this.fn, m.x, m.y);
+    });
+    for (const sheet of this.sheets) this.upload(sheet);
     if (this.moving) this.kick();
     else this.draw();
   }
 
-  // the heights drawn now, nondimensional
-  private current(): Float64Array {
-    if (this.mix >= 1 || this.A === this.B) return this.B;
-    const a = this.A, b = this.B, t = this.mix;
-    return a.map((z, i) => z + (b[i] - z) * t);
+  // the heights of the sheet drawn now, nondimensional, kept for the frame
+  private current(sheet: SheetMesh): Float64Array {
+    if (this.mix >= 1 || sheet.A === sheet.B) return sheet.B;
+    const now = sheet.now, a = sheet.A, b = sheet.B, t = this.mix;
+    if (now && now.a === a && now.b === b && now.mix === t) return now.grid;
+    const grid = a.map((z, i) => z + (b[i] - z) * t);
+    sheet.now = { a, b, mix: t, grid };
+    return grid;
   }
 
   // the unit normals of the heights g in world units, by central differences
@@ -511,23 +712,44 @@ export class Surface {
     return out;
   }
 
-  private upload(): void {
-    const geometry = this.surface.geometry, s = this.zscale;
+  private upload(sheet: SheetMesh): void {
+    const geometry = sheet.mesh.geometry, s = this.zscale;
     const zA = geometry.getAttribute('zA') as Three.BufferAttribute, zB = geometry.getAttribute('zB') as Three.BufferAttribute;
-    for (let i = 0; i < this.A.length; i++) { zA.array[i] = this.A[i] * s; zB.array[i] = this.B[i] * s; }
-    (geometry.getAttribute('nA') as Three.BufferAttribute).set(this.normalsOf(this.A));
-    (geometry.getAttribute('nB') as Three.BufferAttribute).set(this.normalsOf(this.B));
+    for (let i = 0; i < sheet.A.length; i++) { zA.array[i] = sheet.A[i] * s; zB.array[i] = sheet.B[i] * s; }
+    (geometry.getAttribute('nA') as Three.BufferAttribute).set(this.normalsOf(sheet.A));
+    (geometry.getAttribute('nB') as Three.BufferAttribute).set(this.normalsOf(sheet.B));
     for (const name of ['zA', 'zB', 'nA', 'nB']) geometry.getAttribute(name).needsUpdate = true;
   }
 
-  // the marks on the layer, in world units
-  private placeMarks(layer: string): void {
-    if (layer === this.markLayer) return;
-    this.markLayer = layer;
-    const f = clamped(this.fn.layers[layer] ?? (() => 0), this.fn.floor);
-    const position = this.points.geometry.getAttribute('position') as Three.BufferAttribute;
-    this.fn.marks.forEach((m, i) => position.setXYZ(i, m.x, m.y, f(m.x, m.y) * this.zscale));
-    position.needsUpdate = true;
+  // the world position of the mark i, on the first sheet as drawn now
+  private markAt(i: number, p: Three.Vector3): Three.Vector3 {
+    const m = this.fn.marks[i];
+    return p.set(m.x, m.y, lerp(this.markA[i], this.markB[i], this.mix) * this.zscale + this.sheet(0).shown.lift);
+  }
+
+  /**
+   * The marks as drawn now, read by the tests: for each mark, the height at which it is drawn and
+   * the height of the drawn surface under it, both in world units, and its fade, from 0 when it is
+   * hidden to 1. With settled, the change of stage has ended.
+   */
+  probe(): { stage: string; settled: boolean; marks: { name: string; z: number; surface: number; fade: number; label: number | null }[] } {
+    const position = this.points.geometry.getAttribute('position') as Three.BufferAttribute, lead = this.sheet(0), g = this.current(lead);
+    const fade = this.points.visible ? this.shown.marks : 0;
+    // the distance in pixels from the anchor of the label of a mark to the mark seen by the camera now
+    const camera = this.camera.clone(), p = new this.THREE.Vector3();
+    camera.updateMatrixWorld();
+    const label = (i: number) => {
+      const lab = this.labels.find((l) => l.dataset.at === this.fn.marks[i].name);
+      if (!lab) return null;
+      this.markAt(i, p).project(camera);
+      const x = ((p.x + 1) / 2) * this.w + num(lab.dataset.dx, 0), y = ((1 - p.y) / 2) * this.h + num(lab.dataset.dy, -34);
+      return Math.hypot(parseFloat(lab.style.left) - x, parseFloat(lab.style.top) - y);
+    };
+    return {
+      stage: this.stageName,
+      settled: !this.moving,
+      marks: this.fn.marks.map((m, i) => ({ name: m.name, z: position.getZ(i), surface: heightAt(g, this.fn, m.x, m.y) * this.zscale + lead.shown.lift, fade, label: label(i) })),
+    };
   }
 
   /** Sizes the canvas from the box of the element on the screen, and draws. */
@@ -553,29 +775,36 @@ export class Surface {
     this.draw();
   }
 
-  // the camera on a sphere about the middle of the box of the surface, at a distance at which the
-  // sphere around the box fits the narrower field of view, divided by data-zoom
+  // the camera on a sphere about the middle of the box of the sheets shown, divided by data-zoom.
+  // its distance is that at which the sphere around the box of one sheet overfills the narrower
+  // field of view by a little, as the box does not fill its sphere, or, for sheets stacked taller
+  // than one, that at which their box fits the height of the view at the elevation of the camera
   private aim(): void {
-    const fn = this.fn, s = this.zscale;
-    const cx = (fn.x[0] + fn.x[1]) / 2, cy = (fn.y[0] + fn.y[1]) / 2, cz = ((this.zmin + this.zmax) / 2) * s;
-    const R = 0.5 * Math.hypot(fn.x[1] - fn.x[0], fn.y[1] - fn.y[0], (this.zmax - this.zmin) * s);
+    const fn = this.fn, { low, high } = this.shown;
+    const cx = (fn.x[0] + fn.x[1]) / 2, cy = (fn.y[0] + fn.y[1]) / 2, cz = (low + high) / 2;
+    const wide = Math.hypot(fn.x[1] - fn.x[0], fn.y[1] - fn.y[0]), R = 0.5 * Math.hypot(wide, high - low);
     const v = (this.camera.fov * Math.PI) / 360, half = Math.min(v, Math.atan(Math.tan(v) * this.camera.aspect));
-    const d = (R / Math.sin(half)) * 0.86 / this.zoom;
+    const one = 0.5 * Math.hypot(wide, (this.zmax - this.zmin) * this.zscale) / Math.sin(half);
+    const tall = (0.5 * ((high - low) * Math.cos(this.elevation) + wide * Math.sin(this.elevation))) / Math.tan(v);
+    const d = Math.max(0.86 * one, tall) / this.zoom;
     const c = Math.cos(this.elevation);
     this.camera.position.set(cx + d * c * Math.cos(this.azimuth), cy + d * c * Math.sin(this.azimuth), cz + d * Math.sin(this.elevation));
     this.camera.near = Math.max(0.01, d - 2 * R);
     this.camera.far = d + 2 * R;
     this.camera.lookAt(cx, cy, cz);
     this.camera.updateProjectionMatrix();
+    // the marks and their labels are placed before the render, which would update the matrix
+    this.camera.updateMatrixWorld();
   }
 
-  // the curve of intersection of the plane at the level shown, recomputed when the level or the
-  // heights have changed
+  // the curve of intersection of the plane with the first sheet at the level shown, recomputed when
+  // the level or the heights have changed
   private trace(): void {
-    const key = this.shown.cut > 0 ? `${this.shown.level}|${this.mix}|${this.markLayer}` : '';
+    const lead = this.sheet(0);
+    const key = this.shown.cut > 0 ? `${this.shown.level}|${this.mix}|${lead.layer}` : '';
     if (key === this.drawn) return;
     this.drawn = key;
-    const curves = key ? levelCurves(this.current(), this.fn.x, this.fn.y, CELLS, CELLS, this.shown.level) : [];
+    const curves = key ? levelCurves(this.current(lead), this.fn.x, this.fn.y, CELLS, CELLS, this.shown.level) : [];
     const count = curves.reduce((total, c) => total + Math.max(0, c.length / 2 - 1), 0);
     const geometry = this.curve.geometry, THREE = this.THREE;
     if (count > this.capacity) {
@@ -612,12 +841,21 @@ export class Surface {
     if (!this.W) return;
     const r = renderer();
     if (!r) return;
-    const shown = this.shown, u = this.surface.material.uniforms;
-    u.uMix.value = this.mix;
-    u.uRange.value.set(shown.lo, shown.hi);
-    this.plane.position.z = shown.level * this.zscale;
+    const shown = this.shown;
+    for (const s of this.sheets) {
+      const u = s.mesh.material.uniforms;
+      u.uMix.value = this.mix;
+      u.uTone.value = s.tone;
+      u.uAlpha.value = s.shown.alpha;
+      s.group.position.z = s.shown.lift;
+      s.group.visible = s.shown.alpha > 0;
+      s.depth.visible = s.shown.alpha < 1;
+    }
+    const lift = this.sheet(0).shown.lift;
+    this.plane.position.z = shown.level * this.zscale + lift;
     this.plane.material.uniforms.uAlpha.value = 0.2 * shown.cut;
     this.plane.visible = shown.cut > 0;
+    this.curve.position.z = this.glow.position.z = lift;
     this.curve.material.uniforms.uAlpha.value = Math.min(1, 2 * shown.cut);
     this.curve.visible = shown.cut > 0;
     this.glow.material.uniforms.uAlpha.value = 0.45 * Math.min(1, 2 * shown.cut);
@@ -626,6 +864,7 @@ export class Surface {
     this.points.visible = shown.marks > 0;
     this.trace();
     this.aim();
+    this.place();
     if (r.domElement.width !== this.W || r.domElement.height !== this.H) r.setSize(this.W, this.H, false);
     r.render(this.scene, this.camera);
     const ctx = this.canvas.getContext('2d');
@@ -633,42 +872,43 @@ export class Surface {
     // in the same task as the render, since the drawing buffer of WebGL is cleared after a frame
     ctx.clearRect(0, 0, this.W, this.H);
     ctx.drawImage(r.domElement, 0, 0);
-    this.place();
   }
 
-  // the labels at their marks, in the pixels of the slide, faded with the marks and dimmed behind
-  // the surface
+  // the marks on the first sheet as drawn now, dimmed behind the surface, and the labels at their
+  // marks in the pixels of the slide, faded with the marks. the dimming follows the surface over
+  // DIMMING seconds, and at once after a pause between two frames
   private place(): void {
-    const THREE = this.THREE, p = new THREE.Vector3(), lift = (1 - this.shown.marks) * RISE;
+    const THREE = this.THREE, p = new THREE.Vector3();
     const position = this.points.geometry.getAttribute('position') as Three.BufferAttribute;
+    const seen = this.points.geometry.getAttribute('seen') as Three.BufferAttribute;
+    const now = performance.now(), dt = (now - this.seenAt) / 1000;
+    this.seenAt = now;
+    const k = dt > 0.25 ? 1 : 1 - Math.exp(-dt / DIMMING);
+    this.fn.marks.forEach((m, i) => {
+      this.markAt(i, p);
+      position.setXYZ(i, p.x, p.y, p.z);
+      this.seen[i] += ((this.behind(p) ? BEHIND : 1) - this.seen[i]) * k;
+      seen.setX(i, this.seen[i]);
+    });
+    position.needsUpdate = seen.needsUpdate = true;
     for (const lab of this.labels) {
       const i = this.fn.marks.findIndex((m) => m.name === lab.dataset.at);
       if (i < 0) continue;
-      p.set(position.getX(i), position.getY(i), position.getZ(i) - lift);
-      const hidden = this.behind(p);
-      p.project(this.camera);
+      this.markAt(i, p).project(this.camera);
       lab.style.left = `${((p.x + 1) / 2) * this.w + num(lab.dataset.dx, 0)}px`;
       lab.style.top = `${((1 - p.y) / 2) * this.h + num(lab.dataset.dy, -34)}px`;
-      lab.style.opacity = String(this.shown.marks ** 2 * (hidden ? 0.3 : 1));
+      lab.style.opacity = String(this.shown.marks ** 2 * this.seen[i]);
     }
   }
 
-  // whether the surface is between the world point p, a little above it, and the camera
+  // whether the first sheet is between the world point p, a little above it, and the camera
   private behind(p: Three.Vector3): boolean {
-    const fn = this.fn, g = this.current(), n = CELLS + 1, cam = this.camera.position;
-    const height = (x: number, y: number): number | null => {
-      const u = ((x - fn.x[0]) / (fn.x[1] - fn.x[0])) * CELLS, v = ((y - fn.y[0]) / (fn.y[1] - fn.y[0])) * CELLS;
-      if (u < 0 || v < 0 || u > CELLS || v > CELLS) return null;
-      const i = Math.min(CELLS - 1, Math.floor(u)), j = Math.min(CELLS - 1, Math.floor(v)), s = u - i, t = v - j;
-      const z = (1 - t) * ((1 - s) * g[j * n + i] + s * g[j * n + i + 1]) + t * ((1 - s) * g[(j + 1) * n + i] + s * g[(j + 1) * n + i + 1]);
-      return z * this.zscale;
-    };
+    const fn = this.fn, lead = this.sheet(0), g = this.current(lead), cam = this.camera.position;
     for (let k = 1; k <= 80; k++) {
       const t = 0.01 + (k / 80) * 0.99;
       const x = p.x + (cam.x - p.x) * t, y = p.y + (cam.y - p.y) * t, z = p.z + 0.03 + (cam.z - p.z) * t;
-      const zs = height(x, y);
-      if (zs === null) return false;
-      if (zs > z) return true;
+      if (x < fn.x[0] || x > fn.x[1] || y < fn.y[0] || y > fn.y[1]) return false;
+      if (heightAt(g, fn, x, y) * this.zscale + lead.shown.lift > z) return true;
     }
     return false;
   }
@@ -711,11 +951,16 @@ export class Surface {
     this.last = now;
     if (this.moving) {
       const k = Math.min(1, (now - this.t0) / this.duration), e = ease(k), a = this.from, b = this.to;
+      // a mark or a sheet that is added is faded in late in a change, once the surface has nearly
+      // settled, and one that is removed is faded out early
+      const late = ease(clamp((k - 0.35) / 0.65, 0, 1)), early = ease(clamp(k / 0.65, 0, 1));
       this.mix = e;
-      // the marks are raised in the last part of a change, once the surface has nearly settled
-      const late = ease(clamp((k - 0.35) / 0.65, 0, 1));
-      this.shown = { lo: lerp(a.lo, b.lo, e), hi: lerp(a.hi, b.hi, e), marks: lerp(a.marks, b.marks, b.marks > a.marks ? late : e), cut: lerp(a.cut, b.cut, e), level: lerp(a.level, b.level, e) };
-      if (k >= 1) this.moving = false;
+      this.shown = { marks: lerp(a.marks, b.marks, b.marks > a.marks ? late : early), cut: lerp(a.cut, b.cut, e), level: lerp(a.level, b.level, e), low: lerp(a.low, b.low, e), high: lerp(a.high, b.high, e) };
+      for (const s of this.sheets) {
+        s.shown = { lift: lerp(s.from.lift, s.to.lift, e), alpha: lerp(s.from.alpha, s.to.alpha, s.to.alpha > s.from.alpha ? early : late) };
+        s.tone = lerp(s.toneFrom, 1, e);
+      }
+      if (k >= 1) this.settle();
     }
     if (this.rate && !this.drag && now > this.resume) this.azimuth += dt * this.rate;
     this.draw();
@@ -728,6 +973,10 @@ export class Surface {
     this.moving = false;
     this.mix = 1;
     this.shown = this.to;
+    for (const s of this.sheets) {
+      s.shown = s.to;
+      s.tone = 1;
+    }
   }
 
   /** Starts the turning of the camera and the animation of a change of stage, while the slide is shown. */

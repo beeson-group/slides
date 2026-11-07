@@ -97,10 +97,17 @@ test('the surface of the demo deck is drawn at each of its stages, live and in t
   await page.goto(deckUrl('index.html', 'still'));
   await page.waitFor(deckSettled);
   const h = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.surface'))`);
-  const live = [];
+  // the label of each mark shown is at the mark, also after a turn of the camera
+  const live = [], astray = [];
+  const labeled = async (where) => {
+    for (const m of (await page.evaluate(`Beeson.surfaces[0].probe()`)).marks) {
+      if (m.fade > 0 && !(m.label < 1)) astray.push(`the label of ${m.name} is ${m.label?.toFixed(1)} px from its mark ${where}`);
+    }
+  };
   for (let f = -1; f < stages.length - 1; f++) {
     await page.evaluate(`Reveal.slide(${h}, 0, ${f})`);
     live.push(...(await page.evaluate(surfaces)));
+    await labeled(`at the stage ${stages[f + 1]}`);
   }
   // a drag turns the surface, and the slide is not changed by it as by a swipe
   const turned = await page.evaluate(`(async () => {
@@ -113,9 +120,11 @@ test('the surface of the demo deck is drawn at each of its stages, live and in t
   })()`);
   assert.equal(turned.h, h);
   assert.notEqual(turned.surface.digest, live.at(-1).digest);
+  await labeled('after a drag');
   await page.evaluate(`Reveal.slide(${h}, 0, ${stages.length - 2})`);
 
   assert.deepEqual(page.errors, []);
+  assert.deepEqual(astray, []);
   assert.deepEqual(live.map((s) => s.stage), stages);
   for (const s of live) assert.ok(s.drawn > 0.1, `${(100 * s.drawn).toFixed(1)}% of the canvas is drawn at the stage ${s.stage}`);
   assert.equal(new Set(live.map((s) => s.digest)).size, stages.length);
@@ -129,4 +138,61 @@ test('the surface of the demo deck is drawn at each of its stages, live and in t
   // the pixels are not compared one by one, since a canvas read back a few times is moved to the
   // processor by Chrome, and the copy of the WebGL image is then rounded differently
   pages.forEach((s, i) => assert.ok(Math.abs(s.drawn - live[i].drawn) < 0.002, `the page of the stage ${s.stage} is drawn over ${s.drawn}, and the slide over ${live[i].drawn}`));
+});
+
+// a change of stage takes 1.4 s, or 2.6 s when the cutting plane is slid. a quick step is taken
+// 0.4 s after the last one, while the surface is still being changed, as when a talk is stepped back
+// in a hurry, and a settled step is taken once the change has ended
+test('the marks of the surface are drawn on it or hidden at every step, forward to cut and back to wells', { timeout: 120000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl('index.html'));
+  await page.waitFor(deckSettled);
+  const h = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.surface'))`);
+  const probe = `Beeson.surfaces.find((s) => s.el.closest('section') === Reveal.getCurrentSlide()).probe()`;
+  const wait = (ms) => new Promise((done) => setTimeout(done, ms));
+  // each stage with the index of the fragment that sets it
+  const forward = [['wells', 0], ['bowl', 1], ['sum', 2], ['extrema', 3], ['cut', 4]];
+  const backward = [['extrema', 3], ['sum', 2], ['bowl', 1], ['wells', 0]];
+  const TOLERANCE = 0.02;
+  const floating = [], buried = [];
+  const look = (where, p) => {
+    for (const m of p.marks) {
+      if (m.fade <= 0) continue;
+      const dz = m.z - m.surface;
+      if (dz > TOLERANCE) floating.push(`${m.name} ${dz.toFixed(2)} above the surface ${where}`);
+      if (dz < -TOLERANCE) buried.push(`${m.name} ${(-dz).toFixed(2)} under the surface ${where}`);
+    }
+  };
+  const walk = async (steps, pace) => {
+    for (const [stage, f] of steps) {
+      await page.evaluate(`Reveal.slide(${h}, 0, ${f})`);
+      for (let ms = 0; ; ms += 130) {
+        const p = await page.evaluate(probe);
+        assert.equal(p.stage, stage);
+        look(`${ms} ms after the ${pace} step to ${stage}`, p);
+        if (pace === 'quick' ? ms >= 390 : p.settled) {
+          if (pace === 'settled') {
+            const shown = stage === 'extrema' || stage === 'cut';
+            for (const m of p.marks) assert.equal(m.fade, shown ? 1 : 0, `the fade of ${m.name} at the end of the step to ${stage}`);
+            for (const m of p.marks) if (shown) assert.ok(m.label < 1, `the label of ${m.name} is ${m.label} px from its mark at the end of the step to ${stage}`);
+          }
+          break;
+        }
+        await wait(130);
+      }
+    }
+  };
+
+  await page.evaluate(`Reveal.slide(${h}, 0, -1)`);
+  await page.waitFor(`(${probe}).settled`);
+  await walk(forward, 'settled');
+  await walk(backward, 'quick');
+  await walk(forward.slice(1), 'quick');
+  await walk(backward, 'settled');
+
+  assert.deepEqual(page.errors, []);
+  assert.deepEqual(floating, []);
+  assert.deepEqual(buried, []);
 });
