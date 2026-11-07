@@ -977,7 +977,7 @@
     });
     document.body.append(dot);
   }
-  function initCursor(orbits, slide) {
+  function initCursor(orbits, slide, tintOn = true) {
     let last = null, frame = 0;
     const lit = /* @__PURE__ */ new Set();
     const update = () => {
@@ -995,7 +995,7 @@
         }
       }
     };
-    const tint = !Orbits.reduced();
+    const tint = tintOn && !Orbits.reduced();
     document.addEventListener("pointermove", (ev) => {
       if (dot) {
         dot.style.display = "block";
@@ -1148,7 +1148,13 @@
   };
   var TRACED = ["title", "section", "closing"];
   var backdrops = [];
-  var still = () => Orbits.reduced() || window.Reveal.isPrintView() || /print-pdf/.test(location.search);
+  var EDITING = new URLSearchParams(location.search).has("edit");
+  function edit() {
+    const params = new URLSearchParams(location.search);
+    params.set("edit", "");
+    location.href = `${location.href.split(/[?#]/)[0]}?${params.toString().replace(/=(?=&|$)/g, "")}${location.hash}`;
+  }
+  var still = () => EDITING || Orbits.reduced() || window.Reveal.isPrintView() || /print-pdf/.test(location.search);
   function remount() {
     for (const o of mount(document)) if (!backdrops.includes(o)) backdrops.push(o);
   }
@@ -1197,12 +1203,15 @@
     initChrome(deck);
     initSteps(deck);
     remount();
-    initCursor(() => backdrops, () => deck.getCurrentSlide());
+    initCursor(() => backdrops, () => deck.getCurrentSlide(), !EDITING);
     deck.addKeyBinding({ keyCode: 68, key: "D", description: "Switch dark and light" }, (ev) => {
       if (forDeck(ev)) toggle();
     });
     deck.addKeyBinding({ keyCode: 80, key: "P", description: "Pointer" }, (ev) => {
       if (forDeck(ev)) togglePointer();
+    });
+    if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: "E", description: "Edit the deck" }, (ev) => {
+      if (forDeck(ev)) edit();
     });
     if (still()) completeAll();
     else show(deck.getCurrentSlide());
@@ -1218,7 +1227,12 @@
     });
     syncViewers(get());
     document.addEventListener("beeson:theme", () => {
-      for (const o of backdrops) o.redraw();
+      const now = window.Reveal.isPrintView() ? backdrops : within(deck.getCurrentSlide());
+      for (const o of now) o.redraw();
+      const later = backdrops.filter((o) => !now.includes(o));
+      if (later.length) setTimeout(() => {
+        for (const o of later) o.redraw();
+      }, 600);
       syncViewers(get());
     });
   }
@@ -1229,6 +1243,12 @@
     }
   }
   initTheme();
+  var self = document.currentScript;
+  if (EDITING) {
+    const script = document.createElement("script");
+    script.src = self?.src ? new URL("editor.js", self.src).href : "theme/editor.js";
+    document.head.append(script);
+  }
   var Beeson = {
     start,
     theme: { get, set: (theme) => set(theme), toggle: () => toggle() },

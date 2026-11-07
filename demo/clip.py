@@ -86,6 +86,9 @@ for mode, background in MODES.items():
         ["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
          "-s", f"{SIZE}x{SIZE}", "-r", str(FPS), "-i", "-", "-an", "-c:v", "libx264",
          "-profile:v", "main", "-pix_fmt", "yuv420p", "-crf", "28", "-preset", "veryslow",
+         # the range and the matrix are tagged, since a browser that guesses them for an untagged
+         # clip lifts its black above the background of the slide
+         "-color_range", "tv", "-colorspace", "bt709",
          "-movflags", "+faststart", str(root / "demo" / f"clip-{mode}.mp4")],
         stdin=subprocess.PIPE,
     )

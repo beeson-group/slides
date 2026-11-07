@@ -1,13 +1,14 @@
 # AGENTS.md
 
-This repository is the slide template of the Beeson group. The reveal.js theme `beeson` is in `theme/`, and a demo deck with an example of every layout class is in `index.html`. The brand marks are in `brand/`, the matplotlib styles in `styles/`, and the maintainer tooling in `src/`, `scripts/`, and `.github/`. A talk made from the template is one `index.html` next to `theme/` and `brand/`.
+This repository is the slide template of the Beeson group. The reveal.js theme `beeson` is in `theme/`, and a demo deck with an example of every layout class is in `index.html`. The in-place editor of a deck, loaded with the URL parameter `edit`, is in `src/editor/` and compiled to `theme/editor.js`. The brand marks are in `brand/`, the matplotlib styles in `styles/`, and the maintainer tooling in `src/`, `scripts/`, and `.github/`. A talk made from the template is one `index.html` next to `theme/` and `brand/`.
 
 ## Vocabulary
 
 - A slide is a `section` element, and its layout is set with a class. With `title` or `closing`, the slide is a plate with the backdrop behind a block of words at the lower left. With `section`, the words are at the left and the outline of the talk is under them. Without a class, the slide is a content slide with a text column of 1000 px at the left margin and a `zone` or a full-height `backdrop` at the right. Set the width of the column with `narrow` or `wide`. With `figure`, the slide is a plate with a `backdrop` or a `plate` figure, the head at the top, and the `caption` at the lower left. With `split`, the black `panel` is at the left and a `zone` at the right.
 - A backdrop is the orbit drawing behind a slide, a `div.backdrop` with the attributes `data-scene`, `data-cx`, `data-cy`, and `data-half`, where `data-half` is the half height of the window in rotating-frame units. A drawing may run off the slide, but choose the window so that it is not cut at an edge of its box inside the slide. Optional `lab` spans are the labels of L1, L2, the Moon, and the Earth. On a content slide, the backdrop is drawn complete, and on a title, section, or closing slide, or with the attribute `data-live`, it is animated. The word is not background, and not scene, which is a 3D view exported from tycho (the Typed Celestial HTML Observer).
-- A step is the stage at which an element is shown, i.e. a reveal.js fragment: `class="fragment"` with a `data-fragment-index`. Design the complete slide first, then assign the steps. The word is not build.
+- A step is the stage at which an element is shown, i.e. a reveal.js fragment: `class="fragment"` with a `data-fragment-index`. Design the complete slide first, then assign the steps. With `?edit`, the steps of a slide are set in the Steps pane, which writes the class and the index into the tags of the slide. The word is not build.
 - A plate is a layout with the backdrop or figure over the whole slide and the words in a block at the lower left.
+- A block is an element whose text is edited in place with `?edit`: a heading, a paragraph, a list item, a cell, a caption, the `foot`, the `math` div, a `lab` span, or the notes. At a save, each edited block is written into its place in `index.html`, and every byte outside it is kept. A block that the editor cannot match to the file is skipped, counted in the state of its toolbar, and listed on the card of its button Which?. On a deck with a skipped block, `npm run check` fails. While a deck is edited, every backdrop is drawn complete, every step is shown, and the slides change without a transition. A figure, or a block together with its list or table, is moved by dragging, snapped to the edges and centers of the other elements and of the slide unless Alt is held. While Shift is held, the drag is locked to one axis. The offset is written as the declaration `translate` of the `style` of its tag, in slide pixels, and it is shown at the lower right of the frame while the element is moved. Esc leaves a text and selects its block, which the arrow keys nudge, and nudges less than a second apart are one entry of the history. Every change is in one history, undone with ⌘Z and redone with ⌘⇧Z. The unsaved edits are kept in the storage of the browser and offered on a card when the deck is opened again, and Open or Present with unsaved changes asks whether to save them first. With Notes on, every slide gets an empty `aside.notes` to type into, which is written only once it has text. A bold or an italic set with ⌘B or ⌘I is written as `strong` or `em`. In the deck, the key E opens the same slide with `edit`.
 - The chrome is the running head (`run`, filled automatically from the last section slide), the slide number at the bottom right, the footnote line (`foot`) at the bottom left, and the 3 px progress line. A title bar, a rule under a title, bullets, cards, all-caps labels, and eyebrows are not part of the theme. A list item is marked with a short orange dash.
 
 ## Writing a slide
@@ -23,9 +24,9 @@ This repository is the slide template of the Beeson group. The reveal.js theme `
 ## Commands
 
 ```sh
-npm ci && npm run vendor && npm run build   # dependencies, vendored files, theme/beeson.js
-npm run typecheck && npm test               # types, then the orbit engine, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, and the PowerPoint file under node --test
-npm run check                               # screenshots of every slide in both modes, console errors, problems in the page, a poster on every video, the phone layout, a pixel ratio of 1.25
+npm ci && npm run vendor && npm run build   # dependencies, vendored files, theme/beeson.js and theme/editor.js
+npm run typecheck && npm test               # types, then the orbit engine, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, the PowerPoint file, and the editor under node --test
+npm run check                               # screenshots of every slide in both modes, console errors, problems in the page, a poster on every video, the phone layout, a pixel ratio of 1.25, the editor on the deck
 npm run check -- --browser firefox          # the same in Firefox or Safari over WebDriver, without the console, the phone layout, and the pixel ratio
 npm run pdf                                 # slides.pdf, one page per step, with a page count check
 npm run pptx                                # slides.pptx, one click per step, with videos and speaker notes
@@ -33,7 +34,7 @@ npm run pptx                                # slides.pptx, one click per step, w
 
 ## Conventions
 
-- The compiled `theme/beeson.js` is committed, since a talk must be usable without a toolchain. Rebuild it after every change under `src/`.
+- The compiled `theme/beeson.js` and `theme/editor.js` are committed, since a talk must be usable without a toolchain. Rebuild them after every change under `src/`. Nothing of the editor is loaded without `?edit`, and it does not fetch anything either.
 - Everything loaded in a deck is vendored under `theme/vendor/` with its license, and nothing is fetched from the network at show time.
 - The orbit engine is a port of `orbits.ts` of claudiovestini.com (MIT). Do not derive anything in this repository from DyLAN code.
 - The Princeton marks and the group logo in `brand/` are outside the MIT license, see `brand/NOTICE.md`.

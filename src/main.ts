@@ -37,7 +37,17 @@ const TRACED = ['title', 'section', 'closing'];
 
 const backdrops: Orbits[] = [];
 
-const still = () => Orbits.reduced() || window.Reveal.isPrintView() || /print-pdf/.test(location.search);
+// with the URL parameter edit, the in-place editor is loaded, and the deck is drawn still while it
+// is edited, without the traced backdrops and the tint at the pointer
+const EDITING = new URLSearchParams(location.search).has('edit');
+
+function edit(): void {
+  const params = new URLSearchParams(location.search);
+  params.set('edit', '');
+  location.href = `${location.href.split(/[?#]/)[0]}?${params.toString().replace(/=(?=&|$)/g, '')}${location.hash}`;
+}
+
+const still = () => EDITING || Orbits.reduced() || window.Reveal.isPrintView() || /print-pdf/.test(location.search);
 
 function remount(): void {
   for (const o of mount(document)) if (!backdrops.includes(o)) backdrops.push(o);
@@ -90,9 +100,11 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   initChrome(deck);
   initSteps(deck);
   remount();
-  initCursor(() => backdrops, () => deck.getCurrentSlide());
+  initCursor(() => backdrops, () => deck.getCurrentSlide(), !EDITING);
   deck.addKeyBinding({ keyCode: 68, key: 'D', description: 'Switch dark and light' }, (ev) => { if (forDeck(ev)) toggle(); });
   deck.addKeyBinding({ keyCode: 80, key: 'P', description: 'Pointer' }, (ev) => { if (forDeck(ev)) togglePointer(); });
+  // E opens the same slide in the editor, and the other parameters of the address are kept
+  if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: 'E', description: 'Edit the deck' }, (ev) => { if (forDeck(ev)) edit(); });
 
   if (still()) completeAll();
   else show(deck.getCurrentSlide());
@@ -103,8 +115,14 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   });
   deck.on('resize', () => { for (const o of backdrops) o.fit(); });
   syncViewers(get());
+  // the backdrops of the current slide are redrawn inside the flip, and the others after it, since
+  // a redraw of every backdrop of the deck holds the first frame of the flip. in the print view
+  // every page is in view
   document.addEventListener('beeson:theme', () => {
-    for (const o of backdrops) o.redraw();
+    const now = window.Reveal.isPrintView() ? backdrops : within(deck.getCurrentSlide());
+    for (const o of now) o.redraw();
+    const later = backdrops.filter((o) => !now.includes(o));
+    if (later.length) setTimeout(() => { for (const o of later) o.redraw(); }, 600);
     syncViewers(get());
   });
 }
@@ -119,6 +137,15 @@ function syncViewers(theme: string): void {
 }
 
 initTheme();
+
+// the editor, editor.js next to this script, is loaded after the deck. without the parameter, a
+// deck does not load it
+const self = document.currentScript as HTMLScriptElement | null;
+if (EDITING) {
+  const script = document.createElement('script');
+  script.src = self?.src ? new URL('editor.js', self.src).href : 'theme/editor.js';
+  document.head.append(script);
+}
 
 const Beeson = {
   start,
