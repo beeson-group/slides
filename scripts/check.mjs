@@ -1,6 +1,6 @@
 // Renders every slide of a deck in each theme, and fails on any page error.
 //
-//   node scripts/check.mjs [--deck index.html] [--themes dark,light] [--out check]
+//   node scripts/check.mjs [--browser chrome] [--deck index.html] [--themes dark,light] [--out check]
 //
 // For each theme, the deck is opened offline at ?theme=<theme>&still#/<h>/<v> once for each slide,
 // at 1920 by 1080 px, and saved as <out>/<theme>-<nn>.png, where nn is the number of the slide from
@@ -10,13 +10,19 @@
 // A page error is an uncaught exception, a console.error, or a failed load, e.g. of a missing file
 // or of anything on the network. Finally, the behaviors that a screenshot does not show are checked
 // in pages of their own. The script prints a summary and exits nonzero on any error.
+//
+// With --browser firefox or --browser safari, the deck is driven over WebDriver. The console is not
+// read in these browsers, hence a page error is then what is found in the page, with deckProblems.
+// A phone and a pixel ratio cannot be emulated in these browsers, thus they are checked only in Chrome.
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { deckSettled, deckUrl, launch } from './chrome.mjs';
+import { launch as launchWebDriver } from './webdriver.mjs';
 
 const { values: options } = parseArgs({
   options: {
+    browser: { type: 'string', default: 'chrome' },
     deck: { type: 'string', default: 'index.html' },
     themes: { type: 'string', default: 'dark,light' },
     out: { type: 'string', default: 'check' },
@@ -33,12 +39,16 @@ const listSlides = `[...document.querySelectorAll('.reveal .slides > section')].
 
 // what is wrong in a settled page, read from the page itself, hence in every browser
 const deckProblems = `[
+  ...[...document.images].filter((image) => image.complete && !image.naturalWidth).map((image) => 'image not loaded: ' + image.src),
+  ...[...document.fonts].filter((face) => face.status === 'error').map((face) => 'font not loaded: ' + face.family),
+  ...[...document.querySelectorAll('mjx-merror')].map((error) => 'formula not typeset: ' + error.textContent),
+  ...[...document.querySelectorAll('tycho-viewer')].map((viewer) => viewer.shadowRoot?.querySelector('.status.error')?.textContent).filter(Boolean),
   ...performance.getEntriesByType('resource').map((entry) => entry.name).filter((name) => /^https?:/.test(name)).map((name) => 'network load: ' + name),
 ]`;
 
 mkdirSync(options.out, { recursive: true });
 const failures = [];
-const browser = await launch();
+const browser = await (options.browser === 'chrome' ? launch() : launchWebDriver(options.browser));
 
 async function checkPhone() {
   const page = await browser.newPage({ width: 390, height: 844, mobile: true });
@@ -143,7 +153,9 @@ try {
         page.errors.push(`opened at #/${at.h}/${at.v ?? 0}, set hash: true in Reveal.initialize`);
       }
       writeFileSync(join(options.out, name), await page.screenshot());
-      for (const error of page.errors) failures.push(`${name} (#/${h}/${v}): ${error}`);
+      for (const error of [...page.errors, ...(await page.evaluate(deckProblems))]) {
+        failures.push(`${name} (#/${h}/${v}): ${error}`);
+      }
       await page.close();
     }
     console.log(`${theme}: ${slides.length} slides saved to ${options.out}/${theme}-*.png`);
@@ -164,8 +176,10 @@ try {
     for (const error of animated.errors) failures.push(`${theme} animated run: ${error}`);
     await animated.close();
   }
-  await checkPhone();
-  await checkScaled();
+  if (options.browser === 'chrome') {
+    await checkPhone();
+    await checkScaled();
+  }
   await checkDesktop();
   await checkHeads();
 } finally {
