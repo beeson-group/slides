@@ -25,6 +25,9 @@ jobs:
       - run: npm test
       # the Chrome preinstalled on each runner is found in scripts/chrome.mjs
       - run: npm run check
+      # Firefox on Linux has WebGL in software only in a window, hence Xvfb
+      - run: xvfb-run -a -s "-screen 0 1920x1080x24" npm run check -- --browser firefox --out check/firefox
+        if: ${{ !cancelled() && matrix.os == 'ubuntu-latest' }}
       - run: npm run pdf
         if: ${{ !cancelled() }}
       - uses: actions/upload-artifact@v4
@@ -32,6 +35,6 @@ jobs:
         with:
           name: slides-${{ matrix.os }}
           path: |
-            check/*.png
+            check/**/*.png
             slides.pdf
           if-no-files-found: warn
