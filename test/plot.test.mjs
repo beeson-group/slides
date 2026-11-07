@@ -1,8 +1,9 @@
-// checks of the plot element of src/plot.ts, i.e. the parser of the JSON block
+// checks of the plot element of src/plot.ts, i.e. the parser of the JSON block, the interpolation
+// between frames, and the loop
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { parsePlot } from '../src/plot.ts';
+import { framesAt, loopFrame, nearest, parsePlot, traceTo, valueAt } from '../src/plot.ts';
 
 const minimal = () => ({
   panels: [{ id: 'p', x: { range: [0, 1] }, y: { range: [0, 1] } }],
@@ -40,4 +41,31 @@ test('a fault in a plot is reported with its path', () => {
     change(plot);
     assert.throws(() => parsePlot(plot), { message });
   }
+});
+
+test('a frame between two frames is interpolated, and frames of different lengths are not', () => {
+  assert.equal(valueAt([0, 10, 30], 1.5), 20);
+  assert.equal(valueAt([0, 10, 30], 5), 30);
+  assert.deepEqual(framesAt([[0, 0], [2, 4]], 0.25), [0.5, 1]);
+  assert.deepEqual(framesAt([[0, 0], [2, 4, 6, 8]], 0.25), [0, 0]);
+  assert.deepEqual(framesAt([[0, 0], [2, 4, 6, 8]], 0.75), [2, 4, 6, 8]);
+  assert.deepEqual(framesAt([[5, 6]], 3), [5, 6]);
+  assert.equal(nearest(['a', 'b', 'c'], 1.4), 'b');
+  assert.equal(nearest(['a', 'b', 'c'], -2), 'a');
+});
+
+test('a trace ends between two frames', () => {
+  const path = [[0, 0], [1, 0], [1, 2]];
+  assert.deepEqual(traceTo(path, 0), [[0, 0]]);
+  assert.deepEqual(traceTo(path, 1.5), [[0, 0], [1, 0], [1, 1]]);
+  assert.deepEqual(traceTo(path, 9), path);
+});
+
+test('the loop runs over the frames, holds the last one, and starts again', () => {
+  // 11 frames in 2 s, held for 1 s
+  assert.equal(loopFrame(0, 11, 2, 1), 0);
+  assert.equal(loopFrame(1, 11, 2, 1), 5);
+  assert.equal(loopFrame(2.5, 11, 2, 1), 10);
+  assert.equal(loopFrame(4, 11, 2, 1), 5);
+  assert.equal(loopFrame(7, 1, 2, 1), 0);
 });
