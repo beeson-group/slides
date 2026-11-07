@@ -13,7 +13,9 @@ export type Tone = 'orange' | 'violet' | 'text' | 'hero' | 'line';
 // the last of them. alpha, when set, replaces the opacity of the tone. ink, when set, replaces the
 // color of the tone with the color at the fraction at between the two colors of the pair of the
 // palette --strand-1 to --strand-8 in theme/beeson.css, i.e. --strand-1 and --strand-2 for pair 0
-export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; alpha?: number; ink?: { pair: number; at: number } };
+// a strand of a file may also set its weight, i.e. its width in line widths, the size of its head
+// in line widths in place of the size of its backdrop, and a glow, a soft halo of its own color
+export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; alpha?: number; ink?: { pair: number; at: number }; weight?: number; head?: number; glow?: boolean };
 
 export const MU = 0.01215;
 // the distance to a body within which the step is shortened in step()
@@ -461,11 +463,15 @@ export class Orbits {
     }
   }
 
-  // the color, opacity, and width of a strand of the given tone
-  private pen(ctx: CanvasRenderingContext2D, c: Colors, tone: Tone | undefined): void {
-    ctx.strokeStyle = tone === 'orange' || tone === 'hero' ? c.accent : tone === 'violet' ? c.violet : tone === 'text' || tone === 'line' ? c.text : c.stroke;
-    ctx.globalAlpha = tone === 'orange' || tone === 'violet' ? 0.42 : tone === 'text' ? 0.8 : tone === 'line' ? 0.36 : 1;
-    ctx.lineWidth = tone === 'hero' ? this.lw * 2.2 : tone === 'text' ? this.lw * 1.3 : this.lw;
+  // the color, opacity, width, and glow of strand i: those of its tone, then its own ink, alpha,
+  // weight, and glow where it has them
+  private pen(ctx: CanvasRenderingContext2D, c: Colors, i: number): void {
+    const s = this.strands[i], tone = s.tone;
+    ctx.strokeStyle = s.ink ? this.inks[i] : tone === 'orange' || tone === 'hero' ? c.accent : tone === 'violet' ? c.violet : tone === 'text' || tone === 'line' ? c.text : c.stroke;
+    ctx.globalAlpha = s.alpha ?? (tone === 'orange' || tone === 'violet' ? 0.42 : tone === 'text' ? 0.8 : tone === 'line' ? 0.36 : 1);
+    ctx.lineWidth = (tone === 'hero' ? 2.2 : tone === 'text' ? 1.3 : 1) * (s.weight ?? 1) * this.lw;
+    ctx.shadowBlur = s.glow ? 6 * this.lw : 0;
+    if (s.glow) ctx.shadowColor = ctx.strokeStyle;
   }
 
   private segments(ctx: CanvasRenderingContext2D, i: number, from: number, to: number): void {
@@ -490,13 +496,11 @@ export class Orbits {
     this.paint(ctx, c);
     ctx.lineWidth = this.lw; ctx.lineJoin = 'round'; ctx.strokeStyle = c.stroke;
     this.bodies(ctx, c);
-    this.strands.forEach((s, i) => {
-      this.pen(ctx, c, s.tone);
-      if (s.alpha) ctx.globalAlpha = s.alpha;
-      if (s.ink) ctx.strokeStyle = this.inks[i];
+    this.strands.forEach((_, i) => {
+      this.pen(ctx, c, i);
       this.segments(ctx, i, 0, this.drawn(i));
     });
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
     this.paintHead(performance.now(), c);
   }
 
@@ -582,16 +586,37 @@ export class Orbits {
     ctx.fillStyle = c.accent; ctx.beginPath(); ctx.arc(X, Y, 3 * this.lw, 0, 2 * Math.PI); ctx.fill();
   }
 
+  // the radius of the head of strand i in line widths: its own, or the one of the backdrop
+  private headOf(i: number): number {
+    return this.strands[i].head ?? this.headSize;
+  }
+
+  // whether a head is drawn on any strand during the trace
+  get headed(): boolean {
+    return this.strands.some((_, i) => this.headOf(i) > 0);
+  }
+
+  // the seconds into the trace at which its first head is drawn, e.g. after the tubes of a transfer
+  get headAfter(): number {
+    const first = Math.min(...this.strands.filter((_, i) => this.headOf(i) > 0).map((s) => s.times[0]));
+    return Number.isFinite(first) && this.Tmax > 0 ? (first / this.Tmax) * DURATION : 0;
+  }
+
+  // the clock of the trace at the time now, in the units of the strands
+  private tau(now: number): number {
+    return ((now - (this.t0 ?? now)) / 1000 / DURATION) * this.Tmax;
+  }
+
   private heads(ctx: CanvasRenderingContext2D, c: Colors, now: number): void {
-    if (!this.headSize) return;
-    const tau = (((now - (this.t0 ?? now)) / 1000) / DURATION) * this.Tmax;
+    if (!this.headed) return;
+    const tau = this.tau(now);
     ctx.fillStyle = c.accent;
     this.strands.forEach((s, i) => {
-      const j = this.idx[i];
+      const j = this.idx[i], size = this.headOf(i);
       // the head of a strand is not drawn before times[0] of this strand
-      if (j >= s.times.length - 1 || tau < s.times[0]) return;
+      if (!size || j >= s.times.length - 1 || tau < s.times[0]) return;
       const [X, Y] = this.at(i, j, tau);
-      ctx.beginPath(); ctx.arc(X, Y, this.headSize * this.lw, 0, 2 * Math.PI); ctx.fill();
+      ctx.beginPath(); ctx.arc(X, Y, size * this.lw, 0, 2 * Math.PI); ctx.fill();
     });
   }
 
@@ -630,7 +655,7 @@ export class Orbits {
 
   private frame(now: number): void {
     if (this.loop || !this.W) { this.paintHead(now); return; }
-    const tau = (((now - (this.t0 ?? now)) / 1000) / DURATION) * this.Tmax;
+    const tau = this.tau(now);
     const ctx = this.base.getContext('2d');
     if (!ctx) return;
     const c = this.colors();
@@ -640,14 +665,12 @@ export class Orbits {
       const n = s.times.length;
       let j = this.idx[i];
       while (j < n - 1 && s.times[j + 1] <= tau) j++;
-      this.pen(ctx, c, s.tone);
-      if (s.alpha) ctx.globalAlpha = s.alpha;
-      if (s.ink) ctx.strokeStyle = this.inks[i];
+      this.pen(ctx, c, i);
       this.segments(ctx, i, this.idx[i], j);
       this.idx[i] = j;
       if (j < n - 1) flying++;
     });
-    ctx.globalAlpha = 1;
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
     if (flying === 0) this.finished = true;
     this.paintHead(now, c);
   }
