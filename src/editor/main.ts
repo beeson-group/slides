@@ -590,6 +590,80 @@ function placeCaret(host: Element, offset: number | null = null): void {
   selection.addRange(range);
 }
 
+// Cmd+B and Cmd+I wrap the selection in strong and em, as the deck is written, or take it out of
+// them when all of its text is inside. the command of the browser would write b and i, and it
+// nests a b inside a strong of the theme, whose weight of 500 it does not take for bold
+function toggleFormat(host: Element, tag: 'strong' | 'em'): void {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) return;
+  const range = selection.getRangeAt(0);
+  if (range.collapsed || !host.contains(range.commonAncestorContainer)) return;
+  const alias = tag === 'strong' ? 'b' : 'i';
+  const same = (el: Element) => el.localName === tag || el.localName === alias;
+  const formatOf = (node: Node): Element | null => {
+    for (let el = node instanceof Element ? node : node.parentElement; el && el !== host; el = el.parentElement) if (same(el)) return el;
+    return null;
+  };
+  const unwrap = (root: ParentNode) => {
+    for (const el of [...root.querySelectorAll(`${tag}, ${alias}`)]) el.replaceWith(...el.childNodes);
+  };
+  const common = range.commonAncestorContainer;
+  const texts: Text[] = [];
+  if (common instanceof Text) texts.push(common);
+  else {
+    const walker = document.createTreeWalker(common, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+      const empty = (node === range.startContainer && range.startOffset === node.length) || (node === range.endContainer && range.endOffset === 0);
+      if (range.intersectsNode(node) && !empty && node.data.trim()) texts.push(node);
+    }
+  }
+  const off = texts.length > 0 && texts.every((node) => formatOf(node));
+  const outer = off ? formatOf(common) : null;
+  let nodes: Node[];
+  if (outer) {
+    // the element around the whole selection is split into the part before it, the selection
+    // without the element, and the part after it, so that the formats inside it are kept
+    const start: [Node, number] = [range.startContainer, range.startOffset];
+    const tail = document.createRange();
+    tail.setStart(range.endContainer, range.endOffset);
+    tail.setEnd(outer, outer.childNodes.length);
+    const after = outer.cloneNode(false) as Element;
+    after.append(tail.extractContents());
+    const head = document.createRange();
+    head.setStart(outer, 0);
+    head.setEnd(...start);
+    const before = outer.cloneNode(false) as Element;
+    before.append(head.extractContents());
+    unwrap(outer);
+    nodes = [...outer.childNodes];
+    outer.before(before);
+    outer.after(after);
+    outer.replaceWith(...nodes);
+  } else {
+    const fragment = range.extractContents();
+    unwrap(fragment);
+    if (off) {
+      nodes = [...fragment.childNodes];
+      range.insertNode(fragment);
+    } else {
+      const el = document.createElement(tag);
+      el.append(fragment);
+      range.insertNode(el);
+      nodes = [el];
+    }
+  }
+  for (const el of [...host.querySelectorAll('strong, em, b, i')]) {
+    if (!el.textContent && !el.querySelector('br, img, mjx-container')) el.remove();
+  }
+  if (nodes.length) {
+    const selected = document.createRange();
+    selected.setStartBefore(nodes[0]);
+    selected.setEndAfter(nodes[nodes.length - 1]);
+    selection.removeAllRanges();
+    selection.addRange(selected);
+  }
+  host.normalize();
+}
 
 const hostOf = (target: EventTarget | null): Element | null => {
   const host = target instanceof Element ? target.closest(HOST) : null;
@@ -618,6 +692,18 @@ function onBeforeInput(ev: InputEvent): void {
   if (type === 'historyUndo' || type === 'historyRedo') {
     ev.preventDefault();
     void (type === 'historyUndo' ? history.undo() : history.redo()).catch(fail);
+    return;
+  }
+  // bold and italic are an entry of the history each
+  if (type === 'formatBold' || type === 'formatItalic') {
+    ev.preventDefault();
+    history.break();
+    history.beforeTyping(host);
+    toggleFormat(host, type === 'formatBold' ? 'strong' : 'em');
+    history.afterTyping(host);
+    history.break();
+    markDirty();
+    follow();
     return;
   }
   // a new line starts a new entry of the history, as in a text editor
