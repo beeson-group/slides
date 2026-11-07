@@ -1,10 +1,11 @@
 // a `.surface`: the graph z = f(x, y) of a function of surfaces.ts over its rectangle, drawn with
-// three.js under an orbit camera that turns slowly. its stage is set by the fragments of its slide
-// with data-surface-stage, and a change of stage is animated. the heights are morphed, the marks
-// are raised into place, and the cutting plane is slid to its level, where the curve of
-// intersection is drawn. three.js is the global THREE of theme/vendor/three/three.js. one WebGL
-// renderer is shared by every surface of the page, and its image is copied to a 2D canvas in each
-// element. hence the page of each step in the print view does not hold a WebGL context of its own
+// three.js under an orbit camera that turns slowly and is turned by a drag. its stage is set by the
+// fragments of its slide with data-surface-stage, and a change of stage is animated. the heights
+// are morphed, the marks are raised into place, and the cutting plane is slid to its level, where
+// the curve of intersection is drawn. three.js is the global THREE of theme/vendor/three/three.js.
+// one WebGL renderer is shared by every surface of the page, and its image is copied to a 2D canvas
+// in each element. hence the page of each step in the print view does not hold a WebGL context of
+// its own
 
 import type * as Three from 'three';
 import { FUNCTION_NAMES, clamped, levelCurves, sample, surfaceFunction } from './surfaces.ts';
@@ -247,6 +248,8 @@ export class Surface {
   private active = false;
   private raf = 0;
   private last = 0;
+  private resume = 0;
+  private drag: { x: number; y: number } | null = null;
   private W = 0;
   private H = 0;
   private w = 0;
@@ -269,6 +272,7 @@ export class Surface {
     this.canvas.className = 'surface-image';
     this.canvas.setAttribute('aria-hidden', 'true');
     el.prepend(this.canvas);
+    el.setAttribute('data-prevent-swipe', '');
     this.labels = [...el.querySelectorAll<HTMLElement>('.lab')];
 
     for (const [name, f] of Object.entries(fn.layers)) {
@@ -294,6 +298,7 @@ export class Surface {
     this.points = this.makeMarks();
     this.scene.add(this.surface, this.plane, this.glow, this.curve, this.points);
     this.recolor();
+    this.bindDrag();
     CACHE.set(el, this);
     this.sync(false);
     this.fit();
@@ -668,6 +673,34 @@ export class Surface {
     return false;
   }
 
+  private bindDrag(): void {
+    const el = this.el;
+    el.addEventListener('pointerdown', (ev) => {
+      if (ev.button !== 0) return;
+      this.drag = { x: ev.clientX, y: ev.clientY };
+      // the capture is refused for a pointer that is not active, e.g. that of a synthetic event
+      try { el.setPointerCapture(ev.pointerId); } catch { /* the drag is followed without a capture */ }
+      el.classList.add('dragging');
+    });
+    el.addEventListener('pointermove', (ev) => {
+      if (!this.drag) return;
+      const scale = el.getBoundingClientRect().width / (el.offsetWidth || 1) || 1;
+      const dx = (ev.clientX - this.drag.x) / scale, dy = (ev.clientY - this.drag.y) / scale;
+      this.drag = { x: ev.clientX, y: ev.clientY };
+      this.azimuth -= dx * 0.005;
+      this.elevation = clamp(this.elevation + dy * 0.004, 0.12, 1.45);
+      if (!this.raf) this.draw();
+    });
+    const end = () => {
+      if (!this.drag) return;
+      this.drag = null;
+      el.classList.remove('dragging');
+      this.resume = performance.now() + 1500;
+    };
+    el.addEventListener('pointerup', end);
+    el.addEventListener('pointercancel', end);
+  }
+
   private kick(): void {
     if (this.active && !this.raf) this.raf = requestAnimationFrame(this.tick);
   }
@@ -684,7 +717,7 @@ export class Surface {
       this.shown = { lo: lerp(a.lo, b.lo, e), hi: lerp(a.hi, b.hi, e), marks: lerp(a.marks, b.marks, b.marks > a.marks ? late : e), cut: lerp(a.cut, b.cut, e), level: lerp(a.level, b.level, e) };
       if (k >= 1) this.moving = false;
     }
-    if (this.rate) this.azimuth += dt * this.rate;
+    if (this.rate && !this.drag && now > this.resume) this.azimuth += dt * this.rate;
     this.draw();
     if (this.moving || this.rate) this.kick();
   };
