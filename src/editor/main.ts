@@ -39,6 +39,7 @@ type Deck = {
   right(): void;
   on(type: string, listener: () => void): void;
 };
+type Draft = { at: number; text: string };
 
 const FILE_TYPES = [{ description: 'HTML', accept: { 'text/html': ['.html', '.htm'] } }];
 const HOST = '[contenteditable="true"]';
@@ -354,6 +355,8 @@ function status() {
     redo: history.canRedo,
     autosave,
     overflow: overflowing,
+    draft: readDraft() !== null,
+    recover: !recover.hidden,
     pane: paneHeight,
   };
 }
@@ -382,6 +385,7 @@ function open(text: string, fresh = true): ReturnType<typeof status> {
   attach();
   report();
   follow();
+  if (fresh) offerDraft();
   return status();
 }
 
@@ -506,8 +510,10 @@ async function doSave(): Promise<void> {
   // reads as the saved text
   if (render() === rendered.text) {
     open(rendered.text, false);
+    dropDraft();
   } else {
     report();
+    scheduleAutosave();
   }
 }
 
@@ -531,6 +537,9 @@ function markDirty(): void {
     note = null;
     report();
   }
+  window.clearTimeout(draftTimer);
+  draftTimer = window.setTimeout(keepDraft, DRAFT_DELAY);
+  scheduleAutosave();
 }
 
 // a deck whose text is the file again, e.g. after its edits were undone, is clean
@@ -542,9 +551,93 @@ function cleanIfSaved(): void {
     return;
   }
   dirty = false;
+  window.clearTimeout(autosaveTimer);
+  dropDraft();
   report();
 }
 
+function keepDraft(): void {
+  if (!dirty || !source || !pairing) return;
+  const draft: Draft = { at: Date.now(), text: render() };
+  store(DRAFT_KEY, JSON.stringify(draft));
+}
+
+function dropDraft(): void {
+  window.clearTimeout(draftTimer);
+  store(DRAFT_KEY, null);
+}
+
+function readDraft(): Draft | null {
+  const raw = stored(DRAFT_KEY);
+  if (!raw) return null;
+  try {
+    const draft = JSON.parse(raw) as Partial<Draft>;
+    return typeof draft.text === 'string' && typeof draft.at === 'number' ? { at: draft.at, text: draft.text } : null;
+  } catch {
+    return null;
+  }
+}
+
+// a draft that differs from the file that was opened is offered on the card
+function offerDraft(): void {
+  const draft = readDraft();
+  if (!draft || !source || draft.text === source.text) {
+    if (draft) dropDraft();
+    recover.hidden = true;
+    return;
+  }
+  const when = new Date(draft.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+  recoverText.textContent = `Edits of ${fileName()} from ${when} were kept in this browser and not saved. Restore writes the file with them and shows it again, a copy goes to your downloads, and Discard forgets them.`;
+  copyButton.hidden = false;
+  recover.hidden = false;
+}
+
+async function restoreDraft(): Promise<void> {
+  const draft = readDraft();
+  if (!draft) {
+    recover.hidden = true;
+    return;
+  }
+  if (!handle && canWrite() && !(await pickTarget())) return;
+  if (handle) {
+    await write(handle, draft.text);
+    dropDraft();
+    location.reload();
+    return;
+  }
+  copyDraft();
+}
+
+function copyDraft(): void {
+  const draft = readDraft();
+  if (draft) download(fileName(), draft.text);
+  dropDraft();
+  recover.hidden = true;
+  note = { text: `A copy of ${fileName()} with the edits is in your downloads. Replace the file with it and open it again`, warn: false };
+  report();
+}
+
+function discardDraft(): void {
+  dropDraft();
+  recover.hidden = true;
+  report();
+}
+
+function scheduleAutosave(): void {
+  window.clearTimeout(autosaveTimer);
+  if (!autosave || !handle) return;
+  autosaveTimer = window.setTimeout(() => {
+    if (dirty && !saving) void save().catch(fail);
+  }, AUTOSAVE_DELAY);
+}
+
+// the switch is kept in the storage, as the AutoSave switch of PowerPoint
+function toggleAutosave(): void {
+  autosave = !autosave;
+  store(AUTOSAVE_KEY, autosave ? '1' : '0');
+  if (dirty) scheduleAutosave();
+  report();
+}
 
 // the saved deck in a new tab, without the editor. with unsaved changes, the user is asked first
 async function present(): Promise<void> {
@@ -937,6 +1030,11 @@ async function init(): Promise<void> {
   document.head.append(style);
   document.body.append(top, bottom, pane, resizer, nav.pane, steps.pane, steps.badges, move.frame, move.selectedFrame, move.handle, move.guideV, move.guideH, move.offset, card, recover, ask, problemsCard);
   document.documentElement.classList.add('beeson-editor');
+  autosave = canWrite() && stored(AUTOSAVE_KEY) === '1';
+  if (!canWrite()) {
+    autosaveButton.disabled = true;
+    autosaveButton.title = 'Autosave needs a browser that writes the file in place, i.e. Chrome or Edge';
+  }
   setPane(Number(stored(PANE_KEY)) || 200);
   // a pointer click leaves the focus on the slide, and Enter or Space on a focused button keeps it
   const wire = (el: HTMLButtonElement, action: () => unknown) => el.addEventListener('click', (ev) => {
@@ -947,12 +1045,16 @@ async function init(): Promise<void> {
   wire(cardButton, openFile);
   wire(saveButton, save);
   wire(saveAsButton, saveAs);
+  wire(autosaveButton, toggleAutosave);
   wire(presentButton, present);
   wire(undoButton, () => history.undo());
   wire(redoButton, () => history.redo());
   wire(prevButton, () => deck()?.left());
   wire(nextButton, () => deck()?.right());
   wire(notesButton, toggleNotes);
+  wire(restoreButton, restoreDraft);
+  wire(copyButton, copyDraft);
+  wire(discardButton, discardDraft);
   resizer.addEventListener('keydown', (ev) => {
     const step = ev.key === 'ArrowUp' ? 20 : ev.key === 'ArrowDown' ? -20 : 0;
     if (!step) return;
@@ -1023,6 +1125,8 @@ const BeesonEditor = {
   setMath,
   undo: () => history.undo(),
   redo: () => history.redo(),
+  toggleAutosave,
+  restoreDraft,
   setPane,
   // the file written by save, for a test with a handle of the origin private file system
   attach: (h: FileSystemFileHandle) => { handle = h; },
