@@ -1,9 +1,10 @@
 // checks of the backdrops drawn from a file of polylines: the parse, the select and color
-// attributes, and the fit, run under type stripping
+// attributes, and the fit under type stripping, and a missing or malformed file in Chrome
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { deckSettled, deckUrl, launch } from '../scripts/chrome.mjs';
 import { FILL, bodiesOf, fitView, mix, parse, select, strandsOf } from '../src/strands.ts';
 
 // the sample of the demo deck is a JSON object wrapped in Beeson.strands( and );
@@ -176,4 +177,40 @@ test('the bodies are drawn only where they are fixed in the frame of the chosen 
   assert.deepEqual(at('family=7,frame=pulsating'), ['-0.01215 0.987845', '0.98784 0.012155']);
   assert.deepEqual(at('frame=pulsating'), ['-0.01215 0.987845', '0.98784 0.012155', '-0.5 0.5', '0.5 0.5']);
   assert.deepEqual(at('frame=inertial'), []);
+});
+
+// a missing, malformed, or unreadable file and a selection without a match are each reported in one
+// warning, and their backdrops are left empty without an exception
+test('a backdrop of a missing or malformed file is left empty after one warning', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl('test/pages/strands.html', 'still'));
+  await page.waitFor(deckSettled);
+  const seen = await page.evaluate(`({
+    warnings: window.warnings,
+    counts: Beeson.backdrops.map((b) => b.strands.length),
+  })`);
+  assert.deepEqual(
+    seen.counts.map((n) => n > 0),
+    [true, false, false, false, false, false],
+  );
+  // the files are read at once, hence the warnings come in any order
+  const reasons = [
+    /missing\.js is not drawn, since it was not found/,
+    /strands-malformed\.js is not drawn, since it does not have a list "families"/,
+    /broucke-sample\.json is not drawn, since a JSON file cannot be read in a deck opened from the disk/,
+    /data-strands-select="family=99" does not match/,
+  ];
+  assert.equal(seen.warnings.length, reasons.length, seen.warnings.join('\n'));
+  for (const reason of reasons) assert.equal(seen.warnings.filter((w) => reason.test(w)).length, 1, `${reason}`);
+  const thrown = page.errors.filter((e) => !/Failed to load resource/.test(e));
+  assert.deepEqual(thrown, []);
+
+  // the backdrop of the sample is painted
+  const painted = await page.evaluate(`(() => {
+    const { base } = Beeson.backdrops[0];
+    return base.getContext('2d').getImageData(0, 0, base.width, base.height).data.some(Boolean);
+  })()`);
+  assert.ok(painted);
 });
