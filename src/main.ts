@@ -6,6 +6,7 @@ import { Orbits, mount } from './orbits.ts';
 import { initChrome } from './chrome.ts';
 import { initCursor, togglePointer } from './cursor.ts';
 import { stillViewers } from './print.ts';
+import { register } from './strands.ts';
 import { initSteps } from './steps.ts';
 import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.ts';
 import type { RevealOptions, SlideEvent } from './reveal.d.ts';
@@ -124,6 +125,8 @@ const Beeson = {
   start,
   theme: { get, set: (theme: 'dark' | 'light') => set(theme), toggle: () => toggle() },
   backdrops,
+  // called in a script file of polylines named in data-strands, see src/strands.ts
+  strands: register,
   version: __VERSION__,
 };
 
