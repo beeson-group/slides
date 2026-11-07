@@ -1,6 +1,8 @@
-// the JSON of an animated 2D plot, i.e. its parser, the interpolation between its frames, and the
-// small markup of its text, in which $...$ is math with italic letters, sub- and superscripts, and
-// TeX names of symbols
+// an animated 2D plot in a `.plot` element, drawn as SVG from an inline JSON block named by the
+// attribute data-plot. the format is documented in the README. the plot is played in a loop while
+// its slide is shown, and the fragments of its slide reveal its panels and marks with
+// data-plot-show and switch its tab with data-plot-tab. text in the JSON is set in a small markup,
+// in which $...$ is math with italic letters, sub- and superscripts, and TeX names of symbols
 
 type Pair = [number, number];
 type Anchor = 'start' | 'middle' | 'end';
@@ -330,4 +332,494 @@ export function setMarkup(el: HTMLElement, src: string): void {
     if (r.shift) { const s = document.createElement(r.shift); s.append(node); node = s; }
     return node;
   }));
+}
+
+const SVG = 'http://www.w3.org/2000/svg';
+
+function svg<K extends keyof SVGElementTagNameMap>(tag: K, attrs: Record<string, string | number>, parent?: Element): SVGElementTagNameMap[K] {
+  const el = document.createElementNS(SVG, tag);
+  for (const [k, v] of Object.entries(attrs)) el.setAttribute(k, String(v));
+  parent?.append(el);
+  return el;
+}
+
+// a tone is the name of a custom property of the theme, e.g. accent or data-3, or a CSS color
+const toneColor = (tone: string) => (/^[a-z][a-z0-9-]*$/.test(tone) ? `var(--${tone})` : tone);
+
+const words = (s: string | undefined | null) => (s ?? '').split(/\s+/).filter(Boolean);
+
+type Box = { x: number; y: number; w: number; h: number; sx: number; sy: number; panel: Panel };
+
+const MARGIN = { left: 76, right: 20, top: 52, bottom: 84 };
+const GAP = 56;
+
+let serial = 0;
+
+const reduced = () => typeof window === 'undefined' || matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+const CACHE = new WeakMap<HTMLElement, PlotView>();
+
+/** One animated plot per `.plot` element. */
+export class PlotView {
+  readonly el: HTMLElement;
+  private spec: Plot | null = null;
+  private panels: Panel[] = [];
+  private tab = 0;
+  private u = 0;
+  private raf = 0;
+  private t0 = 0;
+  private W = 0;
+  private H = 0;
+  private uid = ++serial;
+  private body!: HTMLElement;
+  private area!: HTMLElement;
+  private svgEl!: SVGSVGElement;
+  private overlay!: HTMLElement;
+  private tabButtons: HTMLButtonElement[] = [];
+  private playButton!: HTMLButtonElement;
+  private scrub!: HTMLElement;
+  private fill!: HTMLElement;
+  private knob!: HTMLElement;
+  private ticks!: HTMLElement;
+  private value!: HTMLElement;
+  private boxes = new Map<string, Box>();
+  private gated: { node: Element; names: string[] }[] = [];
+  private emphasized: { node: Element; id: string }[] = [];
+  private drawers: ((u: number) => void)[] = [];
+  private eventFrames: { frame: number; names: string[] }[] = [];
+  private shown = new Set<string>();
+  private steps = new Set<string>();
+  private stepTab: string | null = null;
+
+  constructor(el: HTMLElement) {
+    this.el = el;
+    CACHE.set(el, this);
+    // a slide is cloned with its plot for each step in the print view of reveal.js
+    for (const old of el.querySelectorAll(':scope > .plot-body, :scope > .plot-error')) old.remove();
+    try {
+      const id = el.dataset.plot ?? '';
+      const block = id ? document.getElementById(id) : null;
+      if (!block) throw new Error(`the JSON block with the id "${id}" is not found`);
+      this.spec = parsePlot(block.textContent ?? '');
+    } catch (error) {
+      const message = `plot ${el.dataset.plot ?? ''}: ${(error as Error).message}`;
+      const box = document.createElement('div');
+      box.className = 'plot-error';
+      box.textContent = message;
+      el.append(box);
+      console.error(message);
+      return;
+    }
+    const only = words(el.dataset.plotPanels);
+    this.panels = only.length ? this.spec.panels.filter((p) => only.includes(p.id)) : this.spec.panels;
+    const start = this.spec.tabs.findIndex((t) => t.name === el.dataset.plotTab);
+    this.tab = Math.max(0, start);
+    this.build();
+  }
+
+  private get plot(): Plot {
+    return this.spec as Plot;
+  }
+
+  private get frames(): number {
+    return this.plot.tabs[this.tab].values.length;
+  }
+
+  private build(): void {
+    const plot = this.plot;
+    this.body = document.createElement('div');
+    this.body.className = 'plot-body';
+    if (plot.tabs.length > 1) {
+      const bar = document.createElement('div');
+      bar.className = 'plot-tabs';
+      bar.setAttribute('role', 'tablist');
+      this.tabButtons = plot.tabs.map((t, i) => {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.setAttribute('role', 'tab');
+        setMarkup(b, t.label);
+        b.addEventListener('click', () => { b.blur(); this.setTab(i); });
+        bar.append(b);
+        return b;
+      });
+      this.body.append(bar);
+    }
+    this.area = document.createElement('div');
+    this.area.className = 'plot-area';
+    this.svgEl = svg('svg', { 'aria-hidden': 'true' });
+    this.overlay = document.createElement('div');
+    this.overlay.className = 'plot-labels';
+    this.area.append(this.svgEl, this.overlay);
+    this.body.append(this.area);
+
+    const controls = document.createElement('div');
+    controls.className = 'plot-bar';
+    this.playButton = document.createElement('button');
+    this.playButton.type = 'button';
+    this.playButton.className = 'plot-play';
+    this.playButton.addEventListener('click', () => {
+      this.playButton.blur();
+      if (this.raf) this.pause();
+      else this.play();
+    });
+    this.scrub = document.createElement('div');
+    this.scrub.className = 'plot-scrub';
+    // a drag on the scrubber is not a swipe of the deck
+    this.scrub.setAttribute('data-prevent-swipe', '');
+    this.fill = document.createElement('div');
+    this.fill.className = 'plot-fill';
+    this.knob = document.createElement('div');
+    this.knob.className = 'plot-knob';
+    this.ticks = document.createElement('div');
+    this.ticks.className = 'plot-ticks';
+    this.scrub.append(this.ticks, this.fill, this.knob);
+    const seek = (ev: PointerEvent) => {
+      const r = this.scrub.getBoundingClientRect();
+      if (!r.width) return;
+      this.u = clamp((ev.clientX - r.left) / r.width, 0, 1) * (this.frames - 1);
+      this.draw();
+    };
+    this.scrub.addEventListener('pointerdown', (ev) => {
+      this.pause();
+      this.scrub.setPointerCapture(ev.pointerId);
+      seek(ev);
+    });
+    this.scrub.addEventListener('pointermove', (ev) => { if (this.scrub.hasPointerCapture(ev.pointerId)) seek(ev); });
+    const readout = document.createElement('div');
+    readout.className = 'plot-readout';
+    if (plot.parameter.label) {
+      const name = document.createElement('span');
+      setMarkup(name, plot.parameter.label);
+      readout.append(name, ' = ');
+    }
+    this.value = document.createElement('span');
+    this.value.className = 'plot-value';
+    readout.append(this.value);
+    controls.append(this.playButton, this.scrub, readout);
+    this.body.append(controls);
+    this.el.append(this.body);
+    this.setPlaying(false);
+    this.markTabs();
+  }
+
+  private setPlaying(on: boolean): void {
+    if (!this.spec) return;
+    this.playButton.setAttribute('aria-label', on ? 'Pause' : 'Play');
+    this.playButton.classList.toggle('playing', on);
+  }
+
+  private markTabs(): void {
+    this.tabButtons.forEach((b, i) => b.setAttribute('aria-selected', String(i === this.tab)));
+  }
+
+  /** Lays the panels out in the size of the element, which is measured in slide pixels. */
+  fit(): void {
+    if (!this.spec) return;
+    const W = this.area.offsetWidth, H = this.area.offsetHeight;
+    if (!W || !H) return;
+    if (W === this.W && H === this.H) return;
+    this.W = W;
+    this.H = H;
+    this.svgEl.setAttribute('viewBox', `0 0 ${W} ${H}`);
+    this.layout();
+    this.drawStatic();
+    this.buildMarks();
+  }
+
+  private layout(): void {
+    const n = this.panels.length, row = (this.plot.layout ?? (this.W >= this.H ? 'row' : 'column')) === 'row';
+    const cw = row ? (this.W - GAP * (n - 1)) / n : this.W, ch = row ? this.H : (this.H - GAP * (n - 1)) / n;
+    this.boxes.clear();
+    this.panels.forEach((p, i) => {
+      const cx = row ? i * (cw + GAP) : 0, cy = row ? 0 : i * (ch + GAP);
+      let x = cx + MARGIN.left, y = cy + MARGIN.top, w = cw - MARGIN.left - MARGIN.right, h = ch - MARGIN.top - MARGIN.bottom;
+      const dx = p.x.range[1] - p.x.range[0], dy = p.y.range[1] - p.y.range[0];
+      if (p.equal) {
+        const s = Math.min(w / dx, h / dy);
+        x += (w - s * dx) / 2;
+        y += (h - s * dy) / 2;
+        w = s * dx;
+        h = s * dy;
+      }
+      this.boxes.set(p.id, { x, y, w, h, sx: w / dx, sy: h / dy, panel: p });
+    });
+  }
+
+  private X(b: Box, x: number): number {
+    return b.x + (x - b.panel.x.range[0]) * b.sx;
+  }
+
+  private Y(b: Box, y: number): number {
+    return b.y + b.h - (y - b.panel.y.range[0]) * b.sy;
+  }
+
+  private path(b: Box, pts: Pair[]): string {
+    return pts.map(([x, y], i) => `${i ? 'L' : 'M'}${this.X(b, x).toFixed(1)} ${this.Y(b, y).toFixed(1)}`).join('');
+  }
+
+  private label(text: string, left: number, top: number, a: Anchor, cls: string, names: string[], tone?: string): HTMLElement {
+    const el = document.createElement('div');
+    el.className = `plot-label ${cls}`.trim();
+    setMarkup(el, text);
+    this.place(el, left, top, a);
+    if (tone) el.style.color = toneColor(tone);
+    this.overlay.append(el);
+    this.gate(el, names);
+    return el;
+  }
+
+  private place(el: HTMLElement, left: number, top: number, a: Anchor): void {
+    el.style.left = `${left}px`;
+    el.style.top = `${top}px`;
+    el.style.transform = `translate(${a === 'start' ? 0 : a === 'end' ? -100 : -50}%, -50%)`;
+  }
+
+  private gate(node: Element, names: (string | null)[]): void {
+    const n = names.filter((s): s is string => !!s);
+    if (n.length) this.gated.push({ node, names: n });
+  }
+
+  private styleItem(node: Element, it: Item, names: (string | null)[]): void {
+    (node as HTMLElement | SVGElement).style.color = toneColor(it.tone);
+    node.classList.add(...it.cls);
+    this.gate(node, names);
+    if (it.id) this.emphasized.push({ node, id: it.id });
+  }
+
+  private drawStatic(): void {
+    this.svgEl.replaceChildren();
+    this.overlay.replaceChildren();
+    this.gated = [];
+    this.emphasized = [];
+    const defs = svg('defs', {}, this.svgEl);
+    for (const b of this.boxes.values()) {
+      const p = b.panel;
+      const g = svg('g', { class: 'plot-panel' }, this.svgEl);
+      this.gate(g, [p.id]);
+      // the marks are clipped a little outside the axes, so that a point on an axis is drawn whole
+      for (const [suffix, pad] of [['', 0], ['-marks', 14]] as const) {
+        const clip = svg('clipPath', { id: `plot-${this.uid}-${p.id}${suffix}` }, defs);
+        svg('rect', { x: b.x - pad, y: b.y - pad, width: b.w + 2 * pad, height: b.h + 2 * pad }, clip);
+      }
+      const statics = svg('g', { 'clip-path': `url(#plot-${this.uid}-${p.id})` }, g);
+      for (const r of p.regions) {
+        const node = svg('path', { class: 'plot-region', d: `${this.path(b, r.points)}Z`, 'fill-opacity': r.opacity }, statics);
+        this.styleItem(node, r, [p.id, r.id]);
+      }
+      for (const c of p.curves) {
+        const attrs: Record<string, string | number> = { class: 'plot-curve', 'stroke-width': c.width };
+        if (c.dash) attrs['stroke-dasharray'] = c.dash.join(' ');
+        const node = c.circle
+          ? svg('ellipse', { ...attrs, cx: this.X(b, c.circle[0]), cy: this.Y(b, c.circle[1]), rx: c.circle[2] * b.sx, ry: c.circle[2] * b.sy }, statics)
+          : svg('path', { ...attrs, d: this.path(b, c.points ?? []) }, statics);
+        this.styleItem(node, c, [p.id, c.id]);
+      }
+      if (p.axes) {
+        const axes = svg('g', { class: 'plot-axes' }, g);
+        svg('path', { d: `M${b.x} ${b.y}V${b.y + b.h}H${b.x + b.w}` }, axes);
+        for (const t of p.x.ticks) {
+          const X = this.X(b, t);
+          svg('path', { d: `M${X} ${b.y + b.h}v10` }, axes);
+          this.label(formatNumber(t), X, b.y + b.h + 32, 'middle', 'plot-tick', [p.id]);
+        }
+        for (const t of p.y.ticks) {
+          const Y = this.Y(b, t);
+          svg('path', { d: `M${b.x} ${Y}h-10` }, axes);
+          this.label(formatNumber(t), b.x - 18, Y, 'end', 'plot-tick', [p.id]);
+        }
+        if (p.x.title) this.label(p.x.title, b.x + b.w / 2, b.y + b.h + 70, 'middle', 'plot-title', [p.id]);
+        if (p.y.title) this.label(p.y.title, b.x, b.y - 30, 'middle', 'plot-title', [p.id]);
+      }
+      if (p.title) this.label(p.title, b.x + b.w, b.y - 30, 'end', 'plot-title', [p.id]);
+      for (const l of p.labels) {
+        const node = this.label(l.text, this.X(b, l.at[0]) + l.dx, this.Y(b, l.at[1]) + l.dy, l.anchor, '', []);
+        this.styleItem(node, l, [p.id, l.id]);
+      }
+      svg('g', { class: 'plot-marks', 'data-panel': p.id, 'clip-path': `url(#plot-${this.uid}-${p.id}-marks)` }, g);
+    }
+  }
+
+  // the nodes of the marks of the current tab, with one drawer per mark that sets them at a frame
+  private buildMarks(): void {
+    for (const g of this.svgEl.querySelectorAll('.plot-marks')) g.replaceChildren();
+    for (const old of this.overlay.querySelectorAll('.plot-mark')) old.remove();
+    this.gated = this.gated.filter((e) => e.node.isConnected);
+    this.drawers = [];
+    this.eventFrames = [];
+    const tab = this.plot.tabs[this.tab];
+    for (const m of this.plot.marks) {
+      const b = this.boxes.get(m.panel), data = tab.data[m.id];
+      const g = this.svgEl.querySelector(`.plot-marks[data-panel="${m.panel}"]`);
+      if (!b || !g || data === undefined) continue;
+      const group = svg('g', {}, g);
+      this.styleItem(group, m, [m.panel, m.id]);
+      if (m.kind === 'points') {
+        const frames = data as number[][];
+        const dots: SVGCircleElement[] = [];
+        this.drawers.push((u) => {
+          const at = framesAt(frames, u);
+          while (dots.length < at.length / 2) dots.push(svg('circle', { r: m.size / 2, class: m.hollow ? 'plot-hollow' : 'plot-dot', 'stroke-width': m.width }, group));
+          dots.forEach((d, k) => {
+            const on = 2 * k < at.length;
+            d.style.display = on ? '' : 'none';
+            if (on) { d.setAttribute('cx', this.X(b, at[2 * k]).toFixed(1)); d.setAttribute('cy', this.Y(b, at[2 * k + 1]).toFixed(1)); }
+          });
+        });
+      } else if (m.kind === 'trace') {
+        const pts = data as Pair[];
+        svg('path', { class: 'plot-ghost', d: this.path(b, pts), 'stroke-width': m.width }, group);
+        const done = svg('path', { class: 'plot-trace', 'stroke-width': m.width }, group);
+        const head = svg('circle', { class: 'plot-dot', r: m.size / 2 }, group);
+        this.drawers.push((u) => {
+          const p = traceTo(pts, u), [x, y] = p[p.length - 1];
+          done.setAttribute('d', this.path(b, p));
+          head.setAttribute('cx', this.X(b, x).toFixed(1));
+          head.setAttribute('cy', this.Y(b, y).toFixed(1));
+        });
+      } else if (m.kind === 'label') {
+        const d = data as LabelData;
+        const el = this.label(d.text[0], 0, 0, m.anchor, 'plot-mark', [m.panel, m.id], m.tone);
+        el.classList.add(...m.cls);
+        let shown = d.text[0];
+        this.drawers.push((u) => {
+          const [x, y] = d.at.length === 1 ? d.at[0] : (framesAt(d.at, u) as Pair);
+          this.place(el, this.X(b, x) + m.dx, this.Y(b, y) + m.dy, m.anchor);
+          const text = nearest(d.text, u);
+          if (text !== shown) { setMarkup(el, text); shown = text; }
+        });
+      } else {
+        const events = data as PlotEvent[];
+        const nodes = events.map((e) => {
+          const X = this.X(b, e.at[0]), Y = this.Y(b, e.at[1]);
+          const ring = svg('circle', { class: 'plot-ring', cx: X, cy: Y, r: m.size / 2, 'stroke-width': m.width }, group);
+          const text = e.text ? this.label(e.text, X + m.dx, Y + m.dy, m.anchor, 'plot-mark', [m.panel, m.id], m.tone) : null;
+          text?.classList.add(...m.cls);
+          this.eventFrames.push({ frame: e.frame, names: [m.panel, m.id] });
+          return { frame: e.frame, nodes: [ring, text].filter((n): n is SVGCircleElement | HTMLElement => !!n) };
+        });
+        this.drawers.push((u) => {
+          for (const e of nodes) for (const n of e.nodes) n.classList.toggle('plot-later', u < e.frame - 1e-6);
+        });
+      }
+    }
+    this.applyGates();
+    this.draw();
+  }
+
+  private draw(): void {
+    if (!this.spec || !this.W) return;
+    const tab = this.plot.tabs[this.tab], u = this.u, n = this.frames;
+    for (const d of this.drawers) d(u);
+    this.value.textContent = formatNumber(valueAt(tab.values, u), this.plot.parameter.digits);
+    const at = `${(n > 1 ? u / (n - 1) : 0) * 100}%`;
+    this.fill.style.width = at;
+    this.knob.style.left = at;
+    if (tab.active) {
+      const on = nearest(tab.active, u), all = new Set(tab.active.flat());
+      for (const { node, id } of this.emphasized) {
+        node.classList.toggle('plot-on', on.includes(id));
+        node.classList.toggle('plot-off', all.has(id) && !on.includes(id));
+      }
+    } else for (const { node } of this.emphasized) node.classList.remove('plot-on', 'plot-off');
+  }
+
+  private hidden(names: string[]): boolean {
+    return names.some((s) => this.steps.has(s) && !this.shown.has(s));
+  }
+
+  private applyGates(): void {
+    for (const { node, names } of this.gated) node.classList.toggle('plot-hidden', this.hidden(names));
+    const n = this.frames;
+    this.ticks.replaceChildren(...this.eventFrames.filter((e) => !this.hidden(e.names)).map((e) => {
+      const t = document.createElement('div');
+      t.className = 'plot-tick-mark';
+      t.style.left = `${(n > 1 ? e.frame / (n - 1) : 0) * 100}%`;
+      return t;
+    }));
+  }
+
+  /** Reads the fragments of the slide: the names of data-plot-show, and the tab of the last visible data-plot-tab. */
+  syncSteps(): void {
+    if (!this.spec) return;
+    const slide = this.el.closest('section');
+    const frags = slide ? [...slide.querySelectorAll<HTMLElement>('.fragment')] : [];
+    this.steps = new Set(frags.flatMap((f) => words(f.dataset.plotShow)));
+    const visible = frags.filter((f) => f.classList.contains('visible'));
+    this.shown = new Set(visible.flatMap((f) => words(f.dataset.plotShow)));
+    const tabbed = visible.filter((f) => f.dataset.plotTab).sort((a, b) => +(a.dataset.fragmentIndex ?? 0) - +(b.dataset.fragmentIndex ?? 0));
+    const name = tabbed.at(-1)?.dataset.plotTab ?? this.el.dataset.plotTab ?? null;
+    if (name !== this.stepTab) {
+      this.stepTab = name;
+      const i = this.plot.tabs.findIndex((t) => t.name === name);
+      if (i >= 0 && i !== this.tab) { this.setTab(i); return; }
+    }
+    this.applyGates();
+  }
+
+  /** Shows the tab i, from its first frame while the plot is played, and at its still frame otherwise. */
+  setTab(i: number): void {
+    if (!this.spec || i === this.tab) return;
+    this.tab = i;
+    this.markTabs();
+    this.u = this.raf ? 0 : this.stillFrame();
+    this.t0 = performance.now();
+    if (this.W) this.buildMarks();
+  }
+
+  /** The frame of a still, from data-plot-frame, where a negative frame is counted from the end. The default is the last frame. */
+  private stillFrame(): number {
+    const f = Number(this.el.dataset.plotFrame ?? -1), n = this.frames;
+    return clamp(Number.isFinite(f) ? (f < 0 ? n + f : f) : n - 1, 0, n - 1);
+  }
+
+  /** Draws the still frame, without the animation. */
+  still(): void {
+    if (!this.spec) return;
+    this.pause();
+    this.u = this.stillFrame();
+    this.draw();
+  }
+
+  /** Starts the loop from the first frame, unless data-plot-paused is set or the motion is reduced. */
+  start(): void {
+    if (!this.spec) return;
+    if (this.el.hasAttribute('data-plot-paused') || reduced()) { this.still(); return; }
+    this.u = 0;
+    this.play();
+  }
+
+  play(): void {
+    if (!this.spec || this.raf) return;
+    const { duration } = this.plot, n = this.frames;
+    // a pass that ended is played again from the first frame
+    if (this.u >= n - 1) this.u = 0;
+    this.t0 = performance.now() - (n > 1 ? this.u / (n - 1) : 0) * duration * 1000;
+    const tick = (now: number) => {
+      this.u = loopFrame((now - this.t0) / 1000, this.frames, this.plot.duration, this.plot.hold);
+      this.draw();
+      this.raf = requestAnimationFrame(tick);
+    };
+    this.raf = requestAnimationFrame(tick);
+    this.setPlaying(true);
+  }
+
+  pause(): void {
+    if (this.raf) cancelAnimationFrame(this.raf);
+    this.raf = 0;
+    this.setPlaying(false);
+  }
+
+  get playing(): boolean {
+    return this.raf !== 0;
+  }
+
+  /** The fractional frame shown. */
+  get frame(): number {
+    return this.u;
+  }
+}
+
+/** One PlotView per `.plot` element under root, reused when an element was mounted before. */
+export function mountPlots(root: ParentNode): PlotView[] {
+  return [...root.querySelectorAll<HTMLElement>('.plot')].map((el) => CACHE.get(el) ?? new PlotView(el));
 }
