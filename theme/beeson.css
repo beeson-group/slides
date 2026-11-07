@@ -11,7 +11,7 @@ html[data-theme="dark"] {
   --line: #232320;
   --accent: #f08050;
   --violet: #c94fe6;
-  --stroke: rgba(242, 242, 239, 0.17);
+  --stroke: rgba(242, 242, 239, 0.34);
   --body: rgba(242, 242, 239, 0.55);
   --panel: #050505;
   --panel-text: #f2f2ef;
@@ -26,7 +26,7 @@ html[data-theme="light"] {
   --line: #e3e0d8;
   --accent: #c8571e;
   --violet: #8a2be2;
-  --stroke: rgba(20, 20, 19, 0.14);
+  --stroke: rgba(20, 20, 19, 0.3);
   --body: rgba(20, 20, 19, 0.5);
 }
 /* the Okabe–Ito set for data, the same in both modes */
