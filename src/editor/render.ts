@@ -219,3 +219,47 @@ function serializeText(source: Source, s: SrcText, it: Item & { kind: 'text' }):
 
 // the content of el as it is written into the file. each child of el is matched to the next child
 // of s of its kind, and a matched child is copied from the file where it is unchanged
+function serializeChildren(source: Source, s: SrcEl, el: Element, math: MathLookup): string {
+  const text = source.text;
+  const items = virtualChildren(el, math);
+  const kids = s.children;
+  let c = 0;
+  const parts: string[] = [];
+  for (const it of items) {
+    if (it.kind === 'element') {
+      let k = c;
+      while (k < kids.length && !(kids[k].kind === 'element' && sameTag(it.el, kids[k] as SrcEl))) k++;
+      if (k < kids.length) {
+        c = k + 1;
+        parts.push(serializeElement(source, kids[k] as SrcEl, it.el, math));
+      } else parts.push(serializeNew(source, it.el, math));
+      continue;
+    }
+    // a text or a comment is matched to the next one of its kind before the next element of the file
+    let k = c;
+    while (k < kids.length && kids[k].kind !== it.kind && kids[k].kind !== 'element') k++;
+    const hit = k < kids.length && kids[k].kind === it.kind ? kids[k] : null;
+    if (hit) c = k + 1;
+    if (it.kind === 'text') parts.push(hit ? serializeText(source, hit as SrcText, it) : escape(source, it.text, false));
+    else parts.push(hit ? text.slice((hit as SrcComment).range.start, (hit as SrcComment).range.end) : `<!--${it.node.data}-->`);
+  }
+  return parts.join('');
+}
+
+function serializeElement(source: Source, s: SrcEl, el: Element, math: MathLookup): string {
+  const text = source.text;
+  const open = s.open ? text.slice(s.open.start, s.open.end) : '';
+  const close = s.close ? text.slice(s.close.start, s.close.end) : '';
+  if (VOID.has(s.tag)) return open;
+  if (RAW_TEXT.has(s.tag)) {
+    const inner = innerRange(s);
+    return open + (inner ? text.slice(inner.start, inner.end) : '') + close;
+  }
+  return open + serializeChildren(source, s, el, math) + close;
+}
+
+export function renderBlock(source: Source, block: Block, math: MathLookup): string {
+  return serializeChildren(source, block.src, block.live, math);
+}
+
+// the range of an element removed on the page, with its line when nothing else is on it
