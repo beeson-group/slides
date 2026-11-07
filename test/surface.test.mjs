@@ -97,10 +97,17 @@ test('the surface of the demo deck is drawn at each of its stages, live and in t
   await page.goto(deckUrl('index.html', 'still'));
   await page.waitFor(deckSettled);
   const h = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.surface'))`);
-  const live = [];
+  // the label of each mark shown is at the mark, also after a turn of the camera
+  const live = [], astray = [];
+  const labeled = async (where) => {
+    for (const m of (await page.evaluate(`Beeson.surfaces[0].probe()`)).marks) {
+      if (m.fade > 0 && !(m.label < 1)) astray.push(`the label of ${m.name} is ${m.label?.toFixed(1)} px from its mark ${where}`);
+    }
+  };
   for (let f = -1; f < stages.length - 1; f++) {
     await page.evaluate(`Reveal.slide(${h}, 0, ${f})`);
     live.push(...(await page.evaluate(surfaces)));
+    await labeled(`at the stage ${stages[f + 1]}`);
   }
   // a drag turns the surface, and the slide is not changed by it as by a swipe
   const turned = await page.evaluate(`(async () => {
@@ -113,9 +120,11 @@ test('the surface of the demo deck is drawn at each of its stages, live and in t
   })()`);
   assert.equal(turned.h, h);
   assert.notEqual(turned.surface.digest, live.at(-1).digest);
+  await labeled('after a drag');
   await page.evaluate(`Reveal.slide(${h}, 0, ${stages.length - 2})`);
 
   assert.deepEqual(page.errors, []);
+  assert.deepEqual(astray, []);
   assert.deepEqual(live.map((s) => s.stage), stages);
   for (const s of live) assert.ok(s.drawn > 0.1, `${(100 * s.drawn).toFixed(1)}% of the canvas is drawn at the stage ${s.stage}`);
   assert.equal(new Set(live.map((s) => s.digest)).size, stages.length);
@@ -167,6 +176,7 @@ test('the marks of the surface are drawn on it or hidden at every step, forward 
           if (pace === 'settled') {
             const shown = stage === 'extrema' || stage === 'cut';
             for (const m of p.marks) assert.equal(m.fade, shown ? 1 : 0, `the fade of ${m.name} at the end of the step to ${stage}`);
+            for (const m of p.marks) if (shown) assert.ok(m.label < 1, `the label of ${m.name} is ${m.label} px from its mark at the end of the step to ${stage}`);
           }
           break;
         }

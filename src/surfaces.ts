@@ -1,6 +1,7 @@
 // the functions drawn by a `.surface`, selected with its data-function attribute and built from its
-// data attributes. a function is given with its rectangle, its floor, the layers drawn at its stages,
-// its marked points, and its stages, i.e. what is shown at each step of the slide
+// data attributes. a function is given with its rectangle, its floor, the layers drawn at its stages
+// and the color ramp of each, its marked points, and its stages, i.e. what is shown at each step of
+// the slide
 
 import { isolines } from './contour.ts';
 import { lagrange } from './orbits.ts';
@@ -11,19 +12,47 @@ export type Layer = (x: number, y: number) => number;
 /** A marked point of a surface, drawn on the layer of the stage that shows the marks. */
 export type Mark = { name: string; x: number; y: number; kind: 'saddle' | 'maximum' | 'minimum' };
 
-/** What a surface shows at one step: a layer, the marks or not, and the height of a cutting plane, or null for no cut. */
-export type Stage = { layer: string; marks: boolean; level: number | null };
+/** A layer drawn at a stage, raised by lift, nondimensional. */
+export type Sheet = { layer: string; lift: number };
+
+/**
+ * What a surface shows at one step: its sheets, the marks on the first sheet or not, and the
+ * height of a cutting plane through the first sheet, or null for no cut. A sheet after the first
+ * that is not shown at the next stage is merged into the first sheet when the first sheet is given
+ * another layer, and is flattened onto the first sheet and faded out otherwise. A sheet is split
+ * from the first in the same way when it is added.
+ */
+export type Stage = { sheets: Sheet[]; marks: boolean; level: number | null };
+
+/**
+ * The color ramp of a layer: the name of a ramp of RAMPS, or theme for the ramp of the colors of
+ * the mode of the deck, and the heights at its two ends, nondimensional. Without range, the ramp is
+ * spread from the 5th percentile of the heights of the layer to their maximum.
+ */
+export type Tone = { ramp: string; range?: [number, number] };
+
+/**
+ * The fixed color ramps, as sRGB colors at even steps from the lowest height of a range to the
+ * highest. blues and reds are the sequential ColorBrewer scales Blues and Reds, as plotly 7 resolves
+ * colorscale='Blues' and colorscale='Reds' of a go.Surface. The ramp theme is made from the custom
+ * properties of the theme in surface.ts.
+ */
+export const RAMPS: Record<string, string[]> = {
+  blues: ['#f7fbff', '#deebf7', '#c6dbef', '#9ecae1', '#6baed6', '#4292c6', '#2171b5', '#08519c', '#08306b'],
+  reds: ['#fff5f0', '#fee0d2', '#fcbba1', '#fc9272', '#fb6a4a', '#ef3b2c', '#cb181d', '#a50f15', '#67000d'],
+};
 
 /** The data attributes of the element and of the fragment that sets the stage, by their dataset keys. */
 export type Attributes = Record<string, string | undefined>;
 
-/** A function of a surface. The heights of every layer are clamped at floor, and initial is the stage shown before a fragment sets one. */
+/** A function of a surface. The heights of every layer are clamped at floor, a layer without a tone is drawn in the ramp theme, and initial is the stage shown before a fragment sets one. */
 export type SurfaceFunction = {
   x: [number, number];
   y: [number, number];
   floor: number;
   zscale: number;
   layers: Record<string, Layer>;
+  tones: Record<string, Tone>;
   marks: Mark[];
   stages: Record<string, (attributes: Attributes) => Stage>;
   initial: string;
@@ -88,32 +117,43 @@ export function levelCurves(g: Float64Array, x: [number, number], y: [number, nu
   return isolines(d, nx, ny, x[0], y[0], (x[1] - x[0]) / nx, (y[1] - y[0]) / ny, true);
 }
 
+// the ramps and ranges of the gravitational and the centrifugal parts in plot_potentials_decomposed.py
+// of Claudio Vestini's MAE 541 project, a plotly figure of the three surfaces at mu = 0.05 with
+// cmin = -3 and cmax = -1.5
+const GRAVITATIONAL: Tone = { ramp: 'blues', range: [-3, -1.5] };
+const CENTRIFUGAL: Tone = { ramp: 'reds', range: [-3, -1.5] };
+// the height by which the bowl is raised above the wells at the stage bowl, nondimensional
+const BOWL_LIFT = 4;
+
 const FUNCTIONS = {
   // the effective potential of the CR3BP at data-mu, assembled from its wells and its bowl, with the
   // libration points marked and a cut at the height -C/2 of the Jacobi constant C of data-C. the
-  // intersection of this plane with the surface is the zero-velocity curve, and Hill's region is
+  // bowl is shown above the wells, and the two are merged into their sum at the next stage. the
+  // intersection of the plane with the surface is the zero-velocity curve, and Hill's region is
   // where the surface is under the plane. C is the value at L1 when data-C is not given
   'effective-potential': (attributes: Attributes): SurfaceFunction => {
     const mu = num(attributes.mu, 0.05);
     const { wells, bowl, sum } = effectivePotential(mu);
     const marks = librationPoints(mu);
     const C1 = -2 * sum(marks[0].x, 0);
-    const plain = (layer: string) => () => ({ layer, marks: false, level: null });
+    const one = (layer: string): Sheet[] => [{ layer, lift: 0 }];
+    const plain = (layer: string) => (): Stage => ({ sheets: one(layer), marks: false, level: null });
     return {
       x: [-1.5, 1.5],
       y: [-1.5, 1.5],
       floor: -3.2,
       zscale: 1,
       layers: { flat: () => 0, wells, bowl, sum },
+      tones: { flat: GRAVITATIONAL, wells: GRAVITATIONAL, bowl: CENTRIFUGAL, sum: { ramp: 'theme' } },
       marks,
       initial: 'flat',
       stages: {
         flat: plain('flat'),
         wells: plain('wells'),
-        bowl: plain('bowl'),
+        bowl: () => ({ sheets: [{ layer: 'wells', lift: 0 }, { layer: 'bowl', lift: BOWL_LIFT }], marks: false, level: null }),
         sum: plain('sum'),
-        extrema: () => ({ layer: 'sum', marks: true, level: null }),
-        cut: (a) => ({ layer: 'sum', marks: true, level: -num(a.c, C1) / 2 }),
+        extrema: () => ({ sheets: one('sum'), marks: true, level: null }),
+        cut: (a) => ({ sheets: one('sum'), marks: true, level: -num(a.c, C1) / 2 }),
       },
     };
   },

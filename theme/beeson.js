@@ -2304,6 +2304,10 @@
   }
 
   // src/surfaces.ts
+  var RAMPS = {
+    blues: ["#f7fbff", "#deebf7", "#c6dbef", "#9ecae1", "#6baed6", "#4292c6", "#2171b5", "#08519c", "#08306b"],
+    reds: ["#fff5f0", "#fee0d2", "#fcbba1", "#fc9272", "#fb6a4a", "#ef3b2c", "#cb181d", "#a50f15", "#67000d"]
+  };
   var num2 = (value, fallback) => value !== void 0 && value.trim() !== "" && Number.isFinite(Number(value)) ? Number(value) : fallback;
   function effectivePotential(mu) {
     const wells = (x, y) => -(1 - mu) / Math.hypot(x + mu, y) - mu / Math.hypot(x - 1 + mu, y);
@@ -2337,32 +2341,38 @@
     const d = g.map((z) => z - level);
     return isolines(d, nx, ny, x[0], y[0], (x[1] - x[0]) / nx, (y[1] - y[0]) / ny, true);
   }
+  var GRAVITATIONAL = { ramp: "blues", range: [-3, -1.5] };
+  var CENTRIFUGAL = { ramp: "reds", range: [-3, -1.5] };
+  var BOWL_LIFT = 4;
   var FUNCTIONS = {
     // the effective potential of the CR3BP at data-mu, assembled from its wells and its bowl, with the
     // libration points marked and a cut at the height -C/2 of the Jacobi constant C of data-C. the
-    // intersection of this plane with the surface is the zero-velocity curve, and Hill's region is
+    // bowl is shown above the wells, and the two are merged into their sum at the next stage. the
+    // intersection of the plane with the surface is the zero-velocity curve, and Hill's region is
     // where the surface is under the plane. C is the value at L1 when data-C is not given
     "effective-potential": (attributes) => {
       const mu = num2(attributes.mu, 0.05);
       const { wells, bowl, sum } = effectivePotential(mu);
       const marks = librationPoints(mu);
       const C1 = -2 * sum(marks[0].x, 0);
-      const plain = (layer) => () => ({ layer, marks: false, level: null });
+      const one = (layer) => [{ layer, lift: 0 }];
+      const plain = (layer) => () => ({ sheets: one(layer), marks: false, level: null });
       return {
         x: [-1.5, 1.5],
         y: [-1.5, 1.5],
         floor: -3.2,
         zscale: 1,
         layers: { flat: () => 0, wells, bowl, sum },
+        tones: { flat: GRAVITATIONAL, wells: GRAVITATIONAL, bowl: CENTRIFUGAL, sum: { ramp: "theme" } },
         marks,
         initial: "flat",
         stages: {
           flat: plain("flat"),
           wells: plain("wells"),
-          bowl: plain("bowl"),
+          bowl: () => ({ sheets: [{ layer: "wells", lift: 0 }, { layer: "bowl", lift: BOWL_LIFT }], marks: false, level: null }),
           sum: plain("sum"),
-          extrema: () => ({ layer: "sum", marks: true, level: null }),
-          cut: (a) => ({ layer: "sum", marks: true, level: -num2(a.c, C1) / 2 })
+          extrema: () => ({ sheets: one("sum"), marks: true, level: null }),
+          cut: (a) => ({ sheets: one("sum"), marks: true, level: -num2(a.c, C1) / 2 })
         }
       };
     }
@@ -2377,10 +2387,12 @@
   var MORPH = 1400;
   var SLIDE = 2600;
   var TURN = 90;
-  var RISE = 0.4;
   var CURVE_WIDTH = 3.5;
   var GLOW_WIDTH = 18;
   var MARK_SIZE = 22;
+  var BEHIND = 0.3;
+  var DIMMING = 0.12;
+  var RAMP_TEXELS = 256;
   var ease = (t) => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
   var lerp = (a, b, t) => a + (b - a) * t;
   var clamp2 = (v, a, b) => Math.min(b, Math.max(a, v));
@@ -2398,6 +2410,15 @@
       if (v.length >= 3 && v.every(Number.isFinite)) return [v[0] / 255, v[1] / 255, v[2] / 255];
     }
     return fallback;
+  }
+  function rampTexels(stops) {
+    const out = new Uint8Array(4 * RAMP_TEXELS);
+    for (let i = 0; i < RAMP_TEXELS; i++) {
+      const p = i / (RAMP_TEXELS - 1) * (stops.length - 1), j = Math.min(stops.length - 2, Math.floor(p));
+      const c = mix3(stops[j], stops[j + 1], p - j);
+      out.set([...c.map((v) => Math.round(255 * v)), 255], 4 * i);
+    }
+    return out;
   }
   function heightAt(g, fn, x, y) {
     const n = CELLS + 1;
@@ -2427,23 +2448,29 @@ void main() {
   var SURFACE_FRAGMENT = (
     /* glsl */
     `
-uniform vec3 uRamp[4];
+uniform sampler2D uRampA;
+uniform sampler2D uRampB;
+uniform vec2 uRangeA;
+uniform vec2 uRangeB;
+uniform float uTone;
+uniform float uAlpha;
 uniform vec3 uGroove;
-uniform vec2 uRange;
 uniform vec3 uLight;
 uniform vec2 uGrid;
 varying vec3 vNormal;
 varying vec2 vXY;
 varying float vZ;
+vec3 ramp(sampler2D r, vec2 range) {
+  float t = clamp((vZ - range.x) / max(range.y - range.x, 1e-6), 0.0, 1.0);
+  return texture2D(r, vec2((t * ${RAMP_TEXELS - 1}.0 + 0.5) / ${RAMP_TEXELS}.0, 0.5)).rgb;
+}
 void main() {
-  float t = clamp((vZ - uRange.x) / max(uRange.y - uRange.x, 1e-6), 0.0, 1.0);
-  float k = t * 3.0;
-  vec3 c = k < 1.0 ? mix(uRamp[0], uRamp[1], k) : k < 2.0 ? mix(uRamp[1], uRamp[2], k - 1.0) : mix(uRamp[2], uRamp[3], k - 2.0);
+  vec3 c = mix(ramp(uRampA, uRangeA), ramp(uRampB, uRangeB), uTone);
   c *= 0.58 + 0.42 * abs(dot(normalize(vNormal), uLight));
   vec2 q = vXY / uGrid;
   vec2 a = abs(fract(q - 0.5) - 0.5) / max(fwidth(q), vec2(1e-4));
   c = mix(c, uGroove, 0.45 * (1.0 - min(min(a.x, a.y), 1.0)));
-  gl_FragColor = vec4(c, 1.0);
+  gl_FragColor = vec4(c, uAlpha);
 }`
   );
   var PLANE_VERTEX = (
@@ -2506,19 +2533,16 @@ void main() {
     /* glsl */
     `
 attribute float kind;
+attribute float seen;
 uniform float uRise;
-uniform float uLift;
 uniform float uSize;
-uniform float uBias;
 varying float vKind;
+varying float vSeen;
 void main() {
-  vec3 p = position;
-  p.z -= (1.0 - uRise) * uLift;
-  vec4 c = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
-  c.z -= uBias * c.w;
-  gl_Position = c;
+  gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   gl_PointSize = uSize * (0.35 + 0.65 * uRise);
   vKind = kind;
+  vSeen = seen;
 }`
   );
   var MARK_FRAGMENT = (
@@ -2529,6 +2553,7 @@ uniform vec3 uRing;
 uniform float uRise;
 uniform float uSize;
 varying float vKind;
+varying float vSeen;
 void main() {
   float r = length(gl_PointCoord * 2.0 - 1.0);
   float aa = 2.0 / uSize;
@@ -2536,7 +2561,7 @@ void main() {
   if (outer <= 0.0) discard;
   float fill = 1.0 - smoothstep(0.7 - aa, 0.7, r);
   if (vKind < 0.5) fill *= smoothstep(0.36 - aa, 0.36, r);
-  gl_FragColor = vec4(mix(uRing, uFill, fill), outer * uRise);
+  gl_FragColor = vec4(mix(uRing, uFill, fill), outer * uRise * vSeen);
 }`
   );
   var shared;
@@ -2565,13 +2590,16 @@ void main() {
       this.grids = /* @__PURE__ */ new Map();
       this.normals = /* @__PURE__ */ new WeakMap();
       this.ranges = /* @__PURE__ */ new Map();
+      this.textures = /* @__PURE__ */ new Map();
+      this.zeros = new Float64Array((CELLS + 1) ** 2);
       this.zmin = 0;
       this.zmax = 0;
+      this.sheets = [];
+      this.seenAt = 0;
       this.capacity = 0;
       this.drawn = "";
       this.mix = 1;
       this.stageName = "";
-      this.markLayer = "";
       this.t0 = 0;
       this.duration = MORPH;
       this.moving = false;
@@ -2590,10 +2618,14 @@ void main() {
         this.last = now;
         if (this.moving) {
           const k = Math.min(1, (now - this.t0) / this.duration), e = ease(k), a = this.from, b = this.to;
+          const late = ease(clamp2((k - 0.35) / 0.65, 0, 1)), early = ease(clamp2(k / 0.65, 0, 1));
           this.mix = e;
-          const late = ease(clamp2((k - 0.35) / 0.65, 0, 1));
-          this.shown = { lo: lerp(a.lo, b.lo, e), hi: lerp(a.hi, b.hi, e), marks: lerp(a.marks, b.marks, b.marks > a.marks ? late : e), cut: lerp(a.cut, b.cut, e), level: lerp(a.level, b.level, e) };
-          if (k >= 1) this.moving = false;
+          this.shown = { marks: lerp(a.marks, b.marks, b.marks > a.marks ? late : early), cut: lerp(a.cut, b.cut, e), level: lerp(a.level, b.level, e), low: lerp(a.low, b.low, e), high: lerp(a.high, b.high, e) };
+          for (const s of this.sheets) {
+            s.shown = { lift: lerp(s.from.lift, s.to.lift, e), alpha: lerp(s.from.alpha, s.to.alpha, s.to.alpha > s.from.alpha ? early : late) };
+            s.tone = lerp(s.toneFrom, 1, e);
+          }
+          if (k >= 1) this.settle();
         }
         if (this.rate && !this.drag && now > this.resume) this.azimuth += dt * this.rate;
         this.draw();
@@ -2602,6 +2634,7 @@ void main() {
       this.el = el;
       this.fn = fn;
       this.THREE = THREE;
+      this.groove = new THREE.Vector3();
       this.zscale = num3(el.dataset.zscale, fn.zscale);
       const turn = num3(el.dataset.turn, TURN);
       this.rate = turn > 0 ? 2 * Math.PI / turn : 0;
@@ -2624,20 +2657,21 @@ void main() {
           if (z > this.zmax) this.zmax = z;
         }
       }
-      this.A = this.B = this.grids.get(fn.initial) ?? new Float64Array((CELLS + 1) ** 2);
-      const [lo, hi] = this.ranges.get(fn.initial) ?? [0, 1];
-      this.shown = this.from = this.to = { lo, hi, marks: 0, cut: 0, level: fn.floor };
+      this.markA = new Float64Array(fn.marks.length);
+      this.markB = new Float64Array(fn.marks.length);
+      this.seen = new Float32Array(fn.marks.length).fill(1);
+      const still2 = { marks: 0, cut: 0, level: fn.floor, low: this.zmin * this.zscale, high: this.zmax * this.zscale };
+      this.shown = this.from = this.to = still2;
       this.scene = new THREE.Scene();
       this.camera = new THREE.PerspectiveCamera(26, 1, 0.1, 100);
       this.camera.up.set(0, 0, 1);
-      this.surface = this.makeSurface();
       this.plane = this.makePlane();
       this.curve = this.makeCurve(CURVE_WIDTH, 0);
       this.glow = this.makeCurve(GLOW_WIDTH, 1);
       this.glow.geometry = this.curve.geometry;
       this.glow.renderOrder = 1.5;
       this.points = this.makeMarks();
-      this.scene.add(this.surface, this.plane, this.glow, this.curve, this.points);
+      this.scene.add(this.plane, this.glow, this.curve, this.points);
       this.recolor();
       this.bindDrag();
       CACHE3.set(el, this);
@@ -2651,20 +2685,49 @@ void main() {
       const lo = sorted[Math.floor(0.05 * (sorted.length - 1))] * this.zscale, hi = sorted[sorted.length - 1] * this.zscale;
       return hi - lo > 1e-9 ? [lo, hi] : [hi - 1, hi + 1];
     }
-    makeSurface() {
+    // the texture of a ramp of RAMPS, or of the ramp theme, which is filled in recolor()
+    texture(name) {
+      const known = this.textures.get(name);
+      if (known) return known;
+      const THREE = this.THREE;
+      const t = new THREE.DataTexture(new Uint8Array(4 * RAMP_TEXELS), RAMP_TEXELS, 1, THREE.RGBAFormat, THREE.UnsignedByteType);
+      t.magFilter = t.minFilter = THREE.LinearFilter;
+      t.generateMipmaps = false;
+      const stops = RAMPS[name];
+      if (stops) {
+        t.image.data.set(rampTexels(stops.map((c) => rgb(c, [0.5, 0.5, 0.5]))));
+        t.needsUpdate = true;
+      }
+      this.textures.set(name, t);
+      return t;
+    }
+    // the ramp of a layer and its range in world units. an unknown ramp is reported, and the ramp
+    // theme is drawn in its place
+    paintOf(layer) {
+      let { ramp: ramp2, range } = this.fn.tones[layer] ?? { ramp: "theme" };
+      if (ramp2 !== "theme" && !(ramp2 in RAMPS)) {
+        console.error(`beeson: unknown ramp "${ramp2}" of the layer ${layer} of ${this.el.dataset.function}, known: theme, ${Object.keys(RAMPS).join(", ")}`);
+        ramp2 = "theme";
+      }
+      const world = range ? [range[0] * this.zscale, range[1] * this.zscale] : this.ranges.get(layer) ?? [-1, 1];
+      return { key: `${ramp2}|${world.join("|")}`, texture: this.texture(ramp2), range: world };
+    }
+    // a sheet, made hidden on first use. the sheets are drawn in their order, before the plane
+    sheet(i) {
+      if (this.sheets[i]) return this.sheets[i];
       const THREE = this.THREE, n = CELLS + 1, fn = this.fn;
       const position = new Float32Array(3 * n * n);
       const dx = (fn.x[1] - fn.x[0]) / CELLS, dy = (fn.y[1] - fn.y[0]) / CELLS;
-      for (let j = 0; j < n; j++) for (let i = 0; i < n; i++) {
-        position[3 * (j * n + i)] = fn.x[0] + i * dx;
-        position[3 * (j * n + i) + 1] = fn.y[0] + j * dy;
+      for (let j = 0; j < n; j++) for (let k = 0; k < n; k++) {
+        position[3 * (j * n + k)] = fn.x[0] + k * dx;
+        position[3 * (j * n + k) + 1] = fn.y[0] + j * dy;
       }
       const index = new Uint32Array(6 * CELLS * CELLS);
-      let k = 0;
-      for (let j = 0; j < CELLS; j++) for (let i = 0; i < CELLS; i++) {
-        const a = j * n + i, b = a + 1, c = a + n, d = c + 1;
-        index.set([a, b, d, a, d, c], k);
-        k += 6;
+      let m = 0;
+      for (let j = 0; j < CELLS; j++) for (let k = 0; k < CELLS; k++) {
+        const a = j * n + k, b = a + 1, c = a + n, d = c + 1;
+        index.set([a, b, d, a, d, c], m);
+        m += 6;
       }
       const geometry = new THREE.BufferGeometry();
       geometry.setAttribute("position", new THREE.BufferAttribute(position, 3));
@@ -2672,24 +2735,41 @@ void main() {
         geometry.setAttribute(name, new THREE.BufferAttribute(new Float32Array(size * n * n), size).setUsage(THREE.DynamicDrawUsage));
       }
       geometry.setIndex(new THREE.BufferAttribute(index, 1));
-      const light = new THREE.Vector3(-0.45, -0.35, 0.82).normalize();
       const cell = Math.max(fn.x[1] - fn.x[0], fn.y[1] - fn.y[0]) / 24;
-      const material = new THREE.ShaderMaterial({
+      const paint = this.paintOf(fn.initial);
+      const uniforms = {
+        uMix: { value: 1 },
+        uRampA: { value: paint.texture },
+        uRampB: { value: paint.texture },
+        uRangeA: { value: new THREE.Vector2(...paint.range) },
+        uRangeB: { value: new THREE.Vector2(...paint.range) },
+        uTone: { value: 1 },
+        uAlpha: { value: 1 },
+        uGroove: { value: this.groove },
+        uLight: { value: new THREE.Vector3(-0.45, -0.35, 0.82).normalize() },
+        uGrid: { value: new THREE.Vector2(cell, cell) }
+      };
+      const material = (colorWrite) => new THREE.ShaderMaterial({
         vertexShader: SURFACE_VERTEX,
         fragmentShader: SURFACE_FRAGMENT,
         side: THREE.DoubleSide,
-        uniforms: {
-          uMix: { value: 1 },
-          uRamp: { value: [0, 1, 2, 3].map(() => new THREE.Vector3()) },
-          uGroove: { value: new THREE.Vector3() },
-          uRange: { value: new THREE.Vector2(0, 1) },
-          uLight: { value: light },
-          uGrid: { value: new THREE.Vector2(cell, cell) }
-        }
+        transparent: true,
+        colorWrite,
+        uniforms
       });
-      const mesh = new THREE.Mesh(geometry, material);
-      mesh.frustumCulled = false;
-      return mesh;
+      const mesh = new THREE.Mesh(geometry, material(true)), depth = new THREE.Mesh(geometry, material(false));
+      const group2 = new THREE.Group();
+      for (const [k, o] of [depth, mesh].entries()) {
+        o.frustumCulled = false;
+        o.renderOrder = i * 0.1 + k * 0.01;
+        group2.add(o);
+      }
+      group2.visible = false;
+      this.scene.add(group2);
+      const hidden = { lift: 0, alpha: 0 };
+      const s = { group: group2, mesh, depth, layer: "", A: this.zeros, B: this.zeros, from: hidden, to: hidden, shown: hidden, paintA: paint, paintB: paint, toneFrom: 1, tone: 1, now: null };
+      this.sheets[i] = s;
+      return s;
     }
     makePlane() {
       const THREE = this.THREE, [x0, x1] = this.fn.x, [y0, y1] = this.fn.y;
@@ -2734,20 +2814,20 @@ void main() {
     makeMarks() {
       const THREE = this.THREE, marks = this.fn.marks;
       const geometry = new THREE.BufferGeometry();
-      geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * marks.length), 3));
+      geometry.setAttribute("position", new THREE.BufferAttribute(new Float32Array(3 * marks.length), 3).setUsage(THREE.DynamicDrawUsage));
       geometry.setAttribute("kind", new THREE.BufferAttribute(Float32Array.from(marks, (m) => m.kind === "saddle" ? 0 : 1), 1));
+      geometry.setAttribute("seen", new THREE.BufferAttribute(new Float32Array(marks.length).fill(1), 1).setUsage(THREE.DynamicDrawUsage));
       const material = new THREE.ShaderMaterial({
         vertexShader: MARK_VERTEX,
         fragmentShader: MARK_FRAGMENT,
         transparent: true,
+        depthTest: false,
         depthWrite: false,
         uniforms: {
           uFill: { value: new THREE.Vector3() },
           uRing: { value: new THREE.Vector3() },
           uRise: { value: 0 },
-          uLift: { value: RISE },
-          uSize: { value: MARK_SIZE },
-          uBias: { value: 6e-3 }
+          uSize: { value: MARK_SIZE }
         }
       });
       const points = new THREE.Points(geometry, material);
@@ -2761,10 +2841,11 @@ void main() {
       const bg = css("--bg", [0.02, 0.02, 0.02]), text = css("--text", [0.95, 0.95, 0.94]);
       const violet = css("--violet", [0.79, 0.31, 0.9]), accent = css("--accent", [0.94, 0.5, 0.31]);
       const blue = css("--data-5", [0, 0.45, 0.7]);
-      const u = this.surface.material.uniforms, set2 = (target, c) => target.set(c[0], c[1], c[2]);
-      const ramp2 = [mix3(blue, bg, 0.7), mix3(blue, violet, 0.35), violet, mix3(violet, text, 0.55)];
-      ramp2.forEach((c, i) => set2(u.uRamp.value[i], c));
-      set2(u.uGroove.value, bg);
+      const set2 = (target, c) => target.set(c[0], c[1], c[2]);
+      const theme = this.texture("theme");
+      theme.image.data.set(rampTexels([mix3(blue, bg, 0.7), mix3(blue, violet, 0.35), violet, mix3(violet, text, 0.55)]));
+      theme.needsUpdate = true;
+      set2(this.groove, bg);
       set2(this.plane.material.uniforms.uColor.value, accent);
       set2(this.curve.material.uniforms.uColor.value, mix3(accent, text, 0.35));
       set2(this.glow.material.uniforms.uColor.value, accent);
@@ -2789,41 +2870,120 @@ void main() {
       }
       return { name, stage: this.fn.stages[name]({ ...this.el.dataset, ...best?.dataset }) };
     }
+    // the ramp p set as the end of a change of the sheet s. a ramp drawn at the start is kept, so
+    // that the colors drawn now are not changed at once when a change is reversed or redirected
+    repaint(s, p) {
+      if (p.key === s.paintB.key) s.toneFrom = s.tone;
+      else if (p.key === s.paintA.key) {
+        s.paintA = s.paintB;
+        s.toneFrom = 1 - s.tone;
+        s.paintB = p;
+      } else {
+        s.paintA = s.tone < 0.5 ? s.paintA : s.paintB;
+        s.paintB = p;
+        s.toneFrom = 0;
+      }
+      const u = s.mesh.material.uniforms;
+      u.uRampA.value = s.paintA.texture;
+      u.uRampB.value = s.paintB.texture;
+      u.uRangeA.value.set(...s.paintA.range);
+      u.uRangeB.value.set(...s.paintB.range);
+    }
     /** Sets the stage from the fragments of the slide, animated or at once. */
     sync(animate) {
       const { name, stage } = this.target();
       if (name === this.stageName) return;
-      const first = !this.stageName;
+      const jump = !animate || !this.stageName;
       this.stageName = name;
       this.el.dataset.shown = name;
-      const grid = this.grids.get(stage.layer) ?? this.B;
-      const [lo, hi] = this.ranges.get(stage.layer) ?? [this.shown.lo, this.shown.hi];
-      const to = { lo, hi, marks: stage.marks ? 1 : 0, cut: stage.level === null ? 0 : 1, level: stage.level ?? this.fn.floor };
-      this.placeMarks(stage.layer);
-      if (!animate || first) {
-        this.A = this.B = grid;
+      const s = this.zscale, sheets = stage.sheets.length ? stage.sheets : [{ layer: this.fn.initial, lift: 0 }], main = sheets[0];
+      const grid = (layer) => this.grids.get(layer) ?? this.zeros;
+      const first = this.sheets[0];
+      const merge = !first || first.layer !== main.layer;
+      const was = first ? { heights: this.current(first), lift: first.shown.lift, paint: first.tone < 0.5 ? first.paintA : first.paintB } : null;
+      const lifts = [];
+      for (let i = 0; i < Math.max(this.sheets.length, sheets.length); i++) {
+        const sheet = this.sheet(i), next = sheets[i], seen = sheet.shown.alpha > 0;
+        if (!next && !seen) {
+          sheet.layer = "";
+          sheet.from = sheet.to = sheet.shown;
+          continue;
+        }
+        const heights = this.current(sheet);
+        if (next) {
+          const paint = this.paintOf(next.layer);
+          if (seen) {
+            sheet.A = heights;
+            sheet.from = sheet.shown;
+          } else if (i > 0 && merge && was) {
+            sheet.A = was.heights;
+            sheet.from = { lift: was.lift, alpha: 0 };
+            sheet.paintA = sheet.paintB = was.paint;
+            sheet.tone = 1;
+          } else {
+            sheet.A = this.zeros;
+            sheet.from = { lift: i > 0 && first ? first.shown.lift : next.lift * s, alpha: 0 };
+            sheet.paintA = sheet.paintB = paint;
+            sheet.tone = 1;
+          }
+          sheet.B = grid(next.layer);
+          sheet.to = { lift: next.lift * s, alpha: 1 };
+          sheet.layer = next.layer;
+          this.repaint(sheet, paint);
+          lifts.push(next.lift * s);
+        } else {
+          sheet.A = heights;
+          sheet.from = sheet.shown;
+          sheet.layer = "";
+          sheet.B = merge ? grid(main.layer) : this.zeros;
+          sheet.to = { lift: main.lift * s, alpha: 0 };
+          this.repaint(sheet, merge ? this.paintOf(main.layer) : sheet.paintB);
+        }
+      }
+      const to = {
+        marks: stage.marks ? 1 : 0,
+        cut: stage.level === null ? 0 : 1,
+        level: stage.level ?? this.fn.floor,
+        low: this.zmin * s + Math.min(...lifts),
+        high: this.zmax * s + Math.max(...lifts)
+      };
+      const counted = (shown) => this.sheets.filter(shown).length;
+      const regrouped = counted((sheet) => sheet.from.alpha > 0) !== counted((sheet) => sheet.to.alpha > 0);
+      if (jump) {
         this.mix = 1;
+        for (const sheet of this.sheets) {
+          sheet.A = sheet.B;
+          sheet.from = sheet.shown = sheet.to;
+          sheet.toneFrom = sheet.tone = 1;
+        }
         this.shown = this.from = this.to = to;
         this.moving = false;
       } else {
-        this.A = this.current();
-        this.B = grid;
         this.mix = 0;
+        for (const sheet of this.sheets) sheet.tone = sheet.toneFrom;
         this.from = { ...this.shown, level: this.shown.cut > 0 ? this.shown.level : this.fn.floor };
         this.to = to;
-        this.duration = this.from.level !== to.level ? SLIDE : MORPH;
+        this.duration = this.from.level !== to.level || regrouped ? SLIDE : MORPH;
         this.t0 = performance.now();
         this.moving = true;
       }
-      this.upload();
+      const lead = this.sheet(0);
+      this.fn.marks.forEach((m, i) => {
+        this.markA[i] = heightAt(lead.A, this.fn, m.x, m.y);
+        this.markB[i] = heightAt(lead.B, this.fn, m.x, m.y);
+      });
+      for (const sheet of this.sheets) this.upload(sheet);
       if (this.moving) this.kick();
       else this.draw();
     }
-    // the heights drawn now, nondimensional
-    current() {
-      if (this.mix >= 1 || this.A === this.B) return this.B;
-      const a = this.A, b = this.B, t = this.mix;
-      return a.map((z, i) => z + (b[i] - z) * t);
+    // the heights of the sheet drawn now, nondimensional, kept for the frame
+    current(sheet) {
+      if (this.mix >= 1 || sheet.A === sheet.B) return sheet.B;
+      const now = sheet.now, a = sheet.A, b = sheet.B, t = this.mix;
+      if (now && now.a === a && now.b === b && now.mix === t) return now.grid;
+      const grid = a.map((z, i) => z + (b[i] - z) * t);
+      sheet.now = { a, b, mix: t, grid };
+      return grid;
     }
     // the unit normals of the heights g in world units, by central differences
     normalsOf(g) {
@@ -2843,25 +3003,21 @@ void main() {
       this.normals.set(g, out);
       return out;
     }
-    upload() {
-      const geometry = this.surface.geometry, s = this.zscale;
+    upload(sheet) {
+      const geometry = sheet.mesh.geometry, s = this.zscale;
       const zA = geometry.getAttribute("zA"), zB = geometry.getAttribute("zB");
-      for (let i = 0; i < this.A.length; i++) {
-        zA.array[i] = this.A[i] * s;
-        zB.array[i] = this.B[i] * s;
+      for (let i = 0; i < sheet.A.length; i++) {
+        zA.array[i] = sheet.A[i] * s;
+        zB.array[i] = sheet.B[i] * s;
       }
-      geometry.getAttribute("nA").set(this.normalsOf(this.A));
-      geometry.getAttribute("nB").set(this.normalsOf(this.B));
+      geometry.getAttribute("nA").set(this.normalsOf(sheet.A));
+      geometry.getAttribute("nB").set(this.normalsOf(sheet.B));
       for (const name of ["zA", "zB", "nA", "nB"]) geometry.getAttribute(name).needsUpdate = true;
     }
-    // the marks on the layer, in world units
-    placeMarks(layer) {
-      if (layer === this.markLayer) return;
-      this.markLayer = layer;
-      const f = clamped(this.fn.layers[layer] ?? (() => 0), this.fn.floor);
-      const position = this.points.geometry.getAttribute("position");
-      this.fn.marks.forEach((m, i) => position.setXYZ(i, m.x, m.y, f(m.x, m.y) * this.zscale));
-      position.needsUpdate = true;
+    // the world position of the mark i, on the first sheet as drawn now
+    markAt(i, p) {
+      const m = this.fn.marks[i];
+      return p.set(m.x, m.y, lerp(this.markA[i], this.markB[i], this.mix) * this.zscale + this.sheet(0).shown.lift);
     }
     /**
      * The marks as drawn now, read by the tests: for each mark, the height at which it is drawn and
@@ -2869,12 +3025,21 @@ void main() {
      * hidden to 1. With settled, the change of stage has ended.
      */
     probe() {
-      const position = this.points.geometry.getAttribute("position"), g = this.current();
-      const lift = (1 - this.shown.marks) * RISE, fade = this.points.visible ? this.shown.marks : 0;
+      const position = this.points.geometry.getAttribute("position"), lead = this.sheet(0), g = this.current(lead);
+      const fade = this.points.visible ? this.shown.marks : 0;
+      const camera = this.camera.clone(), p = new this.THREE.Vector3();
+      camera.updateMatrixWorld();
+      const label = (i) => {
+        const lab = this.labels.find((l) => l.dataset.at === this.fn.marks[i].name);
+        if (!lab) return null;
+        this.markAt(i, p).project(camera);
+        const x = (p.x + 1) / 2 * this.w + num3(lab.dataset.dx, 0), y = (1 - p.y) / 2 * this.h + num3(lab.dataset.dy, -34);
+        return Math.hypot(parseFloat(lab.style.left) - x, parseFloat(lab.style.top) - y);
+      };
       return {
         stage: this.stageName,
         settled: !this.moving,
-        marks: this.fn.marks.map((m, i) => ({ name: m.name, z: position.getZ(i) - lift, surface: heightAt(g, this.fn, m.x, m.y) * this.zscale, fade }))
+        marks: this.fn.marks.map((m, i) => ({ name: m.name, z: position.getZ(i), surface: heightAt(g, this.fn, m.x, m.y) * this.zscale + lead.shown.lift, fade, label: label(i) }))
       };
     }
     /** Sizes the canvas from the box of the element on the screen, and draws. */
@@ -2897,28 +3062,34 @@ void main() {
       this.camera.aspect = this.W / this.H;
       this.draw();
     }
-    // the camera on a sphere about the middle of the box of the surface, at a distance at which the
-    // sphere around the box fits the narrower field of view, divided by data-zoom
+    // the camera on a sphere about the middle of the box of the sheets shown, divided by data-zoom.
+    // its distance is that at which the sphere around the box of one sheet overfills the narrower
+    // field of view by a little, as the box does not fill its sphere, or, for sheets stacked taller
+    // than one, that at which their box fits the height of the view at the elevation of the camera
     aim() {
-      const fn = this.fn, s = this.zscale;
-      const cx = (fn.x[0] + fn.x[1]) / 2, cy = (fn.y[0] + fn.y[1]) / 2, cz = (this.zmin + this.zmax) / 2 * s;
-      const R = 0.5 * Math.hypot(fn.x[1] - fn.x[0], fn.y[1] - fn.y[0], (this.zmax - this.zmin) * s);
+      const fn = this.fn, { low, high } = this.shown;
+      const cx = (fn.x[0] + fn.x[1]) / 2, cy = (fn.y[0] + fn.y[1]) / 2, cz = (low + high) / 2;
+      const wide = Math.hypot(fn.x[1] - fn.x[0], fn.y[1] - fn.y[0]), R = 0.5 * Math.hypot(wide, high - low);
       const v = this.camera.fov * Math.PI / 360, half = Math.min(v, Math.atan(Math.tan(v) * this.camera.aspect));
-      const d = R / Math.sin(half) * 0.86 / this.zoom;
+      const one = 0.5 * Math.hypot(wide, (this.zmax - this.zmin) * this.zscale) / Math.sin(half);
+      const tall = 0.5 * ((high - low) * Math.cos(this.elevation) + wide * Math.sin(this.elevation)) / Math.tan(v);
+      const d = Math.max(0.86 * one, tall) / this.zoom;
       const c = Math.cos(this.elevation);
       this.camera.position.set(cx + d * c * Math.cos(this.azimuth), cy + d * c * Math.sin(this.azimuth), cz + d * Math.sin(this.elevation));
       this.camera.near = Math.max(0.01, d - 2 * R);
       this.camera.far = d + 2 * R;
       this.camera.lookAt(cx, cy, cz);
       this.camera.updateProjectionMatrix();
+      this.camera.updateMatrixWorld();
     }
-    // the curve of intersection of the plane at the level shown, recomputed when the level or the
-    // heights have changed
+    // the curve of intersection of the plane with the first sheet at the level shown, recomputed when
+    // the level or the heights have changed
     trace() {
-      const key = this.shown.cut > 0 ? `${this.shown.level}|${this.mix}|${this.markLayer}` : "";
+      const lead = this.sheet(0);
+      const key = this.shown.cut > 0 ? `${this.shown.level}|${this.mix}|${lead.layer}` : "";
       if (key === this.drawn) return;
       this.drawn = key;
-      const curves2 = key ? levelCurves(this.current(), this.fn.x, this.fn.y, CELLS, CELLS, this.shown.level) : [];
+      const curves2 = key ? levelCurves(this.current(lead), this.fn.x, this.fn.y, CELLS, CELLS, this.shown.level) : [];
       const count = curves2.reduce((total, c) => total + Math.max(0, c.length / 2 - 1), 0);
       const geometry = this.curve.geometry, THREE = this.THREE;
       if (count > this.capacity) {
@@ -2958,12 +3129,21 @@ void main() {
       if (!this.W) return;
       const r = renderer();
       if (!r) return;
-      const shown = this.shown, u = this.surface.material.uniforms;
-      u.uMix.value = this.mix;
-      u.uRange.value.set(shown.lo, shown.hi);
-      this.plane.position.z = shown.level * this.zscale;
+      const shown = this.shown;
+      for (const s of this.sheets) {
+        const u = s.mesh.material.uniforms;
+        u.uMix.value = this.mix;
+        u.uTone.value = s.tone;
+        u.uAlpha.value = s.shown.alpha;
+        s.group.position.z = s.shown.lift;
+        s.group.visible = s.shown.alpha > 0;
+        s.depth.visible = s.shown.alpha < 1;
+      }
+      const lift = this.sheet(0).shown.lift;
+      this.plane.position.z = shown.level * this.zscale + lift;
       this.plane.material.uniforms.uAlpha.value = 0.2 * shown.cut;
       this.plane.visible = shown.cut > 0;
+      this.curve.position.z = this.glow.position.z = lift;
       this.curve.material.uniforms.uAlpha.value = Math.min(1, 2 * shown.cut);
       this.curve.visible = shown.cut > 0;
       this.glow.material.uniforms.uAlpha.value = 0.45 * Math.min(1, 2 * shown.cut);
@@ -2972,46 +3152,48 @@ void main() {
       this.points.visible = shown.marks > 0;
       this.trace();
       this.aim();
+      this.place();
       if (r.domElement.width !== this.W || r.domElement.height !== this.H) r.setSize(this.W, this.H, false);
       r.render(this.scene, this.camera);
       const ctx = this.canvas.getContext("2d");
       if (!ctx) return;
       ctx.clearRect(0, 0, this.W, this.H);
       ctx.drawImage(r.domElement, 0, 0);
-      this.place();
     }
-    // the labels at their marks, in the pixels of the slide, faded with the marks and dimmed behind
-    // the surface
+    // the marks on the first sheet as drawn now, dimmed behind the surface, and the labels at their
+    // marks in the pixels of the slide, faded with the marks. the dimming follows the surface over
+    // DIMMING seconds, and at once after a pause between two frames
     place() {
-      const THREE = this.THREE, p = new THREE.Vector3(), lift = (1 - this.shown.marks) * RISE;
+      const THREE = this.THREE, p = new THREE.Vector3();
       const position = this.points.geometry.getAttribute("position");
+      const seen = this.points.geometry.getAttribute("seen");
+      const now = performance.now(), dt = (now - this.seenAt) / 1e3;
+      this.seenAt = now;
+      const k = dt > 0.25 ? 1 : 1 - Math.exp(-dt / DIMMING);
+      this.fn.marks.forEach((m, i) => {
+        this.markAt(i, p);
+        position.setXYZ(i, p.x, p.y, p.z);
+        this.seen[i] += ((this.behind(p) ? BEHIND : 1) - this.seen[i]) * k;
+        seen.setX(i, this.seen[i]);
+      });
+      position.needsUpdate = seen.needsUpdate = true;
       for (const lab of this.labels) {
         const i = this.fn.marks.findIndex((m) => m.name === lab.dataset.at);
         if (i < 0) continue;
-        p.set(position.getX(i), position.getY(i), position.getZ(i) - lift);
-        const hidden = this.behind(p);
-        p.project(this.camera);
+        this.markAt(i, p).project(this.camera);
         lab.style.left = `${(p.x + 1) / 2 * this.w + num3(lab.dataset.dx, 0)}px`;
         lab.style.top = `${(1 - p.y) / 2 * this.h + num3(lab.dataset.dy, -34)}px`;
-        lab.style.opacity = String(this.shown.marks ** 2 * (hidden ? 0.3 : 1));
+        lab.style.opacity = String(this.shown.marks ** 2 * this.seen[i]);
       }
     }
-    // whether the surface is between the world point p, a little above it, and the camera
+    // whether the first sheet is between the world point p, a little above it, and the camera
     behind(p) {
-      const fn = this.fn, g = this.current(), n = CELLS + 1, cam = this.camera.position;
-      const height = (x, y) => {
-        const u = (x - fn.x[0]) / (fn.x[1] - fn.x[0]) * CELLS, v = (y - fn.y[0]) / (fn.y[1] - fn.y[0]) * CELLS;
-        if (u < 0 || v < 0 || u > CELLS || v > CELLS) return null;
-        const i = Math.min(CELLS - 1, Math.floor(u)), j = Math.min(CELLS - 1, Math.floor(v)), s = u - i, t = v - j;
-        const z = (1 - t) * ((1 - s) * g[j * n + i] + s * g[j * n + i + 1]) + t * ((1 - s) * g[(j + 1) * n + i] + s * g[(j + 1) * n + i + 1]);
-        return z * this.zscale;
-      };
+      const fn = this.fn, lead = this.sheet(0), g = this.current(lead), cam = this.camera.position;
       for (let k = 1; k <= 80; k++) {
         const t = 0.01 + k / 80 * 0.99;
         const x = p.x + (cam.x - p.x) * t, y = p.y + (cam.y - p.y) * t, z = p.z + 0.03 + (cam.z - p.z) * t;
-        const zs = height(x, y);
-        if (zs === null) return false;
-        if (zs > z) return true;
+        if (x < fn.x[0] || x > fn.x[1] || y < fn.y[0] || y > fn.y[1]) return false;
+        if (heightAt(g, fn, x, y) * this.zscale + lead.shown.lift > z) return true;
       }
       return false;
     }
@@ -3053,6 +3235,10 @@ void main() {
       this.moving = false;
       this.mix = 1;
       this.shown = this.to;
+      for (const s of this.sheets) {
+        s.shown = s.to;
+        s.tone = 1;
+      }
     }
     /** Starts the turning of the camera and the animation of a change of stage, while the slide is shown. */
     start() {
