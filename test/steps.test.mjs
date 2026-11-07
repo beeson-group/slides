@@ -58,13 +58,14 @@ const TEXT = 'rgb(242, 242, 239)';
 const ACCENT = 'rgb(240, 128, 80)';
 const VIOLET = 'rgb(201, 79, 230)';
 
-// at the start, and after each of the six steps
+// at the start, after each of the six steps, and after the step added to restore the dimmed ones
 const EXPECTED = [
   { display: ['0', false], sentence: '0', first: [TEXT, TEXT], second: TEXT },
   { display: ['1', false], sentence: '0', first: [TEXT, TEXT], second: TEXT },
   { display: ['1', true], sentence: '1', first: [TEXT, TEXT], second: TEXT },
   { display: ['1', true], sentence: '0.45', first: [ACCENT, ACCENT], second: TEXT },
   { display: ['1', true], sentence: '0.45', first: [ACCENT, ACCENT], second: VIOLET },
+  { display: ['0.45', false], sentence: '0.45', first: [ACCENT, ACCENT], second: VIOLET },
   { display: ['0.45', false], sentence: '0.45', first: [ACCENT, ACCENT], second: VIOLET },
   { display: ['1', false], sentence: '1', first: [ACCENT, ACCENT], second: VIOLET },
 ];
@@ -96,6 +97,43 @@ test('the print view shows the held display and the colors of each step', { time
   assert.equal(await page.evaluate(`document.querySelectorAll('.pdf-page').length`), EXPECTED.length);
   const seen = [];
   for (let i = 0; i < EXPECTED.length; i++) seen.push(await page.evaluate(view(`document.querySelectorAll('.pdf-page section')[${i}]`)));
-  // the page of the last step is not marked complete in the print view, hence it is printed dimmed
-  assert.deepEqual(seen.slice(0, -1), EXPECTED.slice(0, -1));
+  assert.deepEqual(seen, EXPECTED);
+});
+
+// the opacity of each fragment with content of the current slide, and whether the slide is complete
+const opacities = `(() => {
+  const slide = Reveal.getCurrentSlide();
+  const shown = [...slide.querySelectorAll('.fragment')].filter((f) => f.textContent.trim());
+  return [shown.map((f) => getComputedStyle(f).opacity), slide.hasAttribute('data-complete')];
+})()`;
+
+test('the last step of a slide is shown alone, and a step is added to restore the dimmed ones', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl('index.html', 'still'));
+  await page.waitFor(deckSettled);
+
+  // a slide whose fragments are empty spans, e.g. the steps of a plot, is not dimmed and is left as it is
+  const restored = await page.evaluate(`[...document.querySelectorAll('.slides > section')]
+    .filter((section) => section.querySelector('.fragment[data-restore]'))
+    .map((section) => section.querySelector('h1, h2').textContent)`);
+  assert.deepEqual(restored, ['Steps are shown one at a time', 'Stepping through the equations', 'The effective potential', 'A video on a slide']);
+
+  await page.evaluate(`Reveal.slide(2)`);
+  const seen = [];
+  for (let i = 0; i < 5; i++) {
+    if (i) await page.evaluate('Reveal.next()');
+    await new Promise((done) => setTimeout(done, 600));
+    seen.push(await page.evaluate(opacities));
+  }
+  assert.deepEqual(seen, [
+    [['0', '0', '0'], false],
+    [['1', '0', '0'], false],
+    [['0.45', '1', '0'], false],
+    [['0.45', '0.45', '1'], false],
+    [['1', '1', '1'], true],
+  ]);
+  assert.deepEqual(await page.evaluate('Reveal.getIndices().h'), 2);
+  assert.deepEqual(page.errors, []);
 });
