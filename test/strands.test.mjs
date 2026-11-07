@@ -119,6 +119,44 @@ test('a strand is colored by the pair of its family and the ramp along e', () =>
   assert.ok(both.every((s) => s.ink.at === 0));
 });
 
+// the look of a record: its tone, opacity, weight, head, start, and glow, as on the title slide
+const looked = {
+  families: [
+    { piece: 'tube', tone: 'violet', alpha: 0.35, weight: 0.5, head: 0, start: 0, points: [[0, 0], [1, 0], [2, 0]], t: [0, 3, 6] },
+    { piece: 'spiral', tone: 'orange', head: 2.2, start: 6, points: [[2, 0], [2, 1]], t: [10, 12] },
+    { piece: 'arc', tone: 'violet', weight: 1.4, glow: true, start: 8, points: [[2, 1], [3, 1]] },
+  ],
+};
+
+test('the tone, opacity, weight, head, start, and glow of a record are given to its strand', () => {
+  const [tube, spiral, arc] = strandsOf(parse(looked), looked.families);
+  assert.deepEqual([tube.tone, tube.alpha, tube.weight, tube.head, tube.glow], ['violet', 0.35, 0.5, 0, undefined]);
+  // a clock is moved by the start of its record, and T is the clock of the last point
+  assert.deepEqual([...tube.times], [0, 3, 6]);
+  assert.deepEqual([...spiral.times], [6, 8]);
+  assert.equal(spiral.T, 8);
+  assert.deepEqual([spiral.tone, spiral.alpha, spiral.weight, spiral.head], ['orange', undefined, undefined, 2.2]);
+  // without a clock, the strand is traced along its length from its start
+  assert.deepEqual([...arc.times], [8, 9]);
+  assert.deepEqual([arc.weight, arc.glow, arc.head], [1.4, true, undefined]);
+  // the opacity of a record wins over the one of its ink
+  const inked = strandsOf(parse(looked), looked.families, 'piece');
+  assert.equal(inked[0].alpha, 0.35);
+  assert.ok(inked[1].alpha > 0 && inked[1].alpha < 1);
+});
+
+test('a record with a look of another form is rejected with the reason', () => {
+  const file = (look) => ({ families: [{ points: [[0, 0], [1, 1]], ...look }] });
+  assert.throws(() => parse(file({ tone: 'hero' })), /"tone" of its record 0/);
+  assert.throws(() => parse(file({ alpha: 0 })), /"alpha" of its record 0/);
+  assert.throws(() => parse(file({ alpha: 1.5 })), /"alpha" of its record 0/);
+  assert.throws(() => parse(file({ weight: -1 })), /"weight" of its record 0/);
+  assert.throws(() => parse(file({ head: 'small' })), /"head" of its record 0/);
+  assert.throws(() => parse(file({ start: NaN })), /"start" of its record 0/);
+  assert.throws(() => parse(file({ glow: 'yes' })), /"glow" of its record 0/);
+  assert.equal(parse(file({ tone: 'text', alpha: 1, weight: 0, head: 0, start: 0, glow: false })).families.length, 1);
+});
+
 test('colors are mixed in OKLCH along the shorter arc of hue', () => {
   assert.equal(mix('#000000', '#ffffff', 0), '#000000');
   assert.equal(mix('#000', 'rgb(255, 255, 255)', 1), '#ffffff');
