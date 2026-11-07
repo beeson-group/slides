@@ -9,7 +9,7 @@
 // page, or when the page count of the PDF is not equal to the number of .pdf-page elements created
 // in reveal.js. A slide taller than one page is the usual cause of the latter.
 import { readFileSync, writeFileSync } from 'node:fs';
-import { deckSettled, deckUrl, launch } from './chrome.mjs';
+import { deckUrl, launch, printView } from './chrome.mjs';
 
 const [deck = 'index.html', output = 'slides.pdf'] = process.argv.slice(2);
 
@@ -28,11 +28,7 @@ const browser = await launch();
 let failed = false;
 try {
   const page = await browser.newPage();
-  await page.goto(deckUrl(deck, 'print-pdf&still'));
-  // loading-scroll-mode is removed from the viewport after the pdf-ready event of reveal.js
-  await page.waitFor(`!!document.querySelector('.pdf-page')
-    && !document.querySelector('.reveal-viewport.loading-scroll-mode')`);
-  await page.waitFor(deckSettled);
+  await printView(page, deckUrl(deck, 'print-pdf&still'));
   const steps = await page.evaluate(`document.querySelectorAll('.pdf-page').length`);
   const pdf = await page.pdf();
   writeFileSync(output, pdf);

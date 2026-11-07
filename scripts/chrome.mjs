@@ -235,3 +235,12 @@ export const deckSettled = `(async () => {
   await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
   return true;
 })()`;
+
+/** Opens a deck at url in the print view of reveal.js, with ?print-pdf in url, and waits until it can be printed. */
+export async function printView(page, url) {
+  await page.goto(url);
+  // loading-scroll-mode is removed from the viewport after the pdf-ready event of reveal.js
+  await page.waitFor(`!!document.querySelector('.pdf-page')
+    && !document.querySelector('.reveal-viewport.loading-scroll-mode')`);
+  await page.waitFor(deckSettled);
+}
