@@ -647,6 +647,25 @@ test('a formula is reached with Tab and opened with Enter, and the controls carr
   assert.deepEqual(page.errors, []);
 });
 
+test('a text that runs past the edge of the slide is marked and counted, and no text of the demo deck does', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  const counts = await page.evaluate(`(async () => { const out = []; for (let i = 0; i < Reveal.getTotalSlides(); i += 1) { Reveal.slide(i); await new Promise((d) => setTimeout(d, 50)); out.push(window.BeesonEditor.status().overflow); } return out; })()`);
+  assert.deepEqual(counts, counts.map(() => 0));
+  const h2 = 'Period of the families';
+  await page.evaluate(`(() => { const h = [...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === ${JSON.stringify(h2)}); Reveal.slide(Reveal.getIndices(h.closest('section')).h); h.firstChild.data = 'A heading that goes on and on '.repeat(30); h.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  const status = await page.evaluate('window.BeesonEditor.status()');
+  assert.ok(status.overflow >= 1, `overflow ${status.overflow}`);
+  assert.match(status.message, /texts? runs? past the slide or into its footnote/);
+  assert.equal(await page.evaluate(`document.querySelector('.reveal section.present h2').classList.contains('beeson-overflow')`), true);
+  await page.evaluate(`(() => { const h = document.querySelector('.reveal section.present h2'); h.firstChild.data = ${JSON.stringify(h2)}; h.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  assert.equal((await page.evaluate('window.BeesonEditor.status()')).overflow, 0);
+  assert.equal(await page.evaluate(`document.querySelectorAll('.reveal .beeson-overflow').length`), 0);
+  assert.deepEqual(page.errors, []);
+});
+
 test('the notes pane is resized by dragging the strip above it, and the height is kept', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
@@ -813,6 +832,41 @@ test('Esc leaves a text and selects its block for the arrow keys, Tab reaches a 
   assert.deepEqual(page.errors, []);
 });
 
+test('the toggles, the state, the notes, and the formula dialog carry their states, and the notes strip is operated by keyboard', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  const pressed = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button, .beeson-edit-bottom button')].filter((b) => b.hasAttribute('aria-pressed')).map((b) => [b.textContent, b.getAttribute('aria-pressed')])`);
+  assert.deepEqual(await pressed(), [['Autosave', 'false'], ['Slides', 'true'], ['Steps', 'false'], ['Notes', 'false']]);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Notes').click()`);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
+  assert.deepEqual(await pressed(), [['Autosave', 'false'], ['Slides', 'true'], ['Steps', 'true'], ['Notes', 'true']]);
+  assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-top .state').getAttribute('aria-live')`), 'polite');
+  assert.equal(await page.evaluate(`document.querySelector('.reveal section.present > aside.notes').getAttribute('aria-label')`), 'Speaker notes');
+  // the strip above the notes is a separator with a value, and the arrows change the height
+  const strip = await page.evaluate(`(() => { const s = document.querySelector('.beeson-edit-resize'); s.focus(); return { role: s.getAttribute('role'), label: s.getAttribute('aria-label'), now: s.getAttribute('aria-valuenow'), focused: document.activeElement === s }; })()`);
+  assert.deepEqual(strip, { role: 'separator', label: 'Height of the notes', now: '200', focused: true });
+  await page.evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }))`);
+  await page.evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', bubbles: true, cancelable: true }))`);
+  await page.evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }))`);
+  assert.deepEqual(await page.evaluate(`({ pane: window.BeesonEditor.status().pane, now: document.querySelector('.beeson-edit-resize').getAttribute('aria-valuenow'), stored: localStorage.getItem('beeson-pane') })`), { pane: 220, now: '220', stored: '220' });
+  // the formula dialog is modal, and Escape and Apply give the focus back to the formula
+  await page.evaluate(`(() => { const c = document.querySelector('.reveal .slides .math mjx-container'); Reveal.slide(Reveal.getIndices(c.closest('section')).h); })()`);
+  await sleep(200);
+  await page.evaluate(`(() => { const c = document.querySelector('.reveal section.present .math mjx-container'); c.focus(); c.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true, cancelable: true })); })()`);
+  assert.equal(await page.evaluate(`document.querySelector('.beeson-math').getAttribute('aria-modal')`), 'true');
+  await page.evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true, cancelable: true }))`);
+  assert.equal(await page.evaluate(`document.activeElement === document.querySelector('.reveal section.present .math mjx-container')`), true);
+  await page.evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true, cancelable: true }))`);
+  await page.evaluate(`(() => { const f = document.querySelector('.beeson-math textarea'); f.value = f.value + ' + 1'; f.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await sleep(400);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-math button')].find((b) => b.textContent === 'Apply').click()`);
+  await until(page, `!document.querySelector('.beeson-math')`);
+  assert.equal(await page.evaluate(`document.activeElement === document.querySelector('.reveal section.present .math mjx-container')`), true);
+  assert.deepEqual(page.errors, []);
+});
+
 test('with Notes on, a slide without notes gets an empty aside to type into, which is saved once it has text', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
@@ -834,6 +888,32 @@ test('with Notes on, a slide without notes gets an empty aside to type into, whi
   assert.equal(rendered.replace(line, ''), deckText);
   // the notes are written into the second slide
   assert.equal(rendered.slice(0, rendered.indexOf(line)).split('<section').length - 1, 2);
+  assert.deepEqual(page.errors, []);
+});
+
+test('a toolbar button pressed by keyboard keeps the focus, and Tab is kept inside the formula dialog', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  const focus = await page.evaluate(`(() => {
+    const b = [...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Autosave');
+    b.focus();
+    b.click();
+    const keyboard = document.activeElement === b;
+    b.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, detail: 1 }));
+    return { keyboard, pointer: document.activeElement === b };
+  })()`);
+  assert.deepEqual(focus, { keyboard: true, pointer: false });
+  await page.evaluate(`(() => { const c = document.querySelector('.reveal .slides .math mjx-container'); Reveal.slide(Reveal.getIndices(c.closest('section')).h); })()`);
+  await sleep(200);
+  await page.evaluate(`(() => { const c = document.querySelector('.reveal section.present .math mjx-container'); c.focus(); c.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true, cancelable: true })); })()`);
+  await sleep(400);
+  const tab = (shift) => page.evaluate(`(() => { document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', keyCode: 9, shiftKey: ${shift}, bubbles: true, cancelable: true })); const a = document.activeElement; return a.tagName === 'TEXTAREA' ? 'field' : a.textContent; })()`);
+  assert.equal(await tab(false), 'Apply');
+  assert.equal(await tab(false), 'Cancel');
+  assert.equal(await tab(false), 'field');
+  assert.equal(await tab(true), 'Cancel');
   assert.deepEqual(page.errors, []);
 });
 
@@ -897,6 +977,26 @@ test('an undo back to the saved text leaves the deck clean, and Present with uns
   await present();
   await until(page, '!!window.__opened');
   assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-card.ask').hidden`), true);
+  assert.deepEqual(page.errors, []);
+});
+
+test('the texts that cannot be edited are listed on a card from the toolbar', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  const which = `[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Which?')`;
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  assert.equal(await page.evaluate(`!${which} || ${which}.hidden`), true);
+  const changed = deckText.replace('<h2>Period of the families</h2>', '<h2>Another heading</h2>');
+  const problems = (await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(changed)})`)).problems;
+  assert.ok(problems.length > 0);
+  assert.equal(await page.evaluate(`${which}.hidden`), false);
+  await page.evaluate(`${which}.click()`);
+  const card = await page.evaluate(`(() => { const c = document.querySelector('.beeson-edit-card.problems'); return { hidden: c.hidden, title: c.querySelector('h3').textContent, items: c.querySelectorAll('li').length, focused: document.activeElement.textContent }; })()`);
+  assert.deepEqual(card, { hidden: false, title: 'Texts that cannot be edited', items: problems.length, focused: 'Close' });
+  await page.evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true, cancelable: true }))`);
+  assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-card.problems').hidden`), true);
+  assert.equal(await page.evaluate(`document.activeElement === ${which}`), true);
   assert.deepEqual(page.errors, []);
 });
 
@@ -974,6 +1074,42 @@ test('an empty TeX is refused in the field, and a save without an edit does not 
     return window.BeesonEditor.status().message;
   })()`);
   assert.match(message, /^Saved unchanged\.html at \d/);
+  assert.deepEqual(page.errors, []);
+});
+
+// the contrast ratio of two CSS colors rgb(r, g, b), as defined in the Web Content Accessibility
+// Guidelines 2
+const contrast = (a, b) => {
+  const lum = (c) => {
+    const [r, g, bl] = c.match(/[\d.]+/g).slice(0, 3).map((v) => {
+      const s = Number(v) / 255;
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const [hi, lo] = [lum(a), lum(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+};
+
+test('the slide list and the selects of the Steps pane carry their names, and the muted text of the panes is legible in light mode', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-nav .rows').getAttribute('aria-label')`), 'Slides');
+  await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .zone > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
+  await sleep(300);
+  const rows = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .rows > *')].map((r) => [r.localName, r.className, r.querySelector('select').getAttribute('aria-label')])`);
+  assert.equal(rows.length, 6);
+  assert.deepEqual(rows[0].slice(0, 2), ['div', 'row']);
+  assert.match(rows[0][2], /^Step of the heading: \S/);
+  assert.match(rows[5][2], /^Step of the figure: \S/);
+  assert.ok(rows.every(([name, , label]) => name === 'div' && /^Step of the [a-z]+: /.test(label)), JSON.stringify(rows));
+  await page.evaluate(`document.documentElement.dataset.theme = 'light'`);
+  const colors = await page.evaluate(`({ text: getComputedStyle(document.querySelector('.beeson-edit-side .foot')).color, bg: getComputedStyle(document.querySelector('.beeson-edit-side')).backgroundColor })`);
+  const ratio = contrast(colors.text, colors.bg);
+  assert.ok(ratio >= 4.5, `the footnote of the Steps pane has a contrast of ${ratio.toFixed(2)} to 1 (${colors.text} on ${colors.bg})`);
   assert.deepEqual(page.errors, []);
 });
 
