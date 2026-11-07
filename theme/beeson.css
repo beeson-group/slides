@@ -13,6 +13,17 @@ html[data-theme="dark"] {
   --violet: #c94fe6;
   --stroke: rgba(242, 242, 239, 0.34);
   --body: rgba(242, 242, 239, 0.55);
+  /* the palette of a backdrop drawn from a file, in pairs: a value of data-strands-color takes
+     --strand-1 and --strand-2, the next value --strand-3 and --strand-4, and so on, and a strand is
+     colored between the two along data-strands-ramp */
+  --strand-1: #c94fe6;
+  --strand-2: #f08050;
+  --strand-3: #3d8bff;
+  --strand-4: #2fd4c0;
+  --strand-5: #ffd23f;
+  --strand-6: #8fdc5a;
+  --strand-7: #6f7cff;
+  --strand-8: #f2f2ef;
   --panel: #050505;
   --panel-text: #f2f2ef;
   --paper: #ffffff;
@@ -28,6 +39,14 @@ html[data-theme="light"] {
   --violet: #8a2be2;
   --stroke: rgba(20, 20, 19, 0.3);
   --body: rgba(20, 20, 19, 0.5);
+  --strand-1: #8a2be2;
+  --strand-2: #c8571e;
+  --strand-3: #1f5fd0;
+  --strand-4: #0f8a7a;
+  --strand-5: #b8860b;
+  --strand-6: #4a8c1c;
+  --strand-7: #3b3fb0;
+  --strand-8: #141413;
 }
 /* the Okabe–Ito set for data, the same in both modes */
 :root {
