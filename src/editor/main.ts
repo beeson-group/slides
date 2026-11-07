@@ -581,6 +581,113 @@ function ensureNotes(): HTMLElement | null {
   return aside;
 }
 
+// the TeX of a formula is edited in a field under it, and the host is typeset again on Apply
+let popover: HTMLElement | null = null;
+// the formula that the field is open for, which gets the focus back when the field is closed
+let popoverFor: Element | null = null;
+
+function closeMath(back = true): void {
+  popover?.remove();
+  popover = null;
+  const el = popoverFor;
+  popoverFor = null;
+  if (back && el?.isConnected) (el as HTMLElement).focus({ preventScroll: true });
+}
+
+// a TeX with an error is refused before the slide is touched, and the error is thrown to the
+// field, where it is shown under the TeX. the change is one entry of the history
+async function setMath(container: Element, tex: string): Promise<void> {
+  const host = container.closest(HOST);
+  if (!host) throw new Error('the formula is not in an editable block');
+  const info = mathLookup()(container);
+  const { error } = await previewTex(tex, info?.display ?? false);
+  if (error) throw new Error(error);
+  const before = contentWithTex(host);
+  if (!(await retypeset(host, container, tex))) throw new Error('MathJax does not find the formula with this TeX, and the slide is kept as it was');
+  markMath(host);
+  const after = contentWithTex(host);
+  if (after !== before) history.push({ label: 'formula', undo: () => restoreHost(host, before), redo: () => restoreHost(host, after) });
+  markDirty();
+}
+
+function openMath(container: Element): void {
+  const info = mathLookup()(container);
+  if (!info) return;
+  closeMath();
+  const box = make('div', 'beeson-math');
+  box.setAttribute('role', 'dialog');
+  box.setAttribute('aria-modal', 'true');
+  box.setAttribute('aria-label', 'The TeX of the formula');
+  popoverFor = container;
+  // the formula is typeset into a new container on Apply, found again by its place in the block
+  const host = container.closest(HOST);
+  const at = host ? [...host.querySelectorAll('mjx-container')].indexOf(container) : -1;
+  const field = make('textarea');
+  field.setAttribute('aria-label', 'TeX of the formula');
+  field.value = info.tex;
+  field.rows = Math.min(12, Math.max(3, info.tex.split('\n').length + 1));
+  const row = make('div', 'row');
+  const apply = make('button', '', 'Apply');
+  const cancel = make('button', '', 'Cancel');
+  const hint = make('span', 'hint', `${info.open} … ${info.close}, ⌘ or Ctrl+Enter applies, Esc cancels`);
+  const preview = make('div', 'preview');
+  const error = make('div', 'error');
+  error.setAttribute('role', 'alert');
+  row.append(apply, cancel, hint);
+  box.append(field, preview, row, error);
+  const rect = container.getBoundingClientRect();
+  box.style.left = `${Math.max(16, Math.min(rect.left, window.innerWidth - 656))}px`;
+  box.style.top = `${Math.max(52, Math.min(rect.bottom + 8, window.innerHeight - 420))}px`;
+  // the TeX is typeset under the field as it is typed, and Apply is off while it has an error.
+  // a late result of an earlier TeX is dropped
+  let shown = 0;
+  let timer = 0;
+  const show = async () => {
+    const seq = ++shown;
+    const result = await previewTex(field.value, info.display).catch((e: unknown) => ({ node: null, error: e instanceof Error ? e.message : String(e) }));
+    if (seq !== shown) return;
+    preview.replaceChildren(...(result.node ? [result.node] : []));
+    error.textContent = result.error ?? '';
+    apply.disabled = !!result.error;
+  };
+  void show();
+  field.addEventListener('input', () => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(show, 150);
+  });
+  apply.addEventListener('click', async () => {
+    try {
+      await setMath(container, field.value);
+      popoverFor = host?.querySelectorAll('mjx-container')[at] ?? null;
+      closeMath();
+    } catch (e) {
+      error.textContent = e instanceof Error ? e.message : String(e);
+    }
+  });
+  cancel.addEventListener('click', () => closeMath());
+  field.addEventListener('keydown', (ev) => {
+    if ((ev.metaKey || ev.ctrlKey) && ev.key === 'Enter') {
+      ev.preventDefault();
+      apply.click();
+    } else if (ev.key === 'Escape') {
+      ev.preventDefault();
+      ev.stopPropagation();
+      closeMath();
+    }
+  });
+  // Tab and Shift+Tab cycle between the field and the buttons, as in a modal dialog
+  box.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Tab') return;
+    ev.preventDefault();
+    const stops = [field, apply, cancel].filter((el) => !el.disabled);
+    const at = stops.indexOf(document.activeElement as HTMLTextAreaElement);
+    stops[(at + (ev.shiftKey ? -1 : 1) + stops.length) % stops.length].focus();
+  });
+  document.body.append(box);
+  popover = box;
+  field.focus();
+  field.select();
+}
 
 // a block is put back to a content of the history, on its slide, with the caret at the end of the
 // text that changed
@@ -781,7 +888,26 @@ function onKeyDown(ev: KeyboardEvent): void {
     ev.preventDefault();
     ev.stopPropagation();
     void (key === 'y' || ev.shiftKey ? history.redo() : history.undo()).catch(fail);
+  } else if ((ev.key === 'Enter' || ev.key === ' ') && !popover && active instanceof Element && active.matches('mjx-container') && hostOf(active)) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    openMath(active);
+  } else if (ev.key === 'Escape') {
+    const host = hostOf(active);
+    if (popover) {
+      closeMath();
+      ev.stopPropagation();
+    }
   }
+}
+
+function onClick(ev: MouseEvent): void {
+  const target = ev.target instanceof Element ? ev.target : null;
+  const container = target?.closest('mjx-container');
+  if (container && hostOf(container)) {
+    ev.preventDefault();
+    openMath(container);
+  } else if (popover && target && !popover.contains(target)) closeMath(false);
 }
 
 
@@ -863,6 +989,7 @@ async function init(): Promise<void> {
   });
   document.addEventListener('focusout', () => setTimeout(follow, 0));
   window.addEventListener('keydown', onKeyDown, true);
+  document.addEventListener('click', onClick);
   window.addEventListener('beforeunload', (ev) => { if (dirty) ev.preventDefault(); });
   report();
   await revealReady();
@@ -874,6 +1001,7 @@ async function init(): Promise<void> {
     // (S) are off. the viewport of reveal.js is laid out again between the bars
     d.configure({ transition: 'none', backgroundTransition: 'none', fragments: false, keyboard: { 27: null, 79: null, 66: null, 86: null, 190: null, 70: null, 191: null, 83: null } });
     d.layout();
+    d.on('slidechanged', () => { count(); closeMath(false); move.select(null); ensureNotes(); follow(); });
     d.on('resize', () => { layout(); follow(); });
     count();
     layout();
@@ -892,6 +1020,7 @@ const BeesonEditor = {
   status,
   save,
   saveAs,
+  setMath,
   undo: () => history.undo(),
   redo: () => history.redo(),
   setPane,
