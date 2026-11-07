@@ -1,12 +1,13 @@
 // a `.surface`: the graph z = f(x, y) of a function of surfaces.ts over its rectangle, drawn with
 // three.js under an orbit camera that turns slowly. its stage is set by the fragments of its slide
-// with data-surface-stage, and a change of stage is animated. the heights are morphed. three.js is
-// the global THREE of theme/vendor/three/three.js. one WebGL renderer is shared by every surface of
-// the page, and its image is copied to a 2D canvas in each element. hence the page of each step in
-// the print view does not hold a WebGL context of its own
+// with data-surface-stage, and a change of stage is animated. the heights are morphed, and the
+// marks are raised into place. three.js is the global THREE of theme/vendor/three/three.js. one
+// WebGL renderer is shared by every surface of the page, and its image is copied to a 2D canvas in
+// each element. hence the page of each step in the print view does not hold a WebGL context of its
+// own
 
 import type * as Three from 'three';
-import { FUNCTION_NAMES, sample, surfaceFunction } from './surfaces.ts';
+import { FUNCTION_NAMES, clamped, sample, surfaceFunction } from './surfaces.ts';
 import type { Stage, SurfaceFunction } from './surfaces.ts';
 
 declare global {
@@ -16,8 +17,9 @@ declare global {
 }
 
 type RGB = [number, number, number];
-// the color range of the heights drawn at a frame, in world units
-type Shown = { lo: number; hi: number };
+// the values drawn at a frame: the color range of the heights in world units, and the progress of
+// the marks from 0 to 1
+type Shown = { lo: number; hi: number; marks: number };
 
 // cells along each side of the rectangle
 const CELLS = 200;
@@ -25,6 +27,10 @@ const CELLS = 200;
 const MORPH = 1400;
 // the default seconds per turn of the camera
 const TURN = 90;
+// world units by which a mark is raised into place
+const RISE = 0.4;
+// the width of a mark in slide pixels
+const MARK_SIZE = 22;
 
 const ease = (t: number): number => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2);
 const lerp = (a: number, b: number, t: number): number => a + (b - a) * t;
@@ -85,6 +91,41 @@ void main() {
   gl_FragColor = vec4(c, 1.0);
 }`;
 
+// a mark is raised into place by RISE world units, and is grown while it is faded in. a saddle is
+// drawn as a ring, and a maximum or a minimum as a disc, each outlined in the background color
+const MARK_VERTEX = /* glsl */ `
+attribute float kind;
+uniform float uRise;
+uniform float uLift;
+uniform float uSize;
+uniform float uBias;
+varying float vKind;
+void main() {
+  vec3 p = position;
+  p.z -= (1.0 - uRise) * uLift;
+  vec4 c = projectionMatrix * modelViewMatrix * vec4(p, 1.0);
+  c.z -= uBias * c.w;
+  gl_Position = c;
+  gl_PointSize = uSize * (0.35 + 0.65 * uRise);
+  vKind = kind;
+}`;
+
+const MARK_FRAGMENT = /* glsl */ `
+uniform vec3 uFill;
+uniform vec3 uRing;
+uniform float uRise;
+uniform float uSize;
+varying float vKind;
+void main() {
+  float r = length(gl_PointCoord * 2.0 - 1.0);
+  float aa = 2.0 / uSize;
+  float outer = 1.0 - smoothstep(1.0 - aa, 1.0, r);
+  if (outer <= 0.0) discard;
+  float fill = 1.0 - smoothstep(0.7 - aa, 0.7, r);
+  if (vKind < 0.5) fill *= smoothstep(0.36 - aa, 0.36, r);
+  gl_FragColor = vec4(mix(uRing, uFill, fill), outer * uRise);
+}`;
+
 let shared: Three.WebGLRenderer | null | undefined;
 
 // the renderer of every surface of the page, created on first use, or null without THREE or WebGL,
@@ -131,10 +172,12 @@ export class Surface {
   private scene: Three.Scene;
   private camera: Three.PerspectiveCamera;
   private surface: Three.Mesh<Three.BufferGeometry, Three.ShaderMaterial>;
+  private points: Three.Points<Three.BufferGeometry, Three.ShaderMaterial>;
   private A: Float64Array;
   private B: Float64Array;
   private mix = 1;
   private stageName = '';
+  private markLayer = '';
   private shown: Shown;
   private from: Shown;
   private to: Shown;
@@ -172,13 +215,14 @@ export class Surface {
     }
     this.A = this.B = this.grids.get(fn.initial) ?? new Float64Array((CELLS + 1) ** 2);
     const [lo, hi] = this.ranges.get(fn.initial) ?? [0, 1];
-    this.shown = this.from = this.to = { lo, hi };
+    this.shown = this.from = this.to = { lo, hi, marks: 0 };
 
     this.scene = new THREE.Scene();
     this.camera = new THREE.PerspectiveCamera(26, 1, 0.1, 100);
     this.camera.up.set(0, 0, 1);
     this.surface = this.makeSurface();
-    this.scene.add(this.surface);
+    this.points = this.makeMarks();
+    this.scene.add(this.surface, this.points);
     this.recolor();
     CACHE.set(el, this);
     this.sync(false);
@@ -234,6 +278,31 @@ export class Surface {
     return mesh;
   }
 
+  private makeMarks(): Three.Points<Three.BufferGeometry, Three.ShaderMaterial> {
+    const THREE = this.THREE, marks = this.fn.marks;
+    const geometry = new THREE.BufferGeometry();
+    geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * marks.length), 3));
+    geometry.setAttribute('kind', new THREE.BufferAttribute(Float32Array.from(marks, (m) => (m.kind === 'saddle' ? 0 : 1)), 1));
+    const material = new THREE.ShaderMaterial({
+      vertexShader: MARK_VERTEX,
+      fragmentShader: MARK_FRAGMENT,
+      transparent: true,
+      depthWrite: false,
+      uniforms: {
+        uFill: { value: new THREE.Vector3() },
+        uRing: { value: new THREE.Vector3() },
+        uRise: { value: 0 },
+        uLift: { value: RISE },
+        uSize: { value: MARK_SIZE },
+        uBias: { value: 0.006 },
+      },
+    });
+    const points = new THREE.Points(geometry, material);
+    points.frustumCulled = false;
+    points.renderOrder = 3;
+    return points;
+  }
+
   /** Reads the colors of the theme from the custom properties of the element, e.g. after a flip of the mode. */
   recolor(): void {
     const cs = getComputedStyle(this.el), css = (name: string, fallback: RGB) => rgb(cs.getPropertyValue(name), fallback);
@@ -246,6 +315,8 @@ export class Surface {
     const ramp: RGB[] = [mix3(blue, bg, 0.7), mix3(blue, violet, 0.35), violet, mix3(violet, text, 0.55)];
     ramp.forEach((c, i) => set(u.uRamp.value[i], c));
     set(u.uGroove.value, bg);
+    set(this.points.material.uniforms.uFill.value, text);
+    set(this.points.material.uniforms.uRing.value, bg);
   }
 
   // the stage set by the visible fragment of the slide with data-surface-stage and the highest
@@ -273,7 +344,8 @@ export class Surface {
     this.el.dataset.shown = name;
     const grid = this.grids.get(stage.layer) ?? this.B;
     const [lo, hi] = this.ranges.get(stage.layer) ?? [this.shown.lo, this.shown.hi];
-    const to: Shown = { lo, hi };
+    const to: Shown = { lo, hi, marks: stage.marks ? 1 : 0 };
+    this.placeMarks(stage.layer);
     if (!animate || first) {
       this.A = this.B = grid;
       this.mix = 1;
@@ -326,10 +398,20 @@ export class Surface {
     for (const name of ['zA', 'zB', 'nA', 'nB']) geometry.getAttribute(name).needsUpdate = true;
   }
 
+  // the marks on the layer, in world units
+  private placeMarks(layer: string): void {
+    if (layer === this.markLayer) return;
+    this.markLayer = layer;
+    const f = clamped(this.fn.layers[layer] ?? (() => 0), this.fn.floor);
+    const position = this.points.geometry.getAttribute('position') as Three.BufferAttribute;
+    this.fn.marks.forEach((m, i) => position.setXYZ(i, m.x, m.y, f(m.x, m.y) * this.zscale));
+    position.needsUpdate = true;
+  }
+
   /** Sizes the canvas from the box of the element on the screen, and draws. */
   fit(): void {
     // the slide is scaled with a transform in reveal.js, hence the canvas is sized from the screen
-    // rectangle
+    // rectangle and the marks are sized in the pixels of the slide
     const r = this.el.getBoundingClientRect(), dpr = devicePixelRatio || 1;
     const w = this.el.offsetWidth, h = this.el.offsetHeight;
     if (!r.width || !r.height || !w || !h) return;
@@ -337,6 +419,8 @@ export class Surface {
     this.H = Math.max(1, Math.round(r.height * dpr));
     this.canvas.width = this.W;
     this.canvas.height = this.H;
+    const px = (dpr * r.height) / h;
+    this.points.material.uniforms.uSize.value = MARK_SIZE * px;
     this.camera.aspect = this.W / this.H;
     this.draw();
   }
@@ -365,6 +449,8 @@ export class Surface {
     const shown = this.shown, u = this.surface.material.uniforms;
     u.uMix.value = this.mix;
     u.uRange.value.set(shown.lo, shown.hi);
+    this.points.material.uniforms.uRise.value = shown.marks;
+    this.points.visible = shown.marks > 0;
     this.aim();
     if (r.domElement.width !== this.W || r.domElement.height !== this.H) r.setSize(this.W, this.H, false);
     r.render(this.scene, this.camera);
@@ -386,7 +472,9 @@ export class Surface {
     if (this.moving) {
       const k = Math.min(1, (now - this.t0) / MORPH), e = ease(k), a = this.from, b = this.to;
       this.mix = e;
-      this.shown = { lo: lerp(a.lo, b.lo, e), hi: lerp(a.hi, b.hi, e) };
+      // the marks are raised in the last part of a change, once the surface has nearly settled
+      const late = ease(clamp((k - 0.35) / 0.65, 0, 1));
+      this.shown = { lo: lerp(a.lo, b.lo, e), hi: lerp(a.hi, b.hi, e), marks: lerp(a.marks, b.marks, b.marks > a.marks ? late : e) };
       if (k >= 1) this.moving = false;
     }
     if (this.rate) this.azimuth += dt * this.rate;
