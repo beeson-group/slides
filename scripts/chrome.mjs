@@ -128,7 +128,8 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
     return answered(new Promise((done, fail) => pending.set(id, { done, fail })), method);
   }
 
-  async function newPage({ width = 1920, height = 1080 } = {}) {
+  // with mobile set, the page is laid out as on a phone, with touch and a coarse pointer
+  async function newPage({ width = 1920, height = 1080, mobile = false } = {}) {
     const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
     const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
     const call = (method, params) => send(method, params, sessionId);
@@ -147,7 +148,8 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
     };
     listeners.add(onEvent);
     await Promise.all([call('Page.enable'), call('Runtime.enable'), call('Log.enable')]);
-    await call('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+    await call('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile });
+    if (mobile) await call('Emulation.setTouchEmulationEnabled', { enabled: true });
 
     async function evaluate(expression) {
       const { result, exceptionDetails } = await call('Runtime.evaluate', {

@@ -8,7 +8,8 @@
 // .reveal .slides, or each child of one that is a vertical stack. The deck is then opened without
 // `still`, i.e. with its animations, and stepped through to the last fragment of the last slide.
 // A page error is an uncaught exception, a console.error, or a failed load, e.g. of a missing file
-// or of anything on the network. The script prints a summary and exits nonzero on any error.
+// or of anything on the network. Finally, the behaviors that a screenshot does not show are checked
+// in pages of their own. The script prints a summary and exits nonzero on any error.
 import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -33,6 +34,16 @@ const listSlides = `[...document.querySelectorAll('.reveal .slides > section')].
 mkdirSync(options.out, { recursive: true });
 const failures = [];
 const browser = await launch();
+
+async function checkPhone() {
+  const page = await browser.newPage({ width: 390, height: 844, mobile: true });
+  await page.goto(deckUrl(options.deck));
+  await page.waitFor(deckSettled);
+  if (await page.evaluate('Reveal.isScrollView()')) failures.push('phone: the scroll view of reveal.js is on');
+  for (const error of page.errors) failures.push(`phone: ${error}`);
+  await page.close();
+}
+
 try {
   for (const theme of themes) {
     for (const file of readdirSync(options.out)) {
@@ -76,6 +87,7 @@ try {
     for (const error of animated.errors) failures.push(`${theme} animated run: ${error}`);
     await animated.close();
   }
+  await checkPhone();
 } finally {
   await browser.close();
 }
