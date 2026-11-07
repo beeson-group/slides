@@ -152,24 +152,24 @@ async function checkEditor() {
 }
 
 // read during a trace on the first slide with a backdrop that draws a head, since the heads of a
-// backdrop are cleared at its end. a head is drawn on the path of a spacecraft, or on every strand
-// with data-heads set to full or small
+// backdrop are cleared at its end. a head is drawn on the path of a spacecraft, on a record with a
+// head of its own, or on every strand with data-heads set to full or small
 async function checkHeads() {
   const page = await browser.newPage();
   await page.goto(deckAt());
   await page.waitFor(deckSettled);
-  const found = await page.evaluate(`(() => {
+  const after = await page.evaluate(`(() => {
     const headed = Beeson.backdrops.find((backdrop) => backdrop.headed);
-    if (!headed) return false;
+    if (!headed) return null;
     const { h, v } = Reveal.getIndices(headed.el.closest('section'));
     Reveal.slide(h, v);
-    return true;
+    return headed.headAfter;
   })()`);
-  if (found) {
-    // the head of a spacecraft is painted once it starts, which in a transfer is after its manifolds
-    // have grown, hence the canvas is read every quarter second for at most 15 s
+  if (after !== null) {
+    // the first head may be due later in the trace, e.g. once the manifolds of a transfer have grown,
+    // hence the canvas is read every quarter second until 15 s after it is due
     let blank = true;
-    for (let i = 0; blank && i < 60; i++) {
+    for (let i = 0; blank && i < 60 + Math.ceil(4 * after); i++) {
       await new Promise((done) => setTimeout(done, 250));
       blank = await page.evaluate(`(() => {
         const live = Beeson.backdrops.find((backdrop) => backdrop.raf && backdrop.headed);

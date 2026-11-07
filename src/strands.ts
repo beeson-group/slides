@@ -1,12 +1,26 @@
 // backdrops drawn from a file of polylines next to the deck, named in the attribute data-strands of
 // a `.backdrop`. the format of the file is described in the README under "Backdrops"
 
-import type { Strand } from './orbits.ts';
+import type { Strand, Tone } from './orbits.ts';
 
 // one polyline of a file, e.g. one member of a family in one frame. t or theta, when given, is the
 // clock of each point, e.g. the time or the true anomaly. craft, when true, marks the path of a
-// spacecraft, and the other keys are free
-export type StrandRecord = { points: [number, number][]; t?: number[]; theta?: number[]; [key: string]: unknown };
+// spacecraft. the look of the strand is set with tone, a color of the theme, alpha, its opacity,
+// weight, its width in line widths, head, the radius of its head in line widths, start, the clock
+// at which its trace begins, and glow. the other keys are free
+export type StrandRecord = {
+  points: [number, number][];
+  t?: number[];
+  theta?: number[];
+  craft?: boolean;
+  tone?: Tone;
+  alpha?: number;
+  weight?: number;
+  head?: number;
+  start?: number;
+  glow?: boolean;
+  [key: string]: unknown;
+};
 export type StrandFile = { families: StrandRecord[]; bodies: Record<string, unknown>[] };
 // a body drawn as a dot, with the fraction of the total mass that sets its radius when it is known
 export type Dot = { x: number; y: number; mass?: number };
@@ -28,6 +42,8 @@ const INK_ALPHA = 0.6;
 const isPair = (p: unknown): p is [number, number] =>
   Array.isArray(p) && p.length === 2 && Number.isFinite(p[0]) && Number.isFinite(p[1]);
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+// the tones of a record of a file. hero and line are the tones of the named scenes only
+const TONES = ['orange', 'violet', 'text'];
 
 // the records and bodies of a parsed file. throws an Error that says what is malformed
 export function parse(data: unknown): StrandFile {
@@ -45,6 +61,21 @@ export function parse(data: unknown): StrandFile {
       ) {
         throw new Error(`the list "${key}" of its record ${i} does not have one number per point`);
       }
+    }
+    if (r.tone !== undefined && !TONES.includes(r.tone as string)) {
+      throw new Error(`the "tone" of its record ${i} is not orange, violet, or text`);
+    }
+    if (r.alpha !== undefined && !(typeof r.alpha === 'number' && r.alpha > 0 && r.alpha <= 1)) {
+      throw new Error(`the "alpha" of its record ${i} is not a number above 0 and up to 1`);
+    }
+    for (const key of ['weight', 'head', 'start']) {
+      const v = r[key];
+      if (v !== undefined && !(typeof v === 'number' && Number.isFinite(v) && v >= 0)) {
+        throw new Error(`the "${key}" of its record ${i} is not a number of zero or more`);
+      }
+    }
+    if (r.glow !== undefined && typeof r.glow !== 'boolean') {
+      throw new Error(`the "glow" of its record ${i} is not true or false`);
     }
   });
   const bodies = isObject(data) && Array.isArray(data.bodies) ? data.bodies.filter(isObject) : [];
@@ -87,7 +118,8 @@ function group(spec: string): ((r: StrandRecord) => boolean)[] {
 // with ramp, the key of data-strands-ramp, a strand is colored from the first color of its pair at the
 // smallest value of ramp among the chosen records of its pair to the second at the largest. with
 // shade, the key of data-strands-shade, which is used in place of ramp, a strand is drawn in a shade of
-// the first color of its pair, from a lighter shade at the smallest value to a darker at the largest
+// the first color of its pair, from a lighter shade at the smallest value to a darker at the largest.
+// the clock of a strand is moved by the start of its record, and the look of the record is copied
 export function strandsOf(file: StrandFile, chosen: StrandRecord[], color?: string, ramp?: string, shade?: string): Strand[] {
   const along = shade ?? ramp;
   const order = color ? [...new Set(file.families.map((r) => String(r[color])))] : [];
@@ -112,7 +144,7 @@ export function strandsOf(file: StrandFile, chosen: StrandRecord[], color?: stri
       pts[2 * i + 1] = r.points[i][1];
       // without a clock, a strand is traced at a uniform speed along its length
       if (i > 0 && !clock) length += Math.hypot(pts[2 * i] - pts[2 * i - 2], pts[2 * i + 1] - pts[2 * i - 1]);
-      times[i] = clock ? clock[i] - clock[0] : length;
+      times[i] = (clock ? clock[i] - clock[0] : length) + (r.start ?? 0);
     }
     const strand: Strand = { pts, times, T: times[n - 1] };
     if (r.craft === true) strand.craft = true;
@@ -124,6 +156,11 @@ export function strandsOf(file: StrandFile, chosen: StrandRecord[], color?: stri
       if (shade) strand.ink.shade = true;
       strand.alpha = INK_ALPHA;
     }
+    if (r.tone) strand.tone = r.tone;
+    if (r.alpha !== undefined) strand.alpha = r.alpha;
+    if (r.weight !== undefined) strand.weight = r.weight;
+    if (r.head !== undefined) strand.head = r.head;
+    if (r.glow) strand.glow = true;
     return strand;
   });
 }

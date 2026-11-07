@@ -88,15 +88,24 @@ test('a head is drawn on the path of a spacecraft alone', { timeout: 60000 }, as
   const page = await browser.newPage({ motion: true });
   await page.goto(deckUrl('index.html'));
   await page.waitFor(deckSettled);
+  // the title slide draws brand/transfer.js, whose spiral carries a head of its own from the start
   await new Promise((done) => setTimeout(done, 800));
   const [titleRunning, titlePixels] = await page.evaluate(headPixels);
   assert.ok(titleRunning, 'the backdrop of the title slide is traced');
-  assert.equal(titlePixels, 0);
+  assert.ok(titlePixels > 5 && titlePixels < 60, `${titlePixels} pixels on the title slide`);
 
-  await page.evaluate(`(() => {
-    const { h, v } = Reveal.getIndices(document.querySelector('.backdrop[data-scene="transfer"]').closest('section'));
+  const slideTo = (selector) => `(() => {
+    const { h, v } = Reveal.getIndices(document.querySelector('${selector}').closest('section'));
     Reveal.slide(h, v);
-  })()`);
+  })()`;
+  // the lace has neither a spacecraft nor data-heads, hence no head
+  await page.evaluate(slideTo('.backdrop[data-scene="lace"]'));
+  await new Promise((done) => setTimeout(done, 800));
+  const [laceRunning, lacePixels] = await page.evaluate(headPixels);
+  assert.ok(laceRunning, 'the lace is traced');
+  assert.equal(lacePixels, 0);
+
+  await page.evaluate(slideTo('.backdrop[data-scene="transfer"]'));
   // the spacecraft starts once the manifolds have grown, at its share of the clock of the scene
   const strands = scene('transfer'), craft = strands.find((s) => s.craft);
   const start = (craft.times[0] / Math.max(...strands.map((s) => s.T))) * (seconds('transfer') ?? 12);

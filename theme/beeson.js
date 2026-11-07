@@ -459,6 +459,7 @@
   var INK_ALPHA = 0.6;
   var isPair = (p) => Array.isArray(p) && p.length === 2 && Number.isFinite(p[0]) && Number.isFinite(p[1]);
   var isObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+  var TONES = ["orange", "violet", "text"];
   function parse(data) {
     const records = isObject(data) ? data.families : void 0;
     if (!Array.isArray(records)) throw new Error('it does not have a list "families"');
@@ -471,6 +472,21 @@
         if (clock !== void 0 && (!Array.isArray(clock) || clock.length !== r.points.length || !clock.every(Number.isFinite))) {
           throw new Error(`the list "${key}" of its record ${i} does not have one number per point`);
         }
+      }
+      if (r.tone !== void 0 && !TONES.includes(r.tone)) {
+        throw new Error(`the "tone" of its record ${i} is not orange, violet, or text`);
+      }
+      if (r.alpha !== void 0 && !(typeof r.alpha === "number" && r.alpha > 0 && r.alpha <= 1)) {
+        throw new Error(`the "alpha" of its record ${i} is not a number above 0 and up to 1`);
+      }
+      for (const key of ["weight", "head", "start"]) {
+        const v = r[key];
+        if (v !== void 0 && !(typeof v === "number" && Number.isFinite(v) && v >= 0)) {
+          throw new Error(`the "${key}" of its record ${i} is not a number of zero or more`);
+        }
+      }
+      if (r.glow !== void 0 && typeof r.glow !== "boolean") {
+        throw new Error(`the "glow" of its record ${i} is not true or false`);
       }
     });
     const bodies = isObject(data) && Array.isArray(data.bodies) ? data.bodies.filter(isObject) : [];
@@ -521,7 +537,7 @@
         pts[2 * i] = r.points[i][0];
         pts[2 * i + 1] = r.points[i][1];
         if (i > 0 && !clock) length += Math.hypot(pts[2 * i] - pts[2 * i - 2], pts[2 * i + 1] - pts[2 * i - 1]);
-        times[i] = clock ? clock[i] - clock[0] : length;
+        times[i] = (clock ? clock[i] - clock[0] : length) + (r.start ?? 0);
       }
       const strand = { pts, times, T: times[n - 1] };
       if (r.craft === true) strand.craft = true;
@@ -531,6 +547,11 @@
         if (shade) strand.ink.shade = true;
         strand.alpha = INK_ALPHA;
       }
+      if (r.tone) strand.tone = r.tone;
+      if (r.alpha !== void 0) strand.alpha = r.alpha;
+      if (r.weight !== void 0) strand.weight = r.weight;
+      if (r.head !== void 0) strand.head = r.head;
+      if (r.glow) strand.glow = true;
       return strand;
     });
   }
@@ -978,7 +999,8 @@
       this.fitted = file && el.dataset.half === void 0;
       this.headSize = HEADS[el.dataset.heads ?? "full"] ?? HEADS.full;
       this.everyHead = el.dataset.heads !== void 0;
-      this.duration = (file ? void 0 : seconds(el.dataset.scene ?? "")) ?? DURATION;
+      const given2 = Number(el.dataset.duration);
+      this.duration = (given2 > 0 ? given2 : void 0) ?? (file ? void 0 : seconds(el.dataset.scene ?? "")) ?? DURATION;
       this.stagger = Math.max(0, Number(el.dataset.stagger) || 0);
       this.cx = +(el.dataset.cx ?? 0);
       this.cy = +(el.dataset.cy ?? 0);
@@ -1020,10 +1042,6 @@
     // the window in the units of the strands: its center and its half height
     get view() {
       return { cx: this.cx, cy: this.cy, half: this.half };
-    }
-    // true when a head is drawn on at least one strand during a trace
-    get headed() {
-      return this.headSize > 0 && (this.everyHead || this.strands.some((s) => s.craft));
     }
     get done() {
       return this.finished || this.loop;
@@ -1132,11 +1150,15 @@
         ctx.fill();
       }
     }
-    // the color, opacity, and width of a strand of the given tone
-    pen(ctx, c, tone) {
-      ctx.strokeStyle = tone === "orange" || tone === "hero" ? c.accent : tone === "violet" ? c.violet : tone === "text" || tone === "line" ? c.text : c.stroke;
-      ctx.globalAlpha = tone === "orange" || tone === "violet" ? 0.42 : tone === "text" ? 0.8 : tone === "line" ? 0.36 : 1;
-      ctx.lineWidth = tone === "hero" ? this.lw * 2.2 : tone === "text" ? this.lw * 1.3 : this.lw;
+    // the color, opacity, width, and glow of strand i: those of its tone, then its own ink, alpha,
+    // weight, and glow where it has them
+    pen(ctx, c, i) {
+      const s = this.strands[i], tone = s.tone;
+      ctx.strokeStyle = s.ink ? this.inks[i] : tone === "orange" || tone === "hero" ? c.accent : tone === "violet" ? c.violet : tone === "text" || tone === "line" ? c.text : c.stroke;
+      ctx.globalAlpha = s.alpha ?? (tone === "orange" || tone === "violet" ? 0.42 : tone === "text" ? 0.8 : tone === "line" ? 0.36 : 1);
+      ctx.lineWidth = (tone === "hero" ? 2.2 : tone === "text" ? 1.3 : 1) * (s.weight ?? 1) * this.lw;
+      ctx.shadowBlur = s.glow ? 6 * this.lw : 0;
+      if (s.glow) ctx.shadowColor = ctx.strokeStyle;
     }
     segments(ctx, i, from, to) {
       const p = this.px[i];
@@ -1161,13 +1183,12 @@
       ctx.lineJoin = "round";
       ctx.strokeStyle = c.stroke;
       this.bodies(ctx, c);
-      this.strands.forEach((s, i) => {
-        this.pen(ctx, c, s.tone);
-        if (s.alpha) ctx.globalAlpha = s.alpha;
-        if (s.ink) ctx.strokeStyle = this.inks[i];
+      this.strands.forEach((_, i) => {
+        this.pen(ctx, c, i);
         this.segments(ctx, i, 0, this.drawn(i));
       });
       ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
       this.paintHead(performance.now(), c);
     }
     reset() {
@@ -1262,15 +1283,31 @@
     clock(i, now) {
       return ((now - (this.t0 ?? now)) / 1e3 - i * this.stagger) / this.duration * this.Tmax;
     }
+    // the radius of the head of strand i in line widths: the one of its record, or the one of the
+    // backdrop on the path of a spacecraft, or on every strand with data-heads set
+    headOf(i) {
+      const s = this.strands[i];
+      return s.head ?? (this.everyHead || s.craft ? this.headSize : 0);
+    }
+    // true when a head is drawn on at least one strand during a trace
+    get headed() {
+      return this.strands.some((_, i) => this.headOf(i) > 0);
+    }
+    // the seconds into the trace at which its first head is drawn, e.g. after the tubes of a transfer
+    get headAfter() {
+      if (!(this.Tmax > 0)) return 0;
+      const first = Math.min(...this.strands.map((s, i) => this.headOf(i) > 0 ? s.times[0] / this.Tmax * this.duration + i * this.stagger : Infinity));
+      return Number.isFinite(first) ? first : 0;
+    }
     heads(ctx, c, now) {
-      if (!this.headSize) return;
+      if (!this.headed) return;
       ctx.fillStyle = c.accent;
       this.strands.forEach((s, i) => {
-        const j = this.idx[i], tau = this.clock(i, now);
-        if (!this.everyHead && !s.craft || j >= s.times.length - 1 || tau < s.times[0]) return;
+        const j = this.idx[i], tau = this.clock(i, now), size = this.headOf(i);
+        if (!size || j >= s.times.length - 1 || tau < s.times[0]) return;
         const [X, Y] = this.at(i, j, tau);
         ctx.beginPath();
-        ctx.arc(X, Y, this.headSize * this.lw, 0, 2 * Math.PI);
+        ctx.arc(X, Y, size * this.lw, 0, 2 * Math.PI);
         ctx.fill();
       });
     }
@@ -1327,14 +1364,13 @@
         const n = s.times.length, tau = this.clock(i, now);
         let j = this.idx[i];
         while (j < n - 1 && s.times[j + 1] <= tau) j++;
-        this.pen(ctx, c, s.tone);
-        if (s.alpha) ctx.globalAlpha = s.alpha;
-        if (s.ink) ctx.strokeStyle = this.inks[i];
+        this.pen(ctx, c, i);
         this.segments(ctx, i, this.idx[i], j);
         this.idx[i] = j;
         if (j < n - 1) flying++;
       });
       ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
       if (flying === 0) this.finished = true;
       this.paintHead(now, c);
     }
