@@ -847,7 +847,10 @@ html.to-dark::view-transition-new(root) { z-index: 1; }
     });
   }
   function syncViewers(theme) {
-    for (const viewer of document.querySelectorAll("tycho-viewer")) viewer.setAttribute("theme", theme);
+    for (const viewer of document.querySelectorAll("tycho-viewer")) {
+      viewer.setAttribute("theme", theme);
+      viewer.setAttribute("data-prevent-swipe", "");
+    }
   }
   initTheme();
   var Beeson = {
