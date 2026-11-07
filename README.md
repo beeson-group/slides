@@ -9,7 +9,7 @@ The demo deck, `index.html`, is also the documentation of every layout class. Op
 1. Press "Use this template" on GitHub, or copy the folders `theme/` and `brand/` next to a new `index.html`.
 2. Write the slides in `index.html` as `section` elements, one per slide, with the layout classes listed in the demo and in `AGENTS.md`. Link the theme, the vendored fonts, and MathJax in the head of the file, and call `Beeson.start({})` with the options of reveal.js in the foot.
 3. Give each element its step once the slide is complete: `class="fragment"` with a `data-fragment-index`. During the talk, a new element is faded in, and the earlier ones are dimmed to 45 percent. All of them are restored to full opacity once the slide is complete.
-4. Export the PDF with `npm run pdf` after `npm ci`, or open `index.html?print-pdf` in Chrome and print to PDF. The PDF is printed with one page per step.
+4. Export the PDF with `npm run pdf` after `npm ci`, or open `index.html?print-pdf` in a browser on a computer and print to PDF. The PDF is printed with one page per step.
 
 The mode is kept per browser in local storage. To fix it for a venue, add the URL parameter `?theme=light`. To draw every backdrop complete at once for a screenshot, add `?still`.
 
@@ -35,6 +35,16 @@ Set the drawing of a `backdrop` with its attribute `data-scene`. Each drawing is
 | `sheaf` | Lunar transfers from a low Earth orbit |
 | `torus` | Quasi-periodic strands about distant retrograde orbits |
 
+## Browsers
+
+You can show a deck in the current Chrome, Edge, Firefox, and Safari, and in the browsers built on their engines, on a computer, a phone, or a tablet. This holds for both modes, the steps, the speaker view, and the viewer of tycho, whether you open the file with a double click or from a web server. All browsers on iOS are built on the engine of Safari. These are the limits.
+
+- In Safari on a Mac, the paper size of the deck is ignored, and the PDF is printed on the paper chosen in the print dialog. Choose a paper of 16:9, or export with `npm run pdf`. The backdrops are also printed fainter than in the other browsers.
+- On an iPhone, fullscreen is not available, since the fullscreen API is missing there.
+- On a phone or a tablet, the speaker view is opened with the key `s`, hence you need a keyboard. A deck is opened from a web server, such as the site of the repository, since a double click on a file does not apply there. Printing is not tested.
+- In every browser, the viewer of tycho is printed as an empty panel.
+- In every browser, `\require{bbm}`, `\require{bboldx}`, and `\require{dsfont}` show the error "Extension failed to load", since the fonts of these three extensions of MathJax are not vendored.
+
 ## Figures
 
 For a figure made with matplotlib, use the styles `beeson-dark.mplstyle` and `beeson-light.mplstyle` in `styles/`. The palette, the typeface, and a transparent background are set in these styles. Export one file per mode and mark the images `for-dark` and `for-light`, so that the right one is shown in each mode. Give a white raster figure the class `paper`, and it is framed. Give a black-on-white line plot the class `invert`, and it is inverted in dark mode.
@@ -58,14 +68,16 @@ npm ci                 # the dependencies
 npm run vendor         # reveal.js, the notes plugin, the fonts, and MathJax into theme/vendor/ (tycho is copied by hand)
 npm run build          # src/*.ts into theme/beeson.js with esbuild
 npm run typecheck      # tsc --noEmit
-npm test               # the orbit engine, the build, the vendor script, the Chrome lookup, the mode flip, and the crop of the backdrops under node --test
+npm test               # the orbit engine, the build, the vendor script, the browser lookup, the mode flip, and the crop of the backdrops under node --test
 npm run check          # every slide of index.html in both modes, screenshots and console errors
 npm run pdf            # index.html to slides.pdf, with a check of the page count
 ```
 
 For `npm test`, `npm run check`, and `npm run pdf`, Chrome is looked up at its default location on macOS and Windows, and on the `PATH` on Linux. Edge is used on Windows when Chrome is missing. To use another browser build, set `CHROME_PATH` to its executable.
 
-The compiled `theme/beeson.js` is committed, hence none of this is required for a talk. The same commands are run on Ubuntu, macOS, and Windows on every push with the workflow `.github/workflows/check.yml`, and the repository root is published on GitHub Pages with `pages.yml`.
+To run the check in another engine, use `npm run check -- --browser firefox` or `npm run check -- --browser safari`. Firefox is driven with `geckodriver`, which is looked up in `GECKOWEBDRIVER` and on the `PATH`, and `FIREFOX_PATH` selects another Firefox build. Safari is driven with `safaridriver`, which you enable once with `sudo safaridriver --enable`. Quit Safari before a run, since a session cannot be started in a Safari that is already open. A page from `file://` is refused under automation, hence the deck is served from a local port in Safari, and a double click is not covered by this check. The problems in the page are reported in all three browsers, but the console is read only in Chrome, and the phone layout and a pixel ratio of 1.25 are checked only in Chrome. On Linux, run Firefox under `xvfb-run`, since WebGL in software is available there only in a window.
+
+The compiled `theme/beeson.js` is committed, hence none of this is required for a talk. The same commands are run on Ubuntu, macOS, and Windows on every push with the workflow `.github/workflows/check.yml`. The check is also run in Firefox on Ubuntu and in Safari on macOS. The repository root is published on GitHub Pages with `pages.yml`.
 
 ## License
 
