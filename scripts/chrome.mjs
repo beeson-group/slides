@@ -190,8 +190,9 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
           await sleep(50);
         }
       },
-      async screenshot() {
-        const { data } = await call('Page.captureScreenshot', { format: 'png' });
+      // clip is a box of the document, with x, y, width, height, and scale
+      async screenshot(clip) {
+        const { data } = await call('Page.captureScreenshot', { format: 'png', ...(clip ? { clip } : {}) });
         return Buffer.from(data, 'base64');
       },
       async pdf() {
@@ -235,3 +236,24 @@ export const deckSettled = `(async () => {
   await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
   return true;
 })()`;
+
+/** Opens a deck at url in the print view of reveal.js, with ?print-pdf in url, and waits until it can be printed. */
+export async function printView(page, url) {
+  await page.goto(url);
+  // loading-scroll-mode is removed from the viewport after the pdf-ready event of reveal.js
+  await page.waitFor(`!!document.querySelector('.pdf-page')
+    && !document.querySelector('.reveal-viewport.loading-scroll-mode')`);
+  await page.waitFor(deckSettled);
+  // reveal.js clones a slide for each of its steps after the load event, which does not wait for
+  // the clones, and a video that has not loaded a frame is printed as a black panel. A hidden video
+  // is not printed, and it may not load a frame at all. A tycho viewer is replaced by its still in
+  // src/print.ts, unless it shows an error
+  await page.evaluate(`document.querySelectorAll('video[preload="none"]').forEach((video) => {
+    video.preload = 'auto';
+    video.load();
+  })`);
+  await page.waitFor(`[...document.querySelectorAll('video')].every((video) => video.readyState >= 2 || video.error || !video.getClientRects().length)
+    && [...document.querySelectorAll('tycho-viewer')].every((viewer) => viewer.shadowRoot?.querySelector('.status.error'))
+    && [...document.images].every((image) => image.complete)`, 60000);
+  await page.waitFor(deckSettled);
+}

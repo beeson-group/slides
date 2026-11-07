@@ -32,6 +32,8 @@ jobs:
         if: ${{ !cancelled() && matrix.os == 'macos-latest' }}
       - run: npm run pdf
         if: ${{ !cancelled() }}
+      - run: npm run pptx
+        if: ${{ !cancelled() }}
       - uses: actions/upload-artifact@v4
         if: ${{ !cancelled() }}
         with:
@@ -39,4 +41,5 @@ jobs:
           path: |
             check/**/*.png
             slides.pdf
+            slides.pptx
           if-no-files-found: warn

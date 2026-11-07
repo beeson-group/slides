@@ -1013,6 +1013,25 @@
     });
   }
 
+  // src/print.ts
+  var sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+  async function stillViewers() {
+    for (const viewer of document.querySelectorAll("tycho-viewer")) {
+      const failed = () => viewer.shadowRoot?.querySelector(".status.error");
+      while (!viewer.renderer && !failed()) await sleep(50);
+      if (!viewer.canvas || !viewer.renderer) continue;
+      viewer.pause();
+      viewer.draw();
+      const image = new Image();
+      image.src = viewer.canvas.toDataURL("image/png");
+      image.alt = "A still of a tycho scene";
+      const still2 = document.createElement("div");
+      still2.className = viewer.className;
+      still2.append(image);
+      viewer.replaceWith(still2);
+    }
+  }
+
   // src/steps.ts
   function initSteps(deck) {
     const mark = () => {
@@ -1169,7 +1188,11 @@
     const plugins = [...options.plugins ?? []];
     if (window.RevealNotes && !plugins.includes(window.RevealNotes)) plugins.push(window.RevealNotes);
     initSwitcher();
-    deck.on("pdf-ready", completeAll);
+    deck.on("pdf-ready", () => {
+      completeAll();
+      syncViewers(get());
+      void stillViewers();
+    });
     await deck.initialize({ ...DEFAULTS, ...options, plugins });
     initChrome(deck);
     initSteps(deck);

@@ -185,6 +185,21 @@ try {
   <aside class="notes">The runtime is vendored once in the theme, and the scene and its data are in the slide as two inline blocks. The viewer shows a distant retrograde orbit and an L1 Lyapunov orbit of the Earth–Moon system.</aside>
 </section>
 
+<section>
+  <h2>A video on a slide</h2>
+  <p>A video is shown in a <code>zone</code> or a <code>plate</code>, and it is played while its slide is shown.</p>
+  <ul>
+    <li class="fragment" data-fragment-index="1">Give every video a <code>poster</code>, since <code>npm run check</code> fails without one.</li>
+    <li class="fragment" data-fragment-index="2">The poster is printed in the PDF, and in PowerPoint the video itself is played.</li>
+  </ul>
+  <div class="zone">
+    <video class="for-dark" src="demo/clip-dark.mp4" poster="demo/clip-dark.png" muted loop data-autoplay></video>
+    <video class="for-light" src="demo/clip-light.mp4" poster="demo/clip-light.png" muted loop data-autoplay></video>
+  </div>
+  <div class="foot">Drawn with <code>demo/clip.py</code>.</div>
+  <aside class="notes">A distant retrograde orbit is traced about the Moon, once in six seconds. The clip and its poster are given once for each mode, with the classes for-dark and for-light, since a video does not have a transparent background.</aside>
+</section>
+
 <section class="section">
   <div class="sec">
     <h2>Writing a talk</h2>

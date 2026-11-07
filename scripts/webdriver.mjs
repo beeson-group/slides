@@ -11,16 +11,20 @@ import { extname, join, resolve, sep } from 'node:path';
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
-const contentTypes = { '.css': 'text/css', '.html': 'text/html', '.js': 'text/javascript', '.svg': 'image/svg+xml' };
+const contentTypes = { '.css': 'text/css', '.html': 'text/html', '.js': 'text/javascript', '.mp4': 'video/mp4', '.svg': 'image/svg+xml' };
 
-/** Serves the files of a folder on a local port, and returns its origin and close(). */
-export async function serve(folder) {
+/**
+ * Serves the files of a folder on a local port, and returns its origin and close(). The answer for
+ * a file is held back by delay(path) ms.
+ */
+export async function serve(folder, { delay = () => 0 } = {}) {
   const root = resolve(folder);
   const server = createHttpServer(async (request, response) => {
     const path = join(root, decodeURIComponent(new URL(request.url, 'http://localhost').pathname));
     try {
       if (!path.startsWith(root + sep)) throw new Error(`${path} is outside ${root}`);
       const body = await readFile(path);
+      await sleep(delay(path));
       response.writeHead(200, { 'Content-Type': contentTypes[extname(path)] ?? 'application/octet-stream' });
       response.end(body);
     } catch {

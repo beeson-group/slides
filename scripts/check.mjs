@@ -9,7 +9,8 @@
 // `still`, i.e. with its animations, and stepped through to the last fragment of the last slide.
 // A page error is an uncaught exception, a console.error, or a failed load, e.g. of a missing file
 // or of anything on the network. Finally, the behaviors that a screenshot does not show are checked
-// in pages of their own. The script prints a summary and exits nonzero on any error.
+// in pages of their own, among them that every video has a poster, which is the still of the video
+// in a PDF. The script prints a summary and exits nonzero on any error.
 //
 // With --browser firefox or --browser safari, the deck is driven over WebDriver. The console is not
 // read in these browsers, hence a page error is then what is found in the page, with deckProblems.
@@ -46,6 +47,9 @@ const deckProblems = `[
   ...[...document.querySelectorAll('tycho-viewer')].map((viewer) => viewer.shadowRoot?.querySelector('.status.error')?.textContent).filter(Boolean),
   ...performance.getEntriesByType('resource').map((entry) => entry.name).filter((name) => /^https?:/.test(name) && !name.startsWith(location.origin)).map((name) => 'network load: ' + name),
 ]`;
+
+const videosWithoutPoster = `[...document.querySelectorAll('video:not([poster])')]
+  .map((video) => video.getAttribute('src') ?? video.querySelector('source')?.getAttribute('src'))`;
 
 mkdirSync(options.out, { recursive: true });
 const failures = [];
@@ -102,6 +106,9 @@ async function checkDesktop() {
   await page.evaluate(String.raw`window.MathJax?.tex2svgPromise('\\ce{H2O}').then(() => true)`);
   await new Promise((done) => setTimeout(done, 1000));
   for (const error of [...page.errors, ...(await page.evaluate(deckProblems))]) failures.push(`behaviors: ${error}`);
+  for (const video of await page.evaluate(videosWithoutPoster)) {
+    failures.push(`video without a poster: ${video}, give it a poster attribute, since it is printed in the PDF`);
+  }
   await page.close();
 }
 
