@@ -154,6 +154,13 @@ try {
   <p class="caption">The unstable tube of an L<sub>1</sub> Lyapunov orbit toward the Earth, in orange, and its mirror image, the stable tube, in violet.</p>
 </section>
 
+<section class="figure">
+  <div class="backdrop" data-strands="demo/broucke-sample.js" data-strands-select="frame=pulsating" data-strands-color="family" data-strands-ramp="e" data-live></div>
+  <h2>A backdrop from a file of polylines</h2>
+  <p class="caption">Members of Broucke's families 7 and 11 of the elliptic problem in the rotating-pulsating frame, read from <code>demo/broucke-sample.js</code>, with a hue per family and a ramp along the eccentricity.</p>
+  <aside class="notes">The file is named in data-strands, the records are chosen with data-strands-select, and the colors are keyed with data-strands-color and data-strands-ramp. The window is fitted to the strands, since data-half is not given.</aside>
+</section>
+
 <!-- split: the black panel of the group deck, dark in both modes -->
 <section class="split">
   <div class="panel">
@@ -217,7 +224,7 @@ try {
     <tr><td>no class</td><td>A content slide: a text column of 1000 px at the left margin, a <code>zone</code> or <code>backdrop</code> at the right, with <code>narrow</code> or <code>wide</code>.</td></tr>
     <tr><td><code>figure</code></td><td>A plate with a <code>backdrop</code> or a <code>plate</code> figure, the head at the top, the <code>caption</code> at the lower left.</td></tr>
     <tr><td><code>split</code></td><td>The black <code>panel</code> at the left, a <code>zone</code> at the right.</td></tr>
-    <tr><td><code>backdrop</code></td><td>An orbit drawing: <code>data-scene</code>, <code>data-cx</code>, <code>data-cy</code>, <code>data-half</code>, <code>data-live</code>, labels in <code>lab</code> spans.</td></tr>
+    <tr><td><code>backdrop</code></td><td>An orbit drawing: <code>data-scene</code>, <code>data-cx</code>, <code>data-cy</code>, <code>data-half</code>, <code>data-live</code>, labels in <code>lab</code> spans, or a file of polylines in <code>data-strands</code>.</td></tr>
     <tr><td><code>fragment</code></td><td>A step, with <code>data-fragment-index</code>. Earlier steps are dimmed until the slide is complete.</td></tr>
   </table>
   <aside class="notes">The chrome is the running head, filled automatically from the last section slide, and the footnote line, with the classes run and foot.</aside>
