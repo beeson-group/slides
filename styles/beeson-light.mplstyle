@@ -11,10 +11,13 @@ figure.figsize: 8, 4.5
 # with constrained layout, the labels of 18 pt text are fitted inside the figure at its set size
 figure.constrained_layout.use: True
 
-# STIXGeneral, which is included in Matplotlib, is used where STIX Two Text is not installed
+# Computer Modern, as on the slides. cmr10, which is included in Matplotlib, is used where Latin
+# Modern Roman is not installed. cmr10 does not have a minus sign, hence the tick labels are set
+# as math
 font.family: serif
-font.serif: STIX Two Text, STIXGeneral, DejaVu Serif
-mathtext.fontset: stix
+font.serif: Latin Modern Roman, cmr10, DejaVu Serif
+mathtext.fontset: cm
+axes.formatter.use_mathtext: True
 font.size: 18
 
 text.color: 141413
