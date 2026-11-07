@@ -170,6 +170,59 @@ test('the keys of reveal.js do not fire while a block is typed into', async (t) 
   assert.deepEqual(page.errors, []);
 });
 
+test('a save writes the file through a handle, from a served deck', async (t) => {
+  // the local server is reached, hence the browser is not offline here
+  const browser = await launch({ offline: false });
+  t.after(() => browser.close());
+  const server = await serve('.');
+  t.after(() => server.close());
+  const page = await browser.newPage();
+  await page.goto(`${server.origin}/index.html?edit&still`);
+  await page.waitFor(deckSettled);
+  await page.waitFor(ready);
+  // the served deck is fetched by the editor itself
+  const status = await page.evaluate('window.BeesonEditor.status()');
+  assert.equal(status.state, 'loaded');
+  assert.deepEqual(status.problems, []);
+  await page.evaluate(`[...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === 'Period of the families').firstChild.data = 'Saved'`);
+  const written = await page.evaluate(`(async () => {
+    const root = await navigator.storage.getDirectory();
+    const handle = await root.getFileHandle('saved.html', { create: true });
+    window.BeesonEditor.attach(handle);
+    await window.BeesonEditor.save();
+    return (await (await handle.getFile()).text());
+  })()`);
+  assert.equal(written, replaced('<h2>Period of the families</h2>', '<h2>Saved</h2>'));
+  const after = await page.evaluate('window.BeesonEditor.status()');
+  assert.equal(after.dirty, false);
+  assert.match(after.message, /^Saved 1 edit to saved\.html/);
+  // the demo deck does not have a favicon, which a browser asks a server for
+  assert.deepEqual(page.errors.filter((e) => !e.includes('favicon.ico')), []);
+});
+
+test('without the file pickers, a save is a download of the file with the edits', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  await page.evaluate(`{
+    window.showOpenFilePicker = undefined;
+    window.showSaveFilePicker = undefined;
+    URL.createObjectURL = (blob) => { window.__blob = blob; return 'blob:test'; };
+    URL.revokeObjectURL = () => {};
+    HTMLAnchorElement.prototype.click = function () { window.__download = this.download; };
+  }`);
+  assert.equal((await page.evaluate('window.BeesonEditor.status()')).supported, false);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  await page.evaluate(`[...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === 'Period of the families').firstChild.data = 'Downloaded'`);
+  await page.evaluate('window.BeesonEditor.save()');
+  assert.equal(await page.evaluate('window.__download'), 'index.html');
+  assert.equal(await page.evaluate('window.__blob.text()'), replaced('<h2>Period of the families</h2>', '<h2>Downloaded</h2>'));
+  const after = await page.evaluate('window.BeesonEditor.status()');
+  assert.equal(after.dirty, false);
+  assert.match(after.message, /^Saved a copy with 1 edit to your downloads/);
+  assert.deepEqual(page.errors, []);
+});
+
 test('the video slide and the viewer are left alone, and the deck is still while it is edited', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
