@@ -95,7 +95,7 @@ Each video is placed over its image as a PowerPoint video, and it is started whe
 
 ## Figures
 
-For a figure made with matplotlib, use the styles `beeson-dark.mplstyle` and `beeson-light.mplstyle` in `styles/`. The palette, the typeface, and a transparent background are set in these styles. Export one file per mode and mark the images `for-dark` and `for-light`, so that the right one is shown in each mode. Give a white raster figure the class `paper`, and it is framed. Give a black-on-white line plot the class `invert`, and it is inverted in dark mode.
+For a figure made with matplotlib, use the styles `beeson-dark.mplstyle` and `beeson-light.mplstyle` in `styles/`. The palette, the typeface, and a transparent background are set in these styles. Export one file per mode and mark the images `for-dark` and `for-light`, so that the right one is shown in each mode. Give a white raster figure the class `paper`, and it is framed. In a `plate` or a `zone`, the paper is cut to the size of the image, which is scaled down to fit and is not enlarged. Export such a figure at the aspect of its box and at least at its pixel size, e.g. 1680 by 630 px for the plate of a figure slide. Give a black-on-white line plot the class `invert`, and it is inverted in dark mode.
 
 Math is typeset in SVG with MathJax 4 and the STIX Two Math font, both vendored. The macros of a deck are defined in `theme/macros.js`.
 
