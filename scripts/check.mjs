@@ -16,7 +16,7 @@
 // read in these browsers, hence a page error is then what is found in the page, with deckProblems.
 // A phone and a pixel ratio cannot be emulated in these browsers, thus they are checked only in Chrome.
 // Automation in Safari refuses a page from file://, hence the deck is served from a local port there.
-import { mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { deckSettled, deckUrl, launch } from './chrome.mjs';
@@ -43,7 +43,7 @@ const listSlides = `[...document.querySelectorAll('.reveal .slides > section')].
 const deckProblems = `[
   ...[...document.images].filter((image) => image.complete && !image.naturalWidth).map((image) => 'image not loaded: ' + image.src),
   ...[...document.fonts].filter((face) => face.status === 'error').map((face) => 'font not loaded: ' + face.family),
-  ...[...document.querySelectorAll('mjx-merror')].map((error) => 'formula not typeset: ' + error.textContent),
+  ...[...document.querySelectorAll('[data-mjx-error], mjx-merror')].map((error) => 'formula not typeset: ' + (error.getAttribute('data-mjx-error') ?? error.textContent)),
   ...[...document.querySelectorAll('tycho-viewer')].map((viewer) => viewer.shadowRoot?.querySelector('.status.error')?.textContent).filter(Boolean),
   ...performance.getEntriesByType('resource').map((entry) => entry.name).filter((name) => /^https?:/.test(name) && !name.startsWith(location.origin)).map((name) => 'network load: ' + name),
 ]`;
@@ -129,6 +129,27 @@ async function checkScaled() {
   await page.close();
 }
 
+// the in-place editor, loaded with ?edit: the deck is opened in it, every block of text must be
+// paired with the file, and the text written back without an edit must be the file, in every
+// browser. A save is written in place only in Chrome and Edge, and it is tested in test/editor.test.mjs
+async function checkEditor() {
+  const page = await browser.newPage();
+  await page.goto(deckAt('edit&still'));
+  await page.waitFor(deckSettled);
+  await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
+  const text = readFileSync(options.deck, 'utf8');
+  const opened = await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(text)})`);
+  for (const problem of opened.problems) failures.push(`editor: slide ${problem.slide}, ${problem.tag}: ${problem.reason}`);
+  if (opened.blocks && (await page.evaluate('window.BeesonEditor.render()')) !== text) {
+    failures.push('editor: the deck written back without an edit differs from the file');
+  }
+  // a save writes the file in place with the file pickers of Chrome and Edge, and elsewhere it is
+  // a download of the file
+  console.log(`editor: ${opened.blocks} texts on ${opened.sections} slides, saved ${opened.supported ? 'in place' : 'as a download'}`);
+  for (const error of [...page.errors, ...(await page.evaluate(deckProblems))]) failures.push(`editor: ${error}`);
+  await page.close();
+}
+
 // read during a trace, since the heads of a backdrop are cleared at its end
 async function checkHeads() {
   const page = await browser.newPage();
@@ -196,6 +217,7 @@ try {
   }
   await checkDesktop();
   await checkHeads();
+  await checkEditor();
 } finally {
   await browser.close();
   server?.close();
