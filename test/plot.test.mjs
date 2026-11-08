@@ -6,7 +6,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { deckSettled, deckUrl, launch, printView } from '../scripts/chrome.mjs';
-import { cells, formatNumber, framesAt, loopFrame, nearest, parseMarkup, parsePlot, scaled, traceTo, valueAt } from '../src/plot.ts';
+import { cells, formatNumber, frameAt, framesAt, loopFade, loopFrame, nearest, parseMarkup, parsePlot, scaled, timeAt, traceTo, valueAt } from '../src/plot.ts';
 
 const minimal = () => ({
   panels: [{ id: 'p', x: { range: [0, 1] }, y: { range: [0, 1] } }],
@@ -18,6 +18,7 @@ test('a plot is read with its defaults', () => {
   const plot = parsePlot(JSON.stringify(minimal()));
   assert.equal(plot.duration, 8);
   assert.equal(plot.hold, 1);
+  assert.equal(plot.fade, 0.5);
   assert.equal(plot.layout, null);
   assert.deepEqual(plot.panels[0].x, { range: [0, 1], ticks: [], title: '', scale: 'linear', unit: 1 });
   assert.equal(plot.panels[0].axes, true);
@@ -26,6 +27,7 @@ test('a plot is read with its defaults', () => {
   assert.equal(plot.marks[0].tone, 'accent');
   assert.equal(plot.tabs[0].label, 'a');
   assert.equal(plot.tabs[0].active, null);
+  assert.equal(plot.tabs[0].times, null);
   assert.deepEqual(plot.tabs[0].panels, {});
 });
 
@@ -63,6 +65,9 @@ test('a fault in a plot is reported with its path', () => {
     [(p) => (p.tabs[0].data.m = [[0, 0], [1, 1], [2, 2]]), /^tabs\[0\]\.data\.m: 3 frames are given, and the tab has 2 values/],
     [(p) => (p.tabs[0].data.m = [[0, 0, 1]]), /^tabs\[0\]\.data\.m\[0\]: pairs of x and y are expected/],
     [(p) => (p.tabs[0].active = [['m']]), /^tabs\[0\]\.active: 1 frames are given, and the tab has 2 values/],
+    [(p) => (p.tabs[0].times = [0, 1, 2]), /^tabs\[0\]\.times: 3 times are given, and the tab has 2 values/],
+    [(p) => (p.tabs[0].times = [0.5, 1]), /^tabs\[0\]\.times: times that increase from 0 are expected/],
+    [(p) => (p.tabs[0].times = [0, 0]), /^tabs\[0\]\.times: times that increase from 0 are expected/],
     [(p) => { p.marks[0].kind = 'events'; p.tabs[0].data.m = [{ frame: 2, at: [0, 0] }]; }, /^tabs\[0\]\.data\.m\[0\]\.frame: a frame from 0 to 1 is expected/],
     [(p) => (p.panels[0].x.scale = 'log'), /^panels\[0\]\.x\.scale: linear or asinh is expected/],
     [(p) => (p.panels[0].x.unit = 0), /^panels\[0\]\.x\.unit: a positive number is expected/],
@@ -106,6 +111,50 @@ test('the loop runs over the frames, holds the last one, and starts again', () =
   assert.equal(loopFrame(7, 1, 2, 1), 0);
 });
 
+test('the frames of a tab with times are shown at their times, and the loop runs over these times', () => {
+  // 3 frames at 0, 0.5, and 2 s, held for 1 s, where the duration of 99 s is not used
+  const times = [0, 0.5, 2];
+  assert.equal(timeAt(0.5, 3, 99, times), 0.25);
+  assert.equal(timeAt(1.5, 3, 99, times), 1.25);
+  assert.equal(frameAt(1.25, 3, 99, times), 1.5);
+  assert.equal(frameAt(5, 3, 99, times), 2);
+  assert.equal(loopFrame(1.25, 3, 99, 1, times), 1.5);
+  assert.equal(loopFrame(2.5, 3, 99, 1, times), 2);
+  assert.equal(loopFrame(4.25, 3, 99, 1, times), 1.5);
+  // without times, the frames are shown at even steps over the duration
+  assert.equal(timeAt(1.5, 3, 4, null), 3);
+  assert.equal(frameAt(3, 3, 4, null), 1.5);
+});
+
+test('the moving marks are held through the hold and faded in at the start of the next pass', () => {
+  // passes of 2 s, each held for 1 s, with a fade of 0.5 s, over which the held frame is faded out
+  // at 1 minus the opacity of the next pass
+  assert.equal(loopFade(0, 2, 1, 0.5), 1);
+  assert.equal(loopFade(2.4, 2, 1, 0.5), 1);
+  assert.equal(loopFade(2.99, 2, 1, 0.5), 1);
+  assert.equal(loopFade(3, 2, 1, 0.5), 0);
+  assert.equal(loopFade(3.25, 2, 1, 0.5), 0.5);
+  assert.equal(loopFade(3.5, 2, 1, 0.5), 1);
+  // a fade longer than a pass is cut to the pass, and a fade of 0 keeps the marks
+  assert.equal(loopFade(4, 2, 1, 4), 0.5);
+  assert.equal(loopFade(3.1, 2, 1, 0), 1);
+});
+
+test('a trace is read as a list of points, or with the last frame of its faint line', () => {
+  const plot = (path) => ({
+    panels: [{ id: 'p', x: { range: [0, 1] }, y: { range: [0, 1] } }],
+    marks: [{ id: 'm', panel: 'p', kind: 'trace' }],
+    tabs: [{ name: 'a', values: [0, 0.5, 1], data: { m: path } }],
+  });
+  const points = [[0, 0], [0.5, 1], [1, 0]];
+  assert.deepEqual(parsePlot(plot(points)).tabs[0].data.m, { points, ghost: 2 });
+  assert.deepEqual(parsePlot(plot({ points, ghost: 1 })).tabs[0].data.m, { points, ghost: 1 });
+  assert.deepEqual(parsePlot(plot({ points, ghost: 0 })).tabs[0].data.m, { points, ghost: 0 });
+  assert.throws(() => parsePlot(plot({ points, ghost: 3 })), { message: /^tabs\[0\]\.data\.m\.ghost: a frame from 0 to 2 is expected/ });
+  assert.throws(() => parsePlot(plot({ points, ghost: 0.5 })), { message: /^tabs\[0\]\.data\.m\.ghost: a frame from 0 to 2 is expected/ });
+  assert.throws(() => parsePlot(plot({ points: points.slice(1) })), { message: /^tabs\[0\]\.data\.m: 2 frames are given, and the tab has 3 values/ });
+});
+
 test('a label is set in runs of the markup', () => {
   assert.deepEqual(parseMarkup('$\\lambda_h = 3$'), [
     { text: 'λ', italic: true, shift: null },
@@ -138,6 +187,60 @@ test('the plot of the demo deck is valid', () => {
   assert.ok(block, 'the JSON block of the plot is in index.html');
   const plot = parsePlot(block[1]);
   assert.deepEqual(plot.tabs.map((t) => t.name), ['l1', 'l2']);
+});
+
+// the state of the plot at every frame for 3 s: the pass, the opacity of the moving marks and of the
+// copies of the held frame, the paths of the trace and of its copy, and the faint line
+const crossfade = `(async () => {
+  const view = Beeson.plots[0], samples = [];
+  const d = (node) => node?.querySelector('.plot-trace')?.getAttribute('d') ?? null;
+  const opacity = (node) => (node instanceof HTMLElement ? Number(/opacity\\(([\\d.e-]+)\\)/.exec(node.style.filter)?.[1] ?? 1) : Number(node.style.opacity || 1));
+  for (const end = performance.now() + 3000; performance.now() < end; ) {
+    await new Promise((done) => requestAnimationFrame(done));
+    samples.push({
+      pass: view.pass,
+      fade: view.fade,
+      live: view.faders.map(opacity),
+      held: view.held.filter((n) => !(n instanceof HTMLElement)).map(opacity),
+      liveText: view.fadeLabels.map(opacity),
+      heldText: view.held.filter((n) => n instanceof HTMLElement).map(opacity),
+      trace: d(view.faders.find((f) => f.querySelector('.plot-trace'))),
+      heldTrace: d(view.held.find((f) => f.querySelector?.('.plot-trace'))),
+    });
+  }
+  return { samples, ghost: view.el.querySelector('.plot-ghost')?.getAttribute('d') };
+})()`;
+
+test('at the restart of a loop, the held frame is faded out while the next pass is faded in', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage({ motion: true });
+  await page.goto(deckUrl('test/pages/plot-loop.html'));
+  await page.waitFor(deckSettled);
+  const { samples, ghost } = await page.evaluate(crossfade);
+  // the faint line of the trace ends at its second frame
+  assert.equal((ghost.match(/[ML]/g) ?? []).length, 2);
+  const fading = samples.filter((s) => s.held.length);
+  assert.ok(fading.length > 3, `${fading.length} frames of a crossfade are drawn`);
+  for (const s of samples) {
+    // the opacity of the marks and of the held copies sums to 1 at every frame, hence the plot is
+    // not empty at the restart
+    assert.ok(s.live.every((a) => Math.abs(a - s.fade) < 1e-6), JSON.stringify(s));
+    if (s.held.length) {
+      assert.equal(s.held.length, s.live.length);
+      assert.ok(s.held.every((a) => Math.abs(a + s.fade - 1) < 1e-6), JSON.stringify(s));
+      assert.ok(s.pass > 0 && s.fade < 1);
+      // a text of the held frame is gone before a text of the next pass is shown
+      assert.equal(s.heldText.length, s.liveText.length);
+      assert.ok(s.heldText.every((a) => Math.abs(a - Math.max(0, 1 - 2 * s.fade)) < 1e-6), JSON.stringify(s));
+      assert.ok(s.liveText.every((a) => Math.abs(a - Math.max(0, 2 * s.fade - 1)) < 1e-6), JSON.stringify(s));
+    } else assert.equal(s.fade, 1, JSON.stringify(s));
+  }
+  // the copy holds the whole path, while the next pass is traced from its first frame
+  const full = samples.filter((s) => s.pass === 0).at(-1).trace;
+  assert.equal((full.match(/L/g) ?? []).length, 2, 'the first pass is held at its last frame');
+  assert.ok(fading.every((s) => s.heldTrace === full && s.trace.length < full.length), JSON.stringify(fading[0]));
+  assert.deepEqual(page.errors, []);
 });
 
 const state = `(() => {
