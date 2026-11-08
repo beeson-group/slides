@@ -34,25 +34,13 @@ The editor does not add, delete, or reorder slides, and it does not change the l
 
 ## Backdrops
 
-Set the drawing of a `backdrop` with its attribute `data-scene`. Each drawing is computed in the browser by the code in `src/scenes.ts`, and the demo deck shows most of them.
+Set the drawing of a `backdrop` with its attribute `data-scene`. Each drawing is computed in the browser by the code in `src/scenes.ts`, and the demo deck shows each of them.
 
 | Name | Drawing |
 |---|---|
 | `nest` | The Lyapunov families of L1 and L2 with the distant retrograde orbits about the Moon |
-| `dro` | The distant retrograde family |
-| `mark` | One distant retrograde orbit |
-| `l1`, `l2` | The Lyapunov family of one libration point |
-| `lyapunovs` | The Lyapunov families of L1 and L2 |
-| `halo` | The L2 halo family continued to a near rectilinear orbit |
-| `rosette` | A family of 7:2 resonant orbits |
-| `hill` | Zero-velocity curves of the Jacobi constant |
 | `tubes` | The stable and unstable tubes of orbits at L1 and L2 |
-| `lace` | The unstable tube of an L1 orbit and the stable tube of an L2 orbit about the Moon |
-| `ribbon`, `wideRibbon` | The tubes of a small and a larger L1 orbit toward the Earth, after Amlan Sinha's figures in the group deck and in [Phantom Pathways](https://amlan-sinha.github.io/art-of-science/art-1/) |
-| `spiral` | An illustrative low-thrust flight and a near rectilinear orbit in the inertial frame, after [Cosmic Choreography](https://amlan-sinha.github.io/art-of-science/art-2/) by Amlan Sinha |
-| `transfer` | A low-energy transfer through an L2 Lyapunov orbit, with its manifolds drawn first and a head on the spacecraft alone |
-| `sheaf` | Lunar transfers from a low Earth orbit |
-| `torus` | Quasi-periodic strands about distant retrograde orbits |
+| `wideRibbon` | The tubes of an L1 orbit toward the Earth, after Amlan Sinha's figures in the group deck and in [Phantom Pathways](https://amlan-sinha.github.io/art-of-science/art-1/) |
 | a file in `data-strands` | The polylines of a file next to the deck, described below |
 
 Label a point of a named drawing with a `lab` span inside the backdrop, whose `data-at` is `L1`, `L2`, `moon`, or `earth`, and shift the label from the point by `data-dx` and `data-dy` pixels. A label is typeset with MathJax. Write a libration point as `\(\LL{1}\)`, i.e. a calligraphic L with its index, with the macro `\LL` of `theme/macros.js`, and write it in the same way in a heading, a caption, and the notes.
@@ -68,7 +56,7 @@ A deck opened with a double click cannot read a JSON file, since the browser ref
 - With `data-strands-ramp`, you color each strand from the first color of its pair at the smallest value of a key, e.g. `e`, among the drawn records of the pair, to the second color at the largest.
 - With `data-strands-shade`, you draw each strand in a shade of the first color of its pair instead. The shade is lighter at the smallest value of a key, e.g. `e`, among the drawn records of the pair, and darker at the largest. It is used in place of `data-strands-ramp` when both are given.
 - With `data-stagger`, you start the strands one after another, in the order of the file, with the given number of seconds between two starts, e.g. `0.4`. It works on a named drawing too.
-- With `data-heads`, you draw a moving head on every strand, at the size `full` or `small`, or on none with `none`. Without it, a head is drawn only on the path of a spacecraft, and on a record of a file with a `head` of its own. In a named drawing, such a path is a strand marked `craft: true` in `src/scenes.ts`, e.g. the transfer of `transfer`, and in a file it is a record with `"craft": true`.
+- With `data-heads`, you draw a moving head on every strand, at the size `full` or `small`, or on none with `none`. Without it, a head is drawn only on the path of a spacecraft, and on a record of a file with a `head` of its own. Such a path is a record of a file with `"craft": true`.
 - With `data-duration`, you set the seconds in which the whole drawing is traced, from the first strand to the last, 12 by default. The clock of a file runs in these seconds, hence with `data-duration` equal to the last time on the clock, `start` and `t` are in seconds.
 
 Without `data-half`, the window of a backdrop of a file is fitted to its drawing with the fill of `tubes` on the closing slide. In the window, 93 percent of the drawing is held, measured along each strand with every strand counted alike. The drawing is also kept 40 px clear of each side of the box that is inside the slide.
@@ -114,7 +102,7 @@ To embed a scene of tycho, the Typed Celestial HTML Observer, call `build_embed`
 
 A display is revealed in four steps: the lead-in sentence, the display, the sentence in which it is explained, and a step in which a symbol of the display is colored. Mark the symbol in the TeX with `\class{name}{...}`, and give a later fragment the attribute `data-highlight="name"`. Once this fragment is shown, the symbols of the class are drawn in orange, or in violet with `data-tone="violet"`. Any element of the slide with the class `name` is colored as well, e.g. a `span` around the words that name the symbol. Use orange for motion and violet for structure, as in the rest of the theme, and separate several classes with spaces.
 
-An earlier fragment is dimmed to 45 percent once a later one is shown, and every fragment is restored at the step added after the last one. Give the display the attribute `data-keep` to hold it at full opacity through the next step, or `data-keep="4"` to hold it through the step of index 4. A display is also held at full opacity while a class in it is colored at the current step. The demo slide "Motion in the rotating frame" is an example of every step.
+An earlier fragment is dimmed to 45 percent once a later one is shown, and every fragment is restored at the step added after the last one. Give the display the attribute `data-keep` to hold it at full opacity through the next step, or `data-keep="4"` to hold it through the step of index 4. A display is also held at full opacity while a class in it is colored at the current step. The demo slide "Stepping through the equations" is an example of every step.
 
 ## Code
 
@@ -124,7 +112,7 @@ To step through a box, number its lines with `data-line-numbers` on the `code`, 
 
 ## Plots
 
-A plot is an animated 2D figure, drawn as SVG from a block of JSON in the deck. Put a `div` with the class `plot` in a `zone`, or with the classes `plot plate` on a `figure` slide, and give it the id of the block in `data-plot`. Write the block next to it as `<script type="application/json" id="...">`. The block is inline, since fetching a file is blocked for a deck opened with a double click. Run `node demo/multipliers.mjs index.html` to write the plot of the demo deck, the Floquet multipliers of the Lyapunov families of L1 and L2, which is also the example to start from.
+A plot is an animated 2D figure, drawn as SVG from a block of JSON in the deck. Put a `div` with the class `plot` in a `zone`, or with the classes `plot plate` on a `figure` slide, and give it the id of the block in `data-plot`. Write the block next to it as `<script type="application/json" id="...">`. The block is inline, since fetching a file is blocked for a deck opened with a double click. The demo deck does not have a plot, and the test decks `test/pages/plot-steps.html` and `test/pages/plot-reveals.html` are examples to start from.
 
 The plot is played in a loop while its slide is shown, and it is paused when the slide is left. Under the plot, a button to play and pause, a scrubber with a tick at each event, and the value of the parameter are shown, and the plot is paused when you drag the scrubber. In the PDF and in PowerPoint, the plot is printed at its last frame. Set another frame with `data-plot-frame`, where a negative frame is counted from the end, and set `data-plot-paused` to show the still in the slides as well. To start the plot at a step, give a fragment of its slide the attribute `data-plot-play`. The plot is then held at its still frame until the fragment is shown and played from its first frame afterward, and it is printed at its last frame from this step on. Under reduced motion, the plot is not played.
 
