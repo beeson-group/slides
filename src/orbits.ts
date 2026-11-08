@@ -10,14 +10,15 @@ import type { Dot } from './strands.ts';
 export type Member = { s: Float64Array; path: number[]; times: number[]; t: number };
 export type Tone = 'orange' | 'violet' | 'text' | 'hero' | 'line';
 // pts is a list of alternating x and y values. times are the flight times of the points, and T is
-// the last of them. alpha, when set, replaces the opacity of the tone. ink, when set, replaces the
-// color of the tone with the color at the fraction at between the two colors of the pair of the
-// palette --strand-1 to --strand-8 in theme/beeson.css, i.e. --strand-1 and --strand-2 for pair 0,
-// or with shade the shade at the fraction at of the first color of the pair. craft, when true, marks
-// the path of a spacecraft, whose head is drawn without data-heads. a strand of a file may also set
-// its weight, i.e. its width in line widths, the radius of its head in line widths in place of the
-// size of its backdrop, and a glow, a soft halo of its own color
-export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; alpha?: number; ink?: { pair: number; at: number; shade?: boolean }; craft?: boolean; weight?: number; head?: number; glow?: boolean };
+// the last of them. color, when set, is a CSS color or a pair of them for the dark and the light
+// mode in place of the color of the tone. alpha, when set, replaces the opacity of the tone. ink,
+// when set, replaces the color of the tone with the color at the fraction at between the two
+// colors of the pair of the palette --strand-1 to --strand-8 in theme/beeson.css, i.e. --strand-1
+// and --strand-2 for pair 0, or with shade the shade at the fraction at of the first color of the
+// pair. craft, when true, marks the path of a spacecraft, whose head is drawn without data-heads.
+// a strand of a file may also set its weight, i.e. its width in line widths, the radius of its
+// head in line widths in place of the size of its backdrop, and a glow, a soft halo of its own color
+export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; color?: string | [string, string]; alpha?: number; ink?: { pair: number; at: number; shade?: boolean }; craft?: boolean; weight?: number; head?: number; glow?: boolean };
 
 export const MU = 0.01215;
 // the distance to a body within which the step is shortened in step()
@@ -265,7 +266,8 @@ export const POINTS = {
 type Point = keyof typeof POINTS;
 const isPoint = (v: string | undefined): v is Point => v !== undefined && v in POINTS;
 
-type Colors = { stroke: string; body: string; accent: string; violet: string; text: string };
+// the colors of the theme in the mode of the deck, and whether the mode is light
+type Colors = { stroke: string; body: string; accent: string; violet: string; text: string; light: boolean };
 
 const CACHE = new WeakMap<HTMLElement, Orbits>();
 
@@ -379,7 +381,7 @@ export class Orbits {
 
   private colors(): Colors {
     const cs = getComputedStyle(this.el);
-    return { stroke: cs.getPropertyValue('--stroke').trim(), body: cs.getPropertyValue('--body').trim(), accent: cs.getPropertyValue('--accent').trim(), violet: cs.getPropertyValue('--violet').trim(), text: cs.getPropertyValue('--text').trim() };
+    return { stroke: cs.getPropertyValue('--stroke').trim(), body: cs.getPropertyValue('--body').trim(), accent: cs.getPropertyValue('--accent').trim(), violet: cs.getPropertyValue('--violet').trim(), text: cs.getPropertyValue('--text').trim(), light: this.el.ownerDocument.documentElement.dataset.theme === 'light' };
   }
 
   // the colors of the strands with an ink in the current mode. a color of the palette is serialized
@@ -479,7 +481,7 @@ export class Orbits {
   // weight, and glow where it has them
   private pen(ctx: CanvasRenderingContext2D, c: Colors, i: number): void {
     const s = this.strands[i], tone = s.tone;
-    ctx.strokeStyle = s.ink ? this.inks[i] : tone === 'orange' || tone === 'hero' ? c.accent : tone === 'violet' ? c.violet : tone === 'text' || tone === 'line' ? c.text : c.stroke;
+    ctx.strokeStyle = s.color ? (typeof s.color === 'string' ? s.color : s.color[c.light ? 1 : 0]) : s.ink ? this.inks[i] : tone === 'orange' || tone === 'hero' ? c.accent : tone === 'violet' ? c.violet : tone === 'text' || tone === 'line' ? c.text : c.stroke;
     ctx.globalAlpha = s.alpha ?? (tone === 'orange' || tone === 'violet' ? 0.42 : tone === 'text' ? 0.8 : tone === 'line' ? 0.36 : 1);
     ctx.lineWidth = (tone === 'hero' ? 2.2 : tone === 'text' ? 1.3 : 1) * (s.weight ?? 1) * this.lw;
     ctx.shadowBlur = s.glow ? 6 * this.lw : 0;
