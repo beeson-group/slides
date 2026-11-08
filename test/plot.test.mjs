@@ -124,6 +124,11 @@ test('a label is set in runs of the markup', () => {
     { text: '12', italic: false, shift: 'sub' },
     { text: ' family', italic: false, shift: null },
   ]);
+  assert.deepEqual(parseMarkup('$\\mathcal{EH}^{+}$ and $\\mathcal{N}$'), [
+    { text: 'ℰℋ', italic: false, shift: null },
+    { text: '+', italic: false, shift: 'sup' },
+    { text: ' and 𝒩', italic: false, shift: null },
+  ]);
   assert.deepEqual(parseMarkup('$-1$ and -1'), [{ text: '−1 and -1', italic: false, shift: null }]);
   assert.deepEqual(parseMarkup('$x^{2}$'), [
     { text: 'x', italic: true, shift: null },
