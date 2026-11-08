@@ -66,6 +66,27 @@ test('the new light view is clipped from the start of a flip to light', { timeou
   assert.match(await page.evaluate(clipAtReady), /^circle\(0px/);
 });
 
+// a scene whose marks are drawn for one background keeps the theme written in the file
+test('a viewer with data-keep-theme keeps its theme through a flip of the mode', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl('test/pages/viewer-steps.html', 'theme=dark'));
+  await page.waitFor(deckSettled);
+  const themes = await page.evaluate(`(async () => {
+    const viewer = document.querySelector('tycho-viewer');
+    const flip = async (mode) => { Beeson.theme.set(mode); await new Promise((done) => setTimeout(done, 1500)); };
+    viewer.setAttribute('data-keep-theme', '');
+    await flip('light');
+    const kept = [Beeson.theme.get(), viewer.getAttribute('theme')];
+    viewer.removeAttribute('data-keep-theme');
+    await flip('dark');
+    await flip('light');
+    return [kept, [Beeson.theme.get(), viewer.getAttribute('theme')]];
+  })()`);
+  assert.deepEqual(themes, [['light', 'dark'], ['light', 'light']]);
+});
+
 // the animations of the current slide, each with whether it plays and how far it is: the points
 // traced by a backdrop, the azimuth of a surface, the frame of a plot, the time of a video, and the
 // step of a tycho scene. a traced backdrop is counted as playing once every strand is traced to its
