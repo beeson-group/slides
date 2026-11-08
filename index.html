@@ -207,6 +207,23 @@ try {
   <aside class="notes">The runtime is vendored once in the theme, and the scene and its data are in the slide as two inline blocks. The viewer shows the \(\LL{1}\) halo family of the Earth–Moon system in the rotating frame above, and below in the inertial frames centered on the barycenter and on the Moon. It is a kiosk without controls. While it is in focus, you select a larger or a smaller member with the up and down arrow keys, and you pause it with the space bar.</aside>
 </section>
 
+<!-- code: a box colored by the highlight plugin of reveal.js, with one group of lines per step in data-line-numbers -->
+<section>
+  <h2>Code, one group of lines per step</h2>
+  <p>A code box is colored by highlight.js, and at each step one group of its lines is lit.</p>
+  <pre><code class="language-python" data-line-numbers="1-3|4|5-7|8-9">def halo_family():
+    members = []
+    x0, vy0 = SEED
+    for z0 in np.linspace(Z_START, Z_END, STEPS + 1) / DU:
+        if len(members) >= 2:
+            (_, xa, va, _), (_, xb, vb, _) = members[-2:]
+            x0, vy0 = 2 * xb - xa, 2 * vb - va
+        members.append((z0, *correct(x0, z0, vy0)))
+    return members</code></pre>
+  <div class="foot">The continuation of the halo family in <code>demo/tycho-scene.py</code>, without its docstring.</div>
+  <aside class="notes">The groups of lines are given in data-line-numbers, separated by bars, and the first group is lit when the slide is shown. The family is continued in the initial z, and the guess of each member is extrapolated from the two members before it, then corrected by Newton's method.</aside>
+</section>
+
 <!-- a surface: the graph of a function of src/surfaces.ts, whose stage is set by the steps with data-surface-stage -->
 <section>
   <h2>The effective potential</h2>
@@ -302,6 +319,7 @@ try {
 </div>
 <script src="theme/vendor/reveal/reveal.js"></script>
 <script src="theme/vendor/reveal/notes.js"></script>
+<script src="theme/vendor/reveal/highlight.js"></script>
 <script src="theme/vendor/tycho/tycho.js"></script>
 <script src="theme/vendor/three/three.js"></script>
 <script src="theme/beeson.js"></script>
