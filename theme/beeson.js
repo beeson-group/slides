@@ -1399,10 +1399,17 @@
         ctx.fill();
       });
     }
+    // tints the drawn strands within the radius of the pointer. a segment of a strand is stroked when its
+    // box, with its control points where it is curved, meets the box of the disc, and the stroke is
+    // clipped to the disc, since the points of a strand may lie far apart on either side of it
     glowing(ctx, c) {
       const g = this.pointer;
       if (!g) return;
-      const r2 = g.r * g.r;
+      const reach = g.r + this.lw;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(g.x, g.y, g.r, 0, 2 * Math.PI);
+      ctx.clip();
       ctx.strokeStyle = c.accent;
       ctx.globalAlpha = 0.35;
       ctx.lineWidth = this.lw;
@@ -1411,28 +1418,29 @@
       ctx.beginPath();
       this.strands.forEach((_, i) => {
         const { px: p, ctl } = this.paths[i], last = this.drawn(i);
-        const to = (j) => {
-          if (curved(ctl, j - 1)) ctx.bezierCurveTo(ctl[4 * j - 4], ctl[4 * j - 3], ctl[4 * j - 2], ctl[4 * j - 1], p[2 * j], p[2 * j + 1]);
-          else ctx.lineTo(p[2 * j], p[2 * j + 1]);
-        };
         let pen = false;
-        for (let j = 0; j <= last; j++) {
-          const dx = p[2 * j] - g.x, dy = p[2 * j + 1] - g.y;
-          if (dx * dx + dy * dy <= r2) {
-            if (pen) to(j);
-            else if (j > 0) {
-              ctx.moveTo(p[2 * j - 2], p[2 * j - 1]);
-              to(j);
-            } else ctx.moveTo(p[0], p[1]);
-            pen = true;
-          } else if (pen) {
-            to(j);
-            pen = false;
+        for (let j = 1; j <= last; j++) {
+          const bent = curved(ctl, j - 1);
+          let lx = Math.min(p[2 * j - 2], p[2 * j]), hx = Math.max(p[2 * j - 2], p[2 * j]);
+          let ly = Math.min(p[2 * j - 1], p[2 * j + 1]), hy = Math.max(p[2 * j - 1], p[2 * j + 1]);
+          if (bent) {
+            lx = Math.min(lx, ctl[4 * j - 4], ctl[4 * j - 2]);
+            hx = Math.max(hx, ctl[4 * j - 4], ctl[4 * j - 2]);
+            ly = Math.min(ly, ctl[4 * j - 3], ctl[4 * j - 1]);
+            hy = Math.max(hy, ctl[4 * j - 3], ctl[4 * j - 1]);
           }
+          if (lx > g.x + reach || hx < g.x - reach || ly > g.y + reach || hy < g.y - reach) {
+            pen = false;
+            continue;
+          }
+          if (!pen) ctx.moveTo(p[2 * j - 2], p[2 * j - 1]);
+          if (bent) ctx.bezierCurveTo(ctl[4 * j - 4], ctl[4 * j - 3], ctl[4 * j - 2], ctl[4 * j - 1], p[2 * j], p[2 * j + 1]);
+          else ctx.lineTo(p[2 * j], p[2 * j + 1]);
+          pen = true;
         }
       });
       ctx.stroke();
-      ctx.globalAlpha = 1;
+      ctx.restore();
     }
     // the point of strand i at the flight time tau, on its segment from point j to j + 1
     at(i, j, tau) {
