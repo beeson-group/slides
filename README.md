@@ -2,16 +2,32 @@
 
 This repository is an HTML slide template for the talks of the Beeson group, built on reveal.js 6 with the theme `beeson`. A deck is one `index.html`, and you open it with a double click, without a server or a toolchain. The same file is exported to a PDF with one page per step, exported to PowerPoint with one click per step, and published as a GitHub Pages site. The theme is black by default, and you switch to a warm paper light mode with the key `d`. Behind the slides are orbits of the circular restricted three-body problem, computed with a small engine ported from Claudio Vestini's website.
 
-The demo deck, `index.html`, is also the documentation of every layout class. Open it, and press `s` for the speaker view.
+The demo deck, `index.html`, shows the main layouts, the steps, and the elements of the theme, and every layout class is listed under Layouts below. Open it, and press `s` for the speaker view.
 
 ## Start a talk
 
 1. Press "Use this template" on GitHub, or copy the folders `theme/` and `brand/` next to a new `index.html`.
-2. Write the slides in `index.html` as `section` elements, one per slide, with the layout classes listed in the demo and in `AGENTS.md`. Link the theme, the vendored fonts, and MathJax in the head of the file, and call `Beeson.start({})` with the options of reveal.js in the foot.
+2. Write the slides in `index.html` as `section` elements, one per slide, with the layout classes listed under Layouts. Link the theme, the vendored fonts, and MathJax in the head of the file, and call `Beeson.start({})` with the options of reveal.js in the foot.
 3. Give each element its step once the slide is complete: `class="fragment"` with a `data-fragment-index`. During the talk, a new element is faded in, and the earlier ones are dimmed to 45 percent. The last element is also shown alone at first, and all of them are restored to full opacity at one more step, which is added to every slide with a dimmed element. A slide whose fragments are empty, e.g. the steps of a plot, is not given this step.
 4. Export the PDF with `npm run pdf` after `npm ci`, or open `index.html?print-pdf` in a browser on a computer and print to PDF. The PDF is printed with one page per step.
 
 You flip the mode with the key `d` or with the button at the upper right. The change is drawn as a circle at the button or at the point of the click, grown on a flip to light and shrunk on a flip to dark. During a flip, a backdrop that is being traced is drawn on in both modes. A viewer of tycho, a surface, a plot, or a video is held still in the old mode for up to 450 ms, until the new mode is shown over it. The mode is kept per browser in local storage. To fix it for a venue, add the URL parameter `?theme=light`. To draw every backdrop complete at once for a screenshot, add `?still`.
+
+During a talk, press `s` for the speaker view with the notes, `p` for the pointer dot, `f` for fullscreen, and Esc for the overview.
+
+## Layouts
+
+Set the layout of a slide with a class on its `section`. The running head (`run`) is filled automatically from the last section slide, and the footnote line is a `div` with the class `foot`.
+
+| Class | Layout |
+|---|---|
+| `title`, `closing` | A plate with the backdrop behind a block of words at the lower left, and the lockup at the top left |
+| `section` | The words at the left, the outline of the talk under them, and the backdrop at the right |
+| no class | A content slide, with a text column of 1000 px at the left margin and a `zone` or a `backdrop` at the right. The column is set narrower with `narrow` and wider with `wide` |
+| `figure` | A plate with a `backdrop` or a `plate` figure, the head at the top, and the `caption` at the lower left |
+| `split` | The black `panel` of the PowerPoint deck of the group at the left, black in the light mode too, and a `zone` at the right |
+
+An orbit drawing is a `div` with the class `backdrop`, described under Backdrops, and a step is an element with the class `fragment` and a `data-fragment-index`. The classes `paper` and `invert` of a figure are described under Figures.
 
 ## Edit the text in the browser
 
@@ -42,6 +58,8 @@ Set the drawing of a `backdrop` with its attribute `data-scene`. Each drawing is
 | `tubes` | The stable and unstable tubes of orbits at L1 and L2 |
 | `wideRibbon` | The tubes of an L1 orbit toward the Earth, after Amlan Sinha's figures in the group deck and in [Phantom Pathways](https://amlan-sinha.github.io/art-of-science/art-1/) |
 | a file in `data-strands` | The polylines of a file next to the deck, described below |
+
+Set the window of the drawing with `data-cx` and `data-cy`, the point at the center of the box, and `data-half`, half of the height of the box, all in nondimensional units. The backdrop of a title, section, or closing slide is traced when its slide is shown, and the backdrop of another slide is drawn complete. Add `data-live` to trace it as well.
 
 Label a point of a named drawing with a `lab` span inside the backdrop, whose `data-at` is `L1`, `L2`, `moon`, or `earth`, and shift the label from the point by `data-dx` and `data-dy` pixels. A label is typeset with MathJax. Write a libration point as `\(\LL{1}\)`, i.e. a calligraphic L with its index, with the macro `\LL` of `theme/macros.js`, and write it in the same way in a heading, a caption, and the notes.
 
