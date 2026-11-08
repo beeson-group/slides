@@ -1,6 +1,6 @@
 {
   "name": "beeson-slides",
-  "version": "1.0.0",
+  "version": "0.9.0-beta.1",
   "description": "The HTML slide template of the Beeson group, a reveal.js theme with its demo deck and tooling",
   "scripts": {
     "test": "node --test \"test/*.test.mjs\"",
