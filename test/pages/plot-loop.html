@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Plot loop</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+</head>
+<body>
+<!-- a plot whose loop is restarted every 1.3 s, with a crossfade of 0.4 s, and a trace whose faint
+     line ends at its second frame -->
+<div class="reveal">
+  <div class="slides">
+    <section>
+      <h2>A plot in a loop</h2>
+      <div class="plot zone" data-plot="loop"></div>
+      <script type="application/json" id="loop">{
+        "duration": 1,
+        "hold": 0.3,
+        "fade": 0.4,
+        "panels": [{ "id": "p", "x": { "range": [0, 1] }, "y": { "range": [-1, 1] } }],
+        "marks": [
+          { "id": "dot", "panel": "p", "kind": "points" },
+          { "id": "path", "panel": "p", "kind": "trace" },
+          { "id": "event", "panel": "p", "kind": "events" }
+        ],
+        "tabs": [{
+          "name": "one",
+          "values": [0, 0.5, 1],
+          "data": {
+            "dot": [[0, 0], [0.5, 0.5], [1, 1]],
+            "path": { "points": [[0, 0], [0.5, 1], [1, -1]], "ghost": 1 },
+            "event": [{ "frame": 2, "at": [1, -1], "text": "end" }]
+          }
+        }]
+      }</script>
+    </section>
+  </div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

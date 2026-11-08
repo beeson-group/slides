@@ -15,6 +15,17 @@ const END = '<!-- plot data end -->';
 const STEPS = 6000;
 // the last distance of the families, where the pair is still in the window of the plane
 const LAST = 0.13;
+// the largest turn in rad of the vertical pair on the unit circle between two frames, and the
+// largest step of ln|lambda| on the real axis after the pair leaves the circle at -1
+const TURN = (1.5 * Math.PI) / 180;
+const SPREAD = 0.03;
+// the seconds of a pass over the members and the crossings at even steps, the pace up to the axial
+// crossing. on the circle after it, the pair turns at CRUISE in deg/s up to EASE in deg, and slows
+// at a constant rate to SLOWEST at -1. it rests there for PAUSE seconds and then leaves the circle
+// along the real axis over SPLIT seconds
+const EARLY = 10;
+const CRUISE = 30, EASE = 120, SLOWEST = 4;
+const PAUSE = 0.5, SPLIT = 1.5;
 
 // y holds the state in its first 6 entries and the state transition matrix, row by row, in the
 // next 36. the Jacobian is the Hessian of the effective potential with the Coriolis block
@@ -79,6 +90,14 @@ function pair(zeta) {
 
 const round = (x, digits = 4) => Number(x.toFixed(digits));
 
+// the seconds after the axial crossing at which the pair is at the angle deg on the circle
+const RATE = (CRUISE ** 2 - SLOWEST ** 2) / (180 - EASE);
+const turnTime = (deg) => (deg <= EASE ? deg / CRUISE : EASE / CRUISE + (2 / RATE) * (CRUISE - Math.sqrt(SLOWEST ** 2 + RATE * (180 - deg))));
+
+// the fraction of a step at the fraction of its seconds s, the inverse of the smoothstep
+// 3x^2 - 2x^3, hence a motion timed with it starts and ends at rest
+const unsmooth = (s) => 0.5 - Math.sin(Math.asin(1 - 2 * s) / 3);
+
 function tab(n) {
   const xL = lagrange(n);
   const members = lyapunovFamily(n, spaced(0.004, LAST, 90, 1.3), 0.004);
@@ -97,15 +116,62 @@ function tab(n) {
   // a crossing of zeta = 1 or zeta = -1 is added as a frame, interpolated between two members, so
   // that the pair is drawn on the real axis there. a pair moves fast near a crossing, as the square
   // root of the distance in zeta, and it would cut a chord between two members
-  const rows = [];
+  const crossed = [];
   computed.forEach((r, i) => {
-    rows.push(r);
+    crossed.push(r);
+    r.q = crossed.length - 1;
     const next = computed[i + 1];
     if (!next) return;
     for (const level of [1, -1]) {
       const f = (r.zv - level) / (r.zv - next.zv);
-      if (f > 0 && f < 1) rows.push({ A: r.A + f * (next.A - r.A), lh: r.lh + f * (next.lh - r.lh), zv: level, level });
+      if (f > 0 && f < 1) crossed.push({ A: r.A + f * (next.A - r.A), lh: r.lh + f * (next.lh - r.lh), zv: level, level, q: crossed.length });
     }
+  });
+  // on the unit circle, the pair is at the angle acos(zeta), and it turns fast near zeta = -1,
+  // where the angle goes as the square root of the distance in zeta. frames are added at even
+  // steps of the angle, interpolated as the crossings above, so that the trace of the pair follows
+  // the circle in place of a chord. q is the place of a frame among the crossed rows, by which the
+  // frames up to the axial crossing are timed
+  const rows = [];
+  const between = (r, next, zv) => {
+    const f = (r.zv - zv) / (r.zv - next.zv);
+    return { A: r.A + f * (next.A - r.A), lh: r.lh + f * (next.lh - r.lh), zv, level: 0, q: r.q + f * (next.q - r.q) };
+  };
+  crossed.forEach((r, i) => {
+    rows.push(r);
+    const next = crossed[i + 1];
+    if (!next || Math.abs(r.zv) > 1 || Math.abs(next.zv) > 1) return;
+    const a = Math.acos(r.zv), b = Math.acos(next.zv), steps = Math.ceil(Math.abs(b - a) / TURN);
+    for (let k = 1; k < steps; k++) rows.push({ ...between(r, next, Math.cos(a + ((b - a) * k) / steps)), q: r.q + k / steps });
+  });
+  // the pair rests at -1 in a copy of the frame of the crossing, and frames are added on the real
+  // axis after it at even steps of ln|lambda|, so that the pair leaves the circle smoothly
+  const doubling = rows.findIndex((r) => r.level === -1);
+  if (doubling < 0) throw new Error(`L${n}: the pair does not reach -1`);
+  const log = (zv) => Math.log(Math.abs(pair(zv)[0][0]));
+  const after = rows.splice(doubling + 1);
+  rows.push({ ...rows[doubling], level: 0 });
+  [rows[doubling], ...after].forEach((r, i, real) => {
+    if (i > 0) rows.push(r);
+    const next = real[i + 1];
+    if (!next) return;
+    const a = log(r.zv), b = log(next.zv), steps = Math.ceil((b - a) / SPREAD);
+    for (let k = 1; k < steps; k++) {
+      const big = -Math.exp(a + ((b - a) * k) / steps);
+      rows.push(between(r, next, (big + 1 / big) / 2));
+    }
+  });
+  // the times of the frames: the old pace up to the axial crossing, the turn on the circle up to
+  // -1, the rest, and the split on the real axis
+  const axial = rows.findLastIndex((r) => r.level === 1), early = EARLY / (crossed.length - 1), last = log(rows.at(-1).zv);
+  const t0 = rows[axial].q * early, t1 = t0 + turnTime(180);
+  const times = rows.map((r, k) => {
+    if (k <= axial) return r.q * early;
+    if (k <= doubling) return t0 + turnTime((Math.acos(Math.max(-1, Math.min(1, r.zv))) * 180) / Math.PI);
+    return t1 + PAUSE + SPLIT * unsmooth(log(r.zv) / last);
+  });
+  times.forEach((t, k) => {
+    if (k > 0 && !(t > times[k - 1])) throw new Error(`L${n}: the time of frame ${k}, ${t} s, does not follow the time of frame ${k - 1}, ${times[k - 1]} s`);
   });
   const plus = [], minus = [], rings = [];
   rows.forEach((r, frame) => {
@@ -117,16 +183,19 @@ function tab(n) {
   plus[0].text = 'halo';
   plus[1].text = 'axial';
   minus[0].text = 'period doubling';
+  // the faint line of the pair ends at -1, since the split along the real axis is drawn only as it
+  // is traced
   const v = rows.map((r) => pair(r.zv));
   return {
     name: `l${n}`,
     label: `$\\mathrm{L}_${n}$ family`,
     values: rows.map((r) => round(r.A)),
+    times: times.map((t) => round(t, 3)),
     data: {
       trivial: [[1, 0, 1, 0]],
       stable: rows.map((r) => [round(1 / r.lh, 5), 0]),
-      first: v.map(([p]) => p.map((x) => round(x))),
-      second: v.map(([, q]) => q.map((x) => round(x))),
+      first: { points: v.map(([p]) => p.map((x) => round(x))), ghost: doubling },
+      second: { points: v.map(([, q]) => q.map((x) => round(x))), ghost: doubling },
       unstable: { at: [2.25, 0.3], text: rows.map((r) => `$\\lambda_{\\mathrm{h}} = ${Math.round(r.lh)} \\to$`) },
       index: rows.map((r) => [round(r.A), round(r.zv)]),
       plus,
@@ -139,10 +208,11 @@ function tab(n) {
 
 const ticks = (a, b, s) => Array.from({ length: Math.round((b - a) / s) + 1 }, (_, i) => round(a + i * s));
 
+// the last frame is held for 3 s, and the next pass is then faded in over the default fade of 0.5 s
+// while the held frame is faded out
 const plot = {
   parameter: { label: '$A$', digits: 3 },
-  duration: 10,
-  hold: 1.5,
+  hold: 3,
   panels: [
     {
       id: 'plane',
@@ -200,5 +270,6 @@ const block = `<script type="application/json" id="multipliers">${JSON.stringify
 writeFileSync(file, `${html.slice(0, a + START.length)}\n${block}\n${html.slice(b)}`);
 for (const t of plot.tabs) {
   const crossings = [...t.data.plus, ...t.data.minus].map((e) => `${e.text} at A = ${e.at[0]}`).join(', ');
-  console.log(`${t.name}: ${t.values.length} frames from A = ${t.values[0]} to ${t.values.at(-1)}, ${crossings}`);
+  const at = [...t.data.plus, ...t.data.minus].map((e) => `${e.text} at ${t.times[e.frame]} s`).join(', ');
+  console.log(`${t.name}: ${t.values.length} frames from A = ${t.values[0]} to ${t.values.at(-1)} in ${t.times.at(-1)} s, ${crossings}, ${at}`);
 }

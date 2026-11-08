@@ -521,7 +521,8 @@
       };
     });
   }
-  function strandsOf(file, chosen, color, ramp2, shade) {
+  function strandsOf(file, chosen, color, ramp2, shade, map) {
+    if (map) shade = void 0;
     const along = shade ?? ramp2;
     const order = color ? [...new Set(file.families.map((r) => String(r[color])))] : [];
     const pairOf = (r) => color ? order.indexOf(String(r[color])) : 0;
@@ -546,11 +547,12 @@
       }
       const strand = { pts, times, T: times[n - 1] };
       if (r.craft === true) strand.craft = true;
-      if (color || along) {
+      if (color || along || map) {
         const pair2 = pairOf(r), [lo, hi] = range.get(pair2) ?? [0, 0], v = along ? r[along] : void 0;
         strand.ink = { pair: pair2, at: typeof v === "number" && hi > lo ? (v - lo) / (hi - lo) : 0 };
         if (shade) strand.ink.shade = true;
-        strand.alpha = INK_ALPHA;
+        if (map) strand.ink.map = map;
+        strand.alpha = map ? MAP_ALPHA : INK_ALPHA;
       }
       if (r.tone) strand.tone = r.tone;
       if (r.color !== void 0) strand.color = r.color;
@@ -562,25 +564,31 @@
       return strand;
     });
   }
+  var SAME = 1e-4;
   function bodiesOf(file, chosen) {
-    const places = /* @__PURE__ */ new Map(), dots = /* @__PURE__ */ new Map();
+    const apart = (a, b) => Math.hypot(a.x - b.x, a.y - b.y) > SAME;
+    let first = null;
     for (const r of chosen) {
+      const own = /* @__PURE__ */ new Map();
       for (const body of file.bodies) {
-        const own = Object.entries(body).filter(([, v]) => ["number", "string", "boolean"].includes(typeof v));
-        if (!own.every(([k, v]) => !(k in r) || r[k] === v)) continue;
+        const keys = Object.entries(body).filter(([, v]) => ["number", "string", "boolean"].includes(typeof v));
+        if (!keys.every(([k, v]) => !(k in r) || r[k] === v)) continue;
         const at = r.frame === void 0 ? body : body[String(r.frame)];
         if (!isObject(at)) continue;
         const mu = typeof body.mu === "number" ? body.mu : typeof r.mu === "number" ? r.mu : void 0;
         for (const [name, p] of Object.entries(at)) {
           if (!isPair(p)) continue;
-          const who = `${name} ${mu} ${r.frame}`;
-          places.set(who, (places.get(who) ?? /* @__PURE__ */ new Set()).add(`${p[0]},${p[1]}`));
-          const mass = mu === void 0 ? void 0 : name === "m1" ? 1 - mu : name === "m2" ? mu : void 0;
-          dots.set(who, { x: p[0], y: p[1], mass });
+          const dot2 = { x: p[0], y: p[1], mass: mu === void 0 ? void 0 : name === "m1" ? 1 - mu : name === "m2" ? mu : void 0 };
+          const was = own.get(name);
+          if (was && apart(was, dot2)) return [];
+          own.set(name, dot2);
         }
       }
+      const seen = first ?? own;
+      if (own.size !== seen.size || [...own].some(([name, d]) => !seen.has(name) || apart(seen.get(name), d))) return [];
+      first = seen;
     }
-    return [...dots].filter(([who]) => places.get(who)?.size === 1).map(([, dot2]) => dot2);
+    return first ? [...first.values()] : [];
   }
   function fitView(strands, box2, slide) {
     const xs = [], ys = [], ws = [];
@@ -660,12 +668,81 @@
     return hex(rgbFromLab([L, C * Math.cos(h), C * Math.sin(h)]));
   }
   var SHADES = 0.16;
-  function shadeOf(color, at) {
+  var CONTRAST = 2.5;
+  function contrastOver(c, bg, alpha = INK_ALPHA) {
+    const luminance = ([R, G, B]) => 0.2126 * linear(R) + 0.7152 * linear(G) + 0.0722 * linear(B);
+    const a = luminance(c.map((v, i) => alpha * v + (1 - alpha) * bg[i])), b = luminance(bg);
+    return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+  }
+  function shadeOf(color, at, bg) {
     const c = rgbOf(color);
     if (!c) return null;
     const [L, C, h] = lch(c);
-    const shaded = Math.min(0.95, Math.max(0.2, L + SHADES * (1 - 2 * at)));
-    return hex(rgbFromLab([shaded, C * Math.cos(h), C * Math.sin(h)]));
+    const shade = (l) => hex(rgbFromLab([l, C * Math.cos(h), C * Math.sin(h)]));
+    let light = Math.min(0.95, L + SHADES), dark = Math.max(0.2, L - SHADES);
+    const back = bg ? rgbOf(bg) : null;
+    if (back) {
+      const below = lch(back)[0] < L, near = below ? dark : light, far = below ? 0.95 : 0.2;
+      const keeps = (l) => contrastOver(rgbOf(shade(l)), back) >= CONTRAST;
+      if (!keeps(near) && keeps(far)) {
+        let a = near, b = far;
+        for (let i = 0; i < 30; i++) {
+          const m = (a + b) / 2;
+          if (keeps(m)) b = m;
+          else a = m;
+        }
+        if (below) [dark, light] = [b, Math.min(0.95, light + b - near)];
+        else [light, dark] = [b, Math.max(0.2, dark + b - near)];
+      }
+    }
+    return shade(light + (dark - light) * at);
+  }
+  var COLORMAPS = {
+    viridis: {
+      stops: ["#440154", "#48186a", "#472d7b", "#424086", "#3b528b", "#33638d", "#2c728e", "#26818e", "#21908c", "#1f9f88", "#28ae80", "#3ebc74", "#5dc963", "#82d34c", "#abdc32", "#d5e21a", "#fde725"],
+      ends: [0, 0.85]
+    },
+    plasma: {
+      stops: ["#0d0887", "#310596", "#4c02a1", "#6600a7", "#7e03a8", "#9511a2", "#a92396", "#bb3587", "#cb4778", "#d9596a", "#e66c5c", "#f07f4f", "#f89441", "#fdab33", "#fdc328", "#f9dd25", "#f0f921"],
+      ends: [0, 0.85]
+    },
+    Blues_r: {
+      stops: ["#08306b", "#084084", "#08519c", "#1461a9", "#2171b5", "#3282be", "#4292c6", "#56a0ce", "#6baed6", "#84bcdb", "#9ecae1", "#b2d2e8", "#c6dbef", "#d2e3f3", "#deebf7", "#eaf3fb", "#f7fbff"],
+      ends: [0, 0.683]
+    }
+  };
+  var MAP_CONTRAST = 3;
+  var MAP_ALPHA = 1;
+  function colormapOf(spec) {
+    const [name, ...ends] = spec.trim().split(/\s+/);
+    if (!Object.prototype.hasOwnProperty.call(COLORMAPS, name)) throw new Error(`"${name}" is not viridis, plasma, or Blues_r`);
+    const map = COLORMAPS[name];
+    if (!ends.length) return { name, lo: map.ends[0], hi: map.ends[1] };
+    const [lo, hi] = ends.map(Number);
+    if (ends.length !== 2 || !(lo >= 0 && lo < hi && hi <= 1)) {
+      throw new Error(`"${ends.join(" ")}" is not a lower and an upper end with 0 <= lower < upper <= 1`);
+    }
+    return { name, lo, hi };
+  }
+  function colormapAt(name, x) {
+    const stops = COLORMAPS[name].stops, n = stops.length - 1;
+    const u = Math.min(Math.max(x, 0), 1) * n, k = Math.min(Math.floor(u), n - 1);
+    const a = rgbOf(stops[k]), b = rgbOf(stops[k + 1]);
+    return hex(a.map((v, i) => v + (b[i] - v) * (u - k)));
+  }
+  function colormapEnds(map, bg) {
+    const back = bg ? rgbOf(bg) : null;
+    if (!back) return [map.lo, map.hi];
+    const keeps = (x) => contrastOver(rgbOf(colormapAt(map.name, x)), back, 1) >= MAP_CONTRAST;
+    const round = (x) => Math.round(x * 1e9) / 1e9;
+    let lo = map.lo, hi = map.hi;
+    for (let k = 1; !keeps(lo) && lo < hi; k++) lo = round(map.lo + k / 100);
+    for (let k = 1; !keeps(hi) && hi > lo; k++) hi = round(map.hi - k / 100);
+    return [Math.min(lo, hi), hi];
+  }
+  function colormapColor(map, at, bg) {
+    const [lo, hi] = colormapEnds(map, bg);
+    return colormapAt(map.name, lo + (hi - lo) * at);
   }
   function rgbOf(color) {
     const c = color.trim();
@@ -743,6 +820,20 @@
     }
     return out;
   }
+  function colormapFor(el) {
+    const spec = el.dataset.strandsColormap;
+    if (!spec?.trim()) return void 0;
+    let map;
+    try {
+      map = colormapOf(spec);
+    } catch (error) {
+      console.warn(`beeson: data-strands-colormap="${spec}" is not used, since ${error.message}. The strands are colored from the palette`);
+      return void 0;
+    }
+    if (el.dataset.strandsShade)
+      console.warn(`beeson: data-strands-shade="${el.dataset.strandsShade}" is ignored, since data-strands-colormap is given`);
+    return map;
+  }
   async function strandsFor(el) {
     const path = el.dataset.strands ?? "";
     const file = await load(path);
@@ -757,7 +848,8 @@
           chosen,
           el.dataset.strandsColor || void 0,
           el.dataset.strandsRamp || void 0,
-          el.dataset.strandsShade || void 0
+          el.dataset.strandsShade || void 0,
+          colormapFor(el)
         ),
         dots: bodiesOf(file, chosen)
       };
@@ -775,6 +867,7 @@
   var LOOP = 9;
   var HEADS = { full: 2.2, small: 0.55, none: 0 };
   var PALETTE = 8;
+  var TOLERANCE = 0.1;
   function accel(s, a) {
     const x = s[0], y = s[1], z = s[2];
     const dx1 = x + MU, dx2 = x - 1 + MU;
@@ -973,6 +1066,110 @@
     }
     return { pts, times: Float32Array.from(times), T: times[n - 1] };
   }
+  var curved = (ctl, j) => ctl !== null && !Number.isNaN(ctl[4 * j]);
+  function pathOf(px, tolerance = TOLERANCE) {
+    const n = px.length / 2;
+    const closed2 = n > 3 && Math.hypot(px[0] - px[2 * n - 2], px[1] - px[2 * n - 1]) < 0.5;
+    const mark = new Uint8Array(n);
+    mark[0] = mark[n - 1] = 1;
+    let ctl = null;
+    for (let j = 0; j < n - 1; j++) {
+      const x1 = px[2 * j], y1 = px[2 * j + 1], x2 = px[2 * j + 2], y2 = px[2 * j + 3];
+      let x0 = 2 * x1 - x2, y0 = 2 * y1 - y2, x3 = 2 * x2 - x1, y3 = 2 * y2 - y1;
+      if (j > 0) {
+        x0 = px[2 * j - 2];
+        y0 = px[2 * j - 1];
+      } else if (closed2) {
+        x0 = px[2 * n - 4];
+        y0 = px[2 * n - 3];
+      }
+      if (j < n - 2) {
+        x3 = px[2 * j + 4];
+        y3 = px[2 * j + 5];
+      } else if (closed2) {
+        x3 = px[2];
+        y3 = px[3];
+      }
+      const d1 = Math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2), d2 = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2), d3 = Math.sqrt((x3 - x2) ** 2 + (y3 - y2) ** 2);
+      if (!(d1 > 1e-6 && d2 > 1e-6 && d3 > 1e-6)) continue;
+      const s1 = Math.sqrt(d1), s2 = Math.sqrt(d2), s3 = Math.sqrt(d3);
+      const a = 2 * d1 + 3 * s1 * s2 + d2, b = 3 * s1 * (s1 + s2);
+      const e = 2 * d3 + 3 * s3 * s2 + d2, g = 3 * s3 * (s3 + s2);
+      const c1x = (d1 * x2 - d2 * x0 + a * x1) / b, c1y = (d1 * y2 - d2 * y0 + a * y1) / b;
+      const c2x = (d3 * x1 - d2 * x3 + e * x2) / g, c2y = (d3 * y1 - d2 * y3 + e * y2) / g;
+      const off = Math.max(Math.abs((c1x - x1) * (y2 - y1) - (c1y - y1) * (x2 - x1)), Math.abs((c2x - x1) * (y2 - y1) - (c2y - y1) * (x2 - x1))) / d2;
+      if (0.75 * off <= tolerance) continue;
+      if (!ctl) ctl = new Float32Array(4 * (n - 1)).fill(NaN);
+      ctl.set([c1x, c1y, c2x, c2y], 4 * j);
+      mark[j] = mark[j + 1] = 1;
+    }
+    const stack = [];
+    for (let a = 0, b = 1; b < n; b++) {
+      if (!mark[b]) continue;
+      if (b > a + 1) stack.push(a, b);
+      a = b;
+    }
+    const t2 = tolerance * tolerance;
+    while (stack.length) {
+      const b = stack.pop(), a = stack.pop();
+      const ax = px[2 * a], ay = px[2 * a + 1], dx = px[2 * b] - ax, dy = px[2 * b + 1] - ay, L = dx * dx + dy * dy;
+      let worst = t2, at = -1;
+      for (let k = a + 1; k < b; k++) {
+        const qx = px[2 * k] - ax, qy = px[2 * k + 1] - ay;
+        const u = L > 0 ? Math.min(1, Math.max(0, (qx * dx + qy * dy) / L)) : 0;
+        const d = (qx - u * dx) ** 2 + (qy - u * dy) ** 2;
+        if (d > worst) {
+          worst = d;
+          at = k;
+        }
+      }
+      if (at < 0) continue;
+      mark[at] = 1;
+      if (at > a + 1) stack.push(a, at);
+      if (b > at + 1) stack.push(at, b);
+    }
+    let count = 0;
+    for (let k = 0; k < n; k++) count += mark[k];
+    const keep = new Uint32Array(count);
+    for (let k = 0, m = 0; k < n; k++) if (mark[k]) keep[m++] = k;
+    return { px, keep, ctl };
+  }
+  function pointOn(path, j, f) {
+    const p = path.px, n = p.length / 2;
+    if (j >= n - 1) return [p[2 * n - 2], p[2 * n - 1]];
+    const x1 = p[2 * j], y1 = p[2 * j + 1], x2 = p[2 * j + 2], y2 = p[2 * j + 3];
+    if (!curved(path.ctl, j)) return [x1 + f * (x2 - x1), y1 + f * (y2 - y1)];
+    const c = path.ctl, k = 4 * j, g = 1 - f;
+    const w0 = g * g * g, w1 = 3 * g * g * f, w2 = 3 * g * f * f, w3 = f * f * f;
+    return [w0 * x1 + w1 * c[k] + w2 * c[k + 2] + w3 * x2, w0 * y1 + w1 * c[k + 1] + w2 * c[k + 3] + w3 * y2];
+  }
+  function trace(pen, path, j, f, from = 0) {
+    const { px: p, keep, ctl } = path, n = p.length / 2;
+    pen.moveTo(p[2 * from], p[2 * from + 1]);
+    let last = from, lo = 0, hi = keep.length;
+    while (lo < hi) {
+      const mid = lo + hi >> 1;
+      if (keep[mid] <= from) lo = mid + 1;
+      else hi = mid;
+    }
+    for (let k = lo; k < keep.length && keep[k] <= j; k++) {
+      const v = keep[k];
+      if (v === last + 1 && curved(ctl, last)) pen.bezierCurveTo(ctl[4 * last], ctl[4 * last + 1], ctl[4 * last + 2], ctl[4 * last + 3], p[2 * v], p[2 * v + 1]);
+      else pen.lineTo(p[2 * v], p[2 * v + 1]);
+      last = v;
+    }
+    if (j >= n - 1 || !(f > 0)) return;
+    if (last === j && curved(ctl, j)) {
+      const x1 = p[2 * j], y1 = p[2 * j + 1], k = 4 * j;
+      const ax = x1 + f * (ctl[k] - x1), ay = y1 + f * (ctl[k + 1] - y1);
+      const mx = ctl[k] + f * (ctl[k + 2] - ctl[k]), my = ctl[k + 1] + f * (ctl[k + 3] - ctl[k + 1]);
+      const [ex, ey] = pointOn(path, j, f);
+      pen.bezierCurveTo(ax, ay, ax + f * (mx - ax), ay + f * (my - ay), ex, ey);
+    } else {
+      const [x, y] = pointOn(path, j, f);
+      pen.lineTo(x, y);
+    }
+  }
   var POINTS = {
     L1: () => [lagrange(1), 0],
     L2: () => [lagrange(2), 0],
@@ -990,7 +1187,9 @@
       this.H = 0;
       this.scale = 1;
       this.lw = 1;
-      this.px = [];
+      this.paths = [];
+      // the scale and window for which the paths were last computed
+      this.pathsFor = "";
       // the pointer in canvas pixels, and the glow radius there
       this.pointer = null;
       // the box and the slide for which the window was last fitted, in slide pixels
@@ -1046,6 +1245,7 @@
       this.idx = strands.map(() => 0);
       this.loaded = true;
       this.fittedFor = "";
+      this.pathsFor = "";
       this.fit();
       if (this.pending) {
         this.pending = false;
@@ -1103,17 +1303,20 @@
         return;
       }
       const cs = getComputedStyle(this.el);
-      const palette = Array.from({ length: PALETTE }, (_, i) => {
-        const value = cs.getPropertyValue(`--strand-${i + 1}`).trim();
+      const color = (name) => {
+        const value = cs.getPropertyValue(name).trim();
         if (!value) return "";
         ctx.fillStyle = "#000000";
         ctx.fillStyle = value;
         return String(ctx.fillStyle);
-      });
+      };
+      const palette = Array.from({ length: PALETTE }, (_, i) => color(`--strand-${i + 1}`));
+      const bg = color("--bg") || void 0;
       this.inks = this.strands.map((s) => {
         if (!s.ink) return "";
+        if (s.ink.map) return colormapColor(s.ink.map, s.ink.at, bg);
         const k = 2 * s.ink.pair % PALETTE;
-        return (s.ink.shade ? shadeOf(palette[k], s.ink.at) : mix(palette[k], palette[k + 1], s.ink.at)) ?? c.stroke;
+        return (s.ink.shade ? shadeOf(palette[k], s.ink.at, bg) : mix(palette[k], palette[k + 1], s.ink.at)) ?? c.stroke;
       });
     }
     X(x) {
@@ -1131,11 +1334,11 @@
         const section = this.el.closest("section");
         const box2 = { left: this.el.offsetLeft, top: this.el.offsetTop, width: w, height: h };
         const slide = { width: section?.offsetWidth || w, height: section?.offsetHeight || h };
-        const key = [box2.left, box2.top, w, h, slide.width, slide.height].join();
-        if (key !== this.fittedFor) {
+        const key2 = [box2.left, box2.top, w, h, slide.width, slide.height].join();
+        if (key2 !== this.fittedFor) {
           const view = fitView(this.strands, box2, slide);
           if (view) ({ cx: this.cx, cy: this.cy, half: this.half } = view);
-          this.fittedFor = key;
+          this.fittedFor = key2;
         }
       }
       this.W = Math.max(1, Math.round(r.width * dpr));
@@ -1146,14 +1349,18 @@
       }
       this.scale = this.H / 2 / this.half;
       this.lw = Math.max(1, 0.7 * dpr * (r.height / h));
-      this.px = this.strands.map((s) => {
-        const n = s.times.length, out = new Float32Array(2 * n);
-        for (let i = 0; i < n; i++) {
-          out[2 * i] = this.X(s.pts[2 * i]);
-          out[2 * i + 1] = this.Y(s.pts[2 * i + 1]);
-        }
-        return out;
-      });
+      const key = [this.W, this.H, this.cx, this.cy, this.half].join();
+      if (key !== this.pathsFor) {
+        this.paths = this.strands.map((s) => {
+          const n = s.times.length, out = new Float32Array(2 * n);
+          for (let i = 0; i < n; i++) {
+            out[2 * i] = this.X(s.pts[2 * i]);
+            out[2 * i + 1] = this.Y(s.pts[2 * i + 1]);
+          }
+          return pathOf(out);
+        });
+        this.pathsFor = key;
+      }
       const k = h / 2 / this.half;
       for (const lab of this.labels) {
         const at = lab.dataset.at;
@@ -1202,36 +1409,35 @@
       ctx.strokeStyle = s.color ? typeof s.color === "string" ? s.color : s.color[c.light ? 1 : 0] : s.ink ? inks[i] : tone === "orange" || tone === "hero" ? c.accent : tone === "violet" ? c.violet : tone === "text" || tone === "line" ? c.text : c.stroke;
       ctx.globalAlpha = s.alpha ?? (tone === "orange" || tone === "violet" ? 0.42 : tone === "text" ? 0.8 : tone === "line" ? 0.36 : 1);
       ctx.lineWidth = (tone === "hero" ? 2.2 : tone === "text" ? 1.3 : 1) * (s.weight ?? 1) * this.lw;
+      ctx.lineJoin = "round";
       ctx.shadowBlur = s.glow ? 6 * this.lw : 0;
       if (s.glow) ctx.shadowColor = ctx.strokeStyle;
     }
-    // the segments from to to of strand i, at the opacity of the pen up to its fade, and beyond it in
-    // bands of equal time whose opacity falls to zero at its last point
-    segments(ctx, i, from, to) {
-      const p = this.px[i], s = this.strands[i];
-      if (to <= from) return;
-      const path = (a2, b) => {
-        if (b <= a2) return;
+    // strokes strand i up to the fraction f of its segment from point j to j + 1. up to its fade, the
+    // strand is stroked in one path, since two strokes of one strand at an opacity below 1 overlap or
+    // leave a gap at their joint. beyond its fade, it is stroked in bands of equal time, which begin
+    // and end at its points, at an opacity that falls to zero at its last point
+    stroke(ctx, i, j, f) {
+      const s = this.strands[i], path = this.paths[i];
+      const part = (a2, b, g) => {
         ctx.beginPath();
-        ctx.moveTo(p[2 * a2], p[2 * a2 + 1]);
-        for (let j = a2 + 1; j <= b; j++) ctx.lineTo(p[2 * j], p[2 * j + 1]);
+        trace(ctx, path, b, g, a2);
         ctx.stroke();
       };
-      if (s.fade === void 0) return path(from, to);
-      const fadeAt = s.times[0] + s.fade, span = s.T - fadeAt;
-      let a = from;
-      while (a < to && s.times[a + 1] <= fadeAt) a++;
-      path(from, a);
-      if (!(span > 0)) return path(a, to);
+      const fadeAt = s.times[0] + (s.fade ?? Infinity), span = s.T - fadeAt;
+      let a = 0;
+      while (a < j && s.times[a + 1] <= fadeAt) a++;
+      if (a === j || !(span > 0)) return part(0, j, f);
+      if (a > 0) part(0, a, 0);
       const base = ctx.globalAlpha;
-      for (let b = 0; b < FADE_BANDS && a < to; b++) {
+      for (let b = 0; b < FADE_BANDS && a < j; b++) {
         const until = fadeAt + (b + 1) * span / FADE_BANDS;
         let c = a;
-        while (c < to && s.times[c + 1] <= until) c++;
-        if (b === FADE_BANDS - 1) c = to;
+        while (c < j && s.times[c + 1] <= until) c++;
+        if (b === FADE_BANDS - 1) c = j;
         if (c > a) {
           ctx.globalAlpha = base * (1 - (b + 0.5) / FADE_BANDS) ** 2;
-          path(a, c);
+          part(a, c, c === j ? f : 0);
         }
         a = c;
       }
@@ -1241,24 +1447,48 @@
     drawn(i) {
       return this.done ? this.strands[i].times.length - 1 : this.idx[i];
     }
+    // true between the start and the end of a trace that is not a loop
+    get midTrace() {
+      return !this.loop && this.t0 !== null && !this.finished;
+    }
+    // the fraction of the segment of strand i from point j to j + 1 reached at the flight time tau
+    fraction(i, j, tau) {
+      const t = this.strands[i].times, dt = t[j + 1] - t[j];
+      return dt > 0 ? Math.min(1, Math.max(0, (tau - t[j]) / dt)) : 1;
+    }
+    // draws the bodies and the strands on the base canvas for the current mode
     redraw() {
       if (!this.W) return;
       const ctx = this.base.getContext("2d");
       if (!ctx) return;
-      const c = this.colors();
-      ctx.clearRect(0, 0, this.W, this.H);
+      const c = this.colors(), now = performance.now();
       this.paint(ctx, c);
-      ctx.lineWidth = this.lw;
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = c.stroke;
+      this.draw(ctx, c, now);
+      this.paintHead(now, c);
+    }
+    // draws the bodies and every strand, a finished strand whole and a strand in its trace up to its
+    // head at the time now. the strands are stroked in the order of their file or scene at every
+    // frame, the order of the still, hence the last frame of a trace is its still apart from the heads
+    draw(ctx, c, now, inks = this.inks) {
+      ctx.globalAlpha = 1;
+      ctx.shadowBlur = 0;
+      ctx.clearRect(0, 0, this.W, this.H);
       this.bodies(ctx, c);
-      this.strands.forEach((_, i) => {
-        this.pen(ctx, c, i);
-        this.segments(ctx, i, 0, this.drawn(i));
+      const tracing = this.midTrace;
+      this.strands.forEach((s, i) => {
+        const n = s.times.length, j = this.drawn(i);
+        if (j < n - 1) {
+          const tau = this.clock(i, now);
+          if (!tracing || !(tau > s.times[0])) return;
+          this.pen(ctx, c, i, inks);
+          this.stroke(ctx, i, j, this.fraction(i, j, tau));
+          return;
+        }
+        this.pen(ctx, c, i, inks);
+        this.stroke(ctx, i, n - 1, 0);
       });
       ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;
-      this.paintHead(performance.now(), c);
     }
     reset() {
       this.unghost();
@@ -1331,7 +1561,7 @@
       if (this.pointer) this.glowing(ctx, c);
     }
     loopHead(ctx, c, now) {
-      const s = this.strands[0], p = this.px[0], n = s.times.length;
+      const s = this.strands[0], p = this.paths[0].px, n = s.times.length;
       const tau = this.raf && this.t0 !== null ? (now - this.t0) / 1e3 % LOOP / LOOP * s.T : this.finished ? 0.37 * s.T : 0;
       let j = 0;
       while (j < n - 1 && s.times[j + 1] <= tau) j++;
@@ -1398,19 +1628,23 @@
       ctx.lineCap = "round";
       ctx.beginPath();
       this.strands.forEach((_, i) => {
-        const p = this.px[i], last = this.drawn(i);
+        const { px: p, ctl } = this.paths[i], last = this.drawn(i);
+        const to = (j) => {
+          if (curved(ctl, j - 1)) ctx.bezierCurveTo(ctl[4 * j - 4], ctl[4 * j - 3], ctl[4 * j - 2], ctl[4 * j - 1], p[2 * j], p[2 * j + 1]);
+          else ctx.lineTo(p[2 * j], p[2 * j + 1]);
+        };
         let pen = false;
         for (let j = 0; j <= last; j++) {
           const dx = p[2 * j] - g.x, dy = p[2 * j + 1] - g.y;
           if (dx * dx + dy * dy <= r2) {
-            if (pen) ctx.lineTo(p[2 * j], p[2 * j + 1]);
+            if (pen) to(j);
             else if (j > 0) {
               ctx.moveTo(p[2 * j - 2], p[2 * j - 1]);
-              ctx.lineTo(p[2 * j], p[2 * j + 1]);
+              to(j);
             } else ctx.moveTo(p[0], p[1]);
             pen = true;
           } else if (pen) {
-            ctx.lineTo(p[2 * j], p[2 * j + 1]);
+            to(j);
             pen = false;
           }
         }
@@ -1418,11 +1652,9 @@
       ctx.stroke();
       ctx.globalAlpha = 1;
     }
+    // the point of strand i at the flight time tau, on its segment from point j to j + 1
     at(i, j, tau) {
-      const s = this.strands[i], p = this.px[i], n = s.times.length;
-      if (j >= n - 1) return [p[2 * (n - 1)], p[2 * (n - 1) + 1]];
-      const f = Math.min(1, Math.max(0, (tau - s.times[j]) / (s.times[j + 1] - s.times[j])));
-      return [p[2 * j] + f * (p[2 * j + 2] - p[2 * j]), p[2 * j + 1] + f * (p[2 * j + 3] - p[2 * j + 1])];
+      return pointOn(this.paths[i], j, j < this.strands[i].times.length - 1 ? this.fraction(i, j, tau) : 0);
     }
     frame(now) {
       if (this.loop || !this.W) {
@@ -1431,30 +1663,18 @@
       }
       const ctx = this.base.getContext("2d");
       if (!ctx) return;
-      const c = this.colors(), ghost = this.ghosted, gtx = ghost?.base.getContext("2d");
-      for (const g of [ctx, gtx]) if (g) {
-        g.lineWidth = this.lw;
-        g.lineJoin = "round";
-      }
       let flying = 0;
       this.strands.forEach((s, i) => {
         const n = s.times.length, tau = this.clock(i, now);
         let j = this.idx[i];
         while (j < n - 1 && s.times[j + 1] <= tau) j++;
-        this.pen(ctx, c, i);
-        this.segments(ctx, i, this.idx[i], j);
-        if (ghost && gtx) {
-          this.pen(gtx, ghost.c, i, ghost.inks);
-          this.segments(gtx, i, this.idx[i], j);
-        }
         this.idx[i] = j;
         if (j < n - 1) flying++;
       });
-      for (const g of [ctx, gtx]) if (g) {
-        g.globalAlpha = 1;
-        g.shadowBlur = 0;
-      }
       if (flying === 0) this.finished = true;
+      const c = this.colors(), ghost = this.ghosted, gtx = ghost?.base.getContext("2d");
+      this.draw(ctx, c, now);
+      if (ghost && gtx) this.draw(gtx, ghost.c, now, ghost.inks);
       this.paintHead(now, c);
     }
   };
@@ -1689,9 +1909,12 @@
       return a;
     }
     if (m.kind === "trace") {
-      const a = pairs(v, path);
-      perFrame(a.length);
-      return a;
+      const given2 = isObject2(v) ? v : { points: v };
+      const points = pairs(given2.points, isObject2(v) ? `${path}.points` : path);
+      perFrame(points.length);
+      const ghost = num(given2.ghost, `${path}.ghost`, points.length - 1);
+      if (!Number.isInteger(ghost) || ghost < 0 || ghost > points.length - 1) fail(`${path}.ghost`, `a frame from 0 to ${points.length - 1} is expected`);
+      return { points, ghost };
     }
     if (m.kind === "label") {
       if (!isObject2(v)) fail(path, "a label { at, text } is expected");
@@ -1752,6 +1975,13 @@
         const m = marks.find((mark) => mark.id === key) ?? fail(`${p}.data.${key}`, "the mark is not declared");
         data[key] = markData(m, raw[key], values.length, `${p}.data.${key}`);
       }
+      let times = null;
+      if (t.times !== void 0) {
+        const given3 = list(t.times, `${p}.times`).map((x, j) => num(x, `${p}.times[${j}]`));
+        if (given3.length !== values.length) fail(`${p}.times`, `${given3.length} times are given, and the tab has ${values.length} values`);
+        if (given3[0] !== 0 || given3.some((x, j) => j > 0 && !(x > given3[j - 1]))) fail(`${p}.times`, "times that increase from 0 are expected");
+        times = given3;
+      }
       let active = null;
       if (t.active !== void 0) {
         active = list(t.active, `${p}.active`).map((f, j) => typeof f === "string" ? [f] : list(f, `${p}.active[${j}]`).map((s, k) => str(s, `${p}.active[${j}][${k}]`)));
@@ -1764,7 +1994,7 @@
         if (!ids.has(key)) fail(`${p}.panels.${key}`, `the panel ${key} is not declared`);
         patches[key] = patch(given2[key], `${p}.panels.${key}`);
       }
-      return { name, label: str(t.label, `${p}.label`, name), values, data, active, panels: patches };
+      return { name, label: str(t.label, `${p}.label`, name), values, times, data, active, panels: patches };
     });
     if (!tabs.length) fail("tabs", "at least one tab is expected");
     const parameter = isObject2(v.parameter) ? v.parameter : {};
@@ -1774,6 +2004,7 @@
       parameter: { label: str(parameter.label, "parameter.label", ""), digits: num(parameter.digits, "parameter.digits", 3) },
       duration: num(v.duration, "duration", 8),
       hold: num(v.hold, "hold", 1),
+      fade: num(v.fade, "fade", 0.5),
       layout,
       panels,
       marks,
@@ -1804,10 +2035,41 @@
     if (f > 0 && i < n - 1) out.push([path[i][0] + f * (path[i + 1][0] - path[i][0]), path[i][1] + f * (path[i + 1][1] - path[i][1])]);
     return out;
   }
-  function loopFrame(t, n, duration, hold) {
+  function passLength(n, duration, times) {
+    return times ? times[n - 1] : duration;
+  }
+  function timeAt(u, n, duration, times) {
     if (n < 2) return 0;
-    const tau = (t % (duration + hold) + duration + hold) % (duration + hold);
-    return Math.min(1, tau / duration) * (n - 1);
+    const v = clamp(u, 0, n - 1);
+    if (!times) return v / (n - 1) * duration;
+    const i = Math.min(n - 2, Math.floor(v));
+    return times[i] + (v - i) * (times[i + 1] - times[i]);
+  }
+  function frameAt(tau, n, duration, times) {
+    if (n < 2) return 0;
+    if (!times) return clamp(tau / duration, 0, 1) * (n - 1);
+    if (!(tau > 0)) return 0;
+    if (tau >= times[n - 1]) return n - 1;
+    let lo = 0, hi = n - 1;
+    while (hi - lo > 1) {
+      const m = lo + hi >> 1;
+      if (times[m] <= tau) lo = m;
+      else hi = m;
+    }
+    return lo + (tau - times[lo]) / (times[lo + 1] - times[lo]);
+  }
+  function loopFrame(t, n, duration, hold, times = null) {
+    if (n < 2) return 0;
+    const period = passLength(n, duration, times) + hold;
+    const tau = (t % period + period) % period;
+    return frameAt(tau, n, duration, times);
+  }
+  function loopFade(t, length, hold, fade) {
+    const f = Math.min(fade, length), period = length + hold;
+    if (!(f > 0) || !(period > 0) || t < 0) return 1;
+    const pass = Math.floor(t / period), tau = t - pass * period;
+    const a = pass > 0 && tau < f ? tau / f : 1;
+    return a * a * (3 - 2 * a);
   }
   var MINUS = "\u2212";
   function formatNumber(x, digits) {
@@ -1989,6 +2251,15 @@
       this.gated = [];
       this.emphasized = [];
       this.drawers = [];
+      // the opacity of the moving marks, below 1 while they are faded at the restart of the loop, and
+      // the groups and labels of these marks
+      this.fade = 1;
+      this.faders = [];
+      this.fadeLabels = [];
+      // copies of the faders and of their labels at the last frame, faded out at 1 - fade while the next
+      // pass is faded in, and the number of the pass of the loop drawn last
+      this.held = [];
+      this.pass = 0;
       this.eventFrames = [];
       // the ids named in the active list of any tab, which are dimmed while another id is active
       this.emphasis = /* @__PURE__ */ new Set();
@@ -2031,6 +2302,17 @@
     }
     get frames() {
       return this.plot.tabs[this.tab].values.length;
+    }
+    // the seconds of a pass over the frames of the tab shown
+    get length() {
+      return passLength(this.frames, this.plot.duration, this.plot.tabs[this.tab].times);
+    }
+    // the seconds into a pass at the fractional frame u of the tab shown, and the inverse
+    timeOf(u) {
+      return timeAt(u, this.frames, this.plot.duration, this.plot.tabs[this.tab].times);
+    }
+    frameOf(tau) {
+      return frameAt(tau, this.frames, this.plot.duration, this.plot.tabs[this.tab].times);
     }
     build() {
       const plot = this.plot;
@@ -2084,7 +2366,7 @@
       const seek = (ev) => {
         const r = this.scrub.getBoundingClientRect();
         if (!r.width) return;
-        this.u = clamp((ev.clientX - r.left) / r.width, 0, 1) * (this.frames - 1);
+        this.u = this.frameOf(clamp((ev.clientX - r.left) / r.width, 0, 1) * this.length);
         this.draw();
       };
       this.scrub.addEventListener("pointerdown", (ev) => {
@@ -2264,6 +2546,9 @@
       this.gated = this.gated.filter((e) => e.node.isConnected);
       this.drawers = [];
       this.eventFrames = [];
+      this.faders = [];
+      this.fadeLabels = [];
+      this.held = [];
       const tab = this.plot.tabs[this.tab];
       for (const m of this.plot.marks) {
         const b = this.boxes.get(m.panel), data = tab.data[m.id];
@@ -2271,12 +2556,18 @@
         if (!b || !g || data === void 0) continue;
         const group2 = svg("g", {}, g);
         this.styleItem(group2, m, [m.panel, m.id]);
+        const moving = m.kind === "events" || (m.kind === "label" ? data.at.length > 1 || data.text.length > 1 : (m.kind === "trace" ? data.points : data).length > 1);
+        const fader = moving ? svg("g", {}, group2) : group2;
+        if (moving) {
+          fader.style.transition = "none";
+          this.faders.push(fader);
+        }
         if (m.kind === "points") {
           const frames = data.map((f) => f.map((v, k) => scaled(k % 2 ? b.panel.y : b.panel.x, v)));
           const dots = [];
           this.drawers.push((u) => {
             const at = framesAt(frames, u);
-            while (dots.length < at.length / 2) dots.push(svg("circle", { r: m.size / 2, class: m.hollow ? "plot-hollow" : "plot-dot", "stroke-width": m.width }, group2));
+            while (dots.length < at.length / 2) dots.push(svg("circle", { r: m.size / 2, class: m.hollow ? "plot-hollow" : "plot-dot", "stroke-width": m.width }, fader));
             dots.forEach((d, k) => {
               const on = 2 * k < at.length;
               d.style.display = on ? "" : "none";
@@ -2287,10 +2578,11 @@
             });
           });
         } else if (m.kind === "trace") {
-          const pts = data.map((q) => this.toAxes(b, q));
-          if (m.ghost) svg("path", { class: "plot-ghost", d: this.pathS(b, pts), "stroke-width": m.width }, group2);
-          const done = svg("path", { class: "plot-trace", "stroke-width": m.width }, group2);
-          const head = svg("circle", { class: "plot-dot", r: m.size / 2 }, group2);
+          const { points, ghost } = data, pts = points.map((q) => this.toAxes(b, q));
+          if (m.ghost && ghost > 0) svg("path", { class: "plot-ghost", d: this.pathS(b, pts.slice(0, ghost + 1)), "stroke-width": m.width }, group2);
+          if (fader !== group2) group2.append(fader);
+          const done = svg("path", { class: "plot-trace", "stroke-width": m.width }, fader);
+          const head = svg("circle", { class: "plot-dot", r: m.size / 2 }, fader);
           this.drawers.push((u) => {
             const p = traceTo(pts, u), [x, y] = p[p.length - 1];
             done.setAttribute("d", this.pathS(b, p));
@@ -2301,6 +2593,7 @@
           const d = data, at = d.at.map((q) => this.toAxes(b, q));
           const el = this.label(d.text[0], 0, 0, m.anchor, "plot-mark", [m.panel, m.id], m.tone);
           el.classList.add(...m.cls);
+          if (moving) this.fadeLabels.push(el);
           let shown = d.text[0];
           this.drawers.push((u) => {
             const [x, y] = at.length === 1 ? at[0] : framesAt(at, u);
@@ -2315,9 +2608,10 @@
           const events = data;
           const nodes = events.map((e) => {
             const X = this.X(b, e.at[0]), Y = this.Y(b, e.at[1]);
-            const ring = svg("circle", { class: "plot-ring", cx: X, cy: Y, r: m.size / 2, "stroke-width": m.width }, group2);
+            const ring = svg("circle", { class: "plot-ring", cx: X, cy: Y, r: m.size / 2, "stroke-width": m.width }, fader);
             const text = e.text ? this.label(e.text, X + m.dx, Y + m.dy, m.anchor, "plot-mark", [m.panel, m.id], m.tone) : null;
             text?.classList.add(...m.cls);
+            if (text) this.fadeLabels.push(text);
             this.eventFrames.push({ frame: e.frame, names: [m.panel, m.id], tone: m.tone });
             return { frame: e.frame, nodes: [ring, text].filter((n) => !!n) };
           });
@@ -2333,8 +2627,15 @@
       if (!this.spec || !this.W) return;
       const tab = this.plot.tabs[this.tab], u = this.u, n = this.frames;
       for (const d of this.drawers) d(u);
+      for (const f of this.faders) f.style.opacity = this.fade < 1 ? String(this.fade) : "";
+      for (const el of this.fadeLabels) el.style.filter = this.fade < 1 ? `opacity(${Math.max(0, 2 * this.fade - 1)})` : "";
+      for (const node of this.held) {
+        if (node instanceof HTMLElement) node.style.filter = `opacity(${Math.max(0, 1 - 2 * this.fade)})`;
+        else node.style.opacity = String(1 - this.fade);
+      }
       this.value.textContent = formatNumber(valueAt(tab.values, u), this.plot.parameter.digits);
-      const at = `${(n > 1 ? u / (n - 1) : 0) * 100}%`;
+      const length = this.length;
+      const at = `${(length > 0 ? this.timeOf(u) / length : 0) * 100}%`;
       this.fill.style.width = at;
       this.knob.style.left = at;
       if (tab.active) {
@@ -2344,6 +2645,25 @@
           node.classList.toggle("plot-off", this.emphasis.has(id) && !on.includes(id));
         }
       } else for (const { node } of this.emphasized) node.classList.remove("plot-on", "plot-off");
+    }
+    // copies the moving marks at the last frame of the tab before the first frame of the next pass is
+    // drawn, so that the held frame is faded out while the next pass is faded in
+    holdLast() {
+      this.release();
+      for (const d of this.drawers) d(this.frames - 1);
+      for (const node of [...this.faders, ...this.fadeLabels]) {
+        const copy = node.cloneNode(true);
+        node.before(copy);
+        this.held.push(copy);
+        const gate = this.gated.find((g) => g.node === node);
+        if (gate) this.gated.push({ node: copy, names: gate.names });
+      }
+    }
+    release() {
+      if (!this.held.length) return;
+      for (const node of this.held) node.remove();
+      this.held = [];
+      this.gated = this.gated.filter((g) => g.node.isConnected);
     }
     hidden(names) {
       return names.some((s) => this.steps.has(s) && !this.shown.has(s));
@@ -2355,11 +2675,11 @@
         b.classList.toggle("plot-hidden", off);
         b.disabled = off;
       }
-      const n = this.frames;
+      const length = this.length;
       this.ticks.replaceChildren(...this.eventFrames.filter((e) => !this.hidden(e.names)).map((e) => {
         const t = document.createElement("div");
         t.className = "plot-tick-mark";
-        t.style.left = `${(n > 1 ? e.frame / (n - 1) : 0) * 100}%`;
+        t.style.left = `${(length > 0 ? this.timeOf(e.frame) / length : 0) * 100}%`;
         t.style.background = toneColor(e.tone);
         return t;
       }));
@@ -2401,6 +2721,9 @@
       this.markTabs();
       this.u = this.raf ? 0 : this.stillFrame();
       this.t0 = performance.now();
+      this.fade = 1;
+      this.pass = 0;
+      this.release();
       if (!this.W) return;
       this.layout();
       this.drawStatic();
@@ -2440,11 +2763,19 @@
     }
     play() {
       if (!this.spec || this.raf) return;
-      const { duration } = this.plot, n = this.frames;
-      if (this.u >= n - 1) this.u = 0;
-      this.t0 = performance.now() - (n > 1 ? this.u / (n - 1) : 0) * duration * 1e3;
+      if (this.u >= this.frames - 1) this.u = 0;
+      this.t0 = performance.now() - this.timeOf(this.u) * 1e3;
+      this.pass = 0;
       const tick = (now) => {
-        this.u = loopFrame((now - this.t0) / 1e3, this.frames, this.plot.duration, this.plot.hold);
+        const t = (now - this.t0) / 1e3, { duration, hold, fade } = this.plot, length = this.length;
+        const pass = length + hold > 0 ? Math.floor(t / (length + hold)) : 0;
+        if (pass !== this.pass) {
+          this.pass = pass;
+          if (fade > 0) this.holdLast();
+        }
+        this.u = loopFrame(t, this.frames, duration, hold, this.plot.tabs[this.tab].times);
+        this.fade = loopFade(t, length, hold, fade);
+        if (this.fade >= 1) this.release();
         this.draw();
         this.raf = requestAnimationFrame(tick);
       };
@@ -2455,6 +2786,11 @@
       if (this.raf) cancelAnimationFrame(this.raf);
       this.raf = 0;
       this.setPlaying(false);
+      if (this.fade < 1 || this.held.length) {
+        this.fade = 1;
+        this.release();
+        this.draw();
+      }
     }
     get playing() {
       return this.raf !== 0;

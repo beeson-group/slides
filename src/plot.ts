@@ -27,9 +27,12 @@ export type Mark = Item & { id: string; panel: string; kind: Kind; size: number;
 export type PlotEvent = { frame: number; at: Pair; text: string };
 // a label mark with one position or one text is held there for every frame
 export type LabelData = { at: Pair[]; text: string[] };
-export type MarkData = number[][] | Pair[] | LabelData | PlotEvent[];
-export type Tab = { name: string; label: string; values: number[]; data: Record<string, MarkData>; active: string[][] | null; panels: Record<string, PanelPatch> };
-export type Plot = { parameter: { label: string; digits: number }; duration: number; hold: number; layout: 'row' | 'column' | null; panels: Panel[]; marks: Mark[]; tabs: Tab[] };
+// the path of a trace, whose faint line is drawn from the first frame to the frame ghost
+export type TraceData = { points: Pair[]; ghost: number };
+export type MarkData = number[][] | TraceData | LabelData | PlotEvent[];
+// times, when given, are the seconds into a pass at which the frames of a tab are shown
+export type Tab = { name: string; label: string; values: number[]; times: number[] | null; data: Record<string, MarkData>; active: string[][] | null; panels: Record<string, PanelPatch> };
+export type Plot = { parameter: { label: string; digits: number }; duration: number; hold: number; fade: number; layout: 'row' | 'column' | null; panels: Panel[]; marks: Mark[]; tabs: Tab[] };
 
 const KINDS: Kind[] = ['points', 'trace', 'label', 'events'];
 const PATCH = ['x', 'y', 'title', 'regions', 'curves', 'labels'];
@@ -180,9 +183,13 @@ function markData(m: Mark, v: unknown, frames: number, path: string): MarkData {
     return a;
   }
   if (m.kind === 'trace') {
-    const a = pairs(v, path);
-    perFrame(a.length);
-    return a;
+    // a list of points, or { points, ghost } with the last frame of the faint line
+    const given = isObject(v) ? v : { points: v };
+    const points = pairs(given.points, isObject(v) ? `${path}.points` : path);
+    perFrame(points.length);
+    const ghost = num(given.ghost, `${path}.ghost`, points.length - 1);
+    if (!Number.isInteger(ghost) || ghost < 0 || ghost > points.length - 1) fail(`${path}.ghost`, `a frame from 0 to ${points.length - 1} is expected`);
+    return { points, ghost };
   }
   if (m.kind === 'label') {
     if (!isObject(v)) fail(path, 'a label { at, text } is expected');
@@ -245,6 +252,13 @@ export function parsePlot(input: unknown): Plot {
       const m = marks.find((mark) => mark.id === key) ?? fail(`${p}.data.${key}`, 'the mark is not declared');
       data[key] = markData(m, raw[key], values.length, `${p}.data.${key}`);
     }
+    let times: number[] | null = null;
+    if (t.times !== undefined) {
+      const given = list(t.times, `${p}.times`).map((x, j) => num(x, `${p}.times[${j}]`));
+      if (given.length !== values.length) fail(`${p}.times`, `${given.length} times are given, and the tab has ${values.length} values`);
+      if (given[0] !== 0 || given.some((x, j) => j > 0 && !(x > given[j - 1]))) fail(`${p}.times`, 'times that increase from 0 are expected');
+      times = given;
+    }
     let active: string[][] | null = null;
     if (t.active !== undefined) {
       active = list(t.active, `${p}.active`).map((f, j) => (typeof f === 'string' ? [f] : list(f, `${p}.active[${j}]`).map((s, k) => str(s, `${p}.active[${j}][${k}]`))));
@@ -257,7 +271,7 @@ export function parsePlot(input: unknown): Plot {
       if (!ids.has(key)) fail(`${p}.panels.${key}`, `the panel ${key} is not declared`);
       patches[key] = patch(given[key], `${p}.panels.${key}`);
     }
-    return { name, label: str(t.label, `${p}.label`, name), values, data, active, panels: patches };
+    return { name, label: str(t.label, `${p}.label`, name), values, times, data, active, panels: patches };
   });
   if (!tabs.length) fail('tabs', 'at least one tab is expected');
   const parameter = isObject(v.parameter) ? v.parameter : {};
@@ -267,6 +281,7 @@ export function parsePlot(input: unknown): Plot {
     parameter: { label: str(parameter.label, 'parameter.label', ''), digits: num(parameter.digits, 'parameter.digits', 3) },
     duration: num(v.duration, 'duration', 8),
     hold: num(v.hold, 'hold', 1),
+    fade: num(v.fade, 'fade', 0.5),
     layout,
     panels,
     marks,
@@ -307,11 +322,50 @@ export function traceTo(path: Pair[], u: number): Pair[] {
   return out;
 }
 
-/** The fractional frame at t seconds into a loop that runs over n frames in duration seconds and then holds the last frame for hold seconds. */
-export function loopFrame(t: number, n: number, duration: number, hold: number): number {
+/** The seconds of a pass over the n frames of a tab: its last time, or duration for a tab without times. */
+export function passLength(n: number, duration: number, times: number[] | null): number {
+  return times ? times[n - 1] : duration;
+}
+
+/** The seconds into a pass at the fractional frame u of n frames, shown at their times, or at even steps over duration without times. */
+export function timeAt(u: number, n: number, duration: number, times: number[] | null): number {
   if (n < 2) return 0;
-  const tau = ((t % (duration + hold)) + duration + hold) % (duration + hold);
-  return Math.min(1, tau / duration) * (n - 1);
+  const v = clamp(u, 0, n - 1);
+  if (!times) return (v / (n - 1)) * duration;
+  const i = Math.min(n - 2, Math.floor(v));
+  return times[i] + (v - i) * (times[i + 1] - times[i]);
+}
+
+/** The fractional frame of n frames shown at tau seconds into a pass, the inverse of timeAt. */
+export function frameAt(tau: number, n: number, duration: number, times: number[] | null): number {
+  if (n < 2) return 0;
+  if (!times) return clamp(tau / duration, 0, 1) * (n - 1);
+  if (!(tau > 0)) return 0;
+  if (tau >= times[n - 1]) return n - 1;
+  let lo = 0, hi = n - 1;
+  while (hi - lo > 1) {
+    const m = (lo + hi) >> 1;
+    if (times[m] <= tau) lo = m;
+    else hi = m;
+  }
+  return lo + (tau - times[lo]) / (times[lo + 1] - times[lo]);
+}
+
+/** The fractional frame at t seconds into a loop that runs over n frames in duration seconds, or at the times of a tab, and then holds the last frame for hold seconds. */
+export function loopFrame(t: number, n: number, duration: number, hold: number, times: number[] | null = null): number {
+  if (n < 2) return 0;
+  const period = passLength(n, duration, times) + hold;
+  const tau = ((t % period) + period) % period;
+  return frameAt(tau, n, duration, times);
+}
+
+/** The opacity of the moving marks at t seconds into a loop of passes of length seconds, each followed by a hold of hold seconds. Over the first fade seconds of each later pass, the marks are faded in while a copy of the held last frame is faded out at 1 minus this opacity, with fade at most length. */
+export function loopFade(t: number, length: number, hold: number, fade: number): number {
+  const f = Math.min(fade, length), period = length + hold;
+  if (!(f > 0) || !(period > 0) || t < 0) return 1;
+  const pass = Math.floor(t / period), tau = t - pass * period;
+  const a = pass > 0 && tau < f ? tau / f : 1;
+  return a * a * (3 - 2 * a);
 }
 
 const MINUS = '−';
@@ -478,6 +532,15 @@ export class PlotView {
   private gated: { node: Element; names: string[] }[] = [];
   private emphasized: { node: Element; id: string }[] = [];
   private drawers: ((u: number) => void)[] = [];
+  // the opacity of the moving marks, below 1 while they are faded at the restart of the loop, and
+  // the groups and labels of these marks
+  private fade = 1;
+  private faders: SVGElement[] = [];
+  private fadeLabels: HTMLElement[] = [];
+  // copies of the faders and of their labels at the last frame, faded out at 1 - fade while the next
+  // pass is faded in, and the number of the pass of the loop drawn last
+  private held: (SVGElement | HTMLElement)[] = [];
+  private pass = 0;
   private eventFrames: { frame: number; names: string[]; tone: string }[] = [];
   // the ids named in the active list of any tab, which are dimmed while another id is active
   private emphasis = new Set<string>();
@@ -525,6 +588,20 @@ export class PlotView {
 
   private get frames(): number {
     return this.plot.tabs[this.tab].values.length;
+  }
+
+  // the seconds of a pass over the frames of the tab shown
+  private get length(): number {
+    return passLength(this.frames, this.plot.duration, this.plot.tabs[this.tab].times);
+  }
+
+  // the seconds into a pass at the fractional frame u of the tab shown, and the inverse
+  private timeOf(u: number): number {
+    return timeAt(u, this.frames, this.plot.duration, this.plot.tabs[this.tab].times);
+  }
+
+  private frameOf(tau: number): number {
+    return frameAt(tau, this.frames, this.plot.duration, this.plot.tabs[this.tab].times);
   }
 
   private build(): void {
@@ -578,7 +655,7 @@ export class PlotView {
     const seek = (ev: PointerEvent) => {
       const r = this.scrub.getBoundingClientRect();
       if (!r.width) return;
-      this.u = clamp((ev.clientX - r.left) / r.width, 0, 1) * (this.frames - 1);
+      this.u = this.frameOf(clamp((ev.clientX - r.left) / r.width, 0, 1) * this.length);
       this.draw();
     };
     this.scrub.addEventListener('pointerdown', (ev) => {
@@ -777,6 +854,9 @@ export class PlotView {
     this.gated = this.gated.filter((e) => e.node.isConnected);
     this.drawers = [];
     this.eventFrames = [];
+    this.faders = [];
+    this.fadeLabels = [];
+    this.held = [];
     const tab = this.plot.tabs[this.tab];
     for (const m of this.plot.marks) {
       const b = this.boxes.get(m.panel), data = tab.data[m.id];
@@ -784,12 +864,20 @@ export class PlotView {
       if (!b || !g || data === undefined) continue;
       const group = svg('g', {}, g);
       this.styleItem(group, m, [m.panel, m.id]);
+      // a mark that moves is faded at the restart of the loop in a group of its own, since the
+      // opacity of the group of the mark is set by the classes of the steps
+      const moving = m.kind === 'events' || (m.kind === 'label' ? (data as LabelData).at.length > 1 || (data as LabelData).text.length > 1 : (m.kind === 'trace' ? (data as TraceData).points : (data as unknown[])).length > 1);
+      const fader = moving ? svg('g', {}, group) : group;
+      if (moving) {
+        fader.style.transition = 'none';
+        this.faders.push(fader);
+      }
       if (m.kind === 'points') {
         const frames = (data as number[][]).map((f) => f.map((v, k) => scaled(k % 2 ? b.panel.y : b.panel.x, v)));
         const dots: SVGCircleElement[] = [];
         this.drawers.push((u) => {
           const at = framesAt(frames, u);
-          while (dots.length < at.length / 2) dots.push(svg('circle', { r: m.size / 2, class: m.hollow ? 'plot-hollow' : 'plot-dot', 'stroke-width': m.width }, group));
+          while (dots.length < at.length / 2) dots.push(svg('circle', { r: m.size / 2, class: m.hollow ? 'plot-hollow' : 'plot-dot', 'stroke-width': m.width }, fader));
           dots.forEach((d, k) => {
             const on = 2 * k < at.length;
             d.style.display = on ? '' : 'none';
@@ -797,10 +885,12 @@ export class PlotView {
           });
         });
       } else if (m.kind === 'trace') {
-        const pts = (data as Pair[]).map((q) => this.toAxes(b, q));
-        if (m.ghost) svg('path', { class: 'plot-ghost', d: this.pathS(b, pts), 'stroke-width': m.width }, group);
-        const done = svg('path', { class: 'plot-trace', 'stroke-width': m.width }, group);
-        const head = svg('circle', { class: 'plot-dot', r: m.size / 2 }, group);
+        const { points, ghost } = data as TraceData, pts = points.map((q) => this.toAxes(b, q));
+        // the faint path up to the frame ghost is kept through the fade, and left out with "ghost": false
+        if (m.ghost && ghost > 0) svg('path', { class: 'plot-ghost', d: this.pathS(b, pts.slice(0, ghost + 1)), 'stroke-width': m.width }, group);
+        if (fader !== group) group.append(fader);
+        const done = svg('path', { class: 'plot-trace', 'stroke-width': m.width }, fader);
+        const head = svg('circle', { class: 'plot-dot', r: m.size / 2 }, fader);
         this.drawers.push((u) => {
           const p = traceTo(pts, u), [x, y] = p[p.length - 1];
           done.setAttribute('d', this.pathS(b, p));
@@ -811,6 +901,7 @@ export class PlotView {
         const d = data as LabelData, at = d.at.map((q) => this.toAxes(b, q));
         const el = this.label(d.text[0], 0, 0, m.anchor, 'plot-mark', [m.panel, m.id], m.tone);
         el.classList.add(...m.cls);
+        if (moving) this.fadeLabels.push(el);
         let shown = d.text[0];
         this.drawers.push((u) => {
           const [x, y] = at.length === 1 ? at[0] : (framesAt(at, u) as Pair);
@@ -822,9 +913,10 @@ export class PlotView {
         const events = data as PlotEvent[];
         const nodes = events.map((e) => {
           const X = this.X(b, e.at[0]), Y = this.Y(b, e.at[1]);
-          const ring = svg('circle', { class: 'plot-ring', cx: X, cy: Y, r: m.size / 2, 'stroke-width': m.width }, group);
+          const ring = svg('circle', { class: 'plot-ring', cx: X, cy: Y, r: m.size / 2, 'stroke-width': m.width }, fader);
           const text = e.text ? this.label(e.text, X + m.dx, Y + m.dy, m.anchor, 'plot-mark', [m.panel, m.id], m.tone) : null;
           text?.classList.add(...m.cls);
+          if (text) this.fadeLabels.push(text);
           this.eventFrames.push({ frame: e.frame, names: [m.panel, m.id], tone: m.tone });
           return { frame: e.frame, nodes: [ring, text].filter((n): n is SVGCircleElement | HTMLElement => !!n) };
         });
@@ -841,8 +933,18 @@ export class PlotView {
     if (!this.spec || !this.W) return;
     const tab = this.plot.tabs[this.tab], u = this.u, n = this.frames;
     for (const d of this.drawers) d(u);
+    // a filter multiplies the opacity of a label, which is set by the classes of the steps. two texts
+    // at one place are read as one, hence a held label is faded out while fade is below 0.5, and a
+    // label of the next pass is faded in afterward
+    for (const f of this.faders) f.style.opacity = this.fade < 1 ? String(this.fade) : '';
+    for (const el of this.fadeLabels) el.style.filter = this.fade < 1 ? `opacity(${Math.max(0, 2 * this.fade - 1)})` : '';
+    for (const node of this.held) {
+      if (node instanceof HTMLElement) node.style.filter = `opacity(${Math.max(0, 1 - 2 * this.fade)})`;
+      else node.style.opacity = String(1 - this.fade);
+    }
     this.value.textContent = formatNumber(valueAt(tab.values, u), this.plot.parameter.digits);
-    const at = `${(n > 1 ? u / (n - 1) : 0) * 100}%`;
+    const length = this.length;
+    const at = `${(length > 0 ? this.timeOf(u) / length : 0) * 100}%`;
     this.fill.style.width = at;
     this.knob.style.left = at;
     if (tab.active) {
@@ -852,6 +954,27 @@ export class PlotView {
         node.classList.toggle('plot-off', this.emphasis.has(id) && !on.includes(id));
       }
     } else for (const { node } of this.emphasized) node.classList.remove('plot-on', 'plot-off');
+  }
+
+  // copies the moving marks at the last frame of the tab before the first frame of the next pass is
+  // drawn, so that the held frame is faded out while the next pass is faded in
+  private holdLast(): void {
+    this.release();
+    for (const d of this.drawers) d(this.frames - 1);
+    for (const node of [...this.faders, ...this.fadeLabels]) {
+      const copy = node.cloneNode(true) as SVGElement | HTMLElement;
+      node.before(copy);
+      this.held.push(copy);
+      const gate = this.gated.find((g) => g.node === node);
+      if (gate) this.gated.push({ node: copy, names: gate.names });
+    }
+  }
+
+  private release(): void {
+    if (!this.held.length) return;
+    for (const node of this.held) node.remove();
+    this.held = [];
+    this.gated = this.gated.filter((g) => g.node.isConnected);
   }
 
   private hidden(names: string[]): boolean {
@@ -866,11 +989,11 @@ export class PlotView {
       b.classList.toggle('plot-hidden', off);
       b.disabled = off;
     }
-    const n = this.frames;
+    const length = this.length;
     this.ticks.replaceChildren(...this.eventFrames.filter((e) => !this.hidden(e.names)).map((e) => {
       const t = document.createElement('div');
       t.className = 'plot-tick-mark';
-      t.style.left = `${(n > 1 ? e.frame / (n - 1) : 0) * 100}%`;
+      t.style.left = `${(length > 0 ? this.timeOf(e.frame) / length : 0) * 100}%`;
       t.style.background = toneColor(e.tone);
       return t;
     }));
@@ -911,6 +1034,9 @@ export class PlotView {
     this.markTabs();
     this.u = this.raf ? 0 : this.stillFrame();
     this.t0 = performance.now();
+    this.fade = 1;
+    this.pass = 0;
+    this.release();
     if (!this.W) return;
     // a tab may replace the axes and the elements of a panel. the elements are drawn again, hence
     // the slide is told to apply its highlights to them
@@ -955,12 +1081,20 @@ export class PlotView {
 
   play(): void {
     if (!this.spec || this.raf) return;
-    const { duration } = this.plot, n = this.frames;
     // a pass that ended is played again from the first frame
-    if (this.u >= n - 1) this.u = 0;
-    this.t0 = performance.now() - (n > 1 ? this.u / (n - 1) : 0) * duration * 1000;
+    if (this.u >= this.frames - 1) this.u = 0;
+    this.t0 = performance.now() - this.timeOf(this.u) * 1000;
+    this.pass = 0;
     const tick = (now: number) => {
-      this.u = loopFrame((now - this.t0) / 1000, this.frames, this.plot.duration, this.plot.hold);
+      const t = (now - this.t0) / 1000, { duration, hold, fade } = this.plot, length = this.length;
+      const pass = length + hold > 0 ? Math.floor(t / (length + hold)) : 0;
+      if (pass !== this.pass) {
+        this.pass = pass;
+        if (fade > 0) this.holdLast();
+      }
+      this.u = loopFrame(t, this.frames, duration, hold, this.plot.tabs[this.tab].times);
+      this.fade = loopFade(t, length, hold, fade);
+      if (this.fade >= 1) this.release();
       this.draw();
       this.raf = requestAnimationFrame(tick);
     };
@@ -972,6 +1106,11 @@ export class PlotView {
     if (this.raf) cancelAnimationFrame(this.raf);
     this.raf = 0;
     this.setPlaying(false);
+    if (this.fade < 1 || this.held.length) {
+      this.fade = 1;
+      this.release();
+      this.draw();
+    }
   }
 
   get playing(): boolean {
