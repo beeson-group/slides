@@ -166,7 +166,7 @@ async function checkHeads() {
     return headed.headAfter;
   })()`);
   if (after !== null) {
-    // the first head may be due later in the trace, e.g. once the manifolds of a transfer have grown,
+    // the first head may be due later in the trace, e.g. at the start of a record of a file,
     // hence the canvas is read every quarter second until 15 s after it is due
     let blank = true;
     for (let i = 0; blank && i < 60 + Math.ceil(4 * after); i++) {

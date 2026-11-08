@@ -70,12 +70,12 @@ test('one edit of a text, a formula, the notes, or a line changes only that text
   t.after(() => browser.close());
   const page = await editorPage(browser);
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
-  const h2 = 'Period of the families';
+  const h2 = 'Steps are shown one at a time';
   assert.equal(deckText.includes(`<h2>${h2}</h2>`), true);
   // typing changes the data of the text node
-  await page.evaluate(`[...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === ${JSON.stringify(h2)}).firstChild.data = 'Period of the families now'`);
-  assert.equal(await page.evaluate('window.BeesonEditor.render()'), replaced(`<h2>${h2}</h2>`, '<h2>Period of the families now</h2>'));
-  await page.evaluate(`[...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === 'Period of the families now').firstChild.data = ${JSON.stringify(h2)}`);
+  await page.evaluate(`[...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === ${JSON.stringify(h2)}).firstChild.data = 'Steps are shown one at a time now'`);
+  assert.equal(await page.evaluate('window.BeesonEditor.render()'), replaced(`<h2>${h2}</h2>`, '<h2>Steps are shown one at a time now</h2>'));
+  await page.evaluate(`[...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === 'Steps are shown one at a time now').firstChild.data = ${JSON.stringify(h2)}`);
   assert.equal(await page.evaluate('window.BeesonEditor.render()'), deckText);
 
   // a character that must be escaped, and the no-break space that Chrome types at the end of a line
@@ -84,7 +84,7 @@ test('one edit of a text, a formula, the notes, or a line changes only that text
   await page.evaluate(`[...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === 'a < b &\\u00a0c').firstChild.data = ${JSON.stringify(h2)}`);
 
   // a formula, through the field of the editor, which typesets the block again
-  const tex = 'C = 2U - v^2';
+  const tex = '-C/2';
   assert.equal(deckText.split(tex).length, 2);
   await page.evaluate(`(async () => {
     const items = MathJax.startup.document.getMathItemsWithin([document.body]);
@@ -133,7 +133,7 @@ test('a save is paired again, and a second save is byte-exact', async (t) => {
   t.after(() => browser.close());
   const page = await editorPage(browser);
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
-  const h2 = 'Period of the families';
+  const h2 = 'Steps are shown one at a time';
   await page.evaluate(`[...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === ${JSON.stringify(h2)}).firstChild.data = 'Changed'`);
   const once = await page.evaluate('window.BeesonEditor.render()');
   assert.equal(once, replaced(`<h2>${h2}</h2>`, '<h2>Changed</h2>'));
@@ -186,7 +186,7 @@ test('a save writes the file through a handle, from a served deck', async (t) =>
   const status = await page.evaluate('window.BeesonEditor.status()');
   assert.equal(status.state, 'loaded');
   assert.deepEqual(status.problems, []);
-  await page.evaluate(`[...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === 'Period of the families').firstChild.data = 'Saved'`);
+  await page.evaluate(`[...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === 'Steps are shown one at a time').firstChild.data = 'Saved'`);
   const written = await page.evaluate(`(async () => {
     const root = await navigator.storage.getDirectory();
     const handle = await root.getFileHandle('saved.html', { create: true });
@@ -194,7 +194,7 @@ test('a save writes the file through a handle, from a served deck', async (t) =>
     await window.BeesonEditor.save();
     return (await (await handle.getFile()).text());
   })()`);
-  assert.equal(written, replaced('<h2>Period of the families</h2>', '<h2>Saved</h2>'));
+  assert.equal(written, replaced('<h2>Steps are shown one at a time</h2>', '<h2>Saved</h2>'));
   const after = await page.evaluate('window.BeesonEditor.status()');
   assert.equal(after.dirty, false);
   assert.match(after.message, /^Saved 1 edit to saved\.html/);
@@ -215,10 +215,10 @@ test('without the file pickers, a save is a download of the file with the edits'
   }`);
   assert.equal((await page.evaluate('window.BeesonEditor.status()')).supported, false);
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
-  await page.evaluate(`[...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === 'Period of the families').firstChild.data = 'Downloaded'`);
+  await page.evaluate(`[...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === 'Steps are shown one at a time').firstChild.data = 'Downloaded'`);
   await page.evaluate('window.BeesonEditor.save()');
   assert.equal(await page.evaluate('window.__download'), 'index.html');
-  assert.equal(await page.evaluate('window.__blob.text()'), replaced('<h2>Period of the families</h2>', '<h2>Downloaded</h2>'));
+  assert.equal(await page.evaluate('window.__blob.text()'), replaced('<h2>Steps are shown one at a time</h2>', '<h2>Downloaded</h2>'));
   const after = await page.evaluate('window.BeesonEditor.status()');
   assert.equal(after.dirty, false);
   assert.match(after.message, /^Saved a copy with 1 edit to your downloads/);
@@ -318,7 +318,7 @@ test('a step set in the Steps pane writes the class and the index into the tag o
   const rows = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row select')].map((s) => s.value)`);
   assert.deepEqual(rows, ['', '', '', '0', '1', '0']);
   assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-badge')].map((b) => b.textContent)`), ['1', '2', '1']);
-  let expected = replaced('<li>Give a white raster figure the class <code>paper</code> to frame it.</li>', '<li class="fragment" data-fragment-index="1">Give a white raster figure the class <code>paper</code> to frame it.</li>');
+  let expected = replaced('<li>Give a white raster figure the class <code>paper</code>, which frames it on a sheet cut to its size.</li>', '<li class="fragment" data-fragment-index="1">Give a white raster figure the class <code>paper</code>, which frames it on a sheet cut to its size.</li>');
   expected = expected.replace('<li>Give a black-on-white line plot the class <code>invert</code> to invert it in dark mode.</li>', '<li class="fragment" data-fragment-index="2">Give a black-on-white line plot the class <code>invert</code> to invert it in dark mode.</li>');
   expected = expected.replace('<figure class="zone">', '<figure class="zone fragment" data-fragment-index="1">');
   assert.notEqual(expected, deckText);
@@ -420,7 +420,7 @@ test('one history undoes and redoes the typing, a formula, a step, and a move, w
   const key = (key, extra = '') => page.evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(key)}, metaKey: true, ${extra} bubbles: true, cancelable: true }))`);
   assert.deepEqual([(await status()).undo, (await status()).redo], [false, false]);
   // the typing into a heading, as the keys type it
-  const h2 = 'Period of the families';
+  const h2 = 'Steps are shown one at a time';
   await page.evaluate(`(() => {
     const h = [...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === ${JSON.stringify(h2)});
     Reveal.slide(Reveal.getIndices(h.closest('section')).h);
@@ -445,7 +445,7 @@ test('one history undoes and redoes the typing, a formula, a step, and a move, w
   await sleep(200);
   assert.equal(await render(), deckText);
   // a formula, from another slide
-  const tex = 'C = 2U - v^2';
+  const tex = '-C/2';
   const applied = replaced(tex, `${tex} + 1`);
   await page.evaluate(`(async () => {
     const items = MathJax.startup.document.getMathItemsWithin([document.body]);
@@ -457,7 +457,7 @@ test('one history undoes and redoes the typing, a formula, a step, and a move, w
   await page.evaluate('window.BeesonEditor.undo()');
   assert.equal(await render(), deckText);
   // the undo showed the slide of the formula
-  assert.equal(await page.evaluate(`!!document.querySelector('.reveal section.present li mjx-container')`), true);
+  assert.equal(await page.evaluate(`!!document.querySelector('.reveal section.present .surface')`), true);
   await page.evaluate('window.BeesonEditor.redo()');
   assert.equal(await render(), applied);
   await page.evaluate('window.BeesonEditor.undo()');
@@ -467,7 +467,7 @@ test('one history undoes and redoes the typing, a formula, a step, and a move, w
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
   await sleep(200);
   await page.evaluate(`(() => { const sel = document.querySelectorAll('.beeson-edit-side .row select')[3]; sel.value = [...sel.options].at(-1).value; sel.dispatchEvent(new Event('change', { bubbles: true })); })()`);
-  const stepped = replaced('<li>Give a white raster figure the class <code>paper</code> to frame it.</li>', '<li class="fragment" data-fragment-index="1">Give a white raster figure the class <code>paper</code> to frame it.</li>');
+  const stepped = replaced('<li>Give a white raster figure the class <code>paper</code>, which frames it on a sheet cut to its size.</li>', '<li class="fragment" data-fragment-index="1">Give a white raster figure the class <code>paper</code>, which frames it on a sheet cut to its size.</li>');
   assert.equal(await render(), stepped);
   await page.evaluate('window.BeesonEditor.undo()');
   assert.equal(await render(), deckText);
@@ -571,7 +571,7 @@ test('Save as writes a chosen file, autosave saves after a pause, and unsaved ed
   // the guard against leaving with unsaved changes would hold the navigation of the test
   const leave = () => page.evaluate(`window.addEventListener('beforeunload', (e) => e.stopImmediatePropagation(), true)`);
   await load();
-  const h2 = 'Period of the families';
+  const h2 = 'Steps are shown one at a time';
   const type = (from, to) => page.evaluate(`(() => { const h = [...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === ${JSON.stringify(from)}); h.firstChild.data = ${JSON.stringify(to)}; h.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   const file = (name) => page.evaluate(`(async () => { const root = await navigator.storage.getDirectory(); const h = await root.getFileHandle(${JSON.stringify(name)}, { create: true }); return (await h.getFile()).text(); })()`);
   // Save as, with the picker giving a file of the private file system of the browser
@@ -656,7 +656,7 @@ test('a text that runs past the edge of the slide is marked and counted, and no 
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
   const counts = await page.evaluate(`(async () => { const out = []; for (let i = 0; i < Reveal.getTotalSlides(); i += 1) { Reveal.slide(i); await new Promise((d) => setTimeout(d, 50)); out.push(window.BeesonEditor.status().overflow); } return out; })()`);
   assert.deepEqual(counts, counts.map(() => 0));
-  const h2 = 'Period of the families';
+  const h2 = 'Steps are shown one at a time';
   await page.evaluate(`(() => { const h = [...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === ${JSON.stringify(h2)}); Reveal.slide(Reveal.getIndices(h.closest('section')).h); h.firstChild.data = 'A heading that goes on and on '.repeat(30); h.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   const status = await page.evaluate('window.BeesonEditor.status()');
   assert.ok(status.overflow >= 1, `overflow ${status.overflow}`);
@@ -721,7 +721,7 @@ test('Open with unsaved changes asks first: Cancel keeps them, Open without savi
   t.after(() => browser.close());
   const page = await editorPage(browser);
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
-  const h2 = 'Period of the families';
+  const h2 = 'Steps are shown one at a time';
   // stubs of the pickers: both give one handle of a file, read as last written
   await page.evaluate(`window.pickerCalls = 0; window.written = null;
     const handle = { name: 'index.html', getFile: async () => new File([window.written ?? ${JSON.stringify(deckText)}], 'index.html', { type: 'text/html' }), createWritable: async () => ({ write: async (text) => { window.written = text; }, close: async () => {} }) };
@@ -939,7 +939,7 @@ test('an undo back to the saved text leaves the deck clean, and Present with uns
   const page = await editorPage(browser);
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
   const status = () => page.evaluate('window.BeesonEditor.status()');
-  const h2 = 'Period of the families';
+  const h2 = 'Steps are shown one at a time';
   const type = (text) => page.evaluate(`(() => { const h = [...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === ${JSON.stringify(h2)}); Reveal.slide(Reveal.getIndices(h.closest('section')).h); h.focus(); const r = document.createRange(); r.selectNodeContents(h); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); document.execCommand('insertText', false, ${JSON.stringify(text)}); })()`);
   await type(' edited');
   assert.equal((await status()).dirty, true);
@@ -989,7 +989,7 @@ test('the texts that cannot be edited are listed on a card from the toolbar', as
   const which = `[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Which?')`;
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
   assert.equal(await page.evaluate(`!${which} || ${which}.hidden`), true);
-  const changed = deckText.replace('<h2>Period of the families</h2>', '<h2>Another heading</h2>');
+  const changed = deckText.replace('<h2>Steps are shown one at a time</h2>', '<h2>Another heading</h2>');
   const problems = (await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(changed)})`)).problems;
   assert.ok(problems.length > 0);
   assert.equal(await page.evaluate(`${which}.hidden`), false);
@@ -1008,20 +1008,20 @@ test('an undo puts the caret at the change, and ⌘B and ⌘I write strong and e
   const page = await editorPage(browser);
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
   const render = () => page.evaluate('window.BeesonEditor.render()');
-  const h2 = 'Period of the families';
+  const h2 = 'Steps are shown one at a time';
   await page.evaluate(`(() => {
     const h = [...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === ${JSON.stringify(h2)});
     Reveal.slide(Reveal.getIndices(h.closest('section')).h);
     h.focus();
-    const r = document.createRange(); r.setStart(h.firstChild, 6); r.collapse(true);
+    const r = document.createRange(); r.setStart(h.firstChild, 5); r.collapse(true);
     const s = getSelection(); s.removeAllRanges(); s.addRange(r);
     document.execCommand('insertText', false, 'X');
   })()`);
   const caret = () => page.evaluate(`(() => { const s = getSelection(); const h = document.activeElement; const r = document.createRange(); r.setStart(h, 0); r.setEnd(s.anchorNode, s.anchorOffset); return [h.textContent, r.toString().length]; })()`);
   await page.evaluate('window.BeesonEditor.undo()');
-  assert.deepEqual(await caret(), [h2, 6]);
+  assert.deepEqual(await caret(), [h2, 5]);
   await page.evaluate('window.BeesonEditor.redo()');
-  assert.deepEqual(await caret(), ['PeriodX of the families', 7]);
+  assert.deepEqual(await caret(), ['StepsX are shown one at a time', 6]);
   await page.evaluate('window.BeesonEditor.undo()');
   assert.equal(await render(), deckText);
   // a word of a list item is made bold and italic, and the selection is kept
@@ -1133,22 +1133,22 @@ test('a step is inserted before the others as one entry of the history, and a fo
   await pick(2, 'before');
   assert.deepEqual(await values(), ['', '', '0', '1', '2', '']);
   let expected = replaced('<li>Export one file per mode and mark them <code>for-dark</code> and <code>for-light</code>.</li>', '<li class="fragment" data-fragment-index="1">Export one file per mode and mark them <code>for-dark</code> and <code>for-light</code>.</li>');
-  expected = expected.replace('<li>Give a white raster figure the class <code>paper</code> to frame it.</li>', '<li class="fragment" data-fragment-index="2">Give a white raster figure the class <code>paper</code> to frame it.</li>');
+  expected = expected.replace('<li>Give a white raster figure the class <code>paper</code>, which frames it on a sheet cut to its size.</li>', '<li class="fragment" data-fragment-index="2">Give a white raster figure the class <code>paper</code>, which frames it on a sheet cut to its size.</li>');
   expected = expected.replace('<li>Give a black-on-white line plot the class <code>invert</code> to invert it in dark mode.</li>', '<li class="fragment" data-fragment-index="3">Give a black-on-white line plot the class <code>invert</code> to invert it in dark mode.</li>');
   assert.equal(await page.evaluate('window.BeesonEditor.render()'), expected);
   // one undo takes the new step away and puts the other steps back
   await page.evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'z', metaKey: true, bubbles: true, cancelable: true }))`);
   assert.deepEqual(await values(), ['', '', '', '0', '1', '']);
-  // a display formula is listed by its TeX, and an inline formula is shown in place in its item
-  await page.evaluate(`(() => { const c = document.querySelector('.reveal .slides .math mjx-container'); Reveal.slide(Reveal.getIndices(c.closest('section')).h); })()`);
+  // a display formula is listed by its TeX, and an inline formula is shown in place in its paragraph
+  await page.evaluate(`(() => { const c = document.querySelector('.reveal .slides .surface'); Reveal.slide(Reveal.getIndices(c.closest('section')).h); })()`);
   await sleep(300);
   const texts = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row')].map((r) => [r.querySelector('.kind').textContent, r.querySelector('.text').textContent])`);
   const formulas = texts.filter(([kind]) => kind === 'Formula').map(([, text]) => text);
-  assert.equal(formulas.length, 2);
-  assert.ok(formulas[0].startsWith('\\ddot x - 2\\dot y = \\frac{\\partial U}'), formulas[0]);
-  assert.ok(formulas[1].startsWith('U = \\frac{x^2 + y^2}{2}'), formulas[1]);
-  const item = texts.find(([kind, text]) => kind === 'Item' && text.startsWith('At a given'));
-  assert.ok(item && item[1].startsWith('At a given Jacobi constant C = 2U - v^2, the motion'), JSON.stringify(texts));
+  assert.equal(formulas.length, 3);
+  assert.ok(formulas[0].startsWith('U_g = -(1-\\mu)/\\rho_1'), formulas[0]);
+  assert.ok(formulas[2].startsWith('\\tilde U = U_g + U_c'), formulas[2]);
+  const item = texts.find(([kind, text]) => kind === 'Paragraph' && text.startsWith('The cut at'));
+  assert.ok(item && item[1].startsWith('The cut at -C/2 is the zero-velocity curve'), JSON.stringify(texts));
   assert.deepEqual(page.errors, []);
 });
 
