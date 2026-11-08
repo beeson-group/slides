@@ -1650,6 +1650,7 @@
         size: num(m.size, `${p}.size`, kind === "events" ? 16 : 10),
         width: num(m.width, `${p}.width`, 3),
         hollow: m.hollow === true,
+        ghost: m.ghost !== false,
         anchor: anchor(m.anchor, `${p}.anchor`),
         dx: num(m.dx, `${p}.dx`, 0),
         dy: num(m.dy, `${p}.dy`, 0)
@@ -2198,7 +2199,7 @@
           });
         } else if (m.kind === "trace") {
           const pts = data.map((q) => this.toAxes(b, q));
-          svg("path", { class: "plot-ghost", d: this.pathS(b, pts), "stroke-width": m.width }, group2);
+          if (m.ghost) svg("path", { class: "plot-ghost", d: this.pathS(b, pts), "stroke-width": m.width }, group2);
           const done = svg("path", { class: "plot-trace", "stroke-width": m.width }, group2);
           const head = svg("circle", { class: "plot-dot", r: m.size / 2 }, group2);
           this.drawers.push((u) => {

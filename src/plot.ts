@@ -23,7 +23,7 @@ export type Margin = [number, number, number, number];
 export type Panel = { id: string; x: Axis; y: Axis; equal: boolean; axes: boolean; title: string; regions: Region[]; curves: Curve[]; labels: Label[]; size: number; margin: Margin };
 // the keys of a panel that a tab may replace
 export type PanelPatch = Partial<Pick<Panel, 'x' | 'y' | 'title' | 'regions' | 'curves' | 'labels'>>;
-export type Mark = Item & { id: string; panel: string; kind: Kind; size: number; width: number; hollow: boolean; anchor: Anchor; dx: number; dy: number };
+export type Mark = Item & { id: string; panel: string; kind: Kind; size: number; width: number; hollow: boolean; ghost: boolean; anchor: Anchor; dx: number; dy: number };
 export type PlotEvent = { frame: number; at: Pair; text: string };
 // a label mark with one position or one text is held there for every frame
 export type LabelData = { at: Pair[]; text: string[] };
@@ -226,6 +226,7 @@ export function parsePlot(input: unknown): Plot {
       size: num(m.size, `${p}.size`, kind === 'events' ? 16 : 10),
       width: num(m.width, `${p}.width`, 3),
       hollow: m.hollow === true,
+      ghost: m.ghost !== false,
       anchor: anchor(m.anchor, `${p}.anchor`),
       dx: num(m.dx, `${p}.dx`, 0),
       dy: num(m.dy, `${p}.dy`, 0),
@@ -788,7 +789,7 @@ export class PlotView {
         });
       } else if (m.kind === 'trace') {
         const pts = (data as Pair[]).map((q) => this.toAxes(b, q));
-        svg('path', { class: 'plot-ghost', d: this.pathS(b, pts), 'stroke-width': m.width }, group);
+        if (m.ghost) svg('path', { class: 'plot-ghost', d: this.pathS(b, pts), 'stroke-width': m.width }, group);
         const done = svg('path', { class: 'plot-trace', 'stroke-width': m.width }, group);
         const head = svg('circle', { class: 'plot-dot', r: m.size / 2 }, group);
         this.drawers.push((u) => {
