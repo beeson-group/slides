@@ -10,7 +10,7 @@
 </head>
 <body>
 <!-- a plot of two panels with a step that shows the second panel and a step that switches its tab,
-     then a plot whose JSON block is missing -->
+     and a trace without its ghost, then a plot whose JSON block is missing -->
 <div class="reveal">
   <div class="slides">
     <section>
@@ -31,11 +31,12 @@
         ],
         "marks": [
           { "id": "dot", "panel": "left", "kind": "points" },
-          { "id": "path", "panel": "right", "kind": "trace" }
+          { "id": "path", "panel": "right", "kind": "trace" },
+          { "id": "bare", "panel": "left", "kind": "trace", "ghost": false }
         ],
         "tabs": [
-          { "name": "one", "values": [0, 0.5, 1], "data": { "dot": [[0, 0], [0.5, 0.5], [1, 1]], "path": [[0, 0], [0.5, 1], [1, 0]] } },
-          { "name": "two", "values": [0, 0.5, 1], "data": { "dot": [[1, 0], [0.5, 0.5], [0, 1]], "path": [[0, 0], [0.5, -1], [1, 0]] } }
+          { "name": "one", "values": [0, 0.5, 1], "data": { "dot": [[0, 0], [0.5, 0.5], [1, 1]], "path": [[0, 0], [0.5, 1], [1, 0]], "bare": [[0, 1], [0.5, 0.5], [1, 0]] } },
+          { "name": "two", "values": [0, 0.5, 1], "data": { "dot": [[1, 0], [0.5, 0.5], [0, 1]], "path": [[0, 0], [0.5, -1], [1, 0]], "bare": [[1, 1], [0.5, 0.5], [0, 0]] } }
         ]
       }</script>
     </section>

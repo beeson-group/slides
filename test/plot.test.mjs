@@ -29,6 +29,13 @@ test('a plot is read with its defaults', () => {
   assert.deepEqual(plot.tabs[0].panels, {});
 });
 
+test('a trace is drawn with its ghost unless ghost is false', () => {
+  const spec = minimal();
+  spec.marks = [{ id: 'm', panel: 'p', kind: 'trace' }, { id: 'n', panel: 'p', kind: 'trace', ghost: false }];
+  spec.tabs[0].data = { m: [[0, 0], [1, 1]], n: [[1, 0], [0, 1]] };
+  assert.deepEqual(parsePlot(spec).marks.map((m) => m.ghost), [true, false]);
+});
+
 test('an axis is read with its scale and the text of its ticks, and a tab replaces the keys of a panel', () => {
   const spec = minimal();
   spec.panels[0].x = { range: [-100, 100], scale: 'asinh', unit: 2, ticks: [-10, { at: 0, text: '$0$' }] };
@@ -147,6 +154,8 @@ const state = `(() => {
     frame: view.frame,
     hidden: [...view.el.querySelectorAll('.plot-panel')].map((g) => g.classList.contains('plot-hidden')),
     tab: view.el.querySelector('[aria-selected="true"]').textContent,
+    ghosts: view.el.querySelectorAll('.plot-ghost').length,
+    traces: view.el.querySelectorAll('.plot-trace').length,
   };
 })()`;
 
@@ -161,6 +170,9 @@ test('a plot is played while its slide is shown, and its steps show a panel and 
   assert.equal(first.playing, true);
   assert.deepEqual(first.hidden, [false, true]);
   assert.equal(first.tab, 'one');
+  // the trace bare is drawn without its ghost
+  assert.equal(first.traces, 2);
+  assert.equal(first.ghosts, 1);
   await page.waitFor(`${state}.frame > ${first.frame}`);
 
   await page.evaluate('Reveal.next()');
