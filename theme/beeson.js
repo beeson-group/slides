@@ -3655,6 +3655,7 @@ void main() {
     const deck = window.Reveal;
     const plugins = [...options.plugins ?? []];
     if (window.RevealNotes && !plugins.includes(window.RevealNotes)) plugins.push(window.RevealNotes);
+    if (window.RevealHighlight && !EDITING && !plugins.includes(window.RevealHighlight)) plugins.push(window.RevealHighlight);
     initSwitcher();
     markViewers();
     deck.on("pdf-ready", () => {

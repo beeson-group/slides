@@ -115,6 +115,9 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   const deck = window.Reveal;
   const plugins = [...(options.plugins ?? [])];
   if (window.RevealNotes && !plugins.includes(window.RevealNotes)) plugins.push(window.RevealNotes);
+  // a code box is left as written in the file while the deck is edited, since the text of the page
+  // is paired with the file in the editor
+  if (window.RevealHighlight && !EDITING && !plugins.includes(window.RevealHighlight)) plugins.push(window.RevealHighlight);
   initSwitcher();
   // in the print view, a page is cloned per fragment state after ready, and the clones are
   // mounted here. the viewers are numbered before the clones are made
