@@ -16,7 +16,9 @@ html[data-theme="dark"] {
   --body: rgba(242, 242, 239, 0.55);
   /* the palette of a backdrop drawn from a file, in pairs: a value of data-strands-color takes
      --strand-1 and --strand-2, the next value --strand-3 and --strand-4, and so on, and a strand is
-     colored between the two along data-strands-ramp */
+     colored between the two along data-strands-ramp. in each mode, every color is drawn at the
+     opacity 0.6 of a strand with a contrast of at least 2.5:1 against --bg, as test/strands.test.mjs
+     checks */
   --strand-1: #c94fe6;
   --strand-2: #f08050;
   --strand-3: #3d8bff;
@@ -41,11 +43,11 @@ html[data-theme="light"] {
   --stroke: rgba(20, 20, 19, 0.3);
   --body: rgba(20, 20, 19, 0.5);
   --strand-1: #8a2be2;
-  --strand-2: #c8571e;
+  --strand-2: #b24500;
   --strand-3: #1f5fd0;
-  --strand-4: #0f8a7a;
-  --strand-5: #b8860b;
-  --strand-6: #4a8c1c;
+  --strand-4: #006c5f;
+  --strand-5: #7e5a00;
+  --strand-6: #356f00;
   --strand-7: #3b3fb0;
   --strand-8: #141413;
 }
