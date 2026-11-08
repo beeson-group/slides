@@ -184,7 +184,7 @@ npm ci                 # the dependencies
 npm run vendor         # reveal.js, the notes and highlight plugins, the fonts, MathJax, and three.js into theme/vendor/ (tycho and Latin Modern Roman are copied by hand)
 npm run build          # src/*.ts into theme/beeson.js and src/editor/*.ts into theme/editor.js with esbuild
 npm run typecheck      # tsc --noEmit
-npm test               # the orbit engine, the surfaces, the backdrops from files, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, the PowerPoint file, the plots, the stepped math, the code boxes, and the editor under node --test
+npm test               # the orbit engine, the surfaces, the backdrops from files, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, the PowerPoint file, the plots, the stepped math, the code boxes, the frame cost of the title trace, and the editor under node --test
 npm run check          # every slide of index.html in both modes, screenshots, console errors, a poster on every video, and the editor on the deck
 npm run pdf            # index.html to slides.pdf, with a check of the page count
 npm run pptx           # index.html to slides.pptx, with one click per step
