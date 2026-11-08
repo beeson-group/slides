@@ -61,7 +61,7 @@ Set the drawing of a `backdrop` with its attribute `data-scene`. Each drawing is
 | `wideRibbon` | The tubes of an L1 orbit toward the Earth, after Amlan Sinha's figures in the group deck and in [Phantom Pathways](https://amlan-sinha.github.io/art-of-science/art-1/) |
 | a file in `data-strands` | The polylines of a file next to the deck, described below |
 
-Set the window of the drawing with `data-cx` and `data-cy`, the point at the center of the box, and `data-half`, half of the height of the box, all in nondimensional units. The backdrop of a title, section, or closing slide is traced when its slide is shown, and the backdrop of another slide is drawn complete. Add `data-live` to trace it as well.
+Set the window of the drawing with `data-cx` and `data-cy`, the point at the center of the box, and `data-half`, half of the height of the box, all in nondimensional units. The backdrop of a title, section, or closing slide is traced when its slide is shown, and the backdrop of another slide is drawn complete. Add `data-live` to trace it as well. While the pointer is on a backdrop, the strands within 20 slide pixels of it are tinted orange.
 
 Label a point of a named drawing with a `lab` span inside the backdrop, whose `data-at` is `L1`, `L2`, `moon`, or `earth`, and shift the label from the point by `data-dx` and `data-dy` pixels. A label is typeset with MathJax. Write a libration point as `\(\LL{1}\)`, i.e. a calligraphic L with its index, with the macro `\LL` of `theme/macros.js`, and write it in the same way in a heading, a caption, and the notes.
 
