@@ -5,14 +5,16 @@ import type { Strand, Tone } from './orbits.ts';
 
 // one polyline of a file, e.g. one member of a family in one frame. t or theta, when given, is the
 // clock of each point, e.g. the time or the true anomaly. the look of the strand is set with tone,
-// a color of the theme, alpha, its opacity, weight, its width in line widths, head, the radius of
-// its head in line widths, start, the clock at which its trace begins, and glow. the other keys
-// are free
+// a color of the theme, color, a CSS color or a pair of them for the dark and the light mode in
+// place of the color of the tone, alpha, its opacity, weight, its width in line widths, head, the
+// radius of its head in line widths, start, the clock at which its trace begins, and glow. the
+// other keys are free
 export type StrandRecord = {
   points: [number, number][];
   t?: number[];
   theta?: number[];
   tone?: Tone;
+  color?: string | [string, string];
   alpha?: number;
   weight?: number;
   head?: number;
@@ -41,6 +43,9 @@ const INK_ALPHA = 0.6;
 const isPair = (p: unknown): p is [number, number] =>
   Array.isArray(p) && p.length === 2 && Number.isFinite(p[0]) && Number.isFinite(p[1]);
 const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
+const isColorString = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '';
+const isColor = (v: unknown): v is string | [string, string] =>
+  isColorString(v) || (Array.isArray(v) && v.length === 2 && v.every(isColorString));
 // the tones of a record of a file. hero and line are the tones of the named scenes only
 const TONES = ['orange', 'violet', 'text'];
 
@@ -63,6 +68,9 @@ export function parse(data: unknown): StrandFile {
     }
     if (r.tone !== undefined && !TONES.includes(r.tone as string)) {
       throw new Error(`the "tone" of its record ${i} is not orange, violet, or text`);
+    }
+    if (r.color !== undefined && !isColor(r.color)) {
+      throw new Error(`the "color" of its record ${i} is not a CSS color or a pair of them for the dark and the light mode`);
     }
     if (r.alpha !== undefined && !(typeof r.alpha === 'number' && r.alpha > 0 && r.alpha <= 1)) {
       throw new Error(`the "alpha" of its record ${i} is not a number above 0 and up to 1`);
@@ -151,6 +159,7 @@ export function strandsOf(file: StrandFile, chosen: StrandRecord[], color?: stri
       strand.alpha = INK_ALPHA;
     }
     if (r.tone) strand.tone = r.tone;
+    if (r.color !== undefined) strand.color = r.color;
     if (r.alpha !== undefined) strand.alpha = r.alpha;
     if (r.weight !== undefined) strand.weight = r.weight;
     if (r.head !== undefined) strand.head = r.head;

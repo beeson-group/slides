@@ -426,6 +426,8 @@
   var INK_ALPHA = 0.6;
   var isPair = (p) => Array.isArray(p) && p.length === 2 && Number.isFinite(p[0]) && Number.isFinite(p[1]);
   var isObject = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
+  var isColorString = (v) => typeof v === "string" && v.trim() !== "";
+  var isColor = (v) => isColorString(v) || Array.isArray(v) && v.length === 2 && v.every(isColorString);
   var TONES = ["orange", "violet", "text"];
   function parse(data) {
     const records = isObject(data) ? data.families : void 0;
@@ -442,6 +444,9 @@
       }
       if (r.tone !== void 0 && !TONES.includes(r.tone)) {
         throw new Error(`the "tone" of its record ${i} is not orange, violet, or text`);
+      }
+      if (r.color !== void 0 && !isColor(r.color)) {
+        throw new Error(`the "color" of its record ${i} is not a CSS color or a pair of them for the dark and the light mode`);
       }
       if (r.alpha !== void 0 && !(typeof r.alpha === "number" && r.alpha > 0 && r.alpha <= 1)) {
         throw new Error(`the "alpha" of its record ${i} is not a number above 0 and up to 1`);
@@ -512,6 +517,7 @@
         strand.alpha = INK_ALPHA;
       }
       if (r.tone) strand.tone = r.tone;
+      if (r.color !== void 0) strand.color = r.color;
       if (r.alpha !== void 0) strand.alpha = r.alpha;
       if (r.weight !== void 0) strand.weight = r.weight;
       if (r.head !== void 0) strand.head = r.head;
@@ -996,7 +1002,7 @@
     }
     colors() {
       const cs = getComputedStyle(this.el);
-      return { stroke: cs.getPropertyValue("--stroke").trim(), body: cs.getPropertyValue("--body").trim(), accent: cs.getPropertyValue("--accent").trim(), violet: cs.getPropertyValue("--violet").trim(), text: cs.getPropertyValue("--text").trim() };
+      return { stroke: cs.getPropertyValue("--stroke").trim(), body: cs.getPropertyValue("--body").trim(), accent: cs.getPropertyValue("--accent").trim(), violet: cs.getPropertyValue("--violet").trim(), text: cs.getPropertyValue("--text").trim(), light: this.el.ownerDocument.documentElement.dataset.theme === "light" };
     }
     // the colors of the strands with an ink in the current mode. a color of the palette is serialized
     // by the canvas as #rrggbb or rgba(), which mix() reads, and a strand is given the stroke color
@@ -1102,7 +1108,7 @@
     // weight, and glow where it has them
     pen(ctx, c, i) {
       const s = this.strands[i], tone = s.tone;
-      ctx.strokeStyle = s.ink ? this.inks[i] : tone === "orange" || tone === "hero" ? c.accent : tone === "violet" ? c.violet : tone === "text" || tone === "line" ? c.text : c.stroke;
+      ctx.strokeStyle = s.color ? typeof s.color === "string" ? s.color : s.color[c.light ? 1 : 0] : s.ink ? this.inks[i] : tone === "orange" || tone === "hero" ? c.accent : tone === "violet" ? c.violet : tone === "text" || tone === "line" ? c.text : c.stroke;
       ctx.globalAlpha = s.alpha ?? (tone === "orange" || tone === "violet" ? 0.42 : tone === "text" ? 0.8 : tone === "line" ? 0.36 : 1);
       ctx.lineWidth = (tone === "hero" ? 2.2 : tone === "text" ? 1.3 : 1) * (s.weight ?? 1) * this.lw;
       ctx.shadowBlur = s.glow ? 6 * this.lw : 0;
