@@ -1316,7 +1316,7 @@
     }
     // tints the drawn strands within r slide pixels of the client point in the accent color, or
     // clears the tint when clientX is null
-    glow(clientX, clientY = 0, r = 60) {
+    glow(clientX, clientY = 0, r = 20) {
       if (clientX === null || !this.W) this.pointer = null;
       else {
         const b = this.el.getBoundingClientRect();
@@ -1499,7 +1499,7 @@
   }
 
   // src/cursor.ts
-  var REACH = 60;
+  var REACH = 20;
   var dot = null;
   function togglePointer() {
     if (dot) {

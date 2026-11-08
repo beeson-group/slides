@@ -915,7 +915,7 @@ export class Orbits {
 
   // tints the drawn strands within r slide pixels of the client point in the accent color, or
   // clears the tint when clientX is null
-  glow(clientX: number | null, clientY = 0, r = 60): void {
+  glow(clientX: number | null, clientY = 0, r = 20): void {
     if (clientX === null || !this.W) this.pointer = null;
     else {
       const b = this.el.getBoundingClientRect();
