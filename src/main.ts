@@ -178,10 +178,12 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
 }
 
 // the mode of the deck is passed to a tycho viewer through its theme attribute, which can be
-// changed at any time. a drag in a viewer moves the camera, and it is not a swipe of the deck
+// changed at any time, unless the viewer carries data-keep-theme, under which the theme written in
+// the file is kept, for a scene whose marks are drawn for one background. a drag in a viewer moves
+// the camera, and it is not a swipe of the deck
 function syncViewers(theme: string): void {
   for (const viewer of document.querySelectorAll('tycho-viewer')) {
-    viewer.setAttribute('theme', theme);
+    if (!viewer.hasAttribute('data-keep-theme')) viewer.setAttribute('theme', theme);
     viewer.setAttribute('data-prevent-swipe', '');
   }
 }

@@ -3721,7 +3721,7 @@ void main() {
   }
   function syncViewers(theme) {
     for (const viewer of document.querySelectorAll("tycho-viewer")) {
-      viewer.setAttribute("theme", theme);
+      if (!viewer.hasAttribute("data-keep-theme")) viewer.setAttribute("theme", theme);
       viewer.setAttribute("data-prevent-swipe", "");
     }
   }
