@@ -3414,13 +3414,16 @@ void main() {
   }
   var words2 = (s) => (s ?? "").split(/\s+/).filter(Boolean);
   var hasContent = (f) => f.children.length > 0 || (f.textContent ?? "").trim() !== "";
+  var isCopy = (f) => f.matches("pre > code.fragment");
   function addRestoreSteps(root2) {
     for (const slide of root2.querySelectorAll(".reveal .slides section")) {
       if (slide.querySelector("section, .fragment[data-restore]")) continue;
       const frags = [...slide.querySelectorAll(".fragment")];
       const unindexed = frags.filter((f) => !f.hasAttribute("data-fragment-index"));
       const last = unindexed.length ? [unindexed[unindexed.length - 1]] : frags.filter((f) => Number(f.dataset.fragmentIndex) === Math.max(...frags.map((g) => Number(g.dataset.fragmentIndex))));
-      if (!frags.some((f) => !last.includes(f) && hasContent(f))) continue;
+      const boxes = new Set(frags.filter(isCopy).map((f) => f.parentElement));
+      const dimsBox = [...boxes].some((box2) => !last.some((f) => f.parentElement === box2 && isCopy(f)));
+      if (!dimsBox && !frags.some((f) => !last.includes(f) && hasContent(f) && !isCopy(f))) continue;
       const restore = document.createElement("span");
       restore.className = "fragment";
       restore.setAttribute("data-restore", "");
@@ -3664,7 +3667,7 @@ void main() {
       syncViewers(get());
       void stillViewers();
     });
-    if (!EDITING) addRestoreSteps(document);
+    if (!EDITING) plugins.push({ id: "beeson-restore", init: () => addRestoreSteps(document) });
     await deck.initialize({ ...DEFAULTS, ...options, plugins });
     initChrome(deck);
     initSteps(deck);

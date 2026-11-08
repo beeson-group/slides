@@ -128,8 +128,10 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
     syncViewers(get());
     void stillViewers();
   });
-  // the editor lists the steps written in the file, and it does not show the added ones
-  if (!EDITING) addRestoreSteps(document);
+  // the editor lists the steps written in the file, and it does not show the added ones. the steps
+  // are added in a plugin, since the plugins are initialized in order before the fragments are
+  // sorted, and the copies of a code box are made by the highlight plugin before this one
+  if (!EDITING) plugins.push({ id: 'beeson-restore', init: () => addRestoreSteps(document) });
   await deck.initialize({ ...DEFAULTS, ...options, plugins });
 
   initChrome(deck);
