@@ -8,7 +8,8 @@ import type { Strand, Tone } from './orbits.ts';
 // spacecraft. the look of the strand is set with tone, a color of the theme, color, a CSS color or
 // a pair of them for the dark and the light mode in place of the color of the tone, alpha, its
 // opacity, weight, its width in line widths, head, the radius of its head in line widths, start,
-// the clock at which its trace begins, and glow. the other keys are free
+// the clock at which its trace begins, fade, the seconds of its clock from its first point after
+// which its opacity falls to zero at its last point, and glow. the other keys are free
 export type StrandRecord = {
   points: [number, number][];
   t?: number[];
@@ -20,6 +21,7 @@ export type StrandRecord = {
   weight?: number;
   head?: number;
   start?: number;
+  fade?: number;
   glow?: boolean;
   [key: string]: unknown;
 };
@@ -76,7 +78,7 @@ export function parse(data: unknown): StrandFile {
     if (r.alpha !== undefined && !(typeof r.alpha === 'number' && r.alpha > 0 && r.alpha <= 1)) {
       throw new Error(`the "alpha" of its record ${i} is not a number above 0 and up to 1`);
     }
-    for (const key of ['weight', 'head', 'start']) {
+    for (const key of ['weight', 'head', 'start', 'fade']) {
       const v = r[key];
       if (v !== undefined && !(typeof v === 'number' && Number.isFinite(v) && v >= 0)) {
         throw new Error(`the "${key}" of its record ${i} is not a number of zero or more`);
@@ -169,6 +171,7 @@ export function strandsOf(file: StrandFile, chosen: StrandRecord[], color?: stri
     if (r.alpha !== undefined) strand.alpha = r.alpha;
     if (r.weight !== undefined) strand.weight = r.weight;
     if (r.head !== undefined) strand.head = r.head;
+    if (r.fade !== undefined) strand.fade = r.fade;
     if (r.glow) strand.glow = true;
     return strand;
   });

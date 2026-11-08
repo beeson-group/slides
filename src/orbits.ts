@@ -17,8 +17,11 @@ export type Tone = 'orange' | 'violet' | 'text' | 'hero' | 'line';
 // and --strand-2 for pair 0, or with shade the shade at the fraction at of the first color of the
 // pair. craft, when true, marks the path of a spacecraft, whose head is drawn without data-heads.
 // a strand of a file may also set its weight, i.e. its width in line widths, the radius of its
-// head in line widths in place of the size of its backdrop, and a glow, a soft halo of its own color
-export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; color?: string | [string, string]; alpha?: number; ink?: { pair: number; at: number; shade?: boolean }; craft?: boolean; weight?: number; head?: number; glow?: boolean };
+// head in line widths in place of the size of its backdrop, a glow, a soft halo of its own color, and
+// a fade, the seconds of its clock from its first point after which its opacity falls to zero at its
+// last point, as the square of the time left, in FADE_BANDS bands of equal time
+export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; color?: string | [string, string]; alpha?: number; ink?: { pair: number; at: number; shade?: boolean }; craft?: boolean; weight?: number; head?: number; glow?: boolean; fade?: number };
+const FADE_BANDS = 12;
 
 export const MU = 0.01215;
 // the distance to a body within which the step is shortened in step()
@@ -530,12 +533,33 @@ export class Orbits {
     if (s.glow) ctx.shadowColor = ctx.strokeStyle;
   }
 
+  // the segments from to to of strand i, at the opacity of the pen up to its fade, and beyond it in
+  // bands of equal time whose opacity falls to zero at its last point
   private segments(ctx: CanvasRenderingContext2D, i: number, from: number, to: number): void {
-    const p = this.px[i];
+    const p = this.px[i], s = this.strands[i];
     if (to <= from) return;
-    ctx.beginPath(); ctx.moveTo(p[2 * from], p[2 * from + 1]);
-    for (let j = from + 1; j <= to; j++) ctx.lineTo(p[2 * j], p[2 * j + 1]);
-    ctx.stroke();
+    const path = (a: number, b: number) => {
+      if (b <= a) return;
+      ctx.beginPath(); ctx.moveTo(p[2 * a], p[2 * a + 1]);
+      for (let j = a + 1; j <= b; j++) ctx.lineTo(p[2 * j], p[2 * j + 1]);
+      ctx.stroke();
+    };
+    if (s.fade === undefined) return path(from, to);
+    const fadeAt = s.times[0] + s.fade, span = s.T - fadeAt;
+    let a = from;
+    while (a < to && s.times[a + 1] <= fadeAt) a++;
+    path(from, a);
+    if (!(span > 0)) return path(a, to);
+    const base = ctx.globalAlpha;
+    for (let b = 0; b < FADE_BANDS && a < to; b++) {
+      const until = fadeAt + ((b + 1) * span) / FADE_BANDS;
+      let c = a;
+      while (c < to && s.times[c + 1] <= until) c++;
+      if (b === FADE_BANDS - 1) c = to;
+      if (c > a) { ctx.globalAlpha = base * (1 - (b + 0.5) / FADE_BANDS) ** 2; path(a, c); }
+      a = c;
+    }
+    ctx.globalAlpha = base;
   }
 
   // the last point drawn of strand i

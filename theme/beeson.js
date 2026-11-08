@@ -484,7 +484,7 @@
       if (r.alpha !== void 0 && !(typeof r.alpha === "number" && r.alpha > 0 && r.alpha <= 1)) {
         throw new Error(`the "alpha" of its record ${i} is not a number above 0 and up to 1`);
       }
-      for (const key of ["weight", "head", "start"]) {
+      for (const key of ["weight", "head", "start", "fade"]) {
         const v = r[key];
         if (v !== void 0 && !(typeof v === "number" && Number.isFinite(v) && v >= 0)) {
           throw new Error(`the "${key}" of its record ${i} is not a number of zero or more`);
@@ -557,6 +557,7 @@
       if (r.alpha !== void 0) strand.alpha = r.alpha;
       if (r.weight !== void 0) strand.weight = r.weight;
       if (r.head !== void 0) strand.head = r.head;
+      if (r.fade !== void 0) strand.fade = r.fade;
       if (r.glow) strand.glow = true;
       return strand;
     });
@@ -767,6 +768,7 @@
   }
 
   // src/orbits.ts
+  var FADE_BANDS = 12;
   var MU = 0.01215;
   var NEAR = 0.15;
   var DURATION = 12;
@@ -1203,13 +1205,37 @@
       ctx.shadowBlur = s.glow ? 6 * this.lw : 0;
       if (s.glow) ctx.shadowColor = ctx.strokeStyle;
     }
+    // the segments from to to of strand i, at the opacity of the pen up to its fade, and beyond it in
+    // bands of equal time whose opacity falls to zero at its last point
     segments(ctx, i, from, to) {
-      const p = this.px[i];
+      const p = this.px[i], s = this.strands[i];
       if (to <= from) return;
-      ctx.beginPath();
-      ctx.moveTo(p[2 * from], p[2 * from + 1]);
-      for (let j = from + 1; j <= to; j++) ctx.lineTo(p[2 * j], p[2 * j + 1]);
-      ctx.stroke();
+      const path = (a2, b) => {
+        if (b <= a2) return;
+        ctx.beginPath();
+        ctx.moveTo(p[2 * a2], p[2 * a2 + 1]);
+        for (let j = a2 + 1; j <= b; j++) ctx.lineTo(p[2 * j], p[2 * j + 1]);
+        ctx.stroke();
+      };
+      if (s.fade === void 0) return path(from, to);
+      const fadeAt = s.times[0] + s.fade, span = s.T - fadeAt;
+      let a = from;
+      while (a < to && s.times[a + 1] <= fadeAt) a++;
+      path(from, a);
+      if (!(span > 0)) return path(a, to);
+      const base = ctx.globalAlpha;
+      for (let b = 0; b < FADE_BANDS && a < to; b++) {
+        const until = fadeAt + (b + 1) * span / FADE_BANDS;
+        let c = a;
+        while (c < to && s.times[c + 1] <= until) c++;
+        if (b === FADE_BANDS - 1) c = to;
+        if (c > a) {
+          ctx.globalAlpha = base * (1 - (b + 0.5) / FADE_BANDS) ** 2;
+          path(a, c);
+        }
+        a = c;
+      }
+      ctx.globalAlpha = base;
     }
     // the last point drawn of strand i
     drawn(i) {
