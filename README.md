@@ -140,13 +140,13 @@ The data of a mark are given with one entry per value of the tab, or with one en
 | Kind | Entry | Drawing |
 |---|---|---|
 | `points` | A flat list `[x1, y1, x2, y2, ...]` | A dot at each point, filled, or a ring with `"hollow": true` |
-| `trace` | A point `[x, y]` | The whole path in a faint line, and the path up to the current frame in full with a dot at its end |
+| `trace` | A point `[x, y]` | The whole path in a faint line, left out with `"ghost": false`, and the path up to the current frame in full with a dot at its end |
 | `label` | `{ "at": [x, y], "text": "..." }`, with one position and one text, or a list of each | The text at the position |
 | `events` | A list of `{ "frame": n, "at": [x, y], "text": "..." }`, not one per frame | A ring and its text from the frame on, and a tick on the scrubber in the tone of the mark |
 
 A region is a polygon of `points`, filled at `opacity`. A curve is a polyline of `points` or a `circle` `[cx, cy, r]`, with a `width` and a `dash`. A label is a `text` at `at`, with an `anchor` (`start`, `middle`, or `end`) and an offset `dx`, `dy` in pixels. A mark is drawn with a `size`, a `width`, an `anchor`, `dx`, and `dy` as well. Give each element and mark a `tone`, i.e. a color of the theme without its dashes (`accent`, `violet`, `text`, `subtle`, `muted`, or `data-1` to `data-8`), and the plot is drawn right in both modes. A `class` on an element or a mark is a target of `data-highlight`, as in stepped math, and the element keeps its color when a tab is chosen. In `active`, list the ids of the elements emphasized at each frame. The other ids named in the active list of any tab are dimmed at the same frame.
 
-Text in the JSON is set in a small markup rather than with MathJax, so that a plot is drawn the same in the slides, the PDF, and PowerPoint. Math is written between `$` signs, with italic letters, `_` and `^`, braces, `\mathrm{}`, `\text{}`, Greek letters, and a few symbols such as `\to`, and a hyphen is set as a minus sign there. A fault in the block is shown in place of the plot with its path, e.g. `tabs[0].data.m: 3 frames are given, and the tab has 2 values`, and `npm run check` fails on it.
+Text in the JSON is set in a small markup rather than with MathJax, so that a plot is drawn the same in the slides, the PDF, and PowerPoint. Math is written between `$` signs, with italic letters, `_` and `^`, braces, `\mathrm{}`, `\text{}`, `\mathcal{}` for the script capitals of Unicode, Greek letters, and a few symbols such as `\to`, and a hyphen is set as a minus sign there. A fault in the block is shown in place of the plot with its path, e.g. `tabs[0].data.m: 3 frames are given, and the tab has 2 values`, and `npm run check` fails on it.
 
 ## Agent skills
 
