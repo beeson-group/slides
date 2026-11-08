@@ -4,6 +4,8 @@ This repository is an HTML slide template for the talks of the Beeson group, bui
 
 The demo deck, `index.html`, shows the main layouts, the steps, and the elements of the theme, and every layout class is listed under Layouts below. Open it, and press `s` for the speaker view.
 
+The template is in beta at version 0.9.0-beta.1, hence the names of its classes and data attributes may still change before version 1.0.
+
 ## Start a talk
 
 1. Press "Use this template" on GitHub, or copy the folders `theme/` and `brand/` next to a new `index.html`.
