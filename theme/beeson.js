@@ -1,4 +1,4 @@
-/*! beeson.js 1.0.0, the reveal.js theme of the Beeson group. MIT license. The orbit engine is ported from src/lib/orbits.ts of https://github.com/ClouD-161803/ClouD-161803.github.io (MIT). */
+/*! beeson.js 0.9.0-beta.1, the reveal.js theme of the Beeson group. MIT license. The orbit engine is ported from src/lib/orbits.ts of https://github.com/ClouD-161803/ClouD-161803.github.io (MIT). */
 "use strict";
 (() => {
   // src/scenes.ts
@@ -526,6 +526,23 @@
 
   // src/orbits.ts
   var FADE_BANDS = 12;
+  var alphaOf = (s) => s.alpha ?? (s.tone === "orange" || s.tone === "violet" ? 0.42 : s.tone === "text" ? 0.8 : s.tone === "line" ? 0.36 : 1);
+  var widthOf = (s) => (s.tone === "hero" ? 2.2 : s.tone === "text" ? 1.3 : 1) * (s.weight ?? 1);
+  var colorOf = (s) => s.color ? `color ${JSON.stringify(s.color)}` : s.ink ? `ink ${JSON.stringify(s.ink)}` : s.tone === "orange" || s.tone === "hero" ? "accent" : s.tone === "violet" ? "violet" : s.tone === "text" || s.tone === "line" ? "text" : "stroke";
+  function bandsOf(s) {
+    const n = s.times.length, fadeAt = s.times[0] + (s.fade ?? Infinity), span = s.T - fadeAt;
+    if (!(span > 0)) return null;
+    const out = new Uint32Array(FADE_BANDS);
+    let a = 0;
+    while (a < n - 1 && s.times[a + 1] <= fadeAt) a++;
+    out[0] = a;
+    for (let b = 1; b < FADE_BANDS; b++) {
+      const until = fadeAt + b * span / FADE_BANDS;
+      while (a < n - 1 && s.times[a + 1] <= until) a++;
+      out[b] = a;
+    }
+    return out;
+  }
   var MU = 0.01215;
   var NEAR = 0.15;
   var DURATION = 12;
@@ -863,8 +880,19 @@
       this.pending = false;
       // the colors of the strands with an ink, resolved in redraw() for the current mode
       this.inks = [];
-      // copies of the canvases, traced in the colors of the old mode during a flip, or null
+      // copies of the canvases and of the trail, traced in the colors of the old mode during a flip, or
+      // null
       this.ghosted = null;
+      // during a trace, the strands before the index cached are drawn on the trail a piece per frame, and
+      // the others are stroked whole at every frame, see order()
+      this.cached = 0;
+      // the point of each strand before cached up to which it is drawn on the trail, a point of its path
+      this.upTo = [];
+      // the first points of the bands of the fade of each strand, from bandsOf()
+      this.bands = [];
+      // a canvas outside the page with the bodies and the strands before cached up to upTo, copied onto
+      // the base canvas at every frame of a trace, or null outside a trace
+      this.trail = null;
       this.el = el;
       const file = el.dataset.strands !== void 0;
       this.strands = file ? [] : scene(el.dataset.scene ?? "");
@@ -891,6 +919,7 @@
       this.labels = [...el.querySelectorAll(".lab")];
       this.Tmax = Math.max(...this.strands.map((s) => s.T));
       this.idx = this.strands.map(() => 0);
+      this.order();
       CACHE.set(el, this);
       this.fit();
       this.ready = file ? strandsFor(el).then(({ strands, dots }) => this.install(strands, dots)) : Promise.resolve();
@@ -908,6 +937,7 @@
       this.dots = dots;
       this.Tmax = Math.max(...strands.map((s) => s.T));
       this.idx = strands.map(() => 0);
+      this.order();
       this.loaded = true;
       this.fittedFor = "";
       this.pathsFor = "";
@@ -916,6 +946,37 @@
         this.pending = false;
         this.start();
       }
+    }
+    // sets cached, the number of strands at the start of the order of the strands that are drawn in
+    // pieces during a trace. a strand is drawn in pieces where the seams of the pieces are too faint to
+    // be seen, i.e. it is a hairline without a glow at an opacity of 0.5 or less, and where the pieces
+    // keep the order of the strands, i.e. every earlier strand of another color is traced before it
+    // begins. two strokes of one color give the same pixels in either order
+    order() {
+      const ends = /* @__PURE__ */ new Map();
+      const seconds = (i, t) => t / this.Tmax * this.duration + i * this.stagger;
+      let k = 0;
+      for (; k < this.strands.length; k++) {
+        const s = this.strands[k], color = colorOf(s), begin = seconds(k, s.times[0]);
+        if (s.glow || alphaOf(s) > 0.5 || widthOf(s) > 1) break;
+        if ([...ends].some(([other, end]) => other !== color && end > begin)) break;
+        ends.set(color, Math.max(ends.get(color) ?? -Infinity, seconds(k, s.times[s.times.length - 1])));
+      }
+      this.cached = k;
+      this.upTo = this.strands.map(() => 0);
+      this.bands = this.strands.map(bandsOf);
+      this.trail = null;
+    }
+    // the last point of the path of strand i at or before its point j
+    lastKept(i, j) {
+      const keep = this.paths[i].keep;
+      let lo = 0, hi = keep.length - 1;
+      while (lo < hi) {
+        const mid = lo + hi + 1 >> 1;
+        if (keep[mid] <= j) lo = mid;
+        else hi = mid - 1;
+      }
+      return keep[lo];
     }
     // the window in the units of the strands: its center and its half height
     get view() {
@@ -948,7 +1009,14 @@
         into.append(to);
         return to;
       });
-      this.ghosted = { base, head, c: this.colors(), inks: [...this.inks] };
+      let trail = null;
+      if (this.trail) {
+        trail = document.createElement("canvas");
+        trail.width = this.W;
+        trail.height = this.H;
+        trail.getContext("2d")?.drawImage(this.trail, 0, 0);
+      }
+      this.ghosted = { base, head, trail, c: this.colors(), inks: [...this.inks] };
     }
     unghost() {
       this.ghosted?.base.remove();
@@ -1025,6 +1093,7 @@
           return pathOf(out);
         });
         this.pathsFor = key;
+        this.upTo = this.upTo.map((j, i) => this.lastKept(i, j));
       }
       const k = h / 2 / this.half;
       for (const lab of this.labels) {
@@ -1072,34 +1141,31 @@
     pen(ctx, c, i, inks = this.inks) {
       const s = this.strands[i], tone = s.tone;
       ctx.strokeStyle = s.color ? typeof s.color === "string" ? s.color : s.color[c.light ? 1 : 0] : s.ink ? inks[i] : tone === "orange" || tone === "hero" ? c.accent : tone === "violet" ? c.violet : tone === "text" || tone === "line" ? c.text : c.stroke;
-      ctx.globalAlpha = s.alpha ?? (tone === "orange" || tone === "violet" ? 0.42 : tone === "text" ? 0.8 : tone === "line" ? 0.36 : 1);
-      ctx.lineWidth = (tone === "hero" ? 2.2 : tone === "text" ? 1.3 : 1) * (s.weight ?? 1) * this.lw;
+      ctx.globalAlpha = alphaOf(s);
+      ctx.lineWidth = widthOf(s) * this.lw;
       ctx.lineJoin = "round";
       ctx.shadowBlur = s.glow ? 6 * this.lw : 0;
       if (s.glow) ctx.shadowColor = ctx.strokeStyle;
     }
-    // strokes strand i up to the fraction f of its segment from point j to j + 1. up to its fade, the
-    // strand is stroked in one path, since two strokes of one strand at an opacity below 1 overlap or
-    // leave a gap at their joint. beyond its fade, it is stroked in bands of equal time, which begin
-    // and end at its points, at an opacity that falls to zero at its last point
-    stroke(ctx, i, j, f) {
-      const s = this.strands[i], path = this.paths[i];
+    // strokes strand i from its point from, its first by default, up to the fraction f of its segment
+    // from point j to j + 1. up to its fade, the strand is stroked in one path, since two strokes of one
+    // strand at an opacity below 1 overlap or leave a gap at their joint. beyond its fade, it is stroked
+    // in bands of equal time, which begin and end at its points, at an opacity that falls to zero at its
+    // last point. a stroke from a later point draws the pixels of the same bands beyond this point
+    stroke(ctx, i, j, f, from = 0) {
+      const path = this.paths[i], ends = this.bands[i];
       const part = (a2, b, g) => {
+        if (b < from || b === from && !(g > 0)) return;
         ctx.beginPath();
-        trace(ctx, path, b, g, a2);
+        trace(ctx, path, b, g, Math.max(a2, from));
         ctx.stroke();
       };
-      const fadeAt = s.times[0] + (s.fade ?? Infinity), span = s.T - fadeAt;
-      let a = 0;
-      while (a < j && s.times[a + 1] <= fadeAt) a++;
-      if (a === j || !(span > 0)) return part(0, j, f);
+      let a = ends ? Math.min(ends[0], j) : j;
+      if (!ends || a === j) return part(0, j, f);
       if (a > 0) part(0, a, 0);
       const base = ctx.globalAlpha;
       for (let b = 0; b < FADE_BANDS && a < j; b++) {
-        const until = fadeAt + (b + 1) * span / FADE_BANDS;
-        let c = a;
-        while (c < j && s.times[c + 1] <= until) c++;
-        if (b === FADE_BANDS - 1) c = j;
+        const c = b === FADE_BANDS - 1 ? j : Math.min(ends[b + 1], j);
         if (c > a) {
           ctx.globalAlpha = base * (1 - (b + 0.5) / FADE_BANDS) ** 2;
           part(a, c, c === j ? f : 0);
@@ -1128,32 +1194,80 @@
       if (!ctx) return;
       const c = this.colors(), now = performance.now();
       this.paint(ctx, c);
-      this.draw(ctx, c, now);
+      this.trail = null;
+      this.draw(ctx, c, now, this.inks, this.midTrace ? this.trailOf(c) : null);
       this.paintHead(now, c);
     }
     // draws the bodies and every strand, a finished strand whole and a strand in its trace up to its
     // head at the time now. the strands are stroked in the order of their file or scene at every
-    // frame, the order of the still, hence the last frame of a trace is its still apart from the heads
-    draw(ctx, c, now, inks = this.inks) {
+    // frame, the order of the still, hence the last frame of a trace is its still apart from the heads.
+    // with a trail, the trail is copied in place of the bodies, and each strand before cached is
+    // stroked from its point of upTo on
+    draw(ctx, c, now, inks = this.inks, trail = null) {
       ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;
       ctx.clearRect(0, 0, this.W, this.H);
-      this.bodies(ctx, c);
+      if (trail) ctx.drawImage(trail, 0, 0);
+      else this.bodies(ctx, c);
       const tracing = this.midTrace;
       this.strands.forEach((s, i) => {
-        const n = s.times.length, j = this.drawn(i);
+        const n = s.times.length, j = this.drawn(i), from = trail && i < this.cached ? this.upTo[i] : 0;
+        if (from > 0 && from >= n - 1) return;
         if (j < n - 1) {
           const tau = this.clock(i, now);
           if (!tracing || !(tau > s.times[0])) return;
           this.pen(ctx, c, i, inks);
-          this.stroke(ctx, i, j, this.fraction(i, j, tau));
+          this.stroke(ctx, i, j, this.fraction(i, j, tau), from);
           return;
         }
         this.pen(ctx, c, i, inks);
-        this.stroke(ctx, i, n - 1, 0);
+        this.stroke(ctx, i, n - 1, 0, from);
       });
       ctx.globalAlpha = 1;
       ctx.shadowBlur = 0;
+    }
+    // the trail of the trace, laid with the bodies and the strands before cached up to upTo when it
+    // is missing, or null without a strand before cached
+    trailOf(c) {
+      if (!this.cached) return null;
+      if (!this.trail) {
+        const trail = document.createElement("canvas");
+        trail.width = this.W;
+        trail.height = this.H;
+        const ctx = trail.getContext("2d");
+        if (!ctx) return null;
+        this.bodies(ctx, c);
+        for (let i = 0; i < this.cached; i++) {
+          if (!this.upTo[i]) continue;
+          this.pen(ctx, c, i);
+          this.stroke(ctx, i, this.upTo[i], 0);
+        }
+        this.trail = trail;
+      }
+      return this.trail;
+    }
+    // draws on the trails the pieces of the strands before cached that their heads have passed since
+    // the last frame, i.e. from the point of upTo to the last point of the path passed, and moves upTo
+    // there. a piece ends at a point of the path, since a stroke to a point left out of the path ends
+    // at the point of the path before it
+    extend(c) {
+      const ctx = this.trailOf(c)?.getContext("2d"), ghost = this.ghosted, gtx = ghost?.trail?.getContext("2d");
+      if (!ctx) return;
+      for (let i = 0; i < this.cached; i++) {
+        const to = this.lastKept(i, this.idx[i]), from = this.upTo[i];
+        if (to <= from) continue;
+        this.pen(ctx, c, i);
+        this.stroke(ctx, i, to, 0, from);
+        if (ghost && gtx) {
+          this.pen(gtx, ghost.c, i, ghost.inks);
+          this.stroke(gtx, i, to, 0, from);
+        }
+        this.upTo[i] = to;
+      }
+      for (const t of [ctx, gtx]) if (t) {
+        t.globalAlpha = 1;
+        t.shadowBlur = 0;
+      }
     }
     reset() {
       this.unghost();
@@ -1162,6 +1276,7 @@
       this.t0 = null;
       this.finished = false;
       this.idx = this.strands.map(() => 0);
+      this.upTo = this.strands.map(() => 0);
       this.redraw();
     }
     start() {
@@ -1175,6 +1290,7 @@
       }
       if (this.raf || this.finished && !this.loop) return;
       this.t0 = performance.now();
+      this.trail = null;
       const tick = (now) => {
         this.frame(now);
         this.raf = !this.finished || this.loop ? requestAnimationFrame(tick) : 0;
@@ -1193,13 +1309,14 @@
       this.unghost();
       this.stop();
       this.pending = false;
+      this.trail = null;
       this.base.remove();
       this.head.remove();
       CACHE.delete(this.el);
     }
     // tints the drawn strands within r slide pixels of the client point in the accent color, or
     // clears the tint when clientX is null
-    glow(clientX, clientY = 0, r = 60) {
+    glow(clientX, clientY = 0, r = 20) {
       if (clientX === null || !this.W) this.pointer = null;
       else {
         const b = this.el.getBoundingClientRect();
@@ -1282,10 +1399,17 @@
         ctx.fill();
       });
     }
+    // tints the drawn strands within the radius of the pointer. a segment of a strand is stroked when its
+    // box, with its control points where it is curved, meets the box of the disc, and the stroke is
+    // clipped to the disc, since the points of a strand may lie far apart on either side of it
     glowing(ctx, c) {
       const g = this.pointer;
       if (!g) return;
-      const r2 = g.r * g.r;
+      const reach = g.r + this.lw;
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(g.x, g.y, g.r, 0, 2 * Math.PI);
+      ctx.clip();
       ctx.strokeStyle = c.accent;
       ctx.globalAlpha = 0.35;
       ctx.lineWidth = this.lw;
@@ -1294,28 +1418,29 @@
       ctx.beginPath();
       this.strands.forEach((_, i) => {
         const { px: p, ctl } = this.paths[i], last = this.drawn(i);
-        const to = (j) => {
-          if (curved(ctl, j - 1)) ctx.bezierCurveTo(ctl[4 * j - 4], ctl[4 * j - 3], ctl[4 * j - 2], ctl[4 * j - 1], p[2 * j], p[2 * j + 1]);
-          else ctx.lineTo(p[2 * j], p[2 * j + 1]);
-        };
         let pen = false;
-        for (let j = 0; j <= last; j++) {
-          const dx = p[2 * j] - g.x, dy = p[2 * j + 1] - g.y;
-          if (dx * dx + dy * dy <= r2) {
-            if (pen) to(j);
-            else if (j > 0) {
-              ctx.moveTo(p[2 * j - 2], p[2 * j - 1]);
-              to(j);
-            } else ctx.moveTo(p[0], p[1]);
-            pen = true;
-          } else if (pen) {
-            to(j);
-            pen = false;
+        for (let j = 1; j <= last; j++) {
+          const bent = curved(ctl, j - 1);
+          let lx = Math.min(p[2 * j - 2], p[2 * j]), hx = Math.max(p[2 * j - 2], p[2 * j]);
+          let ly = Math.min(p[2 * j - 1], p[2 * j + 1]), hy = Math.max(p[2 * j - 1], p[2 * j + 1]);
+          if (bent) {
+            lx = Math.min(lx, ctl[4 * j - 4], ctl[4 * j - 2]);
+            hx = Math.max(hx, ctl[4 * j - 4], ctl[4 * j - 2]);
+            ly = Math.min(ly, ctl[4 * j - 3], ctl[4 * j - 1]);
+            hy = Math.max(hy, ctl[4 * j - 3], ctl[4 * j - 1]);
           }
+          if (lx > g.x + reach || hx < g.x - reach || ly > g.y + reach || hy < g.y - reach) {
+            pen = false;
+            continue;
+          }
+          if (!pen) ctx.moveTo(p[2 * j - 2], p[2 * j - 1]);
+          if (bent) ctx.bezierCurveTo(ctl[4 * j - 4], ctl[4 * j - 3], ctl[4 * j - 2], ctl[4 * j - 1], p[2 * j], p[2 * j + 1]);
+          else ctx.lineTo(p[2 * j], p[2 * j + 1]);
+          pen = true;
         }
       });
       ctx.stroke();
-      ctx.globalAlpha = 1;
+      ctx.restore();
     }
     // the point of strand i at the flight time tau, on its segment from point j to j + 1
     at(i, j, tau) {
@@ -1338,8 +1463,10 @@
       });
       if (flying === 0) this.finished = true;
       const c = this.colors(), ghost = this.ghosted, gtx = ghost?.base.getContext("2d");
-      this.draw(ctx, c, now);
-      if (ghost && gtx) this.draw(gtx, ghost.c, now, ghost.inks);
+      if (this.finished) this.trail = null;
+      else this.extend(c);
+      this.draw(ctx, c, now, this.inks, this.trail);
+      if (ghost && gtx) this.draw(gtx, ghost.c, now, ghost.inks, this.trail && ghost.trail);
       this.paintHead(now, c);
     }
   };
@@ -1380,7 +1507,7 @@
   }
 
   // src/cursor.ts
-  var REACH = 60;
+  var REACH = 20;
   var dot = null;
   function togglePointer() {
     if (dot) {
@@ -3932,7 +4059,7 @@ void main() {
     plots,
     // called in a script file of polylines named in data-strands, see src/strands.ts
     strands: register,
-    version: "1.0.0"
+    version: "0.9.0-beta.1"
   };
   window.Beeson = Beeson;
 })();

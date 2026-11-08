@@ -4,7 +4,7 @@
 import { Orbits } from './orbits.ts';
 
 // the radius of the tint, in slide pixels
-const REACH = 60;
+const REACH = 20;
 
 let dot: HTMLDivElement | null = null;
 

@@ -168,6 +168,8 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
     return {
       errors,
       evaluate,
+      // sends a command of the DevTools protocol to the page, e.g. Emulation.setCPUThrottlingRate
+      send: call,
       async goto(url) {
         const loaded = new Promise((done) => {
           const onLoad = ({ method, sessionId: from }) => {
