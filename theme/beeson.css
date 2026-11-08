@@ -487,6 +487,42 @@ html.to-dark::view-transition-new(root) { z-index: 1; }
   from { clip-path: circle(var(--flip-r) at var(--flip-x) var(--flip-y)); }
   to { clip-path: circle(0px at var(--flip-x) var(--flip-y)); }
 }
+/* while a backdrop is traced, the deck is a view of its own over the root, flip-deck, and the copies of the traced canvases
+   are in flip-ghost between them, see ghosts() in src/switcher.ts. The deck and the copies are cut with masks at the
+   radius --flip-at, eased as the circle of the root. The progress --flip-p is animated rather than the radius, since a
+   var() in the keyframes of a custom property is not resolved in Firefox. --flip-deck-x and --flip-deck-y are the point
+   of the flip in the box of the deck, which is also the box of flip-ghost. On a flip to dark, --flip-p is also set to 1
+   outside the animation, hence the old deck is shown whole in a frame drawn before the animation is applied */
+@property --flip-p { syntax: '<number>'; inherits: false; initial-value: 0; }
+.flip-ghost { position: fixed; display: none; overflow: hidden; pointer-events: none; view-transition-name: flip-ghost; }
+html:active-view-transition .flip-ghost { display: block; }
+::view-transition-group(*.flip-art) { display: none; }
+::view-transition-group(flip-ghost) { z-index: 1; animation: none; }
+::view-transition-group(flip-deck) { z-index: 2; animation: none; }
+::view-transition-old(flip-deck), ::view-transition-new(flip-deck), ::view-transition-new(flip-ghost) {
+  --flip-at: calc(var(--flip-p) * var(--flip-r));
+  mix-blend-mode: normal;
+}
+html.to-light::view-transition-new(flip-deck) {
+  animation: flip-grow 400ms ease-out 50ms both;
+  mask-image: radial-gradient(circle at var(--flip-deck-x) var(--flip-deck-y), #000 var(--flip-at), transparent var(--flip-at));
+}
+html.to-light::view-transition-old(flip-deck), html.to-light::view-transition-new(flip-ghost) {
+  animation: flip-grow 400ms ease-out 50ms both;
+  mask-image: radial-gradient(circle at var(--flip-deck-x) var(--flip-deck-y), transparent var(--flip-at), #000 var(--flip-at));
+}
+html.to-dark::view-transition-new(flip-deck) {
+  --flip-p: 1;
+  animation: flip-shrink 400ms ease-out 50ms both;
+  mask-image: radial-gradient(circle at var(--flip-deck-x) var(--flip-deck-y), transparent var(--flip-at), #000 var(--flip-at));
+}
+html.to-dark::view-transition-old(flip-deck), html.to-dark::view-transition-new(flip-ghost) {
+  --flip-p: 1;
+  animation: flip-shrink 400ms ease-out 50ms both;
+  mask-image: radial-gradient(circle at var(--flip-deck-x) var(--flip-deck-y), #000 var(--flip-at), transparent var(--flip-at));
+}
+@keyframes flip-grow { from { --flip-p: 0; } to { --flip-p: 1; } }
+@keyframes flip-shrink { from { --flip-p: 1; } to { --flip-p: 0; } }
 
 /* ---- print (?print-pdf) and stills (?still): everything drawn complete, without the chrome outside the slide ---- */
 html.reveal-print .theme-switch, html.reveal-print .pointer-dot { display: none; }

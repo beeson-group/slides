@@ -997,6 +997,8 @@
       this.pending = false;
       // the colors of the strands with an ink, resolved in redraw() for the current mode
       this.inks = [];
+      // copies of the canvases, traced in the colors of the old mode during a flip, or null
+      this.ghosted = null;
       this.el = el;
       const file = el.dataset.strands !== void 0;
       this.strands = file ? [] : scene(el.dataset.scene ?? "");
@@ -1027,6 +1029,9 @@
       this.fit();
       this.ready = file ? strandsFor(el).then(({ strands, dots }) => this.install(strands, dots)) : Promise.resolve();
     }
+    static of(el) {
+      return CACHE.get(el);
+    }
     static reduced() {
       if (typeof window === "undefined") return true;
       const q = location.search;
@@ -1051,6 +1056,37 @@
     }
     get done() {
       return this.finished || this.loop;
+    }
+    // true while the backdrop is drawn again at every frame of the screen, i.e. during a trace or a
+    // loop
+    get tracing() {
+      return this.raf !== 0;
+    }
+    get canvases() {
+      return [this.base, this.head];
+    }
+    // copies the canvases into the element into, whose client box is at origin, over the boxes of the
+    // canvases. until unghost() is called, the trace is continued on the copies in the colors of the
+    // mode at the call, while the canvases are redrawn in the next mode
+    ghost(into, origin) {
+      this.unghost();
+      if (!this.W) return;
+      const r = this.el.getBoundingClientRect();
+      const [base, head] = this.canvases.map((from) => {
+        const to = document.createElement("canvas");
+        to.width = this.W;
+        to.height = this.H;
+        Object.assign(to.style, { position: "absolute", left: `${r.left - origin.left}px`, top: `${r.top - origin.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+        to.getContext("2d")?.drawImage(from, 0, 0);
+        into.append(to);
+        return to;
+      });
+      this.ghosted = { base, head, c: this.colors(), inks: [...this.inks] };
+    }
+    unghost() {
+      this.ghosted?.base.remove();
+      this.ghosted?.head.remove();
+      this.ghosted = null;
     }
     colors() {
       const cs = getComputedStyle(this.el);
@@ -1088,6 +1124,7 @@
       const r = this.el.getBoundingClientRect(), dpr = devicePixelRatio || 1;
       const w = this.el.offsetWidth, h = this.el.offsetHeight;
       if (r.width === 0 || r.height === 0 || w === 0 || h === 0) return;
+      this.unghost();
       if (this.fitted && this.strands.length) {
         const section = this.el.closest("section");
         const box2 = { left: this.el.offsetLeft, top: this.el.offsetTop, width: w, height: h };
@@ -1158,9 +1195,9 @@
     }
     // the color, opacity, width, and glow of strand i: those of its tone, then its own ink, alpha,
     // weight, and glow where it has them
-    pen(ctx, c, i) {
+    pen(ctx, c, i, inks = this.inks) {
       const s = this.strands[i], tone = s.tone;
-      ctx.strokeStyle = s.color ? typeof s.color === "string" ? s.color : s.color[c.light ? 1 : 0] : s.ink ? this.inks[i] : tone === "orange" || tone === "hero" ? c.accent : tone === "violet" ? c.violet : tone === "text" || tone === "line" ? c.text : c.stroke;
+      ctx.strokeStyle = s.color ? typeof s.color === "string" ? s.color : s.color[c.light ? 1 : 0] : s.ink ? inks[i] : tone === "orange" || tone === "hero" ? c.accent : tone === "violet" ? c.violet : tone === "text" || tone === "line" ? c.text : c.stroke;
       ctx.globalAlpha = s.alpha ?? (tone === "orange" || tone === "violet" ? 0.42 : tone === "text" ? 0.8 : tone === "line" ? 0.36 : 1);
       ctx.lineWidth = (tone === "hero" ? 2.2 : tone === "text" ? 1.3 : 1) * (s.weight ?? 1) * this.lw;
       ctx.shadowBlur = s.glow ? 6 * this.lw : 0;
@@ -1198,6 +1235,7 @@
       this.paintHead(performance.now(), c);
     }
     reset() {
+      this.unghost();
       this.stop();
       this.pending = false;
       this.t0 = null;
@@ -1223,6 +1261,7 @@
       this.raf = requestAnimationFrame(tick);
     }
     complete() {
+      this.unghost();
       this.stop();
       this.pending = false;
       this.finished = true;
@@ -1230,6 +1269,7 @@
       this.redraw();
     }
     destroy() {
+      this.unghost();
       this.stop();
       this.pending = false;
       this.base.remove();
@@ -1253,7 +1293,11 @@
     }
     paintHead(now, c = this.colors()) {
       if (!this.W) return;
-      const ctx = this.head.getContext("2d");
+      this.headOn(this.head, now, c);
+      if (this.ghosted) this.headOn(this.ghosted.head, now, this.ghosted.c);
+    }
+    headOn(canvas, now, c) {
+      const ctx = canvas.getContext("2d");
       if (!ctx) return;
       ctx.clearRect(0, 0, this.W, this.H);
       if (this.loop) this.loopHead(ctx, c, now);
@@ -1361,10 +1405,11 @@
       }
       const ctx = this.base.getContext("2d");
       if (!ctx) return;
-      const c = this.colors();
-      ctx.lineWidth = this.lw;
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = c.stroke;
+      const c = this.colors(), ghost = this.ghosted, gtx = ghost?.base.getContext("2d");
+      for (const g of [ctx, gtx]) if (g) {
+        g.lineWidth = this.lw;
+        g.lineJoin = "round";
+      }
       let flying = 0;
       this.strands.forEach((s, i) => {
         const n = s.times.length, tau = this.clock(i, now);
@@ -1372,11 +1417,17 @@
         while (j < n - 1 && s.times[j + 1] <= tau) j++;
         this.pen(ctx, c, i);
         this.segments(ctx, i, this.idx[i], j);
+        if (ghost && gtx) {
+          this.pen(gtx, ghost.c, i, ghost.inks);
+          this.segments(gtx, i, this.idx[i], j);
+        }
         this.idx[i] = j;
         if (j < n - 1) flying++;
       });
-      ctx.globalAlpha = 1;
-      ctx.shadowBlur = 0;
+      for (const g of [ctx, gtx]) if (g) {
+        g.globalAlpha = 1;
+        g.shadowBlur = 0;
+      }
       if (flying === 0) this.finished = true;
       this.paintHead(now, c);
     }
@@ -3492,6 +3543,7 @@ void main() {
   var pinned = false;
   var button = null;
   var flip = null;
+  var undo = null;
   var isTheme = (v) => v === "dark" || v === "light";
   function get() {
     return root.dataset.theme === "light" ? "light" : "dark";
@@ -3508,6 +3560,44 @@ void main() {
     } catch {
     }
   }
+  function ghosts(x, y) {
+    const deck = document.querySelector(".reveal");
+    const live = [...document.querySelectorAll(".backdrop")].map((el) => Orbits.of(el)).filter((o) => o?.tracing);
+    if (!deck || !live.length || !CSS.supports("view-transition-class", "a") || !CSS.supports("selector(:active-view-transition)")) return null;
+    const box2 = deck.getBoundingClientRect();
+    root.style.setProperty("--flip-deck-x", `${x - box2.left}px`);
+    root.style.setProperty("--flip-deck-y", `${y - box2.top}px`);
+    deck.style.setProperty("view-transition-name", "flip-deck");
+    const canvases = live.flatMap((o) => o.canvases);
+    canvases.forEach((c, k) => {
+      c.style.setProperty("view-transition-name", `flip-art-${k}`);
+      c.style.setProperty("view-transition-class", "flip-art");
+    });
+    const unname = () => {
+      for (const c of canvases) {
+        c.style.removeProperty("view-transition-name");
+        c.style.removeProperty("view-transition-class");
+      }
+    };
+    const layer = document.createElement("div");
+    layer.className = "flip-ghost";
+    Object.assign(layer.style, { left: `${box2.left}px`, top: `${box2.top}px`, width: `${box2.width}px`, height: `${box2.height}px` });
+    return {
+      // called in the update of the view transition before the next mode is applied, hence the
+      // canvases are redrawn after it in the new view of the deck
+      lift() {
+        for (const o of live) o.ghost(layer, box2);
+        document.body.append(layer);
+        unname();
+      },
+      undo() {
+        unname();
+        deck.style.removeProperty("view-transition-name");
+        for (const o of live) o.unghost();
+        layer.remove();
+      }
+    };
+  }
   function set(theme, at) {
     if (!isTheme(theme) || theme === get()) return;
     store(theme);
@@ -3516,6 +3606,8 @@ void main() {
       apply(theme);
       return;
     }
+    undo?.();
+    undo = null;
     const b = button?.getBoundingClientRect();
     const x = at?.x ?? (b ? b.left + b.width / 2 : innerWidth), y = at?.y ?? (b ? b.top + b.height / 2 : 0);
     root.style.setProperty("--flip-x", `${x}px`);
@@ -3523,10 +3615,18 @@ void main() {
     root.style.setProperty("--flip-r", `${Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))}px`);
     root.classList.toggle("to-dark", theme === "dark");
     root.classList.toggle("to-light", theme === "light");
-    const tr = doc.startViewTransition(() => apply(theme));
+    const layers = ghosts(x, y);
+    undo = layers?.undo ?? null;
+    const tr = doc.startViewTransition(() => {
+      layers?.lift();
+      apply(theme);
+    });
     flip = tr;
     tr.finished.finally(() => {
-      if (flip === tr) root.classList.remove("to-dark", "to-light");
+      if (flip !== tr) return;
+      root.classList.remove("to-dark", "to-light");
+      undo?.();
+      undo = null;
     }).catch(() => {
     });
   }

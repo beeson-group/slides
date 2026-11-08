@@ -13,6 +13,8 @@ const root = document.documentElement;
 let pinned = false;
 let button: HTMLButtonElement | null = null;
 let flip: unknown = null;
+// the removal of the names and the layers set for the last flip in ghosts(), or null
+let undo: (() => void) | null = null;
 
 const isTheme = (v: unknown): v is Theme => v === 'dark' || v === 'light';
 
@@ -37,12 +39,57 @@ function store(theme: Theme): void {
   }
 }
 
+// the old view of a flip is a still, shown in the circle on a flip to dark and around it on a flip
+// to light, hence a traced backdrop would be held still there for up to 450 ms. while a backdrop is
+// traced, the deck is captured in a view of its own, flip-deck, without the canvases of the
+// backdrop. in the update of the flip, copies of these canvases are made in the layer flip-ghost
+// under the deck, and the trace is continued there in the old colors. the layer is shown only where
+// the old view of the deck is, with the masks of theme/beeson.css
+function ghosts(x: number, y: number): { lift: () => void; undo: () => void } | null {
+  const deck = document.querySelector<HTMLElement>('.reveal');
+  const live = [...document.querySelectorAll<HTMLElement>('.backdrop')].map((el) => Orbits.of(el)).filter((o) => o?.tracing) as Orbits[];
+  if (!deck || !live.length || !CSS.supports('view-transition-class', 'a') || !CSS.supports('selector(:active-view-transition)')) return null;
+  const box = deck.getBoundingClientRect();
+  root.style.setProperty('--flip-deck-x', `${x - box.left}px`);
+  root.style.setProperty('--flip-deck-y', `${y - box.top}px`);
+  deck.style.setProperty('view-transition-name', 'flip-deck');
+  // a canvas with a name is captured apart from the deck, and its old view is not shown
+  const canvases = live.flatMap((o) => o.canvases);
+  canvases.forEach((c, k) => {
+    c.style.setProperty('view-transition-name', `flip-art-${k}`);
+    c.style.setProperty('view-transition-class', 'flip-art');
+  });
+  const unname = () => {
+    for (const c of canvases) { c.style.removeProperty('view-transition-name'); c.style.removeProperty('view-transition-class'); }
+  };
+  const layer = document.createElement('div');
+  layer.className = 'flip-ghost';
+  Object.assign(layer.style, { left: `${box.left}px`, top: `${box.top}px`, width: `${box.width}px`, height: `${box.height}px` });
+  return {
+    // called in the update of the view transition before the next mode is applied, hence the
+    // canvases are redrawn after it in the new view of the deck
+    lift() {
+      for (const o of live) o.ghost(layer, box);
+      document.body.append(layer);
+      unname();
+    },
+    undo() {
+      unname();
+      deck.style.removeProperty('view-transition-name');
+      for (const o of live) o.unghost();
+      layer.remove();
+    },
+  };
+}
+
 // sets the theme, flipping from the client point at, or from the center of the button
 export function set(theme: Theme, at?: { x: number; y: number }): void {
   if (!isTheme(theme) || theme === get()) return;
   store(theme);
   const doc = document as Document & { startViewTransition?: (update: () => void) => { finished: Promise<void> } };
   if (!doc.startViewTransition || Orbits.reduced()) { apply(theme); return; }
+  undo?.();
+  undo = null;
   const b = button?.getBoundingClientRect();
   const x = at?.x ?? (b ? b.left + b.width / 2 : innerWidth), y = at?.y ?? (b ? b.top + b.height / 2 : 0);
   // the flip itself is the animation of the views in theme/beeson.css, set off with these classes
@@ -51,10 +98,18 @@ export function set(theme: Theme, at?: { x: number; y: number }): void {
   root.style.setProperty('--flip-r', `${Math.hypot(Math.max(x, innerWidth - x), Math.max(y, innerHeight - y))}px`);
   root.classList.toggle('to-dark', theme === 'dark');
   root.classList.toggle('to-light', theme === 'light');
-  const tr = doc.startViewTransition(() => apply(theme));
+  const layers = ghosts(x, y);
+  undo = layers?.undo ?? null;
+  const tr = doc.startViewTransition(() => { layers?.lift(); apply(theme); });
   flip = tr;
-  // a flip started during this one ends it early, and its classes are then left in place
-  tr.finished.finally(() => { if (flip === tr) root.classList.remove('to-dark', 'to-light'); }).catch(() => {});
+  // when a flip is started during this one, this one is ended early, and its classes and layers
+  // are taken down at the start of the later flip
+  tr.finished.finally(() => {
+    if (flip !== tr) return;
+    root.classList.remove('to-dark', 'to-light');
+    undo?.();
+    undo = null;
+  }).catch(() => {});
 }
 
 export function toggle(at?: { x: number; y: number }): void {
