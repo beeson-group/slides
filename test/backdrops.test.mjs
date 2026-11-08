@@ -231,3 +231,43 @@ test('the strands of a backdrop with data-stagger are started one after another'
   assert.deepEqual(started, started.map((_, i) => i < count));
   assert.ok(count >= 2 && count <= Math.ceil(1.6 / stagger) + 1, `${count} of ${started.length} strands started`);
 });
+
+// the fourth slide of the page has a straight strand of three points, 864 px apart. the tint at the
+// pointer is the disc of the strands within its radius, hence it reaches the radius on both sides of
+// the pointer and does not run past it, with the pointer on a point of the strand and between points
+test('the tint at the pointer is a disc of its radius', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl('test/pages/trace.html'));
+  await page.waitFor(deckSettled);
+  await page.evaluate('Reveal.slide(3)');
+  await page.waitFor('Beeson.backdrops.some((o) => Reveal.getCurrentSlide().contains(o.el) && o.W > 0)');
+  for (const at of [0, 0.3]) {
+    const tint = await page.evaluate(`(() => {
+      const b = Beeson.backdrops.find((o) => Reveal.getCurrentSlide().contains(o.el));
+      b.complete();
+      const box = b.el.getBoundingClientRect();
+      b.glow(box.left + (b.X(${at}) / b.W) * box.width, box.top + (b.Y(0) / b.H) * box.height, 30);
+      const { x, y, r } = b.pointer;
+      const c = document.createElement('canvas');
+      c.width = b.W;
+      c.height = b.H;
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(b.head, 0, 0);
+      const d = ctx.getImageData(0, 0, b.W, b.H).data;
+      let far = 0, left = Infinity, right = -Infinity;
+      for (let i = 0; i < d.length; i += 4) {
+        if (!d[i + 3]) continue;
+        const px = (i / 4) % b.W, py = Math.floor(i / 4 / b.W);
+        far = Math.max(far, Math.hypot(px + 0.5 - x, py + 0.5 - y));
+        left = Math.min(left, px - x);
+        right = Math.max(right, px + 1 - x);
+      }
+      return { r, far, left, right };
+    })()`);
+    const where = `with the pointer at x = ${at}, the tint of radius ${tint.r} px`;
+    assert.ok(tint.far <= tint.r + 2, `${where} reaches ${tint.far.toFixed(1)} px from the pointer`);
+    assert.ok(tint.left <= -tint.r + 2 && tint.right >= tint.r - 2, `${where} runs along the strand from ${tint.left} px to ${tint.right} px`);
+  }
+});
