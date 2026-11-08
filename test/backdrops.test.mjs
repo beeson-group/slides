@@ -116,6 +116,112 @@ test('a head is drawn on the path of a spacecraft alone', { timeout: 60000 }, as
   assert.ok(pixels > 5 && pixels < 60, `${pixels} pixels`);
 });
 
+// the alpha of the pixels of rows from to to of the backdrop of the current slide, with its head
+// canvas over its base canvas, read in one task, i.e. without a frame drawn between the two reads
+const alphas = (from, to) => `(() => {
+  const b = Beeson.backdrops.find((o) => Reveal.getCurrentSlide().contains(o.el));
+  const c = document.createElement('canvas');
+  c.width = b.base.width;
+  c.height = b.base.height;
+  const ctx = c.getContext('2d');
+  ctx.drawImage(b.base, 0, 0);
+  ctx.drawImage(b.head, 0, 0);
+  const { data } = ctx.getImageData(0, ${from}, c.width, ${to - from});
+  return Array.from({ length: ${to - from} }, (_, r) => Array.from({ length: c.width }, (_, x) => data[4 * (r * c.width + x) + 3]));
+})()`;
+const spread = (values) => Math.max(...values) - Math.min(...values);
+// the row of rows with the most ink, i.e. the center of a horizontal strand
+const center = (rows) => rows.reduce((best, row, r) => (row.reduce((a, b) => a + b) > rows[best].reduce((a, b) => a + b) ? r : best), 0);
+
+// the page traces two straight strands at an opacity of 0.6 in 2 s, the second with a glow, from
+// x = 96 px to 1824 px on the rows y = 324 px and 756 px. a strand stroked in pieces, one per frame,
+// is beaded at the joints of the pieces, and the glow of the pieces adds up
+test('a strand is traced in one stroke, hence without beads, and its trace ends on its still', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage({ motion: true });
+  await page.goto(deckUrl('test/pages/trace.html'));
+  await page.waitFor(deckSettled);
+  await page.evaluate('Reveal.slide(1)');
+  await new Promise((done) => setTimeout(done, 900));
+  const [plain, glowing] = await page.evaluate(`[${alphas(310, 340)}, ${alphas(735, 780)}]`);
+  await page.waitFor('Beeson.backdrops[0].done', 10000);
+  await new Promise((done) => setTimeout(done, 100));
+  const [plainStill, glowingStill] = await page.evaluate(`[${alphas(310, 340)}, ${alphas(735, 780)}]`);
+
+  const row = plain[center(plain)];
+  const end = row.findLastIndex((a) => a > 0);
+  assert.ok(end > 400 && end < 1600, `the trace has reached x = ${end} px after 0.9 s of 2 s`);
+  assert.ok(spread(row.slice(150, end - 20)) <= 3, `the alpha along the strand spreads over ${spread(row.slice(150, end - 20))}`);
+  const still = plainStill[center(plainStill)];
+  assert.ok(spread(still.slice(150, 1770)) <= 3, `the alpha along the still spreads over ${spread(still.slice(150, 1770))}`);
+
+  // a row of the glow 4 px off the strand, behind the head
+  const r = center(glowing) + 4;
+  const off = glowing[r].slice(150, glowing[center(glowing)].findLastIndex((a) => a > 0) - 40).map((a, x) => Math.abs(a - glowingStill[r][150 + x]));
+  assert.ok(glowing[r][300] > 0, 'the glow is drawn 4 px off the strand');
+  assert.ok(Math.max(...off) <= 3, `the glow during the trace is off its still by up to ${Math.max(...off)}`);
+
+  // the drawing left by the trace is the still drawn after it
+  const changed = await page.evaluate(`(() => {
+    const b = Beeson.backdrops[0], ctx = b.base.getContext('2d');
+    const before = ctx.getImageData(0, 0, b.base.width, b.base.height).data;
+    b.redraw();
+    const after = ctx.getImageData(0, 0, b.base.width, b.base.height).data;
+    let n = 0;
+    for (let i = 0; i < before.length; i++) if (Math.abs(before[i] - after[i]) > 1) n++;
+    return n;
+  })()`);
+  assert.equal(changed, 0);
+});
+
+// the third slide of the page traces three crossing strands in 2 s, which are finished in the
+// reverse of the order of their file. the frames are drawn by frame() at 60 per second on a clock
+// of the test, up to 4 ms before the end of the trace, when the violet strand is 3.5 px short of
+// its end, and then once after the end, when the still is drawn
+test('the last frame of a trace is its still, with the strands overlapped in the order of the file', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage({ motion: true });
+  await page.goto(deckUrl('test/pages/trace.html'));
+  await page.waitFor(deckSettled);
+  await page.evaluate('Reveal.slide(2)');
+  await page.waitFor('Beeson.backdrops.some((o) => Reveal.getCurrentSlide().contains(o.el) && o.strands.length === 3 && o.W > 0)');
+  const out = await page.evaluate(`(() => {
+    const b = Beeson.backdrops.find((o) => Reveal.getCurrentSlide().contains(o.el));
+    // the base canvas is read through a copy, since Chrome may move a canvas read with
+    // getImageData from the GPU to the CPU, where its glows are blurred differently by one level
+    const read = () => {
+      const c = document.createElement('canvas');
+      c.width = b.W;
+      c.height = b.H;
+      const ctx = c.getContext('2d', { willReadFrequently: true });
+      ctx.drawImage(b.base, 0, 0);
+      return ctx.getImageData(0, 0, b.W, b.H).data;
+    };
+    b.reset();
+    b.t0 = 0;
+    for (let k = 0; k < 120; k++) b.frame((1000 * k) / 60);
+    b.frame(1996);
+    const traced = b.finished, last = read();
+    b.frame(2001);
+    const still = read();
+    // the head of the violet strand is at x = 1820.5 px, at the scale of 1080 px per unit
+    let changed = 0, near = 0;
+    for (let i = 0; i < last.length; i += 4) {
+      if ([0, 1, 2, 3].every((c) => last[i + c] === still[i + c])) continue;
+      const x = (i / 4) % b.W, y = Math.floor(i / 4 / b.W);
+      if (Math.hypot(x - 1824, y - 540) < 16) near++;
+      else changed++;
+    }
+    return { traced, finished: b.finished, changed, near };
+  })()`);
+  assert.equal(out.traced, false, 'the trace is not finished 4 ms before its end');
+  assert.equal(out.finished, true);
+  assert.equal(out.changed, 0, `${out.changed} pixels away from the head are changed from the last frame to the still`);
+  assert.ok(out.near > 0, 'the end of the violet strand is drawn in the still');
+});
+
 test('the strands of a backdrop with data-stagger are started one after another', { timeout: 60000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
