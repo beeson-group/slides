@@ -23,7 +23,7 @@ export type Margin = [number, number, number, number];
 export type Panel = { id: string; x: Axis; y: Axis; equal: boolean; axes: boolean; title: string; regions: Region[]; curves: Curve[]; labels: Label[]; size: number; margin: Margin };
 // the keys of a panel that a tab may replace
 export type PanelPatch = Partial<Pick<Panel, 'x' | 'y' | 'title' | 'regions' | 'curves' | 'labels'>>;
-export type Mark = Item & { id: string; panel: string; kind: Kind; size: number; width: number; hollow: boolean; anchor: Anchor; dx: number; dy: number };
+export type Mark = Item & { id: string; panel: string; kind: Kind; size: number; width: number; hollow: boolean; ghost: boolean; anchor: Anchor; dx: number; dy: number };
 export type PlotEvent = { frame: number; at: Pair; text: string };
 // a label mark with one position or one text is held there for every frame
 export type LabelData = { at: Pair[]; text: string[] };
@@ -226,6 +226,7 @@ export function parsePlot(input: unknown): Plot {
       size: num(m.size, `${p}.size`, kind === 'events' ? 16 : 10),
       width: num(m.width, `${p}.width`, 3),
       hollow: m.hollow === true,
+      ghost: m.ghost !== false,
       anchor: anchor(m.anchor, `${p}.anchor`),
       dx: num(m.dx, `${p}.dx`, 0),
       dy: num(m.dy, `${p}.dy`, 0),
@@ -327,6 +328,11 @@ const SYMBOLS: Record<string, string> = {
   pm: '±', mp: '∓', infty: '∞', cdot: '·', times: '×', approx: '≈', le: '≤', ge: '≥', ne: '≠', to: '→', in: '∈',
 };
 
+// the capitals of \mathcal, from the script block of Unicode, where B, E, F, H, I, L, M, and R are
+// taken from the letterlike symbols
+const SCRIPT_GAPS: Record<string, string> = { B: 'ℬ', E: 'ℰ', F: 'ℱ', H: 'ℋ', I: 'ℐ', L: 'ℒ', M: 'ℳ', R: 'ℛ' };
+const script = (c: string) => SCRIPT_GAPS[c] ?? (/^[A-Z]$/.test(c) ? String.fromCodePoint(0x1d49c + c.charCodeAt(0) - 65) : c);
+
 export type Run = { text: string; italic: boolean; shift: 'sub' | 'sup' | null };
 
 /** Splits a text of the markup into runs, i.e. pieces of one style. */
@@ -370,6 +376,10 @@ export function parseMarkup(src: string): Run[] {
           const [g, j] = group(s, i);
           i = j;
           math(g, true, shift);
+        } else if (m[1] === 'mathcal') {
+          const [g, j] = group(s, i);
+          i = j;
+          push([...g].map(script).join(''), false, shift);
         } else {
           const sym = SYMBOLS[m[1]] ?? m[0];
           push(sym, !upright && /^[a-z]+$/.test(m[1]) && /[α-ω]/.test(sym), shift);
@@ -788,7 +798,7 @@ export class PlotView {
         });
       } else if (m.kind === 'trace') {
         const pts = (data as Pair[]).map((q) => this.toAxes(b, q));
-        svg('path', { class: 'plot-ghost', d: this.pathS(b, pts), 'stroke-width': m.width }, group);
+        if (m.ghost) svg('path', { class: 'plot-ghost', d: this.pathS(b, pts), 'stroke-width': m.width }, group);
         const done = svg('path', { class: 'plot-trace', 'stroke-width': m.width }, group);
         const head = svg('circle', { class: 'plot-dot', r: m.size / 2 }, group);
         this.drawers.push((u) => {
