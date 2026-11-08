@@ -11,7 +11,7 @@ The demo deck, `index.html`, is also the documentation of every layout class. Op
 3. Give each element its step once the slide is complete: `class="fragment"` with a `data-fragment-index`. During the talk, a new element is faded in, and the earlier ones are dimmed to 45 percent. The last element is also shown alone at first, and all of them are restored to full opacity at one more step, which is added to every slide with a dimmed element. A slide whose fragments are empty, e.g. the steps of a plot, is not given this step.
 4. Export the PDF with `npm run pdf` after `npm ci`, or open `index.html?print-pdf` in a browser on a computer and print to PDF. The PDF is printed with one page per step.
 
-The mode is kept per browser in local storage. To fix it for a venue, add the URL parameter `?theme=light`. To draw every backdrop complete at once for a screenshot, add `?still`.
+You flip the mode with the key `d` or with the button at the upper right. The change is drawn as a circle at the button or at the point of the click, grown on a flip to light and shrunk on a flip to dark. During a flip, a backdrop that is being traced is drawn on in both modes. A viewer of tycho, a surface, a plot, or a video is held still in the old mode for up to 450 ms, until the new mode is shown over it. The mode is kept per browser in local storage. To fix it for a venue, add the URL parameter `?theme=light`. To draw every backdrop complete at once for a screenshot, add `?still`.
 
 ## Edit the text in the browser
 
