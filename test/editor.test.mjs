@@ -546,11 +546,11 @@ test('the list of the slides at the left jumps to a slide, and G jumps to a slid
   // G of reveal.js asks for a number
   await page.evaluate(`document.activeElement.blur(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', keyCode: 71, which: 71, bubbles: true, cancelable: true }))`);
   assert.equal(await page.evaluate(`document.activeElement.className`), 'jump-to-slide-input');
-  await page.evaluate(`(() => { const i = document.querySelector('.jump-to-slide-input'); i.value = '12'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+  await page.evaluate(`(() => { const i = document.querySelector('.jump-to-slide-input'); i.value = '11'; i.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   await page.evaluate(`document.querySelector('.jump-to-slide-input').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true, cancelable: true }))`);
   await sleep(300);
-  assert.equal(await page.evaluate('Reveal.getIndices().h'), 11);
-  assert.equal((await rows())[11][3], 'true');
+  assert.equal(await page.evaluate('Reveal.getIndices().h'), 10);
+  assert.equal((await rows())[10][3], 'true');
   assert.deepEqual(page.errors, []);
 });
 
