@@ -698,8 +698,8 @@
   var given = /* @__PURE__ */ new Map();
   var files = /* @__PURE__ */ new Map();
   function register(data) {
-    const script = document.currentScript;
-    if (script instanceof HTMLScriptElement && script.src) given.set(script.src, data);
+    const script2 = document.currentScript;
+    if (script2 instanceof HTMLScriptElement && script2.src) given.set(script2.src, data);
   }
   function read(url, path) {
     if (!/\.js$/i.test(new URL(url).pathname)) {
@@ -717,11 +717,11 @@
     }
     if (given.has(url)) return Promise.resolve(given.get(url));
     return new Promise((done, fail2) => {
-      const script = document.createElement("script");
-      script.src = url;
-      script.onload = () => given.has(url) ? done(given.get(url)) : fail2(new Error(`${path} does not call Beeson.strands`));
-      script.onerror = () => fail2(new Error("it was not found"));
-      document.head.append(script);
+      const script2 = document.createElement("script");
+      script2.src = url;
+      script2.onload = () => given.has(url) ? done(given.get(url)) : fail2(new Error(`${path} does not call Beeson.strands`));
+      script2.onerror = () => fail2(new Error("it was not found"));
+      document.head.append(script2);
     });
   }
   function load(path) {
@@ -1779,6 +1779,8 @@
     to: "\u2192",
     in: "\u2208"
   };
+  var SCRIPT_GAPS = { B: "\u212C", E: "\u2130", F: "\u2131", H: "\u210B", I: "\u2110", L: "\u2112", M: "\u2133", R: "\u211B" };
+  var script = (c) => SCRIPT_GAPS[c] ?? (/^[A-Z]$/.test(c) ? String.fromCodePoint(119964 + c.charCodeAt(0) - 65) : c);
   function parseMarkup(src) {
     const runs = [];
     const push = (text, italic, shift) => {
@@ -1825,6 +1827,10 @@
             const [g, j] = group2(s, i);
             i = j;
             math(g, true, shift);
+          } else if (m[1] === "mathcal") {
+            const [g, j] = group2(s, i);
+            i = j;
+            push([...g].map(script).join(""), false, shift);
           } else {
             const sym = SYMBOLS[m[1]] ?? m[0];
             push(sym, !upright && /^[a-z]+$/.test(m[1]) && /[α-ω]/.test(sym), shift);
@@ -3729,9 +3735,9 @@ void main() {
   initTheme();
   var self = document.currentScript;
   if (EDITING) {
-    const script = document.createElement("script");
-    script.src = self?.src ? new URL("editor.js", self.src).href : "theme/editor.js";
-    document.head.append(script);
+    const script2 = document.createElement("script");
+    script2.src = self?.src ? new URL("editor.js", self.src).href : "theme/editor.js";
+    document.head.append(script2);
   }
   var Beeson = {
     start,

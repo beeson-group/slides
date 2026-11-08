@@ -328,6 +328,11 @@ const SYMBOLS: Record<string, string> = {
   pm: '±', mp: '∓', infty: '∞', cdot: '·', times: '×', approx: '≈', le: '≤', ge: '≥', ne: '≠', to: '→', in: '∈',
 };
 
+// the capitals of \mathcal, from the script block of Unicode, where B, E, F, H, I, L, M, and R are
+// taken from the letterlike symbols
+const SCRIPT_GAPS: Record<string, string> = { B: 'ℬ', E: 'ℰ', F: 'ℱ', H: 'ℋ', I: 'ℐ', L: 'ℒ', M: 'ℳ', R: 'ℛ' };
+const script = (c: string) => SCRIPT_GAPS[c] ?? (/^[A-Z]$/.test(c) ? String.fromCodePoint(0x1d49c + c.charCodeAt(0) - 65) : c);
+
 export type Run = { text: string; italic: boolean; shift: 'sub' | 'sup' | null };
 
 /** Splits a text of the markup into runs, i.e. pieces of one style. */
@@ -371,6 +376,10 @@ export function parseMarkup(src: string): Run[] {
           const [g, j] = group(s, i);
           i = j;
           math(g, true, shift);
+        } else if (m[1] === 'mathcal') {
+          const [g, j] = group(s, i);
+          i = j;
+          push([...g].map(script).join(''), false, shift);
         } else {
           const sym = SYMBOLS[m[1]] ?? m[0];
           push(sym, !upright && /^[a-z]+$/.test(m[1]) && /[α-ω]/.test(sym), shift);
