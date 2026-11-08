@@ -311,8 +311,14 @@ export class Orbits {
   private everyHead: boolean;
   // the colors of the strands with an ink, resolved in redraw() for the current mode
   private inks: string[] = [];
+  // copies of the canvases, traced in the colors of the old mode during a flip, or null
+  private ghosted: { base: HTMLCanvasElement; head: HTMLCanvasElement; c: Colors; inks: string[] } | null = null;
   // resolved when the strands are in place, at once for a named scene and after the load of a file
   readonly ready: Promise<void>;
+
+  static of(el: HTMLElement): Orbits | undefined {
+    return CACHE.get(el);
+  }
 
   static reduced(): boolean {
     if (typeof window === 'undefined') return true;
@@ -377,6 +383,41 @@ export class Orbits {
     return this.finished || this.loop;
   }
 
+  // true while the backdrop is drawn again at every frame of the screen, i.e. during a trace or a
+  // loop
+  get tracing(): boolean {
+    return this.raf !== 0;
+  }
+
+  get canvases(): HTMLCanvasElement[] {
+    return [this.base, this.head];
+  }
+
+  // copies the canvases into the element into, whose client box is at origin, over the boxes of the
+  // canvases. until unghost() is called, the trace is continued on the copies in the colors of the
+  // mode at the call, while the canvases are redrawn in the next mode
+  ghost(into: HTMLElement, origin: { left: number; top: number }): void {
+    this.unghost();
+    if (!this.W) return;
+    const r = this.el.getBoundingClientRect();
+    const [base, head] = this.canvases.map((from) => {
+      const to = document.createElement('canvas');
+      to.width = this.W;
+      to.height = this.H;
+      Object.assign(to.style, { position: 'absolute', left: `${r.left - origin.left}px`, top: `${r.top - origin.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+      to.getContext('2d')?.drawImage(from, 0, 0);
+      into.append(to);
+      return to;
+    });
+    this.ghosted = { base, head, c: this.colors(), inks: [...this.inks] };
+  }
+
+  unghost(): void {
+    this.ghosted?.base.remove();
+    this.ghosted?.head.remove();
+    this.ghosted = null;
+  }
+
   private colors(): Colors {
     const cs = getComputedStyle(this.el);
     return { stroke: cs.getPropertyValue('--stroke').trim(), body: cs.getPropertyValue('--body').trim(), accent: cs.getPropertyValue('--accent').trim(), violet: cs.getPropertyValue('--violet').trim(), text: cs.getPropertyValue('--text').trim() };
@@ -416,6 +457,7 @@ export class Orbits {
     const r = this.el.getBoundingClientRect(), dpr = devicePixelRatio || 1;
     const w = this.el.offsetWidth, h = this.el.offsetHeight;
     if (r.width === 0 || r.height === 0 || w === 0 || h === 0) return;
+    this.unghost();
     if (this.fitted && this.strands.length) {
       const section = this.el.closest('section');
       const box = { left: this.el.offsetLeft, top: this.el.offsetTop, width: w, height: h };
@@ -477,9 +519,9 @@ export class Orbits {
 
   // the color, opacity, width, and glow of strand i: those of its tone, then its own ink, alpha,
   // weight, and glow where it has them
-  private pen(ctx: CanvasRenderingContext2D, c: Colors, i: number): void {
+  private pen(ctx: CanvasRenderingContext2D, c: Colors, i: number, inks = this.inks): void {
     const s = this.strands[i], tone = s.tone;
-    ctx.strokeStyle = s.ink ? this.inks[i] : tone === 'orange' || tone === 'hero' ? c.accent : tone === 'violet' ? c.violet : tone === 'text' || tone === 'line' ? c.text : c.stroke;
+    ctx.strokeStyle = s.ink ? inks[i] : tone === 'orange' || tone === 'hero' ? c.accent : tone === 'violet' ? c.violet : tone === 'text' || tone === 'line' ? c.text : c.stroke;
     ctx.globalAlpha = s.alpha ?? (tone === 'orange' || tone === 'violet' ? 0.42 : tone === 'text' ? 0.8 : tone === 'line' ? 0.36 : 1);
     ctx.lineWidth = (tone === 'hero' ? 2.2 : tone === 'text' ? 1.3 : 1) * (s.weight ?? 1) * this.lw;
     ctx.shadowBlur = s.glow ? 6 * this.lw : 0;
@@ -517,6 +559,7 @@ export class Orbits {
   }
 
   reset(): void {
+    this.unghost();
     this.stop();
     this.pending = false;
     this.t0 = null;
@@ -538,6 +581,7 @@ export class Orbits {
   }
 
   complete(): void {
+    this.unghost();
     this.stop();
     this.pending = false;
     this.finished = true;
@@ -546,6 +590,7 @@ export class Orbits {
   }
 
   destroy(): void {
+    this.unghost();
     this.stop();
     this.pending = false;
     this.base.remove();
@@ -572,7 +617,12 @@ export class Orbits {
 
   private paintHead(now: number, c: Colors = this.colors()): void {
     if (!this.W) return;
-    const ctx = this.head.getContext('2d');
+    this.headOn(this.head, now, c);
+    if (this.ghosted) this.headOn(this.ghosted.head, now, this.ghosted.c);
+  }
+
+  private headOn(canvas: HTMLCanvasElement, now: number, c: Colors): void {
+    const ctx = canvas.getContext('2d');
     if (!ctx) return;
     ctx.clearRect(0, 0, this.W, this.H);
     if (this.loop) this.loopHead(ctx, c, now);
@@ -671,8 +721,8 @@ export class Orbits {
     if (this.loop || !this.W) { this.paintHead(now); return; }
     const ctx = this.base.getContext('2d');
     if (!ctx) return;
-    const c = this.colors();
-    ctx.lineWidth = this.lw; ctx.lineJoin = 'round'; ctx.strokeStyle = c.stroke;
+    const c = this.colors(), ghost = this.ghosted, gtx = ghost?.base.getContext('2d');
+    for (const g of [ctx, gtx]) if (g) { g.lineWidth = this.lw; g.lineJoin = 'round'; }
     let flying = 0;
     this.strands.forEach((s, i) => {
       const n = s.times.length, tau = this.clock(i, now);
@@ -680,10 +730,11 @@ export class Orbits {
       while (j < n - 1 && s.times[j + 1] <= tau) j++;
       this.pen(ctx, c, i);
       this.segments(ctx, i, this.idx[i], j);
+      if (ghost && gtx) { this.pen(gtx, ghost.c, i, ghost.inks); this.segments(gtx, i, this.idx[i], j); }
       this.idx[i] = j;
       if (j < n - 1) flying++;
     });
-    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+    for (const g of [ctx, gtx]) if (g) { g.globalAlpha = 1; g.shadowBlur = 0; }
     if (flying === 0) this.finished = true;
     this.paintHead(now, c);
   }
