@@ -1,4 +1,4 @@
-/*! beeson.js 1.0.0, the reveal.js theme of the Beeson group. MIT license. The orbit engine is ported from src/lib/orbits.ts of https://github.com/ClouD-161803/ClouD-161803.github.io (MIT). */
+/*! beeson.js 0.9.0-beta.1, the reveal.js theme of the Beeson group. MIT license. The orbit engine is ported from src/lib/orbits.ts of https://github.com/ClouD-161803/ClouD-161803.github.io (MIT). */
 "use strict";
 (() => {
   // src/scenes.ts
@@ -3932,7 +3932,7 @@ void main() {
     plots,
     // called in a script file of polylines named in data-strands, see src/strands.ts
     strands: register,
-    version: "1.0.0"
+    version: "0.9.0-beta.1"
   };
   window.Beeson = Beeson;
 })();

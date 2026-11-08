@@ -1,4 +1,4 @@
-/*! editor.js 1.0.0, the in-place editor of the beeson theme. MIT license. */
+/*! editor.js 0.9.0-beta.1, the in-place editor of the beeson theme. MIT license. */
 "use strict";
 (() => {
   // src/editor/tokens.ts
@@ -2647,7 +2647,7 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:em
     attach: (h) => {
       handle = h;
     },
-    version: "1.0.0"
+    version: "0.9.0-beta.1"
   };
   window.BeesonEditor = BeesonEditor;
 })();
