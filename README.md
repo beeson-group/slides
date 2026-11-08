@@ -90,7 +90,7 @@ A `surface` is the graph of a function $z = f(x, y)$ over a rectangle, drawn in 
 
 | Function | Attributes | Stages |
 |---|---|---|
-| `effective-potential` | `data-mu`, the mass ratio $\mu$ of the circular restricted three-body problem, 0.05 by default, and `data-C` on the fragment of the cut, the Jacobi constant $C$, that of L1 by default | `wells` in Blues, `bowl` with the bowl in Reds above the wells, `sum` with the two merged, `extrema` with L1 to L5 marked, and `cut` with the plane at $-C/2$ and the zero-velocity curve |
+| `effective-potential` | `data-mu`, the mass ratio $\mu$ of the circular restricted three-body problem, 0.05 by default, and `data-C` on the fragment of the cut, the Jacobi constant $C$, that of L1 by default | `wells` in Blues, `bowl` with the centrifugal dome in Reds above the wells, `sum` with the two merged, `extrema` with L1 to L5 marked, and `cut` with the plane at $-C/2$ and the zero-velocity curve |
 
 The camera is set with `data-azimuth` and `data-elevation` in degrees, `data-turn` in seconds per turn (0 for a still camera), and `data-zoom`, and the heights are scaled with `data-zscale`. With `?still`, a stage is drawn at once and the camera is not turned. In a PDF and in PowerPoint, each step is printed with a still of its stage.
 
