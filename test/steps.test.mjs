@@ -118,7 +118,7 @@ test('the last step of a slide is shown alone, and a step is added to restore th
   const restored = await page.evaluate(`[...document.querySelectorAll('.slides > section')]
     .filter((section) => section.querySelector('.fragment[data-restore]'))
     .map((section) => section.querySelector('h1, h2').textContent)`);
-  assert.deepEqual(restored, ['Steps are shown one at a time', 'Stepping through the equations', 'The effective potential', 'A video on a slide']);
+  assert.deepEqual(restored, ['Show your steps one at a time', 'Equations are first class citizens', 'Explain concepts, visually', 'Embedding videos']);
 
   await page.evaluate(`Reveal.slide(2)`);
   const seen = [];

@@ -64,7 +64,7 @@ test('a tycho viewer is printed with its scene', { timeout: 60000 }, async (t) =
   const page = await browser.newPage();
   await printView(page, deckUrl('index.html', 'print-pdf&still'));
   const step = await page.evaluate(`[...document.querySelectorAll('.pdf-page')]
-    .findIndex((p) => p.querySelector('h2')?.textContent === 'Tycho on a slide')`);
+    .findIndex((p) => p.querySelector('h2')?.textContent === 'Embedding TyCHO scenes')`);
 
   const images = pageImages(await page.pdf())[step];
 
