@@ -3,7 +3,7 @@
 // Vestini's website (MIT) and reduced to the families drawn on the slides. all quantities are
 // nondimensional, in the rotating frame
 
-import { scene, seconds } from './scenes.ts';
+import { scene } from './scenes.ts';
 import { fitView, mix, shadeOf, strandsFor } from './strands.ts';
 import type { Dot } from './strands.ts';
 
@@ -27,7 +27,7 @@ export const MU = 0.01215;
 // the distance to a body within which the step is shortened in step()
 const NEAR = 0.15;
 // seconds in which the longest flight of a backdrop is traced, unless the element sets its own in
-// data-duration or a scene in src/scenes.ts
+// data-duration
 const DURATION = 12;
 // seconds per revolution of a looping mark
 const LOOP = 9;
@@ -341,7 +341,7 @@ export class Orbits {
     this.headSize = HEADS[el.dataset.heads ?? 'full'] ?? HEADS.full;
     this.everyHead = el.dataset.heads !== undefined;
     const given = Number(el.dataset.duration);
-    this.duration = (given > 0 ? given : undefined) ?? (file ? undefined : seconds(el.dataset.scene ?? '')) ?? DURATION;
+    this.duration = given > 0 ? given : DURATION;
     this.stagger = Math.max(0, Number(el.dataset.stagger) || 0);
     this.cx = +(el.dataset.cx ?? 0);
     this.cy = +(el.dataset.cy ?? 0);
@@ -691,7 +691,7 @@ export class Orbits {
     return this.strands.some((_, i) => this.headOf(i) > 0);
   }
 
-  // the seconds into the trace at which its first head is drawn, e.g. after the tubes of a transfer
+  // the seconds into the trace at which its first head is drawn, e.g. at the start of a record of a file
   get headAfter(): number {
     if (!(this.Tmax > 0)) return 0;
     const first = Math.min(...this.strands.map((s, i) => (this.headOf(i) > 0 ? (s.times[0] / this.Tmax) * this.duration + i * this.stagger : Infinity)));
