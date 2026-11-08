@@ -123,33 +123,36 @@ test('every animation of a slide plays on after a flip of the mode, with the key
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage({ motion: true });
-  await page.goto(deckUrl('index.html', 'theme=dark'));
-  await page.waitFor(deckSettled);
   const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
-  const count = await page.evaluate('Reveal.getTotalSlides()');
   const kinds = new Set();
-  for (let i = 0; i < count; i++) {
-    await page.evaluate(`Reveal.slide(${i}, 0, 99)`);
-    await sleep(800);
-    let before = await page.evaluate(animations);
-    if (!before.length) continue;
-    for (const [how, flip] of Object.entries(flips)) {
-      const theme = await page.evaluate('Beeson.theme.get()');
-      assert.ok(await page.evaluate(flip), `slide ${i + 1}: the flip with the ${how} is a view transition`);
-      // the flip takes 450 ms, and an animation is read again after its end
-      await sleep(1000);
-      assert.notEqual(await page.evaluate('Beeson.theme.get()'), theme);
-      const after = await page.evaluate(animations);
-      const name = `slide ${i + 1}, after a flip with the ${how}`;
-      assert.deepEqual(after.map((a) => a.kind), before.map((a) => a.kind), `${name}: ${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
-      after.forEach((a, k) => {
-        if (!a.ended) assert.notEqual(a.at, before[k].at, `${name}: the ${a.kind} is not advanced`);
-        kinds.add(a.kind);
-      });
-      before = after;
+  // the demo deck does not have a plot, hence a plot is taken from a test deck
+  for (const deck of ['index.html', 'test/pages/plot-reveals.html']) {
+    await page.goto(deckUrl(deck, 'theme=dark'));
+    await page.waitFor(deckSettled);
+    const count = await page.evaluate('Reveal.getTotalSlides()');
+    for (let i = 0; i < count; i++) {
+      await page.evaluate(`Reveal.slide(${i}, 0, 99)`);
+      await sleep(800);
+      let before = await page.evaluate(animations);
+      if (!before.length) continue;
+      for (const [how, flip] of Object.entries(flips)) {
+        const theme = await page.evaluate('Beeson.theme.get()');
+        assert.ok(await page.evaluate(flip), `${deck}, slide ${i + 1}: the flip with the ${how} is a view transition`);
+        // the flip takes 450 ms, and an animation is read again after its end
+        await sleep(1000);
+        assert.notEqual(await page.evaluate('Beeson.theme.get()'), theme);
+        const after = await page.evaluate(animations);
+        const name = `${deck}, slide ${i + 1}, after a flip with the ${how}`;
+        assert.deepEqual(after.map((a) => a.kind), before.map((a) => a.kind), `${name}: ${JSON.stringify(before)} -> ${JSON.stringify(after)}`);
+        after.forEach((a, k) => {
+          if (!a.ended) assert.notEqual(a.at, before[k].at, `${name}: the ${a.kind} is not advanced`);
+          kinds.add(a.kind);
+        });
+        before = after;
+      }
     }
   }
-  // the demo deck has an animation of each kind
+  // the two decks have an animation of each kind
   assert.deepEqual([...kinds].sort(), ['backdrop', 'plot', 'scene', 'surface', 'video']);
   assert.deepEqual(page.errors, []);
 });
@@ -208,7 +211,7 @@ test('a traced backdrop is drawn on under the old view of a flip, in both direct
   await page.goto(deckUrl('index.html', 'theme=dark'));
   await page.waitFor(deckSettled);
   const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
-  const index = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.backdrop[data-strands="demo/broucke-sample.js"]'))`);
+  const index = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('section.figure .backdrop[data-strands="demo/broucke-sample.js"]'))`);
   for (const to of ['light', 'dark']) {
     // the trace is begun again on the slide, and several strands are traced after 1.5 s
     await page.evaluate(`Reveal.slide(${index - 1})`);

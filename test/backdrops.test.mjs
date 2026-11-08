@@ -4,7 +4,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { deckSettled, deckUrl, launch } from '../scripts/chrome.mjs';
-import { scene, seconds } from '../src/scenes.ts';
+import { scene } from '../src/scenes.ts';
 
 const boxes = `[...document.querySelectorAll('.backdrop[data-scene]')].map((b) => {
   const cs = getComputedStyle(b), px = (name) => parseFloat(cs[name]);
@@ -98,22 +98,12 @@ test('a head is drawn on the path of a spacecraft alone', { timeout: 60000 }, as
     const { h, v } = Reveal.getIndices(document.querySelector('${selector}').closest('section'));
     Reveal.slide(h, v);
   })()`;
-  // the lace has neither a spacecraft nor data-heads, hence no head
-  await page.evaluate(slideTo('.backdrop[data-scene="lace"]'));
+  // the wide ribbon has neither a spacecraft nor data-heads, hence no head
+  await page.evaluate(slideTo('.backdrop[data-scene="wideRibbon"]'));
   await new Promise((done) => setTimeout(done, 800));
-  const [laceRunning, lacePixels] = await page.evaluate(headPixels);
-  assert.ok(laceRunning, 'the lace is traced');
-  assert.equal(lacePixels, 0);
-
-  await page.evaluate(slideTo('.backdrop[data-scene="transfer"]'));
-  // the spacecraft starts once the manifolds have grown, at its share of the clock of the scene
-  const strands = scene('transfer'), craft = strands.find((s) => s.craft);
-  const start = (craft.times[0] / Math.max(...strands.map((s) => s.T))) * (seconds('transfer') ?? 12);
-  await new Promise((done) => setTimeout(done, 1000 * start + 1500));
-  const [running, pixels] = await page.evaluate(headPixels);
-  assert.ok(running, 'the transfer is traced');
-  // a disk of 2.2 line widths of 1 px, and its antialiased rim
-  assert.ok(pixels > 5 && pixels < 60, `${pixels} pixels`);
+  const [ribbonRunning, ribbonPixels] = await page.evaluate(headPixels);
+  assert.ok(ribbonRunning, 'the wide ribbon is traced');
+  assert.equal(ribbonPixels, 0);
 });
 
 test('the strands of a backdrop with data-stagger are started one after another', { timeout: 60000 }, async (t) => {

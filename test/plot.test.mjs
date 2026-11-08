@@ -1,10 +1,9 @@
 // checks of the plot element of src/plot.ts, i.e. the parser of the JSON block, the interpolation
-// between frames, the loop, and the markup of the labels. the JSON block of the demo deck is parsed
-// as well, and a plot of a test deck is played and printed in Chrome
+// between frames, the loop, and the markup of the labels. a plot of a test deck is played and
+// printed in Chrome
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
 import { deckSettled, deckUrl, launch, printView } from '../scripts/chrome.mjs';
 import { cells, formatNumber, framesAt, loopFrame, nearest, parseMarkup, parsePlot, scaled, traceTo, valueAt } from '../src/plot.ts';
 
@@ -142,14 +141,6 @@ test('a number is written with a minus sign, and without the sign of a zero', ()
   assert.equal(formatNumber(0.1 + 0.2), '0.3');
   assert.equal(formatNumber(-0.25, 1), '−0.3');
   assert.equal(formatNumber(-0.001, 2), '0.00');
-});
-
-test('the plot of the demo deck is valid', () => {
-  const html = readFileSync('index.html', 'utf8');
-  const block = html.match(/<script type="application\/json" id="multipliers">(.*?)<\/script>/s);
-  assert.ok(block, 'the JSON block of the plot is in index.html');
-  const plot = parsePlot(block[1]);
-  assert.deepEqual(plot.tabs.map((t) => t.name), ['l1', 'l2']);
 });
 
 const state = `(() => {
