@@ -116,6 +116,12 @@ A display is revealed in four steps: the lead-in sentence, the display, the sent
 
 An earlier fragment is dimmed to 45 percent once a later one is shown, and every fragment is restored at the step added after the last one. Give the display the attribute `data-keep` to hold it at full opacity through the next step, or `data-keep="4"` to hold it through the step of index 4. A display is also held at full opacity while a class in it is colored at the current step. The demo slide "Motion in the rotating frame" is an example of every step.
 
+## Code
+
+A code box is a `pre` with a `code` in it, and it is colored with highlight.js in the highlight plugin of reveal.js. Load `theme/vendor/reveal/highlight.js` after `notes.js`, and give the `code` the class of its language, e.g. `language-python`, since the language is guessed in a box without one. With the class `nohighlight`, a box is left uncolored. The tokens are colored from the palette of the theme in each mode, and the code is set in the system monospace at 22 px. At this size, about 24 lines can be shown under a heading, and about 29 on a slide without one. A line can be up to about 65 characters long in the text column, and up to about 115 on a slide with the class `wide`. For a longer box, set a smaller `font-size` in its `style`.
+
+To step through a box, number its lines with `data-line-numbers` on the `code`, and write one group of lines per step, separated by bars, e.g. `data-line-numbers="1-3|4|5-7"`. The first group is lit when the slide is shown, and each later group is lit at its step, while the other lines are dimmed to 35 percent. The whole box is dimmed at a step outside it after its last group, and it is restored at the step added at the end of the slide. In the print view, each group is printed on a separate page. While the deck is edited, the box is shown plain at the same size, since the text of the page is paired with the file. The demo slide "Code, one group of lines per step" is an example, cut from `demo/tycho-scene.py`.
+
 ## Plots
 
 A plot is an animated 2D figure, drawn as SVG from a block of JSON in the deck. Put a `div` with the class `plot` in a `zone`, or with the classes `plot plate` on a `figure` slide, and give it the id of the block in `data-plot`. Write the block next to it as `<script type="application/json" id="...">`. The block is inline, since fetching a file is blocked for a deck opened with a double click. Run `node demo/multipliers.mjs index.html` to write the plot of the demo deck, the Floquet multipliers of the Lyapunov families of L1 and L2, which is also the example to start from.
@@ -160,10 +166,10 @@ The theme is maintained with npm and Node 22 or later, on macOS, Linux, or Windo
 
 ```sh
 npm ci                 # the dependencies
-npm run vendor         # reveal.js, the notes plugin, the fonts, MathJax, and three.js into theme/vendor/ (tycho and Latin Modern Roman are copied by hand)
+npm run vendor         # reveal.js, the notes and highlight plugins, the fonts, MathJax, and three.js into theme/vendor/ (tycho and Latin Modern Roman are copied by hand)
 npm run build          # src/*.ts into theme/beeson.js and src/editor/*.ts into theme/editor.js with esbuild
 npm run typecheck      # tsc --noEmit
-npm test               # the orbit engine, the surfaces, the backdrops from files, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, the PowerPoint file, the plots, the stepped math, and the editor under node --test
+npm test               # the orbit engine, the surfaces, the backdrops from files, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, the PowerPoint file, the plots, the stepped math, the code boxes, and the editor under node --test
 npm run check          # every slide of index.html in both modes, screenshots, console errors, a poster on every video, and the editor on the deck
 npm run pdf            # index.html to slides.pdf, with a check of the page count
 npm run pptx           # index.html to slides.pptx, with one click per step

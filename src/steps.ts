@@ -47,10 +47,16 @@ const words = (s: string | null | undefined) => (s ?? '').split(/\s+/).filter(Bo
 
 const hasContent = (f: Element) => f.children.length > 0 || (f.textContent ?? '').trim() !== '';
 
+// a copy of a code box, made by the highlight plugin of reveal.js for each group of lines after the
+// first. a copy is not dimmed as a past step, and the box is dimmed as a whole once a later step
+// outside it is shown, see theme/beeson.css
+const isCopy = (f: Element) => f.matches('pre > code.fragment');
+
 /**
  * Appends the step that restores the dimmed fragments to every slide under root whose last step
- * dims a fragment with content. A fragment without data-fragment-index is placed by reveal.js after
- * every indexed one, in the order of the page, hence the added step is the last of its slide.
+ * dims a fragment with content, or a code box. A fragment without data-fragment-index is placed by
+ * reveal.js after every indexed one, in the order of the page, hence the added step is the last of
+ * its slide.
  */
 export function addRestoreSteps(root: ParentNode): void {
   for (const slide of root.querySelectorAll<HTMLElement>('.reveal .slides section')) {
@@ -60,7 +66,9 @@ export function addRestoreSteps(root: ParentNode): void {
     const last = unindexed.length
       ? [unindexed[unindexed.length - 1]]
       : frags.filter((f) => Number(f.dataset.fragmentIndex) === Math.max(...frags.map((g) => Number(g.dataset.fragmentIndex))));
-    if (!frags.some((f) => !last.includes(f) && hasContent(f))) continue;
+    const boxes = new Set(frags.filter(isCopy).map((f) => f.parentElement));
+    const dimsBox = [...boxes].some((box) => !last.some((f) => f.parentElement === box && isCopy(f)));
+    if (!dimsBox && !frags.some((f) => !last.includes(f) && hasContent(f) && !isCopy(f))) continue;
     const restore = document.createElement('span');
     restore.className = 'fragment';
     restore.setAttribute('data-restore', '');

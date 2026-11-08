@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Stepped code deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+</head>
+<body>
+<!-- a code box stepped through its groups of lines before a sentence step, and a sentence step
+     before a code box, hence each slide gets a step that restores the dimmed box or sentence -->
+<div class="reveal">
+  <div class="slides">
+    <section>
+      <h2>Code, then a sentence</h2>
+      <pre><code class="language-python" data-line-numbers="1|2|3">a = 1
+b = 2
+c = a + b</code></pre>
+      <p class="fragment">The sentence after the code.</p>
+    </section>
+    <section>
+      <h2>A sentence, then code</h2>
+      <p class="fragment">The sentence before the code.</p>
+      <pre><code class="language-python" data-line-numbers="1|2">a = 1
+b = 2</code></pre>
+    </section>
+  </div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/vendor/reveal/highlight.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

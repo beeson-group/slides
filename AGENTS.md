@@ -21,6 +21,7 @@ This repository is the slide template of the Beeson group. The reveal.js theme `
 - Write math in MathJax delimiters, `\(` `\)` inline and `\[` `\]` display, inside a `div.math` for a display, and put shared macros into `theme/macros.js`.
 - Reveal a display in four steps: the lead-in sentence, the display, the sentence in which it is explained, and a step in which a symbol is colored. Mark the symbol with `\class{name}{...}`, and give the later fragment `data-highlight="name"`, so that the class is colored orange once the fragment is shown, or violet with `data-tone="violet"`. Give the display `data-keep` to hold it at full opacity through the next step, or `data-keep="N"` to hold it through the step of index N.
 - Put a plot in a `zone` or a `plate`, with its JSON block next to it. Reveal its panels and marks with `data-plot-show` and switch its tab with `data-plot-tab`, both on fragments of its slide.
+- Put code in a `pre` with a `code` of the class of its language, e.g. `language-python`, and load `theme/vendor/reveal/highlight.js` after `notes.js`. To step through it, write its groups of lines in `data-line-numbers` on the `code`, separated by bars.
 - Put speaker notes in an `aside.notes`.
 - Put a surface where a backdrop would go, and load `theme/vendor/three/three.js` before `theme/beeson.js`.
 - To draw a backdrop from a file of polylines, name the file in `data-strands`, and choose and color its records with `data-strands-select`, `data-strands-color`, and `data-strands-ramp`, as described in the README under Backdrops. Set the look of a record with its keys `tone`, `alpha`, `weight`, `head`, `start`, and `glow`, and the seconds of the trace with `data-duration`.
@@ -32,7 +33,7 @@ This repository is the slide template of the Beeson group. The reveal.js theme `
 
 ```sh
 npm ci && npm run vendor && npm run build   # dependencies, vendored files, theme/beeson.js and theme/editor.js
-npm run typecheck && npm test               # types, then the orbit engine, the surfaces, the backdrops from files, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, the PowerPoint file, the plots, the stepped math, and the editor under node --test
+npm run typecheck && npm test               # types, then the orbit engine, the surfaces, the backdrops from files, the build, the vendor script, the browser lookup, the mode flip, the crop of the backdrops, the print view, the PowerPoint file, the plots, the stepped math, the code boxes, and the editor under node --test
 npm run check                               # screenshots of every slide in both modes, console errors, problems in the page, a poster on every video, the phone layout, a pixel ratio of 1.25, the editor on the deck
 npm run check -- --browser firefox          # the same in Firefox or Safari over WebDriver, without the console, the phone layout, and the pixel ratio
 npm run pdf                                 # slides.pdf, one page per step, with a page count check
@@ -45,7 +46,7 @@ npm run pptx                                # slides.pptx, one click per step, w
 - Everything loaded in a deck is vendored under `theme/vendor/` with its license, and nothing is fetched from the network at show time.
 - The orbit engine is a port of `orbits.ts` of claudiovestini.com (MIT). Do not derive anything in this repository from DyLAN code.
 - The Princeton marks and the group logo in `brand/` are outside the MIT license, see `brand/NOTICE.md`.
-- Colors are the custom properties in `theme/beeson.css`: `--bg`, `--text`, `--subtle`, `--muted`, `--line`, `--accent`, `--violet`, and `--data-1` to `--data-8`. The typeface is Latin Modern Roman at 22, 28, 36, 48, 64, and 96 px on the 1920 by 1080 design size, and math is set in the TeX font of MathJax, i.e. Computer Modern, as in a LaTeX document. Body text is 48 px, i.e. the 24 points asked for by the AIAA on a slide 7.5 in high, and captions, tables, and code are 36 px. Orange is used for motion and progress, and violet for structure.
+- Colors are the custom properties in `theme/beeson.css`: `--bg`, `--text`, `--subtle`, `--muted`, `--line`, `--accent`, `--violet`, and `--data-1` to `--data-8`. The typeface is Latin Modern Roman at 22, 28, 36, 48, 64, and 96 px on the 1920 by 1080 design size, and math is set in the TeX font of MathJax, i.e. Computer Modern, as in a LaTeX document. Body text is 48 px, i.e. the 24 points asked for by the AIAA on a slide 7.5 in high, captions and tables are 36 px, and a code box is 22 px. Orange is used for motion and progress, and violet for structure.
 - Write a talk over the demo deck in `index.html`, and do not copy `theme/` or `brand/` into another folder, since `index.html` is the default deck of `npm run check`, `npm run pdf`, and `npm run pptx`.
 - Read a PowerPoint file from its XML, and do not script PowerPoint, Keynote, or any other desktop app.
 

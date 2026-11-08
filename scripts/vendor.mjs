@@ -25,6 +25,11 @@ copy('reveal.js/dist/reveal.js', 'reveal/reveal.js');
 copy('reveal.js/dist/reveal.css', 'reveal/reveal.css');
 copy('reveal.js/dist/reset.css', 'reveal/reset.css');
 copy('reveal.js/dist/plugin/notes.js', 'reveal/notes.js');
+// highlight.js is bundled into the highlight plugin, and its license is copied from the package of
+// the same version. the color schemes of the plugin are not copied, since the tokens are colored in
+// theme/beeson.css
+copy('reveal.js/dist/plugin/highlight.js', 'reveal/highlight.js');
+copy('highlight.js/LICENSE', 'reveal/LICENSE-highlight.js');
 copy('reveal.js/LICENSE', 'reveal/LICENSE');
 
 // the Greek of STIX Two Text in the weights of the theme, which is the fallback of Latin Modern

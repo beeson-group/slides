@@ -115,6 +115,9 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   const deck = window.Reveal;
   const plugins = [...(options.plugins ?? [])];
   if (window.RevealNotes && !plugins.includes(window.RevealNotes)) plugins.push(window.RevealNotes);
+  // a code box is left as written in the file while the deck is edited, since the text of the page
+  // is paired with the file in the editor
+  if (window.RevealHighlight && !EDITING && !plugins.includes(window.RevealHighlight)) plugins.push(window.RevealHighlight);
   initSwitcher();
   // in the print view, a page is cloned per fragment state after ready, and the clones are
   // mounted here. the viewers are numbered before the clones are made
@@ -125,8 +128,10 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
     syncViewers(get());
     void stillViewers();
   });
-  // the editor lists the steps written in the file, and it does not show the added ones
-  if (!EDITING) addRestoreSteps(document);
+  // the editor lists the steps written in the file, and it does not show the added ones. the steps
+  // are added in a plugin, since the plugins are initialized in order before the fragments are
+  // sorted, and the copies of a code box are made by the highlight plugin before this one
+  if (!EDITING) plugins.push({ id: 'beeson-restore', init: () => addRestoreSteps(document) });
   await deck.initialize({ ...DEFAULTS, ...options, plugins });
 
   initChrome(deck);

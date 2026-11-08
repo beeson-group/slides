@@ -174,6 +174,29 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal code { font-size: 0.86em; color: var(--subtle); }
 .reveal pre { margin: 24px 0; padding: 24px 32px; font-size: 36px; line-height: 1.45; color: var(--text); background: color-mix(in srgb, var(--line) 45%, transparent); border-left: 2px solid var(--line); overflow: hidden; width: auto; box-shadow: none; }
 .reveal pre code { display: block; padding: 0; color: inherit; font-size: inherit; max-height: none; overflow: hidden; white-space: pre; }
+/* a box of the highlight plugin of reveal.js, i.e. a pre with the class code-wrapper. with data-line-numbers, the lines
+   are numbered in a table, and each group of lines after the first is lit in a copy of the code, a fragment stacked
+   over the first. the copies are thus opaque and are not dimmed as past steps, and the box is dimmed as a whole once a
+   later step outside it is shown */
+/* the size is also given to a box with a language while the deck is edited, since the plugin is not loaded there */
+.reveal pre.code-wrapper, .reveal pre:has(> code[class*="language-"]) { font-size: 22px; line-height: 1.25; }
+.reveal pre.code-wrapper { position: relative; padding: 0; background: none; transition: opacity 400ms ease-out; }
+.reveal .slides pre.code-wrapper code.hljs { padding: 24px; font-size: inherit; white-space: pre; word-wrap: normal; word-break: normal; max-height: none; color: var(--text); background: color-mix(in srgb, var(--line) 45%, var(--bg)); }
+.reveal pre code table.hljs-ln { margin: 0; font-size: inherit; line-height: inherit; }
+.reveal pre code .hljs-ln td { padding: 0; border: 0; vertical-align: top; }
+.reveal pre code .hljs-ln td.hljs-ln-numbers { padding-right: 1em; text-align: right; opacity: 1; user-select: none; }
+.reveal pre code .hljs-ln-n { color: var(--muted); }
+.reveal pre code.hljs.has-highlights tr:not(.highlight-line) { opacity: 0.35; }
+.reveal .slides section:not([data-complete]) pre.code-wrapper > code.fragment.visible:not(.current-fragment) { opacity: 1; }
+.reveal .slides section:not([data-complete]) pre.code-wrapper:has(> code.fragment.visible):not(:has(> code.current-fragment)) { opacity: 0.45; }
+.reveal .hljs-keyword, .reveal .hljs-literal, .reveal .hljs-meta { color: var(--violet); }
+.reveal .hljs-built_in { color: var(--strand-3); }
+.reveal .hljs-title { color: var(--accent); }
+.reveal .hljs-params { color: var(--strand-6); }
+.reveal .hljs-string { color: var(--strand-4); }
+.reveal .hljs-number { color: var(--strand-5); }
+.reveal .hljs-comment { color: var(--muted); font-style: italic; }
+.reveal .hljs-operator { color: var(--subtle); }
 
 /* tables: hairlines, without fills */
 .reveal table { margin: 24px 0 0; border-collapse: collapse; font-size: 36px; line-height: 1.4; }
@@ -268,6 +291,7 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section.wide > ol,
 .reveal .slides section.wide > table,
 .reveal .slides section.wide > .math,
+.reveal .slides section.wide > pre,
 .reveal .slides section.wide > .col { max-width: 1680px; width: auto; }
 
 /* title and closing, plate: the backdrop over the whole slide, the words in a block at the lower left */
