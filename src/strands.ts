@@ -119,8 +119,11 @@ function group(spec: string): ((r: StrandRecord) => boolean)[] {
 // smallest value of ramp among the chosen records of its pair to the second at the largest. with
 // shade, the key of data-strands-shade, which is used in place of ramp, a strand is drawn in a shade of
 // the first color of its pair, from a lighter shade at the smallest value to a darker at the largest.
-// the clock of a strand is moved by the start of its record, and the look of the record is copied
-export function strandsOf(file: StrandFile, chosen: StrandRecord[], color?: string, ramp?: string, shade?: string): Strand[] {
+// with map, the colormap of data-strands-colormap, a strand is colored from map at its fraction along
+// ramp instead, and shade is ignored. the clock of a strand is moved by the start of its record, and
+// the look of the record is copied
+export function strandsOf(file: StrandFile, chosen: StrandRecord[], color?: string, ramp?: string, shade?: string, map?: Colormap): Strand[] {
+  if (map) shade = undefined;
   const along = shade ?? ramp;
   const order = color ? [...new Set(file.families.map((r) => String(r[color])))] : [];
   const pairOf = (r: StrandRecord) => (color ? order.indexOf(String(r[color])) : 0);
@@ -148,13 +151,14 @@ export function strandsOf(file: StrandFile, chosen: StrandRecord[], color?: stri
     }
     const strand: Strand = { pts, times, T: times[n - 1] };
     if (r.craft === true) strand.craft = true;
-    if (color || along) {
+    if (color || along || map) {
       const pair = pairOf(r),
         [lo, hi] = range.get(pair) ?? [0, 0],
         v = along ? r[along] : undefined;
       strand.ink = { pair, at: typeof v === 'number' && hi > lo ? (v - lo) / (hi - lo) : 0 };
       if (shade) strand.ink.shade = true;
-      strand.alpha = INK_ALPHA;
+      if (map) strand.ink.map = map;
+      strand.alpha = map ? MAP_ALPHA : INK_ALPHA;
     }
     if (r.tone) strand.tone = r.tone;
     if (r.alpha !== undefined) strand.alpha = r.alpha;
@@ -165,33 +169,40 @@ export function strandsOf(file: StrandFile, chosen: StrandRecord[], color?: stri
   });
 }
 
-// the bodies of the chosen records that are fixed in their frame. a body record of the file is matched
-// to a record when every number, string, or boolean of the body record is equal to the value of the
-// same key in the record, if the record has this key. the positions are read from the object of the
-// body record named by the frame of the record, or from the body record itself. a body, e.g. m1 at
-// one mu, is drawn only when it is at one position in all the chosen records, hence the primary and
-// the secondary are drawn in the rotating-pulsating frame, and not at their many places at theta = 0
-// in the inertial frame. m1 and m2 are given the masses 1 - mu and mu
+// the distance in the units of a file within which two positions of a body are taken as one
+const SAME = 1e-4;
+
+// the bodies of the chosen records, drawn only when every chosen record puts the same bodies at the
+// same positions within SAME, e.g. m1 and m2 of one mass ratio in the rotating-pulsating frame. none
+// is drawn otherwise, e.g. in the inertial frame, where the bodies move, or for records of two mass
+// ratios. a body record of the file is matched to a record when every number, string, or boolean of
+// the body record is equal to the value of the same key in the record, if the record has this key.
+// the positions are read from the object of the body record named by the frame of the record, or
+// from the body record itself. m1 and m2 are given the masses 1 - mu and mu
 export function bodiesOf(file: StrandFile, chosen: StrandRecord[]): Dot[] {
-  const places = new Map<string, Set<string>>(),
-    dots = new Map<string, Dot>();
+  const apart = (a: Dot, b: Dot) => Math.hypot(a.x - b.x, a.y - b.y) > SAME;
+  let first: Map<string, Dot> | null = null;
   for (const r of chosen) {
+    const own = new Map<string, Dot>();
     for (const body of file.bodies) {
-      const own = Object.entries(body).filter(([, v]) => ['number', 'string', 'boolean'].includes(typeof v));
-      if (!own.every(([k, v]) => !(k in r) || r[k] === v)) continue;
+      const keys = Object.entries(body).filter(([, v]) => ['number', 'string', 'boolean'].includes(typeof v));
+      if (!keys.every(([k, v]) => !(k in r) || r[k] === v)) continue;
       const at = r.frame === undefined ? body : body[String(r.frame)];
       if (!isObject(at)) continue;
       const mu = typeof body.mu === 'number' ? body.mu : typeof r.mu === 'number' ? r.mu : undefined;
       for (const [name, p] of Object.entries(at)) {
         if (!isPair(p)) continue;
-        const who = `${name} ${mu} ${r.frame}`;
-        places.set(who, (places.get(who) ?? new Set()).add(`${p[0]},${p[1]}`));
-        const mass = mu === undefined ? undefined : name === 'm1' ? 1 - mu : name === 'm2' ? mu : undefined;
-        dots.set(who, { x: p[0], y: p[1], mass });
+        const dot = { x: p[0], y: p[1], mass: mu === undefined ? undefined : name === 'm1' ? 1 - mu : name === 'm2' ? mu : undefined };
+        const was = own.get(name);
+        if (was && apart(was, dot)) return [];
+        own.set(name, dot);
       }
     }
+    const seen: Map<string, Dot> = first ?? own;
+    if (own.size !== seen.size || [...own].some(([name, d]) => !seen.has(name) || apart(seen.get(name) as Dot, d))) return [];
+    first = seen;
   }
-  return [...dots].filter(([who]) => places.get(who)?.size === 1).map(([, dot]) => dot);
+  return first ? [...first.values()] : [];
 }
 
 // the window of the box in which FILL of the strands is held, centered on the middle of the
@@ -302,16 +313,130 @@ export function mix(from: string, to: string, at: number): string | null {
 
 // the change of OKLCH lightness from the middle shade to either end of the shades of a color
 const SHADES = 0.16;
+// the least WCAG contrast against the background of a shade drawn at INK_ALPHA, met by every color
+// of the palette in theme/beeson.css
+export const CONTRAST = 2.5;
+
+// the WCAG contrast against the background bg of the color c drawn over it at the opacity alpha, as
+// a canvas blends them, both in sRGB from 0 to 1
+function contrastOver(c: [number, number, number], bg: [number, number, number], alpha = INK_ALPHA): number {
+  const luminance = ([R, G, B]: number[]) => 0.2126 * linear(R) + 0.7152 * linear(G) + 0.0722 * linear(B);
+  const a = luminance(c.map((v, i) => alpha * v + (1 - alpha) * bg[i])),
+    b = luminance(bg);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
 
 // the shade at the fraction at of a color, from a lighter shade at 0 to a darker at 1, by a change of
-// its OKLCH lightness at the same chroma and hue. the color is #rrggbb or rgb(r, g, b), and the
-// result is #rrggbb. null when the color is of another form
-export function shadeOf(color: string, at: number): string | null {
+// its OKLCH lightness at the same chroma and hue. with the background bg, the shades are moved away
+// from bg until the end on its side keeps CONTRAST against it, e.g. lighter on a dark background.
+// the colors are #rrggbb or rgb(r, g, b), and the result is #rrggbb. null when the color is of
+// another form
+export function shadeOf(color: string, at: number, bg?: string): string | null {
   const c = rgbOf(color);
   if (!c) return null;
   const [L, C, h] = lch(c);
-  const shaded = Math.min(0.95, Math.max(0.2, L + SHADES * (1 - 2 * at)));
-  return hex(rgbFromLab([shaded, C * Math.cos(h), C * Math.sin(h)]));
+  const shade = (l: number) => hex(rgbFromLab([l, C * Math.cos(h), C * Math.sin(h)]));
+  let light = Math.min(0.95, L + SHADES),
+    dark = Math.max(0.2, L - SHADES);
+  const back = bg ? rgbOf(bg) : null;
+  if (back) {
+    // the contrast grows away from the background, hence the lightness at which the near end keeps
+    // CONTRAST is found by bisection, and the far end is moved as much, within its bound
+    const below = lch(back)[0] < L,
+      near = below ? dark : light,
+      far = below ? 0.95 : 0.2;
+    const keeps = (l: number) => contrastOver(rgbOf(shade(l)) as [number, number, number], back) >= CONTRAST;
+    if (!keeps(near) && keeps(far)) {
+      let a = near,
+        b = far;
+      for (let i = 0; i < 30; i++) {
+        const m = (a + b) / 2;
+        if (keeps(m)) b = m;
+        else a = m;
+      }
+      if (below) [dark, light] = [b, Math.min(0.95, light + b - near)];
+      else [light, dark] = [b, Math.max(0.2, dark + b - near)];
+    }
+  }
+  return shade(light + (dark - light) * at);
+}
+
+// the colormaps of matplotlib named in data-strands-colormap, as colors at even stops from 0 to 1.
+// the stops were sampled from matplotlib's own viridis, plasma, and Blues_r at 17 stops each.
+// interpolated linearly in sRGB, they stay within 0.6 of matplotlib in OKLab distance times 100 at
+// every point, and they give the ends of colormapEnds() that matplotlib gives on --bg of the dark
+// mode. ends are the default lower and upper ends, short of the yellow end of viridis and plasma and
+// of the white end of Blues_r
+export const COLORMAPS = {
+  viridis: {
+    stops: ['#440154', '#48186a', '#472d7b', '#424086', '#3b528b', '#33638d', '#2c728e', '#26818e', '#21908c', '#1f9f88', '#28ae80', '#3ebc74', '#5dc963', '#82d34c', '#abdc32', '#d5e21a', '#fde725'],
+    ends: [0, 0.85],
+  },
+  plasma: {
+    stops: ['#0d0887', '#310596', '#4c02a1', '#6600a7', '#7e03a8', '#9511a2', '#a92396', '#bb3587', '#cb4778', '#d9596a', '#e66c5c', '#f07f4f', '#f89441', '#fdab33', '#fdc328', '#f9dd25', '#f0f921'],
+    ends: [0, 0.85],
+  },
+  Blues_r: {
+    stops: ['#08306b', '#084084', '#08519c', '#1461a9', '#2171b5', '#3282be', '#4292c6', '#56a0ce', '#6baed6', '#84bcdb', '#9ecae1', '#b2d2e8', '#c6dbef', '#d2e3f3', '#deebf7', '#eaf3fb', '#f7fbff'],
+    ends: [0, 0.683],
+  },
+} as const;
+export type ColormapName = keyof typeof COLORMAPS;
+// a colormap with its lower and upper ends in [0, 1], before they are moved for the background
+export type Colormap = { name: ColormapName; lo: number; hi: number };
+
+// the least WCAG contrast of an end of a colormap, drawn opaque, against the background, as in
+// matplotlib figures drawn for the slides, whose dark end is cut in dark mode until it keeps 3:1
+export const MAP_CONTRAST = 3;
+// the opacity of a strand colored from a colormap. it is opaque, hence the color on the slide is the
+// color of the matplotlib figures, and the MAP_CONTRAST of colormapEnds() holds as drawn
+export const MAP_ALPHA = 1;
+
+// the colormap of spec, the value of data-strands-colormap: a name of COLORMAPS, alone or followed by
+// a lower and an upper end, e.g. viridis 0 0.85. throws an Error that says what is malformed
+export function colormapOf(spec: string): Colormap {
+  const [name, ...ends] = spec.trim().split(/\s+/);
+  if (!Object.prototype.hasOwnProperty.call(COLORMAPS, name)) throw new Error(`"${name}" is not viridis, plasma, or Blues_r`);
+  const map = COLORMAPS[name as ColormapName];
+  if (!ends.length) return { name: name as ColormapName, lo: map.ends[0], hi: map.ends[1] };
+  const [lo, hi] = ends.map(Number);
+  if (ends.length !== 2 || !(lo >= 0 && lo < hi && hi <= 1)) {
+    throw new Error(`"${ends.join(' ')}" is not a lower and an upper end with 0 <= lower < upper <= 1`);
+  }
+  return { name: name as ColormapName, lo, hi };
+}
+
+// the color of the colormap name at x from 0 to 1, as #rrggbb
+export function colormapAt(name: ColormapName, x: number): string {
+  const stops = COLORMAPS[name].stops,
+    n = stops.length - 1;
+  const u = Math.min(Math.max(x, 0), 1) * n,
+    k = Math.min(Math.floor(u), n - 1);
+  const a = rgbOf(stops[k]) as [number, number, number],
+    b = rgbOf(stops[k + 1]) as [number, number, number];
+  return hex(a.map((v, i) => v + (b[i] - v) * (u - k)) as [number, number, number]);
+}
+
+// the ends of map on the background bg. an end whose color, drawn opaque, is short of MAP_CONTRAST
+// against bg is moved toward the other end in steps of 0.01 until it keeps it, e.g. the lower, dark
+// end of viridis on a dark background and its upper, light end on a light one. the other end is kept
+export function colormapEnds(map: Colormap, bg?: string): [number, number] {
+  const back = bg ? rgbOf(bg) : null;
+  if (!back) return [map.lo, map.hi];
+  const keeps = (x: number) => contrastOver(rgbOf(colormapAt(map.name, x)) as [number, number, number], back, 1) >= MAP_CONTRAST;
+  // the ends are rounded, since a sum of steps of 0.01 is not exact in binary
+  const round = (x: number) => Math.round(x * 1e9) / 1e9;
+  let lo = map.lo,
+    hi = map.hi;
+  for (let k = 1; !keeps(lo) && lo < hi; k++) lo = round(map.lo + k / 100);
+  for (let k = 1; !keeps(hi) && hi > lo; k++) hi = round(map.hi - k / 100);
+  return [Math.min(lo, hi), hi];
+}
+
+// the color of map at the fraction at from the lower to the upper end of colormapEnds() on bg
+export function colormapColor(map: Colormap, at: number, bg?: string): string {
+  const [lo, hi] = colormapEnds(map, bg);
+  return colormapAt(map.name, lo + (hi - lo) * at);
 }
 
 function rgbOf(color: string): [number, number, number] | null {
@@ -415,9 +540,26 @@ export function load(path: string): Promise<StrandFile | null> {
   return out;
 }
 
+// the colormap of the backdrop el from its attribute data-strands-colormap, or undefined without it.
+// a malformed attribute is reported in a warning, and the strands are then colored from the palette
+function colormapFor(el: HTMLElement): Colormap | undefined {
+  const spec = el.dataset.strandsColormap;
+  if (!spec?.trim()) return undefined;
+  let map: Colormap;
+  try {
+    map = colormapOf(spec);
+  } catch (error) {
+    console.warn(`beeson: data-strands-colormap="${spec}" is not used, since ${(error as Error).message}. The strands are colored from the palette`);
+    return undefined;
+  }
+  if (el.dataset.strandsShade)
+    console.warn(`beeson: data-strands-shade="${el.dataset.strandsShade}" is ignored, since data-strands-colormap is given`);
+  return map;
+}
+
 // the strands and bodies of the backdrop el, from its attributes data-strands, data-strands-select,
-// data-strands-color, data-strands-ramp, and data-strands-shade. never throws, and gives empty lists
-// after a warning
+// data-strands-color, data-strands-ramp, data-strands-shade, and data-strands-colormap. never throws,
+// and gives empty lists after a warning
 export async function strandsFor(el: HTMLElement): Promise<{ strands: Strand[]; dots: Dot[] }> {
   const path = el.dataset.strands ?? '';
   const file = await load(path);
@@ -433,6 +575,7 @@ export async function strandsFor(el: HTMLElement): Promise<{ strands: Strand[]; 
         el.dataset.strandsColor || undefined,
         el.dataset.strandsRamp || undefined,
         el.dataset.strandsShade || undefined,
+        colormapFor(el),
       ),
       dots: bodiesOf(file, chosen),
     };

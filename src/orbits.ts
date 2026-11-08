@@ -4,8 +4,8 @@
 // nondimensional, in the rotating frame
 
 import { scene, seconds } from './scenes.ts';
-import { fitView, mix, shadeOf, strandsFor } from './strands.ts';
-import type { Dot } from './strands.ts';
+import { colormapColor, fitView, mix, shadeOf, strandsFor } from './strands.ts';
+import type { Colormap, Dot } from './strands.ts';
 
 export type Member = { s: Float64Array; path: number[]; times: number[]; t: number };
 export type Tone = 'orange' | 'violet' | 'text' | 'hero' | 'line';
@@ -13,11 +13,12 @@ export type Tone = 'orange' | 'violet' | 'text' | 'hero' | 'line';
 // the last of them. alpha, when set, replaces the opacity of the tone. ink, when set, replaces the
 // color of the tone with the color at the fraction at between the two colors of the pair of the
 // palette --strand-1 to --strand-8 in theme/beeson.css, i.e. --strand-1 and --strand-2 for pair 0,
-// or with shade the shade at the fraction at of the first color of the pair. craft, when true, marks
-// the path of a spacecraft, whose head is drawn without data-heads. a strand of a file may also set
-// its weight, i.e. its width in line widths, the radius of its head in line widths in place of the
-// size of its backdrop, and a glow, a soft halo of its own color
-export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; alpha?: number; ink?: { pair: number; at: number; shade?: boolean }; craft?: boolean; weight?: number; head?: number; glow?: boolean };
+// or with shade the shade at the fraction at of the first color of the pair, or with map the color at
+// the fraction at between the ends of the colormap map. craft, when true, marks the path of a
+// spacecraft, whose head is drawn without data-heads. a strand of a file may also set its weight,
+// i.e. its width in line widths, the radius of its head in line widths in place of the size of its
+// backdrop, and a glow, a soft halo of its own color
+export type Strand = { pts: Float64Array; times: Float32Array; T: number; tone?: Tone; alpha?: number; ink?: { pair: number; at: number; shade?: boolean; map?: Colormap }; craft?: boolean; weight?: number; head?: number; glow?: boolean };
 
 export const MU = 0.01215;
 // the distance to a body within which the step is shortened in step()
@@ -32,6 +33,10 @@ const LOOP = 9;
 const HEADS: Record<string, number> = { full: 2.2, small: 0.55, none: 0 };
 // the number of colors of the palette of theme/beeson.css, in pairs
 const PALETTE = 8;
+// the distance in canvas pixels within which the path drawn for a strand follows its points. a
+// segment whose smooth curve departs further from its chord is drawn as the curve, and a point
+// closer than this to the line through its kept neighbors is left out of the path
+const TOLERANCE = 0.1;
 
 // writes the time derivative of the state s into a. returns the smaller of the distance to the Moon
 // and 0.4 times the distance to the Earth, which is used in step() to shorten the step
@@ -256,6 +261,117 @@ export function open(path: number[], times: number[]): Strand {
   return { pts, times: Float32Array.from(times), T: times[n - 1] };
 }
 
+// a strand as drawn on a canvas. px holds its points in canvas pixels, keep the indices of the
+// points of its path in increasing order, and ctl four numbers per segment, the two inner control
+// points of the cubic Bézier curve of the segment, or NaN for a segment drawn straight. ctl is null
+// when every segment is drawn straight
+export type Path = { px: Float32Array; keep: Uint32Array; ctl: Float32Array | null };
+
+type Pen = Pick<CanvasRenderingContext2D, 'moveTo' | 'lineTo' | 'bezierCurveTo'>;
+
+const curved = (ctl: Float32Array | null, j: number): ctl is Float32Array => ctl !== null && !Number.isNaN(ctl[4 * j]);
+
+// the path of the points px, in canvas pixels. a segment is drawn as the curve of the centripetal
+// Catmull–Rom spline through the points of [Yuksel et al. 2011](https://doi.org/10.1016/j.cad.2010.08.008)
+// where this curve departs from the chord by more than tolerance, i.e. where the points are too
+// sparse for the turn of the strand. on a closed strand, whose last point is within half a pixel
+// of its first, the spline is continued across this point. the points of the straight runs are
+// thinned by Douglas–Peucker within tolerance
+export function pathOf(px: Float32Array, tolerance = TOLERANCE): Path {
+  const n = px.length / 2;
+  const closed = n > 3 && Math.hypot(px[0] - px[2 * n - 2], px[1] - px[2 * n - 1]) < 0.5;
+  const mark = new Uint8Array(n);
+  mark[0] = mark[n - 1] = 1;
+  let ctl: Float32Array | null = null;
+  for (let j = 0; j < n - 1; j++) {
+    const x1 = px[2 * j], y1 = px[2 * j + 1], x2 = px[2 * j + 2], y2 = px[2 * j + 3];
+    // the neighbors of the segment, the points across the joint on a closed strand, or the
+    // reflections of the far end at an end of an open one
+    let x0 = 2 * x1 - x2, y0 = 2 * y1 - y2, x3 = 2 * x2 - x1, y3 = 2 * y2 - y1;
+    if (j > 0) { x0 = px[2 * j - 2]; y0 = px[2 * j - 1]; } else if (closed) { x0 = px[2 * n - 4]; y0 = px[2 * n - 3]; }
+    if (j < n - 2) { x3 = px[2 * j + 4]; y3 = px[2 * j + 5]; } else if (closed) { x3 = px[2]; y3 = px[3]; }
+    const d1 = Math.sqrt((x1 - x0) ** 2 + (y1 - y0) ** 2), d2 = Math.sqrt((x2 - x1) ** 2 + (y2 - y1) ** 2), d3 = Math.sqrt((x3 - x2) ** 2 + (y3 - y2) ** 2);
+    if (!(d1 > 1e-6 && d2 > 1e-6 && d3 > 1e-6)) continue;
+    // with the exponent 1/2 of the centripetal spline, d^(2a) is d and d^a is s
+    const s1 = Math.sqrt(d1), s2 = Math.sqrt(d2), s3 = Math.sqrt(d3);
+    const a = 2 * d1 + 3 * s1 * s2 + d2, b = 3 * s1 * (s1 + s2);
+    const e = 2 * d3 + 3 * s3 * s2 + d2, g = 3 * s3 * (s3 + s2);
+    const c1x = (d1 * x2 - d2 * x0 + a * x1) / b, c1y = (d1 * y2 - d2 * y0 + a * y1) / b;
+    const c2x = (d3 * x1 - d2 * x3 + e * x2) / g, c2y = (d3 * y1 - d2 * y3 + e * y2) / g;
+    // a cubic stays within 3/4 of the larger distance of its inner control points from its chord
+    const off = Math.max(Math.abs((c1x - x1) * (y2 - y1) - (c1y - y1) * (x2 - x1)), Math.abs((c2x - x1) * (y2 - y1) - (c2y - y1) * (x2 - x1))) / d2;
+    if (0.75 * off <= tolerance) continue;
+    if (!ctl) ctl = new Float32Array(4 * (n - 1)).fill(NaN);
+    ctl.set([c1x, c1y, c2x, c2y], 4 * j);
+    mark[j] = mark[j + 1] = 1;
+  }
+  // between two marked points the segments are straight
+  const stack: number[] = [];
+  for (let a = 0, b = 1; b < n; b++) {
+    if (!mark[b]) continue;
+    if (b > a + 1) stack.push(a, b);
+    a = b;
+  }
+  const t2 = tolerance * tolerance;
+  while (stack.length) {
+    const b = stack.pop() as number, a = stack.pop() as number;
+    const ax = px[2 * a], ay = px[2 * a + 1], dx = px[2 * b] - ax, dy = px[2 * b + 1] - ay, L = dx * dx + dy * dy;
+    let worst = t2, at = -1;
+    for (let k = a + 1; k < b; k++) {
+      const qx = px[2 * k] - ax, qy = px[2 * k + 1] - ay;
+      const u = L > 0 ? Math.min(1, Math.max(0, (qx * dx + qy * dy) / L)) : 0;
+      const d = (qx - u * dx) ** 2 + (qy - u * dy) ** 2;
+      if (d > worst) { worst = d; at = k; }
+    }
+    if (at < 0) continue;
+    mark[at] = 1;
+    if (at > a + 1) stack.push(a, at);
+    if (b > at + 1) stack.push(at, b);
+  }
+  let count = 0;
+  for (let k = 0; k < n; k++) count += mark[k];
+  const keep = new Uint32Array(count);
+  for (let k = 0, m = 0; k < n; k++) if (mark[k]) keep[m++] = k;
+  return { px, keep, ctl };
+}
+
+// the point at the fraction f of the segment of path from its point j to j + 1
+export function pointOn(path: Path, j: number, f: number): [number, number] {
+  const p = path.px, n = p.length / 2;
+  if (j >= n - 1) return [p[2 * n - 2], p[2 * n - 1]];
+  const x1 = p[2 * j], y1 = p[2 * j + 1], x2 = p[2 * j + 2], y2 = p[2 * j + 3];
+  if (!curved(path.ctl, j)) return [x1 + f * (x2 - x1), y1 + f * (y2 - y1)];
+  const c = path.ctl, k = 4 * j, g = 1 - f;
+  const w0 = g * g * g, w1 = 3 * g * g * f, w2 = 3 * g * f * f, w3 = f * f * f;
+  return [w0 * x1 + w1 * c[k] + w2 * c[k + 2] + w3 * x2, w0 * y1 + w1 * c[k + 1] + w2 * c[k + 3] + w3 * y2];
+}
+
+// adds to pen the path of a strand from its first point to the fraction f of its segment from point
+// j to j + 1, i.e. to the head of its trace, and to its last point with j its last index
+export function trace(pen: Pen, path: Path, j: number, f: number): void {
+  const { px: p, keep, ctl } = path, n = p.length / 2;
+  pen.moveTo(p[0], p[1]);
+  let last = 0;
+  for (let k = 1; k < keep.length && keep[k] <= j; k++) {
+    const v = keep[k];
+    if (v === last + 1 && curved(ctl, last)) pen.bezierCurveTo(ctl[4 * last], ctl[4 * last + 1], ctl[4 * last + 2], ctl[4 * last + 3], p[2 * v], p[2 * v + 1]);
+    else pen.lineTo(p[2 * v], p[2 * v + 1]);
+    last = v;
+  }
+  if (j >= n - 1 || !(f > 0)) return;
+  if (last === j && curved(ctl, j)) {
+    // the part of the curve up to f, by de Casteljau
+    const x1 = p[2 * j], y1 = p[2 * j + 1], k = 4 * j;
+    const ax = x1 + f * (ctl[k] - x1), ay = y1 + f * (ctl[k + 1] - y1);
+    const mx = ctl[k] + f * (ctl[k + 2] - ctl[k]), my = ctl[k + 1] + f * (ctl[k + 3] - ctl[k + 1]);
+    const [ex, ey] = pointOn(path, j, f);
+    pen.bezierCurveTo(ax, ay, ax + f * (mx - ax), ay + f * (my - ay), ex, ey);
+  } else {
+    const [x, y] = pointOn(path, j, f);
+    pen.lineTo(x, y);
+  }
+}
+
 export const POINTS = {
   L1: (): [number, number] => [lagrange(1), 0],
   L2: (): [number, number] => [lagrange(2), 0],
@@ -290,7 +406,9 @@ export class Orbits {
   private H = 0;
   private scale = 1;
   private lw = 1;
-  private px: Float32Array[] = [];
+  private paths: Path[] = [];
+  // the scale and window for which the paths were last computed
+  private pathsFor = '';
   // the pointer in canvas pixels, and the glow radius there
   private pointer: { x: number; y: number; r: number } | null = null;
   // the bodies of a file of polylines, drawn in place of the Moon and the Earth, or null
@@ -361,6 +479,7 @@ export class Orbits {
     this.idx = strands.map(() => 0);
     this.loaded = true;
     this.fittedFor = '';
+    this.pathsFor = '';
     this.fit();
     if (this.pending) {
       this.pending = false;
@@ -388,17 +507,21 @@ export class Orbits {
   private paint(ctx: CanvasRenderingContext2D, c: Colors): void {
     if (!this.strands.some((s) => s.ink)) { this.inks = []; return; }
     const cs = getComputedStyle(this.el);
-    const palette = Array.from({ length: PALETTE }, (_, i) => {
-      const value = cs.getPropertyValue(`--strand-${i + 1}`).trim();
+    const color = (name: string) => {
+      const value = cs.getPropertyValue(name).trim();
       if (!value) return '';
       ctx.fillStyle = '#000000';
       ctx.fillStyle = value;
       return String(ctx.fillStyle);
-    });
+    };
+    const palette = Array.from({ length: PALETTE }, (_, i) => color(`--strand-${i + 1}`));
+    // the shades and the ends of a colormap keep their contrast against the background of the slide
+    const bg = color('--bg') || undefined;
     this.inks = this.strands.map((s) => {
       if (!s.ink) return '';
+      if (s.ink.map) return colormapColor(s.ink.map, s.ink.at, bg);
       const k = (2 * s.ink.pair) % PALETTE;
-      return (s.ink.shade ? shadeOf(palette[k], s.ink.at) : mix(palette[k], palette[k + 1], s.ink.at)) ?? c.stroke;
+      return (s.ink.shade ? shadeOf(palette[k], s.ink.at, bg) : mix(palette[k], palette[k + 1], s.ink.at)) ?? c.stroke;
     });
   }
 
@@ -432,11 +555,15 @@ export class Orbits {
     for (const c of [this.base, this.head]) { c.width = this.W; c.height = this.H; }
     this.scale = this.H / 2 / this.half;
     this.lw = Math.max(1, 0.7 * dpr * (r.height / h));
-    this.px = this.strands.map((s) => {
-      const n = s.times.length, out = new Float32Array(2 * n);
-      for (let i = 0; i < n; i++) { out[2 * i] = this.X(s.pts[2 * i]); out[2 * i + 1] = this.Y(s.pts[2 * i + 1]); }
-      return out;
-    });
+    const key = [this.W, this.H, this.cx, this.cy, this.half].join();
+    if (key !== this.pathsFor) {
+      this.paths = this.strands.map((s) => {
+        const n = s.times.length, out = new Float32Array(2 * n);
+        for (let i = 0; i < n; i++) { out[2 * i] = this.X(s.pts[2 * i]); out[2 * i + 1] = this.Y(s.pts[2 * i + 1]); }
+        return pathOf(out);
+      });
+      this.pathsFor = key;
+    }
     const k = h / 2 / this.half;
     for (const lab of this.labels) {
       const at = lab.dataset.at;
@@ -482,15 +609,16 @@ export class Orbits {
     ctx.strokeStyle = s.ink ? this.inks[i] : tone === 'orange' || tone === 'hero' ? c.accent : tone === 'violet' ? c.violet : tone === 'text' || tone === 'line' ? c.text : c.stroke;
     ctx.globalAlpha = s.alpha ?? (tone === 'orange' || tone === 'violet' ? 0.42 : tone === 'text' ? 0.8 : tone === 'line' ? 0.36 : 1);
     ctx.lineWidth = (tone === 'hero' ? 2.2 : tone === 'text' ? 1.3 : 1) * (s.weight ?? 1) * this.lw;
+    ctx.lineJoin = 'round';
     ctx.shadowBlur = s.glow ? 6 * this.lw : 0;
     if (s.glow) ctx.shadowColor = ctx.strokeStyle;
   }
 
-  private segments(ctx: CanvasRenderingContext2D, i: number, from: number, to: number): void {
-    const p = this.px[i];
-    if (to <= from) return;
-    ctx.beginPath(); ctx.moveTo(p[2 * from], p[2 * from + 1]);
-    for (let j = from + 1; j <= to; j++) ctx.lineTo(p[2 * j], p[2 * j + 1]);
+  // strokes strand i in one path up to the fraction f of its segment from point j to j + 1, since
+  // two strokes of one strand at an opacity below 1 overlap or leave a gap at their joint
+  private stroke(ctx: CanvasRenderingContext2D, i: number, j: number, f: number): void {
+    ctx.beginPath();
+    trace(ctx, this.paths[i], j, f);
     ctx.stroke();
   }
 
@@ -499,21 +627,48 @@ export class Orbits {
     return this.done ? this.strands[i].times.length - 1 : this.idx[i];
   }
 
+  private get tracing(): boolean {
+    return !this.loop && this.t0 !== null && !this.finished;
+  }
+
+  // the fraction of the segment of strand i from point j to j + 1 reached at the flight time tau
+  private fraction(i: number, j: number, tau: number): number {
+    const t = this.strands[i].times, dt = t[j + 1] - t[j];
+    return dt > 0 ? Math.min(1, Math.max(0, (tau - t[j]) / dt)) : 1;
+  }
+
+  // draws the bodies and the strands on the base canvas for the current mode
   redraw(): void {
     if (!this.W) return;
     const ctx = this.base.getContext('2d');
     if (!ctx) return;
-    const c = this.colors();
-    ctx.clearRect(0, 0, this.W, this.H);
+    const c = this.colors(), now = performance.now();
     this.paint(ctx, c);
-    ctx.lineWidth = this.lw; ctx.lineJoin = 'round'; ctx.strokeStyle = c.stroke;
+    this.draw(ctx, c, now);
+    this.paintHead(now, c);
+  }
+
+  // draws the bodies and every strand, a finished strand whole and a strand in its trace up to its
+  // head at the time now. the strands are stroked in the order of their file or scene at every
+  // frame, the order of the still, hence the last frame of a trace is its still apart from the heads
+  private draw(ctx: CanvasRenderingContext2D, c: Colors, now: number): void {
+    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
+    ctx.clearRect(0, 0, this.W, this.H);
     this.bodies(ctx, c);
-    this.strands.forEach((_, i) => {
+    const tracing = this.tracing;
+    this.strands.forEach((s, i) => {
+      const n = s.times.length, j = this.drawn(i);
+      if (j < n - 1) {
+        const tau = this.clock(i, now);
+        if (!tracing || !(tau > s.times[0])) return;
+        this.pen(ctx, c, i);
+        this.stroke(ctx, i, j, this.fraction(i, j, tau));
+        return;
+      }
       this.pen(ctx, c, i);
-      this.segments(ctx, i, 0, this.drawn(i));
+      this.stroke(ctx, i, n - 1, 0);
     });
     ctx.globalAlpha = 1; ctx.shadowBlur = 0;
-    this.paintHead(performance.now(), c);
   }
 
   reset(): void {
@@ -581,7 +736,7 @@ export class Orbits {
   }
 
   private loopHead(ctx: CanvasRenderingContext2D, c: Colors, now: number): void {
-    const s = this.strands[0], p = this.px[0], n = s.times.length;
+    const s = this.strands[0], p = this.paths[0].px, n = s.times.length;
     const tau = this.raf && this.t0 !== null ? ((((now - this.t0) / 1000) % LOOP) / LOOP) * s.T : this.finished ? 0.37 * s.T : 0;
     let j = 0;
     while (j < n - 1 && s.times[j + 1] <= tau) j++;
@@ -641,17 +796,22 @@ export class Orbits {
     ctx.strokeStyle = c.accent; ctx.globalAlpha = 0.35; ctx.lineWidth = this.lw; ctx.lineJoin = 'round'; ctx.lineCap = 'round';
     ctx.beginPath();
     this.strands.forEach((_, i) => {
-      const p = this.px[i], last = this.drawn(i);
+      const { px: p, ctl } = this.paths[i], last = this.drawn(i);
+      // the segment from point j - 1 to j, along its curve where it has one
+      const to = (j: number) => {
+        if (curved(ctl, j - 1)) ctx.bezierCurveTo(ctl[4 * j - 4], ctl[4 * j - 3], ctl[4 * j - 2], ctl[4 * j - 1], p[2 * j], p[2 * j + 1]);
+        else ctx.lineTo(p[2 * j], p[2 * j + 1]);
+      };
       let pen = false;
       for (let j = 0; j <= last; j++) {
         const dx = p[2 * j] - g.x, dy = p[2 * j + 1] - g.y;
         if (dx * dx + dy * dy <= r2) {
-          if (pen) ctx.lineTo(p[2 * j], p[2 * j + 1]);
-          else if (j > 0) { ctx.moveTo(p[2 * j - 2], p[2 * j - 1]); ctx.lineTo(p[2 * j], p[2 * j + 1]); }
+          if (pen) to(j);
+          else if (j > 0) { ctx.moveTo(p[2 * j - 2], p[2 * j - 1]); to(j); }
           else ctx.moveTo(p[0], p[1]);
           pen = true;
         } else if (pen) {
-          ctx.lineTo(p[2 * j], p[2 * j + 1]);
+          to(j);
           pen = false;
         }
       }
@@ -660,31 +820,26 @@ export class Orbits {
     ctx.globalAlpha = 1;
   }
 
+  // the point of strand i at the flight time tau, on its segment from point j to j + 1
   private at(i: number, j: number, tau: number): [number, number] {
-    const s = this.strands[i], p = this.px[i], n = s.times.length;
-    if (j >= n - 1) return [p[2 * (n - 1)], p[2 * (n - 1) + 1]];
-    const f = Math.min(1, Math.max(0, (tau - s.times[j]) / (s.times[j + 1] - s.times[j])));
-    return [p[2 * j] + f * (p[2 * j + 2] - p[2 * j]), p[2 * j + 1] + f * (p[2 * j + 3] - p[2 * j + 1])];
+    return pointOn(this.paths[i], j, j < this.strands[i].times.length - 1 ? this.fraction(i, j, tau) : 0);
   }
 
   private frame(now: number): void {
     if (this.loop || !this.W) { this.paintHead(now); return; }
     const ctx = this.base.getContext('2d');
     if (!ctx) return;
-    const c = this.colors();
-    ctx.lineWidth = this.lw; ctx.lineJoin = 'round'; ctx.strokeStyle = c.stroke;
     let flying = 0;
     this.strands.forEach((s, i) => {
       const n = s.times.length, tau = this.clock(i, now);
       let j = this.idx[i];
       while (j < n - 1 && s.times[j + 1] <= tau) j++;
-      this.pen(ctx, c, i);
-      this.segments(ctx, i, this.idx[i], j);
       this.idx[i] = j;
       if (j < n - 1) flying++;
     });
-    ctx.globalAlpha = 1; ctx.shadowBlur = 0;
     if (flying === 0) this.finished = true;
+    const c = this.colors();
+    this.draw(ctx, c, now);
     this.paintHead(now, c);
   }
 }
