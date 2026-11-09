@@ -460,6 +460,89 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
 }
 .reveal .slide-number a { color: inherit; text-decoration: none; }
 .reveal .slide-number-delimiter { margin: 0 0.2em; }
+/* the scrubber of src/scrub.ts, over the progress line while the mouse is near the bottom of the
+   window. The band is laid out while hidden, since its box is the zone that opens it. Its track
+   starts at the 3 px of the progress line and grows, and a tick is a gap in the track at the start
+   of a numbered slide, under the slide number and the start time */
+.reveal .scrub {
+  position: absolute;
+  z-index: 35;
+  bottom: 0;
+  left: calc(50% - 960px * var(--slide-scale, 1));
+  width: calc(1920px * var(--slide-scale, 1));
+  height: 5.6em;
+  font-size: max(13px, calc(22px * var(--slide-scale, 1)));
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  visibility: hidden;
+  pointer-events: none;
+}
+.reveal.scrubbing .scrub { visibility: visible; pointer-events: auto; }
+.reveal.scrubbing .progress { opacity: 0; }
+.reveal .scrub::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, var(--bg) 70%, transparent);
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+.reveal.scrubbing .scrub::before { opacity: 1; }
+.reveal .scrub-track {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 3px;
+  background: transparent;
+  transition: height 150ms ease-out, background-color 150ms ease-out;
+}
+.reveal.scrubbing .scrub-track { height: 0.45em; background: var(--line); }
+.reveal .scrub-track span { display: block; height: 100%; background: var(--accent); transform-origin: 0 0; transform: scaleX(0); }
+.reveal .scrub-tick {
+  position: absolute;
+  bottom: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.2em;
+  padding-bottom: 0.9em;
+  color: var(--muted);
+  transform: translateX(-50%);
+  opacity: 0;
+  transition: opacity 150ms ease-out;
+}
+.reveal.scrubbing .scrub-tick { opacity: 1; }
+.reveal .scrub-tick.first { align-items: flex-start; transform: none; }
+.reveal .scrub-tick.last { align-items: flex-end; transform: translateX(-100%); }
+.reveal .scrub-tick::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 2px;
+  margin-left: -1px;
+  height: 0.45em;
+  background: var(--bg);
+}
+.reveal .scrub-tick.first::after, .reveal .scrub-tick.last::after { display: none; }
+.reveal .scrub-tick.hover::after { display: block; height: 0.8em; background: var(--text); }
+.reveal .scrub-tick.quiet:not(.now):not(.hover) > span { visibility: hidden; }
+.reveal .scrub-tick.now { color: var(--accent); }
+.reveal .scrub-tick.hover { color: var(--text); }
+.reveal .scrub-time { font-size: 0.8em; }
+.reveal .scrub-card {
+  position: absolute;
+  bottom: 3.6em;
+  max-width: 60%;
+  overflow: hidden;
+  color: var(--text);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  transform: translateX(-50%);
+}
+.reveal .scrub-card:empty { display: none; }
 .theme-switch {
   position: absolute;
   z-index: 40;
@@ -569,6 +652,9 @@ html.reveal-print .reveal .plot-play { display: none; }
   .reveal .plot .plot-body *,
   .reveal.fade .slides > section,
   .reveal .progress span,
+  .reveal .scrub::before,
+  .reveal .scrub-track,
+  .reveal .scrub-tick,
   .reveal a,
   .theme-switch { transition: none; }
 }

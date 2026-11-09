@@ -1570,6 +1570,51 @@
     });
   }
 
+  // src/fullscreen.ts
+  var prefixed = document;
+  var isFullscreen = () => !!(prefixed.fullscreenElement ?? prefixed.webkitFullscreenElement);
+  function enter() {
+    const root2 = document.documentElement;
+    if (root2.requestFullscreen) root2.requestFullscreen().catch(() => {
+    });
+    else root2.webkitRequestFullscreen?.();
+  }
+  function toggleFullscreen() {
+    if (!isFullscreen()) enter();
+    else if (prefixed.exitFullscreen) prefixed.exitFullscreen().catch(() => {
+    });
+    else prefixed.webkitExitFullscreen?.();
+  }
+  function windowFull(w = window) {
+    const near = (a, b) => Math.abs(a - b) <= 1;
+    return near(w.outerWidth, w.screen.width) && near(w.outerHeight, w.screen.height) && w.innerHeight < w.screen.height - 1;
+  }
+  function initFullscreen() {
+    let armed = false;
+    let left = false;
+    const check = () => {
+      if (!windowFull()) {
+        armed = false;
+        left = false;
+      } else if (!isFullscreen() && !left) armed = true;
+    };
+    const changed = () => {
+      armed = false;
+      if (!isFullscreen()) left = true;
+    };
+    const take = (ev) => {
+      if (!armed || isFullscreen() || ev instanceof KeyboardEvent && (ev.key === "Escape" || ev.repeat)) return;
+      armed = false;
+      enter();
+    };
+    window.addEventListener("resize", check);
+    document.addEventListener("fullscreenchange", changed);
+    document.addEventListener("webkitfullscreenchange", changed);
+    document.addEventListener("keydown", take, true);
+    document.addEventListener("pointerdown", take, true);
+    check();
+  }
+
   // src/plot.ts
   var KINDS = ["points", "trace", "label", "events"];
   var PATCH = ["x", "y", "title", "regions", "curves", "labels"];
@@ -2932,6 +2977,139 @@
         el.append(box2);
       }
     }
+  }
+
+  // src/scrub.ts
+  function minutes(seconds) {
+    const s = Math.max(0, Math.round(seconds));
+    return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+  }
+  function starts(timings, config) {
+    const { totalTime } = config;
+    if (config.defaultTiming == null && totalTime == null) return null;
+    const fallback = totalTime ? 0 : config.defaultTiming ?? 0;
+    let own = timings.map((t2) => {
+      const n = t2 === void 0 ? NaN : parseInt(t2, 10);
+      return Number.isNaN(n) ? fallback : n;
+    });
+    if (totalTime) {
+      const open2 = own.filter((x) => x === 0).length;
+      const share = open2 ? Math.round((totalTime - own.reduce((a, b) => a + b, 0)) / open2) : 0;
+      own = own.map((x) => x === 0 ? share : x);
+    }
+    let t = 0;
+    return own.map((x) => {
+      const at = t;
+      t += x;
+      return at;
+    });
+  }
+  var GAP2 = 3.2;
+  function initScrub(deck) {
+    const reveal = deck.getRevealElement();
+    const band = document.createElement("div");
+    band.className = "scrub";
+    band.setAttribute("aria-hidden", "true");
+    const track = document.createElement("div");
+    track.className = "scrub-track";
+    const fill = document.createElement("span");
+    track.append(fill);
+    const card = document.createElement("div");
+    card.className = "scrub-card";
+    band.append(track, card);
+    reveal.append(band);
+    let ticks = [];
+    let hovered = null;
+    let open2 = false;
+    let zone = band.getBoundingClientRect();
+    const build = () => {
+      for (const t of ticks) t.el.remove();
+      const slides = deck.getSlides();
+      const last = Math.max(1, deck.getTotalSlides() - 1);
+      const times = starts(slides.map((s) => s.dataset.timing), deck.getConfig());
+      ticks = slides.map((slide, i) => {
+        const at = Math.min(deck.getSlidePastCount(slide) / last, 1);
+        const el = document.createElement("div");
+        el.className = "scrub-tick";
+        el.style.left = `${at * 100}%`;
+        if (i === 0) el.classList.add("first");
+        if (i === slides.length - 1 && slides.length > 1) el.classList.add("last");
+        const number = document.createElement("span");
+        number.textContent = String(deck.getSlidePastCount(slide) + 1);
+        el.append(number);
+        if (times) {
+          const time = document.createElement("span");
+          time.className = "scrub-time";
+          time.textContent = minutes(times[i]);
+          el.append(time);
+        }
+        band.append(el);
+        return { slide, at, el };
+      });
+    };
+    const thin = () => {
+      zone = band.getBoundingClientRect();
+      const em = parseFloat(getComputedStyle(band).fontSize) || 16;
+      const spacing = zone.width / Math.max(1, ticks.length - 1);
+      const k = Math.max(1, Math.ceil(GAP2 * em / spacing));
+      ticks.forEach((t, i) => t.el.classList.toggle("quiet", i % k !== 0 && i !== ticks.length - 1));
+    };
+    const mark = () => {
+      fill.style.transform = `scaleX(${deck.getTotalSlides() < 2 ? 0 : deck.getProgress()})`;
+      const current = deck.getCurrentSlide();
+      for (const t of ticks) t.el.classList.toggle("now", t.slide === current);
+    };
+    const hover = (t) => {
+      if (t === hovered) return;
+      hovered?.el.classList.remove("hover");
+      hovered = t;
+      if (!t) {
+        card.textContent = "";
+        return;
+      }
+      t.el.classList.add("hover");
+      card.textContent = heading(t.slide);
+      const half = card.offsetWidth / 2;
+      const x = Math.min(Math.max(t.at * zone.width, half), zone.width - half);
+      card.style.left = `${x}px`;
+    };
+    const show2 = (on) => {
+      if (on === open2) return;
+      open2 = on;
+      if (on) {
+        build();
+        thin();
+        mark();
+      } else hover(null);
+      reveal.classList.toggle("scrubbing", on);
+    };
+    const nearest2 = (x) => {
+      const at = (x - zone.left) / zone.width;
+      let best = ticks[0] ?? null;
+      for (const t of ticks) if (Math.abs(t.at - at) < Math.abs((best?.at ?? 0) - at)) best = t;
+      return best;
+    };
+    document.addEventListener("pointermove", (ev) => {
+      if (ev.pointerType !== "mouse" && ev.pointerType !== "pen") return;
+      const near = ev.clientY >= zone.top && ev.clientY <= zone.bottom && ev.clientX >= zone.left && ev.clientX <= zone.right;
+      show2(near);
+      if (near) hover(nearest2(ev.clientX));
+    }, { passive: true });
+    document.documentElement.addEventListener("pointerleave", () => show2(false));
+    document.addEventListener("keydown", () => show2(false), true);
+    band.addEventListener("click", (ev) => {
+      const t = nearest2(ev.clientX);
+      if (!t) return;
+      const { h, v } = deck.getIndices(t.slide);
+      deck.slide(h, v, -1);
+    });
+    for (const event of ["slidechanged", "fragmentshown", "fragmenthidden"]) deck.on(event, () => {
+      if (open2) mark();
+    });
+    deck.on("resize", () => {
+      zone = band.getBoundingClientRect();
+      if (open2) thin();
+    });
   }
 
   // src/contour.ts
@@ -4359,6 +4537,14 @@ void main() {
     deck.addKeyBinding({ keyCode: 80, key: "P", description: "Pointer" }, (ev) => {
       if (forDeck(ev)) togglePointer();
     });
+    deck.addKeyBinding(70, (ev) => {
+      if (forDeck(ev)) toggleFullscreen();
+    });
+    deck.registerKeyboardShortcut("F", "Full screen on and off");
+    if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) {
+      initFullscreen();
+      initScrub(deck);
+    }
     if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: "E", description: "Edit the deck" }, (ev) => {
       if (forDeck(ev)) edit();
     });

@@ -5,9 +5,11 @@
 import { Orbits, mount } from './orbits.ts';
 import { initChrome } from './chrome.ts';
 import { initCursor, togglePointer } from './cursor.ts';
+import { initFullscreen, toggleFullscreen } from './fullscreen.ts';
 import { mountPlots, type PlotView } from './plot.ts';
 import { markViewers, stillViewers } from './print.ts';
 import { mountQr } from './qr.ts';
+import { initScrub } from './scrub.ts';
 import { mount as mountSurfaces } from './surface.ts';
 import type { Surface } from './surface.ts';
 import { register } from './strands.ts';
@@ -143,6 +145,11 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   initCursor(() => backdrops, () => deck.getCurrentSlide(), !EDITING);
   deck.addKeyBinding({ keyCode: 68, key: 'D', description: 'Switch dark and light' }, (ev) => { if (forDeck(ev)) toggle(); });
   deck.addKeyBinding({ keyCode: 80, key: 'P', description: 'Pointer' }, (ev) => { if (forDeck(ev)) togglePointer(); });
+  // F enters full screen as in reveal.js, and it leaves it too
+  deck.addKeyBinding(70, (ev) => { if (forDeck(ev)) toggleFullscreen(); });
+  deck.registerKeyboardShortcut('F', 'Full screen on and off');
+  // the print view is not shown on a screen, and the editor keeps the bottom of the window
+  if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) { initFullscreen(); initScrub(deck); }
   // E opens the same slide in the editor, and the other parameters of the address are kept
   if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: 'E', description: 'Edit the deck' }, (ev) => { if (forDeck(ev)) edit(); });
 

@@ -21,7 +21,9 @@ The demo deck in `index.html` shows every layout and element of the theme, and i
 | `figure` | A plate with a figure, the heading at the top, and the caption at the lower left |
 | `split` | The black panel at the left, and a figure at the right |
 
-During a talk, press `d` to flip between the dark and the light mode, `s` for the speaker view, `p` for the pointer, `f` for fullscreen, and Esc for the overview. To fix the light mode for a venue, add `?theme=light` to the address.
+During a talk, press `d` to flip between the dark and the light mode, `s` for the speaker view, `p` for the pointer, `f` to enter or leave full screen, and Esc for the overview. To fix the light mode for a venue, add `?theme=light` to the address. Full screen hides the tabs and the address bar. When you make the window full screen from the system, e.g. with the green button in Safari on macOS, the deck is put into full screen at your next key or click. Browsers let a page enter full screen only on a key or a click.
+
+Move the mouse to the bottom of the window to magnify the progress line into a scrubber. In the scrubber, each numbered slide has a tick with its number, and with the time at which it starts when the deck sets `totalTime` or `defaultTiming` in `Beeson.start`. The times are counted as for the pacing of the speaker view, with the seconds of a slide in its `data-timing`. Rest the mouse over a tick to see the title of its slide, and click to jump to the first step of this slide. A key closes the scrubber, and away from the bottom the progress line is drawn as before.
 
 ## Edit in the browser
 

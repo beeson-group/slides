@@ -6,7 +6,7 @@ const OWN = ['title', 'section', 'closing'];
 
 // the data-run of a section slide is used in place of the text of its heading, e.g. for a heading
 // with math
-const heading = (slide: HTMLElement): string =>
+export const heading = (slide: HTMLElement): string =>
   slide.dataset.run ?? (slide.querySelector('h2') ?? slide.querySelector('h1'))?.textContent?.trim() ?? '';
 
 export function initChrome(deck: Deck): void {
