@@ -257,8 +257,9 @@ test('the marks of a surface are dimmed and colored by data-surface-marks, data-
   assert.deepEqual(page.errors, []);
 
   // without still, a step that changes only the marks leaves the sheets settled. the marks are not
-  // changed in the frame of the step, and they reach their targets in a few time constants of 0.15 s
-  const live = await browser.newPage();
+  // changed in the frame of the step, and they reach their targets in a few time constants of 0.15 s.
+  // the page is set to motion, since a runner may prefer reduced motion, under which the marks jump
+  const live = await browser.newPage({ motion: true });
   await live.goto(deckUrl('index.html'));
   await live.waitFor(deckSettled);
   await live.evaluate(`Reveal.slide(${h}, 0, 3)`);
