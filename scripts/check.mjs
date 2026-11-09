@@ -46,6 +46,7 @@ const deckProblems = `[
   ...[...document.querySelectorAll('[data-mjx-error], mjx-merror')].map((error) => 'formula not typeset: ' + (error.getAttribute('data-mjx-error') ?? error.textContent)),
   ...[...document.querySelectorAll('tycho-viewer')].map((viewer) => viewer.shadowRoot?.querySelector('.status.error')?.textContent).filter(Boolean),
   ...[...document.querySelectorAll('.plot-error')].map((error) => error.textContent),
+  ...[...document.querySelectorAll('.qr-error')].map((error) => error.textContent),
   ...performance.getEntriesByType('resource').map((entry) => entry.name).filter((name) => /^https?:/.test(name) && !name.startsWith(location.origin)).map((name) => 'network load: ' + name),
 ]`;
 
