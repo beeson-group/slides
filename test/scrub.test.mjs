@@ -162,7 +162,7 @@ test('a window that does not cover the screen is not taken into full screen', { 
   assert.deepEqual(await page.evaluate('calls'), { enter: 0, exit: 0 });
 });
 
-test('the title and section slides are not numbered, and the slides after the closing slide are numbered A1, A2', { timeout: 60000 }, async (t) => {
+test('the title, section, and closing slides are not numbered, and the slides after the closing slide are numbered A1, A2', { timeout: 60000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
@@ -177,10 +177,10 @@ test('the title and section slides are not numbered, and the slides after the cl
     }
     return out;
   })()`);
-  assert.deepEqual(numbers, ['', '', '1 / 4', '2 / 4', '', '3 / 4', '4 / 4', 'A1', 'A2']);
+  assert.deepEqual(numbers, ['', '', '1 / 3', '2 / 3', '', '3 / 3', '', 'A1', 'A2']);
 
   // the band has a tick for each numbered slide only
   await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 960, y: 1075, button: 'none' });
   const labels = await page.evaluate(`[...document.querySelectorAll('.scrub-tick')].map((t) => t.firstChild.textContent)`);
-  assert.deepEqual(labels, ['1', '2', '3', '4']);
+  assert.deepEqual(labels, ['1', '2', '3']);
 });
