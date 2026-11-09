@@ -41,7 +41,7 @@ npm run typecheck && npm test               # types and unit tests
 npm run check                               # every slide in both modes, with screenshots and console errors
 ```
 
-The compiled `theme/beeson.js` and `theme/editor.js` are committed, hence none of these commands is needed for a talk. The same commands are run on Ubuntu, macOS, and Windows at every push.
+The compiled `theme/beeson.js` and `theme/editor.js` are committed, hence none of these commands is needed for a talk. The same commands are run on Ubuntu and Windows at every push, and the deck is checked in Chrome and Safari on macOS.
 
 ## License
 
