@@ -2,7 +2,7 @@
 
 The marks in this folder are trademarks of Princeton University and of the Beeson group, and every file in it is outside the MIT license in the `LICENSE` file at the root of this repository.
 
-- `logo.png` is the logo of the Beeson group.
+- `logo.png` is the logo of the Beeson group, and `favicon-32x32.png`, `favicon-192x192.png`, and `apple-touch-icon-180x180.png` are the same logo as the icon of the browser tab, as on claudiovestini.com.
 - `lockup-dark.png` and `lockup-light.png` are the Princeton Engineering lockups for dark and light backgrounds, respectively.
 - `transfer.js` is the low-thrust transfer drawn in the logo, as polylines written by DyLAN, the software of the group, and it is traced on the title slide.
 
