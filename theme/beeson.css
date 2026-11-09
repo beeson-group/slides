@@ -536,8 +536,9 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
 .reveal .scrub-time { font-size: 0.8em; }
 .reveal .scrub-card {
   position: absolute;
-  bottom: 3.6em;
+  bottom: 3.4em;
   max-width: 60%;
+  padding-bottom: 0.25em;
   overflow: hidden;
   color: var(--text);
   white-space: nowrap;

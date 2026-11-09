@@ -19,6 +19,9 @@ export const CSS = `
 .beeson-edit-bottom button { padding: 2px 10px; font-size: 13px; }
 .beeson-edit-bottom button.on { border-color: var(--violet, #96f); color: var(--text, #eee); }
 .beeson-edit-bottom .count { white-space: nowrap; min-width: 9ch; text-align: center; }
+.beeson-edit-bottom .beeson-layers { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.beeson-edit-bottom .beeson-layers[hidden] { display: none; }
+.beeson-edit-bottom .beeson-layers > span { margin-right: 4px; }
 .beeson-edit-bottom .hint { flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .beeson-edit-card { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 65; box-sizing: border-box; width: min(600px, calc(100vw - 32px)); padding: 24px 28px; border: 1px solid var(--line, #555); border-radius: 10px; background: var(--bg, #000); color: var(--text, #eee); font: 15px/1.5 system-ui, sans-serif; box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45); }
 .beeson-edit-card[hidden] { display: none; }
@@ -56,6 +59,7 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
 .beeson-edit-peek[hidden] { display: none; }
 .beeson-edit-peek .reveal { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; overflow: hidden; }
 .beeson-edit-peek .fragment { visibility: visible !important; opacity: 1 !important; transition: none !important; }
+.beeson-edit-peek .fragment.beeson-off { visibility: hidden !important; }
 .beeson-edit-side { position: fixed; right: 0; top: 44px; bottom: 36px; z-index: 50; width: 320px; box-sizing: border-box; display: none; flex-direction: column; background: var(--bg, #000); border-left: 1px solid var(--line, #555); color: var(--text, #eee); font: 13px/1.4 system-ui, sans-serif; }
 html.beeson-steps .beeson-edit-side { display: flex; }
 .beeson-edit-side .head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line, #555); }
@@ -90,6 +94,7 @@ html.beeson-dragging, html.beeson-dragging * { cursor: move !important; user-sel
 html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .slides section video, html.beeson-editing .reveal .slides section .zone, html.beeson-editing .reveal .slides section .plate, html.beeson-editing .reveal .slides section .qr { cursor: move; }
 html.beeson-editor .reveal .progress, html.beeson-editor .reveal .slide-number { display: none !important; }
 html.beeson-editing .reveal .slides section .fragment { visibility: visible !important; opacity: 1 !important; transition: none !important; }
+html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: hidden !important; }
 html.beeson-editing .reveal [contenteditable="true"] { cursor: text; outline: 1px dashed transparent; outline-offset: 6px; border-radius: 2px; }
 html.beeson-editing .reveal [contenteditable="true"]:hover { outline-color: var(--subtle, #bbb); }
 html.beeson-editing .reveal [contenteditable="true"]:focus { outline: 2px solid var(--violet, #96f); }

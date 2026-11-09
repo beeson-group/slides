@@ -17,6 +17,7 @@ import { History } from './history.ts';
 import { Nav } from './nav.ts';
 import { Steps } from './steps.ts';
 import { Move } from './move.ts';
+import { Layers } from './layers.ts';
 import type { TagEdit } from './tags.ts';
 import { CSS } from './styles.ts';
 
@@ -41,6 +42,8 @@ type Deck = {
 };
 type Draft = { at: number; text: string };
 
+// the type of the file to save. a file to open is chosen without a filter, since a filter may leave
+// index.html grayed out in the dialog of macOS, and a file that is not the deck is reported once read
 const FILE_TYPES = [{ description: 'HTML', accept: { 'text/html': ['.html', '.htm'] } }];
 const HOST = '[contenteditable="true"]';
 // the keys in the storage of the browser: the unsaved edits of this deck, the autosave switch,
@@ -83,6 +86,10 @@ const slides = (): Element => document.querySelector('.reveal .slides') ?? docum
 const deck = (): Deck | undefined => (window as unknown as { Reveal?: Deck }).Reveal;
 const fileName = (): string => decodeURIComponent(location.pathname.split('/').pop() || '') || 'index.html';
 const folder = (): string => decodeURIComponent(location.pathname).replace(/[^/]*$/, '');
+// the advice after a save that is a download. Safari and Firefox put a download into the downloads
+// folder, unless they are set to ask where to save each download. index.html is then chosen and
+// replaced in the dialog of the browser
+const REPLACE = (): string => `Replace ${fileName()} in ${folder()} with it, or set the browser to ask where to save each download`;
 const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
 const clock = (): string => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
@@ -146,13 +153,16 @@ notesButton.setAttribute('aria-pressed', 'false');
 
 const current = (): Element | null => deck()?.getCurrentSlide() ?? null;
 
-// the slide of el is shown, e.g. for an undo of a change on another slide
+// the slide of el is shown in the layer in which el is seen, e.g. for an undo of a change on
+// another slide
 function showSlide(el: Element): void {
   const d = deck();
   const section = el.closest('section');
-  if (!d || !section || section === d.getCurrentSlide()) return;
-  const { h, v } = d.getIndices(section);
-  d.slide(h, v);
+  if (d && section && section !== d.getCurrentSlide()) {
+    const { h, v } = d.getIndices(section);
+    d.slide(h, v);
+  }
+  layers.reveal(el);
 }
 
 // the history of the changes, the list of the slides at the left, the steps of the current slide
@@ -171,12 +181,19 @@ const relayout = () => {
   layout();
 };
 const nav = new Nav({ slides: () => [...slides().querySelectorAll(':scope > section')], current, go: showSlide, layout: relayout });
-const steps = new Steps({ pairing: () => pairing, slide: current, edits: tagEdits, markDirty, layout: relayout, show: showSlide, record: (e) => history.push(e), tex: (el) => mathLookup()(el)?.tex ?? null });
+const steps = new Steps({ pairing: () => pairing, slide: current, edits: tagEdits, markDirty, layout: relayout, show: showSlide, record: (e) => history.push(e), tex: (el) => mathLookup()(el)?.tex ?? null, changed: () => follow() });
 const move = new Move({ pairing: () => pairing, slide: current, scale: () => deck()?.getScale() ?? 1, edits: tagEdits, markDirty, onChange: () => steps.refresh(), show: showSlide, record: (e) => history.push(e) });
-bottom.append(prevButton, countEl, nextButton, hintEl, nav.button, steps.button, notesButton);
+// a block of another layer is hidden, hence the selection is dropped at a change of the layer
+const layers = new Layers(current, () => {
+  move.select(null);
+  follow();
+});
+bottom.append(prevButton, countEl, nextButton, layers.box, hintEl, nav.button, steps.button, notesButton);
 
-// the frames, the numbers, the list, and the overflow marks follow the slide after a change
+// the layer, the frames, the numbers, the list, and the overflow marks follow the slide after a
+// change
 function follow(): void {
+  layers.refresh();
   steps.refresh();
   move.refresh();
   nav.refresh();
@@ -301,7 +318,7 @@ function report(): void {
     const where = `${fileName()} in ${folder()}, i.e. the file that is open here`;
     cardText.textContent = canWrite()
       ? `A browser writes only to a file that you have chosen. Choose ${where}, and your edits are saved into it.`
-      : `A browser does not write to a file by itself. Choose ${where}. A save then puts a copy with your edits into your downloads, and you replace the file with it.`;
+      : `This browser does not write to a file by itself. Choose ${where}. A save is then a download of a copy with your edits. Set the browser to ask where to save each download, and you choose ${fileName()} in its folder and replace it.`;
     setState('Choose the file of this deck to start editing');
     return;
   }
@@ -443,7 +460,6 @@ function pickFile(): Promise<File | null> {
   return new Promise((done) => {
     const input = make('input');
     input.type = 'file';
-    input.accept = '.html,.htm,text/html';
     input.style.display = 'none';
     const finish = (file: File | null) => {
       input.remove();
@@ -482,7 +498,7 @@ async function openFile(): Promise<void> {
   if (canPick() && pickers.showOpenFilePicker) {
     let picked: FileSystemFileHandle[];
     try {
-      picked = await pickers.showOpenFilePicker({ types: FILE_TYPES, multiple: false });
+      picked = await pickers.showOpenFilePicker({ multiple: false });
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') return;
       throw error;
@@ -564,7 +580,7 @@ async function doSave(): Promise<void> {
     text = n ? `Saved ${edits} to ${handle.name} at ${clock()}` : `Saved ${handle.name} at ${clock()}`;
   } else {
     download(fileName(), rendered.text);
-    text = n ? `Saved a copy with ${edits} to your downloads. Replace ${fileName()} with it to keep them` : `Saved a copy of ${fileName()} to your downloads`;
+    text = `${n ? `Saved a copy with ${edits}` : `Saved a copy of ${fileName()}`}. ${REPLACE()}`;
   }
   const warnings = rendered.warnings.length ? `, ${rendered.warnings.join(', ')}` : '';
   note = { text: `${text}${warnings}`, warn: rendered.warnings.length > 0 };
@@ -675,7 +691,7 @@ function copyDraft(): void {
   if (draft) download(fileName(), draft.text);
   dropDraft();
   recover.hidden = true;
-  note = { text: `A copy of ${fileName()} with the edits is in your downloads. Replace the file with it and open it again`, warn: false };
+  note = { text: `A copy of ${fileName()} with the edits is in your downloads. Replace ${fileName()} in ${folder()} with it and open it again`, warn: false };
   report();
 }
 

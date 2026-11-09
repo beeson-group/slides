@@ -4,6 +4,8 @@
 // since a thumbnail would draw every backdrop and viewer of the deck a second time, and a preview
 // of one slide is shown while the pointer rests on its row
 
+import { layersOf, showLayer } from './layers.ts';
+
 export type Ctx = {
   slides(): Element[];
   current(): Element | null;
@@ -173,6 +175,9 @@ export class Nav {
       el.classList.remove('beeson-hover', 'beeson-overflow', 'current-fragment', 'past', 'future');
       if (el.classList.contains('fragment')) el.classList.add('visible');
     }
+    // the preview shows the first layer of a slide whose elements are hidden at a step
+    const layers = layersOf(clone);
+    showLayer(clone, layers.length > 1 ? layers[0] : null);
     clone.classList.add('present');
     clone.style.display = 'block';
     const deck = document.createElement('div');

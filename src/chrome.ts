@@ -7,17 +7,20 @@ const OWN = ['title', 'section', 'closing'];
 export const heading = (slide: HTMLElement): string =>
   slide.dataset.run ?? (slide.querySelector('h2') ?? slide.querySelector('h1'))?.textContent?.trim() ?? '';
 
+// the running head of the slides after the closing slide, which are the appendix
+const APPENDIX = 'Appendix slides';
+
 // the running heads and the outlines are filled from every slide of the deck, since the slides of
-// reveal.js leave out the section slides, which are not numbered
+// reveal.js leave out the section slides, which are not numbered. a section slide in the appendix
+// names the slides after it
 export function initChrome(): void {
   const slides = [...document.querySelectorAll<HTMLElement>('.reveal .slides section:not(:has(> section))')];
   const sections = slides.filter((s) => s.classList.contains('section'));
-  let current: HTMLElement | null = null;
+  let text = '';
   for (const slide of slides) {
-    if (slide.classList.contains('section')) current = slide;
-    if (OWN.some((c) => slide.classList.contains(c)) || slide.querySelector('.run') || !current) continue;
-    const text = heading(current);
-    if (!text) continue;
+    if (slide.classList.contains('section')) text = heading(slide);
+    if (slide.classList.contains('closing')) text = APPENDIX;
+    if (OWN.some((c) => slide.classList.contains(c)) || slide.querySelector('.run') || !text) continue;
     const run = document.createElement('div');
     run.className = 'run';
     run.textContent = text;

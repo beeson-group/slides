@@ -41,8 +41,9 @@ const GAP = 3.2;
 
 // the band is opened only with the mouse within REACH screen pixels of its bottom edge, so that
 // the controls of a figure near the bottom of a slide are not covered, and it is kept open while
-// the mouse is anywhere over it
-const REACH = 16;
+// the mouse is anywhere over it. REACH is wide enough for the band to open before the pointer hits
+// the bottom of the screen, where macOS shows a hidden Dock over the window
+const REACH = 48;
 
 export function initScrub(deck: Deck): void {
   const reveal = deck.getRevealElement() as HTMLElement;

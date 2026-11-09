@@ -1479,15 +1479,15 @@
   // src/chrome.ts
   var OWN = ["title", "section", "closing"];
   var heading = (slide) => slide.dataset.run ?? (slide.querySelector("h2") ?? slide.querySelector("h1"))?.textContent?.trim() ?? "";
+  var APPENDIX = "Appendix slides";
   function initChrome() {
     const slides = [...document.querySelectorAll(".reveal .slides section:not(:has(> section))")];
     const sections = slides.filter((s) => s.classList.contains("section"));
-    let current = null;
+    let text = "";
     for (const slide of slides) {
-      if (slide.classList.contains("section")) current = slide;
-      if (OWN.some((c) => slide.classList.contains(c)) || slide.querySelector(".run") || !current) continue;
-      const text = heading(current);
-      if (!text) continue;
+      if (slide.classList.contains("section")) text = heading(slide);
+      if (slide.classList.contains("closing")) text = APPENDIX;
+      if (OWN.some((c) => slide.classList.contains(c)) || slide.querySelector(".run") || !text) continue;
       const run = document.createElement("div");
       run.className = "run";
       run.textContent = text;
@@ -3005,7 +3005,7 @@
     });
   }
   var GAP2 = 3.2;
-  var REACH2 = 16;
+  var REACH2 = 48;
   function initScrub(deck) {
     const reveal = deck.getRevealElement();
     const band = document.createElement("div");

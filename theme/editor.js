@@ -784,6 +784,109 @@
     }
   };
 
+  // src/editor/layers.ts
+  var OUT = ".fade-out";
+  var ONLY = ".current-visible, .fade-in-then-out";
+  var OFF = "beeson-off";
+  function fragmentsOf(slide) {
+    const els = [...slide.querySelectorAll(".fragment")].filter((el) => !el.closest("aside.notes"));
+    const given = els.map((el) => parseInt(el.getAttribute("data-fragment-index") ?? "", 10));
+    let next = Math.max(0, ...given.filter((i) => !Number.isNaN(i))) + 1;
+    const index = given.map((i) => Number.isNaN(i) ? next++ : i);
+    const order = [...new Set(index)].sort((a, b) => a - b);
+    return els.map((el, i) => ({ el, step: order.indexOf(index[i]) + 1, kind: el.matches(OUT) ? "out" : el.matches(ONLY) ? "only" : "in" }));
+  }
+  function layersOf(slide) {
+    const fragments = fragmentsOf(slide);
+    const last = Math.max(0, ...fragments.map((f) => f.step));
+    const cuts = /* @__PURE__ */ new Set();
+    for (const f of fragments) {
+      const at = f.kind === "out" ? f.step : f.kind === "only" ? f.step + 1 : 0;
+      if (at > 0 && at <= last) cuts.add(at);
+    }
+    const starts = [0, ...[...cuts].sort((a, b) => a - b)];
+    return starts.map((from, i) => ({ from, to: i + 1 < starts.length ? starts[i + 1] - 1 : last }));
+  }
+  var shownAt = (f, step) => f.kind === "in" ? f.step <= step : f.kind === "out" ? step < f.step : step === f.step;
+  function showLayer(slide, layer) {
+    for (const f of fragmentsOf(slide)) {
+      const up = f.el.parentElement?.closest(".fragment");
+      f.el.classList.toggle(OFF, !!layer && (!shownAt(f, layer.to) || !!up && up.classList.contains(OFF)));
+    }
+  }
+  function label(layer, last) {
+    if (layer.from === 0) return layer.to === 0 ? "Before step 1" : `Up to step ${layer.to}`;
+    if (last) return `From step ${layer.from}`;
+    return layer.from === layer.to ? `Step ${layer.from}` : `Steps ${layer.from}\u2013${layer.to}`;
+  }
+  var Layers = class {
+    constructor(slide, onChange) {
+      this.box = document.createElement("span");
+      // the layer chosen on each slide, kept while the editor is open
+      this.chosen = /* @__PURE__ */ new WeakMap();
+      this.key = "";
+      this.slide = slide;
+      this.onChange = onChange;
+      this.box.className = "beeson-layers";
+      this.box.setAttribute("role", "group");
+      this.box.setAttribute("aria-label", "Layer of the slide");
+      this.box.hidden = true;
+    }
+    // the marks and the switch follow the current slide and its steps
+    refresh() {
+      const slide = this.slide();
+      const layers2 = slide ? layersOf(slide) : [];
+      if (!slide || layers2.length < 2) {
+        if (slide) showLayer(slide, null);
+        this.box.hidden = true;
+        this.box.replaceChildren();
+        this.key = "";
+        return;
+      }
+      const at = Math.min(this.chosen.get(slide) ?? 0, layers2.length - 1);
+      showLayer(slide, layers2[at]);
+      const labels = layers2.map((l, i) => label(l, i === layers2.length - 1));
+      const key = `${labels.join("|")}#${at}`;
+      this.box.hidden = false;
+      if (key === this.key) return;
+      this.key = key;
+      const head = document.createElement("span");
+      head.textContent = "Shows";
+      this.box.replaceChildren(head, ...labels.map((text, i) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = text;
+        b.title = `Show the slide as it is at step ${layers2[i].to}, without the elements hidden by then and those shown after it`;
+        b.setAttribute("aria-pressed", String(i === at));
+        b.classList.toggle("on", i === at);
+        b.addEventListener("click", (ev) => {
+          if (ev.detail > 0) b.blur();
+          this.choose(slide, i);
+        });
+        return b;
+      }));
+    }
+    choose(slide, i) {
+      this.chosen.set(slide, i);
+      this.refresh();
+      this.onChange();
+    }
+    // the layer in which el is shown is chosen, e.g. for an undo of a change to a hidden element
+    reveal(el) {
+      const slide = this.slide();
+      if (!slide || !slide.contains(el) || !el.closest(`.${OFF}`)) return;
+      const layers2 = layersOf(slide);
+      for (let i = 0; i < layers2.length; i++) {
+        showLayer(slide, layers2[i]);
+        if (!el.closest(`.${OFF}`)) {
+          this.choose(slide, i);
+          return;
+        }
+      }
+      this.refresh();
+    }
+  };
+
   // src/editor/nav.ts
   var KEY = "beeson-nav";
   var LAYOUTS = ["title", "section", "closing", "figure", "split"];
@@ -934,6 +1037,8 @@
         el.classList.remove("beeson-hover", "beeson-overflow", "current-fragment", "past", "future");
         if (el.classList.contains("fragment")) el.classList.add("visible");
       }
+      const layers2 = layersOf(clone);
+      showLayer(clone, layers2.length > 1 ? layers2[0] : null);
       clone.classList.add("present");
       clone.style.display = "block";
       const deck2 = document.createElement("div");
@@ -1075,7 +1180,7 @@
       const stepOf2 = (el) => groups.findIndex((g) => g.includes(el));
       for (const el of els) {
         const at = stepOf2(el);
-        if (at < 0) continue;
+        if (at < 0 || el.closest(`.${OFF}`)) continue;
         const rect = el.getBoundingClientRect();
         const badge = document.createElement("span");
         badge.className = "beeson-badge";
@@ -1183,7 +1288,7 @@
         else el.setAttribute("data-fragment-index", String(step.index));
       }
       this.ctx.markDirty();
-      this.refresh();
+      this.ctx.changed();
     }
   };
 
@@ -1511,6 +1616,9 @@
 .beeson-edit-bottom button { padding: 2px 10px; font-size: 13px; }
 .beeson-edit-bottom button.on { border-color: var(--violet, #96f); color: var(--text, #eee); }
 .beeson-edit-bottom .count { white-space: nowrap; min-width: 9ch; text-align: center; }
+.beeson-edit-bottom .beeson-layers { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
+.beeson-edit-bottom .beeson-layers[hidden] { display: none; }
+.beeson-edit-bottom .beeson-layers > span { margin-right: 4px; }
 .beeson-edit-bottom .hint { flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .beeson-edit-card { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 65; box-sizing: border-box; width: min(600px, calc(100vw - 32px)); padding: 24px 28px; border: 1px solid var(--line, #555); border-radius: 10px; background: var(--bg, #000); color: var(--text, #eee); font: 15px/1.5 system-ui, sans-serif; box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45); }
 .beeson-edit-card[hidden] { display: none; }
@@ -1548,6 +1656,7 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
 .beeson-edit-peek[hidden] { display: none; }
 .beeson-edit-peek .reveal { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; overflow: hidden; }
 .beeson-edit-peek .fragment { visibility: visible !important; opacity: 1 !important; transition: none !important; }
+.beeson-edit-peek .fragment.beeson-off { visibility: hidden !important; }
 .beeson-edit-side { position: fixed; right: 0; top: 44px; bottom: 36px; z-index: 50; width: 320px; box-sizing: border-box; display: none; flex-direction: column; background: var(--bg, #000); border-left: 1px solid var(--line, #555); color: var(--text, #eee); font: 13px/1.4 system-ui, sans-serif; }
 html.beeson-steps .beeson-edit-side { display: flex; }
 .beeson-edit-side .head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line, #555); }
@@ -1582,6 +1691,7 @@ html.beeson-dragging, html.beeson-dragging * { cursor: move !important; user-sel
 html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .slides section video, html.beeson-editing .reveal .slides section .zone, html.beeson-editing .reveal .slides section .plate, html.beeson-editing .reveal .slides section .qr { cursor: move; }
 html.beeson-editor .reveal .progress, html.beeson-editor .reveal .slide-number { display: none !important; }
 html.beeson-editing .reveal .slides section .fragment { visibility: visible !important; opacity: 1 !important; transition: none !important; }
+html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: hidden !important; }
 html.beeson-editing .reveal [contenteditable="true"] { cursor: text; outline: 1px dashed transparent; outline-offset: 6px; border-radius: 2px; }
 html.beeson-editing .reveal [contenteditable="true"]:hover { outline-color: var(--subtle, #bbb); }
 html.beeson-editing .reveal [contenteditable="true"]:focus { outline: 2px solid var(--violet, #96f); }
@@ -1633,6 +1743,7 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:em
   var deck = () => window.Reveal;
   var fileName = () => decodeURIComponent(location.pathname.split("/").pop() || "") || "index.html";
   var folder = () => decodeURIComponent(location.pathname).replace(/[^/]*$/, "");
+  var REPLACE = () => `Replace ${fileName()} in ${folder()} with it, or set the browser to ask where to save each download`;
   var plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
   var clock = () => (/* @__PURE__ */ new Date()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   function stored(key) {
@@ -1655,10 +1766,10 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:em
     if (text) el.textContent = text;
     return el;
   }
-  function button(text, title = "", label = "") {
+  function button(text, title = "", label2 = "") {
     const el = make("button", "", text);
     el.title = title;
-    if (label) el.setAttribute("aria-label", label);
+    if (label2) el.setAttribute("aria-label", label2);
     return el;
   }
   var top = make("div", "beeson-edit-top");
@@ -1687,9 +1798,11 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:em
   function showSlide(el) {
     const d = deck();
     const section = el.closest("section");
-    if (!d || !section || section === d.getCurrentSlide()) return;
-    const { h, v } = d.getIndices(section);
-    d.slide(h, v);
+    if (d && section && section !== d.getCurrentSlide()) {
+      const { h, v } = d.getIndices(section);
+      d.slide(h, v);
+    }
+    layers.reveal(el);
   }
   var history = new History({
     snapshot: contentWithTex,
@@ -1705,10 +1818,15 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:em
     layout();
   };
   var nav = new Nav({ slides: () => [...slides().querySelectorAll(":scope > section")], current, go: showSlide, layout: relayout });
-  var steps = new Steps({ pairing: () => pairing, slide: current, edits: tagEdits, markDirty, layout: relayout, show: showSlide, record: (e) => history.push(e), tex: (el) => mathLookup()(el)?.tex ?? null });
+  var steps = new Steps({ pairing: () => pairing, slide: current, edits: tagEdits, markDirty, layout: relayout, show: showSlide, record: (e) => history.push(e), tex: (el) => mathLookup()(el)?.tex ?? null, changed: () => follow() });
   var move = new Move({ pairing: () => pairing, slide: current, scale: () => deck()?.getScale() ?? 1, edits: tagEdits, markDirty, onChange: () => steps.refresh(), show: showSlide, record: (e) => history.push(e) });
-  bottom.append(prevButton, countEl, nextButton, hintEl, nav.button, steps.button, notesButton);
+  var layers = new Layers(current, () => {
+    move.select(null);
+    follow();
+  });
+  bottom.append(prevButton, countEl, nextButton, layers.box, hintEl, nav.button, steps.button, notesButton);
   function follow() {
+    layers.refresh();
     steps.refresh();
     move.refresh();
     nav.refresh();
@@ -1812,7 +1930,7 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:em
     whichButton.hidden = !pairing?.problems.length;
     if (state === "waiting") {
       const where = `${fileName()} in ${folder()}, i.e. the file that is open here`;
-      cardText.textContent = canWrite() ? `A browser writes only to a file that you have chosen. Choose ${where}, and your edits are saved into it.` : `A browser does not write to a file by itself. Choose ${where}. A save then puts a copy with your edits into your downloads, and you replace the file with it.`;
+      cardText.textContent = canWrite() ? `A browser writes only to a file that you have chosen. Choose ${where}, and your edits are saved into it.` : `This browser does not write to a file by itself. Choose ${where}. A save is then a download of a copy with your edits. Set the browser to ask where to save each download, and you choose ${fileName()} in its folder and replace it.`;
       setState("Choose the file of this deck to start editing");
       return;
     }
@@ -1933,7 +2051,6 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:em
     return new Promise((done) => {
       const input = make("input");
       input.type = "file";
-      input.accept = ".html,.htm,text/html";
       input.style.display = "none";
       const finish = (file) => {
         input.remove();
@@ -1968,7 +2085,7 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:em
     if (canPick() && pickers.showOpenFilePicker) {
       let picked;
       try {
-        picked = await pickers.showOpenFilePicker({ types: FILE_TYPES, multiple: false });
+        picked = await pickers.showOpenFilePicker({ multiple: false });
       } catch (error) {
         if (error instanceof DOMException && error.name === "AbortError") return;
         throw error;
@@ -2040,7 +2157,7 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:em
       text = n ? `Saved ${edits} to ${handle.name} at ${clock()}` : `Saved ${handle.name} at ${clock()}`;
     } else {
       download(fileName(), rendered.text);
-      text = n ? `Saved a copy with ${edits} to your downloads. Replace ${fileName()} with it to keep them` : `Saved a copy of ${fileName()} to your downloads`;
+      text = `${n ? `Saved a copy with ${edits}` : `Saved a copy of ${fileName()}`}. ${REPLACE()}`;
     }
     const warnings = rendered.warnings.length ? `, ${rendered.warnings.join(", ")}` : "";
     note = { text: `${text}${warnings}`, warn: rendered.warnings.length > 0 };
@@ -2134,7 +2251,7 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:em
     if (draft) download(fileName(), draft.text);
     dropDraft();
     recover.hidden = true;
-    note = { text: `A copy of ${fileName()} with the edits is in your downloads. Replace the file with it and open it again`, warn: false };
+    note = { text: `A copy of ${fileName()} with the edits is in your downloads. Replace ${fileName()} in ${folder()} with it and open it again`, warn: false };
     report();
   }
   function discardDraft() {

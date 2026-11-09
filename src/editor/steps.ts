@@ -7,6 +7,7 @@
 import type { Entry } from './history.ts';
 import type { Pairing } from './render.ts';
 import { stepIn, type Step, type TagEdit } from './tags.ts';
+import { OFF } from './layers.ts';
 
 export type Group = Element[];
 export type Ctx = {
@@ -20,6 +21,8 @@ export type Ctx = {
   record(entry: Entry): void;
   // the TeX of an mjx-container, or null
   tex(el: Element): string | null;
+  // the steps of the slide were changed, which may change its layers
+  changed(): void;
 };
 // the step of an element at a moment, for the history
 type State = { el: Element; step: Step };
@@ -151,7 +154,8 @@ export class Steps {
     const stepOf = (el: Element) => groups.findIndex((g) => g.includes(el));
     for (const el of els) {
       const at = stepOf(el);
-      if (at < 0) continue;
+      // an element of another layer of the slide is hidden, and so is its number
+      if (at < 0 || el.closest(`.${OFF}`)) continue;
       const rect = el.getBoundingClientRect();
       const badge = document.createElement('span');
       badge.className = 'beeson-badge';
@@ -263,6 +267,6 @@ export class Steps {
       else el.setAttribute('data-fragment-index', String(step.index));
     }
     this.ctx.markDirty();
-    this.refresh();
+    this.ctx.changed();
   }
 }
