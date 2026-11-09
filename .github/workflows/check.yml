@@ -11,7 +11,8 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    # the tests run one file at a time on macOS, see below
+    timeout-minutes: ${{ matrix.os == 'macos-latest' && 60 || 15 }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -23,7 +24,8 @@ jobs:
       - run: npm run build
       - run: npm run typecheck
       # the Chrome preinstalled on each runner is found in scripts/chrome.mjs
-      - run: npm test
+      # the 3 cores of the macOS runner draw Chrome in software, hence one test file at a time there
+      - run: npm test -- ${{ matrix.os == 'macos-latest' && '--test-concurrency=1' || '' }}
       - run: npm run check
       # Firefox on Linux has WebGL in software only in a window, hence Xvfb
       - run: xvfb-run -a -s "-screen 0 1920x1080x24" npm run check -- --browser firefox --out check/firefox
