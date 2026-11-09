@@ -189,3 +189,27 @@ test('the last step of a slide is shown alone, and a step is added to restore th
   assert.deepEqual(await page.evaluate('Reveal.getIndices().h'), 2);
   assert.deepEqual(page.errors, []);
 });
+
+test('a fragment with data-final is shown last with every fragment restored, in place of the added step', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl('test/pages/final.html'));
+  await page.waitFor(deckSettled);
+
+  assert.equal(await page.evaluate(`document.querySelectorAll('.fragment[data-restore]').length`), 0);
+  const seen = [];
+  for (let i = 0; i < 4; i++) {
+    if (i) await page.evaluate('Reveal.next()');
+    await new Promise((done) => setTimeout(done, 600));
+    seen.push(await page.evaluate(opacities));
+  }
+  assert.deepEqual(seen, [
+    [['0', '0', '0'], false],
+    [['1', '0', '0'], false],
+    [['0.45', '1', '0'], false],
+    [['1', '1', '1'], true],
+  ]);
+  assert.equal(await page.evaluate('Reveal.isLastSlide() && !Reveal.availableFragments().next'), true);
+  assert.deepEqual(page.errors, []);
+});

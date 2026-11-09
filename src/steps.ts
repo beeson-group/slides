@@ -1,7 +1,8 @@
 // the steps of a slide. a slide is marked with data-complete once every fragment is shown, so that
 // the earlier fragments are not dimmed any more. a step without content is added after the last
 // step of a slide that dims a fragment, hence the last fragment is first shown alone, and every
-// fragment is restored at the added step. a fragment with data-highlight
+// fragment is restored at the added step. a fragment with data-final is shown last, at a step
+// that restores every fragment, in place of the added one. a fragment with data-highlight
 // colors the elements of the classes it names once it is shown, e.g. a symbol set with
 // \class{name}{...} in MathJax, in orange or, with data-tone, in violet, blue, or red, and a fragment
 // with data-unhighlight takes the color off the classes it names. a fragment with
@@ -63,11 +64,12 @@ const isCopy = (f: Element) => f.matches('pre > code.fragment');
  * Appends the step that restores the dimmed fragments to every slide under root whose last step
  * dims a fragment with content, or a code box. A fragment without data-fragment-index is placed by
  * reveal.js after every indexed one, in the order of the page, hence the added step is the last of
- * its slide.
+ * its slide. A slide with a fragment marked data-final, e.g. a QR code shown once the text is
+ * complete, is left without the added step, since its last step restores every fragment.
  */
 export function addRestoreSteps(root: ParentNode): void {
   for (const slide of root.querySelectorAll<HTMLElement>('.reveal .slides section')) {
-    if (slide.querySelector('section, .fragment[data-restore]')) continue;
+    if (slide.querySelector('section, .fragment[data-restore], .fragment[data-final]')) continue;
     const frags = [...slide.querySelectorAll<HTMLElement>('.fragment')];
     const unindexed = frags.filter((f) => !f.hasAttribute('data-fragment-index'));
     const last = unindexed.length

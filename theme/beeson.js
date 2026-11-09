@@ -4047,7 +4047,7 @@ void main() {
   var isCopy = (f) => f.matches("pre > code.fragment");
   function addRestoreSteps(root2) {
     for (const slide of root2.querySelectorAll(".reveal .slides section")) {
-      if (slide.querySelector("section, .fragment[data-restore]")) continue;
+      if (slide.querySelector("section, .fragment[data-restore], .fragment[data-final]")) continue;
       const frags = [...slide.querySelectorAll(".fragment")];
       const unindexed = frags.filter((f) => !f.hasAttribute("data-fragment-index"));
       const last = unindexed.length ? [unindexed[unindexed.length - 1]] : frags.filter((f) => Number(f.dataset.fragmentIndex) === Math.max(...frags.map((g) => Number(g.dataset.fragmentIndex))));
