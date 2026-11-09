@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <title>QR codes</title>
+  <link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+  <link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+  <link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+  <link rel="stylesheet" href="../../theme/beeson.css">
+</head>
+<body>
+  <div class="reveal"><div class="slides">
+    <section>
+      <h2>A short address</h2>
+      <div class="qr" data-qr="https://example.com/x.pdf"></div>
+    </section>
+    <section>
+      <h2>The template</h2>
+      <div class="qr" data-qr="https://github.com/beeson-group/slides" style="width: 400px"></div>
+    </section>
+    <section>
+      <h2>A paper with a query</h2>
+      <div class="qr fragment" data-fragment-index="1" data-qr="https://arc.aiaa.org/doi/10.2514/6.2026-1234?download=true&amp;utm_source=beeson-group-talk&amp;slide=42" style="width: 480px"></div>
+    </section>
+    <section>
+      <h2>A long address</h2>
+      <div class="qr" data-qr="https://beeson-group.github.io/slides/talks/2026/bifurcation-tracking/slides.pdf?from=qr&amp;session=astrodynamics-specialist-conference&amp;track=orbit-determination-and-mission-design&amp;room=ballroom-b&amp;note=the-families-of-halo-orbits-continued-through-their-bifurcations" style="width: 560px"></div>
+    </section>
+    <section>
+      <h2>Text beyond ASCII</h2>
+      <div class="qr" data-qr="https://example.com/café/Δv?ν=1"></div>
+    </section>
+    <section>
+      <h2>Too long for a code</h2>
+      <div class="qr" id="too-long"></div>
+    </section>
+  </div></div>
+  <script>document.getElementById('too-long').dataset.qr = 'x'.repeat(2332);</script>
+  <script src="../../theme/vendor/reveal/reveal.js"></script>
+  <script src="../../theme/vendor/reveal/notes.js"></script>
+  <script src="../../theme/beeson.js"></script>
+  <script>Beeson.start({});</script>
+</body>
+</html>

@@ -21,10 +21,10 @@ export type Ctx = {
 };
 
 // the outermost of these elements under the pointer is moved, outside the notes and the backdrop
-const MOVABLE = 'h1, h2, h3, p, ul, ol, dl, table, pre, blockquote, div.math, .caption, .foot, img, video, figure, .zone, .plate, tycho-viewer';
+const MOVABLE = 'h1, h2, h3, p, ul, ol, dl, table, pre, blockquote, div.math, .caption, .foot, img, video, figure, .zone, .plate, .qr, tycho-viewer';
 // an element without text to edit, dragged by itself. a tycho-viewer is turned by a drag, hence
 // it is moved by its handle only
-const BY_ITSELF = 'img, video, figure, .zone, .plate';
+const BY_ITSELF = 'img, video, figure, .zone, .plate, .qr';
 const OUTSIDE = 'aside.notes, .backdrop';
 // a drag shorter than this, in screen pixels, is a click
 const CLICK = 3;
