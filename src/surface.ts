@@ -4,8 +4,9 @@
 // one or more sheets, i.e. layers of the function, each raised by its own lift and colored with the
 // ramp of its layer. the heights and the lift of a sheet are morphed, and its colors are blended
 // into those of its next layer. a sheet that is added or removed is faded, and the camera is moved
-// to frame the sheets shown. the marks are faded in on the first sheet, and the cutting plane is
-// slid to its level, where the curve of intersection is drawn. three.js is the global THREE of
+// to frame the sheets shown. the marks are faded in on the first sheet, dimmed unless named by
+// data-surface-marks of the fragment, and filled in orange or violet when named by
+// data-surface-accent or data-surface-violet. the cutting plane is slid to its level, where the curve of intersection is drawn. three.js is the global THREE of
 // theme/vendor/three/three.js. one WebGL renderer is shared by every surface of the page, and its
 // image is copied to a 2D canvas in each element. hence the page of each step in the print view
 // does not hold a WebGL context of its own
@@ -69,6 +70,10 @@ const MARK_SIZE = 22;
 // dimmed or brightened when the surface is turned in front of it or away
 const BEHIND = 0.3;
 const DIMMING = 0.12;
+// the opacity of a mark and its label left out of data-surface-marks, and the time constant of the
+// change of the opacity and the color of a mark between two steps, in s
+const UNLIT = 0.18;
+const MARK_FADE = 0.15;
 // texels of the texture of a color ramp
 const RAMP_TEXELS = 256;
 
@@ -214,28 +219,34 @@ void main() {
 
 // a mark is drawn over the surface without the depth test, at the opacity seen, which is dimmed on
 // the processor when the surface is in front of it, and it is grown while it is faded in. a saddle
-// is drawn as a ring, and a maximum or a minimum as a disc, each outlined in the background color
+// is drawn as a ring, and a maximum or a minimum as a disc, each outlined in the background color.
+// the fill of each mark is its own color, and a mark left out of data-surface-marks is dimmed by
+// its attribute lit
 const MARK_VERTEX = /* glsl */ `
 attribute float kind;
 attribute float seen;
+attribute float lit;
+attribute vec3 fill;
 uniform float uRise;
 uniform float uSize;
 varying float vKind;
 varying float vSeen;
+varying vec3 vFill;
 void main() {
   gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
   gl_PointSize = uSize * (0.35 + 0.65 * uRise);
   vKind = kind;
-  vSeen = seen;
+  vSeen = seen * lit;
+  vFill = fill;
 }`;
 
 const MARK_FRAGMENT = /* glsl */ `
-uniform vec3 uFill;
 uniform vec3 uRing;
 uniform float uRise;
 uniform float uSize;
 varying float vKind;
 varying float vSeen;
+varying vec3 vFill;
 void main() {
   float r = length(gl_PointCoord * 2.0 - 1.0);
   float aa = 2.0 / uSize;
@@ -243,7 +254,7 @@ void main() {
   if (outer <= 0.0) discard;
   float fill = 1.0 - smoothstep(0.7 - aa, 0.7, r);
   if (vKind < 0.5) fill *= smoothstep(0.36 - aa, 0.36, r);
-  gl_FragColor = vec4(mix(uRing, uFill, fill), outer * uRise * vSeen);
+  gl_FragColor = vec4(mix(uRing, vFill, fill), outer * uRise * vSeen);
 }`;
 
 let shared: Three.WebGLRenderer | null | undefined;
@@ -272,6 +283,8 @@ function renderer(): Three.WebGLRenderer | null {
 }
 
 const CACHE = new WeakMap<HTMLElement, Surface>();
+
+type MarkTone = 'text' | 'accent' | 'violet';
 
 /** One drawing per `.surface` element, made with mount(). */
 export class Surface {
@@ -306,6 +319,15 @@ export class Surface {
   private markA: Float64Array;
   private markB: Float64Array;
   private seen: Float32Array;
+  // the opacity and the color of each mark drawn now and at the end of a change, the latter set by
+  // data-surface-marks, data-surface-accent, and data-surface-violet of the step
+  private lit: Float32Array;
+  private litTo: Float32Array;
+  private fill: Float32Array;
+  private fillTo: Float32Array;
+  private markTones: MarkTone[];
+  private palette: Record<MarkTone, RGB> = { text: [0.95, 0.95, 0.94], accent: [0.94, 0.5, 0.31], violet: [0.79, 0.31, 0.9] };
+  private markKey = '';
   private seenAt = 0;
   private capacity = 0;
   private drawn = '';
@@ -357,6 +379,11 @@ export class Surface {
     this.markA = new Float64Array(fn.marks.length);
     this.markB = new Float64Array(fn.marks.length);
     this.seen = new Float32Array(fn.marks.length).fill(1);
+    this.lit = new Float32Array(fn.marks.length).fill(1);
+    this.litTo = new Float32Array(fn.marks.length).fill(1);
+    this.fill = new Float32Array(3 * fn.marks.length);
+    this.fillTo = new Float32Array(3 * fn.marks.length);
+    this.markTones = fn.marks.map(() => 'text');
     const still: Shown = { marks: 0, cut: 0, level: fn.floor, low: this.zmin * this.zscale, high: this.zmax * this.zscale };
     this.shown = this.from = this.to = still;
 
@@ -525,6 +552,8 @@ export class Surface {
     geometry.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3 * marks.length), 3).setUsage(THREE.DynamicDrawUsage));
     geometry.setAttribute('kind', new THREE.BufferAttribute(Float32Array.from(marks, (m) => (m.kind === 'saddle' ? 0 : 1)), 1));
     geometry.setAttribute('seen', new THREE.BufferAttribute(new Float32Array(marks.length).fill(1), 1).setUsage(THREE.DynamicDrawUsage));
+    geometry.setAttribute('lit', new THREE.BufferAttribute(new Float32Array(marks.length).fill(1), 1).setUsage(THREE.DynamicDrawUsage));
+    geometry.setAttribute('fill', new THREE.BufferAttribute(new Float32Array(3 * marks.length), 3).setUsage(THREE.DynamicDrawUsage));
     const material = new THREE.ShaderMaterial({
       vertexShader: MARK_VERTEX,
       fragmentShader: MARK_FRAGMENT,
@@ -532,7 +561,6 @@ export class Surface {
       depthTest: false,
       depthWrite: false,
       uniforms: {
-        uFill: { value: new THREE.Vector3() },
         uRing: { value: new THREE.Vector3() },
         uRise: { value: 0 },
         uSize: { value: MARK_SIZE },
@@ -560,13 +588,16 @@ export class Surface {
     set(this.plane.material.uniforms.uColor.value, accent);
     set(this.curve.material.uniforms.uColor.value, mix3(accent, text, 0.35));
     set(this.glow.material.uniforms.uColor.value, accent);
-    set(this.points.material.uniforms.uFill.value, text);
     set(this.points.material.uniforms.uRing.value, bg);
+    // a flip of the mode recolors the marks at once
+    this.palette = { text, accent, violet };
+    this.paintMarks();
+    this.fill.set(this.fillTo);
   }
 
   // the stage set by the visible fragment of the slide with data-surface-stage and the highest
   // fragment index, or the data-stage of the element, or the initial stage of the function
-  private target(): { name: string; stage: Stage } {
+  private target(): { name: string; stage: Stage; step: HTMLElement | null } {
     let best: HTMLElement | null = null, index = -Infinity;
     for (const f of this.el.closest('section')?.querySelectorAll<HTMLElement>('.fragment.visible[data-surface-stage]') ?? []) {
       const i = num(f.dataset.fragmentIndex, 0);
@@ -577,7 +608,7 @@ export class Surface {
       console.error(`beeson: unknown surface stage "${name}" of ${this.el.dataset.function}, known: ${Object.keys(this.fn.stages).join(', ')}`);
       name = this.fn.initial;
     }
-    return { name, stage: this.fn.stages[name]({ ...this.el.dataset, ...best?.dataset }) };
+    return { name, stage: this.fn.stages[name]({ ...this.el.dataset, ...best?.dataset }), step: best };
   }
 
   // the ramp p set as the end of a change of the sheet s. a ramp drawn at the start is kept, so
@@ -593,11 +624,53 @@ export class Surface {
     u.uRangeB.value.set(...s.paintB.range);
   }
 
+  // the targets of the opacity and the color of the marks at the step: every mark is lit without
+  // data-surface-marks, and a mark is filled in the color of the text unless it is named by
+  // data-surface-accent or data-surface-violet
+  private markTargets(step: HTMLElement | null): string {
+    const names = (key: string) => (step?.dataset[key] ?? '').split(/[\s,]+/).filter(Boolean);
+    const lit = names('surfaceMarks'), accent = names('surfaceAccent'), violet = names('surfaceViolet');
+    this.fn.marks.forEach((m, i) => {
+      this.litTo[i] = !lit.length || lit.includes(m.name) ? 1 : UNLIT;
+      this.markTones[i] = violet.includes(m.name) ? 'violet' : accent.includes(m.name) ? 'accent' : 'text';
+    });
+    this.paintMarks();
+    return JSON.stringify([lit, accent, violet]);
+  }
+
+  private paintMarks(): void {
+    this.markTones.forEach((tone, i) => this.fillTo.set(this.palette[tone], 3 * i));
+  }
+
+  private marksSettled(): boolean {
+    for (let i = 0; i < this.lit.length; i++) if (Math.abs(this.lit[i] - this.litTo[i]) > 1e-3) return false;
+    for (let i = 0; i < this.fill.length; i++) if (Math.abs(this.fill[i] - this.fillTo[i]) > 1e-3) return false;
+    return true;
+  }
+
   /** Sets the stage from the fragments of the slide, animated or at once. */
   sync(animate: boolean): void {
-    const { name, stage } = this.target();
-    if (name === this.stageName) return;
+    const { name, stage, step } = this.target();
+    const markKey = this.markTargets(step);
     const jump = !animate || !this.stageName;
+    if (jump) {
+      this.lit.set(this.litTo);
+      this.fill.set(this.fillTo);
+    }
+    if (name === this.stageName) {
+      // a step that changes only the marks fades them, and leaves the sheets as they are
+      if (markKey !== this.markKey) {
+        this.markKey = markKey;
+        // the fade is timed from now, also under a still camera that was last drawn long ago
+        if (jump) this.draw();
+        else {
+          this.seenAt = performance.now();
+          this.kick();
+        }
+      }
+      return;
+    }
+    this.markKey = markKey;
     this.stageName = name;
     this.el.dataset.shown = name;
     const s = this.zscale, sheets = stage.sheets.length ? stage.sheets : [{ layer: this.fn.initial, lift: 0 }], main = sheets[0];
@@ -730,9 +803,10 @@ export class Surface {
   /**
    * The marks as drawn now, read by the tests: for each mark, the height at which it is drawn and
    * the height of the drawn surface under it, both in world units, and its fade, from 0 when it is
-   * hidden to 1. With settled, the change of stage has ended.
+   * hidden to 1, its opacity lit set by data-surface-marks, and its tone. With settled, the change
+   * of stage has ended.
    */
-  probe(): { stage: string; settled: boolean; marks: { name: string; z: number; surface: number; fade: number; label: number | null }[] } {
+  probe(): { stage: string; settled: boolean; marks: { name: string; z: number; surface: number; fade: number; label: number | null; lit: number; tone: MarkTone }[] } {
     const position = this.points.geometry.getAttribute('position') as Three.BufferAttribute, lead = this.sheet(0), g = this.current(lead);
     const fade = this.points.visible ? this.shown.marks : 0;
     // the distance in pixels from the anchor of the label of a mark to the mark seen by the camera now
@@ -748,7 +822,7 @@ export class Surface {
     return {
       stage: this.stageName,
       settled: !this.moving,
-      marks: this.fn.marks.map((m, i) => ({ name: m.name, z: position.getZ(i), surface: heightAt(g, this.fn, m.x, m.y) * this.zscale + lead.shown.lift, fade, label: label(i) })),
+      marks: this.fn.marks.map((m, i) => ({ name: m.name, z: position.getZ(i), surface: heightAt(g, this.fn, m.x, m.y) * this.zscale + lead.shown.lift, fade, label: label(i), lit: this.lit[i], tone: this.markTones[i] })),
     };
   }
 
@@ -883,21 +957,29 @@ export class Surface {
     const seen = this.points.geometry.getAttribute('seen') as Three.BufferAttribute;
     const now = performance.now(), dt = (now - this.seenAt) / 1000;
     this.seenAt = now;
+    const lit = this.points.geometry.getAttribute('lit') as Three.BufferAttribute;
+    const fill = this.points.geometry.getAttribute('fill') as Three.BufferAttribute;
     const k = dt > 0.25 ? 1 : 1 - Math.exp(-dt / DIMMING);
+    // the fade of a step is ended at once when the surface is not animated, e.g. under ?still
+    const f = !this.active || dt > 0.25 ? 1 : 1 - Math.exp(-dt / MARK_FADE);
     this.fn.marks.forEach((m, i) => {
       this.markAt(i, p);
       position.setXYZ(i, p.x, p.y, p.z);
       this.seen[i] += ((this.behind(p) ? BEHIND : 1) - this.seen[i]) * k;
       seen.setX(i, this.seen[i]);
+      this.lit[i] += (this.litTo[i] - this.lit[i]) * f;
+      lit.setX(i, this.lit[i]);
+      for (let c = 0; c < 3; c++) this.fill[3 * i + c] += (this.fillTo[3 * i + c] - this.fill[3 * i + c]) * f;
+      fill.setXYZ(i, this.fill[3 * i], this.fill[3 * i + 1], this.fill[3 * i + 2]);
     });
-    position.needsUpdate = seen.needsUpdate = true;
+    position.needsUpdate = seen.needsUpdate = lit.needsUpdate = fill.needsUpdate = true;
     for (const lab of this.labels) {
       const i = this.fn.marks.findIndex((m) => m.name === lab.dataset.at);
       if (i < 0) continue;
       this.markAt(i, p).project(this.camera);
       lab.style.left = `${((p.x + 1) / 2) * this.w + num(lab.dataset.dx, 0)}px`;
       lab.style.top = `${((1 - p.y) / 2) * this.h + num(lab.dataset.dy, -34)}px`;
-      lab.style.opacity = String(this.shown.marks ** 2 * this.seen[i]);
+      lab.style.opacity = String(this.shown.marks ** 2 * this.seen[i] * this.lit[i]);
     }
   }
 
@@ -964,7 +1046,7 @@ export class Surface {
     }
     if (this.rate && !this.drag && now > this.resume) this.azimuth += dt * this.rate;
     this.draw();
-    if (this.moving || this.rate) this.kick();
+    if (this.moving || this.rate || !this.marksSettled()) this.kick();
   };
 
   // the end of a change of stage, at once

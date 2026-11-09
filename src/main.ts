@@ -154,8 +154,9 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
     const before = surfacesOf(ev.previousSlide);
     for (const s of before) s.stop();
     // a surface whose data attributes other than data-stage match those of a surface on the slide
-    // before takes its camera, so that the turn of the camera continues across the slide change
-    const key = (s: { el: HTMLElement }) => JSON.stringify(Object.entries(s.el.dataset).filter(([k]) => k !== 'stage').sort());
+    // before takes its camera, so that the turn of the camera continues across the slide change.
+    // data-shown is left out too, since each surface writes its drawn stage there
+    const key = (s: { el: HTMLElement }) => JSON.stringify(Object.entries(s.el.dataset).filter(([k]) => k !== 'stage' && k !== 'shown').sort());
     for (const s of surfacesOf(ev.currentSlide)) {
       const from = before.find((b) => key(b) === key(s));
       if (from) s.follow(from);

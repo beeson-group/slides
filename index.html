@@ -141,6 +141,26 @@ try {
   <aside class="notes">The mass ratio is \(\mu = 0.05\), with the primary at \((-\mu, 0)\) and the secondary at \((1 - \mu, 0)\), hence the saddles are seen at the scale of a slide. The distances from the primary and the secondary are \(\rho_1\) and \(\rho_2\), and \(C\) is the Jacobi constant. The wells are unbounded below at the primary and the secondary, hence the surface is clamped at a floor. At the second step the bowl is drawn in red above the wells in blue, and at the third step the two are merged into their sum. At \(C = 3.39\), the neck at \(\LL{1}\) is open and the neck at \(\LL{2}\) is closed. Drag the surface to turn it.</aside>
 </section>
 
+<!-- the same surface, which keeps the camera of the slide before. the terms are colored in blue and red with data-tone and uncolored with data-unhighlight, and the marks are picked out with data-surface-marks, data-surface-accent, and data-surface-violet -->
+<section>
+  <h2>Color the terms and the marks</h2>
+  <p>The effective potential is the sum of two terms</p>
+  <div class="math fragment" data-fragment-index="1" data-surface-stage="bowl">\[\tilde U = \class{ug}{U_g} + \class{uc}{U_c}.\]</div>
+  <p class="fragment" data-fragment-index="2" data-highlight="ug" data-tone="blue">The <span class="ug">gravitational wells</span> are drawn in blue,</p>
+  <p class="fragment" data-fragment-index="3" data-highlight="uc" data-tone="red" style="margin-top: 0">and the <span class="uc">centrifugal dome</span> in red.</p>
+  <p class="fragment" data-fragment-index="4" data-unhighlight="ug uc" data-surface-stage="extrema">Their sum has three saddles and two maxima.</p>
+  <p class="fragment" data-fragment-index="5" data-surface-stage="extrema" data-surface-marks="L1 L2 L3" data-surface-accent="L1 L2 L3">The saddles lie on the \(x\) axis,</p>
+  <p class="fragment" data-fragment-index="6" data-surface-stage="extrema" data-surface-marks="L4 L5" data-surface-violet="L4 L5" style="margin-top: 0">and the maxima form equilateral triangles.</p>
+  <div class="surface" data-function="effective-potential" data-mu="0.05" data-stage="sum">
+    <span class="lab" data-at="L1">\(\LL{1}\)</span>
+    <span class="lab" data-at="L2">\(\LL{2}\)</span>
+    <span class="lab" data-at="L3">\(\LL{3}\)</span>
+    <span class="lab" data-at="L4">\(\LL{4}\)</span>
+    <span class="lab" data-at="L5">\(\LL{5}\)</span>
+  </div>
+  <aside class="notes">The surface has the attributes of the surface of the slide before, apart from data-stage, hence it is shown under the same camera. The terms are colored in the colors of their sheets, the wells in Blues and the dome in Reds, and their color is taken off once the sheets are summed. The saddles \(\LL{1}\), \(\LL{2}\), and \(\LL{3}\) are then shown in orange with the maxima dimmed, and the maxima \(\LL{4}\) and \(\LL{5}\) in violet with the saddles dimmed. Each maximum is at the apex of an equilateral triangle whose base joins the primary and the secondary.</aside>
+</section>
+
 <section>
   <h2>Embedding TyCHO scenes</h2>
   <p>Create the scene in TyCHO, then embed it as an inline viewer in your slide. Interactively.</p>
