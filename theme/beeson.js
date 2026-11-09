@@ -4423,7 +4423,7 @@ void main() {
     let appendix = 0;
     for (const slide of scope.querySelectorAll(".reveal .slides > section")) {
       if (appendix) slide.dataset.appendix = String(appendix++);
-      if ((appendix || slide.matches(".title, .section")) && !slide.dataset.visibility) slide.dataset.visibility = "uncounted";
+      if ((appendix || slide.matches(".title, .section, .closing")) && !slide.dataset.visibility) slide.dataset.visibility = "uncounted";
       if (!appendix && slide.classList.contains("closing")) appendix = 1;
     }
   }

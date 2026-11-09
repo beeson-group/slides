@@ -18,7 +18,7 @@ import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.t
 import type { RevealOptions, SlideEvent } from './reveal.d.ts';
 
 // the number of a slide out of the numbered slides. a slide with data-visibility="uncounted", e.g. a
-// title or a section slide, is not numbered, and a slide of the appendix is numbered A1, A2, and so on.
+// title, section, or closing slide, is not numbered, and a slide of the appendix is numbered A1, A2, and so on.
 // reveal.js writes the total only when it is a number
 function numberOf(slide: HTMLElement | null | undefined): [string, string, string] {
   if (slide?.dataset.appendix) return [`A${slide.dataset.appendix}`, '', ''];
@@ -26,13 +26,13 @@ function numberOf(slide: HTMLElement | null | undefined): [string, string, strin
   return [String(window.Reveal.getSlidePastCount(slide) + 1), '/', window.Reveal.getTotalSlides() as unknown as string];
 }
 
-// the title and the section slides are left out of the count, and so are the slides after the closing
+// the title, section, and closing slides are left out of the count, and so are the slides after the closing
 // slide, which are the appendix. a slide whose data-visibility is set keeps it
 function markUncounted(scope: ParentNode): void {
   let appendix = 0;
   for (const slide of scope.querySelectorAll<HTMLElement>('.reveal .slides > section')) {
     if (appendix) slide.dataset.appendix = String(appendix++);
-    if ((appendix || slide.matches('.title, .section')) && !slide.dataset.visibility) slide.dataset.visibility = 'uncounted';
+    if ((appendix || slide.matches('.title, .section, .closing')) && !slide.dataset.visibility) slide.dataset.visibility = 'uncounted';
     if (!appendix && slide.classList.contains('closing')) appendix = 1;
   }
 }
