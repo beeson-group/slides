@@ -45,13 +45,14 @@ test('the progress line is left as drawn until the mouse is near the bottom of t
 });
 
 // the controls of a tycho viewer at the bottom of a slide end about 100 px above the bottom of the
-// window, inside the band
-test('the band is opened only at the bottom edge, and kept open over the band', { timeout: 60000 }, async (t) => {
+// window, inside the band. the band is opened 40 px above the bottom edge, before the pointer reaches
+// the edge, where macOS shows a hidden Dock over the window
+test('the band is opened near the bottom edge, and kept open over the band', { timeout: 60000 }, async (t) => {
   const { page, mouse } = await openDeck(t);
   const scrubbing = `document.querySelector('.reveal').classList.contains('scrubbing')`;
-  await mouse('mouseMoved', 960, 1050);
+  await mouse('mouseMoved', 960, 1020);
   assert.equal(await page.evaluate(scrubbing), false);
-  await mouse('mouseMoved', 960, 1070);
+  await mouse('mouseMoved', 960, 1040);
   assert.equal(await page.evaluate(scrubbing), true);
   await mouse('mouseMoved', 960, 1000);
   assert.equal(await page.evaluate(scrubbing), true);
@@ -183,4 +184,28 @@ test('the title, section, and closing slides are not numbered, and the slides af
   await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 960, y: 1075, button: 'none' });
   const labels = await page.evaluate(`[...document.querySelectorAll('.scrub-tick')].map((t) => t.firstChild.textContent)`);
   assert.deepEqual(labels, ['1', '2', '3']);
+
+  // the running head of a slide after the closing slide names the appendix
+  const runs = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].map((s) => s.querySelector('.run')?.textContent ?? '')`);
+  assert.deepEqual(runs, ['', '', 'Chapter one', 'Chapter one', '', 'Chapter two', '', 'Appendix slides', 'Appendix slides']);
+});
+
+// the title of the hovered slide is shown in full, with the descenders of g and y inside its box
+test('the title over the band is not cut at its descenders', { timeout: 60000 }, async (t) => {
+  const { page, mouse } = await openDeck(t);
+  await mouse('mouseMoved', 960, 1075);
+  const room = await page.evaluate(`(() => {
+    const card = document.querySelector('.scrub-card');
+    card.textContent = 'gyp';
+    const mark = document.createElement('span');
+    mark.style.cssText = 'display: inline-block; width: 0; height: 0';
+    card.append(mark);
+    const baseline = mark.getBoundingClientRect().top;
+    const style = getComputedStyle(card);
+    const ctx = document.createElement('canvas').getContext('2d');
+    ctx.font = style.fontStyle + ' ' + style.fontWeight + ' ' + style.fontSize + ' ' + style.fontFamily;
+    const descent = ctx.measureText('gyp').actualBoundingBoxDescent;
+    return card.getBoundingClientRect().bottom - (baseline + descent);
+  })()`);
+  assert.ok(room >= 0, `the descenders run ${-room} px past the bottom of the title`);
 });

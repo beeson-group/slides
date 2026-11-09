@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Layers deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<style>
+.reveal .slides section > .swap { display: grid; grid-template-columns: minmax(0, 1fr); max-width: 1000px; }
+.reveal .slides section > .swap > div { grid-area: 1 / 1; align-self: start; }
+</style>
+</head>
+<body>
+<!-- the first slide has a derivation faded out at step 3 and another one built in its place, in the
+     same cell of a grid, with a step inside a paragraph. the second slide shows one panel at a time
+     with fade-in-then-out, and the third slide has steps that are never hidden -->
+<div class="reveal">
+  <div class="slides">
+    <section>
+      <h2>Swap</h2>
+      <div class="swap">
+        <div class="fragment fade-out" data-fragment-index="3">
+          <p id="old-lead">The old lead-in.</p>
+          <p id="old-step" class="fragment" data-fragment-index="1">The old step.</p>
+          <p id="old-tail"><span id="old-span" class="fragment" data-fragment-index="2">The old span.</span></p>
+        </div>
+        <div>
+          <p id="new-lead" class="fragment" data-fragment-index="3">The new lead-in.</p>
+          <p id="new-step" class="fragment" data-fragment-index="4">The new step.</p>
+        </div>
+      </div>
+    </section>
+    <section>
+      <h2>Panels</h2>
+      <p id="panel-0" class="fragment fade-out" data-fragment-index="1">Panel zero.</p>
+      <p id="panel-1" class="fragment fade-in-then-out" data-fragment-index="1">Panel one.</p>
+      <p id="panel-2" class="fragment fade-in-then-out" data-fragment-index="2">Panel two.</p>
+      <p id="panel-3" class="fragment" data-fragment-index="3">Panel three.</p>
+    </section>
+    <section>
+      <h2>Plain</h2>
+      <p id="plain-1" class="fragment" data-fragment-index="1">The first step.</p>
+      <p id="plain-2" class="fragment" data-fragment-index="2">The second step.</p>
+    </section>
+  </div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

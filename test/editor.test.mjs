@@ -229,7 +229,9 @@ test('without the file pickers, a save is a download of the file with the edits'
   assert.equal(await page.evaluate('window.__blob.text()'), replaced('<h2>Show your steps one at a time</h2>', '<h2>Downloaded</h2>'));
   const after = await page.evaluate('window.BeesonEditor.status()');
   assert.equal(after.dirty, false);
-  assert.match(after.message, /^Saved a copy with 1 edit to your downloads/);
+  // Safari and Firefox put a download into the downloads folder, unless they are set to ask where
+  // to save each download, in which case index.html is chosen and replaced in the dialog
+  assert.match(after.message, /^Saved a copy with 1 edit\. Replace index\.html in \/.*, or set the browser to ask where to save each download/);
   assert.deepEqual(page.errors, []);
 });
 
@@ -1293,5 +1295,76 @@ test('Shift locks a drag to one axis, a run of nudges is one undo, and the offse
   await page.evaluate('window.BeesonEditor.undo()');
   assert.equal(await translate(), '');
   assert.equal(await page.evaluate('window.BeesonEditor.render()'), deckText);
+  assert.deepEqual(page.errors, []);
+});
+
+// a slide whose elements are faded out at a step and replaced in their place is shown one layer at
+// a time, i.e. as it is at the last step before an element is hidden. the texts of test/pages/
+// layers.html are thus not laid over each other while they are edited
+test('a slide with elements faded out at a step is edited one layer at a time', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const file = 'test/pages/layers.html';
+  const text = readFileSync(file, 'utf8');
+  const page = await browser.newPage();
+  await page.goto(deckUrl(file, 'edit&still'));
+  await page.waitFor(deckSettled);
+  await page.waitFor(ready);
+  assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(text)})`)).problems, []);
+  const shown = (ids) => page.evaluate(`${JSON.stringify(ids)}.filter((id) => getComputedStyle(document.getElementById(id)).visibility === 'visible')`);
+  const layers = () => page.evaluate(`(() => { const box = document.querySelector('.beeson-layers'); return box.hidden ? null : [...box.querySelectorAll('button')].map((b) => (b.getAttribute('aria-pressed') === 'true' ? '*' : '') + b.textContent); })()`);
+  const choose = (label) => page.evaluate(`[...document.querySelectorAll('.beeson-layers button')].find((b) => b.textContent === ${JSON.stringify(label)}).click()`);
+  const go = async (h) => { await page.evaluate(`Reveal.slide(${h})`); await sleep(100); };
+  const swap = ['old-lead', 'old-step', 'old-span', 'new-lead', 'new-step'];
+
+  assert.deepEqual(await shown(swap), ['old-lead', 'old-step', 'old-span']);
+  assert.deepEqual(await layers(), ['*Up to step 2', 'From step 3']);
+  await choose('From step 3');
+  assert.deepEqual(await layers(), ['Up to step 2', '*From step 3']);
+  assert.deepEqual(await shown(swap), ['new-lead', 'new-step']);
+
+  const panels = ['panel-0', 'panel-1', 'panel-2', 'panel-3'];
+  await go(1);
+  assert.deepEqual(await layers(), ['*Before step 1', 'Step 1', 'Step 2', 'From step 3']);
+  assert.deepEqual(await shown(panels), ['panel-0']);
+  await choose('Step 2');
+  assert.deepEqual(await shown(panels), ['panel-2']);
+  await choose('From step 3');
+  assert.deepEqual(await shown(panels), ['panel-3']);
+
+  // a slide without such elements shows every step, without the switch
+  await go(2);
+  assert.equal(await layers(), null);
+  assert.deepEqual(await shown(['plain-1', 'plain-2']), ['plain-1', 'plain-2']);
+
+  // the layer of a slide is kept when the slide is shown again, and nothing of it is saved
+  await go(0);
+  assert.deepEqual(await layers(), ['Up to step 2', '*From step 3']);
+  assert.equal(await page.evaluate('window.BeesonEditor.render()'), text);
+  assert.deepEqual(page.errors, []);
+});
+
+// a type filter of the picker may leave index.html grayed out in the file dialog of macOS. any
+// file can thus be chosen, and a file that is not the deck is reported after it is read
+test('the file to open is chosen without a filter of its type', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  await page.evaluate(`{
+    window.__options = 'not called';
+    window.showOpenFilePicker = (options) => { window.__options = options ?? null; return Promise.reject(new DOMException('', 'AbortError')); };
+  }`);
+  await page.evaluate(`document.querySelector('.beeson-edit-card button').click()`);
+  await page.waitFor(`window.__options !== 'not called'`);
+  assert.equal(await page.evaluate('JSON.stringify(window.__options?.types ?? null)'), 'null');
+  // without the open picker, the file is chosen with an input element
+  await page.evaluate(`{
+    window.showOpenFilePicker = undefined;
+    window.__accept = 'not clicked';
+    HTMLInputElement.prototype.click = function () { window.__accept = this.getAttribute('accept'); };
+  }`);
+  await page.evaluate(`document.querySelector('.beeson-edit-card button').click()`);
+  await page.waitFor(`window.__accept !== 'not clicked'`);
+  assert.equal(await page.evaluate('window.__accept'), null);
   assert.deepEqual(page.errors, []);
 });
