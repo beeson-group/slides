@@ -1,5 +1,5 @@
 // an animated 2D plot in a `.plot` element, drawn as SVG from an inline JSON block named by the
-// attribute data-plot. the format is documented in the README. the plot is played in a loop while
+// attribute data-plot. the format is documented in REFERENCE.md. the plot is played in a loop while
 // its slide is shown, and the fragments of its slide reveal its panels and marks with
 // data-plot-show and switch its tab with data-plot-tab. text in the JSON is set in a small markup,
 // in which $...$ is math with italic letters, sub- and superscripts, and TeX names of symbols

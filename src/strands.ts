@@ -1,5 +1,5 @@
 // backdrops drawn from a file of polylines next to the deck, named in the attribute data-strands of
-// a `.backdrop`. the format of the file is described in the README under "Backdrops"
+// a `.backdrop`. the format of the file is described in REFERENCE.md under "Backdrops"
 
 import type { Strand, Tone } from './orbits.ts';
 
