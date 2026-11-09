@@ -261,7 +261,7 @@ const state = `(() => {
 test('a plot is played while its slide is shown, and its steps show a panel and switch its tab', { timeout: 60000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
-  const page = await browser.newPage();
+  const page = await browser.newPage({ motion: true });
   await page.goto(deckUrl('test/pages/plot-steps.html', '', '/1'));
   await page.waitFor(deckSettled);
 
@@ -327,7 +327,7 @@ const reveals = (id) => `(() => {
 test('a plot is held until its cue, offers the tabs of its element and of the steps shown, and draws a tab with its own axis', { timeout: 60000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
-  const page = await browser.newPage();
+  const page = await browser.newPage({ motion: true });
   await page.goto(deckUrl('test/pages/plot-reveals.html'));
   await page.waitFor(deckSettled);
 

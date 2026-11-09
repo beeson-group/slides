@@ -3,13 +3,14 @@
 // step of a slide that dims a fragment, hence the last fragment is first shown alone, and every
 // fragment is restored at the added step. a fragment with data-highlight
 // colors the elements of the classes it names once it is shown, e.g. a symbol set with
-// \class{name}{...} in MathJax, in orange or, with data-tone="violet", in violet. a fragment with
+// \class{name}{...} in MathJax, in orange or, with data-tone, in violet, blue, or red. a fragment with
 // data-keep is held at full opacity through the next step, or through the step of its value, and a
 // fragment is held as well while the current step highlights a class in it
 
 import type { Deck } from './reveal.d.ts';
 
-export type Tone = 'accent' | 'violet';
+export type Tone = 'accent' | 'violet' | 'blue' | 'red';
+const TONES: Tone[] = ['accent', 'violet', 'blue', 'red'];
 
 /** A fragment of a slide, as read by resolve. */
 export type Step = {
@@ -94,7 +95,7 @@ export function applySteps(slide: Element): void {
       visible: f.classList.contains('visible'),
       keep: keep === null ? null : keep.trim() === '' ? 'next' : Number(keep),
       highlight: words(f.dataset.highlight),
-      tone: f.dataset.tone === 'violet' ? 'violet' : 'accent',
+      tone: TONES.find((t) => t !== 'accent' && t === f.dataset.tone) ?? 'accent',
       holds: names.filter((name) => f.matches(select(name)) || f.querySelector(select(name))),
     };
   });
@@ -105,8 +106,7 @@ export function applySteps(slide: Element): void {
   for (const name of names) for (const el of slide.querySelectorAll(select(name))) tones.set(el, lit.get(name) ?? tones.get(el));
   for (const [el, tone] of tones) {
     el.classList.add('hl-target');
-    el.classList.toggle('hl-accent', tone === 'accent');
-    el.classList.toggle('hl-violet', tone === 'violet');
+    for (const t of TONES) el.classList.toggle(`hl-${t}`, tone === t);
   }
 }
 

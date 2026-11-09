@@ -66,8 +66,8 @@ try {
 <section>
   <h2>Equations are first class citizens</h2>
   <p>You can type LaTeX in equation boxes. And you can color elements in your equations.<br><br>For instance, the dynamics in the synodic frame of the CR3BP can be expressed as </p>
-  <div class="math fragment" data-fragment-index="1" data-keep>\[\ddot x - \class{coriolis}{2\dot y} = \frac{\partial \class{potential}{U}}{\partial x},\qquad \ddot y + \class{coriolis}{2\dot x} = \frac{\partial \class{potential}{U}}{\partial y},\]</div>
-  <p class="fragment" data-fragment-index="2">where \(U\) is the effective potential.</p>
+  <div class="math fragment" data-fragment-index="1" data-keep>\[\ddot x - \class{coriolis}{2\dot y} = -\frac{\partial \class{potential}{\tilde U}}{\partial x},\qquad \ddot y + \class{coriolis}{2\dot x} = -\frac{\partial \class{potential}{\tilde U}}{\partial y},\]</div>
+  <p class="fragment" data-fragment-index="2">where \(\tilde U\) is the effective potential.</p>
   <p class="fragment" data-fragment-index="3" data-highlight="coriolis">The <span class="coriolis">Coriolis terms</span> couple \(x\) and \(y\).</p>
   <p class="fragment" data-fragment-index="4" data-highlight="potential" data-tone="violet">The <span class="potential">effective potential</span> gives the dynamics.</p>
   <aside class="notes">The display is held at full opacity through the next step with data-keep, and while a symbol in it is colored at a later step. The Coriolis terms are colored orange, the tone of motion, and the potential violet, the tone of structure.</aside>
@@ -77,9 +77,9 @@ try {
   <h2>Figures are first class citizens, too</h2>
   <p>Export your matplotlib figure with the styles of the template. It will show frameless.</p>
   <ul style="translate: 0px 20px">
-    <li>Dark and light mode: export one file per mode, mark them <code>for-dark</code> and <code>for-light</code>.</li>
-    <li>You might have noticed a toggle on the top right: try clicking it on this slide.</li>
-    <li>You should give black-on-white plots the class <code>invert</code> to invert them in dark mode.</li>
+    <li class="fragment" data-fragment-index="1">Dark and light mode: export one file per mode, mark them <code>for-dark</code> and <code>for-light</code>.</li>
+    <li class="fragment" data-fragment-index="2">You might have noticed a toggle on the top right: try clicking it on this slide.</li>
+    <li class="fragment" data-fragment-index="3">You should give black-on-white plots the class <code>invert</code> to invert them in dark mode.</li>
   </ul>
   <figure class="zone">
     <img class="for-dark" src="demo/figure-dark.png" alt="Zero-velocity curves of the Earth–Moon system, dark version">
@@ -142,9 +142,9 @@ try {
   <h2>Embedding TyCHO scenes</h2>
   <p>Create the scene in TyCHO, then embed it as an inline viewer in your slide. Interactively.</p>
   <ul>
-    <li>The <code>theme</code> attribute controls dark/light mode. Switch the top right toggle!</li>
-    <li>The UI elements are active only while the TyCHO in focus. Click away to unfocus.</li>
-    <li>From pytycho, call <code>build_embed</code> to return the HTML element. Then paste it in.<br>It's really that simple.</li>
+    <li class="fragment" data-fragment-index="1">The <code>theme</code> attribute controls dark/light mode. Switch the top right toggle!</li>
+    <li class="fragment" data-fragment-index="2">The UI elements are active only while the TyCHO in focus. Click away to unfocus.</li>
+    <li class="fragment" data-fragment-index="3">From pytycho, call <code>build_embed</code> to return the HTML element. Then paste it in.<br>It's really that simple.</li>
   </ul>
   <!-- tycho-viewer start, written by demo/tycho-scene.py -->
 <tycho-viewer theme="dark" kiosk class="zone">

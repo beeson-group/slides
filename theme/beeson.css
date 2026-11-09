@@ -12,6 +12,9 @@ html[data-theme="dark"] {
   --line: #232320;
   --accent: #f08050;
   --violet: #c94fe6;
+  /* the tones blue and red of a highlight, e.g. of the terms drawn on a surface in Blues and Reds */
+  --blue: #4f9df5;
+  --red: #ff4d4d;
   --stroke: rgba(242, 242, 239, 0.34);
   --body: rgba(242, 242, 239, 0.55);
   /* the palette of a backdrop drawn from a file, in pairs: a value of data-strands-color takes
@@ -40,6 +43,8 @@ html[data-theme="light"] {
   --line: #e3e0d8;
   --accent: #c8571e;
   --violet: #8a2be2;
+  --blue: #1f5fd0;
+  --red: #c41e1e;
   --stroke: rgba(20, 20, 19, 0.3);
   --body: rgba(20, 20, 19, 0.5);
   --strand-1: #8a2be2;
@@ -417,6 +422,8 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
 .reveal .hl-target { transition: color 400ms ease-out; }
 .reveal .hl-accent { color: var(--accent) !important; }
 .reveal .hl-violet { color: var(--violet) !important; }
+.reveal .hl-blue { color: var(--blue) !important; }
+.reveal .hl-red { color: var(--red) !important; }
 
 /* ---- the slide change: a 400 ms fade ---- */
 .reveal.fade .slides section:not([data-transition]),

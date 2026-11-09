@@ -148,7 +148,15 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   deck.on('slidechanged', (event) => {
     const ev = event as SlideEvent;
     if (!still()) for (const o of within(ev.previousSlide)) if (!ev.currentSlide.contains(o.el)) o.reset();
-    for (const s of surfacesOf(ev.previousSlide)) s.stop();
+    const before = surfacesOf(ev.previousSlide);
+    for (const s of before) s.stop();
+    // a surface whose data attributes other than data-stage match those of a surface on the slide
+    // before takes its camera, so that the turn of the camera continues across the slide change
+    const key = (s: { el: HTMLElement }) => JSON.stringify(Object.entries(s.el.dataset).filter(([k]) => k !== 'stage').sort());
+    for (const s of surfacesOf(ev.currentSlide)) {
+      const from = before.find((b) => key(b) === key(s));
+      if (from) s.follow(from);
+    }
     for (const p of plotsIn(ev.previousSlide)) if (!ev.currentSlide.contains(p.el)) p.leave();
     show(ev.currentSlide);
   });

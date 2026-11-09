@@ -979,6 +979,13 @@ export class Surface {
     }
   }
 
+  /** Takes the azimuth, the elevation, and the pause after a drag of the camera of other. */
+  follow(other: Surface): void {
+    this.azimuth = other.azimuth;
+    this.elevation = other.elevation;
+    this.resume = other.resume;
+  }
+
   /** Starts the turning of the camera and the animation of a change of stage, while the slide is shown. */
   start(): void {
     this.active = true;

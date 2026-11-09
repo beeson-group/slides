@@ -119,7 +119,15 @@ const alphas = (from, to) => `(() => {
   const { data } = ctx.getImageData(0, ${from}, c.width, ${to - from});
   return Array.from({ length: ${to - from} }, (_, r) => Array.from({ length: c.width }, (_, x) => data[4 * (r * c.width + x) + 3]));
 })()`;
-const spread = (values) => Math.max(...values) - Math.min(...values);
+// the pixels of values more than 3 off their most common value. a strand stroked in pieces is beaded
+// at every joint, i.e. at dozens of pixels of a row, while the software rasterizer of Chrome, on the
+// Linux and Windows runners, may leave a pixel of a long line lighter by up to about 25
+const outliers = (values) => {
+  const counts = new Map();
+  for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
+  const mode = [...counts].reduce((a, b) => (b[1] > a[1] ? b : a))[0];
+  return values.filter((v) => Math.abs(v - mode) > 3).length;
+};
 // the row of rows with the most ink, i.e. the center of a horizontal strand
 const center = (rows) => rows.reduce((best, row, r) => (row.reduce((a, b) => a + b) > rows[best].reduce((a, b) => a + b) ? r : best), 0);
 
@@ -142,9 +150,9 @@ test('a strand is traced in one stroke, hence without beads, and its trace ends 
   const row = plain[center(plain)];
   const end = row.findLastIndex((a) => a > 0);
   assert.ok(end > 400 && end < 1600, `the trace has reached x = ${end} px after 0.9 s of 2 s`);
-  assert.ok(spread(row.slice(150, end - 20)) <= 3, `the alpha along the strand spreads over ${spread(row.slice(150, end - 20))}`);
+  assert.ok(outliers(row.slice(150, end - 20)) <= 2, `the alpha along the strand is off at ${outliers(row.slice(150, end - 20))} pixels`);
   const still = plainStill[center(plainStill)];
-  assert.ok(spread(still.slice(150, 1770)) <= 3, `the alpha along the still spreads over ${spread(still.slice(150, 1770))}`);
+  assert.ok(outliers(still.slice(150, 1770)) <= 2, `the alpha along the still is off at ${outliers(still.slice(150, 1770))} pixels`);
 
   // a row of the glow 4 px off the strand, behind the head
   const r = center(glowing) + 4;
@@ -196,10 +204,14 @@ test('the last frame of a trace is its still, with the strands overlapped in the
     const traced = b.finished, last = read();
     b.frame(2001);
     const still = read();
-    // the head of the violet strand is at x = 1820.5 px, at the scale of 1080 px per unit
+    // the head of the violet strand is at x = 1820.5 px, at the scale of 1080 px per unit. the
+    // pixels are compared premultiplied, within 8 of 255. the software rasterizer of Chrome, on the
+    // Linux and Windows runners, draws a line and its glow differently by up to 6 when its length
+    // changes, while the two orders of two strands at their crossing differ by up to about 55
+    const premultiplied = (d, i, c) => (c === 3 ? d[i + 3] : (d[i + c] * d[i + 3]) / 255);
     let changed = 0, near = 0;
     for (let i = 0; i < last.length; i += 4) {
-      if ([0, 1, 2, 3].every((c) => last[i + c] === still[i + c])) continue;
+      if ([0, 1, 2, 3].every((c) => Math.abs(premultiplied(last, i, c) - premultiplied(still, i, c)) <= 8)) continue;
       const x = (i / 4) % b.W, y = Math.floor(i / 4 / b.W);
       if (Math.hypot(x - 1824, y - 540) < 16) near++;
       else changed++;
@@ -224,8 +236,11 @@ test('the strands of a backdrop with data-stagger are started one after another'
     Reveal.slide(h, v);
     return +el.dataset.stagger;
   })()`);
+  // the clock is taken from the start of the first strand, which a slow runner may delay
+  const staggered = `Beeson.backdrops.find((b) => b.el.hasAttribute('data-stagger'))`;
+  await page.waitFor(`${staggered}.idx[0] > 0`);
   await new Promise((done) => setTimeout(done, 1300));
-  const started = await page.evaluate(`Beeson.backdrops.find((b) => b.el.hasAttribute('data-stagger')).idx.map((j) => j > 0)`);
+  const started = await page.evaluate(`${staggered}.idx.map((j) => j > 0)`);
   const count = started.filter(Boolean).length;
   // the strands are started in the order of the file, hence the started ones come first
   assert.deepEqual(started, started.map((_, i) => i < count));

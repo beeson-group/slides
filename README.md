@@ -92,7 +92,7 @@ A `surface` is the graph of a function $z = f(x, y)$ over a rectangle, drawn in 
 
 | Function | Attributes | Stages |
 |---|---|---|
-| `effective-potential` | `data-mu`, the mass ratio $\mu$ of the circular restricted three-body problem, 0.05 by default, and `data-C` on the fragment of the cut, the Jacobi constant $C$, that of L1 by default | `wells` in Blues, `bowl` with the centrifugal dome in Reds above the wells, `sum` with the two merged, `extrema` with L1 to L5 marked, and `cut` with the plane at $-C/2$ and the zero-velocity curve |
+| `effective-potential` | `data-mu`, the mass ratio $\mu$ of the circular restricted three-body problem, 0.05 by default, and `data-C` on the fragment of the cut, the Jacobi constant $C$, that of L1 by default | `wells` in Blues, `bowl` with the centrifugal dome in Reds above the wells, `sum` with the two merged in Magma_r (Magma reversed) without its darkest 30 %, `extrema` with L1 to L5 marked, and `cut` with the plane at $-C/2$ and the zero-velocity curve |
 
 The camera is set with `data-azimuth` and `data-elevation` in degrees, `data-turn` in seconds per turn (0 for a still camera), and `data-zoom`, and the heights are scaled with `data-zscale`. With `?still`, a stage is drawn at once and the camera is not turned. In a PDF and in PowerPoint, each step is printed with a still of its stage.
 
@@ -123,7 +123,7 @@ To embed a scene of tycho, the Typed Celestial HTML Observer, call `build_embed`
 
 ## Stepped math
 
-A display is revealed in four steps: the lead-in sentence, the display, the sentence in which it is explained, and a step in which a symbol of the display is colored. Mark the symbol in the TeX with `\class{name}{...}`, and give a later fragment the attribute `data-highlight="name"`. Once this fragment is shown, the symbols of the class are drawn in orange, or in violet with `data-tone="violet"`. Any element of the slide with the class `name` is colored as well, e.g. a `span` around the words that name the symbol. Use orange for motion and violet for structure, as in the rest of the theme, and separate several classes with spaces.
+A display is revealed in four steps: the lead-in sentence, the display, the sentence in which it is explained, and a step in which a symbol of the display is colored. Mark the symbol in the TeX with `\class{name}{...}`, and give a later fragment the attribute `data-highlight="name"`. Once this fragment is shown, the symbols of the class are drawn in orange, or in violet, blue, or red with `data-tone` set to `violet`, `blue`, or `red`. Any element of the slide with the class `name` is colored as well, e.g. a `span` around the words that name the symbol. Use orange for motion and violet for structure, as in the rest of the theme, and blue and red for the terms drawn in Blues and Reds on a surface, and separate several classes with spaces.
 
 An earlier fragment is dimmed to 45 percent once a later one is shown, and every fragment is restored at the step added after the last one. Give the display the attribute `data-keep` to hold it at full opacity through the next step, or `data-keep="4"` to hold it through the step of index 4. A display is also held at full opacity while a class in it is colored at the current step. The demo slide "Stepping through the equations" is an example of every step.
 

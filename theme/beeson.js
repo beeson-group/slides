@@ -2695,7 +2695,8 @@
   // src/surfaces.ts
   var RAMPS = {
     blues: ["#f7fbff", "#deebf7", "#c6dbef", "#9ecae1", "#6baed6", "#4292c6", "#2171b5", "#08519c", "#08306b"],
-    reds: ["#fff5f0", "#fee0d2", "#fcbba1", "#fc9272", "#fb6a4a", "#ef3b2c", "#cb181d", "#a50f15", "#67000d"]
+    reds: ["#fff5f0", "#fee0d2", "#fcbba1", "#fc9272", "#fb6a4a", "#ef3b2c", "#cb181d", "#a50f15", "#67000d"],
+    magma_r: ["#fcfdbf", "#fdda9c", "#feb67c", "#fc9065", "#f56b5c", "#e24d66", "#c43c75", "#a3307e", "#832681", "#641a80"]
   };
   var num2 = (value, fallback) => value !== void 0 && value.trim() !== "" && Number.isFinite(Number(value)) ? Number(value) : fallback;
   function effectivePotential(mu) {
@@ -2732,6 +2733,7 @@
   }
   var GRAVITATIONAL = { ramp: "blues", range: [-3, -1.5] };
   var CENTRIFUGAL = { ramp: "reds", range: [-3, -1.5] };
+  var EFFECTIVE = { ramp: "magma_r", range: [-3, -1.5] };
   var BOWL_LIFT = 4;
   var FUNCTIONS = {
     // the effective potential of the CR3BP at data-mu, assembled from its wells and its bowl, with the
@@ -2752,7 +2754,7 @@
         floor: -3.2,
         zscale: 1,
         layers: { flat: () => 0, wells, bowl, sum },
-        tones: { flat: GRAVITATIONAL, wells: GRAVITATIONAL, bowl: CENTRIFUGAL, sum: { ramp: "theme" } },
+        tones: { flat: GRAVITATIONAL, wells: GRAVITATIONAL, bowl: CENTRIFUGAL, sum: EFFECTIVE },
         marks,
         initial: "flat",
         stages: {
@@ -3629,6 +3631,12 @@ void main() {
         s.tone = 1;
       }
     }
+    /** Takes the azimuth, the elevation, and the pause after a drag of the camera of other. */
+    follow(other) {
+      this.azimuth = other.azimuth;
+      this.elevation = other.elevation;
+      this.resume = other.resume;
+    }
     /** Starts the turning of the camera and the animation of a change of stage, while the slide is shown. */
     start() {
       this.active = true;
@@ -3664,6 +3672,7 @@ void main() {
   }
 
   // src/steps.ts
+  var TONES2 = ["accent", "violet", "blue", "red"];
   function resolve(steps, current) {
     const indices = [...new Set(steps.map((s) => s.index))].sort((a, b) => a - b);
     const lit = /* @__PURE__ */ new Map();
@@ -3710,7 +3719,7 @@ void main() {
         visible: f.classList.contains("visible"),
         keep: keep === null ? null : keep.trim() === "" ? "next" : Number(keep),
         highlight: words2(f.dataset.highlight),
-        tone: f.dataset.tone === "violet" ? "violet" : "accent",
+        tone: TONES2.find((t) => t !== "accent" && t === f.dataset.tone) ?? "accent",
         holds: names.filter((name) => f.matches(select2(name)) || f.querySelector(select2(name)))
       };
     });
@@ -3721,8 +3730,7 @@ void main() {
     for (const name of names) for (const el of slide.querySelectorAll(select2(name))) tones.set(el, lit.get(name) ?? tones.get(el));
     for (const [el, tone] of tones) {
       el.classList.add("hl-target");
-      el.classList.toggle("hl-accent", tone === "accent");
-      el.classList.toggle("hl-violet", tone === "violet");
+      for (const t of TONES2) el.classList.toggle(`hl-${t}`, tone === t);
     }
   }
   function applyAll(root2) {
@@ -4004,7 +4012,13 @@ void main() {
       if (!still2()) {
         for (const o of within(ev.previousSlide)) if (!ev.currentSlide.contains(o.el)) o.reset();
       }
-      for (const s of surfacesOf(ev.previousSlide)) s.stop();
+      const before = surfacesOf(ev.previousSlide);
+      for (const s of before) s.stop();
+      const key = (s) => JSON.stringify(Object.entries(s.el.dataset).filter(([k]) => k !== "stage").sort());
+      for (const s of surfacesOf(ev.currentSlide)) {
+        const from = before.find((b) => key(b) === key(s));
+        if (from) s.follow(from);
+      }
       for (const p of plotsIn(ev.previousSlide)) if (!ev.currentSlide.contains(p.el)) p.leave();
       show(ev.currentSlide);
     });

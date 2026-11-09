@@ -52,10 +52,15 @@ def zvc(style, out):
     text = plt.rcParams["text.color"]
     ax.plot([-mu], [0], "o", color=text, ms=7)
     ax.plot([1 - mu], [0], "o", color=text, ms=4)
+    # each label is set in a gap between the curves next to its point. L1 is inside the realm of the
+    # Earth, L2 under the loop around the Moon, and L3 between its curve and the outer curves of C_L1 and C_L2
+    offsets = dict(L1=(-11, 0, "right", "center"), L2=(2, -17, "right", "top"), L3=(-8, 0, "right", "center"))
     for name, v in dict(L1=L1, L2=L2, L3=L3).items():
-        ax.plot([v], [0], "+", color=text, ms=9, mew=1.6)
-        ax.annotate(f"$\\mathcal{{L}}_{name[1]}$", (v, 0), xytext=(0, 9), textcoords="offset points",
-                    ha="center", fontsize=14)
+        ax.plot([v], [0], "x", color=text, ms=8, mew=1.8)
+        dx, dy, ha, va = offsets[name]
+        ax.annotate(f"$\\mathcal{{L}}_{name[1]}$", (v, 0), xytext=(dx, dy), textcoords="offset points",
+                    ha=ha, va=va, fontsize=14)
+    ax.grid(True)
     ax.set_aspect("equal")
     ax.set_xlim(-1.6, 1.6)
     ax.set_ylim(-1.6, 1.6)
