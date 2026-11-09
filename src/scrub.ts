@@ -39,6 +39,11 @@ export function starts(timings: (string | undefined)[], config: Timing): number[
 // the least gap between two labels, in em of the band
 const GAP = 3.2;
 
+// the band is opened only with the mouse within REACH screen pixels of its bottom edge, so that
+// the controls of a figure near the bottom of a slide are not covered, and it is kept open while
+// the mouse is anywhere over it
+const REACH = 16;
+
 export function initScrub(deck: Deck): void {
   const reveal = deck.getRevealElement() as HTMLElement;
   const band = document.createElement('div');
@@ -130,7 +135,8 @@ export function initScrub(deck: Deck): void {
 
   document.addEventListener('pointermove', (ev) => {
     if (ev.pointerType !== 'mouse' && ev.pointerType !== 'pen') return;
-    const near = ev.clientY >= zone.top && ev.clientY <= zone.bottom && ev.clientX >= zone.left && ev.clientX <= zone.right;
+    const top = open ? zone.top : zone.bottom - REACH;
+    const near = ev.clientY >= top && ev.clientY <= zone.bottom && ev.clientX >= zone.left && ev.clientX <= zone.right;
     show(near);
     if (near) hover(nearest(ev.clientX));
   }, { passive: true });

@@ -17,6 +17,9 @@ async function openDeck(t, query = '') {
   return { page, mouse, key };
 }
 
+// the pacing of a talk is cleared, since the checks below are written for a deck without one
+const unpaced = `Reveal.getSlides().forEach((s) => delete s.dataset.timing); Reveal.configure({ totalTime: null, defaultTiming: null })`;
+
 const look = `(() => {
   const bar = getComputedStyle(document.querySelector('.reveal .progress'));
   const band = getComputedStyle(document.querySelector('.reveal .scrub'));
@@ -41,8 +44,22 @@ test('the progress line is left as drawn until the mouse is near the bottom of t
   assert.deepEqual(await page.evaluate(look), before);
 });
 
+// the controls of a tycho viewer at the bottom of a slide end about 100 px above the bottom of the
+// window, inside the band
+test('the band is opened only at the bottom edge, and kept open over the band', { timeout: 60000 }, async (t) => {
+  const { page, mouse } = await openDeck(t);
+  const scrubbing = `document.querySelector('.reveal').classList.contains('scrubbing')`;
+  await mouse('mouseMoved', 960, 1050);
+  assert.equal(await page.evaluate(scrubbing), false);
+  await mouse('mouseMoved', 960, 1070);
+  assert.equal(await page.evaluate(scrubbing), true);
+  await mouse('mouseMoved', 960, 1000);
+  assert.equal(await page.evaluate(scrubbing), true);
+});
+
 test('the band has a tick labeled with the number of each numbered slide', { timeout: 60000 }, async (t) => {
   const { page, mouse } = await openDeck(t);
+  await page.evaluate(unpaced);
   await mouse('mouseMoved', 960, 1075);
   const labels = await page.evaluate(`[...document.querySelectorAll('.scrub-tick')].map((t) => t.firstChild.textContent)`);
   const total = await page.evaluate('Reveal.getTotalSlides()');
@@ -82,6 +99,7 @@ test('a key closes the band', { timeout: 60000 }, async (t) => {
 test('the start time of each slide is shown with totalTime, as in the speaker view', { timeout: 60000 }, async (t) => {
   const { page, mouse } = await openDeck(t);
   const total = await page.evaluate('Reveal.getTotalSlides()');
+  await page.evaluate(unpaced);
   await page.evaluate(`Reveal.getSlides()[1].dataset.timing = '90'; Reveal.configure({ totalTime: ${90 + 60 * (total - 1)} })`);
   await mouse('mouseMoved', 960, 1075);
   const times = await page.evaluate(`[...document.querySelectorAll('.scrub-time')].map((t) => t.textContent)`);

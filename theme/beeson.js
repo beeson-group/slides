@@ -3005,6 +3005,7 @@
     });
   }
   var GAP2 = 3.2;
+  var REACH2 = 16;
   function initScrub(deck) {
     const reveal = deck.getRevealElement();
     const band = document.createElement("div");
@@ -3091,7 +3092,8 @@
     };
     document.addEventListener("pointermove", (ev) => {
       if (ev.pointerType !== "mouse" && ev.pointerType !== "pen") return;
-      const near = ev.clientY >= zone.top && ev.clientY <= zone.bottom && ev.clientX >= zone.left && ev.clientX <= zone.right;
+      const top = open2 ? zone.top : zone.bottom - REACH2;
+      const near = ev.clientY >= top && ev.clientY <= zone.bottom && ev.clientX >= zone.left && ev.clientX <= zone.right;
       show2(near);
       if (near) hover(nearest2(ev.clientX));
     }, { passive: true });
