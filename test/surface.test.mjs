@@ -78,8 +78,9 @@ test('the cut of the effective potential is at -C/2, with C from data-C or else 
 });
 
 // the stage of the surface and a digest of its canvas, on the slide of the surface or on each of its
-// pages in the print view
-const surfaces = `Promise.all([...document.querySelectorAll('.surface')].filter((s) => s.getClientRects().length).map(async (s) => {
+// pages in the print view, for the surfaces of the slides headed title
+const TITLE = 'Explain concepts, visually';
+const surfaces = (title = TITLE) => `Promise.all([...document.querySelectorAll('.surface')].filter((s) => s.getClientRects().length && s.closest('section').querySelector('h2')?.textContent === ${JSON.stringify(title)}).map(async (s) => {
   const canvas = s.querySelector('canvas'), ctx = canvas.getContext('2d');
   const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
   let drawn = 0;
@@ -106,7 +107,7 @@ test('the surface of the demo deck is drawn at each of its stages, live and in t
   };
   for (let f = -1; f < stages.length - 1; f++) {
     await page.evaluate(`Reveal.slide(${h}, 0, ${f})`);
-    live.push(...(await page.evaluate(surfaces)));
+    live.push(...(await page.evaluate(surfaces())));
     await labeled(`at the stage ${stages[f + 1]}`);
   }
   // a drag turns the surface, and the slide is not changed by it as by a swipe
@@ -116,7 +117,7 @@ test('the surface of the demo deck is drawn at each of its stages, live and in t
     drag('pointerdown', r.left + 500);
     drag('pointermove', r.left + 300);
     drag('pointerup', r.left + 300);
-    return { h: Reveal.getIndices().h, surface: (await ${surfaces})[0] };
+    return { h: Reveal.getIndices().h, surface: (await ${surfaces()})[0] };
   })()`);
   assert.equal(turned.h, h);
   assert.notEqual(turned.surface.digest, live.at(-1).digest);
@@ -131,7 +132,7 @@ test('the surface of the demo deck is drawn at each of its stages, live and in t
 
   const print = await browser.newPage();
   await printView(print, deckUrl('index.html', 'print-pdf&still'));
-  const pages = await print.evaluate(surfaces);
+  const pages = await print.evaluate(surfaces());
   assert.deepEqual(print.errors, []);
   // the last page is the step that restores the dimmed fragments, at the last stage
   assert.deepEqual(pages.map((s) => s.stage), [...stages, 'cut']);
@@ -199,4 +200,104 @@ test('the marks of the surface are drawn on it or hidden at every step, forward 
   assert.deepEqual(page.errors, []);
   assert.deepEqual(floating, []);
   assert.deepEqual(buried, []);
+});
+
+// the demo slide whose surface marks are picked out with data-surface-marks, data-surface-accent,
+// and data-surface-violet. its surface is at the stage extrema from the fragment of index 4 on
+const MARKED = 'Color the terms and the marks';
+const SADDLES = ['L1', 'L2', 'L3'], MAXIMA = ['L4', 'L5'];
+// the opacity of a mark left out of data-surface-marks, UNLIT in src/surface.ts
+const UNLIT = 0.18;
+
+// the opacity lit and the tone of each mark of the surface on the current slide, and the opacity of
+// the label of the mark
+const marked = `(() => {
+  const s = Beeson.surfaces.find((s) => s.el.closest('section') === Reveal.getCurrentSlide()), p = s.probe();
+  const label = (name) => Number(s.el.querySelector('.lab[data-at="' + name + '"]').style.opacity);
+  return { stage: p.stage, settled: p.settled, marks: Object.fromEntries(p.marks.map((m) => [m.name, { lit: m.lit, tone: m.tone, label: label(m.name) }])) };
+})()`;
+
+// asserts that the marks named in lit are at full opacity in tone, and the other marks are dimmed
+// to UNLIT in the color of the text. with every mark in lit, every mark is in the color of the text
+function expectMarks(seen, lit, tone, where) {
+  const every = lit.length === SADDLES.length + MAXIMA.length;
+  for (const [name, m] of Object.entries(seen.marks)) {
+    const on = lit.includes(name);
+    assert.ok(Math.abs(m.lit - (on ? 1 : UNLIT)) < 1e-3, `the lit of ${name} is ${m.lit} ${where}`);
+    assert.equal(m.tone, on && !every ? tone : 'text', `the tone of ${name} ${where}`);
+  }
+}
+
+test('the marks of a surface are dimmed and colored by data-surface-marks, data-surface-accent, and data-surface-violet', { timeout: 120000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl('index.html', 'still'));
+  await page.waitFor(deckSettled);
+  const h = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('h2')?.textContent === ${JSON.stringify(MARKED)})`);
+
+  // the fragment that sets extrema does not have the attributes, hence every mark is lit
+  await page.evaluate(`Reveal.slide(${h}, 0, 3)`);
+  const all = await page.evaluate(marked);
+  assert.equal(all.stage, 'extrema');
+  expectMarks(all, [...SADDLES, ...MAXIMA], 'text', 'at the step that sets extrema');
+
+  await page.evaluate(`Reveal.slide(${h}, 0, 4)`);
+  const saddles = await page.evaluate(marked);
+  expectMarks(saddles, SADDLES, 'accent', 'at the step of the saddles');
+  // a dimmed label is faded with its mark. a lit label is at least at BEHIND of src/surface.ts, the
+  // opacity of a mark behind the surface
+  for (const name of MAXIMA) assert.ok(saddles.marks[name].label <= UNLIT + 1e-3, `the label of ${name} is at ${saddles.marks[name].label}`);
+  for (const name of SADDLES) assert.ok(saddles.marks[name].label >= 0.3 - 1e-3, `the label of ${name} is at ${saddles.marks[name].label}`);
+
+  await page.evaluate(`Reveal.slide(${h}, 0, 5)`);
+  expectMarks(await page.evaluate(marked), MAXIMA, 'violet', 'at the step of the maxima');
+  await page.evaluate(`Reveal.slide(${h}, 0, 4)`);
+  expectMarks(await page.evaluate(marked), SADDLES, 'accent', 'after the step back to the saddles');
+  assert.deepEqual(page.errors, []);
+
+  // without still, a step that changes only the marks leaves the sheets settled. the marks are not
+  // changed in the frame of the step, and they reach their targets in a few time constants of 0.15 s
+  const live = await browser.newPage();
+  await live.goto(deckUrl('index.html'));
+  await live.waitFor(deckSettled);
+  await live.evaluate(`Reveal.slide(${h}, 0, 3)`);
+  await live.waitFor(`(${marked}).settled`);
+  const step = await live.evaluate(`(() => { Reveal.slide(${h}, 0, 4); return ${marked}; })()`);
+  assert.equal(step.stage, 'extrema');
+  assert.equal(step.settled, true);
+  assert.equal(step.marks.L4.lit, 1);
+  assert.equal(step.marks.L4.tone, 'text');
+  assert.equal(step.marks.L1.tone, 'accent');
+  await new Promise((done) => setTimeout(done, 1500));
+  expectMarks(await live.evaluate(marked), SADDLES, 'accent', '1.5 s after the live step of the saddles');
+  assert.deepEqual(live.errors, []);
+});
+
+test('a surface takes the camera of the surface with the same attributes on the slide before', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl('index.html'));
+  await page.waitFor(deckSettled);
+  const index = (title) => `[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('h2')?.textContent === ${JSON.stringify(title)})`;
+  const h = await page.evaluate(index(TITLE)), next = await page.evaluate(index(MARKED));
+  assert.equal(next, h + 1);
+  await page.evaluate(`Reveal.slide(${h}, 0, 3)`);
+  const camera = (s) => `{ azimuth: ${s}.azimuth, elevation: ${s}.elevation, resume: ${s}.resume }`;
+  // a diagonal drag turns the camera of the first surface in azimuth and elevation, and pauses its turn
+  const handed = await page.evaluate(`(() => {
+    const s = document.querySelector('.surface'), r = s.getBoundingClientRect();
+    const drag = (type, x, y) => s.dispatchEvent(new PointerEvent(type, { pointerType: 'touch', isPrimary: true, clientX: x, clientY: y, bubbles: true }));
+    drag('pointerdown', r.left + 500, r.top + 300);
+    drag('pointermove', r.left + 300, r.top + 400);
+    drag('pointerup', r.left + 300, r.top + 400);
+    const [a, b] = Beeson.surfaces;
+    const before = ${camera('b')};
+    Reveal.slide(${next});
+    return { before, from: ${camera('a')}, to: ${camera('b')} };
+  })()`);
+  assert.notDeepEqual(handed.before, handed.from);
+  assert.deepEqual(handed.to, handed.from);
+  assert.deepEqual(page.errors, []);
 });

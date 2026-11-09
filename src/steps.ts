@@ -3,7 +3,8 @@
 // step of a slide that dims a fragment, hence the last fragment is first shown alone, and every
 // fragment is restored at the added step. a fragment with data-highlight
 // colors the elements of the classes it names once it is shown, e.g. a symbol set with
-// \class{name}{...} in MathJax, in orange or, with data-tone, in violet, blue, or red. a fragment with
+// \class{name}{...} in MathJax, in orange or, with data-tone, in violet, blue, or red, and a fragment
+// with data-unhighlight takes the color off the classes it names. a fragment with
 // data-keep is held at full opacity through the next step, or through the step of its value, and a
 // fragment is held as well while the current step highlights a class in it
 
@@ -19,6 +20,7 @@ export type Step = {
   // the last index at which the fragment is held, 'next' for the index of the next step, and null without data-keep
   keep: number | 'next' | null;
   highlight: string[];
+  unhighlight: string[];
   tone: Tone;
   // the highlighted classes of the slide that are found in the fragment
   holds: string[];
@@ -33,7 +35,11 @@ export function resolve(steps: Step[], current: number): { held: boolean[]; lit:
   const lit = new Map<string, Tone>();
   // a later step wins over an earlier one
   const order = steps.map((_, i) => i).sort((a, b) => steps[a].index - steps[b].index);
-  for (const i of order) if (steps[i].visible) for (const name of steps[i].highlight) lit.set(name, steps[i].tone);
+  for (const i of order) {
+    if (!steps[i].visible) continue;
+    for (const name of steps[i].unhighlight) lit.delete(name);
+    for (const name of steps[i].highlight) lit.set(name, steps[i].tone);
+  }
   const named = new Set(steps.filter((s) => s.visible && s.index === current).flatMap((s) => s.highlight));
   const held = steps.map((s) => {
     if (!s.visible || s.index === current) return false;
@@ -95,6 +101,7 @@ export function applySteps(slide: Element): void {
       visible: f.classList.contains('visible'),
       keep: keep === null ? null : keep.trim() === '' ? 'next' : Number(keep),
       highlight: words(f.dataset.highlight),
+      unhighlight: words(f.dataset.unhighlight),
       tone: TONES.find((t) => t !== 'accent' && t === f.dataset.tone) ?? 'accent',
       holds: names.filter((name) => f.matches(select(name)) || f.querySelector(select(name))),
     };

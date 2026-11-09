@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Tones deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- a display whose two terms are colored in blue and red. the color of the first term is taken off
+     with data-unhighlight, and a later step colors it again in red -->
+<div class="reveal">
+  <div class="slides">
+    <section>
+      <h2>Tones</h2>
+      <div class="math fragment">\[\class{first}{a} + \class{second}{b} = c\]</div>
+      <p class="fragment" data-highlight="first" data-tone="blue">The <span class="first">first term</span> in blue.</p>
+      <p class="fragment" data-highlight="second" data-tone="red">The <span class="second">second term</span> in red.</p>
+      <p class="fragment" data-unhighlight="first">The first term in the color of the text.</p>
+      <p class="fragment" data-highlight="first" data-tone="red">The first term in red again.</p>
+    </section>
+  </div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

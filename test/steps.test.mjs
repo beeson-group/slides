@@ -7,7 +7,7 @@ import assert from 'node:assert/strict';
 import { deckSettled, deckUrl, launch, printView } from '../scripts/chrome.mjs';
 import { resolve } from '../src/steps.ts';
 
-const step = (index, visible, more = {}) => ({ index, visible, keep: null, highlight: [], tone: 'accent', holds: [], ...more });
+const step = (index, visible, more = {}) => ({ index, visible, keep: null, highlight: [], unhighlight: [], tone: 'accent', holds: [], ...more });
 
 test('a fragment with an empty data-keep is held through the next step of the slide', () => {
   const steps = [step(1, true, { keep: 'next' }), step(4, true), step(6, true)];
@@ -39,6 +39,15 @@ test('a class is colored once its step is shown, in the tone of the last step th
   assert.deepEqual([...resolve(steps, 2).lit], [['a', 'violet'], ['b', 'violet']]);
   assert.deepEqual([...resolve([step(1, true, { highlight: ['a'] }), step(2, false, { highlight: ['a'], tone: 'violet' })], 1).lit], [['a', 'accent']]);
   assert.deepEqual([...resolve([step(1, false, { highlight: ['a'] })], -1).lit], []);
+});
+
+test('a class named in data-unhighlight is not colored once its step is shown, until a later step names it again', () => {
+  const steps = [step(1, true, { highlight: ['a', 'b'], tone: 'blue' }), step(2, false, { unhighlight: ['a'] }), step(3, false, { highlight: ['a'], tone: 'red' })];
+  assert.deepEqual([...resolve(steps, 1).lit], [['a', 'blue'], ['b', 'blue']]);
+  steps[1].visible = true;
+  assert.deepEqual([...resolve(steps, 2).lit], [['b', 'blue']]);
+  steps[2].visible = true;
+  assert.deepEqual([...resolve(steps, 3).lit], [['b', 'blue'], ['a', 'red']]);
 });
 
 // the opacity of the display, of the sentence after it, and the color of each class, in the
@@ -100,6 +109,49 @@ test('the print view shows the held display and the colors of each step', { time
   assert.deepEqual(seen, EXPECTED);
 });
 
+const BLUE = 'rgb(79, 157, 245)';
+const RED = 'rgb(255, 77, 77)';
+
+// the color of each term in the display of MathJax and in its span of the text, in the deck of tones
+const tones = (root) => `(() => {
+  const root = ${root}, color = (el) => el && getComputedStyle(el).color;
+  return ['first', 'second'].map((name) => [color(root.querySelector('mjx-container .' + name)), color(root.querySelector('span.' + name))]);
+})()`;
+
+// at the start, after each of the five steps, and after the step added to restore the dimmed ones
+const TONES = [
+  [[TEXT, TEXT], [TEXT, TEXT]],
+  [[TEXT, TEXT], [TEXT, TEXT]],
+  [[BLUE, BLUE], [TEXT, TEXT]],
+  [[BLUE, BLUE], [RED, RED]],
+  [[TEXT, TEXT], [RED, RED]],
+  [[RED, RED], [RED, RED]],
+  [[RED, RED], [RED, RED]],
+];
+
+test('a class is colored in blue or red with data-tone, and its color is taken off with data-unhighlight', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl('test/pages/tones.html'));
+  await page.waitFor(deckSettled);
+
+  const seen = [];
+  for (let i = 0; i < TONES.length; i++) {
+    if (i) await page.evaluate('Reveal.next()');
+    await new Promise((done) => setTimeout(done, 600));
+    seen.push(await page.evaluate(tones('Reveal.getCurrentSlide()')));
+  }
+  assert.deepEqual(seen, TONES);
+  assert.deepEqual(page.errors, []);
+
+  const print = await browser.newPage();
+  await printView(print, deckUrl('test/pages/tones.html', 'print-pdf'));
+  const pages = [];
+  for (let i = 0; i < TONES.length; i++) pages.push(await print.evaluate(tones(`document.querySelectorAll('.pdf-page section')[${i}]`)));
+  assert.deepEqual(pages, TONES);
+});
+
 // the opacity of each fragment with content of the current slide, and whether the slide is complete
 const opacities = `(() => {
   const slide = Reveal.getCurrentSlide();
@@ -118,7 +170,7 @@ test('the last step of a slide is shown alone, and a step is added to restore th
   const restored = await page.evaluate(`[...document.querySelectorAll('.slides > section')]
     .filter((section) => section.querySelector('.fragment[data-restore]'))
     .map((section) => section.querySelector('h1, h2').textContent)`);
-  assert.deepEqual(restored, ['Show your steps one at a time', 'Equations are first class citizens', 'Figures are first class citizens, too', 'Explain concepts, visually', 'Embedding TyCHO scenes', 'Embedding videos']);
+  assert.deepEqual(restored, ['Show your steps one at a time', 'Equations are first class citizens', 'Figures are first class citizens, too', 'Explain concepts, visually', 'Color the terms and the marks', 'Embedding TyCHO scenes', 'Embedding videos']);
 
   await page.evaluate(`Reveal.slide(2)`);
   const seen = [];
