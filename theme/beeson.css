@@ -429,6 +429,8 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
 .reveal .slides section .fragment.visible.current-fragment,
 .reveal .slides section[data-complete] .fragment.visible { opacity: 1; }
 .reveal .slides section .fragment.visible .fragment.visible { opacity: 1; }
+/* a backdrop shown at a step is not dimmed at the later steps */
+.reveal .slides section:not([data-complete]) .backdrop.fragment.visible:not(.current-fragment) { opacity: 1; }
 /* the step added to restore the dimmed fragments, kept out of the layout of its slide */
 .reveal .slides section > .fragment[data-restore] { position: absolute; width: 0; height: 0; overflow: hidden; }
 /* stepped math: a held fragment is not dimmed, and the classes named by a shown data-highlight are colored. the
