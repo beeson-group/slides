@@ -161,3 +161,26 @@ test('a window that does not cover the screen is not taken into full screen', { 
   await key(39, 'ArrowRight');
   assert.deepEqual(await page.evaluate('calls'), { enter: 0, exit: 0 });
 });
+
+test('the title and section slides are not numbered, and the slides after the closing slide are numbered A1, A2', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl('test/pages/numbers.html'));
+  await page.waitFor(deckSettled);
+  const numbers = await page.evaluate(`(async () => {
+    const out = [];
+    for (let i = 0; i < document.querySelectorAll('.reveal .slides > section').length; i += 1) {
+      Reveal.slide(i);
+      await new Promise((done) => setTimeout(done, 50));
+      out.push(document.querySelector('.reveal .slide-number').textContent.replace(/\\s+/g, ' ').trim());
+    }
+    return out;
+  })()`);
+  assert.deepEqual(numbers, ['', '', '1 / 4', '2 / 4', '', '3 / 4', '4 / 4', 'A1', 'A2']);
+
+  // the band has a tick for each numbered slide only
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 960, y: 1075, button: 'none' });
+  const labels = await page.evaluate(`[...document.querySelectorAll('.scrub-tick')].map((t) => t.firstChild.textContent)`);
+  assert.deepEqual(labels, ['1', '2', '3', '4']);
+});
