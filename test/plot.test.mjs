@@ -239,9 +239,12 @@ test('at the restart of a loop, the held frame is faded out while the next pass 
       assert.ok(s.liveText.every((a) => Math.abs(a - Math.max(0, 2 * s.fade - 1)) < 1e-6), JSON.stringify(s));
     } else assert.equal(s.fade, 1, JSON.stringify(s));
   }
-  // the copy holds the whole path, while the next pass is traced from its first frame
-  const full = samples.filter((s) => s.pass === 0).at(-1).trace;
-  assert.equal((full.match(/L/g) ?? []).length, 2, 'the first pass is held at its last frame');
+  // the copy holds the whole path, while the next pass is traced from its first frame. the path is
+  // read on the frame before a crossfade, since a slow runner may start the samples after a pass
+  const k = samples.findIndex((s, i) => i > 0 && s.held.length && !samples[i - 1].held.length);
+  assert.ok(k > 0, 'a crossfade begins within the samples');
+  const full = samples[k - 1].trace;
+  assert.equal((full.match(/L/g) ?? []).length, 2, 'a pass is held at its last frame');
   assert.ok(fading.every((s) => s.heldTrace === full && s.trace.length < full.length), JSON.stringify(fading[0]));
   assert.deepEqual(page.errors, []);
 });

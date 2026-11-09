@@ -77,7 +77,8 @@ test('a ribbon runs from its orbit around the Earth, with its stable tube the mi
   }
 });
 
-test('a scene is computed in under 150 ms', async () => {
+// the timing of a shared runner of GitHub does not stand for a laptop, as in test/perf.test.mjs
+test('a scene is computed in under 150 ms', { skip: process.env.CI ? 'the timing of a shared runner does not stand for a laptop' : false }, async () => {
   // a fresh module instance, so that the cache of the scenes above is empty
   const fresh = await import(`../src/scenes.ts?fresh=${Date.now()}`);
   const t = performance.now();

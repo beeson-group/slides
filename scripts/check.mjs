@@ -155,9 +155,16 @@ async function checkEditor() {
 // backdrop are cleared at its end. a head is drawn on the path of a spacecraft, on a record with a
 // head of its own, or on every strand with data-heads set to full or small
 async function checkHeads() {
-  const page = await browser.newPage();
+  const page = await browser.newPage({ motion: true });
   await page.goto(deckAt());
   await page.waitFor(deckSettled);
+  // Safari over WebDriver keeps the reduced motion of the macOS runners of GitHub, under which a
+  // backdrop is drawn complete without a trace
+  if (await page.evaluate(`matchMedia('(prefers-reduced-motion: reduce)').matches`)) {
+    console.log('heads: not checked, since the browser prefers reduced motion');
+    await page.close();
+    return;
+  }
   const after = await page.evaluate(`(() => {
     const headed = Beeson.backdrops.find((backdrop) => backdrop.headed);
     if (!headed) return null;
