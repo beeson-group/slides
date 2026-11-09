@@ -286,3 +286,28 @@ test('the tint at the pointer is a disc of its radius', { timeout: 60000 }, asyn
     assert.ok(tint.left <= -tint.r + 2 && tint.right >= tint.r - 2, `${where} runs along the strand from ${tint.left} px to ${tint.right} px`);
   }
 });
+
+// a backdrop that is a step of its slide is hidden and left untraced until its step is shown, and it
+// is reset when the step is hidden again
+test('a backdrop that is a step is traced from its step on', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage({ motion: true });
+  await page.goto(deckUrl('test/pages/title-step.html'));
+  await page.waitFor(deckSettled);
+  const state = `(() => {
+    const b = Beeson.backdrops[0];
+    return { tracing: b.tracing, done: b.done, opacity: getComputedStyle(b.el).opacity };
+  })()`;
+  const wait = (ms) => new Promise((done) => setTimeout(done, ms));
+  await wait(600);
+  assert.deepEqual(await page.evaluate(state), { tracing: false, done: false, opacity: '0' });
+
+  await page.evaluate('Reveal.next()');
+  await wait(600);
+  assert.deepEqual(await page.evaluate(state), { tracing: true, done: false, opacity: '1' });
+
+  await page.evaluate('Reveal.prev()');
+  await wait(600);
+  assert.deepEqual(await page.evaluate(state), { tracing: false, done: false, opacity: '0' });
+});
