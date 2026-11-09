@@ -25,11 +25,11 @@ During a talk, press `d` to flip between the dark and the light mode, `s` for th
 
 Title, section, and closing slides are not numbered, and the slides after the closing slide are the appendix, numbered A1, A2, and so on. To leave another slide out of the count, give it `data-visibility="uncounted"`. A slide out of the count is also left out of the pacing of the speaker view and out of the scrubber.
 
-Move the mouse to the bottom edge of the window to magnify the progress line into a scrubber, which stays open while the mouse is over it. In the scrubber, each numbered slide has a tick with its number, and with the time at which it starts when the deck sets `totalTime` or `defaultTiming` in `Beeson.start`. The times are counted as for the pacing of the speaker view, with the seconds of a slide in its `data-timing`. Rest the mouse over a tick to see the title of its slide, and click to jump to the first step of this slide. A key closes the scrubber, and away from the bottom the progress line is drawn as before.
+Move the mouse near the bottom edge of the window to magnify the progress line into a scrubber, which stays open while the mouse is over it. In the scrubber, each numbered slide has a tick with its number, and with the time at which it starts when the deck sets `totalTime` or `defaultTiming` in `Beeson.start`. The times are counted as for the pacing of the speaker view, with the seconds of a slide in its `data-timing`. Rest the mouse over a tick to see the title of its slide, and click to jump to the first step of this slide. A key closes the scrubber, and away from the bottom the progress line is drawn as before.
 
 ## Edit in the browser
 
-To edit a deck on the slides themselves, press `e` in the deck, or add `?edit` to its address. You can change the words, the formulas, the notes, the steps, and the places of the figures, and only your edits are written into `index.html` at a save. In Chrome and Edge, the edits are saved into the file itself, and in Firefox and Safari, a copy of the file is put into your downloads. To add, delete, or reorder slides, edit `index.html` in a text editor.
+To edit a deck on the slides themselves, press `e` in the deck, or add `?edit` to its address. You can change the words, the formulas, the notes, the steps, and the places of the figures, and only your edits are written into `index.html` at a save. In Chrome and Edge, the edits are saved into the file itself, and in Firefox and Safari, a save is a download of a copy of the file. Set Safari or Firefox to ask where to save each download, and you replace `index.html` with the copy in the dialog of the save. To add, delete, or reorder slides, edit `index.html` in a text editor.
 
 ## Elements
 
