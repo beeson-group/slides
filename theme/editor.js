@@ -967,7 +967,7 @@
   };
 
   // src/editor/steps.ts
-  var CANDIDATES = "h1, h2, h3, p, li, table, pre, blockquote, div.math, figure, .zone, .plate, tycho-viewer, .caption, .foot, img, video";
+  var CANDIDATES = "h1, h2, h3, p, li, table, pre, blockquote, div.math, figure, .zone, .plate, .qr, tycho-viewer, .caption, .foot, img, video";
   var WITH_SLIDE = "h1, h2, h3, .foot";
   var OUTSIDE = "aside.notes, .backdrop";
   function candidates(slide, pairing2) {
@@ -996,7 +996,7 @@
     for (const s of steps2) if (s.index === null) groups.push([s.el]);
     return groups;
   }
-  var KINDS = [["h1, h2, h3", "Heading"], [".foot", "Footnote"], ["li", "Item"], ["p", "Paragraph"], ["div.math", "Formula"], ["table", "Table"], ["pre", "Code"], ["blockquote", "Quotation"], ["video", "Video"], ["tycho-viewer", "Scene"], [".caption", "Caption"], ["img, figure, .zone, .plate", "Figure"]];
+  var KINDS = [["h1, h2, h3", "Heading"], [".foot", "Footnote"], ["li", "Item"], ["p", "Paragraph"], ["div.math", "Formula"], ["table", "Table"], ["pre", "Code"], ["blockquote", "Quotation"], ["video", "Video"], ["tycho-viewer", "Scene"], [".qr", "QR code"], [".caption", "Caption"], ["img, figure, .zone, .plate", "Figure"]];
   function textOf(el, tex) {
     let out = "";
     for (const child of el.childNodes) {
@@ -1188,8 +1188,8 @@
   };
 
   // src/editor/move.ts
-  var MOVABLE = "h1, h2, h3, p, ul, ol, dl, table, pre, blockquote, div.math, .caption, .foot, img, video, figure, .zone, .plate, tycho-viewer";
-  var BY_ITSELF = "img, video, figure, .zone, .plate";
+  var MOVABLE = "h1, h2, h3, p, ul, ol, dl, table, pre, blockquote, div.math, .caption, .foot, img, video, figure, .zone, .plate, .qr, tycho-viewer";
+  var BY_ITSELF = "img, video, figure, .zone, .plate, .qr";
   var OUTSIDE2 = "aside.notes, .backdrop";
   var CLICK = 3;
   var SNAP = 8;
@@ -1579,7 +1579,7 @@ html.beeson-editing .reveal .beeson-overflow { outline: 2px dashed var(--accent,
 html.beeson-editing .reveal .beeson-movable:focus-visible { outline: 2px solid var(--violet, #96f); outline-offset: 6px; }
 .beeson-edit-resize:focus-visible { outline: none; background: color-mix(in srgb, var(--violet, #96f) 45%, transparent); }
 html.beeson-dragging, html.beeson-dragging * { cursor: move !important; user-select: none !important; }
-html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .slides section video, html.beeson-editing .reveal .slides section .zone, html.beeson-editing .reveal .slides section .plate { cursor: move; }
+html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .slides section video, html.beeson-editing .reveal .slides section .zone, html.beeson-editing .reveal .slides section .plate, html.beeson-editing .reveal .slides section .qr { cursor: move; }
 html.beeson-editor .reveal .progress, html.beeson-editor .reveal .slide-number { display: none !important; }
 html.beeson-editing .reveal .slides section .fragment { visibility: visible !important; opacity: 1 !important; transition: none !important; }
 html.beeson-editing .reveal [contenteditable="true"] { cursor: text; outline: 1px dashed transparent; outline-offset: 6px; border-radius: 2px; }

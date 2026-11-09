@@ -28,7 +28,7 @@ type State = { el: Element; step: Step };
 // another such element, e.g. an image inside a paragraph, which is shown with the paragraph. a
 // heading and the footnote can be a step too, as any text box in PowerPoint, but One by one
 // leaves them with the slide
-const CANDIDATES = 'h1, h2, h3, p, li, table, pre, blockquote, div.math, figure, .zone, .plate, tycho-viewer, .caption, .foot, img, video';
+const CANDIDATES = 'h1, h2, h3, p, li, table, pre, blockquote, div.math, figure, .zone, .plate, .qr, tycho-viewer, .caption, .foot, img, video';
 const WITH_SLIDE = 'h1, h2, h3, .foot';
 const OUTSIDE = 'aside.notes, .backdrop';
 
@@ -63,7 +63,7 @@ export function groupsOf(els: Element[], pairing: Pairing, edits: Map<Element, T
   return groups;
 }
 
-const KINDS: [string, string][] = [['h1, h2, h3', 'Heading'], ['.foot', 'Footnote'], ['li', 'Item'], ['p', 'Paragraph'], ['div.math', 'Formula'], ['table', 'Table'], ['pre', 'Code'], ['blockquote', 'Quotation'], ['video', 'Video'], ['tycho-viewer', 'Scene'], ['.caption', 'Caption'], ['img, figure, .zone, .plate', 'Figure']];
+const KINDS: [string, string][] = [['h1, h2, h3', 'Heading'], ['.foot', 'Footnote'], ['li', 'Item'], ['p', 'Paragraph'], ['div.math', 'Formula'], ['table', 'Table'], ['pre', 'Code'], ['blockquote', 'Quotation'], ['video', 'Video'], ['tycho-viewer', 'Scene'], ['.qr', 'QR code'], ['.caption', 'Caption'], ['img, figure, .zone, .plate', 'Figure']];
 
 // the text of el with each formula given by its TeX, since an mjx-container does not have text
 function textOf(el: Element, tex: Ctx['tex']): string {
