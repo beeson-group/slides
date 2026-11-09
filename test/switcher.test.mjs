@@ -129,7 +129,7 @@ test('every animation of a slide plays on after a flip of the mode, with the key
   for (const deck of ['index.html', 'test/pages/plot-reveals.html']) {
     await page.goto(deckUrl(deck, 'theme=dark'));
     await page.waitFor(deckSettled);
-    const count = await page.evaluate('Reveal.getTotalSlides()');
+    const count = await page.evaluate(`document.querySelectorAll('.reveal .slides > section').length`);
     for (let i = 0; i < count; i++) {
       await page.evaluate(`Reveal.slide(${i}, 0, 99)`);
       await sleep(800);

@@ -1479,8 +1479,8 @@
   // src/chrome.ts
   var OWN = ["title", "section", "closing"];
   var heading = (slide) => slide.dataset.run ?? (slide.querySelector("h2") ?? slide.querySelector("h1"))?.textContent?.trim() ?? "";
-  function initChrome(deck) {
-    const slides = deck.getSlides();
+  function initChrome() {
+    const slides = [...document.querySelectorAll(".reveal .slides section:not(:has(> section))")];
     const sections = slides.filter((s) => s.classList.contains("section"));
     let current = null;
     for (const slide of slides) {
@@ -4414,6 +4414,19 @@ void main() {
   }
 
   // src/main.ts
+  function numberOf(slide) {
+    if (slide?.dataset.appendix) return [`A${slide.dataset.appendix}`, "", ""];
+    if (!slide || slide.dataset.visibility === "uncounted") return ["", "", ""];
+    return [String(window.Reveal.getSlidePastCount(slide) + 1), "/", window.Reveal.getTotalSlides()];
+  }
+  function markUncounted(scope) {
+    let appendix = 0;
+    for (const slide of scope.querySelectorAll(".reveal .slides > section")) {
+      if (appendix) slide.dataset.appendix = String(appendix++);
+      if ((appendix || slide.matches(".title, .section")) && !slide.dataset.visibility) slide.dataset.visibility = "uncounted";
+      if (!appendix && slide.classList.contains("closing")) appendix = 1;
+    }
+  }
   var DEFAULTS = {
     width: 1920,
     height: 1080,
@@ -4427,7 +4440,7 @@ void main() {
     autoAnimateEasing: "ease-out",
     autoAnimateUnmatched: true,
     progress: true,
-    slideNumber: "c/t",
+    slideNumber: (slide) => numberOf(slide),
     controls: false,
     center: false,
     pdfSeparateFragments: true,
@@ -4524,6 +4537,7 @@ void main() {
     if (window.RevealNotes && !plugins.includes(window.RevealNotes)) plugins.push(window.RevealNotes);
     if (window.RevealHighlight && !EDITING && !plugins.includes(window.RevealHighlight)) plugins.push(window.RevealHighlight);
     initSwitcher();
+    if (!EDITING) markUncounted(document);
     mountQr(document);
     markViewers();
     deck.on("pdf-ready", () => {
@@ -4534,7 +4548,7 @@ void main() {
     });
     if (!EDITING) plugins.push({ id: "beeson-restore", init: () => addRestoreSteps(document) });
     await deck.initialize({ ...DEFAULTS, ...options, plugins });
-    initChrome(deck);
+    initChrome();
     initSteps(deck);
     remount();
     initCursor(() => backdrops, () => deck.getCurrentSlide(), !EDITING);

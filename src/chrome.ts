@@ -1,7 +1,5 @@
 // the running head of each content slide and the automatic outline of the section slides
 
-import type { Deck } from './reveal.d.ts';
-
 const OWN = ['title', 'section', 'closing'];
 
 // the data-run of a section slide is used in place of the text of its heading, e.g. for a heading
@@ -9,8 +7,10 @@ const OWN = ['title', 'section', 'closing'];
 export const heading = (slide: HTMLElement): string =>
   slide.dataset.run ?? (slide.querySelector('h2') ?? slide.querySelector('h1'))?.textContent?.trim() ?? '';
 
-export function initChrome(deck: Deck): void {
-  const slides = deck.getSlides();
+// the running heads and the outlines are filled from every slide of the deck, since the slides of
+// reveal.js leave out the section slides, which are not numbered
+export function initChrome(): void {
+  const slides = [...document.querySelectorAll<HTMLElement>('.reveal .slides section:not(:has(> section))')];
   const sections = slides.filter((s) => s.classList.contains('section'));
   let current: HTMLElement | null = null;
   for (const slide of slides) {

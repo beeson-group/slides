@@ -17,6 +17,26 @@ import { addRestoreSteps, applyAll, applySteps, initSteps, typeset } from './ste
 import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.ts';
 import type { RevealOptions, SlideEvent } from './reveal.d.ts';
 
+// the number of a slide out of the numbered slides. a slide with data-visibility="uncounted", e.g. a
+// title or a section slide, is not numbered, and a slide of the appendix is numbered A1, A2, and so on.
+// reveal.js writes the total only when it is a number
+function numberOf(slide: HTMLElement | null | undefined): [string, string, string] {
+  if (slide?.dataset.appendix) return [`A${slide.dataset.appendix}`, '', ''];
+  if (!slide || slide.dataset.visibility === 'uncounted') return ['', '', ''];
+  return [String(window.Reveal.getSlidePastCount(slide) + 1), '/', window.Reveal.getTotalSlides() as unknown as string];
+}
+
+// the title and the section slides are left out of the count, and so are the slides after the closing
+// slide, which are the appendix. a slide whose data-visibility is set keeps it
+function markUncounted(scope: ParentNode): void {
+  let appendix = 0;
+  for (const slide of scope.querySelectorAll<HTMLElement>('.reveal .slides > section')) {
+    if (appendix) slide.dataset.appendix = String(appendix++);
+    if ((appendix || slide.matches('.title, .section')) && !slide.dataset.visibility) slide.dataset.visibility = 'uncounted';
+    if (!appendix && slide.classList.contains('closing')) appendix = 1;
+  }
+}
+
 const DEFAULTS: RevealOptions = {
   width: 1920,
   height: 1080,
@@ -30,7 +50,7 @@ const DEFAULTS: RevealOptions = {
   autoAnimateEasing: 'ease-out',
   autoAnimateUnmatched: true,
   progress: true,
-  slideNumber: 'c/t',
+  slideNumber: (slide: HTMLElement) => numberOf(slide),
   controls: false,
   center: false,
   pdfSeparateFragments: true,
@@ -127,6 +147,8 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   // is paired with the file in the editor
   if (window.RevealHighlight && !EDITING && !plugins.includes(window.RevealHighlight)) plugins.push(window.RevealHighlight);
   initSwitcher();
+  // the editor counts the slides of the file, hence every slide is numbered while the deck is edited
+  if (!EDITING) markUncounted(document);
   // the QR codes are drawn before reveal.js clones the slides of the print view
   mountQr(document);
   // in the print view, a page is cloned per fragment state after ready, and the clones are
@@ -144,7 +166,7 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   if (!EDITING) plugins.push({ id: 'beeson-restore', init: () => addRestoreSteps(document) });
   await deck.initialize({ ...DEFAULTS, ...options, plugins });
 
-  initChrome(deck);
+  initChrome();
   initSteps(deck);
   remount();
   initCursor(() => backdrops, () => deck.getCurrentSlide(), !EDITING);

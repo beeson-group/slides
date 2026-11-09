@@ -63,7 +63,8 @@ export function initScrub(deck: Deck): void {
   let open = false;
   let zone = band.getBoundingClientRect();
 
-  // the ticks are placed where the progress of reveal.js stands at the first step of each slide
+  // the ticks are placed where the progress of reveal.js stands at the first step of each slide. the
+  // slides of reveal.js leave out those with data-visibility="uncounted", which are not numbered
   const build = () => {
     for (const t of ticks) t.el.remove();
     const slides = deck.getSlides() as HTMLElement[];
