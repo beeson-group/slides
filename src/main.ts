@@ -1,12 +1,13 @@
 // the entry point of beeson.js. window.Beeson.start() is called in a deck to initialize reveal.js
-// with the defaults of the theme, and to start the orbit backdrops, the surfaces, the plots, the fragment steps,
-// the mode switch, and the pointer
+// with the defaults of the theme, and to start the orbit backdrops, the surfaces, the plots, the QR
+// codes, the fragment steps, the mode switch, and the pointer
 
 import { Orbits, mount } from './orbits.ts';
 import { initChrome } from './chrome.ts';
 import { initCursor, togglePointer } from './cursor.ts';
 import { mountPlots, type PlotView } from './plot.ts';
 import { markViewers, stillViewers } from './print.ts';
+import { mountQr } from './qr.ts';
 import { mount as mountSurfaces } from './surface.ts';
 import type { Surface } from './surface.ts';
 import { register } from './strands.ts';
@@ -119,6 +120,8 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   // is paired with the file in the editor
   if (window.RevealHighlight && !EDITING && !plugins.includes(window.RevealHighlight)) plugins.push(window.RevealHighlight);
   initSwitcher();
+  // the QR codes are drawn before reveal.js clones the slides of the print view
+  mountQr(document);
   // in the print view, a page is cloned per fragment state after ready, and the clones are
   // mounted here. the viewers are numbered before the clones are made
   markViewers();

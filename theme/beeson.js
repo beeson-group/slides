@@ -2644,6 +2644,296 @@
     }
   }
 
+  // src/qr.ts
+  var ECC = [10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26, 26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28];
+  var BLOCKS = [1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16, 17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49];
+  var LEVEL_BITS = 0;
+  var QUIET = 4;
+  function dataModules(version) {
+    const size = 4 * version + 17;
+    let n = size * size - 3 * 64 - 2 * (size - 16) - 31;
+    if (version >= 2) {
+      const k = Math.floor(version / 7) + 2;
+      n -= 25 * (k * k - 3) - 10 * (k - 2);
+    }
+    if (version >= 7) n -= 36;
+    return n;
+  }
+  var dataCodewords = (version) => Math.floor(dataModules(version) / 8) - ECC[version - 1] * BLOCKS[version - 1];
+  var capacity = (version) => Math.floor((dataCodewords(version) * 8 - 4 - (version < 10 ? 8 : 16)) / 8);
+  function alignment(version) {
+    if (version === 1) return [];
+    const k = Math.floor(version / 7) + 2;
+    const last = 4 * version + 10;
+    const step2 = version === 32 ? 26 : Math.ceil((last - 6) / (k - 1) / 2) * 2;
+    const out = [6];
+    for (let i = k - 2; i >= 0; i--) out.push(last - i * step2);
+    return out;
+  }
+  var EXP = new Uint8Array(512);
+  var LOG = new Uint8Array(256);
+  for (let i = 0, x = 1; i < 255; i++) {
+    EXP[i] = EXP[i + 255] = x;
+    LOG[x] = i;
+    x = x << 1 ^ (x & 128 ? 285 : 0);
+  }
+  var mul = (a, b) => a && b ? EXP[LOG[a] + LOG[b]] : 0;
+  function generator(n) {
+    let g = new Uint8Array([1]);
+    for (let i = 0; i < n; i++) {
+      const next = new Uint8Array(g.length + 1);
+      for (let j = 0; j < g.length; j++) {
+        next[j] ^= g[j];
+        next[j + 1] ^= mul(g[j], EXP[i]);
+      }
+      g = next;
+    }
+    return g.subarray(1);
+  }
+  function remainder(data, g) {
+    const r = new Uint8Array(g.length);
+    for (const byte of data) {
+      const factor = byte ^ r[0];
+      r.copyWithin(0, 1);
+      r[r.length - 1] = 0;
+      for (let i = 0; i < g.length; i++) r[i] ^= mul(g[i], factor);
+    }
+    return r;
+  }
+  function codewords(bytes, version) {
+    const bits = [];
+    const put = (value, n) => {
+      for (let i = n - 1; i >= 0; i--) bits.push(value >>> i & 1);
+    };
+    put(4, 4);
+    put(bytes.length, version < 10 ? 8 : 16);
+    for (const b of bytes) put(b, 8);
+    const total = dataCodewords(version) * 8;
+    put(0, Math.min(4, total - bits.length));
+    put(0, (8 - bits.length % 8) % 8);
+    for (let pad = 236; bits.length < total; pad ^= 236 ^ 17) put(pad, 8);
+    const out = new Uint8Array(total / 8);
+    for (let i = 0; i < bits.length; i++) out[i >>> 3] |= bits[i] << 7 - (i & 7);
+    return out;
+  }
+  function interleave(data, version) {
+    const n = BLOCKS[version - 1], ecc = ECC[version - 1];
+    const total = Math.floor(dataModules(version) / 8);
+    const short = Math.floor(total / n) - ecc;
+    const shortBlocks = n - total % n;
+    const g = generator(ecc);
+    const blocks = [];
+    const checks = [];
+    for (let i = 0, at = 0; i < n; i++) {
+      const len = short + (i < shortBlocks ? 0 : 1);
+      blocks.push(data.subarray(at, at + len));
+      checks.push(remainder(data.subarray(at, at + len), g));
+      at += len;
+    }
+    const out = [];
+    for (let i = 0; i <= short; i++) for (const b of blocks) if (i < b.length) out.push(b[i]);
+    for (let i = 0; i < ecc; i++) for (const c of checks) out.push(c[i]);
+    return new Uint8Array(out);
+  }
+  function bch(data, bits, poly) {
+    const degree = 31 - Math.clz32(poly);
+    let r = data << degree;
+    for (let i = bits + degree - 1; i >= degree; i--) if (r >>> i & 1) r ^= poly << i - degree;
+    return data << degree | r;
+  }
+  var MASKS = [
+    (r, c) => (r + c) % 2 === 0,
+    (r) => r % 2 === 0,
+    (_, c) => c % 3 === 0,
+    (r, c) => (r + c) % 3 === 0,
+    (r, c) => (Math.floor(r / 2) + Math.floor(c / 3)) % 2 === 0,
+    (r, c) => r * c % 2 + r * c % 3 === 0,
+    (r, c) => (r * c % 2 + r * c % 3) % 2 === 0,
+    (r, c) => ((r + c) % 2 + r * c % 3) % 2 === 0
+  ];
+  var Grid = class {
+    constructor(size) {
+      this.size = size;
+      this.dark = Array.from({ length: size }, () => new Array(size).fill(false));
+      this.fixed = Array.from({ length: size }, () => new Array(size).fill(false));
+    }
+    set(r, c, dark) {
+      if (r < 0 || c < 0 || r >= this.size || c >= this.size) return;
+      this.dark[r][c] = dark;
+      this.fixed[r][c] = true;
+    }
+  };
+  function functionPatterns(grid, version) {
+    const n = grid.size;
+    for (const [r0, c0] of [[0, 0], [0, n - 7], [n - 7, 0]]) {
+      for (let r = -1; r <= 7; r++) {
+        for (let c = -1; c <= 7; c++) {
+          const d = Math.max(Math.abs(r - 3), Math.abs(c - 3));
+          grid.set(r0 + r, c0 + c, d !== 2 && d !== 4);
+        }
+      }
+    }
+    for (let i = 8; i < n - 8; i++) {
+      grid.set(6, i, i % 2 === 0);
+      grid.set(i, 6, i % 2 === 0);
+    }
+    const centers = alignment(version);
+    const last = centers.length - 1;
+    for (const [i, r] of centers.entries()) {
+      for (const [j, c] of centers.entries()) {
+        if (i === 0 && (j === 0 || j === last) || i === last && j === 0) continue;
+        for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) grid.set(r + dr, c + dc, Math.max(Math.abs(dr), Math.abs(dc)) !== 1);
+      }
+    }
+    format(grid, 0);
+    if (version >= 7) {
+      const bits = bch(version, 6, 7973);
+      for (let i = 0; i < 18; i++) {
+        const on = (bits >>> i & 1) === 1;
+        const a = n - 11 + i % 3, b = Math.floor(i / 3);
+        grid.set(a, b, on);
+        grid.set(b, a, on);
+      }
+    }
+  }
+  function format(grid, mask) {
+    const n = grid.size;
+    const bits = bch(LEVEL_BITS << 3 | mask, 5, 1335) ^ 21522;
+    const bit = (i) => (bits >>> i & 1) === 1;
+    for (let i = 0; i <= 5; i++) grid.set(i, 8, bit(i));
+    grid.set(7, 8, bit(6));
+    grid.set(8, 8, bit(7));
+    grid.set(8, 7, bit(8));
+    for (let i = 9; i < 15; i++) grid.set(8, 14 - i, bit(i));
+    for (let i = 0; i < 8; i++) grid.set(8, n - 1 - i, bit(i));
+    for (let i = 8; i < 15; i++) grid.set(n - 15 + i, 8, bit(i));
+    grid.set(n - 8, 8, true);
+  }
+  function place(grid, data) {
+    const n = grid.size;
+    let i = 0;
+    for (let right = n - 1; right >= 1; right -= 2) {
+      if (right === 6) right = 5;
+      const up = (right + 1 & 2) === 0;
+      for (let k = 0; k < n; k++) {
+        const r = up ? n - 1 - k : k;
+        for (const c of [right, right - 1]) {
+          if (grid.fixed[r][c]) continue;
+          grid.dark[r][c] = i < data.length * 8 && (data[i >>> 3] >>> 7 - (i & 7) & 1) === 1;
+          i++;
+        }
+      }
+    }
+  }
+  function applyMask(grid, mask) {
+    const m = MASKS[mask];
+    for (let r = 0; r < grid.size; r++) for (let c = 0; c < grid.size; c++) if (!grid.fixed[r][c] && m(r, c)) grid.dark[r][c] = !grid.dark[r][c];
+  }
+  function penalty(dark) {
+    const n = dark.length;
+    let score = 0;
+    const finder = [true, false, true, true, true, false, true];
+    for (let pass = 0; pass < 2; pass++) {
+      const at = (a, b) => pass === 0 ? dark[a][b] : dark[b][a];
+      for (let a = 0; a < n; a++) {
+        let run = 1;
+        for (let b = 1; b <= n; b++) {
+          if (b < n && at(a, b) === at(a, b - 1)) run++;
+          else {
+            if (run >= 5) score += run - 2;
+            run = 1;
+          }
+        }
+        for (let b = 0; b + 7 <= n; b++) {
+          if (!finder.every((v, k) => at(a, b + k) === v)) continue;
+          const light = (from) => {
+            for (let k = from; k < from + 4; k++) if (k >= 0 && k < n && at(a, k)) return false;
+            return true;
+          };
+          if (light(b - 4) || light(b + 7)) score += 40;
+        }
+      }
+    }
+    let count = 0;
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (dark[r][c]) count++;
+        if (r + 1 < n && c + 1 < n && dark[r][c] === dark[r][c + 1] && dark[r][c] === dark[r + 1][c] && dark[r][c] === dark[r + 1][c + 1]) score += 3;
+      }
+    }
+    score += 10 * Math.floor(Math.abs(count * 100 / (n * n) - 50) / 5);
+    return score;
+  }
+  function encode(text) {
+    const bytes = new TextEncoder().encode(text);
+    let version = 1;
+    while (version <= 40 && capacity(version) < bytes.length) version++;
+    if (version > 40) throw new Error(`the text is ${bytes.length} bytes long, and a QR code at level M holds at most ${capacity(40)}`);
+    const data = interleave(codewords(bytes, version), version);
+    let best = null, bestMask = 0, bestScore = Infinity;
+    for (let mask = 0; mask < 8; mask++) {
+      const grid2 = new Grid(4 * version + 17);
+      functionPatterns(grid2, version);
+      place(grid2, data);
+      applyMask(grid2, mask);
+      format(grid2, mask);
+      const score = penalty(grid2.dark);
+      if (score < bestScore) {
+        best = grid2;
+        bestMask = mask;
+        bestScore = score;
+      }
+    }
+    const grid = best;
+    return { version, size: grid.size, mask: bestMask, dark: grid.dark };
+  }
+  var SVG2 = "http://www.w3.org/2000/svg";
+  function svgOf(code, label) {
+    const side = code.size + 2 * QUIET;
+    const svg2 = document.createElementNS(SVG2, "svg");
+    svg2.setAttribute("viewBox", `0 0 ${side} ${side}`);
+    svg2.setAttribute("shape-rendering", "crispEdges");
+    svg2.setAttribute("role", "img");
+    svg2.setAttribute("aria-label", label);
+    const tile = document.createElementNS(SVG2, "rect");
+    tile.setAttribute("class", "qr-tile");
+    tile.setAttribute("width", String(side));
+    tile.setAttribute("height", String(side));
+    tile.setAttribute("rx", String(+(side * 0.03).toFixed(2)));
+    tile.setAttribute("fill", "#fff");
+    tile.setAttribute("shape-rendering", "geometricPrecision");
+    let d = "";
+    code.dark.forEach((row, r) => {
+      for (let c = 0; c < code.size; c++) {
+        if (!row[c]) continue;
+        const start2 = c;
+        while (c + 1 < code.size && row[c + 1]) c++;
+        d += `M${start2 + QUIET} ${r + QUIET}h${c - start2 + 1}v1h${start2 - c - 1}z`;
+      }
+    });
+    const ink = document.createElementNS(SVG2, "path");
+    ink.setAttribute("class", "qr-ink");
+    ink.setAttribute("d", d);
+    ink.setAttribute("fill", "#000");
+    svg2.append(tile, ink);
+    return svg2;
+  }
+  function mountQr(root2) {
+    for (const el of root2.querySelectorAll(".qr[data-qr]")) {
+      if (el.querySelector(":scope > svg, :scope > .qr-error")) continue;
+      const text = el.dataset.qr ?? "";
+      try {
+        if (!text) throw new Error("data-qr is empty");
+        el.append(svgOf(encode(text), `QR code of ${text}`));
+      } catch (error) {
+        const box2 = document.createElement("div");
+        box2.className = "qr-error";
+        box2.textContent = `QR code: ${error.message}`;
+        el.append(box2);
+      }
+    }
+  }
+
   // src/contour.ts
   function isolines(g, nx, ny, x0, y0, dx, dy = dx, close = false) {
     const at = (i, j) => g[j * (nx + 1) + i];
@@ -3975,6 +4265,7 @@ void main() {
     if (window.RevealNotes && !plugins.includes(window.RevealNotes)) plugins.push(window.RevealNotes);
     if (window.RevealHighlight && !EDITING && !plugins.includes(window.RevealHighlight)) plugins.push(window.RevealHighlight);
     initSwitcher();
+    mountQr(document);
     markViewers();
     deck.on("pdf-ready", () => {
       completeAll();

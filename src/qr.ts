@@ -294,3 +294,56 @@ export function encode(text: string): Code {
   const grid = best as Grid;
   return { version, size: grid.size, mask: bestMask, dark: grid.dark };
 }
+
+const SVG = 'http://www.w3.org/2000/svg';
+
+/** The SVG of a code: a tile as wide as the modules and the quiet zone, and the dark modules as one path of runs along the rows. */
+export function svgOf(code: Code, label: string): SVGSVGElement {
+  const side = code.size + 2 * QUIET;
+  const svg = document.createElementNS(SVG, 'svg');
+  svg.setAttribute('viewBox', `0 0 ${side} ${side}`);
+  svg.setAttribute('shape-rendering', 'crispEdges');
+  svg.setAttribute('role', 'img');
+  svg.setAttribute('aria-label', label);
+  const tile = document.createElementNS(SVG, 'rect');
+  tile.setAttribute('class', 'qr-tile');
+  tile.setAttribute('width', String(side));
+  tile.setAttribute('height', String(side));
+  // the corners of the tile are rounded within the quiet zone, and drawn smooth, while the modules
+  // are drawn with crisp edges. the fills are the fallback of the colors set in theme/beeson.css
+  tile.setAttribute('rx', String(+(side * 0.03).toFixed(2)));
+  tile.setAttribute('fill', '#fff');
+  tile.setAttribute('shape-rendering', 'geometricPrecision');
+  let d = '';
+  code.dark.forEach((row, r) => {
+    for (let c = 0; c < code.size; c++) {
+      if (!row[c]) continue;
+      const start = c;
+      while (c + 1 < code.size && row[c + 1]) c++;
+      d += `M${start + QUIET} ${r + QUIET}h${c - start + 1}v1h${start - c - 1}z`;
+    }
+  });
+  const ink = document.createElementNS(SVG, 'path');
+  ink.setAttribute('class', 'qr-ink');
+  ink.setAttribute('d', d);
+  ink.setAttribute('fill', '#000');
+  svg.append(tile, ink);
+  return svg;
+}
+
+/** Draws the code of each div.qr under root that is not drawn yet, or a message in its place for a text that is empty or too long. */
+export function mountQr(root: ParentNode): void {
+  for (const el of root.querySelectorAll<HTMLElement>('.qr[data-qr]')) {
+    if (el.querySelector(':scope > svg, :scope > .qr-error')) continue;
+    const text = el.dataset.qr ?? '';
+    try {
+      if (!text) throw new Error('data-qr is empty');
+      el.append(svgOf(encode(text), `QR code of ${text}`));
+    } catch (error) {
+      const box = document.createElement('div');
+      box.className = 'qr-error';
+      box.textContent = `QR code: ${(error as Error).message}`;
+      el.append(box);
+    }
+  }
+}
