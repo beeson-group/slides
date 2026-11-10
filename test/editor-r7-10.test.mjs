@@ -334,3 +334,22 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// Delete and Cut of the image selected in its figure take the pair off, with the white space before
+// each image, since the image of the other mode would be left alone in the figure
+for (const platform of PLATFORMS) {
+  // Cut is run as a command, since its key is left to the clipboard event of the browser
+  for (const key of ['Backspace', 'edit.cut']) {
+    test(`${key === 'Backspace' ? 'Delete' : 'Cut'} of an image takes both images of the pair off (${platform})`, async (t) => {
+      const page = await load(t, platform);
+      await click(page, IMG);
+      await frames(page);
+      assert.deepEqual(await selected(page), ['img.for-dark']);
+      if (key === 'Backspace') await press(page, key);
+      else await exec(page, key);
+      await frames(page);
+      await byteExact(page, [[`\n    ${DARK_TAG}\n    ${LIGHT_TAG}`, '']]);
+      await roundTrip(page);
+    });
+  }
+}
