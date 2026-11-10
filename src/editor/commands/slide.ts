@@ -1,14 +1,17 @@
 // the commands of the Slide menu: new slide with the gallery of the layouts, duplicate, delete,
-// hide and show, move up and down, and cut, copy, and paste of slides. each command acts on the
-// slides selected in the navigator, or on the current slide, through the document model, and is
-// one entry of the history however many slides it changes
+// hide and show, move up and down, and cut, copy, and paste of slides, and the move and the rename
+// of a section of the light table. each command acts on the slides selected in the navigator, or on
+// the current slide, through the document model, and is one entry of the history however many
+// slides it changes
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import type { Doc } from '../model/doc.ts';
 import { LAYOUTS, type Layout } from '../model/templates.ts';
 import { droppedOrder, isHidden, type MoveTo, type Navigator } from '../navigator/navigator.ts';
+import { groupsOf, sectionHeading } from '../navigator/sorter.ts';
 import { drawInto } from '../navigator/thumbs.ts';
+import { setOwnTex } from '../text/blocks.ts';
 import { tokenize } from '../tokens.ts';
 import { sample } from './layout.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -16,6 +19,11 @@ import { injectStyle } from '../ui/dom.ts';
 // the mark that opens the text of slides on the clipboard, so that a paste in the navigator tells
 // slides apart from other text
 export const MARK = '<!--beeson-->';
+
+// the width of the picture of a tile of the gallery, and its columns, as in the Add a Slide popover
+// of Keynote
+const PIC = 112;
+const COLUMNS = 3;
 
 const LABELS: Record<Layout, string> = { title: 'Title', section: 'Section', content: 'Content', narrow: 'Content, Narrow', wide: 'Content, Wide', figure: 'Figure', split: 'Split', closing: 'Closing' };
 
@@ -31,11 +39,11 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
 @media (prefers-color-scheme: dark) {
   .beeson-edit-gallery { --g-bg: var(--ed-panel, #2c2c2e); --g-text: var(--ed-text, #f2f2f7); --g-muted: var(--ed-muted, #a1a1a6); --g-line: var(--ed-line, #48484a); --g-select: var(--ed-select, #9b82ff); }
 }
-.beeson-edit-gallery { position: fixed; z-index: 80; margin: 0; padding: 12px 14px 14px; width: 456px; box-sizing: border-box; border: 1px solid var(--g-line); border-radius: 12px; background: var(--g-bg); color: var(--g-text); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28); font: 12px/1.3 system-ui, sans-serif; }
-.beeson-edit-gallery .head { margin: 0 0 10px 2px; font-size: 13px; font-weight: 600; }
-.beeson-edit-gallery .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 10px; }
+.beeson-edit-gallery { position: fixed; z-index: 80; margin: 0; padding: 12px 14px 14px; width: max-content; box-sizing: border-box; border: 1px solid var(--g-line); border-radius: 12px; background: var(--g-bg); color: var(--g-text); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28); font: 12px/1.3 system-ui, sans-serif; }
+.beeson-edit-gallery .head { margin: 0 0 10px; font-size: 13px; font-weight: 600; text-align: center; }
+.beeson-edit-gallery .grid { display: grid; grid-template-columns: repeat(${COLUMNS}, ${PIC + 8}px); gap: 8px 10px; }
 .beeson-edit-gallery .tile { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 4px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
-.beeson-edit-gallery .tile .pic { display: block; width: 92px; aspect-ratio: 16 / 9; border-radius: 4px; outline: 1px solid var(--g-line); background: var(--bg, #000); }
+.beeson-edit-gallery .tile .pic { display: block; width: ${PIC}px; aspect-ratio: 16 / 9; border-radius: 4px; outline: 1px solid var(--g-line); background: var(--bg, #000); }
 .beeson-edit-gallery .tile:hover .pic { outline: 2px solid var(--g-select); }
 .beeson-edit-gallery .tile:focus-visible { outline: none; background: color-mix(in srgb, var(--g-select) 16%, transparent); }
 .beeson-edit-gallery .tile:focus-visible .pic { outline: 2px solid var(--g-select); }
@@ -191,6 +199,15 @@ async function pasteSlides(app: App, text: string, focusNav: boolean): Promise<b
   return true;
 }
 
+// a section of the light table, i.e. a section slide with the slides under it, moved to gap, an
+// index in the slides of the deck, and the name of a section, i.e. the heading of its section slide
+export type MoveSection = { head: Element; gap: number };
+export type RenameSection = { head: Element; text: string };
+
+export const sectionSlides = (app: App, head: Element): Element[] => groupsOf(sections(app)).find((g) => g.head === head)?.slides ?? [];
+
+const escapeText = (text: string): string => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
 // the gallery of the eight layouts, drawn as the samples of the layout chooser of
 // commands/layout.ts. a click or Enter on a layout adds a slide of it after the current one. back
 // is the element that had the focus before the gallery was opened
@@ -247,11 +264,11 @@ function openGallery(app: App, anchor: HTMLElement | null): void {
   dialog.append(head, grid);
   document.body.append(dialog);
   dialog.show();
-  for (const t of tiles) drawInto(t.pic, sample(t.layout), deck, 92);
+  for (const t of tiles) drawInto(t.pic, sample(t.layout), deck, PIC);
   place(dialog, dialog.anchor ?? null, navOf(app).rowOf(app.current()));
   dialog.addEventListener('keydown', (ev) => {
     const i = tiles.findIndex((t) => t.tile === document.activeElement);
-    const step: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 4, ArrowUp: -4 };
+    const step: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: COLUMNS, ArrowUp: -COLUMNS };
     if (ev.key === 'Escape') closeGallery();
     else if (ev.key in step) tiles[Math.min(tiles.length - 1, Math.max(0, i + step[ev.key]))].tile.focus();
     else if (ev.key === 'Home' || ev.key === 'End') tiles[ev.key === 'Home' ? 0 : tiles.length - 1].tile.focus();
@@ -417,6 +434,32 @@ export function install(app: App): void {
         const { slides, gap } = arg as MoveTo;
         await applyOrder(a, droppedOrder(sections(a), slides, gap));
         land(a, slides, a.current(), true);
+      },
+    },
+    {
+      id: 'slide.moveSection',
+      label: 'Move Section',
+      enabled: ready,
+      undoable: true,
+      run: async (a, arg) => {
+        const { head, gap } = arg as MoveSection;
+        const slides = sectionSlides(a, head);
+        if (!slides.length) return;
+        await applyOrder(a, droppedOrder(sections(a), slides, gap));
+        land(a, slides, head, false);
+      },
+    },
+    {
+      id: 'slide.renameSection',
+      label: 'Rename Section',
+      enabled: ready,
+      undoable: true,
+      run: async (a, arg) => {
+        const { head, text } = arg as RenameSection;
+        const h = sectionHeading(head);
+        const name = text.replace(/\s+/g, ' ').trim();
+        if (!h || !name || name === (h.textContent ?? '').replace(/\s+/g, ' ').trim()) return;
+        await setOwnTex(a, h, escapeText(name), 'rename section');
       },
     },
     {

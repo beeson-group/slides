@@ -78,17 +78,19 @@ function align(app: App, side: Side): void {
 }
 
 // the elements spaced evenly along an axis, with the first and the last of them kept in place, or
-// put at the edges of the slide with Align to Slide, as in PowerPoint
+// put at the edges of the slide with Align to Slide, as in PowerPoint. one element is spaced
+// evenly across the slide, i.e. centered on it, since PowerPoint aligns one object to the slide
 function distribute(app: App, axis: 'x' | 'y'): void {
   const els = targetsOf(app);
   const items = els.map((el) => ({ el, b: boxOf(app, el) }));
   const start = (b: Box) => (axis === 'x' ? b.left : b.top);
   const size = (b: Box) => (axis === 'x' ? b.width : b.height);
   items.sort((a, b) => start(a.b) - start(b.b));
-  const ref = reference === 'slide' ? slideBox(app) : union(items.map((i) => i.b));
+  const ref = toSlideRef(els) ? slideBox(app) : union(items.map((i) => i.b));
   const total = items.reduce((s, i) => s + size(i.b), 0);
-  const gap = (size(ref) - total) / (items.length - 1);
-  let at = start(ref);
+  const one = items.length === 1;
+  const gap = one ? 0 : (size(ref) - total) / (items.length - 1);
+  let at = start(ref) + (one ? (size(ref) - total) / 2 : 0);
   const moves = items.map((i) => {
     const d = at - start(i.b);
     at += size(i.b) + gap;
@@ -99,7 +101,7 @@ function distribute(app: App, axis: 'x' | 'y'): void {
 
 const canDistribute = (app: App) => {
   const n = targetsOf(app).length;
-  return n >= 3 || (reference === 'slide' && n >= 2);
+  return n === 1 || n >= 3 || (reference === 'slide' && n === 2);
 };
 
 // whether the width of every target is written by the editor, by the scope rule, and whether its
@@ -140,7 +142,9 @@ export function commands(): Command[] {
       id: `arrange.alignTo.${ref}`,
       label: ref === 'slide' ? 'Align to Slide' : 'Align to Selection',
       menu: { bar: 'Arrange', group: 'reference', order: 30 + i, submenu: 'Align' },
-      checked: () => reference === ref,
+      // one element is aligned to the slide, hence Align to Selection is dimmed for it, as in PowerPoint
+      enabled: (app) => ref === 'slide' || targetsOf(app).length !== 1,
+      checked: (app) => (targetsOf(app).length === 1 ? ref === 'slide' : reference === ref),
       run: (app) => {
         reference = ref;
         app.invalidate('selection');
