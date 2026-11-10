@@ -279,7 +279,9 @@ for (const platform of PLATFORMS) {
     await page.waitFor(`!!document.querySelector('.reveal section.present .plate > img')`);
     await frames(page);
     assert.equal(await shownPlaceholders(page), 0);
-    assert.equal(await undoLabel(page), 'Undo Image');
+    // the entry is named as every insert, and the item of the Insert menu keeps its own label
+    assert.equal(await undoLabel(page), 'Undo Insert Image');
+    assert.equal((await state(page, 'insert.image')).label, 'Image…');
     const edited = await render(page);
     assert.equal(edited, page.source.replace('<div class="plate"></div>', '<div class="plate">\n    <img src="media/figure-light.png">\n  </div>'));
     await undo(page);
@@ -294,6 +296,29 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
+  test(`the Video icon of a placeholder inserts the file chosen into its zone, as the entry Insert Video (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: EMPTY, n: 0 });
+    await click(page, await buttonOf(page, 'Insert Video'));
+    await page.waitFor(`!!document.querySelector('input.beeson-media-input')`);
+    const { result } = await page.send('Runtime.evaluate', { expression: `document.querySelector('input.beeson-media-input')` });
+    await page.send('DOM.setFileInputFiles', { files: [resolve('demo/clip-dark.mp4')], objectId: result.objectId });
+    await page.waitFor(`!!document.querySelector('.reveal section.present .zone > video')`);
+    await frames(page);
+    assert.equal(await shownPlaceholders(page), 0);
+    assert.equal(await undoLabel(page), 'Undo Insert Video');
+    assert.equal((await state(page, 'insert.video')).label, 'Video…');
+    const edited = await render(page);
+    assert.match(edited, /<div class="zone">\s*<video [^>]*src="media\/clip-dark\.mp4"[^>]*><\/video>\s*<\/div>/);
+    await undo(page);
+    await frames(page);
+    await byteExact(page);
+    assert.equal(await shownPlaceholders(page), 1);
+    await redo(page);
+    assert.equal(await render(page), edited);
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.redo').enabled`), false);
+    assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${js(edited)})`)).problems, []);
+    assert.deepEqual(errors(page), []);
+  });
 }
 
 // the deck of layouts of the mask tests, whose slide 3 has a dark image of 1200 by 1440 px in a
