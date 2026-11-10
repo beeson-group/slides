@@ -2,7 +2,7 @@
 // and the comments before it, as one entry of the history
 
 import type { App } from '../app.ts';
-import { docOf, takeKeys } from './slide.ts';
+import { docOf } from './slide.ts';
 
 // the selected elements that are in the file, without the slides
 function selectedElements(app: App): Element[] {
@@ -28,5 +28,4 @@ export function install(app: App): void {
       for (const el of outer.reverse()) await doc.remove(el, 'delete');
     },
   });
-  takeKeys(app, ['element.delete']);
 }

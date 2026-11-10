@@ -318,43 +318,6 @@ function place(dialog: HTMLElement, anchor: HTMLElement | null, row: HTMLElement
   dialog.style.top = `${Math.max(8, Math.min(y, innerHeight - h - 8))}px`;
 }
 
-// the keys of the commands of this file and of commands/delete.ts are matched here until the one
-// keyboard dispatch of commands.ts takes the keys of the registry. a key that the dispatch has
-// taken is prevented, and it is then left alone. the listener is in the capture phase, since
-// reveal.js takes Alt with the arrows on the document
-export function matchKey(platform: 'mac' | 'other', key: string, ev: KeyboardEvent): boolean {
-  const parts = key.split('+');
-  const name = parts.pop() ?? '';
-  const want = { meta: false, ctrl: false, alt: false, shift: false };
-  for (const p of parts) {
-    if (p === 'Mod') want[platform === 'mac' ? 'meta' : 'ctrl'] = true;
-    else if (p === 'Ctrl') want.ctrl = true;
-    else if (p === 'Meta') want.meta = true;
-    else if (p === 'Alt') want.alt = true;
-    else if (p === 'Shift') want.shift = true;
-  }
-  if (ev.metaKey !== want.meta || ev.ctrlKey !== want.ctrl || ev.altKey !== want.alt || ev.shiftKey !== want.shift) return false;
-  if (name.length === 1) return ev.key.toLowerCase() === name.toLowerCase() || ev.code === `Key${name.toUpperCase()}`;
-  return ev.key === name;
-}
-
-export function takeKeys(app: App, ids: string[]): void {
-  window.addEventListener('keydown', (ev) => {
-    if (ev.defaultPrevented || ev.isComposing || ev.getModifierState?.('AltGraph')) return;
-    const region = app.region();
-    for (const id of ids) {
-      const c = app.commands.get(id);
-      const keys = c?.keys?.[app.platform] ?? [];
-      if (!c || !(c.in ?? ['canvas', 'navigator']).includes(region) || !keys.some((k) => matchKey(app.platform, k, ev))) continue;
-      if (!app.commands.enabled(id)) return;
-      ev.preventDefault();
-      ev.stopPropagation();
-      void app.commands.run(id).catch((e) => app.fail(e));
-      return;
-    }
-  }, true);
-}
-
 export function install(app: App): void {
   injectStyle('slide', CSS);
   const c = app.commands;
@@ -514,7 +477,6 @@ export function install(app: App): void {
     },
   ];
   for (const d of defs) c.define(d);
-  takeKeys(app, ['slide.newAfter', 'slide.new', 'slide.duplicate', 'slide.delete', 'slide.hide', 'slide.moveUp', 'slide.moveDown']);
 
   // the clipboard keys in the navigator act on the slides, through the events that carry the
   // clipboard in every browser
