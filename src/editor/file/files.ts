@@ -203,12 +203,14 @@ export function install(app: App): void {
     }
     try {
       app.source = parseSource(text);
+      app.saved = text;
       app.pairing = pair(app.source, app.slides(), mathLookup());
       app.state = 'loaded';
       app.dirty = false;
       if (!app.pairing.blocks.length) app.pairing.problems.push({ slide: null, tag: 'slides', reason: 'nothing on the page was found in the file' });
     } catch (error) {
       app.source = null;
+      app.saved = null;
       app.pairing = null;
       app.state = 'error';
       app.note = { text: error instanceof Error ? error.message : String(error), warn: true };
@@ -305,6 +307,7 @@ export function install(app: App): void {
       download(fileName(), rendered.text);
       text = `${n ? `Saved a copy with ${edits}` : `Saved a copy of ${fileName()}`}. ${REPLACE()}`;
     }
+    app.saved = rendered.text;
     const warnings = rendered.warnings.length ? `, ${rendered.warnings.join(', ')}` : '';
     app.note = { text: `${text}${warnings}`, warn: rendered.warnings.length > 0 };
     // an edit made while the file was written is kept for the next save, since the page no longer
@@ -332,9 +335,9 @@ export function install(app: App): void {
 
   // a deck whose text is the file again, e.g. after its edits were undone, is clean
   function cleanIfSaved(): void {
-    if (!app.source || !app.pairing) return;
+    if (!app.source || !app.pairing || app.saved === null) return;
     try {
-      if (render() !== app.source.text) return;
+      if (render() !== app.saved) return;
     } catch {
       return;
     }

@@ -138,6 +138,9 @@ const detectPlatform = (): Platform => {
 
 export class App {
   source: Source | null = null;
+  // the text last read from the file or written to it. it differs from the source after a save
+  // during which an edit was made, and the deck is clean when it renders as this text
+  saved: string | null = null;
   pairing: Pairing | null = null;
   // the step, the offset, and later any attribute of each element changed since the last save
   readonly tagEdits = new Map<Element, TagEdit>();
