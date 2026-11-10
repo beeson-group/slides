@@ -54,6 +54,7 @@ import { install as installFindCommands } from './commands/find.ts';
 import { install as installStepsCommands } from './commands/steps.ts';
 import { install as installInspector } from './inspector/inspector.ts';
 import { install as installZoomCommands } from './commands/zoom.ts';
+import { install as installReviewCommands } from './commands/review.ts';
 import { Doc } from './model/doc.ts';
 
 const app = new App();
@@ -149,6 +150,7 @@ installFindCommands(app);
 installStepsCommands(app);
 installInspector(app);
 installZoomCommands(app);
+installReviewCommands(app);
 
 const revealReady = (): Promise<void> =>
   new Promise((done) => {
