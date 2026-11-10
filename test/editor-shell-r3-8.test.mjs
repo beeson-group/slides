@@ -209,3 +209,58 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the numbers of the rows of the navigator, '' for a row without one, and whether a row is the bar
+// of a skipped slide
+const navRows = (page) =>
+  page.evaluate(`[...document.querySelectorAll('.beeson-edit-nav .row')].map((r) => ({
+    no: r.querySelector('.no').textContent,
+    skip: r.classList.contains('skip'),
+    height: Math.round(r.getBoundingClientRect().height),
+    pic: getComputedStyle(r.querySelector('.pic')).display !== 'none',
+  }))`);
+const count = (page) => page.evaluate(`document.querySelector('.beeson-edit-bottom .count').textContent`);
+
+for (const platform of PLATFORMS) {
+  test(`every slide is numbered by its place, as in the status bar, and a hidden slide is a thin bar (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    const total = await page.evaluate(`document.querySelectorAll('.reveal .slides > section').length`);
+    assert.deepEqual((await navRows(page)).map((r) => r.no), Array.from({ length: total }, (_, i) => String(i + 1)));
+    for (const n of [0, 1, 4, total - 1]) {
+      await page.evaluate(`Reveal.slide(${n})`);
+      await frames(page);
+      assert.equal(await count(page), `Slide ${n + 1} of ${total}`);
+      assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-nav .row[aria-current="true"] .no').textContent`), String(n + 1));
+    }
+    // a hidden slide is a thin double bar without its picture or number, and it keeps its place
+    await page.evaluate('Reveal.slide(3)');
+    await frames(page);
+    await exec(page, 'slide.hide');
+    await sleep(100);
+    const hidden = await render(page);
+    const list = await navRows(page);
+    assert.deepEqual(list[3], { no: '', skip: true, height: list[3].height, pic: false });
+    assert.ok(list[3].height <= 14, `the bar of the skipped slide is ${list[3].height} px high`);
+    assert.deepEqual(list.map((r) => r.no), Array.from({ length: total }, (_, i) => (i === 3 ? '' : String(i + 1))));
+    // the bar is selected by a click, and the slide is shown again from its context menu
+    await page.evaluate('Reveal.slide(0)');
+    await frames(page);
+    const bar = await page.evaluate(`(() => { const r = document.querySelectorAll('.beeson-edit-nav .row')[3]; r.scrollIntoView({ block: 'center' }); const b = r.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`);
+    await click(page, bar);
+    await frames(page);
+    assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-nav .row')[3].getAttribute('aria-selected')`), 'true');
+    assert.equal(await count(page), `Slide 4 of ${total}`);
+    await click(page, bar, { button: 'right' });
+    await frames(page);
+    const item = `[...document.querySelectorAll('.beeson-edit-menu [role="menuitem"]')].find((m) => m.textContent.includes('Show Slide'))`;
+    assert.equal(await page.evaluate(`!!${item}`), true, 'the context menu does not offer Show Slide');
+    await page.evaluate(`${item}.click()`);
+    await sleep(150);
+    assert.equal(await render(page), page.source);
+    assert.equal((await navRows(page))[3].no, '4');
+    await undo(page);
+    await sleep(100);
+    assert.equal(await render(page), hidden);
+    assert.deepEqual(errors(page), []);
+  });
+}
