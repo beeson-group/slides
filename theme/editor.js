@@ -142,7 +142,7 @@
     // the entry is taken when its turn in the queue comes, hence a second undo asked for during the
     // first one takes the entry before it
     step(way) {
-      const run = this.queue.then(async () => {
+      const run2 = this.queue.then(async () => {
         const [from, to] = way === "undo" ? [this.done, this.undone] : [this.undone, this.done];
         const entry = from.pop();
         if (!entry) return;
@@ -156,9 +156,9 @@
         to.push(entry);
         this.onChange();
       });
-      this.queue = run.catch(() => {
+      this.queue = run2.catch(() => {
       });
-      return run;
+      return run2;
     }
     clear() {
       this.done = [];
@@ -242,14 +242,14 @@
   }
 
   // src/editor/commands.ts
-  var orderOf = (c, place) => c[place]?.order ?? 0;
-  function grouped(list, place) {
+  var orderOf = (c, place2) => c[place2]?.order ?? 0;
+  function grouped(list, place2) {
     const groups = /* @__PURE__ */ new Map();
-    for (const c of [...list].sort((a, b) => orderOf(a, place) - orderOf(b, place))) {
-      const name = c[place]?.group ?? "";
+    for (const c of [...list].sort((a, b) => orderOf(a, place2) - orderOf(b, place2))) {
+      const name = c[place2]?.group ?? "";
       groups.set(name, [...groups.get(name) ?? [], c]);
     }
-    return [...groups].map(([group, commands]) => ({ group, commands }));
+    return [...groups].map(([group, commands2]) => ({ group, commands: commands2 }));
   }
   var Commands = class {
     constructor(app2) {
@@ -305,7 +305,7 @@
     }
   };
   function installKeys(app2) {
-    const run = (id) => void app2.commands.run(id).catch((e) => app2.fail(e));
+    const run2 = (id) => void app2.commands.run(id).catch((e) => app2.fail(e));
     window.addEventListener("keydown", (ev) => {
       const mod = ev.metaKey || ev.ctrlKey;
       const key = ev.key.toLowerCase();
@@ -314,11 +314,11 @@
       const active = document.activeElement;
       if (mod && !ev.altKey && key === "s") {
         ev.preventDefault();
-        run(ev.shiftKey ? "file.saveAs" : "file.save");
+        run2(ev.shiftKey ? "file.saveAs" : "file.save");
       } else if (mod && !ev.altKey && !inField && (key === "z" || key === "y" && !ev.shiftKey)) {
         ev.preventDefault();
         ev.stopPropagation();
-        run(key === "y" || ev.shiftKey ? "edit.redo" : "edit.undo");
+        run2(key === "y" || ev.shiftKey ? "edit.redo" : "edit.undo");
       } else if ((ev.key === "Enter" || ev.key === " ") && !app2.math.isOpen() && active instanceof Element && active.matches("mjx-container") && app2.hostOf(active)) {
         ev.preventDefault();
         ev.stopPropagation();
@@ -504,7 +504,7 @@
     const starts = [0, ...[...cuts].sort((a, b) => a - b)];
     return starts.map((from, i) => ({ from, to: i + 1 < starts.length ? starts[i + 1] - 1 : last }));
   }
-  var shownAt = (f, step) => f.kind === "in" ? f.step <= step : f.kind === "out" ? step < f.step : step === f.step;
+  var shownAt = (f, step2) => f.kind === "in" ? f.step <= step2 : f.kind === "out" ? step2 < f.step : step2 === f.step;
   function showLayer(slide, layer) {
     for (const f of fragmentsOf(slide)) {
       const up = f.el.parentElement?.closest(".fragment");
@@ -850,49 +850,49 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
     };
     while (i < n) {
       if (rawFor) {
-        let end = n;
+        let end2 = n;
         for (let k = lower.indexOf(`</${rawFor.name}`, i); k >= 0; k = lower.indexOf(`</${rawFor.name}`, k + 1)) {
           const after = html[k + 2 + rawFor.name.length] ?? ">";
           if (isSpace(after) || after === "/" || after === ">") {
-            end = k;
+            end2 = k;
             break;
           }
         }
-        if (end > i) out.push({ type: "text", raw: rawFor.raw, start: i, end });
+        if (end2 > i) out.push({ type: "text", raw: rawFor.raw, start: i, end: end2 });
         rawFor = null;
-        i = end;
+        i = end2;
         continue;
       }
       const next = html[i + 1] ?? "";
       if (html[i] !== "<" || !opensMarkup(next)) {
-        const end = textUntilMarkup(i + 1);
-        out.push({ type: "text", raw: false, start: i, end });
-        i = end;
+        const end2 = textUntilMarkup(i + 1);
+        out.push({ type: "text", raw: false, start: i, end: end2 });
+        i = end2;
         continue;
       }
       if (html.startsWith("<!--", i)) {
-        let end;
-        if (html.startsWith(">", i + 4)) end = i + 5;
-        else if (html.startsWith("->", i + 4)) end = i + 6;
+        let end2;
+        if (html.startsWith(">", i + 4)) end2 = i + 5;
+        else if (html.startsWith("->", i + 4)) end2 = i + 6;
         else {
           const k = html.indexOf("-->", i + 4);
-          end = k < 0 ? n : k + 3;
+          end2 = k < 0 ? n : k + 3;
         }
-        out.push({ type: "comment", start: i, end });
-        i = end;
+        out.push({ type: "comment", start: i, end: end2 });
+        i = end2;
       } else if (next === "!" || next === "?" || next === "/" && !isLetter(html[i + 2] ?? "")) {
         const k = html.indexOf(">", i);
-        const end = k < 0 ? n : k + 1;
-        out.push({ type: "other", start: i, end });
-        i = end;
+        const end2 = k < 0 ? n : k + 1;
+        out.push({ type: "other", start: i, end: end2 });
+        i = end2;
       } else if (next === "/") {
         let j = i + 2;
         while (j < n && !isSpace(html[j]) && html[j] !== ">" && html[j] !== "/") j++;
         const name = lower.slice(i + 2, j);
         const k = html.indexOf(">", j);
-        const end = k < 0 ? n : k + 1;
-        out.push({ type: "end", name, start: i, end });
-        i = end;
+        const end2 = k < 0 ? n : k + 1;
+        out.push({ type: "end", name, start: i, end: end2 });
+        i = end2;
       } else {
         let j = i + 1;
         while (j < n && !isSpace(html[j]) && html[j] !== ">" && html[j] !== "/") j++;
@@ -933,9 +933,9 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
             j = e;
           }
         }
-        const end = Math.min(j + 1, n);
-        out.push({ type: "start", name, attrs, selfClosing, start: i, end });
-        i = end;
+        const end2 = Math.min(j + 1, n);
+        out.push({ type: "start", name, attrs, selfClosing, start: i, end: end2 });
+        i = end2;
         if (RAW_TEXT.has(name)) rawFor = { name, raw: true };
         else if (RCDATA.has(name)) rawFor = { name, raw: false };
       }
@@ -1012,13 +1012,13 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
   function rawDeclarations(value) {
     const raw = value ?? "";
     const out = [];
-    let start = 0;
+    let start2 = 0;
     for (const m of raw.matchAll(new RegExp(`${REFERENCE_IN_ATTR.source}|;`, "g"))) {
       if (m[0] !== ";") continue;
-      out.push(raw.slice(start, m.index));
-      start = m.index + 1;
+      out.push(raw.slice(start2, m.index));
+      start2 = m.index + 1;
     }
-    out.push(raw.slice(start));
+    out.push(raw.slice(start2));
     return out.map((d) => d.trim()).filter(Boolean).map((d) => {
       const decoded = decodeAttr(d);
       const colon = decoded.indexOf(":");
@@ -1147,8 +1147,8 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
   function written(name, parts, quote) {
     if (!parts.length) return name;
     const q = quote ?? '"';
-    const other = q === '"' ? "&quot;" : "&#39;";
-    const value = parts.map((p) => p.raw ? quote ? p.text : p.text.replace(/"/g, "&quot;") : p.text.replace(/&/g, "&amp;").split(q).join(other)).join("");
+    const other2 = q === '"' ? "&quot;" : "&#39;";
+    const value = parts.map((p) => p.raw ? quote ? p.text : p.text.replace(/"/g, "&quot;") : p.text.replace(/&/g, "&amp;").split(q).join(other2)).join("");
     return `${name}=${q}${value}${q}`;
   }
   function renderTag(text, range, attrs, edit) {
@@ -1157,22 +1157,22 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
     const ops = [];
     const order = edit.order?.attrs;
     const kept = attrs.filter((a) => changes.get(a.name) !== null);
-    let end = range.end - 1;
-    if (text[end - 1] === "/") end--;
-    while (end > range.start && isSpace2(text[end - 1])) end--;
+    let end2 = range.end - 1;
+    if (text[end2 - 1] === "/") end2--;
+    while (end2 > range.start && isSpace2(text[end2 - 1])) end2--;
     for (const [name, value] of changes) {
       const a = attr(attrs, name);
       if (a && value === null) {
-        let start = a.start;
-        while (start > range.start && isSpace2(text[start - 1])) start--;
-        ops.push({ start, end: a.end, text: "", rank: Infinity });
+        let start2 = a.start;
+        while (start2 > range.start && isSpace2(text[start2 - 1])) start2--;
+        ops.push({ start: start2, end: a.end, text: "", rank: Infinity });
       } else if (a) {
         ops.push({ start: a.start, end: a.end, text: written(name, value, quoteOf(text, a)), rank: Infinity });
       } else if (value !== null) {
         const next = kept[placeOf(order, kept, name, (k) => k.name)];
         const rank = order?.includes(name) ? order.indexOf(name) : 2 ** 40 + ops.length;
         if (next) ops.push({ start: next.start, end: next.start, text: `${written(name, value, '"')} `, rank });
-        else ops.push({ start: end, end, text: ` ${written(name, value, '"')}`, rank });
+        else ops.push({ start: end2, end: end2, text: ` ${written(name, value, '"')}`, rank });
       }
     }
     ops.sort((a, b) => b.start - a.start || b.rank - a.rank);
@@ -1408,342 +1408,16 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
     }
     apply(states) {
       if (states.length) this.ctx.show(states[0].el);
-      for (const { el, step } of states) {
-        this.ctx.edits.set(el, { ...this.ctx.edits.get(el), ...step });
-        el.classList.toggle("fragment", step.fragment);
-        el.classList.toggle("visible", step.fragment);
+      for (const { el, step: step2 } of states) {
+        this.ctx.edits.set(el, { ...this.ctx.edits.get(el), ...step2 });
+        el.classList.toggle("fragment", step2.fragment);
+        el.classList.toggle("visible", step2.fragment);
         el.classList.remove("current-fragment");
-        if (step.index === null) el.removeAttribute("data-fragment-index");
-        else el.setAttribute("data-fragment-index", String(step.index));
+        if (step2.index === null) el.removeAttribute("data-fragment-index");
+        else el.setAttribute("data-fragment-index", String(step2.index));
       }
       this.ctx.markDirty();
       this.ctx.changed();
-    }
-  };
-
-  // src/editor/move.ts
-  var MOVABLE = "h1, h2, h3, p, ul, ol, dl, table, pre, blockquote, div.math, .caption, .foot, img, video, figure, .zone, .plate, .qr, tycho-viewer";
-  var BY_ITSELF = "img, video, figure, .zone, .plate, .qr";
-  var OUTSIDE2 = "aside.notes, .backdrop";
-  var CLICK = 3;
-  var SNAP = 8;
-  var PAUSE2 = 1e3;
-  var translateOf = (el) => {
-    const parts = (el.style.translate ?? "").split(/\s+/).map((p) => parseFloat(p));
-    return { x: Number.isFinite(parts[0]) ? parts[0] : 0, y: Number.isFinite(parts[1]) ? parts[1] : 0 };
-  };
-  var CSS3 = `
-.beeson-frame { position: fixed; z-index: 51; pointer-events: none; box-sizing: border-box; border: 1px dashed var(--subtle, #bbb); }
-.beeson-frame.selected { border: 2px solid var(--violet, #96f); }
-.beeson-frame[hidden], .beeson-handle[hidden] { display: none; }
-.beeson-handle { position: fixed; z-index: 53; width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line, #555); background: var(--bg, #000); color: var(--text, #eee); font: 14px/20px system-ui, sans-serif; text-align: center; cursor: move; user-select: none; }
-.beeson-handle:hover, .beeson-handle:focus-visible { border-color: var(--violet, #96f); outline: none; }
-.beeson-guide { position: fixed; z-index: 52; pointer-events: none; background: var(--accent, #f80); opacity: 0.8; }
-.beeson-guide.v { width: 1px; }
-.beeson-guide.h { height: 1px; }
-.beeson-guide[hidden] { display: none; }
-.beeson-offset { position: fixed; z-index: 53; transform: translateX(-100%); height: 22px; padding: 0 7px; box-sizing: border-box; border-radius: 11px; background: var(--accent, #f80); color: #000; font: 600 13px/22px system-ui, sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }
-.beeson-offset[hidden] { display: none; }
-html.beeson-editing .reveal .beeson-movable:focus-visible { outline: 2px solid var(--violet, #96f); outline-offset: 6px; }
-html.beeson-dragging, html.beeson-dragging * { cursor: move !important; user-select: none !important; }
-html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .slides section video, html.beeson-editing .reveal .slides section .zone, html.beeson-editing .reveal .slides section .plate, html.beeson-editing .reveal .slides section .qr { cursor: move; }
-`;
-  var Move = class {
-    constructor(ctx) {
-      // the dashed frame and the handle of the element under the pointer or being edited, and the
-      // solid frame of the selected element
-      this.frame = document.createElement("div");
-      this.handle = document.createElement("div");
-      this.selectedFrame = document.createElement("div");
-      // the guide lines at the edges that a dragged element snaps to
-      this.guideV = document.createElement("div");
-      this.guideH = document.createElement("div");
-      // the offset of the element being dragged or nudged, at the lower right of its frame
-      this.offset = document.createElement("div");
-      this.hover = null;
-      this.selected = null;
-      this.drag = null;
-      // the element whose offset is shown
-      this.moving = null;
-      // the run of nudges in progress: its element, the time of its last nudge, and the offset after it
-      this.run = null;
-      injectStyle("move", CSS3);
-      this.ctx = ctx;
-      this.frame.className = "beeson-frame";
-      this.selectedFrame.className = "beeson-frame selected";
-      this.handle.className = "beeson-handle";
-      this.handle.textContent = "\u283F";
-      this.handle.title = "Drag to move, double-click to put back, arrow keys nudge";
-      this.handle.tabIndex = 0;
-      this.handle.setAttribute("role", "button");
-      this.handle.setAttribute("aria-label", "Move the block: the arrow keys nudge it, Enter puts it back");
-      this.guideV.className = "beeson-guide v";
-      this.guideH.className = "beeson-guide h";
-      this.offset.className = "beeson-offset";
-      this.frame.hidden = this.selectedFrame.hidden = this.handle.hidden = this.guideV.hidden = this.guideH.hidden = this.offset.hidden = true;
-      this.handle.addEventListener("focus", () => {
-        const el = this.current();
-        if (el) this.select(el);
-      });
-      this.handle.addEventListener("keydown", (ev) => {
-        if (ev.key !== "Enter") return;
-        ev.preventDefault();
-        this.reset();
-      });
-      document.addEventListener("focusin", (ev) => {
-        if (ev.target instanceof Element && ev.target.classList.contains("beeson-movable")) this.select(ev.target);
-      });
-      document.addEventListener("pointermove", (ev) => this.onMove(ev));
-      document.addEventListener("pointerdown", (ev) => this.onDown(ev), true);
-      document.addEventListener("pointerup", (ev) => this.onUp(ev), true);
-      document.addEventListener("pointercancel", () => this.onUp(null), true);
-      this.handle.addEventListener("dblclick", () => this.reset());
-      document.addEventListener("dragstart", (ev) => {
-        if (ev.target instanceof Element && this.movableOf(ev.target)) ev.preventDefault();
-      });
-    }
-    // the element that a drag at target would move, or null
-    movableOf(target) {
-      const slide = this.ctx.slide();
-      const pairing = this.ctx.pairing();
-      if (!target || !slide || !pairing || !slide.contains(target) || target.closest(OUTSIDE2)) return null;
-      let el = target.closest(MOVABLE);
-      while (el) {
-        const up = el.parentElement?.closest(MOVABLE) ?? null;
-        if (!up || !slide.contains(up)) break;
-        el = up;
-      }
-      return el && slide.contains(el) && pairing.elements.get(el)?.open ? el : null;
-    }
-    // the element that the handle is shown at: the one dragged, under the pointer, or being edited,
-    // else the selected one
-    current() {
-      const active = document.activeElement instanceof Element ? document.activeElement : null;
-      const editing = active?.closest('[contenteditable="true"]') ?? null;
-      return this.drag?.el ?? this.hover ?? this.movableOf(editing) ?? this.selected;
-    }
-    refresh() {
-      if (this.selected && !this.selected.isConnected) this.selected = null;
-      if (this.hover && !this.hover.isConnected) this.hover = null;
-      if (this.moving && !this.moving.isConnected) this.moving = null;
-      const place = (box2, el) => {
-        const rect2 = el.getBoundingClientRect();
-        Object.assign(box2.style, { left: `${rect2.left - 6}px`, top: `${rect2.top - 6}px`, width: `${rect2.width + 12}px`, height: `${rect2.height + 12}px` });
-      };
-      const selected = this.selected;
-      this.selectedFrame.hidden = !selected;
-      if (selected) place(this.selectedFrame, selected);
-      this.offset.hidden = !this.moving;
-      if (this.moving) {
-        const rect2 = this.moving.getBoundingClientRect();
-        const { x, y } = translateOf(this.moving);
-        this.offset.textContent = `${x}, ${y}`;
-        Object.assign(this.offset.style, { left: `${rect2.right + 6}px`, top: `${rect2.bottom + 10}px` });
-      }
-      const hot = this.current();
-      this.frame.hidden = !hot || hot === selected;
-      this.handle.hidden = !hot;
-      if (!hot) return;
-      place(this.frame, hot);
-      const rect = hot.getBoundingClientRect();
-      Object.assign(this.handle.style, { left: `${rect.left - 24}px`, top: `${rect.top - 24}px` });
-    }
-    select(el) {
-      if (el !== this.selected) this.moving = this.run = null;
-      this.selected = el;
-      this.refresh();
-    }
-    onMove(ev) {
-      if (this.drag) {
-        const scale = this.ctx.scale() || 1;
-        let dx = (ev.clientX - this.drag.x) / scale;
-        let dy = (ev.clientY - this.drag.y) / scale;
-        const lock = ev.shiftKey ? Math.abs(dx) >= Math.abs(dy) ? "y" : "x" : null;
-        if (lock === "y") dy = 0;
-        if (lock === "x") dx = 0;
-        let x = this.drag.from.x + dx;
-        let y = this.drag.from.y + dy;
-        if (Math.hypot(ev.clientX - this.drag.x, ev.clientY - this.drag.y) >= CLICK) this.drag.moved = true;
-        if (this.drag.moved) {
-          const snapped = ev.altKey ? null : this.snap(this.drag.el, this.drag.base, x, y, scale);
-          if (snapped && lock !== "x") x = snapped.x;
-          if (snapped && lock !== "y") y = snapped.y;
-          this.guides(lock === "x" ? null : snapped?.gx ?? null, lock === "y" ? null : snapped?.gy ?? null);
-          this.drag.el.style.translate = `${Math.round(x)}px ${Math.round(y)}px`;
-          this.moving = this.drag.el;
-        }
-        this.refresh();
-        this.ctx.onChange();
-        return;
-      }
-      const target = ev.target instanceof Element ? ev.target : null;
-      if (target === this.handle || target === this.frame) return;
-      const el = this.movableOf(target);
-      if (el) {
-        if (el !== this.hover) {
-          this.hover = el;
-          this.refresh();
-        }
-      } else if (this.hover && !this.near(this.hover, ev)) {
-        this.hover = null;
-        this.refresh();
-      }
-    }
-    // whether the pointer is over el or over the room for its handle, so that the handle is reached
-    near(el, ev) {
-      const r = el.getBoundingClientRect();
-      return ev.clientX >= r.left - 28 && ev.clientX <= r.right + 4 && ev.clientY >= r.top - 28 && ev.clientY <= r.bottom + 4;
-    }
-    onDown(ev) {
-      if (ev.button !== 0) return;
-      const target = ev.target instanceof Element ? ev.target : null;
-      if (!target) return;
-      let el = null;
-      if (target === this.handle) el = this.current();
-      else if (target.closest(BY_ITSELF) && !target.closest('[contenteditable="true"]')) el = this.movableOf(target);
-      if (!el) {
-        this.select(null);
-        return;
-      }
-      ev.preventDefault();
-      this.run = null;
-      const from = translateOf(el);
-      const scale = this.ctx.scale() || 1;
-      const r = el.getBoundingClientRect();
-      this.drag = { el, x: ev.clientX, y: ev.clientY, from, moved: false, base: { left: r.left - from.x * scale, top: r.top - from.y * scale, width: r.width, height: r.height } };
-      document.documentElement.classList.add("beeson-dragging");
-    }
-    onUp(ev) {
-      const drag = this.drag;
-      if (!drag) return;
-      this.drag = null;
-      this.moving = null;
-      document.documentElement.classList.remove("beeson-dragging");
-      this.guides(null, null);
-      if (ev && drag.moved) this.commit(drag.el, drag.from);
-      this.select(drag.el);
-    }
-    // the offset x, y moved to the nearest edge or center of another element of the slide, of the
-    // slide, or of the place of el in the file, within SNAP screen pixels of an edge or the center of
-    // el, as the alignment guides of Keynote and PowerPoint. gx and gy are the screen coordinates
-    // of the lines snapped to
-    snap(el, base, x, y, scale) {
-      const slide = this.ctx.slide();
-      const pairing = this.ctx.pairing();
-      if (!slide || !pairing) return null;
-      const box2 = slide.getBoundingClientRect();
-      const xs = [box2.left, box2.left + box2.width / 2, box2.right, base.left];
-      const ys = [box2.top, box2.top + box2.height / 2, box2.bottom, base.top];
-      for (const other of slide.querySelectorAll(MOVABLE)) {
-        if (other === el || other.contains(el) || el.contains(other) || other.closest(OUTSIDE2) || !pairing.elements.get(other)?.open) continue;
-        const up = other.parentElement?.closest(MOVABLE);
-        if (up && slide.contains(up)) continue;
-        const r = other.getBoundingClientRect();
-        if (!r.width || !r.height) continue;
-        xs.push(r.left, r.left + r.width / 2, r.right);
-        ys.push(r.top, r.top + r.height / 2, r.bottom);
-      }
-      const nearest = (edges, targets) => {
-        let best = null;
-        for (const edge of edges) {
-          for (const to of targets) {
-            const d = Math.abs(to - edge);
-            if (d <= SNAP && (!best || d < best.d)) best = { d, shift: to - edge, to };
-          }
-        }
-        return best;
-      };
-      const left = base.left + x * scale, top = base.top + y * scale;
-      const bx = nearest([left, left + base.width / 2, left + base.width], xs);
-      const by = nearest([top, top + base.height / 2, top + base.height], ys);
-      return { x: bx ? x + bx.shift / scale : x, y: by ? y + by.shift / scale : y, gx: bx?.to ?? null, gy: by?.to ?? null };
-    }
-    // the guide lines across the slide at the screen coordinates snapped to, or none
-    guides(gx, gy) {
-      const box2 = this.ctx.slide()?.getBoundingClientRect();
-      this.guideV.hidden = gx === null || !box2;
-      this.guideH.hidden = gy === null || !box2;
-      if (!box2) return;
-      if (gx !== null) Object.assign(this.guideV.style, { left: `${gx}px`, top: `${box2.top}px`, height: `${box2.height}px` });
-      if (gy !== null) Object.assign(this.guideH.style, { top: `${gy}px`, left: `${box2.left}px`, width: `${box2.width}px` });
-    }
-    // a figure, which has no text to click into, is put into the tab order, so that it is selected
-    // with Tab and moved with the arrow keys
-    mark(pairing) {
-      for (const el of document.querySelectorAll(".beeson-movable")) {
-        el.classList.remove("beeson-movable");
-        el.removeAttribute("tabindex");
-      }
-      if (!pairing) return;
-      for (const [el, src] of pairing.elements) {
-        if (!src.open || !el.matches(BY_ITSELF) || el.closest(OUTSIDE2)) continue;
-        const up = el.parentElement?.closest(MOVABLE);
-        if (up && el.closest("section")?.contains(up)) continue;
-        el.classList.add("beeson-movable");
-        el.setAttribute("tabindex", "0");
-        if (!el.hasAttribute("aria-label") && !el.hasAttribute("alt")) el.setAttribute("aria-label", "Figure: the arrow keys move it, Esc deselects it");
-      }
-    }
-    // the offset on the page is written into the edits, and the move from the former offset is one
-    // entry of the history
-    commit(el, from) {
-      const to = translateOf(el);
-      this.set(el, to);
-      if (from.x === to.x && from.y === to.y) return;
-      this.ctx.record({ label: "move", undo: () => this.apply(el, from), redo: () => this.apply(el, to) });
-    }
-    apply(el, t) {
-      this.run = null;
-      this.ctx.show(el);
-      el.style.translate = t.x === 0 && t.y === 0 ? "" : `${t.x}px ${t.y}px`;
-      this.set(el, t);
-      this.select(el);
-    }
-    set(el, { x, y }) {
-      this.ctx.edits.set(el, { ...this.ctx.edits.get(el), translate: x === 0 && y === 0 ? null : { x, y } });
-      this.ctx.markDirty();
-      this.refresh();
-      this.ctx.onChange();
-    }
-    // the selected element is nudged by one slide pixel, or ten with Shift, while no text or field
-    // is typed into and no list has the focus. a run of nudges is one entry of the history, whose
-    // destination each nudge moves, until a pause, a drag, Escape, or another selection ends it
-    onKey(ev) {
-      const el = this.selected;
-      const active = document.activeElement;
-      if (!el || active?.closest('[contenteditable="true"], input, select, textarea, .beeson-edit-nav, .beeson-edit-side, .beeson-math')) return false;
-      if (ev.key === "Escape") {
-        if (active instanceof HTMLElement && (active === el || active === this.handle)) active.blur();
-        this.select(null);
-        return true;
-      }
-      const step = ev.shiftKey ? 10 : 1;
-      const delta = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
-      const d = delta[ev.key];
-      if (!d || ev.metaKey || ev.ctrlKey || ev.altKey) return false;
-      const from = translateOf(el);
-      const to = { x: from.x + d[0], y: from.y + d[1] };
-      el.style.translate = `${to.x}px ${to.y}px`;
-      this.moving = el;
-      const now = performance.now();
-      if (this.run && this.run.el === el && now - this.run.at < PAUSE2) {
-        Object.assign(this.run, { at: now, to });
-        this.set(el, to);
-        return true;
-      }
-      const run = { el, at: now, to };
-      this.set(el, to);
-      this.ctx.record({ label: "move", undo: () => this.apply(el, from), redo: () => this.apply(el, run.to) });
-      this.run = run;
-      return true;
-    }
-    reset() {
-      const el = this.current();
-      if (!el) return;
-      this.run = null;
-      const from = translateOf(el);
-      el.style.translate = "";
-      this.commit(el, from);
     }
   };
 
@@ -1776,8 +1450,8 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     source.slides = root;
     const cursor = { i: at + 1 };
     walkChildren(slides, root, cursor, tokens, text);
-    const end = tokens[cursor.i];
-    if (end?.type === "end" && end.name === root.tag) root.close = end;
+    const end2 = tokens[cursor.i];
+    if (end2?.type === "end" && end2.name === root.tag) root.close = end2;
     return source;
   }
   function fail(text, at, what) {
@@ -1819,14 +1493,14 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
           lead = rawText.startsWith("\r\n") ? 2 : 1;
         }
         cursor.i += 1;
-        const start = token.start + lead;
+        const start2 = token.start + lead;
         out.children.push({
           kind: "text",
           node: child,
           range: { start: token.start, end: token.end },
           lead,
           decoded: data,
-          segments: segmentsOf(text.slice(start, token.end), start, raw || token.raw, data),
+          segments: segmentsOf(text.slice(start2, token.end), start2, raw || token.raw, data),
           pieces: null
         });
       } else if (child.nodeType === Node.COMMENT_NODE) {
@@ -1894,14 +1568,14 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     return { start: at(dec.start, false), end: at(dec.end, true) };
   }
   function elementRange(s) {
-    const start = s.open?.start ?? firstStart(s);
-    const end = s.close?.end ?? lastEnd(s);
-    return start === null || end < start ? null : { start, end };
+    const start2 = s.open?.start ?? firstStart(s);
+    const end2 = s.close?.end ?? lastEnd(s);
+    return start2 === null || end2 < start2 ? null : { start: start2, end: end2 };
   }
   function contentRange(s) {
-    const start = s.open ? s.open.end : firstStart(s);
-    if (start === null) return null;
-    return { start, end: s.close ? s.close.start : Math.max(start, lastEnd(s)) };
+    const start2 = s.open ? s.open.end : firstStart(s);
+    if (start2 === null) return null;
+    return { start: start2, end: s.close ? s.close.start : Math.max(start2, lastEnd(s)) };
   }
   function firstStart(s) {
     for (const c of s.children) {
@@ -1951,8 +1625,8 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
   var eolOf = (text) => text.includes("\r\n") ? "\r\n" : "\n";
   var spaceOf = (lead) => /^[ \t\r\n\f]*/.exec(lead)?.[0] ?? "";
   function indentAt(text, pos) {
-    const start = text.lastIndexOf("\n", pos - 1) + 1;
-    return /^[ \t]*/.exec(text.slice(start, pos))?.[0] ?? "";
+    const start2 = text.lastIndexOf("\n", pos - 1) + 1;
+    return /^[ \t]*/.exec(text.slice(start2, pos))?.[0] ?? "";
   }
   function placeLead(lead, space, eol) {
     const own = spaceOf(lead);
@@ -1965,9 +1639,9 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
 
   // src/editor/model/templates.ts
   function textStyle(text) {
-    let step = null;
-    for (const m of text.matchAll(/^([ \t]+)</gm)) if (step === null || m[1].length < step.length) step = m[1];
-    return { eol: eolOf(text), step: step && step.startsWith("	") ? "	" : step ?? "  " };
+    let step2 = null;
+    for (const m of text.matchAll(/^([ \t]+)</gm)) if (step2 === null || m[1].length < step2.length) step2 = m[1];
+    return { eol: eolOf(text), step: step2 && step2.startsWith("	") ? "	" : step2 ?? "  " };
   }
   var attr2 = (value) => value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
   function lines(rows, style, base) {
@@ -2151,9 +1825,9 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
   }
   function innerRange(s) {
     if (!s.open) return null;
-    const start = s.open.end;
-    const end = s.close ? s.close.start : Math.max(start, lastEnd(s));
-    return { start, end };
+    const start2 = s.open.end;
+    const end2 = s.close ? s.close.start : Math.max(start2, lastEnd(s));
+    return { start: start2, end: end2 };
   }
   function escape(source, text, keepNbsp) {
     let s = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
@@ -2283,10 +1957,10 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     if (!s.parent) return null;
     return unitsWithin(s.parent)?.units.find((u) => u.el === s) ?? null;
   }
-  function childSpace(s, eol, step) {
+  function childSpace(s, eol, step2) {
     const first = unitsWithin(s)?.units[0];
     if (first) return spaceOf(s.source.text.slice(first.lead.start, first.range.start));
-    return eol + (s.open ? indentAt(s.source.text, s.open.start) : "") + step;
+    return eol + (s.open ? indentAt(s.source.text, s.open.start) : "") + step2;
   }
   var Renderer = class {
     constructor(source, pairing, math, tags) {
@@ -2440,7 +2114,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
   var REPLACE = () => `Replace ${fileName()} in ${folder()} with it, or set the browser to ask where to save each download`;
   var plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
   var clock = () => (/* @__PURE__ */ new Date()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  var CSS4 = `
+  var CSS3 = `
 .beeson-edit-card { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 65; box-sizing: border-box; width: min(600px, calc(100vw - 32px)); padding: 24px 28px; border: 1px solid var(--line, #555); border-radius: 10px; background: var(--bg, #000); color: var(--text, #eee); font: 15px/1.5 system-ui, sans-serif; box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45); }
 .beeson-edit-card[hidden] { display: none; }
 .beeson-edit-card h3 { margin: 0 0 8px; font: 600 18px/1.3 system-ui, sans-serif; }
@@ -2503,7 +2177,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     }
   };
   function install(app2) {
-    injectStyle("files", CSS4);
+    injectStyle("files", CSS3);
     const card = make("div", "beeson-edit-card");
     const cardText = make("p");
     const cardButton = button(`Choose ${fileName()}\u2026`);
@@ -2784,7 +2458,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
   // src/editor/file/drafts.ts
   var DRAFT_KEY = `beeson-draft:${location.href.split(/[?#]/)[0]}`;
   var DRAFT_DELAY = 1e3;
-  var CSS5 = `
+  var CSS4 = `
 .beeson-edit-card.recover { z-index: 66; }
 `;
   function readDraft() {
@@ -2798,7 +2472,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     }
   }
   function install2(app2) {
-    injectStyle("drafts", CSS5);
+    injectStyle("drafts", CSS4);
     const recover = make("div", "beeson-edit-card recover");
     const recoverText = make("p");
     const restoreButton = button("Restore and save", "Write the edits into the file and show the page again");
@@ -2887,7 +2561,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
 
   // src/editor/notes.ts
   var PANE_KEY = "beeson-pane";
-  var CSS6 = `
+  var CSS5 = `
 .beeson-edit-pane { position: fixed; left: 0; right: 0; bottom: 36px; z-index: 0; height: var(--beeson-pane, 200px); box-sizing: border-box; display: none; background: var(--bg, #000); border-top: 1px solid var(--line, #555); color: var(--subtle, #bbb); font: 12px/1.4 system-ui, sans-serif; padding: 8px 16px; }
 html.beeson-notes .beeson-edit-pane { display: block; }
 html.beeson-nav .beeson-edit-pane, html.beeson-nav .beeson-edit-resize { left: 240px; }
@@ -2902,7 +2576,7 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:fo
 html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:empty::before { content: 'Click to add notes'; color: var(--subtle, #bbb); }
 `;
   function install3(app2) {
-    injectStyle("notes", CSS6);
+    injectStyle("notes", CSS5);
     const notesButton = button("Notes", "Show the speaker notes under the slide");
     notesButton.setAttribute("aria-pressed", "false");
     const pane = make("div", "beeson-edit-pane", "Notes");
@@ -2944,11 +2618,11 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:em
       if (on) ensure()?.focus({ preventScroll: true });
     }
     resizer.addEventListener("keydown", (ev) => {
-      const step = ev.key === "ArrowUp" ? 20 : ev.key === "ArrowDown" ? -20 : 0;
-      if (!step) return;
+      const step2 = ev.key === "ArrowUp" ? 20 : ev.key === "ArrowDown" ? -20 : 0;
+      if (!step2) return;
       ev.preventDefault();
       ev.stopPropagation();
-      setPane(paneHeight + step);
+      setPane(paneHeight + step2);
       store(PANE_KEY, String(paneHeight));
     });
     resizer.addEventListener("pointerdown", (ev) => {
@@ -2972,11 +2646,11 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:em
   }
 
   // src/editor/overflow.ts
-  var CSS7 = `
+  var CSS6 = `
 html.beeson-editing .reveal .beeson-overflow { outline: 2px dashed var(--accent, #f80) !important; outline-offset: 6px; }
 `;
   function install4(app2) {
-    injectStyle("overflow", CSS7);
+    injectStyle("overflow", CSS6);
     app2.onRefresh(ALL, () => {
       const slide = app2.current();
       const box2 = app2.slides().getBoundingClientRect();
@@ -3002,7 +2676,7 @@ html.beeson-editing .reveal .beeson-overflow { outline: 2px dashed var(--accent,
   }
 
   // src/editor/text/typing.ts
-  var CSS8 = `
+  var CSS7 = `
 html.beeson-editing .reveal [contenteditable="true"] { cursor: text; outline: 1px dashed transparent; outline-offset: 6px; border-radius: 2px; }
 html.beeson-editing .reveal [contenteditable="true"]:hover { outline-color: var(--subtle, #bbb); }
 html.beeson-editing .reveal [contenteditable="true"]:focus { outline: 2px solid var(--violet, #96f); }
@@ -3070,7 +2744,7 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
     const outer = off ? formatOf(common) : null;
     let nodes;
     if (outer) {
-      const start = [range.startContainer, range.startOffset];
+      const start2 = [range.startContainer, range.startOffset];
       const tail = document.createRange();
       tail.setStart(range.endContainer, range.endOffset);
       tail.setEnd(outer, outer.childNodes.length);
@@ -3078,7 +2752,7 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
       after.append(tail.extractContents());
       const head = document.createRange();
       head.setStart(outer, 0);
-      head.setEnd(...start);
+      head.setEnd(...start2);
       const before = outer.cloneNode(false);
       before.append(head.extractContents());
       unwrap(outer);
@@ -3123,7 +2797,7 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
     });
   }
   function install5(app2) {
-    injectStyle("typing", CSS8);
+    injectStyle("typing", CSS7);
     const history = app2.history;
     let hosts = [];
     function markMath(root) {
@@ -3208,7 +2882,7 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
   }
 
   // src/editor/text/mathpop.ts
-  var CSS9 = `
+  var CSS8 = `
 .beeson-math { position: fixed; z-index: 70; display: flex; flex-direction: column; gap: 6px; width: min(640px, calc(100vw - 32px)); box-sizing: border-box; padding: 10px; border: 1px solid var(--line, #555); border-radius: 6px; background: var(--bg, #000); color: var(--text, #eee); font: 14px/1.4 system-ui, sans-serif; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); }
 .beeson-math textarea { font: 14px/1.4 ui-monospace, Menlo, Consolas, monospace; min-height: 5em; padding: 6px; border: 1px solid var(--line, #555); border-radius: 4px; background: transparent; color: inherit; resize: vertical; }
 .beeson-math .row { display: flex; gap: 8px; align-items: center; }
@@ -3223,7 +2897,7 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
 .beeson-math button:disabled { opacity: 0.5; cursor: default; }
 `;
   function install6(app2) {
-    injectStyle("mathpop", CSS9);
+    injectStyle("mathpop", CSS8);
     let popover = null;
     let popoverFor = null;
     function closeMath(back = true) {
@@ -3334,7 +3008,7 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
   }
 
   // src/editor/shell/canvas.ts
-  var CSS10 = `
+  var CSS9 = `
 html.beeson-editor { --beeson-left: 6px; --beeson-right: 6px; }
 html.beeson-editor.beeson-nav { --beeson-left: 246px; }
 html.beeson-editor.beeson-steps { --beeson-right: 326px; }
@@ -3345,7 +3019,7 @@ html.beeson-editing .reveal .slides section .fragment { visibility: visible !imp
 html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: hidden !important; }
 `;
   function install7(app2) {
-    injectStyle("canvas", CSS10);
+    injectStyle("canvas", CSS9);
     const layout = () => {
       const d = app2.deck();
       if (!d) return;
@@ -3363,7 +3037,7 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
   }
 
   // src/editor/shell/toolbar.ts
-  var CSS11 = `
+  var CSS10 = `
 .beeson-edit-top, .beeson-edit-bottom { position: fixed; left: 0; right: 0; z-index: 60; display: flex; align-items: center; gap: 12px; box-sizing: border-box; padding: 0 16px; background: var(--bg, #000); color: var(--text, #eee); font: 14px/1.4 system-ui, sans-serif; }
 .beeson-edit-top { top: 0; height: 44px; border-bottom: 1px solid var(--line, #555); }
 .beeson-edit-top .file { font-weight: 600; white-space: nowrap; }
@@ -3375,7 +3049,7 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
 .beeson-edit-top button.on { border-color: var(--accent, #f80); color: var(--accent, #f80); }
 `;
   function install8(app2) {
-    injectStyle("toolbar", CSS11);
+    injectStyle("toolbar", CSS10);
     const top = make("div", "beeson-edit-top");
     const fileEl = make("span", "file");
     const stateEl = make("span", "state");
@@ -3393,14 +3067,14 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
     undoButton.disabled = redoButton.disabled = true;
     top.append(fileEl, stateEl, whichButton, undoButton, redoButton, openButton, saveButton, saveAsButton, autosaveButton, presentButton);
     const fail2 = (e) => app2.fail(e);
-    const run = (id) => () => app2.commands.run(id);
-    wire(openButton, run("file.open"), fail2);
-    wire(saveButton, run("file.save"), fail2);
-    wire(saveAsButton, run("file.saveAs"), fail2);
-    wire(autosaveButton, run("file.autosave"), fail2);
-    wire(presentButton, run("file.present"), fail2);
-    wire(undoButton, run("edit.undo"), fail2);
-    wire(redoButton, run("edit.redo"), fail2);
+    const run2 = (id) => () => app2.commands.run(id);
+    wire(openButton, run2("file.open"), fail2);
+    wire(saveButton, run2("file.save"), fail2);
+    wire(saveAsButton, run2("file.saveAs"), fail2);
+    wire(autosaveButton, run2("file.autosave"), fail2);
+    wire(presentButton, run2("file.present"), fail2);
+    wire(undoButton, run2("edit.undo"), fail2);
+    wire(redoButton, run2("edit.redo"), fail2);
     wire(whichButton, () => app2.files.showProblems(), fail2);
     if (!canWrite()) {
       autosaveButton.disabled = true;
@@ -3424,7 +3098,7 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
   }
 
   // src/editor/shell/statusbar.ts
-  var CSS12 = `
+  var CSS11 = `
 .beeson-edit-bottom { bottom: 0; height: 36px; font-size: 13px; color: var(--subtle, #bbb); border-top: 1px solid var(--line, #555); }
 .beeson-edit-bottom button { padding: 2px 10px; font-size: 13px; }
 .beeson-edit-bottom button.on { border-color: var(--violet, #96f); color: var(--text, #eee); }
@@ -3435,7 +3109,7 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
 .beeson-edit-bottom .hint { flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 `;
   function install9(app2, layers2) {
-    injectStyle("statusbar", CSS12);
+    injectStyle("statusbar", CSS11);
     const bottom = make("div", "beeson-edit-bottom");
     const prevButton = button("\u2039", "Previous slide", "Previous slide");
     const countEl = make("span", "count");
@@ -3483,15 +3157,990 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
   function install16(_app) {
   }
 
+  // src/editor/canvas/hit.ts
+  var MOVABLE = "h1, h2, h3, p, ul, ol, dl, table, pre, blockquote, div.math, .caption, .foot, img, video, figure, .zone, .plate, .qr, tycho-viewer";
+  var BY_ITSELF = "img, video, figure, .zone, .plate, .qr";
+  var OUTSIDE2 = "aside.notes, .backdrop";
+  var RESIZABLE = "img, video, .qr, tycho-viewer";
+  var CONTAINER = "figure, .zone, .plate";
+  var BAND = 6;
+  function frameOf(app2) {
+    const slides = app2.slides();
+    const r = slides.getBoundingClientRect();
+    const scale = slides.offsetWidth ? r.width / slides.offsetWidth : app2.deck()?.getScale() ?? 1;
+    return { left: r.left, top: r.top, scale: scale || 1 };
+  }
+  var toSlide = (f, r) => ({ left: (r.left - f.left) / f.scale, top: (r.top - f.top) / f.scale, width: r.width / f.scale, height: r.height / f.scale });
+  var toScreen = (f, b) => ({ left: f.left + b.left * f.scale, top: f.top + b.top * f.scale, width: b.width * f.scale, height: b.height * f.scale });
+  function visualRect(el) {
+    const r = el.getBoundingClientRect();
+    const box2 = { left: r.left, top: r.top, width: r.width, height: r.height };
+    const natural = el instanceof HTMLImageElement ? [el.naturalWidth, el.naturalHeight] : el instanceof HTMLVideoElement ? [el.videoWidth, el.videoHeight] : null;
+    if (!natural || !natural[0] || !natural[1] || !r.width || !r.height) return box2;
+    const style = getComputedStyle(el);
+    if (style.objectFit !== "contain" && style.objectFit !== "scale-down") return box2;
+    let s = Math.min(r.width / natural[0], r.height / natural[1]);
+    if (style.objectFit === "scale-down") s = Math.min(s, 1);
+    const w = natural[0] * s, h = natural[1] * s;
+    const [px3, py] = style.objectPosition.split(/\s+/);
+    const at = (v, room) => !v ? room / 2 : v.endsWith("%") ? parseFloat(v) / 100 * room : parseFloat(v) || 0;
+    return { left: r.left + at(px3, r.width - w), top: r.top + at(py, r.height - h), width: w, height: h };
+  }
+  function aspectOf(el) {
+    if (el.matches("tycho-viewer")) return null;
+    const r = visualRect(el);
+    return r.width && r.height ? r.width / r.height : null;
+  }
+  function movableOf(app2, target) {
+    const slide = app2.current();
+    const pairing = app2.pairing;
+    if (!target || !slide || !pairing || !slide.contains(target) || target.closest(OUTSIDE2)) return null;
+    let el = target.closest(MOVABLE);
+    while (el) {
+      const up = el.parentElement?.closest(MOVABLE) ?? null;
+      if (!up || !slide.contains(up)) break;
+      el = up;
+    }
+    return el && slide.contains(el) && pairing.elements.get(el)?.open ? el : null;
+  }
+  function movablesOf(app2) {
+    const slide = app2.current();
+    if (!slide) return [];
+    return [...slide.querySelectorAll(MOVABLE)].filter((el) => movableOf(app2, el) === el && el.getBoundingClientRect().width > 0);
+  }
+  function mediaIn(figure, target) {
+    const media = target?.closest("img, video") ?? null;
+    return media && media !== figure && figure.contains(media) && media.parentElement?.closest(MOVABLE) === figure ? media : null;
+  }
+  function containerOf(app2, el) {
+    const up = el.parentElement?.closest(MOVABLE) ?? null;
+    return up && app2.current()?.contains(up) ? up : null;
+  }
+  function onCanvas(target) {
+    return !!target?.closest(".reveal") && !target.closest("aside.notes");
+  }
+  function bandAt(app2, x, y) {
+    let best = null;
+    for (const el of movablesOf(app2)) {
+      const r = el.getBoundingClientRect();
+      const outside = x < r.left || x > r.right || y < r.top || y > r.bottom;
+      const inFrame = x >= r.left - BAND && x <= r.right + BAND && y >= r.top - BAND && y <= r.bottom + BAND;
+      if (!outside || !inFrame) continue;
+      const d = Math.max(r.left - x, x - r.right, r.top - y, y - r.bottom);
+      if (!best || d < best.d) best = { el, d };
+    }
+    return best?.el ?? null;
+  }
+  var hasText = (el) => el.matches(HOST) || !!el.querySelector(HOST);
+  function install17(_app) {
+  }
+
+  // src/editor/canvas/snap.ts
+  var LAYOUT_GUIDES = { x: [120, 880, 1120, 1200, 1800], y: [44, 120, 920, 1030] };
+  var SAME = 0.5;
+  var MIN = 16;
+  var start = (b, axis) => axis === "x" ? b.left : b.top;
+  var size = (b, axis) => axis === "x" ? b.width : b.height;
+  var end = (b, axis) => start(b, axis) + size(b, axis);
+  var other = (axis) => axis === "x" ? "y" : "x";
+  var edgesOf = (b, axis) => [start(b, axis), start(b, axis) + size(b, axis) / 2, end(b, axis)];
+  function linesOf(targets, axis) {
+    const extent = axis === "x" ? targets.slide.width : targets.slide.height;
+    const lines2 = [0, extent / 2, extent].map((at) => ({ at, kind: "slide", box: null }));
+    for (const at of targets.layout?.[axis] ?? []) lines2.push({ at, kind: "layout", box: null });
+    for (const box2 of [...targets.boxes, ...targets.frames ?? []]) for (const at of edgesOf(box2, axis)) lines2.push({ at, kind: "element", box: box2 });
+    return lines2;
+  }
+  function nearest(edges, lines2, threshold) {
+    let best = null;
+    for (const edge of edges) {
+      for (const line of lines2) {
+        const d = Math.abs(line.at - edge);
+        if (d <= threshold && (!best || d < best.d)) best = { shift: line.at - edge, d };
+      }
+    }
+    return best;
+  }
+  function guidesAt(box2, axis, edges, lines2, targets) {
+    const across = other(axis);
+    const extent = across === "x" ? targets.slide.width : targets.slide.height;
+    const out = /* @__PURE__ */ new Map();
+    for (const line of lines2) {
+      if (!edges.some((e) => Math.abs(line.at - e) < SAME)) continue;
+      const key = `${line.kind === "element" ? "element" : "full"}:${Math.round(line.at * 2)}`;
+      const span = line.box ? { from: Math.min(start(box2, across), start(line.box, across)), to: Math.max(end(box2, across), end(line.box, across)) } : { from: 0, to: extent };
+      const had = out.get(key);
+      if (had) Object.assign(had, { from: Math.min(had.from, span.from), to: Math.max(had.to, span.to) });
+      else out.set(key, { axis, at: line.at, kind: line.kind, ...span });
+    }
+    const full = [...out.values()].filter((g) => g.kind !== "element");
+    return [...out.values()].filter((g) => g.kind === "element" && !full.some((f) => Math.abs(f.at - g.at) < SAME)).concat(full);
+  }
+  function neighbors(box2, axis, boxes) {
+    const across = other(axis);
+    const overlaps = (b) => start(b, across) < end(box2, across) && end(b, across) > start(box2, across);
+    const beside = boxes.filter(overlaps);
+    const before = beside.filter((b) => end(b, axis) <= start(box2, axis) + SAME).sort((a, b) => end(b, axis) - end(a, axis));
+    const after = beside.filter((b) => start(b, axis) >= end(box2, axis) - SAME).sort((a, b) => start(a, axis) - start(b, axis));
+    return { before, after };
+  }
+  function spacingStarts(box2, axis, boxes) {
+    const { before, after } = neighbors(box2, axis, boxes);
+    const out = [];
+    const [a, b] = before;
+    const [c, d] = after;
+    if (a && c) out.push((end(a, axis) + start(c, axis) - size(box2, axis)) / 2);
+    if (a && b && end(b, axis) <= start(a, axis)) out.push(end(a, axis) + (start(a, axis) - end(b, axis)));
+    if (c && d && start(d, axis) >= end(c, axis)) out.push(start(c, axis) - (start(d, axis) - end(c, axis)) - size(box2, axis));
+    return out;
+  }
+  function spacingOf(box2, axis, boxes) {
+    const { before, after } = neighbors(box2, axis, boxes);
+    const across = other(axis);
+    const gap = (from, to) => ({ from: end(from, axis), to: start(to, axis), at: (Math.max(start(from, across), start(to, across)) + Math.min(end(from, across), end(to, across))) / 2 });
+    const [a, b] = before;
+    const [c, d] = after;
+    const near = [];
+    if (a) near.push(gap(a, box2));
+    if (c) near.push(gap(box2, c));
+    const far = [];
+    if (a && b && end(b, axis) <= start(a, axis)) far.push(gap(b, a));
+    if (c && d && start(d, axis) >= end(c, axis)) far.push(gap(c, d));
+    const width = (g) => g.to - g.from;
+    for (const g of near) {
+      const equal = [...near, ...far].filter((h) => h !== g && Math.abs(width(h) - width(g)) < SAME && width(g) > 0);
+      if (equal.length) return { axis, gaps: [g, ...equal].sort((p, q) => p.from - q.from) };
+    }
+    return null;
+  }
+  function snapMove(box2, targets, threshold, axes = { x: true, y: true }) {
+    const shift = { x: 0, y: 0 };
+    const lines2 = { x: linesOf(targets, "x"), y: linesOf(targets, "y") };
+    for (const axis of ["x", "y"]) {
+      if (!axes[axis]) continue;
+      let best = nearest(edgesOf(box2, axis), lines2[axis], threshold);
+      for (const at of spacingStarts(box2, axis, targets.boxes)) {
+        const d = Math.abs(at - start(box2, axis));
+        if (d <= threshold && (!best || d < best.d)) best = { shift: at - start(box2, axis), d };
+      }
+      if (best) shift[axis] = best.shift;
+    }
+    const moved = { ...box2, left: box2.left + shift.x, top: box2.top + shift.y };
+    const guides = [];
+    const spacing = [];
+    for (const axis of ["x", "y"]) {
+      if (!axes[axis]) continue;
+      guides.push(...guidesAt(moved, axis, edgesOf(moved, axis), lines2[axis], targets));
+      const s = spacingOf(moved, axis, targets.boxes);
+      if (s) spacing.push(s);
+    }
+    return { dx: shift.x, dy: shift.y, guides, spacing };
+  }
+  var lockedAxis = (dx, dy) => Math.abs(dx) >= Math.abs(dy) ? "x" : "y";
+  var SIDES = {
+    nw: { x: -1, y: -1 },
+    n: { x: 0, y: -1 },
+    ne: { x: 1, y: -1 },
+    e: { x: 1, y: 0 },
+    se: { x: 1, y: 1 },
+    s: { x: 0, y: 1 },
+    sw: { x: -1, y: 1 },
+    w: { x: -1, y: 0 }
+  };
+  function anchored(from, handle, w, h, center) {
+    const { x, y } = SIDES[handle];
+    const cx = from.left + from.width / 2, cy = from.top + from.height / 2;
+    const left = center || x === 0 ? cx - w / 2 : x === 1 ? from.left : from.left + from.width - w;
+    const top = center || y === 0 ? cy - h / 2 : y === 1 ? from.top : from.top + from.height - h;
+    return { left, top, width: w, height: h };
+  }
+  function resizeBox(from, handle, dx, dy, o) {
+    const { x, y } = SIDES[handle];
+    const k = o.center ? 2 : 1;
+    let w = from.width;
+    let h = from.height;
+    if (o.aspect) {
+      const a = o.aspect;
+      if (x && y) w = from.width * (1 + k * (x * dx * from.width + y * dy * from.height) / (from.width ** 2 + from.height ** 2));
+      else if (x) w = from.width + k * x * dx;
+      else h = from.height + k * y * dy;
+      if (x) h = w / a;
+      else w = h * a;
+      if (w < MIN || h < MIN) [w, h] = a >= 1 ? [MIN * a, MIN] : [MIN, MIN / a];
+    } else if (x) w = Math.max(MIN, from.width + k * x * dx);
+    return anchored(from, handle, w, h, o.center);
+  }
+  function snapResize(from, handle, box2, targets, threshold, o) {
+    const sides = SIDES[handle];
+    const moving = (b, axis) => {
+      const sign = sides[axis];
+      if (!sign || !o.aspect && axis === "y") return [];
+      return o.center ? [start(b, axis), end(b, axis)] : [sign === 1 ? end(b, axis) : start(b, axis)];
+    };
+    const lines2 = { x: linesOf(targets, "x"), y: linesOf(targets, "y") };
+    let best = null;
+    for (const axis of ["x", "y"]) {
+      for (const edge of moving(box2, axis)) {
+        for (const line of lines2[axis]) {
+          const d = Math.abs(line.at - edge);
+          if (d <= threshold && (!best || d < best.d)) best = { axis, edge, at: line.at, d };
+        }
+      }
+    }
+    let out = box2;
+    if (best) {
+      const { axis, edge, at } = best;
+      const span = o.center ? 2 * Math.abs(at - (start(box2, axis) + size(box2, axis) / 2)) : Math.abs(at - (edge === end(box2, axis) ? start(box2, axis) : end(box2, axis)));
+      let w = box2.width, h = box2.height;
+      if (axis === "x") {
+        w = Math.max(MIN, span);
+        if (o.aspect) h = w / o.aspect;
+      } else {
+        h = Math.max(MIN, span);
+        if (o.aspect) w = h * o.aspect;
+      }
+      out = anchored(from, handle, w, h, o.center);
+    }
+    const guides = [];
+    for (const axis of ["x", "y"]) guides.push(...guidesAt(out, axis, moving(out, axis), lines2[axis], targets));
+    return { box: out, guides };
+  }
+  function install18(_app) {
+  }
+
+  // src/editor/canvas/frames.ts
+  var HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+  var view = { hover: null, moving: null, resizing: false, guides: [], spacing: [], readout: null, marquee: null };
+  var CSS12 = `
+.beeson-overlay { position: fixed; inset: 0; z-index: 51; pointer-events: none; }
+.beeson-frame { position: fixed; pointer-events: none; box-sizing: border-box; border: 1px dashed var(--ed-muted, var(--subtle, #bbb)); }
+.beeson-frame.selected { border: 2px solid var(--ed-select, #7048e8); }
+.beeson-frame.union { border: 1px dashed var(--ed-select, #7048e8); }
+.beeson-overlay [hidden] { display: none !important; }
+.beeson-grip { position: fixed; width: 9px; height: 9px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; border: 1.5px solid var(--ed-select, #7048e8); background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); pointer-events: auto; touch-action: none; }
+.beeson-grip.fixed { border-color: #8a8a8a; background: #d9d9d9; pointer-events: none; }
+.beeson-grip[data-handle=nw], .beeson-grip[data-handle=se] { cursor: nwse-resize; }
+.beeson-grip[data-handle=ne], .beeson-grip[data-handle=sw] { cursor: nesw-resize; }
+.beeson-grip[data-handle=n], .beeson-grip[data-handle=s] { cursor: ns-resize; }
+.beeson-grip[data-handle=e], .beeson-grip[data-handle=w] { cursor: ew-resize; }
+.beeson-handle { position: fixed; width: 22px; height: 22px; box-sizing: border-box; border-radius: 6px; border: 1px solid var(--ed-line, var(--line, #555)); background: var(--ed-panel, var(--bg, #000)); color: var(--ed-text, var(--text, #eee)); font: 14px/20px system-ui, sans-serif; text-align: center; cursor: move; user-select: none; pointer-events: auto; }
+.beeson-handle:hover, .beeson-handle:focus-visible { border-color: var(--ed-select, #7048e8); outline: none; }
+.beeson-guide { position: fixed; background: var(--ed-guide, #e8590c); }
+.beeson-guide.v { width: 1px; }
+.beeson-guide.h { height: 1px; }
+.beeson-gap { position: fixed; box-sizing: border-box; border-color: var(--ed-guide, #e8590c); border-style: solid; border-width: 0; }
+.beeson-gap.h { height: 7px; margin-top: -3px; border-left-width: 1px; border-right-width: 1px; background: linear-gradient(var(--ed-guide, #e8590c), var(--ed-guide, #e8590c)) center / 100% 1px no-repeat; }
+.beeson-gap.v { width: 7px; margin-left: -3px; border-top-width: 1px; border-bottom-width: 1px; background: linear-gradient(var(--ed-guide, #e8590c), var(--ed-guide, #e8590c)) center / 1px 100% no-repeat; }
+.beeson-offset { position: fixed; height: 22px; padding: 0 7px; box-sizing: border-box; border-radius: 5px; background: var(--ed-guide, #e8590c); color: #fff; font: 600 12px/22px system-ui, sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.beeson-offset.frame { transform: translateX(-100%); }
+.beeson-marquee { position: fixed; box-sizing: border-box; border: 1px solid var(--ed-select, #7048e8); background: color-mix(in srgb, var(--ed-select, #7048e8) 12%, transparent); }
+html.beeson-editing .reveal .beeson-movable:focus-visible { outline: 2px solid var(--ed-select, #7048e8); outline-offset: 6px; }
+html.beeson-dragging, html.beeson-dragging * { cursor: move !important; user-select: none !important; }
+html.beeson-resizing, html.beeson-resizing * { user-select: none !important; }
+html.beeson-band, html.beeson-band .reveal * { cursor: move; }
+html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .slides section video, html.beeson-editing .reveal .slides section .zone, html.beeson-editing .reveal .slides section .plate, html.beeson-editing .reveal .slides section .qr { cursor: move; }
+`;
+  var div = (className, parent) => {
+    const d = document.createElement("div");
+    d.className = className;
+    d.hidden = true;
+    parent.append(d);
+    return d;
+  };
+  var place = (d, b) => {
+    d.hidden = false;
+    Object.assign(d.style, { left: `${b.left}px`, top: `${b.top}px`, width: `${b.width}px`, height: `${b.height}px` });
+  };
+  var grow = (b, by) => ({ left: b.left - by, top: b.top - by, width: b.width + 2 * by, height: b.height + 2 * by });
+  var Frames = class {
+    constructor(app2) {
+      this.frames = [];
+      this.guides = [];
+      this.gaps = [];
+      injectStyle("frames", CSS12);
+      this.app = app2;
+      this.layer = document.createElement("div");
+      this.layer.className = "beeson-overlay";
+      this.hoverFrame = div("beeson-frame", this.layer);
+      this.frames.push(div("beeson-frame selected", this.layer));
+      this.union = div("beeson-frame union", this.layer);
+      this.guides.push(div("beeson-guide v", this.layer), div("beeson-guide h", this.layer));
+      this.marquee = div("beeson-marquee", this.layer);
+      this.grips = Object.fromEntries(HANDLES.map((h) => {
+        const g = div("beeson-grip", this.layer);
+        g.dataset.handle = h;
+        return [h, g];
+      }));
+      this.handle = div("beeson-handle", this.layer);
+      this.handle.textContent = "\u283F";
+      this.handle.title = "Drag to move, double-click to put back, arrow keys nudge";
+      this.handle.tabIndex = 0;
+      this.handle.setAttribute("role", "button");
+      this.handle.setAttribute("aria-label", "Move the block: the arrow keys nudge it, Enter puts it back");
+      this.readout = div("beeson-offset", this.layer);
+    }
+    // the element that the handle of a block is shown at: the one dragged, under the pointer, or
+    // being edited, else the one selected
+    current() {
+      const active = document.activeElement instanceof Element ? document.activeElement : null;
+      const editing = active?.closest(HOST) ?? null;
+      return view.moving?.[0] ?? view.hover ?? movableOf(this.app, editing) ?? this.app.selection.only();
+    }
+    // the resize handles of the one selected element: live on an image, a video, a QR code, or a
+    // viewer, gray on a figure whose size is set by its layout, and none on a block of text
+    gripsOf(el) {
+      if (!el || this.app.selection.only() !== el) return null;
+      if (el.matches(RESIZABLE)) return "live";
+      return el.matches(CONTAINER) ? "fixed" : null;
+    }
+    draw() {
+      const app2 = this.app;
+      const reveal = document.querySelector(".reveal")?.getBoundingClientRect();
+      if (reveal) this.layer.style.clipPath = `inset(${reveal.top}px ${innerWidth - reveal.right}px ${innerHeight - reveal.bottom}px ${reveal.left}px)`;
+      if (view.hover && !view.hover.isConnected) view.hover = null;
+      const selected = app2.selection.elements().filter((el) => el.isConnected);
+      const boxOf = (el) => el.matches(RESIZABLE) || el.matches(CONTAINER) ? visualRect(el) : grow(visualRect(el), 6);
+      const boxes = selected.map(boxOf);
+      while (this.frames.length < boxes.length) this.frames.push(div("beeson-frame selected", this.layer));
+      this.frames.forEach((f, i) => boxes[i] ? place(f, boxes[i]) : f.hidden = true);
+      if (boxes.length > 1) {
+        const left = Math.min(...boxes.map((b) => b.left)), top = Math.min(...boxes.map((b) => b.top));
+        const right = Math.max(...boxes.map((b) => b.left + b.width)), bottom = Math.max(...boxes.map((b) => b.top + b.height));
+        place(this.union, grow({ left, top, width: right - left, height: bottom - top }, 6));
+      } else this.union.hidden = true;
+      const only = app2.selection.only();
+      const grips = view.moving && !view.resizing ? null : this.gripsOf(only);
+      const tycho = !!only?.matches("tycho-viewer");
+      for (const h of HANDLES) {
+        const g = this.grips[h];
+        if (!grips || !only || tycho && (h === "n" || h === "s")) {
+          g.hidden = true;
+          continue;
+        }
+        const b = boxes[0];
+        const x = h.includes("w") ? b.left : h.includes("e") ? b.left + b.width : b.left + b.width / 2;
+        const y = h.includes("n") ? b.top : h.includes("s") ? b.top + b.height : b.top + b.height / 2;
+        g.hidden = false;
+        g.classList.toggle("fixed", grips === "fixed");
+        Object.assign(g.style, { left: `${x}px`, top: `${y}px` });
+      }
+      const hot = this.current();
+      const framed = hot && selected.includes(hot);
+      this.hoverFrame.hidden = !hot || !!framed || !!view.moving;
+      if (hot && !framed && !view.moving) place(this.hoverFrame, grow(visualRect(hot), 6));
+      this.handle.hidden = !hot || hot === only && !!this.gripsOf(only);
+      if (!this.handle.hidden && hot) {
+        const r = hot.getBoundingClientRect();
+        Object.assign(this.handle.style, { left: `${r.left - 24}px`, top: `${r.top - 24}px` });
+      }
+      this.drawGuides();
+      if (view.marquee) place(this.marquee, view.marquee);
+      else this.marquee.hidden = true;
+      const out = view.readout;
+      this.readout.hidden = !out;
+      if (out) {
+        this.readout.textContent = out.text;
+        this.readout.classList.toggle("frame", out.at === "frame");
+        Object.assign(this.readout.style, { left: `${out.x}px`, top: `${out.y}px` });
+      }
+    }
+    drawGuides() {
+      const f = frameOf(this.app);
+      const lines2 = { v: view.guides.filter((g) => g.axis === "x"), h: view.guides.filter((g) => g.axis === "y") };
+      const used = { v: 0, h: 0 };
+      const take = (cls) => {
+        const pool = this.guides.filter((d2) => d2.classList.contains(cls));
+        const d = pool[used[cls]++] ?? div(`beeson-guide ${cls}`, this.layer);
+        if (!this.guides.includes(d)) this.guides.push(d);
+        return d;
+      };
+      for (const g of lines2.v) place(take("v"), { ...toScreen(f, { left: g.at, top: g.from, width: 0, height: g.to - g.from }), width: 1 });
+      for (const g of lines2.h) place(take("h"), { ...toScreen(f, { left: g.from, top: g.at, width: g.to - g.from, height: 0 }), height: 1 });
+      for (const cls of ["v", "h"]) this.guides.filter((d) => d.classList.contains(cls)).slice(used[cls]).forEach((d) => d.hidden = true);
+      let n = 0;
+      for (const s of view.spacing) {
+        for (const gap of s.gaps) {
+          const d = this.gaps[n] ?? div("beeson-gap", this.layer);
+          if (!this.gaps.includes(d)) this.gaps.push(d);
+          n++;
+          d.className = `beeson-gap ${s.axis === "x" ? "h" : "v"}`;
+          const b = s.axis === "x" ? toScreen(f, { left: gap.from, top: gap.at, width: gap.to - gap.from, height: 0 }) : toScreen(f, { left: gap.at, top: gap.from, width: 0, height: gap.to - gap.from });
+          place(d, s.axis === "x" ? { ...b, height: 7 } : { ...b, width: 7 });
+        }
+      }
+      this.gaps.slice(n).forEach((d) => d.hidden = true);
+    }
+  };
+  var installed = null;
+  function overlay() {
+    if (!installed) throw new Error("the frames are not installed");
+    return installed;
+  }
+  function install19(app2) {
+    const frames = new Frames(app2);
+    installed = frames;
+    document.body.append(frames.layer);
+    app2.selection.listen(() => {
+      if (!view.moving) view.readout = null;
+      frames.draw();
+    });
+    app2.onRefresh(["content", "selection", "slide", "structure", "layout"], () => frames.draw());
+    app2.listen("resize", () => frames.draw());
+  }
+
+  // src/editor/canvas/drag.ts
+  var CLICK = 3;
+  var SNAP = 8;
+  var px2 = (v) => {
+    const n = parseFloat(v ?? "");
+    return Number.isFinite(n) ? n : null;
+  };
+  function placeOf2(el) {
+    const style = el.style;
+    const [x, y] = (style.translate ?? "").split(/\s+/).map((p) => px2(p));
+    const translate = x === null || x === void 0 ? null : { x, y: y ?? 0 };
+    return { translate: translate && (translate.x || translate.y) ? translate : null, width: el.matches(RESIZABLE) ? px2(style.width) : null };
+  }
+  var samePlace = (a, b) => (a.translate?.x ?? 0) === (b.translate?.x ?? 0) && (a.translate?.y ?? 0) === (b.translate?.y ?? 0) && a.width === b.width;
+  function writePlace(app2, el, p) {
+    const style = el.style;
+    const t = p.translate && (p.translate.x || p.translate.y) ? { x: Math.round(p.translate.x), y: Math.round(p.translate.y) } : null;
+    style.translate = t ? `${t.x}px ${t.y}px` : "";
+    const edit = { ...app2.tagEdits.get(el), translate: t };
+    if (el.matches(RESIZABLE)) {
+      const w = p.width === null ? null : Math.round(p.width);
+      style.width = w === null ? "" : `${w}px`;
+      if (w !== null || edit.style?.width !== void 0 || /(^|;)\s*width\s*:/.test(el.getAttribute("style") ?? "")) edit.style = { ...edit.style, width: w === null ? null : `${w}px` };
+    }
+    app2.tagEdits.set(el, edit);
+    app2.markDirty();
+  }
+  function record(app2, label2, changes) {
+    const moved = changes.filter((c) => !samePlace(c.from, c.to));
+    if (!moved.length) return moved;
+    const apply = (way) => {
+      app2.showSlide(moved[0].el);
+      for (const c of moved) writePlace(app2, c.el, c[way]);
+      app2.selection.set("elements", moved.map((c) => c.el));
+      app2.invalidate("content");
+    };
+    app2.history.push({ label: label2, undo: () => apply("from"), redo: () => apply("to") });
+    return moved;
+  }
+  var union = (boxes) => {
+    const left = Math.min(...boxes.map((b) => b.left)), top = Math.min(...boxes.map((b) => b.top));
+    return { left, top, width: Math.max(...boxes.map((b) => b.left + b.width)) - left, height: Math.max(...boxes.map((b) => b.top + b.height)) - top };
+  };
+  function contentRect(el) {
+    const r = el.getBoundingClientRect();
+    const s = getComputedStyle(el);
+    const k = el.offsetWidth ? r.width / el.offsetWidth : 1;
+    const p = (v) => (parseFloat(v) || 0) * k;
+    return { left: r.left + p(s.paddingLeft), top: r.top + p(s.paddingTop), width: r.width - p(s.paddingLeft) - p(s.paddingRight), height: r.height - p(s.paddingTop) - p(s.paddingBottom) };
+  }
+  function install20(app2) {
+    const frames = overlay();
+    let press = null;
+    const mac = () => app2.platform === "mac";
+    const commandHeld = (ev) => mac() ? ev.metaKey : ev.ctrlKey;
+    const freeMove = (ev) => mac() ? ev.metaKey || ev.altKey : ev.altKey;
+    const freeResize = (ev) => mac() ? ev.metaKey : ev.altKey;
+    const aboutCenter = (ev) => mac() ? ev.altKey : ev.ctrlKey;
+    const leaveText = () => {
+      const host = app2.hostOf(document.activeElement);
+      if (host) host.blur();
+    };
+    const targetsFor = (els) => {
+      const f = frameOf(app2);
+      const others = movablesOf(app2).filter((o) => !els.some((el) => el === o || el.contains(o) || o.contains(el)));
+      const frames_ = [];
+      for (const el of els) {
+        const up = containerOf(app2, el);
+        if (up) frames_.push(toSlide(f, contentRect(up)));
+      }
+      const slides = app2.slides();
+      return {
+        boxes: others.map((o) => toSlide(f, visualRect(o))).filter((b) => b.width > 0 && b.height > 0),
+        frames: frames_,
+        slide: { width: slides.offsetWidth || 1920, height: slides.offsetHeight || 1080 },
+        layout: LAYOUT_GUIDES
+      };
+    };
+    const start2 = (kind, ev, el, els, click) => {
+      const f = frameOf(app2);
+      const p = {
+        kind,
+        x: ev.clientX,
+        y: ev.clientY,
+        moved: false,
+        el,
+        els,
+        click,
+        from: new Map(els.map((e) => [e, placeOf2(e)])),
+        base: els.length ? union(els.map((e) => toSlide(f, visualRect(e)))) : { left: 0, top: 0, width: 0, height: 0 }
+      };
+      press = p;
+      view.hover = null;
+      return p;
+    };
+    const pressElement = (ev, el, target) => {
+      ev.preventDefault();
+      leaveText();
+      const sel = app2.selection;
+      const add = ev.shiftKey || commandHeld(ev);
+      let click = null;
+      if (add) {
+        if (sel.has(el)) click = () => sel.toggle(el);
+        else sel.add(el);
+      } else if (sel.has(el)) {
+        const several = sel.elements().length > 1;
+        const media = mediaIn(el, target);
+        click = () => {
+          if (several) sel.set("elements", [el]);
+          else if (media) sel.set("elements", [media]);
+        };
+      } else sel.set("elements", [el]);
+      start2("move", ev, el, sel.elements().filter((e) => !sel.elements().some((o) => o !== e && o.contains(e))), click);
+    };
+    const onDown = (ev) => {
+      if (ev.button !== 0 || press) return;
+      const target = ev.target instanceof Element ? ev.target : null;
+      if (!target) return;
+      const sel = app2.selection;
+      const grip = target.closest(".beeson-grip");
+      if (grip && !grip.classList.contains("fixed")) {
+        const el2 = sel.only();
+        if (!el2) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        Object.assign(start2("resize", ev, el2, [el2], null), { handle: grip.dataset.handle, aspect: aspectOf(el2) });
+        document.documentElement.classList.add("beeson-resizing");
+        return;
+      }
+      if (target === frames.handle) {
+        const el2 = frames.current();
+        if (el2) pressElement(ev, el2, null);
+        return;
+      }
+      if (!onCanvas(target)) return;
+      const inner = sel.only();
+      if (inner && inner.matches(RESIZABLE) && containerOf(app2, inner) && inner.contains(target)) {
+        pressElement(ev, inner, target);
+        return;
+      }
+      const el = movableOf(app2, target);
+      const host = app2.hostOf(target);
+      if (el && host) {
+        if (ev.shiftKey || commandHeld(ev)) pressElement(ev, el, target);
+        return;
+      }
+      if (el && (target.closest(BY_ITSELF) || !hasText(el))) {
+        if (el.matches(BY_ITSELF)) pressElement(ev, el, target);
+        else if (!sel.has(el)) sel.set("elements", [el]);
+        return;
+      }
+      const band = bandAt(app2, ev.clientX, ev.clientY);
+      if (band) {
+        pressElement(ev, band, null);
+        return;
+      }
+      ev.preventDefault();
+      leaveText();
+      const add = ev.shiftKey || commandHeld(ev);
+      const initial = add ? sel.elements().slice() : [];
+      if (!add) sel.clear();
+      start2("marquee", ev, null, [], null).initial = initial;
+    };
+    const onMove = (ev) => {
+      const p = press;
+      if (!p) {
+        hover(ev);
+        return;
+      }
+      if (!p.moved && Math.hypot(ev.clientX - p.x, ev.clientY - p.y) < CLICK) return;
+      p.moved = true;
+      const f = frameOf(app2);
+      if (p.kind === "marquee") {
+        const left = Math.min(p.x, ev.clientX), top = Math.min(p.y, ev.clientY);
+        const box2 = { left, top, width: Math.abs(ev.clientX - p.x), height: Math.abs(ev.clientY - p.y) };
+        view.marquee = box2;
+        const touched = movablesOf(app2).filter((el) => {
+          const r = visualRect(el);
+          return r.left <= box2.left + box2.width && r.left + r.width >= box2.left && r.top <= box2.top + box2.height && r.top + r.height >= box2.top;
+        });
+        app2.selection.set("elements", [...p.initial ?? [], ...touched]);
+        frames.draw();
+        return;
+      }
+      let dx = (ev.clientX - p.x) / f.scale;
+      let dy = (ev.clientY - p.y) / f.scale;
+      if (p.kind === "resize") {
+        resize(p, ev, dx, dy);
+        return;
+      }
+      const lock = ev.shiftKey ? lockedAxis(dx, dy) : null;
+      if (lock === "x") dy = 0;
+      if (lock === "y") dx = 0;
+      const moved = { ...p.base, left: p.base.left + dx, top: p.base.top + dy };
+      const snap = freeMove(ev) ? null : snapMove(moved, targetsFor(p.els), SNAP / f.scale, { x: lock !== "y", y: lock !== "x" });
+      dx += snap?.dx ?? 0;
+      dy += snap?.dy ?? 0;
+      for (const el of p.els) {
+        const from = p.from.get(el);
+        writeLive(el, { translate: { x: (from.translate?.x ?? 0) + dx, y: (from.translate?.y ?? 0) + dy }, width: from.width });
+      }
+      view.moving = p.els;
+      view.guides = snap?.guides ?? [];
+      view.spacing = snap?.spacing ?? [];
+      const t = p.el ? placeOf2(p.el).translate : null;
+      const seen = union(p.els.map(visualRect));
+      view.readout = { text: `${t?.x ?? 0}, ${t?.y ?? 0}`, x: seen.left + seen.width + 6, y: seen.top + seen.height + 10, at: "frame" };
+      document.documentElement.classList.add("beeson-dragging");
+      frames.draw();
+      app2.invalidate("content");
+    };
+    const writeLive = (el, p) => {
+      const style = el.style;
+      const t = p.translate && (Math.round(p.translate.x) || Math.round(p.translate.y)) ? p.translate : null;
+      style.translate = t ? `${Math.round(t.x)}px ${Math.round(t.y)}px` : "";
+      if (el.matches(RESIZABLE)) style.width = p.width === null ? "" : `${Math.round(p.width)}px`;
+    };
+    const resize = (p, ev, dx, dy) => {
+      const el = p.els[0];
+      const f = frameOf(app2);
+      const o = { aspect: p.aspect ?? null, center: aboutCenter(ev) };
+      let box2 = resizeBox(p.base, p.handle, dx, dy, o);
+      view.guides = [];
+      if (!freeResize(ev)) {
+        const snapped = snapResize(p.base, p.handle, box2, targetsFor([el]), SNAP / f.scale, o);
+        box2 = snapped.box;
+        view.guides = snapped.guides;
+      }
+      el.style.width = `${Math.round(box2.width)}px`;
+      const seen = toSlide(f, visualRect(el));
+      const h = p.handle;
+      const shift = (a) => {
+        const [s, w] = a === "x" ? ["left", "width"] : ["top", "height"];
+        const side = a === "x" ? h.includes("w") ? -1 : h.includes("e") ? 1 : 0 : h.includes("n") ? -1 : h.includes("s") ? 1 : 0;
+        if (o.center || side === 0) return box2[s] + box2[w] / 2 - (seen[s] + seen[w] / 2);
+        return side === 1 ? box2[s] - seen[s] : box2[s] + box2[w] - (seen[s] + seen[w]);
+      };
+      const now = placeOf2(el).translate ?? { x: 0, y: 0 };
+      writeLive(el, { translate: { x: now.x + shift("x"), y: now.y + shift("y") }, width: box2.width });
+      view.moving = [el];
+      view.resizing = true;
+      const after = toSlide(f, visualRect(el));
+      view.readout = { text: `${Math.round(after.width)} \xD7 ${Math.round(after.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: "pointer" };
+      frames.draw();
+      app2.invalidate("content");
+    };
+    const onUp = (ev) => {
+      const p = press;
+      if (!p) return;
+      press = null;
+      document.documentElement.classList.remove("beeson-dragging", "beeson-resizing");
+      view.moving = null;
+      view.resizing = false;
+      view.guides = [];
+      view.spacing = [];
+      view.marquee = null;
+      view.readout = null;
+      if (p.kind !== "marquee") {
+        if (ev && p.moved) {
+          const changes = p.els.map((el) => {
+            const to = placeOf2(el);
+            writePlace(app2, el, to);
+            return { el, from: p.from.get(el), to };
+          });
+          record(app2, p.kind === "resize" ? "resize" : "move", changes);
+        } else if (p.moved) {
+          for (const el of p.els) writeLive(el, p.from.get(el));
+        } else p.click?.();
+      }
+      frames.draw();
+      app2.invalidate("content");
+    };
+    const hover = (ev) => {
+      const target = ev.target instanceof Element ? ev.target : null;
+      if (target && (target === frames.handle || target.closest(".beeson-grip"))) return;
+      const el = movableOf(app2, target);
+      const band = el ? null : onCanvas(target) ? bandAt(app2, ev.clientX, ev.clientY) : null;
+      document.documentElement.classList.toggle("beeson-band", !!band);
+      const next = el ?? band;
+      if (next) {
+        if (next !== view.hover) {
+          view.hover = next;
+          frames.draw();
+        }
+      } else if (view.hover && !near(view.hover, ev)) {
+        view.hover = null;
+        frames.draw();
+      }
+    };
+    const near = (el, ev) => {
+      const r = el.getBoundingClientRect();
+      return ev.clientX >= r.left - 28 && ev.clientX <= r.right + 6 && ev.clientY >= r.top - 28 && ev.clientY <= r.bottom + 6;
+    };
+    const reset = () => {
+      const el = frames.current();
+      if (!el) return;
+      const from = placeOf2(el);
+      const to = { ...from, translate: null };
+      writePlace(app2, el, to);
+      record(app2, "move", [{ el, from, to }]);
+      if (!app2.selection.has(el)) app2.selection.set("elements", [el]);
+      frames.draw();
+    };
+    frames.handle.addEventListener("dblclick", reset);
+    frames.handle.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Enter") return;
+      ev.preventDefault();
+      reset();
+    });
+    frames.handle.addEventListener("focus", () => {
+      const el = frames.current();
+      if (el && !app2.selection.has(el)) app2.selection.set("elements", [el]);
+    });
+    document.addEventListener("pointerdown", onDown, true);
+    document.addEventListener("pointermove", onMove);
+    document.addEventListener("pointerup", onUp, true);
+    document.addEventListener("pointercancel", () => onUp(null), true);
+    document.addEventListener("dragstart", (ev) => {
+      if (ev.target instanceof Element && movableOf(app2, ev.target)) ev.preventDefault();
+    });
+    app2.listen("slide", () => {
+      view.hover = null;
+      if (press) onUp(null);
+    });
+  }
+
+  // src/editor/commands/arrange.ts
+  var PAUSE2 = 1e3;
+  function onCanvas2() {
+    const a = document.activeElement;
+    return !a || a === document.body || a.classList.contains("beeson-handle") || !!a.closest(".reveal .slides") && !a.closest(HOST);
+  }
+  function caretAtEnd(el) {
+    el.focus({ preventScroll: true });
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    range.collapse(false);
+    const s = getSelection();
+    s?.removeAllRanges();
+    s?.addRange(range);
+  }
+  var run = null;
+  var samePlace2 = (a, b) => (a.translate?.x ?? 0) === (b.translate?.x ?? 0) && (a.translate?.y ?? 0) === (b.translate?.y ?? 0) && a.width === b.width;
+  function nudge(app2, dx, dy) {
+    const els = app2.selection.elements();
+    if (!els.length) return;
+    const now = performance.now();
+    const same = !!run && now - run.at < PAUSE2 && run.changes.length === els.length && run.changes.every((c, i) => c.el === els[i] && samePlace2(placeOf2(c.el), c.to));
+    const changes = els.map((el) => {
+      const from = placeOf2(el);
+      writePlace(app2, el, { ...from, translate: { x: (from.translate?.x ?? 0) + dx, y: (from.translate?.y ?? 0) + dy } });
+      return { el, from, to: placeOf2(el) };
+    });
+    if (same && run) {
+      run.at = now;
+      run.changes.forEach((c, i) => c.to = changes[i].to);
+    } else run = { at: now, changes: record(app2, "move", changes) };
+    const boxes = els.map(visualRect);
+    const t = placeOf2(els[0]).translate;
+    view.readout = { text: `${t?.x ?? 0}, ${t?.y ?? 0}`, x: Math.max(...boxes.map((b) => b.left + b.width)) + 6, y: Math.max(...boxes.map((b) => b.top + b.height)) + 10, at: "frame" };
+    app2.invalidate("content");
+  }
+  function step(app2, back) {
+    const list = movablesOf(app2);
+    if (!list.length) return;
+    const sel = app2.selection.elements();
+    const at = sel.length ? list.indexOf(sel[back ? 0 : sel.length - 1]) : -1;
+    const next = at < 0 ? list[back ? list.length - 1 : 0] : list[(at + (back ? -1 : 1) + list.length) % list.length];
+    app2.selection.set("elements", [next]);
+    if (next.classList.contains("beeson-movable")) next.focus({ preventScroll: true });
+    else if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) document.activeElement.blur();
+  }
+  var ARROWS = [["left", "ArrowLeft", -1, 0], ["right", "ArrowRight", 1, 0], ["up", "ArrowUp", 0, -1], ["down", "ArrowDown", 0, 1]];
+  function commands() {
+    const list = [
+      {
+        id: "selection.all",
+        label: "Select All",
+        keys: { mac: ["Mod+A"], other: ["Mod+A"] },
+        in: ["canvas"],
+        menu: { bar: "Edit", group: "select", order: 10 },
+        context: ["canvas"],
+        enabled: (app2) => !!app2.current() && onCanvas2(),
+        run: (app2) => app2.selection.selectAll()
+      },
+      {
+        // Esc on an image selected inside its figure selects the figure, and else clears
+        id: "selection.clear",
+        label: "Deselect",
+        keys: { mac: ["Escape"], other: ["Escape"] },
+        in: ["canvas"],
+        menu: { bar: "Edit", group: "select", order: 11 },
+        enabled: (app2) => app2.selection.kind === "elements" || app2.selection.kind === "text",
+        run: (app2) => {
+          const only = app2.selection.only();
+          const up = only?.matches(RESIZABLE) ? containerOf(app2, only) : null;
+          const a = document.activeElement;
+          if (a instanceof HTMLElement && (app2.selection.has(a) || a.classList.contains("beeson-handle"))) a.blur();
+          if (up) app2.selection.set("elements", [up]);
+          else app2.selection.clear();
+        }
+      },
+      {
+        id: "selection.leaveText",
+        label: "Select Block",
+        keys: { mac: ["Escape"], other: ["Escape"] },
+        in: ["text"],
+        enabled: (app2) => !!app2.hostOf(document.activeElement),
+        run: (app2) => {
+          const host = app2.hostOf(document.activeElement);
+          host.blur();
+          app2.selection.set("elements", [movableOf(app2, host) ?? host]);
+        }
+      },
+      {
+        // Return puts the caret at the end of the text of a block, and selects the image of a figure
+        id: "selection.editText",
+        label: "Edit Text",
+        keys: { mac: ["Enter"], other: ["Enter"] },
+        in: ["canvas"],
+        context: ["element"],
+        enabled: (app2) => {
+          const el = app2.selection.only();
+          if (!el || document.activeElement?.classList.contains("beeson-handle")) return false;
+          return el.matches(HOST) || !!el.querySelector(HOST) || !!mediaIn(el, el.querySelector("img, video"));
+        },
+        run: (app2) => {
+          const el = app2.selection.only();
+          const hosts = el.matches(HOST) ? [el] : [...el.querySelectorAll(HOST)];
+          const host = hosts.at(-1);
+          if (host) caretAtEnd(host);
+          else {
+            const media = [...el.querySelectorAll("img, video")].find((m) => m.getBoundingClientRect().width > 0);
+            if (media) app2.selection.set("elements", [media]);
+          }
+        }
+      },
+      {
+        id: "selection.next",
+        label: "Select Next Element",
+        keys: { mac: ["Tab"], other: ["Tab"] },
+        in: ["canvas"],
+        enabled: (app2) => onCanvas2() && movablesOf(app2).length > 0,
+        run: (app2) => step(app2, false)
+      },
+      {
+        id: "selection.previous",
+        label: "Select Previous Element",
+        keys: { mac: ["Shift+Tab"], other: ["Shift+Tab"] },
+        in: ["canvas"],
+        enabled: (app2) => onCanvas2() && movablesOf(app2).length > 0,
+        run: (app2) => step(app2, true)
+      },
+      {
+        id: "arrange.resetPosition",
+        label: "Reset Position",
+        menu: { bar: "Arrange", group: "reset", order: 10 },
+        context: ["element"],
+        enabled: (app2) => app2.selection.elements().some((el) => placeOf2(el).translate),
+        run: (app2) => {
+          const changes = app2.selection.elements().map((el) => {
+            const from = placeOf2(el);
+            const to = { ...from, translate: null };
+            writePlace(app2, el, to);
+            return { el, from, to };
+          });
+          record(app2, "move", changes);
+        }
+      },
+      {
+        id: "arrange.resetSize",
+        label: "Reset Size",
+        menu: { bar: "Arrange", group: "reset", order: 11 },
+        context: ["element"],
+        enabled: (app2) => app2.selection.elements().some((el) => placeOf2(el).width !== null),
+        run: (app2) => {
+          const changes = app2.selection.elements().map((el) => {
+            const from = placeOf2(el);
+            const to = { ...from, width: null };
+            writePlace(app2, el, to);
+            return { el, from, to };
+          });
+          record(app2, "resize", changes);
+        }
+      }
+    ];
+    for (const [name, key, x, y] of ARROWS) {
+      for (const far of [false, true]) {
+        list.push({
+          id: `arrange.nudge.${name}${far ? ".far" : ""}`,
+          label: `Nudge ${name[0].toUpperCase()}${name.slice(1)}${far ? " by 10" : ""}`,
+          keys: { mac: [`${far ? "Shift+" : ""}${key}`], other: [`${far ? "Shift+" : ""}${key}`] },
+          in: ["canvas"],
+          enabled: (app2) => app2.selection.elements().length > 0,
+          run: (app2) => nudge(app2, x * (far ? 10 : 1), y * (far ? 10 : 1))
+        });
+      }
+    }
+    return list;
+  }
+  function matches(keys, ev) {
+    if (ev.getModifierState?.("AltGraph")) return false;
+    const parts = keys.split("+");
+    const key = parts.pop();
+    const want = new Set(parts);
+    if (want.has("Mod") !== (ev.metaKey || ev.ctrlKey)) return false;
+    if (want.has("Shift") !== ev.shiftKey || want.has("Alt") !== ev.altKey) return false;
+    return key.length === 1 ? ev.key.toLowerCase() === key.toLowerCase() : ev.key === key;
+  }
+  function onKey(app2, ev) {
+    const region = app2.region();
+    for (const c of mine) {
+      if (!c.keys || !(c.in ?? ["canvas", "navigator"]).includes(region)) continue;
+      if (!(c.keys[app2.platform] ?? []).some((k) => matches(k, ev))) continue;
+      if (!app2.commands.enabled(c.id)) continue;
+      void app2.commands.run(c.id).catch((e) => app2.fail(e));
+      return true;
+    }
+    return false;
+  }
+  var mine = [];
+  function install21(app2) {
+    mine = commands().map((c) => app2.commands.define(c));
+    app2.selection.listen(() => run = null);
+  }
+
   // src/editor/selection.ts
   var inOrder = (items) => [...new Set(items)].sort((a, b) => a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
-  function install17(app2) {
+  function mark(pairing) {
+    for (const el of document.querySelectorAll(".beeson-movable")) {
+      el.classList.remove("beeson-movable");
+      el.removeAttribute("tabindex");
+    }
+    if (!pairing) return;
+    for (const [el, src] of pairing.elements) {
+      if (!src.open || !el.matches(BY_ITSELF) || el.closest(OUTSIDE2)) continue;
+      const up = el.parentElement?.closest(MOVABLE);
+      if (up && el.closest("section")?.contains(up)) continue;
+      el.classList.add("beeson-movable");
+      el.setAttribute("tabindex", "0");
+      if (!el.hasAttribute("aria-label") && !el.hasAttribute("alt")) el.setAttribute("aria-label", "Figure: the arrow keys move it, Esc deselects it");
+    }
+  }
+  function install22(app2) {
     let kind = "none";
     let items = [];
     const listeners = [];
     const set = (k, next) => {
-      items = k === "none" ? [] : inOrder(next);
-      kind = items.length ? k : "none";
+      const ordered = k === "none" ? [] : inOrder(next);
+      const nextKind = ordered.length ? k : "none";
+      if (nextKind === kind && ordered.length === items.length && ordered.every((el, i) => el === items[i])) return;
+      items = ordered;
+      kind = nextKind;
       for (const fn of listeners) fn();
       app2.invalidate("selection");
     };
@@ -3503,49 +4152,57 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
         return items;
       },
       set,
-      add: (item) => set(kind === "none" ? "elements" : kind, [...items, item]),
-      toggle: (item) => set(kind === "none" ? "elements" : kind, items.includes(item) ? items.filter((i) => i !== item) : [...items, item]),
+      add: (item) => set(kind === "none" || kind === "text" ? "elements" : kind, [...kind === "text" ? [] : items, item]),
+      toggle: (item) => {
+        const base = kind === "text" ? [] : items;
+        set(kind === "none" || kind === "text" ? "elements" : kind, base.includes(item) ? base.filter((i) => i !== item) : [...base, item]);
+      },
       clear: () => set("none", []),
       selectAll: () => {
-        if (kind === "slides") {
-          set("slides", [...app2.slides().querySelectorAll(":scope > section")]);
-          return;
-        }
-        const slide = app2.current();
-        const movable = slide ? [...slide.querySelectorAll("*")].filter((el) => app2.move.movableOf(el) === el) : [];
-        set("elements", movable);
+        if (kind === "slides") set("slides", [...app2.slides().querySelectorAll(":scope > section")]);
+        else set("elements", movablesOf(app2));
       },
-      listen: (fn) => void listeners.push(fn)
+      listen: (fn) => void listeners.push(fn),
+      has: (item) => items.includes(item),
+      elements: () => kind === "elements" ? items : [],
+      only: () => kind === "elements" && items.length === 1 ? items[0] : null
     };
     app2.selection = selection;
-  }
-
-  // src/editor/canvas/hit.ts
-  function install18(_app) {
-  }
-
-  // src/editor/canvas/frames.ts
-  function install19(_app) {
-  }
-
-  // src/editor/canvas/drag.ts
-  function install20(_app) {
-  }
-
-  // src/editor/canvas/snap.ts
-  function install21(_app) {
+    const move = {
+      select: (el) => el ? set("elements", [el]) : set("none", []),
+      movableOf: (target) => movableOf(app2, target),
+      mark,
+      refresh: () => app2.invalidate("selection"),
+      onKey: (ev) => onKey(app2, ev)
+    };
+    app2.move = move;
+    document.addEventListener("focusin", (ev) => {
+      const target = ev.target instanceof Element ? ev.target : null;
+      const host = app2.hostOf(target);
+      if (host && app2.current()?.contains(host) && !host.closest("aside.notes")) set("text", [host]);
+      else if (target?.classList.contains("beeson-movable")) set("elements", [target]);
+    });
+    app2.listen("slide", () => {
+      if (kind !== "slides") set("none", []);
+    });
+    app2.onRefresh(["content", "structure", "slide"], () => {
+      if (kind === "slides" || kind === "none") return;
+      const slide = app2.current();
+      const kept = items.filter((el) => el.isConnected && !!slide?.contains(el));
+      if (kept.length !== items.length) set(kind, kept);
+    });
   }
 
   // src/editor/navigator/navigator.ts
-  function install22(_app) {
-  }
-
-  // src/editor/navigator/thumbs.ts
   function install23(_app) {
   }
 
+  // src/editor/navigator/thumbs.ts
+  function install24(_app) {
+  }
+
   // src/editor/commands/file.ts
-  function install24(app2) {
+  function install25(app2) {
     const c = app2.commands;
     c.define({ id: "file.open", label: "Open\u2026", run: (a) => a.files.openFile() });
     c.define({ id: "file.save", label: "Save", run: (a) => a.files.save() });
@@ -3555,14 +4212,14 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
   }
 
   // src/editor/commands/edit.ts
-  function install25(app2) {
+  function install26(app2) {
     const c = app2.commands;
     c.define({ id: "edit.undo", label: "Undo", enabled: (a) => a.history.canUndo, run: (a) => a.history.undo() });
     c.define({ id: "edit.redo", label: "Redo", enabled: (a) => a.history.canRedo, run: (a) => a.history.redo() });
   }
 
   // src/editor/commands/view.ts
-  function install26(app2) {
+  function install27(app2) {
     const c = app2.commands;
     c.define({ id: "view.navigator", label: "Navigator", checked: (a) => a.nav.shown, run: (a) => a.nav.toggle() });
     c.define({ id: "view.steps", label: "Steps", checked: (a) => a.steps.shown, run: (a) => a.steps.toggle() });
@@ -3570,14 +4227,10 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
   }
 
   // src/editor/commands/navigate.ts
-  function install27(app2) {
+  function install28(app2) {
     const c = app2.commands;
     c.define({ id: "navigate.previous", label: "Previous Slide", run: (a) => a.deck()?.left() });
     c.define({ id: "navigate.next", label: "Next Slide", run: (a) => a.deck()?.right() });
-  }
-
-  // src/editor/commands/arrange.ts
-  function install28(_app) {
   }
 
   // src/editor/commands/slide.ts
@@ -3852,11 +4505,11 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
       const u = this.unit(el);
       const old = el.localName;
       let body = u.body.replace(new RegExp(`^<${old}(?=[\\s/>])`, "i"), `<${tag}`).replace(new RegExp(`</${old}(\\s*)>$`, "i"), `</${tag}$1>`);
-      const start = tokenize(body).find((t) => t.type === "start");
+      const start2 = tokenize(body).find((t) => t.type === "start");
       const e = normalizeEdit(edit);
-      if (start?.type === "start" && Object.keys(e).length) {
-        const open = renderTag(body, start, start.attrs, e);
-        if (open !== null) body = body.slice(0, start.start) + open + body.slice(start.end);
+      if (start2?.type === "start" && Object.keys(e).length) {
+        const open = renderTag(body, start2, start2.attrs, e);
+        if (open !== null) body = body.slice(0, start2.start) + open + body.slice(start2.end);
       }
       const node = await this.place(body + u.trail, parent, el, u.lead);
       let rec = this.detach(el);
@@ -3981,31 +4634,18 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
     tex: (el) => mathLookup()(el)?.tex ?? null,
     changed: () => app.invalidate("content")
   });
-  var move = new Move({
-    pairing: () => app.pairing,
-    slide: () => app.current(),
-    scale: () => app.deck()?.getScale() ?? 1,
-    edits: app.tagEdits,
-    markDirty: () => app.markDirty(),
-    onChange: () => steps.refresh(),
-    show: (el) => app.showSlide(el),
-    record: (e) => app.history.push(e)
-  });
   var layers = new Layers(() => app.current(), () => {
-    move.select(null);
+    app.selection.clear();
     app.invalidate("slide");
   });
   app.nav = nav;
   app.steps = steps;
-  app.move = move;
   app.layers = layers;
   app.onRefresh(["content", "selection", "slide", "structure", "layout"], () => {
     layers.refresh();
     steps.refresh();
-    move.refresh();
     nav.refresh();
   });
-  app.listen("slide", () => move.select(null));
   install7(app);
   install8(app);
   install3(app);
@@ -4015,11 +4655,11 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
   install4(app);
   install5(app);
   install6(app);
-  install17(app);
-  install24(app);
+  install22(app);
   install25(app);
   install26(app);
   install27(app);
+  install28(app);
   installKeys(app);
   install15(app);
   install13(app);
@@ -4028,13 +4668,13 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
   install11(app);
   install16(app);
   install12(app);
+  install17(app);
   install18(app);
-  install21(app);
   install19(app);
   install20(app);
-  install28(app);
-  install22(app);
+  install21(app);
   install23(app);
+  install24(app);
   install29(app);
   install30(app);
   var revealReady = () => new Promise((done) => {
@@ -4042,7 +4682,7 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
     tick();
   });
   async function init() {
-    document.body.append(nav.pane, steps.pane, steps.badges, move.frame, move.selectedFrame, move.handle, move.guideV, move.guideH, move.offset);
+    document.body.append(nav.pane, steps.pane, steps.badges);
     document.documentElement.classList.add("beeson-editor");
     app.report();
     await revealReady();
