@@ -464,3 +464,57 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// the boxes of the navigator, the canvas, the inspector, the slide, and the Format button of the
+// toolbar, each null while it is not shown
+const shellBoxes = (page) => page.evaluate(`(() => {
+  const box = (sel) => {
+    const el = [...document.querySelectorAll(sel)].find((e) => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden');
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return r.width && r.height ? { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width } : null;
+  };
+  return { nav: box('body > .beeson-edit-nav'), canvas: box('.beeson-edit-canvas'), inspector: box('body > .beeson-edit-inspector'), slide: box('.reveal:not(.beeson-peek) .slides > section.present'), format: box('.beeson-edit-header [data-command="shell.format"]') };
+})()`);
+
+// finding 4: at a window width of 760 px the canvas was 258 px wide, between the navigator and the
+// inspector. the canvas is at least half of the window down to 760 px: the navigator is narrowed
+// to its smallest width first, and then the inspector is drawn over the canvas as a sheet, which
+// the Format button of the toolbar opens and closes
+for (const platform of PLATFORMS) {
+  test(`the canvas is at least half of a window of 1440, 1024, 900, and 760 px (${platform})`, async (t) => {
+    const narrow = [];
+    for (const width of [1440, 1024, 900, 760]) {
+      const page = await load(t, platform, { n: 2, size: { width, height: 800 } });
+      await sleep(200);
+      await frames(page);
+      const b = await shellBoxes(page);
+      assert.ok(b.inspector, `the Format tab is not shown at ${width} px`);
+      if (b.canvas.width < width / 2) {
+        narrow.push(`the canvas is ${Math.round(b.canvas.width)} px wide in a window of ${width} px, beside a navigator of ${Math.round(b.nav.width)} px`);
+        await page.close();
+        continue;
+      }
+      const over = b.inspector.left < b.canvas.right - 1;
+      if (over) assert.ok(Math.abs(b.nav.width - 140) <= 1, `the inspector is drawn over the canvas at ${width} px before the navigator is at its smallest width of 140 px`);
+      if (width >= 1024) assert.ok(!over && Math.abs(b.nav.width - 200) <= 1, `the navigator or the inspector is changed at ${width} px`);
+      if (width === 760) {
+        assert.ok(over, 'the inspector is not drawn over the canvas at 760 px');
+        assert.ok(b.format, 'the Format button is not in the toolbar at 760 px');
+        await click(page, { x: (b.format.left + b.format.right) / 2, y: (b.format.top + b.format.bottom) / 2 });
+        await sleep(150);
+        await frames(page);
+        const closed = await shellBoxes(page);
+        assert.equal(closed.inspector, null, 'the Format button does not close the sheet');
+        assert.ok(Math.abs(closed.canvas.width - b.canvas.width) <= 1, 'the canvas changes width when the sheet is closed');
+        await click(page, { x: (b.format.left + b.format.right) / 2, y: (b.format.top + b.format.bottom) / 2 });
+        await sleep(150);
+        await frames(page);
+        assert.ok((await shellBoxes(page)).inspector, 'the Format button does not open the sheet');
+      }
+      assert.deepEqual(errors(page), []);
+      await page.close();
+    }
+    assert.deepEqual(narrow, []);
+  });
+}
