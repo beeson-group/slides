@@ -188,3 +188,110 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// the buttons of the insert group of the toolbar, with the command, the text, the shown label, and
+// whether each is the main part of a split button
+const insertGroup = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-top .group[data-group="insert"] .tb')].map((b) => ({ id: b.dataset.command, text: b.textContent, label: getComputedStyle(b.querySelector('.label')).display !== 'none', split: !!b.closest('.beeson-edit-split') }))`);
+
+const LAYOUTS = 'test/pages/editor-layouts.html';
+const MATH = readFileSync(LAYOUTS, 'utf8').split(/<section\b/).slice(1).findIndex((s) => s.includes('<h2>Math, an ordered list, and a zone</h2>'));
+
+// a point of the slide given in slide px, in CSS px of the viewport
+const screen = (page, x, y) => page.evaluate(`(() => {
+  const s = document.querySelector('.reveal .slides');
+  const r = s.getBoundingClientRect(), k = r.width / s.offsetWidth;
+  return { x: r.left + ${x} * k, y: r.top + ${y} * k };
+})()`);
+
+for (const platform of PLATFORMS) {
+  test(`the insert group of the toolbar is Table, Text, Formula, Shape, and Media, with labels above 1100 px (${platform})`, async (t) => {
+    for (const [width, labels] of [[1600, true], [1000, false], [800, false]]) {
+      const page = await load(t, platform, { size: { width, height: 800 } });
+      const group = await insertGroup(page);
+      assert.deepEqual(group.map((b) => [b.id, b.text, b.split]), [
+        ['insert.table', 'Table', false],
+        ['insert.text', 'Text', false],
+        ['insert.formula', 'Formula', false],
+        ['insert.line', 'Shape', true],
+        ['insert.image', 'Media', true],
+      ], `${width}: the insert group`);
+      assert.ok(group.every((b) => b.label === labels), `${width}: the labels`);
+      // the groups after Present go into the menu More below 820 px, and the inserts stay
+      assert.equal(await page.evaluate(`!!document.querySelector('.beeson-edit-top .more-groups')`), width < 820, `${width}: the menu More`);
+      const top = await page.evaluate(`(() => { const t = document.querySelector('.beeson-edit-top'); return { scroll: t.scrollWidth - t.clientWidth, h: t.getBoundingClientRect().height }; })()`);
+      assert.ok(top.scroll <= 0, `${width}: the toolbar overflows by ${top.scroll} px`);
+      assert.equal(top.h, 52);
+      assert.deepEqual(errors(page), []);
+      await page.close();
+    }
+  });
+
+  test(`the arrow of Media lists the inserts of a picture, and QR Code from it is inserted and undone byte for byte (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: LAYOUTS });
+    await page.evaluate(`Reveal.slide(${MATH})`);
+    await sleep(200);
+    assert.equal(await page.evaluate(`document.querySelector('[data-command="insert.image"]').title`), 'Image…');
+    await click(page, await center(page, '.beeson-edit-split:has([data-command="insert.image"]) .more'));
+    await sleep(100);
+    const rows = await menuRows(page);
+    assert.deepEqual(rows.map((r) => r.label), ['Image…', 'Video…', 'QR Code', 'Choose File…']);
+    assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-menu .rule').length`), 1, 'Choose File… is not set apart by a rule');
+    await click(page, await center(page, '.beeson-edit-menu .item[data-command="insert.qr"]'));
+    await sleep(300);
+    const edited = await render(page);
+    assert.ok(edited.length > page.source.length && edited.includes('class="qr"'), 'QR Code of the list of Media did not insert a QR code');
+    await page.evaluate('window.BeesonEditor.undo()');
+    await sleep(150);
+    assert.equal(await render(page), page.source);
+    await page.evaluate('window.BeesonEditor.redo()');
+    await sleep(150);
+    assert.equal(await render(page), edited);
+    const { text } = await saveAndReopen(page, `r5-3-qr-${platform}.html`);
+    assert.equal(text, edited);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`Shape draws a line from its main part and an arrow from its list, and is pressed while one is drawn (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: LAYOUTS });
+    await page.evaluate(`Reveal.slide(${MATH})`);
+    await sleep(200);
+    const shape = '.beeson-edit-top [data-command="insert.line"]';
+    const pressed = () => page.evaluate(`document.querySelector('${shape}').getAttribute('aria-pressed')`);
+    await click(page, await center(page, shape));
+    await sleep(50);
+    assert.equal((await state(page, 'insert.line')).checked, true, 'the main part of Shape does not draw a line');
+    assert.equal(await pressed(), 'true');
+    await press(page, 'Escape');
+    await sleep(50);
+    assert.notEqual(await pressed(), 'true', 'Shape is still pressed');
+    await click(page, await center(page, '.beeson-edit-split:has([data-command="insert.line"]) .more'));
+    await sleep(100);
+    assert.deepEqual((await menuRows(page)).map((r) => r.label), ['Line', 'Arrow']);
+    await click(page, await center(page, '.beeson-edit-menu .item[data-command="insert.arrow"]'));
+    await sleep(50);
+    assert.equal((await state(page, 'insert.arrow')).checked, true);
+    assert.equal(await pressed(), 'true', 'Shape is not pressed while an arrow is drawn');
+    const a = await screen(page, 200, 300);
+    const b = await screen(page, 600, 330);
+    // the drag is made with the modifier of a move without the snap, Meta on a Mac and Alt elsewhere
+    const bits = platform === 'mac' ? 4 : 1;
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: a.x, y: a.y, modifiers: bits });
+    await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: a.x, y: a.y, button: 'left', buttons: 1, clickCount: 1, modifiers: bits });
+    for (let i = 1; i <= 10; i++) await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: a.x + ((b.x - a.x) * i) / 10, y: a.y + ((b.y - a.y) * i) / 10, button: 'left', buttons: 1, modifiers: bits });
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: b.x, y: b.y, button: 'left', clickCount: 1, modifiers: bits });
+    await sleep(200);
+    const edited = await render(page);
+    assert.ok(edited.includes('<svg class="line'), 'the drag did not draw an arrow');
+    assert.ok(edited.includes('marker-end'), 'the line drawn is not an arrow');
+    assert.notEqual(await pressed(), 'true', 'Shape is still pressed');
+    await page.evaluate('window.BeesonEditor.undo()');
+    await sleep(150);
+    assert.equal(await render(page), page.source);
+    await page.evaluate('window.BeesonEditor.redo()');
+    await sleep(150);
+    assert.equal(await render(page), edited);
+    const { text } = await saveAndReopen(page, `r5-3-arrow-${platform}.html`);
+    assert.equal(text, edited);
+    assert.deepEqual(errors(page), []);
+  });
+}

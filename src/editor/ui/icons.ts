@@ -38,6 +38,9 @@ const PATHS: Record<string, string[]> = {
   more: ['M5 6l4 4-4 4', 'M11 6l4 4-4 4'],
   warning: ['M10 3.5 17.5 16.5h-15z', 'M10 8.5v3.5', 'F10.75 14.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0z'],
   square: ['M4.5 4.5h11v11h-11z'],
+  // the Shape and Media buttons of the toolbar of Keynote, a square behind a circle and a paper clip
+  shape: ['M12 7.78V3.5H3.5V12h4.28', 'M12.5 7.75a4.75 4.75 0 1 1 0 9.5 4.75 4.75 0 0 1 0-9.5z'],
+  media: ['M12.75 6.5 7.6 11.65a1.6 1.6 0 0 0 2.26 2.26l5.66-5.66a3.2 3.2 0 0 0-4.53-4.53L5.3 9.4a4.8 4.8 0 0 0 6.79 6.79l4.41-4.41'],
 };
 
 export const iconNames = (): string[] => Object.keys(PATHS);

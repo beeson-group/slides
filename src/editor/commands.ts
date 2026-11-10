@@ -19,8 +19,9 @@ export type Command = {
   // where the keys are taken, by default on the canvas and in the navigator
   in?: Region[];
   menu?: { bar: string; group: string; order: number; submenu?: string };
-  // label is a short label of the toolbar that does not change, e.g. Undo for Undo Typing, and
-  // split names a submenu of the menu of the command, drawn as a split button beside it
+  // label is a short label of the toolbar that does not change, e.g. Undo for Undo Typing. split
+  // draws a split button, whose list holds the commands of the group with the same split and the
+  // submenu of that name of the menu of the command
   toolbar?: { group: string; order: number; icon: string; label?: string; split?: string };
   context?: Context[];
   enabled?(app: App): boolean;
