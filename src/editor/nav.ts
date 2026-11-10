@@ -5,6 +5,7 @@
 // of one slide is shown while the pointer rests on its row
 
 import { layersOf, showLayer } from './layers.ts';
+import { injectStyle } from './ui/dom.ts';
 
 export type Ctx = {
   slides(): Element[];
@@ -25,6 +26,25 @@ function describe(slide: Element): { title: string; kind: string } {
   return { title, kind };
 }
 
+const CSS = `
+.beeson-edit-nav { position: fixed; left: 0; top: 44px; bottom: 36px; z-index: 50; width: 240px; box-sizing: border-box; display: none; flex-direction: column; background: var(--bg, #000); border-right: 1px solid var(--line, #555); color: var(--text, #eee); font: 13px/1.4 system-ui, sans-serif; }
+html.beeson-nav .beeson-edit-nav { display: flex; }
+.beeson-edit-nav .head { padding: 10px 12px; font-weight: 600; border-bottom: 1px solid var(--line, #555); }
+.beeson-edit-nav .rows { flex: 1; overflow: auto; padding: 6px 0; }
+.beeson-edit-nav .row { display: grid; grid-template-columns: 3ch 1fr; column-gap: 10px; width: 100%; box-sizing: border-box; padding: 6px 12px 6px 9px; border: 0; border-left: 3px solid transparent; border-radius: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
+.beeson-edit-nav .row:hover { background: color-mix(in srgb, var(--violet, #96f) 18%, transparent); }
+.beeson-edit-nav .row:focus-visible { outline: 2px solid var(--violet, #96f); outline-offset: -2px; }
+.beeson-edit-nav .row[aria-current="true"] { border-left-color: var(--accent, #f80); background: color-mix(in srgb, var(--violet, #96f) 28%, transparent); }
+.beeson-edit-nav .row .num { color: var(--subtle, #bbb); text-align: right; }
+.beeson-edit-nav .row .title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.beeson-edit-nav .row .kind { grid-column: 2; color: var(--subtle, #bbb); font-size: 11px; }
+.beeson-edit-peek { position: fixed; left: 248px; z-index: 57; width: 320px; overflow: hidden; border-radius: 6px; outline: 1px solid var(--line, #555); background: var(--bg, #000); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); pointer-events: none; }
+.beeson-edit-peek[hidden] { display: none; }
+.beeson-edit-peek .reveal { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; overflow: hidden; }
+.beeson-edit-peek .fragment { visibility: visible !important; opacity: 1 !important; transition: none !important; }
+.beeson-edit-peek .fragment.beeson-off { visibility: hidden !important; }
+`;
+
 export class Nav {
   readonly pane = document.createElement('div');
   readonly button = document.createElement('button');
@@ -36,6 +56,7 @@ export class Nav {
   private timer = 0;
 
   constructor(ctx: Ctx) {
+    injectStyle('nav', CSS);
     this.ctx = ctx;
     this.pane.className = 'beeson-edit-nav';
     this.pane.setAttribute('aria-label', 'Slides');

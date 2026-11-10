@@ -8,6 +8,7 @@ import type { Entry } from './history.ts';
 import type { Pairing } from './render.ts';
 import { stepIn, type Step, type TagEdit } from './tags.ts';
 import { OFF } from './layers.ts';
+import { injectStyle } from './ui/dom.ts';
 
 export type Group = Element[];
 export type Ctx = {
@@ -87,6 +88,25 @@ function describe(el: Element, tex: Ctx['tex']): { kind: string; text: string } 
   return { kind, text: text.length > 60 ? `${text.slice(0, 60)}…` : text };
 }
 
+const CSS = `
+.beeson-edit-side { position: fixed; right: 0; top: 44px; bottom: 36px; z-index: 50; width: 320px; box-sizing: border-box; display: none; flex-direction: column; background: var(--bg, #000); border-left: 1px solid var(--line, #555); color: var(--text, #eee); font: 13px/1.4 system-ui, sans-serif; }
+html.beeson-steps .beeson-edit-side { display: flex; }
+.beeson-edit-side .head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line, #555); }
+.beeson-edit-side .head span { flex: 1; font-weight: 600; }
+.beeson-edit-side .head button, .beeson-edit-side select { font: inherit; font-size: 12px; padding: 2px 8px; border: 1px solid var(--line, #555); border-radius: 6px; background: var(--bg, #000); color: var(--text, #eee); cursor: pointer; }
+.beeson-edit-side .head button:hover { border-color: var(--subtle, #bbb); }
+.beeson-edit-side .rows { flex: 1; overflow: auto; padding: 6px 0; }
+.beeson-edit-side .row { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 8px; padding: 5px 12px; cursor: default; }
+.beeson-edit-side .row:hover { background: color-mix(in srgb, var(--violet, #96f) 18%, transparent); }
+.beeson-edit-side .row .kind { color: var(--subtle, #bbb); white-space: nowrap; }
+.beeson-edit-side .row .text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.beeson-edit-side .empty, .beeson-edit-side .foot { margin: 0; padding: 10px 12px; color: var(--subtle, #bbb); font-size: 12px; }
+.beeson-edit-side .foot { border-top: 1px solid var(--line, #555); }
+.beeson-badges { position: fixed; inset: 0; z-index: 52; pointer-events: none; }
+.beeson-badge { position: absolute; transform: translate(-50%, -50%); min-width: 22px; height: 22px; padding: 0 5px; box-sizing: border-box; border-radius: 11px; background: var(--accent, #f80); color: #000; font: 600 13px/22px system-ui, sans-serif; text-align: center; }
+html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f80) !important; outline-offset: 6px; }
+`;
+
 export class Steps {
   readonly pane = document.createElement('div');
   readonly badges = document.createElement('div');
@@ -99,6 +119,7 @@ export class Steps {
   private key = '';
 
   constructor(ctx: Ctx) {
+    injectStyle('steps', CSS);
     this.ctx = ctx;
     this.pane.className = 'beeson-edit-side';
     this.badges.className = 'beeson-badges';

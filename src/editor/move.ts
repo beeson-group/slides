@@ -7,6 +7,7 @@
 import type { Entry } from './history.ts';
 import type { Pairing } from './render.ts';
 import type { TagEdit, Translate } from './tags.ts';
+import { injectStyle } from './ui/dom.ts';
 
 export type Ctx = {
   pairing(): Pairing | null;
@@ -42,6 +43,23 @@ const translateOf = (el: Element): Translate => {
   return { x: Number.isFinite(parts[0]) ? parts[0] : 0, y: Number.isFinite(parts[1]) ? parts[1] : 0 };
 };
 
+const CSS = `
+.beeson-frame { position: fixed; z-index: 51; pointer-events: none; box-sizing: border-box; border: 1px dashed var(--subtle, #bbb); }
+.beeson-frame.selected { border: 2px solid var(--violet, #96f); }
+.beeson-frame[hidden], .beeson-handle[hidden] { display: none; }
+.beeson-handle { position: fixed; z-index: 53; width: 22px; height: 22px; border-radius: 6px; border: 1px solid var(--line, #555); background: var(--bg, #000); color: var(--text, #eee); font: 14px/20px system-ui, sans-serif; text-align: center; cursor: move; user-select: none; }
+.beeson-handle:hover, .beeson-handle:focus-visible { border-color: var(--violet, #96f); outline: none; }
+.beeson-guide { position: fixed; z-index: 52; pointer-events: none; background: var(--accent, #f80); opacity: 0.8; }
+.beeson-guide.v { width: 1px; }
+.beeson-guide.h { height: 1px; }
+.beeson-guide[hidden] { display: none; }
+.beeson-offset { position: fixed; z-index: 53; transform: translateX(-100%); height: 22px; padding: 0 7px; box-sizing: border-box; border-radius: 11px; background: var(--accent, #f80); color: #000; font: 600 13px/22px system-ui, sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; pointer-events: none; }
+.beeson-offset[hidden] { display: none; }
+html.beeson-editing .reveal .beeson-movable:focus-visible { outline: 2px solid var(--violet, #96f); outline-offset: 6px; }
+html.beeson-dragging, html.beeson-dragging * { cursor: move !important; user-select: none !important; }
+html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .slides section video, html.beeson-editing .reveal .slides section .zone, html.beeson-editing .reveal .slides section .plate, html.beeson-editing .reveal .slides section .qr { cursor: move; }
+`;
+
 export class Move {
   // the dashed frame and the handle of the element under the pointer or being edited, and the
   // solid frame of the selected element
@@ -63,6 +81,7 @@ export class Move {
   private run: { el: Element; at: number; to: Translate } | null = null;
 
   constructor(ctx: Ctx) {
+    injectStyle('move', CSS);
     this.ctx = ctx;
     this.frame.className = 'beeson-frame';
     this.selectedFrame.className = 'beeson-frame selected';
