@@ -328,4 +328,55 @@ for (const platform of PLATFORMS) {
     await roundTrip(page, [[BARE, '<img class="paper" src="../../demo/figure-light.png" alt="A paper figure">']]);
     assert.deepEqual(errors(page), []);
   });
+
+  test(`the gear menu of Find sets the scope to the slides and notes, the notes only, or the alt texts (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await press(page, 'Mod+F');
+    await type(page, 'slide');
+    const count = () => page.evaluate(`document.querySelector('.beeson-find .count').textContent`);
+    const total = (c) => (c === 'Not found' ? 0 : Number(c.split(' of ')[1]));
+    const all = total(await count());
+    // the notes of the deck, as the panel counts them
+    const notes = [...page.source.matchAll(/<aside class="notes">([\s\S]*?)<\/aside>/g)].reduce((n, m) => n + (m[1].match(/slide/gi)?.length ?? 0), 0);
+    assert.ok(notes > 0 && all > notes, `${all} matches in all and ${notes} in the notes`);
+    await click(page, '.beeson-find .gear');
+    await frames(page);
+    const labels = await menuLabels(page);
+    for (const l of ['Slides and Notes', 'Notes Only', 'Alt Texts']) assert.ok(labels.includes(l), `the gear menu has no ${l}`);
+    assert.ok(labels.indexOf('Alt Texts') < labels.indexOf('Search TeX of Formulas'));
+    await choose(page, 'Notes Only');
+    assert.equal(total(await count()), notes);
+    assert.equal((await state(page, 'find.scopeNotes')).checked, true);
+    assert.equal((await state(page, 'find.scopeAll')).checked, false);
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-find .search input').placeholder`), 'Find in Notes');
+    // the current match is in the notes, which are shown
+    assert.equal(await page.evaluate(`!!getSelection().anchorNode?.parentElement?.closest('aside.notes') || [...CSS.highlights.get('beeson-find-current') ?? []].some((r) => r.startContainer.parentElement.closest('aside.notes'))`), true);
+
+    // in the scope of the alt texts, TeX is dimmed, and the alt texts of the images are found
+    await click(page, '.beeson-find .gear');
+    await choose(page, 'Alt Texts');
+    assert.equal((await state(page, 'find.tex')).enabled, false);
+    await click(page, '.beeson-find .search .clear');
+    await type(page, 'version');
+    assert.equal(await count(), '1 of 2');
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-find .search input').placeholder`), 'Find in Alt Texts');
+    // the image of the current match is selected on its slide
+    const slide = await page.evaluate(`Reveal.getIndices().h`);
+    assert.equal(slide, await page.evaluate(`Reveal.getIndices(document.querySelector('.reveal img[alt="A figure, dark version"]').closest('section')).h`));
+    // Replace All writes the alt texts as one entry of the history
+    await exec(page, 'find.replace');
+    await page.evaluate(`document.querySelector('.beeson-find .replace input').focus()`);
+    await type(page, 'variant');
+    await click(page, '.beeson-find .actions button:first-child');
+    await page.waitFor(`window.BeesonEditor.render() !== ${js(page.source)}`);
+    assert.equal(await count(), '2 replaced');
+    await roundTrip(page, [[DARK, 'alt="A figure, dark variant"'], [LIGHT, 'alt="A figure, light variant"']]);
+    // in the scope of the slides and the notes, the alt texts are not searched
+    await click(page, '.beeson-find .gear');
+    await choose(page, 'Slides and Notes');
+    await click(page, '.beeson-find .search .clear');
+    await type(page, 'variant');
+    assert.equal(await count(), 'Not found');
+    assert.deepEqual(errors(page), []);
+  });
 }
