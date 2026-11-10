@@ -11,7 +11,7 @@
 import { App } from './app.ts';
 import { installKeys } from './commands.ts';
 import { mathReady, mathLookup } from './math.ts';
-import { Nav } from './nav.ts';
+import { Navigator } from './navigator/navigator.ts';
 import { Steps } from './steps.ts';
 import { Layers } from './layers.ts';
 import { canWrite, fetchSource, install as installFiles } from './file/files.ts';
@@ -63,11 +63,12 @@ const doc = new Doc({
   },
   restore: (host, content) => app.typing.restoreHost(host, content),
 });
+app.doc = doc;
 
 // the modules of today that are classes with a context: the slide list at the left, the steps of
 // the current slide in a pane at the right, and the layer switch. each is replaced by a module of
 // the plan
-const nav = new Nav({ slides: () => [...app.slides().querySelectorAll(':scope > section')], current: () => app.current(), go: (el) => app.showSlide(el), layout: () => app.relayout() });
+const nav = new Navigator(app);
 const steps = new Steps({
   pairing: () => app.pairing,
   slide: () => app.current(),

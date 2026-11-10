@@ -11,6 +11,7 @@ import { History } from './history.ts';
 import { contentWithTex } from './math.ts';
 import { Commands } from './commands.ts';
 import type { Selection } from './selection.ts';
+import type { Doc } from './model/doc.ts';
 
 // the part of reveal.js that the editor uses
 export type Deck = {
@@ -106,12 +107,11 @@ export interface Typing {
 }
 
 export interface Selector {
-  // move.ts today, the selection of R1.4 later: the selected element and its keys
+  // selection.ts: the selected element for the modules of today
   select(el: Element | null): void;
   movableOf(target: Element | null): Element | null;
   mark(pairing: Pairing | null): void;
   refresh(): void;
-  onKey(ev: KeyboardEvent): boolean;
 }
 
 export interface Pane {
@@ -166,6 +166,7 @@ export class App {
   move!: Selector;
   layers!: LayerSwitch;
   selection!: Selection;
+  doc!: Doc;
   nav!: Pane;
   steps!: Pane;
 

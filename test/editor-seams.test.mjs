@@ -47,7 +47,7 @@ for (const platform of ['mac', 'other']) {
     await type(page, ' now');
     const edit = ['<h2>Text, a list, and a backdrop</h2>', '<h2>Text, a list, and a backdrop now</h2>'];
     await byteExact(page, [edit]);
-    assert.deepEqual(await page.evaluate(`window.BeesonEditor.state('edit.undo')`), { id: 'edit.undo', label: 'Undo', enabled: true, checked: null });
+    assert.deepEqual(await page.evaluate(`window.BeesonEditor.state('edit.undo')`), { id: 'edit.undo', label: 'Undo Typing', enabled: true, checked: null });
     await press(page, 'Mod+Z');
     await page.waitFor(`!window.BeesonEditor.status().undo`);
     await byteExact(page);

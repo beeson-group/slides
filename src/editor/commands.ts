@@ -1,10 +1,11 @@
 // the registry of the commands of the editor. a menu item, a toolbar button, a context menu item,
 // an inspector button, and a key each name a command by its id, and a package declares its
 // commands in its file under commands/, with the places where they are shown. the items of a menu
-// are thus not listed in any file. installKeys holds the keyboard handler of today, which the one
-// dispatch over the keys of the registry replaces
+// are thus not listed in any file. installKeys installs the one keyboard handler of the editor,
+// which runs the command of a key
 
-import type { App, Region } from './app.ts';
+import type { App, Deck, Platform, Region } from './app.ts';
+import { display, fallback, matches, type KeyEvent } from './keymap.ts';
 
 export type Context = 'element' | 'text' | 'canvas' | 'slide' | 'navigator';
 
@@ -32,6 +33,23 @@ export type CommandState = { id: string; label: string; enabled: boolean; checke
 
 // the commands of one group of a menu or of the toolbar, in their order
 export type Group = { group: string; commands: Command[] };
+
+// the regions of a command without in
+export const DEFAULT_REGIONS: Region[] = ['canvas', 'navigator'];
+
+// every region but a dialog, e.g. for Undo, and every region, e.g. for Save
+export const OUTSIDE_DIALOGS: Region[] = ['canvas', 'text', 'field', 'navigator', 'notes', 'inspector'];
+export const EVERYWHERE: Region[] = [...OUTSIDE_DIALOGS, 'dialog'];
+
+export function keysOf(c: Command, platform: Platform): string[] {
+  return c.keys?.[platform] ?? [];
+}
+
+// a key without Mod, Ctrl, Alt, or Meta, other than a function key, which a focused button or
+// field of the bars takes for itself
+export function isPlain(value: string): boolean {
+  return !/(^|\+)(Mod|Ctrl|Alt|Meta)\+/.test(value) && !/^(Shift\+)?F\d+$/.test(value);
+}
 
 const orderOf = (c: Command, place: 'menu' | 'toolbar'): number => c[place]?.order ?? 0;
 
@@ -96,6 +114,25 @@ export class Commands {
     else await c.run(this.app, arg);
   }
 
+  // the keys of a command on the platform of the editor, as a menu shows them
+  shortcuts(id: string): string[] {
+    const c = this.byId.get(id);
+    return c ? keysOf(c, this.app.platform).map((k) => display(k, this.app.platform)) : [];
+  }
+
+  // the first enabled command taken in region whose keys match ev, and else the first one whose
+  // keys match ev with the fallback modifier of keymap.ts. with plain set, a key of isPlain is not
+  // taken
+  forKey(ev: KeyEvent, region: Region, plain = true): Command | undefined {
+    const platform = this.app.platform;
+    const find = (e: KeyEvent) => this.list().find((c) =>
+      (c.in ?? DEFAULT_REGIONS).includes(region) &&
+      keysOf(c, platform).some((k) => (plain || !isPlain(k)) && matches(e, k, platform)) &&
+      this.enabled(c.id));
+    const alt = fallback(ev, platform);
+    return find(ev) ?? (alt ? find(alt) : undefined);
+  }
+
   // the commands of a menu of the menu bar, or of one of its submenus, in groups
   forMenu(bar: string, submenu?: string): Group[] {
     return grouped(this.list().filter((c) => c.menu?.bar === bar && c.menu.submenu === submenu), 'menu');
@@ -111,49 +148,49 @@ export class Commands {
   }
 }
 
-// the keys of today, before the listeners of reveal.js: ⌘S or Ctrl+S saves, with Shift into
-// another file, ⌘Z and ⌘⇧Z or Ctrl+Z and Ctrl+Y move in the history, Enter on a formula opens its
-// TeX, and Esc leaves the text that is being edited, so that the arrow keys move between the
-// slides again
+// the one keyboard handler of the editor, on window in the capture phase and thus before any other
+// listener. it runs the command of a key in the region of the focus, and only then prevents the
+// default and stops the event. a key that does not run a command is left to the browser, e.g.
+// Backspace and the clipboard keys in a text. a plain key on a focused button or field of the bars
+// is left to it, e.g. Space on a button or an arrow on the resizer of the notes. the keys of
+// reveal.js are turned off, since the navigation is a set of commands of the registry
 export function installKeys(app: App): void {
-  const run = (id: string) => void app.commands.run(id).catch((e) => app.fail(e));
   window.addEventListener('keydown', (ev) => {
-    const mod = ev.metaKey || ev.ctrlKey;
-    const key = ev.key.toLowerCase();
-    const target = ev.target instanceof Element ? ev.target : null;
-    const inField = !!target?.closest('.beeson-math, input, textarea, select');
+    if (ev.isComposing || ev.keyCode === 229) return;
+    if (dialogKey(app, ev)) return;
+    const region = app.region();
+    // the handle of a block is outside the slide, and its keys are those of the canvas
     const active = document.activeElement;
-    if (mod && !ev.altKey && key === 's') {
-      ev.preventDefault();
-      run(ev.shiftKey ? 'file.saveAs' : 'file.save');
-    } else if (mod && !ev.altKey && !inField && (key === 'z' || (key === 'y' && !ev.shiftKey))) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      run(key === 'y' || ev.shiftKey ? 'edit.redo' : 'edit.undo');
-    } else if ((ev.key === 'Enter' || ev.key === ' ') && !app.math.isOpen() && active instanceof Element && active.matches('mjx-container') && app.hostOf(active)) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      app.math.open(active);
-    } else if (ev.key === 'Escape' && app.files.problemsShown()) {
-      app.files.closeProblems();
-      ev.stopPropagation();
-    } else if (ev.key === 'Escape' && app.files.askShown()) {
-      app.files.cancelAsk();
-      ev.stopPropagation();
-    } else if (!app.math.isOpen() && app.move.onKey(ev)) {
-      ev.preventDefault();
-      ev.stopPropagation();
-    } else if (ev.key === 'Escape') {
-      const host = app.hostOf(active);
-      if (app.math.isOpen()) {
-        app.math.close();
-        ev.stopPropagation();
-      } else if (host) {
-        // the block is selected, as the text box in PowerPoint, and the arrow keys nudge it
-        (host as HTMLElement).blur();
-        app.move.select(app.move.movableOf(host));
-        ev.stopPropagation();
-      }
-    }
+    const onBar = region === 'canvas' && active instanceof Element && active !== document.body && active !== document.documentElement && !active.closest('.reveal, .beeson-handle');
+    const command = app.commands.forKey(ev, region, !onBar);
+    if (!command) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    void app.commands.run(command.id).catch((e) => app.fail(e));
   }, true);
+  // the options of reveal.js are set by main.ts once it is ready, before the resize that follows
+  // them, hence the keyboard is turned off at a resize
+  app.listen('resize', () => {
+    const d = app.deck() as (Deck & { getConfig?(): { keyboard?: unknown } }) | undefined;
+    if (d?.isReady() && d.getConfig?.().keyboard !== false) d.configure({ keyboard: false });
+  });
+}
+
+// the keys of the dialogs of today, which are not commands yet: Enter on a formula opens its TeX,
+// and Esc closes the TeX field or a card of a file
+function dialogKey(app: App, ev: KeyboardEvent): boolean {
+  const active = document.activeElement;
+  if ((ev.key === 'Enter' || ev.key === ' ') && !app.math.isOpen() && active instanceof Element && active.matches('mjx-container') && app.hostOf(active)) {
+    ev.preventDefault();
+    ev.stopPropagation();
+    app.math.open(active);
+    return true;
+  }
+  if (ev.key !== 'Escape') return false;
+  if (app.files.problemsShown()) app.files.closeProblems();
+  else if (app.files.askShown()) app.files.cancelAsk();
+  else if (app.math.isOpen()) app.math.close();
+  else return false;
+  ev.stopPropagation();
+  return true;
 }
