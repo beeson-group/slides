@@ -464,8 +464,15 @@ class Renderer {
       else kept.set(anchor, [...(kept.get(anchor) ?? []), u]);
     }
     const parts: string[] = [];
+    // the white space before the first unit of an element without a start tag is in its parent,
+    // hence the first unit written is written without it, and a unit after it with it
+    const bare = !s.open;
+    const put = (lead: string, rest: string) => {
+      if (bare) lead = parts.length ? lead || this.space(s) : lead.slice(spaceOf(lead).length);
+      parts.push(lead + rest);
+    };
     const keep = (key: SrcEl | null) => {
-      for (const u of kept.get(key) ?? []) parts.push(text.slice(u.lead.start, u.end));
+      for (const u of kept.get(key) ?? []) put(text.slice(u.lead.start, u.range.start), text.slice(u.range.start, u.end));
     };
     keep(null);
     const notes: Element[] = [];
@@ -480,7 +487,7 @@ class Renderer {
       if (u) {
         if (units.indexOf(u) < order) changed = true;
         order = units.indexOf(u);
-        parts.push(text.slice(u.lead.start, u.range.start) + this.element(m, c) + text.slice(u.range.end, u.end));
+        put(text.slice(u.lead.start, u.range.start), this.element(m, c) + text.slice(u.range.end, u.end));
         keep(m);
         continue;
       }
@@ -490,7 +497,7 @@ class Renderer {
       const mt = m.source.text;
       const lead = mt.slice(home.lead.start, home.range.start);
       const inPlace = isFragmentRoot(m) && m.source.fragment?.home === live;
-      parts.push((inPlace ? lead : placeLead(lead, this.space(s), this.eol)) + this.element(m, c) + mt.slice(home.range.end, home.end));
+      put(inPlace ? lead : placeLead(lead, this.space(s), this.eol), this.element(m, c) + mt.slice(home.range.end, home.end));
     }
     let tail = within ? text.slice(within.tail.start, within.tail.end) : '';
     if (!units.length && !tail && parts.length) tail = this.eol + this.indent(s);
