@@ -206,3 +206,42 @@ test('every key of the keyboard sheet and the menus of Windows and Linux is writ
   assert.ok(sheet.some(([label, keys]) => label === 'Zoom Out' && keys.split(', ').includes('Ctrl+-')), 'Zoom Out is not listed as Ctrl+-');
   assert.deepEqual(errors(page), []);
 });
+
+// the trusted key events of the key of Insert > Formula on the platform, followed by those of text,
+// all sent before the first one is handled, as keys typed back to back
+function formulaThenType(page, platform, text) {
+  const key = (type, base, modifiers = 0) => page.send('Input.dispatchKeyEvent', { type, modifiers, ...base });
+  const sent = [];
+  const trigger = platform === 'mac'
+    ? [{ key: 'e', code: 'KeyE', windowsVirtualKeyCode: 69 }, 4 | 1]
+    : [{ key: '=', code: 'Equal', windowsVirtualKeyCode: 187 }, 1];
+  sent.push(key('rawKeyDown', ...trigger), key('keyUp', ...trigger));
+  for (const c of text) {
+    const base = { key: c, code: c === ' ' ? 'Space' : `Key${c.toUpperCase()}`, windowsVirtualKeyCode: c === ' ' ? 32 : c.toUpperCase().charCodeAt(0) };
+    sent.push(key('keyDown', { ...base, text: c, unmodifiedText: c }), key('keyUp', base));
+  }
+  return Promise.all(sent);
+}
+
+// finding 7: the keys typed while Insert > Formula opens the TeX field of an inline formula in a
+// text were typed into the text, and the TeX field was empty
+for (const platform of PLATFORMS) {
+  test(`every key typed back to back after Insert > Formula in a text reaches the TeX field of its inline formula (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 4, format: false });
+    const PARA = '.reveal section.present > p';
+    await click(page, PARA);
+    await press(page, 'End');
+    await frames(page);
+    assert.ok(await page.evaluate(`document.activeElement.isContentEditable && !!document.activeElement.closest('.reveal')`), 'the caret is not in the paragraph');
+    await formulaThenType(page, platform, 'abc d');
+    await page.waitFor(`!!document.querySelector('.beeson-math textarea')`);
+    await sleep(300);
+    const field = await page.evaluate(`(() => { const f = document.querySelector('.beeson-math textarea'); return { value: f.value, focused: f === document.activeElement }; })()`);
+    assert.deepEqual(field, { value: 'abc d', focused: true });
+    await byteExact(page);
+    await page.evaluate(`[...document.querySelectorAll('.beeson-math button')].find((b) => b.textContent === 'Insert').click()`);
+    await page.waitFor(`!document.querySelector('.beeson-math')`);
+    assert.match(await render(page), /\\\(abc d\\\)/);
+    await roundTrip(page);
+  });
+}
