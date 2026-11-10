@@ -393,6 +393,8 @@ for (const platform of PLATFORMS) {
     // a copy and a paste of the group g1 makes a new group as well
     await undo(page);
     await frames(page);
+    // a first click on a member selects the group, which a second click would leave for the member
+    await exec(page, 'selection.clear');
     await click(page, '.reveal section.present > .qr');
     assert.equal(await shownFrames(page), 2);
     await exec(page, 'edit.copy');

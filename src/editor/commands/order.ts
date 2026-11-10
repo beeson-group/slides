@@ -131,9 +131,21 @@ function setLock(app: App, on: boolean): void {
 // the angle of el in degrees, from 0 to 359
 export const angleOf = (el: Element): number => placeOf(el).rotate ?? 0;
 
-// a selection that holds a member of a group holds every member. a member taken off a selection
-// that held its whole group and other elements, e.g. by a click with Shift, takes the whole group
-// off, and a click that selects one member of a selected group keeps the group
+// the member of a group selected by itself with enterGroup, which keepGroups leaves alone while it
+// is the whole selection
+let entered: Element | null = null;
+
+// selects el, a member of a selected group, by itself, as the second click on a member does in
+// Keynote and PowerPoint
+export function enterGroup(app: App, el: Element): void {
+  entered = el;
+  app.selection.set('elements', [el]);
+}
+
+// a selection that holds a member of a group holds every member, apart from a member selected by
+// itself with enterGroup. a member taken off a selection that held its whole group and other
+// elements, e.g. by a click with Shift, takes the whole group off, and a click that selects one
+// member of a selected group keeps the group
 function keepGroups(app: App): void {
   let before = new Set<Element>();
   let busy = false;
@@ -141,6 +153,11 @@ function keepGroups(app: App): void {
     if (busy) return;
     const sel = app.selection;
     const els = sel.elements();
+    if (entered && !(els.length === 1 && els[0] === entered)) entered = null;
+    if (entered) {
+      before = new Set(els);
+      return;
+    }
     const ids = new Set([...els, ...before].map(groupOf).filter((g): g is string => !!g));
     let next = [...els];
     for (const id of ids) {
