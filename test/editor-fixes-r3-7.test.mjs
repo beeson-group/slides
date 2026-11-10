@@ -253,3 +253,62 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errorsOf(page), []);
   });
 }
+
+// every menu of the menu bar with its submenus, as lines of the form 'Format > List' with the
+// enabled state of each submenu and each command
+const MENUS = ['File', 'Edit', 'Insert', 'Format', 'Arrange', 'Slide', 'View', 'Help'];
+const survey = (page) => page.evaluate(`(() => {
+  const S = window.BeesonEditorShell, E = window.BeesonEditor;
+  const subs = {}, commands = {}, wrong = [];
+  for (const bar of ${JSON.stringify(MENUS)}) {
+    for (const item of S.menuItems(bar)) {
+      if (item.command) commands[item.command] = E.state(item.command).enabled;
+      if (!item.items) continue;
+      const inner = (typeof item.items === 'function' ? item.items() : item.items).filter((i) => i.command).map((i) => ({ id: i.command, ...E.state(i.command) }));
+      for (const i of inner) commands[i.id] = i.enabled;
+      const plain = inner.filter((i) => i.checked === null);
+      const expected = (plain.length ? plain : inner).some((i) => i.enabled);
+      subs[bar + ' > ' + item.label] = !item.disabled;
+      if (!item.disabled !== expected) wrong.push(bar + ' > ' + item.label + (expected ? ' is disabled' : ' is enabled'));
+    }
+  }
+  return { subs, commands, wrong };
+})()`);
+
+const TEXT_SUBMENUS = ['Format > Baseline', 'Format > Text Color', 'Format > Paragraph Style', 'Format > List', 'Format > Change Case'];
+const TEXT_COMMANDS = ['text.bold', 'text.italic', 'text.superscript', 'text.tone.accent', 'text.style.body', 'text.list.ul', 'text.case.upper', 'text.clear', 'text.link'];
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: a menu item is enabled only where its command can run, with nothing, a caret, a figure, or two elements selected`, async () => {
+    const page = await editor(platform);
+    await page.evaluate(`Reveal.slide([...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.zone > video') && s.querySelector(':scope > p')))`);
+    await sleep(250);
+    const off = (s, names) => names.filter((n) => n in s.subs || n in s.commands).filter((n) => s.subs[n] ?? s.commands[n]);
+
+    const nothing = await survey(page);
+    assert.deepEqual(nothing.wrong, [], 'with nothing selected, a submenu is enabled without an item that can run');
+    assert.deepEqual(off(nothing, [...TEXT_SUBMENUS, ...TEXT_COMMANDS, 'Arrange > Align', 'Arrange > Distribute']), [], 'with nothing selected, a text or an arrange item is enabled');
+
+    await click(page, '.reveal section.present > p');
+    await sleep(50);
+    const caret = await survey(page);
+    assert.deepEqual(caret.wrong, [], 'with the caret in a paragraph, a submenu does not follow its items');
+    assert.equal(caret.subs['Format > Paragraph Style'], true, 'with the caret in a paragraph, its style cannot be set');
+    assert.equal(caret.commands['selection.all'], true);
+
+    await press(page, 'Escape');
+    await press(page, 'Escape');
+    await click(page, '.reveal section.present .zone > video');
+    await sleep(50);
+    const figure = await survey(page);
+    assert.deepEqual(figure.wrong, [], 'with a figure selected, a submenu does not follow its items');
+    assert.deepEqual(off(figure, [...TEXT_SUBMENUS, ...TEXT_COMMANDS]), [], 'the text submenus of Format are left enabled while a figure is selected');
+
+    await click(page, '.reveal section.present > p', { modifiers: 'Shift' });
+    await sleep(50);
+    const two = await survey(page);
+    assert.deepEqual(two.wrong, [], 'with two elements selected, a submenu does not follow its items');
+    assert.equal(two.subs['Arrange > Align'], true, 'two elements cannot be aligned');
+    assert.deepEqual(errorsOf(page), []);
+  });
+}
