@@ -515,3 +515,58 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// the labels of the items of the open menu, with their check marks
+const openMenuItems = (page) =>
+  page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu [role^="menuitem"]')].map((m) => ({ label: m.querySelector('.label')?.textContent ?? m.textContent.trim(), checked: m.getAttribute('aria-checked') === 'true' }))`);
+const pickItem = (page, label) =>
+  page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu [role^="menuitem"]')].find((m) => (m.querySelector('.label')?.textContent ?? '') === ${JSON.stringify(label)}).click()`);
+
+for (const platform of PLATFORMS) {
+  test(`the View and Zoom popups are at the left of the toolbar, which fits in 1280 px (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 3, size: { width: 1280, height: 800 } });
+    const bar = await page.evaluate(`(() => {
+      const top = document.querySelector('.beeson-edit-top');
+      const buttons = [...top.querySelectorAll('.tb')].filter((b) => b.getClientRects().length);
+      return { ids: buttons.map((b) => b.dataset.command), fits: top.scrollWidth <= top.clientWidth, rows: new Set(buttons.map((b) => Math.round(b.getBoundingClientRect().top))).size, labels: buttons.every((b) => getComputedStyle(b.querySelector('.label')).display !== 'none') };
+    })()`);
+    assert.deepEqual(bar.ids.slice(0, 3), ['toolbar.view', 'toolbar.zoom', 'edit.undo']);
+    assert.equal(bar.fits, true, 'the toolbar is wider than 1280 px');
+    assert.equal(bar.rows, 1);
+    assert.equal(bar.labels, true);
+    // the View popup opens under its button with the views and the panes
+    const view = '.beeson-edit-top [data-command="toolbar.view"]';
+    await click(page, view);
+    await frames(page);
+    const b = await rectOf(page, view);
+    const m = await rectOf(page, '.beeson-edit-menu');
+    assert.ok(m && m.top >= b.bottom - 1 && m.top - b.bottom < 12 && Math.abs(m.left - b.left) < 12, `the View menu is at ${JSON.stringify(m)} under ${JSON.stringify(b)}`);
+    const items = await openMenuItems(page);
+    for (const label of ['Navigator', 'Outline', 'Light Table', 'Format', 'Steps', 'Notes']) assert.ok(items.some((i) => i.label === label), `the View popup has no ${label}: ${JSON.stringify(items)}`);
+    assert.equal(items.find((i) => i.label === 'Navigator').checked, true);
+    await pickItem(page, 'Notes');
+    await frames(page);
+    assert.equal((await state(page, 'view.notes')).checked, true);
+    // the Zoom popup shows the zoom, and sets a level or Fit
+    const zoom = '.beeson-edit-top [data-command="toolbar.zoom"]';
+    const face = () => page.evaluate(`document.querySelector('${zoom} .readout').textContent`);
+    assert.equal(await face(), 'Fit');
+    await click(page, zoom);
+    await frames(page);
+    const levels = (await openMenuItems(page)).map((i) => i.label);
+    assert.deepEqual(levels, ['Fit', '25%', '33%', '50%', '67%', '75%', '100%', '125%', '150%', '200%', '300%', '400%']);
+    await pickItem(page, '200%');
+    await frames(page);
+    assert.equal(await page.evaluate('window.BeesonEditorShell.stage.zoom'), 2);
+    assert.equal(await face(), '200%');
+    await click(page, zoom);
+    await frames(page);
+    assert.equal((await openMenuItems(page)).find((i) => i.label === '200%').checked, true);
+    await pickItem(page, 'Fit');
+    await frames(page);
+    assert.equal(await page.evaluate('window.BeesonEditorShell.stage.zoom'), null);
+    assert.equal(await face(), 'Fit');
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+}
