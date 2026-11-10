@@ -113,8 +113,17 @@ function ungroup(app: App): void {
   app.selection.set('elements', all);
 }
 
+// the elements of a lock or an unlock. a caret or a range in the text of a locked block unlocks
+// the block, since a click into the text of a locked block puts the caret there
+function lockTargets(app: App, on: boolean): Element[] {
+  const els = selectedEls(app);
+  if (on || app.selection.kind !== 'text') return els;
+  const blocks = app.selection.items.map((el) => el.closest('[data-locked]')).filter((el): el is Element => !!el);
+  return [...new Set([...els, ...blocks])];
+}
+
 function setLock(app: App, on: boolean): void {
-  const els = selectedEls(app).filter((el) => locked(el) !== on);
+  const els = lockTargets(app, on).filter((el) => locked(el) !== on);
   for (const el of els) app.doc.setTag(el, { attrs: { 'data-locked': on ? '' : null } }, on ? 'lock' : 'unlock');
   app.invalidate('selection');
 }
@@ -203,7 +212,8 @@ export function commands(): Command[] {
     {
       id: 'arrange.lock',
       label: 'Lock',
-      keys: { mac: ['Mod+L'], other: ['Mod+L'] },
+      // Safari takes Cmd+L of Keynote before the page, and Chrome and Firefox pass it on
+      keys: { mac: ['Ctrl+Mod+L', 'Mod+L'], other: ['Mod+L'] },
       in: ['canvas'],
       menu: arrange(70, 'lock'),
       enabled: (app) => selectedEls(app).some((el) => !locked(el)),
@@ -214,9 +224,9 @@ export function commands(): Command[] {
       id: 'arrange.unlock',
       label: 'Unlock',
       keys: { mac: ['Mod+Alt+L'], other: ['Mod+Shift+L'] },
-      in: ['canvas'],
+      in: ['canvas', 'text'],
       menu: arrange(71, 'lock'),
-      enabled: (app) => selectedEls(app).some(locked),
+      enabled: (app) => lockTargets(app, false).some(locked),
       undoable: true,
       run: (app) => setLock(app, false),
     },
@@ -258,7 +268,34 @@ export function commands(): Command[] {
   return list;
 }
 
+// the commands that change the elements of the selection or the text of a block of it, which a
+// lock turns off, as Keynote does until a locked object is unlocked. Copy, Duplicate, and the
+// commands that select or show the selection are kept, and so are Lock and Unlock
+const CHANGES = new RegExp([
+  '^(figure|image|media|code|surface|line|backdrop|math|text)\\.',
+  '^plot\\.(?!closeData$)',
+  '^arrange\\.(?!(lock|unlock|toggleLock)$)',
+  '^table\\.(?!(select|extend|cell\\.))',
+  '^steps\\.(set|add|remove|start|delay|deliver|listDelivery|final|move|earlier|later|effect)$',
+  '^(edit\\.cut|selection\\.editText)$',
+].join('|'));
+
+// whether the selection holds a locked element, an element inside one, or a text of one
+export function lockedSelection(app: App): boolean {
+  const sel = app.selection;
+  const els = sel.kind === 'text' ? sel.items : sel.elements();
+  return els.some((el) => !!el.closest('[data-locked]') || !!el.querySelector('[data-locked]'));
+}
+
 export function install(app: App): void {
   for (const c of commands()) app.commands.define(c);
   keepGroups(app);
+  app.commands.veto((a, c) => (CHANGES.test(c.id) || (c.id === 'edit.paste' && a.selection.kind === 'text')) && lockedSelection(a));
+  // Delete skips a locked element, hence it is turned off only when every selected element is locked
+  app.commands.veto((a, c) => c.id === 'element.delete' && a.selection.kind !== 'text' && a.selection.elements().length > 0 && a.selection.elements().every((el) => !!el.closest('[data-locked]')));
+  // typing, a drop, and the keys that delete or break a line do not go through a command, hence
+  // they are cancelled before the browser changes the text of a locked block
+  document.addEventListener('beforeinput', (ev) => {
+    if (ev.target instanceof Element && ev.target.closest('.reveal .slides [data-locked]')) ev.preventDefault();
+  }, true);
 }

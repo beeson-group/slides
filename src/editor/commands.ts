@@ -19,8 +19,9 @@ export type Command = {
   // where the keys are taken, by default on the canvas and in the navigator
   in?: Region[];
   menu?: { bar: string; group: string; order: number; submenu?: string };
-  // label is a short label of the toolbar that does not change, e.g. Undo for Undo Typing, and
-  // split names a submenu of the menu of the command, drawn as a split button beside it
+  // label is a short label of the toolbar that does not change, e.g. Undo for Undo Typing. split
+  // draws a split button, whose list holds the commands of the group with the same split and the
+  // submenu of that name of the menu of the command
   toolbar?: { group: string; order: number; icon: string; label?: string; split?: string };
   context?: Context[];
   enabled?(app: App): boolean;
@@ -52,18 +53,13 @@ export function boundKeys(c: Command, platform: Platform): string[] {
   return c.keys?.[platform] ?? [];
 }
 
-// the registry of each defined command, which lists its keys
-const registryOf = new WeakMap<Command, Commands>();
-
-// the keys of a command that the menus and the sheet of shortcuts list on the platform. a key is
-// listed once, at the first command of the menus that has it, e.g. ⌘= at Zoom In and not at
-// Bigger Notes Text, which it runs while the focus is in the notes
+// the keys of a command that the menus and the sheet of shortcuts list on the platform: each key
+// that runs it in its own regions, once. a key is thus listed at every command that it runs, e.g.
+// ⌘D at Duplicate on the canvas and at Duplicate Slide in the navigator, as in the menus of both
+// apps
 export function keysOf(c: Command, platform: Platform): string[] {
-  return registryOf.get(c)?.listed(c, platform) ?? c.keys?.[platform] ?? CLIPBOARD_KEYS[c.id] ?? [];
+  return [...new Set(c.keys?.[platform] ?? CLIPBOARD_KEYS[c.id] ?? [])];
 }
-
-// the menus of the menu bar from the left
-const BARS = ['File', 'Edit', 'Insert', 'Format', 'Arrange', 'Slide', 'View', 'Help'];
 
 // a key without Mod, Ctrl, Alt, or Meta, other than a function key, which a focused button or
 // field of the bars takes for itself
@@ -96,32 +92,7 @@ export class Commands {
   define(command: Command): Command {
     if (this.byId.has(command.id)) throw new Error(`the command ${command.id} is defined twice`);
     this.byId.set(command.id, command);
-    registryOf.set(command, this);
-    this.listing.clear();
     return command;
-  }
-
-  // the listed keys of each command per platform, made at the first call after a definition
-  private readonly listing = new Map<Platform, Map<Command, string[]>>();
-
-  listed(c: Command, platform: Platform): string[] {
-    let byCommand = this.listing.get(platform);
-    if (!byCommand) {
-      byCommand = new Map();
-      const rank = (x: Command) => (x.menu ? (BARS.includes(x.menu.bar) ? BARS.indexOf(x.menu.bar) : BARS.length) * 1e6 + x.menu.order : 1e12);
-      const taken = new Set<string>();
-      for (const x of [...this.byId.values()].sort((a, b) => rank(a) - rank(b))) {
-        const keys = x.keys?.[platform] ?? CLIPBOARD_KEYS[x.id] ?? [];
-        if (!x.menu) {
-          byCommand.set(x, keys);
-          continue;
-        }
-        byCommand.set(x, keys.filter((k) => !taken.has(k)));
-        for (const k of keys) taken.add(k);
-      }
-      this.listing.set(platform, byCommand);
-    }
-    return byCommand.get(c) ?? [];
   }
 
   get(id: string): Command | undefined {
@@ -138,9 +109,16 @@ export class Commands {
     return typeof c.label === 'function' ? c.label(this.app) : c.label;
   }
 
+  // the checks that turn a command off whatever its own enabled says, e.g. on a locked element
+  private readonly vetoes: ((app: App, c: Command) => boolean)[] = [];
+
+  veto(check: (app: App, c: Command) => boolean): void {
+    this.vetoes.push(check);
+  }
+
   enabled(id: string): boolean {
     const c = this.byId.get(id);
-    return !!c && (c.enabled?.(this.app) ?? true);
+    return !!c && (c.enabled?.(this.app) ?? true) && !this.vetoes.some((v) => v(this.app, c));
   }
 
   state(id: string): CommandState {

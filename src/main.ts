@@ -1,9 +1,10 @@
 // the entry point of beeson.js. window.Beeson.start() is called in a deck to initialize reveal.js
 // with the defaults of the theme, and to start the orbit backdrops, the surfaces, the plots, the QR
-// codes, the fragment steps, the mode switch, and the pointer
+// codes, the fragment steps, the mode switch, the pointer, and the click that moves the show on
 
 import { Orbits, mount } from './orbits.ts';
 import { initChrome, refreshChrome } from './chrome.ts';
+import { initClick } from './click.ts';
 import { initCursor, togglePointer } from './cursor.ts';
 import { initFullscreen, toggleFullscreen } from './fullscreen.ts';
 import { mountPlots, type PlotView } from './plot.ts';
@@ -13,7 +14,7 @@ import { initScrub } from './scrub.ts';
 import { mount as mountSurfaces } from './surface.ts';
 import type { Surface } from './surface.ts';
 import { register } from './strands.ts';
-import { addRestoreSteps, applyAll, applySteps, initSteps, initTimedSteps, typeset } from './steps.ts';
+import { addRestoreSteps, applyAll, applySteps, initSteps, initTimedSteps, typeset, type Internal } from './steps.ts';
 import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.ts';
 import type { RevealOptions, SlideEvent } from './reveal.d.ts';
 
@@ -175,7 +176,9 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   // the editor lists the steps written in the file, and it does not show the added ones. the steps
   // are added in a plugin, since the plugins are initialized in order before the fragments are
   // sorted, and the copies of a code box are made by the highlight plugin before this one
-  if (!EDITING) plugins.push({ id: 'beeson-restore', init: () => addRestoreSteps(document) });
+  // the init of a plugin is given the object of reveal.js that its controllers call
+  const hooks: { internal?: Internal } = {};
+  if (!EDITING) plugins.push({ id: 'beeson-restore', init: (reveal: unknown) => { hooks.internal = reveal as Internal; addRestoreSteps(document); } });
   // a hidden slide is removed from the page by reveal.js unless showHiddenSlides is set, and it
   // must be on the page to be edited
   const editing: Partial<RevealOptions> = EDITING ? { showHiddenSlides: true } : {};
@@ -184,7 +187,8 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   initChrome();
   initSteps(deck);
   // the editor shows every step, and it does not play a delay
-  if (!EDITING) initTimedSteps(deck, forDeck);
+  const { internal } = hooks;
+  if (internal) initTimedSteps(deck, forDeck, internal);
   remount();
   initCursor(() => backdrops, () => deck.getCurrentSlide(), !EDITING);
   deck.addKeyBinding({ keyCode: 68, key: 'D', description: 'Switch dark and light' }, (ev) => { if (forDeck(ev)) toggle(); });
@@ -193,7 +197,12 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   deck.addKeyBinding(70, (ev) => { if (forDeck(ev)) toggleFullscreen(); });
   deck.registerKeyboardShortcut('F', 'Full screen on and off');
   // the print view is not shown on a screen, and the editor keeps the bottom of the window
-  if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) { initFullscreen(); initScrub(deck); }
+  if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) {
+    initFullscreen();
+    initScrub(deck);
+    // a click on a slide moves the show on, as in PowerPoint and Keynote
+    if (internal) initClick(deck, () => internal.cueAutoSlide());
+  }
   // E opens the same slide in the editor, and the other parameters of the address are kept
   if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: 'E', description: 'Edit the deck' }, (ev) => { if (forDeck(ev)) edit(); });
 

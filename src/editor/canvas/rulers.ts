@@ -142,7 +142,8 @@ export function install(app: App): void {
   app.commands.define({
     id: 'view.rulers',
     label: 'Rulers',
-    keys: { mac: ['Mod+R'] },
+    // Safari takes Cmd+R of Keynote before the page, and Chrome and Firefox pass it on
+    keys: { mac: ['Ctrl+Mod+R', 'Mod+R'] },
     in: OUTSIDE_DIALOGS,
     menu: { bar: 'View', group: 'guides', order: 50 },
     checked: () => shown,

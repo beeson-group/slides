@@ -33,7 +33,7 @@ import { placeCaret } from '../text/typing.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { closeMenus, menuOpen, openMenu, type MenuItem } from '../ui/menu.ts';
-import { columnPlace } from './insert.ts';
+import { columnPlace, freeZone, inkBox, meets, slideBox, type Box as SlideBox } from './insert.ts';
 import { MARK } from './slide.ts';
 
 const CSS = `
@@ -240,11 +240,69 @@ function numbersOf(table: HTMLTableElement): boolean[] {
   return numericOf(table, read);
 }
 
-// a table of rows of cells put at its place in the layout of the current slide
-async function insertTable(app: App, rows: string[][]): Promise<HTMLTableElement> {
+// a table of rows of cells put at its place in the layout of the current slide, and then moved
+// where it fits by placeTable, with its rows taken out down to least when they do not fit
+async function insertTable(app: App, rows: string[][], least = rows.length): Promise<HTMLTableElement> {
   const { parent, before } = columnPlace(app, app.current()!);
   const [table] = await app.doc.insert(tableHtml(rows, styleOf(app), baseOf(app, parent)), parent, before, 'insert table');
+  await placeTable(app, table as HTMLTableElement, least);
   return table as HTMLTableElement;
+}
+
+const TEXT = 'h1, h2, h3, h4, p, ul, ol, dl, table, pre, blockquote, div.math';
+// the band in slide px over the bottom of the slide, where the slide number is drawn, and over the
+// footnote line, which a new table does not reach into
+const BOTTOM = 40;
+
+// the box in slide px of an element of a slide, i.e. the box of the text of a block that is not
+// moved, and else the box of the element with its translate
+function shownBox(app: App, el: Element): SlideBox | null {
+  if (!el.getClientRects().length) return null;
+  const moved = el instanceof HTMLElement && !!el.style.translate;
+  return el.matches(TEXT) && !moved ? inkBox(app, el) : slideBox(app, el);
+}
+
+// a new table put where it fits on its slide, with room around it for its bars at the zoom of the
+// canvas: under the blocks before it, else at the center of the free area where the layout puts a
+// zone, else under the blocks before it with its last rows taken out down to least rows, and else
+// moved up until its bottom is BOTTOM over the footnote line or the bottom of the slide.
+// Keynote and PowerPoint put a new table at the center of the slide, over what is there, and the
+// table of a slide of the theme is put into its text column instead. the move is a translate in
+// slide px
+async function placeTable(app: App, table: HTMLTableElement, least: number): Promise<void> {
+  const slide = table.closest('section');
+  const parent = table.parentElement;
+  if (!slide || !parent || !table.getClientRects().length) return;
+  const t = slideBox(app, table);
+  const k = table.getBoundingClientRect().width / (table.offsetWidth || 1) || 1;
+  const room = (GAP + BAR + 2) / k;
+  const w = (slide as HTMLElement).offsetWidth || 1920;
+  const foot = [...slide.querySelectorAll(':scope > .foot')].map((f) => shownBox(app, f)).find((b) => !!b);
+  const floor = Math.min(((slide as HTMLElement).offsetHeight || 1080) - BOTTOM, foot ? foot.top - BOTTOM : Infinity);
+  const skip = (el: Element) => el === table || el.matches('aside.notes, script, style');
+  const boxes = (els: Element[]) => els.filter((el) => !skip(el)).map((el) => shownBox(app, el)).filter((b): b is SlideBox => !!b);
+  const before = boxes([...parent.children].slice(0, [...parent.children].indexOf(table)).filter((el) => !el.matches('.run, .foot, [data-generated]')));
+  const others = boxes([...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *')].filter((el) => !el.contains(table)));
+  const rowHeights = [...table.rows].map((tr) => tr.getBoundingClientRect().height / k);
+  const n0 = rowHeights.length;
+  const heightOf = (n: number) => t.bottom - t.top - rowHeights.slice(n).reduce((a, b) => a + b, 0);
+  const at = (left: number, top: number, n: number): SlideBox => ({ left, top, right: left + t.right - t.left, bottom: top + heightOf(n) });
+  const free = (b: SlideBox) => b.top - room >= 0 && b.bottom <= floor && b.right + room <= w &&
+    !others.some((o) => meets({ left: b.left - room, top: b.top - room, right: b.right + room, bottom: b.bottom + room }, o));
+  const top = Math.max(t.top, ...before.map((b) => b.bottom + room));
+  let place: { box: SlideBox; n: number } | null = free(at(t.left, top, n0)) ? { box: at(t.left, top, n0), n: n0 } : null;
+  const zone = place ? null : freeZone(app, slide, table);
+  if (zone) {
+    const b = at((zone.left + zone.right - t.right + t.left) / 2, (zone.top + zone.bottom - heightOf(n0)) / 2, n0);
+    if (free(b)) place = { box: b, n: n0 };
+  }
+  const fewest = Math.min(Math.max(1, least), n0);
+  for (let n = n0 - 1; !place && n >= fewest; n--) if (free(at(t.left, top, n))) place = { box: at(t.left, top, n), n };
+  place ??= { box: at(t.left, Math.max(room, Math.min(top, floor - heightOf(fewest))), fewest), n: fewest };
+  for (let r = n0 - 1; r >= place.n; r--) await app.doc.remove(table.rows[r], 'insert table');
+  const x = Math.round(place.box.left - t.left);
+  const y = Math.round(place.box.top - t.top);
+  if (x || y) app.doc.setTag(table, { translate: { x, y } }, 'insert table');
 }
 
 const boxOfTarget = (t: Target): Box | null => t.box;
@@ -412,13 +470,15 @@ function numbersRight(t: Target | null): boolean {
 }
 
 // the cells of the range of t merged into its first cell, as Merge Cells of Keynote. the first cell
-// keeps its tag and its style, takes the text of the cells with a text, joined with a space, and
-// is written with the colspan and the rowspan of the range. a row left without a cell is taken out
+// keeps its tag and its style, and thus its alignment, takes the text of the cells with a text in
+// the order of reading, each on a line of its own after a br, as Keynote and PowerPoint keep it,
+// and is written with the colspan and the rowspan of the range. a row left without a cell is
+// taken out
 async function mergeCells(app: App, t: Target): Promise<void> {
   const box = t.box!;
   const [first, ...rest] = spotsIn(gridOf(t.table), box);
   const asBlock = blocked(app, t);
-  const joined = [first, ...rest].map((s) => contentWithTex(s.cell).trim()).filter(Boolean).join(' ');
+  const joined = [first, ...rest].map((s) => contentWithTex(s.cell).trim()).filter(Boolean).join('<br>');
   for (const s of rest) await app.doc.remove(s.cell, 'merge cells');
   app.doc.setTag(first.cell, { attrs: { colspan: spanText(box.c1 - box.c0 + 1), rowspan: spanText(box.r1 - box.r0 + 1) } }, 'merge cells');
   if (joined !== contentWithTex(first.cell)) await app.doc.setContent(first.cell, joined, 'merge cells');
@@ -831,9 +891,13 @@ function installBars(app: App): void {
       if (resize?.i === i) place(guide, x, box.top, 1, box.height);
     });
     guide.hidden = !resize;
-    place(grab, left, top, BAR, BAR);
-    place(addCol, box.right + GAP, top, BAR, BAR);
-    place(addRow, left, box.bottom + GAP, BAR, BAR);
+    // the buttons are kept inside the canvas, also for a table at its edge
+    const v = app.stage?.viewport;
+    const inX = (x: number) => (v ? Math.max(v.left + 2, Math.min(x, v.right - BAR - 2)) : x);
+    const inY = (y: number) => (v ? Math.max(v.top + 2, Math.min(y, v.bottom - BAR - 2)) : y);
+    place(grab, inX(left), inY(top), BAR, BAR);
+    place(addCol, inX(box.right + GAP), inY(top), BAR, BAR);
+    place(addRow, inX(left), inY(box.bottom + GAP), BAR, BAR);
     outline.hidden = !at;
     outline.classList.toggle('block', !!at && inBlock(app));
     if (at) {
@@ -847,7 +911,6 @@ function installBars(app: App): void {
       }
       place(outline, r.left - 1, r.top - 1, r.right - r.left + 2, r.bottom - r.top + 2);
     }
-    const v = app.stage?.viewport;
     if (v) layer.style.clipPath = `inset(${v.top}px ${innerWidth - v.right}px ${innerHeight - v.bottom}px ${v.left}px)`;
     frame = requestAnimationFrame(draw);
   };
@@ -902,14 +965,14 @@ export function install(app: App): void {
     id: 'insert.table',
     label: 'Table…',
     menu: { bar: 'Insert', group: 'element', order: 22 },
-    toolbar: { group: 'insert', order: 22, icon: 'table', label: 'Table' },
+    toolbar: { group: 'insert', order: 20, icon: 'table', label: 'Table' },
     enabled: ready,
     run: async (a, arg) => {
       const size = arg && typeof arg === 'object' && 'rows' in arg ? (arg as Size) : null;
       if (!size) return openPicker(a, toolbarButton('insert.table'), (s) => void a.commands.run('insert.table', s).catch(fail));
       const rows = Math.max(1, Math.min(GRID, Math.round(size.rows)));
       const columns = Math.max(1, Math.min(GRID, Math.round(size.columns)));
-      const table = await a.history.transact('Insert Table', () => insertTable(a, emptyRows(rows, columns)));
+      const table = await a.history.transact('Insert Table', () => insertTable(a, emptyRows(rows, columns), Math.min(2, rows)));
       const first = table.rows[0]?.cells[0];
       if (first) placeCaret(first, 0);
     },

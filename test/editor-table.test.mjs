@@ -151,6 +151,10 @@ async function roundTrip(page, undos = 1) {
 
 const THREE = '<table>\n    <tbody>\n      <tr><th></th><th></th><th></th></tr>\n      <tr><td></td><td></td><td></td></tr>\n      <tr><td></td><td></td><td></td></tr>\n    </tbody>\n  </table>';
 
+// the text rendered with the translate taken off a new table, which placeTable of
+// commands/table.ts gives it on a slide whose text column is full
+const placed = async (page) => (await render(page)).replace(/<table style="translate: -?\d+px -?\d+px">/, '<table>');
+
 // the table of a text cut out with the line it is on, which gives the deck before the insert
 const without = (text, table) => text.replace(`\n  ${table}`, '');
 
@@ -240,7 +244,7 @@ for (const platform of ['mac', 'other']) {
     await click(page, cell);
     await settled(page);
     assert.equal(await page.evaluate(`!!document.querySelector('dialog.beeson-table-picker')`), false);
-    const edited = await render(page);
+    const edited = await placed(page);
     assert.ok(edited.includes(`\n  ${THREE}\n`), `the table is not written:\n${edited.slice(edited.indexOf('Equations'), edited.indexOf('Equations') + 1600)}`);
     assert.equal(without(edited, THREE), page.source);
     assert.deepEqual(await focusCell(page), [0, 0]);
@@ -266,7 +270,7 @@ for (const platform of ['mac', 'other']) {
     await press(page, 'Enter');
     await settled(page);
     const table = '<table>\n    <tbody>\n      <tr><th></th><th></th></tr>\n      <tr><td></td><td></td></tr>\n      <tr><td></td><td></td></tr>\n      <tr><td></td><td></td></tr>\n    </tbody>\n  </table>';
-    assert.equal(without(await render(page), table), page.source);
+    assert.equal(without(await placed(page), table), page.source);
     await roundTrip(page);
   });
 
@@ -513,7 +517,7 @@ for (const platform of ['mac', 'other']) {
     await paste(page, { 'text/plain': 'Family\tPeriod\nLyapunov\t2.69\nHalo\t3.41\n' });
     await settled(page);
     const table = '<table>\n    <tbody>\n      <tr><th>Family</th><th style="text-align: right">Period</th></tr>\n      <tr><td>Lyapunov</td><td style="text-align: right">2.69</td></tr>\n      <tr><td>Halo</td><td style="text-align: right">3.41</td></tr>\n    </tbody>\n  </table>';
-    const edited = await render(page);
+    const edited = await placed(page);
     assert.ok(edited.includes(table), `the table is not written:\n${edited.slice(edited.indexOf('Equations'), edited.indexOf('Equations') + 1600)}`);
     assert.equal(without(edited, table), page.source);
     // the new table is selected, and its bars are shown without a cell marked
@@ -540,7 +544,7 @@ for (const platform of ['mac', 'other']) {
     await paste(page, { 'text/html': html, 'text/plain': 'Body\tMass\nEarth\t5.97\te24 kg\nMoon & Luna\t0.073\te24 kg' });
     await settled(page);
     const table = '<table>\n    <tbody>\n      <tr><th>Body</th><th style="text-align: right">Mass</th><th></th></tr>\n      <tr><td>Earth</td><td style="text-align: right">5.97</td><td>e24 kg</td></tr>\n      <tr><td>Moon &amp; Luna</td><td style="text-align: right">0.073</td><td>e24 kg</td></tr>\n    </tbody>\n  </table>';
-    assert.equal(without(await render(page), table), page.source);
+    assert.equal(without(await placed(page), table), page.source);
     await roundTrip(page);
   });
 
@@ -722,7 +726,7 @@ async function dragCells(page, [r0, c0], [r1, c1]) {
 }
 
 for (const platform of ['mac', 'other']) {
-  test(`Merge Cells writes the range as one cell with a colspan and a rowspan and the text joined (${platform})`, async (t) => {
+  test(`Merge Cells writes the range as one cell with a colspan and a rowspan and the text of each cell on a line (${platform})`, async (t) => {
     const page = await open(platform, TABLES_DECK);
     t.after(() => page.close?.());
     await show(page, 1);
@@ -734,7 +738,7 @@ for (const platform of ['mac', 'other']) {
     await settled(page);
     await byteExact(page, [[tbodyTable(PLAIN_ROWS), tbodyTable([
       PLAIN_ROWS[0],
-      '<tr><td colspan="2" rowspan="2">Moon \\(0.01215\\) Europa 2.53e-5</td><td>Earth and Moon</td></tr>',
+      '<tr><td colspan="2" rowspan="2">Moon<br>\\(0.01215\\)<br>Europa<br>2.53e-5</td><td>Earth and Moon</td></tr>',
       '<tr><td>Jupiter</td></tr>',
       PLAIN_ROWS[3],
     ])]]);
@@ -779,7 +783,7 @@ for (const platform of ['mac', 'other']) {
     await settled(page);
     await byteExact(page, [[tbodyTable(MERGED_ROWS), tbodyTable([
       MERGED_ROWS[0],
-      `<tr><td>Halo</td><td style="text-align: right" colspan="2">14.8 3.05 6.6 3.04</td></tr>`,
+      `<tr><td>Halo</td><td style="text-align: right" colspan="2">14.8<br>3.05<br>6.6<br>3.04</td></tr>`,
       MERGED_ROWS[3],
     ])]]);
     await roundTrip(page);
@@ -793,7 +797,7 @@ for (const platform of ['mac', 'other']) {
     await dragCells(page, [0, 1], [0, 2]);
     await page.evaluate(`window.BeesonEditor.exec('table.merge')`);
     await settled(page);
-    await byteExact(page, [[tbodyTable(MERGED_ROWS), tbodyTable(['<tr><th>Family</th><th colspan="2">Period Jacobi</th></tr>', ...MERGED_ROWS.slice(1)])]]);
+    await byteExact(page, [[tbodyTable(MERGED_ROWS), tbodyTable(['<tr><th>Family</th><th colspan="2">Period<br>Jacobi</th></tr>', ...MERGED_ROWS.slice(1)])]]);
     await roundTrip(page);
   });
 }

@@ -8,6 +8,7 @@
 
 import type { App } from '../app.ts';
 import { QR_MAX, bytesOf, imageOf, qrOf, videoOf } from '../commands/figure.ts';
+import { unreadable } from '../media/actions.ts';
 import { media } from '../media/store.ts';
 import { make, injectStyle } from '../ui/dom.ts';
 import { button, checkbox, note, row, section, segmented, textField, type Control, type Run } from './controls.ts';
@@ -31,7 +32,9 @@ const unsaved = (value: string | null) => {
 };
 
 // a thumbnail of the picture at url, the name of its file, and a button
-function well(app: App, run: Run, url: () => string | null, name: () => string, command: string, arg: unknown, text: string): Control {
+// label gives the text and the title of the button at each sync, in place of text
+type Label = () => { text: string; title: string };
+function well(app: App, run: Run, url: () => string | null, name: () => string, command: string, arg: unknown, text: string, labelOf?: Label): Control {
   const el = make('div', 'ed-well');
   const thumb = make('div', 'thumb');
   const label = make('div', 'name');
@@ -45,6 +48,12 @@ function well(app: App, run: Run, url: () => string | null, name: () => string, 
     label.textContent = name() || 'None';
     label.title = label.textContent;
     b.sync();
+    if (labelOf) {
+      const { text: t, title } = labelOf();
+      const span = b.el.querySelector('span');
+      if (span) span.textContent = t;
+      b.el.title = title;
+    }
   };
   sync();
   return { el, sync };
@@ -107,8 +116,11 @@ export function videoPane(app: App, run: Run): Control[] {
       keptNote(() => video?.getAttribute('src') ?? null),
     ]),
     section('Poster', [
-      well(app, run, poster, () => fileName(poster()), 'media.poster', { el: video }, 'Capture Poster'),
+      well(app, run, poster, () => fileName(poster()), 'media.poster', { el: video }, 'Capture Poster', () => (video && unreadable(video)
+        ? { text: 'Capture Poster…', title: 'Capture the first frame as the poster. In a deck opened from a file, it asks once for the file of the video, whose frames the browser keeps from the page' }
+        : { text: 'Capture Poster', title: 'Capture the first frame as the poster' })),
       note(() => (poster() ? 'The first frame of the video, shown before it plays and printed in the PDF.' : 'The video does not have a poster, which the PDF prints.'), () => !poster()),
+      note(() => (video && unreadable(video) ? `In a deck opened from a file, the browser keeps the frames of ${fileName(video.getAttribute('src'))} from the page, hence Capture Poster asks once for the file.` : '')),
       keptNote(poster),
     ]),
     section('Playback', [

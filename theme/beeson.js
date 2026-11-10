@@ -1560,6 +1560,60 @@
     fill();
   }
 
+  // src/click.ts
+  var OWN2 = [
+    "a[href]",
+    "button",
+    "input",
+    "select",
+    "textarea",
+    "label",
+    "summary",
+    "iframe",
+    "video",
+    "audio",
+    '[contenteditable]:not([contenteditable="false"])',
+    ".plot",
+    ".surface",
+    "tycho-viewer",
+    ".qr",
+    ".run",
+    ".foot",
+    ".slide-number",
+    ".progress",
+    ".scrub",
+    ".theme-switch",
+    ".r-overlay"
+  ].join(", ");
+  var SLOP = 4;
+  var selected = () => String(window.getSelection() ?? "");
+  function initClick(deck, cue) {
+    const root2 = deck.getRevealElement();
+    let down = null;
+    document.addEventListener("pointerdown", (ev) => {
+      down = ev.isPrimary && ev.button === 0 ? { x: ev.clientX, y: ev.clientY, text: selected() } : null;
+    }, true);
+    document.addEventListener("click", (ev) => {
+      const from = down;
+      down = null;
+      if (!from || ev.button !== 0 || ev.defaultPrevented || ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey) return;
+      if (Math.hypot(ev.clientX - from.x, ev.clientY - from.y) > SLOP) return;
+      const text = selected();
+      if (text && text !== from.text) return;
+      const target = ev.target instanceof Element ? ev.target : null;
+      if (!target || !root2.contains(target)) return;
+      const own = target.closest(OWN2);
+      if (own instanceof HTMLMediaElement && !own.controls) {
+        if (own.paused) void own.play().catch(() => {
+        });
+        else own.pause();
+      }
+      if (own || deck.isOverview() || deck.isPaused()) return;
+      deck.next();
+      cue();
+    });
+  }
+
   // src/cursor.ts
   var REACH = 20;
   var dot = null;
@@ -4322,6 +4376,7 @@ void main() {
     return { held, lit };
   }
   var words2 = (s) => (s ?? "").split(/\s+/).filter(Boolean);
+  var MOVES_ON = "data-moves-on";
   var hasContent = (f) => f.children.length > 0 || (f.textContent ?? "").trim() !== "";
   var isCopy = (f) => f.matches("pre > code.fragment");
   function addRestoreSteps(root2) {
@@ -4333,17 +4388,20 @@ void main() {
       const boxes = new Set(frags.filter(isCopy).map((f) => f.parentElement));
       const dimsBox = [...boxes].some((box2) => !last.some((f) => f.parentElement === box2 && isCopy(f)));
       if (!dimsBox && !frags.some((f) => !last.includes(f) && hasContent(f) && !isCopy(f))) continue;
+      if (last.some(delayed)) {
+        slide.setAttribute(MOVES_ON, "");
+        continue;
+      }
       const restore = document.createElement("span");
       restore.className = "fragment";
       restore.setAttribute("data-restore", "");
       restore.setAttribute("aria-hidden", "true");
-      if (last.some(delayed)) restore.setAttribute(AUTOSLIDE, "1");
       slide.append(restore);
     }
   }
   function applySteps(slide) {
     const frags = [...slide.querySelectorAll(".fragment")];
-    if (!slide.querySelector("section")) slide.toggleAttribute("data-complete", frags.every((f) => f.classList.contains("visible")));
+    if (!slide.querySelector("section")) slide.toggleAttribute("data-complete", !slide.hasAttribute(MOVES_ON) && frags.every((f) => f.classList.contains("visible")));
     const names = [...new Set(frags.flatMap((f) => words2(f.dataset.highlight)))];
     if (!names.length && !frags.some((f) => f.hasAttribute("data-keep"))) return;
     const select2 = (name) => `.${CSS.escape(name)}`;
@@ -4381,13 +4439,20 @@ void main() {
     for (const type of ["fragmentshown", "fragmenthidden", "slidechanged"]) deck.on(type, mark);
     mark();
     void typeset2().then(mark);
+    deck.on("slidechanged", (event) => {
+      const { previousSlide: from, currentSlide: to } = event;
+      if (!from?.hasAttribute(MOVES_ON) || !to || deck.getSlides().indexOf(to) < deck.getSlides().indexOf(from)) return;
+      const frags = [...from.querySelectorAll(".fragment")];
+      const last = Math.max(...frags.map((f) => Number(f.dataset.fragmentIndex)).filter(Number.isFinite));
+      for (const f of frags) if (Number(f.dataset.fragmentIndex) === last) f.classList.add("current-fragment");
+    });
   }
   var AUTOSLIDE = "data-autoslide";
   var HELD = "data-autoslide-held";
   var stepsOf = (slide) => [-1, ...new Set([...slide.querySelectorAll(".fragment")].map((f) => Number(f.dataset.fragmentIndex)).filter(Number.isFinite))].sort((a, b) => a - b);
   var fragmentsAt = (slide, f) => [...slide.querySelectorAll(".fragment")].filter((el) => Number(el.dataset.fragmentIndex) === f);
   var delayed = (el) => (parseInt(el.getAttribute(AUTOSLIDE) ?? el.getAttribute(HELD) ?? "", 10) || 0) > 0;
-  function initTimedSteps(deck, forDeck2) {
+  function initTimedSteps(deck, forDeck2, internal) {
     const config = deck.getConfig();
     const method = config.autoSlideMethod;
     let timer = false;
@@ -4404,6 +4469,20 @@ void main() {
     deck.addKeyBinding({ keyCode: 65, key: "A", description: "Pause and resume the timed steps" }, (ev) => {
       if (forDeck2(ev)) deck.toggleAutoSlide(!deck.isAutoSliding());
     });
+    const cue = internal.cueAutoSlide.bind(internal);
+    const state = () => {
+      const { h, v, f } = deck.getIndices();
+      return `${h}/${v}/${f}/${deck.isOverview()}/${deck.isPaused()}`;
+    };
+    let keyFrom = null;
+    internal.cueAutoSlide = () => {
+      if (keyFrom === null || keyFrom !== state()) cue();
+    };
+    window.addEventListener("keydown", () => {
+      keyFrom = state();
+      setTimeout(() => keyFrom = null, 0);
+    }, true);
+    window.addEventListener("keydown", () => keyFrom = null);
     const slides = () => deck.getSlides();
     const here = () => {
       const slide = deck.getCurrentSlide();
@@ -4443,7 +4522,7 @@ void main() {
           el.removeAttribute(AUTOSLIDE);
         }
       }
-      deck.cueAutoSlide?.();
+      internal.cueAutoSlide();
       if (!delayedAt(now)) return;
       if (same(before(from), now) && byDelay(now)) setTimeout(() => deck.prev(), 0);
     };
@@ -4733,12 +4812,17 @@ void main() {
       syncViewers(get());
       void stillViewers();
     });
-    if (!EDITING) plugins.push({ id: "beeson-restore", init: () => addRestoreSteps(document) });
+    const hooks = {};
+    if (!EDITING) plugins.push({ id: "beeson-restore", init: (reveal) => {
+      hooks.internal = reveal;
+      addRestoreSteps(document);
+    } });
     const editing = EDITING ? { showHiddenSlides: true } : {};
     await deck.initialize({ ...DEFAULTS, ...editing, ...options, plugins });
     initChrome();
     initSteps(deck);
-    if (!EDITING) initTimedSteps(deck, forDeck);
+    const { internal } = hooks;
+    if (internal) initTimedSteps(deck, forDeck, internal);
     remount();
     initCursor(() => backdrops, () => deck.getCurrentSlide(), !EDITING);
     deck.addKeyBinding({ keyCode: 68, key: "D", description: "Switch dark and light" }, (ev) => {
@@ -4754,6 +4838,7 @@ void main() {
     if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) {
       initFullscreen();
       initScrub(deck);
+      if (internal) initClick(deck, () => internal.cueAutoSlide());
     }
     if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: "E", description: "Edit the deck" }, (ev) => {
       if (forDeck(ev)) edit();

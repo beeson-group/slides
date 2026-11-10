@@ -94,10 +94,10 @@ test('a delay on the last step moves on to the next slide, and Back from there s
 });
 
 // the step of the current slide: the highest fragment index shown, counted from 0 as reveal.js
-// numbers the steps again at its start, hence the restore step is the last index once it is shown
+// numbers the steps again at its start
 const step = (page) => page.evaluate(`Math.max(-1, ...[...Reveal.getCurrentSlide().querySelectorAll('.fragment.visible')].map((f) => Number(f.dataset.fragmentIndex)))`);
 
-test('a delay on the last step goes on through the restore step to the next slide, and Back lands on the last step', async (t) => {
+test('a delay on a last step that dims the step before moves on to the next slide, and Back lands on the last step', async (t) => {
   const page = await open(t);
   await page.evaluate('Reveal.slide(4)');
   await press(page, 'ArrowRight');
@@ -163,5 +163,55 @@ test('the key A pauses the delays, which stay paused through the steps of the ke
   assert.deepEqual(await settled(page), { slide: 1, shown: ['Click', 'Timed one'] });
   await press(page, 'A');
   assert.deepEqual(await settled(page), { slide: 1, shown: ALL });
+  assert.deepEqual(page.errors, []);
+});
+
+// as in PowerPoint, a slide that moves on by the delay of its last step keeps the look of that
+// step through the transition, with the earlier steps dimmed. the fragments are drawn without
+// their fade, hence each frame shows the opacity of the step
+test('a slide whose last step moves on by a delay keeps the look of its last step until it has left the screen', async (t) => {
+  const page = await open(t);
+  await page.evaluate(`document.head.insertAdjacentHTML('beforeend', '<style>.reveal .slides section .fragment { transition: none !important; }</style>')`);
+  await page.evaluate('Reveal.slide(4, 0, 0)');
+  assert.deepEqual(await settled(page), { slide: 4, shown: ['Dims one'] });
+  await page.evaluate(`(() => {
+    const slide = Reveal.getSlides()[4];
+    const [one, two] = ['Dims one', 'Dims two'].map((text) => [...slide.querySelectorAll('.fragment')].find((f) => f.textContent === text));
+    window.samples = [];
+    const end = performance.now() + 2000;
+    const sample = () => {
+      if (two.classList.contains('visible')) window.samples.push([one, two].map((f) => Number(getComputedStyle(f).opacity)).join(' '));
+      if (performance.now() < end) requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  })()`);
+  await press(page, 'ArrowRight');
+  await page.waitFor('Reveal.getIndices().h === 5', 5000);
+  await sleep(1200);
+  assert.deepEqual([...new Set(await page.evaluate('window.samples'))], ['0.45 1']);
+  assert.deepEqual(page.errors, []);
+});
+
+// a key that does not move the deck, e.g. D for the mode, leaves the running delay alone, as a key
+// that does nothing to the slideshow in PowerPoint and Keynote. the delay of the slide is 1 s
+test('a key that does not move the deck leaves the running delay alone', async (t) => {
+  const page = await open(t);
+  await page.evaluate(`(() => {
+    window.times = {};
+    Reveal.on('fragmentshown', (ev) => { for (const f of ev.fragments) window.times[f.textContent] = performance.now(); });
+    document.addEventListener('keydown', (ev) => { if (ev.key === 'd') window.times.key = performance.now(); }, true);
+  })()`);
+  await page.evaluate('Reveal.slide(6)');
+  await settled(page);
+  await press(page, 'ArrowRight');
+  await sleep(500);
+  await press(page, 'D');
+  await page.waitFor(`'Slow timed' in window.times`, 5000);
+  const times = await page.evaluate('window.times');
+  const key = times.key - times.Slow;
+  assert.ok(key > 200 && key < 1000, `the key is pressed during the delay, ${Math.round(key)} ms after its start`);
+  // the delay ends 1 s after its start, and a restarted one 1 s after the key
+  const shown = times['Slow timed'] - times.Slow;
+  assert.ok(shown < 1000 + key / 2, `the timed step is shown ${Math.round(shown)} ms after the step before, with the key at ${Math.round(key)} ms`);
   assert.deepEqual(page.errors, []);
 });

@@ -257,9 +257,33 @@ async function rewrite(app: App, slides: Element[], write: (body: string, slide:
   return out;
 }
 
-export function changeLayout(app: App, slides: Element[], layout: Layout): Promise<Element[]> {
+export async function changeLayout(app: App, slides: Element[], layout: Layout): Promise<Element[]> {
   const step = stepOf(app);
-  return rewrite(app, slides, (body) => relayout(body, layout, step), 'layout');
+  const out = await rewrite(app, slides, (body) => relayout(body, layout, step), 'layout');
+  for (const s of out) if (!slides.includes(s)) fitPanel(app, s);
+  return out;
+}
+
+// true when a text of the panel runs past its bottom, or into the footnote at its bottom
+function overflows(panel: Element): boolean {
+  const foot = panel.querySelector(':scope > .foot');
+  const box = panel.getBoundingClientRect();
+  const limit = foot && foot.getBoundingClientRect().height ? foot.getBoundingClientRect().top : box.bottom;
+  return [...panel.children].some((el) => !el.matches('.foot, aside') && el.getBoundingClientRect().bottom > limit + 1);
+}
+
+// the texts moved into the panel of a split slide are shrunk to fit it, as PowerPoint shrinks the
+// text of a placeholder: the paragraphs and the lists of the panel are set in the style Small,
+// within the scale of the theme. a text that still does not fit keeps the mark of overflow.ts. a
+// slide that is not shown, whose boxes are not laid out, is left as it is
+function fitPanel(app: App, slide: Element): void {
+  const panel = slide.querySelector(':scope > .panel');
+  if (!panel || !panel.getBoundingClientRect().height || !overflows(panel)) return;
+  for (const el of panel.querySelectorAll(':scope > p, :scope > ul, :scope > ol')) {
+    if (!app.pairing?.elements.get(el)?.open) continue;
+    const classes = app.doc.tagState(el).classes.filter((c) => c !== 'fragment');
+    if (!classes.length) app.doc.setTag(el, { classes: { small: true } }, 'layout');
+  }
 }
 
 // the elements of a slide with a place of the editor: a translate, a rotate, or the width of a
