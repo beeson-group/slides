@@ -224,3 +224,24 @@ test('an element moved into a slide that is then deleted is written in neither s
   same(await render(page), text, 'both undone');
   assert.deepEqual(page.errors, []);
 });
+
+// an attribute, a class, or a declaration removed by an edit and saved was put back at the end of
+// its tag by the undo, since the saved file no longer has its place
+test('an undo after a save puts a removed attribute, class, and declaration back in place', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const { page, text } = await editorPage(browser);
+  const tag = '<div class="math fragment" data-fragment-index="2" data-surface-stage="bowl" style="margin-top: 0">';
+  assert.equal(text.split(tag).length, 2);
+  const el = `[...document.querySelectorAll('.reveal div.math')].find((d) => d.dataset.surfaceStage === 'bowl')`;
+  for (const edit of [{ classes: { math: false } }, { attrs: { 'data-fragment-index': null } }, { attrs: { 'data-surface-stage': null } }, { style: { 'margin-top': null } }, { fragment: false, index: null }]) {
+    await page.evaluate(`${E}.doc.setTag(${el}, ${JSON.stringify(edit)})`);
+    const edited = await render(page);
+    assert.notEqual(edited, text);
+    await page.evaluate(`${E}.open(${JSON.stringify(edited)}, false)`);
+    await page.evaluate(`${E}.undo()`);
+    same(await render(page), text, JSON.stringify(edit));
+    await page.evaluate(`${E}.open(${JSON.stringify(text)})`);
+  }
+  assert.deepEqual(page.errors, []);
+});
