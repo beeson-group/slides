@@ -360,3 +360,57 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// five paragraphs on the clipboard of the editor, which fill the text column of a slide to its foot
+const PARAGRAPHS = ['<!--beeson-->', ...Array.from({ length: 5 }, (_, i) => `<p>Paragraph ${i + 1} of a column that is filled to the foot of the slide.</p>`)].join('\n');
+
+const slideBoxOf = (page, selector) =>
+  page.evaluate(`(() => {
+    const el = [...document.querySelectorAll(${JSON.stringify(selector)})].find((e) => e.getBoundingClientRect().width > 0);
+    if (!el) return null;
+    const s = document.querySelector('.reveal .slides');
+    const k = s.getBoundingClientRect().width / s.offsetWidth;
+    const o = s.getBoundingClientRect();
+    const r = el.getBoundingClientRect();
+    return { left: (r.left - o.left) / k, top: (r.top - o.top) / k, right: (r.right - o.left) / k, bottom: (r.bottom - o.top) / k };
+  })()`);
+
+// a new slide of layout, with its column filled to the foot
+async function fullSlide(page, layout) {
+  await exec(page, `slide.new.${layout}`);
+  await frames(page);
+  await press(page, 'Escape');
+  await press(page, 'Escape');
+  await exec(page, 'edit.paste', PARAGRAPHS);
+  await frames(page);
+  return render(page);
+}
+
+for (const platform of PLATFORMS) {
+  test(`a QR code inserted on a full slide is put in the free area at the right of its column (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    const full = await fullSlide(page, 'content');
+    await exec(page, 'insert.qr');
+    await frames(page);
+    const qr = await slideBoxOf(page, '.reveal section.present .qr');
+    // the zone of a content slide, at the right of its column, in the slide px of theme/beeson.css
+    const zone = { left: 1200, top: 120, right: 1800, bottom: 920 };
+    assert.ok(qr.left >= zone.left && qr.right <= zone.right && qr.top >= zone.top && qr.bottom <= zone.bottom, `the QR code is not in the zone: ${JSON.stringify(qr)}`);
+    assert.ok(Math.abs((qr.left + qr.right) / 2 - 1500) < 2 && Math.abs((qr.top + qr.bottom) / 2 - 520) < 2, `the QR code is not at the center of the zone: ${JSON.stringify(qr)}`);
+    const edited = await render(page);
+    assert.match(edited, /<p>Paragraph 5 [^\n]*<\/p>\n  <div class="qr" data-qr="https:\/\/example.com" style="translate: \d+px -?\d+px"><\/div>\n/);
+    await undoRedo(page, full, edited);
+    await savedAs(page, edited);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`a QR code inserted on a full wide slide, without a free area, is centered on the slide (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await fullSlide(page, 'wide');
+    await exec(page, 'insert.qr');
+    await frames(page);
+    const qr = await slideBoxOf(page, '.reveal section.present .qr');
+    assert.ok(Math.abs((qr.left + qr.right) / 2 - 960) < 2 && Math.abs((qr.top + qr.bottom) / 2 - 540) < 2, `the QR code is not centered: ${JSON.stringify(qr)}`);
+    assert.deepEqual(errors(page), []);
+  });
+}
