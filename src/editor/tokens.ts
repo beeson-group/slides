@@ -137,3 +137,35 @@ export function classesOf(token: Token): string[] {
   const value = token.attrs.find((a) => a.name === 'class')?.value ?? '';
   return value.split(/\s+/).filter(Boolean);
 }
+
+// the named references decoded in an attribute value. a reference outside this table is left as
+// written, which keeps its bytes when the value is rewritten
+const NAMED: Record<string, string> = {
+  amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', ensp: ' ', emsp: ' ', thinsp: ' ',
+  ndash: '–', mdash: '—', minus: '−', hellip: '…', lsquo: '‘', rsquo: '’', ldquo: '“',
+  rdquo: '”', laquo: '«', raquo: '»', middot: '·', bull: '•', times: '×', deg: '°',
+  copy: '©', reg: '®', trade: '™', shy: '­', zwj: '‍', zwnj: '‌',
+};
+// the references that the parser decodes without a semicolon, before a character that is not a
+// letter, a digit, or =
+const LEGACY = new Set(['amp', 'lt', 'gt', 'quot', 'nbsp', 'copy', 'reg', 'times', 'deg', 'laquo', 'raquo', 'middot', 'shy']);
+// a character reference, with its semicolon when it has one
+export const REFERENCE_IN_ATTR = /&(#[xX][0-9a-fA-F]+|#[0-9]+|[A-Za-z][A-Za-z0-9]*)(;?)/g;
+
+// the value of an attribute as the parser reads it from its raw bytes, without the DOM, so that it
+// is read the same in node and in a browser
+export function decodeAttr(raw: string): string {
+  return raw.replace(REFERENCE_IN_ATTR, (m, body: string, semi: string, at: number) => {
+    if (body[0] === '#') {
+      const hex = body[1] === 'x' || body[1] === 'X';
+      const code = parseInt(body.slice(hex ? 2 : 1), hex ? 16 : 10);
+      const bad = !Number.isFinite(code) || code === 0 || code > 0x10ffff || (code >= 0xd800 && code <= 0xdfff);
+      return bad ? '�' : String.fromCodePoint(code);
+    }
+    const value = NAMED[body];
+    if (value === undefined) return m;
+    if (semi) return value;
+    const next = raw[at + m.length] ?? '';
+    return LEGACY.has(body) && !/[A-Za-z0-9=]/.test(next) ? value : m;
+  });
+}
