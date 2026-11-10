@@ -555,13 +555,28 @@ export class PlotView {
   constructor(el: HTMLElement) {
     this.el = el;
     CACHE.set(el, this);
+    this.load(null);
+  }
+
+  /** Draws the plot again from text, or from its block when text is null, e.g. while the editor changes its data. A fault is shown in place of the plot. */
+  reload(text: string | null = null): void {
+    this.pause();
+    this.spec = null;
+    this.W = this.H = 0;
+    this.tabButtons = [];
+    this.stepTab = null;
+    this.load(text);
+  }
+
+  private load(text: string | null): void {
+    const el = this.el;
     // a slide is cloned with its plot for each step in the print view of reveal.js
     for (const old of el.querySelectorAll(':scope > .plot-body, :scope > .plot-error')) old.remove();
     try {
       const id = el.dataset.plot ?? '';
       const block = id ? document.getElementById(id) : null;
-      if (!block) throw new Error(`the JSON block with the id "${id}" is not found`);
-      this.spec = parsePlot(block.textContent ?? '');
+      if (text === null && !block) throw new Error(`the JSON block with the id "${id}" is not found`);
+      this.spec = parsePlot(text ?? block?.textContent ?? '');
     } catch (error) {
       const message = `plot ${el.dataset.plot ?? ''}: ${(error as Error).message}`;
       const box = document.createElement('div');
