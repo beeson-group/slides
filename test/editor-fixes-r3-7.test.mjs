@@ -127,3 +127,78 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errorsOf(page), []);
   });
 }
+
+// the center of word in the shown paragraph that holds it, and the box of the paragraph
+const wordAt = (page, word) => page.evaluate(`(() => {
+  const p = [...document.querySelectorAll('.reveal section.present p')].find((e) => e.textContent.includes(${JSON.stringify(word)}));
+  const walker = document.createTreeWalker(p, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const i = n.data.indexOf(${JSON.stringify(word)});
+    if (i < 0) continue;
+    const range = document.createRange();
+    range.setStart(n, i);
+    range.setEnd(n, i + ${word.length});
+    const r = range.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, left: r.left, right: r.right };
+  }
+})()`);
+
+// the text of the selection of the document, and whether it is collapsed
+const selected = (page) => page.evaluate(`(() => { const s = getSelection(); return { text: s.toString(), collapsed: s.isCollapsed }; })()`);
+
+// the label and the keys of each item of the open context menu, and whether it is enabled
+const menuRows = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item')].map((i) => ({ label: i.querySelector('.label')?.textContent ?? '', keys: i.querySelector('.keys')?.textContent ?? '', enabled: i.getAttribute('aria-disabled') !== 'true' }))`);
+
+const CLIP = { mac: ['⌘X', '⌘C', '⌘V'], other: ['Ctrl+X', 'Ctrl+C', 'Ctrl+V'] };
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: a right-click on a word offers Cut, Copy, and Paste, and on a Mac it selects the word`, async () => {
+    const page = await editor(platform);
+    await slideOf(page, '.reveal .slides p');
+    await page.evaluate(`Reveal.slide([...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.textContent.includes('matplotlib figure')))`);
+    await sleep(250);
+    const word = await wordAt(page, 'matplotlib');
+    // the caret is put into the word first, as in the photo of state 34
+    await click(page, { x: word.left + 20, y: word.y });
+    await sleep(50);
+    await click(page, { x: word.left + 20, y: word.y }, { button: 'right' });
+    await sleep(100);
+    const sel = await selected(page);
+    if (platform === 'mac') assert.equal(sel.text, 'matplotlib', 'a right-click on a word does not select the word');
+    else assert.equal(sel.collapsed, true, 'a right-click on a word selects text outside a Mac');
+    const rows = await menuRows(page);
+    assert.deepEqual(rows.slice(0, 3).map((r) => r.label), ['Cut', 'Copy', 'Paste'], 'the text menu does not open with Cut, Copy, and Paste');
+    assert.deepEqual(rows.slice(0, 3).map((r) => r.keys), CLIP[platform], 'Cut, Copy, and Paste are listed without their keys');
+    if (platform === 'mac') assert.deepEqual(rows.slice(0, 2).map((r) => r.enabled), [true, true], 'Cut and Copy are disabled on a selected word');
+    await page.evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+    await sleep(50);
+
+    // a right-click inside a selection of two words keeps the selection
+    await page.evaluate(`(() => {
+      const p = [...document.querySelectorAll('.reveal section.present p')].find((e) => e.textContent.includes('matplotlib'));
+      const n = [...p.childNodes].find((c) => c.nodeType === 3 && c.data.includes('matplotlib figure'));
+      const i = n.data.indexOf('matplotlib figure');
+      p.focus();
+      getSelection().setBaseAndExtent(n, i, n, i + 'matplotlib figure'.length);
+    })()`);
+    await sleep(50);
+    await click(page, { x: word.left + 20, y: word.y }, { button: 'right' });
+    await sleep(100);
+    assert.equal((await selected(page)).text, 'matplotlib figure', 'a right-click inside a selection does not keep it');
+    assert.deepEqual(errorsOf(page), []);
+  });
+
+  test(`${platform}: a right-click on a word of a paragraph that is not edited puts the text into editing`, async () => {
+    const page = await editor(platform);
+    await page.evaluate(`Reveal.slide([...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.textContent.includes('matplotlib figure')))`);
+    await sleep(250);
+    const word = await wordAt(page, 'matplotlib');
+    await click(page, { x: word.x, y: word.y }, { button: 'right' });
+    await sleep(100);
+    const sel = await selected(page);
+    assert.equal(await page.evaluate(`!!document.activeElement?.closest('.reveal section.present p')`), true, 'the paragraph is not put into editing');
+    if (platform === 'mac') assert.equal(sel.text, 'matplotlib', 'a right-click on a word does not select the word');
+    assert.deepEqual((await menuRows(page)).slice(0, 3).map((r) => r.label), ['Cut', 'Copy', 'Paste']);
+    assert.deepEqual(errorsOf(page), []);
+  });
+}
