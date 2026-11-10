@@ -67,6 +67,8 @@ export class Dialog {
         ev.preventDefault();
         if (options.dismissable !== false) this.close(null);
       } else if (ev.key === 'Tab') this.trap(ev);
+      // the keys that press a button are kept from the key handler of reveal.js, which cancels them
+      else if ((ev.key === 'Enter' || ev.key === ' ') && ev.target instanceof HTMLButtonElement) ev.stopPropagation();
     });
     document.body.append(this.el);
   }
