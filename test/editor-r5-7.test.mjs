@@ -201,3 +201,29 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the typeset items in the list of MathJax, and those of them whose formula is off the page
+const mathItems = (page) =>
+  page.evaluate(`(() => { const items = Array.from(MathJax.startup.document.math); return { all: items.length, gone: items.filter((m) => !m.typesetRoot?.isConnected).length }; })()`);
+
+for (const platform of PLATFORMS) {
+  test(`the Slide pane rebuilt many times leaves no typeset items of MathJax behind on ${platform}`, async () => {
+    const page = await editor(platform, 2);
+    if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
+    const sel = '.beeson-edit-inspector .ed-sec .ed-note.running-head mjx-container';
+    const shown = async () => assert.ok(await until(page, `!!document.querySelector(${JSON.stringify(sel)})`), 'the running head of the Slide pane is not typeset');
+    await shown();
+    const first = await mathItems(page);
+    for (let k = 0; k < 12; k++) {
+      await page.evaluate(`Reveal.slide(${k % 2 ? 2 : 3})`);
+      await shown();
+    }
+    await page.evaluate('Reveal.slide(2)');
+    await shown();
+    await wait(page, 200);
+    const now = await mathItems(page);
+    assert.equal(now.gone, 0, `MathJax keeps ${now.gone} typeset items of running heads that are off the page`);
+    assert.equal(now.all, first.all);
+    assert.deepEqual(errors(page), []);
+  });
+}
