@@ -6,11 +6,12 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { inflateSync } from 'node:zlib';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { numberOf, sortOrder } from '../src/editor/table.ts';
-import { byteExact, click, press, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
 const DECK = 'index.html';
 const PLATFORMS = ['mac', 'other'];
@@ -291,5 +292,157 @@ for (const platform of PLATFORMS) {
     // the text is opened again without a save
     assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${js(edited)})`)).problems, []);
     assert.deepEqual(errors(page), []);
+  });
+
+}
+
+// the deck of layouts of the mask tests, whose slide 3 has a dark image of 1200 by 1440 px in a
+// zone of 600 by 800 px
+const LAYOUTS = 'test/pages/editor-layouts.html';
+const IMG = '.reveal section.present figure.zone img.for-dark';
+const BAR = 'dialog.beeson-mask-bar';
+const written = async (page) => (await render(page)).match(/<img class="for-dark"[^>]*?(?: style="([^"]*)")?>/)[1] ?? null;
+const handlesShown = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-mask-window i')].filter((i) => getComputedStyle(i).display !== 'none').length`);
+const pressed = (page) => page.evaluate(`[...document.querySelectorAll('${BAR} .modes button')].map((b) => b.title + ' ' + b.getAttribute('aria-pressed'))`);
+const handleAt = (page, name) => rect(page, `.beeson-mask-window i[data-handle=${name}]`);
+
+// the pixels of a PNG written by Chrome, with 8 bits per channel and without interlace, as in
+// editor-r6-6.test.mjs
+function decodePng(png) {
+  let at = 8, width = 0, channels = 4;
+  const data = [];
+  while (at < png.length) {
+    const length = png.readUInt32BE(at), kind = png.toString('ascii', at + 4, at + 8), body = png.subarray(at + 8, at + 8 + length);
+    if (kind === 'IHDR') ({ width, channels } = { width: body.readUInt32BE(0), channels: body[9] === 6 ? 4 : 3 });
+    if (kind === 'IDAT') data.push(body);
+    at += 12 + length;
+  }
+  const raw = inflateSync(Buffer.concat(data)), stride = width * channels, height = raw.length / (stride + 1), px = Buffer.alloc(height * stride);
+  for (let y = 0; y < height; y++) {
+    const filter = raw[y * (stride + 1)];
+    for (let x = 0; x < stride; x++) {
+      const a = x >= channels ? px[y * stride + x - channels] : 0, b = y ? px[(y - 1) * stride + x] : 0;
+      const c = x >= channels && y ? px[(y - 1) * stride + x - channels] : 0;
+      const pa = Math.abs(b - c), pb = Math.abs(a - c), pc = Math.abs(a + b - 2 * c);
+      const paeth = pa <= pb && pa <= pc ? a : pb <= pc ? b : c;
+      px[y * stride + x] = raw[y * (stride + 1) + 1 + x] + [0, a, b, (a + b) >> 1, paeth][filter];
+    }
+  }
+  return px;
+}
+
+// the mean difference of two captures of the same size, per channel
+function differ(a, b) {
+  const [x, y] = [decodePng(a), decodePng(b)];
+  assert.equal(x.length, y.length);
+  let sum = 0;
+  for (let i = 0; i < x.length; i++) sum += Math.abs(x[i] - y[i]);
+  return sum / x.length;
+}
+
+// the box of the image on the screen without its scale, inset by 12 px past the selection frame
+const insetBox = (page) => page.evaluate(`(() => {
+  const el = document.querySelector(${js(IMG)}), k = Reveal.getScale(), r = el.getBoundingClientRect();
+  const w = el.offsetWidth * k, h = el.offsetHeight * k;
+  return { x: Math.round(r.left + r.width / 2 - w / 2 + 12), y: Math.round(r.top + r.height / 2 - h / 2 + 12), width: Math.round(w - 24), height: Math.round(h - 24), scale: 1 };
+})()`);
+
+// the picture of the image after an edit captured inside its new box, and the same place after an
+// undo, which differ by the resampling of the scaled picture only, i.e. less than the place shifted
+// by 1 px in any direction. the edit is redone after the check
+async function pictureKept(page, edited) {
+  await press(page, 'Escape');
+  await click(page, '.reveal section.present h2');
+  await frames(page);
+  const box = await insetBox(page);
+  const after = await page.screenshot(box);
+  await undo(page);
+  await frames(page);
+  await byteExact(page);
+  const before = await page.screenshot(box);
+  const kept = differ(after, before);
+  for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+    const shift = differ(await page.screenshot({ ...box, x: box.x + dx, y: box.y + dy }), after);
+    assert.ok(kept < shift, `the picture moved: ${kept} in place against ${shift} shifted by ${dx}, ${dy} px`);
+  }
+  await redo(page);
+  assert.equal(await render(page), edited);
+}
+
+async function editMask(page) {
+  await click(page, IMG, { count: 2 });
+  await page.waitFor(`!!document.querySelector('${BAR}[open]')`);
+  assert.deepEqual(await pressed(page), ['Edit Image true', 'Edit Mask false']);
+  assert.equal(await handlesShown(page), 0, 'the handles are drawn in Edit Image, where they do not resize');
+  await click(page, `${BAR} button[title="Edit Mask"]`);
+  assert.deepEqual(await pressed(page), ['Edit Image false', 'Edit Mask true']);
+  assert.equal(await handlesShown(page), 8);
+}
+
+const RESIZED = /^scale: [\d.]+; clip-path: inset\([\d.]+%\); object-fit: contain; object-position: -?[\d.]+(%|px) -?[\d.]+(%|px); width: (\d+)px; height: (\d+)px(; translate: -?\d+px -?\d+px)?$/;
+
+// state 138 of round 3: the frame of Edit Mask was drawn with eight handles that did not resize it,
+// where Keynote resizes the mask with them and keeps the picture in place
+for (const platform of PLATFORMS) {
+  test(`in Edit Mask a handle resizes the box of an image, and the picture stays in place (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: LAYOUTS, n: 3 });
+    await editMask(page);
+    await drag(page, await handleAt(page, 'nw'), { dx: 120, dy: 90 });
+    await press(page, 'Enter');
+    assert.equal(await page.evaluate(`!!document.querySelector('${BAR}[open]')`), false);
+    assert.equal(await undoLabel(page), 'Undo Edit Mask');
+    const style = await written(page);
+    const m = style?.match(RESIZED);
+    assert.ok(m && m[5], `the style ${style} is not a resized mask with a translate`);
+    assert.ok(+m[3] < 600 && +m[4] < 800, `the box of ${m[3]} by ${m[4]} px is not smaller than the zone`);
+    const edited = await render(page);
+    assert.equal(edited, page.source.replace('<img class="for-dark" src="../../demo/figure-dark.png" alt="A figure, dark version">', `<img class="for-dark" src="../../demo/figure-dark.png" alt="A figure, dark version" style="${style}">`));
+    await pictureKept(page, edited);
+    await roundTrip(page, edited);
+  });
+
+  test(`in Edit Mask a drag inside the box moves it over the picture, and Esc and Reset leave the image as it was (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: LAYOUTS, n: 3 });
+    await editMask(page);
+    await drag(page, await handleAt(page, 'se'), { dx: -150, dy: -150 });
+    // Esc leaves the image as it was
+    await press(page, 'Escape');
+    assert.equal(await written(page), null);
+    assert.equal(await render(page), page.source);
+    // Reset puts the box back, and Done then does not write anything
+    await editMask(page);
+    await drag(page, await handleAt(page, 'e'), { dx: -100, dy: 0 });
+    await click(page, `${BAR} button[title="The picture as it was before this edit"]`);
+    await click(page, `${BAR} button.done`);
+    assert.equal(await render(page), page.source);
+    assert.equal(await page.evaluate(`document.querySelector(${js(IMG)}).getAttribute('style')`), null);
+    // a box made smaller is moved over the picture by a drag inside it
+    await editMask(page);
+    await drag(page, await handleAt(page, 'se'), { dx: -150, dy: -150 });
+    const shrunk = await rect(page, '.beeson-mask-window');
+    await drag(page, shrunk, { dx: 60, dy: 70 });
+    const moved = await rect(page, '.beeson-mask-window');
+    assert.ok(Math.abs(moved.left - shrunk.left - 60) < 2 && Math.abs(moved.top - shrunk.top - 70) < 2, `the box moved from ${js(shrunk)} to ${js(moved)}`);
+    assert.ok(Math.abs(moved.width - shrunk.width) < 1.5 && Math.abs(moved.height - shrunk.height) < 1.5, 'the move changed the size of the box');
+    await click(page, `${BAR} button.done`);
+    assert.equal(await undoLabel(page), 'Undo Edit Mask');
+    const style = await written(page);
+    const m = style?.match(RESIZED);
+    assert.ok(m && m[5], `the style ${style} is not a resized mask with a translate`);
+    const edited = await render(page);
+    await pictureKept(page, edited);
+    await roundTrip(page, edited);
+    // Reset Mask takes the zoom and the place of the picture off, and keeps object-fit contain, without
+    // which the theme stretches the picture to the box
+    await click(page, IMG);
+    await click(page, IMG);
+    assert.equal((await state(page, 'image.resetMask')).enabled, true);
+    await exec(page, 'image.resetMask');
+    const reset = await written(page);
+    assert.match(reset, /^object-fit: contain; width: \d+px; height: \d+px; translate: -?\d+px -?\d+px$/);
+    assert.equal((await state(page, 'image.resetMask')).enabled, false);
+    const fit = await page.evaluate(`getComputedStyle(document.querySelector(${js(IMG)})).objectFit`);
+    assert.equal(fit, 'contain');
+    await roundTrip(page);
   });
 }

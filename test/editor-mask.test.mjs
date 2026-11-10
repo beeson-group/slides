@@ -164,8 +164,8 @@ for (const platform of PLATFORMS) {
     if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
     await tap(page, 'Edit Mask');
     await page.waitFor(`!!document.querySelector('${BAR}[open]')`);
-    await click(page, `${BAR} button:not([hidden])`);
-    assert.equal(await page.evaluate(`document.querySelector('${BAR} button').getAttribute('aria-pressed')`), 'true');
+    await click(page, `${BAR} button.fill`);
+    assert.equal(await page.evaluate(`document.querySelector('${BAR} button.fill').getAttribute('aria-pressed')`), 'true');
     await click(page, `${BAR} button.done`);
     assert.equal(await editing(page), false);
     const edited = await render(page);
