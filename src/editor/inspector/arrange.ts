@@ -1,13 +1,14 @@
 // the Arrange pane of the Format tab, as the Arrange tab of Keynote: Align with its reference,
 // Distribute, the size in W and H, the position in X and Y, and the angle, each with its reset,
-// then the order of the elements, Group and Ungroup, and Lock and Unlock. X and Y are the offset
-// of an element from its place in the file, and W and H its size, in slide pixels. W and H are set
-// only on an image, a video, a QR code, and a tycho viewer, since the size of every other element
-// is set by its layout
+// with Flip Horizontal and Flip Vertical for an image, then the order of the elements, Group and
+// Ungroup, and Lock and Unlock. X and Y are the offset of an element from its place in the file,
+// and W and H its size, in slide pixels. W and H are set only on an image, a video, a QR code, and
+// a tycho viewer, since the size of every other element is set by its layout
 
 import type { App } from '../app.ts';
 import { offsetOf, resizable, sizeOf, targetsOf } from '../commands/align.ts';
 import { angleOf } from '../commands/order.ts';
+import { imageOf } from '../commands/figure.ts';
 import { locked } from '../canvas/drag.ts';
 import { GLYPHS, button, checkbox, note, numberField, row, section, segmented, type Control, type Run } from './controls.ts';
 
@@ -21,6 +22,8 @@ Object.assign(GLYPHS, {
   ungroup: ['M3.5 3.5H9V9H3.5z', 'M11 11h5.5v5.5H11z'],
   lock: ['M5.5 9h9v7.5h-9z', 'M7.5 9V6.5a2.5 2.5 0 0 1 5 0V9'],
   unlock: ['M5.5 9h9v7.5h-9z', 'M7.5 9V6.5a2.5 2.5 0 0 1 4.9-.7'],
+  'flip-h': ['M10 2.5v15', 'M8 5.5 3 14.5h5z', 'F12 5.5l5 9h-5z'],
+  'flip-v': ['M2.5 10h15', 'M5.5 8 14.5 3v5z', 'F5.5 12l9 5v-5z'],
 });
 
 // the value shared by every element, or null when they differ
@@ -87,6 +90,11 @@ export function arrangePane(app: App, run: Run): Control[] {
         }),
       ]),
       row([button(app, run, { command: 'arrange.resetRotation', icon: 'reset', text: 'Reset Rotation' })]),
+      // a flip is offered for an image only
+      ...(imageOf(app) ? [row([
+        button(app, run, { command: 'arrange.flipHorizontal', icon: 'flip-h', text: 'Flip Horizontal' }),
+        button(app, run, { command: 'arrange.flipVertical', icon: 'flip-v', text: 'Flip Vertical' }),
+      ])] : []),
     ]),
     section('Arrange', [
       row([segmented(app, run, [

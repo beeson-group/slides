@@ -136,3 +136,78 @@ export function initSteps(deck: Deck): void {
   mark();
   void typeset().then(mark);
 }
+
+// a step that starts After Previous is shown by reveal.js a delay after the step before, with
+// data-autoslide on a fragment of the step before. going back, as in PowerPoint and Keynote, a timed
+// step does not play again by itself: Back skips the timed steps to the last step reached by a
+// click, and the delay of the step it lands on is set aside in HELD until the step changes again
+const AUTOSLIDE = 'data-autoslide';
+const HELD = 'data-autoslide-held';
+
+// a step of the deck: the index of its slide in getSlides and its fragment index, -1 before the first
+type At = { slide: number; f: number };
+
+// the fragment indices of the steps of a slide, -1 for the slide without a fragment shown
+const stepsOf = (slide: Element): number[] => [-1, ...new Set([...slide.querySelectorAll<HTMLElement>('.fragment')].map((f) => Number(f.dataset.fragmentIndex)).filter(Number.isFinite))].sort((a, b) => a - b);
+const fragmentsAt = (slide: Element, f: number) => [...slide.querySelectorAll<HTMLElement>('.fragment')].filter((el) => Number(el.dataset.fragmentIndex) === f);
+const delayed = (el: Element) => (parseInt(el.getAttribute(AUTOSLIDE) ?? el.getAttribute(HELD) ?? '', 10) || 0) > 0;
+
+/** Keeps Back from playing a timed step again in a deck shown without the editor. */
+export function initTimedSteps(deck: Deck): void {
+  const slides = () => deck.getSlides();
+  const here = (): At => {
+    const slide = deck.getCurrentSlide();
+    const shown = [...slide.querySelectorAll<HTMLElement>('.fragment.visible')].map((f) => Number(f.dataset.fragmentIndex)).filter(Number.isFinite);
+    return { slide: slides().indexOf(slide), f: Math.max(-1, ...shown) };
+  };
+  // the step before at, or null for the first step of the deck
+  const before = (at: At): At | null => {
+    const steps = stepsOf(slides()[at.slide]);
+    const k = steps.indexOf(at.f);
+    if (k > 0) return { slide: at.slide, f: steps[k - 1] };
+    const prev = slides()[at.slide - 1];
+    return prev ? { slide: at.slide - 1, f: stepsOf(prev).at(-1)! } : null;
+  };
+  const delayedAt = (at: At | null) => !!at && at.f >= 0 && fragmentsAt(slides()[at.slide], at.f).some(delayed);
+  const same = (a: At | null, b: At | null) => !!a && !!b && a.slide === b.slide && a.f === b.f;
+
+  let last = here();
+  let held: Element[] = [];
+  // reveal.js pauses every delay of the deck at an input while a delay runs. a pause by the input
+  // of a Back is taken back, and a pause with the key A of reveal.js is kept
+  let paused = false;
+  deck.on('autoslidepaused', () => {
+    paused = true;
+    setTimeout(() => (paused = false), 0);
+  });
+  const change = () => {
+    const now = here();
+    if (same(now, last)) return;
+    for (const el of held) {
+      el.setAttribute(AUTOSLIDE, el.getAttribute(HELD) ?? '');
+      el.removeAttribute(HELD);
+    }
+    held = [];
+    const from = last;
+    last = now;
+    const back = now.slide < from.slide || (now.slide === from.slide && now.f < from.f);
+    if (!back || deck.isOverview()) return;
+    if (delayedAt(now)) {
+      held = fragmentsAt(slides()[now.slide], now.f).filter((el) => el.hasAttribute(AUTOSLIDE));
+      for (const el of held) {
+        el.setAttribute(HELD, el.getAttribute(AUTOSLIDE)!);
+        el.removeAttribute(AUTOSLIDE);
+      }
+    }
+    if (paused) {
+      paused = false;
+      deck.toggleAutoSlide(true);
+    }
+    // the delay of the step may have been started before this event, and it is cued again without it
+    (deck as Deck & { cueAutoSlide?: () => void }).cueAutoSlide?.();
+    if (!delayedAt(now)) return;
+    // a step reached by the delay of the step before is skipped after one step back
+    if (same(before(from), now) && delayedAt(before(now))) setTimeout(() => deck.prev(), 0);
+  };
+  for (const type of ['fragmentshown', 'fragmenthidden', 'slidechanged']) deck.on(type, change);
+}

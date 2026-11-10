@@ -45,6 +45,17 @@ export const LINE_ATTRS: Record<string, string[]> = {
 // the elements whose width is set in a style, by tag or by class
 const SIZED_TAGS = new Set(['img', 'video', 'tycho-viewer']);
 
+// the declarations of the mask and the flip of an image, written by canvas/mask.ts, with the form
+// of their values
+const NUMBER = '-?\\d+(\\.\\d+)?';
+const AT = `(${NUMBER}(%|px)|0)`;
+const MASK_DECLARATIONS: Record<string, RegExp> = {
+  scale: new RegExp(`^${NUMBER}( ${NUMBER})?$`),
+  'clip-path': new RegExp(`^inset\\(${NUMBER}%\\)$`),
+  'object-position': new RegExp(`^${AT} ${AT}$`),
+  'object-fit': /^cover$/,
+};
+
 // the class names in the selectors of a stylesheet. the comments, the strings, and the innermost
 // blocks, i.e. the declarations, are cut first, so that e.g. url(a.png) is not read as a class
 export function themeClasses(css: string): string[] {
@@ -62,6 +73,7 @@ export function declarationProblem(tag: string, classes: string[], name: string,
   if (name === 'width') return SIZED_TAGS.has(tag) || classes.includes('qr') ? null : `width on a ${tag}`;
   if (name === 'font-size') return tag === 'pre' && /^(22|18)px$/.test(value.trim()) ? null : `font-size ${value} on a ${tag}`;
   if (name === 'text-align') return (tag === 'td' || tag === 'th') && value.trim() === 'right' ? null : `text-align ${value} on a ${tag}`;
+  if (MASK_DECLARATIONS[name]) return tag === 'img' && MASK_DECLARATIONS[name].test(value.trim()) ? null : `${name} ${value} on a ${tag}`;
   return `the declaration ${name}`;
 }
 
