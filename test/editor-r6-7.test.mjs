@@ -114,3 +114,77 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// the items of the open menus that run a command, as its id, label, and key text
+const shownItems = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item[data-command]')].map((i) => ({ id: i.dataset.command, label: i.querySelector('.label').textContent, keys: i.querySelector('.keys').textContent }))`);
+
+async function openBar(page, bar) {
+  await click(page, await page.evaluate(`(() => {
+    const r = [...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].find((b) => b.textContent.trim() === ${JSON.stringify(bar)}).getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  })()`));
+  await frames(page);
+}
+
+// the rows of the sheet of keyboard shortcuts by its group and label, opened from the Help menu
+async function sheetRows(page) {
+  await page.evaluate(`window.BeesonEditor.exec('help.keys')`);
+  await frames(page);
+  const rows = await page.evaluate(`Object.fromEntries([...document.querySelectorAll('dialog.beeson-edit-keys section')].flatMap((s) => [...s.querySelectorAll('.row')].map((r) => [s.querySelector('h3').textContent + ' > ' + r.firstChild.textContent, r.lastChild.textContent])))`);
+  await press(page, 'Escape');
+  return rows;
+}
+
+// the notation of each platform: the symbols of Keynote on a Mac, and the words of PowerPoint for
+// Windows elsewhere, e.g. Ctrl+Shift+Up Arrow and Page Down
+const NOTATION = {
+  mac: { 'arrange.order.front': '⇧⌘F', 'navigate.next': '⇟', 'edit.redo': '⇧⌘Z', redoSheet: '⇧⌘Z, ⌘Y', nextSheet: '⇟, →, ↓' },
+  other: { 'arrange.order.front': 'Ctrl+Shift+Up Arrow', 'navigate.next': 'Page Down', 'edit.redo': 'Ctrl+Y', redoSheet: 'Ctrl+Y, Ctrl+Shift+Z', nextSheet: 'Page Down, Right Arrow, Down Arrow' },
+};
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: a menu, a context menu, a tooltip, and the sheet write the keys of a command in one notation`, async () => {
+    const page = await editor(platform, MATH);
+    await click(page, '.reveal section.present .zone > img');
+    await frames(page);
+    const menus = new Map();
+    for (const bar of ['File', 'Edit', 'Insert', 'Format', 'Arrange', 'Slide', 'View', 'Help']) {
+      await openBar(page, bar);
+      for (const item of await shownItems(page)) menus.set(item.id, { ...item, bar });
+      await press(page, 'Escape');
+      await frames(page);
+    }
+    const sheet = await sheetRows(page);
+    let compared = 0;
+    for (const item of menus.values()) {
+      if (!item.keys) continue;
+      const row = sheet[`${item.bar} > ${item.label}`];
+      assert.ok(row, `the sheet does not list ${item.bar} > ${item.label}`);
+      assert.equal(row.split(', ')[0], item.keys, `${item.bar} > ${item.label} reads ${item.keys} in its menu and ${row} in the sheet`);
+      compared++;
+    }
+    assert.ok(compared > 20, `only ${compared} items of the menus have keys`);
+    const want = NOTATION[platform];
+    for (const id of ['arrange.order.front', 'navigate.next', 'edit.redo']) assert.equal(menus.get(id)?.keys, want[id], id);
+    assert.equal(sheet['Edit > Redo'], want.redoSheet);
+    assert.equal(sheet['View > Next Slide'], want.nextSheet);
+
+    // the context menu of the image and the tooltips of the toolbar
+    await click(page, '.reveal section.present .zone > img', { button: 'right' });
+    await frames(page);
+    const context = await shownItems(page);
+    await press(page, 'Escape');
+    assert.ok(context.some((i) => i.id === 'arrange.order.front'), 'the context menu of an image does not have Bring to Front');
+    for (const item of context) if (menus.get(item.id)) assert.equal(item.keys, menus.get(item.id).keys, `${item.label} in the context menu`);
+    const tips = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top [data-command][title]')].map((b) => ({ id: b.dataset.command, title: b.title }))`);
+    let tipped = 0;
+    for (const tip of tips) {
+      const keys = menus.get(tip.id)?.keys;
+      if (!keys) continue;
+      assert.ok(tip.title.endsWith(`(${keys})`), `the tooltip "${tip.title}" does not end with (${keys})`);
+      tipped++;
+    }
+    assert.ok(tipped >= 2, `only ${tipped} tooltips have keys`);
+    assert.deepEqual(errors(page), []);
+  });
+}
