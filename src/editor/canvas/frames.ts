@@ -1,7 +1,8 @@
 // the hover and selection frames, the eight resize handles, the handle of a block, the readout at
 // the pointer, the guides and the marks of equal gaps, and the marquee, in one layer over the canvas
-// clipped to the box of the viewport of reveal.js. the frames are drawn in screen pixels from the
-// live boxes of the elements, and the guides from slide pixels by the live scale of the slide
+// clipped to the canvas cell of the stage, so that a handle at the edge of the slide is drawn on
+// the pasteboard and none is drawn over the bars at a zoom. the frames are drawn in screen pixels
+// from the live boxes of the elements, and the guides from slide pixels by the live scale
 
 import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
@@ -128,8 +129,8 @@ export class Frames {
 
   draw(): void {
     const app = this.app;
-    const reveal = document.querySelector('.reveal')?.getBoundingClientRect();
-    if (reveal) this.layer.style.clipPath = `inset(${reveal.top}px ${innerWidth - reveal.right}px ${innerHeight - reveal.bottom}px ${reveal.left}px)`;
+    const v = app.stage?.viewport;
+    if (v) this.layer.style.clipPath = `inset(${v.top}px ${innerWidth - v.right}px ${innerHeight - v.bottom}px ${v.left}px)`;
     if (view.hover && !view.hover.isConnected) view.hover = null;
     const selected = app.selection.elements().filter((el) => el.isConnected);
     // a figure is framed at its edge, where its handles are, and a block 6 px outside its text

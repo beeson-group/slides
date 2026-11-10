@@ -51,6 +51,7 @@ import { install as installClipboardCommands } from './commands/clipboard.ts';
 import { install as installInsertCommands } from './commands/insert.ts';
 import { install as installFindCommands } from './commands/find.ts';
 import { install as installInspector } from './inspector/inspector.ts';
+import { install as installZoomCommands } from './commands/zoom.ts';
 import { Doc } from './model/doc.ts';
 
 const app = new App();
@@ -143,6 +144,7 @@ installClipboardCommands(app);
 installInsertCommands(app);
 installFindCommands(app);
 installInspector(app);
+installZoomCommands(app);
 
 const revealReady = (): Promise<void> =>
   new Promise((done) => {
