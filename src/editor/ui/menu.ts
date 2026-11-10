@@ -227,8 +227,11 @@ export function contextItems(app: App, kind: Context, target: Element | null): M
   if (lead.length) last = kind === 'element' ? 'edit' : 'Edit/clipboard';
   let rest = app.commands.forContext(kind).filter((x) => !lead.includes(x.id));
   if (kind === 'element') {
-    // Edit Text, enabled on an element that holds a text, e.g. the caption of a figure, follows the
-    // items of the kind of the element
+    // Edit Text, enabled on an element that holds a text, follows the items of the kind of the
+    // element. it is left out of the menu of a figure with an image or a video, as the menu of an
+    // image in Keynote does not have an item for text, and its caption is edited with a click or
+    // Return
+    if (target?.matches('figure') && target.querySelector('img, video')) rest = rest.filter((c) => c.id !== 'selection.editText');
     const rank = (c: Command) => SECTIONS.indexOf(sectionOf(c)) + (c.id === 'selection.editText' ? 0.5 : 0);
     const home = (c: Command) => (c.menu ? `${c.menu.bar}/${c.menu.submenu ?? c.menu.group}` : c.id);
     const live = new Set(rest.filter((c) => sectionOf(c) === 'kind' && app.commands.enabled(c.id)).map(home));
