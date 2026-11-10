@@ -9,7 +9,7 @@ import { after, before, test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, center, click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
+import { byteExact, center, click, drag, press, saveAndReopen, selectFigure, type } from './helpers/editor.mjs';
 
 const LAYOUTS_DECK = 'test/pages/editor-layouts.html';
 const FIGURE = '<figure class="zone">';
@@ -94,7 +94,7 @@ for (const platform of ['mac', 'other']) {
     const page = await open(platform);
     t.after(() => page.close?.());
     await show(page, '.reveal .slides figure.zone');
-    await click(page, '.reveal section.present figure.zone img.for-dark');
+    await selectFigure(page, '.reveal section.present figure.zone img.for-dark');
     assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.copy').enabled`), true);
     await clipEvent(page, 'copy');
     const clipped = await page.evaluate('window.clipped');
@@ -116,7 +116,7 @@ for (const platform of ['mac', 'other']) {
     const page = await open(platform);
     t.after(() => page.close?.());
     await show(page, '.reveal .slides figure.zone');
-    await click(page, '.reveal section.present figure.zone img.for-dark');
+    await selectFigure(page, '.reveal section.present figure.zone img.for-dark');
     await clipEvent(page, 'copy');
     const clipped = await page.evaluate('window.clipped');
     await show(page, EQUATIONS);
@@ -133,7 +133,7 @@ for (const platform of ['mac', 'other']) {
     const page = await open(platform);
     t.after(() => page.close?.());
     await show(page, '.reveal .slides figure.zone');
-    await click(page, '.reveal section.present figure.zone img.for-dark');
+    await selectFigure(page, '.reveal section.present figure.zone img.for-dark');
     await clipEvent(page, 'cut');
     await settle(page);
     const fig = figureText(page.source);
@@ -150,7 +150,7 @@ for (const platform of ['mac', 'other']) {
     const page = await open(platform);
     t.after(() => page.close?.());
     await show(page, '.reveal .slides figure.zone');
-    await click(page, '.reveal section.present figure.zone img.for-dark');
+    await selectFigure(page, '.reveal section.present figure.zone img.for-dark');
     await press(page, 'Mod+D');
     await settle(page);
     const fig = figureText(page.source);
@@ -174,7 +174,7 @@ for (const platform of ['mac', 'other']) {
     t.after(() => page.close?.());
     await show(page, '.reveal .slides figure.zone');
     const copyKey = platform === 'mac' ? 'Alt' : 'Ctrl';
-    await click(page, '.reveal section.present figure.zone img.for-dark');
+    await selectFigure(page, '.reveal section.present figure.zone img.for-dark');
     const scale = await page.evaluate('Reveal.getScale()');
     await drag(page, '.reveal section.present figure.zone img.for-dark', { dx: -200 * scale, dy: 100 * scale, modifiers: copyKey, hold: true });
     // during the drag the figure stays at its place, and the readout names the copy
@@ -201,7 +201,7 @@ for (const platform of ['mac', 'other']) {
     t.after(() => page.close?.());
     await show(page, '.reveal .slides figure.zone');
     const free = platform === 'mac' ? 'Meta' : 'Alt';
-    await click(page, '.reveal section.present figure.zone img.for-dark');
+    await selectFigure(page, '.reveal section.present figure.zone img.for-dark');
     const scale = await page.evaluate('Reveal.getScale()');
     await drag(page, '.reveal section.present figure.zone img.for-dark', { dx: -100 * scale, dy: 50 * scale, modifiers: free });
     await settle(page);
@@ -214,7 +214,7 @@ test('a Ctrl-click on a selected figure with edit-platform=other deselects it wi
   const page = await open('other');
   t.after(() => page.close?.());
   await show(page, '.reveal .slides figure.zone');
-  await click(page, '.reveal section.present figure.zone img.for-dark');
+  await selectFigure(page, '.reveal section.present figure.zone img.for-dark');
   await click(page, '.reveal section.present figure.zone img.for-dark', { modifiers: 'Ctrl' });
   await settle(page);
   assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-frame.selected:not([hidden])').length`), 0);
@@ -364,7 +364,7 @@ test('a press on the pasteboard around the slide clears the selection, and a dra
     return { x: (cell.left + slide.left) / 2, y: slide.top + slide.height / 2, slide: slide.left };
   })()`);
   assert.ok(board.slide - board.x >= 8, 'the canvas cell does not have a pasteboard beside the slide');
-  await click(page, '.reveal section.present figure.zone img.for-dark');
+  await selectFigure(page, '.reveal section.present figure.zone img.for-dark');
   assert.equal(await framedCount(page), 1);
   await click(page, board);
   assert.equal(await framedCount(page), 0, 'a press on the pasteboard keeps the selection');

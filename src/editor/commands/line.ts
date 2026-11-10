@@ -9,7 +9,7 @@
 import type { App } from '../app.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { overlay, view } from '../canvas/frames.ts';
-import { frameOf, movablesOf, onCanvas, toSlide, visualRect, type Frame } from '../canvas/hit.ts';
+import { frameOf, linePoints, movablesOf, onCanvas, snapBoxOf, toSlide, visualRect, type Frame } from '../canvas/hit.ts';
 import { LAYOUT_GUIDES, snapMove, snapPoint, type Box, type Targets } from '../canvas/snap.ts';
 import { locked, placeOf, record, writePlace, type Place } from '../canvas/drag.ts';
 
@@ -135,6 +135,21 @@ export function selectedLines(app: App): Element[] {
 }
 
 const screenOf = (f: Frame, p: Point): Point => ({ x: f.left + p.x * f.scale, y: f.top + p.y * f.scale });
+// the radius of the grip of an end in screen px, with its border and a gap
+const GRIP_R = 8;
+
+// the grip of the end at a of a line from b, in screen px. an end with an arrowhead has its grip
+// past the tip of the head, along the line, so that the head stays in view
+function gripAt(svg: Element, which: 1 | 2, a: Point, b: Point, scale: number): Point {
+  const heads = headsOf(svg);
+  if (heads === 'none' || (which === 1 && heads !== 'both')) return a;
+  const len = Math.hypot(a.x - b.x, a.y - b.y);
+  if (!len) return a;
+  const line = svg.querySelector('line');
+  const sw = (line ? parseFloat(getComputedStyle(line).strokeWidth) || 0 : 0) * scale;
+  const u = sw + GRIP_R;
+  return { x: a.x + ((a.x - b.x) / len) * u, y: a.y + ((a.y - b.y) / len) * u };
+}
 const slideOf = (f: Frame, p: Point): Point => ({ x: (p.x - f.left) / f.scale, y: (p.y - f.top) / f.scale });
 
 // svg set to the ends on the page only, while one of its ends is dragged
@@ -148,7 +163,7 @@ function showEnds(svg: Element, e: Ends): void {
 }
 
 type Press =
-  | { kind: 'end'; svg: Element; which: 1 | 2; from: Ends; x: number; y: number; moved: boolean }
+  | { kind: 'end'; svg: Element; which: 1 | 2; from: Ends; off: Point; x: number; y: number; moved: boolean }
   | { kind: 'move'; svg: Element; els: Element[]; places: Map<Element, Place>; base: Box; x: number; y: number; moved: boolean; click: (() => void) | null }
   | { kind: 'draw'; heads: Heads; start: Point; end: Point; x: number; y: number; moved: boolean };
 
@@ -186,6 +201,7 @@ export function install(app: App): void {
     const slides = app.slides() as HTMLElement;
     return {
       boxes: movablesOf(app).filter((o) => !skip.includes(o)).map((o) => toSlide(f, visualRect(o))).filter((b) => b.width > 0 && b.height > 0),
+      points: linePoints(app, skip),
       slide: { width: slides.offsetWidth || 1920, height: slides.offsetHeight || 1080 },
       layout: LAYOUT_GUIDES,
     };
@@ -193,9 +209,11 @@ export function install(app: App): void {
 
   // the point of ev in slide px, snapped to the lines of the slide, or with Shift and a fixed end
   // start in steps of 45 degrees from it
-  const pointAt = (ev: PointerEvent, start: Point | null, skip: Element[]): Point => {
+  // off is the offset of the pointer from the point that it moves, in slide px
+  const pointAt = (ev: PointerEvent, start: Point | null, skip: Element[], off: Point = { x: 0, y: 0 }): Point => {
     const f = frameOf(app);
-    const p = slideOf(f, { x: ev.clientX, y: ev.clientY });
+    const at = slideOf(f, { x: ev.clientX, y: ev.clientY });
+    const p = { x: at.x - off.x, y: at.y - off.y };
     if (start && ev.shiftKey) return stepped(start, p);
     if (freeMove(ev)) return p;
     const s = snapPoint(p, targets(skip), SNAP / f.scale);
@@ -242,9 +260,10 @@ export function install(app: App): void {
     const ends = shown
       ? lines.flatMap((svg) => {
           const e = endsOf(svg);
+          const a = screenOf(f, { x: e.x1, y: e.y1 }), b = screenOf(f, { x: e.x2, y: e.y2 });
           return [
-            { svg, which: 1, p: screenOf(f, { x: e.x1, y: e.y1 }) },
-            { svg, which: 2, p: screenOf(f, { x: e.x2, y: e.y2 }) },
+            { svg, which: 1, p: gripAt(svg, 1, a, b, f.scale) },
+            { svg, which: 2, p: gripAt(svg, 2, b, a, f.scale) },
           ];
         })
       : [];
@@ -325,7 +344,12 @@ export function install(app: App): void {
     if (grip?.line) {
       ev.preventDefault();
       ev.stopPropagation();
-      press = { kind: 'end', svg: grip.line, which: grip.dataset.end === '1' ? 1 : 2, from: endsOf(grip.line), x: at.x, y: at.y, moved: false };
+      // the end keeps its offset from the pointer, which a grip past an arrowhead is drawn at
+      const which = grip.dataset.end === '1' ? 1 : 2;
+      const from = endsOf(grip.line);
+      const p = slideOf(frameOf(app), at);
+      const off = which === 1 ? { x: p.x - from.x1, y: p.y - from.y1 } : { x: p.x - from.x2, y: p.y - from.y2 };
+      press = { kind: 'end', svg: grip.line, which, from, off, x: at.x, y: at.y, moved: false };
       return;
     }
     if (!onCanvas(target, app, at) || target.closest('[contenteditable="true"]:focus')) return;
@@ -344,8 +368,7 @@ export function install(app: App): void {
       if (sel.elements().length > 1) click = () => sel.set('elements', [svg]);
     } else sel.set('elements', [svg]);
     const els = sel.elements().filter((e) => !sel.elements().some((o) => o !== e && o.contains(e)) && !locked(e));
-    const f = frameOf(app);
-    const boxes = els.map((e) => toSlide(f, visualRect(e)));
+    const boxes = els.map((e) => snapBoxOf(app, e));
     const left = Math.min(...boxes.map((b) => b.left)), top = Math.min(...boxes.map((b) => b.top));
     const base = { left, top, width: Math.max(...boxes.map((b) => b.left + b.width)) - left, height: Math.max(...boxes.map((b) => b.top + b.height)) - top };
     press = { kind: 'move', svg, els, places: new Map(els.map((e) => [e, placeOf(e)])), base, x: at.x, y: at.y, moved: false, click };
@@ -368,7 +391,7 @@ export function install(app: App): void {
     } else if (p.kind === 'end') {
       if (p.svg.isConnected && locked(p.svg)) return;
       const fixed = p.which === 1 ? { x: p.from.x2, y: p.from.y2 } : { x: p.from.x1, y: p.from.y1 };
-      const to = pointAt(ev, fixed, [p.svg]);
+      const to = pointAt(ev, fixed, [p.svg], p.off);
       const e = p.which === 1 ? { x1: to.x, y1: to.y, x2: fixed.x, y2: fixed.y } : { x1: fixed.x, y1: fixed.y, x2: to.x, y2: to.y };
       showEnds(p.svg, e);
       readout({ x1: fixed.x, y1: fixed.y, x2: to.x, y2: to.y }, ev);

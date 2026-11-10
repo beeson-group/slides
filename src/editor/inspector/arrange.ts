@@ -2,11 +2,12 @@
 // Distribute, the size in W and H, the position in X and Y, and the angle, each with its reset,
 // with Flip Horizontal and Flip Vertical for an image, then the order of the elements, Group and
 // Ungroup, and Lock and Unlock. X and Y are the offset of an element from its place in the file,
-// and W and H its size, in slide pixels. W and H are set only on an image, a video, a QR code, and
-// a tycho viewer, since the size of every other element is set by its layout
+// and W and H its size, in slide pixels. W and H are set on an image, a video, a QR code, and a
+// tycho viewer, and W alone on a text block, whose height follows its wrapped text. the size of
+// every other element is set by its layout
 
 import type { App } from '../app.ts';
-import { offsetOf, resizable, sizeOf, targetsOf } from '../commands/align.ts';
+import { heightSet, offsetOf, resizable, sizeOf, targetsOf } from '../commands/align.ts';
 import { angleOf } from '../commands/order.ts';
 import { imageOf } from '../commands/figure.ts';
 import { locked } from '../canvas/drag.ts';
@@ -64,7 +65,7 @@ export function arrangePane(app: App, run: Run): Control[] {
     section('Size', [
       row([
         field('Width', () => shared(live().map((el) => sizeOf(el).w)), (w) => run('arrange.setSize', { w, els: live() }), sized, 1),
-        field('Height', () => shared(live().map((el) => sizeOf(el).h)), (h) => run('arrange.setSize', { h, els: live() }), sized, 1),
+        field('Height', () => shared(live().map((el) => sizeOf(el).h)), (h) => run('arrange.setSize', { h, els: live() }), () => heightSet(live()), 1),
       ]),
       note(() => (!els.length || sized() ? '' : els.length === 1 && els[0].querySelector('img, video') ? 'Set by the layout of the slide. Click the image again to size it.' : 'Set by the layout of the slide.')),
       row([checkbox(app, run, 'arrange.constrainProportions', 'Constrain Proportions')]),
