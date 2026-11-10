@@ -4,7 +4,7 @@
 // slide, and link text that says nothing
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
@@ -206,3 +206,38 @@ for (const platform of PLATFORMS) {
   });
 }
 
+// the demo deck with a rehearsed second on each of its first two slides, in a file of its own
+const TIMED = () => readFileSync('index.html', 'utf8').replace('<section class="title">', '<section class="title" data-timing="1">').replace('<section class="section">', '<section class="section" data-timing="1">');
+
+for (const platform of PLATFORMS) {
+  test(`with Use Rehearsed Timings on, a show opened from the editor moves on after the timings on ${platform}`, async (t) => {
+    const file = `.timed-${process.pid}-${platform}.html`;
+    const text = TIMED();
+    writeFileSync(file, text);
+    t.after(() => rmSync(file, { force: true }));
+    const page = await editor(platform, { deck: file, text });
+    assert.equal((await page.evaluate(`window.BeesonEditor.state('play.useTimings')`)).checked, false);
+    // the tab of the show is kept for the test, behind the wrapper of the editor
+    await page.evaluate(`(() => { const real = window.open; window.open = (...a) => (window.__show = real.apply(window, a)); })()`);
+    const shown = async () => page.evaluate(`(() => { try { const R = window.__show?.Reveal; return R?.isReady?.() ? R.getIndices().h : null; } catch { return null; } })()`);
+
+    // without the switch, the show waits for a key
+    await press(page, 'Mod+Shift+Enter');
+    await page.waitFor(`(() => { try { return !!window.__show?.Reveal?.isReady?.(); } catch { return false; } })()`, 15000);
+    await wait(1800);
+    assert.equal(await shown(), 0);
+    await page.evaluate('window.__show.close()');
+
+    await exec(page, 'play.useTimings');
+    assert.equal((await page.evaluate(`window.BeesonEditor.state('play.useTimings')`)).checked, true);
+    await press(page, 'Mod+Shift+Enter');
+    await page.waitFor(`(() => { try { return window.__show?.Reveal?.isReady?.() && window.__show.Reveal.getIndices().h === 2; } catch { return false; } })()`, 15000);
+    const delays = await page.evaluate(`[...window.__show.document.querySelectorAll('.reveal .slides > section')].slice(0, 3).map((s) => s.getAttribute('data-autoslide'))`);
+    assert.deepEqual(delays, ['1000', '1000', null]);
+    await page.evaluate('window.__show.close()');
+    // the delays are set in the show only
+    assert.equal(readFileSync(file, 'utf8'), text);
+    assert.equal(await page.evaluate('window.BeesonEditor.render()'), text);
+    assert.deepEqual(errors(page), []);
+  });
+}
