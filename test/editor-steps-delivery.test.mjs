@@ -71,7 +71,6 @@ for (const platform of PLATFORMS) {
       if (menu.top >= box.row.bottom || menu.bottom <= box.row.top) assert.ok(Math.abs(menu.left - box.chip.left) < 8, 'the menu is not at its chip');
       else assert.ok(menu.right <= box.row.left, 'the menu is neither under nor beside its row');
       assert.deepEqual(errors(page), []);
-      await page.close();
     }
   });
 }
