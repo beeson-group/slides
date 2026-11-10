@@ -185,7 +185,7 @@ export function movableOf(app: App, target: Element | null): Element | null {
 // so that a drag on its image moves all of it
 export function pickOf(app: App, target: Element | null): Element | null {
   const el = movableOf(app, target);
-  const media = el?.matches('figure') && !app.selection.has(el) ? mediaIn(el, target) : null;
+  const media = el?.matches('figure') && !app.selection.has(el) && !el.hasAttribute('data-locked') ? mediaIn(el, target) : null;
   return media && app.pairing?.elements.get(media)?.open ? media : el;
 }
 

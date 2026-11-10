@@ -710,6 +710,7 @@ for (const platform of PLATFORMS) {
     await click(page, ZONE_IMG);
     await frames(page);
     assert.deepEqual(await selected(page), ['figure.zone'], 'the first click on the image of a locked figure does not select the figure');
+    assert.equal((await state(page, 'selection.selectMedia')).enabled, false, 'Return selects the image of a locked figure');
     assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-rotor')].filter((r) => !r.hidden && r.getBoundingClientRect().width).length`), 0, 'a rotate grip is drawn on a locked figure');
     const k = await scaleOf(page);
     await drag(page, ZONE_IMG, { dx: 120 * k, dy: 40 * k });

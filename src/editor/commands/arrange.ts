@@ -153,14 +153,14 @@ export function commands(): Command[] {
       },
     },
     {
-      // Return on a figure without text selects its image or video
+      // Return on a figure without text selects its image or video, unless the figure is locked
       id: 'selection.selectMedia',
       label: 'Select Image',
       keys: { mac: ['Enter'], other: ['Enter'] },
       in: ['canvas'],
       enabled: (app) => {
         const el = app.selection.only();
-        if (!el || document.activeElement?.classList.contains('beeson-handle') || el.querySelector(HOST)) return false;
+        if (!el || document.activeElement?.classList.contains('beeson-handle') || el.querySelector(HOST) || el.hasAttribute('data-locked')) return false;
         return !!mediaIn(el, el.querySelector('img, video'));
       },
       run: (app) => {
