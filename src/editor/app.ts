@@ -107,12 +107,11 @@ export interface Typing {
 }
 
 export interface Selector {
-  // move.ts today, the selection of R1.4 later: the selected element and its keys
+  // selection.ts: the selected element for the modules of today
   select(el: Element | null): void;
   movableOf(target: Element | null): Element | null;
   mark(pairing: Pairing | null): void;
   refresh(): void;
-  onKey(ev: KeyboardEvent): boolean;
 }
 
 export interface Pane {

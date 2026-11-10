@@ -7,7 +7,6 @@
 import type { App, Selector } from './app.ts';
 import type { Pairing } from './render.ts';
 import { BY_ITSELF, MOVABLE, OUTSIDE, movableOf, movablesOf } from './canvas/hit.ts';
-import { onKey } from './commands/arrange.ts';
 
 export type SelectionKind = 'none' | 'elements' | 'text' | 'slides';
 
@@ -96,7 +95,6 @@ export function install(app: App): void {
     movableOf: (target) => movableOf(app, target),
     mark,
     refresh: () => app.invalidate('selection'),
-    onKey: (ev) => onKey(app, ev),
   };
   app.move = move;
 
