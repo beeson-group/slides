@@ -15,22 +15,24 @@ import { arrangePane } from './arrange.ts';
 import { installStyle, keepFocus, runner, type Control } from './controls.ts';
 import { imagePane, qrPane, videoPane } from './media.ts';
 import { commands as slideCommands, slidePane } from './slide.ts';
+import { tablePane } from './table.ts';
 import { textPane } from './text.ts';
 import { formulaPane, formulaView } from './formula.ts';
 
-export type PaneKind = 'slide' | 'text' | 'image' | 'video' | 'qr' | 'formula' | 'arrange';
-const TAB_NAMES: Record<PaneKind, string> = { slide: 'Slide', text: 'Text', image: 'Image', video: 'Video', qr: 'QR Code', formula: 'Formula', arrange: 'Arrange' };
+export type PaneKind = 'slide' | 'table' | 'text' | 'image' | 'video' | 'qr' | 'formula' | 'arrange';
+const TAB_NAMES: Record<PaneKind, string> = { slide: 'Slide', table: 'Table', text: 'Text', image: 'Image', video: 'Video', qr: 'QR Code', formula: 'Formula', arrange: 'Arrange' };
 
 // the panes of the selection, and the elements that tell one selection from another
 function viewOf(app: App): { tabs: PaneKind[]; items: readonly Element[] } {
   const sel = app.selection;
   const formula = formulaView(app);
   if (formula) return formula;
-  if (sel.kind === 'text') return { tabs: ['text', 'arrange'], items: sel.items };
+  if (sel.kind === 'text') return { tabs: sel.items[0]?.matches('td, th') ? ['table', 'text', 'arrange'] : ['text', 'arrange'], items: sel.items };
   const els = sel.elements();
   if (!els.length) return { tabs: ['slide'], items: [app.current()].filter((s): s is Element => !!s) };
   if (els.length > 1) return { tabs: ['arrange'], items: els };
   const el = els[0];
+  if (el.localName === 'table') return { tabs: ['table', 'arrange'], items: els };
   const img = imageOf(app), video = videoOf(app), qr = qrOf(app);
   if (img) return { tabs: ['image', 'arrange'], items: [el, img] };
   if (video) return { tabs: ['video', 'arrange'], items: [el, video] };
@@ -45,6 +47,7 @@ let shown: { key: string; items: readonly Element[]; panel: HTMLElement; root: H
 function paneOf(app: App, kind: PaneKind, run: ReturnType<typeof runner>): Control[] {
   switch (kind) {
     case 'slide': return slidePane(app, run);
+    case 'table': return tablePane(app, run);
     case 'text': return textPane(app, run);
     case 'image': return imagePane(app, run);
     case 'video': return videoPane(app, run);
