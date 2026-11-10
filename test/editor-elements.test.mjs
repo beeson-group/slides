@@ -346,3 +346,31 @@ test('a QR code is put into an empty zone', async (t) => {
   assert.equal(await page.evaluate(`document.querySelector('.reveal section.present .zone > .qr') !== null`), true);
   await roundTrip(page);
 });
+
+// the frames of the selection shown on the page
+const framedCount = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-frame.selected')].filter((f) => !f.hidden && f.getBoundingClientRect().width).length`);
+
+test('a press on the pasteboard around the slide clears the selection, and a drag from it draws a marquee', async (t) => {
+  const page = await open('mac');
+  t.after(() => page.close?.());
+  await show(page, '.reveal .slides figure.zone');
+  // a point of the pasteboard halfway between the left edge of the canvas cell and the slide
+  const board = await page.evaluate(`(() => {
+    const cell = document.querySelector('.beeson-edit-canvas').getBoundingClientRect();
+    const slide = document.querySelector('.reveal').getBoundingClientRect();
+    return { x: (cell.left + slide.left) / 2, y: slide.top + slide.height / 2, slide: slide.left };
+  })()`);
+  assert.ok(board.slide - board.x >= 8, 'the canvas cell does not have a pasteboard beside the slide');
+  await click(page, '.reveal section.present figure.zone img.for-dark');
+  assert.equal(await framedCount(page), 1);
+  await click(page, board);
+  assert.equal(await framedCount(page), 0, 'a press on the pasteboard keeps the selection');
+  // a marquee from the pasteboard to the middle of the list touches the paragraph and the list
+  const ul = await page.evaluate(`(() => { const r = document.querySelector('.reveal section.present > ul').getBoundingClientRect(); return { x: r.left + 40, y: r.top + 10 }; })()`);
+  const p = await page.evaluate(`document.querySelector('.reveal section.present > p').getBoundingClientRect().top`);
+  const from = { x: board.x, y: p - 4 };
+  await drag(page, from, { dx: ul.x - from.x, dy: ul.y - from.y });
+  assert.equal(await framedCount(page), 2, 'the marquee from the pasteboard does not select the paragraph and the list');
+  await byteExact(page);
+  assert.deepEqual(errors(page), []);
+});
