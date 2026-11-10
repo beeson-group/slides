@@ -109,7 +109,7 @@ export function commands(): Command[] {
       // caption, as Esc does
       id: 'selection.container',
       label: 'Select Figure',
-      menu: { bar: 'Edit', group: 'select', order: 12 },
+      menu: { bar: 'Edit', group: 'select', order: 33 },
       context: ['element'],
       enabled: (app) => {
         const only = app.selection.only();
