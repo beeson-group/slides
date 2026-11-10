@@ -13,6 +13,7 @@ import type { App } from '../app.ts';
 import type { Translate } from '../tags.ts';
 import { insertFiles } from '../media/actions.ts';
 import { kindOf } from '../media/store.ts';
+import { freshGroup } from './order.ts';
 import { VOID } from '../source.ts';
 import { tokenize } from '../tokens.ts';
 import { MARK, docOf, slidesIn } from './slide.ts';
@@ -129,6 +130,18 @@ export function columnOf(slide: Element): Element {
   return slide.querySelector(':scope > .panel, :scope > .block, :scope > .sec') ?? slide;
 }
 
+// the copies of a group are a new group, as the copies of a drag with the copy modifier in
+// canvas/drag.ts are
+function regroup(app: App, copies: Element[]): void {
+  const groups = new Map<string, string>();
+  for (const el of copies) {
+    const g = el.getAttribute('data-group');
+    if (!g) continue;
+    if (!groups.has(g)) groups.set(g, freshGroup(app));
+    docOf(app).setTag(el, { attrs: { 'data-group': groups.get(g)! } }, 'group');
+  }
+}
+
 // the elements of texts pasted onto the current slide. the caller runs it in one transaction
 async function pasteElements(app: App, texts: string[]): Promise<Element[]> {
   const slide = app.current();
@@ -155,6 +168,7 @@ async function pasteElements(app: App, texts: string[]): Promise<Element[]> {
     if (source && own && covers(app, node, source)) shift(app, node, own.pasted + 1);
     nodes.push(node);
   }
+  regroup(app, nodes);
   if (own) {
     own.pasted++;
     own.last = nodes;
@@ -172,6 +186,7 @@ export async function duplicateElements(app: App, els: Element[]): Promise<Eleme
     if (covers(app, dup, el)) shift(app, dup, 1);
     copies.push(dup);
   }
+  regroup(app, copies);
   app.selection.set('elements', copies);
   return copies;
 }
