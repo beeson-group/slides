@@ -410,8 +410,9 @@ export function install(app: App): void {
       }
       view.guides = snap?.guides ?? [];
       view.spacing = snap?.spacing ?? [];
-      const t = placeOf(p.svg).translate;
-      view.readout = { text: `${t?.x ?? 0}, ${t?.y ?? 0}`, x: ev.clientX + 14, y: ev.clientY + 14, at: 'pointer' };
+      // the upper left corner of the line on the slide, as the readout of a move of drag.ts gives it
+      const c = snapBoxOf(app, p.svg);
+      view.readout = { text: `x ${round(c.left)}  y ${round(c.top)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     }
     root.classList.add('beeson-dragging');
     frames.draw();

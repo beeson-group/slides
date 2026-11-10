@@ -7,10 +7,10 @@ import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import type { Doc } from '../model/doc.ts';
 import { LAYOUTS, type Layout } from '../model/templates.ts';
-import { layoutText } from '../model/templates.ts';
 import { droppedOrder, isHidden, type MoveTo, type Navigator } from '../navigator/navigator.ts';
 import { drawInto } from '../navigator/thumbs.ts';
 import { tokenize } from '../tokens.ts';
+import { sample } from './layout.ts';
 import { injectStyle } from '../ui/dom.ts';
 
 // the mark that opens the text of slides on the clipboard, so that a paste in the navigator tells
@@ -191,39 +191,9 @@ async function pasteSlides(app: App, text: string, focusNav: boolean): Promise<b
   return true;
 }
 
-// the gallery of the eight layouts, drawn as small slides of the theme with sample words. a click
-// or Enter on a layout adds a slide of it after the current one
-const SAMPLE: Record<string, string> = { h1: 'Title of the talk', h2: 'Title', 'p.sub': 'Subtitle', 'p.who': 'Name', 'p.caption': 'Caption of the figure', p: 'A sentence of the text.' };
-
-function sampleSlide(app: App, layout: Layout): HTMLElement {
-  const box = document.createElement('div');
-  box.innerHTML = layoutText(layout, { eol: '\n', step: '  ' });
-  const slide = box.firstElementChild as HTMLElement;
-  for (const [sel, text] of Object.entries(SAMPLE)) for (const el of slide.querySelectorAll(sel)) if (!el.textContent) el.textContent = text;
-  for (const el of slide.querySelectorAll<HTMLElement>('.zone, .plate')) el.style.outline = '4px dashed color-mix(in srgb, var(--muted) 70%, transparent)';
-  for (const list of slide.querySelectorAll('ul.outline')) for (const t of ['Chapter one', 'Chapter two']) list.append(Object.assign(document.createElement('li'), { textContent: t }));
-  // the backdrop of a slide of the same layout in the deck is copied, with its drawing
-  const backdrop = slide.querySelector('.backdrop');
-  const cls = layout === 'content' || layout === 'narrow' || layout === 'wide' ? null : layout;
-  const original = cls ? sections(app).find((s) => s.classList.contains(cls) && s.querySelector(':scope > .backdrop canvas'))?.querySelector(':scope > .backdrop') : null;
-  if (backdrop && original) {
-    const copy = original.cloneNode(true) as HTMLElement;
-    const from = original.querySelectorAll('canvas');
-    copy.querySelectorAll('canvas').forEach((c, i) => {
-      c.style.width = `${from[i].offsetWidth}px`;
-      c.style.height = `${from[i].offsetHeight}px`;
-      try {
-        c.getContext('2d')?.drawImage(from[i], 0, 0);
-      } catch {
-        // a WebGL canvas is left blank
-      }
-    });
-    backdrop.replaceWith(copy);
-  }
-  return slide;
-}
-
-// back is the element that had the focus before the gallery was opened
+// the gallery of the eight layouts, drawn as the samples of the layout chooser of
+// commands/layout.ts. a click or Enter on a layout adds a slide of it after the current one. back
+// is the element that had the focus before the gallery was opened
 type Gallery = HTMLDialogElement & { anchor?: HTMLElement | null; back?: HTMLElement | null };
 let gallery: HTMLDialogElement | null = null;
 
@@ -277,7 +247,7 @@ function openGallery(app: App, anchor: HTMLElement | null): void {
   dialog.append(head, grid);
   document.body.append(dialog);
   dialog.show();
-  for (const t of tiles) drawInto(t.pic, sampleSlide(app, t.layout), deck, 92);
+  for (const t of tiles) drawInto(t.pic, sample(t.layout), deck, 92);
   place(dialog, dialog.anchor ?? null, navOf(app).rowOf(app.current()));
   dialog.addEventListener('keydown', (ev) => {
     const i = tiles.findIndex((t) => t.tile === document.activeElement);

@@ -139,12 +139,13 @@ export function install(app: App): void {
   };
   app.move = move;
 
-  // a text that gets the focus is the selection, and so is a figure reached with Tab
+  // a text that gets the focus is the selection, and so is a figure reached with Tab. a figure
+  // focused by a right-click on its selected image keeps the image selected
   document.addEventListener('focusin', (ev) => {
     const target = ev.target instanceof Element ? ev.target : null;
     const host = app.hostOf(target);
     if (host && app.current()?.contains(host) && !host.closest('aside.notes')) set('text', [host]);
-    else if (target?.classList.contains('beeson-movable')) set('elements', [target]);
+    else if (target?.classList.contains('beeson-movable') && !(kind === 'elements' && items.some((el) => el !== target && target.contains(el)))) set('elements', [target]);
   });
   // a right-click in a text, before its context menu is opened in shell.ts: inside the selection
   // the selection is kept, and else the text is focused and the word under the pointer is selected

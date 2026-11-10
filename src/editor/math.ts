@@ -163,8 +163,24 @@ const escapeHtml = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;')
 export async function setContentWithTex(host: Element, content: string): Promise<void> {
   const mj = mathjax();
   if (mj) mj.typesetClear([host]);
-  host.innerHTML = content;
+  if (!keepCode(host, content)) host.innerHTML = content;
   if (mj) await mj.typesetPromise([host]);
+}
+
+// the content of a pre with one code is put into the same code element, since the document model
+// keeps the tag edits of the code, e.g. its line steps, under this element
+function keepCode(host: Element, content: string): boolean {
+  const code = host.localName === 'pre' && host.children.length === 1 ? host.firstElementChild : null;
+  if (code?.localName !== 'code') return false;
+  const t = document.createElement('template');
+  t.innerHTML = content;
+  const next = t.content.children.length === 1 ? t.content.firstElementChild : null;
+  if (next?.localName !== 'code') return false;
+  for (const a of [...code.attributes]) if (!next.hasAttribute(a.name)) code.removeAttribute(a.name);
+  for (const a of [...next.attributes]) code.setAttribute(a.name, a.value);
+  code.replaceChildren(...next.childNodes);
+  host.replaceChildren(...[...t.content.childNodes].map((n) => (n === next ? code : n)));
+  return true;
 }
 
 // a macro of the deck, from theme/macros.js as MathJax was given it, with its number of arguments

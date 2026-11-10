@@ -1,14 +1,14 @@
 // the Arrange pane of the Format tab, as the Arrange tab of Keynote: Align with its reference,
 // Distribute, the size in W and H, the position in X and Y, and the angle, each with its reset,
 // with Flip Horizontal and Flip Vertical for an image, then the order of the elements, Group and
-// Ungroup, and Lock and Unlock. X and Y are the offset of an element from its place in the file,
-// and W and H its size, in slide pixels. W and H are set on an image, a video, a QR code, and a
+// Ungroup, and Lock and Unlock. X and Y are the upper left corner of an element on the slide, as in
+// Keynote and in the readout of a move, and W and H its size, in slide pixels. W and H are set on an image, a video, a QR code, and a
 // tycho viewer, and W alone on a text block, whose height follows its wrapped text. the size of
 // every other element is set by its layout
 
 import type { App } from '../app.ts';
-import { heightSet, offsetOf, resizable, sizeOf, targetsOf } from '../commands/align.ts';
-import { angleOf } from '../commands/order.ts';
+import { boxOf, heightSet, positionOf, resizable, sizeOf, targetsOf } from '../commands/align.ts';
+import { angleOf, groupOf } from '../commands/order.ts';
 import { imageOf } from '../commands/figure.ts';
 import { locked } from '../canvas/drag.ts';
 import { GLYPHS, button, checkbox, note, numberField, row, section, segmented, type Control, type Run } from './controls.ts';
@@ -30,11 +30,23 @@ Object.assign(GLYPHS, {
 // the value shared by every element, or null when they differ
 const shared = (values: number[]): number | null => (values.length && values.every((v) => Math.round(v) === Math.round(values[0])) ? values[0] : null);
 
+// the box of a selection that is one whole group, in slide pixels, or null
+function groupBox(app: App, els: Element[]): { w: number; h: number } | null {
+  const id = els.length > 1 ? groupOf(els[0]) : null;
+  if (!id || !els.every((el) => groupOf(el) === id)) return null;
+  const boxes = els.map((el) => boxOf(app, el));
+  const left = Math.min(...boxes.map((b) => b.left));
+  const top = Math.min(...boxes.map((b) => b.top));
+  return { w: Math.max(...boxes.map((b) => b.left + b.width)) - left, h: Math.max(...boxes.map((b) => b.top + b.height)) - top };
+}
+
 export function arrangePane(app: App, run: Run): Control[] {
   // the fields act on the elements selected when the pane was built
   const els = targetsOf(app);
   const live = () => els.filter((el) => el.isConnected);
-  const sized = () => resizable(live());
+  // W and H of a group are the size of its box, as in Keynote, which its corner grips scale
+  const group = () => groupBox(app, live());
+  const sized = () => !group() && resizable(live());
   const field = (label: string, value: () => number | null, commit: (v: number) => unknown, enabled: () => boolean, min?: number) =>
     numberField(app, { label, value, commit, enabled, min });
   return [
@@ -64,20 +76,20 @@ export function arrangePane(app: App, run: Run): Control[] {
     ]),
     section('Size', [
       row([
-        field('Width', () => shared(live().map((el) => sizeOf(el).w)), (w) => run('arrange.setSize', { w, els: live() }), sized, 1),
-        field('Height', () => shared(live().map((el) => sizeOf(el).h)), (h) => run('arrange.setSize', { h, els: live() }), () => heightSet(live()), 1),
+        field('Width', () => group()?.w ?? shared(live().map((el) => sizeOf(el).w)), (w) => run('arrange.setSize', { w, els: live() }), sized, 1),
+        field('Height', () => group()?.h ?? shared(live().map((el) => sizeOf(el).h)), (h) => run('arrange.setSize', { h, els: live() }), () => !group() && heightSet(live()), 1),
       ]),
-      note(() => (!els.length || sized() ? '' : els.length === 1 && els[0].querySelector('img, video') ? 'Set by the layout of the slide. Click the image again to size it.' : 'Set by the layout of the slide.')),
+      note(() => (!els.length || sized() ? '' : group() ? 'The size of the group. Drag a corner grip to scale it.' : els.length === 1 && els[0].querySelector('img, video') ? 'Set by the layout of the slide. Click the image again to size it.' : 'Set by the layout of the slide.')),
       row([checkbox(app, run, 'arrange.constrainProportions', 'Constrain Proportions')]),
       note(() => (sized() && !app.commands.state('arrange.constrainProportions').enabled ? 'Only the width is written, and the height follows the aspect or the layout.' : '')),
       row([button(app, run, { command: 'arrange.resetSize', icon: 'reset', text: 'Reset Size' })]),
     ]),
     section('Position', [
       row([
-        field('X', () => shared(live().map((el) => offsetOf(el).x)), (x) => run('arrange.setPosition', { x, els: live() }), () => live().length > 0),
-        field('Y', () => shared(live().map((el) => offsetOf(el).y)), (y) => run('arrange.setPosition', { y, els: live() }), () => live().length > 0),
+        field('X', () => shared(live().map((el) => positionOf(app, el).x)), (x) => run('arrange.setPosition', { x, els: live() }), () => live().length > 0),
+        field('Y', () => shared(live().map((el) => positionOf(app, el).y)), (y) => run('arrange.setPosition', { y, els: live() }), () => live().length > 0),
       ]),
-      note(() => 'The offset from the place of the element in the layout.'),
+      note(() => 'The upper left corner of the element on the slide.'),
       row([button(app, run, { command: 'arrange.resetPosition', icon: 'reset', text: 'Reset Position' })]),
     ]),
     section('Rotate', [

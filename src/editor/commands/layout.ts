@@ -306,8 +306,9 @@ const CSS = `
 .beeson-edit-layouts .tile[aria-selected="true"] span:last-child { color: var(--g-select); font-weight: 600; }
 `;
 
-// the sample slide of a layout, parsed from its text
-function sample(layout: Layout): Element {
+// the sample slide of a layout, parsed from its text, for the tiles of this chooser and of the New
+// Slide gallery of commands/slide.ts
+export function sample(layout: Layout): Element {
   const t = document.createElement('template');
   t.innerHTML = sampleText(layout);
   return t.content.firstElementChild!;

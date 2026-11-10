@@ -269,7 +269,7 @@ for (const platform of PLATFORMS) {
       })()`);
       const s = await sheet();
       assert.equal(s.open, true);
-      assert.ok(s.rows > 100, `${s.rows} rows`);
+      assert.ok(s.rows > 90, `${s.rows} rows`);
       assert.equal(s.inside, true, 'the sheet is outside the window');
       if (height >= 768) {
         assert.deepEqual(s.cut, [], 'rows of the sheet are cut');

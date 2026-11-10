@@ -90,9 +90,13 @@ export function install(app: App): void {
     const r = el.getBoundingClientRect();
     return new DOMRect(r.left + el.clientLeft + room.left, r.top + el.clientTop + room.top, el.clientWidth - room.left, el.clientHeight - room.top);
   };
+  // the margin at Fit is MARGIN in a canvas whose slide is 640 px wide or more, and 8 px under 400
+  // px, as Keynote and PowerPoint draw the slide as large as the canvas holds in a narrow window
+  const fitMargin = (v: DOMRect): number => clamp(8 + (Math.min(v.width, (v.height * size.w) / size.h) - 400) / 10, 8, MARGIN);
   const fitScale = (): number => {
     const v = viewport();
-    return Math.max(MIN_ZOOM / 4, hundredth(Math.min((v.width - 2 * MARGIN) / size.w, (v.height - 2 * MARGIN) / size.h)));
+    const m = fitMargin(v);
+    return Math.max(MIN_ZOOM / 4, hundredth(Math.min((v.width - 2 * m) / size.w, (v.height - 2 * m) / size.h)));
   };
   const scale = (): number => app.deck()?.getScale() ?? (box.w / size.w || 1);
   const origin = (): { x: number; y: number } => {
@@ -122,8 +126,9 @@ export function install(app: App): void {
       const v = viewport();
       const w = Math.ceil(size.w * s);
       const h = Math.ceil(size.h * s);
-      const contentW = Math.max(v.width, w + 2 * pad);
-      const contentH = Math.max(v.height, h + 2 * pad);
+      const p = zoom === null ? Math.min(pad, fitMargin(v)) : pad;
+      const contentW = Math.max(v.width, w + 2 * p);
+      const contentH = Math.max(v.height, h + 2 * p);
       spacer.style.width = `${contentW + room.left}px`;
       spacer.style.height = `${contentH + room.top}px`;
       const x = v.left + (contentW - w) / 2 - el.scrollLeft;

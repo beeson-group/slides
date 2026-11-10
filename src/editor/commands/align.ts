@@ -6,7 +6,7 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { RESIZABLE, STRETCHED, aspectOf, constrained, cssWidth, frameOf, isTextSized, kindOf, movableOf, pictureSize, sizedOf, toSlide, visualRect } from '../canvas/hit.ts';
+import { RESIZABLE, STRETCHED, aspectOf, constrained, cssWidth, frameOf, isTextSized, kindOf, movableOf, pictureSize, sizedOf, snapBoxOf, toSlide, visualRect } from '../canvas/hit.ts';
 import type { Box } from '../canvas/snap.ts';
 import { placeOf, record, writePlace, type Place } from '../canvas/drag.ts';
 import { declarationProblem } from '../model/scope.ts';
@@ -107,10 +107,17 @@ const canDistribute = (app: App) => {
 export const resizable = (els: Element[]) => els.length > 0 && els.every((el) => el.matches(RESIZABLE) || isTextSized(el));
 export const heightSet = (els: Element[]) => els.length > 0 && els.every((el) => el.matches(RESIZABLE));
 
-// the offset of an element from its place in the file, which the X and Y fields show
+// the offset of an element from its place in the file, i.e. its translate
 export function offsetOf(el: Element): { x: number; y: number } {
   const t = placeOf(el).translate;
   return { x: t?.x ?? 0, y: t?.y ?? 0 };
+}
+
+// the upper left corner of an element on the slide in slide pixels, as the readout of a move gives
+// it, which the X and Y fields show
+export function positionOf(app: App, el: Element): { x: number; y: number } {
+  const b = snapBoxOf(app, el);
+  return { x: Math.round(b.left), y: Math.round(b.top) };
 }
 
 // the size of an element in slide pixels, unscaled, at its picture for an image or a video
@@ -150,7 +157,8 @@ export function commands(): Command[] {
       run: (app) => distribute(app, axis),
     });
   }
-  // arg is { x, y, els }, with x or y left out to keep it
+  // arg is { x, y, els }, the position on the slide, with x or y left out to keep it. it is written
+  // as the offset that reaches it
   list.push({
     id: 'arrange.setPosition',
     label: 'Position',
@@ -161,7 +169,9 @@ export function commands(): Command[] {
       const changes = targetsOf(app, arg).map((el) => {
         const from = placeOf(el);
         const now = offsetOf(el);
-        writePlace(app, el, { ...from, translate: { x: a.x ?? now.x, y: a.y ?? now.y } });
+        const at = snapBoxOf(app, el);
+        const to = (v: number | undefined, off: number, edge: number) => (v === undefined ? off : Math.round(off + v - edge));
+        writePlace(app, el, { ...from, translate: { x: to(a.x, now.x, at.left), y: to(a.y, now.y, at.top) } });
         return { el, from, to: placeOf(el) };
       });
       record(app, 'position', changes);

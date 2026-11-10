@@ -219,13 +219,12 @@ export function install(app: App): void {
     else if (host || target.closest('.reveal')) focused = null;
   });
 
-  // Keynote's key of Insert Equation on a Mac and PowerPoint's on Windows, which in a text put an
-  // inline formula at the caret. insert.formula of commands/insert.ts takes the same keys on the
-  // canvas for a display
+  // an inline formula at the caret of a text. its key, Keynote's key of Insert Equation on a Mac and
+  // PowerPoint's on Windows, is bound to insert.formula of commands/insert.ts, which runs this
+  // command in a text and puts a display on the canvas
   c.define({
     id: 'math.inline',
     label: 'Inline Formula',
-    keys: { mac: ['Mod+Alt+E'], other: ['Alt+='] },
     in: ['text'],
     menu: { bar: 'Insert', group: 'element', order: 22 },
     context: ['text'],

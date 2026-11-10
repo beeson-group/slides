@@ -1,7 +1,6 @@
 // the thumbnails of the navigator, drawn from cached clones of the slides at the width of the
 // pane. each clone is put into a shadow root, so that the queries of the theme and of the editor
-// over .reveal .slides do not find it, and the stylesheets of the deck are linked into the root
-// again. a thumbnail is drawn when its row comes into view, and again 300 ms after the last change
+// over .reveal .slides do not find it, and the stylesheets of the deck are adopted by the root. a thumbnail is drawn when its row comes into view, and again 300 ms after the last change
 // of its slide
 
 import type { App } from '../app.ts';
@@ -49,10 +48,36 @@ function brandUrl(links: HTMLLinkElement[]): string {
   return new URL('../brand', theme?.href ?? new URL('theme/beeson.css', location.href)).href;
 }
 
+// the sheet of a link of the deck built again from its rules, with its urls made absolute against
+// the address of the link, since Chrome reads a built sheet against the page, so that a root is styled on the frame in which it is drawn. a link that is
+// cloned into a root loads its sheet after that frame. null for a link whose rules cannot be read,
+// e.g. over file:// or before the link is loaded
+const built = new WeakMap<CSSStyleSheet, CSSStyleSheet>();
+function linkSheet(link: HTMLLinkElement): CSSStyleSheet | null {
+  const from = link.sheet;
+  if (!from) return null;
+  let sheet = built.get(from);
+  if (!sheet) {
+    try {
+      sheet = new CSSStyleSheet({ media: link.media || '' });
+      const text = [...from.cssRules].map((r) => r.cssText).join('\n');
+      sheet.replaceSync(text.replace(/url\("([^"]*)"\)/g, (_, u: string) => `url("${new URL(u, link.href).href}")`));
+    } catch {
+      return null;
+    }
+    built.set(from, sheet);
+  }
+  return sheet;
+}
+
+// the sheets adopted by a root, and the links that are cloned into it since their sheets cannot be
+// built again
 function deckStyles(): { links: HTMLLinkElement[]; adopted: CSSStyleSheet[] } {
-  const links = [...document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')];
-  const adopted = [...document.querySelectorAll('style')].filter((s) => !s.id.startsWith('beeson-edit-')).map((s) => sheetOf(s.textContent ?? ''));
-  return { links, adopted: [...adopted, sheetOf(CSS.replaceAll('BRAND', brandUrl(links)))] };
+  const all = [...document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')];
+  const fromLinks = all.map((l) => linkSheet(l));
+  const links = all.filter((_, i) => !fromLinks[i]);
+  const styles = [...document.querySelectorAll('style')].filter((s) => !s.id.startsWith('beeson-edit-')).map((s) => sheetOf(s.textContent ?? ''));
+  return { links, adopted: [...fromLinks.filter((x): x is CSSStyleSheet => !!x), ...styles, sheetOf(CSS.replaceAll('BRAND', brandUrl(all)))] };
 }
 
 // a clone of slide for its thumbnail, with every step shown, or the first layer of a slide whose

@@ -733,7 +733,13 @@ const groupView = (page) => page.evaluate(`(() => {
     const q = Math.min(r.width / el.naturalWidth, r.height / el.naturalHeight), w = el.naturalWidth * q, h = el.naturalHeight * q;
     return { left: r.left + (r.width - w) / 2, top: r.top + (r.height - h) / 2, right: r.left + (r.width + w) / 2, bottom: r.top + (r.height + h) / 2 };
   };
-  const members = window.BeesonEditor.selection().map((el) => { const r = drawn(pic(el)); const g = el.matches('figure') ? 0 : 6; return { left: r.left - g, top: r.top - g, right: r.right + g, bottom: r.bottom + g }; });
+  // a figure is framed at its picture and its caption, and a block 6 px outside its text
+  const members = window.BeesonEditor.selection().map((el) => {
+    const r = drawn(pic(el));
+    const g = el.matches('figure') ? 0 : 6;
+    const caps = el.matches('figure') ? [...el.querySelectorAll(':scope > figcaption, :scope > .caption')].map((c) => c.getBoundingClientRect()).filter((c) => c.width) : [];
+    return { left: Math.min(r.left - g, ...caps.map((c) => c.left)), top: Math.min(r.top - g, ...caps.map((c) => c.top)), right: Math.max(r.right + g, ...caps.map((c) => c.right)), bottom: Math.max(r.bottom + g, ...caps.map((c) => c.bottom)) };
+  });
   return {
     members,
     frames: shown('.beeson-frame.selected').length,
