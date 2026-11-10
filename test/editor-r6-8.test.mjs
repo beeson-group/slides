@@ -338,3 +338,24 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// R6.6's test of the tiles of the layout chooser failed once under load, with the Split tile drawn
+// unlike on the slide before. each tile is a shadow root, into which the links of the deck were
+// cloned, and a tile was thus shown before their sheets were loaded. a tile is drawn in the type of
+// the theme on the frame of the command that opens its gallery
+for (const platform of PLATFORMS) {
+  test(`the tiles of the layout chooser and of New Slide are styled when they are shown (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 2 });
+    for (const [id, dialog] of [['slide.layoutChooser', '.beeson-edit-layouts'], ['slide.gallery', '.beeson-edit-gallery:not(.beeson-edit-layouts)']]) {
+      const fonts = await page.evaluate(`(() => {
+        window.BeesonEditor.exec(${JSON.stringify(id)});
+        return [...document.querySelectorAll('${dialog} .tile .pic')].map((p) => getComputedStyle(p.shadowRoot.querySelector('section h2, section h1')).fontFamily);
+      })()`);
+      assert.equal(fonts.length, 8, `the gallery of ${id} is not open`);
+      assert.deepEqual(fonts.filter((f) => !/Latin Modern/.test(f)), [], `tiles of ${id} are drawn before the sheets of the theme`);
+      await press(page, 'Escape');
+      await frames(page);
+    }
+    assert.deepEqual(errors(page), []);
+  });
+}
