@@ -763,3 +763,44 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the box of the rotate grip, and the boxes of the lines of text of the blocks of the current slide
+// other than the selected one, in CSS px of the viewport
+const rotorView = (page) => page.evaluate(`(() => {
+  const g = document.querySelector('.beeson-rotor');
+  const r = g.hidden ? null : g.getBoundingClientRect();
+  const own = window.BeesonEditor.selection()[0];
+  const text = [];
+  for (const el of Reveal.getCurrentSlide().querySelectorAll('h1, h2, h3, p, li, div.math, .caption')) {
+    if (own && (own.contains(el) || el.contains(own))) continue;
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    for (const b of range.getClientRects()) if (b.width && b.height) text.push({ el: el.localName, left: b.left, top: b.top, right: b.right, bottom: b.bottom });
+  }
+  return { rotor: r && { left: r.left, top: r.top, right: r.right, bottom: r.bottom }, text };
+})()`);
+const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: the rotate grip of a selected text block does not cover the text of another block, and turns the block`, async () => {
+    const page = await editor(platform);
+    const blocks = ['The lead-in of a display', 'where the Coriolis term is colored.'];
+    for (const words of blocks) {
+      const at = await page.evaluate(`(() => { const p = [...document.querySelectorAll('.reveal section.present p')].find((p) => p.textContent === ${JSON.stringify(words)}); const r = p.getBoundingClientRect(); return { x: r.right + 3, y: r.top + r.height / 2 }; })()`);
+      await click(page, at);
+      await frames(page);
+      const v = await rotorView(page);
+      assert.ok(v.rotor, `the paragraph "${words}" does not have a rotate grip`);
+      const hit = v.text.find((t) => overlaps(v.rotor, t));
+      assert.ok(!hit, `the rotate grip of "${words}" at ${JSON.stringify(v.rotor)} covers the text of a ${hit?.el} at ${JSON.stringify(hit)}`);
+    }
+    // the grip turns the last block
+    const v = await rotorView(page);
+    await drag(page, { x: (v.rotor.left + v.rotor.right) / 2, y: (v.rotor.top + v.rotor.bottom) / 2 }, { dx: 120, dy: 40 });
+    await frames(page);
+    const edited = await render(page);
+    assert.match(edited, /<p class="fragment" data-fragment-index="2" data-highlight="coriolis" style="rotate: \d+deg">/, 'the grip does not turn the paragraph');
+    await roundTrip(page, edited);
+    assert.deepEqual(errors(page), []);
+  });
+}
