@@ -171,6 +171,7 @@ for (const platform of PLATFORMS) {
     assert.equal(await render(page), page.source);
     assert.deepEqual(errors(page), []);
   });
+
   test(`Customize Toolbar adds and removes items by drags, sets Show, keeps the layout for the deck, and the default set restores it (${platform})`, async (t) => {
     let page = await load(t, platform);
     const defaults = await toolbarIds(page);
@@ -283,6 +284,48 @@ for (const platform of PLATFORMS) {
     assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-customize').hidden`), true);
     assert.equal(await kept(page), null);
     assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`the state of accessibility in the status bar opens the docked pane, where a fix turns it to Good to go (${platform})`, async (t) => {
+    const text = readFileSync(LAYOUTS, 'utf8').replace(PAPER, BARE);
+    const page = await load(t, platform, { text, change: `document.querySelector('.reveal img.paper').removeAttribute('alt')` });
+    const status = '.beeson-edit-bottom .a11y';
+    await page.waitFor(`!document.querySelector(${js(status)}).hidden && document.querySelector(${js(status)}).textContent === 'Accessibility: Investigate'`);
+    const canvas = await boxOf(page, '.beeson-edit-canvas');
+    await click(page, status);
+    await frames(page);
+    assert.equal(await page.evaluate(`document.querySelector(${js(status)}).getAttribute('aria-pressed')`), 'true');
+    // the pane is docked between the canvas and the inspector, which keeps its place
+    const pane = await boxOf(page, '.beeson-edit-a11y');
+    const inspector = await boxOf(page, '.beeson-edit-inspector');
+    const shrunk = await boxOf(page, '.beeson-edit-canvas');
+    assert.ok(Math.abs(pane.right - inspector.x) <= 1, `the pane ends at ${pane.right} and the inspector starts at ${inspector.x}`);
+    assert.ok(Math.abs(shrunk.right - pane.x) <= 1, `the canvas ends at ${shrunk.right} and the pane starts at ${pane.x}`);
+    assert.ok(Math.abs(shrunk.w + pane.w - canvas.w) <= 1);
+    assert.ok(pane.y < shrunk.y + 1 && pane.bottom >= shrunk.bottom, 'the pane runs the height of the canvas');
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-a11y').getAttribute('role')`), 'complementary');
+    // Add Alt Text writes the alt, and the state turns to Good to go
+    await click(page, '.beeson-edit-a11y .item .fix');
+    await frames(page);
+    await choose(page, 'Add Alt Text');
+    await page.waitFor(`document.activeElement?.matches('.beeson-edit-a11y .alt input')`);
+    await type(page, 'A paper figure');
+    await press(page, 'Enter');
+    await page.waitFor(`!document.querySelector('.beeson-edit-a11y .item')`);
+    await page.waitFor(`document.querySelector(${js(status)}).textContent === 'Accessibility: Good to go'`);
+    // the close button of the pane hides it, and the canvas takes its width back
+    await click(page, '.beeson-edit-a11y .title .close');
+    await frames(page);
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-a11y').hidden`), true);
+    assert.equal((await boxOf(page, '.beeson-edit-canvas')).w, canvas.w);
+    assert.equal(await page.evaluate(`document.querySelector(${js(status)}).getAttribute('aria-pressed')`), 'false');
+    // an undo and a redo with the pane closed are seen in the state
+    await press(page, 'Mod+Z');
+    await page.waitFor(`document.querySelector(${js(status)}).textContent === 'Accessibility: Investigate'`);
+    await press(page, platform === 'mac' ? 'Mod+Shift+Z' : 'Mod+Y');
+    await page.waitFor(`document.querySelector(${js(status)}).textContent === 'Accessibility: Good to go'`);
+    await roundTrip(page, [[BARE, '<img class="paper" src="../../demo/figure-light.png" alt="A paper figure">']]);
     assert.deepEqual(errors(page), []);
   });
 }
