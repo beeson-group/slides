@@ -401,3 +401,66 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// the row of Layout in the menu opened last, and the layout chooser with its box, its marked tile,
+// and its focused tile
+const layoutRow = (page) => page.evaluate(`(() => {
+  const menu = [...document.querySelectorAll('.beeson-edit-menu')].at(-1);
+  const el = menu && [...menu.querySelectorAll('.item')].find((i) => i.querySelector('.label')?.firstChild?.textContent === 'Layout');
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return { command: el.dataset.command ?? null, submenu: el.getAttribute('aria-haspopup') === 'menu', left: r.left, right: r.right, top: r.top, bottom: r.bottom, x: r.left + r.width / 2, y: r.top + r.height / 2 };
+})()`);
+const chooserOf = (page) => page.evaluate(`(() => {
+  const d = document.querySelector('dialog.beeson-edit-layouts[open]');
+  if (!d) return null;
+  const r = d.getBoundingClientRect();
+  return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, marked: [...d.querySelectorAll('.tile[aria-selected="true"]')].map((t) => t.dataset.layout), focused: document.activeElement?.dataset?.layout ?? null };
+})()`);
+
+// opens the menu of from, i.e. Slide of the menu bar or the menu of the current thumbnail of the
+// navigator, and clicks its item Layout, which is returned
+async function openLayouts(page, from) {
+  if (from === 'menu bar') await click(page, await page.evaluate(`(() => { const b = [...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].find((x) => x.textContent === 'Slide'); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`));
+  else await click(page, '.beeson-edit-nav .row[aria-current="true"]', { button: 'right' });
+  await frames(page);
+  const row = await layoutRow(page);
+  assert.ok(row, `the menu of the ${from} does not have an item Layout`);
+  assert.ok(!row.submenu, `Layout in the menu of the ${from} is a submenu of text items`);
+  await click(page, row);
+  await sleep(100);
+  await frames(page);
+  return row;
+}
+
+// finding 3: Slide > Layout was a submenu of text items, and the tile chooser was opened only from
+// the Format pane. Layout of Slide in the menu bar and of the menu of a thumbnail opens the tiles
+// beside its item, with the layout of the slide marked, and the arrows, Enter, and Esc work in it
+for (const platform of PLATFORMS) {
+  for (const from of ['menu bar', 'thumbnail']) {
+    test(`Layout in the menu of the ${from} opens the layout tiles beside it (${platform})`, async (t) => {
+      const page = await load(t, platform, { n: 2 });
+      let row = await openLayouts(page, from);
+      let chooser = await chooserOf(page);
+      assert.ok(chooser, `Layout of the menu of the ${from} does not open the layout tiles`);
+      assert.deepEqual([chooser.marked, chooser.focused], [['content'], 'content'], 'the layout of the slide is not marked and focused');
+      assert.ok(chooser.left >= row.right - 4 || chooser.right <= row.left + 4, `the tiles are not beside the item: ${js(chooser)} ${js(row)}`);
+      assert.ok(chooser.top <= row.bottom && chooser.bottom >= row.top, `the tiles are not at the height of the item: ${js(chooser)} ${js(row)}`);
+      await press(page, 'ArrowRight');
+      assert.equal((await chooserOf(page)).focused, 'narrow');
+      await press(page, 'Escape');
+      await frames(page);
+      assert.equal(await chooserOf(page), null, 'Esc does not close the tiles');
+      await byteExact(page);
+      row = await openLayouts(page, from);
+      await press(page, 'ArrowRight');
+      await press(page, 'ArrowRight');
+      await press(page, 'Enter');
+      await sleep(300);
+      await frames(page);
+      assert.equal(await chooserOf(page), null, 'Enter does not close the tiles');
+      assert.equal((await state(page, 'slide.layout.wide')).checked, true, 'Enter on the tile Content, Wide does not change the layout');
+      await roundTrip(page);
+    });
+  }
+}
