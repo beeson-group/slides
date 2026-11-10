@@ -10,7 +10,6 @@ import type { Command, Group } from '../commands.ts';
 import { injectStyle, make, wire } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { closeMenus, commandKeys, menuItems, openMenu, splitButton, type MenuItem } from '../ui/menu.ts';
-import { toolbarLabel } from './shell.ts';
 
 const NARROW = 820;
 
@@ -37,6 +36,11 @@ const CSS = `
 `;
 
 type Shown = { c: Command; el: HTMLButtonElement };
+
+// the label of a command on the toolbar: its toolbar label, and else its label
+function toolbarLabel(app: App, c: Command): string {
+  return c.toolbar?.label ?? app.commands.label(c.id);
+}
 
 export function install(app: App): void {
   injectStyle('toolbar', CSS);
@@ -80,7 +84,7 @@ export function install(app: App): void {
       for (const c of g.commands) {
         const b = button(c);
         shown.push({ c, el: b });
-        const split = (c.toolbar as { split?: string } | undefined)?.split;
+        const split = c.toolbar?.split;
         if (split && c.menu) {
           const bar = c.menu.bar;
           box.append(splitButton(app, b, () => menuItems(app, bar, split), `${toolbarLabel(app, c)} options`));

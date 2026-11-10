@@ -289,7 +289,7 @@ export class App {
     if (active.closest('aside.notes')) return 'notes';
     if (this.hostOf(active)) return 'text';
     if (active.closest('.beeson-edit-nav')) return 'navigator';
-    if (active.closest('.beeson-edit-side')) return 'inspector';
+    if (active.closest('.beeson-edit-inspector, .beeson-edit-side')) return 'inspector';
     return 'canvas';
   }
 }

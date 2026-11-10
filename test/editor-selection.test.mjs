@@ -166,7 +166,8 @@ const translates = (page, selectors) => page.evaluate(`${JSON.stringify(selector
 test('a drag of two elements writes two translate declarations, undone as one entry', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
-  const page = await editorPage(browser);
+  // Alt is the free modifier of a drag on Windows and Linux, and the copy modifier on a Mac
+  const page = await editorPage(browser, { query: 'edit&still&edit-platform=other' });
   await figureSlide(page);
   const p = await boxOf(page, P);
   await click(page, { x: p.right + 3, y: (p.top + p.bottom) / 2 });

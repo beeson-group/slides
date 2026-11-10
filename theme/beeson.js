@@ -2969,7 +2969,8 @@
     return svg2;
   }
   function mountQr(root2) {
-    for (const el of root2.querySelectorAll(".qr[data-qr]")) {
+    const own = root2 instanceof HTMLElement && root2.matches(".qr[data-qr]") ? [root2] : [];
+    for (const el of [...own, ...root2.querySelectorAll(".qr[data-qr]")]) {
       if (el.querySelector(":scope > svg, :scope > .qr-error")) continue;
       const text = el.dataset.qr ?? "";
       try {

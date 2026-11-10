@@ -151,7 +151,7 @@ for (const platform of PLATFORMS) {
     assert.ok(seen.size > 3, `the matches were shown on ${seen.size} slides`);
     // Whole Words and Match Case are set in the gear menu, and each narrows the count
     await click(page, '.beeson-find .gear');
-    await click(page, '.beeson-find .menu [role="menuitemcheckbox"]');
+    await click(page, '.beeson-edit-menu.find-options [data-command="find.wholeWords"]');
     const words = Number((await panel(page)).count.split(' of ')[1]);
     assert.ok(words < total && words > 0, `${words} whole words of ${total}`);
     assert.equal((await page.evaluate(`window.BeesonEditor.state('find.wholeWords')`)).checked, true);

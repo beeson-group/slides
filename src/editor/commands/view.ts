@@ -37,7 +37,17 @@ const PANES: Pane[] = [
     },
   },
   { name: 'notes', el: (app) => (app.notes.shown() ? app.notes.ensure() : null), enter: (_, el) => (el as HTMLElement).focus() },
-  { name: 'inspector', el: () => document.querySelector('.beeson-edit-side'), enter: first },
+  // the focus goes to the first control of the panel shown, and else to the tab of the panel
+  {
+    name: 'inspector',
+    el: () => document.querySelector('.beeson-edit-inspector'),
+    enter: (app, el) => {
+      const panel = el.querySelector(':scope > .panel:not([hidden])');
+      const tab = el.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
+      if (panel && [...panel.querySelectorAll(FOCUSABLE)].some(shown)) first(app, panel);
+      else tab?.focus();
+    },
+  },
   { name: 'status', el: () => document.querySelector('.beeson-edit-bottom'), enter: first },
 ];
 
