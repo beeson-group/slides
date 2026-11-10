@@ -6,22 +6,28 @@
 // edge of a cell goes to the cell beside it. rows and columns are added and deleted from Format >
 // Table, the context menu of a cell, the row and column bars around the table, and the Table pane
 // of the inspector. a paste of tab-separated text or of an HTML table onto the slide is written as
-// a new table, and a paste into a cell fills the cells from it on. each change is one entry of the
-// history, written through app.doc
+// a new table, and a paste into a cell fills the cells from it on. a range of cells is selected by
+// a drag across cells, a Shift-click, Esc in a cell, or Select Row and Select Column, and is merged
+// and unmerged as a colspan and a rowspan. the widths of the columns are set by a drag of a border
+// in the bar of the columns, Distribute Columns Evenly, and Resize Column to Fit Content, and are
+// written in the style of the cells of the first row. Auto-Align sets the columns of numbers at the
+// right. each change is one entry of the history, written through app.doc
 //
 // while the caret is in a cell, or a table is selected, the table is drawn as a selected table of
 // Keynote: a bar of the column letters above it and a bar of the row numbers at its left, with the
-// column and the row of the caret marked, a round button at the end of each bar that adds a column
-// or a row, a round button at the upper left that selects the table, and an outline around the
-// cell of the caret
+// columns and the rows of the caret or of the range marked, a round button at the end of each bar
+// that adds a column or a row, a round button at the upper left that selects the table, and an
+// outline around the cell of the caret or the range
 
 import type { App } from '../app.ts';
+import { keysOf, type Command } from '../commands.ts';
+import { matches } from '../keymap.ts';
 import { childSpace } from '../render.ts';
-import { mathLookup } from '../math.ts';
+import { contentWithTex, mathLookup } from '../math.ts';
 import { textStyle } from '../model/templates.ts';
 import {
-  CELL, GRID, cellAfter, cellAtColumn, cellBeside, cellHtml, columnName, columnsOf, emptyRows, hasHeader, numericOf,
-  parseHtmlTable, parseTabular, placeOf, placesOf, rowHtml, tableHtml,
+  CELL, GRID, around, boxOf, cellAfter, cellBeside, cellHtml, cellOver, columnName, columnsOf, emptyRows, gridOf, grow, hasHeader, numericOf,
+  parseHtmlTable, parseTabular, placeOf, placesOf, rowHtml, spotsIn, tableHtml, type Box, type Place,
 } from '../table.ts';
 import { placeCaret } from '../text/typing.ts';
 import { injectStyle, make } from '../ui/dom.ts';
@@ -51,13 +57,24 @@ html.beeson-editing .reveal .slides :is(td,th)[contenteditable="true"]:focus{out
 .beeson-table-bars .round{padding:0;border:0;border-radius:50%;display:grid;place-items:center;background:var(--ed-panel);box-shadow:0 0 0 1px var(--ed-control-line);color:var(--ed-select)}
 .beeson-table-bars .round:hover{background:var(--ed-hover)}
 .beeson-table-bars .cell{border:2px solid var(--ed-select);border-radius:2px;pointer-events:none}
+.beeson-table-bars .grips{position:static}
+.beeson-table-bars .grip{position:fixed;cursor:col-resize;touch-action:none}
+.beeson-table-bars .grip::after{content:"";position:absolute;left:4px;top:3px;bottom:3px;width:1px;background:var(--ed-muted);opacity:0}
+.beeson-table-bars .grip:hover::after,html.beeson-column-resizing .beeson-table-bars .grip::after{opacity:1;background:var(--ed-select)}
+.beeson-table-bars .guide{width:1px;background:var(--ed-select);pointer-events:none}
+.beeson-table-bars .guide[hidden]{display:none}
+html.beeson-column-resizing,html.beeson-column-resizing *{cursor:col-resize!important}
+html.beeson-cell-range .reveal *{user-select:none!important;-webkit-user-select:none!important}
+.beeson-table-bars .cell.block{border-width:4px;background:color-mix(in srgb,var(--ed-select) 12%,transparent)}
 `;
 
 // the size of the bars and of their buttons, in screen px, and the gap between a bar and its table
 const BAR = 18;
 const GAP = 6;
+// the width of the grip on the border of two columns, in screen px
+const GRIP = 9;
 
-type Target = { table: HTMLTableElement; cell: HTMLTableCellElement | null };
+type Target = { table: HTMLTableElement; cell: HTMLTableCellElement | null; box: Box | null };
 type Size = { rows: number; columns: number };
 
 const isCell = (el: unknown): el is HTMLTableCellElement => el instanceof HTMLTableCellElement;
@@ -71,15 +88,87 @@ export function cellAt(app: App): HTMLTableCellElement | null {
   return table && app.pairing.elements.get(table)?.open ? item : null;
 }
 
-// the table of the caret, or the one selected table, with the cell given in arg, e.g. by the
-// context menu of a cell or a bar, or the cell of the caret
-export function targetOf(app: App, arg?: unknown): Target | null {
-  const given = arg && typeof arg === 'object' && 'cell' in arg ? (arg as { cell: unknown }).cell : null;
-  const cell = isCell(given) && given.isConnected ? given : cellAt(app);
-  if (cell) return { table: cell.closest('table') as HTMLTableElement, cell };
+// the cells selected as a block, as cells selected in Keynote, after Esc in the text of a cell, a
+// drag across cells, or a Shift-click: the table is the selection, and the commands of the table
+// act at the range from the anchor to the focus, grown over merged cells. caretCell is the last
+// cell of the caret, which Esc leaves
+let block: { anchor: HTMLTableCellElement; focus: HTMLTableCellElement } | null = null;
+let caretCell: HTMLTableCellElement | null = null;
+
+function syncCell(app: App): void {
+  const c = cellAt(app);
+  if (c) {
+    caretCell = c;
+    block = null;
+    return;
+  }
   const only = app.selection.only();
-  if (only instanceof HTMLTableElement && app.pairing?.elements.get(only)?.open) return { table: only, cell: null };
+  const kept = (x: Element | null): x is HTMLTableCellElement => !!x?.isConnected && !!only?.contains(x);
+  if (!(only instanceof HTMLTableElement)) block = null;
+  else if (!block || !kept(block.anchor) || !kept(block.focus)) block = kept(caretCell) ? { anchor: caretCell, focus: caretCell } : null;
+  // Esc blurs the text before it selects the table, and the selection is empty in between
+  if (app.selection.kind !== 'none') caretCell = null;
+}
+
+const inside = (a: Box, b: Box) => a.r0 >= b.r0 && a.c0 >= b.c0 && a.r1 <= b.r1 && a.c1 <= b.c1;
+
+// the range of the cells selected as a block in table, or null
+function rangeIn(table: HTMLTableElement): Box | null {
+  const a = block && block.anchor.closest('table') === table ? placeOf(block.anchor) : null;
+  const f = block && a ? placeOf(block.focus) : null;
+  return a && f ? grow(gridOf(table), around(boxOf(a), boxOf(f))) : null;
+}
+
+// the table of the caret, or the one selected table, with the cell given in arg, e.g. by the
+// context menu of a cell or a bar, else the cell of the caret or the focus of the cells selected
+// as a block. the box is the range selected as a block where it holds the cell, else its cell
+export function targetOf(app: App, arg?: unknown): Target | null {
+  syncCell(app);
+  const given = arg && typeof arg === 'object' && 'cell' in arg ? (arg as { cell: unknown }).cell : null;
+  const cell = isCell(given) && given.isConnected ? given : cellAt(app) ?? block?.focus ?? null;
+  if (cell) {
+    const table = cell.closest('table') as HTMLTableElement;
+    const own = boxOf(placeOf(cell)!);
+    const range = rangeIn(table);
+    return { table, cell, box: range && inside(own, range) ? range : own };
+  }
+  const only = app.selection.only();
+  if (only instanceof HTMLTableElement && app.pairing?.elements.get(only)?.open) return { table: only, cell: null, box: null };
   return null;
+}
+
+// the cells from anchor to focus selected as a block, with the table as the selection
+function selectCells(app: App, anchor: HTMLTableCellElement, focus: HTMLTableCellElement): void {
+  const table = anchor.closest('table') as HTMLTableElement;
+  const host = app.hostOf(document.activeElement);
+  if (host instanceof HTMLElement) host.blur();
+  window.getSelection()?.removeAllRanges();
+  if (app.selection.only() !== table) app.selection.set('elements', [table]);
+  block = { anchor, focus };
+  caretCell = null;
+  app.invalidate('selection');
+}
+
+// a cell of the file on the current slide at target
+function liveCell(target: EventTarget | null): HTMLTableCellElement | null {
+  const app = current;
+  const cell = target instanceof Element ? target.closest(CELL) : null;
+  return app && isCell(cell) && app.pairing?.byLive.has(cell) && app.current()?.contains(cell) ? cell : null;
+}
+
+// whether cell is in the range of the cells selected as a block
+function inRange(cell: HTMLTableCellElement): boolean {
+  const app = current;
+  if (!app || !inBlock(app)) return false;
+  const range = rangeIn(cell.closest('table') as HTMLTableElement);
+  const p = placeOf(cell);
+  return !!range && !!p && inside(boxOf(p), range);
+}
+
+// true while cells of a table are selected as a block, and not a text
+function inBlock(app: App): boolean {
+  syncCell(app);
+  return !!block && app.selection.only() === block.anchor.closest('table') && !cellAt(app);
 }
 
 // the caret is put into a cell, at its start or its end, or over all of its text
@@ -158,65 +247,127 @@ async function insertTable(app: App, rows: string[][]): Promise<HTMLTableElement
   return table as HTMLTableElement;
 }
 
-// a row added above or below the row of cell, with a cell per column. a cell of a column of numbers
-// is set at the right, and a row added above a header row is a header row
+const boxOfTarget = (t: Target): Box | null => t.box;
+
+const spanText = (n: number) => (n > 1 ? String(n) : null);
+
+// a row added above or below the cells of t, or at the end. a cell that reaches across the line of
+// the new row grows by a row, and each other column gets a cell, set at the right in a column of
+// numbers. a row added above a header row is a header row
 async function addRow(app: App, t: Target, below: boolean): Promise<HTMLTableRowElement> {
+  const g = gridOf(t.table);
   const rows = [...t.table.rows];
-  const ref = t.cell ? (t.cell.parentElement as HTMLTableRowElement) : rows[rows.length - 1];
-  const head = hasHeader(t.table) && ref === rows[0];
-  const width = columnsOf(t.table);
-  const aligned = Array.from({ length: width }, (_, c) => rows.some((tr) => {
-    const cell = cellAtColumn(tr, c);
-    return !!cell && cell.localName === 'td' && right(cell);
-  }));
-  const tag = head && !below ? 'th' : 'td';
-  const text = rowHtml(aligned.map((r) => ({ tag, right: r && tag === 'td' })));
-  const parent = ref.parentElement!;
-  const [tr] = await app.doc.insert(text, parent, below ? ref.nextSibling : ref, below ? 'add row below' : 'add row above');
+  const box = boxOfTarget(t);
+  const n = box ? (below ? box.r1 + 1 : box.r0) : below ? rows.length : rows.length - 1;
+  const grown = new Set<Place>();
+  const cols: number[] = [];
+  for (let c = 0; c < g.width; c++) {
+    const s = g.grid[n - 1]?.[c];
+    if (s && s.row + s.rows > n) grown.add(s);
+    else cols.push(c);
+  }
+  const head = hasHeader(t.table) && n === 0;
+  const aligned = (c: number) => g.grid.some((r) => r[c]?.cell.localName === 'td' && right(r[c]!.cell));
+  const tag = head ? 'th' : 'td';
+  const text = rowHtml(cols.map((c) => ({ tag, right: !head && aligned(c) })));
+  const next = rows[n];
+  const parent = (next ?? rows[n - 1]).parentElement!;
+  const [tr] = await app.doc.insert(text, parent, next ?? rows[n - 1].nextSibling, below ? 'add row below' : 'add row above');
+  for (const s of grown) app.doc.setTag(s.cell, { attrs: { rowspan: spanText(s.rows + 1) } }, 'add row');
   return tr as HTMLTableRowElement;
 }
 
-// a column added before or after the column of cell, with a cell in each row. the cell of a header
-// row is a th
+// a column added before or after the cells of t, or at the end. a cell that reaches across the line
+// of the new column grows by a column, and each other row gets a cell, a th next to a th
 async function addColumn(app: App, t: Target, after: boolean): Promise<HTMLTableCellElement | null> {
-  const col = t.cell ? placeOf(t.cell)!.col : columnsOf(t.table) - 1;
-  const home = t.cell?.parentElement ?? null;
+  const g = gridOf(t.table);
+  const box = boxOfTarget(t);
+  const b = box ? (after ? box.c1 + 1 : box.c0) : after ? g.width : g.width - 1;
+  const home = box?.r0 ?? -1;
+  const grown = new Set<Place>();
   let mine: HTMLTableCellElement | null = null;
-  for (const tr of [...t.table.rows]) {
-    const at = cellAtColumn(tr, col);
-    const tag = at?.localName === 'th' || (!at && tr.cells[0]?.localName === 'th') ? 'th' : 'td';
-    const before = at ? (after ? at.nextSibling : at) : null;
+  for (const [r, tr] of [...t.table.rows].entries()) {
+    const s = g.grid[r][b - 1];
+    if (s && s.col + s.span > b) {
+      grown.add(s);
+      if (r === home) mine = s.cell;
+      continue;
+    }
+    const near = s ?? g.grid[r][b];
+    const tag = near?.cell.localName === 'th' ? 'th' : 'td';
+    const before = g.spots[r].find((x) => x.col >= b)?.cell ?? null;
     const [cell] = await app.doc.insert(cellHtml(tag), tr, before, after ? 'add column after' : 'add column before');
-    if (tr === home) mine = cell as HTMLTableCellElement;
+    if (r === home) mine = cell as HTMLTableCellElement;
   }
+  for (const s of grown) app.doc.setTag(s.cell, { attrs: { colspan: spanText(s.span + 1) } }, 'add column');
   return mine;
 }
 
-async function deleteRow(app: App, t: Target): Promise<void> {
-  if (!t.cell) return;
-  const tr = t.cell.parentElement as HTMLTableRowElement;
-  const p = placeOf(t.cell)!;
-  if (t.table.rows.length <= 1) return deleteTable(app, t);
-  const next = t.table.rows[p.row + 1] ?? t.table.rows[p.row - 1];
-  await app.doc.remove(tr, 'delete row');
-  const cell = cellAtColumn(next, p.col) ?? next.cells[next.cells.length - 1];
-  if (cell) focusCell(cell, 'end');
+// true while the table of t is the selection and its cell is selected as a block, not its text
+const blocked = (app: App, t: Target) => app.selection.only() === t.table && !cellAt(app);
+
+// the cell after an edit: selected as a block in the block state, and else with the caret in it
+function land(app: App, cell: Element | null | undefined, at: 'start' | 'end', asBlock: boolean): void {
+  if (!isCell(cell)) return;
+  if (!asBlock) return focusCell(cell, at);
+  selectCells(app, cell, cell);
 }
 
-async function deleteColumn(app: App, t: Target): Promise<void> {
-  if (!t.cell) return;
-  if (columnsOf(t.table) <= 1) return deleteTable(app, t);
-  const p = placeOf(t.cell)!;
-  const tr = t.cell.parentElement as HTMLTableRowElement;
-  for (const row of [...t.table.rows]) {
-    const cell = cellAtColumn(row, p.col);
-    if (!cell) continue;
-    if (cell.colSpan > 1) app.doc.setTag(cell, { attrs: { colspan: cell.colSpan > 2 ? String(cell.colSpan - 1) : null } }, 'delete column');
-    else if (row.cells.length > 1) await app.doc.remove(cell, 'delete column');
-    else await app.doc.remove(row, 'delete column');
+// the rows left without a cell taken out, and each cell that reached over one a row shorter
+async function dropEmptyRows(app: App, table: HTMLTableElement, label: string): Promise<void> {
+  for (let r = table.rows.length - 1; r >= 0; r--) {
+    const tr = table.rows[r];
+    if (tr.cells.length) continue;
+    const g = gridOf(table);
+    for (const s of new Set(g.grid[r].filter((x): x is Place => !!x))) app.doc.setTag(s.cell, { attrs: { rowspan: spanText(s.rows - 1) } }, label);
+    await app.doc.remove(tr, label);
   }
-  const cell = tr.isConnected ? cellAtColumn(tr, p.col) ?? tr.cells[tr.cells.length - 1] : null;
-  if (cell) focusCell(cell, 'end');
+}
+
+// one row taken out. a cell that starts in it and reaches below it is moved to the row below, and a
+// cell from a row above that reaches over it gets a row less
+async function removeRow(app: App, table: HTMLTableElement, r: number): Promise<void> {
+  const g = gridOf(table);
+  for (const s of new Set(g.grid[r].filter((x): x is Place => !!x))) {
+    if (s.rows === 1) continue;
+    if (s.row === r) {
+      const before = g.spots[r + 1].find((x) => x.col > s.col)?.cell ?? null;
+      await app.doc.move(s.cell, table.rows[r + 1], before, 'delete row');
+    }
+    app.doc.setTag(s.cell, { attrs: { rowspan: spanText(s.rows - 1) } }, 'delete row');
+  }
+  await app.doc.remove(table.rows[r], 'delete row');
+}
+
+// the rows of the cells of t taken out, or the table with its last rows
+async function deleteRow(app: App, t: Target): Promise<void> {
+  const box = boxOfTarget(t);
+  if (!box) return;
+  if (box.r1 - box.r0 + 1 >= t.table.rows.length) return deleteTable(app, t);
+  const asBlock = blocked(app, t);
+  for (let r = box.r1; r >= box.r0; r--) await removeRow(app, t.table, r);
+  const row = Math.min(box.r0, t.table.rows.length - 1);
+  land(app, cellOver(t.table, row, box.c0) ?? t.table.rows[row].cells[0], 'end', asBlock);
+}
+
+// the columns of the cells of t taken out, or the table with its last columns. a cell that reaches
+// over another column gets a column less, and a row left without a cell is taken out
+async function deleteColumn(app: App, t: Target): Promise<void> {
+  const box = boxOfTarget(t);
+  if (!box) return;
+  if (box.c1 - box.c0 + 1 >= columnsOf(t.table)) return deleteTable(app, t);
+  const asBlock = blocked(app, t);
+  for (let c = box.c1; c >= box.c0; c--) {
+    const g = gridOf(t.table);
+    for (const s of new Set(g.grid.map((row) => row[c]).filter((x): x is Place => !!x))) {
+      if (s.span > 1) app.doc.setTag(s.cell, { attrs: { colspan: spanText(s.span - 1) } }, 'delete column');
+      else await app.doc.remove(s.cell, 'delete column');
+    }
+  }
+  await dropEmptyRows(app, t.table, 'delete column');
+  const row = Math.min(box.r0, t.table.rows.length - 1);
+  const col = Math.min(box.c0, columnsOf(t.table) - 1);
+  land(app, cellOver(t.table, row, col) ?? t.table.rows[row]?.cells[0], 'end', asBlock);
 }
 
 async function deleteTable(app: App, t: Target): Promise<void> {
@@ -238,16 +389,20 @@ async function setHeader(app: App, t: Target, on: boolean): Promise<void> {
 }
 
 // the cells of the columns of numbers set at the right, the header cell included, or every cell
-// set at the left again
-async function alignNumbers(app: App, t: Target, on: boolean): Promise<void> {
-  const numeric = numbersOf(t.table);
-  for (const row of placesOf(t.table)) {
-    for (const p of row) {
-      const want = on && numeric[p.col];
-      if (right(p.cell) !== want) app.doc.setTag(p.cell, { style: { 'text-align': want ? 'right' : null } }, 'align numbers');
-    }
-  }
+// set at the left again. with a box, only the cells inside it
+function alignNumbers(app: App, t: Target, on: boolean, box?: Box): void {
+  for (const p of misaligned(t, on, box)) app.doc.setTag(p.cell, { style: { 'text-align': right(p.cell) ? null : 'right' } }, 'align numbers');
 }
+
+// the cells that alignNumbers changes
+function misaligned(t: Target, on: boolean, box?: Box): Place[] {
+  const numeric = numbersOf(t.table);
+  const shown = (p: Place) => !box || (p.row >= box.r0 && p.row <= box.r1 && p.col >= box.c0 && p.col <= box.c1);
+  return placesOf(t.table).flat().filter((p) => shown(p) && right(p.cell) !== (on && numeric[p.col]));
+}
+
+// the box of Auto-Align: the range of the cells selected as a block, or the table at one cell
+const alignBox = (t: Target) => (t.box && spotsIn(gridOf(t.table), t.box).length > 1 ? t.box : undefined);
 
 function numbersRight(t: Target | null): boolean {
   if (!t) return false;
@@ -256,18 +411,126 @@ function numbersRight(t: Target | null): boolean {
   return cells.length > 0 && cells.every((p) => right(p.cell));
 }
 
+// the cells of the range of t merged into its first cell, as Merge Cells of Keynote. the first cell
+// keeps its tag and its style, takes the text of the cells with a text, joined with a space, and
+// is written with the colspan and the rowspan of the range. a row left without a cell is taken out
+async function mergeCells(app: App, t: Target): Promise<void> {
+  const box = t.box!;
+  const [first, ...rest] = spotsIn(gridOf(t.table), box);
+  const asBlock = blocked(app, t);
+  const joined = [first, ...rest].map((s) => contentWithTex(s.cell).trim()).filter(Boolean).join(' ');
+  for (const s of rest) await app.doc.remove(s.cell, 'merge cells');
+  app.doc.setTag(first.cell, { attrs: { colspan: spanText(box.c1 - box.c0 + 1), rowspan: spanText(box.r1 - box.r0 + 1) } }, 'merge cells');
+  if (joined !== contentWithTex(first.cell)) await app.doc.setContent(first.cell, joined, 'merge cells');
+  await dropEmptyRows(app, t.table, 'merge cells');
+  land(app, first.cell, 'end', asBlock);
+}
+
+// each merged cell of the range of t split into cells of one row and one column, as Unmerge Cells
+// of Keynote. the merged cell keeps its text at its first row and column, and the new cells are
+// empty, with its tag and its alignment. the place of each new cell is taken from the table before
+// the change, and the merged cells are split in the order of reading, so that the new cells of two
+// merged cells side by side are written in the order of their columns
+async function unmergeCells(app: App, t: Target): Promise<void> {
+  const g = gridOf(t.table);
+  const box = t.box!;
+  const merged = spotsIn(g, box).filter((s) => s.rows > 1 || s.span > 1);
+  const asBlock = blocked(app, t);
+  const plan = merged.map((s) => ({
+    s,
+    rows: Array.from({ length: s.rows - 1 }, (_, k) => s.row + 1 + k).map((r) => ({ r, before: g.spots[r].find((x) => x.col > s.col)?.cell ?? null })),
+  }));
+  for (const { s, rows } of plan) {
+    const cells = (n: number) => Array.from({ length: n }, () => cellHtml(s.cell.localName as 'td' | 'th', '', right(s.cell)));
+    if (s.span > 1) await app.doc.insert(cells(s.span - 1), s.cell.parentElement!, s.cell.nextSibling, 'unmerge cells');
+    for (const { r, before } of rows) await app.doc.insert(cells(s.span), t.table.rows[r], before, 'unmerge cells');
+    app.doc.setTag(s.cell, { attrs: { colspan: null, rowspan: null } }, 'unmerge cells');
+  }
+  const after = gridOf(t.table);
+  const anchor = after.grid[box.r0]?.[box.c0]?.cell;
+  const focus = after.grid[box.r1]?.[box.c1]?.cell;
+  if (asBlock && anchor && focus) selectCells(app, anchor, focus);
+  else land(app, t.cell, 'end', false);
+}
+
+// whether the range of t holds more than one cell, and whether it holds a merged cell
+const mergeable = (t: Target | null) => !!t?.box && spotsIn(gridOf(t.table), t.box).length > 1;
+const unmergeable = (t: Target | null) => !!t?.box && spotsIn(gridOf(t.table), t.box).some((s) => s.rows > 1 || s.span > 1);
+
+// the smallest width of the content of a column that a drag of its border leaves, in slide px,
+// where its words leave it narrower
+const NARROWEST = 24;
+
+// the width of the content of a cell in slide px, which a width in its style sets, since the theme
+// sizes the cells by their content box
+const contentWidth = (cell: Element) => parseFloat(getComputedStyle(cell).width) || 0;
+
+// the widths of cells of the first row written in px into their style, each that changes
+function writeWidths(app: App, widths: Map<HTMLTableCellElement, number>, label: string): void {
+  for (const [cell, w] of widths) {
+    const text = `${Math.max(1, Math.round(w))}px`;
+    if ((cell as HTMLElement).style.width !== text) app.doc.setTag(cell, { style: { width: text } }, label);
+  }
+}
+
+// the cells of the first row in the columns of the range of t, or in every column where the range
+// is one column wide or there is none. a cell of the first row over more than one column is taken
+// only inside the columns
+function firstRowIn(t: Target): Place[] {
+  const g = gridOf(t.table);
+  const box = t.box && t.box.c1 > t.box.c0 ? t.box : { c0: 0, c1: g.width - 1 };
+  return (g.spots[0] ?? []).filter((s) => s.col >= box.c0 && s.col + s.span - 1 <= box.c1);
+}
+
+// the columns of the range of t, or of the table, made as wide as each other, with the width of
+// all of them kept, as Distribute Columns Evenly of Keynote
+function distributeColumns(app: App, t: Target): void {
+  const cells = firstRowIn(t);
+  const outer = cells.map((s) => (s.cell as HTMLElement).offsetWidth);
+  const each = outer.reduce((a, b) => a + b, 0) / cells.reduce((n, s) => n + s.span, 0);
+  writeWidths(app, new Map(cells.map((s, i) => [s.cell, each * s.span - (outer[i] - contentWidth(s.cell))])), 'distribute columns');
+}
+
+// the width of the content of each cell of the first row of table, measured with the cell set a
+// px wide, so that its column is as narrow as its cells let it be: as wide as its longest word, or
+// with nowrap as its widest text on one line. the style of each cell is put back before the next
+// frame. a cell of the first row over more than one column is not measured
+function columnWidths(table: HTMLTableElement, nowrap: boolean, from = 0, to = Infinity): Map<HTMLTableCellElement, number> {
+  const g = gridOf(table);
+  const out = new Map<HTMLTableCellElement, number>();
+  for (const head of (g.spots[0] ?? []).filter((s) => s.span === 1 && s.col >= from && s.col <= to)) {
+    const column = g.grid.map((r) => r[head.col]).filter((s): s is Place => !!s && s.span === 1);
+    const kept = column.map((s) => [s.cell.style.whiteSpace, s.cell.style.width] as const);
+    if (nowrap) for (const s of column) s.cell.style.whiteSpace = 'nowrap';
+    head.cell.style.width = '1px';
+    out.set(head.cell, contentWidth(head.cell));
+    column.forEach((s, i) => {
+      s.cell.style.whiteSpace = kept[i][0];
+      s.cell.style.width = kept[i][1];
+    });
+  }
+  return out;
+}
+
+// the widest text of each column of the cells of t on one line, as Resize Column to Fit Content
+// of Keynote
+const fitWidths = (t: Target) => columnWidths(t.table, true, t.box?.c0, t.box?.c1);
+
 // the cells of rows written into the table of cell from cell on, with rows and columns added at the
 // end as they are needed
 async function pasteCells(app: App, cell: HTMLTableCellElement, rows: string[][]): Promise<void> {
   const start = placeOf(cell)!;
   const table = cell.closest('table') as HTMLTableElement;
-  while (table.rows.length < start.row + rows.length) await addRow(app, { table, cell: null }, true);
-  while (columnsOf(table) < start.col + rows[0].length) await addColumn(app, { table, cell: null }, true);
+  while (table.rows.length < start.row + rows.length) await addRow(app, { table, cell: null, box: null }, true);
+  while (columnsOf(table) < start.col + rows[0].length) await addColumn(app, { table, cell: null, box: null }, true);
   let last: HTMLTableCellElement | null = null;
+  const done = new Set<Element>();
   for (const [i, r] of rows.entries()) {
     for (const [j, text] of r.entries()) {
-      const target = cellAtColumn(table.rows[start.row + i], start.col + j);
-      if (!target) continue;
+      // a merged cell takes the text of its first row and column
+      const target = cellOver(table, start.row + i, start.col + j);
+      if (!target || done.has(target)) continue;
+      done.add(target);
       const html = cellHtml('td', text).replace(/^<td>|<\/td>$/g, '');
       await app.doc.setContent(target, html, 'paste');
       last = target;
@@ -277,6 +540,19 @@ async function pasteCells(app: App, cell: HTMLTableCellElement, rows: string[][]
 }
 
 let current: App | null = null;
+
+// the commands of the keys of the cells selected as a block, run before the commands of a
+// selected element, e.g. the arrows before a nudge and Delete before the delete of the table
+const BLOCK_KEYS: Command[] = [];
+window.addEventListener('keydown', (ev) => {
+  const app = current;
+  if (!app || ev.isComposing || menuOpen() || app.region() !== 'canvas' || !inBlock(app)) return;
+  const c = BLOCK_KEYS.find((x) => keysOf(x, app.platform).some((k) => matches(ev, k, app.platform)));
+  if (!c) return;
+  ev.preventDefault();
+  ev.stopImmediatePropagation();
+  void app.commands.run(c.id).catch((e) => app.fail(e));
+}, true);
 
 // the context menu of a cell, with the commands of the clipboard and of the table
 function cellItems(cell: HTMLTableCellElement): MenuItem[] {
@@ -289,7 +565,13 @@ function cellItems(cell: HTMLTableCellElement): MenuItem[] {
     { rule: true },
     ...ids(['table.deleteRow', 'table.deleteColumn']),
     { rule: true },
-    ...ids(['table.header', 'table.numbersRight']),
+    ...ids(['table.selectRow', 'table.selectColumn']),
+    { rule: true },
+    ...ids(['table.merge', 'table.unmerge']),
+    { rule: true },
+    ...ids(['table.distributeColumns', 'table.fitColumn']),
+    { rule: true },
+    ...ids(['table.header', 'table.numbersRight', 'table.autoAlign']),
     { rule: true },
     ...ids(['table.delete']),
   ];
@@ -416,7 +698,13 @@ function installBars(app: App): void {
   const grab = round('Select Table', 'table', (t) => app.selection.set('elements', [t.table]));
   const addCol = round('Add Column', 'plus', (t) => app.commands.run('table.columnAfter', { cell: lastCell(t.table, 'column') }));
   const addRow = round('Add Row', 'plus', (t) => app.commands.run('table.rowBelow', { cell: lastCell(t.table, 'row') }));
-  layer.append(cols, rows, grab, addCol, addRow, outline);
+  // a grip on the border at the right of each cell of the first row, whose drag sets the widths
+  // of the columns on its two sides, or of the last column, and the line of the border while it is
+  // dragged
+  const grips = make('div', 'grips');
+  const guide = make('div', 'guide');
+  guide.hidden = true;
+  layer.append(cols, rows, grab, addCol, addRow, outline, grips, guide);
   document.body.append(layer);
   // a press on the bars keeps the caret in its cell
   for (const type of ['pointerdown', 'mousedown']) layer.addEventListener(type, (ev) => ev.preventDefault());
@@ -428,7 +716,7 @@ function installBars(app: App): void {
     const i = Number(seg.dataset.index);
     const home = shown.cell ? placeOf(shown.cell)! : { row: 0, col: 0 };
     const tr = shown.table.rows[column ? home.row : i];
-    const cell = tr && (cellAtColumn(tr, column ? i : home.col) ?? tr.cells[tr.cells.length - 1]);
+    const cell = tr && (cellOver(shown.table, column ? home.row : i, column ? i : home.col) ?? tr.cells[tr.cells.length - 1]);
     if (!cell) return;
     const anchor = seg.getBoundingClientRect();
     focusCell(cell, 'end');
@@ -448,6 +736,60 @@ function installBars(app: App): void {
       return d;
     }));
 
+  // the drag of a grip: the cells of the first row, the widths of their content and their widths
+  // in the style at the press, the cell at the left of the border, and the scale of the slide
+  // in the style at the press, the narrowest widths that their words leave, the cell at the left
+  // of the border, and the scale of the slide
+  let resize: { cells: HTMLTableCellElement[]; widths: number[]; styles: string[]; least: number[]; i: number; x: number; scale: number } | null = null;
+  const sized = (ev: PointerEvent): Map<HTMLTableCellElement, number> => {
+    const r = resize!;
+    const d = (ev.clientX - r.x) / r.scale;
+    const out = new Map<HTMLTableCellElement, number>();
+    const left = r.widths[r.i];
+    const next = r.widths[r.i + 1];
+    if (next === undefined) out.set(r.cells[r.i], Math.max(r.least[r.i], left + d));
+    else {
+      const w = Math.max(r.least[r.i], Math.min(left + d, left + next - r.least[r.i + 1]));
+      out.set(r.cells[r.i], w);
+      out.set(r.cells[r.i + 1], Math.max(r.least[r.i + 1], left + next - w));
+    }
+    return out;
+  };
+  grips.addEventListener('pointerdown', (ev) => {
+    const grip = ev.target instanceof HTMLElement ? ev.target.closest<HTMLElement>('[data-grip]') : null;
+    if (!grip || !shown || ev.button !== 0) return;
+    const cells = (gridOf(shown.table).spots[0] ?? []).map((s) => s.cell);
+    const box = shown.table.getBoundingClientRect();
+    const widths = cells.map(contentWidth);
+    const least = columnWidths(shown.table, false);
+    resize = {
+      cells, widths, styles: cells.map((c) => c.style.width), least: cells.map((c, i) => Math.min(widths[i], Math.max(NARROWEST, least.get(c) ?? widths[i]))),
+      i: Number(grip.dataset.grip), x: ev.clientX, scale: box.width / (shown.table.offsetWidth || 1) || 1,
+    };
+    grip.setPointerCapture(ev.pointerId);
+    document.documentElement.classList.add('beeson-column-resizing');
+  });
+  grips.addEventListener('pointermove', (ev) => {
+    if (!resize) return;
+    for (const [cell, w] of sized(ev)) cell.style.width = `${Math.round(w)}px`;
+  });
+  const drop = (ev: PointerEvent | null) => {
+    const r = resize;
+    if (!r) return;
+    const widths = ev ? sized(ev) : null;
+    resize = null;
+    document.documentElement.classList.remove('beeson-column-resizing');
+    r.cells.forEach((c, i) => {
+      c.style.width = r.styles[i];
+    });
+    if (widths && ev && Math.abs(ev.clientX - r.x) >= 1) {
+      void app.history.transact('Resize Column', () => writeWidths(app, widths, 'resize column')).catch((e) => app.fail(e));
+    }
+  };
+  grips.addEventListener('pointerup', (ev) => drop(ev));
+  grips.addEventListener('pointercancel', () => drop(null));
+  grips.addEventListener('lostpointercapture', () => drop(null));
+
   const draw = () => {
     const t = shown;
     if (!t || !t.table.isConnected) return hide();
@@ -461,12 +803,12 @@ function installBars(app: App): void {
       edges[p.col + p.span - 1][1] = Math.max(edges[p.col + p.span - 1][1], b.right);
     }
     const rowBoxes = [...t.table.rows].map((tr) => tr.getBoundingClientRect());
-    const at = t.cell ? placeOf(t.cell) : null;
-    const next = [width, rowBoxes.length, at?.row, at?.col].join();
+    const at = t.box;
+    const next = [width, rowBoxes.length, at?.r0, at?.c0, at?.r1, at?.c1].join();
     if (next !== signature) {
       signature = next;
-      segments(cols, edges.map((_, c) => columnName(c)), (c) => !!at && at.col <= c && c < at.col + at.span, 'Column');
-      segments(rows, rowBoxes.map((_, r) => String(r + 1)), (r) => at?.row === r, 'Row');
+      segments(cols, edges.map((_, c) => columnName(c)), (c) => !!at && at.c0 <= c && c <= at.c1, 'Column');
+      segments(rows, rowBoxes.map((_, r) => String(r + 1)), (r) => !!at && at.r0 <= r && r <= at.r1, 'Row');
     }
     const top = box.top - GAP - BAR;
     const left = box.left - GAP - BAR;
@@ -474,12 +816,37 @@ function installBars(app: App): void {
     edges.forEach(([l, r], c) => place(cols.children[c], l - box.left, 0, r - l, BAR));
     place(rows, left, box.top, BAR, box.height);
     rowBoxes.forEach((b, r) => place(rows.children[r], 0, b.top - box.top, BAR, b.height));
+    const first = gridOf(t.table).spots[0] ?? [];
+    if (grips.children.length !== first.length) {
+      grips.replaceChildren(...first.map((_, i) => {
+        const g = make('div', 'grip');
+        g.dataset.grip = String(i);
+        g.title = 'Drag to resize the column';
+        return g;
+      }));
+    }
+    first.forEach((s, i) => {
+      const x = edges[s.col + s.span - 1][1];
+      place(grips.children[i], x - GRIP / 2, top, GRIP, BAR);
+      if (resize?.i === i) place(guide, x, box.top, 1, box.height);
+    });
+    guide.hidden = !resize;
     place(grab, left, top, BAR, BAR);
     place(addCol, box.right + GAP, top, BAR, BAR);
     place(addRow, left, box.bottom + GAP, BAR, BAR);
-    outline.hidden = !t.cell;
-    const b = t.cell?.getBoundingClientRect();
-    if (b) place(outline, b.left - 1, b.top - 1, b.width + 2, b.height + 2);
+    outline.hidden = !at;
+    outline.classList.toggle('block', !!at && inBlock(app));
+    if (at) {
+      const r = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
+      for (const p of spotsIn(gridOf(t.table), at)) {
+        const b = p.cell.getBoundingClientRect();
+        r.left = Math.min(r.left, b.left);
+        r.top = Math.min(r.top, b.top);
+        r.right = Math.max(r.right, b.right);
+        r.bottom = Math.max(r.bottom, b.bottom);
+      }
+      place(outline, r.left - 1, r.top - 1, r.right - r.left + 2, r.bottom - r.top + 2);
+    }
     const v = app.stage?.viewport;
     if (v) layer.style.clipPath = `inset(${v.top}px ${innerWidth - v.right}px ${innerHeight - v.bottom}px ${v.left}px)`;
     frame = requestAnimationFrame(draw);
@@ -495,7 +862,7 @@ function installBars(app: App): void {
   const refresh = () => {
     const t = targetOf(app);
     if (!t || !app.current()?.contains(t.table)) return hide();
-    if (shown?.table !== t.table || shown.cell !== t.cell) signature = '';
+    if (shown?.table !== t.table) signature = '';
     shown = t;
     layer.hidden = false;
     cancelAnimationFrame(frame);
@@ -548,37 +915,39 @@ export function install(app: App): void {
     },
   });
 
-  const rowCommand = (id: string, label: string, order: number, below: boolean, keys: string[]) => c.define({
+  // the keys of the rows and the columns are taken on the canvas only, while a cell is selected as
+  // a block, as in Keynote. in a text, Option with an arrow moves the caret by a word or a paragraph
+  // on a Mac, and Alt with Left or Right is Back or Forward of a browser on Windows and Linux
+  const rowCommand = (id: string, label: string, order: number, below: boolean, key: string) => c.define({
     id,
     label,
-    keys: { mac: keys, other: keys },
-    in: ['text'],
+    keys: { mac: [key], other: [key] },
+    in: ['canvas'],
     menu: menu('add', order),
     enabled: withTable,
     undoable: true,
     run: async (a, arg) => {
       const t = need(a, arg);
+      const asBlock = blocked(a, t);
       const col = t.cell ? placeOf(t.cell)!.col : 0;
       const tr = await addRow(a, t, below);
-      const cell = cellAtColumn(tr, col) ?? tr.cells[0];
-      if (cell) focusCell(cell, 'start');
+      land(a, cellOver(t.table, [...t.table.rows].indexOf(tr), col) ?? tr.cells[0], 'start', asBlock);
     },
   });
-  rowCommand('table.rowAbove', 'Add Row Above', 80, false, ['Alt+ArrowUp']);
-  rowCommand('table.rowBelow', 'Add Row Below', 81, true, ['Alt+ArrowDown']);
-  // Alt+Left and Alt+Right are the back and forward keys of the browsers on Windows and Linux,
-  // hence a column is added there from the menus only
+  rowCommand('table.rowAbove', 'Add Row Above', 80, false, 'Alt+ArrowUp');
+  rowCommand('table.rowBelow', 'Add Row Below', 81, true, 'Alt+ArrowDown');
   const columnCommand = (id: string, label: string, order: number, after: boolean, key: string) => c.define({
     id,
     label,
-    keys: { mac: [key] },
-    in: ['text'],
+    keys: { mac: [key], other: [key] },
+    in: ['canvas'],
     menu: menu('add', order),
     enabled: withTable,
     undoable: true,
     run: async (a, arg) => {
-      const cell = await addColumn(a, need(a, arg), after);
-      if (cell) focusCell(cell, 'start');
+      const t = need(a, arg);
+      const asBlock = blocked(a, t);
+      land(a, await addColumn(a, t, after), 'start', asBlock);
     },
   });
   columnCommand('table.columnBefore', 'Add Column Before', 82, false, 'Alt+ArrowLeft');
@@ -587,7 +956,7 @@ export function install(app: App): void {
     id: 'table.deleteRow',
     label: 'Delete Row',
     keys: { mac: ['Mod+Alt+Backspace'] },
-    in: ['text'],
+    in: ['text', 'canvas'],
     menu: menu('delete', 84),
     enabled: withCell,
     undoable: true,
@@ -597,7 +966,7 @@ export function install(app: App): void {
     id: 'table.deleteColumn',
     label: 'Delete Column',
     keys: { mac: ['Ctrl+Mod+Backspace'] },
-    in: ['text'],
+    in: ['text', 'canvas'],
     menu: menu('delete', 85),
     enabled: withCell,
     undoable: true,
@@ -633,6 +1002,24 @@ export function install(app: App): void {
       return alignNumbers(a, t, !numbersRight(t));
     },
   });
+  // Auto-Align of Keynote, which sets a number at the right and a text at the left, as the theme
+  // sets it, by the columns of numbers of numbersOf
+  c.define({
+    id: 'table.autoAlign',
+    label: 'Auto-Align',
+    keys: { mac: ['Alt+Mod+U'] },
+    in: ['text', 'canvas'],
+    menu: menu('options', 87.5),
+    enabled: (a, arg?: unknown) => {
+      const t = ready(a) ? targetOf(a, arg) : null;
+      return !!t && misaligned(t, true, alignBox(t)).length > 0;
+    },
+    undoable: true,
+    run: (a, arg) => {
+      const t = need(a, arg);
+      alignNumbers(a, t, true, alignBox(t));
+    },
+  });
   c.define({
     id: 'table.delete',
     label: 'Delete Table',
@@ -641,6 +1028,130 @@ export function install(app: App): void {
     undoable: true,
     run: (a, arg) => deleteTable(a, need(a, arg)),
   });
+
+  c.define({
+    id: 'table.merge',
+    label: 'Merge Cells',
+    keys: { mac: ['Ctrl+Mod+M'] },
+    in: ['text', 'canvas'],
+    menu: menu('merge', 79.7),
+    enabled: (a, arg?: unknown) => ready(a) && mergeable(targetOf(a, arg)),
+    undoable: true,
+    run: (a, arg) => mergeCells(a, need(a, arg)),
+  });
+  c.define({
+    id: 'table.unmerge',
+    label: 'Unmerge Cells',
+    menu: menu('merge', 79.8),
+    enabled: (a, arg?: unknown) => ready(a) && unmergeable(targetOf(a, arg)),
+    undoable: true,
+    run: (a, arg) => unmergeCells(a, need(a, arg)),
+  });
+
+  c.define({
+    id: 'table.distributeColumns',
+    label: 'Distribute Columns Evenly',
+    menu: menu('size', 79.85),
+    enabled: (a, arg?: unknown) => {
+      const t = ready(a) ? targetOf(a, arg) : null;
+      return !!t && firstRowIn(t).length > 1;
+    },
+    undoable: true,
+    run: (a, arg) => distributeColumns(a, need(a, arg)),
+  });
+  c.define({
+    id: 'table.fitColumn',
+    label: 'Resize Column to Fit Content',
+    menu: menu('size', 79.9),
+    enabled: (a, arg?: unknown) => {
+      const t = ready(a) ? targetOf(a, arg) : null;
+      return !!t?.box && gridOf(t.table).spots[0]?.some((s) => s.span === 1 && s.col >= t.box!.c0 && s.col <= t.box!.c1);
+    },
+    undoable: true,
+    run: (a, arg) => {
+      const t = need(a, arg);
+      writeWidths(a, fitWidths(t), 'fit column');
+    },
+  });
+
+  // the rows or the columns of the cells of the target selected as a block, from the first cell
+  // that meets them to the last one
+  const selectLine = (a: App, t: Target, kind: 'row' | 'column') => {
+    const g = gridOf(t.table);
+    const box = t.box!;
+    const met = kind === 'row'
+      ? [box.r0, box.r1].map((r) => g.grid[r].filter((x): x is Place => !!x))
+      : [box.c0, box.c1].map((col) => g.grid.map((r) => r[col]).filter((x): x is Place => !!x));
+    selectCells(a, met[0][0].cell, met[1][met[1].length - 1].cell);
+  };
+  c.define({
+    id: 'table.selectRow',
+    label: 'Select Row',
+    menu: menu('select', 79),
+    enabled: withCell,
+    run: (a, arg) => selectLine(a, need(a, arg), 'row'),
+  });
+  c.define({
+    id: 'table.selectColumn',
+    label: 'Select Column',
+    menu: menu('select', 79.5),
+    enabled: withCell,
+    run: (a, arg) => selectLine(a, need(a, arg), 'column'),
+  });
+
+  // the keys of the cells selected as a block, which the listener of BLOCK_KEYS takes before the
+  // keys of a selected element: an arrow selects the cell beside the focus, Shift with an arrow
+  // moves the focus and keeps the anchor, Return puts the caret into the focus, and Delete clears
+  // the text of the cells
+  const ways = [['Left', 0, -1], ['Right', 0, 1], ['Up', -1, 0], ['Down', 1, 0]] as const;
+  for (const [way, dr, dc] of ways) {
+    const beside = (): HTMLTableCellElement | null => {
+      const f = block && placeOf(block.focus);
+      if (!f) return null;
+      const g = gridOf(block!.focus.closest('table') as HTMLTableElement);
+      const row = dr > 0 ? f.row + f.rows : dr < 0 ? f.row - 1 : f.row;
+      const col = dc > 0 ? f.col + f.span : dc < 0 ? f.col - 1 : f.col;
+      return g.grid[row]?.[col]?.cell ?? null;
+    };
+    for (const extend of [false, true]) {
+      const key = `${extend ? 'Shift+' : ''}Arrow${way}`;
+      BLOCK_KEYS.push(c.define({
+        id: `table.${extend ? 'extend' : 'select'}${way}`,
+        label: `${extend ? 'Extend Selection' : 'Select Cell'} ${way === 'Left' ? 'Before' : way === 'Right' ? 'After' : way === 'Up' ? 'Above' : 'Below'}`,
+        keys: { mac: [key], other: [key] },
+        in: ['canvas'],
+        enabled: inBlock,
+        run: (a) => {
+          const to = beside();
+          if (to && block) selectCells(a, extend ? block.anchor : to, to);
+        },
+      }));
+    }
+  }
+  BLOCK_KEYS.push(c.define({
+    id: 'table.editCell',
+    label: 'Edit Cell',
+    keys: { mac: ['Enter'], other: ['Enter'] },
+    in: ['canvas'],
+    enabled: inBlock,
+    run: () => {
+      if (block) focusCell(block.focus, 'end');
+    },
+  }));
+  BLOCK_KEYS.push(c.define({
+    id: 'table.clearCells',
+    label: 'Clear Cells',
+    keys: { mac: ['Backspace', 'Delete'], other: ['Backspace', 'Delete'] },
+    in: ['canvas'],
+    enabled: inBlock,
+    undoable: true,
+    run: async (a) => {
+      const t = need(a);
+      for (const p of spotsIn(gridOf(t.table), t.box!)) {
+        if (p.cell.childNodes.length) await a.doc.setContent(p.cell, '', 'clear cells');
+      }
+    },
+  }));
 
   // Tab and Shift+Tab go to the next and the previous cell, with its text selected, as in
   // PowerPoint, and Tab in the last cell adds a row below it
@@ -655,7 +1166,7 @@ export function install(app: App): void {
       const next = cellAfter(cell, 1);
       if (next) return focusCell(next, 'all');
       const table = cell.closest('table') as HTMLTableElement;
-      const tr = await a.history.transact('Add Row', () => addRow(a, { table, cell }, true));
+      const tr = await a.history.transact('Add Row', () => addRow(a, { table, cell, box: boxOf(placeOf(cell)!) }, true));
       if (tr.cells[0]) focusCell(tr.cells[0], 'start');
     },
   });
@@ -712,9 +1223,61 @@ export function install(app: App): void {
     if (!isCell(target) || !app.pairing?.byLive.has(target) || !app.current()?.contains(target)) return;
     ev.preventDefault();
     ev.stopPropagation();
-    if (cellAt(app) !== target) focusCell(target, 'end');
+    if (cellAt(app) !== target && !inRange(target)) focusCell(target, 'end');
     openCellMenu(app, target, { x: ev.clientX, y: ev.clientY });
   }, true);
+
+  // a drag from a cell into another one or a Shift-click selects the cells between them as a
+  // block, before canvas/drag.ts on the document. a right press in the range keeps it for the menu
+  let press: HTMLTableCellElement | null = null;
+  let held = false;
+  const stop = (ev: Event) => {
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+  };
+  window.addEventListener('pointerdown', (ev) => {
+    press = null;
+    held = false;
+    const cell = liveCell(ev.target);
+    if (!cell || !ready(app)) return;
+    if (ev.button === 2 || (ev.button === 0 && ev.ctrlKey && app.platform === 'mac')) {
+      if (inRange(cell)) {
+        held = true;
+        stop(ev);
+      }
+      return;
+    }
+    if (ev.button !== 0) return;
+    if (!ev.shiftKey) {
+      press = cell;
+      return;
+    }
+    const table = cell.closest('table');
+    const from = inBlock(app) ? block!.anchor : cellAt(app);
+    if (!from || from.closest('table') !== table || (from === cell && !inBlock(app))) return;
+    held = true;
+    stop(ev);
+    selectCells(app, from, cell);
+  }, true);
+  window.addEventListener('mousedown', (ev) => {
+    if (held) stop(ev);
+  }, true);
+  window.addEventListener('pointermove', (ev) => {
+    if (!press || !(ev.buttons & 1)) return;
+    const over = liveCell(document.elementFromPoint(ev.clientX, ev.clientY));
+    const dragging = document.documentElement.classList.contains('beeson-cell-range');
+    if (!over || over.closest('table') !== press.closest('table') || (over === press && !dragging)) return;
+    document.documentElement.classList.add('beeson-cell-range');
+    if (block?.anchor !== press || block.focus !== over || !inBlock(app)) selectCells(app, press, over);
+    window.getSelection()?.removeAllRanges();
+  }, true);
+  const release = () => {
+    press = null;
+    held = false;
+    document.documentElement.classList.remove('beeson-cell-range');
+  };
+  window.addEventListener('pointerup', release, true);
+  window.addEventListener('pointercancel', release, true);
 
   // a paste of tab-separated text or of an HTML table: onto the slide it is a new table, selected,
   // and into a cell it fills the cells from that cell on. a paste of elements or slides of the

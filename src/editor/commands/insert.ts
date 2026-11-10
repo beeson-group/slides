@@ -3,9 +3,10 @@
 // current slide, i.e. after the last block of the text column, into an empty zone, or on the foot
 // line, and it is selected, with the caret in it for a text. a text box, a code box, and a
 // footnote are put on the page first as an element of the editor only, marked data-generated, which
-// the save and the pairing pass over, with a prompt drawn by the stylesheet below. the first input
-// into it writes the element into the file as one entry of the history, hence an empty one is never
-// written, and it is taken off the page when the caret leaves it
+// the save and the pairing pass over, with a prompt drawn by the stylesheet below. the empty box is
+// an entry of the history, as an insert of Keynote, and the deck is marked edited while it is on the
+// slide. the first input into it writes the element into the file in place of that entry, hence an
+// empty one is never written, and it is taken off the page with its entry when the caret leaves it
 
 import type { App } from '../app.ts';
 import { mathLookup } from '../math.ts';
@@ -59,6 +60,31 @@ export function columnPlace(app: App, slide: Element): { parent: Element; before
   return { parent, before: [...parent.children].find((el) => !el.hasAttribute('data-generated')) ?? null };
 }
 
+// the bottom of the zones and of the text column, in slide px, under which a new figure does not fit
+const FLOOR = 920;
+
+// the box of el in slide px
+function slideBox(app: App, el: Element): { left: number; top: number; right: number; bottom: number } {
+  const slides = app.slides() as HTMLElement;
+  const s = slides.getBoundingClientRect();
+  const k = slides.offsetWidth ? s.width / slides.offsetWidth : 1;
+  const r = el.getBoundingClientRect();
+  return { left: (r.left - s.left) / k, top: (r.top - s.top) / k, right: (r.right - s.left) / k, bottom: (r.bottom - s.top) / k };
+}
+
+// a new figure that does not fit under the last block of the text column is moved to the center of
+// the slide, where Keynote puts a new object, with a translate in slide px
+function centerIfOut(app: App, el: Element): void {
+  const b = slideBox(app, el);
+  const slide = el.closest('section') as HTMLElement | null;
+  const w = slide?.offsetWidth || 1920;
+  if (b.bottom <= FLOOR && b.top >= 0 && b.right <= w) return;
+  const h = slide?.offsetHeight || 1080;
+  const x = Math.round(w / 2 - (b.left + b.right) / 2);
+  const y = Math.round(h / 2 - (b.top + b.bottom) / 2);
+  docOf(app).setTag(el, { translate: { x, y } }, 'move');
+}
+
 // the zone of slide without content, into which a figure is put
 const emptyZone = (slide: Element): Element | null => [...slide.querySelectorAll(':scope > .zone, :scope > .panel ~ .zone')].find((z) => !z.children.length && !z.textContent?.trim()) ?? null;
 
@@ -72,12 +98,25 @@ export function install(app: App): void {
   let pending: { el: HTMLElement; kind: Kind; parent: Element } | null = null;
   let writing = false;
   let typed = '';
+  // the entry of the empty box is the last one of the history, a change of the history is made by
+  // that entry, and an undo of it keeps the box, which the first input then writes
+  let onTop = false;
+  let own = false;
+  let keep = false;
 
-  const drop = () => {
-    if (!pending || writing) return;
+  const take = () => {
+    if (!pending) return;
     pending.el.remove();
     pending = null;
     app.invalidate('content');
+  };
+
+  // the box is taken off through an undo of its entry while that entry is the last one
+  const drop = () => {
+    if (!pending || writing) return;
+    if (!onTop) return take();
+    onTop = false;
+    void app.history.undo().catch(fail);
   };
 
   const begin = (kind: Kind, parent: Element, before: Node | null) => {
@@ -89,13 +128,32 @@ export function install(app: App): void {
     el.setAttribute('contenteditable', 'true');
     el.setAttribute('data-prompt', def.prompt);
     el.setAttribute('aria-label', def.label);
-    parent.insertBefore(el, before && before.parentNode === parent ? before : null);
-    pending = { el, kind, parent };
+    const next = before && before.parentNode === parent ? before : null;
+    const show = () => {
+      parent.insertBefore(el, next && next.parentNode === parent ? next : null);
+      pending = { el, kind, parent };
+      placeCaret(el);
+      app.invalidate('content');
+    };
     el.addEventListener('focusout', () => setTimeout(() => {
       if (pending?.el === el && document.activeElement !== el) drop();
     }, 0));
-    placeCaret(el);
-    app.invalidate('content');
+    show();
+    own = true;
+    app.history.push({
+      label: def.label,
+      undo: () => {
+        own = true;
+        onTop = false;
+        if (!keep && pending?.el === el) take();
+      },
+      redo: () => {
+        own = true;
+        show();
+        onTop = true;
+      },
+    });
+    onTop = true;
   };
 
   // the first text typed into the element of the editor writes it into the file in its place, and
@@ -107,6 +165,11 @@ export function install(app: App): void {
     typed = '';
     const def = PENDING[p.kind];
     try {
+      // the entry of the empty box is undone with the box kept, so that the written box is one entry
+      if (onTop) {
+        keep = true;
+        await app.history.undo().finally(() => (keep = false));
+      }
       await app.history.transact(def.label, async () => {
         const [node] = await docOf(app).insert(def.html(text), p.parent, p.el, def.label);
         p.el.remove();
@@ -149,7 +212,15 @@ export function install(app: App): void {
     }
   }, true);
   app.listen('slide', drop);
+  // the deck is marked edited after the check of files.ts, which marks it clean when its text reads
+  // as saved, at each change of the history
   app.listen('history', () => {
+    if (own) {
+      own = false;
+      if (pending) app.markDirty();
+      return;
+    }
+    onTop = false;
     if (!writing) drop();
   });
 
@@ -200,6 +271,13 @@ export function install(app: App): void {
     enabled: ready,
     undoable: true,
     run: async (a) => {
+      // in a text, the button puts an inline formula at the caret, as Insert Equation of Keynote
+      // and PowerPoint does, through math.inline of commands/math.ts. the sheet is opened after
+      // the click, since the click on the toolbar would close it on its way to the document
+      if (a.selection.kind === 'text' && a.commands.enabled('math.inline')) {
+        setTimeout(() => void a.commands.run('math.inline'), 0);
+        return;
+      }
       const { parent, before } = columnPlace(a, a.current()!);
       const [node] = await docOf(a).insertElement('formula', parent, before, { tex: '' });
       a.selection.set('elements', [node]);
@@ -220,6 +298,7 @@ export function install(app: App): void {
       const zone = emptyZone(slide);
       const place = zone ? { parent: zone, before: null } : slide.matches('.title, .closing') ? { parent: slide, before: slide.querySelector(':scope > aside.notes') } : columnPlace(a, slide);
       const [node] = await docOf(a).insertElement('qr', place.parent, place.before, { qr: 'https://example.com' });
+      if (!zone) centerIfOut(a, node);
       a.selection.set('elements', [node]);
     },
   });

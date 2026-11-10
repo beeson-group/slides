@@ -18,9 +18,14 @@ import { commands as slideCommands, slidePane } from './slide.ts';
 import { tablePane } from './table.ts';
 import { textPane } from './text.ts';
 import { formulaPane, formulaView } from './formula.ts';
+import { plotPane } from './plot.ts';
+import { surfacePane, surfaceOf } from './surface.ts';
+import { plotOf } from '../commands/plot.ts';
+import { linePane } from './line.ts';
+import { selectedLines } from '../commands/line.ts';
 
-export type PaneKind = 'slide' | 'table' | 'text' | 'image' | 'video' | 'qr' | 'formula' | 'arrange';
-const TAB_NAMES: Record<PaneKind, string> = { slide: 'Slide', table: 'Table', text: 'Text', image: 'Image', video: 'Video', qr: 'QR Code', formula: 'Formula', arrange: 'Arrange' };
+export type PaneKind = 'slide' | 'table' | 'text' | 'image' | 'video' | 'qr' | 'formula' | 'plot' | 'surface' | 'line' | 'arrange';
+const TAB_NAMES: Record<PaneKind, string> = { slide: 'Slide', table: 'Table', text: 'Text', image: 'Image', video: 'Video', qr: 'QR Code', formula: 'Formula', plot: 'Plot', surface: 'Surface', line: 'Line', arrange: 'Arrange' };
 
 // the panes of the selection, and the elements that tell one selection from another
 function viewOf(app: App): { tabs: PaneKind[]; items: readonly Element[] } {
@@ -30,6 +35,7 @@ function viewOf(app: App): { tabs: PaneKind[]; items: readonly Element[] } {
   if (sel.kind === 'text') return { tabs: sel.items[0]?.matches('td, th') ? ['table', 'text', 'arrange'] : ['text', 'arrange'], items: sel.items };
   const els = sel.elements();
   if (!els.length) return { tabs: ['slide'], items: [app.current()].filter((s): s is Element => !!s) };
+  if (selectedLines(app).length === els.length) return { tabs: ['line', 'arrange'], items: els };
   if (els.length > 1) return { tabs: ['arrange'], items: els };
   const el = els[0];
   if (el.localName === 'table') return { tabs: ['table', 'arrange'], items: els };
@@ -37,6 +43,9 @@ function viewOf(app: App): { tabs: PaneKind[]; items: readonly Element[] } {
   if (img) return { tabs: ['image', 'arrange'], items: [el, img] };
   if (video) return { tabs: ['video', 'arrange'], items: [el, video] };
   if (qr) return { tabs: ['qr', 'arrange'], items: [el, qr] };
+  const plot = plotOf(app), surface = surfaceOf(app);
+  if (plot) return { tabs: ['plot', 'arrange'], items: [el, plot] };
+  if (surface) return { tabs: ['surface', 'arrange'], items: [el, surface] };
   if (hasText(el)) return { tabs: ['text', 'arrange'], items: els };
   return { tabs: ['arrange'], items: els };
 }
@@ -53,6 +62,9 @@ function paneOf(app: App, kind: PaneKind, run: ReturnType<typeof runner>): Contr
     case 'video': return videoPane(app, run);
     case 'qr': return qrPane(app, run);
     case 'formula': return formulaPane(app, run);
+    case 'plot': return plotPane(app, run);
+    case 'surface': return surfacePane(app, run);
+    case 'line': return linePane(app, run);
     case 'arrange': return arrangePane(app, run);
   }
 }

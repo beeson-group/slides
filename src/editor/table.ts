@@ -3,8 +3,8 @@
 // the right with the declaration text-align, the one style of a cell that the scope rule allows.
 // the text of a new table is built here from a size or from the cells of a paste. a paste is
 // either tab-separated text, as a spreadsheet or a table of Keynote or PowerPoint is put on the
-// clipboard, or an HTML table. the rows and columns of a table on the page are read with colspan
-// counted. the functions without a page are tested under node
+// clipboard, or an HTML table. the cells of a table on the page are laid out in a grid with their
+// colspan and rowspan. the functions without a page are tested under node
 
 import type { TextStyle } from './model/templates.ts';
 
@@ -148,24 +148,71 @@ export function columnName(i: number): string {
   return out;
 }
 
-// a cell of a table on the page, with its row and its first column, counted with colspan. a cell
-// of rowspan is counted in its own row only, since the editor does not write one
-export type Place = { cell: HTMLTableCellElement; row: number; col: number; span: number };
+// a cell of a grid with its first row and column, and the rows and the columns that it covers
+export type Spot<T> = { cell: T; row: number; col: number; rows: number; span: number };
+export type Grid<T> = { spots: Spot<T>[][]; grid: (Spot<T> | undefined)[][]; width: number };
 
-export function placesOf(table: HTMLTableElement): Place[][] {
-  return [...table.rows].map((tr, row) => {
+// the cells of rows laid out as HTML lays out a table. a cell takes the first column of its row
+// that a cell of a row above does not cover, and covers the columns of its colspan and the rows of
+// its rowspan, where a rowspan of 0 or past the last row reaches the last row. grid[r][c] is the
+// spot over row r and column c, or undefined at the end of a short row
+export function layoutCells<T>(rows: T[][], size: (cell: T) => { rows: number; cols: number }): Grid<T> {
+  const grid: (Spot<T> | undefined)[][] = rows.map(() => []);
+  const spots = rows.map((cells, row) => {
     let col = 0;
-    return [...tr.cells].map((cell) => {
-      const p = { cell, row, col, span: Math.max(1, cell.colSpan) };
-      col += p.span;
-      return p;
+    return cells.map((cell) => {
+      while (grid[row][col]) col++;
+      const s = size(cell);
+      const left = rows.length - row;
+      const spot = { cell, row, col, rows: s.rows > 0 ? Math.min(s.rows, left) : left, span: Math.max(1, s.cols) };
+      for (let r = row; r < row + spot.rows; r++) for (let c = col; c < col + spot.span; c++) grid[r][c] = spot;
+      col += spot.span;
+      return spot;
     });
   });
+  return { spots, grid, width: Math.max(0, ...grid.map((r) => r.length)) };
 }
 
-export function columnsOf(table: HTMLTableElement): number {
-  return Math.max(0, ...placesOf(table).map((r) => r.reduce((n, p) => n + p.span, 0)));
+// a range of the cells of a grid, from row r0 and column c0 to row r1 and column c1
+export type Box = { r0: number; c0: number; r1: number; c1: number };
+
+export const boxOf = (s: Spot<unknown>): Box => ({ r0: s.row, c0: s.col, r1: s.row + s.rows - 1, c1: s.col + s.span - 1 });
+
+// the smallest box around a and b
+export const around = (a: Box, b: Box): Box => ({ r0: Math.min(a.r0, b.r0), c0: Math.min(a.c0, b.c0), r1: Math.max(a.r1, b.r1), c1: Math.max(a.c1, b.c1) });
+
+// the box grown until each cell that it meets is inside it, as a merged cell is selected whole
+export function grow<T>(g: Grid<T>, box: Box): Box {
+  let out = box;
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const s of spotsIn(g, out)) {
+      const next = around(out, boxOf(s));
+      if (next.r0 !== out.r0 || next.c0 !== out.c0 || next.r1 !== out.r1 || next.c1 !== out.c1) {
+        out = next;
+        changed = true;
+      }
+    }
+  }
+  return out;
 }
+
+// the cells that a box meets, in the order of reading
+export function spotsIn<T>(g: Grid<T>, box: Box): Spot<T>[] {
+  const out = new Set<Spot<T>>();
+  for (let r = box.r0; r <= box.r1; r++) for (let c = box.c0; c <= box.c1; c++) {
+    const s = g.grid[r]?.[c];
+    if (s) out.add(s);
+  }
+  return [...out].sort((a, b) => a.row - b.row || a.col - b.col);
+}
+
+// the grid of a table on the page
+export type Place = Spot<HTMLTableCellElement>;
+export const gridOf = (table: HTMLTableElement): Grid<HTMLTableCellElement> =>
+  layoutCells([...table.rows].map((tr) => [...tr.cells]), (c) => ({ rows: c.rowSpan, cols: c.colSpan }));
+export const placesOf = (table: HTMLTableElement): Place[][] => gridOf(table).spots;
+export const columnsOf = (table: HTMLTableElement): number => gridOf(table).width;
 
 export function placeOf(cell: HTMLTableCellElement): Place | null {
   const table = cell.closest('table');
@@ -174,16 +221,9 @@ export function placeOf(cell: HTMLTableCellElement): Place | null {
   return null;
 }
 
-// the cell of a row over the column col, or null past the end of the row
-export function cellAtColumn(tr: HTMLTableRowElement, col: number): HTMLTableCellElement | null {
-  let at = 0;
-  for (const cell of tr.cells) {
-    const span = Math.max(1, cell.colSpan);
-    if (col < at + span) return cell;
-    at += span;
-  }
-  return null;
-}
+// the cell over a row and a column, or null at the end of a short row
+export const cellOver = (table: HTMLTableElement, row: number, col: number): HTMLTableCellElement | null =>
+  gridOf(table).grid[row]?.[col]?.cell ?? null;
 
 // the cell after or before cell in the order of reading, row by row
 export function cellAfter(cell: HTMLTableCellElement, way: 1 | -1): HTMLTableCellElement | null {
@@ -193,13 +233,14 @@ export function cellAfter(cell: HTMLTableCellElement, way: 1 | -1): HTMLTableCel
   return all[all.indexOf(cell) + way] ?? null;
 }
 
-// the cell above or below cell in the same column, or the last cell of a shorter row
+// the cell above or below cell in its first column, or the last cell of a shorter row
 export function cellBeside(cell: HTMLTableCellElement, way: 1 | -1): HTMLTableCellElement | null {
   const p = placeOf(cell);
   const table = cell.closest('table');
   if (!p || !table) return null;
-  const tr = table.rows[p.row + way];
-  return tr ? cellAtColumn(tr, p.col) ?? tr.cells[tr.cells.length - 1] ?? null : null;
+  const row = way > 0 ? p.row + p.rows : p.row - 1;
+  const tr = table.rows[row];
+  return tr ? cellOver(table, row, p.col) ?? tr.cells[tr.cells.length - 1] ?? null : null;
 }
 
 // whether the first row of a table is a header row, i.e. a row of th only
