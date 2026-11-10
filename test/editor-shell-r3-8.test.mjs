@@ -570,3 +570,33 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the gaps between the slide and the edges of the cell, in CSS px, with the canvas scrolled to x, y
+const edges = (page, x, y) =>
+  page.evaluate(`(() => {
+    const s = window.BeesonEditorShell.stage;
+    s.el.scrollTo(${x === 'max' ? 's.el.scrollWidth' : x}, ${y === 'max' ? 's.el.scrollHeight' : y});
+    s.place();
+    const v = s.viewport;
+    const r = document.querySelector('.reveal .slides').getBoundingClientRect();
+    const k = s.scale;
+    const o = s.origin;
+    return { left: o.x - v.left, top: o.y - v.top, right: v.right - (o.x + 1920 * k), bottom: v.bottom - (o.y + 1080 * k), overflow: getComputedStyle(s.el).overflow, bars: getComputedStyle(s.el).scrollbarWidth };
+  })()`);
+
+for (const platform of PLATFORMS) {
+  test(`a zoomed canvas is a native scroll container whose pasteboard is scrolled to every edge (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 3 });
+    await page.evaluate('window.BeesonEditorShell.stage.setZoom(2)');
+    await frames(page);
+    const start = await edges(page, 0, 0);
+    // the native bars of the platform are left on: overlay bars on macOS, classic bars elsewhere
+    assert.equal(start.overflow, 'scroll');
+    assert.equal(start.bars, 'auto');
+    assert.ok(Math.abs(start.left - 32) < 1.5 && Math.abs(start.top - 32) < 1.5, `at the upper left the pasteboard is ${JSON.stringify(start)}`);
+    const end = await edges(page, 'max', 'max');
+    assert.ok(Math.abs(end.right - 32) < 1.5 && Math.abs(end.bottom - 32) < 1.5, `at the lower right the pasteboard is ${JSON.stringify(end)}`);
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+}
