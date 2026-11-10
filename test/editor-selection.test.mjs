@@ -36,3 +36,21 @@ test('a click on a button of the status bar keeps the selected figure', async (t
   assert.ok((await shownFrames(page)).some((f) => around(f, zone)), 'the selection is cleared by a click on Steps');
   assert.deepEqual(page.errors, []);
 });
+
+test('during a drag of a figure, the solid frame is on the figure and not on the block selected before', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  await figureSlide(page);
+  // the paragraph is selected as a block, by a click into it and Esc
+  await page.evaluate(`document.querySelector('.reveal section.present p').focus()`);
+  await page.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))`);
+  const p = await boxOf(page, '.reveal section.present p');
+  assert.ok((await shownFrames(page)).some((f) => around(f, p)), 'the paragraph is not selected');
+  await drag(page, '.reveal section.present .zone > img', { dx: 40, dy: 30, modifiers: 'Alt', hold: true });
+  const zone = await boxOf(page, '.reveal section.present .zone');
+  const frames = await shownFrames(page);
+  assert.equal(frames.some((f) => around(f, p)), false, 'the frame is left on the paragraph during the drag');
+  assert.ok(frames.some((f) => around(f, zone)), 'the dragged figure does not have a frame');
+  assert.deepEqual(page.errors, []);
+});
