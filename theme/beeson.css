@@ -32,6 +32,7 @@ html[data-theme="dark"] {
   --strand-8: #f2f2ef;
   --panel: #050505;
   --panel-text: #f2f2ef;
+  --panel-subtle: #a6a6a0;
   --paper: #ffffff;
   /* a QR code is drawn dark on a light tile in both modes, since many scanners do not read an
      inverted code */
@@ -378,6 +379,9 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section.split .panel h2 { width: auto; color: inherit; font-size: 64px; margin-bottom: 28px; }
 .reveal .slides section.split .panel p, .reveal .slides section.split .panel li { font-size: 48px; }
 .reveal .slides section.split .panel .foot { color: #7c7c76; }
+/* the style Small in the panel, and code in the colors of the panel, which is dark in both modes */
+.reveal .slides section.split .panel .small, .reveal .slides section.split .panel .small li { font-size: 36px; }
+.reveal .slides section.split .panel code { color: var(--panel-subtle); }
 /* on the black canvas the edge of the panel is marked with a hairline */
 html:not([data-theme="light"]) .reveal .slides section.split .panel { box-shadow: 1px 0 0 var(--line); }
 .reveal .slides section.split .zone { left: 880px; top: 120px; width: 920px; height: 800px; }
