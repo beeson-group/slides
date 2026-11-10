@@ -5,10 +5,14 @@
 // source is put after the source, offset by 20 px when it would cover it, and a paste on another
 // slide is put into the container on the same path from its slide, at the same offset. the keys
 // of the clipboard are taken from the events cut, copy, and paste, which carry the clipboard in
-// every browser, and ⌘D or Ctrl+D duplicates
+// every browser, and ⌘D or Ctrl+D duplicates. an image or a video on the clipboard, e.g. a
+// screenshot or an image copied in another app, is put on the slide through the media store of
+// media/store.ts, into an empty zone or a new one, and its file is written under media/ at the save
 
 import type { App } from '../app.ts';
 import type { Translate } from '../tags.ts';
+import { insertFiles } from '../media/actions.ts';
+import { kindOf } from '../media/store.ts';
 import { VOID } from '../source.ts';
 import { tokenize } from '../tokens.ts';
 import { MARK, docOf, slidesIn } from './slide.ts';
@@ -172,6 +176,32 @@ export async function duplicateElements(app: App, els: Element[]): Promise<Eleme
   return copies;
 }
 
+// the image and video files of a clipboard
+function mediaFiles(data: DataTransfer | null | undefined): File[] {
+  if (!data) return [];
+  const files = [...data.files];
+  for (const item of data.items ?? []) {
+    const f = item.kind === 'file' ? item.getAsFile() : null;
+    if (f && !files.some((g) => g.name === f.name && g.size === f.size && g.type === f.type)) files.push(f);
+  }
+  return files.filter((f) => kindOf(f));
+}
+
+// the files of an image or a video on the system clipboard, read for Edit > Paste from the menu
+async function readMedia(): Promise<File[]> {
+  try {
+    const items = (await navigator.clipboard?.read?.()) ?? [];
+    const out: File[] = [];
+    for (const item of items) {
+      const type = item.types.find((t) => t.startsWith('image/') || t.startsWith('video/'));
+      if (type) out.push(new File([await item.getType(type)], `image.${type.split('/')[1].split('+')[0]}`, { type }));
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 const inText = (app: App) => app.selection.kind === 'text' || app.region() === 'text';
 const onSlides = (app: App) => app.region() === 'navigator' || app.selection.kind === 'slides';
 
@@ -221,8 +251,14 @@ export function install(app: App): void {
     enabled: ready,
     undoable: true,
     run: async (a, arg) => {
+      if (Array.isArray(arg) && arg.every((f) => f instanceof File)) return void (await insertFiles(a, arg));
       let text = typeof arg === 'string' ? arg : '';
-      if (!text) text = (await navigator.clipboard?.readText().catch(() => '')) || clip?.text || '';
+      if (!text) text = (await navigator.clipboard?.readText().catch(() => '')) || '';
+      if (!text && !inText(a)) {
+        const files = await readMedia();
+        if (files.length) return void (await insertFiles(a, files));
+      }
+      text ||= clip?.text || '';
       const els = elementsIn(text);
       const slides = slidesIn(text)?.length ? text : null;
       // a paste into a text is plain text, as every paste into a text
@@ -252,7 +288,20 @@ export function install(app: App): void {
   // the canvas adds them after the current slide. in a text and in the navigator, the events are
   // left to the browser and to commands/slide.ts
   const onClip = (ev: ClipboardEvent) => {
-    if (ev.defaultPrevented || app.region() !== 'canvas' || !ready(app)) return;
+    if (ev.defaultPrevented || !ready(app)) return;
+    // an image pasted on the slide, or into a text when it comes without a text, e.g. a
+    // screenshot, is put on the slide, since a block of the theme does not hold an image
+    if (ev.type === 'paste' && (app.region() === 'canvas' || app.region() === 'text')) {
+      const data = ev.clipboardData;
+      const text = data?.getData('text/plain') ?? '';
+      const files = mediaFiles(data);
+      if (files.length && !elementsIn(text) && !slidesIn(text)?.length && (app.region() === 'canvas' || !text.trim())) {
+        ev.preventDefault();
+        void c.run('edit.paste', files).catch(fail);
+        return;
+      }
+    }
+    if (app.region() !== 'canvas') return;
     if (ev.type === 'paste') {
       const text = ev.clipboardData?.getData('text/plain') || ev.clipboardData?.getData('text/html') || '';
       if (!elementsIn(text) && !slidesIn(text)?.length) return;
