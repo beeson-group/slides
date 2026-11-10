@@ -320,3 +320,37 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// the start tags of the long paragraph, the note in the style Small, and the list of the slide of
+// the fixture deck with more words than a panel holds
+const fitTags = (text) => ({
+  para: text.match(/<p[^>]*>The stable and the unstable/)[0],
+  note: text.match(/<p[^>]*>A note in the style Small/)[0],
+  list: text.match(/<ul[^>]*>/)[0],
+});
+
+// finding 9: Change Layout to Split set the paragraphs and the lists of an overflowing panel in the
+// style Small, and a change of layout away from Split left them small. the blocks shrunk by the
+// fit are written without the class, also after an undo and a redo of the change to Split, and a
+// block that was in the style Small before the change to Split keeps it
+for (const platform of PLATFORMS) {
+  test(`a change of layout away from Split takes the style Small off the blocks that the fit of the panel shrank (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: PAIR_DECK, n: 1 });
+    await exec(page, 'slide.layout.split');
+    await sleep(300);
+    await frames(page);
+    const split = fitTags(await render(page));
+    assert.match(split.para, /class="small"/, 'the panel is not fitted, and the test does not show the finding');
+    assert.match(split.list, /class="small"/, 'the list of the panel is not fitted');
+    await page.evaluate('window.BeesonEditor.undo()');
+    await page.evaluate('window.BeesonEditor.redo()');
+    await exec(page, 'slide.layout.content');
+    await sleep(300);
+    await frames(page);
+    const content = fitTags(await render(page));
+    assert.doesNotMatch(content.para, /small/, `the paragraph fitted to the panel is still small after the change to Content: ${content.para}`);
+    assert.doesNotMatch(content.list, /small/, `the list fitted to the panel is still small after the change to Content: ${content.list}`);
+    assert.equal(content.note, '<p class="small">A note in the style Small', 'the note in the style Small before the change to Split lost its style');
+    await roundTrip(page, 2);
+  });
+}
