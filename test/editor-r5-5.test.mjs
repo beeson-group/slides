@@ -107,3 +107,82 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the controls of the Text pane that are not dimmed
+const liveControls = (page) =>
+  page.evaluate(`[...document.querySelectorAll('#beeson-edit-panel-format .ed-panes button')].filter((b) => !b.disabled && !b.closest('.ed-tabs')).map((b) => b.title || b.getAttribute('aria-label') || b.textContent)`);
+
+// the button of the Format tab with the title, clicked as a user would
+async function tap(page, title) {
+  const at = await page.evaluate(`(() => {
+    const b = [...document.querySelectorAll('#beeson-edit-panel-format button')].find((b) => (b.title || b.getAttribute('aria-label')) === ${JSON.stringify(title)});
+    if (!b || b.disabled) return null;
+    const r = b.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  })()`);
+  assert.ok(at, `the Format tab does not have a live ${title}`);
+  await click(page, at);
+  await frames(page);
+}
+
+for (const platform of PLATFORMS) {
+  test(`the Text pane is live in a new text box, and a format chosen before typing is typed on ${platform}`, async () => {
+    const page = await editor(platform);
+    await exec(page, 'insert.text');
+    await frames(page);
+    const live = await liveControls(page);
+    for (const title of ['Bold', 'Italic', 'Accent', 'Paragraph Style']) assert.ok(live.includes(title), `${title} is dimmed in a new text box`);
+    await tap(page, 'Bold');
+    assert.equal((await state(page, 'text.bold')).checked, true);
+    await tap(page, 'Accent');
+    await typeKeys(page, 'Hi there');
+    const text = await page.evaluate('window.BeesonEditor.render()');
+    assert.ok(text.includes('<p><strong><span class="tone-accent">Hi there</span></strong></p>'), 'the new text is not bold and orange');
+    await undo(page);
+    await byteExact(page);
+    await redo(page);
+    assert.equal(await page.evaluate('window.BeesonEditor.render()'), text);
+    await saved(page);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`a format chosen at the end of a footnote is typed after it on ${platform}`, async () => {
+    const page = await editor(platform);
+    const FOOT = '<div class="foot">A footnote of a content slide.</div>';
+    await caretAtEnd(page, '.reveal section.present .foot');
+    await frames(page);
+    const live = await liveControls(page);
+    for (const title of ['Bold', 'Italic', 'Strikethrough', 'Paragraph Style']) assert.ok(live.includes(title), `${title} is dimmed in a footnote`);
+    await tap(page, 'Italic');
+    await typeKeys(page, ' ok');
+    const edits = [[FOOT, '<div class="foot">A footnote of a content slide. <em>ok</em></div>']];
+    await byteExact(page, edits);
+    await undo(page);
+    await byteExact(page);
+    await redo(page);
+    await byteExact(page, edits);
+    await saved(page);
+  });
+
+  test(`the size of a code box is live in the Text pane, and the formats it cannot hold are dimmed on ${platform}`, async () => {
+    const page = await editor(platform, 5);
+    const PRE = '<pre><code class="language-python" data-line-numbers="1|2">';
+    await caretAtEnd(page, '.reveal section.present pre code');
+    await frames(page);
+    await page.evaluate(`document.querySelector('#beeson-edit-panel-format .ed-tabs [role=tab]:nth-child(2)')?.click()`);
+    await frames(page);
+    const live = await liveControls(page);
+    assert.ok(live.includes('Smaller'), 'the size of a code box is dimmed');
+    assert.ok(!live.includes('Bold') && !live.includes('Accent'), 'a format that a code box cannot hold is live');
+    await tap(page, 'Smaller');
+    const edits = [[PRE, PRE.replace('<pre>', '<pre style="font-size: 18px">')]];
+    await byteExact(page, edits);
+    assert.equal((await state(page, 'text.smaller')).enabled, false);
+    assert.equal((await state(page, 'text.bigger')).enabled, true);
+    await undo(page);
+    await byteExact(page);
+    await redo(page);
+    await byteExact(page, edits);
+    await saved(page);
+  });
+}
