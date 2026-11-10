@@ -175,8 +175,10 @@ function centerOffset(app: App, el: HTMLElement): { x: number; y: number } | nul
   return { x: Math.round(cx - (b.left + b.right) / 2), y: Math.round(cy - (b.top + b.bottom) / 2) };
 }
 
-// the zone of slide without content, into which a figure is put
-const emptyZone = (slide: Element): Element | null => [...slide.querySelectorAll(':scope > .zone, :scope > .panel ~ .zone')].find((z) => !z.children.length && !z.textContent?.trim()) ?? null;
+// the zone of slide without content, into which a figure is put. the placeholder that the editor
+// draws in an empty zone is not content
+const emptyZone = (slide: Element): Element | null =>
+  [...slide.querySelectorAll(':scope > .zone, :scope > .panel ~ .zone')].find((z) => ![...z.children].some((c) => !c.hasAttribute('data-generated')) && !z.textContent?.trim()) ?? null;
 
 export function install(app: App): void {
   injectStyle('insert', CSS);

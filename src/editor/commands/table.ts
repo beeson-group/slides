@@ -28,7 +28,7 @@ import { childSpace } from '../render.ts';
 import { contentWithTex, mathLookup } from '../math.ts';
 import { textStyle } from '../model/templates.ts';
 import {
-  CELL, GRID, MOST, around, fillLine, boxOf, cellAfter, cellBeside, cellHtml, cellOver, columnName, columnsOf, emptyRows, gridOf, grow, hasHeader, numericOf,
+  CELL, GRID, MOST, around, fillLine, boxOf, cellAfter, cellBeside, cellHtml, cellOver, columnName, columnsOf, emptyRows, gridOf, grow, hasHeader, numericOf, sortOrder,
   parseHtmlTable, parseTabular, placeOf, placesOf, rowHtml, spotsIn, tableHtml, type Box, type Place,
 } from '../table.ts';
 import { placeCaret } from '../text/typing.ts';
@@ -89,7 +89,7 @@ const GRIP = 9;
 type Target = { table: HTMLTableElement; cell: HTMLTableCellElement | null; box: Box | null };
 // a size typed into Insert Table… is kept in full, while one from the grid loses the rows that do
 // not fit on the slide
-type Size = { rows: number; columns: number; all?: boolean };
+type Size = { rows: number; columns: number };
 
 const isCell = (el: unknown): el is HTMLTableCellElement => el instanceof HTMLTableCellElement;
 
@@ -238,29 +238,78 @@ function baseOf(app: App, parent: Element): string {
 
 const right = (cell: Element) => (cell as HTMLElement).style.textAlign === 'right';
 
-// the columns of numbers of a table, with a formula read as its TeX, e.g. 2.69 for \(2.69\)
-function numbersOf(table: HTMLTableElement): boolean[] {
+// the text of a cell with a formula read as its TeX, e.g. 2.69 for \(2.69\)
+function cellText(cell: Element): string {
   const tex = mathLookup();
-  const read = (cell: Element): string => {
-    let out = '';
-    const walk = (n: Node) => {
-      if (n instanceof Element && n.localName === 'mjx-container') out += tex(n)?.tex ?? '';
-      else if (n.nodeType === 3) out += (n as Text).data;
-      else n.childNodes.forEach(walk);
-    };
-    walk(cell);
-    return out;
+  let out = '';
+  const walk = (n: Node) => {
+    if (n instanceof Element && n.localName === 'mjx-container') out += tex(n)?.tex ?? '';
+    else if (n.nodeType === 3) out += (n as Text).data;
+    else n.childNodes.forEach(walk);
   };
-  return numericOf(table, read);
+  walk(cell);
+  return out;
+}
+
+// the columns of numbers of a table, with a formula read as its TeX
+const numbersOf = (table: HTMLTableElement): boolean[] => numericOf(table, cellText);
+
+// the body rows of a table that a sort reorders: the rows of its first tbody after the header rows,
+// i.e. the rows of th only. null when a cell of the body reaches over two rows, since Keynote does
+// not sort the rows of a merged cell, or when fewer than two rows are left
+function sortable(table: HTMLTableElement): HTMLTableRowElement[] | null {
+  const body = table.tBodies[0];
+  if (!body) return null;
+  const rows = [...body.rows];
+  while (rows.length && rows[0].cells.length && [...rows[0].cells].every((c) => c.localName === 'th')) rows.shift();
+  if (rows.length < 2 || rows.some((tr) => [...tr.cells].some((c) => c.rowSpan !== 1))) return null;
+  return rows;
+}
+
+// the body rows of the table of t reordered by the column of its cell, each row moved in the file
+// before the row that takes its place, as one entry of the history
+async function sortRows(app: App, t: Target, descending: boolean): Promise<void> {
+  const rows = sortable(t.table);
+  const col = t.box?.c0;
+  if (!rows || col === undefined) return;
+  const g = gridOf(t.table);
+  const all = [...t.table.rows];
+  const keys = rows.map((tr) => {
+    const s = g.grid[all.indexOf(tr)]?.[col];
+    return s ? cellText(s.cell) : '';
+  });
+  const order = sortOrder(keys, descending).map((i) => rows[i]);
+  const label = descending ? 'sort descending' : 'sort ascending';
+  for (const [i, tr] of order.entries()) {
+    const now = sortable(t.table)!;
+    if (now[i] !== tr) await app.doc.move(tr, now[i].parentElement!, now[i], label);
+  }
 }
 
 // a table of rows of cells put at its place in the layout of the current slide, and then moved
-// where it fits by placeTable, with its rows taken out down to least when they do not fit
-async function insertTable(app: App, rows: string[][], least = rows.length): Promise<HTMLTableElement> {
-  const { parent, before } = columnPlace(app, app.current()!);
+// where it fits by placeTable, with every row, or put into the empty zone into
+async function insertTable(app: App, rows: string[][], into: Element | null = null): Promise<HTMLTableElement> {
+  const { parent, before } = into ? { parent: into, before: null } : columnPlace(app, app.current()!);
   const [table] = await app.doc.insert(tableHtml(rows, styleOf(app), baseOf(app, parent)), parent, before, 'insert table');
-  await placeTable(app, table as HTMLTableElement, least);
+  if (!into) placeTable(app, table as HTMLTableElement);
   return table as HTMLTableElement;
+}
+
+// a new empty table of size, as one entry of the history, with the caret in its first cell
+async function newTable(app: App, size: Size, into: Element | null = null): Promise<void> {
+  const rows = Math.max(1, Math.min(MOST.rows, Math.round(size.rows)));
+  const columns = Math.max(1, Math.min(MOST.columns, Math.round(size.columns)));
+  const table = await app.history.transact('Insert Table', () => insertTable(app, emptyRows(rows, columns), into));
+  const first = table.rows[0]?.cells[0];
+  if (first) placeCaret(first, 0);
+}
+
+// the table picker opened at anchor, e.g. by the table button of the placeholder of an empty zone,
+// whose table is put into the zone
+export function pickTableInto(app: App, zone: Element, anchor: DOMRect): void {
+  const fail = (e: unknown) => app.fail(e);
+  const into = (size: Size) => (zone.isConnected ? newTable(app, size, zone) : Promise.resolve()).catch(fail);
+  openPicker(app, anchor, (s) => void into(s), () => void askSize(app).then((s) => s && into(s)).catch(fail));
 }
 
 const TEXT = 'h1, h2, h3, h4, p, ul, ol, dl, table, pre, blockquote, div.math';
@@ -276,14 +325,13 @@ function shownBox(app: App, el: Element): SlideBox | null {
   return el.matches(TEXT) && !moved ? inkBox(app, el) : slideBox(app, el);
 }
 
-// a new table put where it fits on its slide, with room around it for its bars at the zoom of the
-// canvas: under the blocks before it, else at the center of the free area where the layout puts a
-// zone, else under the blocks before it with its last rows taken out down to least rows, and else
-// moved up until its bottom is BOTTOM over the footnote line or the bottom of the slide.
-// Keynote and PowerPoint put a new table at the center of the slide, over what is there, and the
-// table of a slide of the theme is put into its text column instead. the move is a translate in
-// slide px
-async function placeTable(app: App, table: HTMLTableElement, least: number): Promise<void> {
+// a new table put where it fits on its slide, with every row and with room around it for its bars
+// at the zoom of the canvas: under the blocks before it, else at the center of the free area where
+// the layout puts a zone, else moved up until its bottom is BOTTOM over the footnote line or the
+// bottom of the slide, and else at the center of the slide over what is there, as Keynote inserts
+// a table. the table of a slide of the theme is put into its text column, and it is not put over
+// the text while free space is left. the move is a translate in slide px
+function placeTable(app: App, table: HTMLTableElement): void {
   const slide = table.closest('section');
   const parent = table.parentElement;
   if (!slide || !parent || !table.getClientRects().length) return;
@@ -291,31 +339,30 @@ async function placeTable(app: App, table: HTMLTableElement, least: number): Pro
   const k = table.getBoundingClientRect().width / (table.offsetWidth || 1) || 1;
   const room = (GAP + BAR + 2) / k;
   const w = (slide as HTMLElement).offsetWidth || 1920;
+  const h = (slide as HTMLElement).offsetHeight || 1080;
   const foot = [...slide.querySelectorAll(':scope > .foot')].map((f) => shownBox(app, f)).find((b) => !!b);
-  const floor = Math.min(((slide as HTMLElement).offsetHeight || 1080) - BOTTOM, foot ? foot.top - BOTTOM : Infinity);
+  const floor = Math.min(h - BOTTOM, foot ? foot.top - BOTTOM : Infinity);
   const skip = (el: Element) => el === table || el.matches('aside.notes, script, style');
   const boxes = (els: Element[]) => els.filter((el) => !skip(el)).map((el) => shownBox(app, el)).filter((b): b is SlideBox => !!b);
   const before = boxes([...parent.children].slice(0, [...parent.children].indexOf(table)).filter((el) => !el.matches('.run, .foot, [data-generated]')));
   const others = boxes([...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *')].filter((el) => !el.contains(table)));
-  const rowHeights = [...table.rows].map((tr) => tr.getBoundingClientRect().height / k);
-  const n0 = rowHeights.length;
-  const heightOf = (n: number) => t.bottom - t.top - rowHeights.slice(n).reduce((a, b) => a + b, 0);
-  const at = (left: number, top: number, n: number): SlideBox => ({ left, top, right: left + t.right - t.left, bottom: top + heightOf(n) });
+  const tw = t.right - t.left;
+  const th = t.bottom - t.top;
+  const at = (left: number, top: number): SlideBox => ({ left, top, right: left + tw, bottom: top + th });
   const free = (b: SlideBox) => b.top - room >= 0 && b.bottom <= floor && b.right + room <= w &&
     !others.some((o) => meets({ left: b.left - room, top: b.top - room, right: b.right + room, bottom: b.bottom + room }, o));
   const top = Math.max(t.top, ...before.map((b) => b.bottom + room));
-  let place: { box: SlideBox; n: number } | null = free(at(t.left, top, n0)) ? { box: at(t.left, top, n0), n: n0 } : null;
+  let place: SlideBox | null = free(at(t.left, top)) ? at(t.left, top) : null;
   const zone = place ? null : freeZone(app, slide, table);
   if (zone) {
-    const b = at((zone.left + zone.right - t.right + t.left) / 2, (zone.top + zone.bottom - heightOf(n0)) / 2, n0);
-    if (free(b)) place = { box: b, n: n0 };
+    const b = at((zone.left + zone.right - tw) / 2, (zone.top + zone.bottom - th) / 2);
+    if (free(b)) place = b;
   }
-  const fewest = Math.min(Math.max(1, least), n0);
-  for (let n = n0 - 1; !place && n >= fewest; n--) if (free(at(t.left, top, n))) place = { box: at(t.left, top, n), n };
-  place ??= { box: at(t.left, Math.max(room, Math.min(top, floor - heightOf(fewest))), fewest), n: fewest };
-  for (let r = n0 - 1; r >= place.n; r--) await app.doc.remove(table.rows[r], 'insert table');
-  const x = Math.round(place.box.left - t.left);
-  const y = Math.round(place.box.top - t.top);
+  const raised = Math.min(top, floor - th);
+  if (!place && raised - room >= 0) place = at(t.left, raised);
+  place ??= at((w - tw) / 2, (h - th) / 2);
+  const x = Math.round(place.left - t.left);
+  const y = Math.round(place.top - t.top);
   if (x || y) app.doc.setTag(table, { translate: { x, y } }, 'insert table');
 }
 
@@ -644,6 +691,8 @@ function cellItems(cell: HTMLTableCellElement): MenuItem[] {
     ...ids(['table.merge', 'table.unmerge']),
     { rule: true },
     ...ids(['table.distributeColumns', 'table.fitColumn']),
+    { rule: true },
+    ...ids(['table.sortAscending', 'table.sortDescending']),
     { rule: true },
     ...ids(['table.header', 'table.numbersRight', 'table.autoAlign']),
     { rule: true },
@@ -1138,11 +1187,7 @@ export function install(app: App): void {
     run: async (a, arg) => {
       const size = arg && typeof arg === 'object' && 'rows' in arg ? (arg as Size) : null;
       if (!size) return openPicker(a, toolbarButton('insert.table'), (s) => void a.commands.run('insert.table', s).catch(fail), () => void a.commands.run('insert.tableSize').catch(fail));
-      const rows = Math.max(1, Math.min(MOST.rows, Math.round(size.rows)));
-      const columns = Math.max(1, Math.min(MOST.columns, Math.round(size.columns)));
-      const table = await a.history.transact('Insert Table', () => insertTable(a, emptyRows(rows, columns), size.all ? rows : Math.min(2, rows)));
-      const first = table.rows[0]?.cells[0];
-      if (first) placeCaret(first, 0);
+      await newTable(a, size);
     },
   });
 
@@ -1154,7 +1199,7 @@ export function install(app: App): void {
     enabled: ready,
     run: async (a) => {
       const size = await askSize(a);
-      if (size) await a.commands.run('insert.table', { ...size, all: true });
+      if (size) await a.commands.run('insert.table', size);
     },
   });
 
@@ -1263,6 +1308,20 @@ export function install(app: App): void {
       alignNumbers(a, t, true, alignBox(t));
     },
   });
+  // Sort Ascending and Sort Descending of the column menu of Keynote, by the column of the cell
+  const sortCommand = (id: string, label: string, order: number, descending: boolean) => c.define({
+    id,
+    label,
+    menu: menu('sort', order),
+    enabled: (a, arg?: unknown) => {
+      const t = ready(a) ? targetOf(a, arg) : null;
+      return !!t?.box && !!sortable(t.table);
+    },
+    undoable: true,
+    run: (a, arg) => sortRows(a, need(a, arg), descending),
+  });
+  sortCommand('table.sortAscending', 'Sort Ascending', 87.6, false);
+  sortCommand('table.sortDescending', 'Sort Descending', 87.7, true);
   c.define({
     id: 'table.delete',
     label: 'Delete Table',

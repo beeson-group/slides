@@ -1,14 +1,16 @@
 // image and video files dragged from the Finder or the Explorer onto the slide. a file dropped onto
 // an image or a video, or onto a zone or a plate that shows one, replaces its file, as a drop onto
 // an image in Keynote. a file dropped onto an empty zone or plate fills it, and one dropped anywhere
-// else on the slide is put into a new zone, as a drop onto the slide of PowerPoint. the target is
-// outlined while the files are dragged over it. the browser does not open a file dropped onto the
-// chrome of the editor in place of the deck
+// else on the slide is put into a new zone, as a drop onto the slide of PowerPoint. an empty zone or
+// plate is drawn with the placeholder of placeholder.ts. the target is outlined while the files are
+// dragged over it. the browser does not open a file dropped onto the chrome of the editor in place
+// of the deck
 
 import type { App } from '../app.ts';
 import { onCanvas } from '../canvas/hit.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { insertFiles, isEmptySlot, isSlot, kindOfElement, mediaIn, replaceFile } from './actions.ts';
+import { install as installPlaceholder } from './placeholder.ts';
 import { kindOf } from './store.ts';
 
 const CSS = `
@@ -50,6 +52,7 @@ const hasFiles = (e: DragEvent) => !!e.dataTransfer && [...e.dataTransfer.types]
 
 export function install(app: App): void {
   injectStyle('media-drop', CSS);
+  installPlaceholder(app);
   const box = make('div', 'beeson-drop');
   const tag = make('span');
   box.append(tag);

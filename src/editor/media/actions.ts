@@ -162,7 +162,8 @@ export async function insertFiles(app: App, files: File[], into: Element | null 
   const ready = await prepare(app, files);
   const label = ready.length > 1 ? 'Media' : kindName(ready[0].kind);
   const nodes: Element[] = [];
-  await app.history.transact(label, async () => {
+  // the entry is named Insert and the kind, as every insert of insert.ts
+  await app.history.transact(`Insert ${label}`, async () => {
     for (const [i, r] of ready.entries()) {
       const slot = i === 0 && into && slide.contains(into) && isEmptySlot(app, into) ? into : emptySlot(app, slide);
       nodes.push(slot ? await fill(app, slot, r, label) : await addZone(app, slide, r));

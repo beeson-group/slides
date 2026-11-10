@@ -7,12 +7,18 @@
 // object-position where the picture fills the box, and else scale with a clip-path inset that cuts
 // the scaled element back to its box, and object-position for the place of the picture in it. the
 // sign of scale is the flip of commands/flip.ts. a backdrop is written as data-cx, data-cy, and
-// data-half, and each edge of its box inside the slide at which the drawing is cut is marked in red
+// data-half, and each edge of its box inside the slide at which the drawing is cut is marked in red.
+//
+// the bar of an image switches between Edit Image, in which a drag moves the picture, and Edit
+// Mask, in which a drag moves the box over the picture and the eight handles of the box resize it,
+// as in Keynote. a box resized so is written as a width, a height, and a translate, together with
+// object-fit contain, since the theme stretches an image with a width and a height to its box
 
 import type { App } from '../app.ts';
-import type { TagEdit } from '../tags.ts';
+import { translateText, type TagEdit, type Translate } from '../tags.ts';
 import { frameOf } from './hit.ts';
 import { injectStyle, make } from '../ui/dom.ts';
+import { icon } from '../ui/icons.ts';
 
 // the declarations of a mask besides scale, which Reset Mask takes off
 export const MASK_STYLE = ['object-fit', 'object-position', 'clip-path'] as const;
@@ -20,6 +26,8 @@ export const MASK_STYLE = ['object-fit', 'object-position', 'clip-path'] as cons
 const BACKDROP_ZOOM = 4;
 // within this fraction of the zoom at which an image fills its box, the slider snaps to it
 const DETENT = 0.03;
+// the least width and height of a box resized in Edit Mask, in slide pixels
+const LEAST = 20;
 
 const CSS = `
 html.beeson-masking .beeson-overlay { visibility: hidden; }
@@ -28,11 +36,22 @@ html.beeson-masking .beeson-overlay { visibility: hidden; }
 html.beeson-mask-panning, html.beeson-mask-panning * { cursor: grabbing !important; user-select: none !important; }
 .beeson-mask-stage svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
 .beeson-mask-window { position: absolute; box-sizing: border-box; border: 1px dashed #3a3a3c; outline: 1px dashed rgba(255, 255, 255, 0.85); outline-offset: -2px; pointer-events: none; }
-.beeson-mask-window i { position: absolute; width: 7px; height: 7px; margin: -4px 0 0 -4px; background: #1d1d1f; outline: 1px solid #fff; }
+.beeson-mask-window i { position: absolute; display: none; width: 7px; height: 7px; margin: -4px 0 0 -4px; background: #1d1d1f; outline: 1px solid #fff; }
+.beeson-mask-window i::after { content: ""; position: absolute; inset: -6px; }
+.beeson-mask-stage.sizing { cursor: move; }
+.beeson-mask-stage.sizing .beeson-mask-window i { display: block; pointer-events: auto; }
+.beeson-mask-window i:is([data-handle=nw], [data-handle=se]) { cursor: nwse-resize; }
+.beeson-mask-window i:is([data-handle=ne], [data-handle=sw]) { cursor: nesw-resize; }
+.beeson-mask-window i:is([data-handle=n], [data-handle=s]) { cursor: ns-resize; }
+.beeson-mask-window i:is([data-handle=e], [data-handle=w]) { cursor: ew-resize; }
 .beeson-mask-cut { position: fixed; background: #e03131; box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.7); pointer-events: none; }
 .beeson-mask-cut span { position: absolute; padding: 1px 6px; border-radius: 4px; background: #e03131; color: #fff; font: 600 11px/16px var(--ed-font, system-ui, sans-serif); white-space: nowrap; }
 dialog.beeson-mask-bar { position: fixed; inset: auto; margin: 0; z-index: 53; display: flex; align-items: center; gap: 8px; box-sizing: border-box; height: 44px; padding: 6px 7px 6px 12px; border: 1px solid var(--ed-menu-line); border-radius: 22px; background: var(--ed-menu); color: var(--ed-text); font: 13px/1.25 var(--ed-font); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.22), 0 1px 3px rgba(0, 0, 0, 0.12); -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6); user-select: none; -webkit-user-select: none; outline: none; }
 dialog.beeson-mask-bar .what { color: var(--ed-muted); font-weight: 500; white-space: nowrap; }
+dialog.beeson-mask-bar .what[hidden], dialog.beeson-mask-bar .modes[hidden] { display: none; }
+dialog.beeson-mask-bar .modes { display: flex; gap: 2px; }
+dialog.beeson-mask-bar button.mode { width: 30px; padding: 0; display: grid; place-items: center; background: transparent; color: var(--ed-text); }
+dialog.beeson-mask-bar button.mode:disabled { opacity: 0.4; }
 dialog.beeson-mask-bar button { height: 30px; padding: 0 13px; border: 0; border-radius: 15px; background: var(--ed-pressed); color: var(--ed-text); font: 500 13px/30px var(--ed-font); white-space: nowrap; cursor: default; }
 dialog.beeson-mask-bar button[hidden] { display: none; }
 dialog.beeson-mask-bar button[aria-pressed=true] { background: color-mix(in srgb, var(--ed-select) 22%, transparent); color: var(--ed-select); }
@@ -47,8 +66,9 @@ type Box = { left: number; top: number; width: number; height: number };
 // the picture of an image in its content box before its scale, in slide pixels: the size w, h of
 // the box, the size bw, bh of the picture as the theme fits it, the zoom zc at which the picture
 // covers the box, the offset dx, dy of the center of the picture from the center of the box, and
-// the object-position of the theme
-type Fit = { w: number; h: number; bw: number; bh: number; zc: number; dx: number; dy: number; pos: [string | undefined, string | undefined] };
+// the object-position of the theme. pin is set on a box with a width and a height in its style
+// that keeps the aspect of its picture with object-fit contain
+type Fit = { w: number; h: number; bw: number; bh: number; zc: number; dx: number; dy: number; pos: [string | undefined, string | undefined]; pin: boolean };
 
 // an image in a mask edit: the zoom z of the picture against its fit in the theme, the offset ox, oy
 // of its center from the center of the box as seen, in slide pixels, and the flip sx, sy
@@ -75,21 +95,29 @@ export function scaleText(x: number, y: number): string | null {
   return `${round(x, 4)} ${round(y, 4)}`;
 }
 
-// whether the style of el has a mask of the editor
+// whether a box with a width and a height in the style of el keeps the aspect of its picture
+export const pinned = (el: Element): boolean => {
+  const s = (el as HTMLElement).style;
+  return !!s && !!s.width && !!s.height && !!s.objectFit;
+};
+
+// whether the style of el has a mask of the editor. the object-fit contain of a pinned box is not
+// a mask
 export const masked = (el: Element): boolean => {
   const s = (el as HTMLElement).style;
-  return !!s && (MASK_STYLE.some((n) => s.getPropertyValue(n)) || Math.abs(Math.abs(scaleOf(el).x) - 1) > 1e-6);
+  const own = (n: string) => !!s.getPropertyValue(n) && !(n === 'object-fit' && s.objectFit === 'contain');
+  return !!s && (MASK_STYLE.some(own) || Math.abs(Math.abs(scaleOf(el).x) - 1) > 1e-6);
 };
 
 // the offset of a picture of size s in a box of size box at an axis of object-position
 const at = (v: string | undefined, room: number) => (!v ? room / 2 : v.endsWith('%') ? ((num(v) ?? 50) / 100) * room : (num(v) ?? 0));
 
 // the fit of the picture of img as the theme sets it, read without the declarations of a mask
-function fitOf(img: HTMLImageElement): Fit | null {
+function fitOf(img: HTMLImageElement, pin = pinned(img)): Fit | null {
   const nw = img.naturalWidth, nh = img.naturalHeight;
   const s = img.style;
   const kept = { fit: s.objectFit, position: s.objectPosition };
-  s.objectFit = '';
+  s.objectFit = pin ? 'contain' : '';
   s.objectPosition = '';
   const cs = getComputedStyle(img);
   const pad = (a: string, b: string) => (num(cs.getPropertyValue(a)) ?? 0) + (num(cs.getPropertyValue(b)) ?? 0);
@@ -103,7 +131,7 @@ function fitOf(img: HTMLImageElement): Fit | null {
   const k = fit === 'contain' || fit === 'scale-down' ? contain : fit === 'cover' ? cover : fit === 'none' ? 1 : 0;
   const bw = k ? nw * k : w, bh = k ? nh * k : h;
   const zc = Math.max(1, Math.max(w / bw, h / bh));
-  return { w, h, bw, bh, zc, dx: at(px, w - bw) + bw / 2 - w / 2, dy: at(py, h - bh) + bh / 2 - h / 2, pos: [px, py] };
+  return { w, h, bw, bh, zc, dx: at(px, w - bw) + bw / 2 - w / 2, dy: at(py, h - bh) + bh / 2 - h / 2, pos: [px, py], pin };
 }
 
 // the state of img as its style gives it
@@ -139,7 +167,7 @@ function positionText(f: Fit, size: { w: number; h: number }, lx: number, ly: nu
 // the declarations of the state st, each null where it is not needed
 export function imageStyle(f: Fit, st: ImageState): Record<string, string | null> {
   const flip = scaleText(st.sx, st.sy);
-  const out: Record<string, string | null> = { scale: flip, 'clip-path': null, 'object-fit': null, 'object-position': null };
+  const out: Record<string, string | null> = { scale: flip, 'clip-path': null, 'object-fit': f.pin ? 'contain' : null, 'object-position': null };
   const lx = (st.sx * st.ox) / st.z, ly = (st.sy * st.oy) / st.z;
   const home = Math.abs(lx - f.dx) < 0.25 && Math.abs(ly - f.dy) < 0.25;
   if (Math.abs(st.z - 1) < 1e-3) {
@@ -173,7 +201,7 @@ export function styleEdit(app: App, el: Element, style: Record<string, string | 
 // preview
 function syncLive(app: App, el: Element): void {
   const now = app.doc.tagState(el).style, s = (el as HTMLElement).style;
-  for (const n of [...MASK_STYLE, 'scale']) {
+  for (const n of [...MASK_STYLE, 'scale', 'width', 'height', 'translate']) {
     const v = now[n];
     if (v === undefined) s.removeProperty(n);
     else s.setProperty(n, v);
@@ -273,6 +301,19 @@ type Session = {
   fill?(): void;
   // whether the picture fills its box, or null where Fill is not offered
   filled?(): boolean | null;
+  // in Edit Mask, grab() takes the box and the picture at a press, and stretch() moves the edges of
+  // the box named by handle, or the whole box without one, by dx, dy screen pixels from the press.
+  // sizable is false for a picture stretched to its box, whose aspect a resize would change
+  sizable?: boolean;
+  grab?(): void;
+  stretch?(handle: string | null, dx: number, dy: number): void;
+};
+
+type Edges = { l: number; t: number; r: number; b: number };
+
+const translateOf = (v: string): Translate => {
+  const [x, y] = v.split(/\s+/).map((p) => num(p) ?? 0);
+  return { x: x ?? 0, y: y ?? 0 };
 };
 
 let session: Session | null = null;
@@ -289,7 +330,10 @@ class MaskUi {
   readonly window = make('div', 'beeson-mask-window');
   readonly bar = make('dialog', 'beeson-mask-bar') as HTMLDialogElement;
   readonly what = make('span', 'what');
-  readonly fill = make('button', '', 'Fill');
+  readonly modes = make('span', 'modes');
+  readonly image = make('button', 'mode');
+  readonly mask = make('button', 'mode');
+  readonly fill = make('button', 'fill', 'Fill');
   readonly reset = make('button', '', 'Reset');
   readonly slider = make('input');
   readonly value = make('output');
@@ -298,12 +342,21 @@ class MaskUi {
 
   constructor() {
     this.stage.append(this.svg, this.window);
-    for (const corner of ['0 0', '50% 0', '100% 0', '100% 50%', '100% 100%', '50% 100%', '0 100%', '0 50%']) {
+    const handles: [string, string, string][] = [['nw', '0', '0'], ['n', '50%', '0'], ['ne', '100%', '0'], ['e', '100%', '50%'], ['se', '100%', '100%'], ['s', '50%', '100%'], ['sw', '0', '100%'], ['w', '0', '50%']];
+    for (const [name, x, y] of handles) {
       const i = make('i');
-      const [x, y] = corner.split(' ');
+      i.dataset.handle = name;
       Object.assign(i.style, { left: x, top: y });
       this.window.append(i);
     }
+    for (const [b, name, title] of [[this.image, 'image', 'Edit Image'], [this.mask, 'crop', 'Edit Mask']] as const) {
+      b.type = 'button';
+      b.title = title;
+      b.setAttribute('aria-label', title);
+      b.append(icon(name, 18));
+      this.modes.append(b);
+    }
+    this.modes.setAttribute('role', 'group');
     this.layer.append(this.stage);
     this.slider.type = 'range';
     this.slider.min = '0';
@@ -313,11 +366,21 @@ class MaskUi {
     this.reset.title = 'The picture as it was before this edit';
     this.done.title = 'Apply the mask (Return)';
     this.bar.tabIndex = -1;
-    this.bar.append(this.what, this.fill, this.slider, this.value, this.reset, this.done);
+    this.bar.append(this.what, this.modes, this.fill, this.slider, this.value, this.reset, this.done);
   }
 }
 
 let ui: MaskUi | null = null;
+// Edit Image or Edit Mask, of an image
+let mode: 'image' | 'mask' = 'image';
+
+function setMode(m: 'image' | 'mask'): void {
+  mode = m;
+  if (!ui) return;
+  ui.image.setAttribute('aria-pressed', String(m === 'image'));
+  ui.mask.setAttribute('aria-pressed', String(m === 'mask'));
+  ui.stage.classList.toggle('sizing', m === 'mask');
+}
 
 // the box of el on the screen without its rotation and its scale, about its center, i.e. the box
 // of its mask
@@ -377,23 +440,35 @@ function syncBar(): void {
 }
 
 function imageSession(app: App, img: HTMLImageElement): Session | null {
-  const fit = fitOf(img);
-  if (!fit) return null;
+  const fit0 = fitOf(img);
+  if (!fit0) return null;
+  let fit: Fit = fit0;
   let st = clampImage(fit, imageState(img, fit));
   const start = { ...st };
   const lo = 1, hi = Math.max(4, fit.zc * 2);
+  const s = img.style;
+  // the box as its style gives it at the start, which Reset puts back
+  const box0 = { width: s.width, height: s.height, translate: s.translate };
+  const cs0 = getComputedStyle(img), size0 = `${Math.round(num(cs0.width) ?? 0)} ${Math.round(num(cs0.height) ?? 0)} ${box0.translate}`;
+  let resized = false;
+  // the press of Edit Mask: the box and the picture in the frame of the image about the center of
+  // the box, in slide pixels, the center on the screen, the width and height of the style, and the
+  // translate
+  let grip: { win: Edges; pic: Edges; pw: number; ox: number; oy: number; cx: number; cy: number; cw: number; ch: number; t: Translate } | null = null;
+  const natural = img.naturalWidth / img.naturalHeight;
   // the preview is the picture scaled in its whole box, without the clip
   const preview = () => {
-    const s = img.style;
     s.removeProperty('clip-path');
-    s.removeProperty('object-fit');
+    if (fit.pin) s.setProperty('object-fit', 'contain');
+    else s.removeProperty('object-fit');
     const sc = scaleText(st.sx * st.z, st.sy * st.z);
     if (sc) s.setProperty('scale', sc);
     else s.removeProperty('scale');
     s.setProperty('object-position', positionText(fit, { w: fit.bw, h: fit.bh }, (st.sx * st.ox) / st.z, (st.sy * st.oy) / st.z));
   };
-  const set = (next: ImageState) => {
-    st = clampImage(fit, next);
+  // the picture is held over the box, except after a resize, which keeps it where it is
+  const set = (next: ImageState, hold = true) => {
+    st = hold ? clampImage(fit, next) : next;
     preview();
     draw();
   };
@@ -415,8 +490,70 @@ function imageSession(app: App, img: HTMLImageElement): Session | null {
   };
   preview();
   const scaled = (z: number) => ({ ...st, z, ox: (st.ox * z) / st.z, oy: (st.oy * z) / st.z });
+  const k = () => frameOf(app).scale;
+  const rad = () => (angleOf(img) * Math.PI) / 180;
+  const centerOf = () => {
+    const r = img.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  };
+  // the box resized to the edges w, about the center of the box at the press, with the picture
+  // kept where it is. the width and the height of the style are whole pixels, and the translate
+  // puts the center of the box at the center of w, wherever the layout puts the box
+  const resize = (g: NonNullable<typeof grip>, w: Edges) => {
+    const a = rad(), sk = k();
+    s.width = `${Math.round(g.cw + w.r - w.l - (g.win.r - g.win.l))}px`;
+    s.height = `${Math.round(g.ch + w.b - w.t - (g.win.b - g.win.t))}px`;
+    s.objectFit = 'contain';
+    s.translate = `${g.t.x}px ${g.t.y}px`;
+    const lx = (w.l + w.r) / 2, ly = (w.t + w.b) / 2, c = centerOf();
+    const wx = g.cx + (lx * Math.cos(a) - ly * Math.sin(a)) * sk, wy = g.cy + (lx * Math.sin(a) + ly * Math.cos(a)) * sk;
+    const t = { x: Math.round(g.t.x + (wx - c.x) / sk), y: Math.round(g.t.y + (wy - c.y) / sk) };
+    s.translate = t.x || t.y ? `${t.x}px ${t.y}px` : '';
+    // a box back at its size and place at the start is written as it was
+    resized = `${parseFloat(s.width)} ${parseFloat(s.height)} ${s.translate}` !== size0;
+    if (resized) fit = fitOf(img, true) ?? fit;
+    else {
+      Object.assign(s, box0);
+      fit = fit0;
+    }
+    // the offset of the picture from the center of the box as it is laid out now
+    const now = centerOf(), dx = (now.x - g.cx) / sk, dy = (now.y - g.cy) / sk;
+    const ux = dx * Math.cos(a) + dy * Math.sin(a), uy = -dx * Math.sin(a) + dy * Math.cos(a);
+    set({ ...st, z: Math.max(1, g.pw / fit.bw), ox: g.ox - ux, oy: g.oy - uy }, false);
+  };
   return {
     kind: 'image',
+    sizable: Math.abs(fit0.bw / fit0.bh - natural) < 0.01 * natural,
+    grab: () => {
+      const cs = getComputedStyle(img), c = centerOf();
+      const pw = st.z * fit.bw, ph = st.z * fit.bh;
+      grip = {
+        win: { l: -fit.w / 2, t: -fit.h / 2, r: fit.w / 2, b: fit.h / 2 },
+        pic: { l: st.ox - pw / 2, t: st.oy - ph / 2, r: st.ox + pw / 2, b: st.oy + ph / 2 },
+        pw, ox: st.ox, oy: st.oy, cx: c.x, cy: c.y, cw: num(cs.width) ?? fit.w, ch: num(cs.height) ?? fit.h, t: translateOf(s.translate),
+      };
+    },
+    // the box is kept over the picture, or inside its place at the press where the picture is
+    // smaller than the box
+    stretch: (handle, dx, dy) => {
+      const g = grip;
+      if (!g) return;
+      const a = -rad(), sk = k();
+      const ux = (dx * Math.cos(a) - dy * Math.sin(a)) / sk, uy = (dx * Math.sin(a) + dy * Math.cos(a)) / sk;
+      const out = { l: Math.min(g.pic.l, g.win.l), t: Math.min(g.pic.t, g.win.t), r: Math.max(g.pic.r, g.win.r), b: Math.max(g.pic.b, g.win.b) };
+      const lim = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+      const w = { ...g.win };
+      if (!handle) {
+        const mx = lim(ux, out.l - g.win.l, out.r - g.win.r), my = lim(uy, out.t - g.win.t, out.b - g.win.b);
+        Object.assign(w, { l: w.l + mx, r: w.r + mx, t: w.t + my, b: w.b + my });
+      } else {
+        if (handle.includes('w')) w.l = lim(g.win.l + ux, out.l, w.r - LEAST);
+        if (handle.includes('e')) w.r = lim(g.win.r + ux, w.l + LEAST, out.r);
+        if (handle.includes('n')) w.t = lim(g.win.t + uy, out.t, w.b - LEAST);
+        if (handle.includes('s')) w.b = lim(g.win.b + uy, w.t + LEAST, out.b);
+      }
+      resize(g, w);
+    },
     el: img,
     range: [lo, hi],
     zoom: () => st.z,
@@ -433,12 +570,22 @@ function imageSession(app: App, img: HTMLImageElement): Session | null {
     },
     filled: () => (fit.zc > 1.001 ? Math.abs(st.z - fit.zc) < 1e-3 * fit.zc : null),
     draw,
-    reset: () => set({ ...start }),
+    reset: () => {
+      Object.assign(s, box0);
+      fit = fit0;
+      resized = false;
+      set({ ...start });
+    },
     cancel: () => syncLive(app, img),
     edit: async () => {
+      const box = { width: s.width || null, height: s.height || null, translate: translateOf(s.translate) };
       syncLive(app, img);
-      const edit = styleEdit(app, img, imageStyle(fit, st));
-      if (edit) await app.history.transact('Edit Mask', () => app.doc.setTag(img, edit, 'mask'));
+      const style = imageStyle(fit, st);
+      if (resized) Object.assign(style, { width: box.width, height: box.height });
+      const edit: TagEdit = styleEdit(app, img, style) ?? {};
+      const t = box.translate.x || box.translate.y ? box.translate : null;
+      if (resized && (app.doc.tagState(img).style.translate ?? null) !== (t && translateText(t))) edit.translate = t;
+      if (Object.keys(edit).length) await app.history.transact('Edit Mask', () => app.doc.setTag(img, edit, 'mask'));
     },
   };
 }
@@ -531,6 +678,11 @@ export function begin(app: App, el: Element): boolean {
   if (!s) return false;
   session = s;
   ui.what.textContent = s.kind === 'image' ? 'Mask' : 'Window';
+  ui.what.hidden = s.kind === 'image';
+  ui.modes.hidden = s.kind !== 'image';
+  ui.mask.disabled = !s.sizable;
+  ui.mask.title = s.sizable ? 'Edit Mask' : 'The picture is stretched to its box, which Edit Mask cannot resize';
+  setMode('image');
   ui.slider.setAttribute('aria-label', s.kind === 'image' ? 'Scale of the image' : 'Scale of the drawing');
   ui.bar.setAttribute('aria-label', s.kind === 'image' ? 'Edit Mask' : 'Edit Backdrop Window');
   document.documentElement.classList.add('beeson-masking');
@@ -562,6 +714,8 @@ export function install(app: App): void {
     session.setZoom(Math.round(fromSlider(Number(u.slider.value), lo, hi) * 100) / 100);
   });
   u.fill.addEventListener('click', () => session?.fill?.());
+  u.image.addEventListener('click', () => setMode('image'));
+  u.mask.addEventListener('click', () => setMode('mask'));
   u.reset.addEventListener('click', () => session?.reset());
   u.done.addEventListener('click', () => void finish(app, true).catch((e) => app.fail(e)));
   // Return applies the edit, Esc leaves the element as it was, and the arrows move the picture by
@@ -577,29 +731,39 @@ export function install(app: App): void {
       void finish(app, ev.key === 'Enter').catch((e) => app.fail(e));
     } else if (arrows[ev.key] && !(ev.target instanceof HTMLInputElement)) {
       ev.preventDefault();
-      session.pan(...arrows[ev.key]);
+      if (mode === 'mask' && session.stretch) {
+        session.grab?.();
+        session.stretch(null, ...arrows[ev.key]);
+      } else session.pan(...arrows[ev.key]);
     }
   });
   u.bar.addEventListener('cancel', (ev) => ev.preventDefault());
-  // a drag on the stage moves the picture inside the box
+  // a drag on the stage moves the picture inside the box, and in Edit Mask the box over the
+  // picture, or an edge of the box with a handle
   let last: { x: number; y: number; id: number } | null = null;
+  let press: { x: number; y: number; handle: string | null } | null = null;
   u.stage.addEventListener('pointerdown', (ev) => {
     if (!session || ev.button !== 0) return;
     ev.preventDefault();
     ev.stopPropagation();
     last = { x: ev.clientX, y: ev.clientY, id: ev.pointerId };
     u.stage.setPointerCapture?.(ev.pointerId);
-    document.documentElement.classList.add('beeson-mask-panning');
+    if (mode === 'mask' && session.grab) {
+      session.grab();
+      press = { x: ev.clientX, y: ev.clientY, handle: ev.target instanceof HTMLElement ? (ev.target.closest<HTMLElement>('.beeson-mask-window i')?.dataset.handle ?? null) : null };
+    } else document.documentElement.classList.add('beeson-mask-panning');
   });
   u.stage.addEventListener('mousedown', (ev) => ev.preventDefault());
   u.stage.addEventListener('pointermove', (ev) => {
     if (!session || !last || ev.pointerId !== last.id) return;
     const dx = ev.clientX - last.x, dy = ev.clientY - last.y;
     last = { ...last, x: ev.clientX, y: ev.clientY };
-    if (dx || dy) session.pan(dx, dy);
+    if (press) session.stretch?.(press.handle, ev.clientX - press.x, ev.clientY - press.y);
+    else if (dx || dy) session.pan(dx, dy);
   });
   const up = () => {
     last = null;
+    press = null;
     document.documentElement.classList.remove('beeson-mask-panning');
     u.bar.focus({ preventScroll: true });
   };
