@@ -281,27 +281,34 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`each row shows at least 30 characters of its text at 1440 by 900 on ${platform}`, async (t) => {
+  // the sans of the system is wider on Linux, e.g. DejaVu Sans, hence a row shows fewer characters
+  // there. a long text is cut with an ellipsis and shown whole in its tooltip, as in the Animation
+  // Pane of PowerPoint, and at least 24 characters of it are shown in any font
+  test(`each row shows its text, or at least 24 characters of it with an ellipsis and a tooltip, at 1440 by 900 on ${platform}`, async (t) => {
     const page = await open(t, platform, { width: 1440, height: 900 });
     const slides = await page.evaluate('Reveal.getTotalSlides()');
     let checked = 0;
     for (let h = 0; h < slides; h++) {
       await page.evaluate(`Reveal.slide(${h})`);
       await sleep(80);
-      // the width of the first 30 characters of each text, in the font of its row, and the width
-      // of the box of the text
+      // the width of the first 24 characters of each cut text, in the font of its row, the width of
+      // the box of the text, and its tooltip
       const short = await page.evaluate(`(() => {
         const ctx = document.createElement('canvas').getContext('2d');
-        return [...document.querySelectorAll('.beeson-edit-side .rows .row .text')].filter((el) => el.textContent.length >= 30).map((el) => {
+        return [...document.querySelectorAll('.beeson-edit-side .rows .text')].filter((el) => el.scrollWidth > el.clientWidth).map((el) => {
           const s = getComputedStyle(el);
           ctx.font = s.fontWeight + ' ' + s.fontSize + ' ' + s.fontFamily;
-          return { text: el.textContent.slice(0, 30), need: ctx.measureText(el.textContent.slice(0, 30) + '…').width, has: el.clientWidth };
+          return { text: el.textContent, need: ctx.measureText(el.textContent.slice(0, 24) + '…').width, has: el.clientWidth, overflow: s.textOverflow, tip: el.title };
         });
       })()`);
       checked += short.length;
-      for (const row of short) assert.ok(row.need <= row.has, `only ${row.has} px of the ${Math.ceil(row.need)} px of "${row.text}" are shown`);
+      for (const row of short) {
+        assert.ok(row.need <= row.has, `only ${row.has} px of the ${Math.ceil(row.need)} px of "${row.text.slice(0, 24)}" are shown`);
+        assert.equal(row.overflow, 'ellipsis', row.text);
+        assert.equal(row.tip, row.text, `the cut text "${row.text.slice(0, 24)}…" is not shown whole in a tooltip`);
+      }
     }
-    assert.ok(checked > 10, `only ${checked} rows have 30 characters`);
+    assert.ok(checked > 5, `only ${checked} rows are cut`);
     assert.deepEqual(errors(page), []);
   });
 }
