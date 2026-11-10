@@ -94,10 +94,10 @@ test('a delay on the last step moves on to the next slide, and Back from there s
 });
 
 // the step of the current slide: the highest fragment index shown, counted from 0 as reveal.js
-// numbers the steps again at its start, hence the restore step is the last index once it is shown
+// numbers the steps again at its start
 const step = (page) => page.evaluate(`Math.max(-1, ...[...Reveal.getCurrentSlide().querySelectorAll('.fragment.visible')].map((f) => Number(f.dataset.fragmentIndex)))`);
 
-test('a delay on the last step goes on through the restore step to the next slide, and Back lands on the last step', async (t) => {
+test('a delay on a last step that dims the step before moves on to the next slide, and Back lands on the last step', async (t) => {
   const page = await open(t);
   await page.evaluate('Reveal.slide(4)');
   await press(page, 'ArrowRight');

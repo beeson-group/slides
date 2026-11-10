@@ -9,7 +9,7 @@
 // data-keep is held at full opacity through the next step, or through the step of its value, and a
 // fragment is held as well while the current step highlights a class in it
 
-import type { Deck } from './reveal.d.ts';
+import type { Deck, SlideEvent } from './reveal.d.ts';
 
 export type Tone = 'accent' | 'violet' | 'blue' | 'red';
 const TONES: Tone[] = ['accent', 'violet', 'blue', 'red'];
@@ -53,6 +53,9 @@ export function resolve(steps: Step[], current: number): { held: boolean[]; lit:
 
 const words = (s: string | null | undefined) => (s ?? '').split(/\s+/).filter(Boolean);
 
+// a slide whose last step dims the steps before it and moves on by a delay, see addRestoreSteps
+const MOVES_ON = 'data-moves-on';
+
 const hasContent = (f: Element) => f.children.length > 0 || (f.textContent ?? '').trim() !== '';
 
 // a copy of a code box, made by the highlight plugin of reveal.js for each group of lines after the
@@ -65,7 +68,10 @@ const isCopy = (f: Element) => f.matches('pre > code.fragment');
  * dims a fragment with content, or a code box. A fragment without data-fragment-index is placed by
  * reveal.js after every indexed one, in the order of the page, hence the added step is the last of
  * its slide. A slide with a fragment marked data-final, e.g. a QR code shown once the text is
- * complete, is left without the added step, since its last step restores every fragment.
+ * complete, is left without the added step, since its last step restores every fragment. A slide
+ * whose last step has a delay is left without it too and marked with data-moves-on, since the
+ * delay moves on to the next slide, and the slide keeps the look of its last step through the
+ * transition, as in PowerPoint.
  */
 export function addRestoreSteps(root: ParentNode): void {
   for (const slide of root.querySelectorAll<HTMLElement>('.reveal .slides section')) {
@@ -78,13 +84,14 @@ export function addRestoreSteps(root: ParentNode): void {
     const boxes = new Set(frags.filter(isCopy).map((f) => f.parentElement));
     const dimsBox = [...boxes].some((box) => !last.some((f) => f.parentElement === box && isCopy(f)));
     if (!dimsBox && !frags.some((f) => !last.includes(f) && hasContent(f) && !isCopy(f))) continue;
+    if (last.some(delayed)) {
+      slide.setAttribute(MOVES_ON, '');
+      continue;
+    }
     const restore = document.createElement('span');
     restore.className = 'fragment';
     restore.setAttribute('data-restore', '');
     restore.setAttribute('aria-hidden', 'true');
-    // a delay on the last step moves on to the next slide, as a timed last build is followed by
-    // the transition in PowerPoint and Keynote, hence the restore step after it is passed at once
-    if (last.some(delayed)) restore.setAttribute(AUTOSLIDE, '1');
     slide.append(restore);
   }
 }
@@ -95,7 +102,7 @@ export function addRestoreSteps(root: ParentNode): void {
  */
 export function applySteps(slide: Element): void {
   const frags = [...slide.querySelectorAll<HTMLElement>('.fragment')];
-  if (!slide.querySelector('section')) slide.toggleAttribute('data-complete', frags.every((f) => f.classList.contains('visible')));
+  if (!slide.querySelector('section')) slide.toggleAttribute('data-complete', !slide.hasAttribute(MOVES_ON) && frags.every((f) => f.classList.contains('visible')));
   const names = [...new Set(frags.flatMap((f) => words(f.dataset.highlight)))];
   if (!names.length && !frags.some((f) => f.hasAttribute('data-keep'))) return;
   const select = (name: string) => `.${CSS.escape(name)}`;
@@ -138,6 +145,15 @@ export function initSteps(deck: Deck): void {
   for (const type of ['fragmentshown', 'fragmenthidden', 'slidechanged']) deck.on(type, mark);
   mark();
   void typeset().then(mark);
+  // reveal.js takes current-fragment off every fragment of a slide it leaves forward, hence the
+  // last step of a slide marked data-moves-on is current again for the transition
+  deck.on('slidechanged', (event) => {
+    const { previousSlide: from, currentSlide: to } = event as SlideEvent;
+    if (!from?.hasAttribute(MOVES_ON) || !to || deck.getSlides().indexOf(to) < deck.getSlides().indexOf(from)) return;
+    const frags = [...from.querySelectorAll<HTMLElement>('.fragment')];
+    const last = Math.max(...frags.map((f) => Number(f.dataset.fragmentIndex)).filter(Number.isFinite));
+    for (const f of frags) if (Number(f.dataset.fragmentIndex) === last) f.classList.add('current-fragment');
+  });
 }
 
 // a step that starts After Previous is shown by reveal.js a delay after the step before, with
