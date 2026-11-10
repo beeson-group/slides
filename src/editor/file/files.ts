@@ -37,8 +37,18 @@ const REPLACE = (): string => `Replace ${fileName()} in ${folder()} with it, or 
 export const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
 const clock = (): string => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+// the files that a text of the deck names and that are not on the disk yet, e.g. a new image under
+// media/, written next to the deck before the text, or downloaded with it. each returns a sentence
+// for the state, empty when it did not have anything to do
+export type Companions = { write(text: string, deck: FileSystemFileHandle): Promise<string>; download(text: string): string };
+let companions: Companions | null = null;
+export const setCompanions = (c: Companions): void => {
+  companions = c;
+};
+
 // a copy of the file for a browser that cannot write it in place
-export function download(name: string, text: string): void {
+export function download(name: string, text: string): string {
+  const note = companions?.download(text) ?? '';
   const url = URL.createObjectURL(new Blob([text], { type: 'text/html' }));
   const a = make('a');
   a.href = url;
@@ -47,12 +57,15 @@ export function download(name: string, text: string): void {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
+  return note;
 }
 
-export async function write(to: FileSystemFileHandle, text: string): Promise<void> {
+export async function write(to: FileSystemFileHandle, text: string): Promise<string> {
+  const note = (await companions?.write(text, to)) ?? '';
   const writable = await to.createWritable();
   await writable.write(text);
   await writable.close();
+  return note;
 }
 
 // the file is asked for with the save picker and kept in app.handle, and false is returned when
@@ -282,11 +295,11 @@ export function install(app: App): void {
     const edits = plural(n, 'edit');
     let text: string;
     if (app.handle) {
-      await write(app.handle, rendered.text);
-      text = n ? `Saved ${edits} to ${app.handle.name} at ${clock()}` : `Saved ${app.handle.name} at ${clock()}`;
+      const also = await write(app.handle, rendered.text);
+      text = (n ? `Saved ${edits} to ${app.handle.name} at ${clock()}` : `Saved ${app.handle.name} at ${clock()}`) + (also ? `. ${also}` : '');
     } else {
-      download(fileName(), rendered.text);
-      text = `${n ? `Saved a copy with ${edits}` : `Saved a copy of ${fileName()}`}. ${REPLACE()}`;
+      const also = download(fileName(), rendered.text);
+      text = `${n ? `Saved a copy with ${edits}` : `Saved a copy of ${fileName()}`}. ${REPLACE()}${also ? `. ${also}` : ''}`;
     }
     app.saved = rendered.text;
     // the typing after a save is a new entry of the history, hence a discard can stop at the save
