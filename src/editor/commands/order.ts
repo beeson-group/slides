@@ -8,6 +8,7 @@
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { locked, placeOf, record, writePlace } from '../canvas/drag.ts';
+import { RESIZABLE, containerOf } from '../canvas/hit.ts';
 
 export type Order = 'front' | 'forward' | 'backward' | 'back';
 
@@ -58,14 +59,20 @@ const selectedEls = (app: App): Element[] => {
   return els.filter((e) => !els.some((o) => o !== e && o.contains(e)) && !!app.pairing?.elements.get(e)?.open);
 };
 
+// the elements that the order commands move: the figure of an image, a video, or a QR code
+// selected inside it, since the picture is drawn in the layer of its figure, and else the selected
+// element
+const orderedEls = (app: App): Element[] => [...new Set(selectedEls(app).map((el) => (el.matches(RESIZABLE) ? containerOf(app, el) : null) ?? el))];
+
 const canOrder = (app: App, order: Order): boolean => {
-  const els = selectedEls(app);
+  const els = orderedEls(app);
   const set = new Set(els);
   return els.some((el) => targetOf(app, el, order, set) !== null);
 };
 
 async function reorder(app: App, order: Order): Promise<void> {
-  const els = selectedEls(app);
+  const before = app.selection.elements().slice();
+  const els = orderedEls(app);
   const set = new Set(els);
   const up = order === 'front' || order === 'forward';
   // the elements in the order that keeps their own order: the last first for a move up
@@ -74,7 +81,7 @@ async function reorder(app: App, order: Order): Promise<void> {
     if (!target) continue;
     await app.doc.move(el, el.parentElement!, up ? target.nextSibling : target, 'order');
   }
-  app.selection.set('elements', els);
+  app.selection.set('elements', before.filter((el) => el.isConnected));
   app.invalidate('content');
 }
 
