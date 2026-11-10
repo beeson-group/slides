@@ -7,7 +7,7 @@
 import { RAW_TEXT, type Range } from './tokens.ts';
 import { VOID, rawRange, type Piece, type Source, type SrcComment, type SrcEl, type SrcText } from './source.ts';
 import type { MathInfo, MathLookup } from './math.ts';
-import { renderTag, type TagEdit } from './tags.ts';
+import { mergeEdit, renderTag, stateOf, type TagEdit } from './tags.ts';
 
 export type LivePiece = { kind: 'text'; text: string; node: Text } | ({ kind: 'math'; node: Element } & MathInfo);
 
@@ -219,7 +219,7 @@ function serializeText(source: Source, s: SrcText, it: Item & { kind: 'text' }):
 
 // the content of el as it is written into the file. each child of el is matched to the next child
 // of s of its kind, and a matched child is copied from the file where it is unchanged
-function serializeChildren(source: Source, s: SrcEl, el: Element, math: MathLookup): string {
+function serializeChildren(source: Source, s: SrcEl, el: Element, math: MathLookup, tags: Map<Element, TagEdit>): string {
   const text = source.text;
   const items = virtualChildren(el, math);
   const kids = s.children;
@@ -231,7 +231,7 @@ function serializeChildren(source: Source, s: SrcEl, el: Element, math: MathLook
       while (k < kids.length && !(kids[k].kind === 'element' && sameTag(it.el, kids[k] as SrcEl))) k++;
       if (k < kids.length) {
         c = k + 1;
-        parts.push(serializeElement(source, kids[k] as SrcEl, it.el, math));
+        parts.push(serializeElement(source, kids[k] as SrcEl, it.el, math, tags));
       } else parts.push(serializeNew(source, it.el, math));
       continue;
     }
@@ -246,20 +246,66 @@ function serializeChildren(source: Source, s: SrcEl, el: Element, math: MathLook
   return parts.join('');
 }
 
-function serializeElement(source: Source, s: SrcEl, el: Element, math: MathLookup): string {
+// the classes put on an element at run time by the editor, reveal.js, and the theme, e.g. hl-target
+// on a span colored at a step, which are not written into the file
+const RUNTIME_PREFIX = /^(beeson-|hl-|plot-)/;
+const RUNTIME_CLASSES = new Set(['visible', 'current-fragment', 'present', 'past', 'future', 'disabled', 'enabled', 'stack']);
+export const isRuntimeClass = (c: string): boolean => RUNTIME_PREFIX.test(c) || RUNTIME_CLASSES.has(c);
+// the declarations and the attributes of an element inside a block that are compared with the
+// file, i.e. those that the editor writes under the scope rule
+const LIVE_STYLE = ['translate', 'rotate', 'width', 'font-size', 'text-align'];
+const LIVE_ATTRS = ['alt', 'src', 'poster', 'href', 'muted', 'loop', 'colspan', 'rowspan'];
+
+let probe: HTMLElement | null = null;
+
+// the changes of an element inside a block on the page, against its start tag in the file. the
+// declarations of the file are read by the browser as those of the page are, so that a value is
+// compared in one spelling
+function liveEdit(s: SrcEl, el: Element): TagEdit {
+  const file = stateOf(s.attrs);
+  const edit: TagEdit = {};
+  const live = [...el.classList].filter((c) => !isRuntimeClass(c));
+  const classes: Record<string, boolean> = {};
+  for (const c of live) if (!file.classes.includes(c)) classes[c] = true;
+  for (const c of file.classes) if (!live.includes(c)) classes[c] = false;
+  if (Object.keys(classes).length) edit.classes = classes;
+  const style = (el as HTMLElement).style;
+  if (style) {
+    probe ??= document.createElement('div');
+    probe.setAttribute('style', file.attrs.style ?? '');
+    const decls: Record<string, string | null> = {};
+    for (const name of LIVE_STYLE) {
+      const now = style.getPropertyValue(name);
+      if (now !== probe.style.getPropertyValue(name)) decls[name] = now || null;
+    }
+    if (Object.keys(decls).length) edit.style = decls;
+  }
+  const attrs: Record<string, string | null> = {};
+  for (const name of LIVE_ATTRS) {
+    const now = el.getAttribute(name);
+    if (now !== (file.attrs[name] ?? null)) attrs[name] = now;
+  }
+  if (Object.keys(attrs).length) edit.attrs = attrs;
+  return edit;
+}
+
+// an element inside a block, with its start tag written again when it was changed on the page or
+// by a tag edit, which is applied here since the block is one splice of the file
+function serializeElement(source: Source, s: SrcEl, el: Element, math: MathLookup, tags: Map<Element, TagEdit>): string {
   const text = source.text;
-  const open = s.open ? text.slice(s.open.start, s.open.end) : '';
+  let open = s.open ? text.slice(s.open.start, s.open.end) : '';
+  if (s.open) open = renderTag(text, s.open, s.attrs, mergeEdit(liveEdit(s, el), tags.get(el) ?? {})) ?? open;
   const close = s.close ? text.slice(s.close.start, s.close.end) : '';
   if (VOID.has(s.tag)) return open;
   if (RAW_TEXT.has(s.tag)) {
     const inner = innerRange(s);
     return open + (inner ? text.slice(inner.start, inner.end) : '') + close;
   }
-  return open + serializeChildren(source, s, el, math) + close;
+  return open + serializeChildren(source, s, el, math, tags) + close;
 }
 
-export function renderBlock(source: Source, block: Block, math: MathLookup): string {
-  return serializeChildren(source, block.src, block.live, math);
+export function renderBlock(source: Source, block: Block, math: MathLookup, tags: Map<Element, TagEdit> = new Map()): string {
+  return serializeChildren(source, block.src, block.live, math, tags);
 }
 
 // the range of an element removed on the page, with its line when nothing else is on it
@@ -308,7 +354,7 @@ export function renderDeck(source: Source, pairing: Pairing, math: MathLookup, t
       }
       continue;
     }
-    const inner = renderBlock(source, b, math);
+    const inner = renderBlock(source, b, math, tags);
     if (inner !== source.text.slice(range.start, range.end)) {
       edits.push({ start: range.start, end: range.end, text: inner });
       changed.push(b);
