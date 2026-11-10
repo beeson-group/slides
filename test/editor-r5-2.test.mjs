@@ -608,3 +608,47 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the screen points of the end, the middle of the arrowhead, and the tip of the arrowhead at the
+// end 2 of the line of the current slide, and what is drawn at each
+const arrowAt = (page) => page.evaluate(`(() => {
+  const svg = Reveal.getCurrentSlide().querySelector('svg.line');
+  const l = svg.querySelector('line'), r = svg.getBoundingClientRect(), k = r.width / svg.width.baseVal.value;
+  const n = (a) => Number(l.getAttribute(a));
+  const end = { x: r.left + n('x2') * k, y: r.top + n('y2') * k };
+  const len = Math.hypot(n('x2') - n('x1'), n('y2') - n('y1'));
+  const d = { x: (n('x2') - n('x1')) / len, y: (n('y2') - n('y1')) / len };
+  const sw = parseFloat(getComputedStyle(l).strokeWidth) * k;
+  const at = (u) => ({ x: end.x + d.x * u * sw, y: end.y + d.y * u * sw });
+  const hit = (p) => document.elementsFromPoint(p.x, p.y).some((e) => e.matches('.beeson-line-end'));
+  const head = at(-1.5), tip = at(0.8);
+  return { end, head: hit(head), tip: hit(tip), grip: [...document.querySelectorAll('.beeson-line-end')].filter((g) => !g.hidden && g.dataset.end === '2').map((g) => { const b = g.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })[0] };
+})()`);
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: the grips of a selected arrow leave its arrowhead in view, its end is dragged by its grip, and the selection counts it`, async () => {
+    const page = await editor(platform);
+    await exec(page, 'insert.arrow', { from: { x: 300, y: 980 }, to: { x: 900, y: 980 } });
+    await frames(page);
+    const at = await arrowAt(page);
+    assert.ok(at.grip, 'the end of the arrow does not have a grip');
+    assert.ok(!at.head && !at.tip, `a grip covers the arrowhead: ${JSON.stringify(at)}`);
+    const sel = await page.evaluate('window.BeesonEditor.selection?.()');
+    assert.equal(Array.isArray(sel) ? sel.length : sel?.elements?.length, 1, 'BeesonEditor.selection() does not count the selected arrow');
+    // a drag of the grip moves the end by the drag, without a jump to the pointer
+    const k = await scaleOf(page);
+    await drag(page, at.grip, { dx: 0, dy: -100 * k, modifiers: platform === 'mac' ? 'Meta' : 'Alt' });
+    await frames(page);
+    const moved = await arrowAt(page);
+    assert.ok(near(moved.end.x, at.end.x, 1.5) && near(moved.end.y, at.end.y - 100 * k, 1.5), `the end dragged by 100 up is at ${JSON.stringify(moved.end)}, from ${JSON.stringify(at.end)}`);
+    const edited = await render(page);
+    await undo(page);
+    await frames(page);
+    assert.ok((await render(page)).includes('marker-end'), 'an undo removes the arrow');
+    await redo(page);
+    assert.equal(await render(page), edited);
+    await inScope(page);
+    await saveAndReopen(page, `r5-2-${++saves}.html`);
+    assert.deepEqual(errors(page), []);
+  });
+}
