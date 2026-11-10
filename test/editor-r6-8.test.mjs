@@ -454,7 +454,7 @@ for (const platform of PLATFORMS) {
     await frames(page);
     const start = await cornerOf(page);
     assert.deepEqual(await positionOf(page), { x: String(start.x), y: String(start.y) }, 'the fields do not give the position of the figure in place');
-    const img = await page.evaluate(`(() => { const r = document.querySelector(${js(IMG)}).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    const img = await page.evaluate(`(() => { const r = [...document.querySelectorAll(${js(IMG)})].map((e) => e.getBoundingClientRect()).find((b) => b.width); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
     const { drag } = await import('./helpers/editor.mjs');
     await drag(page, img, { dx: -70, dy: 45, hold: true });
     await frames(page);
