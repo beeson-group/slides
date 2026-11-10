@@ -1,6 +1,7 @@
 // the navigator at the left, as the slide navigator of Keynote: a thumbnail of each slide with its
-// number in the scheme of the theme, three dots on a slide with steps, and a hidden slide collapsed
-// to a thin double bar without a number. a click selects a slide, Shift extends the selection to a
+// number in the scheme of the theme, three dots on a slide with steps, a corner at the lower right
+// of a slide with a transition other than the default Fade or None, as the corner of Keynote, and a
+// hidden slide collapsed to a thin double bar without a number. a click selects a slide, Shift extends the selection to a
 // range, and the command modifier adds or removes one slide. a drag moves the selected slides, with
 // a line at the place where they are dropped. image and video files dropped onto a row make a new
 // figure slide after it with the files in its plate, as a drop onto the navigator of Keynote. a
@@ -10,6 +11,7 @@ import type { App, Pane } from '../app.ts';
 import { layersOf, showLayer } from '../layers.ts';
 import { insertFiles } from '../media/actions.ts';
 import { kindOf } from '../media/store.ts';
+import { transitionOf } from '../review/transitions.ts';
 import { injectStyle, stored, store } from '../ui/dom.ts';
 import { drawInto, type Thumbs } from './thumbs.ts';
 
@@ -27,6 +29,14 @@ export function describe(slide: Element): { title: string; kind: string } {
   const title = (heading?.textContent ?? '').replace(/\s+/g, ' ').trim() || 'Untitled slide';
   const kind = LAYOUTS.find((c) => slide.classList.contains(c)) ?? 'content';
   return { title, kind };
+}
+
+// the name of the transition of slide, or null for the default Fade and for None
+function transitionName(app: App, slide: Element): string | null {
+  const t = transitionOf(app, slide);
+  if (t === 'magic') return 'Magic Move';
+  if (t === null) return slide.getAttribute('data-transition');
+  return null;
 }
 
 export const isHidden = (slide: Element): boolean => slide.getAttribute('data-visibility') === 'hidden';
@@ -71,9 +81,11 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
 .beeson-edit-nav .row .dots { position: absolute; left: 6px; bottom: 5px; display: flex; gap: 3px; pointer-events: none; }
 .beeson-edit-nav .row .dots[hidden] { display: none; }
 .beeson-edit-nav .row .dots i { width: 5px; height: 5px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45); }
+.beeson-edit-nav .row .trans { position: absolute; right: 0; bottom: 0; width: 14px; height: 14px; border-bottom-right-radius: 5px; background: var(--nav-select); clip-path: polygon(100% 0, 100% 100%, 0 100%); pointer-events: none; }
+.beeson-edit-nav .row .trans[hidden] { display: none; }
 .beeson-edit-nav .row.skip { align-items: center; padding-top: 2px; padding-bottom: 2px; }
 .beeson-edit-nav .row.skip .frame { height: 5px; box-shadow: none; outline: 0; border-top: 1px solid var(--nav-muted); border-bottom: 1px solid var(--nav-muted); border-radius: 0; }
-.beeson-edit-nav .row.skip .pic, .beeson-edit-nav .row.skip .dots { display: none; }
+.beeson-edit-nav .row.skip .pic, .beeson-edit-nav .row.skip .dots, .beeson-edit-nav .row.skip .trans { display: none; }
 .beeson-edit-nav .row.skip[aria-selected="true"] .frame { outline: 0; border-color: var(--nav-select); }
 .beeson-edit-nav .row.dragged { opacity: 0.35; }
 .beeson-edit-nav .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
@@ -90,7 +102,7 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
 .beeson-edit-peek .fragment.beeson-off { visibility: hidden !important; }
 `;
 
-type Row = { el: HTMLButtonElement; no: HTMLElement; pic: HTMLElement; dots: HTMLElement; num: HTMLElement; title: HTMLElement; kind: HTMLElement };
+type Row = { el: HTMLButtonElement; no: HTMLElement; pic: HTMLElement; dots: HTMLElement; trans: HTMLElement; num: HTMLElement; title: HTMLElement; kind: HTMLElement };
 
 type Drag = { slide: Element; x: number; y: number; id: number; on: boolean; slides: Element[]; gap: number; ghost: HTMLElement | null; scroll: number };
 
@@ -248,7 +260,10 @@ export class Navigator implements Pane {
     const dots = document.createElement('span');
     dots.className = 'dots';
     dots.append(document.createElement('i'), document.createElement('i'), document.createElement('i'));
-    frame.append(pic, dots);
+    const trans = document.createElement('span');
+    trans.className = 'trans';
+    trans.hidden = true;
+    frame.append(pic, dots, trans);
     const sr = (cls: string) => {
       const s = document.createElement('span');
       s.className = `${cls} sr`;
@@ -267,7 +282,7 @@ export class Navigator implements Pane {
       if (!this.drag) this.timer = window.setTimeout(() => this.showPeek(slide, el), PEEK_DELAY);
     });
     el.addEventListener('pointerleave', () => this.hidePeek());
-    return { el, no, pic, dots, num, title, kind };
+    return { el, no, pic, dots, trans, num, title, kind };
   }
 
   // the rows follow the slides of the deck, their numbers, titles, steps, and hidden state, and
@@ -304,7 +319,9 @@ export class Navigator implements Pane {
       if (row.kind.textContent !== kind) row.kind.textContent = kind;
       row.el.classList.toggle('skip', hidden);
       row.dots.hidden = !steps;
-      const label = `Slide ${i + 1}${nums[i] && nums[i] !== String(i + 1) ? `, numbered ${nums[i]}` : ''}: ${title}${hidden ? ', hidden' : ''}${steps ? ', with steps' : ''}`;
+      const effect = transitionName(this.app, slide);
+      row.trans.hidden = !effect;
+      const label = `Slide ${i + 1}${nums[i] && nums[i] !== String(i + 1) ? `, numbered ${nums[i]}` : ''}: ${title}${hidden ? ', hidden' : ''}${steps ? ', with steps' : ''}${effect ? `, with the transition ${effect}` : ''}`;
       if (row.el.getAttribute('aria-label') !== label) row.el.setAttribute('aria-label', label);
       row.el.title = `Slide ${i + 1}: ${title}`;
     });
