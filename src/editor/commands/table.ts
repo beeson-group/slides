@@ -287,12 +287,29 @@ async function sortRows(app: App, t: Target, descending: boolean): Promise<void>
 }
 
 // a table of rows of cells put at its place in the layout of the current slide, and then moved
-// where it fits by placeTable, with every row
-async function insertTable(app: App, rows: string[][]): Promise<HTMLTableElement> {
-  const { parent, before } = columnPlace(app, app.current()!);
+// where it fits by placeTable, with every row, or put into the empty zone into
+async function insertTable(app: App, rows: string[][], into: Element | null = null): Promise<HTMLTableElement> {
+  const { parent, before } = into ? { parent: into, before: null } : columnPlace(app, app.current()!);
   const [table] = await app.doc.insert(tableHtml(rows, styleOf(app), baseOf(app, parent)), parent, before, 'insert table');
-  placeTable(app, table as HTMLTableElement);
+  if (!into) placeTable(app, table as HTMLTableElement);
   return table as HTMLTableElement;
+}
+
+// a new empty table of size, as one entry of the history, with the caret in its first cell
+async function newTable(app: App, size: Size, into: Element | null = null): Promise<void> {
+  const rows = Math.max(1, Math.min(MOST.rows, Math.round(size.rows)));
+  const columns = Math.max(1, Math.min(MOST.columns, Math.round(size.columns)));
+  const table = await app.history.transact('Insert Table', () => insertTable(app, emptyRows(rows, columns), into));
+  const first = table.rows[0]?.cells[0];
+  if (first) placeCaret(first, 0);
+}
+
+// the table picker opened at anchor, e.g. by the table button of the placeholder of an empty zone,
+// whose table is put into the zone
+export function pickTableInto(app: App, zone: Element, anchor: DOMRect): void {
+  const fail = (e: unknown) => app.fail(e);
+  const into = (size: Size) => (zone.isConnected ? newTable(app, size, zone) : Promise.resolve()).catch(fail);
+  openPicker(app, anchor, (s) => void into(s), () => void askSize(app).then((s) => s && into(s)).catch(fail));
 }
 
 const TEXT = 'h1, h2, h3, h4, p, ul, ol, dl, table, pre, blockquote, div.math';
@@ -1170,11 +1187,7 @@ export function install(app: App): void {
     run: async (a, arg) => {
       const size = arg && typeof arg === 'object' && 'rows' in arg ? (arg as Size) : null;
       if (!size) return openPicker(a, toolbarButton('insert.table'), (s) => void a.commands.run('insert.table', s).catch(fail), () => void a.commands.run('insert.tableSize').catch(fail));
-      const rows = Math.max(1, Math.min(MOST.rows, Math.round(size.rows)));
-      const columns = Math.max(1, Math.min(MOST.columns, Math.round(size.columns)));
-      const table = await a.history.transact('Insert Table', () => insertTable(a, emptyRows(rows, columns)));
-      const first = table.rows[0]?.cells[0];
-      if (first) placeCaret(first, 0);
+      await newTable(a, size);
     },
   });
 

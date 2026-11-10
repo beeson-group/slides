@@ -5,6 +5,7 @@
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
@@ -50,6 +51,8 @@ const meets = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom
 async function load(t, platform, { deck = DECK, n = 0 } = {}) {
   const page = await browser.newPage(SIZES[platform]);
   t.after(() => page.close().catch(() => {}));
+  // the file chooser of the browser is given its files by the test, as in editor-media.test.mjs
+  await page.send('Page.setInterceptFileChooserDialog', { enabled: true });
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
@@ -188,5 +191,105 @@ for (const platform of PLATFORMS) {
     await frames(page);
     assert.equal((await state(page, 'table.sortAscending')).enabled, false);
     assert.equal((await state(page, 'table.sortDescending')).enabled, false);
+  });
+}
+
+// the deck of empty zones: a split slide and a content slide with an empty zone each, and a figure
+// slide with an empty plate
+const EMPTY = 'test/pages/editor-empty-zone.html';
+const PLACEHOLDER = '.reveal section.present .beeson-placeholder';
+const shownPlaceholders = (page) => page.evaluate(`[...document.querySelectorAll('.reveal section.present .beeson-placeholder')].filter((p) => p.getBoundingClientRect().width > 0).length`);
+const buttonOf = (page, label) => rect(page, `${PLACEHOLDER} button[aria-label="${label}"]`);
+
+// state 98 of round 3: an empty zone was drawn as nothing until a file was dragged over it, where
+// PowerPoint draws a content placeholder with icons that insert into it
+for (const platform of PLATFORMS) {
+  test(`an empty zone or plate is drawn with a placeholder of the editor only, which a save does not write (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: EMPTY, n: 0 });
+    for (const n of [0, 1, 2]) {
+      await page.evaluate(`Reveal.slide(${n})`);
+      await frames(page);
+      assert.equal(await shownPlaceholders(page), 1, `slide ${n} does not show one placeholder`);
+      const labels = await page.evaluate(`[...document.querySelectorAll('${PLACEHOLDER} button')].map((b) => b.getAttribute('aria-label'))`);
+      assert.deepEqual(labels, ['Insert Image', 'Insert Video', 'Insert Table', 'Insert QR Code']);
+      const slot = await rect(page, '.reveal section.present :is(.zone, .plate)');
+      const box = await rect(page, PLACEHOLDER);
+      assert.ok(box.left >= slot.left - 0.5 && box.right <= slot.right + 0.5 && box.top >= slot.top - 0.5 && box.bottom <= slot.bottom + 0.5, `the placeholder at ${js(box)} is not inside its slot at ${js(slot)}`);
+      // the icons are at the center of the slot
+      const icon = await buttonOf(page, 'Insert Table');
+      assert.ok(icon.x > slot.left + slot.width / 4 && icon.x < slot.right - slot.width / 4, 'the icons are not at the center of the slot');
+      // the placeholder does not have text, since a slot with text is not empty
+      assert.equal(await page.evaluate(`document.querySelector('${PLACEHOLDER}').textContent`), '');
+    }
+    // a thumbnail of the navigator does not draw the placeholder
+    const thumb = await page.evaluate(`(() => {
+      const hosts = [...document.querySelectorAll('.beeson-edit-nav *')].filter((h) => h.shadowRoot?.querySelector('.beeson-thumb'));
+      return hosts.map((h) => [...h.shadowRoot.querySelectorAll('.beeson-placeholder')].filter((p) => p.getBoundingClientRect().width > 0).length);
+    })()`);
+    assert.ok(thumb.length >= 3, `the navigator draws ${thumb.length} thumbnails`);
+    assert.deepEqual([...new Set(thumb)], [0]);
+    assert.equal(await render(page), page.source);
+    const { text } = await saveAndReopen(page, `r7-8-${++saves}.html`);
+    assert.equal(text, page.source, 'the save of a deck with empty zones changed the file');
+    assert.equal(await page.evaluate(`window.BeesonEditor.status().dirty`), false);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`the QR Code icon of a placeholder inserts a QR code into its zone, and an undo draws the placeholder again (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: EMPTY, n: 0 });
+    await click(page, await buttonOf(page, 'Insert QR Code'));
+    await page.waitFor(`!!document.querySelector('.reveal section.present .zone > .qr')`);
+    await frames(page);
+    assert.equal(await shownPlaceholders(page), 0);
+    assert.equal(await undoLabel(page), 'Undo QR Code');
+    await undo(page);
+    await frames(page);
+    await byteExact(page);
+    assert.equal(await shownPlaceholders(page), 1);
+    await redo(page);
+    await frames(page);
+    assert.equal(await shownPlaceholders(page), 0);
+    const edited = await roundTrip(page);
+    assert.match(edited, /<div class="zone">\s*<div class="qr" data-qr="https:\/\/example.com"><\/div>\s*<\/div>/);
+  });
+
+  test(`the Table icon of a placeholder inserts a table of the size chosen into its zone (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: EMPTY, n: 1 });
+    await click(page, await buttonOf(page, 'Insert Table'));
+    await page.waitFor(`!!document.querySelector('dialog.beeson-table-picker[open]')`);
+    // the cell of the second row and the second column of the grid of 10 columns
+    await click(page, await rect(page, '.beeson-table-picker .grid > :nth-child(12)'));
+    await page.waitFor(`!!document.querySelector('.reveal section.present .zone > table')`);
+    await frames(page);
+    assert.deepEqual(await page.evaluate(`[...document.querySelector('.reveal section.present .zone > table').rows].map((r) => r.cells.length)`), [2, 2]);
+    assert.equal(await shownPlaceholders(page), 0);
+    assert.equal(await page.evaluate('document.activeElement.localName'), 'th');
+    assert.equal(await undoLabel(page), 'Undo Insert Table');
+    const edited = await roundTrip(page);
+    assert.match(edited, /<div class="zone">\s*<table>\s*<tbody>\s*<tr><th><\/th><th><\/th><\/tr>\s*<tr><td><\/td><td><\/td><\/tr>\s*<\/tbody>\s*<\/table>\s*<\/div>/);
+  });
+
+  test(`the Image icon of a placeholder inserts the file chosen into its plate (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: EMPTY, n: 2 });
+    await click(page, await buttonOf(page, 'Insert Image'));
+    await page.waitFor(`!!document.querySelector('input.beeson-media-input')`);
+    const { result } = await page.send('Runtime.evaluate', { expression: `document.querySelector('input.beeson-media-input')` });
+    await page.send('DOM.setFileInputFiles', { files: [resolve('demo/figure-light.png')], objectId: result.objectId });
+    await page.waitFor(`!!document.querySelector('.reveal section.present .plate > img')`);
+    await frames(page);
+    assert.equal(await shownPlaceholders(page), 0);
+    assert.equal(await undoLabel(page), 'Undo Image');
+    const edited = await render(page);
+    assert.equal(edited, page.source.replace('<div class="plate"></div>', '<div class="plate">\n    <img src="media/figure-light.png">\n  </div>'));
+    await undo(page);
+    await frames(page);
+    await byteExact(page);
+    assert.equal(await shownPlaceholders(page), 1);
+    await redo(page);
+    assert.equal(await render(page), edited);
+    // a save of a new file asks for the folder of the deck, which editor-media.test.mjs stubs, hence
+    // the text is opened again without a save
+    assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${js(edited)})`)).problems, []);
+    assert.deepEqual(errors(page), []);
   });
 }
