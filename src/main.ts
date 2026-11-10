@@ -184,7 +184,7 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   initChrome();
   initSteps(deck);
   // the editor shows every step, and it does not play a delay
-  if (!EDITING) initTimedSteps(deck);
+  if (!EDITING) initTimedSteps(deck, forDeck);
   remount();
   initCursor(() => backdrops, () => deck.getCurrentSlide(), !EDITING);
   deck.addKeyBinding({ keyCode: 68, key: 'D', description: 'Switch dark and light' }, (ev) => { if (forDeck(ev)) toggle(); });
