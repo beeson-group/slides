@@ -293,9 +293,11 @@ for (const platform of PLATFORMS) {
     const labels = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item .label')].map((l) => l.textContent)`);
     assert.ok(labels.includes('Copy'), JSON.stringify(labels));
     assert.ok(!labels.includes('Edit Text'), `the context menu of the picture lists Edit Text: ${JSON.stringify(labels)}`);
+    // Esc closes the menu, and Esc again clears the figure, since a click into a selected figure
+    // selects its image. Return on the selected figure puts the caret into its caption
+    await press(page, 'Escape');
     await press(page, 'Escape');
     await frames(page);
-    // Return on the selected figure puts the caret into its caption
     await click(page, img);
     await frames(page);
     await press(page, 'Enter');
