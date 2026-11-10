@@ -15,7 +15,8 @@ export const BY_ITSELF = 'img, video, figure, .zone, .plate, .qr';
 export const OUTSIDE = 'aside.notes, .backdrop';
 // the elements whose width the editor writes, by the scope rule of the plan
 export const RESIZABLE = 'img, video, .qr, tycho-viewer';
-// a figure whose size is set by its layout, drawn with handles that cannot be dragged
+// a figure whose size is set by its layout. its grips resize the image, video, or QR code that it
+// holds, and a figure that does not hold one is drawn without grips
 export const CONTAINER = 'figure, .zone, .plate';
 // the band outside a block in which a press selects the block, in screen pixels
 export const BAND = 6;
@@ -51,12 +52,57 @@ export function visualRect(el: Element): Box {
   return { left: r.left + at(px, r.width - w), top: r.top + at(py, r.height - h), width: w, height: h };
 }
 
+// the picture of el inside its own box, in CSS px of el without its scale and rotation: its size,
+// and the offset of its center from the center of the box
+function pictureIn(el: Element): { width: number; height: number; dx: number; dy: number } {
+  const h = el as HTMLElement;
+  const box = { width: h.offsetWidth, height: h.offsetHeight, dx: 0, dy: 0 };
+  const natural = el instanceof HTMLImageElement ? [el.naturalWidth, el.naturalHeight] : el instanceof HTMLVideoElement ? [el.videoWidth, el.videoHeight] : null;
+  const style = getComputedStyle(el);
+  if (!natural || !natural[0] || !natural[1] || !box.width || !box.height || (style.objectFit !== 'contain' && style.objectFit !== 'scale-down')) return box;
+  let s = Math.min(box.width / natural[0], box.height / natural[1]);
+  if (style.objectFit === 'scale-down') s = Math.min(s, 1);
+  const w = natural[0] * s, ht = natural[1] * s;
+  const [px, py] = style.objectPosition.split(/\s+/);
+  const at = (v: string | undefined, room: number) => (!v ? room / 2 : v.endsWith('%') ? (parseFloat(v) / 100) * room : parseFloat(v) || 0);
+  return { width: w, height: ht, dx: at(px, box.width - w) + w / 2 - box.width / 2, dy: at(py, box.height - ht) + ht / 2 - box.height / 2 };
+}
+
+// the box of the picture of el on the screen, without the rotation by deg of el or of the figure
+// around it, about the center of the picture as it is seen. scale is the screen pixels per slide
+// pixel. an element that is not rotated has the box of visualRect
+export function orientedBox(el: Element, scale: number, deg: number): Box {
+  if (!deg) return visualRect(el);
+  const r = el.getBoundingClientRect();
+  const p = pictureIn(el);
+  const a = (deg * Math.PI) / 180;
+  const cx = r.left + r.width / 2 + (p.dx * Math.cos(a) - p.dy * Math.sin(a)) * scale;
+  const cy = r.top + r.height / 2 + (p.dx * Math.sin(a) + p.dy * Math.cos(a)) * scale;
+  return { left: cx - (p.width * scale) / 2, top: cy - (p.height * scale) / 2, width: p.width * scale, height: p.height * scale };
+}
+
 // the ratio of width to height that a resize of el keeps: the picture of an image or a video, and
 // the box of a QR code. a tycho viewer keeps its height, hence it does not have one
 export function aspectOf(el: Element): number | null {
   if (el.matches('tycho-viewer')) return null;
-  const r = visualRect(el);
-  return r.width && r.height ? r.width / r.height : null;
+  const p = pictureIn(el);
+  return p.width && p.height ? p.width / p.height : null;
+}
+
+// the elements whose width a resize of el writes: el itself, or the images, videos, and QR codes
+// that a figure holds, e.g. the image of each mode. a figure that holds two shown pictures, or
+// none, is not resized
+export function sizedOf(el: Element): Element[] {
+  if (el.matches(RESIZABLE)) return [el];
+  if (!el.matches(CONTAINER)) return [];
+  const held = [...el.querySelectorAll(RESIZABLE)].filter((m) => m.parentElement?.closest(MOVABLE) === el);
+  return held.filter((m) => m.getBoundingClientRect().width > 0).length === 1 ? held : [];
+}
+
+// the element whose picture stands for el in its frame and its resize: the shown image, video, or
+// QR code of a figure, or el itself
+export function pictureOf(el: Element): Element {
+  return sizedOf(el).find((m) => m !== el && m.getBoundingClientRect().width > 0) ?? el;
 }
 
 // the element that a drag at target would move, or null

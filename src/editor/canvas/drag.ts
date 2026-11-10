@@ -10,7 +10,7 @@ import type { App } from '../app.ts';
 import type { TagEdit, Translate } from '../tags.ts';
 import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
-import { BY_ITSELF, RESIZABLE, aspectOf, bandAt, containerOf, frameOf, hasText, mediaIn, movableOf, movablesOf, onCanvas, toSlide, visualRect } from './hit.ts';
+import { BY_ITSELF, RESIZABLE, aspectOf, bandAt, containerOf, frameOf, hasText, mediaIn, movableOf, movablesOf, onCanvas, orientedBox, pictureOf, sizedOf, toSlide, visualRect } from './hit.ts';
 import { overlay, view } from './frames.ts';
 import { freshGroup } from '../commands/order.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -101,6 +101,10 @@ type Press = {
   click: (() => void) | null;
   handle?: Handle;
   aspect?: number | null;
+  // the elements whose width a resize writes, e.g. both images of a figure, and the one shown,
+  // whose picture the resize follows. the offset of the pressed element keeps the anchor in place
+  sized?: Element[];
+  pic?: Element;
   // the selection before a marquee with Shift or the command modifier, which it adds to
   initial?: Element[];
   // the center of a rotated element on the screen, and the angle of the press about it in degrees
@@ -261,15 +265,16 @@ export function install(app: App): void {
       return;
     }
     const grip = target.closest('.beeson-grip');
-    if (grip && !grip.classList.contains('fixed') && !grip.classList.contains('locked')) {
+    if (grip && !grip.classList.contains('locked')) {
       const el = sel.only();
-      if (!el) return;
+      const sized = el ? sizedOf(el) : [];
+      if (!el || !sized.length) return;
       ev.preventDefault();
       ev.stopPropagation();
-      // the aspect of a rotated element is that of its own box, since the box seen is turned
-      const turned = placeOf(el).rotate && !el.matches('tycho-viewer');
-      const aspect = turned ? (el as HTMLElement).offsetWidth / ((el as HTMLElement).offsetHeight || 1) : aspectOf(el);
-      Object.assign(start('resize', ev, el, [el], null), { handle: (grip as HTMLElement).dataset.handle as Handle, aspect });
+      const pic = pictureOf(el);
+      const p = Object.assign(start('resize', ev, el, [el], null), { handle: (grip as HTMLElement).dataset.handle as Handle, aspect: aspectOf(pic), sized, pic });
+      for (const m of sized) if (!p.from.has(m)) p.from.set(m, placeOf(m));
+      p.base = toSlide(frameOf(app), visualRect(pic));
       document.documentElement.classList.add('beeson-resizing');
       return;
     }
@@ -396,14 +401,20 @@ export function install(app: App): void {
     app.invalidate('content');
   };
 
-  // a resize by a handle: the width is the width of the picture, and the offset is changed so that
-  // the edge or corner across from the handle stays, since the box of a figure is laid out by the
-  // theme around its width
+  // the width of every element of a resize, on the page only
+  const setWidth = (p: Press, width: number) => {
+    for (const m of p.sized ?? p.els) (m as HTMLElement).style.width = `${Math.round(width)}px`;
+  };
+
+  // a resize by a handle: the width is the width of the picture, and the offset of the pressed
+  // element, i.e. the picture or the figure around it, is changed so that the edge or corner across
+  // from the handle stays, since the box of a figure is laid out by the theme around its width
   const resize = (p: Press, ev: PointerEvent, dx: number, dy: number) => {
     const el = p.els[0];
+    const pic = p.pic ?? el;
     const f = frameOf(app);
     const o = { aspect: p.aspect ?? null, center: aboutCenter(ev) };
-    const deg = p.from.get(el)?.rotate ?? 0;
+    const deg = (p.from.get(el)?.rotate ?? 0) + (pic === el ? 0 : (p.from.get(pic)?.rotate ?? 0));
     if (deg) {
       rotatedResize(p, ev, dx, dy, deg, o);
       return;
@@ -412,14 +423,14 @@ export function install(app: App): void {
     view.guides = [];
     view.spacing = [];
     if (!freeResize(ev)) {
-      const snapped = snapResize(p.base, p.handle as Handle, box, targetsFor([el]), SNAP / f.scale, o);
+      const snapped = snapResize(p.base, p.handle as Handle, box, targetsFor([pic]), SNAP / f.scale, o);
       box = snapped.box;
       view.guides = snapped.guides;
       view.spacing = snapped.sizes;
     }
-    (el as HTMLElement).style.width = `${Math.round(box.width)}px`;
+    setWidth(p, box.width);
     // the offset that puts the anchor of the box seen where the resize put it
-    const seen = toSlide(f, visualRect(el));
+    const seen = toSlide(f, visualRect(pic));
     const h = p.handle as Handle;
     const shift = (a: 'x' | 'y') => {
       const [s, w] = a === 'x' ? ['left', 'width'] as const : ['top', 'height'] as const;
@@ -428,10 +439,10 @@ export function install(app: App): void {
       return side === 1 ? box[s] - seen[s] : box[s] + box[w] - (seen[s] + seen[w]);
     };
     const now = placeOf(el).translate ?? { x: 0, y: 0 };
-    writeLive(el, { translate: { x: now.x + shift('x'), y: now.y + shift('y') }, width: box.width });
+    writeLive(el, { translate: { x: now.x + shift('x'), y: now.y + shift('y') }, width: el.matches(RESIZABLE) ? box.width : null });
     view.moving = [el];
     view.resizing = true;
-    const after = toSlide(f, visualRect(el));
+    const after = toSlide(f, visualRect(pic));
     view.readout = { text: `${Math.round(after.width)} × ${Math.round(after.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     frames.draw();
     app.invalidate('content');
@@ -442,22 +453,30 @@ export function install(app: App): void {
   // where it was on the slide
   const rotatedResize = (p: Press, ev: PointerEvent, dx: number, dy: number, deg: number, o: { aspect: number | null; center: boolean }) => {
     const el = p.els[0] as HTMLElement;
+    const pic = p.pic ?? el;
     const f = frameOf(app);
     const a = (deg * Math.PI) / 180;
     const turn = (x: number, y: number, by: number) => ({ x: x * Math.cos(by) - y * Math.sin(by), y: x * Math.sin(by) + y * Math.cos(by) });
     const local = turn(dx, dy, -a);
     const from = p.from.get(el) as Place;
-    // the box of the element without its rotation at the press, about the center of the box seen
-    p.size ??= { width: el.offsetWidth, height: el.offsetHeight };
+    // the box of the picture without its rotation at the press, about the center of the picture
+    const center = () => {
+      const b = toSlide(f, orientedBox(pic, f.scale, deg));
+      return { x: b.left + b.width / 2, y: b.top + b.height / 2, width: b.width, height: b.height };
+    };
+    if (!p.size) {
+      const c = center();
+      p.size = { width: c.width, height: c.height };
+      p.base = { left: c.x - c.width / 2, top: c.y - c.height / 2, width: c.width, height: c.height };
+    }
     const cx = p.base.left + p.base.width / 2, cy = p.base.top + p.base.height / 2;
-    const base = { left: cx - p.size.width / 2, top: cy - p.size.height / 2, ...p.size };
-    const box = resizeBox(base, p.handle as Handle, local.x, local.y, o);
-    el.style.width = `${Math.round(box.width)}px`;
+    const box = resizeBox(p.base, p.handle as Handle, local.x, local.y, o);
+    setWidth(p, box.width);
     const move = turn(box.left + box.width / 2 - cx, box.top + box.height / 2 - cy, a);
-    const seen = toSlide(f, el.getBoundingClientRect());
+    const seen = center();
     const now = placeOf(el).translate ?? { x: 0, y: 0 };
-    const sx = cx + move.x - (seen.left + seen.width / 2), sy = cy + move.y - (seen.top + seen.height / 2);
-    writeLive(el, { translate: { x: now.x + sx, y: now.y + sy }, width: box.width, rotate: from.rotate });
+    const sx = cx + move.x - seen.x, sy = cy + move.y - seen.y;
+    writeLive(el, { translate: { x: now.x + sx, y: now.y + sy }, width: el.matches(RESIZABLE) ? box.width : null, rotate: from.rotate });
     view.moving = [el];
     view.resizing = true;
     view.guides = [];
@@ -483,15 +502,16 @@ export function install(app: App): void {
     if (p.kind === 'move' && ev && p.moved && copying && copyHeld(ev)) {
       void copyAt(p).catch((e) => app.fail(e));
     } else if (p.kind !== 'marquee') {
+      const els = [...p.els, ...(p.sized ?? []).filter((m) => !p.els.includes(m))];
       if (ev && p.moved) {
-        const changes = p.els.map((el) => {
+        const changes = els.map((el) => {
           const to = placeOf(el);
           writePlace(app, el, to);
           return { el, from: p.from.get(el) as Place, to };
         });
         record(app, p.kind === 'resize' ? 'resize' : p.kind === 'rotate' ? 'rotate' : 'move', changes);
       } else if (p.moved) {
-        for (const el of p.els) writeLive(el, p.from.get(el) as Place);
+        for (const el of els) writeLive(el, p.from.get(el) as Place);
       } else p.click?.();
     }
     frames.draw();

@@ -11,7 +11,7 @@ import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
 import { injectStyle } from '../ui/dom.ts';
 import type { Box, Guide, Handle, Spacing } from './snap.ts';
-import { CONTAINER, RESIZABLE, frameOf, movableOf, toScreen, visualRect } from './hit.ts';
+import { BY_ITSELF, CONTAINER, RESIZABLE, frameOf, movableOf, orientedBox, pictureOf, sizedOf, toScreen, visualRect } from './hit.ts';
 
 export const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 
@@ -34,7 +34,6 @@ const CSS = `
 .beeson-frame.union { border: 1px dashed var(--ed-select, #7048e8); }
 .beeson-overlay [hidden] { display: none !important; }
 .beeson-grip { position: fixed; width: 9px; height: 9px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; border: 1.5px solid var(--ed-select, #7048e8); background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); pointer-events: auto; touch-action: none; }
-.beeson-grip.fixed { border-color: #8a8a8a; background: #d9d9d9; pointer-events: none; }
 .beeson-frame.selected.locked { border-color: #8a8a8a; }
 .beeson-grip.locked { width: 9px; height: 9px; border: 0; border-radius: 0; background: linear-gradient(45deg, transparent 42%, #8a8a8a 42% 58%, transparent 58%), linear-gradient(-45deg, transparent 42%, #8a8a8a 42% 58%, transparent 58%); box-shadow: none; pointer-events: none; }
 .beeson-rotor { position: fixed; width: 18px; height: 18px; margin: -9px 0 0 -9px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--ed-select, #7048e8); background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); color: var(--ed-select, #7048e8); font: 600 12px/15px system-ui, sans-serif; text-align: center; cursor: grab; user-select: none; pointer-events: auto; touch-action: none; }
@@ -81,14 +80,12 @@ const grow = (b: Box, by: number): Box => ({ left: b.left - by, top: b.top - by,
 const angleOf = (el: Element): number => parseFloat(getComputedStyle(el).rotate) || 0;
 
 // the box of el on the screen without its rotation, about the center of the box seen, and the
-// angle that it is turned by. an element that is not rotated has the box of visualRect
+// angle that it is turned by. a figure that holds a picture is framed at the picture, where its
+// grips resize it
 function orientOf(el: Element, scale: number): { box: Box; deg: number } {
-  const deg = angleOf(el);
-  if (!deg) return { box: visualRect(el), deg: 0 };
-  const r = el.getBoundingClientRect();
-  const h = el as HTMLElement;
-  const w = h.offsetWidth * scale, ht = h.offsetHeight * scale;
-  return { box: { left: r.left + r.width / 2 - w / 2, top: r.top + r.height / 2 - ht / 2, width: w, height: ht }, deg };
+  const pic = pictureOf(el);
+  const deg = angleOf(el) + (pic === el ? 0 : angleOf(pic));
+  return { box: orientedBox(pic, scale, deg), deg };
 }
 
 // the point x, y turned by deg about the center of box
@@ -159,14 +156,13 @@ export class Frames {
     return view.moving?.[0] ?? view.hover ?? movableOf(this.app, editing) ?? this.app.selection.only();
   }
 
-  // the resize handles of the one selected element: live on an image, a video, a QR code, or a
-  // viewer, gray on a figure whose size is set by its layout, none on a block of text, and crosses
-  // on a locked element
-  gripsOf(el: Element | null): 'live' | 'fixed' | 'locked' | null {
+  // the resize handles of the one selected element: live on an image, a video, a QR code, a
+  // viewer, and a figure that holds one of them, none on a block of text or on another figure, and
+  // crosses on a locked element
+  gripsOf(el: Element | null): 'live' | 'locked' | null {
     if (!el || this.app.selection.only() !== el) return null;
     if (el.hasAttribute('data-locked')) return 'locked';
-    if (el.matches(RESIZABLE)) return 'live';
-    return el.matches(CONTAINER) ? 'fixed' : null;
+    return sizedOf(el).length ? 'live' : null;
   }
 
   draw(): void {
@@ -193,7 +189,7 @@ export class Frames {
       f.classList.toggle('locked', selected[i].hasAttribute('data-locked'));
     });
     if (boxes.length > 1) {
-      const seen = selected.map((el) => (el.matches(RESIZABLE) || el.matches(CONTAINER) ? visualRect(el) : grow(visualRect(el), 6)));
+      const seen = selected.map((el) => (el.matches(RESIZABLE) || el.matches(CONTAINER) ? visualRect(pictureOf(el)) : grow(visualRect(el), 6)));
       const left = Math.min(...seen.map((b) => b.left)), top = Math.min(...seen.map((b) => b.top));
       const right = Math.max(...seen.map((b) => b.left + b.width)), bottom = Math.max(...seen.map((b) => b.top + b.height));
       place(this.union, grow({ left, top, width: right - left, height: bottom - top }, 6));
@@ -211,7 +207,6 @@ export class Frames {
       const b = boxes[0];
       const at = turned(b, orients[0].deg, h.includes('w') ? b.left : h.includes('e') ? b.left + b.width : b.left + b.width / 2, h.includes('n') ? b.top : h.includes('s') ? b.top + b.height : b.top + b.height / 2);
       g.hidden = false;
-      g.classList.toggle('fixed', grips === 'fixed');
       g.classList.toggle('locked', grips === 'locked');
       Object.assign(g.style, { left: `${at.x}px`, top: `${at.y}px` });
     }
@@ -230,9 +225,9 @@ export class Frames {
     const hot = this.current();
     const framed = hot && selected.includes(hot);
     this.hoverFrame.hidden = !hot || !!framed || !!view.moving;
-    if (hot && !framed && !view.moving) place(this.hoverFrame, grow(visualRect(hot), 6));
-    // a figure with handles is dragged by itself, and the handle of a block would cover a corner
-    this.handle.hidden = !hot || (hot === only && !!this.gripsOf(only));
+    if (hot && !framed && !view.moving) place(this.hoverFrame, grow(visualRect(pictureOf(hot)), 6));
+    // a figure is dragged by itself, as in Keynote, and a viewer, which a drag turns, by its handle
+    this.handle.hidden = !hot || (hot.matches(BY_ITSELF) && !hot.matches('tycho-viewer')) || (hot === only && !!this.gripsOf(only));
     if (!this.handle.hidden && hot) {
       const r = hot.getBoundingClientRect();
       Object.assign(this.handle.style, { left: `${r.left - 24}px`, top: `${r.top - 24}px` });
