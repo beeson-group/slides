@@ -180,3 +180,79 @@ for (const platform of PLATFORMS) {
     assert.ok(img.rotor && img.rotor.bottom < img.frame.top && img.stem, `the rotate grip of the image at ${js(img.rotor)} is not on a stem above its frame at ${js(img.frame)}`);
   });
 }
+
+// the members of the selection, with their angle in degrees and their center in CSS px of the window
+const members = (page) => page.evaluate(`window.BeesonEditor.selection().map((el) => { const r = el.getBoundingClientRect(); return { tag: el.localName, deg: parseFloat(getComputedStyle(el).rotate) || 0, x: r.left + r.width / 2, y: r.top + r.height / 2 }; })`);
+// the point p turned by deg degrees about the point c
+const turn = (p, c, deg) => {
+  const a = (deg * Math.PI) / 180;
+  return { x: c.x + (p.x - c.x) * Math.cos(a) - (p.y - c.y) * Math.sin(a), y: c.y + (p.x - c.x) * Math.sin(a) + (p.y - c.y) * Math.cos(a) };
+};
+function turnedAbout(now, before, c, deg, what) {
+  assert.equal(now.length, before.length);
+  now.forEach((m, i) => {
+    assert.equal(Math.round(m.deg), ((Math.round(before[i].deg + deg) % 360) + 360) % 360, `${what}: the ${m.tag} of the group is turned by ${m.deg} degrees and not by ${deg}`);
+    const want = turn(before[i], c, deg);
+    assert.ok(Math.hypot(m.x - want.x, m.y - want.y) <= 3, `${what}: the center of the ${m.tag} of the group is at ${js([m.x, m.y])} and not at ${js([want.x, want.y])}, turned about the center of the group`);
+  });
+}
+
+// the paragraph and the figure of slide 5 grouped with the key of the platform, which selects the group
+async function grouped(page, platform) {
+  await click(page, IMG);
+  await press(page, 'Escape');
+  await click(page, '.reveal section.present > p', { modifiers: 'Shift' });
+  await press(page, platform === 'mac' ? 'Mod+Alt+G' : 'Mod+G');
+  await frames(page);
+  assert.match(await render(page), /<p data-group="g\d+">Export/, 'the paragraph is not grouped');
+  page.source = await render(page);
+  assert.deepEqual((await members(page)).map((m) => m.tag).sort(), ['figure', 'p'], 'the group is not selected');
+}
+
+// finding 3: a group was drawn without a rotate grip, and the field Angle set the angle of each
+// member about its own center
+for (const platform of PLATFORMS) {
+  test(`a group is turned by its rotate grip about its center as one entry of the history (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await grouped(page, platform);
+    const v = await chrome(page);
+    assert.ok(v.rotor, 'a selected group is drawn without a rotate grip');
+    assert.ok(v.rotor.bottom < v.frame.top && Math.abs(v.rotor.x - v.frame.x) <= 1 && v.stem, `the rotate grip of the group at ${js(v.rotor)} is not on a stem above the middle of its frame at ${js(v.frame)}`);
+    const before = await members(page);
+    const c = { x: v.frame.x, y: v.frame.y };
+    // a drag of the grip from above the center to the right of the center turns the group by 90 degrees
+    const r = c.y - v.rotor.y;
+    await drag(page, { x: v.rotor.x, y: v.rotor.y }, { dx: r, dy: r, steps: 12, hold: true });
+    await frames(page);
+    const readout = await page.evaluate(`document.querySelector('.beeson-offset:not([hidden])')?.textContent ?? ''`);
+    assert.equal(readout, '90°', 'the angle is not shown at the pointer during the turn of the group');
+    turnedAbout(await members(page), before, c, 90, 'during the drag');
+    await release(page, { x: v.rotor.x + r, y: v.rotor.y + r });
+    await frames(page);
+    turnedAbout(await members(page), before, c, 90, 'after the drag');
+    const edited = await render(page);
+    assert.match(edited, /<p data-group="g\d+" style="translate: -?\d+px -?\d+px; rotate: 90deg">Export/, 'the paragraph is not written with its offset and its angle');
+    assert.match(edited, /<figure class="zone fragment" data-fragment-index="2" data-group="g\d+" style="translate: -?\d+px -?\d+px; rotate: 90deg">/, 'the figure is not written with its offset and its angle');
+    assert.deepEqual((await members(page)).map((m) => m.tag).sort(), ['figure', 'p'], 'the group is not selected after the turn');
+    await roundTrip(page);
+  });
+
+  test(`the field Angle of the Arrange pane turns a group about its center (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await grouped(page, platform);
+    const v = await chrome(page);
+    const before = await members(page);
+    await page.evaluate(`[...document.querySelectorAll('${PANEL} button')].find((b) => b.textContent.trim() === 'Arrange')?.click()`);
+    await frames(page);
+    const field = `${PANEL} input[name="Angle"]`;
+    assert.equal(await page.evaluate(`document.querySelector('${field}')?.disabled`), false, 'the field Angle is not live on a group');
+    await click(page, field, { count: 3 });
+    await press(page, 'Mod+A');
+    await page.send('Input.insertText', { text: '30' });
+    await press(page, 'Enter');
+    await frames(page);
+    turnedAbout(await members(page), before, { x: v.frame.x, y: v.frame.y }, 30, 'after 30 typed in Angle');
+    assert.equal(await page.evaluate(`document.querySelector('${field}').value`), '30');
+    await roundTrip(page);
+  });
+}
