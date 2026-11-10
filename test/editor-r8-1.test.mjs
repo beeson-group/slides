@@ -226,14 +226,35 @@ async function check(page, what, act, expect, { froms = ['figure', 'picture'], f
 
 // a save of the text after a redo of the last edit, and an open of the saved text, which is then
 // the text that the next command starts from
-async function saved(page, edited) {
+async function saved(page, edited, media = null) {
   await redo(page);
   assert.equal(await render(page), edited);
-  const { text } = await saveAndReopen(page, `r8-1-${++saves}.html`);
+  const { text } = media ? await savedInto(page, media) : await saveAndReopen(page, `r8-1-${++saves}.html`);
   assert.equal(text, edited);
   inScope(text, SOURCE);
   assert.deepEqual(errors(page), []);
   page.source = text;
+}
+
+// a save of a deck with new media files into a folder of the private file system, which is given
+// as the folder of the deck, and an open of the saved text. the names in media/ are asserted
+async function savedInto(page, media) {
+  const { text, names } = await page.evaluate(`(async () => {
+    const root = await navigator.storage.getDirectory();
+    const dir = await root.getDirectoryHandle('r8-1-${++saves}', { create: true });
+    const deck = await dir.getFileHandle('deck.html', { create: true });
+    window.showDirectoryPicker = async () => dir;
+    window.BeesonEditor.attach(deck);
+    await window.BeesonEditor.save();
+    const names = [];
+    for await (const [name] of (await dir.getDirectoryHandle('media')).entries()) names.push(name);
+    return { text: await (await deck.getFile()).text(), names: names.sort() };
+  })()`);
+  assert.deepEqual(names, media, 'the new media files are not written into media/');
+  const status = await page.evaluate(`window.BeesonEditor.open(${js(text)})`);
+  assert.deepEqual(status.problems, []);
+  assert.equal(await render(page), text);
+  return { text };
 }
 
 // a value typed into a number field of the Arrange pane, committed with Enter
@@ -530,7 +551,7 @@ for (const combo of COMBOS) {
     let edited = await render(page);
     assert.equal(edited, replacedIn(page.source, ' data-group="g1"'), 'the video of Replace does not keep the group of the image');
     await roundTrip(page, edited);
-    await saved(page, edited);
+    await saved(page, edited, ['clip-dark.mp4', 'clip-dark.png']);
     // a group and a lock, through a drop of a video file onto the picture, which the lock does not
     // turn off
     page = await opened(marked(' data-group="g1" data-locked', ' data-group="g1"'));
@@ -540,7 +561,7 @@ for (const combo of COMBOS) {
     edited = await render(page);
     assert.equal(edited, replacedIn(page.source, ' data-group="g1" data-locked'), 'the video of a drop does not keep the group and the lock of the image');
     await roundTrip(page, edited);
-    await saved(page, edited);
+    await saved(page, edited, ['clip-dark.mp4', 'clip-dark.png']);
   });
 
   test(`the rotation, the flips, Edit Mask, Replace, and the Image pane act on the picture alone, and on both images of a pair (${named(combo)})`, async (t) => {
