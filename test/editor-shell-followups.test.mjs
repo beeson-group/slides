@@ -61,14 +61,15 @@ test('Edit Text is enabled on an element with a block and not on a figure withou
   const page = await editorPage(browser);
   await showSlideWith(page, '.zone video');
   await click(page, await centerOf(page, '.reveal section.present .zone video'), { button: 'right' });
-  assert.equal(await contextItem(page, 'Edit Text'), false, 'Edit Text is enabled on a figure of videos');
+  // an item that a kind of element cannot run is left out of its menu
+  assert.notEqual(await contextItem(page, 'Edit Text'), true, 'Edit Text is enabled on a figure of videos');
   await press(page, 'Escape');
   assert.equal(await editText(page), false);
   // Return into the figure still selects its video, with a command of its own
   assert.equal((await page.evaluate(`window.BeesonEditor.state('selection.selectMedia')`)).enabled, true);
   await showSlideWith(page, '.qr');
   await click(page, await centerOf(page, '.reveal section.present .qr'), { button: 'right' });
-  assert.equal(await contextItem(page, 'Edit Text'), false, 'Edit Text is enabled on a QR code');
+  assert.notEqual(await contextItem(page, 'Edit Text'), true, 'Edit Text is enabled on a QR code');
   await press(page, 'Escape');
   // a figure with its caption holds a block, and so does a heading selected as an element
   await showSlideWith(page, 'figure.zone');
