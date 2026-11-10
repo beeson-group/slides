@@ -59,6 +59,7 @@ import { install as installInspector } from './inspector/inspector.ts';
 import { install as installZoomCommands } from './commands/zoom.ts';
 import { install as installLayoutCommands } from './commands/layout.ts';
 import { install as installReviewCommands } from './commands/review.ts';
+import { install as installPlotCommands } from './commands/plot.ts';
 import { Doc } from './model/doc.ts';
 
 const app = new App();
@@ -159,6 +160,7 @@ installInspector(app);
 installZoomCommands(app);
 installLayoutCommands(app);
 installReviewCommands(app);
+installPlotCommands(app);
 
 const revealReady = (): Promise<void> =>
   new Promise((done) => {
