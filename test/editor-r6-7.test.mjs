@@ -6,7 +6,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen, selectFigure } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 const LAYOUTS = 'test/pages/editor-layouts.html';
@@ -185,6 +185,43 @@ for (const platform of PLATFORMS) {
       tipped++;
     }
     assert.ok(tipped >= 2, `only ${tipped} tooltips have keys`);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+// the modifiers of a drag of canvas/drag.ts and of a line end of commands/line.ts, in the group
+// Mouse of the sheet: the free modifier is ⌘ on a Mac and Alt elsewhere, and the copy modifier ⌥ on
+// a Mac and Ctrl elsewhere
+const MOUSE = {
+  mac: {
+    'Add to the Selection': '⇧-click, ⌘-click', 'Move Along One Axis': '⇧-drag', 'Move Without Snapping': '⌘-drag', 'Drag a Copy': '⌥-drag',
+    'Keep or Free Proportions at a Corner': '⇧-drag', 'Resize Without Snapping': '⌘-drag', 'Resize About the Center': '⌥-drag',
+    'Rotate in Steps of 15°': '⇧-drag', 'Draw a Line in Steps of 45°': '⇧-drag',
+  },
+  other: {
+    'Add to the Selection': 'Shift+click, Ctrl+click', 'Move Along One Axis': 'Shift+drag', 'Move Without Snapping': 'Alt+drag', 'Drag a Copy': 'Ctrl+drag',
+    'Keep or Free Proportions at a Corner': 'Shift+drag', 'Resize Without Snapping': 'Alt+drag', 'Resize About the Center': 'Ctrl+drag',
+    'Rotate in Steps of 15°': 'Shift+drag', 'Draw a Line in Steps of 45°': 'Shift+drag',
+  },
+};
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: the sheet lists the modifiers of a click and a drag in the group Mouse, and the listed copy modifier drops a copy`, async () => {
+    const page = await editor(platform, MATH);
+    const sheet = await sheetRows(page);
+    const mouse = Object.fromEntries(Object.entries(sheet).filter(([k]) => k.startsWith('Mouse > ')).map(([k, v]) => [k.slice(8), v]));
+    assert.deepEqual(mouse, MOUSE[platform]);
+    assert.deepEqual(await page.evaluate('window.BeesonEditorShell.keyClashes()'), []);
+
+    // the modifier of Drag a Copy, held at the release of a drag of the image of the zone
+    const copy = { '⌥-drag': 'Alt', 'Ctrl+drag': 'Ctrl' }[mouse['Drag a Copy']];
+    const img = '.reveal section.present .zone > img.for-dark';
+    const count = async () => (await render(page)).split('<figure class="zone').length - 1;
+    const before = await count();
+    await selectFigure(page, img);
+    await drag(page, img, { dx: -200, dy: 40, modifiers: copy });
+    await new Promise((done) => setTimeout(done, 300));
+    assert.equal(await count(), before + 1, `${mouse['Drag a Copy']} does not drop a copy of the figure`);
     assert.deepEqual(errors(page), []);
   });
 }
