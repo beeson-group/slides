@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { drag, press } from './helpers/editor.mjs';
+import { click, drag, press } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 
@@ -49,6 +49,29 @@ const exec = (page, id, arg) => page.evaluate(`window.BeesonEditor.exec(${JSON.s
 const frames = (page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => d(true))))');
 const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 
+const wait = (ms) => new Promise((done) => setTimeout(done, ms));
+
+// a click on the item of an open menu whose label starts with name
+async function choose(page, name) {
+  const at = await page.evaluate(`(() => {
+    const item = [...document.querySelectorAll('[role="menu"] .item')].find((i) => i.textContent.trim().startsWith(${JSON.stringify(name)}));
+    if (!item) return null;
+    const r = item.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  })()`);
+  assert.ok(at, `an open menu does not have an item ${name}`);
+  // an item is taken at a release 250 ms after the press that opened its menu
+  await wait(300);
+  await click(page, at);
+  await frames(page);
+}
+
+// the light figure of the demo deck without its alt text, in the file and on the page
+const LIGHT_ALT = '<img class="for-light" src="demo/figure-light.png" alt="Zero-velocity curves of the Earth–Moon system, light version">';
+const LIGHT_BARE = '<img class="for-light" src="demo/figure-light.png">';
+const bareLight = () => readFileSync('index.html', 'utf8').replace(LIGHT_ALT, LIGHT_BARE);
+const BARE_PAGE = `document.querySelector('.reveal img.for-light[src="demo/figure-light.png"]').removeAttribute('alt')`;
+
 // two boxes overlap when they share an area, or a line of a box of zero height
 const overlap = (a, b) => a.left < b.right && b.left < a.right && a.top <= b.bottom && b.top <= a.bottom;
 
@@ -78,6 +101,40 @@ for (const platform of PLATFORMS) {
     assert.ok(boxes.shown, 'the drag does not show its drop line and its ghost');
     assert.ok(!overlap(boxes.ghost, boxes.line), `the ghost ${JSON.stringify(boxes.ghost)} covers the drop line ${JSON.stringify(boxes.line)}`);
     assert.ok(!overlap(boxes.ghost, boxes.target), `the ghost ${JSON.stringify(boxes.ghost)} covers the row after the drop line ${JSON.stringify(boxes.target)}`);
+    assert.equal(await page.evaluate('window.BeesonEditor.render()'), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+for (const platform of PLATFORMS) {
+  // round 2 of the council, finding 33 of qwen3: in dark mode, Select and Show of an image of the
+  // light mode drew the frame of its selection collapsed at 0, 0
+  test(`Select and Show of a light image in dark mode frames the image on ${platform}`, async () => {
+    const page = await editor(platform, { text: bareLight(), change: BARE_PAGE });
+    if ((await page.evaluate('Beeson.theme.get()')) !== 'dark') await page.evaluate(`Beeson.theme.set('dark')`);
+    await page.waitFor(`document.documentElement.dataset.theme === 'dark' && !document.documentElement.classList.contains('to-dark')`);
+    await exec(page, 'view.accessibility');
+    await frames(page);
+    await click(page, '.beeson-edit-a11y .item[data-check="alt"] .fix');
+    await choose(page, 'Select and Show');
+    await page.waitFor(`!!document.querySelector('.beeson-frame.selected:not([hidden])')`);
+    await wait(700);
+    await frames(page);
+    const got = await page.evaluate(`(() => {
+      const img = document.querySelector('.reveal img.for-light[src="demo/figure-light.png"]');
+      const box = (r) => ({ left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) });
+      const frame = [...document.querySelectorAll('.beeson-frame.selected')].find((f) => !f.hidden);
+      // the frame of an image is drawn around its picture, fit into its box with object-fit contain
+      const r = img.getBoundingClientRect();
+      const k = Math.min(r.width / img.naturalWidth, r.height / img.naturalHeight);
+      const w = img.naturalWidth * k, h = img.naturalHeight * k;
+      const picture = { left: r.left + (r.width - w) / 2, top: r.top + (r.height - h) / 2, width: w, height: h };
+      return { frame: frame && box(frame.getBoundingClientRect()), image: box(picture), theme: Beeson.theme.get() };
+    })()`);
+    assert.ok(got.frame && got.frame.width > 40 && got.frame.height > 40, `the frame ${JSON.stringify(got.frame)} is collapsed`);
+    assert.ok(got.image.width > 40, 'the light image is not shown');
+    assert.equal(got.theme, 'light');
+    for (const k of ['left', 'top', 'width', 'height']) assert.ok(Math.abs(got.frame[k] - got.image[k]) <= 4, `the frame ${JSON.stringify(got.frame)} is not at the image ${JSON.stringify(got.image)}`);
     assert.equal(await page.evaluate('window.BeesonEditor.render()'), page.source);
     assert.deepEqual(errors(page), []);
   });
