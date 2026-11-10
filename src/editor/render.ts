@@ -354,6 +354,14 @@ export function unitOf(s: SrcEl): Unit | null {
   return unitsWithin(s.parent)?.units.find((u) => u.el === s) ?? null;
 }
 
+// the white space before a unit placed into s: that of the first unit of s, else a line break and
+// the indentation of s with one step more
+export function childSpace(s: SrcEl, eol: string, step: string): string {
+  const first = unitsWithin(s)?.units[0];
+  if (first) return spaceOf(s.source.text.slice(first.lead.start, first.range.start));
+  return eol + (s.open ? indentAt(s.source.text, s.open.start) : '') + step;
+}
+
 // the file written again from the page. each element of the file is written as its units, in the
 // order of its children on the page: a unit of the file with its lead, a unit moved in from another
 // element or inserted on the page with the white space of this one, and a unit taken off the page
@@ -432,12 +440,8 @@ class Renderer {
     return (this.step ??= textStyle(this.source.text).step);
   }
 
-  // the white space before a unit placed into s: that of the first unit of s, else a line break and
-  // the indentation of s with one step more
-  private space(s: SrcEl, within: ReturnType<typeof unitsWithin>): string {
-    const first = within?.units[0];
-    if (first) return spaceOf(s.source.text.slice(first.lead.start, first.range.start));
-    return this.eol + this.indent(s) + this.stepOf();
+  private space(s: SrcEl): string {
+    return childSpace(s, this.eol, this.stepOf());
   }
 
   private content(s: SrcEl, live: Element): string {
@@ -482,7 +486,7 @@ class Renderer {
       const mt = m.source.text;
       const lead = mt.slice(home.lead.start, home.range.start);
       const inPlace = isFragmentRoot(m) && m.source.fragment?.home === live;
-      parts.push((inPlace ? lead : placeLead(lead, this.space(s, within), this.eol)) + this.element(m, c) + mt.slice(home.range.end, home.end));
+      parts.push((inPlace ? lead : placeLead(lead, this.space(s), this.eol)) + this.element(m, c) + mt.slice(home.range.end, home.end));
     }
     let tail = within ? text.slice(within.tail.start, within.tail.end) : '';
     if (!units.length && !tail && parts.length) tail = this.eol + this.indent(s);
