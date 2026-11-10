@@ -606,7 +606,8 @@ const outlineOf = (page, n) =>
   page.evaluate(`[...document.querySelectorAll('.beeson-edit-outline .slide')[${n}].querySelectorAll('.line')].map((l) => ({
     kind: [...l.classList].find((c) => ['title', 'para', 'item', 'other'].includes(c)),
     depth: Number(l.style.getPropertyValue('--depth')),
-    text: l.querySelector('.text').textContent,
+    // the TeX of a line whose math is typeset is in its data-tex
+    text: l.querySelector('.text').dataset.tex ?? l.querySelector('.text').textContent,
     dim: l.classList.contains('dim'),
   }))`);
 const focusLine = (page, n, text) =>

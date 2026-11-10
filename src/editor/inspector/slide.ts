@@ -6,6 +6,8 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
+import { contentWithTex } from '../math.ts';
+import { showText } from '../typeset.ts';
 import { card, checkbox, glyph, note, row, section, segmented, textField, type Control, type Run } from './controls.ts';
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -177,17 +179,41 @@ export function slidePane(app: App, run: Run): Control[] {
     parts.push(section(null, [textField(app, {
       label: 'Running Head',
       name: 'running-head',
-      placeholder: () => app.current()?.querySelector('h2')?.textContent?.trim() ?? '',
+      placeholder: () => {
+        const h = app.current()?.querySelector('h2');
+        return h ? sourceText(h) : '';
+      },
       value: () => app.current()?.getAttribute('data-run') ?? '',
       enabled: () => app.commands.enabled('slide.runningHead'),
       commit: (value) => run('slide.runningHead', { value, el: slide }),
       hint: () => ({ text: 'Shown at the top of the slides of this section. Leave it empty to show the heading.', warn: false }),
     })]));
   } else if (!['title', 'closing'].includes(layout)) {
-    parts.push(section('Running Head', [note(() => {
-      const run = app.current()?.querySelector(':scope > .run[data-generated]')?.textContent?.trim();
+    parts.push(section('Running Head', [typesetNote(() => {
+      const el = app.current()?.querySelector(':scope > .run[data-generated]');
+      const run = el ? sourceText(el) : '';
       return run ? `“${run}”, from the last section slide` : 'None before the first section slide';
-    })]));
+    }, 'running-head')]));
   }
   return parts;
+}
+
+// the text of el with its formulas as their TeX, as the file has it
+function sourceText(el: Element): string {
+  const t = document.createElement('template');
+  t.innerHTML = contentWithTex(el);
+  return (t.content.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
+// a note whose text is typeset, e.g. a running head with math
+function typesetNote(text: () => string, name: string): Control {
+  const { el } = note(() => '');
+  el.classList.add(name);
+  const sync = () => {
+    const t = text();
+    showText(el, t);
+    el.hidden = !t;
+  };
+  sync();
+  return { el, sync };
 }

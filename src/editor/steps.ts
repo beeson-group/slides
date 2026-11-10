@@ -367,16 +367,30 @@ export const rowAnchor = (chip: Element, row: Element): DOMRect => {
 };
 
 // a menu that still covers row, since it fits neither under nor over it, is put beside the row on
-// the side of the canvas, level with the row, as a popover of Keynote is put beside its control
-export function popover(menu: HTMLElement, row: Element): void {
+// the side of the canvas, level with the row, as a popover of Keynote is put beside its control.
+// with beside set, the menu is put there in any case, e.g. for the head of a list, whose items are
+// the rows under it
+export function popover(menu: HTMLElement, row: Element, beside = false): void {
   const m = menu.getBoundingClientRect();
   const r = row.getBoundingClientRect();
-  if (m.bottom <= r.top || m.top >= r.bottom) return;
+  if (!beside && (m.bottom <= r.top || m.top >= r.bottom)) return;
   const pad = 4;
   const left = r.left - m.width - 6 >= pad ? r.left - m.width - 6 : Math.min(innerWidth - m.width - pad, r.right + 6);
   const top = Math.max(pad, Math.min(r.top - 6, innerHeight - m.height - pad));
   menu.style.left = `${Math.round(left)}px`;
   menu.style.top = `${Math.round(top)}px`;
+}
+
+// the menu is moved with its row when the row moves after the menu was opened, e.g. when the block
+// of the transition above the rows is hidden at the release of the press that selected the row
+function follow(menu: HTMLElement, row: Element): void {
+  const top = row.getBoundingClientRect().top;
+  const shift = () => {
+    if (!menu.isConnected || !row.isConnected) return;
+    const dy = row.getBoundingClientRect().top - top;
+    if (dy) menu.style.top = `${Math.round(menu.getBoundingClientRect().top + dy)}px`;
+  };
+  window.addEventListener('pointerup', shift, { once: true, capture: true });
 }
 
 // the six dots of a drag handle, in the grid of the icons of ui/icons.ts
@@ -848,7 +862,9 @@ export class Steps {
     const app = this.app as App;
     const run = () => void app.commands.run('steps.deliver', { el: h.list, by: null }).catch((e) => app.fail(e));
     const items: MenuItem[] = [...this.deliveryItems(h.list), { rule: true }, { label: 'With the Slide', run }];
-    popover(openMenu(app, items, { anchor: rowAnchor(h.chip, h.head), placement: 'below', owner: h.chip, keyboard, label: 'Delivery', className: 'select steps' }).el, h.head);
+    const menu = openMenu(app, items, { anchor: rowAnchor(h.chip, h.head), placement: 'below', owner: h.chip, keyboard, label: 'Delivery', className: 'select steps' }).el;
+    popover(menu, h.head, true);
+    if (!keyboard) follow(menu, h.head);
   }
 
   // the rows of the selected elements are marked, and so are their numbers on the slide
@@ -949,7 +965,9 @@ export class Steps {
     ];
     const delivery = this.deliveryItems(r.el);
     if (delivery.length) items.push({ rule: true }, ...delivery);
-    popover(openMenu(app, items, { anchor: rowAnchor(r.chip, r.row), placement: 'below', owner: r.chip, keyboard, label: 'Step', className: 'select steps' }).el, r.row);
+    const menu = openMenu(app, items, { anchor: rowAnchor(r.chip, r.row), placement: 'below', owner: r.chip, keyboard, label: 'Step', className: 'select steps' }).el;
+    popover(menu, r.row);
+    if (!keyboard) follow(menu, r.row);
   }
 
   // a press on a row selects its element. a press on its chip opens the menu of the chip, and a
