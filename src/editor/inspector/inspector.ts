@@ -43,9 +43,7 @@ function viewOf(app: App): { tabs: PaneKind[]; items: readonly Element[] } {
   if (els.length > 1) return { tabs: ['arrange'], items: els };
   const el = els[0];
   if (el.localName === 'table') return { tabs: ['table', 'arrange'], items: els };
-  // a click selects the image or the video of a figure apart from the figure, hence the pane of
-  // the picture is shown for the picture, and the figure is placed and ordered in the Arrange pane
-  if (el.matches('figure') && !el.hasAttribute('data-locked') && el.querySelector(':scope > img, :scope > video')) return { tabs: ['arrange'], items: els };
+  // a figure is shown with the pane of its picture, as an image with a caption in Keynote
   const img = imageOf(app), video = videoOf(app), qr = qrOf(app);
   if (img) return { tabs: ['image', 'arrange'], items: [el, img] };
   if (video) return { tabs: ['video', 'arrange'], items: [el, video] };
