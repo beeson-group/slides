@@ -678,3 +678,16 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+for (const platform of PLATFORMS) {
+  test(`the outline leaves out the generated outline of a section slide, and a dimmed line keeps its math (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: 'index.html', n: 1 });
+    await exec(page, 'view.outline');
+    await frames(page);
+    assert.deepEqual(await outlineOf(page, 1), [{ kind: 'title', depth: 0, text: 'Chapter one', dim: false }]);
+    // a colored span is not edited in the outline, but its line shows the TeX of the math next to it
+    assert.deepEqual((await outlineOf(page, 3)).find((l) => l.text.includes('Coriolis')), { kind: 'para', depth: 1, text: 'The Coriolis terms couple \\(x\\) and \\(y\\).', dim: true });
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+}
