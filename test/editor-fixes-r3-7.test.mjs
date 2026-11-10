@@ -560,11 +560,12 @@ for (const platform of PLATFORMS) {
 const readoutOf = (page) => page.evaluate(`(() => { const o = document.querySelector('.beeson-offset:not(.beeson-guide-readout)'); if (!o || o.hidden) return null; const r = o.getBoundingClientRect(); return { text: o.textContent, left: r.left, top: r.top }; })()`);
 
 // the values of the fields X and Y of the Arrange pane, opened with its tab in the Format panel
+// where the selection has more than one pane. a figure has the Arrange pane alone
 async function arrangeXY(page) {
   if (!(await page.evaluate(`window.BeesonEditor.state('shell.format')`)).checked) await page.evaluate(`window.BeesonEditor.exec('shell.format')`);
   await sleep(50);
-  const at = await page.evaluate(`(() => { const b = [...document.querySelectorAll('#beeson-edit-panel-format button')].find((b) => [b.textContent.trim(), b.title, b.getAttribute('aria-label')].includes('Arrange')); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
-  await click(page, at);
+  const at = await page.evaluate(`(() => { const b = [...document.querySelectorAll('#beeson-edit-panel-format button')].find((b) => [b.textContent.trim(), b.title, b.getAttribute('aria-label')].includes('Arrange')); if (!b) return null; const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  if (at) await click(page, at);
   await sleep(50);
   return page.evaluate(`['x', 'y'].map((n) => document.querySelector('#beeson-edit-panel-format #beeson-edit-num-' + n).value).join(', ')`);
 }

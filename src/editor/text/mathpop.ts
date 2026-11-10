@@ -217,6 +217,14 @@ type Sheet = { title: string; tex: string; display: boolean; open: string; close
 // and above or below a block that fills the slide
 const SIDES: Side[] = ['right', 'left', 'below', 'above'];
 
+// the canvas, in which a sheet is kept as the popovers of Keynote are kept on its canvas, off the
+// inspector. a target outside the canvas, e.g. scrolled off it, keeps the sheet in the window
+function canvasOf(app: App, t: DOMRectReadOnly): { left: number; top: number; width: number; height: number } {
+  const v = app.stage?.viewport;
+  const within = v && t.left >= v.left && t.right <= v.right && t.top >= v.top && t.bottom <= v.bottom;
+  return within ? v : { left: 0, top: 0, width: innerWidth, height: innerHeight };
+}
+
 // the box of the block that holds a formula or a caret, e.g. a list item, a paragraph, or a display
 export const blockBox = (el: Element): DOMRect => (el.closest(HOST) ?? el).getBoundingClientRect();
 
@@ -325,7 +333,7 @@ export function install(app: App): void {
     document.body.append(box);
     // the box of the block is read once, since the block is typeset again at a commit
     const rect = sheet.rect();
-    unplace = keepBeside(box, () => rect, SIDES);
+    unplace = keepBeside(box, () => rect, SIDES, undefined, () => canvasOf(app, rect));
     apply.disabled = !sheet.tex.trim();
     void ed.refresh();
     // the commit key is held until the TeX typed before it is typeset, since Apply is dimmed or

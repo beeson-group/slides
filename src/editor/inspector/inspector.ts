@@ -1,6 +1,7 @@
 // the Format tab of the inspector, whose panes follow the selection as in the Format inspector of
 // Keynote: the Slide pane with nothing selected, Text and Arrange for a text or a block, Image,
-// Video, or QR with Arrange for a figure, and Arrange alone for another element or for several.
+// Video, or QR with Arrange for a picture, and Arrange alone for a figure around an image or a
+// video, for another element, or for several.
 // with more than one pane, the panes are tabs of a segmented control, and the tab chosen last is
 // kept for the next selection that has it. the panes are built again only when the selection or
 // the slide changes, and else read again in place, so that a field keeps its focus while the deck
@@ -42,6 +43,9 @@ function viewOf(app: App): { tabs: PaneKind[]; items: readonly Element[] } {
   if (els.length > 1) return { tabs: ['arrange'], items: els };
   const el = els[0];
   if (el.localName === 'table') return { tabs: ['table', 'arrange'], items: els };
+  // a click selects the image or the video of a figure apart from the figure, hence the pane of
+  // the picture is shown for the picture, and the figure is placed and ordered in the Arrange pane
+  if (el.matches('figure') && !el.hasAttribute('data-locked') && el.querySelector(':scope > img, :scope > video')) return { tabs: ['arrange'], items: els };
   const img = imageOf(app), video = videoOf(app), qr = qrOf(app);
   if (img) return { tabs: ['image', 'arrange'], items: [el, img] };
   if (video) return { tabs: ['video', 'arrange'], items: [el, video] };
