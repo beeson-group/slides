@@ -222,11 +222,16 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
   }
 
   async function close() {
+    let timer;
     try {
-      await Promise.race([send('Browser.close').catch(() => {}), sleep(2000)]);
+      await Promise.race([send('Browser.close').catch(() => {}), new Promise((done) => (timer = setTimeout(done, 2000)))]);
     } finally {
+      clearTimeout(timer);
       child.kill();
       await exited;
+      // chrome_crashpad_handler and GoogleUpdater inherit the stderr of Chrome and outlive it, and an
+      // open pipe would keep this process alive until they exit
+      for (const stream of child.stdio) stream?.destroy();
       await removeProfile(profile);
     }
   }
