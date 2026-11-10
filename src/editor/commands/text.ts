@@ -17,6 +17,7 @@ import { isSmart, setSmart, type Smart } from '../text/substitute.ts';
 import { injectStyle } from '../ui/dom.ts';
 import { CONTAINER } from '../canvas/hit.ts';
 import { modeOf, type Mode } from './figure.ts';
+import * as notes from '../notes.ts';
 
 const TEXT: Region[] = ['text'];
 const FORMAT: Region[] = ['text', 'canvas'];
@@ -49,8 +50,26 @@ export function install(app: App): void {
   const define = (command: Command) => c.define(command);
   const menu = (group: string, order: number, submenu?: string) => ({ bar: 'Format', group, order, ...(submenu ? { submenu } : {}) });
 
-  define({ id: 'text.newParagraph', label: 'New Paragraph', keys: { mac: ['Enter'], other: ['Enter'] }, in: TEXT, undoable: true, enabled: blocks.canSplit, run: blocks.split });
-  define({ id: 'text.joinBackward', label: 'Join Paragraphs', keys: { mac: ['Backspace'], other: ['Backspace'] }, in: TEXT, undoable: true, enabled: blocks.canJoinBack, run: blocks.joinBackward });
+  // in the speaker notes, Return and Backspace act on an item of a dash list of notes.ts
+  const inNotes = (a: App) => a.region() === 'notes';
+  define({
+    id: 'text.newParagraph',
+    label: 'New Paragraph',
+    keys: { mac: ['Enter'], other: ['Enter'] },
+    in: [...TEXT, 'notes'],
+    undoable: true,
+    enabled: (a) => (inNotes(a) ? notes.canSplitNotesItem(a) : blocks.canSplit(a)),
+    run: (a) => (inNotes(a) ? notes.splitNotesItem(a) : blocks.split(a)),
+  });
+  define({
+    id: 'text.joinBackward',
+    label: 'Join Paragraphs',
+    keys: { mac: ['Backspace'], other: ['Backspace'] },
+    in: [...TEXT, 'notes'],
+    undoable: true,
+    enabled: (a) => (inNotes(a) ? notes.canJoinNotesItem(a) : blocks.canJoinBack(a)),
+    run: (a) => (inNotes(a) ? notes.joinNotesItem(a) : blocks.joinBackward(a)),
+  });
   define({ id: 'text.joinForward', label: 'Join Paragraphs', keys: { mac: ['Delete'], other: ['Delete'] }, in: TEXT, undoable: true, enabled: blocks.canJoinAhead, run: blocks.joinForward });
 
   const format = (name: inline.FormatName, label: string, order: number, keys: Command['keys'], submenu?: string, regions = FORMAT) =>
@@ -137,12 +156,12 @@ export function install(app: App): void {
     define({
       id: `text.list.${kind}`,
       label: LIST_LABELS[kind],
-      in: TEXT,
+      in: [...TEXT, 'notes'],
       menu: menu('list', 60 + i, 'List'),
       undoable: true,
-      enabled: (a) => blocks.canSetList(a, kind) || carry.canList(a),
-      checked: (a) => (carry.canList(a) ? carry.listOf(a) : blocks.listKind(a)) === kind,
-      run: (a) => (carry.canList(a) ? carry.chooseList(a, kind) : blocks.setList(a, kind)),
+      enabled: (a) => (notes.notesListKind(a) ? notes.canSetNotesList(a, kind) : blocks.canSetList(a, kind) || carry.canList(a)),
+      checked: (a) => (notes.notesListKind(a) ?? (carry.canList(a) ? carry.listOf(a) : blocks.listKind(a))) === kind,
+      run: (a) => (notes.notesListKind(a) ? notes.setNotesList(a, kind) : carry.canList(a) ? carry.chooseList(a, kind) : blocks.setList(a, kind)),
     }));
   // Tab is taken in every item of a list, also where it does not change the level, so that it
   // does not move the focus out of the text. ⌘] and ⌘[ are Keynote's keys, shown in the menu, and
