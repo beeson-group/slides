@@ -1,7 +1,8 @@
 // regression tests of R6.8 on both platforms with trusted input: the menus of a locked figure, the
 // line steps of a code box after a line is typed or deleted, the fit of the slide in a narrow window,
 // the size of a group in the Arrange pane during a resize, the place of a new text box, the keys of
-// the keyboard sheet, the figure selected from its image, and the tiles of the New Slide gallery.
+// the keyboard sheet, the figure selected from its image, the tiles of the New Slide gallery, and the
+// position in the readouts and in the Arrange pane.
 // after each edit the text is checked byte for byte, after an undo and a redo, and after a save and
 // an open
 
@@ -418,6 +419,93 @@ for (const platform of PLATFORMS) {
       await press(page, 'Escape');
       await frames(page);
     }
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+// item 10: the readout of a move gives the upper left corner of the element in slide px, and the
+// fields X and Y of the Arrange pane, the readout of a nudge, and the readout of a line drag gave the
+// translate. all four give the position on the slide, and a value typed into X or Y moves the
+// element to that position
+const positionOf = (page) => page.evaluate(`(() => { const v = (n) => document.querySelector('#beeson-edit-panel-format input[name="' + n + '"]')?.value ?? null; return { x: v('X'), y: v('Y') }; })()`);
+const readoutOf = (page) => page.evaluate(`(() => { const o = document.querySelector('.beeson-offset:not(.beeson-guide-readout)'); return o && !o.hidden ? o.textContent : null; })()`);
+// cornerOf returns the upper left corner of the box of the selected element in slide px
+const cornerOf = (page) => page.evaluate(`(() => {
+  const s = document.querySelector('.reveal .slides');
+  const r = s.getBoundingClientRect(), k = r.width / s.offsetWidth;
+  const f = window.BeesonEditor.selection()[0].getBoundingClientRect();
+  return { x: Math.round((f.left - r.left) / k), y: Math.round((f.top - r.top) / k) };
+})()`);
+const xy = (text) => {
+  const m = /^x (-?\d+)\s+y (-?\d+)$/.exec(text ?? '');
+  assert.ok(m, `the readout ${text} does not give x and y`);
+  return { x: m[1], y: m[2] };
+};
+const arrangeTab = (page) => page.evaluate(`[...document.querySelectorAll('#beeson-edit-panel-format button')].find((b) => b.textContent.trim() === 'Arrange')?.click()`);
+
+for (const platform of PLATFORMS) {
+  test(`a figure moved by a drag or a nudge shows the same x and y in its readout and in the fields, and a typed X moves it there (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: MATH });
+    await click(page, IMG);
+    await press(page, 'Escape');
+    await frames(page);
+    assert.deepEqual(await page.evaluate(`window.BeesonEditor.selection().map((e) => e.tagName)`), ['FIGURE']);
+    await arrangeTab(page);
+    await frames(page);
+    const start = await cornerOf(page);
+    assert.deepEqual(await positionOf(page), { x: String(start.x), y: String(start.y) }, 'the fields do not give the position of the figure in place');
+    const img = await page.evaluate(`(() => { const r = document.querySelector(${js(IMG)}).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    const { drag } = await import('./helpers/editor.mjs');
+    await drag(page, img, { dx: -70, dy: 45, hold: true });
+    await frames(page);
+    const held = xy(await readoutOf(page));
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: img.x - 70, y: img.y + 45, button: 'left', clickCount: 1 });
+    await frames(page);
+    assert.deepEqual(await positionOf(page), held, 'the fields do not give the x and y of the readout of the move');
+    // a nudge to the right
+    await press(page, 'ArrowRight');
+    await frames(page);
+    const nudged = { x: String(Number(held.x) + 1), y: held.y };
+    assert.deepEqual(xy(await readoutOf(page)), nudged, 'the readout of a nudge does not give the position');
+    assert.deepEqual(await positionOf(page), nudged);
+    // a value typed into X
+    const moved = await render(page);
+    await click(page, '#beeson-edit-panel-format input[name="X"]');
+    await press(page, 'Mod+A');
+    await type(page, '400');
+    await press(page, 'Enter');
+    await frames(page);
+    assert.equal((await cornerOf(page)).x, 400, 'a typed X does not move the figure to x 400');
+    assert.deepEqual(await positionOf(page), { x: '400', y: held.y });
+    const typed = await render(page);
+    await page.evaluate('window.BeesonEditor.undo()');
+    assert.equal(await render(page), moved);
+    await page.evaluate('window.BeesonEditor.redo()');
+    assert.equal(await render(page), typed);
+    const { text } = await saveAndReopen(page, `r6-8-${++saves}.html`);
+    assert.equal(text, typed);
+    await frames(page);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`a line moved by a drag shows the same x and y in its readout and in the fields (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: MATH });
+    await exec(page, 'insert.line', { from: { x: 300, y: 900 }, to: { x: 800, y: 900 } });
+    await exec(page, 'selection.clear');
+    await frames(page);
+    const m = await page.evaluate(`(() => { const s = document.querySelector('.reveal .slides'); const r = s.getBoundingClientRect(), k = r.width / s.offsetWidth; return { x: r.left + 550 * k, y: r.top + 903 * k }; })()`);
+    await click(page, m);
+    await frames(page);
+    await arrangeTab(page);
+    await frames(page);
+    const { drag } = await import('./helpers/editor.mjs');
+    await drag(page, m, { dx: 60, dy: -40, hold: true });
+    await frames(page);
+    const held = xy(await readoutOf(page));
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: m.x + 60, y: m.y - 40, button: 'left', clickCount: 1 });
+    await frames(page);
+    assert.deepEqual(await page.evaluate(`window.BeesonEditor.selection().map((e) => e.localName)`), ['svg']);
+    assert.deepEqual(await positionOf(page), held, 'the fields do not give the x and y of the readout of the line drag');
     assert.deepEqual(errors(page), []);
   });
 }
