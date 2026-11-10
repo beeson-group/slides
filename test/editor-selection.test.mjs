@@ -152,7 +152,7 @@ test('Return enters the text of a selected block, Tab walks the elements, and a 
   await press(page, 'Shift+Tab');
   assert.deepEqual(await framed(page, [h2, p, ul]), [h2], 'Shift+Tab does not select the element before');
   await press(page, 'Tab');
-  const autosave = await page.evaluate(`(() => { const r = [...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Autosave').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  const autosave = await page.evaluate(`(() => { const r = [...document.querySelectorAll('.beeson-edit-header button')].find((b) => b.textContent === 'Autosave').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
   await click(page, autosave);
   assert.deepEqual(await framed(page, [h2, p, ul]), [p], 'a click on Autosave clears the selection');
   await press(page, 'Enter');

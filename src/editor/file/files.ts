@@ -7,7 +7,8 @@ import type { App, Files, Line } from '../app.ts';
 import { parseSource } from '../source.ts';
 import { pair, renderDeck, type Pairing } from '../render.ts';
 import { mathLookup } from '../math.ts';
-import { button, injectStyle, make, store, stored, wire } from '../ui/dom.ts';
+import { make, store, stored } from '../ui/dom.ts';
+import { Dialog, host } from '../ui/dialog.ts';
 
 type PickerOptions = { types?: { description: string; accept: Record<string, string[]> }[]; multiple?: boolean; suggestedName?: string };
 type Pickers = {
@@ -36,24 +37,13 @@ const REPLACE = (): string => `Replace ${fileName()} in ${folder()} with it, or 
 export const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
 const clock = (): string => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-const CSS = `
-.beeson-edit-card { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 65; box-sizing: border-box; width: min(600px, calc(100vw - 32px)); padding: 24px 28px; border: 1px solid var(--line, #555); border-radius: 10px; background: var(--bg, #000); color: var(--text, #eee); font: 15px/1.5 system-ui, sans-serif; box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45); }
-.beeson-edit-card[hidden] { display: none; }
-.beeson-edit-card h3 { margin: 0 0 8px; font: 600 18px/1.3 system-ui, sans-serif; }
-.beeson-edit-card p { margin: 0 0 16px; color: var(--subtle, #bbb); }
-.beeson-edit-card code { font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace; color: var(--text, #eee); word-break: break-all; }
-.beeson-edit-card button { font: inherit; padding: 8px 16px; border: 1px solid var(--violet, #96f); border-radius: 6px; background: transparent; color: var(--text, #eee); cursor: pointer; white-space: nowrap; }
-.beeson-edit-card .row { display: flex; flex-wrap: wrap; gap: 8px; }
-.beeson-edit-card .row button:not(:first-child) { border-color: var(--line, #555); }
-`;
-
 // a copy of the file for a browser that cannot write it in place
 export function download(name: string, text: string): void {
   const url = URL.createObjectURL(new Blob([text], { type: 'text/html' }));
   const a = make('a');
   a.href = url;
   a.download = name;
-  document.body.append(a);
+  host().append(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -90,7 +80,7 @@ function pickFile(): Promise<File | null> {
     };
     input.addEventListener('change', () => finish(input.files?.[0] ?? null));
     input.addEventListener('cancel', () => finish(null));
-    document.body.append(input);
+    host().append(input);
     input.click();
   });
 }
@@ -109,36 +99,31 @@ const ASK = {
 };
 
 export function install(app: App): void {
-  injectStyle('files', CSS);
+  const fail = (e: unknown) => app.fail(e);
+  const later = (action: () => unknown) => Promise.resolve().then(action).catch(fail);
 
-  // the card shown until a file is chosen on file:, where the page cannot read itself
-  const card = make('div', 'beeson-edit-card');
-  const cardText = make('p');
-  const cardButton = button(`Choose ${fileName()}…`);
-  card.append(make('h3', '', 'Choose the file of this deck'), cardText, cardButton);
-  card.hidden = true;
+  // the dialog shown until a file is chosen on file:, where the page cannot read itself
+  const card = new Dialog({
+    title: 'Choose the file of this deck',
+    text: '',
+    buttons: [{ label: `Choose ${fileName()}…`, value: 'choose', primary: true }],
+    dismissable: false,
+    stay: ['choose'],
+    onButton: () => later(openFile),
+  });
 
-  // the card shown when Open or Present is pressed with unsaved changes, as the prompt of PowerPoint
-  const ask = make('div', 'beeson-edit-card ask');
-  const askText = make('p');
-  const askSave = button('');
-  const askDiscard = button('');
-  const askCancel = button('Cancel', 'Go on editing');
-  const askRow = make('div', 'row');
-  askRow.append(askSave, askDiscard, askCancel);
-  ask.append(make('h3', '', 'The deck has unsaved changes'), askText, askRow);
-  ask.hidden = true;
-  let asking: ((choice: 'save' | 'discard' | null) => void) | null = null;
+  // the dialog shown when Open or Present is pressed with unsaved changes, as the prompt of PowerPoint
+  const ask = new Dialog({ title: 'The deck has unsaved changes', text: '', buttons: [], className: 'ask' });
 
-  // the card that lists the texts that cannot be edited, opened with Which? after the state
-  const problemsCard = make('div', 'beeson-edit-card problems');
+  // the dialog that lists the texts that cannot be edited, opened with Which? after the state
   const problemsList = make('ul');
-  problemsList.style.cssText = 'margin: 0 0 16px; padding-left: 20px; max-height: 50vh; overflow-y: auto; color: var(--subtle, #bbb);';
-  const problemsClose = button('Close');
-  const problemsRow = make('div', 'row');
-  problemsRow.append(problemsClose);
-  problemsCard.append(make('h3', '', 'Texts that cannot be edited'), problemsList, problemsRow);
-  problemsCard.hidden = true;
+  const problemsCard = new Dialog({
+    title: 'Texts that cannot be edited',
+    body: problemsList,
+    buttons: [{ label: 'Close', value: 'close', primary: true }],
+    className: 'problems',
+    onButton: () => later(closeProblems),
+  });
 
   // a save in flight, and whether another one was asked for meanwhile
   let saving = false;
@@ -147,34 +132,27 @@ export function install(app: App): void {
 
   const problemText = (p: Pairing['problems'][number]): string => `slide ${app.slideNumber(p.slide) ?? '?'}, ${p.tag}: ${p.reason}`;
 
-  function askFirst(action: keyof typeof ASK): Promise<'save' | 'discard' | null> {
+  async function askFirst(action: keyof typeof ASK): Promise<'save' | 'discard' | null> {
     const words = ASK[action];
-    askText.textContent = words.text;
-    [askSave.textContent, askSave.title] = words.save;
-    [askDiscard.textContent, askDiscard.title] = words.discard;
-    return new Promise((done) => {
-      asking = done;
-      ask.hidden = false;
-      askCancel.focus();
-    });
-  }
-
-  function answer(choice: 'save' | 'discard' | null): void {
-    ask.hidden = true;
-    asking?.(choice);
-    asking = null;
+    ask.text.textContent = words.text;
+    ask.setButtons([
+      { label: words.save[0], title: words.save[1], value: 'save', primary: true },
+      { label: words.discard[0], title: words.discard[1], value: 'discard' },
+      { label: 'Cancel', title: 'Go on editing', value: 'cancel' },
+    ]);
+    const choice = await ask.open('cancel');
+    return choice === 'save' || choice === 'discard' ? choice : null;
   }
 
   function showProblems(): void {
     problemsList.replaceChildren(...(app.pairing?.problems ?? []).map((p) => make('li', '', problemText(p))));
-    problemsCard.hidden = false;
-    problemsClose.focus();
+    void problemsCard.open('close');
   }
 
-  // the focus goes back to Which? in the toolbar
+  // the focus goes back to Which? in the menu bar
   function closeProblems(): void {
-    problemsCard.hidden = true;
-    const which = document.querySelector<HTMLButtonElement>('.beeson-edit-top button.which');
+    problemsCard.close(null);
+    const which = document.querySelector<HTMLButtonElement>('.beeson-edit-header button.which');
     if (which && !which.hidden) which.focus();
   }
 
@@ -229,9 +207,10 @@ export function install(app: App): void {
     return renderDeck(app.source, app.pairing, mathLookup(), app.tagEdits).text;
   }
 
-  // the edits since the last save are undone, so that the page reads as the saved file again
+  // the edits since the last save are undone, so that the page reads as the saved file again. the
+  // undo stops at the text last saved, since the history also holds the edits written by a save
   async function discardEdits(): Promise<void> {
-    while (app.history.canUndo) await app.history.undo();
+    while (app.history.canUndo && !readsAsSaved()) await app.history.undo();
     app.history.clear();
     app.move.select(null);
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -310,6 +289,8 @@ export function install(app: App): void {
       text = `${n ? `Saved a copy with ${edits}` : `Saved a copy of ${fileName()}`}. ${REPLACE()}`;
     }
     app.saved = rendered.text;
+    // the typing after a save is a new entry of the history, hence a discard can stop at the save
+    app.history.break();
     const warnings = rendered.warnings.length ? `, ${rendered.warnings.join(', ')}` : '';
     app.note = { text: `${text}${warnings}`, warn: rendered.warnings.length > 0 };
     // an edit made while the file was written is kept for the next save, since the page no longer
@@ -333,6 +314,14 @@ export function install(app: App): void {
     }
     if (canWrite() && !(await pickTarget(app))) return;
     await save();
+  }
+
+  function readsAsSaved(): boolean {
+    try {
+      return app.saved !== null && render() === app.saved;
+    } catch {
+      return false;
+    }
   }
 
   // a deck whose text is the file again, e.g. after its edits were undone, is clean
@@ -393,33 +382,29 @@ export function install(app: App): void {
     line,
     showProblems,
     closeProblems,
-    problemsShown: () => !problemsCard.hidden,
-    askShown: () => !ask.hidden,
-    cancelAsk: () => answer(null),
+    problemsShown: () => !problemsCard.el.hidden,
+    askShown: () => !ask.el.hidden,
+    cancelAsk: () => ask.close(null),
   };
   app.files = files;
   app.autosave = canWrite() && stored(AUTOSAVE_KEY) === '1';
 
-  const fail = (e: unknown) => app.fail(e);
-  wire(cardButton, openFile, fail);
-  wire(askSave, () => answer('save'), fail);
-  wire(askDiscard, () => answer('discard'), fail);
-  wire(askCancel, () => answer(null), fail);
-  wire(problemsClose, closeProblems, fail);
   app.listen('report', () => {
-    card.hidden = app.state !== 'waiting';
-    if (app.state !== 'waiting') return;
+    if (app.state !== 'waiting') {
+      card.close(null);
+      return;
+    }
     const where = `${fileName()} in ${folder()}, i.e. the file that is open here`;
-    cardText.textContent = canWrite()
+    card.text.textContent = canWrite()
       ? `A browser writes only to a file that you have chosen. Choose ${where}, and your edits are saved into it.`
       : `This browser does not write to a file by itself. Choose ${where}. A save is then a download of a copy with your edits. Set the browser to ask where to save each download, and you choose ${fileName()} in its folder and replace it.`;
+    if (!card.shown) void card.open('choose');
   });
   app.listen('history', () => {
     if (app.dirty) cleanIfSaved();
   });
   app.listen('dirty', scheduleAutosave);
   window.addEventListener('beforeunload', (ev) => { if (app.dirty) ev.preventDefault(); });
-  document.body.append(card, ask, problemsCard);
 }
 
 // the text is fetched when the deck is served, and with file: it is chosen with the card
