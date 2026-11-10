@@ -3,7 +3,7 @@
 // codes, the fragment steps, the mode switch, and the pointer
 
 import { Orbits, mount } from './orbits.ts';
-import { initChrome } from './chrome.ts';
+import { initChrome, refreshChrome } from './chrome.ts';
 import { initCursor, togglePointer } from './cursor.ts';
 import { initFullscreen, toggleFullscreen } from './fullscreen.ts';
 import { mountPlots, type PlotView } from './plot.ts';
@@ -131,6 +131,18 @@ function show(slide: HTMLElement): void {
   }
 }
 
+// the backdrops, surfaces, plots, and QR codes under root drawn still, for content added to the page
+// by the editor after the start
+function mountWithin(root: Element): void {
+  remount();
+  mountQr(root);
+  for (const o of backdrops) if (root.contains(o.el)) { o.fit(); o.complete(); }
+  for (const s of surfaces) if (root.contains(s.el)) { s.fit(); s.sync(false); s.draw(); }
+  for (const p of plots) if (root.contains(p.el)) { p.fit(); p.syncSteps(); p.still(); }
+  const slide = root.closest('.reveal .slides section');
+  if (slide) applySteps(slide);
+}
+
 function completeAll(): void {
   remount();
   for (const o of backdrops) { o.fit(); o.complete(); }
@@ -164,7 +176,10 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   // are added in a plugin, since the plugins are initialized in order before the fragments are
   // sorted, and the copies of a code box are made by the highlight plugin before this one
   if (!EDITING) plugins.push({ id: 'beeson-restore', init: () => addRestoreSteps(document) });
-  await deck.initialize({ ...DEFAULTS, ...options, plugins });
+  // a hidden slide is removed from the page by reveal.js unless showHiddenSlides is set, and it
+  // must be on the page to be edited
+  const editing: Partial<RevealOptions> = EDITING ? { showHiddenSlides: true } : {};
+  await deck.initialize({ ...DEFAULTS, ...editing, ...options, plugins });
 
   initChrome();
   initSteps(deck);
@@ -265,6 +280,9 @@ const Beeson = {
   plots,
   // called in a script file of polylines named in data-strands, see src/strands.ts
   strands: register,
+  // called by the editor after a structural change of the slides
+  mount: mountWithin,
+  refreshChrome,
   version: __VERSION__,
 };
 
