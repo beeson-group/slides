@@ -632,7 +632,9 @@ for (const platform of PLATFORMS) {
     assert.ok(near(picAfter.left, pic.left) && near(picAfter.top, pic.top), 'the corner of the picture across from the grip is moved');
     assert.equal(await shownSelected(page), 3, 'the resize changes the selection');
     const after = await page.evaluate('window.BeesonEditor.render()');
-    assert.match(after, /<div class="qr" [^>]*style="width: \d+px"/, 'the width of the QR code is not written');
+    // the paragraph, narrowed with the group, wraps and pushes the QR code down, which a translate
+    // takes back
+    assert.match(after, /<div class="qr" [^>]*style="width: \d+px(; translate: [^"]+)?"/, 'the width of the QR code is not written');
     const widths = [...after.matchAll(/<img class="for-(?:dark|light)"[^>]* style="width: (\d+)px"/g)].map((m) => Number(m[1]));
     assert.equal(widths.length, 2, 'the width is not written on both images of the figure');
     assert.equal(widths[0], widths[1], 'the images of the pair are given different widths');
