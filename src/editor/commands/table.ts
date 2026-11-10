@@ -28,7 +28,7 @@ import { childSpace } from '../render.ts';
 import { contentWithTex, mathLookup } from '../math.ts';
 import { textStyle } from '../model/templates.ts';
 import {
-  CELL, GRID, MOST, around, fillLine, boxOf, cellAfter, cellBeside, cellHtml, cellOver, columnName, columnsOf, emptyRows, gridOf, grow, hasHeader, numericOf,
+  CELL, GRID, MOST, around, fillLine, boxOf, cellAfter, cellBeside, cellHtml, cellOver, columnName, columnsOf, emptyRows, gridOf, grow, hasHeader, numericOf, sortOrder,
   parseHtmlTable, parseTabular, placeOf, placesOf, rowHtml, spotsIn, tableHtml, type Box, type Place,
 } from '../table.ts';
 import { placeCaret } from '../text/typing.ts';
@@ -238,20 +238,52 @@ function baseOf(app: App, parent: Element): string {
 
 const right = (cell: Element) => (cell as HTMLElement).style.textAlign === 'right';
 
-// the columns of numbers of a table, with a formula read as its TeX, e.g. 2.69 for \(2.69\)
-function numbersOf(table: HTMLTableElement): boolean[] {
+// the text of a cell with a formula read as its TeX, e.g. 2.69 for \(2.69\)
+function cellText(cell: Element): string {
   const tex = mathLookup();
-  const read = (cell: Element): string => {
-    let out = '';
-    const walk = (n: Node) => {
-      if (n instanceof Element && n.localName === 'mjx-container') out += tex(n)?.tex ?? '';
-      else if (n.nodeType === 3) out += (n as Text).data;
-      else n.childNodes.forEach(walk);
-    };
-    walk(cell);
-    return out;
+  let out = '';
+  const walk = (n: Node) => {
+    if (n instanceof Element && n.localName === 'mjx-container') out += tex(n)?.tex ?? '';
+    else if (n.nodeType === 3) out += (n as Text).data;
+    else n.childNodes.forEach(walk);
   };
-  return numericOf(table, read);
+  walk(cell);
+  return out;
+}
+
+// the columns of numbers of a table, with a formula read as its TeX
+const numbersOf = (table: HTMLTableElement): boolean[] => numericOf(table, cellText);
+
+// the body rows of a table that a sort reorders: the rows of its first tbody after the header rows,
+// i.e. the rows of th only. null when a cell of the body reaches over two rows, since Keynote does
+// not sort the rows of a merged cell, or when fewer than two rows are left
+function sortable(table: HTMLTableElement): HTMLTableRowElement[] | null {
+  const body = table.tBodies[0];
+  if (!body) return null;
+  const rows = [...body.rows];
+  while (rows.length && rows[0].cells.length && [...rows[0].cells].every((c) => c.localName === 'th')) rows.shift();
+  if (rows.length < 2 || rows.some((tr) => [...tr.cells].some((c) => c.rowSpan !== 1))) return null;
+  return rows;
+}
+
+// the body rows of the table of t reordered by the column of its cell, each row moved in the file
+// before the row that takes its place, as one entry of the history
+async function sortRows(app: App, t: Target, descending: boolean): Promise<void> {
+  const rows = sortable(t.table);
+  const col = t.box?.c0;
+  if (!rows || col === undefined) return;
+  const g = gridOf(t.table);
+  const all = [...t.table.rows];
+  const keys = rows.map((tr) => {
+    const s = g.grid[all.indexOf(tr)]?.[col];
+    return s ? cellText(s.cell) : '';
+  });
+  const order = sortOrder(keys, descending).map((i) => rows[i]);
+  const label = descending ? 'sort descending' : 'sort ascending';
+  for (const [i, tr] of order.entries()) {
+    const now = sortable(t.table)!;
+    if (now[i] !== tr) await app.doc.move(tr, now[i].parentElement!, now[i], label);
+  }
 }
 
 // a table of rows of cells put at its place in the layout of the current slide, and then moved
@@ -642,6 +674,8 @@ function cellItems(cell: HTMLTableCellElement): MenuItem[] {
     ...ids(['table.merge', 'table.unmerge']),
     { rule: true },
     ...ids(['table.distributeColumns', 'table.fitColumn']),
+    { rule: true },
+    ...ids(['table.sortAscending', 'table.sortDescending']),
     { rule: true },
     ...ids(['table.header', 'table.numbersRight', 'table.autoAlign']),
     { rule: true },
@@ -1261,6 +1295,20 @@ export function install(app: App): void {
       alignNumbers(a, t, true, alignBox(t));
     },
   });
+  // Sort Ascending and Sort Descending of the column menu of Keynote, by the column of the cell
+  const sortCommand = (id: string, label: string, order: number, descending: boolean) => c.define({
+    id,
+    label,
+    menu: menu('sort', order),
+    enabled: (a, arg?: unknown) => {
+      const t = ready(a) ? targetOf(a, arg) : null;
+      return !!t?.box && !!sortable(t.table);
+    },
+    undoable: true,
+    run: (a, arg) => sortRows(a, need(a, arg), descending),
+  });
+  sortCommand('table.sortAscending', 'Sort Ascending', 87.6, false);
+  sortCommand('table.sortDescending', 'Sort Descending', 87.7, true);
   c.define({
     id: 'table.delete',
     label: 'Delete Table',

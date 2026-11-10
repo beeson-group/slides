@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
+import { numberOf, sortOrder } from '../src/editor/table.ts';
 import { byteExact, click, press, saveAndReopen } from './helpers/editor.mjs';
 
 const DECK = 'index.html';
@@ -17,6 +18,10 @@ const SIZES = { mac: { width: 1600, height: 1000 }, other: { width: 1920, height
 // the index of the slide "Figures are first class citizens, too" of index.html, whose list ends
 // near the bottom of the slide, beside its figure
 const FIGURES = 4;
+// the deck of tables of the table tests, with a table with a rowspan on its first slide and a
+// plain table of mass ratios on its second
+const TABLES = 'test/pages/editor-tables.html';
+const PANEL = '#beeson-edit-panel-format';
 
 let browser;
 let server;
@@ -102,5 +107,86 @@ for (const platform of PLATFORMS) {
     assert.equal(await undoLabel(page), 'Undo Insert Table');
     const edited = await roundTrip(page);
     assert.equal(count(edited, /<tr>/g), rows + 3);
+  });
+}
+
+// the center of the item labeled label of the open menus, or null
+const itemAt = (page, label) => page.evaluate(`(() => {
+  const item = [...document.querySelectorAll('.beeson-edit-menu .item')].find((i) => i.querySelector('.label')?.textContent === ${js(label)});
+  if (!item || item.getAttribute('aria-disabled') === 'true') return null;
+  const r = item.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+})()`);
+
+const cellOf = (r, c) => `.reveal section.present table tr:nth-child(${r + 1}) > :nth-child(${c + 1})`;
+const PLAIN = [
+  '<tr><td>Moon</td><td>\\(0.01215\\)</td><td>Earth and Moon</td></tr>',
+  '<tr><td>Europa</td><td>2.53e-5</td><td>Jupiter</td></tr>',
+  '<tr><td>Titan</td><td>2.37e-4</td><td>Saturn</td></tr>',
+];
+const plainRows = (order) => order.map((i) => PLAIN[i]).join('\n      ');
+
+test('numbers of a table are read by value, and a sort puts numbers before texts and empty cells last', () => {
+  assert.equal(numberOf('1,200'), 1200);
+  assert.equal(numberOf('(10.00)'), -10);
+  assert.equal(numberOf('12 %'), 0.12);
+  assert.equal(numberOf('−3.5'), -3.5);
+  assert.equal(numberOf('2.53e-5'), 2.53e-5);
+  assert.equal(numberOf('Halo'), null);
+  assert.deepEqual(sortOrder(['10', '9', '100']), [1, 0, 2]);
+  assert.deepEqual(sortOrder(['10', '9', '100'], true), [2, 0, 1]);
+  assert.deepEqual(sortOrder(['b', '', '2', 'A', '1']), [4, 2, 3, 0, 1]);
+  assert.deepEqual(sortOrder(['b', '', '2', 'A', '1'], true), [2, 4, 0, 3, 1]);
+  // rows with equal keys keep their order
+  assert.deepEqual(sortOrder(['x', 'y', 'x']), [0, 2, 1]);
+});
+
+// state 95 of round 3: the menu of a cell did not sort the rows of its table. Keynote sorts the
+// body rows by a column from the menu of the column
+for (const platform of PLATFORMS) {
+  test(`Sort Descending in the menu of a cell reorders the body rows by its column, as one entry (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: TABLES, n: 1 });
+    await click(page, cellOf(2, 1));
+    await frames(page);
+    await click(page, cellOf(2, 1), { button: 'right' });
+    await page.waitFor(`!!document.querySelector('.beeson-edit-menu.cell')`);
+    const item = await itemAt(page, 'Sort Descending');
+    assert.ok(item, 'the menu of the cell does not offer Sort Descending');
+    await click(page, item);
+    await frames(page);
+    // 0.01215, 2.37e-4, and 2.53e-5, with the formula read as its number
+    await byteExact(page, [[plainRows([0, 1, 2]), plainRows([0, 2, 1])]]);
+    assert.equal(await undoLabel(page), 'Undo Sort Descending');
+    await roundTrip(page);
+  });
+
+  test(`Sort Ascending in the Table pane reorders the body rows by the column of the caret (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: TABLES, n: 1 });
+    await click(page, cellOf(1, 0));
+    await frames(page);
+    const button = await rect(page, `${PANEL} [data-command="table.sortAscending"]`);
+    assert.ok(button, 'the Table pane does not have Sort Ascending');
+    await click(page, button);
+    await frames(page);
+    // Europa, Moon, and Titan
+    await byteExact(page, [[plainRows([0, 1, 2]), plainRows([1, 0, 2])]]);
+    assert.equal(await undoLabel(page), 'Undo Sort Ascending');
+    // the caret is kept in its cell, which is moved with its row
+    assert.equal(await page.evaluate('document.activeElement.textContent'), 'Moon');
+    await roundTrip(page);
+    // a sort of rows already in order is not an entry of the history, which the open of the saved
+    // text emptied
+    await click(page, cellOf(1, 0));
+    await exec(page, 'table.sortAscending');
+    assert.equal(await render(page), page.source);
+    assert.equal((await state(page, 'edit.undo')).enabled, false);
+  });
+
+  test(`Sort is dimmed for a table with a cell over two rows (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: TABLES, n: 0 });
+    await click(page, cellOf(3, 1));
+    await frames(page);
+    assert.equal((await state(page, 'table.sortAscending')).enabled, false);
+    assert.equal((await state(page, 'table.sortDescending')).enabled, false);
   });
 }

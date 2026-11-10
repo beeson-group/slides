@@ -1,7 +1,7 @@
 // the Table pane of the Format tab, as the Table tab of Keynote: the size of the table and the cell
 // of the caret or the range of the cells selected as a block, the cells merged and unmerged, the
-// header row, the rows and the columns added and deleted, the widths of the columns, the numbers
-// at the right with Auto-Align, and the delete of the table
+// header row, the rows and the columns added, deleted, and sorted, the widths of the columns, the
+// numbers at the right with Auto-Align, and the delete of the table
 
 import type { App } from '../app.ts';
 import { targetOf } from '../commands/table.ts';
@@ -34,6 +34,10 @@ export function tablePane(app: App, run: Run): Control[] {
         { command: 'table.rowBelow', text: 'Below', title: 'Add Row Below' },
       ], 'Add Row')], 'Add'),
       row([button(app, run, { command: 'table.deleteRow', text: 'Delete Row' })]),
+      row([segmented(app, run, [
+        { command: 'table.sortAscending', text: 'Ascending', title: 'Sort Ascending' },
+        { command: 'table.sortDescending', text: 'Descending', title: 'Sort Descending' },
+      ], 'Sort')], 'Sort'),
     ]),
     section('Columns', [
       row([segmented(app, run, [
