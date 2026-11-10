@@ -152,3 +152,52 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the caret put at the end of the first element at selector, or the whole text of it selected,
+// with its block focused
+const caretIn = (page, selector, whole = false) =>
+  page.evaluate(`(() => {
+    const el = document.querySelector(${JSON.stringify(selector)});
+    el.closest('[contenteditable="true"]').focus();
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    if (!${whole}) r.collapse(false);
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+    return true;
+  })()`);
+const painterOn = async (page) => (await state(page, 'text.formatPainter')).enabled;
+
+for (const platform of PLATFORMS) {
+  test(`the Format Painter is dimmed in a code box and live again in a text on ${platform}`, async () => {
+    const page = await editor(platform, 5);
+    const source = page.source;
+    await caretIn(page, '.reveal section.present h2');
+    await frames(page);
+    assert.equal(await painterOn(page), true, 'the painter is dimmed in a heading');
+    await caretIn(page, '.reveal section.present pre code');
+    await frames(page);
+    assert.equal(await painterOn(page), false, 'the painter is live with the caret in a code box');
+    await caretIn(page, '.reveal section.present pre code', true);
+    await frames(page);
+    assert.equal(await painterOn(page), false, 'the painter is live with the code of a box selected');
+    // Esc leaves the text of the code box and selects the box
+    await page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
+    await frames(page);
+    assert.equal(await page.evaluate(`document.activeElement?.closest?.('pre') ? 'text' : 'element'`), 'element');
+    assert.equal(await painterOn(page), false, 'the painter is live with a code box selected');
+    await caretIn(page, '.reveal section.present td');
+    await frames(page);
+    assert.equal(await painterOn(page), true, 'the painter is dimmed in a cell after a code box');
+    // a painter armed in a text does not paint a code box
+    await caretIn(page, '.reveal section.present h2', true);
+    await exec(page, 'text.formatPainter');
+    assert.equal((await state(page, 'text.formatPainter')).checked, true);
+    await caretIn(page, '.reveal section.present pre code', true);
+    await page.evaluate(`document.querySelector('.reveal section.present pre code').dispatchEvent(new PointerEvent('pointerup', { bubbles: true }))`);
+    await wait(page, 100);
+    assert.equal(await render(page), source, 'the painter wrote a style into a code box');
+    assert.deepEqual(errors(page), []);
+  });
+}
