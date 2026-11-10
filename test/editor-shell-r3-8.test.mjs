@@ -330,3 +330,33 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the gap, in slide px, between the new box of a Text Box and the block before it, and the gap of
+// the theme between two paragraphs
+const gapAbove = (page) =>
+  page.evaluate(`(() => {
+    const box = document.querySelector('.reveal section.present .beeson-pending');
+    const slides = document.querySelector('.reveal .slides');
+    const k = slides.getBoundingClientRect().width / slides.offsetWidth;
+    const prev = box.previousElementSibling;
+    const p = document.querySelector('.reveal section.present > p:not(.beeson-pending)');
+    return { gap: (box.getBoundingClientRect().top - prev.getBoundingClientRect().bottom) / k, theme: parseFloat(getComputedStyle(p).marginBottom) };
+  })()`);
+
+for (const platform of PLATFORMS) {
+  test(`a new text box under a list is put at the spacing of the paragraphs of the theme (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 3 });
+    await exec(page, 'insert.text');
+    await frames(page);
+    const { gap, theme } = await gapAbove(page);
+    assert.ok(theme > 0);
+    assert.ok(Math.abs(gap - theme) < 1, `the new text box is ${gap} px under the list, and paragraphs are ${theme} px apart`);
+    await type(page, 'A new paragraph.');
+    await press(page, 'Escape');
+    await frames(page);
+    const edited = await render(page);
+    assert.match(edited, /<\/ol>\n  <p>A new paragraph.<\/p>\n/);
+    await undoRedo(page, page.source, edited);
+    assert.deepEqual(errors(page), []);
+  });
+}
