@@ -10,6 +10,7 @@ import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { columnName, emptyRows, grow, isNumeric, layoutCells, numericColumns, parseTabular, spotsIn, tableHtml } from '../src/editor/table.ts';
+import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { byteExact, click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
@@ -20,6 +21,7 @@ const TABLES_DECK = 'test/pages/editor-tables.html';
 // the index of the slide of the equations in index.html, a content slide without a table
 const EQUATIONS = 3;
 const STYLE = { step: '  ', eol: '\n' };
+const THEME = new Set(themeClasses(readFileSync('theme/beeson.css', 'utf8')));
 
 test('numbers are told from words, and a column of numbers is set at the right below its header', () => {
   for (const t of ['42', '-3.5', '1,200', '$9.99', '12 %', '(10.00)', '3.2e-4', '−7', '+1']) assert.ok(isNumeric(t), t);
@@ -130,6 +132,10 @@ let saves = 0;
 async function roundTrip(page, undos = 1) {
   const edited = await render(page);
   assert.notEqual(edited, page.source, 'the edit did not change the text');
+  // the problems of the scope rule that the file did not have before
+  const added = textProblems(edited, THEME);
+  for (const p of textProblems(page.source, THEME)) if (added.includes(p)) added.splice(added.indexOf(p), 1);
+  assert.deepEqual(added, [], 'the edit is out of the scope rule');
   for (let i = 0; i < undos; i++) await page.evaluate('window.BeesonEditor.undo()');
   await byteExact(page);
   assert.equal((await settle(page)).undo, false, `the edit is more than ${undos} entries of the history`);
@@ -701,6 +707,91 @@ for (const platform of ['mac', 'other']) {
     await byteExact(page, [[tbodyTable(PLAIN_ROWS), tbodyTable(PLAIN_ROWS.map((r) => r.replace(/(<t[dh]>[^<]*<\/t[dh]>)<t([dh])>[^<]*<\/t[dh]>/, '$1<t$2></t$2>')))]]);
     assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Clear Cells');
     assert.equal(await page.evaluate('document.querySelectorAll(".reveal section.present table").length'), 1);
+    await roundTrip(page);
+  });
+}
+
+// a drag from one cell of the current slide to another, by row and column
+async function dragCells(page, [r0, c0], [r1, c1]) {
+  const from = await at(page, cellSelector(r0, c0));
+  const to = await at(page, cellSelector(r1, c1));
+  await drag(page, from, { dx: to.x - from.x, dy: to.y - from.y });
+  await settle(page);
+}
+
+for (const platform of ['mac', 'other']) {
+  test(`Merge Cells writes the range as one cell with a colspan and a rowspan and the text joined (${platform})`, async (t) => {
+    const page = await open(platform, TABLES_DECK);
+    t.after(() => page.close?.());
+    await show(page, 1);
+    // Moon and the formula above Europa and 2.53e-5
+    await dragCells(page, [1, 0], [2, 1]);
+    assert.equal((await page.evaluate(`window.BeesonEditor.state('table.unmerge')`)).enabled, false);
+    if (platform === 'mac') await press(page, 'Ctrl+Mod+M');
+    else await page.evaluate(`window.BeesonEditor.exec('table.merge')`);
+    await settled(page);
+    await byteExact(page, [[tbodyTable(PLAIN_ROWS), tbodyTable([
+      PLAIN_ROWS[0],
+      '<tr><td colspan="2" rowspan="2">Moon \\(0.01215\\) Europa 2.53e-5</td><td>Earth and Moon</td></tr>',
+      '<tr><td>Jupiter</td></tr>',
+      PLAIN_ROWS[3],
+    ])]]);
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Merge Cells');
+    // the merged cell stays selected as a block, and is the range of Unmerge Cells
+    assert.deepEqual(await marked(page), ['A', 'B', '2', '3']);
+    assert.ok(await asBlock(page));
+    assert.equal(await page.evaluate(`document.querySelector('.reveal section.present td[rowspan] mjx-container') !== null`), true);
+    await roundTrip(page);
+  });
+
+  test(`Unmerge Cells splits each merged cell of the range into empty cells of its tag and alignment (${platform})`, async (t) => {
+    const page = await open(platform, TABLES_DECK);
+    t.after(() => page.close?.());
+    await show(page, 0);
+    // the column of Halo grows over Distant retrograde, which reaches into the second column
+    await click(page, cellSelector(1, 0));
+    await page.evaluate(`window.BeesonEditor.exec('table.selectColumn')`);
+    await settle(page);
+    assert.equal((await page.evaluate(`window.BeesonEditor.state('table.unmerge')`)).enabled, true);
+    await page.evaluate(`window.BeesonEditor.exec('table.unmerge')`);
+    await settled(page);
+    await byteExact(page, [[tbodyTable(MERGED_ROWS), tbodyTable([
+      MERGED_ROWS[0],
+      `<tr><td>Halo</td>${R}14.8</td>${R}3.05</td></tr>`,
+      `<tr><td></td>${R}6.6</td>${R}3.04</td></tr>`,
+      `<tr><td>Distant retrograde</td><td></td>${R}2.92</td></tr>`,
+    ])]]);
+    assert.deepEqual(await marked(page), ['A', 'B', '1', '2', '3', '4']);
+    assert.equal((await page.evaluate(`window.BeesonEditor.state('table.unmerge')`)).enabled, false);
+    await roundTrip(page);
+  });
+
+  test(`a merged cell of an aligned column keeps its style, and a row left empty is taken out (${platform})`, async (t) => {
+    const page = await open(platform, TABLES_DECK);
+    t.after(() => page.close?.());
+    await show(page, 0);
+    // 14.8 and 3.05 over 6.6 and 3.04: the second row is then empty and taken out, and Halo with it
+    // a row shorter
+    await dragCells(page, [1, 1], [2, 1]);
+    await page.evaluate(`window.BeesonEditor.exec('table.merge')`);
+    await settled(page);
+    await byteExact(page, [[tbodyTable(MERGED_ROWS), tbodyTable([
+      MERGED_ROWS[0],
+      `<tr><td>Halo</td><td style="text-align: right" colspan="2">14.8 3.05 6.6 3.04</td></tr>`,
+      MERGED_ROWS[3],
+    ])]]);
+    await roundTrip(page);
+  });
+
+  test(`a merged cell of a header row is a th (${platform})`, async (t) => {
+    const page = await open(platform, TABLES_DECK);
+    t.after(() => page.close?.());
+    await show(page, 0);
+    // Period and Jacobi of the header row are one th
+    await dragCells(page, [0, 1], [0, 2]);
+    await page.evaluate(`window.BeesonEditor.exec('table.merge')`);
+    await settled(page);
+    await byteExact(page, [[tbodyTable(MERGED_ROWS), tbodyTable(['<tr><th>Family</th><th colspan="2">Period Jacobi</th></tr>', ...MERGED_ROWS.slice(1)])]]);
     await roundTrip(page);
   });
 }

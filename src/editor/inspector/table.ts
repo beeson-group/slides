@@ -1,5 +1,6 @@
 // the Table pane of the Format tab, as the Table tab of Keynote: the size of the table and the cell
-// of the caret or the range of the cells selected as a block, the header row, the rows and the
+// of the caret or the range of the cells selected as a block, the cells merged and unmerged, the
+// header row, the rows and the
 // columns added and deleted at the cell of the caret, the numbers at the right, and the delete of
 // the table
 import type { App } from '../app.ts';
@@ -22,6 +23,10 @@ export function tablePane(app: App, run: Run): Control[] {
   };
   return [
     section(null, [note(size)]),
+    section('Cells', [row([
+      button(app, run, { command: 'table.merge', text: 'Merge' }),
+      button(app, run, { command: 'table.unmerge', text: 'Unmerge' }),
+    ])]),
     section('Header', [checkbox(app, run, 'table.header', 'Header row, written as th')]),
     section('Rows', [
       row([segmented(app, run, [

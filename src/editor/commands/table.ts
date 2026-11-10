@@ -19,7 +19,7 @@ import type { App } from '../app.ts';
 import { keysOf, type Command } from '../commands.ts';
 import { matches } from '../keymap.ts';
 import { childSpace } from '../render.ts';
-import { mathLookup } from '../math.ts';
+import { contentWithTex, mathLookup } from '../math.ts';
 import { textStyle } from '../model/templates.ts';
 import {
   CELL, GRID, around, boxOf, cellAfter, cellBeside, cellHtml, cellOver, columnName, columnsOf, emptyRows, gridOf, grow, hasHeader, numericOf,
@@ -297,8 +297,7 @@ const blocked = (app: App, t: Target) => app.selection.only() === t.table && !ce
 function land(app: App, cell: Element | null | undefined, at: 'start' | 'end', asBlock: boolean): void {
   if (!isCell(cell)) return;
   if (!asBlock) return focusCell(cell, at);
-  block = { anchor: cell, focus: cell };
-  app.invalidate('selection');
+  selectCells(app, cell, cell);
 }
 
 // the rows left without a cell taken out, and each cell that reached over one a row shorter
@@ -395,6 +394,52 @@ function numbersRight(t: Target | null): boolean {
   return cells.length > 0 && cells.every((p) => right(p.cell));
 }
 
+// the cells of the range of t merged into its first cell, as Merge Cells of Keynote. the first cell
+// keeps its tag and its style, takes the text of the cells with a text, joined with a space, and
+// is written with the colspan and the rowspan of the range. a row left without a cell is taken out
+async function mergeCells(app: App, t: Target): Promise<void> {
+  const box = t.box!;
+  const [first, ...rest] = spotsIn(gridOf(t.table), box);
+  const asBlock = blocked(app, t);
+  const joined = [first, ...rest].map((s) => contentWithTex(s.cell).trim()).filter(Boolean).join(' ');
+  for (const s of rest) await app.doc.remove(s.cell, 'merge cells');
+  app.doc.setTag(first.cell, { attrs: { colspan: spanText(box.c1 - box.c0 + 1), rowspan: spanText(box.r1 - box.r0 + 1) } }, 'merge cells');
+  if (joined !== contentWithTex(first.cell)) await app.doc.setContent(first.cell, joined, 'merge cells');
+  await dropEmptyRows(app, t.table, 'merge cells');
+  land(app, first.cell, 'end', asBlock);
+}
+
+// each merged cell of the range of t split into cells of one row and one column, as Unmerge Cells
+// of Keynote. the merged cell keeps its text at its first row and column, and the new cells are
+// empty, with its tag and its alignment. the place of each new cell is taken from the table before
+// the change, and the merged cells are split in the order of reading, so that the new cells of two
+// merged cells side by side are written in the order of their columns
+async function unmergeCells(app: App, t: Target): Promise<void> {
+  const g = gridOf(t.table);
+  const box = t.box!;
+  const merged = spotsIn(g, box).filter((s) => s.rows > 1 || s.span > 1);
+  const asBlock = blocked(app, t);
+  const plan = merged.map((s) => ({
+    s,
+    rows: Array.from({ length: s.rows - 1 }, (_, k) => s.row + 1 + k).map((r) => ({ r, before: g.spots[r].find((x) => x.col > s.col)?.cell ?? null })),
+  }));
+  for (const { s, rows } of plan) {
+    const cells = (n: number) => Array.from({ length: n }, () => cellHtml(s.cell.localName as 'td' | 'th', '', right(s.cell)));
+    if (s.span > 1) await app.doc.insert(cells(s.span - 1), s.cell.parentElement!, s.cell.nextSibling, 'unmerge cells');
+    for (const { r, before } of rows) await app.doc.insert(cells(s.span), t.table.rows[r], before, 'unmerge cells');
+    app.doc.setTag(s.cell, { attrs: { colspan: null, rowspan: null } }, 'unmerge cells');
+  }
+  const after = gridOf(t.table);
+  const anchor = after.grid[box.r0]?.[box.c0]?.cell;
+  const focus = after.grid[box.r1]?.[box.c1]?.cell;
+  if (asBlock && anchor && focus) selectCells(app, anchor, focus);
+  else land(app, t.cell, 'end', false);
+}
+
+// whether the range of t holds more than one cell, and whether it holds a merged cell
+const mergeable = (t: Target | null) => !!t?.box && spotsIn(gridOf(t.table), t.box).length > 1;
+const unmergeable = (t: Target | null) => !!t?.box && spotsIn(gridOf(t.table), t.box).some((s) => s.rows > 1 || s.span > 1);
+
 // the cells of rows written into the table of cell from cell on, with rows and columns added at the
 // end as they are needed
 async function pasteCells(app: App, cell: HTMLTableCellElement, rows: string[][]): Promise<void> {
@@ -445,6 +490,8 @@ function cellItems(cell: HTMLTableCellElement): MenuItem[] {
     ...ids(['table.deleteRow', 'table.deleteColumn']),
     { rule: true },
     ...ids(['table.selectRow', 'table.selectColumn']),
+    { rule: true },
+    ...ids(['table.merge', 'table.unmerge']),
     { rule: true },
     ...ids(['table.header', 'table.numbersRight']),
     { rule: true },
@@ -809,6 +856,25 @@ export function install(app: App): void {
     enabled: withTable,
     undoable: true,
     run: (a, arg) => deleteTable(a, need(a, arg)),
+  });
+
+  c.define({
+    id: 'table.merge',
+    label: 'Merge Cells',
+    keys: { mac: ['Ctrl+Mod+M'] },
+    in: ['text', 'canvas'],
+    menu: menu('merge', 79.7),
+    enabled: (a, arg?: unknown) => ready(a) && mergeable(targetOf(a, arg)),
+    undoable: true,
+    run: (a, arg) => mergeCells(a, need(a, arg)),
+  });
+  c.define({
+    id: 'table.unmerge',
+    label: 'Unmerge Cells',
+    menu: menu('merge', 79.8),
+    enabled: (a, arg?: unknown) => ready(a) && unmergeable(targetOf(a, arg)),
+    undoable: true,
+    run: (a, arg) => unmergeCells(a, need(a, arg)),
   });
 
   // the rows or the columns of the cells of the target selected as a block, from the first cell
