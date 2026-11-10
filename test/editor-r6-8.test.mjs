@@ -236,3 +236,48 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// fieldsOf returns the values of the fields Width and Height of the Arrange pane
+const fieldsOf = (page) =>
+  page.evaluate(`(() => { const v = (n) => document.querySelector('#beeson-edit-panel-format input[name="' + n + '"]')?.value ?? null; return { w: v('Width'), h: v('Height') }; })()`);
+// groupBoxOf returns the size of the box of the members of the group of the selection, in slide px
+const groupBoxOf = (page) =>
+  page.evaluate(`(() => {
+    const els = window.BeesonEditor.selection();
+    const rs = els.map((e) => e.getBoundingClientRect());
+    const s = Reveal.getScale();
+    return { w: (Math.max(...rs.map((r) => r.right)) - Math.min(...rs.map((r) => r.left))) / s, h: (Math.max(...rs.map((r) => r.bottom)) - Math.min(...rs.map((r) => r.top))) / s };
+  })()`);
+
+for (const platform of PLATFORMS) {
+  test(`the Arrange pane shows the size of a group, also during its resize (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: MATH });
+    // the figure is selected from its image with Esc, and the paragraph added with Shift
+    await click(page, IMG);
+    await press(page, 'Escape');
+    await click(page, '.reveal section.present > p', { modifiers: 'Shift' });
+    await frames(page);
+    assert.deepEqual(await page.evaluate(`window.BeesonEditor.selection().map((e) => e.tagName).sort()`), ['FIGURE', 'P']);
+    await exec(page, 'arrange.group');
+    await frames(page);
+    await page.evaluate(`[...document.querySelectorAll('#beeson-edit-panel-format button')].find((b) => b.textContent.trim() === 'Arrange')?.click()`);
+    await frames(page);
+    const near = (field, value) => Math.abs(Number(field) - value) <= 1.5;
+    const box = await groupBoxOf(page);
+    let f = await fieldsOf(page);
+    assert.ok(near(f.w, box.w) && near(f.h, box.h), `the fields read ${js(f)} for a group of ${js(box)}`);
+    // the corner grip of the group is held after a move of 120 by 90 px
+    const se = await page.evaluate(`(() => { const g = document.querySelector('.beeson-grip[data-group="1"][data-handle="se"]'); const r = g.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    const { drag } = await import('./helpers/editor.mjs');
+    await drag(page, se, { dx: -120, dy: -90, steps: 12, hold: true });
+    await frames(page);
+    const held = await groupBoxOf(page);
+    f = await fieldsOf(page);
+    const readout = await page.evaluate(`document.querySelector('.beeson-offset:not([hidden])')?.textContent ?? ''`);
+    assert.ok(held.w < box.w - 50, js({ box, held }));
+    assert.ok(near(f.w, held.w) && near(f.h, held.h), `during the resize the fields read ${js(f)} for a group of ${js(held)}, and the readout ${readout}`);
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: se.x - 120, y: se.y - 90, button: 'left', clickCount: 1 });
+    await frames(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
