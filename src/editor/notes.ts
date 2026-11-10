@@ -252,4 +252,199 @@ export function install(app: App): void {
   textZoom = TEXT_ZOOMS[0] <= kept && kept <= TEXT_ZOOMS[TEXT_ZOOMS.length - 1] ? kept : 1;
   showZoom();
   setPane(Number(stored(PANE_KEY)) || 200);
+  installDashes(app);
+}
+
+// the dash lists of the speaker notes, which are rich text in Keynote. a line of the notes, i.e.
+// the text between two br or lists, is made an item of a ul by the list commands, or by a dash and
+// a space typed at its start, and an item is made a line again. Enter in an item starts the next
+// one, or ends the list in an empty item, and Backspace at the start of an item makes it a line.
+// each change is recorded as the content of the aside before and after
+
+type Caret = { aside: HTMLElement; range: Range; li: HTMLLIElement | null };
+
+function caretOf(app: App): Caret | null {
+  const sel = window.getSelection();
+  if (!sel?.rangeCount) return null;
+  const range = sel.getRangeAt(0);
+  const node = range.startContainer;
+  const aside = app.hostOf(node instanceof Element ? node : node.parentElement);
+  if (!(aside instanceof HTMLElement) || !aside.matches('aside.notes') || !aside.contains(range.endContainer)) return null;
+  const li = (node instanceof Element ? node : node.parentElement)?.closest('li');
+  return { aside, range, li: li && aside.contains(li) && li.parentElement?.parentElement === aside ? (li as HTMLLIElement) : null };
+}
+
+const isBreak = (n: Node | null) => n instanceof Element && (n.localName === 'br' || n.matches('ul, ol, div, p'));
+const isInline = (n: Node | null) => !!n && !isBreak(n);
+
+// the children of the aside on the line of the caret, and the br or list on each side of them
+function lineOf(c: Caret): { nodes: Node[]; before: Node | null; after: Node | null } {
+  const kids = [...c.aside.childNodes];
+  const { startContainer: node, startOffset: offset } = c.range;
+  let lo: number, hi: number;
+  if (node === c.aside) [lo, hi] = [offset - 1, offset];
+  else {
+    let top: Node = node;
+    while (top.parentNode !== c.aside) top = top.parentNode!;
+    lo = hi = kids.indexOf(top as ChildNode);
+  }
+  while (lo >= 0 && !isBreak(kids[lo])) lo--;
+  while (hi < kids.length && !isBreak(kids[hi])) hi++;
+  return { nodes: kids.slice(lo + 1, hi), before: kids[lo] ?? null, after: kids[hi] ?? null };
+}
+
+// the caret at the start of the text of node, or before node where it is a br
+function caretAt(node: Node): void {
+  if (node instanceof Element && node.localName !== 'br' && node.firstChild) return caretAt(node.firstChild);
+  const r = document.createRange();
+  if (node instanceof Text) r.setStart(node, 0);
+  else r.setStartBefore(node);
+  const sel = window.getSelection();
+  sel?.removeAllRanges();
+  sel?.addRange(r);
+}
+
+const empty = (el: Element) => !el.textContent?.trim() && !el.querySelector('mjx-container, img');
+
+// the line of the caret made an item, joined to a list right before or after it
+function toItem(c: Caret): void {
+  const { nodes, before, after } = lineOf(c);
+  let next = after;
+  if (next instanceof Element && next.localName === 'br') {
+    const n = next.nextSibling;
+    next.remove();
+    next = n;
+  }
+  // a list starts a line, hence the br after a line with text is taken off, and the br of an
+  // empty line is kept
+  if (before instanceof Element && before.localName === 'br' && isInline(before.previousSibling)) before.remove();
+  const li = document.createElement('li');
+  li.append(...nodes);
+  if (!li.firstChild) li.append(document.createElement('br'));
+  const prev = next ? next.previousSibling : c.aside.lastChild;
+  let ul: Element;
+  if (prev instanceof Element && prev.localName === 'ul') ul = prev;
+  else {
+    ul = document.createElement('ul');
+    c.aside.insertBefore(ul, next);
+  }
+  ul.append(li);
+  if (ul.nextSibling instanceof Element && ul.nextSibling.localName === 'ul') {
+    const rest = ul.nextSibling;
+    ul.append(...rest.childNodes);
+    rest.remove();
+  }
+  caretAt(li);
+}
+
+// li made a line of the aside in its place, which cuts its list in two. an empty line is a br
+function toLine(aside: HTMLElement, li: HTMLLIElement): void {
+  const ul = li.parentElement!;
+  const items = [...ul.children];
+  const at = items.indexOf(li);
+  const ref = ul.nextSibling;
+  const line = empty(li) ? [] : [...li.childNodes];
+  const rest = items.slice(at + 1);
+  const out: Node[] = [];
+  if (at === 0 && isInline(ul.previousSibling)) out.push(document.createElement('br'));
+  out.push(...line);
+  if (!line.length || (!rest.length && isInline(ref))) out.push(document.createElement('br'));
+  if (rest.length) {
+    const tail = document.createElement('ul');
+    tail.append(...rest);
+    out.push(tail);
+  }
+  li.remove();
+  for (const n of out) aside.insertBefore(n, ref);
+  if (!ul.children.length) ul.remove();
+  caretAt(line[0] ?? out.find((n) => n instanceof Element && n.localName === 'br')!);
+}
+
+// fn run on the aside of c as one input of typing, which the command around it names
+function change(app: App, c: Caret, fn: () => void): void {
+  app.history.beforeTyping(c.aside);
+  fn();
+  app.history.afterTyping(c.aside);
+  app.markDirty();
+  app.invalidate('content');
+}
+
+// ul at an item of the notes, none on another line of the notes, and null outside the notes
+export function notesListKind(app: App): 'ul' | 'none' | null {
+  const c = caretOf(app);
+  return !c ? null : c.li ? 'ul' : 'none';
+}
+
+// the notes take dashes and lines, and not numbers
+export function canSetNotesList(app: App, kind: 'none' | 'ul' | 'ol'): boolean {
+  return kind !== 'ol' && notesListKind(app) !== null;
+}
+
+export function setNotesList(app: App, kind: 'none' | 'ul' | 'ol'): void {
+  const c = caretOf(app);
+  if (!c || kind === 'ol' || (kind === 'ul') === !!c.li) return;
+  change(app, c, () => (c.li ? toLine(c.aside, c.li) : toItem(c)));
+}
+
+export const canSplitNotesItem = (app: App): boolean => !!caretOf(app)?.li;
+
+// the text of the item after the caret is made the next item, and an empty item is made a line
+export function splitNotesItem(app: App): void {
+  const c = caretOf(app);
+  if (!c?.li) return;
+  const li = c.li;
+  change(app, c, () => {
+    if (empty(li)) return toLine(c.aside, li);
+    c.range.deleteContents();
+    const tail = document.createRange();
+    tail.setStart(c.range.startContainer, c.range.startOffset);
+    tail.setEnd(li, li.childNodes.length);
+    const next = document.createElement('li');
+    next.append(tail.extractContents());
+    // an empty item holds a br, without which the caret cannot be put into it
+    for (const item of [li, next]) if (empty(item)) item.replaceChildren(document.createElement('br'));
+    li.after(next);
+    caretAt(next);
+  });
+}
+
+// whether the caret is collapsed at the start of an item of the notes
+export function canJoinNotesItem(app: App): boolean {
+  const c = caretOf(app);
+  if (!c?.li || !c.range.collapsed) return false;
+  const r = document.createRange();
+  r.setStart(c.li, 0);
+  r.setEnd(c.range.startContainer, c.range.startOffset);
+  return r.toString() === '' && !r.cloneContents().querySelector('mjx-container, img');
+}
+
+export function joinNotesItem(app: App): void {
+  const c = caretOf(app);
+  if (c?.li) change(app, c, () => toLine(c.aside, c.li!));
+}
+
+// a dash and a space typed at the start of a line of the notes make it an item, as an entry of
+// the history after the typing, named as the list command
+function installDashes(app: App): void {
+  let typed = false;
+  document.addEventListener('beforeinput', (ev) => {
+    typed = ev.inputType === 'insertText' && !ev.defaultPrevented && ev.data === ' ';
+  });
+  document.addEventListener('input', () => {
+    if (!typed) return;
+    typed = false;
+    const c = caretOf(app);
+    if (!c || c.li || !c.range.collapsed) return;
+    const first = lineOf(c).nodes[0];
+    if (!(first instanceof Text) || c.range.startContainer !== first || c.range.startOffset !== 2 || !/^[-–][  ]/u.test(first.data)) return;
+    void app.history.transact('Dashes', () => change(app, c, () => {
+      first.deleteData(0, 2);
+      if (first.data) c.range.setStart(first, 0);
+      else {
+        c.range.setStartBefore(first);
+        first.remove();
+      }
+      toItem(c);
+    })).catch((e) => app.fail(e));
+  });
 }

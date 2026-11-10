@@ -1,11 +1,11 @@
 // the commands of the text of a slide: the keys of its structure in a text, i.e. Return, Backspace,
 // Delete, Tab, and Shift+Tab, and the Format menu with the formats of the words, their tones, the
 // paragraph styles, the lists, the links, Change Case, and Copy Style and Paste Style with the
-// Format Painter of the Text pane. the Substitutions of the Edit menu switch the smart quotes and
-// dashes of text/substitute.ts. a key of a disabled command is left to the browser, e.g. Return in
-// a heading, which typing.ts writes as a br. a format is set in a text, or on the whole text of
-// the blocks selected on the canvas. with the caret outside a word, a format, a tone, or a style is
-// kept by text/carry.ts for the text typed next
+// Format Painter of the Text pane. the Substitutions of the Edit menu switch the smart quotes,
+// dashes, and links of text/substitute.ts. a key of a disabled command is left to the browser,
+// e.g. Return in a heading, which typing.ts writes as a br. a format is set in a text, or on the
+// whole text of the blocks selected on the canvas. with the caret outside a word, a format, a
+// tone, or a style is kept by text/carry.ts for the text typed next
 
 import type { App, Region } from '../app.ts';
 import type { Command } from '../commands.ts';
@@ -15,6 +15,9 @@ import * as inline from '../text/inline.ts';
 import { openLink, applyLink, type LinkKind } from '../text/link.ts';
 import { isSmart, setSmart, type Smart } from '../text/substitute.ts';
 import { injectStyle } from '../ui/dom.ts';
+import { CONTAINER } from '../canvas/hit.ts';
+import { modeOf, type Mode } from './figure.ts';
+import * as notes from '../notes.ts';
 
 const TEXT: Region[] = ['text'];
 const FORMAT: Region[] = ['text', 'canvas'];
@@ -47,8 +50,26 @@ export function install(app: App): void {
   const define = (command: Command) => c.define(command);
   const menu = (group: string, order: number, submenu?: string) => ({ bar: 'Format', group, order, ...(submenu ? { submenu } : {}) });
 
-  define({ id: 'text.newParagraph', label: 'New Paragraph', keys: { mac: ['Enter'], other: ['Enter'] }, in: TEXT, undoable: true, enabled: blocks.canSplit, run: blocks.split });
-  define({ id: 'text.joinBackward', label: 'Join Paragraphs', keys: { mac: ['Backspace'], other: ['Backspace'] }, in: TEXT, undoable: true, enabled: blocks.canJoinBack, run: blocks.joinBackward });
+  // in the speaker notes, Return and Backspace act on an item of a dash list of notes.ts
+  const inNotes = (a: App) => a.region() === 'notes';
+  define({
+    id: 'text.newParagraph',
+    label: 'New Paragraph',
+    keys: { mac: ['Enter'], other: ['Enter'] },
+    in: [...TEXT, 'notes'],
+    undoable: true,
+    enabled: (a) => (inNotes(a) ? notes.canSplitNotesItem(a) : blocks.canSplit(a)),
+    run: (a) => (inNotes(a) ? notes.splitNotesItem(a) : blocks.split(a)),
+  });
+  define({
+    id: 'text.joinBackward',
+    label: 'Join Paragraphs',
+    keys: { mac: ['Backspace'], other: ['Backspace'] },
+    in: [...TEXT, 'notes'],
+    undoable: true,
+    enabled: (a) => (inNotes(a) ? notes.canJoinNotesItem(a) : blocks.canJoinBack(a)),
+    run: (a) => (inNotes(a) ? notes.joinNotesItem(a) : blocks.joinBackward(a)),
+  });
   define({ id: 'text.joinForward', label: 'Join Paragraphs', keys: { mac: ['Delete'], other: ['Delete'] }, in: TEXT, undoable: true, enabled: blocks.canJoinAhead, run: blocks.joinForward });
 
   const format = (name: inline.FormatName, label: string, order: number, keys: Command['keys'], submenu?: string, regions = FORMAT) =>
@@ -135,17 +156,18 @@ export function install(app: App): void {
     define({
       id: `text.list.${kind}`,
       label: LIST_LABELS[kind],
-      in: TEXT,
+      in: [...TEXT, 'notes'],
       menu: menu('list', 60 + i, 'List'),
       undoable: true,
-      enabled: (a) => blocks.canSetList(a, kind) || carry.canList(a),
-      checked: (a) => (carry.canList(a) ? carry.listOf(a) : blocks.listKind(a)) === kind,
-      run: (a) => (carry.canList(a) ? carry.chooseList(a, kind) : blocks.setList(a, kind)),
+      enabled: (a) => (notes.notesListKind(a) ? notes.canSetNotesList(a, kind) : blocks.canSetList(a, kind) || carry.canList(a)),
+      checked: (a) => (notes.notesListKind(a) ?? (carry.canList(a) ? carry.listOf(a) : blocks.listKind(a))) === kind,
+      run: (a) => (notes.notesListKind(a) ? notes.setNotesList(a, kind) : carry.canList(a) ? carry.chooseList(a, kind) : blocks.setList(a, kind)),
     }));
   // Tab is taken in every item of a list, also where it does not change the level, so that it
-  // does not move the focus out of the text
-  define({ id: 'text.indent', label: 'Increase Indent Level', keys: { mac: ['Tab'], other: ['Tab'] }, in: TEXT, menu: menu('list', 70, 'List'), undoable: true, enabled: blocks.inList, run: blocks.indent });
-  define({ id: 'text.outdent', label: 'Decrease Indent Level', keys: { mac: ['Shift+Tab'], other: ['Shift+Tab'] }, in: TEXT, menu: menu('list', 71, 'List'), undoable: true, enabled: blocks.inList, run: blocks.outdent });
+  // does not move the focus out of the text. ⌘] and ⌘[ are Keynote's keys, shown in the menu, and
+  // Ctrl+] and Ctrl+[ those of Google Docs elsewhere
+  define({ id: 'text.indent', label: 'Increase Indent Level', keys: { mac: ['Mod+]', 'Tab'], other: ['Mod+]', 'Tab'] }, in: TEXT, menu: menu('list', 70, 'List'), undoable: true, enabled: blocks.inList, run: blocks.indent });
+  define({ id: 'text.outdent', label: 'Decrease Indent Level', keys: { mac: ['Mod+[', 'Shift+Tab'], other: ['Mod+[', 'Shift+Tab'] }, in: TEXT, menu: menu('list', 71, 'List'), undoable: true, enabled: blocks.inList, run: blocks.outdent });
 
   // the link opens its dialog, which makes the change one entry of the history. a test or a script
   // gives the address as arg, e.g. { href: '#/7' }, or the kind of link shown first, e.g.
@@ -186,11 +208,13 @@ export function install(app: App): void {
       // one entry named Change Case for every kind, as in the Edit menu of PowerPoint
       run: (a) => a.history.transact('change case', () => inline.changeCase(a, kind)),
     }));
+  // at the head of the submenu, so that its key is seen there and in the sheet of shortcuts
   define({
     id: 'text.case.cycle',
     label: 'Change Case',
     keys: { mac: ['Shift+F3'], other: ['Shift+F3'] },
     in: TEXT,
+    menu: menu('case-cycle', 83.9, 'Change Case'),
     undoable: true,
     enabled: inline.canPaint,
     run: (a) => inline.changeCase(a, 'cycle'),
@@ -215,15 +239,63 @@ export function install(app: App): void {
 type Define = (command: Command) => Command;
 type MenuOf = (group: string, order: number, submenu?: string) => Command['menu'];
 
+// the style of a figure that Copy Style takes and Paste Style sets, as the Image pane sets it: the
+// classes paper and invert of an image, null when taken from a video, and the mode it is shown in
+type FigureStyle = { paper: boolean | null; invert: boolean | null; mode: Mode };
+type Copied = { text: inline.TextStyle } | { figure: FigureStyle };
+
+// the images and videos of the selected elements: a selected one, or the one shown in a selected
+// figure, zone, or plate
+function figuresOf(app: App): Element[] {
+  if (app.selection.kind !== 'elements') return [];
+  const open = (m: Element) => !!app.pairing?.elements.get(m)?.open;
+  return app.selection.elements().flatMap((el) => {
+    if (el.matches('img, video')) return open(el) ? [el] : [];
+    if (!el.matches(CONTAINER)) return [];
+    const found = [...el.querySelectorAll('img, video')].filter((m) => m.getBoundingClientRect().width > 0 && open(m));
+    return found.length === 1 ? found : [];
+  });
+}
+
+function readFigure(el: Element): FigureStyle {
+  const image = el.localName === 'img';
+  return { paper: image ? el.classList.contains('paper') : null, invert: image ? el.classList.contains('invert') : null, mode: modeOf(el) };
+}
+
+// the style of the selected figure, else of the text or the block
+function readCopied(app: App): Copied | null {
+  const [figure] = figuresOf(app);
+  if (figure) return { figure: readFigure(figure) };
+  const text = inline.readStyle(app);
+  return text ? { text } : null;
+}
+
+// the mode on every figure, and paper and invert on an image, each class changed only where it
+// differs
+function pasteFigure(app: App, style: FigureStyle): void {
+  for (const el of figuresOf(app)) {
+    const classes: Record<string, boolean> = { 'for-dark': style.mode === 'dark', 'for-light': style.mode === 'light' };
+    if (el.localName === 'img') {
+      if (style.paper !== null) classes.paper = style.paper;
+      if (style.invert !== null) classes.invert = style.invert;
+    }
+    const changed = Object.fromEntries(Object.entries(classes).filter(([name, on]) => el.classList.contains(name) !== on));
+    if (Object.keys(changed).length) app.doc.setTag(el, { classes: changed }, 'paste style');
+  }
+}
+
 // the Copy Style and Paste Style of Keynote with its keys on a Mac, and with the keys of the Format
-// Painter of PowerPoint for Windows elsewhere, and the Format Painter of the Text pane. a click on
-// the painter takes the style of the selection, and the next text or block clicked or selected on
-// the slide is given it. with sticky, as after a double click on the painter, it stays armed until
-// it is clicked again or Esc is pressed. the switches Smart Quotes and Smart Dashes are in the
-// Substitutions of the Edit menu
+// Painter of PowerPoint for Windows elsewhere, and the Format Painter of the Text pane. the style of
+// a text goes to a text or a block, and the style of a figure to a figure. a click on the painter
+// takes the style of the selection, and the next text, block, or figure clicked or selected on the
+// slide is given it. with sticky, as after a double click on the painter, it stays armed until it
+// is clicked again or Esc is pressed. the switches Smart Quotes, Smart Dashes, and Smart Web and
+// Email Links are in the Substitutions of the Edit menu
 function installStyles(app: App, define: Define, menu: MenuOf): void {
   injectStyle('text-styles', CSS);
-  let copied: inline.TextStyle | null = null;
+  let copied: Copied | null = null;
+  // a text style is pasted on a text outside a code box, and the style of a figure on a figure
+  const canPaste = (a: App) => (copied && 'figure' in copied ? figuresOf(a).length > 0 : !!copied && !inCode(a) && inline.canPaint(a));
   const painter = { armed: false, sticky: false };
   const arm = (on: boolean, sticky = false) => {
     painter.armed = on;
@@ -238,9 +310,9 @@ function installStyles(app: App, define: Define, menu: MenuOf): void {
     keys: { mac: ['Mod+Alt+C'], other: ['Mod+Shift+C'] },
     in: FORMAT,
     menu: menu('copy-style', 86),
-    enabled: (a) => inline.readStyle(a) !== null,
+    enabled: (a) => readCopied(a) !== null,
     run: (a) => {
-      copied = inline.readStyle(a);
+      copied = readCopied(a);
     },
   });
   define({
@@ -250,8 +322,8 @@ function installStyles(app: App, define: Define, menu: MenuOf): void {
     in: FORMAT,
     menu: menu('copy-style', 87),
     undoable: true,
-    enabled: (a) => copied !== null && !inCode(a) && inline.canPaint(a),
-    run: (a) => (copied ? inline.pasteStyle(a, copied) : undefined),
+    enabled: canPaste,
+    run: (a) => (!copied ? undefined : 'figure' in copied ? pasteFigure(a, copied.figure) : inline.pasteStyle(a, copied.text)),
   });
   // a script or the double click gives { sticky: true }, which arms the painter until it is
   // switched off. without it, a run switches the painter. an armed painter stays live, so that a
@@ -260,12 +332,12 @@ function installStyles(app: App, define: Define, menu: MenuOf): void {
     id: 'text.formatPainter',
     label: 'Format Painter',
     in: FORMAT,
-    enabled: (a) => painter.armed || (!inCode(a) && inline.readStyle(a) !== null),
+    enabled: (a) => painter.armed || figuresOf(a).length > 0 || (!inCode(a) && inline.readStyle(a) !== null),
     checked: () => painter.armed,
     run: (a, arg) => {
       const sticky = (arg as { sticky?: unknown } | undefined)?.sticky === true;
       if (painter.armed && !sticky) return arm(false);
-      if (!painter.armed) copied = inline.readStyle(a);
+      if (!painter.armed) copied = readCopied(a);
       if (copied) arm(true, sticky);
     },
   });
@@ -276,7 +348,7 @@ function installStyles(app: App, define: Define, menu: MenuOf): void {
     if (!painter.armed || !(ev.target instanceof Element) || !ev.target.closest('.reveal .slides')) return;
     setTimeout(() => {
       if (!painter.armed) return;
-      const paint = inline.canPaint(app);
+      const paint = canPaste(app);
       if (!painter.sticky) arm(false);
       if (paint) void app.commands.run('text.pasteStyle').catch((e) => app.fail(e));
     }, 0);
@@ -295,4 +367,5 @@ function installStyles(app: App, define: Define, menu: MenuOf): void {
     });
   smart('quotes', 'Smart Quotes', 90);
   smart('dashes', 'Smart Dashes', 91);
+  smart('links', 'Smart Web and Email Links', 92);
 }
