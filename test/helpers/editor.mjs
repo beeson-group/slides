@@ -101,6 +101,15 @@ export async function selectFigure(page, image) {
 }
 
 /**
+ * The image of a selector selected by itself, by a second click on it after the click that
+ * selects its figure.
+ */
+export async function selectPicture(page, image) {
+  await click(page, image);
+  await click(page, image);
+}
+
+/**
  * A trusted drag from a point or a selector by { dx, dy } in CSS pixels, in steps moves. With hold
  * set, the button is not released, e.g. for a screenshot of the drag in progress.
  */
