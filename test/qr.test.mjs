@@ -132,6 +132,23 @@ test('each code of the test deck is read back from the slide in both modes, dark
   }
 });
 
+test('a code added to a slide after the start is drawn by Beeson.mount on the code itself', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl(PAGE, 'still'));
+  await page.waitFor(deckSettled);
+  const drawn = await page.evaluate(`(() => {
+    const qr = Object.assign(document.createElement('div'), { className: 'qr' });
+    qr.dataset.qr = 'https://example.com';
+    document.querySelector('.reveal .slides section').append(qr);
+    window.Beeson.mount(qr);
+    return !!qr.querySelector(':scope > svg');
+  })()`);
+  assert.equal(drawn, true);
+  assert.deepEqual(page.errors, []);
+});
+
 test('every printed page of the test deck carries the code of its slide, as drawn in the slides', { timeout: 60000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
