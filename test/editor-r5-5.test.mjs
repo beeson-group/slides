@@ -10,7 +10,7 @@ import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { substitution } from '../src/editor/text/substitute.ts';
-import { byteExact, click, press, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, press, saveAndReopen, type } from './helpers/editor.mjs';
 
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
@@ -243,13 +243,11 @@ for (const platform of PLATFORMS) {
     // a new code box is drawn without numbers until the switch is turned on
     await exec(page, 'insert.code');
     await frames(page);
-    await typeKeys(page, 'x');
-    await press(page, 'Enter');
-    await typeKeys(page, 'y');
+    await type(page, 'x\ny');
     await frames(page);
     const pre = '<pre><code class="language-python">x\ny</code></pre>';
     const before = await page.evaluate('window.BeesonEditor.render()');
-    assert.ok(before.includes(pre));
+    assert.ok(before.includes(pre), before.match(/<pre>.*\n?.*<\/pre>/g)?.join(" ; "));
     await page.evaluate(`(() => { const c = [...document.querySelectorAll('.reveal section.present pre code')].pop(); const r = document.createRange(); r.selectNodeContents(c); r.collapse(false); c.closest('[contenteditable="true"]').focus(); getSelection().removeAllRanges(); getSelection().addRange(r); })()`);
     await frames(page);
     assert.equal((await state(page, 'code.numbers')).checked, false);
