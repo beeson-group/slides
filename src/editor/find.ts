@@ -621,9 +621,13 @@ export function createFinder(app: App, keys: Keys): Finder {
     const total = matches.length;
     if (!total) return 0;
     const keep = panel.contains(document.activeElement) ? (document.activeElement as HTMLElement) : null;
+    // restoreHost of text/typing.ts shows the slide of each block written, hence the slide shown
+    // before is shown again
+    const slide = app.current();
     const byBlock = new Map<Element, Span[]>();
     for (const m of matches) byBlock.set(m.block, [...(byBlock.get(m.block) ?? []), m]);
     for (const [block, list] of byBlock) await write(block, list, 'replace all');
+    if (slide?.isConnected) app.showSlide(slide);
     compute();
     current = -1;
     note = `${total} replaced`;
