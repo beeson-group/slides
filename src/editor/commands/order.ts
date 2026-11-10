@@ -277,7 +277,7 @@ const CHANGES = new RegExp([
   '^arrange\\.(?!(lock|unlock|toggleLock)$)',
   '^table\\.(?!(select|extend|cell\\.))',
   '^steps\\.(set|add|remove|start|delay|deliver|listDelivery|final|move|earlier|later|effect)$',
-  '^(element\\.delete|edit\\.cut|selection\\.editText)$',
+  '^(edit\\.cut|selection\\.editText)$',
 ].join('|'));
 
 // whether the selection holds a locked element, an element inside one, or a text of one
@@ -291,6 +291,8 @@ export function install(app: App): void {
   for (const c of commands()) app.commands.define(c);
   keepGroups(app);
   app.commands.veto((a, c) => (CHANGES.test(c.id) || (c.id === 'edit.paste' && a.selection.kind === 'text')) && lockedSelection(a));
+  // Delete skips a locked element, hence it is turned off only when every selected element is locked
+  app.commands.veto((a, c) => c.id === 'element.delete' && a.selection.kind !== 'text' && a.selection.elements().length > 0 && a.selection.elements().every((el) => !!el.closest('[data-locked]')));
   // typing, a drop, and the keys that delete or break a line do not go through a command, hence
   // they are cancelled before the browser changes the text of a locked block
   document.addEventListener('beforeinput', (ev) => {
