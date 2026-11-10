@@ -10,7 +10,7 @@ import type { App } from '../app.ts';
 import type { TagEdit, Translate } from '../tags.ts';
 import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
-import { BY_ITSELF, RESIZABLE, STRETCHED, aspectOf, bandAt, constrained, containerOf, cssWidth, frameOf, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, onCanvas, orientedBox, pickOf, pictureOf, segmentTouches, sizedOf, snapBoxOf, toSlide, twinOf, visualRect } from './hit.ts';
+import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, constrained, containerOf, cssWidth, frameOf, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, onCanvas, orientedBox, pickOf, pictureOf, segmentTouches, sizedOf, snapBoxOf, toSlide, twinOf, visualRect } from './hit.ts';
 import { overlay, view } from './frames.ts';
 import { enterGroup, freshGroup, groupOf } from '../commands/order.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -103,6 +103,64 @@ export function record(app: App, label: string, changes: { el: Element; from: Pl
   return moved;
 }
 
+export type Change = { el: Element; from: Place; to: Place };
+
+// a caption that follows the shown picture of its figure, as a caption of Keynote stays under its
+// image: its place before the change, and its upper left corner and the lower left corner of the
+// picture on the screen before the change
+export type Trailer = { caption: Element; pic: Element; from: Place; at: { x: number; y: number }; corner: { x: number; y: number } };
+
+// the lower left corner of the picture of el on the screen, without the own rotation of el, which
+// thus does not move the caption
+function lowerLeft(app: App, el: Element): { x: number; y: number } {
+  const b = orientedBox(el, frameOf(app).scale, placeOf(el).rotate ?? 0);
+  return { x: b.left, y: b.top + b.height };
+}
+
+// the captions that follow a change of the places of els: the caption of each figure that is not
+// turned and whose shown picture, or the twin of it, is in els. a figure moved by itself carries
+// its caption without an offset, and a caption in els is left to the change
+export function captionsOf(app: App, els: Element[]): Trailer[] {
+  const figures = new Set(els.map((el) => (el.matches(RESIZABLE) ? containerOf(app, el) : null)).filter((f): f is Element => !!f && f.matches(CONTAINER)));
+  const out: Trailer[] = [];
+  for (const fig of figures) {
+    const pic = pictureOf(fig);
+    const twin = twinOf(app, pic);
+    if (pic === fig || placeOf(fig).rotate || !els.some((el) => el === pic || el === twin)) continue;
+    const caption = fig.querySelector(':scope > figcaption, :scope > .caption');
+    if (!caption || els.includes(caption) || locked(caption) || !app.pairing?.elements.get(caption)?.open) continue;
+    const r = caption.getBoundingClientRect();
+    if (!r.width) continue;
+    out.push({ caption, pic, from: placeOf(caption), at: { x: r.left, y: r.top }, corner: lowerLeft(app, pic) });
+  }
+  return out;
+}
+
+// each caption of trailers moved by the move of the lower left corner of its picture since
+// captionsOf, on the page only while live is set, and else with writePlace
+export function followCaptions(app: App, trailers: Trailer[], live = false): void {
+  const k = frameOf(app).scale;
+  for (const t of trailers) {
+    const c = lowerLeft(app, t.pic);
+    const r = t.caption.getBoundingClientRect();
+    const now = placeOf(t.caption);
+    const x = Math.round((now.translate?.x ?? 0) + (t.at.x + c.x - t.corner.x - r.left) / k);
+    const y = Math.round((now.translate?.y ?? 0) + (t.at.y + c.y - t.corner.y - r.top) / k);
+    const to = { ...now, translate: x || y ? { x, y } : null };
+    if (live) (t.caption as HTMLElement).style.translate = x || y ? `${x}px ${y}px` : '';
+    else writePlace(app, t.caption, to);
+  }
+}
+
+// the changes of the places of els made by change, with the changes of the captions that follow
+// them, for record
+export function withCaptions(app: App, els: Element[], change: () => Change[]): Change[] {
+  const trailers = captionsOf(app, els);
+  const changes = change();
+  followCaptions(app, trailers);
+  return [...changes, ...trailers.map((t) => ({ el: t.caption, from: t.from, to: placeOf(t.caption) }))];
+}
+
 type Press = {
   kind: 'move' | 'resize' | 'rotate' | 'marquee';
   x: number;
@@ -141,6 +199,8 @@ type Press = {
   size?: { width: number; height: number };
   // whether the grips of a group are pressed, which scale all its members about one anchor
   group?: boolean;
+  // the captions that follow the pictures of the drag, read at its first move
+  trail?: Trailer[];
 };
 
 // an element of a multiple selection that follows a resize by the grip of another: the elements
@@ -398,6 +458,10 @@ export function install(app: App): void {
       return;
     }
     if (!p.moved && Math.hypot(ev.clientX - p.x, ev.clientY - p.y) < CLICK) return;
+    if (!p.moved && (p.kind === 'move' || p.kind === 'resize')) {
+      p.trail = captionsOf(app, [...p.els, ...(p.sized ?? []), ...(p.followers ?? []).flatMap((m) => m.sized)]);
+      for (const t of p.trail) p.from.set(t.caption, t.from);
+    }
     p.moved = true;
     const f = frameOf(app);
     if (p.kind === 'marquee') {
@@ -418,6 +482,7 @@ export function install(app: App): void {
     let dy = (ev.clientY - p.y) / f.scale;
     if (p.kind === 'resize') {
       resize(p, ev, dx, dy);
+      trail(p);
       return;
     }
     if (p.kind === 'rotate') {
@@ -446,8 +511,16 @@ export function install(app: App): void {
     const at = c ? `x ${Math.round(c.left + dx)}  y ${Math.round(c.top + dy)}` : '';
     view.readout = { text: `${ghosts.shown() ? 'Copy  ' : ''}${at}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     document.documentElement.classList.add('beeson-dragging');
+    if (p.trail?.length) followCaptions(app, p.trail, true);
     frames.draw();
     app.invalidate('content');
+  };
+
+  // the captions of a resize moved under their pictures, and the frames drawn again with them
+  const trail = (p: Press) => {
+    if (!p.trail?.length) return;
+    followCaptions(app, p.trail, true);
+    frames.draw();
   };
 
   // the place on the page only, during a drag. the release writes it with writePlace
@@ -673,7 +746,7 @@ export function install(app: App): void {
     if (p.kind === 'move' && ev && p.moved && copying && copyHeld(ev)) {
       void copyAt(p).catch((e) => app.fail(e));
     } else if (p.kind !== 'marquee') {
-      const els = [...new Set([...p.els, ...(p.sized ?? []), ...(p.followers ?? []).flatMap((m) => m.sized)])];
+      const els = [...new Set([...p.els, ...(p.sized ?? []), ...(p.followers ?? []).flatMap((m) => m.sized), ...(p.trail ?? []).map((t) => t.caption)])];
       if (ev && p.moved) {
         const changes = els.map((el) => {
           const to = placeOf(el);
@@ -694,7 +767,7 @@ export function install(app: App): void {
   const copyAt = async (p: Press) => {
     const f = frameOf(app);
     const dropped = p.els.map((el) => ({ el, box: toSlide(f, visualRect(el)) }));
-    for (const el of p.els) writeLive(el, p.from.get(el) as Place);
+    for (const el of [...p.els, ...(p.trail ?? []).map((t) => t.caption)]) writeLive(el, p.from.get(el) as Place);
     await app.history.transact('Duplicate', async () => {
       const copies: Element[] = [];
       // the copies of a group are a new group
@@ -747,8 +820,10 @@ export function install(app: App): void {
     if (!el) return;
     const from = placeOf(el);
     const to = { ...from, translate: null };
-    writePlace(app, el, to);
-    record(app, 'move', [{ el, from, to }], [el]);
+    record(app, 'move', withCaptions(app, [el], () => {
+      writePlace(app, el, to);
+      return [{ el, from, to }];
+    }), [el]);
     if (!app.selection.has(el)) app.selection.set('elements', [el]);
     frames.draw();
   };
