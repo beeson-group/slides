@@ -206,7 +206,8 @@ for (const platform of PLATFORMS) {
 
 // the rows of the menu of the menu bar named title, opened with a click on its title
 async function barMenu(page, title) {
-  await page.evaluate(`document.querySelectorAll('.beeson-edit-menus .beeson-edit-menu').length && document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+  await page.evaluate('window.BeesonEditorShell.closeMenus()');
+  await sleep(30);
   const at = await page.evaluate(`(() => { const b = [...document.querySelectorAll('.beeson-edit-menubar button')].find((x) => x.textContent === ${JSON.stringify(title)}); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
   await click(page, at);
   await sleep(80);
@@ -326,3 +327,51 @@ test('a label of the history is set in the title case of Apple, with short words
   assert.equal(titled('insert QR code'), 'Insert QR Code');
   assert.equal(titled('zoom in'), 'Zoom In');
 });
+
+// the keys shown in every menu of the menu bar and in each of its submenus, as path and keys
+async function menuKeys(page) {
+  const out = [];
+  for (const bar of MENUS) {
+    const rows = await barMenu(page, bar);
+    for (const r of rows) if (r.keys) out.push({ path: `${bar} > ${r.label}`, keys: r.keys });
+    const subs = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu')].at(-1) ? [...[...document.querySelectorAll('.beeson-edit-menu')][0].querySelectorAll('.item')].filter((i) => i.querySelector('.arrow')?.childNodes.length && i.getAttribute('aria-disabled') !== 'true').map((i) => { const r = i.getBoundingClientRect(); return { label: i.querySelector('.label').textContent, x: r.left + r.width / 2, y: r.top + r.height / 2 }; }) : []`);
+    for (const sub of subs) {
+      await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: sub.x, y: sub.y });
+      await sleep(350);
+      const inner = await page.evaluate(`(() => { const m = [...document.querySelectorAll('.beeson-edit-menu')]; return m.length < 2 ? [] : [...m.at(-1).querySelectorAll('.item')].map((i) => ({ label: i.querySelector('.label')?.textContent ?? '', keys: i.querySelector('.keys')?.textContent ?? '' })); })()`);
+      for (const r of inner) if (r.keys) out.push({ path: `${bar} > ${sub.label} > ${r.label}`, keys: r.keys });
+    }
+  }
+  await page.evaluate('window.BeesonEditorShell.closeMenus()');
+  return out;
+}
+
+const twice = (list) => {
+  const seen = new Map();
+  for (const { path, keys } of list) for (const k of keys.split(', ').filter(Boolean)) seen.set(k, [...(seen.get(k) ?? []), path]);
+  return [...seen].filter(([, paths]) => paths.length > 1).map(([k, paths]) => `${k}: ${paths.join(' | ')}`);
+};
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: each key is listed once in the menus and in the sheet of shortcuts, and the zoom keys under the zoom`, async () => {
+    const page = await editor(platform);
+    // the notes are shown, so that their commands are enabled
+    await page.evaluate(`window.BeesonEditor.exec('view.notes')`);
+    await sleep(100);
+    const listed = await menuKeys(page);
+    assert.deepEqual(twice(listed), [], 'a key is listed for two items of the menus');
+    const zoom = listed.filter((l) => l.path.startsWith('View > Zoom > ')).map((l) => `${l.path.slice(14)} ${l.keys}`);
+    const mod = platform === 'mac' ? '⌘' : 'Ctrl+';
+    for (const want of [`Zoom In ${mod}=`, `Zoom Out ${mod}−`, `Actual Size ${mod}0`]) assert.ok(zoom.includes(want), `${want} is not listed under the zoom`);
+
+    await page.evaluate(`window.BeesonEditor.exec('help.keys')`);
+    await sleep(100);
+    const sheet = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-keys kbd')].map((k) => ({ path: k.previousElementSibling?.textContent ?? '', keys: k.textContent }))`);
+    assert.ok(sheet.length > 10, 'the sheet of shortcuts is empty');
+    // the sheet lists the keys of every context, e.g. Esc in a text and on the canvas, and the keys
+    // of the zoom once
+    const zoomKeys = platform === 'mac' ? ['⌘=', '⌘−', '⌘0'] : ['Ctrl+=', 'Ctrl+−', 'Ctrl+0'];
+    assert.deepEqual(twice(sheet).filter((line) => zoomKeys.some((k) => line.startsWith(`${k}:`))), [], 'a key of the zoom is listed for two items of the sheet of shortcuts');
+    assert.deepEqual(errorsOf(page), []);
+  });
+}
