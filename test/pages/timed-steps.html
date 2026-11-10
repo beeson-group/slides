@@ -13,7 +13,8 @@
      two timed steps after a click on the second slide, and a delay on the last step of the third
      slide, which moves on to the fourth slide. the last step of the fifth slide dims the step before
      it, and its delay moves on to the sixth slide without a restore step, and the timed step of
-     the sixth slide is played after a key during a delay -->
+     the sixth slide is played after a key during a delay. the seventh slide has a delay of 1 s, long
+     enough to press a key in it -->
 <div class="reveal">
   <div class="slides">
     <section>
@@ -44,6 +45,11 @@
       <h2>Later</h2>
       <p class="fragment" data-fragment-index="1" data-autoslide="300">Later</p>
       <p class="fragment" data-fragment-index="2">Later timed</p>
+    </section>
+    <section>
+      <h2>Slow</h2>
+      <p class="fragment" data-fragment-index="1" data-autoslide="1000">Slow</p>
+      <p class="fragment" data-fragment-index="2">Slow timed</p>
     </section>
   </div>
 </div>
