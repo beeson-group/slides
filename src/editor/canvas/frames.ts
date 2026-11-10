@@ -90,6 +90,17 @@ function withCaption(el: Element, box: Box): Box {
   return { left, top, width: right - left, height: bottom - top };
 }
 
+// the box on the screen that a member el of a group reaches: a figure that holds a picture at the
+// picture and over its caption, and another element at its box seen. the frame of a group, its
+// readout in a resize, and W, H, X, and Y of the Arrange pane are the union of these boxes
+export const reachOf = (el: Element): Box => (el.matches(RESIZABLE) || el.matches(CONTAINER) ? withCaption(el, visualRect(pictureOf(el))) : visualRect(el));
+
+export function groupReach(els: Element[]): Box {
+  const seen = els.map(reachOf);
+  const left = Math.min(...seen.map((b) => b.left)), top = Math.min(...seen.map((b) => b.top));
+  return { left, top, width: Math.max(...seen.map((b) => b.left + b.width)) - left, height: Math.max(...seen.map((b) => b.top + b.height)) - top };
+}
+
 // the box of el on the screen without its rotation, about the center of the box seen, and the
 // angle that it is turned by. a figure that holds a picture is framed at the picture, where its
 // grips resize it, and over its caption while it is not turned
@@ -242,10 +253,7 @@ export class Frames {
     const grouped = !!id && selected.every((el) => groupOf(el) === id);
     this.group = null;
     if (boxes.length > 1 && grouped) {
-      const seen = selected.map((el) => (el.matches(RESIZABLE) || el.matches(CONTAINER) ? withCaption(el, visualRect(pictureOf(el))) : grow(visualRect(el), 6)));
-      const left = Math.min(...seen.map((b) => b.left)), top = Math.min(...seen.map((b) => b.top));
-      const right = Math.max(...seen.map((b) => b.left + b.width)), bottom = Math.max(...seen.map((b) => b.top + b.height));
-      this.group = { left, top, width: right - left, height: bottom - top };
+      this.group = groupReach(selected);
       place(this.union, this.group);
       for (const f of this.frames) f.hidden = true;
     } else this.union.hidden = true;

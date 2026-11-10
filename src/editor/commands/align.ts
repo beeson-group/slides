@@ -9,6 +9,8 @@ import type { Command } from '../commands.ts';
 import { RESIZABLE, STRETCHED, aspectOf, constrained, cssWidth, frameOf, isTextSized, kindOf, movableOf, pictureSize, sizedOf, snapBoxOf, toSlide, visualRect } from '../canvas/hit.ts';
 import type { Box } from '../canvas/snap.ts';
 import { placeOf, record, withCaptions, writePlace, type Place } from '../canvas/drag.ts';
+import { groupReach } from '../canvas/frames.ts';
+import { groupOf } from './order.ts';
 import { declarationProblem } from '../model/scope.ts';
 import { store } from '../ui/dom.ts';
 
@@ -34,6 +36,13 @@ export function targetsOf(app: App, arg?: unknown): Element[] {
 
 // the box of el in slide pixels, as the frames draw it
 export const boxOf = (app: App, el: Element): Box => toSlide(frameOf(app), visualRect(el));
+
+// the box in slide pixels of els when they are one whole group, at the frame of the group, or null
+export function groupBoxOf(app: App, els: Element[]): Box | null {
+  const id = els.length > 1 ? groupOf(els[0]) : null;
+  if (!id || !els.every((el) => groupOf(el) === id)) return null;
+  return toSlide(frameOf(app), groupReach(els));
+}
 
 function slideBox(app: App): Box {
   const slides = app.slides() as HTMLElement;
@@ -78,17 +87,19 @@ function align(app: App, side: Side): void {
 }
 
 // the elements spaced evenly along an axis, with the first and the last of them kept in place, or
-// put at the edges of the slide with Align to Slide, as in PowerPoint
+// put at the edges of the slide with Align to Slide, as in PowerPoint. one element is spaced
+// evenly across the slide, i.e. centered on it, since PowerPoint aligns one object to the slide
 function distribute(app: App, axis: 'x' | 'y'): void {
   const els = targetsOf(app);
   const items = els.map((el) => ({ el, b: boxOf(app, el) }));
   const start = (b: Box) => (axis === 'x' ? b.left : b.top);
   const size = (b: Box) => (axis === 'x' ? b.width : b.height);
   items.sort((a, b) => start(a.b) - start(b.b));
-  const ref = reference === 'slide' ? slideBox(app) : union(items.map((i) => i.b));
+  const ref = toSlideRef(els) ? slideBox(app) : union(items.map((i) => i.b));
   const total = items.reduce((s, i) => s + size(i.b), 0);
-  const gap = (size(ref) - total) / (items.length - 1);
-  let at = start(ref);
+  const one = items.length === 1;
+  const gap = one ? 0 : (size(ref) - total) / (items.length - 1);
+  let at = start(ref) + (one ? (size(ref) - total) / 2 : 0);
   const moves = items.map((i) => {
     const d = at - start(i.b);
     at += size(i.b) + gap;
@@ -99,7 +110,7 @@ function distribute(app: App, axis: 'x' | 'y'): void {
 
 const canDistribute = (app: App) => {
   const n = targetsOf(app).length;
-  return n >= 3 || (reference === 'slide' && n >= 2);
+  return n === 1 || n >= 3 || (reference === 'slide' && n === 2);
 };
 
 // whether the width of every target is written by the editor, by the scope rule, and whether its
@@ -140,7 +151,9 @@ export function commands(): Command[] {
       id: `arrange.alignTo.${ref}`,
       label: ref === 'slide' ? 'Align to Slide' : 'Align to Selection',
       menu: { bar: 'Arrange', group: 'reference', order: 30 + i, submenu: 'Align' },
-      checked: () => reference === ref,
+      // one element is aligned to the slide, hence Align to Selection is dimmed for it, as in PowerPoint
+      enabled: (app) => ref === 'slide' || targetsOf(app).length !== 1,
+      checked: (app) => (targetsOf(app).length === 1 ? ref === 'slide' : reference === ref),
       run: (app) => {
         reference = ref;
         app.invalidate('selection');
@@ -167,10 +180,12 @@ export function commands(): Command[] {
     run: (app, arg) => {
       const a = (arg ?? {}) as { x?: number; y?: number };
       const els = targetsOf(app, arg);
+      // a group is moved as one element, by the offset of the corner of its frame
+      const group = groupBoxOf(app, els);
       const changes = withCaptions(app, els, () => els.map((el) => {
         const from = placeOf(el);
         const now = offsetOf(el);
-        const at = snapBoxOf(app, el);
+        const at = group ?? snapBoxOf(app, el);
         const to = (v: number | undefined, off: number, edge: number) => (v === undefined ? off : Math.round(off + v - edge));
         writePlace(app, el, { ...from, translate: { x: to(a.x, now.x, at.left), y: to(a.y, now.y, at.top) } });
         return { el, from, to: placeOf(el) };

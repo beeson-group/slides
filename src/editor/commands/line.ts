@@ -15,7 +15,7 @@ import { locked, placeOf, record, writePlace, type Place } from '../canvas/drag.
 
 export type Point = { x: number; y: number };
 export type Ends = { x1: number; y1: number; x2: number; y2: number };
-export type Heads = 'none' | 'end' | 'both';
+export type Heads = 'none' | 'start' | 'end' | 'both';
 
 // the tones of a line, with the token that each is drawn in
 export const LINE_TONES: [string, string, string][] = [
@@ -26,7 +26,7 @@ export const LINE_TONES: [string, string, string][] = [
   ['blue', 'Blue', '--blue'],
   ['red', 'Red', '--red'],
 ];
-export const HEADS: [Heads, string][] = [['none', 'No Arrowheads'], ['end', 'Arrowhead at End'], ['both', 'Arrowheads at Both Ends']];
+export const HEADS: [Heads, string][] = [['none', 'No Arrowheads'], ['start', 'Arrowhead at Start'], ['end', 'Arrowhead at End'], ['both', 'Arrowheads at Both Ends']];
 
 // the arrowhead in units of the stroke width. its tip is one unit past the end of the line, where
 // the head is as wide as the stroke
@@ -61,8 +61,8 @@ export function boxOf(e: Ends): Box {
 }
 
 const headAttrs = (heads: Heads, id: string): Record<'marker-start' | 'marker-end', string | null> => ({
-  'marker-start': heads === 'both' ? `url(#${id})` : null,
-  'marker-end': heads === 'none' ? null : `url(#${id})`,
+  'marker-start': heads === 'start' || heads === 'both' ? `url(#${id})` : null,
+  'marker-end': heads === 'end' || heads === 'both' ? `url(#${id})` : null,
 });
 
 // the ends of a line relative to the box of its svg
@@ -121,8 +121,9 @@ export function endsOf(svg: Element): Ends {
 
 export function headsOf(svg: Element): Heads {
   const line = svg.querySelector('line');
-  if (line?.hasAttribute('marker-start')) return 'both';
-  return line?.hasAttribute('marker-end') ? 'end' : 'none';
+  const start = !!line?.hasAttribute('marker-start');
+  const end = !!line?.hasAttribute('marker-end');
+  return start && end ? 'both' : start ? 'start' : end ? 'end' : 'none';
 }
 
 export function toneOf(svg: Element): string {
@@ -142,7 +143,7 @@ const GRIP_R = 8;
 // past the tip of the head, along the line, so that the head stays in view
 function gripAt(svg: Element, which: 1 | 2, a: Point, b: Point, scale: number): Point {
   const heads = headsOf(svg);
-  if (heads === 'none' || (which === 1 && heads !== 'both')) return a;
+  if (heads !== 'both' && heads !== (which === 1 ? 'start' : 'end')) return a;
   const len = Math.hypot(a.x - b.x, a.y - b.y);
   if (!len) return a;
   const line = svg.querySelector('line');
