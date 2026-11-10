@@ -236,11 +236,13 @@ test('a text box is a p after the last block of the column, with the caret in it
   const pending = await page.evaluate(`(() => { const a = document.activeElement; return { tag: a.localName, prompt: getComputedStyle(a, '::before').content, after: a.previousElementSibling.localName, editable: a.isContentEditable }; })()`);
   assert.deepEqual(pending, { tag: 'p', prompt: '"Click to add text"', after: 'ul', editable: true });
   assert.equal(await render(page), page.source, 'the empty text box is written');
-  assert.equal((await settle(page)).undo, false);
-  // Esc leaves it, and it is taken off the slide
+  // the empty box is an entry of the history
+  assert.equal((await settle(page)).undo, true);
+  // Esc leaves it, and it is taken off the slide with its entry
   await press(page, 'Escape');
   await settle(page);
   assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-pending').length`), 0);
+  assert.equal((await settle(page)).undo, false);
   await page.evaluate(`window.BeesonEditor.exec('insert.text')`);
   await type(page, 'A new text');
   await sleep(100);
@@ -326,7 +328,8 @@ test('a code box and a footnote are written at the first input, and a QR code is
   await press(page, 'Escape');
   await page.evaluate(`window.BeesonEditor.exec('insert.qr')`);
   await settle(page);
-  assert.ok(slideOf(await render(page), h2).includes('<pre><code class="language-python">x = 1</code></pre>\n  <div class="qr" data-qr="https://example.com"></div>'), 'the QR code is not after the last block');
+  // the column is full, hence the QR code is centered on the slide
+  assert.match(slideOf(await render(page), h2), /<pre><code class="language-python">x = 1<\/code><\/pre>\n  <div class="qr" data-qr="https:\/\/example.com" style="translate: -?\d+px -?\d+px"><\/div>/, 'the QR code is not after the last block');
   assert.equal(await page.evaluate(`!!document.querySelector('.reveal section.present .qr svg')`), true, 'the QR code is not drawn');
   assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.duplicate').enabled`), true);
   await roundTrip(page, 3);

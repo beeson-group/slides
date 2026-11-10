@@ -1,7 +1,9 @@
 // Delete of the selected elements of the current slide, each taken off the page with the white space
-// and the comments before it, as one entry of the history
+// and the comments before it, as one entry of the history. a locked element is skipped and stays
+// selected, as in Keynote, and Delete is disabled while every selected element is locked
 
 import type { App } from '../app.ts';
+import { locked } from '../canvas/drag.ts';
 import { docOf } from './slide.ts';
 
 // the selected elements that are in the file, without the slides
@@ -17,14 +19,16 @@ export function install(app: App): void {
     in: ['canvas'],
     menu: { bar: 'Edit', group: 'delete', order: 40 },
     context: ['element'],
-    enabled: (a) => selectedElements(a).length > 0,
+    enabled: (a) => selectedElements(a).some((el) => !locked(el)),
     undoable: true,
     run: async (a) => {
       const doc = docOf(a);
       // an element inside another selected one goes with it
       const els = selectedElements(a);
-      const outer = els.filter((el) => !els.some((o) => o !== el && o.contains(el)));
-      a.selection.clear();
+      const kept = els.filter((el) => locked(el));
+      const outer = els.filter((el) => !locked(el) && !els.some((o) => o !== el && o.contains(el)));
+      if (kept.length) a.selection.set('elements', kept);
+      else a.selection.clear();
       for (const el of outer.reverse()) await doc.remove(el, 'delete');
     },
   });
