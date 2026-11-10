@@ -8,11 +8,11 @@
 
 import { HOST, type App, type MathPop } from '../app.ts';
 import { completionText, completions, contentWithInline, contentWithTex, deckMacros, glyphOf, isName, mathLookup, previewTex, type Macro } from '../math.ts';
-import { keepBeside, type Side } from '../ui/dialog.ts';
+import { popoverBeside, type Side } from '../ui/dialog.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 
 const CSS = `
-.beeson-math { position: fixed; z-index: 70; display: flex; flex-direction: column; gap: 10px; width: min(460px, calc(100vw - 32px)); box-sizing: border-box; padding: 16px 18px 14px; border: 1px solid var(--ed-menu-line, #555); border-radius: 14px; background: var(--ed-panel, #222); color: var(--ed-text, #eee); font: 13px/1.4 var(--ed-font, system-ui, sans-serif); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.14); }
+.beeson-math { position: fixed; z-index: 70; display: flex; flex-direction: column; gap: 10px; width: min(440px, calc(100vw - 32px)); box-sizing: border-box; padding: 16px 18px 14px; border: 1px solid var(--ed-menu-line, #555); border-radius: 14px; background: var(--ed-panel, #222); color: var(--ed-text, #eee); font: 13px/1.4 var(--ed-font, system-ui, sans-serif); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.14); }
 .beeson-math .title { color: var(--ed-muted, #999); font: 500 12px/1.2 var(--ed-font, system-ui, sans-serif); }
 .beeson-math textarea { font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; min-height: 7.5em; padding: 8px 10px; border: 0; border-radius: 7px; background: var(--ed-control, #333); box-shadow: inset 0 0 0 1px var(--ed-control-line, #555); color: inherit; resize: vertical; outline: none; }
 .beeson-math textarea:focus { box-shadow: inset 0 0 0 1px var(--ed-select, #96f), 0 0 0 2px var(--ed-focus, rgba(150, 100, 255, 0.5)); }
@@ -209,24 +209,17 @@ export function texEditor(options: { display(): boolean; label: string; placehol
 }
 
 // the sheet of a TeX: its title, its first TeX, whether it is a display, the label of its button,
-// the box that it is put beside and kept clear of, and commit, which writes the TeX and throws an
+// the block that it is put beside and kept clear of, and commit, which writes the TeX and throws an
 // error to be shown at the field
-type Sheet = { title: string; tex: string; display: boolean; open: string; close: string; primary: string; rect(): DOMRect; commit(tex: string): Promise<void>; done?(): void };
+type Sheet = { title: string; tex: string; display: boolean; open: string; close: string; primary: string; block(): Element; commit(tex: string): Promise<void>; done?(): void };
 
 // the sheet is put at the right of the text column, over the figure of the slide, or at the left,
-// and above or below a block that fills the slide
+// and above or below a block that fills the slide. its width of 440 px fits at the right of the
+// text column of a content slide in a window 1600 px wide
 const SIDES: Side[] = ['right', 'left', 'below', 'above'];
 
-// the canvas, in which a sheet is kept as the popovers of Keynote are kept on its canvas, off the
-// inspector. a target outside the canvas, e.g. scrolled off it, keeps the sheet in the window
-function canvasOf(app: App, t: DOMRectReadOnly): { left: number; top: number; width: number; height: number } {
-  const v = app.stage?.viewport;
-  const within = v && t.left >= v.left && t.right <= v.right && t.top >= v.top && t.bottom <= v.bottom;
-  return within ? v : { left: 0, top: 0, width: innerWidth, height: innerHeight };
-}
-
-// the box of the block that holds a formula or a caret, e.g. a list item, a paragraph, or a display
-export const blockBox = (el: Element): DOMRect => (el.closest(HOST) ?? el).getBoundingClientRect();
+// the block that holds a formula or a caret, e.g. a list item, a paragraph, or a display
+const blockOf = (el: Element): Element => el.closest(HOST) ?? el;
 
 // the formula that the sheet is open for, read by the Formula pane of the inspector
 let openFor: Element | null = null;
@@ -247,7 +240,7 @@ export function openInsert(app: App, host: Element, range: Range): void {
     open: '\\(',
     close: '\\)',
     primary: 'Insert',
-    rect: () => blockBox(host),
+    block: () => blockOf(host),
     commit: async (tex) => {
       const { content, index } = contentWithInline(host, kept, tex);
       await app.history.transact('Insert Inline Formula', () => app.doc.setContent(host, content, 'Inline Formula'));
@@ -331,9 +324,7 @@ export function install(app: App): void {
     row.append(hint, cancel, apply);
     box.append(title, field, ed.preview, ed.message, row);
     document.body.append(box);
-    // the box of the block is read once, since the block is typeset again at a commit
-    const rect = sheet.rect();
-    unplace = keepBeside(box, () => rect, SIDES, undefined, () => canvasOf(app, rect));
+    unplace = popoverBeside(app, box, sheet.block(), { sides: SIDES });
     apply.disabled = !sheet.tex.trim();
     void ed.refresh();
     // the commit key is held until the TeX typed before it is typeset, since Apply is dimmed or
@@ -412,7 +403,7 @@ export function install(app: App): void {
       open: info.open,
       close: info.close,
       primary: fresh ? 'Insert' : 'Apply',
-      rect: () => blockBox(container),
+      block: () => blockOf(container),
       commit: (tex) => setMath(container, tex),
     }, container);
   }
