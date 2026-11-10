@@ -13,7 +13,7 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, drag, press, saveAndReopen, selectFigure } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen, selectFigure, selectPicture } from './helpers/editor.mjs';
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 const PLATFORMS = ['mac', 'other'];
@@ -118,9 +118,9 @@ for (const platform of PLATFORMS) {
   test(`${platform}: an undo and a redo of a resize of an image select the image alone`, async () => {
     for (const mode of ['dark', 'light']) {
       const page = await editor(platform, { mode });
-      await click(page, ZONE_IMG);
+      await selectPicture(page, ZONE_IMG);
       await frames(page);
-      assert.deepEqual(await selected(page), [`img.for-${mode}`], 'a click on the image of a figure does not select the image');
+      assert.deepEqual(await selected(page), [`img.for-${mode}`], 'a second click on the image of a figure does not select the image');
       const ref = await drawn(page);
       await drag(page, await gripAt(page, 'se'), { dx: -60, dy: -40 });
       await frames(page);
