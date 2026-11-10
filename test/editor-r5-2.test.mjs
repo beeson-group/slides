@@ -696,3 +696,53 @@ for (const platform of PLATFORMS) {
   });
 }
 
+// the frames, the grips, and the boxes of the members of the selection, in CSS px of the viewport.
+// a text block is boxed by its frame, 6 px outside its text, and a figure by its picture
+const groupView = (page) => page.evaluate(`(() => {
+  const shown = (s) => [...document.querySelectorAll(s)].filter((e) => !e.hidden && e.getBoundingClientRect().width);
+  const box = (r) => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+  const pic = (el) => [...el.querySelectorAll('img')].find((i) => i.getBoundingClientRect().width) ?? el;
+  const members = window.BeesonEditor.selection().map((el) => { const r = pic(el).getBoundingClientRect(); const g = el.matches('figure') ? 0 : 6; return { left: r.left - g, top: r.top - g, right: r.right + g, bottom: r.bottom + g }; });
+  return {
+    members,
+    frames: shown('.beeson-frame.selected').length,
+    union: shown('.beeson-frame.union').map((f) => ({ ...box(f.getBoundingClientRect()), group: f.classList.contains('group') })),
+    grips: shown('.beeson-grip').map((g) => { const r = g.getBoundingClientRect(); return { handle: g.dataset.handle, x: r.left + r.width / 2, y: r.top + r.height / 2 }; }),
+  };
+})()`);
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: a selected group is drawn with one frame and one set of grips around its members, which scale them together`, async () => {
+    const page = await editor(platform);
+    await selectFigure(page, ZONE_IMG);
+    const lead = await page.evaluate(`(() => { const r = ${LEAD}.getBoundingClientRect(); return { x: r.right + 3, y: r.top + r.height / 2 }; })()`);
+    await click(page, lead, { modifiers: 'Shift' });
+    await exec(page, 'arrange.group');
+    await frames(page);
+    const v = await groupView(page);
+    assert.equal(v.members.length, 2, 'the group of the paragraph and the figure is not selected');
+    const left = Math.min(...v.members.map((m) => m.left)), top = Math.min(...v.members.map((m) => m.top));
+    const right = Math.max(...v.members.map((m) => m.right)), bottom = Math.max(...v.members.map((m) => m.bottom));
+    assert.equal(v.frames, 0, 'each member of the group is framed by itself');
+    assert.equal(v.union.length, 1, 'the group does not have one frame');
+    assert.ok(v.union[0].group, 'the frame of the group is drawn as the frame of a multiple selection');
+    assert.ok(near(v.union[0].left, left, 1) && near(v.union[0].top, top, 1) && near(v.union[0].right, right, 1) && near(v.union[0].bottom, bottom, 1), `the frame ${JSON.stringify(v.union[0])} is not around the members ${JSON.stringify({ left, top, right, bottom })}`);
+    assert.equal(v.grips.length, 8, `the group has ${v.grips.length} grips, not one set of eight`);
+    const se = v.grips.find((g) => g.handle === 'se');
+    assert.ok(near(se.x, right, 1) && near(se.y, bottom, 1), 'the grip se is not at the corner of the group');
+    // a drag of the corner scales both members about the corner across from it
+    const before = await page.evaluate(`window.BeesonEditor.selection().map((el) => ([...el.querySelectorAll('img')].find((i) => i.getBoundingClientRect().width) ?? el).getBoundingClientRect().width)`);
+    await drag(page, se, { dx: -(right - left) * 0.2, dy: -(bottom - top) * 0.2 });
+    await frames(page);
+    const after = await groupView(page);
+    const widths = await page.evaluate(`window.BeesonEditor.selection().map((el) => ([...el.querySelectorAll('img')].find((i) => i.getBoundingClientRect().width) ?? el).getBoundingClientRect().width)`);
+    const k = widths.map((w, i) => w / before[i]);
+    assert.ok(k.every((x) => x < 0.9), `the members are scaled by ${k}`);
+    assert.ok(near(k[0], k[1], 0.03), `the members are scaled by ${k}, not together`);
+    assert.ok(near(Math.min(...after.members.map((m) => m.left)), left, 3) && near(Math.min(...after.members.map((m) => m.top)), top, 3), 'the corner across from the grip moves');
+    const edited = await render(page);
+    assert.match(edited, /<p data-group="g1" style="width: \d+px[^"]*">The lead-in of a display<\/p>/, 'the width of the paragraph is not written');
+    await roundTrip(page, edited);
+    assert.deepEqual(errors(page), []);
+  });
+}
