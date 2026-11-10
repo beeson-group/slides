@@ -1,6 +1,6 @@
 // the Image, Video, and QR panes of the Format tab. the Image pane has the file, the description
-// read by a screen reader, i.e. the alt of the image, the classes paper and invert, and the mode in
-// which the image is shown, as the Image tab of Keynote. the Video pane has the file, the poster,
+// read by a screen reader, i.e. the alt of the image, the classes paper and invert, its mask, and
+// the mode in which the image is shown, as the Image tab of Keynote. the Video pane has the file, the poster,
 // and the switches of playback, and the QR pane the text of the code with the count of its bytes.
 // the file of an image or a video is shown in a well with Replace…, and the poster of a video in a
 // well with Capture Poster, as the Replace button of the Image tab of Keynote and the poster frame
@@ -85,6 +85,13 @@ export function imagePane(app: App, run: Run): Control[] {
     section('Appearance', [
       checkbox(app, run, 'figure.paper', 'Paper, framed as a white raster figure'),
       checkbox(app, run, 'figure.invert', 'Invert in dark mode, for a black-on-white plot'),
+    ]),
+    section('Mask', [
+      row([
+        button(app, run, { command: 'image.editMask', text: 'Edit Mask' }),
+        button(app, run, { command: 'image.resetMask', icon: 'reset', text: 'Reset Mask' }),
+      ]),
+      note(() => 'Drag the image inside its box and scale it, or double-click the image.'),
     ]),
     modes(app, run, 'image'),
   ];

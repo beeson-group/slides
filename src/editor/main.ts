@@ -65,6 +65,8 @@ import { install as installLineCommands } from './commands/line.ts';
 import { install as installRulers } from './canvas/rulers.ts';
 import { install as installGuides } from './canvas/guides.ts';
 import { install as installGrid } from './canvas/grid.ts';
+import { install as installMaskCommands } from './commands/mask.ts';
+import { install as installFlipCommands } from './commands/flip.ts';
 import { Doc } from './model/doc.ts';
 
 const app = new App();
@@ -171,6 +173,8 @@ installLineCommands(app);
 installRulers(app);
 installGuides(app);
 installGrid(app);
+installMaskCommands(app);
+installFlipCommands(app);
 
 const revealReady = (): Promise<void> =>
   new Promise((done) => {
