@@ -1,10 +1,12 @@
 // the Code pane of the Format tab, for a selected code box or a code box with the caret: the
-// language of its code, the numbers of its lines, and its line steps. the steps are typed into a
-// field, e.g. 1-2|3|4-5, or edited in a list of the groups, in which the lines selected in the box
-// are added as a new group and a group is removed. a group pointed at in the list dims the other
-// lines of the box
+// language of its code, the numbers of its lines, its line steps, and its size. the steps are
+// typed into a field, e.g. 1-2|3|4-5, or edited in a list of the groups, in which the lines
+// selected in the box are added as a new group and a group is removed. a group pointed at in the
+// list dims the other lines of the box
 
 import type { App } from '../app.ts';
+import { stepAt } from '../layers.ts';
+import { modelOf } from '../steps.ts';
 import { COMMON, PLAIN, codeAt, dimLines, hljsOf, languageOf, languages, nameOf, selectedLines, stepsOf } from '../commands/code.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
@@ -78,8 +80,15 @@ function groupList(app: App, run: Run, code: () => Element | null): Control {
   const sync = () => {
     const c = code();
     const groups = c ? stepsOf(app, c).groups : [];
-    if (groups.join('|') === key && el.childElementCount) return;
-    key = groups.join('|');
+    // a group after the first is lit at its step of the slide, as the Steps tab lists it
+    const m = c ? modelOf(app, c.closest('section')) : null;
+    const steps = groups.map((_, k) => {
+      const i = m ? m.lines.findIndex((l) => l?.code === c && l.group === k) : -1;
+      return m && i >= 0 ? stepAt(m.plan, i) + 1 : k;
+    });
+    const now = `${groups.join('|')}#${steps.join(',')}`;
+    if (now === key && el.childElementCount) return;
+    key = now;
     dimLines(null, null);
     if (!groups.length) {
       el.replaceChildren(make('li', 'empty', 'No line steps. Select lines in the code and add them.'));
@@ -89,7 +98,7 @@ function groupList(app: App, run: Run, code: () => Element | null): Control {
       const li = make('li');
       const n = make('span', 'n', String(k + 1));
       const lines = make('span', 'lines', `${g.includes(',') || g.includes('-') ? 'Lines' : 'Line'} ${g.replace(/-/g, '–').replace(/,/g, ', ')}`);
-      const at = make('span', 'at', k ? `Step ${k}` : 'With the slide');
+      const at = make('span', 'at', k ? `Step ${steps[k]}` : 'With the slide');
       const x = make('button');
       x.type = 'button';
       x.title = `Remove the line step ${k + 1}`;
@@ -97,7 +106,7 @@ function groupList(app: App, run: Run, code: () => Element | null): Control {
       x.append(glyph('remove', 14));
       keepFocus(x);
       x.addEventListener('click', () => void run('code.removeGroup', { el: c, index: k }));
-      li.title = k ? `The lines lit at step ${k} of the code` : 'The lines lit when the slide is shown';
+      li.title = k ? `The lines lit at step ${steps[k]} of the slide` : 'The lines lit when the slide is shown';
       li.append(n, lines, at, x);
       li.addEventListener('pointerenter', () => dimLines(c, g));
       li.addEventListener('pointerleave', () => dimLines(null, null));
@@ -141,6 +150,10 @@ export function codePane(app: App, run: Run): Control[] {
       add,
       note(lines),
       note(() => 'The first step is lit with the slide, and each next one at a click.'),
+    ]),
+    section('Size', [
+      checkbox(app, run, 'code.small', 'Small'),
+      note(() => 'The code is set at 22 px, or at 18 px when Small, for a longer box.'),
     ]),
   ];
 }
