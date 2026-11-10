@@ -593,3 +593,52 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errorsOf(page), []);
   });
 }
+
+const MULTI = 'test/pages/editor-multi.html';
+const QR = '.reveal section.present .qr';
+const ZONE_IMG = '.reveal section.present .zone > img';
+// the box of the first shown element matched by selector, in CSS pixels of the viewport
+const boxOf = (page, selector) => page.evaluate(`(() => { const r = [...document.querySelectorAll(${JSON.stringify(selector)})].find((e) => e.getBoundingClientRect().width).getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; })()`);
+const near = (a, b, by = 2) => Math.abs(a - b) < by;
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: each element of a multiple selection shows its grips, and a grip resizes every element of it`, async () => {
+    const page = await editor(platform, MULTI);
+    await click(page, QR);
+    await click(page, ZONE_IMG, { modifiers: 'Shift' });
+    await click(page, '.reveal section.present p', { modifiers: 'Shift' });
+    assert.equal(await shownSelected(page), 3, 'the QR code, the figure, and the paragraph are not selected');
+    const qr = await boxOf(page, QR);
+    const pic = await pictureOf(page, ZONE_IMG);
+    const grips = await gripsOf(page);
+    assert.equal(grips.length, 16, 'the QR code and the figure do not show eight grips each, and the paragraph none');
+    assert.ok(grips.every((g) => g.live), 'a grip of a multiple selection cannot be dragged');
+    const at = (box, handle) => grips.find((g) => g.handle === handle && near(g.x, box.right) && near(g.y, box.bottom));
+    assert.ok(at(qr, 'se') && at(pic, 'se'), 'the grips are not at the corners of the QR code and of the picture');
+
+    const se = at(qr, 'se');
+    await drag(page, { x: se.x, y: se.y }, { dx: -60, dy: -60 });
+    await sleep(50);
+    const qrAfter = await boxOf(page, QR);
+    const picAfter = await pictureOf(page, ZONE_IMG);
+    const k = (qrAfter.right - qrAfter.left) / (qr.right - qr.left);
+    assert.ok(k < 0.9, `the QR code is not resized by its grip (${k})`);
+    const kPic = (picAfter.right - picAfter.left) / (pic.right - pic.left);
+    assert.ok(Math.abs(kPic - k) < 0.02, `the picture is scaled by ${kPic} and the QR code by ${k}`);
+    assert.ok(near(qrAfter.left, qr.left) && near(qrAfter.top, qr.top), 'the corner of the QR code across from the grip is moved');
+    assert.ok(near(picAfter.left, pic.left) && near(picAfter.top, pic.top), 'the corner of the picture across from the grip is moved');
+    assert.equal(await shownSelected(page), 3, 'the resize changes the selection');
+    const after = await page.evaluate('window.BeesonEditor.render()');
+    assert.match(after, /<div class="qr" [^>]*style="width: \d+px"/, 'the width of the QR code is not written');
+    const widths = [...after.matchAll(/<img class="for-(?:dark|light)"[^>]* style="width: (\d+)px"/g)].map((m) => Number(m[1]));
+    assert.equal(widths.length, 2, 'the width is not written on both images of the figure');
+    assert.equal(widths[0], widths[1], 'the images of the pair are given different widths');
+
+    await page.evaluate('window.BeesonEditor.undo()');
+    await byteExact(page);
+    await page.evaluate('window.BeesonEditor.redo()');
+    assert.equal(await page.evaluate('window.BeesonEditor.render()'), after, 'a redo does not write the resize again');
+    await saved();
+    assert.deepEqual(errorsOf(page), []);
+  });
+}
