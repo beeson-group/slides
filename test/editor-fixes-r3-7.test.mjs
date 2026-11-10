@@ -554,3 +554,42 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errorsOf(page), []);
   });
 }
+
+// the text of the readout of a drag and its box, or null while it is hidden
+const readoutOf = (page) => page.evaluate(`(() => { const o = document.querySelector('.beeson-offset:not(.beeson-guide-readout)'); if (!o || o.hidden) return null; const r = o.getBoundingClientRect(); return { text: o.textContent, left: r.left, top: r.top }; })()`);
+
+// the values of the fields X and Y of the Arrange pane, opened with its tab in the Format panel
+async function arrangeXY(page) {
+  if (!(await page.evaluate(`window.BeesonEditor.state('shell.format')`)).checked) await page.evaluate(`window.BeesonEditor.exec('shell.format')`);
+  await sleep(50);
+  const at = await page.evaluate(`(() => { const b = [...document.querySelectorAll('#beeson-edit-panel-format button')].find((b) => [b.textContent.trim(), b.title, b.getAttribute('aria-label')].includes('Arrange')); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  await click(page, at);
+  await sleep(50);
+  return page.evaluate(`['x', 'y'].map((n) => document.querySelector('#beeson-edit-panel-format #beeson-edit-num-' + n).value).join(', ')`);
+}
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: the position of a dragged figure, as the Arrange pane gives it, is shown next to the pointer`, async () => {
+    const page = await editor(platform);
+    await slideOf(page, '.reveal .slides .zone > img');
+    await click(page, IMG);
+    const pic = await pictureOf(page, IMG);
+    const from = { x: (pic.left + pic.right) / 2, y: (pic.top + pic.bottom) / 2 };
+    const to = { x: from.x - 70, y: from.y + 40 };
+    await drag(page, from, { dx: to.x - from.x, dy: to.y - from.y, hold: true });
+    const during = await readoutOf(page);
+    assert.ok(during, 'the position is not shown during the move');
+    assert.ok(during.left > to.x && during.left - to.x < 40 && during.top > to.y && during.top - to.y < 40, `the readout at ${during.left}, ${during.top} is not next to the pointer at ${to.x}, ${to.y}`);
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: to.x, y: to.y, button: 'left', clickCount: 1 });
+    await sleep(50);
+    assert.equal(await readoutOf(page), null, 'the readout is left after the move');
+    assert.equal(during.text, await arrangeXY(page), 'the readout is not the X and Y of the Arrange pane');
+
+    await page.evaluate('window.BeesonEditor.undo()');
+    await byteExact(page);
+    await page.evaluate('window.BeesonEditor.redo()');
+    assert.match(await page.evaluate('window.BeesonEditor.render()'), /class="zone"[^>]* style="translate: -?\d+px -?\d+px"/, 'a redo does not write the move again');
+    await saved();
+    assert.deepEqual(errorsOf(page), []);
+  });
+}
