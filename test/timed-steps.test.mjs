@@ -165,3 +165,29 @@ test('the key A pauses the delays, which stay paused through the steps of the ke
   assert.deepEqual(await settled(page), { slide: 1, shown: ALL });
   assert.deepEqual(page.errors, []);
 });
+
+// as in PowerPoint, a slide that moves on by the delay of its last step keeps the look of that
+// step through the transition, with the earlier steps dimmed. the fragments are drawn without
+// their fade, hence each frame shows the opacity of the step
+test('a slide whose last step moves on by a delay keeps the look of its last step until it has left the screen', async (t) => {
+  const page = await open(t);
+  await page.evaluate(`document.head.insertAdjacentHTML('beforeend', '<style>.reveal .slides section .fragment { transition: none !important; }</style>')`);
+  await page.evaluate('Reveal.slide(4, 0, 0)');
+  assert.deepEqual(await settled(page), { slide: 4, shown: ['Dims one'] });
+  await page.evaluate(`(() => {
+    const slide = Reveal.getSlides()[4];
+    const [one, two] = ['Dims one', 'Dims two'].map((text) => [...slide.querySelectorAll('.fragment')].find((f) => f.textContent === text));
+    window.samples = [];
+    const end = performance.now() + 2000;
+    const sample = () => {
+      if (two.classList.contains('visible')) window.samples.push([one, two].map((f) => Number(getComputedStyle(f).opacity)).join(' '));
+      if (performance.now() < end) requestAnimationFrame(sample);
+    };
+    requestAnimationFrame(sample);
+  })()`);
+  await press(page, 'ArrowRight');
+  await page.waitFor('Reveal.getIndices().h === 5', 5000);
+  await sleep(1200);
+  assert.deepEqual([...new Set(await page.evaluate('window.samples'))], ['0.45 1']);
+  assert.deepEqual(page.errors, []);
+});
