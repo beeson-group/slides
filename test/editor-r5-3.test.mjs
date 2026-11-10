@@ -144,8 +144,8 @@ for (const platform of PLATFORMS) {
     const slide = Object.fromEntries((await barMenu(page, 'Slide')).map((r) => [r.label, r.keys]));
     assert.equal(slide['Duplicate Slide'], mac ? '⌘D' : 'Ctrl+D');
     assert.equal(slide['Delete Slide'], mac ? '⌫' : 'Delete');
-    assert.equal(slide['Move Slide Up'], mac ? '⌥↑' : 'Alt+Up');
-    assert.equal(slide['Move Slide Down'], mac ? '⌥↓' : 'Alt+Down');
+    assert.equal(slide['Move Slide Up'], mac ? '⌥↑' : 'Alt+Up Arrow');
+    assert.equal(slide['Move Slide Down'], mac ? '⌥↓' : 'Alt+Down Arrow');
     const edit = Object.fromEntries((await barMenu(page, 'Edit')).map((r) => [r.label, r.keys]));
     assert.equal(edit.Duplicate, mac ? '⌘D' : 'Ctrl+D');
     await page.evaluate('window.BeesonEditorShell.closeMenus()');
@@ -155,9 +155,9 @@ for (const platform of PLATFORMS) {
     const keysOf = (label) => rows.find((r) => r.label === label)?.keys ?? [];
     assert.ok(keysOf('Duplicate Slide').includes(mac ? '⌘D' : 'Ctrl+D'), JSON.stringify(keysOf('Duplicate Slide')));
     assert.ok(keysOf('Delete Slide').includes(mac ? '⌫' : 'Delete'), JSON.stringify(keysOf('Delete Slide')));
-    assert.ok(keysOf('Move Slide Up').includes(mac ? '⌥↑' : 'Alt+↑'), JSON.stringify(keysOf('Move Slide Up')));
-    assert.ok(keysOf('Move Slide Down').includes(mac ? '⌥↓' : 'Alt+↓'), JSON.stringify(keysOf('Move Slide Down')));
-    assert.ok(keysOf('Add Row Above').includes(mac ? '⌥↑' : 'Alt+↑'), 'Add Row Above lost its key');
+    assert.ok(keysOf('Move Slide Up').includes(mac ? '⌥↑' : 'Alt+Up Arrow'), JSON.stringify(keysOf('Move Slide Up')));
+    assert.ok(keysOf('Move Slide Down').includes(mac ? '⌥↓' : 'Alt+Down Arrow'), JSON.stringify(keysOf('Move Slide Down')));
+    assert.ok(keysOf('Add Row Above').includes(mac ? '⌥↑' : 'Alt+Up Arrow'), 'Add Row Above lost its key');
     for (const r of rows) assert.equal(new Set(r.keys).size, r.keys.length, `${r.label} lists a key twice: ${r.keys}`);
     assert.deepEqual(errors(page), []);
   });

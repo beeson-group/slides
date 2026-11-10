@@ -101,7 +101,10 @@ test('displays platform shortcuts', () => {
   const cases = [
     ['Mod+Shift+Z', '⇧⌘Z', 'Ctrl+Shift+Z'],
     ['Mod+Y', '⌘Y', 'Ctrl+Y'],
-    ['Alt+ArrowUp', '⌥↑', 'Alt+↑'],
+    ['Alt+ArrowUp', '⌥↑', 'Alt+Up Arrow'],
+    ['Mod+Shift+ArrowUp', '⇧⌘↑', 'Ctrl+Shift+Up Arrow'],
+    ['Mod+-', '⌘−', 'Ctrl+−'],
+    ['Mod+Space', '⌘Space', 'Ctrl+Spacebar'],
     ['Ctrl+Mod+G', '⌃⌘G', 'Ctrl+G'],
     ['Mod+Alt+Shift+G', '⌥⇧⌘G', 'Ctrl+Alt+Shift+G'],
     ['Mod+Enter', '⌘↩', 'Ctrl+Enter'],

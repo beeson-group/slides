@@ -326,6 +326,14 @@ export const STARTS: [StartKind, string][] = [['click', 'On Click'], ['with', 'W
 // a delay in ms as seconds with at most one decimal
 const seconds = (ms: number): string => String(Math.round(ms / 100) / 10);
 
+// the text of a row, cut with an ellipsis where the pane is too narrow and then shown whole in its
+// tooltip, as in the Animation Pane of PowerPoint
+function fullText(text: string): HTMLElement {
+  const el = make('span', 'text', text);
+  if (text) el.title = text;
+  return el;
+}
+
 export const startLabel = (start: StartKind | null, delay: number | null): string =>
   start === 'after' ? `After Previous, ${seconds(delay ?? 0)} s` : start === 'with' ? 'With Previous' : 'On Click';
 
@@ -746,7 +754,7 @@ export class Steps {
       const meta = make('span', 'meta');
       meta.append(make('span', 'kind', kind), ` · ${how}`);
       const body = make('span', 'body');
-      body.append(make('span', 'text', text), meta);
+      body.append(fullText(text), meta);
       const handle = make('span', 'grip');
       handle.append(grip());
       r.append(handle, chip, body);
@@ -826,7 +834,7 @@ export class Steps {
     const meta = make('span', 'meta');
     meta.append(make('span', 'kind', 'List'), ` · Item by item · ${n} steps`);
     const body = make('span', 'body');
-    body.append(make('span', 'text', described[run.items[0]].text), meta);
+    body.append(fullText(described[run.items[0]].text), meta);
     head.append(make('span', 'grip'), chip, body);
     head.setAttribute('aria-label', `List, item by item, steps ${run.from + 1} to ${run.from + n}`);
     const entry: Head = { list: run.list, head, chip, run };

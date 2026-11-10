@@ -1182,10 +1182,20 @@ test('the slide list and the step chips of the Steps pane carry their names, and
   assert.match(rows[0][2], /^Step of the heading: \S/);
   assert.match(rows[5][2], /^Step of the figure: \S/);
   assert.ok(rows.every(([name, , label]) => name === 'div' && /^Step of the [a-z]+: /.test(label)), JSON.stringify(rows));
-  await page.evaluate(`document.documentElement.dataset.theme = 'light'`);
-  const colors = await page.evaluate(`({ text: getComputedStyle(document.querySelector('.beeson-edit-side .foot')).color, bg: getComputedStyle(document.querySelector('.beeson-edit-side')).backgroundColor })`);
-  const ratio = contrast(colors.text, colors.bg);
-  assert.ok(ratio >= 4.5, `the footnote of the Steps pane has a contrast of ${ratio.toFixed(2)} to 1 (${colors.text} on ${colors.bg})`);
+  // the panes follow the scheme of the system, not the mode of the deck, and the footnote is drawn
+  // on the first ancestor with an opaque background, the Steps pane itself being transparent
+  for (const scheme of ['light', 'dark']) {
+    await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: scheme }] });
+    const colors = await page.evaluate(`(() => {
+      const foot = document.querySelector('.beeson-edit-side .foot');
+      let el = foot;
+      while (el && /rgba\\([^)]*, 0\\)|transparent/.test(getComputedStyle(el).backgroundColor)) el = el.parentElement;
+      return { text: getComputedStyle(foot).color, bg: el ? getComputedStyle(el).backgroundColor : 'rgb(255, 255, 255)' };
+    })()`);
+    assert.doesNotMatch(colors.bg, /rgba/, colors.bg);
+    const ratio = contrast(colors.text, colors.bg);
+    assert.ok(ratio >= 4.5, `the footnote of the Steps pane has a contrast of ${ratio.toFixed(2)} to 1 in ${scheme} mode (${colors.text} on ${colors.bg})`);
+  }
   assert.deepEqual(page.errors, []);
 });
 
