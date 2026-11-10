@@ -241,3 +241,31 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// finding 3 of R8.3: Use Rehearsed Timings was checked while no timings were recorded (state 193)
+for (const platform of PLATFORMS) {
+  test(`Use Rehearsed Timings is checked and enabled only when the deck has timings (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    assert.equal(await page.evaluate(`document.querySelectorAll('.reveal .slides section[data-timing]').length`), 0);
+    assert.equal((await state(page, 'play.clearTimings')).enabled, false);
+    let s = await state(page, 'play.useTimings');
+    assert.equal(s.enabled, false, 'Use Rehearsed Timings is enabled without timings');
+    // a switch turned on in the storage is not shown checked while the deck has no timings
+    await page.evaluate(`localStorage.setItem('beeson-use-timings', '1')`);
+    s = await state(page, 'play.useTimings');
+    assert.equal(s.checked, false, 'Use Rehearsed Timings is checked without timings');
+    // a timing of the current slide, as a rehearsal writes it
+    await page.evaluate(`window.BeesonEditor.doc.setTag(document.querySelector('.reveal section.present'), { attrs: { 'data-timing': '12' } }, 'timing')`);
+    await frames(page);
+    s = await state(page, 'play.useTimings');
+    assert.equal(s.enabled, true, 'Use Rehearsed Timings is dimmed with timings');
+    assert.equal(s.checked, true, 'Use Rehearsed Timings is not checked with timings and the switch on');
+    assert.equal((await state(page, 'play.clearTimings')).enabled, true);
+    await exec(page, 'play.clearTimings');
+    await frames(page);
+    s = await state(page, 'play.useTimings');
+    assert.deepEqual([s.enabled, s.checked], [false, false], 'Use Rehearsed Timings is live after Clear Timings');
+    await byteExact(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
