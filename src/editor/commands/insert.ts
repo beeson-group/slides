@@ -419,9 +419,11 @@ export function install(app: App): void {
     run: (a) => a.history.transact('Insert Formula', async () => {
       // in a text, the button puts an inline formula at the caret, as Insert Equation of Keynote
       // and PowerPoint does, through math.inline of commands/math.ts. the sheet is opened after
-      // the click, since the click on the toolbar would close it on its way to the document
+      // the click, since the click on the toolbar would close it on its way to the document, and
+      // the keys typed until then are held for its TeX field, and not typed into the text
       if (a.selection.kind === 'text' && a.commands.enabled('math.inline')) {
-        setTimeout(() => void a.commands.run('math.inline'), 0);
+        const release = a.math.hold();
+        setTimeout(() => void a.commands.run('math.inline').finally(release), 0);
         return;
       }
       // the keys typed while the formula is written are typed into its TeX field

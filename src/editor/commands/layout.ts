@@ -228,9 +228,29 @@ async function rewrite(app: App, slides: Element[], write: (body: string, slide:
 
 export async function changeLayout(app: App, slides: Element[], layout: Layout): Promise<Element[]> {
   const step = stepOf(app);
+  // the places among the words of each slide of the blocks that the fit of its panel shrank
+  const shrunk = slides.map((s) => (layout === 'split' ? [] : wordsOf(app, s).flatMap((el, i) => (fitted.has(el) && el.classList.contains('small') ? [i] : []))));
   const out = await rewrite(app, slides, (body) => relayout(body, layout, step), 'layout');
-  for (const s of out) if (!slides.includes(s)) fitPanel(app, s);
+  out.forEach((s, k) => {
+    if (slides.includes(s)) return;
+    const words = wordsOf(app, s);
+    for (const i of shrunk[k]) if (words[i]) app.doc.setTag(words[i], { classes: { small: false } }, 'layout');
+    fitPanel(app, s);
+  });
   return out;
+}
+
+// the blocks set in the style Small by the fit of a panel in this session. an undo and a redo put
+// the same elements back, hence a change of layout away from Split takes the style off these
+// blocks only, and a block in the style Small before the change to Split keeps it
+const fitted = new WeakSet<Element>();
+
+// the parts of a slide of the kind words, in their order, which a change of layout keeps
+function wordsOf(app: App, slide: Element): Element[] {
+  const open = (el: Element) => !!app.pairing?.elements.get(el)?.open;
+  const parts = [...slide.children].filter(open).flatMap((el) =>
+    el.localName === 'div' && WRAPPER_CLASSES.some((c) => el.classList.contains(c)) ? [...el.children].filter(open) : [el]);
+  return parts.filter((el) => kindOf(el.localName, [...el.classList]) === 'words');
 }
 
 // true when a text of the panel runs past its bottom, or into the footnote at its bottom
@@ -252,7 +272,9 @@ function fitPanel(app: App, slide: Element): void {
   for (const el of panel.querySelectorAll(':scope > p, :scope > ul, :scope > ol')) {
     if (!app.pairing?.elements.get(el)?.open) continue;
     const classes = app.doc.tagState(el).classes.filter((c) => c !== 'fragment');
-    if (!classes.length) app.doc.setTag(el, { classes: { small: true } }, 'layout');
+    if (classes.length) continue;
+    app.doc.setTag(el, { classes: { small: true } }, 'layout');
+    fitted.add(el);
   }
 }
 
@@ -325,14 +347,18 @@ function closeChooser(back = true): void {
   if (back && c.anchor?.isConnected) c.anchor.focus({ preventScroll: true });
 }
 
-// the chooser under its anchor, at the right of a row of the navigator, or else in the window
-function placeChooser(dialog: HTMLElement, anchor: Element | null): void {
+// the chooser beside the menu item that opened it, as a submenu, else under its anchor, at the right
+// of a row of the navigator, or else in the window
+function placeChooser(dialog: HTMLElement, anchor: Element | null, item: DOMRect | null = null): void {
   const w = dialog.offsetWidth;
   const h = dialog.offsetHeight;
-  const r = anchor?.getBoundingClientRect();
+  const r = item ?? anchor?.getBoundingClientRect();
   let x = r ? r.left : (innerWidth - w) / 2;
   let y = r ? r.bottom + 6 : (innerHeight - h) / 3;
-  if (r && anchor?.closest('.beeson-edit-nav')) {
+  if (item) {
+    x = item.right + w + 12 <= innerWidth ? item.right + 4 : item.left - w - 4;
+    y = item.top - 8;
+  } else if (r && anchor?.closest('.beeson-edit-nav')) {
     x = r.right + 10;
     y = r.top - 8;
   } else if (r && y + h > innerHeight - 8) {
@@ -343,7 +369,7 @@ function placeChooser(dialog: HTMLElement, anchor: Element | null): void {
   dialog.style.top = `${Math.max(8, Math.min(y, innerHeight - h - 8))}px`;
 }
 
-export function openChooser(app: App, anchor: Element | null): void {
+export function openChooser(app: App, anchor: Element | null, item: DOMRect | null = null): void {
   closeChooser(false);
   const slide = targets(app).at(-1) ?? app.current();
   if (!slide) return;
@@ -378,11 +404,12 @@ export function openChooser(app: App, anchor: Element | null): void {
   document.body.append(dialog);
   dialog.show();
   for (const t of tiles) drawInto(t.pic, sample(t.layout), deck, TILE);
-  placeChooser(dialog, dialog.anchor ?? app.current());
+  placeChooser(dialog, dialog.anchor ?? app.current(), item);
   dialog.addEventListener('keydown', (ev) => {
     const i = tiles.findIndex((t) => t.tile === document.activeElement);
     const step: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 4, ArrowUp: -4 };
     if (ev.key === 'Escape') closeChooser();
+    else if ((ev.key === 'Enter' || ev.key === ' ') && i >= 0) tiles[i].tile.click();
     else if (ev.key in step) tiles[Math.min(tiles.length - 1, Math.max(0, i + step[ev.key]))].tile.focus();
     else if (ev.key === 'Home' || ev.key === 'End') tiles[ev.key === 'Home' ? 0 : tiles.length - 1].tile.focus();
     else if (ev.key === 'Tab') tiles[(i + (ev.shiftKey ? tiles.length - 1 : 1)) % tiles.length].tile.focus();
@@ -409,7 +436,6 @@ export function install(app: App): void {
       (layout, i): Command => ({
         id: `slide.layout.${layout}`,
         label: LABELS[layout],
-        menu: { bar: 'Slide', group: 'layout', order: 55 + i, submenu: 'Layout' },
         enabled: (a) => targets(a).length > 0,
         checked: (a) => {
           const list = targets(a);
@@ -420,14 +446,17 @@ export function install(app: App): void {
       }),
     ),
     {
-      // arg is the button that opens the chooser, or the argument of a context menu
+      // arg is the button that opens the chooser, or the argument of a context menu. from a menu,
+      // the tiles are opened beside the item, as the Layout gallery of the menu of a thumbnail in
+      // PowerPoint
       id: 'slide.layoutChooser',
-      label: 'Change Layout…',
+      label: 'Layout',
+      menu: { bar: 'Slide', group: 'layout', order: 55 },
       context: ['slide', 'canvas'],
       enabled: (a) => targets(a).length > 0,
       run: (a, arg) => {
         const t = (arg as { target?: unknown } | undefined)?.target;
-        openChooser(a, arg instanceof Element ? arg : t instanceof Element && t.closest('.beeson-edit-nav') ? t : null);
+        openChooser(a, arg instanceof Element ? arg : t instanceof Element && t.closest('.beeson-edit-nav') ? t : null, a.menuItem);
       },
     },
     {

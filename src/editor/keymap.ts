@@ -105,7 +105,8 @@ export function fallback(ev: KeyEvent, platform: Platform): KeyEvent | null {
   return null;
 }
 
-// the names of the keys in the notation of Keynote on a Mac and of PowerPoint for Windows elsewhere
+// the names of the keys in the notation of Keynote on a Mac and of PowerPoint for Windows elsewhere,
+// where a symbol is written as the character on the key, e.g. the hyphen-minus of Ctrl+-
 const MAC_KEYS: Record<string, string> = {
   Enter: '↩', Escape: '⎋', Tab: '⇥', Backspace: '⌫', Delete: '⌦', Space: 'Space', ContextMenu: 'Menu',
   ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Home: '↖', End: '↘', PageUp: '⇞', PageDown: '⇟', '-': '−',
@@ -113,7 +114,7 @@ const MAC_KEYS: Record<string, string> = {
 
 const OTHER_KEYS: Record<string, string> = {
   Escape: 'Esc', Space: 'Spacebar', ContextMenu: 'Menu', ArrowUp: 'Up Arrow', ArrowDown: 'Down Arrow', ArrowLeft: 'Left Arrow',
-  ArrowRight: 'Right Arrow', PageUp: 'Page Up', PageDown: 'Page Down', '-': '−',
+  ArrowRight: 'Right Arrow', PageUp: 'Page Up', PageDown: 'Page Down',
 };
 
 // a key as the menus, the context menus, the tooltips, and the sheet of shortcuts show it. on a

@@ -103,7 +103,7 @@ test('displays platform shortcuts', () => {
     ['Mod+Y', '⌘Y', 'Ctrl+Y'],
     ['Alt+ArrowUp', '⌥↑', 'Alt+Up Arrow'],
     ['Mod+Shift+ArrowUp', '⇧⌘↑', 'Ctrl+Shift+Up Arrow'],
-    ['Mod+-', '⌘−', 'Ctrl+−'],
+    ['Mod+-', '⌘−', 'Ctrl+-'],
     ['Mod+Space', '⌘Space', 'Ctrl+Spacebar'],
     ['Ctrl+Mod+G', '⌃⌘G', 'Ctrl+G'],
     ['Mod+Alt+Shift+G', '⌥⇧⌘G', 'Ctrl+Alt+Shift+G'],

@@ -199,7 +199,7 @@ const ORDERS: { order: Order; label: string; mac: string; other: string }[] = [
   { order: 'back', label: 'Send to Back', mac: 'Mod+Shift+B', other: 'Mod+Shift+ArrowDown' },
 ];
 
-export function commands(): Command[] {
+export function commands(app: App): Command[] {
   const arrange = (order: number, group = 'order') => ({ bar: 'Arrange', group, order });
   const list: Command[] = ORDERS.map(({ order, label, mac, other }, i) => ({
     id: `arrange.order.${order}`,
@@ -237,6 +237,7 @@ export function commands(): Command[] {
       // the item of the context menu, which groups or ungroups the selection
       id: 'arrange.toggleGroup',
       label: (app) => (canUngroup(app) && !canGroup(app) ? 'Ungroup' : 'Group'),
+      listedAs: (app) => (canUngroup(app) && !canGroup(app) ? 'arrange.ungroup' : 'arrange.group'),
       context: ['element'],
       enabled: (app) => canGroup(app) || canUngroup(app),
       undoable: true,
@@ -245,8 +246,9 @@ export function commands(): Command[] {
     {
       id: 'arrange.lock',
       label: 'Lock',
-      // Safari takes Cmd+L of Keynote before the page, and Chrome and Firefox pass it on
-      keys: { mac: ['Ctrl+Mod+L', 'Mod+L'], other: ['Mod+L'] },
+      // Safari takes Cmd+L of Keynote before the page, and Chrome and Firefox pass it on. both keys
+      // are bound, and the menus list first the one that reaches the page
+      keys: { mac: app.safari ? ['Ctrl+Mod+L', 'Mod+L'] : ['Mod+L', 'Ctrl+Mod+L'], other: ['Mod+L'] },
       in: ['canvas'],
       menu: arrange(70, 'lock'),
       enabled: (app) => objectEls(app).some((el) => !locked(el)),
@@ -256,7 +258,8 @@ export function commands(): Command[] {
     {
       id: 'arrange.unlock',
       label: 'Unlock',
-      keys: { mac: ['Mod+Alt+L'], other: ['Mod+Shift+L'] },
+      // Safari takes Opt+Cmd+L of Keynote for its downloads
+      keys: { mac: app.safari ? ['Ctrl+Mod+Alt+L', 'Mod+Alt+L'] : ['Mod+Alt+L', 'Ctrl+Mod+Alt+L'], other: ['Mod+Shift+L'] },
       in: ['canvas', 'text'],
       menu: arrange(71, 'lock'),
       enabled: (app) => lockTargets(app, false).some(locked),
@@ -266,6 +269,7 @@ export function commands(): Command[] {
     {
       id: 'arrange.toggleLock',
       label: (app) => (objectEls(app).length && objectEls(app).every(locked) ? 'Unlock' : 'Lock'),
+      listedAs: (app) => (objectEls(app).length && objectEls(app).every(locked) ? 'arrange.unlock' : 'arrange.lock'),
       context: ['element'],
       enabled: (app) => objectEls(app).length > 0,
       undoable: true,
@@ -341,7 +345,7 @@ export function lockedSelection(app: App): boolean {
 }
 
 export function install(app: App): void {
-  for (const c of commands()) app.commands.define(c);
+  for (const c of commands(app)) app.commands.define(c);
   keepGroups(app);
   app.commands.veto((a, c) => (CHANGES.test(c.id) || (c.id === 'edit.paste' && a.selection.kind === 'text')) && lockedSelection(a));
   // Delete skips a locked element, hence it is turned off only when every selected element is locked

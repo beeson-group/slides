@@ -465,6 +465,7 @@ export function install(app: App): void {
     {
       id: 'slide.cut',
       label: 'Cut',
+      listedAs: () => 'edit.cut',
       context: ['slide'],
       enabled: (a) => targets(a).length > 0 && targets(a).length < sections(a).length,
       undoable: true,
@@ -476,6 +477,7 @@ export function install(app: App): void {
     {
       id: 'slide.copy',
       label: 'Copy',
+      listedAs: () => 'edit.copy',
       context: ['slide'],
       enabled: (a) => targets(a).length > 0,
       run: (a, arg) => void copySlides(a, arg instanceof DataTransfer ? arg : null),
@@ -483,6 +485,7 @@ export function install(app: App): void {
     {
       id: 'slide.paste',
       label: 'Paste',
+      listedAs: () => 'edit.paste',
       context: ['slide', 'navigator'],
       enabled: ready,
       undoable: true,

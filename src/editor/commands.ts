@@ -24,6 +24,9 @@ export type Command = {
   // submenu of that name of the menu of the command
   toolbar?: { group: string; order: number; icon: string; label?: string; split?: string };
   context?: Context[];
+  // the id of the command whose keys a menu lists for this one, for an item that stands for it,
+  // e.g. Unlock in a context menu, which runs the Unlock of the Arrange menu
+  listedAs?(app: App): string;
   enabled?(app: App): boolean;
   // true or false for a switch, null or absent for a plain command
   checked?(app: App): boolean | null;
@@ -141,9 +144,15 @@ export class Commands {
     else await c.run(this.app, arg);
   }
 
+  // the command whose keys a menu lists for the command of id
+  listed(id: string): Command | undefined {
+    const c = this.byId.get(id);
+    return (c?.listedAs && this.byId.get(c.listedAs(this.app))) || c;
+  }
+
   // the keys of a command on the platform of the editor, as a menu shows them
   shortcuts(id: string): string[] {
-    const c = this.byId.get(id);
+    const c = this.listed(id);
     return c ? keysOf(c, this.app.platform).map((k) => display(k, this.app.platform)) : [];
   }
 

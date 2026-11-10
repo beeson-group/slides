@@ -288,18 +288,23 @@ export function install(app: App): void {
       else boxes[boxes.length - 1].commands.push(app.commands.get(id)!);
     }
     const spaced = boxes.findIndex((b) => b.right);
+    // below NARROW the groups after the space go into the menu More, apart from the group of
+    // Format, which opens and closes the inspector drawn over the canvas as a sheet in a narrow
+    // window, and is put after More
+    const kept: HTMLElement[] = [];
     let right = false;
     for (const [i, box] of boxes.entries()) {
       right ||= box.right;
       if (!box.commands.length) continue;
-      if (narrow && spaced >= 0 && i >= spaced) {
+      const fold = narrow && spaced >= 0 && i >= spaced;
+      if (fold && !box.commands.some((c) => c.id === 'shell.format')) {
         late.push(box);
         continue;
       }
       const el = make('div', 'group');
       el.dataset.group = box.commands[0].toolbar?.group ?? 'custom';
-      if (right) el.classList.add('right');
-      right = false;
+      if (right && !fold) el.classList.add('right');
+      if (!fold) right = false;
       for (const c of box.commands) {
         const variants = variantsOf(c, groups);
         const b = button(c);
@@ -307,13 +312,14 @@ export function install(app: App): void {
         if (c.toolbar?.split) el.append(splitButton(app, b, () => splitItems(c, variants), `${toolbarLabel(app, c)} options`));
         else el.append(b);
       }
-      parts.push(el);
+      (fold ? kept : parts).push(el);
     }
     if (late.length) {
       const box = make('div', 'group right');
       box.append(more);
       parts.push(box);
-    }
+    } else kept[0]?.classList.add('right');
+    parts.push(...kept);
     top.replaceChildren(...parts);
     update();
   }

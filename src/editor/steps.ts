@@ -12,6 +12,7 @@ import type { Entry } from './history.ts';
 import type { Pairing } from './render.ts';
 import type { TagEdit, TagState } from './tags.ts';
 import { OFF, fragmentIndex, fragmentsOf, type Layers, itemsOf, planOf, remapKeep, showLayer, shownAt, startOf, stepAt, type Item, type Plan, type Start } from './layers.ts';
+import { twinOf } from './canvas/hit.ts';
 import { codeAt, dimLines, lineRect, linesOf, stepsOf } from './commands/code.ts';
 import { numberField } from './inspector/controls.ts';
 import { injectStyle, make } from './ui/dom.ts';
@@ -92,15 +93,26 @@ export const classesOf = (app: App, el: Element): string[] => (app.pairing?.elem
 // it is locked, since it is set in the Code pane and its index is that of the code
 export type LineStep = { code: Element; group: number; lines: string };
 
-// the steps of the current slide as the model reads them
-export type Model = { slide: Element; els: Element[]; items: Item[]; locked: boolean[]; lines: (LineStep | null)[]; plan: Plan };
+// the steps of the current slide as the model reads them. an image or a video of a dark and light
+// pair is one item with its twin, since every tag edit of one is written on the other. the item is
+// the one shown, or else the first, and twins maps it to the other
+export type Model = { slide: Element; els: Element[]; items: Item[]; locked: boolean[]; lines: (LineStep | null)[]; plan: Plan; twins?: Map<Element, Element> };
 
 const intOf = (v: string | undefined): number | null => (v !== undefined && /^\s*-?\d+\s*$/.test(v) ? Number(v) : null);
 
 export function modelOf(app: App, slide: Element | null = app.current(), extra: Element[] = []): Model | null {
   const pairing = app.pairing;
   if (!slide || !pairing || !app.doc) return null;
-  const els = stepElements(slide, pairing, extra);
+  const twins = new Map<Element, Element>();
+  const all = stepElements(slide, pairing, extra);
+  const els = all.filter((el) => {
+    const twin = twinOf(app, el);
+    if (!twin || !all.includes(twin)) return true;
+    if (twins.has(twin)) return false;
+    const keep = el.getClientRects().length || !twin.getClientRects().length;
+    if (keep) twins.set(el, twin);
+    return keep;
+  });
   const locked = els.map((el) => !pairing.elements.get(el)?.open);
   const items = els.map((el, i): Item => {
     if (!locked[i]) return itemOf(app.doc.tagState(el));
@@ -121,11 +133,15 @@ export function modelOf(app: App, slide: Element | null = app.current(), extra: 
     lines.splice(at, 0, ...steps);
     items.splice(at, 0, ...steps.map((_, k): Item => ({ fragment: true, index: r === null ? null : r + k, final: false })));
   }
-  return { slide, els, items, locked, lines, plan: planOf(items) };
+  return { slide, els, items, locked, lines, plan: planOf(items), twins };
 }
 
-// the position of el among the items of m, apart from the line steps of a code
-export const indexIn = (m: Model, el: Element): number => m.els.findIndex((x, k) => x === el && !m.lines[k]);
+// the position of el among the items of m, or of the item of its pair, apart from the line steps
+// of a code
+export const indexIn = (m: Model, el: Element): number => {
+  const item = [...(m.twins ?? [])].find(([, twin]) => twin === el)?.[0] ?? el;
+  return m.els.findIndex((x, k) => x === item && !m.lines[k]);
+};
 
 // the model of the slide of el, with the position of el among its items
 export function modelAt(app: App, el: Element): (Model & { i: number }) | null {
@@ -758,7 +774,10 @@ export class Steps {
       els.forEach((el, i) => {
         // an element of another layer of the slide is hidden, and so is its number
         if (at(i) < 0 || el.closest(`.${OFF}`)) return;
-        let rect = el.getBoundingClientRect();
+        // the number of a pair is drawn at the image of the mode shown
+        const twin = m.twins?.get(el);
+        const shown = twin && !el.getClientRects().length ? twin : el;
+        let rect = shown.getBoundingClientRect();
         if (!rect.width && !rect.height) return;
         // the number of a line step is drawn at the left edge of the box, level with its first line
         const line = m.lines[i];
@@ -771,7 +790,7 @@ export class Steps {
         const badge = make('span', 'beeson-badge', String(at(i) + 1));
         badge.style.left = `${rect.left}px`;
         badge.style.top = `${rect.top}px`;
-        (badge as HTMLElement & { owner?: Element }).owner = el;
+        (badge as HTMLElement & { owner?: Element }).owner = shown;
         this.badges.append(badge);
       });
     }

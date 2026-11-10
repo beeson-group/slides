@@ -139,6 +139,14 @@ const detectPlatform = (): Platform => {
   return /mac|iphone|ipad/i.test(agent) ? 'mac' : 'other';
 };
 
+// true in Safari, which takes Cmd+L and Cmd+R of Keynote before the page, where Chrome and Firefox
+// pass them on. the URL parameter edit-browser=safari sets it for a test
+const detectSafari = (): boolean => {
+  const forced = new URLSearchParams(location.search).get('edit-browser');
+  if (forced) return forced === 'safari';
+  return /Safari\//.test(navigator.userAgent) && !/Chrome|Chromium|CriOS|FxiOS|Firefox|Edg/.test(navigator.userAgent);
+};
+
 export class App {
   source: Source | null = null;
   // the text last read from the file or written to it. it differs from the source after a save
@@ -158,6 +166,10 @@ export class App {
   // the state line as last reported
   line: Line = { text: '', warn: false, title: '' };
   readonly platform: Platform = detectPlatform();
+  readonly safari: boolean = detectSafari();
+  // the box of the menu item whose command runs, until the task of the run ends, e.g. for the
+  // layout tiles that Layout opens beside its item
+  menuItem: DOMRect | null = null;
   readonly history: History;
   readonly commands: Commands;
 
