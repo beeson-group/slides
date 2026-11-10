@@ -24,7 +24,7 @@ export const DATA_ATTRS = [
   'data-stagger', 'data-strands', 'data-strands-color', 'data-strands-colormap', 'data-strands-ramp',
   'data-strands-select', 'data-strands-shade', 'data-surface-accent', 'data-surface-marks', 'data-surface-stage',
   'data-surface-violet', 'data-tone', 'data-turn', 'data-unhighlight', 'data-zoom', 'data-zscale',
-  'data-visibility', 'data-timing', 'data-transition', 'data-group', 'data-locked',
+  'data-visibility', 'data-timing', 'data-transition', 'data-group', 'data-locked', 'data-autoslide',
 ];
 
 // the standard attributes that the editor writes
@@ -33,6 +33,14 @@ export const STANDARD_ATTRS = ['alt', 'src', 'poster', 'href', 'muted', 'loop', 
 // the attributes written only in the text of new content, e.g. the id of the JSON block of a plot
 // and the id renamed in a duplicated slide
 export const TEMPLATE_ATTRS = ['id', 'type'];
+
+// the attributes of the svg of a line or an arrow of commands/line.ts, by tag
+export const LINE_ATTRS: Record<string, string[]> = {
+  svg: ['width', 'height'],
+  line: ['x1', 'y1', 'x2', 'y2', 'marker-start', 'marker-end'],
+  marker: ['orient'],
+  path: ['d'],
+};
 
 // the elements whose width is set in a style, by tag or by class
 const SIZED_TAGS = new Set(['img', 'video', 'tycho-viewer']);
@@ -60,6 +68,8 @@ export function themeClasses(css: string): string[] {
 // the reason a declaration is out of the scope rule on an element, or null when it is in it
 export function declarationProblem(tag: string, classes: string[], name: string, value: string): string | null {
   if (name === 'translate' || name === 'rotate') return null;
+  // the width of a column is written in px on the cells of the first row of a table
+  if (name === 'width' && (tag === 'td' || tag === 'th')) return /^\d+px$/.test(value.trim()) ? null : `width ${value} on a ${tag}`;
   if (name === 'width') return SIZED_TAGS.has(tag) || classes.includes('qr') ? null : `width on a ${tag}`;
   if (name === 'font-size') return tag === 'pre' && /^(22|18)px$/.test(value.trim()) ? null : `font-size ${value} on a ${tag}`;
   if (name === 'text-align') return (tag === 'td' || tag === 'th') && value.trim() === 'right' ? null : `text-align ${value} on a ${tag}`;
@@ -68,8 +78,9 @@ export function declarationProblem(tag: string, classes: string[], name: string,
 }
 
 // the reason an attribute is out of the scope rule, or null when it is in it
-export function attributeProblem(name: string, template = false): string | null {
+export function attributeProblem(name: string, template = false, tag = ''): string | null {
   if (name === 'class' || name === 'style' || DATA_ATTRS.includes(name) || STANDARD_ATTRS.includes(name)) return null;
+  if (LINE_ATTRS[tag]?.includes(name)) return null;
   if (template && TEMPLATE_ATTRS.includes(name)) return null;
   return `the attribute ${name}`;
 }
@@ -86,7 +97,7 @@ export function editProblems(tag: string, fileAttrs: Parameters<typeof stateOf>[
   for (const c of after.classes) if (!before.classes.includes(c) && !allowedClass(c, theme)) out.push(`the class ${c}`);
   for (const [name, value] of Object.entries(after.attrs)) {
     if (before.attrs[name] === value) continue;
-    const problem = attributeProblem(name);
+    const problem = attributeProblem(name, false, tag);
     if (problem) out.push(problem);
   }
   for (const [name, value] of Object.entries(after.style)) {
@@ -105,7 +116,7 @@ export function textProblems(html: string, theme: Set<string>): string[] {
     const s = stateOf(t.attrs);
     for (const c of s.classes) if (!allowedClass(c, theme)) out.push(`the class ${c} on a ${t.name}`);
     for (const name of Object.keys(s.attrs)) {
-      const problem = attributeProblem(name, true);
+      const problem = attributeProblem(name, true, t.name);
       if (problem) out.push(`${problem} on a ${t.name}`);
     }
     for (const [name, value] of Object.entries(s.style)) {
