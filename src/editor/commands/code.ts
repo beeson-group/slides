@@ -6,6 +6,7 @@
 // highlight.js with the CSS Custom Highlight API, which leaves the DOM as the file has it
 
 import type { App } from '../app.ts';
+import { insertPlain } from '../text/typing.ts';
 import { injectStyle } from '../ui/dom.ts';
 
 type Hljs = {
@@ -114,6 +115,61 @@ export function selectedLines(code: Element): [number, number] | null {
   const end = lineAt(r.endContainer, r.endOffset);
   const b = end.atStart && end.line > a && !r.collapsed ? end.line - 1 : end.line;
   return [a, Math.max(a, b)];
+}
+
+// the groups of a box after its text before was changed to after, as a code editor moves its marks
+// of lines: a group after the lines that changed is moved by the lines added or deleted, and a
+// group on a deleted line is put on the line before it, so that the box keeps its steps
+export function shiftGroups(groups: string[], before: string, after: string): string[] {
+  const a = before.replace(/\n$/, '').split('\n');
+  const b = after.replace(/\n$/, '').split('\n');
+  if (a.length === b.length) return groups;
+  let p = 0;
+  while (p < a.length && p < b.length && a[p] === b[p]) p++;
+  let s = 0;
+  while (s < a.length - p && s < b.length - p && a[a.length - 1 - s] === b[b.length - 1 - s]) s++;
+  const endA = a.length - s;
+  const endB = b.length - s;
+  const line = (n: number): number => {
+    if (n - 1 < p) return n;
+    if (n - 1 >= endA) return n + b.length - a.length;
+    return endB > p ? Math.min(n - 1, endB - 1) + 1 : Math.max(1, p);
+  };
+  return groups.map((g) => {
+    const parts = g.split(',').map((part) => {
+      const [x, y = x] = part.split('-').map(Number);
+      const [u, v] = [line(x), line(y)];
+      return u === v ? String(u) : `${u}-${v}`;
+    });
+    return parts.filter((q, k) => q !== parts[k - 1]).join(',');
+  });
+}
+
+// the indent of a new line typed at the caret in code, i.e. the spaces and tabs at the start of
+// the line of the caret that are before the caret
+function indentAt(code: Element): string {
+  const s = document.getSelection();
+  if (!s?.rangeCount || !code.contains(s.getRangeAt(0).startContainer)) return '';
+  const r = document.createRange();
+  r.setStart(code, 0);
+  r.setEnd(s.getRangeAt(0).startContainer, s.getRangeAt(0).startOffset);
+  return /^[ \t]*/.exec(r.toString().split('\n').pop() ?? '')?.[0] ?? '';
+}
+
+// whether an input may add or delete a line of a box, i.e. a new line, a paste, a drop, or a
+// delete of a text with a newline
+function addsOrDeletesLines(ev: InputEvent): boolean {
+  const type = ev.inputType;
+  if (type === 'insertParagraph' || type === 'insertLineBreak' || type.startsWith('insertFrom') || type === 'insertReplacementText' || ev.data?.includes('\n')) return true;
+  const text = (r: StaticRange | Range) => {
+    const range = document.createRange();
+    range.setStart(r.startContainer, r.startOffset);
+    range.setEnd(r.endContainer, r.endOffset);
+    return range.toString();
+  };
+  const s = document.getSelection();
+  if (s?.rangeCount && !s.isCollapsed && text(s.getRangeAt(0)).includes('\n')) return true;
+  return type.startsWith('delete') && ev.getTargetRanges().some((r) => text(r).includes('\n'));
 }
 
 // the numbers of the lines of a group, e.g. 1,3-4 is 1, 3, and 4
@@ -376,6 +432,43 @@ export function install(app: App): void {
       paint(app);
     });
   };
+  // Return in a box starts a line with the indent of the line of the caret. an input that adds or
+  // deletes lines of a box with line steps is one entry of the history with the shift of its
+  // groups, which ends at the input event after it. the listeners are on the window, before and
+  // after those of text/typing.ts on the document
+  let pending: { code: Element; before: string; finish: () => void } | null = null;
+  const settle = () => {
+    const p = pending;
+    if (!p) return;
+    pending = null;
+    try {
+      const s = stepsOf(app, p.code);
+      const groups = shiftGroups(s.groups, p.before, p.code.textContent ?? '');
+      if (groups.join('|') !== s.groups.join('|')) writeSteps(app, p.code, true, groups);
+    } finally {
+      p.finish();
+    }
+  };
+  window.addEventListener('beforeinput', (ev) => {
+    const host = app.hostOf(ev.target);
+    const code = host?.closest('pre')?.querySelector(':scope > code') ?? null;
+    if (!host || !code || pending) return;
+    if (codeAt(app, { el: code }) && stepsOf(app, code).groups.length && addsOrDeletesLines(ev)) {
+      let finish = () => {};
+      const done = new Promise<void>((d) => (finish = d));
+      pending = { code, before: code.textContent ?? '', finish };
+      void app.history.transact('typing', () => done).catch((e) => app.fail(e));
+      setTimeout(settle, 0);
+    }
+    if (ev.inputType === 'insertParagraph' || ev.inputType === 'insertLineBreak') {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      app.history.break();
+      app.history.beforeTyping(host);
+      insertPlain(host, `\n${indentAt(code)}`);
+    }
+  }, true);
+  window.addEventListener('input', settle);
   app.onRefresh(['content', 'slide', 'structure'], later);
   app.listen('slide', later);
   document.addEventListener('input', later, true);

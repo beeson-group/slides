@@ -136,6 +136,15 @@ const caretAt = (page, offset) =>
     return false;
   })()`);
 
+// a Return of a keyboard carries the text \r, which the browser types as a new line, as the press of
+// test/helpers/editor.mjs does not
+async function enter(page) {
+  await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13, text: '\r', unmodifiedText: '\r' });
+  await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 });
+}
+// an edit of the code box writes its text again, with the > of line 5 as &gt;
+const GT = ['if len(members) >= 2:', 'if len(members) &gt;= 2:'];
+
 for (const platform of PLATFORMS) {
   test(`a line typed or deleted in a code box shifts its line steps in one entry (${platform})`, async (t) => {
     const page = await load(t, platform, { deck: 'index.html' });
@@ -147,14 +156,14 @@ for (const platform of PLATFORMS) {
     // Return at the end of line 3 starts line 4 with the indent of line 3, and the groups after it
     // are moved down by one line
     assert.ok(await caretAt(page, end3));
-    await press(page, 'Enter');
+    await enter(page);
     await frames(page);
     const shifted = CODE.replace('1-3|4|5-7|8-9', '1-3|5|6-8|9-10');
-    const typed = [[CODE, shifted], [SEED, `${SEED}    \n`]];
+    const typed = [[CODE, shifted], [SEED, `${SEED}    \n`], GT];
     await byteExact(page, typed);
     await type(page, 'pass');
     await frames(page);
-    await byteExact(page, [[CODE, shifted], [SEED, `${SEED}    pass\n`]]);
+    await byteExact(page, [[CODE, shifted], [SEED, `${SEED}    pass\n`], GT]);
     // the line steps go back with the undo of Return, in one entry with it
     await page.evaluate('window.BeesonEditor.undo()');
     await byteExact(page, typed);
@@ -168,7 +177,7 @@ for (const platform of PLATFORMS) {
     assert.ok(await caretAt(page, end3 + 1));
     await press(page, 'Backspace');
     await frames(page);
-    const joined = [[CODE, CODE.replace('1-3|4|5-7|8-9', '1-3|3|4-6|7-8')], [SEED + '    for', '    x0, vy0 = SEED    for']];
+    const joined = [[CODE, CODE.replace('1-3|4|5-7|8-9', '1-3|3|4-6|7-8')], [SEED + '    for', '    x0, vy0 = SEED    for'], GT];
     await roundTrip(page, joined);
     assert.notEqual(page.source, source);
     assert.deepEqual(errors(page), []);
@@ -182,18 +191,18 @@ for (const platform of PLATFORMS) {
     // the line of the for is indented by 4, and the line after it by 8
     const FOR = '    for z0 in np.linspace(Z_START, Z_END, STEPS + 1) / DU:\n';
     assert.ok(await caretAt(page, text.indexOf(FOR) + FOR.length - 1));
-    await press(page, 'Enter');
+    await enter(page);
     await type(page, 'pass');
     await frames(page);
-    await byteExact(page, [[CODE, CODE.replace('1-3|4|5-7|8-9', '1-3|4|6-8|9-10')], [FOR, `${FOR}    pass\n`]]);
+    await byteExact(page, [[CODE, CODE.replace('1-3|4|5-7|8-9', '1-3|4|6-8|9-10')], [FOR, `${FOR}    pass\n`], GT]);
     // Return at the start of a line moves it down without an indent of the new line
     await page.evaluate('window.BeesonEditor.undo()');
     await page.evaluate('window.BeesonEditor.undo()');
     await byteExact(page);
     assert.ok(await caretAt(page, text.indexOf(FOR)));
-    await press(page, 'Enter');
+    await enter(page);
     await frames(page);
-    await roundTrip(page, [[CODE, CODE.replace('1-3|4|5-7|8-9', '1-3|5|6-8|9-10')], [FOR, `\n${FOR}`]]);
+    await roundTrip(page, [[CODE, CODE.replace('1-3|4|5-7|8-9', '1-3|5|6-8|9-10')], [FOR, `\n${FOR}`], GT]);
     assert.deepEqual(errors(page), []);
   });
 }
