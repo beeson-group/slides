@@ -233,7 +233,7 @@ async function videoFile(url: string): Promise<string | null> {
     onButton: (value) => {
       if (value === 'choose') picked = chooseFiles(ACCEPT.video);
     },
-  });
+  }, 'choose');
   const files = await (picked ?? Promise.resolve([] as File[]));
   if (!files.length) return null;
   if (files[0].name !== name) throw new Error(`the chosen file ${files[0].name} is not the file of the video, ${name}`);
