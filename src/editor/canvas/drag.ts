@@ -84,14 +84,19 @@ export function writePlace(app: App, el: Element, p: Place, force = false, twin 
 }
 
 // the change of the places of elements, already written, as one entry of the history. an undo or a
-// redo shows the slide of the elements and selects them
-export function record(app: App, label: string, changes: { el: Element; from: Place; to: Place }[]): { el: Element; from: Place; to: Place }[] {
+// redo shows the slide of the elements and selects what was selected for the change, by default the
+// selection at the call, as in Keynote. without one, it selects the shown elements that were moved,
+// apart from the hidden image of a dark and light pair and an element inside another one
+export function record(app: App, label: string, changes: { el: Element; from: Place; to: Place }[], selected: Element[] = app.selection.elements()): { el: Element; from: Place; to: Place }[] {
   const moved = changes.filter((c) => !samePlace(c.from, c.to) && !locked(c.el));
   if (!moved.length) return moved;
+  const before = selected.slice();
   const apply = (way: 'from' | 'to') => {
     app.showSlide(moved[0].el);
     for (const c of moved) writePlace(app, c.el, c[way], true);
-    app.selection.set('elements', moved.map((c) => c.el));
+    const kept = before.filter((el) => el.isConnected);
+    const els = moved.map((c) => c.el);
+    app.selection.set('elements', kept.length ? kept : els.filter((el) => el.getClientRects().length && !els.some((o) => o !== el && o.contains(el))));
     app.invalidate('content');
   };
   app.history.push({ label, undo: () => apply('from'), redo: () => apply('to') });
@@ -105,6 +110,8 @@ type Press = {
   moved: boolean;
   // the element pressed, which the readout of a move follows
   el: Element | null;
+  // the selection at the press, which an undo and a redo of the change select again
+  selected: Element[];
   els: Element[];
   from: Map<Element, Place>;
   // the union of the boxes of els at the press, in slide pixels
@@ -244,7 +251,7 @@ export function install(app: App): void {
   const start = (kind: Press['kind'], ev: PointerEvent, el: Element | null, els: Element[], click: Press['click']): Press => {
     const f = frameOf(app);
     const p: Press = {
-      kind, x: ev.clientX, y: ev.clientY, moved: false, el, els, click,
+      kind, x: ev.clientX, y: ev.clientY, moved: false, el, els, click, selected: app.selection.elements().slice(),
       from: new Map(els.map((e) => [e, placeOf(e)])),
       base: els.length ? union(els.map((e) => snapBoxOf(app, e))) : { left: 0, top: 0, width: 0, height: 0 },
     };
@@ -664,7 +671,7 @@ export function install(app: App): void {
           writePlace(app, el, to);
           return { el, from: p.from.get(el) as Place, to };
         });
-        record(app, p.kind === 'resize' ? 'resize' : p.kind === 'rotate' ? 'rotate' : 'move', changes);
+        record(app, p.kind === 'resize' ? 'resize' : p.kind === 'rotate' ? 'rotate' : 'move', changes, p.selected);
       } else if (p.moved) {
         for (const el of els) writeLive(el, p.from.get(el) as Place);
       } else p.click?.();
@@ -732,7 +739,7 @@ export function install(app: App): void {
     const from = placeOf(el);
     const to = { ...from, translate: null };
     writePlace(app, el, to);
-    record(app, 'move', [{ el, from, to }]);
+    record(app, 'move', [{ el, from, to }], [el]);
     if (!app.selection.has(el)) app.selection.set('elements', [el]);
     frames.draw();
   };
