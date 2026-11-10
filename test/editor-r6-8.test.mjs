@@ -118,3 +118,82 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+const CODE = '<code class="language-python" data-line-numbers="1-3|4|5-7|8-9">def halo_family():';
+const SEED = '    x0, vy0 = SEED\n';
+
+// caretAt puts the caret at offset of the text of the code box of the current slide, focused
+const caretAt = (page, offset) =>
+  page.evaluate(`(() => {
+    const code = document.querySelector('.reveal section.present pre > code');
+    code.closest('[contenteditable="true"]').focus();
+    const walk = document.createTreeWalker(code, NodeFilter.SHOW_TEXT);
+    let left = ${offset};
+    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
+      if (left <= n.data.length) { getSelection().setBaseAndExtent(n, left, n, left); return true; }
+      left -= n.data.length;
+    }
+    return false;
+  })()`);
+
+for (const platform of PLATFORMS) {
+  test(`a line typed or deleted in a code box shifts its line steps in one entry (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: 'index.html' });
+    await page.evaluate(`Reveal.slide(Reveal.getIndices(document.querySelector('pre > code').closest('section')).h)`);
+    await frames(page);
+    const source = page.source;
+    const text = await page.evaluate(`document.querySelector('.reveal section.present pre > code').textContent`);
+    const end3 = text.indexOf(SEED) + SEED.length - 1;
+    // Return at the end of line 3 starts line 4 with the indent of line 3, and the groups after it
+    // are moved down by one line
+    assert.ok(await caretAt(page, end3));
+    await press(page, 'Enter');
+    await frames(page);
+    const shifted = CODE.replace('1-3|4|5-7|8-9', '1-3|5|6-8|9-10');
+    const typed = [[CODE, shifted], [SEED, `${SEED}    \n`]];
+    await byteExact(page, typed);
+    await type(page, 'pass');
+    await frames(page);
+    await byteExact(page, [[CODE, shifted], [SEED, `${SEED}    pass\n`]]);
+    // the line steps go back with the undo of Return, in one entry with it
+    await page.evaluate('window.BeesonEditor.undo()');
+    await byteExact(page, typed);
+    await page.evaluate('window.BeesonEditor.undo()');
+    await byteExact(page);
+    await page.evaluate('window.BeesonEditor.redo()');
+    await byteExact(page, typed);
+    await page.evaluate('window.BeesonEditor.undo()');
+    await byteExact(page);
+    // Backspace at the start of line 4 joins it to line 3, and the groups after it are moved up
+    assert.ok(await caretAt(page, end3 + 1));
+    await press(page, 'Backspace');
+    await frames(page);
+    const joined = [[CODE, CODE.replace('1-3|4|5-7|8-9', '1-3|3|4-6|7-8')], [SEED + '    for', '    x0, vy0 = SEED    for']];
+    await roundTrip(page, joined);
+    assert.notEqual(page.source, source);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`Return in a code box indents the new line as the line before (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: 'index.html' });
+    await page.evaluate(`Reveal.slide(Reveal.getIndices(document.querySelector('pre > code').closest('section')).h)`);
+    await frames(page);
+    const text = await page.evaluate(`document.querySelector('.reveal section.present pre > code').textContent`);
+    // the line of the for is indented by 4, and the line after it by 8
+    const FOR = '    for z0 in np.linspace(Z_START, Z_END, STEPS + 1) / DU:\n';
+    assert.ok(await caretAt(page, text.indexOf(FOR) + FOR.length - 1));
+    await press(page, 'Enter');
+    await type(page, 'pass');
+    await frames(page);
+    await byteExact(page, [[CODE, CODE.replace('1-3|4|5-7|8-9', '1-3|4|6-8|9-10')], [FOR, `${FOR}    pass\n`]]);
+    // Return at the start of a line moves it down without an indent of the new line
+    await page.evaluate('window.BeesonEditor.undo()');
+    await page.evaluate('window.BeesonEditor.undo()');
+    await byteExact(page);
+    assert.ok(await caretAt(page, text.indexOf(FOR)));
+    await press(page, 'Enter');
+    await frames(page);
+    await roundTrip(page, [[CODE, CODE.replace('1-3|4|5-7|8-9', '1-3|5|6-8|9-10')], [FOR, `\n${FOR}`]]);
+    assert.deepEqual(errors(page), []);
+  });
+}
