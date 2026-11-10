@@ -169,7 +169,7 @@ for (const platform of PLATFORMS) {
     let r = await rows(page);
     assert.deepEqual(r.slice(0, 3).map((x) => [x.step, x.start, x.marked]), [['0', 'click', ''], ['1', 'after', 'after'], ['2', 'click', '']]);
     assert.match(r[1].meta, /After Previous, 0\.5 s/);
-    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Set Start Of Step');
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Set Start of Step');
     await undoRedo(page, platform, source, after);
 
     // the delay is typed in seconds into the field under the rows
