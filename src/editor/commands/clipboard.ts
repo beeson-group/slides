@@ -7,12 +7,15 @@
 // of the clipboard are taken from the events cut, copy, and paste, which carry the clipboard in
 // every browser, and ⌘D or Ctrl+D duplicates. an image or a video on the clipboard, e.g. a
 // screenshot or an image copied in another app, is put on the slide through the media store of
-// media/store.ts, into an empty zone or a new one, and its file is written under media/ at the save
+// media/store.ts, into an empty zone or a new one, and its file is written under media/ at the save.
+// Paste and Match Style pastes the words of the clipboard into a text in the style at the caret,
+// and it is Paste on the slide
 
 import type { App } from '../app.ts';
 import type { Translate } from '../tags.ts';
 import { insertFiles } from '../media/actions.ts';
 import { kindOf } from '../media/store.ts';
+import { insertPlain } from '../text/typing.ts';
 import { freshGroup } from './order.ts';
 import { VOID } from '../source.ts';
 import { tokenize } from '../tokens.ts';
@@ -53,6 +56,13 @@ export function elementsIn(text: string): string[] | null {
     } else if (t.type === 'end' && depth > 0 && --depth === 0) out.push(body.slice(start, t.end));
   }
   return out.length ? out : null;
+}
+
+// the words of the elements or slides of a text of the clipboard, without their notes, on one line
+function wordsOf(text: string): string {
+  const body = new DOMParser().parseFromString(text, 'text/html').body;
+  body.querySelectorAll('aside.notes, script, style').forEach((n) => n.remove());
+  return (body.textContent ?? '').replace(/\s+/g, ' ').trim();
 }
 
 // the containers between a slide and el, each as its tag and first class, e.g. ['div.panel']
@@ -266,6 +276,27 @@ export function install(app: App): void {
       copy(a, els, data);
     },
   });
+  // a paste into a text is plain text, as every paste into a text. with match set, the words of
+  // the elements or slides of the editor on the clipboard are pasted too
+  const paste = async (a: App, arg: unknown, match: boolean) => {
+    if (Array.isArray(arg) && arg.every((f) => f instanceof File)) return void (await insertFiles(a, arg));
+    let text = typeof arg === 'string' ? arg : '';
+    if (!text) text = (await navigator.clipboard?.readText().catch(() => '')) || '';
+    if (!text && !inText(a)) {
+      const files = await readMedia();
+      if (files.length) return void (await insertFiles(a, files));
+    }
+    text ||= clip?.text || '';
+    const els = elementsIn(text);
+    const slides = slidesIn(text)?.length ? text : null;
+    if (inText(a)) {
+      const at = getSelection()?.anchorNode ?? document.activeElement;
+      const host = a.hostOf(at instanceof Element ? at : at?.parentElement ?? null);
+      if (match && host) insertPlain(host, els || slides ? wordsOf(text) : text);
+      else if (!els && !slides) document.execCommand('insertText', false, text);
+    } else if (els) await pasteElements(a, els);
+    else if (slides) await a.commands.run('slide.paste', slides);
+  };
   c.define({
     id: 'edit.paste',
     label: 'Paste',
@@ -273,23 +304,22 @@ export function install(app: App): void {
     context: ['element', 'text', 'canvas'],
     enabled: ready,
     undoable: true,
-    run: async (a, arg) => {
-      if (Array.isArray(arg) && arg.every((f) => f instanceof File)) return void (await insertFiles(a, arg));
-      let text = typeof arg === 'string' ? arg : '';
-      if (!text) text = (await navigator.clipboard?.readText().catch(() => '')) || '';
-      if (!text && !inText(a)) {
-        const files = await readMedia();
-        if (files.length) return void (await insertFiles(a, files));
-      }
-      text ||= clip?.text || '';
-      const els = elementsIn(text);
-      const slides = slidesIn(text)?.length ? text : null;
-      // a paste into a text is plain text, as every paste into a text
-      if (inText(a)) {
-        if (!els && !slides) document.execCommand('insertText', false, text);
-      } else if (els) await pasteElements(a, els);
-      else if (slides) await a.commands.run('slide.paste', slides);
-    },
+    run: (a, arg) => paste(a, arg, false),
+  });
+  // the keys of Keynote and PowerPoint on the Mac, which are also those of Paste and Match Style
+  // in Chrome, Safari, and Firefox. in a text the key is left to the browser, whose paste is plain
+  // text in text/typing.ts. elsewhere Ctrl+Shift+V is Paste Style, the key of PowerPoint for
+  // Windows, and PowerPoint does not have a key for this paste
+  c.define({
+    id: 'edit.pasteAndMatchStyle',
+    label: 'Paste and Match Style',
+    keys: { mac: ['Mod+Alt+Shift+V'] },
+    in: ['canvas'],
+    menu: menu(22.5),
+    context: ['text'],
+    enabled: ready,
+    undoable: true,
+    run: (a, arg) => paste(a, arg, true),
   });
   c.define({
     id: 'edit.duplicate',

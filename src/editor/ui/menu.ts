@@ -199,7 +199,7 @@ export function contextItems(app: App, kind: Context, target: Element | null): M
   let last: string | null = null;
   // the menu of a text or an element opens with the clipboard, and the menu of the canvas with
   // Paste, as in Keynote and PowerPoint
-  const lead = (kind === 'text' || kind === 'element' ? CLIPBOARD : kind === 'canvas' ? ['edit.paste'] : []).filter((id) => app.commands.get(id));
+  const lead = (kind === 'text' ? [...CLIPBOARD, 'edit.pasteAndMatchStyle'] : kind === 'element' ? CLIPBOARD : kind === 'canvas' ? ['edit.paste'] : []).filter((id) => app.commands.get(id));
   for (const id of lead) out.push({ command: id, arg: { kind, target } });
   if (lead.length) last = kind === 'element' ? 'edit' : 'Edit/clipboard';
   let rest = app.commands.forContext(kind).filter((x) => !lead.includes(x.id));
