@@ -12,6 +12,7 @@ import type { Entry } from './history.ts';
 import type { Pairing } from './render.ts';
 import type { TagEdit, TagState } from './tags.ts';
 import { OFF, fragmentIndex, fragmentsOf, type Layers, itemsOf, planOf, remapKeep, showLayer, shownAt, startOf, stepAt, type Item, type Plan, type Start } from './layers.ts';
+import { numberField } from './inspector/controls.ts';
 import { injectStyle, make } from './ui/dom.ts';
 import { icon } from './ui/icons.ts';
 import { chromeSelect, closeMenus, menuOpen, openMenu, type MenuItem } from './ui/menu.ts';
@@ -465,11 +466,10 @@ ${P} .rows .list-head .chip { width: 52px; }
 ${P} .rows .row.nested { padding-left: 16px; grid-template-columns: 8px 32px minmax(0, 1fr); }
 ${P} .rows .list-head + .row.nested::before, ${P} .rows .row.nested + .row.nested::before { content: ""; position: absolute; left: 61px; right: 10px; top: 0; border-top: 1px solid var(--ed-line); }
 ${P} .rows .list-head.selected + .row::before { border-top-color: transparent; }
-${P} .detail .delay-box { display: flex; align-items: center; gap: 6px; }
-${P} .detail .delay-box input { width: 72px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid var(--ed-control-line); border-radius: 6px; background: var(--ed-control); color: var(--ed-text); font: 12px/1 var(--ed-font); font-variant-numeric: tabular-nums; }
-${P} .detail .delay-box input:disabled { color: var(--ed-faint); background: transparent; }
-${P} .detail .delay-box .unit { color: var(--ed-muted); }
-${P} .detail .delay-box.off .unit { color: var(--ed-faint); }
+${P} .detail .delay-box { display: flex; align-items: center; }
+${P} .detail .delay-box .ed-num { flex: none; width: 104px; }
+${P} .detail .delay-box .ed-num > label { display: none; }
+${P} .detail .delay-box .ed-num .unit { font-size: 12px; }
 ${P} .rows .row.with .chip { color: var(--ed-muted); font-weight: 400; }
 ${P} .rows .row.slide .chip { color: var(--ed-muted); font-weight: 400; }
 ${P} .chip[aria-expanded="true"] { border-color: var(--ed-select); box-shadow: 0 0 0 1px var(--ed-select); }
@@ -562,7 +562,7 @@ export class Steps {
   private start: HTMLButtonElement | null = null;
   private effect: HTMLButtonElement | null = null;
   private final: HTMLInputElement | null = null;
-  private delay: HTMLInputElement | null = null;
+  private delay: ReturnType<typeof numberField> | null = null;
   // the preview that is played, which stop ends on the last layer of the slide
   private playing: { stop(): void; done: Promise<void> } | null = null;
   // the row that a drag has started from, and the step that it is dropped into
@@ -610,34 +610,34 @@ export class Steps {
       text: () => STARTS.find(([v]) => v === this.selected()?.start)?.[1] ?? '—',
       onChange: (v) => this.runOn('steps.start', { start: v }),
     });
-    // the delay of After Previous in seconds, committed with Return or at a blur
-    const delay = make('input', 'delay');
-    delay.type = 'number';
-    delay.min = String(MIN_DELAY / 1000);
-    delay.max = '600';
-    delay.step = '0.1';
-    delay.setAttribute('aria-label', 'Delay after the step before, in seconds');
-    const commit = () => {
+    // the delay of After Previous in seconds, with the stepper of the number fields of the Arrange
+    // pane in steps of 0.1 s, as the Delay of the Timing of PowerPoint and of Build Order in Keynote.
+    // a value is committed with Return, at a blur, or by the stepper
+    const after = () => {
       const s = this.selected();
-      const v = Number(delay.value);
-      if (!s || s.start !== 'after' || !delay.value || !Number.isFinite(v) || Math.round(v * 1000) === s.delay) return;
-      this.runOn('steps.delay', { delay: v });
+      return s?.start === 'after' && !s.final ? s : null;
     };
-    delay.addEventListener('change', commit);
-    delay.addEventListener('keydown', (ev) => {
-      if (ev.key === 'Enter') {
-        ev.preventDefault();
-        commit();
-      } else if (ev.key === 'Escape') {
-        ev.preventDefault();
-        ev.stopPropagation();
-        this.syncDetail(true);
-        delay.blur();
-      }
+    const delay = numberField(app, {
+      label: 'Delay',
+      unit: 's',
+      step: 0.1,
+      min: MIN_DELAY / 1000,
+      max: 600,
+      value: () => {
+        const s = after();
+        return s && s.delay !== null ? s.delay / 1000 : null;
+      },
+      enabled: () => !!after(),
+      commit: (v) => {
+        const s = after();
+        if (s && Math.round(v * 1000) !== s.delay) this.runOn('steps.delay', { delay: v });
+      },
     });
+    delay.input.classList.add('delay');
+    delay.input.setAttribute('aria-label', 'Delay after the step before, in seconds');
     this.delay = delay;
     const delayBox = make('span', 'delay-box');
-    delayBox.append(delay, make('span', 'unit', 's'));
+    delayBox.append(delay.el);
     this.effect = chromeSelect(app, {
       label: 'Effect of the step',
       choices: () => EFFECTS.map(([value, label]) => ({ value, label })),
@@ -908,19 +908,14 @@ export class Steps {
     return { el: r.el, stepped: stepAt(m.plan, r.i) >= 0, start, delay, effect: effectOf(classesOf(app, r.el)), final: m.plan.finals.includes(r.i) };
   }
 
-  private syncDetail(force = false): void {
+  private syncDetail(): void {
     const s = this.selected();
     this.detail.classList.toggle('off', !s);
     if (this.start) {
       this.start.disabled = !s?.stepped || s.final;
       (this.start as HTMLButtonElement & { refresh(): void }).refresh();
     }
-    if (this.delay) {
-      const after = s?.start === 'after' && !s.final;
-      this.delay.disabled = !after;
-      this.delay.parentElement?.classList.toggle('off', !after);
-      if (force || document.activeElement !== this.delay) this.delay.value = after && s.delay !== null ? seconds(s.delay) : '';
-    }
+    this.delay?.sync();
     if (this.effect) {
       this.effect.disabled = !s?.stepped;
       (this.effect as HTMLButtonElement & { refresh(): void }).refresh();

@@ -143,3 +143,102 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+const LI1 = '<li class="fragment" data-fragment-index="1">Each step';
+const LI2 = '<li class="fragment" data-fragment-index="2">Two elements';
+
+// the rows of the Steps tab in their order: the step written on the row, its text, its chip, and
+// its meta line
+const rows = (page) =>
+  page.evaluate(`[...document.querySelectorAll('${SIDE} .rows .row')].map((r) => ({
+    step: r.dataset.step,
+    text: r.querySelector('.text').textContent,
+    chip: r.querySelector('.chip').textContent,
+    meta: r.querySelector('.meta').textContent,
+    selected: r.classList.contains('selected'),
+  }))`);
+
+// the center of a part of the first row whose text starts with text
+const rowPart = (page, text, part = '.text') =>
+  page.evaluate(`(() => {
+    const row = [...document.querySelectorAll('${SIDE} .rows .row')].find((r) => r.querySelector('.text').textContent.startsWith(${js(text)}));
+    const r = row.querySelector(${js(part)}).getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  })()`);
+
+// the labels of the open menu, with a mark on a dimmed item
+const menuLabels = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item')].map((i) => (i.getAttribute('aria-disabled') === 'true' ? '-' : '') + i.querySelector('.label').textContent)`);
+
+// an item of the open menu chosen by a trusted click, 250 ms after the press that opened it
+async function choose(page, label) {
+  const at = await page.evaluate(`(() => {
+    const item = [...document.querySelectorAll('.beeson-edit-menu .item')].find((i) => i.querySelector('.label').textContent === ${js(label)});
+    if (!item || item.getAttribute('aria-disabled') === 'true') return null;
+    const r = item.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  })()`);
+  assert.ok(at, `the open menu does not have an enabled item ${label}`);
+  await sleep(300);
+  await click(page, at);
+  await frames(page);
+}
+
+const DELAY = `${SIDE} .detail input.delay`;
+const STEPPER = `${SIDE} .detail .ed-num .stepper button`;
+
+for (const platform of PLATFORMS) {
+  test(`the Delay field of a step After Previous has a stepper in steps of 0.1 s on ${platform}`, async (t) => {
+    const page = await open(t, platform, { at: 'li.fragment', tab: 'steps' });
+    const source = page.source;
+    await click(page, await rowPart(page, 'Two elements', '.chip'));
+    await page.waitFor(`!!document.querySelector('.beeson-edit-menu')`);
+    await choose(page, 'After Previous');
+    const half = source.replace(LI1, LI1.replace('>', ' data-autoslide="500">'));
+    assert.equal(await rendered(page), half);
+    // the field is the number field of the Arrange pane, with its unit and its two arrows
+    const field = () => page.evaluate(`(() => {
+      const box = document.querySelector('${SIDE} .detail .ed-num');
+      return { value: box.querySelector('input').value, unit: box.querySelector('.unit').textContent, arrows: [...box.querySelectorAll('.stepper button')].map((b) => b.getAttribute('aria-label') + (b.disabled ? ' (dimmed)' : '')) };
+    })()`);
+    assert.deepEqual(await field(), { value: '0.5', unit: 's', arrows: ['Increase Delay', 'Decrease Delay'] });
+    // a click on the upper arrow adds 0.1 s
+    await click(page, `${STEPPER}:first-child`);
+    await frames(page);
+    const more = source.replace(LI1, LI1.replace('>', ' data-autoslide="600">'));
+    assert.equal(await rendered(page), more);
+    assert.equal((await field()).value, '0.6');
+    assert.match((await rows(page)).find((r) => r.text.startsWith('Two elements')).meta, /After Previous, 0\.6 s/);
+    assert.equal(await undoLabel(page), 'Undo Set Delay of Step');
+    await undoRedo(page, platform, half, more);
+    // the lower arrow takes 0.1 s off, and the arrow keys of the field step it too, by 1 s with Shift
+    await click(page, `${STEPPER}:last-child`);
+    await frames(page);
+    assert.equal(await rendered(page), half);
+    await click(page, DELAY);
+    await press(page, 'Shift+ArrowUp');
+    await frames(page);
+    assert.equal(await rendered(page), source.replace(LI1, LI1.replace('>', ' data-autoslide="1500">')));
+    await press(page, 'ArrowDown');
+    await frames(page);
+    const typed = source.replace(LI1, LI1.replace('>', ' data-autoslide="1400">'));
+    assert.equal(await rendered(page), typed);
+    assert.equal((await field()).value, '1.4');
+    // the shortest delay is 0.1 s, as reveal.js reads 0 as no delay
+    await page.evaluate(`document.querySelector(${js(DELAY)}).select()`);
+    await type(page, '0');
+    await press(page, 'Enter');
+    await frames(page);
+    const least = source.replace(LI1, LI1.replace('>', ' data-autoslide="100">'));
+    assert.equal(await rendered(page), least);
+    assert.equal((await field()).value, '0.1');
+    await press(page, 'Escape');
+    await undoRedo(page, platform, typed, least);
+    // a step at a click has the field and its arrows dimmed
+    await click(page, await rowPart(page, 'When exporting'));
+    await frames(page);
+    assert.deepEqual(await field(), { value: '', unit: 's', arrows: ['Increase Delay (dimmed)', 'Decrease Delay (dimmed)'] });
+    assert.deepEqual(newProblems(page, least), []);
+    await saved(page, least);
+    assert.deepEqual(errors(page), []);
+  });
+}
