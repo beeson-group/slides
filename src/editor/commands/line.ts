@@ -461,8 +461,10 @@ export function install(app: App): void {
   };
 
   const insertMenu = (order: number) => ({ bar: 'Insert', group: 'element', order });
-  c.define({ id: 'insert.line', label: 'Line', menu: insertMenu(30), enabled: ready, checked: () => (drawing === 'none' ? true : null), run: startDrawing('none') });
-  c.define({ id: 'insert.arrow', label: 'Arrow', menu: insertMenu(31), enabled: ready, checked: () => (drawing === 'end' ? true : null), run: startDrawing('end') });
+  // the Shape button of the toolbar, whose main part draws a line
+  const shape = (order: number) => ({ group: 'insert', order, icon: 'shape', label: 'Shape', split: 'Shape' });
+  c.define({ id: 'insert.line', label: 'Line', menu: insertMenu(30), toolbar: shape(23), enabled: ready, checked: () => (drawing === 'none' ? true : null), run: startDrawing('none') });
+  c.define({ id: 'insert.arrow', label: 'Arrow', menu: insertMenu(31), toolbar: shape(23.1), enabled: ready, checked: () => (drawing === 'end' ? true : null), run: startDrawing('end') });
 
   const some = (a: App) => ready(a) && selectedLines(a).length > 0;
   const lineMenu = (group: string, order: number) => ({ bar: 'Format', group, order, submenu: 'Line' });

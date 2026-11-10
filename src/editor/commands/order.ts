@@ -212,7 +212,8 @@ export function commands(): Command[] {
     {
       id: 'arrange.lock',
       label: 'Lock',
-      keys: { mac: ['Mod+L'], other: ['Mod+L'] },
+      // Safari takes Cmd+L of Keynote before the page, and Chrome and Firefox pass it on
+      keys: { mac: ['Ctrl+Mod+L', 'Mod+L'], other: ['Mod+L'] },
       in: ['canvas'],
       menu: arrange(70, 'lock'),
       enabled: (app) => selectedEls(app).some((el) => !locked(el)),
