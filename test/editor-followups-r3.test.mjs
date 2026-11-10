@@ -100,9 +100,9 @@ const slideBox = (page, selector) =>
   })()`);
 
 for (const platform of PLATFORMS) {
-  test(`a QR code inserted on a full slide is centered on it, inside its edges (${platform})`, async (t) => {
+  test(`a QR code inserted on a full wide slide is centered on it, inside its edges (${platform})`, async (t) => {
     const page = await load(t, platform);
-    await exec(page, 'slide.new.content');
+    await exec(page, 'slide.new.wide');
     await frames(page);
     await press(page, 'Escape');
     await press(page, 'Escape');
