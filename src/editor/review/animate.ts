@@ -53,9 +53,24 @@ export function install(app: App): void {
   const note = make('p', 'note');
   box.append(make('h5', '', 'Transition'), seg, copy, note);
   slot.replaceChildren(box);
+  // the block is kept while the pane is pressed or holds the focus, e.g. after a row is pressed and
+  // its element selected, so that the rows do not move under the pointer, and it follows the
+  // selection again once the focus leaves the pane
+  let held = false;
+  const pane = slot.parentElement ?? slot;
+  const inside = () => held || pane.contains(document.activeElement);
+  pane.addEventListener('pointerdown', () => (held = true), true);
+  const release = () => {
+    if (!held) return;
+    held = false;
+    sync();
+  };
+  window.addEventListener('pointerup', release, true);
+  window.addEventListener('pointercancel', release, true);
+  pane.addEventListener('focusout', () => queueMicrotask(sync));
   const sync = () => {
     const kind = app.selection.kind;
-    slot.hidden = kind === 'elements' || kind === 'text';
+    if (!inside()) slot.hidden = kind === 'elements' || kind === 'text';
     if (slot.hidden) return;
     for (const b of buttons) {
       const s = app.commands.state(b.dataset.command!);
