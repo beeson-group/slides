@@ -229,9 +229,10 @@ export function install(app: App): void {
     return renderDeck(app.source, app.pairing, mathLookup(), app.tagEdits).text;
   }
 
-  // the edits since the last save are undone, so that the page reads as the saved file again
+  // the edits since the last save are undone, so that the page reads as the saved file again. the
+  // undo stops at the text last saved, since the history also holds the edits written by a save
   async function discardEdits(): Promise<void> {
-    while (app.history.canUndo) await app.history.undo();
+    while (app.history.canUndo && !readsAsSaved()) await app.history.undo();
     app.history.clear();
     app.move.select(null);
     if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -310,6 +311,8 @@ export function install(app: App): void {
       text = `${n ? `Saved a copy with ${edits}` : `Saved a copy of ${fileName()}`}. ${REPLACE()}`;
     }
     app.saved = rendered.text;
+    // the typing after a save is a new entry of the history, hence a discard can stop at the save
+    app.history.break();
     const warnings = rendered.warnings.length ? `, ${rendered.warnings.join(', ')}` : '';
     app.note = { text: `${text}${warnings}`, warn: rendered.warnings.length > 0 };
     // an edit made while the file was written is kept for the next save, since the page no longer
@@ -333,6 +336,14 @@ export function install(app: App): void {
     }
     if (canWrite() && !(await pickTarget(app))) return;
     await save();
+  }
+
+  function readsAsSaved(): boolean {
+    try {
+      return app.saved !== null && render() === app.saved;
+    } catch {
+      return false;
+    }
   }
 
   // a deck whose text is the file again, e.g. after its edits were undone, is clean
