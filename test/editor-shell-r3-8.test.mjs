@@ -280,13 +280,16 @@ for (const platform of PLATFORMS) {
     await exec(page, 'shell.format');
     await frames(page);
     assert.equal((await inspector(page)).shown, false);
+    assert.deepEqual(errors(page), []);
+    await page.close();
     const again = await load(t, platform, { n: 3, keep: true });
     assert.equal((await inspector(again)).shown, false);
     await exec(again, 'shell.format');
     await frames(again);
+    await again.close();
     const third = await load(t, platform, { n: 3, keep: true });
     assert.deepEqual(await inspector(third), { shown: true, tab: 'Format' });
     assert.equal(await render(third), third.source);
-    assert.deepEqual(errors(page), []);
+    assert.deepEqual(errors(third), []);
   });
 }
