@@ -181,7 +181,8 @@ test('the code of the demo deck is read back, moved by a drag in the editor, and
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html', 'edit&still'));
+  // Alt is the free modifier of a drag on Windows and Linux, and the copy modifier on a Mac
+  await page.goto(deckUrl('index.html', 'edit&still&edit-platform=other'));
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
   const opened = await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(deckText)})`);
