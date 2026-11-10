@@ -47,6 +47,7 @@ import { install as installDeleteCommands } from './commands/delete.ts';
 import { install as installBlocks } from './text/blocks.ts';
 import { install as installLink } from './text/link.ts';
 import { install as installTextCommands } from './commands/text.ts';
+import { install as installFindCommands } from './commands/find.ts';
 import { Doc } from './model/doc.ts';
 
 const app = new App();
@@ -135,6 +136,7 @@ installDeleteCommands(app);
 installBlocks(app);
 installLink(app);
 installTextCommands(app);
+installFindCommands(app);
 
 const revealReady = (): Promise<void> =>
   new Promise((done) => {
