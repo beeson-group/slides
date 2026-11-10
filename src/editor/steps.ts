@@ -488,10 +488,10 @@ const CSS = `
 .beeson-edit-side { display: none; flex-direction: column; }
 html.beeson-steps .beeson-edit-side { display: flex; }
 ${P} { font: 12px/1.35 var(--ed-font, system-ui, sans-serif); color: var(--ed-text); user-select: none; -webkit-user-select: none; }
-${P} .head { display: flex; align-items: center; gap: 6px; padding: 2px 12px 10px; border-bottom: 1px solid var(--ed-line); }
+${P} .head { display: flex; align-items: center; gap: 4px; padding: 2px 12px 10px; border-bottom: 1px solid var(--ed-line); }
 ${P} .head .gap { flex: 1; }
 ${P} .row.line .grip { visibility: hidden; }
-${P} .head button { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px; border: 1px solid var(--ed-control-line); border-radius: 6px; background: var(--ed-control); color: var(--ed-text); font: 500 12px/1 var(--ed-font); white-space: nowrap; cursor: default; }
+${P} .head button { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 7px; border: 1px solid var(--ed-control-line); border-radius: 6px; background: var(--ed-control); color: var(--ed-text); font: 500 12px/1 var(--ed-font); white-space: nowrap; cursor: default; }
 ${P} .head button:hover { background: color-mix(in srgb, var(--ed-control) 85%, var(--ed-text)); }
 ${P} .head button:disabled { color: var(--ed-faint); }
 ${P} .head button.play[aria-pressed="true"] { background: var(--ed-select); border-color: var(--ed-select); color: var(--ed-on-select); }
@@ -623,7 +623,7 @@ export class Steps {
   private rows: Row[] = [];
   private heads: Head[] = [];
   private model: Model | null = null;
-  // the row last chosen by a press or a key
+  // the row last chosen by a press or a key, from which Play From plays while it is selected
   private current: Row | null = null;
   private start: HTMLButtonElement | null = null;
   private effect: HTMLButtonElement | null = null;
@@ -644,7 +644,6 @@ export class Steps {
     const head = make('div', 'head');
     this.play.type = 'button';
     this.play.setAttribute('aria-pressed', 'false');
-    this.play.title = 'Play the steps of the slide in place, and end on its last layer';
     this.each.type = 'button';
     this.each.title = 'Show every element of the slide in a step of its own, in reading order';
     this.none.type = 'button';
@@ -664,7 +663,7 @@ export class Steps {
     const run = (id: string) => () => void app.commands.run(id).catch((e) => app.fail(e));
     this.play.addEventListener('click', (ev) => {
       if (ev.detail > 0) this.play.blur();
-      run('steps.preview')();
+      run(!this.playing && this.selectedStep() !== null ? 'steps.playFrom' : 'steps.preview')();
     });
     this.each.addEventListener('click', run('steps.oneByOne'));
     this.none.addEventListener('click', run('steps.allAtOnce'));
@@ -817,7 +816,7 @@ export class Steps {
       chip.setAttribute('aria-expanded', 'false');
       chip.setAttribute('aria-label', `Step of the ${kind.toLowerCase()}${text ? `: ${text}` : ''}`);
       const how = step < 0 ? 'With the slide' : [final ? 'Last' : startLabel(start, delay), effects[i]].join(' · ');
-      chip.title = line ? `Step ${step + 1}, the ${kind.toLowerCase()} of the code box, set in its Code pane` : locked ? `Step ${step + 1}, set in the text of its block` : step < 0 ? 'Shown with the slide. Click to choose a step' : `Step ${step + 1}, ${final ? 'last' : startLabel(start, delay)}. Click to change its step, start, or effect`;
+      chip.title = line ? `Step ${step + 1}, the ${kind.toLowerCase()} of the code box, set in its Code pane. Click to play the steps from it` : locked ? `Step ${step + 1}, set in the text of its block` : step < 0 ? 'Shown with the slide. Click to choose a step' : `Step ${step + 1}, ${final ? 'last' : startLabel(start, delay)}. Click to change its step, start, or effect`;
       chip.disabled = locked;
       // the start is marked in the chip as in the Animation Pane of PowerPoint: a number at a click,
       // a plus with the step before, and a clock after it
@@ -1017,6 +1016,7 @@ export class Steps {
     const m = this.model;
     const steps = m ? m.plan.groups.length + m.plan.finals.length : 0;
     this.play.disabled = !this.playing && !steps;
+    this.setPlaying(!!this.playing);
     this.each.disabled = !m?.els.length;
     this.none.disabled = !steps;
   }
@@ -1033,6 +1033,15 @@ export class Steps {
     this.app?.selection.set('elements', [line ? (r.el.parentElement as Element) : r.el]);
   }
 
+  // the step of the row last chosen, 0 for the first, while it is marked, or null
+  selectedStep(): number | null {
+    const m = this.model;
+    if (!this.on || !m) return null;
+    const r = this.current?.row.classList.contains('selected') ? this.current : this.rows.find((r) => r.row.classList.contains('selected'));
+    const k = r ? stepAt(m.plan, r.i) : -1;
+    return k >= 0 ? k : null;
+  }
+
   // the menu of a chip: the steps of the slide, two new steps, the start, the effect, and Show Last
   private openChip(r: Row, keyboard: boolean): void {
     const app = this.app;
@@ -1041,8 +1050,15 @@ export class Steps {
     this.select(r);
     const { plan } = m;
     const at = stepAt(plan, r.i);
-    // a line step is set in the Code pane of its box
-    if (m.lines[r.i]) return;
+    // Play From plays the steps of the slide from this one, as in the Animation Pane of PowerPoint
+    const play: MenuItem = { label: at < 0 ? 'Play From Step' : `Play From Step ${at + 1}`, disabled: at < 0, run: () => void app.commands.run('steps.playFrom', { step: at }).catch((e) => app.fail(e)) };
+    if (m.lines[r.i]) {
+      // a line step is set in the Code pane of its box, hence its menu only plays it
+      const menu = openMenu(app, [play], { anchor: rowAnchor(r.chip, r.row), placement: 'below', owner: r.chip, keyboard, label: 'Step', className: 'select steps' }).el;
+      popover(menu, r.row);
+      if (!keyboard) follow(menu, r.row);
+      return;
+    }
     const final = plan.finals.includes(r.i);
     const { start } = startAt(app, m, r.i);
     const effect = effectOf(classesOf(app, r.el)).id;
@@ -1061,6 +1077,8 @@ export class Steps {
       ...EFFECTS.map(([id, label]): MenuItem => ({ label, checked: at >= 0 && effect === id, disabled: at < 0, run: run('steps.effect', { effect: id }) })),
       { rule: true },
       { label: 'Show Last', checked: final, run: run('steps.final', { on: !final }) },
+      { rule: true },
+      play,
     ];
     const delivery = this.deliveryItems(r.el);
     if (delivery.length) items.push({ rule: true }, ...delivery);
@@ -1206,9 +1224,15 @@ export class Steps {
     ev.stopPropagation();
   }
 
+  // the button reads Play From while a row of a step is chosen, as Play From and Play All in the
+  // Animation Pane of PowerPoint
   private setPlaying(on: boolean): void {
-    this.play.replaceChildren(icon(on ? 'square' : 'play', 12), on ? 'Stop' : 'Preview');
+    const from = on ? null : this.selectedStep();
+    const label = on ? 'Stop' : from !== null ? 'Play From' : 'Preview';
+    if (this.play.textContent === label) return;
+    this.play.replaceChildren(icon(on ? 'square' : 'play', 12), label);
     this.play.setAttribute('aria-pressed', String(on));
+    this.play.title = on ? 'Stop the preview' : from !== null ? `Play the steps of the slide in place from step ${from + 1}` : 'Play the steps of the slide in place, and end on its last layer';
   }
 
   get previewing(): boolean {
@@ -1216,9 +1240,10 @@ export class Steps {
   }
 
   // the steps of the current slide are played in place, with the effect of each fragment, from
-  // the slide without its steps to its last step, after which every fragment is restored. the
-  // editor then shows the last layer of the slide. a second call stops the preview
-  preview(): Promise<void> {
+  // the slide shown up to step from, 0 for the slide without its steps, to its last step, after
+  // which every fragment is restored. the editor then shows the last layer of the slide. a second
+  // call stops the preview
+  preview(from = 0): Promise<void> {
     if (this.playing) {
       this.stop();
       return Promise.resolve();
@@ -1239,7 +1264,7 @@ export class Steps {
     if (!frags.length && !lines.length) return Promise.resolve();
     const html = document.documentElement;
     const last = Math.max(...frags.map((f) => f.step), ...lines.map((l) => l.step));
-    const first = 0;
+    const first = Math.max(0, Math.min(from, last - 1));
     // the lines of a box are dimmed but for its last group reached, or its first group before
     const dim = (k: number) => {
       const reached = lines.filter((l) => l.step <= k);

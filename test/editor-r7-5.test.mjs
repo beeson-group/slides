@@ -310,6 +310,7 @@ for (const platform of PLATFORMS) {
     // a press selects the box, and marks the line row in place of the row of the box
     await click(page, at);
     await frames(page);
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('steps.playFrom').label`), 'Play From Selected Step');
     assert.deepEqual((await rows(page)).filter((r) => r.selected).map((r) => r.meta.split(' · ')[0]), ['Lines 5–7']);
     assert.equal(await page.evaluate(`window.BeesonEditor.state('code.small').enabled`), true);
     // Delete does not take a line step off, since it is set in the Code pane
@@ -371,6 +372,59 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await lineRows(page), ['0 Line 4', '1 Lines 5–7', '2 Lines 8–9']);
     await undoRedo(page, platform, moved, once);
     await saved(page, once);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`Play From plays the steps of the slide in place from the chosen step on ${platform}`, async (t) => {
+    // the deck is served with the paragraph as a fragment, since the preview plays the page
+    const text = readFileSync('index.html', 'utf8').replace(PARA, '<p class="fragment">Copy-paste the code');
+    const deck = `.play-from-${process.pid}-${platform}.html`;
+    writeFileSync(deck, text);
+    t.after(() => rmSync(deck, { force: true }));
+    const page = await open(t, platform, { deck, tab: 'steps' });
+    const play = `${SIDE} .head .play`;
+    const label = () => page.evaluate(`document.querySelector(${js(play)}).textContent`);
+    assert.equal(await label(), 'Preview');
+    // a chosen row turns the button into Play From, as in the Animation Pane of PowerPoint
+    await click(page, await rowPart(page, 'if len(members)'));
+    await frames(page);
+    assert.equal(await label(), 'Play From');
+    await click(page, play);
+    await frames(page);
+    // the slide starts at the step before the chosen one: the paragraph and line 4 are shown
+    const state = () => page.evaluate(`({ step: document.documentElement.dataset.previewStep, playing: document.documentElement.classList.contains('beeson-previewing'), para: !document.querySelector('.reveal section.present p.fragment').classList.contains('beeson-pv-off') })`);
+    assert.deepEqual(await state(), { step: '2', playing: true, para: true });
+    assert.equal(await dimmed(page), 8);
+    assert.equal(await label(), 'Stop');
+    await page.waitFor(`document.documentElement.dataset.previewStep === '3'`, 3000);
+    assert.equal(await dimmed(page), 6);
+    await page.waitFor(`document.documentElement.dataset.previewStep === '4'`, 3000);
+    assert.equal(await dimmed(page), 7);
+    await page.waitFor(`!document.documentElement.classList.contains('beeson-previewing')`, 4000);
+    assert.equal(await dimmed(page), 0);
+    assert.equal(await label(), 'Play From');
+    // the chip menu of a row ends with Play From its step, before the delivery of a list, and a
+    // line row has only this item
+    await click(page, await rowPart(page, 'Copy-paste', '.chip'));
+    await page.waitFor(`!!document.querySelector('.beeson-edit-menu')`);
+    assert.equal((await menuLabels(page)).at(-1), 'Play From Step 1');
+    await press(page, 'Escape');
+    await click(page, await rowPart(page, 'members.append', '.chip'));
+    await page.waitFor(`!!document.querySelector('.beeson-edit-menu')`);
+    assert.deepEqual(await menuLabels(page), ['Play From Step 4']);
+    await choose(page, 'Play From Step 4');
+    assert.deepEqual(await state(), { step: '3', playing: true, para: true });
+    // Esc stops the preview, and the file is not changed
+    await press(page, 'Escape');
+    await frames(page);
+    assert.equal((await state()).playing, false);
+    assert.equal(await dimmed(page), 0);
+    // a row shown with the slide has Play From dimmed
+    await click(page, await rowPart(page, 'Code boxes', '.chip'));
+    await page.waitFor(`!!document.querySelector('.beeson-edit-menu')`);
+    assert.equal((await menuLabels(page)).at(-1), '-Play From Step');
+    await press(page, 'Escape');
+    assert.equal(await rendered(page), text);
     assert.deepEqual(errors(page), []);
   });
 }

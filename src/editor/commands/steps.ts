@@ -115,6 +115,29 @@ export function install(app: App): void {
     enabled: (a) => (a.steps as Steps).previewing || !!modelOf(a)?.items.some((it) => it.fragment),
     run: (a) => (a.steps as Steps).preview(),
   });
+  // the step given, or the step of the row chosen in the Steps tab, or of the selected element
+  const fromOf = (a: App, arg: unknown): number | null => {
+    const given = (arg as { step?: unknown } | undefined)?.step;
+    if (typeof given === 'number' && given >= 0) return given;
+    const chosen = (a.steps as Steps).selectedStep();
+    if (chosen !== null) return chosen;
+    const el = itemOf(a, arg);
+    const m = el ? modelAt(a, el) : null;
+    const k = m ? stepAt(m.plan, m.i) : -1;
+    return k >= 0 ? k : null;
+  };
+  c.define({
+    id: 'steps.playFrom',
+    label: (a) => ((a.steps as Steps).previewing ? 'Stop Preview' : 'Play From Selected Step'),
+    menu: menu(60.5),
+    enabled: (a) => (a.steps as Steps).previewing || fromOf(a, undefined) !== null,
+    run: (a, arg) => {
+      const steps = a.steps as Steps;
+      if (steps.previewing) return steps.preview();
+      const from = fromOf(a, arg);
+      return from === null ? undefined : steps.preview(from);
+    },
+  });
   c.define({
     id: 'steps.oneByOne',
     label: 'Steps One by One',
