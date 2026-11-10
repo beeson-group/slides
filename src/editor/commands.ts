@@ -86,12 +86,14 @@ export class Commands {
     return { id, label: this.label(id), enabled: this.enabled(id), checked: c.checked?.(this.app) ?? null };
   }
 
-  // a disabled command is not run
+  // a disabled command is not run. an undoable command is one entry of the history, however many
+  // changes it makes
   async run(id: string, arg?: unknown): Promise<void> {
     const c = this.byId.get(id);
     if (!c) throw new Error(`there is no command ${id}`);
     if (!this.enabled(id)) return;
-    await c.run(this.app, arg);
+    if (c.undoable) await this.app.history.transact(this.label(id), () => c.run(this.app, arg));
+    else await c.run(this.app, arg);
   }
 
   // the commands of a menu of the menu bar, or of one of its submenus, in groups

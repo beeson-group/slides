@@ -2,8 +2,8 @@
 // formula, a step, and a move, as in Keynote and PowerPoint, where ⌘Z undoes the last change of
 // any kind. the browser keeps a history of its own for each block that is typed into, hence the
 // keys are taken before it, and the typing is recorded here as the content of the block before
-// and after. the typing into one block within a short time is one entry, and an undo or a redo
-// asked for while another one runs is queued
+// and after. the typing into one block within a short time is one entry. an undo or a redo asked
+// for while another one runs is queued, and the changes made in a transaction are one entry
 
 export type Entry = { label: string; undo(): Promise<void> | void; redo(): Promise<void> | void };
 
@@ -18,6 +18,8 @@ export class History {
   private busy = false;
   // the undos and redos asked for, run one after the other
   private queue: Promise<void> = Promise.resolve();
+  // the entries of the open transaction, which are put into the history as one entry at its end
+  private open: Entry[] | null = null;
   // the content of each block as it was last seen, for an input that is not announced before it
   // happens, e.g. a replacement from the spelling menu or a script
   private readonly known = new WeakMap<Element, string>();
@@ -39,6 +41,15 @@ export class History {
     return this.undone.length > 0;
   }
 
+  // the label of the entry that an undo or a redo would take back, e.g. for the Edit menu
+  get undoLabel(): string | null {
+    return this.done.at(-1)?.label ?? null;
+  }
+
+  get redoLabel(): string | null {
+    return this.undone.at(-1)?.label ?? null;
+  }
+
   // resolved once every undo and redo asked for has run
   idle(): Promise<void> {
     return this.queue;
@@ -47,9 +58,50 @@ export class History {
   // a change other than typing, already applied
   push(entry: Entry): void {
     this.typing = null;
+    this.record(entry);
+    this.onChange();
+  }
+
+  private record(entry: Entry): void {
+    if (this.open) {
+      this.open.push(entry);
+      return;
+    }
     this.done.push(entry);
     this.undone = [];
-    this.onChange();
+  }
+
+  private recorded(entry: Entry): boolean {
+    return this.done.includes(entry) || !!this.open?.includes(entry);
+  }
+
+  // the changes made in fn, typing included, are one entry with label, undone in reverse order. a
+  // transaction opened inside another one is part of it, and the changes made before an error in
+  // fn are still recorded
+  async transact<T>(label: string, fn: () => T | Promise<T>): Promise<T> {
+    if (this.open) return await fn();
+    const entries: Entry[] = [];
+    this.open = entries;
+    this.typing = null;
+    try {
+      return await fn();
+    } finally {
+      this.open = null;
+      this.typing = null;
+      if (entries.length) {
+        this.done.push({
+          label,
+          undo: async () => {
+            for (const e of [...entries].reverse()) await e.undo();
+          },
+          redo: async () => {
+            for (const e of entries) await e.redo();
+          },
+        });
+        this.undone = [];
+        this.onChange();
+      }
+    }
   }
 
   // called when host is focused or put back, so that its content before the next input is known
@@ -98,11 +150,8 @@ export class History {
     typing.state.after = this.snapshot(host);
     typing.at = now;
     this.known.set(host, typing.state.after);
-    if (typing.state.after === typing.state.before && !this.done.includes(typing.entry)) return;
-    if (!this.done.includes(typing.entry)) {
-      this.done.push(typing.entry);
-      this.undone = [];
-    }
+    if (typing.state.after === typing.state.before && !this.recorded(typing.entry)) return;
+    if (!this.recorded(typing.entry)) this.record(typing.entry);
     this.onChange();
   }
 
