@@ -3,10 +3,10 @@
 // is set with position: fixed over the box of the slide in it and clipped to the cell. reveal.js
 // is thus held at the zoom, with a margin of 0 and the limits of its scale widened. at Fit, the
 // slide is centered with a pasteboard of at least 32 px around it. the box of the slide is
-// written into custom properties on html, together with the room under and beside it for the
-// notes in notes.ts. every step of a slide is shown, apart from the elements of another layer,
-// and the progress line, the slide number, and the mode switch of the theme are hidden. the layer
-// of the frames and handles is clipped to the cell rather than to the slide
+// written into custom properties on html. the wheel and a trackpad scroll the canvas past Fit,
+// and a pinch or the wheel with Ctrl zooms about the pointer. every step of a slide is shown,
+// apart from the elements of another layer, and the progress line, the scrubber, the slide
+// number, and the mode switch of the theme are hidden
 
 import type { App } from '../app.ts';
 import { injectStyle, make } from '../ui/dom.ts';
@@ -26,6 +26,8 @@ export type Stage = {
   setZoom(zoom: number | null, about?: { x: number; y: number }): void;
   zoomIn(): void;
   zoomOut(): void;
+  // the zoom at which a box in slide px fills the cell, with the box centered in it
+  zoomTo(box: { left: number; top: number; width: number; height: number }): void;
   fitScale(): number;
   place(): void;
 };
@@ -39,8 +41,8 @@ declare module '../app.ts' {
 // the margin of the pasteboard at Fit, and the steps of Zoom In and Zoom Out, in CSS px and scale
 export const MARGIN = 32;
 export const ZOOMS = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5, 2, 3];
-const MIN_ZOOM = 0.1;
-const MAX_ZOOM = 4;
+export const MIN_ZOOM = 0.1;
+export const MAX_ZOOM = 4;
 
 const CSS = `
 html.beeson-editor body.reveal-viewport { background: var(--ed-canvas); }
@@ -48,8 +50,8 @@ html.beeson-editor .beeson-edit-canvas { grid-area: canvas; position: relative; 
 html.beeson-editor .beeson-edit-canvas.zoomed { overflow: scroll; }
 html.beeson-editor .beeson-edit-canvas > .spacer { width: 1px; height: 1px; pointer-events: none; }
 html.beeson-editor .reveal:not(.beeson-peek) { position: fixed !important; inset: auto !important; left: var(--ed-slide-x, 0px) !important; top: var(--ed-slide-y, 0px) !important; width: var(--ed-slide-w, 100%) !important; height: var(--ed-slide-h, 100%) !important; margin: 0 !important; z-index: 1; overflow: visible; background: var(--bg); box-shadow: 0 0 0 1px var(--ed-edge), 0 2px 6px rgba(0, 0, 0, 0.16), 0 12px 32px rgba(0, 0, 0, 0.18); clip-path: var(--ed-clip, none); }
-html.beeson-editor .beeson-overlay, html.beeson-editor .beeson-badges { clip-path: var(--ed-cell-clip, none) !important; }
-html.beeson-editor .reveal .progress, html.beeson-editor .reveal .slide-number, html.beeson-editor .theme-switch { display: none !important; }
+html.beeson-editor .beeson-badges { clip-path: var(--ed-cell-clip, none) !important; }
+html.beeson-editor .reveal .progress, html.beeson-editor .reveal .scrub, html.beeson-editor .reveal .slide-number, html.beeson-editor .theme-switch { display: none !important; }
 html.beeson-editing .reveal .slides section .fragment { visibility: visible !important; opacity: 1 !important; transition: none !important; }
 html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: hidden !important; }
 `;
@@ -133,24 +135,14 @@ export function install(app: App): void {
     }
   }
 
-  // the clip of .reveal is the cell with the notes cell under it, and the room under and beside
-  // the slide is written for the notes in the slide px of notes.ts
+  // .reveal is clipped to the cell, and to the notes pane under it, over which notes.ts lays the
+  // aside of the slide. the step badges are clipped to the cell, so that a badge at the edge of
+  // the slide is drawn on the pasteboard and none is drawn over the bars
   function writeRoom(v: DOMRect): void {
-    const s = scale();
-    const notes = document.querySelector('.beeson-edit-pane');
-    const notesBox = notes && document.documentElement.classList.contains('beeson-notes') ? notes.getBoundingClientRect() : null;
-    const bottom = notesBox && notesBox.height ? notesBox.bottom : v.bottom;
-    // the overlays of canvas/frames.ts and the step badges are clipped to the cell, so that a
-    // handle at the edge of the slide is drawn on the pasteboard and none is drawn over the bars
+    const notes = document.documentElement.classList.contains('beeson-notes') ? document.querySelector('.beeson-edit-pane')?.getBoundingClientRect() : null;
+    const bottom = notes && notes.height ? notes.bottom : v.bottom;
     root.setProperty('--ed-cell-clip', `inset(${v.top}px ${innerWidth - v.right}px ${innerHeight - v.bottom}px ${v.left}px)`);
     root.setProperty('--ed-clip', `inset(${v.top - box.y}px ${box.x + box.w - v.right}px ${box.y + box.h - bottom}px ${v.left - box.x}px)`);
-    const left = Math.max(0, box.x - v.left) / s;
-    const right = Math.max(0, v.right - box.x - box.w) / s;
-    root.setProperty('--beeson-scale', String(s));
-    root.setProperty('--beeson-gap', `${((notesBox?.top ?? v.bottom) - box.y - box.h) / s}px`);
-    root.setProperty('--beeson-side', `${Math.max(left, right)}px`);
-    root.setProperty('--ed-room-l', `${left}px`);
-    root.setProperty('--ed-room-r', `${right}px`);
   }
 
   function setZoom(next: number | null, about?: { x: number; y: number }): void {
@@ -164,6 +156,19 @@ export function install(app: App): void {
     const after = toScreen(before);
     el.scrollLeft += after.x - at.x;
     el.scrollTop += after.y - at.y;
+    place();
+    app.report();
+  }
+
+  function zoomTo(b: { left: number; top: number; width: number; height: number }): void {
+    const v = viewport();
+    const z = hundredth(Math.min((v.width - 2 * MARGIN) / Math.max(b.width, 1), (v.height - 2 * MARGIN) / Math.max(b.height, 1)));
+    zoom = z <= fitScale() + 0.005 ? null : clamp(z, MIN_ZOOM, MAX_ZOOM);
+    place();
+    const c = toScreen({ x: b.left + b.width / 2, y: b.top + b.height / 2 });
+    const w = viewport();
+    el.scrollLeft += c.x - (w.left + w.width / 2);
+    el.scrollTop += c.y - (w.top + w.height / 2);
     place();
     app.report();
   }
@@ -205,6 +210,7 @@ export function install(app: App): void {
     setZoom,
     zoomIn: () => step(1),
     zoomOut: () => step(-1),
+    zoomTo,
     fitScale,
     place,
   };
@@ -213,23 +219,47 @@ export function install(app: App): void {
   el.addEventListener('scroll', () => place(), { passive: true });
   app.listen('resize', place);
 
-  // the wheel over the slide scrolls the canvas past Fit, and with Ctrl, which a pinch of a
-  // trackpad sends too, it zooms about the pointer. a figure that takes the wheel keeps it
+  // the wheel over the slide scrolls the canvas past Fit, and Shift turns a wheel without a
+  // horizontal delta sideways. with Ctrl, which a pinch of a trackpad sends too, the wheel zooms
+  // about the pointer, and a notch of a mouse wheel is a step of at most 28 percent. Safari sends
+  // a pinch as gesture events instead. a figure that takes the wheel keeps it
+  let pinch: number | null = null;
+  const LINE = 16;
   const onWheel = (ev: WheelEvent) => {
     const t = ev.target instanceof Element ? ev.target : null;
     if (t?.closest('tycho-viewer, aside.notes, .beeson-edit-menu')) return;
+    const unit = ev.deltaMode === 1 ? LINE : ev.deltaMode === 2 ? viewport().height : 1;
+    let dx = ev.deltaX * unit;
+    let dy = ev.deltaY * unit;
     if (ev.ctrlKey) {
       ev.preventDefault();
+      if (pinch !== null) return;
       const now = zoom ?? fitScale();
-      setZoom(now * Math.exp(-ev.deltaY / 200), { x: ev.clientX, y: ev.clientY });
+      setZoom(now * Math.exp(-clamp(dy, -50, 50) / 200), { x: ev.clientX, y: ev.clientY });
     } else if (el.classList.contains('zoomed') && t?.closest('.reveal')) {
       ev.preventDefault();
-      el.scrollLeft += ev.deltaX;
-      el.scrollTop += ev.deltaY;
+      if (ev.shiftKey && !dx) [dx, dy] = [dy, 0];
+      el.scrollLeft += dx;
+      el.scrollTop += dy;
     }
   };
+  const inCanvas = (ev: Event) => ev.target instanceof Element && !!ev.target.closest('.reveal:not(.beeson-peek), .beeson-edit-canvas') && !ev.target.closest('aside.notes');
   window.addEventListener('wheel', (ev) => {
-    const t = ev.target instanceof Element ? ev.target : null;
-    if (t?.closest('.reveal:not(.beeson-peek), .beeson-edit-canvas')) onWheel(ev);
+    if (inCanvas(ev)) onWheel(ev);
   }, { passive: false });
+  type Gesture = Event & { scale: number; clientX: number; clientY: number };
+  window.addEventListener('gesturestart', (ev) => {
+    if (!inCanvas(ev)) return;
+    ev.preventDefault();
+    pinch = zoom ?? fitScale();
+  }, { passive: false });
+  window.addEventListener('gesturechange', (ev) => {
+    if (pinch === null) return;
+    ev.preventDefault();
+    const g = ev as Gesture;
+    setZoom(pinch * g.scale, { x: g.clientX, y: g.clientY });
+  }, { passive: false });
+  window.addEventListener('gestureend', () => {
+    pinch = null;
+  });
 }
