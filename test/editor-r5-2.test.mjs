@@ -652,3 +652,32 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the selected elements by their tag and first class
+const selected = (page) => page.evaluate(`(window.BeesonEditor.selection?.() ?? []).map((e) => [e.tagName.toLowerCase(), ...e.classList].slice(0, 2).join('.'))`);
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: the first click on the image of a figure selects the image, which is rotated without its caption, and Esc selects the figure`, async () => {
+    const page = await editor(platform);
+    const caption = await slideBox(page, '.reveal section.present .zone .caption');
+    await click(page, ZONE_IMG);
+    await frames(page);
+    assert.deepEqual(await selected(page), ['img.for-dark'], 'the first click on the image does not select the image');
+    assert.equal((await state(page, 'image.editMask')).enabled, true, 'Edit Mask is not offered on the image');
+    const rotor = await page.evaluate(`(() => { const r = document.querySelector('.beeson-rotor').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    const k = await scaleOf(page);
+    await drag(page, rotor, { dx: 200 * k, dy: 0 });
+    await frames(page);
+    const edited = await render(page);
+    assert.match(edited, /<img class="for-dark" [^>]*style="rotate: -?\d+(\.\d+)?deg"/, 'the image is not rotated');
+    assert.match(edited, /<figure class="zone fragment" data-fragment-index="2">/, 'the figure is rotated');
+    assert.deepEqual(await slideBox(page, '.reveal section.present .zone .caption'), caption, 'the caption moves with the image');
+    await roundTrip(page, edited);
+    await goTo(page, MATH);
+    await click(page, ZONE_IMG);
+    await press(page, 'Escape');
+    await frames(page);
+    assert.deepEqual(await selected(page), ['figure.zone'], 'Esc on the image does not select its figure');
+    assert.deepEqual(errors(page), []);
+  });
+}
