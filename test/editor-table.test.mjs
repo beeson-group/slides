@@ -56,3 +56,18 @@ test('a row inserted into a table without a tbody tag is written on a line of it
   await page.evaluate('window.BeesonEditor.undo()');
   await byteExact(page);
 });
+
+// for the same reason, a row inserted before the first row, or the first row removed, wrote the
+// white space of the first row twice
+test('the first row of a table without a tbody tag is replaced without its white space twice', async (t) => {
+  const page = await open('mac', LAYOUTS_DECK);
+  t.after(() => page.close?.());
+  const tbody = `document.querySelector('.reveal .slides table').tBodies[0]`;
+  await page.evaluate(`window.BeesonEditor.doc.insert('<tr><td>Axial</td><td></td></tr>', ${tbody}, ${tbody}.rows[0])`);
+  await byteExact(page, [[layoutTable(LAYOUT_ROWS), layoutTable(['<tr><td>Axial</td><td></td></tr>', ...LAYOUT_ROWS])]]);
+  await page.evaluate('window.BeesonEditor.undo()');
+  await page.evaluate(`window.BeesonEditor.doc.remove(${tbody}.rows[0])`);
+  await byteExact(page, [[layoutTable(LAYOUT_ROWS), layoutTable(LAYOUT_ROWS.slice(1))]]);
+  await page.evaluate('window.BeesonEditor.undo()');
+  await byteExact(page);
+});
