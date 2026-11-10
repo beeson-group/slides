@@ -10,6 +10,7 @@
 import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
 import { injectStyle } from '../ui/dom.ts';
+import { groupOf } from '../commands/order.ts';
 import type { Box, Guide, Handle, Spacing } from './snap.ts';
 import { BY_ITSELF, CONTAINER, RESIZABLE, frameOf, isTextSized, movableOf, orientedBox, pictureOf, sizedOf, toScreen, visualRect } from './hit.ts';
 
@@ -32,6 +33,7 @@ const CSS = `
 .beeson-frame { position: fixed; pointer-events: none; box-sizing: border-box; border: 1px dashed var(--ed-muted, var(--subtle, #bbb)); }
 .beeson-frame.selected { border: 2px solid var(--ed-select, #7048e8); }
 .beeson-frame.union { border: 1px dashed var(--ed-select, #7048e8); }
+.beeson-frame.union.group { border: 2px solid var(--ed-select, #7048e8); }
 .beeson-overlay [hidden] { display: none !important; }
 .beeson-grip { position: fixed; width: 9px; height: 9px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; border: 1.5px solid var(--ed-select, #7048e8); background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); pointer-events: auto; touch-action: none; }
 .beeson-frame.selected.locked { border-color: #8a8a8a; }
@@ -117,6 +119,8 @@ export class Frames {
   private readonly stem: HTMLDivElement;
   private readonly frames: HTMLDivElement[] = [];
   private readonly union: HTMLDivElement;
+  // the box of a selected group on the screen, as last drawn, which its one set of grips resizes
+  private group: Box | null = null;
   private readonly guides: HTMLDivElement[] = [];
   private readonly gaps: HTMLDivElement[] = [];
   readonly readout: HTMLDivElement;
@@ -158,6 +162,10 @@ export class Frames {
     })) as Record<Handle, HTMLDivElement>;
     this.gripSets.push(set);
     return set;
+  }
+
+  groupBox(): Box | null {
+    return this.group;
   }
 
   // the selected element that grip resizes
@@ -206,29 +214,40 @@ export class Frames {
       f.style.rotate = orients[i].deg ? `${orients[i].deg}deg` : '';
       f.classList.toggle('locked', selected[i].hasAttribute('data-locked'));
     });
+    // a whole group is drawn as one element, with one frame around its members, as in Keynote and
+    // PowerPoint
+    const id = selected.length > 1 ? groupOf(selected[0]) : null;
+    const grouped = !!id && selected.every((el) => groupOf(el) === id);
+    this.group = null;
     if (boxes.length > 1) {
       const seen = selected.map((el) => (el.matches(RESIZABLE) || el.matches(CONTAINER) ? visualRect(pictureOf(el)) : grow(visualRect(el), 6)));
       const left = Math.min(...seen.map((b) => b.left)), top = Math.min(...seen.map((b) => b.top));
       const right = Math.max(...seen.map((b) => b.left + b.width)), bottom = Math.max(...seen.map((b) => b.top + b.height));
-      place(this.union, grow({ left, top, width: right - left, height: bottom - top }, 6));
+      const all = { left, top, width: right - left, height: bottom - top };
+      if (grouped) this.group = all;
+      place(this.union, grouped ? all : grow(all, 6));
+      this.union.classList.toggle('group', grouped);
+      if (grouped) for (const f of this.frames) f.hidden = true;
     } else this.union.hidden = true;
 
     const only = app.selection.only();
-    const gripped = view.moving && !view.resizing ? [] : selected.map((el, i) => ({ el, i, grips: this.gripsOf(el) })).filter((m) => m.grips);
+    const gripped = view.moving && !view.resizing ? [] : this.group ? [{ el: selected[0], i: -1, grips: selected.some((el) => el.hasAttribute('data-locked')) ? 'locked' as const : 'live' as const }] : selected.map((el, i) => ({ el, i, grips: this.gripsOf(el) })).filter((m) => m.grips);
     while (this.gripSets.length < gripped.length) this.gripSet();
     this.members = this.gripSets.map((_, n) => gripped[n]?.el ?? null);
     this.gripSets.forEach((set, n) => {
       const m = gripped[n];
       // a viewer keeps the height of its layout, and a text block the height of its wrapped text
-      const level = !!m && (m.el.matches('tycho-viewer') || isTextSized(m.el));
+      const level = !!m && m.i >= 0 && (m.el.matches('tycho-viewer') || isTextSized(m.el));
       for (const h of HANDLES) {
         const g = set[h];
+        if (m && m.i < 0) g.dataset.group = '1';
+        else delete g.dataset.group;
         if (!m || (level && (h === 'n' || h === 's'))) {
           g.hidden = true;
           continue;
         }
-        const b = boxes[m.i];
-        const at = turned(b, orients[m.i].deg, h.includes('w') ? b.left : h.includes('e') ? b.left + b.width : b.left + b.width / 2, h.includes('n') ? b.top : h.includes('s') ? b.top + b.height : b.top + b.height / 2);
+        const b = m.i < 0 ? (this.group as Box) : boxes[m.i];
+        const at = turned(b, m.i < 0 ? 0 : orients[m.i].deg, h.includes('w') ? b.left : h.includes('e') ? b.left + b.width : b.left + b.width / 2, h.includes('n') ? b.top : h.includes('s') ? b.top + b.height : b.top + b.height / 2);
         g.hidden = false;
         g.classList.toggle('locked', m.grips === 'locked');
         Object.assign(g.style, { left: `${at.x}px`, top: `${at.y}px` });

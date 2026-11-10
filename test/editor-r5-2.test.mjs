@@ -697,12 +697,19 @@ for (const platform of PLATFORMS) {
 }
 
 // the frames, the grips, and the boxes of the members of the selection, in CSS px of the viewport.
-// a text block is boxed by its frame, 6 px outside its text, and a figure by its picture
+// a text block is boxed by its frame, 6 px outside its text, and a figure by its drawn picture
 const groupView = (page) => page.evaluate(`(() => {
   const shown = (s) => [...document.querySelectorAll(s)].filter((e) => !e.hidden && e.getBoundingClientRect().width);
   const box = (r) => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
   const pic = (el) => [...el.querySelectorAll('img')].find((i) => i.getBoundingClientRect().width) ?? el;
-  const members = window.BeesonEditor.selection().map((el) => { const r = pic(el).getBoundingClientRect(); const g = el.matches('figure') ? 0 : 6; return { left: r.left - g, top: r.top - g, right: r.right + g, bottom: r.bottom + g }; });
+  // the picture of an image, fitted in its box with object-fit contain
+  const drawn = (el) => {
+    const r = el.getBoundingClientRect();
+    if (!(el instanceof HTMLImageElement) || getComputedStyle(el).objectFit !== 'contain') return r;
+    const q = Math.min(r.width / el.naturalWidth, r.height / el.naturalHeight), w = el.naturalWidth * q, h = el.naturalHeight * q;
+    return { left: r.left + (r.width - w) / 2, top: r.top + (r.height - h) / 2, right: r.left + (r.width + w) / 2, bottom: r.top + (r.height + h) / 2 };
+  };
+  const members = window.BeesonEditor.selection().map((el) => { const r = drawn(pic(el)); const g = el.matches('figure') ? 0 : 6; return { left: r.left - g, top: r.top - g, right: r.right + g, bottom: r.bottom + g }; });
   return {
     members,
     frames: shown('.beeson-frame.selected').length,
@@ -741,8 +748,18 @@ for (const platform of PLATFORMS) {
     assert.ok(near(k[0], k[1], 0.03), `the members are scaled by ${k}, not together`);
     assert.ok(near(Math.min(...after.members.map((m) => m.left)), left, 3) && near(Math.min(...after.members.map((m) => m.top)), top, 3), 'the corner across from the grip moves');
     const edited = await render(page);
-    assert.match(edited, /<p data-group="g1" style="width: \d+px[^"]*">The lead-in of a display<\/p>/, 'the width of the paragraph is not written');
-    await roundTrip(page, edited);
+    const tag = edited.match(/<p [^>]*>The lead-in of a display<\/p>/)?.[0] ?? '';
+    assert.ok(/data-group="g1"/.test(tag) && /style="[^"]*width: \d+px/.test(tag), `the width of the paragraph is not written: ${tag}`);
+    // the resize and the group are undone, and redone
+    await undo(page);
+    await undo(page);
+    await frames(page);
+    await byteExact(page);
+    await redo(page);
+    await redo(page);
+    assert.equal(await render(page), edited);
+    await inScope(page);
+    await saveAndReopen(page, `r5-2-${++saves}.html`);
     assert.deepEqual(errors(page), []);
   });
 }

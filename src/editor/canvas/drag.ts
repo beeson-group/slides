@@ -130,6 +130,8 @@ type Press = {
   angle?: number;
   // the size of a rotated element at the press, in slide pixels
   size?: { width: number; height: number };
+  // whether the grips of a group are pressed, which scale all its members about one anchor
+  group?: boolean;
 };
 
 // an element of a multiple selection that follows a resize by the grip of another: the elements
@@ -292,6 +294,24 @@ export function install(app: App): void {
       return;
     }
     const grip = target.closest('.beeson-grip');
+    if (grip && !grip.classList.contains('locked') && (grip as HTMLElement).dataset.group) {
+      // the grips of a group: each member is a follower of the box of the group
+      ev.preventDefault();
+      ev.stopPropagation();
+      const f = frameOf(app);
+      const all = sel.elements().filter((o) => !locked(o));
+      const followers: Follower[] = all.filter((o) => !all.some((x) => x !== o && x.contains(o))).map((o) => {
+        const pic = pictureOf(o);
+        const deg = angleIn(o, pic);
+        return { el: o, sized: sizedOf(o), pic, deg, base: toSlide(f, orientedBox(pic, f.scale, deg)) };
+      });
+      if (!followers.length) return;
+      const p = Object.assign(start('resize', ev, followers[0].el, followers.map((m) => m.el), null), { handle: (grip as HTMLElement).dataset.handle as Handle, followers, group: true });
+      for (const m of followers.flatMap((m) => m.sized)) if (!p.from.has(m)) p.from.set(m, placeOf(m));
+      p.base = toSlide(f, frames.groupBox() ?? union(followers.map((m) => visualRect(m.pic))));
+      document.documentElement.classList.add('beeson-resizing');
+      return;
+    }
     if (grip && !grip.classList.contains('locked')) {
       const el = frames.memberOf(grip);
       const sized = el ? sizedOf(el) : [];
@@ -470,6 +490,10 @@ export function install(app: App): void {
   // element, i.e. the picture or the figure around it, is changed so that the edge or corner across
   // from the handle stays, since the box of a figure is laid out by the theme around its width
   const resize = (p: Press, ev: PointerEvent, dx: number, dy: number) => {
+    if (p.group) {
+      groupResize(p, ev, dx, dy);
+      return;
+    }
     const el = p.els[0];
     const pic = p.pic ?? el;
     const f = frameOf(app);
@@ -542,6 +566,45 @@ export function install(app: App): void {
     const sx = cx + move.x - seen.x, sy = cy + move.y - seen.y;
     writeLive(el, { ...now, translate: { x: (now.translate?.x ?? 0) + sx, y: (now.translate?.y ?? 0) + sy }, rotate: from.rotate });
     follow(p, p.handle as Handle, box.width / p.base.width, box.height / p.base.height, o.center);
+    view.moving = p.els;
+    view.resizing = true;
+    view.guides = [];
+    view.spacing = [];
+    view.readout = { text: `${Math.round(box.width)} × ${Math.round(box.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
+    frames.draw();
+    app.invalidate('content');
+  };
+
+  // a resize of a group by its grips, without snapping: the box of the group keeps its aspect at a
+  // corner unless Shift is held, and each member is scaled by the ratio of the box, with its center
+  // moved away from the edge or corner across from the grip, or from the center of the group
+  const groupResize = (p: Press, ev: PointerEvent, dx: number, dy: number) => {
+    const f = frameOf(app);
+    const h = p.handle as Handle;
+    const corner = h.length === 2;
+    const center = aboutCenter(ev);
+    const box = resizeBox(p.base, h, dx, dy, { aspect: corner && !ev.shiftKey ? p.base.width / p.base.height : null, center, free: true });
+    const sx = h.includes('w') ? -1 : h.includes('e') ? 1 : 0;
+    const sy = h.includes('n') ? -1 : h.includes('s') ? 1 : 0;
+    const k = sx ? box.width / p.base.width : box.height / p.base.height;
+    const b = p.base;
+    const ax = center || !sx ? b.left + b.width / 2 : sx > 0 ? b.left : b.left + b.width;
+    const ay = center || !sy ? b.top + b.height / 2 : sy > 0 ? b.top : b.top + b.height;
+    for (const m of p.followers ?? []) {
+      for (const s of m.sized) {
+        (s as HTMLElement).style.width = `${Math.round(cssWidth(s, m.base.width * k))}px`;
+        if ((p.from.get(s)?.height ?? null) !== null) (s as HTMLElement).style.height = `${Math.round(m.base.height * k)}px`;
+      }
+      const seen = toSlide(f, orientedBox(m.pic, f.scale, m.deg));
+      // a text block keeps the place of its top, under its wrapped text
+      const text = isTextSized(m.pic);
+      const cx = ax + (m.base.left + m.base.width / 2 - ax) * k;
+      const y0 = text ? m.base.top : m.base.top + m.base.height / 2;
+      const cy = ay + (y0 - ay) * k;
+      const now = placeOf(m.el);
+      const from = p.from.get(m.el) as Place;
+      writeLive(m.el, { ...now, translate: { x: (now.translate?.x ?? 0) + cx - (seen.left + seen.width / 2), y: (now.translate?.y ?? 0) + cy - (text ? seen.top : seen.top + seen.height / 2) }, rotate: from.rotate });
+    }
     view.moving = p.els;
     view.resizing = true;
     view.guides = [];

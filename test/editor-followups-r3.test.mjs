@@ -337,7 +337,13 @@ for (const platform of PLATFORMS) {
 
 const DELETE = { mac: 'Backspace', other: 'Delete' };
 const TITLE_QR = '<div class="qr" data-qr="https://github.com/beeson-group/slides"></div>';
-const shownFrames = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-frame.selected')].filter((f) => !f.hidden && f.getBoundingClientRect().width).length`);
+// the shown elements of the selection: each framed by itself, or the members of a group in its
+// one frame
+const shownFrames = (page) => page.evaluate(`(() => {
+  const frames = [...document.querySelectorAll('.beeson-frame.selected')].filter((f) => !f.hidden && f.getBoundingClientRect().width).length;
+  const group = [...document.querySelectorAll('.beeson-frame.union.group')].some((f) => !f.hidden);
+  return group ? window.BeesonEditor.selection().filter((e) => e.getBoundingClientRect().width).length : frames;
+})()`);
 
 for (const platform of PLATFORMS) {
   test(`Delete skips a locked element, and deletes nothing when every selected element is locked (${platform})`, async (t) => {
