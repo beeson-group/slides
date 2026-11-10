@@ -21,7 +21,7 @@ export function install(app: App): void {
     keys: { mac: ['Mod+Z'], other: ['Mod+Z'] },
     in: IN,
     menu: { bar: 'Edit', group: 'history', order: 10 },
-    toolbar: { group: 'history', order: 10, icon: 'undo' },
+    toolbar: { group: 'history', order: 10, icon: 'undo', label: 'Undo' },
     enabled: (a) => a.history.canUndo,
     run: (a) => a.history.undo(),
   });
@@ -31,7 +31,7 @@ export function install(app: App): void {
     keys: { mac: ['Mod+Shift+Z', 'Mod+Y'], other: ['Mod+Y', 'Mod+Shift+Z'] },
     in: IN,
     menu: { bar: 'Edit', group: 'history', order: 11 },
-    toolbar: { group: 'history', order: 11, icon: 'redo' },
+    toolbar: { group: 'history', order: 11, icon: 'redo', label: 'Redo' },
     enabled: (a) => a.history.canRedo,
     run: (a) => a.history.redo(),
   });

@@ -62,15 +62,6 @@ html.beeson-editor .beeson-edit-inspector .beeson-edit-side .row { grid-template
 html.beeson-editor .beeson-edit-inspector .beeson-edit-side .row select { width: 100%; min-width: 0; }
 `;
 
-// the label of a command on the toolbar, which is short and does not change, e.g. Undo for
-// Undo Typing. a package may name it with toolbar.label
-const SHORT: Record<string, string> = { 'edit.undo': 'Undo', 'edit.redo': 'Redo' };
-export function toolbarLabel(app: App, c: Command): string {
-  const own = (c.toolbar as { label?: string } | undefined)?.label ?? SHORT[c.id];
-  if (own) return own;
-  return typeof c.label === 'string' ? c.label : app.commands.label(c.id);
-}
-
 declare global {
   interface Window {
     // the interface of the shell for the tests and the screenshots: commands defined in a page

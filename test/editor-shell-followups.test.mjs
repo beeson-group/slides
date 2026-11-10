@@ -136,3 +136,25 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(page.errors, []);
   });
 }
+
+// the label of a toolbar button is toolbar.label, which does not follow the menu label, e.g. Undo
+// for Undo Typing, and toolbar.split draws the submenu named by it as a split button
+test('a toolbar button takes its label and its split from the toolbar place of its command', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  await click(page, await centerOf(page, '.reveal section.present h1'));
+  await page.send('Input.insertText', { text: 'x' });
+  await page.waitFor(`window.BeesonEditor.state('edit.undo').label === 'Undo Typing'`);
+  const undo = await page.evaluate(`(() => { const b = document.querySelector('.beeson-edit-top [data-command="edit.undo"]'); return { text: b.textContent, title: b.title }; })()`);
+  assert.equal(undo.text, 'Undo');
+  assert.match(undo.title, /^Undo Typing/);
+  await define(page, `{ id: 'test.lead', label: 'Long Menu Label', toolbar: { group: 'test', order: 45, icon: 'square', label: 'Short', split: 'Test Choices' }, menu: { bar: 'Insert', group: 'test', order: 90 }, run: () => {} }`);
+  await define(page, `{ id: 'test.choice', label: 'Test Choice', menu: { bar: 'Insert', group: 'test', order: 91, submenu: 'Test Choices' }, run: () => { window.chose = true; } }`);
+  await frames(page);
+  assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-top [data-command="test.lead"]').textContent`), 'Short');
+  await click(page, await centerOf(page, '.beeson-edit-top .beeson-edit-split:has([data-command="test.lead"]) .more'));
+  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item .label')].map((l) => l.textContent)`), ['Test Choice']);
+  await press(page, 'Escape');
+  assert.deepEqual(page.errors, []);
+});
