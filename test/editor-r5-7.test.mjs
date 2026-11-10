@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, saveAndReopen } from './helpers/editor.mjs';
 
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
@@ -224,6 +224,76 @@ for (const platform of PLATFORMS) {
     const now = await mathItems(page);
     assert.equal(now.gone, 0, `MathJax keeps ${now.gone} typeset items of running heads that are off the page`);
     assert.equal(now.all, first.all);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+// the center of the row of the navigator whose title starts with title
+const rowOf = (page, title) =>
+  page.evaluate(`(() => {
+    const r = [...document.querySelectorAll('.beeson-edit-nav .row')].find((r) => r.querySelector('.title').textContent.startsWith(${JSON.stringify(title)}));
+    r.scrollIntoView({ block: 'center' });
+    const b = r.getBoundingClientRect();
+    return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+  })()`);
+const showSlide = (page, title) =>
+  page.evaluate(`Reveal.slide(Reveal.getIndices([...document.querySelectorAll('.reveal section h2')].find((h) => h.textContent.startsWith(${JSON.stringify(title)})).closest('section')).h)`);
+
+// the texts of the panel of the current slide that run past its bottom, and the texts marked by
+// overflow.ts
+const panelFit = (page) =>
+  page.evaluate(`(() => {
+    const panel = document.querySelector('.reveal section.present > .panel');
+    if (!panel) return null;
+    const p = panel.getBoundingClientRect();
+    const out = [...panel.children].filter((el) => !el.matches('.foot, aside')).filter((el) => el.getBoundingClientRect().bottom > p.bottom + 1).map((el) => el.localName);
+    return { out, marked: document.querySelectorAll('.reveal section.present .beeson-overflow').length };
+  })()`);
+
+// the text of the slide of a deck whose heading starts with title
+const slideText = (text, title) => text.split('<section').find((t) => t.includes(`<h2>${title}`)) ?? null;
+
+// four slides in a row selected with Shift, since a Ctrl click is a right click in Chrome on the
+// Mac. the last is shown, and the first is more than two slides away from it, where reveal.js
+// does not lay out a slide
+const FOUR = ['Show your steps', 'Equations are first', 'Figures are first', 'Code boxes', 'Chapter two', 'Explain concepts', 'Color the terms'];
+
+for (const platform of PLATFORMS) {
+  test(`a change of layout to Split of slides selected in the navigator fits the panel text of each as on the slide shown on ${platform}`, async () => {
+    // the text of each slide changed to Split alone, while it is shown
+    const alone = {};
+    for (const title of FOUR) {
+      const page = await editor(platform, 0, 'index.html', { width: 1600, height: 1000 });
+      await showSlide(page, title);
+      await frames(page);
+      await exec(page, 'slide.layout.split');
+      await wait(page, 300);
+      alone[title] = slideText(await render(page), title);
+    }
+    assert.ok(alone[FOUR[0]].includes('class="small"'), 'the text of the first slide is not shrunk in a panel');
+    const page = await editor(platform, 0, 'index.html', { width: 1600, height: 1000 });
+    await showSlide(page, FOUR.at(-1));
+    await frames(page);
+    assert.equal(await page.evaluate(`[...document.querySelectorAll('.reveal section h2')].find((h) => h.textContent.startsWith(${JSON.stringify(FOUR[0])})).getBoundingClientRect().height`), 0, 'the first slide is laid out');
+    await click(page, await rowOf(page, FOUR.at(-1)));
+    await click(page, await rowOf(page, FOUR[0]), { modifiers: 'Shift' });
+    await frames(page);
+    const picked = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-nav .row[aria-selected="true"] .title')].map((t) => t.textContent)`);
+    assert.equal(picked.length, FOUR.length, `the navigator does not have the slides selected: ${JSON.stringify(picked)}`);
+    const source = page.source;
+    await exec(page, 'slide.layout.split');
+    await wait(page, 300);
+    const split = await render(page);
+    for (const title of FOUR) assert.equal(slideText(split, title), alone[title], `the panel text of ${title} is not fit as on the slide shown`);
+    await showSlide(page, FOUR[0]);
+    await wait(page, 300);
+    assert.deepEqual(await panelFit(page), { out: [], marked: 0 }, `a text runs past the bottom of the panel of ${FOUR[0]}`);
+    // the fit is a part of the change of layout, undone and redone with it
+    await undo(page);
+    assert.equal(await render(page), source);
+    await redo(page);
+    assert.equal(await render(page), split);
+    await saved(page);
     assert.deepEqual(errors(page), []);
   });
 }
