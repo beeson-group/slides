@@ -258,7 +258,27 @@ export function commands(): Command[] {
   return list;
 }
 
+// the commands that change the elements of the selection or the text of a block of it, which a
+// lock turns off, as Keynote does until a locked object is unlocked. Copy, Duplicate, and the
+// commands that select or show the selection are kept, and so are Lock and Unlock
+const CHANGES = new RegExp([
+  '^(figure|image|media|code|surface|line|backdrop|math|text)\\.',
+  '^plot\\.(?!closeData$)',
+  '^arrange\\.(?!(lock|unlock|toggleLock)$)',
+  '^table\\.(?!(select|extend|cell\\.))',
+  '^steps\\.(set|add|remove|start|delay|deliver|listDelivery|final|move|earlier|later|effect)$',
+  '^(element\\.delete|edit\\.cut|selection\\.editText)$',
+].join('|'));
+
+// whether the selection holds a locked element, an element inside one, or a text of one
+export function lockedSelection(app: App): boolean {
+  const sel = app.selection;
+  const els = sel.kind === 'text' ? sel.items : sel.elements();
+  return els.some((el) => !!el.closest('[data-locked]') || !!el.querySelector('[data-locked]'));
+}
+
 export function install(app: App): void {
   for (const c of commands()) app.commands.define(c);
   keepGroups(app);
+  app.commands.veto((a, c) => (CHANGES.test(c.id) || (c.id === 'edit.paste' && a.selection.kind === 'text')) && lockedSelection(a));
 }
