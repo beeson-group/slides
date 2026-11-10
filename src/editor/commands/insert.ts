@@ -17,6 +17,7 @@ import { docOf } from './slide.ts';
 const CSS = `
 html.beeson-editor .reveal .slides .beeson-pending:not(.foot) { position: relative; }
 html.beeson-editor .reveal .slides .beeson-pending { min-height: 1.4em; min-width: 8em; }
+html.beeson-editor .reveal .slides .foot.beeson-pending { min-width: 13em; }
 html.beeson-editor .reveal .slides .beeson-pending[data-prompt][contenteditable]:empty::before { content: attr(data-prompt); position: absolute; left: 0; top: 0; color: var(--muted, #888); white-space: nowrap; pointer-events: none; }
 html.beeson-editor .reveal .slides pre.beeson-pending { box-sizing: border-box; min-height: calc(1.25em + 48px); padding: 24px; font-size: 22px; line-height: 1.25; }
 html.beeson-editor .reveal .slides pre.beeson-pending[data-prompt][contenteditable]:empty::before { left: 24px; top: 24px; font-family: system-ui, sans-serif; }
@@ -226,7 +227,6 @@ export function install(app: App): void {
     id: 'insert.code',
     label: 'Code Box',
     menu: insertMenu(27),
-    toolbar: tool(27, 'code'),
     enabled: ready,
     run: pendingText('code'),
   });
@@ -234,7 +234,6 @@ export function install(app: App): void {
     id: 'insert.footnote',
     label: 'Footnote',
     menu: insertMenu(28),
-    toolbar: tool(28, 'footnote'),
     enabled: ready,
     run: (a) => {
       const slide = a.current()!;
