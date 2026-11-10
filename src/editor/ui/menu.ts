@@ -10,6 +10,7 @@
 
 import type { App, Platform } from '../app.ts';
 import { keysOf, type Command, type Context, type Group } from '../commands.ts';
+import { display } from '../keymap.ts';
 import { injectStyle, make } from './dom.ts';
 import { icon } from './icons.ts';
 
@@ -82,35 +83,11 @@ const stack: Menu[] = [];
 let uid = 0;
 let platform: Platform = 'other';
 
-const MAC_MODS: Record<string, string> = { Ctrl: '⌃', Alt: '⌥', Shift: '⇧', Mod: '⌘', Meta: '⌘' };
-const MAC_ORDER = ['Ctrl', 'Alt', 'Shift', 'Mod', 'Meta'];
-const OTHER_ORDER = ['Mod', 'Ctrl', 'Meta', 'Alt', 'Shift'];
-const KEY_NAMES: Record<string, [string, string]> = {
-  ArrowUp: ['↑', 'Up'], ArrowDown: ['↓', 'Down'], ArrowLeft: ['←', 'Left'], ArrowRight: ['→', 'Right'],
-  Enter: ['↩', 'Enter'], Backspace: ['⌫', 'Backspace'], Delete: ['⌦', 'Delete'], Escape: ['⎋', 'Esc'],
-  Tab: ['⇥', 'Tab'], Space: ['Space', 'Space'], ' ': ['Space', 'Space'], PageUp: ['⇞', 'PgUp'], PageDown: ['⇟', 'PgDn'],
-  Home: ['↖', 'Home'], End: ['↘', 'End'], '-': ['−', '−'], Minus: ['−', '−'], Plus: ['+', '+'], '=': ['=', '='],
-};
-
-// a key string of the registry, e.g. 'Mod+Shift+Z', as the menus of each platform show it: ⇧⌘Z on
-// a Mac and Ctrl+Shift+Z elsewhere. keymap.ts of the keyboard dispatch may take this over
-export function keyLabel(keys: string, on: Platform = platform): string {
-  const parts = keys.split('+');
-  // a key string ending in a plus, e.g. 'Mod++', names the plus key
-  const key = keys.endsWith('++') ? '+' : parts.pop() ?? '';
-  const mods = parts.filter((p) => p && p !== key);
-  const mac = on === 'mac';
-  const name = KEY_NAMES[key]?.[mac ? 0 : 1] ?? (key.length === 1 ? key.toUpperCase() : key);
-  const order = mac ? MAC_ORDER : OTHER_ORDER;
-  const sorted = [...mods].sort((a, b) => order.indexOf(a) - order.indexOf(b));
-  if (mac) return sorted.map((m) => MAC_MODS[m] ?? m).join('') + name;
-  return [...sorted.map((m) => (m === 'Mod' ? 'Ctrl' : m)), name].join('+');
-}
-
-// the first key of a command on the platform, as a menu shows it
+// the first key of a command on the platform, as a menu shows it, e.g. ⇧⌘Z on a Mac and Ctrl+Y
+// elsewhere for Redo, which the sheet of shortcuts lists with its other keys
 export function commandKeys(c: Command, on: Platform = platform): string {
   const k = keysOf(c, on)[0];
-  return k ? keyLabel(k, on) : '';
+  return k ? display(k, on) : '';
 }
 
 // the groups of the registry as items, with a rule between two groups
