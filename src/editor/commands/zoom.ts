@@ -1,15 +1,22 @@
 // the commands of View > Zoom: Fit, Actual Size, Zoom to Selection, Zoom In, and Zoom Out of the
-// canvas, and the zoom of the text of the notes. Mod+= and Mod+- change the text of the notes
-// while the focus is in them, since the zoom of PowerPoint acts on the pane in use. on a Mac,
+// canvas, and the zoom of the text of the notes. Zoom In, Zoom Out, and Actual Size change the
+// text of the notes while the focus is in them, since the zoom of PowerPoint acts on the pane in
+// use, and their keys are thus listed once in the menu. on a Mac,
 // Fit, Actual Size, and Zoom to Selection take the keys of Keynote, Cmd+Option+0, Cmd+0, and
 // Cmd+Shift+0. the keys of Figma, Shift+1, Shift+0, and Shift+2, are bound on every platform,
 // since Ctrl+Alt is not bound on Windows and Linux
 
 import type { App, Region } from '../app.ts';
 
-// the zoom keys of the canvas are taken everywhere but in a field, a dialog, and the notes, which
-// take the same keys for their text
-const CANVAS_ZOOM: Region[] = ['canvas', 'text', 'navigator', 'inspector'];
+// the zoom keys are taken everywhere but in a field and a dialog
+const CANVAS_ZOOM: Region[] = ['canvas', 'text', 'navigator', 'inspector', 'notes'];
+
+// the zoom of the text of the notes while the focus is in them, and else of the canvas
+const inNotes = (app: App, way: 1 | -1 | 0): boolean => {
+  if (app.region() !== 'notes') return false;
+  app.notes.zoomText(way);
+  return true;
+};
 
 // the box of the selected elements, or of the block of the text, in slide px
 function selectionBox(app: App): { left: number; top: number; width: number; height: number } | null {
@@ -39,7 +46,7 @@ export function install(app: App): void {
     keys: { mac: ['Mod+0', 'Shift+0'], other: ['Mod+0', 'Shift+0'] },
     in: CANVAS_ZOOM,
     menu: menu('zoom', 21),
-    run: (a) => a.stage.setZoom(1),
+    run: (a) => void (inNotes(a, 0) || a.stage.setZoom(1)),
   });
   c.define({
     id: 'zoom.selection',
@@ -58,7 +65,7 @@ export function install(app: App): void {
     keys: { mac: ['Mod+=', 'Mod++'], other: ['Mod+=', 'Mod++'] },
     in: CANVAS_ZOOM,
     menu: menu('step', 23),
-    run: (a) => a.stage.zoomIn(),
+    run: (a) => void (inNotes(a, 1) || a.stage.zoomIn()),
   });
   c.define({
     id: 'zoom.out',
@@ -66,12 +73,12 @@ export function install(app: App): void {
     keys: { mac: ['Mod+-'], other: ['Mod+-'] },
     in: CANVAS_ZOOM,
     menu: menu('step', 24),
-    run: (a) => a.stage.zoomOut(),
+    run: (a) => void (inNotes(a, -1) || a.stage.zoomOut()),
   });
 
-  const notes = (id: string, label: string, keys: string[], order: number, way: 1 | -1 | 0) =>
-    c.define({ id, label, keys: { mac: keys, other: keys }, in: ['notes'], menu: menu('notes', order), enabled: (a) => a.notes.shown(), run: (a) => a.notes.zoomText(way) });
-  notes('notes.zoomIn', 'Bigger Notes Text', ['Mod+=', 'Mod++'], 30, 1);
-  notes('notes.zoomOut', 'Smaller Notes Text', ['Mod+-'], 31, -1);
-  notes('notes.zoomReset', 'Notes Text at 100%', ['Mod+0'], 32, 0);
+  const notes = (id: string, label: string, order: number, way: 1 | -1 | 0) =>
+    c.define({ id, label, menu: menu('notes', order), enabled: (a) => a.notes.shown(), run: (a) => a.notes.zoomText(way) });
+  notes('notes.zoomIn', 'Bigger Notes Text', 30, 1);
+  notes('notes.zoomOut', 'Smaller Notes Text', 31, -1);
+  notes('notes.zoomReset', 'Notes Text at 100%', 32, 0);
 }

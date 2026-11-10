@@ -375,6 +375,7 @@ export function install(app: App): void {
     id: 'insert.formula',
     label: 'Formula',
     keys: { mac: ['Mod+Alt+E'], other: ['Alt+='] },
+    in: ['canvas', 'navigator', 'text'],
     menu: insertMenu(21),
     toolbar: tool(22, 'formula'),
     enabled: ready,
