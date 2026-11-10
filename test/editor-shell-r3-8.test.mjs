@@ -191,3 +191,21 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+for (const platform of PLATFORMS) {
+  test(`the thumbnail of a slide with a plot paints its marks as the slide does (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    const n = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.plot'))`);
+    await page.evaluate(`Reveal.slide(${n})`);
+    await page.evaluate(`document.querySelectorAll('.beeson-edit-nav .row')[${n}].scrollIntoView()`);
+    await sleep(1200);
+    const paints = await page.evaluate(`(() => {
+      const pic = document.querySelectorAll('.beeson-edit-nav .row')[${n}].querySelector('.pic');
+      const paint = (svg) => [...svg.querySelectorAll('path, circle, line, polyline, text')].map((e) => { const s = getComputedStyle(e); return e.localName + ' ' + s.fill + ' ' + s.stroke; });
+      return { thumb: paint(pic.shadowRoot.querySelector('.plot svg')), slide: paint(document.querySelector('.reveal section.present .plot svg')) };
+    })()`);
+    assert.ok(paints.slide.some((p) => p.startsWith('circle') && !p.includes('rgb(0, 0, 0) none')), 'the slide does not have a colored mark');
+    assert.deepEqual(paints.thumb, paints.slide);
+    assert.deepEqual(errors(page), []);
+  });
+}
