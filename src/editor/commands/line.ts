@@ -355,6 +355,7 @@ export function install(app: App): void {
   const onMove = (ev: PointerEvent) => {
     const p = press;
     if (!p) return;
+    ev.stopPropagation();
     if (!p.moved && Math.hypot(ev.clientX - p.x, ev.clientY - p.y) < CLICK) return;
     p.moved = true;
     ev.preventDefault();

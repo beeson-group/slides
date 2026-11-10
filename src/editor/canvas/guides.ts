@@ -184,7 +184,9 @@ export function install(app: App): void {
 
   window.addEventListener('pointermove', (ev) => {
     if (press) {
+      // the hover frame of drag.ts is not drawn while a guide is dragged
       ev.preventDefault();
+      ev.stopPropagation();
       track(ev);
       return;
     }
