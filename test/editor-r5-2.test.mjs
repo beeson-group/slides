@@ -188,3 +188,17 @@ for (const platform of PLATFORMS) {
     await show.close();
   });
 }
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: W and H of the Arrange pane give the size of the drawn picture, not of the box of the image`, async () => {
+    const page = await editor(platform);
+    await selectZoneImage(page);
+    const fields = await arrange(page);
+    const pic = await pictureBox(page, ZONE_IMG);
+    const box = await slideBox(page, ZONE_IMG);
+    assert.ok(box.height - pic.height > 40, 'the picture fills the box of the image, which this test needs to tell them apart');
+    assert.deepEqual([Number(fields.w), Number(fields.h)], [Math.round(pic.width), Math.round(pic.height)], `W and H are ${fields.w} and ${fields.h}, and the picture is ${Math.round(pic.width)} by ${Math.round(pic.height)}`);
+    assert.equal(await render(page), page.source, 'the pane writes into the file');
+    assert.deepEqual(errors(page), []);
+  });
+}
