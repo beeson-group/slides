@@ -30,6 +30,9 @@ export type Stage = {
   zoomTo(box: { left: number; top: number; width: number; height: number }): void;
   fitScale(): number;
   place(): void;
+  // the room at the top and the left of the cell that the viewport leaves, e.g. for the rulers of
+  // canvas/rulers.ts, in CSS px
+  setRoom(room: { top: number; left: number }): void;
 };
 
 declare module '../app.ts' {
@@ -74,12 +77,13 @@ export function install(app: App): void {
   // the box of the slide last written, in the viewport, and its size in slide px
   let box = { x: 0, y: 0, w: 0, h: 0 };
   let size = { w: 1920, h: 1080 };
+  let room = { top: 0, left: 0 };
   const root = document.documentElement.style;
 
   const reveal = () => document.querySelector<HTMLElement>('.reveal:not(.beeson-peek)');
   const viewport = (): DOMRect => {
     const r = el.getBoundingClientRect();
-    return new DOMRect(r.left + el.clientLeft, r.top + el.clientTop, el.clientWidth, el.clientHeight);
+    return new DOMRect(r.left + el.clientLeft + room.left, r.top + el.clientTop + room.top, el.clientWidth - room.left, el.clientHeight - room.top);
   };
   const fitScale = (): number => {
     const v = viewport();
@@ -115,8 +119,8 @@ export function install(app: App): void {
       const h = Math.ceil(size.h * s);
       const contentW = Math.max(v.width, w + 2 * MARGIN);
       const contentH = Math.max(v.height, h + 2 * MARGIN);
-      spacer.style.width = `${contentW}px`;
-      spacer.style.height = `${contentH}px`;
+      spacer.style.width = `${contentW + room.left}px`;
+      spacer.style.height = `${contentH + room.top}px`;
       const x = v.left + (contentW - w) / 2 - el.scrollLeft;
       const y = v.top + (contentH - h) / 2 - el.scrollTop;
       const resized = w !== box.w || h !== box.h;
@@ -213,6 +217,11 @@ export function install(app: App): void {
     zoomTo,
     fitScale,
     place,
+    setRoom(next) {
+      if (next.top === room.top && next.left === room.left) return;
+      room = next;
+      place();
+    },
   };
 
   new ResizeObserver(() => place()).observe(el);
