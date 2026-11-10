@@ -241,3 +241,64 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the deck of layouts with the small paragraph of its first content slide moved above the
+// paragraph before it, and a link named "here" in the paragraph, in the file and on the page
+const LAYOUTS = 'test/pages/editor-layouts.html';
+const SMALL = '<p class="small fragment" data-fragment-index="3">A small paragraph.</p>';
+const SMALL_UP = '<p class="small fragment" data-fragment-index="3" style="translate: 0px -560px">A small paragraph.</p>';
+const INLINE = 'and \\(x^2\\) inline.</p>';
+const LINKED = 'and \\(x^2\\) inline, see <a href="https://example.com">here</a>.</p>';
+const reviewed = () => readFileSync(LAYOUTS, 'utf8').replace(SMALL, SMALL_UP).replace(INLINE, LINKED);
+const REVIEWED_PAGE = `(() => {
+  const p = [...document.querySelectorAll('.reveal p.small')].find((e) => e.textContent === 'A small paragraph.');
+  p.style.translate = '0px -560px';
+  const q = [...document.querySelectorAll('.reveal p')].find((e) => e.textContent.startsWith('A paragraph with'));
+  q.lastChild.textContent = q.lastChild.textContent.replace(/inline\\.$/, 'inline, see ');
+  const a = document.createElement('a');
+  a.href = 'https://example.com';
+  a.textContent = 'here';
+  q.append(a, '.');
+})()`;
+
+for (const platform of PLATFORMS) {
+  test(`the checker warns of a reading order other than the drawn order and of a link named here on ${platform}`, async () => {
+    const page = await editor(platform, { deck: LAYOUTS, text: reviewed(), change: REVIEWED_PAGE, index: 2 });
+    await exec(page, 'view.accessibility');
+    await frames(page);
+    const rows = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-a11y .item')].map((r) => r.dataset.check + ' ' + r.querySelector('.what').textContent)`);
+    assert.equal(rows.length, 2, JSON.stringify(rows));
+    assert.match(rows[0], /^order "A small paragraph\." after "Text, a list, and a bac…" Slide \d+$/);
+    assert.equal(rows[1], 'link Link "here" Slide 3');
+    assert.match(await page.evaluate(`document.querySelector('.beeson-edit-a11y .status').textContent`), /2 warnings/);
+    const heads = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-a11y .check')].map((c) => c.textContent)`);
+    assert.deepEqual(heads, ['Check reading order1', 'Unclear link text1']);
+
+    // Select and Show selects the element drawn above the one read before it
+    await page.evaluate('Reveal.slide(0)');
+    await click(page, '.beeson-edit-a11y .item[data-check="order"] .fix');
+    await choose(page, 'Select and Show');
+    await page.waitFor(`window.BeesonEditor.status().then ? true : true`);
+    await frames(page);
+    assert.equal(await page.evaluate('Reveal.getIndices().h'), 2);
+    assert.match(await page.evaluate(`document.querySelector('.beeson-edit-a11y .info').textContent`), /reads the elements of a slide in the order of the file/);
+
+    // Edit Link opens the dialog of the link
+    await click(page, '.beeson-edit-a11y .item[data-check="link"] .fix');
+    await choose(page, 'Edit Link');
+    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-link[open]')`);
+    await press(page, 'Escape');
+    assert.equal(await page.evaluate('window.BeesonEditor.render()'), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`a deck with links that name their targets and elements in reading order has no warnings on ${platform}`, async () => {
+    const text = readFileSync(LAYOUTS, 'utf8').replace(INLINE, 'and \\(x^2\\) inline, see <a href="https://example.com">the example site</a>.</p>');
+    const page = await editor(platform, { deck: LAYOUTS, text, change: REVIEWED_PAGE.replace("p.style.translate = '0px -560px';", '').replace("a.textContent = 'here';", "a.textContent = 'the example site';") });
+    await exec(page, 'view.accessibility');
+    await frames(page);
+    assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-a11y .item')].map((r) => r.dataset.check)`), []);
+    assert.match(await page.evaluate(`document.querySelector('.beeson-edit-a11y .status').textContent`), /Good to go/);
+    assert.deepEqual(errors(page), []);
+  });
+}
