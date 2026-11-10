@@ -156,7 +156,10 @@ for (const platform of PLATFORMS) {
     const page = await inspectorPage(platform, slideWith(FIGURE));
     await selectFigure(page, IMG);
     assert.deepEqual(await framed(page, [ZONE]), [ZONE], 'the figure is not selected by a click on its image and Esc');
-    // the picture of the figure has the Image pane, and the figure itself the Arrange pane alone
+    // the figure has the Image pane with its tabs, as an image with a caption in Keynote, and its
+    // place in the Arrange tab
+    assert.equal(await pane(page), 'image');
+    await tap(page, 'Arrange');
     assert.equal(await pane(page), 'arrange');
     await tap(page, 'Slide');
     assert.deepEqual(await framed(page, [ZONE]), [ZONE], 'a click on Align to Slide clears the selection');
