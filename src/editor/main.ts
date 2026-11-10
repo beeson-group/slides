@@ -49,10 +49,13 @@ import { install as installLink } from './text/link.ts';
 import { install as installTextCommands } from './commands/text.ts';
 import { install as installClipboardCommands } from './commands/clipboard.ts';
 import { install as installInsertCommands } from './commands/insert.ts';
+import { install as installMediaCommands } from './commands/media.ts';
 import { install as installFindCommands } from './commands/find.ts';
+import { install as installStepsCommands } from './commands/steps.ts';
 import { install as installInspector } from './inspector/inspector.ts';
 import { install as installZoomCommands } from './commands/zoom.ts';
 import { install as installLayoutCommands } from './commands/layout.ts';
+import { install as installReviewCommands } from './commands/review.ts';
 import { Doc } from './model/doc.ts';
 
 const app = new App();
@@ -143,10 +146,13 @@ installLink(app);
 installTextCommands(app);
 installClipboardCommands(app);
 installInsertCommands(app);
+installMediaCommands(app);
 installFindCommands(app);
+installStepsCommands(app);
 installInspector(app);
 installZoomCommands(app);
 installLayoutCommands(app);
+installReviewCommands(app);
 
 const revealReady = (): Promise<void> =>
   new Promise((done) => {
