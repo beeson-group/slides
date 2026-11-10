@@ -220,7 +220,22 @@ export function contextItems(app: App, kind: Context, target: Element | null): M
     last = group;
     out.push({ command: c.id, arg: { kind, target } });
   }
+  if (kind === 'canvas') addGrid(app, out);
   return out;
+}
+
+// the submenu Grid and Guides and the switch of the rulers of the menu of a slide in PowerPoint,
+// after the items of the slide and before those of its backdrop
+const GRID: (string | null)[] = ['view.guides', 'view.grid', null, 'view.grid.snap', null, 'view.grid.settings'];
+
+function addGrid(app: App, out: MenuItem[]): void {
+  const items: MenuItem[] = GRID.filter((id) => id === null || app.commands.get(id)).map((id) => (id === null ? { rule: true } : { command: id }));
+  const add: MenuItem[] = [];
+  if (items.some((it) => 'command' in it)) add.push({ label: 'Grid and Guides', items });
+  if (app.commands.get('view.rulers')) add.push({ command: 'view.rulers' });
+  if (!add.length) return;
+  const at = out.findIndex((it) => 'command' in it && !['Edit', 'Slide', undefined].includes(app.commands.get(it.command)?.menu?.bar));
+  out.splice(at < 0 ? out.length : at, 0, { rule: true }, ...add, { rule: true });
 }
 
 class Menu {
