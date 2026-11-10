@@ -362,3 +362,41 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the TeX fields shown in the window, by the popover or the pane that shows each, and their text
+const texFields = (page) => page.evaluate(`[...document.querySelectorAll('textarea')]
+  .filter((f) => f.getClientRects().length && (f.closest('.beeson-math') || f.name === 'tex'))
+  .map((f) => [f.closest('.beeson-math') ? 'popover' : 'pane', f.value])`);
+
+// finding 10: the TeX field of a new formula was shown twice, in its popover and in the Formula pane
+// of the inspector. while the popover is open, its field is the only one, and once it is closed the
+// Formula pane shows the TeX of a display. a display is written on a slide, and an inline formula
+// in a text
+for (const platform of PLATFORMS) {
+  for (const where of ['slide', 'text']) {
+    test(`one TeX field is shown while the popover of a new formula in a ${where} is open (${platform})`, async (t) => {
+      const page = await load(t, platform, { n: where === 'slide' ? 5 : 4 });
+      if (where === 'slide') await exec(page, 'insert.formula');
+      else {
+        await click(page, '.reveal section.present > p');
+        await press(page, 'End');
+        await frames(page);
+        await formulaThenType(page, platform, '');
+      }
+      await page.waitFor(`!!document.querySelector('.beeson-math textarea')`);
+      await sleep(300);
+      await frames(page);
+      assert.deepEqual(await texFields(page), [['popover', '']], 'the TeX field of the new formula is not shown once, in its popover');
+      await page.evaluate(`(() => { const f = document.querySelector('.beeson-math textarea'); f.value = 'x^2'; f.dispatchEvent(new Event('input', { bubbles: true })); return true; })()`);
+      await sleep(200);
+      await page.evaluate(`[...document.querySelectorAll('.beeson-math button')].find((b) => b.textContent === 'Insert').click()`);
+      await page.waitFor(`!document.querySelector('.beeson-math')`);
+      await sleep(300);
+      await frames(page);
+      // the display stays selected, while the caret of a text is put after its inline formula
+      if (where === 'slide') assert.deepEqual(await texFields(page), [['pane', 'x^2']], 'the Formula pane does not show the TeX of the formula once the popover is closed');
+      assert.match(await render(page), where === 'slide' ? /\\\[x\^2\\\]/ : /\\\(x\^2\\\)/);
+      await roundTrip(page);
+    });
+  }
+}
