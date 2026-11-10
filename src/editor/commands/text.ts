@@ -21,12 +21,6 @@ export function install(app: App): void {
   const c = app.commands;
   const define = (command: Command) => c.define(command);
   const menu = (group: string, order: number, submenu?: string) => ({ bar: 'Format', group, order, ...(submenu ? { submenu } : {}) });
-  // a place in the toolbar, with the short label and the submenu of a split button that the shell
-  // reads from it, as PowerPoint has the color, the bullets, and the link of a text on its Home tab
-  const tool = (order: number, icon: string, label: string, split?: string): Command['toolbar'] => {
-    const place = { group: 'text', order, icon, label, ...(split ? { split } : {}) };
-    return place;
-  };
 
   define({ id: 'text.newParagraph', label: 'New Paragraph', keys: { mac: ['Enter'], other: ['Enter'] }, in: TEXT, undoable: true, enabled: blocks.canSplit, run: blocks.split });
   define({ id: 'text.joinBackward', label: 'Join Paragraphs', keys: { mac: ['Backspace'], other: ['Backspace'] }, in: TEXT, undoable: true, enabled: blocks.canJoinBack, run: blocks.joinBackward });
@@ -91,7 +85,6 @@ export function install(app: App): void {
       label: TONE_LABELS[tone],
       in: FORMAT,
       menu: menu('tone', 41 + i, 'Text Color'),
-      ...(tone === 'accent' ? { toolbar: tool(30, 'contrast', 'Color', 'Text Color') } : {}),
       undoable: true,
       enabled: (a) => inline.inlineTargets(a).length > 0,
       checked: (a) => inline.toneAt(a) === tone,
@@ -116,7 +109,6 @@ export function install(app: App): void {
       label: LIST_LABELS[kind],
       in: TEXT,
       menu: menu('list', 60 + i, 'List'),
-      ...(kind === 'ul' ? { toolbar: tool(31, 'list', 'List', 'List') } : {}),
       undoable: true,
       enabled: (a) => blocks.canSetList(a, kind),
       checked: (a) => blocks.listKind(a) === kind,
@@ -135,7 +127,6 @@ export function install(app: App): void {
     keys: { mac: ['Mod+K'], other: ['Mod+K'] },
     in: FORMAT,
     menu: menu('link', 80),
-    toolbar: tool(32, 'link', 'Link'),
     context: ['text'],
     enabled: inline.canLink,
     run: (a, arg) => {
