@@ -1,11 +1,11 @@
 // the commands of the text of a slide: the keys of its structure in a text, i.e. Return, Backspace,
 // Delete, Tab, and Shift+Tab, and the Format menu with the formats of the words, their tones, the
 // paragraph styles, the lists, the links, Change Case, and Copy Style and Paste Style with the
-// Format Painter of the Text pane. the Substitutions of the Edit menu switch the smart quotes and
-// dashes of text/substitute.ts. a key of a disabled command is left to the browser, e.g. Return in
-// a heading, which typing.ts writes as a br. a format is set in a text, or on the whole text of
-// the blocks selected on the canvas. with the caret outside a word, a format, a tone, or a style is
-// kept by text/carry.ts for the text typed next
+// Format Painter of the Text pane. the Substitutions of the Edit menu switch the smart quotes,
+// dashes, and links of text/substitute.ts. a key of a disabled command is left to the browser,
+// e.g. Return in a heading, which typing.ts writes as a br. a format is set in a text, or on the
+// whole text of the blocks selected on the canvas. with the caret outside a word, a format, a
+// tone, or a style is kept by text/carry.ts for the text typed next
 
 import type { App, Region } from '../app.ts';
 import type { Command } from '../commands.ts';
@@ -270,8 +270,8 @@ function pasteFigure(app: App, style: FigureStyle): void {
 // a text goes to a text or a block, and the style of a figure to a figure. a click on the painter
 // takes the style of the selection, and the next text, block, or figure clicked or selected on the
 // slide is given it. with sticky, as after a double click on the painter, it stays armed until it
-// is clicked again or Esc is pressed. the switches Smart Quotes and Smart Dashes are in the
-// Substitutions of the Edit menu
+// is clicked again or Esc is pressed. the switches Smart Quotes, Smart Dashes, and Smart Web and
+// Email Links are in the Substitutions of the Edit menu
 function installStyles(app: App, define: Define, menu: MenuOf): void {
   injectStyle('text-styles', CSS);
   let copied: Copied | null = null;
@@ -348,4 +348,5 @@ function installStyles(app: App, define: Define, menu: MenuOf): void {
     });
   smart('quotes', 'Smart Quotes', 90);
   smart('dashes', 'Smart Dashes', 91);
+  smart('links', 'Smart Web and Email Links', 92);
 }
