@@ -372,6 +372,14 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section .zone:has(> img.paper) { display: flex; justify-content: center; align-items: center; }
 .reveal .slides section.figure .plate > img.paper,
 .reveal .slides section .zone > img.paper { width: auto; height: auto; max-width: 100%; max-height: 100%; min-width: 0; min-height: 0; }
+/* a picture with a width in its style, e.g. one sized in the editor, is drawn at that size, past
+   the box of its zone or plate, and with a height in its style as well it is stretched to it */
+.reveal .slides section img[style*="width:"],
+.reveal .slides section video[style*="width:"] { max-width: none !important; max-height: none !important; flex-shrink: 0; }
+.reveal .slides section img[style*="width:"]:not([style*="height:"]),
+.reveal .slides section video[style*="width:"]:not([style*="height:"]) { height: auto !important; }
+.reveal .slides section img[style*="width:"][style*="height:"]:not([style*="object-fit"]),
+.reveal .slides section video[style*="width:"][style*="height:"]:not([style*="object-fit"]) { object-fit: fill !important; }
 
 /* split: the black panel of the group deck, dark in both modes, with a figure at the right */
 .reveal .slides section.split .panel { left: 0; top: 0; width: 760px; height: 1080px; padding: 120px 80px 0 120px; box-sizing: border-box; background: var(--panel); color: var(--panel-text); }
