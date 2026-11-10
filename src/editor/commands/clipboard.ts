@@ -16,6 +16,7 @@ import type { Translate } from '../tags.ts';
 import { insertFiles } from '../media/actions.ts';
 import { kindOf } from '../media/store.ts';
 import { insertPlain } from '../text/typing.ts';
+import { objectsOf } from '../canvas/hit.ts';
 import { freshGroup } from './order.ts';
 import { withTwins } from '../canvas/hit.ts';
 import { VOID } from '../source.ts';
@@ -25,10 +26,10 @@ import { MARK, docOf, slidesIn } from './slide.ts';
 // the offset of a paste or a duplicate that would cover its source, in slide pixels
 export const STEP = 20;
 
-// the selected elements that are in the file, without the slides, and without an element inside
-// another selected one
+// the selected elements that are in the file, without the slides, with the figure of a picture
+// selected inside it, and without an element inside another selected one
 export function selectedElements(app: App): Element[] {
-  const els = app.selection.elements().filter((el) => el.isConnected && !el.matches('.reveal .slides > section') && !!app.pairing?.elements.get(el)?.open);
+  const els = objectsOf(app, app.selection.elements()).filter((el) => el.isConnected && !el.matches('.reveal .slides > section') && !!app.pairing?.elements.get(el)?.open);
   return els.filter((el) => !els.some((o) => o !== el && o.contains(el)));
 }
 

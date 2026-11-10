@@ -132,7 +132,7 @@ export function install(app: App): void {
   // the interface of the modules of today that select and mark the elements
   const move: Selector = {
     select: (el) => (el ? set('elements', [el]) : set('none', [])),
-    // what a press at target selects, i.e. the image of a figure apart from its caption
+    // what a press at target selects, i.e. the figure of a picture
     movableOf: (target) => pickOf(app, target),
     mark,
     refresh: () => app.invalidate('selection'),

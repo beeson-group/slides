@@ -81,7 +81,6 @@ for (const platform of PLATFORMS) {
   test(`the readout of a resize of a group gives the size of W and H (${platform})`, async (t) => {
     const page = await load(t, platform, { n: MATH });
     await click(page, IMG);
-    await press(page, 'Escape');
     await click(page, '.reveal section.present > p', { modifiers: 'Shift' });
     await exec(page, 'arrange.group');
     await frames(page);
@@ -189,7 +188,9 @@ const frameOf = (page) =>
 // of the slide of figures of index.html was resized, and the readout and the frame read 1443 px
 // wide while W read 1434
 const FIGURES = 4;
-// the image shown of a pair of a dark and a light image, whose group is written on both images
+// the image shown of a pair of a dark and a light image, whose figure is added to the selection by
+// a Shift click on it
+const grouped = (page) => page.evaluate(`[...document.querySelectorAll('.reveal section.present [data-group]')].map((e) => e.localName).sort()`);
 const DEMO_IMG = '.reveal section.present figure.zone img:not([hidden])';
 for (const platform of PLATFORMS) {
   test(`the readout, the frame, and W and H give one size during and after a resize of a group (${platform})`, async (t) => {
@@ -199,7 +200,7 @@ for (const platform of PLATFORMS) {
     await click(page, DEMO_IMG, { modifiers: 'Shift' });
     await exec(page, 'arrange.group');
     await frames(page);
-    assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present [data-group]').length`), 3, 'the paragraph and the image are not grouped');
+    assert.deepEqual(await grouped(page), ['figure', 'p'], 'the paragraph and the figure are not grouped');
     // a click on an empty point of the slide, then on the image, selects the group
     const empty = await page.evaluate(`(() => { const r = document.querySelector('.reveal section.present').getBoundingClientRect(); return { x: r.left + r.width * 0.3, y: r.top + r.height * 0.9 }; })()`);
     await click(page, empty);
@@ -268,7 +269,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await positionFieldsOf(page), { x: String(Number(xy.x) - 40), y: String(Number(xy.y) + 30) });
     const after = await membersOf(page);
     for (const [i, m] of after.entries()) assert.ok(Math.abs(m.x - before[i].x + 40) <= 1 && Math.abs(m.y - before[i].y - 30) <= 1, `member ${i} moved from ${js(before[i])} to ${js(m)}`);
-    assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present [data-group]').length`), 3, 'the group is taken apart');
+    assert.deepEqual(await grouped(page), ['figure', 'p'], 'the group is taken apart');
     // the two typed values are two entries of the history, each of which moves both members
     const typed = await render(page);
     await page.evaluate('window.BeesonEditor.undo()');

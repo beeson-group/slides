@@ -93,12 +93,20 @@ export async function click(page, at, { button = 'left', count = 1, modifiers = 
 }
 
 /**
- * The figure around the image of a selector selected by itself: a click on the image selects the
- * image, an object apart from the caption, and Esc then selects the figure around it.
+ * The figure around the image of a selector selected by itself, by a click on the image, since a
+ * picture with its caption is one object.
  */
 export async function selectFigure(page, image) {
   await click(page, image);
-  await press(page, 'Escape');
+}
+
+/**
+ * The image of a selector selected by itself, by a second click on it after the click that
+ * selects its figure.
+ */
+export async function selectPicture(page, image) {
+  await click(page, image);
+  await click(page, image);
 }
 
 /**

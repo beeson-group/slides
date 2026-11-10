@@ -6,7 +6,7 @@
 import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { RESIZABLE, containerOf, mediaIn, movableOf, movablesOf, snapBoxOf, visualRect } from '../canvas/hit.ts';
+import { CONTAINER, RESIZABLE, containerOf, mediaIn, movableOf, movablesOf, objectsOf, pictureOf, snapBoxOf, visualRect } from '../canvas/hit.ts';
 import type { Place } from '../canvas/drag.ts';
 import { captionsOf, placeOf, record, withCaptions, writePlace } from '../canvas/drag.ts';
 import { view } from '../canvas/frames.ts';
@@ -39,8 +39,13 @@ let run: { at: number; changes: { el: Element; from: Place; to: Place }[] } | nu
 
 const samePlace = (a: Place, b: Place) => (a.translate?.x ?? 0) === (b.translate?.x ?? 0) && (a.translate?.y ?? 0) === (b.translate?.y ?? 0) && a.width === b.width;
 
+// the elements that a move acts on, i.e. the figure of a picture selected inside it, and the pictures
+// that a size acts on, i.e. the shown picture of a figure
+const movedEls = (app: App): Element[] => objectsOf(app, app.selection.elements());
+const sizedEls = (app: App): Element[] => movedEls(app).map((el) => (el.matches(CONTAINER) ? pictureOf(el) : el));
+
 function nudge(app: App, dx: number, dy: number): void {
-  const els = app.selection.elements();
+  const els = movedEls(app);
   if (!els.length) return;
   const now = performance.now();
   const moved = [...els, ...captionsOf(app, els).map((t) => t.caption)];
@@ -106,8 +111,8 @@ export function commands(): Command[] {
       },
     },
     {
-      // the figure around a selected image, video, or QR code, which a click selects apart from its
-      // caption, as Esc does
+      // the figure around an image, a video, or a QR code selected by a second click on it, as Esc
+      // selects it
       id: 'selection.container',
       label: 'Select Figure',
       menu: { bar: 'Edit', group: 'select', order: 33 },
@@ -191,9 +196,9 @@ export function commands(): Command[] {
       label: 'Reset Position',
       menu: { bar: 'Arrange', group: 'reset', order: 10 },
       context: ['element'],
-      enabled: (app) => app.selection.elements().some((el) => placeOf(el).translate),
+      enabled: (app) => movedEls(app).some((el) => placeOf(el).translate),
       run: (app) => {
-        const els = app.selection.elements();
+        const els = movedEls(app);
         const changes = withCaptions(app, els, () => els.map((el) => {
           const from = placeOf(el);
           const to = { ...from, translate: null };
@@ -208,9 +213,9 @@ export function commands(): Command[] {
       label: 'Reset Size',
       menu: { bar: 'Arrange', group: 'reset', order: 11 },
       context: ['element'],
-      enabled: (app) => app.selection.elements().some((el) => placeOf(el).width !== null || (placeOf(el).height ?? null) !== null),
+      enabled: (app) => sizedEls(app).some((el) => placeOf(el).width !== null || (placeOf(el).height ?? null) !== null),
       run: (app) => {
-        const els = app.selection.elements();
+        const els = sizedEls(app);
         const changes = withCaptions(app, els, () => els.map((el) => {
           const from = placeOf(el);
           const to = { ...from, width: null, ...(from.height !== undefined ? { height: null } : {}) };

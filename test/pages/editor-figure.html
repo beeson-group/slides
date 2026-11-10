@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <title>A figure with a caption</title>
+  <link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+  <link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+  <link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+  <link rel="stylesheet" href="../../theme/beeson.css">
+</head>
+<body>
+  <div class="reveal"><div class="slides">
+    <section>
+      <h2>A figure with an image of each mode</h2>
+      <p style="translate: 0px 40px">A paragraph drawn under the figure.</p>
+      <figure class="zone">
+        <img class="for-dark" src="../../demo/figure-dark.png" alt="A figure, dark version">
+        <img class="for-light" src="../../demo/figure-light.png" alt="A figure, light version">
+        <figcaption class="caption">A caption under the figure.</figcaption>
+      </figure>
+      <p style="translate: 0px 80px">A paragraph drawn over the figure.</p>
+    </section>
+    <section>
+      <h2>A figure with one image</h2>
+      <p style="translate: 0px 40px">A paragraph drawn under the figure.</p>
+      <figure class="zone">
+        <img src="../../demo/figure-light.png" alt="A figure in both modes">
+        <figcaption class="caption">A caption under the one image.</figcaption>
+      </figure>
+      <p style="translate: 0px 80px">A paragraph drawn over the figure.</p>
+    </section>
+  </div></div>
+  <script src="../../theme/vendor/reveal/reveal.js"></script>
+  <script src="../../theme/vendor/reveal/notes.js"></script>
+  <script src="../../theme/beeson.js"></script>
+  <script>Beeson.start({});</script>
+</body>
+</html>

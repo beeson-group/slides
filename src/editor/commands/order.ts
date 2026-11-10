@@ -8,7 +8,7 @@
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { locked, pivotOf, placeOf, record, turnedPlace, turnersOf, writePlace } from '../canvas/drag.ts';
-import { RESIZABLE, containerOf, frameOf, turnable, twinOf } from '../canvas/hit.ts';
+import { frameOf, objectsOf, turnable, twinOf } from '../canvas/hit.ts';
 
 export type Order = 'front' | 'forward' | 'backward' | 'back';
 
@@ -59,20 +59,20 @@ const selectedEls = (app: App): Element[] => {
   return els.filter((e) => !els.some((o) => o !== e && o.contains(e)) && !!app.pairing?.elements.get(e)?.open);
 };
 
-// the elements that the order commands move: the figure of an image, a video, or a QR code
-// selected inside it, since the picture is drawn in the layer of its figure, and else the selected
-// element
-const orderedEls = (app: App): Element[] => [...new Set(selectedEls(app).map((el) => (el.matches(RESIZABLE) ? containerOf(app, el) : null) ?? el))];
+// the elements that the order, the group, and the lock commands act on: the figure of an image, a
+// video, or a QR code selected inside it, since the picture is drawn in the layer of its figure and
+// is one object with its caption, and else the selected element
+const objectEls = (app: App): Element[] => objectsOf(app, selectedEls(app));
 
 const canOrder = (app: App, order: Order): boolean => {
-  const els = orderedEls(app);
+  const els = objectEls(app);
   const set = new Set(els);
   return els.some((el) => targetOf(app, el, order, set) !== null);
 };
 
 async function reorder(app: App, order: Order): Promise<void> {
   const before = app.selection.elements().slice();
-  const els = orderedEls(app);
+  const els = objectEls(app);
   const set = new Set(els);
   const up = order === 'front' || order === 'forward';
   // the elements in the order that keeps their own order: the last first for a move up
@@ -101,21 +101,21 @@ export function freshGroup(app: App): string {
 
 // two elements or more that are not one group already
 const canGroup = (app: App): boolean => {
-  const els = selectedEls(app);
+  const els = objectEls(app);
   const first = groupOf(els[0] ?? document.body);
   return els.length > 1 && !(first && els.every((el) => groupOf(el) === first));
 };
-const canUngroup = (app: App): boolean => selectedEls(app).some((el) => groupOf(el));
+const canUngroup = (app: App): boolean => objectEls(app).some((el) => groupOf(el));
 
 function group(app: App): void {
-  const els = selectedEls(app);
+  const els = objectEls(app);
   const id = freshGroup(app);
   for (const el of els) app.doc.setTag(el, { attrs: { 'data-group': id } }, 'group');
   app.selection.set('elements', els);
 }
 
 function ungroup(app: App): void {
-  const els = selectedEls(app);
+  const els = objectEls(app);
   const ids = new Set(els.map(groupOf).filter((g): g is string => !!g));
   const all = [...ids].flatMap((id) => membersOf(app, id));
   for (const el of all) app.doc.setTag(el, { attrs: { 'data-group': null } }, 'ungroup');
@@ -125,7 +125,7 @@ function ungroup(app: App): void {
 // the elements of a lock or an unlock. a caret or a range in the text of a locked block unlocks
 // the block, since a click into the text of a locked block puts the caret there
 function lockTargets(app: App, on: boolean): Element[] {
-  const els = selectedEls(app);
+  const els = objectEls(app);
   if (on || app.selection.kind !== 'text') return els;
   const blocks = app.selection.items.map((el) => el.closest('[data-locked]')).filter((el): el is Element => !!el);
   return [...new Set([...els, ...blocks])];
@@ -249,7 +249,7 @@ export function commands(): Command[] {
       keys: { mac: ['Ctrl+Mod+L', 'Mod+L'], other: ['Mod+L'] },
       in: ['canvas'],
       menu: arrange(70, 'lock'),
-      enabled: (app) => selectedEls(app).some((el) => !locked(el)),
+      enabled: (app) => objectEls(app).some((el) => !locked(el)),
       undoable: true,
       run: (app) => setLock(app, true),
     },
@@ -265,11 +265,11 @@ export function commands(): Command[] {
     },
     {
       id: 'arrange.toggleLock',
-      label: (app) => (selectedEls(app).length && selectedEls(app).every(locked) ? 'Unlock' : 'Lock'),
+      label: (app) => (objectEls(app).length && objectEls(app).every(locked) ? 'Unlock' : 'Lock'),
       context: ['element'],
-      enabled: (app) => selectedEls(app).length > 0,
+      enabled: (app) => objectEls(app).length > 0,
       undoable: true,
-      run: (app) => setLock(app, !selectedEls(app).every(locked)),
+      run: (app) => setLock(app, !objectEls(app).every(locked)),
     },
     {
       // arg is { deg, els }, the angle in degrees, of the elements, or of the selection by default.

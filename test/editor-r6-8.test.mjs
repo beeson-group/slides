@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, press, saveAndReopen, type } from './helpers/editor.mjs';
+import { byteExact, click, press, saveAndReopen, selectPicture, type } from './helpers/editor.mjs';
 
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
@@ -104,7 +104,6 @@ for (const platform of PLATFORMS) {
   test(`the context menu of a figure locked as a whole offers Unlock (${platform})`, async (t) => {
     const page = await load(t, platform, { n: MATH });
     await click(page, IMG);
-    await press(page, 'Escape');
     await frames(page);
     assert.deepEqual(await page.evaluate(`window.BeesonEditor.selection().map((e) => e.tagName)`), ['FIGURE']);
     await press(page, 'Mod+L');
@@ -265,9 +264,8 @@ const groupBoxOf = (page) =>
 for (const platform of PLATFORMS) {
   test(`the Arrange pane shows the size of a group, also during its resize (${platform})`, async (t) => {
     const page = await load(t, platform, { n: MATH });
-    // the figure is selected from its image with Esc, and the paragraph added with Shift
+    // the figure is selected with a click on its image, and the paragraph added with Shift
     await click(page, IMG);
-    await press(page, 'Escape');
     await click(page, '.reveal section.present > p', { modifiers: 'Shift' });
     await frames(page);
     assert.deepEqual(await page.evaluate(`window.BeesonEditor.selection().map((e) => e.tagName).sort()`), ['FIGURE', 'P']);
@@ -408,8 +406,8 @@ const frameAndCaption = (page) => page.evaluate(`(() => {
 for (const platform of PLATFORMS) {
   test(`the frame of a figure selected from its image holds its caption (${platform})`, async (t) => {
     const page = await load(t, platform, { deck: 'index.html', n: 4 });
-    // a click on the image frames its picture alone
-    await click(page, FIGURE_IMG);
+    // a second click on the image frames its picture alone
+    await selectPicture(page, FIGURE_IMG);
     await frames(page);
     const [pic] = (await frameAndCaption(page)).frames;
     await press(page, 'Escape');
@@ -417,7 +415,7 @@ for (const platform of PLATFORMS) {
     await press(page, 'Escape');
     await frames(page);
     for (const how of ['Esc', 'Select Figure']) {
-      await click(page, FIGURE_IMG);
+      await selectPicture(page, FIGURE_IMG);
       await frames(page);
       if (how === 'Esc') await press(page, 'Escape');
       else await exec(page, 'selection.container');
@@ -459,7 +457,6 @@ for (const platform of PLATFORMS) {
   test(`a figure moved by a drag or a nudge shows the same x and y in its readout and in the fields, and a typed X moves it there (${platform})`, async (t) => {
     const page = await load(t, platform, { n: MATH });
     await click(page, IMG);
-    await press(page, 'Escape');
     await frames(page);
     assert.deepEqual(await page.evaluate(`window.BeesonEditor.selection().map((e) => e.tagName)`), ['FIGURE']);
     await arrangeTab(page);

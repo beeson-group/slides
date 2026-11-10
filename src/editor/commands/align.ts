@@ -6,7 +6,7 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { RESIZABLE, STRETCHED, aspectOf, constrained, cssWidth, frameOf, isTextSized, kindOf, movableOf, pictureSize, sizedOf, snapBoxOf, toSlide, visualRect } from '../canvas/hit.ts';
+import { CONTAINER, RESIZABLE, STRETCHED, aspectOf, constrained, cssWidth, frameOf, isTextSized, kindOf, movableOf, objectsOf, pictureOf, pictureSize, sizedOf, snapBoxOf, toSlide, visualRect } from '../canvas/hit.ts';
 import type { Box } from '../canvas/snap.ts';
 import { placeOf, record, withCaptions, writePlace, type Place } from '../canvas/drag.ts';
 import { groupReach } from '../canvas/frames.ts';
@@ -21,11 +21,8 @@ const SIDE_LABELS: Record<Side, string> = { left: 'Left', center: 'Center', righ
 // the reference of Align and Distribute, kept for the session
 let reference: 'slide' | 'selection' = 'selection';
 
-// the elements that the commands of this file act on: those selected on the canvas, or the block
-// of a text that has the caret. arg.els, given by a field of the inspector, is taken in their place
-export function targetsOf(app: App, arg?: unknown): Element[] {
-  const given = (arg as { els?: Element[] } | undefined)?.els;
-  if (given) return given.filter((el) => el.isConnected);
+// the elements selected on the canvas, or the block of a text that has the caret
+export function selectedTargets(app: App): Element[] {
   if (app.selection.kind === 'text') {
     const host = app.selection.items[0];
     const el = host ? (movableOf(app, host) ?? host) : null;
@@ -33,6 +30,18 @@ export function targetsOf(app: App, arg?: unknown): Element[] {
   }
   return app.selection.elements().filter((el) => app.pairing?.elements.get(el)?.open);
 }
+
+// the elements that the commands of this file act on: the selected ones, with the figure of a
+// picture selected inside it, since a picture with its caption is one object. arg.els, given by a
+// field of the inspector, is taken in their place
+export function targetsOf(app: App, arg?: unknown): Element[] {
+  const given = (arg as { els?: Element[] } | undefined)?.els;
+  if (given) return given.filter((el) => el.isConnected);
+  return objectsOf(app, selectedTargets(app));
+}
+
+// the element whose size is set for el: the shown picture of a figure, or el
+export const sizedTarget = (el: Element): Element => (el.matches(CONTAINER) ? pictureOf(el) : el);
 
 // the box of el in slide pixels, as the frames draw it
 export const boxOf = (app: App, el: Element): Box => toSlide(frameOf(app), visualRect(el));
@@ -115,8 +124,8 @@ const canDistribute = (app: App) => {
 
 // whether the width of every target is written by the editor, by the scope rule, and whether its
 // height is set by the field H, i.e. every target is a picture and none a text block
-export const resizable = (els: Element[]) => els.length > 0 && els.every((el) => el.matches(RESIZABLE) || isTextSized(el));
-export const heightSet = (els: Element[]) => els.length > 0 && els.every((el) => el.matches(RESIZABLE));
+export const resizable = (els: Element[]) => els.length > 0 && els.map(sizedTarget).every((el) => el.matches(RESIZABLE) || isTextSized(el));
+export const heightSet = (els: Element[]) => els.length > 0 && els.map(sizedTarget).every((el) => el.matches(RESIZABLE));
 
 // the offset of an element from its place in the file, i.e. its translate
 export function offsetOf(el: Element): { x: number; y: number } {
@@ -131,8 +140,8 @@ export function positionOf(app: App, el: Element): { x: number; y: number } {
   return { x: Math.round(b.left), y: Math.round(b.top) };
 }
 
-// the size of an element in slide pixels, unscaled, at its picture for an image or a video
-export const sizeOf = (el: Element): { w: number; h: number } => pictureSize(el);
+// the size of an element in slide pixels, unscaled, at its picture for an image, a video, or a figure
+export const sizeOf = (el: Element): { w: number; h: number } => pictureSize(sizedTarget(el));
 
 export function commands(): Command[] {
   const list: Command[] = [];
@@ -204,7 +213,7 @@ export function commands(): Command[] {
     enabled: (app) => resizable(targetsOf(app)),
     run: (app, arg) => {
       const a = (arg ?? {}) as { w?: number; h?: number };
-      const els = targetsOf(app, arg);
+      const els = targetsOf(app, arg).map(sizedTarget);
       if (!resizable(els)) return;
       const changes = withCaptions(app, els, () => els.map((el) => {
         const from = placeOf(el);

@@ -213,7 +213,6 @@ function turnedAbout(now, before, c, deg, what) {
 // the paragraph and the figure of slide 5 grouped with the key of the platform, which selects the group
 async function grouped(page, platform) {
   await click(page, IMG);
-  await press(page, 'Escape');
   await click(page, '.reveal section.present > p', { modifiers: 'Shift' });
   await press(page, platform === 'mac' ? 'Mod+Alt+G' : 'Mod+G');
   await frames(page);

@@ -7,13 +7,14 @@
 
 import type { App } from '../app.ts';
 import { locked } from '../canvas/drag.ts';
-import { withTwins } from '../canvas/hit.ts';
+import { objectsOf, withTwins } from '../canvas/hit.ts';
 import { hasRange, inText } from './clipboard.ts';
 import { docOf } from './slide.ts';
 
-// the selected elements that are in the file, without the slides
+// the selected elements that are in the file, with the figure of a picture selected inside it, and
+// without the slides
 function selectedElements(app: App): Element[] {
-  return app.selection.elements().filter((el) => el.isConnected && !el.matches('.reveal .slides > section') && !!app.pairing?.elements.has(el));
+  return objectsOf(app, app.selection.elements()).filter((el) => el.isConnected && !el.matches('.reveal .slides > section') && !!app.pairing?.elements.has(el));
 }
 
 export function install(app: App): void {

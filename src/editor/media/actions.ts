@@ -107,11 +107,12 @@ async function prepare(app: App, files: File[]): Promise<Ready[]> {
   return out;
 }
 
-function mediaText(r: Ready, classes: string[] = []): string {
+function mediaText(r: Ready, classes: string[] = [], attrs: Record<string, string> = {}): string {
   const cls = classes.length ? ` class="${classes.join(' ')}"` : '';
   const src = attr(r.file.path);
-  if (r.kind === 'image') return `<img${cls} src="${src}">`;
-  return `<video${cls} src="${src}"${r.poster ? ` poster="${attr(r.poster.path)}"` : ''} muted loop data-autoplay></video>`;
+  const more = Object.entries(attrs).map(([k, v]) => (v ? ` ${k}="${attr(v)}"` : ` ${k}`)).join('');
+  if (r.kind === 'image') return `<img${cls} src="${src}"${more}>`;
+  return `<video${cls} src="${src}"${r.poster ? ` poster="${attr(r.poster.path)}"` : ''} muted loop data-autoplay${more}></video>`;
 }
 
 // the frames and the inspector are drawn again once the picture of a new element is known
@@ -182,7 +183,7 @@ function setFiles(app: App, el: Element, attrs: Record<string, string | null>, l
 
 // the file of the image or the video el replaced, as one entry of the history. a video gets the
 // poster of its new file. a file of the other kind replaces el with an element of its kind, which
-// keeps the mode of el
+// keeps the mode, the group, and the lock of el
 export async function replaceFile(app: App, el: HTMLImageElement | HTMLVideoElement, file: File): Promise<void> {
   if (!kindOf(file)) throw new Error(`${file.name} is not an image or a video`);
   const [r] = await prepare(app, [file]);
@@ -195,7 +196,9 @@ export async function replaceFile(app: App, el: HTMLImageElement | HTMLVideoElem
     const parent = el.parentElement;
     if (!parent) throw new Error('the figure is not on the page');
     const classes = ['for-dark', 'for-light'].filter((c) => el.classList.contains(c));
-    const pending = app.doc.insert(mediaText(r, classes), parent, el, label);
+    const own = app.doc.tagState(el).attrs;
+    const kept = Object.fromEntries(Object.entries(own).filter(([k]) => k === 'data-group' || k === 'data-locked'));
+    const pending = app.doc.insert(mediaText(r, classes, kept), parent, el, label);
     media.resolve(parent);
     const [node] = await pending;
     media.resolve(node);

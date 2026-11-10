@@ -10,7 +10,7 @@ import type { App } from '../app.ts';
 import type { TagEdit, Translate } from '../tags.ts';
 import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
-import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, constrained, containerOf, cssWidth, frameOf, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, onCanvas, orientedBox, pickOf, pictureOf, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, visualRect } from './hit.ts';
+import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, constrained, containerOf, cssWidth, frameOf, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, visualRect } from './hit.ts';
 import { groupReach, overlay, view } from './frames.ts';
 import { enterGroup, freshGroup, groupOf } from '../commands/order.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -375,8 +375,9 @@ export function install(app: App): void {
 
   // a press on an element: it is selected, or with Shift or the command modifier added, and taken
   // off again at a click without a move. a press on a selected element keeps the selection, so that
-  // all of it is dragged, and a click on it then selects it alone, or the image inside it. a click
-  // on a member of a group that is selected as the whole selection selects the member by itself
+  // all of it is dragged, and a click on it then selects it alone, or the picture inside an
+  // unlocked figure. a click on a member of a group that is selected as the whole selection
+  // selects the member by itself
   const pressElement = (ev: PointerEvent, el: Element, target: Element | null) => {
     ev.preventDefault();
     leaveText();
@@ -388,7 +389,7 @@ export function install(app: App): void {
       else sel.add(el);
     } else if (sel.has(el)) {
       const several = sel.elements().length > 1;
-      const media = mediaIn(el, target);
+      const media = locked(el) ? null : mediaIn(el, target);
       const id = groupOf(el);
       const inGroup = several && !!id && sel.elements().every((o) => groupOf(o) === id);
       click = () => {
@@ -397,8 +398,11 @@ export function install(app: App): void {
         else if (media) sel.set('elements', [media]);
       };
     } else sel.set('elements', [el]);
-    const els = sel.elements().filter((e) => !sel.elements().some((o) => o !== e && o.contains(e)) && !locked(e));
-    start('move', ev, els.includes(el) ? el : (els[0] ?? null), els, click);
+    // a picture selected inside its figure is dragged with its figure
+    const moved = objectsOf(app, sel.elements());
+    const els = moved.filter((e) => !moved.some((o) => o !== e && o.contains(e)) && !locked(e));
+    const lead = objectOf(app, el);
+    start('move', ev, els.includes(lead) ? lead : (els[0] ?? null), els, click);
   };
 
   const onDown = (ev: PointerEvent) => {
@@ -450,7 +454,9 @@ export function install(app: App): void {
       return;
     }
     if (grip && !grip.classList.contains('locked')) {
-      const el = frames.memberOf(grip);
+      // the grips of a picture selected inside its figure resize the figure
+      const member = frames.memberOf(grip);
+      const el = member ? objectOf(app, member) : null;
       const sized = el ? sizedOf(el) : [];
       if (!el || !sized.length || locked(el)) return;
       ev.preventDefault();
@@ -480,12 +486,6 @@ export function install(app: App): void {
     }
     // a press on the chrome, e.g. a button of a bar or a pane, keeps the selection
     if (!onCanvas(target, app, { x: ev.clientX, y: ev.clientY })) return;
-    // an image selected inside its figure is dragged inside it
-    const inner = sel.only();
-    if (inner && inner.matches(RESIZABLE) && containerOf(app, inner) && inner.contains(target)) {
-      pressElement(ev, inner, target);
-      return;
-    }
     const el = pickOf(app, target);
     const host = app.hostOf(target);
     if (el && host) {
