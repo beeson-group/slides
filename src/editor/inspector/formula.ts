@@ -9,7 +9,7 @@
 import type { App } from '../app.ts';
 import { TONES, coloredOf, colorSteps, displayOf, formulaOf, type ColorStep, type Tone } from '../commands/math.ts';
 import { balanced, mathLookup } from '../math.ts';
-import { texEditor } from '../text/mathpop.ts';
+import { sheetTarget, texEditor } from '../text/mathpop.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { openMenu, type MenuItem } from '../ui/menu.ts';
 import { GLYPHS, checkbox, glyph, keepFocus, note, row, section, type Control, type Run } from './controls.ts';
@@ -220,8 +220,17 @@ export function formulaPane(app: App, run: Run): Control[] {
   const shared: Shared = { formula: () => formulaOf(app), field: null, changed: [] };
   const tex = texPart(app, run, shared);
   const display = !!displayOf(shared.formula());
+  // the TeX of a formula is typed in one field, that of its popover while the popover is open
+  const texSection = section('TeX', [tex]);
+  const syncTex = texSection.sync;
+  texSection.sync = () => {
+    const f = shared.formula();
+    texSection.el.style.display = f && sheetTarget() === f ? 'none' : '';
+    syncTex();
+  };
+  texSection.sync();
   return [
-    section('TeX', [tex]),
+    texSection,
     ...(display ? [section(null, [checkbox(app, run, 'math.hold', 'Hold through the next step'), note(() => 'The display is held at full opacity while the sentence after it is shown, and while a symbol of it is colored.')])] : []),
     colorPart(app, run, shared),
     section(null, [row([note(() => (app.platform === 'mac' ? '⌥⌘E puts an inline formula at the caret of a text.' : 'Alt+= puts an inline formula at the caret of a text.'))])]),

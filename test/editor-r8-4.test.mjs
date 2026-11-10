@@ -396,7 +396,8 @@ for (const platform of PLATFORMS) {
       // the display stays selected, while the caret of a text is put after its inline formula
       if (where === 'slide') assert.deepEqual(await texFields(page), [['pane', 'x^2']], 'the Formula pane does not show the TeX of the formula once the popover is closed');
       assert.match(await render(page), where === 'slide' ? /\\\[x\^2\\\]/ : /\\\(x\^2\\\)/);
-      await roundTrip(page);
+      // a display is inserted empty and then given its TeX, two entries of the history
+      await roundTrip(page, where === 'slide' ? 2 : 1);
     });
   }
 }
