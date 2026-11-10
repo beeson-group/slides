@@ -4,13 +4,9 @@
 import type { App } from '../app.ts';
 import { docOf, takeKeys } from './slide.ts';
 
-// the selected elements that are in the file. until the selection of selection.ts holds the
-// elements, the element selected by move.ts is taken
+// the selected elements that are in the file, without the slides
 function selectedElements(app: App): Element[] {
-  const sel = app.selection;
-  const legacy = (app.move as unknown as { selected?: Element | null }).selected ?? null;
-  const items = sel?.kind === 'elements' ? [...sel.items] : legacy ? [legacy] : [];
-  return items.filter((el) => el.isConnected && !el.matches('.reveal .slides > section') && !!app.pairing?.elements.has(el));
+  return app.selection.elements().filter((el) => el.isConnected && !el.matches('.reveal .slides > section') && !!app.pairing?.elements.has(el));
 }
 
 export function install(app: App): void {
@@ -28,7 +24,6 @@ export function install(app: App): void {
       // an element inside another selected one goes with it
       const els = selectedElements(a);
       const outer = els.filter((el) => !els.some((o) => o !== el && o.contains(el)));
-      a.move.select(null);
       a.selection.clear();
       for (const el of outer.reverse()) await doc.remove(el, 'delete');
     },
