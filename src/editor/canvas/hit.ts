@@ -148,6 +148,45 @@ export function movablesOf(app: App): Element[] {
   return [...slide.querySelectorAll(MOVABLE)].filter((el) => movableOf(app, el) === el && el.getBoundingClientRect().width > 0);
 }
 
+// a line or an arrow of commands/line.ts: an svg as large as the box of its line element, whose
+// x1, y1, x2, and y2 are in px of the svg. the marquee selects it, and a drag snaps to its ends
+export const LINE = 'svg.line';
+
+// the shown lines of the current slide that are paired with the file
+export function linesOf(app: App): Element[] {
+  const slide = app.current();
+  if (!slide) return [];
+  return [...slide.querySelectorAll(LINE)].filter((svg) => !!app.pairing?.elements.get(svg)?.open && svg.getClientRects().length > 0 && !svg.closest(OUTSIDE));
+}
+
+// the two ends of the line of svg on the screen
+export function lineEnds(svg: Element): [{ x: number; y: number }, { x: number; y: number }] {
+  const r = svg.getBoundingClientRect();
+  const w = Number(svg.getAttribute('width')) || r.width || 1, h = Number(svg.getAttribute('height')) || r.height || 1;
+  const line = svg.querySelector('line');
+  const n = (a: string) => parseFloat(line?.getAttribute(a) ?? '') || 0;
+  const at = (x: number, y: number) => ({ x: r.left + (x * r.width) / w, y: r.top + (y * r.height) / h });
+  return [at(n('x1'), n('y1')), at(n('x2'), n('y2'))];
+}
+
+// whether the segment from a to b has a point in box, by the clip of Liang and Barsky
+export function segmentTouches(a: { x: number; y: number }, b: { x: number; y: number }, box: Box): boolean {
+  let t0 = 0, t1 = 1;
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const edges: [number, number][] = [[-dx, a.x - box.left], [dx, box.left + box.width - a.x], [-dy, a.y - box.top], [dy, box.top + box.height - a.y]];
+  for (const [p, q] of edges) {
+    if (p === 0) {
+      if (q < 0) return false;
+      continue;
+    }
+    const t = q / p;
+    if (p < 0) t0 = Math.max(t0, t);
+    else t1 = Math.min(t1, t);
+    if (t0 > t1) return false;
+  }
+  return true;
+}
+
 // the image or video of a figure under target, which a click into a selected figure selects
 export function mediaIn(figure: Element, target: Element | null): Element | null {
   const media = target?.closest('img, video') ?? null;

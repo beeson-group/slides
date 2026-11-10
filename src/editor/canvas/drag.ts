@@ -10,7 +10,7 @@ import type { App } from '../app.ts';
 import type { TagEdit, Translate } from '../tags.ts';
 import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
-import { BY_ITSELF, RESIZABLE, aspectOf, bandAt, containerOf, frameOf, hasText, mediaIn, movableOf, movablesOf, onCanvas, orientedBox, pictureOf, sizedOf, toSlide, visualRect } from './hit.ts';
+import { BY_ITSELF, RESIZABLE, aspectOf, bandAt, containerOf, frameOf, hasText, lineEnds, linesOf, mediaIn, movableOf, movablesOf, onCanvas, orientedBox, pictureOf, segmentTouches, sizedOf, toSlide, visualRect } from './hit.ts';
 import { overlay, view } from './frames.ts';
 import { freshGroup } from '../commands/order.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -354,6 +354,8 @@ export function install(app: App): void {
         const r = visualRect(el);
         return r.left <= box.left + box.width && r.left + r.width >= box.left && r.top <= box.top + box.height && r.top + r.height >= box.top;
       });
+      // a line is touched where the marquee touches the line itself, not only its box
+      for (const svg of linesOf(app)) if (segmentTouches(...lineEnds(svg), box)) touched.push(svg);
       app.selection.set('elements', [...(p.initial ?? []), ...touched]);
       frames.draw();
       return;
