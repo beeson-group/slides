@@ -219,3 +219,54 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page3), []);
   });
 }
+
+// the numbers drawn at the left of the code box of the slide, and the gap between the left edge
+// of the box and its first character, in CSS pixels
+const drawnNumbers = (page) =>
+  page.evaluate(`(() => {
+    const pre = document.querySelector('.reveal section.present pre');
+    const content = getComputedStyle(pre, '::before').content;
+    const r = document.createRange();
+    r.setStart(pre.querySelector('code').firstChild, 0);
+    r.setEnd(pre.querySelector('code').firstChild, 1);
+    return { numbers: content === 'none' ? '' : JSON.parse(content.replace(/\\\\a /g, '\\\\n')), indent: r.getBoundingClientRect().left - pre.getBoundingClientRect().left };
+  })()`);
+
+for (const platform of PLATFORMS) {
+  test(`a code box is drawn with numbered lines while Number the lines is on, and the switch numbers them on ${platform}`, async () => {
+    const page = await editor(platform, 5);
+    await caretAtEnd(page, '.reveal section.present pre code');
+    await frames(page);
+    assert.equal((await state(page, 'code.numbers')).checked, true);
+    const numbered = await drawnNumbers(page);
+    assert.equal(numbered.numbers, '1\n2', 'the lines of the code box are not numbered on the canvas');
+    // a new code box is drawn without numbers until the switch is turned on
+    await exec(page, 'insert.code');
+    await frames(page);
+    await typeKeys(page, 'x');
+    await press(page, 'Enter');
+    await typeKeys(page, 'y');
+    await frames(page);
+    const pre = '<pre><code class="language-python">x\ny</code></pre>';
+    const before = await page.evaluate('window.BeesonEditor.render()');
+    assert.ok(before.includes(pre));
+    await page.evaluate(`(() => { const c = [...document.querySelectorAll('.reveal section.present pre code')].pop(); const r = document.createRange(); r.selectNodeContents(c); r.collapse(false); c.closest('[contenteditable="true"]').focus(); getSelection().removeAllRanges(); getSelection().addRange(r); })()`);
+    await frames(page);
+    assert.equal((await state(page, 'code.numbers')).checked, false);
+    const plain = await page.evaluate(`getComputedStyle([...document.querySelectorAll('.reveal section.present pre')].pop(), '::before').content`);
+    assert.ok(plain === 'none' || plain === 'normal', 'a code box without data-line-numbers is drawn with numbers');
+    await exec(page, 'code.numbers');
+    await frames(page);
+    const after = await page.evaluate('window.BeesonEditor.render()');
+    assert.equal(after, before.replace(pre, '<pre><code class="language-python" data-line-numbers>x\ny</code></pre>'));
+    const content = await page.evaluate(`getComputedStyle([...document.querySelectorAll('.reveal section.present pre')].pop(), '::before').content`);
+    assert.ok(content.includes('1') && content.includes('2'), 'the switch does not number the lines of the box on the canvas');
+    assert.equal((await state(page, 'code.numbers')).checked, true);
+    await undo(page);
+    assert.equal(await page.evaluate('window.BeesonEditor.render()'), before);
+    await redo(page);
+    assert.equal(await page.evaluate('window.BeesonEditor.render()'), after);
+    await saved(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
