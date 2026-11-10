@@ -293,3 +293,40 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(third), []);
   });
 }
+
+const rectOf = (page, selector) =>
+  page.evaluate(`(() => { const b = document.querySelector(${JSON.stringify(selector)})?.getBoundingClientRect(); return b ? { left: b.left, right: b.right, top: b.top, bottom: b.bottom } : null; })()`);
+
+for (const platform of PLATFORMS) {
+  test(`the Add Slide chooser opens as a popover under the button that opened it (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 3 });
+    const button = '.beeson-edit-top [data-command="slide.gallery"]';
+    await click(page, button);
+    await frames(page);
+    const b = await rectOf(page, button);
+    let g = await rectOf(page, '.beeson-edit-gallery');
+    assert.ok(g, 'the chooser is not open');
+    assert.ok(g.top >= b.bottom && g.top - b.bottom <= 12, `the chooser is ${g.top - b.bottom} px under the Add Slide button`);
+    assert.ok(g.left <= (b.left + b.right) / 2 && g.right >= b.left, 'the chooser is not under the Add Slide button');
+    await press(page, 'Escape');
+    await frames(page);
+    assert.equal(await rectOf(page, '.beeson-edit-gallery'), null);
+    // the + button at the foot of the navigator opens the chooser over it, inside the window
+    const plus = '.beeson-edit-nav .foot [data-command="slide.gallery"]';
+    await click(page, plus);
+    await frames(page);
+    const p = await rectOf(page, plus);
+    g = await rectOf(page, '.beeson-edit-gallery');
+    assert.ok(g, 'the + button of the navigator does not open the chooser');
+    assert.ok(g.bottom <= p.top && p.top - g.bottom <= 12, `the chooser is ${p.top - g.bottom} px over the + button`);
+    assert.ok(g.left <= p.right && g.right >= p.left, 'the chooser is not over the + button');
+    // a layout chosen there adds a slide after the current one
+    await click(page, '.beeson-edit-gallery .tile[data-layout="content"]');
+    await sleep(150);
+    assert.equal(await count(page), `Slide 5 of ${(await navRows(page)).length}`);
+    await undo(page);
+    await sleep(100);
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+}
