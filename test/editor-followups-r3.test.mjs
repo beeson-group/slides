@@ -474,6 +474,8 @@ for (const platform of PLATFORMS) {
 
 // the empty box of Text Box, Code Box, and Footnote, which is not written into the file
 const PENDING = `document.querySelector('.reveal section.present .beeson-pending')`;
+// a new box on a slide without room under its text is written with the offset that centers it
+const unmoved = (text) => text.replace(/ style="translate: -?\d+px -?\d+px"/g, '');
 const undoLabel = (page, id) => page.evaluate(`window.BeesonEditor.state(${JSON.stringify(id)}).label`);
 const INSERTS = [
   ['insert.text', 'Text Box', '<p>x</p>'],
@@ -521,7 +523,7 @@ for (const platform of PLATFORMS) {
       await frames(page);
       await type(page, 'x');
       await sleep(300);
-      assert.ok((await render(page)).includes(html), 'the box was not written');
+      assert.ok(unmoved(await render(page)).includes(html), 'the box was not written');
       assert.equal(await undoLabel(page, 'edit.undo'), `Undo ${label}`);
       await undo(page);
       await sleep(100);
@@ -530,7 +532,7 @@ for (const platform of PLATFORMS) {
       assert.equal((await status(page)).undo, false, 'the insert is more than one entry of the history');
       await redo(page);
       await sleep(100);
-      assert.ok((await render(page)).includes(html));
+      assert.ok(unmoved(await render(page)).includes(html));
       assert.deepEqual(errors(page), []);
     });
   }

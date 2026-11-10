@@ -143,6 +143,38 @@ function textOffset(app: App, el: HTMLElement): number {
   return Math.max(0, Math.round(Math.max(...drawn) - Math.max(...placed)));
 }
 
+// the bottom margin of a slide in slide px, where the theme ends the foot line
+const MARGIN = 50;
+
+// the offset in slide px of a new text box el that does not fit under the blocks of the text
+// column, i.e. that would meet a footnote or reach under the bottom margin of the slide, or null
+// when it fits. the box is then put at the center of the visible part of the slide, where Keynote
+// puts a new object when it finds no free space, moved up off a footnote under it and into the
+// slide
+function centerOffset(app: App, el: HTMLElement): { x: number; y: number } | null {
+  const slide = el.closest('section') as HTMLElement | null;
+  if (!slide) return null;
+  const w = slide.offsetWidth || 1920, h = slide.offsetHeight || 1080;
+  const b = slideBox(app, el);
+  const feet = [...slide.querySelectorAll('.foot')].filter((f) => f !== el && f.getClientRects().length).map((f) => slideBox(app, f));
+  if (b.top >= 0 && b.right <= w && b.bottom <= h - MARGIN && !feet.some((f) => meets(b, f))) return null;
+  // the visible part of the slide in the canvas, in slide px
+  const v = app.stage?.viewport ?? new DOMRect(0, 0, innerWidth, innerHeight);
+  const slides = app.slides() as HTMLElement;
+  const s = slides.getBoundingClientRect();
+  const k = slides.offsetWidth ? s.width / slides.offsetWidth : 1;
+  const left = Math.max(0, (v.left - s.left) / k), right = Math.min(w, (v.right - s.left) / k);
+  const top = Math.max(0, (v.top - s.top) / k), bottom = Math.min(h, (v.bottom - s.top) / k);
+  const bw = b.right - b.left, bh = b.bottom - b.top;
+  const clamp = (x: number, lo: number, hi: number) => Math.min(Math.max(x, lo), Math.max(lo, hi));
+  const cx = clamp(right > left ? (left + right) / 2 : w / 2, bw / 2, w - bw / 2);
+  let cy = clamp(bottom > top ? (top + bottom) / 2 : h / 2, bh / 2, h - bh / 2);
+  const at = { left: cx - bw / 2, right: cx + bw / 2, top: cy - bh / 2, bottom: cy + bh / 2 };
+  const under = feet.filter((f) => meets(at, f));
+  if (under.length) cy = Math.max(bh / 2, Math.min(...under.map((f) => f.top)) - 24 - bh / 2);
+  return { x: Math.round(cx - (b.left + b.right) / 2), y: Math.round(cy - (b.top + b.bottom) / 2) };
+}
+
 // the zone of slide without content, into which a figure is put
 const emptyZone = (slide: Element): Element | null => [...slide.querySelectorAll(':scope > .zone, :scope > .panel ~ .zone')].find((z) => !z.children.length && !z.textContent?.trim()) ?? null;
 
@@ -198,6 +230,8 @@ export function install(app: App): void {
         el.style.translate = '';
         const y = textOffset(app, el);
         el.style.translate = y ? `0px ${y}px` : '';
+        const c = centerOffset(app, el);
+        if (c) el.style.translate = `${c.x}px ${y + c.y}px`;
       }
       pending = { el, kind, parent };
       placeCaret(el);
@@ -261,12 +295,13 @@ export function install(app: App): void {
         await app.history.undo().finally(() => (keep = false));
       }
       await app.history.transact(def.label, async () => {
-        // a box moved by textOffset is written with the same offset
-        const y = parseFloat(p.el.style.translate.split(' ')[1] ?? '') || 0;
+        // a box moved by textOffset or centerOffset is written with the same offset
+        const [x0, y0] = p.el.style.translate.split(' ');
+        const x = parseFloat(x0 ?? '') || 0, y = parseFloat(y0 ?? '') || 0;
         const [node] = await docOf(app).insert(def.html(text), p.parent, p.el, def.label);
         written!.node = node;
         p.el.remove();
-        if (y) docOf(app).setTag(node, { translate: { x: 0, y } }, def.label);
+        if (x || y) docOf(app).setTag(node, { translate: { x, y } }, def.label);
         pending = null;
         // the caret of a code box is in its code element, where the typing after the first key goes
         placeCaret(node, p.kind === 'code' ? (node.textContent ?? '').length : null);
