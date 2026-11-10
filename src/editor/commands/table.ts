@@ -39,6 +39,9 @@ import { closeMenus, menuOpen, openMenu, type MenuItem } from '../ui/menu.ts';
 import { columnPlace, freeZone, inkBox, meets, slideBox, type Box as SlideBox } from './insert.ts';
 import { MARK } from './slide.ts';
 
+// the widths of the frame of the cell of the caret and of the cells selected as a block
+const FRAME = 2;
+const FRAME_BLOCK = 4;
 const CSS = `
 html.beeson-editor .reveal .slides :is(td,th):empty{height:1.4em;width:3.5em}
 html.beeson-editing .reveal .slides :is(td,th)[contenteditable="true"]:focus{outline:none}
@@ -68,7 +71,7 @@ html.beeson-autofilling,html.beeson-autofilling *{cursor:crosshair!important}
 .beeson-table-bars .bar>.on{background:color-mix(in srgb,var(--ed-select) 20%,transparent);color:var(--ed-text);font-weight:600}
 .beeson-table-bars .round{padding:0;border:0;border-radius:50%;display:grid;place-items:center;background:var(--ed-panel);box-shadow:0 0 0 1px var(--ed-control-line);color:var(--ed-select)}
 .beeson-table-bars .round:hover{background:var(--ed-hover)}
-.beeson-table-bars .cell{border:2px solid var(--ed-select);border-radius:2px;pointer-events:none}
+.beeson-table-bars .cell{border:${FRAME}px solid var(--ed-select);border-radius:2px;pointer-events:none}
 .beeson-table-bars .grips{position:static}
 .beeson-table-bars .grip{position:fixed;cursor:col-resize;touch-action:none}
 .beeson-table-bars .grip::after{content:"";position:absolute;left:4px;top:3px;bottom:3px;width:1px;background:var(--ed-muted);opacity:0}
@@ -77,7 +80,7 @@ html.beeson-autofilling,html.beeson-autofilling *{cursor:crosshair!important}
 .beeson-table-bars .guide[hidden]{display:none}
 html.beeson-column-resizing,html.beeson-column-resizing *{cursor:col-resize!important}
 html.beeson-cell-range .reveal *{user-select:none!important;-webkit-user-select:none!important}
-.beeson-table-bars .cell.block{border-width:4px;background:color-mix(in srgb,var(--ed-select) 12%,transparent)}
+.beeson-table-bars .cell.block{border-width:${FRAME_BLOCK}px;background:color-mix(in srgb,var(--ed-select) 12%,transparent)}
 `;
 
 // the size of the bars and of their buttons, in screen px, and the gap between a bar and its table
@@ -321,11 +324,14 @@ const TEXT = 'h1, h2, h3, h4, p, ul, ol, dl, table, pre, blockquote, div.math';
 const BOTTOM = 40;
 
 // the box in slide px of an element of a slide, i.e. the box of the text of a block that is not
-// moved, and else the box of the element with its translate
+// moved, and else the box of the element with its translate. an empty block that shows its
+// placeholder, e.g. Text on a new slide, counts with its whole box
+const holds = (el: Element) => !['none', 'normal'].includes(getComputedStyle(el, '::before').content);
 function shownBox(app: App, el: Element): SlideBox | null {
   if (!el.getClientRects().length) return null;
   const moved = el instanceof HTMLElement && !!el.style.translate;
-  return el.matches(TEXT) && !moved ? inkBox(app, el) : slideBox(app, el);
+  if (!el.matches(TEXT) || moved) return slideBox(app, el);
+  return inkBox(app, el) ?? (holds(el) ? slideBox(app, el) : null);
 }
 
 // a new table put where it fits on its slide, with every row and with room around it for its bars
@@ -1060,7 +1066,9 @@ function installBars(app: App): void {
     handle.hidden = !blocked && !filling;
     if (at) {
       const r = boxRect(t.table, at);
-      place(outline, r.left - 1, r.top - 1, r.right - r.left + 2, r.bottom - r.top + 2);
+      // the frame is drawn outside the cells, off the text at their edges
+      const f = blocked ? FRAME_BLOCK : FRAME;
+      place(outline, r.left - f, r.top - f, r.right - r.left + 2 * f, r.bottom - r.top + 2 * f);
       // the handle is under the pointer while it is dragged
       if (filling) place(handle, filling.x - 5.5, filling.y - 5.5, 11, 11);
       else if (!handle.hidden) place(handle, r.right - 5, r.bottom - 5, 11, 11);
