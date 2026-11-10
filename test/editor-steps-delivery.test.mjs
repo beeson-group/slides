@@ -326,11 +326,10 @@ test('a list keeps the delay of its step through a change of its delivery', asyn
   assert.equal(await rendered(page), text);
 });
 
-// a regression test of an undo that writes the class and the index of a fragment in a new order.
-// for a tag without a class in the file, stateOf of tags.ts lists data-fragment-index before
-// class, and the undo of inverseEdit in model/doc.ts writes them in this order. the fix is
-// outside the files of this package
-test('an undo of Show with Slide writes the class and the index of the step in their order', { todo: 'stateOf of src/editor/tags.ts lists data-fragment-index before class' }, async (t) => {
+// a regression test of an undo that wrote the class and the index of a fragment in a new order,
+// since for a tag without a class in the file, stateOf of tags.ts listed data-fragment-index
+// before class
+test('an undo of Show with Slide writes the class and the index of the step in their order', async (t) => {
   const page = await open(t, 'mac');
   await slideOf(page, 'li.fragment');
   const p = `document.querySelector('.reveal section.present > p')`;
