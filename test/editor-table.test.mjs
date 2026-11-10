@@ -160,6 +160,40 @@ test('the first row of a table without a tbody tag is replaced without its white
   await byteExact(page);
 });
 
+// a key with Option and the editing command that Chrome on a Mac sends with it, e.g. moveWordRight,
+// which press() does not send
+async function optionKey(page, name, command) {
+  const [key, keyCode] = { ArrowLeft: ['ArrowLeft', 37], ArrowUp: ['ArrowUp', 38], ArrowRight: ['ArrowRight', 39], ArrowDown: ['ArrowDown', 40] }[name];
+  const base = { key, code: key, windowsVirtualKeyCode: keyCode, modifiers: 1 };
+  await page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...base, commands: [command] });
+  await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+}
+
+// the offset of the caret in the text of the cell of the focus
+const caretOffset = (page) => page.evaluate(`(() => {
+  const r = window.getSelection().getRangeAt(0).cloneRange();
+  r.setStart(document.activeElement.closest('td, th'), 0);
+  return r.toString().length;
+})()`);
+
+// on a Mac, Option with an arrow moves the caret by a word or a paragraph in every text field, the
+// cells of Keynote included, and Option with Right Arrow in a cell added a column
+test('Option and Right Arrow in the text of a cell move the caret by a word (mac)', async (t) => {
+  const page = await open('mac', LAYOUTS_DECK);
+  t.after(() => page.close?.());
+  await show(page, '.reveal .slides table');
+  await click(page, cellSelector(0, 0));
+  await press(page, 'End');
+  await type(page, ' of orbits');
+  await press(page, 'Home');
+  await optionKey(page, 'ArrowRight', 'moveWordRight');
+  await settle(page);
+  assert.equal(await page.evaluate(`document.querySelector('.reveal section.present table').rows[0].cells.length`), 2, 'a column is added');
+  assert.deepEqual(await focusCell(page), [0, 0]);
+  assert.equal(await caretOffset(page), 'Family'.length);
+  assert.deepEqual(errors(page), []);
+});
+
 for (const platform of ['mac', 'other']) {
   test(`Insert Table from the grid writes a 3 by 3 table with a tbody and a header row (${platform})`, async (t) => {
     const page = await open(platform);
