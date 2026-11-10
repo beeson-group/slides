@@ -457,3 +457,61 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(again), []);
   });
 }
+
+// the keyboard sheet: its colors, its groups with their rows, and the boxes of its sections
+const keySheet = (page) =>
+  page.evaluate(`(() => {
+    const d = document.querySelector('dialog.beeson-edit-keys');
+    const root = getComputedStyle(document.documentElement);
+    const probe = document.createElement('div');
+    document.body.append(probe);
+    const color = (v) => { probe.style.color = v; return getComputedStyle(probe).color; };
+    const tokens = { panel: color(root.getPropertyValue('--ed-panel')), text: color(root.getPropertyValue('--ed-text')) };
+    probe.remove();
+    const box = d.getBoundingClientRect();
+    const sections = [...d.querySelectorAll('section')].map((s) => {
+      const r = s.getBoundingClientRect();
+      return { head: s.querySelector('h3').textContent, rows: [...s.querySelectorAll('.row')].map((r) => [r.firstChild.textContent, r.lastChild.textContent]), left: r.left, right: r.right, bottom: r.bottom };
+    });
+    const body = d.querySelector('.body');
+    return { tokens, bg: getComputedStyle(d).backgroundColor, fg: getComputedStyle(d).color, box: { left: box.left, right: box.right, bottom: box.bottom }, sections, scrolls: body.scrollHeight > body.clientHeight + 1 || body.scrollWidth > body.clientWidth + 1 };
+  })()`);
+
+// the labels of the items of a menu of the menu bar, in their order
+async function menuLabels(page, bar) {
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].find((m) => m.textContent.trim() === ${JSON.stringify(bar)}).click()`);
+  await frames(page);
+  const labels = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item .label')].map((l) => l.textContent)`);
+  await press(page, 'Escape');
+  await frames(page);
+  return labels;
+}
+
+for (const platform of PLATFORMS) {
+  for (const scheme of ['light', 'dark']) {
+    test(`the keyboard sheet is drawn in the chrome, with every menu in its order and without a blank band (${platform}, ${scheme})`, async (t) => {
+      const page = await load(t, platform, { n: 3, scheme });
+      const edit = await menuLabels(page, 'Edit');
+      await exec(page, 'help.keys');
+      await frames(page);
+      const sheet = await keySheet(page);
+      assert.equal(sheet.bg, sheet.tokens.panel, 'the sheet is not drawn on the panel color of the chrome');
+      assert.equal(sheet.fg, sheet.tokens.text);
+      const mac = platform === 'mac';
+      const rows = Object.fromEntries(sheet.sections.find((s) => s.head === 'Edit').rows);
+      assert.equal(rows.Cut, mac ? '⌘X' : 'Ctrl+X');
+      assert.equal(rows.Copy, mac ? '⌘C' : 'Ctrl+C');
+      assert.equal(rows.Paste, mac ? '⌘V' : 'Ctrl+V');
+      const listed = Object.keys(rows);
+      assert.deepEqual(listed, edit.filter((l) => listed.includes(l)), 'the Edit group is not in the order of the Edit menu');
+      assert.ok(listed.every((l) => edit.includes(l)), `rows of Edit outside the Edit menu: ${listed.filter((l) => !edit.includes(l))}`);
+      assert.ok(sheet.sections.some((s) => s.head === 'Other'), JSON.stringify(sheet.sections.map((s) => s.head)));
+      // every group is inside the box of the sheet, which ends under its longest column
+      assert.equal(sheet.scrolls, false, 'the sheet scrolls');
+      for (const s of sheet.sections) assert.ok(s.left >= sheet.box.left && s.right <= sheet.box.right, `the group ${s.head} is outside the sheet`);
+      const low = Math.max(...sheet.sections.map((s) => s.bottom));
+      assert.ok(sheet.box.bottom - low <= 32, `a band of ${Math.round(sheet.box.bottom - low)} px is blank under the groups`);
+      assert.deepEqual(errors(page), []);
+    });
+  }
+}
