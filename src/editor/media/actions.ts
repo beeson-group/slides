@@ -6,7 +6,7 @@
 // template of model/templates.ts
 
 import type { App } from '../app.ts';
-import { host } from '../ui/dialog.ts';
+import { ask, host } from '../ui/dialog.ts';
 import { make } from '../ui/dom.ts';
 import { firstFrame } from './poster.ts';
 import { kindOf, media, type Kind, type MediaFile } from './store.ts';
@@ -206,10 +206,48 @@ export async function replaceFile(app: App, el: HTMLImageElement | HTMLVideoElem
 }
 
 // the first frame of the video el written as its poster, under the name of the video
+// in a deck opened from a file, the page has an opaque origin, and the browser keeps the frames of a
+// video of its folder from the page. a file chosen in the file chooser can be read, hence the video
+// file is asked for once, and its copy is kept for the next capture
+const chosen = new Map<string, string>();
+const fileName = (url: string): string => decodeURIComponent(url.split(/[?#]/)[0].split('/').pop() ?? '');
+
+export const unreadable = (el: HTMLVideoElement): boolean => {
+  const url = el.currentSrc || el.src;
+  return location.protocol === 'file:' && !!url && !/^(blob|data):/.test(url) && !chosen.has(url);
+};
+
+// the copy of the video file chosen by the person, or null after a cancel
+async function videoFile(url: string): Promise<string | null> {
+  const name = fileName(url);
+  let picked: Promise<File[]> | null = null;
+  await ask({
+    title: 'Choose the Video File',
+    text: `The browser does not let a deck opened from a file read the frames of its videos. Choose ${name} once in the file chooser, and its frames can be read until the deck is closed.`,
+    buttons: [
+      { label: 'Cancel', value: 'cancel' },
+      { label: `Choose ${name}…`, value: 'choose', primary: true },
+    ],
+    className: 'beeson-poster-ask',
+    // the chooser is opened in the click on the button, which a browser requires of a file chooser
+    onButton: (value) => {
+      if (value === 'choose') picked = chooseFiles(ACCEPT.video);
+    },
+  });
+  const files = await (picked ?? Promise.resolve([] as File[]));
+  if (!files.length) return null;
+  if (files[0].name !== name) throw new Error(`the chosen file ${files[0].name} is not the file of the video, ${name}`);
+  const copy = URL.createObjectURL(files[0]);
+  chosen.set(url, copy);
+  return copy;
+}
+
 export async function capturePoster(app: App, el: HTMLVideoElement): Promise<void> {
   const url = el.currentSrc || el.src;
   if (!url) throw new Error('the video does not have a file');
-  const blob = await firstFrame(url);
+  const source = chosen.get(url) ?? (unreadable(el) ? await videoFile(url) : url);
+  if (!source) return;
+  const blob = await firstFrame(source);
   const name = stemOf(media.pathOf(el.getAttribute('src')) ?? 'video');
   const poster = media.add(blob, `${name}.png`, taken(app), 'poster');
   await app.history.transact('Poster Frame', () => setFiles(app, el, { poster: poster.path }, 'poster'));
