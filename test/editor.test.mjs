@@ -24,6 +24,16 @@ async function editorPage(browser, query = 'edit&still') {
 }
 
 // the items of the slide with the figure, each a step of its own in the file
+// the rows of the Steps tab in document order, and the step of each, '' for an element shown with
+// the slide and otherwise the step counted from 0
+const IN_ORDER = `[...document.querySelectorAll('.beeson-edit-side .rows .row')].sort((a, b) => a.dataset.doc - b.dataset.doc)`;
+const STEP_VALUES = `${IN_ORDER}.map((r) => r.dataset.step)`;
+// the item with label of the menu of the chip of the row at position i in document order
+const pickStep = (page, i, label) => page.evaluate(`(() => {
+  document.querySelector('.beeson-edit-side .row[data-doc="${i}"] .chip').click();
+  [...document.querySelectorAll('.beeson-edit-menu .item')].find((x) => x.querySelector('.label').textContent === ${JSON.stringify(label)}).click();
+})()`);
+
 const FIGURE_ITEMS = [
   'Dark and light mode: export one file per mode, mark them <code>for-dark</code> and <code>for-light</code>.',
   'You might have noticed a toggle on the top right: try clicking it on this slide.',
@@ -321,19 +331,19 @@ test('a step set in the Steps pane writes the class and the index into the tag o
   await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .zone > img'); const { h, v } = Reveal.getIndices(img.closest('section')); Reveal.slide(h, v); })()`);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
   await new Promise((done) => setTimeout(done, 300));
-  const pick = (i, value) => page.evaluate(`(() => { const sel = document.querySelectorAll('.beeson-edit-side .row select')[${i}]; sel.value = ${value === undefined ? '[...sel.options].at(-1).value' : JSON.stringify(value)}; sel.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  const pick = (i, label) => pickStep(page, i, label);
   // the heading is the first row, with the slide, and each item is a step of its own. the figure
   // joins the first step
-  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row .kind')].map((k) => k.textContent)`), ['Heading', 'Paragraph', 'Item', 'Item', 'Item', 'Figure']);
-  const rows = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row select')].map((s) => s.value)`);
+  assert.deepEqual(await page.evaluate(`${IN_ORDER}.map((r) => r.querySelector('.kind').textContent)`), ['Heading', 'Paragraph', 'Item', 'Item', 'Item', 'Figure']);
+  const rows = () => page.evaluate(`${STEP_VALUES}`);
   assert.deepEqual(await rows(), ['', '', '0', '1', '2', '']);
-  await pick(5, '0');
+  await pick(5, 'Step 1');
   assert.deepEqual(await rows(), ['', '', '0', '1', '2', '0']);
   assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-badge')].map((b) => b.textContent)`), ['1', '2', '3', '1']);
   const expected = replaced('<figure class="zone">', '<figure class="zone fragment" data-fragment-index="1">');
   assert.equal(await page.evaluate('window.BeesonEditor.render()'), expected);
   // the second item goes back with the slide, and the third item takes the second step
-  await pick(3, '');
+  await pick(3, 'With the Slide');
   assert.deepEqual(await rows(), ['', '', '0', '', '1', '0']);
   // the saved text is paired again, and the steps are read from it
   const text = await page.evaluate('window.BeesonEditor.render()');
@@ -341,9 +351,9 @@ test('a step set in the Steps pane writes the class and the index into the tag o
   assert.deepEqual(await rows(), ['', '', '0', '', '1', '0']);
   // One by one steps every element but the heading, and All at once takes every step away
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .head button')].find((b) => b.textContent === 'One by one').click()`);
-  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row select')].map((s) => s.value)`), ['', '0', '1', '2', '3', '4']);
+  assert.deepEqual(await page.evaluate(`${STEP_VALUES}`), ['', '0', '1', '2', '3', '4']);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .head button')].find((b) => b.textContent === 'All at once').click()`);
-  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row select')].map((s) => s.value)`), ['', '', '', '', '', '']);
+  assert.deepEqual(await page.evaluate(`${STEP_VALUES}`), ['', '', '', '', '', '']);
   const unstepped = FIGURE_ITEMS.reduce((text, item, i) => text.replace(stepped(i), `<li>${item}</li>`), deckText);
   assert.notEqual(unstepped, deckText);
   assert.equal(await page.evaluate('window.BeesonEditor.render()'), unstepped);
@@ -477,12 +487,12 @@ test('one history undoes and redoes the typing, a formula, a step, and a move, w
   await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .zone > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
   await sleep(200);
-  await page.evaluate(`(() => { const sel = document.querySelectorAll('.beeson-edit-side .row select')[5]; sel.value = [...sel.options].at(-1).value; sel.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await pickStep(page, 5, 'New Step at End');
   const figureStep = replaced('<figure class="zone">', '<figure class="zone fragment" data-fragment-index="4">');
   assert.equal(await render(), figureStep);
   await page.evaluate('window.BeesonEditor.undo()');
   assert.equal(await render(), deckText);
-  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row select')].map((s) => s.value)`), ['', '', '0', '1', '2', '']);
+  assert.deepEqual(await page.evaluate(`${STEP_VALUES}`), ['', '', '0', '1', '2', '']);
   await page.evaluate('window.BeesonEditor.redo()');
   assert.equal(await render(), figureStep);
   assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-badge')].map((b) => b.textContent)`), ['1', '2', '3', '4']);
@@ -1140,7 +1150,7 @@ const contrast = (a, b) => {
   return (hi + 0.05) / (lo + 0.05);
 };
 
-test('the slide list and the selects of the Steps pane carry their names, and the muted text of the panes is legible in light mode', async (t) => {
+test('the slide list and the step chips of the Steps pane carry their names, and the muted text of the panes is legible in light mode', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
   const page = await editorPage(browser);
@@ -1149,7 +1159,7 @@ test('the slide list and the selects of the Steps pane carry their names, and th
   await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .zone > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
   await sleep(300);
-  const rows = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .rows > *')].map((r) => [r.localName, r.className, r.querySelector('select').getAttribute('aria-label')])`);
+  const rows = await page.evaluate(`${IN_ORDER}.map((r) => [r.localName, r.classList[0], r.querySelector('.chip').getAttribute('aria-label')])`);
   assert.equal(rows.length, 6);
   assert.deepEqual(rows[0].slice(0, 2), ['div', 'row']);
   assert.match(rows[0][2], /^Step of the heading: \S/);
@@ -1170,12 +1180,12 @@ test('a step is inserted before the others as one entry of the history, and a fo
   await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .zone > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
   await sleep(300);
-  const values = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row select')].map((s) => s.value)`);
-  const pick = (i, value) => page.evaluate(`(() => { const sel = document.querySelectorAll('.beeson-edit-side .row select')[${i}]; sel.value = ${value === undefined ? '[...sel.options].at(-1).value' : JSON.stringify(value)}; sel.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  const values = () => page.evaluate(`${STEP_VALUES}`);
+  const pick = (i, label) => pickStep(page, i, label);
   assert.deepEqual(await values(), ['', '', '0', '1', '2', '']);
-  const before = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .row select')[5].options].map((o) => [o.value, o.textContent])`);
-  assert.deepEqual(before[1], ['before', 'Step 1, new, before the others']);
-  await pick(5, 'before');
+  const before = await page.evaluate(`(() => { const chip = document.querySelector('.beeson-edit-side .row[data-doc="5"] .chip'); chip.click(); const labels = [...document.querySelectorAll('.beeson-edit-menu .item .label')].map((l) => l.textContent); chip.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })); document.querySelector('.beeson-edit-menu')?.remove(); return labels; })()`);
+  assert.deepEqual(before.slice(0, 6), ['With the Slide', 'Step 1', 'Step 2', 'Step 3', 'New Step at Start', 'New Step at End']);
+  await pick(5, 'New Step at Start');
   assert.deepEqual(await values(), ['', '', '1', '2', '3', '0']);
   let expected = replaced('<figure class="zone">', '<figure class="zone fragment" data-fragment-index="1">');
   expected = FIGURE_ITEMS.reduce((text, item, i) => text.replace(stepped(i), `<li class="fragment" data-fragment-index="${i + 2}">${item}</li>`), expected);
