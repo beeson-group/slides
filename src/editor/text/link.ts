@@ -1,5 +1,5 @@
-// the dialog of a link, a popover beside the block of the linked words, under it or over it where
-// the window ends, or at its side, hence the rest of the block stays in view: Link to Slide, Webpage,
+// the dialog of a link, a popover beside the block of the linked words by the rule of the popovers
+// of ui/dialog.ts, hence the block and the text around it stay in view: Link to Slide, Webpage,
 // Email, or Phone, the list of the slides, the address, the address and the subject of an email,
 // or the number, and the buttons Remove, Open Link, and Done. Enter or Done sets the link as one
 // entry of the history, and Esc or a press outside closes the popover without a change. a link to
@@ -9,7 +9,7 @@
 
 import type { App } from '../app.ts';
 import { describe, isHidden, numbers } from '../navigator/navigator.ts';
-import { keepBeside } from '../ui/dialog.ts';
+import { popoverBeside } from '../ui/dialog.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { textTarget, type Target } from './blocks.ts';
 import { canLink, linkAt, removeLink, setLink } from './inline.ts';
@@ -276,8 +276,9 @@ export function openLink(app: App, kind0?: Kind): void {
   const H = (globalThis as unknown as { Highlight?: HighlightCtor }).Highlight;
   if (saved && !saved.range.collapsed && H) highlights()?.set('beeson-link', new H(saved.range));
   show(kind);
-  const block = (saved?.host ?? app.selection.elements()[0] ?? document.body).getBoundingClientRect();
-  unplace = keepBeside(dialog, () => block);
+  // beside the block, with its arrow at the linked words
+  const words = saved && !saved.range.collapsed ? saved.range.getBoundingClientRect() : null;
+  unplace = popoverBeside(app, dialog, saved?.host ?? app.selection.elements()[0] ?? document.body, { at: words?.width ? words : undefined });
   document.addEventListener('pointerdown', outside, true);
   if (kind === 'webpage') field.select();
 }

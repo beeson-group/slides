@@ -33,7 +33,7 @@ const CSS = `
 .beeson-edit-keys kbd { font: inherit; color: var(--ed-muted, #6e6e73); white-space: nowrap; font-variant-numeric: tabular-nums; }
 `;
 
-export type SheetRow = { bar: string; label: string; keys: string[] };
+export type SheetRow = { bar: string; label: string; keys: string[]; commands: Command[] };
 
 // the commands of the items of a menu and of its submenus, in their order
 function commandsOf(app: App, items: MenuItem[]): Command[] {
@@ -67,26 +67,44 @@ export function sheetRows(app: App): SheetRow[] {
   const all = app.commands.list();
   const extra = [...new Set(all.map((c) => c.menu?.bar).filter((b): b is string => !!b && !MENUS.includes(b)))];
   const rows: SheetRow[] = [];
-  const add = (bar: string, name: string, list: string[]) => {
+  const add = (bar: string, name: string, list: string[], c: Command) => {
     const row = rows.find((r) => r.label === name && (r.bar === bar || bar === ''));
-    if (row) row.keys.push(...list.filter((k) => !row.keys.includes(k)));
-    else rows.push({ bar: bar || 'Other', label: name, keys: [...list] });
+    if (row) {
+      row.keys.push(...list.filter((k) => !row.keys.includes(k)));
+      row.commands.push(c);
+    } else rows.push({ bar: bar || 'Other', label: name, keys: [...list], commands: [c] });
   };
   const listed = new Set<Command>();
   for (const bar of [...MENUS, ...extra]) {
     for (const c of commandsOf(app, menuItems(app, bar))) {
       listed.add(c);
       const k = keys(c);
-      if (k.length) add(bar, label(c), k);
+      if (k.length) add(bar, label(c), k, c);
     }
   }
   for (const c of all) {
     const k = keys(c);
-    if (!listed.has(c) && k.length) add('', label(c), k);
+    if (!listed.has(c) && k.length) add('', label(c), k, c);
   }
   const rank = (bar: string) => (bar === 'Other' ? Infinity : [...MENUS, ...extra].indexOf(bar));
   const sorted = rows.map((r, i) => ({ r, i })).sort((a, b) => rank(a.r.bar) - rank(b.r.bar) || a.i - b.i).map(({ r }) => r);
-  return [...sorted, ...MOUSE.map(([name, mac, other]) => ({ bar: 'Mouse', label: name, keys: [platform === 'mac' ? mac : other] }))];
+  return [...sorted, ...MOUSE.map(([name, mac, other]) => ({ bar: 'Mouse', label: name, keys: [platform === 'mac' ? mac : other], commands: [] }))];
+}
+
+// the keys listed at two rows of the menus whose commands are taken in one pane, each as the key
+// and its rows, e.g. Shift+F3: Edit > Find Previous, Format > Change Case. the slide list is one
+// pane and the slide with the inspector the other, hence Delete may be listed at Delete and at
+// Delete Slide, as in both apps. the rows of Other and Mouse are not counted
+export function sheetClashes(app: App): string[] {
+  const panes = (r: SheetRow) => new Set(r.commands.flatMap((c) => (c.in ?? DEFAULT_REGIONS).map((region) => (region === 'navigator' ? 'navigator' : 'slide'))));
+  const by = new Map<string, SheetRow[]>();
+  for (const r of sheetRows(app)) if (r.bar !== 'Other' && r.bar !== 'Mouse') for (const k of r.keys) by.set(k, [...(by.get(k) ?? []), r]);
+  const out: string[] = [];
+  for (const [key, rows] of by) {
+    const shared = rows.filter((r, i) => rows.some((o, j) => j !== i && [...panes(r)].some((p) => panes(o).has(p))));
+    if (shared.length) out.push(`${key}: ${shared.map((r) => `${r.bar} > ${r.label}`).join(', ')}`);
+  }
+  return out;
 }
 
 // the keys of the sheet that run two enabled commands in the region of the focus, each as the key

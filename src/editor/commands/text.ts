@@ -105,6 +105,7 @@ export function install(app: App): void {
     menu: menu('size', 30),
     undoable: true,
     enabled: (a) => blocks.canStep(a, true) || carry.canStep(a, true) || carry.canSizeCode(a, true),
+    why: (a) => blocks.styleWhy(a, 'Bigger', true),
     run: (a) => (carry.canSizeCode(a, true) ? carry.sizeCode(a, true) : carry.canStyle(a) ? carry.chooseStyle(a, (s) => blocks.stepped(s, true)) : blocks.setStyle(a, (s) => blocks.stepped(s, true))),
   });
   define({
@@ -115,6 +116,7 @@ export function install(app: App): void {
     menu: menu('size', 31),
     undoable: true,
     enabled: (a) => blocks.canStep(a, false) || carry.canStep(a, false) || carry.canSizeCode(a, false),
+    why: (a) => blocks.styleWhy(a, 'Smaller', false),
     run: (a) => (carry.canSizeCode(a, false) ? carry.sizeCode(a, false) : carry.canStyle(a) ? carry.chooseStyle(a, (s) => blocks.stepped(s, false)) : blocks.setStyle(a, (s) => blocks.stepped(s, false))),
   });
 
@@ -147,7 +149,8 @@ export function install(app: App): void {
       in: FORMAT,
       menu: menu('style', 50 + i, 'Paragraph Style'),
       undoable: true,
-      enabled: (a) => blocks.canStyle(a) || carry.canStyle(a),
+      enabled: (a) => blocks.canStyle(a, style) || carry.canStyle(a),
+      why: (a) => blocks.styleWhy(a, STYLE_LABELS[style]) ?? `${STYLE_LABELS[style]} is not available, since a list item takes only Body and Small`,
       checked: (a) => (carry.canStyle(a) ? carry.styleOf(a) : blocks.paragraphStyle(a)) === style,
       run: (a) => (carry.canStyle(a) ? carry.chooseStyle(a, style) : blocks.setStyle(a, style)),
     }));
@@ -160,6 +163,7 @@ export function install(app: App): void {
       menu: menu('list', 60 + i, 'List'),
       undoable: true,
       enabled: (a) => (notes.notesListKind(a) ? notes.canSetNotesList(a, kind) : blocks.canSetList(a, kind) || carry.canList(a)),
+      why: (a) => blocks.listWhy(a, LIST_LABELS[kind]),
       checked: (a) => (notes.notesListKind(a) ?? (carry.canList(a) ? carry.listOf(a) : blocks.listKind(a))) === kind,
       run: (a) => (notes.notesListKind(a) ? notes.setNotesList(a, kind) : carry.canList(a) ? carry.chooseList(a, kind) : blocks.setList(a, kind)),
     }));

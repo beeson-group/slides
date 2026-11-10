@@ -33,9 +33,11 @@ export type Command = {
   run(app: App, arg?: unknown): void | Promise<void>;
   // true runs the command in one transaction of the history, labeled with its label
   undoable?: boolean;
+  // why the command is disabled, for the tooltip of its control, e.g. Bigger on a heading
+  why?(app: App): string | null;
 };
 
-export type CommandState = { id: string; label: string; enabled: boolean; checked: boolean | null };
+export type CommandState = { id: string; label: string; enabled: boolean; checked: boolean | null; why?: string };
 
 // the commands of one group of a menu or of the toolbar, in their order
 export type Group = { group: string; commands: Command[] };
@@ -127,7 +129,9 @@ export class Commands {
   state(id: string): CommandState {
     const c = this.byId.get(id);
     if (!c) throw new Error(`there is no command ${id}`);
-    return { id, label: this.label(id), enabled: this.enabled(id), checked: c.checked?.(this.app) ?? null };
+    const enabled = this.enabled(id);
+    const why = enabled ? null : c.why?.(this.app);
+    return { id, label: this.label(id), enabled, checked: c.checked?.(this.app) ?? null, ...(why ? { why } : {}) };
   }
 
   // a disabled command is not run. an undoable command is one entry of the history, however many

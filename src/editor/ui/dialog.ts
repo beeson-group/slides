@@ -177,18 +177,24 @@ export const host = (): HTMLElement => document.querySelector<HTMLElement>('dial
 // a side of a target at which a popover is put
 export type Side = 'below' | 'above' | 'right' | 'left';
 
-type Box = { left: number; top: number; right: number; bottom: number; width: number; height: number };
+export type Box = { left: number; top: number; right: number; bottom: number; width: number; height: number };
 type Bounds = { left?: number; top?: number; width: number; height: number };
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, Math.max(lo, hi)));
+const meets = (a: { left: number; top: number; right: number; bottom: number }, b: Box) =>
+  a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5;
 
-// the place of a popover of size w by h beside the box t, on the first of sides where it fits in
-// view without meeting t, as the popovers of Keynote are put beside their object and flipped to the
-// other side. view is the window, or the canvas, at left and top 0 unless given. where no side
-// fits, it is put on the side with the most room and kept in view, and side is null. arrow is the
-// place of the point of its arrow along its edge, in px from its left or top. a pure function,
-// tested under node
-export function besidePlace(t: Box, w: number, h: number, view: Bounds, sides: Side[] = ['below', 'above', 'right', 'left'], gap = 10, margin = 8): { x: number; y: number; side: Side | null; arrow: number } {
+// the place of a popover of size w by h beside the box t, as the popovers of Keynote are put beside
+// their object and flipped to the other side. a side fits when the popover is in view there
+// without meeting t. on each side that fits, the popover is put next to t, and else at the far
+// edge of view, centered on at, or else aligned with the start or the end of t or clear of a box
+// of avoid, e.g. a line of the text of the slide, at the first of these places where it meets none
+// of the boxes of avoid.
+// where each place meets one, it is put where it covers the least of them, and where no side
+// fits, it is put on the side with the most room and kept in view, and side is null. view is the window or the canvas, at left and top 0 unless
+// given. arrow is the place of the point of its arrow at at along its edge, in px from its left or
+// top. a pure function, tested under node
+export function besidePlace(t: Box, w: number, h: number, view: Bounds, sides: Side[] = ['below', 'above', 'right', 'left'], gap = 10, margin = 8, avoid: Box[] = [], at: Box = t): { x: number; y: number; side: Side | null; arrow: number } {
   const x0 = view.left ?? 0;
   const y0 = view.top ?? 0;
   const x1 = x0 + view.width;
@@ -199,22 +205,104 @@ export function besidePlace(t: Box, w: number, h: number, view: Bounds, sides: S
     right: x1 - margin - (t.right + gap) - w,
     left: t.left - gap - w - margin - x0,
   };
-  const fit = sides.find((s) => room[s] >= 0);
-  const side = fit ?? sides.reduce((a, b) => (room[b] > room[a] ? b : a));
-  const across = side === 'below' || side === 'above';
-  let x = across ? t.left + t.width / 2 - w / 2 : side === 'right' ? t.right + gap : t.left - gap - w;
-  let y = across ? (side === 'below' ? t.bottom + gap : t.top - gap - h) : t.top + t.height / 2 - h / 2;
-  x = clamp(x, x0 + margin, x1 - w - margin);
-  y = clamp(y, y0 + margin, y1 - h - margin);
-  const arrow = across ? clamp(t.left + t.width / 2 - x, 18, w - 18) : clamp(t.top + t.height / 2 - y, 18, h - 18);
-  return { x, y, side: fit ?? null, arrow };
+  const across = (side: Side) => side === 'below' || side === 'above';
+  // the popover on side, next to t or at the far edge of view, at the place cross along the side,
+  // i.e. its left on a side below or above t and its top on a side at the right or the left
+  const place = (side: Side, cross: number, far = false) => {
+    let x = cross;
+    let y = cross;
+    if (across(side)) y = side === 'below' ? (far ? y1 - margin - h : t.bottom + gap) : far ? y0 + margin : t.top - gap - h;
+    else x = side === 'right' ? (far ? x1 - margin - w : t.right + gap) : far ? x0 + margin : t.left - gap - w;
+    x = clamp(x, x0 + margin, x1 - w - margin);
+    y = clamp(y, y0 + margin, y1 - h - margin);
+    const arrow = across(side) ? clamp(at.left + at.width / 2 - x, 18, w - 18) : clamp(at.top + at.height / 2 - y, 18, h - 18);
+    return { x, y, arrow };
+  };
+  // the places along a side: centered on at, aligned with the start or the end of t, and clear of
+  // the start or the end of each box of avoid, as long as the popover is level with t
+  const crosses = (side: Side): number[] => {
+    const a = across(side);
+    const size = a ? w : h;
+    const [lo, hi] = a ? [t.left, t.right] : [t.top, t.bottom];
+    const out = [a ? at.left + at.width / 2 - w / 2 : at.top + at.height / 2 - h / 2, lo, hi - size];
+    for (const b of avoid) out.push(a ? b.left - gap - size : b.top - gap - size, a ? b.right + gap : b.bottom + gap);
+    return out.filter((c) => c < hi && c + size > lo);
+  };
+  // the area of the boxes of avoid under the popover at p
+  const covers = (p: { x: number; y: number }) => avoid.reduce((sum, b) => {
+    const dx = Math.min(p.x + w, b.right) - Math.max(p.x, b.left);
+    const dy = Math.min(p.y + h, b.bottom) - Math.max(p.y, b.top);
+    return dx > 0.5 && dy > 0.5 ? sum + dx * dy : sum;
+  }, 0);
+  const fits = sides.filter((s) => room[s] >= 0);
+  let best: { x: number; y: number; arrow: number; side: Side; cost: number } | null = null;
+  for (const side of fits) {
+    for (const far of [false, true]) {
+      for (const cross of crosses(side)) {
+        const p = place(side, cross, far);
+        const cost = covers(p);
+        if (!cost) return { ...p, side };
+        if (!best || cost < best.cost) best = { ...p, side, cost };
+      }
+    }
+  }
+  if (best) return { x: best.x, y: best.y, arrow: best.arrow, side: best.side };
+  const side = sides.reduce((a, b) => (room[b] > room[a] ? b : a));
+  return { ...place(side, crosses(side)[0] ?? (across(side) ? at.left + at.width / 2 - w / 2 : at.top + at.height / 2 - h / 2)), side: null };
 }
+
+// a box on the screen, from a DOMRect or a box of edges
+const boxOf = (r: { left: number; top: number; right: number; bottom: number }): Box => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.right - r.left, height: r.bottom - r.top });
+
+const TEXT = 'h1, h2, h3, h4, p, ul, ol, dl, table, pre, blockquote, div.math, figcaption, .caption, .foot';
+
+// the boxes of the lines of the text and of the formulas of el, on the screen. the empty part of
+// a block, e.g. the right of a short line, is left out, since a popover may be put over it
+export function inkBoxes(el: Element): Box[] {
+  const out: Box[] = [];
+  const range = document.createRange();
+  const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT | NodeFilter.SHOW_ELEMENT, {
+    acceptNode: (n) => (n instanceof Element ? (n.localName === 'mjx-container' ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_SKIP) : (n as Text).data.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT),
+  });
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (n instanceof Element) {
+      // the ink of a formula is its svg, which is narrower than a display container
+      const ink = n.firstElementChild ?? n;
+      for (const r of ink.getClientRects()) if (r.width && r.height) out.push(boxOf(r));
+      continue;
+    }
+    if (n.parentElement?.closest('mjx-container')) continue;
+    range.selectNodeContents(n);
+    for (const r of range.getClientRects()) if (r.width && r.height) out.push(boxOf(r));
+  }
+  return out;
+}
+
+// the lines of the text of the blocks of slide, which a popover is kept off
+export function slideInk(slide: Element | null): Box[] {
+  if (!slide) return [];
+  return [...slide.querySelectorAll(TEXT)].filter((el) => !el.parentElement?.closest(TEXT) && !el.closest('aside.notes')).flatMap(inkBoxes);
+}
+
+// the canvas, in which a popover is kept as the popovers of Keynote are kept on its canvas, off the
+// inspector. a target outside the canvas, e.g. scrolled off it, keeps the popover in the window
+export function canvasView(app: App, t: Box): Bounds {
+  const v = app.stage?.viewport;
+  const within = v && t.left >= v.left && t.right <= v.right && t.top >= v.top && t.bottom <= v.bottom;
+  return within ? v : { left: 0, top: 0, width: innerWidth, height: innerHeight };
+}
+
+// how a popover is put: the sides to try in order, the gap to its target, the box of its view,
+// the boxes to keep it off, and the box that its arrow points at
+export type Beside = { sides?: Side[]; gap?: number; view?: () => Bounds; avoid?: () => Box[]; at?: () => Box };
 
 // the popover pop, a fixed element, put beside the box of target in view, by default the window,
 // with an arrow at the target on the side where it fits. it is given the attribute data-beside with
 // its side
-export function placeBeside(pop: HTMLElement, target: DOMRectReadOnly, sides?: Side[], gap = 12, view?: () => Bounds): Side | null {
-  const p = besidePlace(target, pop.offsetWidth, pop.offsetHeight, view?.() ?? { width: innerWidth, height: innerHeight }, sides, gap);
+export function placeBeside(pop: HTMLElement, target: Box | DOMRectReadOnly, options: Beside = {}): Side | null {
+  const t = boxOf(target);
+  const view = options.view?.() ?? { width: innerWidth, height: innerHeight };
+  const p = besidePlace(t, pop.offsetWidth, pop.offsetHeight, view, options.sides, options.gap ?? 12, 8, options.avoid?.() ?? [], options.at?.() ?? t);
   pop.style.left = `${Math.round(p.x)}px`;
   pop.style.top = `${Math.round(p.y)}px`;
   if (p.side) {
@@ -224,11 +312,22 @@ export function placeBeside(pop: HTMLElement, target: DOMRectReadOnly, sides?: S
   return p.side;
 }
 
+// the popover of the editor put by the rule of every popover: beside the block of target, which
+// is kept clear also where it is empty, since a text typed there grows into it, off the lines of
+// the text of the current slide, and inside the canvas. the boxes are read once, since a target
+// may be typeset again while the popover is open. the function returned stops it
+export function popoverBeside(app: App, pop: HTMLElement, target: Element, options: { sides?: Side[]; at?: Box } = {}): () => void {
+  const t = boxOf(target.getBoundingClientRect());
+  const avoid = slideInk(app.current());
+  const view = canvasView(app, t);
+  return keepBeside(pop, () => t, { sides: options.sides, view: () => view, avoid: () => avoid, at: options.at ? () => options.at! : undefined });
+}
+
 // the popover kept beside target while its size changes, e.g. as a preview is typeset or a row is
 // shown. the function returned stops it
-export function keepBeside(pop: HTMLElement, target: () => DOMRectReadOnly, sides?: Side[], gap?: number, view?: () => Bounds): () => void {
+export function keepBeside(pop: HTMLElement, target: () => Box | DOMRectReadOnly, options: Beside = {}): () => void {
   const place = () => {
-    if (pop.isConnected) placeBeside(pop, target(), sides, gap, view);
+    if (pop.isConnected) placeBeside(pop, target(), options);
   };
   place();
   const watch = new ResizeObserver(place);

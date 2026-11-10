@@ -91,12 +91,14 @@ export function install(app: App): void {
       void presenter.open('rehearse', a.current());
     },
   });
+  // the switch is shown on only while the deck has timings, as in Keynote, and kept in the storage
+  const timed = (a: App) => slidesOf(a).some((s) => s.hasAttribute('data-timing') && paired(a, s));
   c.define({
     id: 'play.useTimings',
     label: 'Use Rehearsed Timings',
     menu: { bar: 'Play', group: 'timing', order: 31 },
-    enabled: (a) => ready(a),
-    checked: () => usingTimings(),
+    enabled: (a) => ready(a) && timed(a),
+    checked: (a) => usingTimings() && timed(a),
     run: (a) => {
       useTimings(!usingTimings());
       a.invalidate('content');
@@ -106,7 +108,7 @@ export function install(app: App): void {
     id: 'play.clearTimings',
     label: 'Clear Timings',
     menu: { bar: 'Play', group: 'timing', order: 32 },
-    enabled: (a) => ready(a) && slidesOf(a).some((s) => s.hasAttribute('data-timing') && paired(a, s)),
+    enabled: (a) => ready(a) && timed(a),
     undoable: true,
     run: (a) => {
       for (const s of slidesOf(a)) if (s.hasAttribute('data-timing') && paired(a, s)) a.doc.setTag(s, { attrs: { 'data-timing': null } }, 'timing');

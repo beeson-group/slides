@@ -5,6 +5,7 @@
 // of the type scale and the tones of the theme are offered
 
 import type { App } from '../app.ts';
+import { styleWhy } from '../text/blocks.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { openMenu, type MenuItem } from '../ui/menu.ts';
 import { button, glyph, keepFocus, row, section, segmented, type Control, type Run } from './controls.ts';
@@ -128,6 +129,7 @@ function stylePopup(app: App): Control {
     const on = ids.find((id) => app.commands.state(id).checked);
     text.textContent = on ? app.commands.label(on) : tagName(app);
     b.disabled = !ids.some((id) => app.commands.enabled(id));
+    b.title = (b.disabled && styleWhy(app, 'Paragraph Style')) || 'Paragraph Style';
   };
   sync();
   return { el: b, sync };
