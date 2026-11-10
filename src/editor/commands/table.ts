@@ -1,7 +1,7 @@
 // the commands of the tables of the slides, as in Keynote and PowerPoint. Insert > Table… and the
-// Table button of the toolbar open a grid of up to 8 by 8 cells, as the Insert Table grid of
+// Table button of the toolbar open a grid of up to 10 columns by 8 rows, as the Insert Table grid of
 // PowerPoint, and a click puts a table of the size chosen at its place in the layout, with a header
-// row of th and the caret in its first cell. each cell is a block of the editor. Tab and Shift+Tab
+// row of th and the caret in its first cell. Insert Table… under the grid asks for a larger size. each cell is a block of the editor. Tab and Shift+Tab
 // go to the next and the previous cell, Tab in the last cell adds a row, and an arrow key at the
 // edge of a cell goes to the cell beside it. rows and columns are added and deleted from Format >
 // Table, the context menu of a cell, the row and column bars around the table, and the Table pane
@@ -11,7 +11,9 @@
 // and unmerged as a colspan and a rowspan. the widths of the columns are set by a drag of a border
 // in the bar of the columns, Distribute Columns Evenly, and Resize Column to Fit Content, and are
 // written in the style of the cells of the first row. Auto-Align sets the columns of numbers at the
-// right. each change is one entry of the history, written through app.doc
+// right. the handle at the lower right corner of the cells selected as a block is dragged over the
+// cells beside them, which are filled as Autofill of Keynote fills them. each change is one entry
+// of the history, written through app.doc
 //
 // while the caret is in a cell, or a table is selected, the table is drawn as a selected table of
 // Keynote: a bar of the column letters above it and a bar of the row numbers at its left, with the
@@ -26,10 +28,11 @@ import { childSpace } from '../render.ts';
 import { contentWithTex, mathLookup } from '../math.ts';
 import { textStyle } from '../model/templates.ts';
 import {
-  CELL, GRID, around, boxOf, cellAfter, cellBeside, cellHtml, cellOver, columnName, columnsOf, emptyRows, gridOf, grow, hasHeader, numericOf,
+  CELL, GRID, MOST, around, fillLine, boxOf, cellAfter, cellBeside, cellHtml, cellOver, columnName, columnsOf, emptyRows, gridOf, grow, hasHeader, numericOf,
   parseHtmlTable, parseTabular, placeOf, placesOf, rowHtml, spotsIn, tableHtml, type Box, type Place,
 } from '../table.ts';
 import { placeCaret } from '../text/typing.ts';
+import { Dialog } from '../ui/dialog.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { closeMenus, menuOpen, openMenu, type MenuItem } from '../ui/menu.ts';
@@ -41,12 +44,21 @@ html.beeson-editor .reveal .slides :is(td,th):empty{height:1.4em;width:3.5em}
 html.beeson-editing .reveal .slides :is(td,th)[contenteditable="true"]:focus{outline:none}
 .beeson-table-picker{position:fixed;z-index:90;inset:auto;margin:0;padding:8px 10px 10px;border:1px solid var(--ed-menu-line);border-radius:10px;background:var(--ed-menu);color:var(--ed-text);font:13px/1.25 var(--ed-font);box-shadow:0 10px 32px #0003;-webkit-backdrop-filter:blur(24px);backdrop-filter:blur(24px);user-select:none;-webkit-user-select:none}
 .beeson-table-picker .size{margin:0 1px 8px;font-weight:600}
-.beeson-table-picker .grid{display:grid;grid-template-columns:repeat(${GRID},20px);grid-auto-rows:20px;gap:3px;outline:none}
+.beeson-table-picker .grid{display:grid;grid-template-columns:repeat(${GRID.columns},20px);grid-auto-rows:20px;gap:3px;outline:none}
 .beeson-table-picker .grid:focus-visible{outline:2px solid var(--ed-focus);outline-offset:3px}
 .beeson-table-picker .grid>div{border:1px solid var(--ed-control-line);border-radius:3px;background:var(--ed-control)}
-.beeson-table-picker .grid>div:nth-child(-n+${GRID}){border-top-width:3px}
+.beeson-table-picker .grid>div:nth-child(-n+${GRID.columns}){border-top-width:3px}
 .beeson-table-picker .grid>.on{border-color:var(--ed-select);background:color-mix(in srgb,var(--ed-select) 22%,var(--ed-control))}
 .beeson-table-picker .foot{margin:9px 1px 0;color:var(--ed-muted);font-size:11px}
+.beeson-table-picker .more{display:block;width:100%;margin:8px 0 0;padding:4px 8px;border:0;border-top:1px solid var(--ed-menu-line);border-radius:0 0 4px 4px;background:transparent;color:var(--ed-text);font:inherit;text-align:left;cursor:default}
+.beeson-table-picker .more:hover,.beeson-table-picker .more:focus-visible{outline:none;border-radius:5px;background:var(--ed-select);color:var(--ed-on-select)}
+dialog.beeson-table-size .fields{display:grid;grid-template-columns:auto 72px;gap:8px 12px;align-items:center;margin:4px 0 18px}
+dialog.beeson-table-size .fields input{box-sizing:border-box;width:100%;padding:3px 6px;border:1px solid var(--ed-control-line);border-radius:6px;background:var(--ed-field,var(--ed-control));color:var(--ed-text);font:inherit;font-variant-numeric:tabular-nums}
+dialog.beeson-table-size .fields input:focus-visible{outline:3px solid var(--ed-focus);outline-offset:0}
+.beeson-table-bars .fill{width:11px;height:11px;border-radius:50%;background:#ffc400;box-shadow:0 0 0 1.5px #fff,0 0 0 2.5px #0006;cursor:crosshair;touch-action:none}
+.beeson-table-bars .fill[hidden],.beeson-table-bars .spread[hidden]{display:none}
+.beeson-table-bars .spread{border:2px dashed #e0a800;border-radius:2px;pointer-events:none}
+html.beeson-autofilling,html.beeson-autofilling *{cursor:crosshair!important}
 .beeson-table-bars{position:fixed;inset:0;z-index:52;pointer-events:none}
 .beeson-table-bars[hidden]{display:none}
 .beeson-table-bars>*{position:fixed;box-sizing:border-box;pointer-events:auto;cursor:default}
@@ -75,7 +87,9 @@ const GAP = 6;
 const GRIP = 9;
 
 type Target = { table: HTMLTableElement; cell: HTMLTableCellElement | null; box: Box | null };
-type Size = { rows: number; columns: number };
+// a size typed into Insert Table… is kept in full, while one from the grid loses the rows that do
+// not fit on the slide
+type Size = { rows: number; columns: number; all?: boolean };
 
 const isCell = (el: unknown): el is HTMLTableCellElement => el instanceof HTMLTableCellElement;
 
@@ -656,7 +670,7 @@ window.addEventListener('keydown', (ev) => {
 
 // the grid of the Insert Table popover, under its anchor. a cell of the grid chooses the size of
 // the table up to it, shown above the grid as columns by rows, and a click or Return inserts it
-function openPicker(app: App, anchor: DOMRect | null, done: (size: Size) => void): void {
+function openPicker(app: App, anchor: DOMRect | null, done: (size: Size) => void, more?: () => void): void {
   document.querySelector('dialog.beeson-table-picker')?.remove();
   const back = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const box = make('dialog', 'beeson-table-picker');
@@ -666,19 +680,21 @@ function openPicker(app: App, anchor: DOMRect | null, done: (size: Size) => void
   grid.tabIndex = 0;
   grid.setAttribute('role', 'grid');
   grid.setAttribute('aria-label', 'Size of the table');
-  const cells = Array.from({ length: GRID * GRID }, () => make('div'));
+  const cells = Array.from({ length: GRID.columns * GRID.rows }, () => make('div'));
   grid.append(...cells);
-  box.append(size, grid, make('div', 'foot', 'Arrow keys choose, Return inserts'));
+  const larger = make('button', 'more', 'Insert Table…');
+  larger.type = 'button';
+  box.append(size, grid, make('div', 'foot', 'Arrow keys choose, Return inserts'), larger);
   let pick: Size | null = null;
   const show = (next: Size | null) => {
     pick = next;
-    cells.forEach((d, i) => d.classList.toggle('on', !!next && i / GRID < next.rows && i % GRID < next.columns));
+    cells.forEach((d, i) => d.classList.toggle('on', !!next && i / GRID.columns < next.rows && i % GRID.columns < next.columns));
     size.textContent = next ? `${next.columns} × ${next.rows} Table` : 'Insert Table';
     grid.setAttribute('aria-valuetext', next ? `${next.columns} columns by ${next.rows} rows` : '');
   };
   const sizeAt = (ev: Event): Size | null => {
     const i = cells.indexOf(ev.target as HTMLDivElement);
-    return i < 0 ? null : { rows: Math.floor(i / GRID) + 1, columns: (i % GRID) + 1 };
+    return i < 0 ? null : { rows: Math.floor(i / GRID.columns) + 1, columns: (i % GRID.columns) + 1 };
   };
   // the listeners of the window are taken off with the picker
   const off = new AbortController();
@@ -699,14 +715,20 @@ function openPicker(app: App, anchor: DOMRect | null, done: (size: Size) => void
   });
   grid.addEventListener('pointerleave', () => show(null));
   grid.addEventListener('click', (ev) => choose(sizeAt(ev)));
+  larger.addEventListener('click', () => {
+    close(false);
+    more?.();
+  });
   const steps: Record<string, [number, number]> = { ArrowRight: [0, 1], ArrowLeft: [0, -1], ArrowDown: [1, 0], ArrowUp: [-1, 0] };
   box.addEventListener('keydown', (ev) => {
-    const step = steps[ev.key];
-    const clamp = (n: number) => Math.max(1, Math.min(GRID, n));
-    if (step) show({ rows: clamp((pick?.rows ?? 0) + step[0]), columns: clamp((pick?.columns ?? 0) + step[1]) });
+    const step = ev.target === grid ? steps[ev.key] : undefined;
+    const clamp = (n: number, most: number) => Math.max(1, Math.min(most, n));
+    if (step) show({ rows: clamp((pick?.rows ?? 0) + step[0], GRID.rows), columns: clamp((pick?.columns ?? 0) + step[1], GRID.columns) });
+    else if ((ev.key === 'Enter' || ev.key === ' ') && ev.target === larger) larger.click();
     else if (ev.key === 'Enter' || ev.key === ' ') choose(pick);
     else if (ev.key === 'Escape') close(true);
-    else if (ev.key !== 'Tab') return;
+    else if (ev.key === 'Tab') (ev.target === grid ? larger : grid).focus({ preventScroll: true });
+    else return;
     ev.preventDefault();
     ev.stopPropagation();
   });
@@ -725,6 +747,54 @@ function openPicker(app: App, anchor: DOMRect | null, done: (size: Size) => void
     }, { capture: true, signal });
     for (const type of ['resize', 'blur']) window.addEventListener(type, () => close(true), { signal });
   }, 0);
+}
+
+// the numbers of columns and rows of a new table, asked in a dialog, or null after Cancel
+let lastSize: Size = { columns: 4, rows: 6 };
+async function askSize(app: App): Promise<Size | null> {
+  const body = make('div', 'fields');
+  const field = (label: string, value: number, most: number) => {
+    const input = make('input');
+    input.type = 'number';
+    input.min = '1';
+    input.max = String(most);
+    input.step = '1';
+    input.value = String(value);
+    input.name = label.toLowerCase();
+    const l = make('label', '', label);
+    l.htmlFor = input.id = `beeson-table-${input.name}`;
+    // a field reached with Tab is selected, hence a number typed replaces it
+    input.addEventListener('focus', () => input.select());
+    body.append(l, input);
+    return input;
+  };
+  const columns = field('Columns', lastSize.columns, MOST.columns);
+  const rows = field('Rows', lastSize.rows, MOST.rows);
+  const d = new Dialog({
+    title: 'Insert Table',
+    text: `A table of up to ${MOST.columns} columns and ${MOST.rows} rows, with a header row.`,
+    body,
+    className: 'beeson-table-size',
+    buttons: [{ label: 'Cancel', value: 'cancel' }, { label: 'Insert', value: 'insert', primary: true }],
+  });
+  const read = (input: HTMLInputElement, most: number) => Math.max(1, Math.min(most, Math.round(Number(input.value)) || 1));
+  // Return in a field inserts, as the default button of a dialog
+  body.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter') return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    d.buttons.get('insert')?.click();
+  });
+  try {
+    const p = d.open(undefined, document.activeElement as HTMLElement | null);
+    columns.focus();
+    columns.select();
+    if ((await p) !== 'insert' || !app.current()) return null;
+    lastSize = { columns: read(columns, MOST.columns), rows: read(rows, MOST.rows) };
+    return lastSize;
+  } finally {
+    d.el.remove();
+  }
 }
 
 // the toolbar button of a command when it is shown, as the anchor of its popover
@@ -764,7 +834,14 @@ function installBars(app: App): void {
   const grips = make('div', 'grips');
   const guide = make('div', 'guide');
   guide.hidden = true;
-  layer.append(cols, rows, grab, addCol, addRow, outline, grips, guide);
+  // the fill handle at the lower right corner of the cells selected as a block, and the box of the
+  // cells that its drag reaches
+  const handle = make('div', 'fill');
+  handle.title = 'Drag to fill the cells beside the selection';
+  handle.hidden = true;
+  const spread = make('div', 'spread');
+  spread.hidden = true;
+  layer.append(cols, rows, grab, addCol, addRow, outline, grips, guide, spread, handle);
   document.body.append(layer);
   // a press on the bars keeps the caret in its cell
   for (const type of ['pointerdown', 'mousedown']) layer.addEventListener(type, (ev) => ev.preventDefault());
@@ -850,18 +927,38 @@ function installBars(app: App): void {
   grips.addEventListener('pointercancel', () => drop(null));
   grips.addEventListener('lostpointercapture', () => drop(null));
 
+  let filling: { table: HTMLTableElement; from: Box; to: Box } | null = null;
+  handle.addEventListener('pointerdown', (ev) => {
+    if (!shown?.box || ev.button !== 0 || !inBlock(app)) return;
+    filling = { table: shown.table, from: shown.box, to: shown.box };
+    handle.setPointerCapture(ev.pointerId);
+    document.documentElement.classList.add('beeson-autofilling');
+  });
+  handle.addEventListener('pointermove', (ev) => {
+    if (filling) filling.to = reach(filling.table, filling.from, ev.clientX, ev.clientY);
+  });
+  const endFill = (ev: PointerEvent | null) => {
+    const f = filling;
+    if (!f) return;
+    filling = null;
+    document.documentElement.classList.remove('beeson-autofilling');
+    const to = ev ? reach(f.table, f.from, ev.clientX, ev.clientY) : f.from;
+    if (sameBox(to, f.from)) return;
+    void app.history.transact('Autofill', () => autofill(app, f.table, f.from, to)).then(() => {
+      const a = cellOver(f.table, to.r0, to.c0);
+      const b = cellOver(f.table, to.r1, to.c1);
+      if (a && b) selectCells(app, a, b);
+    }).catch((e) => app.fail(e));
+  };
+  handle.addEventListener('pointerup', (ev) => endFill(ev));
+  handle.addEventListener('pointercancel', () => endFill(null));
+
   const draw = () => {
     const t = shown;
     if (!t || !t.table.isConnected) return hide();
     const box = t.table.getBoundingClientRect();
-    const width = columnsOf(t.table);
-    // the left edge of each column and the right edge, from the cells that start and end in it
-    const edges = Array.from({ length: width }, () => [Infinity, -Infinity]);
-    for (const p of placesOf(t.table).flat()) {
-      const b = p.cell.getBoundingClientRect();
-      edges[p.col][0] = Math.min(edges[p.col][0], b.left);
-      edges[p.col + p.span - 1][1] = Math.max(edges[p.col + p.span - 1][1], b.right);
-    }
+    const edges = columnEdges(t.table);
+    const width = edges.length;
     const rowBoxes = [...t.table.rows].map((tr) => tr.getBoundingClientRect());
     const at = t.box;
     const next = [width, rowBoxes.length, at?.r0, at?.c0, at?.r1, at?.c1].join();
@@ -899,18 +996,17 @@ function installBars(app: App): void {
     place(addCol, inX(box.right + GAP), inY(top), BAR, BAR);
     place(addRow, inX(left), inY(box.bottom + GAP), BAR, BAR);
     outline.hidden = !at;
-    outline.classList.toggle('block', !!at && inBlock(app));
+    const blocked = !!at && inBlock(app);
+    outline.classList.toggle('block', blocked);
+    handle.hidden = !blocked && !filling;
     if (at) {
-      const r = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
-      for (const p of spotsIn(gridOf(t.table), at)) {
-        const b = p.cell.getBoundingClientRect();
-        r.left = Math.min(r.left, b.left);
-        r.top = Math.min(r.top, b.top);
-        r.right = Math.max(r.right, b.right);
-        r.bottom = Math.max(r.bottom, b.bottom);
-      }
+      const r = boxRect(t.table, at);
       place(outline, r.left - 1, r.top - 1, r.right - r.left + 2, r.bottom - r.top + 2);
+      if (!handle.hidden) place(handle, r.right - 5, r.bottom - 5, 11, 11);
     }
+    const reached = filling && !sameBox(filling.to, filling.from) ? boxRect(filling.table, filling.to) : null;
+    spread.hidden = !reached;
+    if (reached) place(spread, reached.left - 2, reached.top - 2, reached.right - reached.left + 4, reached.bottom - reached.top + 4);
     if (v) layer.style.clipPath = `inset(${v.top}px ${innerWidth - v.right}px ${innerHeight - v.bottom}px ${v.left}px)`;
     frame = requestAnimationFrame(draw);
   };
@@ -935,6 +1031,78 @@ function installBars(app: App): void {
   document.addEventListener('selectionchange', () => {
     if (shown || cellAt(app)) refresh();
   });
+}
+
+// the left edge and the right edge of each column of a table on the screen, from the cells that
+// start and end in it
+function columnEdges(table: HTMLTableElement): number[][] {
+  const edges = Array.from({ length: columnsOf(table) }, () => [Infinity, -Infinity]);
+  for (const p of placesOf(table).flat()) {
+    const b = p.cell.getBoundingClientRect();
+    edges[p.col][0] = Math.min(edges[p.col][0], b.left);
+    edges[p.col + p.span - 1][1] = Math.max(edges[p.col + p.span - 1][1], b.right);
+  }
+  return edges;
+}
+
+// the box on the screen around the cells of a range
+function boxRect(table: HTMLTableElement, at: Box): { left: number; top: number; right: number; bottom: number } {
+  const r = { left: Infinity, top: Infinity, right: -Infinity, bottom: -Infinity };
+  for (const p of spotsIn(gridOf(table), at)) {
+    const b = p.cell.getBoundingClientRect();
+    r.left = Math.min(r.left, b.left);
+    r.top = Math.min(r.top, b.top);
+    r.right = Math.max(r.right, b.right);
+    r.bottom = Math.max(r.bottom, b.bottom);
+  }
+  return r;
+}
+
+const sameBox = (a: Box, b: Box) => a.r0 === b.r0 && a.c0 === b.c0 && a.r1 === b.r1 && a.c1 === b.c1;
+
+// the range that a drag of the fill handle to the point x, y reaches from the range from: from
+// grown along one axis, the one in which the point is farther past it in cells, to the row or the
+// column of the point, kept inside the table
+function reach(table: HTMLTableElement, from: Box, x: number, y: number): Box {
+  const rows = [...table.rows].map((tr) => tr.getBoundingClientRect());
+  const edges = columnEdges(table);
+  const row = Math.max(0, rows.findIndex((r) => y < r.bottom) < 0 ? rows.length - 1 : rows.findIndex((r) => y < r.bottom));
+  const col = Math.max(0, edges.findIndex(([, r]) => x < r) < 0 ? edges.length - 1 : edges.findIndex(([, r]) => x < r));
+  const dr = row > from.r1 ? row - from.r1 : row < from.r0 ? from.r0 - row : 0;
+  const dc = col > from.c1 ? col - from.c1 : col < from.c0 ? from.c0 - col : 0;
+  if (dr && dr >= dc) return row > from.r1 ? { ...from, r1: row } : { ...from, r0: row };
+  if (dc) return col > from.c1 ? { ...from, c1: col } : { ...from, c0: col };
+  return from;
+}
+
+// the cells of to outside from filled from the cells of from, line by line along the axis in which
+// to grows: a series where the cells of a line hold numbers in a step, else copies of the cells
+async function autofill(app: App, table: HTMLTableElement, from: Box, to: Box): Promise<void> {
+  const g = gridOf(table);
+  if (spotsIn(g, to).some((s) => s.rows > 1 || s.span > 1)) throw new Error('Autofill does not fill merged cells');
+  const content = (r: number, c: number) => {
+    const cell = g.grid[r]?.[c]?.cell;
+    return cell ? contentWithTex(cell) : '';
+  };
+  const write = async (r: number, c: number, html: string) => {
+    const cell = g.grid[r]?.[c]?.cell;
+    if (cell && contentWithTex(cell) !== html) await app.doc.setContent(cell, html, 'autofill');
+  };
+  const span = (a: number, b: number) => Array.from({ length: b - a + 1 }, (_, i) => a + i);
+  const vertical = to.r0 !== from.r0 || to.r1 !== from.r1;
+  const forward = vertical ? to.r1 > from.r1 : to.c1 > from.c1;
+  const count = vertical ? to.r1 - to.r0 - (from.r1 - from.r0) : to.c1 - to.c0 - (from.c1 - from.c0);
+  for (const across of vertical ? span(from.c0, from.c1) : span(from.r0, from.r1)) {
+    const along = vertical ? span(from.r0, from.r1) : span(from.c0, from.c1);
+    // a fill up or to the left goes on from the first cell, hence the line is read backward
+    if (!forward) along.reverse();
+    const line = along.map((i) => (vertical ? content(i, across) : content(across, i)));
+    for (const [k, f] of fillLine(line, count).entries()) {
+      const i = forward ? along[along.length - 1] + 1 + k : along[along.length - 1] - 1 - k;
+      const html = 'text' in f ? f.text : line[f.copy];
+      await (vertical ? write(i, across, html) : write(across, i, html));
+    }
+  }
 }
 
 // the last cell of a table, or the last cell of its first row, after which a row or a column is
@@ -969,12 +1137,24 @@ export function install(app: App): void {
     enabled: ready,
     run: async (a, arg) => {
       const size = arg && typeof arg === 'object' && 'rows' in arg ? (arg as Size) : null;
-      if (!size) return openPicker(a, toolbarButton('insert.table'), (s) => void a.commands.run('insert.table', s).catch(fail));
-      const rows = Math.max(1, Math.min(GRID, Math.round(size.rows)));
-      const columns = Math.max(1, Math.min(GRID, Math.round(size.columns)));
-      const table = await a.history.transact('Insert Table', () => insertTable(a, emptyRows(rows, columns), Math.min(2, rows)));
+      if (!size) return openPicker(a, toolbarButton('insert.table'), (s) => void a.commands.run('insert.table', s).catch(fail), () => void a.commands.run('insert.tableSize').catch(fail));
+      const rows = Math.max(1, Math.min(MOST.rows, Math.round(size.rows)));
+      const columns = Math.max(1, Math.min(MOST.columns, Math.round(size.columns)));
+      const table = await a.history.transact('Insert Table', () => insertTable(a, emptyRows(rows, columns), size.all ? rows : Math.min(2, rows)));
       const first = table.rows[0]?.cells[0];
       if (first) placeCaret(first, 0);
+    },
+  });
+
+  // the Insert Table dialog of PowerPoint, with the numbers of columns and rows, for a table larger
+  // than the grid
+  c.define({
+    id: 'insert.tableSize',
+    label: 'Insert Table…',
+    enabled: ready,
+    run: async (a) => {
+      const size = await askSize(a);
+      if (size) await a.commands.run('insert.table', { ...size, all: true });
     },
   });
 

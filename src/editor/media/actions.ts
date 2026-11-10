@@ -205,7 +205,7 @@ export async function replaceFile(app: App, el: HTMLImageElement | HTMLVideoElem
   report(app, [r]);
 }
 
-// the first frame of the video el written as its poster, under the name of the video
+// the frame of the video el at its poster time written as its poster, under the name of the video
 // in a deck opened from a file, the page has an opaque origin, and the browser keeps the frames of a
 // video of its folder from the page. a file chosen in the file chooser can be read, hence the video
 // file is asked for once, and its copy is kept for the next capture
@@ -242,12 +242,18 @@ async function videoFile(url: string): Promise<string | null> {
   return copy;
 }
 
+// the time of the poster frame of each video, in s, set with the slider of the Video pane and kept
+// until the deck is closed, since the file keeps only the picture
+const times = new WeakMap<HTMLVideoElement, number>();
+export const posterTime = (el: HTMLVideoElement): number => times.get(el) ?? 0;
+export const setPosterTime = (el: HTMLVideoElement, time: number): void => void times.set(el, Math.max(0, time));
+
 export async function capturePoster(app: App, el: HTMLVideoElement): Promise<void> {
   const url = el.currentSrc || el.src;
   if (!url) throw new Error('the video does not have a file');
   const source = chosen.get(url) ?? (unreadable(el) ? await videoFile(url) : url);
   if (!source) return;
-  const blob = await firstFrame(source);
+  const blob = await firstFrame(source, posterTime(el));
   const name = stemOf(media.pathOf(el.getAttribute('src')) ?? 'video');
   const poster = media.add(blob, `${name}.png`, taken(app), 'poster');
   await app.history.transact('Poster Frame', () => setFiles(app, el, { poster: poster.path }, 'poster'));

@@ -8,8 +8,10 @@
 
 import type { TextStyle } from './model/templates.ts';
 
-// the largest size of the grid of the Insert Table popover, in rows and in columns
-export const GRID = 8;
+// the size of the grid of the Insert Table popover, 10 columns by 8 rows as in PowerPoint, and the
+// largest table of the Insert Table dialog
+export const GRID = { columns: 10, rows: 8 };
+export const MOST = { columns: 30, rows: 75 };
 
 export const CELL = 'td, th';
 
@@ -130,6 +132,30 @@ export function tableHtml(rows: string[][], style: TextStyle, base: string): str
     [0, '</table>'],
   ];
   return lines.map(([depth, text], i) => (i ? base + style.step.repeat(depth) : '') + text).join(style.eol);
+}
+
+// the fill of count cells after the cells of a line, as Autofill of Keynote fills them: a line of
+// numbers in a step goes on in that step, also with the same words before and after the numbers,
+// e.g. Step 1 and Step 2, and any other line is repeated, each new cell a copy of a cell of line
+export type Fill = { text: string } | { copy: number };
+const SERIES = /^(\D*?)(-?\d+(?:\.\d+)?)(\D*)$/;
+
+export function fillLine(line: string[], count: number): Fill[] {
+  const parts = line.map((t) => SERIES.exec(t.trim()));
+  const [p0, s0] = [parts[0]?.[1], parts[0]?.[3]];
+  if (line.length >= 2 && parts.every((m) => m && m[1] === p0 && m[3] === s0)) {
+    const values = parts.map((m) => Number(m![2]));
+    const step = values[1] - values[0];
+    const even = values.every((v, i) => !i || Math.abs(v - values[i - 1] - step) < 1e-9 * Math.max(1, Math.abs(step)));
+    if (even && step !== 0) {
+      const places = Math.max(...parts.map((m) => (m![2].split('.')[1] ?? '').length));
+      return Array.from({ length: count }, (_, k) => {
+        const v = (values[values.length - 1] + step * (k + 1)).toFixed(places);
+        return { text: `${p0}${/^-0(\.0*)?$/.test(v) ? v.slice(1) : v}${s0}` };
+      });
+    }
+  }
+  return Array.from({ length: count }, (_, k) => ({ copy: k % line.length }));
 }
 
 // the cells of an empty table of a size, the header row included

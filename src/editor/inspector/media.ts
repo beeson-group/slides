@@ -3,12 +3,13 @@
 // the mode in which the image is shown, as the Image tab of Keynote. the Video pane has the file, the poster,
 // and the switches of playback, and the QR pane the text of the code with the count of its bytes.
 // the file of an image or a video is shown in a well with Replace…, and the poster of a video in a
-// well with Capture Poster, as the Replace button of the Image tab of Keynote and the poster frame
-// of the Movie tab
+// well with Capture Poster, as the Replace button of the Image tab of Keynote. the Poster Frame
+// slider of the Movie tab of Keynote chooses the time of the frame: a move of it shows the frame on
+// the slide, and its release captures the frame as the poster
 
 import type { App } from '../app.ts';
 import { QR_MAX, bytesOf, imageOf, qrOf, videoOf } from '../commands/figure.ts';
-import { unreadable } from '../media/actions.ts';
+import { posterTime, setPosterTime, unreadable } from '../media/actions.ts';
 import { media } from '../media/store.ts';
 import { make, injectStyle } from '../ui/dom.ts';
 import { button, checkbox, note, row, section, segmented, textField, type Control, type Run } from './controls.ts';
@@ -18,6 +19,10 @@ const CSS = `
 .beeson-edit-inspector .ed-well .thumb { grid-row: span 2; width: 56px; height: 40px; border-radius: 5px; background: var(--ed-pressed) center / contain no-repeat; box-shadow: inset 0 0 0 1px var(--ed-line); }
 .beeson-edit-inspector .ed-well .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px/1.3 var(--ed-font); color: var(--ed-text); }
 .beeson-edit-inspector .ed-well .ed-btn { flex: 0 0 auto; justify-self: start; }
+.beeson-edit-inspector .ed-frame { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font: 12px/1.3 var(--ed-font); color: var(--ed-text); }
+.beeson-edit-inspector .ed-frame input { width: 100%; min-width: 0; margin: 0; accent-color: var(--ed-select); }
+.beeson-edit-inspector .ed-frame output { min-width: 4.5em; text-align: right; color: var(--ed-muted); font-variant-numeric: tabular-nums; }
+.beeson-edit-inspector .ed-frame.off { opacity: 0.45; }
 `;
 
 // the path in the deck of a src or a poster, which the page shows from an object URL for a new file
@@ -106,6 +111,51 @@ export function imagePane(app: App, run: Run): Control[] {
   ];
 }
 
+// a time in s as minutes, seconds, and tenths, e.g. 0:03.4
+export const clock = (s: number): string => {
+  const t = Math.max(0, Math.round(s * 10) / 10);
+  return `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
+};
+
+// the Poster Frame slider over the length of the video, with the time of the frame. a move seeks
+// the video on the slide to the frame, and a release captures it as the poster
+function frameSlider(app: App, run: Run, video: HTMLVideoElement | null): Control {
+  const el = make('label', 'ed-frame');
+  const input = make('input');
+  input.type = 'range';
+  input.min = '0';
+  input.step = 'any';
+  input.name = 'poster-frame';
+  input.setAttribute('aria-label', 'Poster Frame');
+  const time = make('output');
+  el.append(make('span', '', 'Frame'), input, time);
+  const length = () => (video && Number.isFinite(video.duration) ? video.duration : 0);
+  const sync = () => {
+    const d = length();
+    const enabled = !!video?.isConnected && d > 0 && !!app.commands.get('media.poster') && app.commands.state('media.poster').enabled;
+    input.disabled = !enabled;
+    el.classList.toggle('off', !enabled);
+    input.max = String(d || 1);
+    if (document.activeElement !== input && video) input.value = String(Math.min(posterTime(video), d));
+    time.textContent = clock(Number(input.value));
+  };
+  input.addEventListener('input', () => {
+    if (!video) return;
+    const t = Number(input.value);
+    setPosterTime(video, t);
+    video.pause();
+    video.currentTime = t;
+    time.textContent = clock(t);
+  });
+  input.addEventListener('change', () => {
+    if (video) void run('media.poster', { el: video });
+  });
+  // the length of a video is known once its metadata is loaded
+  if (video && !(length() > 0)) video.addEventListener('loadedmetadata', sync, { once: true });
+  sync();
+  return { el, sync };
+}
+
 export function videoPane(app: App, run: Run): Control[] {
   injectStyle('inspector-media', CSS);
   const video = videoOf(app);
@@ -117,9 +167,10 @@ export function videoPane(app: App, run: Run): Control[] {
     ]),
     section('Poster', [
       well(app, run, poster, () => fileName(poster()), 'media.poster', { el: video }, 'Capture Poster', () => (video && unreadable(video)
-        ? { text: 'Capture Poster…', title: 'Capture the first frame as the poster. In a deck opened from a file, it asks once for the file of the video, whose frames the browser keeps from the page' }
-        : { text: 'Capture Poster', title: 'Capture the first frame as the poster' })),
-      note(() => (poster() ? 'The first frame of the video, shown before it plays and printed in the PDF.' : 'The video does not have a poster, which the PDF prints.'), () => !poster()),
+        ? { text: 'Capture Poster…', title: 'Capture the frame of the slider as the poster. In a deck opened from a file, it asks once for the file of the video, whose frames the browser keeps from the page' }
+        : { text: 'Capture Poster', title: 'Capture the frame of the slider as the poster' })),
+      frameSlider(app, run, video),
+      note(() => (poster() ? 'The frame shown before the video plays and printed in the PDF. Drag the slider to choose another one.' : 'The video does not have a poster, which the PDF prints.'), () => !poster()),
       note(() => (video && unreadable(video) ? `In a deck opened from a file, the browser keeps the frames of ${fileName(video.getAttribute('src'))} from the page, hence Capture Poster asks once for the file.` : '')),
       keptNote(poster),
     ]),

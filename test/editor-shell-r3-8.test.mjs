@@ -554,7 +554,7 @@ for (const platform of PLATFORMS) {
     await click(page, zoom);
     await frames(page);
     const levels = (await openMenuItems(page)).map((i) => i.label);
-    assert.deepEqual(levels, ['Fit', '25%', '33%', '50%', '67%', '75%', '100%', '125%', '150%', '200%', '300%', '400%']);
+    assert.deepEqual(levels, ['Fit', 'Actual Size', 'Zoom to Selection', '25%', '33%', '50%', '67%', '75%', '100%', '125%', '150%', '200%', '300%', '400%']);
     await pickItem(page, '200%');
     await frames(page);
     assert.equal(await page.evaluate('window.BeesonEditorShell.stage.zoom'), 2);
