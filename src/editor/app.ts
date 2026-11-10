@@ -10,6 +10,7 @@ import type { TagEdit } from './tags.ts';
 import { History } from './history.ts';
 import { contentWithTex } from './math.ts';
 import { Commands } from './commands.ts';
+import type { Selection } from './selection.ts';
 
 // the part of reveal.js that the editor uses
 export type Deck = {
@@ -161,6 +162,7 @@ export class App {
   typing!: Typing;
   move!: Selector;
   layers!: LayerSwitch;
+  selection!: Selection;
   nav!: Pane;
   steps!: Pane;
 

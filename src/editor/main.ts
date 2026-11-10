@@ -24,10 +24,27 @@ import { install as installMathPop } from './text/mathpop.ts';
 import { install as installCanvas } from './shell/canvas.ts';
 import { install as installToolbar } from './shell/toolbar.ts';
 import { install as installStatusbar } from './shell/statusbar.ts';
+import { install as installShell } from './shell/shell.ts';
+import { install as installMenubar } from './shell/menubar.ts';
+import { install as installKeysSheet } from './shell/keys-sheet.ts';
+import { install as installMenu } from './ui/menu.ts';
+import { install as installDialog } from './ui/dialog.ts';
+import { install as installIcons } from './ui/icons.ts';
+import { install as installKeymap } from './keymap.ts';
+import { install as installSelection } from './selection.ts';
+import { install as installHit } from './canvas/hit.ts';
+import { install as installFrames } from './canvas/frames.ts';
+import { install as installDrag } from './canvas/drag.ts';
+import { install as installSnap } from './canvas/snap.ts';
+import { install as installNavigator } from './navigator/navigator.ts';
+import { install as installThumbs } from './navigator/thumbs.ts';
 import { install as installFileCommands } from './commands/file.ts';
 import { install as installEditCommands } from './commands/edit.ts';
 import { install as installViewCommands } from './commands/view.ts';
 import { install as installNavigateCommands } from './commands/navigate.ts';
+import { install as installArrangeCommands } from './commands/arrange.ts';
+import { install as installSlideCommands } from './commands/slide.ts';
+import { install as installDeleteCommands } from './commands/delete.ts';
 
 const app = new App();
 
@@ -85,11 +102,29 @@ installDrafts(app);
 installOverflow(app);
 installTyping(app);
 installMathPop(app);
+installSelection(app);
 installFileCommands(app);
 installEditCommands(app);
 installViewCommands(app);
 installNavigateCommands(app);
 installKeys(app);
+// the stubs of the next modules, which do nothing yet
+installIcons(app);
+installMenu(app);
+installDialog(app);
+installShell(app);
+installMenubar(app);
+installKeymap(app);
+installKeysSheet(app);
+installHit(app);
+installSnap(app);
+installFrames(app);
+installDrag(app);
+installArrangeCommands(app);
+installNavigator(app);
+installThumbs(app);
+installSlideCommands(app);
+installDeleteCommands(app);
 
 const revealReady = (): Promise<void> =>
   new Promise((done) => {
