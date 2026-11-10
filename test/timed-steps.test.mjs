@@ -92,3 +92,34 @@ test('a delay on the last step moves on to the next slide, and Back from there s
   assert.deepEqual(await settled(page), { slide: 2, shown: [] });
   assert.deepEqual(page.errors, []);
 });
+
+// the step of the current slide: the highest fragment index shown, counted from 0 as reveal.js
+// numbers the steps again at its start, hence the restore step is the last index once it is shown
+const step = (page) => page.evaluate(`Math.max(-1, ...[...Reveal.getCurrentSlide().querySelectorAll('.fragment.visible')].map((f) => Number(f.dataset.fragmentIndex)))`);
+
+test('a delay on the last step goes on through the restore step to the next slide, and Back lands on the last step', async (t) => {
+  const page = await open(t);
+  await page.evaluate('Reveal.slide(4)');
+  await press(page, 'ArrowRight');
+  assert.deepEqual(await settled(page), { slide: 4, shown: ['Dims one'] });
+  await press(page, 'ArrowRight');
+  assert.deepEqual(await settled(page), { slide: 5, shown: [] });
+  await press(page, 'ArrowLeft');
+  assert.deepEqual(await settled(page), { slide: 4, shown: ['Dims one', 'Dims two'] });
+  assert.equal(await step(page), 1);
+  await press(page, 'ArrowLeft');
+  assert.deepEqual(await settled(page), { slide: 4, shown: ['Dims one'] });
+  assert.deepEqual(page.errors, []);
+});
+
+test('the restore step of a slide without a delay on its last step waits for a key', async (t) => {
+  const page = await open(t);
+  await page.evaluate('Reveal.slide(1, 0, 3)');
+  assert.deepEqual(await settled(page), { slide: 1, shown: [...ALL, 'Click again'] });
+  await press(page, 'ArrowRight');
+  assert.deepEqual(await settled(page), { slide: 1, shown: [...ALL, 'Click again'] });
+  assert.equal(await step(page), 4);
+  await press(page, 'ArrowRight');
+  assert.deepEqual(await settled(page), { slide: 2, shown: [] });
+  assert.deepEqual(page.errors, []);
+});
