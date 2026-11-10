@@ -6,7 +6,8 @@ import type { App } from '../app.ts';
 
 const SVG = 'http://www.w3.org/2000/svg';
 
-// the path data of each icon. a path is stroked, and a path that starts with F is filled
+// the path data of each icon. a path is stroked, and a path that starts with F in place of its
+// first M is filled
 const PATHS: Record<string, string[]> = {
   undo: ['M7.5 5 4 8.5 7.5 12', 'M4.5 8.5h7.25a4.25 4.25 0 0 1 0 8.5H9'],
   redo: ['M12.5 5 16 8.5 12.5 12', 'M15.5 8.5H8.25a4.25 4.25 0 0 0 0 8.5H11'],
@@ -54,7 +55,7 @@ export function icon(name: string, size = 20): SVGSVGElement {
   for (const d of PATHS[name] ?? PATHS.square) {
     const path = document.createElementNS(SVG, 'path');
     const filled = d.startsWith('F');
-    path.setAttribute('d', filled ? d.slice(1) : d);
+    path.setAttribute('d', filled ? `M${d.slice(1)}` : d);
     if (filled) {
       path.setAttribute('fill', 'currentColor');
     } else {
