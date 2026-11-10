@@ -381,16 +381,17 @@ for (const platform of PLATFORMS) {
     assert.ok(line, 'the paragraph with math is not in the outline');
     assert.equal(line.typeset, 1);
     assert.ok(!line.shown.includes('\\('), `the line shows its TeX: ${line.shown}`);
-    // a click in the line shows its TeX, typed and committed as before
+    // a click on the formula shows the TeX of the line, with the caret after the TeX of the formula
     const at = await page.evaluate(`(() => {
-      const t = [...document.querySelectorAll('.beeson-edit-outline .slide')[2].querySelectorAll('.text')].find((t) => t.querySelector('mjx-container'));
-      const r = t.getBoundingClientRect();
-      return { x: r.left + 6, y: r.top + r.height / 2 };
+      const r = [...document.querySelectorAll('.beeson-edit-outline .slide')[2].querySelectorAll('.text mjx-container')][0].getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
     })()`);
     await click(page, at);
     await frames(page);
     line = (await outlineLines(page, 2)).find((l) => l.focused);
     assert.deepEqual({ shown: line?.shown, typeset: line?.typeset }, { shown: tex, typeset: 0 });
+    const caret = await page.evaluate(`(() => { const r = document.createRange(); r.selectNodeContents(document.activeElement); r.setEnd(getSelection().anchorNode, getSelection().anchorOffset); return r.toString().length; })()`);
+    assert.equal(caret, tex.indexOf(' inline.'), 'the caret is not after the formula');
     await page.evaluate(`(() => { const t = document.activeElement; const r = document.createRange(); r.selectNodeContents(t); r.collapse(false); getSelection().removeAllRanges(); getSelection().addRange(r); })()`);
     await type(page, ' Yes');
     await press(page, 'Escape');
