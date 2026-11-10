@@ -195,6 +195,28 @@ export function describe(el: Element, tex: Ctx['tex']): { kind: string; text: st
   return { kind, text: text.length > 90 ? `${text.slice(0, 90)}…` : text };
 }
 
+// the box under which the menu of a chip is opened: the column of the chip over the height of its
+// row, so that the menu is put under the row at the chip, or over the row when there is no room
+// under it, and never over the second line of the row
+export const rowAnchor = (chip: Element, row: Element): DOMRect => {
+  const c = chip.getBoundingClientRect();
+  const r = row.getBoundingClientRect();
+  return new DOMRect(c.left, r.top, c.width, r.height);
+};
+
+// a menu that still covers row, since it fits neither under nor over it, is put beside the row on
+// the side of the canvas, level with the row, as a popover of Keynote is put beside its control
+export function popover(menu: HTMLElement, row: Element): void {
+  const m = menu.getBoundingClientRect();
+  const r = row.getBoundingClientRect();
+  if (m.bottom <= r.top || m.top >= r.bottom) return;
+  const pad = 4;
+  const left = r.left - m.width - 6 >= pad ? r.left - m.width - 6 : Math.min(innerWidth - m.width - pad, r.right + 6);
+  const top = Math.max(pad, Math.min(r.top - 6, innerHeight - m.height - pad));
+  menu.style.left = `${Math.round(left)}px`;
+  menu.style.top = `${Math.round(top)}px`;
+}
+
 // the six dots of a drag handle, in the grid of the icons of ui/icons.ts
 function grip(): SVGSVGElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -604,8 +626,7 @@ export class Steps {
       { rule: true },
       { label: 'Show Last', checked: final, run: run('steps.final', { on: !final }) },
     ];
-    const box = r.chip.getBoundingClientRect();
-    openMenu(app, items, { anchor: box, placement: 'below', owner: r.chip, keyboard, label: 'Step', className: 'select steps' });
+    popover(openMenu(app, items, { anchor: rowAnchor(r.chip, r.row), placement: 'below', owner: r.chip, keyboard, label: 'Step', className: 'select steps' }).el, r.row);
   }
 
   // a press on a row selects its element. a press on its chip opens the menu of the chip, and a
