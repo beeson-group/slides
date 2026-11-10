@@ -59,6 +59,31 @@ export function columnPlace(app: App, slide: Element): { parent: Element; before
   return { parent, before: [...parent.children].find((el) => !el.hasAttribute('data-generated')) ?? null };
 }
 
+// the bottom of the zones and of the text column, in slide px, under which a new figure does not fit
+const FLOOR = 920;
+
+// the box of el in slide px
+function slideBox(app: App, el: Element): { left: number; top: number; right: number; bottom: number } {
+  const slides = app.slides() as HTMLElement;
+  const s = slides.getBoundingClientRect();
+  const k = slides.offsetWidth ? s.width / slides.offsetWidth : 1;
+  const r = el.getBoundingClientRect();
+  return { left: (r.left - s.left) / k, top: (r.top - s.top) / k, right: (r.right - s.left) / k, bottom: (r.bottom - s.top) / k };
+}
+
+// a new figure that does not fit under the last block of the text column is moved to the center of
+// the slide, where Keynote puts a new object, with a translate in slide px
+function centerIfOut(app: App, el: Element): void {
+  const b = slideBox(app, el);
+  const slide = el.closest('section') as HTMLElement | null;
+  const w = slide?.offsetWidth || 1920;
+  if (b.bottom <= FLOOR && b.top >= 0 && b.right <= w) return;
+  const h = slide?.offsetHeight || 1080;
+  const x = Math.round(w / 2 - (b.left + b.right) / 2);
+  const y = Math.round(h / 2 - (b.top + b.bottom) / 2);
+  docOf(app).setTag(el, { translate: { x, y } }, 'move');
+}
+
 // the zone of slide without content, into which a figure is put
 const emptyZone = (slide: Element): Element | null => [...slide.querySelectorAll(':scope > .zone, :scope > .panel ~ .zone')].find((z) => !z.children.length && !z.textContent?.trim()) ?? null;
 
@@ -220,6 +245,7 @@ export function install(app: App): void {
       const zone = emptyZone(slide);
       const place = zone ? { parent: zone, before: null } : slide.matches('.title, .closing') ? { parent: slide, before: slide.querySelector(':scope > aside.notes') } : columnPlace(a, slide);
       const [node] = await docOf(a).insertElement('qr', place.parent, place.before, { qr: 'https://example.com' });
+      if (!zone) centerIfOut(a, node);
       a.selection.set('elements', [node]);
     },
   });
