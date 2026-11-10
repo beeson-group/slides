@@ -17,6 +17,11 @@ import { injectStyle } from '../ui/dom.ts';
 // slides apart from other text
 export const MARK = '<!--beeson-->';
 
+// the width of the picture of a tile of the gallery, and its columns, as in the Add a Slide popover
+// of Keynote
+const PIC = 112;
+const COLUMNS = 3;
+
 const LABELS: Record<Layout, string> = { title: 'Title', section: 'Section', content: 'Content', narrow: 'Content, Narrow', wide: 'Content, Wide', figure: 'Figure', split: 'Split', closing: 'Closing' };
 
 // the prompts of the empty blocks of a new slide, which are not written into the file
@@ -31,11 +36,11 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
 @media (prefers-color-scheme: dark) {
   .beeson-edit-gallery { --g-bg: var(--ed-panel, #2c2c2e); --g-text: var(--ed-text, #f2f2f7); --g-muted: var(--ed-muted, #a1a1a6); --g-line: var(--ed-line, #48484a); --g-select: var(--ed-select, #9b82ff); }
 }
-.beeson-edit-gallery { position: fixed; z-index: 80; margin: 0; padding: 12px 14px 14px; width: 456px; box-sizing: border-box; border: 1px solid var(--g-line); border-radius: 12px; background: var(--g-bg); color: var(--g-text); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28); font: 12px/1.3 system-ui, sans-serif; }
-.beeson-edit-gallery .head { margin: 0 0 10px 2px; font-size: 13px; font-weight: 600; }
-.beeson-edit-gallery .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 10px; }
+.beeson-edit-gallery { position: fixed; z-index: 80; margin: 0; padding: 12px 14px 14px; width: max-content; box-sizing: border-box; border: 1px solid var(--g-line); border-radius: 12px; background: var(--g-bg); color: var(--g-text); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28); font: 12px/1.3 system-ui, sans-serif; }
+.beeson-edit-gallery .head { margin: 0 0 10px; font-size: 13px; font-weight: 600; text-align: center; }
+.beeson-edit-gallery .grid { display: grid; grid-template-columns: repeat(${COLUMNS}, ${PIC + 8}px); gap: 8px 10px; }
 .beeson-edit-gallery .tile { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 4px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
-.beeson-edit-gallery .tile .pic { display: block; width: 92px; aspect-ratio: 16 / 9; border-radius: 4px; outline: 1px solid var(--g-line); background: var(--bg, #000); }
+.beeson-edit-gallery .tile .pic { display: block; width: ${PIC}px; aspect-ratio: 16 / 9; border-radius: 4px; outline: 1px solid var(--g-line); background: var(--bg, #000); }
 .beeson-edit-gallery .tile:hover .pic { outline: 2px solid var(--g-select); }
 .beeson-edit-gallery .tile:focus-visible { outline: none; background: color-mix(in srgb, var(--g-select) 16%, transparent); }
 .beeson-edit-gallery .tile:focus-visible .pic { outline: 2px solid var(--g-select); }
@@ -247,11 +252,11 @@ function openGallery(app: App, anchor: HTMLElement | null): void {
   dialog.append(head, grid);
   document.body.append(dialog);
   dialog.show();
-  for (const t of tiles) drawInto(t.pic, sample(t.layout), deck, 92);
+  for (const t of tiles) drawInto(t.pic, sample(t.layout), deck, PIC);
   place(dialog, dialog.anchor ?? null, navOf(app).rowOf(app.current()));
   dialog.addEventListener('keydown', (ev) => {
     const i = tiles.findIndex((t) => t.tile === document.activeElement);
-    const step: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 4, ArrowUp: -4 };
+    const step: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: COLUMNS, ArrowUp: -COLUMNS };
     if (ev.key === 'Escape') closeGallery();
     else if (ev.key in step) tiles[Math.min(tiles.length - 1, Math.max(0, i + step[ev.key]))].tile.focus();
     else if (ev.key === 'Home' || ev.key === 'End') tiles[ev.key === 'Home' ? 0 : tiles.length - 1].tile.focus();
