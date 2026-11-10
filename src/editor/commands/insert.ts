@@ -111,12 +111,14 @@ export function install(app: App): void {
     app.invalidate('content');
   };
 
-  // the box is taken off through an undo of its entry while that entry is the last one
+  // the box is taken off, and its entry with it while that entry is the last one, so that the
+  // history does not offer a Redo of an empty box
   const drop = () => {
     if (!pending || writing) return;
-    if (!onTop) return take();
+    const last = onTop;
     onTop = false;
-    void app.history.undo().catch(fail);
+    take();
+    if (last) app.history.discard();
   };
 
   const begin = (kind: Kind, parent: Element, before: Node | null) => {

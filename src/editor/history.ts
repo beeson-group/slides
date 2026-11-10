@@ -191,6 +191,14 @@ export class History {
     return run;
   }
 
+  // the last entry is taken out of the history without an undo, e.g. the insert of an empty box
+  // that the editor has already taken off the page. it is taken at once, so that an entry pushed
+  // right after it is kept
+  discard(): void {
+    this.typing = null;
+    if (this.done.pop()) this.onChange();
+  }
+
   clear(): void {
     this.done = [];
     this.undone = [];

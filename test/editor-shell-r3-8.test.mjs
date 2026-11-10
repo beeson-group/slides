@@ -10,6 +10,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
+import { History } from '../src/editor/history.ts';
 import { center, click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
 
 const LAYOUTS = 'test/pages/editor-layouts.html';
@@ -139,6 +140,27 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+test('discard takes the last entry out of the history without an undo, and keeps the redos empty', () => {
+  const log = [];
+  let changes = 0;
+  const h = new History({ snapshot: () => '', restore: async () => {}, onChange: () => changes++ });
+  const entry = (name) => ({ label: name, undo: () => log.push(`undo ${name}`), redo: () => log.push(`redo ${name}`) });
+  h.push(entry('a'));
+  h.push(entry('b'));
+  h.discard();
+  assert.equal(h.undoLabel, 'a');
+  assert.equal(h.canRedo, false);
+  assert.deepEqual(log, []);
+  // an entry pushed right after the discard is kept
+  h.push(entry('c'));
+  assert.equal(h.undoLabel, 'c');
+  assert.equal(changes, 4);
+  h.discard();
+  h.discard();
+  h.discard();
+  assert.equal(h.canUndo, false);
+});
 
 const state = (page, id) => page.evaluate(`window.BeesonEditor.state(${JSON.stringify(id)})`);
 const PENDING = `document.querySelector('.reveal section.present .beeson-pending')`;
