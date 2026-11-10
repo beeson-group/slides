@@ -44,10 +44,18 @@ export function install(app: App): void {
 
   let draftTimer = 0;
 
+  // a render error is shown, since the edits are then not kept anywhere but on the page
   function keepDraft(): void {
     if (!app.dirty || !app.source || !app.pairing) return;
-    const draft: Draft = { at: Date.now(), text: app.files.render() };
-    store(DRAFT_KEY, JSON.stringify(draft));
+    let text: string;
+    try {
+      text = app.files.render();
+    } catch (e) {
+      app.note = { text: `The edits could not be kept in this browser: ${e instanceof Error ? e.message : String(e)}`, warn: true };
+      app.report();
+      return;
+    }
+    store(DRAFT_KEY, JSON.stringify({ at: Date.now(), text } satisfies Draft));
   }
 
   function drop(): void {

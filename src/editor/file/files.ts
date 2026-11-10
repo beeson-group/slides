@@ -186,6 +186,8 @@ export function install(app: App): void {
     if (!pairing.blocks.length) return plain('This file is not the deck on the page', true);
     const problems = pairing.problems;
     const parts = [app.dirty ? 'Unsaved changes' : app.note?.text ?? 'No unsaved changes'];
+    // a warning, e.g. an error of a save or of a draft, is shown with unsaved changes too
+    if (app.dirty && app.note?.warn) parts.push(app.note.text);
     if (problems.length) parts.push(`${plural(problems.length, 'text')} cannot be edited`);
     if (app.overflow) parts.push(`${plural(app.overflow, 'text')} run${app.overflow === 1 ? 's' : ''} past the slide or into its footnote`);
     if (app.autosave && !app.handle && canWrite()) parts.push('autosave starts after the first save');
