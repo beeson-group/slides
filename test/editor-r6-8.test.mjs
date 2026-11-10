@@ -206,3 +206,33 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// fitOf returns the box of the canvas cell, the box of the slide, and the zoom of the status bar
+const fitOf = (page) =>
+  page.evaluate(`(() => {
+    const c = document.querySelector('.beeson-edit-canvas');
+    const r = c.getBoundingClientRect();
+    const s = document.querySelector('.reveal:not(.beeson-peek)').getBoundingClientRect();
+    const zoom = [...document.querySelectorAll('.beeson-edit-bottom *')].find((e) => !e.children.length && /^\\d+%$/.test(e.textContent.trim()))?.textContent.trim();
+    return { cell: { x: r.left + c.clientLeft, y: r.top + c.clientTop, w: c.clientWidth, h: c.clientHeight }, slide: { x: s.left, y: s.top, w: s.width, h: s.height }, scale: Reveal.getScale(), zoom };
+  })()`);
+
+for (const platform of PLATFORMS) {
+  for (const width of [760, 1000]) {
+    test(`the slide fits a canvas of a window ${width} px wide at the largest zoom (${platform})`, async (t) => {
+      const page = await load(t, platform, { n: MATH, size: { width, height: 700 } });
+      await wait(page, 200);
+      const f = await fitOf(page);
+      // the slide is inside the cell, with a margin of at least 8 px on each side
+      assert.ok(f.slide.x >= f.cell.x + 8 - 0.5 && f.slide.x + f.slide.w <= f.cell.x + f.cell.w - 8 + 0.5, js(f));
+      assert.ok(f.slide.y >= f.cell.y + 8 - 0.5 && f.slide.y + f.slide.h <= f.cell.y + f.cell.h - 8 + 0.5, js(f));
+      // in a canvas under 400 px, the zoom is the largest hundredth that leaves 8 px, and in a larger
+      // one, a margin of at most 32 px
+      const best = (m) => Math.floor(Math.min((f.cell.w - 2 * m) / 1920, (f.cell.h - 2 * m) / 1080) * 100 + 1e-6) / 100;
+      if (f.cell.w < 400) assert.equal(f.scale, best(8), js(f));
+      else assert.ok(f.scale >= best(32), js(f));
+      assert.equal(f.zoom, `${Math.round(f.scale * 100)}%`);
+      assert.deepEqual(errors(page), []);
+    });
+  }
+}
