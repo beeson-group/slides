@@ -105,6 +105,23 @@ export function commands(): Command[] {
       },
     },
     {
+      // the figure around a selected image, video, or QR code, which a click selects apart from its
+      // caption, as Esc does
+      id: 'selection.container',
+      label: 'Select Figure',
+      menu: { bar: 'Edit', group: 'select', order: 12 },
+      context: ['element'],
+      enabled: (app) => {
+        const only = app.selection.only();
+        return !!only && only.matches(RESIZABLE) && !!containerOf(app, only);
+      },
+      run: (app) => {
+        const only = app.selection.only();
+        const up = only ? containerOf(app, only) : null;
+        if (up) app.selection.set('elements', [up]);
+      },
+    },
+    {
       id: 'selection.leaveText',
       label: 'Select Block',
       keys: { mac: ['Escape'], other: ['Escape'] },
@@ -136,14 +153,14 @@ export function commands(): Command[] {
       },
     },
     {
-      // Return on a figure without text selects its image or video
+      // Return on a figure without text selects its image or video, unless the figure is locked
       id: 'selection.selectMedia',
       label: 'Select Image',
       keys: { mac: ['Enter'], other: ['Enter'] },
       in: ['canvas'],
       enabled: (app) => {
         const el = app.selection.only();
-        if (!el || document.activeElement?.classList.contains('beeson-handle') || el.querySelector(HOST)) return false;
+        if (!el || document.activeElement?.classList.contains('beeson-handle') || el.querySelector(HOST) || el.hasAttribute('data-locked')) return false;
         return !!mediaIn(el, el.querySelector('img, video'));
       },
       run: (app) => {
@@ -189,11 +206,11 @@ export function commands(): Command[] {
       label: 'Reset Size',
       menu: { bar: 'Arrange', group: 'reset', order: 11 },
       context: ['element'],
-      enabled: (app) => app.selection.elements().some((el) => placeOf(el).width !== null),
+      enabled: (app) => app.selection.elements().some((el) => placeOf(el).width !== null || (placeOf(el).height ?? null) !== null),
       run: (app) => {
         const changes = app.selection.elements().map((el) => {
           const from = placeOf(el);
-          const to = { ...from, width: null };
+          const to = { ...from, width: null, ...(from.height !== undefined ? { height: null } : {}) };
           writePlace(app, el, to);
           return { el, from, to };
         });

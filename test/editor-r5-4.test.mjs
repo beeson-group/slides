@@ -11,7 +11,7 @@ import { resolve } from 'node:path';
 import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, drag, editorPage, press, saveAndReopen, type } from './helpers/editor.mjs';
+import { byteExact, click, drag, editorPage, press, saveAndReopen, selectFigure, type } from './helpers/editor.mjs';
 
 const THEME = new Set(themeClasses(readFileSync('theme/beeson.css', 'utf8')));
 const PANEL = '#beeson-edit-panel-format';
@@ -246,7 +246,7 @@ for (const platform of ['mac', 'other']) {
     t.after(() => page.close?.());
     await show(page, FIGURES);
     const figure = '.reveal section.present figure.zone img';
-    await click(page, figure);
+    await selectFigure(page, figure);
     await settle(page);
     assert.equal((await state(page, 'media.replace')).enabled, true);
     await press(page, 'Mod+L');

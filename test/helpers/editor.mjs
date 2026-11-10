@@ -93,6 +93,15 @@ export async function click(page, at, { button = 'left', count = 1, modifiers = 
 }
 
 /**
+ * The figure around the image of a selector selected by itself: a click on the image selects the
+ * image, an object apart from the caption, and Esc then selects the figure around it.
+ */
+export async function selectFigure(page, image) {
+  await click(page, image);
+  await press(page, 'Escape');
+}
+
+/**
  * A trusted drag from a point or a selector by { dx, dy } in CSS pixels, in steps moves. With hold
  * set, the button is not released, e.g. for a screenshot of the drag in progress.
  */

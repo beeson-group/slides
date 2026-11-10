@@ -10,8 +10,9 @@
 import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
 import { injectStyle } from '../ui/dom.ts';
+import { groupOf } from '../commands/order.ts';
 import type { Box, Guide, Handle, Spacing } from './snap.ts';
-import { BY_ITSELF, CONTAINER, RESIZABLE, frameOf, movableOf, orientedBox, pictureOf, sizedOf, toScreen, visualRect } from './hit.ts';
+import { BY_ITSELF, CONTAINER, RESIZABLE, frameOf, isTextSized, movableOf, orientedBox, pictureOf, sizedOf, toScreen, visualRect } from './hit.ts';
 
 export const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 
@@ -32,12 +33,13 @@ const CSS = `
 .beeson-frame { position: fixed; pointer-events: none; box-sizing: border-box; border: 1px dashed var(--ed-muted, var(--subtle, #bbb)); }
 .beeson-frame.selected { border: 2px solid var(--ed-select, #7048e8); }
 .beeson-frame.union { border: 1px dashed var(--ed-select, #7048e8); }
+.beeson-frame.union.group { border: 2px solid var(--ed-select, #7048e8); }
 .beeson-overlay [hidden] { display: none !important; }
 .beeson-grip { position: fixed; width: 9px; height: 9px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; border: 1.5px solid var(--ed-select, #7048e8); background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); pointer-events: auto; touch-action: none; }
 .beeson-frame.selected.locked { border-color: #8a8a8a; }
 .beeson-grip.locked { width: 9px; height: 9px; border: 0; border-radius: 0; background: linear-gradient(45deg, transparent 42%, #8a8a8a 42% 58%, transparent 58%), linear-gradient(-45deg, transparent 42%, #8a8a8a 42% 58%, transparent 58%); box-shadow: none; pointer-events: none; }
-.beeson-rotor { position: fixed; width: 18px; height: 18px; margin: -9px 0 0 -9px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--ed-select, #7048e8); background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); color: var(--ed-select, #7048e8); font: 600 12px/15px system-ui, sans-serif; text-align: center; cursor: grab; user-select: none; pointer-events: auto; touch-action: none; }
-.beeson-rotor-stem { position: fixed; width: 1px; height: 15px; margin-left: -0.5px; background: var(--ed-select, #7048e8); transform-origin: 50% 100%; }
+.beeson-rotor { position: fixed; width: 14px; height: 14px; margin: -7px 0 0 -7px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--ed-select, #7048e8); background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); color: var(--ed-select, #7048e8); font: 600 10px/11px system-ui, sans-serif; text-align: center; cursor: grab; user-select: none; pointer-events: auto; touch-action: none; }
+.beeson-rotor-stem { position: fixed; width: 1px; height: 11px; margin-left: -0.5px; background: var(--ed-select, #7048e8); transform-origin: 50% 0; }
 html.beeson-rotating, html.beeson-rotating * { cursor: grabbing !important; user-select: none !important; }
 .beeson-grip[data-handle=nw], .beeson-grip[data-handle=se] { cursor: nwse-resize; }
 .beeson-grip[data-handle=ne], .beeson-grip[data-handle=sw] { cursor: nesw-resize; }
@@ -97,7 +99,13 @@ function turned(box: Box, deg: number, x: number, y: number): { x: number; y: nu
 }
 
 // the distance of the rotate handle above the top edge of a frame, in screen pixels
-const ROTOR = 24;
+// the distance of the rotate handle from the edge of the frame, and its radius, in screen px, about
+// those of the rotate handle of PowerPoint
+const ROTOR = 18;
+const KNOB = 7;
+// the text of the blocks whose lines a rotate handle is kept off
+const WORDS = 'h1, h2, h3, p, li, dt, dd, div.math, .caption, figcaption, td, th, pre, blockquote';
+type RotorAt = 'above' | 'below' | 'inside';
 
 // the overlay of the editor. the handle of a block and the resize handles are its only parts that
 // take the pointer
@@ -117,6 +125,10 @@ export class Frames {
   private readonly stem: HTMLDivElement;
   private readonly frames: HTMLDivElement[] = [];
   private readonly union: HTMLDivElement;
+  // where the rotate handle is, kept while it is dragged
+  private rotorAt: RotorAt = 'above';
+  // the box of a selected group on the screen, as last drawn, which its one set of grips resizes
+  private group: Box | null = null;
   private readonly guides: HTMLDivElement[] = [];
   private readonly gaps: HTMLDivElement[] = [];
   readonly readout: HTMLDivElement;
@@ -160,6 +172,10 @@ export class Frames {
     return set;
   }
 
+  groupBox(): Box | null {
+    return this.group;
+  }
+
   // the selected element that grip resizes
   memberOf(grip: Element): Element | null {
     return this.members[Number((grip as HTMLElement).dataset.member)] ?? null;
@@ -174,8 +190,9 @@ export class Frames {
   }
 
   // the resize handles of a selected element, drawn on each element of a multiple selection as in
-  // Keynote and PowerPoint: live on an image, a video, a QR code, a viewer, and a figure that holds
-  // one of them, none on a block of text or on another figure, and crosses on a locked element
+  // Keynote and PowerPoint: live on an image, a video, a QR code, a viewer, a figure that holds one
+  // of them, and a text block, whose grips set its width, none on another figure, and crosses on a
+  // locked element
   gripsOf(el: Element | null): 'live' | 'locked' | null {
     if (!el || !this.app.selection.elements().includes(el)) return null;
     if (el.hasAttribute('data-locked')) return 'locked';
@@ -205,28 +222,40 @@ export class Frames {
       f.style.rotate = orients[i].deg ? `${orients[i].deg}deg` : '';
       f.classList.toggle('locked', selected[i].hasAttribute('data-locked'));
     });
+    // a whole group is drawn as one element, with one frame around its members, as in Keynote and
+    // PowerPoint
+    const id = selected.length > 1 ? groupOf(selected[0]) : null;
+    const grouped = !!id && selected.every((el) => groupOf(el) === id);
+    this.group = null;
     if (boxes.length > 1) {
       const seen = selected.map((el) => (el.matches(RESIZABLE) || el.matches(CONTAINER) ? visualRect(pictureOf(el)) : grow(visualRect(el), 6)));
       const left = Math.min(...seen.map((b) => b.left)), top = Math.min(...seen.map((b) => b.top));
       const right = Math.max(...seen.map((b) => b.left + b.width)), bottom = Math.max(...seen.map((b) => b.top + b.height));
-      place(this.union, grow({ left, top, width: right - left, height: bottom - top }, 6));
+      const all = { left, top, width: right - left, height: bottom - top };
+      if (grouped) this.group = all;
+      place(this.union, grouped ? all : grow(all, 6));
+      this.union.classList.toggle('group', grouped);
+      if (grouped) for (const f of this.frames) f.hidden = true;
     } else this.union.hidden = true;
 
     const only = app.selection.only();
-    const gripped = view.moving && !view.resizing ? [] : selected.map((el, i) => ({ el, i, grips: this.gripsOf(el) })).filter((m) => m.grips);
+    const gripped = view.moving && !view.resizing ? [] : this.group ? [{ el: selected[0], i: -1, grips: selected.some((el) => el.hasAttribute('data-locked')) ? 'locked' as const : 'live' as const }] : selected.map((el, i) => ({ el, i, grips: this.gripsOf(el) })).filter((m) => m.grips);
     while (this.gripSets.length < gripped.length) this.gripSet();
     this.members = this.gripSets.map((_, n) => gripped[n]?.el ?? null);
     this.gripSets.forEach((set, n) => {
       const m = gripped[n];
-      const tycho = !!m?.el.matches('tycho-viewer');
+      // a viewer keeps the height of its layout, and a text block the height of its wrapped text
+      const level = !!m && m.i >= 0 && (m.el.matches('tycho-viewer') || isTextSized(m.el));
       for (const h of HANDLES) {
         const g = set[h];
-        if (!m || (tycho && (h === 'n' || h === 's'))) {
+        if (m && m.i < 0) g.dataset.group = '1';
+        else delete g.dataset.group;
+        if (!m || (level && (h === 'n' || h === 's'))) {
           g.hidden = true;
           continue;
         }
-        const b = boxes[m.i];
-        const at = turned(b, orients[m.i].deg, h.includes('w') ? b.left : h.includes('e') ? b.left + b.width : b.left + b.width / 2, h.includes('n') ? b.top : h.includes('s') ? b.top + b.height : b.top + b.height / 2);
+        const b = m.i < 0 ? (this.group as Box) : boxes[m.i];
+        const at = turned(b, m.i < 0 ? 0 : orients[m.i].deg, h.includes('w') ? b.left : h.includes('e') ? b.left + b.width : b.left + b.width / 2, h.includes('n') ? b.top : h.includes('s') ? b.top + b.height : b.top + b.height / 2);
         g.hidden = false;
         g.classList.toggle('locked', m.grips === 'locked');
         Object.assign(g.style, { left: `${at.x}px`, top: `${at.y}px` });
@@ -238,18 +267,34 @@ export class Frames {
     this.rotor.hidden = this.stem.hidden = !turnable;
     if (turnable) {
       const b = boxes[0], deg = orients[0].deg;
-      const top = turned(b, deg, b.left + b.width / 2, b.top);
-      const knob = turned(b, deg, b.left + b.width / 2, b.top - ROTOR);
+      const cx = b.left + b.width / 2;
+      // above the frame as in Keynote and PowerPoint, or under it, or inside its top edge, whichever
+      // first leaves the text of the other blocks in view
+      const knobAt = (at: RotorAt) => turned(b, deg, cx, at === 'above' ? b.top - ROTOR : at === 'below' ? b.top + b.height + ROTOR : b.top + KNOB + 4);
+      if (!rotating) {
+        const lines = this.linesBesides(only as Element);
+        const free = (at: RotorAt) => {
+          const k = knobAt(at);
+          return !lines.some((r) => k.x + KNOB > r.left && k.x - KNOB < r.right && k.y + KNOB > r.top && k.y - KNOB < r.bottom);
+        };
+        this.rotorAt = (['above', 'below'] as const).find(free) ?? 'inside';
+      }
+      const knob = knobAt(this.rotorAt);
       Object.assign(this.rotor.style, { left: `${knob.x}px`, top: `${knob.y}px` });
-      Object.assign(this.stem.style, { left: `${top.x}px`, top: `${top.y - ROTOR + 9}px`, height: `${ROTOR - 9}px`, rotate: deg ? `${deg}deg` : '' });
+      this.stem.hidden = this.rotorAt === 'inside';
+      // the stem runs from the edge of the frame to the handle, turned with the frame
+      const edge = turned(b, deg, cx, this.rotorAt === 'above' ? b.top : b.top + b.height);
+      const turn = deg + (this.rotorAt === 'above' ? 180 : 0);
+      Object.assign(this.stem.style, { left: `${edge.x}px`, top: `${edge.y}px`, height: `${ROTOR - KNOB}px`, rotate: turn ? `${turn}deg` : '' });
     }
 
     const hot = this.current();
     const framed = hot && selected.includes(hot);
     this.hoverFrame.hidden = !hot || !!framed || !!view.moving;
     if (hot && !framed && !view.moving) place(this.hoverFrame, grow(visualRect(pictureOf(hot)), 6));
-    // a figure is dragged by itself, as in Keynote, and a viewer, which a drag turns, by its handle
-    this.handle.hidden = !hot || (hot.matches(BY_ITSELF) && !hot.matches('tycho-viewer')) || !!this.gripsOf(hot);
+    // a figure is dragged by itself, as in Keynote, and a viewer, which a drag turns, and a text
+    // block, whose text a press edits, by its handle
+    this.handle.hidden = !hot || (hot.matches(BY_ITSELF) && !hot.matches('tycho-viewer')) || (!!this.gripsOf(hot) && !isTextSized(hot));
     if (!this.handle.hidden && hot) {
       const r = hot.getBoundingClientRect();
       Object.assign(this.handle.style, { left: `${r.left - 24}px`, top: `${r.top - 24}px` });
@@ -264,6 +309,20 @@ export class Frames {
       this.readout.classList.toggle('frame', out.at === 'frame');
       Object.assign(this.readout.style, { left: `${out.x}px`, top: `${out.y}px` });
     }
+  }
+
+  // the boxes of the lines of text of the blocks of the current slide outside el, on the screen
+  private linesBesides(el: Element): DOMRect[] {
+    const slide = this.app.current();
+    if (!slide) return [];
+    const out: DOMRect[] = [];
+    const range = document.createRange();
+    for (const block of slide.querySelectorAll(WORDS)) {
+      if (el.contains(block) || block.contains(el) || block.closest('aside.notes')) continue;
+      range.selectNodeContents(block);
+      for (const r of range.getClientRects()) if (r.width && r.height) out.push(r);
+    }
+    return out;
   }
 
   private drawGuides(): void {
