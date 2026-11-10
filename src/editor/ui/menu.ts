@@ -375,7 +375,8 @@ class Menu {
   // selection of the editor as they were before the menu was opened
   private activate(i: number): void {
     const row = this.rows[i];
-    if (!row || !row.enabled) return;
+    // a pointer release runs the item, and the click after it finds the menu closed
+    if (!row || !row.enabled || !stack.includes(this)) return;
     if (row.submenu) {
       this.highlight(i);
       this.openChild(true);
