@@ -246,3 +246,91 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// the start tags of the paragraph and of the pair of images of the figure slide
+const P_TAG = '<p>Export your matplotlib figure';
+const DARK_TAG = '<img class="for-dark" src="demo/figure-dark.png" alt="Zero-velocity curves of the Earth–Moon system, dark version">';
+const LIGHT_TAG = '<img class="for-light" src="demo/figure-light.png" alt="Zero-velocity curves of the Earth–Moon system, light version">';
+const withAttr = (tag, attr) => tag.replace(/>$/, ` ${attr}>`);
+const theme = (page) => page.evaluate('document.documentElement.dataset.theme');
+// the mode of the deck flipped by the button of the status bar
+async function flipMode(page) {
+  const was = await theme(page);
+  await click(page, await controlOf(page, CONTROLS.find((c) => c.undo).find));
+  await frames(page);
+  assert.notEqual(await theme(page), was, 'the mode button does not flip the mode');
+}
+
+for (const platform of PLATFORMS) {
+  test(`a group of an image and a paragraph is written on both images of the pair and holds in the other mode (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    assert.equal(await theme(page), 'dark');
+    await click(page, IMG);
+    await click(page, PARA, { modifiers: 'Shift' });
+    await frames(page);
+    assert.deepEqual((await selected(page)).sort(), ['img.for-dark', 'p']);
+    await press(page, platform === 'mac' ? 'Mod+Alt+G' : 'Mod+G');
+    await frames(page);
+    await byteExact(page, [[P_TAG, '<p data-group="g1">Export your matplotlib figure'], [DARK_TAG, withAttr(DARK_TAG, 'data-group="g1"')], [LIGHT_TAG, withAttr(LIGHT_TAG, 'data-group="g1"')]]);
+    await roundTrip(page);
+    // in light mode a click on the picture selects the group with the light image, and a drag
+    // moves the paragraph and both images of the pair
+    await page.evaluate(`Reveal.slide(${FIGURE})`);
+    await flipMode(page);
+    await click(page, IMG);
+    await frames(page);
+    assert.deepEqual((await selected(page)).sort(), ['img.for-light', 'p'], 'the click in light mode does not select the group');
+    await drag(page, IMG, { dx: -60, dy: -40 });
+    await frames(page);
+    const text = await render(page);
+    const tags = [...text.matchAll(/<(p|img) [^>]*data-group="g1"[^>]*>/g)].map((m) => [m[0].match(/for-(dark|light)/)?.[0] ?? 'p', m[0].match(/translate: ([^;"]+)/)?.[1] ?? null]);
+    assert.equal(tags.length, 3, `the group is not written on three tags: ${js(tags)}`);
+    assert.ok(tags.every(([, tr]) => tr && tr === tags[0][1]), `the drag in light mode does not move the whole group: ${js(tags)}`);
+    await roundTrip(page);
+  });
+
+  test(`a lock of an image is written on both images of the pair and holds in the other mode (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, IMG);
+    await frames(page);
+    await press(page, 'Mod+L');
+    await frames(page);
+    await byteExact(page, [[DARK_TAG, withAttr(DARK_TAG, 'data-locked')], [LIGHT_TAG, withAttr(LIGHT_TAG, 'data-locked')]]);
+    await roundTrip(page);
+    await page.evaluate(`Reveal.slide(${FIGURE})`);
+    await flipMode(page);
+    await click(page, IMG);
+    await drag(page, IMG, { dx: -80, dy: -100 });
+    await frames(page);
+    await byteExact(page);
+    await press(page, 'ArrowLeft');
+    await frames(page);
+    await byteExact(page);
+    // the unlock in light mode takes the lock off both images
+    await exec(page, 'arrange.unlock');
+    await frames(page);
+    assert.ok(!(await render(page)).includes('data-locked'), 'the unlock in light mode leaves a lock in the file');
+    await roundTrip(page);
+  });
+
+  test(`a flip of an image is written on both images of the pair, and its alt and Paper are not (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, IMG);
+    await frames(page);
+    await exec(page, 'arrange.flipHorizontal');
+    await frames(page);
+    await byteExact(page, [[DARK_TAG, DARK_TAG.replace('>', ' style="scale: -1 1">')], [LIGHT_TAG, LIGHT_TAG.replace('>', ' style="scale: -1 1">')]]);
+    await roundTrip(page);
+    // the alt, the mode, and Paper of the dark image are its own
+    await page.evaluate(`Reveal.slide(${FIGURE})`);
+    await click(page, IMG);
+    await frames(page);
+    await exec(page, 'figure.alt', 'Curves of the dark version');
+    await exec(page, 'figure.paper');
+    await frames(page);
+    const text = await render(page);
+    assert.ok(text.includes('<img class="for-light" src="demo/figure-light.png" alt="Zero-velocity curves of the Earth–Moon system, light version" style="scale: -1 1">'), 'the alt or Paper of the dark image is written on the light image');
+    assert.ok(text.includes('<img class="for-dark paper" src="demo/figure-dark.png" alt="Curves of the dark version" style="scale: -1 1">'));
+    assert.deepEqual(errors(page), []);
+  });
+}
