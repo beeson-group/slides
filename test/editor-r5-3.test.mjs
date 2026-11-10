@@ -216,7 +216,7 @@ for (const platform of PLATFORMS) {
         ['insert.image', 'Media', true],
       ], `${width}: the insert group`);
       assert.ok(group.every((b) => b.label === labels), `${width}: the labels`);
-      // the groups after Present go into the menu More below 820 px, and the inserts stay
+      // the groups after Present but Format go into the menu More below 820 px, and the inserts stay
       assert.equal(await page.evaluate(`!!document.querySelector('.beeson-edit-top .more-groups')`), width < 820, `${width}: the menu More`);
       const top = await page.evaluate(`(() => { const t = document.querySelector('.beeson-edit-top'); return { scroll: t.scrollWidth - t.clientWidth, h: t.getBoundingClientRect().height }; })()`);
       assert.ok(top.scroll <= 0, `${width}: the toolbar overflows by ${top.scroll} px`);
