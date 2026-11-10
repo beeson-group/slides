@@ -89,6 +89,22 @@ const CSS = `
 .beeson-edit-a11y .info p:last-child { margin-bottom: 0; }
 `;
 
+type Theme = { get(): string; set(theme: 'dark' | 'light'): void };
+const theme = (): Theme | undefined => (window as unknown as { Beeson?: { theme?: Theme } }).Beeson?.theme;
+const frame = () => new Promise((done) => requestAnimationFrame(done));
+
+// the slide is flipped into the mode of el when el is shown in the other mode only, and the
+// promise is resolved once el has a box, or after 1.5 s. the theme applies a mode at the end of
+// the first frame of its view transition
+async function shownInMode(el: Element): Promise<void> {
+  const mode = el.closest('.for-light') ? 'light' : el.closest('.for-dark') ? 'dark' : null;
+  const t = theme();
+  if (!mode || !t || t.get() === mode) return;
+  t.set(mode);
+  const end = performance.now() + 1500;
+  while (!el.getClientRects().length && performance.now() < end) await frame();
+}
+
 // the label of the slide of an issue, e.g. Slide 4
 const whereOf = (app: App, slide: Element | null): string => (slide ? `Slide ${app.slideNumber(slide) ?? '?'}` : '');
 
@@ -214,33 +230,37 @@ export class Checker {
     fix.append(document.createTextNode('Fix'), icon('chevron-down', 12));
     fix.addEventListener('click', (ev) => {
       ev.stopPropagation();
-      this.pick(issue);
+      void this.pick(issue);
       openMenu(this.app, this.fixes(issue), { anchor: fix.getBoundingClientRect(), placement: 'below', owner: fix, keyboard: ev.detail === 0, label: 'Fixes' });
     });
     row.append(label, fix);
-    row.addEventListener('click', () => this.pick(issue));
+    row.addEventListener('click', () => void this.pick(issue));
     row.addEventListener('keydown', (ev) => {
       if (ev.key !== 'Enter' && ev.key !== ' ') return;
       ev.preventDefault();
-      this.pick(issue);
+      void this.pick(issue);
     });
     const out: HTMLElement[] = [row];
     if (issue.el && this.editing === issue.el) out.push(this.altField(issue.el));
     return out;
   }
 
-  // the element of issue is shown on its slide and selected, and its check is explained
-  pick(issue: Issue): void {
+  // the element of issue is shown on its slide and selected, and its check is explained. an image
+  // of one mode, e.g. for-light in dark mode, is shown by a flip of the slide into its mode first,
+  // and it is selected once it has a box, so that its frame is measured after the flip
+  async pick(issue: Issue): Promise<void> {
     this.picked = issue;
-    const target = issue.el ?? issue.slide;
-    if (target?.isConnected) this.app.showSlide(target);
-    if (issue.el?.isConnected && issue.el.closest('section')) {
-      const box = issue.el.closest('.zone, .plate, figure') ?? issue.el;
-      this.app.selection.set('elements', [issue.el.matches('img, video, .qr') ? issue.el : box]);
-    }
     const i = String(this.issues.findIndex((x) => this.same(x, issue)));
     for (const r of this.list.querySelectorAll<HTMLElement>('.item')) r.setAttribute('aria-selected', String(r.dataset.i === i));
     this.showInfo();
+    const target = issue.el ?? issue.slide;
+    if (target?.isConnected) this.app.showSlide(target);
+    if (!issue.el?.isConnected || !issue.el.closest('section')) return;
+    await shownInMode(issue.el);
+    if (this.picked !== issue || !issue.el.isConnected) return;
+    const box = issue.el.closest('.zone, .plate, figure') ?? issue.el;
+    this.app.selection.set('elements', [issue.el.matches('img, video, .qr') ? issue.el : box]);
+    this.app.invalidate('layout');
   }
 
   private showInfo(): void {
