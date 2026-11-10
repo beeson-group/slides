@@ -37,6 +37,12 @@ dialog.beeson-edit-card .row button:hover { filter: brightness(0.97); }
 dialog.beeson-edit-card .row button.primary { border-color: transparent; background: var(--ed-select); color: var(--ed-on-select); }
 dialog.beeson-edit-card .row button[hidden] { display: none; }
 dialog.beeson-edit-card button:focus-visible { outline: 3px solid var(--ed-focus); outline-offset: 1px; }
+[data-beside] { --arrow: 50%; }
+[data-beside]::before { content: ""; position: absolute; width: 12px; height: 12px; box-sizing: border-box; background: inherit; border: 0 solid; border-color: inherit; transform: rotate(45deg); pointer-events: none; }
+[data-beside="below"]::before { top: -7px; left: calc(var(--arrow) - 6px); border-width: 1px 0 0 1px; }
+[data-beside="above"]::before { bottom: -7px; left: calc(var(--arrow) - 6px); border-width: 0 1px 1px 0; }
+[data-beside="right"]::before { left: -7px; top: calc(var(--arrow) - 6px); border-width: 0 0 1px 1px; }
+[data-beside="left"]::before { right: -7px; top: calc(var(--arrow) - 6px); border-width: 1px 1px 0 0; }
 `;
 
 const FOCUSABLE = 'button:not([disabled]):not([hidden]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
@@ -167,6 +173,61 @@ export async function ask(options: DialogOptions, focus?: string): Promise<strin
 // the open modal dialog, into which an element that must be clicked while it is open is put,
 // since the rest of the page is inert
 export const host = (): HTMLElement => document.querySelector<HTMLElement>('dialog.beeson-edit-card[open]') ?? document.body;
+
+// a side of a target at which a popover is put
+export type Side = 'below' | 'above' | 'right' | 'left';
+
+type Box = { left: number; top: number; right: number; bottom: number; width: number; height: number };
+
+const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, Math.max(lo, hi)));
+
+// the place of a popover of size w by h beside the box t, on the first of sides where it fits in
+// the window without meeting t, as the popovers of Keynote are put beside their object and flipped
+// to the other side. where no side fits, it is put on the side with the most room and kept in the
+// window, and side is null. arrow is the place of the point of its arrow along its edge, in px from
+// its left or top. a pure function, tested under node
+export function besidePlace(t: Box, w: number, h: number, view: { width: number; height: number }, sides: Side[] = ['below', 'above', 'right', 'left'], gap = 10, margin = 8): { x: number; y: number; side: Side | null; arrow: number } {
+  const room: Record<Side, number> = {
+    below: view.height - margin - (t.bottom + gap) - h,
+    above: t.top - gap - h - margin,
+    right: view.width - margin - (t.right + gap) - w,
+    left: t.left - gap - w - margin,
+  };
+  const fit = sides.find((s) => room[s] >= 0);
+  const side = fit ?? sides.reduce((a, b) => (room[b] > room[a] ? b : a));
+  const across = side === 'below' || side === 'above';
+  let x = across ? t.left + t.width / 2 - w / 2 : side === 'right' ? t.right + gap : t.left - gap - w;
+  let y = across ? (side === 'below' ? t.bottom + gap : t.top - gap - h) : t.top + t.height / 2 - h / 2;
+  x = clamp(x, margin, view.width - w - margin);
+  y = clamp(y, margin, view.height - h - margin);
+  const arrow = across ? clamp(t.left + t.width / 2 - x, 18, w - 18) : clamp(t.top + t.height / 2 - y, 18, h - 18);
+  return { x, y, side: fit ?? null, arrow };
+}
+
+// the popover pop, a fixed element, put beside the box of target in the window, with an arrow at
+// the target on the side where it fits. it is given the attribute data-beside with its side
+export function placeBeside(pop: HTMLElement, target: DOMRectReadOnly, sides?: Side[], gap = 12): Side | null {
+  const p = besidePlace(target, pop.offsetWidth, pop.offsetHeight, { width: innerWidth, height: innerHeight }, sides, gap);
+  pop.style.left = `${Math.round(p.x)}px`;
+  pop.style.top = `${Math.round(p.y)}px`;
+  if (p.side) {
+    pop.dataset.beside = p.side;
+    pop.style.setProperty('--arrow', `${Math.round(p.arrow)}px`);
+  } else delete pop.dataset.beside;
+  return p.side;
+}
+
+// the popover kept beside target while its size changes, e.g. as a preview is typeset or a row is
+// shown. the function returned stops it
+export function keepBeside(pop: HTMLElement, target: () => DOMRectReadOnly, sides?: Side[], gap?: number): () => void {
+  const place = () => {
+    if (pop.isConnected) placeBeside(pop, target(), sides, gap);
+  };
+  place();
+  const watch = new ResizeObserver(place);
+  watch.observe(pop);
+  return () => watch.disconnect();
+}
 
 export function install(_app: App): void {
   injectStyle('dialog', CSS);

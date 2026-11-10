@@ -1,4 +1,5 @@
-// the dialog of a link, a popover under the linked words as in Keynote: Link to Slide, Webpage,
+// the dialog of a link, a popover beside the block of the linked words, under it or over it where
+// the window ends, or at its side, hence the rest of the block stays in view: Link to Slide, Webpage,
 // Email, or Phone, the list of the slides, the address, the address and the subject of an email,
 // or the number, and the buttons Remove, Open Link, and Done. Enter or Done sets the link as one
 // entry of the history, and Esc or a press outside closes the popover without a change. a link to
@@ -8,6 +9,7 @@
 
 import type { App } from '../app.ts';
 import { describe, isHidden, numbers } from '../navigator/navigator.ts';
+import { keepBeside } from '../ui/dialog.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { textTarget, type Target } from './blocks.ts';
 import { canLink, linkAt, removeLink, setLink } from './inline.ts';
@@ -108,6 +110,7 @@ export async function applyLink(app: App, href: string): Promise<void> {
 }
 
 let open: { dialog: HTMLDialogElement; close(apply: boolean): void } | null = null;
+let unplace: (() => void) | null = null;
 
 export function linkOpen(): boolean {
   return open !== null;
@@ -229,6 +232,8 @@ export function openLink(app: App, kind0?: Kind): void {
     if (open?.dialog !== dialog) return;
     open = null;
     document.removeEventListener('pointerdown', outside, true);
+    unplace?.();
+    unplace = null;
     highlights()?.delete('beeson-link');
     const h = href();
     dialog.close();
@@ -271,21 +276,10 @@ export function openLink(app: App, kind0?: Kind): void {
   const H = (globalThis as unknown as { Highlight?: HighlightCtor }).Highlight;
   if (saved && !saved.range.collapsed && H) highlights()?.set('beeson-link', new H(saved.range));
   show(kind);
-  place(dialog, saved ? saved.range : null, saved?.host ?? app.selection.elements()[0] ?? null);
+  const block = (saved?.host ?? app.selection.elements()[0] ?? document.body).getBoundingClientRect();
+  unplace = keepBeside(dialog, () => block);
   document.addEventListener('pointerdown', outside, true);
   if (kind === 'webpage') field.select();
-}
-
-// the popover under the words, or over them where the window ends below them
-function place(dialog: HTMLElement, range: Range | null, host: Element | null): void {
-  const r = range && !range.collapsed ? range.getBoundingClientRect() : (host ?? document.body).getBoundingClientRect();
-  const w = dialog.offsetWidth;
-  const h = dialog.offsetHeight;
-  const below = r.bottom + 10;
-  const y = below + h <= innerHeight - 8 ? below : r.top - h - 10;
-  const x = r.left + r.width / 2 - w / 2;
-  dialog.style.left = `${Math.max(8, Math.min(x, innerWidth - w - 8))}px`;
-  dialog.style.top = `${Math.max(8, Math.min(y, innerHeight - h - 8))}px`;
 }
 
 export function install(_app: App): void {

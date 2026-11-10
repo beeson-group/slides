@@ -1,5 +1,5 @@
-// the TeX of a formula is edited in a sheet under it, as the Edit Equation window of Keynote: a
-// title, a tall field of the TeX, a live preview, and Cancel with Apply, or Insert for a new
+// the TeX of a formula is edited in a sheet beside the line or the list item that holds it, as the
+// Edit Equation popover of Keynote, flipped to the other side where the window ends: a title, a tall field of the TeX, a live preview, and Cancel with Apply, or Insert for a new
 // formula. a click on a formula, or Enter on a focused one, opens the sheet, and a TeX with an
 // error is refused before the slide is touched. an empty TeX is shown as a gray prompt and is not
 // applied. the field completes the macros of theme/macros.js and the commands of TeX after a
@@ -8,6 +8,7 @@
 
 import { HOST, type App, type MathPop } from '../app.ts';
 import { completionText, completions, contentWithInline, contentWithTex, deckMacros, isName, mathLookup, previewTex, type Macro } from '../math.ts';
+import { keepBeside, type Side } from '../ui/dialog.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 
 const CSS = `
@@ -188,8 +189,16 @@ export function texEditor(options: { display(): boolean; label: string; placehol
 }
 
 // the sheet of a TeX: its title, its first TeX, whether it is a display, the label of its button,
-// where it is put, and commit, which writes the TeX and throws an error to be shown at the field
-type Sheet = { title: string; tex: string; display: boolean; open: string; close: string; primary: string; rect: DOMRect; commit(tex: string): Promise<void>; done?(): void };
+// the box that it is put beside and kept clear of, and commit, which writes the TeX and throws an
+// error to be shown at the field
+type Sheet = { title: string; tex: string; display: boolean; open: string; close: string; primary: string; rect(): DOMRect; commit(tex: string): Promise<void>; done?(): void };
+
+// the sheet is put at the right of the text column, over the figure of the slide, or at the left,
+// and above or below a block that fills the slide
+const SIDES: Side[] = ['right', 'left', 'below', 'above'];
+
+// the box of the block that holds a formula or a caret, e.g. a list item, a paragraph, or a display
+export const blockBox = (el: Element): DOMRect => (el.closest(HOST) ?? el).getBoundingClientRect();
 
 // the formula that the sheet is open for, read by the Formula pane of the inspector
 let openFor: Element | null = null;
@@ -202,7 +211,6 @@ let sheetApi: { open(sheet: Sheet, target: Element | null): void } | null = null
 // a selection by Insert Equation in PowerPoint
 export function openInsert(app: App, host: Element, range: Range): void {
   const selected = range.collapsed ? '' : range.toString();
-  const rect = range.getClientRects()[0] ?? range.getBoundingClientRect();
   const kept = range.cloneRange();
   sheetApi?.open({
     title: 'Insert Inline Formula',
@@ -211,7 +219,7 @@ export function openInsert(app: App, host: Element, range: Range): void {
     open: '\\(',
     close: '\\)',
     primary: 'Insert',
-    rect: rect.width || rect.height ? rect : host.getBoundingClientRect(),
+    rect: () => blockBox(host),
     commit: async (tex) => {
       const { content, index } = contentWithInline(host, kept, tex);
       await app.history.transact('Inline Formula', () => app.doc.setContent(host, content, 'Inline Formula'));
@@ -232,6 +240,7 @@ export function install(app: App): void {
   injectStyle('mathpop', CSS);
   let popover: HTMLElement | null = null;
   let back: (() => void) | null = null;
+  let unplace: (() => void) | null = null;
 
   // the keys of an open completion list are taken before the keys of the editor and of the sheet
   window.addEventListener('keydown', (ev) => {
@@ -243,6 +252,8 @@ export function install(app: App): void {
 
   function closeMath(focus = true): void {
     completing?.close();
+    unplace?.();
+    unplace = null;
     popover?.remove();
     popover = null;
     openFor = null;
@@ -291,12 +302,10 @@ export function install(app: App): void {
     const hint = make('span', 'hint', `${sheet.open} … ${sheet.close}, ${keys} to ${sheet.primary.toLowerCase()}, Esc to cancel`);
     row.append(hint, cancel, apply);
     box.append(title, field, ed.preview, ed.message, row);
-    const rect = sheet.rect;
     document.body.append(box);
-    const w = box.offsetWidth;
-    const h = box.offsetHeight;
-    box.style.left = `${Math.max(16, Math.min(rect.left, window.innerWidth - w - 16))}px`;
-    box.style.top = `${rect.bottom + 8 + h < window.innerHeight - 8 ? rect.bottom + 8 : Math.max(52, rect.top - h - 8)}px`;
+    // the box of the block is read once, since the block is typeset again at a commit
+    const rect = sheet.rect();
+    unplace = keepBeside(box, () => rect, SIDES);
     apply.disabled = !sheet.tex.trim();
     void ed.refresh();
     apply.addEventListener('click', async () => {
@@ -366,7 +375,7 @@ export function install(app: App): void {
       open: info.open,
       close: info.close,
       primary: fresh ? 'Insert' : 'Apply',
-      rect: container.getBoundingClientRect(),
+      rect: () => blockBox(container),
       commit: (tex) => setMath(container, tex),
     }, container);
   }

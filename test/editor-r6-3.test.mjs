@@ -12,6 +12,7 @@ import { after, before, test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
+import { besidePlace } from '../src/editor/ui/dialog.ts';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { byteExact, click, drag, editorPage, press, saveAndReopen, type } from './helpers/editor.mjs';
@@ -101,6 +102,106 @@ async function roundTrip(page, undos = 1) {
   assert.equal(text, edited);
   assert.deepEqual(errors(page), []);
   return edited;
+}
+
+test('a popover is put on the first side where it fits, and flipped where the window ends', () => {
+  const view = { width: 1440, height: 900 };
+  const item = { left: 250, top: 780, right: 750, bottom: 830, width: 500, height: 50 };
+  // below an item near the bottom of the window there is no room, hence the popover goes above it
+  const up = besidePlace(item, 372, 200, view);
+  assert.equal(up.side, 'above');
+  assert.ok(up.y + 200 <= item.top);
+  assert.equal(besidePlace(item, 460, 316, view, ['right', 'left', 'below', 'above']).side, 'right');
+  const wide = { ...item, left: 600, right: 1300, width: 700 };
+  const left = besidePlace(wide, 460, 316, view, ['right', 'left', 'below', 'above']);
+  assert.equal(left.side, 'left');
+  assert.ok(left.x + 460 <= wide.left);
+  // without room on any side, the popover is kept in the window without an arrow
+  const full = besidePlace({ left: 0, top: 0, right: 1440, bottom: 900, width: 1440, height: 900 }, 460, 316, view);
+  assert.equal(full.side, null);
+  assert.ok(full.x >= 8 && full.y >= 8 && full.x + 460 <= 1432 && full.y + 316 <= 892);
+});
+
+// the caret at the end of the last item of the list of the current slide
+async function caretInLast(page) {
+  const r = await boxOf(page, LAST);
+  await click(page, { x: r.right - 4, y: r.bottom - 6 });
+  await settle(page);
+  await page.evaluate(`(() => {
+    const r = document.createRange();
+    r.selectNodeContents(document.querySelector(${js(LAST)}));
+    r.collapse(false);
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+  })()`);
+}
+
+for (const platform of PLATFORMS) {
+  test(`the formula sheets and the link editor are put beside a list item near the bottom of the slide (${platform})`, async (t) => {
+    const page = await open(platform);
+    t.after(() => page.close?.());
+    await show(page, STEPS);
+    const slide = await boxOf(page, '.reveal section.present');
+    const item = await boxOf(page, LAST);
+    assert.ok(item.bottom > slide.top + (slide.bottom - slide.top) * 0.75, 'the last item is not near the bottom of the slide');
+
+    await caretInLast(page);
+    await exec(page, 'math.inline');
+    await page.waitFor(`!!document.querySelector('.beeson-math')`);
+    await sleep(200);
+    await besideCheck(page, '.beeson-math', LAST, 'the Insert Inline Formula sheet');
+    await type(page, 'x^2');
+    // the sheet takes its TeX once the preview is typeset
+    await page.waitFor(`!document.querySelector('.beeson-math button.primary').disabled`);
+    await press(page, 'Mod+Enter');
+    await page.waitFor(`!document.querySelector('.beeson-math')`);
+    await settle(page);
+    assert.match(await render(page), /one slide per step\.\\\(x\^2\\\)<\/li>/);
+
+    await click(page, `${LAST} mjx-container`);
+    await page.waitFor(`!!document.querySelector('.beeson-math')`);
+    await sleep(200);
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-math .title').textContent`), 'Edit Formula');
+    await besideCheck(page, '.beeson-math', LAST, 'the Edit Formula sheet');
+    await press(page, 'Escape');
+    await page.waitFor(`!document.querySelector('.beeson-math')`);
+    await page.evaluate('window.BeesonEditor.undo()');
+    await byteExact(page);
+
+    // the link editor on the word PDF of the item
+    await caretInLast(page);
+    await page.evaluate(`(() => {
+      const text = document.querySelector(${js(LAST)}).firstChild;
+      const at = text.data.indexOf('PDF');
+      const r = document.createRange();
+      r.setStart(text, at);
+      r.setEnd(text, at + 3);
+      getSelection().removeAllRanges();
+      getSelection().addRange(r);
+    })()`);
+    await settle(page);
+    await press(page, 'Mod+K');
+    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-link[open]')`);
+    await sleep(100);
+    await besideCheck(page, 'dialog.beeson-edit-link', LAST, 'the link editor');
+    await type(page, 'example.com');
+    await press(page, 'Enter');
+    await page.waitFor(`window.BeesonEditor.render().includes('<a href="https://example.com">PDF</a>')`);
+    await roundTrip(page);
+  });
+
+  test(`the formula sheet of a new display formula is kept off the list above it (${platform})`, async (t) => {
+    const page = await open(platform);
+    t.after(() => page.close?.());
+    await show(page, STEPS);
+    await click(page, LAST);
+    await press(page, 'Escape');
+    await exec(page, 'insert.formula');
+    await page.waitFor(`!!document.querySelector('.beeson-math')`);
+    await sleep(200);
+    await besideCheck(page, '.beeson-math', '.reveal section.present ul', 'the Insert Formula sheet');
+    await press(page, 'Escape');
+  });
 }
 
 // the labels of the items of the open menu, with their dimmed state
