@@ -12,6 +12,7 @@ import { layersOf, showLayer } from '../layers.ts';
 import { transitionOf } from '../review/transitions.ts';
 import { injectStyle, stored, store } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
+import { Outline } from './outline.ts';
 import { drawInto, type Thumbs } from './thumbs.ts';
 
 const KEY = 'beeson-nav';
@@ -135,6 +136,7 @@ export class Navigator implements Pane {
   private readonly peek = document.createElement('div');
   private readonly drop = document.createElement('div');
   private readonly foot = document.createElement('div');
+  readonly outline: Outline;
   private readonly app: App;
   private readonly rows = new Map<Element, Row>();
   private thumbs: Thumbs | null = null;
@@ -173,7 +175,20 @@ export class Navigator implements Pane {
     add.append(icon('plus', 16));
     add.addEventListener('click', () => void this.app.commands.run('slide.gallery', add).catch((e) => this.app.fail(e)));
     this.foot.append(add);
-    this.pane.append(this.list, this.foot, this.peek);
+    this.outline = new Outline(app, this.pane);
+    this.pane.append(this.list, this.outline.el, this.foot, this.peek);
+    // the outline view takes the place of the thumbnails, and shows the navigator when it is hidden
+    app.commands.define({
+      id: 'view.outline',
+      label: 'Outline',
+      menu: { bar: 'View', group: 'panes', order: 10.5 },
+      checked: () => this.outline.shown,
+      run: () => {
+        if (!this.on && !this.outline.shown) this.toggle();
+        this.outline.toggle();
+        this.app.relayout();
+      },
+    });
     this.button.addEventListener('click', () => this.toggle());
     this.list.addEventListener('keydown', (ev) => this.onKey(ev));
     this.list.addEventListener('pointerdown', (ev) => this.onDown(ev));
@@ -303,6 +318,7 @@ export class Navigator implements Pane {
   // the rows follow the slides of the deck, their numbers, titles, steps, and hidden state, and
   // the selection. a row is kept with its thumbnail while its slide is on the page
   refresh(): void {
+    this.outline.refresh();
     const slides = this.slides();
     const nums = places(slides);
     const kept = new Set(slides);
