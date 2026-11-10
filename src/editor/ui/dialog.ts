@@ -1,7 +1,9 @@
 // a modal dialog over the dialog element, which traps Tab, gives the focus back on close, and
-// gives its answer as a Promise. the cards of a file in file/files.ts and file/drafts.ts are
-// dialogs of this kind. a Dialog is kept in the page between its opens, with the attribute hidden
-// while it is closed, since the tests read a card by its class and its hidden state
+// gives its answer as a Promise. it is shown as a sheet of Keynote, i.e. a card at the top of the
+// window under the toolbar, over a scrim that dims the window in both modes of the chrome. the
+// cards of a file in file/files.ts and file/drafts.ts are dialogs of this kind. a Dialog is kept
+// in the page between its opens, with the attribute hidden while it is closed, since the tests
+// read a card by its class and its hidden state
 
 import type { App } from '../app.ts';
 import { injectStyle, make } from './dom.ts';
@@ -13,9 +15,18 @@ export type DialogButton = { label: string; value: string; title?: string; prima
 export type DialogOptions = { title: string; text?: string; body?: HTMLElement; buttons: DialogButton[]; className?: string; dismissable?: boolean; stay?: string[]; onButton?: (value: string) => void };
 
 const CSS = `
-dialog.beeson-edit-card { box-sizing: border-box; width: min(460px, calc(100vw - 32px)); max-height: calc(100vh - 64px); margin: auto; padding: 20px 22px 18px; border: 1px solid var(--ed-menu-line); border-radius: 12px; background: var(--ed-panel); color: var(--ed-text); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28), 0 2px 8px rgba(0, 0, 0, 0.12); overflow: auto; }
+dialog.beeson-edit-card { --sheet: var(--ed-panel); --sheet-line: var(--ed-menu-line); box-sizing: border-box; width: min(460px, calc(100vw - 32px)); max-height: calc(100vh - 104px); margin: 88px auto auto; padding: 20px 22px 18px; border: 1px solid var(--sheet-line); border-radius: 12px; background: var(--sheet); color: var(--ed-text); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.32), 0 2px 8px rgba(0, 0, 0, 0.14); overflow: auto; }
 dialog.beeson-edit-card[hidden] { display: none; }
-dialog.beeson-edit-card::backdrop { background: rgba(0, 0, 0, 0.22); }
+dialog.beeson-edit-card::backdrop { background: rgba(0, 0, 0, 0.36); }
+dialog.beeson-edit-card[open] { animation: beeson-sheet-in 160ms ease-out; }
+dialog.beeson-edit-card[open]::backdrop { animation: beeson-scrim-in 160ms ease-out; }
+@keyframes beeson-sheet-in { from { opacity: 0; transform: translateY(-10px); } }
+@keyframes beeson-scrim-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { dialog.beeson-edit-card[open], dialog.beeson-edit-card[open]::backdrop { animation: none; } }
+@media (prefers-color-scheme: dark) {
+  dialog.beeson-edit-card { --sheet: #313133; --sheet-line: rgba(255, 255, 255, 0.16); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6), 0 0 0 0.5px rgba(0, 0, 0, 0.8); }
+  dialog.beeson-edit-card::backdrop { background: rgba(0, 0, 0, 0.5); }
+}
 dialog.beeson-edit-card h3 { margin: 0 0 6px; font: 600 14px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; }
 dialog.beeson-edit-card p { margin: 0 0 16px; color: var(--ed-muted); }
 dialog.beeson-edit-card ul { margin: 0 0 16px; padding-left: 18px; max-height: 50vh; overflow-y: auto; color: var(--ed-muted); }

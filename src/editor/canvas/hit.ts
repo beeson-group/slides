@@ -92,10 +92,16 @@ export function containerOf(app: App, el: Element): Element | null {
   return up && app.current()?.contains(up) ? up : null;
 }
 
-// whether a press at target is on the canvas, i.e. on the slide or around it in the viewport of
-// reveal.js, and not on the notes or the chrome of the editor, which is outside the viewport
-export function onCanvas(target: Element | null): boolean {
-  return !!target?.closest('.reveal') && !target.closest('aside.notes');
+// whether a press at target is on the canvas, i.e. on the slide in the viewport of reveal.js, or at
+// the point at on the pasteboard around it in the canvas cell of the shell, without its scroll bars,
+// and not on the notes or the chrome of the editor
+export function onCanvas(target: Element | null, app?: App, at?: { x: number; y: number }): boolean {
+  if (!target || target.closest('aside.notes')) return false;
+  if (target.closest('.reveal')) return true;
+  const stage = app?.stage;
+  if (!stage || !at || target !== stage.el) return false;
+  const v = stage.viewport;
+  return at.x >= v.left && at.x < v.right && at.y >= v.top && at.y < v.bottom;
 }
 
 // the block whose band holds the point x, y in screen pixels, the nearest edge first

@@ -9,6 +9,7 @@ import type { App } from '../app.ts';
 import type { Command, Context } from '../commands.ts';
 import { ask, type DialogOptions } from '../ui/dialog.ts';
 import { injectStyle, make, store, stored } from '../ui/dom.ts';
+import { fillFormat as fillPanes } from '../inspector/inspector.ts';
 import { closeMenus, openContextMenu, openMenu, menuItems, type MenuItem } from '../ui/menu.ts';
 
 const NAV_KEY = 'beeson-nav-w';
@@ -52,24 +53,10 @@ html.beeson-editor.beeson-steps body > .beeson-edit-inspector, html.beeson-edito
 .beeson-edit-inspector .tabs button:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: 1px; }
 .beeson-edit-inspector > .panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
 .beeson-edit-inspector > .panel[hidden] { display: none; }
-.beeson-edit-inspector .format { padding: 4px 16px 16px; }
-.beeson-edit-inspector .format h4 { margin: 12px 0 6px; font: 600 12px/1.3 var(--ed-font); }
-.beeson-edit-inspector .format dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
-.beeson-edit-inspector .format dt { color: var(--ed-muted); }
-.beeson-edit-inspector .format dd { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 html.beeson-editor .beeson-edit-inspector .beeson-edit-side { position: static; inset: auto; width: auto; flex: 1; min-height: 0; border: 0; background: transparent; color: var(--ed-text); font: 12px/1.4 var(--ed-font); }
 html.beeson-editor .beeson-edit-inspector .beeson-edit-side .row { grid-template-columns: minmax(0, 8.5em) auto minmax(0, 1fr); }
 html.beeson-editor .beeson-edit-inspector .beeson-edit-side .row select { width: 100%; min-width: 0; }
 `;
-
-// the label of a command on the toolbar, which is short and does not change, e.g. Undo for
-// Undo Typing. a package may name it with toolbar.label
-const SHORT: Record<string, string> = { 'edit.undo': 'Undo', 'edit.redo': 'Redo' };
-export function toolbarLabel(app: App, c: Command): string {
-  const own = (c.toolbar as { label?: string } | undefined)?.label ?? SHORT[c.id];
-  if (own) return own;
-  return typeof c.label === 'string' ? c.label : app.commands.label(c.id);
-}
 
 declare global {
   interface Window {
@@ -193,26 +180,9 @@ export function install(app: App): void {
     next.focus();
   });
 
-  // the Format tab: the facts of the slide and of the selection, until the panes of R2 fill it
+  // the Format tab: the panes of inspector/inspector.ts for the selection
   function fillFormat(): void {
-    const slide = app.current();
-    const layout = ['title', 'section', 'closing', 'figure', 'split'].find((c) => slide?.classList.contains(c)) ?? 'content';
-    const width = ['narrow', 'wide'].find((c) => slide?.classList.contains(c)) ?? 'standard';
-    const steps = new Set([...(slide?.querySelectorAll('.fragment') ?? [])].map((f) => f.getAttribute('data-fragment-index') ?? '')).size;
-    const notes = slide?.querySelector('aside.notes')?.textContent?.trim() ? 'yes' : 'none';
-    const sel = app.selection;
-    const what = sel.kind === 'none' ? 'nothing' : sel.kind === 'text' ? 'a text' : `${sel.items.length} ${sel.kind === 'slides' ? 'slide' : 'element'}${sel.items.length === 1 ? '' : 's'}`;
-    const list = (rows: [string, string][]) => {
-      const dl = make('dl');
-      for (const [k, v] of rows) dl.append(make('dt', '', k), make('dd', '', v));
-      return dl;
-    };
-    formatPanel.replaceChildren(
-      make('h4', '', 'Slide'),
-      list([['Layout', layout], ['Width', width], ['Steps', String(steps)], ['Notes', notes]]),
-      make('h4', '', 'Selection'),
-      list([['Selected', what]]),
-    );
+    fillPanes(app, formatPanel);
   }
 
   app.commands.define({

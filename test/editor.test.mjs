@@ -60,7 +60,7 @@ test('a deck without ?edit does not load the editor, with ?edit it does on file:
   const status = await page.evaluate('window.BeesonEditor.status()');
   assert.equal(status.supported, true);
   assert.equal(status.state, 'waiting');
-  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].filter((b) => !b.hidden).map((b) => b.textContent)`), ['Undo', 'Redo', 'Add Slide', 'Present', 'Save', 'Format', 'Steps']);
+  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].filter((b) => !b.hidden).map((b) => b.textContent)`), ['Undo', 'Redo', 'Add Slide', 'Text Box', 'Formula', 'QR Code', 'Present', 'Save', 'Format', 'Steps']);
   // the card asks for the file, with the folder of the deck
   assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-card').hidden`), false);
   assert.match(await page.evaluate(`document.querySelector('.beeson-edit-card p').textContent`), /index\.html in \//);
@@ -363,7 +363,8 @@ test('a step set in the Steps pane writes the class and the index into the tag o
 test('a figure dragged on the slide gets its offset as a translate style in its tag, and the arrow keys nudge it', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
-  const page = await editorPage(browser);
+  // Alt is the free modifier of a drag on Windows and Linux, and the copy modifier on a Mac
+  const page = await editorPage(browser, 'edit&still&edit-platform=other');
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
   const moved = await page.evaluate(`(async () => {
     const img = document.querySelector('.reveal .slides section .zone > img');
@@ -434,7 +435,8 @@ const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 test('one history undoes and redoes the typing, a formula, a step, and a move, with ⌘Z and ⌘⇧Z', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
-  const page = await editorPage(browser);
+  // Alt is the free modifier of a drag on Windows and Linux, and the copy modifier on a Mac
+  const page = await editorPage(browser, 'edit&still&edit-platform=other');
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
   const status = () => page.evaluate('window.BeesonEditor.status()');
   const render = () => page.evaluate('window.BeesonEditor.render()');
@@ -833,7 +835,8 @@ test('Open without saving after a save puts the slides back as last saved', asyn
 test('Esc leaves a text and selects its block for the arrow keys, Tab reaches a figure, and a dragged figure snaps to the edge of a block with a guide', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
-  const page = await editorPage(browser);
+  // Alt is the free modifier of a drag on Windows and Linux, and the copy modifier on a Mac
+  const page = await editorPage(browser, 'edit&still&edit-platform=other');
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
   await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .zone > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
   await sleep(200);
@@ -1292,7 +1295,8 @@ test('a row of the slide list rested on shows a preview of its slide, which is h
 test('Shift locks a drag to one axis, a run of nudges is one undo, and the offset is shown while the element moves', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
-  const page = await editorPage(browser);
+  // Alt is the free modifier of a drag on Windows and Linux, and the copy modifier on a Mac
+  const page = await editorPage(browser, 'edit&still&edit-platform=other');
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
   await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .zone > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
   await sleep(200);
