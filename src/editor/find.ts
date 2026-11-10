@@ -205,7 +205,7 @@ function icon(name: keyof typeof ICONS): SVGSVGElement {
 // its own over the canvas, hence it is drawn in the color of the bars in dark mode, which is
 // lighter than the canvas
 const CSS = `
-.beeson-find { position: fixed; z-index: 80; top: 92px; right: calc(var(--ed-insp-col, 0px) + 16px); width: 480px; max-width: calc(100vw - 32px); box-sizing: border-box; background: var(--ed-panel); color: var(--ed-text); border: 1px solid var(--ed-menu-line); border-radius: 10px; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.12); font: 13px/1.3 var(--ed-font); user-select: none; -webkit-user-select: none; }
+.beeson-find { position: fixed; z-index: 80; top: 92px; right: calc(var(--ed-insp-col, 0px) + var(--ed-a11y-col, 0px) + 16px); width: 480px; max-width: calc(100vw - 32px); box-sizing: border-box; background: var(--ed-panel); color: var(--ed-text); border: 1px solid var(--ed-menu-line); border-radius: 10px; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.12); font: 13px/1.3 var(--ed-font); user-select: none; -webkit-user-select: none; }
 @media (prefers-color-scheme: dark) { .beeson-find { background: var(--ed-bg); box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(0, 0, 0, 0.8); } }
 .beeson-find[hidden] { display: none; }
 .beeson-find .title { position: relative; height: 28px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--ed-line); color: var(--ed-muted); font-size: 13px; font-weight: 500; cursor: grab; touch-action: none; }

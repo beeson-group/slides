@@ -1,5 +1,5 @@
-// the status bar: the previous and next slide with the number of the current one, the layer
-// switch, a hint, the buttons Slides, Steps, and Notes, the zoom (−, a slider, +, the percentage as
+// the status bar: the previous and next slide with the number of the current one, the state of
+// accessibility of the deck, the layer switch, a hint, the buttons Slides, Steps, and Notes, the zoom (−, a slider, +, the percentage as
 // a menu, and Fit), and the switch ◐ of the mode of the slide
 
 import type { App } from '../app.ts';
@@ -20,6 +20,8 @@ const CSS = `
 .beeson-edit-bottom .beeson-layers[hidden] { display: none; }
 .beeson-edit-bottom .beeson-layers > span { margin-right: 4px; }
 .beeson-edit-bottom .hint { flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.beeson-edit-bottom .a11y[hidden] { display: none; }
+.beeson-edit-bottom .a11y svg { flex: none; color: var(--ed-muted); }
 .beeson-edit-bottom .zoom { display: flex; align-items: center; gap: 2px; }
 .beeson-edit-bottom .zoom button { padding: 0 4px; }
 /* the percentage keeps one width, so that the slider stays under the pointer while the zoom changes */
@@ -44,6 +46,27 @@ const STEPS = 1000;
 const TICK = -LOG_MIN / (LOG_MAX - LOG_MIN);
 const SNAP = 4;
 
+// the figure of the accessibility button, drawn as the icons of ui/icons.ts on their grid of 20 px
+function person(): SVGSVGElement {
+  const ns = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(ns, 'svg');
+  svg.setAttribute('viewBox', '0 0 20 20');
+  svg.setAttribute('width', '14');
+  svg.setAttribute('height', '14');
+  svg.setAttribute('aria-hidden', 'true');
+  for (const d of ['M10 3a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2z', 'M4 7.75 10 8.5l6-.75', 'M10 8.5v4', 'M10 12.5 7 17', 'M10 12.5 13 17']) {
+    const path = document.createElementNS(ns, 'path');
+    path.setAttribute('d', d);
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke', 'currentColor');
+    path.setAttribute('stroke-width', '1.5');
+    path.setAttribute('stroke-linecap', 'round');
+    path.setAttribute('stroke-linejoin', 'round');
+    svg.append(path);
+  }
+  return svg;
+}
+
 // layers is the switch of layers.ts, placed between the slide number and the hint
 export function install(app: App, layers: HTMLElement): void {
   injectStyle('statusbar', CSS);
@@ -52,6 +75,13 @@ export function install(app: App, layers: HTMLElement): void {
   const countEl = make('span', 'count');
   const nextButton = button('›', 'Next slide', 'Next slide');
   const hintEl = make('span', 'hint', 'Click a text or a formula to edit it, drag a figure or the ⠿ handle of a block to move it, press G to jump to a slide, and Esc to leave a text and select its block');
+
+  // the state of the checker of review/accessibility.ts, which writes its text, as the button
+  // Accessibility: Investigate of the status bar of PowerPoint, and opens its pane
+  const a11yButton = button('', 'Check Accessibility', '');
+  a11yButton.className = 'a11y';
+  a11yButton.hidden = true;
+  a11yButton.append(person(), make('span', 'text'));
 
   const zoomBox = make('div', 'zoom');
   const outButton = button('', 'Zoom out', 'Zoom out');
@@ -85,11 +115,12 @@ export function install(app: App, layers: HTMLElement): void {
   modeButton.append(icon('contrast', 14));
 
   const rule = () => make('span', 'rule');
-  bottom.append(prevButton, countEl, nextButton, layers, hintEl, app.nav.button, app.steps.button, app.notes.button, rule(), zoomBox, rule(), modeButton);
+  bottom.append(prevButton, countEl, nextButton, a11yButton, layers, hintEl, app.nav.button, app.steps.button, app.notes.button, rule(), zoomBox, rule(), modeButton);
   const fail = (e: unknown) => app.fail(e);
   wire(prevButton, () => app.commands.run('navigate.previous'), fail);
   wire(nextButton, () => app.commands.run('navigate.next'), fail);
   wire(app.notes.button, () => app.commands.run('view.notes'), fail);
+  wire(a11yButton, () => app.commands.run('view.accessibility'), fail);
   // the panes wire Slides and Steps themselves, and a pointer click leaves the focus on the slide
   for (const b of [app.nav.button, app.steps.button]) b.addEventListener('click', (ev) => ev.detail > 0 && b.blur());
   wire(outButton, () => app.stage.zoomOut(), fail);
