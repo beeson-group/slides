@@ -36,6 +36,7 @@ const CSS = `
 .beeson-overlay [hidden] { display: none !important; }
 .beeson-grip { position: fixed; width: 9px; height: 9px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; border: 1.5px solid var(--ed-select, #7048e8); background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); pointer-events: auto; touch-action: none; }
 .beeson-frame.selected.locked { border-color: #8a8a8a; }
+.beeson-grip.square { border-radius: 0; }
 .beeson-grip.locked { width: 9px; height: 9px; border: 0; border-radius: 0; background: linear-gradient(45deg, transparent 42%, #8a8a8a 42% 58%, transparent 58%), linear-gradient(-45deg, transparent 42%, #8a8a8a 42% 58%, transparent 58%); box-shadow: none; pointer-events: none; }
 .beeson-rotor { position: fixed; width: 14px; height: 14px; margin: -7px 0 0 -7px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--ed-select, #7048e8); background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); color: var(--ed-select, #7048e8); font: 600 10px/11px system-ui, sans-serif; text-align: center; cursor: grab; user-select: none; pointer-events: auto; touch-action: none; }
 .beeson-rotor-stem { position: fixed; width: 1px; height: 11px; margin-left: -0.5px; background: var(--ed-select, #7048e8); transform-origin: 50% 0; }
@@ -174,6 +175,8 @@ export class Frames {
     const n = this.gripSets.length;
     const set = Object.fromEntries(HANDLES.map((h) => {
       const g = div('beeson-grip', this.layer);
+      // square on a Mac, as in PowerPoint and Keynote for the Mac, and round as in PowerPoint for Windows
+      g.classList.toggle('square', this.app.platform === 'mac');
       g.dataset.handle = h;
       g.dataset.member = String(n);
       return [h, g];
