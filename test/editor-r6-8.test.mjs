@@ -281,3 +281,48 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// boxesOf returns the box in slide px of the text of the last item of the list of the current
+// slide, and the boxes of the new text box and of the element after the list
+const boxesOf = (page) =>
+  page.evaluate(`(() => {
+    const s = Reveal.getScale();
+    const top = document.querySelector('.reveal .slides').getBoundingClientRect();
+    const box = (r) => ({ top: (r.top - top.top) / s, bottom: (r.bottom - top.top) / s, left: (r.left - top.left) / s, right: (r.right - top.left) / s });
+    const ul = document.querySelector('.reveal section.present > ul');
+    const r = document.createRange();
+    r.selectNodeContents([...ul.children].at(-1));
+    const next = ul.nextElementSibling;
+    return { ink: box(r.getBoundingClientRect()), next: box(next.getBoundingClientRect()), tag: next.localName };
+  })()`);
+
+for (const platform of PLATFORMS) {
+  test(`a new text box is put under a list moved down, without an overlap (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: 'index.html', n: 4 });
+    assert.match(await page.evaluate(`document.querySelector('.reveal section.present > ul').getAttribute('style') ?? ''`), /translate/);
+    await exec(page, 'insert.text');
+    await frames(page);
+    let b = await boxesOf(page);
+    assert.ok(b.next.top >= b.ink.bottom + 8, `the empty box at ${js(b.next)} overlaps the last line of the list at ${js(b.ink)}`);
+    const empty = b.next;
+    await type(page, 'Typed');
+    await wait(page, 300);
+    b = await boxesOf(page);
+    assert.equal(b.tag, 'p');
+    assert.ok(b.next.top >= b.ink.bottom + 8, `the written box at ${js(b.next)} overlaps the last line of the list at ${js(b.ink)}`);
+    assert.ok(Math.abs(b.next.top - empty.top) <= 1, `the box is moved from ${empty.top} to ${b.next.top} when it is written`);
+    const tag = (await render(page)).match(/<p[^>]*>Typed<\/p>/)?.[0];
+    assert.match(tag ?? '', /^<p style="translate: 0px \d+px">Typed<\/p>$/);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`a new text box under a list in its place is written without an offset (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 2 });
+    await exec(page, 'insert.text');
+    await frames(page);
+    await type(page, 'Typed');
+    await wait(page, 300);
+    assert.match(await render(page), /\n {2}<p>Typed<\/p>\n/);
+    assert.deepEqual(errors(page), []);
+  });
+}
