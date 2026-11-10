@@ -64,7 +64,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(page.errors, []);
   });
 
-  test(`in a text, Backspace, Select All, and the clipboard keys are left to the browser on ${platform}`, async (t) => {
+  test(`in a text, Backspace and the clipboard keys are left to the browser, and Select All is a command, on ${platform}`, async (t) => {
     const browser = await launch();
     t.after(() => browser.close());
     const page = await keysPage(browser, platform);
@@ -72,7 +72,9 @@ for (const platform of PLATFORMS) {
     await click(page, '.reveal section.present > h2');
     await press(page, 'End');
     for (const key of ['Backspace', 'Mod+A', 'Mod+C', 'Mod+X', 'Mod+V', 'D', 'G', 'PageDown', 'Home']) await press(page, key);
-    assert.deepEqual(await prevented(page), ['End', 'Backspace', 'a', 'c', 'x', 'v', 'd', 'g', 'PageDown', 'Home']);
+    // Select All is the command of the registry, which selects the text of the block as the browser
+    // does, and a second one selects every element of the slide
+    assert.deepEqual(await prevented(page), ['End', 'Backspace', 'a:prevented', 'c', 'x', 'v', 'd', 'g', 'PageDown', 'Home']);
     assert.equal(await slide(page), 2);
     assert.equal(await page.evaluate('window.BeesonEditor.status().undo'), true);
     assert.deepEqual(page.errors, []);

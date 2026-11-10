@@ -60,10 +60,22 @@ export function numbers(slides: Element[], written: (slide: Element) => string |
   });
 }
 
+// the width in px from which a thumbnail is read without a preview, as in Keynote, whose thumbnails
+// are about as wide as those of the navigator at its usual width
+const READABLE = 120;
+
+// whether the thumbnail of row is large enough to read and inside the visible part of its list, in
+// which case a hover preview would only repeat it
+function shownWhole(row: HTMLElement): boolean {
+  const pic = row.querySelector('.frame')?.getBoundingClientRect();
+  const list = row.closest('.rows')?.getBoundingClientRect();
+  return !!pic && !!list && pic.width >= READABLE && pic.top >= list.top && pic.bottom <= list.bottom;
+}
+
 const CSS = `
-.beeson-edit-nav { --nav-bg: var(--ed-panel, #f4f4f6); --nav-text: var(--ed-text, #1d1d1f); --nav-muted: var(--ed-muted, #86868b); --nav-line: var(--ed-line, #d2d2d7); --nav-select: var(--ed-select, #7a5af8); --nav-current: rgba(0, 0, 0, 0.07); --nav-shadow: 0 1px 3px rgba(0, 0, 0, 0.22); }
+.beeson-edit-nav { --nav-bg: var(--ed-panel, #f4f4f6); --nav-text: var(--ed-text, #1d1d1f); --nav-muted: var(--ed-muted, #86868b); --nav-line: var(--ed-line, #d2d2d7); --nav-select: var(--ed-select, #7a5af8); --nav-current: rgba(0, 0, 0, 0.07); --nav-hover: rgba(0, 0, 0, 0.2); --nav-shadow: 0 1px 3px rgba(0, 0, 0, 0.22); }
 @media (prefers-color-scheme: dark) {
-  .beeson-edit-nav { --nav-bg: var(--ed-panel, #232326); --nav-text: var(--ed-text, #f2f2f7); --nav-muted: var(--ed-muted, #98989d); --nav-line: var(--ed-line, #3a3a3c); --nav-select: var(--ed-select, #9b82ff); --nav-current: rgba(255, 255, 255, 0.09); --nav-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
+  .beeson-edit-nav { --nav-bg: var(--ed-panel, #232326); --nav-text: var(--ed-text, #f2f2f7); --nav-muted: var(--ed-muted, #98989d); --nav-line: var(--ed-line, #3a3a3c); --nav-select: var(--ed-select, #9b82ff); --nav-current: rgba(255, 255, 255, 0.09); --nav-hover: rgba(255, 255, 255, 0.3); --nav-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
 }
 .beeson-edit-nav { position: fixed; left: 0; top: 44px; bottom: 36px; z-index: 50; width: 240px; box-sizing: border-box; display: none; flex-direction: column; background: var(--nav-bg); border-right: 1px solid var(--nav-line); color: var(--nav-text); font: 12px/1.3 system-ui, sans-serif; }
 html.beeson-nav .beeson-edit-nav { display: flex; }
@@ -74,6 +86,7 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
 .beeson-edit-nav .row .no { color: var(--nav-muted); text-align: right; font-variant-numeric: tabular-nums; line-height: 1; padding-bottom: 1px; }
 .beeson-edit-nav .row .frame { position: relative; border-radius: 5px; box-shadow: var(--nav-shadow); outline: 1px solid var(--nav-line); outline-offset: 0; }
 .beeson-edit-nav .row .pic { aspect-ratio: 16 / 9; border-radius: 5px; background: var(--bg, #000); }
+.beeson-edit-nav .row:hover:not([aria-selected="true"]):not(.dragged) .frame { outline: 3px solid var(--nav-hover); outline-offset: 2px; }
 .beeson-edit-nav .row[aria-selected="true"] .frame { outline: 3px solid var(--nav-select); outline-offset: 2px; }
 .beeson-edit-nav .rows:focus-within .row[aria-selected="true"] .no { color: var(--nav-select); font-weight: 600; }
 .beeson-edit-nav .row .dots { position: absolute; left: 6px; bottom: 5px; display: flex; gap: 3px; pointer-events: none; }
@@ -575,7 +588,7 @@ export class Navigator implements Pane {
   // canvases of a backdrop are painted from the originals, since a cloned canvas is blank, and a
   // tycho viewer is left out, since its clone would start a second renderer
   private showPeek(slide: Element, row: HTMLElement): void {
-    if (this.drag || isHidden(slide)) return;
+    if (this.drag || isHidden(slide) || shownWhole(row)) return;
     const stage = slide.parentElement as HTMLElement;
     const width = stage.offsetWidth || 1920;
     const height = stage.offsetHeight || 1080;

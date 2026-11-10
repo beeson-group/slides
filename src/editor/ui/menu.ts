@@ -9,7 +9,7 @@
 // in the menu and announced with aria-activedescendant
 
 import type { App, Platform } from '../app.ts';
-import type { Command, Context, Group } from '../commands.ts';
+import { keysOf, type Command, type Context, type Group } from '../commands.ts';
 import { injectStyle, make } from './dom.ts';
 import { icon } from './icons.ts';
 
@@ -33,6 +33,9 @@ export type MenuOptions = {
   // true when the menu is opened from the keyboard: its first item is highlighted, and the focus
   // is given to the menu and back to the owner at the close
   keyboard?: boolean;
+  // true when a menu opened with the pointer takes the focus without a highlight, as a context
+  // menu of macOS, and gives it back at the close
+  focus?: boolean;
   label?: string;
   className?: string;
   onClose?: () => void;
@@ -106,7 +109,7 @@ export function keyLabel(keys: string, on: Platform = platform): string {
 
 // the first key of a command on the platform, as a menu shows it
 export function commandKeys(c: Command, on: Platform = platform): string {
-  const k = c.keys?.[on]?.[0];
+  const k = keysOf(c, on)[0];
   return k ? keyLabel(k, on) : '';
 }
 
@@ -121,21 +124,73 @@ export function itemsOfGroups(groups: Group[]): MenuItem[] {
   return out;
 }
 
-// the items of a menu of the menu bar, or of one of its submenus. a submenu is shown in its parent
-// at the group and the order of its first command, and its commands are grouped inside it
+// whether a submenu of commands has an item that can run. a switch is counted when a command of its
+// group is not a switch, e.g. Dashes beside Increase Indent Level in Text, or when every group of
+// the submenu is made of switches. a group of settings, e.g. Align to Slide in Align, thus does not
+// enable a submenu whose commands are disabled
+function canRun(app: App, commands: Command[]): boolean {
+  const plain = (c: Command) => !c.checked || c.checked(app) === null;
+  const groups = new Set(commands.filter(plain).map((c) => c.menu?.group));
+  const counted = groups.size ? commands.filter((c) => groups.has(c.menu?.group)) : commands;
+  return counted.some((c) => app.commands.enabled(c.id));
+}
+
+// the layout of a menu over the submenus and the groups that the packages declare, by the name of
+// a declared submenu or, for a command without one, of its group. parent sets it in a submenu of
+// the layout, flat sets the commands of a declared submenu straight into that parent, and order is
+// added to the order of the first command of a submenu. '*' places a submenu of the menu that the
+// layout does not name
+type Place = { parent?: string; group: string; order?: number; flat?: boolean };
+const LAYOUT: Record<string, Record<string, Place>> = {
+  // Keynote's Format menu: the commands of the text in Font and Text, then the menus of an object,
+  // e.g. Image and Table
+  Format: {
+    Font: { group: 'text', order: -1000 },
+    Text: { group: 'text', order: -1000 },
+    font: { parent: 'Font', group: 'font' },
+    size: { parent: 'Font', group: 'font' },
+    Baseline: { parent: 'Font', group: 'more' },
+    'Text Color': { parent: 'Font', group: 'more' },
+    'Change Case': { parent: 'Font', group: 'more' },
+    'Paragraph Style': { parent: 'Text', group: 'style', flat: true },
+    List: { parent: 'Text', group: 'list', flat: true },
+    clear: { group: 'copy-style' },
+    '*': { group: 'objects', order: 1000 },
+  },
+};
+
+// the path of submenus of a command in its menu, and its group and order there
+function placeOf(c: Command): { path: string[]; group: string; order: number } {
+  const m = c.menu as NonNullable<Command['menu']>;
+  const layout = LAYOUT[m.bar] ?? {};
+  const p = layout[m.submenu ?? m.group];
+  if (!m.submenu) return { path: p?.parent ? [p.parent] : [], group: p?.group ?? m.group, order: m.order };
+  if (!p?.parent) return { path: [m.submenu], group: m.group, order: m.order };
+  return p.flat ? { path: [p.parent], group: p.group, order: m.order } : { path: [p.parent, m.submenu], group: m.group, order: m.order };
+}
+
+// the items of a menu of the menu bar, or of one of its submenus at any depth. a submenu is shown
+// at the group and the order of its first command, unless the layout places it, and a submenu of
+// one command is replaced by the command
 export function menuItems(app: App, bar: string, submenu?: string): MenuItem[] {
   type Entry = { group: string; order: number; item: MenuItem };
-  const all = app.commands.list().filter((c) => c.menu?.bar === bar);
-  const entries: Entry[] = [];
-  const subs = new Map<string, Command[]>();
-  for (const c of all) {
-    const m = c.menu as NonNullable<Command['menu']>;
-    if (m.submenu === submenu) entries.push({ group: m.group, order: m.order, item: { command: c.id } });
-    else if (submenu === undefined && m.submenu) subs.set(m.submenu, [...(subs.get(m.submenu) ?? []), c]);
-  }
+  const placed = app.commands.list().filter((c) => c.menu?.bar === bar).map((c) => ({ c, ...placeOf(c) }));
+  const at = submenu === undefined ? [] : (() => {
+    const p = placed.find((x) => x.path.includes(submenu))?.path;
+    return p ? p.slice(0, p.indexOf(submenu) + 1) : null;
+  })();
+  if (!at) return [];
+  const inside = placed.filter((x) => at.every((name, i) => x.path[i] === name));
+  const entries: Entry[] = inside.filter((x) => x.path.length === at.length).map((x) => ({ group: x.group, order: x.order, item: { command: x.c.id } }));
+  const subs = new Map<string, typeof placed>();
+  for (const x of inside) if (x.path.length > at.length) subs.set(x.path[at.length], [...(subs.get(x.path[at.length]) ?? []), x]);
   for (const [name, members] of subs) {
-    const first = [...members].sort((a, b) => (a.menu?.order ?? 0) - (b.menu?.order ?? 0))[0];
-    entries.push({ group: first.menu?.group ?? '', order: first.menu?.order ?? 0, item: { label: name, items: () => menuItems(app, bar, name) } });
+    const first = [...members].sort((a, b) => a.order - b.order)[0];
+    const p = LAYOUT[bar]?.[name] ?? (at.length === 0 ? LAYOUT[bar]?.['*'] : undefined);
+    const group = p && (at.length === 0 ? !p.parent : p.parent === at.at(-1)) ? p.group : first.group;
+    const order = first.order + (p?.order ?? 0);
+    const item: MenuItem = members.length === 1 ? { command: first.c.id } : { label: name, items: () => menuItems(app, bar, name), disabled: !canRun(app, members.map((x) => x.c)) };
+    entries.push({ group, order, item });
   }
   entries.sort((a, b) => a.order - b.order);
   const groups = new Map<string, MenuItem[]>();
@@ -148,13 +203,39 @@ export function menuItems(app: App, bar: string, submenu?: string): MenuItem[] {
   return out;
 }
 
+const CLIPBOARD = ['edit.cut', 'edit.copy', 'edit.paste'];
+
+// the sections of the menu of an element, as in PowerPoint: the clipboard, the items of its kind,
+// e.g. Replace Image… and Edit Alt Text…, the arrange items, and the steps
+const SECTIONS = ['edit', 'kind', 'arrange', 'steps'] as const;
+const sectionOf = (c: Command): (typeof SECTIONS)[number] =>
+  c.menu?.bar === 'Edit' ? 'edit' : c.menu?.bar === 'Arrange' || c.id.startsWith('arrange.') ? 'arrange' : c.id.startsWith('steps.') ? 'steps' : 'kind';
+
 // the items of a context menu of a kind, each run with the kind and the element clicked. a rule
-// is put where the group of the menu bar changes between two neighbors
+// is put where the group of the menu bar changes between two neighbors, and in the menu of an
+// element where its section changes. the items of the kind of another element are left out of the
+// menu of an element, i.e. a disabled item of a submenu without an enabled item, e.g. the items of
+// Video on an image, or one outside a menu, e.g. Edit Text on a figure without a text. Reset Mask,
+// disabled next to Edit Mask on an image without a mask, is kept
 export function contextItems(app: App, kind: Context, target: Element | null): MenuItem[] {
   const out: MenuItem[] = [];
   let last: string | null = null;
-  for (const c of app.commands.forContext(kind)) {
-    const group = `${c.menu?.bar ?? ''}/${c.menu?.group ?? ''}`;
+  // the menu of a text or an element opens with the clipboard, and the menu of the canvas with
+  // Paste, as in Keynote and PowerPoint
+  const lead = (kind === 'text' || kind === 'element' ? CLIPBOARD : kind === 'canvas' ? ['edit.paste'] : []).filter((id) => app.commands.get(id));
+  for (const id of lead) out.push({ command: id, arg: { kind, target } });
+  if (lead.length) last = kind === 'element' ? 'edit' : 'Edit/clipboard';
+  let rest = app.commands.forContext(kind).filter((x) => !lead.includes(x.id));
+  if (kind === 'element') {
+    // Edit Text, enabled on an element that holds a text, e.g. the caption of a figure, follows the
+    // items of the kind of the element
+    const rank = (c: Command) => SECTIONS.indexOf(sectionOf(c)) + (c.id === 'selection.editText' ? 0.5 : 0);
+    const home = (c: Command) => (c.menu ? `${c.menu.bar}/${c.menu.submenu ?? c.menu.group}` : c.id);
+    const live = new Set(rest.filter((c) => sectionOf(c) === 'kind' && app.commands.enabled(c.id)).map(home));
+    rest = rest.filter((c) => sectionOf(c) !== 'kind' || live.has(home(c))).sort((a, b) => rank(a) - rank(b));
+  }
+  for (const c of rest) {
+    const group = kind === 'element' ? sectionOf(c) : `${c.menu?.bar ?? ''}/${c.menu?.group ?? ''}`;
     if (last !== null && group !== last) out.push({ rule: true });
     last = group;
     out.push({ command: c.id, arg: { kind, target } });
@@ -199,7 +280,7 @@ class Menu {
     if (options.keyboard) {
       this.highlight(this.next(-1, 1));
       this.el.focus({ preventScroll: true });
-    }
+    } else if (options.focus) this.el.focus({ preventScroll: true });
   }
 
   private build(items: MenuItem[]): void {
@@ -479,10 +560,24 @@ export const menuOpen = (): boolean => stack.length > 0;
 
 // the context menu of a kind at the point of ev, or null when no command is shown for the kind,
 // in which case the menu of the browser is left alone
+// whether the last input is a press of the key of the context menu or of Shift+F10, which opens
+// the menu from the keyboard. it is set before the listener of shell.ts that opens the menu, since
+// this module is imported first, and a press of the pointer clears it
+let menuKey = false;
+window.addEventListener('keydown', (ev) => {
+  menuKey = ev.key === 'ContextMenu' || (ev.key === 'F10' && ev.shiftKey);
+}, true);
+window.addEventListener('pointerdown', () => {
+  menuKey = false;
+}, true);
+
+// a context menu takes the focus, and opened from the keyboard it highlights its first item
 export function openContextMenu(app: App, kind: Context, target: Element | null, at: { x: number; y: number }): OpenMenu | null {
   const items = contextItems(app, kind, target);
   if (!items.length) return null;
-  return openMenu(app, items, { anchor: at, placement: 'point', label: `${kind} menu`, className: `context ${kind}` });
+  const keyboard = menuKey;
+  menuKey = false;
+  return openMenu(app, items, { anchor: at, placement: 'point', label: `${kind} menu`, className: `context ${kind}`, keyboard, focus: true });
 }
 
 // a button with a menu of its own beside it, e.g. Add Slide with its layouts. the main button runs
