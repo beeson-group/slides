@@ -317,6 +317,19 @@ export function paint(app: App): void {
   for (const [t] of TOKENS) reg.set(NAME(t), new H(...(ranges.get(t) ?? [])));
 }
 
+// the box of the first character of line n of code, counted from 1, or null for a line that code
+// does not have or that is not drawn
+export function lineRect(code: Element, n: number): DOMRect | null {
+  const { nodes, starts, text } = textNodes(code);
+  let at = 0;
+  for (let k = 1; k < n; k++) {
+    at = text.indexOf('\n', at) + 1;
+    if (at <= 0) return null;
+  }
+  const box = rangeOf(nodes, starts, at, Math.min(text.length, at + 1))?.getClientRects()[0];
+  return box && box.height ? box : null;
+}
+
 // the lines of code outside group drawn dim, e.g. while its group is pointed at in the Code pane,
 // or none for null
 export function dimLines(code: Element | null, group: string | null): void {

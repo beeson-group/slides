@@ -12,6 +12,7 @@ import type { Entry } from './history.ts';
 import type { Pairing } from './render.ts';
 import type { TagEdit, TagState } from './tags.ts';
 import { OFF, fragmentIndex, fragmentsOf, type Layers, itemsOf, planOf, remapKeep, showLayer, shownAt, startOf, stepAt, type Item, type Plan, type Start } from './layers.ts';
+import { codeAt, dimLines, lineRect, linesOf, stepsOf } from './commands/code.ts';
 import { numberField } from './inspector/controls.ts';
 import { injectStyle, make } from './ui/dom.ts';
 import { icon } from './ui/icons.ts';
@@ -84,8 +85,17 @@ export function effectOf(classes: string[]): { id: Effect | null; label: string 
 // the classes of el in the file, or on the page for a fragment that is not paired with a tag
 export const classesOf = (app: App, el: Element): string[] => (app.pairing?.elements.get(el)?.open ? app.doc.tagState(el).classes : [...el.classList]);
 
+// a line step of a code box, i.e. a group of lines of data-line-numbers after the first. the
+// highlight plugin of reveal.js appends a copy of the code to the pre for each of them, a fragment
+// at the index of the code and at each next index, or without an index when the code has none. a
+// line step is an item of the model at the place of its copy, with the code as its element, and
+// it is locked, since it is set in the Code pane and its index is that of the code
+export type LineStep = { code: Element; group: number; lines: string };
+
 // the steps of the current slide as the model reads them
-export type Model = { slide: Element; els: Element[]; items: Item[]; locked: boolean[]; plan: Plan };
+export type Model = { slide: Element; els: Element[]; items: Item[]; locked: boolean[]; lines: (LineStep | null)[]; plan: Plan };
+
+const intOf = (v: string | undefined): number | null => (v !== undefined && /^\s*-?\d+\s*$/.test(v) ? Number(v) : null);
 
 export function modelOf(app: App, slide: Element | null = app.current(), extra: Element[] = []): Model | null {
   const pairing = app.pairing;
@@ -97,14 +107,54 @@ export function modelOf(app: App, slide: Element | null = app.current(), extra: 
     const index = Number.parseFloat(fragmentIndex(el) ?? '');
     return { fragment: true, index: Number.isNaN(index) ? null : index, final: el.hasAttribute('data-final') };
   });
-  return { slide, els, items, locked, plan: planOf(items) };
+  const lines: (LineStep | null)[] = els.map(() => null);
+  for (const code of slide.querySelectorAll('pre > code')) {
+    if (code.closest('aside.notes') || code.closest('section') !== slide || codeAt(app, { el: code }) !== code) continue;
+    const groups = stepsOf(app, code).groups;
+    if (groups.length < 2) continue;
+    const pre = code.parentElement as Element;
+    const at = els.reduce((k, e, j) => (e === pre || pre.contains(e) || e.compareDocumentPosition(pre) & Node.DOCUMENT_POSITION_FOLLOWING ? j + 1 : k), 0);
+    const r = intOf(app.doc.tagState(code).attrs['data-fragment-index']);
+    const steps = groups.slice(1).map((g, k) => ({ code, group: k + 1, lines: g }));
+    els.splice(at, 0, ...steps.map(() => code));
+    locked.splice(at, 0, ...steps.map(() => true));
+    lines.splice(at, 0, ...steps);
+    items.splice(at, 0, ...steps.map((_, k): Item => ({ fragment: true, index: r === null ? null : r + k, final: false })));
+  }
+  return { slide, els, items, locked, lines, plan: planOf(items) };
 }
+
+// the position of el among the items of m, apart from the line steps of a code
+export const indexIn = (m: Model, el: Element): number => m.els.findIndex((x, k) => x === el && !m.lines[k]);
 
 // the model of the slide of el, with the position of el among its items
 export function modelAt(app: App, el: Element): (Model & { i: number }) | null {
   const m = modelOf(app, el.closest('section'));
-  const i = m ? m.els.indexOf(el) : -1;
+  const i = m ? indexIn(m, el) : -1;
   return m && i >= 0 ? { ...m, i } : null;
+}
+
+// the line steps of the codes of m in their order, by code, as positions among its items
+function lineRuns(m: Model): Map<Element, number[]> {
+  const out = new Map<Element, number[]>();
+  m.lines.forEach((l, i) => {
+    if (l) out.set(l.code, [...(out.get(l.code) ?? []), i]);
+  });
+  return out;
+}
+
+// the index written on a code for its line steps after the items were written as after. the line
+// steps of a code are at consecutive indexes from the index of the code. a code without an index
+// keeps none while its line steps are the last steps of the slide, each alone, since reveal.js
+// shows the fragments without an index after the others
+function codeIndex(app: App, m: Model, plan: Plan, after: Item[], code: Element, run: number[]): number | null {
+  const at = run.map((i) => after[i].index);
+  if (at.some((x) => x === null)) throw new Error('The line steps of a code box are set in its Code pane, and each of them stays a step of the slide');
+  if (at.some((x, k) => x !== (at[0] as number) + k)) throw new Error('The line steps of a code box are shown at steps one after another, and another step cannot be put between them');
+  const G = plan.groups.length;
+  const last = run.every((i, k) => plan.groups[G - run.length + k]?.length === 1 && plan.groups[G - run.length + k][0] === i);
+  if (intOf(app.doc.tagState(code).attrs['data-fragment-index']) === null && last) return null;
+  return at[0] as number;
 }
 
 // the delivery of a list, as in Keynote and in the Effect Options of PowerPoint: All at Once, i.e.
@@ -186,6 +236,7 @@ export const MIN_DELAY = 100;
 export const AFTER_DEFAULT = 500;
 
 function autoslideOf(app: App, m: Model, i: number): number | null {
+  if (m.lines[i]) return null;
   const raw = m.locked[i] ? m.els[i].getAttribute(AUTOSLIDE) : app.doc.tagState(m.els[i]).attrs[AUTOSLIDE];
   return raw != null && /^\s*\d+\s*$/.test(raw) ? Number(raw) : null;
 }
@@ -218,7 +269,7 @@ export function startAt(app: App, m: Model, i: number, delays: Map<number, numbe
 // entry that shows the slide at an undo, and false is returned when nothing changes
 export function writePlan(app: App, m: Model, plan: Plan, extra: Map<Element, TagEdit> = new Map(), delays: Map<number, number> = delaysOf(app, m)): boolean {
   const after = itemsOf(m.items, plan);
-  const moved = m.els.find((_, i) => m.locked[i] && (after[i].index !== m.items[i].index || after[i].fragment !== m.items[i].fragment || after[i].final !== m.items[i].final));
+  const moved = m.els.find((_, i) => m.locked[i] && !m.lines[i] && (after[i].index !== m.items[i].index || after[i].fragment !== m.items[i].fragment || after[i].final !== m.items[i].final));
   if (moved) throw new Error(`The step of the ${describe(moved, () => null).kind.toLowerCase()} in the text of a block cannot be changed here, and it would be renumbered by this change`);
   const edits = new Map<Element, TagEdit>(extra);
   const add = (el: Element, e: TagEdit) => edits.set(el, { ...edits.get(el), ...e, attrs: { ...edits.get(el)?.attrs, ...e.attrs } });
@@ -263,6 +314,10 @@ export function writePlan(app: App, m: Model, plan: Plan, extra: Map<Element, Ta
     const w = want.has(i) ? String(want.get(i)) : null;
     if (now !== w) add(el, { attrs: { [AUTOSLIDE]: w } });
   });
+  for (const [code, run] of lineRuns(m)) {
+    const want = codeIndex(app, m, plan, after, code, run);
+    if (want !== intOf(app.doc.tagState(code).attrs['data-fragment-index'])) add(code, { index: want });
+  }
   for (const [el, e] of edits) if (e.attrs && !Object.keys(e.attrs).length) delete e.attrs;
   const changed = [...edits].filter(([, e]) => Object.keys(e).length);
   if (!changed.length) return false;
@@ -319,6 +374,14 @@ export function describe(el: Element, tex: Ctx['tex']): { kind: string; text: st
     const named = [['data-plot-show', 'Show'], ['data-plot-tab', 'Tab'], ['data-surface-stage', 'Stage'], ['data-scene', 'Scene'], ['data-strands', 'Strands']].find(([a]) => el.hasAttribute(a));
     if (named) text = `${named[1]} ${el.getAttribute(named[0]) ?? ''}`.trim();
   }
+  return { kind, text: text.length > 90 ? `${text.slice(0, 90)}…` : text };
+}
+
+// the kind and the text of the row of a line step: its lines, and the first of them
+export function describeLines(l: LineStep): { kind: string; text: string } {
+  const first = Math.min(...[...linesOf(l.lines)]);
+  const text = (l.code.textContent ?? '').split('\n')[first - 1]?.trim() ?? '';
+  const kind = `${/[-,]/.test(l.lines) ? 'Lines' : 'Line'} ${l.lines.replace(/-/g, '–').replace(/,/g, ', ')}`;
   return { kind, text: text.length > 90 ? `${text.slice(0, 90)}…` : text };
 }
 
@@ -427,6 +490,7 @@ html.beeson-steps .beeson-edit-side { display: flex; }
 ${P} { font: 12px/1.35 var(--ed-font, system-ui, sans-serif); color: var(--ed-text); user-select: none; -webkit-user-select: none; }
 ${P} .head { display: flex; align-items: center; gap: 6px; padding: 2px 12px 10px; border-bottom: 1px solid var(--ed-line); }
 ${P} .head .gap { flex: 1; }
+${P} .row.line .grip { visibility: hidden; }
 ${P} .head button { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 9px; border: 1px solid var(--ed-control-line); border-radius: 6px; background: var(--ed-control); color: var(--ed-text); font: 500 12px/1 var(--ed-font); white-space: nowrap; cursor: default; }
 ${P} .head button:hover { background: color-mix(in srgb, var(--ed-control) 85%, var(--ed-text)); }
 ${P} .head button:disabled { color: var(--ed-faint); }
@@ -559,6 +623,8 @@ export class Steps {
   private rows: Row[] = [];
   private heads: Head[] = [];
   private model: Model | null = null;
+  // the row last chosen by a press or a key
+  private current: Row | null = null;
   private start: HTMLButtonElement | null = null;
   private effect: HTMLButtonElement | null = null;
   private final: HTMLInputElement | null = null;
@@ -693,8 +759,16 @@ export class Steps {
       els.forEach((el, i) => {
         // an element of another layer of the slide is hidden, and so is its number
         if (at(i) < 0 || el.closest(`.${OFF}`)) return;
-        const rect = el.getBoundingClientRect();
+        let rect = el.getBoundingClientRect();
         if (!rect.width && !rect.height) return;
+        // the number of a line step is drawn at the left edge of the box, level with its first line
+        const line = m.lines[i];
+        if (line) {
+          const first = lineRect(line.code, Math.min(...linesOf(line.lines)));
+          if (!first) return;
+          const box = line.code.closest('pre')?.getBoundingClientRect() ?? rect;
+          rect = new DOMRect(box.left, first.top + first.height / 2, 0, 0);
+        }
         const badge = make('span', 'beeson-badge', String(at(i) + 1));
         badge.style.left = `${rect.left}px`;
         badge.style.top = `${rect.top}px`;
@@ -702,8 +776,8 @@ export class Steps {
         this.badges.append(badge);
       });
     }
-    const described = els.map((el) => describe(el, this.ctx.tex));
-    const effects = els.map((el) => effectOf(classesOf(app, el)).label);
+    const described = els.map((el, i) => (m.lines[i] ? describeLines(m.lines[i] as LineStep) : describe(el, this.ctx.tex)));
+    const effects = els.map((el, i) => (m.lines[i] ? 'Highlight' : effectOf(classesOf(app, el)).label));
     const delays = delaysOf(app, m);
     const key = [app.pairing?.sections.findIndex((s) => s.live === m.slide), JSON.stringify(plan), JSON.stringify([...delays]), ...els.map((_, i) => `${described[i].kind}|${described[i].text}|${effects[i]}|${items[i].final}`)].join('\n');
     if (key !== this.key) {
@@ -730,8 +804,9 @@ export class Steps {
       const { start, delay } = startAt(app, m, i, delays);
       const { kind, text } = described[i];
       const final = plan.finals.includes(i);
-      const locked = m.locked[i];
-      const r = make('div', `row${start === 'with' ? ' with' : ''}${step < 0 ? ' slide' : ''}${locked ? ' locked' : ''}`);
+      const line = m.lines[i];
+      const locked = m.locked[i] && !line;
+      const r = make('div', `row${start === 'with' ? ' with' : ''}${step < 0 ? ' slide' : ''}${locked ? ' locked' : ''}${line ? ' line' : ''}`);
       r.tabIndex = -1;
       r.dataset.doc = String(i);
       r.dataset.step = step < 0 ? '' : String(step);
@@ -742,7 +817,7 @@ export class Steps {
       chip.setAttribute('aria-expanded', 'false');
       chip.setAttribute('aria-label', `Step of the ${kind.toLowerCase()}${text ? `: ${text}` : ''}`);
       const how = step < 0 ? 'With the slide' : [final ? 'Last' : startLabel(start, delay), effects[i]].join(' · ');
-      chip.title = locked ? `Step ${step + 1}, set in the text of its block` : step < 0 ? 'Shown with the slide. Click to choose a step' : `Step ${step + 1}, ${final ? 'last' : startLabel(start, delay)}. Click to change its step, start, or effect`;
+      chip.title = line ? `Step ${step + 1}, the ${kind.toLowerCase()} of the code box, set in its Code pane` : locked ? `Step ${step + 1}, set in the text of its block` : step < 0 ? 'Shown with the slide. Click to choose a step' : `Step ${step + 1}, ${final ? 'last' : startLabel(start, delay)}. Click to change its step, start, or effect`;
       chip.disabled = locked;
       // the start is marked in the chip as in the Animation Pane of PowerPoint: a number at a click,
       // a plus with the step before, and a clock after it
@@ -759,8 +834,17 @@ export class Steps {
       handle.append(grip());
       r.append(handle, chip, body);
       r.setAttribute('aria-label', `${step < 0 ? 'With the slide' : final ? 'Last step' : `Step ${step + 1}`}, ${kind}${text ? `: ${text}` : ''}`);
-      r.addEventListener('pointerenter', () => !this.dragging && el.classList.add('beeson-hover'));
-      r.addEventListener('pointerleave', () => el.classList.remove('beeson-hover'));
+      // a line step points at its box, and dims the other lines of the box as the Code pane does
+      const target = line ? (line.code.closest('pre') ?? el) : el;
+      r.addEventListener('pointerenter', () => {
+        if (this.dragging) return;
+        target.classList.add('beeson-hover');
+        if (line && !this.playing) dimLines(line.code, line.lines);
+      });
+      r.addEventListener('pointerleave', () => {
+        target.classList.remove('beeson-hover');
+        if (line && !this.playing) dimLines(null, null);
+      });
       if (!locked) r.addEventListener('pointerdown', (ev) => this.press(ev, entry));
       chip.addEventListener('click', (ev) => {
         if (ev.detail === 0) this.openChip(entry, true);
@@ -814,6 +898,8 @@ export class Steps {
     }
     const back = open ? this.rows.find((r) => r.el === open) : null;
     if (back) back.row.focus({ preventScroll: true });
+    const was = this.current;
+    this.current = was ? (this.rows.find((r) => r.i === was.i && r.el === was.el) ?? null) : null;
   }
 
   // the row of a list delivered by item, above its items. a press selects the list, and its chip
@@ -884,9 +970,13 @@ export class Steps {
     const sel = app.selection;
     const items = sel.kind === 'elements' || sel.kind === 'text' ? sel.items : [];
     const hit = (el: Element) => items.some((s) => s === el || s.contains(el) || el.contains(s));
+    const lines = this.model?.lines ?? [];
+    // a line row is marked while it is the row last chosen and its box is selected, in place of the
+    // row of the box
+    const cur = this.current && lines[this.current.i] && hit(this.current.el) ? this.current : null;
     let first: Row | null = null;
     for (const r of this.rows) {
-      const on = hit(r.el);
+      const on = lines[r.i] ? r === cur : hit(r.el) && !(cur && cur.el.parentElement === r.el);
       r.row.classList.toggle('selected', on);
       r.row.setAttribute('aria-selected', String(on));
       if (on && !first) first = r;
@@ -902,7 +992,7 @@ export class Steps {
   private selected(): { el: Element; stepped: boolean; start: StartKind | null; delay: number | null; effect: { id: Effect | null; label: string }; final: boolean } | null {
     const m = this.model;
     const app = this.app;
-    const r = this.rows.find((r) => r.row.classList.contains('selected'));
+    const r = this.rows.find((r) => r.row.classList.contains('selected') && !m?.lines[r.i]);
     if (!m || !app || !r) return null;
     const { start, delay } = startAt(app, m, r.i);
     return { el: r.el, stepped: stepAt(m.plan, r.i) >= 0, start, delay, effect: effectOf(classesOf(app, r.el)), final: m.plan.finals.includes(r.i) };
@@ -938,7 +1028,9 @@ export class Steps {
   }
 
   private select(r: Row): void {
-    this.app?.selection.set('elements', [r.el]);
+    this.current = r;
+    const line = this.model?.lines[r.i];
+    this.app?.selection.set('elements', [line ? (r.el.parentElement as Element) : r.el]);
   }
 
   // the menu of a chip: the steps of the slide, two new steps, the start, the effect, and Show Last
@@ -949,6 +1041,8 @@ export class Steps {
     this.select(r);
     const { plan } = m;
     const at = stepAt(plan, r.i);
+    // a line step is set in the Code pane of its box
+    if (m.lines[r.i]) return;
     const final = plan.finals.includes(r.i);
     const { start } = startAt(app, m, r.i);
     const effect = effectOf(classesOf(app, r.el)).id;
@@ -991,7 +1085,7 @@ export class Steps {
       return;
     }
     this.select(r);
-    this.drag(ev, r);
+    if (!this.model.lines[r.i]) this.drag(ev, r);
   }
 
   private drag(ev: PointerEvent, r: Row): void {
@@ -1104,7 +1198,9 @@ export class Steps {
     else if (ev.key === 'Home') go(0);
     else if (ev.key === 'End') go(this.rows.length - 1);
     else if (ev.key === 'Enter' || ev.key === ' ') this.openChip(this.rows[i], true);
-    else if (ev.key === 'Delete' || ev.key === 'Backspace') this.runOn('steps.set', { to: null });
+    else if (ev.key === 'Delete' || ev.key === 'Backspace') {
+      if (!this.model?.lines[this.rows[i].i]) this.runOn('steps.set', { to: null });
+    }
     else return;
     ev.preventDefault();
     ev.stopPropagation();
@@ -1128,16 +1224,36 @@ export class Steps {
       return Promise.resolve();
     }
     const slide = this.ctx.slide();
-    const frags = slide ? fragmentsOf(slide) : [];
-    if (!slide || !frags.length) return Promise.resolve();
+    if (!slide) return Promise.resolve();
+    // the steps are read from the model of the slide, which has the line steps of its code boxes,
+    // or from its fragments where the model does not have them all
+    const raw = fragmentsOf(slide);
+    const m = this.app ? modelOf(this.app, slide) : null;
+    const at = raw.map((f) => {
+      const i = m ? indexIn(m, f.el) : -1;
+      return m && i >= 0 && stepAt(m.plan, i) >= 0 ? stepAt(m.plan, i) + 1 : null;
+    });
+    const byModel = !!m && at.every((k) => k !== null);
+    const frags = byModel ? raw.map((f, j) => ({ ...f, step: at[j] as number })) : raw;
+    const lines = byModel && m ? m.lines.flatMap((l, i) => (l ? [{ ...l, step: stepAt(m.plan, i) + 1 }] : [])) : [];
+    if (!frags.length && !lines.length) return Promise.resolve();
     const html = document.documentElement;
-    const last = Math.max(...frags.map((f) => f.step));
+    const last = Math.max(...frags.map((f) => f.step), ...lines.map((l) => l.step));
+    const first = 0;
+    // the lines of a box are dimmed but for its last group reached, or its first group before
+    const dim = (k: number) => {
+      const reached = lines.filter((l) => l.step <= k);
+      const l = reached.length ? reached.reduce((a, b) => (b.step > a.step ? b : a)) : lines[0];
+      if (!l) return;
+      dimLines(l.code, reached.length ? l.lines : (stepsOf(this.app as App, l.code).groups[0] ?? null));
+    };
     const timers: number[] = [];
     let finish = () => {};
     const done = new Promise<void>((resolve) => {
       finish = () => {
         timers.forEach(clearTimeout);
         for (const f of frags) f.el.classList.remove('beeson-pv-off', 'beeson-pv-dim');
+        if (lines.length) dimLines(null, null);
         html.classList.remove('beeson-previewing');
         this.playing = null;
         this.setPlaying(false);
@@ -1169,6 +1285,9 @@ export class Steps {
         f.el.classList.toggle('beeson-pv-off', !shown);
         f.el.classList.toggle('beeson-pv-dim', shown && !restored && f.kind === 'in' && f.step < k && !nested(f.el) && !held(f, k));
       }
+      if (restored) {
+        if (lines.length) dimLines(null, null);
+      } else dim(k);
       html.dataset.previewStep = String(k);
     };
     showLayer(slide, null);
@@ -1176,19 +1295,19 @@ export class Steps {
     this.badges.replaceChildren();
     this.setPlaying(true);
     window.addEventListener('keydown', esc, true);
-    frame(0);
+    frame(first);
     // a step after a step with data-autoslide is played at its delay, as reveal.js plays it
     const delayAfter = (k: number) => {
       const ms = frags.filter((f) => f.step === k).map((f) => Number.parseInt(f.el.getAttribute(AUTOSLIDE) ?? '', 10)).find((v) => v > 0);
       return ms ?? STEP_MS;
     };
-    let at = 0;
-    for (let k = 1; k <= last; k++) {
-      at += k > 1 ? delayAfter(k - 1) : STEP_MS;
-      timers.push(window.setTimeout(() => frame(k), at));
+    let t = 0;
+    for (let k = first + 1; k <= last; k++) {
+      t += k > first + 1 ? delayAfter(k - 1) : STEP_MS;
+      timers.push(window.setTimeout(() => frame(k), t));
     }
-    timers.push(window.setTimeout(() => frame(last, true), at + STEP_MS));
-    timers.push(window.setTimeout(() => finish(), at + STEP_MS + END_MS));
+    timers.push(window.setTimeout(() => frame(last, true), t + STEP_MS));
+    timers.push(window.setTimeout(() => finish(), t + STEP_MS + END_MS));
     this.playing = { stop: () => finish(), done };
     return done;
   }

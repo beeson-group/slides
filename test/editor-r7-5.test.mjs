@@ -5,12 +5,12 @@
 // opened again without problems
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
-import { click, press, saveAndReopen, type } from './helpers/editor.mjs';
+import { click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 const PANEL = '#beeson-edit-panel-format';
@@ -278,6 +278,99 @@ for (const platform of PLATFORMS) {
     assert.equal(await page.evaluate('window.typeset'), 0);
     await press(page, 'Escape');
     assert.equal(await page.evaluate(`!!document.querySelector('.beeson-complete')`), false);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+const PARA = '<p>Copy-paste the code';
+const LINES = 'data-line-numbers="1-3|4|5-7|8-9"';
+
+// the steps of the line rows, by the text of their meta line
+const lineRows = async (page) => (await rows(page)).filter((r) => r.meta.startsWith('Line')).map((r) => `${r.step} ${r.meta.split(' · ')[0]}`);
+
+// the number of lines of the code box dimmed by the highlight of the editor, or 0 without it
+const dimmed = (page) => page.evaluate(`CSS.highlights.get('beeson-code-dim')?.size ?? 0`);
+
+for (const platform of PLATFORMS) {
+  test(`the line steps of a code box are rows of the Steps tab, kept in sync with its Code pane on ${platform}`, async (t) => {
+    const page = await open(t, platform);
+    const source = page.source;
+    await page.evaluate(`window.BeesonEditor.exec('view.steps')`);
+    await frames(page);
+    // each group after the first is a row at its step, and the first group is lit with the slide
+    assert.deepEqual(await lineRows(page), ['0 Line 4', '1 Lines 5–7', '2 Lines 8–9']);
+    const four = (await rows(page)).find((r) => r.meta.startsWith('Line 4'));
+    assert.deepEqual([four.chip, four.text, four.meta], ['1', 'for z0 in np.linspace(Z_START, Z_END, STEPS + 1) / DU:', 'Line 4 · On Click · Highlight']);
+    assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-badge')].map((b) => b.textContent)`), ['1', '2', '3']);
+    // a row pointed at dims the other lines of the box, as a group of the Code pane does
+    const at = await rowPart(page, 'if len(members)');
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.x, y: at.y });
+    await frames(page);
+    assert.equal(await dimmed(page), 6);
+    // a press selects the box, and marks the line row in place of the row of the box
+    await click(page, at);
+    await frames(page);
+    assert.deepEqual((await rows(page)).filter((r) => r.selected).map((r) => r.meta.split(' · ')[0]), ['Lines 5–7']);
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('code.small').enabled`), true);
+    // Delete does not take a line step off, since it is set in the Code pane
+    await press(page, 'Delete');
+    await frames(page);
+    assert.equal(await rendered(page), source);
+    // the groups typed into the Code pane are the rows, and the pane names their steps of the slide
+    await page.evaluate(`window.BeesonEditor.exec('shell.format')`);
+    await frames(page);
+    const field = `${PANEL} input[name="line-steps"]`;
+    await page.evaluate(`document.querySelector(${js(field)}).select()`);
+    await click(page, field);
+    await page.evaluate(`document.querySelector(${js(field)}).select()`);
+    await type(page, '1-3|4|5-9');
+    await press(page, 'Enter');
+    await frames(page);
+    const fewer = source.replace(LINES, 'data-line-numbers="1-3|4|5-9"');
+    assert.equal(await rendered(page), fewer);
+    assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('${PANEL} .ed-groups .at')].map((s) => s.textContent)`), ['With the slide', 'Step 1', 'Step 2']);
+    await press(page, 'Escape');
+    await undoRedo(page, platform, source, fewer);
+    await page.evaluate(`window.BeesonEditor.exec('view.steps')`);
+    await frames(page);
+    assert.deepEqual(await lineRows(page), ['0 Line 4', '1 Lines 5–9']);
+    await press(page, 'Mod+Z');
+    await frames(page);
+    assert.deepEqual(await lineRows(page), ['0 Line 4', '1 Lines 5–7', '2 Lines 8–9']);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`the line steps of a code box move with the other steps, and are not split on ${platform}`, async (t) => {
+    const text = readFileSync('index.html', 'utf8').replace(PARA, '<p class="fragment">Copy-paste the code');
+    const page = await open(t, platform, { text, tab: 'steps' });
+    assert.deepEqual(await lineRows(page), ['1 Line 4', '2 Lines 5–7', '3 Lines 8–9']);
+    assert.equal((await rows(page)).find((r) => r.text.startsWith('Copy-paste')).step, '0');
+    // the paragraph dragged under the last card is shown after the lines, and the index of the
+    // code puts its line steps before it, as the highlight plugin numbers its copies of the code
+    const from = await rowPart(page, 'Copy-paste', '.body');
+    const to = await page.evaluate(`(() => { const c = [...document.querySelectorAll('${SIDE} .rows .card.step')].at(-1).getBoundingClientRect(); return c.bottom + 2; })()`);
+    await drag(page, from, { dy: to - from.y, steps: 12 });
+    await frames(page);
+    const moved = await rendered(page);
+    assert.equal(moved, text.replace('<p class="fragment">', '<p class="fragment" data-fragment-index="4">').replace(LINES, `${LINES} data-fragment-index="1"`));
+    assert.deepEqual(await lineRows(page), ['0 Line 4', '1 Lines 5–7', '2 Lines 8–9']);
+    assert.equal((await rows(page)).find((r) => r.text.startsWith('Copy-paste')).step, '3');
+    assert.deepEqual(newProblems(page, moved), []);
+    await undoRedo(page, platform, text, moved);
+    // a step put between two line steps is refused, and the file is kept
+    await click(page, await rowPart(page, 'Copy-paste'));
+    await press(page, 'Alt+ArrowUp');
+    await frames(page);
+    assert.equal(await rendered(page), moved);
+    assert.match(await page.evaluate('window.BeesonEditor.status().message'), /another step cannot be put between them/);
+    // All at Once keeps the line steps, which are set in the Code pane
+    await page.evaluate(`window.BeesonEditor.exec('steps.allAtOnce')`);
+    await frames(page);
+    const once = await rendered(page);
+    assert.equal(once, text.replace('<p class="fragment">', '<p>').replace(LINES, `${LINES} data-fragment-index="1"`));
+    assert.deepEqual(await lineRows(page), ['0 Line 4', '1 Lines 5–7', '2 Lines 8–9']);
+    await undoRedo(page, platform, moved, once);
+    await saved(page, once);
     assert.deepEqual(errors(page), []);
   });
 }
