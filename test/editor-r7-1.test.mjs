@@ -180,3 +180,49 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// frameOf returns the size in slide px of the one frame of a selected group, or null
+const frameOf = (page) =>
+  page.evaluate(`(() => { const slides = document.querySelector('.reveal .slides'); const s = slides.getBoundingClientRect().width / slides.offsetWidth; const f = document.querySelector('.beeson-frame.union.group:not([hidden])'); if (!f) return null; const r = f.getBoundingClientRect(); return { w: r.width / s, h: r.height / s }; })()`);
+
+// item 4 of R7.1: in picture 178-group-resize of round 3, a group of the paragraph and the image
+// of the slide of figures of index.html was resized, and the readout and the frame read 1443 px
+// wide while W read 1434
+const FIGURES = 4;
+const DEMO_IMG = '.reveal section.present figure.zone img:not([hidden])';
+for (const platform of PLATFORMS) {
+  test(`the readout, the frame, and W and H give one size during and after a resize of a group (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: 'index.html', n: FIGURES });
+    await click(page, '.reveal section.present > p');
+    await press(page, 'Escape');
+    await click(page, DEMO_IMG, { modifiers: 'Shift' });
+    await exec(page, 'arrange.group');
+    await frames(page);
+    assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present [data-group]').length`), 2, 'the paragraph and the image are not grouped');
+    // a click on an empty point of the slide, then on the image, selects the group
+    const empty = await page.evaluate(`(() => { const r = document.querySelector('.reveal section.present').getBoundingClientRect(); return { x: r.left + r.width * 0.3, y: r.top + r.height * 0.9 }; })()`);
+    await click(page, empty);
+    await click(page, DEMO_IMG);
+    await frames(page);
+    assert.ok(await frameOf(page), 'the group is not selected');
+    await page.evaluate(`[...document.querySelectorAll('#beeson-edit-panel-format button')].find((b) => b.textContent.trim() === 'Arrange')?.click()`);
+    await frames(page);
+    const near = (a, b) => Math.abs(a - b) <= 1.5;
+    const same = (what, a, b) => assert.ok(near(a.w, b.w) && near(a.h, b.h), `${what}: ${js(a)} and ${js(b)}`);
+    same('before the resize, the frame and the fields', await frameOf(page), await fieldsOf(page));
+    const se = await page.evaluate(`(() => { const g = document.querySelector('.beeson-grip[data-group="1"][data-handle="se"]'); const r = g.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    await drag(page, se, { dx: -120, dy: -90, steps: 12, hold: true });
+    await frames(page);
+    const readout = await readoutOf(page);
+    assert.ok(readout, 'a readout is shown during the resize');
+    const during = await fieldsOf(page);
+    same('during the resize, the readout and the fields', readout, during);
+    same('during the resize, the frame and the fields', await frameOf(page), during);
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: se.x - 120, y: se.y - 90, button: 'left', clickCount: 1 });
+    await frames(page);
+    const done = await fieldsOf(page);
+    same('after the resize, the last readout and the fields', readout, done);
+    same('after the resize, the frame and the fields', await frameOf(page), done);
+    assert.deepEqual(errors(page), []);
+  });
+}
