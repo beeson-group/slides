@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, drag, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 const PLATFORMS = ['mac', 'other'];
@@ -199,6 +199,57 @@ for (const platform of PLATFORMS) {
     assert.equal(await page.evaluate(`!!document.activeElement?.closest('.reveal section.present p')`), true, 'the paragraph is not put into editing');
     if (platform === 'mac') assert.equal(sel.text, 'matplotlib', 'a right-click on a word does not select the word');
     assert.deepEqual((await menuRows(page)).slice(0, 3).map((r) => r.label), ['Cut', 'Copy', 'Paste']);
+    assert.deepEqual(errorsOf(page), []);
+  });
+}
+
+// the rows of the menu of the menu bar named title, opened with a click on its title
+async function barMenu(page, title) {
+  await page.evaluate(`document.querySelectorAll('.beeson-edit-menus .beeson-edit-menu').length && document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+  const at = await page.evaluate(`(() => { const b = [...document.querySelectorAll('.beeson-edit-menubar button')].find((x) => x.textContent === ${JSON.stringify(title)}); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  await click(page, at);
+  await sleep(80);
+  return menuRows(page);
+}
+
+// the matplotlib paragraph of the demo deck is shown, and the caret is put into its first word
+async function caretInParagraph(page) {
+  await page.evaluate(`Reveal.slide([...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.textContent.includes('matplotlib figure')))`);
+  await sleep(250);
+  const word = await wordAt(page, 'matplotlib');
+  await click(page, { x: word.left + 20, y: word.y });
+  await sleep(50);
+  return word;
+}
+
+const shownSelected = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-frame.selected')].filter((f) => !f.hidden).length`);
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: in a text, Select All selects the text of the block, and a second one every element of the slide`, async () => {
+    const page = await editor(platform);
+    await caretInParagraph(page);
+    const rows = await barMenu(page, 'Edit');
+    const all = rows.find((r) => r.label === 'Select All');
+    assert.equal(all?.enabled, true, 'Select All is dimmed while the caret is in a paragraph');
+    assert.equal(all.keys, platform === 'mac' ? '⌘A' : 'Ctrl+A');
+    assert.deepEqual(['Cut', 'Copy', 'Paste'].map((l) => rows.find((r) => r.label === l)?.keys), CLIP[platform], 'Cut, Copy, and Paste are listed without their keys');
+    await page.evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))`);
+    await sleep(50);
+
+    const text = await page.evaluate(`[...document.querySelectorAll('.reveal section.present p')].find((e) => e.textContent.includes('matplotlib')).textContent`);
+    // the menu item selects the text of the block, as the first key press does
+    await click(page, await page.evaluate(`(() => { const b = [...document.querySelectorAll('.beeson-edit-menubar button')].find((x) => x.textContent === 'Edit'); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`));
+    await sleep(80);
+    await click(page, await page.evaluate(`(() => { const i = [...document.querySelectorAll('.beeson-edit-menu .item')].find((x) => x.querySelector('.label')?.textContent === 'Select All'); const r = i.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`));
+    await sleep(80);
+    assert.equal((await selected(page)).text, text, 'Select All of the menu does not select the text of the block');
+    assert.equal(await page.evaluate(`!!document.activeElement?.closest('.reveal section.present p')`), true, 'the text is left by the first Select All');
+
+    await press(page, 'Mod+A');
+    await sleep(80);
+    assert.equal(await page.evaluate(`!!document.activeElement?.closest('.reveal section.present p')`), false, 'a second Select All does not leave the text');
+    const count = await shownSelected(page);
+    assert.ok(count >= 3, `a second Select All selects ${count} elements, not every element of the slide`);
     assert.deepEqual(errorsOf(page), []);
   });
 }
