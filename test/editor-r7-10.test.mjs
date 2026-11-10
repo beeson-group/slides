@@ -1,5 +1,6 @@
-// regression tests of R7.10 on both platforms with trusted input. a group, a lock, and every other
-// attribute that the editor sets on an image of a dark and light pair are written on both images.
+// regression tests of R7.10 on both platforms with trusted input. a group and a lock of the image
+// of a figure are written on the figure, and every other attribute that the editor sets on an
+// image of a dark and light pair is written on both images.
 // a press on the slide gives the keys to the canvas after a click on a tab, a button, or a field of
 // the inspector or the status bar. an indent of a list item writes the step index of the file and
 // not the one that reveal.js renumbered on the page. after each edit the text is checked byte for
@@ -10,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen, selectPicture } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 // the slides of the demo deck with the stepped list and with the figure of a dark and light pair
@@ -157,11 +158,8 @@ const controlOf = (page, find) => page.evaluate(`(() => {
   return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
 })()`);
 
-// the declaration translate of the start tag of each image of the pair in the text of the editor
-const translates = async (page) => {
-  const text = await render(page);
-  return [...text.matchAll(/<img class="for-(dark|light)"[^>]*>/g)].map((m) => [m[1], m[0].match(/translate: ([^;"]+)/)?.[1] ?? null]);
-};
+// the declaration translate of the start tag of the figure of the pair in the text of the editor
+const figureTranslate = async (page) => (await render(page)).match(/<figure class="zone"[^>]*>/)?.[0].match(/translate: ([^;"]+)/)?.[1] ?? null;
 
 for (const platform of PLATFORMS) {
   for (const control of CONTROLS) {
@@ -183,17 +181,20 @@ for (const platform of PLATFORMS) {
       const chrome = await focused(page);
       await click(page, IMG);
       await frames(page);
-      assert.deepEqual(await selected(page), ['img.for-dark']);
-      // ArrowRight nudges the image and its twin by one slide pixel
+      // the click selects the figure, or the image alone where the figure was selected before it
+      assert.deepEqual(await selected(page), [control.image ? 'img.for-dark' : 'figure.zone']);
+      // ArrowRight nudges the figure by one slide pixel, also from its image
       await press(page, 'ArrowRight');
       await frames(page);
-      assert.deepEqual(await translates(page), [['dark', '1px 0px'], ['light', '1px 0px']], `ArrowRight does not nudge the image, with the keys on ${chrome}`);
+      assert.equal(await figureTranslate(page), '1px 0px', `ArrowRight does not nudge the figure, with the keys on ${chrome}`);
       assert.equal(await focused(page), 'body', `the keys stay on ${chrome} after a click on the image`);
       await page.evaluate('window.BeesonEditor.undo()');
       await byteExact(page);
-      // Esc selects the figure, and Backspace deletes it
-      await press(page, 'Escape');
-      await frames(page);
+      // Esc selects the figure of the image, and Backspace deletes it
+      if (control.image) {
+        await press(page, 'Escape');
+        await frames(page);
+      }
       assert.deepEqual(await selected(page), ['figure.zone'], 'Esc does not select the figure of the image');
       await press(page, 'Backspace');
       await frames(page);
@@ -249,6 +250,7 @@ for (const platform of PLATFORMS) {
 
 // the start tags of the paragraph and of the pair of images of the figure slide
 const P_TAG = '<p>Export your matplotlib figure';
+const FIG_TAG = '<figure class="zone">';
 const DARK_TAG = '<img class="for-dark" src="demo/figure-dark.png" alt="Zero-velocity curves of the Earth–Moon system, dark version">';
 const LIGHT_TAG = '<img class="for-light" src="demo/figure-light.png" alt="Zero-velocity curves of the Earth–Moon system, light version">';
 const withAttr = (tag, attr) => tag.replace(/>$/, ` ${attr}>`);
@@ -262,40 +264,40 @@ async function flipMode(page) {
 }
 
 for (const platform of PLATFORMS) {
-  test(`a group of an image and a paragraph is written on both images of the pair and holds in the other mode (${platform})`, async (t) => {
+  test(`a group of the figure of an image and a paragraph is written on the figure and holds in the other mode (${platform})`, async (t) => {
     const page = await load(t, platform);
     assert.equal(await theme(page), 'dark');
     await click(page, IMG);
     await click(page, PARA, { modifiers: 'Shift' });
     await frames(page);
-    assert.deepEqual((await selected(page)).sort(), ['img.for-dark', 'p']);
+    assert.deepEqual((await selected(page)).sort(), ['figure.zone', 'p']);
     await press(page, platform === 'mac' ? 'Mod+Alt+G' : 'Mod+G');
     await frames(page);
-    await byteExact(page, [[P_TAG, '<p data-group="g1">Export your matplotlib figure'], [DARK_TAG, withAttr(DARK_TAG, 'data-group="g1"')], [LIGHT_TAG, withAttr(LIGHT_TAG, 'data-group="g1"')]]);
+    await byteExact(page, [[P_TAG, '<p data-group="g1">Export your matplotlib figure'], [FIG_TAG, withAttr(FIG_TAG, 'data-group="g1"')]]);
     await roundTrip(page);
-    // in light mode a click on the picture selects the group with the light image, and a drag
-    // moves the paragraph and both images of the pair
+    // in light mode a click on the picture selects the group with the figure, and a drag moves
+    // the paragraph and the figure
     await page.evaluate(`Reveal.slide(${FIGURE})`);
     await flipMode(page);
     await click(page, IMG);
     await frames(page);
-    assert.deepEqual((await selected(page)).sort(), ['img.for-light', 'p'], 'the click in light mode does not select the group');
+    assert.deepEqual((await selected(page)).sort(), ['figure.zone', 'p'], 'the click in light mode does not select the group');
     await drag(page, IMG, { dx: -60, dy: -40 });
     await frames(page);
     const text = await render(page);
-    const tags = [...text.matchAll(/<(p|img) [^>]*data-group="g1"[^>]*>/g)].map((m) => [m[0].match(/for-(dark|light)/)?.[0] ?? 'p', m[0].match(/translate: ([^;"]+)/)?.[1] ?? null]);
-    assert.equal(tags.length, 3, `the group is not written on three tags: ${js(tags)}`);
+    const tags = [...text.matchAll(/<(p|figure) [^>]*data-group="g1"[^>]*>/g)].map((m) => [m[1], m[0].match(/translate: ([^;"]+)/)?.[1] ?? null]);
+    assert.equal(tags.length, 2, `the group is not written on two tags: ${js(tags)}`);
     assert.ok(tags.every(([, tr]) => tr && tr === tags[0][1]), `the drag in light mode does not move the whole group: ${js(tags)}`);
     await roundTrip(page);
   });
 
-  test(`a lock of an image is written on both images of the pair and holds in the other mode (${platform})`, async (t) => {
+  test(`a lock of the figure of an image is written on the figure and holds in the other mode (${platform})`, async (t) => {
     const page = await load(t, platform);
     await click(page, IMG);
     await frames(page);
     await press(page, 'Mod+L');
     await frames(page);
-    await byteExact(page, [[DARK_TAG, withAttr(DARK_TAG, 'data-locked')], [LIGHT_TAG, withAttr(LIGHT_TAG, 'data-locked')]]);
+    await byteExact(page, [[FIG_TAG, withAttr(FIG_TAG, 'data-locked')]]);
     await roundTrip(page);
     await page.evaluate(`Reveal.slide(${FIGURE})`);
     await flipMode(page);
@@ -306,7 +308,7 @@ for (const platform of PLATFORMS) {
     await press(page, 'ArrowLeft');
     await frames(page);
     await byteExact(page);
-    // the unlock in light mode takes the lock off both images
+    // the unlock in light mode takes the lock off the figure
     await exec(page, 'arrange.unlock');
     await frames(page);
     assert.ok(!(await render(page)).includes('data-locked'), 'the unlock in light mode leaves a lock in the file');
@@ -335,20 +337,21 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// Delete and Cut of the image selected in its figure take the pair off, with the white space before
-// each image, since the image of the other mode would be left alone in the figure
+// Delete and Cut of the image selected in its figure take the figure off, with both images of the
+// pair and the caption, as Keynote takes off an image with its caption
 for (const platform of PLATFORMS) {
   // Cut is run as a command, since its key is left to the clipboard event of the browser
   for (const key of ['Backspace', 'edit.cut']) {
-    test(`${key === 'Backspace' ? 'Delete' : 'Cut'} of an image takes both images of the pair off (${platform})`, async (t) => {
+    test(`${key === 'Backspace' ? 'Delete' : 'Cut'} of the image of a figure takes the figure off with both images of the pair (${platform})`, async (t) => {
       const page = await load(t, platform);
-      await click(page, IMG);
+      await selectPicture(page, IMG);
       await frames(page);
       assert.deepEqual(await selected(page), ['img.for-dark']);
       if (key === 'Backspace') await press(page, key);
       else await exec(page, key);
       await frames(page);
-      await byteExact(page, [[`\n    ${DARK_TAG}\n    ${LIGHT_TAG}`, '']]);
+      const figure = page.source.match(/\n *<figure class="zone">[\s\S]*?<\/figure>/)[0];
+      await byteExact(page, [[figure, '']]);
       await roundTrip(page);
     });
   }
