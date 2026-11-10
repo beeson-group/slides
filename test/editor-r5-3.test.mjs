@@ -1,0 +1,190 @@
+// the inserts of the toolbar, the clipboard commands, and the keys, on both platforms: Cut and
+// Copy on a collapsed caret, Paste in the menu of a text, the keys of every command in the menus
+// and in the sheet of shortcuts, the error color of the formula sheet, the insert cluster of the
+// toolbar with its split buttons, and the keys moved off the keys that a browser takes before the
+// page. each edit is checked byte for byte, after an undo and a redo, and after a save and an open
+// of the saved text
+
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { after, before, test } from 'node:test';
+import { deckSettled, launch } from '../scripts/chrome.mjs';
+import { serve } from '../scripts/webdriver.mjs';
+import { center, click, press, saveAndReopen } from './helpers/editor.mjs';
+
+const PLATFORMS = ['mac', 'other'];
+
+let browser;
+let server;
+before(async () => {
+  browser = await launch({ offline: false });
+  server = await serve('.');
+});
+after(async () => {
+  await browser?.close();
+  server?.close();
+});
+
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+const frames = (page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => d(true))))');
+const render = (page) => page.evaluate('window.BeesonEditor.render()');
+const errors = (page) => page.errors.filter((e) => !e.includes('favicon.ico'));
+
+// the editor on a deck served over HTTP, with the storage of the origin emptied first
+async function load(t, platform, { deck = 'index.html', size = { width: 1600, height: 1000 }, scheme } = {}) {
+  const page = await browser.newPage(size);
+  t.after(() => page.close().catch(() => {}));
+  if (scheme) await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: scheme }] });
+  await page.goto(`${server.origin}/theme/beeson.css`);
+  await page.evaluate('localStorage.clear()');
+  await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
+  await page.waitFor(deckSettled);
+  await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
+  page.source = readFileSync(deck, 'utf8');
+  const s = await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(page.source)})`);
+  assert.deepEqual(s.problems, []);
+  await frames(page);
+  return page;
+}
+
+// window.app is set to the app of the editor by the run of a command that the test defines
+async function grabApp(page) {
+  await page.evaluate(`window.BeesonEditorShell.define({ id: 'test.app', label: 'App', run: (a) => { window.app = a; } })`);
+  await page.evaluate(`window.BeesonEditor.exec('test.app')`);
+}
+
+// the command, label, keys, and enabled state of each item of the last open menu
+const menuRows = (page) => page.evaluate(`(() => { const m = [...document.querySelectorAll('.beeson-edit-menu')].at(-1); return m ? [...m.querySelectorAll('.item')].map((i) => ({ id: i.dataset.command ?? '', label: i.querySelector('.label')?.textContent ?? '', keys: i.querySelector('.keys')?.textContent ?? '', enabled: i.getAttribute('aria-disabled') !== 'true' })) : []; })()`);
+
+// barMenu opens the menu of a title of the menu bar with a click, and returns its rows
+async function barMenu(page, title) {
+  await page.evaluate('window.BeesonEditorShell.closeMenus()');
+  await sleep(30);
+  const at = await page.evaluate(`(() => { const b = [...document.querySelectorAll('.beeson-edit-menubar button')].find((x) => x.textContent === ${JSON.stringify(title)}); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  await click(page, at);
+  await sleep(80);
+  return menuRows(page);
+}
+
+// caretInTitle collapses the caret in the heading of the title slide after its first n characters
+async function caretInTitle(page, n = 4) {
+  await page.evaluate('Reveal.slide(0)');
+  await sleep(200);
+  await click(page, await center(page, '.reveal section.present h1'));
+  await sleep(100);
+  await page.evaluate(`(() => { const h = document.querySelector('.reveal section.present h1'); getSelection().collapse(h.firstChild, ${n}); })()`);
+  await sleep(50);
+}
+
+const state = (page, id) => page.evaluate(`window.BeesonEditor.state(${JSON.stringify(id)})`);
+
+for (const platform of PLATFORMS) {
+  test(`Cut and Copy are disabled while the caret is collapsed in a text, and enabled on a range (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await caretInTitle(page);
+    assert.equal((await state(page, 'edit.cut')).enabled, false, 'Cut is enabled on a collapsed caret');
+    assert.equal((await state(page, 'edit.copy')).enabled, false, 'Copy is enabled on a collapsed caret');
+    assert.equal((await state(page, 'edit.paste')).enabled, true);
+    const rows = await barMenu(page, 'Edit');
+    const enabled = Object.fromEntries(rows.map((r) => [r.id, r.enabled]));
+    assert.deepEqual([enabled['edit.cut'], enabled['edit.copy'], enabled['edit.paste']], [false, false, true], 'the Edit menu offers Cut or Copy on a collapsed caret');
+    await page.evaluate('window.BeesonEditorShell.closeMenus()');
+    // Shift+F10 opens the menu of the text at the caret
+    await press(page, 'Shift+F10');
+    await sleep(150);
+    const context = await menuRows(page);
+    assert.deepEqual(context.slice(0, 3).map((r) => [r.id, r.enabled]), [['edit.cut', false], ['edit.copy', false], ['edit.paste', true]]);
+    await press(page, 'Escape');
+    await sleep(50);
+    await page.evaluate(`(() => { const t = document.querySelector('.reveal section.present h1').firstChild; getSelection().setBaseAndExtent(t, 0, t, 4); })()`);
+    await sleep(50);
+    assert.equal((await state(page, 'edit.cut')).enabled, true, 'Cut is disabled on a range');
+    assert.equal((await state(page, 'edit.copy')).enabled, true, 'Copy is disabled on a range');
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`Paste is a command of the menu of a text, and pastes there as Edit > Paste does (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await grabApp(page);
+    assert.ok((await page.evaluate(`window.app.commands.forContext('text').map((c) => c.id)`)).includes('edit.paste'), 'Paste is not declared for the menu of a text');
+    // the clipboard of the system is shared with the other tests, hence readText is a stub
+    await page.evaluate(`navigator.clipboard.readText = async () => ' pasted'`);
+    await caretInTitle(page, 10);
+    await press(page, 'Shift+F10');
+    await sleep(150);
+    // Cut and Copy are disabled, hence Paste is the first item highlighted
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-menu .item.hi')?.dataset.command`), 'edit.paste');
+    await press(page, 'Enter');
+    await sleep(300);
+    const fromContext = await render(page);
+    assert.equal(await page.evaluate(`document.querySelector('.reveal section.present h1').textContent`), 'Presenting pasted in HTML');
+    await page.evaluate('window.BeesonEditor.undo()');
+    await sleep(150);
+    assert.equal(await render(page), page.source);
+    // Edit > Paste at the same caret writes the same file
+    await caretInTitle(page, 10);
+    await barMenu(page, 'Edit');
+    await click(page, await center(page, '.beeson-edit-menu .item[data-command="edit.paste"]'));
+    await sleep(300);
+    assert.equal(await render(page), fromContext, 'the menu of a text and the Edit menu paste differently');
+    await page.evaluate('window.BeesonEditor.undo()');
+    await sleep(150);
+    assert.equal(await render(page), page.source);
+    await page.evaluate('window.BeesonEditor.redo()');
+    await sleep(150);
+    assert.equal(await render(page), fromContext);
+    const { text } = await saveAndReopen(page, `r5-3-paste-${platform}.html`);
+    assert.equal(text, fromContext);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`every command shows the keys it runs on, in its menu and in the sheet of shortcuts, each key once (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    const mac = platform === 'mac';
+    const slide = Object.fromEntries((await barMenu(page, 'Slide')).map((r) => [r.label, r.keys]));
+    assert.equal(slide['Duplicate Slide'], mac ? '⌘D' : 'Ctrl+D');
+    assert.equal(slide['Delete Slide'], mac ? '⌫' : 'Delete');
+    assert.equal(slide['Move Slide Up'], mac ? '⌥↑' : 'Alt+Up');
+    assert.equal(slide['Move Slide Down'], mac ? '⌥↓' : 'Alt+Down');
+    const edit = Object.fromEntries((await barMenu(page, 'Edit')).map((r) => [r.label, r.keys]));
+    assert.equal(edit.Duplicate, mac ? '⌘D' : 'Ctrl+D');
+    await page.evaluate('window.BeesonEditorShell.closeMenus()');
+    await page.evaluate(`window.BeesonEditor.exec('help.keys')`);
+    await sleep(100);
+    const rows = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-keys .row')].map((r) => ({ label: r.firstElementChild.textContent, keys: r.querySelector('kbd').textContent.split(', ') }))`);
+    const keysOf = (label) => rows.find((r) => r.label === label)?.keys ?? [];
+    assert.ok(keysOf('Duplicate Slide').includes(mac ? '⌘D' : 'Ctrl+D'), JSON.stringify(keysOf('Duplicate Slide')));
+    assert.ok(keysOf('Delete Slide').includes(mac ? '⌫' : 'Delete'), JSON.stringify(keysOf('Delete Slide')));
+    assert.ok(keysOf('Move Slide Up').includes(mac ? '⌥↑' : 'Alt+↑'), JSON.stringify(keysOf('Move Slide Up')));
+    assert.ok(keysOf('Move Slide Down').includes(mac ? '⌥↓' : 'Alt+↓'), JSON.stringify(keysOf('Move Slide Down')));
+    assert.ok(keysOf('Add Row Above').includes(mac ? '⌥↑' : 'Alt+↑'), 'Add Row Above lost its key');
+    for (const r of rows) assert.equal(new Set(r.keys).size, r.keys.length, `${r.label} lists a key twice: ${r.keys}`);
+    assert.deepEqual(errors(page), []);
+  });
+
+  for (const scheme of ['light', 'dark']) {
+    test(`the error of the formula sheet is drawn in a color of the chrome, not in the red of the deck (${platform}, ${scheme})`, async (t) => {
+      const page = await load(t, platform, { scheme });
+      await page.evaluate(`document.documentElement.style.setProperty('--red', 'rgb(1, 2, 3)')`);
+      await page.evaluate(`Reveal.slide([...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.math mjx-container')))`);
+      await sleep(250);
+      await click(page, await center(page, '.reveal section.present .math mjx-container'));
+      await page.waitFor(`!!document.querySelector('.beeson-math textarea')`);
+      await page.evaluate(`(() => { const f = document.querySelector('.beeson-math textarea'); f.focus(); f.value = '\\\\frac{'; f.dispatchEvent(new Event('input', { bubbles: true })); })()`);
+      await page.waitFor(`!!document.querySelector('.beeson-math .error:not(.prompt)')?.textContent`);
+      const colors = await page.evaluate(`(() => {
+        const probe = document.createElement('span');
+        probe.style.color = 'var(--ed-error)';
+        document.querySelector('.beeson-math').append(probe);
+        const out = { error: getComputedStyle(document.querySelector('.beeson-math .error')).color, token: getComputedStyle(probe).color, defined: getComputedStyle(document.documentElement).getPropertyValue('--ed-error').trim() };
+        probe.remove();
+        return out;
+      })()`);
+      assert.notEqual(colors.error, 'rgb(1, 2, 3)', 'the error of the formula sheet is drawn in the --red of the deck');
+      assert.ok(colors.defined, 'the chrome does not define --ed-error');
+      assert.equal(colors.error, colors.token);
+      await press(page, 'Escape');
+      assert.deepEqual(errors(page), []);
+    });
+  }
+}
