@@ -41,6 +41,10 @@ export function tablePane(app: App, run: Run): Control[] {
         { command: 'table.columnAfter', text: 'After', title: 'Add Column After' },
       ], 'Add Column')], 'Add'),
       row([button(app, run, { command: 'table.deleteColumn', text: 'Delete Column' })]),
+      row([
+        button(app, run, { command: 'table.distributeColumns', text: 'Distribute Evenly' }),
+        button(app, run, { command: 'table.fitColumn', text: 'Fit to Content' }),
+      ], 'Size'),
     ]),
     section('Numbers', [checkbox(app, run, 'table.numbersRight', 'Columns of numbers at the right')]),
     section(null, [row([button(app, run, { command: 'table.delete', text: 'Delete Table' })])]),

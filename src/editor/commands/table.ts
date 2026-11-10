@@ -53,6 +53,13 @@ html.beeson-editing .reveal .slides :is(td,th)[contenteditable="true"]:focus{out
 .beeson-table-bars .round{padding:0;border:0;border-radius:50%;display:grid;place-items:center;background:var(--ed-panel);box-shadow:0 0 0 1px var(--ed-control-line);color:var(--ed-select)}
 .beeson-table-bars .round:hover{background:var(--ed-hover)}
 .beeson-table-bars .cell{border:2px solid var(--ed-select);border-radius:2px;pointer-events:none}
+.beeson-table-bars .grips{position:static}
+.beeson-table-bars .grip{position:fixed;cursor:col-resize;touch-action:none}
+.beeson-table-bars .grip::after{content:"";position:absolute;left:4px;top:3px;bottom:3px;width:1px;background:var(--ed-muted);opacity:0}
+.beeson-table-bars .grip:hover::after,html.beeson-column-resizing .beeson-table-bars .grip::after{opacity:1;background:var(--ed-select)}
+.beeson-table-bars .guide{width:1px;background:var(--ed-select);pointer-events:none}
+.beeson-table-bars .guide[hidden]{display:none}
+html.beeson-column-resizing,html.beeson-column-resizing *{cursor:col-resize!important}
 html.beeson-cell-range .reveal *{user-select:none!important;-webkit-user-select:none!important}
 .beeson-table-bars .cell.block{border-width:4px;background:color-mix(in srgb,var(--ed-select) 12%,transparent)}
 `;
@@ -60,6 +67,8 @@ html.beeson-cell-range .reveal *{user-select:none!important;-webkit-user-select:
 // the size of the bars and of their buttons, in screen px, and the gap between a bar and its table
 const BAR = 18;
 const GAP = 6;
+// the width of the grip on the border of two columns, in screen px
+const GRIP = 9;
 
 type Target = { table: HTMLTableElement; cell: HTMLTableCellElement | null; box: Box | null };
 type Size = { rows: number; columns: number };
@@ -440,6 +449,65 @@ async function unmergeCells(app: App, t: Target): Promise<void> {
 const mergeable = (t: Target | null) => !!t?.box && spotsIn(gridOf(t.table), t.box).length > 1;
 const unmergeable = (t: Target | null) => !!t?.box && spotsIn(gridOf(t.table), t.box).some((s) => s.rows > 1 || s.span > 1);
 
+// the smallest width of the content of a column that a drag of its border leaves, in slide px,
+// where its words leave it narrower
+const NARROWEST = 24;
+
+// the width of the content of a cell in slide px, which a width in its style sets, since the theme
+// sizes the cells by their content box
+const contentWidth = (cell: Element) => parseFloat(getComputedStyle(cell).width) || 0;
+
+// the widths of cells of the first row written in px into their style, each that changes
+function writeWidths(app: App, widths: Map<HTMLTableCellElement, number>, label: string): void {
+  for (const [cell, w] of widths) {
+    const text = `${Math.max(1, Math.round(w))}px`;
+    if ((cell as HTMLElement).style.width !== text) app.doc.setTag(cell, { style: { width: text } }, label);
+  }
+}
+
+// the cells of the first row in the columns of the range of t, or in every column where the range
+// is one column wide or there is none. a cell of the first row over more than one column is taken
+// only inside the columns
+function firstRowIn(t: Target): Place[] {
+  const g = gridOf(t.table);
+  const box = t.box && t.box.c1 > t.box.c0 ? t.box : { c0: 0, c1: g.width - 1 };
+  return (g.spots[0] ?? []).filter((s) => s.col >= box.c0 && s.col + s.span - 1 <= box.c1);
+}
+
+// the columns of the range of t, or of the table, made as wide as each other, with the width of
+// all of them kept, as Distribute Columns Evenly of Keynote
+function distributeColumns(app: App, t: Target): void {
+  const cells = firstRowIn(t);
+  const outer = cells.map((s) => (s.cell as HTMLElement).offsetWidth);
+  const each = outer.reduce((a, b) => a + b, 0) / cells.reduce((n, s) => n + s.span, 0);
+  writeWidths(app, new Map(cells.map((s, i) => [s.cell, each * s.span - (outer[i] - contentWidth(s.cell))])), 'distribute columns');
+}
+
+// the width of the content of each cell of the first row of table, measured with the cell set a
+// px wide, so that its column is as narrow as its cells let it be: as wide as its longest word, or
+// with nowrap as its widest text on one line. the style of each cell is put back before the next
+// frame. a cell of the first row over more than one column is not measured
+function columnWidths(table: HTMLTableElement, nowrap: boolean, from = 0, to = Infinity): Map<HTMLTableCellElement, number> {
+  const g = gridOf(table);
+  const out = new Map<HTMLTableCellElement, number>();
+  for (const head of (g.spots[0] ?? []).filter((s) => s.span === 1 && s.col >= from && s.col <= to)) {
+    const column = g.grid.map((r) => r[head.col]).filter((s): s is Place => !!s && s.span === 1);
+    const kept = column.map((s) => [s.cell.style.whiteSpace, s.cell.style.width] as const);
+    if (nowrap) for (const s of column) s.cell.style.whiteSpace = 'nowrap';
+    head.cell.style.width = '1px';
+    out.set(head.cell, contentWidth(head.cell));
+    column.forEach((s, i) => {
+      s.cell.style.whiteSpace = kept[i][0];
+      s.cell.style.width = kept[i][1];
+    });
+  }
+  return out;
+}
+
+// the widest text of each column of the cells of t on one line, as Resize Column to Fit Content
+// of Keynote
+const fitWidths = (t: Target) => columnWidths(t.table, true, t.box?.c0, t.box?.c1);
+
 // the cells of rows written into the table of cell from cell on, with rows and columns added at the
 // end as they are needed
 async function pasteCells(app: App, cell: HTMLTableCellElement, rows: string[][]): Promise<void> {
@@ -492,6 +560,8 @@ function cellItems(cell: HTMLTableCellElement): MenuItem[] {
     ...ids(['table.selectRow', 'table.selectColumn']),
     { rule: true },
     ...ids(['table.merge', 'table.unmerge']),
+    { rule: true },
+    ...ids(['table.distributeColumns', 'table.fitColumn']),
     { rule: true },
     ...ids(['table.header', 'table.numbersRight']),
     { rule: true },
@@ -620,7 +690,13 @@ function installBars(app: App): void {
   const grab = round('Select Table', 'table', (t) => app.selection.set('elements', [t.table]));
   const addCol = round('Add Column', 'plus', (t) => app.commands.run('table.columnAfter', { cell: lastCell(t.table, 'column') }));
   const addRow = round('Add Row', 'plus', (t) => app.commands.run('table.rowBelow', { cell: lastCell(t.table, 'row') }));
-  layer.append(cols, rows, grab, addCol, addRow, outline);
+  // a grip on the border at the right of each cell of the first row, whose drag sets the widths
+  // of the columns on its two sides, or of the last column, and the line of the border while it is
+  // dragged
+  const grips = make('div', 'grips');
+  const guide = make('div', 'guide');
+  guide.hidden = true;
+  layer.append(cols, rows, grab, addCol, addRow, outline, grips, guide);
   document.body.append(layer);
   // a press on the bars keeps the caret in its cell
   for (const type of ['pointerdown', 'mousedown']) layer.addEventListener(type, (ev) => ev.preventDefault());
@@ -652,6 +728,60 @@ function installBars(app: App): void {
       return d;
     }));
 
+  // the drag of a grip: the cells of the first row, the widths of their content and their widths
+  // in the style at the press, the cell at the left of the border, and the scale of the slide
+  // in the style at the press, the narrowest widths that their words leave, the cell at the left
+  // of the border, and the scale of the slide
+  let resize: { cells: HTMLTableCellElement[]; widths: number[]; styles: string[]; least: number[]; i: number; x: number; scale: number } | null = null;
+  const sized = (ev: PointerEvent): Map<HTMLTableCellElement, number> => {
+    const r = resize!;
+    const d = (ev.clientX - r.x) / r.scale;
+    const out = new Map<HTMLTableCellElement, number>();
+    const left = r.widths[r.i];
+    const next = r.widths[r.i + 1];
+    if (next === undefined) out.set(r.cells[r.i], Math.max(r.least[r.i], left + d));
+    else {
+      const w = Math.max(r.least[r.i], Math.min(left + d, left + next - r.least[r.i + 1]));
+      out.set(r.cells[r.i], w);
+      out.set(r.cells[r.i + 1], Math.max(r.least[r.i + 1], left + next - w));
+    }
+    return out;
+  };
+  grips.addEventListener('pointerdown', (ev) => {
+    const grip = ev.target instanceof HTMLElement ? ev.target.closest<HTMLElement>('[data-grip]') : null;
+    if (!grip || !shown || ev.button !== 0) return;
+    const cells = (gridOf(shown.table).spots[0] ?? []).map((s) => s.cell);
+    const box = shown.table.getBoundingClientRect();
+    const widths = cells.map(contentWidth);
+    const least = columnWidths(shown.table, false);
+    resize = {
+      cells, widths, styles: cells.map((c) => c.style.width), least: cells.map((c, i) => Math.min(widths[i], Math.max(NARROWEST, least.get(c) ?? widths[i]))),
+      i: Number(grip.dataset.grip), x: ev.clientX, scale: box.width / (shown.table.offsetWidth || 1) || 1,
+    };
+    grip.setPointerCapture(ev.pointerId);
+    document.documentElement.classList.add('beeson-column-resizing');
+  });
+  grips.addEventListener('pointermove', (ev) => {
+    if (!resize) return;
+    for (const [cell, w] of sized(ev)) cell.style.width = `${Math.round(w)}px`;
+  });
+  const drop = (ev: PointerEvent | null) => {
+    const r = resize;
+    if (!r) return;
+    const widths = ev ? sized(ev) : null;
+    resize = null;
+    document.documentElement.classList.remove('beeson-column-resizing');
+    r.cells.forEach((c, i) => {
+      c.style.width = r.styles[i];
+    });
+    if (widths && ev && Math.abs(ev.clientX - r.x) >= 1) {
+      void app.history.transact('Resize Column', () => writeWidths(app, widths, 'resize column')).catch((e) => app.fail(e));
+    }
+  };
+  grips.addEventListener('pointerup', (ev) => drop(ev));
+  grips.addEventListener('pointercancel', () => drop(null));
+  grips.addEventListener('lostpointercapture', () => drop(null));
+
   const draw = () => {
     const t = shown;
     if (!t || !t.table.isConnected) return hide();
@@ -678,6 +808,21 @@ function installBars(app: App): void {
     edges.forEach(([l, r], c) => place(cols.children[c], l - box.left, 0, r - l, BAR));
     place(rows, left, box.top, BAR, box.height);
     rowBoxes.forEach((b, r) => place(rows.children[r], 0, b.top - box.top, BAR, b.height));
+    const first = gridOf(t.table).spots[0] ?? [];
+    if (grips.children.length !== first.length) {
+      grips.replaceChildren(...first.map((_, i) => {
+        const g = make('div', 'grip');
+        g.dataset.grip = String(i);
+        g.title = 'Drag to resize the column';
+        return g;
+      }));
+    }
+    first.forEach((s, i) => {
+      const x = edges[s.col + s.span - 1][1];
+      place(grips.children[i], x - GRIP / 2, top, GRIP, BAR);
+      if (resize?.i === i) place(guide, x, box.top, 1, box.height);
+    });
+    guide.hidden = !resize;
     place(grab, left, top, BAR, BAR);
     place(addCol, box.right + GAP, top, BAR, BAR);
     place(addRow, left, box.bottom + GAP, BAR, BAR);
@@ -875,6 +1020,32 @@ export function install(app: App): void {
     enabled: (a, arg?: unknown) => ready(a) && unmergeable(targetOf(a, arg)),
     undoable: true,
     run: (a, arg) => unmergeCells(a, need(a, arg)),
+  });
+
+  c.define({
+    id: 'table.distributeColumns',
+    label: 'Distribute Columns Evenly',
+    menu: menu('size', 79.85),
+    enabled: (a, arg?: unknown) => {
+      const t = ready(a) ? targetOf(a, arg) : null;
+      return !!t && firstRowIn(t).length > 1;
+    },
+    undoable: true,
+    run: (a, arg) => distributeColumns(a, need(a, arg)),
+  });
+  c.define({
+    id: 'table.fitColumn',
+    label: 'Resize Column to Fit Content',
+    menu: menu('size', 79.9),
+    enabled: (a, arg?: unknown) => {
+      const t = ready(a) ? targetOf(a, arg) : null;
+      return !!t?.box && gridOf(t.table).spots[0]?.some((s) => s.span === 1 && s.col >= t.box!.c0 && s.col <= t.box!.c1);
+    },
+    undoable: true,
+    run: (a, arg) => {
+      const t = need(a, arg);
+      writeWidths(a, fitWidths(t), 'fit column');
+    },
   });
 
   // the rows or the columns of the cells of the target selected as a block, from the first cell

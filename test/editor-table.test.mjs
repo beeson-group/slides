@@ -795,3 +795,122 @@ for (const platform of ['mac', 'other']) {
     await roundTrip(page);
   });
 }
+
+// the widths of the content of the cells of the first row of the current slide in slide px, their
+// widths in the layout, and the scale of the slide on the screen
+const firstRow = (page) => page.evaluate(`(() => {
+  const table = document.querySelector('.reveal section.present table');
+  const cells = [...table.rows[0].cells];
+  return {
+    content: cells.map((c) => parseFloat(getComputedStyle(c).width)),
+    outer: cells.map((c) => c.offsetWidth),
+    table: table.offsetWidth,
+    scale: table.getBoundingClientRect().width / table.offsetWidth,
+  };
+})()`);
+// the widths in px written into the style of the cells of the first row of the plain table
+const writtenWidths = (text) => {
+  const m = text.match(/<tr><th(?: style="width: (\d+)px")?>Body<\/th><th(?: style="width: (\d+)px")?>Mass ratio<\/th><th(?: style="width: (\d+)px")?>System<\/th><\/tr>/);
+  assert.ok(m, 'the first row of the plain table is not in the text');
+  return m.slice(1).map((w) => (w === undefined ? null : Number(w)));
+};
+const withWidths = (widths) => PLAIN_ROWS.with(0, `<tr>${['Body', 'Mass ratio', 'System'].map((name, i) => (widths[i] === null ? `<th>${name}</th>` : `<th style="width: ${widths[i]}px">${name}</th>`)).join('')}</tr>`);
+const near = (a, b, what) => assert.ok(Math.abs(a - b) <= 1.5, `${what}: ${a} is not ${b}`);
+
+for (const platform of ['mac', 'other']) {
+  test(`a drag of the border of two columns writes the widths of both into the cells of the first row (${platform})`, async (t) => {
+    const page = await open(platform, TABLES_DECK);
+    t.after(() => page.close?.());
+    await show(page, 1);
+    await click(page, cellSelector(2, 0));
+    await settle(page);
+    const before = await firstRow(page);
+    await drag(page, '.beeson-table-bars .grip[data-grip="0"]', { dx: 20 });
+    await settle(page);
+    const text = await render(page);
+    const [a, b, c] = writtenWidths(text);
+    near(a, before.content[0] + 20 / before.scale, 'the left column');
+    near(b, before.content[1] - 20 / before.scale, 'the right column');
+    assert.equal(c, null);
+    await byteExact(page, [[tbodyTable(PLAIN_ROWS), tbodyTable(withWidths([a, b, null]))]]);
+    near((await firstRow(page)).table, before.table, 'the table');
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Resize Column');
+    // the caret stays in its cell
+    assert.deepEqual(await focusCell(page), [2, 0]);
+    await roundTrip(page);
+  });
+
+  test(`a drag of a border stops where the words of a column leave it no narrower (${platform})`, async (t) => {
+    const page = await open(platform, TABLES_DECK);
+    t.after(() => page.close?.());
+    await show(page, 1);
+    await click(page, cellSelector(2, 0));
+    await settle(page);
+    const before = await firstRow(page);
+    await drag(page, '.beeson-table-bars .grip[data-grip="0"]', { dx: 400 });
+    await settle(page);
+    const [a, b] = writtenWidths(await render(page));
+    near((await firstRow(page)).table, before.table, 'the table');
+    assert.ok(a > before.content[0] && b < before.content[1] && b >= 24, `${a} ${b}`);
+    await roundTrip(page);
+  });
+
+  test(`a drag of the last border widens the last column, and Resize Column to Fit Content sets it on one line (${platform})`, async (t) => {
+    const page = await open(platform, TABLES_DECK);
+    t.after(() => page.close?.());
+    await show(page, 1);
+    await click(page, cellSelector(1, 2));
+    await settle(page);
+    const lines = () => page.evaluate(`(() => {
+      const r = document.createRange();
+      r.selectNodeContents(document.querySelector(${js(cellSelector(1, 2))}));
+      return new Set([...r.getClientRects()].map((b) => Math.round(b.top))).size;
+    })()`);
+    assert.equal(await lines(), 1);
+    const before = await firstRow(page);
+    await drag(page, '.beeson-table-bars .grip[data-grip="2"]', { dx: -before.content[2] * before.scale * 0.6 });
+    await settle(page);
+    assert.ok(await lines() > 1, 'Earth and Moon is on one line in a narrow column');
+    await page.evaluate(`window.BeesonEditor.exec('table.fitColumn')`);
+    await settle(page);
+    assert.equal(await lines(), 1);
+    const [a, b, c] = writtenWidths(await render(page));
+    assert.deepEqual([a, b], [null, null]);
+    near(c, before.content[2], 'the fitted column');
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Resize Column To Fit Content');
+    await roundTrip(page, 2);
+  });
+
+  test(`Distribute Columns Evenly makes the columns as wide as each other in the same width (${platform})`, async (t) => {
+    const page = await open(platform, TABLES_DECK);
+    t.after(() => page.close?.());
+    await show(page, 1);
+    await click(page, cellSelector(2, 0));
+    const before = await firstRow(page);
+    await page.evaluate(`window.BeesonEditor.exec('table.distributeColumns')`);
+    await settle(page);
+    const after = await firstRow(page);
+    const each = before.outer.reduce((x, y) => x + y) / 3;
+    for (const [i, w] of after.outer.entries()) near(w, each, `the column ${i}`);
+    near(after.table, before.table, 'the table');
+    assert.ok(writtenWidths(await render(page)).every((w) => w !== null));
+    await roundTrip(page);
+  });
+
+  test(`Distribute Columns Evenly in a range of two columns keeps the third (${platform})`, async (t) => {
+    const page = await open(platform, TABLES_DECK);
+    t.after(() => page.close?.());
+    await show(page, 1);
+    const before = await firstRow(page);
+    await dragCells(page, [2, 1], [3, 2]);
+    await page.evaluate(`window.BeesonEditor.exec('table.distributeColumns')`);
+    await settle(page);
+    const after = await firstRow(page);
+    near(after.outer[1], (before.outer[1] + before.outer[2]) / 2, 'the column B');
+    near(after.outer[2], (before.outer[1] + before.outer[2]) / 2, 'the column C');
+    near(after.outer[0], before.outer[0], 'the column A');
+    assert.equal(writtenWidths(await render(page))[0], null);
+    assert.ok(await asBlock(page));
+    await roundTrip(page);
+  });
+}
