@@ -10,10 +10,12 @@ import { inflateSync } from 'node:zlib';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
+import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
 import { numberOf, sortOrder } from '../src/editor/table.ts';
 import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
 const DECK = 'index.html';
+const THEME = new Set(themeClasses(readFileSync('theme/beeson.css', 'utf8')));
 const PLATFORMS = ['mac', 'other'];
 // the window of the pictures of round 3 on the Mac, and a window of 1920 by 1080 elsewhere
 const SIZES = { mac: { width: 1600, height: 1000 }, other: { width: 1920, height: 1080 } };
@@ -422,6 +424,7 @@ for (const platform of PLATFORMS) {
     assert.ok(+m[3] < 600 && +m[4] < 800, `the box of ${m[3]} by ${m[4]} px is not smaller than the zone`);
     const edited = await render(page);
     assert.equal(edited, page.source.replace('<img class="for-dark" src="../../demo/figure-dark.png" alt="A figure, dark version">', `<img class="for-dark" src="../../demo/figure-dark.png" alt="A figure, dark version" style="${style}">`));
+    assert.deepEqual(textProblems(edited, THEME), textProblems(page.source, THEME), 'the resized mask is out of the scope rule');
     await pictureKept(page, edited);
     await roundTrip(page, edited);
   });
@@ -465,6 +468,7 @@ for (const platform of PLATFORMS) {
     await exec(page, 'image.resetMask');
     const reset = await written(page);
     assert.match(reset, /^object-fit: contain; width: \d+px; height: \d+px; translate: -?\d+px -?\d+px$/);
+    assert.deepEqual(textProblems(await render(page), THEME), textProblems(page.source, THEME), 'the reset mask is out of the scope rule');
     assert.equal((await state(page, 'image.resetMask')).enabled, false);
     const fit = await page.evaluate(`getComputedStyle(document.querySelector(${js(IMG)})).objectFit`);
     assert.equal(fit, 'contain');
