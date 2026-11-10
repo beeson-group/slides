@@ -117,3 +117,73 @@ for (const platform of PLATFORMS) {
     await roundTrip(page, 2);
   });
 }
+
+// the rows of the menu opened last, each with its command, its label, and its keys as shown
+const ROWS = `[...([...document.querySelectorAll('.beeson-edit-menu')].at(-1)?.querySelectorAll('.item') ?? [])].map((el) => ({
+  command: el.dataset.command ?? null,
+  label: el.querySelector('.label')?.firstChild?.textContent ?? '',
+  keys: el.querySelector('.keys')?.textContent ?? '',
+}))`;
+
+// every command row of the menus of the menu bar and of their submenus, each menu opened by itself
+const menuBarRows = (page) => page.evaluate(`(() => {
+  const shell = window.BeesonEditorShell;
+  const out = [];
+  const walk = (items) => {
+    shell.openMenu(items, { x: 40, y: 40 });
+    out.push(...${ROWS}.filter((r) => r.command));
+    shell.closeMenus();
+    for (const it of items) if (it.items) walk(typeof it.items === 'function' ? it.items() : it.items);
+  };
+  for (const bar of ['File', 'Edit', 'Insert', 'Format', 'Arrange', 'Slide', 'View', 'Help']) walk(shell.menuItems(bar));
+  return out;
+})()`);
+
+// the rows of a context menu whose keys differ from the keys of the same command, or else of a
+// command of the same label, in the menu bar
+function differences(bar, rows, where) {
+  const out = [];
+  for (const r of rows.filter((r) => r.command)) {
+    const same = bar.filter((b) => b.command === r.command);
+    const named = same.length ? same : bar.filter((b) => b.label === r.label);
+    if (named.length && !named.some((b) => b.keys === r.keys)) out.push(`${where}: ${r.label} is listed with "${r.keys}" and in the menu bar with "${named.map((b) => b.keys).join('", "')}"`);
+  }
+  return out;
+}
+
+// finding 2: Unlock of the context menu of a locked element was listed without the keys that
+// Arrange > Unlock lists
+for (const platform of PLATFORMS) {
+  test(`every item of every context menu is listed with the keys of the menu bar (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 4 });
+    const bar = await menuBarRows(page);
+    assert.ok(bar.some((b) => b.command === 'arrange.unlock' && b.keys), 'Arrange > Unlock is not listed with its keys');
+    const found = [];
+    const context = async (at, where) => {
+      await click(page, at, { button: 'right' });
+      await frames(page);
+      const rows = await page.evaluate(ROWS);
+      assert.ok(rows.length > 2, `the context menu of ${where} is not open`);
+      found.push(...differences(bar, rows, where));
+      await press(page, 'Escape');
+      await frames(page);
+      return rows;
+    };
+    const IMAGE = '.reveal section.present figure.zone > img';
+    await context(IMAGE, 'an element');
+    await click(page, IMAGE);
+    await exec(page, 'arrange.lock');
+    const locked = await context(IMAGE, 'a locked element');
+    assert.ok(locked.some((r) => r.label === 'Unlock'), 'the menu of a locked element does not list Unlock');
+    await context('.reveal section.present > p', 'a text');
+    await context('.beeson-edit-nav .row', 'a slide of the navigator');
+    const canvas = await boxOf(page, '.beeson-edit-canvas');
+    await context({ x: canvas.left + 12, y: canvas.top + 12 }, 'the canvas');
+    const nav = await boxOf(page, '.beeson-edit-nav');
+    await page.evaluate(`window.BeesonEditorShell.context('navigator', ${nav.left + 20}, ${nav.bottom - 20})`);
+    found.push(...differences(bar, await page.evaluate(ROWS), 'the navigator'));
+    await press(page, 'Escape');
+    assert.deepEqual(found, []);
+    assert.deepEqual(errors(page), []);
+  });
+}
