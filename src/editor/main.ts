@@ -63,6 +63,7 @@ const doc = new Doc({
   },
   restore: (host, content) => app.typing.restoreHost(host, content),
 });
+app.doc = doc;
 
 // the modules of today that are classes with a context: the slide list at the left, the steps of
 // the current slide in a pane at the right, and the layer switch. each is replaced by a module of

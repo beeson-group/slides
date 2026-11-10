@@ -42,11 +42,9 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
 .beeson-edit-gallery .tile span { text-align: center; }
 `;
 
-// the document model, which main.ts creates and exposes for the tests
+// the document model, which main.ts creates
 export function docOf(app: App): Doc {
-  const doc = (app as App & { doc?: Doc }).doc ?? (window as unknown as { BeesonEditor?: { doc?: Doc } }).BeesonEditor?.doc;
-  if (!doc) throw new Error('the document model is not ready');
-  return doc;
+  return app.doc;
 }
 
 const navOf = (app: App): Navigator => app.nav as Navigator;

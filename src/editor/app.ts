@@ -11,6 +11,7 @@ import { History } from './history.ts';
 import { contentWithTex } from './math.ts';
 import { Commands } from './commands.ts';
 import type { Selection } from './selection.ts';
+import type { Doc } from './model/doc.ts';
 
 // the part of reveal.js that the editor uses
 export type Deck = {
@@ -166,6 +167,7 @@ export class App {
   move!: Selector;
   layers!: LayerSwitch;
   selection!: Selection;
+  doc!: Doc;
   nav!: Pane;
   steps!: Pane;
 
