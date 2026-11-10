@@ -5,7 +5,7 @@
 // argument, and otherwise the selected element, or the item of the slide around it
 
 import type { App } from '../app.ts';
-import { moveTo, oneByOne, setFinal, setIndexReader, setStart, setStep, shift, stepAt, type Plan, type Start } from '../layers.ts';
+import { moveTo, oneByOne, placedIndex, setFinal, setIndexReader, setStart, setStep, shift, stepAt, type Plan, type Start } from '../layers.ts';
 import type { TagEdit } from '../tags.ts';
 import { AFTER_DEFAULT, MIN_DELAY, WITH_SLIDE, afterable, carryDelays, classesOf, deliverPlan, deliveryOf, delaysOf, effectEdit, effectOf, indexIn, listItems, listOf, modelAt, modelOf, startAt, writePlan, type Delivery, type Effect, type StartKind, type Steps } from '../steps.ts';
 
@@ -79,10 +79,13 @@ const num = (v: string | null | undefined): number | null => (v != null && /^\s*
 
 // the index of a fragment in the file. a fragment that is not paired with a tag, e.g. a span in a
 // paragraph, is not edited, and its index is placed among those of the paired fragments whose
-// index was not edited, by the order of the page, which reveal.js numbers from 0
+// index was not edited, by the order of the page, which reveal.js numbers from 0. a fragment put
+// into a block from a text keeps the index of the text
 function indexOf(app: App, el: Element): string | null {
   const paired = (f: Element) => !!app.pairing?.elements.get(f)?.open;
   if (paired(el)) return app.doc.tagState(el).attrs['data-fragment-index'] ?? null;
+  const placed = placedIndex(el);
+  if (placed !== undefined) return placed;
   const me = num(el.getAttribute('data-fragment-index'));
   const slide = el.closest('section');
   if (me === null || !slide) return me === null ? null : String(me);
