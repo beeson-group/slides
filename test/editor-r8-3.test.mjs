@@ -269,3 +269,49 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+const cellAt = (r, c) => `.reveal section.present table tr:nth-child(${r + 1}) > :nth-child(${c + 1})`;
+const paneNote = (page) => page.evaluate(`document.querySelector('${PANEL} .ed-note')?.textContent`);
+
+// a new Content slide after the slide with the figure with a table of 3 columns by 5 rows from the
+// grid of the button Table, with rows 2 and 3 typed, as in states 197 and 198
+async function tableSlide(page) {
+  await exec(page, 'slide.new.content');
+  await frames(page);
+  await exec(page, 'insert.table', { rows: 5, columns: 3 });
+  await frames(page);
+  for (const [r, c, text] of [[1, 0, '1'], [2, 0, '2'], [1, 1, 'Step 1'], [2, 1, 'Step 2'], [1, 2, 'orbit'], [2, 2, 'tube']]) {
+    await click(page, cellAt(r, c));
+    await type(page, text);
+  }
+  await frames(page);
+}
+
+// finding 4 of R8.3: the fill handle stood at the corner of the range during its own drag, and
+// the Table pane read the range from before the drag (state 198)
+for (const platform of PLATFORMS) {
+  test(`the fill handle of a range follows the pointer, and the Table pane counts the range during the drag (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await tableSlide(page);
+    const from = middle(await rectOf(page, cellAt(1, 0)));
+    const to = middle(await rectOf(page, cellAt(2, 2)));
+    await drag(page, from, { dx: to.x - from.x, dy: to.y - from.y });
+    await frames(page);
+    assert.match(await paneNote(page), /cells A2:C3$/);
+    const handle = middle(await rectOf(page, '.beeson-table-bars .fill'));
+    const end = middle(await rectOf(page, cellAt(4, 2)));
+    await drag(page, handle, { dy: end.y - handle.y, steps: 12, hold: true });
+    await frames(page);
+    const moved = middle(await rectOf(page, '.beeson-table-bars .fill'));
+    assert.ok(Math.abs(moved.x - handle.x) < 3 && Math.abs(moved.y - end.y) < 3, `the fill handle at ${js(moved)} is not under the pointer at ${js({ x: handle.x, y: end.y })}`);
+    assert.match(await paneNote(page), /cells A2:C5$/, 'the Table pane does not count the range during the drag');
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: handle.x, y: end.y, button: 'left', clickCount: 1 });
+    await page.waitFor(`window.BeesonEditor.state('edit.undo').label === 'Undo Autofill'`);
+    await frames(page);
+    assert.match(await paneNote(page), /cells A2:C5$/);
+    const corner = await rectOf(page, '.beeson-table-bars .cell');
+    const back = middle(await rectOf(page, '.beeson-table-bars .fill'));
+    assert.ok(Math.abs(back.x - corner.right) < 6 && Math.abs(back.y - corner.bottom) < 6, 'the fill handle is not back at the corner of the range after the drag');
+    assert.deepEqual(errors(page), []);
+  });
+}
