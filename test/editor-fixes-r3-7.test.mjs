@@ -642,3 +642,36 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errorsOf(page), []);
   });
 }
+
+// the switch Constrain Proportions of the Arrange pane, whether it follows the fields W and H, and
+// the note under it
+const constrainOf = (page) => page.evaluate(`(() => {
+  const panel = document.querySelector('#beeson-edit-panel-format');
+  const box = [...panel.querySelectorAll('label.ed-check')].find((l) => l.textContent.trim() === 'Constrain Proportions');
+  if (!box) return null;
+  const input = box.querySelector('input');
+  const height = panel.querySelector('#beeson-edit-num-height');
+  return { checked: input.checked, disabled: input.disabled, afterSize: !!height && !!(height.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING), note: box.closest('.ed-sec')?.textContent ?? '' };
+})()`);
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: the Arrange pane has a Constrain Proportions switch beside the size fields, held on while only the width is written`, async () => {
+    const page = await editor(platform, MULTI);
+    // a state kept in the browser does not free an aspect that the scope rule cannot write
+    await page.evaluate(`localStorage.setItem('beeson-edit-constrain-qr', 'off')`);
+    await click(page, ZONE_IMG);
+    await arrangeXY(page);
+    const image = await constrainOf(page);
+    assert.ok(image, 'the Arrange pane does not have a switch Constrain Proportions');
+    assert.ok(image.afterSize, 'the switch is not beside the size fields');
+    assert.deepEqual([image.checked, image.disabled], [true, true], 'the switch of an image is not on, or can be turned off while only the width is written');
+    assert.match(image.note, /width/i, 'the note does not say that only the width is written');
+    await click(page, QR);
+    await arrangeXY(page);
+    const qr = await constrainOf(page);
+    assert.deepEqual([qr.checked, qr.disabled], [true, true], 'the switch of a QR code is not held on');
+    assert.equal(await page.evaluate('window.BeesonEditor.render()'), page.source, 'the switch writes into the file');
+    await page.evaluate(`localStorage.removeItem('beeson-edit-constrain-qr')`);
+    assert.deepEqual(errorsOf(page), []);
+  });
+}
