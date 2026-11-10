@@ -344,3 +344,33 @@ for (const platform of PLATFORMS) {
   });
 
 }
+
+// a table, which is not rotated
+for (const platform of PLATFORMS) {
+  test(`a table is drawn without a rotate handle, and no rotation acts on it (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: TABLES, n: 1 });
+    const rotor = () => page.evaluate(`(() => { const r = document.querySelector('.beeson-rotor'); return !!r && !r.hidden && getComputedStyle(r).display !== 'none'; })()`);
+    const cell = (r, c) => `.reveal section.present table tr:nth-child(${r + 1}) > :nth-child(${c + 1})`;
+    // a range of cells selected by a drag, as in the state of the council
+    const a = await centerOf(page, cell(1, 0));
+    const b = await centerOf(page, cell(2, 1));
+    await drag(page, a, { dx: b.x - a.x, dy: b.y - a.y });
+    await frames(page);
+    assert.equal(await rotor(), false, 'a rotate handle is drawn on a range of cells');
+    // the table selected as an element
+    await click(page, cell(0, 0));
+    await press(page, 'Escape');
+    await frames(page);
+    if ((await selected(page))[0] !== 'table') await press(page, 'Escape');
+    await frames(page);
+    assert.deepEqual(await selected(page), ['table']);
+    assert.equal(await rotor(), false, 'a rotate handle is drawn on a selected table');
+    assert.equal((await state(page, 'arrange.setRotation')).enabled, false, 'Rotate is enabled on a table');
+    await exec(page, 'arrange.setRotation', { deg: 30 });
+    await byteExact(page);
+    await showTab(page, 'Arrange');
+    const angle = await page.evaluate(`[...document.querySelectorAll('${PANEL} input')].some((i) => i.closest('label, .ed-field, .ed-row')?.textContent?.includes('Angle') && !i.disabled)`);
+    assert.equal(angle, false, 'the Angle field of the Arrange pane is live for a table');
+    assert.deepEqual(errors(page), []);
+  });
+}
