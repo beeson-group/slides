@@ -172,11 +172,15 @@ const stepsOf = (slide: Element): number[] => [-1, ...new Set([...slide.querySel
 const fragmentsAt = (slide: Element, f: number) => [...slide.querySelectorAll<HTMLElement>('.fragment')].filter((el) => Number(el.dataset.fragmentIndex) === f);
 const delayed = (el: Element) => (parseInt(el.getAttribute(AUTOSLIDE) ?? el.getAttribute(HELD) ?? '', 10) || 0) > 0;
 
+/** The object of reveal.js that its controllers call, which is passed to the init of a plugin. */
+export type Internal = { cueAutoSlide(): void };
+
 /**
  * Plays the timed steps of a deck shown without the editor as PowerPoint and Keynote play them.
- * forDeck tells whether a key press is for the deck, rather than for a field.
+ * forDeck tells whether a key press is for the deck, rather than for a field, and internal is the
+ * object of reveal.js that its keyboard calls at the end of a key.
  */
-export function initTimedSteps(deck: Deck, forDeck: (ev: KeyboardEvent) => boolean): void {
+export function initTimedSteps(deck: Deck, forDeck: (ev: KeyboardEvent) => boolean, internal: Internal): void {
   // both are read by reveal.js at each input and at the end of each delay. without
   // autoSlideStoppable, an input does not pause the delays, and the key A of reveal.js is bound
   // here in its place. reveal.js moves the deck on at the end of a delay with autoSlideMethod
@@ -196,6 +200,23 @@ export function initTimedSteps(deck: Deck, forDeck: (ev: KeyboardEvent) => boole
   deck.addKeyBinding({ keyCode: 65, key: 'A', description: 'Pause and resume the timed steps' }, (ev: KeyboardEvent) => {
     if (forDeck(ev)) deck.toggleAutoSlide(!deck.isAutoSliding());
   });
+  // reveal.js starts the delay of the step again at the end of every key. as in PowerPoint and
+  // Keynote, a key that does nothing to the show, e.g. D, leaves the running delay alone, hence the
+  // delay is cued at a key only when the step, the overview, or the pause has changed
+  const cue = internal.cueAutoSlide.bind(internal);
+  const state = () => {
+    const { h, v, f } = deck.getIndices();
+    return `${h}/${v}/${f}/${deck.isOverview()}/${deck.isPaused()}`;
+  };
+  let keyFrom: string | null = null;
+  internal.cueAutoSlide = () => {
+    if (keyFrom === null || keyFrom !== state()) cue();
+  };
+  window.addEventListener('keydown', () => {
+    keyFrom = state();
+    setTimeout(() => (keyFrom = null), 0);
+  }, true);
+  window.addEventListener('keydown', () => (keyFrom = null));
 
   const slides = () => deck.getSlides();
   const here = (): At => {
@@ -242,7 +263,7 @@ export function initTimedSteps(deck: Deck, forDeck: (ev: KeyboardEvent) => boole
       }
     }
     // the delay of the step may have been started before this event, and it is cued again without it
-    (deck as Deck & { cueAutoSlide?: () => void }).cueAutoSlide?.();
+    internal.cueAutoSlide();
     if (!delayedAt(now)) return;
     // a step reached by a delay is skipped after one step back
     if (same(before(from), now) && byDelay(now)) setTimeout(() => deck.prev(), 0);
