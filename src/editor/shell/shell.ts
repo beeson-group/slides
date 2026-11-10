@@ -40,10 +40,6 @@ html.beeson-editor.beeson-nav body > .beeson-edit-nav-edge { display: block; }
 html.beeson-editor body > .beeson-edit-nav-edge:hover, html.beeson-editor body > .beeson-edit-nav-edge:focus-visible { outline: none; background: color-mix(in srgb, var(--ed-select) 45%, transparent); }
 html.beeson-editor .beeson-edit-peek { left: calc(var(--ed-nav-col) + 8px); }
 html.beeson-editor body > .beeson-edit-pane { grid-area: notes; position: relative; inset: auto; height: auto; min-height: 0; z-index: 0; background: var(--ed-panel); border-top: 1px solid var(--ed-line); color: var(--ed-faint); font: 11px/1.4 var(--ed-font); padding: 6px 12px; }
-html.beeson-editor body > .beeson-edit-resize { left: var(--ed-nav-col); right: var(--ed-insp-col); bottom: calc(28px + var(--beeson-pane, 200px) - 4px); }
-html.beeson-editor.beeson-notes body .reveal .slides section.present { clip-path: inset(0 calc(-1 * var(--ed-room-r, 0px)) calc(-1 * (var(--beeson-pane, 200px) / var(--beeson-scale, 1) + var(--beeson-gap, 0px))) calc(-1 * var(--ed-room-l, 0px))); }
-html.beeson-editor.beeson-notes body .reveal .slides section.present > aside.notes { left: calc(-1 * var(--ed-room-l, 0px)); right: calc(-1 * var(--ed-room-r, 0px)); padding: calc(28px / var(--beeson-scale, 1)) calc(14px / var(--beeson-scale, 1)) calc(10px / var(--beeson-scale, 1)); font: calc(13px / var(--beeson-scale, 1)) / 1.5 var(--ed-font); background: var(--ed-panel); color: var(--ed-text); }
-html.beeson-editor.beeson-notes body .reveal .slides section.present > aside.notes:empty::before { color: var(--ed-faint); }
 html.beeson-editor body > .beeson-edit-inspector { grid-area: insp; position: relative; z-index: 50; min-width: 0; min-height: 0; display: none; flex-direction: column; background: var(--ed-panel); border-left: 1px solid var(--ed-line); color: var(--ed-text); font: 12px/1.4 var(--ed-font); }
 html.beeson-editor.beeson-steps body > .beeson-edit-inspector, html.beeson-editor.beeson-format body > .beeson-edit-inspector { display: flex; }
 .beeson-edit-inspector .tabs { display: flex; margin: 10px 12px 6px; padding: 2px; border-radius: 7px; background: var(--ed-pressed); }
