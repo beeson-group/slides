@@ -268,3 +268,45 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the editor on the demo deck at a size of the window, with the Steps tab shown on the slide of a
+// list delivered item by item
+async function stepsPage(platform, width, height) {
+  await last?.close().catch(() => {});
+  const page = await browser.newPage({ width, height });
+  last = page;
+  await page.goto(`${server.origin}/index.html?edit&still&edit-platform=${platform}`);
+  await page.waitFor(deckSettled);
+  await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
+  page.source = readFileSync('index.html', 'utf8');
+  assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(page.source)})`)).problems, []);
+  await exec(page, 'view.steps');
+  await page.evaluate(`Reveal.slide(Reveal.getIndices(document.querySelector('li.fragment').closest('section')).h)`);
+  await page.evaluate('new Promise((d) => setTimeout(d, 150))');
+  return page;
+}
+
+for (const platform of PLATFORMS) {
+  for (const [width, height] of [[1600, 1000], [1920, 1080], [1280, 800]]) {
+    test(`the menu of the delivery of a list leaves every row of the Steps tab visible at ${width} by ${height} on ${platform}`, async () => {
+      const page = await stepsPage(platform, width, height);
+      const chip = await page.evaluate(`(() => { const r = document.querySelector('.beeson-edit-side .list-head .chip').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+      await click(page, chip);
+      await page.waitFor(`!!document.querySelector('.beeson-edit-menu')`);
+      const { menu, covered } = await page.evaluate(`(() => {
+        const box = (el) => el.getBoundingClientRect();
+        const m = box(document.querySelector('.beeson-edit-menu'));
+        const rows = [...document.querySelectorAll('.beeson-edit-side .list-head, .beeson-edit-side .rows .row')].filter((r) => box(r).height);
+        const hit = (r) => r.left < m.right && m.left < r.right && r.top < m.bottom && m.top < r.bottom;
+        return { menu: { left: m.left, top: m.top, right: m.right, bottom: m.bottom }, covered: rows.filter((r) => hit(box(r))).map((r) => r.textContent.slice(0, 30)) };
+      })()`);
+      assert.deepEqual(covered, [], 'the menu is drawn over rows of the Steps tab');
+      assert.ok(menu.left >= 0 && menu.top >= 0 && menu.right <= width && menu.bottom <= height, 'the menu runs out of the window');
+      // the menu is level with the head row, at its side
+      const head = await page.evaluate(`(() => { const r = document.querySelector('.beeson-edit-side .list-head').getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; })()`);
+      assert.ok(menu.top <= head.bottom && menu.bottom >= head.top, 'the menu is not level with its row');
+      await press(page, 'Escape');
+      assert.deepEqual(errors(page), []);
+    });
+  }
+}
