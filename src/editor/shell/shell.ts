@@ -1,5 +1,6 @@
 // the grid of the window: the menu bar and the toolbar in the header, the navigator at the left,
-// the canvas with the notes under it, the inspector at the right, and the status bar. the chrome
+// the canvas with the notes under it, the inspector at the right, and the status bar. Slide Only
+// of the View menu hides the navigator and the inspector together, as in Keynote. the chrome
 // is painted in tokens of its own, which follow prefers-color-scheme and not the mode of the deck,
 // hence D flips only the slide. the regions are put into the order of the DOM in which Tab and F6
 // reach them, and the shell also holds the inspector with its tabs Format and Steps, the edge
@@ -195,6 +196,35 @@ export function install(app: App): void {
     run: () => setFormat(!format),
     menu: { bar: 'View', group: 'panes', order: 13 },
     toolbar: { group: 'inspector', order: 60, icon: 'format' },
+  });
+
+  // view.slideOnly is Slide Only of the View menu of Keynote. it hides the navigator and the
+  // inspector together, and a second run shows them again as kept, or else the navigator and the
+  // Format tab. it is checked while both are hidden, and it closes the light table
+  let viewKept: { nav: boolean; tab: 'format' | 'steps' | null } | null = null;
+  const slideOnly = () => !app.nav.shown && !format && !app.steps.shown;
+  app.commands.define({
+    id: 'view.slideOnly',
+    label: 'Slide Only',
+    menu: { bar: 'View', group: 'panes', order: 10.2 },
+    checked: slideOnly,
+    run: async () => {
+      if (slideOnly()) {
+        const was = viewKept ?? { nav: true, tab: 'format' };
+        viewKept = null;
+        if (was.nav) app.nav.toggle();
+        if (was.tab === 'format') setFormat(true);
+        else if (was.tab === 'steps') app.steps.toggle();
+        app.relayout();
+        return;
+      }
+      viewKept = { nav: app.nav.shown, tab: app.steps.shown ? 'steps' : format ? 'format' : null };
+      if (app.commands.get('view.lightTable') && app.commands.state('view.lightTable').checked) await app.commands.run('view.lightTable');
+      if (app.nav.shown) app.nav.toggle();
+      if (app.steps.shown) app.steps.toggle();
+      if (format) setFormat(false);
+      app.relayout();
+    },
   });
 
   queueMicrotask(() => {

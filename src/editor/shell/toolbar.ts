@@ -74,7 +74,7 @@ export function install(app: App): void {
   const ids = (list: string[]): MenuItem[] => list.filter((id) => app.commands.get(id)).map((id) => ({ command: id }));
   const popupItems = (id: string): MenuItem[] => {
     if (id === 'toolbar.view') {
-      return [...ids(['view.navigator', 'view.outline', 'view.lightTable']), { rule: true }, ...ids(['shell.format', 'view.steps', 'view.notes']), { rule: true }, ...ids(['view.rulers', 'view.guides', 'view.grid'])];
+      return [...ids(['view.navigator', 'view.slideOnly', 'view.outline', 'view.lightTable']), { rule: true }, ...ids(['shell.format', 'view.steps', 'view.notes']), { rule: true }, ...ids(['view.rulers', 'view.guides', 'view.grid'])];
     }
     const zoom = app.stage.zoom;
     return [
