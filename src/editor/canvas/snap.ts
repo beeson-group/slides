@@ -32,6 +32,8 @@ export const LAYOUT_GUIDES: { x: number[]; y: number[] } = { x: [120, 880, 1120,
 const SAME = 0.5;
 // the smallest width or height of a resized box, in slide pixels
 const MIN = 16;
+// the distance of a mark of equal size from the box that it measures, in slide pixels
+const SIZE_MARK = 14;
 
 type Line = { at: number; kind: Guide['kind']; box: Box | null };
 
@@ -194,43 +196,64 @@ export function resizeBox(from: Box, handle: Handle, dx: number, dy: number, o: 
   return anchored(from, handle, w, h, o.center);
 }
 
+// the marks of equal size of box on axis: the extent of box and of each other box of the same width,
+// or height, drawn as the marks of an equal gap beside each, or null when no other box matches
+function sizesOf(box: Box, axis: Axis, boxes: Box[]): Spacing | null {
+  const across = other(axis);
+  const same = boxes.filter((b) => Math.abs(size(b, axis) - size(box, axis)) < SAME);
+  if (!same.length) return null;
+  const mark = (b: Box) => ({ from: start(b, axis), to: end(b, axis), at: start(b, across) - SIZE_MARK });
+  return { axis, gaps: [box, ...same].map(mark) };
+}
+
 // box, the result of resizeBox, snapped: the edge that handle moves nearest to a line within
-// threshold is put on it, with the aspect and the anchor of resizeBox kept, and the guides of the
-// edges that moved are returned with it
-export function snapResize(from: Box, handle: Handle, box: Box, targets: Targets, threshold: number, o: { aspect: number | null; center: boolean }): { box: Box; guides: Guide[] } {
+// threshold is put on it, or the size of the box nearest to that of another box is made equal to
+// it, with the aspect and the anchor of resizeBox kept. the guides of the edges that moved and the
+// marks of equal size are returned with it
+export function snapResize(from: Box, handle: Handle, box: Box, targets: Targets, threshold: number, o: { aspect: number | null; center: boolean }): { box: Box; guides: Guide[]; sizes: Spacing[] } {
   const sides = SIDES[handle];
+  const axes = (['x', 'y'] as Axis[]).filter((axis) => sides[axis] && (o.aspect || axis === 'x'));
   const moving = (b: Box, axis: Axis): number[] => {
     const sign = sides[axis];
-    if (!sign || (!o.aspect && axis === 'y')) return [];
+    if (!axes.includes(axis)) return [];
     return o.center ? [start(b, axis), end(b, axis)] : [sign === 1 ? end(b, axis) : start(b, axis)];
   };
   const lines = { x: linesOf(targets, 'x'), y: linesOf(targets, 'y') };
-  let best: { axis: Axis; edge: number; at: number; d: number } | null = null;
-  for (const axis of ['x', 'y'] as Axis[]) {
+  // the snap as the size that the box takes on an axis, and the distance that its edge moves for it
+  let best: { axis: Axis; span: number; d: number } | null = null;
+  const offer = (axis: Axis, span: number, d: number) => {
+    if (d <= threshold && (!best || d < best.d)) best = { axis, span, d };
+  };
+  for (const axis of axes) {
     for (const edge of moving(box, axis)) {
       for (const line of lines[axis]) {
-        const d = Math.abs(line.at - edge);
-        if (d <= threshold && (!best || d < best.d)) best = { axis, edge, at: line.at, d };
+        const span = o.center ? 2 * Math.abs(line.at - (start(box, axis) + size(box, axis) / 2)) : Math.abs(line.at - (edge === end(box, axis) ? start(box, axis) : end(box, axis)));
+        offer(axis, span, Math.abs(line.at - edge));
       }
     }
+    for (const b of targets.boxes) offer(axis, size(b, axis), Math.abs(size(b, axis) - size(box, axis)) / (o.center ? 2 : 1));
   }
   let out = box;
-  if (best) {
-    const { axis, edge, at } = best;
-    const span = o.center ? 2 * Math.abs(at - (start(box, axis) + size(box, axis) / 2)) : Math.abs(at - (edge === end(box, axis) ? start(box, axis) : end(box, axis)));
+  const snapped = best as { axis: Axis; span: number } | null;
+  if (snapped) {
     let w = box.width, h = box.height;
-    if (axis === 'x') {
-      w = Math.max(MIN, span);
+    if (snapped.axis === 'x') {
+      w = Math.max(MIN, snapped.span);
       if (o.aspect) h = w / o.aspect;
     } else {
-      h = Math.max(MIN, span);
+      h = Math.max(MIN, snapped.span);
       if (o.aspect) w = h * o.aspect;
     }
     out = anchored(from, handle, w, h, o.center);
   }
   const guides: Guide[] = [];
-  for (const axis of ['x', 'y'] as Axis[]) guides.push(...guidesAt(out, axis, moving(out, axis), lines[axis], targets));
-  return { box: out, guides };
+  const sizes: Spacing[] = [];
+  for (const axis of axes) {
+    guides.push(...guidesAt(out, axis, moving(out, axis), lines[axis], targets));
+    const s = sizesOf(out, axis, targets.boxes);
+    if (s) sizes.push(s);
+  }
+  return { box: out, guides, sizes };
 }
 
 export function install(_app: App): void {
