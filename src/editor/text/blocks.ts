@@ -623,3 +623,41 @@ export const canStep = (app: App, up: boolean): boolean => styled(app).some((el)
   const s = styleOf(app, el)!;
   return stepped(s, up) !== s;
 });
+
+// the nodes of el before its first nested list, i.e. its own text, and the layout space before the
+// list, which is kept at a change of the text
+function ownNodes(el: Element): { own: Node[]; list: Element | null } {
+  const list = [...el.children].find((c) => c.matches(LIST)) ?? null;
+  const own: Node[] = [];
+  for (const n of el.childNodes) {
+    if (n === list) break;
+    own.push(n);
+  }
+  return { own, list };
+}
+
+// the own text of a block or of a list item, without its nested lists, as HTML with each formula as
+// its TeX between its delimiters
+export function ownTex(el: Element): string {
+  const { list } = ownNodes(el);
+  const end: [Node, number] | null = list ? [el, [...el.childNodes].indexOf(list)] : null;
+  return rangeTex(el, rangeOf(el, null, end)).trim();
+}
+
+// html written as the own text of el, a block or a list item inside one, with its nested lists kept,
+// through app.doc as the content of its block, as one entry of the history
+export async function setOwnTex(app: App, el: Element, html: string, label = 'typing'): Promise<void> {
+  const host = app.hostOf(el) ?? el;
+  if (html === ownTex(el)) return;
+  const copy = texCopy(host);
+  const target = el === host ? copy : copy.querySelectorAll('li')[itemsOf(host).indexOf(el)];
+  if (!target) return;
+  const { own, list } = ownNodes(target);
+  const last = own.at(-1);
+  const tail = list && last instanceof Text ? /\s*$/.exec(last.data)?.[0] ?? '' : '';
+  for (const n of own) n.parentNode?.removeChild(n);
+  const holder = document.createElement('div');
+  holder.innerHTML = html + tail;
+  target.prepend(...holder.childNodes);
+  await app.doc.setContent(host, copy.innerHTML, label);
+}
