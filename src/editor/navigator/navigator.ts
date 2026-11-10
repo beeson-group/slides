@@ -572,4 +572,14 @@ export function install(app: App): void {
     const current = app.current();
     if (current && app.selection.kind === 'slides' && !app.selection.items.includes(current)) nav.select([current], current);
   });
+  // a press on the slide takes the keys to the canvas, also where the canvas does not take the focus
+  document.addEventListener(
+    'pointerdown',
+    (ev) => {
+      const target = ev.target instanceof Element ? ev.target : null;
+      const active = document.activeElement;
+      if (target?.closest('.reveal') && active instanceof HTMLElement && nav.pane.contains(active)) active.blur();
+    },
+    true,
+  );
 }
