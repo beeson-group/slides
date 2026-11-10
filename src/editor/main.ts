@@ -46,6 +46,7 @@ import { install as installSlideCommands } from './commands/slide.ts';
 import { install as installDeleteCommands } from './commands/delete.ts';
 import { install as installClipboardCommands } from './commands/clipboard.ts';
 import { install as installInsertCommands } from './commands/insert.ts';
+import { install as installFindCommands } from './commands/find.ts';
 import { Doc } from './model/doc.ts';
 
 const app = new App();
@@ -133,6 +134,7 @@ installSlideCommands(app);
 installDeleteCommands(app);
 installClipboardCommands(app);
 installInsertCommands(app);
+installFindCommands(app);
 
 const revealReady = (): Promise<void> =>
   new Promise((done) => {
