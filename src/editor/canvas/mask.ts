@@ -16,7 +16,7 @@
 
 import type { App } from '../app.ts';
 import { translateText, type TagEdit, type Translate } from '../tags.ts';
-import { frameOf } from './hit.ts';
+import { frameOf, twinOf } from './hit.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 
@@ -195,6 +195,18 @@ export function styleEdit(app: App, el: Element, style: Record<string, string | 
   const now = app.doc.tagState(el).style;
   const changed = Object.entries(style).filter(([n, v]) => (now[n] ?? null) !== v);
   return changed.length ? { style: Object.fromEntries(changed) } : null;
+}
+
+// the declarations of style, with the offset translate when it is given, written on img and on the
+// image of the other mode beside it, so that the two images of a dark and light pair keep the same
+// flip and mask when the mode is flipped
+export function setPictureStyle(app: App, img: Element, style: Record<string, string | null>, label: string, translate?: Translate | null): void {
+  for (const el of [img, twinOf(app, img)]) {
+    if (!el) continue;
+    const edit: TagEdit = styleEdit(app, el, style) ?? {};
+    if (translate !== undefined && (app.doc.tagState(el).style.translate ?? null) !== (translate && translateText(translate))) edit.translate = translate;
+    if (Object.keys(edit).length) app.doc.setTag(el, edit, label);
+  }
 }
 
 // the declarations of a mask set on the page as the file with its edits has them, e.g. after a
@@ -582,10 +594,10 @@ function imageSession(app: App, img: HTMLImageElement): Session | null {
       syncLive(app, img);
       const style = imageStyle(fit, st);
       if (resized) Object.assign(style, { width: box.width, height: box.height });
-      const edit: TagEdit = styleEdit(app, img, style) ?? {};
       const t = box.translate.x || box.translate.y ? box.translate : null;
+      const edit: TagEdit = styleEdit(app, img, style) ?? {};
       if (resized && (app.doc.tagState(img).style.translate ?? null) !== (t && translateText(t))) edit.translate = t;
-      if (Object.keys(edit).length) await app.history.transact('Edit Mask', () => app.doc.setTag(img, edit, 'mask'));
+      if (Object.keys(edit).length) await app.history.transact('Edit Mask', () => setPictureStyle(app, img, style, 'mask', resized ? t : undefined));
     },
   };
 }

@@ -5,7 +5,7 @@
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { imageOf } from './figure.ts';
-import { editing, scaleOf, scaleText, styleEdit } from '../canvas/mask.ts';
+import { editing, scaleOf, scaleText, setPictureStyle } from '../canvas/mask.ts';
 
 export const flipped = (el: Element) => {
   const sc = scaleOf(el);
@@ -16,8 +16,7 @@ function flip(app: App, axis: 'x' | 'y'): void {
   const img = imageOf(app);
   if (!img) return;
   const sc = scaleOf(img);
-  const edit = styleEdit(app, img, { scale: scaleText(axis === 'x' ? -sc.x : sc.x, axis === 'y' ? -sc.y : sc.y) });
-  if (edit) app.doc.setTag(img, edit, 'flip');
+  setPictureStyle(app, img, { scale: scaleText(axis === 'x' ? -sc.x : sc.x, axis === 'y' ? -sc.y : sc.y) }, 'flip');
   app.invalidate('content');
 }
 
