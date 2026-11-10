@@ -451,12 +451,12 @@ ${P} .detail .delay-box.off .unit { color: var(--ed-faint); }
 ${P} .rows .row.with .chip { color: var(--ed-muted); font-weight: 400; }
 ${P} .rows .row.slide .chip { color: var(--ed-muted); font-weight: 400; }
 ${P} .chip[aria-expanded="true"] { border-color: var(--ed-select); box-shadow: 0 0 0 1px var(--ed-select); }
-${P} .rows .row.selected .chip { border-color: rgba(255, 255, 255, 0.5); background: rgba(255, 255, 255, 0.16); color: inherit; }
+${P} .rows .row.selected .chip, ${P} .rows .list-head.selected .chip { border-color: rgba(255, 255, 255, 0.5); background: rgba(255, 255, 255, 0.16); color: inherit; }
 ${P} .body { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
 ${P} .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 ${P} .text:empty::before { content: "Empty"; color: var(--ed-faint); }
 ${P} .meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ed-muted); font-size: 11px; }
-${P} .rows .row.selected .meta { color: inherit; opacity: 0.82; }
+${P} .rows .row.selected .meta, ${P} .rows .list-head.selected .meta { color: inherit; opacity: 0.82; }
 ${P} .drop-line { position: absolute; left: 6px; right: 10px; height: 2px; margin-top: -1px; border-radius: 1px; background: var(--ed-select); pointer-events: none; }
 ${P} .drop-line::before { content: ""; position: absolute; left: -5px; top: -3px; width: 4px; height: 4px; border: 2px solid var(--ed-select); border-radius: 50%; background: var(--ed-panel); }
 ${P} .slide-zone { border-radius: 8px; }
