@@ -331,6 +331,10 @@ function windowOf(el: HTMLElement, scale: number): Box {
 // the bar under it. outer and picture are in screen pixels without the rotation deg of el
 function drawStage(app: App, el: HTMLElement, outer: Box, picture: Box | null, deg: number): void {
   if (!ui) return;
+  // the stage is clipped to the canvas, as the overlay of frames.ts is, so that a picture scaled past
+  // the canvas is not drawn over the inspector or the bars
+  const v = app.stage?.viewport;
+  ui.layer.style.clipPath = v ? `inset(${v.top}px ${innerWidth - v.right}px ${innerHeight - v.bottom}px ${v.left}px)` : '';
   const win = windowOf(el, frameOf(app).scale);
   const cx = win.left + win.width / 2, cy = win.top + win.height / 2;
   const right = Math.max(outer.left + outer.width, win.left + win.width), bottom = Math.max(outer.top + outer.height, win.top + win.height);
