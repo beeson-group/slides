@@ -6,7 +6,7 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { button, card, checkbox, note, row, section, segmented, textField, type Control, type Run } from './controls.ts';
+import { card, checkbox, note, row, section, segmented, textField, type Control, type Run } from './controls.ts';
 
 const SVG = 'http://www.w3.org/2000/svg';
 
@@ -152,18 +152,6 @@ export function slidePane(app: App, run: Run): Control[] {
     checkbox(app, run, 'slide.hide', 'Hidden in the show', () => app.current()?.getAttribute('data-visibility') === 'hidden'),
     checkbox(app, run, 'slide.footnote', 'Footnote'),
   ]));
-  // the transition of the slide and its time in a rehearsal, defined in commands/review.ts
-  if (app.commands.get('slide.transition.fade')) {
-    const kinds = [['none', 'None'], ['fade', 'Fade'], ['magic', 'Magic Move']];
-    parts.push(section('Transition', [
-      row([segmented(app, run, kinds.map(([t, text]) => ({ command: `slide.transition.${t}`, text })), 'Transition to the next slide')]),
-      button(app, run, { command: 'slide.magicMove', text: 'Magic Move to Copy' }),
-      note(() => {
-        const t = app.current()?.getAttribute('data-timing');
-        return t ? `Rehearsed time ${t} s` : '';
-      }),
-    ]));
-  }
   if (layout === 'section') {
     parts.push(section(null, [textField(app, {
       label: 'Running Head',
