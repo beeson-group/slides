@@ -6,6 +6,7 @@
 
 import type { App, Region } from '../app.ts';
 import { createFinder, type FindOptions } from '../find.ts';
+import { closeMenus, openMenu } from '../ui/menu.ts';
 
 const IN: Region[] = ['canvas', 'text', 'field', 'navigator', 'notes', 'inspector'];
 const NEXT = { mac: ['Mod+G'], other: ['F3'] };
@@ -15,7 +16,7 @@ const PREVIOUS = { mac: ['Mod+Shift+G'], other: ['Shift+F3'] };
 const queryOf = (arg: unknown): string | undefined => (typeof arg === 'string' ? arg : undefined);
 
 export function install(app: App): void {
-  const finder = createFinder(app, { next: NEXT[app.platform], previous: PREVIOUS[app.platform] });
+  const finder = createFinder(app, { next: NEXT[app.platform], previous: PREVIOUS[app.platform] }, { open: openMenu, close: closeMenus });
   const c = app.commands;
   c.define({
     id: 'find.open',

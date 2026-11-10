@@ -158,3 +158,24 @@ test('a toolbar button takes its label and its split from the toolbar place of i
   await press(page, 'Escape');
   assert.deepEqual(page.errors, []);
 });
+
+// the gear menu of the find panel is a menu of ui/menu.ts: a check at the mode, Esc closes the
+// menu and keeps the panel, and a mode chosen in it switches the panel
+test('the gear menu of the find panel is a menu of the chrome', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  await page.evaluate(`window.BeesonEditor.exec('find.open', 'orbit')`);
+  await click(page, await centerOf(page, '.beeson-find .gear'));
+  const menu = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu.find-options .item')].map((i) => [i.querySelector('.label').textContent, i.getAttribute('aria-checked')])`);
+  assert.deepEqual(await menu(), [['Find', 'true'], ['Find & Replace', 'false'], ['Whole Words', 'false'], ['Match Case', 'false'], ['Search TeX of Formulas', 'false']]);
+  assert.equal(await page.evaluate(`document.querySelector('.beeson-find .gear').getAttribute('aria-expanded')`), 'true');
+  await press(page, 'Escape');
+  assert.deepEqual(await menu(), []);
+  assert.equal(await page.evaluate(`!document.querySelector('.beeson-find').hidden`), true, 'Esc in the menu closes the panel');
+  assert.equal(await page.evaluate(`document.activeElement.getAttribute('aria-label')`), 'Find');
+  await click(page, await centerOf(page, '.beeson-find .gear'));
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu.find-options .item')].find((i) => i.textContent.includes('Find & Replace')).click()`);
+  assert.equal(await page.evaluate(`document.querySelector('.beeson-find').classList.contains('replacing')`), true);
+  assert.deepEqual(page.errors, []);
+});
