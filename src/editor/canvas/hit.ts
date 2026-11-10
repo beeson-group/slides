@@ -270,6 +270,17 @@ export function containerOf(app: App, el: Element): Element | null {
   return up && app.current()?.contains(up) ? up : null;
 }
 
+// the element that a move, a resize, the order, a group, a lock, and the clipboard act on for a
+// selected el: the figure of a picture selected inside it, since a picture with its caption is one
+// object, as in Keynote, where a drag of the picture moves the caption with it. a member of a group
+// is moved by itself in PowerPoint, and Keynote is followed here
+export function objectOf(app: App, el: Element): Element {
+  const up = el.matches(RESIZABLE) ? containerOf(app, el) : null;
+  return up && app.pairing?.elements.get(up)?.open ? up : el;
+}
+
+export const objectsOf = (app: App, els: readonly Element[]): Element[] => [...new Set(els.map((el) => objectOf(app, el)))];
+
 // whether a press at target is on the canvas, i.e. on the slide in the viewport of reveal.js, or at
 // the point at on the pasteboard around it in the canvas cell of the shell, without its scroll bars,
 // and not on the notes or the chrome of the editor

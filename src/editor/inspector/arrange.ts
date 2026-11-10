@@ -7,7 +7,7 @@
 // every other element is set by its layout
 
 import type { App } from '../app.ts';
-import { groupBoxOf, heightSet, positionOf, resizable, sizeOf, targetsOf } from '../commands/align.ts';
+import { groupBoxOf, heightSet, positionOf, resizable, selectedTargets, sizeOf, targetsOf } from '../commands/align.ts';
 import { angleOf } from '../commands/order.ts';
 import { imageOf } from '../commands/figure.ts';
 import { turnable } from '../canvas/hit.ts';
@@ -31,9 +31,12 @@ Object.assign(GLYPHS, {
 const shared = (values: number[]): number | null => (values.length && values.every((v) => Math.round(v) === Math.round(values[0])) ? values[0] : null);
 
 export function arrangePane(app: App, run: Run): Control[] {
-  // the fields act on the elements selected when the pane was built
+  // the fields act on the elements selected when the pane was built, i.e. on the figure of a
+  // picture selected inside it, apart from the angle, which turns the picture alone
   const els = targetsOf(app);
+  const turned = selectedTargets(app);
   const live = () => els.filter((el) => el.isConnected);
+  const liveTurned = () => turned.filter((el) => el.isConnected);
   // W, H, X, and Y of a group are the size and the corner of its frame, as in Keynote, where a
   // group is one object. its corner grips scale it, and a typed X or Y moves it as one
   const group = () => groupBoxOf(app, live());
@@ -70,7 +73,7 @@ export function arrangePane(app: App, run: Run): Control[] {
         field('Width', () => group()?.width ?? shared(live().map((el) => sizeOf(el).w)), (w) => run('arrange.setSize', { w, els: live() }), sized, 1),
         field('Height', () => group()?.height ?? shared(live().map((el) => sizeOf(el).h)), (h) => run('arrange.setSize', { h, els: live() }), () => !group() && heightSet(live()), 1),
       ]),
-      note(() => (!els.length || sized() ? '' : group() ? 'The size of the group. Drag a corner grip to scale it.' : els.length === 1 && els[0].querySelector('img, video') ? 'Set by the layout of the slide. Click the image again to size it.' : 'Set by the layout of the slide.')),
+      note(() => (!els.length || sized() ? '' : group() ? 'The size of the group. Drag a corner grip to scale it.' : 'Set by the layout of the slide.')),
       row([checkbox(app, run, 'arrange.constrainProportions', 'Constrain Proportions')]),
       note(() => (sized() && !app.commands.state('arrange.constrainProportions').enabled ? 'Only the width is written, and the height follows the aspect or the layout.' : '')),
       row([button(app, run, { command: 'arrange.resetSize', icon: 'reset', text: 'Reset Size' })]),
@@ -88,9 +91,9 @@ export function arrangePane(app: App, run: Run): Control[] {
         numberField(app, {
           label: 'Angle',
           unit: '°',
-          value: () => shared(live().map(angleOf)),
-          commit: (deg) => run('arrange.setRotation', { deg, els: live() }),
-          enabled: () => live().some(turnable),
+          value: () => shared(liveTurned().map(angleOf)),
+          commit: (deg) => run('arrange.setRotation', { deg, els: liveTurned() }),
+          enabled: () => liveTurned().some(turnable),
         }),
       ]),
       row([button(app, run, { command: 'arrange.resetRotation', icon: 'reset', text: 'Reset Rotation' })]),
