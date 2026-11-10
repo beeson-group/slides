@@ -1,8 +1,8 @@
 // the Code pane of the Format tab, for a selected code box or a code box with the caret: the
-// language of its code, the numbers of its lines, and its line steps. the steps are typed into a
-// field, e.g. 1-2|3|4-5, or edited in a list of the groups, in which the lines selected in the box
-// are added as a new group and a group is removed. a group pointed at in the list dims the other
-// lines of the box
+// language of its code, the numbers of its lines, its line steps, and its size. the steps are
+// typed into a field, e.g. 1-2|3|4-5, or edited in a list of the groups, in which the lines
+// selected in the box are added as a new group and a group is removed. a group pointed at in the
+// list dims the other lines of the box
 
 import type { App } from '../app.ts';
 import { COMMON, PLAIN, codeAt, dimLines, hljsOf, languageOf, languages, nameOf, selectedLines, stepsOf } from '../commands/code.ts';
@@ -141,6 +141,10 @@ export function codePane(app: App, run: Run): Control[] {
       add,
       note(lines),
       note(() => 'The first step is lit with the slide, and each next one at a click.'),
+    ]),
+    section('Size', [
+      checkbox(app, run, 'code.small', 'Small'),
+      note(() => 'The code is set at 22 px, or at 18 px when Small, for a longer box.'),
     ]),
   ];
 }

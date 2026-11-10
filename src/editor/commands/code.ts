@@ -71,6 +71,11 @@ export function languageOf(app: App, code: Element): string | null {
 }
 
 const LINES = 'data-line-numbers';
+// the size of the code of a small box
+const SMALL = '18px';
+
+// whether the pre of code is set small in the file
+export const isSmall = (app: App, code: Element): boolean => app.doc.tagState(code.closest('pre') as Element).style['font-size']?.trim() === SMALL;
 
 // the line steps of a box: whether its lines are numbered, and its groups
 export function stepsOf(app: App, code: Element): { numbers: boolean; groups: string[] } {
@@ -379,6 +384,25 @@ export function install(app: App): void {
       const code = need(a, arg);
       const s = stepsOf(a, code);
       writeSteps(a, code, !s.numbers, s.groups);
+    },
+  });
+  // Small sets the code at 18 px, the one size of a box that the scope rule allows besides the
+  // 22 px of the theme, written as font-size on the pre. off takes the declaration out again
+  c.define({
+    id: 'code.small',
+    label: 'Small Code',
+    enabled: (a) => !!codeAt(a),
+    checked: (a) => {
+      const code = codeAt(a);
+      return !!code && isSmall(a, code);
+    },
+    undoable: true,
+    run: (a, arg) => {
+      const code = need(a, arg);
+      const given = (arg as { on?: unknown } | undefined)?.on;
+      const on = typeof given === 'boolean' ? given : !isSmall(a, code);
+      if (on === isSmall(a, code)) return;
+      a.doc.setTag(code.closest('pre') as Element, { style: { 'font-size': on ? SMALL : null } }, on ? 'Smaller' : 'Bigger');
     },
   });
   // the groups typed into the field of the pane, e.g. 1-2|3|4-5, or none
