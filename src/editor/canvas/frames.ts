@@ -38,8 +38,8 @@ const CSS = `
 .beeson-grip { position: fixed; width: 9px; height: 9px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; border: 1.5px solid var(--ed-select, #7048e8); background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); pointer-events: auto; touch-action: none; }
 .beeson-frame.selected.locked { border-color: #8a8a8a; }
 .beeson-grip.locked { width: 9px; height: 9px; border: 0; border-radius: 0; background: linear-gradient(45deg, transparent 42%, #8a8a8a 42% 58%, transparent 58%), linear-gradient(-45deg, transparent 42%, #8a8a8a 42% 58%, transparent 58%); box-shadow: none; pointer-events: none; }
-.beeson-rotor { position: fixed; width: 18px; height: 18px; margin: -9px 0 0 -9px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--ed-select, #7048e8); background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); color: var(--ed-select, #7048e8); font: 600 12px/15px system-ui, sans-serif; text-align: center; cursor: grab; user-select: none; pointer-events: auto; touch-action: none; }
-.beeson-rotor-stem { position: fixed; width: 1px; height: 15px; margin-left: -0.5px; background: var(--ed-select, #7048e8); transform-origin: 50% 100%; }
+.beeson-rotor { position: fixed; width: 14px; height: 14px; margin: -7px 0 0 -7px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--ed-select, #7048e8); background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); color: var(--ed-select, #7048e8); font: 600 10px/11px system-ui, sans-serif; text-align: center; cursor: grab; user-select: none; pointer-events: auto; touch-action: none; }
+.beeson-rotor-stem { position: fixed; width: 1px; height: 11px; margin-left: -0.5px; background: var(--ed-select, #7048e8); transform-origin: 50% 0; }
 html.beeson-rotating, html.beeson-rotating * { cursor: grabbing !important; user-select: none !important; }
 .beeson-grip[data-handle=nw], .beeson-grip[data-handle=se] { cursor: nwse-resize; }
 .beeson-grip[data-handle=ne], .beeson-grip[data-handle=sw] { cursor: nesw-resize; }
@@ -99,7 +99,13 @@ function turned(box: Box, deg: number, x: number, y: number): { x: number; y: nu
 }
 
 // the distance of the rotate handle above the top edge of a frame, in screen pixels
-const ROTOR = 24;
+// the distance of the rotate handle from the edge of the frame, and its radius, in screen px, about
+// those of the rotate handle of PowerPoint
+const ROTOR = 18;
+const KNOB = 7;
+// the text of the blocks whose lines a rotate handle is kept off
+const WORDS = 'h1, h2, h3, p, li, dt, dd, div.math, .caption, figcaption, td, th, pre, blockquote';
+type RotorAt = 'above' | 'below' | 'inside';
 
 // the overlay of the editor. the handle of a block and the resize handles are its only parts that
 // take the pointer
@@ -119,6 +125,8 @@ export class Frames {
   private readonly stem: HTMLDivElement;
   private readonly frames: HTMLDivElement[] = [];
   private readonly union: HTMLDivElement;
+  // where the rotate handle is, kept while it is dragged
+  private rotorAt: RotorAt = 'above';
   // the box of a selected group on the screen, as last drawn, which its one set of grips resizes
   private group: Box | null = null;
   private readonly guides: HTMLDivElement[] = [];
@@ -259,10 +267,25 @@ export class Frames {
     this.rotor.hidden = this.stem.hidden = !turnable;
     if (turnable) {
       const b = boxes[0], deg = orients[0].deg;
-      const top = turned(b, deg, b.left + b.width / 2, b.top);
-      const knob = turned(b, deg, b.left + b.width / 2, b.top - ROTOR);
+      const cx = b.left + b.width / 2;
+      // above the frame as in Keynote and PowerPoint, or under it, or inside its top edge, whichever
+      // first leaves the text of the other blocks in view
+      const knobAt = (at: RotorAt) => turned(b, deg, cx, at === 'above' ? b.top - ROTOR : at === 'below' ? b.top + b.height + ROTOR : b.top + KNOB + 4);
+      if (!rotating) {
+        const lines = this.linesBesides(only as Element);
+        const free = (at: RotorAt) => {
+          const k = knobAt(at);
+          return !lines.some((r) => k.x + KNOB > r.left && k.x - KNOB < r.right && k.y + KNOB > r.top && k.y - KNOB < r.bottom);
+        };
+        this.rotorAt = (['above', 'below'] as const).find(free) ?? 'inside';
+      }
+      const knob = knobAt(this.rotorAt);
       Object.assign(this.rotor.style, { left: `${knob.x}px`, top: `${knob.y}px` });
-      Object.assign(this.stem.style, { left: `${top.x}px`, top: `${top.y - ROTOR + 9}px`, height: `${ROTOR - 9}px`, rotate: deg ? `${deg}deg` : '' });
+      this.stem.hidden = this.rotorAt === 'inside';
+      // the stem runs from the edge of the frame to the handle, turned with the frame
+      const edge = turned(b, deg, cx, this.rotorAt === 'above' ? b.top : b.top + b.height);
+      const turn = deg + (this.rotorAt === 'above' ? 180 : 0);
+      Object.assign(this.stem.style, { left: `${edge.x}px`, top: `${edge.y}px`, height: `${ROTOR - KNOB}px`, rotate: turn ? `${turn}deg` : '' });
     }
 
     const hot = this.current();
@@ -286,6 +309,20 @@ export class Frames {
       this.readout.classList.toggle('frame', out.at === 'frame');
       Object.assign(this.readout.style, { left: `${out.x}px`, top: `${out.y}px` });
     }
+  }
+
+  // the boxes of the lines of text of the blocks of the current slide outside el, on the screen
+  private linesBesides(el: Element): DOMRect[] {
+    const slide = this.app.current();
+    if (!slide) return [];
+    const out: DOMRect[] = [];
+    const range = document.createRange();
+    for (const block of slide.querySelectorAll(WORDS)) {
+      if (el.contains(block) || block.contains(el) || block.closest('aside.notes')) continue;
+      range.selectNodeContents(block);
+      for (const r of range.getClientRects()) if (r.width && r.height) out.push(r);
+    }
+    return out;
   }
 
   private drawGuides(): void {
