@@ -195,3 +195,49 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the rows of the sheet of keyboard shortcuts, each as its group, its label, and its keys, read
+// from the sheet opened from the Help menu
+async function sheet(page) {
+  await exec(page, 'help.keys');
+  await frames(page);
+  const rows = await page.evaluate(`[...document.querySelectorAll('dialog.beeson-edit-keys section')].flatMap((s) => [...s.querySelectorAll('.row')].map((r) => ({ group: s.querySelector('h3').textContent, label: r.firstChild.textContent, keys: r.lastChild.textContent })))`);
+  await press(page, 'Escape');
+  await frames(page);
+  return rows;
+}
+
+// finding 2 of R8.3: Shift+F3 was listed at Find Previous and at Change Case on Windows and Linux
+// (states 175 and 209). a key may be listed at two rows of the menus only when one of its commands
+// is taken in the navigator alone, e.g. Delete at Delete and at Delete Slide, as in both apps
+for (const platform of PLATFORMS) {
+  test(`each key of the keyboard sheet is listed at one command of a pane, which the key runs (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    const rows = await sheet(page);
+    assert.ok(rows.length > 90, `the sheet lists ${rows.length} rows`);
+    const caseKey = platform === 'mac' ? '⇧F3' : 'Shift+F3';
+    const listed = rows.filter((r) => r.keys.split(', ').includes(caseKey)).map((r) => `${r.group} > ${r.label}`);
+    assert.deepEqual(listed, ['Format > Change Case'], `${caseKey} is not listed at Change Case alone`);
+    assert.deepEqual(await page.evaluate('window.BeesonEditorShell.sheetClashes()'), [], 'a key is listed at two commands of one pane of the sheet');
+    const previous = rows.find((r) => r.label === 'Find Previous').keys;
+    // the key of Change Case changes the case of the words selected in a text
+    await click(page, P);
+    assert.ok(await selectWords(page, P, 'matplotlib'));
+    await frames(page);
+    await press(page, 'Shift+F3');
+    await frames(page);
+    assert.equal(await page.evaluate(`document.querySelector(${js(P)}).textContent.includes('MATPLOTLIB')`), true, 'Shift+F3 does not change the case of the words');
+    await roundTrip(page);
+    // the key of Find Previous selects a match of the query, also from the caret in a text
+    await exec(page, 'find.open', 'styles');
+    await frames(page);
+    await press(page, 'Escape');
+    await click(page, `${LIST} > li:first-child`);
+    await frames(page);
+    await press(page, platform === 'mac' ? 'Mod+Shift+G' : 'Ctrl+Shift+F3');
+    await frames(page);
+    assert.equal(await page.evaluate('getSelection().toString()'), 'styles', `${previous} does not select the match before the caret in a text`);
+    await byteExact(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
