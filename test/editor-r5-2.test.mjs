@@ -586,3 +586,25 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: a text block narrowed by a grip until its text wraps keeps its top, and grows down`, async () => {
+    const page = await editor(platform);
+    const lead = await leadBox(page);
+    await click(page, lead);
+    await press(page, 'Escape');
+    await frames(page);
+    const k = await scaleOf(page);
+    for (const handle of ['e', 'se', 'w']) {
+      await drag(page, (await gripsAt(page))[handle], { dx: (handle === 'w' ? 760 : -760) * k, dy: handle === 'se' ? 30 * k : 0 });
+      await frames(page);
+      const box = await leadBox(page);
+      assert.ok(box.height > lead.height * 1.5, `the paragraph narrowed by the grip ${handle} to ${Math.round(box.width)} does not wrap`);
+      assert.ok(near(box.top, lead.top, 1), `the paragraph narrowed by the grip ${handle} has its top at ${box.top.toFixed(1)}, not at ${lead.top.toFixed(1)}`);
+      await undo(page);
+      await frames(page);
+      await byteExact(page);
+    }
+    assert.deepEqual(errors(page), []);
+  });
+}
