@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen, selectFigure, type } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 const FIG = '.reveal section.present .zone > img';
@@ -217,7 +217,8 @@ for (const platform of PLATFORMS) {
     const lines = page.source.split('\n');
     const zone = async () => (await page.evaluate('window.BeesonEditor.render()')).split('\n').filter((l, i) => l !== lines[i]).join('\n');
     const undo = async () => { await press(page, 'Mod+Z'); await frames(page); };
-    // nothing is selected before each drag, since a click on a selected figure selects its image
+    // nothing is selected before the figure is selected for each drag, since a click on a selected
+    // figure selects its image
     const clear = async () => {
       for (let i = 0; i < 3 && !(await page.evaluate(`document.querySelector('.beeson-frame.selected').hidden`)); i++) await press(page, 'Escape');
       assert.equal(await page.evaluate(`document.querySelector('.beeson-frame.selected').hidden`), true, 'the selection is not cleared');
@@ -228,6 +229,8 @@ for (const platform of PLATFORMS) {
       const r = await rectOf(page, FIG);
       if (z !== null) await centerOn(page, { x: r.left + r.width / 2, y: r.top + r.height / 2 });
       await clear();
+      // a click on the image selects it apart from its caption, and Esc selects the figure
+      await selectFigure(page, FIG);
       return (await stage(page)).scale;
     };
     const free = platform === 'mac' ? 'Meta' : 'Alt';
@@ -250,6 +253,7 @@ for (const platform of PLATFORMS) {
         await centerOn(page, { x: r.left + r.width / 2 - ((off - 3) * z) / 2, y: r.top + r.height / 2 });
       }
       await clear();
+      await selectFigure(page, FIG);
       s = (await stage(page)).scale;
       await drag(page, FIG, { dx: -(off - 3) * s, dy: 0 });
       await frames(page);
@@ -258,8 +262,8 @@ for (const platform of PLATFORMS) {
       assert.ok(Math.abs(center - 960) < 1, `at ${z}: the center of the figure is at ${center}, not snapped to 960`);
       await undo();
       await byteExact(page);
-      // a free resize of the lower right corner of the image by 80 by 80 slide px: the first click
-      // selects the figure, whose grips are gray, and the second its image
+      // a free resize of the lower right corner of the image by 80 by 80 slide px, with the image
+      // selected by a click on the selected figure
       s = await ready(z);
       await click(page, FIG);
       await click(page, FIG);

@@ -6,6 +6,7 @@
 import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
 import type { Box } from './snap.ts';
+import { stored } from '../ui/dom.ts';
 
 // the outermost of these elements under the pointer is moved, outside the notes and the backdrop
 export const MOVABLE = 'h1, h2, h3, p, ul, ol, dl, table, pre, blockquote, div.math, .caption, .foot, img, video, figure, .zone, .plate, .qr, tycho-viewer';
@@ -15,6 +16,11 @@ export const BY_ITSELF = 'img, video, figure, .zone, .plate, .qr';
 export const OUTSIDE = 'aside.notes, .backdrop';
 // the elements whose width the editor writes, by the scope rule of the plan
 export const RESIZABLE = 'img, video, .qr, tycho-viewer';
+// the text blocks whose width their grips set, as a text box of Keynote and PowerPoint, with the
+// height set by their wrapped text
+export const TEXT_SIZED = 'h1, h2, h3, p, ul, ol, div.math, .caption';
+// the pictures whose height the editor writes as well, which a resize stretches
+export const STRETCHED = 'img, video';
 // a figure whose size is set by its layout. its grips resize the image, video, or QR code that it
 // holds, and a figure that does not hold one is drawn without grips
 export const CONTAINER = 'figure, .zone, .plate';
@@ -82,6 +88,14 @@ function pictureIn(el: Element): { width: number; height: number; dx: number; dy
   return { width: w, height: ht, dx: at(px, box.width - w) + w / 2 - box.width / 2, dy: at(py, box.height - ht) + ht / 2 - box.height / 2 };
 }
 
+// the size of the picture of el in slide pixels, without its scale and rotation, which the fields
+// W and H of the Arrange pane give: the picture of an image or a video fitted into its box, and the
+// box of any other element
+export function pictureSize(el: Element): { w: number; h: number } {
+  const p = pictureIn(el);
+  return { w: p.width, h: p.height };
+}
+
 // the box of the picture of el on the screen, without the rotation by deg of el or of the figure
 // around it, about the center of the picture as it is seen. scale is the screen pixels per slide
 // pixel. an element that is not rotated has the box of visualRect
@@ -96,21 +110,53 @@ export function orientedBox(el: Element, scale: number, deg: number): Box {
 }
 
 // the ratio of width to height that a resize of el keeps: the picture of an image or a video, and
-// the box of a QR code. a tycho viewer keeps its height, hence it does not have one
+// the box of a QR code. a tycho viewer keeps its height and a text block its wrapped text, hence
+// neither has one
 export function aspectOf(el: Element): number | null {
-  if (el.matches('tycho-viewer')) return null;
+  if (el.matches('tycho-viewer') || isTextSized(el)) return null;
   const p = pictureIn(el);
   return p.width && p.height ? p.width / p.height : null;
 }
 
-// the elements whose width a resize of el writes: el itself, or the images, videos, and QR codes
-// that a figure holds, e.g. the image of each mode. a figure that holds two shown pictures, or
-// none, is not resized
+// whether el is a text block whose width is set by its grips
+export const isTextSized = (el: Element): boolean => el.matches(TEXT_SIZED) && !el.matches(RESIZABLE);
+
+// the kind of a picture, by which the switch Constrain Proportions is kept in the browser
+export const kindOf = (el: Element): string => (el.matches('img') ? 'image' : el.matches('video') ? 'video' : el.matches('.qr') ? 'qr' : 'viewer');
+
+// whether a resize of the picture el keeps its aspect: the switch of its kind for an image or a
+// video, on by default, and else whenever it has an aspect, since its height then follows its
+// width. a QR code thus keeps its square, and a viewer keeps the height of its layout
+export function constrained(el: Element): boolean {
+  if (!el.matches(STRETCHED)) return aspectOf(el) !== null;
+  return (stored(`beeson-edit-constrain-${kindOf(el)}`) ?? 'on') === 'on';
+}
+
+// the width in the style of el that gives it the border box of width w, in slide pixels
+export function cssWidth(el: Element, w: number): number {
+  const s = getComputedStyle(el);
+  if (s.boxSizing === 'border-box') return w;
+  const n = (v: string) => parseFloat(v) || 0;
+  return w - n(s.paddingLeft) - n(s.paddingRight) - n(s.borderLeftWidth) - n(s.borderRightWidth);
+}
+
+// the elements whose width a resize of el writes: el itself, a text block, or the images, videos,
+// and QR codes that a figure holds, e.g. the image of each mode. a figure that holds two shown
+// pictures, or none, is not resized
 export function sizedOf(el: Element): Element[] {
-  if (el.matches(RESIZABLE)) return [el];
+  if (el.matches(RESIZABLE) || isTextSized(el)) return [el];
   if (!el.matches(CONTAINER)) return [];
   const held = [...el.querySelectorAll(RESIZABLE)].filter((m) => m.parentElement?.closest(MOVABLE) === el);
   return held.filter((m) => m.getBoundingClientRect().width > 0).length === 1 ? held : [];
+}
+
+// the image or video of the other mode beside el, e.g. the for-light image of a for-dark one, which
+// is given the place of el, so that a picture keeps its place and size when the mode is flipped
+export function twinOf(app: App, el: Element): Element | null {
+  const mode = el.classList.contains('for-dark') ? 'for-light' : el.classList.contains('for-light') ? 'for-dark' : null;
+  if (!mode || !el.matches(STRETCHED) || !el.parentElement) return null;
+  const twin = [...el.parentElement.children].find((c) => c !== el && c.localName === el.localName && c.classList.contains(mode));
+  return twin && app.pairing?.elements.get(twin)?.open ? twin : null;
 }
 
 // the element whose picture stands for el in its frame and its resize: the shown image, video, or
@@ -133,11 +179,79 @@ export function movableOf(app: App, target: Element | null): Element | null {
   return el && slide.contains(el) && pairing.elements.get(el)?.open ? el : null;
 }
 
+// what a press at target selects: the image or video under it in a figure, which is an object apart
+// from its caption, as in Keynote and PowerPoint, and else the movable element around it. the figure
+// is selected by a press outside its image, or by Esc on the image, and a selected figure is kept,
+// so that a drag on its image moves all of it
+export function pickOf(app: App, target: Element | null): Element | null {
+  const el = movableOf(app, target);
+  const media = el?.matches('figure') && !app.selection.has(el) && !el.hasAttribute('data-locked') ? mediaIn(el, target) : null;
+  return media && app.pairing?.elements.get(media)?.open ? media : el;
+}
+
 // the movable elements of the current slide that are shown, in document order
 export function movablesOf(app: App): Element[] {
   const slide = app.current();
   if (!slide) return [];
   return [...slide.querySelectorAll(MOVABLE)].filter((el) => movableOf(app, el) === el && el.getBoundingClientRect().width > 0);
+}
+
+// a line or an arrow of commands/line.ts: an svg as large as the box of its line element, whose
+// x1, y1, x2, and y2 are in px of the svg. the marquee selects it, and a drag snaps to its ends
+export const LINE = 'svg.line';
+
+// the shown lines of the current slide that are paired with the file
+export function linesOf(app: App): Element[] {
+  const slide = app.current();
+  if (!slide) return [];
+  return [...slide.querySelectorAll(LINE)].filter((svg) => !!app.pairing?.elements.get(svg)?.open && svg.getClientRects().length > 0 && !svg.closest(OUTSIDE));
+}
+
+// the two ends of the line of svg on the screen
+export function lineEnds(svg: Element): [{ x: number; y: number }, { x: number; y: number }] {
+  const r = svg.getBoundingClientRect();
+  const w = Number(svg.getAttribute('width')) || r.width || 1, h = Number(svg.getAttribute('height')) || r.height || 1;
+  const line = svg.querySelector('line');
+  const n = (a: string) => parseFloat(line?.getAttribute(a) ?? '') || 0;
+  const at = (x: number, y: number) => ({ x: r.left + (x * r.width) / w, y: r.top + (y * r.height) / h });
+  return [at(n('x1'), n('y1')), at(n('x2'), n('y2'))];
+}
+
+// the ends and the middle of each line of the current slide outside skip, in slide pixels, which a
+// drag snaps to
+export function linePoints(app: App, skip: Element[] = []): { x: number; y: number }[] {
+  const f = frameOf(app);
+  return linesOf(app).filter((svg) => !skip.includes(svg)).flatMap((svg) => {
+    const [a, b] = lineEnds(svg).map((p) => ({ x: (p.x - f.left) / f.scale, y: (p.y - f.top) / f.scale }));
+    return [a, b, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }];
+  });
+}
+
+// the box that a drag of el snaps by, in slide pixels: the box of the ends of a line, whose edges
+// and center are its ends and its middle, and the box of the picture of any other element
+export function snapBoxOf(app: App, el: Element): Box {
+  const f = frameOf(app);
+  if (!el.matches(LINE)) return toSlide(f, visualRect(el));
+  const [a, b] = lineEnds(el);
+  return toSlide(f, { left: Math.min(a.x, b.x), top: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) });
+}
+
+// whether the segment from a to b has a point in box, by the clip of Liang and Barsky
+export function segmentTouches(a: { x: number; y: number }, b: { x: number; y: number }, box: Box): boolean {
+  let t0 = 0, t1 = 1;
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const edges: [number, number][] = [[-dx, a.x - box.left], [dx, box.left + box.width - a.x], [-dy, a.y - box.top], [dy, box.top + box.height - a.y]];
+  for (const [p, q] of edges) {
+    if (p === 0) {
+      if (q < 0) return false;
+      continue;
+    }
+    const t = q / p;
+    if (p < 0) t0 = Math.max(t0, t);
+    else t1 = Math.min(t1, t);
+    if (t0 > t1) return false;
+  }
+  return true;
 }
 
 // the image or video of a figure under target, which a click into a selected figure selects

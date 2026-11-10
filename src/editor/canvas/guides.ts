@@ -2,9 +2,11 @@
 // canvas/rulers.ts, with its place in slide px shown during the drag, moved by a drag on the canvas
 // where no element is under the pointer, and removed by a drag back onto a ruler or off the
 // canvas. an element snaps to the guides as it snaps to the other elements in snap.ts. the guides
-// are not part of the deck: they are kept per slide during the session, and in the storage of the
-// browser per deck and per index of a slide. Show Guides, Clear All Guides on Slide, Copy Guides,
-// and Paste Guides are the commands of Keynote
+// are not part of the deck: they are kept per slide element during the session, so that they follow
+// a slide that is moved, added before, or deleted, and a duplicated slide gets a copy of the guides
+// of its source, as in Keynote. they are stored in the storage of the browser per deck, by the index
+// of each slide in the order of the page, after every change of the slides. Show Guides, Clear All
+// Guides on Slide, Copy Guides, and Paste Guides are the commands of Keynote
 
 import type { App } from '../app.ts';
 import { injectStyle, make, store, stored } from '../ui/dom.ts';
@@ -64,27 +66,39 @@ export function install(app: App): void {
   const root = document.documentElement;
 
   let shown = stored(SHOWN) !== '0';
-  // the guides of each slide element, read by index from the storage of the deck at the first use
+  // the guides of each slide element. every slide of the page is read by its index from the storage
+  // of the deck at the first use, before a slide can be moved, and a slide added later has none
   const kept = new WeakMap<Element, Guides>();
   const sections = () => [...app.slides().querySelectorAll(':scope > section')];
+  let seeded = false;
   const of = (slide: Element | null): Guides => {
+    if (!seeded) {
+      seeded = true;
+      const saved = read<Partial<Guides>[]>(keyOf(), []);
+      sections().forEach((s, i) => kept.set(s, clean(saved[i])));
+    }
     if (!slide) return empty();
     let g = kept.get(slide);
     if (!g) {
-      const saved = read<Partial<Guides>[]>(keyOf(), []);
-      g = clean(saved[sections().indexOf(slide)]);
+      g = empty();
       kept.set(slide, g);
     }
     return g;
   };
-  // every slide is read before one is written, so that a guide stays with its slide when slides
-  // are added or moved during the session
   const persist = () => {
     const all = sections().map((s) => of(s));
-    store(keyOf(), all.some((g) => g.x.length || g.y.length) ? JSON.stringify(all) : null);
+    const text = all.some((g) => g.x.length || g.y.length) ? JSON.stringify(all) : null;
+    if (text !== stored(keyOf())) store(keyOf(), text);
+  };
+  // a copy of a slide gets a copy of its guides
+  const duplicate = app.doc.duplicate.bind(app.doc);
+  app.doc.duplicate = async (el) => {
+    const source = el.parentElement === app.slides() && el.matches('section') ? of(el) : null;
+    const copy = await duplicate(el);
+    if (source) kept.set(copy, clean(source));
+    return copy;
   };
   const setOf = (slide: Element, g: Guides) => {
-    sections().forEach((s) => of(s));
     kept.set(slide, clean(g));
     persist();
     draw();
@@ -223,6 +237,9 @@ export function install(app: App): void {
 
   app.listen('resize', draw);
   app.onRefresh(['content', 'slide', 'layout', 'structure'], draw);
+  app.onRefresh(['structure'], () => {
+    if (app.state === 'loaded') persist();
+  });
 
   const set = (on: boolean) => {
     shown = on;

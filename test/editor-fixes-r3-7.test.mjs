@@ -9,7 +9,7 @@ import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { titled } from '../src/editor/commands/edit.ts';
-import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen, selectFigure } from './helpers/editor.mjs';
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 const PLATFORMS = ['mac', 'other'];
@@ -71,7 +71,7 @@ const pictureOf = (page, selector) => page.evaluate(`(() => {
 const gripsOf = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-grip')].filter((g) => !g.hidden).map((g) => { const r = g.getBoundingClientRect(); return { handle: g.dataset.handle, x: r.left + r.width / 2, y: r.top + r.height / 2, live: getComputedStyle(g).pointerEvents !== 'none' }; })`);
 
 for (const platform of PLATFORMS) {
-  test(`${platform}: a figure selected with one click is resized by its grips at the corners of its picture`, async () => {
+  test(`${platform}: the image of a figure, selected with one click, is resized by its grips at the corners of its picture`, async () => {
     const page = await editor(platform);
     await slideOf(page, '.reveal .slides .zone > img');
     await click(page, IMG);
@@ -90,7 +90,9 @@ for (const platform of PLATFORMS) {
     await sleep(50);
 
     const after = await page.evaluate('window.BeesonEditor.render()');
-    const widths = [...after.matchAll(/<img class="for-(?:dark|light)"[^>]* style="width: (\d+)px"/g)].map((m) => Number(m[1]));
+    // the image keeps the corner across from the grip with a translate, and its twin of the other
+    // mode is given the same place
+    const widths = [...after.matchAll(/<img class="for-(?:dark|light)"[^>]* style="width: (\d+)px(; translate: [^"]+)?"/g)].map((m) => Number(m[1]));
     assert.equal(widths.length, 2, 'the width is not written on both images of the pair');
     assert.equal(widths[0], widths[1], 'the images of the pair are given different widths');
     assert.ok(widths[0] > 300 && widths[0] < 560, `the width ${widths[0]} is not the dragged width`);
@@ -570,7 +572,7 @@ for (const platform of PLATFORMS) {
   test(`${platform}: the position of a dragged figure, as the Arrange pane gives it, is shown next to the pointer`, async () => {
     const page = await editor(platform);
     await slideOf(page, '.reveal .slides .zone > img');
-    await click(page, IMG);
+    await selectFigure(page, IMG);
     const pic = await pictureOf(page, IMG);
     const from = { x: (pic.left + pic.right) / 2, y: (pic.top + pic.bottom) / 2 };
     const to = { x: from.x - 70, y: from.y + 40 };
@@ -605,11 +607,11 @@ for (const platform of PLATFORMS) {
     await click(page, QR);
     await click(page, ZONE_IMG, { modifiers: 'Shift' });
     await click(page, '.reveal section.present p', { modifiers: 'Shift' });
-    assert.equal(await shownSelected(page), 3, 'the QR code, the figure, and the paragraph are not selected');
+    assert.equal(await shownSelected(page), 3, 'the QR code, the image of the figure, and the paragraph are not selected');
     const qr = await boxOf(page, QR);
     const pic = await pictureOf(page, ZONE_IMG);
     const grips = await gripsOf(page);
-    assert.equal(grips.length, 16, 'the QR code and the figure do not show eight grips each, and the paragraph none');
+    assert.equal(grips.length, 22, 'the QR code and the image do not show eight grips each, and the paragraph six for its width');
     assert.ok(grips.every((g) => g.live), 'a grip of a multiple selection cannot be dragged');
     const at = (box, handle) => grips.find((g) => g.handle === handle && near(g.x, box.right) && near(g.y, box.bottom));
     assert.ok(at(qr, 'se') && at(pic, 'se'), 'the grips are not at the corners of the QR code and of the picture');
@@ -627,8 +629,10 @@ for (const platform of PLATFORMS) {
     assert.ok(near(picAfter.left, pic.left) && near(picAfter.top, pic.top), 'the corner of the picture across from the grip is moved');
     assert.equal(await shownSelected(page), 3, 'the resize changes the selection');
     const after = await page.evaluate('window.BeesonEditor.render()');
-    assert.match(after, /<div class="qr" [^>]*style="width: \d+px"/, 'the width of the QR code is not written');
-    const widths = [...after.matchAll(/<img class="for-(?:dark|light)"[^>]* style="width: (\d+)px"/g)].map((m) => Number(m[1]));
+    // the paragraph, narrowed with the group, wraps and pushes the QR code down, which a translate
+    // takes back
+    assert.match(after, /<div class="qr" [^>]*style="width: \d+px(; translate: [^"]+)?"/, 'the width of the QR code is not written');
+    const widths = [...after.matchAll(/<img class="for-(?:dark|light)"[^>]* style="width: (\d+)px(; translate: [^"]+)?"/g)].map((m) => Number(m[1]));
     assert.equal(widths.length, 2, 'the width is not written on both images of the figure');
     assert.equal(widths[0], widths[1], 'the images of the pair are given different widths');
 
@@ -654,23 +658,23 @@ const constrainOf = (page) => page.evaluate(`(() => {
 })()`);
 
 for (const platform of PLATFORMS) {
-  test(`${platform}: the Arrange pane has a Constrain Proportions switch beside the size fields, held on while only the width is written`, async () => {
+  test(`${platform}: the Arrange pane has a Constrain Proportions switch beside the size fields, free for an image and held on for a QR code`, async () => {
     const page = await editor(platform, MULTI);
     // a state kept in the browser does not free an aspect that the scope rule cannot write
     await page.evaluate(`localStorage.setItem('beeson-edit-constrain-qr', 'off')`);
-    await click(page, ZONE_IMG);
+    await selectFigure(page, ZONE_IMG);
     await arrangeXY(page);
     const figure = await constrainOf(page);
     assert.ok(figure, 'the Arrange pane does not have a switch Constrain Proportions');
     assert.ok(figure.afterSize, 'the switch is not beside the size fields');
-    assert.deepEqual([figure.checked, figure.disabled], [true, true], 'the switch of a figure is not on, or can be turned off while only the width is written');
+    assert.deepEqual([figure.checked, figure.disabled], [true, false], 'the switch of the image of a figure is not on and free');
     assert.equal(figure.notes.length, 1, `a figure sized by its layout shows more than its one note: ${figure.notes.join(' | ')}`);
     // the image itself, selected with a second click, has live size fields and the note of the switch
     await click(page, ZONE_IMG);
     await arrangeXY(page);
     const image = await constrainOf(page);
-    assert.deepEqual([image.checked, image.disabled], [true, true], 'the switch of an image is not on, or can be turned off while only the width is written');
-    assert.deepEqual(image.notes, ['Only the width is written, and the height follows the aspect or the layout.'], 'the note does not say that only the width is written');
+    assert.deepEqual([image.checked, image.disabled], [true, false], 'the switch of an image is not on and free, though its height is written');
+    assert.deepEqual(image.notes, [], `an image whose height is written shows a note: ${image.notes.join(' | ')}`);
     await click(page, QR);
     await arrangeXY(page);
     const qr = await constrainOf(page);

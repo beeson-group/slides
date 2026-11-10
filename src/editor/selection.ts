@@ -6,7 +6,7 @@
 
 import type { App, Selector } from './app.ts';
 import type { Pairing } from './render.ts';
-import { BY_ITSELF, MOVABLE, OUTSIDE, movableOf, movablesOf } from './canvas/hit.ts';
+import { BY_ITSELF, MOVABLE, OUTSIDE, movablesOf, pickOf } from './canvas/hit.ts';
 
 export type SelectionKind = 'none' | 'elements' | 'text' | 'slides';
 
@@ -132,7 +132,8 @@ export function install(app: App): void {
   // the interface of the modules of today that select and mark the elements
   const move: Selector = {
     select: (el) => (el ? set('elements', [el]) : set('none', [])),
-    movableOf: (target) => movableOf(app, target),
+    // what a press at target selects, i.e. the image of a figure apart from its caption
+    movableOf: (target) => pickOf(app, target),
     mark,
     refresh: () => app.invalidate('selection'),
   };

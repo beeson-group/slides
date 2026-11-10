@@ -15,7 +15,7 @@ import { LAYOUT_GUIDES, snapMove, snapPoint } from '../src/editor/canvas/snap.ts
 import { rulerSteps } from '../src/editor/canvas/rulers.ts';
 import { merged } from '../src/editor/canvas/guides.ts';
 import { spacingOf } from '../src/editor/canvas/grid.ts';
-import { byteExact, click, drag, press } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, selectFigure } from './helpers/editor.mjs';
 
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
@@ -138,7 +138,9 @@ for (const platform of PLATFORMS) {
     await frames(page);
     assert.deepEqual(await guides(page), [['x', 1013]]);
     await byteExact(page);
-    // the left edge of the zone, at 1200, snaps to the guide when it is dragged near it
+    // the left edge of the zone, at 1200, snaps to the guide when it is dragged near it, once the
+    // figure is selected apart from its image
+    await selectFigure(page, `${ZONE} > img`);
     const zone = await box(page, ZONE);
     await drag(page, { x: zone.left + zone.width / 2, y: zone.top + zone.height / 2 }, { dx: -183 * k, dy: 0, modifiers: 'Shift' });
     await frames(page);
@@ -207,6 +209,7 @@ for (const platform of PLATFORMS) {
     // with Snap to Grid, a drag of the zone by 33 slide px is snapped to 40
     await exec(page, 'view.grid.snap');
     assert.equal((await state(page, 'view.grid.snap')).checked, true);
+    await selectFigure(page, `${ZONE} > img`);
     const zone = await box(page, ZONE);
     await drag(page, { x: zone.left + zone.width / 2, y: zone.top + zone.height / 2 }, { dx: 33 * k, dy: 0, modifiers: 'Shift' });
     await frames(page);
