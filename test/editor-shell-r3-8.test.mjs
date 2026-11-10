@@ -264,3 +264,29 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+const inspector = (page) =>
+  page.evaluate(`(() => {
+    const el = document.querySelector('.beeson-edit-inspector');
+    return { shown: el.getClientRects().length > 0 && el.getBoundingClientRect().width > 200, tab: el.querySelector('[role="tab"][aria-selected="true"]')?.textContent ?? null };
+  })()`);
+
+for (const platform of PLATFORMS) {
+  test(`the editor opens with the inspector on its Format tab, and remembers that it was closed (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 3 });
+    assert.deepEqual(await inspector(page), { shown: true, tab: 'Format' });
+    assert.equal((await state(page, 'shell.format')).checked, true);
+    // closed with Format, it stays closed when the editor is opened again in the same browser
+    await exec(page, 'shell.format');
+    await frames(page);
+    assert.equal((await inspector(page)).shown, false);
+    const again = await load(t, platform, { n: 3, keep: true });
+    assert.equal((await inspector(again)).shown, false);
+    await exec(again, 'shell.format');
+    await frames(again);
+    const third = await load(t, platform, { n: 3, keep: true });
+    assert.deepEqual(await inspector(third), { shown: true, tab: 'Format' });
+    assert.equal(await render(third), third.source);
+    assert.deepEqual(errors(page), []);
+  });
+}
