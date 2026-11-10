@@ -80,13 +80,23 @@ const grow = (b: Box, by: number): Box => ({ left: b.left - by, top: b.top - by,
 // the angle of el in degrees, from its computed rotate
 const angleOf = (el: Element): number => parseFloat(getComputedStyle(el).rotate) || 0;
 
+// box grown over the shown caption of the figure el, as Keynote frames an image with its caption
+function withCaption(el: Element, box: Box): Box {
+  const caps = el.matches(CONTAINER) ? [...el.querySelectorAll(':scope > figcaption, :scope > .caption')].map((c) => c.getBoundingClientRect()).filter((r) => r.width && r.height) : [];
+  if (!caps.length) return box;
+  const left = Math.min(box.left, ...caps.map((r) => r.left)), top = Math.min(box.top, ...caps.map((r) => r.top));
+  const right = Math.max(box.left + box.width, ...caps.map((r) => r.right)), bottom = Math.max(box.top + box.height, ...caps.map((r) => r.bottom));
+  return { left, top, width: right - left, height: bottom - top };
+}
+
 // the box of el on the screen without its rotation, about the center of the box seen, and the
 // angle that it is turned by. a figure that holds a picture is framed at the picture, where its
-// grips resize it
+// grips resize it, and over its caption while it is not turned
 function orientOf(el: Element, scale: number): { box: Box; deg: number } {
   const pic = pictureOf(el);
   const deg = angleOf(el) + (pic === el ? 0 : angleOf(pic));
-  return { box: orientedBox(pic, scale, deg), deg };
+  const box = orientedBox(pic, scale, deg);
+  return { box: deg ? box : withCaption(el, box), deg };
 }
 
 // the point x, y turned by deg about the center of box
@@ -229,7 +239,7 @@ export class Frames {
     const grouped = !!id && selected.every((el) => groupOf(el) === id);
     this.group = null;
     if (boxes.length > 1 && grouped) {
-      const seen = selected.map((el) => (el.matches(RESIZABLE) || el.matches(CONTAINER) ? visualRect(pictureOf(el)) : grow(visualRect(el), 6)));
+      const seen = selected.map((el) => (el.matches(RESIZABLE) || el.matches(CONTAINER) ? withCaption(el, visualRect(pictureOf(el))) : grow(visualRect(el), 6)));
       const left = Math.min(...seen.map((b) => b.left)), top = Math.min(...seen.map((b) => b.top));
       const right = Math.max(...seen.map((b) => b.left + b.width)), bottom = Math.max(...seen.map((b) => b.top + b.height));
       this.group = { left, top, width: right - left, height: bottom - top };

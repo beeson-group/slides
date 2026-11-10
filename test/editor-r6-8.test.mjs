@@ -395,6 +395,14 @@ const frameAndCaption = (page) => page.evaluate(`(() => {
 for (const platform of PLATFORMS) {
   test(`the frame of a figure selected from its image holds its caption (${platform})`, async (t) => {
     const page = await load(t, platform, { deck: 'index.html', n: 4 });
+    // a click on the image frames its picture alone
+    await click(page, FIGURE_IMG);
+    await frames(page);
+    const [pic] = (await frameAndCaption(page)).frames;
+    await press(page, 'Escape');
+    await frames(page);
+    await press(page, 'Escape');
+    await frames(page);
     for (const how of ['Esc', 'Select Figure']) {
       await click(page, FIGURE_IMG);
       await frames(page);
@@ -405,15 +413,11 @@ for (const platform of PLATFORMS) {
       assert.deepEqual(s.selected, ['FIGURE'], `${how} does not select the figure`);
       assert.equal(s.frames.length, 1);
       const [f] = s.frames;
-      assert.ok(f.bottom >= s.caption.bottom - 1 && f.top <= s.image.top + 1 && f.left <= Math.min(s.image.left, s.caption.left) + 1, `after ${how} the frame at ${js(f)} leaves out the caption at ${js(s.caption)}`);
+      assert.ok(pic.bottom < s.caption.top, `the frame of the image at ${js(pic)} reaches the caption`);
+      assert.ok(Math.abs(f.top - pic.top) <= 1 && f.bottom >= s.caption.bottom - 1 && f.left <= Math.min(pic.left, s.caption.left) + 1 && f.right >= Math.max(pic.right, s.caption.right) - 1, `after ${how} the frame at ${js(f)} leaves out the caption at ${js(s.caption)}`);
       await press(page, 'Escape');
       await frames(page);
     }
-    // a click on the image still frames the image alone
-    await click(page, FIGURE_IMG);
-    await frames(page);
-    const s = await frameAndCaption(page);
-    assert.ok(Math.abs(s.frames[0].bottom - s.image.bottom) <= 1, js(s));
     assert.deepEqual(errors(page), []);
   });
 }
