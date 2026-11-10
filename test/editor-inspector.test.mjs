@@ -85,19 +85,22 @@ async function tap(page, name) {
 // the boxes of the solid frames shown, and whether one is drawn around the element at selector
 const shownFrames = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-frame.selected')].filter((f) => !f.hidden && f.getBoundingClientRect().width).map((f) => { const r = f.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; })`);
 // the box of the first shown element matched by selector. a figure that holds a picture is framed at
-// the picture, i.e. at the image or video fitted into it with object-fit contain
+// the picture, i.e. at the image or video fitted into it with object-fit contain, and over its
+// caption while the figure is selected
 const boxOf = (page, selector) => page.evaluate(`(() => {
   let el = [...document.querySelectorAll(${JSON.stringify(selector)})].find((e) => e.getBoundingClientRect().width);
+  const caps = el.matches('figure, .zone, .plate') && window.BeesonEditor.selection().includes(el) ? [...el.querySelectorAll(':scope > figcaption, :scope > .caption')].map((c) => c.getBoundingClientRect()).filter((c) => c.width) : [];
+  const out = (b) => ({ left: Math.min(b.left, ...caps.map((c) => c.left)), top: Math.min(b.top, ...caps.map((c) => c.top)), right: Math.max(b.right, ...caps.map((c) => c.right)), bottom: Math.max(b.bottom, ...caps.map((c) => c.bottom)) });
   const pic = el.matches('figure, .zone, .plate') ? [...el.querySelectorAll(':scope > img, :scope > video')].find((m) => m.getBoundingClientRect().width) : null;
   el = pic ?? el;
   const r = el.getBoundingClientRect();
   const [w, h] = el instanceof HTMLImageElement ? [el.naturalWidth, el.naturalHeight] : el instanceof HTMLVideoElement ? [el.videoWidth, el.videoHeight] : [0, 0];
   const fit = getComputedStyle(el).objectFit;
-  if (!w || !h || (fit !== 'contain' && fit !== 'scale-down')) return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+  if (!w || !h || (fit !== 'contain' && fit !== 'scale-down')) return out({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
   const s = Math.min(r.width / w, r.height / h, fit === 'scale-down' ? 1 : Infinity);
   const [px, py] = getComputedStyle(el).objectPosition.split(/\\s+/).map((v) => (v.endsWith('%') ? parseFloat(v) / 100 : 0.5));
   const left = r.left + (r.width - w * s) * px, top = r.top + (r.height - h * s) * py;
-  return { left, top, right: left + w * s, bottom: top + h * s };
+  return out({ left, top, right: left + w * s, bottom: top + h * s });
 })()`);
 const around = (frame, box) => ['left', 'top'].every((k) => box[k] - frame[k] >= -1 && box[k] - frame[k] <= 9) && ['right', 'bottom'].every((k) => frame[k] - box[k] >= -1 && frame[k] - box[k] <= 9);
 async function framed(page, selectors) {
