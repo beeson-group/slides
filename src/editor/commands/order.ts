@@ -113,8 +113,17 @@ function ungroup(app: App): void {
   app.selection.set('elements', all);
 }
 
+// the elements of a lock or an unlock. a caret or a range in the text of a locked block unlocks
+// the block, since a click into the text of a locked block puts the caret there
+function lockTargets(app: App, on: boolean): Element[] {
+  const els = selectedEls(app);
+  if (on || app.selection.kind !== 'text') return els;
+  const blocks = app.selection.items.map((el) => el.closest('[data-locked]')).filter((el): el is Element => !!el);
+  return [...new Set([...els, ...blocks])];
+}
+
 function setLock(app: App, on: boolean): void {
-  const els = selectedEls(app).filter((el) => locked(el) !== on);
+  const els = lockTargets(app, on).filter((el) => locked(el) !== on);
   for (const el of els) app.doc.setTag(el, { attrs: { 'data-locked': on ? '' : null } }, on ? 'lock' : 'unlock');
   app.invalidate('selection');
 }
@@ -214,9 +223,9 @@ export function commands(): Command[] {
       id: 'arrange.unlock',
       label: 'Unlock',
       keys: { mac: ['Mod+Alt+L'], other: ['Mod+Shift+L'] },
-      in: ['canvas'],
+      in: ['canvas', 'text'],
       menu: arrange(71, 'lock'),
-      enabled: (app) => selectedEls(app).some(locked),
+      enabled: (app) => lockTargets(app, false).some(locked),
       undoable: true,
       run: (app) => setLock(app, false),
     },
@@ -281,4 +290,9 @@ export function install(app: App): void {
   for (const c of commands()) app.commands.define(c);
   keepGroups(app);
   app.commands.veto((a, c) => (CHANGES.test(c.id) || (c.id === 'edit.paste' && a.selection.kind === 'text')) && lockedSelection(a));
+  // typing, a drop, and the keys that delete or break a line do not go through a command, hence
+  // they are cancelled before the browser changes the text of a locked block
+  document.addEventListener('beforeinput', (ev) => {
+    if (ev.target instanceof Element && ev.target.closest('.reveal .slides [data-locked]')) ev.preventDefault();
+  }, true);
 }
