@@ -175,8 +175,10 @@ function centerOffset(app: App, el: HTMLElement): { x: number; y: number } | nul
   return { x: Math.round(cx - (b.left + b.right) / 2), y: Math.round(cy - (b.top + b.bottom) / 2) };
 }
 
-// the zone of slide without content, into which a figure is put
-const emptyZone = (slide: Element): Element | null => [...slide.querySelectorAll(':scope > .zone, :scope > .panel ~ .zone')].find((z) => !z.children.length && !z.textContent?.trim()) ?? null;
+// the zone of slide without content, into which a figure is put. the placeholder that the editor
+// draws in an empty zone is not content
+const emptyZone = (slide: Element): Element | null =>
+  [...slide.querySelectorAll(':scope > .zone, :scope > .panel ~ .zone')].find((z) => ![...z.children].some((c) => !c.hasAttribute('data-generated')) && !z.textContent?.trim()) ?? null;
 
 export function install(app: App): void {
   injectStyle('insert', CSS);
@@ -243,7 +245,7 @@ export function install(app: App): void {
     show();
     own = true;
     app.history.push({
-      label: def.label,
+      label: `Insert ${def.label}`,
       undo: () => {
         own = true;
         onTop = false;
@@ -294,7 +296,7 @@ export function install(app: App): void {
         keep = true;
         await app.history.undo().finally(() => (keep = false));
       }
-      await app.history.transact(def.label, async () => {
+      await app.history.transact(`Insert ${def.label}`, async () => {
         // a box moved by textOffset or centerOffset is written with the same offset
         const [x0, y0] = p.el.style.translate.split(' ');
         const x = parseFloat(x0 ?? '') || 0, y = parseFloat(y0 ?? '') || 0;
@@ -384,7 +386,7 @@ export function install(app: App): void {
       if (app.math.isOpen()) return;
       window.clearInterval(wait);
       markEmpty();
-      if (node.isConnected && node.classList.contains('beeson-empty') && app.history.undoLabel === 'Formula') void app.history.undo().catch(fail);
+      if (node.isConnected && node.classList.contains('beeson-empty') && app.history.undoLabel === 'Insert Formula') void app.history.undo().catch(fail);
     }, 100);
   };
 
@@ -414,8 +416,7 @@ export function install(app: App): void {
     menu: insertMenu(21),
     toolbar: tool(22, 'formula'),
     enabled: ready,
-    undoable: true,
-    run: async (a) => {
+    run: (a) => a.history.transact('Insert Formula', async () => {
       // in a text, the button puts an inline formula at the caret, as Insert Equation of Keynote
       // and PowerPoint does, through math.inline of commands/math.ts. the sheet is opened after
       // the click, since the click on the toolbar would close it on its way to the document
@@ -439,7 +440,7 @@ export function install(app: App): void {
       } finally {
         if (!opens) release();
       }
-    },
+    }),
   });
   c.define({
     id: 'insert.qr',
@@ -447,15 +448,14 @@ export function install(app: App): void {
     menu: insertMenu(26),
     toolbar: tool(24.2, 'qr', { split: 'Media' }),
     enabled: ready,
-    undoable: true,
-    run: async (a) => {
+    run: (a) => a.history.transact('Insert QR Code', async () => {
       const slide = a.current()!;
       const zone = emptyZone(slide);
       const place = zone ? { parent: zone, before: null } : slide.matches('.title, .closing') ? { parent: slide, before: slide.querySelector(':scope > aside.notes') } : columnPlace(a, slide);
       const [node] = await docOf(a).insertElement('qr', place.parent, place.before, { qr: 'https://example.com' });
       if (!zone) centerIfOut(a, node);
       a.selection.set('elements', [node]);
-    },
+    }),
   });
   c.define({
     id: 'insert.code',

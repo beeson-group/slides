@@ -1,10 +1,12 @@
-// the commands of the File menu. Save and Save As take their keys everywhere, so that the save
-// page dialog of the browser is never opened. Present and Present from Start have the keys of
-// PowerPoint, since F5 reloads the page in a browser
+// the commands of the File menu, in the groups of the File menu of Keynote: Open… and Open Recent,
+// then Save, Save As…, Autosave, and Revert to Saved, then Export To. Save and Save As take their
+// keys everywhere, so that the save page dialog of the browser is never opened. Present and
+// Present from Start have the keys of PowerPoint, since F5 reloads the page in a browser
 
 import type { App } from '../app.ts';
-import { EVERYWHERE, OUTSIDE_DIALOGS } from '../commands.ts';
-import { canWrite } from '../file/files.ts';
+import { EVERYWHERE, OUTSIDE_DIALOGS, type Command } from '../commands.ts';
+import { canPick, canWrite, fileActions } from '../file/files.ts';
+import { clearRecents, MAX_RECENT, recentLabel, recents } from '../file/recent.ts';
 
 // the saved deck from a slide. the presentation is opened at the address of the editor, whose
 // hash reveal.js does not keep up to date while the deck is edited. the hash is thus set to the
@@ -61,6 +63,71 @@ export function install(app: App): void {
     enabled: () => canWrite(),
     checked: (a) => a.autosave,
     run: (a) => a.files.toggleAutosave(),
+  });
+  c.define({
+    id: 'file.revert',
+    label: 'Revert to Saved',
+    menu: { bar: 'File', group: 'save', order: 23 },
+    enabled: (a) => a.dirty && a.state === 'loaded',
+    run: () => fileActions().revert(),
+  });
+
+  // Open Recent lists the decks of file/recent.ts, which the menus read at each open, hence the
+  // place of each item is a getter. without a deck, or in a browser without the open picker, i.e.
+  // in Firefox and Safari, Open Recent is a dimmed item
+  const listed = () => (canPick() ? recents() : []);
+  const recent = (order: number, group = 'open'): Command['menu'] => ({ bar: 'File', group, order, submenu: 'Open Recent' });
+  c.define({
+    id: 'file.recent.none',
+    label: 'Open Recent',
+    get menu() {
+      return listed().length ? undefined : { bar: 'File', group: 'open', order: 11 };
+    },
+    enabled: () => false,
+    run: () => {},
+  });
+  for (let i = 0; i < MAX_RECENT; i++) {
+    c.define({
+      id: `file.recent.${i + 1}`,
+      label: () => {
+        const r = listed()[i];
+        return r ? recentLabel(r) : '';
+      },
+      get menu() {
+        return listed()[i] ? recent(11 + i / 100) : undefined;
+      },
+      enabled: (a) => !!listed()[i] && a.state !== 'starting',
+      run: async () => {
+        const r = listed()[i];
+        if (r) await fileActions().openRecent(r);
+      },
+    });
+  }
+  c.define({
+    id: 'file.recent.clear',
+    label: 'Clear Menu',
+    get menu() {
+      return listed().length ? recent(11.5, 'clear') : undefined;
+    },
+    run: () => clearRecents(),
+  });
+
+  // Export To of Keynote, with the formats that a browser writes. PDF… prints the saved file in its
+  // print view, and HTML… writes a copy of the deck with its edits
+  const exportTo = (order: number): Command['menu'] => ({ bar: 'File', group: 'export', order, submenu: 'Export To' });
+  c.define({
+    id: 'file.export.pdf',
+    label: 'PDF…',
+    menu: exportTo(40),
+    enabled: (a) => a.state === 'loaded',
+    run: () => fileActions().exportPdf(),
+  });
+  c.define({
+    id: 'file.export.html',
+    label: 'HTML…',
+    menu: exportTo(41),
+    enabled: (a) => a.state === 'loaded' && !!a.pairing,
+    run: () => fileActions().exportHtml(),
   });
   c.define({
     id: 'file.present',

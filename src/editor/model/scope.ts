@@ -52,14 +52,15 @@ const textBlock = (tag: string, classes: string[]) => TEXT_TAGS.has(tag) || (tag
 const PX = /^\d+px$/;
 
 // the declarations of the mask and the flip of an image, written by canvas/mask.ts, with the form
-// of their values
+// of their values. object-fit contain keeps the aspect of a picture whose box was resized in Edit
+// Mask, which theme/beeson.css otherwise stretches to the width and the height of its style
 const NUMBER = '-?\\d+(\\.\\d+)?';
 const AT = `(${NUMBER}(%|px)|0)`;
 const MASK_DECLARATIONS: Record<string, RegExp> = {
   scale: new RegExp(`^${NUMBER}( ${NUMBER})?$`),
   'clip-path': new RegExp(`^inset\\(${NUMBER}%\\)$`),
   'object-position': new RegExp(`^${AT} ${AT}$`),
-  'object-fit': /^cover$/,
+  'object-fit': /^(cover|contain)$/,
 };
 
 // the class names in the selectors of a stylesheet. the comments, the strings, and the innermost

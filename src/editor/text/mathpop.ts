@@ -250,7 +250,7 @@ export function openInsert(app: App, host: Element, range: Range): void {
     rect: () => blockBox(host),
     commit: async (tex) => {
       const { content, index } = contentWithInline(host, kept, tex);
-      await app.history.transact('Inline Formula', () => app.doc.setContent(host, content, 'Inline Formula'));
+      await app.history.transact('Insert Inline Formula', () => app.doc.setContent(host, content, 'Inline Formula'));
       const math = host.querySelectorAll('mjx-container')[index];
       if (!math) return;
       (host as HTMLElement).focus({ preventScroll: true });

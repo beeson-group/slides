@@ -109,6 +109,37 @@ export function numericColumns(rows: string[][]): boolean[] {
   });
 }
 
+// the value of a number of a table, e.g. -1200 for (1,200) or 0.12 for 12 %, or null for a text.
+// a comma is read as a separator of thousands when it is followed by three digits
+export function numberOf(text: string): number | null {
+  const t = text.trim();
+  if (!isNumeric(t)) return null;
+  const negative = /^\(.*\)$/.test(t);
+  let s = t.replace(/[()$€£¥\s]/g, '').replace(/−/g, '-');
+  const scale = s.endsWith('%') ? 0.01 : s.endsWith('‰') ? 0.001 : 1;
+  s = s.replace(/[%‰]$/, '');
+  s = /,\d{3}(?!\d)/.test(s) ? s.replace(/,/g, '') : s.replace(',', '.');
+  const n = Number(s) * scale;
+  return Number.isFinite(n) ? (negative ? -Math.abs(n) : n) : null;
+}
+
+// the order of the rows of a sort by their keys, as Sort Ascending and Sort Descending of a column
+// of Keynote: numbers by value before texts in the order of the language, and empty cells last in
+// either direction. rows with equal keys keep their order
+export function sortOrder(keys: string[], descending = false): number[] {
+  const words = new Intl.Collator(undefined, { numeric: true, sensitivity: 'base' });
+  const values = keys.map((k) => ({ text: k.trim(), number: numberOf(k) }));
+  const rank = (v: { text: string; number: number | null }) => (v.number !== null ? 0 : v.text ? 1 : 2);
+  return keys.map((_, i) => i).sort((i, j) => {
+    const a = values[i];
+    const b = values[j];
+    if (rank(a) !== rank(b)) return rank(a) - rank(b);
+    if (rank(a) === 2) return 0;
+    const d = rank(a) === 0 ? a.number! - b.number! : words.compare(a.text, b.text);
+    return descending ? -d : d;
+  });
+}
+
 const escape = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // a cell with its text, set at the right in a column of numbers

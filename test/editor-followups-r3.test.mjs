@@ -499,7 +499,7 @@ for (const platform of PLATFORMS) {
         const s = await status(page);
         assert.equal(await page.evaluate(`${PENDING} === document.activeElement`), true, 'the caret is not in the empty box');
         assert.equal(s.undo, true, 'Undo is disabled');
-        assert.equal(await undoLabel(page, 'edit.undo'), `Undo ${label}`);
+        assert.equal(await undoLabel(page, 'edit.undo'), `Undo Insert ${label}`);
         assert.equal(s.dirty, true);
         assert.match(s.message, /^Unsaved changes/);
         assert.equal(await render(page), page.source, 'the empty box was written');
@@ -510,7 +510,7 @@ for (const platform of PLATFORMS) {
       await undo(page);
       await frames(page);
       await clean();
-      assert.equal(await undoLabel(page, 'edit.redo'), `Redo ${label}`);
+      assert.equal(await undoLabel(page, 'edit.redo'), `Redo Insert ${label}`);
       await redo(page);
       await frames(page);
       await boxed();
@@ -524,7 +524,7 @@ for (const platform of PLATFORMS) {
       await type(page, 'x');
       await sleep(300);
       assert.ok(unmoved(await render(page)).includes(html), 'the box was not written');
-      assert.equal(await undoLabel(page, 'edit.undo'), `Undo ${label}`);
+      assert.equal(await undoLabel(page, 'edit.undo'), `Undo Insert ${label}`);
       await undo(page);
       await sleep(100);
       assert.equal(await render(page), page.source);
