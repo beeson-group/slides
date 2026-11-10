@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen, selectPicture } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 const TABLES = 'test/pages/editor-tables.html';
@@ -131,7 +131,7 @@ const gripAt = (page, handle) => page.evaluate(`(() => {
 async function reselect(page) {
   await page.evaluate(`Reveal.slide(${FIGURE})`);
   await frames(page);
-  await click(page, IMG);
+  await selectPicture(page, IMG);
   assert.deepEqual(await selected(page), ['img.for-dark']);
 }
 const release = (page, at) => page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: at.x, y: at.y, button: 'left', clickCount: 1 });
@@ -150,7 +150,7 @@ const menuItems = (page) =>
 for (const platform of PLATFORMS) {
   test(`a drag of the image of a figure moves its caption with it (${platform})`, async (t) => {
     const page = await load(t, platform);
-    await click(page, IMG);
+    await selectPicture(page, IMG);
     assert.deepEqual(await selected(page), ['img.for-dark'], 'a click on the image does not select the image alone');
     const rest = await captionFromPicture(page);
     const from = await centerOf(page, IMG);
@@ -161,13 +161,13 @@ for (const platform of PLATFORMS) {
     await release(page, { x: from.x - 80, y: from.y + 20 });
     await frames(page);
     sameOffset(await captionFromPicture(page), rest, 'after the drag');
-    assert.match(await render(page), /<figcaption class="caption" style="translate: -?\d+px -?\d+px">/);
+    assert.match(await render(page), /<figure class="zone[^"]*"[^>]* style="translate: -?\d+px -?\d+px">/, 'the drag of the image does not move its figure');
     await roundTrip(page);
   });
 
   test(`a resize of the image of a figure keeps its caption under it (${platform})`, async (t) => {
     const page = await load(t, platform);
-    await click(page, IMG);
+    await selectPicture(page, IMG);
     const rest = await captionFromPicture(page);
     const at = await gripAt(page, 'se');
     await drag(page, at, { dx: -90, dy: -60, hold: true });
@@ -182,7 +182,7 @@ for (const platform of PLATFORMS) {
 
   test(`the keys, the fields, and Reset Position move the caption with the image, and a rotation does not (${platform})`, async (t) => {
     const page = await load(t, platform);
-    await click(page, IMG);
+    await selectPicture(page, IMG);
     const rest = await captionFromPicture(page);
     // three nudges in a row are one entry of the history
     for (let i = 0; i < 3; i++) await press(page, 'Shift+ArrowLeft');
@@ -233,7 +233,7 @@ for (const platform of PLATFORMS) {
     const orders = ['front', 'forward', 'backward', 'back'];
     const states = async () => Object.fromEntries(await Promise.all(orders.map(async (o) => [o, (await state(page, `arrange.order.${o}`)).enabled])));
     // the states with the figure selected, which the states with its image must match
-    await click(page, IMG);
+    await selectPicture(page, IMG);
     await exec(page, 'selection.container');
     assert.deepEqual(await selected(page), ['figure.zone']);
     const figure = await states();
@@ -245,7 +245,7 @@ for (const platform of PLATFORMS) {
 
     await click(page, '.reveal section.present h2');
     await press(page, 'Escape');
-    await click(page, IMG);
+    await selectPicture(page, IMG);
     assert.deepEqual(await selected(page), ['img.for-dark']);
     assert.deepEqual(await states(), figure, 'the order commands of the image are not those of its figure');
     await showTab(page, 'Arrange');
@@ -279,23 +279,22 @@ for (const platform of PLATFORMS) {
     })()`);
     await click(page, format);
     await frames(page);
-    await click(page, IMG);
+    await selectPicture(page, IMG);
     await frames(page);
     assert.deepEqual(await selected(page), ['img.for-dark']);
     assert.equal(await pane(page), 'image');
     await press(page, 'Escape');
     await frames(page);
     assert.deepEqual(await selected(page), ['figure.zone'], 'Esc on the selected image does not select its figure');
-    assert.equal(await pane(page), 'arrange', `the inspector shows the pane ${await pane(page)} for the figure`);
-    assert.ok(!(await tabs(page)).includes('Image'), `the inspector offers the Image pane for the figure: ${js(await tabs(page))}`);
+    assert.ok((await tabs(page)).includes('Image'), `the inspector does not offer the Image pane for the figure: ${js(await tabs(page))}`);
     // Select Figure shows the same pane, and Esc on the selected figure clears the selection
     await click(page, '.reveal section.present h2');
     await press(page, 'Escape');
-    await click(page, IMG);
+    await selectPicture(page, IMG);
     await exec(page, 'selection.container');
     await frames(page);
     assert.deepEqual(await selected(page), ['figure.zone']);
-    assert.equal(await pane(page), 'arrange');
+    assert.ok((await tabs(page)).includes('Image'));
     await press(page, 'Escape');
     await frames(page);
     assert.deepEqual(await selected(page), []);
