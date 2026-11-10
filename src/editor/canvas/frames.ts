@@ -1,7 +1,11 @@
-// the hover and selection frames, the eight resize handles, the handle of a block, the readout at
-// the pointer, the guides and the marks of equal gaps, and the marquee, in one layer over the canvas
-// clipped to the box of the viewport of reveal.js. the frames are drawn in screen pixels from the
-// live boxes of the elements, and the guides from slide pixels by the live scale of the slide
+// the hover and selection frames, the eight resize handles, the rotate handle, the handle of a
+// block, the readout at the pointer, the guides and the marks of equal gaps and sizes, and the
+// marquee, in one layer over the canvas
+// clipped to the canvas cell of the stage, so that a handle at the edge of the slide is drawn on
+// the pasteboard and none is drawn over the bars at a zoom. the frames are drawn in screen pixels
+// from the live boxes of the elements, and the guides from slide pixels by the live scale. the frame
+// and the handles of a rotated element are turned with it, and a locked element is framed in gray
+// with a cross in place of each handle
 
 import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
@@ -31,6 +35,11 @@ const CSS = `
 .beeson-overlay [hidden] { display: none !important; }
 .beeson-grip { position: fixed; width: 9px; height: 9px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; border: 1.5px solid var(--ed-select, #7048e8); background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); pointer-events: auto; touch-action: none; }
 .beeson-grip.fixed { border-color: #8a8a8a; background: #d9d9d9; pointer-events: none; }
+.beeson-frame.selected.locked { border-color: #8a8a8a; }
+.beeson-grip.locked { width: 9px; height: 9px; border: 0; border-radius: 0; background: linear-gradient(45deg, transparent 42%, #8a8a8a 42% 58%, transparent 58%), linear-gradient(-45deg, transparent 42%, #8a8a8a 42% 58%, transparent 58%); box-shadow: none; pointer-events: none; }
+.beeson-rotor { position: fixed; width: 18px; height: 18px; margin: -9px 0 0 -9px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid var(--ed-select, #7048e8); background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); color: var(--ed-select, #7048e8); font: 600 12px/15px system-ui, sans-serif; text-align: center; cursor: grab; user-select: none; pointer-events: auto; touch-action: none; }
+.beeson-rotor-stem { position: fixed; width: 1px; height: 15px; margin-left: -0.5px; background: var(--ed-select, #7048e8); transform-origin: 50% 100%; }
+html.beeson-rotating, html.beeson-rotating * { cursor: grabbing !important; user-select: none !important; }
 .beeson-grip[data-handle=nw], .beeson-grip[data-handle=se] { cursor: nwse-resize; }
 .beeson-grip[data-handle=ne], .beeson-grip[data-handle=sw] { cursor: nesw-resize; }
 .beeson-grip[data-handle=n], .beeson-grip[data-handle=s] { cursor: ns-resize; }
@@ -68,6 +77,31 @@ const place = (d: HTMLElement, b: Box) => {
 
 const grow = (b: Box, by: number): Box => ({ left: b.left - by, top: b.top - by, width: b.width + 2 * by, height: b.height + 2 * by });
 
+// the angle of el in degrees, from its computed rotate
+const angleOf = (el: Element): number => parseFloat(getComputedStyle(el).rotate) || 0;
+
+// the box of el on the screen without its rotation, about the center of the box seen, and the
+// angle that it is turned by. an element that is not rotated has the box of visualRect
+function orientOf(el: Element, scale: number): { box: Box; deg: number } {
+  const deg = angleOf(el);
+  if (!deg) return { box: visualRect(el), deg: 0 };
+  const r = el.getBoundingClientRect();
+  const h = el as HTMLElement;
+  const w = h.offsetWidth * scale, ht = h.offsetHeight * scale;
+  return { box: { left: r.left + r.width / 2 - w / 2, top: r.top + r.height / 2 - ht / 2, width: w, height: ht }, deg };
+}
+
+// the point x, y turned by deg about the center of box
+function turned(box: Box, deg: number, x: number, y: number): { x: number; y: number } {
+  if (!deg) return { x, y };
+  const a = (deg * Math.PI) / 180;
+  const cx = box.left + box.width / 2, cy = box.top + box.height / 2;
+  return { x: cx + (x - cx) * Math.cos(a) - (y - cy) * Math.sin(a), y: cy + (x - cx) * Math.sin(a) + (y - cy) * Math.cos(a) };
+}
+
+// the distance of the rotate handle above the top edge of a frame, in screen pixels
+const ROTOR = 24;
+
 // the overlay of the editor. the handle of a block and the resize handles are its only parts that
 // take the pointer
 export class Frames {
@@ -77,6 +111,9 @@ export class Frames {
   // the handle of the block under the pointer, being edited, or selected, by which it is dragged
   readonly handle: HTMLDivElement;
   readonly grips: Record<Handle, HTMLDivElement>;
+  // the rotate handle of the one selected element, on a stem above the middle of its top edge
+  readonly rotor: HTMLDivElement;
+  private readonly stem: HTMLDivElement;
   private readonly frames: HTMLDivElement[] = [];
   private readonly union: HTMLDivElement;
   private readonly guides: HTMLDivElement[] = [];
@@ -101,6 +138,10 @@ export class Frames {
       g.dataset.handle = h;
       return [h, g];
     })) as Record<Handle, HTMLDivElement>;
+    this.stem = div('beeson-rotor-stem', this.layer);
+    this.rotor = div('beeson-rotor', this.layer);
+    this.rotor.textContent = '↻';
+    this.rotor.title = 'Drag to rotate, with Shift in steps of 15°';
     this.handle = div('beeson-handle', this.layer);
     this.handle.textContent = '⠿';
     this.handle.title = 'Drag to move, double-click to put back, arrow keys nudge';
@@ -119,27 +160,42 @@ export class Frames {
   }
 
   // the resize handles of the one selected element: live on an image, a video, a QR code, or a
-  // viewer, gray on a figure whose size is set by its layout, and none on a block of text
-  gripsOf(el: Element | null): 'live' | 'fixed' | null {
+  // viewer, gray on a figure whose size is set by its layout, none on a block of text, and crosses
+  // on a locked element
+  gripsOf(el: Element | null): 'live' | 'fixed' | 'locked' | null {
     if (!el || this.app.selection.only() !== el) return null;
+    if (el.hasAttribute('data-locked')) return 'locked';
     if (el.matches(RESIZABLE)) return 'live';
     return el.matches(CONTAINER) ? 'fixed' : null;
   }
 
   draw(): void {
     const app = this.app;
-    const reveal = document.querySelector('.reveal')?.getBoundingClientRect();
-    if (reveal) this.layer.style.clipPath = `inset(${reveal.top}px ${innerWidth - reveal.right}px ${innerHeight - reveal.bottom}px ${reveal.left}px)`;
+    const v = app.stage?.viewport;
+    if (v) this.layer.style.clipPath = `inset(${v.top}px ${innerWidth - v.right}px ${innerHeight - v.bottom}px ${v.left}px)`;
     if (view.hover && !view.hover.isConnected) view.hover = null;
     const selected = app.selection.elements().filter((el) => el.isConnected);
+    const scale = frameOf(app).scale;
     // a figure is framed at its edge, where its handles are, and a block 6 px outside its text
-    const boxOf = (el: Element): Box => (el.matches(RESIZABLE) || el.matches(CONTAINER) ? visualRect(el) : grow(visualRect(el), 6));
-    const boxes = selected.map(boxOf);
+    const orients = selected.map((el) => {
+      const o = orientOf(el, scale);
+      return el.matches(RESIZABLE) || el.matches(CONTAINER) ? o : { ...o, box: grow(o.box, 6) };
+    });
+    const boxes = orients.map((o) => o.box);
     while (this.frames.length < boxes.length) this.frames.push(div('beeson-frame selected', this.layer));
-    this.frames.forEach((f, i) => (boxes[i] ? place(f, boxes[i]) : (f.hidden = true)));
+    this.frames.forEach((f, i) => {
+      if (!boxes[i]) {
+        f.hidden = true;
+        return;
+      }
+      place(f, boxes[i]);
+      f.style.rotate = orients[i].deg ? `${orients[i].deg}deg` : '';
+      f.classList.toggle('locked', selected[i].hasAttribute('data-locked'));
+    });
     if (boxes.length > 1) {
-      const left = Math.min(...boxes.map((b) => b.left)), top = Math.min(...boxes.map((b) => b.top));
-      const right = Math.max(...boxes.map((b) => b.left + b.width)), bottom = Math.max(...boxes.map((b) => b.top + b.height));
+      const seen = selected.map((el) => (el.matches(RESIZABLE) || el.matches(CONTAINER) ? visualRect(el) : grow(visualRect(el), 6)));
+      const left = Math.min(...seen.map((b) => b.left)), top = Math.min(...seen.map((b) => b.top));
+      const right = Math.max(...seen.map((b) => b.left + b.width)), bottom = Math.max(...seen.map((b) => b.top + b.height));
       place(this.union, grow({ left, top, width: right - left, height: bottom - top }, 6));
     } else this.union.hidden = true;
 
@@ -153,11 +209,22 @@ export class Frames {
         continue;
       }
       const b = boxes[0];
-      const x = h.includes('w') ? b.left : h.includes('e') ? b.left + b.width : b.left + b.width / 2;
-      const y = h.includes('n') ? b.top : h.includes('s') ? b.top + b.height : b.top + b.height / 2;
+      const at = turned(b, orients[0].deg, h.includes('w') ? b.left : h.includes('e') ? b.left + b.width : b.left + b.width / 2, h.includes('n') ? b.top : h.includes('s') ? b.top + b.height : b.top + b.height / 2);
       g.hidden = false;
       g.classList.toggle('fixed', grips === 'fixed');
-      Object.assign(g.style, { left: `${x}px`, top: `${y}px` });
+      g.classList.toggle('locked', grips === 'locked');
+      Object.assign(g.style, { left: `${at.x}px`, top: `${at.y}px` });
+    }
+    // the rotate handle, also while it is dragged, on one element that is not locked
+    const rotating = document.documentElement.classList.contains('beeson-rotating');
+    const turnable = !!only && boxes.length === 1 && !only.hasAttribute('data-locked') && (!view.moving || rotating);
+    this.rotor.hidden = this.stem.hidden = !turnable;
+    if (turnable) {
+      const b = boxes[0], deg = orients[0].deg;
+      const top = turned(b, deg, b.left + b.width / 2, b.top);
+      const knob = turned(b, deg, b.left + b.width / 2, b.top - ROTOR);
+      Object.assign(this.rotor.style, { left: `${knob.x}px`, top: `${knob.y}px` });
+      Object.assign(this.stem.style, { left: `${top.x}px`, top: `${top.y - ROTOR + 9}px`, height: `${ROTOR - 9}px`, rotate: deg ? `${deg}deg` : '' });
     }
 
     const hot = this.current();

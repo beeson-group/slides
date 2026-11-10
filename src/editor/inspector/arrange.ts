@@ -1,12 +1,27 @@
 // the Arrange pane of the Format tab, as the Arrange tab of Keynote: Align with its reference,
-// Distribute, the size in W and H, and the position in X and Y, each with its reset. X and Y are
-// the offset of an element from its place in the file, and W and H its size, in slide pixels. W
-// and H are set only on an image, a video, a QR code, and a tycho viewer, since the size of every
-// other element is set by its layout
+// Distribute, the size in W and H, the position in X and Y, and the angle, each with its reset,
+// then the order of the elements, Group and Ungroup, and Lock and Unlock. X and Y are the offset
+// of an element from its place in the file, and W and H its size, in slide pixels. W and H are set
+// only on an image, a video, a QR code, and a tycho viewer, since the size of every other element
+// is set by its layout
 
 import type { App } from '../app.ts';
 import { offsetOf, resizable, sizeOf, targetsOf } from '../commands/align.ts';
-import { button, note, numberField, row, section, segmented, type Control, type Run } from './controls.ts';
+import { angleOf } from '../commands/order.ts';
+import { locked } from '../canvas/drag.ts';
+import { GLYPHS, button, note, numberField, row, section, segmented, type Control, type Run } from './controls.ts';
+
+// the glyphs of the order, the groups, and the locks, on the grid of GLYPHS
+Object.assign(GLYPHS, {
+  'order-front': ['M3.5 7.5h9v9h-9z', 'F7.5 3.5h9v9h-9z'],
+  'order-forward': ['M5 9.5h10v7H5z', 'M10 7V2.5', 'M8 4.5l2-2 2 2'],
+  'order-backward': ['M5 3.5h10v7H5z', 'M10 13v4.5', 'M8 15.5l2 2 2-2'],
+  'order-back': ['M7.5 3.5h9v9h-9z', 'F3.5 7.5h4v9h-4zM7.5 12.5h5v4h-5z'],
+  group: ['M5 5h5.5v5.5H5z', 'M9.5 9.5H15V15H9.5z', 'M2.5 4.5v-2h2', 'M15.5 2.5h2v2', 'M17.5 15.5v2h-2', 'M4.5 17.5h-2v-2'],
+  ungroup: ['M3.5 3.5H9V9H3.5z', 'M11 11h5.5v5.5H11z'],
+  lock: ['M5.5 9h9v7.5h-9z', 'M7.5 9V6.5a2.5 2.5 0 0 1 5 0V9'],
+  unlock: ['M5.5 9h9v7.5h-9z', 'M7.5 9V6.5a2.5 2.5 0 0 1 4.9-.7'],
+});
 
 // the value shared by every element, or null when they differ
 const shared = (values: number[]): number | null => (values.length && values.every((v) => Math.round(v) === Math.round(values[0])) ? values[0] : null);
@@ -58,6 +73,34 @@ export function arrangePane(app: App, run: Run): Control[] {
       ]),
       note(() => 'The offset from the place of the element in the layout.'),
       row([button(app, run, { command: 'arrange.resetPosition', icon: 'reset', text: 'Reset Position' })]),
+    ]),
+    section('Rotate', [
+      row([
+        numberField(app, {
+          label: 'Angle',
+          unit: '°',
+          value: () => shared(live().map(angleOf)),
+          commit: (deg) => run('arrange.setRotation', { deg, els: live() }),
+          enabled: () => live().some((el) => !locked(el)),
+        }),
+      ]),
+      row([button(app, run, { command: 'arrange.resetRotation', icon: 'reset', text: 'Reset Rotation' })]),
+    ]),
+    section('Arrange', [
+      row([segmented(app, run, [
+        { command: 'arrange.order.back', icon: 'order-back' },
+        { command: 'arrange.order.backward', icon: 'order-backward' },
+        { command: 'arrange.order.forward', icon: 'order-forward' },
+        { command: 'arrange.order.front', icon: 'order-front' },
+      ], 'Order')], 'Order'),
+      row([
+        button(app, run, { command: 'arrange.group', icon: 'group', text: 'Group' }),
+        button(app, run, { command: 'arrange.ungroup', icon: 'ungroup', text: 'Ungroup' }),
+      ]),
+      row([
+        button(app, run, { command: 'arrange.lock', icon: 'lock', text: 'Lock' }),
+        button(app, run, { command: 'arrange.unlock', icon: 'unlock', text: 'Unlock' }),
+      ]),
     ]),
   ];
 }
