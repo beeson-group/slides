@@ -1,69 +1,169 @@
-// the toolbar of today: the file, its state, Which?, and the buttons Undo, Redo, Open…, Save,
-// Save as…, Autosave, and Present, each of which runs a command of the registry. the toolbar of
-// the plan, drawn from the registry, is built here
+// the toolbar, drawn from the commands of the registry that name a toolbar place: a 20 px icon over
+// an 11 px label in groups with a thin rule between them, and the groups of order 80 and more at
+// the right. a switch is shown pressed, and a command whose toolbar place names a split is drawn
+// as a split button with the commands of that submenu of its menu. below a window width of 1100 px
+// the labels are hidden and kept as the text of the buttons, and below 820 px the groups after
+// Present are put into a menu ». the toolbar has one tab stop, and the arrow keys move in it
 
 import type { App } from '../app.ts';
-import { canWrite, fileName } from '../file/files.ts';
-import { button, injectStyle, make, wire } from '../ui/dom.ts';
+import type { Command, Group } from '../commands.ts';
+import { injectStyle, make, wire } from '../ui/dom.ts';
+import { icon } from '../ui/icons.ts';
+import { closeMenus, commandKeys, menuItems, openMenu, splitButton, type MenuItem } from '../ui/menu.ts';
+import { toolbarLabel } from './shell.ts';
+
+const RIGHT = 80;
+const NARROW = 820;
 
 const CSS = `
-.beeson-edit-top, .beeson-edit-bottom { position: fixed; left: 0; right: 0; z-index: 60; display: flex; align-items: center; gap: 12px; box-sizing: border-box; padding: 0 16px; background: var(--bg, #000); color: var(--text, #eee); font: 14px/1.4 system-ui, sans-serif; }
-.beeson-edit-top { top: 0; height: 44px; border-bottom: 1px solid var(--line, #555); }
-.beeson-edit-top .file { font-weight: 600; white-space: nowrap; }
-.beeson-edit-top .state { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--subtle, #bbb); }
-.beeson-edit-top .state.warn { color: var(--accent, #f80); }
-.beeson-edit-top button, .beeson-edit-bottom button { font: inherit; padding: 4px 12px; border: 1px solid var(--line, #555); border-radius: 6px; background: transparent; color: var(--text, #eee); cursor: pointer; white-space: nowrap; }
-.beeson-edit-top button:hover, .beeson-edit-bottom button:hover { border-color: var(--subtle, #bbb); }
-.beeson-edit-top button:disabled { opacity: 0.4; cursor: default; }
-.beeson-edit-top button.on { border-color: var(--accent, #f80); color: var(--accent, #f80); }
+.beeson-edit-top { display: flex; align-items: center; gap: 2px; height: 52px; padding: 0 10px; box-sizing: border-box; font: 11px/1.2 var(--ed-font); color: var(--ed-text); user-select: none; -webkit-user-select: none; }
+.beeson-edit-top .group { display: flex; align-items: center; gap: 2px; }
+.beeson-edit-top .group + .group::before { content: ''; align-self: center; width: 1px; height: 28px; margin: 0 6px; background: var(--ed-line); }
+.beeson-edit-top .group.right { margin-left: auto; }
+.beeson-edit-top .group.right ~ .group.right { margin-left: 0; }
+.beeson-edit-top .group[hidden] { display: none; }
+.beeson-edit-top .tb { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 56px; height: 44px; padding: 3px 6px 2px; box-sizing: border-box; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: default; white-space: nowrap; }
+.beeson-edit-top .tb .beeson-icon { flex: none; }
+.beeson-edit-top .tb:hover:not(:disabled) { background: var(--ed-hover); }
+.beeson-edit-top .tb:active:not(:disabled), .beeson-edit-top .tb[aria-pressed="true"] { background: var(--ed-pressed); }
+.beeson-edit-top .tb[aria-pressed="true"] .beeson-icon { color: var(--ed-select); }
+.beeson-edit-top .tb.on .beeson-icon { color: var(--ed-select); }
+.beeson-edit-top .tb:disabled { color: var(--ed-faint); }
+.beeson-edit-top .tb:focus-visible, .beeson-edit-split .more:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: -2px; }
+.beeson-edit-split { display: inline-flex; align-items: stretch; border-radius: 6px; }
+.beeson-edit-split .tb { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.beeson-edit-split .more { width: 16px; height: 44px; padding: 0; border: 0; border-radius: 0 6px 6px 0; background: transparent; color: var(--ed-muted); cursor: default; }
+.beeson-edit-split .more:hover, .beeson-edit-split .more[aria-expanded="true"] { background: var(--ed-hover); }
+@media (max-width: 1099px) { .beeson-edit-top .tb .label { display: none; } .beeson-edit-top .tb { min-width: 36px; } }
 `;
+
+type Shown = { c: Command; el: HTMLButtonElement };
 
 export function install(app: App): void {
   injectStyle('toolbar', CSS);
   const top = make('div', 'beeson-edit-top');
-  const fileEl = make('span', 'file');
-  const stateEl = make('span', 'state');
-  stateEl.setAttribute('aria-live', 'polite');
-  const undoButton = button('Undo', 'Undo the last change, ⌘Z or Ctrl+Z');
-  const redoButton = button('Redo', 'Redo the change undone, ⌘⇧Z or Ctrl+Y');
-  const openButton = button('Open…', 'Choose the file of this deck');
-  const saveButton = button('Save', 'Save the edits into the file, ⌘S or Ctrl+S');
-  const saveAsButton = button('Save as…', 'Save the deck into another file, ⌘⇧S or Ctrl+Shift+S');
-  const autosaveButton = button('Autosave', 'Save the edits into the file after each change');
-  const presentButton = button('Present', 'Show the saved deck in a new tab');
-  const whichButton = button('Which?', 'List the texts that cannot be edited');
-  whichButton.className = 'which';
-  whichButton.hidden = true;
-  undoButton.disabled = redoButton.disabled = true;
-  top.append(fileEl, stateEl, whichButton, undoButton, redoButton, openButton, saveButton, saveAsButton, autosaveButton, presentButton);
-
+  top.setAttribute('role', 'toolbar');
+  top.setAttribute('aria-label', 'Toolbar');
+  let shown: Shown[] = [];
+  let signature = '';
+  let narrow = innerWidth < NARROW;
+  let late: Group[] = [];
+  const more = make('button', 'tb more-groups');
+  more.type = 'button';
+  more.setAttribute('aria-label', 'More');
+  more.setAttribute('aria-haspopup', 'menu');
+  more.title = 'More';
+  more.append(icon('more'), make('span', 'label', 'More'));
   const fail = (e: unknown) => app.fail(e);
-  const run = (id: string) => () => app.commands.run(id);
-  wire(openButton, run('file.open'), fail);
-  wire(saveButton, run('file.save'), fail);
-  wire(saveAsButton, run('file.saveAs'), fail);
-  wire(autosaveButton, run('file.autosave'), fail);
-  wire(presentButton, run('file.present'), fail);
-  wire(undoButton, run('edit.undo'), fail);
-  wire(redoButton, run('edit.redo'), fail);
-  wire(whichButton, () => app.files.showProblems(), fail);
-  if (!canWrite()) {
-    autosaveButton.disabled = true;
-    autosaveButton.title = 'Autosave needs a browser that writes the file in place, i.e. Chrome or Edge';
+
+  const button = (c: Command): HTMLButtonElement => {
+    const b = make('button', 'tb');
+    b.type = 'button';
+    b.dataset.command = c.id;
+    const label = toolbarLabel(app, c);
+    b.append(icon(c.toolbar?.icon ?? 'square'), make('span', 'label', label));
+    wire(b, () => app.commands.run(c.id), fail);
+    return b;
+  };
+
+  function render(): void {
+    const groups = app.commands.forToolbar();
+    const at = groups.findIndex((g) => g.commands.some((c) => c.id === 'file.present'));
+    signature = JSON.stringify([narrow, groups.map((g) => [g.group, g.commands.map((c) => c.id)])]);
+    shown = [];
+    late = narrow && at >= 0 ? groups.slice(at + 1) : [];
+    const parts: HTMLElement[] = [];
+    for (const g of groups) {
+      if (late.includes(g)) continue;
+      const box = make('div', 'group');
+      box.dataset.group = g.group;
+      if ((g.commands[0].toolbar?.order ?? 0) >= RIGHT) box.classList.add('right');
+      for (const c of g.commands) {
+        const b = button(c);
+        shown.push({ c, el: b });
+        const split = (c.toolbar as { split?: string } | undefined)?.split;
+        if (split && c.menu) {
+          const bar = c.menu.bar;
+          box.append(splitButton(app, b, () => menuItems(app, bar, split), `${toolbarLabel(app, c)} options`));
+        } else box.append(b);
+      }
+      parts.push(box);
+    }
+    if (late.length) {
+      const box = make('div', 'group right');
+      box.append(more);
+      parts.push(box);
+    }
+    top.replaceChildren(...parts);
+    update();
   }
-  app.listen('history', () => {
-    undoButton.disabled = !app.history.canUndo;
-    redoButton.disabled = !app.history.canRedo;
+
+  // the state of each button, and the one tab stop on the first button that can be pressed
+  function update(): void {
+    const next = JSON.stringify([innerWidth < NARROW, app.commands.forToolbar().map((g) => [g.group, g.commands.map((c) => c.id)])]);
+    if (next !== signature) {
+      narrow = innerWidth < NARROW;
+      render();
+      return;
+    }
+    for (const { c, el } of shown) {
+      const s = app.commands.state(c.id);
+      el.disabled = !s.enabled;
+      const keys = commandKeys(c, app.platform);
+      el.title = keys ? `${s.label} (${keys})` : s.label;
+      if (s.checked !== null) el.setAttribute('aria-pressed', String(s.checked));
+      else el.removeAttribute('aria-pressed');
+      if (c.id === 'file.save') el.classList.toggle('on', app.dirty);
+    }
+    const stops = items();
+    if (!stops.some((b) => b.tabIndex === 0)) stops.forEach((b, i) => (b.tabIndex = i === 0 ? 0 : -1));
+    else stops.forEach((b) => b.tabIndex === 0 || (b.tabIndex = -1));
+  }
+
+  const items = (): HTMLButtonElement[] => [...top.querySelectorAll<HTMLButtonElement>('button')].filter((b) => !b.disabled && b.getClientRects().length > 0);
+
+  top.addEventListener('keydown', (ev) => {
+    const list = items();
+    const at = list.indexOf(document.activeElement as HTMLButtonElement);
+    if (at < 0) return;
+    let to = -1;
+    if (ev.key === 'ArrowRight') to = (at + 1) % list.length;
+    else if (ev.key === 'ArrowLeft') to = (at - 1 + list.length) % list.length;
+    else if (ev.key === 'Home') to = 0;
+    else if (ev.key === 'End') to = list.length - 1;
+    else return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    list.forEach((b, i) => (b.tabIndex = i === to ? 0 : -1));
+    list[to].focus();
   });
-  app.listen('report', () => {
-    fileEl.textContent = app.handle?.name ?? fileName();
-    saveButton.classList.toggle('on', app.dirty);
-    autosaveButton.classList.toggle('on', app.autosave);
-    autosaveButton.setAttribute('aria-pressed', String(app.autosave));
-    whichButton.hidden = !app.pairing?.problems.length;
-    stateEl.textContent = app.line.text;
-    stateEl.title = app.line.title;
-    stateEl.classList.toggle('warn', app.line.warn);
+  // a button that gets the focus is the tab stop
+  top.addEventListener('focusin', (ev) => {
+    if (!(ev.target instanceof HTMLButtonElement)) return;
+    for (const b of top.querySelectorAll('button')) b.tabIndex = b === ev.target ? 0 : -1;
   });
+
+  const openMore = (keyboard: boolean) => {
+    const out: MenuItem[] = [];
+    for (const g of late) {
+      if (out.length) out.push({ rule: true });
+      for (const c of g.commands) out.push({ command: c.id, label: toolbarLabel(app, c) });
+    }
+    openMenu(app, out, { anchor: more.getBoundingClientRect(), placement: 'below', owner: more, keyboard, label: 'More' });
+  };
+  more.addEventListener('pointerdown', (ev) => {
+    ev.preventDefault();
+    if (more.getAttribute('aria-expanded') === 'true') closeMenus();
+    else openMore(false);
+  });
+  more.addEventListener('click', (ev) => {
+    if (ev.detail === 0) openMore(true);
+  });
+
+  app.listen('history', update);
+  app.listen('report', update);
+  app.onRefresh(['content', 'selection', 'slide', 'structure', 'layout'], update);
+  window.addEventListener('resize', update);
+  render();
   document.body.append(top);
 }
