@@ -6,7 +6,7 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { card, checkbox, note, row, section, segmented, textField, type Control, type Run } from './controls.ts';
+import { card, checkbox, glyph, note, row, section, segmented, textField, type Control, type Run } from './controls.ts';
 
 const SVG = 'http://www.w3.org/2000/svg';
 
@@ -137,11 +137,32 @@ function sketch(layout: string, width: Width): SVGSVGElement {
 export function slidePane(app: App, run: Run): Control[] {
   const slide = app.current();
   const layout = layoutOf(slide);
-  const parts: Control[] = [card(() => sketch(layoutOf(app.current()), slide ? widthOf(slide) : 'normal'), 'Slide Layout', () => {
+  const layoutCard = card(() => sketch(layoutOf(app.current()), slide ? widthOf(slide) : 'normal'), 'Slide Layout', () => {
     const s = app.current();
     const name = LAYOUT_NAMES[layoutOf(s)];
     return s && layoutOf(s) === 'content' && widthOf(s) !== 'normal' ? `${name}, ${widthOf(s) === 'narrow' ? 'Narrow' : 'Wide'}` : name;
-  })];
+  });
+  // the card is the button of the chooser of the layouts of commands/layout.ts
+  const chooser = layoutCard.el;
+  chooser.classList.add('ed-chooser');
+  chooser.setAttribute('role', 'button');
+  chooser.setAttribute('aria-haspopup', 'dialog');
+  chooser.tabIndex = 0;
+  chooser.title = 'Change the layout of the slide';
+  chooser.style.cursor = 'pointer';
+  const chevron = glyph('chevron-down', 14);
+  chevron.style.marginLeft = 'auto';
+  chooser.append(chevron);
+  const choose = () => {
+    if (app.commands.get('slide.layoutChooser') && app.commands.enabled('slide.layoutChooser')) void run('slide.layoutChooser', chooser);
+  };
+  chooser.addEventListener('click', choose);
+  chooser.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    ev.preventDefault();
+    choose();
+  });
+  const parts: Control[] = [layoutCard];
   if (layout === 'content') {
     parts.push(section('Text Column', [
       row([segmented(app, run, WIDTHS.map((w) => ({ command: `slide.width.${w}`, icon: `column-${w}`, text: w === 'narrow' ? 'Narrow' : w === 'wide' ? 'Wide' : 'Normal' })), 'Width of the text column')]),

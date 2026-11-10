@@ -12,6 +12,7 @@ import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
 import { BY_ITSELF, RESIZABLE, aspectOf, bandAt, containerOf, frameOf, hasText, mediaIn, movableOf, movablesOf, onCanvas, toSlide, visualRect } from './hit.ts';
 import { overlay, view } from './frames.ts';
+import { freshGroup } from '../commands/order.ts';
 import { injectStyle } from '../ui/dom.ts';
 
 const CSS = `
@@ -23,8 +24,12 @@ const CLICK = 3;
 // a dragged edge snaps to a line within this many screen pixels
 const SNAP = 8;
 
-// the place of an element: its offset and its width, null where its style does not set them
-export type Place = { translate: Translate | null; width: number | null };
+// the place of an element: its offset, its width, and its angle in degrees, null where its style
+// does not set them
+export type Place = { translate: Translate | null; width: number | null; rotate?: number | null };
+
+// an element with data-locked, which the pointer, the keys, and the fields do not move
+export const locked = (el: Element): boolean => el.hasAttribute('data-locked');
 
 const px = (v: string | undefined): number | null => {
   const n = parseFloat(v ?? '');
@@ -35,17 +40,19 @@ export function placeOf(el: Element): Place {
   const style = (el as HTMLElement).style;
   const [x, y] = (style.translate ?? '').split(/\s+/).map((p) => px(p));
   const translate = x === null || x === undefined ? null : { x, y: y ?? 0 };
-  return { translate: translate && (translate.x || translate.y) ? translate : null, width: el.matches(RESIZABLE) ? px(style.width) : null };
+  const rotate = px(style.rotate);
+  return { translate: translate && (translate.x || translate.y) ? translate : null, width: el.matches(RESIZABLE) ? px(style.width) : null, rotate: rotate ? rotate : null };
 }
 
 const samePlace = (a: Place, b: Place) =>
-  (a.translate?.x ?? 0) === (b.translate?.x ?? 0) && (a.translate?.y ?? 0) === (b.translate?.y ?? 0) && a.width === b.width;
+  (a.translate?.x ?? 0) === (b.translate?.x ?? 0) && (a.translate?.y ?? 0) === (b.translate?.y ?? 0) && a.width === b.width && (a.rotate ?? 0) === (b.rotate ?? 0);
 
 // the one function that writes the place of an element: on the page, and as the tag edit that a
 // save writes into its start tag. the width is written as a declaration of the style, which the
 // writer of the tags of the document model takes. it does not record the history, which the caller
-// does with record()
-export function writePlace(app: App, el: Element, p: Place): void {
+// does with record(). a locked element is left as it is, unless force is set by an undo or a redo
+export function writePlace(app: App, el: Element, p: Place, force = false): void {
+  if (locked(el) && !force) return;
   const style = (el as HTMLElement).style;
   const t = p.translate && (p.translate.x || p.translate.y) ? { x: Math.round(p.translate.x), y: Math.round(p.translate.y) } : null;
   style.translate = t ? `${t.x}px ${t.y}px` : '';
@@ -55,6 +62,11 @@ export function writePlace(app: App, el: Element, p: Place): void {
     style.width = w === null ? '' : `${w}px`;
     if (w !== null || edit.style?.width !== undefined || /(^|;)\s*width\s*:/.test(el.getAttribute('style') ?? '')) edit.style = { ...edit.style, width: w === null ? null : `${w}px` };
   }
+  if (p.rotate !== undefined) {
+    const r = p.rotate ? ((Math.round(p.rotate) % 360) + 360) % 360 : 0;
+    style.rotate = r ? `${r}deg` : '';
+    if (r || edit.style?.rotate !== undefined || /(^|;)\s*rotate\s*:/.test(el.getAttribute('style') ?? '')) edit.style = { ...edit.style, rotate: r ? `${r}deg` : null };
+  }
   app.tagEdits.set(el, edit);
   app.markDirty();
 }
@@ -62,11 +74,11 @@ export function writePlace(app: App, el: Element, p: Place): void {
 // the change of the places of elements, already written, as one entry of the history. an undo or a
 // redo shows the slide of the elements and selects them
 export function record(app: App, label: string, changes: { el: Element; from: Place; to: Place }[]): { el: Element; from: Place; to: Place }[] {
-  const moved = changes.filter((c) => !samePlace(c.from, c.to));
+  const moved = changes.filter((c) => !samePlace(c.from, c.to) && !locked(c.el));
   if (!moved.length) return moved;
   const apply = (way: 'from' | 'to') => {
     app.showSlide(moved[0].el);
-    for (const c of moved) writePlace(app, c.el, c[way]);
+    for (const c of moved) writePlace(app, c.el, c[way], true);
     app.selection.set('elements', moved.map((c) => c.el));
     app.invalidate('content');
   };
@@ -75,7 +87,7 @@ export function record(app: App, label: string, changes: { el: Element; from: Pl
 }
 
 type Press = {
-  kind: 'move' | 'resize' | 'marquee';
+  kind: 'move' | 'resize' | 'rotate' | 'marquee';
   x: number;
   y: number;
   moved: boolean;
@@ -91,6 +103,11 @@ type Press = {
   aspect?: number | null;
   // the selection before a marquee with Shift or the command modifier, which it adds to
   initial?: Element[];
+  // the center of a rotated element on the screen, and the angle of the press about it in degrees
+  center?: { x: number; y: number };
+  angle?: number;
+  // the size of a rotated element at the press, in slide pixels
+  size?: { width: number; height: number };
 };
 
 const union = (boxes: Box[]): Box => {
@@ -223,7 +240,8 @@ export function install(app: App): void {
         else if (media) sel.set('elements', [media]);
       };
     } else sel.set('elements', [el]);
-    start('move', ev, el, sel.elements().filter((e) => !sel.elements().some((o) => o !== e && o.contains(e))), click);
+    const els = sel.elements().filter((e) => !sel.elements().some((o) => o !== e && o.contains(e)) && !locked(e));
+    start('move', ev, els.includes(el) ? el : (els[0] ?? null), els, click);
   };
 
   const onDown = (ev: PointerEvent) => {
@@ -231,13 +249,27 @@ export function install(app: App): void {
     const target = ev.target instanceof Element ? ev.target : null;
     if (!target) return;
     const sel = app.selection;
+    if (target === frames.rotor) {
+      const el = sel.only();
+      if (!el || locked(el)) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const r = el.getBoundingClientRect();
+      const center = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      Object.assign(start('rotate', ev, el, [el], null), { center, angle: Math.atan2(ev.clientY - center.y, ev.clientX - center.x) * 180 / Math.PI });
+      document.documentElement.classList.add('beeson-rotating');
+      return;
+    }
     const grip = target.closest('.beeson-grip');
-    if (grip && !grip.classList.contains('fixed')) {
+    if (grip && !grip.classList.contains('fixed') && !grip.classList.contains('locked')) {
       const el = sel.only();
       if (!el) return;
       ev.preventDefault();
       ev.stopPropagation();
-      Object.assign(start('resize', ev, el, [el], null), { handle: (grip as HTMLElement).dataset.handle as Handle, aspect: aspectOf(el) });
+      // the aspect of a rotated element is that of its own box, since the box seen is turned
+      const turned = placeOf(el).rotate && !el.matches('tycho-viewer');
+      const aspect = turned ? (el as HTMLElement).offsetWidth / ((el as HTMLElement).offsetHeight || 1) : aspectOf(el);
+      Object.assign(start('resize', ev, el, [el], null), { handle: (grip as HTMLElement).dataset.handle as Handle, aspect });
       document.documentElement.classList.add('beeson-resizing');
       return;
     }
@@ -308,6 +340,11 @@ export function install(app: App): void {
       resize(p, ev, dx, dy);
       return;
     }
+    if (p.kind === 'rotate') {
+      rotate(p, ev);
+      return;
+    }
+    if (!p.els.length) return;
     const lock = ev.shiftKey ? lockedAxis(dx, dy) : null;
     if (lock === 'x') dy = 0;
     if (lock === 'y') dx = 0;
@@ -339,6 +376,24 @@ export function install(app: App): void {
     const t = p.translate && (Math.round(p.translate.x) || Math.round(p.translate.y)) ? p.translate : null;
     style.translate = t ? `${Math.round(t.x)}px ${Math.round(t.y)}px` : '';
     if (el.matches(RESIZABLE)) style.width = p.width === null ? '' : `${Math.round(p.width)}px`;
+    if (p.rotate !== undefined) style.rotate = p.rotate ? `${Math.round(p.rotate)}deg` : '';
+  };
+
+  // a turn by the rotate handle about the center of the element. Shift snaps the angle to steps of
+  // 15 degrees, and the angle is shown at the pointer
+  const rotate = (p: Press, ev: PointerEvent) => {
+    const el = p.els[0];
+    const c = p.center as { x: number; y: number };
+    const now = Math.atan2(ev.clientY - c.y, ev.clientX - c.x) * 180 / Math.PI;
+    let deg = (p.from.get(el)?.rotate ?? 0) + now - (p.angle ?? 0);
+    deg = ev.shiftKey ? Math.round(deg / 15) * 15 : Math.round(deg);
+    deg = ((deg % 360) + 360) % 360;
+    writeLive(el, { ...(p.from.get(el) as Place), rotate: deg || null });
+    view.moving = [el];
+    view.resizing = true;
+    view.readout = { text: `${deg}°`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
+    frames.draw();
+    app.invalidate('content');
   };
 
   // a resize by a handle: the width is the width of the picture, and the offset is changed so that
@@ -348,12 +403,19 @@ export function install(app: App): void {
     const el = p.els[0];
     const f = frameOf(app);
     const o = { aspect: p.aspect ?? null, center: aboutCenter(ev) };
+    const deg = p.from.get(el)?.rotate ?? 0;
+    if (deg) {
+      rotatedResize(p, ev, dx, dy, deg, o);
+      return;
+    }
     let box = resizeBox(p.base, p.handle as Handle, dx, dy, o);
     view.guides = [];
+    view.spacing = [];
     if (!freeResize(ev)) {
       const snapped = snapResize(p.base, p.handle as Handle, box, targetsFor([el]), SNAP / f.scale, o);
       box = snapped.box;
       view.guides = snapped.guides;
+      view.spacing = snapped.sizes;
     }
     (el as HTMLElement).style.width = `${Math.round(box.width)}px`;
     // the offset that puts the anchor of the box seen where the resize put it
@@ -375,11 +437,41 @@ export function install(app: App): void {
     app.invalidate('content');
   };
 
+  // a resize of a rotated element, without snapping: the pointer offset is turned into the frame of
+  // the element, and the offset is changed so that the edge or corner across from the handle stays
+  // where it was on the slide
+  const rotatedResize = (p: Press, ev: PointerEvent, dx: number, dy: number, deg: number, o: { aspect: number | null; center: boolean }) => {
+    const el = p.els[0] as HTMLElement;
+    const f = frameOf(app);
+    const a = (deg * Math.PI) / 180;
+    const turn = (x: number, y: number, by: number) => ({ x: x * Math.cos(by) - y * Math.sin(by), y: x * Math.sin(by) + y * Math.cos(by) });
+    const local = turn(dx, dy, -a);
+    const from = p.from.get(el) as Place;
+    // the box of the element without its rotation at the press, about the center of the box seen
+    p.size ??= { width: el.offsetWidth, height: el.offsetHeight };
+    const cx = p.base.left + p.base.width / 2, cy = p.base.top + p.base.height / 2;
+    const base = { left: cx - p.size.width / 2, top: cy - p.size.height / 2, ...p.size };
+    const box = resizeBox(base, p.handle as Handle, local.x, local.y, o);
+    el.style.width = `${Math.round(box.width)}px`;
+    const move = turn(box.left + box.width / 2 - cx, box.top + box.height / 2 - cy, a);
+    const seen = toSlide(f, el.getBoundingClientRect());
+    const now = placeOf(el).translate ?? { x: 0, y: 0 };
+    const sx = cx + move.x - (seen.left + seen.width / 2), sy = cy + move.y - (seen.top + seen.height / 2);
+    writeLive(el, { translate: { x: now.x + sx, y: now.y + sy }, width: box.width, rotate: from.rotate });
+    view.moving = [el];
+    view.resizing = true;
+    view.guides = [];
+    view.spacing = [];
+    view.readout = { text: `${Math.round(box.width)} × ${Math.round(box.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
+    frames.draw();
+    app.invalidate('content');
+  };
+
   const onUp = (ev: PointerEvent | null) => {
     const p = press;
     if (!p) return;
     press = null;
-    document.documentElement.classList.remove('beeson-dragging', 'beeson-resizing');
+    document.documentElement.classList.remove('beeson-dragging', 'beeson-resizing', 'beeson-rotating');
     view.moving = null;
     view.resizing = false;
     view.guides = [];
@@ -397,7 +489,7 @@ export function install(app: App): void {
           writePlace(app, el, to);
           return { el, from: p.from.get(el) as Place, to };
         });
-        record(app, p.kind === 'resize' ? 'resize' : 'move', changes);
+        record(app, p.kind === 'resize' ? 'resize' : p.kind === 'rotate' ? 'rotate' : 'move', changes);
       } else if (p.moved) {
         for (const el of p.els) writeLive(el, p.from.get(el) as Place);
       } else p.click?.();
@@ -414,8 +506,15 @@ export function install(app: App): void {
     for (const el of p.els) writeLive(el, p.from.get(el) as Place);
     await app.history.transact('Duplicate', async () => {
       const copies: Element[] = [];
+      // the copies of a group are a new group
+      const groups = new Map<string, string>();
       for (const { el, box } of dropped) {
         const copy = await app.doc.duplicate(el);
+        const g = copy.getAttribute('data-group');
+        if (g) {
+          if (!groups.has(g)) groups.set(g, freshGroup(app));
+          app.doc.setTag(copy, { attrs: { 'data-group': groups.get(g)! } }, 'group');
+        }
         const now = toSlide(frameOf(app), visualRect(copy));
         const t = placeOf(copy).translate ?? { x: 0, y: 0 };
         app.doc.setTag(copy, { translate: { x: Math.round(t.x + box.left - now.left), y: Math.round(t.y + box.top - now.top) } }, 'move');

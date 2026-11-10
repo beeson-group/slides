@@ -297,6 +297,8 @@ export class Steps {
   readonly pane = make('div', 'beeson-edit-side');
   readonly badges = make('div', 'beeson-badges');
   readonly button = make('button', '', 'Steps');
+  // the place of the transition of the slide at the head of the pane, filled by review/animate.ts
+  readonly slot = make('div', 'slot');
   private readonly list = make('div', 'rows');
   private readonly detail = make('div', 'detail off');
   private readonly play = make('button', 'play');
@@ -338,7 +340,7 @@ export class Steps {
     this.list.setAttribute('role', 'group');
     this.list.setAttribute('aria-label', 'Steps of the slide');
     const foot = make('p', 'foot', 'Drag a row to change when it appears. The rows of a card appear together, at one click.');
-    this.pane.append(head, this.list, this.detail, foot);
+    this.pane.append(this.slot, head, this.list, this.detail, foot);
     this.list.addEventListener('keydown', (ev) => this.key_(ev));
   }
 

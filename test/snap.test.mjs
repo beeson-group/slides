@@ -121,5 +121,29 @@ test('a resize snaps the moved edge to a line and keeps the aspect, and the guid
   assert.deepEqual(left.box, box(120, 100, 380, 200));
   // beyond the threshold nothing snaps
   const free = resizeBox(from, 'e', 300, 0, { aspect: null, center: false });
-  assert.deepEqual(snapResize(from, 'e', free, targets, T, { aspect: null, center: false }), { box: free, guides: [] });
+  assert.deepEqual(snapResize(from, 'e', free, targets, T, { aspect: null, center: false }), { box: free, guides: [], sizes: [] });
+});
+
+test('a resize snaps the size to that of another box, and marks the boxes of equal size', () => {
+  const from = box(100, 100, 400, 200);
+  const other = box(800, 500, 450, 120);
+  const targets = { boxes: [other], slide };
+  // the width dragged to 446 is made 450, the width of the other box, with the left edge kept
+  const raw = resizeBox(from, 'e', 46, 0, { aspect: null, center: false });
+  const snapped = snapResize(from, 'e', raw, targets, T, { aspect: null, center: false });
+  assert.deepEqual(snapped.box, box(100, 100, 450, 200));
+  assert.equal(snapped.sizes.length, 1);
+  const [mark] = snapped.sizes;
+  assert.equal(mark.axis, 'x');
+  assert.deepEqual(mark.gaps.map((g) => [g.from, g.to]), [[100, 550], [800, 1250]]);
+  // each mark is drawn above its box
+  assert.deepEqual(mark.gaps.map((g) => g.at), [86, 486]);
+  // about the center, the width is matched with both edges moved
+  const center = snapResize(from, 'e', resizeBox(from, 'e', 22, 0, { aspect: null, center: true }), targets, T, { aspect: null, center: true });
+  assert.deepEqual(center.box, box(75, 100, 450, 200));
+  // a height is matched only with an aspect, since the editor writes only a width
+  const tall = box(800, 500, 300, 150);
+  const withAspect = snapResize(from, 'se', resizeBox(from, 'se', -98, -49, { aspect: 2, center: false }), { boxes: [tall], slide }, T, { aspect: 2, center: false });
+  assert.deepEqual(round(withAspect.box), box(100, 100, 300, 150));
+  assert.deepEqual(withAspect.sizes.map((s) => s.axis).sort(), ['x', 'y']);
 });
