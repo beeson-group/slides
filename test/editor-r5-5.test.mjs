@@ -304,7 +304,7 @@ for (const platform of PLATFORMS) {
       assert.ok(menu.left >= 0 && menu.top >= 0 && menu.right <= width && menu.bottom <= height, 'the menu runs out of the window');
       // the menu is level with the head row, at its side
       const head = await page.evaluate(`(() => { const r = document.querySelector('.beeson-edit-side .list-head').getBoundingClientRect(); return { top: r.top, bottom: r.bottom }; })()`);
-      assert.ok(menu.top <= head.bottom && menu.bottom >= head.top, 'the menu is not level with its row');
+      assert.ok(menu.top <= head.bottom && menu.bottom >= head.top, `the menu is not level with its row: ${JSON.stringify([menu, head])}`);
       await press(page, 'Escape');
       assert.deepEqual(errors(page), []);
     });
