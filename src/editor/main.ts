@@ -44,6 +44,7 @@ import { install as installNavigateCommands } from './commands/navigate.ts';
 import { install as installArrangeCommands } from './commands/arrange.ts';
 import { install as installSlideCommands } from './commands/slide.ts';
 import { install as installDeleteCommands } from './commands/delete.ts';
+import { install as installFindCommands } from './commands/find.ts';
 import { Doc } from './model/doc.ts';
 
 const app = new App();
@@ -129,6 +130,7 @@ installNavigator(app);
 installThumbs(app);
 installSlideCommands(app);
 installDeleteCommands(app);
+installFindCommands(app);
 
 const revealReady = (): Promise<void> =>
   new Promise((done) => {
