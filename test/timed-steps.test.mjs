@@ -123,3 +123,45 @@ test('the restore step of a slide without a delay on its last step waits for a k
   assert.deepEqual(await settled(page), { slide: 2, shown: [] });
   assert.deepEqual(page.errors, []);
 });
+
+test('a key during a delay shows the next step at once, the later delays still play, and Back lands on the step of the key', async (t) => {
+  const page = await open(t);
+  await press(page, 'ArrowRight');
+  assert.deepEqual(await settled(page), { slide: 1, shown: [] });
+  await press(page, 'ArrowRight');
+  await press(page, 'ArrowRight');
+  assert.deepEqual(await settled(page), { slide: 1, shown: ALL });
+  // the second step was reached by the key, and its delay is not started again
+  await press(page, 'ArrowLeft');
+  assert.deepEqual(await settled(page), { slide: 1, shown: ['Click', 'Timed one'] });
+  await press(page, 'ArrowLeft');
+  assert.deepEqual(await settled(page), { slide: 1, shown: ['Click'] });
+  assert.deepEqual(page.errors, []);
+});
+
+// a remote sends PageDown, and the space bar moves the talk on as well. reveal.js pauses every
+// later delay of the talk at such a key by default
+test('the keys of a remote during the delay of the last step go on to the next slide, whose delay still plays', async (t) => {
+  const page = await open(t);
+  await page.evaluate('Reveal.slide(4)');
+  await press(page, 'PageDown');
+  await press(page, 'PageDown');
+  await press(page, 'Space');
+  assert.deepEqual(await settled(page), { slide: 5, shown: [] });
+  await press(page, 'PageDown');
+  assert.deepEqual(await settled(page), { slide: 5, shown: ['Later', 'Later timed'] });
+  assert.deepEqual(page.errors, []);
+});
+
+test('the key A pauses the delays, which stay paused through the steps of the keys, and A again plays them', async (t) => {
+  const page = await open(t);
+  await press(page, 'ArrowRight');
+  await press(page, 'ArrowRight');
+  await press(page, 'A');
+  assert.deepEqual(await settled(page), { slide: 1, shown: ['Click'] });
+  await press(page, 'ArrowRight');
+  assert.deepEqual(await settled(page), { slide: 1, shown: ['Click', 'Timed one'] });
+  await press(page, 'A');
+  assert.deepEqual(await settled(page), { slide: 1, shown: ALL });
+  assert.deepEqual(page.errors, []);
+});
