@@ -37,6 +37,8 @@ const PANES: Pane[] = [
     },
   },
   { name: 'notes', el: (app) => (app.notes.shown() ? app.notes.ensure() : null), enter: (_, el) => (el as HTMLElement).focus() },
+  // the accessibility pane of review/accessibility.ts, at the right of the canvas
+  { name: 'accessibility', el: () => document.querySelector('.beeson-edit-a11y:not([hidden])'), enter: first },
   // the focus goes to the tab of the panel shown, from which Tab reaches its controls, since a
   // first control that is a field would take the keys of the inspector
   {

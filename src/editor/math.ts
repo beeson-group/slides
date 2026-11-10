@@ -232,6 +232,34 @@ export function isName(name: string, macros: Macro[]): boolean {
   return macros.some((m) => m.name === name) || COMMANDS.some(([n]) => n === name);
 }
 
+// the TeX that draws the glyph of a command of TeX in the completion list, where the command with
+// an x for each argument does not draw it, or null for a command without a glyph of its own
+const SAMPLES: Record<string, string | null> = {
+  frac: '\\frac{a}{b}', class: null, text: '\\text{ab}', operatorname: '\\operatorname{op}', mathrm: '\\mathrm{d}',
+  mathbf: '\\mathbf{v}', mathcal: '\\mathcal{L}', mathbb: '\\mathbb{R}', boldsymbol: '\\boldsymbol{\\mu}',
+  left: '\\left(\\,\\right.', right: '\\left.\\,\\right)', quad: '|\\quad|', qquad: '|\\qquad|', begin: null, end: null,
+};
+
+export function sampleTex(m: Macro): string | null {
+  if (!m.deck && Object.hasOwn(SAMPLES, m.name)) return SAMPLES[m.name];
+  return `\\${m.name}${'{x}'.repeat(m.args)}`;
+}
+
+// the glyph of a completion, typeset once by MathJax and kept for every later list, or null where
+// MathJax is not loaded or does not typeset its sample
+const glyphs = new Map<string, Promise<Element | null>>();
+
+export function glyphOf(m: Macro): Promise<Element | null> {
+  const tex = sampleTex(m);
+  if (tex === null) return Promise.resolve(null);
+  let out = glyphs.get(tex);
+  if (!out) {
+    out = previewTex(tex, false).then((r) => (r.error ? null : r.node), () => null);
+    glyphs.set(tex, out);
+  }
+  return out;
+}
+
 // the text that a completion writes, with a pair of braces for each argument, and the offset of
 // the caret in it, which is inside the first pair
 export function completionText(m: Macro): { text: string; caret: number } {

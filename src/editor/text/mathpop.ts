@@ -7,7 +7,7 @@
 // inspector. openInsert opens the sheet for an inline formula at the caret of a text
 
 import { HOST, type App, type MathPop } from '../app.ts';
-import { completionText, completions, contentWithInline, contentWithTex, deckMacros, isName, mathLookup, previewTex, type Macro } from '../math.ts';
+import { completionText, completions, contentWithInline, contentWithTex, deckMacros, glyphOf, isName, mathLookup, previewTex, type Macro } from '../math.ts';
 import { keepBeside, type Side } from '../ui/dialog.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 
@@ -33,6 +33,8 @@ const CSS = `
 .beeson-complete { position: fixed; z-index: 90; min-width: 220px; max-width: 360px; margin: 0; padding: 4px; list-style: none; border: 1px solid var(--ed-menu-line, #555); border-radius: 8px; background: var(--ed-menu, #2c2c2e); color: var(--ed-text, #eee); font: 12px/1.3 var(--ed-font, system-ui, sans-serif); box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
 .beeson-complete li { display: flex; align-items: baseline; gap: 10px; padding: 4px 8px; border-radius: 5px; cursor: default; white-space: nowrap; }
 .beeson-complete li[aria-selected="true"] { background: var(--ed-select, #96f); color: var(--ed-on-select, #fff); }
+.beeson-complete .glyph { flex: 0 0 30px; align-self: center; display: flex; align-items: center; justify-content: center; height: 22px; overflow: hidden; font-size: 13px; }
+.beeson-complete .glyph svg { max-width: 30px; max-height: 22px; }
 .beeson-complete .name { font: 12px/1.3 ui-monospace, Menlo, Consolas, monospace; }
 .beeson-complete .args { color: var(--ed-faint, #888); }
 .beeson-complete .what { margin-left: auto; overflow: hidden; text-overflow: ellipsis; color: var(--ed-muted, #999); font-size: 11px; }
@@ -111,7 +113,15 @@ export function attachCompletion(field: HTMLTextAreaElement): void {
       const li = make('li');
       li.id = `${list.id}-${i}`;
       li.setAttribute('role', 'option');
-      li.append(make('span', 'name', `\\${it.name}`));
+      // the glyph of the command, as in the math autocomplete list of PowerPoint, is filled in once
+      // MathJax has typeset it, and from the cache of glyphOf in every later list
+      const shown = make('span', 'glyph');
+      shown.setAttribute('aria-hidden', 'true');
+      void glyphOf(it).then((g) => {
+        const svg = g?.querySelector('svg');
+        if (svg && li.isConnected) shown.replaceChildren(svg.cloneNode(true));
+      });
+      li.append(shown, make('span', 'name', `\\${it.name}`));
       if (it.args) li.append(make('span', 'args', '{…}'.repeat(it.args)));
       li.append(make('span', 'what', it.deck ? `deck macro${it.body ? `, ${it.body}` : ''}` : 'TeX'));
       li.addEventListener('pointerdown', (ev) => {

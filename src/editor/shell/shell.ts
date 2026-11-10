@@ -1,5 +1,7 @@
 // the grid of the window: the menu bar and the toolbar in the header, the navigator at the left,
-// the canvas with the notes under it, the inspector at the right, and the status bar. the chrome
+// the canvas with the notes under it, the accessibility pane while it is docked, the inspector at
+// the right, and the status bar. Slide Only of the View menu hides the navigator and the
+// inspector together, as in Keynote. the chrome
 // is painted in tokens of its own, which follow prefers-color-scheme and not the mode of the deck,
 // hence D flips only the slide. the regions are put into the order of the DOM in which Tab and F6
 // reach them, and the shell also holds the inspector with its tabs Format and Steps, the edge
@@ -28,15 +30,18 @@ const TOKENS_DARK = `--ed-bg: #2b2b2d; --ed-panel: #232325; --ed-text: #ececee; 
 const CHROME = 'html.beeson-editor .beeson-edit-header, html.beeson-editor .beeson-edit-inspector, html.beeson-editor .beeson-edit-bottom, html.beeson-editor .beeson-edit-pane, html.beeson-editor dialog.beeson-edit-card, html.beeson-editor .beeson-edit-menus';
 
 const CSS = `
-html.beeson-editor { ${TOKENS_LIGHT} --ed-nav-col: 0px; --ed-insp-col: 0px; --ed-notes-row: 0px; --ed-font: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif; }
+html.beeson-editor { ${TOKENS_LIGHT} --ed-nav-col: 0px; --ed-insp-col: 0px; --ed-a11y-col: 0px; --ed-notes-row: 0px; --ed-font: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif; }
 @media (prefers-color-scheme: dark) { html.beeson-editor { ${TOKENS_DARK} } }
 html.beeson-editor.beeson-nav { --ed-nav-col: var(--ed-nav-w, ${NAV_DEFAULT}px); }
 html.beeson-editor.beeson-steps, html.beeson-editor.beeson-format { --ed-insp-col: 288px; }
+html.beeson-editor.beeson-a11y { --ed-a11y-col: min(300px, 30vw); }
 html.beeson-editor.beeson-notes { --ed-notes-row: var(--beeson-pane, 200px); }
 ${CHROME} { --bg: var(--ed-panel); --text: var(--ed-text); --subtle: var(--ed-muted); --muted: var(--ed-muted); --line: var(--ed-line); --violet: var(--ed-select); --accent: var(--ed-guide); }
-html.beeson-editor body.reveal-viewport { display: grid !important; grid-template-columns: var(--ed-nav-col) minmax(0, 1fr) var(--ed-insp-col); grid-template-rows: auto minmax(0, 1fr) var(--ed-notes-row) 28px; grid-template-areas: "top top top" "nav canvas insp" "nav notes insp" "status status status"; width: 100vw; height: 100vh; height: 100dvh; margin: 0; overflow: hidden; color: var(--ed-text); font: 12px/1.35 var(--ed-font); }
+html.beeson-editor body.reveal-viewport { display: grid !important; grid-template-columns: var(--ed-nav-col) minmax(0, 1fr) var(--ed-a11y-col) var(--ed-insp-col); grid-template-rows: auto minmax(0, 1fr) var(--ed-notes-row) 28px; grid-template-areas: "top top top top" "nav canvas a11y insp" "nav notes a11y insp" "status status status status"; width: 100vw; height: 100vh; height: 100dvh; margin: 0; overflow: hidden; color: var(--ed-text); font: 12px/1.35 var(--ed-font); }
 html.beeson-editor body > * { grid-area: canvas; }
 html.beeson-editor body > .beeson-edit-bottom { grid-area: status; }
+html.beeson-editor body > .beeson-edit-a11y { grid-area: a11y; }
+html.beeson-editor.beeson-a11y .beeson-edit-resize { right: calc(var(--ed-insp-col) + var(--ed-a11y-col)); }
 html.beeson-editor body > .beeson-edit-header { grid-area: top; position: relative; z-index: 60; display: flex; flex-direction: column; background: var(--ed-bg); border-bottom: 1px solid var(--ed-line); }
 html.beeson-editor body > .beeson-edit-nav { grid-area: nav; position: relative; inset: auto; width: auto; min-width: 0; min-height: 0; z-index: 50; background: var(--ed-panel); border-right: 1px solid var(--ed-line); color: var(--ed-text); font: 12px/1.4 var(--ed-font); }
 html.beeson-editor body > .beeson-edit-nav-edge { grid-area: nav; justify-self: end; position: relative; z-index: 55; width: 7px; margin-right: -4px; display: none; cursor: ew-resize; touch-action: none; }
@@ -195,6 +200,35 @@ export function install(app: App): void {
     run: () => setFormat(!format),
     menu: { bar: 'View', group: 'panes', order: 13 },
     toolbar: { group: 'inspector', order: 60, icon: 'format' },
+  });
+
+  // view.slideOnly is Slide Only of the View menu of Keynote. it hides the navigator and the
+  // inspector together, and a second run shows them again as kept, or else the navigator and the
+  // Format tab. it is checked while both are hidden, and it closes the light table
+  let viewKept: { nav: boolean; tab: 'format' | 'steps' | null } | null = null;
+  const slideOnly = () => !app.nav.shown && !format && !app.steps.shown;
+  app.commands.define({
+    id: 'view.slideOnly',
+    label: 'Slide Only',
+    menu: { bar: 'View', group: 'panes', order: 10.2 },
+    checked: slideOnly,
+    run: async () => {
+      if (slideOnly()) {
+        const was = viewKept ?? { nav: true, tab: 'format' };
+        viewKept = null;
+        if (was.nav) app.nav.toggle();
+        if (was.tab === 'format') setFormat(true);
+        else if (was.tab === 'steps') app.steps.toggle();
+        app.relayout();
+        return;
+      }
+      viewKept = { nav: app.nav.shown, tab: app.steps.shown ? 'steps' : format ? 'format' : null };
+      if (app.commands.get('view.lightTable') && app.commands.state('view.lightTable').checked) await app.commands.run('view.lightTable');
+      if (app.nav.shown) app.nav.toggle();
+      if (app.steps.shown) app.steps.toggle();
+      if (format) setFormat(false);
+      app.relayout();
+    },
   });
 
   queueMicrotask(() => {
