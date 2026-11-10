@@ -169,6 +169,25 @@ export function lineEnds(svg: Element): [{ x: number; y: number }, { x: number; 
   return [at(n('x1'), n('y1')), at(n('x2'), n('y2'))];
 }
 
+// the ends and the middle of each line of the current slide outside skip, in slide pixels, which a
+// drag snaps to
+export function linePoints(app: App, skip: Element[] = []): { x: number; y: number }[] {
+  const f = frameOf(app);
+  return linesOf(app).filter((svg) => !skip.includes(svg)).flatMap((svg) => {
+    const [a, b] = lineEnds(svg).map((p) => ({ x: (p.x - f.left) / f.scale, y: (p.y - f.top) / f.scale }));
+    return [a, b, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }];
+  });
+}
+
+// the box that a drag of el snaps by, in slide pixels: the box of the ends of a line, whose edges
+// and center are its ends and its middle, and the box of the picture of any other element
+export function snapBoxOf(app: App, el: Element): Box {
+  const f = frameOf(app);
+  if (!el.matches(LINE)) return toSlide(f, visualRect(el));
+  const [a, b] = lineEnds(el);
+  return toSlide(f, { left: Math.min(a.x, b.x), top: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) });
+}
+
 // whether the segment from a to b has a point in box, by the clip of Liang and Barsky
 export function segmentTouches(a: { x: number; y: number }, b: { x: number; y: number }, box: Box): boolean {
   let t0 = 0, t1 = 1;

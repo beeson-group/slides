@@ -10,7 +10,7 @@ import type { App } from '../app.ts';
 import type { TagEdit, Translate } from '../tags.ts';
 import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
-import { BY_ITSELF, RESIZABLE, aspectOf, bandAt, containerOf, frameOf, hasText, lineEnds, linesOf, mediaIn, movableOf, movablesOf, onCanvas, orientedBox, pictureOf, segmentTouches, sizedOf, toSlide, visualRect } from './hit.ts';
+import { BY_ITSELF, RESIZABLE, aspectOf, bandAt, containerOf, frameOf, hasText, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, onCanvas, orientedBox, pictureOf, segmentTouches, sizedOf, snapBoxOf, toSlide, visualRect } from './hit.ts';
 import { overlay, view } from './frames.ts';
 import { freshGroup } from '../commands/order.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -217,6 +217,7 @@ export function install(app: App): void {
     return {
       boxes: others.map((o) => toSlide(f, visualRect(o))).filter((b) => b.width > 0 && b.height > 0),
       frames: frames_,
+      points: linePoints(app, els),
       slide: { width: slides.offsetWidth || 1920, height: slides.offsetHeight || 1080 },
       layout: LAYOUT_GUIDES,
     };
@@ -227,7 +228,7 @@ export function install(app: App): void {
     const p: Press = {
       kind, x: ev.clientX, y: ev.clientY, moved: false, el, els, click,
       from: new Map(els.map((e) => [e, placeOf(e)])),
-      base: els.length ? union(els.map((e) => toSlide(f, visualRect(e)))) : { left: 0, top: 0, width: 0, height: 0 },
+      base: els.length ? union(els.map((e) => snapBoxOf(app, e))) : { left: 0, top: 0, width: 0, height: 0 },
     };
     press = p;
     view.hover = null;

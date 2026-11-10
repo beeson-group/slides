@@ -9,7 +9,7 @@
 import type { App } from '../app.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { overlay, view } from '../canvas/frames.ts';
-import { frameOf, movablesOf, onCanvas, toSlide, visualRect, type Frame } from '../canvas/hit.ts';
+import { frameOf, linePoints, movablesOf, onCanvas, snapBoxOf, toSlide, visualRect, type Frame } from '../canvas/hit.ts';
 import { LAYOUT_GUIDES, snapMove, snapPoint, type Box, type Targets } from '../canvas/snap.ts';
 import { locked, placeOf, record, writePlace, type Place } from '../canvas/drag.ts';
 
@@ -186,6 +186,7 @@ export function install(app: App): void {
     const slides = app.slides() as HTMLElement;
     return {
       boxes: movablesOf(app).filter((o) => !skip.includes(o)).map((o) => toSlide(f, visualRect(o))).filter((b) => b.width > 0 && b.height > 0),
+      points: linePoints(app, skip),
       slide: { width: slides.offsetWidth || 1920, height: slides.offsetHeight || 1080 },
       layout: LAYOUT_GUIDES,
     };
@@ -344,8 +345,7 @@ export function install(app: App): void {
       if (sel.elements().length > 1) click = () => sel.set('elements', [svg]);
     } else sel.set('elements', [svg]);
     const els = sel.elements().filter((e) => !sel.elements().some((o) => o !== e && o.contains(e)) && !locked(e));
-    const f = frameOf(app);
-    const boxes = els.map((e) => toSlide(f, visualRect(e)));
+    const boxes = els.map((e) => snapBoxOf(app, e));
     const left = Math.min(...boxes.map((b) => b.left)), top = Math.min(...boxes.map((b) => b.top));
     const base = { left, top, width: Math.max(...boxes.map((b) => b.left + b.width)) - left, height: Math.max(...boxes.map((b) => b.top + b.height)) - top };
     press = { kind: 'move', svg, els, places: new Map(els.map((e) => [e, placeOf(e)])), base, x: at.x, y: at.y, moved: false, click };

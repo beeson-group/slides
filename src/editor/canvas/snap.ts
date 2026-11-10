@@ -19,6 +19,8 @@ export type Targets = {
   boxes: Box[];
   // boxes whose edges are lines but which are not neighbors, e.g. the zone around an image
   frames?: Box[];
+  // points that are lines on both axes, e.g. the ends and the middle of a line of commands/line.ts
+  points?: { x: number; y: number }[];
   slide: { width: number; height: number };
   layout?: { x: number[]; y: number[] };
   // the guides placed by hand on the slide, and the spacing of the grid, or null without a snap to
@@ -66,6 +68,7 @@ function linesOf(targets: Targets, axis: Axis): Line[] {
   const grid = targets.grid === undefined ? more.grid : targets.grid;
   if (grid && grid >= 1) for (let at = grid; at < extent; at += grid) lines.push({ at, kind: 'grid', box: null });
   for (const box of [...targets.boxes, ...(targets.frames ?? [])]) for (const at of edgesOf(box, axis)) lines.push({ at, kind: 'element', box });
+  for (const p of targets.points ?? []) lines.push({ at: axis === 'x' ? p.x : p.y, kind: 'element', box: { left: p.x, top: p.y, width: 0, height: 0 } });
   return lines;
 }
 
