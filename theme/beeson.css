@@ -163,6 +163,14 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal a:hover { color: var(--accent); }
 .reveal sub, .reveal sup { font-size: 0.7em; line-height: 0; }
 
+/* words in a color of the palette, set with Text Color of the editor */
+.reveal .tone-accent { color: var(--accent); }
+.reveal .tone-violet { color: var(--violet); }
+.reveal .tone-blue { color: var(--blue); }
+.reveal .tone-red { color: var(--red); }
+.reveal .tone-subtle { color: var(--subtle); }
+.reveal .tone-muted { color: var(--muted); }
+
 /* lists: a short orange dash in place of a bullet, numbers in gray */
 .reveal ul, .reveal ol { display: block; margin: 24px 0 0; padding: 0; list-style: none; }
 .reveal li { position: relative; margin: 0 0 14px; padding-left: 54px; }
