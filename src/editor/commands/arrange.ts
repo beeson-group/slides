@@ -189,11 +189,11 @@ export function commands(): Command[] {
       label: 'Reset Size',
       menu: { bar: 'Arrange', group: 'reset', order: 11 },
       context: ['element'],
-      enabled: (app) => app.selection.elements().some((el) => placeOf(el).width !== null),
+      enabled: (app) => app.selection.elements().some((el) => placeOf(el).width !== null || (placeOf(el).height ?? null) !== null),
       run: (app) => {
         const changes = app.selection.elements().map((el) => {
           const from = placeOf(el);
-          const to = { ...from, width: null };
+          const to = { ...from, width: null, ...(from.height !== undefined ? { height: null } : {}) };
           writePlace(app, el, to);
           return { el, from, to };
         });

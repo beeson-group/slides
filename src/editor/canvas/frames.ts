@@ -11,7 +11,7 @@ import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
 import { injectStyle } from '../ui/dom.ts';
 import type { Box, Guide, Handle, Spacing } from './snap.ts';
-import { BY_ITSELF, CONTAINER, RESIZABLE, frameOf, movableOf, orientedBox, pictureOf, sizedOf, toScreen, visualRect } from './hit.ts';
+import { BY_ITSELF, CONTAINER, RESIZABLE, frameOf, isTextSized, movableOf, orientedBox, pictureOf, sizedOf, toScreen, visualRect } from './hit.ts';
 
 export const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 
@@ -174,8 +174,9 @@ export class Frames {
   }
 
   // the resize handles of a selected element, drawn on each element of a multiple selection as in
-  // Keynote and PowerPoint: live on an image, a video, a QR code, a viewer, and a figure that holds
-  // one of them, none on a block of text or on another figure, and crosses on a locked element
+  // Keynote and PowerPoint: live on an image, a video, a QR code, a viewer, a figure that holds one
+  // of them, and a text block, whose grips set its width, none on another figure, and crosses on a
+  // locked element
   gripsOf(el: Element | null): 'live' | 'locked' | null {
     if (!el || !this.app.selection.elements().includes(el)) return null;
     if (el.hasAttribute('data-locked')) return 'locked';
@@ -218,10 +219,11 @@ export class Frames {
     this.members = this.gripSets.map((_, n) => gripped[n]?.el ?? null);
     this.gripSets.forEach((set, n) => {
       const m = gripped[n];
-      const tycho = !!m?.el.matches('tycho-viewer');
+      // a viewer keeps the height of its layout, and a text block the height of its wrapped text
+      const level = !!m && (m.el.matches('tycho-viewer') || isTextSized(m.el));
       for (const h of HANDLES) {
         const g = set[h];
-        if (!m || (tycho && (h === 'n' || h === 's'))) {
+        if (!m || (level && (h === 'n' || h === 's'))) {
           g.hidden = true;
           continue;
         }
@@ -248,8 +250,9 @@ export class Frames {
     const framed = hot && selected.includes(hot);
     this.hoverFrame.hidden = !hot || !!framed || !!view.moving;
     if (hot && !framed && !view.moving) place(this.hoverFrame, grow(visualRect(pictureOf(hot)), 6));
-    // a figure is dragged by itself, as in Keynote, and a viewer, which a drag turns, by its handle
-    this.handle.hidden = !hot || (hot.matches(BY_ITSELF) && !hot.matches('tycho-viewer')) || !!this.gripsOf(hot);
+    // a figure is dragged by itself, as in Keynote, and a viewer, which a drag turns, and a text
+    // block, whose text a press edits, by its handle
+    this.handle.hidden = !hot || (hot.matches(BY_ITSELF) && !hot.matches('tycho-viewer')) || (!!this.gripsOf(hot) && !isTextSized(hot));
     if (!this.handle.hidden && hot) {
       const r = hot.getBoundingClientRect();
       Object.assign(this.handle.style, { left: `${r.left - 24}px`, top: `${r.top - 24}px` });

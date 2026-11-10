@@ -252,9 +252,10 @@ for (const size of [{ width: 1920, height: 1080 }, { width: 1280, height: 800 }]
       const scale = await page.evaluate(`(() => { const s = document.querySelector('.reveal .slides'); return s.getBoundingClientRect().width / s.offsetWidth; })()`);
       const p = await boxOf(page, P);
       const left = (await page.evaluate(`document.querySelector(${JSON.stringify(P)}).offsetLeft`));
-      // the left edge is dragged to 3 slide px right of the guide at 1200
+      // the left edge is dragged to 3 slide px right of the guide at 1200, by the frame above the
+      // grip e of the selected paragraph
       const dx = (1203 - left) * scale;
-      const at = { x: p.right + 3, y: (p.top + p.bottom) / 2 };
+      const at = { x: p.right + 3, y: p.top + (p.bottom - p.top) / 5 };
       await drag(page, at, { dx });
       const snapped = await translates(page, [P]);
       assert.equal(parseFloat(snapped[0]) + left, 1200, `the left edge is not snapped to 1200: ${snapped[0]}`);

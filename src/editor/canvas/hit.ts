@@ -6,6 +6,7 @@
 import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
 import type { Box } from './snap.ts';
+import { stored } from '../ui/dom.ts';
 
 // the outermost of these elements under the pointer is moved, outside the notes and the backdrop
 export const MOVABLE = 'h1, h2, h3, p, ul, ol, dl, table, pre, blockquote, div.math, .caption, .foot, img, video, figure, .zone, .plate, .qr, tycho-viewer';
@@ -15,6 +16,11 @@ export const BY_ITSELF = 'img, video, figure, .zone, .plate, .qr';
 export const OUTSIDE = 'aside.notes, .backdrop';
 // the elements whose width the editor writes, by the scope rule of the plan
 export const RESIZABLE = 'img, video, .qr, tycho-viewer';
+// the text blocks whose width their grips set, as a text box of Keynote and PowerPoint, with the
+// height set by their wrapped text
+export const TEXT_SIZED = 'h1, h2, h3, p, ul, ol, div.math, .caption';
+// the pictures whose height the editor writes as well, which a resize stretches
+export const STRETCHED = 'img, video';
 // a figure whose size is set by its layout. its grips resize the image, video, or QR code that it
 // holds, and a figure that does not hold one is drawn without grips
 export const CONTAINER = 'figure, .zone, .plate';
@@ -104,18 +110,41 @@ export function orientedBox(el: Element, scale: number, deg: number): Box {
 }
 
 // the ratio of width to height that a resize of el keeps: the picture of an image or a video, and
-// the box of a QR code. a tycho viewer keeps its height, hence it does not have one
+// the box of a QR code. a tycho viewer keeps its height and a text block its wrapped text, hence
+// neither has one
 export function aspectOf(el: Element): number | null {
-  if (el.matches('tycho-viewer')) return null;
+  if (el.matches('tycho-viewer') || isTextSized(el)) return null;
   const p = pictureIn(el);
   return p.width && p.height ? p.width / p.height : null;
 }
 
-// the elements whose width a resize of el writes: el itself, or the images, videos, and QR codes
-// that a figure holds, e.g. the image of each mode. a figure that holds two shown pictures, or
-// none, is not resized
+// whether el is a text block whose width is set by its grips
+export const isTextSized = (el: Element): boolean => el.matches(TEXT_SIZED) && !el.matches(RESIZABLE);
+
+// the kind of a picture, by which the switch Constrain Proportions is kept in the browser
+export const kindOf = (el: Element): string => (el.matches('img') ? 'image' : el.matches('video') ? 'video' : el.matches('.qr') ? 'qr' : 'viewer');
+
+// whether a resize of the picture el keeps its aspect: the switch of its kind for an image or a
+// video, on by default, and else whenever it has an aspect, since its height then follows its
+// width. a QR code thus keeps its square, and a viewer keeps the height of its layout
+export function constrained(el: Element): boolean {
+  if (!el.matches(STRETCHED)) return aspectOf(el) !== null;
+  return (stored(`beeson-edit-constrain-${kindOf(el)}`) ?? 'on') === 'on';
+}
+
+// the width in the style of el that gives it the border box of width w, in slide pixels
+export function cssWidth(el: Element, w: number): number {
+  const s = getComputedStyle(el);
+  if (s.boxSizing === 'border-box') return w;
+  const n = (v: string) => parseFloat(v) || 0;
+  return w - n(s.paddingLeft) - n(s.paddingRight) - n(s.borderLeftWidth) - n(s.borderRightWidth);
+}
+
+// the elements whose width a resize of el writes: el itself, a text block, or the images, videos,
+// and QR codes that a figure holds, e.g. the image of each mode. a figure that holds two shown
+// pictures, or none, is not resized
 export function sizedOf(el: Element): Element[] {
-  if (el.matches(RESIZABLE)) return [el];
+  if (el.matches(RESIZABLE) || isTextSized(el)) return [el];
   if (!el.matches(CONTAINER)) return [];
   const held = [...el.querySelectorAll(RESIZABLE)].filter((m) => m.parentElement?.closest(MOVABLE) === el);
   return held.filter((m) => m.getBoundingClientRect().width > 0).length === 1 ? held : [];

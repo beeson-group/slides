@@ -242,9 +242,11 @@ export function checkbox(app: App, run: Run, command: string, text: string, chec
   input.dataset.command = command;
   el.append(input, make('span', '', text));
   keepFocus(el);
+  // the browser puts back the old check of a cancelled click after its listeners, hence the box
+  // is synced once the click is over, for a command that does not refresh the pane
   el.addEventListener('click', (ev) => {
     ev.preventDefault();
-    if (!input.disabled) void run(command);
+    if (!input.disabled) void Promise.resolve(run(command)).then(() => setTimeout(sync));
   });
   const sync = () => {
     const s = stateOf(app, command);

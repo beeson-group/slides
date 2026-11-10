@@ -407,3 +407,182 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the shown grips of the first selected element by their handle, as screen points, the switch
+// Constrain Proportions of the Arrange pane, and the scale from slide px to screen px
+const gripsAt = (page) => page.evaluate(`Object.fromEntries([...document.querySelectorAll('.beeson-grip[data-member="0"]')].filter((g) => !g.hidden).map((g) => { const r = g.getBoundingClientRect(); return [g.dataset.handle, { x: r.left + r.width / 2, y: r.top + r.height / 2 }]; }))`);
+const constrainSwitch = (page) => page.evaluate(`(() => {
+  const l = [...document.querySelectorAll('${PANEL} label.ed-check')].find((l) => l.textContent.trim() === 'Constrain Proportions');
+  const i = l?.querySelector('input');
+  return i ? { checked: i.checked, disabled: i.disabled } : null;
+})()`);
+const toggleConstrain = async (page) => {
+  const at = await page.evaluate(`(() => { const l = [...document.querySelectorAll('${PANEL} label.ed-check')].find((l) => l.textContent.trim() === 'Constrain Proportions'); const r = l.querySelector('input').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  await click(page, at);
+  await frames(page);
+};
+const scaleOf = async (page) => (await screen(page, 1, 0)).x - (await screen(page, 0, 0)).x;
+const fitOf = (page, selector) => page.evaluate(`getComputedStyle([...document.querySelectorAll(${JSON.stringify(selector)})].find((e) => e.getBoundingClientRect().width)).objectFit`);
+const SPLIT = SECTIONS.findIndex((s) => s.includes('<h2>A split slide</h2>'));
+const IMG_STYLE = (style) => new RegExp(`<img class="for-dark"[^>]* style="${style}">`);
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: with Constrain Proportions off, a side grip and the field H stretch an image, whose height is written`, async () => {
+    let page = await editor(platform);
+    await selectZoneImage(page);
+    await arrange(page);
+    assert.deepEqual(await constrainSwitch(page), { checked: true, disabled: false }, 'the switch of an image is not on and free');
+    await toggleConstrain(page);
+    assert.deepEqual(await constrainSwitch(page), { checked: false, disabled: false }, 'a click does not turn the switch off');
+    assert.equal(await render(page), page.source, 'the switch writes into the file');
+    const k = await scaleOf(page);
+    // the picture of 600 by 720 is narrowed by 100 with its grip e, and keeps its height
+    await drag(page, (await gripsAt(page)).e, { dx: -100 * k });
+    await frames(page);
+    let box = await slideBox(page, ZONE_IMG);
+    assert.ok(near(box.width, 500) && near(box.height, 720), `the image stretched by its grip e is drawn at ${Math.round(box.width)} by ${Math.round(box.height)}`);
+    assert.equal(await fitOf(page, ZONE_IMG), 'fill', 'the stretched picture is fitted in its box, not stretched to it');
+    let edited = await render(page);
+    assert.match(edited, IMG_STYLE('width: 500px; height: 720px(; translate: [^"]+)?'), 'the width and the height are not written on the image');
+    assert.deepEqual(await sizeFields(page), { w: '500', h: '720', wOff: false, hOff: false });
+    await roundTrip(page, edited);
+
+    // the field H with the switch off sets the height alone
+    page = await editor(platform);
+    await selectZoneImage(page);
+    await arrange(page);
+    await toggleConstrain(page);
+    await setField(page, 'height', 400);
+    box = await slideBox(page, ZONE_IMG);
+    assert.ok(near(box.width, 600) && near(box.height, 400), `the image of height 400 is drawn at ${Math.round(box.width)} by ${Math.round(box.height)}`);
+    edited = await render(page);
+    assert.match(edited, IMG_STYLE('width: 600px; height: 400px(; translate: [^"]+)?'));
+    await roundTrip(page, edited);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`${platform}: with Constrain Proportions on, a corner grip and W and H keep the aspect, and Shift on a corner frees it`, async () => {
+    let page = await editor(platform);
+    await selectZoneImage(page);
+    await arrange(page);
+    const k = await scaleOf(page);
+    await drag(page, (await gripsAt(page)).se, { dx: -100 * k, dy: -20 * k });
+    await frames(page);
+    let box = await slideBox(page, ZONE_IMG);
+    assert.ok(near(box.width / box.height, 600 / 720, 0.01), `the corner grip changes the aspect to ${Math.round(box.width)} by ${Math.round(box.height)}`);
+    let edited = await render(page);
+    assert.match(edited, IMG_STYLE('width: \\d+px; translate: [^"]+'), 'a height is written by a resize that keeps the aspect');
+    await roundTrip(page, edited);
+
+    // Shift on a corner frees the aspect, and then the side grip e and the field W keep the aspect
+    // that the stretched image has
+    page = await editor(platform);
+    await selectZoneImage(page);
+    await arrange(page);
+    await drag(page, (await gripsAt(page)).se, { dx: -100 * k, dy: -120 * k, modifiers: 'Shift' });
+    await frames(page);
+    box = await slideBox(page, ZONE_IMG);
+    assert.ok(near(box.width, 500, 3) && near(box.height, 600, 3), `the corner grip with Shift draws the image at ${Math.round(box.width)} by ${Math.round(box.height)}, not at 500 by 600`);
+    edited = await render(page);
+    assert.match(edited, IMG_STYLE('width: \\d+px; height: \\d+px; translate: [^"]+'), 'the height of an image stretched with Shift is not written');
+    const aspect = box.width / box.height;
+    await drag(page, (await gripsAt(page)).e, { dx: -100 * k });
+    await frames(page);
+    box = await slideBox(page, ZONE_IMG);
+    assert.ok(near(box.width / box.height, aspect, 0.01), `the grip e of a stretched image changes its aspect from ${aspect.toFixed(3)} to ${(box.width / box.height).toFixed(3)}`);
+    await setField(page, 'width', 200);
+    box = await slideBox(page, ZONE_IMG);
+    assert.ok(near(box.width, 200) && near(box.height, 200 / aspect), `the field W of a stretched image draws it at ${Math.round(box.width)} by ${Math.round(box.height)}`);
+    await setField(page, 'height', 300);
+    box = await slideBox(page, ZONE_IMG);
+    assert.ok(near(box.width, 300 * aspect) && near(box.height, 300), `the field H of a stretched image draws it at ${Math.round(box.width)} by ${Math.round(box.height)}`);
+    edited = await render(page);
+    for (let n = 0; n < 3; n++) await undo(page);
+    await frames(page);
+    assert.match(await render(page), IMG_STYLE('width: \\d+px; height: \\d+px; translate: [^"]+'), 'the undo of the field W and the grip e does not give the stretched image back');
+    await undo(page);
+    await frames(page);
+    await byteExact(page);
+    for (let n = 0; n < 4; n++) await redo(page);
+    assert.equal(await render(page), edited);
+    await inScope(page);
+    await saveAndReopen(page, `r5-2-${++saves}.html`);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`${platform}: a video is stretched with its switch off, and a QR code keeps its square with its switch held on`, async () => {
+    let page = await editor(platform, SPLIT);
+    const VIDEO = '.reveal section.present .zone > video';
+    // the zone is selected with a first click, and its video with a second
+    await click(page, VIDEO);
+    await click(page, VIDEO);
+    await frames(page);
+    await arrange(page);
+    assert.deepEqual(await constrainSwitch(page), { checked: true, disabled: false }, 'the switch of a video is not on and free');
+    await toggleConstrain(page);
+    const before = await pictureBox(page, VIDEO);
+    await setField(page, 'height', 300);
+    const box = await slideBox(page, VIDEO);
+    assert.ok(near(box.width, before.width) && near(box.height, 300), `the video of height 300 is drawn at ${Math.round(box.width)} by ${Math.round(box.height)}`);
+    assert.equal(await fitOf(page, VIDEO), 'fill', 'the stretched video is letterboxed');
+    const edited = await render(page);
+    assert.match(edited, /<video src="..\/..\/demo\/clip-dark.mp4" [^>]*style="width: \d+px; height: 300px(; translate: [^"]+)?">/);
+    await roundTrip(page, edited);
+
+    page = await editor(platform, 0);
+    await page.evaluate(`localStorage.setItem('beeson-edit-constrain-qr', 'off')`);
+    await click(page, '.reveal section.present .qr');
+    await arrange(page);
+    assert.deepEqual(await constrainSwitch(page), { checked: true, disabled: true }, 'the switch of a QR code is not held on');
+    await setField(page, 'height', 260);
+    const qr = await slideBox(page, '.reveal section.present .qr');
+    assert.ok(near(qr.width, 260) && near(qr.height, 260), `the QR code of height 260 is drawn at ${Math.round(qr.width)} by ${Math.round(qr.height)}`);
+    assert.match(await render(page), /<div class="qr" [^>]*style="width: 260px[^"]*"/);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+// the lead-in paragraph of the math slide, as a point inside its text
+const LEAD = `[...document.querySelectorAll('.reveal section.present p')].find((p) => p.textContent === 'The lead-in of a display')`;
+const leadBox = (page) => page.evaluate(`(() => {
+  const s = document.querySelector('.reveal .slides');
+  const sr = s.getBoundingClientRect(), k = sr.width / s.offsetWidth, b = ${LEAD}.getBoundingClientRect();
+  return { left: (b.left - sr.left) / k, top: (b.top - sr.top) / k, width: b.width / k, height: b.height / k, x: b.left + 20, y: b.top + b.height / 2 };
+})()`);
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: the side and corner grips of a text block set its width, which W shows, and its height follows its text`, async () => {
+    const page = await editor(platform);
+    const lead = await leadBox(page);
+    await click(page, lead);
+    await press(page, 'Escape');
+    await frames(page);
+    const grips = await gripsAt(page);
+    assert.deepEqual(Object.keys(grips).sort(), ['e', 'ne', 'nw', 'se', 'sw', 'w'], `a text block shows the grips ${Object.keys(grips).join(' ')}`);
+    const k = await scaleOf(page);
+    await drag(page, grips.e, { dx: -400 * k });
+    await frames(page);
+    let box = await leadBox(page);
+    assert.ok(near(box.width, lead.width - 400, 9), `the paragraph narrowed by 400 from ${Math.round(lead.width)} is ${Math.round(box.width)} wide`);
+    assert.ok(near(box.left, lead.left, 1), 'the grip e moves the left edge of the paragraph');
+    let edited = await render(page);
+    assert.match(edited, new RegExp(`<p style="width: ${Math.round(box.width)}px">The lead-in of a display</p>`), 'the width of the paragraph is not written in px');
+    const fields = await arrange(page);
+    assert.deepEqual([fields.w, fields.wOff, fields.hOff], [String(Math.round(box.width)), false, true], `W and H of a text block are ${JSON.stringify(fields)}`);
+    await setField(page, 'width', 200);
+    box = await leadBox(page);
+    assert.ok(near(box.width, 200) && box.height > lead.height * 1.5, `the paragraph of width 200 is ${Math.round(box.width)} by ${Math.round(box.height)}, and its text does not wrap`);
+    edited = await render(page);
+    assert.match(edited, /<p style="width: 200px">The lead-in of a display<\/p>/);
+    await undo(page);
+    await undo(page);
+    await frames(page);
+    await byteExact(page);
+    await redo(page);
+    await redo(page);
+    assert.equal(await render(page), edited);
+    await inScope(page);
+    await saveAndReopen(page, `r5-2-${++saves}.html`);
+    assert.deepEqual(errors(page), []);
+  });
+}
