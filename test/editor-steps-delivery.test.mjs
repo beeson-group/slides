@@ -341,3 +341,13 @@ test('an undo of Show with Slide writes the class and the index of the step in t
   await press(page, 'Mod+Z');
   assert.equal(await rendered(page), stepped);
 });
+
+test('the meta of a selected list head is drawn in the color of the selection', async (t) => {
+  const page = await open(t, 'mac');
+  await slideOf(page, 'li.fragment');
+  const text = await page.evaluate(`(() => { const r = document.querySelector('.beeson-edit-side .list-head .text').getBoundingClientRect(); return { x: r.left + 20, y: r.top + r.height / 2 }; })()`);
+  await click(page, text);
+  await page.waitFor(`!!document.querySelector('.beeson-edit-side .list-head.selected')`);
+  const colors = await page.evaluate(`(() => { const h = document.querySelector('.beeson-edit-side .list-head.selected'); const m = h.querySelector('.meta'); return { head: getComputedStyle(h).color, meta: getComputedStyle(m).color }; })()`);
+  assert.equal(colors.meta, colors.head);
+});
