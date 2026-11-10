@@ -4332,6 +4332,63 @@ void main() {
     mark();
     void typeset().then(mark);
   }
+  var AUTOSLIDE = "data-autoslide";
+  var HELD = "data-autoslide-held";
+  var stepsOf = (slide) => [-1, ...new Set([...slide.querySelectorAll(".fragment")].map((f) => Number(f.dataset.fragmentIndex)).filter(Number.isFinite))].sort((a, b) => a - b);
+  var fragmentsAt = (slide, f) => [...slide.querySelectorAll(".fragment")].filter((el) => Number(el.dataset.fragmentIndex) === f);
+  var delayed = (el) => (parseInt(el.getAttribute(AUTOSLIDE) ?? el.getAttribute(HELD) ?? "", 10) || 0) > 0;
+  function initTimedSteps(deck) {
+    const slides = () => deck.getSlides();
+    const here = () => {
+      const slide = deck.getCurrentSlide();
+      const shown = [...slide.querySelectorAll(".fragment.visible")].map((f) => Number(f.dataset.fragmentIndex)).filter(Number.isFinite);
+      return { slide: slides().indexOf(slide), f: Math.max(-1, ...shown) };
+    };
+    const before = (at) => {
+      const steps = stepsOf(slides()[at.slide]);
+      const k = steps.indexOf(at.f);
+      if (k > 0) return { slide: at.slide, f: steps[k - 1] };
+      const prev = slides()[at.slide - 1];
+      return prev ? { slide: at.slide - 1, f: stepsOf(prev).at(-1) } : null;
+    };
+    const delayedAt = (at) => !!at && at.f >= 0 && fragmentsAt(slides()[at.slide], at.f).some(delayed);
+    const same = (a, b) => !!a && !!b && a.slide === b.slide && a.f === b.f;
+    let last = here();
+    let held = [];
+    let paused = false;
+    deck.on("autoslidepaused", () => {
+      paused = true;
+      setTimeout(() => paused = false, 0);
+    });
+    const change = () => {
+      const now = here();
+      if (same(now, last)) return;
+      for (const el of held) {
+        el.setAttribute(AUTOSLIDE, el.getAttribute(HELD) ?? "");
+        el.removeAttribute(HELD);
+      }
+      held = [];
+      const from = last;
+      last = now;
+      const back = now.slide < from.slide || now.slide === from.slide && now.f < from.f;
+      if (!back || deck.isOverview()) return;
+      if (delayedAt(now)) {
+        held = fragmentsAt(slides()[now.slide], now.f).filter((el) => el.hasAttribute(AUTOSLIDE));
+        for (const el of held) {
+          el.setAttribute(HELD, el.getAttribute(AUTOSLIDE));
+          el.removeAttribute(AUTOSLIDE);
+        }
+      }
+      if (paused) {
+        paused = false;
+        deck.toggleAutoSlide(true);
+      }
+      deck.cueAutoSlide?.();
+      if (!delayedAt(now)) return;
+      if (same(before(from), now) && delayedAt(before(now))) setTimeout(() => deck.prev(), 0);
+    };
+    for (const type of ["fragmentshown", "fragmenthidden", "slidechanged"]) deck.on(type, change);
+  }
 
   // src/switcher.ts
   var KEY = "beeson-theme";
@@ -4621,6 +4678,7 @@ void main() {
     await deck.initialize({ ...DEFAULTS, ...editing, ...options, plugins });
     initChrome();
     initSteps(deck);
+    if (!EDITING) initTimedSteps(deck);
     remount();
     initCursor(() => backdrops, () => deck.getCurrentSlide(), !EDITING);
     deck.addKeyBinding({ keyCode: 68, key: "D", description: "Switch dark and light" }, (ev) => {
