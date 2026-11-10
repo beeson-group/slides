@@ -45,8 +45,25 @@ import { install as installNavigateCommands } from './commands/navigate.ts';
 import { install as installArrangeCommands } from './commands/arrange.ts';
 import { install as installSlideCommands } from './commands/slide.ts';
 import { install as installDeleteCommands } from './commands/delete.ts';
+import { Doc } from './model/doc.ts';
 
 const app = new App();
+
+// the document model, through which a command inserts, removes, moves, and retags the slides and
+// their elements, and writes the start tags
+const doc = new Doc({
+  source: () => app.source,
+  pairing: () => app.pairing,
+  tags: app.tagEdits,
+  math: mathLookup,
+  record: (e) => app.history.push(e),
+  changed: () => {
+    app.typing.attach();
+    app.markDirty();
+    app.invalidate('structure');
+  },
+  restore: (host, content) => app.typing.restoreHost(host, content),
+});
 
 // the modules of today that are classes with a context: the slide list at the left, the steps of
 // the current slide in a pane at the right, the moving of the figures and blocks, and the layer
@@ -188,8 +205,9 @@ function status() {
 
 const BeesonEditor = {
   ready: init(),
-  open: (text: string) => {
-    app.files.open(text);
+  // a fresh text starts the history anew, and false opens it as the text of a save
+  open: (text: string, fresh = true) => {
+    app.files.open(text, fresh);
     return status();
   },
   render: () => app.files.render(),
@@ -209,6 +227,7 @@ const BeesonEditor = {
   // a command of the registry run by its id, and its label, switch, and enabled state
   exec: (id: string, arg?: unknown) => app.commands.run(id, arg),
   state: (id: string) => app.commands.state(id),
+  doc,
   version: __VERSION__,
 };
 

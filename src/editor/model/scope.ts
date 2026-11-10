@@ -1,0 +1,105 @@
+// the scope rule of the editor: the only classes, attributes, and declarations that it writes into
+// a tag, so that a deck edited in the editor still follows AGENTS.md. a class is one of the theme,
+// read from theme/beeson.css with themeClasses, or one of the fragments of reveal.js. pure, without
+// the DOM
+
+import { tokenize } from '../tokens.ts';
+import { stateOf, type TagEdit } from '../tags.ts';
+
+// the classes of the fragments of reveal.js, i.e. a step and its effects
+export const REVEAL_CLASSES = [
+  'fragment', 'fade-in', 'fade-out', 'fade-up', 'fade-down', 'fade-left', 'fade-right', 'fade-in-then-out',
+  'fade-in-then-semi-out', 'semi-fade-out', 'current-visible', 'grow', 'shrink', 'strike', 'highlight-red',
+  'highlight-green', 'highlight-blue', 'highlight-current-red', 'highlight-current-green', 'highlight-current-blue',
+];
+
+// the data attributes of AGENTS.md and REFERENCE.md, those of reveal.js that the theme gives a
+// meaning, and data-group and data-locked, which are new and named among the open decisions
+export const DATA_ATTRS = [
+  'data-at', 'data-auto', 'data-auto-animate', 'data-autoplay', 'data-azimuth', 'data-cx', 'data-cy', 'data-duration',
+  'data-dx', 'data-dy', 'data-elevation', 'data-final', 'data-fragment-index', 'data-function', 'data-half',
+  'data-heads', 'data-highlight', 'data-id', 'data-keep', 'data-keep-theme', 'data-line-numbers', 'data-live',
+  'data-loop', 'data-mu', 'data-plot', 'data-plot-frame', 'data-plot-panels', 'data-plot-paused', 'data-plot-play',
+  'data-plot-show', 'data-plot-tab', 'data-plot-tabs', 'data-qr', 'data-run', 'data-scene', 'data-stage',
+  'data-stagger', 'data-strands', 'data-strands-color', 'data-strands-colormap', 'data-strands-ramp',
+  'data-strands-select', 'data-strands-shade', 'data-surface-accent', 'data-surface-marks', 'data-surface-stage',
+  'data-surface-violet', 'data-tone', 'data-turn', 'data-unhighlight', 'data-zoom', 'data-zscale',
+  'data-visibility', 'data-timing', 'data-transition', 'data-group', 'data-locked',
+];
+
+// the standard attributes that the editor writes
+export const STANDARD_ATTRS = ['alt', 'src', 'poster', 'href', 'muted', 'loop', 'colspan', 'rowspan'];
+
+// the attributes written only in the text of new content, e.g. the id of the JSON block of a plot
+// and the id renamed in a duplicated slide
+export const TEMPLATE_ATTRS = ['id', 'type'];
+
+// the elements whose width is set in a style, by tag or by class
+const SIZED_TAGS = new Set(['img', 'video', 'tycho-viewer']);
+
+// the class names in the selectors of a stylesheet. the comments, the strings, and the innermost
+// blocks, i.e. the declarations, are cut first, so that e.g. url(a.png) is not read as a class
+export function themeClasses(css: string): string[] {
+  const text = css.replace(/\/\*[\s\S]*?\*\//g, '').replace(/"[^"]*"|'[^']*'/g, '').replace(/\{[^{}]*\}/g, '{}');
+  const out = new Set<string>();
+  for (const m of text.matchAll(/\.(-?[_a-zA-Z][_a-zA-Z0-9-]*)/g)) out.add(m[1]);
+  return [...out];
+}
+
+// the reason a declaration is out of the scope rule on an element, or null when it is in it
+export function declarationProblem(tag: string, classes: string[], name: string, value: string): string | null {
+  if (name === 'translate' || name === 'rotate') return null;
+  if (name === 'width') return SIZED_TAGS.has(tag) || classes.includes('qr') ? null : `width on a ${tag}`;
+  if (name === 'font-size') return tag === 'pre' && /^(22|18)px$/.test(value.trim()) ? null : `font-size ${value} on a ${tag}`;
+  if (name === 'text-align') return (tag === 'td' || tag === 'th') && value.trim() === 'right' ? null : `text-align ${value} on a ${tag}`;
+  return `the declaration ${name}`;
+}
+
+// the reason an attribute is out of the scope rule, or null when it is in it
+export function attributeProblem(name: string, template = false): string | null {
+  if (name === 'class' || name === 'style' || DATA_ATTRS.includes(name) || STANDARD_ATTRS.includes(name)) return null;
+  if (template && TEMPLATE_ATTRS.includes(name)) return null;
+  return `the attribute ${name}`;
+}
+
+// a class of the theme or of reveal.js, or the language of a code box
+const allowedClass = (name: string, theme: Set<string>) => theme.has(name) || REVEAL_CLASSES.includes(name) || /^language-[\w-]+$/.test(name);
+
+// the writes of edit on an element with the tag and the attributes of the file that are out of the
+// scope rule, each as a sentence. theme is the set of the classes of themeClasses
+export function editProblems(tag: string, fileAttrs: Parameters<typeof stateOf>[0], edit: TagEdit, theme: Set<string>): string[] {
+  const out: string[] = [];
+  const before = stateOf(fileAttrs);
+  const after = stateOf(fileAttrs, edit);
+  for (const c of after.classes) if (!before.classes.includes(c) && !allowedClass(c, theme)) out.push(`the class ${c}`);
+  for (const [name, value] of Object.entries(after.attrs)) {
+    if (before.attrs[name] === value) continue;
+    const problem = attributeProblem(name);
+    if (problem) out.push(problem);
+  }
+  for (const [name, value] of Object.entries(after.style)) {
+    if (before.style[name] === value) continue;
+    const problem = declarationProblem(tag, after.classes, name, value);
+    if (problem) out.push(problem);
+  }
+  return out;
+}
+
+// the writes of a text of new content that are out of the scope rule, read from each start tag
+export function textProblems(html: string, theme: Set<string>): string[] {
+  const out: string[] = [];
+  for (const t of tokenize(html)) {
+    if (t.type !== 'start') continue;
+    const s = stateOf(t.attrs);
+    for (const c of s.classes) if (!allowedClass(c, theme)) out.push(`the class ${c} on a ${t.name}`);
+    for (const name of Object.keys(s.attrs)) {
+      const problem = attributeProblem(name, true);
+      if (problem) out.push(`${problem} on a ${t.name}`);
+    }
+    for (const [name, value] of Object.entries(s.style)) {
+      const problem = declarationProblem(t.name, s.classes, name, value);
+      if (problem) out.push(problem);
+    }
+  }
+  return out;
+}
