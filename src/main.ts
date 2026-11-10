@@ -164,7 +164,10 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   // are added in a plugin, since the plugins are initialized in order before the fragments are
   // sorted, and the copies of a code box are made by the highlight plugin before this one
   if (!EDITING) plugins.push({ id: 'beeson-restore', init: () => addRestoreSteps(document) });
-  await deck.initialize({ ...DEFAULTS, ...options, plugins });
+  // a hidden slide is removed from the page by reveal.js unless showHiddenSlides is set, and it
+  // must be on the page to be edited
+  const editing: Partial<RevealOptions> = EDITING ? { showHiddenSlides: true } : {};
+  await deck.initialize({ ...DEFAULTS, ...editing, ...options, plugins });
 
   initChrome();
   initSteps(deck);
