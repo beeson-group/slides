@@ -61,3 +61,209 @@ test('Tab from the start of the page reaches the bars before the slide', async (
   assert.deepEqual(first, { inSlide: false, inBars: true });
   assert.deepEqual(page.errors, []);
 });
+
+// a command of a package that is not built yet, defined in the page through the shell
+const define = (page, command) => page.evaluate(`window.BeesonEditorShell.define(${command})`);
+const boxOf = (page, selector) => page.evaluate(`(() => { const r = document.querySelector(${JSON.stringify(selector)}).getBoundingClientRect(); return { x: Math.round(r.left), y: Math.round(r.top), w: Math.round(r.width), h: Math.round(r.height) }; })()`);
+
+test('the regions have the sizes of the plan at 1440 by 900, and the slide is fitted with its pasteboard', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser, { page: { width: 1440, height: 900 } });
+  await page.evaluate(`window.BeesonEditor.exec('view.notes'); window.BeesonEditor.exec('view.steps'); window.BeesonEditor.setPane(160)`);
+  await frames(page);
+  assert.equal((await boxOf(page, '.beeson-edit-titlebar')).h, 28);
+  assert.equal((await boxOf(page, '.beeson-edit-top')).h, 52);
+  assert.equal((await boxOf(page, '.beeson-edit-bottom')).h, 28);
+  assert.equal((await boxOf(page, '.beeson-edit-nav')).w, 200);
+  assert.equal((await boxOf(page, '.beeson-edit-inspector')).w, 288);
+  const cell = await boxOf(page, '.beeson-edit-canvas');
+  assert.deepEqual([cell.w, cell.h], [952, 631]);
+  const stage = await page.evaluate(`(() => { const s = window.BeesonEditorShell.stage; const r = document.querySelector('.reveal .slides').getBoundingClientRect(); return { scale: s.scale, reveal: Reveal.getScale(), zoom: s.zoom, origin: s.origin, left: r.left, top: r.top, width: r.width, viewport: s.viewport.toJSON() }; })()`);
+  assert.equal(stage.scale, 0.46);
+  assert.equal(stage.reveal, 0.46);
+  assert.equal(stage.zoom, null);
+  assert.ok(Math.abs(stage.origin.x - stage.left) < 0.5 && Math.abs(stage.origin.y - stage.top) < 0.5, JSON.stringify(stage));
+  // a margin of at least 32 px of pasteboard is left around the slide
+  assert.ok(stage.left - stage.viewport.left >= 32 && stage.viewport.right - stage.left - stage.width >= 32, JSON.stringify(stage));
+  // the slide sits in the canvas cell, and the notes in the cell under it
+  const notes = await boxOf(page, '.reveal section.present > aside.notes');
+  const pane = await boxOf(page, '.beeson-edit-pane');
+  assert.ok(Math.abs(notes.x - pane.x) <= 1 && Math.abs(notes.y - pane.y) <= 1 && Math.abs(notes.w - pane.w) <= 1, JSON.stringify({ notes, pane }));
+  assert.deepEqual(page.errors, []);
+});
+
+test('the chrome follows the color scheme of the system, and D flips only the slide', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  const colors = () => page.evaluate(`(() => ({ header: getComputedStyle(document.querySelector('.beeson-edit-header')).backgroundColor, nav: getComputedStyle(document.querySelector('.beeson-edit-nav')).backgroundColor, text: getComputedStyle(document.querySelector('.beeson-edit-top .tb')).color, slide: getComputedStyle(document.querySelector('.reveal')).backgroundColor }))()`);
+  await scheme(page, 'light');
+  await page.evaluate(`document.activeElement.blur()`);
+  const before = await colors();
+  await press(page, 'D');
+  await page.waitFor(`document.documentElement.dataset.theme === 'light'`);
+  await frames(page);
+  const after = await colors();
+  assert.deepEqual({ ...after, slide: null }, { ...before, slide: null });
+  assert.notEqual(after.slide, before.slide);
+  await scheme(page, 'dark');
+  const dark = await colors();
+  assert.notEqual(dark.header, before.header);
+  assert.notEqual(dark.text, before.text);
+  assert.deepEqual(page.errors, []);
+});
+
+for (const platform of ['mac', 'other']) {
+  test(`a menu of the menu bar is opened, walked, and run with the keys of the platform ${platform}`, async (t) => {
+    const browser = await launch();
+    t.after(() => browser.close());
+    const page = await editorPage(browser, { query: `edit&still&edit-platform=${platform}` });
+    await define(page, `{ id: 'test.box', label: 'Text Box', keys: { mac: ['Mod+Shift+K'], other: ['Mod+Shift+K'] }, menu: { bar: 'Insert', group: 'text', order: 1 }, run: () => { window.ran = (window.ran ?? 0) + 1; } }`);
+    await define(page, `{ id: 'test.off', label: 'Formula', enabled: () => false, menu: { bar: 'Insert', group: 'text', order: 2 }, run: () => {} }`);
+    await define(page, `{ id: 'test.table', label: 'Table…', menu: { bar: 'Insert', group: 'more', order: 3 }, run: () => { window.table = true; } }`);
+    const items = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item')].map((i) => [i.querySelector('.label').textContent, i.querySelector('.keys').textContent, i.getAttribute('aria-disabled') === 'true', i.classList.contains('hi')])`);
+    // a click on the title opens the menu without the focus, with the keys in the notation of the platform
+    await click(page, await page.evaluate(`(() => { const r = [...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].find((b) => b.textContent === 'Insert').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`));
+    const keys = platform === 'mac' ? '⇧⌘K' : 'Ctrl+Shift+K';
+    assert.deepEqual(await items(), [['Text Box', keys, false, false], ['Formula', '', true, false], ['Table…', '', false, false]]);
+    assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-menu [role=separator]').length`), 1);
+    // the arrows skip the disabled item, and Enter runs the highlighted one
+    await press(page, 'ArrowDown');
+    await press(page, 'ArrowDown');
+    assert.deepEqual((await items()).map((i) => i[3]), [false, false, true]);
+    await press(page, 'Enter');
+    assert.equal(await page.evaluate('window.table'), true);
+    assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-menu').length`), 0);
+    // from the keyboard: the focused title opens with Enter, Esc closes the menu, and the focus goes back
+    await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].find((b) => b.textContent === 'Insert').focus()`);
+    await press(page, 'Enter');
+    assert.deepEqual((await items()).map((i) => i[3]), [true, false, false]);
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-menubar [aria-expanded=true]').textContent`), 'Insert');
+    await press(page, 'Escape');
+    assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-menu').length`), 0);
+    assert.equal(await page.evaluate('document.activeElement.textContent'), 'Insert');
+    // Left on a title moves to the title before it, and Down opens its menu
+    await press(page, 'ArrowLeft');
+    assert.equal(await page.evaluate('document.activeElement.textContent'), 'Edit');
+    await press(page, 'ArrowDown');
+    assert.deepEqual((await items()).slice(0, 2).map((i) => i[0]), ['Undo', 'Redo']);
+    // Right in an open menu opens the menu beside it
+    await press(page, 'ArrowRight');
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-menubar [aria-expanded=true]').textContent`), 'Insert');
+    await press(page, 'Escape');
+    // a menu without an item is dimmed
+    assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].find((b) => b.textContent === 'Help').getAttribute('aria-disabled')`), 'true');
+    assert.deepEqual(page.errors, []);
+  });
+}
+
+test('a right-click opens the context menu of a figure, of the slide, and of a slide row, and its command gets the place', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  await define(page, `{ id: 'test.front', label: 'Bring to Front', context: ['element'], menu: { bar: 'Arrange', group: 'order', order: 1 }, run: (app, arg) => { window.got = { kind: arg.kind, tag: arg.target.localName, selected: app.selection.has(arg.target) }; } }`);
+  await define(page, `{ id: 'test.paste', label: 'Paste', context: ['canvas', 'navigator'], run: (app, arg) => { window.got = { kind: arg.kind }; } }`);
+  await define(page, `{ id: 'test.dup', label: 'Duplicate Slide', context: ['slide'], run: (app, arg) => { window.got = { kind: arg.kind, index: [...app.slides().children].indexOf(arg.target) }; } }`);
+  const labels = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu.context .item .label')].map((l) => l.textContent)`);
+  const run = (label) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu.context .item')].find((i) => i.querySelector('.label').textContent === ${JSON.stringify(label)}).click()`);
+  // a figure of the slide with the figure
+  await page.evaluate(`Reveal.slide([...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('img.beeson-movable, .zone.beeson-movable, .qr.beeson-movable')))`);
+  await frames(page);
+  const figure = await page.evaluate(`(() => { const el = [...document.querySelectorAll('.reveal section.present :is(img, .zone, .qr).beeson-movable')].find((e) => e.getBoundingClientRect().width > 40); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  await click(page, figure, { button: 'right' });
+  assert.ok((await labels()).includes('Bring to Front'));
+  assert.ok(!(await labels()).includes('Paste'));
+  await run('Bring to Front');
+  const got = await page.evaluate('window.got');
+  assert.equal(got.kind, 'element');
+  assert.equal(got.selected, true);
+  // the pasteboard around the slide
+  const cell = await boxOf(page, '.beeson-edit-canvas');
+  await click(page, { x: cell.x + 8, y: cell.y + 8 }, { button: 'right' });
+  assert.ok(!(await labels()).includes('Bring to Front'));
+  await run('Paste');
+  assert.deepEqual(await page.evaluate('window.got'), { kind: 'canvas' });
+  // a row of the slide list
+  await page.evaluate(`document.querySelectorAll('.beeson-edit-nav .row')[2].scrollIntoView()`);
+  await click(page, await page.evaluate(`(() => { const r = document.querySelectorAll('.beeson-edit-nav .row')[2].getBoundingClientRect(); return { x: r.left + 40, y: r.top + r.height / 2 }; })()`), { button: 'right' });
+  await run('Duplicate Slide');
+  assert.deepEqual(await page.evaluate('window.got'), { kind: 'slide', index: 2 });
+  // Esc closes a context menu without running anything
+  await click(page, { x: cell.x + 8, y: cell.y + 8 }, { button: 'right' });
+  await press(page, 'Escape');
+  assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-menu').length`), 0);
+  assert.deepEqual(page.errors, []);
+});
+
+test('a dialog keeps Tab inside, answers with the button pressed, and gives the focus back', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top .tb')].find((b) => b.textContent === 'Present').focus()`);
+  await page.evaluate(`window.answer = 'none'; window.BeesonEditorShell.ask({ title: 'Delete the slide?', text: 'It has notes.', buttons: [{ label: 'Delete', value: 'delete', primary: true }, { label: 'Cancel', value: 'cancel' }] }, 'cancel').then((v) => { window.answer = v; }); 0`);
+  const focused = () => page.evaluate('document.activeElement.textContent');
+  assert.equal(await focused(), 'Cancel');
+  await press(page, 'Tab');
+  assert.equal(await focused(), 'Delete');
+  await press(page, 'Tab');
+  assert.equal(await focused(), 'Cancel');
+  await press(page, 'Shift+Tab');
+  assert.equal(await focused(), 'Delete');
+  await press(page, 'Escape');
+  await page.waitFor(`window.answer !== 'none'`);
+  assert.equal(await page.evaluate('window.answer'), null);
+  assert.equal(await focused(), 'Present');
+  await page.evaluate(`window.answer = 'none'; window.BeesonEditorShell.ask({ title: 'Delete the slide?', buttons: [{ label: 'Delete', value: 'delete' }, { label: 'Cancel', value: 'cancel' }] }).then((v) => { window.answer = v; }); 0`);
+  // the first button has the focus, and a key that presses a button answers with its value
+  assert.equal(await focused(), 'Delete');
+  await press(page, 'Space');
+  await page.waitFor(`window.answer !== 'none'`);
+  assert.equal(await page.evaluate('window.answer'), 'delete');
+  assert.equal(await page.evaluate(`document.querySelectorAll('dialog.beeson-edit-card[open]').length`), 0);
+  assert.deepEqual(page.errors, []);
+});
+
+test('the labels of the toolbar are hidden below 1100 px and kept as text, and the late groups go into a menu below 820 px', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  for (const [width, labels, more] of [[1440, true, false], [1000, false, false], [800, false, true]]) {
+    const page = await editorPage(browser, { page: { width, height: 700 } });
+    const bar = await page.evaluate(`(() => { const b = [...document.querySelectorAll('.beeson-edit-top .tb')]; return { texts: b.filter((e) => !e.classList.contains('more-groups')).map((e) => e.textContent), label: getComputedStyle(b[0].querySelector('.label')).display !== 'none', more: !!document.querySelector('.beeson-edit-top .more-groups') }; })()`);
+    assert.equal(bar.label, labels, `${width}: labels`);
+    assert.equal(bar.more, more, `${width}: the menu More`);
+    assert.deepEqual(bar.texts, more ? ['Undo', 'Redo', 'Present'] : ['Undo', 'Redo', 'Present', 'Save', 'Format', 'Steps']);
+    const cell = await boxOf(page, '.beeson-edit-canvas');
+    assert.ok(cell.w > 0 && cell.h > 0);
+    assert.deepEqual(page.errors, []);
+    await page.close();
+  }
+});
+
+test('the zoom of the status bar scales the slide past Fit, the canvas scrolls, and Fit comes back', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser, { page: { width: 1440, height: 900 } });
+  const state = () => page.evaluate(`(() => { const s = window.BeesonEditorShell.stage; const c = document.querySelector('.beeson-edit-canvas'); return { zoom: s.zoom, scale: Reveal.getScale(), percent: document.querySelector('.beeson-edit-bottom .percent').textContent, scroll: c.scrollWidth > c.clientWidth }; })()`);
+  const fit = await state();
+  assert.equal(fit.zoom, null);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.getAttribute('aria-label') === 'Zoom in').click()`);
+  const zoomed = await state();
+  assert.ok(zoomed.zoom > fit.scale, JSON.stringify(zoomed));
+  assert.equal(zoomed.scale, zoomed.zoom);
+  assert.equal(zoomed.percent, `${Math.round(zoomed.zoom * 100)}%`);
+  await page.evaluate(`window.BeesonEditorShell.stage.setZoom(2)`);
+  assert.equal((await state()).scroll, true);
+  // the slide is clipped to the cell, and the canvas is scrolled
+  const clip = await page.evaluate(`getComputedStyle(document.querySelector('.reveal')).clipPath`);
+  assert.match(clip, /^inset\(/);
+  const before = await page.evaluate(`window.BeesonEditorShell.stage.origin`);
+  await page.evaluate(`document.querySelector('.beeson-edit-canvas').scrollBy(200, 100)`);
+  await frames(page);
+  const after = await page.evaluate(`window.BeesonEditorShell.stage.origin`);
+  assert.ok(Math.abs(before.x - after.x - 200) < 1 && Math.abs(before.y - after.y - 100) < 1, JSON.stringify({ before, after }));
+  // a figure selected at the zoom is framed at its box
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Fit').click()`);
+  assert.deepEqual(await state(), fit);
+  assert.deepEqual(page.errors, []);
+});
