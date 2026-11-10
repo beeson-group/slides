@@ -152,7 +152,9 @@ for (const platform of PLATFORMS) {
 }
 
 // the drawing of each tile of the chooser opened on the slide at index, as the markup of the slide
-// in its shadow root and a hash of its pixels, inside the outline of the tile
+// in its shadow root and a hash of its pixels, inside the outline of the tile. Chrome may raster an
+// anti-aliased edge of a new tile one level apart on its first frame, e.g. the corner of the zone
+// of Split at a half pixel, hence a tile is captured until two captures in a row are equal
 async function tiles(page, index) {
   await page.evaluate(`Reveal.slide(${index})`);
   await wait(page, 300);
@@ -169,7 +171,11 @@ async function tiles(page, index) {
       clip: { x: r.left + 4, y: r.top + 4, width: r.width - 8, height: r.height - 8, scale: 1 },
     };
   })`);
-  for (const t of list) t.pixels = createHash('sha1').update(await page.screenshot(t.clip)).digest('hex');
+  const digest = async (clip) => createHash('sha1').update(await page.screenshot(clip)).digest('hex');
+  for (const t of list) {
+    t.pixels = await digest(t.clip);
+    for (let n = 0, last = null; n < 5 && t.pixels !== last; n++) [last, t.pixels] = [t.pixels, await digest(t.clip)];
+  }
   await press(page, 'Escape');
   return list;
 }
