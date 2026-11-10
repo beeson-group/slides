@@ -1,0 +1,196 @@
+// the commands of Align, Distribute, and the size and position fields of the Arrange tab of the
+// inspector, in the Arrange menu. Align to Slide and Align to Selection is a switch, as in
+// PowerPoint, and a single element is aligned to the slide in either case, as in Keynote. every
+// command of a selection is one entry of the history, with the offsets written as translate and the
+// widths as width, in slide pixels, by writePlace of canvas/drag.ts
+
+import type { App } from '../app.ts';
+import type { Command } from '../commands.ts';
+import { RESIZABLE, aspectOf, frameOf, movableOf, toSlide, visualRect } from '../canvas/hit.ts';
+import type { Box } from '../canvas/snap.ts';
+import { placeOf, record, writePlace, type Place } from '../canvas/drag.ts';
+
+export type Side = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
+export const SIDES: Side[] = ['left', 'center', 'right', 'top', 'middle', 'bottom'];
+const SIDE_LABELS: Record<Side, string> = { left: 'Left', center: 'Center', right: 'Right', top: 'Top', middle: 'Middle', bottom: 'Bottom' };
+
+// the reference of Align and Distribute, kept for the session
+let reference: 'slide' | 'selection' = 'selection';
+
+// the elements that the commands of this file act on: those selected on the canvas, or the block
+// of a text that has the caret. arg.els, given by a field of the inspector, is taken in their place
+export function targetsOf(app: App, arg?: unknown): Element[] {
+  const given = (arg as { els?: Element[] } | undefined)?.els;
+  if (given) return given.filter((el) => el.isConnected);
+  if (app.selection.kind === 'text') {
+    const host = app.selection.items[0];
+    const el = host ? (movableOf(app, host) ?? host) : null;
+    return el && app.pairing?.elements.get(el)?.open ? [el] : [];
+  }
+  return app.selection.elements().filter((el) => app.pairing?.elements.get(el)?.open);
+}
+
+// the box of el in slide pixels, as the frames draw it
+export const boxOf = (app: App, el: Element): Box => toSlide(frameOf(app), visualRect(el));
+
+function slideBox(app: App): Box {
+  const slides = app.slides() as HTMLElement;
+  return { left: 0, top: 0, width: slides.offsetWidth || 1920, height: slides.offsetHeight || 1080 };
+}
+
+const union = (boxes: Box[]): Box => {
+  const left = Math.min(...boxes.map((b) => b.left)), top = Math.min(...boxes.map((b) => b.top));
+  return { left, top, width: Math.max(...boxes.map((b) => b.left + b.width)) - left, height: Math.max(...boxes.map((b) => b.top + b.height)) - top };
+};
+
+const toSlideRef = (els: Element[]) => reference === 'slide' || els.length === 1;
+
+// each element moved by its offset dx and dy, as one entry of the history
+function shift(app: App, label: string, moves: { el: Element; dx: number; dy: number }[]): void {
+  const changes = moves.map(({ el, dx, dy }) => {
+    const from = placeOf(el);
+    const to: Place = { ...from, translate: { x: (from.translate?.x ?? 0) + dx, y: (from.translate?.y ?? 0) + dy } };
+    writePlace(app, el, to);
+    return { el, from, to: placeOf(el) };
+  });
+  record(app, label, changes);
+  app.invalidate('content');
+}
+
+function align(app: App, side: Side): void {
+  const els = targetsOf(app);
+  if (!els.length) return;
+  const boxes = els.map((el) => boxOf(app, el));
+  const ref = toSlideRef(els) ? slideBox(app) : union(boxes);
+  const at = (b: Box) => {
+    switch (side) {
+      case 'left': return { dx: ref.left - b.left, dy: 0 };
+      case 'center': return { dx: ref.left + ref.width / 2 - (b.left + b.width / 2), dy: 0 };
+      case 'right': return { dx: ref.left + ref.width - (b.left + b.width), dy: 0 };
+      case 'top': return { dx: 0, dy: ref.top - b.top };
+      case 'middle': return { dx: 0, dy: ref.top + ref.height / 2 - (b.top + b.height / 2) };
+      case 'bottom': return { dx: 0, dy: ref.top + ref.height - (b.top + b.height) };
+    }
+  };
+  shift(app, `align ${side}`, els.map((el, i) => ({ el, ...at(boxes[i]) })));
+}
+
+// the elements spaced evenly along an axis, with the first and the last of them kept in place, or
+// put at the edges of the slide with Align to Slide, as in PowerPoint
+function distribute(app: App, axis: 'x' | 'y'): void {
+  const els = targetsOf(app);
+  const items = els.map((el) => ({ el, b: boxOf(app, el) }));
+  const start = (b: Box) => (axis === 'x' ? b.left : b.top);
+  const size = (b: Box) => (axis === 'x' ? b.width : b.height);
+  items.sort((a, b) => start(a.b) - start(b.b));
+  const ref = reference === 'slide' ? slideBox(app) : union(items.map((i) => i.b));
+  const total = items.reduce((s, i) => s + size(i.b), 0);
+  const gap = (size(ref) - total) / (items.length - 1);
+  let at = start(ref);
+  const moves = items.map((i) => {
+    const d = at - start(i.b);
+    at += size(i.b) + gap;
+    return { el: i.el, dx: axis === 'x' ? d : 0, dy: axis === 'y' ? d : 0 };
+  });
+  shift(app, `distribute ${axis === 'x' ? 'horizontally' : 'vertically'}`, moves);
+}
+
+const canDistribute = (app: App) => {
+  const n = targetsOf(app).length;
+  return n >= 3 || (reference === 'slide' && n >= 2);
+};
+
+// whether the width of every target is written by the editor, by the scope rule
+export const resizable = (els: Element[]) => els.length > 0 && els.every((el) => el.matches(RESIZABLE));
+
+// the offset of an element from its place in the file, which the X and Y fields show
+export function offsetOf(el: Element): { x: number; y: number } {
+  const t = placeOf(el).translate;
+  return { x: t?.x ?? 0, y: t?.y ?? 0 };
+}
+
+// the size of an element in slide pixels, unscaled
+export function sizeOf(el: Element): { w: number; h: number } {
+  const h = el as HTMLElement;
+  return { w: h.offsetWidth, h: h.offsetHeight };
+}
+
+export function commands(): Command[] {
+  const list: Command[] = [];
+  for (const [i, side] of SIDES.entries()) {
+    list.push({
+      id: `arrange.align.${side}`,
+      label: `Align ${SIDE_LABELS[side]}`,
+      menu: { bar: 'Arrange', group: i < 3 ? 'x' : 'y', order: 20 + i, submenu: 'Align' },
+      undoable: true,
+      enabled: (app) => targetsOf(app).length > 0,
+      run: (app) => align(app, side),
+    });
+  }
+  for (const [i, ref] of (['slide', 'selection'] as const).entries()) {
+    list.push({
+      id: `arrange.alignTo.${ref}`,
+      label: ref === 'slide' ? 'Align to Slide' : 'Align to Selection',
+      menu: { bar: 'Arrange', group: 'reference', order: 30 + i, submenu: 'Align' },
+      checked: () => reference === ref,
+      run: (app) => {
+        reference = ref;
+        app.invalidate('selection');
+      },
+    });
+  }
+  for (const [i, axis] of (['x', 'y'] as const).entries()) {
+    list.push({
+      id: `arrange.distribute.${axis === 'x' ? 'horizontal' : 'vertical'}`,
+      label: axis === 'x' ? 'Distribute Horizontally' : 'Distribute Vertically',
+      menu: { bar: 'Arrange', group: 'distribute', order: 40 + i, submenu: 'Distribute' },
+      undoable: true,
+      enabled: canDistribute,
+      run: (app) => distribute(app, axis),
+    });
+  }
+  // arg is { x, y, els }, with x or y left out to keep it
+  list.push({
+    id: 'arrange.setPosition',
+    label: 'Position',
+    undoable: true,
+    enabled: (app) => targetsOf(app).length > 0,
+    run: (app, arg) => {
+      const a = (arg ?? {}) as { x?: number; y?: number };
+      const changes = targetsOf(app, arg).map((el) => {
+        const from = placeOf(el);
+        const now = offsetOf(el);
+        writePlace(app, el, { ...from, translate: { x: a.x ?? now.x, y: a.y ?? now.y } });
+        return { el, from, to: placeOf(el) };
+      });
+      record(app, 'position', changes);
+      app.invalidate('content');
+    },
+  });
+  // arg is { w, h, els }. a height is written as the width at the aspect of the element
+  list.push({
+    id: 'arrange.setSize',
+    label: 'Size',
+    undoable: true,
+    enabled: (app) => resizable(targetsOf(app)),
+    run: (app, arg) => {
+      const a = (arg ?? {}) as { w?: number; h?: number };
+      const els = targetsOf(app, arg);
+      if (!resizable(els)) return;
+      const changes = els.map((el) => {
+        const from = placeOf(el);
+        const aspect = aspectOf(el) ?? sizeOf(el).w / Math.max(1, sizeOf(el).h);
+        const w = a.w ?? (a.h !== undefined ? a.h * aspect : sizeOf(el).w);
+        writePlace(app, el, { ...from, width: Math.max(1, w) });
+        return { el, from, to: placeOf(el) };
+      });
+      record(app, 'resize', changes);
+      app.invalidate('content');
+    },
+  });
+  return list;
+}
+
+export function install(app: App): void {
+  for (const c of commands()) app.commands.define(c);
+}
