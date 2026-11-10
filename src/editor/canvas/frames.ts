@@ -12,7 +12,7 @@ import { HOST } from '../app.ts';
 import { injectStyle } from '../ui/dom.ts';
 import { groupOf } from '../commands/order.ts';
 import type { Box, Guide, Handle, Spacing } from './snap.ts';
-import { BY_ITSELF, CONTAINER, RESIZABLE, frameOf, isTextSized, movableOf, orientedBox, pictureOf, sizedOf, toScreen, visualRect } from './hit.ts';
+import { BY_ITSELF, CONTAINER, RESIZABLE, frameOf, isTextSized, movableOf, orientedBox, pictureOf, sizedOf, toScreen, turnable as turns, visualRect } from './hit.ts';
 
 export const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 
@@ -270,9 +270,10 @@ export class Frames {
         Object.assign(g.style, { left: `${at.x}px`, top: `${at.y}px` });
       }
     });
-    // the rotate handle, also while it is dragged, on one element that is not locked
+    // the rotate handle, also while it is dragged, on one element that is turned, i.e. not locked
+    // and not a table or a range of its cells
     const rotating = document.documentElement.classList.contains('beeson-rotating');
-    const turnable = !!only && boxes.length === 1 && !only.hasAttribute('data-locked') && (!view.moving || rotating);
+    const turnable = !!only && boxes.length === 1 && turns(only as Element) && (!view.moving || rotating);
     this.rotor.hidden = this.stem.hidden = !turnable;
     if (turnable) {
       const b = boxes[0], deg = orients[0].deg;

@@ -10,7 +10,7 @@ import type { App } from '../app.ts';
 import { boxOf, heightSet, positionOf, resizable, sizeOf, targetsOf } from '../commands/align.ts';
 import { angleOf, groupOf } from '../commands/order.ts';
 import { imageOf } from '../commands/figure.ts';
-import { locked } from '../canvas/drag.ts';
+import { turnable } from '../canvas/hit.ts';
 import { GLYPHS, button, checkbox, note, numberField, row, section, segmented, type Control, type Run } from './controls.ts';
 
 // the glyphs of the order, the groups, and the locks, on the grid of GLYPHS
@@ -99,7 +99,7 @@ export function arrangePane(app: App, run: Run): Control[] {
           unit: '°',
           value: () => shared(live().map(angleOf)),
           commit: (deg) => run('arrange.setRotation', { deg, els: live() }),
-          enabled: () => live().some((el) => !locked(el)),
+          enabled: () => live().some(turnable),
         }),
       ]),
       row([button(app, run, { command: 'arrange.resetRotation', icon: 'reset', text: 'Reset Rotation' })]),

@@ -16,6 +16,11 @@ export const BY_ITSELF = 'img, video, figure, .zone, .plate, .qr';
 export const OUTSIDE = 'aside.notes, .backdrop';
 // the elements whose width the editor writes, by the scope rule of the plan
 export const RESIZABLE = 'img, video, .qr, tycho-viewer';
+
+// whether el is turned by a rotation, which leaves out a table and its cells, as PowerPoint and
+// Keynote do not turn a table
+export const turnable = (el: Element): boolean => !el.hasAttribute('data-locked') && !el.closest('table');
+
 // the text blocks whose width their grips set, as a text box of Keynote and PowerPoint, with the
 // height set by their wrapped text
 export const TEXT_SIZED = 'h1, h2, h3, p, ul, ol, div.math, .caption';

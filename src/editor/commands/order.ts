@@ -8,7 +8,7 @@
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { locked, placeOf, record, writePlace } from '../canvas/drag.ts';
-import { RESIZABLE, containerOf } from '../canvas/hit.ts';
+import { RESIZABLE, containerOf, turnable } from '../canvas/hit.ts';
 
 export type Order = 'front' | 'forward' | 'backward' | 'back';
 
@@ -266,12 +266,12 @@ export function commands(): Command[] {
       // arg is { deg, els }, the angle in degrees, of the elements, or of the selection by default
       id: 'arrange.setRotation',
       label: 'Rotate',
-      enabled: (app) => selectedEls(app).some((el) => !locked(el)),
+      enabled: (app) => selectedEls(app).some(turnable),
       run: (app, arg) => {
         const a = (arg ?? {}) as { deg?: number; els?: Element[] };
         if (typeof a.deg !== 'number' || !Number.isFinite(a.deg)) return;
         const deg = ((Math.round(a.deg) % 360) + 360) % 360;
-        const changes = (a.els ?? selectedEls(app)).filter((el) => el.isConnected && !locked(el)).map((el) => {
+        const changes = (a.els ?? selectedEls(app)).filter((el) => el.isConnected && turnable(el)).map((el) => {
           const from = placeOf(el);
           const to = { ...from, rotate: deg || null };
           writePlace(app, el, to);
@@ -285,7 +285,7 @@ export function commands(): Command[] {
       id: 'arrange.resetRotation',
       label: 'Reset Rotation',
       menu: { bar: 'Arrange', group: 'reset', order: 12 },
-      enabled: (app) => selectedEls(app).some((el) => !locked(el) && angleOf(el) !== 0),
+      enabled: (app) => selectedEls(app).some((el) => turnable(el) && angleOf(el) !== 0),
       run: (app) => app.commands.run('arrange.setRotation', { deg: 0 }),
     },
   );
