@@ -302,3 +302,30 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// loadTime returns the ms from the navigation of a new tab with the editor to its ready editor
+async function loadTime(t, platform) {
+  const page = await browser.newPage({ width: 1600, height: 1000 });
+  t.after(() => page.close().catch(() => {}));
+  const t0 = Date.now();
+  await page.goto(`${server.origin}/${LAYOUTS}?edit&still&edit-platform=${platform}`);
+  await page.waitFor(deckSettled);
+  await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
+  return { page, ms: Date.now() - t0 };
+}
+
+// item 3 of R7.1: a second tab of the deck of layouts, opened while the first was open, took about
+// 15 s to load, since the two clips of 12 MB in demo/ held the connections of the first tab. the
+// budget is several times the load of one tab, about 0.6 s
+const BUDGET = 4000;
+for (const platform of PLATFORMS) {
+  test(`a second tab of a deck with videos loads as fast as the first (${platform})`, async (t) => {
+    const first = await loadTime(t, platform);
+    await first.page.evaluate(`window.BeesonEditor.open(${js(readFileSync(LAYOUTS, 'utf8'))})`);
+    assert.ok(first.ms < BUDGET, `the first tab takes ${first.ms} ms to load`);
+    const second = await loadTime(t, platform);
+    assert.ok(second.ms < BUDGET, `the second tab takes ${second.ms} ms to load, and the first ${first.ms} ms`);
+    assert.deepEqual(errors(first.page), []);
+    assert.deepEqual(errors(second.page), []);
+  });
+}
