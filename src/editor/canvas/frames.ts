@@ -312,7 +312,7 @@ export class Frames {
     const hot = this.current();
     const framed = hot && selected.includes(hot);
     this.hoverFrame.hidden = !hot || !!framed || !!view.moving;
-    if (hot && !framed && !view.moving) place(this.hoverFrame, grow(visualRect(pictureOf(hot)), 6));
+    if (hot && !framed && !view.moving) place(this.hoverFrame, grow(reachOf(hot), 6));
     // a figure is dragged by itself, as in Keynote, and a viewer, which a drag turns, and a text
     // block, whose text a press edits, by its handle
     this.handle.hidden = !hot || (hot.matches(BY_ITSELF) && !hot.matches('tycho-viewer')) || (!!this.gripsOf(hot) && !isTextSized(hot));

@@ -184,14 +184,13 @@ export function movableOf(app: App, target: Element | null): Element | null {
   return el && slide.contains(el) && pairing.elements.get(el)?.open ? el : null;
 }
 
-// what a press at target selects: the image or video under it in a figure, which is an object apart
-// from its caption, as in Keynote and PowerPoint, and else the movable element around it. the figure
-// is selected by a press outside its image, or by Esc on the image, and a selected figure is kept,
-// so that a drag on its image moves all of it
+// what a press at target selects: the movable element around it, thus the figure of a picture,
+// since a picture with its caption is one object, as in Keynote. a picture selected by itself with
+// a second click on it is kept while the press is on it
 export function pickOf(app: App, target: Element | null): Element | null {
   const el = movableOf(app, target);
-  const media = el?.matches('figure') && !app.selection.has(el) && !el.hasAttribute('data-locked') ? mediaIn(el, target) : null;
-  return media && app.pairing?.elements.get(media)?.open ? media : el;
+  const only = app.selection.only();
+  return only && only !== el && !!el?.contains(only) && !!target && only.contains(target) ? only : el;
 }
 
 // the movable elements of the current slide that are shown, in document order

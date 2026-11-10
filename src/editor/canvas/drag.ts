@@ -333,8 +333,9 @@ export function install(app: App): void {
 
   // a press on an element: it is selected, or with Shift or the command modifier added, and taken
   // off again at a click without a move. a press on a selected element keeps the selection, so that
-  // all of it is dragged, and a click on it then selects it alone, or the image inside it. a click
-  // on a member of a group that is selected as the whole selection selects the member by itself
+  // all of it is dragged, and a click on it then selects it alone, or the picture inside an
+  // unlocked figure. a click on a member of a group that is selected as the whole selection
+  // selects the member by itself
   const pressElement = (ev: PointerEvent, el: Element, target: Element | null) => {
     ev.preventDefault();
     leaveText();
@@ -346,7 +347,7 @@ export function install(app: App): void {
       else sel.add(el);
     } else if (sel.has(el)) {
       const several = sel.elements().length > 1;
-      const media = mediaIn(el, target);
+      const media = locked(el) ? null : mediaIn(el, target);
       const id = groupOf(el);
       const inGroup = several && !!id && sel.elements().every((o) => groupOf(o) === id);
       click = () => {
