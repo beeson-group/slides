@@ -12,7 +12,7 @@ import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
 import { BY_ITSELF, RESIZABLE, STRETCHED, aspectOf, bandAt, constrained, containerOf, cssWidth, frameOf, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, onCanvas, orientedBox, pickOf, pictureOf, segmentTouches, sizedOf, snapBoxOf, toSlide, twinOf, visualRect } from './hit.ts';
 import { overlay, view } from './frames.ts';
-import { freshGroup } from '../commands/order.ts';
+import { enterGroup, freshGroup, groupOf } from '../commands/order.ts';
 import { injectStyle } from '../ui/dom.ts';
 
 const CSS = `
@@ -84,14 +84,19 @@ export function writePlace(app: App, el: Element, p: Place, force = false, twin 
 }
 
 // the change of the places of elements, already written, as one entry of the history. an undo or a
-// redo shows the slide of the elements and selects them
-export function record(app: App, label: string, changes: { el: Element; from: Place; to: Place }[]): { el: Element; from: Place; to: Place }[] {
+// redo shows the slide of the elements and selects what was selected for the change, by default the
+// selection at the call, as in Keynote. without one, it selects the shown elements that were moved,
+// apart from the hidden image of a dark and light pair and an element inside another one
+export function record(app: App, label: string, changes: { el: Element; from: Place; to: Place }[], selected: Element[] = app.selection.elements()): { el: Element; from: Place; to: Place }[] {
   const moved = changes.filter((c) => !samePlace(c.from, c.to) && !locked(c.el));
   if (!moved.length) return moved;
+  const before = selected.slice();
   const apply = (way: 'from' | 'to') => {
     app.showSlide(moved[0].el);
     for (const c of moved) writePlace(app, c.el, c[way], true);
-    app.selection.set('elements', moved.map((c) => c.el));
+    const kept = before.filter((el) => el.isConnected);
+    const els = moved.map((c) => c.el);
+    app.selection.set('elements', kept.length ? kept : els.filter((el) => el.getClientRects().length && !els.some((o) => o !== el && o.contains(el))));
     app.invalidate('content');
   };
   app.history.push({ label, undo: () => apply('from'), redo: () => apply('to') });
@@ -105,6 +110,10 @@ type Press = {
   moved: boolean;
   // the element pressed, which the readout of a move follows
   el: Element | null;
+  // the selection at the press, which an undo and a redo of the change select again
+  selected: Element[];
+  // the box of el at the press, in slide pixels, whose upper left corner the readout of a move gives
+  corner: Box | null;
   els: Element[];
   from: Map<Element, Place>;
   // the union of the boxes of els at the press, in slide pixels
@@ -244,7 +253,7 @@ export function install(app: App): void {
   const start = (kind: Press['kind'], ev: PointerEvent, el: Element | null, els: Element[], click: Press['click']): Press => {
     const f = frameOf(app);
     const p: Press = {
-      kind, x: ev.clientX, y: ev.clientY, moved: false, el, els, click,
+      kind, x: ev.clientX, y: ev.clientY, moved: false, el, els, click, selected: app.selection.elements().slice(), corner: el ? snapBoxOf(app, el) : null,
       from: new Map(els.map((e) => [e, placeOf(e)])),
       base: els.length ? union(els.map((e) => snapBoxOf(app, e))) : { left: 0, top: 0, width: 0, height: 0 },
     };
@@ -255,7 +264,8 @@ export function install(app: App): void {
 
   // a press on an element: it is selected, or with Shift or the command modifier added, and taken
   // off again at a click without a move. a press on a selected element keeps the selection, so that
-  // all of it is dragged, and a click on it then selects it alone, or the image inside it
+  // all of it is dragged, and a click on it then selects it alone, or the image inside it. a click
+  // on a member of a group that is selected as the whole selection selects the member by itself
   const pressElement = (ev: PointerEvent, el: Element, target: Element | null) => {
     ev.preventDefault();
     leaveText();
@@ -268,8 +278,11 @@ export function install(app: App): void {
     } else if (sel.has(el)) {
       const several = sel.elements().length > 1;
       const media = mediaIn(el, target);
+      const id = groupOf(el);
+      const inGroup = several && !!id && sel.elements().every((o) => groupOf(o) === id);
       click = () => {
-        if (several) sel.set('elements', [el]);
+        if (inGroup) enterGroup(app, el);
+        else if (several) sel.set('elements', [el]);
         else if (media) sel.set('elements', [media]);
       };
     } else sel.set('elements', [el]);
@@ -353,8 +366,10 @@ export function install(app: App): void {
     const host = app.hostOf(target);
     if (el && host) {
       // a click into a text puts the caret there, and with Shift or the command modifier the block
-      // is added to the selection as a box
-      if (ev.shiftKey || commandHeld(ev)) pressElement(ev, el, target);
+      // is added to the selection as a box. a block of a group is selected with its group at the
+      // first click and by itself at the second, and only the third puts the caret in it, as in
+      // Keynote and PowerPoint
+      if (ev.shiftKey || commandHeld(ev) || (groupOf(el) && sel.only() !== el)) pressElement(ev, el, target);
       return;
     }
     if (el && (target.closest(BY_ITSELF) || !hasText(el))) {
@@ -425,10 +440,11 @@ export function install(app: App): void {
     view.moving = p.els;
     view.guides = snap?.guides ?? [];
     view.spacing = snap?.spacing ?? [];
-    // the position of the pressed element, i.e. the X and Y of the Arrange pane, next to the pointer
-    // as in Keynote, below and to the right of it, where the guides at the pointer are not covered
-    const t = p.el ? placeOf(p.el).translate : null;
-    view.readout = { text: `${ghosts.shown() ? 'Copy  ' : ''}${t?.x ?? 0}, ${t?.y ?? 0}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
+    // the upper left corner of the pressed element in slide pixels next to the pointer, as Keynote
+    // gives its x and y, below and to the right of it, where the guides at the pointer are not covered
+    const c = p.corner;
+    const at = c ? `x ${Math.round(c.left + dx)}  y ${Math.round(c.top + dy)}` : '';
+    view.readout = { text: `${ghosts.shown() ? 'Copy  ' : ''}${at}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     document.documentElement.classList.add('beeson-dragging');
     frames.draw();
     app.invalidate('content');
@@ -664,7 +680,7 @@ export function install(app: App): void {
           writePlace(app, el, to);
           return { el, from: p.from.get(el) as Place, to };
         });
-        record(app, p.kind === 'resize' ? 'resize' : p.kind === 'rotate' ? 'rotate' : 'move', changes);
+        record(app, p.kind === 'resize' ? 'resize' : p.kind === 'rotate' ? 'rotate' : 'move', changes, p.selected);
       } else if (p.moved) {
         for (const el of els) writeLive(el, p.from.get(el) as Place);
       } else p.click?.();
@@ -732,7 +748,7 @@ export function install(app: App): void {
     const from = placeOf(el);
     const to = { ...from, translate: null };
     writePlace(app, el, to);
-    record(app, 'move', [{ el, from, to }]);
+    record(app, 'move', [{ el, from, to }], [el]);
     if (!app.selection.has(el)) app.selection.set('elements', [el]);
     frames.draw();
   };

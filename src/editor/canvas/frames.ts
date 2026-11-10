@@ -32,7 +32,6 @@ const CSS = `
 .beeson-overlay { position: fixed; inset: 0; z-index: 51; pointer-events: none; }
 .beeson-frame { position: fixed; pointer-events: none; box-sizing: border-box; border: 1px dashed var(--ed-muted, var(--subtle, #bbb)); }
 .beeson-frame.selected { border: 2px solid var(--ed-select, #7048e8); }
-.beeson-frame.union { border: 1px dashed var(--ed-select, #7048e8); }
 .beeson-frame.union.group { border: 2px solid var(--ed-select, #7048e8); }
 .beeson-overlay [hidden] { display: none !important; }
 .beeson-grip { position: fixed; width: 9px; height: 9px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; border: 1.5px solid var(--ed-select, #7048e8); background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); pointer-events: auto; touch-action: none; }
@@ -124,6 +123,7 @@ export class Frames {
   readonly rotor: HTMLDivElement;
   private readonly stem: HTMLDivElement;
   private readonly frames: HTMLDivElement[] = [];
+  // the one frame of a selected group
   private readonly union: HTMLDivElement;
   // where the rotate handle is, kept while it is dragged
   private rotorAt: RotorAt = 'above';
@@ -142,7 +142,7 @@ export class Frames {
     this.layer.className = 'beeson-overlay';
     this.hoverFrame = div('beeson-frame', this.layer);
     this.frames.push(div('beeson-frame selected', this.layer));
-    this.union = div('beeson-frame union', this.layer);
+    this.union = div('beeson-frame union group', this.layer);
     // the first guide on each axis is always there, at the line snapped to
     this.guides.push(div('beeson-guide v', this.layer), div('beeson-guide h', this.layer));
     this.marquee = div('beeson-marquee', this.layer);
@@ -223,19 +223,18 @@ export class Frames {
       f.classList.toggle('locked', selected[i].hasAttribute('data-locked'));
     });
     // a whole group is drawn as one element, with one frame around its members, as in Keynote and
-    // PowerPoint
+    // PowerPoint. in another multiple selection, each member is drawn with its own frame and grips,
+    // without a frame around all of them, as in both apps
     const id = selected.length > 1 ? groupOf(selected[0]) : null;
     const grouped = !!id && selected.every((el) => groupOf(el) === id);
     this.group = null;
-    if (boxes.length > 1) {
+    if (boxes.length > 1 && grouped) {
       const seen = selected.map((el) => (el.matches(RESIZABLE) || el.matches(CONTAINER) ? visualRect(pictureOf(el)) : grow(visualRect(el), 6)));
       const left = Math.min(...seen.map((b) => b.left)), top = Math.min(...seen.map((b) => b.top));
       const right = Math.max(...seen.map((b) => b.left + b.width)), bottom = Math.max(...seen.map((b) => b.top + b.height));
-      const all = { left, top, width: right - left, height: bottom - top };
-      if (grouped) this.group = all;
-      place(this.union, grouped ? all : grow(all, 6));
-      this.union.classList.toggle('group', grouped);
-      if (grouped) for (const f of this.frames) f.hidden = true;
+      this.group = { left, top, width: right - left, height: bottom - top };
+      place(this.union, this.group);
+      for (const f of this.frames) f.hidden = true;
     } else this.union.hidden = true;
 
     const only = app.selection.only();

@@ -71,12 +71,18 @@ export function install(app: App): void {
   const kept = new WeakMap<Element, Guides>();
   const sections = () => [...app.slides().querySelectorAll(':scope > section')];
   let seeded = false;
+  // the slides in the order of the last read or write of the storage. a page writes its guides at a
+  // change of the slides only where this order changed, so that a page that opens the file again or
+  // inserts an element does not write the guides it read at its start over those of another tab
+  let order: Element[] = [];
+  const seed = () => {
+    seeded = true;
+    const saved = read<Partial<Guides>[]>(keyOf(), []);
+    order = sections();
+    order.forEach((s, i) => kept.set(s, clean(saved[i])));
+  };
   const of = (slide: Element | null): Guides => {
-    if (!seeded) {
-      seeded = true;
-      const saved = read<Partial<Guides>[]>(keyOf(), []);
-      sections().forEach((s, i) => kept.set(s, clean(saved[i])));
-    }
+    if (!seeded) seed();
     if (!slide) return empty();
     let g = kept.get(slide);
     if (!g) {
@@ -86,7 +92,9 @@ export function install(app: App): void {
     return g;
   };
   const persist = () => {
-    const all = sections().map((s) => of(s));
+    of(null);
+    order = sections();
+    const all = order.map((s) => of(s));
     const text = all.some((g) => g.x.length || g.y.length) ? JSON.stringify(all) : null;
     if (text !== stored(keyOf())) store(keyOf(), text);
   };
@@ -95,7 +103,10 @@ export function install(app: App): void {
   app.doc.duplicate = async (el) => {
     const source = el.parentElement === app.slides() && el.matches('section') ? of(el) : null;
     const copy = await duplicate(el);
-    if (source) kept.set(copy, clean(source));
+    if (source) {
+      kept.set(copy, clean(source));
+      persist();
+    }
     return copy;
   };
   const setOf = (slide: Element, g: Guides) => {
@@ -238,7 +249,15 @@ export function install(app: App): void {
   app.listen('resize', draw);
   app.onRefresh(['content', 'slide', 'layout', 'structure'], draw);
   app.onRefresh(['structure'], () => {
-    if (app.state === 'loaded') persist();
+    const now = sections();
+    if (app.state === 'loaded' && seeded && (now.length !== order.length || now.some((s, i) => s !== order[i]))) persist();
+  });
+  // the guides stored by another tab of the deck are read again by the index of each slide
+  window.addEventListener('storage', (ev) => {
+    if (ev.key !== keyOf() && ev.key !== null) return;
+    seed();
+    draw();
+    app.invalidate('layout');
   });
 
   const set = (on: boolean) => {
