@@ -4,7 +4,7 @@
 // numbers at the right with Auto-Align, and the delete of the table
 
 import type { App } from '../app.ts';
-import { targetOf } from '../commands/table.ts';
+import { fillRange, targetOf } from '../commands/table.ts';
 import { boxOf, columnName, columnsOf, placeOf } from '../table.ts';
 import { button, checkbox, note, row, section, segmented, type Control, type Run } from './controls.ts';
 
@@ -14,7 +14,7 @@ export function tablePane(app: App, run: Run): Control[] {
   const size = () => {
     const t = targetOf(app);
     if (!t) return '';
-    const b = t.box;
+    const b = fillRange(t.table) ?? t.box;
     const own = t.cell ? boxOf(placeOf(t.cell)!) : null;
     const name = (r: number, c: number) => `${columnName(c)}${r + 1}`;
     const one = !!b && !!own && JSON.stringify(b) === JSON.stringify(own);

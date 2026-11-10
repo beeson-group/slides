@@ -108,6 +108,9 @@ export function cellAt(app: App): HTMLTableCellElement | null {
 // cell of the caret, which Esc leaves
 let block: { anchor: HTMLTableCellElement; focus: HTMLTableCellElement } | null = null;
 let caretCell: HTMLTableCellElement | null = null;
+// the range reached by the fill handle while it is dragged, which the Table pane counts
+let reaching: { table: HTMLTableElement; box: Box } | null = null;
+export const fillRange = (table: HTMLTableElement): Box | null => (reaching?.table === table ? reaching.box : null);
 
 function syncCell(app: App): void {
   const c = cellAt(app);
@@ -976,20 +979,27 @@ function installBars(app: App): void {
   grips.addEventListener('pointercancel', () => drop(null));
   grips.addEventListener('lostpointercapture', () => drop(null));
 
-  let filling: { table: HTMLTableElement; from: Box; to: Box } | null = null;
+  let filling: { table: HTMLTableElement; from: Box; to: Box; x: number; y: number } | null = null;
   handle.addEventListener('pointerdown', (ev) => {
     if (!shown?.box || ev.button !== 0 || !inBlock(app)) return;
-    filling = { table: shown.table, from: shown.box, to: shown.box };
+    filling = { table: shown.table, from: shown.box, to: shown.box, x: ev.clientX, y: ev.clientY };
     handle.setPointerCapture(ev.pointerId);
     document.documentElement.classList.add('beeson-autofilling');
   });
   handle.addEventListener('pointermove', (ev) => {
-    if (filling) filling.to = reach(filling.table, filling.from, ev.clientX, ev.clientY);
+    if (!filling) return;
+    const to = reach(filling.table, filling.from, ev.clientX, ev.clientY);
+    Object.assign(filling, { x: ev.clientX, y: ev.clientY });
+    if (sameBox(to, filling.to)) return;
+    filling.to = to;
+    reaching = { table: filling.table, box: to };
+    app.invalidate('selection');
   });
   const endFill = (ev: PointerEvent | null) => {
     const f = filling;
     if (!f) return;
     filling = null;
+    reaching = null;
     document.documentElement.classList.remove('beeson-autofilling');
     const to = ev ? reach(f.table, f.from, ev.clientX, ev.clientY) : f.from;
     if (sameBox(to, f.from)) return;
@@ -1051,7 +1061,9 @@ function installBars(app: App): void {
     if (at) {
       const r = boxRect(t.table, at);
       place(outline, r.left - 1, r.top - 1, r.right - r.left + 2, r.bottom - r.top + 2);
-      if (!handle.hidden) place(handle, r.right - 5, r.bottom - 5, 11, 11);
+      // the handle is under the pointer while it is dragged
+      if (filling) place(handle, filling.x - 5.5, filling.y - 5.5, 11, 11);
+      else if (!handle.hidden) place(handle, r.right - 5, r.bottom - 5, 11, 11);
     }
     const reached = filling && !sameBox(filling.to, filling.from) ? boxRect(filling.table, filling.to) : null;
     spread.hidden = !reached;
