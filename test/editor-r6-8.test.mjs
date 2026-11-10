@@ -359,3 +359,26 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// item 8: the New Slide gallery drew samples of its own, and the layout chooser drew sampleText of
+// model/templates.ts. the tile of a layout is the same in both, on a slide with a backdrop too
+const tileSlides = (page, id, dialog) => page.evaluate(`(async () => {
+  window.BeesonEditor.exec(${JSON.stringify(id)});
+  await new Promise((r) => requestAnimationFrame(r));
+  return [...document.querySelectorAll('${dialog} .tile')].map((t) => ({ layout: t.dataset.layout ?? null, name: t.textContent.trim(), slide: t.querySelector('.pic').shadowRoot.querySelector('.slides > section').outerHTML }));
+})()`);
+
+for (const platform of PLATFORMS) {
+  test(`the tile of a layout is the same in New Slide and in the layout chooser (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 0 });
+    const chooser = await tileSlides(page, 'slide.layoutChooser', '.beeson-edit-layouts');
+    await press(page, 'Escape');
+    await frames(page);
+    const gallery = await tileSlides(page, 'slide.gallery', '.beeson-edit-gallery:not(.beeson-edit-layouts)');
+    await press(page, 'Escape');
+    assert.equal(chooser.length, 8);
+    assert.deepEqual(gallery.map((g) => g.name), chooser.map((c) => c.name));
+    for (const [i, c] of chooser.entries()) assert.equal(gallery[i].slide, c.slide, `the tile of ${c.layout} differs`);
+    assert.deepEqual(errors(page), []);
+  });
+}
