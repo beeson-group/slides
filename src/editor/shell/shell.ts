@@ -3,10 +3,9 @@
 // is painted in tokens of its own, which follow prefers-color-scheme and not the mode of the deck,
 // hence D flips only the slide. the regions are put into the order of the DOM in which Tab and F6
 // reach them, and the shell also holds the inspector with its tabs Format and Steps, the edge
-// between the navigator and the canvas, the context menu, and the places in the menus and the
-// toolbar of the commands of today that do not name one yet
+// between the navigator and the canvas, and the context menu
 
-import type { App, Region } from '../app.ts';
+import type { App } from '../app.ts';
 import type { Command, Context } from '../commands.ts';
 import { ask, type DialogOptions } from '../ui/dialog.ts';
 import { injectStyle, make, store, stored } from '../ui/dom.ts';
@@ -61,61 +60,13 @@ html.beeson-editor.beeson-steps body > .beeson-edit-inspector, html.beeson-edito
 html.beeson-editor .beeson-edit-inspector .beeson-edit-side { position: static; inset: auto; width: auto; flex: 1; min-height: 0; border: 0; background: transparent; color: var(--ed-text); font: 12px/1.4 var(--ed-font); }
 `;
 
-// the places of the commands of today that name none, until their packages set them. a place that
-// a command names is never changed
-const BRIDGE: Record<string, Pick<Command, 'menu' | 'toolbar'> & { toolbarLabel?: string }> = {
-  'file.open': { menu: { bar: 'File', group: 'open', order: 10 } },
-  'file.save': { menu: { bar: 'File', group: 'save', order: 20 }, toolbar: { group: 'file', order: 80, icon: 'save' } },
-  'file.saveAs': { menu: { bar: 'File', group: 'save', order: 21 } },
-  'file.autosave': { menu: { bar: 'File', group: 'save', order: 22 } },
-  'file.present': { menu: { bar: 'File', group: 'present', order: 30 }, toolbar: { group: 'play', order: 50, icon: 'play' } },
-  'edit.undo': { menu: { bar: 'Edit', group: 'history', order: 10 }, toolbar: { group: 'history', order: 10, icon: 'undo' }, toolbarLabel: 'Undo' },
-  'edit.redo': { menu: { bar: 'Edit', group: 'history', order: 11 }, toolbar: { group: 'history', order: 11, icon: 'redo' }, toolbarLabel: 'Redo' },
-  'view.navigator': { menu: { bar: 'View', group: 'panes', order: 10 } },
-  'view.notes': { menu: { bar: 'View', group: 'panes', order: 12 } },
-  'view.steps': { menu: { bar: 'View', group: 'panes', order: 13 }, toolbar: { group: 'inspector', order: 91, icon: 'steps' } },
-  'navigate.next': { menu: { bar: 'View', group: 'navigate', order: 40 } },
-  'navigate.previous': { menu: { bar: 'View', group: 'navigate', order: 41 } },
-};
-
 // the label of a command on the toolbar, which is short and does not change, e.g. Undo for
 // Undo Typing. a package may name it with toolbar.label
+const SHORT: Record<string, string> = { 'edit.undo': 'Undo', 'edit.redo': 'Redo' };
 export function toolbarLabel(app: App, c: Command): string {
-  const own = (c.toolbar as { label?: string } | undefined)?.label;
+  const own = (c.toolbar as { label?: string } | undefined)?.label ?? SHORT[c.id];
   if (own) return own;
   return typeof c.label === 'string' ? c.label : app.commands.label(c.id);
-}
-
-// the regions in the order of F6, each with the element that takes the focus
-const REGIONS: { name: Region | 'menubar' | 'toolbar' | 'status'; selector: string }[] = [
-  { name: 'menubar', selector: '.beeson-edit-menubar [role=menuitem][tabindex="0"]' },
-  { name: 'toolbar', selector: '.beeson-edit-top [tabindex="0"]' },
-  { name: 'navigator', selector: '.beeson-edit-nav .rows [tabindex="0"], .beeson-edit-nav .rows button' },
-  { name: 'canvas', selector: '.reveal .slides section.present' },
-  { name: 'notes', selector: '.reveal .slides section.present > aside.notes' },
-  { name: 'inspector', selector: '.beeson-edit-inspector .tabs [aria-selected="true"]' },
-  { name: 'status', selector: '.beeson-edit-bottom button' },
-];
-
-const shown = (el: Element | null): el is HTMLElement => el instanceof HTMLElement && el.getClientRects().length > 0 && !el.closest('[hidden], [inert]');
-
-// the focus is moved to the next or the previous region that is shown, e.g. by F6 of keymap.ts
-export function focusRegion(step: 1 | -1): string | null {
-  const active = document.activeElement;
-  const at = REGIONS.findIndex((r) => {
-    const el = document.querySelector(r.selector);
-    const root = el?.closest('.beeson-edit-menubar, .beeson-edit-top, .beeson-edit-nav, .beeson-edit-inspector, .beeson-edit-bottom, aside.notes, .reveal');
-    return !!root && !!active && root.contains(active);
-  });
-  for (let i = 1; i <= REGIONS.length; i++) {
-    const r = REGIONS[(at + step * i + REGIONS.length * 2) % REGIONS.length];
-    const el = document.querySelector(r.selector);
-    if (!shown(el)) continue;
-    if (r.name === 'canvas' && !el.hasAttribute('tabindex')) el.tabIndex = -1;
-    el.focus({ preventScroll: true });
-    return r.name;
-  }
-  return null;
 }
 
 declare global {
@@ -267,8 +218,8 @@ export function install(app: App): void {
     label: 'Format',
     checked: () => format,
     run: () => setFormat(!format),
-    menu: { bar: 'View', group: 'panes', order: 11 },
-    toolbar: { group: 'inspector', order: 90, icon: 'format' },
+    menu: { bar: 'View', group: 'panes', order: 13 },
+    toolbar: { group: 'inspector', order: 60, icon: 'format' },
   });
 
   // the zoom of the canvas, in View > Zoom and in the status bar
@@ -279,14 +230,7 @@ export function install(app: App): void {
   zoom('shell.zoomIn', 'Zoom In', 22, () => app.stage.zoomIn(), { mac: ['Mod+='], other: ['Mod+='] });
   zoom('shell.zoomOut', 'Zoom Out', 23, () => app.stage.zoomOut(), { mac: ['Mod+-'], other: ['Mod+-'] });
 
-  // the places of today's commands are filled once every package is installed
   queueMicrotask(() => {
-    for (const [id, place] of Object.entries(BRIDGE)) {
-      const c = app.commands.get(id);
-      if (!c) continue;
-      if (!c.menu) c.menu = place.menu;
-      if (!c.toolbar && place.toolbar) c.toolbar = place.toolbarLabel ? ({ ...place.toolbar, label: place.toolbarLabel } as Command['toolbar']) : place.toolbar;
-    }
     arrange();
     app.invalidate();
   });
@@ -376,6 +320,5 @@ export function install(app: App): void {
     context: (kind: Context, x: number, y: number) => !!openContextMenu(app, kind, null, { x, y }),
     closeMenus,
     ask: (options: DialogOptions, focus?: string) => ask(options, focus),
-    focusRegion,
   };
 }
