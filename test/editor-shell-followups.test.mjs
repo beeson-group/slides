@@ -171,7 +171,7 @@ test('the gear menu of the find panel is a menu of the chrome', async (t) => {
   await page.evaluate(`window.BeesonEditor.exec('find.open', 'orbit')`);
   await click(page, await centerOf(page, '.beeson-find .gear'));
   const menu = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu.find-options .item')].map((i) => [i.querySelector('.label').textContent, i.getAttribute('aria-checked')])`);
-  assert.deepEqual(await menu(), [['Find', 'true'], ['Find & Replace', 'false'], ['Whole Words', 'false'], ['Match Case', 'false'], ['Search TeX of Formulas', 'false']]);
+  assert.deepEqual(await menu(), [['Find', 'true'], ['Find & Replace', 'false'], ['Whole Words', 'false'], ['Match Case', 'false'], ['Slides and Notes', 'true'], ['Notes Only', 'false'], ['Alt Texts', 'false'], ['Search TeX of Formulas', 'false']]);
   assert.equal(await page.evaluate(`document.querySelector('.beeson-find .gear').getAttribute('aria-expanded')`), 'true');
   await press(page, 'Escape');
   assert.deepEqual(await menu(), []);
