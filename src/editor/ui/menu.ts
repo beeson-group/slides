@@ -121,6 +121,14 @@ export function itemsOfGroups(groups: Group[]): MenuItem[] {
   return out;
 }
 
+// whether a submenu of commands has an item that can run: a command that is not a switch, or a
+// switch when every command of the submenu is one, e.g. the switches of Image without a figure
+// selected are not counted when its Replace Image is disabled
+function canRun(app: App, commands: Command[]): boolean {
+  const plain = commands.filter((c) => !c.checked || c.checked(app) === null);
+  return (plain.length ? plain : commands).some((c) => app.commands.enabled(c.id));
+}
+
 // the items of a menu of the menu bar, or of one of its submenus. a submenu is shown in its parent
 // at the group and the order of its first command, and its commands are grouped inside it
 export function menuItems(app: App, bar: string, submenu?: string): MenuItem[] {
@@ -135,7 +143,7 @@ export function menuItems(app: App, bar: string, submenu?: string): MenuItem[] {
   }
   for (const [name, members] of subs) {
     const first = [...members].sort((a, b) => (a.menu?.order ?? 0) - (b.menu?.order ?? 0))[0];
-    entries.push({ group: first.menu?.group ?? '', order: first.menu?.order ?? 0, item: { label: name, items: () => menuItems(app, bar, name) } });
+    entries.push({ group: first.menu?.group ?? '', order: first.menu?.order ?? 0, item: { label: name, items: () => menuItems(app, bar, name), disabled: !canRun(app, members) } });
   }
   entries.sort((a, b) => a.order - b.order);
   const groups = new Map<string, MenuItem[]>();

@@ -76,6 +76,15 @@ function wholly(s: globalThis.Selection, host: Element): boolean {
   return r.compareBoundaryPoints(Range.START_TO_START, all) <= 0 && r.compareBoundaryPoints(Range.END_TO_END, all) >= 0;
 }
 
+// the range left in a text of the slide after its text is left, e.g. with Esc and a click on a
+// figure, is removed, since the text commands would act on it. a range in a focused field is kept
+function dropRange(app: App): void {
+  const s = getSelection();
+  const active = document.activeElement;
+  if (!s?.rangeCount || (active instanceof HTMLElement && (active.isContentEditable || active.matches('input, textarea')))) return;
+  if (app.hostOf(s.anchorNode instanceof Element ? s.anchorNode : s.anchorNode?.parentElement ?? null)) s.removeAllRanges();
+}
+
 export function install(app: App): void {
   let kind: SelectionKind = 'none';
   let items: Element[] = [];
@@ -86,6 +95,7 @@ export function install(app: App): void {
     if (nextKind === kind && ordered.length === items.length && ordered.every((el, i) => el === items[i])) return;
     items = ordered;
     kind = nextKind;
+    if (kind !== 'text') dropRange(app);
     for (const fn of listeners) fn();
     app.invalidate('selection');
   };
