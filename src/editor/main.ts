@@ -60,6 +60,7 @@ import { install as installZoomCommands } from './commands/zoom.ts';
 import { install as installLayoutCommands } from './commands/layout.ts';
 import { install as installReviewCommands } from './commands/review.ts';
 import { install as installMaskCommands } from './commands/mask.ts';
+import { install as installFlipCommands } from './commands/flip.ts';
 import { Doc } from './model/doc.ts';
 
 const app = new App();
@@ -161,6 +162,7 @@ installZoomCommands(app);
 installLayoutCommands(app);
 installReviewCommands(app);
 installMaskCommands(app);
+installFlipCommands(app);
 
 const revealReady = (): Promise<void> =>
   new Promise((done) => {
