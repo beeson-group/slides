@@ -355,11 +355,15 @@ export function unitOf(s: SrcEl): Unit | null {
 }
 
 // the white space before a unit placed into s: that of the first unit of s, else a line break and
-// the indentation of s with one step more
+// the indentation of s with one step more. the white space before the first unit of an element
+// without a start tag, e.g. the first row of a table without a tbody tag, is in its parent
 export function childSpace(s: SrcEl, eol: string, step: string): string {
   const first = unitsWithin(s)?.units[0];
-  if (first) return spaceOf(s.source.text.slice(first.lead.start, first.range.start));
-  return eol + (s.open ? indentAt(s.source.text, s.open.start) : '') + step;
+  if (!first) return eol + (s.open ? indentAt(s.source.text, s.open.start) : '') + step;
+  const text = s.source.text;
+  let start = first.lead.start;
+  if (!s.open && start === first.range.start) while (start > 0 && /[ \t\r\n\f]/.test(text[start - 1])) start--;
+  return spaceOf(text.slice(start, first.range.start));
 }
 
 // the file written again from the page. each element of the file is written as its units, in the
