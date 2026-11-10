@@ -476,3 +476,35 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errorsOf(page), []);
   });
 }
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: the menu of an image opens with the clipboard, then the items of an image, then the arrange items`, async () => {
+    const page = await editor(platform);
+    await slideOf(page, '.reveal .slides .zone > img');
+    await click(page, IMG, { button: 'right' });
+    await sleep(100);
+    const rows = await menuRows(page);
+    const labels = rows.map((r) => r.label);
+    assert.deepEqual(labels.slice(0, 3), ['Cut', 'Copy', 'Paste'], `the menu of an image opens with ${labels.slice(0, 3).join(', ')}`);
+    assert.ok(!labels.includes('Edit Formula…') && !labels.includes('Edit Plot Data…'), 'the items of another kind are offered on an image');
+    const at = (label) => {
+      const i = labels.indexOf(label);
+      assert.ok(i >= 0, `${label} is not offered on an image: ${labels.join(', ')}`);
+      return i;
+    };
+    const kind = Math.max(at('Replace Image…'), at('Edit Alt Text…'));
+    const arrange = Math.min(at('Bring to Front'), at('Send to Back'));
+    assert.ok(kind < arrange, `the items of an image do not come before the arrange items: ${labels.join(', ')}`);
+    // the figure of the image holds a caption, whose text is offered after the items of the image
+    assert.ok(at('Edit Text') > kind && at('Edit Text') < arrange, `Edit Text is not offered after the items of the image: ${labels.join(', ')}`);
+    await page.evaluate('window.BeesonEditorShell.closeMenus()');
+
+    // a figure of videos does not hold a text, hence Edit Text is not offered on it
+    await slideOf(page, '.reveal .slides .zone > video');
+    await click(page, '.reveal section.present .zone > video', { button: 'right' });
+    await sleep(100);
+    assert.ok(!(await menuRows(page)).some((r) => r.label === 'Edit Text'), 'Edit Text is offered on a figure without a text');
+    await page.evaluate('window.BeesonEditorShell.closeMenus()');
+    assert.deepEqual(errorsOf(page), []);
+  });
+}
