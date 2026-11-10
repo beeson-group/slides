@@ -297,10 +297,10 @@ for (const platform of PLATFORMS) {
 }
 
 // keys that a browser on the platform takes before the page, from the table of keys.md of R5.3:
-// the reserved commands of Chromium, the keys of Firefox marked reserved, and the keys that Safari
-// is documented to keep, i.e. Cmd+R and Cmd+L
+// the reserved commands of Chromium and the keys of Firefox marked reserved. Cmd+R and Cmd+L,
+// which Safari alone keeps, are listed after their fallbacks in Safari only, as editor-r8-4 tests
 const TAKEN = {
-  mac: ['Mod+N', 'Mod+Shift+N', 'Mod+T', 'Mod+Shift+T', 'Mod+W', 'Mod+Shift+W', 'Mod+Q', 'Mod+Shift+P', 'Mod+R', 'Mod+L', 'Ctrl+Tab', 'Ctrl+Shift+Tab', 'Ctrl+PageUp', 'Ctrl+PageDown', 'Ctrl+Home', 'Mod+Alt+ArrowLeft', 'Mod+Alt+ArrowRight', 'Mod+Shift+[', 'Mod+Shift+]', 'Mod+Shift+{', 'Mod+Shift+}'],
+  mac: ['Mod+N', 'Mod+Shift+N', 'Mod+T', 'Mod+Shift+T', 'Mod+W', 'Mod+Shift+W', 'Mod+Q', 'Mod+Shift+P', 'Ctrl+Tab', 'Ctrl+Shift+Tab', 'Ctrl+PageUp', 'Ctrl+PageDown', 'Ctrl+Home', 'Mod+Alt+ArrowLeft', 'Mod+Alt+ArrowRight', 'Mod+Shift+[', 'Mod+Shift+]', 'Mod+Shift+{', 'Mod+Shift+}'],
   other: ['Mod+N', 'Mod+Shift+N', 'Mod+T', 'Mod+Shift+T', 'Mod+W', 'Mod+Shift+W', 'Mod+Shift+P', 'Mod+Shift+Q', 'Mod+F4', 'Alt+F4', 'F11', 'Ctrl+Tab', 'Ctrl+Shift+Tab', 'Ctrl+PageUp', 'Ctrl+PageDown'],
 };
 
@@ -316,18 +316,18 @@ for (const platform of PLATFORMS) {
       for (const k of shown) assert.ok(!TAKEN[platform].includes(k), `${c.id} shows ${k}, which a browser takes before the page`);
     }
     const pinned = Object.fromEntries(keys.map((c) => [c.id, c.keys]));
-    assert.deepEqual(pinned['view.rulers'], mac ? ['Ctrl+Mod+R', 'Mod+R'] : undefined);
-    assert.deepEqual(pinned['arrange.lock'], mac ? ['Ctrl+Mod+L', 'Mod+L'] : ['Mod+L']);
+    assert.deepEqual(pinned['view.rulers'], mac ? ['Mod+R', 'Ctrl+Mod+R'] : undefined);
+    assert.deepEqual(pinned['arrange.lock'], mac ? ['Mod+L', 'Ctrl+Mod+L'] : ['Mod+L']);
     const view = Object.fromEntries((await barMenu(page, 'View')).map((r) => [r.label, r.keys]));
-    assert.equal(view.Rulers, mac ? '⌃⌘R' : '');
+    assert.equal(view.Rulers, mac ? '⌘R' : '');
     const arrange = Object.fromEntries((await barMenu(page, 'Arrange')).map((r) => [r.label, r.keys]));
-    assert.equal(arrange.Lock, mac ? '⌃⌘L' : 'Ctrl+L');
+    assert.equal(arrange.Lock, mac ? '⌘L' : 'Ctrl+L');
     await page.evaluate('window.BeesonEditorShell.closeMenus()');
     await page.evaluate(`window.BeesonEditor.exec('help.keys')`);
     await sleep(100);
     const rows = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-keys .row')].map((r) => ({ label: r.firstElementChild.textContent, keys: r.querySelector('kbd').textContent.split(', ') }))`);
-    assert.deepEqual(rows.find((r) => r.label === 'Lock')?.keys, mac ? ['⌃⌘L', '⌘L'] : ['Ctrl+L']);
-    if (mac) assert.deepEqual(rows.find((r) => r.label === 'Rulers')?.keys, ['⌃⌘R', '⌘R']);
+    assert.deepEqual(rows.find((r) => r.label === 'Lock')?.keys, mac ? ['⌘L', '⌃⌘L'] : ['Ctrl+L']);
+    if (mac) assert.deepEqual(rows.find((r) => r.label === 'Rulers')?.keys, ['⌘R', '⌃⌘R']);
     await press(page, 'Escape');
     await sleep(50);
     if (mac) {
