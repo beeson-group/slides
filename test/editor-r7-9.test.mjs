@@ -320,7 +320,7 @@ for (const platform of PLATFORMS) {
     assert.ok(inside(pop, canvas), `the sheet ${js(pop)} is not inside the canvas ${js(canvas)}`);
     assert.ok(!meets(pop, target), `the sheet ${js(pop)} is put over its formula ${js(target)}`);
     assert.ok(!meets(pop, caption), `the sheet ${js(pop)} is put over the caption ${js(caption)}`);
-    assert.ok(pop.bottom <= target.top, `the sheet ${js(pop)} is not flipped above its formula ${js(target)}`);
+    assert.ok(pop.left >= target.right && pop.top < target.bottom && pop.bottom > target.top, `the sheet ${js(pop)} is not level beside its formula ${js(target)}`);
     await press(page, 'Escape');
     await page.waitFor(`!document.querySelector('.beeson-math')`);
     if ((await render(page)) !== page.source) await page.evaluate('window.BeesonEditor.undo()');

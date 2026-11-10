@@ -203,7 +203,6 @@ function itemButton(app: App, run: Run, item: Item, className: string): { el: HT
   if (item.icon) b.append(glyph(item.icon));
   if (typeof item.text === 'function') b.append(item.text());
   else if (item.text) b.append(make('span', '', item.text));
-  if (item.title) b.title = item.title;
   if (item.title && typeof item.text !== 'string') b.setAttribute('aria-label', item.title);
   keepFocus(b);
   b.addEventListener('click', () => void run(item.command, item.arg));
@@ -213,10 +212,9 @@ function itemButton(app: App, run: Run, item: Item, className: string): { el: HT
     const on = item.pressed ? item.pressed() : s?.checked;
     if (on === null || on === undefined) b.removeAttribute('aria-pressed');
     else b.setAttribute('aria-pressed', String(on && !b.disabled));
-    if (!item.title && s && typeof item.text !== 'string') {
-      b.title = s.label;
-      b.setAttribute('aria-label', s.label);
-    }
+    if (!item.title && s && typeof item.text !== 'string') b.setAttribute('aria-label', s.label);
+    // a dimmed control says why in its tooltip
+    b.title = s?.why ?? item.title ?? (s && typeof item.text !== 'string' ? s.label : '');
   };
   sync();
   return { el: b, sync };
