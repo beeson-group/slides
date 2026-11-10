@@ -245,3 +245,30 @@ test('an undo after a save puts a removed attribute, class, and declaration back
   }
   assert.deepEqual(page.errors, []);
 });
+
+test('the edits of a CRLF file are written with CR LF, and the undos give the file byte for byte', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const { page } = await editorPage(browser);
+  const text = readFileSync('index.html', 'utf8').replace(/\r?\n/g, '\r\n');
+  assert.deepEqual((await page.evaluate(`${E}.open(${JSON.stringify(text)})`)).problems, []);
+  same(await render(page), text, 'the CRLF file');
+  await page.evaluate(`(async () => {
+    const d = ${E}.doc;
+    await d.insertSlide('split', ${slide(2)});
+    await d.insertElement('table', ${slide(2)}.querySelector('.zone'));
+    await d.insertElement('plot', ${slide(4)}, null, { id: 'plot-crlf' });
+    await d.move(${slide(3)}.querySelector(':scope > p'), ${slide(5)}, null);
+    await d.retag(${slide(5)}.querySelector(':scope > p'), 'h3');
+    ${slide(2)}.querySelector('h2').textContent = 'Two\\nlines';
+  })()`);
+  const edited = await render(page);
+  assert.equal(/[^\r]\n/.test(edited), false);
+  assert.ok(edited.includes('<div class="zone">\r\n    <table>\r\n      <tbody>'));
+  assert.ok(edited.includes('<h2>Two\r\nlines</h2>'));
+  const saved = await page.evaluate(`${E}.open(${JSON.stringify(edited)}, false)`);
+  assert.deepEqual(saved.problems, []);
+  await page.evaluate(`(async () => { while (${E}.status().undo) await ${E}.undo(); })()`);
+  same(await render(page), text, 'every edit undone');
+  assert.deepEqual(page.errors, []);
+});
