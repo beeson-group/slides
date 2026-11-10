@@ -494,7 +494,6 @@ export function install(app: App): void {
     let dy = (ev.clientY - p.y) / f.scale;
     if (p.kind === 'resize') {
       resize(p, ev, dx, dy);
-      trail(p);
       return;
     }
     if (p.kind === 'rotate') {
@@ -526,13 +525,6 @@ export function install(app: App): void {
     if (p.trail?.length) followCaptions(app, p.trail, true);
     frames.draw();
     app.invalidate('content');
-  };
-
-  // the captions of a resize moved under their pictures, and the frames drawn again with them
-  const trail = (p: Press) => {
-    if (!p.trail?.length) return;
-    followCaptions(app, p.trail, true);
-    frames.draw();
   };
 
   // the place on the page only, during a drag. the release writes it with writePlace
@@ -633,6 +625,7 @@ export function install(app: App): void {
     view.resizing = true;
     const after = toSlide(f, visualRect(pic));
     view.readout = { text: `${Math.round(after.width)} × ${Math.round(after.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
+    if (p.trail?.length) followCaptions(app, p.trail, true);
     frames.draw();
     app.invalidate('content');
   };
@@ -672,6 +665,7 @@ export function install(app: App): void {
     view.guides = [];
     view.spacing = [];
     view.readout = { text: `${Math.round(box.width)} × ${Math.round(box.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
+    if (p.trail?.length) followCaptions(app, p.trail, true);
     frames.draw();
     app.invalidate('content');
   };
@@ -710,8 +704,10 @@ export function install(app: App): void {
     view.resizing = true;
     view.guides = [];
     view.spacing = [];
-    // the size that the members reach, as W and H of the Arrange pane give it, since the layout
-    // sets the height of a zone and a text block, which can differ from box
+    // the size that the members reach with the captions under their pictures, as W and H of the
+    // Arrange pane give it, since the layout sets the height of a zone and a text block, which can
+    // differ from box
+    if (p.trail?.length) followCaptions(app, p.trail, true);
     const reached = toSlide(f, groupReach(p.els));
     view.readout = { text: `${Math.round(reached.width)} × ${Math.round(reached.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     frames.draw();
