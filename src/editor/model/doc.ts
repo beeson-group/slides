@@ -82,13 +82,18 @@ export function inverseEdit(before: TagState, edit: TagEdit): TagEdit {
   if (edit.fragment !== undefined) out.fragment = before.classes.includes('fragment');
   if (edit.attrs) out.attrs = pick(Object.keys(edit.attrs), (n) => before.attrs[n] ?? null);
   if (edit.index !== undefined) {
+    // an index that the field does not write as the file has it is set back as the attribute
     const v = before.attrs['data-fragment-index'];
-    out.index = v === undefined ? null : Number(v);
+    if (v === undefined || String(Number(v)) === v) out.index = v === undefined ? null : Number(v);
+    else out.attrs = { ...out.attrs, 'data-fragment-index': v };
   }
   if (edit.style) out.style = pick(Object.keys(edit.style), (n) => before.style[n] ?? null);
   if (edit.translate !== undefined) {
+    // and so is a translation, e.g. 1.4px 0px or 0 20px, as the declaration
     const v = before.style.translate;
-    out.translate = v === undefined ? null : translateIn(`translate: ${v}`);
+    const t = v === undefined ? null : translateIn(`translate: ${v}`);
+    if (v === undefined || (t && translateText(t) === v)) out.translate = t;
+    else out.style = { ...out.style, translate: v };
   }
   return out;
 }
@@ -190,6 +195,9 @@ export class Doc {
     if (!s.open) throw new Error(`the ${el.localName} does not have a start tag in the file`);
     const e = normalizeEdit(edit);
     const back = inverseEdit(this.tagState(el), e);
+    // the edit keeps the attributes, the classes, and the declarations of the tag in their order, as
+    // its undo does, hence a redo writes the tag of the edit again
+    e.order ??= back.order;
     this.applyTag(el, e);
     this.host.record({ label, undo: () => this.applyTag(el, back), redo: () => this.applyTag(el, e) });
   }
