@@ -71,11 +71,13 @@ test('Edit Text is enabled on an element with a block and not on a figure withou
   await click(page, await centerOf(page, '.reveal section.present .qr'), { button: 'right' });
   assert.notEqual(await contextItem(page, 'Edit Text'), true, 'Edit Text is enabled on a QR code');
   await press(page, 'Escape');
-  // a figure with its caption holds a block, and so does a heading selected as an element
+  // a figure with its caption holds a block, which Return edits, and so does a heading selected as
+  // an element. the menu of the image of the figure does not offer Edit Text, as in Keynote
   await showSlideWith(page, 'figure.zone');
   await click(page, await centerOf(page, '.reveal section.present figure.zone img'), { button: 'right' });
-  assert.equal(await contextItem(page, 'Edit Text'), true, 'Edit Text is disabled on a figure with a caption');
+  assert.notEqual(await contextItem(page, 'Edit Text'), true, 'Edit Text is offered on the image of a figure');
   await press(page, 'Escape');
+  assert.equal(await editText(page), true, 'Edit Text is disabled on a figure with a caption');
   await click(page, await centerOf(page, '.reveal section.present h2'));
   await press(page, 'Escape');
   assert.equal(await editText(page), true, 'Edit Text is disabled on a heading');
