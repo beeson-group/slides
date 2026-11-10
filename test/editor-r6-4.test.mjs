@@ -1,8 +1,9 @@
 // the canvas follow-ups of package R6.4 on both platforms, driven with trusted input. an undo and a
 // redo of a resize, a move, or a rotation select what was selected for it, i.e. an image, a whole
 // figure, or a group, and not the hidden image of a dark and light pair (finding 4 of opus in round
-// 2 of the council)
+// 2 of the council). the readout of a move gives the upper left corner of the element in slide px.
 // a page of the editor does not write back the guides that it read at its start
+
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
@@ -226,6 +227,44 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
+  test(`${platform}: the readout of a move gives the upper left corner of the element in slide px, and the readout of a resize its size`, async () => {
+    for (const mode of ['dark', 'light']) {
+      const page = await editor(platform, { mode });
+      await selectFigure(page, ZONE_IMG);
+      const img = await boxOf(page, ZONE_IMG);
+      const from = { x: img.left + img.width / 2, y: img.top + img.height / 2 };
+      await drag(page, from, { dx: -70, dy: 45, hold: true });
+      await frames(page);
+      const text = await readout(page);
+      const corner = await page.evaluate(`(() => {
+        const s = document.querySelector('.reveal .slides');
+        const r = s.getBoundingClientRect();
+        const scale = r.width / s.offsetWidth;
+        const f = document.querySelector(${JSON.stringify(FIG)}).getBoundingClientRect();
+        return { x: Math.round((f.left - r.left) / scale), y: Math.round((f.top - r.top) / scale) };
+      })()`);
+      const m = /^x (-?\d+)\s+y (-?\d+)$/.exec(text ?? '');
+      assert.ok(m, `the readout ${text} does not give x and y`);
+      assert.ok(near(Number(m[1]), corner.x, 1) && near(Number(m[2]), corner.y, 1), `the readout ${text} is not the upper left corner ${corner.x}, ${corner.y} of the figure`);
+      await shot(page, `move-readout-${mode}-${platform}`);
+      await release(page, { x: from.x - 70, y: from.y + 45 });
+      await frames(page);
+      await undo(page);
+      await byteExact(page);
+      // the size of a resize
+      const se = await gripAt(page, 'se');
+      await drag(page, se, { dx: -60, dy: -40, hold: true });
+      await frames(page);
+      assert.match((await readout(page)) ?? '', /^\d+ × \d+$/, 'the readout of a resize does not give the size');
+      await shot(page, `resize-readout-${mode}-${platform}`);
+      await release(page, { x: se.x - 60, y: se.y - 40 });
+      await frames(page);
+      await undo(page);
+      await byteExact(page);
+      assert.deepEqual(errors(page), []);
+    }
+  });
+
   test(`${platform}: a page that has not changed its guides does not write the guides it read at its start over those of a newer session`, async () => {
     const key = `beeson-edit-guides:/${LAYOUTS}`;
     const stored = (page) => page.evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(key)}) ?? '[]')`);
@@ -255,7 +294,8 @@ for (const platform of PLATFORMS) {
     assert.deepEqual((await stored(newer))[MATH], { x: [640], y: [300] }, 'a page that is left writes over the guides of the newer session');
     await first.close();
     assert.deepEqual(errors(newer), []);
-  });}
+  });
+}
 
 test('a page shows the guides that another tab stores', async () => {
   const page = await editor('mac');

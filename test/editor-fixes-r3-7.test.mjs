@@ -570,7 +570,7 @@ async function arrangeXY(page) {
 }
 
 for (const platform of PLATFORMS) {
-  test(`${platform}: the position of a dragged figure, as the Arrange pane gives it, is shown next to the pointer`, async () => {
+  test(`${platform}: the position of a dragged figure, its upper left corner in slide px, is shown next to the pointer`, async () => {
     const page = await editor(platform);
     await slideOf(page, '.reveal .slides .zone > img');
     await selectFigure(page, IMG);
@@ -584,7 +584,14 @@ for (const platform of PLATFORMS) {
     await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: to.x, y: to.y, button: 'left', clickCount: 1 });
     await sleep(50);
     assert.equal(await readoutOf(page), null, 'the readout is left after the move');
-    assert.equal(during.text, await arrangeXY(page), 'the readout is not the X and Y of the Arrange pane');
+    const corner = await page.evaluate(`(() => {
+      const s = document.querySelector('.reveal .slides');
+      const r = s.getBoundingClientRect();
+      const f = document.querySelector('.reveal section.present figure.zone').getBoundingClientRect();
+      const scale = r.width / s.offsetWidth;
+      return 'x ' + Math.round((f.left - r.left) / scale) + '  y ' + Math.round((f.top - r.top) / scale);
+    })()`);
+    assert.equal(during.text, corner, 'the readout is not the upper left corner of the figure in slide px');
 
     await page.evaluate('window.BeesonEditor.undo()');
     await byteExact(page);

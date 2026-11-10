@@ -112,6 +112,8 @@ type Press = {
   el: Element | null;
   // the selection at the press, which an undo and a redo of the change select again
   selected: Element[];
+  // the box of el at the press, in slide pixels, whose upper left corner the readout of a move gives
+  corner: Box | null;
   els: Element[];
   from: Map<Element, Place>;
   // the union of the boxes of els at the press, in slide pixels
@@ -251,7 +253,7 @@ export function install(app: App): void {
   const start = (kind: Press['kind'], ev: PointerEvent, el: Element | null, els: Element[], click: Press['click']): Press => {
     const f = frameOf(app);
     const p: Press = {
-      kind, x: ev.clientX, y: ev.clientY, moved: false, el, els, click, selected: app.selection.elements().slice(),
+      kind, x: ev.clientX, y: ev.clientY, moved: false, el, els, click, selected: app.selection.elements().slice(), corner: el ? snapBoxOf(app, el) : null,
       from: new Map(els.map((e) => [e, placeOf(e)])),
       base: els.length ? union(els.map((e) => snapBoxOf(app, e))) : { left: 0, top: 0, width: 0, height: 0 },
     };
@@ -432,10 +434,11 @@ export function install(app: App): void {
     view.moving = p.els;
     view.guides = snap?.guides ?? [];
     view.spacing = snap?.spacing ?? [];
-    // the position of the pressed element, i.e. the X and Y of the Arrange pane, next to the pointer
-    // as in Keynote, below and to the right of it, where the guides at the pointer are not covered
-    const t = p.el ? placeOf(p.el).translate : null;
-    view.readout = { text: `${ghosts.shown() ? 'Copy  ' : ''}${t?.x ?? 0}, ${t?.y ?? 0}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
+    // the upper left corner of the pressed element in slide pixels next to the pointer, as Keynote
+    // gives its x and y, below and to the right of it, where the guides at the pointer are not covered
+    const c = p.corner;
+    const at = c ? `x ${Math.round(c.left + dx)}  y ${Math.round(c.top + dy)}` : '';
+    view.readout = { text: `${ghosts.shown() ? 'Copy  ' : ''}${at}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     document.documentElement.classList.add('beeson-dragging');
     frames.draw();
     app.invalidate('content');
