@@ -99,3 +99,36 @@ export function elementText(kind: ElementKind, style: TextStyle, base: string, o
       return [`<div class="backdrop" data-scene="${attr(o.scene ?? 'nest')}" data-cx="0.97" data-cy="0" data-half="0.5"></div>`];
   }
 }
+
+// the words of the placeholders of the samples, by the tag and the class of the empty element
+const SAMPLE_WORDS: Partial<Record<Layout, [string, string][]>> & { all: [string, string][] } = {
+  title: [['<h1></h1>', 'Title of the talk'], ['<p class="sub"></p>', 'Subtitle of the talk'], ['<p class="who"></p>', 'Name of the speaker']],
+  closing: [['<h1></h1>', 'Thank you'], ['<p class="sub"></p>', 'Questions'], ['<p class="who"></p>', '']],
+  section: [['<h2></h2>', 'Title of the section']],
+  figure: [['<h2></h2>', 'Title of the figure'], ['<p class="caption"></p>', 'Caption of the figure, at the lower left']],
+  split: [['<h2></h2>', 'Title'], ['<p></p>', 'A sentence on the black panel.']],
+  all: [['<h2></h2>', 'Title of the slide'], ['<p></p>', 'A paragraph of the text column, which is set in the width of the layout and runs over a few lines.']],
+};
+
+// the gray box of a sample where a figure or a backdrop goes, inside the padding of a plate
+const BOX = 'style="background: color-mix(in srgb, var(--muted) 34%, var(--bg)); background-clip: content-box"';
+
+// the text of a sample slide of the layout for the tiles of the layout chooser: the skeleton of
+// layoutText with placeholder words, a gray box in place of each figure and backdrop, and a gray
+// zone or backdrop on a content slide, at the place of the layout. a sample does not depend on the
+// deck, and it is drawn but never written into a file
+export function sampleText(layout: Layout): string {
+  const style = { eol: '\n', step: '  ' };
+  let text = layoutText(layout, style);
+  for (const [empty, words] of [...(SAMPLE_WORDS[layout] ?? []), ...SAMPLE_WORDS.all]) {
+    text = text.replace(empty, words ? empty.replace('></', `>${words}</`) : '');
+  }
+  text = text
+    .replace('<ul class="outline" data-auto></ul>', '<ul class="outline"><li class="now">Chapter one</li><li>Chapter two</li></ul>')
+    .replace(/<div class="(backdrop|plate|zone)"[^>]*>/g, (_, cls: string) => `<div class="${cls}" ${BOX}>`);
+  const list = '<ul><li>A first point</li><li>A second point</li></ul>';
+  if (layout === 'content') return text.replace('</section>', `  ${list}\n  <div class="zone" ${BOX}></div>\n</section>`);
+  if (layout === 'narrow') return text.replace('</section>', `  ${list}\n  <div class="backdrop" ${BOX}></div>\n</section>`);
+  if (layout === 'wide') return text.replace('</section>', `  ${list}\n</section>`);
+  return text;
+}

@@ -1,6 +1,9 @@
 // the transition of a slide, as in the Animate inspector of Keynote, limited by the scope rule of
-// the plan to None, Fade, and Magic Move. the transition of a slide is played when the show leaves
-// it for the next slide. Fade is the default of the theme (transition: 'fade' in src/main.ts),
+// the plan to None, Fade, and Magic Move. reveal.js plays the None or Fade of a slide when the show
+// enters it, as PowerPoint plays its Transition to This Slide, since the slide entered is drawn
+// over the slide left (z-index 11 on section.present in reveal.css) and faded in by its own
+// data-transition. Magic Move is played from a slide into the next one. Fade is the default of the
+// theme (transition: 'fade' in src/main.ts),
 // hence it is written as the absence of data-transition, and None as data-transition="none".
 // Magic Move is the auto-animate of reveal.js: data-auto-animate on the slide and on the next one,
 // and the same data-id on each pair of matched elements
