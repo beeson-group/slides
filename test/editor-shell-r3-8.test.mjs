@@ -88,3 +88,54 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the whole text of the first shown element of the current slide matched by selector with has in
+// its text is selected, with the focus in its block
+const selectAll = (page, selector, has) =>
+  page.evaluate(`(() => {
+    const el = [...document.querySelectorAll('.reveal section.present ' + ${JSON.stringify(selector)})].find((e) => e.textContent.includes(${JSON.stringify(has)}));
+    el.closest('[contenteditable="true"]')?.focus();
+    const r = document.createRange();
+    r.selectNodeContents(el);
+    getSelection().removeAllRanges();
+    getSelection().addRange(r);
+    return true;
+  })()`);
+
+const slideOf = (page, heading) => page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('h2')?.textContent.includes(${JSON.stringify(heading)}))`);
+
+for (const platform of PLATFORMS) {
+  test(`Paste Style reads the style of a paragraph that is a step and sets a style on it (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await page.evaluate(`Reveal.slide(${await slideOf(page, 'Math, an ordered list')})`);
+    await frames(page);
+    // from a step: the body style of the paragraph makes a paragraph of a list item
+    await selectAll(page, 'p.fragment', 'Coriolis');
+    await exec(page, 'text.copyStyle');
+    await selectAll(page, 'li', 'A first step');
+    await exec(page, 'text.pasteStyle');
+    await frames(page);
+    const item = await render(page);
+    assert.ok(!item.includes('<li class="fragment" data-fragment-index="3">A first step</li>'), 'the list item is not made a paragraph');
+    assert.match(item, /<p[^>]*>A first step<\/p>/);
+    assert.ok(!/class="[^"]*\b(visible|current-fragment)\b/.test(item), 'a class of reveal.js is written');
+    await undoRedo(page, page.source, item);
+    await undo(page);
+    await sleep(100);
+    // onto a step: the small style of a paragraph is set on the paragraph of the step
+    await selectAll(page, 'p', 'The lead-in');
+    await exec(page, 'text.style.small');
+    await frames(page);
+    const small = await render(page);
+    await exec(page, 'text.copyStyle');
+    await selectAll(page, 'p.fragment', 'Coriolis');
+    await exec(page, 'text.pasteStyle');
+    await frames(page);
+    const edited = await render(page);
+    assert.match(edited, /<p class="(fragment small|small fragment)" data-fragment-index="2" data-highlight="coriolis">where the/);
+    assert.ok(!/class="[^"]*\b(visible|current-fragment)\b/.test(edited), 'a class of reveal.js is written');
+    await undoRedo(page, small, edited);
+    await savedAs(page, edited);
+    assert.deepEqual(errors(page), []);
+  });
+}
