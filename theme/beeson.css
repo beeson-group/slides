@@ -171,6 +171,20 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal .tone-subtle { color: var(--subtle); }
 .reveal .tone-muted { color: var(--muted); }
 
+/* a line or an arrow on a slide, set with Insert > Line of the editor: an svg as large as the box of
+   its line, placed at the upper left of the slide and moved by its translate, stroked in --text or
+   in the tone of its class at the width of a mark of a plot. an arrowhead is the marker of the svg,
+   drawn in the same color */
+.reveal .slides section svg.line { position: absolute; left: 0; top: 0; margin: 0; overflow: visible; pointer-events: none; color: var(--text); }
+.reveal .slides section svg.line.tone-accent { color: var(--accent); }
+.reveal .slides section svg.line.tone-violet { color: var(--violet); }
+.reveal .slides section svg.line.tone-blue { color: var(--blue); }
+.reveal .slides section svg.line.tone-red { color: var(--red); }
+.reveal .slides section svg.line.tone-muted { color: var(--muted); }
+.reveal svg.line line { stroke: currentColor; stroke-width: 3; stroke-linecap: butt; fill: none; }
+.reveal svg.line marker { overflow: visible; }
+.reveal svg.line marker path { fill: currentColor; stroke: none; }
+
 /* lists: a short orange dash in place of a bullet, numbers in gray */
 .reveal ul, .reveal ol { display: block; margin: 24px 0 0; padding: 0; list-style: none; }
 .reveal li { position: relative; margin: 0 0 14px; padding-left: 54px; }

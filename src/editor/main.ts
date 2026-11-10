@@ -60,6 +60,10 @@ import { install as installZoomCommands } from './commands/zoom.ts';
 import { install as installLayoutCommands } from './commands/layout.ts';
 import { install as installReviewCommands } from './commands/review.ts';
 import { install as installPlotCommands } from './commands/plot.ts';
+import { install as installLineCommands } from './commands/line.ts';
+import { install as installRulers } from './canvas/rulers.ts';
+import { install as installGuides } from './canvas/guides.ts';
+import { install as installGrid } from './canvas/grid.ts';
 import { Doc } from './model/doc.ts';
 
 const app = new App();
@@ -161,6 +165,10 @@ installZoomCommands(app);
 installLayoutCommands(app);
 installReviewCommands(app);
 installPlotCommands(app);
+installLineCommands(app);
+installRulers(app);
+installGuides(app);
+installGrid(app);
 
 const revealReady = (): Promise<void> =>
   new Promise((done) => {
