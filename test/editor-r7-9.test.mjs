@@ -304,3 +304,43 @@ for (const platform of PLATFORMS) {
   });
 
 }
+
+// the formula sheets, kept inside the canvas
+for (const platform of PLATFORMS) {
+  test(`the sheet of a new formula is kept beside it inside the canvas, off the figure and its caption (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, '.reveal section.present ul > li:last-child');
+    await press(page, 'Escape');
+    await exec(page, 'insert.formula');
+    await page.waitFor(`!!document.querySelector('.beeson-math')`);
+    await sleep(300);
+    const pop = await rectOf(page, '.beeson-math');
+    const target = await rectOf(page, '.reveal section.present div.math');
+    const caption = await rectOf(page, CAPTION);
+    const canvas = await canvasOf(page);
+    assert.ok(inside(pop, canvas), `the sheet ${js(pop)} is not inside the canvas ${js(canvas)}`);
+    assert.ok(!meets(pop, target), `the sheet ${js(pop)} is put over its formula ${js(target)}`);
+    assert.ok(!meets(pop, caption), `the sheet ${js(pop)} is put over the caption ${js(caption)}`);
+    assert.ok(pop.bottom <= target.top, `the sheet ${js(pop)} is not flipped above its formula ${js(target)}`);
+    await press(page, 'Escape');
+    await page.waitFor(`!document.querySelector('.beeson-math')`);
+    if ((await render(page)) !== page.source) await page.evaluate('window.BeesonEditor.undo()');
+    await byteExact(page);
+  });
+
+  test(`the TeX sheet of a display formula is kept inside the canvas (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: EQUATIONS });
+    await click(page, '.reveal section.present div.math mjx-container');
+    await page.waitFor(`!!document.querySelector('.beeson-math')`);
+    await sleep(300);
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-math .title').textContent`), 'Edit Formula');
+    const pop = await rectOf(page, '.beeson-math');
+    const canvas = await canvasOf(page);
+    assert.ok(inside(pop, canvas), `the sheet ${js(pop)} is drawn past the canvas ${js(canvas)}`);
+    assert.ok(!meets(pop, await rectOf(page, '.reveal section.present div.math')), 'the sheet is put over its formula');
+    await press(page, 'Escape');
+    await page.waitFor(`!document.querySelector('.beeson-math')`);
+    await byteExact(page);
+  });
+
+}
