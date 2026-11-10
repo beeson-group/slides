@@ -33,6 +33,9 @@ export type MenuOptions = {
   // true when the menu is opened from the keyboard: its first item is highlighted, and the focus
   // is given to the menu and back to the owner at the close
   keyboard?: boolean;
+  // true when a menu opened with the pointer takes the focus without a highlight, as a context
+  // menu of macOS, and gives it back at the close
+  focus?: boolean;
   label?: string;
   className?: string;
   onClose?: () => void;
@@ -273,7 +276,7 @@ class Menu {
     if (options.keyboard) {
       this.highlight(this.next(-1, 1));
       this.el.focus({ preventScroll: true });
-    }
+    } else if (options.focus) this.el.focus({ preventScroll: true });
   }
 
   private build(items: MenuItem[]): void {
@@ -553,10 +556,24 @@ export const menuOpen = (): boolean => stack.length > 0;
 
 // the context menu of a kind at the point of ev, or null when no command is shown for the kind,
 // in which case the menu of the browser is left alone
+// whether the last input is a press of the key of the context menu or of Shift+F10, which opens
+// the menu from the keyboard. it is set before the listener of shell.ts that opens the menu, since
+// this module is imported first, and a press of the pointer clears it
+let menuKey = false;
+window.addEventListener('keydown', (ev) => {
+  menuKey = ev.key === 'ContextMenu' || (ev.key === 'F10' && ev.shiftKey);
+}, true);
+window.addEventListener('pointerdown', () => {
+  menuKey = false;
+}, true);
+
+// a context menu takes the focus, and opened from the keyboard it highlights its first item
 export function openContextMenu(app: App, kind: Context, target: Element | null, at: { x: number; y: number }): OpenMenu | null {
   const items = contextItems(app, kind, target);
   if (!items.length) return null;
-  return openMenu(app, items, { anchor: at, placement: 'point', label: `${kind} menu`, className: `context ${kind}` });
+  const keyboard = menuKey;
+  menuKey = false;
+  return openMenu(app, items, { anchor: at, placement: 'point', label: `${kind} menu`, className: `context ${kind}`, keyboard, focus: true });
 }
 
 // a button with a menu of its own beside it, e.g. Add Slide with its layouts. the main button runs
