@@ -107,3 +107,17 @@ test('an edit made while the file is written keeps the deck dirty after both edi
   assert.equal(afterB.dirty, false);
   assert.deepEqual(page.errors, []);
 });
+
+test('an error in the render of a draft is caught and shown in the status line', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser, { deck: LAYOUTS });
+  await page.evaluate(`Reveal.slide(2)`);
+  await click(page, '.reveal section.present > h2');
+  await press(page, 'End');
+  await type(page, ' A');
+  await page.evaluate(`MathJax.startup.document.getMathItemsWithin = () => { throw new Error('the render broke'); }`);
+  await page.waitFor(`/the render broke/.test(window.BeesonEditor.status().message)`, 3000);
+  assert.match((await page.evaluate('window.BeesonEditor.status()')).message, /could not be kept in this browser/);
+  assert.deepEqual(page.errors, []);
+});
