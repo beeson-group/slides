@@ -7,7 +7,7 @@
 import type { App } from '../app.ts';
 import { moveTo, oneByOne, setFinal, setIndexReader, setStart, setStep, shift, stepAt, type Plan, type Start } from '../layers.ts';
 import type { TagEdit } from '../tags.ts';
-import { AFTER_DEFAULT, MIN_DELAY, WITH_SLIDE, afterable, carryDelays, classesOf, deliverPlan, deliveryOf, delaysOf, effectEdit, effectOf, listItems, listOf, modelAt, modelOf, startAt, writePlan, type Delivery, type Effect, type StartKind, type Steps } from '../steps.ts';
+import { AFTER_DEFAULT, MIN_DELAY, WITH_SLIDE, afterable, carryDelays, classesOf, deliverPlan, deliveryOf, delaysOf, effectEdit, effectOf, indexIn, listItems, listOf, modelAt, modelOf, startAt, writePlan, type Delivery, type Effect, type StartKind, type Steps } from '../steps.ts';
 
 type Arg = { el?: Element } & Record<string, unknown>;
 
@@ -19,8 +19,8 @@ function itemOf(app: App, arg: unknown): Element | null {
   if (!el) return null;
   const m = modelOf(app, el.closest('section'));
   if (!m) return null;
-  for (let up: Element | null = el; up && up !== m.slide; up = up.parentElement) if (m.els.includes(up)) return up;
-  return m.els.find((x) => el.contains(x)) ?? null;
+  for (let up: Element | null = el; up && up !== m.slide; up = up.parentElement) if (indexIn(m, up) >= 0) return up;
+  return m.els.find((x, k) => !m.lines[k] && el.contains(x)) ?? null;
 }
 
 function change(app: App, arg: unknown, fn: (plan: Plan, i: number) => Plan): void {
@@ -115,6 +115,29 @@ export function install(app: App): void {
     enabled: (a) => (a.steps as Steps).previewing || !!modelOf(a)?.items.some((it) => it.fragment),
     run: (a) => (a.steps as Steps).preview(),
   });
+  // the step given, or the step of the row chosen in the Steps tab, or of the selected element
+  const fromOf = (a: App, arg: unknown): number | null => {
+    const given = (arg as { step?: unknown } | undefined)?.step;
+    if (typeof given === 'number' && given >= 0) return given;
+    const chosen = (a.steps as Steps).selectedStep();
+    if (chosen !== null) return chosen;
+    const el = itemOf(a, arg);
+    const m = el ? modelAt(a, el) : null;
+    const k = m ? stepAt(m.plan, m.i) : -1;
+    return k >= 0 ? k : null;
+  };
+  c.define({
+    id: 'steps.playFrom',
+    label: (a) => ((a.steps as Steps).previewing ? 'Stop Preview' : 'Play From Selected Step'),
+    menu: menu(60.5),
+    enabled: (a) => (a.steps as Steps).previewing || fromOf(a, undefined) !== null,
+    run: (a, arg) => {
+      const steps = a.steps as Steps;
+      if (steps.previewing) return steps.preview();
+      const from = fromOf(a, arg);
+      return from === null ? undefined : steps.preview(from);
+    },
+  });
   c.define({
     id: 'steps.oneByOne',
     label: 'Steps One by One',
@@ -130,11 +153,15 @@ export function install(app: App): void {
     id: 'steps.allAtOnce',
     label: 'All Steps with the Slide',
     menu: menu(62),
-    enabled: (a) => !!modelOf(a)?.items.some((it) => it.fragment),
+    enabled: (a) => {
+      const m = modelOf(a);
+      return !!m?.items.some((it, k) => it.fragment && !m.lines[k]);
+    },
     undoable: true,
     run: (a) => {
       const m = modelOf(a);
-      if (m) writePlan(a, m, { groups: [], finals: [] });
+      // the line steps of a code box stay steps of their own, set in its Code pane
+      if (m) writePlan(a, m, { groups: m.lines.flatMap((l, i) => (l ? [[i]] : [])), finals: [] });
     },
   });
   // the step chosen in the menu of a chip: an index of the plan, 'first' or 'last' for a new step,

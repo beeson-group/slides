@@ -110,3 +110,24 @@ test('a page opened with motion is shown without reduced motion', { timeout: 600
   assert.equal(await page.evaluate(`matchMedia('(prefers-reduced-motion: reduce)').matches`), false);
   assert.equal(await page.evaluate(`matchMedia('(prefers-reduced-motion: no-preference)').matches`), true);
 });
+
+// in R7.1, the process of a test file of the editor stayed alive for 20 s to 50 s after its last test,
+// since the stderr pipe of Chrome was held open by chrome_crashpad_handler and GoogleUpdater, which
+// inherit it and outlive Chrome, and close() left a timer of 2 s. the timer is found in every run,
+// and the pipe when a helper is still running 200 ms after close()
+test('close() leaves neither a pipe to Chrome nor a timer', { timeout: 60000 }, async () => {
+  const { serve } = await import('../scripts/webdriver.mjs');
+  // the count of each kind of resource, of which an earlier test may still hold some
+  const kinds = () => Object.fromEntries(['PipeWrap', 'ProcessWrap', 'Timeout'].map((k) => [k, process.getActiveResourcesInfo().filter((r) => r === k).length]));
+  const before = kinds();
+  const server = await serve('.');
+  const browser = await launch({ offline: false });
+  const page = await browser.newPage();
+  await page.goto(`${server.origin}/test/pages/editor-layouts.html?edit&still`);
+  await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
+  await browser.close();
+  server.close();
+  await sleep(200);
+  const now = kinds();
+  for (const k of Object.keys(now)) assert.ok(now[k] <= before[k], `close() leaves ${JSON.stringify(now)}, against ${JSON.stringify(before)} before launch()`);
+});

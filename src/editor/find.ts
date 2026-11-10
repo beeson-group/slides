@@ -1,7 +1,8 @@
 // find and replace over the text of the blocks of every slide and of the speaker notes, in one
 // floating panel modeled on the Find & Replace window of Keynote. the panel has a search field with
 // the count of the matches, the previous and next buttons, and a gear menu with the modes Find and
-// Find & Replace and the options Whole Words, Match Case, and the TeX of the formulas. every match
+// Find & Replace, the options Whole Words and Match Case, the scope, and the TeX of the formulas.
+// the scope is the slides and the notes, the notes only, or the alt texts of the images. every match
 // is marked with a highlight of CSS while the panel is open, and the current one more strongly. a
 // replacement writes the content of its block through app.doc.setContent
 //
@@ -10,10 +11,14 @@
 import type { App } from './app.ts';
 import { mathLookup, type MathInfo, type MathLookup } from './math.ts';
 import { display } from './keymap.ts';
+import { paired } from './review/transitions.ts';
 import { injectStyle, make } from './ui/dom.ts';
 import type { MenuItem, MenuOptions, OpenMenu } from './ui/menu.ts';
 
 export type FindOptions = { matchCase: boolean; wholeWords: boolean; tex: boolean };
+
+// the texts searched: the blocks of the slides and of the notes, the notes only, or the alt texts
+export type Scope = 'all' | 'notes' | 'alt';
 
 // a match as the offsets of its first and its past-the-end character in the text of its block
 export type Span = { start: number; end: number };
@@ -205,7 +210,7 @@ function icon(name: keyof typeof ICONS): SVGSVGElement {
 // its own over the canvas, hence it is drawn in the color of the bars in dark mode, which is
 // lighter than the canvas
 const CSS = `
-.beeson-find { position: fixed; z-index: 80; top: 92px; right: calc(var(--ed-insp-col, 0px) + 16px); width: 480px; max-width: calc(100vw - 32px); box-sizing: border-box; background: var(--ed-panel); color: var(--ed-text); border: 1px solid var(--ed-menu-line); border-radius: 10px; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.12); font: 13px/1.3 var(--ed-font); user-select: none; -webkit-user-select: none; }
+.beeson-find { position: fixed; z-index: 80; top: 92px; right: calc(var(--ed-insp-col, 0px) + var(--ed-a11y-col, 0px) + 16px); width: 480px; max-width: calc(100vw - 32px); box-sizing: border-box; background: var(--ed-panel); color: var(--ed-text); border: 1px solid var(--ed-menu-line); border-radius: 10px; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.12); font: 13px/1.3 var(--ed-font); user-select: none; -webkit-user-select: none; }
 @media (prefers-color-scheme: dark) { .beeson-find { background: var(--ed-bg); box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(0, 0, 0, 0.8); } }
 .beeson-find[hidden] { display: none; }
 .beeson-find .title { position: relative; height: 28px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--ed-line); color: var(--ed-muted); font-size: 13px; font-weight: 500; cursor: grab; touch-action: none; }
@@ -256,6 +261,8 @@ export type Finder = {
   readonly open: boolean;
   readonly mode: 'find' | 'replace';
   readonly options: FindOptions;
+  readonly scope: Scope;
+  setScope(scope: Scope): void;
   readonly query: string;
   readonly matches: Match[];
   readonly current: number;
@@ -278,6 +285,7 @@ export type Menus = { open(app: App, items: MenuItem[], options: MenuOptions): O
 export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
   injectStyle('find', CSS);
   const options: FindOptions = { matchCase: false, wholeWords: false, tex: false };
+  let scope: Scope = 'all';
   let mode: 'find' | 'replace' = 'find';
   let indexed: Indexed[] = [];
   let matches: Match[] = [];
@@ -366,6 +374,10 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
     { command: 'find.wholeWords' },
     { command: 'find.matchCase' },
     { rule: true },
+    { command: 'find.scopeAll' },
+    { command: 'find.scopeNotes' },
+    { command: 'find.scopeAlt' },
+    { rule: true },
     { command: 'find.tex' },
   ];
   const openOptions = (keyboard: boolean) => menus.open(app, menuOf(), { anchor: gear.getBoundingClientRect(), placement: 'below', owner: gear, keyboard, label: 'Options', className: 'find-options' });
@@ -408,16 +420,22 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
   });
 
   // the paired blocks on the page in the order of the page, hence the notes of a slide after its
-  // other blocks
+  // other blocks. in the scope of the alt texts, they are the images with an alt text in the file
   function blocks(): Element[] {
-    const list = (app.pairing?.blocks ?? []).map((b) => b.live).filter((el) => el.isConnected && app.slides().contains(el));
+    if (scope === 'alt') return [...app.slides().querySelectorAll('section img[alt]')].filter((img) => img.getAttribute('alt') && !img.closest('aside.notes') && isPaired(img));
+    const list = (app.pairing?.blocks ?? []).map((b) => b.live).filter((el) => el.isConnected && app.slides().contains(el) && (scope !== 'notes' || !!el.closest('aside.notes')));
     return list.sort((a, b) => (a === b ? 0 : before(a, b) ? -1 : 1));
   }
 
+  const isPaired = (el: Element) => paired(app, el);
+
+  // the alt text of an image is one piece without nodes, since it is not drawn on the slide
+  const altIndex = (img: Element): Indexed => ({ block: img, text: img.getAttribute('alt') ?? '', pieces: [] });
+
   function compute(): void {
     const re = pattern(search.input.value, options);
-    const lookup = re ? mathLookup() : null;
-    indexed = re ? blocks().map((b) => index(b, lookup, options.tex)) : [];
+    const lookup = re && scope !== 'alt' ? mathLookup() : null;
+    indexed = re ? blocks().map((b) => (scope === 'alt' ? altIndex(b) : index(b, lookup, options.tex))) : [];
     matches = indexed.flatMap((idx) => spans(idx.text, re).map((s) => ({ ...s, block: idx.block })));
   }
 
@@ -493,6 +511,13 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
     app.showSlide(m.block);
     if (m.block.closest('aside.notes') && !app.notes.shown()) app.notes.toggle();
     app.flush();
+    // an image is selected on its slide, as its alt text is not drawn
+    if (m.block.matches('img')) {
+      if (m.block.getClientRects().length) app.selection.set('elements', [m.block]);
+      app.invalidate('layout');
+      if (keep && keep.isConnected && document.activeElement !== keep) keep.focus({ preventScroll: true });
+      return;
+    }
     const idx = indexedOf(m.block);
     const r = idx && rangeOf(idx, m);
     const scroller = m.block.closest('aside.notes');
@@ -532,6 +557,13 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
   function setMode(m: 'find' | 'replace'): void {
     mode = m;
     sync();
+  }
+
+  function setScope(next: Scope): void {
+    scope = next;
+    search.input.placeholder = next === 'notes' ? 'Find in Notes' : next === 'alt' ? 'Find in Alt Texts' : 'Find';
+    if (panel.hidden) sync();
+    else research();
   }
 
   function toggle(option: keyof FindOptions): void {
@@ -594,6 +626,11 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
   async function write(block: Element, list: Span[], label: string): Promise<void> {
     const idx = indexedOf(block);
     if (!idx || !list.length) return;
+    if (block.matches('img')) {
+      app.doc.setTag(block, { attrs: { alt: splice(idx.text, 0, list, replace.input.value) } }, label);
+      app.invalidate('content');
+      return;
+    }
     await app.doc.setContent(block, replaced(idx, list, replace.input.value), label);
   }
 
@@ -684,6 +721,10 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
       return mode;
     },
     options,
+    get scope() {
+      return scope;
+    },
+    setScope,
     get query() {
       return search.input.value;
     },
