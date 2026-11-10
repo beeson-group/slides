@@ -225,3 +225,44 @@ for (const platform of PLATFORMS) {
   });
 
 }
+
+// the order of the figure of a selected image
+for (const platform of PLATFORMS) {
+  test(`the order commands act on the figure of a selected image (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    const orders = ['front', 'forward', 'backward', 'back'];
+    const states = async () => Object.fromEntries(await Promise.all(orders.map(async (o) => [o, (await state(page, `arrange.order.${o}`)).enabled])));
+    // the states with the figure selected, which the states with its image must match
+    await click(page, IMG);
+    await exec(page, 'selection.container');
+    assert.deepEqual(await selected(page), ['figure.zone']);
+    const figure = await states();
+    assert.equal(figure.backward && figure.back, true, `Send Backward and Send to Back are dimmed for the figure: ${js(figure)}`);
+    await exec(page, 'arrange.order.back');
+    const byFigure = await render(page);
+    await page.evaluate('window.BeesonEditor.undo()');
+    await byteExact(page);
+
+    await click(page, '.reveal section.present h2');
+    await press(page, 'Escape');
+    await click(page, IMG);
+    assert.deepEqual(await selected(page), ['img.for-dark']);
+    assert.deepEqual(await states(), figure, 'the order commands of the image are not those of its figure');
+    await showTab(page, 'Arrange');
+    const buttons = await page.evaluate(`Object.fromEntries(${js(orders)}.map((o) => [o, !document.querySelector('${PANEL} button[data-command="arrange.order.' + o + '"]')?.disabled]))`);
+    assert.deepEqual(buttons, figure, 'the order buttons of the Arrange pane are not live as for the figure');
+    await openBar(page, 'Arrange');
+    const items = await menuItems(page);
+    for (const label of ['Send Backward', 'Send to Back']) assert.equal(items.find((i) => i.label === label)?.dimmed, false, `${label} is dimmed in the Arrange menu: ${js(items)}`);
+    await press(page, 'Escape');
+    await frames(page);
+    // Send to Back of the pane moves the figure as with the figure selected, and keeps the image
+    // selected
+    await click(page, `${PANEL} button[data-command="arrange.order.back"]`);
+    await frames(page);
+    assert.equal(await render(page), byFigure, 'Send to Back of the image does not move its figure');
+    assert.deepEqual(await selected(page), ['img.for-dark'], 'the image is not selected after Send to Back');
+    await roundTrip(page);
+  });
+
+}
