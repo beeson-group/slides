@@ -13,7 +13,7 @@
 
 import type { App } from '../app.ts';
 import type { Command, Group } from '../commands.ts';
-import { injectStyle, make, wire } from '../ui/dom.ts';
+import { injectStyle, make, stored, wire } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { closeMenus, commandKeys, menuItems, openMenu, splitButton, type MenuItem } from '../ui/menu.ts';
 import { ZOOMS } from './canvas.ts';
@@ -21,6 +21,57 @@ import { ZOOMS } from './canvas.ts';
 const NARROW = 820;
 const POPUPS = new Set(['toolbar.view', 'toolbar.zoom']);
 const percent = (z: number) => `${Math.round(z * 100)}%`;
+
+// an item of the layout is a command, a separator, or a space that pushes the items after it to
+// the right. a split button is laid out as its first command
+const SEPARATOR = 'separator';
+const SPACE = 'space';
+type Show = 'both' | 'icon' | 'text';
+const SHOWS: [Show, string][] = [['both', 'Icon and Text'], ['icon', 'Icon Only'], ['text', 'Text Only']];
+const storeKey = () => `beeson-edit-toolbar:${location.pathname}`;
+
+// the commands without a place in the default set that the sheet offers, with their icons on the
+// grid of ui/icons.ts. a name is an icon of that file, and a list is the paths of a new one
+const EXTRA: Record<string, { label: string; icon: string | string[] }> = {
+  'file.open': { label: 'Open', icon: 'open' },
+  'find.open': { label: 'Find', icon: ['M8.5 3.5a5 5 0 1 0 0 10 5 5 0 0 0 0-10z', 'M12.25 12.25 16.5 16.5'] },
+  'view.notes': { label: 'Notes', icon: 'notes' },
+  'view.accessibility': { label: 'Accessibility', icon: ['F10 2.5a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2z', 'M4.5 7.25 10 8.25l5.5-1', 'M10 8.25v4', 'M10 12.25 7.5 17', 'M10 12.25 12.5 17'] },
+  'play.rehearse': { label: 'Rehearse', icon: ['M3 4.5h14v9H3z', 'M8.75 7v4l3.25-2z', 'M7 16.5h6'] },
+  'arrange.group': { label: 'Group', icon: ['M2.75 2.75h14.5v14.5H2.75z', 'M5.5 5.5H10V10H5.5z', 'M10 10h4.5v4.5H10z'] },
+  'arrange.ungroup': { label: 'Ungroup', icon: ['M3.5 3.5h6v6h-6z', 'M10.5 10.5h6v6h-6z'] },
+  'arrange.lock': { label: 'Lock', icon: ['M5 9h10v7.5H5z', 'M7 9V6.75a3 3 0 0 1 6 0V9'] },
+  'arrange.unlock': { label: 'Unlock', icon: ['M5 9h10v7.5H5z', 'M7 9V6.75a3 3 0 0 1 5.8-1.1'] },
+  'text.bigger': { label: 'Bigger', icon: ['M2.75 16 6.75 4.5 10.75 16', 'M4.25 12h5', 'M15 5.5v5', 'M12.5 8h5'] },
+  'text.smaller': { label: 'Smaller', icon: ['M2.75 16 6.75 4.5 10.75 16', 'M4.25 12h5', 'M12.5 8h5'] },
+  'text.copyStyle': { label: 'Copy Style', icon: ['M12.5 3.25l4.25 4.25-7.5 7.5H5v-4.25z', 'M10.5 5.25l4.25 4.25'] },
+  'text.pasteStyle': { label: 'Paste Style', icon: ['M6 4.5H4.5v12h11v-12H14', 'M7 3h6v3H7z', 'M7.5 10h5', 'M7.5 13h5'] },
+  'text.link': { label: 'Link', icon: ['M8.5 11.5a3 3 0 0 0 4.24 0l2.5-2.5a3 3 0 0 0-4.24-4.24l-1 1', 'M11.5 8.5a3 3 0 0 0-4.24 0l-2.5 2.5a3 3 0 0 0 4.24 4.24l1-1'] },
+};
+const MARKS: Record<string, { label: string; icon: string[] }> = {
+  [SEPARATOR]: { label: 'Separator', icon: ['M10 3.5v13'] },
+  [SPACE]: { label: 'Space', icon: ['M3 6.5v7', 'M17 6.5v7', 'M3 10h14'] },
+};
+
+// an icon of ui/icons.ts, or one drawn from paths in the same style
+function glyph(face: string | string[]): SVGSVGElement {
+  if (typeof face === 'string') return icon(face);
+  const svg = icon('square');
+  svg.replaceChildren(...face.map((d) => {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    const filled = d.startsWith('F');
+    path.setAttribute('d', filled ? `M${d.slice(1)}` : d);
+    path.setAttribute('fill', filled ? 'currentColor' : 'none');
+    if (!filled) {
+      path.setAttribute('stroke', 'currentColor');
+      path.setAttribute('stroke-width', '1.5');
+      path.setAttribute('stroke-linecap', 'round');
+      path.setAttribute('stroke-linejoin', 'round');
+    }
+    return path;
+  }));
+  return svg;
+}
 
 const CSS = `
 .beeson-edit-top { display: flex; align-items: center; gap: 2px; height: 52px; padding: 0 10px; box-sizing: border-box; font: 11px/1.2 var(--ed-font); color: var(--ed-text); user-select: none; -webkit-user-select: none; }
@@ -44,14 +95,24 @@ const CSS = `
 .beeson-edit-split .more { width: 16px; height: 44px; padding: 0; border: 0; border-radius: 0 6px 6px 0; background: transparent; color: var(--ed-muted); cursor: default; }
 .beeson-edit-split .more:hover, .beeson-edit-split .more[aria-expanded="true"] { background: var(--ed-hover); }
 @media (max-width: 1099px) { .beeson-edit-top .tb .label { display: none; } .beeson-edit-top .tb { min-width: 36px; } }
+.beeson-edit-top.show-icon .tb .label { display: none; }
+.beeson-edit-top.show-icon .tb { min-width: 36px; }
+.beeson-edit-top.show-text .tb > .beeson-icon { display: none; }
+.beeson-edit-top.show-text .tb .label { display: inline; font-size: 12px; }
+.beeson-edit-top.customizing .tb { cursor: grab; }
+.beeson-edit-top .sep { flex: none; align-self: center; width: 13px; height: 28px; background: linear-gradient(var(--ed-line), var(--ed-line)) center / 1px 100% no-repeat; }
+.beeson-edit-top .space { flex: 1 1 24px; min-width: 24px; align-self: stretch; margin: 6px 0; border: 1px dashed var(--ed-line); border-radius: 6px; }
+.beeson-edit-top .sep:focus-visible, .beeson-edit-top .space:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: -2px; }
 `;
 
 type Shown = { c: Command; el: HTMLButtonElement; variants: Command[] };
 
 // the label of a command on the toolbar: its toolbar label, and else its label
 function toolbarLabel(app: App, c: Command): string {
-  return c.toolbar?.label ?? app.commands.label(c.id);
+  return c.toolbar?.label ?? EXTRA[c.id]?.label ?? app.commands.label(c.id);
 }
+
+const faceOf = (c: Command): string | string[] => c.toolbar?.icon ?? EXTRA[c.id]?.icon ?? 'square';
 
 export function install(app: App): void {
   injectStyle('toolbar', CSS);
@@ -61,7 +122,18 @@ export function install(app: App): void {
   let shown: Shown[] = [];
   let signature = '';
   let narrow = innerWidth < NARROW;
-  let late: Group[] = [];
+  let late: { commands: Command[] }[] = [];
+  // the layout kept for this deck, with null for the default set
+  let kept: string[] | null = null;
+  let show: Show = 'both';
+  try {
+    const saved = JSON.parse(stored(storeKey()) ?? 'null') as { items?: unknown; show?: unknown } | null;
+    if (Array.isArray(saved?.items) && saved.items.every((x) => typeof x === 'string')) kept = saved.items as string[];
+    if (SHOWS.some(([v]) => v === saved?.show)) show = saved!.show as Show;
+  } catch {
+    // a layout that is not read is the default set
+  }
+  let customizing = false;
   const more = make('button', 'tb more-groups');
   more.type = 'button';
   more.setAttribute('aria-label', 'More');
@@ -97,7 +169,7 @@ export function install(app: App): void {
     b.type = 'button';
     b.dataset.command = c.id;
     const label = toolbarLabel(app, c);
-    const face = c.id === 'toolbar.zoom' ? make('span', 'readout', zoomText()) : icon(c.toolbar?.icon ?? 'square');
+    const face = c.id === 'toolbar.zoom' ? make('span', 'readout', zoomText()) : glyph(faceOf(c));
     b.append(face, make('span', 'label', label));
     if (!POPUPS.has(c.id)) {
       wire(b, () => app.commands.run(c.id), fail);
@@ -132,28 +204,86 @@ export function install(app: App): void {
     return out.length && sub.length ? [...out, { rule: true }, ...sub] : [...out, ...sub];
   };
 
+  // the default set: the groups of the registry with a separator between them, and a space before
+  // the groups after Present
+  function defaults(groups: Group[]): string[] {
+    const at = groups.findIndex((g) => g.commands.some((c) => c.id === 'file.present'));
+    const out: string[] = [];
+    for (const [i, g] of groups.entries()) {
+      if (i) out.push(at >= 0 && i === at + 1 ? SPACE : SEPARATOR);
+      for (const c of g.commands) if (!c.toolbar?.split || g.commands.find((x) => x.toolbar?.split === c.toolbar?.split) === c) out.push(c.id);
+    }
+    return out;
+  }
+  const layout = (groups = app.commands.forToolbar()): string[] => (kept ?? defaults(groups)).filter((id) => id === SEPARATOR || id === SPACE || app.commands.get(id));
+
+  // the variants of the split of a command, in the order of its toolbar group, or the command alone
+  const variantsOf = (c: Command, groups: Group[]): Command[] => {
+    const split = c.toolbar?.split;
+    const list = split ? (groups.find((g) => g.group === c.toolbar?.group)?.commands ?? []).filter((x) => x.toolbar?.split === split) : [];
+    return list[0] === c ? list : [c];
+  };
+
+  const signatureOf = (groups: Group[]) => JSON.stringify([innerWidth < NARROW, customizing, show, layout(groups), groups.map((g) => [g.group, g.commands.map((c) => c.id)])]);
+
   function render(): void {
     const groups = app.commands.forToolbar();
-    const at = groups.findIndex((g) => g.commands.some((c) => c.id === 'file.present'));
-    signature = JSON.stringify([narrow, groups.map((g) => [g.group, g.commands.map((c) => c.id)])]);
+    const list = layout(groups);
+    signature = signatureOf(groups);
     shown = [];
-    late = narrow && at >= 0 ? groups.slice(at + 1) : [];
+    late = [];
+    top.classList.toggle('customizing', customizing);
+    for (const [v] of SHOWS) top.classList.toggle(`show-${v}`, v === show);
     const parts: HTMLElement[] = [];
-    for (const [i, g] of groups.entries()) {
-      if (late.includes(g)) continue;
-      const box = make('div', 'group');
-      box.dataset.group = g.group;
-      if (at >= 0 && i === at + 1) box.classList.add('right');
-      for (const c of g.commands) {
-        const split = c.toolbar?.split;
-        const variants = split ? g.commands.filter((x) => x.toolbar?.split === split) : [c];
-        if (variants[0] !== c) continue;
+    if (customizing) {
+      // while the sheet is open, every item is drawn by itself, to be dragged
+      for (const [i, id] of list.entries()) {
+        let el: HTMLElement;
+        if (id === SEPARATOR || id === SPACE) {
+          el = make('span', id === SEPARATOR ? 'sep' : 'space');
+          el.tabIndex = -1;
+          el.setAttribute('role', 'separator');
+          el.setAttribute('aria-label', MARKS[id].label);
+        } else {
+          const c = app.commands.get(id)!;
+          const b = button(c);
+          shown.push({ c, el: b, variants: [c] });
+          el = b;
+        }
+        el.dataset.at = String(i);
+        parts.push(el);
+      }
+      top.replaceChildren(...parts);
+      update();
+      return;
+    }
+    // the groups between the separators and the spaces, the group after a space at the right
+    const boxes: { commands: Command[]; right: boolean }[] = [{ commands: [], right: false }];
+    for (const id of list) {
+      if (id === SEPARATOR || id === SPACE) boxes.push({ commands: [], right: id === SPACE });
+      else boxes[boxes.length - 1].commands.push(app.commands.get(id)!);
+    }
+    const spaced = boxes.findIndex((b) => b.right);
+    let right = false;
+    for (const [i, box] of boxes.entries()) {
+      right ||= box.right;
+      if (!box.commands.length) continue;
+      if (narrow && spaced >= 0 && i >= spaced) {
+        late.push(box);
+        continue;
+      }
+      const el = make('div', 'group');
+      el.dataset.group = box.commands[0].toolbar?.group ?? 'custom';
+      if (right) el.classList.add('right');
+      right = false;
+      for (const c of box.commands) {
+        const variants = variantsOf(c, groups);
         const b = button(c);
         shown.push({ c, el: b, variants });
-        if (split) box.append(splitButton(app, b, () => splitItems(c, variants), `${toolbarLabel(app, c)} options`));
-        else box.append(b);
+        if (c.toolbar?.split) el.append(splitButton(app, b, () => splitItems(c, variants), `${toolbarLabel(app, c)} options`));
+        else el.append(b);
       }
-      parts.push(box);
+      parts.push(el);
     }
     if (late.length) {
       const box = make('div', 'group right');
@@ -166,20 +296,19 @@ export function install(app: App): void {
 
   // the state of each button, and the one tab stop on the first button that can be pressed
   function update(): void {
-    const next = JSON.stringify([innerWidth < NARROW, app.commands.forToolbar().map((g) => [g.group, g.commands.map((c) => c.id)])]);
-    if (next !== signature) {
+    if (signatureOf(app.commands.forToolbar()) !== signature) {
       narrow = innerWidth < NARROW;
       render();
       return;
     }
     for (const { c, el, variants } of shown) {
       const s = app.commands.state(c.id);
-      el.disabled = !s.enabled;
+      el.disabled = !s.enabled && !customizing;
       const keys = commandKeys(c, app.platform);
       el.title = keys ? `${s.label} (${keys})` : s.label;
       // a split button is pressed while one of its variants is on, e.g. Arrow while an arrow is drawn
       const on = variants.map((v) => app.commands.state(v.id).checked);
-      if (on.some((x) => x !== null)) el.setAttribute('aria-pressed', String(on.some((x) => x === true)));
+      if (on.some((x) => x !== null) && !customizing) el.setAttribute('aria-pressed', String(on.some((x) => x === true)));
       else el.removeAttribute('aria-pressed');
       if (c.id === 'file.save') el.classList.toggle('on', app.dirty);
       if (c.id === 'toolbar.zoom') {
@@ -192,7 +321,7 @@ export function install(app: App): void {
     else stops.forEach((b) => b.tabIndex === 0 || (b.tabIndex = -1));
   }
 
-  const items = (): HTMLButtonElement[] => [...top.querySelectorAll<HTMLButtonElement>('button')].filter((b) => !b.disabled && b.getClientRects().length > 0);
+  const items = (): HTMLElement[] => [...top.querySelectorAll<HTMLElement>(customizing ? 'button, .sep, .space' : 'button')].filter((b) => !(b as HTMLButtonElement).disabled && b.getClientRects().length > 0);
 
   top.addEventListener('keydown', (ev) => {
     const list = items();
@@ -211,8 +340,8 @@ export function install(app: App): void {
   });
   // a button that gets the focus is the tab stop
   top.addEventListener('focusin', (ev) => {
-    if (!(ev.target instanceof HTMLButtonElement)) return;
-    for (const b of top.querySelectorAll('button')) b.tabIndex = b === ev.target ? 0 : -1;
+    if (!(ev.target instanceof HTMLElement) || !items().includes(ev.target)) return;
+    for (const b of items()) b.tabIndex = b === ev.target ? 0 : -1;
   });
 
   const openMore = (keyboard: boolean) => {
