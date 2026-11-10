@@ -17,7 +17,7 @@ export function install(app: App): void {
     label: 'Delete',
     keys: { mac: ['Backspace', 'Delete'], other: ['Delete', 'Backspace'] },
     in: ['canvas'],
-    menu: { bar: 'Edit', group: 'delete', order: 40 },
+    menu: { bar: 'Edit', group: 'clipboard', order: 23 },
     context: ['element'],
     enabled: (a) => selectedElements(a).some((el) => !locked(el)),
     undoable: true,

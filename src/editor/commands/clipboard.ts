@@ -230,7 +230,8 @@ const hasRange = () => {
 export function install(app: App): void {
   const c = app.commands;
   const fail = (e: unknown) => app.fail(e);
-  const menu = (order: number) => ({ bar: 'Edit', group: 'clipboard', order });
+  // Duplicate opens the group of the selection, as Duplicate Selection in the Edit menu of Keynote
+  const menu = (order: number, group = 'clipboard') => ({ bar: 'Edit', group, order });
   const ready = (a: App) => !!a.pairing?.root;
 
   c.define({
@@ -295,7 +296,7 @@ export function install(app: App): void {
     label: 'Duplicate',
     keys: { mac: ['Mod+D'], other: ['Mod+D'] },
     in: ['canvas'],
-    menu: menu(30),
+    menu: menu(30, 'select'),
     context: ['element'],
     enabled: (a) => ready(a) && (selectedElements(a).length > 0 || a.commands.enabled('slide.duplicate')),
     undoable: true,

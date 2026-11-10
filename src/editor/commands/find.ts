@@ -23,7 +23,7 @@ export function install(app: App): void {
     label: 'Find…',
     keys: { mac: ['Mod+F'], other: ['Mod+F'] },
     in: IN,
-    menu: { bar: 'Edit', group: 'find', order: 10 },
+    menu: { bar: 'Edit', group: 'find', order: 40 },
     run: (_, arg) => finder.show('find', queryOf(arg)),
   });
   // with the panel closed, the match found is selected in its block, as after Find Next in Keynote
@@ -32,7 +32,7 @@ export function install(app: App): void {
     label: 'Find Next',
     keys: NEXT,
     in: IN,
-    menu: { bar: 'Edit', group: 'find', order: 11 },
+    menu: { bar: 'Edit', group: 'find', order: 41 },
     enabled: () => !!finder.query,
     run: () => finder.step(1, !finder.open),
   });
@@ -41,7 +41,7 @@ export function install(app: App): void {
     label: 'Find Previous',
     keys: PREVIOUS,
     in: IN,
-    menu: { bar: 'Edit', group: 'find', order: 12 },
+    menu: { bar: 'Edit', group: 'find', order: 42 },
     enabled: () => !!finder.query,
     run: () => finder.step(-1, !finder.open),
   });
@@ -50,7 +50,7 @@ export function install(app: App): void {
     label: 'Replace…',
     keys: { mac: ['Ctrl+H'], other: ['Ctrl+H'] },
     in: IN,
-    menu: { bar: 'Edit', group: 'find', order: 13 },
+    menu: { bar: 'Edit', group: 'find', order: 43 },
     run: (_, arg) => finder.show('replace', queryOf(arg)),
   });
   c.define({
