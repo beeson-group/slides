@@ -11,6 +11,7 @@
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
@@ -250,6 +251,12 @@ async function fieldValue(page, id) {
   return Number(await page.evaluate(`document.querySelector('#beeson-edit-num-${id}')?.value`));
 }
 
+// a trusted drag of the file at path from the Finder, dropped at the point at
+async function dropFile(page, at, path) {
+  const data = { items: [], files: [path], dragOperationsMask: 1 };
+  for (const type of ['dragEnter', 'dragOver', 'drop']) await page.send('Input.dispatchDragEvent', { type, x: at.x, y: at.y, data });
+}
+
 // the keys of the commands, and the modifier that turns the snapping of a resize off
 const KEYS = {
   mac: { front: 'Mod+Shift+F', forward: 'Mod+Alt+Shift+F', backward: 'Mod+Alt+Shift+B', back: 'Mod+Shift+B', group: 'Mod+Alt+G', ungroup: 'Mod+Alt+Shift+G', lock: 'Mod+L', unlock: 'Mod+Alt+L', remove: 'Backspace', duplicate: 'Mod+D', free: 'Meta' },
@@ -485,6 +492,55 @@ for (const combo of COMBOS) {
       assert.deepEqual(count(edited), [2, 2], `${act} of the picture writes ${js(count(edited))} images of each mode, not both images of the pair twice`);
       await roundTrip(page, edited);
     }
+  });
+
+  // Replace with a file of the other kind put an element with the mode of the picture alone in its
+  // place, without the group and the lock of the picture
+  test(`Replace with a video keeps the group and the lock of the picture (${named(combo)})`, async (t) => {
+    const marked = (attrs, over) => {
+      const at = [...SOURCE.matchAll(/<section>/g)][n].index;
+      const end = SOURCE.indexOf('</section>', at);
+      const slide = SOURCE.slice(at, end).replace(/(<img [^>]*)>/g, `$1${attrs}>`).replace('<p style="translate: 0px 80px">', `<p style="translate: 0px 80px"${over}>`);
+      return SOURCE.slice(0, at) + slide + SOURCE.slice(end);
+    };
+    // the video put in the place of the shown image of the text, which keeps its mode, group, and lock
+    const replacedIn = (text, attrs) => {
+      const tags = slideOf(text, n).match(/<img [^>]*>/g);
+      const shown = tags.find((tag) => n === 1 || tag.includes(`for-${mode}`));
+      const cls = n === 0 ? ` class="for-${mode}"` : '';
+      return text.replace(shown, `<video${cls} src="media/clip-dark.mp4" poster="media/clip-dark.png" muted loop data-autoplay${attrs}></video>`);
+    };
+    const opened = async (text) => {
+      const page = await load(t, platform, mode, n);
+      const s = await page.evaluate(`window.BeesonEditor.open(${js(text)})`);
+      assert.deepEqual(s.problems, []);
+      page.source = text;
+      await page.evaluate(`Reveal.slide(${n})`);
+      await frames(page);
+      return page;
+    };
+    // a group, through Replace of the Image pane given a video file
+    let page = await opened(marked(' data-group="g1"', ' data-group="g1"'));
+    await pick(page, 'figure');
+    await page.evaluate(`(async () => {
+      const bytes = await (await fetch('/demo/clip-dark.mp4')).arrayBuffer();
+      await window.BeesonEditor.exec('media.replace', { files: [new File([bytes], 'clip-dark.mp4', { type: 'video/mp4' })] });
+    })()`);
+    await frames(page);
+    let edited = await render(page);
+    assert.equal(edited, replacedIn(page.source, ' data-group="g1"'), 'the video of Replace does not keep the group of the image');
+    await roundTrip(page, edited);
+    await saved(page, edited);
+    // a group and a lock, through a drop of a video file onto the picture, which the lock does not
+    // turn off
+    page = await opened(marked(' data-group="g1" data-locked', ' data-group="g1"'));
+    await dropFile(page, await pictureOf(page), resolve('demo/clip-dark.mp4'));
+    await page.waitFor(`window.BeesonEditor.render().includes('media/clip-dark.mp4')`);
+    await frames(page);
+    edited = await render(page);
+    assert.equal(edited, replacedIn(page.source, ' data-group="g1" data-locked'), 'the video of a drop does not keep the group and the lock of the image');
+    await roundTrip(page, edited);
+    await saved(page, edited);
   });
 
   test(`the rotation, the flips, Edit Mask, Replace, and the Image pane act on the picture alone, and on both images of a pair (${named(combo)})`, async (t) => {
