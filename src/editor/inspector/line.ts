@@ -1,6 +1,6 @@
 // the Line pane of the Format tab, for a selected line or arrow, as the Line section of the Style
-// tab of Keynote: a swatch of each tone of the theme, and the arrowheads (none, at the end, or at
-// both ends). each control runs a command of commands/line.ts by its id
+// tab of Keynote: a swatch of each tone of the theme, and the arrowheads (none, at the start, at the
+// end, or at both ends). each control runs a command of commands/line.ts by its id
 
 import type { App } from '../app.ts';
 import { HEADS, LINE_TONES } from '../commands/line.ts';
@@ -17,8 +17,8 @@ function glyphOf(heads: string): SVGSVGElement {
   svg.setAttribute('height', '12');
   svg.setAttribute('aria-hidden', 'true');
   const d = ['M3 6h22'];
-  if (heads !== 'none') d.push('M20 2l5 4-5 4');
-  if (heads === 'both') d.push('M8 2L3 6l5 4');
+  if (heads === 'end' || heads === 'both') d.push('M20 2l5 4-5 4');
+  if (heads === 'start' || heads === 'both') d.push('M8 2L3 6l5 4');
   const path = document.createElementNS(SVG, 'path');
   path.setAttribute('d', d.join(''));
   path.setAttribute('fill', 'none');
