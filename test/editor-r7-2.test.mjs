@@ -362,6 +362,30 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
+  test(`Clear Menu empties Open Recent at once, while its list is still being written to the database (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await exec(page, 'file.recent.clear');
+    const name = `recent-slow-${platform}.html`;
+    await page.evaluate(`(async () => {
+      const root = await navigator.storage.getDirectory();
+      const w = await (await root.getFileHandle(${js(name)}, { create: true })).createWritable();
+      await w.write(${js(page.source)});
+      await w.close();
+      window.showOpenFilePicker = async () => [await root.getFileHandle(${js(name)})];
+    })()`);
+    await choose(page, 'File', 'Open…');
+    await page.waitFor(`window.BeesonEditorShell.menuItems('File', 'Open Recent').length === 3`);
+    // a database that does not answer, as one under load answers late
+    const labels = await page.evaluate(`(() => {
+      indexedDB.open = () => ({});
+      window.BeesonEditor.exec('file.recent.clear');
+      const E = window.BeesonEditor;
+      return window.BeesonEditorShell.menuItems('File').slice(0, 2).map((i) => i.command ? E.state(i.command).label : '{' + i.label + '}');
+    })()`);
+    assert.deepEqual(labels, ['Open…', 'Open Recent']);
+    assert.deepEqual(errors(page), []);
+  });
+
   test(`the card of a deck that cannot read itself offers the file of the deck kept for Open Recent (${platform})`, async (t) => {
     const page = await load(t, platform);
     await exec(page, 'file.recent.clear');

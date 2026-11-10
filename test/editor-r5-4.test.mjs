@@ -102,7 +102,8 @@ const SIZES = { mac: { width: 1600, height: 1000 }, other: { width: 1920, height
 
 // state table-inserted of round 2: the table was put into the flow under the list, which its
 // translate moves down, hence the bar of the columns covered the last line of the list, and the
-// rows and the button Add Row ran past the bottom of the slide
+// rows and the button Add Row ran past the bottom of the slide. a table of 2 rows fits under the
+// list, and one of 3 rows is moved up over it, as tested in editor-r7-8.test.mjs
 for (const platform of ['mac', 'other']) {
   test(`a table inserted under the list of a full slide is put in its free space, with its controls in the canvas (${platform})`, async (t) => {
     const page = await open(platform, { size: SIZES[platform] });
@@ -111,7 +112,7 @@ for (const platform of ['mac', 'other']) {
     const li = '.reveal section.present ul > li:last-child';
     await click(page, li);
     await press(page, 'Escape');
-    await exec(page, 'insert.table', { rows: 3, columns: 3 });
+    await exec(page, 'insert.table', { rows: 2, columns: 3 });
     await sleep(100);
     await settle(page);
     const slide = await boxOf(page, '.reveal section.present');

@@ -35,6 +35,8 @@ const PATHS: Record<string, string[]> = {
   plus: ['M5 10h10', 'M10 5v10'],
   contrast: ['M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13z', 'F10 3.5a6.5 6.5 0 0 0 0 13z'],
   fit: ['M3.5 7.5v-4h4', 'M12.5 3.5h4v4', 'M16.5 12.5v4h-4', 'M7.5 16.5h-4v-4'],
+  // the Edit Mask button of the mask bar of Keynote
+  crop: ['M6 2.5V14h11.5', 'M2.5 6H14v11.5'],
   more: ['M5 6l4 4-4 4', 'M11 6l4 4-4 4'],
   warning: ['M10 3.5 17.5 16.5h-15z', 'M10 8.5v3.5', 'F10.75 14.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0z'],
   square: ['M4.5 4.5h11v11h-11z'],
