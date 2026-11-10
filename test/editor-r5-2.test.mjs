@@ -233,3 +233,93 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the guides of a snap that are drawn, each as its axis and its place in slide px
+const guidesShown = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-overlay .beeson-guide')].filter((g) => !g.hidden).map((g) => {
+  const s = document.querySelector('.reveal .slides');
+  const sr = s.getBoundingClientRect(), k = sr.width / s.offsetWidth, r = g.getBoundingClientRect();
+  return g.classList.contains('v') ? ['x', Math.round((r.left - sr.left) / k)] : ['y', Math.round((r.top - sr.top) / k)];
+})`);
+const release = (page, at) => page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: at.x, y: at.y, button: 'left', clickCount: 1 });
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: a dragged figure snaps to the end and the middle of a line, with the guide drawn`, async () => {
+    const page = await editor(platform);
+    // a vertical line at x 1100 from y 300 to 700, left of the zone, with its middle at y 500
+    await addLine(page, { x: 1100, y: 300 }, { x: 1100, y: 700 });
+    const drawn = await render(page);
+    const zone = await slideBox(page, '.reveal section.present .zone');
+    // the left edge of the zone is dragged to 5 px right of the line, and its top to 5 px under the
+    // middle of the line
+    const start = await screen(page, zone.left + zone.width / 2, zone.top + zone.height / 2);
+    const k = (await screen(page, 1, 0)).x - (await screen(page, 0, 0)).x;
+    const dx = (1105 - zone.left) * k, dy = (505 - zone.top) * k;
+    await drag(page, start, { dx, dy, hold: true });
+    const guides = await guidesShown(page);
+    await release(page, { x: start.x + dx, y: start.y + dy });
+    await frames(page);
+    const moved = await slideBox(page, '.reveal section.present .zone');
+    assert.ok(near(moved.left, 1100, 1), `the left edge of the zone is at ${moved.left.toFixed(1)}, not on the line at 1100`);
+    assert.ok(near(moved.top, 500, 1), `the top of the zone is at ${moved.top.toFixed(1)}, not at the middle of the line at 500`);
+    assert.ok(guides.some(([a, at]) => a === 'x' && near(at, 1100, 1)), `the guide of the line is not drawn: ${JSON.stringify(guides)}`);
+    const edited = await render(page);
+    await undo(page);
+    await frames(page);
+    assert.equal(await render(page), drawn, 'an undo does not put the zone back');
+    await redo(page);
+    assert.equal(await render(page), edited);
+    await inScope(page);
+    await saveAndReopen(page, `r5-2-${++saves}.html`);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`${platform}: a dragged line snaps by its end to the middle of a figure and to the end of another line, with the guides drawn`, async () => {
+    const page = await editor(platform);
+    // a horizontal line under the zone, whose right end is dragged to 3 px right of the middle of
+    // the zone at x 1500, which is not on a line of the layout
+    await addLine(page, { x: 1300, y: 1000 }, { x: 1450, y: 1000 });
+    const k = (await screen(page, 1, 0)).x - (await screen(page, 0, 0)).x;
+    const z = await slideBox(page, '.reveal section.present .zone');
+    const middle = z.left + z.width / 2;
+    const ends = () => page.evaluate(`[...Reveal.getCurrentSlide().querySelectorAll('svg.line')].map((svg) => { const [x, y] = (svg.style.translate || '0px 0px').split(' ').map(parseFloat); const l = svg.querySelector('line'); const n = (a) => Number(l.getAttribute(a)); return [x + n('x1'), y + n('y1'), x + n('x2'), y + n('y2')]; })`);
+    let at = await screen(page, 1375, 1000);
+    let dx = (middle + 3 - 1450) * k;
+    await drag(page, at, { dx, dy: 0, hold: true });
+    let guides = await guidesShown(page);
+    await release(page, { x: at.x + dx, y: at.y });
+    await frames(page);
+    let [line] = await ends(page);
+    assert.ok(near(line[2], middle, 1), `the right end of the line is at ${line[2]}, not on the middle of the zone at ${middle}`);
+    assert.ok(guides.some(([a, p]) => a === 'x' && near(p, middle, 1)), `the guide of the zone is not drawn: ${JSON.stringify(guides)}`);
+    let edited = await render(page);
+    await undo(page);
+    await frames(page);
+    assert.ok((await render(page)).includes('translate: 1300px 1000px'), 'an undo does not put the line back');
+    await redo(page);
+    assert.equal(await render(page), edited);
+
+    // a second line, whose left end is dragged to 3 px under the right end of the first
+    await addLine(page, { x: 400, y: 700 }, { x: 600, y: 700 });
+    [, line] = await ends(page);
+    const [first] = await ends(page);
+    at = await screen(page, 500, 700);
+    dx = (first[2] - 400) * k;
+    const dy = (first[3] + 3 - 700) * k;
+    await drag(page, at, { dx, dy, hold: true });
+    guides = await guidesShown(page);
+    await release(page, { x: at.x + dx, y: at.y + dy });
+    await frames(page);
+    const [, second] = await ends(page);
+    assert.ok(near(second[0], first[2], 1) && near(second[1], first[3], 1), `the left end of the second line is at ${second[0]}, ${second[1]}, not on the end of the first at ${first[2]}, ${first[3]}`);
+    assert.ok(guides.some(([a, p]) => a === 'y' && near(p, first[3], 1)), `the guide of the first line is not drawn: ${JSON.stringify(guides)}`);
+    edited = await render(page);
+    await undo(page);
+    await frames(page);
+    assert.ok((await render(page)).includes('translate: 400px 700px'), 'an undo does not put the second line back');
+    await redo(page);
+    assert.equal(await render(page), edited);
+    await inScope(page);
+    await saveAndReopen(page, `r5-2-${++saves}.html`);
+    assert.deepEqual(errors(page), []);
+  });
+}
