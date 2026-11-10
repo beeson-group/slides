@@ -53,8 +53,9 @@ const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 const near = (a, b, by = 1.5) => Math.abs(a - b) <= by;
 let saves = 0;
 
-// the selected elements, each named by its tag and its classes of the deck
-const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((el) => [el.localName, ...el.classList].filter((c) => !c.startsWith('beeson-') && c !== 'visible' && c !== 'current-fragment').join('.'))`);
+// the selected elements, each named by its tag and its classes of the deck, apart from those that
+// the Image pane writes
+const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((el) => [el.localName, ...el.classList].filter((c) => !c.startsWith('beeson-') && !['visible', 'current-fragment', 'paper', 'invert'].includes(c)).join('.'))`);
 const rectOf = (page, selector) => page.evaluate(`(() => {
   const r = [...document.querySelectorAll(${js(selector)})].map((e) => e.getBoundingClientRect()).find((r) => r.width);
   return r ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom, x: r.left + r.width / 2, y: r.top + r.height / 2 } : null;
@@ -203,8 +204,8 @@ async function roundTrip(page, edited) {
 }
 
 // act run from each of froms, the figure and its picture by default, which must write the same
-// text, accepted by expect. an act that returns false changes the selection on purpose
-async function check(page, what, act, expect, { froms = ['figure', 'picture'], first = 1 } = {}) {
+// text up to same, accepted by expect. an act that returns false changes the selection on purpose
+async function check(page, what, act, expect, { froms = ['figure', 'picture'], first = 1, same = (text) => text } = {}) {
   let text = null;
   for (const from of froms) {
     await pick(page, from, first);
@@ -215,7 +216,7 @@ async function check(page, what, act, expect, { froms = ['figure', 'picture'], f
     if (text === null) {
       expect(edited);
       text = edited;
-    } else assert.equal(edited, text, `${what} from the picture does not write what it writes from the figure`);
+    } else assert.equal(same(edited), same(text), `${what} from the picture does not write what it writes from the figure`);
     if (kept !== false) assert.deepEqual(await selected(page), was, `${what} from the ${from} changes the selection`);
     await roundTrip(page, edited);
   }
@@ -373,13 +374,6 @@ for (const combo of COMBOS) {
   test(`Group, Ungroup, Lock, and Unlock act on the figure from the figure and from its picture (${named(combo)})`, async (t) => {
     const page = await load(t, platform, mode, n);
     const { fig, over } = page.parts;
-    const grouped = await check(page, 'Group', async () => {
-      await click(page, OVER, { modifiers: 'Shift' });
-      await press(page, keys.group);
-      await frames(page);
-      assert.deepEqual(await selected(page), ['figure.zone', 'p'], 'Group does not select the figure and the paragraph');
-      return false;
-    }, (edited) => assert.deepEqual(changedTags(page.source, edited), { [fig]: '<figure class="zone" data-group="g1">', [over]: '<p style="translate: 0px 80px" data-group="g1">' }));
     // a lock from the picture keeps the picture selected, and Unlock then takes it off the figure
     for (const from of ['figure', 'picture']) {
       await pick(page, from);
@@ -409,6 +403,13 @@ for (const combo of COMBOS) {
       assert.equal(await render(page), locked, 'a redo of Lock does not lock the figure again');
       await undo(page);
     }
+    const grouped = await check(page, 'Group', async () => {
+      await click(page, OVER, { modifiers: 'Shift' });
+      await press(page, keys.group);
+      await frames(page);
+      assert.deepEqual(await selected(page), ['figure.zone', 'p'], 'Group does not select the figure and the paragraph');
+      return false;
+    }, (edited) => assert.deepEqual(changedTags(page.source, edited), { [fig]: '<figure class="zone" data-group="g1">', [over]: '<p style="translate: 0px 80px" data-group="g1">' }));
     await saved(page, grouped);
     // a figure in a group is selected by itself at the second click, and its picture at the third
     const last = await check(page, 'Ungroup', async () => {
@@ -501,7 +502,10 @@ for (const combo of COMBOS) {
     await check(page, 'Replace Image', () => page.evaluate(`(async () => {
       const bytes = await (await fetch('/demo/figure-dark.png')).arrayBuffer();
       await window.BeesonEditor.exec('media.replace', { files: [new File([bytes], 'replaced.png', { type: 'image/png' })] });
-    })()`), shownOnly(/ src="media\/replaced[^"]*\.png"/));
+    })()`), shownOnly(/ src="media\/replaced[^"]*\.png"/), {
+      // the second file of the same name is written under a name of its own, e.g. replaced-2.png
+      same: (text) => text.replace(/media\/replaced(-\d+)?\.png/g, 'media/replaced.png'),
+    });
     await check(page, 'Paper', async () => {
       assert.ok((await tabs(page)).includes('Image'), 'the Image pane is not shown');
       await exec(page, 'figure.paper');
