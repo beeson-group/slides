@@ -252,7 +252,7 @@ for (const size of [{ width: 1920, height: 1080 }, { width: 1280, height: 800 }]
   }
 }
 
-test('the width of a resized QR code is written into the file', { todo: 'the tags of today write only translate, until Doc.setTag of R1.1 writes style' }, async (t) => {
+test('the width of a resized QR code is written into the file', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
   const page = await layouts(browser);
