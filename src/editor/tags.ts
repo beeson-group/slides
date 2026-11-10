@@ -12,7 +12,10 @@ export type Translate = { x: number; y: number };
 // style, null removes the attribute or the declaration, and in classes, false removes the class.
 // an empty string in attrs is written as an attribute without a value, e.g. muted. the fields
 // fragment, index, and translate take precedence over the class fragment, the attribute
-// data-fragment-index, and the declaration translate of the maps
+// data-fragment-index, and the declaration translate of the maps. order gives the names of the
+// attributes, the classes, and the declarations of a tag in their order, e.g. those of the tag
+// before an edit that is undone, and a new one is written before the first one that follows it
+// there, else at the end
 export type TagEdit = {
   attrs?: Record<string, string | null>;
   classes?: Record<string, boolean>;
@@ -20,11 +23,20 @@ export type TagEdit = {
   fragment?: boolean;
   index?: number | null;
   translate?: Translate | null;
+  order?: { attrs?: string[]; classes?: string[]; style?: string[] };
 };
 export type Step = { fragment: boolean; index: number | null };
 
 // a part of a written value: raw bytes kept from the file, or new text to escape
 type Part = { text: string; raw: boolean };
+
+// the index in list at which an item named name is put, by its place in order
+function placeOf<T>(order: string[] | undefined, list: T[], name: string, nameOf: (t: T) => string): number {
+  const i = order ? order.indexOf(name) : -1;
+  if (i < 0) return list.length;
+  const j = list.findIndex((t) => order!.indexOf(nameOf(t)) > i);
+  return j < 0 ? list.length : j;
+}
 
 const isSpace = (c: string | undefined) => c === ' ' || c === '\t' || c === '\n' || c === '\r' || c === '\f';
 const attr = (attrs: Attr[], name: string): Attr | null => attrs.find((a) => a.name === name) ?? null;
@@ -143,7 +155,7 @@ function values(attrs: Attr[], edit: TagEdit): Map<string, Part[] | null> {
     let after = 'class' in whole ? splitClasses(whole.class).map((c) => ({ ...c, fresh: true })) : before.map((c) => ({ ...c, fresh: false }));
     for (const [name, on] of Object.entries(classMap)) {
       const has = after.some((c) => c.name === name);
-      if (on && !has) after.push({ raw: name, name, fresh: true });
+      if (on && !has) after.splice(placeOf(edit.order?.classes, after, name, (c) => c.name), 0, { raw: name, name, fresh: true });
       if (!on && has) after = after.filter((c) => c.name !== name);
     }
     const same = after.length === before.length && after.every((c, i) => c.name === before[i].name);
@@ -169,16 +181,16 @@ function values(attrs: Attr[], edit: TagEdit): Map<string, Part[] | null> {
       if (at >= 0 && after[at].value === norm(value)) continue;
       const decl = { raw: `${name}: ${value}`, name, value: norm(value), fresh: true };
       if (at >= 0) after = [...after.slice(0, at), decl, ...after.slice(at + 1).filter((d) => d.name !== name)];
-      else after.push(decl);
+      else after.splice(placeOf(edit.order?.style, after, name, (d) => d.name), 0, decl);
     }
     if (edit.translate !== undefined) {
-      // the translation is compared in whole px, and a new one is put last
+      // the translation is compared in whole px, and a new one is put last unless order places it
       const current = translateIn(after.filter((d) => d.name === 'translate').map((d) => `translate: ${d.value}`)[0] ?? '');
       const t = edit.translate;
       const same = current === t || (!!current && !!t && px(current.x) === px(t.x) && px(current.y) === px(t.y));
       if (!same) {
         after = after.filter((d) => d.name !== 'translate');
-        if (t) after.push({ raw: `translate: ${translateText(t)}`, name: 'translate', value: translateText(t), fresh: true });
+        if (t) after.splice(placeOf(edit.order?.style, after, 'translate', (d) => d.name), 0, { raw: `translate: ${translateText(t)}`, name: 'translate', value: translateText(t), fresh: true });
       }
     }
     const same = after.length === before.length && after.every((d, i) => d.name === before[i].name && d.value === before[i].value);
@@ -223,25 +235,30 @@ function written(name: string, parts: Part[], quote: string | null): string {
 export function renderTag(text: string, range: Range, attrs: Attr[], edit: TagEdit): string | null {
   const changes = values(attrs, edit);
   if (!changes.size) return null;
-  const ops: { start: number; end: number; text: string }[] = [];
-  const added: string[] = [];
+  // ops at one place are applied from the last in the tag, i.e. the highest rank, to the first
+  const ops: { start: number; end: number; text: string; rank: number }[] = [];
+  const order = edit.order?.attrs;
+  const kept = attrs.filter((a) => changes.get(a.name) !== null);
+  let end = range.end - 1;
+  if (text[end - 1] === '/') end--;
+  while (end > range.start && isSpace(text[end - 1])) end--;
   for (const [name, value] of changes) {
     const a = attr(attrs, name);
     if (a && value === null) {
       let start = a.start;
       while (start > range.start && isSpace(text[start - 1])) start--;
-      ops.push({ start, end: a.end, text: '' });
+      ops.push({ start, end: a.end, text: '', rank: Infinity });
     } else if (a) {
-      ops.push({ start: a.start, end: a.end, text: written(name, value as Part[], quoteOf(text, a)) });
-    } else if (value !== null) added.push(` ${written(name, value, '"')}`);
+      ops.push({ start: a.start, end: a.end, text: written(name, value as Part[], quoteOf(text, a)), rank: Infinity });
+    } else if (value !== null) {
+      // a new attribute is put before the attribute that follows it in order, else at the end
+      const next = kept[placeOf(order, kept, name, (k) => k.name)];
+      const rank = order?.includes(name) ? order.indexOf(name) : 2 ** 40 + ops.length;
+      if (next) ops.push({ start: next.start, end: next.start, text: `${written(name, value, '"')} `, rank });
+      else ops.push({ start: end, end, text: ` ${written(name, value, '"')}`, rank });
+    }
   }
-  if (added.length) {
-    let at = range.end - 1;
-    if (text[at - 1] === '/') at--;
-    while (at > range.start && isSpace(text[at - 1])) at--;
-    ops.push({ start: at, end: at, text: added.join('') });
-  }
-  ops.sort((a, b) => b.start - a.start);
+  ops.sort((a, b) => b.start - a.start || b.rank - a.rank);
   let tag = text.slice(range.start, range.end);
   for (const op of ops) tag = tag.slice(0, op.start - range.start) + op.text + tag.slice(op.end - range.start);
   return tag === text.slice(range.start, range.end) ? null : tag;

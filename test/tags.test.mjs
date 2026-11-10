@@ -108,3 +108,13 @@ test('the state of a tag after an edit is read with every value decoded', async 
     style: { width: '5px', translate: '3px 4px' },
   });
 });
+
+test('a new attribute, class, and declaration is put by the order of the edit, else at the end', () => {
+  const order = { attrs: ['class', 'data-fragment-index', 'data-x', 'style'], classes: ['math', 'fragment', 'small'], style: ['margin-top', 'translate', 'width'] };
+  assert.equal(render('<p data-x="1" style="width: 2px">a</p>', { attrs: { 'data-fragment-index': '2' }, order }), '<p data-fragment-index="2" data-x="1" style="width: 2px">a</p>');
+  assert.equal(render('<p data-x="1" style="width: 2px">a</p>', { classes: { math: true }, index: 2, order }), '<p class="math" data-fragment-index="2" data-x="1" style="width: 2px">a</p>');
+  assert.equal(render('<p class="math small">a</p>', { fragment: true, order }), '<p class="math fragment small">a</p>');
+  assert.equal(render('<p style="width: 2px">a</p>', { style: { 'margin-top': '0' }, translate: { x: 1, y: 2 }, order }), '<p style="margin-top: 0; translate: 1px 2px; width: 2px">a</p>');
+  assert.equal(render('<p data-x="1">a</p>', { attrs: { title: 'b', lang: 'en' } }), '<p data-x="1" title="b" lang="en">a</p>');
+  assert.equal(render('<p class="small">a</p>', { classes: { math: true } }), '<p class="small math">a</p>');
+});

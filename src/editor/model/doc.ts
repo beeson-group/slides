@@ -76,7 +76,7 @@ export function normalizeEdit(edit: TagEdit): TagEdit {
 
 // the edit that sets back each value that edit sets, from the state before it
 export function inverseEdit(before: TagState, edit: TagEdit): TagEdit {
-  const out: TagEdit = {};
+  const out: TagEdit = { order: { attrs: Object.keys(before.attrs), classes: before.classes, style: Object.keys(before.style) } };
   const pick = <T>(keys: string[], value: (k: string) => T) => Object.fromEntries(keys.map((k) => [k, value(k)]));
   if (edit.classes) out.classes = pick(Object.keys(edit.classes), (c) => before.classes.includes(c));
   if (edit.fragment !== undefined) out.fragment = before.classes.includes('fragment');
