@@ -60,12 +60,68 @@ function fragOf(el: Element): Frag {
 export const stepsOfSlide = (slide: Element): number => stepCount(stepsOf(fragsOf(slide).map(fragOf)));
 
 // the clone of slide drawn into host is shown at step k: each fragment not seen at k is hidden
-function showStep(host: HTMLElement, slide: Element, k: number): void {
+export function showStep(host: HTMLElement, slide: Element, k: number): void {
   const clone = host.shadowRoot?.querySelector('.beeson-thumb .slides > section');
   if (!clone) return;
   const frags = fragsOf(clone);
   const steps = stepsOf(fragsOf(slide).map(fragOf));
   frags.forEach((f, i) => f.classList.toggle('beeson-off', i < steps.length && !seenAt(fragOf(f).kind, steps[i], k)));
+}
+
+// Use Rehearsed Timings of the Play menu, as the switch of PowerPoint, kept in the storage. a show
+// opened from the editor with the switch on is moved on by reveal.js after the data-timing of each
+// slide, spread evenly over the slide and its steps. data-autoslide is set in the page of the show
+// only, and never written into the file
+const TIMINGS_KEY = 'beeson-use-timings';
+export const usingTimings = (): boolean => stored(TIMINGS_KEY) === '1';
+export const useTimings = (on: boolean): void => store(TIMINGS_KEY, on ? '1' : '0');
+
+// the delay of each step of a slide with data-timing seconds and steps steps, in ms, or null
+// without a timing
+export function stepDelay(timing: string | null, steps: number): number | null {
+  const s = Number(timing);
+  if (timing === null || timing.trim() === '' || !Number.isFinite(s) || s <= 0) return null;
+  return Math.max(100, Math.round((s * 1000) / (steps + 1)));
+}
+
+type ShowReveal = { isReady?(): boolean; sync?(): void };
+
+// plays the timings in the show of win once its reveal.js is ready, and resolves with the number
+// of slides timed, or 0 when the show is closed, cannot be reached, or is not ready in time ms. a
+// slide or step with its own data-autoslide keeps it
+export function playTimings(win: Window, time = 30000): Promise<number> {
+  return new Promise((resolve) => {
+    const started = performance.now();
+    const poll = window.setInterval(() => {
+      let reveal: ShowReveal | undefined;
+      try {
+        if (win.closed) throw new Error('closed');
+        reveal = (win as unknown as { Reveal?: ShowReveal }).Reveal;
+      } catch {
+        clearInterval(poll);
+        resolve(0);
+        return;
+      }
+      if (!reveal?.isReady?.()) {
+        if (performance.now() - started > time) {
+          clearInterval(poll);
+          resolve(0);
+        }
+        return;
+      }
+      clearInterval(poll);
+      let n = 0;
+      for (const s of win.document.querySelectorAll('.reveal .slides section[data-timing]')) {
+        const delay = stepDelay(s.getAttribute('data-timing'), stepsOfSlide(s));
+        if (delay === null || s.hasAttribute('data-autoslide')) continue;
+        s.setAttribute('data-autoslide', String(delay));
+        n++;
+      }
+      // a sync of reveal.js cues the delay of the step shown
+      if (n) reveal.sync?.();
+      resolve(n);
+    }, 100);
+  });
 }
 
 const NOTES_KEY = 'beeson-presenter-notes';

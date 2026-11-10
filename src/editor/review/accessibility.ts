@@ -2,8 +2,9 @@
 // each check with the elements it concerns, a click on an element to show it on its slide, a menu
 // of fixes, and a line on why and how to fix it. the checks are those of section 1 of the plan: an
 // image without alt text, a slide without a heading, a table without a header row, a video
-// without a poster, and the texts that the editor cannot edit. the list is read again after each
-// change while the panel is open
+// without a poster, and the texts that the editor cannot edit, and two checks of PowerPoint: the
+// reading order of a slide and link text that does not name its target. the list is read again
+// after each change while the panel is open
 
 import type { App } from '../app.ts';
 import { injectStyle, make } from '../ui/dom.ts';
@@ -11,7 +12,7 @@ import { icon } from '../ui/icons.ts';
 import { openMenu, type MenuItem } from '../ui/menu.ts';
 import { paired } from './transitions.ts';
 
-export type CheckId = 'alt' | 'heading' | 'header' | 'poster' | 'editable';
+export type CheckId = 'alt' | 'heading' | 'header' | 'poster' | 'order' | 'link' | 'editable';
 export type Severity = 'error' | 'warning';
 export type Issue = { check: CheckId; slide: Element | null; el: Element | null; what: string };
 
@@ -20,10 +21,70 @@ export const CHECKS: { id: CheckId; severity: Severity; title: string; why: stri
   { id: 'heading', severity: 'error', title: 'Missing slide title', why: 'A slide is found and named by its title in the outline of a screen reader, in the navigator, and in the running head.', how: 'Give the slide an h2, or an h1 on a title slide.' },
   { id: 'header', severity: 'error', title: 'Missing table header', why: 'A screen reader names each cell by the header of its column, which it reads from a header row of th cells.', how: 'Choose Use First Row as Header.' },
   { id: 'poster', severity: 'warning', title: 'Video without a poster', why: 'A video without a poster is blank in the PDF, in the print view, and until it plays.', how: 'Give the video a poster, a PNG of its first frame, as AGENTS.md asks.' },
+  { id: 'order', severity: 'warning', title: 'Check reading order', why: 'A screen reader reads the elements of a slide in the order of the file, and here an element drawn above another is read after it.', how: 'Choose Select and Show, and move the element back to its place, or move its text in the file before the element under it.' },
+  { id: 'link', severity: 'warning', title: 'Unclear link text', why: 'A screen reader can list the links of a slide by their text alone, and a link named "here" or by its address does not say where it goes.', how: 'Choose Edit Link, and give the link a few words that name its target.' },
   { id: 'editable', severity: 'warning', title: 'Texts that cannot be edited', why: 'The editor did not match these texts to the file, hence an edit of them would not be saved.', how: 'Choose Show the Texts, and correct the markup of each one in the file.' },
 ];
 
 const fileName = (src: string | null): string => (src ?? '').split(/[?#]/)[0].split('/').pop() || 'image';
+
+// the elements of a slide that a screen reader reads one after the other, outermost first. a
+// backdrop, a surface, a label of a backdrop, and a running head filled by the theme are left out
+const UNITS = 'h1, h2, h3, h4, p, ul, ol, table, pre, div.math, figure, .zone, .plate, .qr, img, video, tycho-viewer, .caption, .foot';
+const SKIP = 'aside.notes, .backdrop, .surface, .lab, [data-generated]';
+
+const quote = (text: string): string => `"${text.length > 24 ? `${text.slice(0, 23)}…` : text}"`;
+
+// the name of an element in a row of the checker: the start of its text, or its kind
+function labelOf(el: Element): string {
+  const text = (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+  if (el.matches('img, video, .qr, tycho-viewer, .zone, .plate, figure') || !text) {
+    return el.matches('table') ? 'Table' : el.matches('video') || el.querySelector('video') ? 'Video' : el.matches('.qr') ? 'QR code' : el.matches('div.math') ? 'Formula' : 'Figure';
+  }
+  return quote(text);
+}
+
+// the box of each element of els, in CSS px of the page. a slide that reveal.js does not lay out,
+// i.e. one away from the current slide, is shown for the time of the measure only
+function measure(slide: HTMLElement, els: Element[]): DOMRect[] {
+  const style = slide.getAttribute('style');
+  const hidden = !slide.getClientRects().length;
+  if (hidden) slide.style.display = 'block';
+  const out = els.map((el) => el.getBoundingClientRect());
+  if (hidden) {
+    if (style === null) slide.removeAttribute('style');
+    else slide.setAttribute('style', style);
+  }
+  return out;
+}
+
+// the first pair of elements of slide whose reading order is not the order in which they are
+// drawn: later comes after earlier in the file, and it is drawn above it in the same column
+export function readingOrder(slide: Element): { earlier: Element; later: Element } | null {
+  const all = [...slide.querySelectorAll(UNITS)].filter((el) => !el.closest(SKIP));
+  const units = all.filter((el) => !all.some((o) => o !== el && o.contains(el)));
+  const boxes = measure(slide as HTMLElement, units);
+  const shown = units.map((el, i) => ({ el, r: boxes[i] })).filter(({ r }) => r.width > 0 && r.height > 0);
+  for (let j = 1; j < shown.length; j++) {
+    for (let i = 0; i < j; i++) {
+      const a = shown[i].r, b = shown[j].r;
+      const column = Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0;
+      if (column && b.bottom <= a.top + 1) return { earlier: shown[i].el, later: shown[j].el };
+    }
+  }
+  return null;
+}
+
+// link text that does not name the target of the link, as the Accessibility Checker of PowerPoint
+// finds it: a bare address, the address of the link, a word such as here, or no text
+const VAGUE = /^(click here|click|here|link|this link|this|more|read more|learn more|details|website|this page|page|go)[.!:]?$/i;
+
+export function unclearLink(a: Element): boolean {
+  const text = (a.textContent ?? '').replace(/\s+/g, ' ').trim();
+  const href = (a.getAttribute('href') ?? '').trim();
+  if (!text) return !a.querySelector('img[alt]:not([alt=""])');
+  return VAGUE.test(text) || /^(https?:\/\/|www\.)\S+$/i.test(text) || text === href;
+}
 
 // the issues of the slides, in the order of the checks and then of the slides
 export function inspect(app: App): Issue[] {
@@ -43,6 +104,13 @@ export function inspect(app: App): Issue[] {
   }
   for (const s of slides) for (const video of s.querySelectorAll('video')) {
     if (outside(video) && !video.getAttribute('poster')) out.push({ check: 'poster', slide: s, el: video, what: `Video ${fileName(video.getAttribute('src'))}` });
+  }
+  for (const s of slides) {
+    const order = readingOrder(s);
+    if (order) out.push({ check: 'order', slide: s, el: order.later, what: `${labelOf(order.later)} after ${labelOf(order.earlier)}` });
+  }
+  for (const s of slides) for (const a of s.querySelectorAll('a')) {
+    if (outside(a) && unclearLink(a)) out.push({ check: 'link', slide: s, el: a, what: `Link ${quote((a.textContent ?? '').trim() || a.getAttribute('href') || '')}` });
   }
   for (const p of app.pairing?.problems ?? []) out.push({ check: 'editable', slide: p.slide, el: null, what: `${p.tag}: ${p.reason}` });
   return out;
@@ -88,6 +156,22 @@ const CSS = `
 .beeson-edit-a11y .info p { margin: 0 0 8px; color: var(--ed-muted); }
 .beeson-edit-a11y .info p:last-child { margin-bottom: 0; }
 `;
+
+type Theme = { get(): string; set(theme: 'dark' | 'light'): void };
+const theme = (): Theme | undefined => (window as unknown as { Beeson?: { theme?: Theme } }).Beeson?.theme;
+const frame = () => new Promise((done) => requestAnimationFrame(done));
+
+// the slide is flipped into the mode of el when el is shown in the other mode only, and the
+// promise is resolved once el has a box, or after 1.5 s. the theme applies a mode at the end of
+// the first frame of its view transition
+async function shownInMode(el: Element): Promise<void> {
+  const mode = el.closest('.for-light') ? 'light' : el.closest('.for-dark') ? 'dark' : null;
+  const t = theme();
+  if (!mode || !t || t.get() === mode) return;
+  t.set(mode);
+  const end = performance.now() + 1500;
+  while (!el.getClientRects().length && performance.now() < end) await frame();
+}
 
 // the label of the slide of an issue, e.g. Slide 4
 const whereOf = (app: App, slide: Element | null): string => (slide ? `Slide ${app.slideNumber(slide) ?? '?'}` : '');
@@ -214,33 +298,37 @@ export class Checker {
     fix.append(document.createTextNode('Fix'), icon('chevron-down', 12));
     fix.addEventListener('click', (ev) => {
       ev.stopPropagation();
-      this.pick(issue);
+      void this.pick(issue);
       openMenu(this.app, this.fixes(issue), { anchor: fix.getBoundingClientRect(), placement: 'below', owner: fix, keyboard: ev.detail === 0, label: 'Fixes' });
     });
     row.append(label, fix);
-    row.addEventListener('click', () => this.pick(issue));
+    row.addEventListener('click', () => void this.pick(issue));
     row.addEventListener('keydown', (ev) => {
       if (ev.key !== 'Enter' && ev.key !== ' ') return;
       ev.preventDefault();
-      this.pick(issue);
+      void this.pick(issue);
     });
     const out: HTMLElement[] = [row];
     if (issue.el && this.editing === issue.el) out.push(this.altField(issue.el));
     return out;
   }
 
-  // the element of issue is shown on its slide and selected, and its check is explained
-  pick(issue: Issue): void {
+  // the element of issue is shown on its slide and selected, and its check is explained. an image
+  // of one mode, e.g. for-light in dark mode, is shown by a flip of the slide into its mode first,
+  // and it is selected once it has a box, so that its frame is measured after the flip
+  async pick(issue: Issue): Promise<void> {
     this.picked = issue;
-    const target = issue.el ?? issue.slide;
-    if (target?.isConnected) this.app.showSlide(target);
-    if (issue.el?.isConnected && issue.el.closest('section')) {
-      const box = issue.el.closest('.zone, .plate, figure') ?? issue.el;
-      this.app.selection.set('elements', [issue.el.matches('img, video, .qr') ? issue.el : box]);
-    }
     const i = String(this.issues.findIndex((x) => this.same(x, issue)));
     for (const r of this.list.querySelectorAll<HTMLElement>('.item')) r.setAttribute('aria-selected', String(r.dataset.i === i));
     this.showInfo();
+    const target = issue.el ?? issue.slide;
+    if (target?.isConnected) this.app.showSlide(target);
+    if (!issue.el?.isConnected || !issue.el.closest('section')) return;
+    await shownInMode(issue.el);
+    if (this.picked !== issue || !issue.el.isConnected) return;
+    const box = issue.check === 'link' ? (issue.el.closest('p, li, h1, h2, h3, h4, td, th, .caption, .foot') ?? issue.el) : (issue.el.closest('.zone, .plate, figure') ?? issue.el);
+    this.app.selection.set('elements', [issue.el.matches('img, video, .qr') ? issue.el : box]);
+    this.app.invalidate('layout');
   }
 
   private showInfo(): void {
@@ -266,11 +354,29 @@ export class Checker {
         ];
       case 'header':
         return [{ command: 'review.tableHeader', arg: { el }, label: 'Use First Row as Header' }, { rule: true }, go];
+      case 'link':
+        return [{ label: 'Edit Link…', run: run(() => this.editLink(issue)), disabled: !el || !paired(this.app, el.closest('[contenteditable]') ?? el) }, { rule: true }, go];
       case 'editable':
         return [{ label: 'Show the Texts…', run: run(() => this.app.files.showProblems()) }, go];
       default:
         return [go];
     }
+  }
+
+  // the dialog of the link of issue, opened with the caret in its text
+  private async editLink(issue: Issue): Promise<void> {
+    const a = issue.el;
+    if (!a?.isConnected) return;
+    this.app.showSlide(a);
+    const host = a.closest<HTMLElement>('[contenteditable="true"]');
+    if (!host) return;
+    host.focus({ preventScroll: true });
+    const range = document.createRange();
+    range.selectNodeContents(a);
+    range.collapse(false);
+    getSelection()?.removeAllRanges();
+    getSelection()?.addRange(range);
+    await this.app.commands.run('text.link');
   }
 
   // a field under the row of an image without alt text, committed with Return and left with Esc

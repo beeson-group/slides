@@ -525,6 +525,8 @@ function runsOf(m: Model): Run[] {
 // the seconds of a step of a preview, and of the last frame, in which every element is restored
 const STEP_MS = 800;
 const END_MS = 700;
+// the widest ghost of a dragged row, in CSS px
+const GHOST_WIDTH = 240;
 
 type Row = { el: Element; i: number; row: HTMLElement; chip: HTMLButtonElement };
 type Head = { list: Element; head: HTMLElement; chip: HTMLButtonElement; run: Run };
@@ -1017,7 +1019,7 @@ export class Steps {
         r.el.classList.remove('beeson-hover');
         ghost = make('div', 'beeson-steps-ghost');
         ghost.append(...[...r.row.children].map((c) => c.cloneNode(true)));
-        ghost.style.width = `${box.width}px`;
+        ghost.style.width = `${Math.min(box.width, GHOST_WIDTH)}px`;
         document.body.append(ghost);
         line = make('div', 'drop-line');
         line.hidden = true;
@@ -1025,9 +1027,13 @@ export class Steps {
         r.row.classList.add('dragging');
         document.documentElement.classList.add('beeson-dragging-step');
       }
-      ghost.style.left = `${box.left + e.clientX - x0}px`;
-      ghost.style.top = `${box.top + e.clientY - y0}px`;
+      // the ghost is held at the left of the list, centered on the pointer, so that the drop line
+      // and the rows on either side of it stay in view, as in the Animation Pane of PowerPoint. in
+      // a window without room at the left, it is put under the pointer
       const lr = this.list.getBoundingClientRect();
+      const left = lr.left - ghost.offsetWidth - 12;
+      ghost.style.left = `${left >= 4 ? left : e.clientX + 16}px`;
+      ghost.style.top = `${left >= 4 ? e.clientY - ghost.offsetHeight / 2 : e.clientY + 18}px`;
       if (e.clientY < lr.top + 24) this.list.scrollTop -= 8;
       else if (e.clientY > lr.bottom - 24) this.list.scrollTop += 8;
       target = this.dropAt(e.clientY, r, m, line as HTMLElement);
