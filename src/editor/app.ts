@@ -167,6 +167,9 @@ export class App {
   line: Line = { text: '', warn: false, title: '' };
   readonly platform: Platform = detectPlatform();
   readonly safari: boolean = detectSafari();
+  // the box of the menu item whose command runs, until the task of the run ends, e.g. for the
+  // layout tiles that Layout opens beside its item
+  menuItem: DOMRect | null = null;
   readonly history: History;
   readonly commands: Commands;
 

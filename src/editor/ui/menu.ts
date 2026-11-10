@@ -594,6 +594,9 @@ class Menu {
       this.openChild(true);
       return;
     }
+    const app = this.app;
+    app.menuItem = row.el.getBoundingClientRect();
+    setTimeout(() => (app.menuItem = null), 0);
     this.closeAll();
     const item = row.item;
     const fail = (e: unknown) => this.app.fail(e);

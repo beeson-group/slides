@@ -347,14 +347,18 @@ function closeChooser(back = true): void {
   if (back && c.anchor?.isConnected) c.anchor.focus({ preventScroll: true });
 }
 
-// the chooser under its anchor, at the right of a row of the navigator, or else in the window
-function placeChooser(dialog: HTMLElement, anchor: Element | null): void {
+// the chooser beside the menu item that opened it, as a submenu, else under its anchor, at the right
+// of a row of the navigator, or else in the window
+function placeChooser(dialog: HTMLElement, anchor: Element | null, item: DOMRect | null = null): void {
   const w = dialog.offsetWidth;
   const h = dialog.offsetHeight;
-  const r = anchor?.getBoundingClientRect();
+  const r = item ?? anchor?.getBoundingClientRect();
   let x = r ? r.left : (innerWidth - w) / 2;
   let y = r ? r.bottom + 6 : (innerHeight - h) / 3;
-  if (r && anchor?.closest('.beeson-edit-nav')) {
+  if (item) {
+    x = item.right + w + 12 <= innerWidth ? item.right + 4 : item.left - w - 4;
+    y = item.top - 8;
+  } else if (r && anchor?.closest('.beeson-edit-nav')) {
     x = r.right + 10;
     y = r.top - 8;
   } else if (r && y + h > innerHeight - 8) {
@@ -365,7 +369,7 @@ function placeChooser(dialog: HTMLElement, anchor: Element | null): void {
   dialog.style.top = `${Math.max(8, Math.min(y, innerHeight - h - 8))}px`;
 }
 
-export function openChooser(app: App, anchor: Element | null): void {
+export function openChooser(app: App, anchor: Element | null, item: DOMRect | null = null): void {
   closeChooser(false);
   const slide = targets(app).at(-1) ?? app.current();
   if (!slide) return;
@@ -400,11 +404,12 @@ export function openChooser(app: App, anchor: Element | null): void {
   document.body.append(dialog);
   dialog.show();
   for (const t of tiles) drawInto(t.pic, sample(t.layout), deck, TILE);
-  placeChooser(dialog, dialog.anchor ?? app.current());
+  placeChooser(dialog, dialog.anchor ?? app.current(), item);
   dialog.addEventListener('keydown', (ev) => {
     const i = tiles.findIndex((t) => t.tile === document.activeElement);
     const step: Record<string, number> = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 4, ArrowUp: -4 };
     if (ev.key === 'Escape') closeChooser();
+    else if ((ev.key === 'Enter' || ev.key === ' ') && i >= 0) tiles[i].tile.click();
     else if (ev.key in step) tiles[Math.min(tiles.length - 1, Math.max(0, i + step[ev.key]))].tile.focus();
     else if (ev.key === 'Home' || ev.key === 'End') tiles[ev.key === 'Home' ? 0 : tiles.length - 1].tile.focus();
     else if (ev.key === 'Tab') tiles[(i + (ev.shiftKey ? tiles.length - 1 : 1)) % tiles.length].tile.focus();
@@ -431,7 +436,6 @@ export function install(app: App): void {
       (layout, i): Command => ({
         id: `slide.layout.${layout}`,
         label: LABELS[layout],
-        menu: { bar: 'Slide', group: 'layout', order: 55 + i, submenu: 'Layout' },
         enabled: (a) => targets(a).length > 0,
         checked: (a) => {
           const list = targets(a);
@@ -442,14 +446,17 @@ export function install(app: App): void {
       }),
     ),
     {
-      // arg is the button that opens the chooser, or the argument of a context menu
+      // arg is the button that opens the chooser, or the argument of a context menu. from a menu,
+      // the tiles are opened beside the item, as the Layout gallery of the menu of a thumbnail in
+      // PowerPoint
       id: 'slide.layoutChooser',
-      label: 'Change Layout…',
+      label: 'Layout',
+      menu: { bar: 'Slide', group: 'layout', order: 55 },
       context: ['slide', 'canvas'],
       enabled: (a) => targets(a).length > 0,
       run: (a, arg) => {
         const t = (arg as { target?: unknown } | undefined)?.target;
-        openChooser(a, arg instanceof Element ? arg : t instanceof Element && t.closest('.beeson-edit-nav') ? t : null);
+        openChooser(a, arg instanceof Element ? arg : t instanceof Element && t.closest('.beeson-edit-nav') ? t : null, a.menuItem);
       },
     },
     {
