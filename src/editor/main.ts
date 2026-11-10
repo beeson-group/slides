@@ -1269,3 +1269,21 @@ declare global {
 }
 
 window.BeesonEditor = BeesonEditor;
+
+// --- the document model of R1.1, exposed for the tests until the commands of R1.0 use it ---
+import { Doc } from './model/doc.ts';
+
+const doc = new Doc({
+  source: () => source,
+  pairing: () => pairing,
+  tags: tagEdits,
+  math: mathLookup,
+  record: (e) => history.push(e),
+  changed: () => {
+    attach();
+    markDirty();
+  },
+  restore: restoreHost,
+});
+(window.BeesonEditor as typeof BeesonEditor & { doc: Doc }).doc = doc;
+// --- end of the document model ---
