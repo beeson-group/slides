@@ -1490,6 +1490,7 @@
       if (OWN.some((c) => slide.classList.contains(c)) || slide.querySelector(".run") || !text) continue;
       const run = document.createElement("div");
       run.className = "run";
+      run.dataset.generated = "";
       run.textContent = text;
       slide.append(run);
     }
@@ -1504,6 +1505,10 @@
         })
       );
     }
+  }
+  function refreshChrome() {
+    for (const run of document.querySelectorAll(".reveal .slides div.run[data-generated]")) run.remove();
+    initChrome();
   }
 
   // src/cursor.ts
@@ -4513,6 +4518,26 @@ void main() {
       if (!still2()) s.start();
     }
   }
+  function mountWithin(root2) {
+    remount();
+    mountQr(root2);
+    for (const o of backdrops) if (root2.contains(o.el)) {
+      o.fit();
+      o.complete();
+    }
+    for (const s of surfaces) if (root2.contains(s.el)) {
+      s.fit();
+      s.sync(false);
+      s.draw();
+    }
+    for (const p of plots) if (root2.contains(p.el)) {
+      p.fit();
+      p.syncSteps();
+      p.still();
+    }
+    const slide = root2.closest(".reveal .slides section");
+    if (slide) applySteps(slide);
+  }
   function completeAll() {
     remount();
     for (const o of backdrops) {
@@ -4547,7 +4572,8 @@ void main() {
       void stillViewers();
     });
     if (!EDITING) plugins.push({ id: "beeson-restore", init: () => addRestoreSteps(document) });
-    await deck.initialize({ ...DEFAULTS, ...options, plugins });
+    const editing = EDITING ? { showHiddenSlides: true } : {};
+    await deck.initialize({ ...DEFAULTS, ...editing, ...options, plugins });
     initChrome();
     initSteps(deck);
     remount();
@@ -4643,6 +4669,9 @@ void main() {
     plots,
     // called in a script file of polylines named in data-strands, see src/strands.ts
     strands: register,
+    // called by the editor after a structural change of the slides
+    mount: mountWithin,
+    refreshChrome,
     version: "0.9.0-beta.1"
   };
   window.Beeson = Beeson;

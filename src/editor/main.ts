@@ -13,7 +13,6 @@ import { installKeys } from './commands.ts';
 import { mathReady, mathLookup } from './math.ts';
 import { Nav } from './nav.ts';
 import { Steps } from './steps.ts';
-import { Move } from './move.ts';
 import { Layers } from './layers.ts';
 import { canWrite, fetchSource, install as installFiles } from './file/files.ts';
 import { install as installDrafts } from './file/drafts.ts';
@@ -45,12 +44,29 @@ import { install as installNavigateCommands } from './commands/navigate.ts';
 import { install as installArrangeCommands } from './commands/arrange.ts';
 import { install as installSlideCommands } from './commands/slide.ts';
 import { install as installDeleteCommands } from './commands/delete.ts';
+import { Doc } from './model/doc.ts';
 
 const app = new App();
 
+// the document model, through which a command inserts, removes, moves, and retags the slides and
+// their elements, and writes the start tags
+const doc = new Doc({
+  source: () => app.source,
+  pairing: () => app.pairing,
+  tags: app.tagEdits,
+  math: mathLookup,
+  record: (e) => app.history.push(e),
+  changed: () => {
+    app.typing.attach();
+    app.markDirty();
+    app.invalidate('structure');
+  },
+  restore: (host, content) => app.typing.restoreHost(host, content),
+});
+
 // the modules of today that are classes with a context: the slide list at the left, the steps of
-// the current slide in a pane at the right, the moving of the figures and blocks, and the layer
-// switch. each is replaced by a module of the plan
+// the current slide in a pane at the right, and the layer switch. each is replaced by a module of
+// the plan
 const nav = new Nav({ slides: () => [...app.slides().querySelectorAll(':scope > section')], current: () => app.current(), go: (el) => app.showSlide(el), layout: () => app.relayout() });
 const steps = new Steps({
   pairing: () => app.pairing,
@@ -63,33 +79,20 @@ const steps = new Steps({
   tex: (el) => mathLookup()(el)?.tex ?? null,
   changed: () => app.invalidate('content'),
 });
-const move = new Move({
-  pairing: () => app.pairing,
-  slide: () => app.current(),
-  scale: () => app.deck()?.getScale() ?? 1,
-  edits: app.tagEdits,
-  markDirty: () => app.markDirty(),
-  onChange: () => steps.refresh(),
-  show: (el) => app.showSlide(el),
-  record: (e) => app.history.push(e),
-});
 // a block of another layer is hidden, hence the selection is dropped at a change of the layer
 const layers = new Layers(() => app.current(), () => {
-  move.select(null);
+  app.selection.clear();
   app.invalidate('slide');
 });
 app.nav = nav;
 app.steps = steps;
-app.move = move;
 app.layers = layers;
 // the refresh of today, of every part after any change, in this order
 app.onRefresh(['content', 'selection', 'slide', 'structure', 'layout'], () => {
   layers.refresh();
   steps.refresh();
-  move.refresh();
   nav.refresh();
 });
-app.listen('slide', () => move.select(null));
 
 // the order of the installs is the order of the stylesheets, of the listeners of an event, and of
 // the refreshes in a frame
@@ -133,7 +136,7 @@ const revealReady = (): Promise<void> =>
   });
 
 async function init(): Promise<void> {
-  document.body.append(nav.pane, steps.pane, steps.badges, move.frame, move.selectedFrame, move.handle, move.guideV, move.guideH, move.offset);
+  document.body.append(nav.pane, steps.pane, steps.badges);
   document.documentElement.classList.add('beeson-editor');
   app.report();
   await revealReady();
@@ -188,8 +191,9 @@ function status() {
 
 const BeesonEditor = {
   ready: init(),
-  open: (text: string) => {
-    app.files.open(text);
+  // a fresh text starts the history anew, and false opens it as the text of a save
+  open: (text: string, fresh = true) => {
+    app.files.open(text, fresh);
     return status();
   },
   render: () => app.files.render(),
@@ -209,6 +213,7 @@ const BeesonEditor = {
   // a command of the registry run by its id, and its label, switch, and enabled state
   exec: (id: string, arg?: unknown) => app.commands.run(id, arg),
   state: (id: string) => app.commands.state(id),
+  doc,
   version: __VERSION__,
 };
 

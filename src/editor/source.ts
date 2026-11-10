@@ -36,10 +36,15 @@ export type SrcEl = {
   attrs: Attr[];
   close: Range | null;
   children: SrcNode[];
+  // the element of the file around this one, null for div.slides, and the text it was read from
+  parent: SrcEl | null;
+  source: Source;
 };
 export type SrcNode = SrcText | SrcComment | SrcEl;
 
-export type Source = { text: string; crlf: boolean; doc: Document; slides: SrcEl };
+// the text of a file, or of a new fragment of content inserted on the page, see model/fragments.ts.
+// the home of a fragment is the element of the page that it was inserted into
+export type Source = { text: string; crlf: boolean; doc: Document; slides: SrcEl; fragment?: { home: Element | null } };
 
 export const VOID = new Set(['area', 'base', 'br', 'col', 'embed', 'hr', 'img', 'input', 'link', 'meta', 'param', 'source', 'track', 'wbr']);
 // a newline right after the start tag of these elements is dropped by the parser
@@ -72,12 +77,14 @@ export function parseSource(text: string): Source {
     }
   });
   if (at < 0) throw new Error('the start tag of div.slides was not found in the file');
-  const root: SrcEl = { kind: 'element', node: slides, tag: slides.localName, open: tokens[at], attrs: [], close: null, children: [] };
+  const source = { text, crlf: text.includes('\r\n'), doc } as Source;
+  const root: SrcEl = { kind: 'element', node: slides, tag: slides.localName, open: tokens[at], attrs: [], close: null, children: [], parent: null, source };
+  source.slides = root;
   const cursor = { i: at + 1 };
   walkChildren(slides, root, cursor, tokens, text);
   const end = tokens[cursor.i];
   if (end?.type === 'end' && end.name === root.tag) root.close = end;
-  return { text, crlf: text.includes('\r\n'), doc, slides: root };
+  return source;
 }
 
 function fail(text: string, at: number, what: string): never {
@@ -101,7 +108,7 @@ function walkChildren(el: Element, out: SrcEl, cursor: { i: number }, tokens: To
         attrs = token.attrs;
         cursor.i += 1;
       }
-      const node: SrcEl = { kind: 'element', node: e, tag, open, attrs, close: null, children: [] };
+      const node: SrcEl = { kind: 'element', node: e, tag, open, attrs, close: null, children: [], parent: out, source: out.source };
       out.children.push(node);
       walkChildren(e, node, cursor, tokens, text);
       const after = tokens[cursor.i];
@@ -203,3 +210,38 @@ export function rawRange(s: SrcText, dec: Range): Range {
   };
   return { start: at(dec.start, false), end: at(dec.end, true) };
 }
+
+// the range of an element in its text, from its start tag to its end tag. an element without a
+// start tag, e.g. the tbody of a table, starts at its first child, and one without any bytes is null
+export function elementRange(s: SrcEl): Range | null {
+  const start = s.open?.start ?? firstStart(s);
+  const end = s.close?.end ?? lastEnd(s);
+  return start === null || end < start ? null : { start, end };
+}
+
+// the range of the content of an element, between its tags
+export function contentRange(s: SrcEl): Range | null {
+  const start = s.open ? s.open.end : firstStart(s);
+  if (start === null) return null;
+  return { start, end: s.close ? s.close.start : Math.max(start, lastEnd(s)) };
+}
+
+function firstStart(s: SrcEl): number | null {
+  for (const c of s.children) {
+    if (c.kind !== 'element') return c.range.start;
+    const r = elementRange(c);
+    if (r) return r.start;
+  }
+  return null;
+}
+
+// the end of the last token inside s, for an element without an end tag
+export function lastEnd(s: SrcEl): number {
+  const last = s.children[s.children.length - 1];
+  if (!last) return s.open?.end ?? -1;
+  if (last.kind === 'element') return last.close ? last.close.end : lastEnd(last);
+  return last.range.end;
+}
+
+// the root of a fragment, i.e. the element of new content that was inserted on the page
+export const isFragmentRoot = (s: SrcEl): boolean => !!s.source.fragment && s.parent === s.source.slides;
