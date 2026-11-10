@@ -425,9 +425,9 @@ class Renderer {
   }
 
   // a unit is left out when its element was taken off the page by the document model, moved into
-  // another element, or is a block deleted on the page
+  // another element, also one taken off the page, or is a block deleted on the page
   private dropped(s: SrcEl, node: Element): boolean {
-    if (detached.has(node) || node.isConnected) return true;
+    if (detached.has(node) || node.parentNode) return true;
     return this.pairing.byLive.get(node)?.src === s;
   }
 
