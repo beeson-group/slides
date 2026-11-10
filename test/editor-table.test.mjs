@@ -236,8 +236,8 @@ for (const platform of ['mac', 'other']) {
     await click(page, '.beeson-edit-top [data-command="insert.table"]');
     await page.waitFor(`!!document.querySelector('dialog.beeson-table-picker[open]')`);
     assert.equal(await page.evaluate('document.activeElement.className'), 'grid');
-    // the cell of row 3 and column 3 of the grid of 8 columns
-    const cell = await at(page, 'dialog.beeson-table-picker .grid > :nth-child(19)');
+    // the cell of row 3 and column 3 of the grid of 10 columns
+    const cell = await at(page, 'dialog.beeson-table-picker .grid > :nth-child(23)');
     await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: cell.x, y: cell.y });
     assert.equal(await page.evaluate(`document.querySelector('.beeson-table-picker .size').textContent`), '3 × 3 Table');
     assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-table-picker .grid > .on').length`), 9);

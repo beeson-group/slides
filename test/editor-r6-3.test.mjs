@@ -13,6 +13,7 @@ import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
 import { besidePlace } from '../src/editor/ui/dialog.ts';
+import { GRID, fillLine } from '../src/editor/table.ts';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { byteExact, click, drag, editorPage, press, saveAndReopen, type } from './helpers/editor.mjs';
@@ -120,6 +121,17 @@ test('a popover is put on the first side where it fits, and flipped where the wi
   const full = besidePlace({ left: 0, top: 0, right: 1440, bottom: 900, width: 1440, height: 900 }, 460, 316, view);
   assert.equal(full.side, null);
   assert.ok(full.x >= 8 && full.y >= 8 && full.x + 460 <= 1432 && full.y + 316 <= 892);
+});
+
+test('Autofill goes on with a step of numbers and repeats any other line', () => {
+  assert.deepEqual(fillLine(['1', '2'], 3), [{ text: '3' }, { text: '4' }, { text: '5' }]);
+  assert.deepEqual(fillLine(['Step 1', 'Step 3'], 2), [{ text: 'Step 5' }, { text: 'Step 7' }]);
+  assert.deepEqual(fillLine(['1.5', '1.25'], 2), [{ text: '1.00' }, { text: '0.75' }]);
+  assert.deepEqual(fillLine(['a', 'b'], 3), [{ copy: 0 }, { copy: 1 }, { copy: 0 }]);
+  assert.deepEqual(fillLine(['7'], 2), [{ copy: 0 }, { copy: 0 }]);
+  assert.deepEqual(fillLine(['1', '1'], 1), [{ copy: 0 }]);
+  assert.deepEqual(fillLine(['<b>1</b>', '<b>2</b>'], 1), [{ text: '<b>3</b>' }]);
+  assert.deepEqual(GRID, { columns: 10, rows: 8 });
 });
 
 // the caret at the end of the last item of the list of the current slide
@@ -342,6 +354,82 @@ for (const platform of PLATFORMS) {
     assert.notEqual(await posterBytes(page, video), half);
     const edited = page.source.replace(clipOf(mode), clipOf(mode).replace(`poster="demo/${clip}.png"`, `poster="media/${clip}-2.png"`));
     assert.equal(await render(page), edited);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+// the text of the cells of the table of the current slide, row by row
+const cells = (page) => page.evaluate(`[...document.querySelector('.reveal section.present table').rows].map((tr) => [...tr.cells].map((c) => c.textContent))`);
+const cellAt = (r, c) => `.reveal section.present table tr:nth-child(${r + 1}) > :nth-child(${c + 1})`;
+
+for (const platform of PLATFORMS) {
+  test(`the Insert Table grid has 10 columns by 8 rows, and Insert Table… inserts a larger table (${platform})`, async (t) => {
+    const page = await open(platform);
+    t.after(() => page.close?.());
+    await show(page, EQUATIONS);
+    await click(page, '.beeson-edit-top [data-command="insert.table"]');
+    await page.waitFor(`!!document.querySelector('dialog.beeson-table-picker[open]')`);
+    assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-table-picker .grid > div').length`), 80);
+    const { x, y } = middle(await boxOf(page, '.beeson-table-picker .grid > :last-child'));
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-table-picker .size').textContent`), '10 × 8 Table');
+    await click(page, '.beeson-table-picker .more');
+    await page.waitFor(`!!document.querySelector('dialog.beeson-table-size[open]')`);
+    assert.equal(await page.evaluate('document.activeElement.name'), 'columns');
+    await type(page, '12');
+    await press(page, 'Tab');
+    await type(page, '9');
+    await press(page, 'Enter');
+    await page.waitFor(`!!document.querySelector('.reveal section.present table')`);
+    await settle(page);
+    const shape = await cells(page);
+    assert.equal(shape.length, 9);
+    assert.ok(shape.every((r) => r.length === 12), js(shape.map((r) => r.length)));
+    assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present table tr:first-child th').length`), 12);
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Insert Table');
+    await roundTrip(page);
+  });
+
+  test(`a drag of the fill handle of a range of cells goes on with its numbers and copies its words (${platform})`, async (t) => {
+    const page = await open(platform);
+    t.after(() => page.close?.());
+    await show(page, EQUATIONS);
+    await exec(page, 'insert.table', { rows: 5, columns: 3 });
+    await settle(page);
+    for (const [r, c, text] of [[1, 0, '1'], [2, 0, '2'], [1, 1, 'Step 1'], [2, 1, 'Step 2'], [1, 2, 'orbit'], [2, 2, 'tube']]) {
+      await click(page, cellAt(r, c));
+      await type(page, text);
+    }
+    await settle(page);
+    const typed = await render(page);
+    // the range of rows 2 and 3, by a drag across its cells
+    const from = middle(await boxOf(page, cellAt(1, 0)));
+    const to = middle(await boxOf(page, cellAt(2, 2)));
+    await drag(page, from, { dx: to.x - from.x, dy: to.y - from.y });
+    await settle(page);
+    assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-table-bars .bar > .on')].map((d) => d.textContent)`), ['A', 'B', 'C', '2', '3']);
+    const handle = await boxOf(page, '.beeson-table-bars .fill');
+    assert.ok(handle, 'the range does not have a fill handle');
+    const range = await boxOf(page, '.beeson-table-bars .cell');
+    assert.ok(Math.abs(middle(handle).x - range.right) < 4 && Math.abs(middle(handle).y - range.bottom) < 4, 'the fill handle is not at the lower right corner of the range');
+    const end = middle(await boxOf(page, cellAt(4, 2)));
+    await drag(page, middle(handle), { dy: end.y - middle(handle).y, steps: 12, hold: true });
+    assert.ok(await boxOf(page, '.beeson-table-bars .spread'), 'the cells that the drag reaches are not marked');
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: middle(handle).x, y: end.y, button: 'left', clickCount: 1 });
+    await page.waitFor(`window.BeesonEditor.state('edit.undo').label === 'Undo Autofill'`);
+    await settle(page);
+    assert.deepEqual((await cells(page)).slice(1), [['1', 'Step 1', 'orbit'], ['2', 'Step 2', 'tube'], ['3', 'Step 3', 'orbit'], ['4', 'Step 4', 'tube']]);
+    // the range is the source with the cells filled from it
+    assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-table-bars .bar.rows > .on')].map((d) => d.textContent)`), ['2', '3', '4', '5']);
+    const filled = await render(page);
+    assert.match(filled, /<tr><td>3<\/td><td>Step 3<\/td><td>orbit<\/td><\/tr>/);
+    assert.deepEqual(textProblems(filled, THEME).filter((p) => !textProblems(typed, THEME).includes(p)), []);
+    await page.evaluate('window.BeesonEditor.undo()');
+    assert.equal(await render(page), typed);
+    await page.evaluate('window.BeesonEditor.redo()');
+    assert.equal(await render(page), filled);
+    const { text } = await saveAndReopen(page, `r6-3-${++saves}.html`);
+    assert.equal(text, filled);
     assert.deepEqual(errors(page), []);
   });
 }
