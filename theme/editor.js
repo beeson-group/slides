@@ -831,13 +831,201 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
     }
   };
 
-  // src/editor/tags.ts
+  // src/editor/tokens.ts
+  var RAW_TEXT = /* @__PURE__ */ new Set(["script", "style", "xmp", "iframe", "noembed", "noframes"]);
+  var RCDATA = /* @__PURE__ */ new Set(["textarea", "title"]);
+  var isLetter = (c) => /^[A-Za-z]$/.test(c);
   var isSpace = (c) => c === " " || c === "	" || c === "\n" || c === "\r" || c === "\f";
-  var quote = (value) => `"${value.replace(/&/g, "&amp;").replace(/"/g, "&quot;")}"`;
-  var decode = (value) => (value ?? "").replace(/&quot;/g, '"').replace(/&amp;/g, "&");
+  var opensMarkup = (c) => /^[A-Za-z!/?]$/.test(c);
+  function tokenize(html) {
+    const out = [];
+    const lower = html.toLowerCase();
+    const n = html.length;
+    let i = 0;
+    let rawFor = null;
+    const textUntilMarkup = (from) => {
+      let j = from;
+      while (j < n && !(html[j] === "<" && j + 1 < n && opensMarkup(html[j + 1]))) j++;
+      return j;
+    };
+    while (i < n) {
+      if (rawFor) {
+        let end = n;
+        for (let k = lower.indexOf(`</${rawFor.name}`, i); k >= 0; k = lower.indexOf(`</${rawFor.name}`, k + 1)) {
+          const after = html[k + 2 + rawFor.name.length] ?? ">";
+          if (isSpace(after) || after === "/" || after === ">") {
+            end = k;
+            break;
+          }
+        }
+        if (end > i) out.push({ type: "text", raw: rawFor.raw, start: i, end });
+        rawFor = null;
+        i = end;
+        continue;
+      }
+      const next = html[i + 1] ?? "";
+      if (html[i] !== "<" || !opensMarkup(next)) {
+        const end = textUntilMarkup(i + 1);
+        out.push({ type: "text", raw: false, start: i, end });
+        i = end;
+        continue;
+      }
+      if (html.startsWith("<!--", i)) {
+        let end;
+        if (html.startsWith(">", i + 4)) end = i + 5;
+        else if (html.startsWith("->", i + 4)) end = i + 6;
+        else {
+          const k = html.indexOf("-->", i + 4);
+          end = k < 0 ? n : k + 3;
+        }
+        out.push({ type: "comment", start: i, end });
+        i = end;
+      } else if (next === "!" || next === "?" || next === "/" && !isLetter(html[i + 2] ?? "")) {
+        const k = html.indexOf(">", i);
+        const end = k < 0 ? n : k + 1;
+        out.push({ type: "other", start: i, end });
+        i = end;
+      } else if (next === "/") {
+        let j = i + 2;
+        while (j < n && !isSpace(html[j]) && html[j] !== ">" && html[j] !== "/") j++;
+        const name = lower.slice(i + 2, j);
+        const k = html.indexOf(">", j);
+        const end = k < 0 ? n : k + 1;
+        out.push({ type: "end", name, start: i, end });
+        i = end;
+      } else {
+        let j = i + 1;
+        while (j < n && !isSpace(html[j]) && html[j] !== ">" && html[j] !== "/") j++;
+        const name = lower.slice(i + 1, j);
+        const attrs = [];
+        let selfClosing = false;
+        for (; ; ) {
+          while (j < n && (isSpace(html[j]) || html[j] === "/")) {
+            selfClosing = html[j] === "/" && html[j + 1] === ">";
+            j++;
+          }
+          if (j >= n || html[j] === ">") break;
+          const nameStart = j;
+          while (j < n && !isSpace(html[j]) && html[j] !== ">" && html[j] !== "/" && html[j] !== "=") j++;
+          if (j === nameStart) {
+            j++;
+            continue;
+          }
+          const attrName = lower.slice(nameStart, j);
+          let k = j;
+          while (k < n && isSpace(html[k])) k++;
+          if (html[k] !== "=") {
+            attrs.push({ name: attrName, value: null, start: nameStart, end: j });
+            continue;
+          }
+          k++;
+          while (k < n && isSpace(html[k])) k++;
+          const quote = html[k];
+          if (quote === '"' || quote === "'") {
+            const e = html.indexOf(quote, k + 1);
+            const valueEnd = e < 0 ? n : e;
+            attrs.push({ name: attrName, value: html.slice(k + 1, valueEnd), start: nameStart, end: Math.min(valueEnd + 1, n) });
+            j = Math.min(valueEnd + 1, n);
+          } else {
+            let e = k;
+            while (e < n && !isSpace(html[e]) && html[e] !== ">") e++;
+            attrs.push({ name: attrName, value: html.slice(k, e), start: nameStart, end: e });
+            j = e;
+          }
+        }
+        const end = Math.min(j + 1, n);
+        out.push({ type: "start", name, attrs, selfClosing, start: i, end });
+        i = end;
+        if (RAW_TEXT.has(name)) rawFor = { name, raw: true };
+        else if (RCDATA.has(name)) rawFor = { name, raw: false };
+      }
+    }
+    return out;
+  }
+  function classesOf(token) {
+    if (token.type !== "start") return [];
+    const value = token.attrs.find((a) => a.name === "class")?.value ?? "";
+    return value.split(/\s+/).filter(Boolean);
+  }
+  var NAMED = {
+    amp: "&",
+    lt: "<",
+    gt: ">",
+    quot: '"',
+    apos: "'",
+    nbsp: "\xA0",
+    ensp: "\u2002",
+    emsp: "\u2003",
+    thinsp: "\u2009",
+    ndash: "\u2013",
+    mdash: "\u2014",
+    minus: "\u2212",
+    hellip: "\u2026",
+    lsquo: "\u2018",
+    rsquo: "\u2019",
+    ldquo: "\u201C",
+    rdquo: "\u201D",
+    laquo: "\xAB",
+    raquo: "\xBB",
+    middot: "\xB7",
+    bull: "\u2022",
+    times: "\xD7",
+    deg: "\xB0",
+    copy: "\xA9",
+    reg: "\xAE",
+    trade: "\u2122",
+    shy: "\xAD",
+    zwj: "\u200D",
+    zwnj: "\u200C"
+  };
+  var LEGACY = /* @__PURE__ */ new Set(["amp", "lt", "gt", "quot", "nbsp", "copy", "reg", "times", "deg", "laquo", "raquo", "middot", "shy"]);
+  var REFERENCE_IN_ATTR = /&(#[xX][0-9a-fA-F]+|#[0-9]+|[A-Za-z][A-Za-z0-9]*)(;?)/g;
+  function decodeAttr(raw) {
+    return raw.replace(REFERENCE_IN_ATTR, (m, body, semi, at) => {
+      if (body[0] === "#") {
+        const hex = body[1] === "x" || body[1] === "X";
+        const code = parseInt(body.slice(hex ? 2 : 1), hex ? 16 : 10);
+        const bad = !Number.isFinite(code) || code === 0 || code > 1114111 || code >= 55296 && code <= 57343;
+        return bad ? "\uFFFD" : String.fromCodePoint(code);
+      }
+      const value = NAMED[body];
+      if (value === void 0) return m;
+      if (semi) return value;
+      const next = raw[at + m.length] ?? "";
+      return LEGACY.has(body) && !/[A-Za-z0-9=]/.test(next) ? value : m;
+    });
+  }
+
+  // src/editor/tags.ts
+  function placeOf(order, list, name, nameOf) {
+    const i = order ? order.indexOf(name) : -1;
+    if (i < 0) return list.length;
+    const j = list.findIndex((t) => order.indexOf(nameOf(t)) > i);
+    return j < 0 ? list.length : j;
+  }
+  var isSpace2 = (c) => c === " " || c === "	" || c === "\n" || c === "\r" || c === "\f";
   var attr = (attrs, name) => attrs.find((a) => a.name === name) ?? null;
   var px = (n) => `${Math.round(n)}px`;
-  var classesIn = (attrs) => decode(attr(attrs, "class")?.value ?? null).split(/\s+/).filter(Boolean);
+  var norm = (value) => value.trim().replace(/\s+/g, " ");
+  var splitClasses = (raw) => (raw ?? "").split(/[ \t\n\r\f]+/).filter(Boolean).map((r) => ({ raw: r, name: decodeAttr(r) }));
+  var rawClasses = (attrs) => splitClasses(attr(attrs, "class")?.value);
+  function rawDeclarations(value) {
+    const raw = value ?? "";
+    const out = [];
+    let start = 0;
+    for (const m of raw.matchAll(new RegExp(`${REFERENCE_IN_ATTR.source}|;`, "g"))) {
+      if (m[0] !== ";") continue;
+      out.push(raw.slice(start, m.index));
+      start = m.index + 1;
+    }
+    out.push(raw.slice(start));
+    return out.map((d) => d.trim()).filter(Boolean).map((d) => {
+      const decoded = decodeAttr(d);
+      const colon = decoded.indexOf(":");
+      return { raw: d, name: (colon < 0 ? decoded : decoded.slice(0, colon)).trim().toLowerCase(), value: colon < 0 ? "" : norm(decoded.slice(colon + 1)) };
+    });
+  }
+  var classesIn = (attrs) => rawClasses(attrs).map((c) => c.name);
   function stepIn(attrs) {
     const value = attr(attrs, "data-fragment-index")?.value;
     const index = value === void 0 || value === null || !/^\s*-?\d+\s*$/.test(value) ? null : Number(value);
@@ -847,55 +1035,147 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
     const m = (style ?? "").match(/(?:^|;)\s*translate\s*:\s*(-?[\d.]+)px(?:\s+(-?[\d.]+)px)?\s*(?:;|$)/);
     return m ? { x: Number(m[1]), y: Number(m[2] ?? 0) } : null;
   }
+  var translateText = (t) => `${px(t.x)} ${px(t.y)}`;
+  function mergeEdit(a, b) {
+    const out = { ...a, ...b };
+    if (a?.attrs || b.attrs) out.attrs = { ...a?.attrs, ...b.attrs };
+    if (a?.classes || b.classes) out.classes = { ...a?.classes, ...b.classes };
+    if (a?.style || b.style) out.style = { ...a?.style, ...b.style };
+    return out;
+  }
+  function stateOf(attrs, edit = {}) {
+    const out = { classes: [], attrs: {}, style: {} };
+    for (const a of attrs) if (!(a.name in out.attrs)) out.attrs[a.name] = a.value === null ? "" : decodeAttr(a.value);
+    const classValue = edit.attrs && "class" in edit.attrs ? edit.attrs.class : out.attrs.class ?? null;
+    const styleValue = edit.attrs && "style" in edit.attrs ? edit.attrs.style : out.attrs.style ?? null;
+    for (const [name, value] of Object.entries(edit.attrs ?? {})) {
+      if (value === null) delete out.attrs[name];
+      else out.attrs[name] = value;
+    }
+    out.classes = splitClasses(classValue).map((c) => c.name);
+    for (const [name, on] of Object.entries(classesOf2(edit))) {
+      out.classes = out.classes.filter((c) => c !== name);
+      if (on) out.classes.push(name);
+    }
+    for (const d of rawDeclarations(styleValue)) out.style[d.name] = d.value;
+    for (const [name, value] of Object.entries(styleOf(edit))) {
+      if (value === null) delete out.style[name];
+      else out.style[name] = norm(value);
+    }
+    if (edit.index !== void 0) {
+      if (edit.index === null) delete out.attrs["data-fragment-index"];
+      else out.attrs["data-fragment-index"] = String(edit.index);
+    }
+    if (out.classes.length) out.attrs.class = out.classes.join(" ");
+    else delete out.attrs.class;
+    const decls = Object.entries(out.style);
+    if (decls.length) out.attrs.style = decls.map(([k, v]) => `${k}: ${v}`).join("; ");
+    else delete out.attrs.style;
+    return out;
+  }
+  function classesOf2(edit) {
+    return edit.fragment === void 0 ? { ...edit.classes } : { ...edit.classes, fragment: edit.fragment };
+  }
+  function styleOf(edit) {
+    if (edit.translate === void 0) return { ...edit.style };
+    return { ...edit.style, translate: edit.translate === null ? null : translateText(edit.translate) };
+  }
+  var join = (parts, by) => parts.flatMap((p, i) => i ? [{ text: by, raw: true }, ...p] : p);
   function values(attrs, edit) {
     const out = /* @__PURE__ */ new Map();
-    if (edit.fragment !== void 0) {
-      const classes = classesIn(attrs);
-      const has = classes.includes("fragment");
-      if (edit.fragment && !has) out.set("class", [...classes, "fragment"].join(" "));
-      if (!edit.fragment && has) {
-        const rest = classes.filter((c) => c !== "fragment");
-        out.set("class", rest.length ? rest.join(" ") : null);
+    const whole = edit.attrs ?? {};
+    const classMap = classesOf2(edit);
+    if ("class" in whole || Object.keys(classMap).length) {
+      const before = rawClasses(attrs);
+      let after = "class" in whole ? splitClasses(whole.class).map((c) => ({ ...c, fresh: true })) : before.map((c) => ({ ...c, fresh: false }));
+      for (const [name, on] of Object.entries(classMap)) {
+        const has = after.some((c) => c.name === name);
+        if (on && !has) after.splice(placeOf(edit.order?.classes, after, name, (c) => c.name), 0, { raw: name, name, fresh: true });
+        if (!on && has) after = after.filter((c) => c.name !== name);
       }
+      const same = after.length === before.length && after.every((c, i) => c.name === before[i].name);
+      if (!same) out.set("class", after.length ? join(after.map((c) => [{ text: c.fresh ? c.name : c.raw, raw: !c.fresh }]), " ") : null);
     }
     if (edit.index !== void 0) {
       const current = stepIn(attrs).index;
-      if (edit.index !== current) out.set("data-fragment-index", edit.index === null ? null : String(edit.index));
+      if (edit.index !== current) out.set("data-fragment-index", edit.index === null ? null : [{ text: String(edit.index), raw: false }]);
     }
-    if (edit.translate !== void 0) {
-      const style = decode(attr(attrs, "style")?.value ?? null);
-      const current = translateIn(style);
-      const same = current === edit.translate || !!current && !!edit.translate && px(current.x) === px(edit.translate.x) && px(current.y) === px(edit.translate.y);
-      if (!same) {
-        const rest = style.split(";").map((d) => d.trim()).filter((d) => d && !/^translate\s*:/.test(d));
-        if (edit.translate) rest.push(`translate: ${px(edit.translate.x)} ${px(edit.translate.y)}`);
-        out.set("style", rest.length ? rest.join("; ") : null);
+    const styleMap = { ...edit.style };
+    if ("style" in whole || Object.keys(styleMap).length || edit.translate !== void 0) {
+      const before = rawDeclarations(attr(attrs, "style")?.value);
+      let after = "style" in whole ? rawDeclarations(whole.style).map((d) => ({ ...d, raw: d.raw, fresh: true })) : before.map((d) => ({ ...d, fresh: false }));
+      for (const [name, value] of Object.entries(styleMap)) {
+        const at = after.findIndex((d) => d.name === name);
+        if (value === null) {
+          if (at >= 0) after = after.filter((d) => d.name !== name);
+          continue;
+        }
+        if (at >= 0 && after[at].value === norm(value)) continue;
+        const decl = { raw: `${name}: ${value}`, name, value: norm(value), fresh: true };
+        if (at >= 0) after = [...after.slice(0, at), decl, ...after.slice(at + 1).filter((d) => d.name !== name)];
+        else after.splice(placeOf(edit.order?.style, after, name, (d) => d.name), 0, decl);
       }
+      if (edit.translate !== void 0) {
+        const current = translateIn(after.filter((d) => d.name === "translate").map((d) => `translate: ${d.value}`)[0] ?? "");
+        const t = edit.translate;
+        const same2 = current === t || !!current && !!t && px(current.x) === px(t.x) && px(current.y) === px(t.y);
+        if (!same2) {
+          after = after.filter((d) => d.name !== "translate");
+          if (t) after.splice(placeOf(edit.order?.style, after, "translate", (d) => d.name), 0, { raw: `translate: ${translateText(t)}`, name: "translate", value: translateText(t), fresh: true });
+        }
+      }
+      const same = after.length === before.length && after.every((d, i) => d.name === before[i].name && d.value === before[i].value);
+      if (!same) out.set("style", after.length ? join(after.map((d) => [{ text: d.raw, raw: !d.fresh }]), "; ") : null);
+    }
+    for (const [name, value] of Object.entries(whole)) {
+      if (name === "class" || name === "style" || name === "data-fragment-index" && edit.index !== void 0) continue;
+      const a = attr(attrs, name);
+      if (value === null) {
+        if (a) out.set(name, null);
+        continue;
+      }
+      const current = a ? a.value === null ? "" : decodeAttr(a.value) : null;
+      if (current !== value) out.set(name, value === "" ? [] : [{ text: value, raw: false }]);
     }
     return out;
+  }
+  function quoteOf(text, a) {
+    if (a.value === null) return null;
+    const c = text[a.end - 1];
+    return (c === '"' || c === "'") && a.end - a.start >= a.name.length + 2 ? c : null;
+  }
+  function written(name, parts, quote) {
+    if (!parts.length) return name;
+    const q = quote ?? '"';
+    const other = q === '"' ? "&quot;" : "&#39;";
+    const value = parts.map((p) => p.raw ? quote ? p.text : p.text.replace(/"/g, "&quot;") : p.text.replace(/&/g, "&amp;").split(q).join(other)).join("");
+    return `${name}=${q}${value}${q}`;
   }
   function renderTag(text, range, attrs, edit) {
     const changes = values(attrs, edit);
     if (!changes.size) return null;
     const ops = [];
-    const added = [];
+    const order = edit.order?.attrs;
+    const kept = attrs.filter((a) => changes.get(a.name) !== null);
+    let end = range.end - 1;
+    if (text[end - 1] === "/") end--;
+    while (end > range.start && isSpace2(text[end - 1])) end--;
     for (const [name, value] of changes) {
       const a = attr(attrs, name);
       if (a && value === null) {
         let start = a.start;
-        while (start > range.start && isSpace(text[start - 1])) start--;
-        ops.push({ start, end: a.end, text: "" });
+        while (start > range.start && isSpace2(text[start - 1])) start--;
+        ops.push({ start, end: a.end, text: "", rank: Infinity });
       } else if (a) {
-        ops.push({ start: a.start, end: a.end, text: `${name}=${quote(value)}` });
-      } else if (value !== null) added.push(` ${name}=${quote(value)}`);
+        ops.push({ start: a.start, end: a.end, text: written(name, value, quoteOf(text, a)), rank: Infinity });
+      } else if (value !== null) {
+        const next = kept[placeOf(order, kept, name, (k) => k.name)];
+        const rank = order?.includes(name) ? order.indexOf(name) : 2 ** 40 + ops.length;
+        if (next) ops.push({ start: next.start, end: next.start, text: `${written(name, value, '"')} `, rank });
+        else ops.push({ start: end, end, text: ` ${written(name, value, '"')}`, rank });
+      }
     }
-    if (added.length) {
-      let at = range.end - 1;
-      if (text[at - 1] === "/") at--;
-      while (at > range.start && isSpace(text[at - 1])) at--;
-      ops.push({ start: at, end: at, text: added.join("") });
-    }
-    ops.sort((a, b) => b.start - a.start);
+    ops.sort((a, b) => b.start - a.start || b.rank - a.rank);
     let tag = text.slice(range.start, range.end);
     for (const op of ops) tag = tag.slice(0, op.start - range.start) + op.text + tag.slice(op.end - range.start);
     return tag === text.slice(range.start, range.end) ? null : tag;
@@ -1467,128 +1747,11 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     }
   };
 
-  // src/editor/tokens.ts
-  var RAW_TEXT = /* @__PURE__ */ new Set(["script", "style", "xmp", "iframe", "noembed", "noframes"]);
-  var RCDATA = /* @__PURE__ */ new Set(["textarea", "title"]);
-  var isLetter = (c) => /^[A-Za-z]$/.test(c);
-  var isSpace2 = (c) => c === " " || c === "	" || c === "\n" || c === "\r" || c === "\f";
-  var opensMarkup = (c) => /^[A-Za-z!/?]$/.test(c);
-  function tokenize(html) {
-    const out = [];
-    const lower = html.toLowerCase();
-    const n = html.length;
-    let i = 0;
-    let rawFor = null;
-    const textUntilMarkup = (from) => {
-      let j = from;
-      while (j < n && !(html[j] === "<" && j + 1 < n && opensMarkup(html[j + 1]))) j++;
-      return j;
-    };
-    while (i < n) {
-      if (rawFor) {
-        let end = n;
-        for (let k = lower.indexOf(`</${rawFor.name}`, i); k >= 0; k = lower.indexOf(`</${rawFor.name}`, k + 1)) {
-          const after = html[k + 2 + rawFor.name.length] ?? ">";
-          if (isSpace2(after) || after === "/" || after === ">") {
-            end = k;
-            break;
-          }
-        }
-        if (end > i) out.push({ type: "text", raw: rawFor.raw, start: i, end });
-        rawFor = null;
-        i = end;
-        continue;
-      }
-      const next = html[i + 1] ?? "";
-      if (html[i] !== "<" || !opensMarkup(next)) {
-        const end = textUntilMarkup(i + 1);
-        out.push({ type: "text", raw: false, start: i, end });
-        i = end;
-        continue;
-      }
-      if (html.startsWith("<!--", i)) {
-        let end;
-        if (html.startsWith(">", i + 4)) end = i + 5;
-        else if (html.startsWith("->", i + 4)) end = i + 6;
-        else {
-          const k = html.indexOf("-->", i + 4);
-          end = k < 0 ? n : k + 3;
-        }
-        out.push({ type: "comment", start: i, end });
-        i = end;
-      } else if (next === "!" || next === "?" || next === "/" && !isLetter(html[i + 2] ?? "")) {
-        const k = html.indexOf(">", i);
-        const end = k < 0 ? n : k + 1;
-        out.push({ type: "other", start: i, end });
-        i = end;
-      } else if (next === "/") {
-        let j = i + 2;
-        while (j < n && !isSpace2(html[j]) && html[j] !== ">" && html[j] !== "/") j++;
-        const name = lower.slice(i + 2, j);
-        const k = html.indexOf(">", j);
-        const end = k < 0 ? n : k + 1;
-        out.push({ type: "end", name, start: i, end });
-        i = end;
-      } else {
-        let j = i + 1;
-        while (j < n && !isSpace2(html[j]) && html[j] !== ">" && html[j] !== "/") j++;
-        const name = lower.slice(i + 1, j);
-        const attrs = [];
-        let selfClosing = false;
-        for (; ; ) {
-          while (j < n && (isSpace2(html[j]) || html[j] === "/")) {
-            selfClosing = html[j] === "/" && html[j + 1] === ">";
-            j++;
-          }
-          if (j >= n || html[j] === ">") break;
-          const nameStart = j;
-          while (j < n && !isSpace2(html[j]) && html[j] !== ">" && html[j] !== "/" && html[j] !== "=") j++;
-          if (j === nameStart) {
-            j++;
-            continue;
-          }
-          const attrName = lower.slice(nameStart, j);
-          let k = j;
-          while (k < n && isSpace2(html[k])) k++;
-          if (html[k] !== "=") {
-            attrs.push({ name: attrName, value: null, start: nameStart, end: j });
-            continue;
-          }
-          k++;
-          while (k < n && isSpace2(html[k])) k++;
-          const quote2 = html[k];
-          if (quote2 === '"' || quote2 === "'") {
-            const e = html.indexOf(quote2, k + 1);
-            const valueEnd = e < 0 ? n : e;
-            attrs.push({ name: attrName, value: html.slice(k + 1, valueEnd), start: nameStart, end: Math.min(valueEnd + 1, n) });
-            j = Math.min(valueEnd + 1, n);
-          } else {
-            let e = k;
-            while (e < n && !isSpace2(html[e]) && html[e] !== ">") e++;
-            attrs.push({ name: attrName, value: html.slice(k, e), start: nameStart, end: e });
-            j = e;
-          }
-        }
-        const end = Math.min(j + 1, n);
-        out.push({ type: "start", name, attrs, selfClosing, start: i, end });
-        i = end;
-        if (RAW_TEXT.has(name)) rawFor = { name, raw: true };
-        else if (RCDATA.has(name)) rawFor = { name, raw: false };
-      }
-    }
-    return out;
-  }
-  function classesOf(token) {
-    if (token.type !== "start") return [];
-    const value = token.attrs.find((a) => a.name === "class")?.value ?? "";
-    return value.split(/\s+/).filter(Boolean);
-  }
-
   // src/editor/source.ts
   var VOID = /* @__PURE__ */ new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
   var PRE_LIKE = /* @__PURE__ */ new Set(["pre", "textarea", "listing"]);
   var box = null;
-  function decode2(raw) {
+  function decode(raw) {
     box ?? (box = document.createElement("textarea"));
     box.innerHTML = `.${raw}`;
     return box.value.slice(1);
@@ -1596,10 +1759,10 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
   var short = (s) => (s.length > 40 ? `${s.slice(0, 40)}\u2026` : s).replace(/\n/g, "\\n");
   function parseSource(text) {
     const tokens = tokenize(text);
-    const doc = new DOMParser().parseFromString(text, "text/html");
-    const slides = doc.querySelector(".reveal .slides") ?? doc.querySelector(".slides");
+    const doc2 = new DOMParser().parseFromString(text, "text/html");
+    const slides = doc2.querySelector(".reveal .slides") ?? doc2.querySelector(".slides");
     if (!slides) throw new Error("the file does not have a div.slides element");
-    const index = [...doc.querySelectorAll(`${slides.localName}.slides`)].indexOf(slides);
+    const index = [...doc2.querySelectorAll(`${slides.localName}.slides`)].indexOf(slides);
     let seen = -1, at = -1;
     tokens.forEach((t, i) => {
       if (t.type === "start" && t.name === slides.localName && classesOf(t).includes("slides")) {
@@ -1608,12 +1771,14 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
       }
     });
     if (at < 0) throw new Error("the start tag of div.slides was not found in the file");
-    const root = { kind: "element", node: slides, tag: slides.localName, open: tokens[at], attrs: [], close: null, children: [] };
+    const source = { text, crlf: text.includes("\r\n"), doc: doc2 };
+    const root = { kind: "element", node: slides, tag: slides.localName, open: tokens[at], attrs: [], close: null, children: [], parent: null, source };
+    source.slides = root;
     const cursor = { i: at + 1 };
     walkChildren(slides, root, cursor, tokens, text);
     const end = tokens[cursor.i];
     if (end?.type === "end" && end.name === root.tag) root.close = end;
-    return { text, crlf: text.includes("\r\n"), doc, slides: root };
+    return source;
   }
   function fail(text, at, what) {
     const line = text.slice(0, at).split("\n").length;
@@ -1634,7 +1799,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
           attrs = token.attrs;
           cursor.i += 1;
         }
-        const node = { kind: "element", node: e, tag, open, attrs, close: null, children: [] };
+        const node = { kind: "element", node: e, tag, open, attrs, close: null, children: [], parent: out, source: out.source };
         out.children.push(node);
         walkChildren(e, node, cursor, tokens, text);
         const after = tokens[cursor.i];
@@ -1646,7 +1811,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
         const data = child.data;
         if (token?.type !== "text") fail(text, token?.start ?? text.length, `the text "${short(data)}" is not in the file`);
         const rawText = text.slice(token.start, token.end);
-        const decoded = raw || token.raw ? rawText.replace(/\r\n?/g, "\n") : decode2(rawText);
+        const decoded = raw || token.raw ? rawText.replace(/\r\n?/g, "\n") : decode(rawText);
         let lead = 0;
         if (decoded !== data) {
           const stripped = PRE_LIKE.has(el.localName) && decoded.startsWith("\n") && decoded.slice(1) === data;
@@ -1699,7 +1864,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
       if (c === "&" && !isRaw) {
         REFERENCE.lastIndex = i;
         const m = REFERENCE.exec(raw);
-        const value = m ? decode2(m[0]) : null;
+        const value = m ? decode(m[0]) : null;
         if (m && value !== null && value !== m[0]) {
           flush(i);
           out.push({ raw: { start: base + i, end: base + i + m[0].length }, dec: { start: d, end: d + value.length }, literal: false });
@@ -1727,6 +1892,148 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
       return pos <= 0 ? s.range.start + s.lead : s.range.end;
     };
     return { start: at(dec.start, false), end: at(dec.end, true) };
+  }
+  function elementRange(s) {
+    const start = s.open?.start ?? firstStart(s);
+    const end = s.close?.end ?? lastEnd(s);
+    return start === null || end < start ? null : { start, end };
+  }
+  function contentRange(s) {
+    const start = s.open ? s.open.end : firstStart(s);
+    if (start === null) return null;
+    return { start, end: s.close ? s.close.start : Math.max(start, lastEnd(s)) };
+  }
+  function firstStart(s) {
+    for (const c of s.children) {
+      if (c.kind !== "element") return c.range.start;
+      const r = elementRange(c);
+      if (r) return r.start;
+    }
+    return null;
+  }
+  function lastEnd(s) {
+    const last = s.children[s.children.length - 1];
+    if (!last) return s.open?.end ?? -1;
+    if (last.kind === "element") return last.close ? last.close.end : lastEnd(last);
+    return last.range.end;
+  }
+  var isFragmentRoot = (s) => !!s.source.fragment && s.parent === s.source.slides;
+
+  // src/editor/model/units.ts
+  var START = /^\s*(\S+) start\b/;
+  var commentText = (text, c) => text.slice(c.start + 4, Math.max(c.start + 4, c.end - 3));
+  var blank = (text, c) => c.kind === "text" && !/\S/.test(text.slice(c.start, c.end));
+  function unitsOf(text, children, content) {
+    const units = [];
+    let pos = content.start;
+    let from = 0;
+    for (let i = 0; i < children.length; i++) {
+      const c = children[i];
+      if (c.kind !== "element") continue;
+      const unit = { lead: { start: pos, end: c.start }, range: { start: c.start, end: c.end }, end: c.end, child: i };
+      const opener = children.slice(from, i).reverse().find((k) => k.kind === "comment");
+      const name = opener ? START.exec(commentText(text, opener))?.[1] : void 0;
+      if (name) {
+        let j = i + 1;
+        while (j < children.length && blank(text, children[j])) j++;
+        const closer = children[j];
+        if (closer?.kind === "comment" && new RegExp(`^\\s*${name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} end\\b`).test(commentText(text, closer))) {
+          unit.end = closer.end;
+          i = j;
+        }
+      }
+      units.push(unit);
+      pos = unit.end;
+      from = i + 1;
+    }
+    return { units, tail: { start: pos, end: Math.max(pos, content.end) } };
+  }
+  var eolOf = (text) => text.includes("\r\n") ? "\r\n" : "\n";
+  var spaceOf = (lead) => /^[ \t\r\n\f]*/.exec(lead)?.[0] ?? "";
+  function indentAt(text, pos) {
+    const start = text.lastIndexOf("\n", pos - 1) + 1;
+    return /^[ \t]*/.exec(text.slice(start, pos))?.[0] ?? "";
+  }
+  function placeLead(lead, space, eol) {
+    const own = spaceOf(lead);
+    const rest = lead.slice(own.length);
+    const indent = space.slice(space.lastIndexOf("\n") + 1);
+    if (own.includes("\n") && space.includes("\n") && own.slice(own.lastIndexOf("\n") + 1) === indent) return lead;
+    if (!rest) return space;
+    return space + rest.replace(/\r?\n[ \t]*/g, eol + indent);
+  }
+
+  // src/editor/model/templates.ts
+  function textStyle(text) {
+    let step = null;
+    for (const m of text.matchAll(/^([ \t]+)</gm)) if (step === null || m[1].length < step.length) step = m[1];
+    return { eol: eolOf(text), step: step && step.startsWith("	") ? "	" : step ?? "  " };
+  }
+  var attr2 = (value) => value.replace(/&/g, "&amp;").replace(/"/g, "&quot;");
+  function lines(rows, style, base) {
+    return rows.map(([depth, row], i) => (i ? base + style.step.repeat(depth) : "") + row).join(style.eol);
+  }
+  function layoutText(layout, style, base = "") {
+    const block = [[1, '<div class="block">'], [2, "<h1></h1>"], [2, '<p class="sub"></p>'], [2, '<p class="who"></p>'], [1, "</div>"]];
+    switch (layout) {
+      case "title":
+        return lines([[0, '<section class="title">'], [1, '<div class="backdrop" data-strands="brand/transfer.js" data-duration="20" data-cx="-0.84" data-cy="0" data-half="1.128"></div>'], ...block, [0, "</section>"]], style, base);
+      case "closing":
+        return lines([[0, '<section class="closing">'], [1, '<div class="backdrop" data-scene="tubes" data-cx="0.42" data-cy="0" data-half="0.6"></div>'], ...block, [0, "</section>"]], style, base);
+      case "section":
+        return lines(
+          [[0, '<section class="section">'], [1, '<div class="sec">'], [2, "<h2></h2>"], [2, '<ul class="outline" data-auto></ul>'], [1, "</div>"], [1, '<div class="backdrop" data-scene="wideRibbon" data-cx="0.2" data-cy="0" data-half="1.3"></div>'], [0, "</section>"]],
+          style,
+          base
+        );
+      case "figure":
+        return lines([[0, '<section class="figure">'], [1, '<div class="plate"></div>'], [1, "<h2></h2>"], [1, '<p class="caption"></p>'], [0, "</section>"]], style, base);
+      case "split":
+        return lines([[0, '<section class="split">'], [1, '<div class="panel">'], [2, "<h2></h2>"], [2, "<p></p>"], [1, "</div>"], [1, '<div class="zone"></div>'], [0, "</section>"]], style, base);
+      default:
+        return lines([[0, layout === "content" ? "<section>" : `<section class="${layout}">`], [1, "<h2></h2>"], [1, "<p></p>"], [0, "</section>"]], style, base);
+    }
+  }
+  function elementText(kind, style, base, options = {}) {
+    const o = options;
+    switch (kind) {
+      case "text":
+        return ["<p></p>"];
+      case "image":
+        return [lines([[0, '<figure class="zone">'], [1, `<img src="${attr2(o.src ?? "media/image.png")}" alt="${attr2(o.alt ?? "")}">`], [0, "</figure>"]], style, base)];
+      case "video": {
+        const src = o.src ?? "media/video.mp4";
+        const poster = o.poster ?? src.replace(/\.[^./]*$/, ".png");
+        return [lines([[0, '<div class="zone">'], [1, `<video src="${attr2(src)}" poster="${attr2(poster)}" muted loop data-autoplay></video>`], [0, "</div>"]], style, base)];
+      }
+      case "table": {
+        const columns = Math.max(1, o.columns ?? 2);
+        const rows = Math.max(1, o.rows ?? 2);
+        const row = (cell) => `<tr>${`<${cell}></${cell}>`.repeat(columns)}</tr>`;
+        const body = Array.from({ length: rows }, (_, i) => [2, row(i ? "td" : "th")]);
+        return [lines([[0, "<table>"], [1, "<tbody>"], ...body, [1, "</tbody>"], [0, "</table>"]], style, base)];
+      }
+      case "formula":
+        return [`<div class="math">\\[${o.tex ?? "x"}\\]</div>`];
+      case "code":
+        return [`<pre><code class="language-${attr2(o.language ?? "python")}"></code></pre>`];
+      case "qr":
+        return [`<div class="qr" data-qr="${attr2(o.qr ?? "https://example.com")}"></div>`];
+      case "plot": {
+        const id = attr2(o.id ?? "plot-1");
+        const json = [
+          [0, `<script type="application/json" id="${id}">{`],
+          [1, '"duration": 2,'],
+          [1, '"panels": [{ "id": "main", "x": { "range": [0, 1] }, "y": { "range": [0, 1] } }],'],
+          [1, '"marks": [{ "id": "line", "panel": "main", "kind": "trace" }],'],
+          [1, '"tabs": [{ "name": "data", "values": [0, 1], "data": { "line": [[0, 0], [1, 1]] } }]'],
+          [0, "}<\/script>"]
+        ];
+        return [`<div class="plot zone" data-plot="${id}"></div>`, lines(json, style, base)];
+      }
+      case "backdrop":
+        return [`<div class="backdrop" data-scene="${attr2(o.scene ?? "nest")}" data-cx="0.97" data-cy="0" data-half="0.5"></div>`];
+    }
   }
 
   // src/editor/render.ts
@@ -1770,7 +2077,8 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
   var shown = (live, src) => src.includes("\xA0") ? live : live.replace(/\u00a0/g, " ");
   var short2 = (s) => (s.length > 40 ? `${s.slice(0, 40)}\u2026` : s).replace(/\n/g, "\\n");
   function pair(source, liveSlides, math) {
-    const out = { blocks: [], byLive: /* @__PURE__ */ new Map(), elements: /* @__PURE__ */ new Map(), sections: [], problems: [] };
+    const out = { blocks: [], byLive: /* @__PURE__ */ new Map(), elements: /* @__PURE__ */ new Map(), inner: /* @__PURE__ */ new Map(), sections: [], problems: [], root: liveSlides };
+    out.elements.set(liveSlides, source.slides);
     pairChildren(source.slides, liveSlides, null, math, out);
     return out;
   }
@@ -1778,34 +2086,37 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     if (isBlock(s)) return [s];
     return s.children.flatMap((c) => c.kind === "element" ? blocksWithin(c) : []);
   }
+  var generated = (el) => el.hasAttribute("data-generated");
   function pairChildren(src, live, slide, math, out) {
     const items = virtualChildren(live, math);
     let j = 0;
     for (const s of src.children) {
       if (s.kind !== "element") continue;
       let k = j;
-      while (k < items.length && !(items[k].kind === "element" && sameTag(items[k].el, s))) k++;
+      while (k < items.length && !(items[k].kind === "element" && sameTag(items[k].el, s) && !generated(items[k].el))) k++;
       if (k === items.length) {
         for (const b of blocksWithin(s)) out.problems.push({ slide, tag: b.tag, reason: "it is not on the page" });
         continue;
       }
-      const el = items[k].el;
       j = k + 1;
-      out.elements.set(el, s);
-      const here = s.tag === "section" ? el : slide;
-      if (s.tag === "section") out.sections.push({ src: s, live: el });
-      if (isBlock(s)) {
-        const reason = verify(s, el, math);
-        if (reason) out.problems.push({ slide: here, tag: s.tag, reason });
-        else {
-          const block = { src: s, live: el, slide: here };
-          out.blocks.push(block);
-          out.byLive.set(el, block);
-        }
-      } else pairChildren(s, el, here, math, out);
+      pairElement(s, items[k].el, slide, math, out);
     }
   }
-  function verify(s, el, math) {
+  function pairElement(s, el, slide, math, out) {
+    out.elements.set(el, s);
+    const here = s.tag === "section" ? el : slide;
+    if (s.tag === "section") out.sections.push({ src: s, live: el });
+    if (isBlock(s)) {
+      const reason = verify(s, el, math, out.inner);
+      if (reason) out.problems.push({ slide: here, tag: s.tag, reason });
+      else {
+        const block = { src: s, live: el, slide: here };
+        out.blocks.push(block);
+        out.byLive.set(el, block);
+      }
+    } else pairChildren(s, el, here, math, out);
+  }
+  function verify(s, el, math, inner) {
     const items = virtualChildren(el, math);
     const kids = s.children;
     if (items.length !== kids.length) return `the ${s.tag} has ${kids.length} parts in the file and ${items.length} on the page`;
@@ -1813,8 +2124,9 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
       const k = kids[i], it = items[i];
       if (k.kind === "element") {
         if (it.kind !== "element" || !sameTag(it.el, k)) return `a ${k.tag} of the file is not on the page`;
-        const reason = verify(k, it.el, math);
+        const reason = verify(k, it.el, math, inner);
         if (reason) return reason;
+        inner?.set(it.el, k);
       } else if (k.kind === "text") {
         if (it.kind !== "text") return `the text "${short2(k.decoded)}" is not on the page`;
         if (shown(it.text, k.decoded) !== k.decoded) return `the text "${short2(k.decoded)}" reads "${short2(it.text)}" on the page`;
@@ -1836,12 +2148,6 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
       d += length;
       return piece;
     });
-  }
-  function lastEnd(s) {
-    const last = s.children[s.children.length - 1];
-    if (!last) return s.open?.end ?? -1;
-    if (last.kind === "element") return last.close ? last.close.end : lastEnd(last);
-    return last.range.end;
   }
   function innerRange(s) {
     if (!s.open) return null;
@@ -1887,7 +2193,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     }
     return lead + escape(source, it.text, keepNbsp);
   }
-  function serializeChildren(source, s, el, math) {
+  function serializeChildren(source, s, el, math, tags) {
     const text = source.text;
     const items = virtualChildren(el, math);
     const kids = s.children;
@@ -1899,7 +2205,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
         while (k2 < kids.length && !(kids[k2].kind === "element" && sameTag(it.el, kids[k2]))) k2++;
         if (k2 < kids.length) {
           c = k2 + 1;
-          parts.push(serializeElement(source, kids[k2], it.el, math));
+          parts.push(serializeElement(source, kids[k2], it.el, math, tags));
         } else parts.push(serializeNew(source, it.el, math));
         continue;
       }
@@ -1912,83 +2218,214 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     }
     return parts.join("");
   }
-  function serializeElement(source, s, el, math) {
+  var RUNTIME_PREFIX = /^(beeson-|hl-|plot-)/;
+  var RUNTIME_CLASSES = /* @__PURE__ */ new Set(["visible", "current-fragment", "present", "past", "future", "disabled", "enabled", "stack"]);
+  var isRuntimeClass = (c) => RUNTIME_PREFIX.test(c) || RUNTIME_CLASSES.has(c);
+  var LIVE_STYLE = ["translate", "rotate", "width", "font-size", "text-align"];
+  var LIVE_ATTRS = ["alt", "src", "poster", "href", "muted", "loop", "colspan", "rowspan"];
+  var probe = null;
+  function liveEdit(s, el) {
+    const file = stateOf(s.attrs);
+    const edit = {};
+    const live = [...el.classList].filter((c) => !isRuntimeClass(c));
+    const classes = {};
+    for (const c of live) if (!file.classes.includes(c)) classes[c] = true;
+    for (const c of file.classes) if (!live.includes(c)) classes[c] = false;
+    if (Object.keys(classes).length) edit.classes = classes;
+    const style = el.style;
+    if (style) {
+      probe ?? (probe = document.createElement("div"));
+      probe.setAttribute("style", file.attrs.style ?? "");
+      const decls = {};
+      for (const name of LIVE_STYLE) {
+        const now = style.getPropertyValue(name);
+        if (now !== probe.style.getPropertyValue(name)) decls[name] = now || null;
+      }
+      if (Object.keys(decls).length) edit.style = decls;
+    }
+    const attrs = {};
+    for (const name of LIVE_ATTRS) {
+      const now = el.getAttribute(name);
+      if (now !== (file.attrs[name] ?? null)) attrs[name] = now;
+    }
+    if (Object.keys(attrs).length) edit.attrs = attrs;
+    return edit;
+  }
+  function serializeElement(source, s, el, math, tags) {
     const text = source.text;
-    const open = s.open ? text.slice(s.open.start, s.open.end) : "";
+    let open = s.open ? text.slice(s.open.start, s.open.end) : "";
+    if (s.open) open = renderTag(text, s.open, s.attrs, mergeEdit(liveEdit(s, el), tags.get(el) ?? {})) ?? open;
     const close = s.close ? text.slice(s.close.start, s.close.end) : "";
     if (VOID.has(s.tag)) return open;
     if (RAW_TEXT.has(s.tag)) {
       const inner = innerRange(s);
       return open + (inner ? text.slice(inner.start, inner.end) : "") + close;
     }
-    return open + serializeChildren(source, s, el, math) + close;
+    return open + serializeChildren(source, s, el, math, tags) + close;
   }
-  function renderBlock(source, block, math) {
-    return serializeChildren(source, block.src, block.live, math);
-  }
-  function deletionRange(text, s) {
-    if (!s.open) return null;
-    let start = s.open.start;
-    let end = s.close ? s.close.end : lastEnd(s);
-    let a = start;
-    while (a > 0 && (text[a - 1] === " " || text[a - 1] === "	")) a--;
-    let b = end;
-    while (b < text.length && (text[b] === " " || text[b] === "	")) b++;
-    const lineStart = a === 0 || text[a - 1] === "\n";
-    const lineEnd = b === text.length || text[b] === "\n" || text.startsWith("\r\n", b);
-    if (lineStart && lineEnd) {
-      start = a;
-      end = b === text.length ? b : text[b] === "\n" ? b + 1 : b + 2;
+  var detached = /* @__PURE__ */ new WeakSet();
+  function kidsOf(s) {
+    const out = [];
+    for (const c of s.children) {
+      const range = c.kind === "element" ? elementRange(c) : c.range;
+      if (range) out.push({ child: { kind: c.kind, start: range.start, end: range.end }, node: c });
     }
-    return { start, end };
+    return out;
   }
-  function renderDeck(source, pairing, math, tags = /* @__PURE__ */ new Map()) {
-    const edits = [];
-    const changed = [];
-    const warnings = [];
-    for (const [el, edit] of tags) {
-      const s = pairing.elements.get(el);
-      if (!s?.open || !el.isConnected) continue;
-      const tag = renderTag(source.text, s.open, s.attrs, edit);
-      if (tag !== null) edits.push({ start: s.open.start, end: s.open.end, text: tag });
+  function unitsWithin(s) {
+    const range = contentRange(s);
+    if (!range) return null;
+    const kids = kidsOf(s);
+    const { units, tail } = unitsOf(s.source.text, kids.map((k) => k.child), range);
+    return { units: units.map((u) => ({ ...u, el: kids[u.child].node })), tail };
+  }
+  function unitOf(s) {
+    if (!s.parent) return null;
+    return unitsWithin(s.parent)?.units.find((u) => u.el === s) ?? null;
+  }
+  function childSpace(s, eol, step) {
+    const first = unitsWithin(s)?.units[0];
+    if (first) return spaceOf(s.source.text.slice(first.lead.start, first.range.start));
+    return eol + (s.open ? indentAt(s.source.text, s.open.start) : "") + step;
+  }
+  var Renderer = class {
+    constructor(source, pairing, math, tags) {
+      this.edits = [];
+      this.changed = [];
+      this.warnings = [];
+      this.liveOf = /* @__PURE__ */ new Map();
+      this.step = null;
+      this.source = source;
+      this.pairing = pairing;
+      this.math = math;
+      this.tags = tags;
+      for (const [el, s] of pairing.elements) this.liveOf.set(s, el);
+      this.eol = source.crlf ? "\r\n" : "\n";
     }
-    for (const b of pairing.blocks) {
-      const range = innerRange(b.src);
-      if (!range) continue;
-      if (!b.live.isConnected) {
-        const d = deletionRange(source.text, b.src);
-        if (d) {
-          edits.push({ ...d, text: "" });
-          changed.push(b);
+    element(s, live) {
+      const text = s.source.text;
+      const range = elementRange(s);
+      if (!range) return "";
+      if (!live) return text.slice(range.start, range.end);
+      const open = this.open(s, live);
+      const close = s.close ? text.slice(s.close.start, s.close.end) : "";
+      const inner = contentRange(s);
+      const verbatim = inner ? text.slice(inner.start, inner.end) : "";
+      if (VOID.has(s.tag)) return open;
+      if (RAW_TEXT.has(s.tag)) return open + verbatim + close;
+      const block = this.pairing.byLive.get(live);
+      if (block?.src === s) {
+        const content = serializeChildren(s.source, s, live, this.math, this.tags);
+        if (content !== verbatim) {
+          this.edits.push({ start: inner?.start ?? range.start, end: inner?.end ?? range.start, text: content });
+          this.changed.push(block);
         }
-        continue;
+        return open + content + close;
       }
-      const inner = renderBlock(source, b, math);
-      if (inner !== source.text.slice(range.start, range.end)) {
-        edits.push({ start: range.start, end: range.end, text: inner });
-        changed.push(b);
-      }
+      if (isBlock(s)) return open + verbatim + close;
+      return open + this.content(s, live) + close;
     }
-    for (const { src, live } of pairing.sections) {
-      for (const aside of live.querySelectorAll(":scope > aside.notes")) {
-        if (pairing.byLive.has(aside)) continue;
-        const inner = serializeNewChildren(source, aside, math);
-        if (!inner.trim()) continue;
-        if (!src.close) {
-          warnings.push("the notes of a slide without an end tag are not saved");
+    open(s, live) {
+      if (!s.open) return "";
+      const raw = s.source.text.slice(s.open.start, s.open.end);
+      const edit = this.tags.get(live);
+      const tag = edit ? renderTag(s.source.text, s.open, s.attrs, edit) : null;
+      if (tag === null) return raw;
+      this.edits.push({ start: s.open.start, end: s.open.end, text: tag });
+      return tag;
+    }
+    // a unit is left out when its element was taken off the page by the document model, moved into
+    // another element, also one taken off the page, or is a block deleted on the page
+    dropped(s, node) {
+      if (detached.has(node) || node.parentNode) return true;
+      return this.pairing.byLive.get(node)?.src === s;
+    }
+    // the indentation of the line of the start tag of s, and one step of the file
+    indent(s) {
+      return s.open ? indentAt(s.source.text, s.open.start) : "";
+    }
+    stepOf() {
+      return this.step ?? (this.step = textStyle(this.source.text).step);
+    }
+    space(s) {
+      return childSpace(s, this.eol, this.stepOf());
+    }
+    content(s, live) {
+      const text = s.source.text;
+      const within = unitsWithin(s);
+      const units = within?.units ?? [];
+      const own = new Map(units.map((u) => [u.el, u]));
+      const kept = /* @__PURE__ */ new Map();
+      let anchor = null;
+      let changed = false;
+      for (const u of units) {
+        const node = this.liveOf.get(u.el);
+        if (node?.parentElement === live) anchor = u.el;
+        else if (node && this.dropped(u.el, node)) changed = true;
+        else kept.set(anchor, [...kept.get(anchor) ?? [], u]);
+      }
+      const parts = [];
+      const keep = (key) => {
+        for (const u of kept.get(key) ?? []) parts.push(text.slice(u.lead.start, u.end));
+      };
+      keep(null);
+      const notes = [];
+      let order = -1;
+      for (const c of live.children) {
+        const m = this.pairing.elements.get(c);
+        if (!m) {
+          if (s.tag === "section" && c.matches("aside.notes") && !generated(c)) notes.push(c);
           continue;
         }
-        const eol = source.crlf ? "\r\n" : "\n";
-        edits.push({ start: src.close.start, end: src.close.start, text: `  <aside class="notes">${inner}</aside>${eol}` });
+        const u = own.get(m);
+        if (u) {
+          if (units.indexOf(u) < order) changed = true;
+          order = units.indexOf(u);
+          parts.push(text.slice(u.lead.start, u.range.start) + this.element(m, c) + text.slice(u.range.end, u.end));
+          keep(m);
+          continue;
+        }
+        const home = unitOf(m);
+        if (!home) continue;
+        changed = true;
+        const mt = m.source.text;
+        const lead = mt.slice(home.lead.start, home.range.start);
+        const inPlace = isFragmentRoot(m) && m.source.fragment?.home === live;
+        parts.push((inPlace ? lead : placeLead(lead, this.space(s), this.eol)) + this.element(m, c) + mt.slice(home.range.end, home.end));
       }
+      let tail = within ? text.slice(within.tail.start, within.tail.end) : "";
+      if (!units.length && !tail && parts.length) tail = this.eol + this.indent(s);
+      let out = parts.join("") + tail;
+      for (const aside of notes) {
+        const inner = serializeNewChildren(this.source, aside, this.math);
+        if (!inner.trim()) continue;
+        if (!s.close) {
+          this.warnings.push("the notes of a slide without an end tag are not saved");
+          continue;
+        }
+        out += `  <aside class="notes">${inner}</aside>${this.eol}`;
+        changed = true;
+      }
+      const range = contentRange(s);
+      if (changed && range) this.edits.push({ ...range, text: out });
+      return out;
     }
-    edits.sort((a, b) => b.start - a.start || b.end - a.end);
-    for (let i = 1; i < edits.length; i++) {
-      if (edits[i].end > edits[i - 1].start) throw new Error("two edits overlap in the file");
-    }
+  };
+  function renderDeck(source, pairing, math, tags = /* @__PURE__ */ new Map()) {
+    const r = new Renderer(source, pairing, math, tags);
+    const range = elementRange(source.slides);
     let text = source.text;
-    for (const e of edits) text = text.slice(0, e.start) + e.text + text.slice(e.end);
-    return { text, edits, changed, warnings };
+    if (range && pairing.root) text = text.slice(0, range.start) + r.element(source.slides, pairing.root) + text.slice(range.end);
+    return { text, edits: r.edits, changed: r.changed, warnings: r.warnings };
+  }
+  function renderUnit(pairing, math, tags, el, source) {
+    const s = pairing.elements.get(el);
+    if (!s) return null;
+    const u = unitOf(s);
+    const text = s.source.text;
+    const body = new Renderer(source, pairing, math, tags).element(s, el);
+    if (!u) return { lead: "", body, trail: "" };
+    return { lead: text.slice(u.lead.start, u.range.start), body, trail: text.slice(u.range.end, u.end) };
   }
 
   // src/editor/file/files.ts
@@ -2679,10 +3116,10 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
       document.execCommand("insertText", false, text);
       return;
     }
-    const lines = text.split(/\r?\n/);
-    lines.forEach((line, i) => {
+    const lines2 = text.split(/\r?\n/);
+    lines2.forEach((line, i) => {
       if (line) document.execCommand("insertText", false, line);
-      if (i < lines.length - 1) document.execCommand("insertLineBreak");
+      if (i < lines2.length - 1) document.execCommand("insertLineBreak");
     });
   }
   function install5(app2) {
@@ -3151,8 +3588,387 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
   function install30(_app) {
   }
 
+  // src/editor/model/fragments.ts
+  var WRAPPERS = [
+    [/* @__PURE__ */ new Set(["tr"]), '<table><tbody class="slides">', "</tbody></table>"],
+    [/* @__PURE__ */ new Set(["td", "th"]), '<table><tbody><tr class="slides">', "</tr></tbody></table>"],
+    [/* @__PURE__ */ new Set(["thead", "tbody", "tfoot", "caption", "colgroup"]), '<table class="slides">', "</table>"]
+  ];
+  var DEFAULT = ['<div class="reveal"><div class="slides">', "</div></div>"];
+  function rootTag(text) {
+    return /^(?:\s|<!--[\s\S]*?-->)*<([a-zA-Z][\w-]*)/.exec(text)?.[1].toLowerCase() ?? null;
+  }
+  function parseFragment(text, crlf, home) {
+    const tag = rootTag(text);
+    if (!tag) throw new Error("the new content does not start with an element");
+    const wrapper = WRAPPERS.find(([tags]) => tags.has(tag));
+    const [open, close] = wrapper ? [wrapper[1], wrapper[2]] : DEFAULT;
+    const source = parseSource(open + text + close);
+    source.crlf = crlf;
+    source.fragment = { home };
+    if (!fragmentRoot(source)) throw new Error(`the new ${tag} is not read as one element`);
+    return source;
+  }
+  function fragmentRoot(source) {
+    return source.slides.children.find((c) => c.kind === "element") ?? null;
+  }
+  var emptyPairing = () => ({ blocks: [], byLive: /* @__PURE__ */ new Map(), elements: /* @__PURE__ */ new Map(), inner: /* @__PURE__ */ new Map(), sections: [], problems: [], root: null });
+  function pairFragment(source, live, math) {
+    const root = fragmentRoot(source);
+    if (!root) throw new Error("the fragment does not have an element");
+    const out = emptyPairing();
+    pairElement(root, live, live.parentElement?.closest("section") ?? null, math, out);
+    return out;
+  }
+  function mergePairing(into, from) {
+    into.blocks.push(...from.blocks);
+    for (const [k, v] of from.byLive) into.byLive.set(k, v);
+    for (const [k, v] of from.elements) into.elements.set(k, v);
+    for (const [k, v] of from.inner) into.inner.set(k, v);
+    into.sections.push(...from.sections);
+    into.sections.sort((a, b) => a.live.compareDocumentPosition(b.live) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
+    into.problems.push(...from.problems);
+  }
+
+  // src/editor/model/doc.ts
+  var generated2 = (n) => n instanceof Element && n.hasAttribute("data-generated");
+  function nextKept(el) {
+    let n = el.nextSibling;
+    while (generated2(n)) n = n.nextSibling;
+    return n;
+  }
+  function prevKept(el) {
+    let n = el.previousSibling;
+    while (generated2(n)) n = n.previousSibling;
+    return n;
+  }
+  function normalizeEdit(edit) {
+    const out = { ...edit };
+    if (edit.classes && "fragment" in edit.classes) {
+      const { fragment, ...rest } = edit.classes;
+      out.classes = rest;
+      out.fragment = fragment;
+    }
+    const index = edit.attrs?.["data-fragment-index"];
+    if (index !== void 0 && (index === null || /^\s*-?\d+\s*$/.test(index))) {
+      const { "data-fragment-index": _, ...rest } = edit.attrs;
+      out.attrs = rest;
+      out.index = index === null ? null : Number(index);
+    }
+    const translate = edit.style?.translate;
+    const parsed = translate ? translateIn(`translate: ${translate}`) : null;
+    if (translate === null || parsed) {
+      const { translate: _, ...rest } = edit.style;
+      out.style = rest;
+      out.translate = parsed;
+    }
+    for (const key of ["classes", "attrs", "style"]) if (out[key] && !Object.keys(out[key]).length) delete out[key];
+    return out;
+  }
+  function inverseEdit(before, edit) {
+    const out = { order: { attrs: Object.keys(before.attrs), classes: before.classes, style: Object.keys(before.style) } };
+    const pick = (keys, value) => Object.fromEntries(keys.map((k) => [k, value(k)]));
+    if (edit.classes) out.classes = pick(Object.keys(edit.classes), (c) => before.classes.includes(c));
+    if (edit.fragment !== void 0) out.fragment = before.classes.includes("fragment");
+    if (edit.attrs) out.attrs = pick(Object.keys(edit.attrs), (n) => before.attrs[n] ?? null);
+    if (edit.index !== void 0) {
+      const v = before.attrs["data-fragment-index"];
+      out.index = v === void 0 ? null : Number(v);
+    }
+    if (edit.style) out.style = pick(Object.keys(edit.style), (n) => before.style[n] ?? null);
+    if (edit.translate !== void 0) {
+      const v = before.style.translate;
+      out.translate = v === void 0 ? null : translateIn(`translate: ${v}`);
+    }
+    return out;
+  }
+  function applyLive(el, edit) {
+    for (const [c, on] of Object.entries(edit.classes ?? {})) el.classList.toggle(c, on);
+    if (edit.fragment !== void 0) el.classList.toggle("fragment", edit.fragment);
+    for (const [n, v] of Object.entries(edit.attrs ?? {})) {
+      if (v === null) el.removeAttribute(n);
+      else el.setAttribute(n, v);
+    }
+    if (edit.index !== void 0) {
+      if (edit.index === null) el.removeAttribute("data-fragment-index");
+      else el.setAttribute("data-fragment-index", String(edit.index));
+    }
+    const style = el.style;
+    if (!style) return;
+    for (const [n, v] of Object.entries(edit.style ?? {})) {
+      if (v === null) style.removeProperty(n);
+      else style.setProperty(n, v);
+    }
+    if (edit.translate !== void 0) style.translate = edit.translate ? translateText(edit.translate) : "";
+  }
+  function renameIds(text, fresh) {
+    let out = text;
+    for (const m of new Set([...text.matchAll(/\sid="([^"]+)"/g)].map((m2) => m2[1]))) {
+      const id = fresh(m);
+      out = out.split(`id="${m}"`).join(`id="${id}"`).split(`data-plot="${m}"`).join(`data-plot="${id}"`);
+    }
+    return out;
+  }
+  var Doc = class {
+    constructor(host) {
+      this.host = host;
+    }
+    need() {
+      const source = this.host.source();
+      const pairing = this.host.pairing();
+      if (!source || !pairing) throw new Error("no file is open");
+      return { source, pairing };
+    }
+    srcOf(el) {
+      const { pairing } = this.need();
+      const s = pairing.elements.get(el) ?? pairing.inner.get(el);
+      if (!s) throw new Error(`the ${el.localName} is not in the file`);
+      return s;
+    }
+    eol() {
+      return this.need().source.crlf ? "\r\n" : "\n";
+    }
+    style() {
+      return textStyle(this.need().source.text);
+    }
+    // the text of the file with the edits of the page
+    render() {
+      const { source, pairing } = this.need();
+      return renderDeck(source, pairing, this.host.math(), this.host.tags).text;
+    }
+    // the text of the unit of el, i.e. its lead, the element with its edits, and the end comment of
+    // its marker pair, and the text of the element alone
+    unitText(el) {
+      const u = this.unit(el);
+      return u.lead + u.body + u.trail;
+    }
+    elementText(el) {
+      return this.unit(el).body;
+    }
+    unit(el) {
+      const { source, pairing } = this.need();
+      const u = renderUnit(pairing, this.host.math(), this.host.tags, el, source);
+      if (!u) throw new Error(`the ${el.localName} is not in the file`);
+      return u;
+    }
+    // the state of the start tag of el with its edits, i.e. its classes, attributes, and declarations
+    tagState(el) {
+      const s = this.srcOf(el);
+      return stateOf(s.attrs, this.host.tags.get(el) ?? {});
+    }
+    // sets the given classes, attributes, and declarations of the start tag of el. the inverse sets
+    // the values before the edit, hence it holds after a save as well
+    setTag(el, edit, label2 = "tag") {
+      const s = this.srcOf(el);
+      if (!s.open) throw new Error(`the ${el.localName} does not have a start tag in the file`);
+      const e = normalizeEdit(edit);
+      const back = inverseEdit(this.tagState(el), e);
+      this.applyTag(el, e);
+      this.host.record({ label: label2, undo: () => this.applyTag(el, back), redo: () => this.applyTag(el, e) });
+    }
+    applyTag(el, edit) {
+      this.host.tags.set(el, mergeEdit(this.host.tags.get(el), edit));
+      applyLive(el, edit);
+      this.refresh();
+    }
+    hide(slide, hidden = true) {
+      this.setTag(slide, { attrs: { "data-visibility": hidden ? "hidden" : null } }, hidden ? "hide" : "show");
+    }
+    // inserts the units of texts into parent before the node before, as one entry of the history. a
+    // text is an element without the white space before it, which is that of the units of parent
+    async insert(texts, parent, before = null, label2 = "insert") {
+      const nodes = [];
+      let ref = before;
+      for (const text of [...typeof texts === "string" ? [texts] : texts].reverse()) {
+        ref = await this.place(text, parent, ref);
+        nodes.unshift(ref);
+      }
+      let recs = [];
+      this.host.record({
+        label: label2,
+        undo: async () => {
+          recs = nodes.map((n) => this.detach(n));
+          await this.after(parent);
+        },
+        redo: async () => {
+          for (const r of [...recs].reverse()) await this.attach(r, false);
+          await this.after(parent);
+        }
+      });
+      return nodes;
+    }
+    // a new slide of the layout before the slide before, or at the end
+    async insertSlide(layout, before = null) {
+      const { pairing } = this.need();
+      if (!pairing.root) throw new Error("the deck does not have a div.slides element");
+      const base = this.childIndent(pairing.root);
+      const [slide] = await this.insert(layoutText(layout, this.style(), base), pairing.root, before, `new ${layout} slide`);
+      return slide;
+    }
+    // a new element of the kind in parent before the node before, or at the end
+    async insertElement(kind, parent, before = null, options = {}) {
+      const o = kind === "plot" && !options.id ? { ...options, id: this.uniqueId("plot") } : options;
+      return this.insert(elementText(kind, this.style(), this.childIndent(parent), o), parent, before, `new ${kind}`);
+    }
+    // a copy of el after it, with each id renamed
+    async duplicate(el) {
+      const parent = el.parentElement;
+      if (!parent) throw new Error("the element is not on the page");
+      const text = renameIds(this.elementText(el), (id) => this.uniqueId(id));
+      const [copy] = await this.insert(text, parent, nextKept(el), "duplicate");
+      return copy;
+    }
+    async remove(el, label2 = "remove") {
+      let rec = this.detach(el);
+      await this.after(rec.parent);
+      this.host.record({
+        label: label2,
+        undo: () => this.attach(rec),
+        redo: async () => {
+          rec = this.detach(el);
+          await this.after(rec.parent);
+        }
+      });
+    }
+    // moves el into parent before the node before, or at the end
+    async move(el, parent, before = null, label2 = "move") {
+      const { pairing } = this.need();
+      if (el === parent || el.contains(parent)) throw new Error("an element is not moved into itself");
+      if (!pairing.elements.has(parent) || pairing.byLive.has(parent)) throw new Error(`the ${parent.localName} does not take elements`);
+      if (!el.parentElement) throw new Error("the element is not on the page");
+      const from = { parent: el.parentElement, next: nextKept(el) };
+      const put = async (p, n) => {
+        p.insertBefore(el, n && n !== el && n.parentNode === p ? n : null);
+        await this.after(el);
+      };
+      await put(parent, before);
+      this.host.record({ label: label2, undo: () => put(from.parent, from.next), redo: () => put(parent, before) });
+    }
+    // el replaced by an element of the tag with the same attributes and content, and with the edit
+    // applied to its start tag, e.g. a p made an h3
+    async retag(el, tag, edit = {}, label2 = "retag") {
+      const parent = el.parentElement;
+      if (!parent) throw new Error("the element is not on the page");
+      const u = this.unit(el);
+      const old = el.localName;
+      let body = u.body.replace(new RegExp(`^<${old}(?=[\\s/>])`, "i"), `<${tag}`).replace(new RegExp(`</${old}(\\s*)>$`, "i"), `</${tag}$1>`);
+      const start = tokenize(body).find((t) => t.type === "start");
+      const e = normalizeEdit(edit);
+      if (start?.type === "start" && Object.keys(e).length) {
+        const open = renderTag(body, start, start.attrs, e);
+        if (open !== null) body = body.slice(0, start.start) + open + body.slice(start.end);
+      }
+      const node = await this.place(body + u.trail, parent, el, u.lead);
+      let rec = this.detach(el);
+      await this.after(parent);
+      let back = null;
+      this.host.record({
+        label: label2,
+        undo: async () => {
+          await this.attach(rec, false);
+          back = this.detach(node);
+          await this.after(parent);
+        },
+        redo: async () => {
+          if (back) await this.attach(back, false);
+          rec = this.detach(el);
+          await this.after(parent);
+        }
+      });
+      return node;
+    }
+    // the content of a block set to a text with each formula as its TeX, as one entry of the history
+    async setContent(block, content, label2 = "content") {
+      const before = contentWithTex(block);
+      const put = async (c) => {
+        if (this.host.restore) await this.host.restore(block, c);
+        else await setContentWithTex(block, c);
+        this.host.changed();
+      };
+      await put(content);
+      this.host.record({ label: label2, undo: () => put(before), redo: () => put(content) });
+    }
+    // takes el off the page, with the text of its unit. its unit is then left out of the file
+    detach(el) {
+      const parent = el.parentElement;
+      if (!parent) throw new Error("the element is not on the page");
+      const u = this.unit(el);
+      const rec = { node: el, parent, prev: prevKept(el), next: nextKept(el), text: u.lead + u.body + u.trail };
+      el.remove();
+      detached.add(el);
+      return rec;
+    }
+    // puts an element taken off the page back. after a save it is no longer in the file, and it is
+    // then paired with the text of its unit as a fragment
+    async attach(rec, refresh = true) {
+      const { pairing, source } = this.need();
+      const { node, parent } = rec;
+      const at = rec.next?.parentNode === parent ? rec.next : rec.prev?.parentNode === parent ? rec.prev.nextSibling : rec.prev ? null : parent.firstChild;
+      parent.insertBefore(node, at);
+      detached.delete(node);
+      if (!pairing.elements.has(node)) mergePairing(pairing, pairFragment(parseFragment(rec.text, source.crlf, parent), node, this.host.math()));
+      if (refresh) await this.after(node);
+    }
+    // an id that is not on the page or in the file, from base
+    uniqueId(base) {
+      const stem = base.replace(/-\d+$/, "");
+      const text = this.host.source()?.text ?? "";
+      for (let i = 1; ; i++) {
+        const id = `${stem}-${i}`;
+        if (!document.getElementById(id) && !text.includes(`id="${id}"`)) return id;
+      }
+    }
+    // the indentation of the children of parent in the file
+    childIndent(parent) {
+      const space = childSpace(this.srcOf(parent), this.eol(), this.style().step);
+      return space.slice(space.lastIndexOf("\n") + 1);
+    }
+    // the new element made from text and paired as a fragment, inserted before the node before. lead
+    // is the white space and the comments before it, by default those of the units of parent
+    async place(text, parent, before, lead) {
+      const { source, pairing } = this.need();
+      const container = pairing.elements.get(parent);
+      if (!container || pairing.byLive.has(parent)) throw new Error(`the ${parent.localName} does not take elements`);
+      const fragment = parseFragment((lead ?? childSpace(container, this.eol(), this.style().step)) + text, source.crlf, parent);
+      const node = document.importNode(fragmentRoot(fragment).node, true);
+      parent.insertBefore(node, before && before.parentNode === parent ? before : null);
+      const mj = window.MathJax;
+      if (mj?.typesetPromise) await mj.typesetPromise([node]);
+      mergePairing(pairing, pairFragment(fragment, node, this.host.math()));
+      await this.after(node);
+      return node;
+    }
+    refresh() {
+      const page = window;
+      page.Beeson?.refreshChrome?.();
+      page.Reveal?.sync?.();
+      page.Reveal?.layout?.();
+      this.host.changed();
+    }
+    // the backdrops, plots, surfaces, and QR codes under root drawn, the running heads and the
+    // outlines filled again, and the slides of reveal.js read again
+    async after(root) {
+      const page = window;
+      if (root.isConnected) page.Beeson?.mount?.(root);
+      this.refresh();
+    }
+  };
+
   // src/editor/main.ts
   var app = new App();
+  var doc = new Doc({
+    source: () => app.source,
+    pairing: () => app.pairing,
+    tags: app.tagEdits,
+    math: mathLookup,
+    record: (e) => app.history.push(e),
+    changed: () => {
+      app.typing.attach();
+      app.markDirty();
+      app.invalidate("structure");
+    },
+    restore: (host, content) => app.typing.restoreHost(host, content)
+  });
   var nav = new Nav({ slides: () => [...app.slides().querySelectorAll(":scope > section")], current: () => app.current(), go: (el) => app.showSlide(el), layout: () => app.relayout() });
   var steps = new Steps({
     pairing: () => app.pairing,
@@ -3274,8 +4090,9 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
   }
   var BeesonEditor = {
     ready: init(),
-    open: (text) => {
-      app.files.open(text);
+    // a fresh text starts the history anew, and false opens it as the text of a save
+    open: (text, fresh = true) => {
+      app.files.open(text, fresh);
       return status();
     },
     render: () => app.files.render(),
@@ -3295,6 +4112,7 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
     // a command of the registry run by its id, and its label, switch, and enabled state
     exec: (id, arg) => app.commands.run(id, arg),
     state: (id) => app.commands.state(id),
+    doc,
     version: "0.9.0-beta.1"
   };
   window.BeesonEditor = BeesonEditor;
