@@ -244,7 +244,7 @@ for (const platform of PLATFORMS) {
     await page.waitFor(`!!document.querySelector('.reveal section.present .zone > .qr')`);
     await frames(page);
     assert.equal(await shownPlaceholders(page), 0);
-    assert.equal(await undoLabel(page), 'Undo QR Code');
+    assert.equal(await undoLabel(page), 'Undo Insert QR Code');
     await undo(page);
     await frames(page);
     await byteExact(page);
