@@ -329,6 +329,9 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section.wide > .math,
 .reveal .slides section.wide > pre,
 .reveal .slides section.wide > .col { max-width: 1680px; width: auto; }
+/* a text block with a width in its style, e.g. one sized in the editor, is wrapped at that width,
+   past the text column */
+.reveal .slides section > :is(h2, p, ul, ol, .math)[style*="width:"] { max-width: none; }
 
 /* title and closing, plate: the backdrop over the whole slide, the words in a block at the lower left */
 .reveal .slides section.title,

@@ -105,17 +105,20 @@ export function fallback(ev: KeyEvent, platform: Platform): KeyEvent | null {
   return null;
 }
 
+// the names of the keys in the notation of Keynote on a Mac and of PowerPoint for Windows elsewhere
 const MAC_KEYS: Record<string, string> = {
   Enter: '↩', Escape: '⎋', Tab: '⇥', Backspace: '⌫', Delete: '⌦', Space: 'Space', ContextMenu: 'Menu',
-  ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Home: '↖', End: '↘', PageUp: '⇞', PageDown: '⇟',
+  ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', Home: '↖', End: '↘', PageUp: '⇞', PageDown: '⇟', '-': '−',
 };
 
 const OTHER_KEYS: Record<string, string> = {
-  Escape: 'Esc', ContextMenu: 'Menu', ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→', PageUp: 'Page Up', PageDown: 'Page Down',
+  Escape: 'Esc', Space: 'Spacebar', ContextMenu: 'Menu', ArrowUp: 'Up Arrow', ArrowDown: 'Down Arrow', ArrowLeft: 'Left Arrow',
+  ArrowRight: 'Right Arrow', PageUp: 'Page Up', PageDown: 'Page Down', '-': '−',
 };
 
-// a key as a menu shows it. on a Mac, the modifiers are written as symbols in the order Control,
-// Option, Shift, and Command, and elsewhere as words joined by a plus, e.g. Ctrl+Shift+Z
+// a key as the menus, the context menus, the tooltips, and the sheet of shortcuts show it. on a
+// Mac, the modifiers are written as symbols in the order Control, Option, Shift, and Command, e.g.
+// ⇧⌘↑, and elsewhere as words joined by a plus, e.g. Ctrl+Shift+Up Arrow
 export function display(value: KeyString, platform: Platform): string {
   const c = parseKey(value, platform);
   const key = c.key.length === 1 ? c.key.toUpperCase() : c.key;
