@@ -1,7 +1,8 @@
 // the commands Undo and Redo of the Edit menu, named after the entry of the history that they take
 // back, e.g. Undo Typing. their keys are those of both apps, and Redo has the key of PowerPoint
 // and the key of Keynote. the browser keeps a history of its own in a text, hence the keys are
-// taken in a text too, and they are left to a field and a dialog
+// taken in a text too, and they are left to a field and a dialog. the install also defines Size
+// and Position… of the menu of an element in PowerPoint
 
 import type { App } from '../app.ts';
 import { OUTSIDE_DIALOGS } from '../commands.ts';
@@ -19,6 +20,26 @@ export function titled(label: string): string {
   const words = label.split(/(\s+)/);
   const last = words.length - 1;
   return words.map((w, i) => (i === 0 || i === last || !MINOR.has(w) ? w.replace(/^\p{Ll}/u, (l) => l.toUpperCase()) : w)).join('');
+}
+
+const frame = () => new Promise((done) => requestAnimationFrame(done));
+
+// the Arrange pane of the Format tab, with the focus in W, or in X when the size is set by the
+// layout of the slide, as Size and Position… of PowerPoint opens the Size and Position pane
+async function sizeAndPosition(app: App): Promise<void> {
+  // imported here, since the tests of titled import this module in node, without a document
+  const { showFormat } = await import('../inspector/inspector.ts');
+  showFormat(app, 'arrange');
+  for (let i = 0; i < 3; i++) {
+    const panel = document.getElementById('beeson-edit-panel-format');
+    const field = ['width', 'x'].map((n) => panel?.querySelector<HTMLInputElement>(`#beeson-edit-num-${n}`)).find((f) => f && !f.disabled);
+    if (field) {
+      field.focus();
+      field.select();
+      return;
+    }
+    await frame();
+  }
 }
 
 export function install(app: App): void {
@@ -42,5 +63,12 @@ export function install(app: App): void {
     toolbar: { group: 'history', order: 11, icon: 'redo', label: 'Redo' },
     enabled: (a) => a.history.canRedo,
     run: (a) => a.history.redo(),
+  });
+  c.define({
+    id: 'arrange.sizeAndPosition',
+    label: 'Size and Position…',
+    context: ['element'],
+    enabled: (a) => a.selection.elements().length > 0 && a.region() !== 'dialog',
+    run: (a) => sizeAndPosition(a),
   });
 }
