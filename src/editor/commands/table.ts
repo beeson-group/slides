@@ -902,7 +902,7 @@ export function install(app: App): void {
     id: 'insert.table',
     label: 'Table…',
     menu: { bar: 'Insert', group: 'element', order: 22 },
-    toolbar: { group: 'insert', order: 22, icon: 'table', label: 'Table' },
+    toolbar: { group: 'insert', order: 20, icon: 'table', label: 'Table' },
     enabled: ready,
     run: async (a, arg) => {
       const size = arg && typeof arg === 'object' && 'rows' in arg ? (arg as Size) : null;

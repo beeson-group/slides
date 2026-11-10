@@ -1,7 +1,10 @@
 // the toolbar, drawn from the commands of the registry that name a toolbar place: a 20 px icon over
 // an 11 px label in groups with a thin rule between them, and the groups after Present at the
-// right. a switch is shown pressed, and a command whose toolbar place names a split is drawn
-// as a split button with the commands of that submenu of its menu. below a window width of 1100 px
+// right. a switch is shown pressed, and a command whose toolbar place names a split is drawn as a
+// split button. the commands of a group that name the same split are its variants, e.g. Image…,
+// Video…, and QR Code under Media, as the Pictures button of PowerPoint: the main part runs the
+// first of them, and its arrow lists them with the commands of the submenu of that name of the
+// menu of the first. below a window width of 1100 px
 // the labels are hidden and kept as the text of the buttons, and below 820 px the groups after
 // Present are put into a menu ». the toolbar has one tab stop, and the arrow keys move in it. the
 // View and Zoom popups at its left are as in Keynote: View with the views of the slides and the
@@ -43,7 +46,7 @@ const CSS = `
 @media (max-width: 1099px) { .beeson-edit-top .tb .label { display: none; } .beeson-edit-top .tb { min-width: 36px; } }
 `;
 
-type Shown = { c: Command; el: HTMLButtonElement };
+type Shown = { c: Command; el: HTMLButtonElement; variants: Command[] };
 
 // the label of a command on the toolbar: its toolbar label, and else its label
 function toolbarLabel(app: App, c: Command): string {
@@ -114,6 +117,20 @@ export function install(app: App): void {
     return b;
   };
 
+  // the list of a split button: its variants, with a rule where their group of the menu changes,
+  // then the submenu that the split names in the menu of the first
+  const splitItems = (first: Command, variants: Command[]): MenuItem[] => {
+    const out: MenuItem[] = [];
+    let last: string | undefined;
+    for (const v of variants.length > 1 ? variants : []) {
+      if (out.length && v.menu?.group !== last) out.push({ rule: true });
+      last = v.menu?.group;
+      out.push({ command: v.id });
+    }
+    const sub = first.menu && first.toolbar?.split ? menuItems(app, first.menu.bar, first.toolbar.split) : [];
+    return out.length && sub.length ? [...out, { rule: true }, ...sub] : [...out, ...sub];
+  };
+
   function render(): void {
     const groups = app.commands.forToolbar();
     const at = groups.findIndex((g) => g.commands.some((c) => c.id === 'file.present'));
@@ -127,13 +144,13 @@ export function install(app: App): void {
       box.dataset.group = g.group;
       if (at >= 0 && i === at + 1) box.classList.add('right');
       for (const c of g.commands) {
-        const b = button(c);
-        shown.push({ c, el: b });
         const split = c.toolbar?.split;
-        if (split && c.menu) {
-          const bar = c.menu.bar;
-          box.append(splitButton(app, b, () => menuItems(app, bar, split), `${toolbarLabel(app, c)} options`));
-        } else box.append(b);
+        const variants = split ? g.commands.filter((x) => x.toolbar?.split === split) : [c];
+        if (variants[0] !== c) continue;
+        const b = button(c);
+        shown.push({ c, el: b, variants });
+        if (split) box.append(splitButton(app, b, () => splitItems(c, variants), `${toolbarLabel(app, c)} options`));
+        else box.append(b);
       }
       parts.push(box);
     }
@@ -154,12 +171,14 @@ export function install(app: App): void {
       render();
       return;
     }
-    for (const { c, el } of shown) {
+    for (const { c, el, variants } of shown) {
       const s = app.commands.state(c.id);
       el.disabled = !s.enabled;
       const keys = commandKeys(c, app.platform);
       el.title = keys ? `${s.label} (${keys})` : s.label;
-      if (s.checked !== null) el.setAttribute('aria-pressed', String(s.checked));
+      // a split button is pressed while one of its variants is on, e.g. Arrow while an arrow is drawn
+      const on = variants.map((v) => app.commands.state(v.id).checked);
+      if (on.some((x) => x !== null)) el.setAttribute('aria-pressed', String(on.some((x) => x === true)));
       else el.removeAttribute('aria-pressed');
       if (c.id === 'file.save') el.classList.toggle('on', app.dirty);
       if (c.id === 'toolbar.zoom') {
@@ -216,6 +235,9 @@ export function install(app: App): void {
   app.listen('report', update);
   app.onRefresh(['content', 'selection', 'slide', 'structure', 'layout'], update);
   window.addEventListener('resize', update);
+  // a mode that ends without a change of the file, e.g. the drawing of a line left with Esc, is
+  // shown on its switch after the key or the release that ends it
+  for (const type of ['keyup', 'pointerup']) window.addEventListener(type, () => requestAnimationFrame(update), true);
   render();
   document.body.append(top);
 }

@@ -301,12 +301,14 @@ export function install(app: App): void {
   };
 
   const insertMenu = (order: number) => ({ bar: 'Insert', group: 'element', order });
-  const tool = (order: number, icon: string) => ({ group: 'insert', order, icon });
+  // the inserts of the toolbar in the order of Keynote: Table, Text, Formula, Shape, and Media, the
+  // last two as split buttons of their variants
+  const tool = (order: number, icon: string, more: { label?: string; split?: string } = {}) => ({ group: 'insert', order, icon, ...more });
   c.define({
     id: 'insert.text',
     label: 'Text Box',
     menu: insertMenu(20),
-    toolbar: tool(20, 'text'),
+    toolbar: tool(21, 'text', { label: 'Text' }),
     enabled: ready,
     run: pendingText('text'),
   });
@@ -315,7 +317,7 @@ export function install(app: App): void {
     label: 'Formula',
     keys: { mac: ['Mod+Alt+E'], other: ['Alt+='] },
     menu: insertMenu(21),
-    toolbar: tool(21, 'formula'),
+    toolbar: tool(22, 'formula'),
     enabled: ready,
     undoable: true,
     run: async (a) => {
@@ -338,7 +340,7 @@ export function install(app: App): void {
     id: 'insert.qr',
     label: 'QR Code',
     menu: insertMenu(26),
-    toolbar: tool(26, 'qr'),
+    toolbar: tool(24.2, 'qr', { split: 'Media' }),
     enabled: ready,
     undoable: true,
     run: async (a) => {
