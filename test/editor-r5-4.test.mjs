@@ -217,3 +217,65 @@ for (const platform of ['mac', 'other']) {
     await roundTrip(page);
   });
 }
+
+// the controls of the Format tab other than its tabs, as text, command, and whether each is enabled
+const controls = (page) => page.evaluate(`[...document.querySelectorAll('${PANEL} :is(button, input, textarea, select)')]
+  .filter((e) => e.getAttribute('role') !== 'tab' && e.getClientRects().length)
+  .map((e) => ({ name: e.textContent.trim() || e.getAttribute('aria-label') || e.name || e.type, command: e.dataset.command ?? null, on: !e.disabled }))`);
+
+// the items of the open menu, as their text without the keys, and whether each is enabled
+const menuItems = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu [role^=menuitem]')]
+  .map((e) => ({ text: e.textContent.trim(), on: e.getAttribute('aria-disabled') !== 'true' }))`);
+
+// the commands that change a figure, which a lock turns off
+const CHANGES = [
+  'media.replace', 'figure.alt', 'figure.decorative', 'figure.paper', 'figure.invert', 'figure.mode.dark', 'image.editMask', 'image.crop',
+  'edit.cut', 'element.delete', 'selection.editText', 'arrange.align.left', 'arrange.order.back', 'arrange.flipHorizontal', 'arrange.nudge.left',
+  'arrange.group', 'steps.add',
+];
+// the items of the context menu of a locked figure that do not change it
+const KEPT = ['Copy', 'Paste', 'Duplicate', 'Unlock'];
+
+// state locked-element of round 2: a figure locked with Lock kept Replace and the other controls
+// of the Image pane, the align, flip, and order buttons of the Arrange pane, and the items of its
+// context menu enabled, where Keynote turns off every control of a locked object but Unlock
+for (const platform of ['mac', 'other']) {
+  test(`a locked figure cannot be changed from the inspector, the menus, or its context menu until it is unlocked (${platform})`, async (t) => {
+    const page = await open(platform, { size: SIZES[platform] });
+    t.after(() => page.close?.());
+    await show(page, FIGURES);
+    const figure = '.reveal section.present figure.zone img';
+    await click(page, figure);
+    await settle(page);
+    assert.equal((await state(page, 'media.replace')).enabled, true);
+    await press(page, 'Mod+L');
+    await settle(page);
+    assert.equal(await page.evaluate(`document.querySelector('.reveal section.present figure.zone').hasAttribute('data-locked')`), true);
+    assert.equal((await state(page, 'arrange.unlock')).enabled, true);
+    assert.equal((await state(page, 'edit.copy')).enabled, true);
+    for (const id of CHANGES) assert.equal((await state(page, id)).enabled, false, `${id} is enabled on a locked figure`);
+    assert.equal(await page.evaluate(`document.querySelector('${PANEL} .ed-panes')?.dataset.pane`), 'image');
+    assert.deepEqual((await controls(page)).filter((c) => c.on), [], 'the Image pane has enabled controls');
+    await click(page, `${PANEL} [role=tab]:last-child`);
+    await settle(page);
+    assert.equal(await page.evaluate(`document.querySelector('${PANEL} .ed-panes')?.dataset.pane`), 'arrange');
+    assert.deepEqual((await controls(page)).filter((c) => c.on).map((c) => c.command), ['arrange.unlock'], 'the Arrange pane has enabled controls other than Unlock');
+    await click(page, figure, { button: 'right' });
+    await settle(page);
+    const on = (await menuItems(page)).filter((i) => i.on).map((i) => i.text);
+    assert.ok(on.some((text) => text.startsWith('Unlock')), 'Unlock is not in the context menu');
+    assert.deepEqual(on.filter((text) => !KEPT.some((k) => text.startsWith(k))), [], 'the context menu has enabled items that change the figure');
+    await press(page, 'Escape');
+    const edited = await roundTrip(page);
+    assert.match(edited, /<figure class="zone" data-locked>/);
+    // Unlock gives the controls back, on the figure selected again after the open of the save
+    await click(page, figure);
+    await settle(page);
+    assert.equal((await state(page, 'media.replace')).enabled, false);
+    await press(page, platform === 'mac' ? 'Mod+Alt+L' : 'Mod+Shift+L');
+    await settle(page);
+    assert.equal(await page.evaluate(`document.querySelector('.reveal section.present figure.zone').hasAttribute('data-locked')`), false);
+    for (const id of ['media.replace', 'figure.paper', 'arrange.align.left', 'edit.cut']) assert.equal((await state(page, id)).enabled, true, `${id} is off after Unlock`);
+    assert.ok((await controls(page)).filter((c) => c.on).length > 10, 'the Arrange pane is still off after Unlock');
+  });
+}
