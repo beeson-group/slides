@@ -13,6 +13,7 @@
 import type { App } from '../app.ts';
 import { mathLookup } from '../math.ts';
 import { tokenize } from '../tokens.ts';
+import { isRuntimeClass } from '../render.ts';
 import { renderTag, type TagEdit } from '../tags.ts';
 import { textStyle } from '../model/templates.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -158,8 +159,10 @@ const trimEnd = (el: Element) => {
 const blank = (r: Range) => !r.toString().trim() && !r.cloneContents().querySelector(ATOM);
 
 // the classes of a paragraph that is split and joined as a body paragraph. a caption, a subtitle,
-// or a footnote is placed by the theme, and Return writes a br in it
-const PLAIN_CLASSES = /^(small|fragment|fade-[\w-]+|semi-fade-out|current-visible|grow|shrink|strike|highlight-[\w-]+|beeson-[\w-]+)$/;
+// or a footnote is placed by the theme, and Return writes a br in it. a class that reveal.js or the
+// editor sets at run time, e.g. visible on a step while every step is shown, is never a style
+const PLAIN = /^(small|fragment|fade-[\w-]+|semi-fade-out|current-visible|grow|shrink|strike|highlight-[\w-]+)$/;
+const plainClass = (c: string): boolean => PLAIN.test(c) || isRuntimeClass(c);
 
 type Item = {
   host: Element;
@@ -187,7 +190,7 @@ function structural(app: App, el: Element | null): boolean {
   if (!parent || !pairing.elements.has(parent) || pairing.byLive.has(parent)) return false;
   if (el.localName === 'li') return parent.matches(LIST);
   if (el.localName === 'h3') return true;
-  if (el.localName === 'p') return [...el.classList].every((c) => PLAIN_CLASSES.test(c));
+  if (el.localName === 'p') return [...el.classList].every(plainClass);
   return false;
 }
 
@@ -568,7 +571,7 @@ export function styleOf(app: App, el: Element): ParagraphStyle | null {
   if (!pairing?.byLive.has(el) || el.matches('aside.notes')) return null;
   const parent = el.parentElement;
   if (!parent || !pairing.elements.has(parent) || pairing.byLive.has(parent)) return null;
-  const own = [...el.classList].filter((c) => !PLAIN_CLASSES.test(c) || c === 'small');
+  const own = [...el.classList].filter((c) => !plainClass(c) || c === 'small');
   const one = (tag: string, cls: string | null) => el.localName === tag && (cls ? own.length === 1 && own[0] === cls : own.length === 0);
   if (one('h3', null)) return 'subheading';
   if (one('div', 'foot')) return 'footnote';
