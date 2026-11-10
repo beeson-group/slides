@@ -1,54 +1,153 @@
-// the speaker notes of the current slide, laid over a pane under the slide while the Notes button
-// is on, and the strip above the pane that changes its height. while the notes are shown, a slide
-// without notes gets an empty aside to type into. an aside without text is not written into the
-// file, hence it does not make the deck dirty
+// the speaker notes of the current slide, in a pane under the canvas as in PowerPoint and Keynote,
+// in the font of the chrome and at a zoom of their own. the text that is edited is the aside.notes
+// of the slide, so that the typing, the history, find, and the save treat it as any other block.
+// lay() sets the aside over the box of the pane, in the slide px of its section, at every zoom and
+// scroll of the canvas, and its font is divided by the scale of the slide, hence its text keeps
+// its size on the screen. while the notes are shown, a slide without notes gets an empty aside to
+// type into, which is not written into the file before it has text. the divider above the pane is
+// dragged to set its height, and dragged down to the bottom it hides the notes, as in PowerPoint
 
 import type { App, Notes } from './app.ts';
 import { button, injectStyle, make, store, stored } from './ui/dom.ts';
 
-const PANE_KEY = 'beeson-pane';
+declare module './app.ts' {
+  interface Notes {
+    // the zoom of the text of the notes, 1 at 100 percent
+    textZoom(): number;
+    // a step up or down the zooms of TEXT_ZOOMS, or back to 100 percent with 0
+    zoomText(way: 1 | -1 | 0): void;
+  }
+}
 
-// --beeson-scale is the scale of the slide, --beeson-gap the room under the slide in the viewport
-// of reveal.js, and --beeson-side the room beside it on each side, in slide pixels, all set by
-// shell/canvas.ts. --beeson-pane is the height of the pane, in CSS pixels
+const PANE_KEY = 'beeson-pane';
+const ZOOM_KEY = 'beeson-notes-zoom';
+// the heights of the pane in CSS px. a drag of the divider below HIDE hides the notes
+const MIN = 80;
+const MAX = 600;
+const HIDE = 40;
+export const TEXT_ZOOMS = [0.5, 0.75, 1, 1.25, 1.5, 2, 2.5, 3];
+// the size of the text at 100 percent and the padding of the pane, in CSS px
+const FONT = 13;
+const PAD = { top: 10, side: 16 };
+
+// the box of the pane and the font are written by lay() in the slide px of the present section:
+// --ed-notes-x, -y, -w, and -h, --ed-notes-font, and --ed-notes-pad-t, -s, and -r. the
+// section keeps its clip at its edge, widened by the box of the pane in --ed-notes-clip
 const CSS = `
-.beeson-edit-pane { position: fixed; left: 0; right: 0; bottom: 36px; z-index: 0; height: var(--beeson-pane, 200px); box-sizing: border-box; display: none; background: var(--bg, #000); border-top: 1px solid var(--line, #555); color: var(--subtle, #bbb); font: 12px/1.4 system-ui, sans-serif; padding: 8px 16px; }
-html.beeson-notes .beeson-edit-pane { display: block; }
-html.beeson-nav .beeson-edit-pane, html.beeson-nav .beeson-edit-resize { left: 240px; }
-html.beeson-steps .beeson-edit-pane, html.beeson-steps .beeson-edit-resize { right: 320px; }
-.beeson-edit-resize { position: fixed; left: 0; right: 0; bottom: calc(36px + var(--beeson-pane, 200px) - 4px); height: 8px; z-index: 56; display: none; cursor: ns-resize; }
-html.beeson-notes .beeson-edit-resize { display: block; }
-.beeson-edit-resize:hover { background: color-mix(in srgb, var(--violet, #96f) 45%, transparent); }
-.beeson-edit-resize:focus-visible { outline: none; background: color-mix(in srgb, var(--violet, #96f) 45%, transparent); }
-html.beeson-editor.beeson-notes .reveal .slides section.present { overflow: visible; clip-path: inset(0 calc(-1 * var(--beeson-side, 0px)) calc(-1 * (var(--beeson-pane, 200px) / var(--beeson-scale, 1) + var(--beeson-gap, 0px))) calc(-1 * var(--beeson-side, 0px))); }
-html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes { display: block; position: absolute; left: calc(-1 * var(--beeson-side, 0px)); right: calc(-1 * var(--beeson-side, 0px)); top: calc(100% + var(--beeson-gap, 0px)); z-index: 5; box-sizing: border-box; height: calc(var(--beeson-pane, 200px) / var(--beeson-scale, 1)); margin: 0; padding: calc(30px / var(--beeson-scale, 1)) calc(16px / var(--beeson-scale, 1)) calc(12px / var(--beeson-scale, 1)); font-size: calc(15px / var(--beeson-scale, 1)); line-height: 1.5; text-align: left; color: var(--text, #eee); background: transparent; overflow: auto; outline: 1px solid transparent; outline-offset: -1px; }
-html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:focus { outline-color: var(--violet, #96f); }
-html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:empty::before { content: 'Click to add notes'; color: var(--subtle, #bbb); }
+html.beeson-editor body > .beeson-edit-pane { display: none; }
+html.beeson-editor.beeson-notes body > .beeson-edit-pane { display: block; }
+html.beeson-editor .beeson-edit-resize { position: fixed; left: var(--ed-nav-col); right: var(--ed-insp-col); bottom: calc(28px + var(--beeson-pane, 200px) - 4px); height: 8px; z-index: 56; display: none; cursor: row-resize; touch-action: none; }
+html.beeson-editor.beeson-notes .beeson-edit-resize { display: block; }
+html.beeson-editor .beeson-edit-resize::after { content: ''; position: absolute; left: 50%; top: 2px; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: var(--ed-faint); opacity: 0.6; }
+html.beeson-editor .beeson-edit-resize:hover::after, html.beeson-editor .beeson-edit-resize.dragging::after, html.beeson-editor .beeson-edit-resize:focus-visible::after { opacity: 1; background: var(--ed-muted); }
+html.beeson-editor .beeson-edit-resize:hover, html.beeson-editor .beeson-edit-resize.dragging, html.beeson-editor .beeson-edit-resize:focus-visible { outline: none; background: linear-gradient(transparent 3px, color-mix(in srgb, var(--ed-select) 55%, transparent) 3px 5px, transparent 5px); }
+html.beeson-editor .beeson-edit-notes-zoom { position: fixed; z-index: 57; display: none; align-items: center; gap: 2px; height: 22px; padding: 0 2px; box-sizing: border-box; border: 1px solid var(--ed-line); border-radius: 6px; background: var(--ed-panel); color: var(--ed-muted); font: 11px/1 var(--ed-font); font-variant-numeric: tabular-nums; opacity: 0.7; transition: opacity 120ms; user-select: none; -webkit-user-select: none; }
+html.beeson-editor.beeson-notes .beeson-edit-notes-zoom { display: flex; }
+html.beeson-editor .beeson-edit-notes-zoom:hover, html.beeson-editor .beeson-edit-notes-zoom:focus-within, html.beeson-editor.beeson-notes-hot .beeson-edit-notes-zoom { opacity: 1; }
+html.beeson-editor .beeson-edit-notes-zoom button { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 18px; padding: 0 3px; border: 0; border-radius: 4px; background: transparent; color: var(--ed-text); font: 500 11px/1 var(--ed-font); cursor: default; }
+html.beeson-editor .beeson-edit-notes-zoom button.big { font-size: 15px; }
+html.beeson-editor .beeson-edit-notes-zoom button:hover { background: var(--ed-hover); }
+html.beeson-editor .beeson-edit-notes-zoom button:disabled { color: var(--ed-faint); }
+html.beeson-editor .beeson-edit-notes-zoom button:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: -1px; }
+html.beeson-editor .beeson-edit-notes-zoom .value { min-width: 34px; text-align: center; }
+html.beeson-editor.beeson-notes .reveal .slides section.present { overflow: visible; clip-path: var(--ed-notes-clip, none); }
+html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes { display: block; position: absolute; left: var(--ed-notes-x, 0px); top: var(--ed-notes-y, 100%); width: var(--ed-notes-w, 100%); height: var(--ed-notes-h, 200px); right: auto; bottom: auto; z-index: 100; box-sizing: border-box; margin: 0; padding: var(--ed-notes-pad-t, 10px) var(--ed-notes-pad-r, 16px) var(--ed-notes-pad-t, 10px) var(--ed-notes-pad-s, 16px); --text: var(--ed-text); --subtle: var(--ed-muted); --muted: var(--ed-muted); --line: var(--ed-line); --accent: var(--ed-guide); --violet: var(--ed-select); font-family: var(--ed-font); font-size: var(--ed-notes-font, 13px); font-weight: 400; line-height: 1.5; letter-spacing: normal; text-align: left; color: var(--ed-text); background: var(--ed-panel); box-shadow: inset 0 var(--ed-notes-hair, 1px) var(--ed-line); overflow: auto; overscroll-behavior: contain; outline: var(--ed-notes-hair, 1px) solid transparent; outline-offset: calc(-1 * var(--ed-notes-hair, 1px)); cursor: text; }
+html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:hover { outline-color: transparent; }
+html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:focus { outline: calc(2 * var(--ed-notes-hair, 1px)) solid var(--ed-focus); outline-offset: calc(-2 * var(--ed-notes-hair, 1px)); }
+html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:empty::before { content: 'Click to add notes'; color: var(--ed-faint); }
 `;
+
+const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
 
 export function install(app: App): void {
   injectStyle('notes', CSS);
+  const root = document.documentElement;
   const notesButton = button('Notes', 'Show the speaker notes under the slide');
   notesButton.setAttribute('aria-pressed', 'false');
-  const pane = make('div', 'beeson-edit-pane', 'Notes');
+  // the backdrop of the notes in the grid of the shell, over which the aside is laid
+  const pane = make('div', 'beeson-edit-pane');
+  pane.setAttribute('aria-hidden', 'true');
   const resizer = make('div', 'beeson-edit-resize');
-  resizer.title = 'Drag to change the height of the notes, or focus it and press the up and down arrows';
+  resizer.title = 'Drag to change the height of the notes, or down to hide them. When focused, the up and down arrows change it';
   resizer.tabIndex = 0;
   resizer.setAttribute('role', 'separator');
   resizer.setAttribute('aria-orientation', 'horizontal');
   resizer.setAttribute('aria-label', 'Height of the notes');
-  resizer.setAttribute('aria-valuemin', '120');
-  resizer.setAttribute('aria-valuemax', '600');
-  let paneHeight = 200;
+  resizer.setAttribute('aria-valuemin', String(MIN));
+  resizer.setAttribute('aria-valuemax', String(MAX));
 
-  const shown = () => document.documentElement.classList.contains('beeson-notes');
+  // the zoom of the text, at the upper right of the pane, as the A buttons of the notes of the
+  // presenter display of Keynote
+  const zoomBox = make('div', 'beeson-edit-notes-zoom');
+  zoomBox.setAttribute('role', 'group');
+  zoomBox.setAttribute('aria-label', 'Size of the notes text');
+  const smaller = button('A', 'Smaller notes text', 'Smaller notes text');
+  const bigger = button('A', 'Bigger notes text', 'Bigger notes text');
+  bigger.className = 'big';
+  const value = make('span', 'value');
+  zoomBox.append(smaller, value, bigger);
+
+  let paneHeight = 200;
+  let textZoom = 1;
+  const shown = () => root.classList.contains('beeson-notes');
+
+  // the aside is laid over the pane, in the slide px of the present section
+  function lay(): void {
+    if (!shown() || !app.stage) return;
+    const slide = app.current();
+    const box = pane.getBoundingClientRect();
+    if (!slide || !box.height) return;
+    const s = app.stage.scale || 1;
+    const sec = slide.getBoundingClientRect();
+    const px = (v: number) => `${v / s}px`;
+    const x = (box.left - sec.left) / s;
+    const y = (box.top - sec.top) / s;
+    const w = box.width / s;
+    const h = box.height / s;
+    const set = (name: string, v: string) => root.style.setProperty(name, v);
+    set('--ed-notes-x', `${x}px`);
+    set('--ed-notes-y', `${y}px`);
+    set('--ed-notes-w', `${w}px`);
+    set('--ed-notes-h', `${h}px`);
+    set('--ed-notes-font', px(FONT * textZoom));
+    set('--ed-notes-pad-t', px(PAD.top));
+    set('--ed-notes-pad-s', px(PAD.side));
+    // the text keeps clear of the zoom control at the top right of the pane
+    set('--ed-notes-pad-r', px((zoomBox.offsetWidth || 110) + 14 + PAD.side));
+    set('--ed-notes-hair', px(1));
+    // the box of the slide and the box of the pane, both drawn clockwise, hence their union
+    const W = sec.width / s;
+    const H = sec.height / s;
+    set('--ed-notes-clip', `path('M0 0H${W}V${H}H0Z M${x} ${y}H${x + w}V${y + h}H${x}Z')`);
+    Object.assign(zoomBox.style, { left: '', right: `${innerWidth - box.right + 14}px`, top: `${box.top + 7}px` });
+  }
 
   function setPane(height: number): void {
-    paneHeight = Math.max(120, Math.min(600, Math.round(height)));
-    document.documentElement.style.setProperty('--beeson-pane', `${paneHeight}px`);
+    paneHeight = clamp(Math.round(height), MIN, MAX);
+    root.style.setProperty('--beeson-pane', `${paneHeight}px`);
     resizer.setAttribute('aria-valuenow', String(paneHeight));
     app.relayout();
     app.invalidate('layout');
+  }
+
+  function showZoom(): void {
+    value.textContent = `${Math.round(textZoom * 100)}%`;
+    smaller.disabled = textZoom <= TEXT_ZOOMS[0];
+    bigger.disabled = textZoom >= TEXT_ZOOMS[TEXT_ZOOMS.length - 1];
+    zoomBox.title = `Notes text at ${Math.round(textZoom * 100)} percent`;
+  }
+
+  function setTextZoom(z: number): void {
+    textZoom = clamp(Math.round(z * 100) / 100, TEXT_ZOOMS[0], TEXT_ZOOMS[TEXT_ZOOMS.length - 1]);
+    store(ZOOM_KEY, String(textZoom));
+    showZoom();
+    lay();
+  }
+
+  function zoomText(way: 1 | -1 | 0): void {
+    if (way === 0) return setTextZoom(1);
+    const next = way > 0 ? TEXT_ZOOMS.find((z) => z > textZoom + 0.001) : [...TEXT_ZOOMS].reverse().find((z) => z < textZoom - 0.001);
+    if (next) setTextZoom(next);
   }
 
   function ensure(): HTMLElement | null {
@@ -64,13 +163,17 @@ export function install(app: App): void {
     return aside;
   }
 
-  function toggle(): void {
-    const on = document.documentElement.classList.toggle('beeson-notes');
+  function setShown(on: boolean): void {
+    root.classList.toggle('beeson-notes', on);
     notesButton.classList.toggle('on', on);
     notesButton.setAttribute('aria-pressed', String(on));
     app.relayout();
     app.invalidate('layout');
-    if (on) ensure()?.focus({ preventScroll: true });
+  }
+
+  function toggle(): void {
+    setShown(!shown());
+    if (shown()) ensure()?.focus({ preventScroll: true });
   }
 
   resizer.addEventListener('keydown', (ev) => {
@@ -82,21 +185,71 @@ export function install(app: App): void {
     store(PANE_KEY, String(paneHeight));
   });
   resizer.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0) return;
     ev.preventDefault();
     const startY = ev.clientY;
     const startHeight = paneHeight;
-    const onMove = (e: PointerEvent) => setPane(startHeight + startY - e.clientY);
+    let wanted = startHeight;
+    resizer.classList.add('dragging');
+    const onMove = (e: PointerEvent) => {
+      wanted = startHeight + startY - e.clientY;
+      setPane(wanted);
+    };
     const onUp = () => {
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp);
+      resizer.classList.remove('dragging');
+      // dragged down to the bottom, the notes are hidden, and shown again at their height before
+      if (wanted < HIDE) {
+        setPane(startHeight);
+        setShown(false);
+      }
       store(PANE_KEY, String(paneHeight));
     };
     document.addEventListener('pointermove', onMove);
     document.addEventListener('pointerup', onUp);
   });
-  app.listen('slide', () => void ensure());
-  document.body.append(pane, resizer);
-  const notes: Notes = { button: notesButton, shown, toggle, ensure, setPane, height: () => paneHeight };
+
+  smaller.addEventListener('click', () => zoomText(-1));
+  bigger.addEventListener('click', () => zoomText(1));
+  // a press on the zoom buttons keeps the caret in the notes
+  zoomBox.addEventListener('pointerdown', (ev) => ev.preventDefault());
+
+  const inNotes = (ev: Event) => ev.target instanceof Element && !!ev.target.closest('aside.notes, .beeson-edit-notes-zoom');
+  // a pinch or the wheel with Ctrl over the notes zooms their text, as over the notes pane of
+  // PowerPoint, and Safari sends a pinch as gesture events
+  let pinch: number | null = null;
+  window.addEventListener('wheel', (ev) => {
+    if (!ev.ctrlKey || !inNotes(ev)) return;
+    ev.preventDefault();
+    if (pinch === null) setTextZoom(textZoom * Math.exp(-clamp(ev.deltaY, -50, 50) / 200));
+  }, { passive: false });
+  window.addEventListener('gesturestart', (ev) => {
+    if (!inNotes(ev)) return;
+    ev.preventDefault();
+    pinch = textZoom;
+  }, { passive: false });
+  window.addEventListener('gesturechange', (ev) => {
+    if (pinch === null) return;
+    ev.preventDefault();
+    setTextZoom(pinch * (ev as Event & { scale: number }).scale);
+  }, { passive: false });
+  window.addEventListener('gestureend', () => {
+    pinch = null;
+  });
+  // the zoom buttons are brought up while the pointer is over the notes
+  document.addEventListener('pointerover', (ev) => root.classList.toggle('beeson-notes-hot', inNotes(ev)));
+
+  app.listen('slide', () => {
+    ensure();
+    lay();
+  });
+  app.listen('resize', lay);
+  document.body.append(pane, resizer, zoomBox);
+  const notes: Notes = { button: notesButton, shown, toggle, ensure, setPane, height: () => paneHeight, textZoom: () => textZoom, zoomText };
   app.notes = notes;
+  const kept = Number(stored(ZOOM_KEY));
+  textZoom = TEXT_ZOOMS[0] <= kept && kept <= TEXT_ZOOMS[TEXT_ZOOMS.length - 1] ? kept : 1;
+  showZoom();
   setPane(Number(stored(PANE_KEY)) || 200);
 }

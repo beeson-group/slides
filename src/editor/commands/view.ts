@@ -37,15 +37,16 @@ const PANES: Pane[] = [
     },
   },
   { name: 'notes', el: (app) => (app.notes.shown() ? app.notes.ensure() : null), enter: (_, el) => (el as HTMLElement).focus() },
-  // the focus goes to the first control of the panel shown, and else to the tab of the panel
+  // the focus goes to the tab of the panel shown, from which Tab reaches its controls, since a
+  // first control that is a field would take the keys of the inspector
   {
     name: 'inspector',
     el: () => document.querySelector('.beeson-edit-inspector'),
     enter: (app, el) => {
-      const panel = el.querySelector(':scope > .panel:not([hidden])');
       const tab = el.querySelector<HTMLElement>('[role="tab"][aria-selected="true"]');
-      if (panel && [...panel.querySelectorAll(FOCUSABLE)].some(shown)) first(app, panel);
-      else tab?.focus();
+      const panel = el.querySelector(':scope > .panel:not([hidden])');
+      if (tab && shown(tab)) tab.focus();
+      else if (panel) first(app, panel);
     },
   },
   { name: 'status', el: () => document.querySelector('.beeson-edit-bottom'), enter: first },
