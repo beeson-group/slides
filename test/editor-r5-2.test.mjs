@@ -202,3 +202,34 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the line of the current slide drawn from a to b in slide px with Insert > Line, then deselected
+async function addLine(page, a, b) {
+  await exec(page, 'insert.line', { from: a, to: b });
+  await frames(page);
+  await press(page, 'Escape');
+  await frames(page);
+}
+const lineEnds = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-line-end')].filter((g) => !g.hidden).length`);
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: a marquee that touches a line selects it, and one beside it does not`, async () => {
+    const page = await editor(platform);
+    await addLine(page, { x: 400, y: 960 }, { x: 900, y: 960 });
+    assert.equal(await lineEnds(page), 0, 'the line is still selected');
+    // a marquee from below the line up across its middle
+    const from = await screen(page, 600, 1050);
+    const to = await screen(page, 700, 940);
+    await drag(page, from, { dx: to.x - from.x, dy: to.y - from.y });
+    await frames(page);
+    assert.equal(await lineEnds(page), 2, 'the marquee does not select the line');
+    // a marquee beside the end of the line selects nothing
+    await press(page, 'Escape');
+    const off = await screen(page, 950, 1050);
+    const offTo = await screen(page, 1000, 1000);
+    await drag(page, off, { dx: offTo.x - off.x, dy: offTo.y - off.y });
+    await frames(page);
+    assert.equal(await lineEnds(page), 0, 'a marquee beside the line selects it');
+    assert.deepEqual(errors(page), []);
+  });
+}
