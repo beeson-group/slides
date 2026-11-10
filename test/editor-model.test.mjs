@@ -204,3 +204,23 @@ test('a moved section slide fills the running heads again', async (t) => {
   assert.deepEqual(await heads(), before);
   assert.deepEqual(page.errors, []);
 });
+
+// a list is not a block, hence it was kept in its first slide while it was inside a slide taken off
+// the page
+test('an element moved into a slide that is then deleted is written in neither slide', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const { page, text } = await editorPage(browser);
+  const slides = await unitsAt(text, text.indexOf('<div class="slides">'));
+  const three = await unitsAt(text, slides.units[2].range.start);
+  const ul = three.units.find((u) => text.startsWith('<ul>', u.range.start));
+  await page.evaluate(`(async () => {
+    await ${E}.doc.move(${slide(2)}.querySelector(':scope > ul'), ${slide(3)}, null);
+    await ${E}.doc.remove(${slide(3)});
+  })()`);
+  const four = slides.units[3];
+  same(await render(page), text.slice(0, ul.lead.start) + text.slice(ul.end, four.lead.start) + text.slice(four.end), 'a deleted slide with a moved list');
+  await page.evaluate(`(async () => { await ${E}.undo(); await ${E}.undo(); })()`);
+  same(await render(page), text, 'both undone');
+  assert.deepEqual(page.errors, []);
+});
