@@ -181,11 +181,11 @@
     }
     return (el) => map.get(el) ?? null;
   }
-  async function previewTex(tex, display) {
+  async function previewTex(tex, display2) {
     if (!tex.trim()) return { node: null, error: "The formula is empty" };
     const mj = mathjax();
     if (!mj?.tex2svgPromise) return { node: null, error: null };
-    const node = await mj.tex2svgPromise(tex, { display });
+    const node = await mj.tex2svgPromise(tex, { display: display2 });
     const merror = node.querySelector("[data-mjx-error], mjx-merror");
     const error = merror ? merror.getAttribute("data-mjx-error") ?? merror.textContent ?? "TeX error" : null;
     return { node, error };
@@ -241,7 +241,137 @@
     if (mj) await mj.typesetPromise([host]);
   }
 
+  // src/editor/keymap.ts
+  var MODIFIERS = ["Mod", "Shift", "Alt", "Ctrl", "Meta"];
+  var NAMED = /* @__PURE__ */ new Set([
+    "Enter",
+    "Escape",
+    "Tab",
+    "Backspace",
+    "Delete",
+    "Space",
+    "ContextMenu",
+    "ArrowUp",
+    "ArrowDown",
+    "ArrowLeft",
+    "ArrowRight",
+    "Home",
+    "End",
+    "PageUp",
+    "PageDown",
+    ...Array.from({ length: 12 }, (_, i) => `F${i + 1}`)
+  ]);
+  var SYMBOLS = {
+    Minus: ["-", "_"],
+    Equal: ["=", "+"],
+    BracketLeft: ["[", "{"],
+    BracketRight: ["]", "}"],
+    Backslash: ["\\", "|"],
+    Semicolon: [";", ":"],
+    Quote: ["'", '"'],
+    Backquote: ["`", "~"],
+    Comma: [",", "<"],
+    Period: [".", ">"],
+    Slash: ["/", "?"]
+  };
+  var isLetter = (key) => /^[a-z]$/i.test(key);
+  var isDigit = (key) => /^[0-9]$/.test(key);
+  var isSymbol = (key) => key.length === 1 && !isLetter(key) && !isDigit(key);
+  function parseKey(value, platform) {
+    const parts = value.endsWith("++") ? [...value.slice(0, -2).split("+"), "+"] : value.split("+");
+    const raw = parts.pop() ?? "";
+    for (const part of parts) if (!MODIFIERS.includes(part)) throw new Error(`the modifier ${part} of ${value} is not known`);
+    const key = raw.length === 1 ? raw.toLowerCase() : raw;
+    if (!key || key.length > 1 && !NAMED.has(key)) throw new Error(`the key of ${value} is not known`);
+    const mods = new Set(parts);
+    return {
+      key,
+      shift: mods.has("Shift"),
+      alt: mods.has("Alt"),
+      ctrl: mods.has("Ctrl") || mods.has("Mod") && platform === "other",
+      meta: mods.has("Meta") || mods.has("Mod") && platform === "mac"
+    };
+  }
+  function keyMatches(ev, chord, platform) {
+    const key = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
+    const code = ev.code ?? "";
+    if (isLetter(chord.key)) {
+      const ascii = key.length === 1 && key.charCodeAt(0) < 128;
+      return ascii ? key === chord.key : code === `Key${chord.key.toUpperCase()}`;
+    }
+    if (isDigit(chord.key)) return key === chord.key || code === `Digit${chord.key}`;
+    if (isSymbol(chord.key)) {
+      if (key === chord.key) return true;
+      const typed = platform === "mac" && ev.altKey ? SYMBOLS[code] : void 0;
+      return !!typed && typed[ev.shiftKey ? 1 : 0] === chord.key;
+    }
+    if (chord.key === "Space") return ev.key === " ";
+    return ev.key === chord.key;
+  }
+  function matches(ev, value, platform) {
+    if (platform === "other" && ev.getModifierState?.("AltGraph")) return false;
+    const chord = parseKey(value, platform);
+    if (!keyMatches(ev, chord, platform)) return false;
+    if (!isSymbol(chord.key) && ev.shiftKey !== chord.shift) return false;
+    return ev.altKey === chord.alt && ev.ctrlKey === chord.ctrl && ev.metaKey === chord.meta;
+  }
+  function fallback(ev, platform) {
+    const get = (name) => ev.getModifierState?.(name) ?? false;
+    const base = { key: ev.key, code: ev.code, shiftKey: ev.shiftKey, altKey: ev.altKey, getModifierState: get };
+    if (platform === "mac" && ev.ctrlKey && !ev.metaKey) return { ...base, ctrlKey: false, metaKey: true };
+    if (platform === "other" && ev.metaKey && !ev.ctrlKey) return { ...base, ctrlKey: true, metaKey: false };
+    return null;
+  }
+  var MAC_KEYS = {
+    Enter: "\u21A9",
+    Escape: "\u238B",
+    Tab: "\u21E5",
+    Backspace: "\u232B",
+    Delete: "\u2326",
+    Space: "Space",
+    ContextMenu: "Menu",
+    ArrowUp: "\u2191",
+    ArrowDown: "\u2193",
+    ArrowLeft: "\u2190",
+    ArrowRight: "\u2192",
+    Home: "\u2196",
+    End: "\u2198",
+    PageUp: "\u21DE",
+    PageDown: "\u21DF"
+  };
+  var OTHER_KEYS = {
+    Escape: "Esc",
+    ContextMenu: "Menu",
+    ArrowUp: "\u2191",
+    ArrowDown: "\u2193",
+    ArrowLeft: "\u2190",
+    ArrowRight: "\u2192",
+    PageUp: "Page Up",
+    PageDown: "Page Down"
+  };
+  function display(value, platform) {
+    const c = parseKey(value, platform);
+    const key = c.key.length === 1 ? c.key.toUpperCase() : c.key;
+    if (platform === "mac") {
+      const mods2 = (c.ctrl ? "\u2303" : "") + (c.alt ? "\u2325" : "") + (c.shift ? "\u21E7" : "") + (c.meta ? "\u2318" : "");
+      return mods2 + (MAC_KEYS[key] ?? key);
+    }
+    const mods = [c.ctrl && "Ctrl", c.meta && "Meta", c.alt && "Alt", c.shift && "Shift"].filter(Boolean);
+    return [...mods, OTHER_KEYS[key] ?? key].join("+");
+  }
+  function install(_app) {
+  }
+
   // src/editor/commands.ts
+  var DEFAULT_REGIONS = ["canvas", "navigator"];
+  var OUTSIDE_DIALOGS = ["canvas", "text", "field", "navigator", "notes", "inspector"];
+  var EVERYWHERE = [...OUTSIDE_DIALOGS, "dialog"];
+  function keysOf(c, platform) {
+    return c.keys?.[platform] ?? [];
+  }
+  function isPlain(value) {
+    return !/(^|\+)(Mod|Ctrl|Alt|Meta)\+/.test(value) && !/^(Shift\+)?F\d+$/.test(value);
+  }
   var orderOf = (c, place3) => c[place3]?.order ?? 0;
   function grouped(list, place3) {
     const groups = /* @__PURE__ */ new Map();
@@ -292,6 +422,20 @@
       if (c.undoable) await this.app.history.transact(this.label(id), () => c.run(this.app, arg));
       else await c.run(this.app, arg);
     }
+    // the keys of a command on the platform of the editor, as a menu shows them
+    shortcuts(id) {
+      const c = this.byId.get(id);
+      return c ? keysOf(c, this.app.platform).map((k) => display(k, this.app.platform)) : [];
+    }
+    // the first enabled command taken in region whose keys match ev, and else the first one whose
+    // keys match ev with the fallback modifier of keymap.ts. with plain set, a key of isPlain is not
+    // taken
+    forKey(ev, region, plain = true) {
+      const platform = this.app.platform;
+      const find = (e) => this.list().find((c) => (c.in ?? DEFAULT_REGIONS).includes(region) && keysOf(c, platform).some((k) => (plain || !isPlain(k)) && matches(e, k, platform)) && this.enabled(c.id));
+      const alt = fallback(ev, platform);
+      return find(ev) ?? (alt ? find(alt) : void 0);
+    }
     // the commands of a menu of the menu bar, or of one of its submenus, in groups
     forMenu(bar, submenu) {
       return grouped(this.list().filter((c) => c.menu?.bar === bar && c.menu.submenu === submenu), "menu");
@@ -305,45 +449,38 @@
     }
   };
   function installKeys(app2) {
-    const run2 = (id) => void app2.commands.run(id).catch((e) => app2.fail(e));
     window.addEventListener("keydown", (ev) => {
-      const mod = ev.metaKey || ev.ctrlKey;
-      const key = ev.key.toLowerCase();
-      const target = ev.target instanceof Element ? ev.target : null;
-      const inField = !!target?.closest(".beeson-math, input, textarea, select");
+      if (ev.isComposing || ev.keyCode === 229) return;
+      if (dialogKey(app2, ev)) return;
+      const region = app2.region();
       const active = document.activeElement;
-      if (mod && !ev.altKey && key === "s") {
-        ev.preventDefault();
-        run2(ev.shiftKey ? "file.saveAs" : "file.save");
-      } else if (mod && !ev.altKey && !inField && (key === "z" || key === "y" && !ev.shiftKey)) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        run2(key === "y" || ev.shiftKey ? "edit.redo" : "edit.undo");
-      } else if ((ev.key === "Enter" || ev.key === " ") && !app2.math.isOpen() && active instanceof Element && active.matches("mjx-container") && app2.hostOf(active)) {
-        ev.preventDefault();
-        ev.stopPropagation();
-        app2.math.open(active);
-      } else if (ev.key === "Escape" && app2.files.problemsShown()) {
-        app2.files.closeProblems();
-        ev.stopPropagation();
-      } else if (ev.key === "Escape" && app2.files.askShown()) {
-        app2.files.cancelAsk();
-        ev.stopPropagation();
-      } else if (!app2.math.isOpen() && app2.move.onKey(ev)) {
-        ev.preventDefault();
-        ev.stopPropagation();
-      } else if (ev.key === "Escape") {
-        const host = app2.hostOf(active);
-        if (app2.math.isOpen()) {
-          app2.math.close();
-          ev.stopPropagation();
-        } else if (host) {
-          host.blur();
-          app2.move.select(app2.move.movableOf(host));
-          ev.stopPropagation();
-        }
-      }
+      const onBar = region === "canvas" && active instanceof Element && active !== document.body && active !== document.documentElement && !active.closest(".reveal, .beeson-handle");
+      const command = app2.commands.forKey(ev, region, !onBar);
+      if (!command) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      void app2.commands.run(command.id).catch((e) => app2.fail(e));
     }, true);
+    app2.listen("resize", () => {
+      const d = app2.deck();
+      if (d?.isReady() && d.getConfig?.().keyboard !== false) d.configure({ keyboard: false });
+    });
+  }
+  function dialogKey(app2, ev) {
+    const active = document.activeElement;
+    if ((ev.key === "Enter" || ev.key === " ") && !app2.math.isOpen() && active instanceof Element && active.matches("mjx-container") && app2.hostOf(active)) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      app2.math.open(active);
+      return true;
+    }
+    if (ev.key !== "Escape") return false;
+    if (app2.files.problemsShown()) app2.files.closeProblems();
+    else if (app2.files.askShown()) app2.files.cancelAsk();
+    else if (app2.math.isOpen()) app2.math.close();
+    else return false;
+    ev.stopPropagation();
+    return true;
   }
 
   // src/editor/app.ts
@@ -631,7 +768,7 @@
   // src/editor/tokens.ts
   var RAW_TEXT = /* @__PURE__ */ new Set(["script", "style", "xmp", "iframe", "noembed", "noframes"]);
   var RCDATA = /* @__PURE__ */ new Set(["textarea", "title"]);
-  var isLetter = (c) => /^[A-Za-z]$/.test(c);
+  var isLetter2 = (c) => /^[A-Za-z]$/.test(c);
   var isSpace = (c) => c === " " || c === "	" || c === "\n" || c === "\r" || c === "\f";
   var opensMarkup = (c) => /^[A-Za-z!/?]$/.test(c);
   function tokenize(html) {
@@ -677,7 +814,7 @@
         }
         out.push({ type: "comment", start: i, end: end2 });
         i = end2;
-      } else if (next === "!" || next === "?" || next === "/" && !isLetter(html[i + 2] ?? "")) {
+      } else if (next === "!" || next === "?" || next === "/" && !isLetter2(html[i + 2] ?? "")) {
         const k = html.indexOf(">", i);
         const end2 = k < 0 ? n : k + 1;
         out.push({ type: "other", start: i, end: end2 });
@@ -744,7 +881,7 @@
     const value = token.attrs.find((a) => a.name === "class")?.value ?? "";
     return value.split(/\s+/).filter(Boolean);
   }
-  var NAMED = {
+  var NAMED2 = {
     amp: "&",
     lt: "<",
     gt: ">",
@@ -785,7 +922,7 @@
         const bad = !Number.isFinite(code) || code === 0 || code > 1114111 || code >= 55296 && code <= 57343;
         return bad ? "\uFFFD" : String.fromCodePoint(code);
       }
-      const value = NAMED[body];
+      const value = NAMED2[body];
       if (value === void 0) return m;
       if (semi) return value;
       const next = raw[at + m.length] ?? "";
@@ -1516,8 +1653,8 @@
     return unitsWithin(s.parent)?.units.find((u) => u.el === s) ?? null;
   }
   function childSpace(s, eol, step2) {
-    const first = unitsWithin(s)?.units[0];
-    if (first) return spaceOf(s.source.text.slice(first.lead.start, first.range.start));
+    const first2 = unitsWithin(s)?.units[0];
+    if (first2) return spaceOf(s.source.text.slice(first2.lead.start, first2.range.start));
     return eol + (s.open ? indentAt(s.source.text, s.open.start) : "") + step2;
   }
   var Renderer = class {
@@ -1761,8 +1898,8 @@
     }
     const wrap = document.createElement("div");
     wrap.className = "reveal beeson-thumb";
-    const theme = document.documentElement.dataset.theme;
-    if (theme) wrap.dataset.theme = theme;
+    const theme2 = document.documentElement.dataset.theme;
+    if (theme2) wrap.dataset.theme = theme2;
     for (const c of ["no-logo", "no-lockup"]) wrap.classList.toggle(c, document.body.classList.contains(c));
     wrap.setAttribute("inert", "");
     const slides = document.createElement("div");
@@ -1886,7 +2023,7 @@
       this.idle = later(step2);
     }
   };
-  function install(app2) {
+  function install2(app2) {
     const nav2 = app2.nav;
     const thumbs = new Thumbs(app2, nav2.list);
     nav2.useThumbs(thumbs);
@@ -2167,8 +2304,8 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
       if (!current && this.rows.size) [...this.rows.values()][0].el.tabIndex = 0;
     }
     measure() {
-      const first = this.rows.values().next().value;
-      const width = first && !first.el.classList.contains("skip") ? first.pic.getBoundingClientRect().width : this.list.clientWidth - 44;
+      const first2 = this.rows.values().next().value;
+      const width = first2 && !first2.el.classList.contains("skip") ? first2.pic.getBoundingClientRect().width : this.list.clientWidth - 44;
       if (width > 0) this.thumbs?.setWidth(width);
     }
     onClick(slide, ev) {
@@ -2391,7 +2528,7 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
       this.peek.hidden = false;
     }
   };
-  function install2(app2) {
+  function install3(app2) {
     const nav2 = app2.nav;
     app2.selection.listen(() => nav2.refresh());
     app2.listen("slide", () => {
@@ -2723,7 +2860,7 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
       discard: ["Present the saved file", "Show the deck as saved in a new tab, and keep the edits here"]
     }
   };
-  function install3(app2) {
+  function install4(app2) {
     injectStyle("files", CSS4);
     const card = make("div", "beeson-edit-card");
     const cardText = make("p");
@@ -3018,7 +3155,7 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
       return null;
     }
   }
-  function install4(app2) {
+  function install5(app2) {
     injectStyle("drafts", CSS5);
     const recover = make("div", "beeson-edit-card recover");
     const recoverText = make("p");
@@ -3122,7 +3259,7 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes { 
 html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:focus { outline-color: var(--violet, #96f); }
 html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:empty::before { content: 'Click to add notes'; color: var(--subtle, #bbb); }
 `;
-  function install5(app2) {
+  function install6(app2) {
     injectStyle("notes", CSS6);
     const notesButton = button("Notes", "Show the speaker notes under the slide");
     notesButton.setAttribute("aria-pressed", "false");
@@ -3136,7 +3273,7 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:em
     resizer.setAttribute("aria-valuemin", "120");
     resizer.setAttribute("aria-valuemax", "600");
     let paneHeight = 200;
-    const shown2 = () => document.documentElement.classList.contains("beeson-notes");
+    const shown3 = () => document.documentElement.classList.contains("beeson-notes");
     function setPane(height) {
       paneHeight = Math.max(120, Math.min(600, Math.round(height)));
       document.documentElement.style.setProperty("--beeson-pane", `${paneHeight}px`);
@@ -3146,7 +3283,7 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:em
     }
     function ensure() {
       const slide = app2.current();
-      if (!slide || !app2.pairing?.blocks.length || !shown2()) return null;
+      if (!slide || !app2.pairing?.blocks.length || !shown3()) return null;
       let aside = slide.querySelector(":scope > aside.notes");
       if (!aside) {
         aside = make("aside", "notes");
@@ -3187,7 +3324,7 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:em
     });
     app2.listen("slide", () => void ensure());
     document.body.append(pane, resizer);
-    const notes = { button: notesButton, shown: shown2, toggle, ensure, setPane, height: () => paneHeight };
+    const notes = { button: notesButton, shown: shown3, toggle, ensure, setPane, height: () => paneHeight };
     app2.notes = notes;
     setPane(Number(stored(PANE_KEY)) || 200);
   }
@@ -3196,7 +3333,7 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:em
   var CSS7 = `
 html.beeson-editing .reveal .beeson-overflow { outline: 2px dashed var(--accent, #f80) !important; outline-offset: 6px; }
 `;
-  function install6(app2) {
+  function install7(app2) {
     injectStyle("overflow", CSS7);
     app2.onRefresh(ALL, () => {
       const slide = app2.current();
@@ -3343,9 +3480,9 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
       if (i < lines2.length - 1) document.execCommand("insertLineBreak");
     });
   }
-  function install7(app2) {
+  function install8(app2) {
     injectStyle("typing", CSS8);
-    const history = app2.history;
+    const history2 = app2.history;
     let hosts = [];
     function markMath(root) {
       for (const c of root.querySelectorAll("mjx-container")) {
@@ -3373,7 +3510,7 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
       const before = host.textContent ?? "";
       await setContentWithTex(host, content);
       markMath(host);
-      history.track(host);
+      history2.track(host);
       app2.markDirty();
       placeCaret(host, changeEnd(before, host.textContent ?? ""));
       app2.invalidate("content");
@@ -3384,22 +3521,22 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
       const type = ev.inputType;
       if (type === "historyUndo" || type === "historyRedo") {
         ev.preventDefault();
-        void (type === "historyUndo" ? history.undo() : history.redo()).catch((e) => app2.fail(e));
+        void (type === "historyUndo" ? history2.undo() : history2.redo()).catch((e) => app2.fail(e));
         return;
       }
       if (type === "formatBold" || type === "formatItalic") {
         ev.preventDefault();
-        history.break();
-        history.beforeTyping(host);
+        history2.break();
+        history2.beforeTyping(host);
         toggleFormat(host, type === "formatBold" ? "strong" : "em");
-        history.afterTyping(host);
-        history.break();
+        history2.afterTyping(host);
+        history2.break();
         app2.markDirty();
         app2.invalidate("content");
         return;
       }
-      if (type === "insertParagraph" || type === "insertLineBreak") history.break();
-      history.beforeTyping(host);
+      if (type === "insertParagraph" || type === "insertLineBreak") history2.break();
+      history2.beforeTyping(host);
       if (type === "insertParagraph" || type === "insertLineBreak") {
         ev.preventDefault();
         insertPlain(host, "\n");
@@ -3416,13 +3553,13 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
     document.addEventListener("input", (ev) => {
       const host = app2.hostOf(ev.target);
       if (!host) return;
-      history.afterTyping(host);
+      history2.afterTyping(host);
       app2.markDirty();
       app2.invalidate("content");
     });
     document.addEventListener("focusin", (ev) => {
       const host = app2.hostOf(ev.target);
-      if (host) history.track(host);
+      if (host) history2.track(host);
       app2.invalidate("selection");
     });
     document.addEventListener("focusout", () => setTimeout(() => app2.invalidate("selection"), 0));
@@ -3443,7 +3580,7 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
 .beeson-math .preview:empty { display: none; }
 .beeson-math button:disabled { opacity: 0.5; cursor: default; }
 `;
-  function install8(app2) {
+  function install9(app2) {
     injectStyle("mathpop", CSS9);
     let popover = null;
     let popoverFor = null;
@@ -3494,12 +3631,12 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
       const rect = container.getBoundingClientRect();
       box2.style.left = `${Math.max(16, Math.min(rect.left, window.innerWidth - 656))}px`;
       box2.style.top = `${Math.max(52, Math.min(rect.bottom + 8, window.innerHeight - 420))}px`;
-      let shown2 = 0;
+      let shown3 = 0;
       let timer = 0;
       const show = async () => {
-        const seq = ++shown2;
+        const seq = ++shown3;
         const result = await previewTex(field.value, info.display).catch((e) => ({ node: null, error: e instanceof Error ? e.message : String(e) }));
-        if (seq !== shown2) return;
+        if (seq !== shown3) return;
         preview.replaceChildren(...result.node ? [result.node] : []);
         error.textContent = result.error ?? "";
         apply.disabled = !!result.error;
@@ -3565,7 +3702,7 @@ html.beeson-editor .reveal .progress, html.beeson-editor .reveal .slide-number {
 html.beeson-editing .reveal .slides section .fragment { visibility: visible !important; opacity: 1 !important; transition: none !important; }
 html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: hidden !important; }
 `;
-  function install9(app2) {
+  function install10(app2) {
     injectStyle("canvas", CSS10);
     const layout = () => {
       const d = app2.deck();
@@ -3595,7 +3732,7 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
 .beeson-edit-top button:disabled { opacity: 0.4; cursor: default; }
 .beeson-edit-top button.on { border-color: var(--accent, #f80); color: var(--accent, #f80); }
 `;
-  function install10(app2) {
+  function install11(app2) {
     injectStyle("toolbar", CSS11);
     const top = make("div", "beeson-edit-top");
     const fileEl = make("span", "file");
@@ -3655,7 +3792,7 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
 .beeson-edit-bottom .beeson-layers > span { margin-right: 4px; }
 .beeson-edit-bottom .hint { flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 `;
-  function install11(app2, layers2) {
+  function install12(app2, layers2) {
     injectStyle("statusbar", CSS12);
     const bottom = make("div", "beeson-edit-bottom");
     const prevButton = button("\u2039", "Previous slide", "Previous slide");
@@ -3677,30 +3814,104 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
   }
 
   // src/editor/shell/shell.ts
-  function install12(_app) {
-  }
-
-  // src/editor/shell/menubar.ts
   function install13(_app) {
   }
 
-  // src/editor/shell/keys-sheet.ts
+  // src/editor/shell/menubar.ts
   function install14(_app) {
   }
 
-  // src/editor/ui/menu.ts
-  function install15(_app) {
+  // src/editor/shell/keys-sheet.ts
+  var BARS = ["File", "Edit", "Insert", "Format", "Arrange", "Slide", "View", "Help"];
+  var CSS13 = `
+.beeson-edit-keys { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 64px); box-sizing: border-box; padding: 0; border: 1px solid var(--line, #555); border-radius: 10px; background: var(--bg, #000); color: var(--text, #eee); font: 13px/1.4 system-ui, sans-serif; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5); }
+.beeson-edit-keys::backdrop { background: rgba(0, 0, 0, 0.4); }
+.beeson-edit-keys .head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line, #555); }
+.beeson-edit-keys h2 { margin: 0; font: 600 15px/1.4 system-ui, sans-serif; }
+.beeson-edit-keys .head button { font: inherit; padding: 2px 10px; border: 1px solid var(--line, #555); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
+.beeson-edit-keys .body { columns: 2 300px; column-gap: 32px; padding: 12px 16px 16px; overflow: auto; max-height: calc(100vh - 140px); }
+.beeson-edit-keys section { break-inside: avoid; margin-bottom: 12px; }
+.beeson-edit-keys h3 { margin: 0 0 4px; font: 600 12px/1.4 system-ui, sans-serif; color: var(--subtle, #bbb); }
+.beeson-edit-keys .row { display: flex; justify-content: space-between; gap: 16px; padding: 2px 0; }
+.beeson-edit-keys kbd { font: inherit; color: var(--subtle, #bbb); white-space: nowrap; }
+`;
+  function sheetRows(app2) {
+    const platform = app2.platform;
+    const commands2 = app2.commands.list().filter((c) => keysOf(c, platform).length);
+    const label2 = (c) => typeof c.label === "string" ? c.label : c.label(app2);
+    const barOf = (c) => c.menu?.bar ?? commands2.find((o) => o.menu && label2(o) === label2(c))?.menu?.bar ?? "Other";
+    const rows = [];
+    const sorted = [...commands2].sort((a, b) => (a.menu?.order ?? Infinity) - (b.menu?.order ?? Infinity));
+    for (const c of sorted) {
+      const bar = barOf(c);
+      const keys = keysOf(c, platform).map((k) => display(k, platform));
+      const row = rows.find((r) => r.bar === bar && r.label === label2(c));
+      if (row) row.keys.push(...keys.filter((k) => !row.keys.includes(k)));
+      else rows.push({ bar, label: label2(c), keys });
+    }
+    const rank = (bar) => BARS.includes(bar) ? BARS.indexOf(bar) : BARS.length;
+    return rows.sort((a, b) => rank(a.bar) - rank(b.bar));
+  }
+  function install15(app2) {
+    injectStyle("keys", CSS13);
+    const sheet = make("dialog", "beeson-edit-keys");
+    sheet.setAttribute("aria-labelledby", "beeson-edit-keys-title");
+    const head = make("div", "head");
+    const title = make("h2", "", "Keyboard Shortcuts");
+    title.id = "beeson-edit-keys-title";
+    const done = button("Done", "Close the list of keyboard shortcuts");
+    head.append(title, done);
+    const body = make("div", "body");
+    sheet.append(head, body);
+    let back = null;
+    done.addEventListener("click", () => sheet.close());
+    sheet.addEventListener("close", () => {
+      if (back instanceof HTMLElement && back !== document.body && back.isConnected) back.focus();
+      else document.activeElement?.blur();
+    });
+    sheet.addEventListener("click", (ev) => {
+      if (ev.target === sheet) sheet.close();
+    });
+    document.body.append(sheet);
+    const open = () => {
+      body.replaceChildren();
+      let section = null;
+      let bar = "";
+      for (const row of sheetRows(app2)) {
+        if (row.bar !== bar || !section) {
+          bar = row.bar;
+          section = make("section");
+          section.append(make("h3", "", bar));
+          body.append(section);
+        }
+        const line = make("div", "row");
+        line.append(make("span", "", row.label), make("kbd", "", row.keys.join(", ")));
+        section.append(line);
+      }
+      back = document.activeElement;
+      sheet.showModal();
+      done.focus();
+    };
+    app2.commands.define({
+      id: "help.keys",
+      label: "Keyboard Shortcuts",
+      keys: { mac: ["?"], other: ["?"] },
+      menu: { bar: "Help", group: "help", order: 10 },
+      run: () => {
+        if (!sheet.open) open();
+      }
+    });
   }
 
-  // src/editor/ui/dialog.ts
+  // src/editor/ui/menu.ts
   function install16(_app) {
   }
 
-  // src/editor/ui/icons.ts
+  // src/editor/ui/dialog.ts
   function install17(_app) {
   }
 
-  // src/editor/keymap.ts
+  // src/editor/ui/icons.ts
   function install18(_app) {
   }
 
@@ -3780,6 +3991,264 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
   }
   var hasText = (el) => el.matches(HOST) || !!el.querySelector(HOST);
   function install19(_app) {
+  }
+
+  // src/editor/selection.ts
+  var inOrder = (items) => [...new Set(items)].sort((a, b) => a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
+  function mark(pairing) {
+    for (const el of document.querySelectorAll(".beeson-movable")) {
+      el.classList.remove("beeson-movable");
+      el.removeAttribute("tabindex");
+    }
+    if (!pairing) return;
+    for (const [el, src] of pairing.elements) {
+      if (!src.open || !el.matches(BY_ITSELF) || el.closest(OUTSIDE2)) continue;
+      const up = el.parentElement?.closest(MOVABLE);
+      if (up && el.closest("section")?.contains(up)) continue;
+      el.classList.add("beeson-movable");
+      el.setAttribute("tabindex", "0");
+      if (!el.hasAttribute("aria-label") && !el.hasAttribute("alt")) el.setAttribute("aria-label", "Figure: the arrow keys move it, Esc deselects it");
+    }
+  }
+  function install20(app2) {
+    let kind = "none";
+    let items = [];
+    const listeners = [];
+    const set = (k, next) => {
+      const ordered = k === "none" ? [] : inOrder(next);
+      const nextKind = ordered.length ? k : "none";
+      if (nextKind === kind && ordered.length === items.length && ordered.every((el, i) => el === items[i])) return;
+      items = ordered;
+      kind = nextKind;
+      for (const fn of listeners) fn();
+      app2.invalidate("selection");
+    };
+    const selection = {
+      get kind() {
+        return kind;
+      },
+      get items() {
+        return items;
+      },
+      set,
+      add: (item) => set(kind === "none" || kind === "text" ? "elements" : kind, [...kind === "text" ? [] : items, item]),
+      toggle: (item) => {
+        const base = kind === "text" ? [] : items;
+        set(kind === "none" || kind === "text" ? "elements" : kind, base.includes(item) ? base.filter((i) => i !== item) : [...base, item]);
+      },
+      clear: () => set("none", []),
+      selectAll: () => {
+        if (kind === "slides") set("slides", [...app2.slides().querySelectorAll(":scope > section")]);
+        else set("elements", movablesOf(app2));
+      },
+      listen: (fn) => void listeners.push(fn),
+      has: (item) => items.includes(item),
+      elements: () => kind === "elements" ? items : [],
+      only: () => kind === "elements" && items.length === 1 ? items[0] : null
+    };
+    app2.selection = selection;
+    const move = {
+      select: (el) => el ? set("elements", [el]) : set("none", []),
+      movableOf: (target) => movableOf(app2, target),
+      mark,
+      refresh: () => app2.invalidate("selection")
+    };
+    app2.move = move;
+    document.addEventListener("focusin", (ev) => {
+      const target = ev.target instanceof Element ? ev.target : null;
+      const host = app2.hostOf(target);
+      if (host && app2.current()?.contains(host) && !host.closest("aside.notes")) set("text", [host]);
+      else if (target?.classList.contains("beeson-movable")) set("elements", [target]);
+    });
+    app2.listen("slide", () => {
+      if (kind !== "slides") set("none", []);
+    });
+    app2.onRefresh(["content", "structure", "slide"], () => {
+      if (kind === "slides" || kind === "none") return;
+      const slide = app2.current();
+      const kept = items.filter((el) => el.isConnected && !!slide?.contains(el));
+      if (kept.length !== items.length) set(kind, kept);
+    });
+  }
+
+  // src/editor/canvas/frames.ts
+  var HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
+  var view = { hover: null, moving: null, resizing: false, guides: [], spacing: [], readout: null, marquee: null };
+  var CSS14 = `
+.beeson-overlay { position: fixed; inset: 0; z-index: 51; pointer-events: none; }
+.beeson-frame { position: fixed; pointer-events: none; box-sizing: border-box; border: 1px dashed var(--ed-muted, var(--subtle, #bbb)); }
+.beeson-frame.selected { border: 2px solid var(--ed-select, #7048e8); }
+.beeson-frame.union { border: 1px dashed var(--ed-select, #7048e8); }
+.beeson-overlay [hidden] { display: none !important; }
+.beeson-grip { position: fixed; width: 9px; height: 9px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; border: 1.5px solid var(--ed-select, #7048e8); background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); pointer-events: auto; touch-action: none; }
+.beeson-grip.fixed { border-color: #8a8a8a; background: #d9d9d9; pointer-events: none; }
+.beeson-grip[data-handle=nw], .beeson-grip[data-handle=se] { cursor: nwse-resize; }
+.beeson-grip[data-handle=ne], .beeson-grip[data-handle=sw] { cursor: nesw-resize; }
+.beeson-grip[data-handle=n], .beeson-grip[data-handle=s] { cursor: ns-resize; }
+.beeson-grip[data-handle=e], .beeson-grip[data-handle=w] { cursor: ew-resize; }
+.beeson-handle { position: fixed; width: 22px; height: 22px; box-sizing: border-box; border-radius: 6px; border: 1px solid var(--ed-line, var(--line, #555)); background: var(--ed-panel, var(--bg, #000)); color: var(--ed-text, var(--text, #eee)); font: 14px/20px system-ui, sans-serif; text-align: center; cursor: move; user-select: none; pointer-events: auto; }
+.beeson-handle:hover, .beeson-handle:focus-visible { border-color: var(--ed-select, #7048e8); outline: none; }
+.beeson-guide { position: fixed; background: var(--ed-guide, #e8590c); }
+.beeson-guide.v { width: 1px; }
+.beeson-guide.h { height: 1px; }
+.beeson-gap { position: fixed; box-sizing: border-box; border-color: var(--ed-guide, #e8590c); border-style: solid; border-width: 0; }
+.beeson-gap.h { height: 7px; margin-top: -3px; border-left-width: 1px; border-right-width: 1px; background: linear-gradient(var(--ed-guide, #e8590c), var(--ed-guide, #e8590c)) center / 100% 1px no-repeat; }
+.beeson-gap.v { width: 7px; margin-left: -3px; border-top-width: 1px; border-bottom-width: 1px; background: linear-gradient(var(--ed-guide, #e8590c), var(--ed-guide, #e8590c)) center / 1px 100% no-repeat; }
+.beeson-offset { position: fixed; height: 22px; padding: 0 7px; box-sizing: border-box; border-radius: 5px; background: var(--ed-guide, #e8590c); color: #fff; font: 600 12px/22px system-ui, sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.beeson-offset.frame { transform: translateX(-100%); }
+.beeson-marquee { position: fixed; box-sizing: border-box; border: 1px solid var(--ed-select, #7048e8); background: color-mix(in srgb, var(--ed-select, #7048e8) 12%, transparent); }
+html.beeson-editing .reveal .beeson-movable:focus-visible { outline: 2px solid var(--ed-select, #7048e8); outline-offset: 6px; }
+html.beeson-dragging, html.beeson-dragging * { cursor: move !important; user-select: none !important; }
+html.beeson-resizing, html.beeson-resizing * { user-select: none !important; }
+html.beeson-band, html.beeson-band .reveal * { cursor: move; }
+html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .slides section video, html.beeson-editing .reveal .slides section .zone, html.beeson-editing .reveal .slides section .plate, html.beeson-editing .reveal .slides section .qr { cursor: move; }
+`;
+  var div = (className, parent) => {
+    const d = document.createElement("div");
+    d.className = className;
+    d.hidden = true;
+    parent.append(d);
+    return d;
+  };
+  var place = (d, b) => {
+    d.hidden = false;
+    Object.assign(d.style, { left: `${b.left}px`, top: `${b.top}px`, width: `${b.width}px`, height: `${b.height}px` });
+  };
+  var grow = (b, by) => ({ left: b.left - by, top: b.top - by, width: b.width + 2 * by, height: b.height + 2 * by });
+  var Frames = class {
+    constructor(app2) {
+      this.frames = [];
+      this.guides = [];
+      this.gaps = [];
+      injectStyle("frames", CSS14);
+      this.app = app2;
+      this.layer = document.createElement("div");
+      this.layer.className = "beeson-overlay";
+      this.hoverFrame = div("beeson-frame", this.layer);
+      this.frames.push(div("beeson-frame selected", this.layer));
+      this.union = div("beeson-frame union", this.layer);
+      this.guides.push(div("beeson-guide v", this.layer), div("beeson-guide h", this.layer));
+      this.marquee = div("beeson-marquee", this.layer);
+      this.grips = Object.fromEntries(HANDLES.map((h) => {
+        const g = div("beeson-grip", this.layer);
+        g.dataset.handle = h;
+        return [h, g];
+      }));
+      this.handle = div("beeson-handle", this.layer);
+      this.handle.textContent = "\u283F";
+      this.handle.title = "Drag to move, double-click to put back, arrow keys nudge";
+      this.handle.tabIndex = 0;
+      this.handle.setAttribute("role", "button");
+      this.handle.setAttribute("aria-label", "Move the block: the arrow keys nudge it, Enter puts it back");
+      this.readout = div("beeson-offset", this.layer);
+    }
+    // the element that the handle of a block is shown at: the one dragged, under the pointer, or
+    // being edited, else the one selected
+    current() {
+      const active = document.activeElement instanceof Element ? document.activeElement : null;
+      const editing = active?.closest(HOST) ?? null;
+      return view.moving?.[0] ?? view.hover ?? movableOf(this.app, editing) ?? this.app.selection.only();
+    }
+    // the resize handles of the one selected element: live on an image, a video, a QR code, or a
+    // viewer, gray on a figure whose size is set by its layout, and none on a block of text
+    gripsOf(el) {
+      if (!el || this.app.selection.only() !== el) return null;
+      if (el.matches(RESIZABLE)) return "live";
+      return el.matches(CONTAINER) ? "fixed" : null;
+    }
+    draw() {
+      const app2 = this.app;
+      const reveal = document.querySelector(".reveal")?.getBoundingClientRect();
+      if (reveal) this.layer.style.clipPath = `inset(${reveal.top}px ${innerWidth - reveal.right}px ${innerHeight - reveal.bottom}px ${reveal.left}px)`;
+      if (view.hover && !view.hover.isConnected) view.hover = null;
+      const selected = app2.selection.elements().filter((el) => el.isConnected);
+      const boxOf = (el) => el.matches(RESIZABLE) || el.matches(CONTAINER) ? visualRect(el) : grow(visualRect(el), 6);
+      const boxes = selected.map(boxOf);
+      while (this.frames.length < boxes.length) this.frames.push(div("beeson-frame selected", this.layer));
+      this.frames.forEach((f, i) => boxes[i] ? place(f, boxes[i]) : f.hidden = true);
+      if (boxes.length > 1) {
+        const left = Math.min(...boxes.map((b) => b.left)), top = Math.min(...boxes.map((b) => b.top));
+        const right = Math.max(...boxes.map((b) => b.left + b.width)), bottom = Math.max(...boxes.map((b) => b.top + b.height));
+        place(this.union, grow({ left, top, width: right - left, height: bottom - top }, 6));
+      } else this.union.hidden = true;
+      const only = app2.selection.only();
+      const grips = view.moving && !view.resizing ? null : this.gripsOf(only);
+      const tycho = !!only?.matches("tycho-viewer");
+      for (const h of HANDLES) {
+        const g = this.grips[h];
+        if (!grips || !only || tycho && (h === "n" || h === "s")) {
+          g.hidden = true;
+          continue;
+        }
+        const b = boxes[0];
+        const x = h.includes("w") ? b.left : h.includes("e") ? b.left + b.width : b.left + b.width / 2;
+        const y = h.includes("n") ? b.top : h.includes("s") ? b.top + b.height : b.top + b.height / 2;
+        g.hidden = false;
+        g.classList.toggle("fixed", grips === "fixed");
+        Object.assign(g.style, { left: `${x}px`, top: `${y}px` });
+      }
+      const hot = this.current();
+      const framed = hot && selected.includes(hot);
+      this.hoverFrame.hidden = !hot || !!framed || !!view.moving;
+      if (hot && !framed && !view.moving) place(this.hoverFrame, grow(visualRect(hot), 6));
+      this.handle.hidden = !hot || hot === only && !!this.gripsOf(only);
+      if (!this.handle.hidden && hot) {
+        const r = hot.getBoundingClientRect();
+        Object.assign(this.handle.style, { left: `${r.left - 24}px`, top: `${r.top - 24}px` });
+      }
+      this.drawGuides();
+      if (view.marquee) place(this.marquee, view.marquee);
+      else this.marquee.hidden = true;
+      const out = view.readout;
+      this.readout.hidden = !out;
+      if (out) {
+        this.readout.textContent = out.text;
+        this.readout.classList.toggle("frame", out.at === "frame");
+        Object.assign(this.readout.style, { left: `${out.x}px`, top: `${out.y}px` });
+      }
+    }
+    drawGuides() {
+      const f = frameOf(this.app);
+      const lines2 = { v: view.guides.filter((g) => g.axis === "x"), h: view.guides.filter((g) => g.axis === "y") };
+      const used = { v: 0, h: 0 };
+      const take = (cls) => {
+        const pool = this.guides.filter((d2) => d2.classList.contains(cls));
+        const d = pool[used[cls]++] ?? div(`beeson-guide ${cls}`, this.layer);
+        if (!this.guides.includes(d)) this.guides.push(d);
+        return d;
+      };
+      for (const g of lines2.v) place(take("v"), { ...toScreen(f, { left: g.at, top: g.from, width: 0, height: g.to - g.from }), width: 1 });
+      for (const g of lines2.h) place(take("h"), { ...toScreen(f, { left: g.from, top: g.at, width: g.to - g.from, height: 0 }), height: 1 });
+      for (const cls of ["v", "h"]) this.guides.filter((d) => d.classList.contains(cls)).slice(used[cls]).forEach((d) => d.hidden = true);
+      let n = 0;
+      for (const s of view.spacing) {
+        for (const gap of s.gaps) {
+          const d = this.gaps[n] ?? div("beeson-gap", this.layer);
+          if (!this.gaps.includes(d)) this.gaps.push(d);
+          n++;
+          d.className = `beeson-gap ${s.axis === "x" ? "h" : "v"}`;
+          const b = s.axis === "x" ? toScreen(f, { left: gap.from, top: gap.at, width: gap.to - gap.from, height: 0 }) : toScreen(f, { left: gap.at, top: gap.from, width: 0, height: gap.to - gap.from });
+          place(d, s.axis === "x" ? { ...b, height: 7 } : { ...b, width: 7 });
+        }
+      }
+      this.gaps.slice(n).forEach((d) => d.hidden = true);
+    }
+  };
+  var installed = null;
+  function overlay() {
+    if (!installed) throw new Error("the frames are not installed");
+    return installed;
+  }
+  function install21(app2) {
+    const frames = new Frames(app2);
+    installed = frames;
+    document.body.append(frames.layer);
+    app2.selection.listen(() => {
+      if (!view.moving) view.readout = null;
+      frames.draw();
+    });
+    app2.onRefresh(["content", "selection", "slide", "structure", "layout"], () => frames.draw());
+    app2.listen("resize", () => frames.draw());
   }
 
   // src/editor/canvas/snap.ts
@@ -3952,187 +4421,7 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
     for (const axis of ["x", "y"]) guides.push(...guidesAt(out, axis, moving(out, axis), lines2[axis], targets2));
     return { box: out, guides };
   }
-  function install20(_app) {
-  }
-
-  // src/editor/canvas/frames.ts
-  var HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
-  var view = { hover: null, moving: null, resizing: false, guides: [], spacing: [], readout: null, marquee: null };
-  var CSS13 = `
-.beeson-overlay { position: fixed; inset: 0; z-index: 51; pointer-events: none; }
-.beeson-frame { position: fixed; pointer-events: none; box-sizing: border-box; border: 1px dashed var(--ed-muted, var(--subtle, #bbb)); }
-.beeson-frame.selected { border: 2px solid var(--ed-select, #7048e8); }
-.beeson-frame.union { border: 1px dashed var(--ed-select, #7048e8); }
-.beeson-overlay [hidden] { display: none !important; }
-.beeson-grip { position: fixed; width: 9px; height: 9px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; border: 1.5px solid var(--ed-select, #7048e8); background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); pointer-events: auto; touch-action: none; }
-.beeson-grip.fixed { border-color: #8a8a8a; background: #d9d9d9; pointer-events: none; }
-.beeson-grip[data-handle=nw], .beeson-grip[data-handle=se] { cursor: nwse-resize; }
-.beeson-grip[data-handle=ne], .beeson-grip[data-handle=sw] { cursor: nesw-resize; }
-.beeson-grip[data-handle=n], .beeson-grip[data-handle=s] { cursor: ns-resize; }
-.beeson-grip[data-handle=e], .beeson-grip[data-handle=w] { cursor: ew-resize; }
-.beeson-handle { position: fixed; width: 22px; height: 22px; box-sizing: border-box; border-radius: 6px; border: 1px solid var(--ed-line, var(--line, #555)); background: var(--ed-panel, var(--bg, #000)); color: var(--ed-text, var(--text, #eee)); font: 14px/20px system-ui, sans-serif; text-align: center; cursor: move; user-select: none; pointer-events: auto; }
-.beeson-handle:hover, .beeson-handle:focus-visible { border-color: var(--ed-select, #7048e8); outline: none; }
-.beeson-guide { position: fixed; background: var(--ed-guide, #e8590c); }
-.beeson-guide.v { width: 1px; }
-.beeson-guide.h { height: 1px; }
-.beeson-gap { position: fixed; box-sizing: border-box; border-color: var(--ed-guide, #e8590c); border-style: solid; border-width: 0; }
-.beeson-gap.h { height: 7px; margin-top: -3px; border-left-width: 1px; border-right-width: 1px; background: linear-gradient(var(--ed-guide, #e8590c), var(--ed-guide, #e8590c)) center / 100% 1px no-repeat; }
-.beeson-gap.v { width: 7px; margin-left: -3px; border-top-width: 1px; border-bottom-width: 1px; background: linear-gradient(var(--ed-guide, #e8590c), var(--ed-guide, #e8590c)) center / 1px 100% no-repeat; }
-.beeson-offset { position: fixed; height: 22px; padding: 0 7px; box-sizing: border-box; border-radius: 5px; background: var(--ed-guide, #e8590c); color: #fff; font: 600 12px/22px system-ui, sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; }
-.beeson-offset.frame { transform: translateX(-100%); }
-.beeson-marquee { position: fixed; box-sizing: border-box; border: 1px solid var(--ed-select, #7048e8); background: color-mix(in srgb, var(--ed-select, #7048e8) 12%, transparent); }
-html.beeson-editing .reveal .beeson-movable:focus-visible { outline: 2px solid var(--ed-select, #7048e8); outline-offset: 6px; }
-html.beeson-dragging, html.beeson-dragging * { cursor: move !important; user-select: none !important; }
-html.beeson-resizing, html.beeson-resizing * { user-select: none !important; }
-html.beeson-band, html.beeson-band .reveal * { cursor: move; }
-html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .slides section video, html.beeson-editing .reveal .slides section .zone, html.beeson-editing .reveal .slides section .plate, html.beeson-editing .reveal .slides section .qr { cursor: move; }
-`;
-  var div = (className, parent) => {
-    const d = document.createElement("div");
-    d.className = className;
-    d.hidden = true;
-    parent.append(d);
-    return d;
-  };
-  var place = (d, b) => {
-    d.hidden = false;
-    Object.assign(d.style, { left: `${b.left}px`, top: `${b.top}px`, width: `${b.width}px`, height: `${b.height}px` });
-  };
-  var grow = (b, by) => ({ left: b.left - by, top: b.top - by, width: b.width + 2 * by, height: b.height + 2 * by });
-  var Frames = class {
-    constructor(app2) {
-      this.frames = [];
-      this.guides = [];
-      this.gaps = [];
-      injectStyle("frames", CSS13);
-      this.app = app2;
-      this.layer = document.createElement("div");
-      this.layer.className = "beeson-overlay";
-      this.hoverFrame = div("beeson-frame", this.layer);
-      this.frames.push(div("beeson-frame selected", this.layer));
-      this.union = div("beeson-frame union", this.layer);
-      this.guides.push(div("beeson-guide v", this.layer), div("beeson-guide h", this.layer));
-      this.marquee = div("beeson-marquee", this.layer);
-      this.grips = Object.fromEntries(HANDLES.map((h) => {
-        const g = div("beeson-grip", this.layer);
-        g.dataset.handle = h;
-        return [h, g];
-      }));
-      this.handle = div("beeson-handle", this.layer);
-      this.handle.textContent = "\u283F";
-      this.handle.title = "Drag to move, double-click to put back, arrow keys nudge";
-      this.handle.tabIndex = 0;
-      this.handle.setAttribute("role", "button");
-      this.handle.setAttribute("aria-label", "Move the block: the arrow keys nudge it, Enter puts it back");
-      this.readout = div("beeson-offset", this.layer);
-    }
-    // the element that the handle of a block is shown at: the one dragged, under the pointer, or
-    // being edited, else the one selected
-    current() {
-      const active = document.activeElement instanceof Element ? document.activeElement : null;
-      const editing = active?.closest(HOST) ?? null;
-      return view.moving?.[0] ?? view.hover ?? movableOf(this.app, editing) ?? this.app.selection.only();
-    }
-    // the resize handles of the one selected element: live on an image, a video, a QR code, or a
-    // viewer, gray on a figure whose size is set by its layout, and none on a block of text
-    gripsOf(el) {
-      if (!el || this.app.selection.only() !== el) return null;
-      if (el.matches(RESIZABLE)) return "live";
-      return el.matches(CONTAINER) ? "fixed" : null;
-    }
-    draw() {
-      const app2 = this.app;
-      const reveal = document.querySelector(".reveal")?.getBoundingClientRect();
-      if (reveal) this.layer.style.clipPath = `inset(${reveal.top}px ${innerWidth - reveal.right}px ${innerHeight - reveal.bottom}px ${reveal.left}px)`;
-      if (view.hover && !view.hover.isConnected) view.hover = null;
-      const selected = app2.selection.elements().filter((el) => el.isConnected);
-      const boxOf = (el) => el.matches(RESIZABLE) || el.matches(CONTAINER) ? visualRect(el) : grow(visualRect(el), 6);
-      const boxes = selected.map(boxOf);
-      while (this.frames.length < boxes.length) this.frames.push(div("beeson-frame selected", this.layer));
-      this.frames.forEach((f, i) => boxes[i] ? place(f, boxes[i]) : f.hidden = true);
-      if (boxes.length > 1) {
-        const left = Math.min(...boxes.map((b) => b.left)), top = Math.min(...boxes.map((b) => b.top));
-        const right = Math.max(...boxes.map((b) => b.left + b.width)), bottom = Math.max(...boxes.map((b) => b.top + b.height));
-        place(this.union, grow({ left, top, width: right - left, height: bottom - top }, 6));
-      } else this.union.hidden = true;
-      const only = app2.selection.only();
-      const grips = view.moving && !view.resizing ? null : this.gripsOf(only);
-      const tycho = !!only?.matches("tycho-viewer");
-      for (const h of HANDLES) {
-        const g = this.grips[h];
-        if (!grips || !only || tycho && (h === "n" || h === "s")) {
-          g.hidden = true;
-          continue;
-        }
-        const b = boxes[0];
-        const x = h.includes("w") ? b.left : h.includes("e") ? b.left + b.width : b.left + b.width / 2;
-        const y = h.includes("n") ? b.top : h.includes("s") ? b.top + b.height : b.top + b.height / 2;
-        g.hidden = false;
-        g.classList.toggle("fixed", grips === "fixed");
-        Object.assign(g.style, { left: `${x}px`, top: `${y}px` });
-      }
-      const hot = this.current();
-      const framed = hot && selected.includes(hot);
-      this.hoverFrame.hidden = !hot || !!framed || !!view.moving;
-      if (hot && !framed && !view.moving) place(this.hoverFrame, grow(visualRect(hot), 6));
-      this.handle.hidden = !hot || hot === only && !!this.gripsOf(only);
-      if (!this.handle.hidden && hot) {
-        const r = hot.getBoundingClientRect();
-        Object.assign(this.handle.style, { left: `${r.left - 24}px`, top: `${r.top - 24}px` });
-      }
-      this.drawGuides();
-      if (view.marquee) place(this.marquee, view.marquee);
-      else this.marquee.hidden = true;
-      const out = view.readout;
-      this.readout.hidden = !out;
-      if (out) {
-        this.readout.textContent = out.text;
-        this.readout.classList.toggle("frame", out.at === "frame");
-        Object.assign(this.readout.style, { left: `${out.x}px`, top: `${out.y}px` });
-      }
-    }
-    drawGuides() {
-      const f = frameOf(this.app);
-      const lines2 = { v: view.guides.filter((g) => g.axis === "x"), h: view.guides.filter((g) => g.axis === "y") };
-      const used = { v: 0, h: 0 };
-      const take = (cls) => {
-        const pool = this.guides.filter((d2) => d2.classList.contains(cls));
-        const d = pool[used[cls]++] ?? div(`beeson-guide ${cls}`, this.layer);
-        if (!this.guides.includes(d)) this.guides.push(d);
-        return d;
-      };
-      for (const g of lines2.v) place(take("v"), { ...toScreen(f, { left: g.at, top: g.from, width: 0, height: g.to - g.from }), width: 1 });
-      for (const g of lines2.h) place(take("h"), { ...toScreen(f, { left: g.from, top: g.at, width: g.to - g.from, height: 0 }), height: 1 });
-      for (const cls of ["v", "h"]) this.guides.filter((d) => d.classList.contains(cls)).slice(used[cls]).forEach((d) => d.hidden = true);
-      let n = 0;
-      for (const s of view.spacing) {
-        for (const gap of s.gaps) {
-          const d = this.gaps[n] ?? div("beeson-gap", this.layer);
-          if (!this.gaps.includes(d)) this.gaps.push(d);
-          n++;
-          d.className = `beeson-gap ${s.axis === "x" ? "h" : "v"}`;
-          const b = s.axis === "x" ? toScreen(f, { left: gap.from, top: gap.at, width: gap.to - gap.from, height: 0 }) : toScreen(f, { left: gap.at, top: gap.from, width: 0, height: gap.to - gap.from });
-          place(d, s.axis === "x" ? { ...b, height: 7 } : { ...b, width: 7 });
-        }
-      }
-      this.gaps.slice(n).forEach((d) => d.hidden = true);
-    }
-  };
-  var installed = null;
-  function overlay() {
-    if (!installed) throw new Error("the frames are not installed");
-    return installed;
-  }
-  function install21(app2) {
-    const frames = new Frames(app2);
-    installed = frames;
-    document.body.append(frames.layer);
-    app2.selection.listen(() => {
-      if (!view.moving) view.readout = null;
-      frames.draw();
-    });
-    app2.onRefresh(["content", "selection", "slide", "structure", "layout"], () => frames.draw());
-    app2.listen("resize", () => frames.draw());
+  function install22(_app) {
   }
 
   // src/editor/canvas/drag.ts
@@ -4185,7 +4474,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     const p = (v) => (parseFloat(v) || 0) * k;
     return { left: r.left + p(s.paddingLeft), top: r.top + p(s.paddingTop), width: r.width - p(s.paddingLeft) - p(s.paddingRight), height: r.height - p(s.paddingTop) - p(s.paddingBottom) };
   }
-  function install22(app2) {
+  function install23(app2) {
     const frames = overlay();
     let press = null;
     const mac = () => app2.platform === "mac";
@@ -4461,6 +4750,233 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     });
   }
 
+  // src/editor/commands/file.ts
+  async function presentAt(app2, fromStart) {
+    const d = app2.deck();
+    const current = app2.current();
+    const { h, v } = !fromStart && d && current ? d.getIndices(current) : { h: 0, v: 0 };
+    const to = v ? `#/${h}/${v}` : h ? `#/${h}` : "";
+    const hash = location.hash;
+    const at = (fragment) => history.replaceState(history.state, "", fragment || location.pathname + location.search);
+    at(to);
+    try {
+      await app2.files.present();
+    } finally {
+      if (location.hash === to) at(hash);
+    }
+  }
+  function install24(app2) {
+    const c = app2.commands;
+    const both = (...keys) => ({ mac: keys, other: keys });
+    c.define({
+      id: "file.open",
+      label: "Open\u2026",
+      keys: both("Mod+O"),
+      in: OUTSIDE_DIALOGS,
+      menu: { bar: "File", group: "open", order: 10 },
+      run: (a) => a.files.openFile()
+    });
+    c.define({
+      id: "file.save",
+      label: "Save",
+      keys: both("Mod+S"),
+      in: EVERYWHERE,
+      menu: { bar: "File", group: "save", order: 20 },
+      toolbar: { group: "save", order: 50, icon: "save" },
+      run: (a) => a.files.save()
+    });
+    c.define({
+      id: "file.saveAs",
+      label: "Save As\u2026",
+      keys: both("Mod+Shift+S"),
+      in: EVERYWHERE,
+      menu: { bar: "File", group: "save", order: 21 },
+      run: (a) => a.files.saveAs()
+    });
+    c.define({
+      id: "file.autosave",
+      label: "Autosave",
+      menu: { bar: "File", group: "save", order: 22 },
+      enabled: () => canWrite(),
+      checked: (a) => a.autosave,
+      run: (a) => a.files.toggleAutosave()
+    });
+    c.define({
+      id: "file.present",
+      label: "Present",
+      keys: both("Mod+Enter"),
+      in: OUTSIDE_DIALOGS,
+      menu: { bar: "File", group: "present", order: 30 },
+      toolbar: { group: "present", order: 40, icon: "play" },
+      run: (a) => presentAt(a, false)
+    });
+    c.define({
+      id: "file.presentStart",
+      label: "Present from Start",
+      keys: both("Mod+Shift+Enter"),
+      in: OUTSIDE_DIALOGS,
+      menu: { bar: "File", group: "present", order: 31 },
+      run: (a) => presentAt(a, true)
+    });
+  }
+
+  // src/editor/commands/edit.ts
+  var IN = OUTSIDE_DIALOGS.filter((r) => r !== "field");
+  function titled(label2) {
+    return label2.replace(/(^|\s)(\p{Ll})/gu, (_, space, letter) => space + letter.toUpperCase());
+  }
+  function install25(app2) {
+    const c = app2.commands;
+    c.define({
+      id: "edit.undo",
+      label: (a) => a.history.undoLabel ? `Undo ${titled(a.history.undoLabel)}` : "Undo",
+      keys: { mac: ["Mod+Z"], other: ["Mod+Z"] },
+      in: IN,
+      menu: { bar: "Edit", group: "history", order: 10 },
+      toolbar: { group: "history", order: 10, icon: "undo" },
+      enabled: (a) => a.history.canUndo,
+      run: (a) => a.history.undo()
+    });
+    c.define({
+      id: "edit.redo",
+      label: (a) => a.history.redoLabel ? `Redo ${titled(a.history.redoLabel)}` : "Redo",
+      keys: { mac: ["Mod+Shift+Z", "Mod+Y"], other: ["Mod+Y", "Mod+Shift+Z"] },
+      in: IN,
+      menu: { bar: "Edit", group: "history", order: 11 },
+      toolbar: { group: "history", order: 11, icon: "redo" },
+      enabled: (a) => a.history.canRedo,
+      run: (a) => a.history.redo()
+    });
+  }
+
+  // src/editor/commands/view.ts
+  var theme = () => window.Beeson?.theme;
+  var FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea, [tabindex]:not([tabindex="-1"])';
+  var shown2 = (el) => el instanceof HTMLElement && el.getClientRects().length > 0;
+  var first = (_, el) => [...el.querySelectorAll(FOCUSABLE)].find(shown2)?.focus();
+  var PANES = [
+    { name: "menubar", el: () => document.querySelector(".beeson-edit-menubar"), enter: first },
+    { name: "toolbar", el: () => document.querySelector(".beeson-edit-top"), enter: first },
+    {
+      name: "navigator",
+      el: () => document.querySelector(".beeson-edit-nav"),
+      enter: (app2, el) => shown2(el.querySelector('[aria-current="true"]')) ? el.querySelector('[aria-current="true"]').focus() : first(app2, el)
+    },
+    {
+      name: "canvas",
+      el: () => document.querySelector(".reveal"),
+      enter: () => {
+        const active = document.activeElement;
+        if (active instanceof HTMLElement) active.blur();
+      }
+    },
+    { name: "notes", el: (app2) => app2.notes.shown() ? app2.notes.ensure() : null, enter: (_, el) => el.focus() },
+    { name: "inspector", el: () => document.querySelector(".beeson-edit-side"), enter: first },
+    { name: "status", el: () => document.querySelector(".beeson-edit-bottom"), enter: first }
+  ];
+  function paneOf(app2) {
+    const active = document.activeElement;
+    const notes = PANES.findIndex((p) => p.name === "notes");
+    if (active?.closest("aside.notes")) return notes;
+    const i = PANES.findIndex((p) => p.name !== "canvas" && p.name !== "notes" && !!active && !!p.el(app2)?.contains(active));
+    return i >= 0 ? i : PANES.findIndex((p) => p.name === "canvas");
+  }
+  function cyclePane(app2, step2) {
+    const from = paneOf(app2);
+    for (let n = 1; n < PANES.length; n++) {
+      const pane = PANES[(from + step2 * n + PANES.length * n) % PANES.length];
+      const el = pane.el(app2);
+      if (!el || pane.name !== "canvas" && pane.name !== "notes" && !shown2(el)) continue;
+      pane.enter(app2, el);
+      return;
+    }
+  }
+  function install26(app2) {
+    const c = app2.commands;
+    const pane = (order) => ({ bar: "View", group: "panes", order });
+    c.define({ id: "view.navigator", label: "Navigator", menu: pane(10), checked: (a) => a.nav.shown, run: (a) => a.nav.toggle() });
+    c.define({ id: "view.notes", label: "Notes", menu: pane(11), checked: (a) => a.notes.shown(), run: (a) => a.notes.toggle() });
+    c.define({ id: "view.steps", label: "Steps", menu: pane(12), toolbar: { group: "inspector", order: 61, icon: "steps" }, checked: (a) => a.steps.shown, run: (a) => a.steps.toggle() });
+    c.define({
+      id: "view.slideDark",
+      label: "Slide in Dark Mode",
+      keys: { mac: ["D"], other: ["D"] },
+      menu: { bar: "View", group: "mode", order: 20 },
+      enabled: () => !!theme(),
+      checked: () => theme()?.get() === "dark",
+      run: () => theme()?.toggle()
+    });
+    const go2 = (order) => ({ bar: "View", group: "pane", order });
+    c.define({ id: "view.nextPane", label: "Next Pane", keys: { mac: ["F6"], other: ["F6"] }, in: OUTSIDE_DIALOGS, menu: go2(50), run: (a) => cyclePane(a, 1) });
+    c.define({ id: "view.previousPane", label: "Previous Pane", keys: { mac: ["Shift+F6"], other: ["Shift+F6"] }, in: OUTSIDE_DIALOGS, menu: go2(51), run: (a) => cyclePane(a, -1) });
+  }
+
+  // src/editor/commands/navigate.ts
+  var CSS15 = `
+.beeson-edit-goto { position: fixed; top: 56px; left: 50%; z-index: 70; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line, #555); border-radius: 8px; background: var(--bg, #000); color: var(--text, #eee); font: 13px/1.4 system-ui, sans-serif; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); }
+.beeson-edit-goto[hidden] { display: none; }
+.beeson-edit-goto input { width: 6ch; font: inherit; padding: 2px 6px; border: 1px solid var(--line, #555); border-radius: 4px; background: transparent; color: inherit; }
+`;
+  var sections = (app2) => [...app2.slides().querySelectorAll(":scope > section")];
+  function go(app2, to) {
+    const all = sections(app2);
+    const current = app2.current()?.closest(".slides > section");
+    const at = current ? all.indexOf(current) : -1;
+    const i = Math.max(0, Math.min(all.length - 1, to(at, all.length)));
+    if (all[i] && i !== at) app2.showSlide(all[i]);
+  }
+  function gotoField(app2) {
+    injectStyle("goto", CSS15);
+    const box2 = make("div", "beeson-edit-goto");
+    const input = make("input", "jump-to-slide-input");
+    input.type = "text";
+    input.inputMode = "numeric";
+    input.setAttribute("aria-label", "Slide number");
+    box2.append(make("span", "", "Go to slide"), input);
+    box2.hidden = true;
+    let back = null;
+    const close = (restore) => {
+      if (box2.hidden) return;
+      box2.hidden = true;
+      if (restore && back instanceof HTMLElement && back.isConnected) back.focus();
+      else input.blur();
+    };
+    input.addEventListener("keydown", (ev) => {
+      if (ev.key === "Enter") {
+        ev.preventDefault();
+        const n = Number.parseInt(input.value, 10);
+        close(false);
+        if (n >= 1) go(app2, (_, count) => Math.min(n, count) - 1);
+      } else if (ev.key === "Escape") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        close(true);
+      }
+    });
+    input.addEventListener("blur", () => close(false));
+    document.body.append(box2);
+    return () => {
+      back = document.activeElement;
+      input.value = "";
+      box2.hidden = false;
+      input.focus();
+    };
+  }
+  function install27(app2) {
+    const c = app2.commands;
+    const both = (...keys) => ({ mac: keys, other: keys });
+    const view2 = (order) => ({ bar: "View", group: "go", order });
+    const free = (a) => a.selection.kind !== "elements";
+    c.define({ id: "navigate.next", label: "Next Slide", keys: both("PageDown"), menu: view2(40), run: (a) => go(a, (at) => at + 1) });
+    c.define({ id: "navigate.previous", label: "Previous Slide", keys: both("PageUp"), menu: view2(41), run: (a) => go(a, (at) => at - 1) });
+    c.define({ id: "navigate.first", label: "First Slide", keys: both("Home"), in: ["canvas"], menu: view2(42), run: (a) => go(a, () => 0) });
+    c.define({ id: "navigate.last", label: "Last Slide", keys: both("End"), in: ["canvas"], menu: view2(43), run: (a) => go(a, (_, count) => count - 1) });
+    const open = gotoField(app2);
+    c.define({ id: "navigate.goTo", label: "Go to Slide\u2026", keys: { mac: ["G", "Ctrl+Mod+G"], other: ["G"] }, menu: view2(44), run: () => open() });
+    c.define({ id: "navigate.nextArrow", label: "Next Slide", keys: both("ArrowRight", "ArrowDown"), in: ["canvas"], enabled: free, run: (a) => go(a, (at) => at + 1) });
+    c.define({ id: "navigate.previousArrow", label: "Previous Slide", keys: both("ArrowLeft", "ArrowUp"), in: ["canvas"], enabled: free, run: (a) => go(a, (at) => at - 1) });
+  }
+
   // src/editor/commands/arrange.ts
   var PAUSE2 = 1e3;
   function onCanvas2() {
@@ -4635,147 +5151,15 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     }
     return list;
   }
-  function matches(keys, ev) {
-    if (ev.getModifierState?.("AltGraph")) return false;
-    const parts = keys.split("+");
-    const key = parts.pop();
-    const want = new Set(parts);
-    if (want.has("Mod") !== (ev.metaKey || ev.ctrlKey)) return false;
-    if (want.has("Shift") !== ev.shiftKey || want.has("Alt") !== ev.altKey) return false;
-    return key.length === 1 ? ev.key.toLowerCase() === key.toLowerCase() : ev.key === key;
-  }
-  function onKey(app2, ev) {
-    const region = app2.region();
-    for (const c of mine) {
-      if (!c.keys || !(c.in ?? ["canvas", "navigator"]).includes(region)) continue;
-      if (!(c.keys[app2.platform] ?? []).some((k) => matches(k, ev))) continue;
-      if (!app2.commands.enabled(c.id)) continue;
-      void app2.commands.run(c.id).catch((e) => app2.fail(e));
-      return true;
-    }
-    return false;
-  }
-  var mine = [];
-  function install23(app2) {
-    mine = commands().map((c) => app2.commands.define(c));
-    app2.selection.listen(() => run = null);
-  }
-
-  // src/editor/selection.ts
-  var inOrder = (items) => [...new Set(items)].sort((a, b) => a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1);
-  function mark(pairing) {
-    for (const el of document.querySelectorAll(".beeson-movable")) {
-      el.classList.remove("beeson-movable");
-      el.removeAttribute("tabindex");
-    }
-    if (!pairing) return;
-    for (const [el, src] of pairing.elements) {
-      if (!src.open || !el.matches(BY_ITSELF) || el.closest(OUTSIDE2)) continue;
-      const up = el.parentElement?.closest(MOVABLE);
-      if (up && el.closest("section")?.contains(up)) continue;
-      el.classList.add("beeson-movable");
-      el.setAttribute("tabindex", "0");
-      if (!el.hasAttribute("aria-label") && !el.hasAttribute("alt")) el.setAttribute("aria-label", "Figure: the arrow keys move it, Esc deselects it");
-    }
-  }
-  function install24(app2) {
-    let kind = "none";
-    let items = [];
-    const listeners = [];
-    const set = (k, next) => {
-      const ordered = k === "none" ? [] : inOrder(next);
-      const nextKind = ordered.length ? k : "none";
-      if (nextKind === kind && ordered.length === items.length && ordered.every((el, i) => el === items[i])) return;
-      items = ordered;
-      kind = nextKind;
-      for (const fn of listeners) fn();
-      app2.invalidate("selection");
-    };
-    const selection = {
-      get kind() {
-        return kind;
-      },
-      get items() {
-        return items;
-      },
-      set,
-      add: (item) => set(kind === "none" || kind === "text" ? "elements" : kind, [...kind === "text" ? [] : items, item]),
-      toggle: (item) => {
-        const base = kind === "text" ? [] : items;
-        set(kind === "none" || kind === "text" ? "elements" : kind, base.includes(item) ? base.filter((i) => i !== item) : [...base, item]);
-      },
-      clear: () => set("none", []),
-      selectAll: () => {
-        if (kind === "slides") set("slides", [...app2.slides().querySelectorAll(":scope > section")]);
-        else set("elements", movablesOf(app2));
-      },
-      listen: (fn) => void listeners.push(fn),
-      has: (item) => items.includes(item),
-      elements: () => kind === "elements" ? items : [],
-      only: () => kind === "elements" && items.length === 1 ? items[0] : null
-    };
-    app2.selection = selection;
-    const move = {
-      select: (el) => el ? set("elements", [el]) : set("none", []),
-      movableOf: (target) => movableOf(app2, target),
-      mark,
-      refresh: () => app2.invalidate("selection"),
-      onKey: (ev) => onKey(app2, ev)
-    };
-    app2.move = move;
-    document.addEventListener("focusin", (ev) => {
-      const target = ev.target instanceof Element ? ev.target : null;
-      const host = app2.hostOf(target);
-      if (host && app2.current()?.contains(host) && !host.closest("aside.notes")) set("text", [host]);
-      else if (target?.classList.contains("beeson-movable")) set("elements", [target]);
-    });
-    app2.listen("slide", () => {
-      if (kind !== "slides") set("none", []);
-    });
-    app2.onRefresh(["content", "structure", "slide"], () => {
-      if (kind === "slides" || kind === "none") return;
-      const slide = app2.current();
-      const kept = items.filter((el) => el.isConnected && !!slide?.contains(el));
-      if (kept.length !== items.length) set(kind, kept);
-    });
-  }
-
-  // src/editor/commands/file.ts
-  function install25(app2) {
-    const c = app2.commands;
-    c.define({ id: "file.open", label: "Open\u2026", run: (a) => a.files.openFile() });
-    c.define({ id: "file.save", label: "Save", run: (a) => a.files.save() });
-    c.define({ id: "file.saveAs", label: "Save As\u2026", run: (a) => a.files.saveAs() });
-    c.define({ id: "file.autosave", label: "Autosave", enabled: () => canWrite(), checked: (a) => a.autosave, run: (a) => a.files.toggleAutosave() });
-    c.define({ id: "file.present", label: "Present", run: (a) => a.files.present() });
-  }
-
-  // src/editor/commands/edit.ts
-  function install26(app2) {
-    const c = app2.commands;
-    c.define({ id: "edit.undo", label: "Undo", enabled: (a) => a.history.canUndo, run: (a) => a.history.undo() });
-    c.define({ id: "edit.redo", label: "Redo", enabled: (a) => a.history.canRedo, run: (a) => a.history.redo() });
-  }
-
-  // src/editor/commands/view.ts
-  function install27(app2) {
-    const c = app2.commands;
-    c.define({ id: "view.navigator", label: "Navigator", checked: (a) => a.nav.shown, run: (a) => a.nav.toggle() });
-    c.define({ id: "view.steps", label: "Steps", checked: (a) => a.steps.shown, run: (a) => a.steps.toggle() });
-    c.define({ id: "view.notes", label: "Notes", checked: (a) => a.notes.shown(), run: (a) => a.notes.toggle() });
-  }
-
-  // src/editor/commands/navigate.ts
   function install28(app2) {
-    const c = app2.commands;
-    c.define({ id: "navigate.previous", label: "Previous Slide", run: (a) => a.deck()?.left() });
-    c.define({ id: "navigate.next", label: "Next Slide", run: (a) => a.deck()?.right() });
+    for (const c of commands()) app2.commands.define(c);
+    app2.selection.listen(() => run = null);
   }
 
   // src/editor/commands/slide.ts
   var MARK = "<!--beeson-->";
   var LABELS = { title: "Title", section: "Section", content: "Content", narrow: "Content, Narrow", wide: "Content, Wide", figure: "Figure", split: "Split", closing: "Closing" };
-  var CSS14 = `
+  var CSS16 = `
 html.beeson-editor .reveal:not(.beeson-peek) .slides section :is(h1, h2, p)[contenteditable="true"]:empty::before { color: var(--muted, #888); pointer-events: none; }
 html.beeson-editor .reveal:not(.beeson-peek) .slides section :is(h1, h2)[contenteditable="true"]:empty::before { content: "Title"; }
 html.beeson-editor .reveal:not(.beeson-peek) .slides section p.sub[contenteditable="true"]:empty::before { content: "Subtitle"; }
@@ -4800,7 +5184,7 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
     return app2.doc;
   }
   var navOf = (app2) => app2.nav;
-  var sections = (app2) => [...app2.slides().querySelectorAll(":scope > section")];
+  var sections2 = (app2) => [...app2.slides().querySelectorAll(":scope > section")];
   var ready = (app2) => !!app2.pairing?.root;
   var targets = (app2) => ready(app2) ? navOf(app2).selected() : [];
   function placeAfter(app2) {
@@ -4839,7 +5223,7 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
     const doc2 = docOf(app2);
     const root = app2.slides();
     for (let i = 0; i < desired.length; i++) {
-      const live = sections(app2);
+      const live = sections2(app2);
       if (live[i] !== desired[i]) await doc2.move(desired[i], root, live[i], "move slide");
     }
   }
@@ -4854,7 +5238,7 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
     return out;
   }
   var canShift = (app2, up) => {
-    const list = sections(app2);
+    const list = sections2(app2);
     const t = targets(app2);
     return t.length > 0 && shifted(list, new Set(t), up).some((s, i) => s !== list[i]);
   };
@@ -4899,7 +5283,7 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
     return text;
   }
   async function deleteSlides(app2, slides, focusNav) {
-    const list = sections(app2);
+    const list = sections2(app2);
     const gone = new Set(slides);
     const lastAt = list.indexOf(slides.at(-1));
     const next = list.slice(lastAt + 1).find((s) => !gone.has(s)) ?? [...list.slice(0, list.indexOf(slides[0]))].reverse().find((s) => !gone.has(s)) ?? null;
@@ -4925,7 +5309,7 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
     for (const list of slide.querySelectorAll("ul.outline")) for (const t of ["Chapter one", "Chapter two"]) list.append(Object.assign(document.createElement("li"), { textContent: t }));
     const backdrop = slide.querySelector(".backdrop");
     const cls = layout === "content" || layout === "narrow" || layout === "wide" ? null : layout;
-    const original = cls ? sections(app2).find((s) => s.classList.contains(cls) && s.querySelector(":scope > .backdrop canvas"))?.querySelector(":scope > .backdrop") : null;
+    const original = cls ? sections2(app2).find((s) => s.classList.contains(cls) && s.querySelector(":scope > .backdrop canvas"))?.querySelector(":scope > .backdrop") : null;
     if (backdrop && original) {
       const copy = original.cloneNode(true);
       const from = original.querySelectorAll("canvas");
@@ -5028,39 +5412,8 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
     dialog.style.left = `${Math.max(8, Math.min(x, innerWidth - w - 8))}px`;
     dialog.style.top = `${Math.max(8, Math.min(y, innerHeight - h - 8))}px`;
   }
-  function matchKey(platform, key, ev) {
-    const parts = key.split("+");
-    const name = parts.pop() ?? "";
-    const want = { meta: false, ctrl: false, alt: false, shift: false };
-    for (const p of parts) {
-      if (p === "Mod") want[platform === "mac" ? "meta" : "ctrl"] = true;
-      else if (p === "Ctrl") want.ctrl = true;
-      else if (p === "Meta") want.meta = true;
-      else if (p === "Alt") want.alt = true;
-      else if (p === "Shift") want.shift = true;
-    }
-    if (ev.metaKey !== want.meta || ev.ctrlKey !== want.ctrl || ev.altKey !== want.alt || ev.shiftKey !== want.shift) return false;
-    if (name.length === 1) return ev.key.toLowerCase() === name.toLowerCase() || ev.code === `Key${name.toUpperCase()}`;
-    return ev.key === name;
-  }
-  function takeKeys(app2, ids) {
-    window.addEventListener("keydown", (ev) => {
-      if (ev.defaultPrevented || ev.isComposing || ev.getModifierState?.("AltGraph")) return;
-      const region = app2.region();
-      for (const id of ids) {
-        const c = app2.commands.get(id);
-        const keys = c?.keys?.[app2.platform] ?? [];
-        if (!c || !(c.in ?? ["canvas", "navigator"]).includes(region) || !keys.some((k) => matchKey(app2.platform, k, ev))) continue;
-        if (!app2.commands.enabled(id)) return;
-        ev.preventDefault();
-        ev.stopPropagation();
-        void app2.commands.run(id).catch((e) => app2.fail(e));
-        return;
-      }
-    }, true);
-  }
   function install29(app2) {
-    injectStyle("slide", CSS14);
+    injectStyle("slide", CSS16);
     const c = app2.commands;
     const inNav = () => app2.region() === "navigator";
     const slideMenu = (order, group = "slide") => ({ bar: "Slide", group, order });
@@ -5125,7 +5478,7 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
         in: ["navigator"],
         menu: slideMenu(30),
         context: ["slide"],
-        enabled: (a) => targets(a).length > 0 && targets(a).length < sections(a).length,
+        enabled: (a) => targets(a).length > 0 && targets(a).length < sections2(a).length,
         undoable: true,
         run: (a) => deleteSlides(a, targets(a), inNav())
       },
@@ -5156,7 +5509,7 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
         undoable: true,
         run: async (a) => {
           const t = targets(a);
-          await applyOrder(a, shifted(sections(a), new Set(t), true));
+          await applyOrder(a, shifted(sections2(a), new Set(t), true));
           land(a, t, a.current(), inNav());
         }
       },
@@ -5171,7 +5524,7 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
         undoable: true,
         run: async (a) => {
           const t = targets(a);
-          await applyOrder(a, shifted(sections(a), new Set(t), false));
+          await applyOrder(a, shifted(sections2(a), new Set(t), false));
           land(a, t, a.current(), inNav());
         }
       },
@@ -5182,7 +5535,7 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
         undoable: true,
         run: async (a, arg) => {
           const { slides, gap } = arg;
-          await applyOrder(a, droppedOrder(sections(a), slides, gap));
+          await applyOrder(a, droppedOrder(sections2(a), slides, gap));
           land(a, slides, a.current(), true);
         }
       },
@@ -5190,7 +5543,7 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
         id: "slide.cut",
         label: "Cut",
         context: ["slide"],
-        enabled: (a) => targets(a).length > 0 && targets(a).length < sections(a).length,
+        enabled: (a) => targets(a).length > 0 && targets(a).length < sections2(a).length,
         undoable: true,
         run: async (a, arg) => {
           copySlides(a, arg instanceof DataTransfer ? arg : null);
@@ -5218,7 +5571,6 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
       }
     ];
     for (const d of defs) c.define(d);
-    takeKeys(app2, ["slide.newAfter", "slide.new", "slide.duplicate", "slide.delete", "slide.hide", "slide.moveUp", "slide.moveDown"]);
     const onClip = (ev) => {
       if (ev.defaultPrevented || app2.region() !== "navigator" || !ready(app2)) return;
       if (ev.type === "paste") {
@@ -5256,7 +5608,6 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
         for (const el of outer.reverse()) await doc2.remove(el, "delete");
       }
     });
-    takeKeys(app2, ["element.delete"]);
   }
 
   // src/editor/model/fragments.ts
@@ -5665,35 +6016,35 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
     steps.refresh();
     nav.refresh();
   });
-  install9(app);
   install10(app);
-  install5(app);
-  install11(app, layers.box);
-  install3(app);
-  install4(app);
+  install11(app);
   install6(app);
+  install12(app, layers.box);
+  install4(app);
+  install5(app);
   install7(app);
   install8(app);
+  install9(app);
+  install20(app);
   install24(app);
   install25(app);
   install26(app);
   install27(app);
-  install28(app);
   installKeys(app);
-  install17(app);
-  install15(app);
-  install16(app);
-  install12(app);
-  install13(app);
   install18(app);
+  install16(app);
+  install17(app);
+  install13(app);
   install14(app);
-  install19(app);
-  install20(app);
-  install21(app);
-  install22(app);
-  install23(app);
-  install2(app);
   install(app);
+  install15(app);
+  install19(app);
+  install22(app);
+  install21(app);
+  install23(app);
+  install28(app);
+  install3(app);
+  install2(app);
   install29(app);
   install30(app);
   var revealReady = () => new Promise((done) => {
