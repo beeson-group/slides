@@ -1,5 +1,5 @@
 // the navigator at the left, as the slide navigator of Keynote: a thumbnail of each slide with its
-// number in the scheme of the theme, three dots on a slide with steps, a corner at the lower right
+// number, its place in the deck, three dots on a slide with steps, a corner at the lower right
 // of a slide with a transition other than the default Fade or None, as the corner of Keynote, and a
 // hidden slide collapsed to a thin double bar without a number. a click selects a slide, Shift extends the selection to a
 // range, and the command modifier adds or removes one slide. a drag moves the selected slides, with
@@ -60,6 +60,13 @@ export function numbers(slides: Element[], written: (slide: Element) => string |
   });
 }
 
+// the number of each slide in the navigator: its place in the deck, 1 to N, as in the status bar and
+// in the navigators of Keynote and PowerPoint, and none on a hidden slide, which is drawn as the
+// bar of a skipped slide of Keynote
+export function places(slides: Element[]): string[] {
+  return slides.map((s, i) => (isHidden(s) ? '' : String(i + 1)));
+}
+
 const CSS = `
 .beeson-edit-nav { --nav-bg: var(--ed-panel, #f4f4f6); --nav-text: var(--ed-text, #1d1d1f); --nav-muted: var(--ed-muted, #86868b); --nav-line: var(--ed-line, #d2d2d7); --nav-select: var(--ed-select, #7a5af8); --nav-current: rgba(0, 0, 0, 0.07); --nav-shadow: 0 1px 3px rgba(0, 0, 0, 0.22); }
 @media (prefers-color-scheme: dark) {
@@ -73,7 +80,7 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
 .beeson-edit-nav .row[aria-current="true"] { background: var(--nav-current); }
 .beeson-edit-nav .row .no { color: var(--nav-muted); text-align: right; font-variant-numeric: tabular-nums; line-height: 1; padding-bottom: 1px; }
 .beeson-edit-nav .row .frame { position: relative; border-radius: 5px; box-shadow: var(--nav-shadow); outline: 1px solid var(--nav-line); outline-offset: 0; }
-.beeson-edit-nav .row .pic { aspect-ratio: 16 / 9; border-radius: 5px; background: var(--bg, #000); }
+.beeson-edit-nav .row .pic { display: block; aspect-ratio: 16 / 9; border-radius: 5px; background: var(--bg, #000); }
 .beeson-edit-nav .row[aria-selected="true"] .frame { outline: 3px solid var(--nav-select); outline-offset: 2px; }
 .beeson-edit-nav .rows:focus-within .row[aria-selected="true"] .no { color: var(--nav-select); font-weight: 600; }
 .beeson-edit-nav .row .dots { position: absolute; left: 6px; bottom: 5px; display: flex; gap: 3px; pointer-events: none; }
@@ -236,11 +243,6 @@ export class Navigator implements Pane {
     return (slide && this.rows.get(slide)?.el) || null;
   }
 
-  private written(slide: Element): string | null {
-    const s = this.app.pairing?.elements.get(slide);
-    return s?.attrs.find((a) => a.name === 'data-visibility')?.value ?? null;
-  }
-
   private makeRow(slide: Element): Row {
     const el = document.createElement('button');
     el.type = 'button';
@@ -254,8 +256,7 @@ export class Navigator implements Pane {
     frame.className = 'frame';
     const pic = document.createElement('span');
     pic.className = 'pic';
-    pic.style.display = 'block';
-    const dots = document.createElement('span');
+        const dots = document.createElement('span');
     dots.className = 'dots';
     dots.append(document.createElement('i'), document.createElement('i'), document.createElement('i'));
     const trans = document.createElement('span');
@@ -287,7 +288,7 @@ export class Navigator implements Pane {
   // the selection. a row is kept with its thumbnail while its slide is on the page
   refresh(): void {
     const slides = this.slides();
-    const nums = numbers(slides, (s) => this.written(s));
+    const nums = places(slides);
     const kept = new Set(slides);
     for (const [s, r] of this.rows) {
       if (kept.has(s)) continue;
@@ -319,7 +320,7 @@ export class Navigator implements Pane {
       row.dots.hidden = !steps;
       const effect = transitionName(this.app, slide);
       row.trans.hidden = !effect;
-      const label = `Slide ${i + 1}${nums[i] && nums[i] !== String(i + 1) ? `, numbered ${nums[i]}` : ''}: ${title}${hidden ? ', hidden' : ''}${steps ? ', with steps' : ''}${effect ? `, with the transition ${effect}` : ''}`;
+      const label = `Slide ${i + 1}: ${title}${hidden ? ', hidden' : ''}${steps ? ', with steps' : ''}${effect ? `, with the transition ${effect}` : ''}`;
       if (row.el.getAttribute('aria-label') !== label) row.el.setAttribute('aria-label', label);
       row.el.title = `Slide ${i + 1}: ${title}`;
     });
