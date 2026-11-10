@@ -651,7 +651,8 @@ const constrainOf = (page) => page.evaluate(`(() => {
   if (!box) return null;
   const input = box.querySelector('input');
   const height = panel.querySelector('#beeson-edit-num-height');
-  return { checked: input.checked, disabled: input.disabled, afterSize: !!height && !!(height.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING), note: box.closest('.ed-sec')?.textContent ?? '' };
+  const notes = [...box.closest('.ed-sec').querySelectorAll('.ed-note')].filter((n) => !n.hidden).map((n) => n.textContent);
+  return { checked: input.checked, disabled: input.disabled, afterSize: !!height && !!(height.compareDocumentPosition(box) & Node.DOCUMENT_POSITION_FOLLOWING), notes };
 })()`);
 
 for (const platform of PLATFORMS) {
@@ -661,11 +662,17 @@ for (const platform of PLATFORMS) {
     await page.evaluate(`localStorage.setItem('beeson-edit-constrain-qr', 'off')`);
     await click(page, ZONE_IMG);
     await arrangeXY(page);
+    const figure = await constrainOf(page);
+    assert.ok(figure, 'the Arrange pane does not have a switch Constrain Proportions');
+    assert.ok(figure.afterSize, 'the switch is not beside the size fields');
+    assert.deepEqual([figure.checked, figure.disabled], [true, true], 'the switch of a figure is not on, or can be turned off while only the width is written');
+    assert.equal(figure.notes.length, 1, `a figure sized by its layout shows more than its one note: ${figure.notes.join(' | ')}`);
+    // the image itself, selected with a second click, has live size fields and the note of the switch
+    await click(page, ZONE_IMG);
+    await arrangeXY(page);
     const image = await constrainOf(page);
-    assert.ok(image, 'the Arrange pane does not have a switch Constrain Proportions');
-    assert.ok(image.afterSize, 'the switch is not beside the size fields');
     assert.deepEqual([image.checked, image.disabled], [true, true], 'the switch of an image is not on, or can be turned off while only the width is written');
-    assert.match(image.note, /width/i, 'the note does not say that only the width is written');
+    assert.deepEqual(image.notes, ['Only the width is written, and the height follows the aspect or the layout.'], 'the note does not say that only the width is written');
     await click(page, QR);
     await arrangeXY(page);
     const qr = await constrainOf(page);
