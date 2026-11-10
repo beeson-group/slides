@@ -151,6 +151,10 @@ async function roundTrip(page, undos = 1) {
 
 const THREE = '<table>\n    <tbody>\n      <tr><th></th><th></th><th></th></tr>\n      <tr><td></td><td></td><td></td></tr>\n      <tr><td></td><td></td><td></td></tr>\n    </tbody>\n  </table>';
 
+// the text rendered with the translate taken off a new table, which placeTable of
+// commands/table.ts gives it on a slide whose text column is full
+const placed = async (page) => (await render(page)).replace(/<table style="translate: -?\d+px -?\d+px">/, '<table>');
+
 // the table of a text cut out with the line it is on, which gives the deck before the insert
 const without = (text, table) => text.replace(`\n  ${table}`, '');
 
@@ -240,7 +244,7 @@ for (const platform of ['mac', 'other']) {
     await click(page, cell);
     await settled(page);
     assert.equal(await page.evaluate(`!!document.querySelector('dialog.beeson-table-picker')`), false);
-    const edited = await render(page);
+    const edited = await placed(page);
     assert.ok(edited.includes(`\n  ${THREE}\n`), `the table is not written:\n${edited.slice(edited.indexOf('Equations'), edited.indexOf('Equations') + 1600)}`);
     assert.equal(without(edited, THREE), page.source);
     assert.deepEqual(await focusCell(page), [0, 0]);
@@ -266,7 +270,7 @@ for (const platform of ['mac', 'other']) {
     await press(page, 'Enter');
     await settled(page);
     const table = '<table>\n    <tbody>\n      <tr><th></th><th></th></tr>\n      <tr><td></td><td></td></tr>\n      <tr><td></td><td></td></tr>\n      <tr><td></td><td></td></tr>\n    </tbody>\n  </table>';
-    assert.equal(without(await render(page), table), page.source);
+    assert.equal(without(await placed(page), table), page.source);
     await roundTrip(page);
   });
 
@@ -513,7 +517,7 @@ for (const platform of ['mac', 'other']) {
     await paste(page, { 'text/plain': 'Family\tPeriod\nLyapunov\t2.69\nHalo\t3.41\n' });
     await settled(page);
     const table = '<table>\n    <tbody>\n      <tr><th>Family</th><th style="text-align: right">Period</th></tr>\n      <tr><td>Lyapunov</td><td style="text-align: right">2.69</td></tr>\n      <tr><td>Halo</td><td style="text-align: right">3.41</td></tr>\n    </tbody>\n  </table>';
-    const edited = await render(page);
+    const edited = await placed(page);
     assert.ok(edited.includes(table), `the table is not written:\n${edited.slice(edited.indexOf('Equations'), edited.indexOf('Equations') + 1600)}`);
     assert.equal(without(edited, table), page.source);
     // the new table is selected, and its bars are shown without a cell marked
@@ -540,7 +544,7 @@ for (const platform of ['mac', 'other']) {
     await paste(page, { 'text/html': html, 'text/plain': 'Body\tMass\nEarth\t5.97\te24 kg\nMoon & Luna\t0.073\te24 kg' });
     await settled(page);
     const table = '<table>\n    <tbody>\n      <tr><th>Body</th><th style="text-align: right">Mass</th><th></th></tr>\n      <tr><td>Earth</td><td style="text-align: right">5.97</td><td>e24 kg</td></tr>\n      <tr><td>Moon &amp; Luna</td><td style="text-align: right">0.073</td><td>e24 kg</td></tr>\n    </tbody>\n  </table>';
-    assert.equal(without(await render(page), table), page.source);
+    assert.equal(without(await placed(page), table), page.source);
     await roundTrip(page);
   });
 

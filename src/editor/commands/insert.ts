@@ -66,7 +66,7 @@ export function columnPlace(app: App, slide: Element): { parent: Element; before
 const FLOOR = 920;
 
 // the box of el in slide px
-function slideBox(app: App, el: Element): { left: number; top: number; right: number; bottom: number } {
+export function slideBox(app: App, el: Element): { left: number; top: number; right: number; bottom: number } {
   const slides = app.slides() as HTMLElement;
   const s = slides.getBoundingClientRect();
   const k = slides.offsetWidth ? s.width / slides.offsetWidth : 1;
@@ -74,11 +74,11 @@ function slideBox(app: App, el: Element): { left: number; top: number; right: nu
   return { left: (r.left - s.left) / k, top: (r.top - s.top) / k, right: (r.right - s.left) / k, bottom: (r.bottom - s.top) / k };
 }
 
-type Box = { left: number; top: number; right: number; bottom: number };
-const meets = (a: Box, b: Box) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+export type Box = { left: number; top: number; right: number; bottom: number };
+export const meets = (a: Box, b: Box) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 
 // the box of the text of a block, which may be narrower than the block, or null when it is empty
-function inkBox(app: App, el: Element): Box | null {
+export function inkBox(app: App, el: Element): Box | null {
   const range = document.createRange();
   range.selectNodeContents(el);
   const r = range.getBoundingClientRect();
@@ -91,7 +91,7 @@ function inkBox(app: App, el: Element): Box | null {
 
 // the box where the layout of slide puts a zone, when nothing of the slide but el is drawn there. it
 // is measured on a hidden zone of the theme, taken off at once
-function freeZone(app: App, slide: Element, el: Element): Box | null {
+export function freeZone(app: App, slide: Element, el: Element): Box | null {
   if (slide.matches('.title, .closing, .figure, .section')) return null;
   const probe = document.createElement('div');
   probe.className = 'zone';
