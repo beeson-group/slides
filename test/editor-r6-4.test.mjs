@@ -4,7 +4,9 @@
 // 2 of the council). the readout of a move gives the upper left corner of the element in slide px.
 // a page of the editor does not write back the guides that it read at its start. a first click on a
 // text block of a group selects the group, a second click the block, and a third puts the caret
-// in its text, as in Keynote and PowerPoint
+// in its text, as in Keynote and PowerPoint. in a multiple selection that is not a group, each
+// member is drawn with its own frame and grips, without a frame around all of them, and a drag of
+// the grip of one member resizes every member
 
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -349,6 +351,49 @@ for (const platform of PLATFORMS) {
     assert.equal(await render(page), moved);
     await saveAndReopen(page);
     assert.deepEqual(errors(page), []);
+  });
+}
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: each member of a multiple selection has its own grips, without a frame around all, and the grip of one resizes all`, async () => {
+    for (const mode of ['dark', 'light']) {
+      const page = await editor(platform, { mode });
+      await selectFigure(page, ZONE_IMG);
+      await click(page, await leadAt(page), { modifiers: 'Shift' });
+      await frames(page);
+      assert.deepEqual((await selected(page)).sort(), ['figure.zone.fragment', 'p'], 'the figure and the paragraph are not selected');
+      const view = await page.evaluate(`(() => {
+        const shown = (el) => !el.hidden && getComputedStyle(el).display !== 'none';
+        const grips = [...document.querySelectorAll('.beeson-overlay .beeson-grip')].filter(shown);
+        return {
+          union: [...document.querySelectorAll('.beeson-overlay .beeson-frame.union')].filter(shown).length,
+          frames: [...document.querySelectorAll('.beeson-overlay .beeson-frame.selected')].filter(shown).length,
+          members: [...new Set(grips.map((g) => g.dataset.member))].map((m) => grips.filter((g) => g.dataset.member === m).map((g) => g.dataset.handle).sort()),
+        };
+      })()`);
+      assert.equal(view.union, 0, 'a frame is drawn around the members of a multiple selection');
+      assert.equal(view.frames, 2, `${view.frames} frames are drawn for two members`);
+      assert.equal(view.members.length, 2, `the grips of ${view.members.length} members are drawn, not of both`);
+      assert.ok(view.members.some((h) => h.length === 8), `the figure does not have eight grips: ${JSON.stringify(view.members)}`);
+      assert.ok(view.members.some((h) => h.includes('e') && h.includes('w') && !h.includes('n')), `the paragraph does not have the grips of a text block: ${JSON.stringify(view.members)}`);
+      await shot(page, `multiple-selection-${mode}-${platform}`);
+      // a drag of the lower right grip of the figure resizes the figure and the paragraph
+      const widths = () => page.evaluate(`[${LEAD}, [...document.querySelectorAll(${JSON.stringify(ZONE_IMG)})].find((i) => i.getBoundingClientRect().width)].map((el) => el.getBoundingClientRect().width)`);
+      const before = await widths();
+      const se = await page.evaluate(`(() => { const g = [...document.querySelectorAll('.beeson-grip[data-handle="se"]')].filter((g) => !g.hidden).map((g) => g.getBoundingClientRect()).sort((a, b) => b.left - a.left)[0]; return { x: g.left + g.width / 2, y: g.top + g.height / 2 }; })()`);
+      await drag(page, se, { dx: -80, dy: -60 });
+      await frames(page);
+      const after = await widths();
+      assert.ok(after[0] < before[0] - 5 && after[1] < before[1] - 5, `the widths ${JSON.stringify(before)} became ${JSON.stringify(after)}, not both smaller`);
+      const resized = await render(page);
+      assert.match(resized, /<p style="width: \d+px">The lead-in of a display<\/p>/, 'the width of the paragraph is not written');
+      await undo(page);
+      await byteExact(page);
+      await redo(page);
+      assert.equal(await render(page), resized);
+      await saveAndReopen(page);
+      assert.deepEqual(errors(page), []);
+    }
   });
 }
 
