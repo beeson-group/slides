@@ -50,6 +50,7 @@ import { install as installTextCommands } from './commands/text.ts';
 import { install as installClipboardCommands } from './commands/clipboard.ts';
 import { install as installInsertCommands } from './commands/insert.ts';
 import { install as installFindCommands } from './commands/find.ts';
+import { install as installStepsCommands } from './commands/steps.ts';
 import { install as installInspector } from './inspector/inspector.ts';
 import { install as installZoomCommands } from './commands/zoom.ts';
 import { Doc } from './model/doc.ts';
@@ -143,6 +144,7 @@ installTextCommands(app);
 installClipboardCommands(app);
 installInsertCommands(app);
 installFindCommands(app);
+installStepsCommands(app);
 installInspector(app);
 installZoomCommands(app);
 
