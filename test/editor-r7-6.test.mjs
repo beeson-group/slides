@@ -136,4 +136,34 @@ for (const platform of PLATFORMS) {
     assert.equal(await render(page), page.source);
     assert.deepEqual(errors(page), []);
   });
+
+  test(`a drag of the zoom slider near its tick at 100% snaps to 100% (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    const slider = '.beeson-edit-bottom .slider input';
+    const thumb = async () => {
+      const r = await boxOf(page, slider);
+      const v = Number(await page.evaluate(`document.querySelector(${js(slider)}).value`));
+      return { x: r.x + 7 + ((r.w - 14) * v) / 1000, y: r.y + r.h / 2 };
+    };
+    const tick = await center(page, '.beeson-edit-bottom .slider .tick');
+    const readout = () => page.evaluate(`document.querySelector('.beeson-edit-top [data-command="toolbar.zoom"] .readout').textContent`);
+    assert.equal(await readout(), 'Fit');
+    // a drag that ends 3 px past the tick gives 100%, with the thumb on the tick
+    let from = await thumb();
+    await drag(page, from, { dx: tick.x + 3 - from.x, dy: 0, steps: 12 });
+    await frames(page);
+    assert.equal(await readout(), '100%');
+    assert.ok(Math.abs((await thumb()).x - tick.x) < 1, `the thumb is at ${(await thumb()).x} and the tick at ${tick.x}`);
+    // a drag that ends 12 px past the tick does not snap
+    from = await thumb();
+    await drag(page, from, { dx: 12, dy: 0, steps: 6 });
+    await frames(page);
+    assert.ok(Number((await readout()).replace('%', '')) > 110, await readout());
+    // the arrow keys move the slider past the tick
+    await page.evaluate(`document.querySelector(${js(slider)}).focus()`);
+    for (let i = 0; i < 3; i++) await press(page, 'ArrowLeft');
+    assert.notEqual(await readout(), '100%');
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
 }
