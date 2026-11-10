@@ -11,7 +11,7 @@ export type Match = (el: Element) => boolean;
 
 const tagIs = (...tags: string[]): Match => (el) => tags.includes(el.localName);
 
-export const TONES = ['subtle', 'muted', 'accent', 'violet', 'blue', 'red'] as const;
+export const TONES = ['accent', 'violet', 'blue', 'red', 'subtle', 'muted'] as const;
 export type Tone = (typeof TONES)[number];
 
 export const isTone: Match = (el) => el.localName === 'span' && el.classList.length === 1 && el.classList[0].startsWith('tone-');
