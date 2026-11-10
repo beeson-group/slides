@@ -17,6 +17,7 @@ const CSS = `
 }
 .beeson-edit-link { position: fixed; z-index: 80; margin: 0; padding: 14px 16px 12px; width: 340px; box-sizing: border-box; border: 1px solid var(--l-line); border-radius: 12px; background: var(--l-bg); color: var(--l-text); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28); font: 13px/1.35 system-ui, sans-serif; }
 .beeson-edit-link .row { display: grid; grid-template-columns: 64px 1fr; align-items: center; gap: 8px; margin-bottom: 10px; }
+.beeson-edit-link .row[hidden] { display: none; }
 .beeson-edit-link .row > span { text-align: right; color: var(--l-muted); }
 .beeson-edit-link .kinds { display: inline-flex; border: 1px solid var(--l-line); border-radius: 7px; overflow: hidden; justify-self: start; }
 .beeson-edit-link .kinds button { padding: 3px 12px; border: 0; background: transparent; color: inherit; font: inherit; cursor: pointer; }
