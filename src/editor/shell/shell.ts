@@ -58,6 +58,8 @@ html.beeson-editor.beeson-steps body > .beeson-edit-inspector, html.beeson-edito
 .beeson-edit-inspector .format dt { color: var(--ed-muted); }
 .beeson-edit-inspector .format dd { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 html.beeson-editor .beeson-edit-inspector .beeson-edit-side { position: static; inset: auto; width: auto; flex: 1; min-height: 0; border: 0; background: transparent; color: var(--ed-text); font: 12px/1.4 var(--ed-font); }
+html.beeson-editor .beeson-edit-inspector .beeson-edit-side .row { grid-template-columns: minmax(0, 8.5em) auto minmax(0, 1fr); }
+html.beeson-editor .beeson-edit-inspector .beeson-edit-side .row select { width: 100%; min-width: 0; }
 `;
 
 // the label of a command on the toolbar, which is short and does not change, e.g. Undo for
