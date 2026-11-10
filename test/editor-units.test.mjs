@@ -141,7 +141,11 @@ test('the scope rule allows the writes of AGENTS.md and names the others', () =>
   assert.deepEqual(editProblems('p', attrs, { classes: { mine: true }, attrs: { title: 'x' }, style: { color: 'red' } }, theme), ['the class mine', 'the attribute title', 'the declaration color']);
   assert.equal(declarationProblem('img', [], 'width', '40%'), null);
   assert.equal(declarationProblem('div', ['qr'], 'width', '300px'), null);
-  assert.match(declarationProblem('p', [], 'width', '300px'), /width/);
+  // a text block takes a width in px from its grips, and an image or a video a height as well
+  assert.equal(declarationProblem('p', [], 'width', '300px'), null);
+  assert.match(declarationProblem('p', [], 'width', '40%'), /width/);
+  assert.equal(declarationProblem('img', [], 'height', '300px'), null);
+  assert.match(declarationProblem('div', ['qr'], 'height', '300px'), /height/);
   assert.equal(declarationProblem('pre', [], 'font-size', '18px'), null);
   assert.equal(declarationProblem('td', [], 'text-align', 'right'), null);
   assert.equal(declarationProblem('th', [], 'width', '240px'), null);

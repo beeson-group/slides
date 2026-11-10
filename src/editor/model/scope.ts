@@ -42,8 +42,14 @@ export const LINE_ATTRS: Record<string, string[]> = {
   path: ['d'],
 };
 
-// the elements whose width is set in a style, by tag or by class
+// the elements whose width is set in a style, by tag or by class, and those whose height is set as
+// well, which a resize stretches
 const SIZED_TAGS = new Set(['img', 'video', 'tycho-viewer']);
+const STRETCHED_TAGS = new Set(['img', 'video']);
+// the text blocks whose width is set in a style in px, as a text box of Keynote and PowerPoint
+const TEXT_TAGS = new Set(['h1', 'h2', 'h3', 'p', 'ul', 'ol']);
+const textBlock = (tag: string, classes: string[]) => TEXT_TAGS.has(tag) || (tag === 'div' && classes.includes('math')) || classes.includes('caption');
+const PX = /^\d+px$/;
 
 // the declarations of the mask and the flip of an image, written by canvas/mask.ts, with the form
 // of their values
@@ -70,7 +76,9 @@ export function declarationProblem(tag: string, classes: string[], name: string,
   if (name === 'translate' || name === 'rotate') return null;
   // the width of a column is written in px on the cells of the first row of a table
   if (name === 'width' && (tag === 'td' || tag === 'th')) return /^\d+px$/.test(value.trim()) ? null : `width ${value} on a ${tag}`;
-  if (name === 'width') return SIZED_TAGS.has(tag) || classes.includes('qr') ? null : `width on a ${tag}`;
+  if (name === 'width' && (SIZED_TAGS.has(tag) || classes.includes('qr'))) return null;
+  if (name === 'width') return textBlock(tag, classes) && PX.test(value.trim()) ? null : `width on a ${tag}`;
+  if (name === 'height') return STRETCHED_TAGS.has(tag) && PX.test(value.trim()) ? null : `height ${value} on a ${tag}`;
   if (name === 'font-size') return tag === 'pre' && /^(22|18)px$/.test(value.trim()) ? null : `font-size ${value} on a ${tag}`;
   if (name === 'text-align') return (tag === 'td' || tag === 'th') && value.trim() === 'right' ? null : `text-align ${value} on a ${tag}`;
   if (MASK_DECLARATIONS[name]) return tag === 'img' && MASK_DECLARATIONS[name].test(value.trim()) ? null : `${name} ${value} on a ${tag}`;

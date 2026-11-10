@@ -260,6 +260,8 @@ const BeesonEditor = {
   // a command of the registry run by its id, and its label, switch, and enabled state
   exec: (id: string, arg?: unknown) => app.commands.run(id, arg),
   state: (id: string) => app.commands.state(id),
+  // the selected elements, a line among them
+  selection: () => app.selection.elements(),
   doc,
   version: __VERSION__,
 };

@@ -208,10 +208,12 @@ for (const platform of PLATFORMS) {
     await redo(page);
     await redo(page);
     const styled = await inserted(page);
-    // a drag of the second end handle moves only that end
+    // a drag of the second end handle moves only that end, by the drag, from a handle drawn past
+    // the arrowhead
     const end = await page.evaluate(`(() => { const r = document.querySelector('.beeson-line-end[data-end="2"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    const at = await screen(page, l.ends[2], l.ends[3]);
     const to = await screen(page, 800, 700);
-    await drag(page, end, { dx: to.x - end.x, dy: to.y - end.y, modifiers: platform === 'mac' ? 'Meta' : 'Alt' });
+    await drag(page, end, { dx: to.x - at.x, dy: to.y - at.y, modifiers: platform === 'mac' ? 'Meta' : 'Alt' });
     await frames(page);
     [l] = await lines(page);
     assert.deepEqual(l.ends.slice(0, 2), [300, 500]);

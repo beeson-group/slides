@@ -10,7 +10,7 @@ import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
-import { byteExact, click, press, saveAndReopen, type } from './helpers/editor.mjs';
+import { byteExact, click, press, saveAndReopen, selectFigure, type } from './helpers/editor.mjs';
 
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
@@ -151,8 +151,8 @@ async function typeInto(page, selector, text) {
 for (const platform of PLATFORMS) {
   test(`a click in the inspector keeps the selected figure, and X typed as 40 writes its translate on ${platform}`, async () => {
     const page = await inspectorPage(platform, slideWith(FIGURE));
-    await click(page, IMG);
-    assert.deepEqual(await framed(page, [ZONE]), [ZONE], 'the figure is not selected by a click');
+    await selectFigure(page, IMG);
+    assert.deepEqual(await framed(page, [ZONE]), [ZONE], 'the figure is not selected by a click on its image and Esc');
     assert.equal(await pane(page), 'image');
     await tap(page, 'Arrange');
     assert.equal(await pane(page), 'arrange');
@@ -212,8 +212,8 @@ for (const platform of PLATFORMS) {
   test(`Align Left of two elements writes both offsets as one entry of the history on ${platform}`, async () => {
     const page = await inspectorPage(platform, slideWith(FIGURE));
     const p = await boxOf(page, P);
-    await click(page, { x: p.right + 3, y: (p.top + p.bottom) / 2 });
-    await click(page, IMG, { modifiers: 'Shift' });
+    await selectFigure(page, IMG);
+    await click(page, { x: p.right + 3, y: (p.top + p.bottom) / 2 }, { modifiers: 'Shift' });
     assert.deepEqual(await framed(page, [P, ZONE]), [P, ZONE]);
     assert.equal(await pane(page), 'arrange');
     await tap(page, 'Slide');

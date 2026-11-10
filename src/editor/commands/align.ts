@@ -6,11 +6,11 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { RESIZABLE, aspectOf, frameOf, movableOf, sizedOf, toSlide, visualRect } from '../canvas/hit.ts';
+import { RESIZABLE, STRETCHED, aspectOf, constrained, cssWidth, frameOf, isTextSized, kindOf, movableOf, pictureSize, sizedOf, toSlide, visualRect } from '../canvas/hit.ts';
 import type { Box } from '../canvas/snap.ts';
 import { placeOf, record, writePlace, type Place } from '../canvas/drag.ts';
 import { declarationProblem } from '../model/scope.ts';
-import { store, stored } from '../ui/dom.ts';
+import { store } from '../ui/dom.ts';
 
 export type Side = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
 export const SIDES: Side[] = ['left', 'center', 'right', 'top', 'middle', 'bottom'];
@@ -102,8 +102,10 @@ const canDistribute = (app: App) => {
   return n >= 3 || (reference === 'slide' && n >= 2);
 };
 
-// whether the width of every target is written by the editor, by the scope rule
-export const resizable = (els: Element[]) => els.length > 0 && els.every((el) => el.matches(RESIZABLE));
+// whether the width of every target is written by the editor, by the scope rule, and whether its
+// height is set by the field H, i.e. every target is a picture and none a text block
+export const resizable = (els: Element[]) => els.length > 0 && els.every((el) => el.matches(RESIZABLE) || isTextSized(el));
+export const heightSet = (els: Element[]) => els.length > 0 && els.every((el) => el.matches(RESIZABLE));
 
 // the offset of an element from its place in the file, which the X and Y fields show
 export function offsetOf(el: Element): { x: number; y: number } {
@@ -111,11 +113,8 @@ export function offsetOf(el: Element): { x: number; y: number } {
   return { x: t?.x ?? 0, y: t?.y ?? 0 };
 }
 
-// the size of an element in slide pixels, unscaled
-export function sizeOf(el: Element): { w: number; h: number } {
-  const h = el as HTMLElement;
-  return { w: h.offsetWidth, h: h.offsetHeight };
-}
+// the size of an element in slide pixels, unscaled, at its picture for an image or a video
+export const sizeOf = (el: Element): { w: number; h: number } => pictureSize(el);
 
 export function commands(): Command[] {
   const list: Command[] = [];
@@ -169,7 +168,9 @@ export function commands(): Command[] {
       app.invalidate('content');
     },
   });
-  // arg is { w, h, els }. a height is written as the width at the aspect of the element
+  // arg is { w, h, els }. an image or a video with its switch Constrain Proportions on keeps the
+  // aspect that it has, and with the switch off it is stretched, with its height written. for any
+  // other picture, a height is written as the width at its aspect, and a text block takes a width
   list.push({
     id: 'arrange.setSize',
     label: 'Size',
@@ -181,9 +182,22 @@ export function commands(): Command[] {
       if (!resizable(els)) return;
       const changes = els.map((el) => {
         const from = placeOf(el);
-        const aspect = aspectOf(el) ?? sizeOf(el).w / Math.max(1, sizeOf(el).h);
-        const w = a.w ?? (a.h !== undefined ? a.h * aspect : sizeOf(el).w);
-        writePlace(app, el, { ...from, width: Math.max(1, w) });
+        const now = sizeOf(el);
+        if (isTextSized(el)) {
+          if (a.w !== undefined) writePlace(app, el, { ...from, width: Math.max(1, cssWidth(el, a.w)) });
+        } else if (el.matches(STRETCHED)) {
+          const keep = constrained(el);
+          const aspect = now.w / Math.max(1, now.h);
+          let w = now.w, h = now.h;
+          if (a.w !== undefined) [w, h] = [a.w, keep ? a.w / aspect : now.h];
+          else if (a.h !== undefined) [w, h] = [keep ? a.h * aspect : now.w, a.h];
+          const stretch = !keep || (from.height ?? null) !== null;
+          writePlace(app, el, { ...from, width: Math.max(1, w), height: stretch ? Math.max(1, h) : null });
+        } else {
+          const aspect = aspectOf(el) ?? now.w / Math.max(1, now.h);
+          const w = a.w ?? (a.h !== undefined ? a.h * aspect : now.w);
+          writePlace(app, el, { ...from, width: Math.max(1, w) });
+        }
         return { el, from, to: placeOf(el) };
       });
       record(app, 'resize', changes);
@@ -191,8 +205,8 @@ export function commands(): Command[] {
     },
   });
   // the switch Constrain Proportions of the size fields, as in Keynote and PowerPoint. it is kept
-  // per kind of picture in the browser and written nowhere in the file. it is held on wherever the
-  // scope rule writes the width and not the height, since the aspect then follows the width
+  // per kind of picture in the browser and written nowhere in the file. it is held on for a QR code,
+  // whose height the scope rule does not write, since its square then follows its width
   list.push({
     id: 'arrange.constrainProportions',
     label: 'Constrain Proportions',
@@ -213,18 +227,8 @@ export function commands(): Command[] {
 
 // the shown images, videos, QR codes, and viewers whose size the fields of the selection set,
 // including those that a selected figure holds. the image of the other mode shares their kind
-const picturesOf = (app: App): Element[] => [...new Set(targetsOf(app).flatMap(sizedOf))].filter((m) => m.getBoundingClientRect().width > 0);
-const kindOf = (el: Element): string => (el.matches('img') ? 'image' : el.matches('video') ? 'video' : el.matches('.qr') ? 'qr' : 'viewer');
+const picturesOf = (app: App): Element[] => [...new Set(targetsOf(app).flatMap(sizedOf))].filter((m) => m.matches(RESIZABLE) && m.getBoundingClientRect().width > 0);
 const heightWritten = (el: Element): boolean => declarationProblem(el.localName, [...el.classList], 'height', '1px') === null;
-
-// whether a resize of el keeps its aspect: by the switch of its kind where the height is written,
-// on by default for an image, a video, and a QR code, and else whenever it has an aspect, since
-// its height then follows its width. a viewer keeps the height that its layout gives it
-function constrained(el: Element): boolean {
-  if (!heightWritten(el)) return aspectOf(el) !== null;
-  const kind = kindOf(el);
-  return (stored(`beeson-edit-constrain-${kind}`) ?? (kind === 'viewer' ? 'off' : 'on')) === 'on';
-}
 
 export function install(app: App): void {
   for (const c of commands()) app.commands.define(c);
