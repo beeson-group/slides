@@ -247,7 +247,7 @@ export function install(app: App): void {
       return;
     }
     // a press on the chrome, e.g. a button of a bar or a pane, keeps the selection
-    if (!onCanvas(target)) return;
+    if (!onCanvas(target, app, { x: ev.clientX, y: ev.clientY })) return;
     // an image selected inside its figure is dragged inside it
     const inner = sel.only();
     if (inner && inner.matches(RESIZABLE) && containerOf(app, inner) && inner.contains(target)) {
@@ -432,7 +432,7 @@ export function install(app: App): void {
     const target = ev.target instanceof Element ? ev.target : null;
     if (target && (target === frames.handle || target.closest('.beeson-grip'))) return;
     const el = movableOf(app, target);
-    const band = el ? null : onCanvas(target) ? bandAt(app, ev.clientX, ev.clientY) : null;
+    const band = el ? null : onCanvas(target, app, { x: ev.clientX, y: ev.clientY }) ? bandAt(app, ev.clientX, ev.clientY) : null;
     document.documentElement.classList.toggle('beeson-band', !!band);
     const next = el ?? band;
     if (next) {
