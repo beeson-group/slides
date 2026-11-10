@@ -376,7 +376,8 @@ test('a figure dragged on the slide gets its offset as a translate style in its 
     // with Alt, so that the figure does not snap to an edge on its way
     const at = (type, cx, cy) => document.elementFromPoint(cx, cy).dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: cx, clientY: cy, button: 0, pointerId: 1, altKey: true }));
     at('pointermove', x, y);
-    const hovered = !document.querySelector('.beeson-frame').hidden && !document.querySelector('.beeson-handle').hidden;
+    // a figure is dragged by itself, hence its hover frame is drawn without the handle of a block
+    const hovered = !document.querySelector('.beeson-frame').hidden && document.querySelector('.beeson-handle').hidden;
     const scale = Reveal.getScale();
     at('pointerdown', x, y);
     at('pointermove', x + 30 * scale, y + 20 * scale);
