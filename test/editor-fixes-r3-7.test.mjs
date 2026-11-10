@@ -262,22 +262,28 @@ const MENUS = ['File', 'Edit', 'Insert', 'Format', 'Arrange', 'Slide', 'View', '
 const survey = (page) => page.evaluate(`(() => {
   const S = window.BeesonEditorShell, E = window.BeesonEditor;
   const subs = {}, commands = {}, wrong = [];
-  for (const bar of ${JSON.stringify(MENUS)}) {
-    for (const item of S.menuItems(bar)) {
+  // the commands of a submenu at any depth, with the state of each
+  const all = (items) => items.flatMap((i) => i.command ? [{ id: i.command, ...E.state(i.command) }] : i.items ? all(typeof i.items === 'function' ? i.items() : i.items) : []);
+  const walk = (items, path) => {
+    for (const item of items) {
       if (item.command) commands[item.command] = E.state(item.command).enabled;
       if (!item.items) continue;
-      const inner = (typeof item.items === 'function' ? item.items() : item.items).filter((i) => i.command).map((i) => ({ id: i.command, ...E.state(i.command) }));
-      for (const i of inner) commands[i.id] = i.enabled;
-      const plain = inner.filter((i) => i.checked === null);
-      const expected = (plain.length ? plain : inner).some((i) => i.enabled);
-      subs[bar + ' > ' + item.label] = !item.disabled;
-      if (!item.disabled !== expected) wrong.push(bar + ' > ' + item.label + (expected ? ' is disabled' : ' is enabled'));
+      const list = typeof item.items === 'function' ? item.items() : item.items;
+      const inner = all(list);
+      const name = path + ' > ' + item.label;
+      subs[name] = !item.disabled;
+      // a submenu is enabled only with an enabled command, and enabled with an enabled command that
+      // is not a switch
+      if (!item.disabled && !inner.some((i) => i.enabled)) wrong.push(name + ' is enabled');
+      if (item.disabled && inner.some((i) => i.enabled && i.checked === null)) wrong.push(name + ' is disabled');
+      walk(list, name);
     }
-  }
+  };
+  for (const bar of ${JSON.stringify(MENUS)}) walk(S.menuItems(bar), bar);
   return { subs, commands, wrong };
 })()`);
 
-const TEXT_SUBMENUS = ['Format > Baseline', 'Format > Text Color', 'Format > Paragraph Style', 'Format > List', 'Format > Change Case'];
+const TEXT_SUBMENUS = ['Format > Font', 'Format > Text', 'Format > Font > Baseline', 'Format > Font > Text Color', 'Format > Font > Change Case'];
 const TEXT_COMMANDS = ['text.bold', 'text.italic', 'text.superscript', 'text.tone.accent', 'text.style.body', 'text.list.ul', 'text.case.upper', 'text.clear', 'text.link'];
 
 for (const platform of PLATFORMS) {
@@ -295,7 +301,8 @@ for (const platform of PLATFORMS) {
     await sleep(50);
     const caret = await survey(page);
     assert.deepEqual(caret.wrong, [], 'with the caret in a paragraph, a submenu does not follow its items');
-    assert.equal(caret.subs['Format > Paragraph Style'], true, 'with the caret in a paragraph, its style cannot be set');
+    assert.equal(caret.subs['Format > Text'], true, 'with the caret in a paragraph, its style cannot be set');
+    assert.equal(caret.commands['text.style.body'], true, 'with the caret in a paragraph, its style cannot be set');
     assert.equal(caret.commands['selection.all'], true);
 
     await press(page, 'Escape');
