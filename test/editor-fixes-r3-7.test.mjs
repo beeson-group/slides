@@ -417,3 +417,55 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errorsOf(page), []);
   });
 }
+
+// the menus of the menu bar as a tree of labels, with a submenu as { label, items } and a rule as '|'
+const tree = (page) => page.evaluate(`(() => {
+  const E = window.BeesonEditor;
+  const walk = (items) => items.map((i) => i.rule ? '|' : i.command ? E.state(i.command).label : { label: i.label, items: walk(typeof i.items === 'function' ? i.items() : i.items) });
+  return Object.fromEntries(${JSON.stringify(MENUS)}.map((bar) => [bar, walk(window.BeesonEditorShell.menuItems(bar))]));
+})()`);
+
+// the paths of the submenus of one item, and of the groups of one item between two rules
+function sparse(items, path, out = []) {
+  const groups = [[]];
+  for (const i of items) if (i === '|') groups.push([]); else groups.at(-1).push(i);
+  if (groups.length > 1) for (const g of groups) if (g.length === 1 && typeof g[0] === 'string') out.push(`${path} > ${g[0]} is a group of one item`);
+  for (const i of items) {
+    if (typeof i !== 'object') continue;
+    if (i.items.filter((x) => x !== '|').length === 1) out.push(`${path} > ${i.label} is a submenu of one item`);
+    sparse(i.items, `${path} > ${i.label}`, out);
+  }
+  return out;
+}
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: the Format menu is grouped as in Keynote, and a menu does not have a submenu of one item`, async () => {
+    const page = await editor(platform);
+    await caretInParagraph(page);
+    const menus = await tree(page);
+    assert.deepEqual(Object.entries(menus).flatMap(([bar, items]) => sparse(items, bar).filter((p) => p.includes('submenu'))), [], 'a submenu holds a single item');
+    const format = menus.Format;
+    assert.deepEqual(format.slice(0, 2).map((i) => i.label), ['Font', 'Text'], 'the Format menu does not open with Font and Text');
+    const font = format[0].items.filter((i) => i !== '|').map((i) => i.label ?? i);
+    for (const want of ['Bold', 'Italic', 'Bigger', 'Smaller', 'Baseline', 'Text Color']) assert.ok(font.includes(want), `${want} is not in Font`);
+    const text = format[1].items.filter((i) => i !== '|').map((i) => i.label ?? i);
+    for (const want of ['Body', 'Subheading', 'Dashes', 'Numbers']) assert.ok(text.includes(want), `${want} is not in Text`);
+    const top = format.map((i) => i.label ?? i);
+    assert.ok(top.indexOf('Image') > top.indexOf('Clear Formatting') && top.indexOf('Table') > top.indexOf('Clear Formatting'), `the object items do not follow the text items: ${top.join(', ')}`);
+    // a group of one item, e.g. Delete Table set apart in Table, is checked at the top of Format only
+    assert.deepEqual(sparse(format, 'Format').filter((p) => p.split(' > ').length === 2), [], 'the Format menu has a group of one item');
+
+    // a submenu of a submenu is opened in the menus
+    await barMenu(page, 'Format');
+    const hover = async (label, level) => {
+      const at = await page.evaluate(`(() => { const i = [...[...document.querySelectorAll('.beeson-edit-menu')][${level}].querySelectorAll('.item')].find((x) => x.querySelector('.label').textContent === ${JSON.stringify(label)}); const r = i.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+      await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.x, y: at.y });
+      await sleep(350);
+    };
+    await hover('Font', 0);
+    await hover('Baseline', 1);
+    assert.deepEqual(await page.evaluate(`[...[...document.querySelectorAll('.beeson-edit-menu')][2]?.querySelectorAll('.item .label') ?? []].map((l) => l.textContent)`), ['Superscript', 'Subscript']);
+    await page.evaluate('window.BeesonEditorShell.closeMenus()');
+    assert.deepEqual(errorsOf(page), []);
+  });
+}
