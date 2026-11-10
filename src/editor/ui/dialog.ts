@@ -178,36 +178,43 @@ export const host = (): HTMLElement => document.querySelector<HTMLElement>('dial
 export type Side = 'below' | 'above' | 'right' | 'left';
 
 type Box = { left: number; top: number; right: number; bottom: number; width: number; height: number };
+type Bounds = { left?: number; top?: number; width: number; height: number };
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, Math.max(lo, hi)));
 
 // the place of a popover of size w by h beside the box t, on the first of sides where it fits in
-// the window without meeting t, as the popovers of Keynote are put beside their object and flipped
-// to the other side. where no side fits, it is put on the side with the most room and kept in the
-// window, and side is null. arrow is the place of the point of its arrow along its edge, in px from
-// its left or top. a pure function, tested under node
-export function besidePlace(t: Box, w: number, h: number, view: { width: number; height: number }, sides: Side[] = ['below', 'above', 'right', 'left'], gap = 10, margin = 8): { x: number; y: number; side: Side | null; arrow: number } {
+// view without meeting t, as the popovers of Keynote are put beside their object and flipped to the
+// other side. view is the window, or the canvas, at left and top 0 unless given. where no side
+// fits, it is put on the side with the most room and kept in view, and side is null. arrow is the
+// place of the point of its arrow along its edge, in px from its left or top. a pure function,
+// tested under node
+export function besidePlace(t: Box, w: number, h: number, view: Bounds, sides: Side[] = ['below', 'above', 'right', 'left'], gap = 10, margin = 8): { x: number; y: number; side: Side | null; arrow: number } {
+  const x0 = view.left ?? 0;
+  const y0 = view.top ?? 0;
+  const x1 = x0 + view.width;
+  const y1 = y0 + view.height;
   const room: Record<Side, number> = {
-    below: view.height - margin - (t.bottom + gap) - h,
-    above: t.top - gap - h - margin,
-    right: view.width - margin - (t.right + gap) - w,
-    left: t.left - gap - w - margin,
+    below: y1 - margin - (t.bottom + gap) - h,
+    above: t.top - gap - h - margin - y0,
+    right: x1 - margin - (t.right + gap) - w,
+    left: t.left - gap - w - margin - x0,
   };
   const fit = sides.find((s) => room[s] >= 0);
   const side = fit ?? sides.reduce((a, b) => (room[b] > room[a] ? b : a));
   const across = side === 'below' || side === 'above';
   let x = across ? t.left + t.width / 2 - w / 2 : side === 'right' ? t.right + gap : t.left - gap - w;
   let y = across ? (side === 'below' ? t.bottom + gap : t.top - gap - h) : t.top + t.height / 2 - h / 2;
-  x = clamp(x, margin, view.width - w - margin);
-  y = clamp(y, margin, view.height - h - margin);
+  x = clamp(x, x0 + margin, x1 - w - margin);
+  y = clamp(y, y0 + margin, y1 - h - margin);
   const arrow = across ? clamp(t.left + t.width / 2 - x, 18, w - 18) : clamp(t.top + t.height / 2 - y, 18, h - 18);
   return { x, y, side: fit ?? null, arrow };
 }
 
-// the popover pop, a fixed element, put beside the box of target in the window, with an arrow at
-// the target on the side where it fits. it is given the attribute data-beside with its side
-export function placeBeside(pop: HTMLElement, target: DOMRectReadOnly, sides?: Side[], gap = 12): Side | null {
-  const p = besidePlace(target, pop.offsetWidth, pop.offsetHeight, { width: innerWidth, height: innerHeight }, sides, gap);
+// the popover pop, a fixed element, put beside the box of target in view, by default the window,
+// with an arrow at the target on the side where it fits. it is given the attribute data-beside with
+// its side
+export function placeBeside(pop: HTMLElement, target: DOMRectReadOnly, sides?: Side[], gap = 12, view?: () => Bounds): Side | null {
+  const p = besidePlace(target, pop.offsetWidth, pop.offsetHeight, view?.() ?? { width: innerWidth, height: innerHeight }, sides, gap);
   pop.style.left = `${Math.round(p.x)}px`;
   pop.style.top = `${Math.round(p.y)}px`;
   if (p.side) {
@@ -219,9 +226,9 @@ export function placeBeside(pop: HTMLElement, target: DOMRectReadOnly, sides?: S
 
 // the popover kept beside target while its size changes, e.g. as a preview is typeset or a row is
 // shown. the function returned stops it
-export function keepBeside(pop: HTMLElement, target: () => DOMRectReadOnly, sides?: Side[], gap?: number): () => void {
+export function keepBeside(pop: HTMLElement, target: () => DOMRectReadOnly, sides?: Side[], gap?: number, view?: () => Bounds): () => void {
   const place = () => {
-    if (pop.isConnected) placeBeside(pop, target(), sides, gap);
+    if (pop.isConnected) placeBeside(pop, target(), sides, gap, view);
   };
   place();
   const watch = new ResizeObserver(place);
