@@ -94,7 +94,7 @@ export function install(app: App): void {
   // the edge between the navigator and the canvas, dragged or moved with the arrow keys
   const edge = make('div', 'beeson-edit-nav-edge beeson-edit-region');
   edge.tabIndex = 0;
-  edge.title = 'Drag to change the width of the slide list, or focus it and press the left and right arrows';
+  edge.title = 'Drag to change the width of the slide list, double-click to reset it, or focus it and press the left and right arrows';
   edge.setAttribute('role', 'separator');
   edge.setAttribute('aria-orientation', 'vertical');
   edge.setAttribute('aria-label', 'Width of the slide list');
@@ -134,6 +134,7 @@ export function install(app: App): void {
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
   });
+  edge.addEventListener('dblclick', () => setNavWidth(NAV_DEFAULT));
 
   // the inspector shows one tab, Format or Steps, and is hidden when neither is on. Steps is the
   // pane of steps.ts, hence its tab is on while that pane is shown. the editor opens with the
