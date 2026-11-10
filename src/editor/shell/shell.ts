@@ -220,14 +220,6 @@ export function install(app: App): void {
     toolbar: { group: 'inspector', order: 60, icon: 'format' },
   });
 
-  // the zoom of the canvas, in View > Zoom and in the status bar
-  const zoom = (id: string, label: string, order: number, run: () => void, keys?: Command['keys']) =>
-    app.commands.define({ id, label, run, keys, menu: { bar: 'View', group: 'zoom', order, submenu: 'Zoom' } });
-  zoom('shell.zoomFit', 'Fit', 20, () => app.stage.setZoom(null), { mac: ['Mod+0'], other: ['Mod+0'] });
-  zoom('shell.zoomActual', 'Actual Size', 21, () => app.stage.setZoom(1));
-  zoom('shell.zoomIn', 'Zoom In', 22, () => app.stage.zoomIn(), { mac: ['Mod+='], other: ['Mod+='] });
-  zoom('shell.zoomOut', 'Zoom Out', 23, () => app.stage.zoomOut(), { mac: ['Mod+-'], other: ['Mod+-'] });
-
   queueMicrotask(() => {
     arrange();
     app.invalidate();
