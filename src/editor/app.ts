@@ -97,6 +97,9 @@ export interface MathPop {
   open(container: Element): void;
   close(back?: boolean): void;
   setMath(container: Element, tex: string): Promise<void>;
+  // holds the keys typed until the next open, which types them into its field, and returns the
+  // release of the hold for a command that opens nothing
+  hold(): () => void;
 }
 
 export interface Typing {
