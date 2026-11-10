@@ -116,6 +116,29 @@ async function pick(page, text, label) {
   await page.evaluate('window.BeesonEditor.status()');
 }
 
+// the labels of the items of the open menu, with a check mark on the checked ones
+const menuLabels = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item')].map((i) => (i.getAttribute('aria-checked') === 'true' ? '✓ ' : '') + i.querySelector('.label').textContent)`);
+
+// an item of the open menu chosen with a trusted click
+async function choose(page, label) {
+  const item = await page.evaluate(`(() => {
+    const item = [...document.querySelectorAll('.beeson-edit-menu .item')].find((i) => i.querySelector('.label').textContent === ${JSON.stringify(label)});
+    if (!item || item.getAttribute('aria-disabled') === 'true') return null;
+    const r = item.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  })()`);
+  assert.ok(item, `the open menu does not have an enabled item ${label}`);
+  await sleep(300);
+  await click(page, item);
+  await page.evaluate('window.BeesonEditor.status()');
+}
+
+// the cards of the Steps tab, each with its head of a list and its rows as step and text
+const cards = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .rows .card.step')].map((c) => ({
+  head: c.querySelector('.list-head')?.querySelector('.chip').textContent ?? null,
+  rows: [...c.querySelectorAll('.row')].map((r) => (r.classList.contains('nested') ? '  ' : '') + r.dataset.step + ' ' + r.querySelector('.text').textContent.slice(0, 12)),
+}))`);
+
 async function undoRedo(page, platform, before, after) {
   await press(page, 'Mod+Z');
   assert.equal(await rendered(page), before, 'an undo does not give the file before the edit');
@@ -212,3 +235,93 @@ test('a step After Previous is shown by itself after its delay in the deck', asy
   assert.deepEqual(await shown(), [true, true, false], 'the step after the delayed step is shown without a click');
   assert.deepEqual(errors(page), []);
 });
+
+const UL = '<ul>\n    <li class="fragment" data-fragment-index="1">Each step';
+const ALL = '<ul class="fragment" data-fragment-index="1">\n    <li>Each step';
+
+for (const platform of PLATFORMS) {
+  test(`a list is delivered all at once or item by item from its row and its context menu on ${platform}`, async (t) => {
+    const page = await open(t, platform);
+    await slideOf(page, 'li.fragment');
+    const source = page.source;
+    // the list of the slide is delivered by item, hence one card with the list and its items
+    assert.deepEqual(await cards(page), [{ head: '1–3', rows: ['  0 Each step is', '  1 Two elements', '  2 When exporti'] }]);
+    const head = await page.evaluate(`(() => { const r = document.querySelector('.beeson-edit-side .list-head .chip').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    await click(page, head);
+    await page.waitFor(`!!document.querySelector('.beeson-edit-menu')`);
+    assert.deepEqual(await menuLabels(page), ['List All at Once', '✓ List Item by Item', 'With the Slide']);
+    await choose(page, 'List All at Once');
+    const all = source
+      .replace(UL, ALL)
+      .replace(LI2, '<li>Two elements')
+      .replace(LI3, '<li>When exporting');
+    assert.equal(await rendered(page), all);
+    assert.deepEqual(await cards(page), [{ head: null, rows: ['0 Each step is'] }]);
+    assert.match(await page.evaluate(`document.querySelector('.beeson-edit-side .rows .row .meta').textContent`), /^List · /);
+    await undoRedo(page, platform, source, all);
+    assert.deepEqual(newProblems(page, all), []);
+
+    // the context menu of an item of the list puts it back item by item, byte for byte
+    await click(page, await page.evaluate(`(() => { const r = document.querySelector('.reveal section.present ul li').getBoundingClientRect(); return { x: r.left + 40, y: r.top + r.height / 2 }; })()`), { button: 'right' });
+    await page.waitFor(`!!document.querySelector('.beeson-edit-menu')`);
+    assert.ok((await menuLabels(page)).includes('Show List Item by Item'));
+    await choose(page, 'Show List Item by Item');
+    assert.equal(await rendered(page), source);
+    await press(page, REDO[platform]);
+    assert.equal(await rendered(page), source);
+    // the menu of the chip of an item offers the same delivery
+    await click(page, await rowChip(page, 'Two elements'));
+    await page.waitFor(`!!document.querySelector('.beeson-edit-menu')`);
+    assert.deepEqual((await menuLabels(page)).slice(-2), ['List All at Once', '✓ List Item by Item']);
+    await press(page, 'Escape');
+    await saveAndReopen(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+test('a list delivered all at once moves the later steps up, and item by item moves them down', async (t) => {
+  const deck = 'test/pages/editor-layouts.html';
+  const page = await open(t, 'mac', { deck });
+  await slideOf(page, 'p.small.fragment');
+  const source = page.source;
+  const P = '<p class="small fragment" data-fragment-index="3">';
+  assert.deepEqual(await cards(page), [{ head: '1–2', rows: ['  0 A first item', '  1 A second ite'] }, { head: null, rows: ['2 A small para'] }]);
+  await page.evaluate(`window.BeesonEditor.exec('steps.deliver', { el: document.querySelector('.reveal section.present ul'), by: 'all' })`);
+  const all = source
+    .replace('<ul>\n    <li class="fragment" data-fragment-index="1">A first item', '<ul class="fragment" data-fragment-index="1">\n    <li>A first item')
+    .replace('<li class="fragment" data-fragment-index="2">A second item', '<li>A second item')
+    .replace(P, '<p class="small fragment" data-fragment-index="2">');
+  assert.equal(await rendered(page), all);
+  assert.deepEqual(await cards(page), [{ head: null, rows: ['0 A first item'] }, { head: null, rows: ['1 A small para'] }]);
+  // item by item with an effect on the list: each item takes the effect, and the paragraph moves down
+  await page.evaluate(`window.BeesonEditor.exec('steps.effect', { el: document.querySelector('.reveal section.present ul'), effect: 'only' })`);
+  await page.evaluate(`window.BeesonEditor.exec('steps.deliver', { el: document.querySelector('.reveal section.present ul li'), by: 'item' })`);
+  assert.equal(await rendered(page), source
+    .replace('<li class="fragment" data-fragment-index="1">A first item', '<li class="fragment current-visible" data-fragment-index="1">A first item')
+    .replace('<li class="fragment" data-fragment-index="2">A second item', '<li class="fragment current-visible" data-fragment-index="2">A second item'));
+  // with the slide, and item by item again as the last steps
+  await page.evaluate(`window.BeesonEditor.exec('steps.deliver', { el: document.querySelector('.reveal section.present ul'), by: null })`);
+  assert.deepEqual(await cards(page), [{ head: null, rows: ['0 A small para'] }]);
+  await page.evaluate(`window.BeesonEditor.exec('steps.deliver', { el: document.querySelector('.reveal section.present ul'), by: 'item' })`);
+  assert.deepEqual(await cards(page), [{ head: null, rows: ['0 A small para'] }, { head: '2–3', rows: ['  1 A first item', '  2 A second ite'] }]);
+  assert.deepEqual(newProblems(page, await rendered(page)), []);
+  assert.deepEqual(errors(page), []);
+});
+
+// a delay of After Previous on the step of a list follows the list into its new delivery
+test('a list keeps the delay of its step through a change of its delivery', async (t) => {
+  const text = readFileSync('index.html', 'utf8').replace('<p>Design the complete slide first', '<p class="fragment" data-fragment-index="1" data-autoslide="700">Design the complete slide first')
+    .replace(LI1, '<li class="fragment" data-fragment-index="2">Each step')
+    .replace(LI2, '<li class="fragment" data-fragment-index="3">Two elements')
+    .replace(LI3, '<li class="fragment" data-fragment-index="4">When exporting');
+  const page = await open(t, 'other', { text });
+  await slideOf(page, 'li.fragment');
+  await page.evaluate(`window.BeesonEditor.exec('steps.deliver', { el: document.querySelector('.reveal section.present ul'), by: 'all' })`);
+  const all = await rendered(page);
+  assert.match(all, /<p class="fragment" data-fragment-index="1" data-autoslide="700">Design/);
+  assert.match(all, /<ul class="fragment" data-fragment-index="2">/);
+  assert.match((await rows(page))[1].meta, /After Previous, 0\.7 s/);
+  await page.evaluate(`window.BeesonEditor.exec('steps.deliver', { el: document.querySelector('.reveal section.present ul'), by: 'item' })`);
+  assert.equal(await rendered(page), text);
+});
+

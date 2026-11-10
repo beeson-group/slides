@@ -6,7 +6,8 @@
 
 import type { App } from '../app.ts';
 import { moveTo, oneByOne, setFinal, setIndexReader, setStart, setStep, shift, stepAt, type Plan, type Start } from '../layers.ts';
-import { AFTER_DEFAULT, MIN_DELAY, WITH_SLIDE, afterable, delaysOf, effectEdit, modelAt, modelOf, startAt, writePlan, type Effect, type StartKind, type Steps } from '../steps.ts';
+import type { TagEdit } from '../tags.ts';
+import { AFTER_DEFAULT, MIN_DELAY, WITH_SLIDE, afterable, carryDelays, classesOf, deliverPlan, deliveryOf, delaysOf, effectEdit, effectOf, listItems, listOf, modelAt, modelOf, startAt, writePlan, type Delivery, type Effect, type StartKind, type Steps } from '../steps.ts';
 
 type Arg = { el?: Element } & Record<string, unknown>;
 
@@ -38,6 +39,40 @@ const stepped = (app: App, arg?: unknown): boolean => {
 function msOf(seconds: number): number {
   if (!Number.isFinite(seconds) || seconds < 0) throw new Error(`a delay of ${seconds} s is not a time`);
   return Math.min(600000, Math.max(MIN_DELAY, Math.round(seconds * 1000)));
+}
+
+// the list of the argument or of the selection, i.e. the selected list, an item of it, or the
+// block of a text in it
+function listAt(app: App, arg: unknown): Element | null {
+  const given = (arg as Arg | undefined)?.el;
+  const sel = app.selection;
+  const el = given instanceof Element ? given : sel.only() ?? (sel.kind === 'text' ? sel.items[0] ?? null : null);
+  const list = listOf(el);
+  const paired = (x: Element) => !!app.pairing?.elements.get(x)?.open;
+  return list && paired(list) && listItems(list).every(paired) ? list : null;
+}
+
+// the list delivered by, or shown with the slide for null, as one change. the effect of the step
+// moves from the list to its items, or from the first of its items that is a step to the list
+function deliver(app: App, list: Element, by: Delivery | null): void {
+  const lis = listItems(list);
+  const m = modelOf(app, list.closest('section'), [list, ...lis]);
+  if (!m || !lis.length) return;
+  const at = m.els.indexOf(list);
+  const items = lis.map((li) => m.els.indexOf(li));
+  if (at < 0 || items.some((i) => i < 0)) return;
+  const plan = deliverPlan(m.plan, at, items, by);
+  const from = m.items[at].fragment ? at : items.find((i) => m.items[i].fragment);
+  const effect = from === undefined ? null : effectOf(classesOf(app, m.els[from])).id;
+  const extra = new Map<Element, TagEdit>();
+  if (effect && by) {
+    for (const i of by === 'all' ? [at] : items) {
+      const edit = effectEdit(app.doc.tagState(m.els[i]), effect);
+      if (i !== from && Object.keys(edit).length) extra.set(m.els[i], edit);
+    }
+  }
+  const standIn = new Map(by === 'item' ? [[at, items[0]]] : items.map((i) => [i, at]));
+  writePlan(app, m, plan, extra, carryDelays(m.plan, plan, delaysOf(app, m), standIn));
 }
 
 const num = (v: string | null | undefined): number | null => (v != null && /^\s*-?\d+(\.\d+)?\s*$/.test(v) ? Number(v) : null);
@@ -163,6 +198,32 @@ export function install(app: App): void {
       const delays = delaysOf(a, m);
       delays.set(m.i, msOf((arg as { delay: number }).delay));
       writePlan(a, m, m.plan, new Map(), delays);
+    },
+  });
+  // the delivery of a list from the menu of its row: all, item, or null for the slide
+  c.define({
+    id: 'steps.deliver',
+    label: 'Set Delivery of List',
+    undoable: true,
+    run: (a, arg) => {
+      const list = listAt(a, arg);
+      if (!list) throw new Error('the element is not in a list at the top of the slide');
+      deliver(a, list, (arg as { by: Delivery | null }).by);
+    },
+  });
+  // the context menu of a list switches it between its two deliveries, as the Delivery of Keynote
+  c.define({
+    id: 'steps.listDelivery',
+    label: (a) => {
+      const list = listAt(a, undefined);
+      return list && deliveryOf(a, list) === 'item' ? 'Show List All at Once' : 'Show List Item by Item';
+    },
+    context: ['element', 'text'],
+    enabled: (a) => !!listAt(a, undefined),
+    undoable: true,
+    run: (a, arg) => {
+      const list = listAt(a, (arg as { target?: unknown } | undefined)?.target instanceof Element ? { el: (arg as { target: Element }).target } : undefined) ?? listAt(a, undefined);
+      if (list) deliver(a, list, deliveryOf(a, list) === 'item' ? 'all' : 'item');
     },
   });
   c.define({
