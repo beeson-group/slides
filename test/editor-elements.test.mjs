@@ -326,7 +326,8 @@ test('a code box and a footnote are written at the first input, and a QR code is
   await press(page, 'Escape');
   await page.evaluate(`window.BeesonEditor.exec('insert.qr')`);
   await settle(page);
-  assert.ok(slideOf(await render(page), h2).includes('<pre><code class="language-python">x = 1</code></pre>\n  <div class="qr" data-qr="https://example.com"></div>'), 'the QR code is not after the last block');
+  // the column is full, hence the QR code is centered on the slide
+  assert.match(slideOf(await render(page), h2), /<pre><code class="language-python">x = 1<\/code><\/pre>\n  <div class="qr" data-qr="https:\/\/example.com" style="translate: -?\d+px -?\d+px"><\/div>/, 'the QR code is not after the last block');
   assert.equal(await page.evaluate(`!!document.querySelector('.reveal section.present .qr svg')`), true, 'the QR code is not drawn');
   assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.duplicate').enabled`), true);
   await roundTrip(page, 3);
