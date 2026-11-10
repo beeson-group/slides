@@ -12,7 +12,7 @@ import { readFileSync } from 'node:fs';
 import { columnName, emptyRows, grow, isNumeric, layoutCells, numericColumns, parseTabular, spotsIn, tableHtml } from '../src/editor/table.ts';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, press, saveAndReopen, type } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
 
 const LAYOUTS_DECK = 'test/pages/editor-layouts.html';
 // a table with a rowspan and a colspan on its first slide, and a plain table on its second
@@ -596,6 +596,111 @@ for (const platform of ['mac', 'other']) {
       `<tr>${R}6.6</td><td></td>${R}3.04</td></tr>`,
       `<tr><td colspan="2">Distant retrograde</td><td></td>${R}2.92</td></tr>`,
     ])]]);
+    await roundTrip(page);
+  });
+}
+
+// the letters of the columns and the numbers of the rows marked in the bars, whether the outline is
+// drawn as cells selected as a block, and the cell of the caret
+const marked = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-table-bars .bar > .on')].map((d) => d.textContent)`);
+const asBlock = (page) => page.evaluate(`!!document.querySelector('.beeson-table-bars .cell.block:not([hidden])')`);
+
+const PLAIN_ROWS = [
+  '<tr><th>Body</th><th>Mass ratio</th><th>System</th></tr>',
+  '<tr><td>Moon</td><td>\\(0.01215\\)</td><td>Earth and Moon</td></tr>',
+  '<tr><td>Europa</td><td>2.53e-5</td><td>Jupiter</td></tr>',
+  '<tr><td>Titan</td><td>2.37e-4</td><td>Saturn</td></tr>',
+];
+
+for (const platform of ['mac', 'other']) {
+  test(`a drag across cells and a Shift-click select a range of cells, which the keys move and extend (${platform})`, async (t) => {
+    const page = await open(platform, TABLES_DECK);
+    t.after(() => page.close?.());
+    await show(page, 1);
+    const from = await at(page, cellSelector(1, 0));
+    const to = await at(page, cellSelector(2, 1));
+    await drag(page, from, { dx: to.x - from.x, dy: to.y - from.y });
+    await settle(page);
+    assert.deepEqual(await marked(page), ['A', 'B', '2', '3']);
+    assert.ok(await asBlock(page));
+    assert.equal(await focusCell(page), null);
+    assert.equal(await selected(page), '');
+    await click(page, cellSelector(3, 2), { modifiers: 'Shift' });
+    await settle(page);
+    assert.deepEqual(await marked(page), ['A', 'B', 'C', '2', '3', '4']);
+    await press(page, 'Shift+ArrowLeft');
+    await settle(page);
+    assert.deepEqual(await marked(page), ['A', 'B', '2', '3', '4']);
+    await press(page, 'Shift+ArrowUp');
+    await press(page, 'Shift+ArrowUp');
+    await settle(page);
+    assert.deepEqual(await marked(page), ['A', 'B', '2']);
+    // an arrow selects the one cell beside the focus, and stops at the edge of the table
+    await press(page, 'ArrowRight');
+    await press(page, 'ArrowRight');
+    await settle(page);
+    assert.deepEqual(await marked(page), ['C', '2']);
+    await press(page, 'ArrowRight');
+    await settle(page);
+    assert.deepEqual(await marked(page), ['C', '2'], 'the arrow moved the table');
+    assert.equal(await render(page), page.source);
+    // Return puts the caret into the focus
+    await press(page, 'Enter');
+    await settle(page);
+    assert.deepEqual(await focusCell(page), [1, 2]);
+    // a Shift-click from the caret selects the cells between
+    await click(page, cellSelector(3, 0), { modifiers: 'Shift' });
+    await settle(page);
+    assert.deepEqual(await marked(page), ['A', 'B', 'C', '2', '3', '4']);
+    assert.equal(await focusCell(page), null);
+    // a click into a cell puts the caret there again
+    await click(page, cellSelector(2, 0));
+    await settle(page);
+    assert.deepEqual(await focusCell(page), [2, 0]);
+    assert.ok(!(await asBlock(page)));
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`a range of cells grows over a merged cell, and Select Row and Select Column select its lines (${platform})`, async (t) => {
+    const page = await open(platform, TABLES_DECK);
+    t.after(() => page.close?.());
+    await show(page, 0);
+    // from 6.6 down to Distant retrograde, which takes in Halo above it
+    const from = await at(page, cellSelector(2, 0));
+    const to = await at(page, cellSelector(3, 0));
+    await drag(page, from, { dx: to.x - from.x, dy: to.y - from.y });
+    await settle(page);
+    assert.deepEqual(await marked(page), ['A', 'B', '2', '3', '4']);
+    await click(page, cellSelector(1, 1));
+    await page.evaluate(`window.BeesonEditor.exec('table.selectColumn')`);
+    await settle(page);
+    assert.deepEqual(await marked(page), ['A', 'B', '1', '2', '3', '4']);
+    await click(page, cellSelector(2, 1));
+    await page.evaluate(`window.BeesonEditor.exec('table.selectRow')`);
+    await settle(page);
+    assert.deepEqual(await marked(page), ['A', 'B', 'C', '2', '3']);
+    // the menu of a cell in the range keeps the range, and its rows are added below it
+    await click(page, cellSelector(2, 1), { button: 'right' });
+    await settle(page);
+    assert.deepEqual(await marked(page), ['A', 'B', 'C', '2', '3']);
+    const items = await page.evaluate(`[...document.querySelectorAll('[role=menu][aria-label="cell menu"] [role=menuitem]')].map((r) => r.textContent)`);
+    assert.ok(items.some((s) => s.startsWith('Select Row')) && items.some((s) => s.startsWith('Select Column')), items.join());
+    await press(page, 'Escape');
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`Delete clears the text of the cells selected as a block (${platform})`, async (t) => {
+    const page = await open(platform, TABLES_DECK);
+    t.after(() => page.close?.());
+    await show(page, 1);
+    await click(page, cellSelector(2, 1));
+    await page.evaluate(`window.BeesonEditor.exec('table.selectColumn')`);
+    await settle(page);
+    await press(page, 'Backspace');
+    await settled(page);
+    await byteExact(page, [[tbodyTable(PLAIN_ROWS), tbodyTable(PLAIN_ROWS.map((r) => r.replace(/(<t[dh]>[^<]*<\/t[dh]>)<t([dh])>[^<]*<\/t[dh]>/, '$1<t$2></t$2>')))]]);
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Clear Cells');
+    assert.equal(await page.evaluate('document.querySelectorAll(".reveal section.present table").length'), 1);
     await roundTrip(page);
   });
 }
