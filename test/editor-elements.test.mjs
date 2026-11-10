@@ -236,11 +236,13 @@ test('a text box is a p after the last block of the column, with the caret in it
   const pending = await page.evaluate(`(() => { const a = document.activeElement; return { tag: a.localName, prompt: getComputedStyle(a, '::before').content, after: a.previousElementSibling.localName, editable: a.isContentEditable }; })()`);
   assert.deepEqual(pending, { tag: 'p', prompt: '"Click to add text"', after: 'ul', editable: true });
   assert.equal(await render(page), page.source, 'the empty text box is written');
-  assert.equal((await settle(page)).undo, false);
-  // Esc leaves it, and it is taken off the slide
+  // the empty box is an entry of the history
+  assert.equal((await settle(page)).undo, true);
+  // Esc leaves it, and it is taken off the slide with its entry
   await press(page, 'Escape');
   await settle(page);
   assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-pending').length`), 0);
+  assert.equal((await settle(page)).undo, false);
   await page.evaluate(`window.BeesonEditor.exec('insert.text')`);
   await type(page, 'A new text');
   await sleep(100);
