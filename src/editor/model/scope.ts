@@ -24,7 +24,7 @@ export const DATA_ATTRS = [
   'data-stagger', 'data-strands', 'data-strands-color', 'data-strands-colormap', 'data-strands-ramp',
   'data-strands-select', 'data-strands-shade', 'data-surface-accent', 'data-surface-marks', 'data-surface-stage',
   'data-surface-violet', 'data-tone', 'data-turn', 'data-unhighlight', 'data-zoom', 'data-zscale',
-  'data-visibility', 'data-timing', 'data-transition', 'data-group', 'data-locked',
+  'data-visibility', 'data-timing', 'data-transition', 'data-group', 'data-locked', 'data-autoslide',
 ];
 
 // the standard attributes that the editor writes
