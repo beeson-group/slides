@@ -295,3 +295,68 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// keys that a browser on the platform takes before the page, from the table of keys.md of R5.3:
+// the reserved commands of Chromium, the keys of Firefox marked reserved, and the keys that Safari
+// is documented to keep, i.e. Cmd+R and Cmd+L
+const TAKEN = {
+  mac: ['Mod+N', 'Mod+Shift+N', 'Mod+T', 'Mod+Shift+T', 'Mod+W', 'Mod+Shift+W', 'Mod+Q', 'Mod+Shift+P', 'Mod+R', 'Mod+L', 'Ctrl+Tab', 'Ctrl+Shift+Tab', 'Ctrl+PageUp', 'Ctrl+PageDown', 'Ctrl+Home', 'Mod+Alt+ArrowLeft', 'Mod+Alt+ArrowRight', 'Mod+Shift+[', 'Mod+Shift+]', 'Mod+Shift+{', 'Mod+Shift+}'],
+  other: ['Mod+N', 'Mod+Shift+N', 'Mod+T', 'Mod+Shift+T', 'Mod+W', 'Mod+Shift+W', 'Mod+Shift+P', 'Mod+Shift+Q', 'Mod+F4', 'Alt+F4', 'F11', 'Ctrl+Tab', 'Ctrl+Shift+Tab', 'Ctrl+PageUp', 'Ctrl+PageDown'],
+};
+
+for (const platform of PLATFORMS) {
+  test(`no menu shows a key that a browser takes before the page, and Rulers and Lock run on their new keys (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: LAYOUTS });
+    const mac = platform === 'mac';
+    await grabApp(page);
+    const keys = await page.evaluate(`window.app.commands.list().filter((c) => c.keys?.${platform}).map((c) => ({ id: c.id, keys: c.keys.${platform} }))`);
+    for (const c of keys) {
+      // a key taken by Safari alone may stay behind the key shown, for Chrome and Firefox
+      const shown = mac ? c.keys.slice(0, 1) : c.keys;
+      for (const k of shown) assert.ok(!TAKEN[platform].includes(k), `${c.id} shows ${k}, which a browser takes before the page`);
+    }
+    const pinned = Object.fromEntries(keys.map((c) => [c.id, c.keys]));
+    assert.deepEqual(pinned['view.rulers'], mac ? ['Ctrl+Mod+R', 'Mod+R'] : undefined);
+    assert.deepEqual(pinned['arrange.lock'], mac ? ['Ctrl+Mod+L', 'Mod+L'] : ['Mod+L']);
+    const view = Object.fromEntries((await barMenu(page, 'View')).map((r) => [r.label, r.keys]));
+    assert.equal(view.Rulers, mac ? '⌃⌘R' : '');
+    const arrange = Object.fromEntries((await barMenu(page, 'Arrange')).map((r) => [r.label, r.keys]));
+    assert.equal(arrange.Lock, mac ? '⌃⌘L' : 'Ctrl+L');
+    await page.evaluate('window.BeesonEditorShell.closeMenus()');
+    await page.evaluate(`window.BeesonEditor.exec('help.keys')`);
+    await sleep(100);
+    const rows = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-keys .row')].map((r) => ({ label: r.firstElementChild.textContent, keys: r.querySelector('kbd').textContent.split(', ') }))`);
+    assert.deepEqual(rows.find((r) => r.label === 'Lock')?.keys, mac ? ['⌃⌘L', '⌘L'] : ['Ctrl+L']);
+    if (mac) assert.deepEqual(rows.find((r) => r.label === 'Rulers')?.keys, ['⌃⌘R', '⌘R']);
+    await press(page, 'Escape');
+    await sleep(50);
+    if (mac) {
+      const rulers = (await state(page, 'view.rulers')).checked;
+      await press(page, 'Ctrl+Mod+R');
+      await frames(page);
+      assert.equal((await state(page, 'view.rulers')).checked, !rulers, 'Ctrl+Cmd+R does not toggle the rulers');
+      await press(page, 'Ctrl+Mod+R');
+      await frames(page);
+      assert.equal((await state(page, 'view.rulers')).checked, rulers);
+    }
+    // Lock on its new key writes data-locked on the QR code of the title slide, byte for byte
+    await page.evaluate('Reveal.slide(0)');
+    await sleep(200);
+    await click(page, await center(page, '.reveal section.present > .qr'));
+    await sleep(50);
+    await press(page, mac ? 'Ctrl+Mod+L' : 'Mod+L');
+    await sleep(100);
+    const edited = await render(page);
+    const qr = page.source.match(/<div class="qr"[^>]*>/)[0];
+    assert.equal(edited, page.source.replace(qr, qr.replace(/>$/, ' data-locked>')));
+    await page.evaluate('window.BeesonEditor.undo()');
+    await sleep(150);
+    assert.equal(await render(page), page.source);
+    await page.evaluate('window.BeesonEditor.redo()');
+    await sleep(150);
+    assert.equal(await render(page), edited);
+    const { text } = await saveAndReopen(page, `r5-3-lock-${platform}.html`);
+    assert.equal(text, edited);
+    assert.deepEqual(errors(page), []);
+  });
+}
