@@ -1,6 +1,7 @@
 // the fixes of R6.6 on both platforms. Cmd+Enter on a Mac and Ctrl+Enter elsewhere commit the TeX
-// of the Insert Formula and Edit Formula sheets while the preview is still typeset. each edit of
-// the file is checked byte for byte, after an undo and a redo, and after a save and an open
+// of the Insert Formula and Edit Formula sheets while the preview is still typeset, and the labels
+// of the transitions say that reveal.js plays the Fade of the slide entered. each edit of the file
+// is checked byte for byte, after an undo and a redo, and after a save and an open
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -129,6 +130,21 @@ for (const platform of PLATFORMS) {
     await byteExact(page, [[OLD, String.raw`-\frac{a}{b}`]]);
     await undoAll(page, readFileSync(LAYOUTS, 'utf8'));
     await saved(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+// reveal.js fades a slide in by its own data-transition, over the slide left (z-index 11 on
+// section.present in theme/vendor/reveal/reveal.css), hence a Fade set on a slide is played into it
+for (const platform of PLATFORMS) {
+  test(`the label of Fade says that it is played into the slide on ${platform}`, async () => {
+    const page = await editor(platform, 3);
+    const [title, group] = await page.evaluate(`[
+      document.querySelector('.beeson-edit-transition button[data-command="slide.transition.fade"]').title,
+      document.querySelector('.beeson-edit-transition .seg').getAttribute('aria-label'),
+    ]`);
+    assert.equal(title, 'Fade into this slide from the slide before, the default of the theme');
+    assert.doesNotMatch(group, /next slide/);
     assert.deepEqual(errors(page), []);
   });
 }
