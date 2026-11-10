@@ -6,7 +6,7 @@
 
 import type { App } from '../app.ts';
 import { moveTo, oneByOne, setFinal, setIndexReader, setStart, setStep, shift, stepAt, type Plan, type Start } from '../layers.ts';
-import { WITH_SLIDE, effectEdit, modelAt, modelOf, writePlan, type Effect, type Steps } from '../steps.ts';
+import { AFTER_DEFAULT, MIN_DELAY, WITH_SLIDE, afterable, delaysOf, effectEdit, modelAt, modelOf, startAt, writePlan, type Effect, type StartKind, type Steps } from '../steps.ts';
 
 type Arg = { el?: Element } & Record<string, unknown>;
 
@@ -33,6 +33,12 @@ const stepped = (app: App, arg?: unknown): boolean => {
   const m = el ? modelAt(app, el) : null;
   return !!m && stepAt(m.plan, m.i) >= 0;
 };
+
+// a delay given in seconds, in ms from 0.1 s to 10 min
+function msOf(seconds: number): number {
+  if (!Number.isFinite(seconds) || seconds < 0) throw new Error(`a delay of ${seconds} s is not a time`);
+  return Math.min(600000, Math.max(MIN_DELAY, Math.round(seconds * 1000)));
+}
 
 const num = (v: string | null | undefined): number | null => (v != null && /^\s*-?\d+(\.\d+)?\s*$/.test(v) ? Number(v) : null);
 
@@ -121,11 +127,43 @@ export function install(app: App): void {
     undoable: true,
     run: (a, arg) => change(a, arg, (p, i) => setStep(p, i, null)),
   });
+  // On Click, With Previous, or After Previous with a delay in seconds, the last one written as
+  // data-autoslide on the step before by writePlan of steps.ts
   c.define({
     id: 'steps.start',
     label: 'Set Start of Step',
     undoable: true,
-    run: (a, arg) => change(a, arg, (p, i) => setStart(p, i, (arg as { start: Start }).start)),
+    run: (a, arg) => {
+      const el = itemOf(a, arg);
+      const m = el ? modelAt(a, el) : null;
+      if (!m) return;
+      const { start, delay } = arg as { start: StartKind; delay?: number };
+      const delays = delaysOf(a, m);
+      const g = m.plan.groups.findIndex((g) => g.includes(m.i));
+      if (start !== 'after') {
+        delays.delete(m.i);
+        if (start === 'with' && g >= 0) delays.delete(Math.min(...m.plan.groups[g]));
+        writePlan(a, m, setStart(m.plan, m.i, start as Start), new Map(), delays);
+        return;
+      }
+      if (g <= 0 && Math.min(...(m.plan.groups[g] ?? [m.i])) === m.i) throw new Error('the first step of a slide is shown at a click, and it cannot start after a step before it');
+      if (!afterable(m, m.i)) throw new Error('the step before is set in the text of a block, and a delay cannot be written on it');
+      delays.set(m.i, delay === undefined ? (startAt(a, m, m.i, delays).delay ?? AFTER_DEFAULT) : msOf(delay));
+      writePlan(a, m, setStart(m.plan, m.i, 'click'), new Map(), delays);
+    },
+  });
+  c.define({
+    id: 'steps.delay',
+    label: 'Set Delay of Step',
+    undoable: true,
+    run: (a, arg) => {
+      const el = itemOf(a, arg);
+      const m = el ? modelAt(a, el) : null;
+      if (!m || startAt(a, m, m.i).start !== 'after') return;
+      const delays = delaysOf(a, m);
+      delays.set(m.i, msOf((arg as { delay: number }).delay));
+      writePlan(a, m, m.plan, new Map(), delays);
+    },
   });
   c.define({
     id: 'steps.final',
