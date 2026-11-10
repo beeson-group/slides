@@ -12,7 +12,7 @@ import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
 import { BY_ITSELF, RESIZABLE, STRETCHED, aspectOf, bandAt, constrained, containerOf, cssWidth, frameOf, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, onCanvas, orientedBox, pickOf, pictureOf, segmentTouches, sizedOf, snapBoxOf, toSlide, twinOf, visualRect } from './hit.ts';
 import { overlay, view } from './frames.ts';
-import { freshGroup } from '../commands/order.ts';
+import { enterGroup, freshGroup, groupOf } from '../commands/order.ts';
 import { injectStyle } from '../ui/dom.ts';
 
 const CSS = `
@@ -264,7 +264,8 @@ export function install(app: App): void {
 
   // a press on an element: it is selected, or with Shift or the command modifier added, and taken
   // off again at a click without a move. a press on a selected element keeps the selection, so that
-  // all of it is dragged, and a click on it then selects it alone, or the image inside it
+  // all of it is dragged, and a click on it then selects it alone, or the image inside it. a click
+  // on a member of a group that is selected as the whole selection selects the member by itself
   const pressElement = (ev: PointerEvent, el: Element, target: Element | null) => {
     ev.preventDefault();
     leaveText();
@@ -277,8 +278,11 @@ export function install(app: App): void {
     } else if (sel.has(el)) {
       const several = sel.elements().length > 1;
       const media = mediaIn(el, target);
+      const id = groupOf(el);
+      const inGroup = several && !!id && sel.elements().every((o) => groupOf(o) === id);
       click = () => {
-        if (several) sel.set('elements', [el]);
+        if (inGroup) enterGroup(app, el);
+        else if (several) sel.set('elements', [el]);
         else if (media) sel.set('elements', [media]);
       };
     } else sel.set('elements', [el]);
@@ -362,8 +366,10 @@ export function install(app: App): void {
     const host = app.hostOf(target);
     if (el && host) {
       // a click into a text puts the caret there, and with Shift or the command modifier the block
-      // is added to the selection as a box
-      if (ev.shiftKey || commandHeld(ev)) pressElement(ev, el, target);
+      // is added to the selection as a box. a block of a group is selected with its group at the
+      // first click and by itself at the second, and only the third puts the caret in it, as in
+      // Keynote and PowerPoint
+      if (ev.shiftKey || commandHeld(ev) || (groupOf(el) && sel.only() !== el)) pressElement(ev, el, target);
       return;
     }
     if (el && (target.closest(BY_ITSELF) || !hasText(el))) {
