@@ -242,11 +242,11 @@
   }
 
   // src/editor/commands.ts
-  var orderOf = (c, place2) => c[place2]?.order ?? 0;
-  function grouped(list, place2) {
+  var orderOf = (c, place3) => c[place3]?.order ?? 0;
+  function grouped(list, place3) {
     const groups = /* @__PURE__ */ new Map();
-    for (const c of [...list].sort((a, b) => orderOf(a, place2) - orderOf(b, place2))) {
-      const name = c[place2]?.group ?? "";
+    for (const c of [...list].sort((a, b) => orderOf(a, place3) - orderOf(b, place3))) {
+      const name = c[place3]?.group ?? "";
       groups.set(name, [...groups.get(name) ?? [], c]);
     }
     return [...groups].map(([group, commands2]) => ({ group, commands: commands2 }));
@@ -628,209 +628,6 @@
     });
   }
 
-  // src/editor/nav.ts
-  var KEY = "beeson-nav";
-  var LAYOUTS = ["title", "section", "closing", "figure", "split"];
-  var PEEK_WIDTH = 320;
-  var PEEK_DELAY = 300;
-  function describe(slide) {
-    const heading = [...slide.querySelectorAll("h1, h2, h3, p, .caption")].find((h) => !h.closest("aside.notes, .backdrop") && (h.textContent ?? "").trim());
-    const title = (heading?.textContent ?? "").replace(/\s+/g, " ").trim() || "Untitled slide";
-    const kind = LAYOUTS.find((c) => slide.classList.contains(c)) ?? "content";
-    return { title, kind };
-  }
-  var CSS = `
-.beeson-edit-nav { position: fixed; left: 0; top: 44px; bottom: 36px; z-index: 50; width: 240px; box-sizing: border-box; display: none; flex-direction: column; background: var(--bg, #000); border-right: 1px solid var(--line, #555); color: var(--text, #eee); font: 13px/1.4 system-ui, sans-serif; }
-html.beeson-nav .beeson-edit-nav { display: flex; }
-.beeson-edit-nav .head { padding: 10px 12px; font-weight: 600; border-bottom: 1px solid var(--line, #555); }
-.beeson-edit-nav .rows { flex: 1; overflow: auto; padding: 6px 0; }
-.beeson-edit-nav .row { display: grid; grid-template-columns: 3ch 1fr; column-gap: 10px; width: 100%; box-sizing: border-box; padding: 6px 12px 6px 9px; border: 0; border-left: 3px solid transparent; border-radius: 0; background: transparent; color: inherit; font: inherit; text-align: left; cursor: pointer; }
-.beeson-edit-nav .row:hover { background: color-mix(in srgb, var(--violet, #96f) 18%, transparent); }
-.beeson-edit-nav .row:focus-visible { outline: 2px solid var(--violet, #96f); outline-offset: -2px; }
-.beeson-edit-nav .row[aria-current="true"] { border-left-color: var(--accent, #f80); background: color-mix(in srgb, var(--violet, #96f) 28%, transparent); }
-.beeson-edit-nav .row .num { color: var(--subtle, #bbb); text-align: right; }
-.beeson-edit-nav .row .title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.beeson-edit-nav .row .kind { grid-column: 2; color: var(--subtle, #bbb); font-size: 11px; }
-.beeson-edit-peek { position: fixed; left: 248px; z-index: 57; width: 320px; overflow: hidden; border-radius: 6px; outline: 1px solid var(--line, #555); background: var(--bg, #000); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); pointer-events: none; }
-.beeson-edit-peek[hidden] { display: none; }
-.beeson-edit-peek .reveal { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; overflow: hidden; }
-.beeson-edit-peek .fragment { visibility: visible !important; opacity: 1 !important; transition: none !important; }
-.beeson-edit-peek .fragment.beeson-off { visibility: hidden !important; }
-`;
-  var Nav = class {
-    constructor(ctx) {
-      this.pane = document.createElement("div");
-      this.button = document.createElement("button");
-      this.list = document.createElement("div");
-      this.peek = document.createElement("div");
-      this.on = true;
-      this.key = "";
-      this.timer = 0;
-      injectStyle("nav", CSS);
-      this.ctx = ctx;
-      this.pane.className = "beeson-edit-nav";
-      this.pane.setAttribute("aria-label", "Slides");
-      this.button.textContent = "Slides";
-      this.button.title = "Show the list of the slides at the left";
-      const head = document.createElement("div");
-      head.className = "head";
-      head.textContent = "Slides";
-      this.list.className = "rows";
-      this.list.setAttribute("role", "listbox");
-      this.list.setAttribute("aria-label", "Slides");
-      this.peek.className = "beeson-edit-peek";
-      this.peek.hidden = true;
-      this.peek.setAttribute("aria-hidden", "true");
-      this.peek.setAttribute("inert", "");
-      this.pane.append(head, this.list, this.peek);
-      this.button.addEventListener("click", () => this.toggle());
-      this.list.addEventListener("keydown", (ev) => this.onKey(ev));
-      try {
-        this.on = localStorage.getItem(KEY) !== "0";
-      } catch {
-        this.on = true;
-      }
-      this.show(this.on);
-    }
-    get shown() {
-      return this.on;
-    }
-    toggle() {
-      this.show(!this.on);
-      try {
-        localStorage.setItem(KEY, this.on ? "1" : "0");
-      } catch {
-      }
-      this.ctx.layout();
-      this.refresh();
-    }
-    show(on) {
-      this.on = on;
-      if (!on) this.hidePeek();
-      document.documentElement.classList.toggle("beeson-nav", on);
-      this.button.classList.toggle("on", on);
-      this.button.setAttribute("aria-pressed", String(on));
-    }
-    // the rows are built again when a title changes, and the current row is marked and kept in view
-    refresh() {
-      if (!this.on) return;
-      const slides = this.ctx.slides();
-      const rows = slides.map((s) => describe(s));
-      const key = rows.map((r) => `${r.kind}|${r.title}`).join("\n");
-      if (key !== this.key) {
-        this.key = key;
-        this.hidePeek();
-        this.list.replaceChildren(...slides.map((slide, i) => {
-          const row = document.createElement("button");
-          row.className = "row";
-          row.type = "button";
-          row.setAttribute("role", "option");
-          const num = document.createElement("span");
-          num.className = "num";
-          num.textContent = String(i + 1);
-          const title = document.createElement("span");
-          title.className = "title";
-          title.textContent = rows[i].title;
-          const kind = document.createElement("span");
-          kind.className = "kind";
-          kind.textContent = rows[i].kind;
-          row.append(num, title, kind);
-          row.title = `Slide ${i + 1}: ${rows[i].title}`;
-          row.addEventListener("click", () => {
-            this.hidePeek();
-            this.ctx.go(slide);
-          });
-          row.addEventListener("pointerenter", () => {
-            this.hidePeek();
-            this.timer = window.setTimeout(() => this.showPeek(slide, row), PEEK_DELAY);
-          });
-          row.addEventListener("pointerleave", () => this.hidePeek());
-          return row;
-        }));
-      }
-      const current = this.ctx.current();
-      const at = slides.indexOf(current);
-      [...this.list.children].forEach((row, i) => {
-        const here = i === at;
-        row.setAttribute("aria-current", here ? "true" : "false");
-        row.setAttribute("aria-selected", here ? "true" : "false");
-        row.setAttribute("tabindex", here || at < 0 && i === 0 ? "0" : "-1");
-        if (here) row.scrollIntoView({ block: "nearest" });
-      });
-    }
-    hidePeek() {
-      clearTimeout(this.timer);
-      this.peek.hidden = true;
-      this.peek.replaceChildren();
-    }
-    // a clone of the slide, scaled into the preview from its upper left, with every step shown. the
-    // canvases of a backdrop are painted from the originals, since a cloned canvas is blank, and a
-    // tycho viewer is left out, since its clone would start a second renderer
-    showPeek(slide, row) {
-      const stage = slide.parentElement;
-      const width = stage.offsetWidth || 1920;
-      const height = stage.offsetHeight || 1080;
-      const clone = slide.cloneNode(true);
-      const from = slide.querySelectorAll("canvas");
-      clone.querySelectorAll("canvas").forEach((canvas, i) => {
-        try {
-          canvas.getContext("2d")?.drawImage(from[i], 0, 0);
-        } catch {
-        }
-      });
-      clone.querySelectorAll("aside.notes").forEach((n) => n.remove());
-      clone.querySelectorAll(".backdrop .lab").forEach((l) => {
-        if (!l.style.left) l.remove();
-      });
-      clone.querySelectorAll("tycho-viewer").forEach((v) => {
-        const box2 = document.createElement("div");
-        box2.className = v.className;
-        box2.setAttribute("style", v.getAttribute("style") ?? "");
-        v.replaceWith(box2);
-      });
-      clone.querySelectorAll("video").forEach((v) => {
-        v.removeAttribute("autoplay");
-        v.preload = "none";
-      });
-      for (const el of [clone, ...clone.querySelectorAll("*")]) {
-        for (const name of ["id", "contenteditable", "tabindex", "hidden", "aria-hidden"]) el.removeAttribute(name);
-        el.classList.remove("beeson-hover", "beeson-overflow", "current-fragment", "past", "future");
-        if (el.classList.contains("fragment")) el.classList.add("visible");
-      }
-      const layers2 = layersOf(clone);
-      showLayer(clone, layers2.length > 1 ? layers2[0] : null);
-      clone.classList.add("present");
-      clone.style.display = "block";
-      const deck = document.createElement("div");
-      deck.className = "reveal beeson-peek";
-      const slides = document.createElement("div");
-      slides.className = "slides";
-      slides.style.cssText = `inset: 0 auto auto 0; margin: 0; width: ${width}px; height: ${height}px; transform: scale(${PEEK_WIDTH / width}); transform-origin: 0 0;`;
-      slides.append(clone);
-      deck.append(slides);
-      const peekHeight = PEEK_WIDTH * height / width;
-      const top = Math.max(52, Math.min(row.getBoundingClientRect().top, innerHeight - 44 - peekHeight));
-      this.peek.style.top = `${top}px`;
-      this.peek.style.height = `${peekHeight}px`;
-      this.peek.replaceChildren(deck);
-      this.peek.hidden = false;
-    }
-    // the arrows move to the previous or next slide while a row has the focus, and Home and End to
-    // the first and the last
-    onKey(ev) {
-      const slides = this.ctx.slides();
-      const at = slides.indexOf(this.ctx.current());
-      const to = { ArrowUp: at - 1, ArrowDown: at + 1, Home: 0, End: slides.length - 1 };
-      const i = to[ev.key];
-      if (i === void 0 || i < 0 || i >= slides.length) return;
-      ev.preventDefault();
-      ev.stopPropagation();
-      this.ctx.go(slides[i]);
-      this.refresh();
-      this.list.children[i]?.focus({ preventScroll: true });
-    }
-  };
-
   // src/editor/tokens.ts
   var RAW_TEXT = /* @__PURE__ */ new Set(["script", "style", "xmp", "iframe", "noembed", "noframes"]);
   var RCDATA = /* @__PURE__ */ new Set(["textarea", "title"]);
@@ -995,6 +792,178 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
       return LEGACY.has(body) && !/[A-Za-z0-9=]/.test(next) ? value : m;
     });
   }
+
+  // src/editor/source.ts
+  var VOID = /* @__PURE__ */ new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
+  var PRE_LIKE = /* @__PURE__ */ new Set(["pre", "textarea", "listing"]);
+  var box = null;
+  function decode(raw) {
+    box ?? (box = document.createElement("textarea"));
+    box.innerHTML = `.${raw}`;
+    return box.value.slice(1);
+  }
+  var short = (s) => (s.length > 40 ? `${s.slice(0, 40)}\u2026` : s).replace(/\n/g, "\\n");
+  function parseSource(text) {
+    const tokens = tokenize(text);
+    const doc2 = new DOMParser().parseFromString(text, "text/html");
+    const slides = doc2.querySelector(".reveal .slides") ?? doc2.querySelector(".slides");
+    if (!slides) throw new Error("the file does not have a div.slides element");
+    const index = [...doc2.querySelectorAll(`${slides.localName}.slides`)].indexOf(slides);
+    let seen2 = -1, at = -1;
+    tokens.forEach((t, i) => {
+      if (t.type === "start" && t.name === slides.localName && classesOf(t).includes("slides")) {
+        seen2 += 1;
+        if (seen2 === index) at = i;
+      }
+    });
+    if (at < 0) throw new Error("the start tag of div.slides was not found in the file");
+    const source = { text, crlf: text.includes("\r\n"), doc: doc2 };
+    const root = { kind: "element", node: slides, tag: slides.localName, open: tokens[at], attrs: [], close: null, children: [], parent: null, source };
+    source.slides = root;
+    const cursor = { i: at + 1 };
+    walkChildren(slides, root, cursor, tokens, text);
+    const end2 = tokens[cursor.i];
+    if (end2?.type === "end" && end2.name === root.tag) root.close = end2;
+    return source;
+  }
+  function fail(text, at, what) {
+    const line = text.slice(0, at).split("\n").length;
+    throw new Error(`the file could not be matched to the page at line ${line}: ${what}`);
+  }
+  function walkChildren(el, out, cursor, tokens, text) {
+    const raw = RAW_TEXT.has(el.localName);
+    for (const child of el.childNodes) {
+      while (tokens[cursor.i]?.type === "other" && child.nodeType !== Node.COMMENT_NODE) cursor.i += 1;
+      const token = tokens[cursor.i];
+      if (child.nodeType === Node.ELEMENT_NODE) {
+        const e = child;
+        const tag = e.localName;
+        let open = null;
+        let attrs = [];
+        if (token?.type === "start" && token.name === tag.toLowerCase()) {
+          open = token;
+          attrs = token.attrs;
+          cursor.i += 1;
+        }
+        const node = { kind: "element", node: e, tag, open, attrs, close: null, children: [], parent: out, source: out.source };
+        out.children.push(node);
+        walkChildren(e, node, cursor, tokens, text);
+        const after = tokens[cursor.i];
+        if (after?.type === "end" && after.name === tag.toLowerCase()) {
+          node.close = after;
+          cursor.i += 1;
+        }
+      } else if (child.nodeType === Node.TEXT_NODE) {
+        const data = child.data;
+        if (token?.type !== "text") fail(text, token?.start ?? text.length, `the text "${short(data)}" is not in the file`);
+        const rawText = text.slice(token.start, token.end);
+        const decoded = raw || token.raw ? rawText.replace(/\r\n?/g, "\n") : decode(rawText);
+        let lead = 0;
+        if (decoded !== data) {
+          const stripped = PRE_LIKE.has(el.localName) && decoded.startsWith("\n") && decoded.slice(1) === data;
+          if (!stripped) fail(text, token.start, `the text "${short(data)}" reads "${short(decoded)}" in the file`);
+          lead = rawText.startsWith("\r\n") ? 2 : 1;
+        }
+        cursor.i += 1;
+        const start2 = token.start + lead;
+        out.children.push({
+          kind: "text",
+          node: child,
+          range: { start: token.start, end: token.end },
+          lead,
+          decoded: data,
+          segments: segmentsOf(text.slice(start2, token.end), start2, raw || token.raw, data),
+          pieces: null
+        });
+      } else if (child.nodeType === Node.COMMENT_NODE) {
+        if (token?.type !== "comment" && token?.type !== "other") fail(text, token?.start ?? text.length, "a comment is not in the file");
+        cursor.i += 1;
+        out.children.push({ kind: "comment", node: child, range: token });
+      }
+    }
+  }
+  var REFERENCE = /&(?:#[xX][0-9a-fA-F]+;?|#[0-9]+;?|[A-Za-z][A-Za-z0-9]*;?)/y;
+  function segmentsOf(raw, base, isRaw, decoded) {
+    const out = [];
+    const whole = [{ raw: { start: base, end: base + raw.length }, dec: { start: 0, end: decoded.length }, literal: false }];
+    let i = 0, d = 0, literalStart = -1;
+    const parts = [];
+    const flush = (to) => {
+      if (literalStart >= 0 && to > literalStart) {
+        out.push({ raw: { start: base + literalStart, end: base + to }, dec: { start: d, end: d + to - literalStart }, literal: true });
+        parts.push(raw.slice(literalStart, to));
+        d += to - literalStart;
+      }
+      literalStart = -1;
+    };
+    while (i < raw.length) {
+      const c = raw[i];
+      if (c === "\r") {
+        flush(i);
+        const length = raw[i + 1] === "\n" ? 2 : 1;
+        out.push({ raw: { start: base + i, end: base + i + length }, dec: { start: d, end: d + 1 }, literal: false });
+        parts.push("\n");
+        d += 1;
+        i += length;
+        continue;
+      }
+      if (c === "&" && !isRaw) {
+        REFERENCE.lastIndex = i;
+        const m = REFERENCE.exec(raw);
+        const value = m ? decode(m[0]) : null;
+        if (m && value !== null && value !== m[0]) {
+          flush(i);
+          out.push({ raw: { start: base + i, end: base + i + m[0].length }, dec: { start: d, end: d + value.length }, literal: false });
+          parts.push(value);
+          d += value.length;
+          i += m[0].length;
+          continue;
+        }
+      }
+      if (literalStart < 0) literalStart = i;
+      i += 1;
+    }
+    flush(i);
+    return parts.join("") === decoded ? out : whole;
+  }
+  function rawRange(s, dec) {
+    const at = (pos, isEnd) => {
+      for (const seg of s.segments) {
+        if (pos < seg.dec.start || pos > seg.dec.end) continue;
+        if (seg.literal) return seg.raw.start + (pos - seg.dec.start);
+        if (pos === seg.dec.start) return seg.raw.start;
+        if (pos === seg.dec.end) return seg.raw.end;
+        return isEnd ? seg.raw.end : seg.raw.start;
+      }
+      return pos <= 0 ? s.range.start + s.lead : s.range.end;
+    };
+    return { start: at(dec.start, false), end: at(dec.end, true) };
+  }
+  function elementRange(s) {
+    const start2 = s.open?.start ?? firstStart(s);
+    const end2 = s.close?.end ?? lastEnd(s);
+    return start2 === null || end2 < start2 ? null : { start: start2, end: end2 };
+  }
+  function contentRange(s) {
+    const start2 = s.open ? s.open.end : firstStart(s);
+    if (start2 === null) return null;
+    return { start: start2, end: s.close ? s.close.start : Math.max(start2, lastEnd(s)) };
+  }
+  function firstStart(s) {
+    for (const c of s.children) {
+      if (c.kind !== "element") return c.range.start;
+      const r = elementRange(c);
+      if (r) return r.start;
+    }
+    return null;
+  }
+  function lastEnd(s) {
+    const last = s.children[s.children.length - 1];
+    if (!last) return s.open?.end ?? -1;
+    if (last.kind === "element") return last.close ? last.close.end : lastEnd(last);
+    return last.range.end;
+  }
+  var isFragmentRoot = (s) => !!s.source.fragment && s.parent === s.source.slides;
 
   // src/editor/tags.ts
   function placeOf(order, list, name, nameOf) {
@@ -1181,418 +1150,6 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
     return tag === text.slice(range.start, range.end) ? null : tag;
   }
 
-  // src/editor/steps.ts
-  var CANDIDATES = "h1, h2, h3, p, li, table, pre, blockquote, div.math, figure, .zone, .plate, .qr, tycho-viewer, .caption, .foot, img, video";
-  var WITH_SLIDE = "h1, h2, h3, .foot";
-  var OUTSIDE = "aside.notes, .backdrop";
-  function candidates(slide, pairing) {
-    return [...slide.querySelectorAll(CANDIDATES)].filter((el) => {
-      if (!pairing.elements.get(el)?.open) return false;
-      const up = el.parentElement?.closest(`${CANDIDATES}, ${OUTSIDE}, section`);
-      return !up || up === slide;
-    });
-  }
-  function stepOf(el, pairing, edits) {
-    const base = stepIn(pairing.elements.get(el)?.attrs ?? []);
-    const e = edits.get(el);
-    return { fragment: e?.fragment ?? base.fragment, index: e?.index !== void 0 ? e.index : base.index };
-  }
-  function groupsOf(els, pairing, edits) {
-    const steps2 = els.map((el) => ({ el, ...stepOf(el, pairing, edits) })).filter((s) => s.fragment);
-    const groups = [];
-    let last = null;
-    for (const s of steps2.filter((s2) => s2.index !== null).sort((a, b) => a.index - b.index)) {
-      if (s.index !== last) {
-        groups.push([]);
-        last = s.index;
-      }
-      groups[groups.length - 1].push(s.el);
-    }
-    for (const s of steps2) if (s.index === null) groups.push([s.el]);
-    return groups;
-  }
-  var KINDS = [["h1, h2, h3", "Heading"], [".foot", "Footnote"], ["li", "Item"], ["p", "Paragraph"], ["div.math", "Formula"], ["table", "Table"], ["pre", "Code"], ["blockquote", "Quotation"], ["video", "Video"], ["tycho-viewer", "Scene"], [".qr", "QR code"], [".caption", "Caption"], ["img, figure, .zone, .plate", "Figure"]];
-  function textOf(el, tex) {
-    let out = "";
-    for (const child of el.childNodes) {
-      if (child.nodeType === Node.TEXT_NODE) out += child.nodeValue ?? "";
-      else if (child instanceof Element) out += child.localName === "mjx-container" ? tex(child) ?? "" : textOf(child, tex);
-    }
-    return out;
-  }
-  function describe2(el, tex) {
-    const kind = KINDS.find(([selector]) => el.matches(selector))?.[1] ?? el.localName;
-    const media = el.matches("img, video") ? el : el.querySelector("img, video");
-    let text = textOf(el, tex).replace(/\s+/g, " ").trim();
-    if (!text && media) text = media.getAttribute("alt") || (media.getAttribute("src") ?? media.querySelector("source")?.getAttribute("src") ?? "").split("/").pop() || "";
-    if (!text && el.matches("tycho-viewer")) text = el.getAttribute("src")?.split("/").pop() ?? "";
-    return { kind, text: text.length > 60 ? `${text.slice(0, 60)}\u2026` : text };
-  }
-  var CSS2 = `
-.beeson-edit-side { position: fixed; right: 0; top: 44px; bottom: 36px; z-index: 50; width: 320px; box-sizing: border-box; display: none; flex-direction: column; background: var(--bg, #000); border-left: 1px solid var(--line, #555); color: var(--text, #eee); font: 13px/1.4 system-ui, sans-serif; }
-html.beeson-steps .beeson-edit-side { display: flex; }
-.beeson-edit-side .head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line, #555); }
-.beeson-edit-side .head span { flex: 1; font-weight: 600; }
-.beeson-edit-side .head button, .beeson-edit-side select { font: inherit; font-size: 12px; padding: 2px 8px; border: 1px solid var(--line, #555); border-radius: 6px; background: var(--bg, #000); color: var(--text, #eee); cursor: pointer; }
-.beeson-edit-side .head button:hover { border-color: var(--subtle, #bbb); }
-.beeson-edit-side .rows { flex: 1; overflow: auto; padding: 6px 0; }
-.beeson-edit-side .row { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 8px; padding: 5px 12px; cursor: default; }
-.beeson-edit-side .row:hover { background: color-mix(in srgb, var(--violet, #96f) 18%, transparent); }
-.beeson-edit-side .row .kind { color: var(--subtle, #bbb); white-space: nowrap; }
-.beeson-edit-side .row .text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.beeson-edit-side .empty, .beeson-edit-side .foot { margin: 0; padding: 10px 12px; color: var(--subtle, #bbb); font-size: 12px; }
-.beeson-edit-side .foot { border-top: 1px solid var(--line, #555); }
-.beeson-badges { position: fixed; inset: 0; z-index: 52; pointer-events: none; }
-.beeson-badge { position: absolute; transform: translate(-50%, -50%); min-width: 22px; height: 22px; padding: 0 5px; box-sizing: border-box; border-radius: 11px; background: var(--accent, #f80); color: #000; font: 600 13px/22px system-ui, sans-serif; text-align: center; }
-html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f80) !important; outline-offset: 6px; }
-`;
-  var Steps = class {
-    constructor(ctx) {
-      this.pane = document.createElement("div");
-      this.badges = document.createElement("div");
-      this.button = document.createElement("button");
-      this.list = document.createElement("div");
-      this.on = false;
-      // what the rows show, so that they are built again only when it changes, since a select that
-      // is being opened would be lost
-      this.key = "";
-      injectStyle("steps", CSS2);
-      this.ctx = ctx;
-      this.pane.className = "beeson-edit-side";
-      this.badges.className = "beeson-badges";
-      this.button.textContent = "Steps";
-      this.button.title = "Show the order in which the elements of the slide appear";
-      this.button.setAttribute("aria-pressed", "false");
-      const head = document.createElement("div");
-      head.className = "head";
-      const title = document.createElement("span");
-      title.textContent = "Steps";
-      const each = document.createElement("button");
-      each.textContent = "One by one";
-      each.title = "Show every element of the slide in a step of its own, in reading order";
-      const none = document.createElement("button");
-      none.textContent = "All at once";
-      none.title = "Show every element with the slide";
-      each.addEventListener("click", () => this.setAll(true));
-      none.addEventListener("click", () => this.setAll(false));
-      head.append(title, each, none);
-      this.list.className = "rows";
-      const foot = document.createElement("p");
-      foot.className = "foot";
-      foot.textContent = "Elements with the same step appear together. A step is a reveal.js fragment in the file.";
-      this.pane.append(head, this.list, foot);
-      this.button.addEventListener("click", () => this.toggle());
-    }
-    toggle() {
-      this.on = document.documentElement.classList.toggle("beeson-steps");
-      this.button.classList.toggle("on", this.on);
-      this.button.setAttribute("aria-pressed", String(this.on));
-      this.ctx.layout();
-      this.refresh();
-    }
-    get shown() {
-      return this.on;
-    }
-    // the numbers on the slide follow its layout, and the rows are built again when the slide or
-    // its steps change
-    refresh() {
-      this.badges.replaceChildren();
-      const pairing = this.ctx.pairing();
-      const slide = this.ctx.slide();
-      if (!this.on || !pairing || !slide) {
-        this.key = "";
-        this.list.replaceChildren();
-        return;
-      }
-      const els = candidates(slide, pairing);
-      const groups = groupsOf(els, pairing, this.ctx.edits);
-      const stepOf2 = (el) => groups.findIndex((g) => g.includes(el));
-      for (const el of els) {
-        const at = stepOf2(el);
-        if (at < 0 || el.closest(`.${OFF}`)) continue;
-        const rect = el.getBoundingClientRect();
-        const badge = document.createElement("span");
-        badge.className = "beeson-badge";
-        badge.textContent = String(at + 1);
-        badge.style.left = `${rect.left}px`;
-        badge.style.top = `${rect.top}px`;
-        this.badges.append(badge);
-      }
-      const described = els.map((el) => describe2(el, this.ctx.tex));
-      const rows = els.map((el, i) => `${stepOf2(el)}|${described[i].kind}|${described[i].text}`);
-      const key = [pairing.sections.findIndex((s) => s.live === slide), groups.length, ...rows].join("\n");
-      if (key === this.key) return;
-      this.key = key;
-      this.list.replaceChildren();
-      if (!els.length) {
-        const empty = document.createElement("p");
-        empty.className = "empty";
-        empty.textContent = "This slide has no element that can be a step.";
-        this.list.append(empty);
-        return;
-      }
-      els.forEach((el, i) => {
-        const at = stepOf2(el);
-        const { kind, text } = described[i];
-        const row = document.createElement("div");
-        row.className = "row";
-        const select = document.createElement("select");
-        select.title = "The step at which this element appears";
-        select.setAttribute("aria-label", `Step of the ${kind.toLowerCase()}${text ? `: ${text}` : ""}`);
-        const option = (value, text2) => {
-          const o = document.createElement("option");
-          o.value = value;
-          o.textContent = text2;
-          select.append(o);
-        };
-        option("", "With slide");
-        if (groups.length) option("before", "Step 1, new, before the others");
-        groups.forEach((_, g) => option(String(g), `Step ${g + 1}`));
-        option(String(groups.length), `Step ${groups.length + 1}, new`);
-        select.value = at < 0 ? "" : String(at);
-        select.addEventListener("change", () => this.setStep(el, select.value === "" ? null : select.value === "before" ? "before" : Number(select.value)));
-        const kindEl = document.createElement("span");
-        kindEl.className = "kind";
-        kindEl.textContent = kind;
-        const textEl = document.createElement("span");
-        textEl.className = "text";
-        textEl.textContent = text;
-        row.append(select, kindEl, textEl);
-        row.addEventListener("pointerenter", () => el.classList.add("beeson-hover"));
-        row.addEventListener("pointerleave", () => el.classList.remove("beeson-hover"));
-        this.list.append(row);
-      });
-    }
-    // moves el to the group at position to, to a new last group with to at the count of the
-    // groups, to a new first group with 'before', which shifts the others by one, or out of the
-    // steps with null
-    setStep(el, to) {
-      const pairing = this.ctx.pairing();
-      const slide = this.ctx.slide();
-      if (!pairing || !slide) return;
-      const els = candidates(slide, pairing);
-      let groups = groupsOf(els, pairing, this.ctx.edits);
-      const target = to === null || to === "before" ? to : to >= groups.length ? "new" : groups[to];
-      for (const g of groups) {
-        const i = g.indexOf(el);
-        if (i >= 0) g.splice(i, 1);
-      }
-      groups = groups.filter((g) => g.length);
-      if (target === "before") groups.unshift([el]);
-      else if (target === "new") groups.push([el]);
-      else if (target && groups.includes(target)) target.push(el);
-      else if (target) groups.push([el]);
-      this.write(els, groups, pairing);
-    }
-    setAll(each) {
-      const pairing = this.ctx.pairing();
-      const slide = this.ctx.slide();
-      if (!pairing || !slide) return;
-      const els = candidates(slide, pairing);
-      this.write(els, each ? els.filter((el) => !el.matches(WITH_SLIDE)).map((el) => [el]) : [], pairing);
-    }
-    // the indices of the slide, numbered from the lowest index in the file, or from 1, are written
-    // into the edits and onto the page. an element that is not in a group is shown with the slide,
-    // and the change is one entry of the history
-    write(els, groups, pairing) {
-      const given = els.map((el) => stepIn(pairing.elements.get(el)?.attrs ?? []).index).filter((i) => i !== null);
-      const base = given.length ? Math.min(1, ...given) : 1;
-      const before = els.map((el) => ({ el, step: stepOf(el, pairing, this.ctx.edits) }));
-      const after = els.map((el) => {
-        const at = groups.findIndex((g) => g.includes(el));
-        return { el, step: at < 0 ? { fragment: false, index: null } : { fragment: true, index: base + at } };
-      });
-      if (before.every((b, i) => b.step.fragment === after[i].step.fragment && b.step.index === after[i].step.index)) return;
-      this.apply(after);
-      this.ctx.record({ label: "steps", undo: () => this.apply(before), redo: () => this.apply(after) });
-    }
-    apply(states) {
-      if (states.length) this.ctx.show(states[0].el);
-      for (const { el, step: step2 } of states) {
-        this.ctx.edits.set(el, { ...this.ctx.edits.get(el), ...step2 });
-        el.classList.toggle("fragment", step2.fragment);
-        el.classList.toggle("visible", step2.fragment);
-        el.classList.remove("current-fragment");
-        if (step2.index === null) el.removeAttribute("data-fragment-index");
-        else el.setAttribute("data-fragment-index", String(step2.index));
-      }
-      this.ctx.markDirty();
-      this.ctx.changed();
-    }
-  };
-
-  // src/editor/source.ts
-  var VOID = /* @__PURE__ */ new Set(["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"]);
-  var PRE_LIKE = /* @__PURE__ */ new Set(["pre", "textarea", "listing"]);
-  var box = null;
-  function decode(raw) {
-    box ?? (box = document.createElement("textarea"));
-    box.innerHTML = `.${raw}`;
-    return box.value.slice(1);
-  }
-  var short = (s) => (s.length > 40 ? `${s.slice(0, 40)}\u2026` : s).replace(/\n/g, "\\n");
-  function parseSource(text) {
-    const tokens = tokenize(text);
-    const doc2 = new DOMParser().parseFromString(text, "text/html");
-    const slides = doc2.querySelector(".reveal .slides") ?? doc2.querySelector(".slides");
-    if (!slides) throw new Error("the file does not have a div.slides element");
-    const index = [...doc2.querySelectorAll(`${slides.localName}.slides`)].indexOf(slides);
-    let seen = -1, at = -1;
-    tokens.forEach((t, i) => {
-      if (t.type === "start" && t.name === slides.localName && classesOf(t).includes("slides")) {
-        seen += 1;
-        if (seen === index) at = i;
-      }
-    });
-    if (at < 0) throw new Error("the start tag of div.slides was not found in the file");
-    const source = { text, crlf: text.includes("\r\n"), doc: doc2 };
-    const root = { kind: "element", node: slides, tag: slides.localName, open: tokens[at], attrs: [], close: null, children: [], parent: null, source };
-    source.slides = root;
-    const cursor = { i: at + 1 };
-    walkChildren(slides, root, cursor, tokens, text);
-    const end2 = tokens[cursor.i];
-    if (end2?.type === "end" && end2.name === root.tag) root.close = end2;
-    return source;
-  }
-  function fail(text, at, what) {
-    const line = text.slice(0, at).split("\n").length;
-    throw new Error(`the file could not be matched to the page at line ${line}: ${what}`);
-  }
-  function walkChildren(el, out, cursor, tokens, text) {
-    const raw = RAW_TEXT.has(el.localName);
-    for (const child of el.childNodes) {
-      while (tokens[cursor.i]?.type === "other" && child.nodeType !== Node.COMMENT_NODE) cursor.i += 1;
-      const token = tokens[cursor.i];
-      if (child.nodeType === Node.ELEMENT_NODE) {
-        const e = child;
-        const tag = e.localName;
-        let open = null;
-        let attrs = [];
-        if (token?.type === "start" && token.name === tag.toLowerCase()) {
-          open = token;
-          attrs = token.attrs;
-          cursor.i += 1;
-        }
-        const node = { kind: "element", node: e, tag, open, attrs, close: null, children: [], parent: out, source: out.source };
-        out.children.push(node);
-        walkChildren(e, node, cursor, tokens, text);
-        const after = tokens[cursor.i];
-        if (after?.type === "end" && after.name === tag.toLowerCase()) {
-          node.close = after;
-          cursor.i += 1;
-        }
-      } else if (child.nodeType === Node.TEXT_NODE) {
-        const data = child.data;
-        if (token?.type !== "text") fail(text, token?.start ?? text.length, `the text "${short(data)}" is not in the file`);
-        const rawText = text.slice(token.start, token.end);
-        const decoded = raw || token.raw ? rawText.replace(/\r\n?/g, "\n") : decode(rawText);
-        let lead = 0;
-        if (decoded !== data) {
-          const stripped = PRE_LIKE.has(el.localName) && decoded.startsWith("\n") && decoded.slice(1) === data;
-          if (!stripped) fail(text, token.start, `the text "${short(data)}" reads "${short(decoded)}" in the file`);
-          lead = rawText.startsWith("\r\n") ? 2 : 1;
-        }
-        cursor.i += 1;
-        const start2 = token.start + lead;
-        out.children.push({
-          kind: "text",
-          node: child,
-          range: { start: token.start, end: token.end },
-          lead,
-          decoded: data,
-          segments: segmentsOf(text.slice(start2, token.end), start2, raw || token.raw, data),
-          pieces: null
-        });
-      } else if (child.nodeType === Node.COMMENT_NODE) {
-        if (token?.type !== "comment" && token?.type !== "other") fail(text, token?.start ?? text.length, "a comment is not in the file");
-        cursor.i += 1;
-        out.children.push({ kind: "comment", node: child, range: token });
-      }
-    }
-  }
-  var REFERENCE = /&(?:#[xX][0-9a-fA-F]+;?|#[0-9]+;?|[A-Za-z][A-Za-z0-9]*;?)/y;
-  function segmentsOf(raw, base, isRaw, decoded) {
-    const out = [];
-    const whole = [{ raw: { start: base, end: base + raw.length }, dec: { start: 0, end: decoded.length }, literal: false }];
-    let i = 0, d = 0, literalStart = -1;
-    const parts = [];
-    const flush = (to) => {
-      if (literalStart >= 0 && to > literalStart) {
-        out.push({ raw: { start: base + literalStart, end: base + to }, dec: { start: d, end: d + to - literalStart }, literal: true });
-        parts.push(raw.slice(literalStart, to));
-        d += to - literalStart;
-      }
-      literalStart = -1;
-    };
-    while (i < raw.length) {
-      const c = raw[i];
-      if (c === "\r") {
-        flush(i);
-        const length = raw[i + 1] === "\n" ? 2 : 1;
-        out.push({ raw: { start: base + i, end: base + i + length }, dec: { start: d, end: d + 1 }, literal: false });
-        parts.push("\n");
-        d += 1;
-        i += length;
-        continue;
-      }
-      if (c === "&" && !isRaw) {
-        REFERENCE.lastIndex = i;
-        const m = REFERENCE.exec(raw);
-        const value = m ? decode(m[0]) : null;
-        if (m && value !== null && value !== m[0]) {
-          flush(i);
-          out.push({ raw: { start: base + i, end: base + i + m[0].length }, dec: { start: d, end: d + value.length }, literal: false });
-          parts.push(value);
-          d += value.length;
-          i += m[0].length;
-          continue;
-        }
-      }
-      if (literalStart < 0) literalStart = i;
-      i += 1;
-    }
-    flush(i);
-    return parts.join("") === decoded ? out : whole;
-  }
-  function rawRange(s, dec) {
-    const at = (pos, isEnd) => {
-      for (const seg of s.segments) {
-        if (pos < seg.dec.start || pos > seg.dec.end) continue;
-        if (seg.literal) return seg.raw.start + (pos - seg.dec.start);
-        if (pos === seg.dec.start) return seg.raw.start;
-        if (pos === seg.dec.end) return seg.raw.end;
-        return isEnd ? seg.raw.end : seg.raw.start;
-      }
-      return pos <= 0 ? s.range.start + s.lead : s.range.end;
-    };
-    return { start: at(dec.start, false), end: at(dec.end, true) };
-  }
-  function elementRange(s) {
-    const start2 = s.open?.start ?? firstStart(s);
-    const end2 = s.close?.end ?? lastEnd(s);
-    return start2 === null || end2 < start2 ? null : { start: start2, end: end2 };
-  }
-  function contentRange(s) {
-    const start2 = s.open ? s.open.end : firstStart(s);
-    if (start2 === null) return null;
-    return { start: start2, end: s.close ? s.close.start : Math.max(start2, lastEnd(s)) };
-  }
-  function firstStart(s) {
-    for (const c of s.children) {
-      if (c.kind !== "element") return c.range.start;
-      const r = elementRange(c);
-      if (r) return r.start;
-    }
-    return null;
-  }
-  function lastEnd(s) {
-    const last = s.children[s.children.length - 1];
-    if (!last) return s.open?.end ?? -1;
-    if (last.kind === "element") return last.close ? last.close.end : lastEnd(last);
-    return last.range.end;
-  }
-  var isFragmentRoot = (s) => !!s.source.fragment && s.parent === s.source.slides;
-
   // src/editor/model/units.ts
   var START = /^\s*(\S+) start\b/;
   var commentText = (text, c) => text.slice(c.start + 4, Math.max(c.start + 4, c.end - 3));
@@ -1638,6 +1195,7 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
   }
 
   // src/editor/model/templates.ts
+  var LAYOUTS = ["title", "section", "content", "narrow", "wide", "figure", "split", "closing"];
   function textStyle(text) {
     let step2 = null;
     for (const m of text.matchAll(/^([ \t]+)</gm)) if (step2 === null || m[1].length < step2.length) step2 = m[1];
@@ -2102,6 +1660,995 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
     return { lead: text.slice(u.lead.start, u.range.start), body, trail: text.slice(u.range.end, u.end) };
   }
 
+  // src/editor/navigator/thumbs.ts
+  var CSS = `
+:host { display: block; position: relative; overflow: hidden; contain: strict; }
+.reveal.beeson-thumb { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; overflow: hidden; background: var(--bg); pointer-events: none; }
+.reveal.beeson-thumb .slides { position: absolute; inset: 0 auto auto 0; margin: 0; transform-origin: 0 0; pointer-events: none; }
+.reveal.beeson-thumb .slides > section { display: block !important; position: absolute; inset: 0; transform: none !important; }
+.reveal.beeson-thumb .fragment { visibility: visible !important; opacity: 1 !important; transition: none !important; }
+.reveal.beeson-thumb .fragment.beeson-off { visibility: hidden !important; }
+.reveal.beeson-thumb:not([data-theme="light"]) .for-light, .reveal.beeson-thumb[data-theme="light"] .for-dark { display: none !important; }
+.reveal.beeson-thumb[data-theme="dark"] .invert { filter: invert(1) hue-rotate(180deg); }
+.reveal.beeson-thumb[data-theme="light"] .slides section.title::before, .reveal.beeson-thumb[data-theme="light"] .slides section.closing::before { background-image: url("brand/lockup-light.png"); }
+.reveal.beeson-thumb:not([data-theme="light"]) .slides section.split .panel { box-shadow: 1px 0 0 var(--line); }
+.reveal.beeson-thumb.no-logo .slides section::after { content: none; }
+.reveal.beeson-thumb.no-lockup .slides section.title::before, .reveal.beeson-thumb.no-lockup .slides section.closing::before { content: none; }
+`;
+  var SVG = "http://www.w3.org/2000/svg";
+  var XLINK = "http://www.w3.org/1999/xlink";
+  var sheets = /* @__PURE__ */ new Map();
+  var sheetOf = (text) => {
+    let sheet = sheets.get(text);
+    if (!sheet) {
+      sheet = new CSSStyleSheet();
+      sheet.replaceSync(text);
+      sheets.set(text, sheet);
+    }
+    return sheet;
+  };
+  function deckStyles() {
+    const links = [...document.querySelectorAll('link[rel="stylesheet"]')];
+    const adopted = [...document.querySelectorAll("style")].filter((s) => !s.id.startsWith("beeson-edit-")).map((s) => sheetOf(s.textContent ?? ""));
+    return { links, adopted: [...adopted, sheetOf(CSS)] };
+  }
+  function cloneSlide(slide, scale) {
+    const clone = slide.cloneNode(true);
+    clone.querySelectorAll("aside.notes").forEach((n) => n.remove());
+    const from = slide.querySelectorAll("canvas");
+    const ratio = Math.min(2, window.devicePixelRatio || 1);
+    clone.querySelectorAll("canvas").forEach((canvas, i) => {
+      const source = from[i];
+      const w = source.offsetWidth || parseFloat(source.style.width) || source.width;
+      const h = source.offsetHeight || parseFloat(source.style.height) || source.height;
+      canvas.width = Math.max(1, Math.round(w * scale * ratio));
+      canvas.height = Math.max(1, Math.round(h * scale * ratio));
+      canvas.style.width = `${w}px`;
+      canvas.style.height = `${h}px`;
+      try {
+        if (source.width && source.height) canvas.getContext("2d")?.drawImage(source, 0, 0, canvas.width, canvas.height);
+      } catch {
+      }
+    });
+    clone.querySelectorAll(".backdrop .lab").forEach((l) => {
+      if (!l.style.left) l.remove();
+    });
+    clone.querySelectorAll("tycho-viewer").forEach((v) => {
+      const box2 = document.createElement("div");
+      box2.className = v.className;
+      box2.setAttribute("style", v.getAttribute("style") ?? "");
+      v.replaceWith(box2);
+    });
+    clone.querySelectorAll("video").forEach((v) => {
+      v.removeAttribute("autoplay");
+      v.removeAttribute("data-autoplay");
+      v.preload = "none";
+    });
+    for (const el of [clone, ...clone.querySelectorAll("*")]) {
+      for (const name of ["contenteditable", "tabindex", "hidden", "aria-hidden", "role"]) el.removeAttribute(name);
+      for (const c of [...el.classList]) if (isRuntimeClass(c)) el.classList.remove(c);
+    }
+    const layers2 = layersOf(clone);
+    showLayer(clone, layers2.length > 1 ? layers2[0] : null);
+    clone.classList.add("present");
+    clone.style.display = "block";
+    clone.style.top = "0";
+    return clone;
+  }
+  function glyphsOf(clone) {
+    const ids = /* @__PURE__ */ new Set();
+    for (const use of clone.querySelectorAll("use")) {
+      const href = use.getAttribute("href") ?? use.getAttributeNS(XLINK, "href") ?? "";
+      if (href.startsWith("#")) ids.add(href.slice(1));
+    }
+    const glyphs = [...ids].map((id) => document.getElementById(id)).filter((g) => !!g && !clone.contains(g));
+    if (!glyphs.length) return null;
+    const svg = document.createElementNS(SVG, "svg");
+    svg.setAttribute("style", "display: none");
+    const defs = document.createElementNS(SVG, "defs");
+    defs.append(...glyphs.map((g) => g.cloneNode(true)));
+    svg.append(defs);
+    return svg;
+  }
+  function drawInto(host, slide, deck, width) {
+    const root = host.shadowRoot ?? host.attachShadow({ mode: "open" });
+    const { links, adopted } = deckStyles();
+    root.adoptedStyleSheets = adopted;
+    const have = [...root.querySelectorAll("link")].map((l) => l.href).join("\n");
+    if (have !== links.map((l) => l.href).join("\n")) {
+      root.querySelectorAll("link").forEach((l) => l.remove());
+      root.prepend(...links.map((l) => l.cloneNode(true)));
+    }
+    const wrap = document.createElement("div");
+    wrap.className = "reveal beeson-thumb";
+    const theme = document.documentElement.dataset.theme;
+    if (theme) wrap.dataset.theme = theme;
+    for (const c of ["no-logo", "no-lockup"]) wrap.classList.toggle(c, document.body.classList.contains(c));
+    wrap.setAttribute("inert", "");
+    const slides = document.createElement("div");
+    slides.className = "slides";
+    slides.style.cssText = `width: ${deck.width}px; height: ${deck.height}px; transform: scale(${width / deck.width});`;
+    const clone = cloneSlide(slide, width / deck.width);
+    slides.append(clone);
+    wrap.append(slides);
+    const glyphs = glyphsOf(clone);
+    if (glyphs) wrap.append(glyphs);
+    root.querySelector(".beeson-thumb")?.remove();
+    root.append(wrap);
+  }
+  var QUIET = /* @__PURE__ */ new Set(["contenteditable", "tabindex", "aria-hidden", "hidden", "role", "aria-label", "data-appendix", "data-visibility"]);
+  function seen(m) {
+    if (m.type !== "attributes") return true;
+    const el = m.target;
+    const name = m.attributeName ?? "";
+    if (name === "class") {
+      const kept = (v) => (v ?? "").split(/\s+/).filter((c) => c && !isRuntimeClass(c)).sort().join(" ");
+      return kept(m.oldValue) !== kept(el.getAttribute("class"));
+    }
+    if (name === "style") return el.localName !== "section";
+    return !QUIET.has(name);
+  }
+  var DELAY = 300;
+  var Thumbs = class {
+    constructor(app2, scroller) {
+      this.hosts = /* @__PURE__ */ new Map();
+      this.dirty = /* @__PURE__ */ new Set();
+      this.timers = /* @__PURE__ */ new Map();
+      this.inView = /* @__PURE__ */ new Set();
+      this.idle = 0;
+      this.width = 0;
+      this.app = app2;
+      this.seenBy = new IntersectionObserver(
+        (entries) => {
+          for (const e of entries) {
+            const host = e.target;
+            if (e.isIntersecting) this.inView.add(host);
+            else this.inView.delete(host);
+          }
+          this.drawDue();
+        },
+        { root: scroller, rootMargin: "200px 0px" }
+      );
+      const watch = new MutationObserver((records) => {
+        const slides = /* @__PURE__ */ new Set();
+        for (const m of records) {
+          if (!seen(m)) continue;
+          const node = m.target instanceof Element ? m.target : m.target.parentElement;
+          const slide = node?.closest(".reveal .slides > section");
+          if (slide) slides.add(slide);
+        }
+        for (const s of slides) this.soon(s);
+      });
+      watch.observe(app2.slides(), { subtree: true, childList: true, characterData: true, attributes: true, attributeOldValue: true });
+    }
+    // the host of each slide, kept while its slide is on the page. a new host is drawn once seen
+    setHosts(next) {
+      for (const [slide, host] of this.hosts) {
+        if (next.get(slide) === host) continue;
+        this.seenBy.unobserve(host);
+        this.inView.delete(host);
+        this.hosts.delete(slide);
+      }
+      for (const [slide, host] of next) {
+        if (this.hosts.get(slide) === host) continue;
+        this.hosts.set(slide, host);
+        this.dirty.add(slide);
+        this.seenBy.observe(host);
+      }
+      this.drawDue();
+    }
+    // the width of the thumbnails in CSS px, set after a resize of the pane
+    setWidth(width) {
+      if (Math.abs(width - this.width) < 0.5) return;
+      this.width = width;
+      for (const s of this.hosts.keys()) this.dirty.add(s);
+      this.drawDue();
+    }
+    // the slide is drawn again 300 ms after its last change
+    soon(slide) {
+      clearTimeout(this.timers.get(slide));
+      this.timers.set(
+        slide,
+        window.setTimeout(() => {
+          this.timers.delete(slide);
+          this.dirty.add(slide);
+          this.drawDue();
+        }, DELAY)
+      );
+    }
+    // every slide drawn again soon, e.g. after the mode of the slides was flipped
+    all() {
+      for (const s of this.hosts.keys()) this.soon(s);
+    }
+    deck() {
+      const s = this.app.slides();
+      return { width: s.offsetWidth || 1920, height: s.offsetHeight || 1080 };
+    }
+    draw(slide) {
+      const host = this.hosts.get(slide);
+      this.dirty.delete(slide);
+      if (!host || !this.width || !slide.isConnected) return;
+      drawInto(host, slide, this.deck(), this.width);
+      host.dataset.drawn = String(Number(host.dataset.drawn ?? 0) + 1);
+    }
+    drawDue() {
+      if (!this.width) return;
+      for (const [slide, host] of this.hosts) if (this.dirty.has(slide) && this.inView.has(host)) this.draw(slide);
+      if (this.idle || ![...this.dirty].some((s) => this.hosts.has(s))) return;
+      const later = (fn) => typeof requestIdleCallback === "function" ? requestIdleCallback(fn, { timeout: 200 }) : setTimeout(fn, 16);
+      const step2 = () => {
+        this.idle = 0;
+        const next = [...this.hosts.keys()].find((s) => this.dirty.has(s));
+        if (!next) return;
+        this.draw(next);
+        this.idle = later(step2);
+      };
+      this.idle = later(step2);
+    }
+  };
+  function install(app2) {
+    const nav2 = app2.nav;
+    const thumbs = new Thumbs(app2, nav2.list);
+    nav2.useThumbs(thumbs);
+    new MutationObserver(() => thumbs.all()).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  }
+
+  // src/editor/navigator/navigator.ts
+  var KEY = "beeson-nav";
+  var LAYOUTS2 = ["title", "section", "closing", "figure", "split"];
+  var PEEK_WIDTH = 320;
+  var PEEK_DELAY = 300;
+  var DRAG_START = 4;
+  var SCROLL_BAND = 28;
+  function describe(slide) {
+    const heading = [...slide.querySelectorAll("h1, h2, h3, p, .caption")].find((h) => !h.closest("aside.notes, .backdrop") && (h.textContent ?? "").trim());
+    const title = (heading?.textContent ?? "").replace(/\s+/g, " ").trim() || "Untitled slide";
+    const kind = LAYOUTS2.find((c) => slide.classList.contains(c)) ?? "content";
+    return { title, kind };
+  }
+  var isHidden = (slide) => slide.getAttribute("data-visibility") === "hidden";
+  var hasSteps = (slide) => [...slide.querySelectorAll(".fragment")].some((f) => !f.closest("aside.notes"));
+  function numbers(slides, written2) {
+    let n = 0;
+    let a = 0;
+    let appendix = false;
+    return slides.map((s) => {
+      let label2 = "";
+      if (isHidden(s)) label2 = "";
+      else if (appendix) label2 = `A${++a}`;
+      else if (!s.matches(".title, .section, .closing") && written2(s) !== "uncounted") label2 = String(++n);
+      if (s.classList.contains("closing")) appendix = true;
+      return label2;
+    });
+  }
+  var CSS2 = `
+.beeson-edit-nav { --nav-bg: var(--ed-panel, #f4f4f6); --nav-text: var(--ed-text, #1d1d1f); --nav-muted: var(--ed-muted, #86868b); --nav-line: var(--ed-line, #d2d2d7); --nav-select: var(--ed-select, #7a5af8); --nav-current: rgba(0, 0, 0, 0.07); --nav-shadow: 0 1px 3px rgba(0, 0, 0, 0.22); }
+@media (prefers-color-scheme: dark) {
+  .beeson-edit-nav { --nav-bg: var(--ed-panel, #232326); --nav-text: var(--ed-text, #f2f2f7); --nav-muted: var(--ed-muted, #98989d); --nav-line: var(--ed-line, #3a3a3c); --nav-select: var(--ed-select, #9b82ff); --nav-current: rgba(255, 255, 255, 0.09); --nav-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
+}
+.beeson-edit-nav { position: fixed; left: 0; top: 44px; bottom: 36px; z-index: 50; width: 240px; box-sizing: border-box; display: none; flex-direction: column; background: var(--nav-bg); border-right: 1px solid var(--nav-line); color: var(--nav-text); font: 12px/1.3 system-ui, sans-serif; }
+html.beeson-nav .beeson-edit-nav { display: flex; }
+.beeson-edit-nav .rows { position: relative; flex: 1; overflow: auto; padding: 10px 10px 40px 4px; outline: none; }
+.beeson-edit-nav .row { position: relative; display: grid; grid-template-columns: 24px 1fr; column-gap: 6px; align-items: end; width: 100%; box-sizing: border-box; margin: 0 0 8px; padding: 5px 6px 5px 0; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: default; touch-action: none; }
+.beeson-edit-nav .row:focus-visible { outline: none; }
+.beeson-edit-nav .row[aria-current="true"] { background: var(--nav-current); }
+.beeson-edit-nav .row .no { color: var(--nav-muted); text-align: right; font-variant-numeric: tabular-nums; line-height: 1; padding-bottom: 1px; }
+.beeson-edit-nav .row .frame { position: relative; border-radius: 5px; box-shadow: var(--nav-shadow); outline: 1px solid var(--nav-line); outline-offset: 0; }
+.beeson-edit-nav .row .pic { aspect-ratio: 16 / 9; border-radius: 5px; background: var(--bg, #000); }
+.beeson-edit-nav .row[aria-selected="true"] .frame { outline: 3px solid var(--nav-select); outline-offset: 2px; }
+.beeson-edit-nav .rows:focus-within .row[aria-selected="true"] .no { color: var(--nav-select); font-weight: 600; }
+.beeson-edit-nav .row .dots { position: absolute; left: 6px; bottom: 5px; display: flex; gap: 3px; pointer-events: none; }
+.beeson-edit-nav .row .dots[hidden] { display: none; }
+.beeson-edit-nav .row .dots i { width: 5px; height: 5px; border-radius: 50%; background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.45); }
+.beeson-edit-nav .row.skip { align-items: center; padding-top: 2px; padding-bottom: 2px; }
+.beeson-edit-nav .row.skip .frame { height: 5px; box-shadow: none; outline: 0; border-top: 1px solid var(--nav-muted); border-bottom: 1px solid var(--nav-muted); border-radius: 0; }
+.beeson-edit-nav .row.skip .pic, .beeson-edit-nav .row.skip .dots { display: none; }
+.beeson-edit-nav .row.skip[aria-selected="true"] .frame { outline: 0; border-color: var(--nav-select); }
+.beeson-edit-nav .row.dragged { opacity: 0.35; }
+.beeson-edit-nav .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.beeson-edit-nav .drop { position: absolute; left: 22px; right: 10px; height: 3px; margin-top: -1.5px; border-radius: 2px; background: var(--nav-select); pointer-events: none; }
+.beeson-edit-nav .drop::before { content: ""; position: absolute; left: -7px; top: -3.5px; width: 6px; height: 6px; border: 2px solid var(--nav-select); border-radius: 50%; background: var(--nav-bg); }
+.beeson-edit-nav .drop[hidden] { display: none; }
+.beeson-edit-ghost { position: fixed; z-index: 70; pointer-events: none; border-radius: 6px; overflow: visible; box-shadow: 0 10px 28px rgba(0, 0, 0, 0.35); transform: rotate(-1.5deg); opacity: 0.95; }
+.beeson-edit-ghost .pic { border-radius: 6px; aspect-ratio: 16 / 9; background: var(--bg, #000); }
+.beeson-edit-ghost .count { position: absolute; right: -8px; top: -8px; min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box; border-radius: 10px; background: var(--ed-select, #7a5af8); color: #fff; font: 600 12px/20px system-ui, sans-serif; text-align: center; }
+.beeson-edit-peek { position: fixed; left: 248px; z-index: 57; width: 320px; overflow: hidden; border-radius: 6px; outline: 1px solid var(--line, #555); background: var(--bg, #000); box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); pointer-events: none; }
+.beeson-edit-peek[hidden] { display: none; }
+.beeson-edit-peek .reveal { position: absolute; inset: 0; width: 100%; height: 100%; margin: 0; overflow: hidden; }
+.beeson-edit-peek .fragment { visibility: visible !important; opacity: 1 !important; transition: none !important; }
+.beeson-edit-peek .fragment.beeson-off { visibility: hidden !important; }
+`;
+  function droppedOrder(list, moved, gap) {
+    const set = new Set(moved);
+    const rest = list.filter((s) => !set.has(s));
+    const at = gap - list.slice(0, gap).filter((s) => set.has(s)).length;
+    return [...rest.slice(0, at), ...list.filter((s) => set.has(s)), ...rest.slice(at)];
+  }
+  var Navigator = class {
+    constructor(app2) {
+      this.pane = document.createElement("div");
+      this.button = document.createElement("button");
+      this.list = document.createElement("div");
+      this.peek = document.createElement("div");
+      this.drop = document.createElement("div");
+      this.rows = /* @__PURE__ */ new Map();
+      this.thumbs = null;
+      this.on = true;
+      this.timer = 0;
+      this.anchor = null;
+      this.drag = null;
+      this.eatClick = false;
+      injectStyle("nav", CSS2);
+      this.app = app2;
+      this.pane.className = "beeson-edit-nav";
+      this.pane.setAttribute("aria-label", "Slides");
+      this.button.textContent = "Slides";
+      this.button.title = "Show the navigator of the slides at the left";
+      this.list.className = "rows";
+      this.list.setAttribute("role", "listbox");
+      this.list.setAttribute("aria-label", "Slides");
+      this.list.setAttribute("aria-multiselectable", "true");
+      this.list.dataset.context = "navigator";
+      this.drop.className = "drop";
+      this.drop.hidden = true;
+      this.list.append(this.drop);
+      this.peek.className = "beeson-edit-peek";
+      this.peek.hidden = true;
+      this.peek.setAttribute("aria-hidden", "true");
+      this.peek.setAttribute("inert", "");
+      this.pane.append(this.list, this.peek);
+      this.button.addEventListener("click", () => this.toggle());
+      this.list.addEventListener("keydown", (ev) => this.onKey(ev));
+      this.list.addEventListener("pointerdown", (ev) => this.onDown(ev));
+      this.list.addEventListener("pointermove", (ev) => this.onMove(ev));
+      this.list.addEventListener("pointerup", (ev) => this.onUp(ev));
+      this.list.addEventListener("pointercancel", () => this.endDrag(false));
+      this.list.addEventListener("lostpointercapture", () => this.endDrag(false));
+      this.list.addEventListener("focusin", () => {
+        if (this.app.selection && this.app.selection.kind !== "slides") this.selectOnly(this.app.current());
+      });
+      new ResizeObserver(() => this.measure()).observe(this.list);
+      this.on = stored(KEY) !== "0";
+      this.show(this.on);
+    }
+    get shown() {
+      return this.on;
+    }
+    useThumbs(thumbs) {
+      this.thumbs = thumbs;
+      this.thumbs.setHosts(new Map([...this.rows].map(([s, r]) => [s, r.pic])));
+      this.measure();
+    }
+    toggle() {
+      this.show(!this.on);
+      store(KEY, this.on ? "1" : "0");
+      this.app.relayout();
+      this.refresh();
+    }
+    show(on) {
+      this.on = on;
+      if (!on) this.hidePeek();
+      document.documentElement.classList.toggle("beeson-nav", on);
+      this.button.classList.toggle("on", on);
+      this.button.setAttribute("aria-pressed", String(on));
+    }
+    slides() {
+      return [...this.app.slides().querySelectorAll(":scope > section")];
+    }
+    // the selected slides in the order of the deck, or the current slide when no slide is selected
+    selected() {
+      const sel = this.app.selection;
+      if (sel?.kind === "slides") {
+        const items = sel.items.filter((s) => s.isConnected && s.parentElement === this.app.slides());
+        if (items.length) return items;
+      }
+      const current = this.app.current();
+      return current ? [current] : [];
+    }
+    // the slides set as the selection, the anchor of a range, and the slide shown
+    select(slides, current = slides.at(-1) ?? null, anchor = current) {
+      this.app.selection.set("slides", slides);
+      this.anchor = anchor;
+      if (current) this.app.showSlide(current);
+      this.refresh();
+    }
+    selectOnly(slide) {
+      if (slide) this.select([slide], slide);
+    }
+    // the row of slide gets the focus, e.g. after a command run in the navigator
+    focus(slide = this.app.current()) {
+      const row = slide ? this.rows.get(slide) : null;
+      row?.el.focus({ preventScroll: true });
+      row?.el.scrollIntoView({ block: "nearest" });
+    }
+    // the row and the thumbnail of slide, e.g. as the place of the gallery of a new slide
+    rowOf(slide) {
+      return slide && this.rows.get(slide)?.el || null;
+    }
+    written(slide) {
+      const s = this.app.pairing?.elements.get(slide);
+      return s?.attrs.find((a) => a.name === "data-visibility")?.value ?? null;
+    }
+    makeRow(slide) {
+      const el = document.createElement("button");
+      el.type = "button";
+      el.className = "row";
+      el.setAttribute("role", "option");
+      el.dataset.context = "slide";
+      const no = document.createElement("span");
+      no.className = "no";
+      no.setAttribute("aria-hidden", "true");
+      const frame = document.createElement("span");
+      frame.className = "frame";
+      const pic = document.createElement("span");
+      pic.className = "pic";
+      pic.style.display = "block";
+      const dots = document.createElement("span");
+      dots.className = "dots";
+      dots.append(document.createElement("i"), document.createElement("i"), document.createElement("i"));
+      frame.append(pic, dots);
+      const sr = (cls) => {
+        const s = document.createElement("span");
+        s.className = `${cls} sr`;
+        return s;
+      };
+      const num = sr("num");
+      const title = sr("title");
+      const kind = sr("kind");
+      el.append(no, frame, num, title, kind);
+      el.addEventListener("click", (ev) => this.onClick(slide, ev));
+      el.addEventListener("contextmenu", () => {
+        if (!this.selected().includes(slide)) this.selectOnly(slide);
+      });
+      el.addEventListener("pointerenter", () => {
+        this.hidePeek();
+        if (!this.drag) this.timer = window.setTimeout(() => this.showPeek(slide, el), PEEK_DELAY);
+      });
+      el.addEventListener("pointerleave", () => this.hidePeek());
+      return { el, no, pic, dots, num, title, kind };
+    }
+    // the rows follow the slides of the deck, their numbers, titles, steps, and hidden state, and
+    // the selection. a row is kept with its thumbnail while its slide is on the page
+    refresh() {
+      const slides = this.slides();
+      const nums = numbers(slides, (s) => this.written(s));
+      const kept = new Set(slides);
+      for (const [s, r] of this.rows) {
+        if (kept.has(s)) continue;
+        r.el.remove();
+        this.rows.delete(s);
+      }
+      let changed = false;
+      let prev = this.drop;
+      slides.forEach((slide, i) => {
+        let row = this.rows.get(slide);
+        if (!row) {
+          row = this.makeRow(slide);
+          this.rows.set(slide, row);
+          changed = true;
+        }
+        if (prev.nextSibling !== row.el) {
+          prev.after(row.el);
+          changed = true;
+        }
+        prev = row.el;
+        const { title, kind } = describe(slide);
+        const hidden = isHidden(slide);
+        const steps2 = hasSteps(slide);
+        if (row.no.textContent !== nums[i]) row.no.textContent = nums[i];
+        if (row.num.textContent !== String(i + 1)) row.num.textContent = String(i + 1);
+        if (row.title.textContent !== title) row.title.textContent = title;
+        if (row.kind.textContent !== kind) row.kind.textContent = kind;
+        row.el.classList.toggle("skip", hidden);
+        row.dots.hidden = !steps2;
+        const label2 = `Slide ${i + 1}${nums[i] && nums[i] !== String(i + 1) ? `, numbered ${nums[i]}` : ""}: ${title}${hidden ? ", hidden" : ""}${steps2 ? ", with steps" : ""}`;
+        if (row.el.getAttribute("aria-label") !== label2) row.el.setAttribute("aria-label", label2);
+        row.el.title = `Slide ${i + 1}: ${title}`;
+      });
+      if (changed && this.thumbs) this.thumbs.setHosts(new Map([...this.rows].map(([s, r]) => [s, r.pic])));
+      this.paint();
+    }
+    // the current row and the selected rows are marked, the current row is kept in view, and the
+    // focus follows the current slide while it is in the list
+    paint() {
+      const current = this.app.current();
+      const sel = this.app.selection?.kind === "slides" ? new Set(this.selected()) : new Set(current ? [current] : []);
+      const focusIn = this.list.contains(document.activeElement);
+      for (const [slide, row] of this.rows) {
+        const here = slide === current;
+        row.el.setAttribute("aria-current", here ? "true" : "false");
+        row.el.setAttribute("aria-selected", sel.has(slide) ? "true" : "false");
+        row.el.tabIndex = here ? 0 : -1;
+        if (here && !this.drag) {
+          if (this.on) row.el.scrollIntoView({ block: "nearest" });
+          if (focusIn && document.activeElement !== row.el) row.el.focus({ preventScroll: true });
+        }
+      }
+      if (!current && this.rows.size) [...this.rows.values()][0].el.tabIndex = 0;
+    }
+    measure() {
+      const first = this.rows.values().next().value;
+      const width = first && !first.el.classList.contains("skip") ? first.pic.getBoundingClientRect().width : this.list.clientWidth - 44;
+      if (width > 0) this.thumbs?.setWidth(width);
+    }
+    onClick(slide, ev) {
+      this.hidePeek();
+      if (this.eatClick) {
+        this.eatClick = false;
+        return;
+      }
+      const list = this.slides();
+      const mod = this.app.platform === "mac" ? ev.metaKey : ev.ctrlKey;
+      if (ev.shiftKey) {
+        const anchor = this.anchor && list.includes(this.anchor) ? this.anchor : this.selected()[0] ?? slide;
+        const [a, b] = [list.indexOf(anchor), list.indexOf(slide)].sort((x, y) => x - y);
+        this.select(list.slice(a, b + 1), slide, anchor);
+      } else if (mod) {
+        const now = this.app.selection.kind === "slides" ? this.selected() : [];
+        if (now.includes(slide) && now.length > 1) {
+          const rest = now.filter((s) => s !== slide);
+          this.select(rest, slide === this.app.current() ? rest.at(-1) : this.app.current(), this.anchor);
+        } else this.select([...now, slide], slide);
+      } else this.selectOnly(slide);
+      this.focus(this.app.current());
+    }
+    // the arrows move to the previous or next slide, with Shift the selection is extended, and Home
+    // and End move to the first and the last slide. a key taken by the dispatch of the registry is
+    // left alone
+    onKey(ev) {
+      if (ev.defaultPrevented || ev.altKey || ev.metaKey || ev.ctrlKey) return;
+      if (this.drag && ev.key === "Escape") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.endDrag(false);
+        return;
+      }
+      const slides = this.slides();
+      const at = slides.indexOf(this.app.current());
+      const to = { ArrowUp: at - 1, ArrowDown: at + 1, Home: 0, End: slides.length - 1 };
+      const i = to[ev.key];
+      if (i === void 0) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      if (i < 0 || i >= slides.length) return;
+      if (ev.shiftKey) {
+        const anchor = this.anchor && slides.includes(this.anchor) ? this.anchor : slides[at];
+        const [a, b] = [slides.indexOf(anchor), i].sort((x, y) => x - y);
+        this.select(slides.slice(a, b + 1), slides[i], anchor);
+      } else this.selectOnly(slides[i]);
+      this.focus(slides[i]);
+    }
+    rowAt(target) {
+      const el = target instanceof Element ? target.closest(".row") : null;
+      for (const entry of this.rows) if (entry[1].el === el) return entry;
+      return null;
+    }
+    onDown(ev) {
+      if (ev.button !== 0 || this.app.platform === "mac" && ev.ctrlKey) return;
+      const hit = this.rowAt(ev.target);
+      if (!hit) return;
+      this.drag = { slide: hit[0], x: ev.clientX, y: ev.clientY, id: ev.pointerId, on: false, slides: [], gap: -1, ghost: null, scroll: 0 };
+    }
+    onMove(ev) {
+      const d = this.drag;
+      if (!d || ev.pointerId !== d.id) return;
+      if (!d.on) {
+        if (Math.hypot(ev.clientX - d.x, ev.clientY - d.y) < DRAG_START) return;
+        this.startDrag(d);
+      }
+      this.placeGhost(ev.clientX, ev.clientY);
+      this.placeDrop(ev.clientY);
+      const box2 = this.list.getBoundingClientRect();
+      d.scroll = ev.clientY < box2.top + SCROLL_BAND ? -1 : ev.clientY > box2.bottom - SCROLL_BAND ? 1 : 0;
+      if (d.scroll) this.autoScroll(ev.clientY);
+    }
+    startDrag(d) {
+      this.hidePeek();
+      d.on = true;
+      if (!this.selected().includes(d.slide) || this.app.selection.kind !== "slides") this.selectOnly(d.slide);
+      d.slides = this.selected();
+      try {
+        this.list.setPointerCapture(d.id);
+      } catch {
+      }
+      for (const s of d.slides) this.rows.get(s)?.el.classList.add("dragged");
+      const row = this.rows.get(d.slide);
+      const ghost = document.createElement("div");
+      ghost.className = "beeson-edit-ghost";
+      const width = row?.pic.getBoundingClientRect().width || 150;
+      ghost.style.width = `${width}px`;
+      const pic = document.createElement("div");
+      pic.className = "pic";
+      ghost.append(pic);
+      if (d.slides.length > 1) {
+        const count = document.createElement("span");
+        count.className = "count";
+        count.textContent = String(d.slides.length);
+        ghost.append(count);
+      }
+      document.body.append(ghost);
+      d.ghost = ghost;
+      const stage = this.app.slides();
+      drawInto(pic, d.slide, { width: stage.offsetWidth || 1920, height: stage.offsetHeight || 1080 }, width);
+    }
+    placeGhost(x, y) {
+      const g = this.drag?.ghost;
+      if (!g) return;
+      g.style.left = `${x + 14}px`;
+      g.style.top = `${y - 18}px`;
+    }
+    // the gap nearest to y, between two rows, and the line drawn in it
+    placeDrop(y) {
+      const d = this.drag;
+      if (!d) return;
+      const rows = this.slides().map((s) => this.rows.get(s).el);
+      let gap = rows.length;
+      for (let i = 0; i < rows.length; i++) {
+        const r = rows[i].getBoundingClientRect();
+        if (y < r.top + r.height / 2) {
+          gap = i;
+          break;
+        }
+      }
+      d.gap = gap;
+      const box2 = this.list.getBoundingClientRect();
+      const before = rows[gap - 1]?.getBoundingClientRect();
+      const after = rows[gap]?.getBoundingClientRect();
+      const at = before && after ? (before.bottom + after.top) / 2 : after ? after.top - 2 : before ? before.bottom + 2 : box2.top;
+      this.drop.style.top = `${at - box2.top + this.list.scrollTop}px`;
+      this.drop.hidden = false;
+    }
+    autoScroll(y) {
+      const d = this.drag;
+      if (!d || !d.scroll) return;
+      this.list.scrollTop += d.scroll * 8;
+      this.placeDrop(y);
+      requestAnimationFrame(() => {
+        if (this.drag === d && d.scroll) this.autoScroll(y);
+      });
+    }
+    onUp(ev) {
+      const d = this.drag;
+      if (!d || ev.pointerId !== d.id) return;
+      if (d.on) this.placeDrop(ev.clientY);
+      this.endDrag(d.on);
+    }
+    // a drop moves the slides of the drag to its gap through the command slide.moveTo, as one entry
+    endDrag(dropped) {
+      const d = this.drag;
+      if (!d) return;
+      this.drag = null;
+      this.drop.hidden = true;
+      d.ghost?.remove();
+      for (const r of this.rows.values()) r.el.classList.remove("dragged");
+      if (!d.on) return;
+      this.eatClick = true;
+      setTimeout(() => this.eatClick = false, 0);
+      if (!dropped || d.gap < 0) return;
+      const list = this.slides();
+      const order = droppedOrder(list, d.slides, d.gap);
+      if (order.every((s, i) => s === list[i])) return;
+      const arg = { slides: d.slides, gap: d.gap };
+      void this.app.commands.run("slide.moveTo", arg).catch((e) => this.app.fail(e));
+    }
+    hidePeek() {
+      clearTimeout(this.timer);
+      this.peek.hidden = true;
+      this.peek.replaceChildren();
+    }
+    // a clone of the slide, scaled into the preview from its upper left, with every step shown. the
+    // canvases of a backdrop are painted from the originals, since a cloned canvas is blank, and a
+    // tycho viewer is left out, since its clone would start a second renderer
+    showPeek(slide, row) {
+      if (this.drag || isHidden(slide)) return;
+      const stage = slide.parentElement;
+      const width = stage.offsetWidth || 1920;
+      const height = stage.offsetHeight || 1080;
+      const clone = slide.cloneNode(true);
+      const from = slide.querySelectorAll("canvas");
+      clone.querySelectorAll("canvas").forEach((canvas, i) => {
+        try {
+          canvas.getContext("2d")?.drawImage(from[i], 0, 0);
+        } catch {
+        }
+      });
+      clone.querySelectorAll("aside.notes").forEach((n) => n.remove());
+      clone.querySelectorAll(".backdrop .lab").forEach((l) => {
+        if (!l.style.left) l.remove();
+      });
+      clone.querySelectorAll("tycho-viewer").forEach((v) => {
+        const box2 = document.createElement("div");
+        box2.className = v.className;
+        box2.setAttribute("style", v.getAttribute("style") ?? "");
+        v.replaceWith(box2);
+      });
+      clone.querySelectorAll("video").forEach((v) => {
+        v.removeAttribute("autoplay");
+        v.preload = "none";
+      });
+      for (const el of [clone, ...clone.querySelectorAll("*")]) {
+        for (const name of ["id", "contenteditable", "tabindex", "hidden", "aria-hidden"]) el.removeAttribute(name);
+        el.classList.remove("beeson-hover", "beeson-overflow", "current-fragment", "past", "future");
+        if (el.classList.contains("fragment")) el.classList.add("visible");
+      }
+      const layers2 = layersOf(clone);
+      showLayer(clone, layers2.length > 1 ? layers2[0] : null);
+      clone.classList.add("present");
+      clone.style.display = "block";
+      const deck = document.createElement("div");
+      deck.className = "reveal beeson-peek";
+      const slides = document.createElement("div");
+      slides.className = "slides";
+      slides.style.cssText = `inset: 0 auto auto 0; margin: 0; width: ${width}px; height: ${height}px; transform: scale(${PEEK_WIDTH / width}); transform-origin: 0 0;`;
+      slides.append(clone);
+      deck.append(slides);
+      const peekHeight = PEEK_WIDTH * height / width;
+      const top = Math.max(52, Math.min(row.getBoundingClientRect().top, innerHeight - 44 - peekHeight));
+      this.peek.style.left = `${this.pane.getBoundingClientRect().right + 8}px`;
+      this.peek.style.top = `${top}px`;
+      this.peek.style.height = `${peekHeight}px`;
+      this.peek.replaceChildren(deck);
+      this.peek.hidden = false;
+    }
+  };
+  function install2(app2) {
+    const nav2 = app2.nav;
+    app2.selection.listen(() => nav2.refresh());
+    app2.listen("slide", () => {
+      const current = app2.current();
+      if (current && app2.selection.kind === "slides" && !app2.selection.items.includes(current)) nav2.select([current], current);
+    });
+    document.addEventListener(
+      "pointerdown",
+      (ev) => {
+        const target = ev.target instanceof Element ? ev.target : null;
+        const active = document.activeElement;
+        if (target?.closest(".reveal") && active instanceof HTMLElement && nav2.pane.contains(active)) active.blur();
+      },
+      true
+    );
+  }
+
+  // src/editor/steps.ts
+  var CANDIDATES = "h1, h2, h3, p, li, table, pre, blockquote, div.math, figure, .zone, .plate, .qr, tycho-viewer, .caption, .foot, img, video";
+  var WITH_SLIDE = "h1, h2, h3, .foot";
+  var OUTSIDE = "aside.notes, .backdrop";
+  function candidates(slide, pairing) {
+    return [...slide.querySelectorAll(CANDIDATES)].filter((el) => {
+      if (!pairing.elements.get(el)?.open) return false;
+      const up = el.parentElement?.closest(`${CANDIDATES}, ${OUTSIDE}, section`);
+      return !up || up === slide;
+    });
+  }
+  function stepOf(el, pairing, edits) {
+    const base = stepIn(pairing.elements.get(el)?.attrs ?? []);
+    const e = edits.get(el);
+    return { fragment: e?.fragment ?? base.fragment, index: e?.index !== void 0 ? e.index : base.index };
+  }
+  function groupsOf(els, pairing, edits) {
+    const steps2 = els.map((el) => ({ el, ...stepOf(el, pairing, edits) })).filter((s) => s.fragment);
+    const groups = [];
+    let last = null;
+    for (const s of steps2.filter((s2) => s2.index !== null).sort((a, b) => a.index - b.index)) {
+      if (s.index !== last) {
+        groups.push([]);
+        last = s.index;
+      }
+      groups[groups.length - 1].push(s.el);
+    }
+    for (const s of steps2) if (s.index === null) groups.push([s.el]);
+    return groups;
+  }
+  var KINDS = [["h1, h2, h3", "Heading"], [".foot", "Footnote"], ["li", "Item"], ["p", "Paragraph"], ["div.math", "Formula"], ["table", "Table"], ["pre", "Code"], ["blockquote", "Quotation"], ["video", "Video"], ["tycho-viewer", "Scene"], [".qr", "QR code"], [".caption", "Caption"], ["img, figure, .zone, .plate", "Figure"]];
+  function textOf(el, tex) {
+    let out = "";
+    for (const child of el.childNodes) {
+      if (child.nodeType === Node.TEXT_NODE) out += child.nodeValue ?? "";
+      else if (child instanceof Element) out += child.localName === "mjx-container" ? tex(child) ?? "" : textOf(child, tex);
+    }
+    return out;
+  }
+  function describe2(el, tex) {
+    const kind = KINDS.find(([selector]) => el.matches(selector))?.[1] ?? el.localName;
+    const media = el.matches("img, video") ? el : el.querySelector("img, video");
+    let text = textOf(el, tex).replace(/\s+/g, " ").trim();
+    if (!text && media) text = media.getAttribute("alt") || (media.getAttribute("src") ?? media.querySelector("source")?.getAttribute("src") ?? "").split("/").pop() || "";
+    if (!text && el.matches("tycho-viewer")) text = el.getAttribute("src")?.split("/").pop() ?? "";
+    return { kind, text: text.length > 60 ? `${text.slice(0, 60)}\u2026` : text };
+  }
+  var CSS3 = `
+.beeson-edit-side { position: fixed; right: 0; top: 44px; bottom: 36px; z-index: 50; width: 320px; box-sizing: border-box; display: none; flex-direction: column; background: var(--bg, #000); border-left: 1px solid var(--line, #555); color: var(--text, #eee); font: 13px/1.4 system-ui, sans-serif; }
+html.beeson-steps .beeson-edit-side { display: flex; }
+.beeson-edit-side .head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--line, #555); }
+.beeson-edit-side .head span { flex: 1; font-weight: 600; }
+.beeson-edit-side .head button, .beeson-edit-side select { font: inherit; font-size: 12px; padding: 2px 8px; border: 1px solid var(--line, #555); border-radius: 6px; background: var(--bg, #000); color: var(--text, #eee); cursor: pointer; }
+.beeson-edit-side .head button:hover { border-color: var(--subtle, #bbb); }
+.beeson-edit-side .rows { flex: 1; overflow: auto; padding: 6px 0; }
+.beeson-edit-side .row { display: grid; grid-template-columns: auto auto 1fr; align-items: center; gap: 8px; padding: 5px 12px; cursor: default; }
+.beeson-edit-side .row:hover { background: color-mix(in srgb, var(--violet, #96f) 18%, transparent); }
+.beeson-edit-side .row .kind { color: var(--subtle, #bbb); white-space: nowrap; }
+.beeson-edit-side .row .text { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.beeson-edit-side .empty, .beeson-edit-side .foot { margin: 0; padding: 10px 12px; color: var(--subtle, #bbb); font-size: 12px; }
+.beeson-edit-side .foot { border-top: 1px solid var(--line, #555); }
+.beeson-badges { position: fixed; inset: 0; z-index: 52; pointer-events: none; }
+.beeson-badge { position: absolute; transform: translate(-50%, -50%); min-width: 22px; height: 22px; padding: 0 5px; box-sizing: border-box; border-radius: 11px; background: var(--accent, #f80); color: #000; font: 600 13px/22px system-ui, sans-serif; text-align: center; }
+html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f80) !important; outline-offset: 6px; }
+`;
+  var Steps = class {
+    constructor(ctx) {
+      this.pane = document.createElement("div");
+      this.badges = document.createElement("div");
+      this.button = document.createElement("button");
+      this.list = document.createElement("div");
+      this.on = false;
+      // what the rows show, so that they are built again only when it changes, since a select that
+      // is being opened would be lost
+      this.key = "";
+      injectStyle("steps", CSS3);
+      this.ctx = ctx;
+      this.pane.className = "beeson-edit-side";
+      this.badges.className = "beeson-badges";
+      this.button.textContent = "Steps";
+      this.button.title = "Show the order in which the elements of the slide appear";
+      this.button.setAttribute("aria-pressed", "false");
+      const head = document.createElement("div");
+      head.className = "head";
+      const title = document.createElement("span");
+      title.textContent = "Steps";
+      const each = document.createElement("button");
+      each.textContent = "One by one";
+      each.title = "Show every element of the slide in a step of its own, in reading order";
+      const none = document.createElement("button");
+      none.textContent = "All at once";
+      none.title = "Show every element with the slide";
+      each.addEventListener("click", () => this.setAll(true));
+      none.addEventListener("click", () => this.setAll(false));
+      head.append(title, each, none);
+      this.list.className = "rows";
+      const foot = document.createElement("p");
+      foot.className = "foot";
+      foot.textContent = "Elements with the same step appear together. A step is a reveal.js fragment in the file.";
+      this.pane.append(head, this.list, foot);
+      this.button.addEventListener("click", () => this.toggle());
+    }
+    toggle() {
+      this.on = document.documentElement.classList.toggle("beeson-steps");
+      this.button.classList.toggle("on", this.on);
+      this.button.setAttribute("aria-pressed", String(this.on));
+      this.ctx.layout();
+      this.refresh();
+    }
+    get shown() {
+      return this.on;
+    }
+    // the numbers on the slide follow its layout, and the rows are built again when the slide or
+    // its steps change
+    refresh() {
+      this.badges.replaceChildren();
+      const pairing = this.ctx.pairing();
+      const slide = this.ctx.slide();
+      if (!this.on || !pairing || !slide) {
+        this.key = "";
+        this.list.replaceChildren();
+        return;
+      }
+      const els = candidates(slide, pairing);
+      const groups = groupsOf(els, pairing, this.ctx.edits);
+      const stepOf2 = (el) => groups.findIndex((g) => g.includes(el));
+      for (const el of els) {
+        const at = stepOf2(el);
+        if (at < 0 || el.closest(`.${OFF}`)) continue;
+        const rect = el.getBoundingClientRect();
+        const badge = document.createElement("span");
+        badge.className = "beeson-badge";
+        badge.textContent = String(at + 1);
+        badge.style.left = `${rect.left}px`;
+        badge.style.top = `${rect.top}px`;
+        this.badges.append(badge);
+      }
+      const described = els.map((el) => describe2(el, this.ctx.tex));
+      const rows = els.map((el, i) => `${stepOf2(el)}|${described[i].kind}|${described[i].text}`);
+      const key = [pairing.sections.findIndex((s) => s.live === slide), groups.length, ...rows].join("\n");
+      if (key === this.key) return;
+      this.key = key;
+      this.list.replaceChildren();
+      if (!els.length) {
+        const empty = document.createElement("p");
+        empty.className = "empty";
+        empty.textContent = "This slide has no element that can be a step.";
+        this.list.append(empty);
+        return;
+      }
+      els.forEach((el, i) => {
+        const at = stepOf2(el);
+        const { kind, text } = described[i];
+        const row = document.createElement("div");
+        row.className = "row";
+        const select = document.createElement("select");
+        select.title = "The step at which this element appears";
+        select.setAttribute("aria-label", `Step of the ${kind.toLowerCase()}${text ? `: ${text}` : ""}`);
+        const option = (value, text2) => {
+          const o = document.createElement("option");
+          o.value = value;
+          o.textContent = text2;
+          select.append(o);
+        };
+        option("", "With slide");
+        if (groups.length) option("before", "Step 1, new, before the others");
+        groups.forEach((_, g) => option(String(g), `Step ${g + 1}`));
+        option(String(groups.length), `Step ${groups.length + 1}, new`);
+        select.value = at < 0 ? "" : String(at);
+        select.addEventListener("change", () => this.setStep(el, select.value === "" ? null : select.value === "before" ? "before" : Number(select.value)));
+        const kindEl = document.createElement("span");
+        kindEl.className = "kind";
+        kindEl.textContent = kind;
+        const textEl = document.createElement("span");
+        textEl.className = "text";
+        textEl.textContent = text;
+        row.append(select, kindEl, textEl);
+        row.addEventListener("pointerenter", () => el.classList.add("beeson-hover"));
+        row.addEventListener("pointerleave", () => el.classList.remove("beeson-hover"));
+        this.list.append(row);
+      });
+    }
+    // moves el to the group at position to, to a new last group with to at the count of the
+    // groups, to a new first group with 'before', which shifts the others by one, or out of the
+    // steps with null
+    setStep(el, to) {
+      const pairing = this.ctx.pairing();
+      const slide = this.ctx.slide();
+      if (!pairing || !slide) return;
+      const els = candidates(slide, pairing);
+      let groups = groupsOf(els, pairing, this.ctx.edits);
+      const target = to === null || to === "before" ? to : to >= groups.length ? "new" : groups[to];
+      for (const g of groups) {
+        const i = g.indexOf(el);
+        if (i >= 0) g.splice(i, 1);
+      }
+      groups = groups.filter((g) => g.length);
+      if (target === "before") groups.unshift([el]);
+      else if (target === "new") groups.push([el]);
+      else if (target && groups.includes(target)) target.push(el);
+      else if (target) groups.push([el]);
+      this.write(els, groups, pairing);
+    }
+    setAll(each) {
+      const pairing = this.ctx.pairing();
+      const slide = this.ctx.slide();
+      if (!pairing || !slide) return;
+      const els = candidates(slide, pairing);
+      this.write(els, each ? els.filter((el) => !el.matches(WITH_SLIDE)).map((el) => [el]) : [], pairing);
+    }
+    // the indices of the slide, numbered from the lowest index in the file, or from 1, are written
+    // into the edits and onto the page. an element that is not in a group is shown with the slide,
+    // and the change is one entry of the history
+    write(els, groups, pairing) {
+      const given = els.map((el) => stepIn(pairing.elements.get(el)?.attrs ?? []).index).filter((i) => i !== null);
+      const base = given.length ? Math.min(1, ...given) : 1;
+      const before = els.map((el) => ({ el, step: stepOf(el, pairing, this.ctx.edits) }));
+      const after = els.map((el) => {
+        const at = groups.findIndex((g) => g.includes(el));
+        return { el, step: at < 0 ? { fragment: false, index: null } : { fragment: true, index: base + at } };
+      });
+      if (before.every((b, i) => b.step.fragment === after[i].step.fragment && b.step.index === after[i].step.index)) return;
+      this.apply(after);
+      this.ctx.record({ label: "steps", undo: () => this.apply(before), redo: () => this.apply(after) });
+    }
+    apply(states) {
+      if (states.length) this.ctx.show(states[0].el);
+      for (const { el, step: step2 } of states) {
+        this.ctx.edits.set(el, { ...this.ctx.edits.get(el), ...step2 });
+        el.classList.toggle("fragment", step2.fragment);
+        el.classList.toggle("visible", step2.fragment);
+        el.classList.remove("current-fragment");
+        if (step2.index === null) el.removeAttribute("data-fragment-index");
+        else el.setAttribute("data-fragment-index", String(step2.index));
+      }
+      this.ctx.markDirty();
+      this.ctx.changed();
+    }
+  };
+
   // src/editor/file/files.ts
   var FILE_TYPES = [{ description: "HTML", accept: { "text/html": [".html", ".htm"] } }];
   var AUTOSAVE_KEY = "beeson-autosave";
@@ -2114,7 +2661,7 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
   var REPLACE = () => `Replace ${fileName()} in ${folder()} with it, or set the browser to ask where to save each download`;
   var plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
   var clock = () => (/* @__PURE__ */ new Date()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  var CSS3 = `
+  var CSS4 = `
 .beeson-edit-card { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 65; box-sizing: border-box; width: min(600px, calc(100vw - 32px)); padding: 24px 28px; border: 1px solid var(--line, #555); border-radius: 10px; background: var(--bg, #000); color: var(--text, #eee); font: 15px/1.5 system-ui, sans-serif; box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45); }
 .beeson-edit-card[hidden] { display: none; }
 .beeson-edit-card h3 { margin: 0 0 8px; font: 600 18px/1.3 system-ui, sans-serif; }
@@ -2176,8 +2723,8 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
       discard: ["Present the saved file", "Show the deck as saved in a new tab, and keep the edits here"]
     }
   };
-  function install(app2) {
-    injectStyle("files", CSS3);
+  function install3(app2) {
+    injectStyle("files", CSS4);
     const card = make("div", "beeson-edit-card");
     const cardText = make("p");
     const cardButton = button(`Choose ${fileName()}\u2026`);
@@ -2458,7 +3005,7 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
   // src/editor/file/drafts.ts
   var DRAFT_KEY = `beeson-draft:${location.href.split(/[?#]/)[0]}`;
   var DRAFT_DELAY = 1e3;
-  var CSS4 = `
+  var CSS5 = `
 .beeson-edit-card.recover { z-index: 66; }
 `;
   function readDraft() {
@@ -2471,8 +3018,8 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
       return null;
     }
   }
-  function install2(app2) {
-    injectStyle("drafts", CSS4);
+  function install4(app2) {
+    injectStyle("drafts", CSS5);
     const recover = make("div", "beeson-edit-card recover");
     const recoverText = make("p");
     const restoreButton = button("Restore and save", "Write the edits into the file and show the page again");
@@ -2561,7 +3108,7 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
 
   // src/editor/notes.ts
   var PANE_KEY = "beeson-pane";
-  var CSS5 = `
+  var CSS6 = `
 .beeson-edit-pane { position: fixed; left: 0; right: 0; bottom: 36px; z-index: 0; height: var(--beeson-pane, 200px); box-sizing: border-box; display: none; background: var(--bg, #000); border-top: 1px solid var(--line, #555); color: var(--subtle, #bbb); font: 12px/1.4 system-ui, sans-serif; padding: 8px 16px; }
 html.beeson-notes .beeson-edit-pane { display: block; }
 html.beeson-nav .beeson-edit-pane, html.beeson-nav .beeson-edit-resize { left: 240px; }
@@ -2575,8 +3122,8 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes { 
 html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:focus { outline-color: var(--violet, #96f); }
 html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:empty::before { content: 'Click to add notes'; color: var(--subtle, #bbb); }
 `;
-  function install3(app2) {
-    injectStyle("notes", CSS5);
+  function install5(app2) {
+    injectStyle("notes", CSS6);
     const notesButton = button("Notes", "Show the speaker notes under the slide");
     notesButton.setAttribute("aria-pressed", "false");
     const pane = make("div", "beeson-edit-pane", "Notes");
@@ -2646,11 +3193,11 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:em
   }
 
   // src/editor/overflow.ts
-  var CSS6 = `
+  var CSS7 = `
 html.beeson-editing .reveal .beeson-overflow { outline: 2px dashed var(--accent, #f80) !important; outline-offset: 6px; }
 `;
-  function install4(app2) {
-    injectStyle("overflow", CSS6);
+  function install6(app2) {
+    injectStyle("overflow", CSS7);
     app2.onRefresh(ALL, () => {
       const slide = app2.current();
       const box2 = app2.slides().getBoundingClientRect();
@@ -2676,7 +3223,7 @@ html.beeson-editing .reveal .beeson-overflow { outline: 2px dashed var(--accent,
   }
 
   // src/editor/text/typing.ts
-  var CSS7 = `
+  var CSS8 = `
 html.beeson-editing .reveal [contenteditable="true"] { cursor: text; outline: 1px dashed transparent; outline-offset: 6px; border-radius: 2px; }
 html.beeson-editing .reveal [contenteditable="true"]:hover { outline-color: var(--subtle, #bbb); }
 html.beeson-editing .reveal [contenteditable="true"]:focus { outline: 2px solid var(--violet, #96f); }
@@ -2796,8 +3343,8 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
       if (i < lines2.length - 1) document.execCommand("insertLineBreak");
     });
   }
-  function install5(app2) {
-    injectStyle("typing", CSS7);
+  function install7(app2) {
+    injectStyle("typing", CSS8);
     const history = app2.history;
     let hosts = [];
     function markMath(root) {
@@ -2882,7 +3429,7 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
   }
 
   // src/editor/text/mathpop.ts
-  var CSS8 = `
+  var CSS9 = `
 .beeson-math { position: fixed; z-index: 70; display: flex; flex-direction: column; gap: 6px; width: min(640px, calc(100vw - 32px)); box-sizing: border-box; padding: 10px; border: 1px solid var(--line, #555); border-radius: 6px; background: var(--bg, #000); color: var(--text, #eee); font: 14px/1.4 system-ui, sans-serif; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); }
 .beeson-math textarea { font: 14px/1.4 ui-monospace, Menlo, Consolas, monospace; min-height: 5em; padding: 6px; border: 1px solid var(--line, #555); border-radius: 4px; background: transparent; color: inherit; resize: vertical; }
 .beeson-math .row { display: flex; gap: 8px; align-items: center; }
@@ -2896,8 +3443,8 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
 .beeson-math .preview:empty { display: none; }
 .beeson-math button:disabled { opacity: 0.5; cursor: default; }
 `;
-  function install6(app2) {
-    injectStyle("mathpop", CSS8);
+  function install8(app2) {
+    injectStyle("mathpop", CSS9);
     let popover = null;
     let popoverFor = null;
     function closeMath(back = true) {
@@ -3008,7 +3555,7 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
   }
 
   // src/editor/shell/canvas.ts
-  var CSS9 = `
+  var CSS10 = `
 html.beeson-editor { --beeson-left: 6px; --beeson-right: 6px; }
 html.beeson-editor.beeson-nav { --beeson-left: 246px; }
 html.beeson-editor.beeson-steps { --beeson-right: 326px; }
@@ -3018,8 +3565,8 @@ html.beeson-editor .reveal .progress, html.beeson-editor .reveal .slide-number {
 html.beeson-editing .reveal .slides section .fragment { visibility: visible !important; opacity: 1 !important; transition: none !important; }
 html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: hidden !important; }
 `;
-  function install7(app2) {
-    injectStyle("canvas", CSS9);
+  function install9(app2) {
+    injectStyle("canvas", CSS10);
     const layout = () => {
       const d = app2.deck();
       if (!d) return;
@@ -3037,7 +3584,7 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
   }
 
   // src/editor/shell/toolbar.ts
-  var CSS10 = `
+  var CSS11 = `
 .beeson-edit-top, .beeson-edit-bottom { position: fixed; left: 0; right: 0; z-index: 60; display: flex; align-items: center; gap: 12px; box-sizing: border-box; padding: 0 16px; background: var(--bg, #000); color: var(--text, #eee); font: 14px/1.4 system-ui, sans-serif; }
 .beeson-edit-top { top: 0; height: 44px; border-bottom: 1px solid var(--line, #555); }
 .beeson-edit-top .file { font-weight: 600; white-space: nowrap; }
@@ -3048,8 +3595,8 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
 .beeson-edit-top button:disabled { opacity: 0.4; cursor: default; }
 .beeson-edit-top button.on { border-color: var(--accent, #f80); color: var(--accent, #f80); }
 `;
-  function install8(app2) {
-    injectStyle("toolbar", CSS10);
+  function install10(app2) {
+    injectStyle("toolbar", CSS11);
     const top = make("div", "beeson-edit-top");
     const fileEl = make("span", "file");
     const stateEl = make("span", "state");
@@ -3098,7 +3645,7 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
   }
 
   // src/editor/shell/statusbar.ts
-  var CSS11 = `
+  var CSS12 = `
 .beeson-edit-bottom { bottom: 0; height: 36px; font-size: 13px; color: var(--subtle, #bbb); border-top: 1px solid var(--line, #555); }
 .beeson-edit-bottom button { padding: 2px 10px; font-size: 13px; }
 .beeson-edit-bottom button.on { border-color: var(--violet, #96f); color: var(--text, #eee); }
@@ -3108,8 +3655,8 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
 .beeson-edit-bottom .beeson-layers > span { margin-right: 4px; }
 .beeson-edit-bottom .hint { flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 `;
-  function install9(app2, layers2) {
-    injectStyle("statusbar", CSS11);
+  function install11(app2, layers2) {
+    injectStyle("statusbar", CSS12);
     const bottom = make("div", "beeson-edit-bottom");
     const prevButton = button("\u2039", "Previous slide", "Previous slide");
     const countEl = make("span", "count");
@@ -3130,31 +3677,31 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
   }
 
   // src/editor/shell/shell.ts
-  function install10(_app) {
-  }
-
-  // src/editor/shell/menubar.ts
-  function install11(_app) {
-  }
-
-  // src/editor/shell/keys-sheet.ts
   function install12(_app) {
   }
 
-  // src/editor/ui/menu.ts
+  // src/editor/shell/menubar.ts
   function install13(_app) {
   }
 
-  // src/editor/ui/dialog.ts
+  // src/editor/shell/keys-sheet.ts
   function install14(_app) {
   }
 
-  // src/editor/ui/icons.ts
+  // src/editor/ui/menu.ts
   function install15(_app) {
   }
 
-  // src/editor/keymap.ts
+  // src/editor/ui/dialog.ts
   function install16(_app) {
+  }
+
+  // src/editor/ui/icons.ts
+  function install17(_app) {
+  }
+
+  // src/editor/keymap.ts
+  function install18(_app) {
   }
 
   // src/editor/canvas/hit.ts
@@ -3232,7 +3779,7 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
     return best?.el ?? null;
   }
   var hasText = (el) => el.matches(HOST) || !!el.querySelector(HOST);
-  function install17(_app) {
+  function install19(_app) {
   }
 
   // src/editor/canvas/snap.ts
@@ -3244,11 +3791,11 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
   var end = (b, axis) => start(b, axis) + size(b, axis);
   var other = (axis) => axis === "x" ? "y" : "x";
   var edgesOf = (b, axis) => [start(b, axis), start(b, axis) + size(b, axis) / 2, end(b, axis)];
-  function linesOf(targets, axis) {
-    const extent = axis === "x" ? targets.slide.width : targets.slide.height;
+  function linesOf(targets2, axis) {
+    const extent = axis === "x" ? targets2.slide.width : targets2.slide.height;
     const lines2 = [0, extent / 2, extent].map((at) => ({ at, kind: "slide", box: null }));
-    for (const at of targets.layout?.[axis] ?? []) lines2.push({ at, kind: "layout", box: null });
-    for (const box2 of [...targets.boxes, ...targets.frames ?? []]) for (const at of edgesOf(box2, axis)) lines2.push({ at, kind: "element", box: box2 });
+    for (const at of targets2.layout?.[axis] ?? []) lines2.push({ at, kind: "layout", box: null });
+    for (const box2 of [...targets2.boxes, ...targets2.frames ?? []]) for (const at of edgesOf(box2, axis)) lines2.push({ at, kind: "element", box: box2 });
     return lines2;
   }
   function nearest(edges, lines2, threshold) {
@@ -3261,9 +3808,9 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
     }
     return best;
   }
-  function guidesAt(box2, axis, edges, lines2, targets) {
+  function guidesAt(box2, axis, edges, lines2, targets2) {
     const across = other(axis);
-    const extent = across === "x" ? targets.slide.width : targets.slide.height;
+    const extent = across === "x" ? targets2.slide.width : targets2.slide.height;
     const out = /* @__PURE__ */ new Map();
     for (const line of lines2) {
       if (!edges.some((e) => Math.abs(line.at - e) < SAME)) continue;
@@ -3313,13 +3860,13 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
     }
     return null;
   }
-  function snapMove(box2, targets, threshold, axes = { x: true, y: true }) {
+  function snapMove(box2, targets2, threshold, axes = { x: true, y: true }) {
     const shift = { x: 0, y: 0 };
-    const lines2 = { x: linesOf(targets, "x"), y: linesOf(targets, "y") };
+    const lines2 = { x: linesOf(targets2, "x"), y: linesOf(targets2, "y") };
     for (const axis of ["x", "y"]) {
       if (!axes[axis]) continue;
       let best = nearest(edgesOf(box2, axis), lines2[axis], threshold);
-      for (const at of spacingStarts(box2, axis, targets.boxes)) {
+      for (const at of spacingStarts(box2, axis, targets2.boxes)) {
         const d = Math.abs(at - start(box2, axis));
         if (d <= threshold && (!best || d < best.d)) best = { shift: at - start(box2, axis), d };
       }
@@ -3330,8 +3877,8 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
     const spacing = [];
     for (const axis of ["x", "y"]) {
       if (!axes[axis]) continue;
-      guides.push(...guidesAt(moved, axis, edgesOf(moved, axis), lines2[axis], targets));
-      const s = spacingOf(moved, axis, targets.boxes);
+      guides.push(...guidesAt(moved, axis, edgesOf(moved, axis), lines2[axis], targets2));
+      const s = spacingOf(moved, axis, targets2.boxes);
       if (s) spacing.push(s);
     }
     return { dx: shift.x, dy: shift.y, guides, spacing };
@@ -3370,14 +3917,14 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
     } else if (x) w = Math.max(MIN, from.width + k * x * dx);
     return anchored(from, handle, w, h, o.center);
   }
-  function snapResize(from, handle, box2, targets, threshold, o) {
+  function snapResize(from, handle, box2, targets2, threshold, o) {
     const sides = SIDES[handle];
     const moving = (b, axis) => {
       const sign = sides[axis];
       if (!sign || !o.aspect && axis === "y") return [];
       return o.center ? [start(b, axis), end(b, axis)] : [sign === 1 ? end(b, axis) : start(b, axis)];
     };
-    const lines2 = { x: linesOf(targets, "x"), y: linesOf(targets, "y") };
+    const lines2 = { x: linesOf(targets2, "x"), y: linesOf(targets2, "y") };
     let best = null;
     for (const axis of ["x", "y"]) {
       for (const edge of moving(box2, axis)) {
@@ -3402,16 +3949,16 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
       out = anchored(from, handle, w, h, o.center);
     }
     const guides = [];
-    for (const axis of ["x", "y"]) guides.push(...guidesAt(out, axis, moving(out, axis), lines2[axis], targets));
+    for (const axis of ["x", "y"]) guides.push(...guidesAt(out, axis, moving(out, axis), lines2[axis], targets2));
     return { box: out, guides };
   }
-  function install18(_app) {
+  function install20(_app) {
   }
 
   // src/editor/canvas/frames.ts
   var HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
   var view = { hover: null, moving: null, resizing: false, guides: [], spacing: [], readout: null, marquee: null };
-  var CSS12 = `
+  var CSS13 = `
 .beeson-overlay { position: fixed; inset: 0; z-index: 51; pointer-events: none; }
 .beeson-frame { position: fixed; pointer-events: none; box-sizing: border-box; border: 1px dashed var(--ed-muted, var(--subtle, #bbb)); }
 .beeson-frame.selected { border: 2px solid var(--ed-select, #7048e8); }
@@ -3457,7 +4004,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
       this.frames = [];
       this.guides = [];
       this.gaps = [];
-      injectStyle("frames", CSS12);
+      injectStyle("frames", CSS13);
       this.app = app2;
       this.layer = document.createElement("div");
       this.layer.className = "beeson-overlay";
@@ -3576,7 +4123,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     if (!installed) throw new Error("the frames are not installed");
     return installed;
   }
-  function install19(app2) {
+  function install21(app2) {
     const frames = new Frames(app2);
     installed = frames;
     document.body.append(frames.layer);
@@ -3638,7 +4185,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     const p = (v) => (parseFloat(v) || 0) * k;
     return { left: r.left + p(s.paddingLeft), top: r.top + p(s.paddingTop), width: r.width - p(s.paddingLeft) - p(s.paddingRight), height: r.height - p(s.paddingTop) - p(s.paddingBottom) };
   }
-  function install20(app2) {
+  function install22(app2) {
     const frames = overlay();
     let press = null;
     const mac = () => app2.platform === "mac";
@@ -3793,8 +4340,8 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
       view.guides = snap?.guides ?? [];
       view.spacing = snap?.spacing ?? [];
       const t = p.el ? placeOf2(p.el).translate : null;
-      const seen = union(p.els.map(visualRect));
-      view.readout = { text: `${t?.x ?? 0}, ${t?.y ?? 0}`, x: seen.left + seen.width + 6, y: seen.top + seen.height + 10, at: "frame" };
+      const seen2 = union(p.els.map(visualRect));
+      view.readout = { text: `${t?.x ?? 0}, ${t?.y ?? 0}`, x: seen2.left + seen2.width + 6, y: seen2.top + seen2.height + 10, at: "frame" };
       document.documentElement.classList.add("beeson-dragging");
       frames.draw();
       app2.invalidate("content");
@@ -3817,13 +4364,13 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
         view.guides = snapped.guides;
       }
       el.style.width = `${Math.round(box2.width)}px`;
-      const seen = toSlide(f, visualRect(el));
+      const seen2 = toSlide(f, visualRect(el));
       const h = p.handle;
       const shift = (a) => {
         const [s, w] = a === "x" ? ["left", "width"] : ["top", "height"];
         const side = a === "x" ? h.includes("w") ? -1 : h.includes("e") ? 1 : 0 : h.includes("n") ? -1 : h.includes("s") ? 1 : 0;
-        if (o.center || side === 0) return box2[s] + box2[w] / 2 - (seen[s] + seen[w] / 2);
-        return side === 1 ? box2[s] - seen[s] : box2[s] + box2[w] - (seen[s] + seen[w]);
+        if (o.center || side === 0) return box2[s] + box2[w] / 2 - (seen2[s] + seen2[w] / 2);
+        return side === 1 ? box2[s] - seen2[s] : box2[s] + box2[w] - (seen2[s] + seen2[w]);
       };
       const now = placeOf2(el).translate ?? { x: 0, y: 0 };
       writeLive(el, { translate: { x: now.x + shift("x"), y: now.y + shift("y") }, width: box2.width });
@@ -4109,7 +4656,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     return false;
   }
   var mine = [];
-  function install21(app2) {
+  function install23(app2) {
     mine = commands().map((c) => app2.commands.define(c));
     app2.selection.listen(() => run = null);
   }
@@ -4131,7 +4678,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
       if (!el.hasAttribute("aria-label") && !el.hasAttribute("alt")) el.setAttribute("aria-label", "Figure: the arrow keys move it, Esc deselects it");
     }
   }
-  function install22(app2) {
+  function install24(app2) {
     let kind = "none";
     let items = [];
     const listeners = [];
@@ -4193,14 +4740,6 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     });
   }
 
-  // src/editor/navigator/navigator.ts
-  function install23(_app) {
-  }
-
-  // src/editor/navigator/thumbs.ts
-  function install24(_app) {
-  }
-
   // src/editor/commands/file.ts
   function install25(app2) {
     const c = app2.commands;
@@ -4234,11 +4773,490 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
   }
 
   // src/editor/commands/slide.ts
-  function install29(_app) {
+  var MARK = "<!--beeson-->";
+  var LABELS = { title: "Title", section: "Section", content: "Content", narrow: "Content, Narrow", wide: "Content, Wide", figure: "Figure", split: "Split", closing: "Closing" };
+  var CSS14 = `
+html.beeson-editor .reveal:not(.beeson-peek) .slides section :is(h1, h2, p)[contenteditable="true"]:empty::before { color: var(--muted, #888); pointer-events: none; }
+html.beeson-editor .reveal:not(.beeson-peek) .slides section :is(h1, h2)[contenteditable="true"]:empty::before { content: "Title"; }
+html.beeson-editor .reveal:not(.beeson-peek) .slides section p.sub[contenteditable="true"]:empty::before { content: "Subtitle"; }
+html.beeson-editor .reveal:not(.beeson-peek) .slides section p.who[contenteditable="true"]:empty::before { content: "Author"; }
+html.beeson-editor .reveal:not(.beeson-peek) .slides section p.caption[contenteditable="true"]:empty::before { content: "Caption"; }
+html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable="true"]:empty::before, html.beeson-editor .reveal:not(.beeson-peek) .slides section .panel > p[contenteditable="true"]:empty::before { content: "Text"; }
+.beeson-edit-gallery { --g-bg: var(--ed-panel, #fbfbfd); --g-text: var(--ed-text, #1d1d1f); --g-muted: var(--ed-muted, #6e6e73); --g-line: var(--ed-line, #d2d2d7); --g-select: var(--ed-select, #7a5af8); }
+@media (prefers-color-scheme: dark) {
+  .beeson-edit-gallery { --g-bg: var(--ed-panel, #2c2c2e); --g-text: var(--ed-text, #f2f2f7); --g-muted: var(--ed-muted, #a1a1a6); --g-line: var(--ed-line, #48484a); --g-select: var(--ed-select, #9b82ff); }
+}
+.beeson-edit-gallery { position: fixed; z-index: 80; margin: 0; padding: 12px 14px 14px; width: 456px; box-sizing: border-box; border: 1px solid var(--g-line); border-radius: 12px; background: var(--g-bg); color: var(--g-text); box-shadow: 0 12px 40px rgba(0, 0, 0, 0.28); font: 12px/1.3 system-ui, sans-serif; }
+.beeson-edit-gallery .head { margin: 0 0 10px 2px; font-size: 13px; font-weight: 600; }
+.beeson-edit-gallery .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px 10px; }
+.beeson-edit-gallery .tile { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 4px; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; cursor: pointer; }
+.beeson-edit-gallery .tile .pic { display: block; width: 92px; aspect-ratio: 16 / 9; border-radius: 4px; outline: 1px solid var(--g-line); background: var(--bg, #000); }
+.beeson-edit-gallery .tile:hover .pic { outline: 2px solid var(--g-select); }
+.beeson-edit-gallery .tile:focus-visible { outline: none; background: color-mix(in srgb, var(--g-select) 16%, transparent); }
+.beeson-edit-gallery .tile:focus-visible .pic { outline: 2px solid var(--g-select); }
+.beeson-edit-gallery .tile span { text-align: center; }
+`;
+  function docOf(app2) {
+    return app2.doc;
+  }
+  var navOf = (app2) => app2.nav;
+  var sections = (app2) => [...app2.slides().querySelectorAll(":scope > section")];
+  var ready = (app2) => !!app2.pairing?.root;
+  var targets = (app2) => ready(app2) ? navOf(app2).selected() : [];
+  function placeAfter(app2) {
+    const last = navOf(app2).selected().at(-1) ?? null;
+    return { root: app2.slides(), before: last?.nextElementSibling ?? null };
+  }
+  function land(app2, slides, current, focusNav) {
+    const nav2 = navOf(app2);
+    nav2.select(slides, current);
+    if (focusNav) nav2.focus(current);
+  }
+  function caretInto(slide) {
+    const block = slide.querySelector('h1[contenteditable="true"], h2[contenteditable="true"]') ?? slide.querySelector('[contenteditable="true"]');
+    if (!block) return;
+    block.focus({ preventScroll: true });
+    const range = document.createRange();
+    range.selectNodeContents(block);
+    range.collapse(true);
+    const sel = getSelection();
+    sel?.removeAllRanges();
+    sel?.addRange(range);
+  }
+  async function newSlide(app2, layout) {
+    const { before } = placeAfter(app2);
+    const slide = await docOf(app2).insertSlide(layout, before);
+    navOf(app2).select([slide], slide);
+    caretInto(slide);
+    return slide;
+  }
+  function nextLayout(app2) {
+    const s = navOf(app2).selected().at(-1);
+    if (!s || s.matches(".title, .section, .closing, .figure, .split")) return "content";
+    return s.classList.contains("narrow") ? "narrow" : s.classList.contains("wide") ? "wide" : "content";
+  }
+  async function applyOrder(app2, desired) {
+    const doc2 = docOf(app2);
+    const root = app2.slides();
+    for (let i = 0; i < desired.length; i++) {
+      const live = sections(app2);
+      if (live[i] !== desired[i]) await doc2.move(desired[i], root, live[i], "move slide");
+    }
+  }
+  function shifted(list, moved, up) {
+    const out = [...list];
+    const idx = up ? out.map((_, i) => i) : out.map((_, i) => out.length - 1 - i);
+    for (const i of idx) {
+      const j = up ? i - 1 : i + 1;
+      if (j < 0 || j >= out.length || !moved.has(out[i]) || moved.has(out[j])) continue;
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+    return out;
+  }
+  var canShift = (app2, up) => {
+    const list = sections(app2);
+    const t = targets(app2);
+    return t.length > 0 && shifted(list, new Set(t), up).some((s, i) => s !== list[i]);
+  };
+  function clipText(app2, slides) {
+    const doc2 = docOf(app2);
+    const eol = app2.source?.crlf ? "\r\n" : "\n";
+    return [MARK, ...slides.map((s) => doc2.elementText(s))].join(eol);
+  }
+  function slidesIn(text) {
+    const at = text.indexOf(MARK);
+    if (at < 0 || text.slice(0, at).trim()) return null;
+    const body = text.slice(at + MARK.length);
+    const out = [];
+    let depth = 0;
+    let start2 = 0;
+    for (const t of tokenize(body)) {
+      if (t.type === "start" && t.name === "section" && !t.selfClosing) {
+        if (depth++ === 0) start2 = t.start;
+      } else if (t.type === "end" && t.name === "section" && depth > 0 && --depth === 0) out.push(body.slice(start2, t.end));
+    }
+    return out;
+  }
+  function freshIds(app2, text) {
+    const doc2 = docOf(app2);
+    let out = text;
+    for (const id of new Set([...text.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]))) {
+      if (!document.getElementById(id)) continue;
+      const next = doc2.uniqueId(id);
+      out = out.split(`id="${id}"`).join(`id="${next}"`).split(`data-plot="${id}"`).join(`data-plot="${next}"`);
+    }
+    return out;
+  }
+  var copied = "";
+  function copySlides(app2, data) {
+    const text = clipText(app2, targets(app2));
+    copied = text;
+    if (data) {
+      data.setData("text/plain", text);
+      data.setData("text/html", text);
+    } else void navigator.clipboard?.writeText(text).catch(() => {
+    });
+    return text;
+  }
+  async function deleteSlides(app2, slides, focusNav) {
+    const list = sections(app2);
+    const gone = new Set(slides);
+    const lastAt = list.indexOf(slides.at(-1));
+    const next = list.slice(lastAt + 1).find((s) => !gone.has(s)) ?? [...list.slice(0, list.indexOf(slides[0]))].reverse().find((s) => !gone.has(s)) ?? null;
+    const doc2 = docOf(app2);
+    for (const s of [...slides].reverse()) await doc2.remove(s, "delete slide");
+    if (next) land(app2, [next], next, focusNav);
+  }
+  async function pasteSlides(app2, text, focusNav) {
+    const texts = slidesIn(text);
+    if (!texts?.length) return false;
+    const { root, before } = placeAfter(app2);
+    const nodes = await docOf(app2).insert(texts.map((t) => freshIds(app2, t)), root, before, "paste slides");
+    land(app2, nodes, nodes[0], focusNav);
+    return true;
+  }
+  var SAMPLE = { h1: "Title of the talk", h2: "Title", "p.sub": "Subtitle", "p.who": "Name", "p.caption": "Caption of the figure", p: "A sentence of the text." };
+  function sampleSlide(app2, layout) {
+    const box2 = document.createElement("div");
+    box2.innerHTML = layoutText(layout, { eol: "\n", step: "  " });
+    const slide = box2.firstElementChild;
+    for (const [sel, text] of Object.entries(SAMPLE)) for (const el of slide.querySelectorAll(sel)) if (!el.textContent) el.textContent = text;
+    for (const el of slide.querySelectorAll(".zone, .plate")) el.style.outline = "4px dashed color-mix(in srgb, var(--muted) 70%, transparent)";
+    for (const list of slide.querySelectorAll("ul.outline")) for (const t of ["Chapter one", "Chapter two"]) list.append(Object.assign(document.createElement("li"), { textContent: t }));
+    const backdrop = slide.querySelector(".backdrop");
+    const cls = layout === "content" || layout === "narrow" || layout === "wide" ? null : layout;
+    const original = cls ? sections(app2).find((s) => s.classList.contains(cls) && s.querySelector(":scope > .backdrop canvas"))?.querySelector(":scope > .backdrop") : null;
+    if (backdrop && original) {
+      const copy = original.cloneNode(true);
+      const from = original.querySelectorAll("canvas");
+      copy.querySelectorAll("canvas").forEach((c, i) => {
+        c.style.width = `${from[i].offsetWidth}px`;
+        c.style.height = `${from[i].offsetHeight}px`;
+        try {
+          c.getContext("2d")?.drawImage(from[i], 0, 0);
+        } catch {
+        }
+      });
+      backdrop.replaceWith(copy);
+    }
+    return slide;
+  }
+  var gallery = null;
+  function closeGallery(back = true) {
+    if (!gallery) return;
+    const g = gallery;
+    gallery = null;
+    const anchor = g.anchor;
+    g.close();
+    g.remove();
+    if (back && anchor?.isConnected) anchor.focus({ preventScroll: true });
+  }
+  function openGallery(app2, anchor) {
+    closeGallery(false);
+    const dialog = document.createElement("dialog");
+    dialog.className = "beeson-edit-gallery";
+    dialog.setAttribute("aria-label", "New slide");
+    dialog.anchor = anchor ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+    const head = document.createElement("div");
+    head.className = "head";
+    head.textContent = "New Slide";
+    const grid = document.createElement("div");
+    grid.className = "grid";
+    grid.setAttribute("role", "listbox");
+    grid.setAttribute("aria-label", "Layouts");
+    const stage = app2.slides();
+    const deck = { width: stage.offsetWidth || 1920, height: stage.offsetHeight || 1080 };
+    const tiles = LAYOUTS.map((layout) => {
+      const tile = document.createElement("button");
+      tile.type = "button";
+      tile.className = "tile";
+      tile.dataset.layout = layout;
+      tile.setAttribute("role", "option");
+      const pic = document.createElement("span");
+      pic.className = "pic";
+      const name = document.createElement("span");
+      name.textContent = LABELS[layout];
+      tile.append(pic, name);
+      tile.addEventListener("click", () => {
+        closeGallery(false);
+        void app2.commands.run(`slide.new.${layout}`).catch((e) => app2.fail(e));
+      });
+      grid.append(tile);
+      return { tile, pic, layout };
+    });
+    dialog.append(head, grid);
+    document.body.append(dialog);
+    dialog.show();
+    for (const t of tiles) drawInto(t.pic, sampleSlide(app2, t.layout), deck, 92);
+    place2(dialog, dialog.anchor ?? null, navOf(app2).rowOf(app2.current()));
+    dialog.addEventListener("keydown", (ev) => {
+      const i = tiles.findIndex((t) => t.tile === document.activeElement);
+      const step2 = { ArrowRight: 1, ArrowLeft: -1, ArrowDown: 4, ArrowUp: -4 };
+      if (ev.key === "Escape") closeGallery();
+      else if (ev.key in step2) tiles[Math.min(tiles.length - 1, Math.max(0, i + step2[ev.key]))].tile.focus();
+      else if (ev.key === "Home" || ev.key === "End") tiles[ev.key === "Home" ? 0 : tiles.length - 1].tile.focus();
+      else if (ev.key === "Tab") tiles[(i + (ev.shiftKey ? tiles.length - 1 : 1)) % tiles.length].tile.focus();
+      else return;
+      ev.preventDefault();
+      ev.stopPropagation();
+    });
+    const outside = (ev) => {
+      if (!gallery) document.removeEventListener("pointerdown", outside, true);
+      else if (!gallery.contains(ev.target)) {
+        document.removeEventListener("pointerdown", outside, true);
+        closeGallery(false);
+      }
+    };
+    document.addEventListener("pointerdown", outside, true);
+    gallery = dialog;
+    (tiles.find((t) => t.layout === nextLayout(app2)) ?? tiles[0]).tile.focus();
+  }
+  function place2(dialog, anchor, row) {
+    const w = dialog.offsetWidth;
+    const h = dialog.offsetHeight;
+    const a = anchor && !anchor.closest(".beeson-edit-nav") ? anchor.getBoundingClientRect() : null;
+    let x;
+    let y;
+    if (a && a.bottom < innerHeight / 3) {
+      x = a.left;
+      y = a.bottom + 6;
+    } else {
+      const r = (row ?? anchor)?.getBoundingClientRect();
+      x = r ? r.right + 10 : 260;
+      y = r ? r.top - 8 : 60;
+    }
+    dialog.style.left = `${Math.max(8, Math.min(x, innerWidth - w - 8))}px`;
+    dialog.style.top = `${Math.max(8, Math.min(y, innerHeight - h - 8))}px`;
+  }
+  function matchKey(platform, key, ev) {
+    const parts = key.split("+");
+    const name = parts.pop() ?? "";
+    const want = { meta: false, ctrl: false, alt: false, shift: false };
+    for (const p of parts) {
+      if (p === "Mod") want[platform === "mac" ? "meta" : "ctrl"] = true;
+      else if (p === "Ctrl") want.ctrl = true;
+      else if (p === "Meta") want.meta = true;
+      else if (p === "Alt") want.alt = true;
+      else if (p === "Shift") want.shift = true;
+    }
+    if (ev.metaKey !== want.meta || ev.ctrlKey !== want.ctrl || ev.altKey !== want.alt || ev.shiftKey !== want.shift) return false;
+    if (name.length === 1) return ev.key.toLowerCase() === name.toLowerCase() || ev.code === `Key${name.toUpperCase()}`;
+    return ev.key === name;
+  }
+  function takeKeys(app2, ids) {
+    window.addEventListener("keydown", (ev) => {
+      if (ev.defaultPrevented || ev.isComposing || ev.getModifierState?.("AltGraph")) return;
+      const region = app2.region();
+      for (const id of ids) {
+        const c = app2.commands.get(id);
+        const keys = c?.keys?.[app2.platform] ?? [];
+        if (!c || !(c.in ?? ["canvas", "navigator"]).includes(region) || !keys.some((k) => matchKey(app2.platform, k, ev))) continue;
+        if (!app2.commands.enabled(id)) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        void app2.commands.run(id).catch((e) => app2.fail(e));
+        return;
+      }
+    }, true);
+  }
+  function install29(app2) {
+    injectStyle("slide", CSS14);
+    const c = app2.commands;
+    const inNav = () => app2.region() === "navigator";
+    const slideMenu = (order, group = "slide") => ({ bar: "Slide", group, order });
+    const defs = [
+      {
+        id: "slide.new",
+        label: "New Slide",
+        keys: { mac: ["Ctrl+M"], other: ["Ctrl+M"] },
+        menu: slideMenu(10),
+        context: ["slide", "navigator", "canvas"],
+        enabled: ready,
+        undoable: true,
+        run: async (a) => void await newSlide(a, nextLayout(a))
+      },
+      {
+        id: "slide.newAfter",
+        label: "New Slide",
+        keys: { mac: ["Enter"], other: ["Enter"] },
+        in: ["navigator"],
+        enabled: ready,
+        undoable: true,
+        run: async (a) => void await newSlide(a, nextLayout(a))
+      },
+      {
+        id: "slide.gallery",
+        label: "Add Slide",
+        toolbar: { group: "slide", order: 10, icon: "add-slide" },
+        enabled: ready,
+        run: (a, arg) => openGallery(a, arg instanceof HTMLElement ? arg : null)
+      },
+      ...LAYOUTS.map(
+        (layout, i) => ({
+          id: `slide.new.${layout}`,
+          label: LABELS[layout],
+          menu: { bar: "Insert", group: "slide", order: 10 + i, submenu: "New Slide" },
+          enabled: ready,
+          undoable: true,
+          run: async (a) => void await newSlide(a, layout)
+        })
+      ),
+      {
+        id: "slide.duplicate",
+        label: "Duplicate Slide",
+        keys: { mac: ["Mod+D"], other: ["Mod+D"] },
+        in: ["navigator"],
+        menu: slideMenu(20),
+        context: ["slide"],
+        enabled: (a) => targets(a).length > 0,
+        undoable: true,
+        run: async (a) => {
+          const focus = inNav();
+          const doc2 = docOf(a);
+          const copies = [];
+          for (const s of targets(a)) copies.push(await doc2.duplicate(s));
+          land(a, copies, copies.at(-1) ?? null, focus);
+        }
+      },
+      {
+        id: "slide.delete",
+        label: (a) => targets(a).length > 1 ? "Delete Slides" : "Delete Slide",
+        keys: { mac: ["Backspace", "Delete"], other: ["Delete", "Backspace"] },
+        in: ["navigator"],
+        menu: slideMenu(30),
+        context: ["slide"],
+        enabled: (a) => targets(a).length > 0 && targets(a).length < sections(a).length,
+        undoable: true,
+        run: (a) => deleteSlides(a, targets(a), inNav())
+      },
+      {
+        id: "slide.hide",
+        label: (a) => targets(a).length && targets(a).every(isHidden) ? "Show Slide" : "Hide Slide",
+        keys: { mac: ["Mod+Shift+H"] },
+        in: ["navigator", "canvas"],
+        menu: slideMenu(40),
+        context: ["slide", "canvas"],
+        enabled: (a) => targets(a).length > 0,
+        undoable: true,
+        run: (a) => {
+          const t = targets(a);
+          const hide = !t.every(isHidden);
+          for (const s of t) docOf(a).hide(s, hide);
+          navOf(a).refresh();
+        }
+      },
+      {
+        id: "slide.moveUp",
+        label: "Move Slide Up",
+        keys: { mac: ["Alt+ArrowUp"], other: ["Alt+ArrowUp"] },
+        in: ["navigator"],
+        menu: slideMenu(50, "move"),
+        context: ["slide"],
+        enabled: (a) => canShift(a, true),
+        undoable: true,
+        run: async (a) => {
+          const t = targets(a);
+          await applyOrder(a, shifted(sections(a), new Set(t), true));
+          land(a, t, a.current(), inNav());
+        }
+      },
+      {
+        id: "slide.moveDown",
+        label: "Move Slide Down",
+        keys: { mac: ["Alt+ArrowDown"], other: ["Alt+ArrowDown"] },
+        in: ["navigator"],
+        menu: slideMenu(51, "move"),
+        context: ["slide"],
+        enabled: (a) => canShift(a, false),
+        undoable: true,
+        run: async (a) => {
+          const t = targets(a);
+          await applyOrder(a, shifted(sections(a), new Set(t), false));
+          land(a, t, a.current(), inNav());
+        }
+      },
+      {
+        id: "slide.moveTo",
+        label: (a) => targets(a).length > 1 ? "Move Slides" : "Move Slide",
+        enabled: ready,
+        undoable: true,
+        run: async (a, arg) => {
+          const { slides, gap } = arg;
+          await applyOrder(a, droppedOrder(sections(a), slides, gap));
+          land(a, slides, a.current(), true);
+        }
+      },
+      {
+        id: "slide.cut",
+        label: "Cut",
+        context: ["slide"],
+        enabled: (a) => targets(a).length > 0 && targets(a).length < sections(a).length,
+        undoable: true,
+        run: async (a, arg) => {
+          copySlides(a, arg instanceof DataTransfer ? arg : null);
+          await deleteSlides(a, targets(a), inNav());
+        }
+      },
+      {
+        id: "slide.copy",
+        label: "Copy",
+        context: ["slide"],
+        enabled: (a) => targets(a).length > 0,
+        run: (a, arg) => void copySlides(a, arg instanceof DataTransfer ? arg : null)
+      },
+      {
+        id: "slide.paste",
+        label: "Paste",
+        context: ["slide", "navigator"],
+        enabled: ready,
+        undoable: true,
+        run: async (a, arg) => {
+          let text = typeof arg === "string" ? arg : "";
+          if (!text) text = await navigator.clipboard?.readText().catch(() => "") || copied;
+          await pasteSlides(a, text, inNav());
+        }
+      }
+    ];
+    for (const d of defs) c.define(d);
+    takeKeys(app2, ["slide.newAfter", "slide.new", "slide.duplicate", "slide.delete", "slide.hide", "slide.moveUp", "slide.moveDown"]);
+    const onClip = (ev) => {
+      if (ev.defaultPrevented || app2.region() !== "navigator" || !ready(app2)) return;
+      if (ev.type === "paste") {
+        const text = ev.clipboardData?.getData("text/plain") || ev.clipboardData?.getData("text/html") || "";
+        if (!slidesIn(text)?.length) return;
+        ev.preventDefault();
+        void c.run("slide.paste", text).catch((e) => app2.fail(e));
+        return;
+      }
+      ev.preventDefault();
+      void c.run(ev.type === "cut" ? "slide.cut" : "slide.copy", ev.clipboardData).catch((e) => app2.fail(e));
+    };
+    for (const type of ["copy", "cut", "paste"]) document.addEventListener(type, onClip);
   }
 
   // src/editor/commands/delete.ts
-  function install30(_app) {
+  function selectedElements(app2) {
+    return app2.selection.elements().filter((el) => el.isConnected && !el.matches(".reveal .slides > section") && !!app2.pairing?.elements.has(el));
+  }
+  function install30(app2) {
+    app2.commands.define({
+      id: "element.delete",
+      label: "Delete",
+      keys: { mac: ["Backspace", "Delete"], other: ["Delete", "Backspace"] },
+      in: ["canvas"],
+      menu: { bar: "Edit", group: "delete", order: 40 },
+      context: ["element"],
+      enabled: (a) => selectedElements(a).length > 0,
+      undoable: true,
+      run: async (a) => {
+        const doc2 = docOf(a);
+        const els = selectedElements(a);
+        const outer = els.filter((el) => !els.some((o) => o !== el && o.contains(el)));
+        a.selection.clear();
+        for (const el of outer.reverse()) await doc2.remove(el, "delete");
+      }
+    });
+    takeKeys(app2, ["element.delete"]);
   }
 
   // src/editor/model/fragments.ts
@@ -4622,7 +5640,8 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     },
     restore: (host, content) => app.typing.restoreHost(host, content)
   });
-  var nav = new Nav({ slides: () => [...app.slides().querySelectorAll(":scope > section")], current: () => app.current(), go: (el) => app.showSlide(el), layout: () => app.relayout() });
+  app.doc = doc;
+  var nav = new Navigator(app);
   var steps = new Steps({
     pairing: () => app.pairing,
     slide: () => app.current(),
@@ -4646,35 +5665,35 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     steps.refresh();
     nav.refresh();
   });
+  install9(app);
+  install10(app);
+  install5(app);
+  install11(app, layers.box);
+  install3(app);
+  install4(app);
+  install6(app);
   install7(app);
   install8(app);
-  install3(app);
-  install9(app, layers.box);
-  install(app);
-  install2(app);
-  install4(app);
-  install5(app);
-  install6(app);
-  install22(app);
+  install24(app);
   install25(app);
   install26(app);
   install27(app);
   install28(app);
   installKeys(app);
+  install17(app);
   install15(app);
-  install13(app);
-  install14(app);
-  install10(app);
-  install11(app);
   install16(app);
   install12(app);
-  install17(app);
+  install13(app);
   install18(app);
+  install14(app);
   install19(app);
   install20(app);
   install21(app);
+  install22(app);
   install23(app);
-  install24(app);
+  install2(app);
+  install(app);
   install29(app);
   install30(app);
   var revealReady = () => new Promise((done) => {
