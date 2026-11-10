@@ -242,3 +242,42 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the options of the completion list: the text of each, and whether its glyph is drawn
+const options = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-complete [role=option]')].map((o) => ({ text: o.querySelector('.name').textContent, glyph: !!o.querySelector('.glyph svg') }))`);
+
+for (const platform of PLATFORMS) {
+  test(`the TeX completion list draws the glyph of each command beside its name, typeset once on ${platform}`, async (t) => {
+    const page = await open(t, platform, { at: 'div.math[data-keep]' });
+    await click(page, 'div.math[data-keep] mjx-container');
+    await sleep(200);
+    await press(page, 'Escape');
+    await sleep(200);
+    await click(page, `${PANEL} textarea[name="tex"]`);
+    await press(page, 'Mod+ArrowDown');
+    await type(page, String.raw` + \L`);
+    await page.waitFor(`[...document.querySelectorAll('.beeson-complete [role=option]')].every((o) => o.querySelector('.glyph svg'))`);
+    const first = await options(page);
+    assert.deepEqual(first.slice(0, 3).map((o) => o.text), [String.raw`\LL`, String.raw`\Lambda`, String.raw`\le`]);
+    assert.ok(first.every((o) => o.glyph), js(first));
+    // the glyph is a picture beside the name, hidden from a screen reader, and the name is read
+    // first in the text of an option
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-complete .glyph').getAttribute('aria-hidden')`), 'true');
+    assert.ok((await page.evaluate(`document.querySelector('.beeson-complete [role=option]').textContent`)).startsWith(String.raw`\LL`));
+    const box = await page.evaluate(`(() => { const g = document.querySelector('.beeson-complete .glyph').getBoundingClientRect(), n = document.querySelector('.beeson-complete .name').getBoundingClientRect(); return { gap: n.left - g.right, w: g.width, h: g.height }; })()`);
+    assert.ok(box.gap >= 0 && box.gap < 20 && box.w > 10 && box.h > 10, js(box));
+    // the command class does not draw a symbol, and its glyph is left empty. a list opened again
+    // takes its glyphs from the cache, without typesetting them again
+    await type(page, 'a');
+    await page.waitFor(`[...document.querySelectorAll('.beeson-complete [role=option]')].every((o) => o.querySelector('.glyph svg') || o.querySelector('.name').textContent === '\\\\class')`);
+    assert.ok((await options(page)).some((o) => o.text === String.raw`\class` && !o.glyph));
+    await page.evaluate(`(() => { const mj = window.MathJax, f = mj.tex2svgPromise; window.typeset = 0; mj.tex2svgPromise = (...a) => { window.typeset++; return f.apply(mj, a); }; })()`);
+    await press(page, 'Backspace');
+    await frames(page);
+    assert.deepEqual(await options(page), first);
+    assert.equal(await page.evaluate('window.typeset'), 0);
+    await press(page, 'Escape');
+    assert.equal(await page.evaluate(`!!document.querySelector('.beeson-complete')`), false);
+    assert.deepEqual(errors(page), []);
+  });
+}
