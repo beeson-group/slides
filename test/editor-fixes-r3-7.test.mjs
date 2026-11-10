@@ -414,6 +414,9 @@ for (const platform of PLATFORMS) {
       const list = document.querySelector('.beeson-edit-nav .rows');
       const edge = list.getBoundingClientRect().bottom;
       const frames = [...list.querySelectorAll('.row .frame')];
+      // the list is scrolled to cut a thumbnail at its middle, whatever the height of the window
+      const below = frames.findIndex((f) => f.getBoundingClientRect().bottom > edge);
+      if (below >= 0) { const r = frames[below].getBoundingClientRect(); list.scrollTop += r.top + r.height / 2 - edge; }
       const i = frames.findIndex((f) => { const r = f.getBoundingClientRect(); return r.top < edge - 20 && r.bottom > edge; });
       if (i < 0) return null;
       const r = frames[i].getBoundingClientRect();
