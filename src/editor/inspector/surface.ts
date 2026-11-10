@@ -236,7 +236,8 @@ export function surfacePane(app: App, run: Run): Control[] {
       note(() => 'Drag the surface to turn it, and then use its view. A turn of 0 s keeps it still.'),
       note(linked),
     ]),
-    section('Heights', [row([decimalField(app, run, el, 'zscale')])]),
+    // an empty cell beside Z Scale keeps the field at the width of the fields above
+    section('Heights', [row([decimalField(app, run, el, 'zscale'), { el: make('div', 'ed-num'), sync: () => {} }])]),
   ];
 }
 
