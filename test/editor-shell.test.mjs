@@ -97,7 +97,7 @@ test('the chrome follows the color scheme of the system, and D flips only the sl
   const browser = await launch();
   t.after(() => browser.close());
   const page = await editorPage(browser);
-  const colors = () => page.evaluate(`(() => ({ header: getComputedStyle(document.querySelector('.beeson-edit-header')).backgroundColor, nav: getComputedStyle(document.querySelector('.beeson-edit-nav')).backgroundColor, text: getComputedStyle(document.querySelector('.beeson-edit-top .tb')).color, slide: getComputedStyle(document.querySelector('.reveal')).backgroundColor }))()`);
+  const colors = () => page.evaluate(`(() => ({ header: getComputedStyle(document.querySelector('.beeson-edit-header')).backgroundColor, nav: getComputedStyle(document.querySelector('.beeson-edit-nav')).backgroundColor, text: getComputedStyle(document.querySelector('.beeson-edit-top .tb')).color, slide: getComputedStyle(document.querySelector('.reveal')).backgroundColor, thumb: getComputedStyle(document.querySelector('.beeson-edit-nav .row .pic')).backgroundColor }))()`);
   await scheme(page, 'light');
   await page.evaluate(`document.activeElement.blur()`);
   const before = await colors();
@@ -105,8 +105,11 @@ test('the chrome follows the color scheme of the system, and D flips only the sl
   await page.waitFor(`document.documentElement.dataset.theme === 'light'`);
   await frames(page);
   const after = await colors();
-  assert.deepEqual({ ...after, slide: null }, { ...before, slide: null });
+  assert.deepEqual({ ...after, slide: null, thumb: null }, { ...before, slide: null, thumb: null });
   assert.notEqual(after.slide, before.slide);
+  // a thumbnail of the navigator is drawn in the mode of the slide, not in the colors of the chrome
+  assert.equal(before.thumb, before.slide);
+  assert.equal(after.thumb, after.slide);
   await scheme(page, 'dark');
   const dark = await colors();
   assert.notEqual(dark.header, before.header);
@@ -126,19 +129,20 @@ for (const platform of ['mac', 'other']) {
     // a click on the title opens the menu without the focus, with the keys in the notation of the platform
     await click(page, await page.evaluate(`(() => { const r = [...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].find((b) => b.textContent === 'Insert').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`));
     const keys = platform === 'mac' ? '⇧⌘K' : 'Ctrl+Shift+K';
-    assert.deepEqual(await items(), [['Text Box', keys, false, false], ['Formula', '', true, false], ['Table…', '', false, false]]);
-    assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-menu [role=separator]').length`), 1);
+    assert.deepEqual((await items()).slice(0, 3), [['Text Box', keys, false, false], ['Formula', '', true, false], ['Table…', '', false, false]]);
+    // a rule is drawn between two groups of a menu
+    assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item')].find((i) => i.textContent.startsWith('Table…')).previousElementSibling.getAttribute('role')`), 'separator');
     // the arrows skip the disabled item, and Enter runs the highlighted one
     await press(page, 'ArrowDown');
     await press(page, 'ArrowDown');
-    assert.deepEqual((await items()).map((i) => i[3]), [false, false, true]);
+    assert.deepEqual((await items()).slice(0, 3).map((i) => i[3]), [false, false, true]);
     await press(page, 'Enter');
     assert.equal(await page.evaluate('window.table'), true);
     assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-menu').length`), 0);
     // from the keyboard: the focused title opens with Enter, Esc closes the menu, and the focus goes back
     await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].find((b) => b.textContent === 'Insert').focus()`);
     await press(page, 'Enter');
-    assert.deepEqual((await items()).map((i) => i[3]), [true, false, false]);
+    assert.deepEqual((await items()).slice(0, 3).map((i) => i[3]), [true, false, false]);
     assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-menubar [aria-expanded=true]').textContent`), 'Insert');
     await press(page, 'Escape');
     assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-menu').length`), 0);
@@ -152,8 +156,10 @@ for (const platform of ['mac', 'other']) {
     await press(page, 'ArrowRight');
     assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-menubar [aria-expanded=true]').textContent`), 'Insert');
     await press(page, 'Escape');
-    // a menu without an item is dimmed
-    assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].find((b) => b.textContent === 'Help').getAttribute('aria-disabled')`), 'true');
+    // a menu without an item is dimmed, and one with items is not
+    const dimmed = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].map((b) => [b.getAttribute('aria-disabled'), String(window.BeesonEditorShell.menuItems(b.textContent).length === 0)])`);
+    assert.ok(dimmed.every(([a, b]) => a === b), JSON.stringify(dimmed));
+    assert.ok(dimmed.some(([a]) => a === 'false'));
     assert.deepEqual(page.errors, []);
   });
 }
@@ -162,9 +168,9 @@ test('a right-click opens the context menu of a figure, of the slide, and of a s
   const browser = await launch();
   t.after(() => browser.close());
   const page = await editorPage(browser);
-  await define(page, `{ id: 'test.front', label: 'Bring to Front', context: ['element'], menu: { bar: 'Arrange', group: 'order', order: 1 }, run: (app, arg) => { window.got = { kind: arg.kind, tag: arg.target.localName, selected: app.selection.has(arg.target) }; } }`);
-  await define(page, `{ id: 'test.paste', label: 'Paste', context: ['canvas', 'navigator'], run: (app, arg) => { window.got = { kind: arg.kind }; } }`);
-  await define(page, `{ id: 'test.dup', label: 'Duplicate Slide', context: ['slide'], run: (app, arg) => { window.got = { kind: arg.kind, index: [...app.slides().children].indexOf(arg.target) }; } }`);
+  await define(page, `{ id: 'test.front', label: 'Test Element Item', context: ['element'], menu: { bar: 'Arrange', group: 'order', order: 1 }, run: (app, arg) => { window.got = { kind: arg.kind, tag: arg.target.localName, selected: app.selection.has(arg.target) }; } }`);
+  await define(page, `{ id: 'test.paste', label: 'Test Canvas Item', context: ['canvas', 'navigator'], run: (app, arg) => { window.got = { kind: arg.kind }; } }`);
+  await define(page, `{ id: 'test.dup', label: 'Test Slide Item', context: ['slide'], run: (app, arg) => { window.got = { kind: arg.kind, index: [...app.slides().children].indexOf(arg.target) }; } }`);
   const labels = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu.context .item .label')].map((l) => l.textContent)`);
   const run = (label) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu.context .item')].find((i) => i.querySelector('.label').textContent === ${JSON.stringify(label)}).click()`);
   // a figure of the slide with the figure
@@ -172,22 +178,22 @@ test('a right-click opens the context menu of a figure, of the slide, and of a s
   await frames(page);
   const figure = await page.evaluate(`(() => { const el = [...document.querySelectorAll('.reveal section.present :is(img, .zone, .qr).beeson-movable')].find((e) => e.getBoundingClientRect().width > 40); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
   await click(page, figure, { button: 'right' });
-  assert.ok((await labels()).includes('Bring to Front'));
-  assert.ok(!(await labels()).includes('Paste'));
-  await run('Bring to Front');
+  assert.ok((await labels()).includes('Test Element Item'));
+  assert.ok(!(await labels()).includes('Test Canvas Item'));
+  await run('Test Element Item');
   const got = await page.evaluate('window.got');
   assert.equal(got.kind, 'element');
   assert.equal(got.selected, true);
   // the pasteboard around the slide
   const cell = await boxOf(page, '.beeson-edit-canvas');
   await click(page, { x: cell.x + 8, y: cell.y + 8 }, { button: 'right' });
-  assert.ok(!(await labels()).includes('Bring to Front'));
-  await run('Paste');
+  assert.ok(!(await labels()).includes('Test Element Item'));
+  await run('Test Canvas Item');
   assert.deepEqual(await page.evaluate('window.got'), { kind: 'canvas' });
   // a row of the slide list
   await page.evaluate(`document.querySelectorAll('.beeson-edit-nav .row')[2].scrollIntoView()`);
   await click(page, await page.evaluate(`(() => { const r = document.querySelectorAll('.beeson-edit-nav .row')[2].getBoundingClientRect(); return { x: r.left + 40, y: r.top + r.height / 2 }; })()`), { button: 'right' });
-  await run('Duplicate Slide');
+  await run('Test Slide Item');
   assert.deepEqual(await page.evaluate('window.got'), { kind: 'slide', index: 2 });
   // Esc closes a context menu without running anything
   await click(page, { x: cell.x + 8, y: cell.y + 8 }, { button: 'right' });
@@ -232,7 +238,7 @@ test('the labels of the toolbar are hidden below 1100 px and kept as text, and t
     const bar = await page.evaluate(`(() => { const b = [...document.querySelectorAll('.beeson-edit-top .tb')]; return { texts: b.filter((e) => !e.classList.contains('more-groups')).map((e) => e.textContent), label: getComputedStyle(b[0].querySelector('.label')).display !== 'none', more: !!document.querySelector('.beeson-edit-top .more-groups') }; })()`);
     assert.equal(bar.label, labels, `${width}: labels`);
     assert.equal(bar.more, more, `${width}: the menu More`);
-    assert.deepEqual(bar.texts, more ? ['Undo', 'Redo', 'Present'] : ['Undo', 'Redo', 'Present', 'Save', 'Format', 'Steps']);
+    assert.deepEqual(bar.texts, more ? ['Undo', 'Redo', 'Add Slide', 'Present'] : ['Undo', 'Redo', 'Add Slide', 'Present', 'Save', 'Format', 'Steps']);
     const cell = await boxOf(page, '.beeson-edit-canvas');
     assert.ok(cell.w > 0 && cell.h > 0);
     assert.deepEqual(page.errors, []);
