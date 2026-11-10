@@ -1,108 +1,313 @@
-// the TeX of a formula is edited in a field under it, with a live preview, and the block of the
-// formula is typeset again on Apply. a click on a formula, or Enter on a focused one, opens the
-// field, and a TeX with an error is refused before the slide is touched
+// the TeX of a formula is edited in a sheet under it, as the Edit Equation window of Keynote: a
+// title, a tall field of the TeX, a live preview, and Cancel with Apply, or Insert for a new
+// formula. a click on a formula, or Enter on a focused one, opens the sheet, and a TeX with an
+// error is refused before the slide is touched. an empty TeX is shown as a gray prompt and is not
+// applied. the field completes the macros of theme/macros.js and the commands of TeX after a
+// backslash, and texEditor gives the same field with its preview to the Formula pane of the
+// inspector. openInsert opens the sheet for an inline formula at the caret of a text
 
 import { HOST, type App, type MathPop } from '../app.ts';
-import { contentWithTex, mathLookup, previewTex, retypeset } from '../math.ts';
+import { completionText, completions, contentWithInline, contentWithTex, deckMacros, isName, mathLookup, previewTex, type Macro } from '../math.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 
 const CSS = `
-.beeson-math { position: fixed; z-index: 70; display: flex; flex-direction: column; gap: 6px; width: min(640px, calc(100vw - 32px)); box-sizing: border-box; padding: 10px; border: 1px solid var(--line, #555); border-radius: 6px; background: var(--bg, #000); color: var(--text, #eee); font: 14px/1.4 system-ui, sans-serif; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); }
-.beeson-math textarea { font: 14px/1.4 ui-monospace, Menlo, Consolas, monospace; min-height: 5em; padding: 6px; border: 1px solid var(--line, #555); border-radius: 4px; background: transparent; color: inherit; resize: vertical; }
+.beeson-math { position: fixed; z-index: 70; display: flex; flex-direction: column; gap: 10px; width: min(460px, calc(100vw - 32px)); box-sizing: border-box; padding: 16px 18px 14px; border: 1px solid var(--ed-menu-line, #555); border-radius: 14px; background: var(--ed-panel, #222); color: var(--ed-text, #eee); font: 13px/1.4 var(--ed-font, system-ui, sans-serif); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.14); }
+.beeson-math .title { color: var(--ed-muted, #999); font: 500 12px/1.2 var(--ed-font, system-ui, sans-serif); }
+.beeson-math textarea { font: 13px/1.45 ui-monospace, Menlo, Consolas, monospace; min-height: 7.5em; padding: 8px 10px; border: 0; border-radius: 7px; background: var(--ed-control, #333); box-shadow: inset 0 0 0 1px var(--ed-control-line, #555); color: inherit; resize: vertical; outline: none; }
+.beeson-math textarea:focus { box-shadow: inset 0 0 0 1px var(--ed-select, #96f), 0 0 0 2px var(--ed-focus, rgba(150, 100, 255, 0.5)); }
+.beeson-math textarea::placeholder, .beeson-tex textarea::placeholder { color: var(--ed-faint, #777); }
 .beeson-math .row { display: flex; gap: 8px; align-items: center; }
-.beeson-math button { font: inherit; padding: 4px 12px; border: 1px solid var(--line, #555); border-radius: 6px; background: transparent; color: var(--text, #eee); cursor: pointer; white-space: nowrap; }
-.beeson-math button:hover { border-color: var(--subtle, #bbb); }
-.beeson-math .hint { margin-left: auto; color: var(--subtle, #bbb); }
-.beeson-math .error { color: var(--accent, #f80); }
-.beeson-math .error:empty { display: none; }
-.beeson-math .preview { padding: 8px 12px; border: 1px solid var(--line, #444); background: var(--bg, #000); color: var(--text, #fff); font-size: 32px; max-height: 240px; overflow: auto; }
-.beeson-math .preview mjx-container { margin: 0 !important; }
-.beeson-math .preview:empty { display: none; }
-.beeson-math button:disabled { opacity: 0.5; cursor: default; }
+.beeson-math button { font: inherit; min-width: 72px; padding: 4px 14px; border: 1px solid var(--ed-control-line, #555); border-radius: 6px; background: var(--ed-control, #333); color: var(--ed-text, #eee); cursor: default; white-space: nowrap; box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.12); }
+.beeson-math button.primary { border-color: transparent; background: var(--ed-select, #96f); color: var(--ed-on-select, #fff); }
+.beeson-math button:focus-visible { outline: 3px solid var(--ed-focus, rgba(150, 100, 255, 0.5)); outline-offset: 1px; }
+.beeson-math button:disabled { opacity: 0.45; }
+.beeson-math .hint { margin-right: auto; color: var(--ed-faint, #888); font-size: 11px; }
+.beeson-tex .preview { display: flex; align-items: center; justify-content: center; min-height: 56px; max-height: 200px; overflow: auto; padding: 8px 12px; border-radius: 9px; background: var(--ed-hover, rgba(127, 127, 127, 0.1)); color: var(--ed-text, #eee); font-size: 26px; }
+.beeson-tex .preview mjx-container { margin: 0 !important; max-width: 100%; }
+.beeson-tex .preview svg { max-width: 100%; height: auto; }
+.beeson-tex .preview .empty { color: var(--ed-faint, #888); font: 12px/1.3 var(--ed-font, system-ui, sans-serif); }
+.beeson-tex .error { color: var(--red, #e5484d); font: 12px/1.35 var(--ed-font, system-ui, sans-serif); }
+.beeson-tex .error.prompt { color: var(--ed-muted, #999); }
+.beeson-tex .error:empty { display: none; }
+.beeson-complete { position: fixed; z-index: 90; min-width: 220px; max-width: 360px; margin: 0; padding: 4px; list-style: none; border: 1px solid var(--ed-menu-line, #555); border-radius: 8px; background: var(--ed-menu, #2c2c2e); color: var(--ed-text, #eee); font: 12px/1.3 var(--ed-font, system-ui, sans-serif); box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+.beeson-complete li { display: flex; align-items: baseline; gap: 10px; padding: 4px 8px; border-radius: 5px; cursor: default; white-space: nowrap; }
+.beeson-complete li[aria-selected="true"] { background: var(--ed-select, #96f); color: var(--ed-on-select, #fff); }
+.beeson-complete .name { font: 12px/1.3 ui-monospace, Menlo, Consolas, monospace; }
+.beeson-complete .args { color: var(--ed-faint, #888); }
+.beeson-complete .what { margin-left: auto; overflow: hidden; text-overflow: ellipsis; color: var(--ed-muted, #999); font-size: 11px; }
+.beeson-complete li[aria-selected="true"] .args, .beeson-complete li[aria-selected="true"] .what { color: inherit; opacity: 0.8; }
 `;
+
+// the completion list that is open, which the keys of its field reach before the keys of the
+// editor, since the keyboard handler of commands.ts is on window in the capture phase as well
+let completing: { field: HTMLTextAreaElement; key(ev: KeyboardEvent): boolean; close(): void } | null = null;
+
+// the place of the caret of field on the screen, read from a copy of the field with the same
+// font and wrapping
+function caretPoint(field: HTMLTextAreaElement): { x: number; y: number } {
+  const style = getComputedStyle(field);
+  const mirror = document.createElement('div');
+  for (const p of ['font', 'letterSpacing', 'padding', 'border', 'boxSizing', 'lineHeight', 'whiteSpace', 'wordWrap', 'tabSize'] as const) mirror.style[p] = style[p];
+  Object.assign(mirror.style, { position: 'fixed', visibility: 'hidden', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', width: `${field.clientWidth}px`, left: '0', top: '0' });
+  mirror.textContent = field.value.slice(0, field.selectionStart);
+  const mark = document.createElement('span');
+  mark.textContent = '​';
+  mirror.append(mark);
+  document.body.append(mirror);
+  const r = field.getBoundingClientRect();
+  const x = r.left + mark.offsetLeft - field.scrollLeft;
+  const y = r.top + mark.offsetTop + mark.offsetHeight - field.scrollTop;
+  mirror.remove();
+  return { x, y };
+}
+
+// the completion of field: after a backslash and the letters typed after it, a list of the macros
+// of the deck and of the commands of TeX that match. the arrows choose, Return or Tab writes the
+// name with the braces of its arguments, and Esc closes the list
+export function attachCompletion(field: HTMLTextAreaElement): void {
+  const list = make('ul', 'beeson-complete');
+  list.id = `beeson-complete-${Math.random().toString(36).slice(2, 8)}`;
+  list.setAttribute('role', 'listbox');
+  list.setAttribute('aria-label', 'TeX macros');
+  field.setAttribute('aria-autocomplete', 'list');
+  field.setAttribute('aria-controls', list.id);
+  let items: Macro[] = [];
+  let at = 0;
+  let from = -1;
+  const close = () => {
+    list.remove();
+    items = [];
+    from = -1;
+    field.removeAttribute('aria-activedescendant');
+    field.setAttribute('aria-expanded', 'false');
+    if (completing?.field === field) completing = null;
+  };
+  const choose = (i: number) => {
+    at = i;
+    [...list.children].forEach((li, k) => li.setAttribute('aria-selected', String(k === i)));
+    if (i < 0) field.removeAttribute('aria-activedescendant');
+    else field.setAttribute('aria-activedescendant', `${list.id}-${i}`);
+    list.children[i]?.scrollIntoView({ block: 'nearest' });
+  };
+  const accept = () => {
+    const m = items[at];
+    if (!m || from < 0) return close();
+    const { text, caret } = completionText(m);
+    field.setRangeText(text, from, field.selectionStart, 'end');
+    field.setSelectionRange(from + caret, from + caret);
+    close();
+    field.dispatchEvent(new Event('input', { bubbles: true }));
+  };
+  const update = () => {
+    const before = field.value.slice(0, field.selectionStart);
+    const m = field.selectionStart === field.selectionEnd ? /\\([A-Za-z]*)$/.exec(before) : null;
+    if (!m || document.activeElement !== field) return close();
+    from = m.index;
+    const macros = deckMacros();
+    items = completions(m[1], macros);
+    if (!items.length) return close();
+    list.replaceChildren(...items.map((it, i) => {
+      const li = make('li');
+      li.id = `${list.id}-${i}`;
+      li.setAttribute('role', 'option');
+      li.append(make('span', 'name', `\\${it.name}`));
+      if (it.args) li.append(make('span', 'args', '{…}'.repeat(it.args)));
+      li.append(make('span', 'what', it.deck ? `deck macro${it.body ? `, ${it.body}` : ''}` : 'TeX'));
+      li.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault();
+        at = i;
+        accept();
+      });
+      return li;
+    }));
+    if (!list.isConnected) document.body.append(list);
+    const p = caretPoint(field);
+    list.style.left = `${Math.max(8, Math.min(p.x - 8, window.innerWidth - list.offsetWidth - 8))}px`;
+    list.style.top = `${p.y + list.offsetHeight + 4 > window.innerHeight ? Math.max(8, p.y - list.offsetHeight - 20) : p.y + 4}px`;
+    field.setAttribute('aria-expanded', 'true');
+    // a name typed in full, e.g. \quad, is not replaced by Enter with a longer name, e.g. \qquad,
+    // until an arrow chooses one
+    choose(isName(m[1], macros) ? -1 : 0);
+    completing = { field, key, close };
+  };
+  const key = (ev: KeyboardEvent): boolean => {
+    if (!items.length) return false;
+    if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') choose(at < 0 && ev.key === 'ArrowUp' ? items.length - 1 : (at + (ev.key === 'ArrowDown' ? 1 : -1) + items.length) % items.length);
+    else if ((ev.key === 'Enter' && !ev.metaKey && !ev.ctrlKey) || (ev.key === 'Tab' && !ev.shiftKey)) {
+      if (at < 0) {
+        close();
+        return false;
+      }
+      accept();
+    }
+    else if (ev.key === 'Escape') close();
+    else return false;
+    return true;
+  };
+  field.addEventListener('input', update);
+  field.addEventListener('blur', () => setTimeout(() => document.activeElement !== field && close(), 0));
+  field.addEventListener('pointerdown', () => setTimeout(update, 0));
+}
+
+// a field of the TeX with its live preview and its message, which is the error of MathJax in red
+// or the prompt of an empty TeX in gray. a late result of an earlier TeX is dropped, and shown is
+// called with the result of each TeX that is typeset
+export type TexEditor = { field: HTMLTextAreaElement; preview: HTMLElement; message: HTMLElement; ok(): boolean; refresh(): Promise<void> };
+
+export function texEditor(options: { display(): boolean; label: string; placeholder?: string; shown?(ok: boolean): void }): TexEditor {
+  const field = make('textarea');
+  field.setAttribute('aria-label', options.label);
+  field.spellcheck = false;
+  field.autocapitalize = 'off';
+  field.placeholder = options.placeholder ?? 'Type TeX, e.g. \\frac{a}{b} or \\LL{1}';
+  const preview = make('div', 'preview');
+  preview.setAttribute('aria-live', 'polite');
+  const message = make('div', 'error');
+  let seq = 0;
+  let timer = 0;
+  let ok = false;
+  const refresh = async () => {
+    const n = ++seq;
+    const result = await previewTex(field.value, options.display()).catch((e: unknown) => ({ node: null, error: e instanceof Error ? e.message : String(e) }));
+    if (n !== seq) return;
+    const empty = !field.value.trim();
+    preview.replaceChildren(...(result.node ? [result.node] : [make('span', 'empty', 'A preview of the formula appears here.')]));
+    message.textContent = result.error ?? '';
+    message.classList.toggle('prompt', empty);
+    if (empty || !result.error) message.removeAttribute('role');
+    else message.setAttribute('role', 'alert');
+    ok = !result.error;
+    options.shown?.(ok);
+  };
+  field.addEventListener('input', () => {
+    window.clearTimeout(timer);
+    timer = window.setTimeout(() => void refresh(), 150);
+  });
+  attachCompletion(field);
+  return { field, preview, message, ok: () => ok, refresh };
+}
+
+// the sheet of a TeX: its title, its first TeX, whether it is a display, the label of its button,
+// where it is put, and commit, which writes the TeX and throws an error to be shown at the field
+type Sheet = { title: string; tex: string; display: boolean; open: string; close: string; primary: string; rect: DOMRect; commit(tex: string): Promise<void>; done?(): void };
+
+// the formula that the sheet is open for, read by the Formula pane of the inspector
+let openFor: Element | null = null;
+export const sheetTarget = (): Element | null => openFor;
+
+let sheetApi: { open(sheet: Sheet, target: Element | null): void } | null = null;
+
+// the sheet of an inline formula at range in host, written at Insert as \(tex\) at the caret, as
+// one entry of the history. a range that is not collapsed is the first TeX, as the conversion of
+// a selection by Insert Equation in PowerPoint
+export function openInsert(app: App, host: Element, range: Range): void {
+  const selected = range.collapsed ? '' : range.toString();
+  const rect = range.getClientRects()[0] ?? range.getBoundingClientRect();
+  const kept = range.cloneRange();
+  sheetApi?.open({
+    title: 'Insert Inline Formula',
+    tex: selected,
+    display: false,
+    open: '\\(',
+    close: '\\)',
+    primary: 'Insert',
+    rect: rect.width || rect.height ? rect : host.getBoundingClientRect(),
+    commit: async (tex) => {
+      const { content, index } = contentWithInline(host, kept, tex);
+      await app.history.transact('Inline Formula', () => app.doc.setContent(host, content, 'Inline Formula'));
+      const math = host.querySelectorAll('mjx-container')[index];
+      if (!math) return;
+      (host as HTMLElement).focus({ preventScroll: true });
+      const after = document.createRange();
+      after.setStartAfter(math);
+      after.collapse(true);
+      const sel = window.getSelection();
+      sel?.removeAllRanges();
+      sel?.addRange(after);
+    },
+  }, null);
+}
 
 export function install(app: App): void {
   injectStyle('mathpop', CSS);
   let popover: HTMLElement | null = null;
-  // the formula that the field is open for, which gets the focus back when the field is closed
-  let popoverFor: Element | null = null;
+  let back: (() => void) | null = null;
 
-  function closeMath(back = true): void {
+  // the keys of an open completion list are taken before the keys of the editor and of the sheet
+  window.addEventListener('keydown', (ev) => {
+    if (completing && ev.target === completing.field && completing.key(ev)) {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+    }
+  }, true);
+
+  function closeMath(focus = true): void {
+    completing?.close();
     popover?.remove();
     popover = null;
-    const el = popoverFor;
-    popoverFor = null;
-    if (back && el?.isConnected) (el as HTMLElement).focus({ preventScroll: true });
+    openFor = null;
+    const restore = back;
+    back = null;
+    if (focus) restore?.();
+    app.invalidate('selection');
   }
 
-  // a TeX with an error is refused before the slide is touched, and the error is thrown to the
-  // field, where it is shown under the TeX. the change is one entry of the history
+  // a TeX with an error, or with a delimiter of a formula in it, is refused before the slide is
+  // touched, and the error is thrown to the field, where it is shown under the TeX. the block is
+  // written through app.doc as one entry of the history, and the focus is kept where it was
   async function setMath(container: Element, tex: string): Promise<void> {
     const host = container.closest(HOST);
     if (!host) throw new Error('the formula is not in an editable block');
     const info = mathLookup()(container);
-    const { error } = await previewTex(tex, info?.display ?? false);
+    if (!info) throw new Error('MathJax does not know this formula');
+    const { error } = await previewTex(tex, info.display);
     if (error) throw new Error(error);
+    if ((info.close && tex.includes(info.close)) || (info.open && tex.includes(info.open))) throw new Error(`The TeX cannot hold ${info.open} or ${info.close}, which end the formula`);
     const before = contentWithTex(host);
-    if (!(await retypeset(host, container, tex))) throw new Error('MathJax does not find the formula with this TeX, and the slide is kept as it was');
-    app.typing.markMath(host);
-    const after = contentWithTex(host);
-    if (after !== before) app.history.push({ label: 'formula', undo: () => app.typing.restoreHost(host, before), redo: () => app.typing.restoreHost(host, after) });
-    app.markDirty();
+    const after = contentWithTex(host, new Map([[container, tex]]));
+    if (after === before) return;
+    const count = host.querySelectorAll('mjx-container').length;
+    const active = document.activeElement as HTMLElement | null;
+    await app.doc.setContent(host, after, 'Formula');
+    if (host.querySelectorAll('mjx-container').length !== count) throw new Error('MathJax does not find the formula with this TeX, and Undo puts the slide back');
+    if (active?.isConnected && !host.contains(active)) active.focus({ preventScroll: true });
   }
 
-  function openMath(container: Element): void {
-    const info = mathLookup()(container);
-    if (!info) return;
-    closeMath();
-    const box = make('div', 'beeson-math');
+  function openSheet(sheet: Sheet, target: Element | null): void {
+    closeMath(false);
+    const box = make('div', 'beeson-math beeson-tex');
     box.setAttribute('role', 'dialog');
     box.setAttribute('aria-modal', 'true');
-    box.setAttribute('aria-label', 'The TeX of the formula');
-    popoverFor = container;
-    // the formula is typeset into a new container on Apply, found again by its place in the block
-    const host = container.closest(HOST);
-    const at = host ? [...host.querySelectorAll('mjx-container')].indexOf(container) : -1;
-    const field = make('textarea');
-    field.setAttribute('aria-label', 'TeX of the formula');
-    field.value = info.tex;
-    field.rows = Math.min(12, Math.max(3, info.tex.split('\n').length + 1));
+    box.setAttribute('aria-label', sheet.title);
+    const title = make('div', 'title', sheet.title);
+    const apply = make('button', 'primary', sheet.primary);
+    const ed = texEditor({ display: () => sheet.display, label: 'TeX of the formula', shown: (ok) => (apply.disabled = !ok) });
+    const { field } = ed;
+    field.value = sheet.tex;
+    field.rows = Math.min(12, Math.max(4, sheet.tex.split('\n').length + 1));
     const row = make('div', 'row');
-    const apply = make('button', '', 'Apply');
     const cancel = make('button', '', 'Cancel');
-    const hint = make('span', 'hint', `${info.open} … ${info.close}, ⌘ or Ctrl+Enter applies, Esc cancels`);
-    const preview = make('div', 'preview');
-    const error = make('div', 'error');
-    error.setAttribute('role', 'alert');
-    row.append(apply, cancel, hint);
-    box.append(field, preview, row, error);
-    const rect = container.getBoundingClientRect();
-    box.style.left = `${Math.max(16, Math.min(rect.left, window.innerWidth - 656))}px`;
-    box.style.top = `${Math.max(52, Math.min(rect.bottom + 8, window.innerHeight - 420))}px`;
-    // the TeX is typeset under the field as it is typed, and Apply is off while it has an error.
-    // a late result of an earlier TeX is dropped
-    let shown = 0;
-    let timer = 0;
-    const show = async () => {
-      const seq = ++shown;
-      const result = await previewTex(field.value, info.display).catch((e: unknown) => ({ node: null, error: e instanceof Error ? e.message : String(e) }));
-      if (seq !== shown) return;
-      preview.replaceChildren(...(result.node ? [result.node] : []));
-      error.textContent = result.error ?? '';
-      apply.disabled = !!result.error;
-    };
-    void show();
-    field.addEventListener('input', () => {
-      window.clearTimeout(timer);
-      timer = window.setTimeout(show, 150);
-    });
+    const keys = app.platform === 'mac' ? '⌘↩' : 'Ctrl+Enter';
+    const hint = make('span', 'hint', `${sheet.open} … ${sheet.close}, ${keys} to ${sheet.primary.toLowerCase()}, Esc to cancel`);
+    row.append(hint, cancel, apply);
+    box.append(title, field, ed.preview, ed.message, row);
+    const rect = sheet.rect;
+    document.body.append(box);
+    const w = box.offsetWidth;
+    const h = box.offsetHeight;
+    box.style.left = `${Math.max(16, Math.min(rect.left, window.innerWidth - w - 16))}px`;
+    box.style.top = `${rect.bottom + 8 + h < window.innerHeight - 8 ? rect.bottom + 8 : Math.max(52, rect.top - h - 8)}px`;
+    apply.disabled = !sheet.tex.trim();
+    void ed.refresh();
     apply.addEventListener('click', async () => {
+      if (apply.disabled) return;
       try {
-        await setMath(container, field.value);
-        popoverFor = host?.querySelectorAll('mjx-container')[at] ?? null;
-        closeMath();
+        await sheet.commit(field.value);
+        closeMath(!!target);
+        sheet.done?.();
       } catch (e) {
-        error.textContent = e instanceof Error ? e.message : String(e);
+        ed.message.classList.remove('prompt');
+        ed.message.textContent = e instanceof Error ? e.message : String(e);
       }
     });
     cancel.addEventListener('click', () => closeMath());
@@ -124,12 +329,49 @@ export function install(app: App): void {
       const at = stops.indexOf(document.activeElement as HTMLTextAreaElement);
       stops[(at + (ev.shiftKey ? -1 : 1) + stops.length) % stops.length].focus();
     });
-    document.body.append(box);
     popover = box;
+    openFor = target;
+    const host = target?.closest(HOST);
+    const at = host && target ? [...host.querySelectorAll('mjx-container')].indexOf(target) : -1;
+    // the focus goes back to the formula, or to the caret of the text of an inline formula
+    const sel = window.getSelection();
+    const caret = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+    const from = document.activeElement as HTMLElement | null;
+    back = target
+      ? () => {
+          const now = target.isConnected ? target : host?.querySelectorAll('mjx-container')[at] ?? null;
+          (now as HTMLElement | null)?.focus({ preventScroll: true });
+        }
+      : () => {
+          if (!from?.isConnected) return;
+          from.focus({ preventScroll: true });
+          if (caret && from.contains(caret.startContainer)) {
+            sel?.removeAllRanges();
+            sel?.addRange(caret);
+          }
+        };
     field.focus();
     field.select();
+    app.invalidate('selection');
   }
 
+  function openMath(container: Element): void {
+    const info = mathLookup()(container);
+    if (!info) return;
+    const fresh = !info.tex.trim();
+    openSheet({
+      title: fresh ? 'Insert Formula' : 'Edit Formula',
+      tex: info.tex,
+      display: info.display,
+      open: info.open,
+      close: info.close,
+      primary: fresh ? 'Insert' : 'Apply',
+      rect: container.getBoundingClientRect(),
+      commit: (tex) => setMath(container, tex),
+    }, container);
+  }
+
+  sheetApi = { open: openSheet };
   const math: MathPop = { isOpen: () => !!popover, open: openMath, close: closeMath, setMath };
   app.math = math;
   document.addEventListener('click', (ev) => {
@@ -138,7 +380,7 @@ export function install(app: App): void {
     if (container && app.hostOf(container)) {
       ev.preventDefault();
       openMath(container);
-    } else if (popover && target && !popover.contains(target)) closeMath(false);
+    } else if (popover && target && !popover.contains(target) && !target.closest('.beeson-complete')) closeMath(false);
   });
   app.listen('slide', () => closeMath(false));
 }

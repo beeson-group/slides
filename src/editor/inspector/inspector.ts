@@ -16,13 +16,16 @@ import { installStyle, keepFocus, runner, type Control } from './controls.ts';
 import { imagePane, qrPane, videoPane } from './media.ts';
 import { commands as slideCommands, slidePane } from './slide.ts';
 import { textPane } from './text.ts';
+import { formulaPane, formulaView } from './formula.ts';
 
-export type PaneKind = 'slide' | 'text' | 'image' | 'video' | 'qr' | 'arrange';
-const TAB_NAMES: Record<PaneKind, string> = { slide: 'Slide', text: 'Text', image: 'Image', video: 'Video', qr: 'QR Code', arrange: 'Arrange' };
+export type PaneKind = 'slide' | 'text' | 'image' | 'video' | 'qr' | 'formula' | 'arrange';
+const TAB_NAMES: Record<PaneKind, string> = { slide: 'Slide', text: 'Text', image: 'Image', video: 'Video', qr: 'QR Code', formula: 'Formula', arrange: 'Arrange' };
 
 // the panes of the selection, and the elements that tell one selection from another
 function viewOf(app: App): { tabs: PaneKind[]; items: readonly Element[] } {
   const sel = app.selection;
+  const formula = formulaView(app);
+  if (formula) return formula;
   if (sel.kind === 'text') return { tabs: ['text', 'arrange'], items: sel.items };
   const els = sel.elements();
   if (!els.length) return { tabs: ['slide'], items: [app.current()].filter((s): s is Element => !!s) };
@@ -46,6 +49,7 @@ function paneOf(app: App, kind: PaneKind, run: ReturnType<typeof runner>): Contr
     case 'image': return imagePane(app, run);
     case 'video': return videoPane(app, run);
     case 'qr': return qrPane(app, run);
+    case 'formula': return formulaPane(app, run);
     case 'arrange': return arrangePane(app, run);
   }
 }
