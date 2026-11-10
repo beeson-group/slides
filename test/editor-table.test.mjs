@@ -726,7 +726,7 @@ async function dragCells(page, [r0, c0], [r1, c1]) {
 }
 
 for (const platform of ['mac', 'other']) {
-  test(`Merge Cells writes the range as one cell with a colspan and a rowspan and the text joined (${platform})`, async (t) => {
+  test(`Merge Cells writes the range as one cell with a colspan and a rowspan and the text of each cell on a line (${platform})`, async (t) => {
     const page = await open(platform, TABLES_DECK);
     t.after(() => page.close?.());
     await show(page, 1);
@@ -738,7 +738,7 @@ for (const platform of ['mac', 'other']) {
     await settled(page);
     await byteExact(page, [[tbodyTable(PLAIN_ROWS), tbodyTable([
       PLAIN_ROWS[0],
-      '<tr><td colspan="2" rowspan="2">Moon \\(0.01215\\) Europa 2.53e-5</td><td>Earth and Moon</td></tr>',
+      '<tr><td colspan="2" rowspan="2">Moon<br>\\(0.01215\\)<br>Europa<br>2.53e-5</td><td>Earth and Moon</td></tr>',
       '<tr><td>Jupiter</td></tr>',
       PLAIN_ROWS[3],
     ])]]);
@@ -783,7 +783,7 @@ for (const platform of ['mac', 'other']) {
     await settled(page);
     await byteExact(page, [[tbodyTable(MERGED_ROWS), tbodyTable([
       MERGED_ROWS[0],
-      `<tr><td>Halo</td><td style="text-align: right" colspan="2">14.8 3.05 6.6 3.04</td></tr>`,
+      `<tr><td>Halo</td><td style="text-align: right" colspan="2">14.8<br>3.05<br>6.6<br>3.04</td></tr>`,
       MERGED_ROWS[3],
     ])]]);
     await roundTrip(page);
@@ -797,7 +797,7 @@ for (const platform of ['mac', 'other']) {
     await dragCells(page, [0, 1], [0, 2]);
     await page.evaluate(`window.BeesonEditor.exec('table.merge')`);
     await settled(page);
-    await byteExact(page, [[tbodyTable(MERGED_ROWS), tbodyTable(['<tr><th>Family</th><th colspan="2">Period Jacobi</th></tr>', ...MERGED_ROWS.slice(1)])]]);
+    await byteExact(page, [[tbodyTable(MERGED_ROWS), tbodyTable(['<tr><th>Family</th><th colspan="2">Period<br>Jacobi</th></tr>', ...MERGED_ROWS.slice(1)])]]);
     await roundTrip(page);
   });
 }

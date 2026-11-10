@@ -470,13 +470,15 @@ function numbersRight(t: Target | null): boolean {
 }
 
 // the cells of the range of t merged into its first cell, as Merge Cells of Keynote. the first cell
-// keeps its tag and its style, takes the text of the cells with a text, joined with a space, and
-// is written with the colspan and the rowspan of the range. a row left without a cell is taken out
+// keeps its tag and its style, and thus its alignment, takes the text of the cells with a text in
+// the order of reading, each on a line of its own after a br, as Keynote and PowerPoint keep it,
+// and is written with the colspan and the rowspan of the range. a row left without a cell is
+// taken out
 async function mergeCells(app: App, t: Target): Promise<void> {
   const box = t.box!;
   const [first, ...rest] = spotsIn(gridOf(t.table), box);
   const asBlock = blocked(app, t);
-  const joined = [first, ...rest].map((s) => contentWithTex(s.cell).trim()).filter(Boolean).join(' ');
+  const joined = [first, ...rest].map((s) => contentWithTex(s.cell).trim()).filter(Boolean).join('<br>');
   for (const s of rest) await app.doc.remove(s.cell, 'merge cells');
   app.doc.setTag(first.cell, { attrs: { colspan: spanText(box.c1 - box.c0 + 1), rowspan: spanText(box.r1 - box.r0 + 1) } }, 'merge cells');
   if (joined !== contentWithTex(first.cell)) await app.doc.setContent(first.cell, joined, 'merge cells');
