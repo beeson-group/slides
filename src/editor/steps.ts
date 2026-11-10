@@ -34,8 +34,9 @@ export type Ctx = {
 // the elements of a slide that can be a step, outside the notes and the backdrop, and not inside
 // another such element, e.g. an image inside a paragraph, which is shown with the paragraph. a
 // heading and the footnote can be a step too, as any text box in PowerPoint, but One by one
-// leaves them with the slide
-const CANDIDATES = 'h1, h2, h3, p, li, table, pre, blockquote, div.math, figure, .zone, .plate, .qr, tycho-viewer, .caption, .foot, img, video';
+// leaves them with the slide. a list is a step of its own only when it is shown all at once, and
+// otherwise its items are the steps
+const CANDIDATES = 'h1, h2, h3, p, li, ul.fragment, ol.fragment, table, pre, blockquote, div.math, figure, .zone, .plate, .qr, tycho-viewer, .caption, .foot, img, video';
 export const WITH_SLIDE = 'h1, h2, h3, .foot';
 const OUTSIDE = 'aside.notes, .backdrop';
 
@@ -51,8 +52,9 @@ export function candidates(slide: Element, pairing: Pairing): Element[] {
 // row of a table, a span in a paragraph, a backdrop, or a step of a plot, in document order, since
 // their indexes are one order. a fragment that is not paired with a tag, e.g. a span in the text of
 // a block, is locked, since its tag is not written
-export function stepElements(slide: Element, pairing: Pairing): Element[] {
-  const listed = new Set(candidates(slide, pairing));
+// a list of the slide is given in extra with its items, so that a change of its delivery sees both
+export function stepElements(slide: Element, pairing: Pairing, extra: Element[] = []): Element[] {
+  const listed = new Set([...candidates(slide, pairing), ...extra]);
   return [...slide.querySelectorAll('*')].filter((el) => listed.has(el) || (el.classList.contains('fragment') && !el.closest('aside.notes') && el.closest('section') === slide));
 }
 
@@ -84,10 +86,10 @@ export const classesOf = (app: App, el: Element): string[] => (app.pairing?.elem
 // the steps of the current slide as the model reads them
 export type Model = { slide: Element; els: Element[]; items: Item[]; locked: boolean[]; plan: Plan };
 
-export function modelOf(app: App, slide: Element | null = app.current()): Model | null {
+export function modelOf(app: App, slide: Element | null = app.current(), extra: Element[] = []): Model | null {
   const pairing = app.pairing;
   if (!slide || !pairing || !app.doc) return null;
-  const els = stepElements(slide, pairing);
+  const els = stepElements(slide, pairing, extra);
   const locked = els.map((el) => !pairing.elements.get(el)?.open);
   const items = els.map((el, i): Item => {
     if (!locked[i]) return itemOf(app.doc.tagState(el));
@@ -104,11 +106,116 @@ export function modelAt(app: App, el: Element): (Model & { i: number }) | null {
   return m && i >= 0 ? { ...m, i } : null;
 }
 
+// the delivery of a list, as in Keynote and in the Effect Options of PowerPoint: All at Once, i.e.
+// As One Object, is the list as one fragment, and By Item, i.e. By Bullet or By Paragraph, is each
+// item of the list a fragment of its own step. a list is delivered only at the top of a slide,
+// i.e. not inside an item or a paragraph, and a nested list is shown with its item
+export type Delivery = 'all' | 'item';
+export const DELIVERIES: [Delivery, string][] = [['all', 'List All at Once'], ['item', 'List Item by Item']];
+
+export const listItems = (list: Element): Element[] => [...list.children].filter((c) => c.localName === 'li');
+
+// the list at the top of the slide around el, or el itself when it is one
+export function listOf(el: Element | null): Element | null {
+  for (let up = el; up && up.localName !== 'section'; up = up.parentElement) {
+    if (!up.matches('ul, ol')) continue;
+    const outer = up.parentElement?.closest(`${CANDIDATES}, ${OUTSIDE}, section`);
+    if (outer?.localName === 'section') return up;
+  }
+  return null;
+}
+
+export function deliveryOf(app: App, list: Element): Delivery | null {
+  if (classesOf(app, list).includes('fragment')) return 'all';
+  return listItems(list).some((li) => classesOf(app, li).includes('fragment')) ? 'item' : null;
+}
+
+// the plan with the list delivered by. the list and its items are taken out of the plan, and put
+// back at the first step of any of them: the list alone for all, or each item at a step of its own
+// from there on, the later steps moved down. the first one joins the other elements of that step.
+// a list that is not a step becomes the last steps, a list shown last stays last, and null shows
+// the list with the slide
+export function deliverPlan(plan: Plan, list: number, items: number[], by: Delivery | null): Plan {
+  const members = new Set([list, ...items]);
+  const k = plan.groups.findIndex((g) => g.some((x) => members.has(x)));
+  const last = plan.finals.some((x) => members.has(x));
+  const rest = plan.groups.map((g) => g.filter((x) => !members.has(x)));
+  const groups = rest.filter((g) => g.length);
+  const finals = plan.finals.filter((x) => !members.has(x));
+  if (by === null) return { groups, finals };
+  const heads = by === 'all' ? [list] : items;
+  if (k < 0 && last) return { groups, finals: [...finals, ...heads].sort((a, b) => a - b) };
+  const at = k < 0 ? groups.length : rest.slice(0, k).filter((g) => g.length).length;
+  if (k >= 0 && rest[k].length) groups[at].push(heads[0]);
+  else groups.splice(at, 0, [heads[0]]);
+  groups.splice(at + 1, 0, ...heads.slice(1).map((i) => [i]));
+  return { groups, finals };
+}
+
+// the delays of the steps of before carried to the steps of after, through standIn, the item of
+// after that takes the place of an item of before. the first step of before that lands on a step
+// of after gives it its delay
+export function carryDelays(before: Plan, after: Plan, delays: Map<number, number>, standIn: Map<number, number>): Map<number, number> {
+  const out = new Map<number, number>();
+  const end = delays.get(-1);
+  if (end !== undefined) out.set(-1, end);
+  const seen = new Set<number>();
+  for (const g of before.groups) {
+    const d = delays.get(Math.min(...g));
+    for (const x of g) {
+      const k = after.groups.findIndex((h) => h.includes(standIn.get(x) ?? x));
+      if (k < 0) continue;
+      if (!seen.has(k) && d !== undefined && k > 0) out.set(Math.min(...after.groups[k]), d);
+      seen.add(k);
+      break;
+    }
+  }
+  return out;
+}
+
+// a step that starts After Previous, as in PowerPoint, or After Build, as in Keynote, is shown by
+// itself a delay after the step before it. reveal.js offers this as data-autoslide on a fragment,
+// the milliseconds after which the next step is shown once the fragment is the current one. the
+// delay is thus written on the first fragment of the step before, and read back as the start of
+// the first item of the next step. a delay on the last step moves on to the next slide, and it is
+// kept on the last step at -1. reveal.js reads 0 as no delay, hence the shortest delay is 0.1 s
+export type StartKind = Start | 'after';
+export const AUTOSLIDE = 'data-autoslide';
+export const MIN_DELAY = 100;
+export const AFTER_DEFAULT = 500;
+
+function autoslideOf(app: App, m: Model, i: number): number | null {
+  const raw = m.locked[i] ? m.els[i].getAttribute(AUTOSLIDE) : app.doc.tagState(m.els[i]).attrs[AUTOSLIDE];
+  return raw != null && /^\s*\d+\s*$/.test(raw) ? Number(raw) : null;
+}
+
+// the delays in ms of the steps that start after the step before, keyed by the first item of the
+// step in document order, and by -1 for the next slide after the last step
+export function delaysOf(app: App, m: Model): Map<number, number> {
+  const out = new Map<number, number>();
+  m.plan.groups.forEach((g, k) => {
+    const ms = g.map((i) => autoslideOf(app, m, i)).find((v) => v !== null);
+    if (ms === undefined || ms === null) return;
+    const next = m.plan.groups[k + 1];
+    out.set(next ? Math.min(...next) : -1, ms);
+  });
+  return out;
+}
+
+// the start of item i, with its delay in ms for After Previous
+export function startAt(app: App, m: Model, i: number, delays: Map<number, number> = delaysOf(app, m)): { start: StartKind | null; delay: number | null } {
+  const start = startOf(m.plan, i);
+  const g = m.plan.groups.findIndex((g) => g.includes(i));
+  const delay = start === 'click' && g > 0 ? delays.get(i) : undefined;
+  return delay === undefined ? { start, delay: null } : { start: 'after', delay };
+}
+
 // the plan written into the tags of the slide: the class fragment, data-fragment-index, and
 // data-final of each item that changes, the effect classes of an item taken out of the steps, and
-// each data-keep of a number, which follows its step to its new index. the changes are recorded
-// with an entry that shows the slide at an undo, and false is returned when nothing changes
-export function writePlan(app: App, m: Model, plan: Plan, extra: Map<Element, TagEdit> = new Map()): boolean {
+// each data-keep of a number, which follows its step to its new index. the delays of the steps
+// that start After Previous follow the first item of their step. the changes are recorded with an
+// entry that shows the slide at an undo, and false is returned when nothing changes
+export function writePlan(app: App, m: Model, plan: Plan, extra: Map<Element, TagEdit> = new Map(), delays: Map<number, number> = delaysOf(app, m)): boolean {
   const after = itemsOf(m.items, plan);
   const moved = m.els.find((_, i) => m.locked[i] && (after[i].index !== m.items[i].index || after[i].fragment !== m.items[i].fragment || after[i].final !== m.items[i].final));
   if (moved) throw new Error(`The step of the ${describe(moved, () => null).kind.toLowerCase()} in the text of a block cannot be changed here, and it would be renumbered by this change`);
@@ -136,6 +243,25 @@ export function writePlan(app: App, m: Model, plan: Plan, extra: Map<Element, Ta
     const n = remapKeep(Number(value), m.items, after);
     if (n !== Number(value)) add(el, { attrs: { 'data-keep': String(n) } });
   }
+  // the data-autoslide of each step before a step with a delay, on its first fragment with a tag,
+  // and on no other fragment of a step before or after the change
+  const want = new Map<number, number>();
+  const firstTagged = (g: number[]) => [...g].sort((a, b) => a - b).find((i) => !m.locked[i]);
+  plan.groups.forEach((g, k) => {
+    const d = k ? delays.get(Math.min(...g)) : undefined;
+    const at = d === undefined ? undefined : firstTagged(plan.groups[k - 1]);
+    if (d !== undefined && at !== undefined) want.set(at, d);
+  });
+  const end = delays.get(-1);
+  const lastAt = plan.groups.length ? firstTagged(plan.groups[plan.groups.length - 1]) : undefined;
+  if (end !== undefined && lastAt !== undefined) want.set(lastAt, end);
+  const touched = new Set([...m.plan.groups.flat(), ...plan.groups.flat()]);
+  m.els.forEach((el, i) => {
+    if (m.locked[i] || !touched.has(i)) return;
+    const now = app.doc.tagState(el).attrs[AUTOSLIDE] ?? null;
+    const w = want.has(i) ? String(want.get(i)) : null;
+    if (now !== w) add(el, { attrs: { [AUTOSLIDE]: w } });
+  });
   for (const [el, e] of edits) if (e.attrs && !Object.keys(e.attrs).length) delete e.attrs;
   const changed = [...edits].filter(([, e]) => Object.keys(e).length);
   if (!changed.length) return false;
@@ -154,7 +280,7 @@ export function effectEdit(state: TagState, effect: Effect): TagEdit {
   return Object.keys(classes).length ? { classes } : {};
 }
 
-const KINDS: [string, string][] = [['h1, h2, h3', 'Heading'], ['.foot', 'Footnote'], ['li', 'Item'], ['p', 'Paragraph'], ['div.math', 'Formula'], ['table', 'Table'], ['tr', 'Table row'], ['pre, code', 'Code'], ['blockquote', 'Quotation'], ['video', 'Video'], ['tycho-viewer', 'Scene'], ['.qr', 'QR code'], ['.caption', 'Caption'], ['.backdrop', 'Backdrop'], ['.surface', 'Surface'], ['.plot', 'Plot'], ['[data-plot-show], [data-plot-tab]', 'Plot step'], ['[data-surface-stage]', 'Surface step'], ['img, figure, .zone, .plate', 'Figure']];
+const KINDS: [string, string][] = [['h1, h2, h3', 'Heading'], ['.foot', 'Footnote'], ['li', 'Item'], ['ul, ol', 'List'], ['p', 'Paragraph'], ['div.math', 'Formula'], ['table', 'Table'], ['tr', 'Table row'], ['pre, code', 'Code'], ['blockquote', 'Quotation'], ['video', 'Video'], ['tycho-viewer', 'Scene'], ['.qr', 'QR code'], ['.caption', 'Caption'], ['.backdrop', 'Backdrop'], ['.surface', 'Surface'], ['.plot', 'Plot'], ['[data-plot-show], [data-plot-tab]', 'Plot step'], ['[data-surface-stage]', 'Surface step'], ['img, figure, .zone, .plate', 'Figure']];
 
 // the text of el with each formula given by its TeX, since an mjx-container does not have text
 function textOf(el: Element, tex: Ctx['tex']): string {
@@ -193,6 +319,64 @@ export function describe(el: Element, tex: Ctx['tex']): { kind: string; text: st
     if (named) text = `${named[1]} ${el.getAttribute(named[0]) ?? ''}`.trim();
   }
   return { kind, text: text.length > 90 ? `${text.slice(0, 90)}…` : text };
+}
+
+export const STARTS: [StartKind, string][] = [['click', 'On Click'], ['with', 'With Previous'], ['after', 'After Previous']];
+
+// a delay in ms as seconds with at most one decimal
+const seconds = (ms: number): string => String(Math.round(ms / 100) / 10);
+
+export const startLabel = (start: StartKind | null, delay: number | null): string =>
+  start === 'after' ? `After Previous, ${seconds(delay ?? 0)} s` : start === 'with' ? 'With Previous' : 'On Click';
+
+// item i can start After Previous when the step before its own has a fragment with a tag, on
+// which the delay is written, or when it is shown with others and gets a step of its own
+export function afterable(m: Model, i: number): boolean {
+  const g = m.plan.groups.findIndex((g) => g.includes(i));
+  if (g < 0) return false;
+  const before = Math.min(...m.plan.groups[g]) === i ? m.plan.groups[g - 1] : m.plan.groups[g].filter((x) => x < i);
+  return !!before?.some((x) => !m.locked[x]);
+}
+
+// the mark of a start in a chip, 9 px on the grid of the icons of ui/icons.ts: a plus for With
+// Previous, and a clock for After Previous
+function startGlyph(start: 'with' | 'after'): SVGSVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', '0 0 10 10');
+  svg.setAttribute('width', '9');
+  svg.setAttribute('height', '9');
+  svg.setAttribute('aria-hidden', 'true');
+  svg.classList.add('start', start);
+  const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  path.setAttribute('d', start === 'with' ? 'M5 1.5v7M1.5 5h7' : 'M5 .9a4.1 4.1 0 1 1 0 8.2 4.1 4.1 0 0 1 0-8.2zM5 2.8V5l1.6 1.1');
+  path.setAttribute('fill', 'none');
+  path.setAttribute('stroke', 'currentColor');
+  path.setAttribute('stroke-width', '1.3');
+  path.setAttribute('stroke-linecap', 'round');
+  svg.append(path);
+  return svg;
+}
+
+// the box under which the menu of a chip is opened: the column of the chip over the height of its
+// row, so that the menu is put under the row at the chip, or over the row when there is no room
+// under it, and never over the second line of the row
+export const rowAnchor = (chip: Element, row: Element): DOMRect => {
+  const c = chip.getBoundingClientRect();
+  const r = row.getBoundingClientRect();
+  return new DOMRect(c.left, r.top, c.width, r.height);
+};
+
+// a menu that still covers row, since it fits neither under nor over it, is put beside the row on
+// the side of the canvas, level with the row, as a popover of Keynote is put beside its control
+export function popover(menu: HTMLElement, row: Element): void {
+  const m = menu.getBoundingClientRect();
+  const r = row.getBoundingClientRect();
+  if (m.bottom <= r.top || m.top >= r.bottom) return;
+  const pad = 4;
+  const left = r.left - m.width - 6 >= pad ? r.left - m.width - 6 : Math.min(innerWidth - m.width - pad, r.right + 6);
+  const top = Math.max(pad, Math.min(r.top - 6, innerHeight - m.height - pad));
+  menu.style.left = `${Math.round(left)}px`;
+  menu.style.top = `${Math.round(top)}px`;
 }
 
 // the six dots of a drag handle, in the grid of the icons of ui/icons.ts
@@ -247,15 +431,32 @@ ${P} .grip { display: flex; justify-content: center; color: var(--ed-faint); cur
 ${P} .rows .row.selected .grip { color: inherit; opacity: 0.7; }
 ${P} .chip { display: inline-flex; align-items: center; justify-content: center; gap: 1px; box-sizing: border-box; width: 32px; height: 20px; padding: 0 1px 0 4px; border: 1px solid var(--ed-control-line); border-radius: 10px; background: var(--ed-panel); color: var(--ed-text); font: 600 11px/1 var(--ed-font); font-variant-numeric: tabular-nums; cursor: default; }
 ${P} .chip svg { flex: none; opacity: 0.6; }
+${P} .chip svg.start { opacity: 1; margin-right: 2px; }
+${P} .chip[data-start="after"] svg.start { color: var(--ed-guide); }
+${P} .rows .row.selected .chip svg.start { color: inherit; }
+${P} .rows .list-head { position: relative; display: grid; grid-template-columns: 8px 52px minmax(0, 1fr); align-items: center; column-gap: 5px; min-height: 38px; padding: 4px 8px 4px 4px; box-sizing: border-box; cursor: default; }
+${P} .rows .card > .row + .list-head::before { content: ""; position: absolute; left: 49px; right: 10px; top: 0; border-top: 1px solid var(--ed-line); }
+${P} .rows .card > .list-head:first-child { border-radius: 7px 7px 0 0; }
+${P} .rows .list-head:hover { background: var(--ed-hover); }
+${P} .rows .list-head.selected { background: var(--ed-select); color: var(--ed-on-select); }
+${P} .rows .list-head .chip { width: 52px; }
+${P} .rows .row.nested { padding-left: 16px; grid-template-columns: 8px 32px minmax(0, 1fr); }
+${P} .rows .list-head + .row.nested::before, ${P} .rows .row.nested + .row.nested::before { content: ""; position: absolute; left: 61px; right: 10px; top: 0; border-top: 1px solid var(--ed-line); }
+${P} .rows .list-head.selected + .row::before { border-top-color: transparent; }
+${P} .detail .delay-box { display: flex; align-items: center; gap: 6px; }
+${P} .detail .delay-box input { width: 72px; height: 24px; box-sizing: border-box; padding: 0 6px; border: 1px solid var(--ed-control-line); border-radius: 6px; background: var(--ed-control); color: var(--ed-text); font: 12px/1 var(--ed-font); font-variant-numeric: tabular-nums; }
+${P} .detail .delay-box input:disabled { color: var(--ed-faint); background: transparent; }
+${P} .detail .delay-box .unit { color: var(--ed-muted); }
+${P} .detail .delay-box.off .unit { color: var(--ed-faint); }
 ${P} .rows .row.with .chip { color: var(--ed-muted); font-weight: 400; }
 ${P} .rows .row.slide .chip { color: var(--ed-muted); font-weight: 400; }
 ${P} .chip[aria-expanded="true"] { border-color: var(--ed-select); box-shadow: 0 0 0 1px var(--ed-select); }
-${P} .rows .row.selected .chip { border-color: rgba(255, 255, 255, 0.5); background: rgba(255, 255, 255, 0.16); color: inherit; }
+${P} .rows .row.selected .chip, ${P} .rows .list-head.selected .chip { border-color: rgba(255, 255, 255, 0.5); background: rgba(255, 255, 255, 0.16); color: inherit; }
 ${P} .body { display: flex; flex-direction: column; min-width: 0; gap: 1px; }
 ${P} .text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 12px; }
 ${P} .text:empty::before { content: "Empty"; color: var(--ed-faint); }
 ${P} .meta { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ed-muted); font-size: 11px; }
-${P} .rows .row.selected .meta { color: inherit; opacity: 0.82; }
+${P} .rows .row.selected .meta, ${P} .rows .list-head.selected .meta { color: inherit; opacity: 0.82; }
 ${P} .drop-line { position: absolute; left: 6px; right: 10px; height: 2px; margin-top: -1px; border-radius: 1px; background: var(--ed-select); pointer-events: none; }
 ${P} .drop-line::before { content: ""; position: absolute; left: -5px; top: -3px; width: 4px; height: 4px; border: 2px solid var(--ed-select); border-radius: 50%; background: var(--ed-panel); }
 ${P} .slide-zone { border-radius: 8px; }
@@ -287,11 +488,32 @@ html.beeson-editing.beeson-previewing .reveal .slides section .fragment.beeson-p
 @media (prefers-reduced-motion: reduce) { html.beeson-editing.beeson-previewing .reveal .slides section .fragment { transition: none !important; } }
 `;
 
+// the lists of the slide delivered by item whose items are consecutive steps, each alone at its
+// step but the first, which may share its step. such a list is shown as one row with its items
+// nested under it, as a build By Bullet in Keynote
+type Run = { list: Element; items: number[]; from: number };
+function runsOf(m: Model): Run[] {
+  const out: Run[] = [];
+  const seen = new Set<Element>();
+  m.els.forEach((el) => {
+    const list = el.localName === 'li' ? el.parentElement : null;
+    if (!list || seen.has(list) || listOf(el) !== list) return;
+    seen.add(list);
+    const items = listItems(list).map((li) => m.els.indexOf(li));
+    if (items.length < 2 || items.some((i) => i < 0)) return;
+    const ks = items.map((i) => m.plan.groups.findIndex((g) => g.includes(i)));
+    if (ks[0] < 0 || ks.some((k, j) => k !== ks[0] + j || (j > 0 && m.plan.groups[k].length !== 1))) return;
+    out.push({ list, items, from: ks[0] });
+  });
+  return out;
+}
+
 // the seconds of a step of a preview, and of the last frame, in which every element is restored
 const STEP_MS = 800;
 const END_MS = 700;
 
 type Row = { el: Element; i: number; row: HTMLElement; chip: HTMLButtonElement };
+type Head = { list: Element; head: HTMLElement; chip: HTMLButtonElement; run: Run };
 
 export class Steps {
   readonly pane = make('div', 'beeson-edit-side');
@@ -311,10 +533,12 @@ export class Steps {
   // open on a chip would be lost
   private key = '';
   private rows: Row[] = [];
+  private heads: Head[] = [];
   private model: Model | null = null;
   private start: HTMLButtonElement | null = null;
   private effect: HTMLButtonElement | null = null;
   private final: HTMLInputElement | null = null;
+  private delay: HTMLInputElement | null = null;
   // the preview that is played, which stop ends on the last layer of the slide
   private playing: { stop(): void; done: Promise<void> } | null = null;
   // the row that a drag has started from, and the step that it is dropped into
@@ -357,11 +581,39 @@ export class Steps {
     const field = (label: string, el: HTMLElement) => this.detail.append(make('span', '', label), el);
     this.start = chromeSelect(app, {
       label: 'Start of the step',
-      choices: () => [{ value: 'click', label: 'On Click' }, { value: 'with', label: 'With Previous' }],
+      choices: () => STARTS.map(([value, label]) => ({ value, label })),
       value: () => this.selected()?.start ?? 'click',
-      text: () => (this.selected()?.start === 'with' ? 'With Previous' : this.selected()?.start === 'click' ? 'On Click' : '—'),
+      text: () => STARTS.find(([v]) => v === this.selected()?.start)?.[1] ?? '—',
       onChange: (v) => this.runOn('steps.start', { start: v }),
     });
+    // the delay of After Previous in seconds, committed with Return or at a blur
+    const delay = make('input', 'delay');
+    delay.type = 'number';
+    delay.min = String(MIN_DELAY / 1000);
+    delay.max = '600';
+    delay.step = '0.1';
+    delay.setAttribute('aria-label', 'Delay after the step before, in seconds');
+    const commit = () => {
+      const s = this.selected();
+      const v = Number(delay.value);
+      if (!s || s.start !== 'after' || !delay.value || !Number.isFinite(v) || Math.round(v * 1000) === s.delay) return;
+      this.runOn('steps.delay', { delay: v });
+    };
+    delay.addEventListener('change', commit);
+    delay.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Enter') {
+        ev.preventDefault();
+        commit();
+      } else if (ev.key === 'Escape') {
+        ev.preventDefault();
+        ev.stopPropagation();
+        this.syncDetail(true);
+        delay.blur();
+      }
+    });
+    this.delay = delay;
+    const delayBox = make('span', 'delay-box');
+    delayBox.append(delay, make('span', 'unit', 's'));
     this.effect = chromeSelect(app, {
       label: 'Effect of the step',
       choices: () => EFFECTS.map(([value, label]) => ({ value, label })),
@@ -377,6 +629,7 @@ export class Steps {
     label.title = 'Show the element after every other step of the slide, as data-final does';
     label.append(final, document.createTextNode('Show last, after every step'));
     field('Start', this.start);
+    field('Delay', delayBox);
     field('Effect', this.effect);
     this.detail.append(label);
     app.listen('slide', () => this.stop());
@@ -427,26 +680,30 @@ export class Steps {
     }
     const described = els.map((el) => describe(el, this.ctx.tex));
     const effects = els.map((el) => effectOf(classesOf(app, el)).label);
-    const key = [app.pairing?.sections.findIndex((s) => s.live === m.slide), JSON.stringify(plan), ...els.map((_, i) => `${described[i].kind}|${described[i].text}|${effects[i]}|${items[i].final}`)].join('\n');
+    const delays = delaysOf(app, m);
+    const key = [app.pairing?.sections.findIndex((s) => s.live === m.slide), JSON.stringify(plan), JSON.stringify([...delays]), ...els.map((_, i) => `${described[i].kind}|${described[i].text}|${effects[i]}|${items[i].final}`)].join('\n');
     if (key !== this.key) {
       this.key = key;
-      this.build(m, described, effects);
+      this.build(m, described, effects, delays);
     }
     this.mark();
   }
 
-  private build(m: Model, described: { kind: string; text: string }[], effects: string[]): void {
+  private build(m: Model, described: { kind: string; text: string }[], effects: string[], delays: Map<number, number>): void {
     const { els, plan } = m;
+    const app = this.app as App;
     const open = document.activeElement instanceof HTMLElement && this.list.contains(document.activeElement) ? this.rows.find((r) => r.row === document.activeElement || r.chip === document.activeElement)?.el : null;
     this.rows = [];
+    this.heads = [];
     this.list.replaceChildren();
     if (!els.length) {
       this.list.append(make('div', 'card empty', 'This slide has no element that can be a step.'));
       return;
     }
     const G = plan.groups.length;
-    const row = (i: number, step: number, start: Start | null) => {
+    const row = (i: number, step: number) => {
       const el = els[i];
+      const { start, delay } = startAt(app, m, i, delays);
       const { kind, text } = described[i];
       const final = plan.finals.includes(i);
       const locked = m.locked[i];
@@ -460,11 +717,16 @@ export class Steps {
       chip.setAttribute('aria-haspopup', 'menu');
       chip.setAttribute('aria-expanded', 'false');
       chip.setAttribute('aria-label', `Step of the ${kind.toLowerCase()}${text ? `: ${text}` : ''}`);
-      chip.title = locked ? `Step ${step + 1}, set in the text of its block` : step < 0 ? 'Shown with the slide. Click to choose a step' : `Step ${step + 1}. Click to change its step, start, or effect`;
+      const how = step < 0 ? 'With the slide' : [final ? 'Last' : startLabel(start, delay), effects[i]].join(' · ');
+      chip.title = locked ? `Step ${step + 1}, set in the text of its block` : step < 0 ? 'Shown with the slide. Click to choose a step' : `Step ${step + 1}, ${final ? 'last' : startLabel(start, delay)}. Click to change its step, start, or effect`;
       chip.disabled = locked;
+      // the start is marked in the chip as in the Animation Pane of PowerPoint: a number at a click,
+      // a plus with the step before, and a clock after it
+      const mark = step < 0 || final ? null : start === 'with' ? startGlyph('with') : start === 'after' ? startGlyph('after') : null;
+      if (mark) chip.append(mark);
+      chip.dataset.start = step < 0 ? '' : final ? 'last' : (start ?? '');
       chip.append(step < 0 ? '–' : final ? 'Last' : String(step + 1), icon('chevron-down', 9));
-      if (final) chip.style.width = '44px';
-      const how = step < 0 ? 'With the slide' : [final ? 'Last' : start === 'with' ? 'With Previous' : 'On Click', effects[i]].join(' · ');
+      if (final || mark) chip.style.width = '44px';
       const meta = make('span', 'meta');
       meta.append(make('span', 'kind', kind), ` · ${how}`);
       const body = make('span', 'body');
@@ -484,12 +746,24 @@ export class Steps {
       return r;
     };
     const cards: HTMLElement[] = [];
+    const runs = new Map(runsOf(m).map((r) => [r.from, r]));
+    const inner = new Set([...runs.values()].flatMap((r) => r.items.slice(1).map((_, j) => r.from + 1 + j)));
     plan.groups.forEach((g, k) => {
-      const card = make('div', 'card step');
+      if (inner.has(k)) return;
+      const run = runs.get(k);
+      const card = make('div', `card step${run ? ' list' : ''}`);
       card.dataset.gap = String(k);
       card.setAttribute('role', 'group');
-      card.setAttribute('aria-label', `Step ${k + 1}`);
-      for (const i of [...g].sort((a, b) => a - b)) card.append(row(i, k, startOf(plan, i)));
+      const n = run ? run.items.length : 1;
+      card.setAttribute('aria-label', n > 1 ? `Steps ${k + 1} to ${k + n}` : `Step ${k + 1}`);
+      const others = [...g].filter((i) => !run?.items.includes(i)).sort((a, b) => a - b);
+      for (const i of others.filter((i) => !run || i < run.items[0])) card.append(row(i, k));
+      if (run) {
+        card.append(this.head(run, described));
+        run.items.forEach((i, j) => card.append(row(i, k + j)));
+        for (const r of this.rows.slice(-run.items.length)) r.row.classList.add('nested');
+      }
+      for (const i of others.filter((i) => run && i > run.items[0])) card.append(row(i, k));
       cards.push(card);
     });
     plan.finals.forEach((i, f) => {
@@ -497,7 +771,7 @@ export class Steps {
       card.dataset.gap = String(G);
       card.setAttribute('role', 'group');
       card.setAttribute('aria-label', 'Last step');
-      card.append(row(i, G + f, 'click'));
+      card.append(row(i, G + f));
       cards.push(card);
     });
     if (!cards.length) cards.push(make('div', 'card empty step', 'No element of this slide is a step. Choose a step in the menu of a row, or drag a row here.'));
@@ -510,12 +784,71 @@ export class Steps {
       const card = make('div', 'card plain');
       card.setAttribute('role', 'group');
       card.setAttribute('aria-label', 'With the slide');
-      for (const i of rest) card.append(row(i, -1, null));
+      for (const i of rest) card.append(row(i, -1));
       zone.append(head, card);
       this.list.append(zone);
     }
     const back = open ? this.rows.find((r) => r.el === open) : null;
     if (back) back.row.focus({ preventScroll: true });
+  }
+
+  // the row of a list delivered by item, above its items. a press selects the list, and its chip
+  // opens the menu of its delivery
+  private head(run: Run, described: { kind: string; text: string }[]): HTMLElement {
+    const app = this.app as App;
+    const n = run.items.length;
+    const steps = `${run.from + 1}–${run.from + n}`;
+    const head = make('div', 'list-head');
+    const chip = make('button', 'chip');
+    chip.type = 'button';
+    chip.tabIndex = -1;
+    chip.setAttribute('aria-haspopup', 'menu');
+    chip.setAttribute('aria-expanded', 'false');
+    chip.setAttribute('aria-label', `Delivery of the list, steps ${run.from + 1} to ${run.from + n}`);
+    chip.title = `Steps ${run.from + 1} to ${run.from + n}, item by item. Click to change the delivery of the list`;
+    chip.append(steps, icon('chevron-down', 9));
+    const meta = make('span', 'meta');
+    meta.append(make('span', 'kind', 'List'), ` · Item by item · ${n} steps`);
+    const body = make('span', 'body');
+    body.append(make('span', 'text', described[run.items[0]].text), meta);
+    head.append(make('span', 'grip'), chip, body);
+    head.setAttribute('aria-label', `List, item by item, steps ${run.from + 1} to ${run.from + n}`);
+    const entry: Head = { list: run.list, head, chip, run };
+    head.addEventListener('pointerdown', (ev) => {
+      if (ev.button !== 0) return;
+      ev.preventDefault();
+      const onChip = ev.target instanceof Element && !!ev.target.closest('.chip');
+      if (onChip && menuOpen() && chip.getAttribute('aria-expanded') === 'true') {
+        closeMenus();
+        return;
+      }
+      app.selection.set('elements', [run.list]);
+      if (onChip) this.openDelivery(entry, false);
+    });
+    chip.addEventListener('click', (ev) => {
+      if (ev.detail === 0) this.openDelivery(entry, true);
+    });
+    head.addEventListener('pointerenter', () => !this.dragging && run.list.classList.add('beeson-hover'));
+    head.addEventListener('pointerleave', () => run.list.classList.remove('beeson-hover'));
+    this.heads.push(entry);
+    return head;
+  }
+
+  // the items of the delivery of the list of an element, for the menu of its chip
+  private deliveryItems(el: Element): MenuItem[] {
+    const app = this.app as App;
+    const list = listOf(el);
+    if (!list || !app.pairing?.elements.get(list)?.open) return [];
+    const now = deliveryOf(app, list);
+    const run = (by: Delivery | null) => () => void app.commands.run('steps.deliver', { el: list, by }).catch((e) => app.fail(e));
+    return DELIVERIES.map(([by, label]): MenuItem => ({ label, checked: now === by, run: run(by) }));
+  }
+
+  private openDelivery(h: Head, keyboard: boolean): void {
+    const app = this.app as App;
+    const run = () => void app.commands.run('steps.deliver', { el: h.list, by: null }).catch((e) => app.fail(e));
+    const items: MenuItem[] = [...this.deliveryItems(h.list), { rule: true }, { label: 'With the Slide', run }];
+    popover(openMenu(app, items, { anchor: rowAnchor(h.chip, h.head), placement: 'below', owner: h.chip, keyboard, label: 'Delivery', className: 'select steps' }).el, h.head);
   }
 
   // the rows of the selected elements are marked, and so are their numbers on the slide
@@ -532,6 +865,7 @@ export class Steps {
       r.row.setAttribute('aria-selected', String(on));
       if (on && !first) first = r;
     }
+    for (const h of this.heads) h.head.classList.toggle('selected', items.includes(h.list));
     for (const b of this.badges.children) b.classList.toggle('on', hit((b as HTMLElement & { owner?: Element }).owner as Element));
     if (first && !this.dragging) first.row.scrollIntoView({ block: 'nearest' });
     for (const r of this.rows) r.row.tabIndex = r === (first ?? this.rows[0]) ? 0 : -1;
@@ -539,20 +873,27 @@ export class Steps {
   }
 
   // the facts of the one selected row, for the fields under the rows
-  private selected(): { el: Element; stepped: boolean; start: Start | null; effect: { id: Effect | null; label: string }; final: boolean } | null {
+  private selected(): { el: Element; stepped: boolean; start: StartKind | null; delay: number | null; effect: { id: Effect | null; label: string }; final: boolean } | null {
     const m = this.model;
     const app = this.app;
     const r = this.rows.find((r) => r.row.classList.contains('selected'));
     if (!m || !app || !r) return null;
-    return { el: r.el, stepped: stepAt(m.plan, r.i) >= 0, start: startOf(m.plan, r.i), effect: effectOf(classesOf(app, r.el)), final: m.plan.finals.includes(r.i) };
+    const { start, delay } = startAt(app, m, r.i);
+    return { el: r.el, stepped: stepAt(m.plan, r.i) >= 0, start, delay, effect: effectOf(classesOf(app, r.el)), final: m.plan.finals.includes(r.i) };
   }
 
-  private syncDetail(): void {
+  private syncDetail(force = false): void {
     const s = this.selected();
     this.detail.classList.toggle('off', !s);
     if (this.start) {
       this.start.disabled = !s?.stepped || s.final;
       (this.start as HTMLButtonElement & { refresh(): void }).refresh();
+    }
+    if (this.delay) {
+      const after = s?.start === 'after' && !s.final;
+      this.delay.disabled = !after;
+      this.delay.parentElement?.classList.toggle('off', !after);
+      if (force || document.activeElement !== this.delay) this.delay.value = after && s.delay !== null ? seconds(s.delay) : '';
     }
     if (this.effect) {
       this.effect.disabled = !s?.stepped;
@@ -588,8 +929,9 @@ export class Steps {
     const { plan } = m;
     const at = stepAt(plan, r.i);
     const final = plan.finals.includes(r.i);
-    const start = startOf(plan, r.i);
+    const { start } = startAt(app, m, r.i);
     const effect = effectOf(classesOf(app, r.el)).id;
+    const first = at === 0 && start === 'click';
     const run = (id: string, arg: Record<string, unknown>) => () => void app.commands.run(id, { el: r.el, ...arg }).catch((e) => app.fail(e));
     const items: MenuItem[] = [
       { label: 'With the Slide', checked: at < 0, run: run('steps.set', { to: null }) },
@@ -598,14 +940,16 @@ export class Steps {
       { label: 'New Step at End', run: run('steps.set', { to: 'last' }) },
       { rule: true },
       { label: 'On Click', checked: start === 'click', disabled: at < 0 || final, run: run('steps.start', { start: 'click' }) },
-      { label: 'With Previous', checked: start === 'with', disabled: at < 0 || final || (at === 0 && start === 'click'), run: run('steps.start', { start: 'with' }) },
+      { label: 'With Previous', checked: start === 'with', disabled: at < 0 || final || first, run: run('steps.start', { start: 'with' }) },
+      { label: 'After Previous', checked: start === 'after', disabled: at < 0 || final || first || !afterable(m, r.i), run: run('steps.start', { start: 'after' }) },
       { rule: true },
       ...EFFECTS.map(([id, label]): MenuItem => ({ label, checked: at >= 0 && effect === id, disabled: at < 0, run: run('steps.effect', { effect: id }) })),
       { rule: true },
       { label: 'Show Last', checked: final, run: run('steps.final', { on: !final }) },
     ];
-    const box = r.chip.getBoundingClientRect();
-    openMenu(app, items, { anchor: box, placement: 'below', owner: r.chip, keyboard, label: 'Step', className: 'select steps' });
+    const delivery = this.deliveryItems(r.el);
+    if (delivery.length) items.push({ rule: true }, ...delivery);
+    popover(openMenu(app, items, { anchor: rowAnchor(r.chip, r.row), placement: 'below', owner: r.chip, keyboard, label: 'Step', className: 'select steps' }).el, r.row);
   }
 
   // a press on a row selects its element. a press on its chip opens the menu of the chip, and a
@@ -806,9 +1150,18 @@ export class Steps {
     this.setPlaying(true);
     window.addEventListener('keydown', esc, true);
     frame(0);
-    for (let k = 1; k <= last; k++) timers.push(window.setTimeout(() => frame(k), STEP_MS * k));
-    timers.push(window.setTimeout(() => frame(last, true), STEP_MS * (last + 1)));
-    timers.push(window.setTimeout(() => finish(), STEP_MS * (last + 1) + END_MS));
+    // a step after a step with data-autoslide is played at its delay, as reveal.js plays it
+    const delayAfter = (k: number) => {
+      const ms = frags.filter((f) => f.step === k).map((f) => Number.parseInt(f.el.getAttribute(AUTOSLIDE) ?? '', 10)).find((v) => v > 0);
+      return ms ?? STEP_MS;
+    };
+    let at = 0;
+    for (let k = 1; k <= last; k++) {
+      at += k > 1 ? delayAfter(k - 1) : STEP_MS;
+      timers.push(window.setTimeout(() => frame(k), at));
+    }
+    timers.push(window.setTimeout(() => frame(last, true), at + STEP_MS));
+    timers.push(window.setTimeout(() => finish(), at + STEP_MS + END_MS));
     this.playing = { stop: () => finish(), done };
     return done;
   }
