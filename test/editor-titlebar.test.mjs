@@ -54,7 +54,7 @@ for (const platform of ['mac', 'other']) {
   }
 
   test(`the title of the file is cut when there is not room for it on ${platform}`, async () => {
-    const page = await editorPage(browser, { query: `edit&still&edit-platform=${platform}`, page: { width: 640, height: 800 } });
+    const page = await editorPage(browser, { query: `edit&still&edit-platform=${platform}`, page: { width: 600, height: 800 } });
     try {
       const box = await layout(page);
       assert.equal(box.cut, true, 'the title of the file is shown whole');
