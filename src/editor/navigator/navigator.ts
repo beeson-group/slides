@@ -2,11 +2,14 @@
 // number in the scheme of the theme, three dots on a slide with steps, and a hidden slide collapsed
 // to a thin double bar without a number. a click selects a slide, Shift extends the selection to a
 // range, and the command modifier adds or removes one slide. a drag moves the selected slides, with
-// a line at the place where they are dropped. a preview of a slide at 320 px is shown while the
-// pointer rests on its row
+// a line at the place where they are dropped. image and video files dropped onto a row make a new
+// figure slide after it with the files in its plate, as a drop onto the navigator of Keynote. a
+// preview of a slide at 320 px is shown while the pointer rests on its row
 
 import type { App, Pane } from '../app.ts';
 import { layersOf, showLayer } from '../layers.ts';
+import { insertFiles } from '../media/actions.ts';
+import { kindOf } from '../media/store.ts';
 import { injectStyle, stored, store } from '../ui/dom.ts';
 import { drawInto, type Thumbs } from './thumbs.ts';
 
@@ -148,6 +151,12 @@ export class Navigator implements Pane {
     this.list.addEventListener('focusin', () => {
       if (this.app.selection && this.app.selection.kind !== 'slides') this.selectOnly(this.app.current());
     });
+    this.list.addEventListener('dragover', (ev) => this.onFileOver(ev));
+    this.list.addEventListener('dragleave', (ev) => {
+      if (!this.drag && !(ev.relatedTarget instanceof Node && this.list.contains(ev.relatedTarget))) this.drop.hidden = true;
+    });
+    // the drop of media/drop.ts stops the drop at the window, hence it is taken there
+    window.addEventListener('drop', (ev) => this.onFileDrop(ev), true);
     new ResizeObserver(() => this.measure()).observe(this.list);
     this.on = stored(KEY) !== '0';
     this.show(this.on);
@@ -456,6 +465,11 @@ export class Navigator implements Pane {
       }
     }
     d.gap = gap;
+    this.drawDrop(gap);
+  }
+
+  private drawDrop(gap: number): void {
+    const rows = this.slides().map((s) => this.rows.get(s)!.el);
     const box = this.list.getBoundingClientRect();
     const before = rows[gap - 1]?.getBoundingClientRect();
     const after = rows[gap]?.getBoundingClientRect();
@@ -479,6 +493,37 @@ export class Navigator implements Pane {
     if (!d || ev.pointerId !== d.id) return;
     if (d.on) this.placeDrop(ev.clientY);
     this.endDrag(d.on);
+  }
+
+  // the gap after the row under y, where a drop of files puts its slide
+  private fileGap(y: number): number {
+    return this.slides().filter((s) => this.rows.get(s)!.el.getBoundingClientRect().top <= y).length;
+  }
+
+  private onFileOver(ev: DragEvent): void {
+    const dt = ev.dataTransfer;
+    if (this.drag || !dt || !this.app.pairing?.root || !dt.types.includes('Files')) return;
+    const kinds = [...dt.items].filter((i) => i.kind === 'file').map((i) => kindOf({ type: i.type, name: '' }));
+    if (kinds.some((k) => !k)) return;
+    ev.preventDefault();
+    dt.dropEffect = 'copy';
+    this.drawDrop(this.fileGap(ev.clientY));
+  }
+
+  // the new slide and its files are one entry of the history
+  private onFileDrop(ev: DragEvent): void {
+    if (this.drag || !(ev.target instanceof Node) || !this.list.contains(ev.target)) return;
+    this.drop.hidden = true;
+    const files = [...(ev.dataTransfer?.files ?? [])].filter((f) => kindOf(f));
+    if (!files.length || !this.app.pairing?.root) return;
+    ev.preventDefault();
+    const before = this.slides()[this.fileGap(ev.clientY)] ?? null;
+    const run = this.app.history.transact(files.length > 1 ? 'Media' : 'New Slide', async () => {
+      const slide = await this.app.doc.insertSlide('figure', before);
+      this.select([slide], slide);
+      await insertFiles(this.app, files, slide.querySelector('.plate'));
+    });
+    void run.catch((e) => this.app.fail(e));
   }
 
   // a drop moves the slides of the drag to its gap through the command slide.moveTo, as one entry
