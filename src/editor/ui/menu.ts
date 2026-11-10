@@ -213,8 +213,10 @@ const sectionOf = (c: Command): (typeof SECTIONS)[number] =>
 
 // the items of a context menu of a kind, each run with the kind and the element clicked. a rule
 // is put where the group of the menu bar changes between two neighbors, and in the menu of an
-// element where its section changes. an item of the kind of another element, which is disabled,
-// is left out of the menu of an element, e.g. Edit Text on a figure without a text
+// element where its section changes. the items of the kind of another element are left out of the
+// menu of an element, i.e. a disabled item of a submenu without an enabled item, e.g. the items of
+// Video on an image, or one outside a menu, e.g. Edit Text on a figure without a text. Reset Mask,
+// disabled next to Edit Mask on an image without a mask, is kept
 export function contextItems(app: App, kind: Context, target: Element | null): MenuItem[] {
   const out: MenuItem[] = [];
   let last: string | null = null;
@@ -228,7 +230,9 @@ export function contextItems(app: App, kind: Context, target: Element | null): M
     // Edit Text, enabled on an element that holds a text, e.g. the caption of a figure, follows the
     // items of the kind of the element
     const rank = (c: Command) => SECTIONS.indexOf(sectionOf(c)) + (c.id === 'selection.editText' ? 0.5 : 0);
-    rest = rest.filter((c) => sectionOf(c) !== 'kind' || app.commands.enabled(c.id)).sort((a, b) => rank(a) - rank(b));
+    const home = (c: Command) => (c.menu ? `${c.menu.bar}/${c.menu.submenu ?? c.menu.group}` : c.id);
+    const live = new Set(rest.filter((c) => sectionOf(c) === 'kind' && app.commands.enabled(c.id)).map(home));
+    rest = rest.filter((c) => sectionOf(c) !== 'kind' || live.has(home(c))).sort((a, b) => rank(a) - rank(b));
   }
   for (const c of rest) {
     const group = kind === 'element' ? sectionOf(c) : `${c.menu?.bar ?? ''}/${c.menu?.group ?? ''}`;
