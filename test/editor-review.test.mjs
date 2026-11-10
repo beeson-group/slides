@@ -206,12 +206,19 @@ for (const platform of PLATFORMS) {
     await undo(page);
     await byteExact(page, none);
     await saved(page);
-    // the Transition section of the Slide pane shows the transition of the slide
-    if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
-    await page.evaluate('document.activeElement?.blur(); window.BeesonEditor.exec("edit.selectNone")').catch(() => {});
+    // the head of the Steps tab shows the transition of the slide while no element is selected,
+    // and a click on Fade there writes it
+    if (!(await state(page, 'view.steps')).checked) await exec(page, 'view.steps');
     await frames(page);
-    const pressed = await page.evaluate(`[...document.querySelectorAll('[data-command^="slide.transition."]')].filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.dataset.command)`);
-    assert.deepEqual(pressed, ['slide.transition.none']);
+    const pressed = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-transition [data-command^="slide.transition."]')].filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.dataset.command)`);
+    assert.deepEqual(await pressed(), ['slide.transition.none']);
+    await click(page, '.beeson-edit-transition [data-command="slide.transition.fade"]');
+    await frames(page);
+    await byteExact(page, [[none[0][1], NARROW]]);
+    assert.deepEqual(await pressed(), ['slide.transition.fade']);
+    await click(page, '.reveal section.present > h2');
+    await frames(page);
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-side .slot').hidden`), true, 'the transition is shown with a text selected');
     assert.deepEqual(errors(page), []);
   });
 
