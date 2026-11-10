@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, press, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
 const THEME = new Set(themeClasses(readFileSync('theme/beeson.css', 'utf8')));
 const PANEL = '#beeson-edit-panel-format';
@@ -154,5 +154,66 @@ for (const platform of ['mac', 'other']) {
     for (const id of ['table.distributeColumns', 'table.fitColumn']) {
       assert.equal(await page.evaluate(`document.querySelectorAll('${PANEL} [data-command="${id}"]').length`), 1, id);
     }
+  });
+}
+
+// the deck of tables of the table tests: a table with a rowspan and a colspan on its first slide,
+// a table of mass ratios on its second, and a first column set at the right in its first row on
+// its third
+const TABLES_DECK = 'test/pages/editor-tables.html';
+const cellSelector = (r, c) => `.reveal section.present table tr:nth-child(${r + 1}) > :nth-child(${c + 1})`;
+const centerOf = (page, selector) => boxOf(page, selector).then((b) => ({ x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 }));
+
+async function dragCells(page, [r0, c0], [r1, c1]) {
+  const from = await centerOf(page, cellSelector(r0, c0));
+  const to = await centerOf(page, cellSelector(r1, c1));
+  await drag(page, from, { dx: to.x - from.x, dy: to.y - from.y });
+  await settle(page);
+}
+
+// the lines of the text of the cell of selector on the page, from the tops of its line boxes
+const linesOf = (page, selector) => page.evaluate(`(() => {
+  const range = document.createRange();
+  range.selectNodeContents(document.querySelector(${js(selector)}));
+  return new Set([...range.getClientRects()].filter((r) => r.width > 0).map((r) => Math.round(r.top))).size;
+})()`);
+
+// state table-merged of round 2: Merge Cells joined the text of the cells with spaces on one line,
+// where PowerPoint and Keynote keep the text of each cell on a line of its own
+for (const platform of ['mac', 'other']) {
+  test(`Merge Cells keeps the text of each cell on a line of its own, in the order of reading (${platform})`, async (t) => {
+    const page = await open(platform, { deck: TABLES_DECK });
+    t.after(() => page.close?.());
+    await show(page, 1);
+    // Moon and the formula above Europa and 2.53e-5
+    await dragCells(page, [1, 0], [2, 1]);
+    if (platform === 'mac') await press(page, 'Ctrl+Mod+M');
+    else await exec(page, 'table.merge');
+    await sleep(120);
+    await settle(page);
+    await byteExact(page, [[
+      '<tr><td>Moon</td><td>\\(0.01215\\)</td><td>Earth and Moon</td></tr>\n      <tr><td>Europa</td><td>2.53e-5</td><td>Jupiter</td></tr>',
+      '<tr><td colspan="2" rowspan="2">Moon<br>\\(0.01215\\)<br>Europa<br>2.53e-5</td><td>Earth and Moon</td></tr>\n      <tr><td>Jupiter</td></tr>',
+    ]]);
+    assert.equal(await linesOf(page, '.reveal section.present td[rowspan]'), 4);
+    assert.equal(await page.evaluate(`getComputedStyle(document.querySelector('.reveal section.present td[rowspan]')).textAlign`), 'left');
+    await roundTrip(page);
+  });
+
+  test(`a merged cell keeps the alignment of its first cell (${platform})`, async (t) => {
+    const page = await open(platform, { deck: TABLES_DECK });
+    t.after(() => page.close?.());
+    await show(page, 2);
+    // Halo, set at the right, above Lyapunov, set at the left
+    await dragCells(page, [1, 0], [2, 0]);
+    await exec(page, 'table.merge');
+    await sleep(120);
+    await settle(page);
+    await byteExact(page, [[
+      '<tr><td style="text-align: right">Halo</td><td>14.8</td></tr>\n      <tr><td>Lyapunov</td><td>2.69</td></tr>',
+      '<tr><td style="text-align: right" rowspan="2">Halo<br>Lyapunov</td><td>14.8</td></tr>\n      <tr><td>2.69</td></tr>',
+    ]]);
+    assert.equal(await page.evaluate(`getComputedStyle(document.querySelector('.reveal section.present td[rowspan]')).textAlign`), 'right');
+    await roundTrip(page);
   });
 }
