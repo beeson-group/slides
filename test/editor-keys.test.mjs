@@ -168,7 +168,7 @@ for (const platform of PLATFORMS) {
       const a = document.activeElement;
       if (a === document.body) return 'canvas';
       if (a.closest('aside.notes')) return 'notes';
-      for (const [name, sel] of [['menubar', '.beeson-edit-menubar'], ['toolbar', '.beeson-edit-top'], ['navigator', '.beeson-edit-nav'], ['inspector', '.beeson-edit-side'], ['status', '.beeson-edit-bottom']]) if (a.closest(sel)) return name;
+      for (const [name, sel] of [['menubar', '.beeson-edit-menubar'], ['toolbar', '.beeson-edit-top'], ['navigator', '.beeson-edit-nav'], ['inspector', '.beeson-edit-inspector'], ['status', '.beeson-edit-bottom']]) if (a.closest(sel)) return name;
       return a.tagName;
     })()`);
     const seen = [];
