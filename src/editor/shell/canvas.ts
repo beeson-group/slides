@@ -2,8 +2,9 @@
 // spacer as large as the zoomed slide and its pasteboard, and the viewport of reveal.js, .reveal,
 // is set with position: fixed over the box of the slide in it and clipped to the cell. reveal.js
 // is thus held at the zoom, with a margin of 0 and the limits of its scale widened. at Fit, the
-// slide is centered with a pasteboard of at least 32 px around it. the box of the slide is
-// written into custom properties on html. the wheel and a trackpad scroll the canvas past Fit,
+// slide is centered with a pasteboard of at least 32 px around it, and past Fit the pasteboard is
+// 32 px on every side, grown by Zoom to Selection to center a box near an edge. the box of the
+// slide is written into custom properties on html. the wheel and a trackpad scroll the canvas past Fit,
 // and a pinch or the wheel with Ctrl zooms about the pointer. every step of a slide is shown,
 // apart from the elements of another layer, and the progress line, the scrubber, the slide
 // number, and the mode switch of the theme are hidden
@@ -72,6 +73,9 @@ export function install(app: App): void {
   document.body.append(el);
 
   let zoom: number | null = null;
+  // the pasteboard on each side of the slide past Fit, grown by Zoom to Selection for a box near an
+  // edge of the slide, and given back its margin by the next zoom
+  let pad = MARGIN;
   let configured = false;
   let placing = false;
   // the box of the slide last written, in the viewport, and its size in slide px
@@ -117,8 +121,8 @@ export function install(app: App): void {
       const v = viewport();
       const w = Math.ceil(size.w * s);
       const h = Math.ceil(size.h * s);
-      const contentW = Math.max(v.width, w + 2 * MARGIN);
-      const contentH = Math.max(v.height, h + 2 * MARGIN);
+      const contentW = Math.max(v.width, w + 2 * pad);
+      const contentH = Math.max(v.height, h + 2 * pad);
       spacer.style.width = `${contentW + room.left}px`;
       spacer.style.height = `${contentH + room.top}px`;
       const x = v.left + (contentW - w) / 2 - el.scrollLeft;
@@ -153,6 +157,7 @@ export function install(app: App): void {
     const v = viewport();
     const at = about ?? { x: v.left + v.width / 2, y: v.top + v.height / 2 };
     const before = toSlide(at);
+    pad = MARGIN;
     zoom = next === null ? null : clamp(hundredth(next), MIN_ZOOM, MAX_ZOOM);
     if (zoom !== null && Math.abs(zoom - fitScale()) < 0.005) zoom = null;
     place();
@@ -168,7 +173,18 @@ export function install(app: App): void {
     const v = viewport();
     const z = hundredth(Math.min((v.width - 2 * MARGIN) / Math.max(b.width, 1), (v.height - 2 * MARGIN) / Math.max(b.height, 1)));
     zoom = z <= fitScale() + 0.005 ? null : clamp(z, MIN_ZOOM, MAX_ZOOM);
+    pad = MARGIN;
     place();
+    // the pasteboard is made wide enough on every side for the center of the box to be scrolled to
+    // the center of the cell, which is measured inside the scroll bars of the zoom
+    if (zoom !== null) {
+      const u = viewport();
+      const cx = (b.left + b.width / 2) * zoom;
+      const cy = (b.top + b.height / 2) * zoom;
+      const need = Math.max(u.width / 2 - cx, u.width / 2 - (size.w * zoom - cx), u.height / 2 - cy, u.height / 2 - (size.h * zoom - cy));
+      pad = Math.max(MARGIN, Math.ceil(need) + 1);
+      place();
+    }
     const c = toScreen({ x: b.left + b.width / 2, y: b.top + b.height / 2 });
     const w = viewport();
     el.scrollLeft += c.x - (w.left + w.width / 2);
