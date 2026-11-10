@@ -132,8 +132,10 @@ export function toggleFormat(host: Element, tag: 'strong' | 'em'): void {
 
 // a line in a block is a br, or a newline in a pre, and a paste is plain text, so that the text
 // of a slide stays what the file can hold
-function insertPlain(host: Element, text: string): void {
-  if (host.closest('pre')) {
+export function insertPlain(host: Element, text: string): void {
+  const pre = host.closest('pre');
+  if (pre && text.includes('\n')) return insertCode(host, pre, text);
+  if (pre) {
     document.execCommand('insertText', false, text);
     return;
   }
@@ -142,6 +144,28 @@ function insertPlain(host: Element, text: string): void {
     if (line) document.execCommand('insertText', false, line);
     if (i < lines.length - 1) document.execCommand('insertLineBreak');
   });
+}
+
+// Chrome types a newline of insertText in a pre as a split of its code element, hence a text with
+// lines is put at the caret as a text node. a newline at the end of a pre is drawn only before
+// another character, thus a second newline is put after the caret there, which the numbers of
+// commands/code.ts do not count
+function insertCode(host: Element, pre: Element, text: string): void {
+  const sel = window.getSelection();
+  if (!sel?.rangeCount) return;
+  const range = sel.getRangeAt(0);
+  range.deleteContents();
+  const node = document.createTextNode(text);
+  range.insertNode(node);
+  const rest = document.createRange();
+  rest.setStartAfter(node);
+  rest.setEnd(pre, pre.childNodes.length);
+  if (!rest.toString()) node.data += '\n';
+  const caret = document.createRange();
+  caret.setStart(node, text.length);
+  sel.removeAllRanges();
+  sel.addRange(caret);
+  host.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
 }
 
 export function install(app: App): void {
