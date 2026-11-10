@@ -1,11 +1,10 @@
 // the commands of find and replace in the Edit menu, with the panel of find.ts. Find, Find Next,
 // and Find Previous have the keys of both apps, ⌘F, ⌘G, and ⇧⌘G on a Mac. elsewhere Ctrl+G is
-// Group, hence Next and Previous are F3 and Shift+F3. Shift+F3 in a text is Change Case there, as
-// in PowerPoint, hence Find Previous is not taken in a text on Windows and Linux, and Shift+Return
-// in the search field of the panel steps back on every platform. Replace has the key ⌃H of
-// PowerPoint on every platform, since Keynote does not give it a key and ⌥⌘F of the plan is not in
-// either app. the keys are taken in every region outside a dialog, the search field of the panel
-// included
+// Group, hence Next is F3, and Previous is Ctrl+Shift+F3, since Shift+F3 is Change Case, as in
+// PowerPoint. Shift+Return in the search field of the panel steps back on every platform. Replace
+// has the key ⌃H of PowerPoint on every platform, since Keynote does not give it a key and ⌥⌘F of
+// the plan is not in either app. the keys are taken in every region outside a dialog, the search
+// field of the panel included
 
 import type { App, Region } from '../app.ts';
 import { createFinder, type FindOptions, type Scope } from '../find.ts';
@@ -13,7 +12,7 @@ import { closeMenus, openMenu } from '../ui/menu.ts';
 
 const IN: Region[] = ['canvas', 'text', 'field', 'navigator', 'notes', 'inspector'];
 const NEXT = { mac: ['Mod+G'], other: ['F3'] };
-const PREVIOUS = { mac: ['Mod+Shift+G'], other: ['Shift+F3'] };
+const PREVIOUS = { mac: ['Mod+Shift+G'], other: ['Mod+Shift+F3'] };
 
 // the query of find.open and find.replace, given as an argument by a test or a script
 const queryOf = (arg: unknown): string | undefined => (typeof arg === 'string' ? arg : undefined);
@@ -43,7 +42,7 @@ export function install(app: App): void {
     id: 'find.previous',
     label: 'Find Previous',
     keys: PREVIOUS,
-    in: app.platform === 'mac' ? IN : IN.filter((r) => r !== 'text'),
+    in: IN,
     menu: { bar: 'Edit', group: 'find', order: 42 },
     enabled: () => !!finder.query,
     run: () => finder.step(-1, !finder.open),

@@ -220,8 +220,8 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  // Find Previous keeps a key on every platform, and Shift+F3 in a text is Change Case on Windows
-  // and Linux, as in PowerPoint
+  // Find Previous keeps a key on every platform, Ctrl+Shift+F3 on Windows and Linux, and Shift+F3
+  // is Change Case, as in PowerPoint
   test(`Find Previous and Change Case each have their key (${platform})`, async (t) => {
     const page = await load(t, platform, { n: MATH });
     await exec(page, 'find.open', 'step');
@@ -231,7 +231,7 @@ for (const platform of PLATFORMS) {
     const at = () => page.evaluate(`document.querySelector('.beeson-find .count')?.textContent.match(/(\\d+) of (\\d+)/)?.[1] ?? null`);
     const second = await at();
     assert.ok(second, 'the find panel does not count its matches');
-    await press(page, platform === 'mac' ? 'Mod+Shift+G' : 'Shift+F3');
+    await press(page, platform === 'mac' ? 'Mod+Shift+G' : 'Ctrl+Shift+F3');
     await frames(page);
     assert.notEqual(await at(), second, 'the key of Find Previous does not step back in the find panel');
     await press(page, 'Escape');
