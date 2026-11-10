@@ -138,7 +138,7 @@ export class Outline {
       }
     };
     for (const el of column.children) {
-      if (el === title || el.hasAttribute('data-generated') || el.matches('aside, .foot, .run, .caption, .zone, .backdrop, .surface, .plot, script, h1, h2')) continue;
+      if (el === title || el.hasAttribute('data-generated') || el.matches('aside, .foot, .run, .caption, .zone, .backdrop, .surface, .plot, script, h1, h2, ul.outline[data-auto]')) continue;
       if (el.matches('ul, ol')) items(el, 1);
       else if (el.matches('p, h3, h4')) out.push({ el, kind: 'para', depth: 1 });
       else if (el.matches('.col')) out.push(...this.blocks(el, null));
@@ -164,7 +164,10 @@ export class Outline {
     } else {
       row.classList.add('dim');
       const name = OTHER.find(([s]) => el.matches(s))?.[1];
-      text.textContent = name ?? (el.textContent ?? '').replace(/\s+/g, ' ').trim();
+      // the own text of the block, with the TeX of its math, as it is typed
+      const own = document.createElement('template');
+      own.innerHTML = html;
+      text.textContent = name ?? (own.content.textContent ?? '').replace(/\s+/g, ' ').trim();
       text.title = 'Edit this block on the slide';
     }
     row.append(text);
