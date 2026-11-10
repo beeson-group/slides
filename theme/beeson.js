@@ -2114,12 +2114,25 @@
       this.live = false;
       this.el = el;
       CACHE2.set(el, this);
+      this.load(null);
+    }
+    /** Draws the plot again from text, or from its block when text is null, e.g. while the editor changes its data. A fault is shown in place of the plot. */
+    reload(text = null) {
+      this.pause();
+      this.spec = null;
+      this.W = this.H = 0;
+      this.tabButtons = [];
+      this.stepTab = null;
+      this.load(text);
+    }
+    load(text) {
+      const el = this.el;
       for (const old of el.querySelectorAll(":scope > .plot-body, :scope > .plot-error")) old.remove();
       try {
         const id = el.dataset.plot ?? "";
         const block = id ? document.getElementById(id) : null;
-        if (!block) throw new Error(`the JSON block with the id "${id}" is not found`);
-        this.spec = parsePlot(block.textContent ?? "");
+        if (text === null && !block) throw new Error(`the JSON block with the id "${id}" is not found`);
+        this.spec = parsePlot(text ?? block?.textContent ?? "");
       } catch (error) {
         const message = `plot ${el.dataset.plot ?? ""}: ${error.message}`;
         const box2 = document.createElement("div");
@@ -4138,12 +4151,9 @@ void main() {
       });
       el.addEventListener("pointermove", (ev) => {
         if (!this.drag) return;
-        const scale = el.getBoundingClientRect().width / (el.offsetWidth || 1) || 1;
-        const dx = (ev.clientX - this.drag.x) / scale, dy = (ev.clientY - this.drag.y) / scale;
+        const { x, y } = this.drag;
         this.drag = { x: ev.clientX, y: ev.clientY };
-        this.azimuth -= dx * 5e-3;
-        this.elevation = clamp2(this.elevation + dy * 4e-3, 0.12, 1.45);
-        if (!this.raf) this.draw();
+        this.turn(ev.clientX - x, ev.clientY - y);
       });
       const end = () => {
         if (!this.drag) return;
@@ -4167,6 +4177,40 @@ void main() {
         s.shown = s.to;
         s.tone = 1;
       }
+    }
+    /** Turns the camera as a drag by dx and dy screen pixels does. */
+    turn(dx, dy) {
+      const scale = this.el.getBoundingClientRect().width / (this.el.offsetWidth || 1) || 1;
+      this.azimuth -= dx / scale * 5e-3;
+      this.elevation = clamp2(this.elevation + dy / scale * 4e-3, 0.12, 1.45);
+      if (!this.raf) this.draw();
+    }
+    /** The camera drawn now and the values read from the attributes of the element, with the angles in degrees, e.g. for the editor. */
+    view() {
+      const d = this.el.dataset, deg = 180 / Math.PI;
+      return {
+        azimuth: this.azimuth * deg,
+        elevation: this.elevation * deg,
+        zoom: this.zoom,
+        written: { azimuth: num3(d.azimuth, -60), elevation: num3(d.elevation, 32), zoom: num3(d.zoom, 1), turn: num3(d.turn, TURN), zscale: num3(d.zscale, this.fn.zscale) }
+      };
+    }
+    /** Reads the camera, the turn, and the scale of the heights from the attributes of the element again, e.g. after the editor changed them. */
+    configure() {
+      const w = this.view().written;
+      this.rate = w.turn > 0 ? 2 * Math.PI / w.turn : 0;
+      this.azimuth = w.azimuth * Math.PI / 180;
+      this.elevation = w.elevation * Math.PI / 180;
+      this.zoom = w.zoom;
+      if (w.zscale !== this.zscale) {
+        this.zscale = w.zscale;
+        for (const [name, g] of this.grids) this.ranges.set(name, this.range(g));
+        this.normals = /* @__PURE__ */ new WeakMap();
+        this.drawn = "";
+        this.stageName = "";
+        this.sync(false);
+      }
+      this.draw();
     }
     /** Takes the azimuth, the elevation, and the pause after a drag of the camera of other. */
     follow(other) {
