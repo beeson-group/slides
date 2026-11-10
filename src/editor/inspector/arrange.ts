@@ -9,7 +9,8 @@ import type { App } from '../app.ts';
 import { offsetOf, resizable, sizeOf, targetsOf } from '../commands/align.ts';
 import { angleOf } from '../commands/order.ts';
 import { locked } from '../canvas/drag.ts';
-import { GLYPHS, button, note, numberField, row, section, segmented, type Control, type Run } from './controls.ts';
+import { sizedOf } from '../canvas/hit.ts';
+import { GLYPHS, button, checkbox, note, numberField, row, section, segmented, type Control, type Run } from './controls.ts';
 
 // the glyphs of the order, the groups, and the locks, on the grid of GLYPHS
 Object.assign(GLYPHS, {
@@ -64,6 +65,8 @@ export function arrangePane(app: App, run: Run): Control[] {
         field('Height', () => shared(live().map((el) => sizeOf(el).h)), (h) => run('arrange.setSize', { h, els: live() }), sized, 1),
       ]),
       note(() => (!els.length || sized() ? '' : els.length === 1 && els[0].querySelector('img, video') ? 'Set by the layout of the slide. Click the image again to size it.' : 'Set by the layout of the slide.')),
+      row([checkbox(app, run, 'arrange.constrainProportions', 'Constrain Proportions')]),
+      note(() => (live().some((el) => sizedOf(el).length) && !app.commands.state('arrange.constrainProportions').enabled ? 'Only the width is written, and the height follows the aspect or the layout.' : '')),
       row([button(app, run, { command: 'arrange.resetSize', icon: 'reset', text: 'Reset Size' })]),
     ]),
     section('Position', [

@@ -6,9 +6,11 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { RESIZABLE, aspectOf, frameOf, movableOf, toSlide, visualRect } from '../canvas/hit.ts';
+import { RESIZABLE, aspectOf, frameOf, movableOf, sizedOf, toSlide, visualRect } from '../canvas/hit.ts';
 import type { Box } from '../canvas/snap.ts';
 import { placeOf, record, writePlace, type Place } from '../canvas/drag.ts';
+import { declarationProblem } from '../model/scope.ts';
+import { store, stored } from '../ui/dom.ts';
 
 export type Side = 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom';
 export const SIDES: Side[] = ['left', 'center', 'right', 'top', 'middle', 'bottom'];
@@ -188,7 +190,40 @@ export function commands(): Command[] {
       app.invalidate('content');
     },
   });
+  // the switch Constrain Proportions of the size fields, as in Keynote and PowerPoint. it is kept
+  // per kind of picture in the browser and written nowhere in the file. it is held on wherever the
+  // scope rule writes the width and not the height, since the aspect then follows the width
+  list.push({
+    id: 'arrange.constrainProportions',
+    label: 'Constrain Proportions',
+    enabled: (app) => picturesOf(app).some(heightWritten),
+    checked: (app) => {
+      const pics = picturesOf(app);
+      return pics.length > 0 && pics.every(constrained);
+    },
+    run: (app) => {
+      const pics = picturesOf(app).filter(heightWritten);
+      const on = !pics.every(constrained);
+      for (const m of pics) store(`beeson-edit-constrain-${kindOf(m)}`, on ? 'on' : 'off');
+      app.invalidate('selection');
+    },
+  });
   return list;
+}
+
+// the shown images, videos, QR codes, and viewers whose size the fields of the selection set,
+// including those that a selected figure holds. the image of the other mode shares their kind
+const picturesOf = (app: App): Element[] => [...new Set(targetsOf(app).flatMap(sizedOf))].filter((m) => m.getBoundingClientRect().width > 0);
+const kindOf = (el: Element): string => (el.matches('img') ? 'image' : el.matches('video') ? 'video' : el.matches('.qr') ? 'qr' : 'viewer');
+const heightWritten = (el: Element): boolean => declarationProblem(el.localName, [...el.classList], 'height', '1px') === null;
+
+// whether a resize of el keeps its aspect: by the switch of its kind where the height is written,
+// on by default for an image, a video, and a QR code, and else whenever it has an aspect, since
+// its height then follows its width. a viewer keeps the height that its layout gives it
+function constrained(el: Element): boolean {
+  if (!heightWritten(el)) return aspectOf(el) !== null;
+  const kind = kindOf(el);
+  return (stored(`beeson-edit-constrain-${kind}`) ?? (kind === 'viewer' ? 'off' : 'on')) === 'on';
 }
 
 export function install(app: App): void {
