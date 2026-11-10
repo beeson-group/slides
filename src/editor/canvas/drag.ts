@@ -494,6 +494,8 @@ export function install(app: App): void {
     const shift = (a: 'x' | 'y') => {
       const [s, w] = a === 'x' ? ['left', 'width'] as const : ['top', 'height'] as const;
       const side = a === 'x' ? (h.includes('w') ? -1 : h.includes('e') ? 1 : 0) : (h.includes('n') ? -1 : h.includes('s') ? 1 : 0);
+      // a text block keeps its top, and its wrapped text sets its height
+      if (a === 'y' && isTextSized(pic)) return box.top - seen.top;
       if (o.center || side === 0) return box[s] + box[w] / 2 - (seen[s] + seen[w] / 2);
       return side === 1 ? box[s] - seen[s] : box[s] + box[w] - (seen[s] + seen[w]);
     };
