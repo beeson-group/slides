@@ -67,11 +67,14 @@ const pictureOf = (page, selector) => page.evaluate(`(() => {
   return { left, top, right: left + w * s, bottom: top + h * s };
 })()`);
 
+const CAPTION = '.reveal section.present .zone > figcaption';
+const frameOf = (page) => boxOf(page, '.beeson-frame.selected:not([hidden])');
+
 // the shown grips, each with its handle, its center, and whether it takes the pointer
 const gripsOf = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-grip')].filter((g) => !g.hidden).map((g) => { const r = g.getBoundingClientRect(); return { handle: g.dataset.handle, x: r.left + r.width / 2, y: r.top + r.height / 2, live: getComputedStyle(g).pointerEvents !== 'none' }; })`);
 
 for (const platform of PLATFORMS) {
-  test(`${platform}: the image of a figure, selected with one click, is resized by its grips at the corners of its picture`, async () => {
+  test(`${platform}: a figure, selected with one click on its image, is resized by its grips at the corners of its frame, which holds the picture and the caption`, async () => {
     const page = await editor(platform);
     await slideOf(page, '.reveal .slides .zone > img');
     await click(page, IMG);
@@ -79,8 +82,12 @@ for (const platform of PLATFORMS) {
     assert.equal(grips.length, 8, 'a selected figure does not show eight grips');
     assert.ok(grips.every((g) => g.live), 'a grip of a selected figure cannot be dragged');
     const pic = await pictureOf(page, IMG);
+    const caption = await boxOf(page, CAPTION);
+    const frame = await frameOf(page);
+    const holds = (b) => frame.left <= b.left + 1 && frame.top <= b.top + 1 && frame.right >= b.right - 1 && frame.bottom >= b.bottom - 1;
+    assert.ok(holds(pic) && holds(caption), `the frame ${JSON.stringify(frame)} does not hold the picture and the caption`);
     const se = grips.find((g) => g.handle === 'se');
-    assert.ok(Math.abs(se.x - pic.right) < 2 && Math.abs(se.y - pic.bottom) < 2, `the grip se is at ${se.x}, ${se.y} and not at the corner ${pic.right}, ${pic.bottom} of the picture`);
+    assert.ok(Math.abs(se.x - frame.right) < 2 && Math.abs(se.y - frame.bottom) < 2, `the grip se is at ${se.x}, ${se.y} and not at the corner ${frame.right}, ${frame.bottom} of the frame`);
     assert.equal(await page.evaluate(`document.querySelector('.beeson-handle').hidden`), true, 'the handle of a block is drawn on a figure');
 
     await drag(page, { x: se.x, y: se.y }, { dx: -90, dy: -60, hold: true });
@@ -90,18 +97,18 @@ for (const platform of PLATFORMS) {
     await sleep(50);
 
     const after = await page.evaluate('window.BeesonEditor.render()');
-    // the image keeps the corner across from the grip with a translate, and its twin of the other
-    // mode is given the same place
-    const widths = [...after.matchAll(/<img class="for-(?:dark|light)"[^>]* style="width: (\d+)px(; translate: [^"]+)?"/g)].map((m) => Number(m[1]));
+    // the figure keeps the corner across from the grip with a translate, and both images of the
+    // pair are given the width
+    const widths = [...after.matchAll(/<img class="for-(?:dark|light)"[^>]* style="width: (\d+)px"/g)].map((m) => Number(m[1]));
     assert.equal(widths.length, 2, 'the width is not written on both images of the pair');
     assert.equal(widths[0], widths[1], 'the images of the pair are given different widths');
     assert.ok(widths[0] > 300 && widths[0] < 560, `the width ${widths[0]} is not the dragged width`);
-    const now = await pictureOf(page, IMG);
+    const now = await frameOf(page);
     const moved = await gripsOf(page);
     const corner = moved.find((g) => g.handle === 'se');
-    assert.ok(Math.abs(corner.x - now.right) < 2 && Math.abs(corner.y - now.bottom) < 2, 'the grips do not follow the picture');
+    assert.ok(Math.abs(corner.x - now.right) < 2 && Math.abs(corner.y - now.bottom) < 2, 'the grips do not follow the frame');
     const nw = moved.find((g) => g.handle === 'nw');
-    assert.ok(Math.abs(nw.x - pic.left) < 3 && Math.abs(nw.y - pic.top) < 3, 'the corner across from the dragged grip is moved');
+    assert.ok(Math.abs(nw.x - frame.left) < 3 && Math.abs(nw.y - frame.top) < 3, 'the corner across from the dragged grip is moved');
 
     await page.evaluate('window.BeesonEditor.undo()');
     await byteExact(page);
@@ -680,8 +687,8 @@ for (const platform of PLATFORMS) {
     assert.ok(figure, 'the Arrange pane does not have a switch Constrain Proportions');
     assert.ok(figure.afterSize, 'the switch is not beside the size fields');
     assert.deepEqual([figure.checked, figure.disabled], [true, false], 'the switch of the image of a figure is not on and free');
-    assert.equal(figure.notes.length, 1, `a figure sized by its layout shows more than its one note: ${figure.notes.join(' | ')}`);
-    // the image itself, selected with a second click, has live size fields and the note of the switch
+    assert.deepEqual(figure.notes, [], `a figure, whose size fields size its image, shows a note: ${figure.notes.join(' | ')}`);
+    // the image itself, selected with a second click, has the same live size fields
     await click(page, ZONE_IMG);
     await arrangeXY(page);
     const image = await constrainOf(page);
