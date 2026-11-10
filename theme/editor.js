@@ -94,15 +94,15 @@
       if (this.typing && this.typing.host === host && now - this.typing.at < PAUSE) return;
       this.start(host, this.snapshot(host), now);
     }
-    start(host, before, at) {
-      const state = { before, after: before };
+    start(host, before2, at) {
+      const state = { before: before2, after: before2 };
       const entry = {
         label: "typing",
         undo: () => this.put(host, state.before),
         redo: () => this.put(host, state.after)
       };
       this.typing = { host, state, entry, at };
-      this.known.set(host, before);
+      this.known.set(host, before2);
     }
     async put(host, content) {
       await this.restore(host, content);
@@ -114,12 +114,12 @@
       if (this.busy) return;
       const now = performance.now();
       if (!this.typing || this.typing.host !== host || now - this.typing.at >= PAUSE) {
-        const before = this.known.get(host);
-        if (before === void 0) {
+        const before2 = this.known.get(host);
+        if (before2 === void 0) {
           this.known.set(host, this.snapshot(host));
           return;
         }
-        this.start(host, before, now);
+        this.start(host, before2, now);
       }
       const typing = this.typing;
       typing.state.after = this.snapshot(host);
@@ -626,9 +626,9 @@
     const els = [...slide.querySelectorAll(".fragment")].filter((el) => !el.closest("aside.notes"));
     const given = els.map((el) => parseInt(el.getAttribute("data-fragment-index") ?? "", 10));
     let next = Math.max(0, ...given.filter((i) => !Number.isNaN(i))) + 1;
-    const index = given.map((i) => Number.isNaN(i) ? next++ : i);
-    const order = [...new Set(index)].sort((a, b) => a - b);
-    return els.map((el, i) => ({ el, step: order.indexOf(index[i]) + 1, kind: el.matches(OUT) ? "out" : el.matches(ONLY) ? "only" : "in" }));
+    const index2 = given.map((i) => Number.isNaN(i) ? next++ : i);
+    const order = [...new Set(index2)].sort((a, b) => a - b);
+    return els.map((el, i) => ({ el, step: order.indexOf(index2[i]) + 1, kind: el.matches(OUT) ? "out" : el.matches(ONLY) ? "only" : "in" }));
   }
   function layersOf(slide) {
     const fragments = fragmentsOf(slide);
@@ -945,12 +945,12 @@
     const doc2 = new DOMParser().parseFromString(text, "text/html");
     const slides = doc2.querySelector(".reveal .slides") ?? doc2.querySelector(".slides");
     if (!slides) throw new Error("the file does not have a div.slides element");
-    const index = [...doc2.querySelectorAll(`${slides.localName}.slides`)].indexOf(slides);
+    const index2 = [...doc2.querySelectorAll(`${slides.localName}.slides`)].indexOf(slides);
     let seen2 = -1, at = -1;
     tokens.forEach((t, i) => {
       if (t.type === "start" && t.name === slides.localName && classesOf(t).includes("slides")) {
         seen2 += 1;
-        if (seen2 === index) at = i;
+        if (seen2 === index2) at = i;
       }
     });
     if (at < 0) throw new Error("the start tag of div.slides was not found in the file");
@@ -1134,8 +1134,8 @@
   var classesIn = (attrs) => rawClasses(attrs).map((c) => c.name);
   function stepIn(attrs) {
     const value = attr(attrs, "data-fragment-index")?.value;
-    const index = value === void 0 || value === null || !/^\s*-?\d+\s*$/.test(value) ? null : Number(value);
-    return { fragment: classesIn(attrs).includes("fragment"), index };
+    const index2 = value === void 0 || value === null || !/^\s*-?\d+\s*$/.test(value) ? null : Number(value);
+    return { fragment: classesIn(attrs).includes("fragment"), index: index2 };
   }
   function translateIn(style) {
     const m = (style ?? "").match(/(?:^|;)\s*translate\s*:\s*(-?[\d.]+)px(?:\s+(-?[\d.]+)px)?\s*(?:;|$)/);
@@ -1192,14 +1192,14 @@
     const whole = edit.attrs ?? {};
     const classMap = classesOf2(edit);
     if ("class" in whole || Object.keys(classMap).length) {
-      const before = rawClasses(attrs);
-      let after = "class" in whole ? splitClasses(whole.class).map((c) => ({ ...c, fresh: true })) : before.map((c) => ({ ...c, fresh: false }));
+      const before2 = rawClasses(attrs);
+      let after = "class" in whole ? splitClasses(whole.class).map((c) => ({ ...c, fresh: true })) : before2.map((c) => ({ ...c, fresh: false }));
       for (const [name, on] of Object.entries(classMap)) {
         const has = after.some((c) => c.name === name);
         if (on && !has) after.splice(placeOf(edit.order?.classes, after, name, (c) => c.name), 0, { raw: name, name, fresh: true });
         if (!on && has) after = after.filter((c) => c.name !== name);
       }
-      const same = after.length === before.length && after.every((c, i) => c.name === before[i].name);
+      const same = after.length === before2.length && after.every((c, i) => c.name === before2[i].name);
       if (!same) out.set("class", after.length ? join(after.map((c) => [{ text: c.fresh ? c.name : c.raw, raw: !c.fresh }]), " ") : null);
     }
     if (edit.index !== void 0) {
@@ -1208,8 +1208,8 @@
     }
     const styleMap = { ...edit.style };
     if ("style" in whole || Object.keys(styleMap).length || edit.translate !== void 0) {
-      const before = rawDeclarations(attr(attrs, "style")?.value);
-      let after = "style" in whole ? rawDeclarations(whole.style).map((d) => ({ ...d, raw: d.raw, fresh: true })) : before.map((d) => ({ ...d, fresh: false }));
+      const before2 = rawDeclarations(attr(attrs, "style")?.value);
+      let after = "style" in whole ? rawDeclarations(whole.style).map((d) => ({ ...d, raw: d.raw, fresh: true })) : before2.map((d) => ({ ...d, fresh: false }));
       for (const [name, value] of Object.entries(styleMap)) {
         const at = after.findIndex((d) => d.name === name);
         if (value === null) {
@@ -1230,7 +1230,7 @@
           if (t) after.splice(placeOf(edit.order?.style, after, "translate", (d) => d.name), 0, { raw: `translate: ${translateText(t)}`, name: "translate", value: translateText(t), fresh: true });
         }
       }
-      const same = after.length === before.length && after.every((d, i) => d.name === before[i].name && d.value === before[i].value);
+      const same = after.length === before2.length && after.every((d, i) => d.name === before2[i].name && d.value === before2[i].value);
       if (!same) out.set("style", after.length ? join(after.map((d) => [{ text: d.raw, raw: !d.fresh }]), "; ") : null);
     }
     for (const [name, value] of Object.entries(whole)) {
@@ -2429,9 +2429,9 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
       }
       d.gap = gap;
       const box2 = this.list.getBoundingClientRect();
-      const before = rows[gap - 1]?.getBoundingClientRect();
+      const before2 = rows[gap - 1]?.getBoundingClientRect();
       const after = rows[gap]?.getBoundingClientRect();
-      const at = before && after ? (before.bottom + after.top) / 2 : after ? after.top - 2 : before ? before.bottom + 2 : box2.top;
+      const at = before2 && after ? (before2.bottom + after.top) / 2 : after ? after.top - 2 : before2 ? before2.bottom + 2 : box2.top;
       this.drop.style.top = `${at - box2.top + this.list.scrollTop}px`;
       this.drop.hidden = false;
     }
@@ -2762,14 +2762,14 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
     write(els, groups, pairing) {
       const given = els.map((el) => stepIn(pairing.elements.get(el)?.attrs ?? []).index).filter((i) => i !== null);
       const base = given.length ? Math.min(1, ...given) : 1;
-      const before = els.map((el) => ({ el, step: stepOf(el, pairing, this.ctx.edits) }));
+      const before2 = els.map((el) => ({ el, step: stepOf(el, pairing, this.ctx.edits) }));
       const after = els.map((el) => {
         const at = groups.findIndex((g) => g.includes(el));
         return { el, step: at < 0 ? { fragment: false, index: null } : { fragment: true, index: base + at } };
       });
-      if (before.every((b, i) => b.step.fragment === after[i].step.fragment && b.step.index === after[i].step.index)) return;
+      if (before2.every((b, i) => b.step.fragment === after[i].step.fragment && b.step.index === after[i].step.index)) return;
       this.apply(after);
-      this.ctx.record({ label: "steps", undo: () => this.apply(before), redo: () => this.apply(after) });
+      this.ctx.record({ label: "steps", undo: () => this.apply(before2), redo: () => this.apply(after) });
     }
     apply(states) {
       if (states.length) this.ctx.show(states[0].el);
@@ -3367,12 +3367,12 @@ html.beeson-editing .reveal [contenteditable="true"]:focus { outline: 2px solid 
 html.beeson-editing .reveal [contenteditable="true"] mjx-container { cursor: pointer; border-radius: 2px; }
 html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.beeson-editing .reveal [contenteditable="true"] mjx-container:focus-visible { outline: 1px dashed var(--accent, #f80); outline-offset: 4px; }
 `;
-  function changeEnd(before, after) {
-    if (before === after) return null;
+  function changeEnd(before2, after) {
+    if (before2 === after) return null;
     let head = 0;
-    while (head < before.length && head < after.length && before[head] === after[head]) head++;
+    while (head < before2.length && head < after.length && before2[head] === after[head]) head++;
     let tail = 0;
-    while (tail < before.length - head && tail < after.length - head && before[before.length - 1 - tail] === after[after.length - 1 - tail]) tail++;
+    while (tail < before2.length - head && tail < after.length - head && before2[before2.length - 1 - tail] === after[after.length - 1 - tail]) tail++;
     return after.length - tail;
   }
   function placeCaret(host, offset = null) {
@@ -3437,11 +3437,11 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
       const head = document.createRange();
       head.setStart(outer, 0);
       head.setEnd(...start2);
-      const before = outer.cloneNode(false);
-      before.append(head.extractContents());
+      const before2 = outer.cloneNode(false);
+      before2.append(head.extractContents());
       unwrap(outer);
       nodes = [...outer.childNodes];
-      outer.before(before);
+      outer.before(before2);
       outer.after(after);
       outer.replaceWith(...nodes);
     } else {
@@ -3507,12 +3507,12 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
     async function restoreHost(host, content) {
       app2.showSlide(host);
       if (host.matches("aside.notes") && !app2.notes.shown()) app2.notes.toggle();
-      const before = host.textContent ?? "";
+      const before2 = host.textContent ?? "";
       await setContentWithTex(host, content);
       markMath(host);
       history2.track(host);
       app2.markDirty();
-      placeCaret(host, changeEnd(before, host.textContent ?? ""));
+      placeCaret(host, changeEnd(before2, host.textContent ?? ""));
       app2.invalidate("content");
     }
     function onBeforeInput(ev) {
@@ -3597,11 +3597,11 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
       const info = mathLookup()(container);
       const { error } = await previewTex(tex, info?.display ?? false);
       if (error) throw new Error(error);
-      const before = contentWithTex(host);
+      const before2 = contentWithTex(host);
       if (!await retypeset(host, container, tex)) throw new Error("MathJax does not find the formula with this TeX, and the slide is kept as it was");
       app2.typing.markMath(host);
       const after = contentWithTex(host);
-      if (after !== before) app2.history.push({ label: "formula", undo: () => app2.typing.restoreHost(host, before), redo: () => app2.typing.restoreHost(host, after) });
+      if (after !== before2) app2.history.push({ label: "formula", undo: () => app2.typing.restoreHost(host, before2), redo: () => app2.typing.restoreHost(host, after) });
       app2.markDirty();
     }
     function openMath(container) {
@@ -4296,14 +4296,14 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     const across = other(axis);
     const overlaps = (b) => start(b, across) < end(box2, across) && end(b, across) > start(box2, across);
     const beside = boxes.filter(overlaps);
-    const before = beside.filter((b) => end(b, axis) <= start(box2, axis) + SAME).sort((a, b) => end(b, axis) - end(a, axis));
+    const before2 = beside.filter((b) => end(b, axis) <= start(box2, axis) + SAME).sort((a, b) => end(b, axis) - end(a, axis));
     const after = beside.filter((b) => start(b, axis) >= end(box2, axis) - SAME).sort((a, b) => start(a, axis) - start(b, axis));
-    return { before, after };
+    return { before: before2, after };
   }
   function spacingStarts(box2, axis, boxes) {
-    const { before, after } = neighbors(box2, axis, boxes);
+    const { before: before2, after } = neighbors(box2, axis, boxes);
     const out = [];
-    const [a, b] = before;
+    const [a, b] = before2;
     const [c, d] = after;
     if (a && c) out.push((end(a, axis) + start(c, axis) - size(box2, axis)) / 2);
     if (a && b && end(b, axis) <= start(a, axis)) out.push(end(a, axis) + (start(a, axis) - end(b, axis)));
@@ -4311,10 +4311,10 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     return out;
   }
   function spacingOf(box2, axis, boxes) {
-    const { before, after } = neighbors(box2, axis, boxes);
+    const { before: before2, after } = neighbors(box2, axis, boxes);
     const across = other(axis);
     const gap = (from, to) => ({ from: end(from, axis), to: start(to, axis), at: (Math.max(start(from, across), start(to, across)) + Math.min(end(from, across), end(to, across))) / 2 });
-    const [a, b] = before;
+    const [a, b] = before2;
     const [c, d] = after;
     const near = [];
     if (a) near.push(gap(a, box2));
@@ -5208,8 +5208,8 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
     sel?.addRange(range);
   }
   async function newSlide(app2, layout) {
-    const { before } = placeAfter(app2);
-    const slide = await docOf(app2).insertSlide(layout, before);
+    const { before: before2 } = placeAfter(app2);
+    const slide = await docOf(app2).insertSlide(layout, before2);
     navOf(app2).select([slide], slide);
     caretInto(slide);
     return slide;
@@ -5294,8 +5294,8 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
   async function pasteSlides(app2, text, focusNav) {
     const texts = slidesIn(text);
     if (!texts?.length) return false;
-    const { root, before } = placeAfter(app2);
-    const nodes = await docOf(app2).insert(texts.map((t) => freshIds(app2, t)), root, before, "paste slides");
+    const { root, before: before2 } = placeAfter(app2);
+    const nodes = await docOf(app2).insert(texts.map((t) => freshIds(app2, t)), root, before2, "paste slides");
     land(app2, nodes, nodes[0], focusNav);
     return true;
   }
@@ -5610,6 +5610,696 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
     });
   }
 
+  // src/editor/find.ts
+  var MARK2 = "\uFFFC";
+  var WORD = "[\\p{L}\\p{N}_]";
+  function pattern(query, options) {
+    if (!query) return null;
+    const body = query.split(/\s+/u).map((part) => part.replace(/[.*+?^${}()|[\]\\/-]/g, "\\$&")).join("\\s+");
+    const source = options.wholeWords ? `(?<!${WORD})(?:${body})(?!${WORD})` : body;
+    return new RegExp(source, `gu${options.matchCase ? "" : "i"}`);
+  }
+  function spans(text, re) {
+    if (!re) return [];
+    const out = [];
+    re.lastIndex = 0;
+    for (let m = re.exec(text); m; m = re.exec(text)) {
+      if (!m[0].length) {
+        re.lastIndex++;
+        continue;
+      }
+      out.push({ start: m.index, end: m.index + m[0].length });
+    }
+    return out;
+  }
+  function splice(text, from, list, replacement) {
+    let out = "";
+    let at = 0;
+    for (const s of list) {
+      const a = Math.max(s.start - from, 0);
+      const b = Math.min(s.end - from, text.length);
+      if (b < 0 || a > text.length) continue;
+      out += text.slice(at, a);
+      if (s.start >= from) out += replacement;
+      at = Math.max(at, b);
+    }
+    return out + text.slice(at);
+  }
+  var SKIP = "[data-generated], script, style, template, .beeson-badge";
+  function index(block, lookup, tex) {
+    const pieces = [];
+    let text = "";
+    const walk = (node) => {
+      for (const child of [...node.childNodes]) {
+        if (child.nodeType === Node.TEXT_NODE) {
+          const value = child.data;
+          pieces.push({ kind: "text", node: child, from: text.length, to: text.length + value.length });
+          text += value;
+        } else if (child instanceof Element) {
+          if (child.matches("mjx-container")) {
+            const info = lookup ? lookup(child) : null;
+            text += MARK2;
+            const t = tex && info ? info.tex : "";
+            pieces.push({ kind: "math", el: child, info, from: text.length, to: text.length + t.length });
+            text += t + MARK2;
+          } else if (child.matches("br")) {
+            pieces.push({ kind: "other", from: text.length, to: text.length + 1 });
+            text += "\n";
+          } else if (!child.matches(SKIP)) {
+            walk(child);
+          }
+        }
+      }
+    };
+    walk(block);
+    return { block, text, pieces };
+  }
+  function piecesOf2(root) {
+    const out = [];
+    const walk = (node) => {
+      for (const child of [...node.childNodes]) {
+        if (child.nodeType === Node.TEXT_NODE) out.push(child);
+        else if (child instanceof Element) {
+          if (child.matches("mjx-container")) out.push(child);
+          else if (child.matches("br")) out.push(null);
+          else if (!child.matches(SKIP)) walk(child);
+        }
+      }
+    };
+    walk(root);
+    return out;
+  }
+  function replaced(idx, list, replacement) {
+    const copy = idx.block.cloneNode(true);
+    const nodes = piecesOf2(copy);
+    const emptied = [];
+    idx.pieces.forEach((p, i) => {
+      const node = nodes[i];
+      if (!node) return;
+      const mine = list.filter((s) => s.end > p.from && s.start < p.to);
+      if (p.kind === "text" && node instanceof Text) {
+        if (mine.length) {
+          node.data = splice(node.data, p.from, mine, replacement);
+          if (!node.data) emptied.push(node);
+        }
+      } else if (p.kind === "math" && node instanceof Element) {
+        const info = p.info;
+        const tex = info ? splice(info.tex, p.from, mine, replacement) : "";
+        node.replaceWith(document.createTextNode(info ? info.open + tex + info.close : node.textContent ?? ""));
+      }
+    });
+    for (const n of emptied) {
+      let el = n.parentNode;
+      n.parentNode?.removeChild(n);
+      while (el && el !== copy && el instanceof Element && !el.childNodes.length) {
+        const up = el.parentNode;
+        el.remove();
+        el = up;
+      }
+    }
+    copy.normalize();
+    return copy.innerHTML;
+  }
+  function rangeOf(idx, m) {
+    const range = document.createRange();
+    const math = idx.pieces.find((p) => p.kind === "math" && m.start >= p.from && m.end <= p.to);
+    if (math && math.kind === "math") {
+      range.selectNode(math.el);
+      return range;
+    }
+    const first2 = idx.pieces.find((p) => p.kind === "text" && m.start >= p.from && m.start < p.to);
+    const last = [...idx.pieces].reverse().find((p) => p.kind === "text" && m.end > p.from && m.end <= p.to);
+    if (!first2 || !last || first2.kind !== "text" || last.kind !== "text") return null;
+    range.setStart(first2.node, m.start - first2.from);
+    range.setEnd(last.node, m.end - last.from);
+    return range;
+  }
+  var before = (a, b) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+  var ICONS = {
+    gear: "M8 5.3a2.7 2.7 0 1 0 0 5.4 2.7 2.7 0 0 0 0-5.4Zm6.2 3.6-.1-1.8 1.5-1.2-1.6-2.8-1.8.7a5.8 5.8 0 0 0-1.6-.9L10.3 1H7.1l-.3 1.9c-.6.2-1.1.5-1.6.9l-1.8-.7-1.6 2.8 1.5 1.2a6 6 0 0 0 0 1.8l-1.5 1.2 1.6 2.8 1.8-.7c.5.4 1 .7 1.6.9l.3 1.9h3.2l.3-1.9c.6-.2 1.1-.5 1.6-.9l1.8.7 1.6-2.8-1.5-1.2Z",
+    chevronDown: "M4 6.5 8 10.5 12 6.5",
+    chevronLeft: "M10 3.5 5.5 8 10 12.5",
+    chevronRight: "M6 3.5 10.5 8 6 12.5",
+    search: "M7 2.5a4.5 4.5 0 1 0 0 9 4.5 4.5 0 0 0 0-9ZM10.3 10.3 14 14",
+    pencil: "M3 13l.6-2.7L10.8 3a1.2 1.2 0 0 1 1.7 0l.5.5a1.2 1.2 0 0 1 0 1.7L5.7 12.4Z",
+    clear: "M8 1.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13Zm-2.3 4.2 4.6 4.6m0-4.6-4.6 4.6",
+    close: "M4.5 4.5l7 7m0-7-7 7"
+  };
+  function icon(name) {
+    const ns = "http://www.w3.org/2000/svg";
+    const svg = document.createElementNS(ns, "svg");
+    svg.setAttribute("viewBox", "0 0 16 16");
+    svg.setAttribute("aria-hidden", "true");
+    svg.classList.add("ic", `ic-${name}`);
+    const path = document.createElementNS(ns, "path");
+    path.setAttribute("d", ICONS[name]);
+    svg.append(path);
+    return svg;
+  }
+  var CSS17 = `
+.beeson-find { --f-panel: var(--ed-panel, #f6f6f6); --f-text: var(--ed-text, #1d1d1f); --f-muted: var(--ed-muted, #6e6e73); --f-line: var(--ed-line, #d4d4d6); --f-control: var(--ed-control, #fff); --f-control-line: var(--ed-control-line, #c6c6ca); --f-button: var(--ed-pressed, rgba(0, 0, 0, 0.07)); --f-hover: var(--ed-hover, rgba(0, 0, 0, 0.05)); --f-select: var(--ed-select, #8a2be2); --f-on-select: var(--ed-on-select, #fff); --f-focus: var(--ed-focus, rgba(138, 43, 226, 0.5)); --f-menu: var(--ed-menu, rgba(248, 248, 248, 0.96)); --f-menu-line: var(--ed-menu-line, rgba(0, 0, 0, 0.14)); color-scheme: light; }
+@media (prefers-color-scheme: dark) {
+  .beeson-find { --f-panel: var(--ed-panel, #232325); --f-text: var(--ed-text, #ececee); --f-muted: var(--ed-muted, #9a9a9f); --f-line: var(--ed-line, #3b3b3e); --f-control: var(--ed-control, #3a3a3c); --f-control-line: var(--ed-control-line, #4a4a4e); --f-button: var(--ed-pressed, rgba(255, 255, 255, 0.11)); --f-hover: var(--ed-hover, rgba(255, 255, 255, 0.07)); --f-select: var(--ed-select, #9d47d8); --f-focus: var(--ed-focus, rgba(201, 79, 230, 0.6)); --f-menu: var(--ed-menu, rgba(44, 44, 46, 0.96)); --f-menu-line: var(--ed-menu-line, rgba(255, 255, 255, 0.12)); color-scheme: dark; }
+}
+.beeson-find { position: fixed; z-index: 90; top: 92px; right: calc(var(--ed-insp-col, 0px) + 16px); width: 440px; max-width: calc(100vw - 32px); box-sizing: border-box; background: var(--f-panel); color: var(--f-text); border: 1px solid var(--f-line); border-radius: 10px; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.12); font: 13px/1.3 var(--ed-font, system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif); user-select: none; -webkit-user-select: none; }
+.beeson-find[hidden] { display: none; }
+.beeson-find .title { position: relative; height: 26px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--f-line); color: var(--f-muted); font-size: 12px; font-weight: 500; cursor: grab; touch-action: none; }
+.beeson-find .title.dragging { cursor: grabbing; }
+.beeson-find .title .close { position: absolute; left: 6px; top: 4px; width: 18px; height: 18px; padding: 0; border: 0; border-radius: 4px; background: transparent; color: var(--f-muted); display: grid; place-items: center; }
+.beeson-find .title .close:hover { background: var(--f-hover); color: var(--f-text); }
+.beeson-find .body { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; grid-template-areas: "gear search nav"; gap: 8px 10px; align-items: center; padding: 12px 14px 14px; }
+.beeson-find.replacing .body { grid-template-areas: "gear search search" ". replace replace" ". actions nav"; }
+.beeson-find .gear { grid-area: gear; align-self: start; display: flex; align-items: center; gap: 4px; height: 26px; padding: 0 6px 0 8px; }
+.beeson-find .search { grid-area: search; }
+.beeson-find .replace { grid-area: replace; }
+.beeson-find .actions { grid-area: actions; display: flex; gap: 8px; }
+.beeson-find:not(.replacing) .replace, .beeson-find:not(.replacing) .actions { display: none; }
+.beeson-find .nav { grid-area: nav; display: flex; height: 26px; border-radius: 6px; background: var(--f-button); }
+.beeson-find button { font: inherit; color: inherit; cursor: default; }
+.beeson-find .gear, .beeson-find .actions button { border: 0; border-radius: 6px; background: var(--f-button); color: var(--f-text); }
+.beeson-find .actions button { height: 26px; padding: 0 12px; white-space: nowrap; }
+.beeson-find .nav button { width: 30px; display: grid; place-items: center; border: 0; background: transparent; color: var(--f-text); padding: 0; }
+.beeson-find .nav button:first-child { border-radius: 6px 0 0 6px; }
+.beeson-find .nav button + button { border-left: 1px solid var(--f-control-line); border-radius: 0 6px 6px 0; }
+.beeson-find .gear:hover, .beeson-find .actions button:hover:not(:disabled), .beeson-find .nav button:hover:not(:disabled) { background-color: var(--f-hover); }
+.beeson-find button:disabled { color: var(--f-muted); opacity: 0.55; }
+.beeson-find button:focus-visible { outline: 2px solid var(--f-focus); outline-offset: 1px; }
+.beeson-find .field { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 4px 0 7px; box-sizing: border-box; background: var(--f-control); border: 1px solid var(--f-control-line); border-radius: 6px; min-width: 0; }
+.beeson-find .field:focus-within { border-color: var(--f-select); box-shadow: 0 0 0 2px var(--f-focus); }
+.beeson-find .field input { flex: 1; min-width: 0; border: 0; outline: 0; padding: 0; background: transparent; color: var(--f-text); font: inherit; user-select: text; -webkit-user-select: text; }
+.beeson-find .field input::placeholder { color: var(--f-muted); }
+.beeson-find .count { color: var(--f-muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.beeson-find .count.none { color: #d1453b; }
+.beeson-find .field .clear { width: 18px; height: 18px; padding: 0; border: 0; background: transparent; color: var(--f-muted); display: grid; place-items: center; border-radius: 50%; }
+.beeson-find .field .clear[hidden] { display: none; }
+.beeson-find .field .clear:hover { color: var(--f-text); }
+.beeson-find .ic { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+.beeson-find .ic-gear { stroke: none; fill: currentColor; fill-rule: evenodd; }
+.beeson-find .gear .ic-chevronDown { width: 11px; height: 11px; }
+.beeson-find .field > .ic { color: var(--f-muted); }
+.beeson-find .menu { position: absolute; z-index: 1; min-width: 200px; padding: 5px; box-sizing: border-box; background: var(--f-menu); color: var(--f-text); border: 1px solid var(--f-menu-line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, 0.22); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
+.beeson-find .menu[hidden] { display: none; }
+.beeson-find .menu [role^="menuitem"] { display: flex; align-items: center; gap: 6px; width: 100%; height: 24px; padding: 0 10px 0 6px; box-sizing: border-box; border: 0; border-radius: 5px; background: transparent; text-align: left; white-space: nowrap; }
+.beeson-find .menu [role^="menuitem"]::before { content: ''; width: 14px; text-align: center; }
+.beeson-find .menu [aria-checked="true"]::before { content: '\u2713'; }
+.beeson-find .menu [role^="menuitem"]:hover, .beeson-find .menu [role^="menuitem"]:focus { outline: none; background: var(--f-select); color: var(--f-on-select); }
+.beeson-find .menu hr { margin: 5px 8px; border: 0; border-top: 1px solid var(--f-menu-line); }
+::highlight(beeson-find) { background-color: #ffe14d; color: #000; }
+::highlight(beeson-find-current) { background-color: #ff9632; color: #000; }
+html.beeson-editor mjx-container.beeson-find-math { outline: 3px solid rgba(255, 221, 0, 0.8); outline-offset: 2px; border-radius: 2px; }
+html.beeson-editor mjx-container.beeson-find-math.current { outline-color: #ff9632; }
+`;
+  function createFinder(app2, keys) {
+    injectStyle("find", CSS17);
+    const options = { matchCase: false, wholeWords: false, tex: false };
+    let mode = "find";
+    let indexed = [];
+    let matches2 = [];
+    let current = -1;
+    let note = null;
+    const panel = make("div", "beeson-find");
+    panel.hidden = true;
+    panel.setAttribute("role", "dialog");
+    panel.setAttribute("aria-label", "Find & Replace");
+    const title = make("div", "title", "Find & Replace");
+    const close = make("button", "close");
+    close.type = "button";
+    close.title = "Close";
+    close.setAttribute("aria-label", "Close");
+    close.append(icon("close"));
+    title.prepend(close);
+    const gear = make("button", "gear");
+    gear.type = "button";
+    gear.title = "Options";
+    gear.setAttribute("aria-label", "Options");
+    gear.setAttribute("aria-haspopup", "menu");
+    gear.setAttribute("aria-expanded", "false");
+    gear.append(icon("gear"), icon("chevronDown"));
+    const field = (cls, glyph, label2, placeholder) => {
+      const box2 = make("label", `field ${cls}`);
+      const input = make("input");
+      input.type = "text";
+      input.spellcheck = false;
+      input.autocomplete = "off";
+      input.setAttribute("aria-label", label2);
+      input.placeholder = placeholder;
+      const clear = make("button", "clear");
+      clear.type = "button";
+      clear.tabIndex = -1;
+      clear.title = "Clear";
+      clear.setAttribute("aria-label", `Clear ${label2.toLowerCase()}`);
+      clear.hidden = true;
+      clear.append(icon("clear"));
+      box2.append(icon(glyph), input);
+      return { box: box2, input, clear };
+    };
+    const search = field("search", "search", "Find", "Find");
+    const count = make("span", "count");
+    count.setAttribute("aria-live", "polite");
+    search.box.append(count, search.clear);
+    const replace = field("replace", "pencil", "Replace with", "Replace");
+    replace.box.append(replace.clear);
+    const actionButton = (text) => {
+      const b = make("button", "", text);
+      b.type = "button";
+      return b;
+    };
+    const actions = make("div", "actions");
+    const allButton = actionButton("Replace All");
+    const andFindButton = actionButton("Replace & Find");
+    const oneButton = actionButton("Replace");
+    actions.append(allButton, andFindButton, oneButton);
+    const nav2 = make("div", "nav");
+    const previous = make("button");
+    previous.type = "button";
+    previous.setAttribute("aria-label", "Previous");
+    previous.append(icon("chevronLeft"));
+    const next = make("button");
+    next.type = "button";
+    next.setAttribute("aria-label", "Next");
+    next.append(icon("chevronRight"));
+    nav2.append(previous, next);
+    const keyText = (list) => list[0] ? ` (${display(list[0], app2.platform)})` : "";
+    previous.title = `Previous${keyText(keys.previous)}`;
+    next.title = `Next${keyText(keys.next)}`;
+    const body = make("div", "body");
+    body.append(gear, search.box, replace.box, actions, nav2);
+    const menu = make("div", "menu");
+    menu.hidden = true;
+    menu.setAttribute("role", "menu");
+    menu.setAttribute("aria-label", "Options");
+    const item = (text, role, checked, act) => {
+      const b = make("button", "", text);
+      b.type = "button";
+      b.tabIndex = -1;
+      b.setAttribute("role", role);
+      b.addEventListener("click", () => {
+        act();
+        closeMenu(true);
+      });
+      return { b, sync: () => b.setAttribute("aria-checked", String(checked())) };
+    };
+    const items = [
+      item("Find", "menuitemradio", () => mode === "find", () => setMode("find")),
+      item("Find & Replace", "menuitemradio", () => mode === "replace", () => setMode("replace")),
+      item("Whole Words", "menuitemcheckbox", () => options.wholeWords, () => toggle("wholeWords")),
+      item("Match Case", "menuitemcheckbox", () => options.matchCase, () => toggle("matchCase")),
+      item("Search TeX of Formulas", "menuitemcheckbox", () => options.tex, () => toggle("tex"))
+    ];
+    menu.append(items[0].b, items[1].b, make("hr"), items[2].b, items[3].b, make("hr"), items[4].b);
+    panel.append(title, body, menu);
+    document.body.append(panel);
+    title.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0 || ev.target.closest("button")) return;
+      ev.preventDefault();
+      const box2 = panel.getBoundingClientRect();
+      const dx = ev.clientX - box2.left;
+      const dy = ev.clientY - box2.top;
+      title.setPointerCapture(ev.pointerId);
+      title.classList.add("dragging");
+      const move = (e) => {
+        const x = Math.max(0, Math.min(innerWidth - box2.width, e.clientX - dx));
+        const y = Math.max(0, Math.min(innerHeight - 40, e.clientY - dy));
+        Object.assign(panel.style, { left: `${x}px`, top: `${y}px`, right: "auto" });
+      };
+      const up = () => {
+        title.classList.remove("dragging");
+        title.removeEventListener("pointermove", move);
+        title.removeEventListener("pointerup", up);
+        title.removeEventListener("pointercancel", up);
+      };
+      title.addEventListener("pointermove", move);
+      title.addEventListener("pointerup", up);
+      title.addEventListener("pointercancel", up);
+    });
+    function blocks() {
+      const list = (app2.pairing?.blocks ?? []).map((b) => b.live).filter((el) => el.isConnected && app2.slides().contains(el));
+      return list.sort((a, b) => a === b ? 0 : before(a, b) ? -1 : 1);
+    }
+    function compute() {
+      const re = pattern(search.input.value, options);
+      const lookup = re ? mathLookup() : null;
+      indexed = re ? blocks().map((b) => index(b, lookup, options.tex)) : [];
+      matches2 = indexed.flatMap((idx) => spans(idx.text, re).map((s) => ({ ...s, block: idx.block })));
+    }
+    const indexedOf = (block) => indexed.find((i) => i.block === block) ?? null;
+    function fromSlide() {
+      const slide = app2.current();
+      if (!matches2.length) return -1;
+      if (!slide) return 0;
+      const at = matches2.findIndex((m) => slide.contains(m.block) || before(slide, m.block));
+      return at < 0 ? 0 : at;
+    }
+    function nearest2(block, start2) {
+      if (!matches2.length) return -1;
+      const at = matches2.findIndex((m) => m.block === block && m.start >= start2 || m.block !== block && before(block, m.block));
+      return at < 0 ? 0 : at;
+    }
+    function paint() {
+      const highlights = globalThis.CSS?.highlights;
+      const Highlight = globalThis.Highlight;
+      for (const el of document.querySelectorAll("mjx-container.beeson-find-math")) el.classList.remove("beeson-find-math", "current");
+      highlights?.delete("beeson-find");
+      highlights?.delete("beeson-find-current");
+      if (panel.hidden) return;
+      const all = [];
+      let mine = null;
+      matches2.forEach((m, i) => {
+        const idx = indexedOf(m.block);
+        const r = idx && rangeOf(idx, m);
+        if (!r) return;
+        const math = r.startContainer.childNodes[r.startOffset];
+        if (r.endOffset === r.startOffset + 1 && math instanceof Element && math.matches("mjx-container")) {
+          math.classList.add("beeson-find-math");
+          if (i === current) math.classList.add("current");
+        }
+        if (i === current) mine = r;
+        else all.push(r);
+      });
+      if (!highlights || !Highlight) return;
+      highlights.set("beeson-find", new Highlight(...all));
+      if (mine) highlights.set("beeson-find-current", new Highlight(mine));
+    }
+    function sync() {
+      const query = search.input.value;
+      search.clear.hidden = !query;
+      replace.clear.hidden = !replace.input.value;
+      count.classList.toggle("none", !!query && !matches2.length && !note);
+      count.textContent = note ?? (!query ? "" : !matches2.length ? "Not found" : current >= 0 ? `${current + 1} of ${matches2.length}` : `${matches2.length} found`);
+      const any = matches2.length > 0;
+      previous.disabled = !any;
+      next.disabled = !any;
+      allButton.disabled = !any;
+      andFindButton.disabled = !(any && current >= 0);
+      oneButton.disabled = !(any && current >= 0);
+      panel.classList.toggle("replacing", mode === "replace");
+      for (const i of items) i.sync();
+      paint();
+    }
+    function reveal(select) {
+      const m = matches2[current];
+      if (!m) return;
+      const keep = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+      app2.showSlide(m.block);
+      if (m.block.closest("aside.notes") && !app2.notes.shown()) app2.notes.toggle();
+      app2.flush();
+      const idx = indexedOf(m.block);
+      const r = idx && rangeOf(idx, m);
+      const scroller = m.block.closest("aside.notes");
+      if (r && scroller) {
+        const box2 = r.getBoundingClientRect();
+        const view2 = scroller.getBoundingClientRect();
+        if (box2.top < view2.top || box2.bottom > view2.bottom) scroller.scrollTop += box2.top - view2.top - view2.height / 3;
+      }
+      if (select && r) {
+        app2.hostOf(m.block)?.focus({ preventScroll: true });
+        const sel = getSelection();
+        sel?.removeAllRanges();
+        sel?.addRange(r);
+      } else if (keep && keep.isConnected && document.activeElement !== keep) {
+        keep.focus({ preventScroll: true });
+      }
+    }
+    function research() {
+      note = null;
+      compute();
+      current = fromSlide();
+      sync();
+      if (current >= 0) reveal(false);
+    }
+    function refresh() {
+      if (panel.hidden || !search.input.value) return;
+      const was = matches2[current];
+      compute();
+      current = was ? nearest2(was.block, was.start) : -1;
+      sync();
+    }
+    function setMode(m) {
+      mode = m;
+      sync();
+    }
+    function toggle(option) {
+      options[option] = !options[option];
+      if (panel.hidden) sync();
+      else research();
+    }
+    function show(m, query) {
+      mode = m;
+      const wasHidden = panel.hidden;
+      if (query === void 0 && wasHidden) {
+        const sel = getSelection();
+        const text = sel && !sel.isCollapsed && app2.hostOf(sel.anchorNode?.parentElement ?? null) ? sel.toString() : "";
+        if (text && text.length < 200 && !text.includes("\n")) query = text;
+      }
+      panel.hidden = false;
+      if (query !== void 0 && query !== search.input.value) {
+        search.input.value = query;
+        research();
+      } else if (wasHidden) {
+        research();
+      } else {
+        sync();
+      }
+      const target = m === "replace" && search.input.value ? replace.input : search.input;
+      target.focus();
+      target.select();
+    }
+    function hide() {
+      if (panel.hidden) return;
+      closeMenu(false);
+      const had = panel.contains(document.activeElement);
+      panel.hidden = true;
+      sync();
+      if (current >= 0 && matches2[current]) reveal(true);
+      else if (had) document.activeElement?.blur();
+    }
+    function step2(way, select = false) {
+      compute();
+      if (!matches2.length) {
+        current = -1;
+        sync();
+        return;
+      }
+      note = null;
+      const start2 = fromSlide();
+      if (current < 0 || current >= matches2.length) current = way > 0 ? start2 : (start2 - 1 + matches2.length) % matches2.length;
+      else current = (current + way + matches2.length) % matches2.length;
+      sync();
+      reveal(select);
+    }
+    async function write2(block, list, label2) {
+      const idx = indexedOf(block);
+      if (!idx || !list.length) return;
+      await app2.doc.setContent(block, replaced(idx, list, replace.input.value), label2);
+    }
+    async function replaceCurrent(find) {
+      const m = matches2[current];
+      if (!m) return;
+      const keep = panel.contains(document.activeElement) ? document.activeElement : null;
+      await write2(m.block, [m], "replace");
+      note = null;
+      compute();
+      current = nearest2(m.block, m.start + replace.input.value.length);
+      sync();
+      if (find && current >= 0) reveal(false);
+      keep?.focus({ preventScroll: true });
+    }
+    async function replaceAll() {
+      compute();
+      const total = matches2.length;
+      if (!total) return 0;
+      const keep = panel.contains(document.activeElement) ? document.activeElement : null;
+      const slide = app2.current();
+      const byBlock = /* @__PURE__ */ new Map();
+      for (const m of matches2) byBlock.set(m.block, [...byBlock.get(m.block) ?? [], m]);
+      for (const [block, list] of byBlock) await write2(block, list, "replace all");
+      if (slide?.isConnected) app2.showSlide(slide);
+      compute();
+      current = -1;
+      note = `${total} replaced`;
+      sync();
+      keep?.focus({ preventScroll: true });
+      return total;
+    }
+    function openMenu() {
+      for (const i of items) i.sync();
+      menu.hidden = false;
+      gear.setAttribute("aria-expanded", "true");
+      const g = gear.getBoundingClientRect();
+      const p = panel.getBoundingClientRect();
+      menu.style.left = `${g.left - p.left}px`;
+      menu.style.top = `${g.bottom - p.top + 4}px`;
+      (menu.querySelector('[aria-checked="true"]') ?? items[0].b).focus();
+    }
+    function closeMenu(back) {
+      if (menu.hidden) return;
+      menu.hidden = true;
+      gear.setAttribute("aria-expanded", "false");
+      if (back) (mode === "replace" && search.input.value ? replace.input : search.input).focus();
+    }
+    gear.addEventListener("click", () => menu.hidden ? openMenu() : closeMenu(true));
+    menu.addEventListener("keydown", (ev) => {
+      const list = items.map((i) => i.b);
+      const at = list.indexOf(document.activeElement);
+      if (ev.key === "ArrowDown" || ev.key === "ArrowUp") {
+        ev.preventDefault();
+        list[(at + (ev.key === "ArrowDown" ? 1 : -1) + list.length) % list.length].focus();
+      } else if (ev.key === "Home" || ev.key === "End") {
+        ev.preventDefault();
+        list[ev.key === "Home" ? 0 : list.length - 1].focus();
+      } else if (ev.key === "Escape" || ev.key === "Tab") {
+        ev.preventDefault();
+        ev.stopPropagation();
+        closeMenu(false);
+        gear.focus();
+      }
+    });
+    document.addEventListener("pointerdown", (ev) => {
+      if (!menu.hidden && !menu.contains(ev.target) && !gear.contains(ev.target)) closeMenu(false);
+    }, true);
+    search.input.addEventListener("input", research);
+    replace.input.addEventListener("input", () => {
+      note = null;
+      sync();
+    });
+    for (const f of [search, replace]) {
+      f.clear.addEventListener("click", () => {
+        f.input.value = "";
+        f.input.dispatchEvent(new Event("input"));
+        f.input.focus();
+      });
+    }
+    const fail2 = (e) => app2.fail(e);
+    search.input.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Enter" || ev.isComposing) return;
+      ev.preventDefault();
+      step2(ev.shiftKey ? -1 : 1);
+    });
+    replace.input.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Enter" || ev.isComposing) return;
+      ev.preventDefault();
+      void app2.commands.run("find.replaceAndFind").catch(fail2);
+    });
+    panel.addEventListener("keydown", (ev) => {
+      if (ev.key !== "Escape" || !menu.hidden) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      hide();
+    });
+    close.addEventListener("click", () => hide());
+    previous.addEventListener("click", () => step2(-1));
+    next.addEventListener("click", () => step2(1));
+    allButton.addEventListener("click", () => void app2.commands.run("find.replaceAll").catch(fail2));
+    andFindButton.addEventListener("click", () => void app2.commands.run("find.replaceAndFind").catch(fail2));
+    oneButton.addEventListener("click", () => void app2.commands.run("find.replaceOne").catch(fail2));
+    app2.onRefresh(["content", "structure"], refresh);
+    app2.listen("history", () => {
+      if (!panel.hidden) queueMicrotask(refresh);
+    });
+    return {
+      get open() {
+        return !panel.hidden;
+      },
+      get mode() {
+        return mode;
+      },
+      options,
+      get query() {
+        return search.input.value;
+      },
+      get matches() {
+        return matches2;
+      },
+      get current() {
+        return current;
+      },
+      show,
+      hide,
+      step: step2,
+      toggle,
+      setMode,
+      replaceCurrent,
+      replaceAll
+    };
+  }
+
+  // src/editor/commands/find.ts
+  var IN2 = ["canvas", "text", "field", "navigator", "notes", "inspector"];
+  var NEXT = { mac: ["Mod+G"], other: ["F3"] };
+  var PREVIOUS = { mac: ["Mod+Shift+G"], other: ["Shift+F3"] };
+  var queryOf = (arg) => typeof arg === "string" ? arg : void 0;
+  function install31(app2) {
+    const finder = createFinder(app2, { next: NEXT[app2.platform], previous: PREVIOUS[app2.platform] });
+    const c = app2.commands;
+    c.define({
+      id: "find.open",
+      label: "Find\u2026",
+      keys: { mac: ["Mod+F"], other: ["Mod+F"] },
+      in: IN2,
+      menu: { bar: "Edit", group: "find", order: 10 },
+      run: (_, arg) => finder.show("find", queryOf(arg))
+    });
+    c.define({
+      id: "find.next",
+      label: "Find Next",
+      keys: NEXT,
+      in: IN2,
+      menu: { bar: "Edit", group: "find", order: 11 },
+      enabled: () => !!finder.query,
+      run: () => finder.step(1, !finder.open)
+    });
+    c.define({
+      id: "find.previous",
+      label: "Find Previous",
+      keys: PREVIOUS,
+      in: IN2,
+      menu: { bar: "Edit", group: "find", order: 12 },
+      enabled: () => !!finder.query,
+      run: () => finder.step(-1, !finder.open)
+    });
+    c.define({
+      id: "find.replace",
+      label: "Replace\u2026",
+      keys: { mac: ["Ctrl+H"], other: ["Ctrl+H"] },
+      in: IN2,
+      menu: { bar: "Edit", group: "find", order: 13 },
+      run: (_, arg) => finder.show("replace", queryOf(arg))
+    });
+    c.define({
+      id: "find.replaceOne",
+      label: "Replace",
+      enabled: () => finder.open && finder.current >= 0,
+      undoable: true,
+      run: () => finder.replaceCurrent(false)
+    });
+    c.define({
+      id: "find.replaceAndFind",
+      label: "Replace & Find",
+      enabled: () => finder.open && finder.current >= 0,
+      undoable: true,
+      run: () => finder.replaceCurrent(true)
+    });
+    c.define({
+      id: "find.replaceAll",
+      label: "Replace All",
+      enabled: () => finder.open && finder.matches.length > 0,
+      undoable: true,
+      run: async () => {
+        await finder.replaceAll();
+      }
+    });
+    c.define({
+      id: "find.close",
+      label: "Close Find",
+      enabled: () => finder.open,
+      run: () => finder.hide()
+    });
+    const option = (id, label2, key) => c.define({ id, label: label2, checked: () => finder.options[key], run: () => finder.toggle(key) });
+    option("find.matchCase", "Match Case", "matchCase");
+    option("find.wholeWords", "Whole Words", "wholeWords");
+    option("find.tex", "Search TeX of Formulas", "tex");
+  }
+
   // src/editor/model/fragments.ts
   var WRAPPERS = [
     [/* @__PURE__ */ new Set(["tr"]), '<table><tbody class="slides">', "</tbody></table>"],
@@ -5671,11 +6361,11 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
       out.classes = rest;
       out.fragment = fragment;
     }
-    const index = edit.attrs?.["data-fragment-index"];
-    if (index !== void 0 && (index === null || /^\s*-?\d+\s*$/.test(index))) {
+    const index2 = edit.attrs?.["data-fragment-index"];
+    if (index2 !== void 0 && (index2 === null || /^\s*-?\d+\s*$/.test(index2))) {
       const { "data-fragment-index": _, ...rest } = edit.attrs;
       out.attrs = rest;
-      out.index = index === null ? null : Number(index);
+      out.index = index2 === null ? null : Number(index2);
     }
     const translate = edit.style?.translate;
     const parsed = translate ? translateIn(`translate: ${translate}`) : null;
@@ -5687,19 +6377,19 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
     for (const key of ["classes", "attrs", "style"]) if (out[key] && !Object.keys(out[key]).length) delete out[key];
     return out;
   }
-  function inverseEdit(before, edit) {
-    const out = { order: { attrs: Object.keys(before.attrs), classes: before.classes, style: Object.keys(before.style) } };
+  function inverseEdit(before2, edit) {
+    const out = { order: { attrs: Object.keys(before2.attrs), classes: before2.classes, style: Object.keys(before2.style) } };
     const pick = (keys, value) => Object.fromEntries(keys.map((k) => [k, value(k)]));
-    if (edit.classes) out.classes = pick(Object.keys(edit.classes), (c) => before.classes.includes(c));
-    if (edit.fragment !== void 0) out.fragment = before.classes.includes("fragment");
-    if (edit.attrs) out.attrs = pick(Object.keys(edit.attrs), (n) => before.attrs[n] ?? null);
+    if (edit.classes) out.classes = pick(Object.keys(edit.classes), (c) => before2.classes.includes(c));
+    if (edit.fragment !== void 0) out.fragment = before2.classes.includes("fragment");
+    if (edit.attrs) out.attrs = pick(Object.keys(edit.attrs), (n) => before2.attrs[n] ?? null);
     if (edit.index !== void 0) {
-      const v = before.attrs["data-fragment-index"];
+      const v = before2.attrs["data-fragment-index"];
       out.index = v === void 0 ? null : Number(v);
     }
-    if (edit.style) out.style = pick(Object.keys(edit.style), (n) => before.style[n] ?? null);
+    if (edit.style) out.style = pick(Object.keys(edit.style), (n) => before2.style[n] ?? null);
     if (edit.translate !== void 0) {
-      const v = before.style.translate;
+      const v = before2.style.translate;
       out.translate = v === void 0 ? null : translateIn(`translate: ${v}`);
     }
     return out;
@@ -5798,9 +6488,9 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
     }
     // inserts the units of texts into parent before the node before, as one entry of the history. a
     // text is an element without the white space before it, which is that of the units of parent
-    async insert(texts, parent, before = null, label2 = "insert") {
+    async insert(texts, parent, before2 = null, label2 = "insert") {
       const nodes = [];
-      let ref = before;
+      let ref = before2;
       for (const text of [...typeof texts === "string" ? [texts] : texts].reverse()) {
         ref = await this.place(text, parent, ref);
         nodes.unshift(ref);
@@ -5820,17 +6510,17 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
       return nodes;
     }
     // a new slide of the layout before the slide before, or at the end
-    async insertSlide(layout, before = null) {
+    async insertSlide(layout, before2 = null) {
       const { pairing } = this.need();
       if (!pairing.root) throw new Error("the deck does not have a div.slides element");
       const base = this.childIndent(pairing.root);
-      const [slide] = await this.insert(layoutText(layout, this.style(), base), pairing.root, before, `new ${layout} slide`);
+      const [slide] = await this.insert(layoutText(layout, this.style(), base), pairing.root, before2, `new ${layout} slide`);
       return slide;
     }
     // a new element of the kind in parent before the node before, or at the end
-    async insertElement(kind, parent, before = null, options = {}) {
+    async insertElement(kind, parent, before2 = null, options = {}) {
       const o = kind === "plot" && !options.id ? { ...options, id: this.uniqueId("plot") } : options;
-      return this.insert(elementText(kind, this.style(), this.childIndent(parent), o), parent, before, `new ${kind}`);
+      return this.insert(elementText(kind, this.style(), this.childIndent(parent), o), parent, before2, `new ${kind}`);
     }
     // a copy of el after it, with each id renamed
     async duplicate(el) {
@@ -5853,7 +6543,7 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
       });
     }
     // moves el into parent before the node before, or at the end
-    async move(el, parent, before = null, label2 = "move") {
+    async move(el, parent, before2 = null, label2 = "move") {
       const { pairing } = this.need();
       if (el === parent || el.contains(parent)) throw new Error("an element is not moved into itself");
       if (!pairing.elements.has(parent) || pairing.byLive.has(parent)) throw new Error(`the ${parent.localName} does not take elements`);
@@ -5863,8 +6553,8 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
         p.insertBefore(el, n && n !== el && n.parentNode === p ? n : null);
         await this.after(el);
       };
-      await put(parent, before);
-      this.host.record({ label: label2, undo: () => put(from.parent, from.next), redo: () => put(parent, before) });
+      await put(parent, before2);
+      this.host.record({ label: label2, undo: () => put(from.parent, from.next), redo: () => put(parent, before2) });
     }
     // el replaced by an element of the tag with the same attributes and content, and with the edit
     // applied to its start tag, e.g. a p made an h3
@@ -5901,14 +6591,14 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
     }
     // the content of a block set to a text with each formula as its TeX, as one entry of the history
     async setContent(block, content, label2 = "content") {
-      const before = contentWithTex(block);
+      const before2 = contentWithTex(block);
       const put = async (c) => {
         if (this.host.restore) await this.host.restore(block, c);
         else await setContentWithTex(block, c);
         this.host.changed();
       };
       await put(content);
-      this.host.record({ label: label2, undo: () => put(before), redo: () => put(content) });
+      this.host.record({ label: label2, undo: () => put(before2), redo: () => put(content) });
     }
     // takes el off the page, with the text of its unit. its unit is then left out of the file
     detach(el) {
@@ -5947,13 +6637,13 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
     }
     // the new element made from text and paired as a fragment, inserted before the node before. lead
     // is the white space and the comments before it, by default those of the units of parent
-    async place(text, parent, before, lead) {
+    async place(text, parent, before2, lead) {
       const { source, pairing } = this.need();
       const container = pairing.elements.get(parent);
       if (!container || pairing.byLive.has(parent)) throw new Error(`the ${parent.localName} does not take elements`);
       const fragment = parseFragment((lead ?? childSpace(container, this.eol(), this.style().step)) + text, source.crlf, parent);
       const node = document.importNode(fragmentRoot(fragment).node, true);
-      parent.insertBefore(node, before && before.parentNode === parent ? before : null);
+      parent.insertBefore(node, before2 && before2.parentNode === parent ? before2 : null);
       const mj = window.MathJax;
       if (mj?.typesetPromise) await mj.typesetPromise([node]);
       mergePairing(pairing, pairFragment(fragment, node, this.host.math()));
@@ -6047,6 +6737,7 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
   install2(app);
   install29(app);
   install30(app);
+  install31(app);
   var revealReady = () => new Promise((done) => {
     const tick = () => app.deck()?.isReady() ? done() : setTimeout(tick, 50);
     tick();
