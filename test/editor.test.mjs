@@ -1266,6 +1266,9 @@ test('a row of the slide list rested on shows a preview of its slide, which is h
     return { shown: !p.hidden && getComputedStyle(p).display !== 'none', width: box.width, right: box.left >= list.right, hidden: p.getAttribute('aria-hidden'), focusable: p.querySelectorAll('[tabindex], [contenteditable]').length, title: clone?.querySelector('h2')?.textContent ?? null, painted, fragments: [...(clone?.querySelectorAll('.fragment') ?? [])].every((f) => getComputedStyle(f).opacity === '1') };
   })()`);
   const row = (type) => page.evaluate(`document.querySelectorAll('.beeson-edit-nav .row')[${at}].dispatchEvent(new PointerEvent('${type}', { bubbles: false, pointerId: 1 }))`);
+  // a thumbnail shown whole is not previewed, hence the row is scrolled under the upper edge of the
+  // list, where its thumbnail is cut
+  await page.evaluate(`(() => { const list = document.querySelector('.beeson-edit-nav .rows'); const f = document.querySelectorAll('.beeson-edit-nav .row')[${at}].querySelector('.frame').getBoundingClientRect(); list.scrollTop += f.top + f.height / 2 - list.getBoundingClientRect().top; })()`);
   await row('pointerenter');
   await sleep(100);
   assert.notEqual((await peek())?.shown, true, 'the preview waits for the pointer to rest');
