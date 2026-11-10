@@ -288,7 +288,7 @@ export function install(app: App): void {
     menuItems: (bar: string, submenu?: string) => menuItems(app, bar, submenu),
     context: (kind: Context, x: number, y: number) => !!openContextMenu(app, kind, null, { x, y }),
     closeMenus,
-    keyClashes: () => keyClashes(app),
+    keyClashes: (shared?: boolean) => keyClashes(app, shared),
     ask: (options: DialogOptions, focus?: string) => ask(options, focus),
   };
 }

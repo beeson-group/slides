@@ -327,3 +327,14 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// item 6: in the trial, Insert listed ⌥⌘E at Formula and at Inline Formula, and View > Zoom listed
+// ⌘= at Zoom In and at Bigger Notes Text. one key is listed at one item of a menu, enabled or not
+for (const platform of PLATFORMS) {
+  test(`no key is listed at two items of one menu or one context menu (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: MATH });
+    assert.deepEqual(await page.evaluate('window.BeesonEditorShell.keyClashes(true)'), []);
+    assert.deepEqual(await page.evaluate('window.BeesonEditorShell.keyClashes()'), []);
+    assert.deepEqual(errors(page), []);
+  });
+}

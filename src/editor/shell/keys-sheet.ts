@@ -78,19 +78,32 @@ export function sheetRows(app: App): SheetRow[] {
 
 // the keys of the sheet that run two enabled commands in the region of the focus, each as the key
 // and the ids of its commands, e.g. ⇧F3: find.previous, text.case.cycle. a key is meant to run one
-// command in each state of the editor, the first enabled one that the registry finds
-export function keyClashes(app: App): string[] {
+// command in each state of the editor, the first enabled one that the registry finds. with shared
+// set, the keys listed at two items of one menu or of one context menu, enabled or not, each as
+// the menu, the key, and the ids, e.g. Insert: ⌥⌘E: insert.formula, math.inline, which the menu
+// would show as one key of two commands
+export function keyClashes(app: App, shared = false): string[] {
   const platform = app.platform;
-  const region = app.region();
   const listed = new Set(sheetRows(app).flatMap((r) => r.keys));
-  const by = new Map<string, string[]>();
-  for (const c of app.commands.list()) {
-    if (!(c.in ?? DEFAULT_REGIONS).includes(region) || !app.commands.enabled(c.id)) continue;
-    for (const key of new Set(boundKeys(c, platform).map((k) => display(k, platform)))) {
-      if (listed.has(key)) by.set(key, [...(by.get(key) ?? []), c.id]);
-    }
+  const out: string[] = [];
+  const clash = (where: string, commands: Command[], keys: (c: Command) => string[]) => {
+    const by = new Map<string, string[]>();
+    for (const c of commands) for (const key of new Set(keys(c))) if (listed.has(key)) by.set(key, [...(by.get(key) ?? []), c.id]);
+    out.push(...[...by].filter(([, ids]) => ids.length > 1).map(([key, ids]) => `${where}${key}: ${ids.join(', ')}`));
+  };
+  if (!shared) {
+    const region = app.region();
+    clash('', app.commands.list().filter((c) => (c.in ?? DEFAULT_REGIONS).includes(region) && app.commands.enabled(c.id)), (c) => boundKeys(c, platform).map((k) => display(k, platform)));
+    return out;
   }
-  return [...by].filter(([, ids]) => ids.length > 1).map(([key, ids]) => `${key}: ${ids.join(', ')}`);
+  const shown = (c: Command) => app.commands.shortcuts(c.id);
+  const menus = new Map<string, Command[]>();
+  for (const c of app.commands.list()) {
+    const places = [...(c.menu ? [c.menu.submenu ? `${c.menu.bar} > ${c.menu.submenu}` : c.menu.bar] : []), ...(c.context ?? []).map((k) => `the context menu of ${k}`)];
+    for (const p of places) menus.set(p, [...(menus.get(p) ?? []), c]);
+  }
+  for (const [where, commands] of menus) clash(`${where}: `, commands, shown);
+  return out;
 }
 
 // the groups split in their order into n columns, with the tallest column as short as it can be
