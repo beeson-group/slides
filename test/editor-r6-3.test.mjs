@@ -254,3 +254,94 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the video of the mode of the slide, its selector, and the name of its clip
+async function videoOfSlide(page) {
+  const mode = await page.evaluate(`[...document.querySelectorAll('.reveal section.present video')].find((v) => v.getClientRects().length && v.getBoundingClientRect().width).classList.contains('for-dark') ? 'dark' : 'light'`);
+  return { mode, video: `.reveal section.present video.for-${mode}`, clip: `clip-${mode}` };
+}
+const clipOf = (mode) => `<video class="for-${mode}" src="demo/clip-${mode}.mp4" poster="demo/clip-${mode}.png" muted loop data-autoplay></video>`;
+const SLIDER = `${PANEL} input[name="poster-frame"]`;
+// a hash of the bytes of the poster that the page shows, read from its object URL
+const posterBytes = (page, video) => page.evaluate(`fetch(document.querySelector(${js(video)}).poster).then((r) => r.arrayBuffer()).then((b) => [...new Uint8Array(b)].reduce((h, x) => (h * 31 + x) >>> 0, b.byteLength))`);
+// a trusted click on the poster frame slider at a fraction of its length
+async function slideTo(page, fraction) {
+  const r = await boxOf(page, SLIDER);
+  await click(page, { x: r.left + 8 + (r.right - r.left - 16) * fraction, y: (r.top + r.bottom) / 2 });
+}
+const ASK = 'dialog.beeson-edit-card.beeson-poster-ask[open]';
+
+for (const platform of PLATFORMS) {
+  test(`the poster frame slider captures the frame at its time as the poster (${platform})`, async (t) => {
+    const page = await open(platform);
+    t.after(() => page.close?.());
+    await show(page, VIDEOS);
+    const { mode, video, clip } = await videoOfSlide(page);
+    await click(page, video);
+    await settle(page);
+    assert.equal(await page.evaluate(`document.querySelector('${PANEL} .ed-panes')?.dataset.pane`), 'video');
+    await page.waitFor(`!document.querySelector(${js(SLIDER)}).disabled`);
+    const length = await page.evaluate(`document.querySelector(${js(video)}).duration`);
+    await slideTo(page, 0.5);
+    await page.waitFor(`window.BeesonEditor.render().includes('poster="media/${clip}.png"')`);
+    await settle(page);
+    const time = await page.evaluate(`Number(document.querySelector(${js(SLIDER)}).value)`);
+    assert.ok(Math.abs(time - length / 2) < length * 0.1, `the slider is at ${time} of ${length} s`);
+    assert.match(await page.evaluate(`document.querySelector('${PANEL} .ed-frame output').textContent`), /^0:\d\d\.\d$/);
+    const half = await posterBytes(page, video);
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Poster Frame');
+    const edited = page.source.replace(clipOf(mode), clipOf(mode).replace(`poster="demo/${clip}.png"`, `poster="media/${clip}.png"`));
+    assert.equal(await render(page), edited);
+    // the first frame of the video is another picture
+    await page.evaluate(`document.querySelector(${js(SLIDER)}).focus()`);
+    await press(page, 'Home');
+    await page.waitFor(`window.BeesonEditor.render().includes('poster="media/${clip}-2.png"')`);
+    assert.notEqual(await posterBytes(page, video), half);
+    await page.evaluate('window.BeesonEditor.undo()');
+    await settle(page);
+    // the new posters are written into media/ of the folder of the saved deck, the root of the
+    // private file system of the page
+    await page.evaluate('window.showDirectoryPicker = () => navigator.storage.getDirectory()');
+    await roundTrip(page);
+  });
+
+  // regression test of opus 13 and qwen3 34 of the juror of round 2: in a deck opened from a file,
+  // the browser keeps the frames of a video of the folder from the page, and the Video pane must
+  // still offer a way to set the poster
+  test(`in a deck opened from a file, the Video pane offers a way to set the poster, and the slider captures through the chosen file (${platform})`, async (t) => {
+    const page = await editorPage(browser, { query: `edit&still&edit-platform=${platform}`, page: { width: 1440, height: 900 } });
+    t.after(() => page.close?.());
+    assert.equal(await page.evaluate('location.protocol'), 'file:');
+    if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
+    await show(page, VIDEOS);
+    const { mode, video, clip } = await videoOfSlide(page);
+    await click(page, video);
+    await settle(page);
+    const before = (await page.evaluate('window.BeesonEditor.status()')).message;
+    if (await page.evaluate(`!!document.querySelector(${js(SLIDER)})`)) {
+      await page.waitFor(`!document.querySelector(${js(SLIDER)}).disabled`);
+      await slideTo(page, 0.5);
+    } else await click(page, `${PANEL} [data-command="media.poster"]`);
+    await page.waitFor(`!!document.querySelector(${js(ASK)}) || window.BeesonEditor.status().message !== ${js(before)}`, 8000);
+    const asked = await page.evaluate(`document.querySelector(${js(ASK)})?.textContent ?? null`);
+    assert.ok(asked, `the pane did not offer a way to set the poster: ${(await page.evaluate('window.BeesonEditor.status()')).message}`);
+    assert.ok(asked.includes(`${clip}.mp4`), asked);
+    await page.send('Page.setInterceptFileChooserDialog', { enabled: true });
+    await click(page, `${ASK} button.primary`);
+    await page.waitFor(`!!document.querySelector('input.beeson-media-input')`);
+    const { result } = await page.send('Runtime.evaluate', { expression: `document.querySelector('input.beeson-media-input')` });
+    await page.send('DOM.setFileInputFiles', { files: [resolve(`demo/${clip}.mp4`)], objectId: result.objectId });
+    await page.waitFor(`window.BeesonEditor.render().includes('poster="media/${clip}.png"')`);
+    if (!(await page.evaluate(`!!document.querySelector(${js(SLIDER)})`))) return;
+    // a second move of the slider reads the chosen file again without asking
+    const half = await posterBytes(page, video);
+    await page.evaluate(`document.querySelector(${js(SLIDER)}).focus()`);
+    await press(page, 'Home');
+    await page.waitFor(`window.BeesonEditor.render().includes('poster="media/${clip}-2.png"')`);
+    assert.equal(await page.evaluate(`!!document.querySelector(${js(ASK)})`), false);
+    assert.notEqual(await posterBytes(page, video), half);
+    const edited = page.source.replace(clipOf(mode), clipOf(mode).replace(`poster="demo/${clip}.png"`, `poster="media/${clip}-2.png"`));
+    assert.equal(await render(page), edited);
+    assert.deepEqual(errors(page), []);
+  });
+}
