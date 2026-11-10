@@ -157,10 +157,11 @@ export class Commands {
 export function installKeys(app: App): void {
   window.addEventListener('keydown', (ev) => {
     if (ev.isComposing || ev.keyCode === 229) return;
+    if (dialogKey(app, ev)) return;
     const region = app.region();
-    if (selectionKey(app, ev, region)) return;
+    // the handle of a block is outside the slide, and its keys are those of the canvas
     const active = document.activeElement;
-    const onBar = region === 'canvas' && active instanceof Element && active !== document.body && active !== document.documentElement && !active.closest('.reveal');
+    const onBar = region === 'canvas' && active instanceof Element && active !== document.body && active !== document.documentElement && !active.closest('.reveal, .beeson-handle');
     const command = app.commands.forKey(ev, region, !onBar);
     if (!command) return;
     ev.preventDefault();
@@ -175,43 +176,21 @@ export function installKeys(app: App): void {
   });
 }
 
-// the keys of the selection and of the dialogs of today, which are not commands yet: Enter on a
-// formula opens its TeX, Esc closes a card of a file, the arrow keys nudge the selected element,
-// and Esc leaves the text that is being edited and selects its block. they are taken before the
-// keys of the registry, so that an arrow nudges a selected element rather than changing the slide
-function selectionKey(app: App, ev: KeyboardEvent, region: Region): boolean {
+// the keys of the dialogs of today, which are not commands yet: Enter on a formula opens its TeX,
+// and Esc closes the TeX field or a card of a file
+function dialogKey(app: App, ev: KeyboardEvent): boolean {
   const active = document.activeElement;
-  const take = () => {
+  if ((ev.key === 'Enter' || ev.key === ' ') && !app.math.isOpen() && active instanceof Element && active.matches('mjx-container') && app.hostOf(active)) {
     ev.preventDefault();
     ev.stopPropagation();
-    return true;
-  };
-  if ((ev.key === 'Enter' || ev.key === ' ') && !app.math.isOpen() && active instanceof Element && active.matches('mjx-container') && app.hostOf(active)) {
     app.math.open(active);
-    return take();
-  }
-  if (ev.key === 'Escape' && app.files.problemsShown()) {
-    app.files.closeProblems();
-    ev.stopPropagation();
     return true;
   }
-  if (ev.key === 'Escape' && app.files.askShown()) {
-    app.files.cancelAsk();
-    ev.stopPropagation();
-    return true;
-  }
-  if (region !== 'dialog' && !app.math.isOpen() && app.move.onKey(ev)) return take();
   if (ev.key !== 'Escape') return false;
-  if (app.math.isOpen()) {
-    app.math.close();
-    ev.stopPropagation();
-    return true;
-  }
-  const host = app.hostOf(active);
-  if (!host) return false;
-  // the block is selected, as the text box in PowerPoint, and the arrow keys nudge it
-  (host as HTMLElement).blur();
-  app.move.select(app.move.movableOf(host));
+  if (app.files.problemsShown()) app.files.closeProblems();
+  else if (app.files.askShown()) app.files.cancelAsk();
+  else if (app.math.isOpen()) app.math.close();
+  else return false;
   ev.stopPropagation();
   return true;
 }

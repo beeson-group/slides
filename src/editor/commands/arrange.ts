@@ -1,10 +1,9 @@
 // the commands of the selection on the canvas and of the Arrange menu: Select All, Deselect, the
 // ladder of Esc from a text to its block to nothing, Return into the text of a block, Tab between
-// the elements, the nudges by 1 and 10 slide pixels, and the reset of a place or a width. onKey runs
-// the keys of these commands from the keyboard handler of today, until the one dispatch over the
-// keys of the registry takes them
+// the elements, the nudges by 1 and 10 slide pixels, and the reset of a place or a width. their keys
+// are run by the one keyboard dispatch of commands.ts
 
-import type { App, Region } from '../app.ts';
+import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { RESIZABLE, containerOf, mediaIn, movableOf, movablesOf, visualRect } from '../canvas/hit.ts';
@@ -203,34 +202,7 @@ export function commands(): Command[] {
   return list;
 }
 
-// whether ev is the key string keys, e.g. 'Mod+Shift+A', where Mod is ⌘ on a Mac and Ctrl
-// elsewhere, and each falls back to the other. a key with AltGraph is never a shortcut
-export function matches(keys: string, ev: KeyboardEvent): boolean {
-  if (ev.getModifierState?.('AltGraph')) return false;
-  const parts = keys.split('+');
-  const key = parts.pop() as string;
-  const want = new Set(parts);
-  if (want.has('Mod') !== (ev.metaKey || ev.ctrlKey)) return false;
-  if (want.has('Shift') !== ev.shiftKey || want.has('Alt') !== ev.altKey) return false;
-  return key.length === 1 ? ev.key.toLowerCase() === key.toLowerCase() : ev.key === key;
-}
-
-// the first enabled command of this file whose keys match ev in the region of the focus is run
-export function onKey(app: App, ev: KeyboardEvent): boolean {
-  const region: Region = app.region();
-  for (const c of mine) {
-    if (!c.keys || !(c.in ?? ['canvas', 'navigator']).includes(region)) continue;
-    if (!(c.keys[app.platform] ?? []).some((k) => matches(k, ev))) continue;
-    if (!app.commands.enabled(c.id)) continue;
-    void app.commands.run(c.id).catch((e) => app.fail(e));
-    return true;
-  }
-  return false;
-}
-
-let mine: Command[] = [];
-
 export function install(app: App): void {
-  mine = commands().map((c) => app.commands.define(c));
+  for (const c of commands()) app.commands.define(c);
   app.selection.listen(() => (run = null));
 }
