@@ -12,6 +12,7 @@ import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
+import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
 
 const PLATFORMS = ['mac', 'other'];
 // the slide of the demo deck with the figure and its caption, under a paragraph and over a list
@@ -39,6 +40,18 @@ const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 const meets = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 let saves = 0;
+const THEME = new Set(themeClasses(readFileSync('theme/beeson.css', 'utf8')));
+
+// inScope asserts that the edit writes only what the scope rule allows, besides the problems of the
+// text before it
+function inScope(edited, source) {
+  const now = textProblems(edited, THEME);
+  for (const p of textProblems(source, THEME)) {
+    const i = now.indexOf(p);
+    if (i >= 0) now.splice(i, 1);
+  }
+  assert.deepEqual(now, []);
+}
 
 // the editor on the slide n of the demo deck served over HTTP, in a window of 1600 by 1000 px as
 // in the shoot of the council, in the mode of the slides given, with the Format tab shown. with
@@ -231,9 +244,10 @@ for (const platform of PLATFORMS) {
     await frames(page);
     turnedAbout(await members(page), before, c, 90, 'after the drag');
     const edited = await render(page);
-    assert.match(edited, /<p data-group="g\d+" style="translate: -?\d+px -?\d+px; rotate: 90deg">Export/, 'the paragraph is not written with its offset and its angle');
-    assert.match(edited, /<figure class="zone fragment" data-fragment-index="2" data-group="g\d+" style="translate: -?\d+px -?\d+px; rotate: 90deg">/, 'the figure is not written with its offset and its angle');
+    assert.match(edited, /<p style="rotate: 90deg; translate: -?\d+px -?\d+px" data-group="g\d+">Export/, 'the paragraph is not written with its offset and its angle');
+    assert.match(edited, /<figure class="zone" style="rotate: 90deg; translate: -?\d+px -?\d+px" data-group="g\d+">/, 'the figure is not written with its offset and its angle');
     assert.deepEqual((await members(page)).map((m) => m.tag).sort(), ['figure', 'p'], 'the group is not selected after the turn');
+    inScope(edited, page.source);
     await roundTrip(page);
   });
 
@@ -253,6 +267,7 @@ for (const platform of PLATFORMS) {
     await frames(page);
     turnedAbout(await members(page), before, { x: v.frame.x, y: v.frame.y }, 30, 'after 30 typed in Angle');
     assert.equal(await page.evaluate(`document.querySelector('${field}').value`), '30');
+    inScope(await render(page), page.source);
     await roundTrip(page);
   });
 }
