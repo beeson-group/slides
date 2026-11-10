@@ -625,7 +625,10 @@ export function install(app: App): void {
     view.resizing = true;
     view.guides = [];
     view.spacing = [];
-    view.readout = { text: `${Math.round(box.width)} × ${Math.round(box.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
+    // the size that the members reach, as W and H of the Arrange pane give it, since the layout
+    // sets the height of a zone and a text block, which can differ from box
+    const reached = union(p.els.map((el) => toSlide(f, visualRect(el))));
+    view.readout = { text: `${Math.round(reached.width)} × ${Math.round(reached.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     frames.draw();
     app.invalidate('content');
   };
