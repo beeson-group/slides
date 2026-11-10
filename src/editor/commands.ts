@@ -52,10 +52,18 @@ export function boundKeys(c: Command, platform: Platform): string[] {
   return c.keys?.[platform] ?? [];
 }
 
-// the keys of a command that the menus and the sheet of shortcuts list on the platform
+// the registry of each defined command, which lists its keys
+const registryOf = new WeakMap<Command, Commands>();
+
+// the keys of a command that the menus and the sheet of shortcuts list on the platform. a key is
+// listed once, at the first command of the menus that has it, e.g. ⌘= at Zoom In and not at
+// Bigger Notes Text, which it runs while the focus is in the notes
 export function keysOf(c: Command, platform: Platform): string[] {
-  return c.keys?.[platform] ?? CLIPBOARD_KEYS[c.id] ?? [];
+  return registryOf.get(c)?.listed(c, platform) ?? c.keys?.[platform] ?? CLIPBOARD_KEYS[c.id] ?? [];
 }
+
+// the menus of the menu bar from the left
+const BARS = ['File', 'Edit', 'Insert', 'Format', 'Arrange', 'Slide', 'View', 'Help'];
 
 // a key without Mod, Ctrl, Alt, or Meta, other than a function key, which a focused button or
 // field of the bars takes for itself
@@ -88,7 +96,32 @@ export class Commands {
   define(command: Command): Command {
     if (this.byId.has(command.id)) throw new Error(`the command ${command.id} is defined twice`);
     this.byId.set(command.id, command);
+    registryOf.set(command, this);
+    this.listing.clear();
     return command;
+  }
+
+  // the listed keys of each command per platform, made at the first call after a definition
+  private readonly listing = new Map<Platform, Map<Command, string[]>>();
+
+  listed(c: Command, platform: Platform): string[] {
+    let byCommand = this.listing.get(platform);
+    if (!byCommand) {
+      byCommand = new Map();
+      const rank = (x: Command) => (x.menu ? (BARS.includes(x.menu.bar) ? BARS.indexOf(x.menu.bar) : BARS.length) * 1e6 + x.menu.order : 1e12);
+      const taken = new Set<string>();
+      for (const x of [...this.byId.values()].sort((a, b) => rank(a) - rank(b))) {
+        const keys = x.keys?.[platform] ?? CLIPBOARD_KEYS[x.id] ?? [];
+        if (!x.menu) {
+          byCommand.set(x, keys);
+          continue;
+        }
+        byCommand.set(x, keys.filter((k) => !taken.has(k)));
+        for (const k of keys) taken.add(k);
+      }
+      this.listing.set(platform, byCommand);
+    }
+    return byCommand.get(c) ?? [];
   }
 
   get(id: string): Command | undefined {
