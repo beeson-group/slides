@@ -28,7 +28,7 @@ const CSS = `
 .beeson-edit-keys h3 { margin: 0 0 2px; font: 600 11px/1.5 var(--ed-font, system-ui, sans-serif); color: var(--ed-muted, #6e6e73); }
 .beeson-edit-keys .row { display: flex; justify-content: space-between; gap: 12px; padding: 1px 0; }
 .beeson-edit-keys .row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.beeson-edit-keys.dense .row { padding: 0; }
+.beeson-edit-keys.dense .row { padding: 0; line-height: 1.3; }
 .beeson-edit-keys.dense section { margin-bottom: 6px; }
 .beeson-edit-keys kbd { font: inherit; color: var(--ed-muted, #6e6e73); white-space: nowrap; font-variant-numeric: tabular-nums; }
 `;
@@ -47,24 +47,19 @@ function commandsOf(app: App, items: MenuItem[]): Command[] {
   return out;
 }
 
-// the modifiers of a click and a drag on the canvas, as canvas/drag.ts and commands/line.ts read
-// them, in the group Mouse after the menus, as in the list of Keyboard Shortcuts of Keynote: Shift
-// locks an axis, the free modifier turns the snapping off, and the copy modifier drops a copy or
-// resizes about the center
-const MOUSE: [label: string, mac: string[], other: string[]][] = [
-  ['Add to the Selection', ['⇧-click', '⌘-click'], ['Shift+click', 'Ctrl+click']],
-  ['Move Along One Axis', ['⇧-drag'], ['Shift+drag']],
-  ['Move Without Snapping', ['⌘-drag'], ['Alt+drag']],
-  ['Drag a Copy', ['⌥-drag'], ['Ctrl+drag']],
-  ['Keep or Free Proportions at a Corner', ['⇧-drag'], ['Shift+drag']],
-  ['Resize Without Snapping', ['⌘-drag'], ['Alt+drag']],
-  ['Resize About the Center', ['⌥-drag'], ['Ctrl+drag']],
-  ['Rotate in Steps of 15°', ['⇧-drag'], ['Shift+drag']],
-  ['Draw a Line in Steps of 45°', ['⇧-drag'], ['Shift+drag']],
+// the modifiers of a drag on the canvas, as canvas/drag.ts and commands/line.ts read them, one row
+// per modifier in the group Mouse after the menus, as Keynote describes them. Shift locks a move to
+// an axis, a rotation to steps of 15 degrees, and a line to steps of 45, and turns Constrain
+// Proportions over on a corner. the free modifier turns the snapping off, and the copy modifier
+// drops a copy of a move or resizes about the center
+const MOUSE: [label: string, mac: string, other: string][] = [
+  ['Lock Axis or Angle, Toggle Aspect', '⇧-drag', 'Shift+drag'],
+  ['Move or Resize Without Snapping', '⌘-drag', 'Alt+drag'],
+  ['Drag a Copy, Resize About the Center', '⌥-drag', 'Ctrl+drag'],
 ];
 
 // the rows of the sheet: one per label of each menu, with the keys of every command of the label,
-// then the modifiers of the mouse
+// then the modifiers of a drag
 export function sheetRows(app: App): SheetRow[] {
   const platform = app.platform;
   const label = (c: Command) => (typeof c.label === 'string' ? c.label : c.label(app));
@@ -91,7 +86,7 @@ export function sheetRows(app: App): SheetRow[] {
   }
   const rank = (bar: string) => (bar === 'Other' ? Infinity : [...MENUS, ...extra].indexOf(bar));
   const sorted = rows.map((r, i) => ({ r, i })).sort((a, b) => rank(a.r.bar) - rank(b.r.bar) || a.i - b.i).map(({ r }) => r);
-  return [...sorted, ...MOUSE.map(([name, mac, other]) => ({ bar: 'Mouse', label: name, keys: platform === 'mac' ? mac : other }))];
+  return [...sorted, ...MOUSE.map(([name, mac, other]) => ({ bar: 'Mouse', label: name, keys: [platform === 'mac' ? mac : other] }))];
 }
 
 // the keys of the sheet that run two enabled commands in the region of the focus, each as the key
