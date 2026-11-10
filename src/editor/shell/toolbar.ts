@@ -8,18 +8,18 @@
 // the labels are hidden and kept as the text of the buttons, and below 820 px the groups after
 // Present are put into a menu ». the toolbar has one tab stop, and the arrow keys move in it. the
 // View and Zoom popups at its left are as in Keynote: View with the views of the slides and the
-// panes, and Zoom with Fit and the levels, showing the zoom on its face
+// panes, and Zoom with Fit, Actual Size, Zoom to Selection, and the levels, showing the zoom on its
+// face
 
 import type { App } from '../app.ts';
 import type { Command, Group } from '../commands.ts';
 import { injectStyle, make, wire } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { closeMenus, commandKeys, menuItems, openMenu, splitButton, type MenuItem } from '../ui/menu.ts';
-import { MAX_ZOOM, ZOOMS } from './canvas.ts';
+import { ZOOMS } from './canvas.ts';
 
 const NARROW = 820;
 const POPUPS = new Set(['toolbar.view', 'toolbar.zoom']);
-const LEVELS = ZOOMS.includes(MAX_ZOOM) ? ZOOMS : [...ZOOMS, MAX_ZOOM];
 const percent = (z: number) => `${Math.round(z * 100)}%`;
 
 const CSS = `
@@ -79,8 +79,9 @@ export function install(app: App): void {
     const zoom = app.stage.zoom;
     return [
       { label: 'Fit', checked: zoom === null, run: () => app.stage.setZoom(null) },
+      ...ids(['zoom.actual', 'zoom.selection']),
       { rule: true },
-      ...LEVELS.map((z): MenuItem => ({ label: percent(z), checked: zoom !== null && Math.abs(zoom - z) < 0.005, run: () => app.stage.setZoom(z) })),
+      ...ZOOMS.map((z): MenuItem => ({ label: percent(z), checked: zoom !== null && Math.abs(zoom - z) < 0.005, run: () => app.stage.setZoom(z) })),
     ];
   };
   const openPopup = (id: string, b: HTMLElement | null, keyboard: boolean) => {

@@ -42,9 +42,10 @@ declare module '../app.ts' {
   }
 }
 
-// the margin of the pasteboard at Fit, and the steps of Zoom In and Zoom Out, in CSS px and scale
+// the margin of the pasteboard at Fit, in CSS px, and the levels of the zoom, which are the steps of
+// Zoom In and Zoom Out and the choices of the Zoom popup of the toolbar and of the status bar
 export const MARGIN = 32;
-export const ZOOMS = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5, 2, 3];
+export const ZOOMS = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5, 2, 3, 4];
 export const MIN_ZOOM = 0.1;
 export const MAX_ZOOM = 4;
 
