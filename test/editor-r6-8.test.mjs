@@ -382,3 +382,38 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// item 7: in the trial (state 177), Esc and Edit > Select Figure selected figure.zone, but its frame
+// stayed on the image, above the caption of the figure. the frame of the figure holds its caption
+const FIGURE_IMG = '.reveal section.present .zone > img:not([hidden])';
+const frameAndCaption = (page) => page.evaluate(`(() => {
+  const box = (e) => { const r = e.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; };
+  const frames = [...document.querySelectorAll('.beeson-frame.selected')].filter((f) => !f.hidden && f.getClientRects().length);
+  return { selected: window.BeesonEditor.selection().map((e) => e.tagName), frames: frames.map(box), caption: box(document.querySelector('.reveal section.present figure.zone figcaption')), image: box(document.querySelector('${FIGURE_IMG}')) };
+})()`);
+
+for (const platform of PLATFORMS) {
+  test(`the frame of a figure selected from its image holds its caption (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: 'index.html', n: 4 });
+    for (const how of ['Esc', 'Select Figure']) {
+      await click(page, FIGURE_IMG);
+      await frames(page);
+      if (how === 'Esc') await press(page, 'Escape');
+      else await exec(page, 'selection.container');
+      await frames(page);
+      const s = await frameAndCaption(page);
+      assert.deepEqual(s.selected, ['FIGURE'], `${how} does not select the figure`);
+      assert.equal(s.frames.length, 1);
+      const [f] = s.frames;
+      assert.ok(f.bottom >= s.caption.bottom - 1 && f.top <= s.image.top + 1 && f.left <= Math.min(s.image.left, s.caption.left) + 1, `after ${how} the frame at ${js(f)} leaves out the caption at ${js(s.caption)}`);
+      await press(page, 'Escape');
+      await frames(page);
+    }
+    // a click on the image still frames the image alone
+    await click(page, FIGURE_IMG);
+    await frames(page);
+    const s = await frameAndCaption(page);
+    assert.ok(Math.abs(s.frames[0].bottom - s.image.bottom) <= 1, js(s));
+    assert.deepEqual(errors(page), []);
+  });
+}
