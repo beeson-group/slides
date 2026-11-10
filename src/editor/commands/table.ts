@@ -315,7 +315,7 @@ async function newTable(app: App, size: Size, into: Element | null = null): Prom
 export function pickTableInto(app: App, zone: Element, anchor: DOMRect): void {
   const fail = (e: unknown) => app.fail(e);
   const into = (size: Size) => (zone.isConnected ? newTable(app, size, zone) : Promise.resolve()).catch(fail);
-  openPicker(app, anchor, (s) => void into(s), () => void askSize(app).then((s) => s && into(s)).catch(fail));
+  openPicker(app, anchor, (s) => void into(s), (rested) => void askSize(app, rested).then((s) => s && into(s)).catch(fail));
 }
 
 const TEXT = 'h1, h2, h3, h4, p, ul, ol, dl, table, pre, blockquote, div.math';
@@ -728,7 +728,7 @@ window.addEventListener('keydown', (ev) => {
 
 // the grid of the Insert Table popover, under its anchor. a cell of the grid chooses the size of
 // the table up to it, shown above the grid as columns by rows, and a click or Return inserts it
-function openPicker(app: App, anchor: DOMRect | null, done: (size: Size) => void, more?: () => void): void {
+function openPicker(app: App, anchor: DOMRect | null, done: (size: Size) => void, more?: (rested?: Size) => void): void {
   document.querySelector('dialog.beeson-table-picker')?.remove();
   const back = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const box = make('dialog', 'beeson-table-picker');
@@ -744,8 +744,11 @@ function openPicker(app: App, anchor: DOMRect | null, done: (size: Size) => void
   larger.type = 'button';
   box.append(size, grid, make('div', 'foot', 'Arrow keys choose, Return inserts'), larger);
   let pick: Size | null = null;
+  // the size last shown, which Insert Table… opens with after the pointer leaves the grid
+  let rested: Size | undefined;
   const show = (next: Size | null) => {
     pick = next;
+    if (next) rested = next;
     cells.forEach((d, i) => d.classList.toggle('on', !!next && i / GRID.columns < next.rows && i % GRID.columns < next.columns));
     size.textContent = next ? `${next.columns} × ${next.rows} Table` : 'Insert Table';
     grid.setAttribute('aria-valuetext', next ? `${next.columns} columns by ${next.rows} rows` : '');
@@ -775,7 +778,7 @@ function openPicker(app: App, anchor: DOMRect | null, done: (size: Size) => void
   grid.addEventListener('click', (ev) => choose(sizeAt(ev)));
   larger.addEventListener('click', () => {
     close(false);
-    more?.();
+    more?.(rested);
   });
   const steps: Record<string, [number, number]> = { ArrowRight: [0, 1], ArrowLeft: [0, -1], ArrowDown: [1, 0], ArrowUp: [-1, 0] };
   box.addEventListener('keydown', (ev) => {
@@ -807,9 +810,10 @@ function openPicker(app: App, anchor: DOMRect | null, done: (size: Size) => void
   }, 0);
 }
 
-// the numbers of columns and rows of a new table, asked in a dialog, or null after Cancel
+// the numbers of columns and rows of a new table, asked in a dialog, or null after Cancel. the
+// dialog opens with start, the size last shown in the grid, and else with the size typed last
 let lastSize: Size = { columns: 4, rows: 6 };
-async function askSize(app: App): Promise<Size | null> {
+async function askSize(app: App, start: Size = lastSize): Promise<Size | null> {
   const body = make('div', 'fields');
   const field = (label: string, value: number, most: number) => {
     const input = make('input');
@@ -826,8 +830,8 @@ async function askSize(app: App): Promise<Size | null> {
     body.append(l, input);
     return input;
   };
-  const columns = field('Columns', lastSize.columns, MOST.columns);
-  const rows = field('Rows', lastSize.rows, MOST.rows);
+  const columns = field('Columns', start.columns, MOST.columns);
+  const rows = field('Rows', start.rows, MOST.rows);
   const d = new Dialog({
     title: 'Insert Table',
     text: `A table of up to ${MOST.columns} columns and ${MOST.rows} rows, with a header row.`,
@@ -1206,7 +1210,7 @@ export function install(app: App): void {
     enabled: ready,
     run: async (a, arg) => {
       const size = arg && typeof arg === 'object' && 'rows' in arg ? (arg as Size) : null;
-      if (!size) return openPicker(a, toolbarButton('insert.table'), (s) => void a.commands.run('insert.table', s).catch(fail), () => void a.commands.run('insert.tableSize').catch(fail));
+      if (!size) return openPicker(a, toolbarButton('insert.table'), (s) => void a.commands.run('insert.table', s).catch(fail), (rested) => void a.commands.run('insert.tableSize', rested).catch(fail));
       await newTable(a, size);
     },
   });
@@ -1217,8 +1221,9 @@ export function install(app: App): void {
     id: 'insert.tableSize',
     label: 'Insert Table…',
     enabled: ready,
-    run: async (a) => {
-      const size = await askSize(a);
+    run: async (a, arg) => {
+      const start = arg && typeof arg === 'object' && 'rows' in arg ? (arg as Size) : undefined;
+      const size = await askSize(a, start);
       if (size) await a.commands.run('insert.table', size);
     },
   });
