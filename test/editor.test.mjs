@@ -1361,11 +1361,16 @@ test('Shift locks a drag to one axis, a run of nudges is one undo, and the offse
   assert.match(snapped.translate, /^-?\d+px$/);
   await page.evaluate(`document.querySelector('.beeson-handle').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
   assert.equal(await translate(), '');
-  // five nudges in a run are one entry of the history, and the offset is shown while they last
+  // five nudges in a run are one entry of the history, and the upper left corner of the figure in
+  // slide px is shown while they last
   const key = (k) => page.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(k)}, bubbles: true, cancelable: true }))`);
   for (let i = 0; i < 5; i++) await key('ArrowRight');
   assert.equal(await translate(), '5px');
-  assert.deepEqual(await page.evaluate(`(() => { const l = document.querySelector('.beeson-offset'); return { shown: !l.hidden, text: l.textContent }; })()`), { shown: true, text: '5, 0' });
+  assert.deepEqual(await page.evaluate(`(() => {
+    const l = document.querySelector('.beeson-offset');
+    const scale = Reveal.getScale(), s = document.querySelector('.reveal .slides').getBoundingClientRect(), z = document.querySelector('.reveal section.present .zone').getBoundingClientRect();
+    return { shown: !l.hidden, corner: l.textContent === 'x ' + Math.round((z.left - s.left) / scale) + '  y ' + Math.round((z.top - s.top) / scale) };
+  })()`), { shown: true, corner: true });
   await page.evaluate('window.BeesonEditor.undo()');
   assert.equal(await translate(), '');
   await page.evaluate('window.BeesonEditor.redo()');
