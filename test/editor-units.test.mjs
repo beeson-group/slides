@@ -91,6 +91,7 @@ test('the white space of a lead is placed in another container', () => {
   assert.equal(spaceOf('\n\n  <!-- c -->\n  '), '\n\n  ');
   assert.equal(indentAt('<a>\n    <b>', 9), '    ');
   assert.equal(placeLead('\n      ', '\n  ', '\n'), '\n  ');
+  assert.equal(placeLead('\n\n  <!-- a -->\n  ', '\n  ', '\n'), '\n\n  <!-- a -->\n  ');
   assert.equal(placeLead('\n\n<!-- a -->\n<!-- b -->\n', '\r\n    ', '\r\n'), '\r\n    <!-- a -->\r\n    <!-- b -->\r\n    ');
 });
 

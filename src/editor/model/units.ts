@@ -63,11 +63,14 @@ export function indentAt(text: string, pos: number): string {
 }
 
 // the lead of a unit placed in a container it did not come from: the white space of the container,
-// then the comments of the lead, each line indented as the container indents its children
+// then the comments of the lead, each line indented as the container indents its children. a lead
+// on a line of its own at the indentation of the container is kept, e.g. with its blank line
 export function placeLead(lead: string, space: string, eol: string): string {
-  const rest = lead.slice(spaceOf(lead).length);
-  if (!rest) return space;
+  const own = spaceOf(lead);
+  const rest = lead.slice(own.length);
   const indent = space.slice(space.lastIndexOf('\n') + 1);
+  if (own.includes('\n') && space.includes('\n') && own.slice(own.lastIndexOf('\n') + 1) === indent) return lead;
+  if (!rest) return space;
   return space + rest.replace(/\r?\n[ \t]*/g, eol + indent);
 }
 
