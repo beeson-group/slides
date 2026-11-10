@@ -11,7 +11,9 @@
 <body>
 <!-- steps that start After Previous, written as data-autoslide on a fragment of the step before:
      two timed steps after a click on the second slide, and a delay on the last step of the third
-     slide, which moves on to the fourth slide -->
+     slide, which moves on to the fourth slide. the last step of the fifth slide dims the step before
+     it, hence the theme adds its restore step after it, and its delay moves on to the sixth slide,
+     whose timed step is played after a key during a delay -->
 <div class="reveal">
   <div class="slides">
     <section>
@@ -32,6 +34,16 @@
     <section>
       <h2>After</h2>
       <p>The slide after.</p>
+    </section>
+    <section>
+      <h2>Restored</h2>
+      <p class="fragment" data-fragment-index="1">Dims one</p>
+      <p class="fragment" data-fragment-index="2" data-autoslide="300">Dims two</p>
+    </section>
+    <section>
+      <h2>Later</h2>
+      <p class="fragment" data-fragment-index="1" data-autoslide="300">Later</p>
+      <p class="fragment" data-fragment-index="2">Later timed</p>
     </section>
   </div>
 </div>
