@@ -8,9 +8,17 @@ import { OUTSIDE_DIALOGS } from '../commands.ts';
 
 const IN = OUTSIDE_DIALOGS.filter((r) => r !== 'field');
 
-// a label of the history in title case, e.g. typing as Typing
+// the articles, coordinating conjunctions, and short prepositions that the title case of Apple
+// keeps in lowercase inside a menu item. up, out, off, and over are left out, since they are most
+// often a part of the verb, as in Set Up
+const MINOR = new Set(['a', 'an', 'the', 'and', 'but', 'nor', 'or', 'as', 'at', 'by', 'for', 'from', 'in', 'into', 'of', 'on', 'onto', 'to', 'via', 'with']);
+
+// a label of the history in the title case of macOS menus, e.g. resize column to fit content as
+// Resize Column to Fit Content. a word given with a capital is kept, e.g. QR
 export function titled(label: string): string {
-  return label.replace(/(^|\s)(\p{Ll})/gu, (_, space: string, letter: string) => space + letter.toUpperCase());
+  const words = label.split(/(\s+)/);
+  const last = words.length - 1;
+  return words.map((w, i) => (i === 0 || i === last || !MINOR.has(w) ? w.replace(/^\p{Ll}/u, (l) => l.toUpperCase()) : w)).join('');
 }
 
 export function install(app: App): void {

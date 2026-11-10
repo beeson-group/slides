@@ -376,7 +376,8 @@ test('a figure dragged on the slide gets its offset as a translate style in its 
     // with Alt, so that the figure does not snap to an edge on its way
     const at = (type, cx, cy) => document.elementFromPoint(cx, cy).dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: cx, clientY: cy, button: 0, pointerId: 1, altKey: true }));
     at('pointermove', x, y);
-    const hovered = !document.querySelector('.beeson-frame').hidden && !document.querySelector('.beeson-handle').hidden;
+    // a figure is dragged by itself, hence its hover frame is drawn without the handle of a block
+    const hovered = !document.querySelector('.beeson-frame').hidden && document.querySelector('.beeson-handle').hidden;
     const scale = Reveal.getScale();
     at('pointerdown', x, y);
     at('pointermove', x + 30 * scale, y + 20 * scale);
@@ -1266,6 +1267,9 @@ test('a row of the slide list rested on shows a preview of its slide, which is h
     return { shown: !p.hidden && getComputedStyle(p).display !== 'none', width: box.width, right: box.left >= list.right, hidden: p.getAttribute('aria-hidden'), focusable: p.querySelectorAll('[tabindex], [contenteditable]').length, title: clone?.querySelector('h2')?.textContent ?? null, painted, fragments: [...(clone?.querySelectorAll('.fragment') ?? [])].every((f) => getComputedStyle(f).opacity === '1') };
   })()`);
   const row = (type) => page.evaluate(`document.querySelectorAll('.beeson-edit-nav .row')[${at}].dispatchEvent(new PointerEvent('${type}', { bubbles: false, pointerId: 1 }))`);
+  // a thumbnail shown whole is not previewed, hence the row is scrolled under the upper edge of the
+  // list, where its thumbnail is cut
+  await page.evaluate(`(() => { const list = document.querySelector('.beeson-edit-nav .rows'); const f = document.querySelectorAll('.beeson-edit-nav .row')[${at}].querySelector('.frame').getBoundingClientRect(); list.scrollTop += f.top + f.height / 2 - list.getBoundingClientRect().top; })()`);
   await row('pointerenter');
   await sleep(100);
   assert.notEqual((await peek())?.shown, true, 'the preview waits for the pointer to rest');
@@ -1314,13 +1318,13 @@ test('Shift locks a drag to one axis, a run of nudges is one undo, and the offse
     at('pointerdown', x, y);
     at('pointermove', x + 30 * scale, y + 10 * scale);
     at('pointermove', x + 60 * scale, y + 20 * scale);
-    const zone = img.closest('.zone'), z = zone.getBoundingClientRect(), l = label()?.getBoundingClientRect();
-    const during = { shown: !!label() && !label().hidden, text: label()?.textContent, lowerRight: !!l && l.top >= z.bottom && Math.abs(l.right - z.right - 6) < 1 };
+    const zone = img.closest('.zone'), l = label()?.getBoundingClientRect();
+    const during = { shown: !!label() && !label().hidden, text: label()?.textContent, atPointer: !!l && Math.abs(l.left - (x + 60 * scale) - 14) < 1 && Math.abs(l.top - (y + 20 * scale) - 18) < 1 };
     at('pointerup', x + 60 * scale, y + 20 * scale);
     return { during, after: label()?.hidden, translate: zone.style.translate };
   })()`);
   const locked = await drag(true);
-  assert.deepEqual(locked, { during: { shown: true, text: '60, 0', lowerRight: true }, after: true, translate: '60px' });
+  assert.deepEqual(locked, { during: { shown: true, text: '60, 0', atPointer: true }, after: true, translate: '60px' });
   await page.evaluate(`document.querySelector('.beeson-handle').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
   // without Alt the figure may snap along the free axis, but not off the locked one
   const snapped = await drag(false);

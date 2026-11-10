@@ -13,7 +13,7 @@ import { initScrub } from './scrub.ts';
 import { mount as mountSurfaces } from './surface.ts';
 import type { Surface } from './surface.ts';
 import { register } from './strands.ts';
-import { addRestoreSteps, applyAll, applySteps, initSteps, typeset } from './steps.ts';
+import { addRestoreSteps, applyAll, applySteps, initSteps, initTimedSteps, typeset } from './steps.ts';
 import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.ts';
 import type { RevealOptions, SlideEvent } from './reveal.d.ts';
 
@@ -183,6 +183,8 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
 
   initChrome();
   initSteps(deck);
+  // the editor shows every step, and it does not play a delay
+  if (!EDITING) initTimedSteps(deck);
   remount();
   initCursor(() => backdrops, () => deck.getCurrentSlide(), !EDITING);
   deck.addKeyBinding({ keyCode: 68, key: 'D', description: 'Switch dark and light' }, (ev) => { if (forDeck(ev)) toggle(); });

@@ -169,7 +169,7 @@ for (const platform of PLATFORMS) {
     let r = await rows(page);
     assert.deepEqual(r.slice(0, 3).map((x) => [x.step, x.start, x.marked]), [['0', 'click', ''], ['1', 'after', 'after'], ['2', 'click', '']]);
     assert.match(r[1].meta, /After Previous, 0\.5 s/);
-    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Set Start Of Step');
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Set Start of Step');
     await undoRedo(page, platform, source, after);
 
     // the delay is typed in seconds into the field under the rows
@@ -267,7 +267,7 @@ for (const platform of PLATFORMS) {
     assert.ok((await menuLabels(page)).includes('Show List Item by Item'));
     await choose(page, 'Show List Item by Item');
     assert.equal(await rendered(page), source);
-    // the undo of this edit is checked by the todo test of the order of the attributes below
+    // the undo of this edit is checked by the test of the order of the attributes below
     await press(page, REDO[platform]);
     assert.equal(await rendered(page), source);
     // the menu of the chip of an item offers the same delivery
@@ -326,21 +326,27 @@ test('a list keeps the delay of its step through a change of its delivery', asyn
   assert.equal(await rendered(page), text);
 });
 
-// a regression test of an undo that writes the class and the index of a fragment in a new order.
-// for a tag without a class in the file, stateOf of tags.ts lists data-fragment-index before
-// class, and the undo of inverseEdit in model/doc.ts writes them in this order. the fix is
-// outside the files of this package
-test('an undo of Show with Slide writes the class and the index of the step in their order', { todo: 'stateOf of src/editor/tags.ts lists data-fragment-index before class' }, async (t) => {
-  const page = await open(t, 'mac');
-  await slideOf(page, 'li.fragment');
-  const p = `document.querySelector('.reveal section.present > p')`;
-  await page.evaluate(`window.BeesonEditor.exec('steps.set', { el: ${p}, to: 'last' })`);
-  const stepped = await rendered(page);
-  assert.match(stepped, /<p class="fragment" data-fragment-index="4">Design/);
-  await page.evaluate(`window.BeesonEditor.exec('steps.set', { el: ${p}, to: null })`);
-  await press(page, 'Mod+Z');
-  assert.equal(await rendered(page), stepped);
-});
+// a regression test of an undo that wrote the class and the index of a fragment in a new order,
+// since for a tag without a class in the file, stateOf of tags.ts listed data-fragment-index
+// before class
+for (const platform of PLATFORMS) {
+  test(`an undo of Show with Slide writes the class and the index of the step in their order on ${platform}`, async (t) => {
+    const page = await open(t, platform);
+    await slideOf(page, 'li.fragment');
+    const p = `document.querySelector('.reveal section.present > p')`;
+    await page.evaluate(`window.BeesonEditor.exec('steps.set', { el: ${p}, to: 'last' })`);
+    const stepped = await rendered(page);
+    assert.match(stepped, /<p class="fragment" data-fragment-index="4">Design/);
+    await page.evaluate(`window.BeesonEditor.exec('steps.set', { el: ${p}, to: null })`);
+    const unstepped = await rendered(page);
+    await press(page, 'Mod+Z');
+    assert.equal(await rendered(page), stepped);
+    await press(page, REDO[platform]);
+    assert.equal(await rendered(page), unstepped);
+    await press(page, 'Mod+Z');
+    assert.equal(await rendered(page), stepped);
+  });
+}
 
 test('the meta of a selected list head is drawn in the color of the selection', async (t) => {
   const page = await open(t, 'mac');
