@@ -211,7 +211,9 @@ const caretOffset = (page) => page.evaluate(`(() => {
 })()`);
 
 // on a Mac, Option with an arrow moves the caret by a word or a paragraph in every text field, the
-// cells of Keynote included, and Option with Right Arrow in a cell added a column
+// cells of Keynote included, and Option with Right Arrow in a cell added a column. the word move is
+// left to the browser, which moves as its host does: past the space after the word on Windows, and
+// to the end of the word on macOS and Linux
 test('Option and Right Arrow in the text of a cell move the caret by a word (mac)', async (t) => {
   const page = await open('mac', LAYOUTS_DECK);
   t.after(() => page.close?.());
@@ -224,7 +226,7 @@ test('Option and Right Arrow in the text of a cell move the caret by a word (mac
   await settle(page);
   assert.equal(await page.evaluate(`document.querySelector('.reveal section.present table').rows[0].cells.length`), 2, 'a column is added');
   assert.deepEqual(await focusCell(page), [0, 0]);
-  assert.equal(await caretOffset(page), 'Family'.length);
+  assert.equal(await caretOffset(page), process.platform === 'win32' ? 'Family '.length : 'Family'.length);
   assert.deepEqual(errors(page), []);
 });
 
