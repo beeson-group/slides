@@ -365,11 +365,10 @@ export function install(app: App): void {
     view.moving = p.els;
     view.guides = snap?.guides ?? [];
     view.spacing = snap?.spacing ?? [];
-    // the offset of the pressed element at the lower right of the frames, where the pointer is
-    // mostly near and the readout does not cover the guides at the pointer
+    // the position of the pressed element, i.e. the X and Y of the Arrange pane, next to the pointer
+    // as in Keynote, below and to the right of it, where the guides at the pointer are not covered
     const t = p.el ? placeOf(p.el).translate : null;
-    const seen = union(p.els.map(visualRect));
-    view.readout = { text: `${ghosts.shown() ? 'Copy  ' : ''}${t?.x ?? 0}, ${t?.y ?? 0}`, x: seen.left + seen.width + 6, y: seen.top + seen.height + 10, at: 'frame' };
+    view.readout = { text: `${ghosts.shown() ? 'Copy  ' : ''}${t?.x ?? 0}, ${t?.y ?? 0}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     document.documentElement.classList.add('beeson-dragging');
     frames.draw();
     app.invalidate('content');

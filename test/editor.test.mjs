@@ -1317,13 +1317,13 @@ test('Shift locks a drag to one axis, a run of nudges is one undo, and the offse
     at('pointerdown', x, y);
     at('pointermove', x + 30 * scale, y + 10 * scale);
     at('pointermove', x + 60 * scale, y + 20 * scale);
-    const zone = img.closest('.zone'), z = zone.getBoundingClientRect(), l = label()?.getBoundingClientRect();
-    const during = { shown: !!label() && !label().hidden, text: label()?.textContent, lowerRight: !!l && l.top >= z.bottom && Math.abs(l.right - z.right - 6) < 1 };
+    const zone = img.closest('.zone'), l = label()?.getBoundingClientRect();
+    const during = { shown: !!label() && !label().hidden, text: label()?.textContent, atPointer: !!l && Math.abs(l.left - (x + 60 * scale) - 14) < 1 && Math.abs(l.top - (y + 20 * scale) - 18) < 1 };
     at('pointerup', x + 60 * scale, y + 20 * scale);
     return { during, after: label()?.hidden, translate: zone.style.translate };
   })()`);
   const locked = await drag(true);
-  assert.deepEqual(locked, { during: { shown: true, text: '60, 0', lowerRight: true }, after: true, translate: '60px' });
+  assert.deepEqual(locked, { during: { shown: true, text: '60, 0', atPointer: true }, after: true, translate: '60px' });
   await page.evaluate(`document.querySelector('.beeson-handle').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
   // without Alt the figure may snap along the free axis, but not off the locked one
   const snapped = await drag(false);
