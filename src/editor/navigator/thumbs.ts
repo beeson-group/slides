@@ -198,6 +198,26 @@ function seen(m: MutationRecord): boolean {
 }
 
 export const DELAY = 300;
+// the times a thumbnail waits DELAY for the formulas of its slide to be typeset, after which it is
+// drawn as it is, e.g. on a deck whose MathJax does not load
+const WAITS = 20;
+
+// true while a formula of slide is in raw TeX on a deck with MathJax, which is its configuration
+// until MathJax is loaded, i.e. not typeset yet. a code box, the notes, and the text being edited,
+// whose TeX is shown while it has the focus, are passed over
+function rawTex(slide: Element): boolean {
+  if (!window.MathJax) return false;
+  const walker = document.createTreeWalker(slide, NodeFilter.SHOW_TEXT);
+  const active = document.activeElement;
+  const editing = active && slide.contains(active) ? active : null;
+  for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+    if (!/\\[([]/.test(t.nodeValue ?? '')) continue;
+    const up = t.parentElement;
+    if (!up || up.closest('mjx-container, pre, code, script, style, textarea, aside.notes') || editing?.contains(up)) continue;
+    return true;
+  }
+  return false;
+}
 
 // the thumbnails of the slides, each drawn into the host that the navigator gives for its slide. a
 // host is drawn while it is in view and its slide is dirty, and the other dirty hosts are drawn one
@@ -208,6 +228,8 @@ export class Thumbs {
   private readonly dirty = new Set<Element>();
   private readonly timers = new Map<Element, number>();
   private readonly inView = new Set<HTMLElement>();
+  // the times each slide has waited for its formulas to be typeset
+  private readonly waits = new Map<Element, number>();
   private readonly seenBy: IntersectionObserver;
   private idle = 0;
   private width = 0;
@@ -290,6 +312,15 @@ export class Thumbs {
     const host = this.hosts.get(slide);
     this.dirty.delete(slide);
     if (!host || !this.width || !slide.isConnected) return;
+    // the last picture is kept until the formulas of the slide are typeset, since the thumbnail
+    // would show their TeX in the meantime
+    const waited = this.waits.get(slide) ?? 0;
+    if (waited < WAITS && rawTex(slide)) {
+      this.waits.set(slide, waited + 1);
+      this.soon(slide);
+      return;
+    }
+    this.waits.delete(slide);
     drawInto(host, slide, this.deck(), this.width);
     host.dataset.drawn = String(Number(host.dataset.drawn ?? 0) + 1);
   }
