@@ -34,21 +34,35 @@ export const toSlide = (f: Frame, r: Box): Box => ({ left: (r.left - f.left) / f
 export const toScreen = (f: Frame, b: Box): Box => ({ left: f.left + b.left * f.scale, top: f.top + b.top * f.scale, width: b.width * f.scale, height: b.height * f.scale });
 
 // the box of el on the screen as it is seen: for an image or a video fitted with object-fit
-// contain, the box of the picture inside the element, else the box of the element
+// contain, the box of the picture inside the element, else the box of the element. the mask of
+// canvas/mask.ts, a scale with a clip-path inset, is cut out of it, and a flip mirrors it
 export function visualRect(el: Element): Box {
   const r = el.getBoundingClientRect();
   const box = { left: r.left, top: r.top, width: r.width, height: r.height };
   const natural = el instanceof HTMLImageElement ? [el.naturalWidth, el.naturalHeight] : el instanceof HTMLVideoElement ? [el.videoWidth, el.videoHeight] : null;
   if (!natural || !natural[0] || !natural[1] || !r.width || !r.height) return box;
   const style = getComputedStyle(el);
-  if (style.objectFit !== 'contain' && style.objectFit !== 'scale-down') return box;
+  const inset = /^inset\(\s*([\d.]+)%\s*\)$/.exec(style.clipPath)?.[1];
+  const q = inset ? parseFloat(inset) / 100 : 0;
+  const clip = { left: r.left + q * r.width, top: r.top + q * r.height, right: r.right - q * r.width, bottom: r.bottom - q * r.height };
+  const cut = (b: Box): Box => {
+    const left = Math.max(b.left, clip.left), top = Math.max(b.top, clip.top);
+    return { left, top, width: Math.max(0, Math.min(b.left + b.width, clip.right) - left), height: Math.max(0, Math.min(b.top + b.height, clip.bottom) - top) };
+  };
+  if (style.objectFit !== 'contain' && style.objectFit !== 'scale-down') return cut(box);
   let s = Math.min(r.width / natural[0], r.height / natural[1]);
   if (style.objectFit === 'scale-down') s = Math.min(s, 1);
   const w = natural[0] * s, h = natural[1] * s;
-  // object-position is computed as two lengths or percentages, e.g. "100% 50%"
+  // object-position is computed as two lengths or percentages, e.g. "100% 50%", and a length is
+  // in the pixels of the element before its scale
+  const k = (el as HTMLElement).offsetWidth ? r.width / (el as HTMLElement).offsetWidth : 1;
   const [px, py] = style.objectPosition.split(/\s+/);
-  const at = (v: string | undefined, room: number) => (!v ? room / 2 : v.endsWith('%') ? (parseFloat(v) / 100) * room : parseFloat(v) || 0);
-  return { left: r.left + at(px, r.width - w), top: r.top + at(py, r.height - h), width: w, height: h };
+  const at = (v: string | undefined, room: number) => (!v ? room / 2 : v.endsWith('%') ? (parseFloat(v) / 100) * room : (parseFloat(v) || 0) * k);
+  let left = r.left + at(px, r.width - w), top = r.top + at(py, r.height - h);
+  const [sx, sy = sx] = style.scale.split(/\s+/).map(parseFloat);
+  if (sx < 0) left = r.left + r.right - left - w;
+  if (sy < 0) top = r.top + r.bottom - top - h;
+  return cut({ left, top, width: w, height: h });
 }
 
 // the ratio of width to height that a resize of el keeps: the picture of an image or a video, and
