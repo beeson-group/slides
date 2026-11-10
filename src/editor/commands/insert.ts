@@ -3,9 +3,10 @@
 // current slide, i.e. after the last block of the text column, into an empty zone, or on the foot
 // line, and it is selected, with the caret in it for a text. a text box, a code box, and a
 // footnote are put on the page first as an element of the editor only, marked data-generated, which
-// the save and the pairing pass over, with a prompt drawn by the stylesheet below. the first input
-// into it writes the element into the file as one entry of the history, hence an empty one is never
-// written, and it is taken off the page when the caret leaves it
+// the save and the pairing pass over, with a prompt drawn by the stylesheet below. the empty box is
+// an entry of the history, as an insert of Keynote, and the deck is marked edited while it is on the
+// slide. the first input into it writes the element into the file in place of that entry, hence an
+// empty one is never written, and it is taken off the page with its entry when the caret leaves it
 
 import type { App } from '../app.ts';
 import { mathLookup } from '../math.ts';
@@ -97,12 +98,25 @@ export function install(app: App): void {
   let pending: { el: HTMLElement; kind: Kind; parent: Element } | null = null;
   let writing = false;
   let typed = '';
+  // the entry of the empty box is the last one of the history, a change of the history is made by
+  // that entry, and an undo of it keeps the box, which the first input then writes
+  let onTop = false;
+  let own = false;
+  let keep = false;
 
-  const drop = () => {
-    if (!pending || writing) return;
+  const take = () => {
+    if (!pending) return;
     pending.el.remove();
     pending = null;
     app.invalidate('content');
+  };
+
+  // the box is taken off through an undo of its entry while that entry is the last one
+  const drop = () => {
+    if (!pending || writing) return;
+    if (!onTop) return take();
+    onTop = false;
+    void app.history.undo().catch(fail);
   };
 
   const begin = (kind: Kind, parent: Element, before: Node | null) => {
@@ -114,13 +128,32 @@ export function install(app: App): void {
     el.setAttribute('contenteditable', 'true');
     el.setAttribute('data-prompt', def.prompt);
     el.setAttribute('aria-label', def.label);
-    parent.insertBefore(el, before && before.parentNode === parent ? before : null);
-    pending = { el, kind, parent };
+    const next = before && before.parentNode === parent ? before : null;
+    const show = () => {
+      parent.insertBefore(el, next && next.parentNode === parent ? next : null);
+      pending = { el, kind, parent };
+      placeCaret(el);
+      app.invalidate('content');
+    };
     el.addEventListener('focusout', () => setTimeout(() => {
       if (pending?.el === el && document.activeElement !== el) drop();
     }, 0));
-    placeCaret(el);
-    app.invalidate('content');
+    show();
+    own = true;
+    app.history.push({
+      label: def.label,
+      undo: () => {
+        own = true;
+        onTop = false;
+        if (!keep && pending?.el === el) take();
+      },
+      redo: () => {
+        own = true;
+        show();
+        onTop = true;
+      },
+    });
+    onTop = true;
   };
 
   // the first text typed into the element of the editor writes it into the file in its place, and
@@ -132,6 +165,11 @@ export function install(app: App): void {
     typed = '';
     const def = PENDING[p.kind];
     try {
+      // the entry of the empty box is undone with the box kept, so that the written box is one entry
+      if (onTop) {
+        keep = true;
+        await app.history.undo().finally(() => (keep = false));
+      }
       await app.history.transact(def.label, async () => {
         const [node] = await docOf(app).insert(def.html(text), p.parent, p.el, def.label);
         p.el.remove();
@@ -174,7 +212,15 @@ export function install(app: App): void {
     }
   }, true);
   app.listen('slide', drop);
+  // the deck is marked edited after the check of files.ts, which marks it clean when its text reads
+  // as saved, at each change of the history
   app.listen('history', () => {
+    if (own) {
+      own = false;
+      if (pending) app.markDirty();
+      return;
+    }
+    onTop = false;
     if (!writing) drop();
   });
 
