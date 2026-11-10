@@ -15,6 +15,8 @@ import * as inline from '../text/inline.ts';
 import { openLink, applyLink, type LinkKind } from '../text/link.ts';
 import { isSmart, setSmart, type Smart } from '../text/substitute.ts';
 import { injectStyle } from '../ui/dom.ts';
+import { CONTAINER } from '../canvas/hit.ts';
+import { modeOf, type Mode } from './figure.ts';
 
 const TEXT: Region[] = ['text'];
 const FORMAT: Region[] = ['text', 'canvas'];
@@ -216,15 +218,63 @@ export function install(app: App): void {
 type Define = (command: Command) => Command;
 type MenuOf = (group: string, order: number, submenu?: string) => Command['menu'];
 
+// the style of a figure that Copy Style takes and Paste Style sets, as the Image pane sets it: the
+// classes paper and invert of an image, null when taken from a video, and the mode it is shown in
+type FigureStyle = { paper: boolean | null; invert: boolean | null; mode: Mode };
+type Copied = { text: inline.TextStyle } | { figure: FigureStyle };
+
+// the images and videos of the selected elements: a selected one, or the one shown in a selected
+// figure, zone, or plate
+function figuresOf(app: App): Element[] {
+  if (app.selection.kind !== 'elements') return [];
+  const open = (m: Element) => !!app.pairing?.elements.get(m)?.open;
+  return app.selection.elements().flatMap((el) => {
+    if (el.matches('img, video')) return open(el) ? [el] : [];
+    if (!el.matches(CONTAINER)) return [];
+    const found = [...el.querySelectorAll('img, video')].filter((m) => m.getBoundingClientRect().width > 0 && open(m));
+    return found.length === 1 ? found : [];
+  });
+}
+
+function readFigure(el: Element): FigureStyle {
+  const image = el.localName === 'img';
+  return { paper: image ? el.classList.contains('paper') : null, invert: image ? el.classList.contains('invert') : null, mode: modeOf(el) };
+}
+
+// the style of the selected figure, else of the text or the block
+function readCopied(app: App): Copied | null {
+  const [figure] = figuresOf(app);
+  if (figure) return { figure: readFigure(figure) };
+  const text = inline.readStyle(app);
+  return text ? { text } : null;
+}
+
+// the mode on every figure, and paper and invert on an image, each class changed only where it
+// differs
+function pasteFigure(app: App, style: FigureStyle): void {
+  for (const el of figuresOf(app)) {
+    const classes: Record<string, boolean> = { 'for-dark': style.mode === 'dark', 'for-light': style.mode === 'light' };
+    if (el.localName === 'img') {
+      if (style.paper !== null) classes.paper = style.paper;
+      if (style.invert !== null) classes.invert = style.invert;
+    }
+    const changed = Object.fromEntries(Object.entries(classes).filter(([name, on]) => el.classList.contains(name) !== on));
+    if (Object.keys(changed).length) app.doc.setTag(el, { classes: changed }, 'paste style');
+  }
+}
+
 // the Copy Style and Paste Style of Keynote with its keys on a Mac, and with the keys of the Format
-// Painter of PowerPoint for Windows elsewhere, and the Format Painter of the Text pane. a click on
-// the painter takes the style of the selection, and the next text or block clicked or selected on
-// the slide is given it. with sticky, as after a double click on the painter, it stays armed until
-// it is clicked again or Esc is pressed. the switches Smart Quotes and Smart Dashes are in the
+// Painter of PowerPoint for Windows elsewhere, and the Format Painter of the Text pane. the style of
+// a text goes to a text or a block, and the style of a figure to a figure. a click on the painter
+// takes the style of the selection, and the next text, block, or figure clicked or selected on the
+// slide is given it. with sticky, as after a double click on the painter, it stays armed until it
+// is clicked again or Esc is pressed. the switches Smart Quotes and Smart Dashes are in the
 // Substitutions of the Edit menu
 function installStyles(app: App, define: Define, menu: MenuOf): void {
   injectStyle('text-styles', CSS);
-  let copied: inline.TextStyle | null = null;
+  let copied: Copied | null = null;
+  // a text style is pasted on a text outside a code box, and the style of a figure on a figure
+  const canPaste = (a: App) => (copied && 'figure' in copied ? figuresOf(a).length > 0 : !!copied && !inCode(a) && inline.canPaint(a));
   const painter = { armed: false, sticky: false };
   const arm = (on: boolean, sticky = false) => {
     painter.armed = on;
@@ -239,9 +289,9 @@ function installStyles(app: App, define: Define, menu: MenuOf): void {
     keys: { mac: ['Mod+Alt+C'], other: ['Mod+Shift+C'] },
     in: FORMAT,
     menu: menu('copy-style', 86),
-    enabled: (a) => inline.readStyle(a) !== null,
+    enabled: (a) => readCopied(a) !== null,
     run: (a) => {
-      copied = inline.readStyle(a);
+      copied = readCopied(a);
     },
   });
   define({
@@ -251,8 +301,8 @@ function installStyles(app: App, define: Define, menu: MenuOf): void {
     in: FORMAT,
     menu: menu('copy-style', 87),
     undoable: true,
-    enabled: (a) => copied !== null && !inCode(a) && inline.canPaint(a),
-    run: (a) => (copied ? inline.pasteStyle(a, copied) : undefined),
+    enabled: canPaste,
+    run: (a) => (!copied ? undefined : 'figure' in copied ? pasteFigure(a, copied.figure) : inline.pasteStyle(a, copied.text)),
   });
   // a script or the double click gives { sticky: true }, which arms the painter until it is
   // switched off. without it, a run switches the painter. an armed painter stays live, so that a
@@ -261,12 +311,12 @@ function installStyles(app: App, define: Define, menu: MenuOf): void {
     id: 'text.formatPainter',
     label: 'Format Painter',
     in: FORMAT,
-    enabled: (a) => painter.armed || (!inCode(a) && inline.readStyle(a) !== null),
+    enabled: (a) => painter.armed || figuresOf(a).length > 0 || (!inCode(a) && inline.readStyle(a) !== null),
     checked: () => painter.armed,
     run: (a, arg) => {
       const sticky = (arg as { sticky?: unknown } | undefined)?.sticky === true;
       if (painter.armed && !sticky) return arm(false);
-      if (!painter.armed) copied = inline.readStyle(a);
+      if (!painter.armed) copied = readCopied(a);
       if (copied) arm(true, sticky);
     },
   });
@@ -277,7 +327,7 @@ function installStyles(app: App, define: Define, menu: MenuOf): void {
     if (!painter.armed || !(ev.target instanceof Element) || !ev.target.closest('.reveal .slides')) return;
     setTimeout(() => {
       if (!painter.armed) return;
-      const paint = inline.canPaint(app);
+      const paint = canPaste(app);
       if (!painter.sticky) arm(false);
       if (paint) void app.commands.run('text.pasteStyle').catch((e) => app.fail(e));
     }, 0);
