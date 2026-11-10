@@ -15,7 +15,9 @@ const contentTypes = { '.css': 'text/css', '.html': 'text/html', '.js': 'text/ja
 
 /**
  * Serves the files of a folder on a local port, and returns its origin and close(). The answer for
- * a file is held back by delay(path) ms.
+ * a file is held back by delay(path) ms. A Range request is answered with the bytes it names, as a
+ * static server does, since Chrome otherwise holds a connection for each video it reads in part,
+ * and a second tab of a deck with two videos then waits about 15 s for its files.
  */
 export async function serve(folder, { delay = () => 0 } = {}) {
   const root = resolve(folder);
@@ -25,7 +27,20 @@ export async function serve(folder, { delay = () => 0 } = {}) {
       if (!path.startsWith(root + sep)) throw new Error(`${path} is outside ${root}`);
       const body = await readFile(path);
       await sleep(delay(path));
-      response.writeHead(200, { 'Content-Type': contentTypes[extname(path)] ?? 'application/octet-stream' });
+      const type = { 'Content-Type': contentTypes[extname(path)] ?? 'application/octet-stream', 'Accept-Ranges': 'bytes' };
+      const range = /^bytes=(\d*)-(\d*)$/.exec(request.headers.range ?? '');
+      if (range && (range[1] || range[2])) {
+        const start = range[1] ? Number(range[1]) : Math.max(0, body.length - Number(range[2]));
+        const end = range[1] && range[2] ? Math.min(Number(range[2]), body.length - 1) : body.length - 1;
+        if (start > end || start >= body.length) {
+          response.writeHead(416, { 'Content-Range': `bytes */${body.length}` }).end();
+          return;
+        }
+        response.writeHead(206, { ...type, 'Content-Range': `bytes ${start}-${end}/${body.length}`, 'Content-Length': end - start + 1 });
+        response.end(body.subarray(start, end + 1));
+        return;
+      }
+      response.writeHead(200, { ...type, 'Content-Length': body.length });
       response.end(body);
     } catch {
       response.writeHead(404).end();
