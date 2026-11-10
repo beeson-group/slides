@@ -91,6 +91,30 @@ for (const platform of PLATFORMS) {
     assert.equal((await state(page, 'element.delete')).enabled, false, 'Delete of the Edit menu is enabled on the locked figure');
     assert.equal((await state(page, 'arrange.unlock')).enabled, true, 'Unlock of the Arrange menu is dimmed on the locked figure');
     assert.equal((await state(page, 'arrange.lock')).enabled, false, 'Lock of the Arrange menu is enabled on the locked figure');
+    // Unlock of the context menu unlocks the image
+    await click(page, IMG, { button: 'right' });
+    await frames(page);
+    await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item')].find((i) => i.querySelector('.label')?.textContent === 'Unlock')?.click()`);
+    await frames(page);
+    assert.ok(await page.evaluate(`!document.querySelector('.reveal section.present [data-locked]')`), 'Unlock does not unlock the image');
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`the context menu of a figure locked as a whole offers Unlock (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: MATH });
+    await click(page, IMG);
+    await press(page, 'Escape');
+    await frames(page);
+    assert.deepEqual(await page.evaluate(`window.BeesonEditor.selection().map((e) => e.tagName)`), ['FIGURE']);
+    await press(page, 'Mod+L');
+    await frames(page);
+    const FIG = '<figure class="zone fragment" data-fragment-index="2">';
+    await roundTrip(page, [[FIG, FIG.replace('>', ' data-locked>')]]);
+    await click(page, IMG, { button: 'right' });
+    await frames(page);
+    const items = await menuItems(page);
+    assert.equal(items.find((i) => /^(Un)?[Ll]ock$/.test(i.label))?.label, 'Unlock', js(items));
+    assert.equal(items.find((i) => i.label === 'Delete')?.dimmed, true, js(items));
     assert.deepEqual(errors(page), []);
   });
 }
