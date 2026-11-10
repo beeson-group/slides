@@ -351,6 +351,14 @@ for (const platform of PLATFORMS) {
     assert.doesNotMatch(content.para, /small/, `the paragraph fitted to the panel is still small after the change to Content: ${content.para}`);
     assert.doesNotMatch(content.list, /small/, `the list fitted to the panel is still small after the change to Content: ${content.list}`);
     assert.equal(content.note, '<p class="small">A note in the style Small', 'the note in the style Small before the change to Split lost its style');
-    await roundTrip(page, 2);
+    // Split and then Content give back the file byte for byte, and the undo gives back the fit
+    await byteExact(page);
+    await page.evaluate('window.BeesonEditor.undo()');
+    assert.match(fitTags(await render(page)).para, /class="small"/, 'the undo of the change to Content does not give back the fit');
+    await page.evaluate('window.BeesonEditor.redo()');
+    await byteExact(page);
+    const { text } = await saveAndReopen(page, `r8-4-${++saves}.html`);
+    assert.equal(text, page.source);
+    assert.deepEqual(errors(page), []);
   });
 }

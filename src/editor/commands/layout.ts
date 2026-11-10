@@ -228,9 +228,29 @@ async function rewrite(app: App, slides: Element[], write: (body: string, slide:
 
 export async function changeLayout(app: App, slides: Element[], layout: Layout): Promise<Element[]> {
   const step = stepOf(app);
+  // the places among the words of each slide of the blocks that the fit of its panel shrank
+  const shrunk = slides.map((s) => (layout === 'split' ? [] : wordsOf(app, s).flatMap((el, i) => (fitted.has(el) && el.classList.contains('small') ? [i] : []))));
   const out = await rewrite(app, slides, (body) => relayout(body, layout, step), 'layout');
-  for (const s of out) if (!slides.includes(s)) fitPanel(app, s);
+  out.forEach((s, k) => {
+    if (slides.includes(s)) return;
+    const words = wordsOf(app, s);
+    for (const i of shrunk[k]) if (words[i]) app.doc.setTag(words[i], { classes: { small: false } }, 'layout');
+    fitPanel(app, s);
+  });
   return out;
+}
+
+// the blocks set in the style Small by the fit of a panel in this session. an undo and a redo put
+// the same elements back, hence a change of layout away from Split takes the style off these
+// blocks only, and a block in the style Small before the change to Split keeps it
+const fitted = new WeakSet<Element>();
+
+// the parts of a slide of the kind words, in their order, which a change of layout keeps
+function wordsOf(app: App, slide: Element): Element[] {
+  const open = (el: Element) => !!app.pairing?.elements.get(el)?.open;
+  const parts = [...slide.children].filter(open).flatMap((el) =>
+    el.localName === 'div' && WRAPPER_CLASSES.some((c) => el.classList.contains(c)) ? [...el.children].filter(open) : [el]);
+  return parts.filter((el) => kindOf(el.localName, [...el.classList]) === 'words');
 }
 
 // true when a text of the panel runs past its bottom, or into the footnote at its bottom
@@ -252,7 +272,9 @@ function fitPanel(app: App, slide: Element): void {
   for (const el of panel.querySelectorAll(':scope > p, :scope > ul, :scope > ol')) {
     if (!app.pairing?.elements.get(el)?.open) continue;
     const classes = app.doc.tagState(el).classes.filter((c) => c !== 'fragment');
-    if (!classes.length) app.doc.setTag(el, { classes: { small: true } }, 'layout');
+    if (classes.length) continue;
+    app.doc.setTag(el, { classes: { small: true } }, 'layout');
+    fitted.add(el);
   }
 }
 
