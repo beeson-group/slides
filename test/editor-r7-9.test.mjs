@@ -374,3 +374,24 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the resize grips, square on a Mac as in PowerPoint and Keynote for the Mac, and round elsewhere
+// as in PowerPoint for Windows
+for (const platform of PLATFORMS) {
+  test(`the resize grips are ${platform === 'mac' ? 'square' : 'round'}, and the rotate handle is round (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: FIGURE });
+    await click(page, IMG);
+    await frames(page);
+    const looks = await page.evaluate(`(() => {
+      const shown = (el) => !el.hidden && getComputedStyle(el).display !== 'none';
+      const grips = [...document.querySelectorAll('.beeson-grip:not(.locked)')].filter(shown);
+      const rotor = document.querySelector('.beeson-rotor');
+      return { grips: grips.length, radii: [...new Set(grips.map((g) => getComputedStyle(g).borderTopLeftRadius))], sizes: [...new Set(grips.map((g) => { const r = g.getBoundingClientRect(); return r.width + 'x' + r.height; }))], rotor: rotor && shown(rotor) ? getComputedStyle(rotor).borderTopLeftRadius : null };
+    })()`);
+    assert.equal(looks.grips, 8, 'the selected image does not have eight grips');
+    assert.deepEqual(looks.radii, [platform === 'mac' ? '0px' : '50%'], `the grips have the corners ${js(looks.radii)}`);
+    assert.deepEqual(looks.sizes, ['11x11'], `the grips have the sizes ${js(looks.sizes)}`);
+    assert.equal(looks.rotor, '50%', 'the rotate handle is not round');
+    assert.deepEqual(errors(page), []);
+  });
+}
