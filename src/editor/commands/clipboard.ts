@@ -217,12 +217,12 @@ async function readMedia(): Promise<File[]> {
   }
 }
 
-const inText = (app: App) => app.selection.kind === 'text' || app.region() === 'text';
+export const inText = (app: App) => app.selection.kind === 'text' || app.region() === 'text';
 const onSlides = (app: App) => app.region() === 'navigator' || app.selection.kind === 'slides';
 
 // whether the range of the document is not collapsed, i.e. a text has something to cut or copy, as
 // in both apps, where Cut and Copy are disabled at a caret
-const hasRange = () => {
+export const hasRange = () => {
   const s = getSelection();
   return !!s && s.rangeCount > 0 && !s.isCollapsed;
 };

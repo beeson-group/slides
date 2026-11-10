@@ -1,9 +1,12 @@
 // Delete of the selected elements of the current slide, each taken off the page with the white space
 // and the comments before it, as one entry of the history. a locked element is skipped and stays
-// selected, as in Keynote, and Delete is disabled while every selected element is locked
+// selected, as in Keynote, and Delete is disabled while every selected element is locked. in a
+// text, Delete of the menu deletes the selected words as Cut does, and it is dimmed at a caret as in
+// both apps. the keys of Delete are left to the browser in a text
 
 import type { App } from '../app.ts';
 import { locked } from '../canvas/drag.ts';
+import { hasRange, inText } from './clipboard.ts';
 import { docOf } from './slide.ts';
 
 // the selected elements that are in the file, without the slides
@@ -19,9 +22,10 @@ export function install(app: App): void {
     in: ['canvas'],
     menu: { bar: 'Edit', group: 'clipboard', order: 23 },
     context: ['element'],
-    enabled: (a) => selectedElements(a).some((el) => !locked(el)),
+    enabled: (a) => (inText(a) ? hasRange() : selectedElements(a).some((el) => !locked(el))),
     undoable: true,
     run: async (a) => {
+      if (inText(a)) return void document.execCommand('delete');
       const doc = docOf(a);
       // an element inside another selected one goes with it
       const els = selectedElements(a);
