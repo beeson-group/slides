@@ -71,3 +71,39 @@ test('a deck with every layout is saved and opened again without a problem', asy
   assert.ok(text.includes('<p class="caption">An edited caption.</p>'));
   assert.deepEqual(page.errors.filter((e) => !e.includes('favicon.ico')), []);
 });
+
+// a handle whose write takes ms, so that an edit can be made while the file is written
+const slowHandle = (ms) => `window.BeesonEditor.attach({
+  name: 'slow.html',
+  createWritable: async () => ({
+    write: async (text) => { await new Promise((done) => setTimeout(done, ${ms})); window.__written = text; },
+    close: async () => {},
+  }),
+})`;
+
+test('an edit made while the file is written keeps the deck dirty after both edits are undone', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser, { deck: LAYOUTS });
+  await page.evaluate(`Reveal.slide(2)`);
+  await page.evaluate(slowHandle(400));
+  await click(page, '.reveal section.present > h2');
+  await press(page, 'End');
+  await type(page, ' A');
+  await page.evaluate(`window.__save = window.BeesonEditor.save(), true`);
+  await click(page, '.reveal section.present > p.small');
+  await press(page, 'End');
+  await type(page, ' B');
+  await page.evaluate('window.__save');
+  const editA = ['<h2>Text, a list, and a backdrop</h2>', '<h2>Text, a list, and a backdrop A</h2>'];
+  assert.equal(await page.evaluate('window.__written'), page.source.replace(...editA));
+  await page.evaluate('window.BeesonEditor.undo()');
+  const afterB = await page.evaluate('window.BeesonEditor.status()');
+  await page.evaluate('window.BeesonEditor.undo()');
+  await byteExact(page);
+  // the file on disk has edit A, which the page no longer has
+  assert.equal((await page.evaluate('window.BeesonEditor.status()')).dirty, true);
+  // with edit B undone, the page reads as the file on disk again
+  assert.equal(afterB.dirty, false);
+  assert.deepEqual(page.errors, []);
+});
