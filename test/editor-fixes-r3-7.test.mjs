@@ -375,3 +375,45 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errorsOf(page), []);
   });
 }
+
+// the outline of the thumbnail of row i of the navigator, and the box of the row
+const thumb = (page, i) => page.evaluate(`(() => {
+  const row = document.querySelectorAll('.beeson-edit-nav .row')[${i}];
+  const f = row.querySelector('.frame');
+  const s = getComputedStyle(f);
+  const r = f.getBoundingClientRect();
+  return { outline: s.outlineWidth + ' ' + s.outlineColor, x: r.left + r.width / 2, y: r.top + r.height / 2, top: r.top, bottom: r.bottom };
+})()`);
+const peekShown = (page) => page.evaluate(`!document.querySelector('.beeson-edit-peek')?.hidden`);
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: a hovered thumbnail of the navigator is framed, and previewed only where it is not shown whole`, async () => {
+    const page = await editor(platform);
+    await page.evaluate(`document.documentElement.classList.contains('beeson-nav') || window.BeesonEditor.exec('view.navigator')`);
+    await sleep(150);
+    const rest = await thumb(page, 1);
+    const other = await thumb(page, 2);
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: rest.x, y: rest.y });
+    await sleep(700);
+    const hovered = await thumb(page, 1);
+    assert.notEqual(hovered.outline, other.outline, 'the hovered thumbnail is drawn as at rest');
+    assert.equal(await peekShown(page), false, 'the hover preview repeats a thumbnail that is shown whole');
+
+    // a thumbnail cut by the lower edge of the list is previewed
+    const cut = await page.evaluate(`(() => {
+      const list = document.querySelector('.beeson-edit-nav .rows');
+      const edge = list.getBoundingClientRect().bottom;
+      const frames = [...list.querySelectorAll('.row .frame')];
+      const i = frames.findIndex((f) => { const r = f.getBoundingClientRect(); return r.top < edge - 20 && r.bottom > edge; });
+      if (i < 0) return null;
+      const r = frames[i].getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: (r.top + edge) / 2 };
+    })()`);
+    assert.ok(cut, 'a thumbnail is not cut by the lower edge of the list');
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: 5, y: 600 });
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: cut.x, y: cut.y });
+    await sleep(700);
+    assert.equal(await peekShown(page), true, 'a thumbnail cut by the edge of the list is not previewed');
+    assert.deepEqual(errorsOf(page), []);
+  });
+}
