@@ -37,11 +37,11 @@ let saves = 0;
 
 // the editor on the slide n of a deck served over HTTP, in a window of size, with the Format tab
 // shown unless format is false, and in the mode of the slides given, or else of the system
-async function load(t, platform, { deck = 'index.html', n = 0, size = { width: 1440, height: 900 }, format = true, mode = null } = {}) {
+async function load(t, platform, { deck = 'index.html', n = 0, size = { width: 1440, height: 900 }, format = true, mode = null, query = '' } = {}) {
   const page = await browser.newPage(size);
   t.after(() => page.close().catch(() => {}));
   if (mode) await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: mode }] });
-  const url = `${server.origin}/${deck}?edit&still&edit-platform=${platform}${mode ? `&theme=${mode}` : ''}`;
+  const url = `${server.origin}/${deck}?edit&still&edit-platform=${platform}${mode ? `&theme=${mode}` : ''}${query}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
@@ -275,6 +275,48 @@ for (const platform of PLATFORMS) {
       const badges = await page.evaluate(`document.querySelectorAll('.beeson-badges .beeson-badge').length`);
       assert.equal(badges, 2, 'the paragraph and the pair do not each have one number on the slide');
       await roundTrip(page);
+    });
+  }
+}
+
+// the keys that Arrange > Lock, Arrange > Unlock, and View > Rulers list, in the browser of the
+// URL parameter edit-browser, or else in the headless Chrome of the tests
+const LISTED = {
+  mac: { chrome: { Lock: '⌘L', Unlock: '⌥⌘L', Rulers: '⌘R' }, safari: { Lock: '⌃⌘L', Unlock: '⌃⌥⌘L', Rulers: '⌃⌘R' } },
+  other: { chrome: { Lock: 'Ctrl+L', Unlock: 'Ctrl+Shift+L', Rulers: '' }, safari: { Lock: 'Ctrl+L', Unlock: 'Ctrl+Shift+L', Rulers: '' } },
+};
+
+// finding 8: Lock was listed with the fallback of Safari, Ctrl+Cmd+L, in a browser that passes the
+// Cmd+L of Keynote to the page, and so was Rulers with Ctrl+Cmd+R
+for (const platform of PLATFORMS) {
+  for (const browserName of ['chrome', 'safari']) {
+    test(`Lock, Unlock, and Rulers list the key of Keynote first where the browser passes it to the page, in ${browserName} (${platform})`, async (t) => {
+      const page = await load(t, platform, { n: 4, query: browserName === 'safari' ? '&edit-browser=safari' : '' });
+      const rows = await menuBarRows(page);
+      const keysOf = (id) => rows.find((r) => r.command === id)?.keys ?? '';
+      const want = LISTED[platform][browserName];
+      assert.deepEqual({ Lock: keysOf('arrange.lock'), Unlock: keysOf('arrange.unlock'), Rulers: keysOf('view.rulers') }, want);
+      if (platform !== 'mac') return;
+      // the keys of Keynote and the fallbacks of Safari both reach the page in the headless Chrome
+      const IMAGE = '.reveal section.present figure.zone > img';
+      const locks = browserName === 'safari' ? [['Ctrl+Mod+L', 'Ctrl+Mod+Alt+L'], ['Mod+L', 'Mod+Alt+L']] : [['Mod+L', 'Mod+Alt+L'], ['Ctrl+Mod+L', 'Ctrl+Mod+Alt+L']];
+      for (const [lock, unlock] of locks) {
+        await click(page, IMAGE);
+        await press(page, lock);
+        await frames(page);
+        assert.equal((await state(page, 'edit.undo')).label, 'Undo Lock', `${lock} does not lock the picture`);
+        await press(page, unlock);
+        await frames(page);
+        assert.equal((await state(page, 'edit.undo')).label, 'Undo Unlock', `${unlock} does not unlock the picture`);
+        await byteExact(page);
+      }
+      for (const key of ['Mod+R', 'Ctrl+Mod+R']) {
+        const shown = (await state(page, 'view.rulers')).checked;
+        await press(page, key);
+        await frames(page);
+        assert.equal((await state(page, 'view.rulers')).checked, !shown, `${key} does not toggle the rulers`);
+      }
+      assert.deepEqual(errors(page), []);
     });
   }
 }
