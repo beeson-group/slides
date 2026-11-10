@@ -237,6 +237,7 @@ export function commands(): Command[] {
       // the item of the context menu, which groups or ungroups the selection
       id: 'arrange.toggleGroup',
       label: (app) => (canUngroup(app) && !canGroup(app) ? 'Ungroup' : 'Group'),
+      listedAs: (app) => (canUngroup(app) && !canGroup(app) ? 'arrange.ungroup' : 'arrange.group'),
       context: ['element'],
       enabled: (app) => canGroup(app) || canUngroup(app),
       undoable: true,
@@ -266,6 +267,7 @@ export function commands(): Command[] {
     {
       id: 'arrange.toggleLock',
       label: (app) => (selectedEls(app).length && selectedEls(app).every(locked) ? 'Unlock' : 'Lock'),
+      listedAs: (app) => (selectedEls(app).length && selectedEls(app).every(locked) ? 'arrange.unlock' : 'arrange.lock'),
       context: ['element'],
       enabled: (app) => selectedEls(app).length > 0,
       undoable: true,

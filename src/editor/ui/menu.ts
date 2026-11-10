@@ -453,7 +453,8 @@ class Menu {
       label = item.label ?? this.app.commands.label(item.command);
       enabled = !!c && this.app.commands.enabled(item.command);
       checked = c?.checked?.(this.app) ?? null;
-      keys = c ? commandKeys(c) : '';
+      const listed = this.app.commands.listed(item.command);
+      keys = listed ? commandKeys(listed) : '';
       el.dataset.command = item.command;
     } else if ('items' in item) {
       label = item.label;
