@@ -7,10 +7,11 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, drag, editorPage, press, saveAndReopen } from './helpers/editor.mjs';
 
 const THEME = new Set(themeClasses(readFileSync('theme/beeson.css', 'utf8')));
 const PANEL = '#beeson-edit-panel-format';
@@ -277,5 +278,81 @@ for (const platform of ['mac', 'other']) {
     assert.equal(await page.evaluate(`document.querySelector('.reveal section.present figure.zone').hasAttribute('data-locked')`), false);
     for (const id of ['media.replace', 'figure.paper', 'arrange.align.left', 'edit.cut']) assert.equal((await state(page, id)).enabled, true, `${id} is off after Unlock`);
     assert.ok((await controls(page)).filter((c) => c.on).length > 10, 'the Arrange pane is still off after Unlock');
+  });
+}
+
+// the index of the slide "Embedding videos" of index.html, with a video for each mode
+const VIDEOS = 10;
+const clipOf = (mode) => `<video class="for-${mode}" src="demo/clip-${mode}.mp4" poster="demo/clip-${mode}.png" muted loop data-autoplay></video>`;
+
+// a trusted click on the button of the Format tab with the text name
+async function tap(page, name) {
+  const at = await page.evaluate(`(() => {
+    const b = [...document.querySelectorAll('${PANEL} button')].find((b) => b.textContent.trim() === ${js(name)});
+    if (!b) return null;
+    const r = b.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  })()`);
+  assert.ok(at, `the inspector does not have a button ${name}`);
+  await click(page, at);
+}
+
+// the file at path given to the open file chooser of the editor, as a person picks it
+async function choose(page, path) {
+  await page.waitFor(`!!document.querySelector('input.beeson-media-input')`);
+  const { result } = await page.send('Runtime.evaluate', { expression: `document.querySelector('input.beeson-media-input')` });
+  await page.send('DOM.setFileInputFiles', { files: [path], objectId: result.objectId });
+}
+
+const ASK = 'dialog.beeson-edit-card.beeson-poster-ask[open]';
+
+// state video-capture-poster of round 2: in a deck opened from a file, the page has an origin of
+// its own, which the video of the folder does not share, hence the browser kept the frames of the
+// video from the page, and Capture Poster failed with a message in the title bar
+for (const platform of ['mac', 'other']) {
+  test(`Capture Poster on a video of a deck opened from a file asks once for its file and writes its first frame (${platform})`, async (t) => {
+    const page = await editorPage(browser, { query: `edit&still&edit-platform=${platform}` });
+    t.after(() => page.close?.());
+    assert.match(await page.evaluate('location.protocol'), /^file:$/);
+    if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
+    await show(page, VIDEOS);
+    // the video of the mode of the slide, and its file
+    const mode = await page.evaluate(`[...document.querySelectorAll('.reveal section.present video')].find((v) => v.getClientRects().length && v.getBoundingClientRect().width).classList.contains('for-dark') ? 'dark' : 'light'`);
+    const video = `.reveal section.present video.for-${mode}`;
+    const clip = `clip-${mode}`;
+    await click(page, video);
+    await settle(page);
+    assert.equal(await page.evaluate(`document.querySelector('${PANEL} .ed-panes')?.dataset.pane`), 'video');
+    const button = await page.evaluate(`[...document.querySelectorAll('${PANEL} [data-command="media.poster"]')].map((b) => [b.textContent.trim(), b.title])[0]`);
+    const before = (await page.evaluate('window.BeesonEditor.status()')).message;
+    await click(page, `${PANEL} [data-command="media.poster"]`);
+    const asked = await page.waitFor(`!!document.querySelector(${js(ASK)}) || window.BeesonEditor.status().message !== ${js(before)}`, 8000).then(() => page.evaluate(`document.querySelector(${js(ASK)})?.textContent ?? null`));
+    assert.ok(asked, `Capture Poster did not ask for the file: ${(await page.evaluate('window.BeesonEditor.status()')).message}`);
+    assert.ok(asked.includes(`${clip}.mp4`), asked);
+    // the button says that it asks for the file
+    assert.equal(button[0], 'Capture Poster…');
+    assert.match(button[1], /asks once for the file/);
+    // a chooser opened by a trusted click is cancelled at once in headless Chrome unless the
+    // protocol intercepts it, and the input then keeps waiting for its files
+    await page.send('Page.setInterceptFileChooserDialog', { enabled: true });
+    await click(page, `${ASK} button.primary`);
+    await choose(page, resolve(`demo/${clip}.mp4`));
+    await page.waitFor(`window.BeesonEditor.render().includes('poster="media/${clip}.png"')`);
+    const captured = page.source.replace(clipOf(mode), clipOf(mode).replace(`poster="demo/${clip}.png"`, `poster="media/${clip}.png"`));
+    assert.equal(await render(page), captured);
+    assert.doesNotMatch((await page.evaluate('window.BeesonEditor.status()')).message ?? '', /cannot/);
+    assert.deepEqual(textProblems(captured, THEME).filter((p) => !textProblems(page.source, THEME).includes(p)), []);
+    await page.evaluate('window.BeesonEditor.undo()');
+    await byteExact(page);
+    await page.evaluate('window.BeesonEditor.redo()');
+    assert.equal(await render(page), captured);
+    // a second capture reads the file chosen before, without asking again
+    await page.evaluate('window.BeesonEditor.undo()');
+    await click(page, video);
+    await settle(page);
+    await tap(page, 'Capture Poster');
+    await page.waitFor(`window.BeesonEditor.render().includes('poster="media/${clip}')`);
+    assert.equal(await page.evaluate(`!!document.querySelector(${js(ASK)})`), false);
+    assert.deepEqual(errors(page), []);
   });
 }
