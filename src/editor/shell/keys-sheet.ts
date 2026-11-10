@@ -28,6 +28,8 @@ const CSS = `
 .beeson-edit-keys h3 { margin: 0 0 2px; font: 600 11px/1.5 var(--ed-font, system-ui, sans-serif); color: var(--ed-muted, #6e6e73); }
 .beeson-edit-keys .row { display: flex; justify-content: space-between; gap: 12px; padding: 1px 0; }
 .beeson-edit-keys .row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.beeson-edit-keys.dense .row { padding: 0; }
+.beeson-edit-keys.dense section { margin-bottom: 6px; }
 .beeson-edit-keys kbd { font: inherit; color: var(--ed-muted, #6e6e73); white-space: nowrap; font-variant-numeric: tabular-nums; }
 `;
 
@@ -151,17 +153,12 @@ export function install(app: App): void {
       if (last?.bar === row.bar) last.rows.push(row);
       else groups.push({ bar: row.bar, rows: [row] });
     }
-    // three columns of about 290 px each when the window has room for them, and a fourth in a
-    // wider sheet when three would be taller than the window, a row being about 19 px high
+    // columns of about 290 px each, as many as the window has room for up to three, with the
+    // heading of a group counted as two rows
     const fit = (width: number) => Math.max(1, Math.floor((Math.min(width, innerWidth - 32) - 32) / 290));
     const units = (g: { rows: SheetRow[] }) => g.rows.length + 2;
-    const tallest = (lists: { rows: SheetRow[] }[][]) => Math.max(...lists.map((l) => l.reduce((sum, g) => sum + units(g), 0)));
-    let lists = columns(groups, units, Math.min(3, fit(980)));
-    const four = fit(1280) >= 4 && tallest(lists) * 19 > innerHeight - 160;
-    if (four) lists = columns(groups, units, 4);
-    sheet.classList.toggle('four', four);
-    body.replaceChildren(
-      ...lists.map((list) => {
+    const draw = (n: number) => body.replaceChildren(
+      ...columns(groups, units, n).map((list) => {
         const column = make('div', 'column');
         for (const g of list) {
           const section = make('section');
@@ -178,8 +175,18 @@ export function install(app: App): void {
         return column;
       }),
     );
+    sheet.classList.remove('four', 'dense');
+    draw(Math.min(3, fit(980)));
     back = document.activeElement;
     sheet.showModal();
+    // the sheet is measured once shown. while its rows are taller than the window, it gets a fourth
+    // column in a wider sheet, then tighter rows, and else its body scrolls
+    const over = () => body.scrollHeight > body.clientHeight;
+    if (over() && fit(1280) >= 4) {
+      sheet.classList.add('four');
+      draw(4);
+    }
+    if (over()) sheet.classList.add('dense');
     done.focus();
   };
   app.commands.define({
