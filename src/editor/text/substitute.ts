@@ -38,7 +38,9 @@ export function substitution(before: string, typed: string, on: Record<Smart, bo
     return { remove: 1, insert: open ? '‘' : '’' };
   }
   if (on.dashes && typed === '-' && before.endsWith('-') && !before.endsWith('--')) return { remove: 2, insert: '—' };
-  if (on.dashes && typed === ' ' && /\S -$/u.test(before)) return { remove: 2, insert: '– ' };
+  // a space typed at the end of a block is a no-break space in Chrome, and it is kept as typed,
+  // since a plain space there is dropped once the next character is typed
+  if (on.dashes && (typed === ' ' || typed === '\u00a0') && /\S[ \u00a0]-$/u.test(before)) return { remove: 2, insert: `–${typed}` };
   return null;
 }
 
@@ -70,7 +72,8 @@ export function install(app: App): void {
     const node = sel.anchorNode;
     const offset = sel.anchorOffset;
     if (!(node instanceof Text) || !host.contains(node) || node.parentElement?.closest('pre, code, mjx-container')) return;
-    const sub = substitution(textBefore(host, node, offset - 1), data, { quotes: isSmart('quotes'), dashes: isSmart('dashes') });
+    const char = data === ' ' ? node.data.charAt(offset - 1) : data;
+    const sub = substitution(textBefore(host, node, offset - 1), char, { quotes: isSmart('quotes'), dashes: isSmart('dashes') });
     if (!sub || offset < sub.remove) return;
     const was = contentWithTex(host);
     node.replaceData(offset - sub.remove, sub.remove, sub.insert);

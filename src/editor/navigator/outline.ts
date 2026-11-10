@@ -4,10 +4,12 @@
 // the slide through app.doc when the field is left, as a text typed on the canvas. Return splits a
 // paragraph or an item and adds a slide after a heading, and Tab and Shift+Tab change the level of
 // an item, with the commands of text/blocks.ts at the same place of the block. a block that is not
-// edited here, e.g. a formula, a table, or a text with other markup, is drawn dimmed
+// edited here, e.g. a formula, a table, or a text with other markup, is drawn dimmed. the math of
+// a line is typeset, apart from the line with the caret, which shows its TeX to be edited
 
 import type { App } from '../app.ts';
 import { canIndent, canOutdent, canSplit, indent, offsetIn, outdent, ownTex, selectIn, setOwnTex, split } from '../text/blocks.ts';
+import { hasTex, typeset, untypeset } from '../typeset.ts';
 import { injectStyle, make, store, stored } from '../ui/dom.ts';
 
 const KEY = 'beeson-outline';
@@ -52,6 +54,42 @@ function fieldHtml(text: HTMLElement): string {
   return text.innerHTML.replace(/&nbsp;/g, ' ').replace(/<br>$/, '').trim();
 }
 
+// the offset in the TeX of a typeset field of the point x, y, after a formula at the point
+function texOffset(field: HTMLElement, x: number, y: number): number {
+  const tex = field.dataset.tex ?? field.textContent ?? '';
+  const formulas = [...tex.matchAll(/\\\(.*?\\\)|\\\[.*?\\\]/gs)].map((m) => m[0].length);
+  const doc = document as Document & { caretPositionFromPoint?(x: number, y: number): { offsetNode: Node; offset: number } | null };
+  const p = doc.caretPositionFromPoint?.(x, y);
+  const r = p ? null : document.caretRangeFromPoint?.(x, y);
+  const node = p?.offsetNode ?? r?.startContainer ?? null;
+  const offset = p?.offset ?? r?.startOffset ?? 0;
+  if (!node || !field.contains(node)) return tex.length;
+  const math = (node instanceof Element ? node : node.parentElement)?.closest('mjx-container') ?? null;
+  // the point before a child of an element is the end of the text before the child
+  const before = !math && node instanceof Element ? (node.childNodes[offset] ?? null) : null;
+  let count = 0;
+  let k = 0;
+  const walk = (parent: Node): boolean => {
+    for (const c of parent.childNodes) {
+      if (c === before) return true;
+      if (c instanceof Element && c.localName === 'mjx-container') {
+        count += formulas[k++] ?? 0;
+        if (c === math) return true;
+      } else if (c instanceof Text) {
+        if (c === node) {
+          count += offset;
+          return true;
+        }
+        count += c.length;
+      } else if (walk(c)) return true;
+      if (c === node) return true;
+    }
+    return false;
+  };
+  walk(field);
+  return Math.min(count, tex.length);
+}
+
 export class Outline {
   readonly el = make('div', 'beeson-edit-outline');
   private readonly app: App;
@@ -72,11 +110,26 @@ export class Outline {
     window.addEventListener('keydown', (ev) => this.onKey(ev), true);
     this.el.addEventListener('focusout', (ev) => {
       const t = ev.target instanceof HTMLElement ? this.entries.find((e) => e.text === ev.target) : null;
-      if (t && !this.busy) void this.commit(t).then(() => setTimeout(() => this.refresh(), 0)).catch((e) => app.fail(e));
+      if (t && !this.busy) void this.commit(t).then(() => {
+        this.typesetLine(t);
+        setTimeout(() => this.refresh(), 0);
+      }).catch((e) => app.fail(e));
+    });
+    // a press in a typeset field puts the caret at the same place of its TeX, since the browser
+    // would put it at the point in the TeX, which is longer
+    this.el.addEventListener('mousedown', (ev) => {
+      const t = this.entries.find((e) => e.text.contains(ev.target as Node));
+      if (!t || ev.button !== 0 || t.text.contentEditable !== 'true' || !t.text.querySelector('mjx-container')) return;
+      ev.preventDefault();
+      const at = texOffset(t.text, ev.clientX, ev.clientY);
+      t.text.focus({ preventScroll: true });
+      selectIn(t.text, at);
     });
     this.el.addEventListener('focusin', (ev) => {
       const t = this.entries.find((e) => e.text === ev.target);
-      if (t && t.slide !== app.current()) app.showSlide(t.slide);
+      if (!t) return;
+      this.showTex(t);
+      if (t.slide !== app.current()) app.showSlide(t.slide);
     });
     this.on = stored(KEY) === '1';
   }
@@ -123,8 +176,30 @@ export class Outline {
       for (const block of this.blocks(column, title)) g.append(this.line(slide, block.el, block.kind, block.depth));
       return g;
     });
+    untypeset([...this.el.querySelectorAll('.text')]);
     this.el.replaceChildren(...groups);
     this.mark();
+    void typeset(this.entries.filter((e) => e.text.dataset.tex !== undefined).map((e) => e.text));
+  }
+
+  // the TeX of a typeset field put back when the field is focused, with the caret where the click
+  // put it in the TeX, or else at its end
+  private showTex(e: Entry): void {
+    if (e.text.contentEditable !== 'true' || !e.text.querySelector('mjx-container')) return;
+    untypeset([e.text]);
+    e.text.innerHTML = e.shown;
+    queueMicrotask(() => {
+      const sel = window.getSelection();
+      if (document.activeElement === e.text && !(sel?.rangeCount && e.text.contains(sel.anchorNode))) selectIn(e.text, (e.text.textContent ?? '').length);
+    });
+  }
+
+  // a field typeset again when it is left, with its TeX as committed
+  private typesetLine(e: Entry): void {
+    const tex = e.text.textContent ?? '';
+    if (!e.text.isConnected || e.text === document.activeElement || !hasTex(tex)) return;
+    e.text.dataset.tex = tex;
+    void typeset([e.text]);
   }
 
   // the blocks of a text column in order, with the items of its lists at their levels
@@ -170,6 +245,9 @@ export class Outline {
       text.textContent = name ?? (own.content.textContent ?? '').replace(/\s+/g, ' ').trim();
       text.title = 'Edit this block on the slide';
     }
+    // the text of the line as typed, read while its math is typeset
+    const source = text.textContent ?? '';
+    if (hasTex(source)) text.dataset.tex = source;
     row.append(text);
     this.entries.push({ slide, el, kind, text, shown: editable ? html : '' });
     return row;
@@ -213,7 +291,7 @@ export class Outline {
     try {
       const sel = window.getSelection();
       const at = sel?.rangeCount && e.text.contains(sel.getRangeAt(0).startContainer) ? offsetIn(e.text, sel.getRangeAt(0).startContainer, sel.getRangeAt(0).startOffset) : null;
-      const math = /\\\(|\\\[/.test(e.text.textContent ?? '');
+      const math = hasTex(e.text.textContent ?? '');
       await this.commit(e);
       const k = this.entries.indexOf(e);
       if (what === 'return' && e.kind === 'title') {

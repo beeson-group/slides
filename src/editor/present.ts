@@ -197,6 +197,10 @@ export class Presenter {
 
     const shotCurrent = make('div', 'shot current');
     shotCurrent.append(this.current);
+    // a click on the current slide moves the show on, as in the presenter view of PowerPoint
+    shotCurrent.addEventListener('click', (ev) => {
+      if (ev.button === 0 && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !ev.shiftKey) this.go(1);
+    });
     const currentLabel = make('div', 'label');
     const colLeft = make('div', 'col');
     colLeft.append(currentLabel, shotCurrent);

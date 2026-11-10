@@ -133,10 +133,38 @@ const TOKENS: [string, string][] = [
 ];
 const NAME = (token: string) => `beeson-code-${token.replace(/_/g, '-')}`;
 const DIM = 'beeson-code-dim';
+// the numbers of the lines of a box with data-line-numbers, drawn while the deck is edited at
+// the left of its code, as the table of the highlight plugin draws them in the deck
+const NUMBERS = `
+html.beeson-editor .reveal pre[data-beeson-lines] { position: relative; }
+html.beeson-editor .reveal pre[data-beeson-lines]::before { content: attr(data-beeson-lines); position: absolute; top: 24px; left: 32px; white-space: pre; text-align: right; color: var(--muted); pointer-events: none; user-select: none; }
+${[1, 2, 3].map((d) => `html.beeson-editor .reveal pre[data-beeson-digits="${d}"]::before { width: ${d}ch; }
+html.beeson-editor .reveal pre[data-beeson-digits="${d}"] > code { padding-left: calc(${d}ch + 1em); }`).join('\n')}
+`;
+
 const STYLE = [
   ...TOKENS.map(([t, color]) => `::highlight(${NAME(t)}) { color: var(--${color}); }`),
   `::highlight(${DIM}) { color: var(--muted); }`,
+  NUMBERS,
 ].join('\n');
+
+// the numbers of the lines of each box of the slide whose lines are numbered in the file, as an
+// attribute of the page only, which the save does not write
+function numberLines(app: App): void {
+  for (const pre of app.slides().querySelectorAll('pre')) {
+    const code = pre.querySelector(':scope > code');
+    const on = !!code && code.hasAttribute(LINES);
+    const count = on ? Math.max(1, (code!.textContent ?? '').replace(/\n$/, '').split('\n').length) : 0;
+    const lines = on ? Array.from({ length: count }, (_, k) => String(k + 1)).join('\n') : null;
+    if (lines === null) {
+      pre.removeAttribute('data-beeson-lines');
+      pre.removeAttribute('data-beeson-digits');
+    } else if (pre.getAttribute('data-beeson-lines') !== lines) {
+      pre.setAttribute('data-beeson-lines', lines);
+      pre.setAttribute('data-beeson-digits', String(Math.min(3, String(count).length)));
+    }
+  }
+}
 
 type Token = [number, number, string];
 const cache = new Map<string, Token[]>();
@@ -344,6 +372,7 @@ export function install(app: App): void {
     if (frame) return;
     frame = requestAnimationFrame(() => {
       frame = 0;
+      numberLines(app);
       paint(app);
     });
   };
