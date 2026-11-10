@@ -133,3 +133,116 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// the controls of the chrome that may keep the keys after a click: the tabs Format and Steps at
+// the head of the inspector, the tabs of the panes of an image, a check box of the Image pane, and
+// the buttons and the zoom slider of the status bar. each is found by a test of its element b and
+// its box r in the window, with the image selected first where image is set
+const CONTROLS = [
+  { name: 'the tab Format', find: "b.textContent.trim() === 'Format' && r.left > innerWidth * 0.7 && r.top > 80" },
+  { name: 'the tab Steps', find: "b.textContent.trim() === 'Steps' && r.left > innerWidth * 0.7 && r.top > 80" },
+  { name: 'the pane tab Image', find: "b.textContent.trim() === 'Image' && r.left > innerWidth * 0.7", image: true },
+  { name: 'the pane tab Arrange', find: "b.textContent.trim() === 'Arrange' && r.left > innerWidth * 0.7", image: true },
+  { name: 'the check box Decorative', find: "b.type === 'checkbox' && b.labels?.[0]?.textContent.trim() === 'Decorative'", image: true },
+  { name: 'the button Fit', find: "b.textContent.trim() === 'Fit' && r.top > innerHeight - 60" },
+  { name: 'the zoom slider', find: "b.type === 'range' && r.top > innerHeight - 60" },
+  { name: 'the mode button', find: "b.getAttribute('aria-label') === 'Flip the mode of the slide' && r.top > innerHeight - 60", undo: true },
+  { name: 'the button Next slide', find: "b.getAttribute('aria-label') === 'Next slide' && r.top > innerHeight - 60", back: true },
+];
+
+const controlOf = (page, find) => page.evaluate(`(() => {
+  const b = [...document.querySelectorAll('button, input, select')].find((b) => { const r = b.getBoundingClientRect(); return r.width && (${find}); });
+  if (!b) return null;
+  const r = b.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+})()`);
+
+// the declaration translate of the start tag of each image of the pair in the text of the editor
+const translates = async (page) => {
+  const text = await render(page);
+  return [...text.matchAll(/<img class="for-(dark|light)"[^>]*>/g)].map((m) => [m[1], m[0].match(/translate: ([^;"]+)/)?.[1] ?? null]);
+};
+
+for (const platform of PLATFORMS) {
+  for (const control of CONTROLS) {
+    test(`a click on the image gives the keys to the slide after a click on ${control.name} (${platform})`, async (t) => {
+      const page = await load(t, platform);
+      if (control.image) {
+        await click(page, IMG);
+        await frames(page);
+      }
+      const at = await controlOf(page, control.find);
+      assert.ok(at, `the window does not show ${control.name}`);
+      await click(page, at);
+      await frames(page);
+      // the slide of the image again after Next slide, and the mode of the deck after the flip
+      if (control.back) await page.evaluate(`Reveal.slide(${FIGURE})`);
+      if (control.undo) await click(page, at);
+      if (control.image && control.find.includes('checkbox')) await page.evaluate('window.BeesonEditor.undo()');
+      await frames(page);
+      const chrome = await focused(page);
+      await click(page, IMG);
+      await frames(page);
+      assert.deepEqual(await selected(page), ['img.for-dark']);
+      // ArrowRight nudges the image and its twin by one slide pixel
+      await press(page, 'ArrowRight');
+      await frames(page);
+      assert.deepEqual(await translates(page), [['dark', '1px 0px'], ['light', '1px 0px']], `ArrowRight does not nudge the image, with the keys on ${chrome}`);
+      assert.equal(await focused(page), 'body', `the keys stay on ${chrome} after a click on the image`);
+      await page.evaluate('window.BeesonEditor.undo()');
+      await byteExact(page);
+      // Esc selects the figure, and Backspace deletes it
+      await press(page, 'Escape');
+      await frames(page);
+      assert.deepEqual(await selected(page), ['figure.zone'], 'Esc does not select the figure of the image');
+      await press(page, 'Backspace');
+      await frames(page);
+      assert.equal(await page.evaluate(`document.querySelectorAll(${js(IMG)}).length`), 0, 'Backspace does not delete the figure');
+      await roundTrip(page);
+    });
+  }
+}
+
+// a press on a line or on the grip of its end, which the line module takes before the presses of
+// the canvas, gives the keys to the slide as well
+const LINE = '.reveal section.present svg.line';
+const lineState = (page) => page.evaluate(`(() => {
+  const svg = document.querySelector(${js(LINE)});
+  const l = svg.querySelector('line');
+  return { translate: svg.style.translate, x2: l.getAttribute('x2') };
+})()`);
+
+for (const platform of PLATFORMS) {
+  for (const part of ['line', 'end grip']) {
+    test(`a press on the ${part} of a line gives the keys to the slide after a click on the tab Format (${platform})`, async (t) => {
+      const page = await load(t, platform);
+      await exec(page, 'insert.arrow', { from: { x: 150, y: 960 }, to: { x: 650, y: 960 } });
+      await frames(page);
+      page.source = await render(page);
+      const format = await controlOf(page, CONTROLS[0].find);
+      await click(page, format);
+      await frames(page);
+      assert.match(await focused(page), /^button/);
+      if (part === 'line') {
+        await press(page, 'Escape');
+        await click(page, format);
+        const r = await page.evaluate(`(() => { const r = document.querySelector(${js(LINE)} + ' line').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+        await click(page, r);
+      } else {
+        const end = await page.evaluate(`(() => { const g = [...document.querySelectorAll('.beeson-line-end')].find((g) => !g.hidden && g.dataset.end === '2' && g.getBoundingClientRect().width); const r = g.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+        await drag(page, end, { dx: 20, dy: 0 });
+      }
+      await frames(page);
+      assert.deepEqual(await selected(page), ['svg.line']);
+      const before = await lineState(page);
+      await press(page, 'ArrowRight');
+      await frames(page);
+      assert.notDeepEqual(await lineState(page), before, `ArrowRight does not nudge the line, with the keys on ${await focused(page)}`);
+      assert.equal(await focused(page), 'body', 'the keys stay on the tab Format after a press on the line');
+      await press(page, 'Backspace');
+      await frames(page);
+      assert.equal(await page.evaluate(`document.querySelectorAll(${js(LINE)}).length`), 0, 'Backspace does not delete the line');
+      await roundTrip(page, part === 'line' ? 2 : 3);
+    });
+  }
+}
