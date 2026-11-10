@@ -177,7 +177,7 @@ for (const platform of PLATFORMS) {
       const undoBefore = (await state(page, 'edit.undo')).label;
       await exec(page, id);
       await frames(page);
-      assert.equal((await state(page, 'edit.undo')).label, `Undo ${label}`);
+      assert.equal((await state(page, 'edit.undo')).label, `Undo Insert ${label}`);
       await press(page, 'Escape');
       await sleep(150);
       assert.equal(await page.evaluate(`!!${PENDING}`), false, 'the empty box is on the slide');
