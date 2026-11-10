@@ -1,14 +1,17 @@
 // the commands of the Slide menu: new slide with the gallery of the layouts, duplicate, delete,
-// hide and show, move up and down, and cut, copy, and paste of slides. each command acts on the
-// slides selected in the navigator, or on the current slide, through the document model, and is
-// one entry of the history however many slides it changes
+// hide and show, move up and down, and cut, copy, and paste of slides, and the move and the rename
+// of a section of the light table. each command acts on the slides selected in the navigator, or on
+// the current slide, through the document model, and is one entry of the history however many
+// slides it changes
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import type { Doc } from '../model/doc.ts';
 import { LAYOUTS, type Layout } from '../model/templates.ts';
 import { droppedOrder, isHidden, type MoveTo, type Navigator } from '../navigator/navigator.ts';
+import { groupsOf, sectionHeading } from '../navigator/sorter.ts';
 import { drawInto } from '../navigator/thumbs.ts';
+import { setOwnTex } from '../text/blocks.ts';
 import { tokenize } from '../tokens.ts';
 import { sample } from './layout.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -195,6 +198,15 @@ async function pasteSlides(app: App, text: string, focusNav: boolean): Promise<b
   land(app, nodes, nodes[0], focusNav);
   return true;
 }
+
+// a section of the light table, i.e. a section slide with the slides under it, moved to gap, an
+// index in the slides of the deck, and the name of a section, i.e. the heading of its section slide
+export type MoveSection = { head: Element; gap: number };
+export type RenameSection = { head: Element; text: string };
+
+export const sectionSlides = (app: App, head: Element): Element[] => groupsOf(sections(app)).find((g) => g.head === head)?.slides ?? [];
+
+const escapeText = (text: string): string => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 // the gallery of the eight layouts, drawn as the samples of the layout chooser of
 // commands/layout.ts. a click or Enter on a layout adds a slide of it after the current one. back
@@ -422,6 +434,32 @@ export function install(app: App): void {
         const { slides, gap } = arg as MoveTo;
         await applyOrder(a, droppedOrder(sections(a), slides, gap));
         land(a, slides, a.current(), true);
+      },
+    },
+    {
+      id: 'slide.moveSection',
+      label: 'Move Section',
+      enabled: ready,
+      undoable: true,
+      run: async (a, arg) => {
+        const { head, gap } = arg as MoveSection;
+        const slides = sectionSlides(a, head);
+        if (!slides.length) return;
+        await applyOrder(a, droppedOrder(sections(a), slides, gap));
+        land(a, slides, head, false);
+      },
+    },
+    {
+      id: 'slide.renameSection',
+      label: 'Rename Section',
+      enabled: ready,
+      undoable: true,
+      run: async (a, arg) => {
+        const { head, text } = arg as RenameSection;
+        const h = sectionHeading(head);
+        const name = text.replace(/\s+/g, ' ').trim();
+        if (!h || !name || name === (h.textContent ?? '').replace(/\s+/g, ' ').trim()) return;
+        await setOwnTex(a, h, escapeText(name), 'rename section');
       },
     },
     {
