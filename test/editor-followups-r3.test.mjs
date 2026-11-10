@@ -280,7 +280,8 @@ for (const platform of PLATFORMS) {
     await frames(page);
     const edited = await render(page);
     assert.equal(sectionsOf(edited), sectionsOf(page.source) + 1);
-    const slides = edited.split(/\n(?=<section)/);
+    // the text before the first slide, then the slides
+    const slides = edited.split(/\n(?=<section)/).slice(1);
     assert.match(slides[3], /^<section class="figure">\n {2}<div class="plate">\n {4}<img src="media\/figure-light.png">\n {2}<\/div>\n {2}<h2><\/h2>\n {2}<p class="caption"><\/p>\n<\/section>/);
     assert.equal(await page.evaluate('Reveal.getIndices().h'), 3);
     assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-nav .drop').hidden`), true);
