@@ -47,6 +47,8 @@ import { install as installDeleteCommands } from './commands/delete.ts';
 import { install as installBlocks } from './text/blocks.ts';
 import { install as installLink } from './text/link.ts';
 import { install as installTextCommands } from './commands/text.ts';
+import { install as installClipboardCommands } from './commands/clipboard.ts';
+import { install as installInsertCommands } from './commands/insert.ts';
 import { install as installFindCommands } from './commands/find.ts';
 import { install as installInspector } from './inspector/inspector.ts';
 import { Doc } from './model/doc.ts';
@@ -137,6 +139,8 @@ installDeleteCommands(app);
 installBlocks(app);
 installLink(app);
 installTextCommands(app);
+installClipboardCommands(app);
+installInsertCommands(app);
 installFindCommands(app);
 installInspector(app);
 

@@ -1,8 +1,10 @@
 // the pointer on the canvas: a press selects, a drag moves every selected element as one entry of
 // the history, a drag of a resize handle writes the width of an image, a video, a QR code, or a
-// viewer, and a drag from an empty point draws a marquee. Shift locks a move to one axis, and the
-// free modifier, ⌘ on a Mac and Alt elsewhere, turns the snapping off. the offset of an element is
-// the declaration translate of its style, and its size the declaration width, in slide pixels
+// viewer, and a drag from an empty point draws a marquee. Shift locks a move to one axis, the free
+// modifier, ⌘ on a Mac and Alt elsewhere, turns the snapping off, and the copy modifier, ⌥ on a Mac
+// and Ctrl elsewhere, held at the release leaves the elements and writes a copy of each where they
+// were dropped. the offset of an element is the declaration translate of its style, and its size
+// the declaration width, in slide pixels
 
 import type { App } from '../app.ts';
 import type { TagEdit, Translate } from '../tags.ts';
@@ -10,6 +12,11 @@ import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
 import { BY_ITSELF, RESIZABLE, aspectOf, bandAt, containerOf, frameOf, hasText, mediaIn, movableOf, movablesOf, onCanvas, toSlide, visualRect } from './hit.ts';
 import { overlay, view } from './frames.ts';
+import { injectStyle } from '../ui/dom.ts';
+
+const CSS = `
+html.beeson-dragging.beeson-copying, html.beeson-dragging.beeson-copying * { cursor: copy !important; }
+`;
 
 // a drag shorter than this, in screen pixels, is a click
 const CLICK = 3;
@@ -100,13 +107,63 @@ function contentRect(el: Element): Box {
   return { left: r.left + p(s.paddingLeft), top: r.top + p(s.paddingTop), width: r.width - p(s.paddingLeft) - p(s.paddingRight), height: r.height - p(s.paddingTop) - p(s.paddingBottom) };
 }
 
+// the stand-ins of the elements of a copy by a drag, which stay at their places while the elements
+// are dragged. each is a copy of the page only, marked data-generated, which the save and the
+// pairing pass over, laid out over the place of its element without taking room in the flow
+function standIns() {
+  let list: Element[] = [];
+  const make = (el: Element, from: Place): Element => {
+    const h = el as HTMLElement;
+    const copy = h.cloneNode(true) as HTMLElement;
+    for (const n of [copy, ...copy.querySelectorAll('*')]) {
+      for (const a of ['id', 'contenteditable', 'tabindex', 'data-id']) n.removeAttribute(a);
+      n.classList.remove('beeson-movable');
+    }
+    const fromCanvas = h.querySelectorAll('canvas');
+    copy.querySelectorAll('canvas').forEach((c, i) => {
+      try {
+        c.getContext('2d')?.drawImage(fromCanvas[i], 0, 0);
+      } catch {
+        // a WebGL canvas is left blank
+      }
+    });
+    copy.setAttribute('data-generated', '');
+    copy.setAttribute('aria-hidden', 'true');
+    copy.classList.add('beeson-standin');
+    const s = copy.style;
+    if (getComputedStyle(h).position === 'static') {
+      s.position = 'absolute';
+      s.left = `${h.offsetLeft}px`;
+      s.top = `${h.offsetTop}px`;
+      s.width = `${h.offsetWidth}px`;
+      s.boxSizing = 'border-box';
+      s.margin = '0';
+    }
+    s.translate = from.translate ? `${Math.round(from.translate.x)}px ${Math.round(from.translate.y)}px` : '';
+    s.pointerEvents = 'none';
+    h.parentElement?.append(copy);
+    return copy;
+  };
+  return {
+    shown: () => list.length > 0,
+    show(p: Press, on: boolean) {
+      document.documentElement.classList.toggle('beeson-copying', on);
+      if (on === list.length > 0) return;
+      for (const c of list) c.remove();
+      list = on ? p.els.map((el) => make(el, p.from.get(el) as Place)) : [];
+    },
+  };
+}
+
 export function install(app: App): void {
+  injectStyle('drag', CSS);
   const frames = overlay();
+  const ghosts = standIns();
   let press: Press | null = null;
   const mac = () => app.platform === 'mac';
   const commandHeld = (ev: MouseEvent) => (mac() ? ev.metaKey : ev.ctrlKey);
-  // Alt also frees a move on a Mac until the copy by a drag with ⌥ is built
-  const freeMove = (ev: MouseEvent) => (mac() ? ev.metaKey || ev.altKey : ev.altKey);
+  const freeMove = (ev: MouseEvent) => (mac() ? ev.metaKey : ev.altKey);
+  const copyHeld = (ev: MouseEvent) => (mac() ? ev.altKey : ev.ctrlKey);
   const freeResize = (ev: MouseEvent) => (mac() ? ev.metaKey : ev.altKey);
   const aboutCenter = (ev: MouseEvent) => (mac() ? ev.altKey : ev.ctrlKey);
 
@@ -190,7 +247,7 @@ export function install(app: App): void {
       return;
     }
     // a press on the chrome, e.g. a button of a bar or a pane, keeps the selection
-    if (!onCanvas(target)) return;
+    if (!onCanvas(target, app, { x: ev.clientX, y: ev.clientY })) return;
     // an image selected inside its figure is dragged inside it
     const inner = sel.only();
     if (inner && inner.matches(RESIZABLE) && containerOf(app, inner) && inner.contains(target)) {
@@ -258,6 +315,7 @@ export function install(app: App): void {
     const snap = freeMove(ev) ? null : snapMove(moved, targetsFor(p.els), SNAP / f.scale, { x: lock !== 'y', y: lock !== 'x' });
     dx += snap?.dx ?? 0;
     dy += snap?.dy ?? 0;
+    ghosts.show(p, copyHeld(ev));
     for (const el of p.els) {
       const from = p.from.get(el) as Place;
       writeLive(el, { translate: { x: (from.translate?.x ?? 0) + dx, y: (from.translate?.y ?? 0) + dy }, width: from.width });
@@ -269,7 +327,7 @@ export function install(app: App): void {
     // mostly near and the readout does not cover the guides at the pointer
     const t = p.el ? placeOf(p.el).translate : null;
     const seen = union(p.els.map(visualRect));
-    view.readout = { text: `${t?.x ?? 0}, ${t?.y ?? 0}`, x: seen.left + seen.width + 6, y: seen.top + seen.height + 10, at: 'frame' };
+    view.readout = { text: `${ghosts.shown() ? 'Copy  ' : ''}${t?.x ?? 0}, ${t?.y ?? 0}`, x: seen.left + seen.width + 6, y: seen.top + seen.height + 10, at: 'frame' };
     document.documentElement.classList.add('beeson-dragging');
     frames.draw();
     app.invalidate('content');
@@ -328,7 +386,11 @@ export function install(app: App): void {
     view.spacing = [];
     view.marquee = null;
     view.readout = null;
-    if (p.kind !== 'marquee') {
+    const copying = ghosts.shown();
+    ghosts.show(p, false);
+    if (p.kind === 'move' && ev && p.moved && copying && copyHeld(ev)) {
+      void copyAt(p).catch((e) => app.fail(e));
+    } else if (p.kind !== 'marquee') {
       if (ev && p.moved) {
         const changes = p.els.map((el) => {
           const to = placeOf(el);
@@ -344,13 +406,33 @@ export function install(app: App): void {
     app.invalidate('content');
   };
 
+  // the elements of a copy by a drag are put back, and a copy of each is written after it, at the
+  // place where it was dropped, as one entry of the history. the copies are then selected
+  const copyAt = async (p: Press) => {
+    const f = frameOf(app);
+    const dropped = p.els.map((el) => ({ el, box: toSlide(f, visualRect(el)) }));
+    for (const el of p.els) writeLive(el, p.from.get(el) as Place);
+    await app.history.transact('Duplicate', async () => {
+      const copies: Element[] = [];
+      for (const { el, box } of dropped) {
+        const copy = await app.doc.duplicate(el);
+        const now = toSlide(frameOf(app), visualRect(copy));
+        const t = placeOf(copy).translate ?? { x: 0, y: 0 };
+        app.doc.setTag(copy, { translate: { x: Math.round(t.x + box.left - now.left), y: Math.round(t.y + box.top - now.top) } }, 'move');
+        copies.push(copy);
+      }
+      app.selection.set('elements', copies);
+    });
+    frames.draw();
+  };
+
   // the element under the pointer gets the hover frame and the handle, which stay while the pointer
   // is on its way to the handle at its upper left
   const hover = (ev: PointerEvent) => {
     const target = ev.target instanceof Element ? ev.target : null;
     if (target && (target === frames.handle || target.closest('.beeson-grip'))) return;
     const el = movableOf(app, target);
-    const band = el ? null : onCanvas(target) ? bandAt(app, ev.clientX, ev.clientY) : null;
+    const band = el ? null : onCanvas(target, app, { x: ev.clientX, y: ev.clientY }) ? bandAt(app, ev.clientX, ev.clientY) : null;
     document.documentElement.classList.toggle('beeson-band', !!band);
     const next = el ?? band;
     if (next) {
