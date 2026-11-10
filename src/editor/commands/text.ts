@@ -143,9 +143,10 @@ export function install(app: App): void {
       run: (a) => (carry.canList(a) ? carry.chooseList(a, kind) : blocks.setList(a, kind)),
     }));
   // Tab is taken in every item of a list, also where it does not change the level, so that it
-  // does not move the focus out of the text
-  define({ id: 'text.indent', label: 'Increase Indent Level', keys: { mac: ['Tab'], other: ['Tab'] }, in: TEXT, menu: menu('list', 70, 'List'), undoable: true, enabled: blocks.inList, run: blocks.indent });
-  define({ id: 'text.outdent', label: 'Decrease Indent Level', keys: { mac: ['Shift+Tab'], other: ['Shift+Tab'] }, in: TEXT, menu: menu('list', 71, 'List'), undoable: true, enabled: blocks.inList, run: blocks.outdent });
+  // does not move the focus out of the text. ⌘] and ⌘[ are Keynote's keys, shown in the menu, and
+  // Ctrl+] and Ctrl+[ those of Google Docs elsewhere
+  define({ id: 'text.indent', label: 'Increase Indent Level', keys: { mac: ['Mod+]', 'Tab'], other: ['Mod+]', 'Tab'] }, in: TEXT, menu: menu('list', 70, 'List'), undoable: true, enabled: blocks.inList, run: blocks.indent });
+  define({ id: 'text.outdent', label: 'Decrease Indent Level', keys: { mac: ['Mod+[', 'Shift+Tab'], other: ['Mod+[', 'Shift+Tab'] }, in: TEXT, menu: menu('list', 71, 'List'), undoable: true, enabled: blocks.inList, run: blocks.outdent });
 
   // the link opens its dialog, which makes the change one entry of the history. a test or a script
   // gives the address as arg, e.g. { href: '#/7' }, or the kind of link shown first, e.g.
