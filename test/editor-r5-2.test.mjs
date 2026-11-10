@@ -721,7 +721,8 @@ for (const platform of PLATFORMS) {
 }
 
 // the frames, the grips, and the boxes of the members of the selection, in CSS px of the viewport.
-// a text block is boxed by its frame, 6 px outside its text, and a figure by its drawn picture
+// a text block is boxed by its box, and a figure by its drawn picture and its caption, which are
+// the boxes that W and H of the Arrange pane give for a group
 const groupView = (page) => page.evaluate(`(() => {
   const shown = (s) => [...document.querySelectorAll(s)].filter((e) => !e.hidden && e.getBoundingClientRect().width);
   const box = (r) => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
@@ -733,12 +734,10 @@ const groupView = (page) => page.evaluate(`(() => {
     const q = Math.min(r.width / el.naturalWidth, r.height / el.naturalHeight), w = el.naturalWidth * q, h = el.naturalHeight * q;
     return { left: r.left + (r.width - w) / 2, top: r.top + (r.height - h) / 2, right: r.left + (r.width + w) / 2, bottom: r.top + (r.height + h) / 2 };
   };
-  // a figure is framed at its picture and its caption, and a block 6 px outside its text
   const members = window.BeesonEditor.selection().map((el) => {
     const r = drawn(pic(el));
-    const g = el.matches('figure') ? 0 : 6;
     const caps = el.matches('figure') ? [...el.querySelectorAll(':scope > figcaption, :scope > .caption')].map((c) => c.getBoundingClientRect()).filter((c) => c.width) : [];
-    return { left: Math.min(r.left - g, ...caps.map((c) => c.left)), top: Math.min(r.top - g, ...caps.map((c) => c.top)), right: Math.max(r.right + g, ...caps.map((c) => c.right)), bottom: Math.max(r.bottom + g, ...caps.map((c) => c.bottom)) };
+    return { left: Math.min(r.left, ...caps.map((c) => c.left)), top: Math.min(r.top, ...caps.map((c) => c.top)), right: Math.max(r.right, ...caps.map((c) => c.right)), bottom: Math.max(r.bottom, ...caps.map((c) => c.bottom)) };
   });
   return {
     members,

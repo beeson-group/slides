@@ -7,10 +7,12 @@
 // every other element is set by its layout
 
 import type { App } from '../app.ts';
-import { boxOf, heightSet, positionOf, resizable, sizeOf, targetsOf } from '../commands/align.ts';
+import { heightSet, positionOf, resizable, sizeOf, targetsOf } from '../commands/align.ts';
 import { angleOf, groupOf } from '../commands/order.ts';
 import { imageOf } from '../commands/figure.ts';
 import { locked } from '../canvas/drag.ts';
+import { groupReach } from '../canvas/frames.ts';
+import { frameOf, toSlide } from '../canvas/hit.ts';
 import { GLYPHS, button, checkbox, note, numberField, row, section, segmented, type Control, type Run } from './controls.ts';
 
 // the glyphs of the order, the groups, and the locks, on the grid of GLYPHS
@@ -30,14 +32,13 @@ Object.assign(GLYPHS, {
 // the value shared by every element, or null when they differ
 const shared = (values: number[]): number | null => (values.length && values.every((v) => Math.round(v) === Math.round(values[0])) ? values[0] : null);
 
-// the box of a selection that is one whole group, in slide pixels, or null
+// the box of a selection that is one whole group, in slide pixels, or null. it is the box of the
+// frame of the group, as frames.ts draws it
 function groupBox(app: App, els: Element[]): { w: number; h: number } | null {
   const id = els.length > 1 ? groupOf(els[0]) : null;
   if (!id || !els.every((el) => groupOf(el) === id)) return null;
-  const boxes = els.map((el) => boxOf(app, el));
-  const left = Math.min(...boxes.map((b) => b.left));
-  const top = Math.min(...boxes.map((b) => b.top));
-  return { w: Math.max(...boxes.map((b) => b.left + b.width)) - left, h: Math.max(...boxes.map((b) => b.top + b.height)) - top };
+  const b = toSlide(frameOf(app), groupReach(els));
+  return { w: b.width, h: b.height };
 }
 
 export function arrangePane(app: App, run: Run): Control[] {

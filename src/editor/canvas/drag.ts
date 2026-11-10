@@ -11,7 +11,7 @@ import type { TagEdit, Translate } from '../tags.ts';
 import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
 import { BY_ITSELF, RESIZABLE, STRETCHED, aspectOf, bandAt, constrained, containerOf, cssWidth, frameOf, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, onCanvas, orientedBox, pickOf, pictureOf, segmentTouches, sizedOf, snapBoxOf, toSlide, twinOf, visualRect } from './hit.ts';
-import { overlay, view } from './frames.ts';
+import { groupReach, overlay, view } from './frames.ts';
 import { enterGroup, freshGroup, groupOf } from '../commands/order.ts';
 import { injectStyle } from '../ui/dom.ts';
 
@@ -627,7 +627,7 @@ export function install(app: App): void {
     view.spacing = [];
     // the size that the members reach, as W and H of the Arrange pane give it, since the layout
     // sets the height of a zone and a text block, which can differ from box
-    const reached = union(p.els.map((el) => toSlide(f, visualRect(el))));
+    const reached = toSlide(f, groupReach(p.els));
     view.readout = { text: `${Math.round(reached.width)} × ${Math.round(reached.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     frames.draw();
     app.invalidate('content');
