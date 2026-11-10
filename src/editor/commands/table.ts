@@ -89,7 +89,7 @@ const GRIP = 9;
 type Target = { table: HTMLTableElement; cell: HTMLTableCellElement | null; box: Box | null };
 // a size typed into Insert Table… is kept in full, while one from the grid loses the rows that do
 // not fit on the slide
-type Size = { rows: number; columns: number; all?: boolean };
+type Size = { rows: number; columns: number };
 
 const isCell = (el: unknown): el is HTMLTableCellElement => el instanceof HTMLTableCellElement;
 
@@ -255,11 +255,11 @@ function numbersOf(table: HTMLTableElement): boolean[] {
 }
 
 // a table of rows of cells put at its place in the layout of the current slide, and then moved
-// where it fits by placeTable, with its rows taken out down to least when they do not fit
-async function insertTable(app: App, rows: string[][], least = rows.length): Promise<HTMLTableElement> {
+// where it fits by placeTable, with every row
+async function insertTable(app: App, rows: string[][]): Promise<HTMLTableElement> {
   const { parent, before } = columnPlace(app, app.current()!);
   const [table] = await app.doc.insert(tableHtml(rows, styleOf(app), baseOf(app, parent)), parent, before, 'insert table');
-  await placeTable(app, table as HTMLTableElement, least);
+  placeTable(app, table as HTMLTableElement);
   return table as HTMLTableElement;
 }
 
@@ -276,14 +276,13 @@ function shownBox(app: App, el: Element): SlideBox | null {
   return el.matches(TEXT) && !moved ? inkBox(app, el) : slideBox(app, el);
 }
 
-// a new table put where it fits on its slide, with room around it for its bars at the zoom of the
-// canvas: under the blocks before it, else at the center of the free area where the layout puts a
-// zone, else under the blocks before it with its last rows taken out down to least rows, and else
-// moved up until its bottom is BOTTOM over the footnote line or the bottom of the slide.
-// Keynote and PowerPoint put a new table at the center of the slide, over what is there, and the
-// table of a slide of the theme is put into its text column instead. the move is a translate in
-// slide px
-async function placeTable(app: App, table: HTMLTableElement, least: number): Promise<void> {
+// a new table put where it fits on its slide, with every row and with room around it for its bars
+// at the zoom of the canvas: under the blocks before it, else at the center of the free area where
+// the layout puts a zone, else moved up until its bottom is BOTTOM over the footnote line or the
+// bottom of the slide, and else at the center of the slide over what is there, as Keynote inserts
+// a table. the table of a slide of the theme is put into its text column, and it is not put over
+// the text while free space is left. the move is a translate in slide px
+function placeTable(app: App, table: HTMLTableElement): void {
   const slide = table.closest('section');
   const parent = table.parentElement;
   if (!slide || !parent || !table.getClientRects().length) return;
@@ -291,31 +290,30 @@ async function placeTable(app: App, table: HTMLTableElement, least: number): Pro
   const k = table.getBoundingClientRect().width / (table.offsetWidth || 1) || 1;
   const room = (GAP + BAR + 2) / k;
   const w = (slide as HTMLElement).offsetWidth || 1920;
+  const h = (slide as HTMLElement).offsetHeight || 1080;
   const foot = [...slide.querySelectorAll(':scope > .foot')].map((f) => shownBox(app, f)).find((b) => !!b);
-  const floor = Math.min(((slide as HTMLElement).offsetHeight || 1080) - BOTTOM, foot ? foot.top - BOTTOM : Infinity);
+  const floor = Math.min(h - BOTTOM, foot ? foot.top - BOTTOM : Infinity);
   const skip = (el: Element) => el === table || el.matches('aside.notes, script, style');
   const boxes = (els: Element[]) => els.filter((el) => !skip(el)).map((el) => shownBox(app, el)).filter((b): b is SlideBox => !!b);
   const before = boxes([...parent.children].slice(0, [...parent.children].indexOf(table)).filter((el) => !el.matches('.run, .foot, [data-generated]')));
   const others = boxes([...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *')].filter((el) => !el.contains(table)));
-  const rowHeights = [...table.rows].map((tr) => tr.getBoundingClientRect().height / k);
-  const n0 = rowHeights.length;
-  const heightOf = (n: number) => t.bottom - t.top - rowHeights.slice(n).reduce((a, b) => a + b, 0);
-  const at = (left: number, top: number, n: number): SlideBox => ({ left, top, right: left + t.right - t.left, bottom: top + heightOf(n) });
+  const tw = t.right - t.left;
+  const th = t.bottom - t.top;
+  const at = (left: number, top: number): SlideBox => ({ left, top, right: left + tw, bottom: top + th });
   const free = (b: SlideBox) => b.top - room >= 0 && b.bottom <= floor && b.right + room <= w &&
     !others.some((o) => meets({ left: b.left - room, top: b.top - room, right: b.right + room, bottom: b.bottom + room }, o));
   const top = Math.max(t.top, ...before.map((b) => b.bottom + room));
-  let place: { box: SlideBox; n: number } | null = free(at(t.left, top, n0)) ? { box: at(t.left, top, n0), n: n0 } : null;
+  let place: SlideBox | null = free(at(t.left, top)) ? at(t.left, top) : null;
   const zone = place ? null : freeZone(app, slide, table);
   if (zone) {
-    const b = at((zone.left + zone.right - t.right + t.left) / 2, (zone.top + zone.bottom - heightOf(n0)) / 2, n0);
-    if (free(b)) place = { box: b, n: n0 };
+    const b = at((zone.left + zone.right - tw) / 2, (zone.top + zone.bottom - th) / 2);
+    if (free(b)) place = b;
   }
-  const fewest = Math.min(Math.max(1, least), n0);
-  for (let n = n0 - 1; !place && n >= fewest; n--) if (free(at(t.left, top, n))) place = { box: at(t.left, top, n), n };
-  place ??= { box: at(t.left, Math.max(room, Math.min(top, floor - heightOf(fewest))), fewest), n: fewest };
-  for (let r = n0 - 1; r >= place.n; r--) await app.doc.remove(table.rows[r], 'insert table');
-  const x = Math.round(place.box.left - t.left);
-  const y = Math.round(place.box.top - t.top);
+  const raised = Math.min(top, floor - th);
+  if (!place && raised - room >= 0) place = at(t.left, raised);
+  place ??= at((w - tw) / 2, (h - th) / 2);
+  const x = Math.round(place.left - t.left);
+  const y = Math.round(place.top - t.top);
   if (x || y) app.doc.setTag(table, { translate: { x, y } }, 'insert table');
 }
 
@@ -1140,7 +1138,7 @@ export function install(app: App): void {
       if (!size) return openPicker(a, toolbarButton('insert.table'), (s) => void a.commands.run('insert.table', s).catch(fail), () => void a.commands.run('insert.tableSize').catch(fail));
       const rows = Math.max(1, Math.min(MOST.rows, Math.round(size.rows)));
       const columns = Math.max(1, Math.min(MOST.columns, Math.round(size.columns)));
-      const table = await a.history.transact('Insert Table', () => insertTable(a, emptyRows(rows, columns), size.all ? rows : Math.min(2, rows)));
+      const table = await a.history.transact('Insert Table', () => insertTable(a, emptyRows(rows, columns)));
       const first = table.rows[0]?.cells[0];
       if (first) placeCaret(first, 0);
     },
@@ -1154,7 +1152,7 @@ export function install(app: App): void {
     enabled: ready,
     run: async (a) => {
       const size = await askSize(a);
-      if (size) await a.commands.run('insert.table', { ...size, all: true });
+      if (size) await a.commands.run('insert.table', size);
     },
   });
 
