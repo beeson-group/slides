@@ -14,6 +14,7 @@ import { MENUS } from './menubar.ts';
 
 const CSS = `
 .beeson-edit-keys { width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 64px); box-sizing: border-box; padding: 0; border: 1px solid var(--ed-line, #555); border-radius: 10px; background: var(--ed-panel, #f6f6f6); color: var(--ed-text, #1d1d1f); font: 12px/1.4 var(--ed-font, system-ui, sans-serif); box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35); }
+.beeson-edit-keys.four { width: min(1280px, calc(100vw - 32px)); }
 .beeson-edit-keys[open] { display: flex; flex-direction: column; }
 .beeson-edit-keys::backdrop { background: rgba(0, 0, 0, 0.3); }
 .beeson-edit-keys .head { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid var(--ed-line, #555); }
@@ -139,10 +140,17 @@ export function install(app: App): void {
       if (last?.bar === row.bar) last.rows.push(row);
       else groups.push({ bar: row.bar, rows: [row] });
     }
-    // three columns of about 290 px each when the window has room for them
-    const n = Math.max(1, Math.min(3, Math.floor((Math.min(980, innerWidth - 32) - 32) / 290)));
+    // three columns of about 290 px each when the window has room for them, and a fourth in a
+    // wider sheet when three would be taller than the window, a row being about 19 px high
+    const fit = (width: number) => Math.max(1, Math.floor((Math.min(width, innerWidth - 32) - 32) / 290));
+    const units = (g: { rows: SheetRow[] }) => g.rows.length + 2;
+    const tallest = (lists: { rows: SheetRow[] }[][]) => Math.max(...lists.map((l) => l.reduce((sum, g) => sum + units(g), 0)));
+    let lists = columns(groups, units, Math.min(3, fit(980)));
+    const four = fit(1280) >= 4 && tallest(lists) * 19 > innerHeight - 160;
+    if (four) lists = columns(groups, units, 4);
+    sheet.classList.toggle('four', four);
     body.replaceChildren(
-      ...columns(groups, (g) => g.rows.length + 2, n).map((list) => {
+      ...lists.map((list) => {
         const column = make('div', 'column');
         for (const g of list) {
           const section = make('section');
