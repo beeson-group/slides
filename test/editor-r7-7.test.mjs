@@ -219,7 +219,8 @@ for (const platform of PLATFORMS) {
     assert.equal((await state(page, 'arrange.distribute.vertical')).enabled, true);
     assert.equal((await state(page, 'arrange.alignTo.selection')).enabled, false);
     assert.equal((await state(page, 'arrange.alignTo.slide')).checked, true);
-    // a figure has the Arrange pane alone, without tabs
+    // a figure has the Image pane with its tabs, and Distribute is in the tab Arrange
+    await tap(page, 'Arrange');
     await tap(page, 'Horizontally');
     const text = await render(page);
     const dx = Number(text.match(/<figure class="zone fragment" data-fragment-index="2" style="translate: (-?\d+)px 0px">/)?.[1]);
@@ -231,6 +232,7 @@ for (const platform of PLATFORMS) {
     await roundTrip(page, text);
     // the open of the saved text clears the selection
     await selectFigure(page, IMG);
+    await tap(page, 'Arrange');
     await tap(page, 'Vertically');
     const both = await render(page);
     const dy = Number(both.match(/data-fragment-index="2" style="translate: -?\d+px (-?\d+)px">/)?.[1]);
