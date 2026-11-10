@@ -670,6 +670,7 @@ html.to-dark::view-transition-old(flip-deck), html.to-dark::view-transition-new(
 
 /* ---- print (?print-pdf) and stills (?still): everything drawn complete, without the chrome outside the slide ---- */
 html.reveal-print .theme-switch, html.reveal-print .pointer-dot { display: none; }
+html.reveal-print .reveal .pdf-page { overflow: hidden; }
 html.reveal-print .reveal .slides section { height: 1080px !important; padding: 120px 120px 0 120px !important; }
 html.reveal-print .reveal .slides section.title,
 html.reveal-print .reveal .slides section.closing,

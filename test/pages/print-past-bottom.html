@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Picture past the bottom</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+</head>
+<body>
+<!-- three slides of one step each. the picture of the second slide is enlarged in the editor to a
+     width of 900 px and moved down, hence it runs past the bottom of its slide -->
+<div class="reveal">
+  <div class="slides">
+    <section>
+      <h2>Before the picture</h2>
+      <p>A slide that fits.</p>
+    </section>
+    <section>
+      <h2>A picture past the bottom</h2>
+      <figure class="zone" style="translate: 0px 200px">
+        <img src="../../demo/figure-dark.png" alt="Zero-velocity curves" style="width: 900px">
+        <figcaption class="caption">A caption under the picture.</figcaption>
+      </figure>
+    </section>
+    <section>
+      <h2>After the picture</h2>
+      <p class="foot">A footnote at the bottom of a slide that fits.</p>
+    </section>
+  </div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

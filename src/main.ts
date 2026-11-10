@@ -55,6 +55,9 @@ const DEFAULTS: RevealOptions = {
   controls: false,
   center: false,
   pdfSeparateFragments: true,
+  // one page per step, as in Keynote and PowerPoint, with what runs past the slide cut off in the
+  // print styles of theme/beeson.css
+  pdfMaxPagesPerSlide: 1,
   // off with 0, since the chrome, the mode button, and the viewer are lost in the scroll view that
   // reveal.js would start in a narrow window
   scrollActivationWidth: 0,

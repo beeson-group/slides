@@ -152,8 +152,9 @@ export function attachCompletion(field: HTMLTextAreaElement): void {
 
 // a field of the TeX with its live preview and its message, which is the error of MathJax in red
 // or the prompt of an empty TeX in gray. a late result of an earlier TeX is dropped, and shown is
-// called with the result of each TeX that is typeset
-export type TexEditor = { field: HTMLTextAreaElement; preview: HTMLElement; message: HTMLElement; ok(): boolean; refresh(): Promise<void> };
+// called with the result of each TeX that is typeset. settle resolves once the TeX of the field is
+// typeset, after which ok() is true for that TeX
+export type TexEditor = { field: HTMLTextAreaElement; preview: HTMLElement; message: HTMLElement; ok(): boolean; refresh(): Promise<void>; settle(): Promise<void> };
 
 export function texEditor(options: { display(): boolean; label: string; placeholder?: string; shown?(ok: boolean): void }): TexEditor {
   const field = make('textarea');
@@ -167,10 +168,15 @@ export function texEditor(options: { display(): boolean; label: string; placehol
   let seq = 0;
   let timer = 0;
   let ok = false;
+  // the TeX and the mode of the last result shown
+  let shown: string | null = null;
+  const key = () => `${options.display()}\n${field.value}`;
   const refresh = async () => {
     const n = ++seq;
+    const typeset = key();
     const result = await previewTex(field.value, options.display()).catch((e: unknown) => ({ node: null, error: e instanceof Error ? e.message : String(e) }));
     if (n !== seq) return;
+    shown = typeset;
     const empty = !field.value.trim();
     preview.replaceChildren(...(result.node ? [result.node] : [make('span', 'empty', 'A preview of the formula appears here.')]));
     message.textContent = result.error ?? '';
@@ -185,7 +191,11 @@ export function texEditor(options: { display(): boolean; label: string; placehol
     timer = window.setTimeout(() => void refresh(), 150);
   });
   attachCompletion(field);
-  return { field, preview, message, ok: () => ok, refresh };
+  const settle = async () => {
+    window.clearTimeout(timer);
+    while (shown !== key()) await refresh();
+  };
+  return { field, preview, message, ok: () => ok, refresh, settle };
 }
 
 // the sheet of a TeX: its title, its first TeX, whether it is a display, the label of its button,
@@ -308,22 +318,31 @@ export function install(app: App): void {
     unplace = keepBeside(box, () => rect, SIDES);
     apply.disabled = !sheet.tex.trim();
     void ed.refresh();
-    apply.addEventListener('click', async () => {
-      if (apply.disabled) return;
+    // the commit key is held until the TeX typed before it is typeset, since Apply is dimmed or
+    // lit by the preview of an earlier TeX until then. a TeX with an error is not committed
+    let committing = false;
+    const submit = async () => {
+      if (committing) return;
+      committing = true;
       try {
+        await ed.settle();
+        if (popover !== box || !ed.ok()) return;
         await sheet.commit(field.value);
         closeMath(!!target);
         sheet.done?.();
       } catch (e) {
         ed.message.classList.remove('prompt');
         ed.message.textContent = e instanceof Error ? e.message : String(e);
+      } finally {
+        committing = false;
       }
-    });
+    };
+    apply.addEventListener('click', () => void submit());
     cancel.addEventListener('click', () => closeMath());
     field.addEventListener('keydown', (ev) => {
       if ((ev.metaKey || ev.ctrlKey) && ev.key === 'Enter') {
         ev.preventDefault();
-        apply.click();
+        void submit();
       } else if (ev.key === 'Escape') {
         ev.preventDefault();
         ev.stopPropagation();
