@@ -7,11 +7,14 @@
 // edited here, e.g. a formula, a table, or a text with other markup, is drawn dimmed
 
 import type { App } from '../app.ts';
-import { columnOf } from '../commands/clipboard.ts';
 import { canIndent, canOutdent, canSplit, indent, offsetIn, outdent, ownTex, selectIn, setOwnTex, split } from '../text/blocks.ts';
 import { injectStyle, make, store, stored } from '../ui/dom.ts';
 
 const KEY = 'beeson-outline';
+
+// the text column of a slide, as columnOf of commands/clipboard.ts gives it, which is not imported
+// here, since its media modules read the location of the page when they are loaded
+const columnOf = (slide: Element): Element => slide.querySelector(':scope > .panel, :scope > .block, :scope > .sec') ?? slide;
 
 const CSS = `
 .beeson-edit-outline { flex: 1; min-height: 0; overflow: auto; padding: 8px 10px 40px 4px; font: 12px/1.35 var(--ed-font, system-ui, sans-serif); color: var(--nav-text); }
