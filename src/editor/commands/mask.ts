@@ -6,7 +6,7 @@
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { imageOf } from './figure.ts';
-import { MASK_STYLE, begin, editing, install as installMask, masked, orbitOf, pinned, scaleOf, scaleText, setPictureStyle } from '../canvas/mask.ts';
+import { MASK_STYLE, begin, editing, install as installMask, masked, orbitOf, pinned, scaleOf, scaleText, styleEdit } from '../canvas/mask.ts';
 
 // the backdrops of the current slide that an edit of the window can start on
 function backdropsOf(app: App): HTMLElement[] {
@@ -58,7 +58,8 @@ const commands = (): Command[] => [
       // a box resized in Edit Mask keeps object-fit contain, without which the theme stretches its
       // picture to the box
       if (pinned(img)) style['object-fit'] = 'contain';
-      setPictureStyle(app, img, style, 'mask');
+      const edit = styleEdit(app, img, style);
+      if (edit) app.doc.setTag(img, edit, 'mask');
     },
   },
   {
