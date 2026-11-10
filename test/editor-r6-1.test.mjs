@@ -112,8 +112,9 @@ async function openBar(page, bar) {
 
 // the Edit menu of Keynote 15.4 in references/keynote-menus.txt of the council: Undo and Redo, the
 // clipboard and Delete, Duplicate Selection and the selection, then Find. the labels are those of
-// the commands of the editor, e.g. Duplicate for Duplicate Selection
-const EDIT = ['Undo', 'Redo', '|', 'Cut', 'Copy', 'Paste', 'Delete', '|', 'Duplicate', 'Select All', 'Deselect', '|', 'Find…', 'Find Next', 'Find Previous', 'Replace…', '|', '{Substitutions}'];
+// the commands of the editor, e.g. Duplicate for Duplicate Selection and Select Figure for Select
+// Parent
+const EDIT = ['Undo', 'Redo', '|', 'Cut', 'Copy', 'Paste', 'Delete', '|', 'Duplicate', 'Select All', 'Deselect', 'Select Figure', '|', 'Find…', 'Find Next', 'Find Previous', 'Replace…', '|', '{Substitutions}'];
 
 for (const platform of PLATFORMS) {
   // finding opus 10 of round 2: Select All and Find were listed before Cut
@@ -293,13 +294,14 @@ for (const platform of PLATFORMS) {
     const labels = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item .label')].map((l) => l.textContent)`);
     assert.ok(labels.includes('Copy'), JSON.stringify(labels));
     assert.ok(!labels.includes('Edit Text'), `the context menu of the picture lists Edit Text: ${JSON.stringify(labels)}`);
-    // Esc closes the menu, and Esc again clears the figure, since a click into a selected figure
-    // selects its image. Return on the selected figure puts the caret into its caption
-    await press(page, 'Escape');
+    // Esc closes the menu. a click on the image selects it, and Esc selects its figure, on which
+    // Return puts the caret into the caption
     await press(page, 'Escape');
     await frames(page);
     await click(page, img);
+    await press(page, 'Escape');
     await frames(page);
+    assert.equal(await page.evaluate(`window.BeesonEditor.selection().map((e) => e.localName).join()`), 'figure');
     await press(page, 'Enter');
     await frames(page);
     assert.equal(await page.evaluate(`document.activeElement?.closest('figcaption')?.textContent ?? null`), 'A caption under a zone.');
