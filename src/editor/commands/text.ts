@@ -189,11 +189,13 @@ export function install(app: App): void {
       // one entry named Change Case for every kind, as in the Edit menu of PowerPoint
       run: (a) => a.history.transact('change case', () => inline.changeCase(a, kind)),
     }));
+  // at the head of the submenu, so that its key is seen there and in the sheet of shortcuts
   define({
     id: 'text.case.cycle',
     label: 'Change Case',
     keys: { mac: ['Shift+F3'], other: ['Shift+F3'] },
     in: TEXT,
+    menu: menu('case-cycle', 83.9, 'Change Case'),
     undoable: true,
     enabled: inline.canPaint,
     run: (a) => inline.changeCase(a, 'cycle'),
