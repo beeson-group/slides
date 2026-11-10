@@ -168,21 +168,21 @@ for (const platform of PLATFORMS) {
       const a = document.activeElement;
       if (a === document.body) return 'canvas';
       if (a.closest('aside.notes')) return 'notes';
-      for (const [name, sel] of [['toolbar', '.beeson-edit-top'], ['navigator', '.beeson-edit-nav'], ['inspector', '.beeson-edit-side'], ['status', '.beeson-edit-bottom']]) if (a.closest(sel)) return name;
+      for (const [name, sel] of [['menubar', '.beeson-edit-menubar'], ['toolbar', '.beeson-edit-top'], ['navigator', '.beeson-edit-nav'], ['inspector', '.beeson-edit-side'], ['status', '.beeson-edit-bottom']]) if (a.closest(sel)) return name;
       return a.tagName;
     })()`);
     const seen = [];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 7; i++) {
       await press(page, 'F6');
       seen.push(await where());
     }
-    assert.deepEqual(seen, ['notes', 'inspector', 'status', 'toolbar', 'navigator', 'canvas']);
+    assert.deepEqual(seen, ['notes', 'inspector', 'status', 'menubar', 'toolbar', 'navigator', 'canvas']);
     const back = [];
-    for (let i = 0; i < 6; i++) {
+    for (let i = 0; i < 7; i++) {
       await press(page, 'Shift+F6');
       back.push(await where());
     }
-    assert.deepEqual(back, ['navigator', 'toolbar', 'status', 'inspector', 'notes', 'canvas']);
+    assert.deepEqual(back, ['navigator', 'toolbar', 'menubar', 'status', 'inspector', 'notes', 'canvas']);
     // F6 is taken in a text too
     await click(page, '.reveal section.present h1');
     await press(page, 'F6');
