@@ -1478,37 +1478,86 @@
 
   // src/chrome.ts
   var OWN = ["title", "section", "closing"];
-  var heading = (slide) => slide.dataset.run ?? (slide.querySelector("h2") ?? slide.querySelector("h1"))?.textContent?.trim() ?? "";
+  function sourceText(el) {
+    const items = window.MathJax?.startup?.document?.getMathItemsWithin([el]) ?? [];
+    if (!items.length) return el.textContent ?? "";
+    const tex = new Map(items.filter((i) => i.typesetRoot).map((i) => [i.typesetRoot, `${i.start.delim ?? ""}${i.math}${i.end.delim ?? ""}`]));
+    const copy = el.cloneNode(true);
+    const roots = [...el.querySelectorAll("mjx-container")];
+    [...copy.querySelectorAll("mjx-container")].forEach((m, k) => m.replaceWith(tex.get(roots[k]) ?? m.textContent ?? ""));
+    return copy.textContent ?? "";
+  }
+  var heading = (slide) => {
+    if (slide.dataset.run !== void 0) return slide.dataset.run;
+    const h = slide.querySelector("h2") ?? slide.querySelector("h1");
+    return h ? sourceText(h).trim() : "";
+  };
   var APPENDIX = "Appendix slides";
-  function initChrome() {
+  var made = /* @__PURE__ */ new WeakMap();
+  function typeset(nodes) {
+    const mj = window.MathJax;
+    if (!nodes.length || !mj?.typesetPromise) return;
+    void Promise.resolve(mj.startup?.promise).then(() => mj.typesetPromise(nodes.filter((n) => n.isConnected)));
+  }
+  function untypeset(nodes) {
+    if (nodes.length) window.MathJax?.typesetClear?.(nodes);
+  }
+  function fill() {
     const slides = [...document.querySelectorAll(".reveal .slides section:not(:has(> section))")];
     const sections = slides.filter((s) => s.classList.contains("section"));
+    const fresh = [];
+    const gone = [];
     let text = "";
     for (const slide of slides) {
       if (slide.classList.contains("section")) text = heading(slide);
       if (slide.classList.contains("closing")) text = APPENDIX;
-      if (OWN.some((c) => slide.classList.contains(c)) || slide.querySelector(".run") || !text) continue;
+      const old = slide.querySelector(":scope > div.run[data-generated]");
+      const wanted = !OWN.some((c) => slide.classList.contains(c)) && !slide.querySelector(".run:not([data-generated])") && !!text;
+      if (old && wanted && made.get(old) === text) {
+        if (old.nextElementSibling) slide.append(old);
+        continue;
+      }
+      if (old) {
+        gone.push(old);
+        old.remove();
+      }
+      if (!wanted) continue;
       const run = document.createElement("div");
       run.className = "run";
       run.dataset.generated = "";
       run.textContent = text;
+      made.set(run, text);
       slide.append(run);
+      fresh.push(run);
     }
     for (const list2 of document.querySelectorAll(".reveal ul.outline[data-auto]")) {
       const home = list2.closest("section");
-      list2.replaceChildren(
-        ...sections.map((s) => {
-          const li = document.createElement("li");
-          li.textContent = heading(s);
-          if (s === home) li.className = "now";
-          return li;
-        })
-      );
+      const names = sections.map(heading);
+      const items = [...list2.children];
+      const same = items.length === names.length && items.every((li, k) => made.get(li) === names[k]);
+      if (same) {
+        items.forEach((li, k) => li.classList.toggle("now", sections[k] === home));
+        continue;
+      }
+      gone.push(...items);
+      const lis = sections.map((s, k) => {
+        const li = document.createElement("li");
+        li.textContent = names[k];
+        made.set(li, names[k]);
+        if (s === home) li.className = "now";
+        return li;
+      });
+      list2.replaceChildren(...lis);
+      fresh.push(...lis);
     }
+    untypeset(gone);
+    typeset(fresh);
+  }
+  function initChrome() {
+    fill();
   }
   function refreshChrome() {
-    for (const run of document.querySelectorAll(".reveal .slides div.run[data-generated]")) run.remove();
-    initChrome();
+    fill();
   }
 
   // src/cursor.ts
@@ -3032,8 +3081,8 @@
     band.setAttribute("aria-hidden", "true");
     const track = document.createElement("div");
     track.className = "scrub-track";
-    const fill = document.createElement("span");
-    track.append(fill);
+    const fill2 = document.createElement("span");
+    track.append(fill2);
     const card = document.createElement("div");
     card.className = "scrub-card";
     band.append(track, card);
@@ -3075,7 +3124,7 @@
       ticks.forEach((t, i) => t.el.classList.toggle("quiet", i % k !== 0 && i !== ticks.length - 1));
     };
     const mark = () => {
-      fill.style.transform = `scaleX(${deck.getTotalSlides() < 2 ? 0 : deck.getProgress()})`;
+      fill2.style.transform = `scaleX(${deck.getTotalSlides() < 2 ? 0 : deck.getProgress()})`;
       const current = deck.getCurrentSlide();
       for (const t of ticks) t.el.classList.toggle("now", t.slide === current);
     };
@@ -4104,7 +4153,7 @@ void main() {
       const now = performance.now(), dt = (now - this.seenAt) / 1e3;
       this.seenAt = now;
       const lit = this.points.geometry.getAttribute("lit");
-      const fill = this.points.geometry.getAttribute("fill");
+      const fill2 = this.points.geometry.getAttribute("fill");
       const k = dt > 0.25 ? 1 : 1 - Math.exp(-dt / DIMMING);
       const f = !this.active || dt > 0.25 ? 1 : 1 - Math.exp(-dt / MARK_FADE);
       this.fn.marks.forEach((m, i) => {
@@ -4115,9 +4164,9 @@ void main() {
         this.lit[i] += (this.litTo[i] - this.lit[i]) * f;
         lit.setX(i, this.lit[i]);
         for (let c = 0; c < 3; c++) this.fill[3 * i + c] += (this.fillTo[3 * i + c] - this.fill[3 * i + c]) * f;
-        fill.setXYZ(i, this.fill[3 * i], this.fill[3 * i + 1], this.fill[3 * i + 2]);
+        fill2.setXYZ(i, this.fill[3 * i], this.fill[3 * i + 1], this.fill[3 * i + 2]);
       });
-      position.needsUpdate = seen.needsUpdate = lit.needsUpdate = fill.needsUpdate = true;
+      position.needsUpdate = seen.needsUpdate = lit.needsUpdate = fill2.needsUpdate = true;
       for (const lab of this.labels) {
         const i = this.fn.marks.findIndex((m) => m.name === lab.dataset.at);
         if (i < 0) continue;
@@ -4288,6 +4337,7 @@ void main() {
       restore.className = "fragment";
       restore.setAttribute("data-restore", "");
       restore.setAttribute("aria-hidden", "true");
+      if (last.some(delayed)) restore.setAttribute(AUTOSLIDE, "1");
       slide.append(restore);
     }
   }
@@ -4322,7 +4372,7 @@ void main() {
   function applyAll(root2) {
     for (const slide of root2.querySelectorAll(".reveal .slides section")) applySteps(slide);
   }
-  var typeset = () => window.MathJax?.startup?.promise ?? Promise.resolve();
+  var typeset2 = () => window.MathJax?.startup?.promise ?? Promise.resolve();
   function initSteps(deck) {
     const mark = () => {
       const slide = deck.getCurrentSlide();
@@ -4330,14 +4380,30 @@ void main() {
     };
     for (const type of ["fragmentshown", "fragmenthidden", "slidechanged"]) deck.on(type, mark);
     mark();
-    void typeset().then(mark);
+    void typeset2().then(mark);
   }
   var AUTOSLIDE = "data-autoslide";
   var HELD = "data-autoslide-held";
   var stepsOf = (slide) => [-1, ...new Set([...slide.querySelectorAll(".fragment")].map((f) => Number(f.dataset.fragmentIndex)).filter(Number.isFinite))].sort((a, b) => a - b);
   var fragmentsAt = (slide, f) => [...slide.querySelectorAll(".fragment")].filter((el) => Number(el.dataset.fragmentIndex) === f);
   var delayed = (el) => (parseInt(el.getAttribute(AUTOSLIDE) ?? el.getAttribute(HELD) ?? "", 10) || 0) > 0;
-  function initTimedSteps(deck) {
+  function initTimedSteps(deck, forDeck2) {
+    const config = deck.getConfig();
+    const method = config.autoSlideMethod;
+    let timer = false;
+    config.autoSlideStoppable = false;
+    config.autoSlideMethod = () => {
+      timer = true;
+      try {
+        if (typeof method === "function") method();
+        else deck.next();
+      } finally {
+        timer = false;
+      }
+    };
+    deck.addKeyBinding({ keyCode: 65, key: "A", description: "Pause and resume the timed steps" }, (ev) => {
+      if (forDeck2(ev)) deck.toggleAutoSlide(!deck.isAutoSliding());
+    });
     const slides = () => deck.getSlides();
     const here = () => {
       const slide = deck.getCurrentSlide();
@@ -4353,13 +4419,10 @@ void main() {
     };
     const delayedAt = (at) => !!at && at.f >= 0 && fragmentsAt(slides()[at.slide], at.f).some(delayed);
     const same = (a, b) => !!a && !!b && a.slide === b.slide && a.f === b.f;
+    const reached = /* @__PURE__ */ new Map();
+    const byDelay = (at) => reached.get(`${at.slide}:${at.f}`) ?? delayedAt(before(at));
     let last = here();
     let held = [];
-    let paused = false;
-    deck.on("autoslidepaused", () => {
-      paused = true;
-      setTimeout(() => paused = false, 0);
-    });
     const change = () => {
       const now = here();
       if (same(now, last)) return;
@@ -4371,6 +4434,7 @@ void main() {
       const from = last;
       last = now;
       const back = now.slide < from.slide || now.slide === from.slide && now.f < from.f;
+      if (!back) reached.set(`${now.slide}:${now.f}`, timer);
       if (!back || deck.isOverview()) return;
       if (delayedAt(now)) {
         held = fragmentsAt(slides()[now.slide], now.f).filter((el) => el.hasAttribute(AUTOSLIDE));
@@ -4379,13 +4443,9 @@ void main() {
           el.removeAttribute(AUTOSLIDE);
         }
       }
-      if (paused) {
-        paused = false;
-        deck.toggleAutoSlide(true);
-      }
       deck.cueAutoSlide?.();
       if (!delayedAt(now)) return;
-      if (same(before(from), now) && delayedAt(before(now))) setTimeout(() => deck.prev(), 0);
+      if (same(before(from), now) && byDelay(now)) setTimeout(() => deck.prev(), 0);
     };
     for (const type of ["fragmentshown", "fragmenthidden", "slidechanged"]) deck.on(type, change);
   }
@@ -4669,7 +4729,7 @@ void main() {
     markViewers();
     deck.on("pdf-ready", () => {
       completeAll();
-      void typeset().then(() => applyAll(document));
+      void typeset2().then(() => applyAll(document));
       syncViewers(get());
       void stillViewers();
     });
@@ -4678,7 +4738,7 @@ void main() {
     await deck.initialize({ ...DEFAULTS, ...editing, ...options, plugins });
     initChrome();
     initSteps(deck);
-    if (!EDITING) initTimedSteps(deck);
+    if (!EDITING) initTimedSteps(deck, forDeck);
     remount();
     initCursor(() => backdrops, () => deck.getCurrentSlide(), !EDITING);
     deck.addKeyBinding({ keyCode: 68, key: "D", description: "Switch dark and light" }, (ev) => {
