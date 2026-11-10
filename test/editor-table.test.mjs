@@ -1,10 +1,12 @@
 // the tables of the editor: the model of src/editor/table.ts under node, and on either platform
 // with trusted input the Insert Table grid, Tab and the arrow keys between the cells, the rows and
 // columns added and deleted, the header row, the numbers at the right, the context menu of a cell,
-// and a paste of tab-separated text or of an HTML table, onto the slide or into a cell. after each
-// edit an undo gives the file byte for byte, a redo gives the edit, and a save is opened again
-// without problems. a paste is a synthetic event with a DataTransfer of its own, since the
-// clipboard of the system is shared with the other tests run at the same time
+// a paste of tab-separated text or of an HTML table, onto the slide or into a cell, a range of
+// cells selected by a drag, a Shift-click, and the keys, the cells merged and unmerged, the widths
+// of the columns, and Auto-Align. after each edit the text is in the scope rule, an undo gives the
+// file byte for byte, a redo gives the edit, and a save is opened again without problems. a paste
+// is a synthetic event with a DataTransfer of its own, since the clipboard of the system is shared
+// with the other tests run at the same time
 
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
