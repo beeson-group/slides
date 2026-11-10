@@ -116,7 +116,8 @@ export function commands(): Command[] {
       },
     },
     {
-      // Return puts the caret at the end of the text of a block, and selects the image of a figure
+      // Return puts the caret at the end of the text of a block. the command is enabled only on an
+      // element that holds a block, since Keynote offers Edit Text only on an element with text
       id: 'selection.editText',
       label: 'Edit Text',
       keys: { mac: ['Enter'], other: ['Enter'] },
@@ -125,17 +126,29 @@ export function commands(): Command[] {
       enabled: (app) => {
         const el = app.selection.only();
         if (!el || document.activeElement?.classList.contains('beeson-handle')) return false;
-        return el.matches(HOST) || !!el.querySelector(HOST) || !!mediaIn(el, el.querySelector('img, video'));
+        return el.matches(HOST) || !!el.querySelector(HOST);
       },
       run: (app) => {
         const el = app.selection.only() as Element;
-        const hosts = el.matches(HOST) ? [el] : [...el.querySelectorAll(HOST)];
-        const host = hosts.at(-1);
+        const host = el.matches(HOST) ? el : [...el.querySelectorAll(HOST)].at(-1);
         if (host) caretAtEnd(host);
-        else {
-          const media = [...el.querySelectorAll('img, video')].find((m) => m.getBoundingClientRect().width > 0);
-          if (media) app.selection.set('elements', [media]);
-        }
+      },
+    },
+    {
+      // Return on a figure without text selects its image or video
+      id: 'selection.selectMedia',
+      label: 'Select Image',
+      keys: { mac: ['Enter'], other: ['Enter'] },
+      in: ['canvas'],
+      enabled: (app) => {
+        const el = app.selection.only();
+        if (!el || document.activeElement?.classList.contains('beeson-handle') || el.querySelector(HOST)) return false;
+        return !!mediaIn(el, el.querySelector('img, video'));
+      },
+      run: (app) => {
+        const el = app.selection.only() as Element;
+        const media = [...el.querySelectorAll('img, video')].find((m) => m.getBoundingClientRect().width > 0);
+        if (media) app.selection.set('elements', [media]);
       },
     },
     {

@@ -19,7 +19,9 @@ export type Command = {
   // where the keys are taken, by default on the canvas and in the navigator
   in?: Region[];
   menu?: { bar: string; group: string; order: number; submenu?: string };
-  toolbar?: { group: string; order: number; icon: string };
+  // label is a short label of the toolbar that does not change, e.g. Undo for Undo Typing, and
+  // split names a submenu of the menu of the command, drawn as a split button beside it
+  toolbar?: { group: string; order: number; icon: string; label?: string; split?: string };
   context?: Context[];
   enabled?(app: App): boolean;
   // true or false for a switch, null or absent for a plain command
