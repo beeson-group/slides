@@ -41,10 +41,12 @@ export function tablePane(app: App, run: Run): Control[] {
         { command: 'table.columnAfter', text: 'After', title: 'Add Column After' },
       ], 'Add Column')], 'Add'),
       row([button(app, run, { command: 'table.deleteColumn', text: 'Delete Column' })]),
+      // the widths of the columns, on a row of their own as Merge and Unmerge, since the two
+      // buttons do not fit beside a label in the width of the inspector
       row([
-        button(app, run, { command: 'table.distributeColumns', text: 'Distribute Evenly' }),
-        button(app, run, { command: 'table.fitColumn', text: 'Fit to Content' }),
-      ], 'Size'),
+        button(app, run, { command: 'table.distributeColumns', text: 'Distribute Evenly', title: 'Distribute Columns Evenly' }),
+        button(app, run, { command: 'table.fitColumn', text: 'Fit to Content', title: 'Resize Column to Fit Content' }),
+      ]),
     ]),
     section('Numbers', [
       checkbox(app, run, 'table.numbersRight', 'Columns of numbers at the right'),

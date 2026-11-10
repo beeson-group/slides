@@ -109,9 +109,16 @@ export class Commands {
     return typeof c.label === 'function' ? c.label(this.app) : c.label;
   }
 
+  // the checks that turn a command off whatever its own enabled says, e.g. on a locked element
+  private readonly vetoes: ((app: App, c: Command) => boolean)[] = [];
+
+  veto(check: (app: App, c: Command) => boolean): void {
+    this.vetoes.push(check);
+  }
+
   enabled(id: string): boolean {
     const c = this.byId.get(id);
-    return !!c && (c.enabled?.(this.app) ?? true);
+    return !!c && (c.enabled?.(this.app) ?? true) && !this.vetoes.some((v) => v(this.app, c));
   }
 
   state(id: string): CommandState {

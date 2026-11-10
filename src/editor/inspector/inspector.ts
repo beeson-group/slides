@@ -24,6 +24,7 @@ import { surfacePane, surfaceOf } from './surface.ts';
 import { plotOf } from '../commands/plot.ts';
 import { linePane } from './line.ts';
 import { selectedLines } from '../commands/line.ts';
+import { lockedSelection } from '../commands/order.ts';
 
 export type PaneKind = 'slide' | 'table' | 'text' | 'image' | 'video' | 'qr' | 'formula' | 'code' | 'plot' | 'surface' | 'line' | 'arrange';
 const TAB_NAMES: Record<PaneKind, string> = { slide: 'Slide', table: 'Table', text: 'Text', image: 'Image', video: 'Video', qr: 'QR Code', formula: 'Formula', code: 'Code', plot: 'Plot', surface: 'Surface', line: 'Line', arrange: 'Arrange' };
@@ -129,7 +130,26 @@ export function fillFormat(app: App, panel: HTMLElement): void {
   parts[0]?.el.classList.add('first');
   root.append(...parts.map((p) => p.el));
   panel.replaceChildren(root);
-  shown = { key, items: view.items, panel, root, parts };
+  // synced after the panes, since a field sets its own enabled state at each sync
+  const lock: Control = { el: root, sync: () => lockFields(app, root) };
+  shown = { key, items: view.items, panel, root, parts: [...parts, lock] };
+  lock.sync();
+}
+
+// the fields of the panes of a locked selection turned off, i.e. each control without a command,
+// whose own check does not know the lock. a control with a command follows the command, which the
+// lock turns off in commands/order.ts, and a field turned off here is turned on again at an unlock
+function lockFields(app: App, root: HTMLElement): void {
+  const on = lockedSelection(app);
+  for (const el of root.querySelectorAll<HTMLInputElement>('input:not([data-command]), textarea, select, button:not([data-command]):not([role="tab"])')) {
+    if (on && !el.disabled) {
+      el.disabled = true;
+      el.dataset.lockedOff = '';
+    } else if (!on && el.dataset.lockedOff !== undefined) {
+      el.disabled = false;
+      delete el.dataset.lockedOff;
+    }
+  }
 }
 
 // the Format tab is shown, on the pane of tab when the selection has it
