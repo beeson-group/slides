@@ -150,6 +150,15 @@ export function sizedOf(el: Element): Element[] {
   return held.filter((m) => m.getBoundingClientRect().width > 0).length === 1 ? held : [];
 }
 
+// the image or video of the other mode beside el, e.g. the for-light image of a for-dark one, which
+// is given the place of el, so that a picture keeps its place and size when the mode is flipped
+export function twinOf(app: App, el: Element): Element | null {
+  const mode = el.classList.contains('for-dark') ? 'for-light' : el.classList.contains('for-light') ? 'for-dark' : null;
+  if (!mode || !el.matches(STRETCHED) || !el.parentElement) return null;
+  const twin = [...el.parentElement.children].find((c) => c !== el && c.localName === el.localName && c.classList.contains(mode));
+  return twin && app.pairing?.elements.get(twin)?.open ? twin : null;
+}
+
 // the element whose picture stands for el in its frame and its resize: the shown image, video, or
 // QR code of a figure, or el itself
 export function pictureOf(el: Element): Element {
@@ -168,6 +177,16 @@ export function movableOf(app: App, target: Element | null): Element | null {
     el = up;
   }
   return el && slide.contains(el) && pairing.elements.get(el)?.open ? el : null;
+}
+
+// what a press at target selects: the image or video under it in a figure, which is an object apart
+// from its caption, as in Keynote and PowerPoint, and else the movable element around it. the figure
+// is selected by a press outside its image, or by Esc on the image, and a selected figure is kept,
+// so that a drag on its image moves all of it
+export function pickOf(app: App, target: Element | null): Element | null {
+  const el = movableOf(app, target);
+  const media = el?.matches('figure') && !app.selection.has(el) ? mediaIn(el, target) : null;
+  return media && app.pairing?.elements.get(media)?.open ? media : el;
 }
 
 // the movable elements of the current slide that are shown, in document order

@@ -379,6 +379,10 @@ test('a figure dragged on the slide gets its offset as a translate style in its 
     // a figure is dragged by itself, hence its hover frame is drawn without the handle of a block
     const hovered = !document.querySelector('.beeson-frame').hidden && document.querySelector('.beeson-handle').hidden;
     const scale = Reveal.getScale();
+    // a click on the image selects it apart from its caption, and Esc selects the figure
+    at('pointerdown', x, y);
+    at('pointerup', x, y);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     at('pointerdown', x, y);
     at('pointermove', x + 30 * scale, y + 20 * scale);
     at('pointermove', x + 60 * scale, y + 40 * scale);
@@ -509,6 +513,10 @@ test('one history undoes and redoes the typing, a formula, a step, and a move, w
     const at = (type, cx, cy) => document.elementFromPoint(cx, cy).dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: cx, clientY: cy, button: 0, pointerId: 1, altKey: true }));
     const scale = Reveal.getScale();
     at('pointermove', x, y);
+    // a click on the image selects it apart from its caption, and Esc selects the figure
+    at('pointerdown', x, y);
+    at('pointerup', x, y);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     at('pointerdown', x, y);
     at('pointermove', x + 60 * scale, y + 40 * scale);
     at('pointerup', x + 60 * scale, y + 40 * scale);
@@ -874,6 +882,10 @@ test('Esc leaves a text and selects its block for the arrow keys, Tab reaches a 
     const x = r.left + r.width / 2, y = r.top + r.height / 2;
     const at = (type, cx, cy) => document.elementFromPoint(cx, cy).dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: cx, clientY: cy, button: 0, pointerId: 1, altKey: ${alt} }));
     const dx = pr.left + 5 - z.left;
+    // a click on the image selects it apart from its caption, and Esc selects the figure
+    at('pointerdown', x, y);
+    at('pointerup', x, y);
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     at('pointerdown', x, y);
     at('pointermove', x + dx / 2, y + 100);
     at('pointermove', x + dx, y + 200);
@@ -1314,6 +1326,11 @@ test('Shift locks a drag to one axis, a run of nudges is one undo, and the offse
     const at = (type, cx, cy) => document.elementFromPoint(cx, cy).dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: cx, clientY: cy, button: 0, pointerId: 1, shiftKey: true, altKey: ${alt} }));
     const scale = Reveal.getScale();
     const label = () => document.querySelector('.beeson-offset');
+    // a click on the image selects it apart from its caption, and Esc selects the figure
+    const tap = (type) => document.elementFromPoint(x, y).dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: x, clientY: y, button: 0, pointerId: 1 }));
+    tap('pointerdown');
+    tap('pointerup');
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     at('pointermove', x, y);
     at('pointerdown', x, y);
     at('pointermove', x + 30 * scale, y + 10 * scale);

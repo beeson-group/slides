@@ -7,7 +7,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { launch } from '../scripts/chrome.mjs';
-import { click, drag, editorPage, press } from './helpers/editor.mjs';
+import { click, drag, editorPage, press, selectFigure } from './helpers/editor.mjs';
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
@@ -184,8 +184,9 @@ test('a drag of two elements writes two translate declarations, undone as one en
   const page = await editorPage(browser, { query: 'edit&still&edit-platform=other' });
   await figureSlide(page);
   const p = await boxOf(page, P);
-  await click(page, { x: p.right + 3, y: (p.top + p.bottom) / 2 });
-  await click(page, IMG, { modifiers: 'Shift' });
+  // the figure, selected apart from its image, and the paragraph added by its band
+  await selectFigure(page, IMG);
+  await click(page, { x: p.right + 3, y: (p.top + p.bottom) / 2 }, { modifiers: 'Shift' });
   await drag(page, IMG, { dx: -30, dy: 40, modifiers: 'Alt' });
   const [tp, tz] = await translates(page, [P, ZONE]);
   assert.match(tp, /^-?\d+px \d+px$/);

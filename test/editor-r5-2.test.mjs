@@ -12,7 +12,7 @@ import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
-import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen, selectFigure } from './helpers/editor.mjs';
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 const PLATFORMS = ['mac', 'other'];
@@ -145,10 +145,8 @@ async function setField(page, name, value) {
   await sleep(80);
 }
 
-// the image of the zone of the math slide selected by itself, with a click on the figure and one
-// more on the image
+// the image of the zone of the math slide selected by itself, apart from its caption, with a click
 async function selectZoneImage(page) {
-  await click(page, ZONE_IMG);
   await click(page, ZONE_IMG);
   await frames(page);
 }
@@ -248,6 +246,7 @@ for (const platform of PLATFORMS) {
     // a vertical line at x 1100 from y 300 to 700, left of the zone, with its middle at y 500
     await addLine(page, { x: 1100, y: 300 }, { x: 1100, y: 700 });
     const drawn = await render(page);
+    await selectFigure(page, ZONE_IMG);
     const zone = await slideBox(page, '.reveal section.present .zone');
     // the left edge of the zone is dragged to 5 px right of the line, and its top to 5 px under the
     // middle of the line
@@ -664,12 +663,27 @@ for (const platform of PLATFORMS) {
     await frames(page);
     assert.deepEqual(await selected(page), ['img.for-dark'], 'the first click on the image does not select the image');
     assert.equal((await state(page, 'image.editMask')).enabled, true, 'Edit Mask is not offered on the image');
+    // Select Figure of the Edit menu, and a click on the band under the figure, select the figure
+    await click(page, ZONE_IMG);
+    assert.equal((await state(page, 'selection.container')).enabled, true, 'Select Figure is not offered on the image');
+    await exec(page, 'selection.container');
+    await frames(page);
+    assert.deepEqual(await selected(page), ['figure.zone'], 'Select Figure does not select the figure of the image');
+    await click(page, ZONE_IMG);
+    const z = await page.evaluate(`(() => { const r = document.querySelector('.reveal section.present .zone').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.bottom + 3 }; })()`);
+    await click(page, z);
+    await frames(page);
+    assert.deepEqual(await selected(page), ['figure.zone'], 'a click on the band under the figure does not select it');
+    await click(page, ZONE_IMG);
+    await frames(page);
+    assert.deepEqual(await selected(page), ['img.for-dark'], 'a click on the image of a selected figure does not select the image');
     const rotor = await page.evaluate(`(() => { const r = document.querySelector('.beeson-rotor').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
     const k = await scaleOf(page);
     await drag(page, rotor, { dx: 200 * k, dy: 0 });
     await frames(page);
     const edited = await render(page);
     assert.match(edited, /<img class="for-dark" [^>]*style="rotate: -?\d+(\.\d+)?deg"/, 'the image is not rotated');
+    assert.match(edited, /<img class="for-light" [^>]*style="rotate: -?\d+(\.\d+)?deg"/, 'the image of the other mode is not rotated with it');
     assert.match(edited, /<figure class="zone fragment" data-fragment-index="2">/, 'the figure is rotated');
     assert.deepEqual(await slideBox(page, '.reveal section.present .zone .caption'), caption, 'the caption moves with the image');
     await roundTrip(page, edited);
@@ -681,3 +695,4 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+

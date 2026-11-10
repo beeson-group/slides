@@ -10,7 +10,7 @@ import type { App } from '../app.ts';
 import type { TagEdit, Translate } from '../tags.ts';
 import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
-import { BY_ITSELF, RESIZABLE, STRETCHED, aspectOf, bandAt, constrained, containerOf, cssWidth, frameOf, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, onCanvas, orientedBox, pictureOf, segmentTouches, sizedOf, snapBoxOf, toSlide, visualRect } from './hit.ts';
+import { BY_ITSELF, RESIZABLE, STRETCHED, aspectOf, bandAt, constrained, containerOf, cssWidth, frameOf, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, onCanvas, orientedBox, pickOf, pictureOf, segmentTouches, sizedOf, snapBoxOf, toSlide, twinOf, visualRect } from './hit.ts';
 import { overlay, view } from './frames.ts';
 import { freshGroup } from '../commands/order.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -64,8 +64,10 @@ function declare(el: Element, edit: TagEdit & { style?: Record<string, string | 
 // save writes into its start tag. the width is written as a declaration of the style, which the
 // writer of the tags of the document model takes. it does not record the history, which the caller
 // does with record(). a locked element is left as it is, unless force is set by an undo or a redo
-export function writePlace(app: App, el: Element, p: Place, force = false): void {
+export function writePlace(app: App, el: Element, p: Place, force = false, twin = true): void {
   if (locked(el) && !force) return;
+  const other = twin ? twinOf(app, el) : null;
+  if (other) writePlace(app, other, p, force, false);
   const style = (el as HTMLElement).style;
   const t = p.translate && (p.translate.x || p.translate.y) ? { x: Math.round(p.translate.x), y: Math.round(p.translate.y) } : null;
   style.translate = t ? `${t.x}px ${t.y}px` : '';
@@ -327,7 +329,7 @@ export function install(app: App): void {
       pressElement(ev, inner, target);
       return;
     }
-    const el = movableOf(app, target);
+    const el = pickOf(app, target);
     const host = app.hostOf(target);
     if (el && host) {
       // a click into a text puts the caret there, and with Shift or the command modifier the block
@@ -640,7 +642,7 @@ export function install(app: App): void {
   const hover = (ev: PointerEvent) => {
     const target = ev.target instanceof Element ? ev.target : null;
     if (target && (target === frames.handle || target.closest('.beeson-grip'))) return;
-    const el = movableOf(app, target);
+    const el = pickOf(app, target);
     const band = el ? null : onCanvas(target, app, { x: ev.clientX, y: ev.clientY }) ? bandAt(app, ev.clientX, ev.clientY) : null;
     document.documentElement.classList.toggle('beeson-band', !!band);
     const next = el ?? band;

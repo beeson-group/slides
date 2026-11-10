@@ -105,6 +105,23 @@ export function commands(): Command[] {
       },
     },
     {
+      // the figure around a selected image, video, or QR code, which a click selects apart from its
+      // caption, as Esc does
+      id: 'selection.container',
+      label: 'Select Figure',
+      menu: { bar: 'Edit', group: 'select', order: 12 },
+      context: ['element'],
+      enabled: (app) => {
+        const only = app.selection.only();
+        return !!only && only.matches(RESIZABLE) && !!containerOf(app, only);
+      },
+      run: (app) => {
+        const only = app.selection.only();
+        const up = only ? containerOf(app, only) : null;
+        if (up) app.selection.set('elements', [up]);
+      },
+    },
+    {
       id: 'selection.leaveText',
       label: 'Select Block',
       keys: { mac: ['Escape'], other: ['Escape'] },
