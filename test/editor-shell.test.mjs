@@ -242,7 +242,7 @@ test('the labels of the toolbar are hidden below 1100 px and kept as text, and t
     const bar = await page.evaluate(`(() => { const b = [...document.querySelectorAll('.beeson-edit-top .tb')]; return { texts: b.filter((e) => !e.classList.contains('more-groups')).map((e) => e.textContent), label: getComputedStyle(b[0].querySelector('.label')).display !== 'none', more: !!document.querySelector('.beeson-edit-top .more-groups') }; })()`);
     assert.equal(bar.label, labels, `${width}: labels`);
     assert.equal(bar.more, more, `${width}: the menu More`);
-    assert.deepEqual(bar.texts, more ? ['View', 'FitZoom', 'Undo', 'Redo', 'Add Slide', 'Text Box', 'Formula', 'Table', 'Image', 'Video', 'QR Code', 'Present'] : ['View', 'FitZoom', 'Undo', 'Redo', 'Add Slide', 'Text Box', 'Formula', 'Table', 'Image', 'Video', 'QR Code', 'Present', 'Save', 'Format', 'Steps']);
+    assert.deepEqual(bar.texts, more ? ['View', 'FitZoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', 'Media', 'Present'] : ['View', 'FitZoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', 'Media', 'Present', 'Save', 'Format', 'Steps']);
     const cell = await boxOf(page, '.beeson-edit-canvas');
     assert.ok(cell.w > 0 && cell.h > 0);
     assert.deepEqual(page.errors, []);

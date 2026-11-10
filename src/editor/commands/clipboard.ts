@@ -220,6 +220,13 @@ async function readMedia(): Promise<File[]> {
 const inText = (app: App) => app.selection.kind === 'text' || app.region() === 'text';
 const onSlides = (app: App) => app.region() === 'navigator' || app.selection.kind === 'slides';
 
+// whether the range of the document is not collapsed, i.e. a text has something to cut or copy, as
+// in both apps, where Cut and Copy are disabled at a caret
+const hasRange = () => {
+  const s = getSelection();
+  return !!s && s.rangeCount > 0 && !s.isCollapsed;
+};
+
 export function install(app: App): void {
   const c = app.commands;
   const fail = (e: unknown) => app.fail(e);
@@ -231,7 +238,7 @@ export function install(app: App): void {
     label: 'Cut',
     menu: menu(20),
     context: ['element', 'text'],
-    enabled: (a) => ready(a) && (inText(a) || selectedElements(a).length > 0 || (onSlides(a) && a.commands.enabled('slide.cut'))),
+    enabled: (a) => ready(a) && (inText(a) ? hasRange() : selectedElements(a).length > 0 || (onSlides(a) && a.commands.enabled('slide.cut'))),
     undoable: true,
     run: async (a, arg) => {
       const data = arg instanceof DataTransfer ? arg : null;
@@ -249,7 +256,7 @@ export function install(app: App): void {
     label: 'Copy',
     menu: menu(21),
     context: ['element', 'text'],
-    enabled: (a) => ready(a) && (inText(a) || selectedElements(a).length > 0 || (onSlides(a) && a.commands.enabled('slide.copy'))),
+    enabled: (a) => ready(a) && (inText(a) ? hasRange() : selectedElements(a).length > 0 || (onSlides(a) && a.commands.enabled('slide.copy'))),
     run: (a, arg) => {
       const data = arg instanceof DataTransfer ? arg : null;
       if (inText(a)) return void document.execCommand('copy');
@@ -262,7 +269,7 @@ export function install(app: App): void {
     id: 'edit.paste',
     label: 'Paste',
     menu: menu(22),
-    context: ['element', 'canvas'],
+    context: ['element', 'text', 'canvas'],
     enabled: ready,
     undoable: true,
     run: async (a, arg) => {

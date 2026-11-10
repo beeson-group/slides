@@ -26,7 +26,7 @@ const CSS = `
 .beeson-tex .preview mjx-container { margin: 0 !important; max-width: 100%; }
 .beeson-tex .preview svg { max-width: 100%; height: auto; }
 .beeson-tex .preview .empty { color: var(--ed-faint, #888); font: 12px/1.3 var(--ed-font, system-ui, sans-serif); }
-.beeson-tex .error { color: var(--red, #e5484d); font: 12px/1.35 var(--ed-font, system-ui, sans-serif); }
+.beeson-tex .error { color: var(--ed-error, #d70015); font: 12px/1.35 var(--ed-font, system-ui, sans-serif); }
 .beeson-tex .error.prompt { color: var(--ed-muted, #999); }
 .beeson-tex .error:empty { display: none; }
 .beeson-complete { position: fixed; z-index: 90; min-width: 220px; max-width: 360px; margin: 0; padding: 4px; list-style: none; border: 1px solid var(--ed-menu-line, #555); border-radius: 8px; background: var(--ed-menu, #2c2c2e); color: var(--ed-text, #eee); font: 12px/1.3 var(--ed-font, system-ui, sans-serif); box-shadow: 0 10px 32px rgba(0, 0, 0, 0.28); -webkit-backdrop-filter: blur(20px); backdrop-filter: blur(20px); }
