@@ -33,9 +33,6 @@ const CSS = `
 
 export type SheetRow = { bar: string; label: string; keys: string[] };
 
-// the keys of the clipboard, which the browser takes in a text and the registry does not bind
-const NATIVE: Record<string, string> = { 'edit.cut': 'Mod+X', 'edit.copy': 'Mod+C', 'edit.paste': 'Mod+V' };
-
 // the commands of the items of a menu and of its submenus, in their order
 function commandsOf(app: App, items: MenuItem[]): Command[] {
   const out: Command[] = [];
@@ -52,10 +49,7 @@ function commandsOf(app: App, items: MenuItem[]): Command[] {
 export function sheetRows(app: App): SheetRow[] {
   const platform = app.platform;
   const label = (c: Command) => (typeof c.label === 'string' ? c.label : c.label(app));
-  const keys = (c: Command) => {
-    const own = keysOf(c, platform);
-    return (own.length ? own : NATIVE[c.id] ? [NATIVE[c.id]] : []).map((k) => display(k, platform));
-  };
+  const keys = (c: Command) => [...new Set(keysOf(c, platform).map((k) => display(k, platform)))];
   const all = app.commands.list();
   const extra = [...new Set(all.map((c) => c.menu?.bar).filter((b): b is string => !!b && !MENUS.includes(b)))];
   const rows: SheetRow[] = [];
