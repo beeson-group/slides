@@ -131,10 +131,14 @@ function canRun(app: App, commands: Command[]): boolean {
 // the layout of a menu over the submenus and the groups that the packages declare, by the name of
 // a declared submenu or, for a command without one, of its group. parent sets it in a submenu of
 // the layout, flat sets the commands of a declared submenu straight into that parent, and order is
-// added to the order of the first command of a submenu. '*' places a submenu of the menu that the
-// layout does not name
-type Place = { parent?: string; group: string; order?: number; flat?: boolean };
+// added to the order of the first command of a submenu. keep shows a submenu of one command as a
+// submenu. '*' places a submenu of the menu that the layout does not name
+type Place = { parent?: string; group: string; order?: number; flat?: boolean; keep?: boolean };
 const LAYOUT: Record<string, Record<string, Place>> = {
+  // Spelling and Grammar of Keynote, before Substitutions, with the one switch a page can set
+  Edit: {
+    'Spelling and Grammar': { group: 'substitutions', keep: true },
+  },
   // Keynote's Format menu: the commands of the text in Font and Text, then the menus of an object,
   // e.g. Image and Table
   Format: {
@@ -182,7 +186,7 @@ export function menuItems(app: App, bar: string, submenu?: string): MenuItem[] {
     const p = LAYOUT[bar]?.[name] ?? (at.length === 0 ? LAYOUT[bar]?.['*'] : undefined);
     const group = p && (at.length === 0 ? !p.parent : p.parent === at.at(-1)) ? p.group : first.group;
     const order = first.order + (p?.order ?? 0);
-    const item: MenuItem = members.length === 1 ? { command: first.c.id } : { label: name, items: () => menuItems(app, bar, name), disabled: !canRun(app, members.map((x) => x.c)) };
+    const item: MenuItem = members.length === 1 && !p?.keep ? { command: first.c.id } : { label: name, items: () => menuItems(app, bar, name), disabled: !canRun(app, members.map((x) => x.c)) };
     entries.push({ group, order, item });
   }
   entries.sort((a, b) => a.order - b.order);
@@ -274,6 +278,8 @@ export function contextItems(app: App, kind: Context, target: Element | null): M
     out.push({ command: c.id, arg: { kind, target } });
   }
   if (kind === 'canvas') addGrid(app, out);
+  // the menu of the browser, with its spelling guesses, is opened by a second right-click
+  if (kind === 'text' && out.length) out.push({ rule: true }, { note: browserNote(app) });
   return out;
 }
 
@@ -289,6 +295,14 @@ function addGrid(app: App, out: MenuItem[]): void {
   if (!add.length) return;
   const at = out.findIndex((it) => 'command' in it && !['Edit', 'Slide', undefined].includes(app.commands.get(it.command)?.menu?.bar));
   out.splice(at < 0 ? out.length : at, 0, { rule: true }, ...add, { rule: true });
+}
+
+// the note at the end of the menu of a text, on what a second right-click opens. a page cannot
+// read the spelling guesses of the browser, and it cannot open its menu either
+function browserNote(app: App): string {
+  const spelling = !!app.commands.get('edit.spelling') && app.commands.state('edit.spelling').checked;
+  if (!spelling) return 'Right-click again for the menu of the browser';
+  return app.platform === 'mac' ? 'Right-click again for spelling guesses and Look Up' : 'Right-click again for spelling guesses';
 }
 
 class Menu {
@@ -691,8 +705,25 @@ let menuKey = false;
 window.addEventListener('keydown', (ev) => {
   menuKey = ev.key === 'ContextMenu' || (ev.key === 'F10' && ev.shiftKey);
 }, true);
+
+// whether the menu of a text or a cell was open at the last press, which the press closes
+let textMenu = false;
 window.addEventListener('pointerdown', () => {
   menuKey = false;
+  const kinds = stack[0]?.options.className?.split(' ') ?? [];
+  textMenu = kinds.includes('context') && (kinds.includes('text') || kinds.includes('cell'));
+}, true);
+
+// a second right-click in a text, or a right-click with ⌥ or Alt held, is left to the browser,
+// which opens its own menu with the spelling guesses, Look Up, and Translate. this listener is added
+// at the import of this module, before every other listener of the menus of the editor
+window.addEventListener('contextmenu', (ev) => {
+  const t = ev.target instanceof Element ? ev.target : null;
+  const again = textMenu && !!t?.closest('[contenteditable="true"]');
+  textMenu = false;
+  if (!t || t.closest('.beeson-edit-menu') || !(again || ev.altKey)) return;
+  closeMenus();
+  ev.stopImmediatePropagation();
 }, true);
 
 // a context menu takes the focus, and opened from the keyboard it highlights its first item
