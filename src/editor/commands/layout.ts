@@ -275,14 +275,36 @@ function overflows(panel: Element): boolean {
 // the texts moved into the panel of a split slide are shrunk to fit it, as PowerPoint shrinks the
 // text of a placeholder: the paragraphs and the lists of the panel are set in the style Small,
 // within the scale of the theme. a text that still does not fit keeps the mark of overflow.ts. a
-// slide that is not shown, whose boxes are not laid out, is left as it is
+// slide that is not shown is laid out for the measure, hidden, since reveal.js does not lay out a
+// slide away from the current one
 function fitPanel(app: App, slide: Element): void {
   const panel = slide.querySelector(':scope > .panel');
-  if (!panel || !panel.getBoundingClientRect().height || !overflows(panel)) return;
+  if (!panel || !(slide instanceof HTMLElement) || !laidOut(slide, () => overflows(panel))) return;
   for (const el of panel.querySelectorAll(':scope > p, :scope > ul, :scope > ol')) {
     if (!app.pairing?.elements.get(el)?.open) continue;
     const classes = app.doc.tagState(el).classes.filter((c) => c !== 'fragment');
     if (!classes.length) app.doc.setTag(el, { classes: { small: true } }, 'layout');
+  }
+}
+
+// measure run on slide shown as the current slide is, and invisible, with its inline style put back
+function laidOut<T>(slide: HTMLElement, measure: () => T): T {
+  const style = slide.getAttribute('style');
+  const hidden = slide.hidden;
+  const present = slide.classList.contains('present');
+  slide.hidden = false;
+  slide.style.display = 'block';
+  if (!present) {
+    slide.style.visibility = 'hidden';
+    slide.classList.add('present');
+  }
+  try {
+    return measure();
+  } finally {
+    if (!present) slide.classList.remove('present');
+    if (style === null) slide.removeAttribute('style');
+    else slide.setAttribute('style', style);
+    slide.hidden = hidden;
   }
 }
 

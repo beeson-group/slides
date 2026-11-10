@@ -19,6 +19,16 @@ import { injectStyle } from '../ui/dom.ts';
 const TEXT: Region[] = ['text'];
 const FORMAT: Region[] = ['text', 'canvas'];
 
+// whether the caret, the selected text, or a selected block is in a code box, which does not hold
+// the styles of a text that Paste Style and the Format Painter set
+function inCode(app: App): boolean {
+  if (app.selection.kind === 'text') {
+    const n = window.getSelection()?.anchorNode;
+    return !!(n instanceof Element ? n : n?.parentElement)?.closest('pre');
+  }
+  return app.selection.elements().some((el) => !!el.closest('pre'));
+}
+
 const TONE_LABELS: Record<inline.Tone, string> = { accent: 'Accent', violet: 'Violet', blue: 'Blue', red: 'Red', subtle: 'Subtle', muted: 'Muted' };
 const STYLE_LABELS: Record<blocks.ParagraphStyle, string> = { body: 'Body', small: 'Small', subheading: 'Subheading', caption: 'Caption', footnote: 'Footnote' };
 const LIST_LABELS: Record<blocks.ListKind, string> = { none: 'Paragraphs', ul: 'Dashes', ol: 'Numbers' };
@@ -240,16 +250,17 @@ function installStyles(app: App, define: Define, menu: MenuOf): void {
     in: FORMAT,
     menu: menu('copy-style', 87),
     undoable: true,
-    enabled: (a) => copied !== null && inline.canPaint(a),
+    enabled: (a) => copied !== null && !inCode(a) && inline.canPaint(a),
     run: (a) => (copied ? inline.pasteStyle(a, copied) : undefined),
   });
   // a script or the double click gives { sticky: true }, which arms the painter until it is
-  // switched off. without it, a run switches the painter
+  // switched off. without it, a run switches the painter. an armed painter stays live, so that a
+  // click switches it off
   define({
     id: 'text.formatPainter',
     label: 'Format Painter',
     in: FORMAT,
-    enabled: (a) => painter.armed || inline.readStyle(a) !== null,
+    enabled: (a) => painter.armed || (!inCode(a) && inline.readStyle(a) !== null),
     checked: () => painter.armed,
     run: (a, arg) => {
       const sticky = (arg as { sticky?: unknown } | undefined)?.sticky === true;

@@ -7,7 +7,7 @@
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { contentWithTex } from '../math.ts';
-import { showText } from '../typeset.ts';
+import { showText, untypeset } from '../typeset.ts';
 import { card, checkbox, glyph, note, row, section, segmented, textField, type Control, type Run } from './controls.ts';
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -135,8 +135,14 @@ function sketch(layout: string, width: Width): SVGSVGElement {
   return svg;
 }
 
+// the typeset notes of the Slide pane shown last, whose formulas are taken out of the list of
+// MathJax when the pane is built again, since the inspector drops the old pane
+let typesetNotes: HTMLElement[] = [];
+
 // the Slide pane for the current slide
 export function slidePane(app: App, run: Run): Control[] {
+  untypeset(typesetNotes);
+  typesetNotes = [];
   const slide = app.current();
   const layout = layoutOf(slide);
   const layoutCard = card(() => sketch(layoutOf(app.current()), slide ? widthOf(slide) : 'normal'), 'Slide Layout', () => {
@@ -209,6 +215,7 @@ function sourceText(el: Element): string {
 function typesetNote(text: () => string, name: string): Control {
   const { el } = note(() => '');
   el.classList.add(name);
+  typesetNotes.push(el);
   const sync = () => {
     const t = text();
     showText(el, t);

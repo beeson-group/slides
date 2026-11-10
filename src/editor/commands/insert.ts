@@ -11,7 +11,7 @@
 import type { App } from '../app.ts';
 import { mathLookup } from '../math.ts';
 import { applyPending } from '../text/carry.ts';
-import { placeCaret } from '../text/typing.ts';
+import { insertPlain, placeCaret } from '../text/typing.ts';
 import { injectStyle } from '../ui/dom.ts';
 import { columnOf } from './clipboard.ts';
 import { docOf } from './slide.ts';
@@ -142,7 +142,10 @@ export function install(app: App): void {
   // the element of the editor that waits for its first input, and whether it is being written
   let pending: { el: HTMLElement; kind: Kind; parent: Element } | null = null;
   let writing = false;
-  let typed = '';
+  // the kind and the element written in place of the box while it is written, and the input taken
+  // meanwhile, in order: a text, or the inputType of a deletion
+  let written: { kind: Kind; node: Element | null } | null = null;
+  let typed: string[] = [];
   // the entry of the empty box is the last one of the history, a change of the history is made by
   // that entry, and an undo of it keeps the box, which the first input then writes
   let onTop = false;
@@ -203,13 +206,35 @@ export function install(app: App): void {
     onTop = true;
   };
 
-  // the first text typed into the element of the editor writes it into the file in its place, and
-  // the text typed while it is written is typed after it, as typing of the block
+  // the input taken while the box is written is typed after it, in order, as typing of the block.
+  // a new line in a text box is a new paragraph, as Enter in a paragraph, and a line break else.
+  // the input that comes meanwhile is taken too, at the block of the caret
+  const caretHost = () => {
+    const n = window.getSelection()?.anchorNode;
+    return app.hostOf(n instanceof Element ? n : n?.parentElement ?? null);
+  };
+  const replay = async (kind: Kind) => {
+    for (let op = typed.shift(); op !== undefined; op = typed.shift()) {
+      const host = caretHost();
+      if (!host) break;
+      if (op === 'deleteContentBackward') document.execCommand('delete');
+      else if (op === 'deleteContentForward') document.execCommand('forwardDelete');
+      else if (op === '\n' && kind === 'text' && app.commands.enabled('text.newParagraph')) await app.commands.run('text.newParagraph');
+      else insertPlain(host, op);
+      if (written) written.node = caretHost();
+    }
+    typed = [];
+  };
+
+  // the first text typed into the element of the editor writes it into the file in its place. every
+  // input into the box or into the element written for it is taken until the write ends, since the
+  // element is not yet a block of the pairing that the typing of text/typing.ts records
   const write = async (text: string) => {
     const p = pending;
     if (!p) return;
     writing = true;
-    typed = '';
+    written = { kind: p.kind, node: null };
+    typed = [];
     const def = PENDING[p.kind];
     try {
       // the entry of the empty box is undone with the box kept, so that the written box is one entry
@@ -219,33 +244,46 @@ export function install(app: App): void {
       }
       await app.history.transact(def.label, async () => {
         const [node] = await docOf(app).insert(def.html(text), p.parent, p.el, def.label);
+        written!.node = node;
         p.el.remove();
         pending = null;
-        placeCaret(node);
+        // the caret of a code box is in its code element, where the typing after the first key goes
+        placeCaret(node, p.kind === 'code' ? (node.textContent ?? '').length : null);
         await applyPending(app, p.el, node);
       });
+      await replay(p.kind);
     } finally {
       writing = false;
+      written = null;
+      typed = [];
     }
-    if (typed) document.execCommand('insertText', false, typed);
-    typed = '';
+  };
+
+  // whether an input goes to the box, or to the element written in its place while it is written
+  const intoBox = (target: EventTarget | null): boolean => {
+    if (pending && target === pending.el) return true;
+    const node = written?.node;
+    return !!node && target instanceof Node && (node.contains(target) || target.contains(node));
   };
 
   // the input into the element of the editor is taken before the typing of text/typing.ts, which
   // records the blocks of the file
   window.addEventListener('beforeinput', (ev) => {
-    const p = pending;
-    if (!p || ev.target !== p.el) return;
+    if (!intoBox(ev.target)) return;
     ev.stopImmediatePropagation();
     const type = ev.inputType;
     if (type === 'insertCompositionText') return;
     ev.preventDefault();
+    const kind = written?.kind ?? pending!.kind;
     let text = '';
     if (type === 'insertText' || type === 'insertReplacementText') text = ev.data ?? ev.dataTransfer?.getData('text/plain') ?? '';
     else if (type === 'insertFromPaste') text = ev.dataTransfer?.getData('text/plain') ?? '';
-    else if (p.kind === 'code' && (type === 'insertParagraph' || type === 'insertLineBreak')) text = '\n';
+    // a new line typed after the first key is a line of the box, and an empty text box or
+    // footnote is not written for a new line alone
+    else if (type === 'insertParagraph' || type === 'insertLineBreak') text = kind === 'code' || writing ? '\n' : '';
+    else if (writing && (type === 'deleteContentBackward' || type === 'deleteContentForward')) typed.push(type);
     if (!text) return;
-    if (writing) typed += text;
+    if (writing) typed.push(text);
     else void write(text).catch(fail);
   }, true);
   window.addEventListener('input', (ev) => {
