@@ -782,6 +782,35 @@ test('Open with unsaved changes asks first: Cancel keeps them, Open without savi
   assert.deepEqual(page.errors, []);
 });
 
+// a regression test of Discard going back past the text on disk: Open without saving after a save
+// and a later edit must leave the page as saved, not as it was before the save
+test('Open without saving after a save puts the slides back as last saved', async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await editorPage(browser);
+  assert.deepEqual((await page.evaluate(openDeck)).problems, []);
+  const h2 = 'Show your steps one at a time';
+  await page.evaluate(`window.written = null;
+    const handle = { name: 'index.html', getFile: async () => new File([window.written], 'index.html', { type: 'text/html' }), createWritable: async () => ({ write: async (text) => { window.written = text; }, close: async () => {} }) };
+    window.showOpenFilePicker = async () => { throw new DOMException('', 'AbortError'); };
+    window.showSaveFilePicker = async () => handle;`);
+  const type = (text) => page.evaluate(`(() => { const h = [...document.querySelectorAll('.reveal h2')].find((h) => h.textContent.startsWith(${JSON.stringify(h2)})); Reveal.slide(Reveal.getIndices(h.closest('section')).h); h.focus(); const r = document.createRange(); r.selectNodeContents(h); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); document.execCommand('insertText', false, ${JSON.stringify(text)}); })()`);
+  await type(' saved');
+  await page.evaluate('window.BeesonEditor.save()');
+  const saved = await page.evaluate('window.written');
+  assert.equal(saved, replaced(`<h2>${h2}</h2>`, `<h2>${h2} saved</h2>`));
+  await type(' later');
+  assert.equal((await page.evaluate('window.BeesonEditor.status()')).dirty, true);
+  await page.evaluate(`void window.BeesonEditor.exec('file.open')`);
+  await sleep(100);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-card.ask button')].find((b) => b.textContent === 'Open without saving').click()`);
+  await sleep(300);
+  assert.equal(await page.evaluate('window.BeesonEditor.render()'), saved);
+  const status = await page.evaluate('window.BeesonEditor.status()');
+  assert.deepEqual({ dirty: status.dirty, problems: status.problems }, { dirty: false, problems: [] });
+  assert.deepEqual(page.errors, []);
+});
+
 test('Esc leaves a text and selects its block for the arrow keys, Tab reaches a figure, and a dragged figure snaps to the edge of a block with a guide', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
