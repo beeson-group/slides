@@ -9,11 +9,13 @@
 // Present are put into a menu ». the toolbar has one tab stop, and the arrow keys move in it. the
 // View and Zoom popups at its left are as in Keynote: View with the views of the slides and the
 // panes, and Zoom with Fit, Actual Size, Zoom to Selection, and the levels, showing the zoom on its
-// face
+// face. the items of the toolbar and whether it shows icons, labels, or both are set in the sheet
+// Customize Toolbar of the View menu, as in Keynote, and kept in the storage of the browser for
+// each deck, never in the file
 
 import type { App } from '../app.ts';
 import type { Command, Group } from '../commands.ts';
-import { injectStyle, make, stored, wire } from '../ui/dom.ts';
+import { injectStyle, make, store, stored, wire } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { closeMenus, commandKeys, menuItems, openMenu, splitButton, type MenuItem } from '../ui/menu.ts';
 import { ZOOMS } from './canvas.ts';
@@ -103,6 +105,28 @@ const CSS = `
 .beeson-edit-top .sep { flex: none; align-self: center; width: 13px; height: 28px; background: linear-gradient(var(--ed-line), var(--ed-line)) center / 1px 100% no-repeat; }
 .beeson-edit-top .space { flex: 1 1 24px; min-width: 24px; align-self: stretch; margin: 6px 0; border: 1px dashed var(--ed-line); border-radius: 6px; }
 .beeson-edit-top .sep:focus-visible, .beeson-edit-top .space:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: -2px; }
+.beeson-edit-customize-scrim { position: fixed; left: 0; right: 0; bottom: 0; z-index: 79; background: rgba(0, 0, 0, 0.36); }
+.beeson-edit-customize { position: fixed; left: 50%; z-index: 80; transform: translateX(-50%); box-sizing: border-box; width: min(980px, calc(100vw - 32px)); display: flex; flex-direction: column; padding: 16px 22px 14px; border: 1px solid var(--ed-menu-line); border-top: 0; border-radius: 0 0 12px 12px; background: var(--ed-panel); color: var(--ed-text); font: 13px/1.35 var(--ed-font); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.32); user-select: none; -webkit-user-select: none; }
+.beeson-edit-customize[hidden], .beeson-edit-customize-scrim[hidden] { display: none; }
+.beeson-edit-customize .lead { margin: 0 0 10px; }
+.beeson-edit-customize .palette { flex: 0 1 auto; min-height: 60px; overflow-y: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr)); gap: 6px 4px; padding-bottom: 12px; margin-bottom: 12px; border-bottom: 1px solid var(--ed-line); }
+.beeson-edit-customize .item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 2px; border-radius: 8px; text-align: center; font-size: 11px; color: var(--ed-muted); cursor: grab; }
+.beeson-edit-customize .item .well { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--ed-hover); color: var(--ed-text); }
+.beeson-edit-customize .item:hover .well { background: var(--ed-pressed); }
+.beeson-edit-customize .item:focus-visible, .beeson-edit-customize .default:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: 1px; }
+.beeson-edit-customize .default { display: flex; align-items: center; gap: 2px; padding: 6px 8px; margin-bottom: 12px; border: 1px solid var(--ed-line); border-radius: 8px; font-size: 10px; color: var(--ed-muted); overflow: hidden; cursor: grab; }
+.beeson-edit-customize .default .mini { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 40px; }
+.beeson-edit-customize .default .mini.sep { width: 9px; min-width: 0; align-self: stretch; background: linear-gradient(var(--ed-line), var(--ed-line)) center / 1px 70% no-repeat; }
+.beeson-edit-customize .default .mini.space { flex: 1 1 0; min-width: 8px; }
+.beeson-edit-customize .foot { display: flex; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--ed-line); }
+.beeson-edit-customize .foot button { font: inherit; padding: 3px 12px; border: 1px solid var(--ed-control-line); border-radius: 6px; background: var(--ed-control); color: var(--ed-text); cursor: default; }
+.beeson-edit-customize .foot .show::after { content: ''; display: inline-block; width: 5px; height: 5px; margin: -3px 0 0 8px; border: solid currentColor; border-width: 0 1.25px 1.25px 0; transform: rotate(45deg); opacity: 0.7; vertical-align: middle; }
+.beeson-edit-customize .foot .done { margin-left: auto; min-width: 72px; border-color: transparent; background: var(--ed-select); color: var(--ed-on-select); }
+.beeson-edit-customize .foot button:focus-visible { outline: 3px solid var(--ed-focus); outline-offset: 1px; }
+.beeson-edit-drag-ghost { position: fixed; z-index: 95; pointer-events: none; display: flex; flex-direction: column; align-items: center; gap: 3px; padding: 4px 6px; border-radius: 6px; background: var(--ed-panel); color: var(--ed-text); font: 11px/1.2 var(--ed-font); box-shadow: 0 6px 18px rgba(0, 0, 0, 0.3); transform: translate(-50%, -50%); opacity: 0.92; }
+.beeson-edit-drag-ghost.remove { opacity: 0.45; }
+.beeson-edit-drop-mark { position: fixed; z-index: 95; width: 2px; border-radius: 1px; background: var(--ed-select); pointer-events: none; }
+.beeson-edit-drop-mark[hidden], .beeson-edit-drag-ghost[hidden] { display: none; }
 `;
 
 type Shown = { c: Command; el: HTMLButtonElement; variants: Command[] };
@@ -360,6 +384,256 @@ export function install(app: App): void {
   more.addEventListener('click', (ev) => {
     if (ev.detail === 0) openMore(true);
   });
+
+  // the sheet Customize Toolbar of Keynote, drawn down from the toolbar: the items that have a
+  // place on it, the default set, and the choice of icons and labels. an item is dragged into the
+  // toolbar or out of it, and the default set dragged into it puts it back. on the keyboard,
+  // Return adds an item or puts the default set back, and Delete takes the item of the focus off
+  const sheet = make('div', 'beeson-edit-customize');
+  sheet.hidden = true;
+  sheet.setAttribute('role', 'dialog');
+  sheet.setAttribute('aria-label', 'Customize Toolbar');
+  const scrim = make('div', 'beeson-edit-customize-scrim');
+  scrim.hidden = true;
+  const palette = make('div', 'palette');
+  palette.setAttribute('role', 'group');
+  palette.setAttribute('aria-label', 'Items');
+  const defaultRow = make('div', 'default');
+  defaultRow.tabIndex = 0;
+  defaultRow.setAttribute('role', 'button');
+  defaultRow.setAttribute('aria-label', 'Default Set');
+  defaultRow.title = 'Drag the default set into the toolbar, or press Return to put it back';
+  const showButton = make('button', 'show');
+  showButton.type = 'button';
+  showButton.setAttribute('aria-haspopup', 'menu');
+  const done = make('button', 'done', 'Done');
+  done.type = 'button';
+  const foot = make('div', 'foot');
+  foot.append(make('span', '', 'Show'), showButton, done);
+  sheet.append(make('p', 'lead', 'Drag your favorite items into the toolbar…'), palette, make('p', 'lead', '… or drag the default set into the toolbar.'), defaultRow, foot);
+  const ghost = make('div', 'beeson-edit-drag-ghost');
+  ghost.hidden = true;
+  const mark = make('div', 'beeson-edit-drop-mark');
+  mark.hidden = true;
+  let back: HTMLElement | null = null;
+
+  // a layout equal to the default set is kept as the default, and nothing is kept for the
+  // default set shown with icons and labels
+  const save = (next: string[] | null) => {
+    kept = next && JSON.stringify(next) !== JSON.stringify(defaults(app.commands.forToolbar())) ? next : null;
+    store(storeKey(), kept || show !== 'both' ? JSON.stringify({ items: kept, show }) : null);
+    showButton.textContent = SHOWS.find(([v]) => v === show)![1];
+    render();
+  };
+  const isMark = (id: string) => id === SEPARATOR || id === SPACE;
+  const nameOf = (id: string) => (isMark(id) ? MARKS[id].label : toolbarLabel(app, app.commands.get(id)!));
+  const faceFor = (id: string) => glyph(isMark(id) ? MARKS[id].icon : faceOf(app.commands.get(id)!));
+
+  // the commands with a place in the default set, then the others that the sheet offers
+  const paletteIds = (): string[] => {
+    const ids = defaults(app.commands.forToolbar()).filter((id) => !isMark(id));
+    for (const id of Object.keys(EXTRA)) if (app.commands.get(id) && !ids.includes(id)) ids.push(id);
+    return [...ids, SEPARATOR, SPACE];
+  };
+  function fill(): void {
+    palette.replaceChildren(...paletteIds().map((id) => {
+      const el = make('div', 'item');
+      const well = make('span', 'well');
+      well.append(faceFor(id));
+      el.append(well, make('span', 'name', nameOf(id)));
+      el.dataset.item = id;
+      el.tabIndex = 0;
+      el.setAttribute('role', 'button');
+      el.title = `Drag ${nameOf(id)} into the toolbar, or press Return to add it`;
+      return el;
+    }));
+    defaultRow.replaceChildren(...defaults(app.commands.forToolbar()).map((id) => {
+      if (isMark(id)) return make('span', `mini ${id === SEPARATOR ? 'sep' : 'space'}`);
+      const m = make('span', 'mini');
+      m.append(faceFor(id), make('span', '', nameOf(id)));
+      return m;
+    }));
+    showButton.textContent = SHOWS.find(([v]) => v === show)![1];
+  }
+  const place = () => {
+    const y = top.getBoundingClientRect().bottom;
+    sheet.style.top = scrim.style.top = `${y}px`;
+    sheet.style.maxHeight = `${Math.max(160, innerHeight - y - 16)}px`;
+  };
+  function openSheet(): void {
+    if (customizing) return;
+    closeMenus();
+    back = document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null;
+    customizing = true;
+    render();
+    fill();
+    if (!sheet.isConnected) document.body.append(scrim, sheet, ghost, mark);
+    sheet.hidden = scrim.hidden = false;
+    place();
+    palette.querySelector<HTMLElement>('.item')?.focus();
+  }
+  function closeSheet(): void {
+    if (!customizing) return;
+    endDrag();
+    customizing = false;
+    sheet.hidden = scrim.hidden = true;
+    closeMenus();
+    render();
+    if (back?.isConnected) back.focus({ preventScroll: true });
+    else if (sheet.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
+    back = null;
+  }
+  app.commands.define({ id: 'view.customizeToolbar', label: 'Customize Toolbar…', menu: { bar: 'View', group: 'toolbar', order: 90 }, run: () => (customizing ? closeSheet() : openSheet()) });
+
+  // a drag adds an item of the sheet, moves an item of the toolbar or takes it off when it is
+  // dropped outside, or puts the default set back. it starts once the pointer moves 4 px
+  type Drag = { kind: 'add' | 'move' | 'default'; id: string; from: number; x: number; y: number; started: boolean; pointer: number };
+  let drag: Drag | null = null;
+  const begin = (ev: PointerEvent, kind: Drag['kind'], id: string, from: number) => {
+    if (ev.button !== 0) return;
+    ev.preventDefault();
+    drag = { kind, id, from, x: ev.clientX, y: ev.clientY, started: false, pointer: ev.pointerId };
+  };
+  function endDrag(): void {
+    drag = null;
+    ghost.hidden = mark.hidden = true;
+  }
+  const overBar = (ev: PointerEvent) => {
+    const r = top.getBoundingClientRect();
+    return ev.clientY >= r.top - 8 && ev.clientY <= r.bottom + 8 && ev.clientX >= r.left && ev.clientX <= r.right;
+  };
+  const slots = () => [...top.querySelectorAll<HTMLElement>(':scope > [data-at]')];
+  // the index of the layout before which a drop at x puts its item
+  const dropAt = (x: number): number => {
+    for (const el of slots()) {
+      const r = el.getBoundingClientRect();
+      if (x < r.left + r.width / 2) return Number(el.dataset.at);
+    }
+    return layout().length;
+  };
+  const showMark = (at: number) => {
+    const r = top.getBoundingClientRect();
+    const list = slots();
+    const el = list.find((k) => Number(k.dataset.at) === at);
+    const last = list[list.length - 1];
+    const x = el ? el.getBoundingClientRect().left : last ? last.getBoundingClientRect().right : r.left + 10;
+    mark.style.left = `${x - 1}px`;
+    mark.style.top = `${r.top + 6}px`;
+    mark.style.height = `${r.height - 12}px`;
+    mark.hidden = false;
+  };
+  window.addEventListener('pointermove', (ev) => {
+    if (!drag || ev.pointerId !== drag.pointer) return;
+    if (!drag.started) {
+      if (Math.hypot(ev.clientX - drag.x, ev.clientY - drag.y) < 4) return;
+      drag.started = true;
+      if (drag.kind === 'default') ghost.replaceChildren(make('span', '', 'Default Set'));
+      else ghost.replaceChildren(faceFor(drag.id), make('span', '', nameOf(drag.id)));
+      ghost.hidden = false;
+    }
+    ghost.style.left = `${ev.clientX}px`;
+    ghost.style.top = `${ev.clientY}px`;
+    const over = overBar(ev);
+    ghost.classList.toggle('remove', drag.kind === 'move' && !over);
+    if (over && drag.kind !== 'default') showMark(dropAt(ev.clientX));
+    else mark.hidden = true;
+  }, true);
+  window.addEventListener('pointerup', (ev) => {
+    if (!drag || ev.pointerId !== drag.pointer) return;
+    const d = drag;
+    endDrag();
+    if (!d.started) return;
+    const over = overBar(ev);
+    if (d.kind === 'default') {
+      if (over) save(null);
+      return;
+    }
+    let at = over ? dropAt(ev.clientX) : -1;
+    if (at < 0 && d.kind === 'add') return;
+    const list = layout();
+    // a command is on the toolbar once, hence a command dragged in from the sheet is moved
+    const was = d.kind === 'move' ? d.from : isMark(d.id) ? -1 : list.indexOf(d.id);
+    if (was >= 0) {
+      list.splice(was, 1);
+      if (at > was) at--;
+    }
+    if (at >= 0) list.splice(at, 0, d.id);
+    save(list);
+  }, true);
+  window.addEventListener('pointercancel', () => drag && endDrag(), true);
+
+  // while the sheet is open, the buttons of the toolbar are items to drag and do not run
+  top.addEventListener('pointerdown', (ev) => {
+    if (!customizing) return;
+    ev.stopPropagation();
+    const el = (ev.target as Element).closest<HTMLElement>('[data-at]');
+    if (!el) return;
+    el.focus({ preventScroll: true });
+    begin(ev, 'move', layout()[Number(el.dataset.at)], Number(el.dataset.at));
+  }, true);
+  top.addEventListener('click', (ev) => {
+    if (!customizing) return;
+    ev.stopPropagation();
+    ev.preventDefault();
+  }, true);
+  top.addEventListener('keydown', (ev) => {
+    if (!customizing) return;
+    if (ev.key === 'Escape') {
+      ev.preventDefault();
+      closeSheet();
+      return;
+    }
+    if (ev.key !== 'Delete' && ev.key !== 'Backspace') return;
+    const el = document.activeElement instanceof HTMLElement ? document.activeElement.closest<HTMLElement>('[data-at]') : null;
+    if (!el || !top.contains(el)) return;
+    ev.preventDefault();
+    const at = Number(el.dataset.at);
+    const list = layout();
+    list.splice(at, 1);
+    save(list);
+    top.querySelector<HTMLElement>(`[data-at="${Math.min(at, list.length - 1)}"]`)?.focus();
+  });
+  const add = (id: string) => {
+    const list = layout();
+    if (!isMark(id) && list.includes(id)) return;
+    const at = list.indexOf(SPACE);
+    list.splice(at < 0 ? list.length : at, 0, id);
+    save(list);
+  };
+  const pressed = (ev: KeyboardEvent) => ev.key === 'Enter' || ev.key === ' ';
+  palette.addEventListener('pointerdown', (ev) => {
+    const el = (ev.target as Element).closest<HTMLElement>('.item');
+    if (el) begin(ev, 'add', el.dataset.item!, -1);
+  });
+  palette.addEventListener('keydown', (ev) => {
+    const el = (ev.target as Element).closest<HTMLElement>('.item');
+    if (!el || !pressed(ev)) return;
+    ev.preventDefault();
+    add(el.dataset.item!);
+  });
+  defaultRow.addEventListener('pointerdown', (ev) => begin(ev, 'default', '', -1));
+  defaultRow.addEventListener('keydown', (ev) => {
+    if (!pressed(ev)) return;
+    ev.preventDefault();
+    save(null);
+  });
+  const openShow = (keyboard: boolean) =>
+    openMenu(app, SHOWS.map(([v, label]): MenuItem => ({ label, checked: v === show, run: () => { show = v; save(kept); } })), { anchor: showButton.getBoundingClientRect(), placement: 'below', owner: showButton, keyboard, label: 'Show', className: 'select' });
+  showButton.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0) return;
+    ev.preventDefault();
+    if (showButton.getAttribute('aria-expanded') === 'true') closeMenus();
+    else openShow(false);
+  });
+  showButton.addEventListener('click', (ev) => ev.detail === 0 && openShow(true));
+  done.addEventListener('click', closeSheet);
+  sheet.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape') return;
+    ev.preventDefault();
+    closeSheet();
+  });
+  scrim.addEventListener('pointerdown', (ev) => ev.preventDefault());
+  window.addEventListener('resize', () => customizing && place());
 
   app.listen('history', update);
   app.listen('report', update);
