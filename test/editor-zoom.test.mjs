@@ -230,9 +230,9 @@ for (const platform of PLATFORMS) {
     const free = platform === 'mac' ? 'Meta' : 'Alt';
     const results = {};
     for (const z of [null, 0.5, 1, 2]) {
-      // a free move by 60 by 40 slide px, with Alt held so that the figure does not snap
+      // a free move by 60 by 40 slide px, with Cmd on a Mac and Alt elsewhere, hence no snap
       let s = await ready(z);
-      await drag(page, FIG, { dx: 60 * s, dy: 40 * s, modifiers: 'Alt' });
+      await drag(page, FIG, { dx: 60 * s, dy: 40 * s, modifiers: free });
       await frames(page);
       const moved = await zone();
       await undo();
