@@ -10,7 +10,7 @@ import type { App } from '../app.ts';
 import { injectStyle, make, stored, store } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { transitionOf } from '../review/transitions.ts';
-import { describe, isHidden, numbers, type MoveTo, type Navigator } from './navigator.ts';
+import { describe, isHidden, type MoveTo, type Navigator } from './navigator.ts';
 import { Thumbs } from './thumbs.ts';
 
 const SIZE_KEY = 'beeson-sorter-size';
@@ -201,16 +201,11 @@ export class Sorter {
     return (this.app.nav as Navigator).selected();
   }
 
-  private written(slide: Element): string | null {
-    const s = this.app.pairing?.elements.get(slide);
-    return s?.attrs.find((a) => a.name === 'data-visibility')?.value ?? null;
-  }
-
-  // the groups and tiles follow the slides, their numbers, transitions, steps, and hidden state, and
-  // the selection. a tile is kept with its thumbnail while its slide is on the page
+  // the groups and tiles follow the slides, their positions as in the status bar, their
+  // transitions, steps, and hidden state, and the selection. a tile is kept with its thumbnail
+  // while its slide is on the page
   refresh(): void {
     const slides = this.slides();
-    const nums = numbers(slides, (s) => this.written(s));
     const kept = new Set(slides);
     for (const s of [...this.tiles.keys()]) if (!kept.has(s)) this.tiles.delete(s);
     const picked = new Set(this.app.selection.kind === 'slides' ? this.app.selection.items : [this.app.current()]);
@@ -235,7 +230,7 @@ export class Sorter {
         this.tiles.set(s, t);
         const { title } = describe(s);
         const hidden = isHidden(s);
-        t.no.textContent = nums[i] || String(i + 1);
+        t.no.textContent = String(i + 1);
         t.el.classList.toggle('hidden-slide', hidden);
         t.el.setAttribute('aria-selected', String(picked.has(s)));
         t.el.tabIndex = s === current ? 0 : -1;

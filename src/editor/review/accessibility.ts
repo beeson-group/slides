@@ -35,7 +35,7 @@ export function inspect(app: App): Issue[] {
   }
   for (const s of slides) {
     const heading = [...s.querySelectorAll('h1, h2')].find((h) => outside(h) && (h.textContent ?? '').trim());
-    if (!heading) out.push({ check: 'heading', slide: s, el: null, what: 'Slide' });
+    if (!heading) out.push({ check: 'heading', slide: s, el: null, what: '' });
   }
   for (const s of slides) for (const table of s.querySelectorAll('table')) {
     const first = (table as HTMLTableElement).rows[0];
@@ -206,7 +206,8 @@ export class Checker {
     row.dataset.i = String(this.issues.indexOf(issue));
     row.setAttribute('aria-selected', String(this.same(issue, this.picked)));
     const label = make('span', 'what');
-    label.append(document.createTextNode(`${issue.what} `), make('span', 'where', whereOf(this.app, issue.slide)));
+    if (issue.what) label.append(document.createTextNode(`${issue.what} `));
+    label.append(make('span', issue.what ? 'where' : '', whereOf(this.app, issue.slide)));
     const fix = make('button', 'fix');
     fix.type = 'button';
     fix.title = 'Recommended actions';
