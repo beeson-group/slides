@@ -128,3 +128,31 @@ for (const platform of ['mac', 'other']) {
     assert.match(edited, /<table style="translate: 0px \d+px">/);
   });
 }
+
+// the controls of the Format tab that reach past the right edge of the inspector, with their text
+const overflowing = (page) => page.evaluate(`(() => {
+  const panel = document.querySelector('${PANEL}');
+  const edge = panel.getBoundingClientRect().right - (panel.offsetWidth - panel.clientWidth);
+  return [...panel.querySelectorAll('button, input, label, .ed-seg')]
+    .filter((el) => el.getClientRects().length && el.getBoundingClientRect().right > edge + 0.5)
+    .map((el) => el.textContent.trim() || el.getAttribute('aria-label') || el.localName);
+})()`);
+
+// states inspector-table and inspector-table-dark of round 2: the row Size of the Table pane put
+// Distribute Evenly and Fit to Content beside its label, and Fit to Content was cut off at the
+// right edge of the inspector
+for (const platform of ['mac', 'other']) {
+  test(`every control of the Table pane fits the width of the inspector (${platform})`, async (t) => {
+    const page = await open(platform, { size: SIZES[platform] });
+    t.after(() => page.close?.());
+    await show(page, FIGURES);
+    await exec(page, 'insert.table', { rows: 3, columns: 3 });
+    await sleep(100);
+    await settle(page);
+    assert.equal(await page.evaluate(`document.querySelector('${PANEL} .ed-panes')?.dataset.pane`), 'table');
+    assert.deepEqual(await overflowing(page), []);
+    for (const id of ['table.distributeColumns', 'table.fitColumn']) {
+      assert.equal(await page.evaluate(`document.querySelectorAll('${PANEL} [data-command="${id}"]').length`), 1, id);
+    }
+  });
+}
