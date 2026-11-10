@@ -1,14 +1,15 @@
 // the snap engine of a drag, without the DOM: the edges and centers of a dragged box are snapped
-// to those of the other elements, of the slide, and of the boxes of the layouts, and to equal gaps
-// between neighbors, within a threshold. a resize snaps the edges that its handle moves. every box
-// is in slide pixels of the 1920 by 1080 design size
+// to those of the other elements, of the slide, of the boxes of the layouts, of the guides placed
+// by hand, and of the grid, and to equal gaps between neighbors, within a threshold. a resize snaps
+// the edges that its handle moves, and a point, e.g. the end of a line, snaps to the same lines.
+// every box is in slide pixels of the 1920 by 1080 design size
 
 import type { App } from '../app.ts';
 
 export type Box = { left: number; top: number; width: number; height: number };
 export type Axis = 'x' | 'y';
 // a line at `at` on axis, drawn from `from` to `to` along the other axis
-export type Guide = { axis: Axis; at: number; from: number; to: number; kind: 'element' | 'slide' | 'layout' };
+export type Guide = { axis: Axis; at: number; from: number; to: number; kind: 'element' | 'slide' | 'layout' | 'guide' | 'grid' };
 // equal gaps along axis, each from `from` to `to`, drawn at `at` on the other axis
 export type Spacing = { axis: Axis; gaps: { from: number; to: number; at: number }[] };
 // the shift that snaps a box, in slide pixels, and the guides and gaps that it then lines up with
@@ -20,7 +21,20 @@ export type Targets = {
   frames?: Box[];
   slide: { width: number; height: number };
   layout?: { x: number[]; y: number[] };
+  // the guides placed by hand on the slide, and the spacing of the grid, or null without a snap to
+  // it. where a caller leaves them out, those of provideLines are taken
+  guides?: { x: number[]; y: number[] };
+  grid?: number | null;
 };
+
+// the lines of the slide shown in the editor that are not given by a caller, i.e. the guides placed
+// by hand of canvas/guides.ts and the grid of canvas/grid.ts
+export type Lines = { guides?: { x: number[]; y: number[] }; grid?: number | null };
+const providers: (() => Lines)[] = [];
+export function provideLines(fn: () => Lines): void {
+  providers.push(fn);
+}
+const provided = (): Lines => Object.assign({}, ...providers.map((p) => p()));
 export type Handle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
 // the edges of the layouts of theme/beeson.css: the margins, the right edges of the narrow,
@@ -47,6 +61,10 @@ function linesOf(targets: Targets, axis: Axis): Line[] {
   const extent = axis === 'x' ? targets.slide.width : targets.slide.height;
   const lines: Line[] = [0, extent / 2, extent].map((at) => ({ at, kind: 'slide', box: null }));
   for (const at of targets.layout?.[axis] ?? []) lines.push({ at, kind: 'layout', box: null });
+  const more = targets.guides === undefined || targets.grid === undefined ? provided() : {};
+  for (const at of (targets.guides ?? more.guides)?.[axis] ?? []) lines.push({ at, kind: 'guide', box: null });
+  const grid = targets.grid === undefined ? more.grid : targets.grid;
+  if (grid && grid >= 1) for (let at = grid; at < extent; at += grid) lines.push({ at, kind: 'grid', box: null });
   for (const box of [...targets.boxes, ...(targets.frames ?? [])]) for (const at of edgesOf(box, axis)) lines.push({ at, kind: 'element', box });
   return lines;
 }
@@ -70,7 +88,8 @@ function guidesAt(box: Box, axis: Axis, edges: number[], lines: Line[], targets:
   const extent = across === 'x' ? targets.slide.width : targets.slide.height;
   const out = new Map<string, Guide>();
   for (const line of lines) {
-    if (!edges.some((e) => Math.abs(line.at - e) < SAME)) continue;
+    // a line of the grid is not drawn, since the grid is drawn by itself
+    if (line.kind === 'grid' || !edges.some((e) => Math.abs(line.at - e) < SAME)) continue;
     const key = `${line.kind === 'element' ? 'element' : 'full'}:${Math.round(line.at * 2)}`;
     const span = line.box
       ? { from: Math.min(start(box, across), start(line.box, across)), to: Math.max(end(box, across), end(line.box, across)) }
@@ -154,6 +173,22 @@ export function snapMove(box: Box, targets: Targets, threshold: number, axes: { 
     if (s) spacing.push(s);
   }
   return { dx: shift.x, dy: shift.y, guides, spacing };
+}
+
+// the shift of the point p onto the nearest line within threshold on each axis, e.g. the end of a
+// line that is drawn or dragged, with the guides that it then lies on
+export function snapPoint(p: { x: number; y: number }, targets: Targets, threshold: number, axes: { x: boolean; y: boolean } = { x: true, y: true }): Snap {
+  const box = { left: p.x, top: p.y, width: 0, height: 0 };
+  const shift: Record<Axis, number> = { x: 0, y: 0 };
+  const lines = { x: linesOf(targets, 'x'), y: linesOf(targets, 'y') };
+  for (const axis of ['x', 'y'] as Axis[]) {
+    const best = axes[axis] ? nearest([start(box, axis)], lines[axis], threshold) : null;
+    if (best) shift[axis] = best.shift;
+  }
+  const moved = { ...box, left: p.x + shift.x, top: p.y + shift.y };
+  const guides: Guide[] = [];
+  for (const axis of ['x', 'y'] as Axis[]) if (axes[axis]) guides.push(...guidesAt(moved, axis, [start(moved, axis)], lines[axis], targets));
+  return { dx: shift.x, dy: shift.y, guides, spacing: [] };
 }
 
 // the axis that a drag with Shift moves along: the axis of its larger offset, as in Keynote
