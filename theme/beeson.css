@@ -391,7 +391,7 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section.split .panel p, .reveal .slides section.split .panel li { font-size: 48px; }
 .reveal .slides section.split .panel .foot { color: #7c7c76; }
 /* the style Small in the panel, and code in the colors of the panel, which is dark in both modes */
-.reveal .slides section.split .panel .small, .reveal .slides section.split .panel .small li { font-size: 36px; }
+.reveal .slides section.split .panel .small, .reveal .slides section.split .panel .small li { font-size: 36px; color: var(--panel-text); }
 .reveal .slides section.split .panel code { color: var(--panel-subtle); }
 /* on the black canvas the edge of the panel is marked with a hairline */
 html:not([data-theme="light"]) .reveal .slides section.split .panel { box-shadow: 1px 0 0 var(--line); }
