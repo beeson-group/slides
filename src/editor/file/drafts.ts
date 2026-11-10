@@ -4,7 +4,8 @@
 // and hash. it is never replayed onto the page: Restore writes it over the file and reloads
 
 import type { App, Drafts } from '../app.ts';
-import { button, injectStyle, make, store, stored, wire } from '../ui/dom.ts';
+import { store, stored } from '../ui/dom.ts';
+import { Dialog } from '../ui/dialog.ts';
 import { canWrite, download, fileName, folder, pickTarget, write } from './files.ts';
 
 type Draft = { at: number; text: string };
@@ -12,10 +13,6 @@ type Draft = { at: number; text: string };
 const DRAFT_KEY = `beeson-draft:${location.href.split(/[?#]/)[0]}`;
 // the pause after the last change, in ms, before the edits are kept in the storage
 const DRAFT_DELAY = 1000;
-
-const CSS = `
-.beeson-edit-card.recover { z-index: 66; }
-`;
 
 function readDraft(): Draft | null {
   const raw = stored(DRAFT_KEY);
@@ -29,18 +26,24 @@ function readDraft(): Draft | null {
 }
 
 export function install(app: App): void {
-  injectStyle('drafts', CSS);
+  const fail = (e: unknown) => app.fail(e);
+  const actions: Record<string, () => unknown> = { restore: () => restore(), copy: () => copy(), discard: () => discard() };
 
-  // the card shown when edits that were not saved are found in the storage of the browser
-  const recover = make('div', 'beeson-edit-card recover');
-  const recoverText = make('p');
-  const restoreButton = button('Restore and save', 'Write the edits into the file and show the page again');
-  const copyButton = button('Download a copy', 'Put a copy of the file with the edits into your downloads');
-  const discardButton = button('Discard', 'Forget the edits');
-  const recoverRow = make('div', 'row');
-  recoverRow.append(restoreButton, copyButton, discardButton);
-  recover.append(make('h3', '', 'Edits that were not saved were found'), recoverText, recoverRow);
-  recover.hidden = true;
+  // the dialog shown when edits that were not saved are found in the storage of the browser. it
+  // stays open until its action is done, since a dismissed picker leaves the draft where it is
+  const recover = new Dialog({
+    title: 'Edits that were not saved were found',
+    text: '',
+    buttons: [
+      { label: 'Restore and save', title: 'Write the edits into the file and show the page again', value: 'restore', primary: true },
+      { label: 'Download a copy', title: 'Put a copy of the file with the edits into your downloads', value: 'copy' },
+      { label: 'Discard', title: 'Forget the edits', value: 'discard' },
+    ],
+    className: 'recover',
+    dismissable: false,
+    stay: ['restore', 'copy', 'discard'],
+    onButton: (value) => void Promise.resolve().then(actions[value]).catch(fail),
+  });
 
   let draftTimer = 0;
 
@@ -68,19 +71,18 @@ export function install(app: App): void {
     const draft = readDraft();
     if (!draft || !app.source || draft.text === app.source.text) {
       if (draft) drop();
-      recover.hidden = true;
+      recover.close(null);
       return;
     }
     const when = new Date(draft.at).toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
-    recoverText.textContent = `Edits of ${fileName()} from ${when} were kept in this browser and not saved. Restore writes the file with them and shows it again, a copy goes to your downloads, and Discard forgets them.`;
-    copyButton.hidden = false;
-    recover.hidden = false;
+    recover.text.textContent = `Edits of ${fileName()} from ${when} were kept in this browser and not saved. Restore writes the file with them and shows it again, a copy goes to your downloads, and Discard forgets them.`;
+    void recover.open('restore');
   }
 
   async function restore(): Promise<void> {
     const draft = readDraft();
     if (!draft) {
-      recover.hidden = true;
+      recover.close(null);
       return;
     }
     if (!app.handle && canWrite() && !(await pickTarget(app))) return;
@@ -97,14 +99,14 @@ export function install(app: App): void {
     const draft = readDraft();
     if (draft) download(fileName(), draft.text);
     drop();
-    recover.hidden = true;
+    recover.close(null);
     app.note = { text: `A copy of ${fileName()} with the edits is in your downloads. Replace ${fileName()} in ${folder()} with it and open it again`, warn: false };
     app.report();
   }
 
   function discard(): void {
     drop();
-    recover.hidden = true;
+    recover.close(null);
     app.report();
   }
 
@@ -116,14 +118,9 @@ export function install(app: App): void {
     drop,
     hasDraft: () => readDraft() !== null,
     offer,
-    offered: () => !recover.hidden,
+    offered: () => !recover.el.hidden,
     restore,
   };
   app.drafts = drafts;
-  const fail = (e: unknown) => app.fail(e);
-  wire(restoreButton, restore, fail);
-  wire(copyButton, copy, fail);
-  wire(discardButton, discard, fail);
   app.listen('dirty', drafts.keepSoon);
-  document.body.append(recover);
 }

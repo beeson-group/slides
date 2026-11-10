@@ -1,39 +1,107 @@
-// the status bar of today: the previous and next slide with the number of the current one, the
-// layer switch, a hint, and the buttons Slides, Steps, and Notes. the status bar of the plan is
-// built here
+// the status bar: the previous and next slide with the number of the current one, the layer
+// switch, a hint, the buttons Slides, Steps, and Notes, the zoom (−, a slider, +, the percentage as
+// a menu, and Fit), and the switch ◐ of the mode of the slide
 
 import type { App } from '../app.ts';
 import { button, injectStyle, make, wire } from '../ui/dom.ts';
+import { icon } from '../ui/icons.ts';
+import { chromeSelect } from '../ui/menu.ts';
+import { ZOOMS } from './canvas.ts';
 
 const CSS = `
-.beeson-edit-bottom { bottom: 0; height: 36px; font-size: 13px; color: var(--subtle, #bbb); border-top: 1px solid var(--line, #555); }
-.beeson-edit-bottom button { padding: 2px 10px; font-size: 13px; }
-.beeson-edit-bottom button.on { border-color: var(--violet, #96f); color: var(--text, #eee); }
-.beeson-edit-bottom .count { white-space: nowrap; min-width: 9ch; text-align: center; }
+.beeson-edit-bottom { grid-area: status; position: relative; z-index: 60; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; box-sizing: border-box; background: var(--ed-bg); border-top: 1px solid var(--ed-line); color: var(--ed-muted); font: 12px/1 var(--ed-font); user-select: none; -webkit-user-select: none; }
+.beeson-edit-bottom button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 20px; padding: 0 7px; border: 0; border-radius: 4px; background: transparent; color: var(--ed-text); font: inherit; cursor: default; white-space: nowrap; }
+.beeson-edit-bottom button:hover { background: var(--ed-hover); }
+.beeson-edit-bottom button.on, .beeson-edit-bottom button[aria-pressed="true"] { background: var(--ed-pressed); }
+.beeson-edit-bottom button:focus-visible, .beeson-edit-bottom input:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: -1px; }
+.beeson-edit-bottom .count { white-space: nowrap; min-width: 9ch; text-align: center; color: var(--ed-text); font-variant-numeric: tabular-nums; }
+.beeson-edit-bottom .rule { width: 1px; height: 14px; background: var(--ed-line); flex: none; }
 .beeson-edit-bottom .beeson-layers { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 .beeson-edit-bottom .beeson-layers[hidden] { display: none; }
 .beeson-edit-bottom .beeson-layers > span { margin-right: 4px; }
 .beeson-edit-bottom .hint { flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.beeson-edit-bottom .zoom { display: flex; align-items: center; gap: 2px; }
+.beeson-edit-bottom .zoom button { padding: 0 4px; }
+.beeson-edit-bottom input[type=range] { width: 120px; height: 16px; margin: 0 2px; accent-color: var(--ed-select); }
+.beeson-edit-bottom .beeson-edit-select { min-width: 52px; justify-content: space-between; font-variant-numeric: tabular-nums; }
+@media (max-width: 1099px) { .beeson-edit-bottom .hint { visibility: hidden; } .beeson-edit-bottom input[type=range] { width: 72px; } }
 `;
+
+// the slider is linear in the logarithm of the zoom, from 10 to 400 percent
+const LOG_MIN = Math.log(0.1);
+const LOG_MAX = Math.log(4);
 
 // layers is the switch of layers.ts, placed between the slide number and the hint
 export function install(app: App, layers: HTMLElement): void {
   injectStyle('statusbar', CSS);
-  const bottom = make('div', 'beeson-edit-bottom');
+  const bottom = make('div', 'beeson-edit-bottom beeson-edit-region');
   const prevButton = button('‹', 'Previous slide', 'Previous slide');
   const countEl = make('span', 'count');
   const nextButton = button('›', 'Next slide', 'Next slide');
   const hintEl = make('span', 'hint', 'Click a text or a formula to edit it, drag a figure or the ⠿ handle of a block to move it, press G to jump to a slide, and Esc to leave a text and select its block');
-  bottom.append(prevButton, countEl, nextButton, layers, hintEl, app.nav.button, app.steps.button, app.notes.button);
+
+  const zoomBox = make('div', 'zoom');
+  const outButton = button('', 'Zoom out', 'Zoom out');
+  outButton.append(icon('minus', 14));
+  const inButton = button('', 'Zoom in', 'Zoom in');
+  inButton.append(icon('plus', 14));
+  const slider = make('input');
+  slider.type = 'range';
+  slider.min = '0';
+  slider.max = '1000';
+  slider.setAttribute('aria-label', 'Zoom');
+  const current = () => app.stage?.zoom ?? app.stage?.fitScale() ?? 1;
+  const percent = chromeSelect(app, {
+    label: 'Zoom',
+    className: 'percent',
+    choices: () => [{ value: 'fit', label: 'Fit' }, ...ZOOMS.map((z) => ({ value: String(z), label: `${Math.round(z * 100)}%` }))],
+    value: () => (app.stage?.zoom === null ? 'fit' : String(app.stage?.zoom)),
+    text: () => `${Math.round(current() * 100)}%`,
+    onChange: (v) => app.stage.setZoom(v === 'fit' ? null : Number(v)),
+  }) as HTMLButtonElement & { refresh(): void };
+  const fitButton = button('Fit', 'Fit the slide into the window');
+  zoomBox.append(outButton, slider, inButton, percent, fitButton);
+
+  // the mode of the slide is flipped by the button of the theme, from the point of this one
+  const modeButton = button('', 'Flip the slide between dark and light mode, D', 'Flip the mode of the slide');
+  modeButton.append(icon('contrast', 14));
+
+  const rule = () => make('span', 'rule');
+  bottom.append(prevButton, countEl, nextButton, layers, hintEl, app.nav.button, app.steps.button, app.notes.button, rule(), zoomBox, rule(), modeButton);
   const fail = (e: unknown) => app.fail(e);
   wire(prevButton, () => app.commands.run('navigate.previous'), fail);
   wire(nextButton, () => app.commands.run('navigate.next'), fail);
   wire(app.notes.button, () => app.commands.run('view.notes'), fail);
+  // the panes wire Slides and Steps themselves, and a pointer click leaves the focus on the slide
+  for (const b of [app.nav.button, app.steps.button]) b.addEventListener('click', (ev) => ev.detail > 0 && b.blur());
+  wire(outButton, () => app.stage.zoomOut(), fail);
+  wire(inButton, () => app.stage.zoomIn(), fail);
+  wire(fitButton, () => app.stage.setZoom(null), fail);
+  slider.addEventListener('input', () => {
+    const z = Math.exp(LOG_MIN + (Number(slider.value) / 1000) * (LOG_MAX - LOG_MIN));
+    app.stage.setZoom(z);
+  });
+  wire(modeButton, () => {
+    const r = modeButton.getBoundingClientRect();
+    document.querySelector('.theme-switch')?.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }));
+  }, fail);
+
   const count = () => {
     const d = app.deck();
     if (d) countEl.textContent = `Slide ${d.getSlidePastCount() + 1} of ${d.getTotalSlides()}`;
   };
+  const zoomState = () => {
+    if (!app.stage) return;
+    const z = current();
+    if (document.activeElement !== slider) slider.value = String(Math.round(((Math.log(z) - LOG_MIN) / (LOG_MAX - LOG_MIN)) * 1000));
+    fitButton.setAttribute('aria-pressed', String(app.stage.zoom === null));
+    percent.refresh();
+  };
   app.listen('slide', count);
-  app.listen('resize', count);
+  app.listen('resize', () => {
+    count();
+    zoomState();
+  });
+  app.listen('report', zoomState);
   document.body.append(bottom);
 }

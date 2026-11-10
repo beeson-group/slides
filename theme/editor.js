@@ -84,47 +84,47 @@
       }
     }
     // called when host is focused or put back, so that its content before the next input is known
-    track(host) {
-      this.known.set(host, this.snapshot(host));
+    track(host2) {
+      this.known.set(host2, this.snapshot(host2));
     }
     // called before an input into host, with the content that the input changes
-    beforeTyping(host) {
+    beforeTyping(host2) {
       if (this.busy) return;
       const now = performance.now();
-      if (this.typing && this.typing.host === host && now - this.typing.at < PAUSE) return;
-      this.start(host, this.snapshot(host), now);
+      if (this.typing && this.typing.host === host2 && now - this.typing.at < PAUSE) return;
+      this.start(host2, this.snapshot(host2), now);
     }
-    start(host, before2, at) {
+    start(host2, before2, at) {
       const state = { before: before2, after: before2 };
       const entry = {
         label: "typing",
-        undo: () => this.put(host, state.before),
-        redo: () => this.put(host, state.after)
+        undo: () => this.put(host2, state.before),
+        redo: () => this.put(host2, state.after)
       };
-      this.typing = { host, state, entry, at };
-      this.known.set(host, before2);
+      this.typing = { host: host2, state, entry, at };
+      this.known.set(host2, before2);
     }
-    async put(host, content) {
-      await this.restore(host, content);
-      this.known.set(host, content);
+    async put(host2, content) {
+      await this.restore(host2, content);
+      this.known.set(host2, content);
     }
     // called after an input into host. the entry is put into the history at the first input, and
     // an input without a call before it starts from the content last seen
-    afterTyping(host) {
+    afterTyping(host2) {
       if (this.busy) return;
       const now = performance.now();
-      if (!this.typing || this.typing.host !== host || now - this.typing.at >= PAUSE) {
-        const before2 = this.known.get(host);
+      if (!this.typing || this.typing.host !== host2 || now - this.typing.at >= PAUSE) {
+        const before2 = this.known.get(host2);
         if (before2 === void 0) {
-          this.known.set(host, this.snapshot(host));
+          this.known.set(host2, this.snapshot(host2));
           return;
         }
-        this.start(host, before2, now);
+        this.start(host2, before2, now);
       }
       const typing = this.typing;
-      typing.state.after = this.snapshot(host);
+      typing.state.after = this.snapshot(host2);
       typing.at = now;
-      this.known.set(host, typing.state.after);
+      this.known.set(host2, typing.state.after);
       if (typing.state.after === typing.state.before && !this.recorded(typing.entry)) return;
       if (!this.recorded(typing.entry)) this.record(typing.entry);
       this.onChange();
@@ -190,42 +190,42 @@
     const error = merror ? merror.getAttribute("data-mjx-error") ?? merror.textContent ?? "TeX error" : null;
     return { node, error };
   }
-  async function retypeset(host, container, tex) {
+  async function retypeset(host2, container, tex) {
     const mj = mathjax();
     if (!mj) return false;
     const lookup = mathLookup();
     const former = lookup(container);
-    const count = host.querySelectorAll("mjx-container").length;
+    const count = host2.querySelectorAll("mjx-container").length;
     const typeset = async (replacement) => {
-      for (const c of [...host.querySelectorAll("mjx-container")]) {
+      for (const c of [...host2.querySelectorAll("mjx-container")]) {
         const info = lookup(c);
         if (!info) continue;
         c.replaceWith(document.createTextNode(info.open + (c === container ? replacement : info.tex) + info.close));
       }
-      host.normalize();
-      mj.typesetClear([host]);
-      await mj.typesetPromise([host]);
-      return host.querySelectorAll("mjx-container").length === count;
+      host2.normalize();
+      mj.typesetClear([host2]);
+      await mj.typesetPromise([host2]);
+      return host2.querySelectorAll("mjx-container").length === count;
     };
     if (await typeset(tex)) return true;
     if (former) {
-      const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+      const walker = document.createTreeWalker(host2, NodeFilter.SHOW_TEXT);
       const source = former.open + tex + former.close;
       for (let text = walker.nextNode(); text; text = walker.nextNode()) {
         if (!text.nodeValue?.includes(source)) continue;
         text.nodeValue = text.nodeValue.replace(source, former.open + former.tex + former.close);
         break;
       }
-      mj.typesetClear([host]);
-      await mj.typesetPromise([host]);
+      mj.typesetClear([host2]);
+      await mj.typesetPromise([host2]);
     }
     return false;
   }
   var mathReady = () => window.MathJax?.startup?.promise ?? Promise.resolve();
-  function contentWithTex(host) {
-    const copy = host.cloneNode(true);
+  function contentWithTex(host2) {
+    const copy = host2.cloneNode(true);
     const lookup = mathLookup();
-    const live = [...host.querySelectorAll("mjx-container")];
+    const live = [...host2.querySelectorAll("mjx-container")];
     const copies = [...copy.querySelectorAll("mjx-container")];
     copies.forEach((c, i) => {
       const info = lookup(live[i]);
@@ -234,11 +234,11 @@
     copy.normalize();
     return copy.innerHTML;
   }
-  async function setContentWithTex(host, content) {
+  async function setContentWithTex(host2, content) {
     const mj = mathjax();
-    if (mj) mj.typesetClear([host]);
-    host.innerHTML = content;
-    if (mj) await mj.typesetPromise([host]);
+    if (mj) mj.typesetClear([host2]);
+    host2.innerHTML = content;
+    if (mj) await mj.typesetPromise([host2]);
   }
 
   // src/editor/keymap.ts
@@ -277,7 +277,7 @@
   var isLetter = (key) => /^[a-z]$/i.test(key);
   var isDigit = (key) => /^[0-9]$/.test(key);
   var isSymbol = (key) => key.length === 1 && !isLetter(key) && !isDigit(key);
-  function parseKey(value, platform) {
+  function parseKey(value, platform2) {
     const parts = value.endsWith("++") ? [...value.slice(0, -2).split("+"), "+"] : value.split("+");
     const raw = parts.pop() ?? "";
     for (const part of parts) if (!MODIFIERS.includes(part)) throw new Error(`the modifier ${part} of ${value} is not known`);
@@ -288,11 +288,11 @@
       key,
       shift: mods.has("Shift"),
       alt: mods.has("Alt"),
-      ctrl: mods.has("Ctrl") || mods.has("Mod") && platform === "other",
-      meta: mods.has("Meta") || mods.has("Mod") && platform === "mac"
+      ctrl: mods.has("Ctrl") || mods.has("Mod") && platform2 === "other",
+      meta: mods.has("Meta") || mods.has("Mod") && platform2 === "mac"
     };
   }
-  function keyMatches(ev, chord, platform) {
+  function keyMatches(ev, chord, platform2) {
     const key = ev.key.length === 1 ? ev.key.toLowerCase() : ev.key;
     const code = ev.code ?? "";
     if (isLetter(chord.key)) {
@@ -302,24 +302,24 @@
     if (isDigit(chord.key)) return key === chord.key || code === `Digit${chord.key}`;
     if (isSymbol(chord.key)) {
       if (key === chord.key) return true;
-      const typed = platform === "mac" && ev.altKey ? SYMBOLS[code] : void 0;
+      const typed = platform2 === "mac" && ev.altKey ? SYMBOLS[code] : void 0;
       return !!typed && typed[ev.shiftKey ? 1 : 0] === chord.key;
     }
     if (chord.key === "Space") return ev.key === " ";
     return ev.key === chord.key;
   }
-  function matches(ev, value, platform) {
-    if (platform === "other" && ev.getModifierState?.("AltGraph")) return false;
-    const chord = parseKey(value, platform);
-    if (!keyMatches(ev, chord, platform)) return false;
+  function matches(ev, value, platform2) {
+    if (platform2 === "other" && ev.getModifierState?.("AltGraph")) return false;
+    const chord = parseKey(value, platform2);
+    if (!keyMatches(ev, chord, platform2)) return false;
     if (!isSymbol(chord.key) && ev.shiftKey !== chord.shift) return false;
     return ev.altKey === chord.alt && ev.ctrlKey === chord.ctrl && ev.metaKey === chord.meta;
   }
-  function fallback(ev, platform) {
+  function fallback(ev, platform2) {
     const get = (name) => ev.getModifierState?.(name) ?? false;
     const base = { key: ev.key, code: ev.code, shiftKey: ev.shiftKey, altKey: ev.altKey, getModifierState: get };
-    if (platform === "mac" && ev.ctrlKey && !ev.metaKey) return { ...base, ctrlKey: false, metaKey: true };
-    if (platform === "other" && ev.metaKey && !ev.ctrlKey) return { ...base, ctrlKey: true, metaKey: false };
+    if (platform2 === "mac" && ev.ctrlKey && !ev.metaKey) return { ...base, ctrlKey: false, metaKey: true };
+    if (platform2 === "other" && ev.metaKey && !ev.ctrlKey) return { ...base, ctrlKey: true, metaKey: false };
     return null;
   }
   var MAC_KEYS = {
@@ -349,10 +349,10 @@
     PageUp: "Page Up",
     PageDown: "Page Down"
   };
-  function display(value, platform) {
-    const c = parseKey(value, platform);
+  function display(value, platform2) {
+    const c = parseKey(value, platform2);
     const key = c.key.length === 1 ? c.key.toUpperCase() : c.key;
-    if (platform === "mac") {
+    if (platform2 === "mac") {
       const mods2 = (c.ctrl ? "\u2303" : "") + (c.alt ? "\u2325" : "") + (c.shift ? "\u21E7" : "") + (c.meta ? "\u2318" : "");
       return mods2 + (MAC_KEYS[key] ?? key);
     }
@@ -366,8 +366,8 @@
   var DEFAULT_REGIONS = ["canvas", "navigator"];
   var OUTSIDE_DIALOGS = ["canvas", "text", "field", "navigator", "notes", "inspector"];
   var EVERYWHERE = [...OUTSIDE_DIALOGS, "dialog"];
-  function keysOf(c, platform) {
-    return c.keys?.[platform] ?? [];
+  function keysOf(c, platform2) {
+    return c.keys?.[platform2] ?? [];
   }
   function isPlain(value) {
     return !/(^|\+)(Mod|Ctrl|Alt|Meta)\+/.test(value) && !/^(Shift\+)?F\d+$/.test(value);
@@ -431,9 +431,9 @@
     // keys match ev with the fallback modifier of keymap.ts. with plain set, a key of isPlain is not
     // taken
     forKey(ev, region, plain = true) {
-      const platform = this.app.platform;
-      const find = (e) => this.list().find((c) => (c.in ?? DEFAULT_REGIONS).includes(region) && keysOf(c, platform).some((k) => (plain || !isPlain(k)) && matches(e, k, platform)) && this.enabled(c.id));
-      const alt = fallback(ev, platform);
+      const platform2 = this.app.platform;
+      const find = (e) => this.list().find((c) => (c.in ?? DEFAULT_REGIONS).includes(region) && keysOf(c, platform2).some((k) => (plain || !isPlain(k)) && matches(e, k, platform2)) && this.enabled(c.id));
+      const alt = fallback(ev, platform2);
       return find(ev) ?? (alt ? find(alt) : void 0);
     }
     // the commands of a menu of the menu bar, or of one of its submenus, in groups
@@ -518,7 +518,7 @@
       this.scheduled = false;
       this.history = new History({
         snapshot: contentWithTex,
-        restore: (host, content) => this.typing.restoreHost(host, content),
+        restore: (host2, content) => this.typing.restoreHost(host2, content),
         onChange: () => this.emit("history")
       });
       this.commands = new Commands(this);
@@ -550,8 +550,8 @@
     }
     // the editable block around target, on a slide
     hostOf(target) {
-      const host = target instanceof Element ? target.closest(HOST) : null;
-      return host && this.slides().contains(host) ? host : null;
+      const host2 = target instanceof Element ? target.closest(HOST) : null;
+      return host2 && this.slides().contains(host2) ? host2 : null;
     }
     // the viewport of reveal.js is laid out again, e.g. after a pane was shown or resized
     relayout() {
@@ -642,16 +642,16 @@
     return starts.map((from, i) => ({ from, to: i + 1 < starts.length ? starts[i + 1] - 1 : last }));
   }
   var shownAt = (f, step2) => f.kind === "in" ? f.step <= step2 : f.kind === "out" ? step2 < f.step : step2 === f.step;
-  function showLayer(slide, layer) {
+  function showLayer(slide, layer2) {
     for (const f of fragmentsOf(slide)) {
       const up = f.el.parentElement?.closest(".fragment");
-      f.el.classList.toggle(OFF, !!layer && (!shownAt(f, layer.to) || !!up && up.classList.contains(OFF)));
+      f.el.classList.toggle(OFF, !!layer2 && (!shownAt(f, layer2.to) || !!up && up.classList.contains(OFF)));
     }
   }
-  function label(layer, last) {
-    if (layer.from === 0) return layer.to === 0 ? "Before step 1" : `Up to step ${layer.to}`;
-    if (last) return `From step ${layer.from}`;
-    return layer.from === layer.to ? `Step ${layer.from}` : `Steps ${layer.from}\u2013${layer.to}`;
+  function label(layer2, last) {
+    if (layer2.from === 0) return layer2.to === 0 ? "Before step 1" : `Up to step ${layer2.to}`;
+    if (last) return `From step ${layer2.from}`;
+    return layer2.from === layer2.to ? `Step ${layer2.from}` : `Steps ${layer2.from}\u2013${layer2.to}`;
   }
   var Layers = class {
     constructor(slide, onChange) {
@@ -1887,8 +1887,8 @@
     svg.append(defs);
     return svg;
   }
-  function drawInto(host, slide, deck, width) {
-    const root = host.shadowRoot ?? host.attachShadow({ mode: "open" });
+  function drawInto(host2, slide, deck, width) {
+    const root = host2.shadowRoot ?? host2.attachShadow({ mode: "open" });
     const { links, adopted } = deckStyles();
     root.adoptedStyleSheets = adopted;
     const have = [...root.querySelectorAll("link")].map((l) => l.href).join("\n");
@@ -1938,9 +1938,9 @@
       this.seenBy = new IntersectionObserver(
         (entries) => {
           for (const e of entries) {
-            const host = e.target;
-            if (e.isIntersecting) this.inView.add(host);
-            else this.inView.delete(host);
+            const host2 = e.target;
+            if (e.isIntersecting) this.inView.add(host2);
+            else this.inView.delete(host2);
           }
           this.drawDue();
         },
@@ -1960,17 +1960,17 @@
     }
     // the host of each slide, kept while its slide is on the page. a new host is drawn once seen
     setHosts(next) {
-      for (const [slide, host] of this.hosts) {
-        if (next.get(slide) === host) continue;
-        this.seenBy.unobserve(host);
-        this.inView.delete(host);
+      for (const [slide, host2] of this.hosts) {
+        if (next.get(slide) === host2) continue;
+        this.seenBy.unobserve(host2);
+        this.inView.delete(host2);
         this.hosts.delete(slide);
       }
-      for (const [slide, host] of next) {
-        if (this.hosts.get(slide) === host) continue;
-        this.hosts.set(slide, host);
+      for (const [slide, host2] of next) {
+        if (this.hosts.get(slide) === host2) continue;
+        this.hosts.set(slide, host2);
         this.dirty.add(slide);
-        this.seenBy.observe(host);
+        this.seenBy.observe(host2);
       }
       this.drawDue();
     }
@@ -2002,15 +2002,15 @@
       return { width: s.offsetWidth || 1920, height: s.offsetHeight || 1080 };
     }
     draw(slide) {
-      const host = this.hosts.get(slide);
+      const host2 = this.hosts.get(slide);
       this.dirty.delete(slide);
-      if (!host || !this.width || !slide.isConnected) return;
-      drawInto(host, slide, this.deck(), this.width);
-      host.dataset.drawn = String(Number(host.dataset.drawn ?? 0) + 1);
+      if (!host2 || !this.width || !slide.isConnected) return;
+      drawInto(host2, slide, this.deck(), this.width);
+      host2.dataset.drawn = String(Number(host2.dataset.drawn ?? 0) + 1);
     }
     drawDue() {
       if (!this.width) return;
-      for (const [slide, host] of this.hosts) if (this.dirty.has(slide) && this.inView.has(host)) this.draw(slide);
+      for (const [slide, host2] of this.hosts) if (this.dirty.has(slide) && this.inView.has(host2)) this.draw(slide);
       if (this.idle || ![...this.dirty].some((s) => this.hosts.has(s))) return;
       const later = (fn) => typeof requestIdleCallback === "function" ? requestIdleCallback(fn, { timeout: 200 }) : setTimeout(fn, 16);
       const step2 = () => {
@@ -2786,6 +2786,136 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
     }
   };
 
+  // src/editor/ui/dialog.ts
+  var CSS4 = `
+dialog.beeson-edit-card { box-sizing: border-box; width: min(460px, calc(100vw - 32px)); max-height: calc(100vh - 64px); margin: auto; padding: 20px 22px 18px; border: 1px solid var(--ed-menu-line); border-radius: 12px; background: var(--ed-panel); color: var(--ed-text); font: 13px/1.45 system-ui, -apple-system, "Segoe UI", sans-serif; box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28), 0 2px 8px rgba(0, 0, 0, 0.12); overflow: auto; }
+dialog.beeson-edit-card[hidden] { display: none; }
+dialog.beeson-edit-card::backdrop { background: rgba(0, 0, 0, 0.22); }
+dialog.beeson-edit-card h3 { margin: 0 0 6px; font: 600 14px/1.3 system-ui, -apple-system, "Segoe UI", sans-serif; }
+dialog.beeson-edit-card p { margin: 0 0 16px; color: var(--ed-muted); }
+dialog.beeson-edit-card ul { margin: 0 0 16px; padding-left: 18px; max-height: 50vh; overflow-y: auto; color: var(--ed-muted); }
+dialog.beeson-edit-card code { font: 12px/1.45 ui-monospace, Menlo, Consolas, monospace; color: var(--ed-text); word-break: break-all; }
+dialog.beeson-edit-card .row { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; margin-top: 4px; }
+dialog.beeson-edit-card .row button { font: inherit; min-width: 72px; padding: 4px 14px; border: 1px solid var(--ed-control-line); border-radius: 6px; background: var(--ed-control); color: var(--ed-text); cursor: default; white-space: nowrap; box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.12); }
+dialog.beeson-edit-card .row button:hover { filter: brightness(0.97); }
+dialog.beeson-edit-card .row button.primary { border-color: transparent; background: var(--ed-select); color: var(--ed-on-select); }
+dialog.beeson-edit-card .row button[hidden] { display: none; }
+dialog.beeson-edit-card button:focus-visible { outline: 3px solid var(--ed-focus); outline-offset: 1px; }
+`;
+  var FOCUSABLE = 'button:not([disabled]):not([hidden]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+  var Dialog = class {
+    constructor(options) {
+      this.el = make("dialog", "beeson-edit-card");
+      this.heading = make("h3");
+      this.text = make("p");
+      this.row = make("div", "row");
+      this.buttons = /* @__PURE__ */ new Map();
+      this.done = null;
+      this.back = null;
+      this.options = options;
+      if (options.className) this.el.classList.add(...options.className.split(" "));
+      this.el.hidden = true;
+      this.el.setAttribute("aria-modal", "true");
+      this.heading.id = `beeson-edit-dialog-${Math.random().toString(36).slice(2, 8)}`;
+      this.el.setAttribute("aria-labelledby", this.heading.id);
+      this.heading.textContent = options.title;
+      this.el.append(this.heading);
+      if (options.text !== void 0) {
+        this.text.textContent = options.text;
+        this.el.append(this.text);
+      }
+      if (options.body) this.el.append(options.body);
+      this.setButtons(options.buttons);
+      this.el.append(this.row);
+      this.el.addEventListener("cancel", (ev) => {
+        ev.preventDefault();
+        if (options.dismissable !== false) this.close(null);
+      });
+      this.el.addEventListener("keydown", (ev) => {
+        if (ev.key === "Escape") {
+          ev.preventDefault();
+          if (options.dismissable !== false) this.close(null);
+        } else if (ev.key === "Tab") this.trap(ev);
+        else if ((ev.key === "Enter" || ev.key === " ") && ev.target instanceof HTMLButtonElement) ev.stopPropagation();
+      });
+      document.body.append(this.el);
+    }
+    setButtons(buttons) {
+      this.buttons.clear();
+      this.row.replaceChildren(...buttons.map((b) => {
+        const el = make("button", b.primary ? "primary" : "", b.label);
+        el.type = "button";
+        if (b.title) el.title = b.title;
+        el.addEventListener("click", () => {
+          if (!this.options.stay?.includes(b.value)) this.close(b.value);
+          this.options.onButton?.(b.value);
+        });
+        this.buttons.set(b.value, el);
+        return el;
+      }));
+    }
+    get shown() {
+      return this.el.open;
+    }
+    // the dialog is shown over the page, which is inert meanwhile, with the focus on the button of
+    // the value focus or on the first button. the answer is the value of the button pressed, or null
+    // for Esc or a close by the editor
+    open(focus, back) {
+      if (this.el.open) return new Promise((resolve) => this.chain(resolve));
+      this.back = back ?? (document.activeElement instanceof HTMLElement && document.activeElement !== document.body ? document.activeElement : null);
+      this.el.hidden = false;
+      try {
+        this.el.showModal();
+      } catch {
+        this.el.show();
+      }
+      const target = focus && this.buttons.get(focus) || this.el.querySelector(FOCUSABLE);
+      target?.focus({ preventScroll: true });
+      return new Promise((resolve) => {
+        this.done = resolve;
+      });
+    }
+    chain(resolve) {
+      const prev = this.done;
+      this.done = (v) => {
+        prev?.(v);
+        resolve(v);
+      };
+    }
+    close(value) {
+      if (!this.el.open && this.el.hidden) return;
+      if (this.el.open) this.el.close();
+      this.el.hidden = true;
+      const done = this.done;
+      this.done = null;
+      const back = this.back;
+      this.back = null;
+      if (back?.isConnected && !back.closest("[hidden], [inert]")) back.focus({ preventScroll: true });
+      done?.(value);
+    }
+    // Tab and Shift+Tab go round the controls of the dialog
+    trap(ev) {
+      const list = [...this.el.querySelectorAll(FOCUSABLE)].filter((el) => el.offsetParent !== null || el === document.activeElement);
+      if (!list.length) return;
+      ev.preventDefault();
+      const at = list.indexOf(document.activeElement);
+      const next = ev.shiftKey ? at <= 0 ? list.length - 1 : at - 1 : (at + 1) % list.length;
+      list[next].focus();
+    }
+  };
+  async function ask(options, focus) {
+    const d = new Dialog(options);
+    try {
+      return await d.open(focus);
+    } finally {
+      d.el.remove();
+    }
+  }
+  var host = () => document.querySelector("dialog.beeson-edit-card[open]") ?? document.body;
+  function install4(_app) {
+    injectStyle("dialog", CSS4);
+  }
+
   // src/editor/file/files.ts
   var FILE_TYPES = [{ description: "HTML", accept: { "text/html": [".html", ".htm"] } }];
   var AUTOSAVE_KEY = "beeson-autosave";
@@ -2798,22 +2928,12 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
   var REPLACE = () => `Replace ${fileName()} in ${folder()} with it, or set the browser to ask where to save each download`;
   var plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
   var clock = () => (/* @__PURE__ */ new Date()).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  var CSS4 = `
-.beeson-edit-card { position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%); z-index: 65; box-sizing: border-box; width: min(600px, calc(100vw - 32px)); padding: 24px 28px; border: 1px solid var(--line, #555); border-radius: 10px; background: var(--bg, #000); color: var(--text, #eee); font: 15px/1.5 system-ui, sans-serif; box-shadow: 0 12px 48px rgba(0, 0, 0, 0.45); }
-.beeson-edit-card[hidden] { display: none; }
-.beeson-edit-card h3 { margin: 0 0 8px; font: 600 18px/1.3 system-ui, sans-serif; }
-.beeson-edit-card p { margin: 0 0 16px; color: var(--subtle, #bbb); }
-.beeson-edit-card code { font: 13px/1.5 ui-monospace, Menlo, Consolas, monospace; color: var(--text, #eee); word-break: break-all; }
-.beeson-edit-card button { font: inherit; padding: 8px 16px; border: 1px solid var(--violet, #96f); border-radius: 6px; background: transparent; color: var(--text, #eee); cursor: pointer; white-space: nowrap; }
-.beeson-edit-card .row { display: flex; flex-wrap: wrap; gap: 8px; }
-.beeson-edit-card .row button:not(:first-child) { border-color: var(--line, #555); }
-`;
   function download(name, text) {
     const url = URL.createObjectURL(new Blob([text], { type: "text/html" }));
     const a = make("a");
     a.href = url;
     a.download = name;
-    document.body.append(a);
+    host().append(a);
     a.click();
     a.remove();
     setTimeout(() => URL.revokeObjectURL(url), 1e3);
@@ -2844,7 +2964,7 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
       };
       input.addEventListener("change", () => finish(input.files?.[0] ?? null));
       input.addEventListener("cancel", () => finish(null));
-      document.body.append(input);
+      host().append(input);
       input.click();
     });
   }
@@ -2860,59 +2980,48 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
       discard: ["Present the saved file", "Show the deck as saved in a new tab, and keep the edits here"]
     }
   };
-  function install4(app2) {
-    injectStyle("files", CSS4);
-    const card = make("div", "beeson-edit-card");
-    const cardText = make("p");
-    const cardButton = button(`Choose ${fileName()}\u2026`);
-    card.append(make("h3", "", "Choose the file of this deck"), cardText, cardButton);
-    card.hidden = true;
-    const ask = make("div", "beeson-edit-card ask");
-    const askText = make("p");
-    const askSave = button("");
-    const askDiscard = button("");
-    const askCancel = button("Cancel", "Go on editing");
-    const askRow = make("div", "row");
-    askRow.append(askSave, askDiscard, askCancel);
-    ask.append(make("h3", "", "The deck has unsaved changes"), askText, askRow);
-    ask.hidden = true;
-    let asking = null;
-    const problemsCard = make("div", "beeson-edit-card problems");
+  function install5(app2) {
+    const fail2 = (e) => app2.fail(e);
+    const later = (action) => Promise.resolve().then(action).catch(fail2);
+    const card = new Dialog({
+      title: "Choose the file of this deck",
+      text: "",
+      buttons: [{ label: `Choose ${fileName()}\u2026`, value: "choose", primary: true }],
+      dismissable: false,
+      stay: ["choose"],
+      onButton: () => later(openFile)
+    });
+    const ask2 = new Dialog({ title: "The deck has unsaved changes", text: "", buttons: [], className: "ask" });
     const problemsList = make("ul");
-    problemsList.style.cssText = "margin: 0 0 16px; padding-left: 20px; max-height: 50vh; overflow-y: auto; color: var(--subtle, #bbb);";
-    const problemsClose = button("Close");
-    const problemsRow = make("div", "row");
-    problemsRow.append(problemsClose);
-    problemsCard.append(make("h3", "", "Texts that cannot be edited"), problemsList, problemsRow);
-    problemsCard.hidden = true;
+    const problemsCard = new Dialog({
+      title: "Texts that cannot be edited",
+      body: problemsList,
+      buttons: [{ label: "Close", value: "close", primary: true }],
+      className: "problems",
+      onButton: () => later(closeProblems)
+    });
     let saving = false;
     let again = false;
     let autosaveTimer = 0;
     const problemText = (p) => `slide ${app2.slideNumber(p.slide) ?? "?"}, ${p.tag}: ${p.reason}`;
-    function askFirst(action) {
+    async function askFirst(action) {
       const words = ASK[action];
-      askText.textContent = words.text;
-      [askSave.textContent, askSave.title] = words.save;
-      [askDiscard.textContent, askDiscard.title] = words.discard;
-      return new Promise((done) => {
-        asking = done;
-        ask.hidden = false;
-        askCancel.focus();
-      });
-    }
-    function answer(choice) {
-      ask.hidden = true;
-      asking?.(choice);
-      asking = null;
+      ask2.text.textContent = words.text;
+      ask2.setButtons([
+        { label: words.save[0], title: words.save[1], value: "save", primary: true },
+        { label: words.discard[0], title: words.discard[1], value: "discard" },
+        { label: "Cancel", title: "Go on editing", value: "cancel" }
+      ]);
+      const choice = await ask2.open("cancel");
+      return choice === "save" || choice === "discard" ? choice : null;
     }
     function showProblems() {
       problemsList.replaceChildren(...(app2.pairing?.problems ?? []).map((p) => make("li", "", problemText(p))));
-      problemsCard.hidden = false;
-      problemsClose.focus();
+      void problemsCard.open("close");
     }
     function closeProblems() {
-      problemsCard.hidden = true;
-      const which = document.querySelector(".beeson-edit-top button.which");
+      problemsCard.close(null);
+      const which = document.querySelector(".beeson-edit-header button.which");
       if (which && !which.hidden) which.focus();
     }
     function line() {
@@ -2959,7 +3068,7 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
       return renderDeck(app2.source, app2.pairing, mathLookup(), app2.tagEdits).text;
     }
     async function discardEdits() {
-      while (app2.history.canUndo) await app2.history.undo();
+      while (app2.history.canUndo && !readsAsSaved()) await app2.history.undo();
       app2.history.clear();
       app2.move.select(null);
       if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
@@ -3031,6 +3140,7 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
         text = `${n ? `Saved a copy with ${edits}` : `Saved a copy of ${fileName()}`}. ${REPLACE()}`;
       }
       app2.saved = rendered.text;
+      app2.history.break();
       const warnings = rendered.warnings.length ? `, ${rendered.warnings.join(", ")}` : "";
       app2.note = { text: `${text}${warnings}`, warn: rendered.warnings.length > 0 };
       if (render() === rendered.text) {
@@ -3049,6 +3159,13 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
       }
       if (canWrite() && !await pickTarget(app2)) return;
       await save();
+    }
+    function readsAsSaved() {
+      try {
+        return app2.saved !== null && render() === app2.saved;
+      } catch {
+        return false;
+      }
     }
     function cleanIfSaved() {
       if (!app2.source || !app2.pairing || app2.saved === null) return;
@@ -3100,23 +3217,20 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
       line,
       showProblems,
       closeProblems,
-      problemsShown: () => !problemsCard.hidden,
-      askShown: () => !ask.hidden,
-      cancelAsk: () => answer(null)
+      problemsShown: () => !problemsCard.el.hidden,
+      askShown: () => !ask2.el.hidden,
+      cancelAsk: () => ask2.close(null)
     };
     app2.files = files;
     app2.autosave = canWrite() && stored(AUTOSAVE_KEY) === "1";
-    const fail2 = (e) => app2.fail(e);
-    wire(cardButton, openFile, fail2);
-    wire(askSave, () => answer("save"), fail2);
-    wire(askDiscard, () => answer("discard"), fail2);
-    wire(askCancel, () => answer(null), fail2);
-    wire(problemsClose, closeProblems, fail2);
     app2.listen("report", () => {
-      card.hidden = app2.state !== "waiting";
-      if (app2.state !== "waiting") return;
+      if (app2.state !== "waiting") {
+        card.close(null);
+        return;
+      }
       const where = `${fileName()} in ${folder()}, i.e. the file that is open here`;
-      cardText.textContent = canWrite() ? `A browser writes only to a file that you have chosen. Choose ${where}, and your edits are saved into it.` : `This browser does not write to a file by itself. Choose ${where}. A save is then a download of a copy with your edits. Set the browser to ask where to save each download, and you choose ${fileName()} in its folder and replace it.`;
+      card.text.textContent = canWrite() ? `A browser writes only to a file that you have chosen. Choose ${where}, and your edits are saved into it.` : `This browser does not write to a file by itself. Choose ${where}. A save is then a download of a copy with your edits. Set the browser to ask where to save each download, and you choose ${fileName()} in its folder and replace it.`;
+      if (!card.shown) void card.open("choose");
     });
     app2.listen("history", () => {
       if (app2.dirty) cleanIfSaved();
@@ -3125,7 +3239,6 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
     window.addEventListener("beforeunload", (ev) => {
       if (app2.dirty) ev.preventDefault();
     });
-    document.body.append(card, ask, problemsCard);
   }
   async function fetchSource(app2) {
     if (location.protocol === "file:") return false;
@@ -3142,9 +3255,6 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
   // src/editor/file/drafts.ts
   var DRAFT_KEY = `beeson-draft:${location.href.split(/[?#]/)[0]}`;
   var DRAFT_DELAY = 1e3;
-  var CSS5 = `
-.beeson-edit-card.recover { z-index: 66; }
-`;
   function readDraft() {
     const raw = stored(DRAFT_KEY);
     if (!raw) return null;
@@ -3155,17 +3265,22 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
       return null;
     }
   }
-  function install5(app2) {
-    injectStyle("drafts", CSS5);
-    const recover = make("div", "beeson-edit-card recover");
-    const recoverText = make("p");
-    const restoreButton = button("Restore and save", "Write the edits into the file and show the page again");
-    const copyButton = button("Download a copy", "Put a copy of the file with the edits into your downloads");
-    const discardButton = button("Discard", "Forget the edits");
-    const recoverRow = make("div", "row");
-    recoverRow.append(restoreButton, copyButton, discardButton);
-    recover.append(make("h3", "", "Edits that were not saved were found"), recoverText, recoverRow);
-    recover.hidden = true;
+  function install6(app2) {
+    const fail2 = (e) => app2.fail(e);
+    const actions = { restore: () => restore(), copy: () => copy(), discard: () => discard() };
+    const recover = new Dialog({
+      title: "Edits that were not saved were found",
+      text: "",
+      buttons: [
+        { label: "Restore and save", title: "Write the edits into the file and show the page again", value: "restore", primary: true },
+        { label: "Download a copy", title: "Put a copy of the file with the edits into your downloads", value: "copy" },
+        { label: "Discard", title: "Forget the edits", value: "discard" }
+      ],
+      className: "recover",
+      dismissable: false,
+      stay: ["restore", "copy", "discard"],
+      onButton: (value) => void Promise.resolve().then(actions[value]).catch(fail2)
+    });
     let draftTimer = 0;
     function keepDraft() {
       if (!app2.dirty || !app2.source || !app2.pairing) return;
@@ -3187,18 +3302,17 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
       const draft = readDraft();
       if (!draft || !app2.source || draft.text === app2.source.text) {
         if (draft) drop();
-        recover.hidden = true;
+        recover.close(null);
         return;
       }
       const when = new Date(draft.at).toLocaleString([], { dateStyle: "medium", timeStyle: "short" });
-      recoverText.textContent = `Edits of ${fileName()} from ${when} were kept in this browser and not saved. Restore writes the file with them and shows it again, a copy goes to your downloads, and Discard forgets them.`;
-      copyButton.hidden = false;
-      recover.hidden = false;
+      recover.text.textContent = `Edits of ${fileName()} from ${when} were kept in this browser and not saved. Restore writes the file with them and shows it again, a copy goes to your downloads, and Discard forgets them.`;
+      void recover.open("restore");
     }
     async function restore() {
       const draft = readDraft();
       if (!draft) {
-        recover.hidden = true;
+        recover.close(null);
         return;
       }
       if (!app2.handle && canWrite() && !await pickTarget(app2)) return;
@@ -3214,13 +3328,13 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
       const draft = readDraft();
       if (draft) download(fileName(), draft.text);
       drop();
-      recover.hidden = true;
+      recover.close(null);
       app2.note = { text: `A copy of ${fileName()} with the edits is in your downloads. Replace ${fileName()} in ${folder()} with it and open it again`, warn: false };
       app2.report();
     }
     function discard() {
       drop();
-      recover.hidden = true;
+      recover.close(null);
       app2.report();
     }
     const drafts = {
@@ -3231,21 +3345,16 @@ html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--accent, #f8
       drop,
       hasDraft: () => readDraft() !== null,
       offer,
-      offered: () => !recover.hidden,
+      offered: () => !recover.el.hidden,
       restore
     };
     app2.drafts = drafts;
-    const fail2 = (e) => app2.fail(e);
-    wire(restoreButton, restore, fail2);
-    wire(copyButton, copy, fail2);
-    wire(discardButton, discard, fail2);
     app2.listen("dirty", drafts.keepSoon);
-    document.body.append(recover);
   }
 
   // src/editor/notes.ts
   var PANE_KEY = "beeson-pane";
-  var CSS6 = `
+  var CSS5 = `
 .beeson-edit-pane { position: fixed; left: 0; right: 0; bottom: 36px; z-index: 0; height: var(--beeson-pane, 200px); box-sizing: border-box; display: none; background: var(--bg, #000); border-top: 1px solid var(--line, #555); color: var(--subtle, #bbb); font: 12px/1.4 system-ui, sans-serif; padding: 8px 16px; }
 html.beeson-notes .beeson-edit-pane { display: block; }
 html.beeson-nav .beeson-edit-pane, html.beeson-nav .beeson-edit-resize { left: 240px; }
@@ -3259,8 +3368,8 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes { 
 html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:focus { outline-color: var(--violet, #96f); }
 html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:empty::before { content: 'Click to add notes'; color: var(--subtle, #bbb); }
 `;
-  function install6(app2) {
-    injectStyle("notes", CSS6);
+  function install7(app2) {
+    injectStyle("notes", CSS5);
     const notesButton = button("Notes", "Show the speaker notes under the slide");
     notesButton.setAttribute("aria-pressed", "false");
     const pane = make("div", "beeson-edit-pane", "Notes");
@@ -3330,11 +3439,11 @@ html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:em
   }
 
   // src/editor/overflow.ts
-  var CSS7 = `
+  var CSS6 = `
 html.beeson-editing .reveal .beeson-overflow { outline: 2px dashed var(--accent, #f80) !important; outline-offset: 6px; }
 `;
-  function install7(app2) {
-    injectStyle("overflow", CSS7);
+  function install8(app2) {
+    injectStyle("overflow", CSS6);
     app2.onRefresh(ALL, () => {
       const slide = app2.current();
       const box2 = app2.slides().getBoundingClientRect();
@@ -3360,7 +3469,7 @@ html.beeson-editing .reveal .beeson-overflow { outline: 2px dashed var(--accent,
   }
 
   // src/editor/text/typing.ts
-  var CSS8 = `
+  var CSS7 = `
 html.beeson-editing .reveal [contenteditable="true"] { cursor: text; outline: 1px dashed transparent; outline-offset: 6px; border-radius: 2px; }
 html.beeson-editing .reveal [contenteditable="true"]:hover { outline-color: var(--subtle, #bbb); }
 html.beeson-editing .reveal [contenteditable="true"]:focus { outline: 2px solid var(--violet, #96f); }
@@ -3375,21 +3484,21 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
     while (tail < before2.length - head && tail < after.length - head && before2[before2.length - 1 - tail] === after[after.length - 1 - tail]) tail++;
     return after.length - tail;
   }
-  function placeCaret(host, offset = null) {
-    if (!(host instanceof HTMLElement)) return;
-    host.focus({ preventScroll: true });
+  function placeCaret(host2, offset = null) {
+    if (!(host2 instanceof HTMLElement)) return;
+    host2.focus({ preventScroll: true });
     const selection = window.getSelection();
     if (!selection) return;
     const range = document.createRange();
-    range.selectNodeContents(host);
+    range.selectNodeContents(host2);
     range.collapse(false);
     if (offset !== null) {
-      const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+      const walker = document.createTreeWalker(host2, NodeFilter.SHOW_TEXT);
       let left = offset;
       for (let node = walker.nextNode(); node; node = walker.nextNode()) {
         if (left <= node.length) {
           const math = node.parentElement?.closest("mjx-container");
-          if (math && host.contains(math)) range.setStartAfter(math);
+          if (math && host2.contains(math)) range.setStartAfter(math);
           else range.setStart(node, left);
           range.collapse(true);
           break;
@@ -3400,15 +3509,15 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
     selection.removeAllRanges();
     selection.addRange(range);
   }
-  function toggleFormat(host, tag) {
+  function toggleFormat(host2, tag) {
     const selection = window.getSelection();
     if (!selection?.rangeCount) return;
     const range = selection.getRangeAt(0);
-    if (range.collapsed || !host.contains(range.commonAncestorContainer)) return;
+    if (range.collapsed || !host2.contains(range.commonAncestorContainer)) return;
     const alias = tag === "strong" ? "b" : "i";
     const same = (el) => el.localName === tag || el.localName === alias;
     const formatOf = (node) => {
-      for (let el = node instanceof Element ? node : node.parentElement; el && el !== host; el = el.parentElement) if (same(el)) return el;
+      for (let el = node instanceof Element ? node : node.parentElement; el && el !== host2; el = el.parentElement) if (same(el)) return el;
       return null;
     };
     const unwrap = (root) => {
@@ -3457,7 +3566,7 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
         nodes = [el];
       }
     }
-    for (const el of [...host.querySelectorAll("strong, em, b, i")]) {
+    for (const el of [...host2.querySelectorAll("strong, em, b, i")]) {
       if (!el.textContent && !el.querySelector("br, img, mjx-container")) el.remove();
     }
     if (nodes.length) {
@@ -3467,10 +3576,10 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
       selection.removeAllRanges();
       selection.addRange(selected);
     }
-    host.normalize();
+    host2.normalize();
   }
-  function insertPlain(host, text) {
-    if (host.closest("pre")) {
+  function insertPlain(host2, text) {
+    if (host2.closest("pre")) {
       document.execCommand("insertText", false, text);
       return;
     }
@@ -3480,8 +3589,8 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
       if (i < lines2.length - 1) document.execCommand("insertLineBreak");
     });
   }
-  function install8(app2) {
-    injectStyle("typing", CSS8);
+  function install9(app2) {
+    injectStyle("typing", CSS7);
     const history2 = app2.history;
     let hosts = [];
     function markMath(root) {
@@ -3504,20 +3613,20 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
       document.documentElement.classList.toggle("beeson-editing", hosts.length > 0);
       app2.notes.ensure();
     }
-    async function restoreHost(host, content) {
-      app2.showSlide(host);
-      if (host.matches("aside.notes") && !app2.notes.shown()) app2.notes.toggle();
-      const before2 = host.textContent ?? "";
-      await setContentWithTex(host, content);
-      markMath(host);
-      history2.track(host);
+    async function restoreHost(host2, content) {
+      app2.showSlide(host2);
+      if (host2.matches("aside.notes") && !app2.notes.shown()) app2.notes.toggle();
+      const before2 = host2.textContent ?? "";
+      await setContentWithTex(host2, content);
+      markMath(host2);
+      history2.track(host2);
       app2.markDirty();
-      placeCaret(host, changeEnd(before2, host.textContent ?? ""));
+      placeCaret(host2, changeEnd(before2, host2.textContent ?? ""));
       app2.invalidate("content");
     }
     function onBeforeInput(ev) {
-      const host = app2.hostOf(ev.target);
-      if (!host) return;
+      const host2 = app2.hostOf(ev.target);
+      if (!host2) return;
       const type = ev.inputType;
       if (type === "historyUndo" || type === "historyRedo") {
         ev.preventDefault();
@@ -3527,22 +3636,22 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
       if (type === "formatBold" || type === "formatItalic") {
         ev.preventDefault();
         history2.break();
-        history2.beforeTyping(host);
-        toggleFormat(host, type === "formatBold" ? "strong" : "em");
-        history2.afterTyping(host);
+        history2.beforeTyping(host2);
+        toggleFormat(host2, type === "formatBold" ? "strong" : "em");
+        history2.afterTyping(host2);
         history2.break();
         app2.markDirty();
         app2.invalidate("content");
         return;
       }
       if (type === "insertParagraph" || type === "insertLineBreak") history2.break();
-      history2.beforeTyping(host);
+      history2.beforeTyping(host2);
       if (type === "insertParagraph" || type === "insertLineBreak") {
         ev.preventDefault();
-        insertPlain(host, "\n");
+        insertPlain(host2, "\n");
       } else if (type === "insertFromPaste") {
         ev.preventDefault();
-        insertPlain(host, ev.dataTransfer?.getData("text/plain") ?? "");
+        insertPlain(host2, ev.dataTransfer?.getData("text/plain") ?? "");
       } else if (type === "insertFromDrop" || type.startsWith("format") || type.startsWith("insertOrdered") || type.startsWith("insertUnordered") || type === "insertHorizontalRule" || type === "insertLink") {
         ev.preventDefault();
       }
@@ -3551,22 +3660,22 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
     app2.typing = typing;
     document.addEventListener("beforeinput", onBeforeInput);
     document.addEventListener("input", (ev) => {
-      const host = app2.hostOf(ev.target);
-      if (!host) return;
-      history2.afterTyping(host);
+      const host2 = app2.hostOf(ev.target);
+      if (!host2) return;
+      history2.afterTyping(host2);
       app2.markDirty();
       app2.invalidate("content");
     });
     document.addEventListener("focusin", (ev) => {
-      const host = app2.hostOf(ev.target);
-      if (host) history2.track(host);
+      const host2 = app2.hostOf(ev.target);
+      if (host2) history2.track(host2);
       app2.invalidate("selection");
     });
     document.addEventListener("focusout", () => setTimeout(() => app2.invalidate("selection"), 0));
   }
 
   // src/editor/text/mathpop.ts
-  var CSS9 = `
+  var CSS8 = `
 .beeson-math { position: fixed; z-index: 70; display: flex; flex-direction: column; gap: 6px; width: min(640px, calc(100vw - 32px)); box-sizing: border-box; padding: 10px; border: 1px solid var(--line, #555); border-radius: 6px; background: var(--bg, #000); color: var(--text, #eee); font: 14px/1.4 system-ui, sans-serif; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); }
 .beeson-math textarea { font: 14px/1.4 ui-monospace, Menlo, Consolas, monospace; min-height: 5em; padding: 6px; border: 1px solid var(--line, #555); border-radius: 4px; background: transparent; color: inherit; resize: vertical; }
 .beeson-math .row { display: flex; gap: 8px; align-items: center; }
@@ -3580,8 +3689,8 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
 .beeson-math .preview:empty { display: none; }
 .beeson-math button:disabled { opacity: 0.5; cursor: default; }
 `;
-  function install9(app2) {
-    injectStyle("mathpop", CSS9);
+  function install10(app2) {
+    injectStyle("mathpop", CSS8);
     let popover = null;
     let popoverFor = null;
     function closeMath(back = true) {
@@ -3592,16 +3701,16 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
       if (back && el?.isConnected) el.focus({ preventScroll: true });
     }
     async function setMath(container, tex) {
-      const host = container.closest(HOST);
-      if (!host) throw new Error("the formula is not in an editable block");
+      const host2 = container.closest(HOST);
+      if (!host2) throw new Error("the formula is not in an editable block");
       const info = mathLookup()(container);
       const { error } = await previewTex(tex, info?.display ?? false);
       if (error) throw new Error(error);
-      const before2 = contentWithTex(host);
-      if (!await retypeset(host, container, tex)) throw new Error("MathJax does not find the formula with this TeX, and the slide is kept as it was");
-      app2.typing.markMath(host);
-      const after = contentWithTex(host);
-      if (after !== before2) app2.history.push({ label: "formula", undo: () => app2.typing.restoreHost(host, before2), redo: () => app2.typing.restoreHost(host, after) });
+      const before2 = contentWithTex(host2);
+      if (!await retypeset(host2, container, tex)) throw new Error("MathJax does not find the formula with this TeX, and the slide is kept as it was");
+      app2.typing.markMath(host2);
+      const after = contentWithTex(host2);
+      if (after !== before2) app2.history.push({ label: "formula", undo: () => app2.typing.restoreHost(host2, before2), redo: () => app2.typing.restoreHost(host2, after) });
       app2.markDirty();
     }
     function openMath(container) {
@@ -3613,8 +3722,8 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
       box2.setAttribute("aria-modal", "true");
       box2.setAttribute("aria-label", "The TeX of the formula");
       popoverFor = container;
-      const host = container.closest(HOST);
-      const at = host ? [...host.querySelectorAll("mjx-container")].indexOf(container) : -1;
+      const host2 = container.closest(HOST);
+      const at = host2 ? [...host2.querySelectorAll("mjx-container")].indexOf(container) : -1;
       const field = make("textarea");
       field.setAttribute("aria-label", "TeX of the formula");
       field.value = info.tex;
@@ -3649,7 +3758,7 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
       apply.addEventListener("click", async () => {
         try {
           await setMath(container, field.value);
-          popoverFor = host?.querySelectorAll("mjx-container")[at] ?? null;
+          popoverFor = host2?.querySelectorAll("mjx-container")[at] ?? null;
           closeMath();
         } catch (e) {
           error.textContent = e instanceof Error ? e.message : String(e);
@@ -3692,138 +3801,1370 @@ html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.b
   }
 
   // src/editor/shell/canvas.ts
-  var CSS10 = `
-html.beeson-editor { --beeson-left: 6px; --beeson-right: 6px; }
-html.beeson-editor.beeson-nav { --beeson-left: 246px; }
-html.beeson-editor.beeson-steps { --beeson-right: 326px; }
-html.beeson-editor .reveal:not(.beeson-peek) { position: relative; z-index: 1; height: calc(100% - 80px) !important; margin-top: 44px; margin-left: var(--beeson-left); width: calc(100% - var(--beeson-left) - var(--beeson-right)) !important; overflow: visible; }
-html.beeson-editor.beeson-notes .reveal:not(.beeson-peek) { height: calc(100% - 80px - var(--beeson-pane, 200px)) !important; }
-html.beeson-editor .reveal .progress, html.beeson-editor .reveal .slide-number { display: none !important; }
+  var MARGIN = 32;
+  var ZOOMS = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5, 2, 3];
+  var MIN_ZOOM = 0.1;
+  var MAX_ZOOM = 4;
+  var CSS9 = `
+html.beeson-editor body.reveal-viewport { background: var(--ed-canvas); }
+html.beeson-editor .beeson-edit-canvas { grid-area: canvas; position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--ed-canvas); color-scheme: inherit; }
+html.beeson-editor .beeson-edit-canvas.zoomed { overflow: scroll; }
+html.beeson-editor .beeson-edit-canvas > .spacer { width: 1px; height: 1px; pointer-events: none; }
+html.beeson-editor .reveal:not(.beeson-peek) { position: fixed !important; inset: auto !important; left: var(--ed-slide-x, 0px) !important; top: var(--ed-slide-y, 0px) !important; width: var(--ed-slide-w, 100%) !important; height: var(--ed-slide-h, 100%) !important; margin: 0 !important; z-index: 1; overflow: visible; background: var(--bg); box-shadow: 0 0 0 1px var(--ed-edge), 0 2px 6px rgba(0, 0, 0, 0.16), 0 12px 32px rgba(0, 0, 0, 0.18); clip-path: var(--ed-clip, none); }
+html.beeson-editor .beeson-overlay, html.beeson-editor .beeson-badges { clip-path: var(--ed-cell-clip, none) !important; }
+html.beeson-editor .reveal .progress, html.beeson-editor .reveal .slide-number, html.beeson-editor .theme-switch { display: none !important; }
 html.beeson-editing .reveal .slides section .fragment { visibility: visible !important; opacity: 1 !important; transition: none !important; }
 html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: hidden !important; }
 `;
-  function install10(app2) {
-    injectStyle("canvas", CSS10);
-    const layout = () => {
-      const d = app2.deck();
-      if (!d) return;
-      const scale = d.getScale();
-      const reveal = document.querySelector(".reveal")?.getBoundingClientRect();
-      const box2 = app2.slides().getBoundingClientRect();
-      const root = document.documentElement.style;
-      const gap = reveal ? Math.max(0, reveal.bottom - box2.bottom) / scale : 0;
-      root.setProperty("--beeson-scale", String(scale));
-      root.setProperty("--beeson-gap", `${gap}px`);
-      const side = reveal ? Math.max(0, (reveal.width - box2.width) / 2) / scale : 0;
-      root.setProperty("--beeson-side", `${side}px`);
+  var clamp = (v, lo, hi) => Math.min(hi, Math.max(lo, v));
+  var hundredth = (v) => Math.floor(v * 100 + 1e-6) / 100;
+  function install11(app2) {
+    injectStyle("canvas", CSS9);
+    const el = make("div", "beeson-edit-canvas beeson-edit-region");
+    el.setAttribute("aria-hidden", "true");
+    const spacer = make("div", "spacer");
+    el.append(spacer);
+    document.body.append(el);
+    let zoom = null;
+    let configured = false;
+    let placing = false;
+    let box2 = { x: 0, y: 0, w: 0, h: 0 };
+    let size2 = { w: 1920, h: 1080 };
+    const root = document.documentElement.style;
+    const reveal = () => document.querySelector(".reveal:not(.beeson-peek)");
+    const viewport = () => {
+      const r = el.getBoundingClientRect();
+      return new DOMRect(r.left + el.clientLeft, r.top + el.clientTop, el.clientWidth, el.clientHeight);
     };
-    app2.listen("resize", layout);
+    const fitScale = () => {
+      const v = viewport();
+      return Math.max(MIN_ZOOM / 4, hundredth(Math.min((v.width - 2 * MARGIN) / size2.w, (v.height - 2 * MARGIN) / size2.h)));
+    };
+    const scale = () => app2.deck()?.getScale() ?? (box2.w / size2.w || 1);
+    const origin = () => {
+      const r = app2.slides().getBoundingClientRect();
+      return { x: r.left, y: r.top };
+    };
+    function configure() {
+      const d = app2.deck();
+      if (configured || !d?.isReady()) return;
+      configured = true;
+      const config = d.getConfig?.();
+      if (typeof config?.width === "number" && typeof config.height === "number") size2 = { w: config.width, h: config.height };
+      d.configure({ margin: 0, minScale: MIN_ZOOM / 4, maxScale: MAX_ZOOM, scrollActivationWidth: 0 });
+    }
+    function place3() {
+      if (placing) return;
+      placing = true;
+      try {
+        configure();
+        const s = zoom ?? fitScale();
+        el.classList.toggle("zoomed", zoom !== null && zoom > fitScale());
+        const v = viewport();
+        const w = Math.ceil(size2.w * s);
+        const h = Math.ceil(size2.h * s);
+        const contentW = Math.max(v.width, w + 2 * MARGIN);
+        const contentH = Math.max(v.height, h + 2 * MARGIN);
+        spacer.style.width = `${contentW}px`;
+        spacer.style.height = `${contentH}px`;
+        const x = v.left + (contentW - w) / 2 - el.scrollLeft;
+        const y = v.top + (contentH - h) / 2 - el.scrollTop;
+        const resized = w !== box2.w || h !== box2.h;
+        box2 = { x, y, w, h };
+        root.setProperty("--ed-slide-x", `${x}px`);
+        root.setProperty("--ed-slide-y", `${y}px`);
+        root.setProperty("--ed-slide-w", `${w}px`);
+        root.setProperty("--ed-slide-h", `${h}px`);
+        const d = app2.deck();
+        if (resized && d?.isReady()) d.layout();
+        writeRoom(v);
+        app2.invalidate("layout");
+        app2.emit("resize");
+      } finally {
+        placing = false;
+      }
+    }
+    function writeRoom(v) {
+      const s = scale();
+      const notes = document.querySelector(".beeson-edit-pane");
+      const notesBox = notes && document.documentElement.classList.contains("beeson-notes") ? notes.getBoundingClientRect() : null;
+      const bottom = notesBox && notesBox.height ? notesBox.bottom : v.bottom;
+      root.setProperty("--ed-cell-clip", `inset(${v.top}px ${innerWidth - v.right}px ${innerHeight - v.bottom}px ${v.left}px)`);
+      root.setProperty("--ed-clip", `inset(${v.top - box2.y}px ${box2.x + box2.w - v.right}px ${box2.y + box2.h - bottom}px ${v.left - box2.x}px)`);
+      const left = Math.max(0, box2.x - v.left) / s;
+      const right = Math.max(0, v.right - box2.x - box2.w) / s;
+      root.setProperty("--beeson-scale", String(s));
+      root.setProperty("--beeson-gap", `${((notesBox?.top ?? v.bottom) - box2.y - box2.h) / s}px`);
+      root.setProperty("--beeson-side", `${Math.max(left, right)}px`);
+      root.setProperty("--ed-room-l", `${left}px`);
+      root.setProperty("--ed-room-r", `${right}px`);
+    }
+    function setZoom(next, about) {
+      const v = viewport();
+      const at = about ?? { x: v.left + v.width / 2, y: v.top + v.height / 2 };
+      const before2 = toSlide2(at);
+      zoom = next === null ? null : clamp(hundredth(next), MIN_ZOOM, MAX_ZOOM);
+      if (zoom !== null && Math.abs(zoom - fitScale()) < 5e-3) zoom = null;
+      place3();
+      const after = toScreen2(before2);
+      el.scrollLeft += after.x - at.x;
+      el.scrollTop += after.y - at.y;
+      place3();
+      app2.report();
+    }
+    const step2 = (way) => {
+      const now = zoom ?? fitScale();
+      const next = way > 0 ? ZOOMS.find((z) => z > now + 4e-3) : [...ZOOMS].reverse().find((z) => z < now - 4e-3);
+      setZoom(next ?? (way > 0 ? MAX_ZOOM : MIN_ZOOM));
+    };
+    function toSlide2(p) {
+      const o = origin();
+      const s = scale();
+      return { x: (p.x - o.x) / s, y: (p.y - o.y) / s };
+    }
+    function toScreen2(p) {
+      const o = origin();
+      const s = scale();
+      return { x: o.x + p.x * s, y: o.y + p.y * s };
+    }
+    app2.stage = {
+      get scale() {
+        return scale();
+      },
+      get origin() {
+        return origin();
+      },
+      get zoom() {
+        return zoom;
+      },
+      get viewport() {
+        return viewport();
+      },
+      el,
+      toSlide: toSlide2,
+      toScreen: toScreen2,
+      setZoom,
+      zoomIn: () => step2(1),
+      zoomOut: () => step2(-1),
+      fitScale,
+      place: place3
+    };
+    new ResizeObserver(() => place3()).observe(el);
+    el.addEventListener("scroll", () => place3(), { passive: true });
+    app2.listen("resize", place3);
+    const onWheel = (ev) => {
+      const t = ev.target instanceof Element ? ev.target : null;
+      if (t?.closest("tycho-viewer, aside.notes, .beeson-edit-menu")) return;
+      if (ev.ctrlKey) {
+        ev.preventDefault();
+        const now = zoom ?? fitScale();
+        setZoom(now * Math.exp(-ev.deltaY / 200), { x: ev.clientX, y: ev.clientY });
+      } else if (el.classList.contains("zoomed") && t?.closest(".reveal")) {
+        ev.preventDefault();
+        el.scrollLeft += ev.deltaX;
+        el.scrollTop += ev.deltaY;
+      }
+    };
+    window.addEventListener("wheel", (ev) => {
+      const t = ev.target instanceof Element ? ev.target : null;
+      if (t?.closest(".reveal:not(.beeson-peek), .beeson-edit-canvas")) onWheel(ev);
+    }, { passive: false });
+  }
+
+  // src/editor/ui/icons.ts
+  var SVG2 = "http://www.w3.org/2000/svg";
+  var PATHS = {
+    undo: ["M7.5 5 4 8.5 7.5 12", "M4.5 8.5h7.25a4.25 4.25 0 0 1 0 8.5H9"],
+    redo: ["M12.5 5 16 8.5 12.5 12", "M15.5 8.5H8.25a4.25 4.25 0 0 0 0 8.5H11"],
+    slide: ["M3 5.5h14v9H3z"],
+    "slide-add": ["M2.5 5h11v8h-11z", "M16.5 9v6", "M13.5 12h6"],
+    text: ["M4.5 5.5V4h11v1.5", "M10 4v12", "M7.5 16h5"],
+    formula: ["M14.5 4.5h-9l5 5.5-5 5.5h9"],
+    table: ["M3 4.5h14v11H3z", "M3 8.25h14", "M3 11.75h14", "M8 4.5v11", "M12.5 8.25v7.25"],
+    image: ["M3 4.5h14v11H3z", "M3.5 14l4-4.25 3.25 3.25 2.25-2.25L16.5 14", "F13 8.25a1.25 1.25 0 1 1 0-.01z"],
+    video: ["M2.5 5.5h10.5v9H2.5z", "M13 9l4.5-2.5v7L13 11"],
+    qr: ["M3.5 3.5h5v5h-5z", "M11.5 3.5h5v5h-5z", "M3.5 11.5h5v5h-5z", "M11.5 11.5h2v2h-2z", "M14.5 14.5h2v2h-2z", "F5.25 5.25h1.5v1.5h-1.5z", "F13.25 5.25h1.5v1.5h-1.5z", "F5.25 13.25h1.5v1.5h-1.5z"],
+    play: ["F6.5 4.25v11.5L15.75 10z"],
+    save: ["M4 3.5h9.5L16.5 6.5V16.5H4z", "M7 3.5V7.5h5.5V3.5", "M7 16.5v-5h6.5v5"],
+    open: ["M2.75 15.5V4.5h5l1.75 2h7.75v9z", "M2.75 8.5h14.5"],
+    format: ["M12 3.5l4.5 4.5-6.75 6.75-4.5-4.5z", "M5.25 10.25 3.5 16.5l6.25-1.75"],
+    steps: ["M10 3 17 10 10 17 3 10z", "M10 6.5v7"],
+    navigator: ["M3 4.5h14v11H3z", "M8 4.5v11", "M4.75 7h1.5", "M4.75 9.5h1.5", "M4.75 12h1.5"],
+    inspector: ["M3 4.5h14v11H3z", "M12 4.5v11", "M13.75 7h1.5", "M13.75 9.5h1.5", "M13.75 12h1.5"],
+    notes: ["M3 4.5h14v11H3z", "M3 11h14", "M5.5 13.25h6"],
+    "chevron-down": ["M6 8l4 4 4-4"],
+    "chevron-right": ["M8 6l4 4-4 4"],
+    "chevron-left": ["M12 6l-4 4 4 4"],
+    check: ["M5 10.5l3.25 3.25L15 6.5"],
+    minus: ["M5 10h10"],
+    plus: ["M5 10h10", "M10 5v10"],
+    contrast: ["M10 3.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13z", "F10 3.5a6.5 6.5 0 0 0 0 13z"],
+    fit: ["M3.5 7.5v-4h4", "M12.5 3.5h4v4", "M16.5 12.5v4h-4", "M7.5 16.5h-4v-4"],
+    more: ["M5 6l4 4-4 4", "M11 6l4 4-4 4"],
+    warning: ["M10 3.5 17.5 16.5h-15z", "M10 8.5v3.5", "F10.75 14.25a.75.75 0 1 1-1.5 0 .75.75 0 0 1 1.5 0z"],
+    square: ["M4.5 4.5h11v11h-11z"]
+  };
+  function icon(name, size2 = 20) {
+    const svg = document.createElementNS(SVG2, "svg");
+    svg.setAttribute("viewBox", "0 0 20 20");
+    svg.setAttribute("width", String(size2));
+    svg.setAttribute("height", String(size2));
+    svg.setAttribute("aria-hidden", "true");
+    svg.setAttribute("focusable", "false");
+    svg.classList.add("beeson-icon");
+    for (const d of PATHS[name] ?? PATHS.square) {
+      const path = document.createElementNS(SVG2, "path");
+      const filled = d.startsWith("F");
+      path.setAttribute("d", filled ? `M${d.slice(1)}` : d);
+      if (filled) {
+        path.setAttribute("fill", "currentColor");
+      } else {
+        path.setAttribute("fill", "none");
+        path.setAttribute("stroke", "currentColor");
+        path.setAttribute("stroke-width", "1.5");
+        path.setAttribute("stroke-linecap", "round");
+        path.setAttribute("stroke-linejoin", "round");
+      }
+      svg.append(path);
+    }
+    return svg;
+  }
+  function install12(_app) {
+  }
+
+  // src/editor/ui/menu.ts
+  var CSS10 = `
+.beeson-edit-menu { position: fixed; z-index: 90; box-sizing: border-box; min-width: 220px; max-width: 420px; max-height: calc(100vh - 16px); overflow-y: auto; padding: 5px; border: 1px solid var(--ed-menu-line); border-radius: 8px; background: var(--ed-menu); color: var(--ed-text); font: 13px/1.25 system-ui, -apple-system, "Segoe UI", sans-serif; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.22), 0 1px 3px rgba(0, 0, 0, 0.12); -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6); outline: none; user-select: none; -webkit-user-select: none; }
+.beeson-edit-menu .item { display: grid; grid-template-columns: 18px 1fr auto 14px; align-items: center; column-gap: 4px; min-height: 22px; padding: 0 8px 0 4px; border-radius: 4px; cursor: default; white-space: nowrap; }
+.beeson-edit-menu .item .check { display: flex; justify-content: center; }
+.beeson-edit-menu .item .label { overflow: hidden; text-overflow: ellipsis; }
+.beeson-edit-menu .item .keys { padding-left: 24px; color: var(--ed-muted); font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
+.beeson-edit-menu .item .arrow { display: flex; justify-content: flex-end; color: var(--ed-muted); }
+.beeson-edit-menu .item.hi { background: var(--ed-select); color: var(--ed-on-select); }
+.beeson-edit-menu .item.hi .keys, .beeson-edit-menu .item.hi .arrow { color: inherit; }
+.beeson-edit-menu .item[aria-disabled="true"] { color: var(--ed-faint); }
+.beeson-edit-menu .item[aria-disabled="true"] .keys { color: var(--ed-faint); }
+.beeson-edit-menu .rule { height: 1px; margin: 5px 8px; background: var(--ed-menu-line); }
+.beeson-edit-menu .empty { padding: 3px 12px; color: var(--ed-faint); }
+.beeson-edit-split { display: inline-flex; align-items: stretch; }
+.beeson-edit-select { display: inline-flex; align-items: center; gap: 2px; }
+`;
+  var layer = () => {
+    let el = document.querySelector(".beeson-edit-menus");
+    if (!el) {
+      el = make("div", "beeson-edit-menus");
+      document.body.append(el);
+    }
+    return el;
+  };
+  var stack = [];
+  var uid = 0;
+  var platform = "other";
+  var MAC_MODS = { Ctrl: "\u2303", Alt: "\u2325", Shift: "\u21E7", Mod: "\u2318", Meta: "\u2318" };
+  var MAC_ORDER = ["Ctrl", "Alt", "Shift", "Mod", "Meta"];
+  var OTHER_ORDER = ["Mod", "Ctrl", "Meta", "Alt", "Shift"];
+  var KEY_NAMES = {
+    ArrowUp: ["\u2191", "Up"],
+    ArrowDown: ["\u2193", "Down"],
+    ArrowLeft: ["\u2190", "Left"],
+    ArrowRight: ["\u2192", "Right"],
+    Enter: ["\u21A9", "Enter"],
+    Backspace: ["\u232B", "Backspace"],
+    Delete: ["\u2326", "Delete"],
+    Escape: ["\u238B", "Esc"],
+    Tab: ["\u21E5", "Tab"],
+    Space: ["Space", "Space"],
+    " ": ["Space", "Space"],
+    PageUp: ["\u21DE", "PgUp"],
+    PageDown: ["\u21DF", "PgDn"],
+    Home: ["\u2196", "Home"],
+    End: ["\u2198", "End"],
+    "-": ["\u2212", "\u2212"],
+    Minus: ["\u2212", "\u2212"],
+    Plus: ["+", "+"],
+    "=": ["=", "="]
+  };
+  function keyLabel(keys, on = platform) {
+    const parts = keys.split("+");
+    const key = keys.endsWith("++") ? "+" : parts.pop() ?? "";
+    const mods = parts.filter((p) => p && p !== key);
+    const mac = on === "mac";
+    const name = KEY_NAMES[key]?.[mac ? 0 : 1] ?? (key.length === 1 ? key.toUpperCase() : key);
+    const order = mac ? MAC_ORDER : OTHER_ORDER;
+    const sorted = [...mods].sort((a, b) => order.indexOf(a) - order.indexOf(b));
+    if (mac) return sorted.map((m) => MAC_MODS[m] ?? m).join("") + name;
+    return [...sorted.map((m) => m === "Mod" ? "Ctrl" : m), name].join("+");
+  }
+  function commandKeys(c, on = platform) {
+    const k = c.keys?.[on]?.[0];
+    return k ? keyLabel(k, on) : "";
+  }
+  function menuItems(app2, bar, submenu) {
+    const all = app2.commands.list().filter((c) => c.menu?.bar === bar);
+    const entries = [];
+    const subs = /* @__PURE__ */ new Map();
+    for (const c of all) {
+      const m = c.menu;
+      if (m.submenu === submenu) entries.push({ group: m.group, order: m.order, item: { command: c.id } });
+      else if (submenu === void 0 && m.submenu) subs.set(m.submenu, [...subs.get(m.submenu) ?? [], c]);
+    }
+    for (const [name, members] of subs) {
+      const first2 = [...members].sort((a, b) => (a.menu?.order ?? 0) - (b.menu?.order ?? 0))[0];
+      entries.push({ group: first2.menu?.group ?? "", order: first2.menu?.order ?? 0, item: { label: name, items: () => menuItems(app2, bar, name) } });
+    }
+    entries.sort((a, b) => a.order - b.order);
+    const groups = /* @__PURE__ */ new Map();
+    for (const e of entries) groups.set(e.group, [...groups.get(e.group) ?? [], e.item]);
+    const out = [];
+    for (const items of groups.values()) {
+      if (out.length) out.push({ rule: true });
+      out.push(...items);
+    }
+    return out;
+  }
+  function contextItems(app2, kind, target) {
+    const out = [];
+    let last = null;
+    for (const c of app2.commands.forContext(kind)) {
+      const group = `${c.menu?.bar ?? ""}/${c.menu?.group ?? ""}`;
+      if (last !== null && group !== last) out.push({ rule: true });
+      last = group;
+      out.push({ command: c.id, arg: { kind, target } });
+    }
+    return out;
+  }
+  var Menu = class _Menu {
+    constructor(app2, items, options, parent) {
+      this.el = make("div", "beeson-edit-menu");
+      this.rows = [];
+      this.hi = -1;
+      this.child = null;
+      this.childTimer = 0;
+      this.opened = performance.now();
+      this.typed = "";
+      // the row of the parent menu that opened this submenu
+      this.anchorRow = null;
+      this.typedAt = 0;
+      this.app = app2;
+      this.options = options;
+      this.parent = parent;
+      this.restore = document.activeElement;
+      this.el.id = `beeson-edit-menu-${++uid}`;
+      this.el.setAttribute("role", "menu");
+      this.el.tabIndex = -1;
+      if (options.label) this.el.setAttribute("aria-label", options.label);
+      if (options.className) this.el.classList.add(...options.className.split(" "));
+      this.build(items);
+      this.el.addEventListener("pointerdown", (ev) => ev.preventDefault());
+      this.el.addEventListener("mousedown", (ev) => ev.preventDefault());
+      this.el.addEventListener("contextmenu", (ev) => ev.preventDefault());
+      layer().append(this.el);
+      this.place();
+      if (options.owner) options.owner.setAttribute("aria-expanded", "true");
+      if (options.keyboard) {
+        this.highlight(this.next(-1, 1));
+        this.el.focus({ preventScroll: true });
+      }
+    }
+    build(items) {
+      const clean = items.filter((it, i) => !("rule" in it) || i > 0 && i < items.length - 1 && !("rule" in items[i - 1]));
+      if (!clean.length) {
+        this.el.append(make("div", "empty", "No items"));
+        return;
+      }
+      for (const item of clean) {
+        if ("rule" in item) {
+          const rule = make("div", "rule");
+          rule.setAttribute("role", "separator");
+          this.el.append(rule);
+          continue;
+        }
+        const row = this.row(item);
+        const i = this.rows.length;
+        this.rows.push(row);
+        row.el.addEventListener("pointermove", () => {
+          if (this.hi !== i) this.highlight(i, true);
+        });
+        row.el.addEventListener("pointerleave", () => {
+          if (!this.child && this.hi === i) this.highlight(-1);
+        });
+        row.el.addEventListener("click", () => this.activate(i));
+        row.el.addEventListener("pointerup", (ev) => {
+          if (ev.button === 0 && performance.now() - this.opened > 250) this.activate(i);
+        });
+        this.el.append(row.el);
+      }
+    }
+    row(item) {
+      const el = make("div", "item");
+      el.id = `${this.el.id}-${this.rows.length}`;
+      let label2 = "";
+      let keys = "";
+      let checked = null;
+      let enabled = true;
+      let submenu = null;
+      if ("command" in item) {
+        const c = this.app.commands.get(item.command);
+        label2 = item.label ?? this.app.commands.label(item.command);
+        enabled = !!c && this.app.commands.enabled(item.command);
+        checked = c?.checked?.(this.app) ?? null;
+        keys = c ? commandKeys(c) : "";
+        el.dataset.command = item.command;
+      } else if ("items" in item) {
+        label2 = item.label;
+        enabled = !item.disabled;
+        const items = item.items;
+        submenu = typeof items === "function" ? items : () => items;
+      } else {
+        label2 = item.label;
+        enabled = !item.disabled;
+        checked = item.checked ?? null;
+        keys = item.keys ?? "";
+      }
+      el.setAttribute("role", checked === null ? "menuitem" : "menuitemcheckbox");
+      if (checked !== null) el.setAttribute("aria-checked", String(checked));
+      if (!enabled) el.setAttribute("aria-disabled", "true");
+      if (submenu) el.setAttribute("aria-haspopup", "menu");
+      const check = make("span", "check");
+      if (checked) check.append(icon("check", 14));
+      const arrow = make("span", "arrow");
+      if (submenu) arrow.append(icon("chevron-right", 12));
+      el.append(check, make("span", "label", label2), make("span", "keys", keys), arrow);
+      return { el, item, enabled, submenu, text: label2.toLowerCase() };
+    }
+    // the menu is kept inside the window, and flipped to the other side of its anchor when it would
+    // leave the window
+    place() {
+      const a = this.options.anchor;
+      const box2 = "width" in a ? a : new DOMRect(a.x, a.y, 0, 0);
+      const w = this.el.offsetWidth;
+      const h = this.el.offsetHeight;
+      const pad = 4;
+      let x = box2.left;
+      let y = box2.bottom;
+      switch (this.options.placement ?? "below") {
+        case "beside":
+          x = box2.right - 2;
+          y = box2.top - 6;
+          if (x + w > innerWidth - pad) x = box2.left - w + 2;
+          break;
+        case "point":
+          x = box2.left;
+          y = box2.top;
+          if (x + w > innerWidth - pad) x = Math.max(pad, x - w);
+          if (y + h > innerHeight - pad) y = Math.max(pad, y - h);
+          break;
+        case "over": {
+          const on = this.rows.find((r) => r.el.getAttribute("aria-checked") === "true");
+          x = box2.left - 22;
+          y = box2.top - (on ? on.el.offsetTop : 5);
+          break;
+        }
+        default:
+          x = box2.left;
+          y = box2.bottom + 2;
+          if (y + h > innerHeight - pad && box2.top - h - 2 > pad) y = box2.top - h - 2;
+      }
+      x = Math.max(pad, Math.min(x, innerWidth - w - pad));
+      y = Math.max(pad, Math.min(y, innerHeight - h - pad));
+      this.el.style.left = `${Math.round(x)}px`;
+      this.el.style.top = `${Math.round(y)}px`;
+    }
+    highlight(i, fromPointer = false) {
+      this.rows[this.hi]?.el.classList.remove("hi");
+      this.hi = i;
+      const row = this.rows[i];
+      window.clearTimeout(this.childTimer);
+      if (!row) {
+        this.el.removeAttribute("aria-activedescendant");
+        return;
+      }
+      row.el.classList.add("hi");
+      this.el.setAttribute("aria-activedescendant", row.el.id);
+      row.el.scrollIntoView({ block: "nearest" });
+      if (this.child && this.child.anchorRow !== row.el) this.closeChild();
+      if (fromPointer && row.submenu && row.enabled && !this.child) this.childTimer = window.setTimeout(() => this.openChild(false), 120);
+    }
+    openChild(keyboard) {
+      const row = this.rows[this.hi];
+      if (!row?.submenu || !row.enabled) return;
+      if (this.child) this.closeChild();
+      const child = new _Menu(this.app, row.submenu(), { anchor: row.el.getBoundingClientRect(), placement: "beside", label: row.text }, this);
+      child.anchorRow = row.el;
+      row.el.setAttribute("aria-expanded", "true");
+      this.child = child;
+      stack.push(child);
+      if (keyboard) child.highlight(child.next(-1, 1));
+    }
+    closeChild() {
+      if (!this.child) return;
+      this.child.anchorRow?.removeAttribute("aria-expanded");
+      this.child.destroy();
+      this.child = null;
+    }
+    destroy() {
+      this.closeChild();
+      window.clearTimeout(this.childTimer);
+      this.el.remove();
+      const at = stack.indexOf(this);
+      if (at >= 0) stack.splice(at, 1);
+      if (!this.parent) {
+        this.options.owner?.setAttribute("aria-expanded", "false");
+        this.options.onClose?.();
+      }
+    }
+    // the root and its submenus are closed, and the focus goes back where it was before the open
+    closeAll() {
+      const root = this.root();
+      root.destroy();
+      const back = root.options.keyboard && root.options.owner ? root.options.owner : root.restore;
+      if (back instanceof HTMLElement && back.isConnected && document.activeElement !== back && (root.options.keyboard || document.activeElement === root.el || !document.activeElement || document.activeElement === document.body)) back.focus({ preventScroll: true });
+    }
+    root() {
+      let m = this;
+      while (m.parent) m = m.parent;
+      return m;
+    }
+    // the item i is run after every menu is closed, so that its command sees the focus and the
+    // selection of the editor as they were before the menu was opened
+    activate(i) {
+      const row = this.rows[i];
+      if (!row || !row.enabled || !stack.includes(this)) return;
+      if (row.submenu) {
+        this.highlight(i);
+        this.openChild(true);
+        return;
+      }
+      this.closeAll();
+      const item = row.item;
+      const fail2 = (e) => this.app.fail(e);
+      if ("command" in item) void this.app.commands.run(item.command, item.arg).catch(fail2);
+      else if ("run" in item) Promise.resolve().then(item.run).catch(fail2);
+    }
+    next(from, step2) {
+      const n = this.rows.length;
+      for (let k = 1; k <= n; k++) {
+        const i = ((from + step2 * k) % n + n) % n;
+        if (this.rows[i].enabled) return i;
+      }
+      return -1;
+    }
+    // the keys of the deepest open menu. Left and Right move between the menus of the menu bar
+    // when the menu is not a submenu and its item does not open one
+    key(ev) {
+      const row = this.rows[this.hi];
+      switch (ev.key) {
+        case "ArrowDown":
+          this.highlight(this.next(this.hi, 1));
+          return true;
+        case "ArrowUp":
+          this.highlight(this.next(this.hi < 0 ? 0 : this.hi, -1));
+          return true;
+        case "Home":
+          this.highlight(this.next(-1, 1));
+          return true;
+        case "End":
+          this.highlight(this.next(0, -1));
+          return true;
+        case "ArrowRight":
+          if (row?.submenu && row.enabled) this.openChild(true);
+          else if (!this.parent) this.options.onSibling?.(1);
+          return true;
+        case "ArrowLeft":
+          if (this.parent) {
+            this.parent.closeChild();
+            this.parent.el.focus({ preventScroll: true });
+          } else this.options.onSibling?.(-1);
+          return true;
+        case "Enter":
+        case " ":
+          if (this.hi >= 0) this.activate(this.hi);
+          else if (ev.key === "Enter") this.closeAll();
+          return true;
+        case "Escape":
+          if (this.parent) this.parent.closeChild();
+          else this.closeAll();
+          return true;
+        case "Tab":
+          this.closeAll();
+          return true;
+        default:
+          if (ev.key.length === 1 && !ev.metaKey && !ev.ctrlKey && !ev.altKey) {
+            const now = performance.now();
+            this.typed = now - this.typedAt < 700 ? this.typed + ev.key.toLowerCase() : ev.key.toLowerCase();
+            this.typedAt = now;
+            const start2 = this.typed.length > 1 ? Math.max(this.hi, 0) : this.hi + 1;
+            const n = this.rows.length;
+            for (let k = 0; k < n; k++) {
+              const i = (start2 + k) % n;
+              if (this.rows[i].enabled && this.rows[i].text.startsWith(this.typed)) {
+                this.highlight(i);
+                break;
+              }
+            }
+            return true;
+          }
+          if (ev.metaKey || ev.ctrlKey) {
+            this.closeAll();
+            return false;
+          }
+          return true;
+      }
+    }
+  };
+  function openMenu(app2, items, options) {
+    closeMenus();
+    const menu = new Menu(app2, items, options, null);
+    stack.push(menu);
+    return { el: menu.el, close: () => stack.includes(menu) ? menu.closeAll() : void 0 };
+  }
+  function closeMenus() {
+    stack[0]?.closeAll();
+  }
+  var menuOpen = () => stack.length > 0;
+  function openContextMenu(app2, kind, target, at) {
+    const items = contextItems(app2, kind, target);
+    if (!items.length) return null;
+    return openMenu(app2, items, { anchor: at, placement: "point", label: `${kind} menu`, className: `context ${kind}` });
+  }
+  function splitButton(app2, main, items, label2) {
+    const box2 = make("span", "beeson-edit-split");
+    const more = make("button", "more");
+    more.type = "button";
+    more.setAttribute("aria-label", label2);
+    more.setAttribute("aria-haspopup", "menu");
+    more.setAttribute("aria-expanded", "false");
+    more.title = label2;
+    more.append(icon("chevron-down", 12));
+    const open = (keyboard) => openMenu(app2, items(), { anchor: box2.getBoundingClientRect(), owner: more, keyboard, label: label2 });
+    more.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      if (stack[0]?.options.owner === more) closeMenus();
+      else open(false);
+    });
+    more.addEventListener("click", (ev) => {
+      if (ev.detail === 0) open(true);
+    });
+    box2.append(main, more);
+    return box2;
+  }
+  function chromeSelect(app2, options) {
+    const b = make("button", `beeson-edit-select ${options.className ?? ""}`.trim());
+    b.type = "button";
+    b.setAttribute("aria-haspopup", "menu");
+    b.setAttribute("aria-expanded", "false");
+    b.setAttribute("aria-label", options.label);
+    b.title = options.label;
+    const text = make("span", "value");
+    b.append(text, icon("chevron-down", 10));
+    const refresh = () => {
+      text.textContent = options.text?.() ?? options.choices().find((c) => c.value === options.value())?.label ?? options.value();
+    };
+    const open = (keyboard) => {
+      const value = options.value();
+      const items = options.choices().map((c) => ({ label: c.label, checked: c.value === value, run: () => {
+        options.onChange(c.value);
+        refresh();
+      } }));
+      openMenu(app2, items, { anchor: b.getBoundingClientRect(), placement: "below", owner: b, keyboard, label: options.label, className: "select" });
+    };
+    b.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      if (stack[0]?.options.owner === b) closeMenus();
+      else open(false);
+    });
+    b.addEventListener("click", (ev) => {
+      if (ev.detail === 0) open(true);
+    });
+    b.refresh = refresh;
+    refresh();
+    return b;
+  }
+  window.addEventListener("keydown", (ev) => {
+    if (!stack.length) return;
+    const handled = stack[stack.length - 1].key(ev);
+    if (handled) {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+    }
+  }, true);
+  window.addEventListener("pointerdown", (ev) => {
+    if (!stack.length) return;
+    const t = ev.target instanceof Node ? ev.target : null;
+    if (t && stack.some((m) => m.el.contains(t))) {
+      ev.stopPropagation();
+      return;
+    }
+    const owner = stack[0].options.owner;
+    if (owner && t && owner.contains(t)) return;
+    closeMenus();
+  }, true);
+  window.addEventListener("blur", () => closeMenus());
+  window.addEventListener("resize", () => closeMenus());
+  function install13(app2) {
+    injectStyle("menu", CSS10);
+    platform = app2.platform;
+  }
+
+  // src/editor/shell/shell.ts
+  var NAV_KEY = "beeson-nav-w";
+  var NAV_MIN = 140;
+  var NAV_MAX = 360;
+  var NAV_DEFAULT = 200;
+  var TOKENS_LIGHT = `--ed-bg: #ececec; --ed-panel: #f6f6f6; --ed-text: #1d1d1f; --ed-muted: #6e6e73; --ed-faint: #a9a9ae; --ed-line: #d4d4d6; --ed-canvas: #e1e1e3; --ed-select: #8a2be2; --ed-on-select: #fff; --ed-guide: #e0651f; --ed-menu: rgba(248, 248, 248, 0.94); --ed-menu-line: rgba(0, 0, 0, 0.14); --ed-control: #fff; --ed-control-line: #c6c6ca; --ed-segment: #fff; --ed-focus: rgba(138, 43, 226, 0.5); --ed-hover: rgba(0, 0, 0, 0.06); --ed-pressed: rgba(0, 0, 0, 0.11); --ed-edge: rgba(0, 0, 0, 0.16); color-scheme: light;`;
+  var TOKENS_DARK = `--ed-bg: #2b2b2d; --ed-panel: #232325; --ed-text: #ececee; --ed-muted: #9a9a9f; --ed-faint: #5e5e63; --ed-line: #3b3b3e; --ed-canvas: #1a1a1c; --ed-select: #9d47d8; --ed-on-select: #fff; --ed-guide: #f08050; --ed-menu: rgba(44, 44, 46, 0.94); --ed-menu-line: rgba(255, 255, 255, 0.12); --ed-control: #3a3a3c; --ed-control-line: #4a4a4e; --ed-segment: #636366; --ed-focus: rgba(201, 79, 230, 0.6); --ed-hover: rgba(255, 255, 255, 0.07); --ed-pressed: rgba(255, 255, 255, 0.13); --ed-edge: rgba(255, 255, 255, 0.14); color-scheme: dark;`;
+  var CHROME = "html.beeson-editor .beeson-edit-header, html.beeson-editor .beeson-edit-inspector, html.beeson-editor .beeson-edit-bottom, html.beeson-editor .beeson-edit-pane, html.beeson-editor dialog.beeson-edit-card, html.beeson-editor .beeson-edit-menus";
+  var CSS11 = `
+html.beeson-editor { ${TOKENS_LIGHT} --ed-nav-col: 0px; --ed-insp-col: 0px; --ed-notes-row: 0px; --ed-font: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif; }
+@media (prefers-color-scheme: dark) { html.beeson-editor { ${TOKENS_DARK} } }
+html.beeson-editor.beeson-nav { --ed-nav-col: var(--ed-nav-w, ${NAV_DEFAULT}px); }
+html.beeson-editor.beeson-steps, html.beeson-editor.beeson-format { --ed-insp-col: 288px; }
+html.beeson-editor.beeson-notes { --ed-notes-row: var(--beeson-pane, 200px); }
+${CHROME} { --bg: var(--ed-panel); --text: var(--ed-text); --subtle: var(--ed-muted); --muted: var(--ed-muted); --line: var(--ed-line); --violet: var(--ed-select); --accent: var(--ed-guide); }
+html.beeson-editor body.reveal-viewport { display: grid !important; grid-template-columns: var(--ed-nav-col) minmax(0, 1fr) var(--ed-insp-col); grid-template-rows: auto minmax(0, 1fr) var(--ed-notes-row) 28px; grid-template-areas: "top top top" "nav canvas insp" "nav notes insp" "status status status"; width: 100vw; height: 100vh; height: 100dvh; margin: 0; overflow: hidden; color: var(--ed-text); font: 12px/1.35 var(--ed-font); }
+html.beeson-editor body > * { grid-area: canvas; }
+html.beeson-editor body > .beeson-edit-bottom { grid-area: status; }
+html.beeson-editor body > .beeson-edit-header { grid-area: top; position: relative; z-index: 60; display: flex; flex-direction: column; background: var(--ed-bg); border-bottom: 1px solid var(--ed-line); }
+html.beeson-editor body > .beeson-edit-nav { grid-area: nav; position: relative; inset: auto; width: auto; min-width: 0; min-height: 0; z-index: 50; background: var(--ed-panel); border-right: 1px solid var(--ed-line); color: var(--ed-text); font: 12px/1.4 var(--ed-font); }
+html.beeson-editor body > .beeson-edit-nav-edge { grid-area: nav; justify-self: end; position: relative; z-index: 55; width: 7px; margin-right: -4px; display: none; cursor: ew-resize; touch-action: none; }
+html.beeson-editor.beeson-nav body > .beeson-edit-nav-edge { display: block; }
+html.beeson-editor body > .beeson-edit-nav-edge:hover, html.beeson-editor body > .beeson-edit-nav-edge:focus-visible { outline: none; background: color-mix(in srgb, var(--ed-select) 45%, transparent); }
+html.beeson-editor .beeson-edit-peek { left: calc(var(--ed-nav-col) + 8px); }
+html.beeson-editor body > .beeson-edit-pane { grid-area: notes; position: relative; inset: auto; height: auto; min-height: 0; z-index: 0; background: var(--ed-panel); border-top: 1px solid var(--ed-line); color: var(--ed-faint); font: 11px/1.4 var(--ed-font); padding: 6px 12px; }
+html.beeson-editor body > .beeson-edit-resize { left: var(--ed-nav-col); right: var(--ed-insp-col); bottom: calc(28px + var(--beeson-pane, 200px) - 4px); }
+html.beeson-editor.beeson-notes body .reveal .slides section.present { clip-path: inset(0 calc(-1 * var(--ed-room-r, 0px)) calc(-1 * (var(--beeson-pane, 200px) / var(--beeson-scale, 1) + var(--beeson-gap, 0px))) calc(-1 * var(--ed-room-l, 0px))); }
+html.beeson-editor.beeson-notes body .reveal .slides section.present > aside.notes { left: calc(-1 * var(--ed-room-l, 0px)); right: calc(-1 * var(--ed-room-r, 0px)); padding: calc(28px / var(--beeson-scale, 1)) calc(14px / var(--beeson-scale, 1)) calc(10px / var(--beeson-scale, 1)); font: calc(13px / var(--beeson-scale, 1)) / 1.5 var(--ed-font); background: var(--ed-panel); color: var(--ed-text); }
+html.beeson-editor.beeson-notes body .reveal .slides section.present > aside.notes:empty::before { color: var(--ed-faint); }
+html.beeson-editor body > .beeson-edit-inspector { grid-area: insp; position: relative; z-index: 50; min-width: 0; min-height: 0; display: none; flex-direction: column; background: var(--ed-panel); border-left: 1px solid var(--ed-line); color: var(--ed-text); font: 12px/1.4 var(--ed-font); }
+html.beeson-editor.beeson-steps body > .beeson-edit-inspector, html.beeson-editor.beeson-format body > .beeson-edit-inspector { display: flex; }
+.beeson-edit-inspector .tabs { display: flex; margin: 10px 12px 6px; padding: 2px; border-radius: 7px; background: var(--ed-pressed); }
+.beeson-edit-inspector .tabs button { flex: 1; padding: 3px 0; border: 0; border-radius: 5px; background: transparent; color: var(--ed-text); font: 500 12px/1.3 var(--ed-font); cursor: default; }
+.beeson-edit-inspector .tabs button[aria-selected="true"] { background: var(--ed-segment); box-shadow: 0 0.5px 2px rgba(0, 0, 0, 0.2); }
+.beeson-edit-inspector .tabs button:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: 1px; }
+.beeson-edit-inspector > .panel { flex: 1; min-height: 0; display: flex; flex-direction: column; overflow: auto; }
+.beeson-edit-inspector > .panel[hidden] { display: none; }
+.beeson-edit-inspector .format { padding: 4px 16px 16px; }
+.beeson-edit-inspector .format h4 { margin: 12px 0 6px; font: 600 12px/1.3 var(--ed-font); }
+.beeson-edit-inspector .format dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0; }
+.beeson-edit-inspector .format dt { color: var(--ed-muted); }
+.beeson-edit-inspector .format dd { margin: 0; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+html.beeson-editor .beeson-edit-inspector .beeson-edit-side { position: static; inset: auto; width: auto; flex: 1; min-height: 0; border: 0; background: transparent; color: var(--ed-text); font: 12px/1.4 var(--ed-font); }
+html.beeson-editor .beeson-edit-inspector .beeson-edit-side .row { grid-template-columns: minmax(0, 8.5em) auto minmax(0, 1fr); }
+html.beeson-editor .beeson-edit-inspector .beeson-edit-side .row select { width: 100%; min-width: 0; }
+`;
+  var SHORT = { "edit.undo": "Undo", "edit.redo": "Redo" };
+  function toolbarLabel(app2, c) {
+    const own = c.toolbar?.label ?? SHORT[c.id];
+    if (own) return own;
+    return typeof c.label === "string" ? c.label : app2.commands.label(c.id);
+  }
+  function install14(app2) {
+    injectStyle("shell", CSS11);
+    const html = document.documentElement;
+    const header = make("header", "beeson-edit-header beeson-edit-region");
+    const inspector = make("div", "beeson-edit-inspector beeson-edit-region");
+    inspector.setAttribute("role", "complementary");
+    inspector.setAttribute("aria-label", "Inspector");
+    const tabs = make("div", "tabs");
+    tabs.setAttribute("role", "tablist");
+    tabs.setAttribute("aria-label", "Inspector");
+    const formatTab = make("button", "", "Format");
+    const stepsTab = make("button", "", "Steps");
+    const formatPanel = make("div", "panel format");
+    const stepsPanel = make("div", "panel steps");
+    for (const [tab, panel, id] of [[formatTab, formatPanel, "format"], [stepsTab, stepsPanel, "steps"]]) {
+      tab.type = "button";
+      tab.id = `beeson-edit-tab-${id}`;
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-controls", `beeson-edit-panel-${id}`);
+      panel.id = `beeson-edit-panel-${id}`;
+      panel.setAttribute("role", "tabpanel");
+      panel.setAttribute("aria-labelledby", tab.id);
+    }
+    tabs.append(formatTab, stepsTab);
+    inspector.append(tabs, formatPanel, stepsPanel);
+    const edge = make("div", "beeson-edit-nav-edge beeson-edit-region");
+    edge.tabIndex = 0;
+    edge.title = "Drag to change the width of the slide list, or focus it and press the left and right arrows";
+    edge.setAttribute("role", "separator");
+    edge.setAttribute("aria-orientation", "vertical");
+    edge.setAttribute("aria-label", "Width of the slide list");
+    edge.setAttribute("aria-valuemin", String(NAV_MIN));
+    edge.setAttribute("aria-valuemax", String(NAV_MAX));
+    let navWidth = NAV_DEFAULT;
+    const setNavWidth = (w, keep = true) => {
+      navWidth = Math.round(Math.min(NAV_MAX, Math.max(NAV_MIN, w)));
+      html.style.setProperty("--ed-nav-w", `${navWidth}px`);
+      edge.setAttribute("aria-valuenow", String(navWidth));
+      if (keep) store(NAV_KEY, String(navWidth));
+      app2.relayout();
+    };
+    const kept = Number(stored(NAV_KEY));
+    navWidth = Number.isFinite(kept) && kept >= NAV_MIN && kept <= NAV_MAX ? kept : NAV_DEFAULT;
+    html.style.setProperty("--ed-nav-w", `${navWidth}px`);
+    edge.setAttribute("aria-valuenow", String(navWidth));
+    edge.addEventListener("keydown", (ev) => {
+      const step2 = ev.key === "ArrowLeft" ? -10 : ev.key === "ArrowRight" ? 10 : 0;
+      if (!step2) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      setNavWidth(navWidth + step2);
+    });
+    edge.addEventListener("pointerdown", (ev) => {
+      if (ev.button !== 0) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const startX = ev.clientX;
+      const start2 = navWidth;
+      const onMove = (e) => setNavWidth(start2 + e.clientX - startX, false);
+      const onUp = () => {
+        window.removeEventListener("pointermove", onMove);
+        window.removeEventListener("pointerup", onUp);
+        store(NAV_KEY, String(navWidth));
+      };
+      window.addEventListener("pointermove", onMove);
+      window.addEventListener("pointerup", onUp);
+    });
+    let format = false;
+    let stepsBefore = false;
+    const setFormat = (on) => {
+      format = on;
+      html.classList.toggle("beeson-format", on);
+      if (on && app2.steps.shown) app2.steps.toggle();
+      syncInspector();
+      app2.relayout();
+    };
+    function syncInspector() {
+      const steps2 = app2.steps.shown;
+      if (steps2 && !stepsBefore && format) {
+        format = false;
+        html.classList.remove("beeson-format");
+      }
+      stepsBefore = steps2;
+      const tab = steps2 ? "steps" : format ? "format" : null;
+      formatTab.setAttribute("aria-selected", String(tab === "format"));
+      stepsTab.setAttribute("aria-selected", String(tab === "steps"));
+      formatTab.tabIndex = tab === "format" ? 0 : -1;
+      stepsTab.tabIndex = tab === "steps" ? 0 : -1;
+      formatPanel.hidden = tab !== "format";
+      stepsPanel.hidden = tab !== "steps";
+      if (tab === "format") fillFormat();
+    }
+    const fail2 = (e) => app2.fail(e);
+    formatTab.addEventListener("click", () => {
+      if (!format) setFormat(true);
+    });
+    stepsTab.addEventListener("click", () => {
+      if (!app2.steps.shown) void app2.commands.run("view.steps").catch(fail2);
+    });
+    tabs.addEventListener("keydown", (ev) => {
+      if (ev.key !== "ArrowLeft" && ev.key !== "ArrowRight") return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const next = document.activeElement === formatTab ? stepsTab : formatTab;
+      next.click();
+      next.focus();
+    });
+    function fillFormat() {
+      const slide = app2.current();
+      const layout = ["title", "section", "closing", "figure", "split"].find((c) => slide?.classList.contains(c)) ?? "content";
+      const width = ["narrow", "wide"].find((c) => slide?.classList.contains(c)) ?? "standard";
+      const steps2 = new Set([...slide?.querySelectorAll(".fragment") ?? []].map((f) => f.getAttribute("data-fragment-index") ?? "")).size;
+      const notes = slide?.querySelector("aside.notes")?.textContent?.trim() ? "yes" : "none";
+      const sel = app2.selection;
+      const what = sel.kind === "none" ? "nothing" : sel.kind === "text" ? "a text" : `${sel.items.length} ${sel.kind === "slides" ? "slide" : "element"}${sel.items.length === 1 ? "" : "s"}`;
+      const list = (rows) => {
+        const dl = make("dl");
+        for (const [k, v] of rows) dl.append(make("dt", "", k), make("dd", "", v));
+        return dl;
+      };
+      formatPanel.replaceChildren(
+        make("h4", "", "Slide"),
+        list([["Layout", layout], ["Width", width], ["Steps", String(steps2)], ["Notes", notes]]),
+        make("h4", "", "Selection"),
+        list([["Selected", what]])
+      );
+    }
+    app2.commands.define({
+      id: "shell.format",
+      label: "Format",
+      checked: () => format,
+      run: () => setFormat(!format),
+      menu: { bar: "View", group: "panes", order: 13 },
+      toolbar: { group: "inspector", order: 60, icon: "format" }
+    });
+    const zoom = (id, label2, order, run2, keys) => app2.commands.define({ id, label: label2, run: run2, keys, menu: { bar: "View", group: "zoom", order, submenu: "Zoom" } });
+    zoom("shell.zoomFit", "Fit", 20, () => app2.stage.setZoom(null), { mac: ["Mod+0"], other: ["Mod+0"] });
+    zoom("shell.zoomActual", "Actual Size", 21, () => app2.stage.setZoom(1));
+    zoom("shell.zoomIn", "Zoom In", 22, () => app2.stage.zoomIn(), { mac: ["Mod+="], other: ["Mod+="] });
+    zoom("shell.zoomOut", "Zoom Out", 23, () => app2.stage.zoomOut(), { mac: ["Mod+-"], other: ["Mod+-"] });
+    queueMicrotask(() => {
+      arrange();
+      app2.invalidate();
+    });
+    function arrange() {
+      const reveal = document.querySelector(".reveal:not(.beeson-peek)");
+      if (!reveal) return;
+      const top = document.querySelector(".beeson-edit-top");
+      if (top && top.parentElement !== header) header.append(top);
+      stepsPanel.append(app2.steps.pane);
+      const canvas = document.querySelector(".beeson-edit-canvas");
+      reveal.before(...[header, app2.nav.pane, edge, canvas].filter((el) => !!el));
+      const after = [document.querySelector(".beeson-edit-pane"), document.querySelector(".beeson-edit-resize"), inspector, document.querySelector(".beeson-edit-bottom")];
+      reveal.after(...after.filter((el) => !!el));
+      const peek = document.querySelector(".beeson-edit-peek");
+      if (peek) document.body.append(peek);
+      syncInspector();
+    }
+    document.body.append(header, inspector, edge);
+    app2.listen("resize", syncInspector);
+    app2.listen("slide", () => format && fillFormat());
+    app2.onRefresh(["selection", "content", "structure"], () => format && fillFormat());
+    function placeOf3(target) {
+      if (!target || target.closest(".beeson-edit-menu, dialog, input, textarea, select, aside.notes")) return null;
+      const row = target.closest(".beeson-edit-nav .row");
+      if (row) {
+        const rows = [...document.querySelectorAll(".beeson-edit-nav .row")];
+        const slide = app2.slides().querySelectorAll(":scope > section")[rows.indexOf(row)] ?? null;
+        if (slide && !app2.selection.has(slide)) app2.selection.set("slides", [slide]);
+        return { kind: "slide", target: slide };
+      }
+      if (target.closest(".beeson-edit-nav")) return { kind: "navigator", target: null };
+      if (target.closest(".beeson-edit-canvas")) return { kind: "canvas", target: app2.current() };
+      if (!target.closest(".reveal:not(.beeson-peek)")) return null;
+      const host2 = app2.hostOf(target);
+      if (host2) return { kind: "text", target: host2 };
+      const el = app2.move.movableOf(target);
+      if (el) {
+        if (!app2.selection.has(el)) app2.selection.set("elements", [el]);
+        return { kind: "element", target: el };
+      }
+      return { kind: "canvas", target: app2.current() };
+    }
+    document.addEventListener("contextmenu", (ev) => {
+      const place3 = placeOf3(ev.target instanceof Element ? ev.target : null);
+      if (!place3) return;
+      if (openContextMenu(app2, place3.kind, place3.target, { x: ev.clientX, y: ev.clientY })) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+    });
+    window.addEventListener("keydown", (ev) => {
+      if (!(ev.key === "ContextMenu" || ev.key === "F10" && ev.shiftKey && !ev.metaKey && !ev.ctrlKey && !ev.altKey)) return;
+      const sel = app2.selection.only();
+      const at = sel ?? (document.activeElement instanceof Element && document.activeElement !== document.body ? document.activeElement : app2.current());
+      const place3 = placeOf3(at);
+      if (!place3 || !at) return;
+      const r = at.getBoundingClientRect();
+      const v = app2.stage.viewport;
+      const x = Math.min(Math.max(r.left + 8, v.left), v.right);
+      const y = Math.min(Math.max(r.top + Math.min(r.height, 24), v.top), v.bottom);
+      if (openContextMenu(app2, place3.kind, place3.target, { x, y })) {
+        ev.preventDefault();
+        ev.stopPropagation();
+      }
+    }, true);
+    window.BeesonEditorShell = {
+      define: (c) => {
+        app2.commands.define(c);
+        app2.invalidate();
+        app2.flush();
+      },
+      stage: app2.stage,
+      openMenu: (items, at) => openMenu(app2, items, { anchor: at, placement: "point" }),
+      menuItems: (bar, submenu) => menuItems(app2, bar, submenu),
+      context: (kind, x, y) => !!openContextMenu(app2, kind, null, { x, y }),
+      closeMenus,
+      ask: (options, focus) => ask(options, focus)
+    };
   }
 
   // src/editor/shell/toolbar.ts
-  var CSS11 = `
-.beeson-edit-top, .beeson-edit-bottom { position: fixed; left: 0; right: 0; z-index: 60; display: flex; align-items: center; gap: 12px; box-sizing: border-box; padding: 0 16px; background: var(--bg, #000); color: var(--text, #eee); font: 14px/1.4 system-ui, sans-serif; }
-.beeson-edit-top { top: 0; height: 44px; border-bottom: 1px solid var(--line, #555); }
-.beeson-edit-top .file { font-weight: 600; white-space: nowrap; }
-.beeson-edit-top .state { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--subtle, #bbb); }
-.beeson-edit-top .state.warn { color: var(--accent, #f80); }
-.beeson-edit-top button, .beeson-edit-bottom button { font: inherit; padding: 4px 12px; border: 1px solid var(--line, #555); border-radius: 6px; background: transparent; color: var(--text, #eee); cursor: pointer; white-space: nowrap; }
-.beeson-edit-top button:hover, .beeson-edit-bottom button:hover { border-color: var(--subtle, #bbb); }
-.beeson-edit-top button:disabled { opacity: 0.4; cursor: default; }
-.beeson-edit-top button.on { border-color: var(--accent, #f80); color: var(--accent, #f80); }
+  var NARROW = 820;
+  var CSS12 = `
+.beeson-edit-top { display: flex; align-items: center; gap: 2px; height: 52px; padding: 0 10px; box-sizing: border-box; font: 11px/1.2 var(--ed-font); color: var(--ed-text); user-select: none; -webkit-user-select: none; }
+.beeson-edit-top .group { display: flex; align-items: center; gap: 2px; }
+.beeson-edit-top .group + .group::before { content: ''; align-self: center; width: 1px; height: 28px; margin: 0 6px; background: var(--ed-line); }
+.beeson-edit-top .group.right { margin-left: auto; }
+.beeson-edit-top .group.right ~ .group.right { margin-left: 0; }
+.beeson-edit-top .group[hidden] { display: none; }
+.beeson-edit-top .tb { display: inline-flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; min-width: 56px; height: 44px; padding: 3px 6px 2px; box-sizing: border-box; border: 0; border-radius: 6px; background: transparent; color: inherit; font: inherit; cursor: default; white-space: nowrap; }
+.beeson-edit-top .tb .beeson-icon { flex: none; }
+.beeson-edit-top .tb:hover:not(:disabled) { background: var(--ed-hover); }
+.beeson-edit-top .tb:active:not(:disabled), .beeson-edit-top .tb[aria-pressed="true"] { background: var(--ed-pressed); }
+.beeson-edit-top .tb[aria-pressed="true"] .beeson-icon { color: var(--ed-select); }
+.beeson-edit-top .tb.on .beeson-icon { color: var(--ed-select); }
+.beeson-edit-top .tb:disabled { color: var(--ed-faint); }
+.beeson-edit-top .tb:focus-visible, .beeson-edit-split .more:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: -2px; }
+.beeson-edit-split { display: inline-flex; align-items: stretch; border-radius: 6px; }
+.beeson-edit-split .tb { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.beeson-edit-split .more { width: 16px; height: 44px; padding: 0; border: 0; border-radius: 0 6px 6px 0; background: transparent; color: var(--ed-muted); cursor: default; }
+.beeson-edit-split .more:hover, .beeson-edit-split .more[aria-expanded="true"] { background: var(--ed-hover); }
+@media (max-width: 1099px) { .beeson-edit-top .tb .label { display: none; } .beeson-edit-top .tb { min-width: 36px; } }
 `;
-  function install11(app2) {
-    injectStyle("toolbar", CSS11);
+  function install15(app2) {
+    injectStyle("toolbar", CSS12);
     const top = make("div", "beeson-edit-top");
-    const fileEl = make("span", "file");
-    const stateEl = make("span", "state");
-    stateEl.setAttribute("aria-live", "polite");
-    const undoButton = button("Undo", "Undo the last change, \u2318Z or Ctrl+Z");
-    const redoButton = button("Redo", "Redo the change undone, \u2318\u21E7Z or Ctrl+Y");
-    const openButton = button("Open\u2026", "Choose the file of this deck");
-    const saveButton = button("Save", "Save the edits into the file, \u2318S or Ctrl+S");
-    const saveAsButton = button("Save as\u2026", "Save the deck into another file, \u2318\u21E7S or Ctrl+Shift+S");
-    const autosaveButton = button("Autosave", "Save the edits into the file after each change");
-    const presentButton = button("Present", "Show the saved deck in a new tab");
-    const whichButton = button("Which?", "List the texts that cannot be edited");
-    whichButton.className = "which";
-    whichButton.hidden = true;
-    undoButton.disabled = redoButton.disabled = true;
-    top.append(fileEl, stateEl, whichButton, undoButton, redoButton, openButton, saveButton, saveAsButton, autosaveButton, presentButton);
+    top.setAttribute("role", "toolbar");
+    top.setAttribute("aria-label", "Toolbar");
+    let shown3 = [];
+    let signature = "";
+    let narrow = innerWidth < NARROW;
+    let late = [];
+    const more = make("button", "tb more-groups");
+    more.type = "button";
+    more.setAttribute("aria-label", "More");
+    more.setAttribute("aria-haspopup", "menu");
+    more.title = "More";
+    more.append(icon("more"), make("span", "label", "More"));
     const fail2 = (e) => app2.fail(e);
-    const run2 = (id) => () => app2.commands.run(id);
-    wire(openButton, run2("file.open"), fail2);
-    wire(saveButton, run2("file.save"), fail2);
-    wire(saveAsButton, run2("file.saveAs"), fail2);
-    wire(autosaveButton, run2("file.autosave"), fail2);
-    wire(presentButton, run2("file.present"), fail2);
-    wire(undoButton, run2("edit.undo"), fail2);
-    wire(redoButton, run2("edit.redo"), fail2);
-    wire(whichButton, () => app2.files.showProblems(), fail2);
-    if (!canWrite()) {
-      autosaveButton.disabled = true;
-      autosaveButton.title = "Autosave needs a browser that writes the file in place, i.e. Chrome or Edge";
+    const button2 = (c) => {
+      const b = make("button", "tb");
+      b.type = "button";
+      b.dataset.command = c.id;
+      const label2 = toolbarLabel(app2, c);
+      b.append(icon(c.toolbar?.icon ?? "square"), make("span", "label", label2));
+      wire(b, () => app2.commands.run(c.id), fail2);
+      return b;
+    };
+    function render() {
+      const groups = app2.commands.forToolbar();
+      const at = groups.findIndex((g) => g.commands.some((c) => c.id === "file.present"));
+      signature = JSON.stringify([narrow, groups.map((g) => [g.group, g.commands.map((c) => c.id)])]);
+      shown3 = [];
+      late = narrow && at >= 0 ? groups.slice(at + 1) : [];
+      const parts = [];
+      for (const [i, g] of groups.entries()) {
+        if (late.includes(g)) continue;
+        const box2 = make("div", "group");
+        box2.dataset.group = g.group;
+        if (at >= 0 && i === at + 1) box2.classList.add("right");
+        for (const c of g.commands) {
+          const b = button2(c);
+          shown3.push({ c, el: b });
+          const split = c.toolbar?.split;
+          if (split && c.menu) {
+            const bar = c.menu.bar;
+            box2.append(splitButton(app2, b, () => menuItems(app2, bar, split), `${toolbarLabel(app2, c)} options`));
+          } else box2.append(b);
+        }
+        parts.push(box2);
+      }
+      if (late.length) {
+        const box2 = make("div", "group right");
+        box2.append(more);
+        parts.push(box2);
+      }
+      top.replaceChildren(...parts);
+      update();
     }
-    app2.listen("history", () => {
-      undoButton.disabled = !app2.history.canUndo;
-      redoButton.disabled = !app2.history.canRedo;
+    function update() {
+      const next = JSON.stringify([innerWidth < NARROW, app2.commands.forToolbar().map((g) => [g.group, g.commands.map((c) => c.id)])]);
+      if (next !== signature) {
+        narrow = innerWidth < NARROW;
+        render();
+        return;
+      }
+      for (const { c, el } of shown3) {
+        const s = app2.commands.state(c.id);
+        el.disabled = !s.enabled;
+        const keys = commandKeys(c, app2.platform);
+        el.title = keys ? `${s.label} (${keys})` : s.label;
+        if (s.checked !== null) el.setAttribute("aria-pressed", String(s.checked));
+        else el.removeAttribute("aria-pressed");
+        if (c.id === "file.save") el.classList.toggle("on", app2.dirty);
+      }
+      const stops = items();
+      if (!stops.some((b) => b.tabIndex === 0)) stops.forEach((b, i) => b.tabIndex = i === 0 ? 0 : -1);
+      else stops.forEach((b) => b.tabIndex === 0 || (b.tabIndex = -1));
+    }
+    const items = () => [...top.querySelectorAll("button")].filter((b) => !b.disabled && b.getClientRects().length > 0);
+    top.addEventListener("keydown", (ev) => {
+      const list = items();
+      const at = list.indexOf(document.activeElement);
+      if (at < 0) return;
+      let to = -1;
+      if (ev.key === "ArrowRight") to = (at + 1) % list.length;
+      else if (ev.key === "ArrowLeft") to = (at - 1 + list.length) % list.length;
+      else if (ev.key === "Home") to = 0;
+      else if (ev.key === "End") to = list.length - 1;
+      else return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      list.forEach((b, i) => b.tabIndex = i === to ? 0 : -1);
+      list[to].focus();
     });
-    app2.listen("report", () => {
-      fileEl.textContent = app2.handle?.name ?? fileName();
-      saveButton.classList.toggle("on", app2.dirty);
-      autosaveButton.classList.toggle("on", app2.autosave);
-      autosaveButton.setAttribute("aria-pressed", String(app2.autosave));
-      whichButton.hidden = !app2.pairing?.problems.length;
-      stateEl.textContent = app2.line.text;
-      stateEl.title = app2.line.title;
-      stateEl.classList.toggle("warn", app2.line.warn);
+    top.addEventListener("focusin", (ev) => {
+      if (!(ev.target instanceof HTMLButtonElement)) return;
+      for (const b of top.querySelectorAll("button")) b.tabIndex = b === ev.target ? 0 : -1;
     });
+    const openMore = (keyboard) => {
+      const out = [];
+      for (const g of late) {
+        if (out.length) out.push({ rule: true });
+        for (const c of g.commands) out.push({ command: c.id, label: toolbarLabel(app2, c) });
+      }
+      openMenu(app2, out, { anchor: more.getBoundingClientRect(), placement: "below", owner: more, keyboard, label: "More" });
+    };
+    more.addEventListener("pointerdown", (ev) => {
+      ev.preventDefault();
+      if (more.getAttribute("aria-expanded") === "true") closeMenus();
+      else openMore(false);
+    });
+    more.addEventListener("click", (ev) => {
+      if (ev.detail === 0) openMore(true);
+    });
+    app2.listen("history", update);
+    app2.listen("report", update);
+    app2.onRefresh(["content", "selection", "slide", "structure", "layout"], update);
+    window.addEventListener("resize", update);
+    render();
     document.body.append(top);
   }
 
   // src/editor/shell/statusbar.ts
-  var CSS12 = `
-.beeson-edit-bottom { bottom: 0; height: 36px; font-size: 13px; color: var(--subtle, #bbb); border-top: 1px solid var(--line, #555); }
-.beeson-edit-bottom button { padding: 2px 10px; font-size: 13px; }
-.beeson-edit-bottom button.on { border-color: var(--violet, #96f); color: var(--text, #eee); }
-.beeson-edit-bottom .count { white-space: nowrap; min-width: 9ch; text-align: center; }
+  var CSS13 = `
+.beeson-edit-bottom { grid-area: status; position: relative; z-index: 60; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; box-sizing: border-box; background: var(--ed-bg); border-top: 1px solid var(--ed-line); color: var(--ed-muted); font: 12px/1 var(--ed-font); user-select: none; -webkit-user-select: none; }
+.beeson-edit-bottom button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 20px; padding: 0 7px; border: 0; border-radius: 4px; background: transparent; color: var(--ed-text); font: inherit; cursor: default; white-space: nowrap; }
+.beeson-edit-bottom button:hover { background: var(--ed-hover); }
+.beeson-edit-bottom button.on, .beeson-edit-bottom button[aria-pressed="true"] { background: var(--ed-pressed); }
+.beeson-edit-bottom button:focus-visible, .beeson-edit-bottom input:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: -1px; }
+.beeson-edit-bottom .count { white-space: nowrap; min-width: 9ch; text-align: center; color: var(--ed-text); font-variant-numeric: tabular-nums; }
+.beeson-edit-bottom .rule { width: 1px; height: 14px; background: var(--ed-line); flex: none; }
 .beeson-edit-bottom .beeson-layers { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 .beeson-edit-bottom .beeson-layers[hidden] { display: none; }
 .beeson-edit-bottom .beeson-layers > span { margin-right: 4px; }
 .beeson-edit-bottom .hint { flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.beeson-edit-bottom .zoom { display: flex; align-items: center; gap: 2px; }
+.beeson-edit-bottom .zoom button { padding: 0 4px; }
+.beeson-edit-bottom input[type=range] { width: 120px; height: 16px; margin: 0 2px; accent-color: var(--ed-select); }
+.beeson-edit-bottom .beeson-edit-select { min-width: 52px; justify-content: space-between; font-variant-numeric: tabular-nums; }
+@media (max-width: 1099px) { .beeson-edit-bottom .hint { visibility: hidden; } .beeson-edit-bottom input[type=range] { width: 72px; } }
 `;
-  function install12(app2, layers2) {
-    injectStyle("statusbar", CSS12);
-    const bottom = make("div", "beeson-edit-bottom");
+  var LOG_MIN = Math.log(0.1);
+  var LOG_MAX = Math.log(4);
+  function install16(app2, layers2) {
+    injectStyle("statusbar", CSS13);
+    const bottom = make("div", "beeson-edit-bottom beeson-edit-region");
     const prevButton = button("\u2039", "Previous slide", "Previous slide");
     const countEl = make("span", "count");
     const nextButton = button("\u203A", "Next slide", "Next slide");
     const hintEl = make("span", "hint", "Click a text or a formula to edit it, drag a figure or the \u283F handle of a block to move it, press G to jump to a slide, and Esc to leave a text and select its block");
-    bottom.append(prevButton, countEl, nextButton, layers2, hintEl, app2.nav.button, app2.steps.button, app2.notes.button);
+    const zoomBox = make("div", "zoom");
+    const outButton = button("", "Zoom out", "Zoom out");
+    outButton.append(icon("minus", 14));
+    const inButton = button("", "Zoom in", "Zoom in");
+    inButton.append(icon("plus", 14));
+    const slider = make("input");
+    slider.type = "range";
+    slider.min = "0";
+    slider.max = "1000";
+    slider.setAttribute("aria-label", "Zoom");
+    const current = () => app2.stage?.zoom ?? app2.stage?.fitScale() ?? 1;
+    const percent = chromeSelect(app2, {
+      label: "Zoom",
+      className: "percent",
+      choices: () => [{ value: "fit", label: "Fit" }, ...ZOOMS.map((z) => ({ value: String(z), label: `${Math.round(z * 100)}%` }))],
+      value: () => app2.stage?.zoom === null ? "fit" : String(app2.stage?.zoom),
+      text: () => `${Math.round(current() * 100)}%`,
+      onChange: (v) => app2.stage.setZoom(v === "fit" ? null : Number(v))
+    });
+    const fitButton = button("Fit", "Fit the slide into the window");
+    zoomBox.append(outButton, slider, inButton, percent, fitButton);
+    const modeButton = button("", "Flip the slide between dark and light mode, D", "Flip the mode of the slide");
+    modeButton.append(icon("contrast", 14));
+    const rule = () => make("span", "rule");
+    bottom.append(prevButton, countEl, nextButton, layers2, hintEl, app2.nav.button, app2.steps.button, app2.notes.button, rule(), zoomBox, rule(), modeButton);
     const fail2 = (e) => app2.fail(e);
     wire(prevButton, () => app2.commands.run("navigate.previous"), fail2);
     wire(nextButton, () => app2.commands.run("navigate.next"), fail2);
     wire(app2.notes.button, () => app2.commands.run("view.notes"), fail2);
+    for (const b of [app2.nav.button, app2.steps.button]) b.addEventListener("click", (ev) => ev.detail > 0 && b.blur());
+    wire(outButton, () => app2.stage.zoomOut(), fail2);
+    wire(inButton, () => app2.stage.zoomIn(), fail2);
+    wire(fitButton, () => app2.stage.setZoom(null), fail2);
+    slider.addEventListener("input", () => {
+      const z = Math.exp(LOG_MIN + Number(slider.value) / 1e3 * (LOG_MAX - LOG_MIN));
+      app2.stage.setZoom(z);
+    });
+    wire(modeButton, () => {
+      const r = modeButton.getBoundingClientRect();
+      document.querySelector(".theme-switch")?.dispatchEvent(new MouseEvent("click", { bubbles: true, detail: 1, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }));
+    }, fail2);
     const count = () => {
       const d = app2.deck();
       if (d) countEl.textContent = `Slide ${d.getSlidePastCount() + 1} of ${d.getTotalSlides()}`;
     };
+    const zoomState = () => {
+      if (!app2.stage) return;
+      const z = current();
+      if (document.activeElement !== slider) slider.value = String(Math.round((Math.log(z) - LOG_MIN) / (LOG_MAX - LOG_MIN) * 1e3));
+      fitButton.setAttribute("aria-pressed", String(app2.stage.zoom === null));
+      percent.refresh();
+    };
     app2.listen("slide", count);
-    app2.listen("resize", count);
+    app2.listen("resize", () => {
+      count();
+      zoomState();
+    });
+    app2.listen("report", zoomState);
     document.body.append(bottom);
   }
 
-  // src/editor/shell/shell.ts
-  function install13(_app) {
-  }
-
   // src/editor/shell/menubar.ts
-  function install14(_app) {
+  var MENUS = ["File", "Edit", "Insert", "Format", "Arrange", "Slide", "View", "Help"];
+  var CSS14 = `
+.beeson-edit-titlebar { display: flex; align-items: center; gap: 12px; height: 28px; padding: 0 8px 0 6px; box-sizing: border-box; font: 13px/1 var(--ed-font); color: var(--ed-text); user-select: none; -webkit-user-select: none; }
+.beeson-edit-menubar { display: flex; align-items: center; flex: 1 1 0; min-width: 0; }
+.beeson-edit-menubar [role=menuitem] { height: 22px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: inherit; font: inherit; cursor: default; white-space: nowrap; }
+.beeson-edit-menubar [role=menuitem]:first-child { font-weight: 600; }
+.beeson-edit-menubar [role=menuitem]:hover, .beeson-edit-menubar [role=menuitem][aria-expanded="true"] { background: var(--ed-pressed); }
+.beeson-edit-menubar [role=menuitem][aria-disabled="true"] { color: var(--ed-faint); }
+.beeson-edit-menubar [role=menuitem]:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: -2px; }
+.beeson-edit-titlebar .doc { flex: 0 1 auto; min-width: 0; display: flex; gap: 6px; align-items: baseline; overflow: hidden; white-space: nowrap; }
+.beeson-edit-titlebar .file { font-weight: 600; }
+.beeson-edit-titlebar .state { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ed-muted); }
+.beeson-edit-titlebar .state.warn { color: var(--ed-guide); }
+.beeson-edit-titlebar .right { flex: 1 1 0; min-width: 0; display: flex; justify-content: flex-end; align-items: center; gap: 10px; }
+.beeson-edit-titlebar .right button { display: inline-flex; align-items: center; gap: 6px; height: 22px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: inherit; font: 12px/1 var(--ed-font); cursor: default; white-space: nowrap; }
+.beeson-edit-titlebar .right button:hover { background: var(--ed-hover); }
+.beeson-edit-titlebar .right button[hidden] { display: none; }
+.beeson-edit-titlebar .right button:disabled { color: var(--ed-faint); }
+.beeson-edit-titlebar .right button:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: -2px; }
+.beeson-edit-titlebar button.which { color: var(--ed-guide); }
+.beeson-edit-titlebar .track { position: relative; width: 26px; height: 15px; border-radius: 8px; background: var(--ed-control-line); transition: background 120ms; }
+.beeson-edit-titlebar .track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: #fff; box-shadow: 0 0.5px 1.5px rgba(0, 0, 0, 0.3); transition: transform 120ms; }
+.beeson-edit-titlebar button[aria-pressed="true"] .track { background: var(--ed-select); }
+.beeson-edit-titlebar button[aria-pressed="true"] .track::after { transform: translateX(11px); }
+@media (max-width: 899px) { .beeson-edit-titlebar .doc .state { display: none; } }
+`;
+  function install17(app2) {
+    injectStyle("menubar", CSS14);
+    const row = make("div", "beeson-edit-titlebar");
+    const bar = make("div", "beeson-edit-menubar");
+    bar.setAttribute("role", "menubar");
+    bar.setAttribute("aria-label", "Menus");
+    const doc2 = make("div", "doc");
+    const fileEl = make("span", "file");
+    const stateEl = make("span", "state");
+    stateEl.setAttribute("aria-live", "polite");
+    doc2.append(fileEl, make("span", "dash", "\u2014"), stateEl);
+    const right = make("div", "right");
+    const which = make("button", "which");
+    which.type = "button";
+    which.title = "List the texts that cannot be edited";
+    which.hidden = true;
+    which.append(icon("warning", 14), document.createTextNode("Which?"));
+    const autosave = make("button", "autosave");
+    autosave.type = "button";
+    autosave.title = "Save the edits into the file after each change";
+    autosave.append(document.createTextNode("Autosave"), make("span", "track"));
+    if (!canWrite()) {
+      autosave.disabled = true;
+      autosave.title = "Autosave needs a browser that writes the file in place, i.e. Chrome or Edge";
+    }
+    right.append(which, autosave);
+    row.append(bar, doc2, right);
+    const titles = MENUS.map((name, i) => {
+      const b = make("button", "", name);
+      b.type = "button";
+      b.setAttribute("role", "menuitem");
+      b.setAttribute("aria-haspopup", "menu");
+      b.setAttribute("aria-expanded", "false");
+      b.tabIndex = i === 0 ? 0 : -1;
+      bar.append(b);
+      return b;
+    });
+    let open = null;
+    const empty = (name) => menuItems(app2, name).length === 0;
+    const dim = () => titles.forEach((t) => t.setAttribute("aria-disabled", String(empty(t.textContent ?? ""))));
+    const rove = (to) => {
+      for (const t of titles) t.tabIndex = t === to ? 0 : -1;
+    };
+    function show(title, keyboard) {
+      const name = title.textContent ?? "";
+      rove(title);
+      if (empty(name)) {
+        closeMenus();
+        if (keyboard) title.focus();
+        return;
+      }
+      const menu = openMenu(app2, menuItems(app2, name), {
+        anchor: title.getBoundingClientRect(),
+        placement: "below",
+        owner: title,
+        keyboard,
+        label: name,
+        className: "bar",
+        onClose: () => {
+          if (open?.menu === menu) open = null;
+        },
+        onSibling: (step2) => sibling(title, step2, true)
+      });
+      open = { title, menu };
+    }
+    function sibling(from, step2, opening) {
+      let i = titles.indexOf(from);
+      for (let n = 0; n < titles.length; n++) {
+        i = (i + step2 + titles.length) % titles.length;
+        if (!opening || !empty(titles[i].textContent ?? "")) break;
+      }
+      const to = titles[i];
+      if (opening) show(to, true);
+      else {
+        rove(to);
+        to.focus();
+      }
+    }
+    for (const title of titles) {
+      title.addEventListener("pointerdown", (ev) => {
+        if (ev.button !== 0) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        if (open?.title === title && menuOpen()) closeMenus();
+        else show(title, false);
+      });
+      title.addEventListener("pointerenter", () => {
+        if (open && open.title !== title && menuOpen()) show(title, false);
+      });
+      title.addEventListener("click", (ev) => {
+        if (ev.detail === 0) show(title, true);
+      });
+      title.addEventListener("keydown", (ev) => {
+        if (ev.key === "ArrowRight" || ev.key === "ArrowLeft") sibling(title, ev.key === "ArrowRight" ? 1 : -1, false);
+        else if (ev.key === "Home" || ev.key === "End") {
+          const to = ev.key === "Home" ? titles[0] : titles[titles.length - 1];
+          rove(to);
+          to.focus();
+        } else if (ev.key === "ArrowDown" || ev.key === "Enter" || ev.key === " ") show(title, true);
+        else if (ev.key === "Escape") title.blur();
+        else return;
+        ev.preventDefault();
+        ev.stopPropagation();
+      });
+    }
+    bar.addEventListener("focusin", dim);
+    const fail2 = (e) => app2.fail(e);
+    wire(which, () => app2.files.showProblems(), fail2);
+    wire(autosave, () => app2.commands.run("file.autosave"), fail2);
+    app2.listen("report", () => {
+      fileEl.textContent = app2.handle?.name ?? fileName();
+      autosave.setAttribute("aria-pressed", String(app2.autosave));
+      autosave.classList.toggle("on", app2.autosave);
+      which.hidden = !app2.pairing?.problems.length;
+      stateEl.textContent = app2.line.text;
+      stateEl.title = app2.line.title;
+      stateEl.classList.toggle("warn", app2.line.warn);
+    });
+    app2.onRefresh(["content", "selection", "slide", "structure", "layout"], dim);
+    const header = document.querySelector(".beeson-edit-header");
+    if (header) header.prepend(row);
+    else document.body.append(row);
   }
 
   // src/editor/shell/keys-sheet.ts
   var BARS = ["File", "Edit", "Insert", "Format", "Arrange", "Slide", "View", "Help"];
-  var CSS13 = `
+  var CSS15 = `
 .beeson-edit-keys { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 64px); box-sizing: border-box; padding: 0; border: 1px solid var(--line, #555); border-radius: 10px; background: var(--bg, #000); color: var(--text, #eee); font: 13px/1.4 system-ui, sans-serif; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5); }
 .beeson-edit-keys::backdrop { background: rgba(0, 0, 0, 0.4); }
 .beeson-edit-keys .head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line, #555); }
@@ -3836,15 +5177,15 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
 .beeson-edit-keys kbd { font: inherit; color: var(--subtle, #bbb); white-space: nowrap; }
 `;
   function sheetRows(app2) {
-    const platform = app2.platform;
-    const commands2 = app2.commands.list().filter((c) => keysOf(c, platform).length);
+    const platform2 = app2.platform;
+    const commands2 = app2.commands.list().filter((c) => keysOf(c, platform2).length);
     const label2 = (c) => typeof c.label === "string" ? c.label : c.label(app2);
     const barOf = (c) => c.menu?.bar ?? commands2.find((o) => o.menu && label2(o) === label2(c))?.menu?.bar ?? "Other";
     const rows = [];
     const sorted = [...commands2].sort((a, b) => (a.menu?.order ?? Infinity) - (b.menu?.order ?? Infinity));
     for (const c of sorted) {
       const bar = barOf(c);
-      const keys = keysOf(c, platform).map((k) => display(k, platform));
+      const keys = keysOf(c, platform2).map((k) => display(k, platform2));
       const row = rows.find((r) => r.bar === bar && r.label === label2(c));
       if (row) row.keys.push(...keys.filter((k) => !row.keys.includes(k)));
       else rows.push({ bar, label: label2(c), keys });
@@ -3852,8 +5193,8 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
     const rank = (bar) => BARS.includes(bar) ? BARS.indexOf(bar) : BARS.length;
     return rows.sort((a, b) => rank(a.bar) - rank(b.bar));
   }
-  function install15(app2) {
-    injectStyle("keys", CSS13);
+  function install18(app2) {
+    injectStyle("keys", CSS15);
     const sheet = make("dialog", "beeson-edit-keys");
     sheet.setAttribute("aria-labelledby", "beeson-edit-keys-title");
     const head = make("div", "head");
@@ -3901,18 +5242,6 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
         if (!sheet.open) open();
       }
     });
-  }
-
-  // src/editor/ui/menu.ts
-  function install16(_app) {
-  }
-
-  // src/editor/ui/dialog.ts
-  function install17(_app) {
-  }
-
-  // src/editor/ui/icons.ts
-  function install18(_app) {
   }
 
   // src/editor/canvas/hit.ts
@@ -4056,8 +5385,8 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
     app2.move = move;
     document.addEventListener("focusin", (ev) => {
       const target = ev.target instanceof Element ? ev.target : null;
-      const host = app2.hostOf(target);
-      if (host && app2.current()?.contains(host) && !host.closest("aside.notes")) set("text", [host]);
+      const host2 = app2.hostOf(target);
+      if (host2 && app2.current()?.contains(host2) && !host2.closest("aside.notes")) set("text", [host2]);
       else if (target?.classList.contains("beeson-movable")) set("elements", [target]);
     });
     app2.listen("slide", () => {
@@ -4074,7 +5403,7 @@ html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: h
   // src/editor/canvas/frames.ts
   var HANDLES = ["nw", "n", "ne", "e", "se", "s", "sw", "w"];
   var view = { hover: null, moving: null, resizing: false, guides: [], spacing: [], readout: null, marquee: null };
-  var CSS14 = `
+  var CSS16 = `
 .beeson-overlay { position: fixed; inset: 0; z-index: 51; pointer-events: none; }
 .beeson-frame { position: fixed; pointer-events: none; box-sizing: border-box; border: 1px dashed var(--ed-muted, var(--subtle, #bbb)); }
 .beeson-frame.selected { border: 2px solid var(--ed-select, #7048e8); }
@@ -4120,7 +5449,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
       this.frames = [];
       this.guides = [];
       this.gaps = [];
-      injectStyle("frames", CSS14);
+      injectStyle("frames", CSS16);
       this.app = app2;
       this.layer = document.createElement("div");
       this.layer.className = "beeson-overlay";
@@ -4483,8 +5812,8 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     const freeResize = (ev) => mac() ? ev.metaKey : ev.altKey;
     const aboutCenter = (ev) => mac() ? ev.altKey : ev.ctrlKey;
     const leaveText = () => {
-      const host = app2.hostOf(document.activeElement);
-      if (host) host.blur();
+      const host2 = app2.hostOf(document.activeElement);
+      if (host2) host2.blur();
     };
     const targetsFor = (els) => {
       const f = frameOf(app2);
@@ -4565,8 +5894,8 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
         return;
       }
       const el = movableOf(app2, target);
-      const host = app2.hostOf(target);
-      if (el && host) {
+      const host2 = app2.hostOf(target);
+      if (el && host2) {
         if (ev.shiftKey || commandHeld(ev)) pressElement(ev, el, target);
         return;
       }
@@ -4851,9 +6180,9 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
 
   // src/editor/commands/view.ts
   var theme = () => window.Beeson?.theme;
-  var FOCUSABLE = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea, [tabindex]:not([tabindex="-1"])';
+  var FOCUSABLE2 = 'button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea, [tabindex]:not([tabindex="-1"])';
   var shown2 = (el) => el instanceof HTMLElement && el.getClientRects().length > 0;
-  var first = (_, el) => [...el.querySelectorAll(FOCUSABLE)].find(shown2)?.focus();
+  var first = (_, el) => [...el.querySelectorAll(FOCUSABLE2)].find(shown2)?.focus();
   var PANES = [
     { name: "menubar", el: () => document.querySelector(".beeson-edit-menubar"), enter: first },
     { name: "toolbar", el: () => document.querySelector(".beeson-edit-top"), enter: first },
@@ -4912,7 +6241,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
   }
 
   // src/editor/commands/navigate.ts
-  var CSS15 = `
+  var CSS17 = `
 .beeson-edit-goto { position: fixed; top: 56px; left: 50%; z-index: 70; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line, #555); border-radius: 8px; background: var(--bg, #000); color: var(--text, #eee); font: 13px/1.4 system-ui, sans-serif; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); }
 .beeson-edit-goto[hidden] { display: none; }
 .beeson-edit-goto input { width: 6ch; font: inherit; padding: 2px 6px; border: 1px solid var(--line, #555); border-radius: 4px; background: transparent; color: inherit; }
@@ -4926,7 +6255,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
     if (all[i] && i !== at) app2.showSlide(all[i]);
   }
   function gotoField(app2) {
-    injectStyle("goto", CSS15);
+    injectStyle("goto", CSS17);
     const box2 = make("div", "beeson-edit-goto");
     const input = make("input", "jump-to-slide-input");
     input.type = "text";
@@ -5060,9 +6389,9 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
         in: ["text"],
         enabled: (app2) => !!app2.hostOf(document.activeElement),
         run: (app2) => {
-          const host = app2.hostOf(document.activeElement);
-          host.blur();
-          app2.selection.set("elements", [movableOf(app2, host) ?? host]);
+          const host2 = app2.hostOf(document.activeElement);
+          host2.blur();
+          app2.selection.set("elements", [movableOf(app2, host2) ?? host2]);
         }
       },
       {
@@ -5080,8 +6409,8 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
         run: (app2) => {
           const el = app2.selection.only();
           const hosts = el.matches(HOST) ? [el] : [...el.querySelectorAll(HOST)];
-          const host = hosts.at(-1);
-          if (host) caretAtEnd(host);
+          const host2 = hosts.at(-1);
+          if (host2) caretAtEnd(host2);
           else {
             const media = [...el.querySelectorAll("img, video")].find((m) => m.getBoundingClientRect().width > 0);
             if (media) app2.selection.set("elements", [media]);
@@ -5159,7 +6488,7 @@ html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .sl
   // src/editor/commands/slide.ts
   var MARK = "<!--beeson-->";
   var LABELS = { title: "Title", section: "Section", content: "Content", narrow: "Content, Narrow", wide: "Content, Wide", figure: "Figure", split: "Split", closing: "Closing" };
-  var CSS16 = `
+  var CSS18 = `
 html.beeson-editor .reveal:not(.beeson-peek) .slides section :is(h1, h2, p)[contenteditable="true"]:empty::before { color: var(--muted, #888); pointer-events: none; }
 html.beeson-editor .reveal:not(.beeson-peek) .slides section :is(h1, h2)[contenteditable="true"]:empty::before { content: "Title"; }
 html.beeson-editor .reveal:not(.beeson-peek) .slides section p.sub[contenteditable="true"]:empty::before { content: "Subtitle"; }
@@ -5413,7 +6742,7 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
     dialog.style.top = `${Math.max(8, Math.min(y, innerHeight - h - 8))}px`;
   }
   function install29(app2) {
-    injectStyle("slide", CSS16);
+    injectStyle("slide", CSS18);
     const c = app2.commands;
     const inNav = () => app2.region() === "navigator";
     const slideMenu = (order, group = "slide") => ({ bar: "Slide", group, order });
@@ -5745,7 +7074,7 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
     clear: "M8 1.5a6.5 6.5 0 1 1 0 13 6.5 6.5 0 0 1 0-13Zm-2.3 4.2 4.6 4.6m0-4.6-4.6 4.6",
     close: "M4.5 4.5l7 7m0-7-7 7"
   };
-  function icon(name) {
+  function icon2(name) {
     const ns = "http://www.w3.org/2000/svg";
     const svg = document.createElementNS(ns, "svg");
     svg.setAttribute("viewBox", "0 0 16 16");
@@ -5756,7 +7085,7 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable
     svg.append(path);
     return svg;
   }
-  var CSS17 = `
+  var CSS19 = `
 .beeson-find { --f-panel: var(--ed-panel, #f6f6f6); --f-text: var(--ed-text, #1d1d1f); --f-muted: var(--ed-muted, #6e6e73); --f-line: var(--ed-line, #d4d4d6); --f-control: var(--ed-control, #fff); --f-control-line: var(--ed-control-line, #c6c6ca); --f-button: var(--ed-pressed, rgba(0, 0, 0, 0.07)); --f-hover: var(--ed-hover, rgba(0, 0, 0, 0.05)); --f-select: var(--ed-select, #8a2be2); --f-on-select: var(--ed-on-select, #fff); --f-focus: var(--ed-focus, rgba(138, 43, 226, 0.5)); --f-menu: var(--ed-menu, rgba(248, 248, 248, 0.96)); --f-menu-line: var(--ed-menu-line, rgba(0, 0, 0, 0.14)); color-scheme: light; }
 @media (prefers-color-scheme: dark) {
   .beeson-find { --f-panel: var(--ed-panel, #232325); --f-text: var(--ed-text, #ececee); --f-muted: var(--ed-muted, #9a9a9f); --f-line: var(--ed-line, #3b3b3e); --f-control: var(--ed-control, #3a3a3c); --f-control-line: var(--ed-control-line, #4a4a4e); --f-button: var(--ed-pressed, rgba(255, 255, 255, 0.11)); --f-hover: var(--ed-hover, rgba(255, 255, 255, 0.07)); --f-select: var(--ed-select, #9d47d8); --f-focus: var(--ed-focus, rgba(201, 79, 230, 0.6)); --f-menu: var(--ed-menu, rgba(44, 44, 46, 0.96)); --f-menu-line: var(--ed-menu-line, rgba(255, 255, 255, 0.12)); color-scheme: dark; }
@@ -5810,7 +7139,7 @@ html.beeson-editor mjx-container.beeson-find-math { outline: 3px solid rgba(255,
 html.beeson-editor mjx-container.beeson-find-math.current { outline-color: #ff9632; }
 `;
   function createFinder(app2, keys) {
-    injectStyle("find", CSS17);
+    injectStyle("find", CSS19);
     const options = { matchCase: false, wholeWords: false, tex: false };
     let mode = "find";
     let indexed = [];
@@ -5826,7 +7155,7 @@ html.beeson-editor mjx-container.beeson-find-math.current { outline-color: #ff96
     close.type = "button";
     close.title = "Close";
     close.setAttribute("aria-label", "Close");
-    close.append(icon("close"));
+    close.append(icon2("close"));
     title.prepend(close);
     const gear = make("button", "gear");
     gear.type = "button";
@@ -5834,7 +7163,7 @@ html.beeson-editor mjx-container.beeson-find-math.current { outline-color: #ff96
     gear.setAttribute("aria-label", "Options");
     gear.setAttribute("aria-haspopup", "menu");
     gear.setAttribute("aria-expanded", "false");
-    gear.append(icon("gear"), icon("chevronDown"));
+    gear.append(icon2("gear"), icon2("chevronDown"));
     const field = (cls, glyph, label2, placeholder) => {
       const box2 = make("label", `field ${cls}`);
       const input = make("input");
@@ -5849,8 +7178,8 @@ html.beeson-editor mjx-container.beeson-find-math.current { outline-color: #ff96
       clear.title = "Clear";
       clear.setAttribute("aria-label", `Clear ${label2.toLowerCase()}`);
       clear.hidden = true;
-      clear.append(icon("clear"));
-      box2.append(icon(glyph), input);
+      clear.append(icon2("clear"));
+      box2.append(icon2(glyph), input);
       return { box: box2, input, clear };
     };
     const search = field("search", "search", "Find", "Find");
@@ -5873,11 +7202,11 @@ html.beeson-editor mjx-container.beeson-find-math.current { outline-color: #ff96
     const previous = make("button");
     previous.type = "button";
     previous.setAttribute("aria-label", "Previous");
-    previous.append(icon("chevronLeft"));
+    previous.append(icon2("chevronLeft"));
     const next = make("button");
     next.type = "button";
     next.setAttribute("aria-label", "Next");
-    next.append(icon("chevronRight"));
+    next.append(icon2("chevronRight"));
     nav2.append(previous, next);
     const keyText = (list) => list[0] ? ` (${display(list[0], app2.platform)})` : "";
     previous.title = `Previous${keyText(keys.previous)}`;
@@ -6121,7 +7450,7 @@ html.beeson-editor mjx-container.beeson-find-math.current { outline-color: #ff96
       keep?.focus({ preventScroll: true });
       return total;
     }
-    function openMenu() {
+    function openMenu2() {
       for (const i of items) i.sync();
       menu.hidden = false;
       gear.setAttribute("aria-expanded", "true");
@@ -6137,7 +7466,7 @@ html.beeson-editor mjx-container.beeson-find-math.current { outline-color: #ff96
       gear.setAttribute("aria-expanded", "false");
       if (back) (mode === "replace" && search.input.value ? replace.input : search.input).focus();
     }
-    gear.addEventListener("click", () => menu.hidden ? openMenu() : closeMenu(true));
+    gear.addEventListener("click", () => menu.hidden ? openMenu2() : closeMenu(true));
     menu.addEventListener("keydown", (ev) => {
       const list = items.map((i) => i.b);
       const at = list.indexOf(document.activeElement);
@@ -6422,8 +7751,8 @@ html.beeson-editor mjx-container.beeson-find-math.current { outline-color: #ff96
     return out;
   }
   var Doc = class {
-    constructor(host) {
-      this.host = host;
+    constructor(host2) {
+      this.host = host2;
     }
     need() {
       const source = this.host.source();
@@ -6679,7 +8008,7 @@ html.beeson-editor mjx-container.beeson-find-math.current { outline-color: #ff96
       app.markDirty();
       app.invalidate("structure");
     },
-    restore: (host, content) => app.typing.restoreHost(host, content)
+    restore: (host2, content) => app.typing.restoreHost(host2, content)
   });
   app.doc = doc;
   var nav = new Navigator(app);
@@ -6706,28 +8035,28 @@ html.beeson-editor mjx-container.beeson-find-math.current { outline-color: #ff96
     steps.refresh();
     nav.refresh();
   });
-  install10(app);
   install11(app);
-  install6(app);
-  install12(app, layers.box);
-  install4(app);
-  install5(app);
+  install15(app);
   install7(app);
+  install16(app, layers.box);
+  install5(app);
+  install6(app);
   install8(app);
   install9(app);
+  install10(app);
   install20(app);
   install24(app);
   install25(app);
   install26(app);
   install27(app);
   installKeys(app);
-  install18(app);
-  install16(app);
-  install17(app);
+  install12(app);
   install13(app);
+  install4(app);
   install14(app);
+  install17(app);
   install(app);
-  install15(app);
+  install18(app);
   install19(app);
   install22(app);
   install21(app);
