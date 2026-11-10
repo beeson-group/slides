@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync } from 'node:fs';
+import { cpSync, existsSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -26,4 +26,10 @@ test('the theme bundle carries none of the editor, which is all in theme/editor.
   const editor = readFileSync(resolve('theme/editor.js'), 'utf8');
   for (const mark of ['BeesonEditor', 'beeson-edit', 'showOpenFilePicker']) assert.ok(!theme.includes(mark), `${mark} is in theme/beeson.js`);
   assert.ok(editor.includes('BeesonEditor'));
+});
+
+// the editor is loaded at each ?edit from a file, without a toolchain, hence its bundle is kept small
+test('theme/editor.js is under 400 KB', () => {
+  const size = statSync(resolve('theme/editor.js')).size;
+  assert.ok(size < 400 * 1024, `theme/editor.js is ${Math.round(size / 1024)} KB`);
 });

@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor layouts deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- every layout of the theme and every kind of element that the editor meets, for the tests of the
+     editor. a tycho viewer is left out, since its scene is an inline block of about 200 KB -->
+<div class="reveal">
+<div class="slides">
+
+<section class="title">
+  <div class="backdrop" data-scene="tubes" data-cx="0.42" data-cy="0" data-half="0.6"></div>
+  <div class="block">
+    <h1>Every layout</h1>
+    <p class="sub">A deck for the editor</p>
+    <p class="who">The Beeson group<br>Princeton University</p>
+  </div>
+  <div class="qr" data-qr="https://github.com/beeson-group/slides"></div>
+  <aside class="notes">The title slide, with a backdrop, a block, and a QR code.</aside>
+</section>
+
+<section class="section" data-run="Content \(\LL{1}\)">
+  <div class="sec">
+    <h2>Content</h2>
+    <ul class="outline" data-auto></ul>
+  </div>
+  <div class="backdrop" data-scene="wideRibbon" data-cx="0.2" data-cy="0" data-half="1.3">
+    <span class="lab" data-at="earth" data-dy="36">Earth</span>
+    <span class="lab" data-at="moon" data-dy="36">Moon</span>
+  </div>
+</section>
+
+<section data-timing="40">
+  <h2>Text, a list, and a backdrop</h2>
+  <p>A paragraph with <strong>bold</strong>, <em>italic</em>, <code>code</code>, and \(x^2\) inline.</p>
+  <ul>
+    <li class="fragment" data-fragment-index="1">A first item</li>
+    <li class="fragment" data-fragment-index="2">A second item
+      <ul>
+        <li>A nested item</li>
+      </ul>
+    </li>
+  </ul>
+  <p class="small fragment" data-fragment-index="3">A small paragraph.</p>
+  <div class="backdrop" data-scene="nest" data-cx="0.97" data-cy="0" data-half="0.5">
+    <span class="lab" data-at="L1" data-dy="-34">\(\LL{1}\)</span>
+    <span class="lab" data-at="L2" data-dy="-34">\(\LL{2}\)</span>
+  </div>
+  <div class="foot">A footnote of a content slide.</div>
+  <aside class="notes">Notes of a content slide.</aside>
+</section>
+
+<section>
+  <h2>Math, an ordered list, and a zone</h2>
+  <p>The lead-in of a display</p>
+  <div class="math fragment" data-fragment-index="1" data-keep>\[\ddot x - \class{coriolis}{2\dot y} = -\frac{\partial \tilde U}{\partial x},\]</div>
+  <p class="fragment" data-fragment-index="2" data-highlight="coriolis">where the <span class="coriolis">Coriolis term</span> is colored.</p>
+  <ol>
+    <li class="fragment" data-fragment-index="3">A first step</li>
+    <li class="fragment" data-final>A final step</li>
+  </ol>
+  <figure class="zone fragment" data-fragment-index="2">
+    <img class="for-dark" src="../../demo/figure-dark.png" alt="A figure, dark version">
+    <img class="for-light" src="../../demo/figure-light.png" alt="A figure, light version">
+    <figcaption class="caption">A caption under a zone.</figcaption>
+  </figure>
+</section>
+
+<section class="narrow">
+  <h2>A narrow slide</h2>
+  <h3>A subheading</h3>
+  <div class="col">
+    <p>A paragraph in a column.</p>
+  </div>
+  <div class="backdrop" data-scene="tubes" data-cx="0.9" data-cy="0" data-half="0.4" data-live></div>
+</section>
+
+<section class="wide">
+  <h2>A wide slide with a table and code</h2>
+  <table>
+    <tr><th>Family</th><th>Period</th></tr>
+    <tr><td>Lyapunov</td><td>\(2.69\)</td></tr>
+    <tr class="fragment" data-fragment-index="1"><td>Halo</td><td>\(3.41\)</td></tr>
+  </table>
+  <pre><code class="language-python" data-line-numbers="1|2">x = 1
+y = x + 1</code></pre>
+  <div class="foot">A footnote of a wide slide.</div>
+</section>
+
+<section class="figure">
+  <h2>A figure slide with a paper image</h2>
+  <div class="plate">
+    <img class="paper" src="../../demo/figure-light.png" alt="A white raster figure">
+  </div>
+  <p class="caption">A caption of a figure slide.</p>
+</section>
+
+<section class="figure">
+  <h2>A figure slide with a video</h2>
+  <div class="plate">
+    <video class="for-dark" src="../../demo/clip-dark.mp4" poster="../../demo/clip-dark.png" muted loop data-autoplay></video>
+    <video class="for-light" src="../../demo/clip-light.mp4" poster="../../demo/clip-light.png" muted loop data-autoplay></video>
+  </div>
+  <p class="caption">A video in a plate.</p>
+</section>
+
+<section class="figure">
+  <h2>A figure slide with a plot</h2>
+  <div class="plot plate" data-plot="plate-plot"></div>
+  <span class="fragment" data-plot-show="right"></span>
+  <span class="fragment" data-plot-tab="two"></span>
+  <script type="application/json" id="plate-plot">{
+    "parameter": { "label": "$t$", "digits": 2 },
+    "duration": 2,
+    "panels": [
+      { "id": "left", "x": { "range": [0, 1] }, "y": { "range": [0, 1] } },
+      { "id": "right", "x": { "range": [0, 1] }, "y": { "range": [-1, 1] } }
+    ],
+    "marks": [
+      { "id": "dot", "panel": "left", "kind": "points" },
+      { "id": "path", "panel": "right", "kind": "trace" }
+    ],
+    "tabs": [
+      { "name": "one", "values": [0, 1], "data": { "dot": [[0, 0], [1, 1]], "path": [[0, 0], [1, 0]] } },
+      { "name": "two", "values": [0, 1], "data": { "dot": [[1, 0], [0, 1]], "path": [[0, 0], [1, 1]] } }
+    ]
+  }</script>
+  <p class="caption">A plot in a plate.</p>
+</section>
+
+<section class="figure">
+  <h2>A figure slide with a backdrop</h2>
+  <div class="backdrop" data-scene="wideRibbon" data-cx="0.2" data-cy="0" data-half="1.3"></div>
+  <p class="caption">A backdrop over the whole slide.</p>
+</section>
+
+<section class="split">
+  <div class="panel">
+    <h2>A split slide</h2>
+    <p>Words in the black panel.</p>
+    <div class="foot">A footnote in the panel.</div>
+  </div>
+  <div class="zone">
+    <video src="../../demo/clip-dark.mp4" poster="../../demo/clip-dark.png" muted loop></video>
+  </div>
+</section>
+
+<section>
+  <h2>A surface</h2>
+  <p class="fragment" data-fragment-index="1" data-surface-stage="sum">The effective potential.</p>
+  <div class="surface" data-function="effective-potential" data-mu="0.05">
+    <span class="lab" data-at="L1">\(\LL{1}\)</span>
+  </div>
+</section>
+
+<section>
+  <h2>A plot in a zone</h2>
+  <p>A step <span class="fragment" data-fragment-index="1">inside a paragraph</span>.</p>
+  <div class="plot zone" data-plot="zone-plot"></div>
+  <span class="fragment" data-fragment-index="2" data-plot-show="right"></span>
+  <script type="application/json" id="zone-plot">{
+    "parameter": { "label": "$t$", "digits": 2 },
+    "duration": 2,
+    "panels": [
+      { "id": "left", "x": { "range": [0, 1] }, "y": { "range": [0, 1] } },
+      { "id": "right", "x": { "range": [0, 1] }, "y": { "range": [0, 1] } }
+    ],
+    "marks": [
+      { "id": "dot", "panel": "left", "kind": "points" },
+      { "id": "path", "panel": "right", "kind": "trace" }
+    ],
+    "tabs": [
+      { "name": "one", "values": [0, 1], "data": { "dot": [[0, 0], [1, 1]], "path": [[0, 0], [1, 1]] } }
+    ]
+  }</script>
+</section>
+
+<section data-auto-animate>
+  <h2>A glide</h2>
+  <div class="backdrop" data-id="glide" data-scene="mark" data-cx="0.988" data-cy="0" data-half="0.15"></div>
+</section>
+
+<section data-auto-animate>
+  <h2>A glide, continued</h2>
+  <div class="backdrop" data-id="glide" data-scene="mark" data-cx="0.988" data-cy="0" data-half="0.3"></div>
+</section>
+
+<section class="closing">
+  <div class="backdrop fragment" data-fragment-index="1" data-scene="tubes" data-cx="0.42" data-cy="0" data-half="0.6"></div>
+  <div class="block">
+    <h1>Thank you</h1>
+    <p class="sub">Questions</p>
+  </div>
+  <div class="qr fragment" data-final data-qr="https://github.com/beeson-group/slides"></div>
+</section>
+
+<section>
+  <h2>An appendix slide</h2>
+  <p>A slide after the closing slide.</p>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/vendor/reveal/highlight.js"></script>
+<script src="../../theme/vendor/three/three.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

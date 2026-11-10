@@ -1,0 +1,243 @@
+// the typing into the blocks of the slides. a block paired with the file is made editable, and the
+// input of the browser is filtered so that a block holds only what the file can hold: a line is a
+// br, or a newline in a pre, a paste is plain text, and ⌘B and ⌘I write strong and em. the typing
+// is recorded in the history as the content of the block before and after, and an undo puts the
+// block back with restoreHost
+
+import type { App, Typing } from '../app.ts';
+import { setContentWithTex } from '../math.ts';
+import { injectStyle } from '../ui/dom.ts';
+
+const CSS = `
+html.beeson-editing .reveal [contenteditable="true"] { cursor: text; outline: 1px dashed transparent; outline-offset: 6px; border-radius: 2px; }
+html.beeson-editing .reveal [contenteditable="true"]:hover { outline-color: var(--subtle, #bbb); }
+html.beeson-editing .reveal [contenteditable="true"]:focus { outline: 2px solid var(--violet, #96f); }
+html.beeson-editing .reveal [contenteditable="true"] mjx-container { cursor: pointer; border-radius: 2px; }
+html.beeson-editing .reveal [contenteditable="true"] mjx-container:hover, html.beeson-editing .reveal [contenteditable="true"] mjx-container:focus-visible { outline: 1px dashed var(--accent, #f80); outline-offset: 4px; }
+`;
+
+// the end of the part of after that differs from before, as an offset into after, i.e. the first
+// character that differs after an undo of typing. null when the texts are the same
+export function changeEnd(before: string, after: string): number | null {
+  if (before === after) return null;
+  let head = 0;
+  while (head < before.length && head < after.length && before[head] === after[head]) head++;
+  let tail = 0;
+  while (tail < before.length - head && tail < after.length - head && before[before.length - 1 - tail] === after[after.length - 1 - tail]) tail++;
+  return after.length - tail;
+}
+
+// the caret is put at the offset into the text of host, or at its end. an offset inside a formula
+// puts it after the formula
+export function placeCaret(host: Element, offset: number | null = null): void {
+  if (!(host instanceof HTMLElement)) return;
+  host.focus({ preventScroll: true });
+  const selection = window.getSelection();
+  if (!selection) return;
+  const range = document.createRange();
+  range.selectNodeContents(host);
+  range.collapse(false);
+  if (offset !== null) {
+    const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+    let left = offset;
+    for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+      if (left <= node.length) {
+        const math = node.parentElement?.closest('mjx-container');
+        if (math && host.contains(math)) range.setStartAfter(math);
+        else range.setStart(node, left);
+        range.collapse(true);
+        break;
+      }
+      left -= node.length;
+    }
+  }
+  selection.removeAllRanges();
+  selection.addRange(range);
+}
+
+// Cmd+B and Cmd+I wrap the selection in strong and em, as the deck is written, or take it out of
+// them when all of its text is inside. the command of the browser would write b and i, and it
+// nests a b inside a strong of the theme, whose weight of 500 it does not take for bold
+export function toggleFormat(host: Element, tag: 'strong' | 'em'): void {
+  const selection = window.getSelection();
+  if (!selection?.rangeCount) return;
+  const range = selection.getRangeAt(0);
+  if (range.collapsed || !host.contains(range.commonAncestorContainer)) return;
+  const alias = tag === 'strong' ? 'b' : 'i';
+  const same = (el: Element) => el.localName === tag || el.localName === alias;
+  const formatOf = (node: Node): Element | null => {
+    for (let el = node instanceof Element ? node : node.parentElement; el && el !== host; el = el.parentElement) if (same(el)) return el;
+    return null;
+  };
+  const unwrap = (root: ParentNode) => {
+    for (const el of [...root.querySelectorAll(`${tag}, ${alias}`)]) el.replaceWith(...el.childNodes);
+  };
+  const common = range.commonAncestorContainer;
+  const texts: Text[] = [];
+  if (common instanceof Text) texts.push(common);
+  else {
+    const walker = document.createTreeWalker(common, NodeFilter.SHOW_TEXT);
+    for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+      const empty = (node === range.startContainer && range.startOffset === node.length) || (node === range.endContainer && range.endOffset === 0);
+      if (range.intersectsNode(node) && !empty && node.data.trim()) texts.push(node);
+    }
+  }
+  const off = texts.length > 0 && texts.every((node) => formatOf(node));
+  const outer = off ? formatOf(common) : null;
+  let nodes: Node[];
+  if (outer) {
+    // the element around the whole selection is split into the part before it, the selection
+    // without the element, and the part after it, so that the formats inside it are kept
+    const start: [Node, number] = [range.startContainer, range.startOffset];
+    const tail = document.createRange();
+    tail.setStart(range.endContainer, range.endOffset);
+    tail.setEnd(outer, outer.childNodes.length);
+    const after = outer.cloneNode(false) as Element;
+    after.append(tail.extractContents());
+    const head = document.createRange();
+    head.setStart(outer, 0);
+    head.setEnd(...start);
+    const before = outer.cloneNode(false) as Element;
+    before.append(head.extractContents());
+    unwrap(outer);
+    nodes = [...outer.childNodes];
+    outer.before(before);
+    outer.after(after);
+    outer.replaceWith(...nodes);
+  } else {
+    const fragment = range.extractContents();
+    unwrap(fragment);
+    if (off) {
+      nodes = [...fragment.childNodes];
+      range.insertNode(fragment);
+    } else {
+      const el = document.createElement(tag);
+      el.append(fragment);
+      range.insertNode(el);
+      nodes = [el];
+    }
+  }
+  for (const el of [...host.querySelectorAll('strong, em, b, i')]) {
+    if (!el.textContent && !el.querySelector('br, img, mjx-container')) el.remove();
+  }
+  if (nodes.length) {
+    const selected = document.createRange();
+    selected.setStartBefore(nodes[0]);
+    selected.setEndAfter(nodes[nodes.length - 1]);
+    selection.removeAllRanges();
+    selection.addRange(selected);
+  }
+  host.normalize();
+}
+
+// a line in a block is a br, or a newline in a pre, and a paste is plain text, so that the text
+// of a slide stays what the file can hold
+function insertPlain(host: Element, text: string): void {
+  if (host.closest('pre')) {
+    document.execCommand('insertText', false, text);
+    return;
+  }
+  const lines = text.split(/\r?\n/);
+  lines.forEach((line, i) => {
+    if (line) document.execCommand('insertText', false, line);
+    if (i < lines.length - 1) document.execCommand('insertLineBreak');
+  });
+}
+
+export function install(app: App): void {
+  injectStyle('typing', CSS);
+  const history = app.history;
+  let hosts: Element[] = [];
+
+  // each formula is one unit that the caret skips, reached with Tab and opened with Enter
+  function markMath(root: Element): void {
+    for (const c of root.querySelectorAll('mjx-container')) {
+      c.setAttribute('contenteditable', 'false');
+      if (!app.hostOf(c)) continue;
+      c.setAttribute('tabindex', '0');
+      c.setAttribute('role', 'button');
+      c.setAttribute('aria-label', 'Formula, Enter opens its TeX');
+    }
+  }
+
+  // marks the blocks of the pairing editable, and the formulas in them as one unit each. a block
+  // that stays a block is left alone, so that a save does not take the focus
+  function attach(): void {
+    const next = app.pairing ? app.pairing.blocks.map((b) => b.live) : [];
+    for (const h of hosts) if (!next.includes(h)) h.removeAttribute('contenteditable');
+    for (const h of next) if (h.getAttribute('contenteditable') !== 'true') h.setAttribute('contenteditable', 'true');
+    hosts = next;
+    for (const h of next) if (h.matches('aside.notes')) h.setAttribute('aria-label', 'Speaker notes');
+    app.move.mark(app.pairing);
+    markMath(app.slides());
+    document.documentElement.classList.toggle('beeson-editing', hosts.length > 0);
+    app.notes.ensure();
+  }
+
+  // a block is put back to a content of the history, on its slide, with the caret at the end of
+  // the text that changed
+  async function restoreHost(host: Element, content: string): Promise<void> {
+    app.showSlide(host);
+    if (host.matches('aside.notes') && !app.notes.shown()) app.notes.toggle();
+    const before = host.textContent ?? '';
+    await setContentWithTex(host, content);
+    markMath(host);
+    history.track(host);
+    app.markDirty();
+    placeCaret(host, changeEnd(before, host.textContent ?? ''));
+    app.invalidate('content');
+  }
+
+  // the undo of the browser, e.g. from its Edit menu, is taken by the history
+  function onBeforeInput(ev: InputEvent): void {
+    const host = app.hostOf(ev.target);
+    if (!host) return;
+    const type = ev.inputType;
+    if (type === 'historyUndo' || type === 'historyRedo') {
+      ev.preventDefault();
+      void (type === 'historyUndo' ? history.undo() : history.redo()).catch((e) => app.fail(e));
+      return;
+    }
+    // bold and italic are an entry of the history each
+    if (type === 'formatBold' || type === 'formatItalic') {
+      ev.preventDefault();
+      history.break();
+      history.beforeTyping(host);
+      toggleFormat(host, type === 'formatBold' ? 'strong' : 'em');
+      history.afterTyping(host);
+      history.break();
+      app.markDirty();
+      app.invalidate('content');
+      return;
+    }
+    // a new line starts a new entry of the history, as in a text editor
+    if (type === 'insertParagraph' || type === 'insertLineBreak') history.break();
+    history.beforeTyping(host);
+    if (type === 'insertParagraph' || type === 'insertLineBreak') {
+      ev.preventDefault();
+      insertPlain(host, '\n');
+    } else if (type === 'insertFromPaste') {
+      ev.preventDefault();
+      insertPlain(host, ev.dataTransfer?.getData('text/plain') ?? '');
+    } else if (type === 'insertFromDrop' || type.startsWith('format') || type.startsWith('insertOrdered') || type.startsWith('insertUnordered') || type === 'insertHorizontalRule' || type === 'insertLink') {
+      ev.preventDefault();
+    }
+  }
+
+  const typing: Typing = { attach, markMath, restoreHost };
+  app.typing = typing;
+  document.addEventListener('beforeinput', onBeforeInput);
+  document.addEventListener('input', (ev) => {
+    const host = app.hostOf(ev.target);
+    if (!host) return;
+    history.afterTyping(host);
+    app.markDirty();
+    app.invalidate('content');
+  });
+  document.addEventListener('focusin', (ev) => {
+    const host = app.hostOf(ev.target);
+    if (host) history.track(host);
+    app.invalidate('selection');
+  });
+  document.addEventListener('focusout', () => setTimeout(() => app.invalidate('selection'), 0));
+}
