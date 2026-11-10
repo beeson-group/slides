@@ -462,6 +462,31 @@ for (const combo of COMBOS) {
     await saved(page, last);
   });
 
+  // Duplicate and Copy of the picture of a pair, selected by itself, copied only the image shown,
+  // without its image of the other mode
+  if (n === 0) test(`Duplicate and Copy and Paste of the picture of a pair, selected by itself, copy both images of the pair (${named(combo)})`, async (t) => {
+    const page = await load(t, platform, mode, n);
+    const count = (text) => ['for-dark', 'for-light'].map((m) => slideOf(text, n).split(`<img class="${m}"`).length - 1);
+    for (const act of ['Duplicate', 'Copy and Paste']) {
+      await deselect(page);
+      // the picture alone, by a second click on it
+      for (let i = 0; i < 2; i++) {
+        await click(page, IMG);
+        await frames(page);
+      }
+      assert.deepEqual(await selected(page), [page.parts.pic], 'the picture is not selected by itself');
+      if (act === 'Duplicate') await press(page, keys.duplicate);
+      else {
+        await exec(page, 'edit.copy');
+        await exec(page, 'edit.paste');
+      }
+      await frames(page);
+      const edited = await render(page);
+      assert.deepEqual(count(edited), [2, 2], `${act} of the picture writes ${js(count(edited))} images of each mode, not both images of the pair twice`);
+      await roundTrip(page, edited);
+    }
+  });
+
   test(`the rotation, the flips, Edit Mask, Replace, and the Image pane act on the picture alone, and on both images of a pair (${named(combo)})`, async (t) => {
     const page = await load(t, platform, mode, n);
     const { imgs } = page.parts;
