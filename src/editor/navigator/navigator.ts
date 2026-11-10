@@ -11,6 +11,7 @@ import type { App, Pane } from '../app.ts';
 import { layersOf, showLayer } from '../layers.ts';
 import { transitionOf } from '../review/transitions.ts';
 import { injectStyle, stored, store } from '../ui/dom.ts';
+import { icon } from '../ui/icons.ts';
 import { drawInto, type Thumbs } from './thumbs.ts';
 
 const KEY = 'beeson-nav';
@@ -75,6 +76,10 @@ const CSS = `
 .beeson-edit-nav { position: fixed; left: 0; top: 44px; bottom: 36px; z-index: 50; width: 240px; box-sizing: border-box; display: none; flex-direction: column; background: var(--nav-bg); border-right: 1px solid var(--nav-line); color: var(--nav-text); font: 12px/1.3 system-ui, sans-serif; }
 html.beeson-nav .beeson-edit-nav { display: flex; }
 .beeson-edit-nav .rows { position: relative; flex: 1; overflow: auto; padding: 10px 10px 40px 4px; outline: none; }
+.beeson-edit-nav .foot { flex: none; display: flex; align-items: center; height: 32px; padding: 0 6px; border-top: 1px solid var(--nav-line); }
+.beeson-edit-nav .foot button { display: grid; place-items: center; width: 26px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--nav-text); }
+.beeson-edit-nav .foot button:hover { background: var(--nav-current); }
+.beeson-edit-nav .foot button:focus-visible { outline: 2px solid var(--nav-select); outline-offset: -2px; }
 .beeson-edit-nav .row { position: relative; display: grid; grid-template-columns: 24px 1fr; column-gap: 6px; align-items: end; width: 100%; box-sizing: border-box; margin: 0 0 8px; padding: 5px 6px 5px 0; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: default; touch-action: none; }
 .beeson-edit-nav .row:focus-visible { outline: none; }
 .beeson-edit-nav .row[aria-current="true"] { background: var(--nav-current); }
@@ -129,6 +134,7 @@ export class Navigator implements Pane {
   readonly list = document.createElement('div');
   private readonly peek = document.createElement('div');
   private readonly drop = document.createElement('div');
+  private readonly foot = document.createElement('div');
   private readonly app: App;
   private readonly rows = new Map<Element, Row>();
   private thumbs: Thumbs | null = null;
@@ -157,7 +163,17 @@ export class Navigator implements Pane {
     this.peek.hidden = true;
     this.peek.setAttribute('aria-hidden', 'true');
     this.peek.setAttribute('inert', '');
-    this.pane.append(this.list, this.peek);
+    // the + button opens the chooser of New Slide over itself
+    this.foot.className = 'foot';
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.dataset.command = 'slide.gallery';
+    add.title = 'Add Slide';
+    add.setAttribute('aria-label', 'Add Slide');
+    add.append(icon('plus', 16));
+    add.addEventListener('click', () => void this.app.commands.run('slide.gallery', add).catch((e) => this.app.fail(e)));
+    this.foot.append(add);
+    this.pane.append(this.list, this.foot, this.peek);
     this.button.addEventListener('click', () => this.toggle());
     this.list.addEventListener('keydown', (ev) => this.onKey(ev));
     this.list.addEventListener('pointerdown', (ev) => this.onDown(ev));
