@@ -13,6 +13,7 @@
 import type { App } from '../app.ts';
 import { mathLookup } from '../math.ts';
 import { tokenize } from '../tokens.ts';
+import { isRuntimeClass } from '../render.ts';
 import { renderTag, type TagEdit } from '../tags.ts';
 import { textStyle } from '../model/templates.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -158,8 +159,10 @@ const trimEnd = (el: Element) => {
 const blank = (r: Range) => !r.toString().trim() && !r.cloneContents().querySelector(ATOM);
 
 // the classes of a paragraph that is split and joined as a body paragraph. a caption, a subtitle,
-// or a footnote is placed by the theme, and Return writes a br in it
-const PLAIN_CLASSES = /^(small|fragment|fade-[\w-]+|semi-fade-out|current-visible|grow|shrink|strike|highlight-[\w-]+|beeson-[\w-]+)$/;
+// or a footnote is placed by the theme, and Return writes a br in it. a class that reveal.js or the
+// editor sets at run time, e.g. visible on a step while every step is shown, is never a style
+const PLAIN = /^(small|fragment|fade-[\w-]+|semi-fade-out|current-visible|grow|shrink|strike|highlight-[\w-]+)$/;
+const plainClass = (c: string): boolean => PLAIN.test(c) || isRuntimeClass(c);
 
 type Item = {
   host: Element;
@@ -187,7 +190,7 @@ function structural(app: App, el: Element | null): boolean {
   if (!parent || !pairing.elements.has(parent) || pairing.byLive.has(parent)) return false;
   if (el.localName === 'li') return parent.matches(LIST);
   if (el.localName === 'h3') return true;
-  if (el.localName === 'p') return [...el.classList].every((c) => PLAIN_CLASSES.test(c));
+  if (el.localName === 'p') return [...el.classList].every(plainClass);
   return false;
 }
 
@@ -568,7 +571,7 @@ export function styleOf(app: App, el: Element): ParagraphStyle | null {
   if (!pairing?.byLive.has(el) || el.matches('aside.notes')) return null;
   const parent = el.parentElement;
   if (!parent || !pairing.elements.has(parent) || pairing.byLive.has(parent)) return null;
-  const own = [...el.classList].filter((c) => !PLAIN_CLASSES.test(c) || c === 'small');
+  const own = [...el.classList].filter((c) => !plainClass(c) || c === 'small');
   const one = (tag: string, cls: string | null) => el.localName === tag && (cls ? own.length === 1 && own[0] === cls : own.length === 0);
   if (one('h3', null)) return 'subheading';
   if (one('div', 'foot')) return 'footnote';
@@ -620,3 +623,41 @@ export const canStep = (app: App, up: boolean): boolean => styled(app).some((el)
   const s = styleOf(app, el)!;
   return stepped(s, up) !== s;
 });
+
+// the nodes of el before its first nested list, i.e. its own text, and the layout space before the
+// list, which is kept at a change of the text
+function ownNodes(el: Element): { own: Node[]; list: Element | null } {
+  const list = [...el.children].find((c) => c.matches(LIST)) ?? null;
+  const own: Node[] = [];
+  for (const n of el.childNodes) {
+    if (n === list) break;
+    own.push(n);
+  }
+  return { own, list };
+}
+
+// the own text of a block or of a list item, without its nested lists, as HTML with each formula as
+// its TeX between its delimiters
+export function ownTex(el: Element): string {
+  const { list } = ownNodes(el);
+  const end: [Node, number] | null = list ? [el, [...el.childNodes].indexOf(list)] : null;
+  return rangeTex(el, rangeOf(el, null, end)).trim();
+}
+
+// html written as the own text of el, a block or a list item inside one, with its nested lists kept,
+// through app.doc as the content of its block, as one entry of the history
+export async function setOwnTex(app: App, el: Element, html: string, label = 'typing'): Promise<void> {
+  const host = app.hostOf(el) ?? el;
+  if (html === ownTex(el)) return;
+  const copy = texCopy(host);
+  const target = el === host ? copy : copy.querySelectorAll('li')[itemsOf(host).indexOf(el)];
+  if (!target) return;
+  const { own, list } = ownNodes(target);
+  const last = own.at(-1);
+  const tail = list && last instanceof Text ? /\s*$/.exec(last.data)?.[0] ?? '' : '';
+  for (const n of own) n.parentNode?.removeChild(n);
+  const holder = document.createElement('div');
+  holder.innerHTML = html + tail;
+  target.prepend(...holder.childNodes);
+  await app.doc.setContent(host, copy.innerHTML, label);
+}

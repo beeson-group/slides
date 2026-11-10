@@ -223,26 +223,30 @@ function sampleSlide(app: App, layout: Layout): HTMLElement {
   return slide;
 }
 
+// back is the element that had the focus before the gallery was opened
+type Gallery = HTMLDialogElement & { anchor?: HTMLElement | null; back?: HTMLElement | null };
 let gallery: HTMLDialogElement | null = null;
 
 function closeGallery(back = true): void {
   if (!gallery) return;
   const g = gallery;
   gallery = null;
-  const anchor = (g as HTMLDialogElement & { anchor?: HTMLElement | null }).anchor;
+  const to = (g as Gallery).back;
   g.close();
   g.remove();
-  if (back && anchor?.isConnected) anchor.focus({ preventScroll: true });
+  if (back && to?.isConnected) to.focus({ preventScroll: true });
 }
 
-// the gallery opened at anchor: under a button of the toolbar, or else at the right of the row of
-// the current slide in the navigator
+// the gallery opened as a popover at anchor, a button of the toolbar or of the navigator, or else
+// at the right of the row of the current slide in the navigator
 function openGallery(app: App, anchor: HTMLElement | null): void {
   closeGallery(false);
-  const dialog = document.createElement('dialog') as HTMLDialogElement & { anchor?: HTMLElement | null };
+  const dialog = document.createElement('dialog') as Gallery;
   dialog.className = 'beeson-edit-gallery';
   dialog.setAttribute('aria-label', 'New slide');
-  dialog.anchor = anchor ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  // a click blurs the button of the toolbar, hence the button is looked up when it is not given
+  dialog.back = anchor ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
+  dialog.anchor = anchor ?? document.querySelector<HTMLElement>('.beeson-edit-top [data-command="slide.gallery"]');
   const head = document.createElement('div');
   head.className = 'head';
   head.textContent = 'New Slide';
@@ -298,19 +302,19 @@ function openGallery(app: App, anchor: HTMLElement | null): void {
   (tiles.find((t) => t.layout === nextLayout(app)) ?? tiles[0]).tile.focus();
 }
 
-// the gallery is put under an anchor in the upper part of the window, and else at the right of
-// row, inside the window
+// the gallery is a popover under its anchor, or over it when there is no room under it, and
+// else at the right of the row of the current slide, inside the window
 function place(dialog: HTMLElement, anchor: HTMLElement | null, row: HTMLElement | null): void {
   const w = dialog.offsetWidth;
   const h = dialog.offsetHeight;
-  const a = anchor && !anchor.closest('.beeson-edit-nav') ? anchor.getBoundingClientRect() : null;
+  const a = anchor?.isConnected && anchor.getClientRects().length ? anchor.getBoundingClientRect() : null;
   let x: number;
   let y: number;
-  if (a && a.bottom < innerHeight / 3) {
+  if (a) {
     x = a.left;
-    y = a.bottom + 6;
+    y = a.bottom + 6 + h <= innerHeight - 8 ? a.bottom + 6 : a.top - 6 - h;
   } else {
-    const r = (row ?? anchor)?.getBoundingClientRect();
+    const r = row?.getBoundingClientRect();
     x = r ? r.right + 10 : 260;
     y = r ? r.top - 8 : 60;
   }

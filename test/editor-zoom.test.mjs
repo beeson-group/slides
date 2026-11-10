@@ -110,6 +110,9 @@ test('at 200 percent the slide is 3840 px wide, and the wheel scrolls it down an
 
 test('a pinch of the trackpad zooms the canvas about the pointer', async (t) => {
   const page = await open(t, 'mac');
+  // the canvas is made as wide as the window without the inspector, so that the zoom past Fit
+  // scrolls the canvas in both directions
+  await page.evaluate(`window.BeesonEditor.exec('shell.format')`);
   await figureSlide(page);
   const img = await rectOf(page, FIG);
   const at = { x: img.left + img.width / 3, y: img.top + img.height / 3 };

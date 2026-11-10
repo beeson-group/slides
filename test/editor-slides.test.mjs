@@ -91,7 +91,7 @@ function slideText(source, heading) {
   return source.slice(start, end);
 }
 
-test('the demo deck shows 12 thumbnails within 1 s, with the numbers of the theme and a mark on a slide with steps', async (t) => {
+test('the demo deck shows 12 thumbnails within 1 s, numbered by their places, with a mark on a slide with steps', async (t) => {
   const page = await open('mac');
   t.after(() => page.close?.());
   const ms = await page.evaluate(`(async () => {
@@ -107,7 +107,7 @@ test('the demo deck shows 12 thumbnails within 1 s, with the numbers of the them
   const list = await rows(page);
   assert.deepEqual(
     list.map((r) => r.no),
-    ['', '', '1', '2', '3', '4', '', '5', '6', '7', '8', ''],
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
   );
   const stepped = await page.evaluate(`window.Reveal.getSlides().map((s) => !!s.querySelector('.fragment'))`);
   assert.deepEqual(
@@ -123,12 +123,12 @@ test('the demo deck shows 12 thumbnails within 1 s, with the numbers of the them
   assert.deepEqual(errors(page), []);
 });
 
-test('the slides after the closing slide are numbered A1, A2, and so on', async (t) => {
+test('the slides after the closing slide are numbered by their places, as in the status bar', async (t) => {
   const page = await open('mac', LAYOUTS_DECK);
   t.after(() => page.close?.());
   const list = await rows(page);
-  assert.equal(list.at(-1).no, 'A1');
-  assert.equal(list.at(-2).no, '');
+  assert.equal(list.at(-1).no, String(list.length));
+  assert.equal(list.at(-2).no, String(list.length - 1));
   assert.deepEqual(errors(page), []);
 });
 
@@ -261,7 +261,7 @@ for (const platform of ['mac', 'other']) {
     assert.equal(list[3].skip, true);
     assert.deepEqual(
       list.map((r) => r.no),
-      ['', '', '1', '', '2', '3', '', '4', '5', '6', '7', ''],
+      ['1', '2', '3', '', '5', '6', '7', '8', '9', '10', '11', '12'],
     );
     const edited = await page.evaluate('window.BeesonEditor.render()');
     const original = slideText(page.source, 'Equations are first class citizens');
@@ -329,7 +329,7 @@ for (const platform of ['mac', 'other']) {
     const list = await rows(page);
     assert.equal(list.length, 13);
     assert.equal(list[12].title, 'Equations are first class citizens');
-    assert.equal(list[12].no, 'A1');
+    assert.equal(list[12].no, '13');
     assert.equal(list[12].current, true);
     const copied = slideText(page.source, 'Equations are first class citizens');
     const closing = slideText(page.source, 'Thank you');

@@ -60,7 +60,7 @@ test('a deck without ?edit does not load the editor, with ?edit it does on file:
   const status = await page.evaluate('window.BeesonEditor.status()');
   assert.equal(status.supported, true);
   assert.equal(status.state, 'waiting');
-  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].filter((b) => !b.hidden).map((b) => b.textContent)`), ['Undo', 'Redo', 'Add Slide', 'Text Box', 'Formula', 'Table', 'Image', 'Video', 'QR Code', 'Present', 'Save', 'Format', 'Steps']);
+  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].filter((b) => !b.hidden).map((b) => b.textContent)`), ['View', 'FitZoom', 'Undo', 'Redo', 'Add Slide', 'Text Box', 'Formula', 'Table', 'Image', 'Video', 'QR Code', 'Present', 'Save', 'Format', 'Steps']);
   // the card asks for the file, with the folder of the deck
   assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-card').hidden`), false);
   assert.match(await page.evaluate(`document.querySelector('.beeson-edit-card p').textContent`), /index\.html in \//);
@@ -544,7 +544,7 @@ test('the list of the slides at the left jumps to a slide, and G jumps to a slid
   assert.deepEqual(first[1].slice(0, 3), ['2', 'Chapter one', 'section']);
   assert.ok(first.every((r) => r[1].length > 0));
   // the pane is beside the slide, and the slide is not under it
-  const box = () => page.evaluate(`(() => { const nav = document.querySelector('.beeson-edit-nav'); const n = nav.getBoundingClientRect(); const s = document.querySelector('.reveal .slides').getBoundingClientRect(); return { display: getComputedStyle(nav).display, navRight: n.right, slideLeft: s.left, slideRight: s.right }; })()`);
+  const box = () => page.evaluate(`(() => { const nav = document.querySelector('.beeson-edit-nav'); const n = nav.getBoundingClientRect(); const s = document.querySelector('.reveal .slides').getBoundingClientRect(); const c = window.BeesonEditorShell.stage.viewport; return { display: getComputedStyle(nav).display, navRight: n.right, slideLeft: s.left, slideRight: s.right, cellLeft: c.left, cellRight: c.right }; })()`);
   let b = await box();
   assert.equal(b.display, 'flex');
   assert.ok(b.slideLeft >= b.navRight && b.slideRight <= 1920, JSON.stringify(b));
@@ -564,7 +564,7 @@ test('the list of the slides at the left jumps to a slide, and G jumps to a slid
   b = await box();
   assert.equal(b.display, 'none');
   // the canvas takes the width of the list, and the slide is centered in it
-  assert.ok(Math.abs(b.slideLeft - (1920 - b.slideRight)) < 2 && b.slideLeft < 200, JSON.stringify(b));
+  assert.ok(Math.abs(b.slideLeft - b.cellLeft - (b.cellRight - b.slideRight)) < 2 && b.slideLeft < 200, JSON.stringify(b));
   assert.equal(await page.evaluate(`localStorage.getItem('beeson-nav')`), '0');
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Slides').click()`);
   assert.equal((await box()).display, 'flex');
@@ -901,7 +901,8 @@ test('the toggles, the state, the notes, and the formula dialog carry their stat
   const page = await editorPage(browser);
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
   const pressed = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-header button, .beeson-edit-bottom button')].filter((b) => b.hasAttribute('aria-pressed')).map((b) => [b.textContent, b.getAttribute('aria-pressed')])`);
-  assert.deepEqual(await pressed(), [['Autosave', 'false'], ['Format', 'false'], ['Steps', 'false'], ['Slides', 'true'], ['Steps', 'false'], ['Notes', 'false'], ['Fit', 'true']]);
+  // the inspector is shown at the start with its Format tab, as Keynote opens a presentation
+  assert.deepEqual(await pressed(), [['Autosave', 'false'], ['Format', 'true'], ['Steps', 'false'], ['Slides', 'true'], ['Steps', 'false'], ['Notes', 'false'], ['Fit', 'true']]);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Notes').click()`);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
   assert.deepEqual(await pressed(), [['Autosave', 'false'], ['Format', 'false'], ['Steps', 'true'], ['Slides', 'true'], ['Steps', 'true'], ['Notes', 'true'], ['Fit', 'true']]);
