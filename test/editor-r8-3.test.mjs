@@ -364,3 +364,40 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+const sizeFields = (page) => page.evaluate(`Object.fromEntries([...document.querySelectorAll('dialog.beeson-table-size input')].map((i) => [i.name, i.value]))`);
+
+// finding 6 of R8.3: Insert Table… opened with 6 rows after the pointer rested on 3 rows of the
+// grid (states 196 and 205)
+for (const platform of PLATFORMS) {
+  test(`Insert Table… opens with the size that the pointer last rested on in the grid, and inserts every row (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await exec(page, 'slide.new.content');
+    await frames(page);
+    await click(page, '.beeson-edit-top [data-command="insert.table"]');
+    await page.waitFor(`!!document.querySelector('dialog.beeson-table-picker[open]')`);
+    // the cell of 4 columns by 3 rows of the grid of 10 columns
+    const { x, y } = middle(await rectOf(page, '.beeson-table-picker .grid > :nth-child(24)'));
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-table-picker .size').textContent`), '4 × 3 Table');
+    await click(page, '.beeson-table-picker .more');
+    await page.waitFor(`!!document.querySelector('dialog.beeson-table-size[open]')`);
+    assert.deepEqual(await sizeFields(page), { columns: '4', rows: '3' }, 'the dialog does not open with the size of the grid');
+    await press(page, 'Tab');
+    await type(page, '9');
+    await press(page, 'Enter');
+    await page.waitFor(`!!document.querySelector('.reveal section.present table')`);
+    await frames(page);
+    const shape = await page.evaluate(`[...document.querySelector('.reveal section.present table').rows].map((tr) => tr.cells.length)`);
+    assert.deepEqual(shape, Array(9).fill(4), 'the table is not inserted with every row');
+    await roundTrip(page, 2);
+    // a later Insert Table… without a rest on the grid opens with the size typed last
+    await click(page, '.beeson-edit-top [data-command="insert.table"]');
+    await page.waitFor(`!!document.querySelector('dialog.beeson-table-picker[open]')`);
+    await click(page, '.beeson-table-picker .more');
+    await page.waitFor(`!!document.querySelector('dialog.beeson-table-size[open]')`);
+    assert.deepEqual(await sizeFields(page), { columns: '4', rows: '9' });
+    await press(page, 'Escape');
+    assert.deepEqual(errors(page), []);
+  });
+}
