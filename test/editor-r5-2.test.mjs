@@ -323,3 +323,87 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the guides of the current slide, as drawn, the title of the slide, the guides kept in the
+// storage of the browser by the index of their slide, and the center of a row of the navigator
+const handGuides = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-hand-guide')].filter((g) => !g.hidden && !g.classList.contains('off')).map((g) => [g.dataset.axis, Number(g.dataset.at)])`);
+const goTo = async (page, n) => {
+  await page.evaluate(`Reveal.slide(${n})`);
+  await frames(page);
+};
+const titleOf = (page) => page.evaluate(`Reveal.getCurrentSlide().querySelector('h1, h2')?.textContent ?? ''`);
+const stored = (page) => page.evaluate(`JSON.parse(localStorage.getItem('beeson-edit-guides:' + location.pathname) ?? '[]')`);
+const navRow = (page, i) => page.evaluate(`(() => {
+  const r = document.querySelectorAll('.beeson-edit-nav .row')[${i}];
+  r.scrollIntoView({ block: 'center' });
+  const b = r.getBoundingClientRect();
+  return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+})()`);
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: a guide follows its slide when slides are moved, added, duplicated, and deleted, and through an undo of each`, async () => {
+    const page = await editor(platform);
+    const title = await titleOf(page);
+    await exec(page, 'view.guides.add', { x: [640], y: [300] });
+    await frames(page);
+    assert.deepEqual(await handGuides(page), [['x', 640], ['y', 300]]);
+    const check = async (n, what) => {
+      await goTo(page, n);
+      assert.equal(await titleOf(page), title, `the slide is not at ${n} after ${what}`);
+      assert.deepEqual(await handGuides(page), [['x', 640], ['y', 300]], `the guides do not follow the slide after ${what}`);
+      const saved = await stored(page);
+      assert.deepEqual(saved[n], { x: [640], y: [300] }, `the stored guides are not at index ${n} after ${what}: ${JSON.stringify(saved)}`);
+      assert.ok(saved.every((g, i) => i === n || (!g.x.length && !g.y.length)), `another slide is stored with guides after ${what}`);
+    };
+    // moved up with the navigator, and back with an undo
+    await click(page, await navRow(page, MATH));
+    await exec(page, 'slide.moveUp');
+    await frames(page);
+    await check(MATH - 1, 'a move up');
+    await undo(page);
+    await check(MATH, 'an undo of the move');
+    // a slide added before it
+    await click(page, await navRow(page, 1));
+    await exec(page, 'slide.new');
+    await frames(page);
+    await check(MATH + 1, 'a new slide before it');
+    await undo(page);
+    await check(MATH, 'an undo of the new slide');
+    // a slide before it deleted
+    await click(page, await navRow(page, 1));
+    await exec(page, 'slide.delete');
+    await frames(page);
+    await check(MATH - 1, 'a delete of a slide before it');
+    await undo(page);
+    await check(MATH, 'an undo of the delete');
+    // duplicated: the copy after it gets a copy of its guides, as in Keynote
+    await click(page, await navRow(page, MATH));
+    await exec(page, 'slide.duplicate');
+    await frames(page);
+    await goTo(page, MATH + 1);
+    assert.deepEqual(await handGuides(page), [['x', 640], ['y', 300]], 'the duplicated slide does not get the guides of its source');
+    const both = await stored(page);
+    assert.deepEqual([both[MATH], both[MATH + 1]], [{ x: [640], y: [300] }, { x: [640], y: [300] }], `the guides of the copy are not stored: ${JSON.stringify(both)}`);
+    await undo(page);
+    await check(MATH, 'an undo of the duplicate');
+    await byteExact(page);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`${platform}: a guide stored in an earlier session is read at its slide after a slide is added before it`, async () => {
+    const first = await editor(platform);
+    await exec(first, 'view.guides.add', { x: [640] });
+    await frames(first);
+    // the next session adds a slide at the start before it shows the slide of the guide
+    const page = await editor(platform, 0, { keep: true });
+    await click(page, await navRow(page, 0));
+    await exec(page, 'slide.new');
+    await frames(page);
+    await goTo(page, MATH + 1);
+    assert.equal(await titleOf(page), 'Math, an ordered list, and a zone');
+    assert.deepEqual(await handGuides(page), [['x', 640]], 'the stored guide is not read at its slide after a slide is added before it');
+    await goTo(page, MATH);
+    assert.deepEqual(await handGuides(page), [], 'the slide now at the index of the stored guide shows it');
+    assert.deepEqual(errors(page), []);
+  });
+}
