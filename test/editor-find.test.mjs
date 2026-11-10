@@ -15,7 +15,7 @@ import { click, press, saveAndReopen, type } from './helpers/editor.mjs';
 const PLATFORMS = ['mac', 'other'];
 const KEYS = {
   mac: { find: 'Mod+F', next: 'Mod+G', previous: 'Mod+Shift+G', replace: 'Ctrl+H' },
-  other: { find: 'Mod+F', next: 'F3', previous: 'Shift+F3', replace: 'Ctrl+H' },
+  other: { find: 'Mod+F', next: 'F3', previous: 'Ctrl+Shift+F3', replace: 'Ctrl+H' },
 };
 
 const found = (text, query, options = {}) => spans(text, pattern(query, { matchCase: false, wholeWords: false, ...options })).map((s) => text.slice(s.start, s.end));

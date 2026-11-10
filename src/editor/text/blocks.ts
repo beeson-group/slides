@@ -90,6 +90,17 @@ export function selectIn(root: Element, start: number, end = start): void {
 // a range in a block, which a text command works on
 export type Target = { host: Element; range: Range };
 
+// the blocks of the selected elements: a selected block, and each item of a selected list, as on a
+// text box selected as an object in Keynote
+export function selectedBlocks(app: App): Element[] {
+  const pairing = app.pairing;
+  if (!pairing) return [];
+  return app.selection.elements().flatMap((el) => {
+    if (pairing.byLive.has(el)) return el.matches('aside.notes') ? [] : [el];
+    return el.matches(LIST) && pairing.elements.has(el) ? [...el.querySelectorAll('li')].filter((li) => pairing.byLive.has(li)) : [];
+  });
+}
+
 let last: Target | null = null;
 
 // the range of the window in a block, or the one last seen in the block of app.selection, e.g.
@@ -519,6 +530,16 @@ export function canSetList(app: App, kind: ListKind): boolean {
   return !at.nested && !at.item.querySelector(LIST);
 }
 
+// why a list is not set on the selection, or null without a block
+export function listWhy(app: App, label: string): string | null {
+  const el = textTarget(app)?.host ?? app.selection.elements()[0];
+  if (!el) return null;
+  if (el.matches('h1, h2, h3, h4')) return `${label} is not available on a heading, since only a paragraph or a list item is set as a list`;
+  if (el.matches('td, th')) return `${label} is not available in a table, since a cell of the theme does not hold a list`;
+  if (el.querySelector('li :is(ul, ol)') || itemAt(app)?.item.querySelector(LIST)) return `${label} is not available, since the nested items of the list would be lost`;
+  return `${label} is not available on this block, since only a paragraph or a list item is set as a list`;
+}
+
 // the list at the caret given the tag of kind. a paragraph becomes a list of one item, and an item
 // of the first level becomes a paragraph, which cuts its list in two
 export async function setList(app: App, kind: ListKind): Promise<void> {
@@ -636,16 +657,20 @@ export function styleOf(app: App, el: Element): ParagraphStyle | null {
   if (one('h3', null)) return 'subheading';
   if (one('div', 'foot')) return 'footnote';
   if (one('p', 'caption')) return 'caption';
-  if (one('p', 'small')) return 'small';
-  return one('p', null) ? 'body' : null;
+  if (one('p', 'small') || one('li', 'small')) return 'small';
+  return one('p', null) || one('li', null) ? 'body' : null;
 }
 
 // the blocks that a style is set on: the block of the text, or the selected blocks
 function styled(app: App): Element[] {
   const t = textTarget(app);
-  const list = t ? [t.host] : app.selection.elements();
+  const list = t ? [t.host] : selectedBlocks(app);
   return list.filter((el) => styleOf(app, el) !== null);
 }
+
+// a list item takes the styles that are a class on its tag, i.e. Body and Small
+const ITEM_STYLES: ParagraphStyle[] = ['body', 'small'];
+export const fits = (el: Element, style: ParagraphStyle): boolean => el.localName !== 'li' || ITEM_STYLES.includes(style);
 
 // the style of every block that a style is set on, or null when they differ or there are none
 export function paragraphStyle(app: App): ParagraphStyle | null {
@@ -653,12 +678,12 @@ export function paragraphStyle(app: App): ParagraphStyle | null {
   return styles.size === 1 ? [...styles][0] : null;
 }
 
-export const canStyle = (app: App): boolean => styled(app).length > 0;
+export const canStyle = (app: App, style?: ParagraphStyle): boolean => styled(app).some((el) => !style || fits(el, style));
 
 async function restyle(app: App, el: Element, style: ParagraphStyle, caret: number | null): Promise<void> {
   const classes: Record<string, boolean> = {};
   for (const [s, c] of Object.entries(STYLE_CLASSES)) if (el.classList.contains(c) !== (s === style)) classes[c] = s === style;
-  const tag = STYLE_TAG[style];
+  const tag = el.localName === 'li' ? 'li' : STYLE_TAG[style];
   let node = el;
   if (tag === el.localName) {
     if (Object.keys(classes).length) app.doc.setTag(el, { classes }, 'paragraph style');
@@ -672,8 +697,24 @@ export async function setStyle(app: App, style: ParagraphStyle | ((s: ParagraphS
   for (const el of styled(app)) {
     const now = styleOf(app, el)!;
     const next = typeof style === 'function' ? style(now) : style;
-    if (next !== now) await restyle(app, el, next, caret);
+    if (next !== now && fits(el, next)) await restyle(app, el, next, caret);
   }
+}
+
+// why a style or a step of the size is not set on the blocks of the selection, by the scope rule,
+// or null without a block
+export function styleWhy(app: App, label: string, up?: boolean): string | null {
+  const t = textTarget(app);
+  const el = t?.host ?? selectedBlocks(app)[0] ?? app.selection.elements()[0];
+  if (!el) return null;
+  if (el.matches('h1, h2, h4')) return `${label} is not available on a heading, since the theme sets its size`;
+  if (el.matches('td, th')) return `${label} is not available in a table, since the theme sets the size of its cells`;
+  if (el.matches('aside.notes')) return `${label} is not available in the notes, which take only bold and italic`;
+  const s = styleOf(app, el);
+  if (!s) return `${label} is not available on this block, since only a paragraph or a list item takes a style of the type scale`;
+  if (up === undefined) return null;
+  if (el.localName === 'li') return `${label} is not available, since a list item takes only Body and Small`;
+  return `${label} is not available, since ${up ? 'Subheading is the largest' : 'Footnote is the smallest'} style of the type scale`;
 }
 
 // the style one size up or down the ladder, or the same style at its end
@@ -681,7 +722,8 @@ export const stepped = (s: ParagraphStyle, up: boolean): ParagraphStyle => LADDE
 
 export const canStep = (app: App, up: boolean): boolean => styled(app).some((el) => {
   const s = styleOf(app, el)!;
-  return stepped(s, up) !== s;
+  const next = stepped(s, up);
+  return next !== s && fits(el, next);
 });
 
 // the nodes of el before its first nested list, i.e. its own text, and the layout space before the
