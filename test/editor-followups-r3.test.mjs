@@ -463,3 +463,67 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the empty box of Text Box, Code Box, and Footnote, which is not written into the file
+const PENDING = `document.querySelector('.reveal section.present .beeson-pending')`;
+const undoLabel = (page, id) => page.evaluate(`window.BeesonEditor.state(${JSON.stringify(id)}).label`);
+const INSERTS = [
+  ['insert.text', 'Text Box', '<p>x</p>'],
+  ['insert.code', 'Code Box', '<pre><code class="language-python">x</code></pre>'],
+  ['insert.footnote', 'Footnote', '<div class="foot">x</div>'],
+];
+
+for (const platform of PLATFORMS) {
+  for (const [id, label, html] of INSERTS) {
+    test(`${label} is an entry of the history, and the deck is edited while its empty box is on the slide (${platform})`, async (t) => {
+      const page = await load(t, platform, { deck: 'index.html', n: EQUATIONS });
+      const clean = async () => {
+        const s = await status(page);
+        assert.equal(await page.evaluate(`!!${PENDING}`), false, 'the empty box is on the slide');
+        assert.equal(s.undo, false);
+        assert.equal(s.dirty, false);
+        assert.match(s.message, /^No unsaved changes/);
+        assert.equal(await render(page), page.source);
+      };
+      const boxed = async () => {
+        const s = await status(page);
+        assert.equal(await page.evaluate(`${PENDING} === document.activeElement`), true, 'the caret is not in the empty box');
+        assert.equal(s.undo, true, 'Undo is disabled');
+        assert.equal(await undoLabel(page, 'edit.undo'), `Undo ${label}`);
+        assert.equal(s.dirty, true);
+        assert.match(s.message, /^Unsaved changes/);
+        assert.equal(await render(page), page.source, 'the empty box was written');
+      };
+      await exec(page, id);
+      await frames(page);
+      await boxed();
+      await undo(page);
+      await frames(page);
+      await clean();
+      assert.equal(await undoLabel(page, 'edit.redo'), `Redo ${label}`);
+      await redo(page);
+      await frames(page);
+      await boxed();
+      // the box is taken off when the caret leaves it, and so is its entry
+      await press(page, 'Escape');
+      await sleep(100);
+      await clean();
+      // the first input writes the box, and one undo takes it off with its text
+      await exec(page, id);
+      await frames(page);
+      await type(page, 'x');
+      await sleep(300);
+      assert.ok((await render(page)).includes(html), 'the box was not written');
+      assert.equal(await undoLabel(page, 'edit.undo'), `Undo ${label}`);
+      await undo(page);
+      await sleep(100);
+      assert.equal(await render(page), page.source);
+      assert.equal(await page.evaluate(`!!${PENDING}`), false);
+      assert.equal((await status(page)).undo, false, 'the insert is more than one entry of the history');
+      await redo(page);
+      await sleep(100);
+      assert.ok((await render(page)).includes(html));
+      assert.deepEqual(errors(page), []);
+    });
+  }
+}
