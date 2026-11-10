@@ -202,8 +202,16 @@ export function menuItems(app: App, bar: string, submenu?: string): MenuItem[] {
 
 const CLIPBOARD = ['edit.cut', 'edit.copy', 'edit.paste'];
 
+// the sections of the menu of an element, as in PowerPoint: the clipboard, the items of its kind,
+// e.g. Replace Image… and Edit Alt Text…, the arrange items, and the steps
+const SECTIONS = ['edit', 'kind', 'arrange', 'steps'] as const;
+const sectionOf = (c: Command): (typeof SECTIONS)[number] =>
+  c.menu?.bar === 'Edit' ? 'edit' : c.menu?.bar === 'Arrange' || c.id.startsWith('arrange.') ? 'arrange' : c.id.startsWith('steps.') ? 'steps' : 'kind';
+
 // the items of a context menu of a kind, each run with the kind and the element clicked. a rule
-// is put where the group of the menu bar changes between two neighbors
+// is put where the group of the menu bar changes between two neighbors, and in the menu of an
+// element where its section changes. an item of the kind of another element, which is disabled,
+// is left out of the menu of an element, e.g. Edit Text on a figure without a text
 export function contextItems(app: App, kind: Context, target: Element | null): MenuItem[] {
   const out: MenuItem[] = [];
   let last: string | null = null;
@@ -211,9 +219,16 @@ export function contextItems(app: App, kind: Context, target: Element | null): M
   // Paste, as in Keynote and PowerPoint
   const lead = (kind === 'text' || kind === 'element' ? CLIPBOARD : kind === 'canvas' ? ['edit.paste'] : []).filter((id) => app.commands.get(id));
   for (const id of lead) out.push({ command: id, arg: { kind, target } });
-  if (lead.length) last = 'Edit/clipboard';
-  for (const c of app.commands.forContext(kind).filter((x) => !lead.includes(x.id))) {
-    const group = `${c.menu?.bar ?? ''}/${c.menu?.group ?? ''}`;
+  if (lead.length) last = kind === 'element' ? 'edit' : 'Edit/clipboard';
+  let rest = app.commands.forContext(kind).filter((x) => !lead.includes(x.id));
+  if (kind === 'element') {
+    // Edit Text, enabled on an element that holds a text, e.g. the caption of a figure, follows the
+    // items of the kind of the element
+    const rank = (c: Command) => SECTIONS.indexOf(sectionOf(c)) + (c.id === 'selection.editText' ? 0.5 : 0);
+    rest = rest.filter((c) => sectionOf(c) !== 'kind' || app.commands.enabled(c.id)).sort((a, b) => rank(a) - rank(b));
+  }
+  for (const c of rest) {
+    const group = kind === 'element' ? sectionOf(c) : `${c.menu?.bar ?? ''}/${c.menu?.group ?? ''}`;
     if (last !== null && group !== last) out.push({ rule: true });
     last = group;
     out.push({ command: c.id, arg: { kind, target } });
