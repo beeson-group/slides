@@ -31,7 +31,7 @@ import { install as installDialog } from './ui/dialog.ts';
 import { install as installIcons } from './ui/icons.ts';
 import { install as installKeymap } from './keymap.ts';
 import { install as installSelection } from './selection.ts';
-import { install as installHit } from './canvas/hit.ts';
+import { install as installHit, twinOf } from './canvas/hit.ts';
 import { install as installFrames } from './canvas/frames.ts';
 import { install as installDrag } from './canvas/drag.ts';
 import { install as installSnap } from './canvas/snap.ts';
@@ -85,6 +85,7 @@ const doc = new Doc({
     app.invalidate('structure');
   },
   restore: (host, content) => app.typing.restoreHost(host, content),
+  twin: (el) => twinOf(app, el),
 });
 app.doc = doc;
 

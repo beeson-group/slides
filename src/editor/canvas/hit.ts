@@ -156,12 +156,17 @@ export function sizedOf(el: Element): Element[] {
 }
 
 // the image or video of the other mode beside el, e.g. the for-light image of a for-dark one, which
-// is given the place of el, so that a picture keeps its place and size when the mode is flipped
+// is given the place and the tag edits of el, so that a picture keeps its place, its size, its
+// group, and its lock when the mode is flipped. the two are each other's first of their mode, so
+// that a copy of one of them beside the pair is not taken for its twin
 export function twinOf(app: App, el: Element): Element | null {
-  const mode = el.classList.contains('for-dark') ? 'for-light' : el.classList.contains('for-light') ? 'for-dark' : null;
-  if (!mode || !el.matches(STRETCHED) || !el.parentElement) return null;
-  const twin = [...el.parentElement.children].find((c) => c !== el && c.localName === el.localName && c.classList.contains(mode));
-  return twin && app.pairing?.elements.get(twin)?.open ? twin : null;
+  const first = (of: Element): Element | null => {
+    const mode = of.classList.contains('for-dark') ? 'for-light' : of.classList.contains('for-light') ? 'for-dark' : null;
+    if (!mode || !of.matches(STRETCHED) || !of.parentElement) return null;
+    return [...of.parentElement.children].find((c) => c !== of && c.localName === of.localName && c.classList.contains(mode)) ?? null;
+  };
+  const twin = first(el);
+  return twin && first(twin) === el && app.pairing?.elements.get(twin)?.open ? twin : null;
 }
 
 // the element whose picture stands for el in its frame and its resize: the shown image, video, or

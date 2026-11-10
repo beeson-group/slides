@@ -8,7 +8,7 @@
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { locked, placeOf, record, writePlace } from '../canvas/drag.ts';
-import { RESIZABLE, containerOf, turnable } from '../canvas/hit.ts';
+import { RESIZABLE, containerOf, turnable, twinOf } from '../canvas/hit.ts';
 
 export type Order = 'front' | 'forward' | 'backward' | 'back';
 
@@ -85,8 +85,10 @@ async function reorder(app: App, order: Order): Promise<void> {
   app.invalidate('content');
 }
 
-// the members of a group on the page
-const membersOf = (app: App, id: string): Element[] => [...(app.current() ?? document).querySelectorAll(`[data-group="${CSS.escape(id)}"]`)].filter((el) => !!app.pairing?.elements.get(el)?.open);
+// the members of a group on the page, apart from the hidden image of a dark and light pair, which
+// follows its twin
+const membersOf = (app: App, id: string): Element[] => [...(app.current() ?? document).querySelectorAll(`[data-group="${CSS.escape(id)}"]`)]
+  .filter((el) => !!app.pairing?.elements.get(el)?.open && !(twinOf(app, el) && !el.getClientRects().length));
 
 // a name of a group that is not on the page or in the file
 export function freshGroup(app: App): string {
