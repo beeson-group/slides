@@ -24,7 +24,24 @@ export type DocHost = {
   record(entry: Entry): void;
   changed(): void;
   restore?(host: Element, content: string): Promise<void>;
+  // the image or video of the other mode beside el, which is given every tag edit of el
+  twin?(el: Element): Element | null;
 };
+
+// the attributes and the classes of an image of a dark and light pair that are its own, since they
+// name or describe its file or its mode. every other part of a tag edit is written on both images
+const OWN_ATTRS = ['src', 'srcset', 'poster', 'alt'];
+const OWN_CLASSES = ['for-dark', 'for-light', 'paper', 'invert'];
+
+// the part of a normalized edit that is written on the twin of an image as well, or null
+function sharedEdit(e: TagEdit): TagEdit | null {
+  const out: TagEdit = { ...e };
+  delete out.order;
+  if (out.attrs) out.attrs = Object.fromEntries(Object.entries(out.attrs).filter(([k]) => !OWN_ATTRS.includes(k)));
+  if (out.classes) out.classes = Object.fromEntries(Object.entries(out.classes).filter(([k]) => !OWN_CLASSES.includes(k)));
+  for (const key of ['classes', 'attrs', 'style'] as const) if (out[key] && !Object.keys(out[key]!).length) delete out[key];
+  return Object.keys(out).length ? out : null;
+}
 
 // an element taken off the page, with its place and the text of its unit. the place is given by
 // the siblings before and after it, since one of them may be taken off the page as well
@@ -188,18 +205,31 @@ export class Doc {
     return stateOf(s.attrs, this.host.tags.get(el) ?? {});
   }
 
-  // sets the given classes, attributes, and declarations of the start tag of el. the inverse sets
-  // the values before the edit, hence it holds after a save as well
+  // sets the given classes, attributes, and declarations of the start tag of el, and the shared
+  // part of them on the twin of el. the inverse sets the values before the edit, hence it holds
+  // after a save as well
   setTag(el: Element, edit: TagEdit, label = 'tag'): void {
+    const e = normalizeEdit(edit);
+    const twin = this.host.twin?.(el) ?? null;
+    const shared = twin ? sharedEdit(e) : null;
+    const writes = [this.tagWrite(el, e), ...(twin && shared ? [this.tagWrite(twin, shared)] : [])];
+    for (const w of writes) this.applyTag(w.el, w.e);
+    this.host.record({
+      label,
+      undo: () => [...writes].reverse().forEach((w) => this.applyTag(w.el, w.back)),
+      redo: () => writes.forEach((w) => this.applyTag(w.el, w.e)),
+    });
+  }
+
+  private tagWrite(el: Element, edit: TagEdit): { el: Element; e: TagEdit; back: TagEdit } {
     const s = this.srcOf(el);
     if (!s.open) throw new Error(`the ${el.localName} does not have a start tag in the file`);
-    const e = normalizeEdit(edit);
+    const e = { ...edit };
     const back = inverseEdit(this.tagState(el), e);
     // the edit keeps the attributes, the classes, and the declarations of the tag in their order, as
     // its undo does, hence a redo writes the tag of the edit again
     e.order ??= back.order;
-    this.applyTag(el, e);
-    this.host.record({ label, undo: () => this.applyTag(el, back), redo: () => this.applyTag(el, e) });
+    return { el, e, back };
   }
 
   private applyTag(el: Element, edit: TagEdit): void {

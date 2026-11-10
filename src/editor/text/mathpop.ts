@@ -278,6 +278,23 @@ export function install(app: App): void {
     }
   }, true);
 
+  // the keys typed between Insert > Formula and the open of its TeX field are held from the canvas,
+  // where a letter can be a command, e.g. D, which flips the mode of the slide
+  let held: string | null = null;
+  window.addEventListener('keydown', (ev) => {
+    if (held === null || ev.isComposing || ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    if (ev.key.length === 1) held += ev.key;
+    else if (ev.key === 'Enter') held += '\n';
+    else if (ev.key === 'Backspace') held = held.slice(0, -1);
+    else return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+  }, true);
+  const hold = () => {
+    held = '';
+    return () => void (held = null);
+  };
+
   function closeMath(focus = true): void {
     completing?.close();
     unplace?.();
@@ -398,6 +415,9 @@ export function install(app: App): void {
         };
     field.focus();
     field.select();
+    const typed = held;
+    held = null;
+    if (typed) document.execCommand('insertText', false, typed);
     app.invalidate('selection');
   }
 
@@ -418,7 +438,7 @@ export function install(app: App): void {
   }
 
   sheetApi = { open: openSheet };
-  const math: MathPop = { isOpen: () => !!popover, open: openMath, close: closeMath, setMath };
+  const math: MathPop = { isOpen: () => !!popover, open: openMath, close: closeMath, setMath, hold };
   app.math = math;
   document.addEventListener('click', (ev) => {
     const target = ev.target instanceof Element ? ev.target : null;

@@ -423,7 +423,9 @@ for (const platform of PLATFORMS) {
     assert.ok(m && m[5], `the style ${style} is not a resized mask with a translate`);
     assert.ok(+m[3] < 600 && +m[4] < 800, `the box of ${m[3]} by ${m[4]} px is not smaller than the zone`);
     const edited = await render(page);
-    assert.equal(edited, page.source.replace('<img class="for-dark" src="../../demo/figure-dark.png" alt="A figure, dark version">', `<img class="for-dark" src="../../demo/figure-dark.png" alt="A figure, dark version" style="${style}">`));
+    // the mask is written on both images of the pair of a dark and a light figure
+    const pair = (text, tag) => text.replace(tag, `${tag.slice(0, -1)} style="${style}">`);
+    assert.equal(edited, pair(pair(page.source, '<img class="for-dark" src="../../demo/figure-dark.png" alt="A figure, dark version">'), '<img class="for-light" src="../../demo/figure-light.png" alt="A figure, light version">'));
     assert.deepEqual(textProblems(edited, THEME), textProblems(page.source, THEME), 'the resized mask is out of the scope rule');
     await pictureKept(page, edited);
     await roundTrip(page, edited);

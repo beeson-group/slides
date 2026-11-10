@@ -23,6 +23,25 @@ export function setIndexReader(read: (el: Element) => string | null): void {
 }
 export const fragmentIndex = (el: Element): string | null => readIndex(el);
 
+// the index of each element that the editor put into a block from a text, as the text gives it,
+// i.e. in the numbers of the file. reveal.js numbers it again with the page, and the element does
+// not have a tag in the file, hence this index is the one written for it
+const placed = new WeakMap<Element, string>();
+export function notePlaced(root: Element): void {
+  for (const el of root.querySelectorAll('[data-fragment-index]')) placed.set(el, el.getAttribute('data-fragment-index')!);
+}
+export const placedIndex = (el: Element): string | undefined => placed.get(el);
+
+// the index of each copy set to the index of the file of its element of live, the elements of a
+// copy of a part of the page with an index, in the same order, so that a text taken from the page
+// gives the numbers of the file
+export function fileIndexes(live: Element[], copies: Element[]): void {
+  copies.forEach((c, i) => {
+    const v = live[i] ? readIndex(live[i]) : null;
+    if (v !== null) c.setAttribute('data-fragment-index', v);
+  });
+}
+
 // the fragments of a slide outside its notes, with their steps numbered from 1 in the order of
 // reveal.js: by data-fragment-index, then the fragments without one in document order
 export function fragmentsOf(slide: Element): Fragment[] {

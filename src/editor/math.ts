@@ -1,6 +1,8 @@
 // the formulas of the page, read from MathJax: the TeX of each mjx-container with its delimiters,
 // and the typesetting of a host again after a formula in it was changed
 
+import { fileIndexes, notePlaced } from './layers.ts';
+
 export type MathInfo = { tex: string; open: string; close: string; display: boolean };
 export type MathLookup = (el: Element) => MathInfo | null;
 
@@ -100,6 +102,8 @@ export function contentWithTex(host: Element, replace?: ReadonlyMap<Element, str
 // range of host is found in the copy. a formula is one text node of the copy
 function withTex(host: Element, replace?: ReadonlyMap<Element, string>, edit?: (copy: Element, at: (node: Node) => Node | null) => void): Element {
   const copy = host.cloneNode(true) as Element;
+  const indexed = '[data-fragment-index]';
+  fileIndexes([...host.querySelectorAll(indexed)], [...copy.querySelectorAll(indexed)]);
   const lookup = mathLookup();
   const live = [...host.querySelectorAll('mjx-container')];
   const copies = [...copy.querySelectorAll('mjx-container')];
@@ -164,6 +168,7 @@ export async function setContentWithTex(host: Element, content: string): Promise
   const mj = mathjax();
   if (mj) mj.typesetClear([host]);
   if (!keepCode(host, content)) host.innerHTML = content;
+  notePlaced(host);
   if (mj) await mj.typesetPromise([host]);
 }
 
