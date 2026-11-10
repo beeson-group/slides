@@ -414,3 +414,46 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the width of the navigator, of the picture of its first thumbnail, and the cursor of its resizer
+const navGeometry = (page) =>
+  page.evaluate(`(() => {
+    const nav = document.querySelector('.beeson-edit-nav').getBoundingClientRect();
+    const pic = document.querySelector('.beeson-edit-nav .row .pic').getBoundingClientRect();
+    const edge = document.querySelector('.beeson-edit-nav-edge');
+    const e = edge.getBoundingClientRect();
+    return { nav: Math.round(nav.width), pic: Math.round(pic.width), edge: { x: e.left + e.width / 2, y: e.top + e.height / 2 }, cursor: getComputedStyle(edge).cursor };
+  })()`);
+
+for (const platform of PLATFORMS) {
+  test(`the navigator is widened by a drag of its resizer, kept, and reset by a double-click (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 3 });
+    const start = await navGeometry(page);
+    assert.equal(start.nav, 200);
+    assert.equal(start.cursor, 'ew-resize');
+    await drag(page, start.edge, { dx: 100 });
+    await sleep(150);
+    const wide = await navGeometry(page);
+    assert.equal(wide.nav, 300);
+    assert.ok(wide.pic > start.pic + 80, `the thumbnail is ${wide.pic} px wide after the drag, and was ${start.pic} px`);
+    // the drag stops at 140 and at 360 px
+    await drag(page, wide.edge, { dx: 400 });
+    await sleep(100);
+    assert.equal((await navGeometry(page)).nav, 360);
+    await drag(page, (await navGeometry(page)).edge, { dx: -400 });
+    await sleep(100);
+    assert.equal((await navGeometry(page)).nav, 140);
+    await drag(page, (await navGeometry(page)).edge, { dx: 160 });
+    await sleep(100);
+    await page.close();
+    const again = await load(t, platform, { n: 3, keep: true });
+    const kept = await navGeometry(again);
+    assert.equal(kept.nav, 300);
+    await click(again, kept.edge, { count: 2 });
+    await sleep(150);
+    assert.equal((await navGeometry(again)).nav, 200);
+    assert.equal(await again.evaluate(`localStorage.getItem('beeson-nav-w')`), '200');
+    assert.equal(await render(again), again.source);
+    assert.deepEqual(errors(again), []);
+  });
+}
