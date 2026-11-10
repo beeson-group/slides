@@ -68,7 +68,13 @@ const redo = (page) => page.evaluate('window.BeesonEditor.redo()');
 const frames = (page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => d(true))))');
 const render = (page) => page.evaluate('window.BeesonEditor.render()');
 const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
-const shownFrames = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-frame.selected')].filter((f) => !f.hidden && f.getBoundingClientRect().width).length`);
+// the shown elements of the selection: each framed by itself, or the members of a group in its
+// one frame
+const shownFrames = (page) => page.evaluate(`(() => {
+  const frames = [...document.querySelectorAll('.beeson-frame.selected')].filter((f) => !f.hidden && f.getBoundingClientRect().width).length;
+  const group = [...document.querySelectorAll('.beeson-frame.union.group')].some((f) => !f.hidden);
+  return group ? window.BeesonEditor.selection().filter((e) => e.getBoundingClientRect().width).length : frames;
+})()`);
 
 // the problems of the scope rule in the rendered text that the file did not have before
 async function inScope(page) {

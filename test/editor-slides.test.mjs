@@ -10,7 +10,7 @@ import { readFileSync } from 'node:fs';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { LAYOUTS, layoutText, textStyle } from '../src/editor/model/templates.ts';
-import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen, selectFigure } from './helpers/editor.mjs';
 
 const LAYOUTS_DECK = 'test/pages/editor-layouts.html';
 
@@ -344,7 +344,7 @@ for (const platform of ['mac', 'other']) {
     t.after(() => page.close?.());
     await click(page, await row(page, 4));
     await settle(page);
-    await click(page, '.reveal .slides section.present figure.zone img.for-dark, .reveal .slides section.present figure.zone img');
+    await selectFigure(page, '.reveal .slides section.present figure.zone img.for-dark, .reveal .slides section.present figure.zone img');
     await settle(page);
     assert.equal(await page.evaluate(`window.BeesonEditor.state('element.delete').enabled`), true);
     await press(page, 'Delete');
