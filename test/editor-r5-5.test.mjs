@@ -115,7 +115,7 @@ const liveControls = (page) =>
 // the button of the Format tab with the title, clicked as a user would
 async function tap(page, title) {
   const at = await page.evaluate(`(() => {
-    const b = [...document.querySelectorAll('#beeson-edit-panel-format button')].find((b) => (b.title || b.getAttribute('aria-label')) === ${JSON.stringify(title)});
+    const b = [...document.querySelectorAll('#beeson-edit-panel-format button')].find((b) => (b.title || b.getAttribute('aria-label') || b.textContent) === ${JSON.stringify(title)});
     if (!b || b.disabled) return null;
     const r = b.getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
@@ -138,8 +138,11 @@ for (const platform of PLATFORMS) {
     await typeKeys(page, 'Hi there');
     const text = await page.evaluate('window.BeesonEditor.render()');
     assert.ok(text.includes('<p><strong><span class="tone-accent">Hi there</span></strong></p>'), 'the new text is not bold and orange');
+    // the box with its first character is one entry, and the typing after it another
+    await undo(page);
     await undo(page);
     await byteExact(page);
+    await redo(page);
     await redo(page);
     assert.equal(await page.evaluate('window.BeesonEditor.render()'), text);
     await saved(page);
@@ -184,5 +187,35 @@ for (const platform of PLATFORMS) {
     await redo(page);
     await byteExact(page, edits);
     await saved(page);
+  });
+}
+
+for (const platform of PLATFORMS) {
+  test(`a paragraph style and a list chosen in a new text box, and the size in a new code box, are typed on ${platform}`, async () => {
+    const page = await editor(platform);
+    await exec(page, 'insert.text');
+    await frames(page);
+    await exec(page, 'text.list.ul');
+    assert.equal((await state(page, 'text.list.ul')).checked, true);
+    await typeKeys(page, 'Item');
+    assert.ok((await page.evaluate('window.BeesonEditor.render()')).includes('<li>Item</li>'), 'the new text is not a list item');
+    const page2 = await editor(platform);
+    await exec(page2, 'insert.text');
+    await frames(page2);
+    await exec(page2, 'text.style.subheading');
+    await typeKeys(page2, 'Sub');
+    assert.ok((await page2.evaluate('window.BeesonEditor.render()')).includes('<h3>Sub</h3>'), 'the new text is not a subheading');
+    const page3 = await editor(platform, 5);
+    await exec(page3, 'insert.code');
+    await frames(page3);
+    assert.equal((await state(page3, 'text.bold')).enabled, false);
+    await exec(page3, 'text.smaller');
+    await typeKeys(page3, 'x');
+    const text = await page3.evaluate('window.BeesonEditor.render()');
+    assert.ok(text.includes('<pre style="font-size: 18px"><code class="language-python">x</code></pre>'), 'the new code box is not small');
+    await undo(page3);
+    await byteExact(page3);
+    await saved(page3);
+    assert.deepEqual(errors(page3), []);
   });
 }

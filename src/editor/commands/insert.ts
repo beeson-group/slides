@@ -10,6 +10,7 @@
 
 import type { App } from '../app.ts';
 import { mathLookup } from '../math.ts';
+import { applyPending } from '../text/carry.ts';
 import { placeCaret } from '../text/typing.ts';
 import { injectStyle } from '../ui/dom.ts';
 import { columnOf } from './clipboard.ts';
@@ -221,6 +222,7 @@ export function install(app: App): void {
         p.el.remove();
         pending = null;
         placeCaret(node);
+        await applyPending(app, p.el, node);
       });
     } finally {
       writing = false;

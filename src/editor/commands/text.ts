@@ -4,11 +4,13 @@
 // Format Painter of the Text pane. the Substitutions of the Edit menu switch the smart quotes and
 // dashes of text/substitute.ts. a key of a disabled command is left to the browser, e.g. Return in
 // a heading, which typing.ts writes as a br. a format is set in a text, or on the whole text of
-// the blocks selected on the canvas
+// the blocks selected on the canvas. with the caret outside a word, a format, a tone, or a style is
+// kept by text/carry.ts for the text typed next
 
 import type { App, Region } from '../app.ts';
 import type { Command } from '../commands.ts';
 import * as blocks from '../text/blocks.ts';
+import * as carry from '../text/carry.ts';
 import * as inline from '../text/inline.ts';
 import { openLink, applyLink, type LinkKind } from '../text/link.ts';
 import { isSmart, setSmart, type Smart } from '../text/substitute.ts';
@@ -30,6 +32,7 @@ html.beeson-painting .reveal .slides, html.beeson-painting .reveal .slides * { c
 `;
 
 export function install(app: App): void {
+  carry.install(app);
   const c = app.commands;
   const define = (command: Command) => c.define(command);
   const menu = (group: string, order: number, submenu?: string) => ({ bar: 'Format', group, order, ...(submenu ? { submenu } : {}) });
@@ -46,9 +49,9 @@ export function install(app: App): void {
       in: regions,
       menu: menu(submenu ? 'script' : 'font', order, submenu),
       undoable: true,
-      enabled: (a) => inline.inlineTargets(a, name === 'bold' || name === 'italic').length > 0,
-      checked: (a) => inline.isOn(a, name),
-      run: (a) => inline.toggle(a, name),
+      enabled: (a) => inline.inlineTargets(a, name === 'bold' || name === 'italic').length > 0 || carry.canFormat(a, name === 'bold' || name === 'italic'),
+      checked: (a) => (carry.canFormat(a, true) ? carry.formatOn(a, name) : inline.isOn(a, name)),
+      run: (a) => (carry.canFormat(a, true) ? carry.toggleFormat(a, name) : inline.toggle(a, name)),
       ...(name === 'bold' || name === 'italic' ? { context: ['text' as const] } : {}),
     });
   // bold and italic are taken in the speaker notes too
@@ -70,8 +73,8 @@ export function install(app: App): void {
     in: FORMAT,
     menu: menu('size', 30),
     undoable: true,
-    enabled: (a) => blocks.canStep(a, true),
-    run: (a) => blocks.setStyle(a, (s) => blocks.stepped(s, true)),
+    enabled: (a) => blocks.canStep(a, true) || carry.canStep(a, true) || carry.canSizeCode(a, true),
+    run: (a) => (carry.canSizeCode(a, true) ? carry.sizeCode(a, true) : carry.canStyle(a) ? carry.chooseStyle(a, (s) => blocks.stepped(s, true)) : blocks.setStyle(a, (s) => blocks.stepped(s, true))),
   });
   define({
     id: 'text.smaller',
@@ -80,8 +83,8 @@ export function install(app: App): void {
     in: FORMAT,
     menu: menu('size', 31),
     undoable: true,
-    enabled: (a) => blocks.canStep(a, false),
-    run: (a) => blocks.setStyle(a, (s) => blocks.stepped(s, false)),
+    enabled: (a) => blocks.canStep(a, false) || carry.canStep(a, false) || carry.canSizeCode(a, false),
+    run: (a) => (carry.canSizeCode(a, false) ? carry.sizeCode(a, false) : carry.canStyle(a) ? carry.chooseStyle(a, (s) => blocks.stepped(s, false)) : blocks.setStyle(a, (s) => blocks.stepped(s, false))),
   });
 
   define({
@@ -90,9 +93,9 @@ export function install(app: App): void {
     in: FORMAT,
     menu: menu('tone', 40, 'Text Color'),
     undoable: true,
-    enabled: (a) => inline.inlineTargets(a).length > 0,
-    checked: (a) => inline.inlineTargets(a).length > 0 && inline.toneAt(a) === null,
-    run: (a) => inline.setTone(a, null),
+    enabled: (a) => inline.inlineTargets(a).length > 0 || carry.canFormat(a),
+    checked: (a) => (carry.canFormat(a) ? carry.toneOf(a) === null : inline.inlineTargets(a).length > 0 && inline.toneAt(a) === null),
+    run: (a) => (carry.canFormat(a) ? carry.chooseTone(a, null) : inline.setTone(a, null)),
   });
   inline.TONES.forEach((tone, i) =>
     define({
@@ -101,9 +104,9 @@ export function install(app: App): void {
       in: FORMAT,
       menu: menu('tone', 41 + i, 'Text Color'),
       undoable: true,
-      enabled: (a) => inline.inlineTargets(a).length > 0,
-      checked: (a) => inline.toneAt(a) === tone,
-      run: (a) => inline.setTone(a, tone),
+      enabled: (a) => inline.inlineTargets(a).length > 0 || carry.canFormat(a),
+      checked: (a) => (carry.canFormat(a) ? carry.toneOf(a) : inline.toneAt(a)) === tone,
+      run: (a) => (carry.canFormat(a) ? carry.chooseTone(a, tone) : inline.setTone(a, tone)),
     }));
 
   blocks.PARAGRAPH_STYLES.forEach((style, i) =>
@@ -113,9 +116,9 @@ export function install(app: App): void {
       in: FORMAT,
       menu: menu('style', 50 + i, 'Paragraph Style'),
       undoable: true,
-      enabled: blocks.canStyle,
-      checked: (a) => blocks.paragraphStyle(a) === style,
-      run: (a) => blocks.setStyle(a, style),
+      enabled: (a) => blocks.canStyle(a) || carry.canStyle(a),
+      checked: (a) => (carry.canStyle(a) ? carry.styleOf(a) : blocks.paragraphStyle(a)) === style,
+      run: (a) => (carry.canStyle(a) ? carry.chooseStyle(a, style) : blocks.setStyle(a, style)),
     }));
 
   (['none', 'ul', 'ol'] as const).forEach((kind, i) =>
@@ -125,9 +128,9 @@ export function install(app: App): void {
       in: TEXT,
       menu: menu('list', 60 + i, 'List'),
       undoable: true,
-      enabled: (a) => blocks.canSetList(a, kind),
-      checked: (a) => blocks.listKind(a) === kind,
-      run: (a) => blocks.setList(a, kind),
+      enabled: (a) => blocks.canSetList(a, kind) || carry.canList(a),
+      checked: (a) => (carry.canList(a) ? carry.listOf(a) : blocks.listKind(a)) === kind,
+      run: (a) => (carry.canList(a) ? carry.chooseList(a, kind) : blocks.setList(a, kind)),
     }));
   // Tab is taken in every item of a list, also where it does not change the level, so that it
   // does not move the focus out of the text
