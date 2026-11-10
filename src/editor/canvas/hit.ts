@@ -82,6 +82,14 @@ function pictureIn(el: Element): { width: number; height: number; dx: number; dy
   return { width: w, height: ht, dx: at(px, box.width - w) + w / 2 - box.width / 2, dy: at(py, box.height - ht) + ht / 2 - box.height / 2 };
 }
 
+// the size of the picture of el in slide pixels, without its scale and rotation, which the fields
+// W and H of the Arrange pane give: the picture of an image or a video fitted into its box, and the
+// box of any other element
+export function pictureSize(el: Element): { w: number; h: number } {
+  const p = pictureIn(el);
+  return { w: p.width, h: p.height };
+}
+
 // the box of the picture of el on the screen, without the rotation by deg of el or of the figure
 // around it, about the center of the picture as it is seen. scale is the screen pixels per slide
 // pixel. an element that is not rotated has the box of visualRect

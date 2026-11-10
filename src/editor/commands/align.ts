@@ -6,7 +6,7 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { RESIZABLE, aspectOf, frameOf, movableOf, sizedOf, toSlide, visualRect } from '../canvas/hit.ts';
+import { RESIZABLE, aspectOf, frameOf, movableOf, pictureSize, sizedOf, toSlide, visualRect } from '../canvas/hit.ts';
 import type { Box } from '../canvas/snap.ts';
 import { placeOf, record, writePlace, type Place } from '../canvas/drag.ts';
 import { declarationProblem } from '../model/scope.ts';
@@ -111,11 +111,8 @@ export function offsetOf(el: Element): { x: number; y: number } {
   return { x: t?.x ?? 0, y: t?.y ?? 0 };
 }
 
-// the size of an element in slide pixels, unscaled
-export function sizeOf(el: Element): { w: number; h: number } {
-  const h = el as HTMLElement;
-  return { w: h.offsetWidth, h: h.offsetHeight };
-}
+// the size of an element in slide pixels, unscaled, at its picture for an image or a video
+export const sizeOf = (el: Element): { w: number; h: number } => pictureSize(el);
 
 export function commands(): Command[] {
   const list: Command[] = [];
