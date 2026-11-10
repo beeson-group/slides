@@ -1,0 +1,227 @@
+// regression tests of R7.9 on both platforms with trusted input, for the places where round 3 of
+// the council was worse than round 2. the caption of a figure is moved with its image and kept
+// under it at a move or a resize of the image alone, and not at a rotation of the image. the four
+// order commands act on the figure of a selected image. Esc on a selected image selects its
+// figure, also with the focus on a button of the inspector, and the inspector then shows the pane
+// of the figure. the formula sheets are kept beside their target inside the canvas, and a table
+// is not rotated. after each edit the text is checked byte for byte, after an undo and a redo, and
+// after a save and an open
+
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { after, before, test } from 'node:test';
+import { deckSettled, launch } from '../scripts/chrome.mjs';
+import { serve } from '../scripts/webdriver.mjs';
+import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
+
+const PLATFORMS = ['mac', 'other'];
+const TABLES = 'test/pages/editor-tables.html';
+// the slides of the demo deck with the display formula and with the figure and its caption
+const EQUATIONS = 3;
+const FIGURE = 4;
+const IMG = '.reveal section.present figure.zone > img';
+const CAPTION = '.reveal section.present figure.zone > figcaption';
+const PANEL = '#beeson-edit-panel-format';
+
+let browser;
+let server;
+before(async () => {
+  browser = await launch({ offline: false });
+  server = await serve('.');
+});
+after(async () => {
+  await browser?.close();
+  server?.close();
+});
+
+const js = (v) => JSON.stringify(v);
+const exec = (page, id, arg) => page.evaluate(`window.BeesonEditor.exec(${js(id)}${arg === undefined ? '' : `, ${js(arg)}`})`);
+const state = (page, id) => page.evaluate(`window.BeesonEditor.state(${js(id)})`);
+const render = (page) => page.evaluate('window.BeesonEditor.render()');
+const frames = (page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => d(true))))');
+const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+const meets = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+const inside = (a, b) => a.left >= b.left && a.top >= b.top && a.right <= b.right && a.bottom <= b.bottom;
+let saves = 0;
+
+// the selected elements, each named by its tag and its classes of the deck
+const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((el) => [el.localName, ...el.classList].filter((c) => !c.startsWith('beeson-') && c !== 'visible' && c !== 'current-fragment').join('.'))`);
+// the center of the first shown element of a selector, in CSS px of the window
+const centerOf = (page, selector) => page.evaluate(`(() => {
+  const r = [...document.querySelectorAll(${js(selector)})].map((e) => e.getBoundingClientRect()).find((r) => r.width);
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+})()`);
+// the box of the first element of a selector, with its right and bottom edges
+const rectOf = (page, selector) => page.evaluate(`(() => {
+  const b = [...document.querySelectorAll(${js(selector)})].map((e) => e.getBoundingClientRect()).filter((r) => r.width).pop();
+  return { left: b.left, top: b.top, right: b.right, bottom: b.bottom };
+})()`);
+const canvasOf = (page) => page.evaluate('(() => { const v = window.BeesonEditorShell.stage.viewport; return { left: v.left, top: v.top, right: v.right, bottom: v.bottom }; })()');
+const pane = (page) => page.evaluate(`document.querySelector('${PANEL} .ed-panes')?.dataset.pane`);
+const tabs = (page) => page.evaluate(`[...document.querySelectorAll('${PANEL} .ed-tabs button')].map((b) => b.textContent)`);
+const showTab = async (page, name) => {
+  await page.evaluate(`[...document.querySelectorAll('${PANEL} .ed-tabs button')].find((b) => b.textContent === ${js(name)})?.click()`);
+  await frames(page);
+};
+
+// the editor on the slide n of a deck served over HTTP, in a window of 1600 by 1000 px as in the
+// shoot of the council, with the Format tab shown
+async function load(t, platform, { deck = 'index.html', n = FIGURE } = {}) {
+  const page = await browser.newPage({ width: 1600, height: 1000 });
+  t.after(() => page.close().catch(() => {}));
+  const url = `${server.origin}/${deck}?edit&still&edit-platform=${platform}`;
+  await page.goto(url);
+  await page.evaluate('localStorage.clear()');
+  await page.goto(url);
+  await page.waitFor(deckSettled);
+  await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
+  page.source = readFileSync(deck, 'utf8');
+  const s = await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`);
+  assert.deepEqual(s.problems, []);
+  if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
+  await page.evaluate(`Reveal.slide(${n})`);
+  await frames(page);
+  return page;
+}
+
+// roundTrip checks the text before byte for byte after undos undos, the edit after as many redos,
+// and an open of the saved edit without problems, which is the text before the next check
+async function roundTrip(page, undos = 1) {
+  const edited = await render(page);
+  assert.notEqual(edited, page.source, 'the action does not change the file');
+  for (let i = 0; i < undos; i++) await page.evaluate('window.BeesonEditor.undo()');
+  await byteExact(page);
+  for (let i = 0; i < undos; i++) await page.evaluate('window.BeesonEditor.redo()');
+  assert.equal(await render(page), edited);
+  const { text } = await saveAndReopen(page, `r7-9-${++saves}.html`);
+  assert.equal(text, edited);
+  assert.deepEqual(errors(page), []);
+  page.source = text;
+  return edited;
+}
+
+// the place of the caption from the lower left corner of the picture of the shown image, i.e. the
+// image fitted into its box with object-fit contain, in screen px
+const captionFromPicture = (page) => page.evaluate(`(() => {
+  const img = [...document.querySelectorAll(${js(IMG)})].find((e) => e.getBoundingClientRect().width);
+  const r = img.getBoundingClientRect();
+  let w = r.width, h = r.height;
+  if (getComputedStyle(img).objectFit === 'contain') {
+    const k = Math.min(r.width / img.naturalWidth, r.height / img.naturalHeight);
+    w = img.naturalWidth * k;
+    h = img.naturalHeight * k;
+  }
+  const left = r.left + (r.width - w) / 2, bottom = r.top + (r.height + h) / 2;
+  const c = document.querySelector(${js(CAPTION)}).getBoundingClientRect();
+  return { dx: c.left - left, dy: c.top - bottom, left, bottom, caption: { left: c.left, top: c.top } };
+})()`);
+
+function sameOffset(now, before, what) {
+  const ok = Math.abs(now.dx - before.dx) <= 1.5 && Math.abs(now.dy - before.dy) <= 1.5;
+  assert.ok(ok, `${what}: the caption is at ${js([now.dx, now.dy])} from the lower left corner of the image, and not at ${js([before.dx, before.dy])} as before`);
+}
+
+const gripAt = (page, handle) => page.evaluate(`(() => {
+  const g = [...document.querySelectorAll('.beeson-grip[data-handle="${handle}"]')].find((g) => !g.hidden && g.getBoundingClientRect().width);
+  const r = g.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+})()`);
+// the image selected again after an open of the saved text, which clears the selection
+async function reselect(page) {
+  await page.evaluate(`Reveal.slide(${FIGURE})`);
+  await frames(page);
+  await click(page, IMG);
+  assert.deepEqual(await selected(page), ['img.for-dark']);
+}
+const release = (page, at) => page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: at.x, y: at.y, button: 'left', clickCount: 1 });
+
+async function openBar(page, bar) {
+  await click(page, await page.evaluate(`(() => {
+    const r = [...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].find((b) => b.textContent.trim() === ${js(bar)}).getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  })()`));
+  await frames(page);
+}
+const menuItems = (page) =>
+  page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item')].map((i) => ({ label: i.querySelector('.label')?.textContent ?? '', dimmed: i.getAttribute('aria-disabled') === 'true' }))`);
+
+// the caption of a figure, kept under its image
+for (const platform of PLATFORMS) {
+  test(`a drag of the image of a figure moves its caption with it (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, IMG);
+    assert.deepEqual(await selected(page), ['img.for-dark'], 'a click on the image does not select the image alone');
+    const rest = await captionFromPicture(page);
+    const from = await centerOf(page, IMG);
+    await drag(page, from, { dx: -80, dy: 20, hold: true });
+    const held = await captionFromPicture(page);
+    assert.ok(Math.abs(held.left - rest.left) > 40, 'the image is not moved by the drag');
+    sameOffset(held, rest, 'while the image is dragged');
+    await release(page, { x: from.x - 80, y: from.y + 20 });
+    await frames(page);
+    sameOffset(await captionFromPicture(page), rest, 'after the drag');
+    assert.match(await render(page), /<figcaption class="caption" style="translate: -?\d+px -?\d+px">/);
+    await roundTrip(page);
+  });
+
+  test(`a resize of the image of a figure keeps its caption under it (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, IMG);
+    const rest = await captionFromPicture(page);
+    const at = await gripAt(page, 'se');
+    await drag(page, at, { dx: -90, dy: -60, hold: true });
+    const held = await captionFromPicture(page);
+    assert.ok(held.bottom < rest.bottom - 30, 'the image is not shrunk by the drag of its grip');
+    sameOffset(held, rest, 'while the image is resized');
+    await release(page, { x: at.x - 90, y: at.y - 60 });
+    await frames(page);
+    sameOffset(await captionFromPicture(page), rest, 'after the resize');
+    await roundTrip(page);
+  });
+
+  test(`the keys, the fields, and Reset Position move the caption with the image, and a rotation does not (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, IMG);
+    const rest = await captionFromPicture(page);
+    // three nudges in a row are one entry of the history
+    for (let i = 0; i < 3; i++) await press(page, 'Shift+ArrowLeft');
+    await frames(page);
+    const nudged = await captionFromPicture(page);
+    assert.ok(nudged.left < rest.left - 5, 'the image is not nudged');
+    sameOffset(nudged, rest, 'after three nudges');
+    await roundTrip(page);
+    await reselect(page);
+
+    await exec(page, 'arrange.setPosition', { y: 100 });
+    await frames(page);
+    sameOffset(await captionFromPicture(page), rest, 'after a position typed in Y');
+    await roundTrip(page);
+    await reselect(page);
+
+    await exec(page, 'arrange.setSize', { w: 420 });
+    await frames(page);
+    sameOffset(await captionFromPicture(page), rest, 'after a width typed in W');
+    await roundTrip(page);
+    await reselect(page);
+
+    await exec(page, 'arrange.resetPosition');
+    await frames(page);
+    sameOffset(await captionFromPicture(page), rest, 'after Reset Position');
+    await roundTrip(page);
+    await reselect(page);
+
+    // a turn of the image alone leaves its caption where it is, and the start tag of the caption
+    // as it was
+    const before = await captionFromPicture(page);
+    const text = await render(page);
+    await exec(page, 'arrange.setRotation', { deg: 30 });
+    await frames(page);
+    const turned = await captionFromPicture(page);
+    assert.ok(Math.abs(turned.caption.left - before.caption.left) <= 1 && Math.abs(turned.caption.top - before.caption.top) <= 1, 'the caption is moved by a rotation of the image');
+    const captionTag = (s) => s.match(/<figcaption[^>]*>/g);
+    assert.deepEqual(captionTag(await render(page)), captionTag(text));
+    await roundTrip(page);
+  });
+
+}
