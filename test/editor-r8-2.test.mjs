@@ -103,3 +103,80 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// the frame of the selection, the rotate grip, its stem, the handle of a block, and the shown grips,
+// in CSS px of the window, and the boxes of the lines of the text of the selected element
+const chrome = (page) => page.evaluate(`(() => {
+  const box = (el) => { if (!el || el.hidden) return null; const r = el.getBoundingClientRect(); return r.width ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom, x: r.left + r.width / 2, y: r.top + r.height / 2 } : null; };
+  const frame = [...document.querySelectorAll('.beeson-frame.selected, .beeson-frame.union')].find((f) => !f.hidden);
+  const rotor = document.querySelector('.beeson-rotor');
+  const own = window.BeesonEditor.selection();
+  const text = [];
+  for (const el of own) {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    for (const b of range.getClientRects()) if (b.width && b.height) text.push({ left: b.left, top: b.top, right: b.right, bottom: b.bottom });
+  }
+  const r = box(rotor);
+  return {
+    frame: box(frame),
+    rotor: r,
+    stem: box(document.querySelector('.beeson-rotor-stem')),
+    handle: box(document.querySelector('.beeson-handle')),
+    grips: [...document.querySelectorAll('.beeson-grip')].map(box).filter(Boolean),
+    hit: r ? document.elementFromPoint(r.x, r.y) === rotor : false,
+    text,
+  };
+})()`);
+
+// the paragraphs of the demo deck stacked close between a heading and a list or a display
+const STACKED = [
+  [2, 'Design the complete slide'],
+  [3, 'You can type LaTeX'],
+  [3, 'The Coriolis terms couple'],
+  [4, 'Export your matplotlib'],
+  [5, 'Copy-paste the code'],
+  [10, 'Videos are shown'],
+];
+
+// finding 2: the rotate grip of a text block was drawn inside its frame over its first line, and
+// the handle of the block over its upper left grip
+for (const platform of PLATFORMS) {
+  test(`the rotate grip of a text block is drawn on a stem above its frame, and the block handle clear of its grips (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    for (const [n, words] of STACKED) {
+      await page.evaluate(`Reveal.slide(${n})`);
+      await frames(page);
+      await press(page, 'Escape');
+      const at = await page.evaluate(`(() => { const p = [...document.querySelectorAll('.reveal section.present p')].find((p) => p.textContent.trim().startsWith(${js(words)})); const r = p.getBoundingClientRect(); return { x: r.right + 3, y: r.top + r.height / 2 }; })()`);
+      await click(page, at);
+      await frames(page);
+      const v = await chrome(page);
+      const what = `the paragraph "${words}" of slide ${n + 1}`;
+      assert.ok(v.frame && v.rotor, `${what} is not framed with a rotate grip`);
+      assert.ok(v.rotor.bottom < v.frame.top, `the rotate grip of ${what} at ${js(v.rotor)} is not above its frame at ${js(v.frame)}`);
+      assert.ok(Math.abs(v.rotor.x - v.frame.x) <= 1, `the rotate grip of ${what} is not at the middle of its frame`);
+      assert.ok(v.stem && v.stem.top <= v.rotor.bottom + 1 && v.stem.bottom >= v.frame.top - 1, `the rotate grip of ${what} is not on a stem from its frame`);
+      assert.ok(!v.text.some((r) => meets(r, v.rotor)), `the rotate grip of ${what} covers its own text`);
+      assert.ok(v.hit, `the rotate grip of ${what} is not the element at its center, i.e. it cannot be pressed`);
+      assert.ok(v.handle, `${what} is drawn without its block handle`);
+      const hit = v.grips.find((g) => meets(g, v.handle));
+      assert.ok(!hit, `the block handle of ${what} at ${js(v.handle)} covers a grip at ${js(hit)}`);
+      assert.ok(!meets(v.handle, v.rotor), `the block handle of ${what} covers its rotate grip`);
+    }
+    // the grip turns the last paragraph, under the heading of slide 11
+    const v = await chrome(page);
+    await drag(page, { x: v.rotor.x, y: v.rotor.y }, { dx: 120, dy: 40 });
+    await frames(page);
+    assert.match(await render(page), /<p[^>]* style="rotate: \d+deg">Videos are shown/, 'the grip does not turn the paragraph');
+    await roundTrip(page);
+
+    // an image has its grip on the same stem above its frame
+    await page.evaluate(`Reveal.slide(${FIGURE})`);
+    await frames(page);
+    await click(page, IMG);
+    await frames(page);
+    const img = await chrome(page);
+    assert.ok(img.rotor && img.rotor.bottom < img.frame.top && img.stem, `the rotate grip of the image at ${js(img.rotor)} is not on a stem above its frame at ${js(img.frame)}`);
+  });
+}
