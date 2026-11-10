@@ -6,7 +6,8 @@
 // range of a text are kept for its command, as in the menus of macOS. while a menu is open, every
 // key is taken by the listener below, which is added at the import of this module and thus runs
 // before the keyboard handler that commands.ts adds at its install. the highlighted item is kept
-// in the menu and announced with aria-activedescendant
+// in the menu and announced with aria-activedescendant. a menu with a search field, i.e. the Help
+// menu, gives the focus to its field, which lists the commands of the menu bar that match
 
 import type { App, Platform } from '../app.ts';
 import { keysOf, type Command, type Context, type Group } from '../commands.ts';
@@ -15,11 +16,15 @@ import { injectStyle, make } from './dom.ts';
 import { icon } from './icons.ts';
 
 // an item of a menu: a command of the registry by its id, a submenu, an action of the chrome, or a
-// rule between groups. a command item may give a label of its own, e.g. a short one in a submenu
+// rule between groups. a command item may give a label of its own, e.g. a short one in a submenu,
+// and the path of its menu, e.g. in the results of a search. a note is a line of gray text, and a
+// search is the field at the top of the Help menu over the commands of the menus of bars
 export type MenuItem =
-  | { command: string; arg?: unknown; label?: string }
+  | { command: string; arg?: unknown; label?: string; path?: string[] }
   | { label: string; items: MenuItem[] | (() => MenuItem[]); disabled?: boolean }
   | { label: string; run: () => unknown; checked?: boolean | null; disabled?: boolean; keys?: string }
+  | { note: string }
+  | { search: { bars: string[] } }
   | { rule: true };
 
 // where a menu is put: under a rectangle, e.g. a menu bar title, beside it for a submenu, or with
@@ -50,7 +55,7 @@ export interface OpenMenu {
 }
 
 // the item kinds, each with its rendered element
-type Row = { el: HTMLElement; item: MenuItem; enabled: boolean; submenu: (() => MenuItem[]) | null; text: string };
+type Row = { el: HTMLElement; item: Exclude<MenuItem, { rule: true } | { note: string } | { search: unknown }>; enabled: boolean; submenu: (() => MenuItem[]) | null; text: string };
 
 const CSS = `
 .beeson-edit-menu { position: fixed; z-index: 90; box-sizing: border-box; min-width: 220px; max-width: 420px; max-height: calc(100vh - 16px); overflow-y: auto; padding: 5px; border: 1px solid var(--ed-menu-line); border-radius: 8px; background: var(--ed-menu); color: var(--ed-text); font: 13px/1.25 system-ui, -apple-system, "Segoe UI", sans-serif; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.22), 0 1px 3px rgba(0, 0, 0, 0.12); -webkit-backdrop-filter: blur(24px) saturate(1.6); backdrop-filter: blur(24px) saturate(1.6); outline: none; user-select: none; -webkit-user-select: none; }
@@ -65,6 +70,17 @@ const CSS = `
 .beeson-edit-menu .item[aria-disabled="true"] .keys { color: var(--ed-faint); }
 .beeson-edit-menu .rule { height: 1px; margin: 5px 8px; background: var(--ed-menu-line); }
 .beeson-edit-menu .empty { padding: 3px 12px; color: var(--ed-faint); }
+.beeson-edit-menu .note { max-width: 300px; padding: 3px 8px 2px 26px; color: var(--ed-faint); font-size: 12px; white-space: normal; }
+.beeson-edit-menu .item .label .path { margin-left: 8px; color: var(--ed-muted); font-size: 12px; }
+.beeson-edit-menu .item.hi .label .path { color: inherit; opacity: 0.8; }
+.beeson-edit-menu.help { min-width: 300px; max-width: 560px; }
+.beeson-edit-menu .search { position: sticky; top: 0; z-index: 1; display: flex; align-items: center; gap: 8px; margin: -5px -5px 0; padding: 8px 11px 4px 13px; background: var(--ed-menu); }
+.beeson-edit-menu .search .field { position: relative; flex: 1; display: flex; align-items: center; }
+.beeson-edit-menu .search svg { position: absolute; left: 6px; width: 12px; height: 12px; color: var(--ed-muted); pointer-events: none; }
+.beeson-edit-menu .search input { flex: 1; min-width: 0; height: 22px; box-sizing: border-box; padding: 0 6px 0 22px; border: 1px solid var(--ed-control-line); border-radius: 6px; background: var(--ed-control); color: var(--ed-text); font: inherit; outline: none; }
+.beeson-edit-menu .search input:focus { border-color: transparent; box-shadow: 0 0 0 3px var(--ed-focus); }
+.beeson-edit-menu .search input::-webkit-search-cancel-button { display: none; }
+.beeson-edit-menu .heading { padding: 4px 8px 2px; color: var(--ed-muted); font-size: 11px; font-weight: 600; }
 .beeson-edit-split { display: inline-flex; align-items: stretch; }
 .beeson-edit-select { display: inline-flex; align-items: center; gap: 2px; }
 `;
@@ -115,10 +131,14 @@ function canRun(app: App, commands: Command[]): boolean {
 // the layout of a menu over the submenus and the groups that the packages declare, by the name of
 // a declared submenu or, for a command without one, of its group. parent sets it in a submenu of
 // the layout, flat sets the commands of a declared submenu straight into that parent, and order is
-// added to the order of the first command of a submenu. '*' places a submenu of the menu that the
-// layout does not name
-type Place = { parent?: string; group: string; order?: number; flat?: boolean };
+// added to the order of the first command of a submenu. keep shows a submenu of one command as a
+// submenu. '*' places a submenu of the menu that the layout does not name
+type Place = { parent?: string; group: string; order?: number; flat?: boolean; keep?: boolean };
 const LAYOUT: Record<string, Record<string, Place>> = {
+  // Spelling and Grammar of Keynote, before Substitutions, with the one switch a page can set
+  Edit: {
+    'Spelling and Grammar': { group: 'substitutions', keep: true },
+  },
   // Keynote's Format menu: the commands of the text in Font and Text, then the menus of an object,
   // e.g. Image and Table
   Format: {
@@ -166,7 +186,7 @@ export function menuItems(app: App, bar: string, submenu?: string): MenuItem[] {
     const p = LAYOUT[bar]?.[name] ?? (at.length === 0 ? LAYOUT[bar]?.['*'] : undefined);
     const group = p && (at.length === 0 ? !p.parent : p.parent === at.at(-1)) ? p.group : first.group;
     const order = first.order + (p?.order ?? 0);
-    const item: MenuItem = members.length === 1 ? { command: first.c.id } : { label: name, items: () => menuItems(app, bar, name), disabled: !canRun(app, members.map((x) => x.c)) };
+    const item: MenuItem = members.length === 1 && !p?.keep ? { command: first.c.id } : { label: name, items: () => menuItems(app, bar, name), disabled: !canRun(app, members.map((x) => x.c)) };
     entries.push({ group, order, item });
   }
   entries.sort((a, b) => a.order - b.order);
@@ -178,6 +198,43 @@ export function menuItems(app: App, bar: string, submenu?: string): MenuItem[] {
     out.push(...items);
   }
   return out;
+}
+
+// a command of a menu of the menu bar, with the names of the menu and the submenus that lead to it
+export type MenuEntry = { command: string; label: string; path: string[] };
+
+// the commands of the menus of bars as they are shown, each once, in the order of the menus
+export function menuEntries(app: App, bars: string[]): MenuEntry[] {
+  const out: MenuEntry[] = [];
+  const seen = new Set<string>();
+  const walk = (items: MenuItem[], path: string[]) => {
+    for (const it of items) {
+      if ('command' in it && !seen.has(it.command)) {
+        seen.add(it.command);
+        out.push({ command: it.command, label: it.label ?? app.commands.label(it.command), path });
+      } else if ('items' in it) walk(typeof it.items === 'function' ? it.items() : it.items, [...path, it.label]);
+    }
+  };
+  for (const bar of bars) walk(menuItems(app, bar), [bar]);
+  return out;
+}
+
+// the lowercase letters of a label without accents and the ellipsis, as a search compares them
+const plain = (text: string) => text.normalize('NFD').replace(/\p{M}/gu, '').replace(/…/g, '').toLowerCase();
+
+// the entries whose label holds every word of query, as the search of the Help menu of macOS
+// matches the items of the menus: first the labels that start with the query, then the labels
+// with a word that starts with its first word, then the others, each in the order of the menus
+export function searchEntries(entries: MenuEntry[], query: string): MenuEntry[] {
+  const q = plain(query).trim();
+  const words = q.split(/\s+/).filter(Boolean);
+  if (!words.length) return [];
+  const rank = (label: string) => (label.startsWith(q) ? 0 : label.split(/[\s,(]+/).some((w) => w.startsWith(words[0])) ? 1 : 2);
+  return entries
+    .map((e, i) => ({ e, i, label: plain(e.label) }))
+    .filter((x) => words.every((w) => x.label.includes(w)))
+    .sort((a, b) => rank(a.label) - rank(b.label) || a.i - b.i)
+    .map((x) => x.e);
 }
 
 const CLIPBOARD = ['edit.cut', 'edit.copy', 'edit.paste'];
@@ -220,7 +277,32 @@ export function contextItems(app: App, kind: Context, target: Element | null): M
     last = group;
     out.push({ command: c.id, arg: { kind, target } });
   }
+  if (kind === 'canvas') addGrid(app, out);
+  // the menu of the browser, with its spelling guesses, is opened by a second right-click
+  if (kind === 'text' && out.length) out.push({ rule: true }, { note: browserNote(app) });
   return out;
+}
+
+// the submenu Grid and Guides and the switch of the rulers of the menu of a slide in PowerPoint,
+// after the items of the slide and before those of its backdrop
+const GRID: (string | null)[] = ['view.guides', 'view.grid', null, 'view.grid.snap', null, 'view.grid.settings'];
+
+function addGrid(app: App, out: MenuItem[]): void {
+  const items: MenuItem[] = GRID.filter((id) => id === null || app.commands.get(id)).map((id) => (id === null ? { rule: true } : { command: id }));
+  const add: MenuItem[] = [];
+  if (items.some((it) => 'command' in it)) add.push({ label: 'Grid and Guides', items });
+  if (app.commands.get('view.rulers')) add.push({ command: 'view.rulers' });
+  if (!add.length) return;
+  const at = out.findIndex((it) => 'command' in it && !['Edit', 'Slide', undefined].includes(app.commands.get(it.command)?.menu?.bar));
+  out.splice(at < 0 ? out.length : at, 0, { rule: true }, ...add, { rule: true });
+}
+
+// the note at the end of the menu of a text, on what a second right-click opens. a page cannot
+// read the spelling guesses of the browser, and it cannot open its menu either
+function browserNote(app: App): string {
+  const spelling = !!app.commands.get('edit.spelling') && app.commands.state('edit.spelling').checked;
+  if (!spelling) return 'Right-click again for the menu of the browser';
+  return app.platform === 'mac' ? 'Right-click again for spelling guesses and Look Up' : 'Right-click again for spelling guesses';
 }
 
 class Menu {
@@ -238,6 +320,10 @@ class Menu {
   // the row of the parent menu that opened this submenu
   anchorRow: HTMLElement | null = null;
   private typedAt = 0;
+  private ids = 0;
+  // the search field of the Help menu, the rows of its results before the rows of the items, and
+  // the commands that it searches
+  private search: { input: HTMLInputElement; results: HTMLElement; rows: Row[]; bars: string[] } | null = null;
 
   constructor(app: App, items: MenuItem[], options: MenuOptions, parent: Menu | null) {
     this.app = app;
@@ -250,14 +336,18 @@ class Menu {
     if (options.label) this.el.setAttribute('aria-label', options.label);
     if (options.className) this.el.classList.add(...options.className.split(' '));
     this.build(items);
-    // a press in a menu does not move the focus, and it is not seen by the editor below
-    this.el.addEventListener('pointerdown', (ev) => ev.preventDefault());
-    this.el.addEventListener('mousedown', (ev) => ev.preventDefault());
+    // a press in a menu does not move the focus, and it is not seen by the editor below. a press in
+    // the search field places the caret
+    const field = (ev: Event) => ev.target instanceof Element && !!ev.target.closest('.search input');
+    this.el.addEventListener('pointerdown', (ev) => field(ev) || ev.preventDefault());
+    this.el.addEventListener('mousedown', (ev) => field(ev) || ev.preventDefault());
     this.el.addEventListener('contextmenu', (ev) => ev.preventDefault());
     layer().append(this.el);
     this.place();
     if (options.owner) options.owner.setAttribute('aria-expanded', 'true');
-    if (options.keyboard) {
+    // the search field takes the focus at once, as in the Help menu of macOS
+    if (this.search) this.search.input.focus({ preventScroll: true });
+    else if (options.keyboard) {
       this.highlight(this.next(-1, 1));
       this.el.focus({ preventScroll: true });
     } else if (options.focus) this.el.focus({ preventScroll: true });
@@ -274,29 +364,85 @@ class Menu {
         const rule = make('div', 'rule');
         rule.setAttribute('role', 'separator');
         this.el.append(rule);
-        continue;
+      } else if ('note' in item) this.el.append(make('div', 'note', item.note));
+      else if ('search' in item) this.buildSearch(item.search.bars);
+      else {
+        const row = this.attach(this.row(item));
+        this.rows.push(row);
+        this.el.append(row.el);
       }
-      const row = this.row(item);
-      const i = this.rows.length;
-      this.rows.push(row);
-      row.el.addEventListener('pointermove', () => {
-        if (this.hi !== i) this.highlight(i, true);
-      });
-      row.el.addEventListener('pointerleave', () => {
-        if (!this.child && this.hi === i) this.highlight(-1);
-      });
-      row.el.addEventListener('click', () => this.activate(i));
-      // a press on a menu bar title held and released over an item runs it, as in macOS
-      row.el.addEventListener('pointerup', (ev) => {
-        if (ev.button === 0 && performance.now() - this.opened > 250) this.activate(i);
-      });
-      this.el.append(row.el);
     }
   }
 
-  private row(item: Exclude<MenuItem, { rule: true }>): Row {
+  // the listeners of a row, which find its index when they run, since the results of a search are
+  // put before the other rows
+  private attach(row: Row): Row {
+    const at = () => this.rows.indexOf(row);
+    row.el.addEventListener('pointermove', () => {
+      if (this.hi !== at()) this.highlight(at(), true);
+    });
+    row.el.addEventListener('pointerleave', () => {
+      if (!this.child && this.hi === at()) this.highlight(-1);
+    });
+    row.el.addEventListener('click', () => this.activate(at()));
+    // a press on a menu bar title held and released over an item runs it, as in macOS
+    row.el.addEventListener('pointerup', (ev) => {
+      if (ev.button === 0 && performance.now() - this.opened > 250) this.activate(at());
+    });
+    return row;
+  }
+
+  // the field Search at the top of the Help menu, with the commands that match under the heading
+  // Menu Items, each with the path of its menu and its keys, before the items of the menu
+  private buildSearch(bars: string[]): void {
+    const box = make('div', 'search');
+    const field = make('span', 'field');
+    const input = make('input');
+    input.type = 'search';
+    input.autocomplete = 'off';
+    input.spellcheck = false;
+    input.setAttribute('role', 'combobox');
+    input.setAttribute('aria-label', 'Search the menus');
+    input.setAttribute('aria-autocomplete', 'list');
+    input.setAttribute('aria-controls', this.el.id);
+    input.setAttribute('aria-expanded', 'false');
+    field.innerHTML = '<svg viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><circle cx="5" cy="5" r="3.6"/><path d="M7.7 7.7 11 11" stroke-linecap="round"/></svg>';
+    field.append(input);
+    box.append(make('span', 'name', 'Search'), field);
+    const results = make('div', 'results');
+    results.setAttribute('role', 'group');
+    results.setAttribute('aria-label', 'Menu Items');
+    this.el.append(box, results);
+    this.search = { input, results, rows: [], bars };
+    input.addEventListener('input', () => this.find());
+  }
+
+  // the results of the text of the search field, of which the first that can run is highlighted, so
+  // that Return runs it
+  private find(): void {
+    const s = this.search;
+    if (!s) return;
+    this.highlight(-1);
+    this.closeChild();
+    this.rows = this.rows.filter((r) => !s.rows.includes(r));
+    s.results.replaceChildren();
+    const found = searchEntries(menuEntries(this.app, s.bars), s.input.value);
+    s.rows = found.map((e) => this.attach(this.row({ command: e.command, path: e.path })));
+    if (s.input.value.trim()) {
+      s.results.append(make('div', 'heading', 'Menu Items'));
+      if (!s.rows.length) s.results.append(make('div', 'note', 'No menu items match'));
+      for (const r of s.rows) s.results.append(r.el);
+    }
+    this.rows = [...s.rows, ...this.rows];
+    s.input.setAttribute('aria-expanded', String(s.rows.length > 0));
+    const first = s.rows.findIndex((r) => r.enabled);
+    if (first >= 0) this.highlight(first);
+    this.place();
+  }
+
+  private row(item: Row['item']): Row {
     const el = make('div', 'item');
-    el.id = `${this.el.id}-${this.rows.length}`;
+    el.id = `${this.el.id}-${++this.ids}`;
     let label = '';
     let keys = '';
     let checked: boolean | null = null;
@@ -328,7 +474,9 @@ class Menu {
     if (checked) check.append(icon('check', 14));
     const arrow = make('span', 'arrow');
     if (submenu) arrow.append(icon('chevron-right', 12));
-    el.append(check, make('span', 'label', label), make('span', 'keys', keys), arrow);
+    const name = make('span', 'label', label);
+    if ('path' in item && item.path?.length) name.append(make('span', 'path', item.path.join(' ▸ ')));
+    el.append(check, name, make('span', 'keys', keys), arrow);
     return { el, item, enabled, submenu, text: label.toLowerCase() };
   }
 
@@ -378,10 +526,12 @@ class Menu {
     window.clearTimeout(this.childTimer);
     if (!row) {
       this.el.removeAttribute('aria-activedescendant');
+      this.search?.input.removeAttribute('aria-activedescendant');
       return;
     }
     row.el.classList.add('hi');
     this.el.setAttribute('aria-activedescendant', row.el.id);
+    this.search?.input.setAttribute('aria-activedescendant', row.el.id);
     row.el.scrollIntoView({ block: 'nearest' });
     if (this.child && this.child.anchorRow !== row.el) this.closeChild();
     if (fromPointer && row.submenu && row.enabled && !this.child) this.childTimer = window.setTimeout(() => this.openChild(false), 120);
@@ -460,9 +610,17 @@ class Menu {
   }
 
   // the keys of the deepest open menu. Left and Right move between the menus of the menu bar
-  // when the menu is not a submenu and its item does not open one
-  key(ev: KeyboardEvent): boolean {
+  // when the menu is not a submenu and its item does not open one. 'field' leaves a key to the
+  // search field and keeps it from the editor
+  key(ev: KeyboardEvent): boolean | 'field' {
     const row = this.rows[this.hi];
+    if (this.search && document.activeElement === this.search.input) {
+      const empty = !this.search.input.value;
+      if (ev.key === 'ArrowLeft' || ev.key === 'ArrowRight') {
+        if (!empty) return 'field';
+      } else if (ev.key === 'Home' || ev.key === 'End' || ev.key === ' ') return 'field';
+      else if (ev.key.length === 1 || ['Backspace', 'Delete'].includes(ev.key)) return 'field';
+    }
     switch (ev.key) {
       case 'ArrowDown':
         this.highlight(this.next(this.hi, 1));
@@ -547,8 +705,25 @@ let menuKey = false;
 window.addEventListener('keydown', (ev) => {
   menuKey = ev.key === 'ContextMenu' || (ev.key === 'F10' && ev.shiftKey);
 }, true);
+
+// whether the menu of a text or a cell was open at the last press, which the press closes
+let textMenu = false;
 window.addEventListener('pointerdown', () => {
   menuKey = false;
+  const kinds = stack[0]?.options.className?.split(' ') ?? [];
+  textMenu = kinds.includes('context') && (kinds.includes('text') || kinds.includes('cell'));
+}, true);
+
+// a second right-click in a text, or a right-click with ⌥ or Alt held, is left to the browser,
+// which opens its own menu with the spelling guesses, Look Up, and Translate. this listener is added
+// at the import of this module, before every other listener of the menus of the editor
+window.addEventListener('contextmenu', (ev) => {
+  const t = ev.target instanceof Element ? ev.target : null;
+  const again = textMenu && !!t?.closest('[contenteditable="true"]');
+  textMenu = false;
+  if (!t || t.closest('.beeson-edit-menu') || !(again || ev.altKey)) return;
+  closeMenus();
+  ev.stopImmediatePropagation();
 }, true);
 
 // a context menu takes the focus, and opened from the keyboard it highlights its first item
@@ -622,10 +797,8 @@ export function chromeSelect(app: App, options: { label: string; choices: () => 
 window.addEventListener('keydown', (ev) => {
   if (!stack.length) return;
   const handled = stack[stack.length - 1].key(ev);
-  if (handled) {
-    ev.preventDefault();
-    ev.stopImmediatePropagation();
-  }
+  if (handled) ev.stopImmediatePropagation();
+  if (handled === true) ev.preventDefault();
 }, true);
 
 // a press outside the open menus closes them. a press on the owner of the menu is left to the

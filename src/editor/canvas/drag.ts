@@ -10,7 +10,7 @@ import type { App } from '../app.ts';
 import type { TagEdit, Translate } from '../tags.ts';
 import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
-import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, constrained, containerOf, cssWidth, frameOf, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, onCanvas, orientedBox, pickOf, pictureOf, segmentTouches, sizedOf, snapBoxOf, toSlide, twinOf, visualRect } from './hit.ts';
+import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, constrained, containerOf, cssWidth, frameOf, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, onCanvas, orientedBox, pickOf, pictureOf, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, visualRect } from './hit.ts';
 import { groupReach, overlay, view } from './frames.ts';
 import { enterGroup, freshGroup, groupOf } from '../commands/order.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -27,6 +27,9 @@ const SNAP = 8;
 // the place of an element: its offset, its width, its height, and its angle in degrees, null where
 // its style does not set them. a height is written only on a stretched image or video
 export type Place = { translate: Translate | null; width: number | null; height?: number | null; rotate?: number | null };
+
+// the layers drawn over the slide by the editor, whose presses are presses on the canvas
+const OVERLAYS = '.beeson-overlay, .beeson-line-layer, .beeson-table-bars, .beeson-guides, .beeson-ruler';
 
 // an element with data-locked, which the pointer, the keys, and the fields do not move
 export const locked = (el: Element): boolean => el.hasAttribute('data-locked');
@@ -104,6 +107,40 @@ export function record(app: App, label: string, changes: { el: Element; from: Pl
 }
 
 export type Change = { el: Element; from: Place; to: Place };
+
+// a member of a group at the start of a turn of the group: its place, and its center on the screen,
+// about which its rotate turns it
+export type Turner = { el: Element; from: Place; center: { x: number; y: number } };
+
+// the members of a selected group that a turn moves, in the order of the page, whose first sets the
+// angle of the group, or null when els are not one whole group that every member of can be turned
+export function turnersOf(app: App, els: Element[]): Turner[] | null {
+  const id = els.length > 1 ? groupOf(els[0]) : null;
+  if (!id || !els.every((el) => groupOf(el) === id && turnable(el))) return null;
+  const top = els.filter((el) => !els.some((o) => o !== el && o.contains(el)) && el.getClientRects().length);
+  top.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
+  return top.map((el) => {
+    const r = el.getBoundingClientRect();
+    return { el, from: placeOf(el), center: { x: r.left + r.width / 2, y: r.top + r.height / 2 } };
+  });
+}
+
+// the place of a member t of a group turned by deg degrees about the point pivot on the screen: its
+// angle grows by deg, and its offset moves its center about pivot, in slide pixels at scale
+export function turnedPlace(t: Turner, pivot: { x: number; y: number }, deg: number, scale: number): Place {
+  const a = (deg * Math.PI) / 180;
+  const dx = t.center.x - pivot.x, dy = t.center.y - pivot.y;
+  const x = pivot.x + dx * Math.cos(a) - dy * Math.sin(a), y = pivot.y + dx * Math.sin(a) + dy * Math.cos(a);
+  const from = t.from.translate ?? { x: 0, y: 0 };
+  const rotate = (((t.from.rotate ?? 0) + deg) % 360 + 360) % 360;
+  return { ...t.from, translate: { x: from.x + (x - t.center.x) / scale, y: from.y + (y - t.center.y) / scale }, rotate: rotate || null };
+}
+
+// the center of the frame of a group on the screen, about which the group is turned
+export function pivotOf(els: Element[]): { x: number; y: number } {
+  const b = groupReach(els);
+  return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+}
 
 // a caption that follows the shown picture of its figure, as a caption of Keynote stays under its
 // image: its place before the change, and its upper left corner and the lower left corner of the
@@ -199,6 +236,8 @@ type Press = {
   size?: { width: number; height: number };
   // whether the grips of a group are pressed, which scale all its members about one anchor
   group?: boolean;
+  // the members of a group turned by its rotate handle about the center of its frame
+  turners?: Turner[];
   // the captions that follow the pictures of the drag, read at its first move
   trail?: Trailer[];
 };
@@ -285,18 +324,21 @@ export function install(app: App): void {
   const freeResize = (ev: MouseEvent) => (mac() ? ev.metaKey : ev.altKey);
   const aboutCenter = (ev: MouseEvent) => (mac() ? ev.altKey : ev.ctrlKey);
 
-  // a press on the canvas takes the keys from a control of the chrome, e.g. a tab of the
-  // inspector, so that Esc and the arrows reach the selection, as after a click on the canvas of
-  // Keynote. the press is cancelled, hence the browser does not move the focus by itself
-  const leaveChrome = () => {
+  // a press on the slide, or on a frame, a grip, a line, a bar of a table, a ruler, or a guide of
+  // the canvas, takes the keys from a control of the chrome, e.g. a tab of the inspector, so that
+  // Esc and the arrows reach the selection, as after a click on the canvas of Keynote. most of
+  // these presses are cancelled, hence the browser does not move the focus by itself. the listener
+  // is added before those of the lines, the tables, and the guides, which stop the press
+  window.addEventListener('pointerdown', (ev) => {
+    const target = ev.target instanceof Element ? ev.target : null;
+    if (!target || !(onCanvas(target, app, { x: ev.clientX, y: ev.clientY }) || target.closest(OVERLAYS))) return;
     const a = document.activeElement;
     if (a instanceof HTMLElement && a !== document.body && !app.hostOf(a) && !a.closest('.reveal, .beeson-handle')) a.blur();
-  };
+  }, true);
 
   const leaveText = () => {
     const host = app.hostOf(document.activeElement);
     if (host) (host as HTMLElement).blur();
-    else leaveChrome();
   };
 
   // the lines that a drag of els snaps to: the other elements of the slide, the figure around an
@@ -366,13 +408,25 @@ export function install(app: App): void {
     const sel = app.selection;
     if (target === frames.rotor) {
       const el = sel.only();
-      if (!el || locked(el)) return;
+      const box = frames.groupBox();
+      const turners = !el && box ? turnersOf(app, sel.elements()) : null;
+      if (!turners && (!el || locked(el))) return;
       ev.preventDefault();
       ev.stopPropagation();
-      leaveChrome();
-      const r = el.getBoundingClientRect();
-      const center = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-      Object.assign(start('rotate', ev, el, [el], null), { center, angle: Math.atan2(ev.clientY - center.y, ev.clientX - center.x) * 180 / Math.PI });
+      let center: { x: number; y: number };
+      let p: Press;
+      if (turners && box) {
+        // a group turns about the center of its frame, which is drawn turned with it
+        center = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
+        p = start('rotate', ev, turners[0].el, turners.map((t) => t.el), null);
+        p.turners = turners;
+        view.turn = { box, deg: 0 };
+      } else {
+        const r = (el as Element).getBoundingClientRect();
+        center = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        p = start('rotate', ev, el, [el as Element], null);
+      }
+      Object.assign(p, { center, angle: Math.atan2(ev.clientY - center.y, ev.clientX - center.x) * 180 / Math.PI });
       document.documentElement.classList.add('beeson-rotating');
       return;
     }
@@ -381,7 +435,6 @@ export function install(app: App): void {
       // the grips of a group: each member is a follower of the box of the group
       ev.preventDefault();
       ev.stopPropagation();
-      leaveChrome();
       const f = frameOf(app);
       const all = sel.elements().filter((o) => !locked(o));
       const followers: Follower[] = all.filter((o) => !all.some((x) => x !== o && x.contains(o))).map((o) => {
@@ -402,7 +455,6 @@ export function install(app: App): void {
       if (!el || !sized.length || locked(el)) return;
       ev.preventDefault();
       ev.stopPropagation();
-      leaveChrome();
       const pic = pictureOf(el);
       const f = frameOf(app);
       const all = sel.elements();
@@ -543,11 +595,18 @@ export function install(app: App): void {
     const el = p.els[0];
     const c = p.center as { x: number; y: number };
     const now = Math.atan2(ev.clientY - c.y, ev.clientX - c.x) * 180 / Math.PI;
-    let deg = (p.from.get(el)?.rotate ?? 0) + now - (p.angle ?? 0);
+    const was = p.from.get(el)?.rotate ?? 0;
+    let deg = was + now - (p.angle ?? 0);
     deg = ev.shiftKey ? Math.round(deg / 15) * 15 : Math.round(deg);
     deg = ((deg % 360) + 360) % 360;
-    writeLive(el, { ...(p.from.get(el) as Place), rotate: deg || null });
-    view.moving = [el];
+    if (p.turners) {
+      // the angle of a group is that of its first member, as in the field Angle
+      const by = deg - was;
+      const scale = frameOf(app).scale;
+      for (const t of p.turners) writeLive(t.el, turnedPlace(t, c, by, scale));
+      if (view.turn) view.turn.deg = by;
+    } else writeLive(el, { ...(p.from.get(el) as Place), rotate: deg || null });
+    view.moving = p.els;
     view.resizing = true;
     view.readout = { text: `${deg}°`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     frames.draw();
@@ -748,6 +807,7 @@ export function install(app: App): void {
     document.documentElement.classList.remove('beeson-dragging', 'beeson-resizing', 'beeson-rotating');
     view.moving = null;
     view.resizing = false;
+    view.turn = null;
     view.guides = [];
     view.spacing = [];
     view.marquee = null;

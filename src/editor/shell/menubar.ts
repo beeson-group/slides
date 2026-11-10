@@ -3,7 +3,8 @@
 // the middle, and at the right Which? and the Autosave switch. a title is a menu item of a menubar
 // with a roving tabindex: Left and Right move between the titles, and Down, Enter, or Space opens
 // the menu. while a menu is open, the pointer over another title opens its menu, and Left and
-// Right in a menu open the menu beside it. a menu without an item is dimmed
+// Right in a menu open the menu beside it. a menu without an item is dimmed. the Help menu opens
+// with a search field over the commands of every menu, as in macOS
 
 import type { App } from '../app.ts';
 import { canWrite, fileName } from '../file/files.ts';
@@ -98,13 +99,15 @@ export function install(app: App): void {
       if (keyboard) title.focus();
       return;
     }
-    const menu = openMenu(app, menuItems(app, name), {
+    const help = name === 'Help';
+    const items = menuItems(app, name);
+    const menu = openMenu(app, help ? [{ search: { bars: MENUS } }, { rule: true }, ...items] : items, {
       anchor: title.getBoundingClientRect(),
       placement: 'below',
       owner: title,
       keyboard,
       label: name,
-      className: 'bar',
+      className: help ? 'bar help' : 'bar',
       onClose: () => {
         if (open?.menu === menu) open = null;
       },

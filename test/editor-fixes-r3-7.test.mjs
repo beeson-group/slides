@@ -435,6 +435,9 @@ const tree = (page) => page.evaluate(`(() => {
   return Object.fromEntries(${JSON.stringify(MENUS)}.map((bar) => [bar, walk(window.BeesonEditorShell.menuItems(bar))]));
 })()`);
 
+// the submenus of one item kept as the apps name them, e.g. Edit > Spelling and Grammar of R7.3
+const ONE = ['Edit > Spelling and Grammar'];
+
 // the paths of the submenus of one item, and of the groups of one item between two rules
 function sparse(items, path, out = []) {
   const groups = [[]];
@@ -442,7 +445,7 @@ function sparse(items, path, out = []) {
   if (groups.length > 1) for (const g of groups) if (g.length === 1 && typeof g[0] === 'string') out.push(`${path} > ${g[0]} is a group of one item`);
   for (const i of items) {
     if (typeof i !== 'object') continue;
-    if (i.items.filter((x) => x !== '|').length === 1) out.push(`${path} > ${i.label} is a submenu of one item`);
+    if (i.items.filter((x) => x !== '|').length === 1 && !ONE.includes(`${path} > ${i.label}`)) out.push(`${path} > ${i.label} is a submenu of one item`);
     sparse(i.items, `${path} > ${i.label}`, out);
   }
   return out;

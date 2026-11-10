@@ -12,6 +12,7 @@
 
 import type { App } from '../app.ts';
 import { mathLookup } from '../math.ts';
+import { fileIndexes } from '../layers.ts';
 import { tokenize } from '../tokens.ts';
 import { isRuntimeClass } from '../render.ts';
 import { renderTag, type TagEdit } from '../tags.ts';
@@ -120,6 +121,8 @@ export function textTarget(app: App): Target | null {
 export function rangeTex(root: Element, range: Range): string {
   const div = document.createElement('div');
   div.append(range.cloneContents());
+  const indexed = '[data-fragment-index]';
+  fileIndexes([...root.querySelectorAll(indexed)].filter((el) => range.intersectsNode(el)), [...div.querySelectorAll(indexed)]);
   const lookup = mathLookup();
   const outer = (m: Element) => !m.parentElement?.closest('mjx-container');
   const live = [...root.querySelectorAll('mjx-container')].filter((m) => outer(m) && range.intersectsNode(m));

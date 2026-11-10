@@ -8,7 +8,7 @@
 
 import type { App } from '../app.ts';
 import { groupBoxOf, heightSet, positionOf, resizable, sizeOf, targetsOf } from '../commands/align.ts';
-import { angleOf } from '../commands/order.ts';
+import { angleOf, groupAngle } from '../commands/order.ts';
 import { imageOf } from '../commands/figure.ts';
 import { turnable } from '../canvas/hit.ts';
 import { GLYPHS, button, checkbox, note, numberField, row, section, segmented, type Control, type Run } from './controls.ts';
@@ -88,7 +88,8 @@ export function arrangePane(app: App, run: Run): Control[] {
         numberField(app, {
           label: 'Angle',
           unit: '°',
-          value: () => shared(live().map(angleOf)),
+          // the angle of a group is that of its first member, which a typed angle turns it to
+          value: () => (group() ? groupAngle(app, live()) : shared(live().map(angleOf))),
           commit: (deg) => run('arrange.setRotation', { deg, els: live() }),
           enabled: () => live().some(turnable),
         }),

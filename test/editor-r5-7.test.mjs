@@ -151,6 +151,28 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(field, { value: 'abc d', focused: true });
     assert.deepEqual(errors(page), []);
   });
+
+  // the keys come while the formula is written, before its TeX field is open, and D, which flips
+  // the mode of the slide on the canvas, is a key of the TeX
+  test(`every key typed while Insert > Formula writes its formula reaches its TeX field on ${platform}`, async () => {
+    const page = await editor(platform, 5);
+    const source = page.source;
+    const dark = (await state(page, 'view.slideDark')).checked;
+    await page.evaluate(`(() => { const t = MathJax.typesetPromise.bind(MathJax); MathJax.typesetPromise = (n) => new Promise((d) => setTimeout(d, 150)).then(() => t(n)); })()`);
+    await page.evaluate(`void window.BeesonEditor.exec('insert.formula'), true`);
+    await burst(page, 'abc d');
+    assert.ok(await until(page, `!!document.querySelector('.beeson-math textarea')`), 'the TeX field does not open');
+    await wait(page, 300);
+    const field = await page.evaluate(`(() => { const f = document.querySelector('.beeson-math textarea'); return { value: f.value, focused: f === document.activeElement }; })()`);
+    assert.deepEqual(field, { value: 'abc d', focused: true });
+    assert.equal((await state(page, 'view.slideDark')).checked, dark, 'a key of the TeX flips the mode of the slide');
+    await page.evaluate(`[...document.querySelectorAll('.beeson-math button')].find((b) => b.textContent === 'Insert').click()`);
+    assert.ok(await until(page, `!document.querySelector('.beeson-math')`), 'the formula is not inserted');
+    assert.match(await render(page), /<div class="math">\\\[abc d\\\]<\/div>/);
+    await undoAll(page, source);
+    await saved(page);
+    assert.deepEqual(errors(page), []);
+  });
 }
 
 // the caret put at the end of the first element at selector, or the whole text of it selected,

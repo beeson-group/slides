@@ -7,8 +7,8 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { locked, placeOf, record, writePlace } from '../canvas/drag.ts';
-import { RESIZABLE, containerOf, turnable } from '../canvas/hit.ts';
+import { locked, pivotOf, placeOf, record, turnedPlace, turnersOf, writePlace } from '../canvas/drag.ts';
+import { RESIZABLE, containerOf, frameOf, turnable, twinOf } from '../canvas/hit.ts';
 
 export type Order = 'front' | 'forward' | 'backward' | 'back';
 
@@ -85,8 +85,10 @@ async function reorder(app: App, order: Order): Promise<void> {
   app.invalidate('content');
 }
 
-// the members of a group on the page
-const membersOf = (app: App, id: string): Element[] => [...(app.current() ?? document).querySelectorAll(`[data-group="${CSS.escape(id)}"]`)].filter((el) => !!app.pairing?.elements.get(el)?.open);
+// the members of a group on the page, apart from the hidden image of a dark and light pair, which
+// follows its twin
+const membersOf = (app: App, id: string): Element[] => [...(app.current() ?? document).querySelectorAll(`[data-group="${CSS.escape(id)}"]`)]
+  .filter((el) => !!app.pairing?.elements.get(el)?.open && !(twinOf(app, el) && !el.getClientRects().length));
 
 // a name of a group that is not on the page or in the file
 export function freshGroup(app: App): string {
@@ -137,6 +139,13 @@ function setLock(app: App, on: boolean): void {
 
 // the angle of el in degrees, from 0 to 359
 export const angleOf = (el: Element): number => placeOf(el).rotate ?? 0;
+
+// the angle of a whole group, i.e. of its first member in the order of the page, or null when els
+// are not one whole group that can be turned
+export function groupAngle(app: App, els: Element[]): number | null {
+  const turners = turnersOf(app, els);
+  return turners ? angleOf(turners[0].el) : null;
+}
 
 // the member of a group selected by itself with enterGroup, which keepGroups leaves alone while it
 // is the whole selection
@@ -263,7 +272,8 @@ export function commands(): Command[] {
       run: (app) => setLock(app, !selectedEls(app).every(locked)),
     },
     {
-      // arg is { deg, els }, the angle in degrees, of the elements, or of the selection by default
+      // arg is { deg, els }, the angle in degrees, of the elements, or of the selection by default.
+      // a whole group is turned about the center of its frame until its first member is at deg
       id: 'arrange.setRotation',
       label: 'Rotate',
       enabled: (app) => selectedEls(app).some(turnable),
@@ -271,7 +281,22 @@ export function commands(): Command[] {
         const a = (arg ?? {}) as { deg?: number; els?: Element[] };
         if (typeof a.deg !== 'number' || !Number.isFinite(a.deg)) return;
         const deg = ((Math.round(a.deg) % 360) + 360) % 360;
-        const changes = (a.els ?? selectedEls(app)).filter((el) => el.isConnected && turnable(el)).map((el) => {
+        const els = (a.els ?? selectedEls(app)).filter((el) => el.isConnected);
+        const turners = turnersOf(app, els);
+        if (turners) {
+          const pivot = pivotOf(turners.map((t) => t.el));
+          const scale = frameOf(app).scale;
+          const by = deg - angleOf(turners[0].el);
+          const changes = turners.map((t) => {
+            const to = turnedPlace(t, pivot, by, scale);
+            writePlace(app, t.el, to);
+            return { el: t.el, from: t.from, to };
+          });
+          record(app, 'rotate', changes);
+          app.invalidate('content');
+          return;
+        }
+        const changes = els.filter((el) => turnable(el)).map((el) => {
           const from = placeOf(el);
           const to = { ...from, rotate: deg || null };
           writePlace(app, el, to);
@@ -285,7 +310,11 @@ export function commands(): Command[] {
       id: 'arrange.resetRotation',
       label: 'Reset Rotation',
       menu: { bar: 'Arrange', group: 'reset', order: 12 },
-      enabled: (app) => selectedEls(app).some((el) => turnable(el) && angleOf(el) !== 0),
+      enabled: (app) => {
+        const els = selectedEls(app);
+        const group = groupAngle(app, els);
+        return group !== null ? group !== 0 : els.some((el) => turnable(el) && angleOf(el) !== 0);
+      },
       run: (app) => app.commands.run('arrange.setRotation', { deg: 0 }),
     },
   );
