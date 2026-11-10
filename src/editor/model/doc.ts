@@ -375,8 +375,9 @@ export class Doc {
     const node = document.importNode(fragmentRoot(fragment)!.node, true) as Element;
     parent.insertBefore(node, before && before.parentNode === parent ? before : null);
     // every step is shown while the deck is edited, which reveal.js marks only on the fragments of
-    // its start, hence the highlights of a new fragment are colored once it is marked
-    for (const f of [node, ...node.querySelectorAll('.fragment')]) if (f.classList.contains('fragment')) f.classList.add('visible');
+    // its start, hence the highlights of a new slide are colored once its fragments are marked. an
+    // element is left unmarked, since a marked paragraph is not a body paragraph of text/blocks.ts
+    if (node.localName === 'section') for (const f of node.querySelectorAll('.fragment')) f.classList.add('visible');
     const mj = window.MathJax;
     if (mj?.typesetPromise) await mj.typesetPromise([node]);
     mergePairing(pairing, pairFragment(fragment, node, this.host.math()));
