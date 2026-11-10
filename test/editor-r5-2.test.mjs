@@ -696,6 +696,29 @@ for (const platform of PLATFORMS) {
   });
 }
 
+// the first click on the image of a locked figure selected the image, which is not locked itself,
+// and was then moved, resized, and rotated past the lock of its figure
+for (const platform of PLATFORMS) {
+  test(`${platform}: the first click on the image of a locked figure selects the figure, which is not moved or rotated`, async () => {
+    const page = await editor(platform);
+    await selectFigure(page, ZONE_IMG);
+    await press(page, 'Mod+L');
+    await frames(page);
+    const locked = await render(page);
+    assert.match(locked, /<figure class="zone fragment" data-fragment-index="2" data-locked>/, 'the figure is not locked');
+    await press(page, 'Escape');
+    await click(page, ZONE_IMG);
+    await frames(page);
+    assert.deepEqual(await selected(page), ['figure.zone'], 'the first click on the image of a locked figure does not select the figure');
+    assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-rotor')].filter((r) => !r.hidden && r.getBoundingClientRect().width).length`), 0, 'a rotate grip is drawn on a locked figure');
+    const k = await scaleOf(page);
+    await drag(page, ZONE_IMG, { dx: 120 * k, dy: 40 * k });
+    await frames(page);
+    assert.equal(await render(page), locked, 'a drag of the image changes a locked figure');
+    assert.deepEqual(errors(page), []);
+  });
+}
+
 // the frames, the grips, and the boxes of the members of the selection, in CSS px of the viewport.
 // a text block is boxed by its frame, 6 px outside its text, and a figure by its drawn picture
 const groupView = (page) => page.evaluate(`(() => {
