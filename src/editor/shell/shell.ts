@@ -11,6 +11,7 @@ import { ask, type DialogOptions } from '../ui/dialog.ts';
 import { injectStyle, make, store, stored } from '../ui/dom.ts';
 import { fillFormat as fillPanes } from '../inspector/inspector.ts';
 import { closeMenus, openContextMenu, openMenu, menuItems, type MenuItem } from '../ui/menu.ts';
+import { keyClashes } from './keys-sheet.ts';
 
 const NAV_KEY = 'beeson-nav-w';
 const NAV_MIN = 140;
@@ -287,6 +288,7 @@ export function install(app: App): void {
     menuItems: (bar: string, submenu?: string) => menuItems(app, bar, submenu),
     context: (kind: Context, x: number, y: number) => !!openContextMenu(app, kind, null, { x, y }),
     closeMenus,
+    keyClashes: () => keyClashes(app),
     ask: (options: DialogOptions, focus?: string) => ask(options, focus),
   };
 }

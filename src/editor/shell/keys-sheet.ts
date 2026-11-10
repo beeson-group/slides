@@ -6,7 +6,7 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { keysOf } from '../commands.ts';
+import { DEFAULT_REGIONS, boundKeys, keysOf } from '../commands.ts';
 import { display } from '../keymap.ts';
 import { button, injectStyle, make } from '../ui/dom.ts';
 import { menuItems, type MenuItem } from '../ui/menu.ts';
@@ -72,6 +72,23 @@ export function sheetRows(app: App): SheetRow[] {
   }
   const rank = (bar: string) => (bar === 'Other' ? Infinity : [...MENUS, ...extra].indexOf(bar));
   return rows.map((r, i) => ({ r, i })).sort((a, b) => rank(a.r.bar) - rank(b.r.bar) || a.i - b.i).map(({ r }) => r);
+}
+
+// the keys of the sheet that run two enabled commands in the region of the focus, each as the key
+// and the ids of its commands, e.g. ⇧F3: find.previous, text.case.cycle. a key is meant to run one
+// command in each state of the editor, the first enabled one that the registry finds
+export function keyClashes(app: App): string[] {
+  const platform = app.platform;
+  const region = app.region();
+  const listed = new Set(sheetRows(app).flatMap((r) => r.keys));
+  const by = new Map<string, string[]>();
+  for (const c of app.commands.list()) {
+    if (!(c.in ?? DEFAULT_REGIONS).includes(region) || !app.commands.enabled(c.id)) continue;
+    for (const key of new Set(boundKeys(c, platform).map((k) => display(k, platform)))) {
+      if (listed.has(key)) by.set(key, [...(by.get(key) ?? []), c.id]);
+    }
+  }
+  return [...by].filter(([, ids]) => ids.length > 1).map(([key, ids]) => `${key}: ${ids.join(', ')}`);
 }
 
 // the groups split in their order into n columns, with the tallest column as short as it can be
