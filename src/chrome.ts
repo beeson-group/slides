@@ -12,7 +12,8 @@ const APPENDIX = 'Appendix slides';
 
 // the running heads and the outlines are filled from every slide of the deck, since the slides of
 // reveal.js leave out the section slides, which are not numbered. a section slide in the appendix
-// names the slides after it
+// names the slides after it. a running head made here is marked with data-generated, and one
+// written in the file is kept
 export function initChrome(): void {
   const slides = [...document.querySelectorAll<HTMLElement>('.reveal .slides section:not(:has(> section))')];
   const sections = slides.filter((s) => s.classList.contains('section'));
@@ -23,6 +24,7 @@ export function initChrome(): void {
     if (OWN.some((c) => slide.classList.contains(c)) || slide.querySelector('.run') || !text) continue;
     const run = document.createElement('div');
     run.className = 'run';
+    run.dataset.generated = '';
     run.textContent = text;
     slide.append(run);
   }
@@ -37,4 +39,11 @@ export function initChrome(): void {
       }),
     );
   }
+}
+
+// the running heads and the outlines filled again, after the slides were added, removed, or
+// reordered in the editor
+export function refreshChrome(): void {
+  for (const run of document.querySelectorAll('.reveal .slides div.run[data-generated]')) run.remove();
+  initChrome();
 }
