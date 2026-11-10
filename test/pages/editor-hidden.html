@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Hidden slide deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+</head>
+<body>
+<!-- the second slide is hidden with data-visibility, which reveal.js removes from the page unless
+     showHiddenSlides is set, hence its texts are edited only with the option -->
+<div class="reveal">
+  <div class="slides">
+    <section>
+      <h2>Shown</h2>
+      <p>The first slide.</p>
+    </section>
+    <section data-visibility="hidden">
+      <h2>Hidden</h2>
+      <p>The hidden slide.</p>
+    </section>
+    <section>
+      <h2>Last</h2>
+      <p>The last slide.</p>
+    </section>
+  </div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>
