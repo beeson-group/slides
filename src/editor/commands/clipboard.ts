@@ -14,6 +14,7 @@ import type { Translate } from '../tags.ts';
 import { insertFiles } from '../media/actions.ts';
 import { kindOf } from '../media/store.ts';
 import { freshGroup } from './order.ts';
+import { withTwins } from '../canvas/hit.ts';
 import { VOID } from '../source.ts';
 import { tokenize } from '../tokens.ts';
 import { MARK, docOf, slidesIn } from './slide.ts';
@@ -245,7 +246,8 @@ export function install(app: App): void {
       const data = arg instanceof DataTransfer ? arg : null;
       // in a text, the command of the browser, which a click on a menu item allows
       if (inText(a)) return void document.execCommand('cut');
-      const els = selectedElements(a);
+      // the image of the other mode beside a cut image goes with it
+      const els = withTwins(a, selectedElements(a));
       if (!els.length) return a.commands.run('slide.cut', data ?? undefined);
       copy(a, els, data);
       a.selection.clear();

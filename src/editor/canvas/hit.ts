@@ -169,6 +169,14 @@ export function twinOf(app: App, el: Element): Element | null {
   return twin && first(twin) === el && app.pairing?.elements.get(twin)?.open ? twin : null;
 }
 
+// els with the twin of each image or video after it, for a change that takes the pair off
+export function withTwins(app: App, els: Element[]): Element[] {
+  return els.flatMap((el) => {
+    const twin = twinOf(app, el);
+    return twin && !els.includes(twin) ? [el, twin] : [el];
+  });
+}
+
 // the element whose picture stands for el in its frame and its resize: the shown image, video, or
 // QR code of a figure, or el itself
 export function pictureOf(el: Element): Element {
