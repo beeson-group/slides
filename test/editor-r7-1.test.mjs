@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
 
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
@@ -33,6 +33,7 @@ const exec = (page, id, arg) => page.evaluate(`window.BeesonEditor.exec(${js(id)
 const state = (page, id) => page.evaluate(`window.BeesonEditor.state(${js(id)})`);
 const render = (page) => page.evaluate('window.BeesonEditor.render()');
 const frames = (page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => d(true))))');
+const wait = (page, ms) => page.evaluate(`new Promise((d) => setTimeout(() => d(true), ${ms}))`);
 const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 
 // the editor on the slide n of a deck served over HTTP, with the Format tab shown
@@ -102,4 +103,80 @@ for (const platform of PLATFORMS) {
     assert.ok(near(readout.w, f.w) && near(readout.h, f.h), `after the resize the fields read ${js(f)}, and the last readout ${readout.text}`);
     assert.deepEqual(errors(page), []);
   });
+}
+
+// placedOf returns the box in slide px of the new text box, or of the paragraph Typed once it is
+// written, the boxes of the footnotes of the current slide, the size of the slide, and the visible
+// part of the slide in the canvas
+const placedOf = (page) =>
+  page.evaluate(`(() => {
+    const slides = document.querySelector('.reveal .slides');
+    const top = slides.getBoundingClientRect();
+    const s = top.width / slides.offsetWidth;
+    const box = (r) => ({ left: (r.left - top.left) / s, top: (r.top - top.top) / s, right: (r.right - top.left) / s, bottom: (r.bottom - top.top) / s });
+    const sec = document.querySelector('.reveal section.present');
+    const el = document.querySelector('.beeson-pending') ?? [...sec.querySelectorAll('p')].find((p) => p.textContent === 'Typed');
+    const v = document.querySelector('.beeson-edit-canvas').getBoundingClientRect();
+    const seen = box(new DOMRect(v.left, v.top, v.width, v.height));
+    const w = sec.offsetWidth, h = sec.offsetHeight;
+    const visible = { left: Math.max(0, seen.left), top: Math.max(0, seen.top), right: Math.min(w, seen.right), bottom: Math.min(h, seen.bottom) };
+    return { box: box(el.getBoundingClientRect()), feet: [...sec.querySelectorAll('.foot')].map((f) => box(f.getBoundingClientRect())), w, h, visible };
+  })()`);
+
+// item 2 of R7.1: on a slide without room under its text column, a new text box was put under the
+// lowest block, over the footnote or under the slide. it is put at the center of the visible part
+// of the slide, as Keynote puts a new object, moved up off the footnote and into the slide
+const meets = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+const SMALL = '.reveal section.present > p.small';
+for (const platform of PLATFORMS) {
+  for (const { name, y, zoom } of [
+    { name: 'over the footnote', y: 880 },
+    { name: 'under the slide', y: 1000 },
+    { name: 'under the slide at Actual Size, scrolled to the upper left', y: 1000, zoom: true },
+  ]) {
+    test(`a new text box that would be ${name} is put at the center of the visible slide (${platform})`, async (t) => {
+      const page = await load(t, platform, { n: 2 });
+      // the small paragraph under the list is selected and moved down to the top y
+      await click(page, SMALL);
+      await press(page, 'Escape');
+      await exec(page, 'arrange.setPosition', { y });
+      await frames(page);
+      assert.match(await page.evaluate(`document.querySelector(${js(SMALL)}).getAttribute('style') ?? ''`), /translate/);
+      page.source = await render(page);
+      if (zoom) {
+        await exec(page, 'zoom.actual');
+        await page.evaluate(`(() => { const c = document.querySelector('.beeson-edit-canvas'); c.scrollLeft = 0; c.scrollTop = 0; })()`);
+        await frames(page);
+      }
+      await exec(page, 'insert.text');
+      await frames(page);
+      const check = (at, what) => {
+        const { box, feet, w, h, visible } = at;
+        assert.ok(box.left >= -1 && box.top >= -1 && box.right <= w + 1 && box.bottom <= h + 1, `the ${what} at ${js(box)} is off the slide of ${w} by ${h}`);
+        for (const f of feet) assert.ok(!meets(box, f), `the ${what} at ${js(box)} is over the footnote at ${js(f)}`);
+        // the center of the visible part, moved as little as it takes to keep the box in the slide
+        const bw = box.right - box.left, bh = box.bottom - box.top;
+        const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
+        const cx = clamp((visible.left + visible.right) / 2, bw / 2, w - bw / 2);
+        const cy = clamp((visible.top + visible.bottom) / 2, bh / 2, h - bh / 2);
+        assert.ok(Math.abs((box.left + box.right) / 2 - cx) <= 2, `the ${what} at ${js(box)} is not centered at x ${cx} of the visible part ${js(visible)}`);
+        // a box centered over a footnote is moved up until it is clear of the footnote
+        const centered = { left: cx - bw / 2, right: cx + bw / 2, top: cy - bh / 2, bottom: cy + bh / 2 };
+        const under = feet.filter((f) => meets(centered, f));
+        if (!under.length) assert.ok(Math.abs((box.top + box.bottom) / 2 - cy) <= 2, `the ${what} at ${js(box)} is not centered at y ${cy} of the visible part ${js(visible)}`);
+        else assert.ok(box.bottom >= Math.min(...under.map((f) => f.top)) - 40, `the ${what} at ${js(box)} is moved further up than the footnote at ${js(under)}`);
+      };
+      const empty = await placedOf(page);
+      check(empty, 'empty box');
+      await type(page, 'Typed');
+      await wait(page, 300);
+      const written = await placedOf(page);
+      check(written, 'written box');
+      assert.ok(Math.abs(written.box.left - empty.box.left) <= 1 && Math.abs(written.box.top - empty.box.top) <= 1, `the box is moved from ${js(empty.box)} to ${js(written.box)} when it is written`);
+      const tag = (await render(page)).match(/<p style="translate: -?\d+px -?\d+px">Typed<\/p>/)?.[0];
+      assert.ok(tag, 'the box is written with its offset');
+      await roundTrip(page, [['A small paragraph.</p>\n', `A small paragraph.</p>\n  ${tag}\n`]]);
+      assert.deepEqual(errors(page), []);
+    });
+  }
 }
