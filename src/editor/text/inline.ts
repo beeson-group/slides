@@ -5,7 +5,7 @@
 // after, as typing is, and the command around it makes it one entry of the history
 
 import type { App } from '../app.ts';
-import { canSetList, listKind, paragraphStyle, setList, setStyle, styleOf, textTarget, type ListKind, type ParagraphStyle, type Target } from './blocks.ts';
+import { canSetList, listKind, paragraphStyle, selectedBlocks, setList, setStyle, styleOf, textTarget, type ListKind, type ParagraphStyle, type Target } from './blocks.ts';
 
 export type Match = (el: Element) => boolean;
 
@@ -61,9 +61,12 @@ export function inlineTargets(app: App, notes = false): Target[] {
     const range = wordRange(t.range);
     return range.collapsed ? [] : [{ host: t.host, range }];
   }
-  return app.selection.elements().filter((el) => app.pairing?.byLive.has(el) && !el.matches('aside.notes')).map((host) => {
+  // an item takes its own text, without its nested list, which is a block of its own
+  return selectedBlocks(app).map((host) => {
     const range = document.createRange();
     range.selectNodeContents(host);
+    const nested = [...host.children].find((c) => c.matches('ul, ol'));
+    if (nested) range.setEndBefore(nested);
     return { host, range };
   });
 }
