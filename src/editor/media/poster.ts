@@ -27,6 +27,23 @@ function loaded(video: HTMLVideoElement, event: string): Promise<void> {
 const seekable = (video: HTMLVideoElement, s: number): boolean =>
   [...Array(video.seekable.length).keys()].some((i) => video.seekable.start(i) <= s && s <= video.seekable.end(i));
 
+// a frame is decoded once a seek ends, also in Safari, which does not paint at loadeddata. the
+// frame is thus read only once the video is at time s and is not seeking, however long the seek
+// takes on a slow machine. a browser may not end a seek to the time that the video is at, hence
+// such a seek is waited for 500 ms at most
+async function seekTo(video: HTMLVideoElement, s: number): Promise<void> {
+  const there = () => !video.seeking && Math.abs(video.currentTime - s) < 0.25;
+  const already = there();
+  const seeked = loaded(video, 'seeked');
+  video.currentTime = s;
+  if (already) {
+    await Promise.race([seeked.catch(() => {}), new Promise((done) => setTimeout(done, 500))]);
+    return;
+  }
+  await seeked;
+  while (!there()) await loaded(video, 'seeked');
+}
+
 // the frame of the video at url at time s, or its last frame for a time past its end. a video
 // that cannot be sought there, e.g. from a server without byte ranges, is read again from a copy
 // in memory. it fails for a video that the browser cannot play, and for a video of another origin,
@@ -46,11 +63,7 @@ export async function firstFrame(url: string, time = 0): Promise<Blob> {
       video.src = copy;
       await loaded(video, 'loadeddata');
     }
-    // a frame is decoded once a seek ends, also in Safari, which does not paint at loadeddata. a
-    // browser that does not end a seek to the time it is at is waited for 500 ms
-    const seeked = loaded(video, 'seeked').catch(() => {});
-    video.currentTime = at;
-    await Promise.race([seeked, new Promise((done) => setTimeout(done, 500))]);
+    await seekTo(video, at);
     const canvas = document.createElement('canvas');
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
