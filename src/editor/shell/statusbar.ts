@@ -22,14 +22,27 @@ const CSS = `
 .beeson-edit-bottom .hint { flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .beeson-edit-bottom .zoom { display: flex; align-items: center; gap: 2px; }
 .beeson-edit-bottom .zoom button { padding: 0 4px; }
-.beeson-edit-bottom input[type=range] { width: 120px; height: 16px; margin: 0 2px; accent-color: var(--ed-select); }
+/* the percentage keeps one width, so that the slider stays under the pointer while the zoom changes */
+.beeson-edit-bottom .zoom .percent { min-width: 60px; justify-content: flex-end; font-variant-numeric: tabular-nums; }
+.beeson-edit-bottom .slider { position: relative; display: inline-flex; align-items: center; width: 120px; height: 16px; margin: 0 2px; flex: none; }
+.beeson-edit-bottom .slider .tick { position: absolute; left: calc(7px + (100% - 14px) * var(--tick)); top: 3px; width: 1px; height: 10px; margin-left: -0.5px; background: var(--ed-muted); pointer-events: none; }
+.beeson-edit-bottom input[type=range] { position: relative; z-index: 1; width: 100%; height: 16px; margin: 0; padding: 0; background: transparent; -webkit-appearance: none; appearance: none; pointer-events: none; }
+.beeson-edit-bottom input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--ed-muted) 45%, transparent); }
+.beeson-edit-bottom input[type=range]::-moz-range-track { height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--ed-muted) 45%, transparent); }
+.beeson-edit-bottom input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.3); }
+.beeson-edit-bottom input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.3); }
 .beeson-edit-bottom .beeson-edit-select { min-width: 52px; justify-content: space-between; font-variant-numeric: tabular-nums; }
-@media (max-width: 1099px) { .beeson-edit-bottom .hint { visibility: hidden; } .beeson-edit-bottom input[type=range] { width: 72px; } }
+@media (max-width: 1099px) { .beeson-edit-bottom .hint { visibility: hidden; } .beeson-edit-bottom .slider { width: 72px; } }
 `;
 
-// the slider is linear in the logarithm of the zoom, from 10 to 400 percent
+// the slider is linear in the logarithm of the zoom, from 10 to 400 percent, in steps of a
+// thousandth of its length. TICK is the place of 100 percent, to which a drag within SNAP px is
+// snapped, as on the zoom slider of PowerPoint
 const LOG_MIN = Math.log(0.1);
 const LOG_MAX = Math.log(4);
+const STEPS = 1000;
+const TICK = -LOG_MIN / (LOG_MAX - LOG_MIN);
+const SNAP = 4;
 
 // layers is the switch of layers.ts, placed between the slide number and the hint
 export function install(app: App, layers: HTMLElement): void {
@@ -48,8 +61,13 @@ export function install(app: App, layers: HTMLElement): void {
   const slider = make('input');
   slider.type = 'range';
   slider.min = '0';
-  slider.max = '1000';
+  slider.max = String(STEPS);
   slider.setAttribute('aria-label', 'Zoom');
+  const track = make('span', 'slider');
+  track.style.setProperty('--tick', String(TICK));
+  const tick = make('span', 'tick');
+  tick.title = '100%';
+  track.append(tick, slider);
   const current = () => app.stage?.zoom ?? app.stage?.fitScale() ?? 1;
   const percent = chromeSelect(app, {
     label: 'Zoom',
@@ -60,7 +78,7 @@ export function install(app: App, layers: HTMLElement): void {
     onChange: (v) => app.stage.setZoom(v === 'fit' ? null : Number(v)),
   }) as HTMLButtonElement & { refresh(): void };
   const fitButton = button('Fit', 'Fit the slide into the window');
-  zoomBox.append(outButton, slider, inButton, percent, fitButton);
+  zoomBox.append(outButton, track, inButton, percent, fitButton);
 
   // the mode of the slide is flipped by the button of the theme, from the point of this one
   const modeButton = button('', 'Flip the slide between dark and light mode, D', 'Flip the mode of the slide');
@@ -77,10 +95,33 @@ export function install(app: App, layers: HTMLElement): void {
   wire(outButton, () => app.stage.zoomOut(), fail);
   wire(inButton, () => app.stage.zoomIn(), fail);
   wire(fitButton, () => app.stage.setZoom(null), fail);
-  slider.addEventListener('input', () => {
-    const z = Math.exp(LOG_MIN + (Number(slider.value) / 1000) * (LOG_MAX - LOG_MIN));
-    app.stage.setZoom(z);
+  // a press or a drag on the slider is followed here rather than by the browser, which loses the
+  // pointer once the thumb is held at the tick. the thumb of 14 px runs over the width of the
+  // slider less its own, measured at the press, and the arrow keys move it one step at a time
+  // without a snap
+  const zoomAt = (at: number) => app.stage.setZoom(Math.exp(LOG_MIN + (at / STEPS) * (LOG_MAX - LOG_MIN)));
+  let r = track.getBoundingClientRect();
+  const follow = (ev: PointerEvent) => {
+    const span = r.width - 14;
+    const at = Math.min(1, Math.max(0, (ev.clientX - r.left - 7) / span));
+    if (Math.abs(at - TICK) * span <= SNAP) {
+      slider.value = String(Math.round(TICK * STEPS));
+      app.stage.setZoom(1);
+      return;
+    }
+    slider.value = String(Math.round(at * STEPS));
+    zoomAt(Number(slider.value));
+  };
+  track.addEventListener('pointerdown', (ev) => {
+    if (ev.button !== 0) return;
+    ev.preventDefault();
+    slider.focus({ preventScroll: true });
+    track.setPointerCapture(ev.pointerId);
+    r = track.getBoundingClientRect();
+    follow(ev);
   });
+  track.addEventListener('pointermove', (ev) => track.hasPointerCapture(ev.pointerId) && follow(ev));
+  slider.addEventListener('input', () => zoomAt(Number(slider.value)));
   wire(modeButton, () => {
     const r = modeButton.getBoundingClientRect();
     document.querySelector('.theme-switch')?.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }));
@@ -93,7 +134,7 @@ export function install(app: App, layers: HTMLElement): void {
   const zoomState = () => {
     if (!app.stage) return;
     const z = current();
-    if (document.activeElement !== slider) slider.value = String(Math.round(((Math.log(z) - LOG_MIN) / (LOG_MAX - LOG_MIN)) * 1000));
+    if (document.activeElement !== slider) slider.value = String(Math.round(((Math.log(z) - LOG_MIN) / (LOG_MAX - LOG_MIN)) * STEPS));
     fitButton.setAttribute('aria-pressed', String(app.stage.zoom === null));
     percent.refresh();
   };
