@@ -9,7 +9,7 @@
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
 import { readFileSync } from 'node:fs';
-import { columnName, emptyRows, isNumeric, numericColumns, parseTabular, tableHtml } from '../src/editor/table.ts';
+import { columnName, emptyRows, grow, isNumeric, layoutCells, numericColumns, parseTabular, spotsIn, tableHtml } from '../src/editor/table.ts';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { byteExact, click, press, saveAndReopen, type } from './helpers/editor.mjs';
@@ -42,6 +42,26 @@ test('a table is written with an explicit tbody, a header row of th, and numbers
     '<table>\r\n\t\t<tbody>\r\n\t\t\t<tr><th>Body</th><th style="text-align: right">μ</th></tr>\r\n\t\t\t<tr><td>Moon</td><td style="text-align: right">0.01215</td></tr>\r\n\t\t\t<tr><td>a &lt; b</td><td style="text-align: right">1</td></tr>\r\n\t\t</tbody>\r\n\t</table>',
   );
   assert.deepEqual([0, 1, 25, 26, 27, 701, 702].map(columnName), ['A', 'B', 'Z', 'AA', 'AB', 'ZZ', 'AAA']);
+});
+
+test('the cells of a table are laid out with their colspan and rowspan, and a range grows over merged cells', () => {
+  // the table of merged cells of TABLES_DECK: Halo over two rows, Distant retrograde over two columns
+  const cell = (name, rows = 1, cols = 1) => ({ name, rows, cols });
+  const g = layoutCells([
+    [cell('Family'), cell('Period'), cell('Jacobi')],
+    [cell('Halo', 2), cell('14.8'), cell('3.05')],
+    [cell('6.6'), cell('3.04')],
+    [cell('DRO', 1, 2), cell('2.92')],
+  ], (c) => c);
+  assert.equal(g.width, 3);
+  assert.deepEqual(g.grid.map((r) => r.map((s) => s.cell.name)), [['Family', 'Period', 'Jacobi'], ['Halo', '14.8', '3.05'], ['Halo', '6.6', '3.04'], ['DRO', 'DRO', '2.92']]);
+  assert.deepEqual(g.spots[2].map((s) => [s.row, s.col]), [[2, 1], [2, 2]]);
+  // a range from 6.6 to Distant retrograde grows to Halo, which reaches into it
+  assert.deepEqual(grow(g, { r0: 2, c0: 1, r1: 3, c1: 1 }), { r0: 1, c0: 0, r1: 3, c1: 1 });
+  assert.deepEqual(spotsIn(g, { r0: 1, c0: 0, r1: 3, c1: 1 }).map((s) => s.cell.name), ['Halo', '14.8', '6.6', 'DRO']);
+  // a rowspan of 0 or past the last row reaches the last row
+  assert.equal(layoutCells([[cell('a', 0)], [], [cell('b')]], (c) => c).spots[0][0].rows, 3);
+  assert.equal(layoutCells([[cell('a', 9)], [cell('b')]], (c) => c).grid[1][1].cell.name, 'b');
 });
 
 let browser;

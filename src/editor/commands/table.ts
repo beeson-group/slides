@@ -20,8 +20,8 @@ import { childSpace } from '../render.ts';
 import { mathLookup } from '../math.ts';
 import { textStyle } from '../model/templates.ts';
 import {
-  CELL, GRID, cellAfter, cellAtColumn, cellBeside, cellHtml, columnName, columnsOf, emptyRows, hasHeader, numericOf,
-  parseHtmlTable, parseTabular, placeOf, placesOf, rowHtml, tableHtml,
+  CELL, GRID, boxOf, cellAfter, cellBeside, cellHtml, cellOver, columnName, columnsOf, emptyRows, gridOf, hasHeader, numericOf,
+  parseHtmlTable, parseTabular, placeOf, placesOf, rowHtml, tableHtml, type Box, type Place,
 } from '../table.ts';
 import { placeCaret } from '../text/typing.ts';
 import { injectStyle, make } from '../ui/dom.ts';
@@ -180,37 +180,60 @@ async function insertTable(app: App, rows: string[][]): Promise<HTMLTableElement
   return table as HTMLTableElement;
 }
 
-// a row added above or below the row of cell, with a cell per column. a cell of a column of numbers
-// is set at the right, and a row added above a header row is a header row
+// the cells of t, i.e. the box of its cell, or null for a table without a cell
+const boxOfTarget = (t: Target): Box | null => (t.cell ? boxOf(placeOf(t.cell)!) : null);
+
+const spanText = (n: number) => (n > 1 ? String(n) : null);
+
+// a row added above or below the cells of t, or at the end. a cell that reaches across the line of
+// the new row grows by a row, and each other column gets a cell, set at the right in a column of
+// numbers. a row added above a header row is a header row
 async function addRow(app: App, t: Target, below: boolean): Promise<HTMLTableRowElement> {
+  const g = gridOf(t.table);
   const rows = [...t.table.rows];
-  const ref = t.cell ? (t.cell.parentElement as HTMLTableRowElement) : rows[rows.length - 1];
-  const head = hasHeader(t.table) && ref === rows[0];
-  const width = columnsOf(t.table);
-  const aligned = Array.from({ length: width }, (_, c) => rows.some((tr) => {
-    const cell = cellAtColumn(tr, c);
-    return !!cell && cell.localName === 'td' && right(cell);
-  }));
-  const tag = head && !below ? 'th' : 'td';
-  const text = rowHtml(aligned.map((r) => ({ tag, right: r && tag === 'td' })));
-  const parent = ref.parentElement!;
-  const [tr] = await app.doc.insert(text, parent, below ? ref.nextSibling : ref, below ? 'add row below' : 'add row above');
+  const box = boxOfTarget(t);
+  const n = box ? (below ? box.r1 + 1 : box.r0) : below ? rows.length : rows.length - 1;
+  const grown = new Set<Place>();
+  const cols: number[] = [];
+  for (let c = 0; c < g.width; c++) {
+    const s = g.grid[n - 1]?.[c];
+    if (s && s.row + s.rows > n) grown.add(s);
+    else cols.push(c);
+  }
+  const head = hasHeader(t.table) && n === 0;
+  const aligned = (c: number) => g.grid.some((r) => r[c]?.cell.localName === 'td' && right(r[c]!.cell));
+  const tag = head ? 'th' : 'td';
+  const text = rowHtml(cols.map((c) => ({ tag, right: !head && aligned(c) })));
+  const next = rows[n];
+  const parent = (next ?? rows[n - 1]).parentElement!;
+  const [tr] = await app.doc.insert(text, parent, next ?? rows[n - 1].nextSibling, below ? 'add row below' : 'add row above');
+  for (const s of grown) app.doc.setTag(s.cell, { attrs: { rowspan: spanText(s.rows + 1) } }, 'add row');
   return tr as HTMLTableRowElement;
 }
 
-// a column added before or after the column of cell, with a cell in each row. the cell of a header
-// row is a th
+// a column added before or after the cells of t, or at the end. a cell that reaches across the line
+// of the new column grows by a column, and each other row gets a cell, a th next to a th
 async function addColumn(app: App, t: Target, after: boolean): Promise<HTMLTableCellElement | null> {
-  const col = t.cell ? placeOf(t.cell)!.col : columnsOf(t.table) - 1;
-  const home = t.cell?.parentElement ?? null;
+  const g = gridOf(t.table);
+  const box = boxOfTarget(t);
+  const b = box ? (after ? box.c1 + 1 : box.c0) : after ? g.width : g.width - 1;
+  const home = box?.r0 ?? -1;
+  const grown = new Set<Place>();
   let mine: HTMLTableCellElement | null = null;
-  for (const tr of [...t.table.rows]) {
-    const at = cellAtColumn(tr, col);
-    const tag = at?.localName === 'th' || (!at && tr.cells[0]?.localName === 'th') ? 'th' : 'td';
-    const before = at ? (after ? at.nextSibling : at) : null;
+  for (const [r, tr] of [...t.table.rows].entries()) {
+    const s = g.grid[r][b - 1];
+    if (s && s.col + s.span > b) {
+      grown.add(s);
+      if (r === home) mine = s.cell;
+      continue;
+    }
+    const near = s ?? g.grid[r][b];
+    const tag = near?.cell.localName === 'th' ? 'th' : 'td';
+    const before = g.spots[r].find((x) => x.col >= b)?.cell ?? null;
     const [cell] = await app.doc.insert(cellHtml(tag), tr, before, after ? 'add column after' : 'add column before');
-    if (tr === home) mine = cell as HTMLTableCellElement;
+    if (r === home) mine = cell as HTMLTableCellElement;
   }
+  for (const s of grown) app.doc.setTag(s.cell, { attrs: { colspan: spanText(s.span + 1) } }, 'add column');
   return mine;
 }
 
@@ -225,31 +248,61 @@ function land(app: App, cell: Element | null | undefined, at: 'start' | 'end', b
   app.invalidate('selection');
 }
 
-async function deleteRow(app: App, t: Target): Promise<void> {
-  if (!t.cell) return;
-  const block = blocked(app, t);
-  const tr = t.cell.parentElement as HTMLTableRowElement;
-  const p = placeOf(t.cell)!;
-  if (t.table.rows.length <= 1) return deleteTable(app, t);
-  const next = t.table.rows[p.row + 1] ?? t.table.rows[p.row - 1];
-  await app.doc.remove(tr, 'delete row');
-  land(app, cellAtColumn(next, p.col) ?? next.cells[next.cells.length - 1], 'end', block);
+// the rows left without a cell taken out, and each cell that reached over one a row shorter
+async function dropEmptyRows(app: App, table: HTMLTableElement, label: string): Promise<void> {
+  for (let r = table.rows.length - 1; r >= 0; r--) {
+    const tr = table.rows[r];
+    if (tr.cells.length) continue;
+    const g = gridOf(table);
+    for (const s of new Set(g.grid[r].filter((x): x is Place => !!x))) app.doc.setTag(s.cell, { attrs: { rowspan: spanText(s.rows - 1) } }, label);
+    await app.doc.remove(tr, label);
+  }
 }
 
-async function deleteColumn(app: App, t: Target): Promise<void> {
-  if (!t.cell) return;
-  if (columnsOf(t.table) <= 1) return deleteTable(app, t);
-  const block = blocked(app, t);
-  const p = placeOf(t.cell)!;
-  const tr = t.cell.parentElement as HTMLTableRowElement;
-  for (const row of [...t.table.rows]) {
-    const cell = cellAtColumn(row, p.col);
-    if (!cell) continue;
-    if (cell.colSpan > 1) app.doc.setTag(cell, { attrs: { colspan: cell.colSpan > 2 ? String(cell.colSpan - 1) : null } }, 'delete column');
-    else if (row.cells.length > 1) await app.doc.remove(cell, 'delete column');
-    else await app.doc.remove(row, 'delete column');
+// one row taken out. a cell that starts in it and reaches below it is moved to the row below, and a
+// cell from a row above that reaches over it gets a row less
+async function removeRow(app: App, table: HTMLTableElement, r: number): Promise<void> {
+  const g = gridOf(table);
+  for (const s of new Set(g.grid[r].filter((x): x is Place => !!x))) {
+    if (s.rows === 1) continue;
+    if (s.row === r) {
+      const before = g.spots[r + 1].find((x) => x.col > s.col)?.cell ?? null;
+      await app.doc.move(s.cell, table.rows[r + 1], before, 'delete row');
+    }
+    app.doc.setTag(s.cell, { attrs: { rowspan: spanText(s.rows - 1) } }, 'delete row');
   }
-  land(app, tr.isConnected ? cellAtColumn(tr, p.col) ?? tr.cells[tr.cells.length - 1] : null, 'end', block);
+  await app.doc.remove(table.rows[r], 'delete row');
+}
+
+// the rows of the cells of t taken out, or the table with its last rows
+async function deleteRow(app: App, t: Target): Promise<void> {
+  const box = boxOfTarget(t);
+  if (!box) return;
+  if (box.r1 - box.r0 + 1 >= t.table.rows.length) return deleteTable(app, t);
+  const block = blocked(app, t);
+  for (let r = box.r1; r >= box.r0; r--) await removeRow(app, t.table, r);
+  const row = Math.min(box.r0, t.table.rows.length - 1);
+  land(app, cellOver(t.table, row, box.c0) ?? t.table.rows[row].cells[0], 'end', block);
+}
+
+// the columns of the cells of t taken out, or the table with its last columns. a cell that reaches
+// over another column gets a column less, and a row left without a cell is taken out
+async function deleteColumn(app: App, t: Target): Promise<void> {
+  const box = boxOfTarget(t);
+  if (!box) return;
+  if (box.c1 - box.c0 + 1 >= columnsOf(t.table)) return deleteTable(app, t);
+  const block = blocked(app, t);
+  for (let c = box.c1; c >= box.c0; c--) {
+    const g = gridOf(t.table);
+    for (const s of new Set(g.grid.map((row) => row[c]).filter((x): x is Place => !!x))) {
+      if (s.span > 1) app.doc.setTag(s.cell, { attrs: { colspan: spanText(s.span - 1) } }, 'delete column');
+      else await app.doc.remove(s.cell, 'delete column');
+    }
+  }
+  await dropEmptyRows(app, t.table, 'delete column');
+  const row = Math.min(box.r0, t.table.rows.length - 1);
+  const col = Math.min(box.c0, columnsOf(t.table) - 1);
+  land(app, cellOver(t.table, row, col) ?? t.table.rows[row]?.cells[0], 'end', block);
 }
 
 async function deleteTable(app: App, t: Target): Promise<void> {
@@ -297,10 +350,13 @@ async function pasteCells(app: App, cell: HTMLTableCellElement, rows: string[][]
   while (table.rows.length < start.row + rows.length) await addRow(app, { table, cell: null }, true);
   while (columnsOf(table) < start.col + rows[0].length) await addColumn(app, { table, cell: null }, true);
   let last: HTMLTableCellElement | null = null;
+  const done = new Set<Element>();
   for (const [i, r] of rows.entries()) {
     for (const [j, text] of r.entries()) {
-      const target = cellAtColumn(table.rows[start.row + i], start.col + j);
-      if (!target) continue;
+      // a merged cell takes the text of its first row and column
+      const target = cellOver(table, start.row + i, start.col + j);
+      if (!target || done.has(target)) continue;
+      done.add(target);
       const html = cellHtml('td', text).replace(/^<td>|<\/td>$/g, '');
       await app.doc.setContent(target, html, 'paste');
       last = target;
@@ -461,7 +517,7 @@ function installBars(app: App): void {
     const i = Number(seg.dataset.index);
     const home = shown.cell ? placeOf(shown.cell)! : { row: 0, col: 0 };
     const tr = shown.table.rows[column ? home.row : i];
-    const cell = tr && (cellAtColumn(tr, column ? i : home.col) ?? tr.cells[tr.cells.length - 1]);
+    const cell = tr && (cellOver(shown.table, column ? home.row : i, column ? i : home.col) ?? tr.cells[tr.cells.length - 1]);
     if (!cell) return;
     const anchor = seg.getBoundingClientRect();
     focusCell(cell, 'end');
@@ -598,7 +654,7 @@ export function install(app: App): void {
       const block = blocked(a, t);
       const col = t.cell ? placeOf(t.cell)!.col : 0;
       const tr = await addRow(a, t, below);
-      land(a, cellAtColumn(tr, col) ?? tr.cells[0], 'start', block);
+      land(a, cellOver(t.table, [...t.table.rows].indexOf(tr), col) ?? tr.cells[0], 'start', block);
     },
   });
   rowCommand('table.rowAbove', 'Add Row Above', 80, false, 'Alt+ArrowUp');
