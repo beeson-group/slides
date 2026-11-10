@@ -6,7 +6,7 @@
 import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { RESIZABLE, containerOf, mediaIn, movableOf, movablesOf, visualRect } from '../canvas/hit.ts';
+import { RESIZABLE, containerOf, mediaIn, movableOf, movablesOf, snapBoxOf, visualRect } from '../canvas/hit.ts';
 import type { Place } from '../canvas/drag.ts';
 import { placeOf, record, writePlace } from '../canvas/drag.ts';
 import { view } from '../canvas/frames.ts';
@@ -53,10 +53,10 @@ function nudge(app: App, dx: number, dy: number): void {
     run.at = now;
     run.changes.forEach((c, i) => (c.to = changes[i].to));
   } else run = { at: now, changes: record(app, 'move', changes) };
-  // the offset of the first element at the lower right of the frames
+  // the upper left corner of the first element on the slide at the lower right of the frames
   const boxes = els.map(visualRect);
-  const t = placeOf(els[0]).translate;
-  view.readout = { text: `${t?.x ?? 0}, ${t?.y ?? 0}`, x: Math.max(...boxes.map((b) => b.left + b.width)) + 6, y: Math.max(...boxes.map((b) => b.top + b.height)) + 10, at: 'frame' };
+  const c = snapBoxOf(app, els[0]);
+  view.readout = { text: `x ${Math.round(c.left)}  y ${Math.round(c.top)}`, x: Math.max(...boxes.map((b) => b.left + b.width)) + 6, y: Math.max(...boxes.map((b) => b.top + b.height)) + 10, at: 'frame' };
   app.invalidate('content');
 }
 

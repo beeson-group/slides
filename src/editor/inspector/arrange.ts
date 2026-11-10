@@ -1,13 +1,13 @@
 // the Arrange pane of the Format tab, as the Arrange tab of Keynote: Align with its reference,
 // Distribute, the size in W and H, the position in X and Y, and the angle, each with its reset,
 // with Flip Horizontal and Flip Vertical for an image, then the order of the elements, Group and
-// Ungroup, and Lock and Unlock. X and Y are the offset of an element from its place in the file,
-// and W and H its size, in slide pixels. W and H are set on an image, a video, a QR code, and a
+// Ungroup, and Lock and Unlock. X and Y are the upper left corner of an element on the slide, as in
+// Keynote and in the readout of a move, and W and H its size, in slide pixels. W and H are set on an image, a video, a QR code, and a
 // tycho viewer, and W alone on a text block, whose height follows its wrapped text. the size of
 // every other element is set by its layout
 
 import type { App } from '../app.ts';
-import { boxOf, heightSet, offsetOf, resizable, sizeOf, targetsOf } from '../commands/align.ts';
+import { boxOf, heightSet, positionOf, resizable, sizeOf, targetsOf } from '../commands/align.ts';
 import { angleOf, groupOf } from '../commands/order.ts';
 import { imageOf } from '../commands/figure.ts';
 import { locked } from '../canvas/drag.ts';
@@ -86,10 +86,10 @@ export function arrangePane(app: App, run: Run): Control[] {
     ]),
     section('Position', [
       row([
-        field('X', () => shared(live().map((el) => offsetOf(el).x)), (x) => run('arrange.setPosition', { x, els: live() }), () => live().length > 0),
-        field('Y', () => shared(live().map((el) => offsetOf(el).y)), (y) => run('arrange.setPosition', { y, els: live() }), () => live().length > 0),
+        field('X', () => shared(live().map((el) => positionOf(app, el).x)), (x) => run('arrange.setPosition', { x, els: live() }), () => live().length > 0),
+        field('Y', () => shared(live().map((el) => positionOf(app, el).y)), (y) => run('arrange.setPosition', { y, els: live() }), () => live().length > 0),
       ]),
-      note(() => 'The offset from the place of the element in the layout.'),
+      note(() => 'The upper left corner of the element on the slide.'),
       row([button(app, run, { command: 'arrange.resetPosition', icon: 'reset', text: 'Reset Position' })]),
     ]),
     section('Rotate', [

@@ -152,7 +152,7 @@ async function typeInto(page, selector, text) {
 }
 
 for (const platform of PLATFORMS) {
-  test(`a click in the inspector keeps the selected figure, and X typed as 40 writes its translate on ${platform}`, async () => {
+  test(`a click in the inspector keeps the selected figure, and X typed 40 px to the right writes its translate on ${platform}`, async () => {
     const page = await inspectorPage(platform, slideWith(FIGURE));
     await selectFigure(page, IMG);
     assert.deepEqual(await framed(page, [ZONE]), [ZONE], 'the figure is not selected by a click on its image and Esc');
@@ -163,13 +163,17 @@ for (const platform of PLATFORMS) {
     await tap(page, 'Slide');
     assert.deepEqual(await framed(page, [ZONE]), [ZONE], 'a click on Align to Slide clears the selection');
     await tap(page, 'Selection');
-    await typeInto(page, '#beeson-edit-num-x', '40');
+    // X and Y are the position of the figure on the slide, and a position 40 px to the right is
+    // written as a translate of 40 px
+    const field = (n) => page.evaluate(`Number(document.querySelector('${PANEL} #beeson-edit-num-${n}').value)`);
+    const x0 = await field('x'), y0 = await field('y');
+    await typeInto(page, '#beeson-edit-num-x', String(x0 + 40));
     assert.deepEqual(await framed(page, [ZONE]), [ZONE], 'a value typed into X clears the selection');
     const moved = [FIGURE, '<figure class="zone fragment" data-fragment-index="2" style="translate: 40px 0px">'];
     await roundTrip(page, [moved]);
-    assert.equal(await page.evaluate(`document.querySelector('${PANEL} #beeson-edit-num-x').value`), '40');
+    assert.equal(await field('x'), x0 + 40);
     // Y is written next to X, and Reset Position takes both off
-    await typeInto(page, '#beeson-edit-num-y', '-12');
+    await typeInto(page, '#beeson-edit-num-y', String(y0 - 12));
     const both = [FIGURE, '<figure class="zone fragment" data-fragment-index="2" style="translate: 40px -12px">'];
     await byteExact(page, [both]);
     await undo(page);

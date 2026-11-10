@@ -471,7 +471,7 @@ for (const platform of PLATFORMS) {
     // a value typed into X
     const moved = await render(page);
     await click(page, '#beeson-edit-panel-format input[name="X"]');
-    await press(page, 'Mod+A');
+    await page.evaluate(`document.querySelector('#beeson-edit-panel-format input[name="X"]').select()`);
     await type(page, '400');
     await press(page, 'Enter');
     await frames(page);
