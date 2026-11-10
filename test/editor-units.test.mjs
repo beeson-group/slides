@@ -144,6 +144,8 @@ test('the scope rule allows the writes of AGENTS.md and names the others', () =>
   assert.match(declarationProblem('p', [], 'width', '300px'), /width/);
   assert.equal(declarationProblem('pre', [], 'font-size', '18px'), null);
   assert.equal(declarationProblem('td', [], 'text-align', 'right'), null);
+  assert.equal(declarationProblem('th', [], 'width', '240px'), null);
+  assert.match(declarationProblem('td', [], 'width', '40%'), /width 40% on a td/);
   assert.equal(attributeProblem('id'), 'the attribute id');
   assert.equal(attributeProblem('id', true), null);
   const all = new Set(themeClasses(readFileSync(new URL('../theme/beeson.css', import.meta.url), 'utf8')));

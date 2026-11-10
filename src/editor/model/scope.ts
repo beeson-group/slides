@@ -49,6 +49,8 @@ export function themeClasses(css: string): string[] {
 // the reason a declaration is out of the scope rule on an element, or null when it is in it
 export function declarationProblem(tag: string, classes: string[], name: string, value: string): string | null {
   if (name === 'translate' || name === 'rotate') return null;
+  // the width of a column is written in px on the cells of the first row of a table
+  if (name === 'width' && (tag === 'td' || tag === 'th')) return /^\d+px$/.test(value.trim()) ? null : `width ${value} on a ${tag}`;
   if (name === 'width') return SIZED_TAGS.has(tag) || classes.includes('qr') ? null : `width on a ${tag}`;
   if (name === 'font-size') return tag === 'pre' && /^(22|18)px$/.test(value.trim()) ? null : `font-size ${value} on a ${tag}`;
   if (name === 'text-align') return (tag === 'td' || tag === 'th') && value.trim() === 'right' ? null : `text-align ${value} on a ${tag}`;
