@@ -1,6 +1,6 @@
 // the toolbar, drawn from the commands of the registry that name a toolbar place: a 20 px icon over
-// an 11 px label in groups with a thin rule between them, and the groups of order 80 and more at
-// the right. a switch is shown pressed, and a command whose toolbar place names a split is drawn
+// an 11 px label in groups with a thin rule between them, and the groups after Present at the
+// right. a switch is shown pressed, and a command whose toolbar place names a split is drawn
 // as a split button with the commands of that submenu of its menu. below a window width of 1100 px
 // the labels are hidden and kept as the text of the buttons, and below 820 px the groups after
 // Present are put into a menu ». the toolbar has one tab stop, and the arrow keys move in it
@@ -12,7 +12,6 @@ import { icon } from '../ui/icons.ts';
 import { closeMenus, commandKeys, menuItems, openMenu, splitButton, type MenuItem } from '../ui/menu.ts';
 import { toolbarLabel } from './shell.ts';
 
-const RIGHT = 80;
 const NARROW = 820;
 
 const CSS = `
@@ -73,11 +72,11 @@ export function install(app: App): void {
     shown = [];
     late = narrow && at >= 0 ? groups.slice(at + 1) : [];
     const parts: HTMLElement[] = [];
-    for (const g of groups) {
+    for (const [i, g] of groups.entries()) {
       if (late.includes(g)) continue;
       const box = make('div', 'group');
       box.dataset.group = g.group;
-      if ((g.commands[0].toolbar?.order ?? 0) >= RIGHT) box.classList.add('right');
+      if (at >= 0 && i === at + 1) box.classList.add('right');
       for (const c of g.commands) {
         const b = button(c);
         shown.push({ c, el: b });
