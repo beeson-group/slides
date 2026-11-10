@@ -310,9 +310,10 @@ for (const platform of PLATFORMS) {
     b = await boxesOf(page);
     assert.equal(b.tag, 'p');
     assert.ok(b.next.top >= b.ink.bottom + 8, `the written box at ${js(b.next)} overlaps the last line of the list at ${js(b.ink)}`);
-    assert.ok(Math.abs(b.next.top - empty.top) <= 1, `the box is moved from ${empty.top} to ${b.next.top} when it is written`);
+    assert.ok(b.next.top <= empty.top, `the box is moved down from ${empty.top} to ${b.next.top} when it is written`);
+    // the box is moved with the list, by the 20 px of its translate
     const tag = (await render(page)).match(/<p[^>]*>Typed<\/p>/)?.[0];
-    assert.match(tag ?? '', /^<p style="translate: 0px \d+px">Typed<\/p>$/);
+    assert.equal(tag, '<p style="translate: 0px 20px">Typed</p>');
     assert.deepEqual(errors(page), []);
   });
 

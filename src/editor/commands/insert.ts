@@ -130,6 +130,19 @@ function centerIfOut(app: App, el: Element): void {
   docOf(app).setTag(el, { translate: { x, y } }, 'move');
 }
 
+// the offset in slide px of a new text box el in the text column, under the blocks before it as
+// they are drawn: moved down as far as the lowest of them is drawn under its place in the layout,
+// e.g. a list moved down with a translate
+function textOffset(app: App, el: HTMLElement): number {
+  const parent = el.parentElement;
+  if (!parent) return 0;
+  const before = [...parent.children].slice(0, [...parent.children].indexOf(el)).filter((o) => !o.matches('.run, .foot, aside.notes, [data-generated]') && o.getClientRects().length);
+  if (!before.length) return 0;
+  const drawn = before.map((o) => slideBox(app, o).bottom);
+  const placed = before.map((o, i) => drawn[i] - (parseFloat(getComputedStyle(o).translate.split(' ')[1] ?? '') || 0));
+  return Math.max(0, Math.round(Math.max(...drawn) - Math.max(...placed)));
+}
+
 // the zone of slide without content, into which a figure is put
 const emptyZone = (slide: Element): Element | null => [...slide.querySelectorAll(':scope > .zone, :scope > .panel ~ .zone')].find((z) => !z.children.length && !z.textContent?.trim()) ?? null;
 
@@ -181,6 +194,11 @@ export function install(app: App): void {
     const next = before && before.parentNode === parent ? before : null;
     const show = () => {
       parent.insertBefore(el, next && next.parentNode === parent ? next : null);
+      if (kind !== 'foot') {
+        el.style.translate = '';
+        const y = textOffset(app, el);
+        el.style.translate = y ? `0px ${y}px` : '';
+      }
       pending = { el, kind, parent };
       placeCaret(el);
       app.invalidate('content');
@@ -243,9 +261,12 @@ export function install(app: App): void {
         await app.history.undo().finally(() => (keep = false));
       }
       await app.history.transact(def.label, async () => {
+        // a box moved by textOffset is written with the same offset
+        const y = parseFloat(p.el.style.translate.split(' ')[1] ?? '') || 0;
         const [node] = await docOf(app).insert(def.html(text), p.parent, p.el, def.label);
         written!.node = node;
         p.el.remove();
+        if (y) docOf(app).setTag(node, { translate: { x: 0, y } }, def.label);
         pending = null;
         // the caret of a code box is in its code element, where the typing after the first key goes
         placeCaret(node, p.kind === 'code' ? (node.textContent ?? '').length : null);

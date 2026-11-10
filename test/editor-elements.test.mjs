@@ -249,7 +249,8 @@ test('a text box is a p after the last block of the column, with the caret in it
   await type(page, ' box');
   await settle(page);
   const ul = page.source.slice(page.source.indexOf('<ul style="translate: 0px 20px">'), page.source.indexOf('</ul>', page.source.indexOf('<ul style="translate: 0px 20px">')) + 5);
-  assert.equal(await render(page), page.source.replace(ul, `${ul}\n  <p>A new text box</p>`));
+  // the box is moved down with the list above it, by the 20 px of its translate
+  assert.equal(await render(page), page.source.replace(ul, `${ul}\n  <p style="translate: 0px 20px">A new text box</p>`));
   assert.equal(await page.evaluate(`document.activeElement.textContent`), 'A new text box');
   await roundTrip(page, 2);
 });
