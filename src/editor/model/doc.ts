@@ -374,6 +374,9 @@ export class Doc {
     const fragment = parseFragment((lead ?? childSpace(container, this.eol(), this.style().step)) + text, source.crlf, parent);
     const node = document.importNode(fragmentRoot(fragment)!.node, true) as Element;
     parent.insertBefore(node, before && before.parentNode === parent ? before : null);
+    // every step is shown while the deck is edited, which reveal.js marks only on the fragments of
+    // its start, hence the highlights of a new fragment are colored once it is marked
+    for (const f of [node, ...node.querySelectorAll('.fragment')]) if (f.classList.contains('fragment')) f.classList.add('visible');
     const mj = window.MathJax;
     if (mj?.typesetPromise) await mj.typesetPromise([node]);
     mergePairing(pairing, pairFragment(fragment, node, this.host.math()));
