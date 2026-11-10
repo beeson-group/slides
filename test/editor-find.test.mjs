@@ -172,10 +172,13 @@ for (const platform of PLATFORMS) {
     await type(page, 'tube');
     const changed = page.source.replaceAll('manifold', 'tube');
     assert.equal((await panel(page)).count, '1 of 2');
+    const shown = (await panel(page)).slide;
     await click(page, '.beeson-find .actions button:first-child');
     await page.waitFor(`window.BeesonEditor.render() !== ${JSON.stringify(page.source)}`);
     assert.equal(await rendered(page), changed);
     assert.equal((await panel(page)).count, '2 replaced');
+    // the slide shown before Replace All stays shown, although the last block written is on another
+    assert.equal((await panel(page)).slide, shown);
     assert.equal(await undoLabel(page), 'Undo Replace All');
     // the matches of the second search were written by the first, as one entry of the history
     await press(page, 'Mod+Z');
