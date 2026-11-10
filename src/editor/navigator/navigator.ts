@@ -9,8 +9,6 @@
 
 import type { App, Pane } from '../app.ts';
 import { layersOf, showLayer } from '../layers.ts';
-import { insertFiles } from '../media/actions.ts';
-import { kindOf } from '../media/store.ts';
 import { transitionOf } from '../review/transitions.ts';
 import { injectStyle, stored, store } from '../ui/dom.ts';
 import { drawInto, type Thumbs } from './thumbs.ts';
@@ -520,27 +518,32 @@ export class Navigator implements Pane {
   private onFileOver(ev: DragEvent): void {
     const dt = ev.dataTransfer;
     if (this.drag || !dt || !this.app.pairing?.root || !dt.types.includes('Files')) return;
-    const kinds = [...dt.items].filter((i) => i.kind === 'file').map((i) => kindOf({ type: i.type, name: '' }));
-    if (kinds.some((k) => !k)) return;
+    if (![...dt.items].every((i) => i.kind !== 'file' || /^(image|video)\//.test(i.type))) return;
     ev.preventDefault();
     dt.dropEffect = 'copy';
     this.drawDrop(this.fileGap(ev.clientY));
   }
 
-  // the new slide and its files are one entry of the history
+  // the new slide and its files are one entry of the history. the media modules are loaded at the
+  // drop, since they read the location of the page, and the node tests load this module
   private onFileDrop(ev: DragEvent): void {
     if (this.drag || !(ev.target instanceof Node) || !this.list.contains(ev.target)) return;
     this.drop.hidden = true;
-    const files = [...(ev.dataTransfer?.files ?? [])].filter((f) => kindOf(f));
-    if (!files.length || !this.app.pairing?.root) return;
+    const dropped = [...(ev.dataTransfer?.files ?? [])];
+    if (!dropped.length || !this.app.pairing?.root) return;
     ev.preventDefault();
     const before = this.slides()[this.fileGap(ev.clientY)] ?? null;
-    const run = this.app.history.transact(files.length > 1 ? 'Media' : 'New Slide', async () => {
-      const slide = await this.app.doc.insertSlide('figure', before);
-      this.select([slide], slide);
-      await insertFiles(this.app, files, slide.querySelector('.plate'));
-    });
-    void run.catch((e) => this.app.fail(e));
+    const run = async () => {
+      const [{ insertFiles }, { kindOf }] = await Promise.all([import('../media/actions.ts'), import('../media/store.ts')]);
+      const files = dropped.filter((f) => kindOf(f));
+      if (!files.length) return;
+      await this.app.history.transact(files.length > 1 ? 'Media' : 'New Slide', async () => {
+        const slide = await this.app.doc.insertSlide('figure', before);
+        this.select([slide], slide);
+        await insertFiles(this.app, files, slide.querySelector('.plate'));
+      });
+    };
+    run().catch((e) => this.app.fail(e));
   }
 
   // a drop moves the slides of the drag to its gap through the command slide.moveTo, as one entry
