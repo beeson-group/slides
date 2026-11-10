@@ -315,3 +315,52 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the box inside the border of the frame of the selected cells
+const frameInside = (page) => page.evaluate(`(() => {
+  const el = document.querySelector('.beeson-table-bars .cell');
+  const r = el.getBoundingClientRect();
+  const w = parseFloat(getComputedStyle(el).borderLeftWidth);
+  return { left: r.left + w, top: r.top + w, right: r.right - w, bottom: r.bottom - w };
+})()`);
+// the box of the ink of the text of an element, from the range of its content
+const cellInk = (page, selector) => page.evaluate(`(() => {
+  const r = document.createRange();
+  r.selectNodeContents(document.querySelector(${js(selector)}));
+  const b = r.getBoundingClientRect();
+  return { left: b.left, top: b.top, right: b.right, bottom: b.bottom };
+})()`);
+
+// finding 5 of R8.3: the frame of a merged cell was drawn over its first characters, and the
+// placeholder of a new slide under the column bar of its table (state 96)
+for (const platform of PLATFORMS) {
+  test(`the frame of a selected cell is drawn outside its text, and the bars of a new table are kept off the placeholder (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await tableSlide(page);
+    const holder = await rectOf(page, '.reveal section.present > p:empty');
+    assert.ok(holder, 'the new slide does not have an empty paragraph');
+    for (const sel of ['.beeson-table-bars .bar', '.beeson-table-bars .bar ~ .bar', '.beeson-table-bars .round', '.reveal section.present table']) {
+      const r = await rectOf(page, sel);
+      assert.ok(!meets(r, holder), `${sel} at ${js(r)} is drawn over the placeholder at ${js(holder)}`);
+    }
+    // the cells A2 to B3 merged, as in state 96
+    const from = middle(await rectOf(page, cellAt(1, 0)));
+    const to = middle(await rectOf(page, cellAt(2, 1)));
+    await drag(page, from, { dx: to.x - from.x, dy: to.y - from.y });
+    await frames(page);
+    await exec(page, 'table.merge');
+    await frames(page);
+    const frame = await frameInside(page);
+    const ink = await cellInk(page, cellAt(1, 0));
+    assert.ok(inside(ink, frame), `the text of the merged cell at ${js(ink)} is drawn under its frame, whose inside is ${js(frame)}`);
+    // one cell of the first column selected as a block, whose text starts at the left edge of the
+    // cell
+    await click(page, cellAt(3, 0));
+    await press(page, 'Escape');
+    await frames(page);
+    const one = await frameInside(page);
+    const cell = await rectOf(page, cellAt(3, 0));
+    assert.ok(inside(cell, one), `the cell at ${js(cell)} is drawn under its frame, whose inside is ${js(one)}`);
+    assert.deepEqual(errors(page), []);
+  });
+}
