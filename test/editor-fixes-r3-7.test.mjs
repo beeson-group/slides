@@ -508,3 +508,46 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errorsOf(page), []);
   });
 }
+
+// the open menu that holds the focus, with the label of its highlighted item
+const menuFocus = (page) => page.evaluate(`(() => {
+  const m = document.activeElement?.closest?.('.beeson-edit-menu');
+  return { focused: !!m, hi: m?.querySelector('.item.hi .label')?.textContent ?? null, open: document.querySelectorAll('.beeson-edit-menu').length };
+})()`);
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: a context menu takes the focus, with its first item highlighted when it is opened from the keyboard`, async () => {
+    const page = await editor(platform);
+    await slideOf(page, '.reveal .slides .zone > img');
+    await click(page, IMG);
+    await press(page, 'Shift+F10');
+    await sleep(100);
+    const keyed = await menuFocus(page);
+    assert.equal(keyed.open, 1, 'Shift+F10 does not open the menu of the selection');
+    assert.equal(keyed.focused, true, 'a menu opened with Shift+F10 leaves the focus on the page');
+    assert.equal(keyed.hi, 'Cut', 'a menu opened with Shift+F10 does not highlight its first item');
+    await press(page, 'ArrowDown');
+    assert.equal((await menuFocus(page)).hi, 'Copy');
+    await press(page, 'Escape');
+    await sleep(50);
+    assert.equal((await menuFocus(page)).open, 0);
+
+    await click(page, IMG, { button: 'right' });
+    await sleep(100);
+    const pointed = await menuFocus(page);
+    assert.equal(pointed.focused, true, 'a menu opened with the mouse does not take the focus');
+    assert.equal(pointed.hi, null, 'a menu opened with the mouse highlights an item');
+    await press(page, 'Escape');
+
+    // the word selected by a right-click is kept, and the focus goes back to its text at the close
+    const word = await caretInParagraph(page);
+    await click(page, { x: word.left + 20, y: word.y }, { button: 'right' });
+    await sleep(100);
+    assert.equal((await menuFocus(page)).focused, true);
+    await press(page, 'Escape');
+    await sleep(50);
+    assert.equal(await page.evaluate(`!!document.activeElement?.closest('.reveal section.present p')`), true, 'the focus does not go back to the text');
+    if (platform === 'mac') assert.equal((await selected(page)).text, 'matplotlib', 'the selected word is lost at the close of the menu');
+    assert.deepEqual(errorsOf(page), []);
+  });
+}
