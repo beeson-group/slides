@@ -36,11 +36,12 @@ const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 let saves = 0;
 
 // the editor on the slide n of a deck served over HTTP, in a window of size, with the Format tab
-// shown unless format is false
-async function load(t, platform, { deck = 'index.html', n = 0, size = { width: 1440, height: 900 }, format = true } = {}) {
+// shown unless format is false, and in the mode of the slides given, or else of the system
+async function load(t, platform, { deck = 'index.html', n = 0, size = { width: 1440, height: 900 }, format = true, mode = null } = {}) {
   const page = await browser.newPage(size);
   t.after(() => page.close().catch(() => {}));
-  const url = `${server.origin}/${deck}?edit&still&edit-platform=${platform}`;
+  if (mode) await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: mode }] });
+  const url = `${server.origin}/${deck}?edit&still&edit-platform=${platform}${mode ? `&theme=${mode}` : ''}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
@@ -244,4 +245,36 @@ for (const platform of PLATFORMS) {
     assert.match(await render(page), /\\\(abc d\\\)/);
     await roundTrip(page);
   });
+}
+
+// the deck with an image pair directly in a slide, and a slide with more words than a panel holds
+const PAIR_DECK = 'test/pages/editor-r8-4.html';
+
+// the start tags of the images of the slide in the text, by their mode
+const imageTags = (text) => Object.fromEntries(['dark', 'light'].map((m) => [m, text.match(new RegExp(`<img class="for-${m}[^>]*>`))[0]]));
+const indexOf = (tag) => tag.match(/data-fragment-index="(\d+)"/)?.[1] ?? null;
+
+// finding 6: the images of a pair directly in a slide were two items of the Steps pane, and a plan
+// that gave them two steps wrote each step on both images, one over the other
+for (const platform of PLATFORMS) {
+  for (const mode of ['dark', 'light']) {
+    test(`an image pair in a slide is one item of the Steps pane, and its step is written on both images in ${mode} mode (${platform})`, async (t) => {
+      const page = await load(t, platform, { deck: PAIR_DECK, n: 0, mode });
+      await exec(page, 'view.steps');
+      await frames(page);
+      const rows = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-inspector .rows .row .chip')].map((c) => c.getAttribute('aria-label'))`);
+      assert.equal(rows.filter((r) => /A figure/.test(r)).length, 1, `the pair is not one row: ${rows.join(' | ')}`);
+      await exec(page, 'steps.oneByOne');
+      const text = await render(page);
+      const tags = imageTags(text);
+      const para = text.match(/<p[^>]*>A paragraph before/)[0];
+      assert.ok(indexOf(tags.dark) && indexOf(tags.dark) === indexOf(tags.light), `the images are not at one step: ${tags.dark} ${tags.light}`);
+      assert.match(tags.dark, /class="for-dark fragment"/);
+      assert.match(tags.light, /class="for-light fragment"/);
+      assert.deepEqual([indexOf(para), indexOf(tags.dark), indexOf(tags.light)], ['1', '2', '2'], 'the paragraph is not at step 1 and the pair at step 2');
+      const badges = await page.evaluate(`document.querySelectorAll('.beeson-badges .beeson-badge').length`);
+      assert.equal(badges, 2, 'the paragraph and the pair do not each have one number on the slide');
+      await roundTrip(page);
+    });
+  }
 }
