@@ -8,6 +8,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
+import { titled } from '../src/editor/commands/edit.ts';
 import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
@@ -312,3 +313,16 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errorsOf(page), []);
   });
 }
+
+test('a label of the history is set in the title case of Apple, with short words in lowercase inside it', () => {
+  assert.equal(titled('resize column to fit content'), 'Resize Column to Fit Content');
+  assert.equal(titled('typing'), 'Typing');
+  assert.equal(titled('move to the back'), 'Move to the Back');
+  assert.equal(titled('size of text and color'), 'Size of Text and Color');
+  assert.equal(titled('paste in place'), 'Paste in Place');
+  // the first and the last word are capitalized, and a word given with a capital is kept
+  assert.equal(titled('a move with Alt'), 'A Move with Alt');
+  assert.equal(titled('set up'), 'Set Up');
+  assert.equal(titled('insert QR code'), 'Insert QR Code');
+  assert.equal(titled('zoom in'), 'Zoom In');
+});
