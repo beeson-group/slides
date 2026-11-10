@@ -282,7 +282,9 @@ for (const platform of PLATFORMS) {
     await click(page, '.reveal section.present .zone > img');
     await frames(page);
     assert.equal((await state(page, 'text.copyStyle')).enabled, true, 'Copy Style is dimmed on an image');
-    const mode = await page.evaluate(`window.BeesonEditor.selection()[0].className`);
+    // the first click selects the figure, whose style is the style of the image shown in it
+    assert.deepEqual(await page.evaluate(`window.BeesonEditor.selection().map((e) => e.localName)`), ['figure']);
+    const mode = await page.evaluate(`[...document.querySelectorAll('.reveal section.present .zone > img')].find((e) => e.getBoundingClientRect().width).className`);
     assert.match(mode, /^for-(dark|light)$/);
     await press(page, copy);
     // on the paper image of slide 6, paper is taken off and the mode is set
@@ -328,7 +330,7 @@ for (const platform of PLATFORMS) {
     await click(page, '.reveal section.present .zone > img');
     await sleep(100);
     assert.equal((await state(page, 'text.formatPainter')).checked, false, 'the painter is still armed');
-    const shown = await page.evaluate(`window.BeesonEditor.selection()[0].getAttribute('src')`);
+    const shown = await page.evaluate(`[...document.querySelectorAll('.reveal section.present .zone > img')].find((e) => e.getBoundingClientRect().width).getAttribute('src')`);
     const name = shown.includes('dark') ? 'dark' : 'light';
     const before = `<img class="for-${name}" src="../../demo/figure-${name}.png"`;
     await roundTrip(page, page.source.replace(before, `<img class="paper" src="../../demo/figure-${name}.png"`));
