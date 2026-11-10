@@ -473,8 +473,32 @@ export async function outdent(app: App): Promise<void> {
 
 export type ListKind = 'none' | 'ul' | 'ol';
 
-// the kind of list at the caret, or null where a list is not set, e.g. in a heading
+// the kind of list of a block selected as an element: a body paragraph, or a list of the file that
+// is not inside a block, e.g. the ul of a slide or of its div.col
+function blockList(app: App, el: Element): ListKind | null {
+  if (el.localName === 'p') return structural(app, el) ? 'none' : null;
+  const pairing = app.pairing;
+  const parent = el.parentElement;
+  if (!el.matches(LIST) || !pairing?.elements.has(el) || pairing.byLive.has(el) || !parent || !pairing.elements.has(parent) || pairing.byLive.has(parent)) return null;
+  return el.localName as ListKind;
+}
+
+// the blocks selected as elements, each of which a list is set on as a whole, as on a text box
+// selected as an object in Keynote, or null when a selected element is not such a block
+function listBlocks(app: App): Element[] | null {
+  if (app.selection.kind !== 'elements') return null;
+  const els = app.selection.elements();
+  return els.length && els.every((el) => blockList(app, el) !== null) ? els : null;
+}
+
+// the kind of list at the caret or of the selected blocks, or null where a list is not set, e.g. in
+// a heading, or where the selected blocks differ
 export function listKind(app: App): ListKind | null {
+  const blocks = listBlocks(app);
+  if (blocks) {
+    const kinds = new Set(blocks.map((el) => blockList(app, el)));
+    return kinds.size === 1 ? [...kinds][0] : null;
+  }
   const at = itemAt(app);
   if (!at) return null;
   if (at.item.localName === 'li') return at.nested || structural(app, at.item) ? (at.item.parentElement!.localName as ListKind) : null;
@@ -482,6 +506,9 @@ export function listKind(app: App): ListKind | null {
 }
 
 export function canSetList(app: App, kind: ListKind): boolean {
+  // a list with a nested list is not made paragraphs, since the nested items would be lost
+  const blocks = listBlocks(app);
+  if (blocks) return kind !== 'none' || blocks.every((el) => !el.querySelector('li :is(ul, ol)'));
   const at = itemAt(app);
   const now = listKind(app);
   if (!at || now === null) return false;
@@ -492,6 +519,8 @@ export function canSetList(app: App, kind: ListKind): boolean {
 // the list at the caret given the tag of kind. a paragraph becomes a list of one item, and an item
 // of the first level becomes a paragraph, which cuts its list in two
 export async function setList(app: App, kind: ListKind): Promise<void> {
+  const blocks = listBlocks(app);
+  if (blocks) return setBlockList(app, blocks, kind);
   const at = itemAt(app);
   const now = listKind(app);
   if (!at || now === null || now === kind || !canSetList(app, kind)) return;
@@ -541,6 +570,34 @@ export async function setList(app: App, kind: ListKind): Promise<void> {
   await app.doc.remove(item, 'list');
   if (!parent.querySelector(':scope > li')) await app.doc.remove(parent, 'list');
   selectIn(p, offset);
+}
+
+// each selected block given the list of kind as a whole: a paragraph becomes a list of one item, a
+// list is retagged, and each item of a list becomes a paragraph with the attributes of the item.
+// the blocks made are selected
+async function setBlockList(app: App, blocks: Element[], kind: ListKind): Promise<void> {
+  if (!canSetList(app, kind)) return;
+  const made: Element[] = [];
+  for (const el of blocks) {
+    const now = blockList(app, el);
+    if (now === kind) {
+      made.push(el);
+      continue;
+    }
+    if (now === 'none') {
+      const { base, step, eol } = indentOf(app, el);
+      const li = startTag(app, el, 'li', { classes: { small: false } });
+      const content = rangeTex(el, rangeOf(el, null, null));
+      made.push(...(await app.doc.insert(`<${kind}>${eol}${base}${step}${li}${content}</li>${eol}${base}</${kind}>`, el.parentElement!, el, 'list')));
+      await app.doc.remove(el, 'list');
+    } else if (kind !== 'none') made.push(await app.doc.retag(el, kind, {}, 'list'));
+    else {
+      const texts = [...el.children].filter((c) => c.localName === 'li').map((li) => `${startTag(app, li, 'p')}${rangeTex(li, rangeOf(li, null, null)).trim()}</p>`);
+      made.push(...(await app.doc.insert(texts, el.parentElement!, nextOf(app, el), 'list')));
+      await app.doc.remove(el, 'list');
+    }
+  }
+  app.selection.set('elements', made);
 }
 
 export function install(app: App): void {
