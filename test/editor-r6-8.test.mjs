@@ -241,11 +241,23 @@ for (const platform of PLATFORMS) {
 // fieldsOf returns the values of the fields Width and Height of the Arrange pane
 const fieldsOf = (page) =>
   page.evaluate(`(() => { const v = (n) => document.querySelector('#beeson-edit-panel-format input[name="' + n + '"]')?.value ?? null; return { w: v('Width'), h: v('Height') }; })()`);
-// groupBoxOf returns the size of the box of the members of the group of the selection, in slide px
+// groupBoxOf returns the size of the box of the members of the group of the selection, in slide px:
+// a figure is boxed by its drawn picture and its caption, which hangs under its zone, and another
+// element by its box
 const groupBoxOf = (page) =>
   page.evaluate(`(() => {
     const els = window.BeesonEditor.selection();
-    const rs = els.map((e) => e.getBoundingClientRect());
+    const drawn = (el) => {
+      const r = el.getBoundingClientRect();
+      if (!(el instanceof HTMLImageElement) || getComputedStyle(el).objectFit !== 'contain') return r;
+      const q = Math.min(r.width / el.naturalWidth, r.height / el.naturalHeight), w = el.naturalWidth * q, h = el.naturalHeight * q;
+      return { left: r.left + (r.width - w) / 2, top: r.top + (r.height - h) / 2, right: r.left + (r.width + w) / 2, bottom: r.top + (r.height + h) / 2 };
+    };
+    const rs = els.map((e) => {
+      const r = drawn([...e.querySelectorAll('img')].find((i) => i.getBoundingClientRect().width) ?? e);
+      const caps = e.matches('figure') ? [...e.querySelectorAll(':scope > figcaption, :scope > .caption')].map((c) => c.getBoundingClientRect()).filter((c) => c.width) : [];
+      return { left: Math.min(r.left, ...caps.map((c) => c.left)), top: Math.min(r.top, ...caps.map((c) => c.top)), right: Math.max(r.right, ...caps.map((c) => c.right)), bottom: Math.max(r.bottom, ...caps.map((c) => c.bottom)) };
+    });
     const s = Reveal.getScale();
     return { w: (Math.max(...rs.map((r) => r.right)) - Math.min(...rs.map((r) => r.left))) / s, h: (Math.max(...rs.map((r) => r.bottom)) - Math.min(...rs.map((r) => r.top))) / s };
   })()`);
