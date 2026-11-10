@@ -2,14 +2,16 @@
 // redo of a resize, a move, or a rotation select what was selected for it, i.e. an image, a whole
 // figure, or a group, and not the hidden image of a dark and light pair (finding 4 of opus in round
 // 2 of the council). the readout of a move gives the upper left corner of the element in slide px.
-// a page of the editor does not write back the guides that it read at its start
+// a page of the editor does not write back the guides that it read at its start. a first click on a
+// text block of a group selects the group, a second click the block, and a third puts the caret
+// in its text, as in Keynote and PowerPoint
 
 import assert from 'node:assert/strict';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, drag, saveAndReopen, selectFigure } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen, selectFigure } from './helpers/editor.mjs';
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 const PLATFORMS = ['mac', 'other'];
@@ -294,6 +296,59 @@ for (const platform of PLATFORMS) {
     assert.deepEqual((await stored(newer))[MATH], { x: [640], y: [300] }, 'a page that is left writes over the guides of the newer session');
     await first.close();
     assert.deepEqual(errors(newer), []);
+  });
+}
+
+const LEAD = `[...document.querySelectorAll('.reveal section.present p')].find((p) => p.textContent === 'The lead-in of a display')`;
+// a point inside the text of the lead paragraph of the math slide
+const leadAt = (page) => page.evaluate(`(() => { const r = document.createRange(); r.selectNodeContents(${LEAD}.firstChild); const b = r.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`);
+// whether the caret is in the lead paragraph
+const caretInLead = (page) => page.evaluate(`(() => { const s = getSelection(); return document.activeElement === ${LEAD} && !!s.rangeCount && ${LEAD}.contains(s.anchorNode); })()`);
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: a first click on a grouped text block selects its group, a second the block, and a third puts the caret in it`, async () => {
+    const page = await editor(platform);
+    // a click on a text block that is not grouped puts the caret in it
+    await click(page, await leadAt(page));
+    await frames(page);
+    assert.ok(await caretInLead(page), 'a click on a text block that is not grouped does not put the caret in it');
+    await press(page, 'Escape');
+    // the paragraph and the figure as a group
+    await selectFigure(page, ZONE_IMG);
+    await click(page, await leadAt(page), { modifiers: 'Shift' });
+    await exec(page, 'arrange.group');
+    await frames(page);
+    const group = ['figure.zone.fragment', 'p'];
+    assert.deepEqual((await selected(page)).sort(), group, 'the paragraph and the figure are not grouped');
+    await exec(page, 'selection.clear');
+    await frames(page);
+    await click(page, await leadAt(page));
+    await frames(page);
+    assert.ok(!(await caretInLead(page)), 'a first click on a grouped text block puts the caret in it');
+    assert.deepEqual((await selected(page)).sort(), group, 'a first click on a grouped text block does not select its group');
+    await click(page, await leadAt(page));
+    await frames(page);
+    assert.ok(!(await caretInLead(page)), 'a second click on a grouped text block puts the caret in it');
+    assert.deepEqual(await selected(page), ['p'], 'a second click on a grouped text block does not select the block alone');
+    await click(page, await leadAt(page));
+    await frames(page);
+    assert.ok(await caretInLead(page), 'a third click on a grouped text block does not put the caret in it');
+    // a drag that starts on a grouped text block moves the group
+    await press(page, 'Escape');
+    await exec(page, 'selection.clear');
+    await frames(page);
+    const grouped = await render(page);
+    await drag(page, await leadAt(page), { dx: 40, dy: 30 });
+    await frames(page);
+    const moved = await render(page);
+    assert.match(moved, /<p style="translate: -?\d+px -?\d+px" data-group="g1">The lead-in of a display<\/p>/, 'the paragraph is not moved');
+    assert.match(moved, /<figure class="zone fragment" data-fragment-index="2" style="translate: -?\d+px -?\d+px" data-group="g1">/, 'the figure is not moved with the paragraph');
+    await undo(page);
+    assert.equal(await render(page), grouped);
+    await redo(page);
+    assert.equal(await render(page), moved);
+    await saveAndReopen(page);
+    assert.deepEqual(errors(page), []);
   });
 }
 
