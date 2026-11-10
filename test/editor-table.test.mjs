@@ -15,6 +15,8 @@ import { serve } from '../scripts/webdriver.mjs';
 import { byteExact, click, press, saveAndReopen, type } from './helpers/editor.mjs';
 
 const LAYOUTS_DECK = 'test/pages/editor-layouts.html';
+// a table with a rowspan and a colspan on its first slide, and a plain table on its second
+const TABLES_DECK = 'test/pages/editor-tables.html';
 // the index of the slide of the equations in index.html, a content slide without a table
 const EQUATIONS = 3;
 const STYLE = { step: '  ', eol: '\n' };
@@ -527,6 +529,53 @@ for (const platform of ['mac', 'other']) {
       '<tr><td>Vertical</td><td>4.4</td></tr>',
     ])]]);
     assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Paste');
+    await roundTrip(page);
+  });
+}
+
+// the rows of the table of merged cells of TABLES_DECK, and the table of rows in its indentation
+const MERGED_ROWS = [
+  '<tr><th>Family</th><th>Period</th><th>Jacobi</th></tr>',
+  '<tr><td rowspan="2">Halo</td><td style="text-align: right">14.8</td><td style="text-align: right">3.05</td></tr>',
+  '<tr><td style="text-align: right">6.6</td><td style="text-align: right">3.04</td></tr>',
+  '<tr><td colspan="2">Distant retrograde</td><td style="text-align: right">2.92</td></tr>',
+];
+const tbodyTable = (rows) => `<table>\n    <tbody>\n${rows.map((r) => `      ${r}\n`).join('')}    </tbody>\n  </table>`;
+const R = '<td style="text-align: right">';
+
+// the cells were counted with colspan only, hence a row or a column added at a cell next to a
+// rowspan was written with a cell too many, or at the wrong column
+for (const platform of ['mac', 'other']) {
+  test(`a row added in a table with a rowspan grows the rowspan and gets a cell less (${platform})`, async (t) => {
+    const page = await open(platform, TABLES_DECK);
+    t.after(() => page.close?.());
+    await show(page, 0);
+    await click(page, cellSelector(1, 1));
+    await page.evaluate(`window.BeesonEditor.exec('table.rowBelow')`);
+    await settle(page);
+    await byteExact(page, [[tbodyTable(MERGED_ROWS), tbodyTable([
+      MERGED_ROWS[0],
+      MERGED_ROWS[1].replace('rowspan="2"', 'rowspan="3"'),
+      `<tr>${R}</td>${R}</td></tr>`,
+      ...MERGED_ROWS.slice(2),
+    ])]]);
+    await roundTrip(page);
+  });
+
+  test(`a column added in a table with a rowspan is put at its column in each row (${platform})`, async (t) => {
+    const page = await open(platform, TABLES_DECK);
+    t.after(() => page.close?.());
+    await show(page, 0);
+    // the cell 6.6 is the first cell of its row and in the second column
+    await click(page, cellSelector(2, 0));
+    await page.evaluate(`window.BeesonEditor.exec('table.columnAfter')`);
+    await settle(page);
+    await byteExact(page, [[tbodyTable(MERGED_ROWS), tbodyTable([
+      '<tr><th>Family</th><th>Period</th><th></th><th>Jacobi</th></tr>',
+      `<tr><td rowspan="2">Halo</td>${R}14.8</td><td></td>${R}3.05</td></tr>`,
+      `<tr>${R}6.6</td><td></td>${R}3.04</td></tr>`,
+      `<tr><td colspan="2">Distant retrograde</td><td></td>${R}2.92</td></tr>`,
+    ])]]);
     await roundTrip(page);
   });
 }
