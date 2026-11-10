@@ -187,3 +187,22 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the names of the keys and of the modifiers of Windows and Linux, as PowerPoint for Windows writes
+// them, and the word drag of the rows of the mouse
+const KEY_NAMES = new Set(['Ctrl', 'Shift', 'Alt', 'Meta', 'Esc', 'Enter', 'Tab', 'Backspace', 'Delete', 'Spacebar', 'Menu', 'Up Arrow', 'Down Arrow', 'Left Arrow', 'Right Arrow', 'Home', 'End', 'Page Up', 'Page Down', 'drag', ...Array.from({ length: 12 }, (_, i) => `F${i + 1}`)]);
+const ODD_PARTS = (label) => label.split(', ').flatMap((key) => key.split(/\+(?!$)/)).filter((part) => !(/^[\x21-\x7E]$/.test(part) || KEY_NAMES.has(part)));
+
+// finding 5: Zoom Out was listed as Ctrl with a minus sign, where the key bears a hyphen-minus
+test('every key of the keyboard sheet and the menus of Windows and Linux is written with ASCII characters and the names of the keys', async (t) => {
+  const page = await load(t, 'other', { n: 1 });
+  const menus = (await menuBarRows(page)).filter((r) => r.keys).map((r) => [r.label, r.keys]);
+  await exec(page, 'help.keys');
+  await page.waitFor(`!!document.querySelector('dialog.beeson-edit-keys[open] kbd')`);
+  const sheet = await page.evaluate(`[...document.querySelectorAll('dialog.beeson-edit-keys[open] .row')].map((r) => [r.querySelector('span').textContent, r.querySelector('kbd').textContent])`);
+  assert.ok(sheet.length > 40, 'the keyboard sheet is not filled');
+  const odd = [...menus, ...sheet].filter(([, keys]) => ODD_PARTS(keys).length || !/^[\x20-\x7E]+$/.test(keys)).map(([label, keys]) => `${label}: ${keys}`);
+  assert.deepEqual([...new Set(odd)], []);
+  assert.ok(sheet.some(([label, keys]) => label === 'Zoom Out' && keys.split(', ').includes('Ctrl+-')), 'Zoom Out is not listed as Ctrl+-');
+  assert.deepEqual(errors(page), []);
+});
