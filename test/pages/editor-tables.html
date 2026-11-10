@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor tables deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the tables of the tests of the editor: one with merged cells, a plain one with numbers that are
+     not set at the right, and one with a word set at the right -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>A table with merged cells</h2>
+  <table>
+    <tbody>
+      <tr><th>Family</th><th>Period</th><th>Jacobi</th></tr>
+      <tr><td rowspan="2">Halo</td><td style="text-align: right">14.8</td><td style="text-align: right">3.05</td></tr>
+      <tr><td style="text-align: right">6.6</td><td style="text-align: right">3.04</td></tr>
+      <tr><td colspan="2">Distant retrograde</td><td style="text-align: right">2.92</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>A plain table</h2>
+  <table>
+    <tbody>
+      <tr><th>Body</th><th>Mass ratio</th><th>System</th></tr>
+      <tr><td>Moon</td><td>\(0.01215\)</td><td>Earth and Moon</td></tr>
+      <tr><td>Europa</td><td>2.53e-5</td><td>Jupiter</td></tr>
+      <tr><td>Titan</td><td>2.37e-4</td><td>Saturn</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>A word at the right</h2>
+  <table>
+    <tbody>
+      <tr><th>Orbit</th><th>Period</th></tr>
+      <tr><td style="text-align: right">Halo</td><td>14.8</td></tr>
+      <tr><td>Lyapunov</td><td>2.69</td></tr>
+    </tbody>
+  </table>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>
