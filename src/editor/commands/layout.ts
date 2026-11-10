@@ -8,10 +8,10 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { LAYOUTS, textStyle, type Layout } from '../model/templates.ts';
+import { LAYOUTS, sampleText, textStyle, type Layout } from '../model/templates.ts';
 import { childrenIn, eolOf, indentAt, spaceOf, unitsOf } from '../model/units.ts';
 import type { Navigator } from '../navigator/navigator.ts';
-import { cloneSlide, drawInto } from '../navigator/thumbs.ts';
+import { drawInto } from '../navigator/thumbs.ts';
 import { classesOf, tokenize, type Range, type Token } from '../tokens.ts';
 import { injectStyle } from '../ui/dom.ts';
 import { install as installOrder } from './order.ts';
@@ -174,37 +174,6 @@ export function relayout(body: string, layout: Layout, step: string): string {
   return out + eol + base + body.slice(close.start);
 }
 
-// the change of relayout made on a clone of a slide, for the tiles of the chooser
-function relayoutClone(clone: HTMLElement, layout: Layout): void {
-  const els: Element[] = [];
-  for (const child of [...clone.children]) {
-    if (child.localName === 'div' && WRAPPER_CLASSES.some((c) => child.classList.contains(c))) {
-      els.push(...child.children);
-      child.remove();
-    } else els.push(child);
-  }
-  const kinds = els.map((el) => (el.hasAttribute('data-generated') ? 'other' : kindOf(el.localName, [...el.classList])));
-  const h = headingTag(layout);
-  const first = kinds.indexOf('heading');
-  if (first >= 0 && els[first].localName !== h) {
-    const n = document.createElement(h);
-    for (const a of els[first].attributes) n.setAttribute(a.name, a.value);
-    n.append(...els[first].childNodes);
-    els[first] = n;
-  }
-  for (const c of LAYOUT_CLASSES) clone.classList.remove(c);
-  if (layout !== 'content') clone.classList.add(layout);
-  for (const item of arrange(kinds, layout)) {
-    if (typeof item === 'number') clone.append(els[item]);
-    else {
-      const div = document.createElement('div');
-      div.className = item.wrap;
-      div.append(...(item.parts.length ? item.parts.map((i) => els[i]) : [document.createElement(h)]));
-      clone.append(div);
-    }
-  }
-}
-
 const navOf = (app: App): Navigator => app.nav as Navigator;
 
 // the slides of the commands: those selected in the navigator, else the current one
@@ -324,13 +293,25 @@ function needsReset(app: App, slide: Element): boolean {
   return relayout(body, layoutOf(slide), stepOf(app)) !== body || placed(app, slide).length > 0;
 }
 
-// the chooser: a grid of the current slide drawn in each layout. a click or Enter on a tile
-// changes the layout of the selected slides. it has the look of the New Slide gallery of
-// commands/slide.ts
+// the chooser: a grid of a sample slide of each layout, as the master slides of Keynote and the
+// layout gallery of PowerPoint, with the name of the layout under it and the layout of the slide
+// marked. a click or Enter on a tile changes the layout of the selected slides. it has the look of
+// the New Slide gallery of commands/slide.ts, with larger tiles
+const TILE = 120;
 const CSS = `
-.beeson-edit-layouts .tile[aria-selected="true"] .pic { outline: 2px solid var(--g-select); }
-.beeson-edit-layouts .tile[aria-selected="true"] span:last-child { font-weight: 600; }
+.beeson-edit-gallery.beeson-edit-layouts { width: max-content; }
+.beeson-edit-layouts .grid { grid-template-columns: repeat(4, ${TILE + 8}px); }
+.beeson-edit-layouts .tile .pic { width: ${TILE}px; }
+.beeson-edit-layouts .tile[aria-selected="true"] .pic { outline: 3px solid var(--g-select); }
+.beeson-edit-layouts .tile[aria-selected="true"] span:last-child { color: var(--g-select); font-weight: 600; }
 `;
+
+// the sample slide of a layout, parsed from its text
+function sample(layout: Layout): Element {
+  const t = document.createElement('template');
+  t.innerHTML = sampleText(layout);
+  return t.content.firstElementChild!;
+}
 
 let chooser: (HTMLDialogElement & { anchor?: HTMLElement | null }) | null = null;
 
@@ -395,11 +376,7 @@ export function openChooser(app: App, anchor: Element | null): void {
   dialog.append(head, grid);
   document.body.append(dialog);
   dialog.show();
-  for (const t of tiles) {
-    const clone = cloneSlide(slide, 92 / deck.width);
-    relayoutClone(clone, t.layout);
-    drawInto(t.pic, clone, deck, 92);
-  }
+  for (const t of tiles) drawInto(t.pic, sample(t.layout), deck, TILE);
   placeChooser(dialog, dialog.anchor ?? app.current());
   dialog.addEventListener('keydown', (ev) => {
     const i = tiles.findIndex((t) => t.tile === document.activeElement);

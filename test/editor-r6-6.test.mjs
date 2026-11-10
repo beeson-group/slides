@@ -1,9 +1,11 @@
-// the fixes of R6.6 on both platforms. Cmd+Enter on a Mac and Ctrl+Enter elsewhere commit the TeX
+// the fixes of R6.6 on both platforms. the tiles of the layout chooser are drawn from samples of
+// the layouts rather than from the current slide. Cmd+Enter on a Mac and Ctrl+Enter elsewhere commit the TeX
 // of the Insert Formula and Edit Formula sheets while the preview is still typeset, and the labels
 // of the transitions say that reveal.js plays the Fade of the slide entered. each edit of the file
 // is checked byte for byte, after an undo and a redo, and after a save and an open
 
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
@@ -145,6 +147,48 @@ for (const platform of PLATFORMS) {
     ]`);
     assert.equal(title, 'Fade into this slide from the slide before, the default of the theme');
     assert.doesNotMatch(group, /next slide/);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+// the drawing of each tile of the chooser opened on the slide at index, as the markup of the slide
+// in its shadow root and a hash of its pixels, inside the outline of the tile
+async function tiles(page, index) {
+  await page.evaluate(`Reveal.slide(${index})`);
+  await wait(page, 300);
+  await exec(page, 'slide.layoutChooser');
+  assert.ok(await until(page, `document.querySelectorAll('.beeson-edit-layouts .tile .pic').length === 8`), 'the chooser is not open');
+  await frames(page);
+  const list = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-layouts .tile')].map((t) => {
+    const r = t.querySelector('.pic').getBoundingClientRect();
+    return {
+      layout: t.dataset.layout,
+      name: t.textContent.trim(),
+      marked: t.getAttribute('aria-selected') === 'true',
+      markup: t.querySelector('.pic').shadowRoot.querySelector('.slides').innerHTML,
+      clip: { x: r.left + 4, y: r.top + 4, width: r.width - 8, height: r.height - 8, scale: 1 },
+    };
+  })`);
+  for (const t of list) t.pixels = createHash('sha1').update(await page.screenshot(t.clip)).digest('hex');
+  await press(page, 'Escape');
+  return list;
+}
+
+for (const platform of PLATFORMS) {
+  test(`the tiles of the layout chooser are samples of the layouts, the same on every slide, on ${platform}`, async () => {
+    const page = await editor(platform, 2);
+    const content = await tiles(page, 2);
+    const figure = await tiles(page, 8);
+
+    assert.deepEqual(content.map((t) => t.name), ['Title', 'Section', 'Content', 'Content, Narrow', 'Content, Wide', 'Figure', 'Split', 'Closing']);
+    assert.equal(new Set(content.map((t) => t.markup)).size, 8, 'two tiles have the same markup');
+    assert.equal(new Set(content.map((t) => t.pixels)).size, 8, 'two tiles are drawn alike');
+    assert.deepEqual(figure.map((t) => t.markup), content.map((t) => t.markup), 'a tile depends on the current slide');
+    assert.deepEqual(figure.map((t) => t.pixels), content.map((t) => t.pixels), 'a tile is drawn from the current slide');
+    assert.deepEqual(content.filter((t) => t.marked).map((t) => t.layout), ['content']);
+    assert.deepEqual(figure.filter((t) => t.marked).map((t) => t.layout), ['figure']);
+    // the deck is not changed by the chooser
+    await byteExact(page);
     assert.deepEqual(errors(page), []);
   });
 }
