@@ -310,3 +310,48 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// the contrast ratio of two colors given as rgb() strings, as WCAG 2 defines it
+function contrast(a, b) {
+  const lum = (c) => {
+    const [r, g, bl] = c.match(/[\d.]+/g).slice(0, 3).map((v) => {
+      const s = Number(v) / 255;
+      return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+    });
+    return 0.2126 * r + 0.7152 * g + 0.0722 * bl;
+  };
+  const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p);
+  return (x + 0.05) / (y + 0.05);
+}
+
+for (const platform of PLATFORMS) {
+  test(`a slide changed to Split keeps its text inside the panel, with readable inline code in both modes, on ${platform}`, async () => {
+    const page = await stepsPage(platform, 1600, 1000);
+    await page.evaluate(`Reveal.slide(Reveal.getIndices([...document.querySelectorAll('.reveal section h2')].find((h) => h.textContent.startsWith('Figures are first')).closest('section')).h)`);
+    await frames(page);
+    const source = page.source;
+    await exec(page, 'slide.layout.split');
+    await page.evaluate('new Promise((d) => setTimeout(d, 300))');
+    const fit = await page.evaluate(`(() => {
+      const panel = document.querySelector('.reveal section.present > .panel');
+      const p = panel.getBoundingClientRect();
+      const out = [...panel.children].filter((el) => !el.matches('.foot, aside')).filter((el) => el.getBoundingClientRect().bottom > p.bottom + 1).map((el) => el.localName);
+      return { out, marked: document.querySelectorAll('.reveal section.present .beeson-overflow').length };
+    })()`);
+    assert.deepEqual(fit.out, [], 'a text runs past the bottom of the panel');
+    assert.equal(fit.marked, 0);
+    const split = await page.evaluate('window.BeesonEditor.render()');
+    assert.notEqual(split, source);
+    for (const theme of ['dark', 'light']) {
+      await page.evaluate(`document.documentElement.dataset.theme = '${theme}'`);
+      const [fg, bg] = await page.evaluate(`(() => { const c = document.querySelector('.reveal section.present > .panel code'); return [getComputedStyle(c).color, getComputedStyle(c.closest('.panel')).backgroundColor]; })()`);
+      assert.ok(contrast(fg, bg) >= 4.5, `inline code in the panel has a contrast of ${contrast(fg, bg).toFixed(2)} in ${theme} mode`);
+    }
+    await undo(page);
+    assert.equal(await page.evaluate('window.BeesonEditor.render()'), source);
+    await redo(page);
+    assert.equal(await page.evaluate('window.BeesonEditor.render()'), split);
+    await saved(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
