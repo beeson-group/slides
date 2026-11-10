@@ -271,3 +271,48 @@ for (const platform of PLATFORMS) {
     await roundTrip(page);
   });
 }
+
+// every drawing of a thumbnail with a formula of the deck in raw TeX, kept in window.rawThumbs,
+// and the number of drawings of the thumbnail of slide 5 with typeset formulas
+const WATCH = `(() => {
+  window.rawThumbs = [];
+  window.typesetThumbs = 0;
+  const check = () => {
+    const hosts = [...document.querySelectorAll('.beeson-edit-nav .row .pic')];
+    hosts.forEach((h, i) => {
+      const root = h.shadowRoot;
+      const wrap = root?.querySelector('.beeson-thumb');
+      if (!wrap || wrap.dataset.checked) return;
+      wrap.dataset.checked = '1';
+      const walker = document.createTreeWalker(wrap, NodeFilter.SHOW_TEXT);
+      for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+        if (t.parentElement.closest('pre, code, mjx-container')) continue;
+        const m = /\\\\[(\\[].{0,16}/.exec(t.data);
+        if (m) window.rawThumbs.push({ slide: i + 1, text: m[0] });
+      }
+      if (i === 4 && wrap.querySelector('mjx-container')) window.typesetThumbs++;
+    });
+    requestAnimationFrame(check);
+  };
+  requestAnimationFrame(check);
+  return true;
+})()`;
+
+// finding 4: the thumbnail of a slide was drawn before its formulas were typeset, and showed raw
+// TeX, e.g. while the image of slide 5 was rotated right after the deck was opened
+for (const platform of PLATFORMS) {
+  test(`a thumbnail of the navigator is drawn only from typeset formulas (${platform})`, async (t) => {
+    const page = await load(t, platform, { mode: 'light', watch: true });
+    await sleep(150);
+    await click(page, IMG);
+    const rotor = await page.evaluate(`(() => { const r = document.querySelector('.beeson-rotor').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    await drag(page, rotor, { dx: 120, dy: 40, hold: true });
+    await sleep(1500);
+    await release(page, { x: rotor.x + 120, y: rotor.y + 40 });
+    await sleep(800);
+    const raw = await page.evaluate('window.rawThumbs');
+    assert.deepEqual(raw, [], `a thumbnail is drawn with raw TeX: ${js(raw)}`);
+    assert.ok((await page.evaluate('window.typesetThumbs')) > 0, 'the thumbnail of slide 5 is not drawn with its typeset formulas');
+    assert.deepEqual(errors(page), []);
+  });
+}
