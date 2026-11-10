@@ -50,7 +50,7 @@ test('a deck without ?edit does not load the editor, with ?edit it does on file:
   const status = await page.evaluate('window.BeesonEditor.status()');
   assert.equal(status.supported, true);
   assert.equal(status.state, 'waiting');
-  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].filter((b) => !b.hidden).map((b) => b.textContent)`), ['Undo', 'Redo', 'Open…', 'Save', 'Save as…', 'Autosave', 'Present']);
+  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].filter((b) => !b.hidden).map((b) => b.textContent)`), ['Undo', 'Redo', 'Present', 'Save', 'Format', 'Steps']);
   // the card asks for the file, with the folder of the deck
   assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-card').hidden`), false);
   assert.match(await page.evaluate(`document.querySelector('.beeson-edit-card p').textContent`), /index\.html in \//);
@@ -267,11 +267,14 @@ test('the notes are laid in a pane under the slide, and Present opens the deck w
     const slide = document.querySelector('.reveal .slides').getBoundingClientRect();
     const aside = document.querySelector('.reveal section.present > aside.notes');
     const box = aside.getBoundingClientRect();
-    return { display: getComputedStyle(aside).display, slideBottom: slide.bottom, top: box.top, bottom: box.bottom, height: innerHeight, focused: document.activeElement === aside };
+    const pane = document.querySelector('.beeson-edit-pane').getBoundingClientRect();
+    return { display: getComputedStyle(aside).display, slideBottom: slide.bottom, paneTop: pane.top, top: box.top, bottom: box.bottom, height: innerHeight, focused: document.activeElement === aside };
   })()`);
   assert.equal(boxes.display, 'block');
-  assert.ok(Math.abs(boxes.top - boxes.slideBottom) < 2, `the notes start at ${boxes.top}, the slide ends at ${boxes.slideBottom}`);
-  assert.ok(boxes.bottom <= boxes.height - 35, `the notes end at ${boxes.bottom} in a window of ${boxes.height}`);
+  // the notes are in their pane under the canvas, below the slide and its pasteboard
+  assert.ok(Math.abs(boxes.top - boxes.paneTop) < 2 && boxes.slideBottom <= boxes.top, `the notes start at ${boxes.top}, the pane at ${boxes.paneTop}, and the slide ends at ${boxes.slideBottom}`);
+  // the status bar of 28 px is under the notes
+  assert.ok(boxes.bottom <= boxes.height - 27, `the notes end at ${boxes.bottom} in a window of ${boxes.height}`);
   assert.equal(boxes.focused, true);
   await page.evaluate(`window.open = (url) => { window.__opened = url; }`);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Present').click()`);
@@ -547,7 +550,8 @@ test('the list of the slides at the left jumps to a slide, and G jumps to a slid
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Slides').click()`);
   b = await box();
   assert.equal(b.display, 'none');
-  assert.ok(b.slideLeft < 100, JSON.stringify(b));
+  // the canvas takes the width of the list, and the slide is centered in it
+  assert.ok(Math.abs(b.slideLeft - (1920 - b.slideRight)) < 2 && b.slideLeft < 200, JSON.stringify(b));
   assert.equal(await page.evaluate(`localStorage.getItem('beeson-nav')`), '0');
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Slides').click()`);
   assert.equal((await box()).display, 'flex');
@@ -593,7 +597,7 @@ test('Save as writes a chosen file, autosave saves after a pause, and unsaved ed
   assert.equal(s.file, 'saved-as.html');
   assert.match(s.message, /^Saved 1 edit to saved-as\.html at \d/);
   // autosave, after the pause that follows the last change
-  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Autosave').click()`);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-header button')].find((b) => b.textContent === 'Autosave').click()`);
   s = await status();
   assert.equal(s.autosave, true);
   await type('Saved as', 'Autosaved');
@@ -694,14 +698,15 @@ test('the notes pane is resized by dragging the strip above it, and the height i
     at('pointerup', y - 100);
     const aside = document.querySelector('.reveal section.present > aside.notes').getBoundingClientRect();
     const slide = document.querySelector('.reveal .slides').getBoundingClientRect();
-    return { display: getComputedStyle(strip).display, stripAtPane: Math.abs(y - paneTop) < 6, pane: window.BeesonEditor.status().pane, stored: localStorage.getItem('beeson-pane'), asideHeight: aside.height, asideAtSlide: Math.abs(aside.top - slide.bottom) < 2 };
+    const paneAfter = document.querySelector('.beeson-edit-pane').getBoundingClientRect().top;
+    return { display: getComputedStyle(strip).display, stripAtPane: Math.abs(y - paneTop) < 6, pane: window.BeesonEditor.status().pane, stored: localStorage.getItem('beeson-pane'), asideHeight: aside.height, asideAtPane: Math.abs(aside.top - paneAfter) < 2 && slide.bottom <= aside.top };
   })()`);
   assert.equal(result.display, 'block');
   assert.equal(result.stripAtPane, true);
   assert.equal(result.pane, 300);
   assert.equal(result.stored, '300');
   assert.ok(Math.abs(result.asideHeight - 300) < 2, `the notes are ${result.asideHeight} px high`);
-  assert.equal(result.asideAtSlide, true);
+  assert.equal(result.asideAtPane, true);
   assert.deepEqual(page.errors, []);
 });
 
@@ -737,7 +742,11 @@ test('Open with unsaved changes asks first: Cancel keeps them, Open without savi
     window.showOpenFilePicker = async () => { window.pickerCalls += 1; return [handle]; };
     window.showSaveFilePicker = async () => handle;`);
   const type = (text) => page.evaluate(`(() => { const h = [...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === ${JSON.stringify(h2)}); Reveal.slide(Reveal.getIndices(h.closest('section')).h); h.focus(); const r = document.createRange(); r.selectNodeContents(h); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); document.execCommand('insertText', false, ${JSON.stringify(text)}); })()`);
-  const open = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Open…').click()`);
+  // Open… is in the File menu of the menu bar
+  const open = () => page.evaluate(`{
+    [...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].find((b) => b.textContent === 'File').click();
+    [...document.querySelectorAll('.beeson-edit-menu .item')].find((i) => i.querySelector('.label').textContent === 'Open…').click();
+  }`);
   const choose = (text) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-card.ask button')].find((b) => b.textContent === ${JSON.stringify(text)}).click()`);
   await type(' edited');
   assert.equal((await page.evaluate('window.BeesonEditor.status()')).dirty, true);
@@ -877,12 +886,12 @@ test('the toggles, the state, the notes, and the formula dialog carry their stat
   t.after(() => browser.close());
   const page = await editorPage(browser);
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
-  const pressed = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button, .beeson-edit-bottom button')].filter((b) => b.hasAttribute('aria-pressed')).map((b) => [b.textContent, b.getAttribute('aria-pressed')])`);
-  assert.deepEqual(await pressed(), [['Autosave', 'false'], ['Slides', 'true'], ['Steps', 'false'], ['Notes', 'false']]);
+  const pressed = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-header button, .beeson-edit-bottom button')].filter((b) => b.hasAttribute('aria-pressed')).map((b) => [b.textContent, b.getAttribute('aria-pressed')])`);
+  assert.deepEqual(await pressed(), [['Autosave', 'false'], ['Format', 'false'], ['Steps', 'false'], ['Slides', 'true'], ['Steps', 'false'], ['Notes', 'false'], ['Fit', 'true']]);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Notes').click()`);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
-  assert.deepEqual(await pressed(), [['Autosave', 'false'], ['Slides', 'true'], ['Steps', 'true'], ['Notes', 'true']]);
-  assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-top .state').getAttribute('aria-live')`), 'polite');
+  assert.deepEqual(await pressed(), [['Autosave', 'false'], ['Format', 'false'], ['Steps', 'true'], ['Slides', 'true'], ['Steps', 'true'], ['Notes', 'true'], ['Fit', 'true']]);
+  assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-header .state').getAttribute('aria-live')`), 'polite');
   assert.equal(await page.evaluate(`document.querySelector('.reveal section.present > aside.notes').getAttribute('aria-label')`), 'Speaker notes');
   // the strip above the notes is a separator with a value, and the arrows change the height
   const strip = await page.evaluate(`(() => { const s = document.querySelector('.beeson-edit-resize'); s.focus(); return { role: s.getAttribute('role'), label: s.getAttribute('aria-label'), now: s.getAttribute('aria-valuenow'), focused: document.activeElement === s }; })()`);
@@ -937,7 +946,7 @@ test('a toolbar button pressed by keyboard keeps the focus, and Tab is kept insi
   const page = await editorPage(browser);
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
   const focus = await page.evaluate(`(() => {
-    const b = [...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Autosave');
+    const b = [...document.querySelectorAll('.beeson-edit-header button')].find((b) => b.textContent === 'Autosave');
     b.focus();
     b.click();
     const keyboard = document.activeElement === b;
@@ -1024,7 +1033,7 @@ test('the texts that cannot be edited are listed on a card from the toolbar', as
   const browser = await launch();
   t.after(() => browser.close());
   const page = await editorPage(browser);
-  const which = `[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Which?')`;
+  const which = `[...document.querySelectorAll('.beeson-edit-header button')].find((b) => b.textContent === 'Which?')`;
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
   assert.equal(await page.evaluate(`!${which} || ${which}.hidden`), true);
   const changed = deckText.replace('<h2>Show your steps one at a time</h2>', '<h2>Another heading</h2>');
@@ -1211,7 +1220,7 @@ test('the notes fill the width of the pane when the pane is tall', async (t) => 
     range.selectNodeContents(aside);
     const text = range.getClientRects()[0];
     const hit = document.elementFromPoint(pane.left + 30, text.top + text.height / 2);
-    return { pane: window.BeesonEditor.status().pane, aside: a.width, reveal: reveal.width, left: a.left, revealLeft: reveal.left, textLeft: text.left, paneLeft: pane.left, hit: !!hit && aside.contains(hit) };
+    return { pane: window.BeesonEditor.status().pane, aside: a.width, reveal: pane.width, left: a.left, revealLeft: pane.left, textLeft: text.left, paneLeft: pane.left, hit: !!hit && aside.contains(hit) };
   })()`);
   assert.equal(result.pane, 500);
   assert.ok(Math.abs(result.aside - result.reveal) < 2, `the notes are ${result.aside} px wide in a pane of ${result.reveal} px`);

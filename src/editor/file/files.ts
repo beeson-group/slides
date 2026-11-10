@@ -149,10 +149,10 @@ export function install(app: App): void {
     void problemsCard.open('close');
   }
 
-  // the focus goes back to Which? in the toolbar
+  // the focus goes back to Which? in the menu bar
   function closeProblems(): void {
     problemsCard.close(null);
-    const which = document.querySelector<HTMLButtonElement>('.beeson-edit-top button.which');
+    const which = document.querySelector<HTMLButtonElement>('.beeson-edit-header button.which');
     if (which && !which.hidden) which.focus();
   }
 
