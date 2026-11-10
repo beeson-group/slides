@@ -498,8 +498,9 @@ for (const platform of PLATFORMS) {
     const kind = Math.max(at('Replace Image…'), at('Edit Alt Text…'));
     const arrange = Math.min(at('Bring to Front'), at('Send to Back'));
     assert.ok(kind < arrange, `the items of an image do not come before the arrange items: ${labels.join(', ')}`);
-    // the figure of the image holds a caption, whose text is offered after the items of the image
-    assert.ok(at('Edit Text') > kind && at('Edit Text') < arrange, `Edit Text is not offered after the items of the image: ${labels.join(', ')}`);
+    // the figure of the image holds a caption, which is edited with a click or Return, as the menu
+    // of an image in Keynote does not have an item for text
+    assert.ok(!labels.includes('Edit Text'), `Edit Text is offered on an image: ${labels.join(', ')}`);
     await page.evaluate('window.BeesonEditorShell.closeMenus()');
 
     // a figure of videos does not hold a text, hence Edit Text is not offered on it

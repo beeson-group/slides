@@ -82,7 +82,7 @@ export function commands(): Command[] {
       keys: { mac: ['Mod+A'], other: ['Mod+A'] },
       // in a text, the first one selects the text of the block and the next one every element
       in: ['canvas', 'text'],
-      menu: { bar: 'Edit', group: 'select', order: 10 },
+      menu: { bar: 'Edit', group: 'select', order: 31 },
       context: ['canvas'],
       enabled: (app) => !!app.current() && (onCanvas() || app.selection.kind === 'text'),
       run: (app) => app.selection.selectAll(),
@@ -93,7 +93,7 @@ export function commands(): Command[] {
       label: 'Deselect',
       keys: { mac: ['Escape'], other: ['Escape'] },
       in: ['canvas'],
-      menu: { bar: 'Edit', group: 'select', order: 11 },
+      menu: { bar: 'Edit', group: 'select', order: 32 },
       enabled: (app) => app.selection.kind === 'elements' || app.selection.kind === 'text',
       run: (app) => {
         const only = app.selection.only();
@@ -109,7 +109,7 @@ export function commands(): Command[] {
       // caption, as Esc does
       id: 'selection.container',
       label: 'Select Figure',
-      menu: { bar: 'Edit', group: 'select', order: 12 },
+      menu: { bar: 'Edit', group: 'select', order: 33 },
       context: ['element'],
       enabled: (app) => {
         const only = app.selection.only();
