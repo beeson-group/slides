@@ -1,10 +1,11 @@
 // the commands of the show and of the review of a deck, after the Play menu of Keynote and the
-// Slide Show and Review tabs of PowerPoint, and the transition at the head of the Steps tab. the Play menu holds Present and Present from Start,
-// moved from the File menu, the presenter view, the rehearsal of timings, and Clear Timings. the
-// Slide menu holds the transition of a slide and Magic Move, and the View menu the light table and
-// the accessibility checker. Present keeps the keys of PowerPoint, since F5 reloads the page, and
-// the presenter view takes Alt+Enter, the key of PowerPoint on a Mac. the light table is not given
-// a key, since Chrome takes Mod+1 to Mod+9 for its tabs
+// Slide Show and Review tabs of PowerPoint, and the transition at the head of the Steps tab. the
+// Play menu holds Present and Present from Start, moved from the File menu, the presenter view,
+// the rehearsal of timings, and Clear Timings. the Slide menu holds the transition of a slide,
+// Magic Move, and Preview Transition, and the View menu the light table and the accessibility
+// checker. Present keeps the keys of PowerPoint, since F5 reloads the page, and the presenter view
+// takes Alt+Enter, the key of PowerPoint on a Mac. the light table is not given a key, since
+// Chrome takes Mod+1 to Mod+9 for its tabs
 
 import type { App } from '../app.ts';
 import { OUTSIDE_DIALOGS } from '../commands.ts';
@@ -13,7 +14,7 @@ import { Sorter } from '../navigator/sorter.ts';
 import { Presenter } from '../present.ts';
 import { Checker, useHeaderRow } from '../review/accessibility.ts';
 import { install as installAnimate } from '../review/animate.ts';
-import { magicMoveCopy, nextShown, paired, setTransition, transitionOf, type Transition } from '../review/transitions.ts';
+import { magicMoveCopy, nextShown, paired, preview, setTransition, transitionOf, type Transition } from '../review/transitions.ts';
 import { MENUS } from '../shell/menubar.ts';
 
 // the Play menu after the View menu, as in Keynote, added before the menu bar is built at its
@@ -127,6 +128,17 @@ export function install(app: App): void {
       if (!s) return;
       const copy = await magicMoveCopy(a, s);
       navOf(a).select([copy], copy);
+    },
+  });
+
+  c.define({
+    id: 'slide.previewTransition',
+    label: 'Preview Transition',
+    menu: { bar: 'Slide', group: 'transition', order: 66 },
+    enabled: (a) => ready(a) && !!a.current(),
+    run: (a) => {
+      const s = a.current();
+      if (s) void preview(a, s).catch((e) => a.fail(e));
     },
   });
 

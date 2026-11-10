@@ -6,6 +6,9 @@
 // and the same data-id on each pair of matched elements
 
 import type { App } from '../app.ts';
+import { drawInto } from '../navigator/thumbs.ts';
+import { showStep, stepsOfSlide } from '../present.ts';
+import { injectStyle, make } from '../ui/dom.ts';
 
 export type Transition = 'none' | 'fade' | 'magic';
 
@@ -147,4 +150,133 @@ export async function magicMoveCopy(app: App, slide: Element): Promise<Element> 
   markForMagic(app, slide);
   setMagic(app, slide, true);
   return app.doc.duplicate(slide);
+}
+
+// Preview of the transition, as the Preview button of the Animate pane of Keynote and of the
+// Transitions tab of PowerPoint. in reveal.js a slide is faded or cut into by the data-transition
+// of this slide, hence a Fade or None is played from the slide before, at its last step, into the
+// slide at its first step. a slide with Magic Move is played into the next slide, and a slide
+// moved into by Magic Move from the slide before is played from it. the clones of the slides are
+// drawn on a layer over the canvas, which is taken down at the end, at a press, or at Esc, and the
+// page is not changed
+export type Plan = { kind: Transition; from: Element | null; to: Element };
+
+export function previewOf(app: App, slide: Element): Plan {
+  const next = nextShown(app, slide);
+  if (next && transitionOf(app, slide) === 'magic') return { kind: 'magic', from: slide, to: next };
+  const before = previousShown(app, slide);
+  if (before && transitionOf(app, before) === 'magic') return { kind: 'magic', from: before, to: slide };
+  return { kind: slide.getAttribute('data-transition') === 'none' ? 'none' : 'fade', from: before, to: slide };
+}
+
+// FADE_MS is the fade of theme/beeson.css, and HOLD_MS the time each end of the preview is held,
+// both in ms
+const FADE_MS = 400;
+const HOLD_MS = 350;
+
+const PREVIEW_CSS = `
+.beeson-edit-preview { position: fixed; z-index: 65; overflow: hidden; pointer-events: none; }
+.beeson-edit-preview > .shot { position: absolute; inset: 0; }
+`;
+
+const magicMs = (): number => {
+  const config = (window as unknown as { Reveal?: { getConfig?(): { autoAnimateDuration?: number } } }).Reveal?.getConfig?.();
+  return (config?.autoAnimateDuration ?? 0.5) * 1000;
+};
+
+// the elements of section that are not in kept and do not contain an element of kept, outermost
+// first
+function unmatched(section: Element, kept: Set<Element>): Element[] {
+  const out: Element[] = [];
+  const walk = (el: Element) => {
+    for (const c of el.children) {
+      if (kept.has(c)) continue;
+      if ([...kept].some((k) => c.contains(k))) walk(c);
+      else out.push(c);
+    }
+  };
+  walk(section);
+  return out;
+}
+
+let stopPreview: (() => void) | null = null;
+
+export const previewing = (): boolean => !!stopPreview;
+
+export function preview(app: App, slide: Element): Promise<void> {
+  stopPreview?.();
+  const plan = previewOf(app, slide);
+  const stage = app.slides() as HTMLElement;
+  const box = stage.getBoundingClientRect();
+  if (!box.width || !box.height) return Promise.resolve();
+  injectStyle('preview', PREVIEW_CSS);
+  const deck = { width: stage.offsetWidth || 1920, height: stage.offsetHeight || 1080 };
+  const layer = make('div', 'beeson-edit-preview');
+  layer.dataset.kind = plan.kind;
+  layer.style.cssText = `left: ${box.left}px; top: ${box.top}px; width: ${box.width}px; height: ${box.height}px;`;
+  layer.style.background = getComputedStyle(stage.closest('.reveal') ?? document.body).backgroundColor;
+  document.body.append(layer);
+  const shot = (s: Element, k: number) => {
+    const host = make('div', 'shot');
+    layer.append(host);
+    drawInto(host, s, deck, box.width);
+    showStep(host, s, k);
+    return host;
+  };
+  const from = plan.from ? shot(plan.from, stepsOfSlide(plan.from)) : null;
+  const to = shot(plan.to, 0);
+  to.style.opacity = '0';
+  const animations: Animation[] = [];
+  const timers: number[] = [];
+  return new Promise<void>((resolve) => {
+    const stop = () => {
+      if (stopPreview !== stop) return;
+      stopPreview = null;
+      for (const t of timers) clearTimeout(t);
+      for (const a of animations) a.cancel();
+      window.removeEventListener('pointerdown', stop, true);
+      window.removeEventListener('keydown', key, true);
+      layer.remove();
+      resolve();
+    };
+    const key = (ev: KeyboardEvent) => {
+      if (ev.key !== 'Escape') return;
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      stop();
+    };
+    stopPreview = stop;
+    window.addEventListener('pointerdown', stop, true);
+    window.addEventListener('keydown', key, true);
+    const later = (ms: number, fn: () => void) => timers.push(window.setTimeout(fn, ms));
+    const ms = plan.kind === 'magic' ? magicMs() : plan.kind === 'none' ? 0 : FADE_MS;
+    later(HOLD_MS, () => {
+      layer.dataset.phase = 'play';
+      if (plan.kind === 'magic' && from) {
+        const a = from.shadowRoot?.querySelector('.slides > section');
+        const b = to.shadowRoot?.querySelector('.slides > section');
+        const pairs = a && b ? matchPairs(a, b) : [];
+        const scale = box.width / deck.width;
+        // each matched element of the next slide is moved from the place of its match, and the
+        // others are faded in, as in the auto-animate of reveal.js with autoAnimateUnmatched
+        const moves = pairs.map(([x, y]) => ({ y, p: x.getBoundingClientRect(), q: y.getBoundingClientRect() }));
+        from.style.opacity = '0';
+        to.style.opacity = '1';
+        for (const { y, p, q } of moves) {
+          if (!q.width || !q.height) continue;
+          const start = `translate(${(p.left - q.left) / scale}px, ${(p.top - q.top) / scale}px) scale(${p.width / q.width}, ${p.height / q.height})`;
+          animations.push(y.animate([{ transform: start, transformOrigin: '0 0' }, { transform: 'none', transformOrigin: '0 0' }], { duration: ms, easing: 'ease-out' }));
+        }
+        if (b) for (const el of unmatched(b, new Set(pairs.map(([, y]) => y)))) animations.push(el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: ms, easing: 'ease-out' }));
+      } else if (ms) {
+        to.style.opacity = '1';
+        animations.push(to.animate([{ opacity: 0 }, { opacity: 1 }], { duration: ms, easing: 'ease-out' }));
+        if (from) animations.push(from.animate([{ opacity: 1 }, { opacity: 0 }], { duration: ms, easing: 'ease-out', fill: 'forwards' }));
+      } else {
+        to.style.opacity = '1';
+        if (from) from.style.opacity = '0';
+      }
+      later(ms + HOLD_MS, stop);
+    });
+  });
 }

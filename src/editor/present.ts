@@ -60,7 +60,7 @@ function fragOf(el: Element): Frag {
 export const stepsOfSlide = (slide: Element): number => stepCount(stepsOf(fragsOf(slide).map(fragOf)));
 
 // the clone of slide drawn into host is shown at step k: each fragment not seen at k is hidden
-function showStep(host: HTMLElement, slide: Element, k: number): void {
+export function showStep(host: HTMLElement, slide: Element, k: number): void {
   const clone = host.shadowRoot?.querySelector('.beeson-thumb .slides > section');
   if (!clone) return;
   const frags = fragsOf(clone);

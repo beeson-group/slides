@@ -139,3 +139,70 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the layer of a preview of a transition: its kind, its phase, and the opacity of each shot
+const previewState = (page) => page.evaluate(`(() => {
+  const layer = document.querySelector('.beeson-edit-preview');
+  if (!layer) return null;
+  return { kind: layer.dataset.kind, phase: layer.dataset.phase ?? 'hold', shots: [...layer.querySelectorAll('.shot')].map((s) => Number(getComputedStyle(s).opacity)) };
+})()`);
+const idle = (page) => page.evaluate(`({ h: Reveal.getIndices().h, undo: window.BeesonEditor.state('edit.undo').enabled })`);
+
+for (const platform of PLATFORMS) {
+  test(`Preview plays the fade into the slide from the slide before and leaves the slide as it was on ${platform}`, async () => {
+    const page = await editor(platform, { index: 3 });
+    const before = await idle(page);
+    const items = await page.evaluate(`window.BeesonEditor.state('slide.previewTransition')`);
+    assert.equal(items.enabled, true);
+    assert.equal(items.label, 'Preview Transition');
+    await exec(page, 'slide.previewTransition');
+    const hold = await previewState(page);
+    assert.deepEqual(hold, { kind: 'fade', phase: 'hold', shots: [1, 0] });
+    await page.waitFor(`document.querySelector('.beeson-edit-preview')?.dataset.phase === 'play'`);
+    await wait(120);
+    const mid = await previewState(page);
+    assert.ok(mid.shots[1] > 0 && mid.shots[1] < 1, `the slide is not faded in: ${JSON.stringify(mid)}`);
+    await page.waitFor(`!document.querySelector('.beeson-edit-preview')`, 5000);
+    assert.deepEqual(await idle(page), before);
+    assert.equal(await page.evaluate('window.BeesonEditor.render()'), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`Preview cuts into a slide with None, and Esc ends it, from the head of the Steps tab on ${platform}`, async () => {
+    const page = await editor(platform, { index: 3 });
+    await exec(page, 'slide.transition.none');
+    const edited = await page.evaluate('window.BeesonEditor.render()');
+    if (!(await page.evaluate(`window.BeesonEditor.state('view.steps').checked`))) await exec(page, 'view.steps');
+    await frames(page);
+    await click(page, '.beeson-edit-transition .preview');
+    assert.equal((await previewState(page)).kind, 'none');
+    await page.waitFor(`document.querySelector('.beeson-edit-preview')?.dataset.phase === 'play'`);
+    assert.deepEqual((await previewState(page)).shots, [0, 1]);
+    await press(page, 'Escape');
+    assert.equal(await previewState(page), null);
+    assert.equal(await page.evaluate('window.BeesonEditor.render()'), edited);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`Preview plays Magic Move into the next slide, moving the matched heading on ${platform}`, async () => {
+    const page = await editor(platform, { index: 3 });
+    await exec(page, 'slide.magicMove');
+    await page.evaluate('window.BeesonEditor.status()');
+    await page.evaluate('Reveal.slide(3)');
+    await frames(page);
+    const edited = await page.evaluate('window.BeesonEditor.render()');
+    await exec(page, 'slide.previewTransition');
+    assert.equal((await previewState(page)).kind, 'magic');
+    await page.waitFor(`document.querySelector('.beeson-edit-preview')?.dataset.phase === 'play'`);
+    const moving = await page.evaluate(`(() => {
+      const to = document.querySelectorAll('.beeson-edit-preview .shot')[1].shadowRoot;
+      return to.querySelector('h2').getAnimations().length;
+    })()`);
+    assert.equal(moving, 1, 'the heading of the next slide is not moved');
+    await page.waitFor(`!document.querySelector('.beeson-edit-preview')`, 5000);
+    assert.equal(await page.evaluate('Reveal.getIndices().h'), 3);
+    assert.equal(await page.evaluate('window.BeesonEditor.render()'), edited);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
