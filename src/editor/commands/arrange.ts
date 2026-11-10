@@ -80,10 +80,11 @@ export function commands(): Command[] {
       id: 'selection.all',
       label: 'Select All',
       keys: { mac: ['Mod+A'], other: ['Mod+A'] },
-      in: ['canvas'],
+      // in a text, the first one selects the text of the block and the next one every element
+      in: ['canvas', 'text'],
       menu: { bar: 'Edit', group: 'select', order: 10 },
       context: ['canvas'],
-      enabled: (app) => !!app.current() && onCanvas(),
+      enabled: (app) => !!app.current() && (onCanvas() || app.selection.kind === 'text'),
       run: (app) => app.selection.selectAll(),
     },
     {

@@ -67,6 +67,15 @@ function wordAround(node: Text, offset: number): [number, number] | null {
   return w ? [w.index, w.index + w.segment.length] : null;
 }
 
+// whether the selection s holds every character of host
+function wholly(s: globalThis.Selection, host: Element): boolean {
+  if (!s.rangeCount) return false;
+  const r = s.getRangeAt(0);
+  const all = document.createRange();
+  all.selectNodeContents(host);
+  return r.compareBoundaryPoints(Range.START_TO_START, all) <= 0 && r.compareBoundaryPoints(Range.END_TO_END, all) >= 0;
+}
+
 export function install(app: App): void {
   let kind: SelectionKind = 'none';
   let items: Element[] = [];
@@ -95,8 +104,13 @@ export function install(app: App): void {
     },
     clear: () => set('none', []),
     selectAll: () => {
-      if (kind === 'slides') set('slides', [...app.slides().querySelectorAll(':scope > section')]);
-      else set('elements', movablesOf(app));
+      if (kind === 'slides') return set('slides', [...app.slides().querySelectorAll(':scope > section')]);
+      const host = kind === 'text' ? items[0] : null;
+      const s = getSelection();
+      if (host && s && !wholly(s, host)) return void s.selectAllChildren(host);
+      if (host && host.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
+      if (host) s?.removeAllRanges();
+      set('elements', movablesOf(app));
     },
     listen: (fn) => void listeners.push(fn),
     has: (item) => items.includes(item),
