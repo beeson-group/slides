@@ -235,7 +235,7 @@ const CHANGES = [
   'arrange.group', 'steps.add',
 ];
 // the items of the context menu of a locked figure that do not change it
-const KEPT = ['Copy', 'Paste', 'Duplicate', 'Unlock'];
+const KEPT = ['Copy', 'Paste', 'Duplicate', 'Save as Picture…', 'Unlock'];
 
 // state locked-element of round 2: a figure locked with Lock kept Replace and the other controls
 // of the Image pane, the align, flip, and order buttons of the Arrange pane, and the items of its
