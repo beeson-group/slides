@@ -2,7 +2,8 @@
 // formula, a step, and a move, as in Keynote and PowerPoint, where ⌘Z undoes the last change of
 // any kind. the browser keeps a history of its own for each block that is typed into, hence the
 // keys are taken before it, and the typing is recorded here as the content of the block before
-// and after. the typing into one block within a short time is one entry
+// and after. the typing into one block within a short time is one entry, and an undo or a redo
+// asked for while another one runs is queued
 
 export type Entry = { label: string; undo(): Promise<void> | void; redo(): Promise<void> | void };
 
@@ -15,6 +16,8 @@ export class History {
   // the typing in progress: the block, its content before and after, and the time of the last key
   private typing: { host: Element; state: { before: string; after: string }; entry: Entry; at: number } | null = null;
   private busy = false;
+  // the undos and redos asked for, run one after the other
+  private queue: Promise<void> = Promise.resolve();
   // the content of each block as it was last seen, for an input that is not announced before it
   // happens, e.g. a replacement from the spelling menu or a script
   private readonly known = new WeakMap<Element, string>();
@@ -34,6 +37,11 @@ export class History {
 
   get canRedo(): boolean {
     return this.undone.length > 0;
+  }
+
+  // resolved once every undo and redo asked for has run
+  idle(): Promise<void> {
+    return this.queue;
   }
 
   // a change other than typing, already applied
@@ -103,32 +111,35 @@ export class History {
     this.typing = null;
   }
 
-  async undo(): Promise<void> {
-    const entry = this.done.pop();
-    if (!entry || this.busy) return;
-    this.typing = null;
-    this.busy = true;
-    try {
-      await entry.undo();
-    } finally {
-      this.busy = false;
-    }
-    this.undone.push(entry);
-    this.onChange();
+  undo(): Promise<void> {
+    return this.step('undo');
   }
 
-  async redo(): Promise<void> {
-    const entry = this.undone.pop();
-    if (!entry || this.busy) return;
-    this.typing = null;
-    this.busy = true;
-    try {
-      await entry.redo();
-    } finally {
-      this.busy = false;
-    }
-    this.done.push(entry);
-    this.onChange();
+  redo(): Promise<void> {
+    return this.step('redo');
+  }
+
+  // the entry is taken when its turn in the queue comes, hence a second undo asked for during the
+  // first one takes the entry before it
+  private step(way: 'undo' | 'redo'): Promise<void> {
+    const run = this.queue.then(async () => {
+      // the stacks are read at the turn of the step, since clear() replaces them
+      const [from, to] = way === 'undo' ? [this.done, this.undone] : [this.undone, this.done];
+      const entry = from.pop();
+      if (!entry) return;
+      this.typing = null;
+      this.busy = true;
+      try {
+        await entry[way]();
+      } finally {
+        this.busy = false;
+      }
+      to.push(entry);
+      this.onChange();
+    });
+    // a failed step does not stop the steps after it, and its error is passed to its caller
+    this.queue = run.catch(() => {});
+    return run;
   }
 
   clear(): void {
