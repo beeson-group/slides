@@ -51,6 +51,22 @@ function mark(pairing: Pairing | null): void {
   }
 }
 
+// the text node and the offset of the caret at the point x, y of the viewport
+function caretAt(x: number, y: number): { node: Text; offset: number } | null {
+  const d = document as Document & { caretPositionFromPoint?: (x: number, y: number) => { offsetNode: Node; offset: number } | null };
+  const p = d.caretPositionFromPoint?.(x, y);
+  if (p) return p.offsetNode instanceof Text ? { node: p.offsetNode, offset: p.offset } : null;
+  const r = document.caretRangeFromPoint?.(x, y);
+  return r && r.startContainer instanceof Text ? { node: r.startContainer, offset: r.startOffset } : null;
+}
+
+// the start and the end in node of the word at offset, or at its end, or null between two words
+function wordAround(node: Text, offset: number): [number, number] | null {
+  const words = [...new Intl.Segmenter(document.documentElement.lang || undefined, { granularity: 'word' }).segment(node.data)].filter((w) => w.isWordLike);
+  const w = words.find((x) => x.index <= offset && offset < x.index + x.segment.length) ?? words.find((x) => x.index + x.segment.length === offset);
+  return w ? [w.index, w.index + w.segment.length] : null;
+}
+
 export function install(app: App): void {
   let kind: SelectionKind = 'none';
   let items: Element[] = [];
@@ -105,6 +121,36 @@ export function install(app: App): void {
     if (host && app.current()?.contains(host) && !host.closest('aside.notes')) set('text', [host]);
     else if (target?.classList.contains('beeson-movable')) set('elements', [target]);
   });
+  // a right-click in a text, before its context menu is opened in shell.ts: inside the selection
+  // the selection is kept, and else the text is focused and the word under the pointer is selected
+  // on a Mac, as in the text fields of macOS, or the caret is put under it elsewhere. the range
+  // before the press is kept, since the press of the right button may collapse it
+  let before: Range | null = null;
+  document.addEventListener('mousedown', (ev) => {
+    const s = getSelection();
+    before = ev.button === 2 && s && s.rangeCount && !s.isCollapsed ? s.getRangeAt(0).cloneRange() : null;
+  }, true);
+  document.addEventListener('contextmenu', (ev) => {
+    const target = ev.target instanceof Element ? ev.target : null;
+    const host = app.hostOf(target);
+    if (!host || !app.current()?.contains(host) || host.closest('aside.notes') || target?.closest('mjx-container')) return;
+    const s = getSelection();
+    if (!s) return;
+    const kept = before ?? (s.rangeCount && !s.isCollapsed ? s.getRangeAt(0) : null);
+    before = null;
+    const inside = (r: Range) => [...r.getClientRects()].some((b) => ev.clientX >= b.left && ev.clientX <= b.right && ev.clientY >= b.top && ev.clientY <= b.bottom);
+    if (kept && host.contains(kept.commonAncestorContainer) && inside(kept)) {
+      s.removeAllRanges();
+      s.addRange(kept);
+      return;
+    }
+    const at = caretAt(ev.clientX, ev.clientY);
+    if (!at || !host.contains(at.node)) return;
+    if (document.activeElement !== host && !host.contains(document.activeElement)) (host as HTMLElement).focus({ preventScroll: true });
+    const word = app.platform === 'mac' ? wordAround(at.node, at.offset) : null;
+    if (word) s.setBaseAndExtent(at.node, word[0], at.node, word[1]);
+    else s.setBaseAndExtent(at.node, at.offset, at.node, at.offset);
+  }, true);
   app.listen('slide', () => {
     if (kind !== 'slides') set('none', []);
   });

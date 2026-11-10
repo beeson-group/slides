@@ -43,8 +43,18 @@ export const DEFAULT_REGIONS: Region[] = ['canvas', 'navigator'];
 export const OUTSIDE_DIALOGS: Region[] = ['canvas', 'text', 'field', 'navigator', 'notes', 'inspector'];
 export const EVERYWHERE: Region[] = [...OUTSIDE_DIALOGS, 'dialog'];
 
-export function keysOf(c: Command, platform: Platform): string[] {
+// the keys that the menus list for a command whose keys reach it as clipboard events, since the
+// browser takes them in a text
+const CLIPBOARD_KEYS: Record<string, string[]> = { 'edit.cut': ['Mod+X'], 'edit.copy': ['Mod+C'], 'edit.paste': ['Mod+V'] };
+
+// the keys that run a command on the platform
+export function boundKeys(c: Command, platform: Platform): string[] {
   return c.keys?.[platform] ?? [];
+}
+
+// the keys of a command that the menus and the sheet of shortcuts list on the platform
+export function keysOf(c: Command, platform: Platform): string[] {
+  return c.keys?.[platform] ?? CLIPBOARD_KEYS[c.id] ?? [];
 }
 
 // a key without Mod, Ctrl, Alt, or Meta, other than a function key, which a focused button or
@@ -129,7 +139,7 @@ export class Commands {
     const platform = this.app.platform;
     const find = (e: KeyEvent) => this.list().find((c) =>
       (c.in ?? DEFAULT_REGIONS).includes(region) &&
-      keysOf(c, platform).some((k) => (plain || !isPlain(k)) && matches(e, k, platform)) &&
+      boundKeys(c, platform).some((k) => (plain || !isPlain(k)) && matches(e, k, platform)) &&
       this.enabled(c.id));
     const alt = fallback(ev, platform);
     return find(ev) ?? (alt ? find(alt) : undefined);

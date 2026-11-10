@@ -9,7 +9,7 @@
 // in the menu and announced with aria-activedescendant
 
 import type { App, Platform } from '../app.ts';
-import type { Command, Context, Group } from '../commands.ts';
+import { keysOf, type Command, type Context, type Group } from '../commands.ts';
 import { injectStyle, make } from './dom.ts';
 import { icon } from './icons.ts';
 
@@ -106,7 +106,7 @@ export function keyLabel(keys: string, on: Platform = platform): string {
 
 // the first key of a command on the platform, as a menu shows it
 export function commandKeys(c: Command, on: Platform = platform): string {
-  const k = c.keys?.[on]?.[0];
+  const k = keysOf(c, on)[0];
   return k ? keyLabel(k, on) : '';
 }
 
@@ -148,12 +148,19 @@ export function menuItems(app: App, bar: string, submenu?: string): MenuItem[] {
   return out;
 }
 
+const CLIPBOARD = ['edit.cut', 'edit.copy', 'edit.paste'];
+
 // the items of a context menu of a kind, each run with the kind and the element clicked. a rule
 // is put where the group of the menu bar changes between two neighbors
 export function contextItems(app: App, kind: Context, target: Element | null): MenuItem[] {
   const out: MenuItem[] = [];
   let last: string | null = null;
-  for (const c of app.commands.forContext(kind)) {
+  // the menu of a text or an element opens with the clipboard, and the menu of the canvas with
+  // Paste, as in Keynote and PowerPoint
+  const lead = (kind === 'text' || kind === 'element' ? CLIPBOARD : kind === 'canvas' ? ['edit.paste'] : []).filter((id) => app.commands.get(id));
+  for (const id of lead) out.push({ command: id, arg: { kind, target } });
+  if (lead.length) last = 'Edit/clipboard';
+  for (const c of app.commands.forContext(kind).filter((x) => !lead.includes(x.id))) {
     const group = `${c.menu?.bar ?? ''}/${c.menu?.group ?? ''}`;
     if (last !== null && group !== last) out.push({ rule: true });
     last = group;
