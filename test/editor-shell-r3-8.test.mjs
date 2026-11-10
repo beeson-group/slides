@@ -139,3 +139,33 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+const state = (page, id) => page.evaluate(`window.BeesonEditor.state(${JSON.stringify(id)})`);
+const PENDING = `document.querySelector('.reveal section.present .beeson-pending')`;
+
+for (const platform of PLATFORMS) {
+  for (const [id, label] of [['insert.text', 'Text Box'], ['insert.code', 'Code Box'], ['insert.footnote', 'Footnote']]) {
+    test(`an empty ${label} that is left is taken out of the history, without a Redo (${platform})`, async (t) => {
+      // slide 4 does not have a footnote
+      const page = await load(t, platform, { n: 4 });
+      // an edit before the insert stays the entry of Undo
+      await exec(page, 'slide.hide');
+      await frames(page);
+      const hidden = await render(page);
+      const undoBefore = (await state(page, 'edit.undo')).label;
+      await exec(page, id);
+      await frames(page);
+      assert.equal((await state(page, 'edit.undo')).label, `Undo ${label}`);
+      await press(page, 'Escape');
+      await sleep(150);
+      assert.equal(await page.evaluate(`!!${PENDING}`), false, 'the empty box is on the slide');
+      assert.equal((await state(page, 'edit.redo')).enabled, false, `the history offers ${(await state(page, 'edit.redo')).label}`);
+      assert.equal((await state(page, 'edit.undo')).label, undoBefore);
+      assert.equal(await render(page), hidden);
+      await undo(page);
+      await sleep(100);
+      assert.equal(await render(page), page.source);
+      assert.deepEqual(errors(page), []);
+    });
+  }
+}
