@@ -804,3 +804,44 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the points of a grid over the inspector at which the stage of the mask edit is hit, and whether
+// the box of the stage reaches into the inspector
+const maskOverInspector = (page) => page.evaluate(`(() => {
+  const pane = document.querySelector('${PANEL}').getBoundingClientRect();
+  if (!pane.width) return { reaches: false, hits: [] };
+  const stage = document.querySelector('.beeson-mask-stage').getBoundingClientRect();
+  const reaches = stage.right > pane.left && stage.left < pane.right && stage.bottom > pane.top && stage.top < pane.bottom;
+  const hits = [];
+  for (let i = 1; i < 10; i++) for (let j = 1; j < 10; j++) {
+    const x = pane.left + (pane.width * i) / 10, y = pane.top + (pane.height * j) / 10;
+    if (document.elementFromPoint(x, y)?.closest('.beeson-mask-layer')) hits.push([Math.round(x), Math.round(y)]);
+  }
+  return { reaches, hits };
+})()`);
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: the faded picture of Edit Mask at a high zoom is clipped to the canvas, out of the inspector`, async () => {
+    const page = await editor(platform);
+    if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
+    await selectZoneImage(page);
+    await page.evaluate('window.BeesonEditorShell.stage.setZoom(3)');
+    await frames(page);
+    await exec(page, 'image.editMask');
+    await frames(page);
+    // the picture scaled to the top of the slider, past the right edge of the canvas
+    await page.evaluate(`(() => {
+      const s = document.querySelector('dialog.beeson-mask-bar input[type=range]');
+      s.value = '1000';
+      s.dispatchEvent(new Event('input', { bubbles: true }));
+    })()`);
+    await frames(page);
+    const v = await maskOverInspector(page);
+    assert.ok(v.reaches, 'the stage of the mask edit does not reach into the inspector, hence the test does not see the bug');
+    assert.deepEqual(v.hits, [], 'the mask edit is drawn over the inspector');
+    await press(page, 'Escape');
+    await frames(page);
+    await byteExact(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
