@@ -1,11 +1,13 @@
 // the commands of image and video files: Image… and Video… of the Insert menu and of the Insert
-// group of the toolbar, Choose File… of the Insert menu as in Keynote, and Replace Image… and
-// Capture Poster of Format > Image and of the Image and Video panes. each takes its files from the
-// file chooser of the browser, or from arg.files, e.g. in a test. the install also sets up the drop
-// of files onto the slide, the writing of new files at a save, and the files of a draft
+// group of the toolbar, Choose File… of the Insert menu as in Keynote, Replace Image… and Capture
+// Poster of Format > Image and of the Image and Video panes, and Save as Picture… of the menu of a
+// picture in PowerPoint. each takes its files from the file chooser of the browser, or from
+// arg.files, e.g. in a test. the install also sets up the drop of files onto the slide, the
+// writing of new files at a save, and the files of a draft
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
+import { display } from '../keymap.ts';
 import { ACCEPT, capturePoster, chooseFiles, insertFiles, replaceFile } from '../media/actions.ts';
 import { install as installDrop } from '../media/drop.ts';
 import { install as installSave } from '../media/save.ts';
@@ -21,6 +23,59 @@ function mediaOf(app: App, arg: unknown): HTMLImageElement | HTMLVideoElement | 
   const el = (arg as Arg)?.el;
   if (el?.isConnected && (el instanceof HTMLImageElement || el instanceof HTMLVideoElement)) return el;
   return imageOf(app) ?? videoOf(app);
+}
+
+// the file of an image or a video as the deck names it, with the name of its last segment: a new
+// file from the store, a data or blob URL, or a file of the folder of the deck. a file on another
+// server is not offered, since the editor does not fetch anything from the network
+type Picture = { name: string; href: string; tab: boolean };
+
+function pictureOf(el: HTMLImageElement | HTMLVideoElement): Picture | null {
+  const value = el.getAttribute('src') ?? el.querySelector('source[src]')?.getAttribute('src') ?? null;
+  const path = media.pathOf(value);
+  if (!value || !path) return null;
+  const kept = media.get(path);
+  const fallback = el.localName === 'video' ? 'video' : 'picture';
+  if (kept) return { name: path.slice(path.lastIndexOf('/') + 1), href: kept.url, tab: false };
+  let url: URL;
+  try {
+    url = new URL(value, document.baseURI);
+  } catch {
+    return null;
+  }
+  if (url.protocol === 'data:' || url.protocol === 'blob:') {
+    const ext = /^data:\w+\/([\w+]+)/.exec(value)?.[1]?.replace('svg+xml', 'svg').replace('jpeg', 'jpg');
+    return { name: `${fallback}${ext ? `.${ext}` : ''}`, href: url.href, tab: false };
+  }
+  const own = url.protocol === 'file:' || (url.origin === location.origin && /^https?:$/.test(url.protocol));
+  if (!own) return null;
+  let name = url.pathname.slice(url.pathname.lastIndexOf('/') + 1);
+  try {
+    name = decodeURIComponent(name);
+  } catch {
+    // the name is kept as it is written
+  }
+  // a browser does not download a file of a page opened from a file, and it would open the file in
+  // place of the editor, hence the file is opened in a new tab
+  return { name: name || fallback, href: url.href, tab: url.protocol === 'file:' };
+}
+
+// the file is downloaded as it is, under its own name, or shown in a new tab where it is saved
+function savePicture(app: App, picture: Picture): void {
+  if (picture.tab) {
+    window.open(picture.href, '_blank', 'noopener');
+    app.note = { text: `${picture.name} is open in a new tab. Save it there with ${display('Mod+S', app.platform)}`, warn: false };
+  } else {
+    const a = document.createElement('a');
+    a.href = picture.href;
+    a.download = picture.name;
+    a.hidden = true;
+    document.body.append(a);
+    a.click();
+    a.remove();
+    app.note = { text: `${picture.name} is in your downloads`, warn: false };
+  }
+  app.report();
 }
 
 export function install(app: App): void {
@@ -81,6 +136,21 @@ export function install(app: App): void {
         if (!el) return;
         const [file] = filesOf(arg) ?? (await chooseFiles(ACCEPT[el.localName === 'video' ? 'video' : 'image']));
         if (file) await replaceFile(a, el, file);
+      },
+    },
+    {
+      // the id is outside media., which a lock turns off, since a save does not change the element
+      id: 'picture.save',
+      label: (a) => (videoOf(a) ? 'Save Media as…' : 'Save as Picture…'),
+      context: ['element'],
+      enabled: (a) => {
+        const el = mediaOf(a, undefined);
+        return !!el && !!pictureOf(el);
+      },
+      run: (a, arg) => {
+        const el = mediaOf(a, arg);
+        const picture = el && pictureOf(el);
+        if (picture) savePicture(a, picture);
       },
     },
     {
