@@ -95,7 +95,8 @@ export function cloneSlide(slide: Element, scale: number): HTMLElement {
   });
   for (const el of [clone, ...clone.querySelectorAll('*')]) {
     for (const name of ['contenteditable', 'tabindex', 'hidden', 'aria-hidden', 'role']) el.removeAttribute(name);
-    for (const c of [...el.classList]) if (isRuntimeClass(c)) el.classList.remove(c);
+    // the classes of the marks of a plot are set at run time too, and the theme paints the marks by them
+    for (const c of [...el.classList]) if (isRuntimeClass(c) && !c.startsWith('plot-')) el.classList.remove(c);
   }
   const layers = layersOf(clone);
   showLayer(clone, layers.length > 1 ? layers[0] : null);
