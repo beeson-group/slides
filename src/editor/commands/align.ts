@@ -9,6 +9,8 @@ import type { Command } from '../commands.ts';
 import { RESIZABLE, STRETCHED, aspectOf, constrained, cssWidth, frameOf, isTextSized, kindOf, movableOf, pictureSize, sizedOf, snapBoxOf, toSlide, visualRect } from '../canvas/hit.ts';
 import type { Box } from '../canvas/snap.ts';
 import { placeOf, record, writePlace, type Place } from '../canvas/drag.ts';
+import { groupReach } from '../canvas/frames.ts';
+import { groupOf } from './order.ts';
 import { declarationProblem } from '../model/scope.ts';
 import { store } from '../ui/dom.ts';
 
@@ -34,6 +36,13 @@ export function targetsOf(app: App, arg?: unknown): Element[] {
 
 // the box of el in slide pixels, as the frames draw it
 export const boxOf = (app: App, el: Element): Box => toSlide(frameOf(app), visualRect(el));
+
+// the box in slide pixels of els when they are one whole group, at the frame of the group, or null
+export function groupBoxOf(app: App, els: Element[]): Box | null {
+  const id = els.length > 1 ? groupOf(els[0]) : null;
+  if (!id || !els.every((el) => groupOf(el) === id)) return null;
+  return toSlide(frameOf(app), groupReach(els));
+}
 
 function slideBox(app: App): Box {
   const slides = app.slides() as HTMLElement;
@@ -166,10 +175,13 @@ export function commands(): Command[] {
     enabled: (app) => targetsOf(app).length > 0,
     run: (app, arg) => {
       const a = (arg ?? {}) as { x?: number; y?: number };
-      const changes = targetsOf(app, arg).map((el) => {
+      const els = targetsOf(app, arg);
+      // a group is moved as one element, by the offset of the corner of its frame
+      const group = groupBoxOf(app, els);
+      const changes = els.map((el) => {
         const from = placeOf(el);
         const now = offsetOf(el);
-        const at = snapBoxOf(app, el);
+        const at = group ?? snapBoxOf(app, el);
         const to = (v: number | undefined, off: number, edge: number) => (v === undefined ? off : Math.round(off + v - edge));
         writePlace(app, el, { ...from, translate: { x: to(a.x, now.x, at.left), y: to(a.y, now.y, at.top) } });
         return { el, from, to: placeOf(el) };
