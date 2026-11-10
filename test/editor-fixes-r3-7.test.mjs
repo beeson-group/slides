@@ -368,7 +368,7 @@ for (const platform of PLATFORMS) {
     for (const { path, keys } of listed) assert.equal(new Set(keys.split(', ')).size, keys.split(', ').length, `${path} lists a key twice`);
     const zoom = listed.filter((l) => l.path.startsWith('View > Zoom > ')).map((l) => `${l.path.slice(14)} ${l.keys}`);
     const mod = platform === 'mac' ? '⌘' : 'Ctrl+';
-    for (const want of [`Zoom In ${mod}=`, `Zoom Out ${mod}−`, `Actual Size ${mod}0`]) assert.ok(zoom.includes(want), `${want} is not listed under the zoom`);
+    for (const want of [`Zoom In ${mod}=`, `Zoom Out ${mod}${platform === 'mac' ? '−' : '-'}`, `Actual Size ${mod}0`]) assert.ok(zoom.includes(want), `${want} is not listed under the zoom`);
 
     await page.evaluate(`window.BeesonEditor.exec('help.keys')`);
     await sleep(100);
