@@ -8,7 +8,7 @@
 // included
 
 import type { App, Region } from '../app.ts';
-import { createFinder, type FindOptions } from '../find.ts';
+import { createFinder, type FindOptions, type Scope } from '../find.ts';
 import { closeMenus, openMenu } from '../ui/menu.ts';
 
 const IN: Region[] = ['canvas', 'text', 'field', 'navigator', 'notes', 'inspector'];
@@ -89,5 +89,11 @@ export function install(app: App): void {
     c.define({ id, label, checked: () => finder.options[key], run: () => finder.toggle(key) });
   option('find.matchCase', 'Match Case', 'matchCase');
   option('find.wholeWords', 'Whole Words', 'wholeWords');
-  option('find.tex', 'Search TeX of Formulas', 'tex');
+  c.define({ id: 'find.tex', label: 'Search TeX of Formulas', enabled: () => finder.scope !== 'alt', checked: () => finder.options.tex, run: () => finder.toggle('tex') });
+  // the scope of the search, one of three as a choice of the gear menu
+  const scope = (id: string, label: string, value: Scope) =>
+    c.define({ id, label, checked: () => finder.scope === value, run: () => finder.setScope(value) });
+  scope('find.scopeAll', 'Slides and Notes', 'all');
+  scope('find.scopeNotes', 'Notes Only', 'notes');
+  scope('find.scopeAlt', 'Alt Texts', 'alt');
 }

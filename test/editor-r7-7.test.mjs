@@ -219,7 +219,7 @@ for (const platform of PLATFORMS) {
     assert.equal((await state(page, 'arrange.distribute.vertical')).enabled, true);
     assert.equal((await state(page, 'arrange.alignTo.selection')).enabled, false);
     assert.equal((await state(page, 'arrange.alignTo.slide')).checked, true);
-    await tap(page, 'Arrange');
+    // a figure has the Arrange pane alone, without tabs
     await tap(page, 'Horizontally');
     const text = await render(page);
     const dx = Number(text.match(/<figure class="zone fragment" data-fragment-index="2" style="translate: (-?\d+)px 0px">/)?.[1]);

@@ -1,10 +1,11 @@
-// the accessibility checker, as Check Accessibility of PowerPoint: a panel of errors and warnings,
-// each check with the elements it concerns, a click on an element to show it on its slide, a menu
-// of fixes, and a line on why and how to fix it. the checks are those of section 1 of the plan: an
-// image without alt text, a slide without a heading, a table without a header row, a video
-// without a poster, and the texts that the editor cannot edit, and two checks of PowerPoint: the
-// reading order of a slide and link text that does not name its target. the list is read again
-// after each change while the panel is open
+// the accessibility checker, as Check Accessibility of PowerPoint: a pane docked at the right of
+// the canvas, with the errors and the warnings of each check and the elements they concern, a click
+// on an element to show it on its slide, a menu of fixes, and a line on why and how to fix it. the
+// checks are those of section 1 of the plan: an image without alt text, a slide without a heading,
+// a table without a header row, a video without a poster, and the texts that the editor cannot
+// edit, and two checks of PowerPoint: the reading order of a slide and link text that does not
+// name its target. the list is read again after each change while the pane is open, and else the
+// state of the deck is read for the button Accessibility: Investigate of the status bar
 
 import type { App } from '../app.ts';
 import { injectStyle, make } from '../ui/dom.ts';
@@ -117,13 +118,12 @@ export function inspect(app: App): Issue[] {
 }
 
 const CSS = `
-.beeson-edit-a11y { position: fixed; z-index: 80; top: 92px; right: calc(var(--ed-insp-col, 0px) + 16px); width: 340px; max-width: calc(100vw - 32px); max-height: calc(100vh - 140px); box-sizing: border-box; display: flex; flex-direction: column; background: var(--ed-panel); color: var(--ed-text); border: 1px solid var(--ed-menu-line); border-radius: 10px; box-shadow: 0 10px 32px rgba(0, 0, 0, 0.22), 0 0 0 0.5px rgba(0, 0, 0, 0.12); font: 13px/1.35 var(--ed-font); user-select: none; -webkit-user-select: none; }
-@media (prefers-color-scheme: dark) { .beeson-edit-a11y { background: var(--ed-bg); box-shadow: 0 10px 32px rgba(0, 0, 0, 0.55), 0 0 0 0.5px rgba(0, 0, 0, 0.8); } }
+.beeson-edit-a11y { position: relative; z-index: 50; min-width: 0; min-height: 0; box-sizing: border-box; display: flex; flex-direction: column; background: var(--ed-panel); color: var(--ed-text); border-left: 1px solid var(--ed-line); font: 13px/1.35 var(--ed-font); user-select: none; -webkit-user-select: none; }
 .beeson-edit-a11y[hidden] { display: none; }
-.beeson-edit-a11y .title { position: relative; flex: none; height: 28px; display: flex; align-items: center; justify-content: center; border-bottom: 1px solid var(--ed-line); color: var(--ed-muted); font-weight: 500; }
-.beeson-edit-a11y .title .close { position: absolute; left: 9px; top: 8px; width: 12px; height: 12px; padding: 0; border: 0; border-radius: 50%; background: var(--ed-control-line); color: transparent; display: grid; place-items: center; }
-.beeson-edit-a11y .title .close:hover, .beeson-edit-a11y .title .close:focus-visible { background: var(--ed-muted); color: var(--ed-panel); }
-.beeson-edit-a11y .title .close svg { width: 8px; height: 8px; }
+.beeson-edit-a11y .title { flex: none; height: 36px; display: flex; align-items: center; gap: 8px; padding: 0 8px 0 14px; border-bottom: 1px solid var(--ed-line); font-weight: 600; }
+.beeson-edit-a11y .title .close { margin-left: auto; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--ed-muted); display: grid; place-items: center; }
+.beeson-edit-a11y .title .close:hover { background: var(--ed-hover); color: var(--ed-text); }
+.beeson-edit-a11y .title .close svg { width: 14px; height: 14px; }
 .beeson-edit-a11y .status { flex: none; display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-bottom: 1px solid var(--ed-line); font-weight: 600; }
 .beeson-edit-a11y .status .dot { width: 9px; height: 9px; border-radius: 50%; background: #2e9e5b; }
 .beeson-edit-a11y .status.bad .dot { background: var(--ed-guide); }
@@ -191,18 +191,18 @@ export class Checker {
     this.app = app;
     injectStyle('a11y', CSS);
     this.el.hidden = true;
-    this.el.setAttribute('role', 'dialog');
+    this.el.setAttribute('role', 'complementary');
     this.el.tabIndex = -1;
     this.el.setAttribute('aria-label', 'Accessibility');
     const title = make('div', 'title', 'Accessibility');
     const close = make('button', 'close');
     close.type = 'button';
-    close.title = 'Close the checker';
+    close.title = 'Close the pane';
     close.setAttribute('aria-label', 'Close');
-    close.append(icon('plus', 8));
+    close.append(icon('plus', 14));
     (close.firstChild as SVGElement).style.transform = 'rotate(45deg)';
     close.addEventListener('click', () => this.toggle(false));
-    title.prepend(close);
+    title.append(close);
     this.list.setAttribute('role', 'tree');
     this.list.setAttribute('aria-label', 'Inspection results');
     this.el.append(title, this.status, this.list, this.info);
@@ -213,23 +213,59 @@ export class Checker {
       this.toggle(false);
     });
     app.onRefresh(['content', 'structure'], () => {
-      if (!this.el.hidden && !this.editing) this.refresh();
+      if (this.el.hidden) this.summarySoon();
+      else if (!this.editing) this.refresh();
     });
+    app.listen('report', () => this.el.hidden && this.summarySoon());
   }
 
   get shown(): boolean {
     return !this.el.hidden;
   }
 
+  // the pane is docked at the right of the canvas, before the inspector, as the Accessibility pane
+  // of PowerPoint, and the canvas is laid out again in the space that is left
   toggle(on = this.el.hidden): void {
-    if (!this.el.isConnected) document.body.append(this.el);
+    const inspector = document.querySelector('.beeson-edit-inspector');
+    if (!this.el.isConnected || (inspector && this.el.nextElementSibling !== inspector)) {
+      if (inspector) inspector.before(this.el);
+      else document.body.append(this.el);
+    }
     this.el.hidden = !on;
+    document.documentElement.classList.toggle('beeson-a11y', on);
     this.picked = null;
     this.editing = null;
     if (on) {
       this.refresh();
       (this.list.querySelector<HTMLElement>('.check') ?? this.el.querySelector<HTMLElement>('.close'))?.focus({ preventScroll: true });
     } else if (this.el.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
+    this.showSummary();
+    this.app.relayout();
+  }
+
+  // the state of the deck in the button of the status bar, read again 400 ms after the last change
+  // while the pane is closed, since a check measures every slide
+  private timer = 0;
+
+  private summarySoon(): void {
+    clearTimeout(this.timer);
+    this.timer = window.setTimeout(() => {
+      if (!this.app.pairing?.root) return;
+      this.issues = inspect(this.app);
+      this.showSummary();
+    }, 400);
+  }
+
+  private showSummary(): void {
+    const b = document.querySelector<HTMLButtonElement>('.beeson-edit-bottom .a11y');
+    if (!b) return;
+    const ready = !!this.app.pairing?.root;
+    b.hidden = !ready;
+    const state = this.issues.length ? 'Investigate' : 'Good to go';
+    const text = b.querySelector('.text');
+    if (text) text.textContent = `Accessibility: ${state}`;
+    b.title = this.issues.length ? 'Open the accessibility pane to see the issues of the deck' : 'No accessibility issues were found in this deck';
+    b.setAttribute('aria-pressed', String(this.shown));
   }
 
   refresh(): void {
@@ -252,6 +288,7 @@ export class Checker {
     }
     if (this.picked && !this.issues.some((i) => this.same(i, this.picked))) this.picked = null;
     this.showInfo();
+    this.showSummary();
     if (had && !this.editing) (this.list.querySelector<HTMLElement>(had) ?? this.el).focus({ preventScroll: true });
   }
 

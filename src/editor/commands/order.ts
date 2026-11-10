@@ -8,6 +8,7 @@
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { locked, placeOf, record, writePlace } from '../canvas/drag.ts';
+import { RESIZABLE, containerOf, turnable } from '../canvas/hit.ts';
 
 export type Order = 'front' | 'forward' | 'backward' | 'back';
 
@@ -58,14 +59,20 @@ const selectedEls = (app: App): Element[] => {
   return els.filter((e) => !els.some((o) => o !== e && o.contains(e)) && !!app.pairing?.elements.get(e)?.open);
 };
 
+// the elements that the order commands move: the figure of an image, a video, or a QR code
+// selected inside it, since the picture is drawn in the layer of its figure, and else the selected
+// element
+const orderedEls = (app: App): Element[] => [...new Set(selectedEls(app).map((el) => (el.matches(RESIZABLE) ? containerOf(app, el) : null) ?? el))];
+
 const canOrder = (app: App, order: Order): boolean => {
-  const els = selectedEls(app);
+  const els = orderedEls(app);
   const set = new Set(els);
   return els.some((el) => targetOf(app, el, order, set) !== null);
 };
 
 async function reorder(app: App, order: Order): Promise<void> {
-  const els = selectedEls(app);
+  const before = app.selection.elements().slice();
+  const els = orderedEls(app);
   const set = new Set(els);
   const up = order === 'front' || order === 'forward';
   // the elements in the order that keeps their own order: the last first for a move up
@@ -74,7 +81,7 @@ async function reorder(app: App, order: Order): Promise<void> {
     if (!target) continue;
     await app.doc.move(el, el.parentElement!, up ? target.nextSibling : target, 'order');
   }
-  app.selection.set('elements', els);
+  app.selection.set('elements', before.filter((el) => el.isConnected));
   app.invalidate('content');
 }
 
@@ -259,12 +266,12 @@ export function commands(): Command[] {
       // arg is { deg, els }, the angle in degrees, of the elements, or of the selection by default
       id: 'arrange.setRotation',
       label: 'Rotate',
-      enabled: (app) => selectedEls(app).some((el) => !locked(el)),
+      enabled: (app) => selectedEls(app).some(turnable),
       run: (app, arg) => {
         const a = (arg ?? {}) as { deg?: number; els?: Element[] };
         if (typeof a.deg !== 'number' || !Number.isFinite(a.deg)) return;
         const deg = ((Math.round(a.deg) % 360) + 360) % 360;
-        const changes = (a.els ?? selectedEls(app)).filter((el) => el.isConnected && !locked(el)).map((el) => {
+        const changes = (a.els ?? selectedEls(app)).filter((el) => el.isConnected && turnable(el)).map((el) => {
           const from = placeOf(el);
           const to = { ...from, rotate: deg || null };
           writePlace(app, el, to);
@@ -278,7 +285,7 @@ export function commands(): Command[] {
       id: 'arrange.resetRotation',
       label: 'Reset Rotation',
       menu: { bar: 'Arrange', group: 'reset', order: 12 },
-      enabled: (app) => selectedEls(app).some((el) => !locked(el) && angleOf(el) !== 0),
+      enabled: (app) => selectedEls(app).some((el) => turnable(el) && angleOf(el) !== 0),
       run: (app) => app.commands.run('arrange.setRotation', { deg: 0 }),
     },
   );

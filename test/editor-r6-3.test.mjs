@@ -1,6 +1,7 @@
 // tests of the popovers beside their target, the zoom levels, the poster frame slider, and the
-// table grid with Autofill, on either platform with trusted input. the Insert Formula and Edit
-// Formula sheets and the link editor are kept off a list item near the bottom of the slide, the
+// table grid with Autofill, on either platform with trusted input. the Insert Formula sheet is kept
+// off its formula inside the canvas, the Edit Formula sheet and the link editor are kept off a list
+// item near the bottom of the slide, the
 // toolbar and the status bar list the same zoom levels, a poster is captured at the time of the
 // slider, also in a deck opened from a file, the grid of Insert Table is 10 columns by 8 rows with
 // Insert Table… under it, and a drag of the fill handle of a range of cells fills the cells beside
@@ -202,7 +203,10 @@ for (const platform of PLATFORMS) {
     await roundTrip(page);
   });
 
-  test(`the formula sheet of a new display formula is kept off the list above it (${platform})`, async (t) => {
+  // in this window no side of the new formula below the list has room in the canvas but the one
+  // above it, hence the sheet is put over the list, as R7.9 keeps it inside the canvas and off the
+  // inspector
+  test(`the formula sheet of a new display formula below a list is kept above it, inside the canvas (${platform})`, async (t) => {
     const page = await open(platform);
     t.after(() => page.close?.());
     await show(page, STEPS);
@@ -211,7 +215,11 @@ for (const platform of PLATFORMS) {
     await exec(page, 'insert.formula');
     await page.waitFor(`!!document.querySelector('.beeson-math')`);
     await sleep(200);
-    await besideCheck(page, '.beeson-math', '.reveal section.present ul', 'the Insert Formula sheet');
+    await besideCheck(page, '.beeson-math', '.reveal section.present div.math', 'the Insert Formula sheet');
+    const p = await boxOf(page, '.beeson-math');
+    const v = await page.evaluate('window.BeesonEditorShell.stage.viewport.toJSON()');
+    assert.ok(p.left >= v.left && p.top >= v.top && p.right <= v.right && p.bottom <= v.bottom, `the Insert Formula sheet at ${js(p)} is not inside the canvas ${js(v)}`);
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-math').dataset.beside`), 'above');
     await press(page, 'Escape');
   });
 }
