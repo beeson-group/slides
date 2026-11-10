@@ -29,7 +29,7 @@ Move the mouse near the bottom edge of the window to magnify the progress line i
 
 ## Edit in the browser
 
-To edit a deck on the slides themselves, press `e` in the deck, or add `?edit` to its address. You can change the words, the formulas, the notes, the steps, and the places of the figures, and only your edits are written into `index.html` at a save. In Chrome and Edge, the edits are saved into the file itself, and in Firefox and Safari, a save is a download of a copy of the file. Set Safari or Firefox to ask where to save each download, and you replace `index.html` with the copy in the dialog of the save. To add, delete, or reorder slides, edit `index.html` in a text editor.
+To edit a deck on the slides themselves, press `e` in the deck, or add `?edit` to its address. You can change the words, the formulas, the notes, the steps, and the places of the figures, and only your edits are written into `index.html` at a save. In Chrome and Edge, the edits are saved into the file itself, and in Firefox and Safari, a save is a download of a copy of the file. Set Safari or Firefox to ask where to save each download, and you replace `index.html` with the copy in the dialog of the save. You can also add, duplicate, delete, hide, and reorder slides, change their layout, and insert text boxes, formulas, tables, images, videos, QR codes, code boxes, footnotes, lines, and arrows, as described in [REFERENCE.md](REFERENCE.md) under The editor.
 
 ## Elements
 
