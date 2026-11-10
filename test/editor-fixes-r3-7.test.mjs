@@ -197,9 +197,12 @@ for (const platform of PLATFORMS) {
     await click(page, { x: word.x, y: word.y }, { button: 'right' });
     await sleep(100);
     const sel = await selected(page);
-    assert.equal(await page.evaluate(`!!document.activeElement?.closest('.reveal section.present p')`), true, 'the paragraph is not put into editing');
     if (platform === 'mac') assert.equal(sel.text, 'matplotlib', 'a right-click on a word does not select the word');
     assert.deepEqual((await menuRows(page)).slice(0, 3).map((r) => r.label), ['Cut', 'Copy', 'Paste']);
+    // the menu holds the focus while it is open, and gives it back to the text at its close
+    await press(page, 'Escape');
+    await sleep(50);
+    assert.equal(await page.evaluate(`!!document.activeElement?.closest('.reveal section.present p')`), true, 'the paragraph is not put into editing');
     assert.deepEqual(errorsOf(page), []);
   });
 }
