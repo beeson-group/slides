@@ -1,49 +1,112 @@
 // the sheet of the keyboard shortcuts, opened with ? or from the Help menu. it is built from the
-// registry each time it is opened, with every command that has a key on the platform of the
-// editor, under the menu of the command in the order of the menu bar. a command without a menu,
-// e.g. Next Slide on an arrow key, is listed with the command of its menu of the same label
+// registry each time it is opened: the menus of the menu bar, then the menus that other modules
+// add, e.g. Play, each with the commands that have a key on the platform of the editor, in the
+// order of the menu and its submenus. a command without a menu, e.g. Next Slide on an arrow key,
+// is listed with the command of its label in a menu, and else in the group Other
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { keysOf } from '../commands.ts';
 import { display } from '../keymap.ts';
 import { button, injectStyle, make } from '../ui/dom.ts';
+import { menuItems, type MenuItem } from '../ui/menu.ts';
 import { MENUS } from './menubar.ts';
 
 const CSS = `
-.beeson-edit-keys { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 64px); box-sizing: border-box; padding: 0; border: 1px solid var(--line, #555); border-radius: 10px; background: var(--bg, #000); color: var(--text, #eee); font: 13px/1.4 system-ui, sans-serif; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5); }
-.beeson-edit-keys::backdrop { background: rgba(0, 0, 0, 0.4); }
-.beeson-edit-keys .head { display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; border-bottom: 1px solid var(--line, #555); }
-.beeson-edit-keys h2 { margin: 0; font: 600 15px/1.4 system-ui, sans-serif; }
-.beeson-edit-keys .head button { font: inherit; padding: 2px 10px; border: 1px solid var(--line, #555); border-radius: 6px; background: transparent; color: inherit; cursor: pointer; }
-.beeson-edit-keys .body { columns: 2 300px; column-gap: 32px; padding: 12px 16px 16px; overflow: auto; max-height: calc(100vh - 140px); }
-.beeson-edit-keys section { break-inside: avoid; margin-bottom: 12px; }
-.beeson-edit-keys h3 { margin: 0 0 4px; font: 600 12px/1.4 system-ui, sans-serif; color: var(--subtle, #bbb); }
-.beeson-edit-keys .row { display: flex; justify-content: space-between; gap: 16px; padding: 2px 0; }
-.beeson-edit-keys kbd { font: inherit; color: var(--subtle, #bbb); white-space: nowrap; }
+.beeson-edit-keys { width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 64px); box-sizing: border-box; padding: 0; border: 1px solid var(--ed-line, #555); border-radius: 10px; background: var(--ed-panel, #f6f6f6); color: var(--ed-text, #1d1d1f); font: 12px/1.4 var(--ed-font, system-ui, sans-serif); box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35); }
+.beeson-edit-keys[open] { display: flex; flex-direction: column; }
+.beeson-edit-keys::backdrop { background: rgba(0, 0, 0, 0.3); }
+.beeson-edit-keys .head { flex: none; display: flex; align-items: center; justify-content: space-between; padding: 10px 16px; border-bottom: 1px solid var(--ed-line, #555); }
+.beeson-edit-keys h2 { margin: 0; font: 600 14px/1.4 var(--ed-font, system-ui, sans-serif); }
+.beeson-edit-keys .head button { font: inherit; padding: 2px 12px; border: 1px solid var(--ed-line, #555); border-radius: 6px; background: var(--ed-segment, transparent); color: inherit; cursor: default; }
+.beeson-edit-keys .head button:focus-visible { outline: 2px solid var(--ed-select, #8a2be2); outline-offset: 1px; }
+.beeson-edit-keys .body { display: flex; gap: 28px; min-height: 0; padding: 10px 16px 14px; overflow: auto; }
+.beeson-edit-keys .column { flex: 1; min-width: 0; }
+.beeson-edit-keys section { margin-bottom: 10px; }
+.beeson-edit-keys section:last-child { margin-bottom: 0; }
+.beeson-edit-keys h3 { margin: 0 0 2px; font: 600 11px/1.5 var(--ed-font, system-ui, sans-serif); color: var(--ed-muted, #6e6e73); }
+.beeson-edit-keys .row { display: flex; justify-content: space-between; gap: 12px; padding: 1px 0; }
+.beeson-edit-keys .row > span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.beeson-edit-keys kbd { font: inherit; color: var(--ed-muted, #6e6e73); white-space: nowrap; font-variant-numeric: tabular-nums; }
 `;
 
 export type SheetRow = { bar: string; label: string; keys: string[] };
 
+// the keys of the clipboard, which the browser takes in a text and the registry does not bind
+const NATIVE: Record<string, string> = { 'edit.cut': 'Mod+X', 'edit.copy': 'Mod+C', 'edit.paste': 'Mod+V' };
+
+// the commands of the items of a menu and of its submenus, in their order
+function commandsOf(app: App, items: MenuItem[]): Command[] {
+  const out: Command[] = [];
+  for (const item of items) {
+    if ('command' in item) {
+      const c = app.commands.get(item.command);
+      if (c) out.push(c);
+    } else if ('items' in item) out.push(...commandsOf(app, typeof item.items === 'function' ? item.items() : item.items));
+  }
+  return out;
+}
+
 // the rows of the sheet: one per label of each menu, with the keys of every command of the label
 export function sheetRows(app: App): SheetRow[] {
   const platform = app.platform;
-  const commands = app.commands.list().filter((c) => keysOf(c, platform).length);
   const label = (c: Command) => (typeof c.label === 'string' ? c.label : c.label(app));
-  const barOf = (c: Command) => c.menu?.bar ?? commands.find((o) => o.menu && label(o) === label(c))?.menu?.bar ?? 'Other';
+  const keys = (c: Command) => {
+    const own = keysOf(c, platform);
+    return (own.length ? own : NATIVE[c.id] ? [NATIVE[c.id]] : []).map((k) => display(k, platform));
+  };
+  const all = app.commands.list();
+  const extra = [...new Set(all.map((c) => c.menu?.bar).filter((b): b is string => !!b && !MENUS.includes(b)))];
   const rows: SheetRow[] = [];
-  const sorted = [...commands].sort((a, b) => (a.menu?.order ?? Infinity) - (b.menu?.order ?? Infinity));
-  for (const c of sorted) {
-    const bar = barOf(c);
-    const keys = keysOf(c, platform).map((k) => display(k, platform));
-    const row = rows.find((r) => r.bar === bar && r.label === label(c));
-    if (row) row.keys.push(...keys.filter((k) => !row.keys.includes(k)));
-    else rows.push({ bar, label: label(c), keys });
+  const add = (bar: string, name: string, list: string[]) => {
+    const row = rows.find((r) => r.label === name && (r.bar === bar || bar === ''));
+    if (row) row.keys.push(...list.filter((k) => !row.keys.includes(k)));
+    else rows.push({ bar: bar || 'Other', label: name, keys: [...list] });
+  };
+  const listed = new Set<Command>();
+  for (const bar of [...MENUS, ...extra]) {
+    for (const c of commandsOf(app, menuItems(app, bar))) {
+      listed.add(c);
+      const k = keys(c);
+      if (k.length) add(bar, label(c), k);
+    }
   }
-  // the menus of the menu bar, with those that other modules add, e.g. Play, read when the sheet is
-  // opened
-  const rank = (bar: string) => (MENUS.includes(bar) ? MENUS.indexOf(bar) : MENUS.length);
-  return rows.sort((a, b) => rank(a.bar) - rank(b.bar));
+  for (const c of all) {
+    const k = keys(c);
+    if (!listed.has(c) && k.length) add('', label(c), k);
+  }
+  const rank = (bar: string) => (bar === 'Other' ? Infinity : [...MENUS, ...extra].indexOf(bar));
+  return rows.map((r, i) => ({ r, i })).sort((a, b) => rank(a.r.bar) - rank(b.r.bar) || a.i - b.i).map(({ r }) => r);
+}
+
+// the groups split in their order into n columns, with the tallest column as short as it can be
+function columns<T>(groups: T[], height: (g: T) => number, n: number): T[][] {
+  const h = groups.map(height);
+  const best = new Map<string, { cost: number; cut: number }>();
+  const sum = (a: number, b: number) => h.slice(a, b).reduce((x, y) => x + y, 0);
+  const solve = (from: number, k: number): number => {
+    if (k === 1 || from >= groups.length) return sum(from, groups.length);
+    const key = `${from},${k}`;
+    const hit = best.get(key);
+    if (hit) return hit.cost;
+    let out = { cost: Infinity, cut: groups.length };
+    for (let cut = from + 1; cut <= groups.length; cut++) {
+      const cost = Math.max(sum(from, cut), solve(cut, k - 1));
+      if (cost < out.cost) out = { cost, cut };
+    }
+    best.set(key, out);
+    return out.cost;
+  };
+  solve(0, n);
+  const out: T[][] = [];
+  let from = 0;
+  for (let k = n; k > 1 && from < groups.length; k--) {
+    const cut = best.get(`${from},${k}`)?.cut ?? groups.length;
+    out.push(groups.slice(from, cut));
+    from = cut;
+  }
+  if (from < groups.length) out.push(groups.slice(from));
+  return out;
 }
 
 export function install(app: App): void {
@@ -70,20 +133,32 @@ export function install(app: App): void {
   document.body.append(sheet);
 
   const open = () => {
-    body.replaceChildren();
-    let section: HTMLElement | null = null;
-    let bar = '';
+    const groups: { bar: string; rows: SheetRow[] }[] = [];
     for (const row of sheetRows(app)) {
-      if (row.bar !== bar || !section) {
-        bar = row.bar;
-        section = make('section');
-        section.append(make('h3', '', bar));
-        body.append(section);
-      }
-      const line = make('div', 'row');
-      line.append(make('span', '', row.label), make('kbd', '', row.keys.join(', ')));
-      section.append(line);
+      const last = groups.at(-1);
+      if (last?.bar === row.bar) last.rows.push(row);
+      else groups.push({ bar: row.bar, rows: [row] });
     }
+    // three columns of about 290 px each when the window has room for them
+    const n = Math.max(1, Math.min(3, Math.floor((Math.min(980, innerWidth - 32) - 32) / 290)));
+    body.replaceChildren(
+      ...columns(groups, (g) => g.rows.length + 2, n).map((list) => {
+        const column = make('div', 'column');
+        for (const g of list) {
+          const section = make('section');
+          section.append(make('h3', '', g.bar));
+          for (const row of g.rows) {
+            const line = make('div', 'row');
+            const name = make('span', '', row.label);
+            name.title = row.label;
+            line.append(name, make('kbd', '', row.keys.join(', ')));
+            section.append(line);
+          }
+          column.append(section);
+        }
+        return column;
+      }),
+    );
     back = document.activeElement;
     sheet.showModal();
     done.focus();
