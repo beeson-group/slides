@@ -266,3 +266,41 @@ for (const platform of PLATFORMS) {
   });
 
 }
+
+// Esc on a selected image, and the pane of its figure
+for (const platform of PLATFORMS) {
+  test(`Esc on a selected image selects its figure, with the pane of the figure, after a click on the inspector (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    // the focus on the tab Format of the inspector, as the photographer of the council left it
+    const format = await page.evaluate(`(() => {
+      const b = [...document.querySelectorAll('button')].find((b) => b.textContent.trim() === 'Format' && b.getBoundingClientRect().left > innerWidth * 0.75 && b.getBoundingClientRect().top > 80);
+      const r = b.getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    })()`);
+    await click(page, format);
+    await frames(page);
+    await click(page, IMG);
+    await frames(page);
+    assert.deepEqual(await selected(page), ['img.for-dark']);
+    assert.equal(await pane(page), 'image');
+    await press(page, 'Escape');
+    await frames(page);
+    assert.deepEqual(await selected(page), ['figure.zone'], 'Esc on the selected image does not select its figure');
+    assert.equal(await pane(page), 'arrange', `the inspector shows the pane ${await pane(page)} for the figure`);
+    assert.ok(!(await tabs(page)).includes('Image'), `the inspector offers the Image pane for the figure: ${js(await tabs(page))}`);
+    // Select Figure shows the same pane, and Esc on the selected figure clears the selection
+    await click(page, '.reveal section.present h2');
+    await press(page, 'Escape');
+    await click(page, IMG);
+    await exec(page, 'selection.container');
+    await frames(page);
+    assert.deepEqual(await selected(page), ['figure.zone']);
+    assert.equal(await pane(page), 'arrange');
+    await press(page, 'Escape');
+    await frames(page);
+    assert.deepEqual(await selected(page), []);
+    await byteExact(page);
+    assert.deepEqual(errors(page), []);
+  });
+
+}
