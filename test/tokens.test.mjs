@@ -44,3 +44,12 @@ test('a < that does not open markup is text', () => {
   const tokens = tokenize('<p>a < b and <3</p>');
   assert.deepEqual(tokens.map((t) => t.type), ['start', 'text', 'end']);
 });
+
+test('an attribute value is decoded as the parser reads it, without the DOM', async () => {
+  const { decodeAttr } = await import('../src/editor/tokens.ts');
+  assert.equal(decodeAttr('a &amp; b &lt;c&gt; &quot;d&quot; &#39;e&#x27; &nbsp;'), 'a & b <c> "d" \'e\'  ');
+  // a legacy reference without a semicolon is decoded unless a letter, a digit, or = follows
+  assert.equal(decodeAttr('a&amp b'), 'a& b');
+  assert.equal(decodeAttr('?x=1&ampy=2'), '?x=1&ampy=2');
+  assert.equal(decodeAttr('&unknown; &#0; &#x110000;'), '&unknown; � �');
+});

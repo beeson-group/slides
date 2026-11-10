@@ -55,3 +55,56 @@ test('a character reference in a rewritten class or style is kept', () => {
   assert.equal(render('<p class="x&#45;y">a</p>', { fragment: true }), '<p class="x&#45;y fragment">a</p>');
   assert.deepEqual(stepIn(tagOf('<p class="&#102;ragment">').attrs), { fragment: true, index: null });
 });
+
+test('an attribute is set, changed in place, made bare, and removed, with the other bytes kept', () => {
+  assert.equal(render('<section>', { attrs: { 'data-visibility': 'hidden' } }), '<section data-visibility="hidden">');
+  assert.equal(render("<section  data-visibility='uncounted' id=a>", { attrs: { 'data-visibility': 'hidden' } }), "<section  data-visibility='hidden' id=a>");
+  assert.equal(render('<section data-visibility="hidden" id="a">', { attrs: { 'data-visibility': null } }), '<section id="a">');
+  assert.equal(render('<section data-visibility="hidden">', { attrs: { 'data-visibility': 'hidden' } }), null);
+  assert.equal(render('<video src="a.mp4">', { attrs: { muted: '', loop: '' } }), '<video src="a.mp4" muted loop>');
+  assert.equal(render('<video muted src="a.mp4">', { attrs: { muted: '' } }), null);
+  assert.equal(render('<img alt="a">', { attrs: { alt: 'Tom & "Jerry"' } }), '<img alt="Tom &amp; &quot;Jerry&quot;">');
+  assert.equal(render("<img alt='a'>", { attrs: { alt: "it's" } }), "<img alt='it&#39;s'>");
+  assert.equal(render('<img alt="&#39;a&#39;">', { attrs: { alt: "'a'" } }), null);
+});
+
+test('a class is added and removed by name, and a whole class value replaces the classes', () => {
+  assert.equal(render('<p class="a  b">x</p>', { classes: { c: true, a: false } }), '<p class="b c">x</p>');
+  assert.equal(render('<p class="a">x</p>', { classes: { a: true, b: false } }), null);
+  assert.equal(render('<p class="a">x</p>', { classes: { a: false } }), '<p>x</p>');
+  assert.equal(render('<p class="a">x</p>', { attrs: { class: 'b c' } }), '<p class="b c">x</p>');
+  // the field fragment is laid over the map
+  assert.equal(render('<p>x</p>', { classes: { fragment: false }, fragment: true }), '<p class="fragment">x</p>');
+});
+
+test('a declaration is set in place, added last, and removed, with the others kept in their order', () => {
+  assert.equal(render('<img style="width: 50%; rotate: 0deg">', { style: { width: '600px' } }), '<img style="width: 600px; rotate: 0deg">');
+  assert.equal(render('<img style="width: 50%">', { style: { rotate: '15deg' } }), '<img style="width: 50%; rotate: 15deg">');
+  assert.equal(render('<img style="width: 50%; rotate: 15deg">', { style: { width: null } }), '<img style="rotate: 15deg">');
+  assert.equal(render('<img style="width:  50%">', { style: { width: '50%' } }), null);
+  assert.equal(render('<img style="width: 5px">', { style: { width: null } }), '<img>');
+  // the field translate is laid over the map, and put last as before
+  assert.equal(render('<img style="translate: 1px 1px; width: 5px">', { style: { translate: '9px 9px' }, translate: { x: 2, y: 3 } }), '<img style="width: 5px; translate: 2px 3px">');
+});
+
+test('the index of a step is laid over the attribute of the map', () => {
+  assert.equal(render('<p data-fragment-index="1">x</p>', { attrs: { 'data-fragment-index': '5' }, index: 2 }), '<p data-fragment-index="2">x</p>');
+  assert.equal(render('<p data-fragment-index="1">x</p>', { attrs: { 'data-fragment-index': '5' } }), '<p data-fragment-index="5">x</p>');
+});
+
+test('the state of a tag after an edit is read with every value decoded', async () => {
+  const { stateOf, mergeEdit } = await import('../src/editor/tags.ts');
+  const tag = tagOf('<p class="a&#45;b fragment" data-x="&lt;1" style="width: 5px; translate: 1px 2px">');
+  assert.deepEqual(stateOf(tag.attrs), {
+    classes: ['a-b', 'fragment'],
+    attrs: { class: 'a-b fragment', 'data-x': '<1', style: 'width: 5px; translate: 1px 2px' },
+    style: { width: '5px', translate: '1px 2px' },
+  });
+  const edit = mergeEdit({ classes: { c: true }, translate: { x: 3, y: 4 } }, { classes: { fragment: false }, attrs: { 'data-x': null } });
+  assert.deepEqual(edit, { classes: { c: true, fragment: false }, translate: { x: 3, y: 4 }, attrs: { 'data-x': null } });
+  assert.deepEqual(stateOf(tag.attrs, edit), {
+    classes: ['a-b', 'c'],
+    attrs: { class: 'a-b c', style: 'width: 5px; translate: 3px 4px' },
+    style: { width: '5px', translate: '3px 4px' },
+  });
+});
