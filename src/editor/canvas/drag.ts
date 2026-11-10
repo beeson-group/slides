@@ -105,6 +105,8 @@ type Press = {
   // whose picture the resize follows. the offset of the pressed element keeps the anchor in place
   sized?: Element[];
   pic?: Element;
+  // the other selected elements that a resize scales with the pressed one, each about its anchor
+  followers?: Follower[];
   // the selection before a marquee with Shift or the command modifier, which it adds to
   initial?: Element[];
   // the center of a rotated element on the screen, and the angle of the press about it in degrees
@@ -113,6 +115,14 @@ type Press = {
   // the size of a rotated element at the press, in slide pixels
   size?: { width: number; height: number };
 };
+
+// an element of a multiple selection that follows a resize by the grip of another: the elements
+// whose width it writes, its picture, its angle, and the box of its picture at the press without
+// its rotation, about the center of the picture, in slide pixels
+type Follower = { el: Element; sized: Element[]; pic: Element; deg: number; base: Box };
+
+// the angle of el and of the picture inside it, as its style sets them
+const angleIn = (el: Element, pic: Element): number => (placeOf(el).rotate ?? 0) + (pic === el ? 0 : (placeOf(pic).rotate ?? 0));
 
 const union = (boxes: Box[]): Box => {
   const left = Math.min(...boxes.map((b) => b.left)), top = Math.min(...boxes.map((b) => b.top));
@@ -266,15 +276,24 @@ export function install(app: App): void {
     }
     const grip = target.closest('.beeson-grip');
     if (grip && !grip.classList.contains('locked')) {
-      const el = sel.only();
+      const el = frames.memberOf(grip);
       const sized = el ? sizedOf(el) : [];
-      if (!el || !sized.length) return;
+      if (!el || !sized.length || locked(el)) return;
       ev.preventDefault();
       ev.stopPropagation();
       const pic = pictureOf(el);
-      const p = Object.assign(start('resize', ev, el, [el], null), { handle: (grip as HTMLElement).dataset.handle as Handle, aspect: aspectOf(pic), sized, pic });
-      for (const m of sized) if (!p.from.has(m)) p.from.set(m, placeOf(m));
-      p.base = toSlide(frameOf(app), visualRect(pic));
+      const f = frameOf(app);
+      const all = sel.elements();
+      const followers: Follower[] = all
+        .filter((o) => o !== el && !locked(o) && !o.contains(el) && !el.contains(o) && !all.some((x) => x !== o && x.contains(o)) && sizedOf(o).length)
+        .map((o) => {
+          const pic = pictureOf(o);
+          const deg = angleIn(o, pic);
+          return { el: o, sized: sizedOf(o), pic, deg, base: toSlide(f, orientedBox(pic, f.scale, deg)) };
+        });
+      const p = Object.assign(start('resize', ev, el, [el, ...followers.map((m) => m.el)], null), { handle: (grip as HTMLElement).dataset.handle as Handle, aspect: aspectOf(pic), sized, pic, followers });
+      for (const m of [...sized, ...followers.flatMap((m) => m.sized)]) if (!p.from.has(m)) p.from.set(m, placeOf(m));
+      p.base = toSlide(f, visualRect(pic));
       document.documentElement.classList.add('beeson-resizing');
       return;
     }
@@ -422,7 +441,7 @@ export function install(app: App): void {
     view.guides = [];
     view.spacing = [];
     if (!freeResize(ev)) {
-      const snapped = snapResize(p.base, p.handle as Handle, box, targetsFor([pic]), SNAP / f.scale, o);
+      const snapped = snapResize(p.base, p.handle as Handle, box, targetsFor([pic, ...(p.followers ?? []).map((m) => m.el)]), SNAP / f.scale, o);
       box = snapped.box;
       view.guides = snapped.guides;
       view.spacing = snapped.sizes;
@@ -439,7 +458,8 @@ export function install(app: App): void {
     };
     const now = placeOf(el).translate ?? { x: 0, y: 0 };
     writeLive(el, { translate: { x: now.x + shift('x'), y: now.y + shift('y') }, width: el.matches(RESIZABLE) ? box.width : null });
-    view.moving = [el];
+    follow(p, h, box.width / p.base.width, box.height / p.base.height, o.center);
+    view.moving = p.els;
     view.resizing = true;
     const after = toSlide(f, visualRect(pic));
     view.readout = { text: `${Math.round(after.width)} × ${Math.round(after.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
@@ -476,13 +496,37 @@ export function install(app: App): void {
     const now = placeOf(el).translate ?? { x: 0, y: 0 };
     const sx = cx + move.x - seen.x, sy = cy + move.y - seen.y;
     writeLive(el, { translate: { x: now.x + sx, y: now.y + sy }, width: el.matches(RESIZABLE) ? box.width : null, rotate: from.rotate });
-    view.moving = [el];
+    follow(p, p.handle as Handle, box.width / p.base.width, box.height / p.base.height, o.center);
+    view.moving = p.els;
     view.resizing = true;
     view.guides = [];
     view.spacing = [];
     view.readout = { text: `${Math.round(box.width)} × ${Math.round(box.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     frames.draw();
     app.invalidate('content');
+  };
+
+  // the followers of a resize are scaled by the ratio of the pressed element, the width ratio kx
+  // for a handle on a side edge and the height ratio ky for one on the top or bottom edge, each
+  // about the edge or corner of its own picture across from handle, or about its center
+  const follow = (p: Press, handle: Handle, kx: number, ky: number, center: boolean) => {
+    if (!p.followers?.length) return;
+    const f = frameOf(app);
+    const sx = handle.includes('w') ? -1 : handle.includes('e') ? 1 : 0;
+    const sy = handle.includes('n') ? -1 : handle.includes('s') ? 1 : 0;
+    const k = sx ? kx : ky;
+    for (const m of p.followers) {
+      for (const s of m.sized) (s as HTMLElement).style.width = `${Math.round(m.base.width * k)}px`;
+      const seen = toSlide(f, orientedBox(m.pic, f.scale, m.deg));
+      // the center of the picture moves by half its growth away from the anchor, turned by its angle
+      const a = (m.deg * Math.PI) / 180;
+      const lx = center ? 0 : (sx * (seen.width - m.base.width)) / 2, ly = center ? 0 : (sy * (seen.height - m.base.height)) / 2;
+      const cx = m.base.left + m.base.width / 2 + lx * Math.cos(a) - ly * Math.sin(a);
+      const cy = m.base.top + m.base.height / 2 + lx * Math.sin(a) + ly * Math.cos(a);
+      const now = placeOf(m.el).translate ?? { x: 0, y: 0 };
+      const from = p.from.get(m.el) as Place;
+      writeLive(m.el, { translate: { x: now.x + cx - (seen.left + seen.width / 2), y: now.y + cy - (seen.top + seen.height / 2) }, width: m.el.matches(RESIZABLE) ? m.base.width * k : null, rotate: from.rotate });
+    }
   };
 
   const onUp = (ev: PointerEvent | null) => {
@@ -501,7 +545,7 @@ export function install(app: App): void {
     if (p.kind === 'move' && ev && p.moved && copying && copyHeld(ev)) {
       void copyAt(p).catch((e) => app.fail(e));
     } else if (p.kind !== 'marquee') {
-      const els = [...p.els, ...(p.sized ?? []).filter((m) => !p.els.includes(m))];
+      const els = [...new Set([...p.els, ...(p.sized ?? []), ...(p.followers ?? []).flatMap((m) => m.sized)])];
       if (ev && p.moved) {
         const changes = els.map((el) => {
           const to = placeOf(el);

@@ -107,7 +107,11 @@ export class Frames {
   readonly hoverFrame: HTMLDivElement;
   // the handle of the block under the pointer, being edited, or selected, by which it is dragged
   readonly handle: HTMLDivElement;
+  // the grips of the first selected element, and a set more for each other selected element
   readonly grips: Record<Handle, HTMLDivElement>;
+  private readonly gripSets: Record<Handle, HTMLDivElement>[] = [];
+  // the element of each set of grips, as last drawn
+  private members: (Element | null)[] = [];
   // the rotate handle of the one selected element, on a stem above the middle of its top edge
   readonly rotor: HTMLDivElement;
   private readonly stem: HTMLDivElement;
@@ -130,11 +134,7 @@ export class Frames {
     // the first guide on each axis is always there, at the line snapped to
     this.guides.push(div('beeson-guide v', this.layer), div('beeson-guide h', this.layer));
     this.marquee = div('beeson-marquee', this.layer);
-    this.grips = Object.fromEntries(HANDLES.map((h) => {
-      const g = div('beeson-grip', this.layer);
-      g.dataset.handle = h;
-      return [h, g];
-    })) as Record<Handle, HTMLDivElement>;
+    this.grips = this.gripSet();
     this.stem = div('beeson-rotor-stem', this.layer);
     this.rotor = div('beeson-rotor', this.layer);
     this.rotor.textContent = '↻';
@@ -148,6 +148,23 @@ export class Frames {
     this.readout = div('beeson-offset', this.layer);
   }
 
+  private gripSet(): Record<Handle, HTMLDivElement> {
+    const n = this.gripSets.length;
+    const set = Object.fromEntries(HANDLES.map((h) => {
+      const g = div('beeson-grip', this.layer);
+      g.dataset.handle = h;
+      g.dataset.member = String(n);
+      return [h, g];
+    })) as Record<Handle, HTMLDivElement>;
+    this.gripSets.push(set);
+    return set;
+  }
+
+  // the selected element that grip resizes
+  memberOf(grip: Element): Element | null {
+    return this.members[Number((grip as HTMLElement).dataset.member)] ?? null;
+  }
+
   // the element that the handle of a block is shown at: the one dragged, under the pointer, or
   // being edited, else the one selected
   current(): Element | null {
@@ -156,11 +173,11 @@ export class Frames {
     return view.moving?.[0] ?? view.hover ?? movableOf(this.app, editing) ?? this.app.selection.only();
   }
 
-  // the resize handles of the one selected element: live on an image, a video, a QR code, a
-  // viewer, and a figure that holds one of them, none on a block of text or on another figure, and
-  // crosses on a locked element
+  // the resize handles of a selected element, drawn on each element of a multiple selection as in
+  // Keynote and PowerPoint: live on an image, a video, a QR code, a viewer, and a figure that holds
+  // one of them, none on a block of text or on another figure, and crosses on a locked element
   gripsOf(el: Element | null): 'live' | 'locked' | null {
-    if (!el || this.app.selection.only() !== el) return null;
+    if (!el || !this.app.selection.elements().includes(el)) return null;
     if (el.hasAttribute('data-locked')) return 'locked';
     return sizedOf(el).length ? 'live' : null;
   }
@@ -196,20 +213,25 @@ export class Frames {
     } else this.union.hidden = true;
 
     const only = app.selection.only();
-    const grips = view.moving && !view.resizing ? null : this.gripsOf(only);
-    const tycho = !!only?.matches('tycho-viewer');
-    for (const h of HANDLES) {
-      const g = this.grips[h];
-      if (!grips || !only || (tycho && (h === 'n' || h === 's'))) {
-        g.hidden = true;
-        continue;
+    const gripped = view.moving && !view.resizing ? [] : selected.map((el, i) => ({ el, i, grips: this.gripsOf(el) })).filter((m) => m.grips);
+    while (this.gripSets.length < gripped.length) this.gripSet();
+    this.members = this.gripSets.map((_, n) => gripped[n]?.el ?? null);
+    this.gripSets.forEach((set, n) => {
+      const m = gripped[n];
+      const tycho = !!m?.el.matches('tycho-viewer');
+      for (const h of HANDLES) {
+        const g = set[h];
+        if (!m || (tycho && (h === 'n' || h === 's'))) {
+          g.hidden = true;
+          continue;
+        }
+        const b = boxes[m.i];
+        const at = turned(b, orients[m.i].deg, h.includes('w') ? b.left : h.includes('e') ? b.left + b.width : b.left + b.width / 2, h.includes('n') ? b.top : h.includes('s') ? b.top + b.height : b.top + b.height / 2);
+        g.hidden = false;
+        g.classList.toggle('locked', m.grips === 'locked');
+        Object.assign(g.style, { left: `${at.x}px`, top: `${at.y}px` });
       }
-      const b = boxes[0];
-      const at = turned(b, orients[0].deg, h.includes('w') ? b.left : h.includes('e') ? b.left + b.width : b.left + b.width / 2, h.includes('n') ? b.top : h.includes('s') ? b.top + b.height : b.top + b.height / 2);
-      g.hidden = false;
-      g.classList.toggle('locked', grips === 'locked');
-      Object.assign(g.style, { left: `${at.x}px`, top: `${at.y}px` });
-    }
+    });
     // the rotate handle, also while it is dragged, on one element that is not locked
     const rotating = document.documentElement.classList.contains('beeson-rotating');
     const turnable = !!only && boxes.length === 1 && !only.hasAttribute('data-locked') && (!view.moving || rotating);
@@ -227,7 +249,7 @@ export class Frames {
     this.hoverFrame.hidden = !hot || !!framed || !!view.moving;
     if (hot && !framed && !view.moving) place(this.hoverFrame, grow(visualRect(pictureOf(hot)), 6));
     // a figure is dragged by itself, as in Keynote, and a viewer, which a drag turns, by its handle
-    this.handle.hidden = !hot || (hot.matches(BY_ITSELF) && !hot.matches('tycho-viewer')) || (hot === only && !!this.gripsOf(only));
+    this.handle.hidden = !hot || (hot.matches(BY_ITSELF) && !hot.matches('tycho-viewer')) || !!this.gripsOf(hot);
     if (!this.handle.hidden && hot) {
       const r = hot.getBoundingClientRect();
       Object.assign(this.handle.style, { left: `${r.left - 24}px`, top: `${r.top - 24}px` });
