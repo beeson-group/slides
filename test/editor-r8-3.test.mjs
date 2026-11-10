@@ -401,3 +401,56 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the commands of the Text pane that apply to a text selection, by their ids, apart from Bigger
+const TEXT_PANE = ['text.style.body', 'text.formatPainter', 'text.bold', 'text.italic', 'text.strike', 'text.code', 'text.superscript', 'text.subscript', 'text.smaller', 'text.case.upper', 'text.tone.accent', 'text.link', 'text.clear'];
+// the dimmed controls of the Text pane, each as its command or its text, and its tooltip
+const dimmed = (page) => page.evaluate(`[...document.querySelectorAll('${PANEL} button:disabled')].map((b) => [b.dataset.command || b.textContent, b.title])`);
+// the controls that are dimmed by design on a block of one level that does not have a link
+const UNUSED = /^text\.(indent|outdent|removeLink)$|^(Remove Link|Increase Indent Level|Decrease Indent Level)$/;
+
+// finding 7 of R8.3: with a list selected as a block, the Text pane dimmed every control but the
+// list buttons (state 190)
+for (const platform of PLATFORMS) {
+  test(`the Text pane applies its formats to a list selected as a block (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, P);
+    await press(page, 'Escape');
+    await frames(page);
+    await click(page, `${PANEL} [data-command="text.list.ul"]`);
+    await frames(page);
+    const off = [];
+    for (const id of TEXT_PANE) if (!(await state(page, id)).enabled) off.push(id);
+    assert.deepEqual(off, [], 'a command of the Text pane is dimmed for the list selected as a block');
+    // Bigger stays dimmed with its reason, since the theme does not have a class of an item larger
+    // than Body
+    for (const [id, title] of (await dimmed(page)).filter(([id]) => !UNUSED.test(id))) {
+      assert.ok(id === 'text.bigger' && / (because|since|not|only) /.test(title), `the control ${id} is dimmed for the list selected as a block with the tooltip ${js(title)}`);
+    }
+    // Bold, the accent tone, and Smaller are set on the whole text of the item, with the class of
+    // the style Small on the item
+    await click(page, `${PANEL} [data-command="text.bold"]`);
+    await frames(page);
+    await click(page, `${PANEL} .ed-swatches [data-command="text.tone.accent"]`);
+    await frames(page);
+    await click(page, `${PANEL} [data-command="text.smaller"]`);
+    await frames(page);
+    const text = await roundTrip(page, 4);
+    assert.match(text, /<ul>\s*<li class="small">(<span class="tone-accent"><strong>|<strong><span class="tone-accent">)Export your matplotlib figure with the styles of the template\. It will show frameless\.(<\/strong><\/span>|<\/span><\/strong>)<\/li>\s*<\/ul>/);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`a control of the Text pane dimmed for a selected block says why in its tooltip (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    for (const sel of [P, `${LIST} > li:first-child`, '.reveal section.present h2']) {
+      await click(page, sel);
+      await press(page, 'Escape');
+      await frames(page);
+      for (const [id, title] of await dimmed(page)) {
+        if (UNUSED.test(id)) continue;
+        assert.match(title, / (because|since|not|only) /, `the control ${id} is dimmed for ${sel} with the tooltip ${js(title)}, which does not give a reason`);
+      }
+    }
+    assert.deepEqual(errors(page), []);
+  });
+}
