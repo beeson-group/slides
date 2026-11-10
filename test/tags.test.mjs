@@ -44,3 +44,14 @@ test('a translation is put into the style, next to the declarations that are the
 test('a step and a translation in one edit are written in one tag', () => {
   assert.equal(render('<p>a</p>', { fragment: true, index: 1, translate: { x: 5, y: 5 } }), '<p class="fragment" data-fragment-index="1" style="translate: 5px 5px">a</p>');
 });
+
+// defect 6 of the save model: a value was decoded only for &quot; and &amp;, hence another
+// reference in a rewritten attribute was escaped a second time
+test('a character reference in a rewritten class or style is kept', () => {
+  assert.equal(
+    render('<p style="font-family: &#39;A&#39;; translate: 1px 2px">a</p>', { translate: { x: 3, y: 4 } }),
+    '<p style="font-family: &#39;A&#39;; translate: 3px 4px">a</p>',
+  );
+  assert.equal(render('<p class="x&#45;y">a</p>', { fragment: true }), '<p class="x&#45;y fragment">a</p>');
+  assert.deepEqual(stepIn(tagOf('<p class="&#102;ragment">').attrs), { fragment: true, index: null });
+});
