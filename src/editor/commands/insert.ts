@@ -424,12 +424,22 @@ export function install(app: App): void {
         setTimeout(() => void a.commands.run('math.inline'), 0);
         return;
       }
-      const { parent, before } = columnPlace(a, a.current()!);
-      const [node] = await docOf(a).insertElement('formula', parent, before, { tex: '' });
-      a.selection.set('elements', [node]);
-      markEmpty();
-      const math = node.querySelector('mjx-container');
-      if (math) setTimeout(() => openTex(node, math), 0);
+      // the keys typed while the formula is written are typed into its TeX field
+      const release = a.math.hold();
+      let opens = false;
+      try {
+        const { parent, before } = columnPlace(a, a.current()!);
+        const [node] = await docOf(a).insertElement('formula', parent, before, { tex: '' });
+        a.selection.set('elements', [node]);
+        markEmpty();
+        const math = node.querySelector('mjx-container');
+        if (math) {
+          opens = true;
+          setTimeout(() => (openTex(node, math), release()), 0);
+        }
+      } finally {
+        if (!opens) release();
+      }
     }),
   });
   c.define({

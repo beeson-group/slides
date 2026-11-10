@@ -11,13 +11,15 @@ import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
 import { injectStyle } from '../ui/dom.ts';
 import { groupOf } from '../commands/order.ts';
+import { turnersOf } from './drag.ts';
 import type { Box, Guide, Handle, Spacing } from './snap.ts';
 import { BY_ITSELF, CONTAINER, RESIZABLE, frameOf, isTextSized, movableOf, orientedBox, pictureOf, sizedOf, toScreen, turnable as turns, visualRect } from './hit.ts';
 
 export const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 
 // what the drag and the keys show, besides the selection: the element under the pointer, the
-// elements being moved, the guides and gaps of a snap, the readout, and the marquee in screen pixels
+// elements being moved, the guides and gaps of a snap, the readout, the marquee in screen pixels,
+// and the frame of a group at the start of its turn with the angle it is turned by
 export const view: {
   hover: Element | null;
   moving: Element[] | null;
@@ -26,7 +28,8 @@ export const view: {
   spacing: Spacing[];
   readout: { text: string; x: number; y: number; at: 'pointer' | 'frame' } | null;
   marquee: Box | null;
-} = { hover: null, moving: null, resizing: false, guides: [], spacing: [], readout: null, marquee: null };
+  turn: { box: Box; deg: number } | null;
+} = { hover: null, moving: null, resizing: false, guides: [], spacing: [], readout: null, marquee: null, turn: null };
 
 const CSS = `
 .beeson-overlay { position: fixed; inset: 0; z-index: 51; pointer-events: none; }
@@ -119,14 +122,17 @@ function turned(box: Box, deg: number, x: number, y: number): { x: number; y: nu
   return { x: cx + (x - cx) * Math.cos(a) - (y - cy) * Math.sin(a), y: cy + (x - cx) * Math.sin(a) + (y - cy) * Math.cos(a) };
 }
 
-// the distance of the rotate handle above the top edge of a frame, in screen pixels
-// the distance of the rotate handle from the edge of the frame, and its radius, in screen px, about
-// those of the rotate handle of PowerPoint
+// the distance of the center of the rotate handle above the top edge of a frame, and its radius,
+// in screen px, about those of the rotate handle of PowerPoint. where the handle would cover the
+// text of a block above, e.g. a heading over a paragraph, its stem is cut down to SHORT
 const ROTOR = 18;
+const SHORT = 11;
 const KNOB = 7;
-// the text of the blocks whose lines a rotate handle is kept off
+// the text of the blocks whose lines a rotate handle is kept off where it can be
 const WORDS = 'h1, h2, h3, p, li, dt, dd, div.math, .caption, figcaption, td, th, pre, blockquote';
-type RotorAt = 'above' | 'below' | 'inside';
+// the handle of a block is drawn this far left of the frame, clear of its grips, in screen px
+const HANDLE = 22;
+const HANDLE_GAP = 10;
 
 // the overlay of the editor. the handle of a block and the resize handles are its only parts that
 // take the pointer
@@ -147,8 +153,8 @@ export class Frames {
   private readonly frames: HTMLDivElement[] = [];
   // the one frame of a selected group
   private readonly union: HTMLDivElement;
-  // where the rotate handle is, kept while it is dragged
-  private rotorAt: RotorAt = 'above';
+  // the distance of the rotate handle above the frame, kept while it is dragged
+  private rotorAt = ROTOR;
   // the box of a selected group on the screen, as last drawn, which its one set of grips resizes
   private group: Box | null = null;
   private readonly guides: HTMLDivElement[] = [];
@@ -252,14 +258,17 @@ export class Frames {
     const id = selected.length > 1 ? groupOf(selected[0]) : null;
     const grouped = !!id && selected.every((el) => groupOf(el) === id);
     this.group = null;
+    // a group being turned is framed at its frame at the start of the turn, turned with it
+    const turn = grouped ? view.turn : null;
     if (boxes.length > 1 && grouped) {
-      this.group = groupReach(selected);
+      this.group = turn?.box ?? groupReach(selected);
       place(this.union, this.group);
+      this.union.style.rotate = turn?.deg ? `${turn.deg}deg` : '';
       for (const f of this.frames) f.hidden = true;
     } else this.union.hidden = true;
 
     const only = app.selection.only();
-    const gripped = view.moving && !view.resizing ? [] : this.group ? [{ el: selected[0], i: -1, grips: selected.some((el) => el.hasAttribute('data-locked')) ? 'locked' as const : 'live' as const }] : selected.map((el, i) => ({ el, i, grips: this.gripsOf(el) })).filter((m) => m.grips);
+    const gripped = turn || (view.moving && !view.resizing) ? [] : this.group ? [{ el: selected[0], i: -1, grips: selected.some((el) => el.hasAttribute('data-locked')) ? 'locked' as const : 'live' as const }] : selected.map((el, i) => ({ el, i, grips: this.gripsOf(el) })).filter((m) => m.grips);
     while (this.gripSets.length < gripped.length) this.gripSet();
     this.members = this.gripSets.map((_, n) => gripped[n]?.el ?? null);
     this.gripSets.forEach((set, n) => {
@@ -282,31 +291,33 @@ export class Frames {
       }
     });
     // the rotate handle, also while it is dragged, on one element that is turned, i.e. not locked
-    // and not a table or a range of its cells
+    // and not a table or a range of its cells, or on a group whose every member is turned
     const rotating = document.documentElement.classList.contains('beeson-rotating');
-    const turnable = !!only && boxes.length === 1 && turns(only as Element) && (!view.moving || rotating);
+    const turnGroup = !!this.group && (!!turn || !!turnersOf(app, selected));
+    const turnable = (turnGroup || (!!only && boxes.length === 1 && turns(only as Element))) && (!view.moving || rotating);
     this.rotor.hidden = this.stem.hidden = !turnable;
     if (turnable) {
-      const b = boxes[0], deg = orients[0].deg;
+      const b = turnGroup ? (this.group as Box) : boxes[0], deg = turnGroup ? (turn?.deg ?? 0) : orients[0].deg;
       const cx = b.left + b.width / 2;
-      // above the frame as in Keynote and PowerPoint, or under it, or inside its top edge, whichever
-      // first leaves the text of the other blocks in view
-      const knobAt = (at: RotorAt) => turned(b, deg, cx, at === 'above' ? b.top - ROTOR : at === 'below' ? b.top + b.height + ROTOR : b.top + KNOB + 4);
+      // above the middle of the top edge of the frame, as in PowerPoint, on a stem cut short where
+      // the full stem would put the handle over the text of another block. the handle is drawn over
+      // the slide, hence it is pressed also where it covers a text
+      const knobAt = (d: number) => turned(b, deg, cx, b.top - d);
       if (!rotating) {
-        const lines = this.linesBesides(only as Element);
-        const free = (at: RotorAt) => {
-          const k = knobAt(at);
+        const lines = this.linesBesides(turnGroup ? selected : [only as Element]);
+        const free = (d: number) => {
+          const k = knobAt(d);
           return !lines.some((r) => k.x + KNOB > r.left && k.x - KNOB < r.right && k.y + KNOB > r.top && k.y - KNOB < r.bottom);
         };
-        this.rotorAt = (['above', 'below'] as const).find(free) ?? 'inside';
+        let d = ROTOR;
+        while (d > SHORT && !free(d)) d--;
+        this.rotorAt = free(d) ? d : ROTOR;
       }
       const knob = knobAt(this.rotorAt);
       Object.assign(this.rotor.style, { left: `${knob.x}px`, top: `${knob.y}px` });
-      this.stem.hidden = this.rotorAt === 'inside';
-      // the stem runs from the edge of the frame to the handle, turned with the frame
-      const edge = turned(b, deg, cx, this.rotorAt === 'above' ? b.top : b.top + b.height);
-      const turn = deg + (this.rotorAt === 'above' ? 180 : 0);
-      Object.assign(this.stem.style, { left: `${edge.x}px`, top: `${edge.y}px`, height: `${ROTOR - KNOB}px`, rotate: turn ? `${turn}deg` : '' });
+      // the stem runs up from the edge of the frame to the handle, turned with the frame
+      const edge = turned(b, deg, cx, b.top);
+      Object.assign(this.stem.style, { left: `${edge.x}px`, top: `${edge.y}px`, height: `${this.rotorAt - KNOB}px`, rotate: `${deg + 180}deg` });
     }
 
     const hot = this.current();
@@ -317,8 +328,9 @@ export class Frames {
     // block, whose text a press edits, by its handle
     this.handle.hidden = !hot || (hot.matches(BY_ITSELF) && !hot.matches('tycho-viewer')) || (!!this.gripsOf(hot) && !isTextSized(hot));
     if (!this.handle.hidden && hot) {
+      // left of the frame, 6 px outside the text, at its top edge, clear of the grips at its corners
       const r = hot.getBoundingClientRect();
-      Object.assign(this.handle.style, { left: `${r.left - 24}px`, top: `${r.top - 24}px` });
+      Object.assign(this.handle.style, { left: `${r.left - 6 - HANDLE_GAP - HANDLE}px`, top: `${r.top - 6}px` });
     }
     this.drawGuides();
     if (view.marquee) place(this.marquee, view.marquee);
@@ -332,14 +344,14 @@ export class Frames {
     }
   }
 
-  // the boxes of the lines of text of the blocks of the current slide outside el, on the screen
-  private linesBesides(el: Element): DOMRect[] {
+  // the boxes of the lines of text of the blocks of the current slide outside els, on the screen
+  private linesBesides(els: Element[]): DOMRect[] {
     const slide = this.app.current();
     if (!slide) return [];
     const out: DOMRect[] = [];
     const range = document.createRange();
     for (const block of slide.querySelectorAll(WORDS)) {
-      if (el.contains(block) || block.contains(el) || block.closest('aside.notes')) continue;
+      if (els.some((el) => el.contains(block) || block.contains(el)) || block.closest('aside.notes')) continue;
       range.selectNodeContents(block);
       for (const r of range.getClientRects()) if (r.width && r.height) out.push(r);
     }

@@ -8,6 +8,7 @@ import { RAW_TEXT, type Range } from './tokens.ts';
 import { VOID, contentRange, elementRange, isFragmentRoot, lastEnd, rawRange, type Piece, type Source, type SrcComment, type SrcEl, type SrcNode, type SrcText } from './source.ts';
 import type { MathInfo, MathLookup } from './math.ts';
 import { mergeEdit, renderTag, stateOf, type TagEdit } from './tags.ts';
+import { fragmentIndex } from './layers.ts';
 import { indentAt, placeLead, spaceOf, unitsOf, type Child, type Unit } from './model/units.ts';
 import { textStyle } from './model/templates.ts';
 
@@ -190,6 +191,7 @@ export function escape(source: Source, text: string, keepNbsp: boolean): string 
 function serializeNew(source: Source, el: Element, math: MathLookup): string {
   const tag = el.localName;
   const attrs = [...el.attributes]
+    .map((a) => ({ name: a.name, value: a.name === 'data-fragment-index' ? (fragmentIndex(el) ?? a.value) : a.value }))
     .map((a) => (a.value === '' ? ` ${a.name}` : ` ${a.name}="${a.value.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`))
     .join('');
   if (VOID.has(tag)) return `<${tag}${attrs}>`;

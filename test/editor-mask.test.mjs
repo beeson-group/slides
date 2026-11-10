@@ -18,6 +18,7 @@ const THEME = new Set(themeClasses(readFileSync('theme/beeson.css', 'utf8')));
 const PANEL = '#beeson-edit-panel-format';
 
 const DARK = '<img class="for-dark" src="../../demo/figure-dark.png" alt="A figure, dark version">';
+const LIGHT = '<img class="for-light" src="../../demo/figure-light.png" alt="A figure, light version">';
 const PAPER = '<img class="paper" src="../../demo/figure-light.png" alt="A white raster figure">';
 const NEST = '<div class="backdrop" data-scene="nest" data-cx="0.97" data-cy="0" data-half="0.5">';
 const IMG = 'section.present figure.zone img.for-dark';
@@ -101,6 +102,9 @@ function replaced(text, before, after) {
   return text.replace(before, () => after);
 }
 
+// the text with the style written on both images of the pair of a dark and a light figure
+const onPair = (text, style) => replaced(replaced(text, DARK, DARK.replace('>', ` style="${style}">`)), LIGHT, LIGHT.replace('>', ` style="${style}">`));
+
 // the checks of every edit: the scope rule, an undo byte for byte, a redo, and a save and an open
 async function checkEdit(page, edited) {
   assert.deepEqual(textProblems(edited, THEME), textProblems(page.source, THEME));
@@ -128,7 +132,7 @@ for (const platform of PLATFORMS) {
     const style = await written(page);
     assert.match(style, /^scale: 1\.5; clip-path: inset\(16\.667%\); object-position: -?[\d.]+(%|px) -?[\d.]+(%|px)$/);
     const edited = await render(page);
-    assert.equal(edited, replaced(page.source, DARK, DARK.replace('>', ` style="${style}">`)));
+    assert.equal(edited, onPair(page.source, `${style}`));
     // the picture seen in the box is the part of the scaled picture inside the clip
     const seen = await page.evaluate(`(() => {
       const el = document.querySelector(${JSON.stringify(IMG)});
@@ -169,7 +173,7 @@ for (const platform of PLATFORMS) {
     await click(page, `${BAR} button.done`);
     assert.equal(await editing(page), false);
     const edited = await render(page);
-    assert.equal(edited, replaced(page.source, DARK, DARK.replace('>', ' style="object-fit: cover">')));
+    assert.equal(edited, onPair(page.source, 'object-fit: cover'));
     await checkEdit(page, edited);
     await selectImage(page);
     assert.equal((await state(page, 'image.resetMask')).enabled, true);
@@ -256,12 +260,12 @@ for (const platform of PLATFORMS) {
     await tap(page, 'Arrange');
     await tap(page, 'Flip Horizontal');
     let edited = await render(page);
-    assert.equal(edited, replaced(page.source, DARK, DARK.replace('>', ' style="scale: -1 1">')));
+    assert.equal(edited, onPair(page.source, 'scale: -1 1'));
     await checkEdit(page, edited);
     await selectImage(page);
     await exec(page, 'arrange.flipVertical');
     edited = await render(page);
-    assert.equal(edited, replaced(page.source, DARK, DARK.replace('>', ' style="scale: -1 -1">')));
+    assert.equal(edited, onPair(page.source, 'scale: -1 -1'));
     assert.deepEqual(textProblems(edited, THEME), textProblems(page.source, THEME));
     await exec(page, 'arrange.flipHorizontal');
     await exec(page, 'arrange.flipVertical');

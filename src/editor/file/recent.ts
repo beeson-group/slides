@@ -62,14 +62,15 @@ function changed(next: Recent[]): void {
   for (const fn of watchers) fn();
 }
 
-// a list that cannot be written is kept for the session of the page
+// the menus show the list at once, before it is written. a list that cannot be written is kept for
+// the session of the page
 async function store(next: Recent[]): Promise<void> {
+  changed(next);
   try {
     await run('readwrite', (s) => s.put(next, KEY));
   } catch {
     // nothing else to do
   }
-  changed(next);
 }
 
 export async function loadRecents(): Promise<void> {

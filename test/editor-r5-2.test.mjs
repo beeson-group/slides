@@ -806,22 +806,28 @@ const rotorView = (page) => page.evaluate(`(() => {
     range.selectNodeContents(el);
     for (const b of range.getClientRects()) if (b.width && b.height) text.push({ el: el.localName, left: b.left, top: b.top, right: b.right, bottom: b.bottom });
   }
-  return { rotor: r && { left: r.left, top: r.top, right: r.right, bottom: r.bottom }, text };
+  const f = [...document.querySelectorAll('.beeson-frame.selected')].find((f) => !f.hidden)?.getBoundingClientRect();
+  const hit = r && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === g;
+  return { rotor: r && { left: r.left, top: r.top, right: r.right, bottom: r.bottom }, frame: f && { top: f.top }, hit, text };
 })()`);
 const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 
 for (const platform of PLATFORMS) {
-  test(`${platform}: the rotate grip of a selected text block does not cover the text of another block, and turns the block`, async () => {
+  test(`${platform}: the rotate grip of a selected text block is above its frame, off the text of another block where there is room, and turns the block`, async () => {
     const page = await editor(platform);
-    const blocks = ['The lead-in of a display', 'where the Coriolis term is colored.'];
-    for (const words of blocks) {
+    // the display reaches down to the frame of the second paragraph, whose grip thus covers it, as
+    // the rotate handle of PowerPoint covers a shape above
+    const blocks = [['The lead-in of a display', true], ['where the Coriolis term is colored.', false]];
+    for (const [words, room] of blocks) {
       const at = await page.evaluate(`(() => { const p = [...document.querySelectorAll('.reveal section.present p')].find((p) => p.textContent === ${JSON.stringify(words)}); const r = p.getBoundingClientRect(); return { x: r.right + 3, y: r.top + r.height / 2 }; })()`);
       await click(page, at);
       await frames(page);
       const v = await rotorView(page);
       assert.ok(v.rotor, `the paragraph "${words}" does not have a rotate grip`);
+      assert.ok(v.rotor.bottom < v.frame.top, `the rotate grip of "${words}" is not above its frame`);
+      assert.ok(v.hit, `the rotate grip of "${words}" cannot be pressed`);
       const hit = v.text.find((t) => overlaps(v.rotor, t));
-      assert.ok(!hit, `the rotate grip of "${words}" at ${JSON.stringify(v.rotor)} covers the text of a ${hit?.el} at ${JSON.stringify(hit)}`);
+      if (room) assert.ok(!hit, `the rotate grip of "${words}" at ${JSON.stringify(v.rotor)} covers the text of a ${hit?.el} at ${JSON.stringify(hit)}`);
     }
     // the grip turns the last block
     const v = await rotorView(page);

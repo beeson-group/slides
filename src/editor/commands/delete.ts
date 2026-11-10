@@ -1,12 +1,13 @@
 // Delete of the selected elements of the current slide, each taken off the page with the white space
 // and the comments before it, as one entry of the history. a locked element is skipped and stays
-// selected, as in Keynote, and Delete is disabled while every selected element is locked. in a
-// text, Delete of the menu deletes the selected words as Cut does, and it is dimmed at a caret as in
-// both apps. the keys of Delete are left to the browser in a text
+// selected, as in Keynote, and Delete is disabled while every selected element is locked. the image
+// of the other mode beside a deleted image goes with it. in a text, Delete of the menu deletes the
+// selected words as Cut does, and it is dimmed at a caret as in both apps. the keys of Delete are
+// left to the browser in a text
 
 import type { App } from '../app.ts';
 import { locked } from '../canvas/drag.ts';
-import { objectsOf } from '../canvas/hit.ts';
+import { objectsOf, withTwins } from '../canvas/hit.ts';
 import { hasRange, inText } from './clipboard.ts';
 import { docOf } from './slide.ts';
 
@@ -32,7 +33,7 @@ export function install(app: App): void {
       // an element inside another selected one goes with it
       const els = selectedElements(a);
       const kept = els.filter((el) => locked(el));
-      const outer = els.filter((el) => !locked(el) && !els.some((o) => o !== el && o.contains(el)));
+      const outer = withTwins(a, els.filter((el) => !locked(el) && !els.some((o) => o !== el && o.contains(el))));
       if (kept.length) a.selection.set('elements', kept);
       else a.selection.clear();
       for (const el of outer.reverse()) await doc.remove(el, 'delete');
