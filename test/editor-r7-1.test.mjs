@@ -226,3 +226,79 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// positionFieldsOf returns the values of the fields X and Y of the Arrange pane, '' for an empty one
+const positionFieldsOf = (page) =>
+  page.evaluate(`(() => { const v = (n) => document.querySelector('#beeson-edit-panel-format input[name="' + n + '"]')?.value ?? null; return { x: v('X'), y: v('Y') }; })()`);
+// cornerOfFrame returns the upper left corner in slide px of the one frame of a selected group
+const cornerOfFrame = (page) =>
+  page.evaluate(`(() => { const slides = document.querySelector('.reveal .slides'); const o = slides.getBoundingClientRect(); const s = o.width / slides.offsetWidth; const r = document.querySelector('.beeson-frame.union.group:not([hidden])').getBoundingClientRect(); return { x: (r.left - o.left) / s, y: (r.top - o.top) / s }; })()`);
+// membersOf returns the upper left corners in slide px of the selected elements
+const membersOf = (page) =>
+  page.evaluate(`(() => { const slides = document.querySelector('.reveal .slides'); const o = slides.getBoundingClientRect(); const s = o.width / slides.offsetWidth; return window.BeesonEditor.selection().map((e) => { const r = e.getBoundingClientRect(); return { x: (r.left - o.left) / s, y: (r.top - o.top) / s }; }); })()`);
+
+// item 5 of R7.1: in picture 178-group-resize of round 3, X and Y of the Arrange pane were empty for
+// a group, which Keynote and PowerPoint give as the upper left corner of the group
+for (const platform of PLATFORMS) {
+  test(`X and Y give the corner of a group, and a typed X or Y moves the whole group as one entry (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: 'index.html', n: FIGURES });
+    await click(page, '.reveal section.present > p');
+    await press(page, 'Escape');
+    await click(page, DEMO_IMG, { modifiers: 'Shift' });
+    await exec(page, 'arrange.group');
+    await frames(page);
+    await page.evaluate(`[...document.querySelectorAll('#beeson-edit-panel-format button')].find((b) => b.textContent.trim() === 'Arrange')?.click()`);
+    await frames(page);
+    page.source = await render(page);
+    const corner = await cornerOfFrame(page);
+    const xy = await positionFieldsOf(page);
+    assert.ok(xy.x !== '' && xy.y !== '', `X and Y read ${js(xy)} for a group at ${js(corner)}`);
+    assert.ok(Math.abs(Number(xy.x) - corner.x) <= 1 && Math.abs(Number(xy.y) - corner.y) <= 1, `X and Y read ${js(xy)} for a group at ${js(corner)}`);
+    const before = await membersOf(page);
+    for (const [name, value] of [['X', Number(xy.x) - 40], ['Y', Number(xy.y) + 30]]) {
+      await click(page, `#beeson-edit-panel-format input[name="${name}"]`);
+      await page.evaluate(`document.querySelector('#beeson-edit-panel-format input[name="${name}"]').select()`);
+      await type(page, String(value));
+      await press(page, 'Enter');
+      await frames(page);
+    }
+    const now = await cornerOfFrame(page);
+    assert.ok(Math.abs(now.x - (Number(xy.x) - 40)) <= 1 && Math.abs(now.y - (Number(xy.y) + 30)) <= 1, `the group is at ${js(now)} after X ${Number(xy.x) - 40} and Y ${Number(xy.y) + 30}`);
+    assert.deepEqual(await positionFieldsOf(page), { x: String(Number(xy.x) - 40), y: String(Number(xy.y) + 30) });
+    const after = await membersOf(page);
+    for (const [i, m] of after.entries()) assert.ok(Math.abs(m.x - before[i].x + 40) <= 1 && Math.abs(m.y - before[i].y - 30) <= 1, `member ${i} moved from ${js(before[i])} to ${js(m)}`);
+    assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present [data-group]').length`), 2, 'the group is taken apart');
+    // the two typed values are two entries of the history, each of which moves both members
+    const typed = await render(page);
+    await page.evaluate('window.BeesonEditor.undo()');
+    await frames(page);
+    const half = await membersOf(page);
+    for (const [i, m] of half.entries()) assert.ok(Math.abs(m.x - before[i].x + 40) <= 1 && Math.abs(m.y - before[i].y) <= 1, `after an undo member ${i} is at ${js(m)}`);
+    await page.evaluate('window.BeesonEditor.undo()');
+    await byteExact(page);
+    await page.evaluate('window.BeesonEditor.redo()');
+    await page.evaluate('window.BeesonEditor.redo()');
+    assert.equal(await render(page), typed);
+    const { text } = await saveAndReopen(page, `r7-1-${++saves}.html`);
+    assert.equal(text, typed);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+// item 5 of R7.1: Keynote shows the Style tab with "Multiple Object Types" for several ungrouped
+// objects (raw/keynote-live/006-select-several.png), and neither reference gives their bounding
+// box in X and Y, hence X and Y stay empty for a paragraph and an image at different corners
+for (const platform of PLATFORMS) {
+  test(`X and Y stay empty for several ungrouped elements at different corners (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: 'index.html', n: FIGURES });
+    await click(page, '.reveal section.present > p');
+    await press(page, 'Escape');
+    await click(page, DEMO_IMG, { modifiers: 'Shift' });
+    await frames(page);
+    await page.evaluate(`[...document.querySelectorAll('#beeson-edit-panel-format button')].find((b) => b.textContent.trim() === 'Arrange')?.click()`);
+    await frames(page);
+    assert.equal(await page.evaluate(`window.BeesonEditor.selection().length`), 2);
+    assert.deepEqual(await positionFieldsOf(page), { x: '', y: '' });
+    assert.deepEqual(errors(page), []);
+  });
+}
