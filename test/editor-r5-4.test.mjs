@@ -11,7 +11,7 @@ import { resolve } from 'node:path';
 import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, drag, editorPage, press, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, drag, editorPage, press, saveAndReopen, type } from './helpers/editor.mjs';
 
 const THEME = new Set(themeClasses(readFileSync('theme/beeson.css', 'utf8')));
 const PANEL = '#beeson-edit-panel-format';
@@ -278,6 +278,40 @@ for (const platform of ['mac', 'other']) {
     assert.equal(await page.evaluate(`document.querySelector('.reveal section.present figure.zone').hasAttribute('data-locked')`), false);
     for (const id of ['media.replace', 'figure.paper', 'arrange.align.left', 'edit.cut']) assert.equal((await state(page, id)).enabled, true, `${id} is off after Unlock`);
     assert.ok((await controls(page)).filter((c) => c.on).length > 10, 'the Arrange pane is still off after Unlock');
+  });
+}
+
+// the text of a locked block was still typed into after a double click, where Keynote keeps the
+// text of a locked object as it is until an unlock
+const LEAD = '<p>Design the complete slide first, then break it up into steps. Direct the viewer\'s attention.</p>';
+for (const platform of ['mac', 'other']) {
+  test(`the text of a locked block is not changed by typing until it is unlocked (${platform})`, async (t) => {
+    const page = await open(platform);
+    t.after(() => page.close());
+    await show(page, 2);
+    const lead = '.reveal section.present > p';
+    await click(page, lead);
+    await press(page, 'Escape');
+    await press(page, 'Mod+L');
+    await settle(page);
+    const locked = page.source.replace(LEAD, LEAD.replace('<p>', '<p data-locked>'));
+    assert.equal(await render(page), locked);
+    await click(page, lead, { count: 2 });
+    await type(page, 'XYZ');
+    for (const key of ['Backspace', 'Delete', 'Enter']) await press(page, key);
+    await press(page, 'Escape');
+    await settle(page);
+    const typed = await render(page);
+    assert.ok(typed === locked, `the text of the locked block was changed: ${typed.match(/<p data-locked>.*<\/p>/)?.[0]}`);
+    await click(page, lead);
+    await press(page, platform === 'mac' ? 'Mod+Alt+L' : 'Mod+Shift+L');
+    await settle(page);
+    await byteExact(page);
+    await click(page, lead, { count: 2 });
+    await type(page, 'XYZ');
+    await settle(page);
+    assert.match(await render(page), /XYZ/, 'the unlocked block cannot be typed into');
+    assert.deepEqual(errors(page), []);
   });
 }
 
