@@ -82,6 +82,9 @@ export function addRestoreSteps(root: ParentNode): void {
     restore.className = 'fragment';
     restore.setAttribute('data-restore', '');
     restore.setAttribute('aria-hidden', 'true');
+    // a delay on the last step moves on to the next slide, as a timed last build is followed by
+    // the transition in PowerPoint and Keynote, hence the restore step after it is passed at once
+    if (last.some(delayed)) restore.setAttribute(AUTOSLIDE, '1');
     slide.append(restore);
   }
 }
