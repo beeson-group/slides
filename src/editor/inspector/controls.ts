@@ -322,8 +322,8 @@ export function textField(app: App, o: FieldOptions): Control & { input: HTMLInp
 }
 
 // a number field with a stepper and its label under it, as the size and position fields of the
-// Arrange tab of Keynote. the arrow keys step it by 1, or by 10 with Shift, and so does a click on
-// the stepper
+// Arrange tab of Keynote. the arrow keys step it by step, 1 by default, or by 10 steps with Shift,
+// and so does a click on the stepper. a value is rounded to a whole number of steps
 type NumberOptions = {
   label: string;
   unit?: string;
@@ -331,6 +331,8 @@ type NumberOptions = {
   enabled(): boolean;
   commit(value: number): unknown;
   min?: number;
+  max?: number;
+  step?: number;
 };
 
 export function numberField(app: App, o: NumberOptions): Control & { input: HTMLInputElement } {
@@ -358,21 +360,24 @@ export function numberField(app: App, o: NumberOptions): Control & { input: HTML
   const label = make('label', '', o.label);
   label.htmlFor = input.id;
   el.append(box, label);
+  const step = o.step ?? 1;
+  const digits = Math.max(0, -Math.floor(Math.log10(step) + 1e-9));
+  const round = (v: number) => Number((Math.round(v / step) * step).toFixed(digits));
   let shown: number | null = null;
   const show = (v: number | null) => {
     shown = v;
-    input.value = v === null ? '' : String(Math.round(v));
+    input.value = v === null ? '' : String(round(v));
   };
   const commit = (v: number) => {
-    const value = Math.max(o.min ?? -Infinity, Math.round(v));
+    const value = Math.min(o.max ?? Infinity, Math.max(o.min ?? -Infinity, round(v)));
     show(value);
     Promise.resolve(o.commit(value)).catch((e) => app.fail(e));
   };
-  const typed = () => (input.value.trim() === '' ? NaN : Number(input.value.trim().replace(/px$/i, '').replace(',', '.')));
+  const typed = () => (input.value.trim() === '' ? NaN : Number(input.value.trim().replace(/\s*(px|s)$/i, '').replace(',', '.')));
   const flush = () => {
     if (input.disabled) return;
     const v = typed();
-    if (Number.isFinite(v) && Math.round(v) !== shown) commit(v);
+    if (Number.isFinite(v) && round(v) !== shown) commit(v);
     else show(shown);
   };
   input.addEventListener('blur', flush);
@@ -389,12 +394,12 @@ export function numberField(app: App, o: NumberOptions): Control & { input: HTML
     } else if (ev.key === 'ArrowUp' || ev.key === 'ArrowDown') {
       ev.preventDefault();
       const base = Number.isFinite(typed()) ? typed() : (shown ?? 0);
-      commit(base + (ev.key === 'ArrowUp' ? 1 : -1) * (ev.shiftKey ? 10 : 1));
+      commit(base + (ev.key === 'ArrowUp' ? 1 : -1) * (ev.shiftKey ? 10 : 1) * step);
       input.select();
     }
   });
   for (const [b, sign] of [[up, 1], [down, -1]] as const) {
-    b.addEventListener('click', (ev) => commit((shown ?? 0) + sign * (ev.shiftKey ? 10 : 1)));
+    b.addEventListener('click', (ev) => commit((shown ?? 0) + sign * (ev.shiftKey ? 10 : 1) * step));
   }
   const sync = () => {
     const on = o.enabled();
