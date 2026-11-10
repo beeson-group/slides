@@ -19,7 +19,21 @@ async function figureSlide(page) {
 
 // the boxes of the solid frames shown, in CSS pixels of the viewport
 const shownFrames = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-frame.selected')].filter((f) => !f.hidden && f.getBoundingClientRect().width).map((f) => { const r = f.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; })`);
-const boxOf = (page, selector) => page.evaluate(`(() => { const r = [...document.querySelectorAll(${JSON.stringify(selector)})].map((el) => el.getBoundingClientRect()).find((r) => r.width); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; })()`);
+// the box of the first shown element matched by selector. a figure that holds a picture is framed at
+// the picture, i.e. at the image or video fitted into it with object-fit contain
+const boxOf = (page, selector) => page.evaluate(`(() => {
+  let el = [...document.querySelectorAll(${JSON.stringify(selector)})].find((e) => e.getBoundingClientRect().width);
+  const pic = el.matches('figure, .zone, .plate') ? [...el.querySelectorAll(':scope > img, :scope > video')].find((m) => m.getBoundingClientRect().width) : null;
+  el = pic ?? el;
+  const r = el.getBoundingClientRect();
+  const [w, h] = el instanceof HTMLImageElement ? [el.naturalWidth, el.naturalHeight] : el instanceof HTMLVideoElement ? [el.videoWidth, el.videoHeight] : [0, 0];
+  const fit = getComputedStyle(el).objectFit;
+  if (!w || !h || (fit !== 'contain' && fit !== 'scale-down')) return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+  const s = Math.min(r.width / w, r.height / h, fit === 'scale-down' ? 1 : Infinity);
+  const [px, py] = getComputedStyle(el).objectPosition.split(/\\s+/).map((v) => (v.endsWith('%') ? parseFloat(v) / 100 : 0.5));
+  const left = r.left + (r.width - w * s) * px, top = r.top + (r.height - h * s) * py;
+  return { left, top, right: left + w * s, bottom: top + h * s };
+})()`);
 // whether frame is drawn around box, 0 to 8 px outside it
 const around = (frame, box) => ['left', 'top'].every((k) => box[k] - frame[k] >= -1 && box[k] - frame[k] <= 9) && ['right', 'bottom'].every((k) => frame[k] - box[k] >= -1 && frame[k] - box[k] <= 9);
 

@@ -16,6 +16,8 @@ const NAV_KEY = 'beeson-nav-w';
 const NAV_MIN = 140;
 const NAV_MAX = 360;
 const NAV_DEFAULT = 200;
+// '0' once the inspector was closed, and '1' while it is shown, kept per browser
+const INSPECTOR_KEY = 'beeson-inspector';
 
 const TOKENS_LIGHT = `--ed-bg: #ececec; --ed-panel: #f6f6f6; --ed-text: #1d1d1f; --ed-muted: #6e6e73; --ed-faint: #a9a9ae; --ed-line: #d4d4d6; --ed-canvas: #e1e1e3; --ed-select: #8a2be2; --ed-on-select: #fff; --ed-guide: #e0651f; --ed-menu: rgba(248, 248, 248, 0.94); --ed-menu-line: rgba(0, 0, 0, 0.14); --ed-control: #fff; --ed-control-line: #c6c6ca; --ed-segment: #fff; --ed-focus: rgba(138, 43, 226, 0.5); --ed-hover: rgba(0, 0, 0, 0.06); --ed-pressed: rgba(0, 0, 0, 0.11); --ed-edge: rgba(0, 0, 0, 0.16); color-scheme: light;`;
 const TOKENS_DARK = `--ed-bg: #2b2b2d; --ed-panel: #232325; --ed-text: #ececee; --ed-muted: #9a9a9f; --ed-faint: #5e5e63; --ed-line: #3b3b3e; --ed-canvas: #1a1a1c; --ed-select: #9d47d8; --ed-on-select: #fff; --ed-guide: #f08050; --ed-menu: rgba(44, 44, 46, 0.94); --ed-menu-line: rgba(255, 255, 255, 0.12); --ed-control: #3a3a3c; --ed-control-line: #4a4a4e; --ed-segment: #636366; --ed-focus: rgba(201, 79, 230, 0.6); --ed-hover: rgba(255, 255, 255, 0.07); --ed-pressed: rgba(255, 255, 255, 0.13); --ed-edge: rgba(255, 255, 255, 0.14); color-scheme: dark;`;
@@ -92,7 +94,7 @@ export function install(app: App): void {
   // the edge between the navigator and the canvas, dragged or moved with the arrow keys
   const edge = make('div', 'beeson-edit-nav-edge beeson-edit-region');
   edge.tabIndex = 0;
-  edge.title = 'Drag to change the width of the slide list, or focus it and press the left and right arrows';
+  edge.title = 'Drag to change the width of the slide list, double-click to reset it, or focus it and press the left and right arrows';
   edge.setAttribute('role', 'separator');
   edge.setAttribute('aria-orientation', 'vertical');
   edge.setAttribute('aria-label', 'Width of the slide list');
@@ -132,11 +134,14 @@ export function install(app: App): void {
     window.addEventListener('pointermove', onMove);
     window.addEventListener('pointerup', onUp);
   });
+  edge.addEventListener('dblclick', () => setNavWidth(NAV_DEFAULT));
 
   // the inspector shows one tab, Format or Steps, and is hidden when neither is on. Steps is the
-  // pane of steps.ts, hence its tab is on while that pane is shown
+  // pane of steps.ts, hence its tab is on while that pane is shown. the editor opens with the
+  // Format tab shown, as Keynote opens a presentation, unless the inspector was closed before
   let format = false;
   let stepsBefore = false;
+  let started = false;
   const setFormat = (on: boolean) => {
     format = on;
     html.classList.toggle('beeson-format', on);
@@ -158,6 +163,7 @@ export function install(app: App): void {
     stepsTab.tabIndex = tab === 'steps' ? 0 : -1;
     formatPanel.hidden = tab !== 'format';
     stepsPanel.hidden = tab !== 'steps';
+    if (started) store(INSPECTOR_KEY, tab ? '1' : '0');
     if (tab === 'format') fillFormat();
   }
   const fail = (e: unknown) => app.fail(e);
@@ -212,6 +218,8 @@ export function install(app: App): void {
     // the theme, and the tests find the slide as the first .reveal of the page
     const peek = document.querySelector('.beeson-edit-peek');
     if (peek) document.body.append(peek);
+    if (stored(INSPECTOR_KEY) !== '0' && !app.steps.shown) setFormat(true);
+    started = true;
     syncInspector();
   }
 

@@ -60,7 +60,7 @@ test('a deck without ?edit does not load the editor, with ?edit it does on file:
   const status = await page.evaluate('window.BeesonEditor.status()');
   assert.equal(status.supported, true);
   assert.equal(status.state, 'waiting');
-  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].filter((b) => !b.hidden).map((b) => b.textContent)`), ['Undo', 'Redo', 'Add Slide', 'Text Box', 'Formula', 'Table', 'Image', 'Video', 'QR Code', 'Present', 'Save', 'Format', 'Steps']);
+  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].filter((b) => !b.hidden).map((b) => b.textContent)`), ['View', 'FitZoom', 'Undo', 'Redo', 'Add Slide', 'Text Box', 'Formula', 'Table', 'Image', 'Video', 'QR Code', 'Present', 'Save', 'Format', 'Steps']);
   // the card asks for the file, with the folder of the deck
   assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-card').hidden`), false);
   assert.match(await page.evaluate(`document.querySelector('.beeson-edit-card p').textContent`), /index\.html in \//);
@@ -376,7 +376,8 @@ test('a figure dragged on the slide gets its offset as a translate style in its 
     // with Alt, so that the figure does not snap to an edge on its way
     const at = (type, cx, cy) => document.elementFromPoint(cx, cy).dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: cx, clientY: cy, button: 0, pointerId: 1, altKey: true }));
     at('pointermove', x, y);
-    const hovered = !document.querySelector('.beeson-frame').hidden && !document.querySelector('.beeson-handle').hidden;
+    // a figure is dragged by itself, hence its hover frame is drawn without the handle of a block
+    const hovered = !document.querySelector('.beeson-frame').hidden && document.querySelector('.beeson-handle').hidden;
     const scale = Reveal.getScale();
     at('pointerdown', x, y);
     at('pointermove', x + 30 * scale, y + 20 * scale);
@@ -543,7 +544,7 @@ test('the list of the slides at the left jumps to a slide, and G jumps to a slid
   assert.deepEqual(first[1].slice(0, 3), ['2', 'Chapter one', 'section']);
   assert.ok(first.every((r) => r[1].length > 0));
   // the pane is beside the slide, and the slide is not under it
-  const box = () => page.evaluate(`(() => { const nav = document.querySelector('.beeson-edit-nav'); const n = nav.getBoundingClientRect(); const s = document.querySelector('.reveal .slides').getBoundingClientRect(); return { display: getComputedStyle(nav).display, navRight: n.right, slideLeft: s.left, slideRight: s.right }; })()`);
+  const box = () => page.evaluate(`(() => { const nav = document.querySelector('.beeson-edit-nav'); const n = nav.getBoundingClientRect(); const s = document.querySelector('.reveal .slides').getBoundingClientRect(); const c = window.BeesonEditorShell.stage.viewport; return { display: getComputedStyle(nav).display, navRight: n.right, slideLeft: s.left, slideRight: s.right, cellLeft: c.left, cellRight: c.right }; })()`);
   let b = await box();
   assert.equal(b.display, 'flex');
   assert.ok(b.slideLeft >= b.navRight && b.slideRight <= 1920, JSON.stringify(b));
@@ -563,7 +564,7 @@ test('the list of the slides at the left jumps to a slide, and G jumps to a slid
   b = await box();
   assert.equal(b.display, 'none');
   // the canvas takes the width of the list, and the slide is centered in it
-  assert.ok(Math.abs(b.slideLeft - (1920 - b.slideRight)) < 2 && b.slideLeft < 200, JSON.stringify(b));
+  assert.ok(Math.abs(b.slideLeft - b.cellLeft - (b.cellRight - b.slideRight)) < 2 && b.slideLeft < 200, JSON.stringify(b));
   assert.equal(await page.evaluate(`localStorage.getItem('beeson-nav')`), '0');
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Slides').click()`);
   assert.equal((await box()).display, 'flex');
@@ -900,7 +901,8 @@ test('the toggles, the state, the notes, and the formula dialog carry their stat
   const page = await editorPage(browser);
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
   const pressed = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-header button, .beeson-edit-bottom button')].filter((b) => b.hasAttribute('aria-pressed')).map((b) => [b.textContent, b.getAttribute('aria-pressed')])`);
-  assert.deepEqual(await pressed(), [['Autosave', 'false'], ['Format', 'false'], ['Steps', 'false'], ['Slides', 'true'], ['Steps', 'false'], ['Notes', 'false'], ['Fit', 'true']]);
+  // the inspector is shown at the start with its Format tab, as Keynote opens a presentation
+  assert.deepEqual(await pressed(), [['Autosave', 'false'], ['Format', 'true'], ['Steps', 'false'], ['Slides', 'true'], ['Steps', 'false'], ['Notes', 'false'], ['Fit', 'true']]);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Notes').click()`);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
   assert.deepEqual(await pressed(), [['Autosave', 'false'], ['Format', 'false'], ['Steps', 'true'], ['Slides', 'true'], ['Steps', 'true'], ['Notes', 'true'], ['Fit', 'true']]);
@@ -1265,6 +1267,9 @@ test('a row of the slide list rested on shows a preview of its slide, which is h
     return { shown: !p.hidden && getComputedStyle(p).display !== 'none', width: box.width, right: box.left >= list.right, hidden: p.getAttribute('aria-hidden'), focusable: p.querySelectorAll('[tabindex], [contenteditable]').length, title: clone?.querySelector('h2')?.textContent ?? null, painted, fragments: [...(clone?.querySelectorAll('.fragment') ?? [])].every((f) => getComputedStyle(f).opacity === '1') };
   })()`);
   const row = (type) => page.evaluate(`document.querySelectorAll('.beeson-edit-nav .row')[${at}].dispatchEvent(new PointerEvent('${type}', { bubbles: false, pointerId: 1 }))`);
+  // a thumbnail shown whole is not previewed, hence the row is scrolled under the upper edge of the
+  // list, where its thumbnail is cut
+  await page.evaluate(`(() => { const list = document.querySelector('.beeson-edit-nav .rows'); const f = document.querySelectorAll('.beeson-edit-nav .row')[${at}].querySelector('.frame').getBoundingClientRect(); list.scrollTop += f.top + f.height / 2 - list.getBoundingClientRect().top; })()`);
   await row('pointerenter');
   await sleep(100);
   assert.notEqual((await peek())?.shown, true, 'the preview waits for the pointer to rest');
@@ -1313,13 +1318,13 @@ test('Shift locks a drag to one axis, a run of nudges is one undo, and the offse
     at('pointerdown', x, y);
     at('pointermove', x + 30 * scale, y + 10 * scale);
     at('pointermove', x + 60 * scale, y + 20 * scale);
-    const zone = img.closest('.zone'), z = zone.getBoundingClientRect(), l = label()?.getBoundingClientRect();
-    const during = { shown: !!label() && !label().hidden, text: label()?.textContent, lowerRight: !!l && l.top >= z.bottom && Math.abs(l.right - z.right - 6) < 1 };
+    const zone = img.closest('.zone'), l = label()?.getBoundingClientRect();
+    const during = { shown: !!label() && !label().hidden, text: label()?.textContent, atPointer: !!l && Math.abs(l.left - (x + 60 * scale) - 14) < 1 && Math.abs(l.top - (y + 20 * scale) - 18) < 1 };
     at('pointerup', x + 60 * scale, y + 20 * scale);
     return { during, after: label()?.hidden, translate: zone.style.translate };
   })()`);
   const locked = await drag(true);
-  assert.deepEqual(locked, { during: { shown: true, text: '60, 0', lowerRight: true }, after: true, translate: '60px' });
+  assert.deepEqual(locked, { during: { shown: true, text: '60, 0', atPointer: true }, after: true, translate: '60px' });
   await page.evaluate(`document.querySelector('.beeson-handle').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
   // without Alt the figure may snap along the free axis, but not off the locked one
   const snapped = await drag(false);

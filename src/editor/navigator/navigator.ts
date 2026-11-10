@@ -1,5 +1,5 @@
 // the navigator at the left, as the slide navigator of Keynote: a thumbnail of each slide with its
-// number in the scheme of the theme, three dots on a slide with steps, a corner at the lower right
+// number, its place in the deck, three dots on a slide with steps, a corner at the lower right
 // of a slide with a transition other than the default Fade or None, as the corner of Keynote, and a
 // hidden slide collapsed to a thin double bar without a number. a click selects a slide, Shift extends the selection to a
 // range, and the command modifier adds or removes one slide. a drag moves the selected slides, with
@@ -11,6 +11,8 @@ import type { App, Pane } from '../app.ts';
 import { layersOf, showLayer } from '../layers.ts';
 import { transitionOf } from '../review/transitions.ts';
 import { injectStyle, stored, store } from '../ui/dom.ts';
+import { icon } from '../ui/icons.ts';
+import { Outline } from './outline.ts';
 import { drawInto, type Thumbs } from './thumbs.ts';
 
 const KEY = 'beeson-nav';
@@ -60,20 +62,44 @@ export function numbers(slides: Element[], written: (slide: Element) => string |
   });
 }
 
+// the number of each slide in the navigator: its place in the deck, 1 to N, as in the status bar and
+// in the navigators of Keynote and PowerPoint, and none on a hidden slide, which is drawn as the
+// bar of a skipped slide of Keynote
+export function places(slides: Element[]): string[] {
+  return slides.map((s, i) => (isHidden(s) ? '' : String(i + 1)));
+}
+
+// the width in px from which a thumbnail is read without a preview, as in Keynote, whose thumbnails
+// are about as wide as those of the navigator at its usual width
+const READABLE = 120;
+
+// whether the thumbnail of row is large enough to read and inside the visible part of its list, in
+// which case a hover preview would only repeat it
+function shownWhole(row: HTMLElement): boolean {
+  const pic = row.querySelector('.frame')?.getBoundingClientRect();
+  const list = row.closest('.rows')?.getBoundingClientRect();
+  return !!pic && !!list && pic.width >= READABLE && pic.top >= list.top && pic.bottom <= list.bottom;
+}
+
 const CSS = `
-.beeson-edit-nav { --nav-bg: var(--ed-panel, #f4f4f6); --nav-text: var(--ed-text, #1d1d1f); --nav-muted: var(--ed-muted, #86868b); --nav-line: var(--ed-line, #d2d2d7); --nav-select: var(--ed-select, #7a5af8); --nav-current: rgba(0, 0, 0, 0.07); --nav-shadow: 0 1px 3px rgba(0, 0, 0, 0.22); }
+.beeson-edit-nav { --nav-bg: var(--ed-panel, #f4f4f6); --nav-text: var(--ed-text, #1d1d1f); --nav-muted: var(--ed-muted, #86868b); --nav-line: var(--ed-line, #d2d2d7); --nav-select: var(--ed-select, #7a5af8); --nav-current: rgba(0, 0, 0, 0.07); --nav-hover: rgba(0, 0, 0, 0.2); --nav-shadow: 0 1px 3px rgba(0, 0, 0, 0.22); }
 @media (prefers-color-scheme: dark) {
-  .beeson-edit-nav { --nav-bg: var(--ed-panel, #232326); --nav-text: var(--ed-text, #f2f2f7); --nav-muted: var(--ed-muted, #98989d); --nav-line: var(--ed-line, #3a3a3c); --nav-select: var(--ed-select, #9b82ff); --nav-current: rgba(255, 255, 255, 0.09); --nav-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
+  .beeson-edit-nav { --nav-bg: var(--ed-panel, #232326); --nav-text: var(--ed-text, #f2f2f7); --nav-muted: var(--ed-muted, #98989d); --nav-line: var(--ed-line, #3a3a3c); --nav-select: var(--ed-select, #9b82ff); --nav-current: rgba(255, 255, 255, 0.09); --nav-hover: rgba(255, 255, 255, 0.3); --nav-shadow: 0 1px 3px rgba(0, 0, 0, 0.6); }
 }
 .beeson-edit-nav { position: fixed; left: 0; top: 44px; bottom: 36px; z-index: 50; width: 240px; box-sizing: border-box; display: none; flex-direction: column; background: var(--nav-bg); border-right: 1px solid var(--nav-line); color: var(--nav-text); font: 12px/1.3 system-ui, sans-serif; }
 html.beeson-nav .beeson-edit-nav { display: flex; }
 .beeson-edit-nav .rows { position: relative; flex: 1; overflow: auto; padding: 10px 10px 40px 4px; outline: none; }
+.beeson-edit-nav .foot { flex: none; display: flex; align-items: center; height: 32px; padding: 0 6px; border-top: 1px solid var(--nav-line); }
+.beeson-edit-nav .foot button { display: grid; place-items: center; width: 26px; height: 24px; padding: 0; border: 0; border-radius: 5px; background: transparent; color: var(--nav-text); }
+.beeson-edit-nav .foot button:hover { background: var(--nav-current); }
+.beeson-edit-nav .foot button:focus-visible { outline: 2px solid var(--nav-select); outline-offset: -2px; }
 .beeson-edit-nav .row { position: relative; display: grid; grid-template-columns: 24px 1fr; column-gap: 6px; align-items: end; width: 100%; box-sizing: border-box; margin: 0 0 8px; padding: 5px 6px 5px 0; border: 0; border-radius: 8px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: default; touch-action: none; }
 .beeson-edit-nav .row:focus-visible { outline: none; }
 .beeson-edit-nav .row[aria-current="true"] { background: var(--nav-current); }
 .beeson-edit-nav .row .no { color: var(--nav-muted); text-align: right; font-variant-numeric: tabular-nums; line-height: 1; padding-bottom: 1px; }
 .beeson-edit-nav .row .frame { position: relative; border-radius: 5px; box-shadow: var(--nav-shadow); outline: 1px solid var(--nav-line); outline-offset: 0; }
-.beeson-edit-nav .row .pic { aspect-ratio: 16 / 9; border-radius: 5px; background: var(--bg, #000); }
+.beeson-edit-nav .row .pic { display: block; aspect-ratio: 16 / 9; border-radius: 5px; background: var(--bg, #000); }
+.beeson-edit-nav .row:hover:not([aria-selected="true"]):not(.dragged) .frame { outline: 3px solid var(--nav-hover); outline-offset: 2px; }
 .beeson-edit-nav .row[aria-selected="true"] .frame { outline: 3px solid var(--nav-select); outline-offset: 2px; }
 .beeson-edit-nav .rows:focus-within .row[aria-selected="true"] .no { color: var(--nav-select); font-weight: 600; }
 .beeson-edit-nav .row .dots { position: absolute; left: 6px; bottom: 5px; display: flex; gap: 3px; pointer-events: none; }
@@ -122,6 +148,8 @@ export class Navigator implements Pane {
   readonly list = document.createElement('div');
   private readonly peek = document.createElement('div');
   private readonly drop = document.createElement('div');
+  private readonly foot = document.createElement('div');
+  readonly outline: Outline;
   private readonly app: App;
   private readonly rows = new Map<Element, Row>();
   private thumbs: Thumbs | null = null;
@@ -150,7 +178,30 @@ export class Navigator implements Pane {
     this.peek.hidden = true;
     this.peek.setAttribute('aria-hidden', 'true');
     this.peek.setAttribute('inert', '');
-    this.pane.append(this.list, this.peek);
+    // the + button opens the chooser of New Slide over itself
+    this.foot.className = 'foot';
+    const add = document.createElement('button');
+    add.type = 'button';
+    add.dataset.command = 'slide.gallery';
+    add.title = 'Add Slide';
+    add.setAttribute('aria-label', 'Add Slide');
+    add.append(icon('plus', 16));
+    add.addEventListener('click', () => void this.app.commands.run('slide.gallery', add).catch((e) => this.app.fail(e)));
+    this.foot.append(add);
+    this.outline = new Outline(app, this.pane);
+    this.pane.append(this.list, this.outline.el, this.foot, this.peek);
+    // the outline view takes the place of the thumbnails, and shows the navigator when it is hidden
+    app.commands.define({
+      id: 'view.outline',
+      label: 'Outline',
+      menu: { bar: 'View', group: 'panes', order: 10.5 },
+      checked: () => this.outline.shown,
+      run: () => {
+        if (!this.on && !this.outline.shown) this.toggle();
+        this.outline.toggle();
+        this.app.relayout();
+      },
+    });
     this.button.addEventListener('click', () => this.toggle());
     this.list.addEventListener('keydown', (ev) => this.onKey(ev));
     this.list.addEventListener('pointerdown', (ev) => this.onDown(ev));
@@ -236,11 +287,6 @@ export class Navigator implements Pane {
     return (slide && this.rows.get(slide)?.el) || null;
   }
 
-  private written(slide: Element): string | null {
-    const s = this.app.pairing?.elements.get(slide);
-    return s?.attrs.find((a) => a.name === 'data-visibility')?.value ?? null;
-  }
-
   private makeRow(slide: Element): Row {
     const el = document.createElement('button');
     el.type = 'button';
@@ -254,8 +300,7 @@ export class Navigator implements Pane {
     frame.className = 'frame';
     const pic = document.createElement('span');
     pic.className = 'pic';
-    pic.style.display = 'block';
-    const dots = document.createElement('span');
+        const dots = document.createElement('span');
     dots.className = 'dots';
     dots.append(document.createElement('i'), document.createElement('i'), document.createElement('i'));
     const trans = document.createElement('span');
@@ -286,8 +331,9 @@ export class Navigator implements Pane {
   // the rows follow the slides of the deck, their numbers, titles, steps, and hidden state, and
   // the selection. a row is kept with its thumbnail while its slide is on the page
   refresh(): void {
+    this.outline.refresh();
     const slides = this.slides();
-    const nums = numbers(slides, (s) => this.written(s));
+    const nums = places(slides);
     const kept = new Set(slides);
     for (const [s, r] of this.rows) {
       if (kept.has(s)) continue;
@@ -319,7 +365,7 @@ export class Navigator implements Pane {
       row.dots.hidden = !steps;
       const effect = transitionName(this.app, slide);
       row.trans.hidden = !effect;
-      const label = `Slide ${i + 1}${nums[i] && nums[i] !== String(i + 1) ? `, numbered ${nums[i]}` : ''}: ${title}${hidden ? ', hidden' : ''}${steps ? ', with steps' : ''}${effect ? `, with the transition ${effect}` : ''}`;
+      const label = `Slide ${i + 1}: ${title}${hidden ? ', hidden' : ''}${steps ? ', with steps' : ''}${effect ? `, with the transition ${effect}` : ''}`;
       if (row.el.getAttribute('aria-label') !== label) row.el.setAttribute('aria-label', label);
       row.el.title = `Slide ${i + 1}: ${title}`;
     });
@@ -575,7 +621,7 @@ export class Navigator implements Pane {
   // canvases of a backdrop are painted from the originals, since a cloned canvas is blank, and a
   // tycho viewer is left out, since its clone would start a second renderer
   private showPeek(slide: Element, row: HTMLElement): void {
-    if (this.drag || isHidden(slide)) return;
+    if (this.drag || isHidden(slide) || shownWhole(row)) return;
     const stage = slide.parentElement as HTMLElement;
     const width = stage.offsetWidth || 1920;
     const height = stage.offsetHeight || 1080;

@@ -18,6 +18,8 @@ import { docOf } from './slide.ts';
 const CSS = `
 html.beeson-editor .reveal .slides .beeson-pending:not(.foot) { position: relative; }
 html.beeson-editor .reveal .slides .beeson-pending { min-height: 1.4em; min-width: 8em; }
+/* a new text box is put at the gap of the theme between two paragraphs, not at the 14 px of a list item */
+html.beeson-editor .reveal .slides p.beeson-pending:not(:first-child) { margin-top: 24px; }
 html.beeson-editor .reveal .slides .foot.beeson-pending { min-width: 13em; }
 html.beeson-editor .reveal .slides .beeson-pending[data-prompt][contenteditable]:empty::before { content: attr(data-prompt); position: absolute; left: 0; top: 0; color: var(--muted, #888); white-space: nowrap; pointer-events: none; }
 html.beeson-editor .reveal .slides pre.beeson-pending { box-sizing: border-box; min-height: calc(1.25em + 48px); padding: 24px; font-size: 22px; line-height: 1.25; }
@@ -72,16 +74,58 @@ function slideBox(app: App, el: Element): { left: number; top: number; right: nu
   return { left: (r.left - s.left) / k, top: (r.top - s.top) / k, right: (r.right - s.left) / k, bottom: (r.bottom - s.top) / k };
 }
 
+type Box = { left: number; top: number; right: number; bottom: number };
+const meets = (a: Box, b: Box) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+// the box of the text of a block, which may be narrower than the block, or null when it is empty
+function inkBox(app: App, el: Element): Box | null {
+  const range = document.createRange();
+  range.selectNodeContents(el);
+  const r = range.getBoundingClientRect();
+  if (!r.width) return el.textContent?.trim() ? slideBox(app, el) : null;
+  const slides = app.slides() as HTMLElement;
+  const s = slides.getBoundingClientRect();
+  const k = slides.offsetWidth ? s.width / slides.offsetWidth : 1;
+  return { left: (r.left - s.left) / k, top: (r.top - s.top) / k, right: (r.right - s.left) / k, bottom: (r.bottom - s.top) / k };
+}
+
+// the box where the layout of slide puts a zone, when nothing of the slide but el is drawn there. it
+// is measured on a hidden zone of the theme, taken off at once
+function freeZone(app: App, slide: Element, el: Element): Box | null {
+  if (slide.matches('.title, .closing, .figure, .section')) return null;
+  const probe = document.createElement('div');
+  probe.className = 'zone';
+  probe.setAttribute('data-generated', '');
+  probe.style.visibility = 'hidden';
+  slide.append(probe);
+  const zone = slideBox(app, probe);
+  probe.remove();
+  if (zone.right - zone.left < 1 || zone.bottom - zone.top < 1) return null;
+  const text = 'h1, h2, h3, h4, p, ul, ol, dl, table, pre, blockquote, div.math, .col, .panel, .block';
+  for (const other of slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *')) {
+    if (other === el || other.contains(el) || other.matches('aside.notes, .foot, .run, [data-generated]')) continue;
+    if (!other.getClientRects().length) continue;
+    const moved = other instanceof HTMLElement && !!other.style.translate;
+    const box = other.matches(text) && !moved ? inkBox(app, other) : slideBox(app, other);
+    if (box && meets(zone, box)) return null;
+  }
+  return zone;
+}
+
 // a new figure that does not fit under the last block of the text column is moved to the center of
-// the slide, where Keynote puts a new object, with a translate in slide px
+// the free area where the layout puts a zone, and else to the center of the slide, where Keynote
+// puts a new object, with a translate in slide px
 function centerIfOut(app: App, el: Element): void {
   const b = slideBox(app, el);
   const slide = el.closest('section') as HTMLElement | null;
   const w = slide?.offsetWidth || 1920;
   if (b.bottom <= FLOOR && b.top >= 0 && b.right <= w) return;
   const h = slide?.offsetHeight || 1080;
-  const x = Math.round(w / 2 - (b.left + b.right) / 2);
-  const y = Math.round(h / 2 - (b.top + b.bottom) / 2);
+  const zone = slide ? freeZone(app, slide, el) : null;
+  const fits = zone && b.right - b.left <= zone.right - zone.left && b.bottom - b.top <= zone.bottom - zone.top;
+  const [cx, cy] = fits ? [(zone.left + zone.right) / 2, (zone.top + zone.bottom) / 2] : [w / 2, h / 2];
+  const x = Math.round(cx - (b.left + b.right) / 2);
+  const y = Math.round(cy - (b.top + b.bottom) / 2);
   docOf(app).setTag(el, { translate: { x, y } }, 'move');
 }
 
@@ -111,12 +155,14 @@ export function install(app: App): void {
     app.invalidate('content');
   };
 
-  // the box is taken off through an undo of its entry while that entry is the last one
+  // the box is taken off, and its entry with it while that entry is the last one, so that the
+  // history does not offer a Redo of an empty box
   const drop = () => {
     if (!pending || writing) return;
-    if (!onTop) return take();
+    const last = onTop;
     onTop = false;
-    void app.history.undo().catch(fail);
+    take();
+    if (last) app.history.discard();
   };
 
   const begin = (kind: Kind, parent: Element, before: Node | null) => {

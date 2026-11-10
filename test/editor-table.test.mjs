@@ -879,7 +879,7 @@ for (const platform of ['mac', 'other']) {
     const [a, b, c] = writtenWidths(await render(page));
     assert.deepEqual([a, b], [null, null]);
     near(c, before.content[2], 'the fitted column');
-    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Resize Column To Fit Content');
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Resize Column to Fit Content');
     await roundTrip(page, 2);
   });
 

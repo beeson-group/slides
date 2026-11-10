@@ -127,7 +127,7 @@ async function menuOf(page, name) {
 for (const platform of PLATFORMS) {
   test(`the Play menu holds Present and the presenter view, and Mod+Enter opens the saved deck at the current slide on ${platform}`, async () => {
     const page = await reviewPage(platform, 4);
-    const titles = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-header [aria-haspopup="menu"]')].map((b) => b.textContent)`);
+    const titles = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menubar [aria-haspopup="menu"]')].map((b) => b.textContent)`);
     assert.deepEqual(titles.slice(-3), ['View', 'Play', 'Help']);
     const items = await menuOf(page, 'Play');
     for (const name of ['Present', 'Present from Start', 'Presenter View', 'Rehearse Timings', 'Clear Timings']) assert.ok(items.some((i) => i.startsWith(name)), `the Play menu does not have ${name}`);

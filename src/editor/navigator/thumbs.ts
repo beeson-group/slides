@@ -19,7 +19,7 @@ const CSS = `
 .reveal.beeson-thumb .fragment.beeson-off { visibility: hidden !important; }
 .reveal.beeson-thumb:not([data-theme="light"]) .for-light, .reveal.beeson-thumb[data-theme="light"] .for-dark { display: none !important; }
 .reveal.beeson-thumb[data-theme="dark"] .invert { filter: invert(1) hue-rotate(180deg); }
-.reveal.beeson-thumb[data-theme="light"] .slides section.title::before, .reveal.beeson-thumb[data-theme="light"] .slides section.closing::before { background-image: url("brand/lockup-light.png"); }
+.reveal.beeson-thumb[data-theme="light"] .slides section.title::before, .reveal.beeson-thumb[data-theme="light"] .slides section.closing::before { background-image: url("BRAND/lockup-light.png"); }
 .reveal.beeson-thumb:not([data-theme="light"]) .slides section.split .panel { box-shadow: 1px 0 0 var(--line); }
 .reveal.beeson-thumb.no-logo .slides section::after { content: none; }
 .reveal.beeson-thumb.no-lockup .slides section.title::before, .reveal.beeson-thumb.no-lockup .slides section.closing::before { content: none; }
@@ -42,10 +42,17 @@ const sheetOf = (text: string): CSSStyleSheet => {
   return sheet;
 };
 
+// the folder brand/ beside theme/, read from the link of theme/beeson.css as the theme reads
+// ../brand/, since a deck may be in another folder than the template, e.g. test/pages/
+function brandUrl(links: HTMLLinkElement[]): string {
+  const theme = links.find((l) => new URL(l.href, location.href).pathname.endsWith('/beeson.css'));
+  return new URL('../brand', theme?.href ?? new URL('theme/beeson.css', location.href)).href;
+}
+
 function deckStyles(): { links: HTMLLinkElement[]; adopted: CSSStyleSheet[] } {
   const links = [...document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]')];
   const adopted = [...document.querySelectorAll('style')].filter((s) => !s.id.startsWith('beeson-edit-')).map((s) => sheetOf(s.textContent ?? ''));
-  return { links, adopted: [...adopted, sheetOf(CSS)] };
+  return { links, adopted: [...adopted, sheetOf(CSS.replaceAll('BRAND', brandUrl(links)))] };
 }
 
 // a clone of slide for its thumbnail, with every step shown, or the first layer of a slide whose
@@ -88,7 +95,8 @@ export function cloneSlide(slide: Element, scale: number): HTMLElement {
   });
   for (const el of [clone, ...clone.querySelectorAll('*')]) {
     for (const name of ['contenteditable', 'tabindex', 'hidden', 'aria-hidden', 'role']) el.removeAttribute(name);
-    for (const c of [...el.classList]) if (isRuntimeClass(c)) el.classList.remove(c);
+    // the classes of the marks of a plot are set at run time too, and the theme paints the marks by them
+    for (const c of [...el.classList]) if (isRuntimeClass(c) && !c.startsWith('plot-')) el.classList.remove(c);
   }
   const layers = layersOf(clone);
   showLayer(clone, layers.length > 1 ? layers[0] : null);
