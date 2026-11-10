@@ -1,0 +1,443 @@
+// the tables of the editor: the model of src/editor/table.ts under node, and on either platform
+// with trusted input the Insert Table grid, Tab and the arrow keys between the cells, the rows and
+// columns added and deleted, the header row, the numbers at the right, the context menu of a cell,
+// and a paste of tab-separated text or of an HTML table, onto the slide or into a cell. after each
+// edit an undo gives the file byte for byte, a redo gives the edit, and a save is opened again
+// without problems. a paste is a synthetic event with a DataTransfer of its own, since the
+// clipboard of the system is shared with the other tests run at the same time
+
+import assert from 'node:assert/strict';
+import { after, before, test } from 'node:test';
+import { readFileSync } from 'node:fs';
+import { columnName, emptyRows, isNumeric, numericColumns, parseTabular, tableHtml } from '../src/editor/table.ts';
+import { deckSettled, launch } from '../scripts/chrome.mjs';
+import { serve } from '../scripts/webdriver.mjs';
+import { byteExact, click, press, saveAndReopen, type } from './helpers/editor.mjs';
+
+const LAYOUTS_DECK = 'test/pages/editor-layouts.html';
+// the index of the slide of the equations in index.html, a content slide without a table
+const EQUATIONS = 3;
+const STYLE = { step: '  ', eol: '\n' };
+
+test('numbers are told from words, and a column of numbers is set at the right below its header', () => {
+  for (const t of ['42', '-3.5', '1,200', '$9.99', '12 %', '(10.00)', '3.2e-4', '−7', '+1']) assert.ok(isNumeric(t), t);
+  for (const t of ['', 'Halo', '1.2.3', '12 km', 'e5', '-', '1.2e']) assert.ok(!isNumeric(t), t);
+  assert.deepEqual(numericColumns([['Family', 'Period'], ['Lyapunov', '2.69'], ['Halo', '']]), [false, true]);
+  assert.deepEqual(numericColumns([['A', 'B'], ['', 'x']]), [false, false]);
+});
+
+test('tab-separated text is read as rows of cells, with quoted cells and short rows padded', () => {
+  assert.deepEqual(parseTabular('a\tb\n1\t2\r\n3\t4\n'), [['a', 'b'], ['1', '2'], ['3', '4']]);
+  assert.deepEqual(parseTabular('"x\ty"\t"say ""hi"""\nz'), [['x\ty', 'say "hi"'], ['z', '']]);
+  assert.equal(parseTabular('one line\ntwo lines'), null);
+  assert.equal(parseTabular('\t'), null);
+});
+
+test('a table is written with an explicit tbody, a header row of th, and numbers at the right', () => {
+  assert.equal(tableHtml(emptyRows(2, 2), STYLE, '  '), '<table>\n    <tbody>\n      <tr><th></th><th></th></tr>\n      <tr><td></td><td></td></tr>\n    </tbody>\n  </table>');
+  assert.equal(
+    tableHtml([['Body', 'μ'], ['Moon', '0.01215'], ['a < b', '1']], { step: '\t', eol: '\r\n' }, '\t'),
+    '<table>\r\n\t\t<tbody>\r\n\t\t\t<tr><th>Body</th><th style="text-align: right">μ</th></tr>\r\n\t\t\t<tr><td>Moon</td><td style="text-align: right">0.01215</td></tr>\r\n\t\t\t<tr><td>a &lt; b</td><td style="text-align: right">1</td></tr>\r\n\t\t</tbody>\r\n\t</table>',
+  );
+  assert.deepEqual([0, 1, 25, 26, 27, 701, 702].map(columnName), ['A', 'B', 'Z', 'AA', 'AB', 'ZZ', 'AAA']);
+});
+
+let browser;
+let server;
+before(async () => {
+  browser = await launch({ offline: false });
+  server = await serve('.');
+});
+after(async () => {
+  await browser?.close();
+  server?.close();
+});
+
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+const settle = (page) => page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(window.BeesonEditor.status()))))');
+const render = (page) => page.evaluate('window.BeesonEditor.render()');
+const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
+const js = (v) => JSON.stringify(v);
+
+async function open(platform, deck = 'index.html') {
+  const page = await browser.newPage();
+  await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
+  await page.waitFor(deckSettled);
+  await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
+  page.source = readFileSync(deck, 'utf8');
+  const status = await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`);
+  assert.deepEqual(status.problems, []);
+  page.platform = platform;
+  return page;
+}
+
+async function show(page, at) {
+  const h = typeof at === 'number' ? at : await page.evaluate(`Reveal.getIndices(document.querySelector(${js(at)}).closest('section')).h`);
+  await page.evaluate(`Reveal.slide(${h})`);
+  await sleep(150);
+}
+
+// the center of a cell of the table of the current slide, by row and column
+const cellSelector = (r, c) => `.reveal section.present table tr:nth-child(${r + 1}) > :nth-child(${c + 1})`;
+const at = (page, selector) => page.evaluate(`(() => { const r = document.querySelector(${js(selector)}).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+
+// the row and the column of the cell of the focus, or null outside a table
+const focusCell = (page) => page.evaluate(`(() => {
+  const c = document.activeElement?.closest?.('td, th');
+  if (!c) return null;
+  return [[...c.closest('table').rows].indexOf(c.parentElement), [...c.parentElement.cells].indexOf(c)];
+})()`);
+
+const selected = (page) => page.evaluate('String(window.getSelection())');
+
+// a paste event with data of its own, as the browser sends it for the paste key
+const paste = (page, data) =>
+  page.evaluate(`(() => {
+    const data = new DataTransfer();
+    for (const [type, text] of Object.entries(${js(data)})) data.setData(type, text);
+    (document.activeElement ?? document.body).dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+  })()`);
+
+// the time for the edits of a paste, which are run after the event
+const settled = async (page) => {
+  await sleep(120);
+  return settle(page);
+};
+
+let saves = 0;
+async function roundTrip(page, undos = 1) {
+  const edited = await render(page);
+  assert.notEqual(edited, page.source, 'the edit did not change the text');
+  for (let i = 0; i < undos; i++) await page.evaluate('window.BeesonEditor.undo()');
+  await byteExact(page);
+  assert.equal((await settle(page)).undo, false, `the edit is more than ${undos} entries of the history`);
+  for (let i = 0; i < undos; i++) await page.evaluate('window.BeesonEditor.redo()');
+  assert.equal(await render(page), edited);
+  const { text } = await saveAndReopen(page, `table-${++saves}.html`);
+  assert.equal(text, edited);
+  assert.deepEqual(errors(page), []);
+  return edited;
+}
+
+const THREE = '<table>\n    <tbody>\n      <tr><th></th><th></th><th></th></tr>\n      <tr><td></td><td></td><td></td></tr>\n      <tr><td></td><td></td><td></td></tr>\n    </tbody>\n  </table>';
+
+// the table of a text cut out with the line it is on, which gives the deck before the insert
+const without = (text, table) => text.replace(`\n  ${table}`, '');
+
+const LAYOUT_ROWS = [
+  '<tr><th>Family</th><th>Period</th></tr>',
+  '<tr><td>Lyapunov</td><td>\\(2.69\\)</td></tr>',
+  '<tr class="fragment" data-fragment-index="1"><td>Halo</td><td>\\(3.41\\)</td></tr>',
+];
+const layoutTable = (rows) => `<table>\n${rows.map((r) => `    ${r}\n`).join('')}  </table>`;
+
+// the white space before the first row of a table without a tbody tag is in the table, before the
+// tbody of the page, and a row inserted into that tbody was written on the line of the row before
+test('a row inserted into a table without a tbody tag is written on a line of its own', async (t) => {
+  const page = await open('mac', LAYOUTS_DECK);
+  t.after(() => page.close?.());
+  const tbody = `document.querySelector('.reveal .slides table').tBodies[0]`;
+  await page.evaluate(`window.BeesonEditor.doc.insert('<tr><td>Axial</td><td></td></tr>', ${tbody}, null)`);
+  await page.evaluate(`window.BeesonEditor.doc.insert('<tr><td>Vertical</td><td></td></tr>', ${tbody}, ${tbody}.rows[1])`);
+  await byteExact(page, [[layoutTable(LAYOUT_ROWS), layoutTable([LAYOUT_ROWS[0], '<tr><td>Vertical</td><td></td></tr>', ...LAYOUT_ROWS.slice(1), '<tr><td>Axial</td><td></td></tr>'])]]);
+  await page.evaluate('window.BeesonEditor.undo()');
+  await page.evaluate('window.BeesonEditor.undo()');
+  await byteExact(page);
+});
+
+// for the same reason, a row inserted before the first row, or the first row removed, wrote the
+// white space of the first row twice
+test('the first row of a table without a tbody tag is replaced without its white space twice', async (t) => {
+  const page = await open('mac', LAYOUTS_DECK);
+  t.after(() => page.close?.());
+  const tbody = `document.querySelector('.reveal .slides table').tBodies[0]`;
+  await page.evaluate(`window.BeesonEditor.doc.insert('<tr><td>Axial</td><td></td></tr>', ${tbody}, ${tbody}.rows[0])`);
+  await byteExact(page, [[layoutTable(LAYOUT_ROWS), layoutTable(['<tr><td>Axial</td><td></td></tr>', ...LAYOUT_ROWS])]]);
+  await page.evaluate('window.BeesonEditor.undo()');
+  await page.evaluate(`window.BeesonEditor.doc.remove(${tbody}.rows[0])`);
+  await byteExact(page, [[layoutTable(LAYOUT_ROWS), layoutTable(LAYOUT_ROWS.slice(1))]]);
+  await page.evaluate('window.BeesonEditor.undo()');
+  await byteExact(page);
+});
+
+for (const platform of ['mac', 'other']) {
+  test(`Insert Table from the grid writes a 3 by 3 table with a tbody and a header row (${platform})`, async (t) => {
+    const page = await open(platform);
+    t.after(() => page.close?.());
+    await show(page, EQUATIONS);
+    await click(page, '.beeson-edit-top [data-command="insert.table"]');
+    await page.waitFor(`!!document.querySelector('dialog.beeson-table-picker[open]')`);
+    assert.equal(await page.evaluate('document.activeElement.className'), 'grid');
+    // the cell of row 3 and column 3 of the grid of 8 columns
+    const cell = await at(page, 'dialog.beeson-table-picker .grid > :nth-child(19)');
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: cell.x, y: cell.y });
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-table-picker .size').textContent`), '3 × 3 Table');
+    assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-table-picker .grid > .on').length`), 9);
+    await click(page, cell);
+    await settled(page);
+    assert.equal(await page.evaluate(`!!document.querySelector('dialog.beeson-table-picker')`), false);
+    const edited = await render(page);
+    assert.ok(edited.includes(`\n  ${THREE}\n`), `the table is not written:\n${edited.slice(edited.indexOf('Equations'), edited.indexOf('Equations') + 1600)}`);
+    assert.equal(without(edited, THREE), page.source);
+    assert.deepEqual(await focusCell(page), [0, 0]);
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Insert Table');
+    // the bars of the table are shown around it, with column A and row 1 marked
+    assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-table-bars .bar > .on')].map((d) => d.textContent)`), ['A', '1']);
+    await roundTrip(page);
+  });
+
+  test(`the keys of the Insert Table grid choose a size, and Escape closes it (${platform})`, async (t) => {
+    const page = await open(platform);
+    t.after(() => page.close?.());
+    await show(page, EQUATIONS);
+    await page.evaluate(`window.BeesonEditor.exec('insert.table')`);
+    await page.waitFor(`!!document.querySelector('dialog.beeson-table-picker[open]')`);
+    await press(page, 'Escape');
+    assert.equal(await page.evaluate(`!!document.querySelector('dialog.beeson-table-picker')`), false);
+    assert.equal(await render(page), page.source);
+    await page.evaluate(`window.BeesonEditor.exec('insert.table')`);
+    for (const key of ['ArrowRight', 'ArrowRight', 'ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowLeft']) await press(page, key);
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-table-picker .size').textContent`), '1 × 4 Table');
+    await press(page, 'ArrowRight');
+    await press(page, 'Enter');
+    await settled(page);
+    const table = '<table>\n    <tbody>\n      <tr><th></th><th></th></tr>\n      <tr><td></td><td></td></tr>\n      <tr><td></td><td></td></tr>\n      <tr><td></td><td></td></tr>\n    </tbody>\n  </table>';
+    assert.equal(without(await render(page), table), page.source);
+    await roundTrip(page);
+  });
+
+  test(`Tab and Shift+Tab go between the cells, and Tab in the last cell writes a new row (${platform})`, async (t) => {
+    const page = await open(platform, LAYOUTS_DECK);
+    t.after(() => page.close?.());
+    await show(page, '.reveal .slides table');
+    await click(page, cellSelector(0, 0));
+    assert.deepEqual(await focusCell(page), [0, 0]);
+    await press(page, 'Tab');
+    assert.deepEqual(await focusCell(page), [0, 1]);
+    assert.equal(await selected(page), 'Period');
+    await press(page, 'Tab');
+    assert.deepEqual(await focusCell(page), [1, 0]);
+    assert.equal(await selected(page), 'Lyapunov');
+    await press(page, 'Shift+Tab');
+    assert.deepEqual(await focusCell(page), [0, 1]);
+    await press(page, 'Shift+Tab');
+    await press(page, 'Shift+Tab');
+    assert.deepEqual(await focusCell(page), [0, 0], 'Shift+Tab in the first cell leaves it');
+    assert.equal(await render(page), page.source);
+    await click(page, cellSelector(2, 0));
+    await press(page, 'Tab');
+    assert.deepEqual(await focusCell(page), [2, 1]);
+    await press(page, 'Tab');
+    await settle(page);
+    assert.deepEqual(await focusCell(page), [3, 0]);
+    await byteExact(page, [[layoutTable(LAYOUT_ROWS), layoutTable([...LAYOUT_ROWS, '<tr><td></td><td></td></tr>'])]]);
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Add Row');
+    // the text typed into the new row is a second entry, and both are undone to the deck
+    await type(page, 'Axial');
+    await settle(page);
+    await byteExact(page, [[layoutTable(LAYOUT_ROWS), layoutTable([...LAYOUT_ROWS, '<tr><td>Axial</td><td></td></tr>'])]]);
+    await roundTrip(page, 2);
+  });
+
+  test(`an arrow key at the edge of a cell goes to the cell beside it (${platform})`, async (t) => {
+    const page = await open(platform, LAYOUTS_DECK);
+    t.after(() => page.close?.());
+    await show(page, '.reveal .slides table');
+    // the cells of the header row hold text, and those of the second column math
+    await click(page, cellSelector(0, 0));
+    await press(page, 'End');
+    await press(page, 'ArrowLeft');
+    assert.deepEqual(await focusCell(page), [0, 0], 'an arrow inside the text moves the caret');
+    await press(page, 'ArrowRight');
+    await press(page, 'ArrowRight');
+    assert.deepEqual(await focusCell(page), [0, 1]);
+    await press(page, 'ArrowLeft');
+    assert.deepEqual(await focusCell(page), [0, 0]);
+    await press(page, 'ArrowDown');
+    assert.deepEqual(await focusCell(page), [1, 0]);
+    await press(page, 'ArrowUp');
+    assert.deepEqual(await focusCell(page), [0, 0]);
+    await press(page, 'ArrowDown');
+    await press(page, 'ArrowDown');
+    assert.deepEqual(await focusCell(page), [2, 0]);
+    await press(page, 'ArrowDown');
+    assert.deepEqual(await focusCell(page), [2, 0], 'Down in the last row stays in the table');
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`rows and columns are added and deleted at the cell of the caret, one entry each (${platform})`, async (t) => {
+    const table = layoutTable(LAYOUT_ROWS);
+    const steps = [
+      // a row above the header row is a header row, and a row below it is a row of td
+      [0, 1, 'table.rowAbove', [`<tr><th></th><th></th></tr>`, ...LAYOUT_ROWS], [0, 1]],
+      [0, 1, 'table.rowBelow', [LAYOUT_ROWS[0], '<tr><td></td><td></td></tr>', ...LAYOUT_ROWS.slice(1)], [1, 1]],
+      [1, 0, 'table.columnBefore', ['<tr><th></th><th>Family</th><th>Period</th></tr>', '<tr><td></td><td>Lyapunov</td><td>\\(2.69\\)</td></tr>', '<tr class="fragment" data-fragment-index="1"><td></td><td>Halo</td><td>\\(3.41\\)</td></tr>'], [1, 0]],
+      [1, 1, 'table.columnAfter', ['<tr><th>Family</th><th>Period</th><th></th></tr>', '<tr><td>Lyapunov</td><td>\\(2.69\\)</td><td></td></tr>', '<tr class="fragment" data-fragment-index="1"><td>Halo</td><td>\\(3.41\\)</td><td></td></tr>'], [1, 2]],
+      [1, 0, 'table.deleteRow', [LAYOUT_ROWS[0], LAYOUT_ROWS[2]], [1, 0]],
+      [2, 1, 'table.deleteColumn', ['<tr><th>Family</th></tr>', '<tr><td>Lyapunov</td></tr>', '<tr class="fragment" data-fragment-index="1"><td>Halo</td></tr>'], [2, 0]],
+    ];
+    for (const [r, c, id, rows, focus] of steps) {
+      const page = await open(platform, LAYOUTS_DECK);
+      await show(page, '.reveal .slides table');
+      await click(page, cellSelector(r, c));
+      assert.equal(await page.evaluate(`window.BeesonEditor.state(${js(id)}).enabled`), true, id);
+      await page.evaluate(`window.BeesonEditor.exec(${js(id)})`);
+      await settle(page);
+      await byteExact(page, [[table, layoutTable(rows)]]);
+      assert.deepEqual(await focusCell(page), focus, `the caret after ${id}`);
+      await roundTrip(page);
+      // a page left open behind the next one is drawn slowly
+      await page.close();
+    }
+  });
+
+  test(`the keys of the rows and columns add and delete them (${platform})`, async (t) => {
+    const page = await open(platform, LAYOUTS_DECK);
+    t.after(() => page.close?.());
+    const table = layoutTable(LAYOUT_ROWS);
+    await show(page, '.reveal .slides table');
+    await click(page, cellSelector(1, 0));
+    await press(page, 'Alt+ArrowDown');
+    await settle(page);
+    await byteExact(page, [[table, layoutTable([LAYOUT_ROWS[0], LAYOUT_ROWS[1], '<tr><td></td><td></td></tr>', LAYOUT_ROWS[2]])]]);
+    assert.deepEqual(await focusCell(page), [2, 0]);
+    if (platform === 'mac') {
+      await press(page, 'Mod+Alt+Backspace');
+      await settle(page);
+      await byteExact(page);
+      await press(page, 'Alt+ArrowRight');
+      await settle(page);
+      assert.deepEqual(await focusCell(page), [2, 1]);
+      await press(page, 'Ctrl+Mod+Backspace');
+      await settle(page);
+      await byteExact(page);
+    } else {
+      // Alt+Left and Alt+Right are left to the browser, as back and forward
+      assert.equal(await page.evaluate(`window.BeesonEditor.state('table.columnAfter').keys?.length ?? 0`), 0);
+      await page.evaluate('window.BeesonEditor.undo()');
+      await byteExact(page);
+    }
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`Header Row and Numbers at the Right are switches of the table (${platform})`, async (t) => {
+    let page = await open(platform, LAYOUTS_DECK);
+    t.after(() => page.close?.());
+    const table = layoutTable(LAYOUT_ROWS);
+    await show(page, '.reveal .slides table');
+    await click(page, cellSelector(1, 1));
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('table.header').checked`), true);
+    await page.evaluate(`window.BeesonEditor.exec('table.header')`);
+    await settle(page);
+    await byteExact(page, [[table, layoutTable(['<tr><td>Family</td><td>Period</td></tr>', ...LAYOUT_ROWS.slice(1)])]]);
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('table.header').checked`), false);
+    assert.deepEqual(await focusCell(page), [1, 1]);
+    await roundTrip(page);
+    await page.close();
+    page = await open(platform, LAYOUTS_DECK);
+    await show(page, '.reveal .slides table');
+    await click(page, cellSelector(1, 1));
+    // the cells of math are numbers
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('table.numbersRight').checked`), false);
+    await page.evaluate(`window.BeesonEditor.exec('table.numbersRight')`);
+    await settle(page);
+    const right = (s) => s.replace(/<(t[dh])>(Period|\\\(\d\.\d\d\\\))</g, '<$1 style="text-align: right">$2<');
+    await byteExact(page, [[table, layoutTable(LAYOUT_ROWS.map(right))]]);
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('table.numbersRight').checked`), true);
+    await roundTrip(page);
+  });
+
+  test(`a right-click on a cell opens the menu of the cell, whose items act on it (${platform})`, async (t) => {
+    const page = await open(platform, LAYOUTS_DECK);
+    t.after(() => page.close?.());
+    await show(page, '.reveal .slides table');
+    await click(page, cellSelector(1, 0));
+    await click(page, cellSelector(2, 1), { button: 'right' });
+    await page.waitFor(`!!document.querySelector('.beeson-edit-menu.cell')`);
+    const labels = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu.cell .item .label')].map((l) => l.textContent)`);
+    for (const label of ['Add Row Above', 'Add Row Below', 'Add Column Before', 'Add Column After', 'Delete Row', 'Delete Column', 'Header Row', 'Delete Table']) {
+      assert.ok(labels.some((l) => l.startsWith(label)), `${label} is not in the menu: ${labels.join(', ')}`);
+    }
+    assert.deepEqual(await focusCell(page), [2, 1]);
+    const item = await page.evaluate(`(() => { const b = [...document.querySelectorAll('.beeson-edit-menu.cell .item')].find((b) => b.querySelector('.label').textContent === 'Delete Row'); const r = b.getBoundingClientRect(); return { x: r.left + 20, y: r.top + r.height / 2 }; })()`);
+    await click(page, item);
+    await settle(page);
+    await byteExact(page, [[layoutTable(LAYOUT_ROWS), layoutTable(LAYOUT_ROWS.slice(0, 2))]]);
+    await roundTrip(page);
+  });
+
+  test(`the Table pane of the inspector shows the cell of the caret and adds a row below it (${platform})`, async (t) => {
+    const page = await open(platform, LAYOUTS_DECK);
+    t.after(() => page.close?.());
+    const panel = '#beeson-edit-panel-format';
+    if (!(await page.evaluate(`window.BeesonEditor.state('shell.format').checked`))) await page.evaluate(`window.BeesonEditor.exec('shell.format')`);
+    await show(page, '.reveal .slides table');
+    await click(page, cellSelector(1, 0));
+    await settle(page);
+    assert.equal(await page.evaluate(`document.querySelector('${panel} .ed-panes')?.dataset.pane`), 'table');
+    assert.equal(await page.evaluate(`document.querySelector('${panel} .ed-note')?.textContent`), '3 rows, 2 columns, cell A2');
+    const below = await page.evaluate(`(() => { const r = document.querySelector('${panel} button[title="Add Row Below"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    await click(page, below);
+    await settle(page);
+    await byteExact(page, [[layoutTable(LAYOUT_ROWS), layoutTable([LAYOUT_ROWS[0], LAYOUT_ROWS[1], '<tr><td></td><td></td></tr>', LAYOUT_ROWS[2]])]]);
+    assert.deepEqual(await focusCell(page), [2, 0]);
+    assert.equal(await page.evaluate(`document.querySelector('${panel} .ed-note')?.textContent`), '4 rows, 2 columns, cell A3');
+    await roundTrip(page);
+  });
+
+  test(`a paste of tab-separated text onto the slide writes a table, numbers at the right (${platform})`, async (t) => {
+    const page = await open(platform);
+    t.after(() => page.close?.());
+    await show(page, EQUATIONS);
+    assert.equal(await page.evaluate('window.BeesonEditor.status().problems.length'), 0);
+    await paste(page, { 'text/plain': 'Family\tPeriod\nLyapunov\t2.69\nHalo\t3.41\n' });
+    await settled(page);
+    const table = '<table>\n    <tbody>\n      <tr><th>Family</th><th style="text-align: right">Period</th></tr>\n      <tr><td>Lyapunov</td><td style="text-align: right">2.69</td></tr>\n      <tr><td>Halo</td><td style="text-align: right">3.41</td></tr>\n    </tbody>\n  </table>';
+    const edited = await render(page);
+    assert.ok(edited.includes(table), `the table is not written:\n${edited.slice(edited.indexOf('Equations'), edited.indexOf('Equations') + 1600)}`);
+    assert.equal(without(edited, table), page.source);
+    // the new table is selected, and its bars are shown without a cell marked
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('table.delete').enabled`), true);
+    assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-table-bars:not([hidden]) .bar > div')].length`), 5);
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Paste Table');
+    await roundTrip(page);
+  });
+
+  test(`a paste of lines without a tab is left to the paste of a text (${platform})`, async (t) => {
+    const page = await open(platform);
+    t.after(() => page.close?.());
+    await show(page, EQUATIONS);
+    await paste(page, { 'text/plain': 'one\ntwo' });
+    await settled(page);
+    assert.ok(!(await render(page)).includes('<table>'), 'plain lines are written as a table');
+  });
+
+  test(`a paste of an HTML table onto the slide writes its cells (${platform})`, async (t) => {
+    const page = await open(platform);
+    t.after(() => page.close?.());
+    await show(page, EQUATIONS);
+    const html = '<meta charset="utf-8"><table style="border:1px"><thead><tr><th>Body</th><th colspan="2">Mass</th></tr></thead><tbody><tr><td>Earth</td><td>5.97</td><td>e24 kg</td></tr><tr><td>Moon <b>&amp;</b> Luna</td><td>0.073</td><td>e24 kg</td></tr></tbody></table>';
+    await paste(page, { 'text/html': html, 'text/plain': 'Body\tMass\nEarth\t5.97\te24 kg\nMoon & Luna\t0.073\te24 kg' });
+    await settled(page);
+    const table = '<table>\n    <tbody>\n      <tr><th>Body</th><th style="text-align: right">Mass</th><th></th></tr>\n      <tr><td>Earth</td><td style="text-align: right">5.97</td><td>e24 kg</td></tr>\n      <tr><td>Moon &amp; Luna</td><td style="text-align: right">0.073</td><td>e24 kg</td></tr>\n    </tbody>\n  </table>';
+    assert.equal(without(await render(page), table), page.source);
+    await roundTrip(page);
+  });
+
+  test(`a paste of tab-separated text into a cell fills the cells from it on, with rows added (${platform})`, async (t) => {
+    const page = await open(platform, LAYOUTS_DECK);
+    t.after(() => page.close?.());
+    await show(page, '.reveal .slides table');
+    await click(page, cellSelector(2, 0));
+    await paste(page, { 'text/plain': 'Axial\t4.0\nVertical\t4.4' });
+    await settled(page);
+    await byteExact(page, [[layoutTable(LAYOUT_ROWS), layoutTable([
+      ...LAYOUT_ROWS.slice(0, 2),
+      '<tr class="fragment" data-fragment-index="1"><td>Axial</td><td>4.0</td></tr>',
+      '<tr><td>Vertical</td><td>4.4</td></tr>',
+    ])]]);
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Paste');
+    await roundTrip(page);
+  });
+}
