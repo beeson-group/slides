@@ -8,8 +8,7 @@ import type { Command } from '../commands.ts';
 import { keysOf } from '../commands.ts';
 import { display } from '../keymap.ts';
 import { button, injectStyle, make } from '../ui/dom.ts';
-
-const BARS = ['File', 'Edit', 'Insert', 'Format', 'Arrange', 'Slide', 'View', 'Help'];
+import { MENUS } from './menubar.ts';
 
 const CSS = `
 .beeson-edit-keys { width: min(720px, calc(100vw - 32px)); max-height: calc(100vh - 64px); box-sizing: border-box; padding: 0; border: 1px solid var(--line, #555); border-radius: 10px; background: var(--bg, #000); color: var(--text, #eee); font: 13px/1.4 system-ui, sans-serif; box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5); }
@@ -41,7 +40,9 @@ export function sheetRows(app: App): SheetRow[] {
     if (row) row.keys.push(...keys.filter((k) => !row.keys.includes(k)));
     else rows.push({ bar, label: label(c), keys });
   }
-  const rank = (bar: string) => (BARS.includes(bar) ? BARS.indexOf(bar) : BARS.length);
+  // the menus of the menu bar, with those that other modules add, e.g. Play, read when the sheet is
+  // opened
+  const rank = (bar: string) => (MENUS.includes(bar) ? MENUS.indexOf(bar) : MENUS.length);
   return rows.sort((a, b) => rank(a.bar) - rank(b.bar));
 }
 
