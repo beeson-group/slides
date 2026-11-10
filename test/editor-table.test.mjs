@@ -326,32 +326,87 @@ for (const platform of ['mac', 'other']) {
     }
   });
 
-  test(`the keys of the rows and columns add and delete them (${platform})`, async (t) => {
+  // as in Keynote, Option with an arrow adds a row or a column while the cell is selected as a block,
+  // after Esc in its text, and the new cell is then the selected block
+  test(`the keys of the rows and columns add and delete them at the cell selected as a block (${platform})`, async (t) => {
     const page = await open(platform, LAYOUTS_DECK);
     t.after(() => page.close?.());
     const table = layoutTable(LAYOUT_ROWS);
+    const empty = '<tr><td></td><td></td></tr>';
+    const marked = () => page.evaluate(`[...document.querySelectorAll('.beeson-table-bars .bar > .on')].map((d) => d.textContent)`);
+    const block = () => page.evaluate(`!!document.querySelector('.beeson-table-bars .cell.block:not([hidden])')`);
     await show(page, '.reveal .slides table');
     await click(page, cellSelector(1, 0));
+    // in the text of a cell the keys add nothing
+    await press(page, 'Alt+ArrowDown');
+    await press(page, 'Alt+ArrowUp');
+    await settle(page);
+    assert.equal(await render(page), page.source);
+    assert.equal(await block(), false);
+    await press(page, 'Escape');
+    await settle(page);
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('table.rowBelow').enabled`), true);
+    assert.equal(await focusCell(page), null);
+    assert.deepEqual(await marked(), ['A', '2']);
+    assert.equal(await block(), true);
     await press(page, 'Alt+ArrowDown');
     await settle(page);
-    await byteExact(page, [[table, layoutTable([LAYOUT_ROWS[0], LAYOUT_ROWS[1], '<tr><td></td><td></td></tr>', LAYOUT_ROWS[2]])]]);
-    assert.deepEqual(await focusCell(page), [2, 0]);
+    assert.deepEqual(await marked(), ['A', '3']);
+    await press(page, 'Alt+ArrowDown');
+    await settle(page);
+    await byteExact(page, [[table, layoutTable([LAYOUT_ROWS[0], LAYOUT_ROWS[1], empty, empty, LAYOUT_ROWS[2]])]]);
+    assert.deepEqual(await marked(), ['A', '4']);
+    assert.equal(await focusCell(page), null, 'the new cell is selected as a block, not its text');
+    assert.equal(await block(), true);
+    await press(page, 'Alt+ArrowUp');
+    await settle(page);
+    await byteExact(page, [[table, layoutTable([LAYOUT_ROWS[0], LAYOUT_ROWS[1], empty, empty, empty, LAYOUT_ROWS[2]])]]);
+    assert.deepEqual(await marked(), ['A', '4']);
+    for (let i = 0; i < 3; i++) await page.evaluate('window.BeesonEditor.undo()');
+    await byteExact(page);
+    // the undo removed the cell selected as a block, hence it is selected again
+    await click(page, cellSelector(1, 0));
+    await press(page, 'Escape');
+    await press(page, 'Alt+ArrowRight');
+    await settle(page);
+    await byteExact(page, [[table, layoutTable(['<tr><th>Family</th><th></th><th>Period</th></tr>', '<tr><td>Lyapunov</td><td></td><td>\\(2.69\\)</td></tr>', '<tr class="fragment" data-fragment-index="1"><td>Halo</td><td></td><td>\\(3.41\\)</td></tr>'])]]);
+    assert.deepEqual(await marked(), ['B', '2']);
+    await press(page, 'Alt+ArrowLeft');
+    await settle(page);
+    assert.deepEqual(await marked(), ['B', '2']);
+    assert.equal(await page.evaluate(`document.querySelector('.reveal section.present table').rows[0].cells.length`), 4);
     if (platform === 'mac') {
-      await press(page, 'Mod+Alt+Backspace');
-      await settle(page);
-      await byteExact(page);
-      await press(page, 'Alt+ArrowRight');
-      await settle(page);
-      assert.deepEqual(await focusCell(page), [2, 1]);
+      await press(page, 'Ctrl+Mod+Backspace');
       await press(page, 'Ctrl+Mod+Backspace');
       await settle(page);
       await byteExact(page);
-    } else {
-      // Alt+Left and Alt+Right are left to the browser, as back and forward
-      assert.equal(await page.evaluate(`window.BeesonEditor.state('table.columnAfter').keys?.length ?? 0`), 0);
+      await press(page, 'Mod+Alt+Backspace');
+      await settle(page);
+      await byteExact(page, [[table, layoutTable([LAYOUT_ROWS[0], LAYOUT_ROWS[2]])]]);
+      assert.deepEqual(await marked(), ['B', '2']);
       await page.evaluate('window.BeesonEditor.undo()');
-      await byteExact(page);
+    } else {
+      await page.evaluate('window.BeesonEditor.undo()');
+      await page.evaluate('window.BeesonEditor.undo()');
     }
+    await byteExact(page);
+    // a click puts the caret into the text of a cell again, where the keys add nothing
+    await click(page, cellSelector(0, 0));
+    await press(page, 'Alt+ArrowDown');
+    await settle(page);
+    assert.equal(await render(page), page.source);
+    // a row added with a key is one entry, undone byte for byte and saved without problems
+    await press(page, 'Escape');
+    await press(page, 'Alt+ArrowDown');
+    await settle(page);
+    const edited = await render(page);
+    assert.ok(edited.includes(layoutTable([LAYOUT_ROWS[0], empty, ...LAYOUT_ROWS.slice(1)])));
+    await page.evaluate('window.BeesonEditor.undo()');
+    await byteExact(page);
+    await page.evaluate('window.BeesonEditor.redo()');
+    assert.equal(await render(page), edited);
+    const { text } = await saveAndReopen(page, `table-keys-${platform}.html`);
+    assert.equal(text, edited);
     assert.deepEqual(errors(page), []);
   });
 

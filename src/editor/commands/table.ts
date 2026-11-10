@@ -51,6 +51,7 @@ html.beeson-editing .reveal .slides :is(td,th)[contenteditable="true"]:focus{out
 .beeson-table-bars .round{padding:0;border:0;border-radius:50%;display:grid;place-items:center;background:var(--ed-panel);box-shadow:0 0 0 1px var(--ed-control-line);color:var(--ed-select)}
 .beeson-table-bars .round:hover{background:var(--ed-hover)}
 .beeson-table-bars .cell{border:2px solid var(--ed-select);border-radius:2px;pointer-events:none}
+.beeson-table-bars .cell.block{border-width:4px;background:color-mix(in srgb,var(--ed-select) 12%,transparent)}
 `;
 
 // the size of the bars and of their buttons, in screen px, and the gap between a bar and its table
@@ -71,11 +72,32 @@ export function cellAt(app: App): HTMLTableCellElement | null {
   return table && app.pairing.elements.get(table)?.open ? item : null;
 }
 
+// the cell selected as a block, as a cell selected in Keynote, after Esc in its text: the table is
+// the selection, and the commands of the table act at this cell. caretCell is the last cell of the
+// caret, which Esc leaves
+let blockCell: HTMLTableCellElement | null = null;
+let caretCell: HTMLTableCellElement | null = null;
+
+function syncCell(app: App): void {
+  const c = cellAt(app);
+  if (c) {
+    caretCell = c;
+    blockCell = null;
+    return;
+  }
+  const only = app.selection.only();
+  const kept = (x: Element | null): x is HTMLTableCellElement => !!x?.isConnected && !!only?.contains(x);
+  blockCell = only instanceof HTMLTableElement ? (kept(blockCell) ? blockCell : kept(caretCell) ? caretCell : null) : null;
+  // Esc blurs the text before it selects the table, and the selection is empty in between
+  if (app.selection.kind !== 'none') caretCell = null;
+}
+
 // the table of the caret, or the one selected table, with the cell given in arg, e.g. by the
-// context menu of a cell or a bar, or the cell of the caret
+// context menu of a cell or a bar, else the cell of the caret or the cell selected as a block
 export function targetOf(app: App, arg?: unknown): Target | null {
+  syncCell(app);
   const given = arg && typeof arg === 'object' && 'cell' in arg ? (arg as { cell: unknown }).cell : null;
-  const cell = isCell(given) && given.isConnected ? given : cellAt(app);
+  const cell = isCell(given) && given.isConnected ? given : cellAt(app) ?? blockCell;
   if (cell) return { table: cell.closest('table') as HTMLTableElement, cell };
   const only = app.selection.only();
   if (only instanceof HTMLTableElement && app.pairing?.elements.get(only)?.open) return { table: only, cell: null };
@@ -192,20 +214,32 @@ async function addColumn(app: App, t: Target, after: boolean): Promise<HTMLTable
   return mine;
 }
 
+// true while the table of t is the selection and its cell is selected as a block, not its text
+const blocked = (app: App, t: Target) => app.selection.only() === t.table && !cellAt(app);
+
+// the cell after an edit: selected as a block in the block state, and else with the caret in it
+function land(app: App, cell: Element | null | undefined, at: 'start' | 'end', block: boolean): void {
+  if (!isCell(cell)) return;
+  if (!block) return focusCell(cell, at);
+  blockCell = cell;
+  app.invalidate('selection');
+}
+
 async function deleteRow(app: App, t: Target): Promise<void> {
   if (!t.cell) return;
+  const block = blocked(app, t);
   const tr = t.cell.parentElement as HTMLTableRowElement;
   const p = placeOf(t.cell)!;
   if (t.table.rows.length <= 1) return deleteTable(app, t);
   const next = t.table.rows[p.row + 1] ?? t.table.rows[p.row - 1];
   await app.doc.remove(tr, 'delete row');
-  const cell = cellAtColumn(next, p.col) ?? next.cells[next.cells.length - 1];
-  if (cell) focusCell(cell, 'end');
+  land(app, cellAtColumn(next, p.col) ?? next.cells[next.cells.length - 1], 'end', block);
 }
 
 async function deleteColumn(app: App, t: Target): Promise<void> {
   if (!t.cell) return;
   if (columnsOf(t.table) <= 1) return deleteTable(app, t);
+  const block = blocked(app, t);
   const p = placeOf(t.cell)!;
   const tr = t.cell.parentElement as HTMLTableRowElement;
   for (const row of [...t.table.rows]) {
@@ -215,8 +249,7 @@ async function deleteColumn(app: App, t: Target): Promise<void> {
     else if (row.cells.length > 1) await app.doc.remove(cell, 'delete column');
     else await app.doc.remove(row, 'delete column');
   }
-  const cell = tr.isConnected ? cellAtColumn(tr, p.col) ?? tr.cells[tr.cells.length - 1] : null;
-  if (cell) focusCell(cell, 'end');
+  land(app, tr.isConnected ? cellAtColumn(tr, p.col) ?? tr.cells[tr.cells.length - 1] : null, 'end', block);
 }
 
 async function deleteTable(app: App, t: Target): Promise<void> {
@@ -478,6 +511,7 @@ function installBars(app: App): void {
     place(addCol, box.right + GAP, top, BAR, BAR);
     place(addRow, left, box.bottom + GAP, BAR, BAR);
     outline.hidden = !t.cell;
+    outline.classList.toggle('block', !!t.cell && t.cell === blockCell);
     const b = t.cell?.getBoundingClientRect();
     if (b) place(outline, b.left - 1, b.top - 1, b.width + 2, b.height + 2);
     const v = app.stage?.viewport;
@@ -548,37 +582,39 @@ export function install(app: App): void {
     },
   });
 
-  const rowCommand = (id: string, label: string, order: number, below: boolean, keys: string[]) => c.define({
+  // the keys of the rows and the columns are taken on the canvas only, while a cell is selected as
+  // a block, as in Keynote. in a text, Option with an arrow moves the caret by a word or a paragraph
+  // on a Mac, and Alt with Left or Right is Back or Forward of a browser on Windows and Linux
+  const rowCommand = (id: string, label: string, order: number, below: boolean, key: string) => c.define({
     id,
     label,
-    keys: { mac: keys, other: keys },
-    in: ['text'],
+    keys: { mac: [key], other: [key] },
+    in: ['canvas'],
     menu: menu('add', order),
     enabled: withTable,
     undoable: true,
     run: async (a, arg) => {
       const t = need(a, arg);
+      const block = blocked(a, t);
       const col = t.cell ? placeOf(t.cell)!.col : 0;
       const tr = await addRow(a, t, below);
-      const cell = cellAtColumn(tr, col) ?? tr.cells[0];
-      if (cell) focusCell(cell, 'start');
+      land(a, cellAtColumn(tr, col) ?? tr.cells[0], 'start', block);
     },
   });
-  rowCommand('table.rowAbove', 'Add Row Above', 80, false, ['Alt+ArrowUp']);
-  rowCommand('table.rowBelow', 'Add Row Below', 81, true, ['Alt+ArrowDown']);
-  // Alt+Left and Alt+Right are the back and forward keys of the browsers on Windows and Linux,
-  // hence a column is added there from the menus only
+  rowCommand('table.rowAbove', 'Add Row Above', 80, false, 'Alt+ArrowUp');
+  rowCommand('table.rowBelow', 'Add Row Below', 81, true, 'Alt+ArrowDown');
   const columnCommand = (id: string, label: string, order: number, after: boolean, key: string) => c.define({
     id,
     label,
-    keys: { mac: [key] },
-    in: ['text'],
+    keys: { mac: [key], other: [key] },
+    in: ['canvas'],
     menu: menu('add', order),
     enabled: withTable,
     undoable: true,
     run: async (a, arg) => {
-      const cell = await addColumn(a, need(a, arg), after);
-      if (cell) focusCell(cell, 'start');
+      const t = need(a, arg);
+      const block = blocked(a, t);
+      land(a, await addColumn(a, t, after), 'start', block);
     },
   });
   columnCommand('table.columnBefore', 'Add Column Before', 82, false, 'Alt+ArrowLeft');
@@ -587,7 +623,7 @@ export function install(app: App): void {
     id: 'table.deleteRow',
     label: 'Delete Row',
     keys: { mac: ['Mod+Alt+Backspace'] },
-    in: ['text'],
+    in: ['text', 'canvas'],
     menu: menu('delete', 84),
     enabled: withCell,
     undoable: true,
@@ -597,7 +633,7 @@ export function install(app: App): void {
     id: 'table.deleteColumn',
     label: 'Delete Column',
     keys: { mac: ['Ctrl+Mod+Backspace'] },
-    in: ['text'],
+    in: ['text', 'canvas'],
     menu: menu('delete', 85),
     enabled: withCell,
     undoable: true,
