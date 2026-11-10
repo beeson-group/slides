@@ -6,14 +6,18 @@
 // edge of a cell goes to the cell beside it. rows and columns are added and deleted from Format >
 // Table, the context menu of a cell, the row and column bars around the table, and the Table pane
 // of the inspector. a paste of tab-separated text or of an HTML table onto the slide is written as
-// a new table, and a paste into a cell fills the cells from it on. each change is one entry of the
-// history, written through app.doc
+// a new table, and a paste into a cell fills the cells from it on. a range of cells is selected by
+// a drag across cells, a Shift-click, Esc in a cell, or Select Row and Select Column, and is merged
+// and unmerged as a colspan and a rowspan. the widths of the columns are set by a drag of a border
+// in the bar of the columns, Distribute Columns Evenly, and Resize Column to Fit Content, and are
+// written in the style of the cells of the first row. Auto-Align sets the columns of numbers at the
+// right. each change is one entry of the history, written through app.doc
 //
 // while the caret is in a cell, or a table is selected, the table is drawn as a selected table of
 // Keynote: a bar of the column letters above it and a bar of the row numbers at its left, with the
-// column and the row of the caret marked, a round button at the end of each bar that adds a column
-// or a row, a round button at the upper left that selects the table, and an outline around the
-// cell of the caret
+// columns and the rows of the caret or of the range marked, a round button at the end of each bar
+// that adds a column or a row, a round button at the upper left that selects the table, and an
+// outline around the cell of the caret or the range
 
 import type { App } from '../app.ts';
 import { keysOf, type Command } from '../commands.ts';
@@ -385,16 +389,20 @@ async function setHeader(app: App, t: Target, on: boolean): Promise<void> {
 }
 
 // the cells of the columns of numbers set at the right, the header cell included, or every cell
-// set at the left again
-async function alignNumbers(app: App, t: Target, on: boolean): Promise<void> {
-  const numeric = numbersOf(t.table);
-  for (const row of placesOf(t.table)) {
-    for (const p of row) {
-      const want = on && numeric[p.col];
-      if (right(p.cell) !== want) app.doc.setTag(p.cell, { style: { 'text-align': want ? 'right' : null } }, 'align numbers');
-    }
-  }
+// set at the left again. with a box, only the cells inside it
+function alignNumbers(app: App, t: Target, on: boolean, box?: Box): void {
+  for (const p of misaligned(t, on, box)) app.doc.setTag(p.cell, { style: { 'text-align': right(p.cell) ? null : 'right' } }, 'align numbers');
 }
+
+// the cells that alignNumbers changes
+function misaligned(t: Target, on: boolean, box?: Box): Place[] {
+  const numeric = numbersOf(t.table);
+  const shown = (p: Place) => !box || (p.row >= box.r0 && p.row <= box.r1 && p.col >= box.c0 && p.col <= box.c1);
+  return placesOf(t.table).flat().filter((p) => shown(p) && right(p.cell) !== (on && numeric[p.col]));
+}
+
+// the box of Auto-Align: the range of the cells selected as a block, or the table at one cell
+const alignBox = (t: Target) => (t.box && spotsIn(gridOf(t.table), t.box).length > 1 ? t.box : undefined);
 
 function numbersRight(t: Target | null): boolean {
   if (!t) return false;
@@ -563,7 +571,7 @@ function cellItems(cell: HTMLTableCellElement): MenuItem[] {
     { rule: true },
     ...ids(['table.distributeColumns', 'table.fitColumn']),
     { rule: true },
-    ...ids(['table.header', 'table.numbersRight']),
+    ...ids(['table.header', 'table.numbersRight', 'table.autoAlign']),
     { rule: true },
     ...ids(['table.delete']),
   ];
@@ -992,6 +1000,24 @@ export function install(app: App): void {
     run: (a, arg) => {
       const t = need(a, arg);
       return alignNumbers(a, t, !numbersRight(t));
+    },
+  });
+  // Auto-Align of Keynote, which sets a number at the right and a text at the left, as the theme
+  // sets it, by the columns of numbers of numbersOf
+  c.define({
+    id: 'table.autoAlign',
+    label: 'Auto-Align',
+    keys: { mac: ['Alt+Mod+U'] },
+    in: ['text', 'canvas'],
+    menu: menu('options', 87.5),
+    enabled: (a, arg?: unknown) => {
+      const t = ready(a) ? targetOf(a, arg) : null;
+      return !!t && misaligned(t, true, alignBox(t)).length > 0;
+    },
+    undoable: true,
+    run: (a, arg) => {
+      const t = need(a, arg);
+      alignNumbers(a, t, true, alignBox(t));
     },
   });
   c.define({

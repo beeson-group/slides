@@ -914,3 +914,53 @@ for (const platform of ['mac', 'other']) {
     await roundTrip(page);
   });
 }
+
+for (const platform of ['mac', 'other']) {
+  const autoAlign = (page) => (platform === 'mac' ? press(page, 'Alt+Mod+U') : page.evaluate(`window.BeesonEditor.exec('table.autoAlign')`));
+
+  test(`Auto-Align sets a column of numbers at the right in the style of its cells (${platform})`, async (t) => {
+    const page = await open(platform, TABLES_DECK);
+    t.after(() => page.close?.());
+    await show(page, 1);
+    await click(page, cellSelector(2, 0));
+    await autoAlign(page);
+    await settle(page);
+    const right = (r) => r.replace(/<(t[dh])>((?:\\\(0\.01215\\\)|2\.53e-5|2\.37e-4|Mass ratio))</, '<$1 style="text-align: right">$2<');
+    await byteExact(page, [[tbodyTable(PLAIN_ROWS), tbodyTable(PLAIN_ROWS.map(right))]]);
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Auto-Align');
+    assert.equal((await page.evaluate(`window.BeesonEditor.state('table.autoAlign')`)).enabled, false);
+    await roundTrip(page);
+  });
+
+  test(`Auto-Align in a range sets only the cells of the range (${platform})`, async (t) => {
+    const page = await open(platform, TABLES_DECK);
+    t.after(() => page.close?.());
+    await show(page, 1);
+    // Europa and Titan with their numbers and systems
+    await dragCells(page, [2, 0], [3, 2]);
+    assert.deepEqual(await marked(page), ['A', 'B', 'C', '3', '4']);
+    await autoAlign(page);
+    await settle(page);
+    await byteExact(page, [[tbodyTable(PLAIN_ROWS), tbodyTable([
+      ...PLAIN_ROWS.slice(0, 2),
+      '<tr><td>Europa</td><td style="text-align: right">2.53e-5</td><td>Jupiter</td></tr>',
+      '<tr><td>Titan</td><td style="text-align: right">2.37e-4</td><td>Saturn</td></tr>',
+    ])]]);
+    assert.ok(await asBlock(page));
+    await roundTrip(page);
+  });
+
+  test(`Auto-Align sets a word at the right at the left again, as the theme sets a text (${platform})`, async (t) => {
+    const page = await open(platform, TABLES_DECK);
+    t.after(() => page.close?.());
+    await show(page, 2);
+    await click(page, cellSelector(2, 0));
+    await autoAlign(page);
+    await settle(page);
+    await byteExact(page, [[
+      '<tr><th>Orbit</th><th>Period</th></tr>\n      <tr><td style="text-align: right">Halo</td><td>14.8</td></tr>\n      <tr><td>Lyapunov</td><td>2.69</td></tr>',
+      `<tr><th>Orbit</th><th style="text-align: right">Period</th></tr>\n      <tr><td>Halo</td>${R}14.8</td></tr>\n      <tr><td>Lyapunov</td>${R}2.69</td></tr>`,
+    ]]);
+    await roundTrip(page);
+  });
+}
