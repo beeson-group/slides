@@ -7,7 +7,8 @@
 // @page size is then set from the slide size, e.g. 1920 by 1080 px with a margin of 0, and it is
 // used in Chrome with preferCSSPageSize. The script exits nonzero on a JavaScript error in the
 // page, or when the page count of the PDF is not equal to the number of .pdf-page elements created
-// in reveal.js. A slide taller than one page is the usual cause of the latter.
+// in reveal.js. A slide is printed on one page, with what runs past its edge cut off, as in Keynote
+// and PowerPoint (pdfMaxPagesPerSlide in src/main.ts).
 import { readFileSync, writeFileSync } from 'node:fs';
 import { deckUrl, launch, printView } from './chrome.mjs';
 
@@ -35,7 +36,7 @@ try {
   const pages = countPdfPages(readFileSync(output));
   console.log(`${output}: ${pages} pages for ${steps} steps of ${deck}`);
   if (pages !== steps) {
-    console.error(`page count ${pages} is not equal to step count ${steps}, look for a slide taller than 1080 px`);
+    console.error(`page count ${pages} is not equal to step count ${steps}, look for a page break inside a slide`);
     failed = true;
   }
   for (const error of page.errors) console.error(`page error: ${error}`);
