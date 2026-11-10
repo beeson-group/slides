@@ -32,7 +32,7 @@ export type Detached = { node: Element; parent: Element; prev: Node | null; next
 
 type Page = { Beeson?: { mount?(root: Element): void; refreshChrome?(): void }; Reveal?: { sync?(): void; layout?(): void } };
 
-// a running head and the like, made at run time and replaced by Beeson.refreshChrome
+// a running head and the like, made at run time and filled again by Beeson.refreshChrome
 const generated = (n: Node | null): boolean => n instanceof Element && n.hasAttribute('data-generated');
 
 // the sibling after or before el that stays on the page
