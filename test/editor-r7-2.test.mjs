@@ -37,6 +37,20 @@ const render = (page) => page.evaluate('window.BeesonEditor.render()');
 // two frames, or a moment in a tab hidden by the tab of the print view, which does not get frames
 const frames = (page) => page.evaluate('new Promise((d) => document.hidden ? setTimeout(() => d(true), 50) : requestAnimationFrame(() => requestAnimationFrame(() => d(true))))');
 const wait = (page, ms) => page.evaluate(`new Promise((d) => setTimeout(() => d(true), ${ms}))`);
+// the names of the decks of Open Recent kept in the database of the editor, which the menus show
+// before the write, hence a reload waits for them
+const storedRecents = (page) => page.evaluate(`new Promise((done) => {
+  const ask = indexedDB.open('beeson-editor', 1);
+  ask.onsuccess = () => {
+    const db = ask.result;
+    const get = db.transaction('recent').objectStore('recent').get('decks');
+    get.onsuccess = () => { db.close(); done((get.result ?? []).map((r) => r.name)); };
+  };
+})`);
+async function written(page, names) {
+  for (let i = 0; i < 100 && JSON.stringify(await storedRecents(page)) !== JSON.stringify(names); i++) await wait(page, 50);
+  assert.deepEqual(await storedRecents(page), names);
+}
 const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 const ready = 'window.BeesonEditor && window.BeesonEditor.ready.then(() => true)';
 
@@ -341,6 +355,7 @@ for (const platform of PLATFORMS) {
     assert.equal(await page.evaluate('window.__picked'), 2);
 
     // the list is kept through a reload, and it is not offered without the open picker
+    await written(page, [a, b]);
     await page.goto(page.url);
     await page.waitFor(ready);
     await page.waitFor(`window.BeesonEditorShell.menuItems('File', 'Open Recent').length === 4`);
@@ -355,6 +370,7 @@ for (const platform of PLATFORMS) {
     // Clear Menu empties the list, also after a reload
     await choose(page, 'File', 'Open Recent', 'Clear Menu');
     assert.deepEqual((await menuLabels(page, 'File')).slice(0, 2), ['Open…', 'Open Recent']);
+    await written(page, []);
     await page.goto(page.url);
     await page.waitFor(ready);
     await wait(page, 300);
@@ -404,6 +420,7 @@ for (const platform of PLATFORMS) {
       source: 'window.fetch = () => Promise.reject(new TypeError("offline")); window.showOpenFilePicker = async () => { window.__picked = true; throw new DOMException("cancelled", "AbortError"); };',
     });
     t.after(() => page.send('Page.removeScriptToEvaluateOnNewDocument', { identifier }).catch(() => {}));
+    await written(page, [name]);
     await page.goto(page.url);
     await page.waitFor(ready);
     await page.waitFor(`(() => { const b = document.querySelector('dialog.beeson-edit-card:not([hidden]) button.primary'); return b?.textContent === ${js(`Open ${name}`)}; })()`);
