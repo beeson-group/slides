@@ -28,6 +28,9 @@ const SNAP = 8;
 // its style does not set them. a height is written only on a stretched image or video
 export type Place = { translate: Translate | null; width: number | null; height?: number | null; rotate?: number | null };
 
+// the layers drawn over the slide by the editor, whose presses are presses on the canvas
+const OVERLAYS = '.beeson-overlay, .beeson-line-layer, .beeson-table-bars, .beeson-guides, .beeson-ruler';
+
 // an element with data-locked, which the pointer, the keys, and the fields do not move
 export const locked = (el: Element): boolean => el.hasAttribute('data-locked');
 
@@ -285,18 +288,21 @@ export function install(app: App): void {
   const freeResize = (ev: MouseEvent) => (mac() ? ev.metaKey : ev.altKey);
   const aboutCenter = (ev: MouseEvent) => (mac() ? ev.altKey : ev.ctrlKey);
 
-  // a press on the canvas takes the keys from a control of the chrome, e.g. a tab of the
-  // inspector, so that Esc and the arrows reach the selection, as after a click on the canvas of
-  // Keynote. the press is cancelled, hence the browser does not move the focus by itself
-  const leaveChrome = () => {
+  // a press on the slide, or on a frame, a grip, a line, a bar of a table, a ruler, or a guide of
+  // the canvas, takes the keys from a control of the chrome, e.g. a tab of the inspector, so that
+  // Esc and the arrows reach the selection, as after a click on the canvas of Keynote. most of
+  // these presses are cancelled, hence the browser does not move the focus by itself. the listener
+  // is added before those of the lines, the tables, and the guides, which stop the press
+  window.addEventListener('pointerdown', (ev) => {
+    const target = ev.target instanceof Element ? ev.target : null;
+    if (!target || !(onCanvas(target, app, { x: ev.clientX, y: ev.clientY }) || target.closest(OVERLAYS))) return;
     const a = document.activeElement;
     if (a instanceof HTMLElement && a !== document.body && !app.hostOf(a) && !a.closest('.reveal, .beeson-handle')) a.blur();
-  };
+  }, true);
 
   const leaveText = () => {
     const host = app.hostOf(document.activeElement);
     if (host) (host as HTMLElement).blur();
-    else leaveChrome();
   };
 
   // the lines that a drag of els snaps to: the other elements of the slide, the figure around an
@@ -369,7 +375,6 @@ export function install(app: App): void {
       if (!el || locked(el)) return;
       ev.preventDefault();
       ev.stopPropagation();
-      leaveChrome();
       const r = el.getBoundingClientRect();
       const center = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
       Object.assign(start('rotate', ev, el, [el], null), { center, angle: Math.atan2(ev.clientY - center.y, ev.clientX - center.x) * 180 / Math.PI });
@@ -381,7 +386,6 @@ export function install(app: App): void {
       // the grips of a group: each member is a follower of the box of the group
       ev.preventDefault();
       ev.stopPropagation();
-      leaveChrome();
       const f = frameOf(app);
       const all = sel.elements().filter((o) => !locked(o));
       const followers: Follower[] = all.filter((o) => !all.some((x) => x !== o && x.contains(o))).map((o) => {
@@ -402,7 +406,6 @@ export function install(app: App): void {
       if (!el || !sized.length || locked(el)) return;
       ev.preventDefault();
       ev.stopPropagation();
-      leaveChrome();
       const pic = pictureOf(el);
       const f = frameOf(app);
       const all = sel.elements();
