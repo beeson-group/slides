@@ -402,3 +402,52 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// the link popover: whether it is open, its address, its buttons, and where the focus and the caret
+// are
+const linkPopover = (page) => page.evaluate(`(() => {
+  const d = document.querySelector('dialog.beeson-edit-link[open]');
+  const s = getSelection();
+  const at = s.rangeCount ? s.getRangeAt(0).startContainer : null;
+  return {
+    open: !!d,
+    href: d?.querySelector('input[name="href"]').value ?? null,
+    buttons: d ? [...d.querySelectorAll('.buttons button')].filter((b) => !b.disabled).map((b) => b.textContent) : [],
+    focus: document.activeElement.localName,
+    inLink: !!at && s.isCollapsed && !!(at.nodeType === 1 ? at : at.parentElement).closest('a'),
+  };
+})()`);
+
+// finding text-lists-find-6: a click on a link only placed the caret, and its popover opened only
+// with Mod+K or the Text pane
+for (const platform of PLATFORMS) {
+  test(`a click on a link places the caret and opens its popover with its address (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, await pointOf(page, PARA, 'figure', 2));
+    await selectText(page, PARA, 'template');
+    await press(page, 'Mod+K');
+    await page.waitFor(`document.querySelector('dialog.beeson-edit-link[open]') !== null`);
+    await type(page, 'example.com');
+    await press(page, 'Enter');
+    await page.waitFor(`window.BeesonEditor.render().includes('<a href="https://example.com">template</a>')`);
+    page.source = await render(page);
+    await click(page, await pointOf(page, PARA, 'Export', 2));
+    assert.equal((await linkPopover(page)).open, false);
+    await click(page, await pointOf(page, PARA, 'template', 3));
+    await frames(page);
+    let p = await linkPopover(page);
+    assert.deepEqual(p, { open: true, href: 'https://example.com', buttons: ['Remove', 'Open Link', 'Done'], focus: 'p', inLink: true });
+    // Esc closes the popover and leaves the caret in the link
+    await press(page, 'Escape');
+    p = await linkPopover(page);
+    assert.deepEqual([p.open, p.focus, p.inLink], [false, 'p', true]);
+    // a key typed after a click goes into the link, and the popover is closed
+    await click(page, await pointOf(page, PARA, 'template', 3));
+    await frames(page);
+    assert.equal((await linkPopover(page)).open, true);
+    await type(page, 'X');
+    assert.equal((await linkPopover(page)).open, false);
+    assert.match(await render(page), /<a href="https:\/\/example\.com">temp?Xp?late<\/a>/);
+    await roundTrip(page);
+  });
+}
