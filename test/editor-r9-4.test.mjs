@@ -357,3 +357,29 @@ for (const platform of PLATFORMS) {
     }
   });
 }
+
+// finding select-move-resize-4: an Option-drag of a line, a Ctrl-drag on Windows and Linux, moved
+// the line without a copy, unlike a drag of every other kind
+for (const platform of PLATFORMS) {
+  test(`a copy drag of a line leaves it in place and moves a copy (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 6 });
+    const s = await page.evaluate(`(() => { const r = document.querySelector('.reveal section.present').getBoundingClientRect(); return { l: r.left, t: r.top, w: r.width, h: r.height }; })()`);
+    const at = await drawArrow(page, s.l + s.w * 0.15, s.t + s.h * 0.85);
+    const lines = () => page.evaluate(`[...document.querySelectorAll('.reveal section.present svg.line')].map((l) => ({ style: l.style.translate, marker: l.querySelector('marker')?.id }))`);
+    const [first] = await lines();
+    await click(page, at);
+    await drag(page, at, { dx: 0, dy: -200, steps: 10, modifiers: platform === 'mac' ? 'Alt' : 'Ctrl', hold: true });
+    const readout = await page.evaluate(`[...document.querySelectorAll('.beeson-offset')].filter((r) => !r.hidden && r.getClientRects().length).map((r) => r.textContent).join(' ')`);
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: at.x, y: at.y - 200, button: 'left', clickCount: 1, modifiers: platform === 'mac' ? 1 : 2 });
+    await sleep(300);
+    assert.match(readout, /Copy/, 'the readout of a copy drag of a line does not read Copy');
+    const after = await lines();
+    assert.equal(after.length, 2, 'a copy drag of a line does not copy it');
+    assert.deepEqual(after[0], first, 'the line dragged with the copy key is moved');
+    assert.notEqual(after[1].marker, first.marker, 'the copy has the id of the marker of its original');
+    assert.notEqual(after[1].style, first.style, 'the copy is not put where it was dropped');
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Duplicate');
+    assert.equal(await page.evaluate(`window.BeesonEditor.selection()[0] === document.querySelectorAll('.reveal section.present svg.line')[1]`), true, 'the copy is not selected');
+    await roundTrip(page);
+  });
+}
