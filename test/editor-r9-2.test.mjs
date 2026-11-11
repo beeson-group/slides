@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, press, saveAndReopen, type } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 
@@ -419,6 +419,101 @@ for (const platform of PLATFORMS) {
     docked(wide, 'at 1440 px after 760 px');
     assert.ok(wide.nav && Math.abs(wide.nav.width - 200) <= 1, 'the navigator is not shown again at its width when the window is wide again');
     assert.equal((await state(page, 'view.navigator'))?.checked ?? true, true);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+const PANE_NOTE = `document.querySelector('#beeson-edit-panel-format .ed-note')?.textContent`;
+const cellOf = (r, c) => `.reveal section.present table tr:nth-child(${r + 1}) > :nth-child(${c + 1})`;
+const middle = (r) => ({ x: (r.left + r.right) / 2, y: (r.top + r.bottom) / 2 });
+
+// the boxes of the frame of the selected cells, of its fill handle, and of each of its corner
+// handles that is shown, keyed by the corner it is drawn at
+const RANGE = `(() => {
+  const box = (el) => {
+    if (!el || !el.getClientRects().length) return null;
+    const r = el.getBoundingClientRect();
+    return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+  };
+  const bars = document.querySelector('.beeson-table-bars');
+  const corners = {};
+  for (const el of bars?.querySelectorAll('[data-corner]') ?? []) if (box(el)) corners[el.dataset.corner] = box(el);
+  return { frame: box(bars?.querySelector('.cell')), fill: box(bars?.querySelector('.fill')), corners };
+})()`;
+
+// asserts that the corner handles of the range are at the upper left, upper right, and lower left
+// corners of its frame, and the fill handle at its lower right corner, without an overlap
+async function handlesAtCorners(page, what) {
+  const { frame, fill, corners } = await page.evaluate(RANGE);
+  assert.ok(frame, `the range is not framed ${what}`);
+  assert.deepEqual(Object.keys(corners).sort(), ['lower-left', 'upper-left', 'upper-right'], `the frame of the range does not have its corner handles ${what}`);
+  const at = { 'upper-left': [frame.left, frame.top], 'upper-right': [frame.right, frame.top], 'lower-left': [frame.left, frame.bottom] };
+  for (const [name, [x, y]] of Object.entries(at)) {
+    const m = middle(corners[name]);
+    assert.ok(Math.abs(m.x - x) < 6 && Math.abs(m.y - y) < 6, `the ${name} handle at ${js(m)} is not at the ${name} corner ${js({ x, y })} of the frame ${what}`);
+    assert.ok(!meets(corners[name], fill), `the ${name} handle is drawn over the fill handle ${what}`);
+  }
+  const f = middle(fill);
+  assert.ok(Math.abs(f.x - frame.right) < 6 && Math.abs(f.y - frame.bottom) < 6, `the fill handle is not at the lower right corner of the frame ${what}`);
+  return corners;
+}
+
+// the corner handle name dragged to the middle of the cell r, c
+async function dragCorner(page, name, r, c) {
+  const { corners } = await page.evaluate(RANGE);
+  const from = middle(corners[name]);
+  const to = middle(await page.evaluate(`document.querySelector(${js(cellOf(r, c))}).getBoundingClientRect().toJSON()`));
+  await drag(page, from, { dx: to.x - from.x, dy: to.y - from.y, steps: 12 });
+  await frames(page);
+}
+
+// finding 5: the frame of a range of cells did not have handles at its corners to extend or
+// contract the range by a drag, as Keynote draws them beside its yellow fill handle. a drag of a
+// corner handle moves that corner of the range to the cell under the pointer, and the opposite
+// corner stays, without an edit of the file
+for (const platform of PLATFORMS) {
+  test(`a range of cells is extended and contracted by a drag of the handles at the corners of its frame (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await exec(page, 'slide.new.content');
+    await frames(page);
+    await exec(page, 'insert.table', { rows: 5, columns: 3 });
+    await frames(page);
+    for (const [r, c, text] of [[1, 0, '1'], [2, 0, '2'], [1, 1, 'orbit'], [2, 1, 'tube']]) {
+      await click(page, cellOf(r, c));
+      await type(page, text);
+    }
+    await frames(page);
+    const source = await render(page);
+    const undo = (await state(page, 'edit.undo')).label;
+    const from = middle(await page.evaluate(`document.querySelector(${js(cellOf(1, 0))}).getBoundingClientRect().toJSON()`));
+    const to = middle(await page.evaluate(`document.querySelector(${js(cellOf(2, 1))}).getBoundingClientRect().toJSON()`));
+    await drag(page, from, { dx: to.x - from.x, dy: to.y - from.y });
+    await frames(page);
+    assert.match(await page.evaluate(PANE_NOTE), /cells A2:B3$/);
+    await handlesAtCorners(page, 'after a drag over A2:B3');
+    for (const [name, r, c, range] of [
+      ['lower-left', 3, 0, 'A2:B4'],
+      ['upper-right', 1, 2, 'A2:C4'],
+      ['upper-left', 2, 1, 'B3:C4'],
+      ['upper-left', 0, 0, 'A1:C4'],
+      ['lower-left', 1, 0, 'A1:C2'],
+    ]) {
+      const what = `after a drag of the ${name} handle to ${'ABC'[c]}${r + 1}`;
+      await dragCorner(page, name, r, c);
+      assert.match(await page.evaluate(PANE_NOTE), new RegExp(`cells ${range}$`), `the range is not ${range} ${what}`);
+      await handlesAtCorners(page, what);
+      assert.equal(await render(page), source, `the file is edited ${what}`);
+      assert.equal((await state(page, 'edit.undo')).label, undo, `a history entry is added ${what}`);
+    }
+    // the fill handle still fills from the range that the corner handles set
+    const { fill } = await page.evaluate(RANGE);
+    const handle = middle(fill);
+    const end = middle(await page.evaluate(`document.querySelector(${js(cellOf(4, 2))}).getBoundingClientRect().toJSON()`));
+    await drag(page, handle, { dy: end.y - handle.y, steps: 12 });
+    await page.waitFor(`window.BeesonEditor.state('edit.undo').label === 'Undo Autofill'`);
+    await frames(page);
+    assert.match(await page.evaluate(PANE_NOTE), /cells A1:C5$/);
+    await handlesAtCorners(page, 'after an autofill');
     assert.deepEqual(errors(page), []);
   });
 }
