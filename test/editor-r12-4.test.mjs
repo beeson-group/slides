@@ -9,13 +9,15 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { saveAndReopen } from './helpers/editor.mjs';
+import { drag, saveAndReopen } from './helpers/editor.mjs';
 
 const DECK = 'index.html';
 // the slides of index.html with a list beside a backdrop, with a figure in a zone, and with a video
 const STEPS = 2;
 const FIGURES = 4;
 const VIDEO = 10;
+// the slide of editor-layouts.html with a heading and a backdrop
+const GLIDE = 13;
 const PLATFORMS = ['mac', 'other'];
 
 let browser;
@@ -97,19 +99,33 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  // tables-equations-insert-6
-  test(`a new plot is put off the figure and the video already on the slide (${platform})`, async (t) => {
-    for (const n of [FIGURES, VIDEO]) {
-      const page = await load(t, platform, { n });
+  // tables-equations-insert-6. the theme draws a plot at the size of a zone, 600 by 800 slide px,
+  // and the slides of index.html with a figure or a video in the zone do not have a free place of
+  // that size, where the plot stays in the zone off every text. the slide of editor-layouts.html
+  // with a QR code moved into the zone has one, at the left over its backdrop
+  test(`a new plot is put off the figures and the texts already on the slide (${platform})`, async (t) => {
+    for (const [deck, n, first] of [['test/pages/editor-layouts.html', GLIDE, 'insert.qr'], [DECK, FIGURES], [DECK, VIDEO]]) {
+      const page = await load(t, platform, { deck, n });
       const before = await render(page);
-      const old = await boxes(page, ':scope > .zone img, :scope > .zone video, :scope > figure img, :scope > p, :scope > ul > li');
+      if (first) {
+        // the QR code is dragged from the text column into the zone place
+        await exec(page, first);
+        await frames(page);
+        const k = await page.evaluate(`(() => { const s = document.querySelector('.reveal section.present'); return s.getBoundingClientRect().width / s.offsetWidth; })()`);
+        await drag(page, '.reveal section.present > .qr', { dx: 1180 * k, dy: 60 * k });
+        await frames(page);
+      }
+      const texts = await boxes(page, ':scope > p, :scope > ul > li, :scope > .foot');
+      const figures = await boxes(page, ':scope > .qr');
       await exec(page, 'insert.plot');
       await exec(page, 'plot.closeData');
       await frames(page);
       const [plot] = await boxes(page, ':scope > .plot');
       assert.ok(plot, 'no plot was inserted');
-      for (const b of old) assert.ok(!meets(plot, b), `on slide ${n}, the plot at ${js(plot)} lies over ${js(b)}`);
-      await checkEdit(page, before, `r12-4-plot-${n}-${platform}.html`);
+      assert.equal(figures.length, first ? 1 : 0);
+      if (first) assert.ok(figures[0].left > 1100, `the QR code was not moved into the zone place: ${js(figures[0])}`);
+      for (const b of [...texts, ...figures]) assert.ok(!meets(plot, b), `on slide ${n} of ${deck}, the plot at ${js(plot)} lies over ${js(b)}`);
+      if (!first) await checkEdit(page, before, `r12-4-plot-${n}-${platform}.html`);
       assert.deepEqual(errors(page), []);
     }
   });
