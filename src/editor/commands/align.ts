@@ -342,11 +342,12 @@ export function commands(): Command[] {
         const to = placeOf(el);
         if (h !== undefined && to.width != null && (to.height ?? null) === null && !isTextSized(el)) {
           const read = () => sizeOf(el).h + captionHeight(app, objects[i]);
+          const wide = (d: number) => Math.max(1, to.width! + d);
           const best = [0, -1, 1].map((d) => {
-            writePlace(app, el, { ...to, width: to.width! + d });
+            writePlace(app, el, { ...to, width: wide(d) });
             return { d, off: Math.abs(read() - h) };
           }).reduce((a, b) => (b.off + 0.01 < a.off ? b : a));
-          writePlace(app, el, { ...to, width: to.width + best.d });
+          writePlace(app, el, { ...to, width: wide(best.d) });
         }
         return { el, from, to: placeOf(el) };
       }));
