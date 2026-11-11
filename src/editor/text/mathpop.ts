@@ -458,7 +458,7 @@ export function install(app: App): void {
     if (container && app.hostOf(container)) {
       ev.preventDefault();
       openMath(container);
-    } else if (popover && target && !popover.contains(target) && !target.closest('.beeson-complete')) {
+    } else if (popover && target && !popover.contains(target) && !target.closest('.beeson-complete, .beeson-edit-menu')) {
       if (away) void away();
       else closeMath(false);
     }
