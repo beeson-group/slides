@@ -276,7 +276,8 @@ export function install(app: App): void {
   c.define({
     id: 'view.guides',
     label: 'Show Guides',
-    keys: { mac: ['Mod+Ctrl+Alt+G'] },
+    // Alt+F9 is the key of the guides of PowerPoint for Windows
+    keys: { mac: ['Mod+Ctrl+Alt+G'], other: ['Alt+F9'] },
     menu: menu(51),
     checked: () => shown,
     run: () => set(!shown),

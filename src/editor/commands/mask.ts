@@ -31,7 +31,7 @@ const commands = (): Command[] => [
   {
     id: 'image.editMask',
     label: 'Edit Mask',
-    keys: { mac: ['Mod+Shift+M'] },
+    keys: { mac: ['Mod+Shift+M'], other: ['Ctrl+Shift+M'] },
     in: ['canvas'],
     menu: { bar: 'Format', group: 'mask', order: 40, submenu: 'Image' },
     context: ['element'],
