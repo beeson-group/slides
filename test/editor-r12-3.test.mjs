@@ -166,3 +166,24 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// navigator-slides-canvas-2: the Percent field of the Zoom dialog opens with its value selected, so
+// that a typed value replaces it
+for (const platform of PLATFORMS) {
+  test(`a value typed into the Zoom dialog replaces the value shown (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, '.beeson-edit-bottom .percent');
+    await sleep(100);
+    const at = await itemAt(page, 'Zoom…');
+    assert.ok(at, 'the zoom menu of the status bar does not have Zoom…');
+    await click(page, at);
+    await page.waitFor(`document.activeElement?.name === 'percent'`);
+    assert.match(await page.evaluate('document.activeElement.value'), /^\d+$/);
+    for (const key of ['1', '4', '0']) await press(page, key);
+    assert.equal(await page.evaluate('document.activeElement.value'), '140');
+    await press(page, 'Enter');
+    await sleep(200);
+    assert.equal(await page.evaluate('Math.round(window.BeesonEditorShell.stage.zoom * 100)'), 140);
+    assert.deepEqual(errors(page), []);
+  });
+}
