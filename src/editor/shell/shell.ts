@@ -335,6 +335,8 @@ export function install(app: App): void {
   });
   window.addEventListener('keydown', (ev) => {
     if (!(ev.key === 'ContextMenu' || (ev.key === 'F10' && ev.shiftKey && !ev.metaKey && !ev.ctrlKey && !ev.altKey))) return;
+    // a row of the accessibility checker opens its own menu of fixes
+    if (document.activeElement?.closest('.beeson-edit-a11y [role="tree"]')) return;
     const sel = app.selection.only();
     const at = sel ?? (document.activeElement instanceof Element && document.activeElement !== document.body ? document.activeElement : app.current());
     const place = placeOf(at);
