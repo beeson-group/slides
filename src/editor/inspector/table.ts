@@ -5,8 +5,8 @@
 
 import type { App } from '../app.ts';
 import { fillRange, targetOf } from '../commands/table.ts';
-import { boxOf, columnName, columnsOf, placeOf } from '../table.ts';
-import { button, checkbox, note, row, section, segmented, type Control, type Run } from './controls.ts';
+import { MOST, boxOf, columnName, columnsOf, placeOf } from '../table.ts';
+import { button, checkbox, note, numberField, row, section, segmented, type Control, type Run } from './controls.ts';
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -21,13 +21,27 @@ export function tablePane(app: App, run: Run): Control[] {
     const where = !b ? '' : one ? `, cell ${name(b.r0, b.c0)}` : `, cells ${name(b.r0, b.c0)}:${name(b.r1, b.c1)}`;
     return `${plural(t.table.rows.length, 'row')}, ${plural(columnsOf(t.table), 'column')}${where}`;
   };
+  // the fields Rows and Columns of the Table tab of Keynote, which add or take out rows and columns
+  // at the end of the table
+  const count = (label: string, kind: 'rows' | 'columns') => numberField(app, {
+    label,
+    unit: '',
+    min: 1,
+    max: MOST[kind],
+    value: () => {
+      const t = targetOf(app);
+      return t ? (kind === 'rows' ? t.table.rows.length : columnsOf(t.table)) : null;
+    },
+    enabled: () => !!targetOf(app),
+    commit: (n) => run(`table.${kind}`, { count: n }),
+  });
   return [
-    section(null, [note(size)]),
+    section(null, [row([count('Rows', 'rows'), count('Columns', 'columns')]), note(size)]),
     section('Cells', [row([
       button(app, run, { command: 'table.merge', text: 'Merge' }),
       button(app, run, { command: 'table.unmerge', text: 'Unmerge' }),
     ])]),
-    section('Header', [checkbox(app, run, 'table.header', 'Header row, written as th')]),
+    section('Header', [checkbox(app, run, 'table.header', 'Header Row')]),
     section('Rows', [
       row([segmented(app, run, [
         { command: 'table.rowAbove', text: 'Above', title: 'Add Row Above' },

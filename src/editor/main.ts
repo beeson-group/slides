@@ -56,6 +56,7 @@ import { install as installFindCommands } from './commands/find.ts';
 import { install as installStepsCommands } from './commands/steps.ts';
 import { install as installCodeCommands } from './commands/code.ts';
 import { install as installMathCommands } from './commands/math.ts';
+import { install as installSpeechCommands } from './commands/speech.ts';
 import { install as installInspector } from './inspector/inspector.ts';
 import { install as installZoomCommands } from './commands/zoom.ts';
 import { install as installLayoutCommands } from './commands/layout.ts';
@@ -67,6 +68,7 @@ import { install as installGuides } from './canvas/guides.ts';
 import { install as installGrid } from './canvas/grid.ts';
 import { install as installMaskCommands } from './commands/mask.ts';
 import { install as installFlipCommands } from './commands/flip.ts';
+import { install as installObjects } from './navigator/objects.ts';
 import { Doc } from './model/doc.ts';
 
 const app = new App();
@@ -165,6 +167,7 @@ installFindCommands(app);
 installStepsCommands(app);
 installCodeCommands(app);
 installMathCommands(app);
+installSpeechCommands(app);
 installInspector(app);
 installZoomCommands(app);
 installLayoutCommands(app);
@@ -176,6 +179,7 @@ installGuides(app);
 installGrid(app);
 installMaskCommands(app);
 installFlipCommands(app);
+installObjects(app);
 
 const revealReady = (): Promise<void> =>
   new Promise((done) => {
