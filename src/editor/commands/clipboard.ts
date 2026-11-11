@@ -17,7 +17,7 @@ import { insertFiles } from '../media/actions.ts';
 import { kindOf } from '../media/store.ts';
 import { insertPlain } from '../text/typing.ts';
 import { objectsOf } from '../canvas/hit.ts';
-import { freshDataIds, freshGroup } from './order.ts';
+import { settleCopies, freshGroup } from './order.ts';
 import { withTwins } from '../canvas/hit.ts';
 import { VOID } from '../source.ts';
 import { tokenize } from '../tokens.ts';
@@ -186,7 +186,7 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
     nodes.push(node);
   }
   regroup(app, nodes);
-  freshDataIds(app, nodes);
+  settleCopies(app, nodes);
   if (own) {
     own.pasted++;
     own.last = nodes;
@@ -210,7 +210,7 @@ async function duplicated(app: App, els: Element[]): Promise<Element[]> {
     copies.push(dup);
   }
   regroup(app, copies);
-  freshDataIds(app, copies);
+  settleCopies(app, copies);
   app.selection.set('elements', copies);
   return copies;
 }

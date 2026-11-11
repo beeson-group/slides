@@ -101,7 +101,7 @@ export function freshGroup(app: App): string {
 
 // a copy does not take a data-id that another element of its slide has, since reveal.js pairs the
 // elements of two slides by this id. the images of a pair of modes in a copy share theirs
-export function freshDataIds(app: App, copies: Element[]): void {
+function freshDataIds(app: App, copies: Element[]): void {
   const slide = app.current();
   if (!slide) return;
   const inCopies = (el: Element) => copies.some((c) => c === el || c.contains(el));
@@ -109,6 +109,23 @@ export function freshDataIds(app: App, copies: Element[]): void {
     const id = el.getAttribute('data-id');
     if (id && [...slide.querySelectorAll(`[data-id="${CSS.escape(id)}"]`)].some((o) => !inCopies(o))) app.doc.setTag(el, { attrs: { 'data-id': null } }, 'id');
   }
+}
+
+// the layout of a figure slide has one plate, and another slide has none, hence a copy of a plate
+// is a plate only as the first plate of a figure slide. elsewhere it is made a zone, the box of
+// the theme for a figure beside other content, since a second plate is laid out under the slide
+function plateToZone(app: App, copies: Element[]): void {
+  for (const el of copies) {
+    const slide = el.closest('section');
+    if (!el.matches('.plate') || !slide || (slide.matches('.figure') && slide.querySelector(':scope > .plate') === el)) continue;
+    app.doc.setTag(el, { classes: { plate: false, zone: true } }, 'layout');
+  }
+}
+
+// the copies of a paste, a Duplicate, or a drag with the copy modifier, fitted to their slide
+export function settleCopies(app: App, copies: Element[]): void {
+  freshDataIds(app, copies);
+  plateToZone(app, copies);
 }
 
 // two elements or more that are not one group already
