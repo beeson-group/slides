@@ -403,16 +403,22 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// finding 8 (menus-keys-12): Move Slide Up and Down work by their keys on the canvas, where their
-// menu items are enabled
+// finding 8 (menus-keys-12): Move Slide Up and Down are dimmed on the canvas, where their keys do
+// nothing, since Alt with an arrow adds a row to a table there and the sheet of keys lists a key
+// at one command of the slide, and they run by their keys in the navigator
 for (const platform of PLATFORMS) {
-  test(`Alt+ArrowUp on the canvas moves the current slide up (${platform})`, async (t) => {
+  test(`Move Slide Up is dimmed on the canvas and runs by Alt+ArrowUp in the navigator (${platform})`, async (t) => {
     const page = await load(t, platform, { n: 3 });
     const canvas = await page.evaluate(`(() => { const r = document.querySelector('.beeson-edit-canvas').getBoundingClientRect(); return { x: r.left + 12, y: r.top + 12 }; })()`);
     await click(page, canvas);
+    assert.equal((await state(page, 'slide.moveUp')).enabled, false, 'Move Slide Up is enabled on the canvas');
+    assert.equal((await state(page, 'slide.moveDown')).enabled, false, 'Move Slide Down is enabled on the canvas');
+    await key(page, 'Alt+ArrowUp');
+    await byteExact(page);
+    await row(page, 4);
     assert.equal((await state(page, 'slide.moveUp')).enabled, true);
     await key(page, 'Alt+ArrowUp');
-    await agree(page, 'after Alt+ArrowUp on the canvas', { n: 12, current: 3, selected: [3], focus: false });
+    await agree(page, 'after Alt+ArrowUp in the navigator', { n: 12, current: 3, selected: [3] });
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Move Slide Up');
     await page.evaluate('window.BeesonEditor.undo()');
     await byteExact(page);
