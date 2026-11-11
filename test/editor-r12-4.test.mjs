@@ -386,4 +386,21 @@ for (const platform of PLATFORMS) {
     assert.ok(!rows.some((l) => /[0-9a-f]{8}-[0-9a-f]{4}-/.test(l)), `a row names the object URL: ${js(rows)}`);
     assert.deepEqual(errors(page), []);
   });
+  // feel-6
+  test(`a duplicate or a layout change of a slide with an unsaved new picture does not ask the server for its file (${platform})`, async (t) => {
+    for (const how of ['edit.duplicate', 'slide.duplicate', 'slide.layout.split']) {
+      const page = await load(t, platform, { n: STEPS });
+      const insert = page.evaluate(`window.BeesonEditor.exec('insert.image').then(() => true)`);
+      await choose(page, [DARK_FILE]);
+      await insert;
+      await waitText(page, 'media/figure-dark.png');
+      await frames(page);
+      if (how === 'slide.layout.split') await exec(page, 'slide.duplicate');
+      await exec(page, how);
+      await page.evaluate('new Promise((d) => setTimeout(d, 500))');
+      const asked = await page.evaluate(`performance.getEntriesByType('resource').map((e) => e.name).filter((n) => n.includes('media/figure-dark'))`);
+      assert.deepEqual(asked, [], `after ${how}`);
+      assert.deepEqual(errors(page), [], `after ${how}`);
+    }
+  });
 }
