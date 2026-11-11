@@ -11,7 +11,7 @@ import { resolve } from 'node:path';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, press, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 const PANEL = '#beeson-edit-panel-format';
@@ -375,4 +375,32 @@ for (const platform of PLATFORMS) {
     await redoSelects(page2, 'Insert Image');
     await roundTrip(page2, 3);
   });
+}
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: a redo of Insert Line selects the line drawn`, async (t) => {
+    const page = await load(t, platform, { n: 5 });
+    await exec(page, 'insert.line');
+    const at = await page.evaluate(`(() => { const r = document.querySelector('.reveal .slides > section.present').getBoundingClientRect(); return { x: r.left + r.width * 0.3, y: r.top + r.height * 0.85 }; })()`);
+    await drag(page, at, { dx: 200, dy: 0 });
+    await frames(page);
+    await redoSelects(page, 'Insert Line');
+    await roundTrip(page);
+  });
+
+  // a box written with a key, then left with Esc, which selects it
+  for (const [id, what] of [['insert.text', 'Insert Text Box'], ['insert.code', 'Insert Code Box']]) {
+    test(`${platform}: a redo of ${what} selects the box`, async (t) => {
+      const page = await load(t, platform, { n: 5 });
+      await exec(page, id);
+      await frames(page);
+      await type(page, 'Hi');
+      await sleep(200);
+      await press(page, 'Escape');
+      await frames(page);
+      assert.equal((await state(page, 'edit.undo')).label, `Undo ${what}`);
+      await redoSelects(page, what);
+      await roundTrip(page);
+    });
+  }
 }
