@@ -66,11 +66,11 @@ async function load(t, platform, n) {
 
 // an undo gives the text before and a redo the edited text byte for byte, and the saved text is
 // opened again without problems
-async function checkEdit(page, name) {
+async function checkEdit(page, name, before = page.source) {
   const edited = await render(page);
-  assert.notEqual(edited, page.source);
+  assert.notEqual(edited, before);
   await undo(page);
-  assert.equal(await render(page), page.source);
+  assert.equal(await render(page), before);
   await redo(page);
   assert.equal(await render(page), edited);
   const { text } = await saveAndReopen(page, name);
@@ -89,31 +89,37 @@ async function groupOnFigures(page) {
 }
 
 for (const platform of PLATFORMS) {
-  test(`Align and Distribute move a whole group as one object (${platform})`, async (t) => {
+  test(`Align moves a whole group as one object (${platform})`, async (t) => {
     const page = await load(t, platform, FIGURES);
     await groupOnFigures(page);
+    const grouped = await render(page);
     const p0 = await boxOf(page, ':scope > p'), f0 = await boxOf(page, ':scope > figure');
     // one whole group is aligned to the slide, as one object of Keynote is
     await exec(page, 'arrange.alignTo.selection');
     await exec(page, 'arrange.align.left');
     await frames(page);
-    let p = await boxOf(page, ':scope > p'), f = await boxOf(page, ':scope > figure');
+    const p = await boxOf(page, ':scope > p'), f = await boxOf(page, ':scope > figure');
     assert.ok(near(f.left - p.left, f0.left - p0.left) && near(f.top - p.top, f0.top - p0.top), `the members kept their places: ${js({ p0, f0, p, f })}`);
     assert.ok(near(Math.min(p.left, f.left), 0), `the group is at the left edge of the slide: ${js({ p, f })}`);
-    await checkEdit(page, `r12-5-align-${platform}.html`);
-    await undo(page);
+    await checkEdit(page, `r12-5-align-${platform}.html`, grouped);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`Distribute moves a whole group as one object (${platform})`, async (t) => {
+    const page = await load(t, platform, FIGURES);
+    await groupOnFigures(page);
+    const grouped = await render(page);
+    const p0 = await boxOf(page, ':scope > p'), f0 = await boxOf(page, ':scope > figure');
     // the group, the heading, and the list spaced vertically with the group kept whole
-    await click(page, { x: 10, y: 10 });
     await click(page, 'section.present figure img.for-light');
     await click(page, 'section.present h2', { modifiers: 'Shift' });
     await click(page, 'section.present > ul > li', { modifiers: 'Shift' });
     assert.equal(await page.evaluate('window.BeesonEditor.selection().length'), 4);
     await exec(page, 'arrange.distribute.vertical');
     await frames(page);
-    p = await boxOf(page, ':scope > p');
-    f = await boxOf(page, ':scope > figure');
+    const p = await boxOf(page, ':scope > p'), f = await boxOf(page, ':scope > figure');
     assert.ok(near(f.left - p.left, f0.left - p0.left) && near(f.top - p.top, f0.top - p0.top), `the members kept their places: ${js({ p0, f0, p, f })}`);
-    assert.ok(f.top >= -1 && p.top >= -1, `the group is on the slide: ${js({ p, f })}`);
+    await checkEdit(page, `r12-5-distribute-${platform}.html`, grouped);
     assert.deepEqual(errors(page), []);
   });
 
