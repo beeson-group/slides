@@ -5,7 +5,7 @@
 // after, as typing is, and the command around it makes it one entry of the history
 
 import type { App } from '../app.ts';
-import { canSetList, listKind, paragraphStyle, selectedBlocks, setList, setStyle, styleOf, textTarget, type ListKind, type ParagraphStyle, type Target } from './blocks.ts';
+import { canSetList, listKind, offsetIn, paragraphStyle, selectedBlocks, selectIn, setList, setStyle, styleOf, textTarget, type ListKind, type ParagraphStyle, type Target } from './blocks.ts';
 
 export type Match = (el: Element) => boolean;
 
@@ -37,13 +37,15 @@ const BLOCKISH = 'ul, ol, li, p, div, table, pre, h1, h2, h3, h4, h5, h6, mjx-co
 
 const elementOf = (n: Node): Element | null => (n instanceof Element ? n : n.parentElement);
 
-// the range around the word at a collapsed caret, or the range itself
+// the range around the word at a collapsed caret strictly inside it, or the range itself. a caret
+// at the edge of a word is left to the typing style of carry.ts, as in Word and PowerPoint
 function wordRange(range: Range): Range {
   if (!range.collapsed || !(range.startContainer instanceof Text)) return range;
   const text = range.startContainer;
   const word = /[\p{L}\p{N}_'’-]/u;
   let start = range.startOffset;
   let end = start;
+  if (!word.test(text.data[start - 1] ?? '') || !word.test(text.data[end] ?? '')) return range;
   while (start > 0 && word.test(text.data[start - 1])) start--;
   while (end < text.length && word.test(text.data[end])) end++;
   const r = document.createRange();
@@ -168,14 +170,17 @@ function prune(host: Element): void {
 }
 
 // the change of a format on each target, recorded in the history as the content of its block
-// before and after. a target of the window keeps the formatted text selected
+// before and after. a target of the window keeps the formatted text selected, or the caret where it
+// was, so that the typing goes on at the caret
 export function edit(app: App, targets: Target[], change: (host: Element, range: Range) => Node[]): void {
-  const fromWindow = textTarget(app) !== null;
+  const t = textTarget(app);
+  const caret = t?.range.collapsed ? offsetIn(t.host, t.range.startContainer, t.range.startOffset) : null;
   for (const { host, range } of targets) {
     app.history.beforeTyping(host);
     const nodes = change(host, range);
     prune(host);
-    if (fromWindow && nodes.length) {
+    if (caret !== null && host === t!.host) selectIn(host, caret);
+    else if (t && nodes.length) {
       const connected = nodes.filter((n) => n.isConnected);
       (host as HTMLElement).focus({ preventScroll: true });
       const r = document.createRange();
