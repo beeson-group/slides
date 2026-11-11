@@ -82,8 +82,10 @@ test('a range pasted from a spreadsheet fills the cells and grows a tab by rows 
   assert.match(pasteCells(BLOCK, 'tab:one', 0, 1, [['x']]).error, /x is not a number/);
   // the axes do not grow
   assert.equal(pasteCells(BLOCK, 'axes', 0, 2, [['-3', '3', '9']]).text, BLOCK.replace('"y": { "range": [-1, 1] }', '"y": { "range": [-3, 3] }'));
+  // a number cell is not cleared, since a plot does not draw a missing value
   const cleared = clearCells(BLOCK, [[tab.rows[1][3], tab.rows[1][4]]]);
-  assert.match(cleared.text, /"b": \[\[0, 1\], \[0, 0\], \[2, 1\]\]/);
+  assert.equal(cleared.text, BLOCK);
+  assert.deepEqual(cleared.kept, [tab.rows[1][3], tab.rows[1][4]]);
 });
 
 test('a key of the block is set, added at the end of its object, and taken out', () => {
@@ -321,13 +323,15 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await grid(page), [['0', '0', '0.2', '0.3', '0'], ['1', '1', '0.4', '0.5', '0'], ['2', '1', '0.6', '0.7', '0']]);
     assert.deepEqual(await picked(page), ['0,2', '0,3', '1,2', '1,3', '2,2', '2,3']);
     await roundTrip(page, pasted, 'Paste');
-    // Delete clears the range, a number to 0
+    // Delete keeps the numbers of the range, marked invalid, since a plot does not draw a missing
+    // value
     await focusCell(page, 0, 2);
     for (const key of ['Shift+ArrowDown', 'Shift+ArrowDown', 'Shift+ArrowRight']) await press(page, key);
     assert.equal(await status(page), '3 × 2 cells selected.');
     await press(page, 'Delete');
-    const cleared = plate([ONE, '"dot": [[0, 0], [1, 0], [1, 0]], "path": [[0, 0], [0, 0], [0, 0]]'], values);
-    await roundTrip(page, cleared, 'Clear Cells', pasted);
+    await frames(page);
+    await byteExact(page, pasted);
+    assert.equal(await page.evaluate(`document.querySelectorAll('${WINDOW} td.bad').length`), 6);
     // a range picked by a drag over the cells
     await drag(page, cell(0, 1), { dx: (await center(page, cell(1, 2))).x - (await center(page, cell(0, 1))).x, dy: (await center(page, cell(1, 2))).y - (await center(page, cell(0, 1))).y });
     assert.deepEqual(await picked(page), ['0,1', '0,2', '1,1', '1,2']);
@@ -337,7 +341,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`a tab is added and deleted in the data window, and a tab named by a step is kept (${platform})`, async () => {
+  test(`a tab is added and deleted in the data window, and a tab named by a step is kept at Esc of its confirmation (${platform})`, async () => {
     const page = await deckPage(platform, PLOT_SLIDE);
     await openData(page);
     await click(page, `${WINDOW} button[data-command="plot.addTab"]`);
@@ -350,10 +354,13 @@ for (const platform of PLATFORMS) {
     await roundTrip(page, [], 'Delete Tab', copy);
     // the tab two is shown by a step of the slide
     await click(page, await page.evaluate(`(() => { const r = [...document.querySelectorAll('${WINDOW} .sheets button[role="tab"]')].find((b) => b.textContent === 'two').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`));
+    // a confirmation names the step, and Esc keeps the tab
     await click(page, `${WINDOW} button[data-command="plot.deleteTab"]`);
-    await frames(page);
+    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-card[open]')`);
+    assert.match(await page.evaluate(`document.querySelector('dialog.beeson-edit-card[open]').textContent`), /tab two is named by step 2/);
+    await press(page, 'Escape');
+    await page.waitFor(`!document.querySelector('dialog.beeson-edit-card[open]')`);
     await byteExact(page);
-    assert.match(await status(page), /names the tab two/);
     await saved(page);
     assert.deepEqual(errors(page), []);
   });
@@ -363,7 +370,10 @@ for (const platform of PLATFORMS) {
     await click(page, '.reveal section.present .plot');
     await frames(page);
     assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('${PANEL} .ed-sec > h5')].map((h) => h.textContent)`), ['Data', 'Panel left', 'Panel right', 'Series Colors']);
+    // the pane is taller than the window with the scales and the axes of two panels, hence a
+    // control is scrolled into view before a click
     const field = async (name, text) => {
+      await page.evaluate(`document.querySelector('${PANEL} input[name="${name}"]').scrollIntoView({ block: 'center' })`);
       await click(page, `${PANEL} input[name="${name}"]`);
       await page.evaluate(`document.querySelector('${PANEL} input[name="${name}"]').select()`);
       if (text) await type(page, text);
@@ -385,6 +395,7 @@ for (const platform of PLATFORMS) {
     await field('plot-1-y-to', '-5');
     await frames(page);
     await byteExact(page, ranged);
+    await page.evaluate(`document.querySelector('${PANEL} button[aria-label="dot in data color 3"]').scrollIntoView({ block: 'center' })`);
     await click(page, `${PANEL} button[aria-label="dot in data color 3"]`);
     const toned = plate(title, range, tone);
     await roundTrip(page, toned, 'Series Color', ranged);

@@ -4,7 +4,8 @@
 // that locks and unlocks it. the members of a group are rows under a row of the group, which is
 // folded with its chevron. a click selects, Shift and the command modifier add or take a row off
 // the selection, and a drag of a row changes its layer within the limits of the layer commands of
-// commands/order.ts. the field at the bottom filters the rows by their name, as the search of
+// commands/order.ts. a group row is dragged as one object, whose members keep their order.
+// a member row is dragged as an object of its own, and it stays in its group. the field at the bottom filters the rows by their name, as the search of
 // Keynote. an element of the theme does not have a name or a hidden state, hence a row is not
 // renamed or hidden
 
@@ -163,7 +164,7 @@ export function install(app: App): void {
   // the key of the row with the focus, kept over a rebuild of the rows
   let focusKey: Element | string | null = null;
   let rows: { item: Item; row: HTMLElement }[] = [];
-  let press: { el: Element; key: Key; x: number; y: number; id: number; on: boolean; gap: number } | null = null;
+  let press: { els: Element[]; key: Key; x: number; y: number; id: number; on: boolean; gap: number } | null = null;
 
   const mod = (ev: MouseEvent | KeyboardEvent) => (app.platform === 'mac' ? ev.metaKey : ev.ctrlKey);
   const outlineShown = () => !!(app.nav as unknown as { outline?: { shown: boolean } }).outline?.shown;
@@ -337,14 +338,17 @@ export function install(app: App): void {
     return i < 0 ? rows.length : i;
   };
   const rowAt = (key: Key) => rows.find((r) => keyOf(r.item) === key)?.row;
-  const movable = (item: Item) => !!item.el && !locked(item.el) && (canStep(app, item.el, true) || canStep(app, item.el, false));
+  const movable = (item: Item) => {
+    const els = membersOf(item);
+    return els.length > 0 && !els.some(locked) && els.some((el) => canStep(app, el, true) || canStep(app, el, false));
+  };
 
   list.addEventListener('pointerdown', (ev) => {
     const r = itemAt(ev.target);
     if (ev.button !== 0 || !r || (ev.target as Element).closest('.lock, .twist')) return;
     // the row is selected at the press, since the rows are built again once it is selected
     choose(r.item, ev.shiftKey || mod(ev));
-    if (r.item.el && movable(r.item)) press = { el: r.item.el, key: keyOf(r.item), x: ev.clientX, y: ev.clientY, id: ev.pointerId, on: false, gap: -1 };
+    if (movable(r.item)) press = { els: membersOf(r.item), key: keyOf(r.item), x: ev.clientX, y: ev.clientY, id: ev.pointerId, on: false, gap: -1 };
   });
   // refresh() puts the focus on the row pressed, which a mousedown would put on the row rebuilt
   list.addEventListener('mousedown', (ev) => {
@@ -372,7 +376,7 @@ export function install(app: App): void {
     if (!p?.on) return;
     rowAt(p.key)?.classList.remove('dragged');
     const k = rows.findIndex((r) => keyOf(r.item) === p.key);
-    if (commit && k >= 0 && (p.gap < k || p.gap > k + 1)) await moveTo(p.el, k, p.gap);
+    if (commit && k >= 0 && (p.gap < k || p.gap > k + 1)) await moveTo(p.els, p.key, k, p.gap);
     refresh(true);
   };
   list.addEventListener('pointerup', (ev) => {
@@ -380,18 +384,21 @@ export function install(app: App): void {
   });
   list.addEventListener('pointercancel', () => void endDrag(false));
 
-  // the element el of row k moved by layers until it is drawn in front of the row at gap, or
-  // behind the row before gap, or until the layer commands stop it
-  async function moveTo(el: Element, k: number, gap: number): Promise<void> {
+  // the elements els of row k, from front to back, moved by layers until each is drawn in front of
+  // the row at gap, or behind the row before gap, or until the layer commands stop it. the element
+  // that goes first is moved first, hence a member of a group does not pass another member
+  async function moveTo(els: Element[], key: Key, k: number, gap: number): Promise<void> {
     const up = gap < k;
     const edge = (item: Item) => membersOf(item)[up ? 0 : membersOf(item).length - 1];
     const other = edge(rows[up ? gap : gap - 1].item);
-    if (!other || !canStep(app, el, up)) return;
+    if (!other || els.includes(other) || !els.some((el) => canStep(app, el, up))) return;
     await app.history.transact('Reorder', async () => {
-      for (let n = 0; n < 500 && (up ? before(el, other) : before(other, el)); n++) if (!(await stepLayer(app, el, up))) break;
+      for (const el of up ? els : [...els].reverse()) {
+        for (let n = 0; n < 500 && (up ? before(el, other) : before(other, el)); n++) if (!(await stepLayer(app, el, up))) break;
+      }
     });
-    focusKey = el;
-    app.selection.set('elements', [el]);
+    focusKey = key;
+    app.selection.set('elements', els);
     app.invalidate('content');
   }
 

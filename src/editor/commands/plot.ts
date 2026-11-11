@@ -11,8 +11,10 @@ import type { Command } from '../commands.ts';
 import { CONTAINER } from '../canvas/hit.ts';
 import { make, injectStyle } from '../ui/dom.ts';
 import { install as installSurface } from '../inspector/surface.ts';
-import { addRow, addSeries, addTab, cellsIn, clearCells, deleteRow, deleteSeries, deleteTab, moveSeries, parseTsv, pasteCells, setCell, setKey, sheetsOf, type Cell, type Result, type Sheet } from '../plotdata.ts';
+import { addRow, addSeries, addTab, cellsIn, clearCells, deleteRow, deleteSeries, deleteTab, literal, moveSeries, parseTsv, pasteCells, setCell, setKey, sheetsOf, type Cell, type Result, type Sheet } from '../plotdata.ts';
 import { emptySlot } from '../media/actions.ts';
+import { modelAt } from '../steps.ts';
+import { ask, trapTab } from '../ui/dialog.ts';
 
 // the tones that a mark of a new color takes, the data colors of the theme
 export const DATA_TONES = ['data-1', 'data-2', 'data-3', 'data-4', 'data-5', 'data-6', 'data-7', 'data-8'];
@@ -78,13 +80,24 @@ async function write(app: App, plot: Element, json: string): Promise<void> {
   });
 }
 
-// the plot drawn again from its block, at the tab of tab when it is given
+// the count of the tabs of the JSON text of a plot, or 0 for a text that cannot be read
+function tabCount(text: string): number {
+  try {
+    return (JSON.parse(text) as { tabs?: unknown[] }).tabs?.length ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+// the plot drawn again from its block, at the tab of tab when it is given and the block has it,
+// since the tab of the window is read again only after a deleted tab is drawn
 function redraw(plot: HTMLElement, text: string | null = null, tab: number | null = null): void {
   const view = viewOf(plot);
   if (!view) return;
   view.reload(text);
   page().Beeson?.mount?.(plot);
-  if (tab !== null) view.setTab(tab);
+  const id = plot.getAttribute('data-plot');
+  if (tab !== null && tab < tabCount(text ?? (id ? document.getElementById(id)?.textContent : null) ?? '')) view.setTab(tab);
 }
 
 const STYLE = `
@@ -163,8 +176,12 @@ class DataWindow {
   // the texts typed into cells and not written, by the path of the cell, with the fault of a text
   // that cannot be read, which is shown in red. a refresh of the window keeps them
   private readonly drafts = new Map<string, { typed: string; error: string | null }>();
+  // the number cells of a range that Delete or Cut could not clear, shown as invalid until a
+  // number is typed into them
+  private refused = new Set<string>();
   private inputs: (HTMLInputElement | null)[][] = [];
   private shape = '';
+  private names = '';
 
   constructor(app: App) {
     this.app = app;
@@ -199,6 +216,16 @@ class DataWindow {
     this.grid.addEventListener('focusout', (ev) => this.left(ev.target));
     this.grid.addEventListener('input', (ev) => this.typed(ev.target));
     this.grid.addEventListener('keydown', (ev) => this.key(ev));
+    // Tab and Shift+Tab go round the controls of the window, and Esc on a control that is not a
+    // cell closes it, as the Esc of a cell does once the cell is not edited
+    this.el.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Tab' && !ev.altKey && !ev.ctrlKey && !ev.metaKey) trapTab(this.el, ev);
+      else if (ev.key === 'Escape' && !ev.defaultPrevented) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        void app.commands.run('plot.closeData');
+      }
+    });
     this.pickRange();
     this.dragColumns();
     for (const type of ['copy', 'cut', 'paste'] as const) this.grid.addEventListener(type, (ev) => this.clip(ev));
@@ -220,6 +247,7 @@ class DataWindow {
       this.at = null;
       this.range = null;
       this.drafts.clear();
+      this.refused.clear();
     }
     this.el.hidden = false;
     this.read();
@@ -232,6 +260,9 @@ class DataWindow {
     this.el.hidden = true;
     this.plot = null;
     this.drafts.clear();
+    this.refused.clear();
+    // the focus is given back to the slide, whose keys then act on the plot selected
+    if (this.el.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
     // a preview of a text that was not written is replaced by the plot of the file
     if (plot?.isConnected) redraw(plot);
   }
@@ -259,21 +290,39 @@ class DataWindow {
     this.fill();
     const hit = this.cellOf(document.activeElement);
     const error = hit ? (this.drafts.get(key(hit.cell))?.error ?? null) : null;
-    this.say(error ?? '', !!error);
+    this.say(error ?? this.refusal(), !!error || this.refused.size > 0);
+  }
+
+  // the number cells of cells marked as not cleared
+  refuse(cells: Cell[]): void {
+    this.refused = new Set(cells.map(key));
+    this.fill();
+    this.say(this.refusal(), this.refused.size > 0);
+  }
+
+  private refusal(): string {
+    const n = this.refused.size;
+    return n ? `A number of a plot cannot be left empty, hence ${n === 1 ? 'a cell keeps its number' : `${n} cells keep their numbers`}.` : '';
   }
 
   // the tabs and the grid of the sheets. a grid of the same shape keeps its inputs, hence a field
   // keeps its focus while the plot is written
   private fill(): void {
-    this.tabs.replaceChildren(...this.sheets.map((s, i) => {
-      const b = make('button', '', s.name);
-      b.type = 'button';
-      b.setAttribute('role', 'tab');
-      b.setAttribute('aria-selected', String(i === this.sheet));
-      b.addEventListener('pointerdown', (ev) => ev.preventDefault());
-      b.addEventListener('click', () => this.choose(i));
-      return b;
-    }));
+    // the buttons of the sheets are kept while their names are, since a button replaced loses the
+    // focus that Tab gave it
+    const names = this.sheets.map((s) => s.name).join('\n');
+    if (names !== this.names || this.tabs.childElementCount !== this.sheets.length) {
+      this.names = names;
+      this.tabs.replaceChildren(...this.sheets.map((s, i) => {
+        const b = make('button', '', s.name);
+        b.type = 'button';
+        b.setAttribute('role', 'tab');
+        b.addEventListener('pointerdown', (ev) => ev.preventDefault());
+        b.addEventListener('click', () => this.choose(i));
+        return b;
+      }));
+    }
+    [...this.tabs.children].forEach((b, i) => b.setAttribute('aria-selected', String(i === this.sheet)));
     const sheet = this.current();
     const shape = sheet ? `${sheet.key}:${sheet.columns.join('|')}:${sheet.rowNames.join('|')}:${sheet.rows.map((r) => r.map((c) => (c ? 1 : 0)).join('')).join()}` : '';
     if (shape !== this.shape || !this.grid.firstChild) {
@@ -286,7 +335,7 @@ class DataWindow {
         if (!input || !cell) return;
         const draft = this.drafts.get(key(cell));
         input.value = draft?.typed ?? cell.text;
-        input.closest('td')?.classList.toggle('bad', !!draft?.error);
+        input.closest('td')?.classList.toggle('bad', !!draft?.error || this.refused.has(key(cell)));
       }));
     }
     for (const [b, id] of [[this.add, 'plot.addRow'], [this.del, 'plot.deleteRow'], [this.addCol, 'plot.addSeries'], [this.delCol, 'plot.deleteSeries'], [this.addSheet, 'plot.addTab'], [this.delSheet, 'plot.deleteTab']] as const) b.disabled = !this.app.commands.enabled(id);
@@ -528,6 +577,7 @@ class DataWindow {
     const hit = this.cellOf(target);
     if (!hit) return;
     const typed = hit.input.value;
+    this.refused.delete(key(hit.cell));
     const res = typed !== hit.cell.text ? this.result(hit.cell, typed) : { text: this.json, error: null };
     hit.input.closest('td')?.classList.toggle('bad', !!res.error);
     if (typed === hit.cell.text) this.drafts.delete(key(hit.cell));
@@ -733,16 +783,60 @@ function moveBy(w: DataWindow, sheet: Sheet, way: -1 | 1): Result & { at?: { r: 
   return { ...res, at: { r: w.at.r, c: columnOf(res.text, sheet.key, id, w.at.c - sheet.series.indexOf(id)) } };
 }
 
-// the tab of a tab sheet, unless a step of the slide of the plot names it, since the step would
-// then show a tab that is not there
-function tabToDelete(w: DataWindow, sheet: Sheet): string | null {
-  if (sheet.tab === null || !sheet.key.startsWith('tab:')) return null;
+const NAMING = ['data-plot-tab', 'data-plot-tabs', 'data-plot-show'];
+
+// the elements of the slide of plot whose attributes of NAMING name the tab name, with the edit
+// that takes the name off each, i.e. the attribute without the name, or without the attribute
+function namersOf(plot: Element, name: string): { el: Element; attrs: Record<string, string | null> }[] {
+  const slide = plot.closest('section');
+  return [...(slide?.querySelectorAll(NAMING.map((a) => `[${a}]`).join(', ')) ?? [])].flatMap((el) => {
+    const attrs: Record<string, string | null> = {};
+    for (const a of NAMING) {
+      const words = (el.getAttribute(a) ?? '').split(/\s+/).filter(Boolean);
+      if (words.includes(name)) attrs[a] = words.filter((w) => w !== name).join(' ') || null;
+    }
+    return Object.keys(attrs).length ? [{ el, attrs }] : [];
+  });
+}
+
+// the words of the confirmation for each element that names a tab: its step, or a plot that offers
+// the tab
+function namerText(app: App, el: Element): string {
+  const m = el.classList.contains('fragment') ? modelAt(app, el) : null;
+  if (!m) return 'a plot of the slide';
+  const k = m.plan.groups.findIndex((g) => g.includes(m.i));
+  return `step ${k >= 0 ? k + 1 : m.plan.groups.length + 1}`;
+}
+
+// Delete Tab. a tab that a step or a plot of the slide names is deleted after a confirmation that
+// names them, and the name is taken off them in the same entry, so that one undo brings back both
+async function deleteTabOf(app: App): Promise<void> {
+  const w = open();
+  const sheet = w?.current();
+  const plot = w?.plot;
+  if (!w || !sheet || !plot || sheet.tab === null || !sheet.key.startsWith('tab:')) return;
+  w.flush();
   const name = sheet.key.slice(4);
-  const slide = w.plot?.closest('section');
-  const named = [...(slide?.querySelectorAll('[data-plot-tab], [data-plot-tabs], [data-plot-show]') ?? [])].some((el) =>
-    ['data-plot-tab', 'data-plot-tabs', 'data-plot-show'].some((a) => (el.getAttribute(a) ?? '').split(/\s+/).includes(name)));
-  if (named) throw new Error(`a step or a plot of the slide names the tab ${name}`);
-  return name;
+  const namers = namersOf(plot, name);
+  if (namers.length) {
+    const who = [...new Set(namers.map((n) => namerText(app, n.el)))];
+    const list = who.length > 1 ? `${who.slice(0, -1).join(', ')} and ${who.at(-1)}` : who[0];
+    const answer = await ask({
+      title: `Delete the tab ${name}?`,
+      text: `The tab ${name} is named by ${list} of the slide. The tab is deleted, and its name is taken off ${who.length > 1 ? 'them' : 'it'}.`,
+      className: 'ask',
+      buttons: [{ label: 'Cancel', value: 'cancel' }, { label: 'Delete Tab', value: 'delete', primary: true }],
+    }, 'delete');
+    if (answer !== 'delete' || !w.open || w.plot !== plot) return;
+  }
+  const res = deleteTab(w.text, sheet.tab);
+  if (res.error !== null) throw new Error(res.error);
+  w.at = { r: 0, c: 0 };
+  w.range = null;
+  await app.history.transact('Delete Tab', async () => {
+    await write(app, plot, res.text);
+    for (const n of namers) app.doc.setTag(n.el, { attrs: n.attrs }, 'plot tab');
+  });
 }
 
 // the place of a new plot: the first empty zone or plate of the current slide, which the plot
@@ -893,12 +987,11 @@ export function commands(): Command[] {
       id: 'plot.deleteTab',
       label: 'Delete Tab',
       menu: plotMenu(31),
-      undoable: true,
       enabled: () => {
         const sheet = open()?.current();
         return !!sheet?.key.startsWith('tab:') && sheetsOf(open()!.text).filter((x) => x.key.startsWith('tab:')).length > 1;
       },
-      run: (app) => windowChange(app, (w, sheet) => (tabToDelete(w, sheet) === null ? null : { ...deleteTab(w.text, sheet.tab!), at: { r: 0, c: 0 } })),
+      run: deleteTabOf,
     },
     {
       // rows of texts arg.rows pasted from row arg.r and column arg.c of the sheet shown
@@ -921,7 +1014,9 @@ export function commands(): Command[] {
       run: (app) => windowChange(app, (w) => {
         const sel = w.selected();
         if (!sel) return null;
-        return { ...clearCells(w.text, sel.cells), at: w.at ?? undefined, range: w.range };
+        const res = clearCells(w.text, sel.cells);
+        w.refuse(res.kept);
+        return { ...res, at: w.at ?? undefined, range: w.range };
       }),
     },
     {
@@ -947,6 +1042,45 @@ export function commands(): Command[] {
         const range = sheetsOf(json).find((x) => x.key === 'axes')?.rows[a.panel]?.[(a.axis === 'y' ? 2 : 0) + a.end];
         if (!range) return { text: null, error: `the ${a.axis} axis of the panel does not have a range` };
         return setCell(json, range, a.text);
+      }),
+    },
+    {
+      // the scale of an axis, given as arg { el, panel, axis, scale }, where scale is linear, the
+      // default, which is taken out of the block, or asinh
+      id: 'plot.scale',
+      label: 'Axis Scale',
+      undoable: true,
+      enabled: (app) => !!blockOf(app, plotOf(app)),
+      run: (app, arg) => paneChange(app, arg, (json) => {
+        const a = arg as { panel: number; axis: 'x' | 'y'; scale: string };
+        return setKey(json, ['panels', a.panel, a.axis], 'scale', a.scale === 'linear' ? null : JSON.stringify(a.scale));
+      }),
+    },
+    {
+      // the unit u of an asinh axis, given as arg { el, panel, axis, text }. an empty text takes
+      // the unit out of the block, and the default of 1 is drawn
+      id: 'plot.unit',
+      label: 'Axis Unit',
+      undoable: true,
+      enabled: (app) => !!blockOf(app, plotOf(app)),
+      run: (app, arg) => paneChange(app, arg, (json) => {
+        const a = arg as { panel: number; axis: 'x' | 'y'; text: string };
+        const lit = a.text.trim() ? literal({ path: [], kind: 'number', text: '' }, a.text) : null;
+        if (a.text.trim() && lit === null) return { text: null, error: `${a.text.trim()} is not a number` };
+        return setKey(json, ['panels', a.panel, a.axis], 'unit', lit);
+      }),
+    },
+    {
+      // the axes of a panel shown or hidden, given as arg { el, panel }. shown axes are the
+      // default, hence "axes": false is written or taken out
+      id: 'plot.axes',
+      label: 'Show Axes',
+      undoable: true,
+      enabled: (app) => !!blockOf(app, plotOf(app)),
+      run: (app, arg) => paneChange(app, arg, (json) => {
+        const a = arg as { panel: number };
+        const panel = (JSON.parse(json) as { panels?: { axes?: unknown }[] }).panels?.[a.panel];
+        return setKey(json, ['panels', a.panel], 'axes', panel?.axes === false ? null : 'false');
       }),
     },
     {

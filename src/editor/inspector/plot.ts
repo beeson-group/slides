@@ -1,16 +1,18 @@
 // the Plot pane of the inspector, for a selected plot: what its JSON block holds, Edit Plot Data…,
 // which opens the data editor of commands/plot.ts, and the keys of the block that the Chart and
-// Axis tabs of Keynote set, i.e. the title of each panel, the title and the range of each axis, and
-// the color of each series, chosen from the data colors of the theme. a legend is not a key of the
-// format of a plot, hence it is not offered
+// Axis tabs of Keynote set, i.e. the title of each panel and whether its axes are drawn, the title,
+// the range, the scale, and the unit of each axis, and the color of each series, chosen from the
+// data colors of the theme. a legend, the labels of the values of a series, and a logarithmic scale
+// are not keys of the format of a plot, hence they are not offered
 
 import type { App } from '../app.ts';
 import { blockOf, DATA_TONES, jsonOf, plotOf } from '../commands/plot.ts';
 import { sheetsOf } from '../plotdata.ts';
 import { make } from '../ui/dom.ts';
-import { button, keepFocus, note, row, section, textField, type Control, type Run } from './controls.ts';
+import { button, checkbox, keepFocus, note, row, section, segmented, textField, type Control, type Run } from './controls.ts';
 
-type Raw = { panels?: { id?: string; title?: string; x?: { title?: string }; y?: { title?: string } }[]; marks?: { id?: string; kind?: string; tone?: string }[] };
+type RawAxis = { title?: string; scale?: string; unit?: number };
+type Raw = { panels?: { id?: string; title?: string; axes?: boolean; x?: RawAxis; y?: RawAxis }[]; marks?: { id?: string; kind?: string; tone?: string }[] };
 
 // the block of plot as it is written, or null when it is not in the file or cannot be read
 function rawOf(app: App, plot: HTMLElement | null): { json: string; raw: Raw } | null {
@@ -40,7 +42,8 @@ function summary(app: App, plot: HTMLElement | null): string {
   }
 }
 
-// the fields of the panel i: its title, and the title and the range of each axis
+// the fields of the panel i: its title, the switch of its axes, and the title, the range, the
+// scale, and the unit of each axis
 function panelPart(app: App, run: Run, plot: HTMLElement, i: number, title: string | null): Control {
   const read = () => rawOf(app, plot);
   const on = () => !!read();
@@ -57,12 +60,33 @@ function panelPart(app: App, run: Run, plot: HTMLElement, i: number, title: stri
     textField(app, { label, name: name(`${axis ?? 'panel'}-title`), value: titleOf(axis), enabled: on, commit: (text) => run('plot.title', { el: plot, panel: i, axis, text }) });
   const ranged = (axis: 'x' | 'y', e: 0 | 1) =>
     textField(app, { label: e ? 'To' : 'From', name: name(`${axis}-${e ? 'to' : 'from'}`), value: end(axis, e), enabled: on, commit: (text) => run('plot.range', { el: plot, panel: i, axis, end: e, text }) });
+  const scaleOf = (axis: 'x' | 'y') => read()?.raw.panels?.[i]?.[axis]?.scale ?? 'linear';
+  const scaled = (axis: 'x' | 'y') => {
+    const seg = segmented(app, run, [['linear', 'Linear'], ['asinh', 'Asinh']].map(([scale, text]) => ({
+      command: 'plot.scale', arg: { el: plot, panel: i, axis, scale }, text, pressed: () => scaleOf(axis) === scale,
+    })), `${axis.toUpperCase()} Axis Scale`);
+    seg.el.dataset.name = name(`${axis}-scale`);
+    const unit = textField(app, {
+      label: 'Unit', name: name(`${axis}-unit`), placeholder: '1',
+      value: () => String(read()?.raw.panels?.[i]?.[axis]?.unit ?? ''),
+      enabled: () => on() && scaleOf(axis) === 'asinh',
+      commit: (text) => run('plot.unit', { el: plot, panel: i, axis, text }),
+    });
+    const box = make('div', 'ed-field');
+    box.append(make('h5', '', 'Scale'), seg.el);
+    return row([{ el: box, sync: seg.sync }, unit]);
+  };
+  const axes = checkbox(app, (id) => run(id, { el: plot, panel: i }), 'plot.axes', 'Axes', () => read()?.raw.panels?.[i]?.axes !== false);
+  axes.el.dataset.name = name('axes');
   return section(title, [
     titled(null, 'Title'),
+    axes,
     titled('x', 'X Axis Title'),
     row([ranged('x', 0), ranged('x', 1)]),
+    scaled('x'),
     titled('y', 'Y Axis Title'),
     row([ranged('y', 0), ranged('y', 1)]),
+    scaled('y'),
   ]);
 }
 
