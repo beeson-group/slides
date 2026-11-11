@@ -511,3 +511,38 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// the declaration scale written on the images of slide n of a text
+const flipsOf = (text, n) => tagsOf(text, n, ['img']).map((tag) => /\bscale: (-?\d+ -?\d+)/.exec(tag)?.[1] ?? null);
+
+for (const platform of PLATFORMS) {
+  for (const mode of MODES) {
+    test(`a flip mirrors the picture of a figure in place, on ${platform} in ${mode} mode`, async (t) => {
+      for (const n of [ZONE_PAIR, PLATE_PAIR, PLATE_ONE]) {
+        for (const from of ['figure', 'picture']) {
+          const page = await load(t, platform, mode, n);
+          for (const [id, scale] of [['arrange.flipHorizontal', '-1 1'], ['arrange.flipVertical', '1 -1']]) {
+            await pick(page, from);
+            const pic = await pictureOf(page);
+            const caption = await rectOf(page, CAPTION);
+            assert.equal((await state(page, id)).enabled, true);
+            await exec(page, id);
+            await frames(page);
+            const edited = await render(page);
+            const where = `${id} of ${NAMES[n]} from the ${from}`;
+            assert.deepEqual(flipsOf(edited, n), new Array(page.parts.images).fill(scale), `${where} is not written on every image`);
+            const flipped = await pictureOf(page);
+            assert.ok(near(flipped.left, pic.left) && near(flipped.top, pic.top), `${where} moves the picture from ${Math.round(pic.left)}, ${Math.round(pic.top)} to ${Math.round(flipped.left)}, ${Math.round(flipped.top)}`);
+            const now = await rectOf(page, CAPTION);
+            assert.ok(near(now.left, caption.left, 1) && near(now.top, caption.top, 1), `${where} moves the caption`);
+            // the frame of the selection is drawn at the picture
+            const frame = await rectOf(page, '.beeson-frame.selected:not([hidden])');
+            assert.ok(near(frame.left, flipped.left) && near(frame.top, flipped.top), `the frame after ${where} is at ${Math.round(frame.left)}, ${Math.round(frame.top)}`);
+            await roundTrip(page, edited);
+          }
+          assert.deepEqual(errors(page), []);
+        }
+      }
+    });
+  }
+}
