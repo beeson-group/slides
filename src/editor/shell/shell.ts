@@ -222,31 +222,19 @@ export function install(app: App): void {
     toolbar: { group: 'inspector', order: 60, icon: 'format' },
   });
 
-  // view.slideOnly is Slide Only of the View menu of Keynote. it hides the navigator and the
-  // inspector together, and a second run shows them again as kept, or else the navigator and the
-  // Format tab. it is checked while both are hidden, and it closes the light table
-  let viewKept: { nav: boolean; tab: 'format' | 'steps' | null } | null = null;
-  const slideOnly = () => !app.nav.shown && !format && !app.steps.shown;
+  // view.slideOnly is Slide Only of the View menu of Keynote. it hides the navigator and leaves the
+  // inspector as it is, since in Keynote the view modes change only what is left of the canvas. a
+  // second run shows the navigator again. it is checked while the navigator is hidden, and it
+  // closes the light table
+  const slideOnly = () => !app.nav.shown;
   app.commands.define({
     id: 'view.slideOnly',
     label: 'Slide Only',
     menu: { bar: 'View', group: 'panes', order: 10.2 },
     checked: slideOnly,
     run: async () => {
-      if (slideOnly()) {
-        const was = viewKept ?? { nav: true, tab: 'format' };
-        viewKept = null;
-        if (was.nav) app.nav.toggle();
-        if (was.tab === 'format') setFormat(true);
-        else if (was.tab === 'steps') app.steps.toggle();
-        app.relayout();
-        return;
-      }
-      viewKept = { nav: app.nav.shown, tab: app.steps.shown ? 'steps' : format ? 'format' : null };
-      if (app.commands.get('view.lightTable') && app.commands.state('view.lightTable').checked) await app.commands.run('view.lightTable');
-      if (app.nav.shown) app.nav.toggle();
-      if (app.steps.shown) app.steps.toggle();
-      if (format) setFormat(false);
+      if (!slideOnly() && app.commands.get('view.lightTable') && app.commands.state('view.lightTable').checked) await app.commands.run('view.lightTable');
+      app.nav.toggle();
       app.relayout();
     },
   });
