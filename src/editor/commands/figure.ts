@@ -27,6 +27,25 @@ function mediaOf(app: App, tag: string): HTMLElement | null {
 }
 
 export const imageOf = (app: App) => mediaOf(app, 'img') as HTMLImageElement | null;
+
+// the one image or video of the figure of the selection that the mode of the slide hides and that
+// does not have a twin, e.g. after Dark on an image in light mode. its pane is kept, so that Shown
+// in and the file for the other mode stay in reach
+export function hiddenOf(app: App): HTMLImageElement | HTMLVideoElement | null {
+  const el = app.selection.only();
+  if (!el?.matches(CONTAINER)) return null;
+  const all = [...el.querySelectorAll('img, video')].filter((m) => !!app.pairing?.elements.get(m)?.open);
+  const m = all.length === 1 ? (all[0] as HTMLImageElement | HTMLVideoElement) : null;
+  return m && !shown(m) && modeOf(m) !== 'both' && !twinOf(app, m) ? m : null;
+}
+
+// the image and the video of the pane of the selection, also when the mode of the slide hides it
+const hiddenTag = (app: App, tag: string) => {
+  const h = hiddenOf(app);
+  return h?.localName === tag ? h : null;
+};
+export const paneImageOf = (app: App) => imageOf(app) ?? (hiddenTag(app, 'img') as HTMLImageElement | null);
+export const paneVideoOf = (app: App) => videoOf(app) ?? (hiddenTag(app, 'video') as HTMLVideoElement | null);
 export const videoOf = (app: App) => mediaOf(app, 'video') as HTMLVideoElement | null;
 export const qrOf = (app: App) => mediaOf(app, '.qr');
 
@@ -85,7 +104,7 @@ function invertible(app: App, el: Element | null): Element | null {
 const imageMenu = (order: number): Command['menu'] => ({ bar: 'Format', group: 'image', order, submenu: 'Image' });
 const has = (name: string) => (el: Element) => el.hasAttribute(name);
 const flag = (name: string) => (on: boolean): TagEdit => ({ attrs: { [name]: on ? '' : null } });
-const visual = (app: App) => imageOf(app) ?? videoOf(app);
+const visual = (app: App) => imageOf(app) ?? videoOf(app) ?? hiddenOf(app);
 
 const modeClasses = (m: Mode) => ({ 'for-dark': m === 'dark', 'for-light': m === 'light' });
 const otherMode = (m: Mode): Mode => (m === 'dark' ? 'light' : 'dark');

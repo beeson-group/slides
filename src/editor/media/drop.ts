@@ -9,7 +9,7 @@
 import type { App } from '../app.ts';
 import { onCanvas } from '../canvas/hit.ts';
 import { injectStyle, make } from '../ui/dom.ts';
-import { insertFiles, isEmptySlot, isSlot, kindOfElement, mediaIn, replaceFile } from './actions.ts';
+import { insertFiles, isEmptySlot, isSlot, kindOfElement, mediaIn, pairMode, replaceFile } from './actions.ts';
 import { install as installPlaceholder } from './placeholder.ts';
 import { kindOf } from './store.ts';
 
@@ -76,14 +76,16 @@ export function install(app: App): void {
     for (const p of marked()) p.classList.remove('dropping');
   };
   const show = (t: Target, kind: 'image' | 'video' | null) => {
-    const el = 'replace' in t ? t.replace : 'fill' in t ? t.fill : t.add;
+    const pair = 'replace' in t ? pairMode(app, t.replace) : null;
+    const el = 'replace' in t ? (pair && t.replace.parentElement) || t.replace : 'fill' in t ? t.fill : t.add;
     const holder = 'fill' in t ? t.fill.querySelector(':scope > .beeson-placeholder') : null;
     for (const p of marked()) if (p !== holder) p.classList.remove('dropping');
     holder?.classList.add('dropping');
     const r = el.getBoundingClientRect();
     Object.assign(box.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
     const noun = kind === 'video' ? 'Video' : kind === 'image' ? 'Image' : 'Media';
-    tag.textContent = 'replace' in t ? `Replace ${kindOfElement(t.replace) === 'video' ? 'Video' : 'Image'}` : 'fill' in t ? `Add ${noun} Here` : `Add ${noun}`;
+    const what = 'replace' in t && kindOfElement(t.replace) === 'video' ? 'Video' : 'Image';
+    tag.textContent = pair ? `Add ${what} for ${pair === 'dark' ? 'Dark' : 'Light'} Mode` : 'replace' in t ? `Replace ${what}` : 'fill' in t ? `Add ${noun} Here` : `Add ${noun}`;
     box.hidden = false;
   };
 

@@ -9,7 +9,7 @@
 // the slide from that frame, as the play button of the Movie tab
 
 import type { App } from '../app.ts';
-import { QR_MAX, bytesOf, imageOf, qrOf, videoOf } from '../commands/figure.ts';
+import { QR_MAX, bytesOf, paneImageOf, paneVideoOf, qrOf } from '../commands/figure.ts';
 import { posterTime, setPosterTime, unreadable } from '../media/actions.ts';
 import { media } from '../media/store.ts';
 import { make, injectStyle } from '../ui/dom.ts';
@@ -82,7 +82,7 @@ const modes = (app: App, run: Run, what: string): Control =>
 
 export function imagePane(app: App, run: Run): Control[] {
   injectStyle('inspector-media', CSS);
-  const img = imageOf(app);
+  const img = paneImageOf(app);
   const alt = textField(app, {
     label: 'Description',
     name: 'alt',
@@ -207,7 +207,7 @@ function frameSlider(app: App, run: Run, video: HTMLVideoElement | null): Contro
 
 export function videoPane(app: App, run: Run): Control[] {
   injectStyle('inspector-media', CSS);
-  const video = videoOf(app);
+  const video = paneVideoOf(app);
   const poster = () => video?.getAttribute('poster') ?? null;
   return [
     section('File', [
