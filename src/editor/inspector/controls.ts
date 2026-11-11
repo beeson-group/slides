@@ -85,6 +85,7 @@ const CSS = `
 .beeson-edit-inspector .ed-seg button + button::before { content: ""; position: absolute; left: 0; top: 6px; bottom: 6px; width: 1px; background: var(--ed-edge); }
 .beeson-edit-inspector .ed-seg button[aria-pressed="true"]::before, .beeson-edit-inspector .ed-seg button[aria-pressed="true"] + button::before { background: transparent; }
 .beeson-edit-inspector .ed-seg button[aria-pressed="true"] { background: var(--ed-select); color: var(--ed-on-select); }
+.beeson-edit-inspector .ed-seg button[aria-pressed="mixed"] { background: color-mix(in srgb, var(--ed-select) 30%, transparent); }
 .beeson-edit-inspector .ed-seg button:not(:disabled):not([aria-pressed="true"]):hover { background: var(--ed-hover); }
 .beeson-edit-inspector .ed-seg button:not(:disabled):active { background: var(--ed-pressed); }
 .beeson-edit-inspector .ed-seg button:disabled { color: var(--ed-faint); }
@@ -131,6 +132,7 @@ const CSS = `
 .beeson-edit-inspector .ed-swatches { display: flex; flex: 1; justify-content: space-between; }
 .beeson-edit-inspector .ed-swatches button { width: 24px; height: 24px; padding: 0; border: 0; border-radius: 50%; background: var(--swatch); box-shadow: inset 0 0 0 1px var(--ed-edge); cursor: default; }
 .beeson-edit-inspector .ed-swatches button[aria-pressed="true"] { outline: 2px solid var(--ed-select); outline-offset: 2px; }
+.beeson-edit-inspector .ed-swatches button[aria-pressed="mixed"] { outline: 2px dashed var(--ed-select); outline-offset: 2px; }
 .beeson-edit-inspector .ed-swatches button:disabled { opacity: 0.35; }
 .beeson-edit-inspector :is(button, input, textarea):focus-visible { outline: 2px solid var(--ed-focus); outline-offset: 1px; }
 `;
@@ -194,7 +196,7 @@ const stateOf = (app: App, id: string) => (app.commands.get(id) ? app.commands.s
 
 // a button of a segmented control or of its own: a command with its arg, shown with an icon of
 // GLYPHS, a text, or both. a command that is not defined is drawn disabled
-export type Item = { command: string; arg?: unknown; icon?: string; text?: string | (() => Node); title?: string; pressed?: () => boolean | null };
+export type Item = { command: string; arg?: unknown; icon?: string; text?: string | (() => Node); title?: string; pressed?: () => boolean | 'mixed' | null };
 
 function itemButton(app: App, run: Run, item: Item, className: string): { el: HTMLButtonElement; sync(): void } {
   const b = make('button', className);
@@ -211,7 +213,7 @@ function itemButton(app: App, run: Run, item: Item, className: string): { el: HT
     b.disabled = !s?.enabled;
     const on = item.pressed ? item.pressed() : s?.checked;
     if (on === null || on === undefined) b.removeAttribute('aria-pressed');
-    else b.setAttribute('aria-pressed', String(on && !b.disabled));
+    else b.setAttribute('aria-pressed', on === 'mixed' && !b.disabled ? 'mixed' : String(on === true && !b.disabled));
     if (!item.title && s && typeof item.text !== 'string') b.setAttribute('aria-label', s.label);
     // a dimmed control says why in its tooltip
     b.title = s?.why ?? item.title ?? (s && typeof item.text !== 'string' ? s.label : '');
