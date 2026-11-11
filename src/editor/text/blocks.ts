@@ -266,6 +266,17 @@ export async function split(app: App): Promise<void> {
   const at = itemAt(app);
   if (!at || !canSplit(app)) return;
   const { host, item, range } = at;
+  // Return on an empty item moves it out one level, and on the first level ends the list with a
+  // paragraph after it, as in Keynote and PowerPoint
+  if (item.localName === 'li' && !item.textContent?.trim() && !item.querySelector('mjx-container, img, ul, ol')) {
+    if (at.nested) return outdent(app);
+    const list = item.parentElement!;
+    if (!nextOf(app, item)) {
+      const [p] = await app.doc.insert('<p></p>', list.parentElement!, nextOf(app, list), 'new paragraph');
+      await app.doc.remove(list.querySelectorAll(':scope > li').length > 1 ? item : list, 'new paragraph');
+      return selectIn(p, 0);
+    }
+  }
   if (!range.collapsed) range.deleteContents();
   const caret: [Node, number] = [range.startContainer, range.startOffset];
   const head = rangeTex(item, rangeOf(item, null, caret));
