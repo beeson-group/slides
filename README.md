@@ -8,10 +8,19 @@ The demo deck in `index.html` shows every layout and element of the theme, and i
 
 ## Start a talk
 
-1. Press "Use this template" on GitHub, and write the talk over the demo deck in `index.html`.
-2. Set the layout of each slide with a class on its `section`, as in the table below.
-3. Once a slide is complete, give each element its step, i.e. `class="fragment"` with a `data-fragment-index`.
-4. Run `npm ci`, then `npm run pdf` for `slides.pdf` and `npm run pptx` for `slides.pptx`.
+1. Press "Use this template" on GitHub, and name the new repository `talk-` followed by the topic, e.g. `talk-bifurcation-tracking`. The name of the repository becomes the path of the slides on GitHub Pages, e.g. `https://OWNER.github.io/talk-bifurcation-tracking/`, where OWNER is your account.
+2. Replace `README.md` of the new repository with the stub below, and fill in NAME, DESCRIPTION, and the address of the slides. If your account has a custom domain, write it in place of `OWNER.github.io`.
+
+   ```markdown
+   # NAME talk
+
+   DESCRIPTION. See the [talk slides](https://OWNER.github.io/talk-NAME/) and the [original template](https://github.com/beeson-group/slides).
+   ```
+
+3. Write the talk over the demo deck in `index.html`.
+4. Set the layout of each slide with a class on its `section`, as in the table below.
+5. Once a slide is complete, give each element its step, i.e. `class="fragment"` with a `data-fragment-index`.
+6. Run `npm ci`, then `npm run pdf` for `slides.pdf` and `npm run pptx` for `slides.pptx`.
 
 | Class | Layout |
 |---|---|
