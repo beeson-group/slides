@@ -218,3 +218,50 @@ for (const platform of PLATFORMS) {
     await byteExact(page);
   });
 }
+
+// roundTrip checks page.source byte for byte after undos undos, the edit after as many redos, and
+// an open of the saved edit without problems
+async function roundTrip(page, undos = 1) {
+  const edited = await render(page);
+  assert.notEqual(edited, page.source, 'the action does not change the file');
+  for (let i = 0; i < undos; i++) await page.evaluate('window.BeesonEditor.undo()');
+  await byteExact(page);
+  for (let i = 0; i < undos; i++) await page.evaluate('window.BeesonEditor.redo()');
+  assert.equal(await render(page), edited);
+  const { text } = await saveAndReopen(page, `r13-6-${++saves}.html`);
+  assert.equal(text, edited);
+  assert.deepEqual(errors(page), []);
+}
+
+// the part of the file from the h2 of slide 5 to its figure
+const listPart = (text) => {
+  const at = text.indexOf('<h2>Figures are first');
+  return text.slice(at, text.indexOf('<figure class="zone">', at));
+};
+
+// the item "You might..." of slide 5 made the first item of a list nested in "Dark and light..."
+async function nested(t, platform) {
+  const page = await load(t, platform, 4);
+  await click(page, await pointOf(page, ITEM, 'You might'));
+  await press(page, 'Home');
+  await press(page, 'Tab');
+  assert.match(listPart(await render(page)), /for-light<\/code>\.\n {6}<ul>\n {8}<li class="fragment" data-fragment-index="2">You might/);
+  return page;
+}
+
+// finding 4: Backspace at the start of a nested first item outdents it, and was named Join Paragraphs
+for (const platform of PLATFORMS) {
+  test(`Backspace at the start of a nested first item is named as the outdent, Decrease Indent Level (${platform})`, async (t) => {
+    const page = await nested(t, platform);
+    await click(page, await pointOf(page, ITEM, 'You might'));
+    await press(page, 'Home');
+    await press(page, 'Backspace');
+    assert.equal(await undoLabel(page), 'Undo Decrease Indent Level');
+    // the outdent takes back the Tab
+    await byteExact(page);
+    await page.evaluate('window.BeesonEditor.undo()');
+    assert.match(listPart(await render(page)), /for-light<\/code>\.\n {6}<ul>\n {8}<li class="fragment" data-fragment-index="2">You might/);
+    await page.evaluate('window.BeesonEditor.redo()');
+    await byteExact(page);
+  });
+}
