@@ -311,7 +311,7 @@ for (const platform of PLATFORMS) {
 }
 
 // a paragraph that is not moved, ordered by the commands or by its row and brought back to the
-// order of the file, keeps the style of the file
+// order of the file, keeps the style of the file, and Reset Slide takes the order off
 const exec = (page, id) => page.evaluate(`Promise.resolve(window.BeesonEditor.exec(${js(id)})).then(() => true)`);
 async function selectP(page) {
   await click(page, P);
@@ -357,5 +357,20 @@ for (const platform of PLATFORMS) {
     await drag(page, { x: at.x, y: at.y }, { dy: at.bottom - 2 - at.y, steps: 8 });
     await frames(page);
     assert.equal(await render(page), page.source, 'a drag back to the order of the file leaves a declaration on the paragraph');
+  });
+
+  test(`${platform}: Reset Slide takes off the z-index and the position written by a layer command`, async (t) => {
+    const page = await load(t, platform);
+    await selectP(page);
+    await press(page, KEYS[platform].front);
+    await frames(page);
+    const front = await render(page);
+    assert.match(front, /<p style="position: relative; z-index: 1">Export/);
+    await exec(page, 'slide.reset');
+    await frames(page);
+    const reset = await render(page);
+    const slide = reset.match(/<section>\s*<h2>Figures are first[\s\S]*?<\/section>/)[0];
+    assert.doesNotMatch(slide, /z-index|position/, 'Reset Slide keeps the order of a layer command');
+    await checkEdit(page, reset, front);
   });
 }
