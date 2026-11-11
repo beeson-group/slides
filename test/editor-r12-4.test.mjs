@@ -279,10 +279,10 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  // feel-4. a new Content slide holds what its tile in Add Slide shows: a heading, a paragraph, a
-  // dash list, and an empty zone, as a new Title & Bullets slide of Keynote holds the placeholders
-  // of its thumbnail (K95)
-  test(`a new Content slide holds the paragraph, the list, and the zone of its tile (${platform})`, async (t) => {
+  // feel-4. a new Content slide holds what its tile in Add Slide shows: a heading, a paragraph, and
+  // a dash list, as a new Title & Bullets slide of Keynote holds the placeholders of its thumbnail
+  // (K95). the tile is drawn from the same skeleton
+  test(`a new Content slide holds the paragraph and the list of its tile (${platform})`, async (t) => {
     const page = await load(t, platform, { n: STEPS });
     const before = await render(page);
     await exec(page, 'slide.new.content');
@@ -294,7 +294,9 @@ for (const platform of PLATFORMS) {
     assert.equal(await render(page), made);
     await frames(page);
     const slide = await page.evaluate(`(() => { const s = document.querySelector('.reveal .slides > section.present'); return { tags: [...s.children].filter((c) => !c.hasAttribute('data-generated') && !c.matches('aside.notes')).map((c) => c.localName + (c.className ? '.' + [...c.classList].filter((k) => !k.startsWith('beeson')).join('.') : '')), items: s.querySelectorAll(':scope > ul > li').length }; })()`);
-    assert.deepEqual(slide.tags.filter((x) => !x.startsWith('div.run') && !x.startsWith('div.foot')), ['h2', 'p', 'ul', 'div.zone']);
+    assert.deepEqual(slide.tags.filter((x) => !x.startsWith('div.run') && !x.startsWith('div.foot')), ['h2', 'p', 'ul']);
+    const { sampleText } = await import('../src/editor/model/templates.ts');
+    assert.ok(!sampleText('content').includes('zone'), 'the Content tile draws a zone that a new slide does not have');
     assert.equal(slide.items, 1);
     // typing into the list item gives a dash item, and Return a second one
     await click(page, '.reveal section.present > ul > li');
