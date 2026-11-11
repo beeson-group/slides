@@ -272,3 +272,115 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// a trusted Return with its character, which presses a focused button as a key of a user does
+async function enter(page) {
+  const base = { key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 };
+  await page.send('Input.dispatchKeyEvent', { type: 'keyDown', ...base, text: '\r', unmodifiedText: '\r' });
+  await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+}
+
+// a trusted ?, typed with Shift on a US layout
+async function question(page) {
+  const base = { key: '?', code: 'Slash', windowsVirtualKeyCode: 191, modifiers: 8 };
+  await page.send('Input.dispatchKeyEvent', { type: 'keyDown', ...base, text: '?', unmodifiedText: '/' });
+  await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+}
+
+// whether the focus is inside the element of selector
+const focusIn = (page, selector) => page.evaluate(`!!document.activeElement?.closest(${js(selector)})`);
+const open = (page, selector) => page.evaluate(`!!document.querySelector(${js(selector)})?.open`);
+
+// dialogs-undo-a11y-5: Tab left the Link popover, and Esc then did not close it
+for (const platform of PLATFORMS) {
+  test(`Tab stays inside the Link popover, and Esc closes it at the first press (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: FIGURES });
+    const p = await center(page, '.reveal section.present > p');
+    await click(page, { x: p.x - 200, y: p.y });
+    await click(page, { x: p.x - 200, y: p.y }, { count: 2 });
+    await press(page, 'Mod+K');
+    assert.ok(await open(page, 'dialog.beeson-edit-link'), 'the Link popover is not open');
+    for (const key of ['Tab', 'Tab', 'Tab', 'Shift+Tab', 'Tab']) {
+      await press(page, key);
+      assert.ok(await focusIn(page, 'dialog.beeson-edit-link'), `the focus leaves the popover after ${key}`);
+    }
+    await press(page, 'Escape');
+    assert.equal(await open(page, 'dialog.beeson-edit-link'), false, 'the first Esc does not close the popover');
+    assert.ok(await focusIn(page, '.reveal section.present > p'), 'the focus does not go back to the paragraph');
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+
+  // dialogs-undo-a11y-9: Tab left the sheet of shortcuts, and after Tab and Shift+Tab the first
+  // Esc was ignored
+  test(`Tab stays inside the sheet of keyboard shortcuts, and Esc closes it at the first press (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    // the focus is on the thumbnail of the current slide, where ? is taken
+    await click(page, '.beeson-edit-nav .row[aria-current="true"], .beeson-edit-nav [aria-current="true"]');
+    const before = await page.evaluate(`document.activeElement.outerHTML.slice(0, 80)`);
+    await question(page);
+    assert.ok(await open(page, 'dialog.beeson-edit-keys'), '? does not open the sheet');
+    for (const key of ['Tab', 'Shift+Tab', 'Tab']) {
+      await press(page, key);
+      assert.ok(await focusIn(page, 'dialog.beeson-edit-keys'), `the focus leaves the sheet after ${key}`);
+    }
+    await press(page, 'Escape');
+    assert.equal(await open(page, 'dialog.beeson-edit-keys'), false, 'the first Esc does not close the sheet');
+    assert.equal(await page.evaluate(`document.activeElement.outerHTML.slice(0, 80)`), before, 'the focus does not go back');
+    assert.deepEqual(errors(page), []);
+  });
+
+  // dialogs-undo-a11y-6: Return in the field of Grid Settings did not press OK, and its field had
+  // the ring of the browser
+  test(`Return in the field of Grid Settings presses OK, and the field has the focus ring of the editor (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    void run(page, 'view.grid.settings');
+    await page.waitFor(`!!document.querySelector('dialog.beeson-grid-sheet[open] input[name="spacing"]')`);
+    assert.equal(await page.evaluate(`document.activeElement.name`), 'spacing');
+    await press(page, 'Tab');
+    await press(page, 'Shift+Tab');
+    const ring = await page.evaluate(`(() => { const s = getComputedStyle(document.activeElement); return { style: s.outlineStyle, color: s.outlineColor }; })()`);
+    const focus = await page.evaluate(`(() => { const p = document.createElement('div'); p.style.color = 'var(--ed-focus)'; document.querySelector('dialog.beeson-grid-sheet').append(p); const c = getComputedStyle(p).color; p.remove(); return c; })()`);
+    assert.deepEqual(ring, { style: 'solid', color: focus }, 'the field does not have the ring of the editor');
+    await page.evaluate(`document.activeElement.select()`);
+    await type(page, '60');
+    await enter(page);
+    assert.equal(await open(page, 'dialog.beeson-grid-sheet'), false, 'Return does not close the sheet');
+    void run(page, 'view.grid.settings');
+    await page.waitFor(`!!document.querySelector('dialog.beeson-grid-sheet[open] input[name="spacing"]')`);
+    assert.equal(await page.evaluate(`document.activeElement.value`), '60', 'Return does not apply the spacing');
+    await press(page, 'Escape');
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+// dialogs-undo-a11y-10: on the Mac, Return on the card of Present with unsaved changes pressed
+// Cancel, the focused button, though Save and Present is drawn as the default
+for (const [platform, answer] of [['mac', 'save'], ['other', 'cancel']]) {
+  test(`Return on the card of Present with unsaved changes presses ${answer === 'save' ? 'the default button' : 'the focused button'} (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: FIGURES });
+    await page.evaluate(`(async () => {
+      window.opened = 0;
+      window.open = () => { window.opened++; return null; };
+      const root = await navigator.storage.getDirectory();
+      window.BeesonEditor.attach(await root.getFileHandle('r9-7-present.html', { create: true }));
+      return true;
+    })()`);
+    const p = await center(page, '.reveal section.present > p');
+    await click(page, { x: p.x, y: p.y });
+    await click(page, { x: p.x, y: p.y });
+    await press(page, 'End');
+    await type(page, 'x');
+    await press(page, 'Escape');
+    void run(page, 'file.present');
+    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-card.ask[open]')`);
+    await enter(page);
+    await page.waitFor(`!document.querySelector('dialog.beeson-edit-card.ask[open]')`);
+    await sleep(300);
+    if (answer === 'save') {
+      assert.equal(await page.evaluate('window.opened'), 1, 'the show is not opened');
+      assert.equal(await page.evaluate('window.BeesonEditor.status().dirty'), false, 'the deck is not saved');
+    } else assert.equal(await page.evaluate('window.opened'), 0);
+    assert.deepEqual(errors(page), []);
+  });
+}
