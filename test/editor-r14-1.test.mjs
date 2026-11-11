@@ -43,12 +43,12 @@ const box = (page, selector) => page.evaluate(`(() => {
   return { left: (r.left - s.left) / k, top: (r.top - s.top) / k, right: (r.right - s.left) / k, bottom: (r.bottom - s.top) / k };
 })()`);
 
-async function load(t, platform, n) {
+async function load(t, platform, n, query = '') {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
   await page.goto(`${server.origin}/theme/beeson.css`);
   await page.evaluate('localStorage.clear()');
-  await page.goto(`${server.origin}/${DECK}?edit&still&edit-platform=${platform}`);
+  await page.goto(`${server.origin}/${DECK}?edit&still&edit-platform=${platform}${query}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
   const s = await page.evaluate(`window.BeesonEditor.open(${js(readFileSync(DECK, 'utf8'))})`);
@@ -110,6 +110,27 @@ for (const platform of PLATFORMS) {
     assert.ok(s.overflow > 0 && /over a figure/.test(s.message), `the table is not reported: ${js({ overflow: s.overflow, message: s.message })}`);
     const marked = await page.evaluate(`[...document.querySelectorAll('.reveal section.present .beeson-overflow')].map((e) => e.localName)`);
     assert.ok(marked.length > 0 && !marked.some((n) => n === 'th' || n === 'td'), `the cells of the table are marked: ${js(marked)}`);
+    assert.deepEqual(errors(page), []);
+  });
+
+  // D30. after Dark on a picture in light mode, the button of the well of the Image pane adds the
+  // twin for light mode, and it is named as the command, as the context menu names it
+  test(`the button of the well names the choice of the twin of a picture hidden by its mode (${platform})`, async (t) => {
+    const page = await load(t, platform, STEPS, '&theme=light');
+    const insert = page.evaluate(`window.BeesonEditor.exec('insert.image').then(() => true)`);
+    await choose(page, [DARK_FILE]);
+    await insert;
+    await page.waitFor(`window.BeesonEditor.render().includes('media/figure-dark.png')`, 30000);
+    await frames(page);
+    const label = () => page.evaluate(`(() => { const b = document.querySelector('.beeson-edit-inspector .ed-well .ed-btn'); return b ? { text: b.textContent.trim(), title: b.title } : null; })()`);
+    assert.equal((await label())?.text, 'Replace…');
+    await exec(page, 'figure.mode.dark');
+    await frames(page);
+    const state = await page.evaluate(`window.BeesonEditor.state('media.replace')`);
+    assert.equal(state.label, 'Choose Image for Light Mode…');
+    const b = await label();
+    assert.equal(b?.text, 'Choose for Light Mode…', `the button reads ${js(b)}`);
+    assert.equal(b.title, state.label);
     assert.deepEqual(errors(page), []);
   });
 }
