@@ -403,4 +403,21 @@ for (const platform of PLATFORMS) {
       assert.deepEqual(errors(page), [], `after ${how}`);
     }
   });
+  // state 287 and 304
+  test(`a new table in the empty slot of a new Figure slide takes the width of the slot (${platform})`, async (t) => {
+    for (const how of ['new', 'change']) {
+      const page = await load(t, platform, { n: STEPS });
+      await exec(page, how === 'new' ? 'slide.new.figure' : 'slide.new.content');
+      if (how === 'change') await exec(page, 'slide.layout.figure');
+      await frames(page);
+      const before = await render(page);
+      await exec(page, 'insert.table', { rows: 3, columns: 3 });
+      await frames(page);
+      const m = await page.evaluate(`(() => { const t = document.querySelector('.reveal section.present table'); const slot = t.parentElement; const s = getComputedStyle(slot); const r = slot.getBoundingClientRect(); const k = r.width / slot.offsetWidth; return { slot: slot.className, table: t.getBoundingClientRect().width / k, inner: slot.clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight), widths: [...t.rows[0].cells].map((c) => c.style.width) }; })()`);
+      assert.ok(m.table > m.inner * 0.95, `after ${how}, the table is ${m.table} px wide in a slot ${m.inner} px wide (${m.slot})`);
+      assert.ok(m.widths.every((w) => /px$/.test(w)), `after ${how}, the first row has the widths ${js(m.widths)}`);
+      await checkEdit(page, before, `a table in the slot after ${how}`);
+      assert.deepEqual(errors(page), []);
+    }
+  });
 }
