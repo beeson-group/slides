@@ -308,7 +308,8 @@ export class App {
     if (active.closest('.beeson-math, .beeson-edit-card:not([hidden]), dialog[open]')) return 'dialog';
     if (active.matches('input, textarea, select')) return 'field';
     if (active.closest('aside.notes')) return 'notes';
-    if (this.hostOf(active)) return 'text';
+    // a formula focused in an object that is selected takes the keys of the slide
+    if (this.hostOf(active) && !(active.matches('mjx-container') && this.selection.items.some((el) => this.selection.kind === 'elements' && el.contains(active)))) return 'text';
     if (active.closest('.beeson-edit-nav')) return 'navigator';
     if (active.closest('.beeson-edit-inspector, .beeson-edit-side')) return 'inspector';
     return 'canvas';

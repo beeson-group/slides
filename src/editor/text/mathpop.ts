@@ -398,7 +398,8 @@ export function install(app: App): void {
     openFor = target;
     const host = target?.closest(HOST);
     const at = host && target ? [...host.querySelectorAll('mjx-container')].indexOf(target) : -1;
-    // the focus goes back to the formula, or to the caret of the text of an inline formula
+    // the focus goes back to the formula, whose object is selected for the keys of the slide, or to
+    // the caret of the text of an inline formula
     const sel = window.getSelection();
     const caret = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
     const from = document.activeElement as HTMLElement | null;
@@ -406,6 +407,8 @@ export function install(app: App): void {
       ? () => {
           const now = target.isConnected ? target : host?.querySelectorAll('mjx-container')[at] ?? null;
           (now as HTMLElement | null)?.focus({ preventScroll: true });
+          const el = now && app.move.movableOf(now);
+          if (el) app.selection.set('elements', [el]);
         }
       : () => {
           if (!from?.isConnected) return;
