@@ -508,6 +508,31 @@ async function deleteRow(app: App, t: Target): Promise<void> {
   land(app, cellOver(t.table, row, box.c0) ?? t.table.rows[row].cells[0], 'end', asBlock);
 }
 
+// one column taken out. a cell that reaches over another column gets a column less
+async function removeColumn(app: App, table: HTMLTableElement, c: number): Promise<void> {
+  const g = gridOf(table);
+  for (const s of new Set(g.grid.map((row) => row[c]).filter((x): x is Place => !!x))) {
+    if (s.span > 1) app.doc.setTag(s.cell, { attrs: { colspan: spanText(s.span - 1) } }, 'delete column');
+    else await app.doc.remove(s.cell, 'delete column');
+  }
+}
+
+// the rows or the columns of a table added or taken out at its end, until it has count of them,
+// as the fields Rows and Columns of the Table tab of Keynote set them. the selection is kept, and a
+// cell taken out is dropped from it
+export async function setCount(app: App, table: HTMLTableElement, kind: 'rows' | 'columns', count: number): Promise<void> {
+  const n = Math.max(1, Math.min(MOST[kind], Math.round(count)));
+  const t = { table, cell: null, box: null };
+  if (kind === 'rows') {
+    while (table.rows.length < n) await addRow(app, t, true);
+    while (table.rows.length > n) await removeRow(app, table, table.rows.length - 1);
+    return;
+  }
+  while (columnsOf(table) < n) await addColumn(app, t, true);
+  while (columnsOf(table) > n) await removeColumn(app, table, columnsOf(table) - 1);
+  await dropEmptyRows(app, table, 'delete column');
+}
+
 // the columns of the cells of t taken out, or the table with its last columns. a cell that reaches
 // over another column gets a column less, and a row left without a cell is taken out
 async function deleteColumn(app: App, t: Target): Promise<void> {
@@ -515,13 +540,7 @@ async function deleteColumn(app: App, t: Target): Promise<void> {
   if (!box) return;
   if (box.c1 - box.c0 + 1 >= columnsOf(t.table)) return deleteTable(app, t);
   const asBlock = blocked(app, t);
-  for (let c = box.c1; c >= box.c0; c--) {
-    const g = gridOf(t.table);
-    for (const s of new Set(g.grid.map((row) => row[c]).filter((x): x is Place => !!x))) {
-      if (s.span > 1) app.doc.setTag(s.cell, { attrs: { colspan: spanText(s.span - 1) } }, 'delete column');
-      else await app.doc.remove(s.cell, 'delete column');
-    }
-  }
+  for (let c = box.c1; c >= box.c0; c--) await removeColumn(app, t.table, c);
   await dropEmptyRows(app, t.table, 'delete column');
   const row = Math.min(box.r0, t.table.rows.length - 1);
   const col = Math.min(box.c0, columnsOf(t.table) - 1);
@@ -1503,6 +1522,16 @@ export function install(app: App): void {
   });
   sortCommand('table.sortAscending', 'Sort Ascending', 87.6, false);
   sortCommand('table.sortDescending', 'Sort Descending', 87.7, true);
+  // the counts of the rows and the columns typed into the fields of the Table pane
+  for (const [kind, label] of [['rows', 'Set Row Count'], ['columns', 'Set Column Count']] as const) {
+    c.define({
+      id: `table.${kind}`,
+      label,
+      enabled: withTable,
+      undoable: true,
+      run: (a, arg) => setCount(a, need(a, arg).table, kind, Number((arg as { count?: unknown } | undefined)?.count)),
+    });
+  }
   c.define({
     id: 'table.delete',
     label: 'Delete Table',
