@@ -60,7 +60,7 @@ test('a deck without ?edit does not load the editor, with ?edit it does on file:
   const status = await page.evaluate('window.BeesonEditor.status()');
   assert.equal(status.supported, true);
   assert.equal(status.state, 'waiting');
-  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].filter((b) => !b.hidden).map((b) => b.textContent.replace(/^\\d+%/, '%'))`), ['View', '%Zoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', '', 'Media', '', 'Present', 'Save', 'Format', 'Steps']);
+  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].filter((b) => !b.hidden).map((b) => b.textContent.replace(/^\\d+%/, '%'))`), ['View', '%Zoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Plot', 'Text', 'Formula', 'Shape', '', 'Media', '', 'Present', 'Save', 'Format', 'Steps']);
   // the card asks for the file, with the folder of the deck
   assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-card').hidden`), false);
   assert.match(await page.evaluate(`document.querySelector('.beeson-edit-card p').textContent`), /index\.html in \//);
@@ -286,10 +286,11 @@ test('the notes are laid in a pane under the slide, and Present opens the deck w
   // the status bar of 28 px is under the notes
   assert.ok(boxes.bottom <= boxes.height - 27, `the notes end at ${boxes.bottom} in a window of ${boxes.height}`);
   assert.equal(boxes.focused, true);
-  await page.evaluate(`window.open = (url) => { window.__opened = url; }`);
+  // the show is played in place, in a frame over the editor
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Present').click()`);
-  const opened = await page.evaluate('window.__opened');
-  assert.ok(!/[?&]edit/.test(opened) && opened.endsWith('index.html?still'), opened);
+  await until(page, `!!document.querySelector('.beeson-edit-show iframe')?.src`);
+  const opened = await page.evaluate(`document.querySelector('.beeson-edit-show iframe').src`);
+  assert.ok(!/[?&]edit(?:[=&]|$)/.test(opened) && /index\.html\?still(?:&|$)/.test(opened), opened);
   assert.deepEqual(page.errors, []);
 });
 
@@ -1021,11 +1022,17 @@ test('an undo back to the saved text leaves the deck clean, and Present with uns
   assert.deepEqual({ dirty: s.dirty, draft: s.draft, undo: s.undo }, { dirty: false, draft: false, undo: false });
   assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Save').classList.contains('on')`), false);
   // Present asks while there are unsaved changes
-  await page.evaluate(`window.written = null; window.__opened = null; window.open = (url) => { window.__opened = url; };
+  await page.evaluate(`window.written = null;
     const handle = { name: 'index.html', getFile: async () => new File([window.written ?? ${JSON.stringify(deckText)}], 'index.html'), createWritable: async () => ({ write: async (text) => { window.written = text; }, close: async () => {} }) };
     window.showSaveFilePicker = async () => handle;`);
   const present = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Present').click()`);
   const choose = (text) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-card.ask button')].find((b) => b.textContent === ${JSON.stringify(text)}).click()`);
+  // the show is played in place, in a frame over the editor, and Esc ends it
+  const shown = `!!document.querySelector('.beeson-edit-show')`;
+  const endShow = async () => {
+    await page.evaluate(`(window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true })), true)`);
+    await until(page, `!document.querySelector('.beeson-edit-show')`);
+  };
   await type(' edited');
   await present();
   await sleep(100);
@@ -1033,24 +1040,24 @@ test('an undo back to the saved text leaves the deck clean, and Present with uns
   assert.deepEqual(card, { hidden: false, buttons: ['Save and present', 'Present the saved file', 'Cancel'], focused: 'Cancel' });
   await choose('Cancel');
   await sleep(100);
-  assert.equal(await page.evaluate('window.__opened'), null);
+  assert.equal(await page.evaluate(shown), false);
   await present();
   await sleep(100);
   await choose('Present the saved file');
-  await until(page, '!!window.__opened');
+  await until(page, shown);
   s = await status();
   assert.deepEqual({ dirty: s.dirty, written: await page.evaluate('window.written') }, { dirty: true, written: null });
-  await page.evaluate('window.__opened = null');
+  await endShow();
   await present();
   await sleep(100);
   await choose('Save and present');
-  await until(page, '!!window.__opened');
+  await until(page, shown);
   assert.equal(await page.evaluate('window.written'), replaced(`<h2>${h2}</h2>`, `<h2>${h2} edited</h2>`));
   assert.equal((await status()).dirty, false);
   // Present without unsaved changes does not ask
-  await page.evaluate('window.__opened = null');
+  await endShow();
   await present();
-  await until(page, '!!window.__opened');
+  await until(page, shown);
   assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-card.ask').hidden`), true);
   assert.deepEqual(page.errors, []);
 });

@@ -406,13 +406,25 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`a QR code inserted on a full wide slide, without a free area, is centered on the slide (${platform})`, async (t) => {
+  // since R9.9, a QR code is put in the free space of the slide, as every new element, and it is
+  // not centered over the text
+  test(`a QR code inserted on a full wide slide is put off its text, inside the slide (${platform})`, async (t) => {
     const page = await load(t, platform);
     await fullSlide(page, 'wide');
     await exec(page, 'insert.qr');
     await frames(page);
     const qr = await slideBoxOf(page, '.reveal section.present .qr');
-    assert.ok(Math.abs((qr.left + qr.right) / 2 - 960) < 2 && Math.abs((qr.top + qr.bottom) / 2 - 540) < 2, `the QR code is not centered: ${JSON.stringify(qr)}`);
+    assert.ok(qr.left >= 0 && qr.right <= 1920 && qr.top >= 0 && qr.bottom <= 1080, `the QR code runs past the slide: ${JSON.stringify(qr)}`);
+    const over = await page.evaluate(`(() => {
+      const q = document.querySelector('.reveal section.present .qr').getBoundingClientRect();
+      return [...document.querySelectorAll('.reveal section.present > p')].filter((p) => {
+        const g = document.createRange();
+        g.selectNodeContents(p);
+        const r = g.getBoundingClientRect();
+        return q.left < r.right - 1 && r.left < q.right - 1 && q.top < r.bottom - 1 && r.top < q.bottom - 1;
+      }).length;
+    })()`);
+    assert.equal(over, 0, `the QR code lies over text: ${JSON.stringify(qr)}`);
     assert.deepEqual(errors(page), []);
   });
 }

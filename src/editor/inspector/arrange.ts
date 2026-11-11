@@ -68,6 +68,7 @@ export function arrangePane(app: App, run: Run): Control[] {
       row([
         button(app, run, { command: 'arrange.distribute.horizontal', icon: 'distribute-h', text: 'Horizontally' }),
         button(app, run, { command: 'arrange.distribute.vertical', icon: 'distribute-v', text: 'Vertically' }),
+        button(app, run, { command: 'arrange.distribute.evenly', icon: 'distribute-e', text: 'Evenly' }),
       ]),
     ]),
     section('Size', [
@@ -77,7 +78,8 @@ export function arrangePane(app: App, run: Run): Control[] {
       ]),
       note(() => (!els.length || sized() || group() ? '' : 'Set by the layout of the slide.')),
       row([checkbox(app, run, 'arrange.constrainProportions', 'Constrain Proportions')]),
-      note(() => (sized() && !app.commands.state('arrange.constrainProportions').enabled ? 'Only the width is written, and the height follows the aspect or the layout.' : '')),
+      // a lock turns the checkbox off too, which the note does not explain
+      note(() => (sized() && !app.commands.applies('arrange.constrainProportions') ? 'Only the width is written, and the height follows the aspect or the layout.' : '')),
       row([button(app, run, { command: 'arrange.resetSize', icon: 'reset', text: 'Reset Size' })]),
     ]),
     section('Position', [

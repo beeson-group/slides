@@ -22,6 +22,7 @@ html.beeson-editor .reveal .slides .beeson-placeholder button:hover, html.beeson
 html.beeson-editor .reveal .slides .beeson-placeholder button svg { width: 52px; height: 52px; }
 html.beeson-editor .reveal .slides .beeson-placeholder::after { content: "Click an icon to add it, or drop an image or a video here"; max-width: 90%; color: var(--muted, #888); font: 26px/1.3 system-ui, sans-serif; text-align: center; }
 html.beeson-editor.beeson-previewing .reveal .slides .beeson-placeholder { display: none !important; }
+html.beeson-editor .reveal .slides .beeson-placeholder.dropping > .row, html.beeson-editor .reveal .slides .beeson-placeholder.dropping::after { visibility: hidden; }
 `;
 
 type Kind = 'image' | 'video' | 'table' | 'qr';

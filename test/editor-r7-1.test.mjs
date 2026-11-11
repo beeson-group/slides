@@ -105,8 +105,8 @@ for (const platform of PLATFORMS) {
 }
 
 // placedOf returns the box in slide px of the new text box, or of the paragraph Typed once it is
-// written, the boxes of the footnotes of the current slide, the size of the slide, and the visible
-// part of the slide in the canvas
+// written, the boxes of the footnotes and of the text of the other blocks of the current slide, the
+// size of the slide, and the visible part of the slide in the canvas
 const placedOf = (page) =>
   page.evaluate(`(() => {
     const slides = document.querySelector('.reveal .slides');
@@ -119,12 +119,15 @@ const placedOf = (page) =>
     const seen = box(new DOMRect(v.left, v.top, v.width, v.height));
     const w = sec.offsetWidth, h = sec.offsetHeight;
     const visible = { left: Math.max(0, seen.left), top: Math.max(0, seen.top), right: Math.min(w, seen.right), bottom: Math.min(h, seen.bottom) };
-    return { box: box(el.getBoundingClientRect()), feet: [...sec.querySelectorAll('.foot')].map((f) => box(f.getBoundingClientRect())), w, h, visible };
+    const ink = (t) => { const g = document.createRange(); g.selectNodeContents(t); return box(g.getBoundingClientRect()); };
+    const texts = [...sec.querySelectorAll(':scope > h2, :scope > p, :scope > ul, :scope > ol')].filter((t) => t !== el && t.getClientRects().length).map(ink);
+    return { box: box(el.getBoundingClientRect()), feet: [...sec.querySelectorAll('.foot')].map((f) => box(f.getBoundingClientRect())), texts, w, h, visible };
   })()`);
 
 // item 2 of R7.1: on a slide without room under its text column, a new text box was put under the
 // lowest block, over the footnote or under the slide. it is put at the center of the visible part
-// of the slide, as Keynote puts a new object, moved up off the footnote and into the slide
+// of the slide, as Keynote puts a new object, moved up off the footnote and into the slide. a box
+// centered over a text is put in the free space nearest to the center, the rule of R9.9
 const meets = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
 const SMALL = '.reveal section.present > p.small';
 for (const platform of PLATFORMS) {
@@ -150,7 +153,8 @@ for (const platform of PLATFORMS) {
       await exec(page, 'insert.text');
       await frames(page);
       const check = (at, what) => {
-        const { box, feet, w, h, visible } = at;
+        const { box, feet, texts, w, h, visible } = at;
+        for (const x of texts) assert.ok(!meets(box, x), `the ${what} at ${js(box)} is over a text at ${js(x)}`);
         assert.ok(box.left >= -1 && box.top >= -1 && box.right <= w + 1 && box.bottom <= h + 1, `the ${what} at ${js(box)} is off the slide of ${w} by ${h}`);
         for (const f of feet) assert.ok(!meets(box, f), `the ${what} at ${js(box)} is over the footnote at ${js(f)}`);
         // the center of the visible part, moved as little as it takes to keep the box in the slide
@@ -158,9 +162,10 @@ for (const platform of PLATFORMS) {
         const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
         const cx = clamp((visible.left + visible.right) / 2, bw / 2, w - bw / 2);
         const cy = clamp((visible.top + visible.bottom) / 2, bh / 2, h - bh / 2);
+        const centered = { left: cx - bw / 2, right: cx + bw / 2, top: cy - bh / 2, bottom: cy + bh / 2 };
+        if (texts.some((x) => meets(centered, x))) return;
         assert.ok(Math.abs((box.left + box.right) / 2 - cx) <= 2, `the ${what} at ${js(box)} is not centered at x ${cx} of the visible part ${js(visible)}`);
         // a box centered over a footnote is moved up until it is clear of the footnote
-        const centered = { left: cx - bw / 2, right: cx + bw / 2, top: cy - bh / 2, bottom: cy + bh / 2 };
         const under = feet.filter((f) => meets(centered, f));
         if (!under.length) assert.ok(Math.abs((box.top + box.bottom) / 2 - cy) <= 2, `the ${what} at ${js(box)} is not centered at y ${cy} of the visible part ${js(visible)}`);
         else assert.ok(box.bottom >= Math.min(...under.map((f) => f.top)) - 40, `the ${what} at ${js(box)} is moved further up than the footnote at ${js(under)}`);
@@ -172,7 +177,7 @@ for (const platform of PLATFORMS) {
       const written = await placedOf(page);
       check(written, 'written box');
       assert.ok(Math.abs(written.box.left - empty.box.left) <= 1 && Math.abs(written.box.top - empty.box.top) <= 1, `the box is moved from ${js(empty.box)} to ${js(written.box)} when it is written`);
-      const tag = (await render(page)).match(/<p style="translate: -?\d+px -?\d+px">Typed<\/p>/)?.[0];
+      const tag = (await render(page)).match(/<p style="(width: \d+px; )?translate: -?\d+px -?\d+px">Typed<\/p>/)?.[0];
       assert.ok(tag, 'the box is written with its offset');
       await roundTrip(page, [['A small paragraph.</p>\n', `A small paragraph.</p>\n  ${tag}\n`]]);
       assert.deepEqual(errors(page), []);

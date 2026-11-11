@@ -23,6 +23,7 @@ export const GLYPHS: Record<string, string[]> = {
   'align-bottom': ['M3 16.5h14', 'M5.5 3.5h3.5v10h-3.5z', 'M11.5 7.5h3.5v6h-3.5z'],
   'distribute-h': ['M3 3.5v13', 'M17 3.5v13', 'M8.25 6h3.5v8h-3.5z'],
   'distribute-v': ['M3.5 3h13', 'M3.5 17h13', 'M6 8.25h8v3.5H6z'],
+  'distribute-e': ['M3 7V3h4', 'M17 13v4h-4', 'M8.25 8.25h3.5v3.5h-3.5z'],
   'column-narrow': ['M2.5 4.5h15v11h-15z', 'M5 8h5', 'M5 10.5h5', 'M5 13h3.5'],
   'column-normal': ['M2.5 4.5h15v11h-15z', 'M5 8h7.5', 'M5 10.5h7.5', 'M5 13h5'],
   'column-wide': ['M2.5 4.5h15v11h-15z', 'M5 8h10', 'M5 10.5h10', 'M5 13h7'],

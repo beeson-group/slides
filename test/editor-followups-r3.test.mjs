@@ -100,7 +100,8 @@ const slideBox = (page, selector) =>
   })()`);
 
 for (const platform of PLATFORMS) {
-  test(`a QR code inserted on a full wide slide is centered on it, inside its edges (${platform})`, async (t) => {
+  // since R9.9, a QR code is put in the free space of the slide, as every new element
+  test(`a QR code inserted on a full wide slide is put in its free space, inside its edges (${platform})`, async (t) => {
     const page = await load(t, platform);
     await exec(page, 'slide.new.wide');
     await frames(page);
@@ -115,9 +116,11 @@ for (const platform of PLATFORMS) {
     const box = await slideBox(page, '.reveal section.present .qr');
     assert.ok(box, 'the QR code is not on the slide');
     assert.ok(box.top >= 0 && box.bottom <= 1080, `the QR code runs past the slide: ${JSON.stringify(box)}`);
-    assert.ok(Math.abs((box.left + box.right) / 2 - 960) < 2 && Math.abs((box.top + box.bottom) / 2 - 540) < 2, `the QR code is not centered: ${JSON.stringify(box)}`);
+    const texts = await page.evaluate(`[...document.querySelectorAll('.reveal section.present > p')].map((p) => { const g = document.createRange(); g.selectNodeContents(p); const r = g.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; })`);
+    const qr = await page.evaluate(`(() => { const r = document.querySelector('.reveal section.present .qr').getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; })()`);
+    for (const p of texts) assert.ok(!(qr.left < p.right - 1 && p.left < qr.right - 1 && qr.top < p.bottom - 1 && p.top < qr.bottom - 1), `the QR code ${JSON.stringify(box)} lies over a paragraph`);
     const edited = await render(page);
-    assert.match(edited, /<p>Paragraph 5 [^\n]*<\/p>\n  <div class="qr" data-qr="https:\/\/example.com" style="translate: -?\d+px -?\d+px"><\/div>\n/);
+    assert.match(edited, /<p>Paragraph 5 [^\n]*<\/p>\n  <div class="qr" data-qr="https:\/\/example.com" style="(width: \d+px; )?translate: -?\d+px -?\d+px"><\/div>\n/);
     await undoRedo(page, full, edited);
     await savedAs(page, edited);
     assert.deepEqual(errors(page), []);
@@ -475,8 +478,9 @@ for (const platform of PLATFORMS) {
 
 // the empty box of Text Box, Code Box, and Footnote, which is not written into the file
 const PENDING = `document.querySelector('.reveal section.present .beeson-pending')`;
-// a new box on a slide without room under its text is written with the offset that centers it
-const unmoved = (text) => text.replace(/ style="translate: -?\d+px -?\d+px"/g, '');
+// a new box on a slide without room under its text is written with the offset, and the width,
+// that put it in free space
+const unmoved = (text) => text.replace(/ style="(width: \d+px; )?translate: -?\d+px -?\d+px"/g, '');
 const undoLabel = (page, id) => page.evaluate(`window.BeesonEditor.state(${JSON.stringify(id)}).label`);
 const INSERTS = [
   ['insert.text', 'Text Box', '<p>x</p>'],

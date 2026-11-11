@@ -6,7 +6,7 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { CONTAINER } from '../canvas/hit.ts';
+import { CONTAINER, twinOf } from '../canvas/hit.ts';
 import type { TagEdit } from '../tags.ts';
 
 // the longest text of a QR code, in bytes of UTF-8, as src/qr.ts encodes it at level M
@@ -75,10 +75,45 @@ function switchOf(id: string, label: string, target: (app: App) => Element | nul
   };
 }
 
+// the image that Invert in Dark Mode acts on: an image shown in dark mode, or the dark twin of a
+// light image, since the theme inverts an image only in dark mode
+function invertible(app: App, el: Element | null): Element | null {
+  if (!el || !el.classList.contains('for-light') || el.classList.contains('invert')) return el;
+  return twinOf(app, el);
+}
+
 const imageMenu = (order: number): Command['menu'] => ({ bar: 'Format', group: 'image', order, submenu: 'Image' });
 const has = (name: string) => (el: Element) => el.hasAttribute(name);
 const flag = (name: string) => (on: boolean): TagEdit => ({ attrs: { [name]: on ? '' : null } });
 const visual = (app: App) => imageOf(app) ?? videoOf(app);
+
+const modeClasses = (m: Mode) => ({ 'for-dark': m === 'dark', 'for-light': m === 'light' });
+const otherMode = (m: Mode): Mode => (m === 'dark' ? 'light' : 'dark');
+
+// the unit text of the twin that Both took off an image or a video, with the mode of the image
+// then, so that Dark or Light on the image puts the pair back
+const takenTwin = new WeakMap<Element, { text: string; mode: Mode; after: boolean }>();
+
+// the mode of el set so that each mode of the slide shows one picture. of a pair, Both keeps el
+// alone, and Dark or Light swaps the modes of el and its twin. Dark or Light on an image whose
+// twin Both took off puts the twin back with the other mode
+async function setMode(app: App, el: Element, mode: Mode): Promise<void> {
+  const twin = twinOf(app, el);
+  if (twin && mode === 'both') {
+    takenTwin.set(el, { text: app.doc.elementText(twin), mode: modeOf(el), after: !!(el.compareDocumentPosition(twin) & Node.DOCUMENT_POSITION_FOLLOWING) });
+    await app.doc.remove(twin, 'mode');
+  }
+  setTag(app, el, { classes: modeClasses(mode) }, 'mode');
+  if (twin && mode !== 'both') {
+    setTag(app, twin, { classes: modeClasses(otherMode(mode)) }, 'mode');
+    // a picture selected by itself gives way to its twin, which is the one shown now
+    if (app.selection.only() === el && !shown(el)) app.selection.set('elements', [twin]);
+  }
+  const back = takenTwin.get(el);
+  if (twin || mode === 'both' || !back || !el.parentElement) return;
+  const [node] = await app.doc.insert(back.text, el.parentElement, back.after ? el.nextElementSibling : el, 'mode');
+  if (mode !== back.mode) setTag(app, node, { classes: modeClasses(otherMode(mode)) }, 'mode');
+}
 
 export function commands(): Command[] {
   const list: Command[] = [
@@ -101,10 +136,19 @@ export function commands(): Command[] {
         if (el.getAttribute('alt') !== alt) setTag(app, el, { attrs: { alt } }, 'alt text');
       },
     },
-    // a decorative image has an empty alt, which a screen reader skips
-    switchOf('figure.decorative', 'Decorative', imageOf, (el) => el.getAttribute('alt') === '', (on) => ({ attrs: { alt: on ? '' : null } }), imageMenu(11)),
+    // a decorative image has an empty alt, which a screen reader skips, written on both images of
+    // a pair
+    {
+      ...switchOf('figure.decorative', 'Decorative', imageOf, (el) => el.getAttribute('alt') === '', () => ({}), imageMenu(11)),
+      run: (app, arg) => {
+        const el = given(arg) ?? imageOf(app);
+        if (!el) return;
+        const edit = { attrs: { alt: el.getAttribute('alt') === '' ? null : '' } };
+        for (const m of [el, twinOf(app, el)]) if (m) setTag(app, m, edit, 'decorative');
+      },
+    },
     switchOf('figure.paper', 'Paper', imageOf, (el) => el.classList.contains('paper'), (on) => ({ classes: { paper: on } }), imageMenu(20)),
-    switchOf('figure.invert', 'Invert in Dark Mode', imageOf, (el) => el.classList.contains('invert'), (on) => ({ classes: { invert: on } }), imageMenu(21)),
+    switchOf('figure.invert', 'Invert in Dark Mode', (app) => invertible(app, imageOf(app)), (el) => el.classList.contains('invert'), (on) => ({ classes: { invert: on } }), imageMenu(21)),
     switchOf('figure.autoplay', 'Play Automatically', videoOf, has('data-autoplay'), flag('data-autoplay')),
     switchOf('figure.loop', 'Loop', videoOf, has('loop'), flag('loop')),
     switchOf('figure.muted', 'Muted', videoOf, has('muted'), flag('muted')),
@@ -137,7 +181,7 @@ export function commands(): Command[] {
       },
       run: (app, arg) => {
         const el = given(arg) ?? visual(app);
-        if (el && modeOf(el) !== mode) setTag(app, el, { classes: { 'for-dark': mode === 'dark', 'for-light': mode === 'light' } }, 'mode');
+        if (el && modeOf(el) !== mode) return app.history.selecting('mode', () => setMode(app, el, mode));
       },
     });
   }

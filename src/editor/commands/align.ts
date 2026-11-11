@@ -217,6 +217,18 @@ export function commands(): Command[] {
       run: (app) => distribute(app, axis),
     });
   }
+  // Evenly spaces the selection in both directions at once, as Distribute Objects > Evenly of Keynote
+  list.push({
+    id: 'arrange.distribute.evenly',
+    label: 'Distribute Evenly',
+    menu: { bar: 'Arrange', group: 'distribute', order: 42, submenu: 'Distribute' },
+    undoable: true,
+    enabled: canDistribute,
+    run: (app) => {
+      distribute(app, 'x');
+      distribute(app, 'y');
+    },
+  });
   // arg is { x, y, els }, the position on the slide, with x or y left out to keep it. it is written
   // as the offset that reaches it
   list.push({
