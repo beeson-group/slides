@@ -311,9 +311,11 @@ export class Outline {
       }
       const end = (e.el.textContent ?? '').length;
       selectIn(e.el, math || at === null ? end : at);
-      if (what === 'return' && canSplit(this.app)) await split(this.app);
-      else if (what === 'indent' && canIndent(this.app)) await indent(this.app);
-      else if (what === 'outdent' && canOutdent(this.app)) await outdent(this.app);
+      // one entry of the history with the label of the command of the canvas
+      const run = (id: string, fn: (app: App) => Promise<void>) => this.app.history.transact(this.app.commands.label(id), () => fn(this.app));
+      if (what === 'return' && canSplit(this.app)) await run('text.newParagraph', split);
+      else if (what === 'indent' && canIndent(this.app)) await run('text.indent', indent);
+      else if (what === 'outdent' && canOutdent(this.app)) await run('text.outdent', outdent);
       else {
         this.done(() => this.entries[k]?.text ?? null, at);
         return;
