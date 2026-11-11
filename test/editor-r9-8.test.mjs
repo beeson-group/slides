@@ -92,3 +92,63 @@ for (const platform of PLATFORMS) {
     }
   });
 }
+
+const stageGone = `!document.querySelector('.beeson-edit-show')`;
+
+// finding steps-transitions-present-1: Present opened the show in a new tab that was not full
+// screen, Esc there opened the overview of reveal.js, and the editor stayed at its own slide
+for (const platform of PLATFORMS) {
+  test(`Present plays the show in place over the whole screen, and Esc ends it at the slide shown last (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 2 });
+    await press(page, 'Mod+Enter');
+    await page.waitFor(showReady, 20000);
+    assert.equal(await page.evaluate('window.__shows.length'), 0, 'Present opens the show in a new tab');
+    assert.equal(await page.evaluate(`document.fullscreenElement?.className ?? null`), 'beeson-edit-show', 'the show is not full screen');
+    assert.equal(await showHeading(page), 'Show your steps one at a time');
+    assert.equal(await page.evaluate(`!!${SHOW}.BeesonEditor || !!${SHOW}.document.querySelector('script[src$="editor.js"]')`), false, 'the editor is loaded in the show');
+    // the keys go to the show
+    await press(page, 'ArrowRight');
+    await page.waitFor(`${SHOW}.Reveal.getIndices().f === 0`);
+    await page.evaluate(`${SHOW}.Reveal.slide(6), true`);
+    await sleep(300);
+    await press(page, 'Escape');
+    await page.waitFor(stageGone);
+    assert.equal(await page.evaluate('document.fullscreenElement'), null);
+    assert.equal(await editorHeading(page), 'Chapter two', 'the editor is not at the slide shown last');
+    await byteExact(page);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`a show that the browser does not take into full screen fills the window, and Esc ends it (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 2 });
+    await page.evaluate(`Element.prototype.requestFullscreen = function () { return Promise.reject(new TypeError('refused')); }, true`);
+    await press(page, 'Mod+Enter');
+    await page.waitFor(showReady, 20000);
+    const box = await page.evaluate(`(() => { const r = document.querySelector('.beeson-edit-show iframe').getBoundingClientRect(); return [r.left, r.top, r.width, r.height]; })()`);
+    assert.deepEqual(box, [0, 0, 1600, 1000], 'the show does not fill the window');
+    await page.evaluate(`${SHOW}.Reveal.slide(4), true`);
+    await sleep(300);
+    await press(page, 'Escape');
+    await page.waitFor(stageGone);
+    assert.equal(await editorHeading(page), 'Figures are first class citizens, too');
+    await byteExact(page);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`Present with unsaved changes asks first, and the saved file is then played in place over the whole screen (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 2 });
+    await page.evaluate(`window.BeesonEditor.exec('slide.hide')`);
+    await press(page, 'Mod+Enter');
+    await page.waitFor(`[...document.querySelectorAll('dialog[open] button')].some((b) => b.textContent === 'Present the saved file')`);
+    const at = await page.evaluate(`(() => { const r = [...document.querySelectorAll('dialog[open] button')].find((b) => b.textContent === 'Present the saved file').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    await click(page, at);
+    await page.waitFor(showReady, 20000);
+    assert.equal(await page.evaluate('window.__shows.length'), 0, 'Present opens the show in a new tab');
+    assert.equal(await page.evaluate(`document.fullscreenElement?.className ?? null`), 'beeson-edit-show', 'the show is not full screen');
+    assert.equal(await showHeading(page), 'Show your steps one at a time');
+    await press(page, 'Escape');
+    await page.waitFor(stageGone);
+    assert.equal(await page.evaluate('window.BeesonEditor.status().dirty'), true);
+    assert.deepEqual(errors(page), []);
+  });
+}
