@@ -53,7 +53,7 @@ html.beeson-editor .beeson-edit-notes-zoom button:focus-visible { outline: 2px s
 html.beeson-editor .beeson-edit-notes-zoom .value { min-width: 34px; text-align: center; }
 html.beeson-editor.beeson-notes .reveal .slides section.present { overflow: visible; clip-path: var(--ed-notes-clip, none); }
 html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes { display: block; position: absolute; left: var(--ed-notes-x, 0px); top: var(--ed-notes-y, 100%); width: var(--ed-notes-w, 100%); height: var(--ed-notes-h, 200px); right: auto; bottom: auto; z-index: 100; box-sizing: border-box; margin: 0; padding: var(--ed-notes-pad-t, 10px) var(--ed-notes-pad-r, 16px) var(--ed-notes-pad-t, 10px) var(--ed-notes-pad-s, 16px); --text: var(--ed-text); --subtle: var(--ed-muted); --muted: var(--ed-muted); --line: var(--ed-line); --accent: var(--ed-guide); --violet: var(--ed-select); font-family: var(--ed-font); font-size: var(--ed-notes-font, 13px); font-weight: 400; line-height: 1.5; letter-spacing: normal; text-align: left; color: var(--ed-text); background: var(--ed-panel); box-shadow: inset 0 var(--ed-notes-hair, 1px) var(--ed-line); overflow: auto; overscroll-behavior: contain; outline: var(--ed-notes-hair, 1px) solid transparent; outline-offset: calc(-1 * var(--ed-notes-hair, 1px)); cursor: text; }
-html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:empty::before { content: 'Click to add notes'; color: var(--ed-faint); }
+html.beeson-editor.beeson-notes .reveal .slides section.present > aside.notes:empty::before { content: 'Click to add notes'; color: var(--ed-muted); }
 `;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));

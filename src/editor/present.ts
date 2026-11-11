@@ -284,7 +284,7 @@ dialog.beeson-edit-presenter::backdrop { background: #000; }
 .beeson-edit-presenter .notes .head button { height: 24px; min-width: 30px; padding: 0 6px; font-weight: 600; }
 .beeson-edit-presenter .notes .text { flex: 1; overflow: auto; padding: 10px 14px 14px; font-family: var(--ed-font); line-height: 1.45; user-select: text; -webkit-user-select: text; }
 .beeson-edit-presenter .notes .text p { margin: 0 0 0.6em; }
-.beeson-edit-presenter .notes .text.empty { color: var(--ed-faint); }
+.beeson-edit-presenter .notes .text.empty { color: var(--ed-muted); }
 .beeson-edit-presenter .count { min-width: 72px; text-align: center; font-variant-numeric: tabular-nums; }
 .beeson-edit-presenter .slide-time { visibility: hidden; display: inline-flex; align-items: baseline; gap: 8px; color: var(--ed-muted); }
 .beeson-edit-presenter.rehearse .slide-time { visibility: visible; }
