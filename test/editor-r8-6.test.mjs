@@ -203,3 +203,56 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the selection, each element as its tag, its style class, and its first words
+const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((e) => [e.localName, ...[...e.classList].filter((c) => ['small', 'caption', 'foot'].includes(c))].join('.') + ' ' + e.textContent.trim().slice(0, 18))`);
+
+// gap 2 of R8.6: an undo and a redo dropped the selection of a list made with Dashes of the Text
+// pane from a paragraph selected as a block. each conversion of the Text pane and of the Format
+// menu is checked on the same paragraph, as [name, label of the entry, control, block made]
+const CONVERSIONS = [
+  ['Dashes of the Text pane', 'Dashes', { pane: 'text.list.ul' }, 'ul'],
+  ['Numbers of the Text pane', 'Numbers', { pane: 'text.list.ol' }, 'ol'],
+  ['Dashes of the Format menu', 'Dashes', { exec: 'text.list.ul' }, 'ul'],
+  ['Numbers of the Format menu', 'Numbers', { exec: 'text.list.ol' }, 'ol'],
+  ['Small of the Format menu', 'Small', { exec: 'text.style.small' }, 'p.small'],
+  ['Subheading of the Format menu', 'Subheading', { exec: 'text.style.subheading' }, 'h3'],
+  ['Caption of the Format menu', 'Caption', { exec: 'text.style.caption' }, 'p.caption'],
+  ['Footnote of the Format menu', 'Footnote', { exec: 'text.style.footnote' }, 'div.foot'],
+  ['Smaller of the Text pane', 'Smaller', { pane: 'text.smaller' }, 'p.small'],
+  ['Bigger of the Text pane', 'Bigger', { pane: 'text.bigger' }, 'h3'],
+];
+for (const platform of PLATFORMS) {
+  for (const [name, label, how, tag] of CONVERSIONS) {
+    test(`a paragraph made ${tag} with ${name} is selected after the command, an undo, and a redo (${platform})`, async (t) => {
+      const page = await load(t, platform);
+      await click(page, P);
+      await press(page, 'Escape');
+      await frames(page);
+      const block = await selected(page);
+      assert.deepEqual(block, ['p A paragraph with b']);
+      if (how.pane) await click(page, `${PANEL} [data-command="${how.pane}"]`);
+      else await exec(page, how.exec);
+      await frames(page);
+      const made = [`${tag} A paragraph with b`];
+      assert.deepEqual(await selected(page), made, `the block made by ${label} is not selected`);
+      assert.equal((await state(page, 'edit.undo')).label, `Undo ${label}`);
+      const edited = await render(page);
+      await undo(page);
+      await frames(page);
+      await byteExact(page);
+      assert.deepEqual(await selected(page), block, `the paragraph is not selected after the undo of ${label}`);
+      await redo(page);
+      await frames(page);
+      assert.equal(await render(page), edited);
+      assert.deepEqual(await selected(page), made, `the block made by ${label} is not selected after the redo`);
+      // the block selected again takes the next command, Paragraphs or Body
+      await exec(page, tag === 'ul' || tag === 'ol' ? 'text.list.none' : 'text.style.body');
+      await frames(page);
+      assert.deepEqual(await selected(page), block, 'the block selected after the redo does not take the next command');
+      const { text } = await saveAndReopen(page, `r8-6-${++saves}.html`);
+      assert.equal(text, page.source);
+      assert.deepEqual(errors(page), []);
+    });
+  }
+}
