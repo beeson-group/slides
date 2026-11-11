@@ -389,15 +389,15 @@ export function install(app: App): void {
         const copies: Element[] = [];
         for (const s of targets(a)) {
           // the copy is the next shown slide of s, and it takes the data-transition of s, which is
-          // the transition into s. the transition out of s is thus set again, and the copy leaves
-          // by the old transition out of s, which stays on the slide after it
+          // the transition into s. the transition out of s is thus set again where the copy changed
+          // it, and the copy leaves by the old transition out of s, which stays on the slide after it
           const out = transitionOf(a, s);
           const raw = nextShown(a, s)?.getAttribute('data-transition') ?? null;
           const copy = await doc.duplicate(s);
           copies.push(copy);
           if (nextShown(a, s) !== copy) continue;
-          if (out) setTransition(a, s, out);
-          else doc.setTag(copy, { attrs: { 'data-transition': raw } }, 'transition');
+          if (!out) doc.setTag(copy, { attrs: { 'data-transition': raw } }, 'transition');
+          else if (transitionOf(a, s) !== out) setTransition(a, s, out);
         }
         land(a, copies, copies.at(-1) ?? null, focus);
       },
