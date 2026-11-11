@@ -216,3 +216,86 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the context menus open, by their class, with whether the top one is hit at its center
+const menus = (page) =>
+  page.evaluate(`(() => {
+    const all = [...document.querySelectorAll('.beeson-edit-menu')];
+    const top = all.at(-1);
+    const r = top?.getBoundingClientRect();
+    return { classes: all.map((m) => m.className), hit: !!r && !!document.elementFromPoint(r.left + r.width / 2, r.top + 12)?.closest('.beeson-edit-menu') };
+  })()`);
+
+// the centers of the shown grips and of the rotate handle of the selection
+const grips = (page) =>
+  page.evaluate(`[...document.querySelectorAll('.beeson-grip, .beeson-rotor')].map((g) => ({ g, r: g.getBoundingClientRect() })).filter(({ g, r }) => r.width && getComputedStyle(g).pointerEvents !== 'none' && document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2) === g).map(({ g, r }) => ({ name: g.dataset.handle ?? 'rotor', x: r.left + r.width / 2, y: r.top + r.height / 2 }))`);
+
+// menus-keys-3: a right-click on a grip or on the rotate handle of a selected object opens its
+// element menu, and the object stays selected
+for (const platform of PLATFORMS) {
+  test(`a right-click on a grip or the rotate handle opens the menu of the object (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 4 });
+    for (const pick of ['figure', 'paragraph']) {
+      if (pick === 'figure') await click(page, '.reveal .slides > section.present img');
+      else {
+        await click(page, '.reveal .slides > section.present p');
+        await press(page, 'Escape');
+      }
+      await sleep(100);
+      const before = await page.evaluate(`window.BeesonEditor.selection().map((el) => el.tagName)`);
+      assert.equal(before.length, 1, pick);
+      const points = await grips(page);
+      assert.ok(points.some((p) => p.name === 'rotor') && points.length >= 3, `${pick}: ${JSON.stringify(points)}`);
+      for (const p of [points.find((q) => q.name === 'rotor'), points.find((q) => q.name !== 'rotor')]) {
+        await click(page, p, { button: 'right' });
+        await sleep(100);
+        const m = await menus(page);
+        assert.equal(m.classes.length, 1, `${pick} ${p.name}: no menu`);
+        assert.match(m.classes[0], /\bcontext element\b/, `${pick} ${p.name}`);
+        assert.equal(m.hit, true);
+        await press(page, 'Escape');
+        await sleep(50);
+        assert.deepEqual(await page.evaluate(`window.BeesonEditor.selection().map((el) => el.tagName)`), before, `${pick} ${p.name}: the selection changed`);
+        assert.equal((await grips(page)).length, points.length, `${pick} ${p.name}: the grips are gone`);
+      }
+      await press(page, 'Escape');
+    }
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+// menus-keys-4: a right-click, Shift+F10, or the Menu key on a tile of the light table opens the
+// thumbnail menu of its slide over the light table
+for (const platform of PLATFORMS) {
+  test(`a right-click, Shift+F10, or the Menu key on a tile opens the thumbnail menu (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await openTable(page);
+    const tile = '.beeson-edit-sorter .tile:nth-of-type(4) .pic';
+    await click(page, tile, { button: 'right' });
+    await sleep(100);
+    let m = await menus(page);
+    assert.equal(m.classes.length, 1, 'a right-click opened no menu');
+    assert.match(m.classes[0], /\bcontext slide\b/);
+    assert.equal(m.hit, true, 'the menu is under the light table');
+    const items = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item .label')].map((l) => l.textContent)`);
+    assert.ok(items.includes('Duplicate Slide') && items.includes('Hide Slide'), items.join(', '));
+    await press(page, 'Escape');
+    await sleep(100);
+    assert.equal((await menus(page)).classes.length, 0);
+    assert.equal((await state(page, 'view.lightTable')).checked, true, 'Esc on the menu closed the light table');
+    await click(page, '.beeson-edit-sorter .tile:nth-of-type(2) .pic');
+    await press(page, 'Shift+F10');
+    await sleep(100);
+    m = await menus(page);
+    assert.equal(m.classes.length, 1, 'Shift+F10 opened no menu');
+    assert.match(m.classes[0], /\bcontext slide\b/);
+    await press(page, 'Escape');
+    await sleep(100);
+    await page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'ContextMenu', code: 'ContextMenu', windowsVirtualKeyCode: 93 });
+    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'ContextMenu', code: 'ContextMenu', windowsVirtualKeyCode: 93 });
+    await sleep(100);
+    m = await menus(page);
+    assert.equal(m.classes.length, 1, 'the Menu key opened no menu');
+    assert.deepEqual(errors(page), []);
+  });
+}
