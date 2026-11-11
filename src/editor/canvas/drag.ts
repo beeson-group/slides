@@ -201,12 +201,13 @@ function cornerOf(app: App, el: Element): { x: number; y: number } {
   return { x: b.left, y: b.top };
 }
 
-// the changes of the sizes of els made by change, with the upper left corner of each image or video
-// kept where it is, as a typed width of Keynote and PowerPoint keeps it. the layout of a zone or a
-// plate puts a picture with a width at another place, hence the offset of its figure is changed, as
-// a resize by a grip changes it
+// the changes of the sizes of els made by change, with the upper left corner of each picture kept
+// where it is, as a typed width of Keynote and PowerPoint keeps it. the layout of a zone or a plate
+// puts a picture with a width at another place, and the theme pins the QR code of a closing slide
+// by its lower right corner, hence the offset of its object is changed, as a resize by a grip
+// changes it
 export function withCorners(app: App, els: Element[], change: () => Change[]): Change[] {
-  const marks = els.filter((el) => el.matches(STRETCHED) && el.getClientRects().length).map((el) => ({ el, carrier: objectOf(app, el), at: cornerOf(app, el) }));
+  const marks = els.filter((el) => el.matches(RESIZABLE) && el.getClientRects().length).map((el) => ({ el, carrier: objectOf(app, el), at: cornerOf(app, el) }));
   const from = new Map(marks.map((m) => [m.carrier, placeOf(m.carrier)]));
   const changes = change();
   const k = frameOf(app).scale;
