@@ -244,7 +244,8 @@ for (const platform of PLATFORMS) {
         const s = document.querySelector('.reveal .slides');
         const r = s.getBoundingClientRect();
         const scale = r.width / s.offsetWidth;
-        const f = document.querySelector(${JSON.stringify(FIG)}).getBoundingClientRect();
+        // the frame of the figure, i.e. its picture with its caption
+        const f = document.querySelector('.beeson-overlay > .beeson-frame.selected:not([hidden])').getBoundingClientRect();
         return { x: Math.round((f.left - r.left) / scale), y: Math.round((f.top - r.top) / scale) };
       })()`);
       const m = /^x (-?\d+)\s+y (-?\d+)$/.exec(text ?? '');
