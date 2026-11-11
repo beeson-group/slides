@@ -137,6 +137,22 @@ export class History {
     }
   }
 
+  // a part of the open transaction after whose undo the selection that take reads now is put back,
+  // and after whose redo the one that it reads at the call of the function returned, e.g. a word
+  // made bold. take gives the function that puts the selection back
+  keep(take: () => (() => void) | null): () => void {
+    const entries = this.open;
+    if (!entries) return () => {};
+    const at = entries.length;
+    const before = take();
+    return () => {
+      if (entries.length === at) return;
+      const after = take();
+      entries.splice(at, 0, { label: 'select', undo: () => before?.(), redo: () => {} });
+      entries.push({ label: 'select', undo: () => {}, redo: () => after?.() });
+    };
+  }
+
   // called when host is focused or put back, so that its content before the next input is known
   track(host: Element): void {
     this.known.set(host, this.snapshot(host));

@@ -180,6 +180,11 @@ export function edit(app: App, targets: Target[], change: (host: Element, range:
   const t = textTarget(app);
   const spanning = flow.active();
   const caret = t?.range.collapsed ? offsetIn(t.host, t.range.startContainer, t.range.startOffset) : null;
+  // an undo and a redo select the text again, as History.selecting does an element
+  const kept = app.history.keep(() => {
+    const p = flow.places(app);
+    return p && (() => flow.select(app, ...p));
+  });
   for (const { host, range } of targets) {
     app.history.beforeTyping(host);
     const nodes = change(host, range);
@@ -203,6 +208,7 @@ export function edit(app: App, targets: Target[], change: (host: Element, range:
     app.history.afterTyping(host);
   }
   if (spanning) flow.repaint(app);
+  kept();
   app.markDirty();
   app.invalidate('content');
 }

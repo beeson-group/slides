@@ -99,7 +99,7 @@ function paint(app: App, apart = span!.focus[0]): void {
 export const repaint = (app: App): void => void (span && paint(app));
 
 // the text from anchor to focus, as a span over several blocks or as the window in one
-function select(app: App, anchor: Place, focus: Place): void {
+export function select(app: App, anchor: Place, focus: Place): void {
   if (anchor[0] !== focus[0]) {
     span = { anchor, focus };
     return paint(app);
@@ -109,6 +109,9 @@ function select(app: App, anchor: Place, focus: Place): void {
   (host as HTMLElement).focus({ preventScroll: true });
   getSelection()?.setBaseAndExtent(...pointAt(host, anchor[1]), ...pointAt(host, focus[1]));
 }
+
+// the anchor and the focus of the span, else of the window in one block
+export const places = (app: App): [Place, Place] | null => (span ? [span.anchor, span.focus] : windowPlaces(app));
 
 // the anchor and the focus of the window as places, in one block
 function windowPlaces(app: App): [Place, Place] | null {
