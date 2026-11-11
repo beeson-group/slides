@@ -128,6 +128,9 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
 
 type Row = { el: HTMLButtonElement; no: HTMLElement; pic: HTMLElement; dots: HTMLElement; trans: HTMLElement; num: HTMLElement; title: HTMLElement; kind: HTMLElement };
 
+// the current slide, the selected slides, and whether the focus is in the navigator
+type Place = { current: Element | null; slides: Element[]; nav: boolean };
+
 type Drag = { slide: Element; x: number; y: number; id: number; on: boolean; slides: Element[]; gap: number; ghost: HTMLElement | null; scroll: number };
 
 // what a drag in the navigator asks for: the slides moved to the gap before the slide at gap, in
@@ -273,6 +276,22 @@ export class Navigator implements Pane {
 
   private selectOnly(slide: Element | null): void {
     if (slide) this.select([slide], slide);
+  }
+
+  // fn as a part of the history after whose undo the current slide, the selected slides, and the
+  // focus in the navigator are those before fn, and after whose redo those after it, as the
+  // selecting() of history.ts keeps the elements
+  keeping<T>(label: string, fn: () => T | Promise<T>): Promise<T> {
+    const take = (): Place => ({ current: this.app.current(), slides: this.selected(), nav: this.app.region() === 'navigator' });
+    return this.app.history.keeping(label, take, (p) => this.restore(p), fn);
+  }
+
+  private restore(p: Place): void {
+    const slides = p.slides.filter((s) => s.isConnected);
+    const current = p.current?.isConnected ? p.current : (slides.at(-1) ?? null);
+    if (!current) return;
+    this.select(slides.length ? slides : [current], current);
+    if (p.nav || this.app.region() === 'navigator' || document.activeElement === document.body) this.focus(current);
   }
 
   // the row of slide gets the focus, e.g. after a command run in the navigator
@@ -583,11 +602,11 @@ export class Navigator implements Pane {
       const [{ insertFiles }, { kindOf }] = await Promise.all([import('../media/actions.ts'), import('../media/store.ts')]);
       const files = dropped.filter((f) => kindOf(f));
       if (!files.length) return;
-      await this.app.history.transact(files.length > 1 ? 'Media' : 'New Slide', async () => {
+      await this.app.history.transact(files.length > 1 ? 'Media' : 'New Slide', () => this.keeping('New Slide', async () => {
         const slide = await this.app.doc.insertSlide('figure', before);
         this.select([slide], slide);
         await insertFiles(this.app, files, slide.querySelector('.plate'));
-      });
+      }));
     };
     run().catch((e) => this.app.fail(e));
   }

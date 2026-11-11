@@ -496,7 +496,8 @@ export function install(app: App): void {
       },
     },
   ];
-  for (const d of defs) c.define(d);
+  // an undo and a redo of a slide command show and select the slides from before and after it
+  for (const d of defs) c.define(d.undoable ? { ...d, run: (a, arg) => navOf(a).keeping(d.id, () => d.run(a, arg)) } : d);
 
   // the clipboard keys in the navigator act on the slides, through the events that carry the
   // clipboard in every browser

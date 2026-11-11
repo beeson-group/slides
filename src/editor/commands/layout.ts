@@ -481,7 +481,7 @@ export function install(app: App): void {
       },
     },
   ];
-  for (const d of defs) app.commands.define(d);
+  for (const d of defs) app.commands.define(d.undoable ? { ...d, run: (a, arg) => navOf(a).keeping(d.id, () => d.run(a, arg)) } : d);
   // the commands of the order, the groups, the locks, and the rotation, from the same install line
   // of main.ts
   installOrder(app);
