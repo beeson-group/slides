@@ -93,6 +93,18 @@ function pictureIn(el: Element): { width: number; height: number; dx: number; dy
   return { width: w, height: ht, dx: at(px, box.width - w) + w / 2 - box.width / 2, dy: at(py, box.height - ht) + ht / 2 - box.height / 2 };
 }
 
+// the box of el on the screen at its frame, as Keynote and PowerPoint take the box of an object in
+// every field and command: a figure that holds a picture at the picture and over the caption that it
+// holds, and another element at its box seen
+export function frameRect(el: Element): Box {
+  const box = visualRect(el.matches(RESIZABLE) || el.matches(CONTAINER) ? pictureOf(el) : el);
+  const caps = el.matches(CONTAINER) ? [...el.querySelectorAll(':scope > figcaption, :scope > .caption')].map((c) => c.getBoundingClientRect()).filter((r) => r.width && r.height) : [];
+  if (!caps.length) return box;
+  const left = Math.min(box.left, ...caps.map((r) => r.left)), top = Math.min(box.top, ...caps.map((r) => r.top));
+  const right = Math.max(box.left + box.width, ...caps.map((r) => r.right)), bottom = Math.max(box.top + box.height, ...caps.map((r) => r.bottom));
+  return { left, top, width: right - left, height: bottom - top };
+}
+
 // the size of the picture of el in slide pixels, without its scale and rotation, which the fields
 // W and H of the Arrange pane give: the picture of an image or a video fitted into its box, and the
 // box of any other element
@@ -248,10 +260,10 @@ export function linePoints(app: App, skip: Element[] = []): { x: number; y: numb
 }
 
 // the box that a drag of el snaps by, in slide pixels: the box of the ends of a line, whose edges
-// and center are its ends and its middle, and the box of the picture of any other element
+// and center are its ends and its middle, and the frame of any other element
 export function snapBoxOf(app: App, el: Element): Box {
   const f = frameOf(app);
-  if (!el.matches(LINE)) return toSlide(f, visualRect(el));
+  if (!el.matches(LINE)) return toSlide(f, frameRect(el));
   const [a, b] = lineEnds(el);
   return toSlide(f, { left: Math.min(a.x, b.x), top: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) });
 }

@@ -70,7 +70,7 @@ export function syncPlaceholders(app: App): void {
 async function insertInto(app: App, zone: Element, kind: Kind, anchor: DOMRect): Promise<void> {
   if (kind === 'table') return pickTableInto(app, zone, anchor);
   if (kind === 'qr') {
-    if (app.current() === zone.closest('section')) await app.commands.run('insert.qr');
+    if (app.current() === zone.closest('section')) await app.commands.run('insert.qr', zone);
     return;
   }
   const files = await chooseFiles(ACCEPT[kind]);

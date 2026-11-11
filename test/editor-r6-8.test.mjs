@@ -443,7 +443,8 @@ const readoutOf = (page) => page.evaluate(`(() => { const o = document.querySele
 const cornerOf = (page) => page.evaluate(`(() => {
   const s = document.querySelector('.reveal .slides');
   const r = s.getBoundingClientRect(), k = r.width / s.offsetWidth;
-  const f = window.BeesonEditor.selection()[0].getBoundingClientRect();
+  // the frame of the selected element, which is the picture with its caption for a figure
+  const f = document.querySelector('.beeson-overlay > .beeson-frame.selected:not([hidden])').getBoundingClientRect();
   return { x: Math.round((f.left - r.left) / k), y: Math.round((f.top - r.top) / k) };
 })()`);
 const xy = (text) => {

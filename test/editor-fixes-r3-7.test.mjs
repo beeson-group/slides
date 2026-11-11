@@ -598,10 +598,11 @@ for (const platform of PLATFORMS) {
     const corner = await page.evaluate(`(() => {
       const s = document.querySelector('.reveal .slides');
       const r = s.getBoundingClientRect();
-      const f = document.querySelector('.reveal section.present figure.zone').getBoundingClientRect();
+      const f = document.querySelector('.beeson-overlay > .beeson-frame.selected:not([hidden])').getBoundingClientRect();
       const scale = r.width / s.offsetWidth;
       return 'x ' + Math.round((f.left - r.left) / scale) + '  y ' + Math.round((f.top - r.top) / scale);
     })()`);
+    // the corner of the frame of the figure, i.e. of its picture with its caption
     assert.equal(during.text, corner, 'the readout is not the upper left corner of the figure in slide px');
 
     await page.evaluate('window.BeesonEditor.undo()');

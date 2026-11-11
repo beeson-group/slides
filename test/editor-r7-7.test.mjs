@@ -21,6 +21,7 @@ const FIGURE = '<figure class="zone fragment" data-fragment-index="2">';
 const LEAD = '<p>The lead-in of a display</p>';
 const P = '.reveal section.present > p';
 const ZONE = '.reveal section.present .zone';
+const SELECTED = '.beeson-overlay > .beeson-frame.selected:not([hidden])';
 const IMG = '.reveal section.present .zone > img:not([hidden])';
 const MATH = [...readFileSync(LAYOUTS, 'utf8').matchAll(/<section[\s\S]*?<\/section>/g)].findIndex((m) => m[0].includes('<h2>Math, an ordered list, and a zone</h2>'));
 
@@ -227,7 +228,8 @@ for (const platform of PLATFORMS) {
     assert.ok(dx < 0, `the offset of the figure is ${dx}`);
     await byteExact(page, [[FIGURE, `${FIGURE.slice(0, -1)} style="translate: ${dx}px 0px">`]]);
     const slide = await rect(page, '.reveal .slides');
-    const frame = await rect(page, ZONE);
+    // the frame of the figure, i.e. its picture with its caption, is centered
+    const frame = await rect(page, SELECTED);
     assert.ok(Math.abs(frame.x - slide.x) <= 1.5, `the figure is centered at ${frame.x}, and the slide at ${slide.x}`);
     await roundTrip(page, text);
     // the open of the saved text clears the selection
@@ -237,7 +239,7 @@ for (const platform of PLATFORMS) {
     const both = await render(page);
     const dy = Number(both.match(/data-fragment-index="2" style="translate: -?\d+px (-?\d+)px">/)?.[1]);
     assert.ok(Number.isFinite(dy) && dy !== 0, `the vertical offset of the figure is ${dy}`);
-    const framed = await rect(page, ZONE);
+    const framed = await rect(page, SELECTED);
     assert.ok(Math.abs(framed.y - slide.y) <= 1.5, `the figure is centered at ${framed.y}, and the slide at ${slide.y}`);
     await roundTrip(page, both);
     assert.deepEqual(errors(page), []);

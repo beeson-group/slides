@@ -7,6 +7,7 @@
 // since Ctrl+Alt is not bound on Windows and Linux
 
 import type { App, Region } from '../app.ts';
+import { frameRect } from '../canvas/hit.ts';
 
 // the zoom keys are taken everywhere but in a field and a dialog
 const CANVAS_ZOOM: Region[] = ['canvas', 'text', 'navigator', 'inspector', 'notes'];
@@ -18,11 +19,11 @@ const inNotes = (app: App, way: 1 | -1 | 0): boolean => {
   return true;
 };
 
-// the box of the selected elements, or of the block of the text, in slide px
+// the box of the frames of the selected elements, or of the block of the text, in slide px
 function selectionBox(app: App): { left: number; top: number; width: number; height: number } | null {
   const sel = app.selection;
   const els = sel.kind === 'elements' || sel.kind === 'text' ? sel.items.filter((el) => el.isConnected) : [];
-  const rects = els.map((el) => el.getBoundingClientRect()).filter((r) => r.width || r.height);
+  const rects = els.map(frameRect).filter((r) => r.width || r.height).map((r) => ({ left: r.left, top: r.top, right: r.left + r.width, bottom: r.top + r.height }));
   if (!rects.length) return null;
   const a = app.stage.toSlide({ x: Math.min(...rects.map((r) => r.left)), y: Math.min(...rects.map((r) => r.top)) });
   const b = app.stage.toSlide({ x: Math.max(...rects.map((r) => r.right)), y: Math.max(...rects.map((r) => r.bottom)) });

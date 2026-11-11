@@ -10,7 +10,7 @@ import type { App } from '../app.ts';
 import type { TagEdit, Translate } from '../tags.ts';
 import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
-import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, constrained, containerOf, cssWidth, frameOf, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, visualRect } from './hit.ts';
+import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, constrained, containerOf, cssWidth, frameOf, frameRect, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, visualRect } from './hit.ts';
 import { groupReach, overlay, view } from './frames.ts';
 import { enterGroup, settleCopies, freshGroup, groupOf } from '../commands/order.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -431,7 +431,7 @@ export function install(app: App): void {
     }
     const slides = app.slides() as HTMLElement;
     return {
-      boxes: others.map((o) => toSlide(f, visualRect(o))).filter((b) => b.width > 0 && b.height > 0),
+      boxes: others.map((o) => toSlide(f, frameRect(o))).filter((b) => b.width > 0 && b.height > 0),
       frames: frames_,
       points: linePoints(app, els),
       slide: { width: slides.offsetWidth || 1920, height: slides.offsetHeight || 1080 },
@@ -616,7 +616,7 @@ export function install(app: App): void {
       const box = { left, top, width: Math.abs(ev.clientX - p.x), height: Math.abs(ev.clientY - p.y) };
       view.marquee = box;
       const touched = movablesOf(app).filter((el) => {
-        const r = visualRect(el);
+        const r = frameRect(el);
         return r.left <= box.left + box.width && r.left + r.width >= box.left && r.top <= box.top + box.height && r.top + r.height >= box.top;
       });
       // a line is touched where the marquee touches the line itself, not only its box
@@ -908,7 +908,7 @@ export function install(app: App): void {
   // place where it was dropped, as one entry of the history. the copies are then selected
   const copyAt = async (p: Press) => {
     const f = frameOf(app);
-    const dropped = p.els.map((el) => ({ el, box: toSlide(f, visualRect(el)) }));
+    const dropped = p.els.map((el) => ({ el, box: toSlide(f, frameRect(el)) }));
     for (const el of [...p.els, ...(p.trail ?? []).map((t) => t.caption)]) writeLive(el, p.from.get(el) as Place);
     await app.history.selecting('Duplicate', async () => {
       const copies: Element[] = [];
@@ -923,7 +923,7 @@ export function install(app: App): void {
           if (!groups.has(g)) groups.set(g, freshGroup(app));
           app.doc.setTag(copy, { attrs: { 'data-group': groups.get(g)! } }, 'group');
         }
-        const now = toSlide(frameOf(app), visualRect(copy));
+        const now = toSlide(frameOf(app), frameRect(copy));
         const t = placeOf(copy).translate ?? { x: 0, y: 0 };
         app.doc.setTag(copy, { translate: { x: Math.round(t.x + box.left - now.left), y: Math.round(t.y + box.top - now.top) } }, 'move');
         copies.push(copy);
