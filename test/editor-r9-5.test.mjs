@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 
@@ -337,6 +337,50 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await shape(page), [1, 1, 1, 1, 1], 'a count of 1 typed into Columns does not take out the last two columns');
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Set Column Count');
     await roundTrip(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+// the buttons of the insert group of the toolbar, by their command, with true where one is enabled
+const INSERTS = `Object.fromEntries([...document.querySelectorAll('.beeson-edit-top button[data-command^="insert."]')]
+  .filter((b) => b.getClientRects().length > 0).map((b) => [b.dataset.command, !b.disabled]))`;
+const TABLE_BUTTON = '.beeson-edit-top button[data-command="insert.table"]';
+const PICKER = `!!document.querySelector('dialog.beeson-table-picker[open]')`;
+const pressed = (page) => page.evaluate(`(() => { const b = document.querySelector(${js(TABLE_BUTTON)}); return { pressed: b.getAttribute('aria-pressed'), expanded: b.getAttribute('aria-expanded') }; })()`);
+
+// finding tables-equations-insert-10: while the grid of Insert > Table was open, the insert buttons
+// were disabled, and the Table button under its grid was not drawn pressed
+for (const [platform, mode] of [['mac', 'light'], ['other', 'dark']]) {
+  test(`the Table button is drawn pressed under its open grid, and the other insert buttons stay enabled (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 6, mode });
+    const was = await page.evaluate(INSERTS);
+    assert.ok(Object.values(was).filter(Boolean).length >= 4, `the insert buttons are not enabled before the grid opens: ${js(was)}`);
+    await click(page, TABLE_BUTTON);
+    await page.waitFor(PICKER);
+    await frames(page);
+    assert.deepEqual(await page.evaluate(INSERTS), was, 'an insert button is disabled while the grid of the Table button is open');
+    assert.deepEqual(await pressed(page), { pressed: 'true', expanded: 'true' }, 'the Table button is not drawn pressed under its open grid');
+
+    await press(page, 'Escape');
+    await frames(page);
+    assert.equal(await page.evaluate(PICKER), false, 'Esc does not close the grid');
+    assert.deepEqual(await pressed(page), { pressed: null, expanded: 'false' }, 'the Table button is still pressed after the grid is closed');
+
+    // a second click on the pressed button closes its grid, as a click on another button does
+    await click(page, TABLE_BUTTON);
+    await page.waitFor(PICKER);
+    await click(page, TABLE_BUTTON);
+    await frames(page);
+    assert.equal(await page.evaluate(PICKER), false, 'a click on the pressed Table button does not close its grid');
+    await click(page, TABLE_BUTTON);
+    await page.waitFor(PICKER);
+    await frames(page);
+    await click(page, '.beeson-edit-top button[data-command="insert.text"]');
+    await frames(page);
+    assert.equal(await page.evaluate(PICKER), false, 'a click on Text does not close the grid');
+    await type(page, 'Gap');
+    await frames(page);
+    assert.match(await render(page), />Gap</, 'a click on Text with the grid open does not insert a text box');
     assert.deepEqual(errors(page), []);
   });
 }
