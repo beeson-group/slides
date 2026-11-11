@@ -365,3 +365,45 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// difference 3 of R11.2: with several rows of the Steps list selected, a delay typed into the field
+// was written only into the first row
+const ROW = (text) => `[...document.querySelectorAll('.beeson-edit-side .rows .row')].find((r) => r.querySelector('.text').textContent.startsWith(${js(text)}))`;
+const pointIn = (page, el, fx = 0.5) => page.evaluate(`(() => { const el = ${el}; el.scrollIntoView({ block: 'nearest' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width * ${fx}, y: r.top + r.height / 2 }; })()`);
+const openSteps = async (page) => {
+  if (!(await page.evaluate(`window.BeesonEditor.state('view.steps').checked`))) await page.evaluate(`window.BeesonEditor.exec('view.steps')`);
+  await frames(page);
+};
+const DELAY = '.beeson-edit-side input.delay';
+const LI = (k) => `document.querySelectorAll('.reveal section.present ul > li')[${k}]`;
+const field = (page) => page.evaluate(`(() => { const f = document.querySelector(${js(DELAY)}); return { value: f.value, placeholder: f.placeholder, disabled: f.disabled }; })()`);
+const [TWO, LAST] = ['Two elements wi', 'When exporting '];
+
+for (const platform of PLATFORMS) {
+  test(`a delay typed with several rows selected is written into each row, as one entry, and a mixed delay shows Multiple (${platform})`, async (t) => {
+    const page = await load(t, platform, 2);
+    await openSteps(page);
+    // the second and the third item of the slide start after the step before, at 1 s and 2 s
+    await exec(page, 'steps.start', `{ start: 'after', el: ${LI(1)} }`);
+    await exec(page, 'steps.start', `{ start: 'after', el: ${LI(2)} }`);
+    await exec(page, 'steps.delay', `{ delay: 1, el: ${LI(1)} }`);
+    await exec(page, 'steps.delay', `{ delay: 2, el: ${LI(2)} }`);
+    page.source = await render(page);
+    assert.ok(page.source.includes('data-fragment-index="1" data-autoslide="1000"') && page.source.includes('data-fragment-index="2" data-autoslide="2000"'), 'the delays are not set up');
+    await click(page, await pointIn(page, ROW(TWO), 0.7));
+    await click(page, await pointIn(page, ROW(LAST), 0.7), { modifiers: 'Shift' });
+    await frames(page);
+    const mixed = await field(page);
+    await click(page, DELAY);
+    await page.evaluate(`document.querySelector(${js(DELAY)}).select()`);
+    await type(page, '3');
+    await press(page, 'Enter');
+    await frames(page);
+    const text = await render(page);
+    assert.ok(text.includes('data-fragment-index="1" data-autoslide="3000"'), 'the delay is not written into the first selected row');
+    assert.ok(text.includes('data-fragment-index="2" data-autoslide="3000"'), 'the delay is not written into the second selected row');
+    assert.deepEqual(mixed, { value: '', placeholder: 'Multiple', disabled: false }, 'the field does not show a mixed delay');
+    assert.deepEqual(await field(page), { value: '3', placeholder: '', disabled: false });
+    await roundTrip(page);
+  });
+}
