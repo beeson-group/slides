@@ -15,7 +15,7 @@ import type { App } from '../app.ts';
 import type { Translate } from '../tags.ts';
 import { insertFiles } from '../media/actions.ts';
 import { kindOf } from '../media/store.ts';
-import { insertPlain } from '../text/typing.ts';
+import { insertPlain, pasteItems, pastesItems } from '../text/typing.ts';
 import { objectsOf } from '../canvas/hit.ts';
 import { settleCopies, freshGroup } from './order.ts';
 import { withTwins } from '../canvas/hit.ts';
@@ -327,7 +327,8 @@ export function install(app: App): void {
     if (inText(a)) {
       const at = getSelection()?.anchorNode ?? document.activeElement;
       const host = a.hostOf(at instanceof Element ? at : at?.parentElement ?? null);
-      if (match && host) insertPlain(host, els || slides ? wordsOf(text) : text);
+      if (host && !els && !slides && pastesItems(a, host, text)) await pasteItems(a, text);
+      else if (match && host) insertPlain(host, els || slides ? wordsOf(text) : text);
       else if (!els && !slides) document.execCommand('insertText', false, text);
     } else if (els) await pasteElements(a, els);
     else if (!slides && (await pasteRange(a, text))) return;

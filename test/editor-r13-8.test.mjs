@@ -306,21 +306,23 @@ async function command(page, platform, key, name) {
   await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
 }
 
+// a point on the last character of the item of slide 3 whose text is drawn on two lines
+const endOf = (page) => page.evaluate(`(() => {
+  const li = [...Reveal.getCurrentSlide().querySelectorAll('li')].find((e) => e.textContent.includes('Two elements with the same index'));
+  const node = li.lastChild, end = node.data.trimEnd().length;
+  const r = document.createRange();
+  r.setStart(node, end - 2);
+  r.setEnd(node, end - 1);
+  const b = r.getBoundingClientRect();
+  return { x: b.left + 1, y: b.top + b.height / 2 };
+})()`);
+
 // finding r12-6-text-lists 4: a paste of several lines into a list item was one item with br breaks
 for (const platform of PLATFORMS) {
   test(`a paste of several lines into a list item makes an item of each line (${platform})`, async (t) => {
     const page = await load(t, platform, 2);
     await page.send('Browser.grantPermissions', { origin: server.origin, permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] }).catch(() => {});
-    // a click on the last character of the item, whose text is drawn on two lines
-    await click(page, await page.evaluate(`(() => {
-      const li = [...Reveal.getCurrentSlide().querySelectorAll('li')].find((e) => e.textContent.includes('Two elements with the same index'));
-      const node = li.lastChild, end = node.data.trimEnd().length;
-      const r = document.createRange();
-      r.setStart(node, end - 2);
-      r.setEnd(node, end - 1);
-      const b = r.getBoundingClientRect();
-      return { x: b.left + 1, y: b.top + b.height / 2 };
-    })()`));
+    await click(page, await endOf(page));
     await press(page, 'End');
     await page.evaluate(`navigator.clipboard.writeText(' one\\ntwo\\nthree')`);
     await command(page, platform, 'v', 'paste');
@@ -336,6 +338,13 @@ for (const platform of PLATFORMS) {
     await byteExact(page);
     await page.evaluate('window.BeesonEditor.redo()');
     assert.equal(await render(page), text);
+    // Paste of the Edit menu makes the same items
+    await page.evaluate('window.BeesonEditor.undo()');
+    await click(page, await endOf(page));
+    await press(page, 'End');
+    await page.evaluate(`window.BeesonEditor.exec('edit.paste', ' one\\ntwo\\nthree')`);
+    await frames(page);
+    assert.equal(await render(page), text, 'Paste of the Edit menu does not make an item of each line');
     await saveAndReopen(page);
     assert.deepEqual(errors(page), []);
   });
