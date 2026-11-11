@@ -414,8 +414,9 @@ for (const platform of PLATFORMS) {
 const TEXT_PANE = ['text.style.body', 'text.formatPainter', 'text.bold', 'text.italic', 'text.strike', 'text.code', 'text.superscript', 'text.subscript', 'text.smaller', 'text.case.upper', 'text.tone.accent', 'text.link', 'text.clear'];
 // the dimmed controls of the Text pane, each as its command or its text, and its tooltip
 const dimmed = (page) => page.evaluate(`[...document.querySelectorAll('${PANEL} button:disabled')].map((b) => [b.dataset.command || b.textContent, b.title])`);
-// the controls that are dimmed by design on a block of one level that does not have a link
-const UNUSED = /^text\.(indent|outdent|removeLink)$|^(Remove Link|Increase Indent Level|Decrease Indent Level)$/;
+// the controls that are dimmed by design on a block of one level that does not have a link, and
+// Start at, which is set only on a numbered list
+const UNUSED = /^text\.(indent|outdent|removeLink|list\.start)$|^(Remove Link|Increase Indent Level|Decrease Indent Level)$/;
 
 // finding 7 of R8.3: with a list selected as a block, the Text pane dimmed every control but the
 // list buttons (state 190)
