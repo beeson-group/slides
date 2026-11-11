@@ -14,7 +14,7 @@ import { install as installSurface } from '../inspector/surface.ts';
 import { addRow, addSeries, addTab, cellsIn, clearCells, deleteRow, deleteSeries, deleteTab, literal, moveSeries, parseTsv, pasteCells, setCell, setKey, sheetsOf, type Cell, type Result, type Sheet } from '../plotdata.ts';
 import { emptySlot } from '../media/actions.ts';
 import { modelAt } from '../steps.ts';
-import { ask } from '../ui/dialog.ts';
+import { ask, trapTab } from '../ui/dialog.ts';
 
 // the tones that a mark of a new color takes, the data colors of the theme
 export const DATA_TONES = ['data-1', 'data-2', 'data-3', 'data-4', 'data-5', 'data-6', 'data-7', 'data-8'];
@@ -181,6 +181,7 @@ class DataWindow {
   private refused = new Set<string>();
   private inputs: (HTMLInputElement | null)[][] = [];
   private shape = '';
+  private names = '';
 
   constructor(app: App) {
     this.app = app;
@@ -215,6 +216,16 @@ class DataWindow {
     this.grid.addEventListener('focusout', (ev) => this.left(ev.target));
     this.grid.addEventListener('input', (ev) => this.typed(ev.target));
     this.grid.addEventListener('keydown', (ev) => this.key(ev));
+    // Tab and Shift+Tab go round the controls of the window, and Esc on a control that is not a
+    // cell closes it, as the Esc of a cell does once the cell is not edited
+    this.el.addEventListener('keydown', (ev) => {
+      if (ev.key === 'Tab' && !ev.altKey && !ev.ctrlKey && !ev.metaKey) trapTab(this.el, ev);
+      else if (ev.key === 'Escape' && !ev.defaultPrevented) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        void app.commands.run('plot.closeData');
+      }
+    });
     this.pickRange();
     this.dragColumns();
     for (const type of ['copy', 'cut', 'paste'] as const) this.grid.addEventListener(type, (ev) => this.clip(ev));
@@ -250,6 +261,8 @@ class DataWindow {
     this.plot = null;
     this.drafts.clear();
     this.refused.clear();
+    // the focus is given back to the slide, whose keys then act on the plot selected
+    if (this.el.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
     // a preview of a text that was not written is replaced by the plot of the file
     if (plot?.isConnected) redraw(plot);
   }
@@ -295,15 +308,21 @@ class DataWindow {
   // the tabs and the grid of the sheets. a grid of the same shape keeps its inputs, hence a field
   // keeps its focus while the plot is written
   private fill(): void {
-    this.tabs.replaceChildren(...this.sheets.map((s, i) => {
-      const b = make('button', '', s.name);
-      b.type = 'button';
-      b.setAttribute('role', 'tab');
-      b.setAttribute('aria-selected', String(i === this.sheet));
-      b.addEventListener('pointerdown', (ev) => ev.preventDefault());
-      b.addEventListener('click', () => this.choose(i));
-      return b;
-    }));
+    // the buttons of the sheets are kept while their names are, since a button replaced loses the
+    // focus that Tab gave it
+    const names = this.sheets.map((s) => s.name).join('\n');
+    if (names !== this.names || this.tabs.childElementCount !== this.sheets.length) {
+      this.names = names;
+      this.tabs.replaceChildren(...this.sheets.map((s, i) => {
+        const b = make('button', '', s.name);
+        b.type = 'button';
+        b.setAttribute('role', 'tab');
+        b.addEventListener('pointerdown', (ev) => ev.preventDefault());
+        b.addEventListener('click', () => this.choose(i));
+        return b;
+      }));
+    }
+    [...this.tabs.children].forEach((b, i) => b.setAttribute('aria-selected', String(i === this.sheet)));
     const sheet = this.current();
     const shape = sheet ? `${sheet.key}:${sheet.columns.join('|')}:${sheet.rowNames.join('|')}:${sheet.rows.map((r) => r.map((c) => (c ? 1 : 0)).join('')).join()}` : '';
     if (shape !== this.shape || !this.grid.firstChild) {
