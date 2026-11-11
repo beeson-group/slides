@@ -28,6 +28,12 @@ const PANES: Pane[] = [
     el: () => document.querySelector('.beeson-edit-nav'),
     enter: (app, el) => (shown(el.querySelector('[aria-current="true"]')) ? (el.querySelector('[aria-current="true"]') as HTMLElement).focus() : first(app, el)),
   },
+  // the object list of navigator/objects.ts, under the thumbnails
+  {
+    name: 'objects',
+    el: () => document.querySelector('.beeson-edit-objects:not([hidden])'),
+    enter: (_, el) => (el.querySelector<HTMLElement>('.row[tabindex="0"]') ?? el.querySelector<HTMLElement>('input'))?.focus(),
+  },
   {
     name: 'canvas',
     el: () => document.querySelector('.reveal'),

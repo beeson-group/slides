@@ -310,7 +310,8 @@ export class App {
     if (active.closest('aside.notes')) return 'notes';
     if (this.hostOf(active)) return 'text';
     if (active.closest('.beeson-edit-nav')) return 'navigator';
-    if (active.closest('.beeson-edit-inspector, .beeson-edit-side')) return 'inspector';
+    // the object list of navigator/objects.ts takes its own keys, as a pane of controls
+    if (active.closest('.beeson-edit-inspector, .beeson-edit-side, .beeson-edit-objects')) return 'inspector';
     return 'canvas';
   }
 }

@@ -2,9 +2,9 @@
 // both platforms, driven with trusted input: View > Rulers leaves room for the rulers, a drag out
 // of the top ruler places a guide with its place shown during the drag, a figure snaps to it, a
 // drag back onto the ruler removes it, the guides are copied and pasted between slides, cleared,
-// hidden, and kept in the storage of the browser over a reload, and View > Gridlines and Snap to
-// Grid draw the grid and snap a figure to it at the spacing of Grid Settings. the file is checked
-// byte for byte after each of them, since neither a guide nor the grid is written into the deck
+// hidden, and kept in the draft of the file over a reload, and View > Gridlines and Snap to Grid draw
+// the grid and snap a figure to it at the spacing of Grid Settings. the file is checked byte for
+// byte after each of them, with the guides of a slide in data-guides on its section
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -22,6 +22,9 @@ const PLATFORMS = ['mac', 'other'];
 const SECTIONS = [...readFileSync(LAYOUTS, 'utf8').matchAll(/<section[\s\S]*?<\/section>/g)].map((m) => m[0]);
 const MATH = SECTIONS.findIndex((s) => s.includes('<h2>Math, an ordered list, and a zone</h2>'));
 const ZONE = '.reveal .slides section.present figure.zone';
+// the section tag of the slide of the math, and the same tag with the guides of text
+const MATH_TAG = '<section>\n  <h2>Math, an ordered list, and a zone</h2>';
+const mathGuides = (text) => [MATH_TAG, MATH_TAG.replace('<section>', `<section data-guides="${text}">`)];
 const SLIDE = { width: 1920, height: 1080 };
 
 let browser;
@@ -37,9 +40,9 @@ after(async () => {
 
 let last = null;
 
-// the editor on slide n of the deck of layouts, with the storage of the browser cleared unless
-// keep is set
-async function guidesPage(platform, n = MATH, keep = false) {
+// the editor on slide n of the deck of layouts, or of text, with the storage of the browser
+// cleared unless keep is set
+async function guidesPage(platform, n = MATH, keep = false, text = readFileSync(LAYOUTS, 'utf8')) {
   await last?.close().catch(() => {});
   const page = await browser.newPage();
   last = page;
@@ -51,7 +54,7 @@ async function guidesPage(platform, n = MATH, keep = false) {
   }
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync(LAYOUTS, 'utf8');
+  page.source = text;
   const status = await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(page.source)})`);
   assert.deepEqual(status.problems, []);
   await page.evaluate(`Reveal.slide(${n})`);
@@ -137,7 +140,14 @@ for (const platform of PLATFORMS) {
     await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: at.x, y: from.y + 40, button: 'left', clickCount: 1 });
     await frames(page);
     assert.deepEqual(await guides(page), [['x', 1013]]);
+    await byteExact(page, [mathGuides('x1013')]);
+    await undo(page);
+    await frames(page);
+    assert.deepEqual(await guides(page), []);
     await byteExact(page);
+    await page.evaluate('window.BeesonEditor.redo()');
+    await frames(page);
+    assert.deepEqual(await guides(page), [['x', 1013]]);
     // the left edge of the zone, at 1200, snaps to the guide when it is dragged near it, once the
     // figure is selected apart from its image
     await selectFigure(page, `${ZONE} > img`);
@@ -146,7 +156,7 @@ for (const platform of PLATFORMS) {
     await frames(page);
     assert.equal(await translateOf(page, ZONE), '-187px');
     await undo(page);
-    await byteExact(page);
+    await byteExact(page, [mathGuides('x1013')]);
     // a drag of the guide back onto the ruler removes it
     const g = await box(page, '.beeson-hand-guide[data-axis="x"]');
     await drag(page, { x: g.left, y: g.top + 30 }, { dx: left.left + 9 - g.left, dy: 0 });
@@ -183,10 +193,15 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await guides(page), []);
     await exec(page, 'view.guides');
     await frames(page);
-    await byteExact(page);
-    // the guides of each slide are read again after a reload
+    await byteExact(page, [mathGuides('x400 y300 y700')]);
+    // the guides are in the draft of the unsaved edits, which a reload offers, and not in the
+    // storage of the browser
+    assert.equal(await page.evaluate(`localStorage.getItem('beeson-edit-guides:' + location.pathname)`), null);
+    await page.evaluate('new Promise((done) => setTimeout(done, 1500))');
     page = await guidesPage(platform, MATH, true);
-    assert.deepEqual((await guides(page)).sort(), [['x', 400], ['y', 300], ['y', 700]]);
+    assert.equal((await page.evaluate('window.BeesonEditor.status()')).recover, true);
+    const draft = await page.evaluate(`JSON.parse(Object.entries(localStorage).find(([k]) => k.startsWith('beeson-draft:'))[1]).text`);
+    assert.equal(draft, page.source.replace(...mathGuides('x400 y300 y700')));
     await page.evaluate(`Reveal.slide(${MATH + 1})`);
     await frames(page);
     assert.deepEqual(await guides(page), []);
