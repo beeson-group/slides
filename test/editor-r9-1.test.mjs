@@ -443,5 +443,33 @@ for (const platform of PLATFORMS) {
       await saved(page, edited, 'r9-1-group.html');
     });
 
+    test(`a turn of a group with a pair turns the image of each mode, in the drag and after it, on ${platform} in ${mode} mode`, async (t) => {
+      const where = `a group of two pairs on ${platform} in ${mode} mode`;
+      const page = await pickGroup(t, platform, mode);
+      const rest = await look(page);
+      const to = await turnGroup(page, rest.group, 30);
+      const turning = await look(page);
+      assert.ok(turning.pictures.every((p) => p.deg === 30), `${where}: the pictures are turned by ${js(turning.pictures.map((p) => p.deg))} in the drag`);
+      await page.evaluate('Beeson.theme.toggle()');
+      await frames(page);
+      const flipped = await look(page);
+      assert.ok(flipped.pictures.every((p) => p.deg === 30), `${where}: after a flip of the mode in the drag, the pictures are turned by ${js(flipped.pictures.map((p) => p.deg))}`);
+      await release(page, to);
+      await frames(page);
+      for (const flip of [false, true]) {
+        if (flip) {
+          await page.evaluate('Beeson.theme.toggle()');
+          await frames(page);
+        }
+        const now = await look(page);
+        assert.ok(now.pictures.every((p) => p.deg === 30), `${where} after the turn${flip ? ' and a flip of the mode' : ''}: the pictures are turned by ${js(now.pictures.map((p) => p.deg))}`);
+      }
+      const edited = await render(page);
+      const imgs = changedLines(page.source, edited).filter((l) => l.startsWith('<img'));
+      assert.equal(imgs.length, 4, `${where}: the turn writes ${js(imgs)}`);
+      for (const l of imgs) assert.match(l, /rotate: 30deg/, `${where}: the turn writes ${l}`);
+      await roundTrip(page, edited);
+      await saved(page, edited, 'r9-1-group-turn.html');
+    });
   }
 }
