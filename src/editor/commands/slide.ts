@@ -231,6 +231,8 @@ function openGallery(app: App, anchor: HTMLElement | null): void {
   const dialog = document.createElement('dialog') as Gallery;
   dialog.className = 'beeson-edit-gallery';
   dialog.setAttribute('aria-label', 'New slide');
+  // a popover leaves the toolbar live, and a click on one of its buttons closes the gallery and runs it
+  dialog.dataset.popover = '';
   // a click blurs the button of the toolbar, hence the button is looked up when it is not given
   dialog.back = anchor ?? (document.activeElement instanceof HTMLElement ? document.activeElement : null);
   dialog.anchor = anchor ?? document.querySelector<HTMLElement>('.beeson-edit-top [data-command="slide.gallery"]');
