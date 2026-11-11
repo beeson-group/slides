@@ -322,3 +322,57 @@ for (const platform of PLATFORMS) {
     await roundTrip(page);
   });
 }
+
+// the files at paths given to the file chooser of the command id, as a person picks them
+async function choose(page, id, paths) {
+  await page.evaluate(`window.__done = window.BeesonEditor.exec(${js(id)}).then(() => true); 0`);
+  await page.waitFor(`!!document.querySelector('input.beeson-media-input')`);
+  const { result } = await page.send('Runtime.evaluate', { expression: `document.querySelector('input.beeson-media-input')` });
+  await page.send('DOM.setFileInputFiles', { files: paths, objectId: result.objectId });
+  await page.waitFor('window.__done', 20000);
+  await frames(page);
+}
+
+// redoSelects asserts that the selection after an undo and a redo of the last entry is the one
+// after the entry, with an element in it
+async function redoSelects(page, what) {
+  const made = await selection(page);
+  assert.ok(made.length, `nothing is selected after ${what}`);
+  await page.evaluate('window.BeesonEditor.undo()');
+  await frames(page);
+  await page.evaluate('window.BeesonEditor.redo()');
+  await frames(page);
+  assert.deepEqual(await selection(page), made, `the redo of ${what} does not select its element`);
+}
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: a picture replaced by a drop is selected, and a redo of an insert or a replace selects its element`, async (t) => {
+    const page = await load(t, platform, { n: FIGURE });
+    assert.deepEqual(await selection(page), []);
+    assert.equal(await dropFiles(page, await centerOf(page, shownImage), [resolve('demo/figure-dark.png')]), 'Replace Image');
+    await page.waitFor(`window.BeesonEditor.render().includes('src="media/figure-dark')`, 20000);
+    await frames(page);
+    assert.deepEqual(await selection(page), ['img.for-light'], 'the picture replaced by the drop is not selected');
+    await redoSelects(page, 'Replace Image');
+    // a picture replaced by a video
+    await choose(page, 'media.replace', [resolve('demo/clip-light.mp4')]);
+    await redoSelects(page, 'Replace Image with a video');
+    await roundTrip(page, 2);
+
+    const page2 = await load(t, platform, { n: 5 });
+    await exec(page2, 'insert.qr');
+    await frames(page2);
+    await redoSelects(page2, 'Insert QR Code');
+    // a new table gets the caret in its first cell, and its redo selects it, as in Keynote
+    await exec(page2, 'insert.table', { rows: 2, columns: 2 });
+    await frames(page2);
+    assert.equal(await page2.evaluate(`(() => { const n = getSelection().anchorNode; return (n?.nodeType === 1 ? n : n?.parentElement)?.closest('td, th')?.cellIndex; })()`), 0);
+    await page2.evaluate('window.BeesonEditor.undo()');
+    await page2.evaluate('window.BeesonEditor.redo()');
+    await frames(page2);
+    assert.deepEqual(await selection(page2), ['table'], 'the redo of Insert Table does not select its table');
+    await choose(page2, 'insert.image', [resolve('demo/figure-light.png')]);
+    await redoSelects(page2, 'Insert Image');
+    await roundTrip(page2, 3);
+  });
+}
