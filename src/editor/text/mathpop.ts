@@ -323,7 +323,13 @@ export function install(app: App): void {
     if (after === before) return;
     const count = host.querySelectorAll('mjx-container').length;
     const active = document.activeElement as HTMLElement | null;
-    await app.doc.setContent(host, after, 'Formula');
+    // a selected display stays selected, also at an undo and a redo, which put a caret into it
+    const kept = app.selection.elements();
+    const write = async () => {
+      await app.doc.setContent(host, after, 'Formula');
+      if (kept.length && kept.every((el) => el.isConnected)) app.selection.set('elements', kept);
+    };
+    await (kept.length ? app.history.selecting('Formula', write) : write());
     if (host.querySelectorAll('mjx-container').length !== count) throw new Error('MathJax does not find the formula with this TeX, and Undo puts the slide back');
     if (active?.isConnected && !host.contains(active)) active.focus({ preventScroll: true });
   }
