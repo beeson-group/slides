@@ -10,7 +10,7 @@ PRE-RELEASE NOTICE: The template is currently still in beta. View the most up to
 2. (Optional) Modify `README.md` of the new repository with information about your talk, overwriting the text you are reading right now.
 3. To create and edit your slides, open `index.html` (at the root of this repository) in your favorite browser. Then, press the `e` key on your keyboard. This will enter editor mode.
 (This appends the text `?edit` your browser tab's URL bar, e.g. `https://OWNER.github.io/talk-{name-of-your-talk}?edit`. You can reach the editor by typing this out manually too).
-4. When you are happy, click on the save button, which overwrites your repository's local `index.html`. We also support exports to the PDF and PPTX file formats.
+4. When you are happy, click on the save button, which overwrites your repository's local `index.html`. We also support exports to the PDF and PPTX file formats (File > Export To > PDF… in the editor, and `npm run pptx` in a terminal for PPTX).
 
 ## Editing with agents
 
@@ -18,11 +18,11 @@ To create custom backdrops, animations, or other effects you want in your slides
 
 ## Presenting
 
-To present your slides, click on the Present button at the top of your editor. This will enter presentation mode. While in presentation mode, press `d` (or click on the top right toggle) to flip between dark and light themes, `s` to enter speaker view (with your notes), `p` to toggle on/off a pointer, `f` to enter (or leave) full screen mode (which hides the tabs and the address bar), and `Esc` for an overview of your slides. The theme defaults to dark. If you want your slides to to default to light theme, add `?theme=light` to the address.
+To present your slides, click on the Present button at the top of your editor. This will enter presentation mode. While in presentation mode, press `d` (or click on the top right toggle) to flip between dark and light themes, `s` to enter speaker view (with your notes), `p` to toggle on/off a pointer, `f` to enter (or leave) full screen mode (which hides the tabs and the address bar), and `o` for an overview of your slides. The theme defaults to dark. If you want your slides to to default to light theme, add `?theme=light` to the address.
 
 Title, section, and closing slides are never numbered, and the slides after the closing slide default to being the appendix, numbered A1, A2, and so on.
 
-Move the mouse near the bottom edge of the window to magnify the progress line into a scrubber. You can use the scrubber to jump to any numbered slide, forwards or backwards, so you never have to click through your entire presentation to go back to an earlier slide after a question. You can also set the total time you expect your presentation to last: the scrubber will automatically show the target start time for each numbered slide, based on how many steps the slide takes compared to the total presentation steps. You can also edit these timestamps if you know exactly how you want to pace your presentation.
+Move the mouse near the bottom edge of the window to magnify the progress line into a scrubber. You can use the scrubber to jump to any numbered slide, forwards or backwards, so you never have to click through your entire presentation to go back to an earlier slide after a question. You can also set the total time you expect your presentation to last (in seconds, as `Beeson.start({ totalTime: 1200 })` at the end of `index.html`): the scrubber will automatically show the target start time for each numbered slide, based on how many steps the slide takes compared to the total presentation steps. You can also edit these timestamps if you know exactly how you want to pace your presentation (the seconds of a slide are its `data-timing`, written by hand or with Play > Rehearse Timings in the editor).
 
 You can go back to editor mode any time by pressing `e` while in presentation mode.
 
