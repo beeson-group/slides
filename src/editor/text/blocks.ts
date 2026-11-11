@@ -694,6 +694,7 @@ async function setSpanList(app: App, kind: ListKind): Promise<boolean> {
   const p = flow.places(app);
   const run = flow.spanTargets(app).map((t) => t.host);
   const list = run[0]?.parentElement;
+  if (p && list && run.every((h) => h.localName === 'p' && h.parentElement === list && structural(app, h))) return spanParagraphs(app, run, p, kind);
   if (!p || !list?.matches(LIST) || !run.every((h) => h.localName === 'li' && h.parentElement === list && structural(app, h))) return false;
   if (list.localName === kind || (kind === 'none' && run.some((h) => h.querySelector(LIST)))) return true;
   const [a, f] = p.map(([el, at]) => [run.indexOf(el), at] as const);
@@ -716,6 +717,19 @@ async function setSpanList(app: App, kind: ListKind): Promise<boolean> {
     if (!list.querySelector(':scope > li')) await app.doc.remove(list, 'list');
   }
   if (made[a[0]] && made[f[0]]) flow.select(app, [made[a[0]], a[1]], [made[f[0]], f[1]]);
+  return true;
+}
+
+// a span over body paragraphs of one parent made one list of kind, with an item for each paragraph
+async function spanParagraphs(app: App, run: Element[], p: [flow.Place, flow.Place], kind: ListKind): Promise<boolean> {
+  if (kind === 'none') return true;
+  const { base, step, eol } = indentOf(app, run[0]);
+  const items = run.map((el) => `${eol}${base}${step}${startTag(app, el, 'li', { classes: { small: false } })}${rangeTex(el, rangeOf(el, null, null))}</li>`).join('');
+  const [list] = await app.doc.insert(`<${kind}>${items}${eol}${base}</${kind}>`, run[0].parentElement!, run[0], 'list');
+  for (const el of run) await app.doc.remove(el, 'list');
+  const made = [...list.children].filter((c) => c.localName === 'li');
+  const [a, f] = p.map(([el, at]) => [made[run.indexOf(el)], at] as const);
+  if (a[0] && f[0]) flow.select(app, [a[0], a[1]], [f[0], f[1]]);
   return true;
 }
 

@@ -10,7 +10,7 @@ import type { App } from '../app.ts';
 import { besideBlock, canIndent, canOutdent, canSplit, endOf, indent, offsetIn, outdent, pointAt, rangeOf, rangeTex, selectIn, split, type Target } from './blocks.ts';
 import { injectStyle } from '../ui/dom.ts';
 
-type Place = [Element, number];
+export type Place = [Element, number];
 type Way = 'left' | 'right' | 'up' | 'down';
 
 const STYLE = '::highlight(beeson-span) { background-color: color-mix(in srgb, Highlight 60%, transparent); }';
