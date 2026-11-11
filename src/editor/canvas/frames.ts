@@ -122,6 +122,9 @@ const WORDS = 'h1, h2, h3, p, li, dt, dd, div.math, .caption, figcaption, td, th
 // the handle of a block is drawn this far left of the frame, clear of its grips, in screen px
 const HANDLE = 22;
 const HANDLE_GAP = 10;
+// the bar of the row numbers of a table with its gap, in commands/table.ts, which the handle of a
+// table is drawn left of
+const ROW_BAR = 24;
 
 // the overlay of the editor. the handle of a block and the resize handles are its only parts that
 // take the pointer
@@ -319,7 +322,8 @@ export class Frames {
     if (!this.handle.hidden && hot) {
       // left of the frame, 6 px outside the text, at its top edge, clear of the grips at its corners
       const r = hot.getBoundingClientRect();
-      Object.assign(this.handle.style, { left: `${r.left - 6 - HANDLE_GAP - HANDLE}px`, top: `${r.top - 6}px` });
+      const bar = hot.localName === 'table' ? ROW_BAR : 0;
+      Object.assign(this.handle.style, { left: `${r.left - 6 - HANDLE_GAP - HANDLE - bar}px`, top: `${r.top - 6}px` });
     }
     this.drawGuides();
     if (view.marquee) place(this.marquee, view.marquee);
