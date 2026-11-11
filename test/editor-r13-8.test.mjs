@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, press, saveAndReopen, selectFigure } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen, selectFigure } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 
@@ -270,6 +270,15 @@ for (const platform of PLATFORMS) {
     assert.equal(await rotorShown(page), true, 'the selection does not have a rotate handle');
     const grouped = await render(page);
     const before = { p: await centerOf(page, 'p'), img: await centerOf(page, 'img.for-light'), h2: await centerOf(page, 'h2') };
+    // a drag of the rotate handle turns the group as one object, and the heading in place
+    await drag(page, '.beeson-rotor', { dx: 120, dy: 60 });
+    await frames(page);
+    const dragged = { p: await centerOf(page, 'p'), img: await centerOf(page, 'img.for-light'), h2: await centerOf(page, 'h2') };
+    assert.ok(Math.abs(gap(dragged.p, dragged.img) - gap(before.p, before.img)) < 2, 'the handle moves the members of the group apart');
+    assert.ok(gap(dragged.p, before.p) > 10, 'the handle does not turn the group about its center');
+    assert.ok(gap(dragged.h2, before.h2) < 2, 'the handle does not turn the heading about its own center');
+    await page.evaluate('window.BeesonEditor.undo()');
+    assert.equal(await render(page), grouped);
     await page.evaluate(`window.BeesonEditor.exec('arrange.setRotation', { deg: 20 })`);
     await frames(page);
     const now = { p: await centerOf(page, 'p'), img: await centerOf(page, 'img.for-light'), h2: await centerOf(page, 'h2') };

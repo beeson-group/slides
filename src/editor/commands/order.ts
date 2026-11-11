@@ -8,7 +8,7 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { angleOf, locked, pivotOf, placeOf, record, seenCenter, spinOf, turn, turnMember, turnedEls, turnersOf } from '../canvas/drag.ts';
+import { angleOf, apartOf, locked, pivotOf, placeOf, record, seenCenter, spinOf, turn, turnMember, turnedEls, turnersOf } from '../canvas/drag.ts';
 import { objectOf, objectsOf, turnable, twinOf } from '../canvas/hit.ts';
 
 export type Order = 'front' | 'forward' | 'backward' | 'back';
@@ -426,6 +426,15 @@ export function commands(app: App): Command[] {
           const pivot = pivotOf(turners.map((t) => t.el), turners[0].angle);
           turned(turnedEls(turners), () => {
             for (const t of turners) turnMember(app, t, pivot, deg - turners[0].angle);
+          });
+          return;
+        }
+        // a group in a multiple selection is turned about the center of its frame until its first
+        // member is at deg, and each element outside a group about its own center
+        const apart = apartOf(app, els);
+        if (apart?.some((t) => t.group)) {
+          turned(turnedEls(apart), () => {
+            for (const t of apart) turnMember(app, t, t.group?.pivot ?? t.center, deg - (t.group?.angle ?? t.angle));
           });
           return;
         }
