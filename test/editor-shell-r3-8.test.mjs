@@ -479,11 +479,25 @@ const keySheet = (page) =>
     return { tokens, bg: getComputedStyle(d).backgroundColor, fg: getComputedStyle(d).color, box: { left: box.left, right: box.right, bottom: box.bottom }, sections, scrolls: body.scrollHeight > body.clientHeight + 1 || body.scrollWidth > body.clientWidth + 1 };
   })()`);
 
-// the labels of the items of a menu of the menu bar, in their order
+// the labels of the items of a menu of the menu bar, in their order, with the items of a submenu
+// after its own label, as the keyboard sheet lists them
 async function menuLabels(page, bar) {
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].find((m) => m.textContent.trim() === ${JSON.stringify(bar)}).click()`);
   await frames(page);
-  const labels = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item .label')].map((l) => l.textContent)`);
+  const read = (nth) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu')[${nth}]?.querySelectorAll('.item') ?? []].map((i) => ({ label: i.querySelector('.label').textContent, submenu: i.getAttribute('aria-haspopup') === 'menu' }))`);
+  const labels = [];
+  const top = await read(0);
+  for (const [n, item] of top.entries()) {
+    labels.push(item.label);
+    if (!item.submenu) continue;
+    const at = await page.evaluate(`(() => { const r = document.querySelectorAll('.beeson-edit-menu')[0].querySelectorAll('.item')[${n}].getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.x, y: at.y });
+    // a submenu is opened after a rest of the pointer on its row, in place of the one open before
+    await sleep(350);
+    assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-menu').length`), 2, `the submenu ${item.label} of ${bar} is not opened`);
+    labels.push(...(await read(1)).map((i) => i.label));
+  }
+  await press(page, 'Escape');
   await press(page, 'Escape');
   await frames(page);
   return labels;
