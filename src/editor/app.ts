@@ -165,6 +165,8 @@ export class App {
   autosave = false;
   // the texts of the current slide that run past its edge
   overflow = 0;
+  // those of them drawn over a figure of the slide
+  overFigure = 0;
   // the state line as last reported
   line: Line = { text: '', warn: false, title: '' };
   readonly platform: Platform = detectPlatform();

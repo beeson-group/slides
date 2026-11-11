@@ -219,7 +219,9 @@ export function install(app: App): void {
     // a warning, e.g. an error of a save or of a draft, is shown with unsaved changes too
     if (app.dirty && app.note?.warn) parts.push(app.note.text);
     if (problems.length) parts.push(`${plural(problems.length, 'text')} cannot be edited`);
-    if (app.overflow) parts.push(`${plural(app.overflow, 'text')} run${app.overflow === 1 ? 's' : ''} past the slide or into its footnote`);
+    const past = app.overflow - app.overFigure;
+    if (past) parts.push(`${plural(past, 'text')} run${past === 1 ? 's' : ''} past the slide or into its footnote`);
+    if (app.overFigure) parts.push(`${plural(app.overFigure, 'text')} ${app.overFigure === 1 ? 'lies' : 'lie'} over a figure`);
     if (app.autosave && !app.handle && canWrite()) parts.push('autosave starts after the first save');
     return { text: parts.join('. '), warn: (app.note?.warn ?? false) || problems.length > 0 || app.overflow > 0, title: problems.map(problemText).join('\n') };
   }
