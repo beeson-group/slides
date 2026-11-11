@@ -137,21 +137,6 @@ export function selectedLines(app: App): Element[] {
 }
 
 const screenOf = (f: Frame, p: Point): Point => ({ x: f.left + p.x * f.scale, y: f.top + p.y * f.scale });
-// the radius of the grip of an end in screen px, with its border and a gap
-const GRIP_R = 8;
-
-// the grip of the end at a of a line from b, in screen px. an end with an arrowhead has its grip
-// past the tip of the head, along the line, so that the head stays in view
-function gripAt(svg: Element, which: 1 | 2, a: Point, b: Point, scale: number): Point {
-  const heads = headsOf(svg);
-  if (heads !== 'both' && heads !== (which === 1 ? 'start' : 'end')) return a;
-  const len = Math.hypot(a.x - b.x, a.y - b.y);
-  if (!len) return a;
-  const line = svg.querySelector('line');
-  const sw = (line ? parseFloat(getComputedStyle(line).strokeWidth) || 0 : 0) * scale;
-  const u = sw + GRIP_R;
-  return { x: a.x + ((a.x - b.x) / len) * u, y: a.y + ((a.y - b.y) / len) * u };
-}
 const slideOf = (f: Frame, p: Point): Point => ({ x: (p.x - f.left) / f.scale, y: (p.y - f.top) / f.scale });
 
 // svg set to the ends on the page only, while one of its ends is dragged
@@ -265,10 +250,9 @@ export function install(app: App): void {
     const ends = shown
       ? lines.flatMap((svg) => {
           const e = endsOf(svg);
-          const a = screenOf(f, { x: e.x1, y: e.y1 }), b = screenOf(f, { x: e.x2, y: e.y2 });
           return [
-            { svg, which: 1, p: gripAt(svg, 1, a, b, f.scale) },
-            { svg, which: 2, p: gripAt(svg, 2, b, a, f.scale) },
+            { svg, which: 1, p: screenOf(f, { x: e.x1, y: e.y1 }) },
+            { svg, which: 2, p: screenOf(f, { x: e.x2, y: e.y2 }) },
           ];
         })
       : [];
