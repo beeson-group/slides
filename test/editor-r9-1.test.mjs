@@ -503,6 +503,47 @@ for (const platform of PLATFORMS) {
       }
     });
 
+    test(`the readouts of a move, a nudge, a resize, and a turn give labels and units, for an element, a line, and a group, on ${platform} in ${mode} mode`, async (t) => {
+      // as Keynote reads 'x: 530 pt  y: 100 pt' and 'w: 744 pt  h: 762 pt' (K63, K77), in slide px
+      const XY = /^x: -?\d+ px {2}y: -?\d+ px$/, WH = /^w: \d+ px {2}h: \d+ px$/, DEG = /^\d+°$/;
+      const readout = async (page) => (await overlay(page)).readout.join('|');
+      // a drag held from the point from by the offset by, read and released, then checked in the file
+      const held = async (page, from, by, want, what, modifiers) => {
+        await drag(page, from, { ...by, modifiers, hold: true });
+        await frames(page);
+        assert.match(await readout(page), want, `${what} reads ${js(await readout(page))}`);
+        await release(page, { x: from.x + by.dx, y: from.y + by.dy });
+        await frames(page);
+        const edited = await render(page);
+        await roundTrip(page, edited);
+        await redo(page);
+        await frames(page);
+        page.source = edited;
+      };
+      const where = `on ${platform} in ${mode} mode`;
+      let page = await load(t, platform, mode, 0, LAYOUTS);
+      await click(page, QR);
+      await frames(page);
+      await held(page, await centerOf(page, QR), { dx: -60, dy: 40 }, XY, `the move of a QR code ${where}`, FREE[platform]);
+      await held(page, await centerOf(page, '.beeson-grip[data-handle="se"]'), { dx: -30, dy: -30 }, WH, `the resize of a QR code ${where}`, FREE[platform]);
+      await held(page, await centerOf(page, '.beeson-rotor'), { dx: 90, dy: 20 }, DEG, `the turn of a QR code ${where}`);
+      await press(page, 'ArrowRight');
+      await frames(page);
+      assert.match(await readout(page), XY, `the nudge of a QR code ${where} reads ${js(await readout(page))}`);
+      // a line drawn on the slide, selected by a press next to it, and moved
+      await exec(page, 'insert.line', { from: { x: 300, y: 700 }, to: { x: 800, y: 700 } });
+      await exec(page, 'selection.clear');
+      await frames(page);
+      page.source = await render(page);
+      const on = await page.evaluate(`(() => { const s = document.querySelector('.reveal .slides'), r = s.getBoundingClientRect(), k = r.width / s.offsetWidth; return { x: r.left + 550 * k, y: r.top + 700 * k + 3 }; })()`);
+      await click(page, on);
+      await frames(page);
+      await held(page, on, { dx: 40, dy: -50 }, XY, `the move of a line ${where}`, FREE[platform]);
+      // a group, resized by its grip se
+      page = await pickGroup(t, platform, mode);
+      await held(page, await centerOf(page, '.beeson-grip[data-group="1"][data-handle="se"]'), { dx: -40, dy: -30 }, WH, `the resize of a group ${where}`, FREE[platform]);
+    });
+
     test(`a turn of a group with a pair turns the image of each mode, in the drag and after it, on ${platform} in ${mode} mode`, async (t) => {
       const where = `a group of two pairs on ${platform} in ${mode} mode`;
       const page = await pickGroup(t, platform, mode);
