@@ -1240,9 +1240,15 @@ function installBars(app: App): void {
     handle.hidden = !blocked && !filling;
     if (at) {
       const r = boxRect(t.table, at);
-      // the frame is drawn outside the cells, off the text at their edges
+      // the frame is drawn on the edges of the cells, on the side of each edge with the padding of a
+      // cell, i.e. inside at the right of the theme and outside at the left, off the text on both sides
       const f = blocked ? FRAME_BLOCK : FRAME;
-      place(outline, r.left - f, r.top - f, r.right - r.left + 2 * f, r.bottom - r.top + 2 * f);
+      const g = gridOf(t.table).grid;
+      const first = g[at.r0]?.[at.c0]?.cell, last = g[at.r1]?.[at.c1]?.cell;
+      const k = first ? first.getBoundingClientRect().width / (first.offsetWidth || 1) : 1;
+      const out = (c: HTMLElement | undefined, side: 'Left' | 'Top' | 'Right' | 'Bottom') => !c || parseFloat(getComputedStyle(c)[`padding${side}`]) * k < f ? f : 0;
+      const x0 = r.left - out(first, 'Left'), y0 = r.top - out(first, 'Top');
+      place(outline, x0, y0, r.right + out(last, 'Right') - x0, r.bottom + out(last, 'Bottom') - y0);
       // the handle is under the pointer while it is dragged
       if (filling) place(handle, filling.x - 5.5, filling.y - 5.5, 11, 11);
       else if (!handle.hidden) place(handle, r.right - 5, r.bottom - 5, 11, 11);
