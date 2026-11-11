@@ -4869,6 +4869,23 @@ void main() {
     } else if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: "E", description: "Edit the deck" }, (ev) => {
       if (forDeck(ev)) RECEIVER ? toEditor("edit") : edit();
     });
+    if (PLAYED && !RECEIVER) {
+      let typed = "";
+      document.addEventListener("keydown", (ev) => {
+        if (!/^[0-9]$/.test(ev.key) && ev.key !== "Enter") typed = "";
+      }, true);
+      for (let d = 0; d < 10; d++) for (const keyCode of [48 + d, 96 + d]) deck.addKeyBinding(keyCode, (ev) => {
+        if (forDeck(ev)) typed = (typed + d).slice(-4);
+      });
+      deck.addKeyBinding(13, (ev) => {
+        if (deck.isOverview()) deck.toggleOverview(false);
+        else if (forDeck(ev)) typed ? deck.slide(Number(typed) - 1) : deck.next();
+        typed = "";
+      });
+      deck.addKeyBinding(8, (ev) => {
+        if (forDeck(ev)) deck.prev();
+      });
+    }
     if (!EDITING && !RECEIVER) window.addEventListener("message", fromSpeaker);
     if (PLAYED) window.addEventListener("pagehide", () => speaker?.close());
     if (still2()) completeAll();
