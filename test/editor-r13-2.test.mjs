@@ -253,3 +253,52 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+const state = (page, id) => page.evaluate(`window.BeesonEditor.state(${js(id)})`);
+const seen = (page, selector) => page.evaluate(`(() => { const e = document.querySelector(${js(selector)}); return !!e && e.getClientRects().length > 0 && e.getBoundingClientRect().width > 0; })()`);
+// the item label of the menu bar named bar chosen by trusted clicks
+async function choose(page, bar, label) {
+  await click(page, await page.evaluate(`(() => {
+    const r = [...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].find((b) => b.textContent.trim() === ${js(bar)}).getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  })()`));
+  await frames(page);
+  const at = await page.evaluate(`(() => {
+    const item = [...document.querySelectorAll('.beeson-edit-menu .item')].find((i) => i.querySelector('.label')?.textContent === ${js(label)});
+    if (!item) return null;
+    const r = item.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  })()`);
+  assert.ok(at, `the menu ${bar} does not have an item ${label}`);
+  await click(page, at);
+  await frames(page);
+}
+
+for (const platform of PLATFORMS) {
+  for (const width of [800, 1600]) {
+    test(`View > Slide Only and View > Navigator agree with the navigator shown in a window ${width} px wide (${platform})`, async (t) => {
+      const page = await load(t, platform, 0, { width, height: 900 });
+      if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
+      await frames(page);
+      const agree = async (why) => {
+        const nav = await seen(page, '.beeson-edit-nav');
+        assert.equal((await state(page, 'view.slideOnly')).checked, !nav, `Slide Only ${why}`);
+        assert.equal((await state(page, 'view.navigator')).checked, nav, `Navigator ${why}`);
+        return nav;
+      };
+      const first = await agree('at the start');
+      assert.equal(first, width > 1000, 'the navigator is hidden beside the inspector only in a narrow window');
+      await choose(page, 'View', 'Slide Only');
+      assert.equal(await agree('after Slide Only'), !first, 'Slide Only changes what is shown');
+      await choose(page, 'View', 'Slide Only');
+      assert.equal(await agree('after Slide Only twice'), first, 'a second Slide Only gives back what was shown');
+      // with the inspector opened again, the narrow window hides the navigator
+      if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
+      await frames(page);
+      await agree('with the inspector open');
+      await choose(page, 'View', 'Slide Only');
+      await agree('after a third Slide Only');
+      assert.deepEqual(errors(page), []);
+    });
+  }
+}
