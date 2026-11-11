@@ -218,6 +218,139 @@ for (const platform of PLATFORMS) {
   });
 }
 
+// the TeX popover of a formula: the focus, Tab and Shift+Tab, Esc, Return on its button, and the
+// keys of the editor after it closes
+const SHEET = '.beeson-math';
+const focusIn = (page, selector) => page.evaluate(`!!document.activeElement?.closest(${js(selector)})`);
+const focused = (page) => page.evaluate(`(() => { const a = document.activeElement; return a?.localName === 'textarea' ? 'field' : a?.localName === 'button' ? a.textContent : a?.localName ?? null; })()`);
+const sheetOpen = (page) => page.evaluate(`!!document.querySelector(${js(SHEET)})`);
+// the TeX typed is typeset in the preview, and the button that applies it is lit
+const typeset = (page) => page.waitFor(`(() => { const b = document.querySelector('${SHEET} button.primary'); return !!b && !b.disabled; })()`);
+
+// Tab until the focus is on stop, the field or the label of a button, within six presses
+async function tabTo(page, stop) {
+  for (let i = 0; i < 6 && (await focused(page)) !== stop; i++) await press(page, 'Tab');
+  assert.equal(await focused(page), stop, `Tab does not reach ${stop}`);
+}
+
+// a trusted Return with its character, which presses a focused button as a key of a user does
+async function enter(page) {
+  const base = { key: 'Enter', code: 'Enter', windowsVirtualKeyCode: 13 };
+  await page.send('Input.dispatchKeyEvent', { type: 'keyDown', ...base, text: '\r', unmodifiedText: '\r' });
+  await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+}
+
+const TEX = String.raw`\[\ddot x - \class{coriolis}{2\dot y} = -\frac{\partial \tilde U}{\partial x},\]`;
+const LIVE_MATH = '.reveal section.present div.math mjx-container';
+
+// the TeX popover opened by a double click on the display of slide MATH
+async function openTex(page) {
+  await click(page, LIVE_MATH, { count: 2 });
+  await page.waitFor(`!!document.querySelector(${js(SHEET)}) && !!document.querySelector('${SHEET} .preview mjx-container')`);
+  await frames(page);
+}
+
+for (const platform of PLATFORMS) {
+  test(`the TeX popover of a formula takes the focus, keeps Tab and Shift+Tab inside it, and closes by Esc from each of its controls (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: LAYOUTS, n: MATH });
+    await openTex(page);
+    assert.equal(await focused(page), 'field', 'the focus is not in the TeX field when the popover opens');
+    await typeset(page);
+    // Tab and Shift+Tab reach the field and each button, and the focus stays inside the popover
+    const reached = new Set(['field']);
+    for (const key of ['Tab', 'Tab', 'Tab', 'Shift+Tab', 'Shift+Tab', 'Shift+Tab']) {
+      await press(page, key);
+      assert.ok(await focusIn(page, SHEET), `the focus leaves the popover after ${key}`);
+      reached.add(await focused(page));
+    }
+    assert.deepEqual([...reached].sort(), ['Apply', 'Cancel', 'field'], 'Tab does not reach each control of the popover');
+    // Esc closes the popover without the change from the field and from each button
+    for (const stop of ['field', 'Apply', 'Cancel']) {
+      if (!(await sheetOpen(page))) await openTex(page);
+      await page.evaluate(`document.querySelector('${SHEET} textarea').select()`);
+      await type(page, 'y');
+      await sleep(300);
+      await typeset(page);
+      await tabTo(page, stop);
+      await press(page, 'Escape');
+      await frames(page);
+      assert.equal(await sheetOpen(page), false, `Esc with the focus on ${stop} does not close the popover`);
+      assert.equal(await render(page), page.source, `Esc with the focus on ${stop} changes the formula`);
+      assert.deepEqual(await selected(page), ['math'], `after Esc from ${stop}, the formula is not selected`);
+    }
+    // Return on Cancel closes the popover without the change
+    await openTex(page);
+    await page.evaluate(`document.querySelector('${SHEET} textarea').select()`);
+    await type(page, 'y');
+    await sleep(300);
+    await typeset(page);
+    await tabTo(page, 'Cancel');
+    await enter(page);
+    await frames(page);
+    assert.equal(await sheetOpen(page), false, 'Return on Cancel does not close the popover');
+    assert.equal(await render(page), page.source, 'Return on Cancel changes the formula');
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`Return on Apply of the TeX popover applies the TeX, and the formula is then selected for the keys of the editor (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: LAYOUTS, n: MATH });
+    await openTex(page);
+    await page.evaluate(`document.querySelector('${SHEET} textarea').select()`);
+    await type(page, String.raw`\ddot x = 0,`);
+    await sleep(300);
+    await typeset(page);
+    await tabTo(page, 'Apply');
+    await enter(page);
+    await page.waitFor(`!document.querySelector(${js(SHEET)})`);
+    await frames(page);
+    const applied = page.source.replace(TEX, () => String.raw`\[\ddot x = 0,\]`);
+    assert.equal(await render(page), applied, 'Return on Apply does not apply the TeX');
+    assert.deepEqual(await selected(page), ['math'], 'the formula is not selected after the popover closes');
+    // the arrow keys nudge the formula, without a click
+    await press(page, 'ArrowRight');
+    await sleep(1100);
+    const nudged = await render(page);
+    assert.match(nudged, /<div class="math fragment" data-fragment-index="1" data-keep style="translate: [^"]+">/, 'the arrow key does not nudge the formula');
+    await checkEdit(page, applied, nudged, `r11-4-nudge-${platform}.html`);
+    // after Esc from the popover, Delete removes the formula
+    await page.evaluate(`Reveal.slide(${MATH})`);
+    await frames(page);
+    await openTex(page);
+    await press(page, 'Escape');
+    await frames(page);
+    await press(page, 'Delete');
+    await frames(page);
+    const removed = await render(page);
+    assert.ok(!removed.includes(String.raw`\ddot x = 0,`), 'Delete does not remove the formula after the popover closes');
+    await checkEdit(page, nudged, removed, `r11-4-delete-${platform}.html`);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`after Insert of a new formula from its TeX popover, the formula is selected for the keys of the editor (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: LAYOUTS, n: 4 });
+    await exec(page, 'insert.formula');
+    await page.waitFor(`!!document.querySelector('${SHEET} textarea') && document.activeElement === document.querySelector('${SHEET} textarea')`);
+    await type(page, 'E = mc^2');
+    await sleep(300);
+    await typeset(page);
+    await tabTo(page, 'Insert');
+    await enter(page);
+    await page.waitFor(`!document.querySelector(${js(SHEET)})`);
+    await frames(page);
+    const inserted = await render(page);
+    assert.match(inserted, /<div class="math">\\\[E = mc\^2\\\]<\/div>/);
+    assert.deepEqual(await selected(page), ['math'], 'the new formula is not selected');
+    await press(page, 'Delete');
+    await frames(page);
+    assert.equal(await render(page), page.source, 'Delete does not remove the new formula');
+    await undo(page);
+    assert.equal(await render(page), inserted);
+    await undo(page);
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
 // a marquee from the empty slide held at the top edge of a zoomed canvas scrolls it, with the start
 // corner of the marquee kept on its point of the slide, and selects what it covers at the release
 const CANVAS = `(() => { const c = document.querySelector('.beeson-edit-canvas'), v = window.BeesonEditorShell.stage.viewport; return { x: c.scrollLeft, y: c.scrollTop, zoomed: c.classList.contains('zoomed'), left: v.left, top: v.top, width: v.width, height: v.height }; })()`;
