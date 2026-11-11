@@ -160,3 +160,82 @@ for (const platform of PLATFORMS) {
     await saveAndReopen(page);
   });
 }
+
+// the Light Table on the demo deck, with the tiles, the focused tile, and the selected tiles
+async function lightTable(t, platform) {
+  const page = await browser.newPage({ width: 1600, height: 1000 });
+  t.after(() => page.close().catch(() => {}));
+  await page.goto(`${server.origin}/theme/beeson.css`);
+  await page.evaluate('localStorage.clear()');
+  await page.goto(`${server.origin}/index.html?edit&still&edit-platform=${platform}`);
+  await page.waitFor(deckSettled);
+  await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
+  page.source = readFileSync('index.html', 'utf8');
+  assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`)).problems, []);
+  await page.evaluate(`window.BeesonEditor.exec('view.lightTable')`);
+  await settle(page);
+  return page;
+}
+const tiles = (page) => page.evaluate(`(() => {
+  const all = [...document.querySelectorAll('.beeson-edit-sorter .tile')];
+  return { shown: !document.querySelector('.beeson-edit-sorter').hidden, n: all.length, focus: all.indexOf(document.activeElement), selected: all.flatMap((t, i) => (t.getAttribute('aria-selected') === 'true' ? [i] : [])) };
+})()`);
+const tileAt = (page, i) => page.evaluate(`(() => { const r = document.querySelectorAll('.beeson-edit-sorter .tile .pic')[${i}].getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+const itemAt = (page, label) => page.evaluate(`(() => { const r = [...document.querySelectorAll('.beeson-edit-menu .item')].find((i) => i.querySelector('.label')?.textContent === ${js(label)}).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+const every = (n) => [...Array(n).keys()];
+
+for (const platform of PLATFORMS) {
+  test(`Mod+A on a tile of the Light Table selects every slide and keeps the focus on the tile (${platform})`, async (t) => {
+    const page = await lightTable(t, platform);
+    await click(page, await tileAt(page, 3));
+    await settle(page);
+    await press(page, 'Mod+A');
+    await settle(page);
+    const { n, focus, selected } = await tiles(page);
+    assert.deepEqual(selected, every(n));
+    assert.equal(focus, 3);
+    await press(page, 'ArrowRight');
+    await settle(page);
+    assert.deepEqual(await tiles(page), { shown: true, n, focus: 4, selected: [4] });
+    await press(page, 'Escape');
+    await settle(page);
+    assert.equal((await tiles(page)).shown, false);
+    assert.equal(await render(page), page.source);
+  });
+
+  test(`Select All Slides in the menu of a tile keeps the focus on the tiles (${platform})`, async (t) => {
+    const page = await lightTable(t, platform);
+    await click(page, await tileAt(page, 3));
+    await settle(page);
+    await click(page, await tileAt(page, 4), { button: 'right' });
+    await settle(page);
+    await click(page, await itemAt(page, 'Select All Slides'));
+    await settle(page);
+    const { n, focus, selected } = await tiles(page);
+    assert.deepEqual(selected, every(n));
+    assert.equal(focus, 4);
+    await press(page, 'ArrowRight');
+    await settle(page);
+    assert.deepEqual(await tiles(page), { shown: true, n, focus: 5, selected: [5] });
+    await press(page, 'Escape');
+    await settle(page);
+    assert.equal((await tiles(page)).shown, false);
+  });
+
+  test(`Mod+D on a tile of the Light Table moves the focus to the tile of the duplicate (${platform})`, async (t) => {
+    const page = await lightTable(t, platform);
+    await click(page, await tileAt(page, 3));
+    await settle(page);
+    const n = (await tiles(page)).n;
+    await press(page, 'Mod+D');
+    await settle(page);
+    assert.deepEqual(await tiles(page), { shown: true, n: n + 1, focus: 4, selected: [4] });
+    await press(page, 'ArrowRight');
+    await settle(page);
+    assert.deepEqual(await tiles(page), { shown: true, n: n + 1, focus: 5, selected: [5] });
+    await undo(page);
+    await settle(page);
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+}
