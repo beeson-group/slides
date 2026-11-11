@@ -546,3 +546,68 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// whether the frame of the selection lies inside the slide, within 2 px
+const frameInSlide = (page) => page.evaluate(`(() => {
+  const f = [...document.querySelectorAll('.beeson-frame.selected')].find((e) => !e.hidden)?.getBoundingClientRect();
+  const s = document.querySelector('.reveal .slides').getBoundingClientRect();
+  return !!f && f.width > 20 && f.left >= s.left - 2 && f.top >= s.top - 2 && f.right <= s.right + 2 && f.bottom <= s.bottom + 2;
+})()`);
+
+for (const platform of PLATFORMS) {
+  for (const mode of MODES) {
+    test(`a copy of the plate of a figure slide is drawn on its slide, as a zone where the layout does not have a plate, on ${platform} in ${mode} mode`, async (t) => {
+      for (const n of [PLATE_PAIR, PLATE_ONE]) {
+        for (const from of ['figure', 'picture']) {
+          const page = await load(t, platform, mode, n);
+          const images = n === PLATE_PAIR ? 2 : 1;
+          // Duplicate on the figure slide, whose layout has one plate
+          await pick(page, from);
+          await press(page, 'Mod+D');
+          await frames(page);
+          let edited = await render(page);
+          let where = `Duplicate of ${NAMES[n]} from the ${from}`;
+          assert.equal(count(slideOf(edited, n), '<div class="plate">'), 1, `${where} writes a second plate`);
+          assert.equal(count(slideOf(edited, n), '<div class="zone">'), 1, `${where} does not write the copy as a zone`);
+          assert.equal(count(slideOf(edited, n), '<img'), 2 * images, `${where} does not copy every image`);
+          assert.deepEqual(await selected(page), ['div.zone'], `${where} does not select the copy`);
+          assert.equal(await frameInSlide(page), true, `the copy of ${where} is not drawn on the slide`);
+          await roundTrip(page, edited);
+          // Copy and Paste onto a content slide
+          await pick(page, from);
+          await exec(page, 'edit.copy');
+          await page.evaluate(`Reveal.slide(${EMPTY})`);
+          await frames(page);
+          await exec(page, 'edit.paste');
+          await frames(page);
+          edited = await render(page);
+          where = `Paste of ${NAMES[n]} onto a content slide from the ${from}`;
+          assert.equal(count(slideOf(edited, EMPTY), '<div class="zone">'), 1, `${where} does not write a zone`);
+          assert.equal(count(slideOf(edited, EMPTY), '<img'), images);
+          assert.deepEqual(await selected(page), ['div.zone']);
+          assert.equal(await frameInSlide(page), true, `the copy of ${where} is not drawn on the slide`);
+          inScope(edited, SOURCE);
+          await undo(page);
+          await frames(page);
+          await byteExact(page);
+          // Cut and Paste on the figure slide, which is then without a plate
+          await page.evaluate(`Reveal.slide(${n})`);
+          await frames(page);
+          await pick(page, from);
+          await exec(page, 'edit.cut');
+          await frames(page);
+          await exec(page, 'edit.paste');
+          await frames(page);
+          edited = await render(page);
+          assert.equal(count(slideOf(edited, n), '<div class="plate">'), 1, 'a plate pasted onto its figure slide after a cut is not a plate');
+          assert.equal(await frameInSlide(page), true);
+          await undo(page);
+          await undo(page);
+          await frames(page);
+          await byteExact(page);
+          assert.deepEqual(errors(page), []);
+        }
+      }
+    });
+  }
+}
