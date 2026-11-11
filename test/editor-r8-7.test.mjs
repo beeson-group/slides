@@ -363,3 +363,36 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// the items of the open context menu, each with its text and whether it is dimmed
+const menuItems = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item')].filter((i) => i.getClientRects().length).map((i) => ({ text: i.textContent.trim().replace(/\\s+/g, ' '), off: i.classList.contains('disabled') || i.getAttribute('aria-disabled') === 'true' }))`);
+const KIND_ITEMS = ['Replace Image…', 'Edit Alt Text…', 'Edit Mask'];
+
+for (const platform of PLATFORMS) {
+  for (const mode of MODES) {
+    test(`the context menu of a locked figure shows Replace Image…, Edit Alt Text…, and Edit Mask dimmed, on ${platform} in ${mode} mode`, async (t) => {
+      for (const n of FIGURES) {
+        const page = await load(t, platform, mode, n);
+        const where = `${NAMES[n]} on ${platform} in ${mode} mode`;
+        await pick(page);
+        await click(page, IMG, { button: 'right' });
+        await frames(page);
+        const open = await menuItems(page);
+        for (const name of KIND_ITEMS) assert.equal(open.find((i) => i.text.startsWith(name))?.off, false, `${name} is not live in the menu of ${where}`);
+        await press(page, 'Escape');
+        await exec(page, 'arrange.lock');
+        await frames(page);
+        const locked = await render(page);
+        await click(page, IMG, { button: 'right' });
+        await frames(page);
+        const items = await menuItems(page);
+        for (const name of KIND_ITEMS) assert.equal(items.find((i) => i.text.startsWith(name))?.off, true, `${name} is not shown dimmed in the menu of ${where} once it is locked, among ${items.map((i) => i.text).join(', ')}`);
+        await press(page, 'Escape');
+        await frames(page);
+        await roundTrip(page, locked);
+        assert.deepEqual(errors(page), []);
+        await page.close();
+      }
+    });
+  }
+}
