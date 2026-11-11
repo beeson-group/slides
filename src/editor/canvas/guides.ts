@@ -283,13 +283,6 @@ export function install(app: App): void {
     const now = sections();
     if (app.state === 'loaded' && seeded && (now.length !== order.length || now.some((s, i) => s !== order[i]))) persist();
   });
-  // the guides stored by another tab of the deck are read again by the index of each slide
-  window.addEventListener('storage', (ev) => {
-    if (ev.key !== keyOf() && ev.key !== null) return;
-    seed();
-    draw();
-    app.invalidate('layout');
-  });
 
   const set = (on: boolean) => {
     shown = on;
