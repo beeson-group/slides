@@ -145,6 +145,22 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
+  // tables-equations-insert-5 on slide 5 (states 23, 93, 157, and 318 to 320), where a free place of
+  // the size of the table is not left beside the figure. the table is then put off every text, over
+  // the figure, as a new picture is
+  test(`a new table on a slide without a free place of its size is kept off the texts (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: FIGURES });
+    const before = await render(page);
+    await exec(page, 'insert.table', { rows: 3, columns: 3 });
+    await frames(page);
+    const [table] = await boxes(page, ':scope > table');
+    assert.ok(table, 'no table was inserted');
+    for (const b of await boxes(page, ':scope > ul > li, :scope > p')) assert.ok(!meets(table, b), `the table at ${js(table)} lies over a text at ${js(b)}`);
+    assert.ok(table.left >= 0 && table.right <= 1920 && table.top >= 0 && table.bottom <= 1080, `the table runs past the slide: ${js(table)}`);
+    await checkEdit(page, before, `r12-4-table5-${platform}.html`);
+    assert.deepEqual(errors(page), []);
+  });
+
   // tables-equations-insert-6. the theme draws a plot at the size of a zone, 600 by 800 slide px,
   // and the slides of index.html with a figure or a video in the zone do not have a free place of
   // that size, where the plot stays in the zone off every text. the slide of editor-layouts.html
