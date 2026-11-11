@@ -395,3 +395,62 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the fields W, H, and Angle of the Arrange pane
+const sizeFields = async (page) => ({ w: await fieldValue(page, 'width'), h: await fieldValue(page, 'height'), angle: await fieldValue(page, 'angle') });
+
+for (const platform of PLATFORMS) {
+  test(`a turned figure selected as one object keeps W and H of its picture with its caption at every angle (${platform})`, async (t) => {
+    const page = await load(t, platform, FIGURES);
+    await click(page, 'section.present figure img.for-light');
+    const rest = await sizeFields(page);
+    assert.deepEqual(rest, { w: 600, h: 875, angle: 0 });
+    for (const deg of [30, 60, 90, 0]) {
+      await typeField(page, 'angle', deg);
+      assert.deepEqual(await sizeFields(page), { ...rest, angle: deg }, `at ${deg} degrees`);
+    }
+    // the rotate handle dragged to the right
+    const rotor = await page.evaluate(`(() => { const r = document.querySelector('.beeson-rotor'); const b = r.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`);
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: rotor.x, y: rotor.y });
+    await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: rotor.x, y: rotor.y, button: 'left', buttons: 1, clickCount: 1 });
+    for (let i = 1; i <= 10; i++) await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: rotor.x + 12 * i, y: rotor.y, button: 'left', buttons: 1 });
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: rotor.x + 120, y: rotor.y, button: 'left', buttons: 0, clickCount: 1 });
+    await frames(page);
+    const turned = await sizeFields(page);
+    assert.ok(turned.angle > 5, `the handle turned the figure: ${js(turned)}`);
+    assert.deepEqual({ w: turned.w, h: turned.h }, { w: rest.w, h: rest.h }, `after the rotate handle: ${js(turned)}`);
+    await checkEdit(page, `r13-2-turned-${platform}.html`);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`a typed Height of a turned figure comes back as typed and gives the same size at Angle 0 (${platform})`, async (t) => {
+    let page = await load(t, platform, FIGURES);
+    await click(page, 'section.present figure img.for-light');
+    await typeField(page, 'angle', 29);
+    const turned = await render(page);
+    // the Height that the figure has changes nothing
+    await typeField(page, 'height', 875);
+    assert.deepEqual(await sizeFields(page), { w: 600, h: 875, angle: 29 });
+    assert.equal(await render(page), turned, 'a typed Height of 875 changes the file');
+    await typeField(page, 'height', 700);
+    const at29 = await sizeFields(page);
+    assert.ok(near(at29.h, 700, 2) && at29.angle === 29, `the typed Height reads ${js(at29)}`);
+    await checkEdit(page, `r13-2-turned-height-${platform}.html`, turned);
+    await typeField(page, 'angle', 0);
+    const at0 = await sizeFields(page);
+    assert.ok(near(at0.h, 700, 2) && near(at0.w, at29.w, 1), `at Angle 0 the size is ${js(at0)} against ${js(at29)}`);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`an undo of a typed Height gives back Width and Height in their fields (${platform})`, async (t) => {
+    const page = await load(t, platform, FIGURES);
+    await click(page, 'section.present figure img.for-light');
+    await typeField(page, 'height', 975);
+    assert.notEqual(await fieldValue(page, 'width'), 600);
+    await undo(page);
+    await frames(page);
+    assert.equal(await render(page), page.source);
+    assert.deepEqual({ w: Number(await page.evaluate(`document.querySelector('#beeson-edit-num-width').value`)), h: Number(await page.evaluate(`document.querySelector('#beeson-edit-num-height').value`)) }, { w: 600, h: 875 });
+    assert.deepEqual(errors(page), []);
+  });
+}
