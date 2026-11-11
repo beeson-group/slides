@@ -153,4 +153,30 @@ for (const platform of PLATFORMS) {
     assert.equal(await render(page), page.source);
     assert.deepEqual(errors(page), []);
   });
+  // a text of the outline is in the navigator, but Delete and Select All of the Edit menu are not
+  // commands on the slides while the caret is in it
+  test(`Edit > Delete and Edit > Select All with the caret in a text of the outline leave the slides (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await page.evaluate(`BeesonEditor.exec('view.outline')`);
+    await settle(page);
+    const title = () => rect(page, `document.querySelectorAll('.beeson-edit-outline .text[aria-label="Slide title"]')[4]`);
+    const chosen = () => page.evaluate(`document.querySelectorAll('.beeson-edit-nav [aria-selected="true"]').length`);
+    await click(page, await title());
+    await settle(page);
+    const one = await chosen();
+    await openBar(page, 'Edit');
+    await click(page, await item(page, 'Delete'));
+    await settle(page);
+    await closeMenus(page);
+    assert.equal(await render(page), page.source, 'Edit > Delete deleted the slide of the text');
+    await click(page, await title());
+    await settle(page);
+    await openBar(page, 'Edit');
+    await click(page, await item(page, 'Select All'));
+    await settle(page);
+    await closeMenus(page);
+    assert.equal(await chosen(), one, 'Edit > Select All selected the slides');
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
 }
