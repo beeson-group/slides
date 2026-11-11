@@ -237,14 +237,14 @@ test('a dialog keeps Tab inside, answers with the button pressed, and gives the 
 test('the labels of the toolbar are kept while they fit, and the late groups go into a menu while they do not', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
-  for (const [width, labels, more] of [[1440, true, false], [1000, true, false], [900, true, true]]) {
+  for (const [width, labels, more] of [[1440, true, false], [1024, true, false], [900, true, true]]) {
     const page = await editorPage(browser, { page: { width, height: 700 } });
     const bar = await page.evaluate(`(() => { const b = [...document.querySelectorAll('.beeson-edit-top .tb')]; return { texts: b.filter((e) => !e.classList.contains('more-groups')).map((e) => e.textContent), label: getComputedStyle(b[0].querySelector('.label')).display !== 'none', more: !!document.querySelector('.beeson-edit-top .more-groups') }; })()`);
     assert.equal(bar.label, labels, `${width}: labels`);
     assert.equal(bar.more, more, `${width}: the menu More`);
     // Format and Steps stay after More, since Format opens and closes the inspector, beside which
-    // the navigator is hidden in a narrow window
-    assert.deepEqual(bar.texts.map((x) => x.replace(/^\d+%/, '%')), more ? ['View', '%Zoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', 'Media', 'Format', 'Steps'] : ['View', '%Zoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', 'Media', 'Present', 'Save', 'Format', 'Steps']);
+    // the navigator is hidden in a narrow window. At 900 px the group of the inserts is folded too
+    assert.deepEqual(bar.texts.map((x) => x.replace(/^\d+%/, '%')), more ? ['View', '%Zoom', 'Undo', 'Redo', 'Add Slide', 'Format', 'Steps'] : ['View', '%Zoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Plot', 'Text', 'Formula', 'Shape', 'Media', 'Present', 'Save', 'Format', 'Steps']);
     const cell = await boxOf(page, '.beeson-edit-canvas');
     assert.ok(cell.w > 0 && cell.h > 0);
     assert.deepEqual(page.errors, []);

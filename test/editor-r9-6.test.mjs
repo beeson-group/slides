@@ -473,7 +473,7 @@ for (const platform of PLATFORMS) {
 // where the buttons of the toolbar give theirs
 const PANE_KEYS = {
   mac: { bold: 'Bold (⌘B)', italic: 'Italic (⌘I)', strike: 'Strikethrough (⇧⌘X)', superscript: 'Superscript (⌃⌘+)', subscript: 'Subscript (⌃⌘−)', outdent: 'Decrease Indent Level (⌘[)', indent: 'Increase Indent Level (⌘])' },
-  other: { bold: 'Bold (Ctrl+B)', italic: 'Italic (Ctrl+I)', strike: 'Strikethrough (Alt+Shift+5)', superscript: 'Superscript (Ctrl+.)', subscript: 'Subscript (Ctrl+,)', outdent: 'Decrease Indent Level (Ctrl+[)', indent: 'Increase Indent Level (Ctrl+])' },
+  other: { bold: 'Bold (Ctrl+B)', italic: 'Italic (Ctrl+I)', strike: 'Strikethrough (Alt+Shift+5)', superscript: 'Superscript (Ctrl+.)', subscript: 'Subscript (Ctrl+,)', outdent: 'Decrease Indent Level (Shift+Tab)', indent: 'Increase Indent Level (Tab)' },
 };
 for (const platform of PLATFORMS) {
   test(`the format buttons of the Text pane give their keys in their tooltips (${platform})`, async (t) => {

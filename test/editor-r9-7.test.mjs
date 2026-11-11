@@ -361,8 +361,6 @@ for (const [platform, answer] of [['mac', 'save'], ['other', 'cancel']]) {
   test(`Return on the card of Present with unsaved changes presses ${answer === 'save' ? 'the default button' : 'the focused button'} (${platform})`, async (t) => {
     const page = await load(t, platform, { n: FIGURES });
     await page.evaluate(`(async () => {
-      window.opened = 0;
-      window.open = () => { window.opened++; return null; };
       const root = await navigator.storage.getDirectory();
       window.BeesonEditor.attach(await root.getFileHandle('r9-7-present.html', { create: true }));
       return true;
@@ -378,10 +376,12 @@ for (const [platform, answer] of [['mac', 'save'], ['other', 'cancel']]) {
     await enter(page);
     await page.waitFor(`!document.querySelector('dialog.beeson-edit-card.ask[open]')`);
     await sleep(300);
+    // the show is played in place, in the frame of .beeson-edit-show over the editor
+    const shown = () => page.evaluate(`!!document.querySelector('.beeson-edit-show')`);
     if (answer === 'save') {
-      assert.equal(await page.evaluate('window.opened'), 1, 'the show is not opened');
+      assert.equal(await shown(), true, 'the show is not opened');
       assert.equal(await page.evaluate('window.BeesonEditor.status().dirty'), false, 'the deck is not saved');
-    } else assert.equal(await page.evaluate('window.opened'), 0);
+    } else assert.equal(await shown(), false);
     assert.deepEqual(errors(page), []);
   });
 }
