@@ -72,6 +72,8 @@ async function roundTrip(page, undos = 1) {
   await byteExact(page);
   for (let i = 0; i < undos; i++) await page.evaluate('window.BeesonEditor.redo()');
   assert.equal(await render(page), edited);
+  // the folder of a new media file is the root of the private file system
+  await page.evaluate('window.showDirectoryPicker = async () => navigator.storage.getDirectory()');
   const { text } = await saveAndReopen(page, `r9-9-${++saves}.html`);
   assert.equal(text, edited);
   assert.deepEqual(errors(page), []);
@@ -120,6 +122,48 @@ async function tap(page, text) {
   await sleep(150);
   await frames(page);
 }
+
+
+// a trusted drag of the files at paths from the Finder, dropped at the point at. it returns the
+// label of the outline and the drop effect while the files are over the point
+async function dropFiles(page, at, paths, { drop = true } = {}) {
+  const data = { items: [], files: paths, dragOperationsMask: 1 };
+  await page.send('Input.dispatchDragEvent', { type: 'dragEnter', x: at.x, y: at.y, data });
+  await page.send('Input.dispatchDragEvent', { type: 'dragOver', x: at.x, y: at.y, data });
+  const outline = await page.evaluate(`(() => { const b = document.querySelector('.beeson-drop'); return b && !b.hidden ? b.textContent : null; })()`);
+  if (drop) await page.send('Input.dispatchDragEvent', { type: 'drop', x: at.x, y: at.y, data });
+  else await page.send('Input.dispatchDragEvent', { type: 'dragCancel', x: at.x, y: at.y, data });
+  return outline;
+}
+
+const centerOf = (page, selector) =>
+  page.evaluate(`(() => { const el = [...document.querySelectorAll(${js(selector)})].find((e) => e.getBoundingClientRect().width > 0); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+
+// the frames of the figures of the current slide, i.e. the shown picture with its caption, and the
+// boxes of the text of its blocks and of the chrome, in px of the window
+const LAID = `(() => {
+  const slide = document.querySelector('.reveal:not(.beeson-peek) .slides > section.present');
+  const s = slide.getBoundingClientRect();
+  const box = (r) => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+  const ink = (el) => { const g = document.createRange(); g.selectNodeContents(el); return box(g.getBoundingClientRect()); };
+  const frame = (f) => {
+    const parts = [...f.querySelectorAll('img, video, figcaption, .caption')].filter((m) => m.getBoundingClientRect().width > 0).map((m) => {
+      const r = m.getBoundingClientRect();
+      const nat = m.localName === 'img' ? [m.naturalWidth, m.naturalHeight] : m.localName === 'video' ? [m.videoWidth, m.videoHeight] : null;
+      if (!nat || !nat[0] || getComputedStyle(m).objectFit !== 'contain') return box(r);
+      const k = Math.min(r.width / nat[0], r.height / nat[1]);
+      const w = nat[0] * k, h = nat[1] * k;
+      return { left: r.left + (r.width - w) / 2, top: r.top + (r.height - h) / 2, right: r.left + (r.width + w) / 2, bottom: r.top + (r.height + h) / 2 };
+    });
+    return parts.reduce((a, b) => ({ left: Math.min(a.left, b.left), top: Math.min(a.top, b.top), right: Math.max(a.right, b.right), bottom: Math.max(a.bottom, b.bottom) }));
+  };
+  const figures = [...slide.querySelectorAll(':scope > figure, :scope > .zone, :scope > .plate')].filter((f) => f.querySelector('img, video')).map(frame);
+  const texts = [...slide.querySelectorAll(':scope > h2, :scope > p, :scope > ul, :scope > ol, :scope > .run, :scope > .foot')].filter((t) => t.getClientRects().length).map(ink);
+  return { slide: box(s), figures, texts };
+})()`;
+
+const meets = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+const inside = (a, s) => a.left >= s.left - 1 && a.top >= s.top - 1 && a.right <= s.right + 1 && a.bottom <= s.bottom + 1;
 
 const shownImage = `.reveal:not(.beeson-peek) .slides > section.present figure img`;
 async function selectPicture(page) {
@@ -184,5 +228,23 @@ for (const platform of PLATFORMS) {
     await selectPicture(page2);
     await tap(page2, 'Decorative');
     await byteExact(page2, [[bare(DARK), DARK.replace(/ alt="[^"]*"/, '')], [bare(LIGHT), LIGHT.replace(/ alt="[^"]*"/, '')]]);
+  });
+
+  test(`${platform}: a picture added on a slide whose zone is filled is put in free space, with the first figure seen`, async (t) => {
+    const page = await load(t, platform, { n: FIGURE });
+    const before = await page.evaluate(LAID);
+    assert.equal(before.figures.length, 1);
+    await dropFiles(page, await centerOf(page, '.reveal .slides > section.present > p'), [resolve('demo/figure-light.png')]);
+    await page.waitFor(`window.BeesonEditor.render().includes('<img src="media/figure-light')`, 20000);
+    await sleep(300);
+    await frames(page);
+    const now = await page.evaluate(LAID);
+    assert.equal(now.figures.length, 2);
+    const [old, added] = now.figures;
+    assert.deepEqual(old, before.figures[0], 'the first figure is moved');
+    assert.ok(!meets(old, added), `the new picture ${JSON.stringify(added)} lies over the first figure ${JSON.stringify(old)}`);
+    for (const text of now.texts) assert.ok(!meets(text, added), `the new picture ${JSON.stringify(added)} lies over a text ${JSON.stringify(text)}`);
+    assert.ok(inside(added, now.slide), 'the new picture runs past the slide');
+    await roundTrip(page);
   });
 }
