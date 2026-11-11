@@ -24,10 +24,8 @@ export function install(app: App): void {
     let over = 0;
     if (slide && box.width > 0) {
       const foot = slide.querySelector(':scope > .foot, :scope > .panel > .foot');
-      const f = foot?.getBoundingClientRect();
       const past = (r: DOMRect) => r.right > box.right + 1 || r.bottom > box.bottom + 1 || r.left < box.left - 1 || r.top < box.top - 1;
       const meets = (r: DOMRect, b: DOMRect | undefined) => !!b && b.height > 0 && r.bottom > b.top + 1 && r.top < b.bottom - 1 && r.right > b.left + 1 && r.left < b.right - 1;
-      const intoFoot = (r: DOMRect) => meets(r, f);
       const above = slide.matches('.figure') ? [...slide.querySelectorAll(':scope > h2, :scope > .run')].map((e) => e.getBoundingClientRect()) : [];
       const partOf = (el: Element) => [...slide.children].find((c) => c.contains(el));
       const figures = [...slide.querySelectorAll(FIGURE)].filter((f) => !f.closest('.plate, .backdrop, .surface') && !f.parentElement?.closest('.plot'))
@@ -43,6 +41,9 @@ export function install(app: App): void {
         rects.push(...shown.flatMap((c) => [...c.querySelectorAll(':scope > svg')].map((g) => g.getBoundingClientRect())));
         return rects.filter((r) => r.width > 1 && r.height > 1);
       };
+      // the footnote is measured by the lines of its text, since its box runs past the end of its text
+      const footLines = foot ? lines(foot) : [];
+      const intoFoot = (r: DOMRect) => footLines.some((l) => meets(r, l));
       for (const el of slide.querySelectorAll(HOST)) {
         // an empty placeholder of the editor is not a text of the slide
         if (el.closest('aside.notes, .backdrop') || (el.matches('.beeson-pending') && !el.textContent)) {
