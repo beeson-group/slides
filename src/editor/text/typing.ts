@@ -181,11 +181,29 @@ export async function pasteItems(app: App, text: string): Promise<void> {
       const host = caretHost();
       if (!host || !line) continue;
       app.history.beforeTyping(host, 'Paste');
-      document.execCommand('insertText', false, line);
+      if (!typeBeforeSpace(host, line)) document.execCommand('insertText', false, line);
       app.history.afterTyping(host);
       app.history.break();
     }
   });
+}
+
+// Chrome drops a space after the caret where the space is not drawn, i.e. at the start of a block,
+// when it types there. text is put into the text node instead, so that the space is kept and drawn,
+// as in Keynote and PowerPoint. false where the caret is not before such a space
+function typeBeforeSpace(host: Element, text: string): boolean {
+  const sel = window.getSelection();
+  const node = sel?.focusNode;
+  if (!sel?.isCollapsed || !(node instanceof Text) || !/^ \S/.test(node.data.slice(sel.focusOffset))) return false;
+  const before = document.createRange();
+  before.setStart(node.parentElement?.closest('li, p') ?? host, 0);
+  before.setEnd(node, sel.focusOffset);
+  if (before.toString().trim() || before.cloneContents().querySelector('img, mjx-container, br')) return false;
+  const at = sel.focusOffset;
+  node.insertData(at, text);
+  sel.collapse(node, at + text.length);
+  host.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: text }));
+  return true;
 }
 
 // Chrome types a newline of insertText in a pre as a split of its code element, hence a text with
@@ -284,7 +302,8 @@ export function install(app: App): void {
     // a new line starts a new entry of the history, as in a text editor
     if (type === 'insertParagraph' || type === 'insertLineBreak') history.break();
     history.beforeTyping(host, type === 'insertFromPaste' ? 'Paste' : type === 'deleteByCut' ? 'Cut' : 'typing');
-    if (type === 'insertParagraph' || type === 'insertLineBreak') {
+    if (type === 'insertText' && ev.data && !host.closest('pre') && typeBeforeSpace(host, ev.data)) ev.preventDefault();
+    else if (type === 'insertParagraph' || type === 'insertLineBreak') {
       ev.preventDefault();
       insertPlain(host, '\n');
     } else if (type === 'insertFromPaste') {
