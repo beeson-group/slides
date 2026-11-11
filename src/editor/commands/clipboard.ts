@@ -21,6 +21,7 @@ import { settleCopies, freshGroup } from './order.ts';
 import { withTwins } from '../canvas/hit.ts';
 import { VOID } from '../source.ts';
 import { tokenize } from '../tokens.ts';
+import { keepBeside } from './place.ts';
 import { MARK, docOf, slidesIn } from './slide.ts';
 import { clearRange, pasteRange, rangeText, selectedRange } from './table.ts';
 
@@ -299,10 +300,13 @@ export function install(app: App): void {
       const els = withTwins(a, selectedElements(a));
       if (!els.length) return a.commands.run('slide.cut', data ?? undefined);
       copy(a, els, data);
+      // an element with an offset beside a cut plate is kept in its place, as at a delete
+      const keep = keepBeside(a, els);
       // an undo selects the cut elements again, as in Keynote
       await a.history.selecting('Cut', async () => {
         a.selection.clear();
         for (const el of [...els].reverse()) await docOf(a).remove(el, 'cut');
+        keep((el, translate) => docOf(a).setTag(el, { translate }, 'move'));
       });
     },
   });

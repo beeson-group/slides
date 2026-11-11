@@ -185,3 +185,22 @@ export function placeNew(app: App, el: Element, picture?: HTMLElement, strict = 
   const t = translateOf(el);
   app.doc.setTag(el, { translate: { x: t.x + f.x, y: t.y + f.y } }, 'move');
 }
+
+// the plate of a figure slide is in the flow and as large as the slide, hence an element with an
+// offset that is written beside it moves when the plate is taken off the slide. keepBeside measures
+// these elements before the removal of outer, and through move, the function that it returns gives
+// each of them the offset that keeps its drawn place
+export function keepBeside(app: App, outer: Element[]): (move: (el: Element, translate: { x: number; y: number }) => void) => void {
+  const beside = [...new Set(outer.filter((el) => el.matches('.plate')).flatMap((el) => [...(el.parentElement?.children ?? [])]))].filter(
+    (el) => !outer.includes(el) && !!(el as HTMLElement).style?.translate && !!app.pairing?.elements.has(el),
+  );
+  const places = beside.map((el) => slideBox(app, el));
+  return (move) =>
+    beside.forEach((el, i) => {
+      const now = slideBox(app, el);
+      const [dx, dy] = [places[i].left - now.left, places[i].top - now.top].map((d) => Math.round(d * 10) / 10);
+      if (!dx && !dy) return;
+      const t = translateOf(el);
+      move(el, { x: t.x + dx, y: t.y + dy });
+    });
+}

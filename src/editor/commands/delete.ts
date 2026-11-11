@@ -9,8 +9,7 @@ import type { App } from '../app.ts';
 import { locked } from '../canvas/drag.ts';
 import { objectsOf, withTwins } from '../canvas/hit.ts';
 import { hasRange, inText } from './clipboard.ts';
-import { slideBox } from './insert.ts';
-import { translateOf } from './place.ts';
+import { keepBeside } from './place.ts';
 import { docOf, onSlides } from './slide.ts';
 import { clearRange, selectedRange } from './table.ts';
 
@@ -42,24 +41,14 @@ export function install(app: App): void {
       const els = selectedElements(a);
       const kept = els.filter((el) => locked(el));
       const outer = withTwins(a, els.filter((el) => !locked(el) && !els.some((o) => o !== el && o.contains(el))));
-      // the plate of a figure slide is in the flow and as large as the slide, hence an element
-      // with an offset that is written beside it is kept in its place when the plate is deleted
-      const beside = [...new Set(outer.filter((el) => el.matches('.plate')).flatMap((el) => [...(el.parentElement?.children ?? [])]))].filter(
-        (el) => !outer.includes(el) && !!(el as HTMLElement).style?.translate && !!a.pairing?.elements.has(el),
-      );
-      const places = beside.map((el) => slideBox(a, el));
+      // an element with an offset beside a deleted plate is kept in its place
+      const keep = keepBeside(a, [...outer]);
       // an undo selects the deleted elements again, as in Keynote
       await a.history.selecting('Delete', async () => {
         if (kept.length) a.selection.set('elements', kept);
         else a.selection.clear();
         for (const el of outer.reverse()) await doc.remove(el, 'delete');
-        beside.forEach((el, i) => {
-          const now = slideBox(a, el);
-          const [dx, dy] = [places[i].left - now.left, places[i].top - now.top].map((d) => Math.round(d * 10) / 10);
-          if (!dx && !dy) return;
-          const t = translateOf(el);
-          doc.setTag(el, { translate: { x: t.x + dx, y: t.y + dy } }, 'move');
-        });
+        keep((el, translate) => doc.setTag(el, { translate }, 'move'));
       });
     },
   });
