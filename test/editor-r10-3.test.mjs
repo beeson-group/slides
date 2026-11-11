@@ -285,3 +285,62 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+const CONTRAST = 'test/pages/editor-contrast.html';
+const rowsOf = (page, cls) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-a11y .${cls}')].map((r) => r.dataset.check + ' ' + r.querySelector('.what').textContent)`);
+
+for (const platform of PLATFORMS) {
+  test(`the checker reports text under the contrast of WCAG 2 in each mode, and lists a label over a backdrop as a tip (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: CONTRAST });
+    await exec(page, 'view.accessibility');
+    await frames(page);
+    // the tones of the theme, a table, and the footnote of slide 1 are not reported in either mode
+    assert.deepEqual(await rowsOf(page, 'item'), [
+      'contrast "A small text with a dar…" 1.7:1 in dark mode Slide 2',
+      'contrast "A gray on the black pan…" 2.7:1 in dark mode Slide 3',
+      'contrast "A gray on the black pan…" 2.7:1 in light mode Slide 3',
+    ]);
+    assert.match(await page.evaluate(`document.querySelector('.beeson-edit-a11y .status').textContent`), /Investigate3 warnings/);
+    assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-a11y :is(.check, .tiphead)')].map((c) => c.textContent)`), ['Hard-to-read text contrast3', 'Check text over a picture1']);
+    assert.deepEqual(await rowsOf(page, 'hint'), ['behind Label Slide 4']);
+    // the same rows in light mode, with the page in its own colors after the measure
+    await page.evaluate(`document.documentElement.dataset.theme = 'light'`);
+    await exec(page, 'view.accessibility');
+    await exec(page, 'view.accessibility');
+    await frames(page);
+    assert.equal((await rowsOf(page, 'item')).length, 3);
+    assert.equal(await page.evaluate(`getComputedStyle(document.querySelector('.reveal section h2')).color`), 'rgb(20, 20, 19)');
+    // a row shows its slide in its mode and selects its block
+    await click(page, '.beeson-edit-a11y .item[data-i]:nth-child(1)');
+    await page.waitFor(`document.documentElement.dataset.theme === 'dark' && window.BeesonEditor.selection().length === 1`);
+    assert.equal(await page.evaluate('Reveal.getIndices().h'), 1);
+    assert.equal(await page.evaluate(`window.BeesonEditor.selection()[0].textContent`), 'A small text with a dark gray.');
+    assert.match(await page.evaluate(`document.querySelector('.beeson-edit-a11y .info').textContent`), /WCAG 2 asks for a contrast of 4\.5:1/);
+    const light = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-a11y .item')].findIndex((r) => r.textContent.includes('light mode'))`);
+    await click(page, `.beeson-edit-a11y .item[data-i="${light}"]`);
+    await page.waitFor(`document.documentElement.dataset.theme === 'light' && window.BeesonEditor.selection()[0]?.textContent === 'A gray on the black panel.'`);
+    assert.equal(await page.evaluate('Reveal.getIndices().h'), 2);
+    // the row of a tip selects the label
+    await click(page, '.beeson-edit-a11y .hint');
+    await page.waitFor(`window.BeesonEditor.selection()[0]?.matches('.lab')`);
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+for (const platform of PLATFORMS) {
+  test(`the demo deck has no contrast warning in either mode, and its tips leave it Good to go (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: 'index.html' });
+    for (const theme of ['dark', 'light']) {
+      await page.evaluate(`document.documentElement.dataset.theme = '${theme}'`);
+      await exec(page, 'view.accessibility');
+      await frames(page);
+      assert.deepEqual(await rowsOf(page, 'item'), []);
+      assert.ok((await rowsOf(page, 'hint')).includes('behind "Thank you" Slide 12'));
+      assert.match(await page.evaluate(`document.querySelector('.beeson-edit-a11y .status').textContent`), /Good to go/);
+      await exec(page, 'view.accessibility');
+      assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-bottom .a11y').textContent`), 'Accessibility: Good to go');
+    }
+    assert.deepEqual(errors(page), []);
+  });
+}
