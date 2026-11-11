@@ -284,3 +284,38 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: a mark of equal gaps is a line with an arrowhead at each end, in the color of the guides`, async (t) => {
+    const page = await load(t, platform);
+    await openList(page, platform);
+    await click(page, `${ROW}:nth-child(4)`);
+    // the formula is moved down, then dragged by its handle back to the middle between the lead-in
+    // and the paragraph under it
+    const handle = await page.evaluate(`(() => { const r = [...document.querySelectorAll('.beeson-handle')].find((d) => !d.hidden && d.getClientRects().length).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    const middle = await page.evaluate(`(() => {
+      const s = document.querySelector('.reveal .slides section.present');
+      const [a, m, c] = [':scope > p', ':scope > div.math', ':scope > p.fragment'].map((q) => s.querySelector(q).getBoundingClientRect());
+      return (a.bottom + c.top - m.height) / 2 - m.top;
+    })()`);
+    await drag(page, handle, { dy: 60, steps: 6 });
+    const moved = await render(page);
+    await drag(page, { x: handle.x, y: handle.y + 60 }, { dy: middle - 58, steps: 10, hold: true });
+    const marks = await page.evaluate(`(() => {
+      const probe = document.body.appendChild(document.createElement('span'));
+      probe.style.color = 'var(--ed-guide)';
+      const guide = getComputedStyle(probe).color;
+      probe.remove();
+      return [...document.querySelectorAll('.beeson-gap')].filter((d) => !d.hidden).map((d) => {
+        const paths = d.querySelectorAll('svg path');
+        return { axis: d.className, heads: (paths[1]?.getAttribute('d').match(/Z/g) ?? []).length, color: getComputedStyle(paths[0]).stroke === guide, fill: getComputedStyle(paths[1]).fill === guide };
+      });
+    })()`);
+    assert.equal(marks.length, 2);
+    for (const m of marks) assert.deepEqual(m, { axis: 'beeson-gap v', heads: 2, color: true, fill: true });
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: handle.x, y: handle.y + middle + 2, button: 'left', clickCount: 1 });
+    await frames(page);
+    assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-gap')].filter((d) => !d.hidden).length`), 0);
+    await checkEdit(page, await render(page), moved);
+  });
+}
