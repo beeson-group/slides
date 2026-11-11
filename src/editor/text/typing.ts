@@ -251,13 +251,15 @@ export function install(app: App): void {
     }
     // a new line starts a new entry of the history, as in a text editor
     if (type === 'insertParagraph' || type === 'insertLineBreak') history.break();
-    history.beforeTyping(host);
+    history.beforeTyping(host, type === 'insertFromPaste' ? 'Paste' : type === 'deleteByCut' ? 'Cut' : 'typing');
     if (type === 'insertParagraph' || type === 'insertLineBreak') {
       ev.preventDefault();
       insertPlain(host, '\n');
     } else if (type === 'insertFromPaste') {
       ev.preventDefault();
       insertPlain(host, ev.dataTransfer?.getData('text/plain') ?? '');
+      history.afterTyping(host);
+      history.break();
     } else if (type === 'insertFromDrop' || type.startsWith('format') || type.startsWith('insertOrdered') || type.startsWith('insertUnordered') || type === 'insertHorizontalRule' || type === 'insertLink') {
       ev.preventDefault();
     }
@@ -270,6 +272,7 @@ export function install(app: App): void {
     const host = app.hostOf(ev.target);
     if (!host) return;
     history.afterTyping(host);
+    if ((ev as InputEvent).inputType === 'deleteByCut') history.break();
     app.markDirty();
     app.invalidate('content');
   });

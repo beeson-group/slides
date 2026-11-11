@@ -165,18 +165,20 @@ export class History {
     this.known.set(host, this.snapshot(host));
   }
 
-  // called before an input into host, with the content that the input changes
-  beforeTyping(host: Element): void {
+  // called before an input into host, with the content that the input changes. an input with a
+  // label of its own, e.g. Paste, is an entry apart from the typing around it
+  beforeTyping(host: Element, label = 'typing'): void {
     if (this.busy) return;
     const now = performance.now();
-    if (this.typing && this.typing.host === host && now - this.typing.at < PAUSE) return;
-    this.start(host, this.snapshot(host), now);
+    if (label !== 'typing') this.typing = null;
+    if (this.typing && this.typing.host === host && now - this.typing.at < PAUSE && this.typing.entry.label === 'typing') return;
+    this.start(host, this.snapshot(host), now, label);
   }
 
-  private start(host: Element, before: string, at: number): void {
+  private start(host: Element, before: string, at: number, label = 'typing'): void {
     const state = { before, after: before };
     const entry: Entry = {
-      label: 'typing',
+      label,
       undo: () => this.put(host, state.before),
       redo: () => this.put(host, state.after),
     };
