@@ -125,6 +125,13 @@ export function install(app: App): void {
   const setNavWidth = (w: number, keep = true) => {
     navWidth = Math.round(Math.min(NAV_MAX, Math.max(NAV_MIN, w)));
     html.style.setProperty('--ed-nav-w', `${navWidth}px`);
+    // the column of the navigator is narrower in a narrow window, which keeps the canvas, and the
+    // width drawn there is the one kept and announced
+    const drawn = Math.round(document.querySelector('.beeson-edit-nav')?.getBoundingClientRect().width ?? 0);
+    if (drawn > 0 && drawn < navWidth - 1) {
+      navWidth = Math.max(NAV_MIN, drawn);
+      html.style.setProperty('--ed-nav-w', `${navWidth}px`);
+    }
     edge.setAttribute('aria-valuenow', String(navWidth));
     if (keep) store(NAV_KEY, String(navWidth));
     app.relayout();

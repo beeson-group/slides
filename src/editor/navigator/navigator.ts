@@ -324,8 +324,13 @@ export class Navigator implements Pane {
     if (p.nav || this.app.region() === 'navigator' || document.activeElement === document.body) this.focus(current);
   }
 
-  // the row of slide gets the focus, e.g. after a command run in the navigator
+  // the row of slide gets the focus, e.g. after a command run in the navigator, or its tile while
+  // the light table is shown
   focus(slide: Element | null = this.app.current()): void {
+    if (this.table?.shown) {
+      this.app.flush();
+      return this.table.focus(slide);
+    }
     const row = slide ? this.rows.get(slide) : null;
     row?.el.focus({ preventScroll: true });
     row?.el.scrollIntoView({ block: 'nearest' });
