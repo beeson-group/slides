@@ -468,7 +468,8 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await page.evaluate(SELECTED_ROWS), [HEADING, PARA], 'Shift does not add a row to the selection');
     await click(page, await pointIn(page, ROW(LAST), 0.7), { modifiers: 'Mod' });
     await frames(page);
-    assert.deepEqual(await page.evaluate(SELECTED_ROWS), [HEADING, PARA, LAST], 'Mod does not add a row to the selection');
+    // the row of the stepped list item is above the rows of the elements shown with the slide
+    assert.deepEqual((await page.evaluate(SELECTED_ROWS)).sort(), [HEADING, PARA, LAST].sort(), 'Mod does not add a row to the selection');
     await click(page, await pointIn(page, ROW(LAST), 0.7), { modifiers: 'Mod' });
     await frames(page);
     assert.deepEqual(await page.evaluate(SELECTED_ROWS), [HEADING, PARA], 'Mod does not take a row off the selection');

@@ -1040,10 +1040,16 @@ export class Steps {
     this.none.disabled = !steps;
   }
 
+  // with several rows selected, a command of the fields acts on each of their elements, apart from
+  // the delay
   private runOn(id: string, arg: Record<string, unknown>): void {
     const s = this.selected();
     const app = this.app;
-    if (s && app) void app.commands.run(id, { el: s.el, ...arg }).catch((e) => app.fail(e));
+    if (s && app) void app.commands.run(id, this.several() && id !== 'steps.delay' ? arg : { el: s.el, ...arg }).catch((e) => app.fail(e));
+  }
+
+  private several(): boolean {
+    return this.rows.filter((r) => r.row.classList.contains('selected') && !this.model?.lines[r.i]).length > 1;
   }
 
   private select(r: Row): void {
@@ -1066,7 +1072,9 @@ export class Steps {
     const app = this.app;
     const m = this.model;
     if (!app || !m) return;
-    this.select(r);
+    // the menu of a row among several selected rows acts on each of them
+    const many = this.several() && r.row.classList.contains('selected') && !m.lines[r.i];
+    if (!many) this.select(r);
     const { plan } = m;
     const at = stepAt(plan, r.i);
     // Play From plays the steps of the slide from this one, as in the Animation Pane of PowerPoint
@@ -1082,7 +1090,7 @@ export class Steps {
     const { start } = startAt(app, m, r.i);
     const effect = effectOf(classesOf(app, r.el)).id;
     const first = at === 0 && start === 'click';
-    const run = (id: string, arg: Record<string, unknown>) => () => void app.commands.run(id, { el: r.el, ...arg }).catch((e) => app.fail(e));
+    const run = (id: string, arg: Record<string, unknown>) => () => void app.commands.run(id, many ? arg : { el: r.el, ...arg }).catch((e) => app.fail(e));
     const items: MenuItem[] = [
       { label: 'With the Slide', checked: at < 0, run: run('steps.set', { to: null }) },
       ...plan.groups.map((_, k): MenuItem => ({ label: `Step ${k + 1}`, checked: at === k, run: run('steps.set', { to: k }) })),
@@ -1107,7 +1115,9 @@ export class Steps {
   }
 
   // a press on a row selects its element. a press on its chip opens the menu of the chip, and a
-  // press elsewhere that is moved by 4 px drags the row to another place in the order
+  // press elsewhere that is moved by 4 px drags the row to another place in the order. with Shift,
+  // the element is added to the selection, and with ⌘ (Ctrl) it is added or taken off, as in the
+  // Animation Pane of PowerPoint
   private press(ev: PointerEvent, r: Row): void {
     if (ev.button !== 0 || !this.app || !this.model) return;
     ev.preventDefault();
@@ -1119,6 +1129,13 @@ export class Steps {
     r.row.focus({ preventScroll: true });
     if (onChip) {
       this.openChip(r, false);
+      return;
+    }
+    if ((ev.shiftKey || (this.app.platform === 'mac' ? ev.metaKey : ev.ctrlKey)) && !this.model.lines[r.i]) {
+      const sel = this.app.selection;
+      if (!ev.shiftKey) sel.toggle(r.el);
+      else if (!sel.items.includes(r.el)) sel.add(r.el);
+      this.current = r;
       return;
     }
     this.select(r);
