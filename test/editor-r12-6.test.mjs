@@ -199,6 +199,7 @@ for (const platform of PLATFORMS) {
     const part = listPart(await render(page));
     assert.doesNotMatch(part, /<(ul|ol)>\s*<\/\1>/, `Return writes an empty list: ${part}`);
     assert.doesNotMatch(part, /<li[^>]*>\s*<(ul|ol)>/, `Return writes an item that starts with a list: ${part}`);
+    await roundTrip(page, 3);
   });
 
   // feel-1: the text typed after Tab on a new empty item went to the item above
