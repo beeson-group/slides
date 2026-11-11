@@ -290,7 +290,7 @@ class DataWindow {
     this.fill();
     const hit = this.cellOf(document.activeElement);
     const error = hit ? (this.drafts.get(key(hit.cell))?.error ?? null) : null;
-    this.say(error ?? this.refusal(), !!error || this.refused.size > 0);
+    this.say(error ?? (this.refusal() || this.size()), !!error || this.refused.size > 0);
   }
 
   // the number cells of cells marked as not cleared
@@ -427,8 +427,13 @@ class DataWindow {
     const r = Math.max(0, Math.min(sheet.rows.length - 1, b.r)), c = Math.max(0, Math.min(sheet.columns.length - 1, b.c));
     this.range = { a: this.range?.a ?? this.at, b: { r, c } };
     this.mark();
+    this.say(this.size());
+  }
+
+  // the size of the range in words, which is kept in the state while the sheets are read again
+  private size(): string {
     const box = this.box();
-    this.say(box ? `${box.r1 - box.r0 + 1} × ${box.c1 - box.c0 + 1} cells selected.` : '');
+    return box ? `${box.r1 - box.r0 + 1} × ${box.c1 - box.c0 + 1} cells selected.` : '';
   }
 
   // the cells of the range, or the focused cell, by row
