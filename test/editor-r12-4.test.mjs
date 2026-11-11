@@ -260,11 +260,10 @@ for (const platform of PLATFORMS) {
     const edited = await render(page);
     assert.match(edited, /<img src="media\/figure-dark.png"[^>]*>\s*<figcaption class="caption">A new caption<\/figcaption>\s*<\/figure>/);
     assert.equal((await page.evaluate(`window.BeesonEditor.state('figure.caption')`)).checked, true);
-    // the switch is one entry and the typing another
-    await undo(page);
+    // the caption is written into the file at its first input, which is one entry with the switch,
+    // as the first input into a new text box
     await undo(page);
     assert.equal(await render(page), before);
-    await redo(page);
     await redo(page);
     assert.equal(await render(page), edited);
     const saved = await saveInto(page, `r12-4-caption-${platform}`);

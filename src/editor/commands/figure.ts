@@ -73,6 +73,15 @@ export function onAltRequest(fn: () => void): void {
   altRequest = fn;
 }
 
+// the empty caption of commands/insert.ts, which the first input writes into the file
+let captionBox: { begin(host: Element): void; drop(): void } | null = null;
+export function onCaptionBox(box: { begin(host: Element): void; drop(): void }): void {
+  captionBox = box;
+}
+
+// the caption last taken off each figure or zone in the session, put back by Caption on
+const takenCaption = new WeakMap<Element, string>();
+
 function setTag(app: App, el: Element, edit: TagEdit, label: string): void {
   app.doc.setTag(el, edit, label);
 }
@@ -148,11 +157,11 @@ export function commands(): Command[] {
   const list: Command[] = [
     {
       // a caption under the picture, as Caption in the Style tab of Keynote: a figcaption in a
-      // figure and a caption paragraph in a zone, with the caret in it
+      // figure and a caption paragraph in a zone, with the caret in it. the caption taken off is
+      // put back with its text, and a new one is written into the file at its first input
       id: 'figure.caption',
       label: 'Caption',
       menu: imageMenu(12),
-      undoable: true,
       enabled: (app) => !!captionHost(app),
       checked: (app) => {
         const host = captionHost(app);
@@ -162,10 +171,17 @@ export function commands(): Command[] {
         const host = captionHost(app);
         if (!host) return;
         const old = captionOf(host);
-        if (old) return void (await app.doc.remove(old, 'caption'));
-        const tag = host.localName === 'figure' ? 'figcaption' : 'p';
-        const [node] = await app.doc.insert(`<${tag} class="caption"></${tag}>`, host, null, 'caption');
-        if (node) setTimeout(() => node.matches('[contenteditable="true"]') && placeCaret(node));
+        if (old?.hasAttribute('data-generated')) return captionBox?.drop();
+        const back = takenCaption.get(host);
+        if (!old && !back) return captionBox?.begin(host);
+        await app.history.transact('Caption', async () => {
+          if (old) {
+            takenCaption.set(host, app.doc.elementText(old));
+            return app.doc.remove(old, 'caption');
+          }
+          const [node] = await app.doc.insert(back!, host, null, 'caption');
+          if (node) setTimeout(() => node.matches('[contenteditable="true"]') && placeCaret(node));
+        });
       },
     },
     {

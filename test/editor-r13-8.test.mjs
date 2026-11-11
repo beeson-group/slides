@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, saveAndReopen, selectFigure } from './helpers/editor.mjs';
+import { byteExact, click, saveAndReopen, selectFigure } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 
@@ -29,12 +29,12 @@ const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 const render = (page) => page.evaluate('window.BeesonEditor.render()');
 const exec = (page, id) => page.evaluate(`window.BeesonEditor.exec(${js(id)})`).then(() => frames(page));
 
-// the editor on slide n of index.html, served over HTTP
-async function load(t, platform, n = 0) {
-  const text = readFileSync('index.html', 'utf8');
+// the editor on slide n of a deck, served over HTTP
+async function load(t, platform, n = 0, deck = 'index.html') {
+  const text = readFileSync(deck, 'utf8');
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  const url = `${server.origin}/index.html?edit&still&theme=light&edit-platform=${platform}`;
+  const url = `${server.origin}/${deck}?edit&still&theme=light&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
@@ -79,6 +79,9 @@ for (const platform of PLATFORMS) {
   });
 }
 
+// the center of the Caption switch of the Image pane
+const switchAt = (page) => page.evaluate(`(() => { const l = [...document.querySelectorAll('.beeson-edit-inspector label')].find((l) => l.textContent.trim() === 'Caption'); const r = l.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+
 // finding r12-4-insert-layout-media 2: Caption turned off and on lost the text of the caption, and
 // wrote an empty figcaption into the file
 for (const platform of PLATFORMS) {
@@ -117,7 +120,31 @@ for (const platform of PLATFORMS) {
     await sleep(100);
     assert.ok(await page.evaluate(`!Reveal.getCurrentSlide().querySelector('.zone > .caption')`), 'an empty caption stays on the page');
     await byteExact(page);
+    await byteExact(page);
     await saveAndReopen(page);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`the Caption switch of the Image pane shows an empty caption, which Caption takes off again (${platform})`, async (t) => {
+    const page = await load(t, platform, 0, 'test/pages/editor-multi.html');
+    await selectFigure(page, 'img.for-light');
+    await click(page, await page.evaluate(`(() => { const b = [...document.querySelectorAll('.beeson-edit-inspector .ed-tabs button')].find((b) => b.textContent.trim() === 'Image'); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`));
+    await frames(page);
+    await click(page, await switchAt(page));
+    await sleep(150);
+    const shown = `!!document.querySelector('figure > figcaption')`;
+    assert.equal(await page.evaluate(shown), true, 'the switch does not show a caption');
+    await byteExact(page);
+    // the caret is in the caption, which Caption turns off again
+    await exec(page, 'figure.caption');
+    assert.equal(await page.evaluate(shown), false, 'Caption does not take the empty caption off');
+    assert.equal((await page.evaluate(`window.BeesonEditor.state('figure.caption')`)).checked, false);
+    await byteExact(page);
+    await selectFigure(page, 'img.for-light');
+    await exec(page, 'figure.caption');
+    await page.send('Input.insertText', { text: 'A caption' });
+    await frames(page);
+    assert.match(await render(page), /<figcaption class="caption">A caption<\/figcaption>\s*<\/figure>/);
     assert.deepEqual(errors(page), []);
   });
 }
