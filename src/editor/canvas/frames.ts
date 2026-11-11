@@ -124,20 +124,27 @@ export function turned(box: Box, deg: number, x: number, y: number): { x: number
 }
 
 // the frame of a group on the screen turned by deg, the angle of its first member, as Keynote
-// turns the frame of a group: the least box at this angle around the turned pictures of the
-// members and their upright captions, without its rotation about its center
+// turns the frame of a group, without its rotation about its center. each member is taken in the
+// axes of the frame at its angle to the group, about its center turned back, and its upright
+// caption is carried with it, hence a turn changes the angle of the frame and not its size, as a
+// turn of one element does (K79, P71)
 export function groupFrame(els: Element[], deg: number): Box {
   if (!deg) return groupReach(els);
-  const corners = (b: Box, d: number) => [[0, 0], [1, 0], [1, 1], [0, 1]].map(([x, y]) => turned(b, d, b.left + x * b.width, b.top + y * b.height));
+  const a = (deg * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a);
+  const back = (x: number, y: number) => ({ x: x * cos + y * sin, y: y * cos - x * sin });
   const points = els.flatMap((el) => {
     const pic = pictureOf(el), d = angleOf(el) + (pic === el ? 0 : angleOf(pic));
-    return [...corners(orientedBox(pic, scaleAt(el), d), d), ...captionsOf(el).flatMap((r) => corners(r, 0))];
+    const b = orientedBox(pic, scaleAt(el), d);
+    const at = back(b.left + b.width / 2, b.top + b.height / 2);
+    // the box of the picture at its angle to the group, and each caption at its place to the picture
+    const boxes = [{ x: at.x, y: at.y, w: b.width, h: b.height, d: d - deg }, ...captionsOf(el).map((r) => ({ x: at.x + r.left + r.width / 2 - (b.left + b.width / 2), y: at.y + r.top + r.height / 2 - (b.top + b.height / 2), w: r.width, h: r.height, d: 0 }))];
+    return boxes.flatMap(({ x, y, w, h, d }) => {
+      const c = { left: x - w / 2, top: y - h / 2, width: w, height: h };
+      return [[0, 0], [1, 0], [1, 1], [0, 1]].map(([u, v]) => turned(c, d, c.left + u * w, c.top + v * h));
+    });
   });
-  // the box of the points turned back by deg about the origin, whose center is turned by deg again
-  const a = (deg * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a);
-  const back = points.map((p) => ({ x: p.x * cos + p.y * sin, y: p.y * cos - p.x * sin }));
-  const left = Math.min(...back.map((p) => p.x)), top = Math.min(...back.map((p) => p.y));
-  const width = Math.max(...back.map((p) => p.x)) - left, height = Math.max(...back.map((p) => p.y)) - top;
+  const left = Math.min(...points.map((p) => p.x)), top = Math.min(...points.map((p) => p.y));
+  const width = Math.max(...points.map((p) => p.x)) - left, height = Math.max(...points.map((p) => p.y)) - top;
   const cx = left + width / 2, cy = top + height / 2;
   return { left: cx * cos - cy * sin - width / 2, top: cx * sin + cy * cos - height / 2, width, height };
 }
