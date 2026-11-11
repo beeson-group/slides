@@ -46,13 +46,13 @@ const rowBox = (page, n) =>
   page.evaluate(`(() => { const r = document.querySelectorAll(${js(ROW)})[${n}].getBoundingClientRect(); return { x: r.left + 60, y: r.top + r.height / 2, top: r.top, bottom: r.bottom }; })()`);
 
 // the editor on slide n of the deck of layouts, served over HTTP, with the storage of the browser
-// cleared
-async function load(t, platform, n = MATH) {
+// cleared, or holding the items of storage
+async function load(t, platform, n = MATH, storage = {}) {
   const page = await browser.newPage();
   t.after(() => page.close().catch(() => {}));
   const url = `${server.origin}/${LAYOUTS}?edit&still&edit-platform=${platform}`;
   await page.goto(url);
-  await page.evaluate('localStorage.clear()');
+  await page.evaluate(`(() => { localStorage.clear(); for (const [k, v] of Object.entries(${js(storage)})) localStorage.setItem(k, v); })()`);
   await page.goto(url);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
@@ -317,5 +317,58 @@ for (const platform of PLATFORMS) {
     await frames(page);
     assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-gap')].filter((d) => !d.hidden).length`), 0);
     await checkEdit(page, await render(page), moved);
+  });
+}
+
+// the guides drawn on the canvas, as [axis, place in slide px]
+const drawnGuides = (page) =>
+  page.evaluate(`[...document.querySelectorAll('.beeson-hand-guide')].filter((g) => !g.hidden && !g.classList.contains('off')).map((g) => [g.dataset.axis, Number(g.dataset.at)]).sort()`);
+const MATH_TAG = '<section>\n  <h2>Math, an ordered list, and a zone</h2>';
+const GUIDES_KEY = `beeson-edit-guides:/${LAYOUTS}`;
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: guides kept in the storage of the browser are shown, and written into data-guides at the next change of the guides of their slide`, async (t) => {
+    const legacy = SECTIONS.map((_, i) => (i === MATH ? { x: [300], y: [] } : i === MATH + 1 ? { x: [], y: [200] } : { x: [], y: [] }));
+    const page = await load(t, platform, MATH, { [GUIDES_KEY]: js(legacy) });
+    assert.deepEqual(await drawnGuides(page), [['x', 300]]);
+    await byteExact(page);
+    await exec(page, 'view.guides.add', { x: [], y: [500] });
+    await frames(page);
+    assert.deepEqual(await drawnGuides(page), [['x', 300], ['y', 500]]);
+    const edited = await render(page);
+    assert.equal(edited, page.source.replace(MATH_TAG, MATH_TAG.replace('<section>', '<section data-guides="x300 y500">')));
+    // the guides of the slide are no longer in the storage, and those of the next slide are kept
+    const kept = JSON.parse(await page.evaluate(`localStorage.getItem(${js(GUIDES_KEY)})`));
+    assert.deepEqual([kept[MATH], kept[MATH + 1]], [{ x: [], y: [] }, { x: [], y: [200] }]);
+    await undo(page);
+    await frames(page);
+    assert.deepEqual(await drawnGuides(page), [['x', 300]]);
+    assert.deepEqual(JSON.parse(await page.evaluate(`localStorage.getItem(${js(GUIDES_KEY)})`))[MATH], { x: [300], y: [] });
+    await checkEdit(page, edited, page.source);
+    assert.deepEqual(await drawnGuides(page), [['x', 300], ['y', 500]]);
+    // the guides of the next slide, still in the storage, are shown there
+    await page.evaluate(`Reveal.slide(${MATH + 1})`);
+    await frames(page);
+    assert.deepEqual(await drawnGuides(page), [['y', 200]]);
+  });
+
+  test(`${platform}: Clear All Guides on Slide takes data-guides off its section, and Paste Guides writes it on another`, async (t) => {
+    const page = await load(t, platform);
+    await exec(page, 'view.guides.add', { x: [960], y: [540] });
+    await exec(page, 'slide.guides.copy');
+    await page.evaluate(`Reveal.slide(${MATH + 1})`);
+    await frames(page);
+    await exec(page, 'slide.guides.paste');
+    await frames(page);
+    assert.deepEqual(await drawnGuides(page), [['x', 960], ['y', 540]]);
+    const narrow = '<section class="narrow">\n  <h2>A narrow slide</h2>';
+    const pasted = await render(page);
+    assert.ok(pasted.includes(narrow.replace('class="narrow"', 'class="narrow" data-guides="x960 y540"')));
+    await exec(page, 'view.guides.clear');
+    await frames(page);
+    assert.deepEqual(await drawnGuides(page), []);
+    const cleared = await render(page);
+    assert.ok(cleared.includes(narrow));
+    await checkEdit(page, cleared, pasted);
   });
 }
