@@ -77,7 +77,7 @@ const MENU = `(() => {
 const menu = (page) => page.evaluate(MENU);
 const mathJaxMenus = (page) => page.evaluate(`document.querySelectorAll('[class*=CtxtMenu_Menu]').length`);
 // the selection of the editor, as the tag name of each element with its first class
-const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((e) => e.localName + (typeof e.className === 'string' && e.className ? '.' + e.className.split(' ')[0] : ''))`);
+const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((e) => e.localName + (e.getAttribute('class') ? '.' + e.getAttribute('class').split(' ')[0] : ''))`);
 const item = (m, label) => m?.items.find((i) => i.label === label);
 
 async function closeMenu(page) {
@@ -306,5 +306,54 @@ for (const platform of PLATFORMS) {
     assert.equal(item(m, 'Delete')?.off, false);
     await closeMenu(page);
     assert.deepEqual(errors(page), []);
+  });
+}
+
+// an arrow drawn by a drag of 300 px from x0 along the line at y on the current slide, with
+// nothing selected after it, and the text with it as the source of the page
+async function drawArrow(page, x0, y) {
+  await page.evaluate(`window.BeesonEditor.exec('insert.arrow')`);
+  await sleep(150);
+  await drag(page, { x: x0, y }, { dx: 300, steps: 12 });
+  await sleep(200);
+  assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present svg.line').length`), 1, 'the arrow is not drawn');
+  await press(page, 'Escape');
+  await press(page, 'Escape');
+  await frames(page);
+  assert.deepEqual(await selected(page), []);
+  page.source = await render(page);
+  const r = await page.evaluate(`(() => { const r = document.querySelector('.reveal section.present svg.line line').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  return r;
+}
+
+// finding menus-keys-3: a right-click on the stroke of a line opened the slide menu, or over a text
+// the text menu with the line taken out of the selection
+for (const platform of PLATFORMS) {
+  test(`a right-click on the stroke of a line selects it and opens its element menu (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 6 });
+    for (const [n, where] of [[6, 'an empty part of a slide'], [3, 'a text']]) {
+      await page.evaluate(`Reveal.slide(${n})`);
+      await frames(page);
+      const s = await page.evaluate(`(() => { const r = document.querySelector('.reveal section.present').getBoundingClientRect(); const p = document.querySelector('.reveal section.present > p')?.getBoundingClientRect(); return { l: r.left, t: r.top, w: r.width, h: r.height, py: p ? p.top + p.height / 2 : null }; })()`);
+      const y = n === 3 ? s.py : s.t + s.h * 0.93;
+      const at = await drawArrow(page, s.l + s.w * 0.15, y);
+      for (const before of ['selected', 'not selected']) {
+        if (before === 'selected') {
+          await click(page, at);
+          await frames(page);
+          assert.deepEqual(await selected(page), ['svg.line']);
+        }
+        const m = await objectMenu(page, at, ['svg.line'], `a line ${before} over ${where}`);
+        assert.equal(item(m, 'Delete')?.off, false);
+        await closeMenu(page);
+        await press(page, 'Escape');
+        await frames(page);
+      }
+      await objectMenu(page, at, ['svg.line'], `a line over ${where}`);
+      await click(page, await itemAt(page, 'Delete'));
+      await frames(page);
+      assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present svg.line').length`), 0);
+      await roundTrip(page);
+    }
   });
 }
