@@ -26,6 +26,9 @@ const DEFAULT = 220;
 // the distance in CSS px by which a press is moved before it is a drag
 const DRAG_START = 4;
 
+// the slide of each tile, by which the context menu of shell.ts finds the slide of a tile
+export const tileSlide = new WeakMap<Element, Element>();
+
 type Group = { key: string; head: Element | null; title: string; slides: Element[] };
 type Tile = { el: HTMLButtonElement; pic: HTMLElement; no: HTMLElement; corner: HTMLElement; dots: HTMLElement };
 type Drag = { slides: Element[]; x: number; y: number; on: boolean; gap: number; head?: Element };
@@ -365,6 +368,7 @@ export class Sorter {
     el.type = 'button';
     el.setAttribute('role', 'option');
     el.dataset.context = 'slide';
+    tileSlide.set(el, slide);
     const frame = make('span', 'frame');
     const pic = make('span', 'pic');
     const corner = make('span', 'corner');

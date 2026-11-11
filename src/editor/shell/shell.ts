@@ -17,6 +17,7 @@ import { keyClashes, sheetClashes } from './keys-sheet.ts';
 import { overlay } from '../canvas/frames.ts';
 import { lineAt, onCanvas } from '../canvas/hit.ts';
 import { PANE_KEYS } from '../commands/view.ts';
+import { tileSlide } from '../navigator/sorter.ts';
 
 const NAV_KEY = 'beeson-nav-w';
 const NAV_MIN = 140;
@@ -295,6 +296,9 @@ export function install(app: App): void {
       return { kind: 'slide', target: slide };
     }
     if (target.closest('.beeson-edit-nav')) return { kind: 'navigator', target: null };
+    // a tile of the light table stands for its slide, as a row of the navigator does
+    const tile = target.closest('.beeson-edit-sorter .tile');
+    if (tile) return { kind: 'slide', target: tileSlide.get(tile) ?? null };
     if (target.closest('.beeson-edit-canvas')) return { kind: 'canvas', target: app.current() };
     // the handle of a block, outside the slide, stands for its block
     const handle = target.closest('.beeson-handle') ? overlay().current() : null;
