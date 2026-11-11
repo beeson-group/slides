@@ -241,3 +241,37 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// a lock holds an element of the slide, and not the text of a line of the outline
+for (const platform of PLATFORMS) {
+  test(`Cut and Delete of the Edit menu act on the selected text of an outline line while a locked figure is selected on the canvas (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    const n = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('figure.zone'))`);
+    await page.evaluate(`Reveal.slide(${n})`);
+    await page.evaluate(`BeesonEditor.exec('view.outline')`);
+    await settle(page);
+    await click(page, await rect(page, `[...document.querySelectorAll('.reveal section.present figure.zone img')].find((i) => i.getClientRects().length)`));
+    await settle(page);
+    await page.evaluate(`Promise.resolve(BeesonEditor.exec('arrange.lock')).then(() => true)`);
+    await settle(page);
+    const locked = await render(page);
+    assert.ok(/<figure[^>]*data-locked/.test(locked), 'the figure is not locked');
+    const at = `document.querySelectorAll('.beeson-edit-outline .slide')[${n}].querySelector('.text[aria-label="Slide title"]')`;
+    await click(page, await rect(page, at));
+    await settle(page);
+    assert.ok(await page.evaluate(`document.activeElement === ${at}`), 'the caret is not in the line of the outline');
+    await openBar(page, 'Edit');
+    await click(page, await item(page, 'Select All'));
+    await settle(page);
+    await closeMenus(page);
+    await openBar(page, 'Edit');
+    assert.equal((await itemState(page, 'Cut'))?.disabled, false, 'Cut is dimmed on the selected text of the line');
+    assert.equal((await itemState(page, 'Delete'))?.disabled, false, 'Delete is dimmed on the selected text of the line');
+    await click(page, await item(page, 'Delete'));
+    await settle(page);
+    await closeMenus(page);
+    assert.equal(await page.evaluate(`${at}.textContent`), '', 'Delete does not delete the selected text of the line');
+    assert.ok(/<figure[^>]*data-locked/.test(await render(page)), 'the locked figure is not in the file any more');
+    assert.deepEqual(errors(page), []);
+  });
+}
