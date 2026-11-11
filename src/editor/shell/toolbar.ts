@@ -279,9 +279,7 @@ export function install(app: App): void {
         parts.push(el);
       }
       top.replaceChildren(...parts);
-      // the items are not folded into » while they are dragged, hence they are drawn as icons
-      // where their labels do not fit the window
-      if (top.scrollWidth > top.clientWidth + 0.5) top.classList.add('compact');
+      fit();
       update();
       return;
     }
@@ -353,6 +351,13 @@ export function install(app: App): void {
       fold([...after, ...before]);
     }
     update();
+  }
+
+  // the items are not folded into » while they are dragged, hence they are drawn as icons
+  // where their labels do not fit the window
+  function fit(): void {
+    top.classList.remove('compact');
+    if (top.scrollWidth > top.clientWidth + 0.5) top.classList.add('compact');
   }
 
   // the state of each button, and the one tab stop on the first button that can be pressed
@@ -718,7 +723,8 @@ export function install(app: App): void {
   new ResizeObserver(() => {
     if (top.clientWidth === width) return;
     width = top.clientWidth;
-    if (!customizing) render();
+    if (customizing) fit();
+    else render();
   }).observe(top);
   // a mode that ends without a change of the file, e.g. the drawing of a line left with Esc, is
   // shown on its switch after the key or the release that ends it
