@@ -72,7 +72,9 @@ export function writePlace(app: App, el: Element, p: Place, force = false, twin 
   const other = twin ? twinOf(app, el) : null;
   if (other) writePlace(app, other, p, force, false);
   const style = (el as HTMLElement).style;
-  const t = p.translate && (p.translate.x || p.translate.y) ? { x: Math.round(p.translate.x), y: Math.round(p.translate.y) } : null;
+  // an offset under half a pixel is none, e.g. the rest of a turn taken back
+  const r = p.translate ? { x: Math.round(p.translate.x), y: Math.round(p.translate.y) } : null;
+  const t = r && (r.x || r.y) ? r : null;
   style.translate = t ? `${t.x}px ${t.y}px` : '';
   const edit: TagEdit & { style?: Record<string, string | null> } = { ...app.tagEdits.get(el), translate: t };
   if (el.matches(RESIZABLE) || isTextSized(el)) declare(el, edit, 'width', p.width === null ? null : `${Math.round(p.width)}px`);
@@ -108,9 +110,54 @@ export function record(app: App, label: string, changes: { el: Element; from: Pl
 
 export type Change = { el: Element; from: Place; to: Place };
 
-// a member of a group at the start of a turn of the group: its place, and its center on the screen,
-// about which its rotate turns it
-export type Turner = { el: Element; from: Place; center: { x: number; y: number } };
+// the element whose style takes the angle of el: the shown picture of a figure, since the caption
+// of a figure is not turned with its picture, as a caption of PowerPoint is not, and else el
+export const spinOf = (el: Element): Element => (el.matches(CONTAINER) ? pictureOf(el) : el);
+
+// the angle of el in degrees, from 0 to 359: the angle of the picture of a figure, with the angle
+// of a figure that is turned in the file
+export function angleOf(el: Element): number {
+  const spin = spinOf(el);
+  const up = spin !== el ? el : spin.matches(RESIZABLE) ? spin.parentElement?.closest(CONTAINER) : null;
+  return (((placeOf(spin).rotate ?? 0) + (up ? (placeOf(up).rotate ?? 0) : 0)) % 360 + 360) % 360;
+}
+
+// the center on the screen of spin as it is seen, i.e. of the picture of an image or a video,
+// about which a turn turns it
+export function seenCenter(app: App, spin: Element): { x: number; y: number } {
+  const b = orientedBox(spin, frameOf(app).scale, angleOf(spin));
+  return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+}
+
+// the place of an element on the page only, as during a drag, whose release writes it with
+// writePlace
+function writeLive(el: Element, p: Place): void {
+  const style = (el as HTMLElement).style;
+  const t = p.translate && (Math.round(p.translate.x) || Math.round(p.translate.y)) ? p.translate : null;
+  style.translate = t ? `${Math.round(t.x)}px ${Math.round(t.y)}px` : '';
+  if (el.matches(RESIZABLE) || isTextSized(el)) style.width = p.width === null ? '' : `${Math.round(p.width)}px`;
+  if (el.matches(STRETCHED) && p.height !== undefined) style.height = p.height === null ? '' : `${Math.round(p.height)}px`;
+  if (p.rotate !== undefined) style.rotate = p.rotate ? `${Math.round(p.rotate)}deg` : '';
+}
+
+// spin turned to deg degrees, with its center on the screen put at want by the offset of carrier,
+// which is spin or the figure around it. an image fitted at a side of its box, e.g. in a plate,
+// thus turns about the center of its picture. a figure that is turned in the file gives its angle
+// to its picture. with live set, the page alone is changed
+export function turn(app: App, spin: Element, carrier: Element, deg: number, want: { x: number; y: number }, live = false): void {
+  const put = (el: Element, p: Place) => (live ? writeLive(el, p) : writePlace(app, el, p));
+  if (carrier !== spin && placeOf(carrier).rotate) put(carrier, { ...placeOf(carrier), rotate: null });
+  put(spin, { ...placeOf(spin), rotate: ((Math.round(deg) % 360) + 360) % 360 || null });
+  const c = seenCenter(app, spin), k = frameOf(app).scale;
+  const dx = (want.x - c.x) / k, dy = (want.y - c.y) / k;
+  if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
+  const now = placeOf(carrier);
+  put(carrier, { ...now, translate: { x: (now.translate?.x ?? 0) + dx, y: (now.translate?.y ?? 0) + dy } });
+}
+
+// a member of a group at the start of a turn of the group: the element that takes its angle, its
+// angle, and the center of this element on the screen, about which its rotate turns it
+export type Turner = { el: Element; spin: Element; angle: number; center: { x: number; y: number } };
 
 // the members of a selected group that a turn moves, in the order of the page, whose first sets the
 // angle of the group, or null when els are not one whole group that every member of can be turned
@@ -120,20 +167,20 @@ export function turnersOf(app: App, els: Element[]): Turner[] | null {
   const top = els.filter((el) => !els.some((o) => o !== el && o.contains(el)) && el.getClientRects().length);
   top.sort((a, b) => (a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
   return top.map((el) => {
-    const r = el.getBoundingClientRect();
-    return { el, from: placeOf(el), center: { x: r.left + r.width / 2, y: r.top + r.height / 2 } };
+    const spin = spinOf(el);
+    return { el, spin, angle: angleOf(el), center: seenCenter(app, spin) };
   });
 }
 
-// the place of a member t of a group turned by deg degrees about the point pivot on the screen: its
-// angle grows by deg, and its offset moves its center about pivot, in slide pixels at scale
-export function turnedPlace(t: Turner, pivot: { x: number; y: number }, deg: number, scale: number): Place {
+// the elements whose places a turn of turners changes
+export const turnedEls = (turners: Turner[]): Element[] => [...new Set(turners.flatMap((t) => [t.el, t.spin]))];
+
+// a member t of a group turned by deg degrees from its angle at the start, about the point pivot
+// on the screen, about which its center is carried
+export function turnMember(app: App, t: Turner, pivot: { x: number; y: number }, deg: number, live = false): void {
   const a = (deg * Math.PI) / 180;
   const dx = t.center.x - pivot.x, dy = t.center.y - pivot.y;
-  const x = pivot.x + dx * Math.cos(a) - dy * Math.sin(a), y = pivot.y + dx * Math.sin(a) + dy * Math.cos(a);
-  const from = t.from.translate ?? { x: 0, y: 0 };
-  const rotate = (((t.from.rotate ?? 0) + deg) % 360 + 360) % 360;
-  return { ...t.from, translate: { x: from.x + (x - t.center.x) / scale, y: from.y + (y - t.center.y) / scale }, rotate: rotate || null };
+  turn(app, t.spin, t.el, t.angle + deg, { x: pivot.x + dx * Math.cos(a) - dy * Math.sin(a), y: pivot.y + dx * Math.sin(a) + dy * Math.cos(a) }, live);
 }
 
 // the center of the frame of a group on the screen, about which the group is turned
@@ -238,6 +285,10 @@ type Press = {
   group?: boolean;
   // the members of a group turned by its rotate handle about the center of its frame
   turners?: Turner[];
+  // the angle at the press of the element turned, or of the first member of a group, and the
+  // element whose offset keeps the center of a turned picture, i.e. its figure
+  was?: number;
+  carrier?: Element;
   // the captions that follow the pictures of the drag, read at its first move
   trail?: Trailer[];
 };
@@ -414,7 +465,10 @@ export function install(app: App): void {
       const el = sel.only();
       const box = frames.groupBox();
       const turners = !el && box ? turnersOf(app, sel.elements()) : null;
-      if (!turners && (!el || locked(el))) return;
+      // the picture of a figure takes the angle, from the figure and from the picture selected
+      const spin = el ? spinOf(el) : null;
+      const carrier = spin ? objectOf(app, spin) : null;
+      if (!turners && (!el || !spin || !carrier || locked(el) || locked(spin) || locked(carrier))) return;
       ev.preventDefault();
       ev.stopPropagation();
       let center: { x: number; y: number };
@@ -422,13 +476,15 @@ export function install(app: App): void {
       if (turners && box) {
         // a group turns about the center of its frame, which is drawn turned with it
         center = { x: box.left + box.width / 2, y: box.top + box.height / 2 };
-        p = start('rotate', ev, turners[0].el, turners.map((t) => t.el), null);
+        p = start('rotate', ev, turners[0].el, turnedEls(turners), null);
         p.turners = turners;
+        p.was = turners[0].angle;
         view.turn = { box, deg: 0 };
       } else {
-        const r = (el as Element).getBoundingClientRect();
-        center = { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-        p = start('rotate', ev, el, [el as Element], null);
+        center = seenCenter(app, spin as Element);
+        p = start('rotate', ev, spin, [...new Set([spin as Element, carrier as Element])], null);
+        p.was = angleOf(spin as Element);
+        p.carrier = carrier as Element;
       }
       Object.assign(p, { center, angle: Math.atan2(ev.clientY - center.y, ev.clientX - center.x) * 180 / Math.PI });
       document.documentElement.classList.add('beeson-rotating');
@@ -579,33 +635,21 @@ export function install(app: App): void {
     app.invalidate('content');
   };
 
-  // the place on the page only, during a drag. the release writes it with writePlace
-  const writeLive = (el: Element, p: Place) => {
-    const style = (el as HTMLElement).style;
-    const t = p.translate && (Math.round(p.translate.x) || Math.round(p.translate.y)) ? p.translate : null;
-    style.translate = t ? `${Math.round(t.x)}px ${Math.round(t.y)}px` : '';
-    if (el.matches(RESIZABLE) || isTextSized(el)) style.width = p.width === null ? '' : `${Math.round(p.width)}px`;
-    if (el.matches(STRETCHED) && p.height !== undefined) style.height = p.height === null ? '' : `${Math.round(p.height)}px`;
-    if (p.rotate !== undefined) style.rotate = p.rotate ? `${Math.round(p.rotate)}deg` : '';
-  };
-
   // a turn by the rotate handle about the center of the element. Shift snaps the angle to steps of
   // 15 degrees, and the angle is shown at the pointer
   const rotate = (p: Press, ev: PointerEvent) => {
-    const el = p.els[0];
     const c = p.center as { x: number; y: number };
     const now = Math.atan2(ev.clientY - c.y, ev.clientX - c.x) * 180 / Math.PI;
-    const was = p.from.get(el)?.rotate ?? 0;
+    const was = p.was ?? 0;
     let deg = was + now - (p.angle ?? 0);
     deg = ev.shiftKey ? Math.round(deg / 15) * 15 : Math.round(deg);
     deg = ((deg % 360) + 360) % 360;
     if (p.turners) {
       // the angle of a group is that of its first member, as in the field Angle
       const by = deg - was;
-      const scale = frameOf(app).scale;
-      for (const t of p.turners) writeLive(t.el, turnedPlace(t, c, by, scale));
+      for (const t of p.turners) turnMember(app, t, c, by, true);
       if (view.turn) view.turn.deg = by;
-    } else writeLive(el, { ...(p.from.get(el) as Place), rotate: deg || null });
+    } else turn(app, p.els[0], p.carrier ?? p.els[0], deg, c, true);
     view.moving = p.els;
     view.resizing = true;
     view.readout = { text: `${deg}°`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
