@@ -310,4 +310,50 @@ for (const platform of PLATFORMS) {
     assert.equal(text, edited);
     assert.deepEqual(errors(page), []);
   });
+
+  // round 5, judge opus, finding 5 (state 303). an empty placeholder of the old layout without a
+  // place in the new one is dropped, and the placeholders of the new layout are shown as on a new
+  // slide of it, as Change Layout of PowerPoint does (P33)
+  test(`a new content slide changed to Figure holds the plate, the heading, and the caption of a new figure slide (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: STEPS });
+    await exec(page, 'slide.new.content');
+    await frames(page);
+    const before = await render(page);
+    await exec(page, 'slide.layout.figure');
+    await frames(page);
+    await frames(page);
+    const tags = await page.evaluate(`[...document.querySelector('.reveal .slides > section.present').children].filter((c) => !c.hasAttribute('data-generated') && !c.matches('aside.notes')).map((c) => c.localName + (c.classList.contains('caption') ? '.caption' : c.classList.contains('plate') ? '.plate' : ''))`);
+    assert.deepEqual(tags, ['div.plate', 'h2', 'p.caption']);
+    const s = await page.evaluate('window.BeesonEditor.status()');
+    assert.equal(s.overflow, 0, `the status reads ${s.message}`);
+    const [caption] = await boxes(page, ':scope > p.caption');
+    assert.ok(caption && caption.bottom <= 1080 && caption.right - caption.left > 1, `the caption placeholder is not shown: ${js(caption)}`);
+    const edited = await render(page);
+    await undo(page);
+    assert.equal(await render(page), before);
+    await redo(page);
+    assert.equal(await render(page), edited);
+    // the change back gives the slide as it was
+    await exec(page, 'slide.layout.content');
+    assert.equal(await render(page), before);
+    assert.deepEqual(errors(page), []);
+  });
+
+  // round 5, judge opus, finding 6 (state 302). the list of slide 3 in the black panel of Split is
+  // kept off the footnote of the panel, or else it is marked and named in the status
+  test(`after Change Layout to Split on slide 3, a list over the footnote of the panel is reported (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: STEPS });
+    await exec(page, 'slide.layout.split');
+    await frames(page);
+    await frames(page);
+    const [foot] = await boxes(page, ':scope > .panel > .foot');
+    assert.ok(foot, 'the footnote is not in the panel');
+    const over = (await boxes(page, ':scope > .panel > ul > li, :scope > .panel > p')).filter((b) => meets(b, foot));
+    const s = await page.evaluate('window.BeesonEditor.status()');
+    if (over.length) {
+      assert.ok(s.overflow >= over.length, `${over.length} texts lie over the footnote at ${js(foot)}, and the status reads ${s.message}`);
+      assert.match(s.message, /past the slide or into its footnote/);
+    }
+    assert.deepEqual(errors(page), []);
+  });
 }
