@@ -13,6 +13,7 @@ import { make, injectStyle } from '../ui/dom.ts';
 import { install as installSurface } from '../inspector/surface.ts';
 import { addRow, addSeries, addTab, cellsIn, clearCells, deleteRow, deleteSeries, deleteTab, literal, moveSeries, parseTsv, pasteCells, setCell, setKey, sheetsOf, type Cell, type Result, type Sheet } from '../plotdata.ts';
 import { emptySlot } from '../media/actions.ts';
+import { placeNew } from './place.ts';
 import { modelAt } from '../steps.ts';
 import { ask, trapTab } from '../ui/dialog.ts';
 
@@ -845,7 +846,8 @@ async function deleteTabOf(app: App): Promise<void> {
 }
 
 // the place of a new plot: the first empty zone or plate of the current slide, which the plot
-// takes, and else a new zone before the footnote and the notes, where an image is put
+// takes, and else a new zone before the footnote and the notes, moved off the texts and the figures
+// where a place of its size is free
 async function insertPlot(app: App): Promise<HTMLElement> {
   const slide = app.current()!;
   const slot = emptySlot(app, slide);
@@ -854,6 +856,7 @@ async function insertPlot(app: App): Promise<HTMLElement> {
   const before = fills ?? slide.querySelector(':scope > .foot, :scope > aside.notes');
   const [plot] = await app.doc.insertElement('plot', parent, before, { plate: !!fills?.matches('.plate') });
   if (fills) await app.doc.remove(fills, 'Insert Plot');
+  else placeNew(app, plot as HTMLElement, undefined, true);
   return plot as HTMLElement;
 }
 
