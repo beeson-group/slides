@@ -363,7 +363,10 @@ for (const platform of PLATFORMS) {
     await click(page, '.reveal section.present .plot');
     await frames(page);
     assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('${PANEL} .ed-sec > h5')].map((h) => h.textContent)`), ['Data', 'Panel left', 'Panel right', 'Series Colors']);
+    // the pane is taller than the window with the scales and the axes of two panels, hence a
+    // control is scrolled into view before a click
     const field = async (name, text) => {
+      await page.evaluate(`document.querySelector('${PANEL} input[name="${name}"]').scrollIntoView({ block: 'center' })`);
       await click(page, `${PANEL} input[name="${name}"]`);
       await page.evaluate(`document.querySelector('${PANEL} input[name="${name}"]').select()`);
       if (text) await type(page, text);
@@ -385,6 +388,7 @@ for (const platform of PLATFORMS) {
     await field('plot-1-y-to', '-5');
     await frames(page);
     await byteExact(page, ranged);
+    await page.evaluate(`document.querySelector('${PANEL} button[aria-label="dot in data color 3"]').scrollIntoView({ block: 'center' })`);
     await click(page, `${PANEL} button[aria-label="dot in data color 3"]`);
     const toned = plate(title, range, tone);
     await roundTrip(page, toned, 'Series Color', ranged);
