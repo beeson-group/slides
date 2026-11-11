@@ -350,6 +350,17 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section .zone:has(> img.paper) { display: flex; justify-content: center; align-items: center; }
 .reveal .slides section.figure .plate > img.paper,
 .reveal .slides section .zone > img.paper { width: auto; height: auto; max-width: 100%; max-height: 100%; min-width: 0; min-height: 0; }
+/* the videos of a zone or a plate are stacked in one place, and a video under a later one that is shown is hidden
+   once the later one has faded in, see src/video.ts. in a plate of the class row, the figures are side by side,
+   each in an equal share of the plate */
+.reveal .slides section .zone:has(> video ~ video),
+.reveal .slides section.figure .plate:not(.row):has(> video ~ video) { display: grid; grid-template: 100% / 100%; }
+.reveal .slides section .zone > video,
+.reveal .slides section.figure .plate:not(.row) > video { grid-area: 1 / 1; }
+.reveal .slides section video[data-covered],
+.reveal .slides section video.fragment[data-covered] { visibility: hidden; transition: opacity 400ms ease-out, visibility 0s 400ms; }
+.reveal .slides section.figure .plate.row { display: flex; gap: 60px; }
+.reveal .slides section.figure .plate.row > * { flex: 1 1 0; min-width: 0; object-position: center; }
 
 /* split: the black panel of the group deck, dark in both modes, with a figure at the right */
 .reveal .slides section.split .panel { left: 0; top: 0; width: 760px; height: 1080px; padding: 120px 80px 0 120px; box-sizing: border-box; background: var(--panel); color: var(--panel-text); }
@@ -431,6 +442,11 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
 .reveal .slides section .fragment.visible .fragment.visible { opacity: 1; }
 /* a backdrop shown at a step is not dimmed at the later steps */
 .reveal .slides section:not([data-complete]) .backdrop.fragment.visible:not(.current-fragment) { opacity: 1; }
+/* nor is a video, which is still played. a video in a fragment of the style play is shown with its poster before
+   its step, and played from its step on */
+.reveal .slides section:not([data-complete]) video.fragment.visible:not(.current-fragment),
+.reveal .slides section:not([data-complete]) .fragment.visible:not(.current-fragment):has(video) { opacity: 1; }
+.reveal .slides section .fragment.play { opacity: 1; visibility: inherit; }
 /* the step added to restore the dimmed fragments, kept out of the layout of its slide */
 .reveal .slides section > .fragment[data-restore] { position: absolute; width: 0; height: 0; overflow: hidden; }
 /* stepped math: a held fragment is not dimmed, and the classes named by a shown data-highlight are colored. the
@@ -644,6 +660,8 @@ html.reveal-print .reveal .slides section.section,
 html.reveal-print .reveal .slides section.split { padding: 0 !important; }
 html.reveal-print .reveal .slide-number-pdf { right: 120px; bottom: 50px; font-size: 22px; color: var(--muted); background: transparent; padding: 0; font-family: inherit; }
 html.reveal-print .reveal .slides section .fragment,
+html.reveal-print .reveal .slides section video[data-covered],
+html.reveal-print .reveal .slides section video.fragment[data-covered],
 html.reveal-print .reveal .hl-target,
 html.reveal-print .reveal .plot * { transition: none; }
 html.reveal-print .reveal .plot-play { display: none; }
@@ -651,6 +669,8 @@ html.reveal-print .reveal .plot-play { display: none; }
 /* reduced motion: transitions are turned off */
 @media (prefers-reduced-motion: reduce) {
   .reveal .slides section .fragment,
+  .reveal .slides section video[data-covered],
+  .reveal .slides section video.fragment[data-covered],
   .reveal .hl-target,
   .reveal .plot .plot-body *,
   .reveal.fade .slides > section,

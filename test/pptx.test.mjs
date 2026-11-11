@@ -139,6 +139,23 @@ test('a video is played through the steps of its slide', () => {
   assert.ok(slide.indexOf('nodeType="afterEffect"') < slide.indexOf('nodeType="clickEffect"'));
 });
 
+// a clip of the style play is in the images of the steps before its own, and it is started on the
+// PowerPoint slide of its step. A clip under a later one of its place is left out
+test('a video is started on the click of its step, and two videos of one step together', () => {
+  const parts = exportDeck('test/pages/video-play.html');
+  assertPackage(parts);
+  assert.equal(slideCount(parts), 10);
+  const slides = Array.from({ length: 10 }, (_, n) => text(parts, `ppt/slides/slide${n + 1}.xml`));
+  assert.deepEqual(slides.map((slide) => slide.match(/<a:videoFile /g)?.length ?? 0), [0, 0, 1, 0, 2, 0, 1, 1, 0, 1]);
+  // the steps after the step of the clip are clicks on its slide
+  assert.equal(slides[2].match(/nodeType="clickEffect"/g).length, 2);
+  assert.deepEqual([...slides[4].matchAll(/presetClass="mediacall"[^>]*nodeType="(\w+)"/g)].map((m) => m[1]), ['afterEffect', 'withEffect']);
+  // the clips of a slide, the dark one and then the light one on the slide of two
+  const clips = (n) => [...new Set([...relationships(parts, `ppt/slides/slide${n}.xml`).values()].filter((name) => name.endsWith('.mp4')))];
+  const [dark, light] = clips(5);
+  assert.deepEqual([clips(7), clips(8)], [[dark], [light]], 'the second clip is shown in place of the first');
+});
+
 test('the demo deck is exported with a step for each page of its PDF', () => {
   const parts = exportDeck('index.html');
   assertPackage(parts);

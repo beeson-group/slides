@@ -60,6 +60,10 @@ const hasContent = (f: Element) => f.children.length > 0 || (f.textContent ?? ''
 // outside it is shown, see theme/beeson.css
 const isCopy = (f: Element) => f.matches('pre > code.fragment');
 
+// a video shown at a step, or a fragment that holds one, is not dimmed at the later steps, since it is
+// still played, see theme/beeson.css
+const holdsVideo = (f: Element) => f.matches('video') || !!f.querySelector('video');
+
 /**
  * Appends the step that restores the dimmed fragments to every slide under root whose last step
  * dims a fragment with content, or a code box. A fragment without data-fragment-index is placed by
@@ -77,7 +81,7 @@ export function addRestoreSteps(root: ParentNode): void {
       : frags.filter((f) => Number(f.dataset.fragmentIndex) === Math.max(...frags.map((g) => Number(g.dataset.fragmentIndex))));
     const boxes = new Set(frags.filter(isCopy).map((f) => f.parentElement));
     const dimsBox = [...boxes].some((box) => !last.some((f) => f.parentElement === box && isCopy(f)));
-    if (!dimsBox && !frags.some((f) => !last.includes(f) && hasContent(f) && !isCopy(f))) continue;
+    if (!dimsBox && !frags.some((f) => !last.includes(f) && hasContent(f) && !isCopy(f) && !holdsVideo(f))) continue;
     const restore = document.createElement('span');
     restore.className = 'fragment';
     restore.setAttribute('data-restore', '');
