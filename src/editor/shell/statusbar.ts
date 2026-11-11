@@ -1,6 +1,6 @@
 // the status bar: the previous and next slide with the number of the current one, the state of
-// accessibility of the deck, the layer switch, a hint, the buttons Slides, Steps, and Notes, the zoom (−, a slider, +, the percentage as
-// a menu, and Fit), and the switch ◐ of the mode of the slide
+// accessibility of the deck, the layer switch, the buttons Navigator, Steps, and Notes, the zoom (−,
+// a slider, +, the percentage as a menu, and Fit), and the switch ◐ of the mode of the slide
 
 import type { App } from '../app.ts';
 import { button, injectStyle, make, wire } from '../ui/dom.ts';
@@ -19,7 +19,7 @@ const CSS = `
 .beeson-edit-bottom .beeson-layers { display: flex; align-items: center; gap: 4px; white-space: nowrap; }
 .beeson-edit-bottom .beeson-layers[hidden] { display: none; }
 .beeson-edit-bottom .beeson-layers > span { margin-right: 4px; }
-.beeson-edit-bottom .hint { flex: 1; min-width: 0; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.beeson-edit-bottom .gap { flex: 1; }
 .beeson-edit-bottom .a11y[hidden] { display: none; }
 .beeson-edit-bottom .a11y svg { flex: none; color: var(--ed-muted); }
 .beeson-edit-bottom .zoom { display: flex; align-items: center; gap: 2px; }
@@ -34,7 +34,7 @@ const CSS = `
 .beeson-edit-bottom input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; margin-top: -5px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.3); }
 .beeson-edit-bottom input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.3); }
 .beeson-edit-bottom .beeson-edit-select { min-width: 52px; justify-content: space-between; font-variant-numeric: tabular-nums; }
-@media (max-width: 1099px) { .beeson-edit-bottom .hint { visibility: hidden; } .beeson-edit-bottom .slider { width: 72px; } }
+@media (max-width: 1099px) { .beeson-edit-bottom .slider { width: 72px; } }
 `;
 
 // the slider is linear in the logarithm of the zoom, from 10 to 400 percent, in steps of a
@@ -67,14 +67,13 @@ function person(): SVGSVGElement {
   return svg;
 }
 
-// layers is the switch of layers.ts, placed between the slide number and the hint
+// layers is the switch of layers.ts, placed after the slide number
 export function install(app: App, layers: HTMLElement): void {
   injectStyle('statusbar', CSS);
   const bottom = make('div', 'beeson-edit-bottom beeson-edit-region');
   const prevButton = button('‹', 'Previous slide', 'Previous slide');
   const countEl = make('span', 'count');
   const nextButton = button('›', 'Next slide', 'Next slide');
-  const hintEl = make('span', 'hint', 'Click a text or a formula to edit it, drag a figure or the ⠿ handle of a block to move it, press G to jump to a slide, and Esc to leave a text and select its block');
 
   // the state of the checker of review/accessibility.ts, which writes its text, as the button
   // Accessibility: Investigate of the status bar of PowerPoint, and opens its pane
@@ -102,10 +101,10 @@ export function install(app: App, layers: HTMLElement): void {
   const percent = chromeSelect(app, {
     label: 'Zoom',
     className: 'percent',
-    choices: () => [{ value: 'fit', label: 'Fit' }, ...ZOOMS.map((z) => ({ value: String(z), label: `${Math.round(z * 100)}%` }))],
+    choices: () => [{ value: 'fit', label: 'Fit Slide' }, ...ZOOMS.map((z) => ({ value: String(z), label: `${Math.round(z * 100)}%` })), { value: 'custom', label: 'Zoom…' }],
     value: () => (app.stage?.zoom === null ? 'fit' : String(app.stage?.zoom)),
     text: () => `${Math.round(current() * 100)}%`,
-    onChange: (v) => app.stage.setZoom(v === 'fit' ? null : Number(v)),
+    onChange: (v) => (v === 'custom' ? void app.commands.run('zoom.custom').catch(fail) : app.stage.setZoom(v === 'fit' ? null : Number(v))),
   }) as HTMLButtonElement & { refresh(): void };
   const fitButton = button('Fit', 'Fit the slide into the window');
   zoomBox.append(outButton, track, inButton, percent, fitButton);
@@ -115,7 +114,7 @@ export function install(app: App, layers: HTMLElement): void {
   modeButton.append(icon('contrast', 14));
 
   const rule = () => make('span', 'rule');
-  bottom.append(prevButton, countEl, nextButton, a11yButton, layers, hintEl, app.nav.button, app.steps.button, app.notes.button, rule(), zoomBox, rule(), modeButton);
+  bottom.append(prevButton, countEl, nextButton, a11yButton, layers, make('span', 'gap'), app.nav.button, app.steps.button, app.notes.button, rule(), zoomBox, rule(), modeButton);
   const fail = (e: unknown) => app.fail(e);
   wire(prevButton, () => app.commands.run('navigate.previous'), fail);
   wire(nextButton, () => app.commands.run('navigate.next'), fail);

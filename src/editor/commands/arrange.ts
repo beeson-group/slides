@@ -97,7 +97,8 @@ export function commands(): Command[] {
       // Esc on an image selected inside its figure selects the figure, and else clears
       id: 'selection.clear',
       label: 'Deselect',
-      keys: { mac: ['Escape'], other: ['Escape'] },
+      // ⇧⌘A is Deselect All of Keynote
+      keys: { mac: ['Mod+Shift+A', 'Escape'], other: ['Mod+Shift+A', 'Escape'] },
       in: ['canvas'],
       menu: { bar: 'Edit', group: 'select', order: 32 },
       enabled: (app) => app.selection.kind === 'elements' || app.selection.kind === 'text',

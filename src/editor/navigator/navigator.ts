@@ -174,7 +174,7 @@ export class Navigator implements Pane {
     this.app = app;
     this.pane.className = 'beeson-edit-nav';
     this.pane.setAttribute('aria-label', 'Slides');
-    this.button.textContent = 'Slides';
+    this.button.textContent = 'Navigator';
     this.button.title = 'Show the navigator of the slides at the left';
     this.list.className = 'rows';
     this.list.setAttribute('role', 'listbox');
@@ -244,6 +244,12 @@ export class Navigator implements Pane {
   }
 
   toggle(): void {
+    // while the navigator is on but hidden for the width of the window beside the inspector, it is
+    // shown with the inspector closed in its place
+    if (this.on && this.pane.isConnected && !this.pane.getClientRects().length) {
+      void this.app.commands.run(this.app.steps.shown ? 'view.steps' : 'shell.format').catch((e) => this.app.fail(e));
+      return;
+    }
     this.show(!this.on);
     store(KEY, this.on ? '1' : '0');
     this.app.relayout();

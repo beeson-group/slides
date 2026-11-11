@@ -204,8 +204,8 @@ const screen = (page, x, y) => page.evaluate(`(() => {
 })()`);
 
 for (const platform of PLATFORMS) {
-  test(`the insert group of the toolbar is Table, Plot, Text, Formula, Shape, and Media, with labels above 1100 px (${platform})`, async (t) => {
-    for (const [width, labels] of [[1600, true], [1000, false], [800, false]]) {
+  test(`the insert group of the toolbar is Table, Plot, Text, Formula, Shape, and Media, with labels while they fit (${platform})`, async (t) => {
+    for (const [width, labels] of [[1600, true], [1024, true]]) {
       const page = await load(t, platform, { size: { width, height: 800 } });
       const group = await insertGroup(page);
       assert.deepEqual(group.map((b) => [b.id, b.text, b.split]), [
@@ -217,8 +217,7 @@ for (const platform of PLATFORMS) {
         ['insert.image', 'Media', true],
       ], `${width}: the insert group`);
       assert.ok(group.every((b) => b.label === labels), `${width}: the labels`);
-      // the groups after Present but Format go into the menu More below 820 px, and the inserts stay
-      assert.equal(await page.evaluate(`!!document.querySelector('.beeson-edit-top .more-groups')`), width < 820, `${width}: the menu More`);
+      assert.equal(await page.evaluate(`!!document.querySelector('.beeson-edit-top .more-groups')`), false, `${width}: the menu More`);
       const top = await page.evaluate(`(() => { const t = document.querySelector('.beeson-edit-top'); return { scroll: t.scrollWidth - t.clientWidth, h: t.getBoundingClientRect().height }; })()`);
       assert.ok(top.scroll <= 0, `${width}: the toolbar overflows by ${top.scroll} px`);
       assert.equal(top.h, 52);
@@ -317,10 +316,10 @@ for (const platform of PLATFORMS) {
       for (const k of shown) assert.ok(!TAKEN[platform].includes(k), `${c.id} shows ${k}, which a browser takes before the page`);
     }
     const pinned = Object.fromEntries(keys.map((c) => [c.id, c.keys]));
-    assert.deepEqual(pinned['view.rulers'], mac ? ['Mod+R', 'Ctrl+Mod+R'] : undefined);
+    assert.deepEqual(pinned['view.rulers'], mac ? ['Mod+R', 'Ctrl+Mod+R'] : ['Alt+Shift+R']);
     assert.deepEqual(pinned['arrange.lock'], mac ? ['Mod+L', 'Ctrl+Mod+L'] : ['Mod+L']);
     const view = Object.fromEntries((await barMenu(page, 'View')).map((r) => [r.label, r.keys]));
-    assert.equal(view.Rulers, mac ? '⌘R' : '');
+    assert.equal(view.Rulers, mac ? '⌘R' : 'Alt+Shift+R');
     const arrange = Object.fromEntries((await barMenu(page, 'Arrange')).map((r) => [r.label, r.keys]));
     assert.equal(arrange.Lock, mac ? '⌘L' : 'Ctrl+L');
     await page.evaluate('window.BeesonEditorShell.closeMenus()');

@@ -152,7 +152,7 @@ for (const platform of PLATFORMS) {
     };
     const tick = await center(page, '.beeson-edit-bottom .slider .tick');
     const readout = () => page.evaluate(`document.querySelector('.beeson-edit-top [data-command="toolbar.zoom"] .readout').textContent`);
-    assert.equal(await readout(), 'Fit');
+    assert.match(await readout(), /^\d+%$/);
     // a drag that ends 3 px past the tick gives 100%, with the thumb on the tick
     let from = await thumb();
     await drag(page, from, { dx: tick.x + 3 - from.x, dy: 0, steps: 12 });

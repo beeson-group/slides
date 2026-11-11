@@ -22,8 +22,6 @@ const CSS = `
   --grid-ink: color-mix(in srgb, var(--ed-muted, #888) 45%, transparent);
   background-image: linear-gradient(to right, var(--grid-ink) 1px, transparent 1px), linear-gradient(to bottom, var(--grid-ink) 1px, transparent 1px); }
 .beeson-grid[hidden] { display: none; }
-.beeson-grid-sheet label { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
-.beeson-grid-sheet input[type="number"] { width: 7ch; font: inherit; padding: 2px 6px; border: 1px solid var(--ed-control-line, var(--ed-line)); border-radius: 5px; background: var(--ed-control); color: var(--ed-text); }
 `;
 
 // a spacing in slide px from a text, or null for one out of range
@@ -89,7 +87,7 @@ export function install(app: App): void {
     const answer = await ask({
       title: 'Grid Settings',
       body,
-      className: 'beeson-grid-sheet',
+      className: 'beeson-grid-sheet form',
       buttons: [{ label: 'Cancel', value: 'cancel' }, { label: 'OK', value: 'ok', primary: true }],
     }, 'input[name="spacing"]');
     if (answer !== 'ok') return;

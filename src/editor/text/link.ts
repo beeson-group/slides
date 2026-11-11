@@ -9,7 +9,7 @@
 
 import type { App } from '../app.ts';
 import { describe, isHidden, numbers } from '../navigator/navigator.ts';
-import { popoverBeside } from '../ui/dialog.ts';
+import { popoverBeside, trapTab } from '../ui/dialog.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { textTarget, type Target } from './blocks.ts';
 import { canLink, linkAt, removeLink, setLink } from './inline.ts';
@@ -263,6 +263,7 @@ export function openLink(app: App, kind0?: Kind): void {
     } else window.open(h, '_blank', 'noopener');
   });
   dialog.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Tab') return trapTab(dialog, ev);
     if (ev.key === 'Escape') close(false);
     else if (ev.key === 'Enter' && !(ev.target instanceof HTMLButtonElement)) close(true);
     else return;

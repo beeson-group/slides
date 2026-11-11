@@ -47,6 +47,17 @@ export function install(app: App): void {
     enabled: () => !!finder.query,
     run: () => finder.step(-1, !finder.open),
   });
+  // Use Selection for Find of Keynote: the text selected in a block becomes the query
+  const selected = () => getSelection()?.toString().trim() ?? '';
+  c.define({
+    id: 'find.useSelection',
+    label: 'Use Selection for Find',
+    keys: { mac: ['Mod+E'], other: ['Mod+E'] },
+    in: IN,
+    menu: { bar: 'Edit', group: 'find', order: 42.5 },
+    enabled: () => !!selected() && !selected().includes('\n'),
+    run: () => finder.show('find', selected()),
+  });
   c.define({
     id: 'find.replace',
     label: 'Replace…',

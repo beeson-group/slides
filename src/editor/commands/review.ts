@@ -169,7 +169,7 @@ export function install(app: App): void {
   c.define({
     id: 'view.lightTable',
     label: 'Light Table',
-    menu: { bar: 'View', group: 'panes', order: 9 },
+    menu: { bar: 'View', group: 'panes', order: 10.3 },
     enabled: (a) => ready(a),
     checked: () => sorter.shown,
     run: () => sorter.toggle(),

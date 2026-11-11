@@ -9,6 +9,7 @@ import type { Command } from '../commands.ts';
 import { DEFAULT_REGIONS, boundKeys, keysOf } from '../commands.ts';
 import { display } from '../keymap.ts';
 import { button, injectStyle, make } from '../ui/dom.ts';
+import { trapTab } from '../ui/dialog.ts';
 import { menuItems, type MenuItem } from '../ui/menu.ts';
 import { MENUS } from './menubar.ts';
 
@@ -183,6 +184,15 @@ export function install(app: App): void {
   sheet.addEventListener('close', () => {
     if (back instanceof HTMLElement && back !== document.body && back.isConnected) back.focus();
     else (document.activeElement as HTMLElement | null)?.blur();
+  });
+  // Tab stays in the sheet, and Esc closes it here, since the browser may ignore the cancel of a
+  // dialog that was not used since a former cancel
+  sheet.addEventListener('keydown', (ev) => {
+    if (ev.key === 'Tab') trapTab(sheet, ev);
+    else if (ev.key === 'Escape') {
+      ev.preventDefault();
+      sheet.close();
+    }
   });
   // a click on the backdrop, outside the box of the sheet, closes it
   sheet.addEventListener('click', (ev) => {
