@@ -69,9 +69,17 @@ export function install(app: App): void {
   box.hidden = true;
   document.body.append(box);
 
-  const hide = () => (box.hidden = true);
+  // the buttons and the hint of the placeholder of a zone to fill are hidden under the tag
+  const marked = () => document.querySelectorAll('.beeson-placeholder.dropping');
+  const hide = () => {
+    box.hidden = true;
+    for (const p of marked()) p.classList.remove('dropping');
+  };
   const show = (t: Target, kind: 'image' | 'video' | null) => {
     const el = 'replace' in t ? t.replace : 'fill' in t ? t.fill : t.add;
+    const holder = 'fill' in t ? t.fill.querySelector(':scope > .beeson-placeholder') : null;
+    for (const p of marked()) if (p !== holder) p.classList.remove('dropping');
+    holder?.classList.add('dropping');
     const r = el.getBoundingClientRect();
     Object.assign(box.style, { left: `${r.left}px`, top: `${r.top}px`, width: `${r.width}px`, height: `${r.height}px` });
     const noun = kind === 'video' ? 'Video' : kind === 'image' ? 'Image' : 'Media';
