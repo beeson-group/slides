@@ -127,8 +127,9 @@ test('relayout writes each layout from the parts of a slide, and gives back a sl
   assert.ok(title.startsWith('<section class="title">\n  <div class="block">\n    <h1>Math, an ordered list, and a zone</h1>\n'));
   assert.ok(title.includes('\n  </div>\n  <figure class="zone fragment"'));
   assert.equal(relayout(title, 'content', '  '), math);
-  // a slide without a heading gets an empty one in a wrapper, and a class of another kind is kept
-  assert.equal(relayout('<section class="x">\n  <div class="zone"></div>\n</section>', 'split', '\t'), '<section class="split x">\n\t<div class="panel">\n\t\t<h2></h2>\n\t</div>\n\t<div class="zone"></div>\n</section>');
+  // a slide without a heading gets an empty one in a wrapper, a slide without words gets the empty
+  // paragraph of a new split slide, and a class of another kind is kept
+  assert.equal(relayout('<section class="x">\n  <div class="zone"></div>\n</section>', 'split', '\t'), '<section class="split x">\n\t<div class="panel">\n\t\t<h2></h2>\n\t\t<p></p>\n\t</div>\n\t<div class="zone"></div>\n</section>');
   // the lines of a pre keep their white space
   assert.equal(shift('<pre>\n  a\n</pre>\n  <p>', '  ', '    '), '<pre>\n  a\n</pre>\n    <p>');
   assert.deepEqual(arrange([kindOf('h2', []), kindOf('p', []), kindOf('div', ['zone']), kindOf('div', ['foot'])], 'split'), [{ wrap: 'panel', parts: [0, 1, 3] }, 2]);

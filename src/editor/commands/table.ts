@@ -322,7 +322,21 @@ async function insertTable(app: App, rows: string[][], into: Element | null = nu
   const { parent, before } = into ? { parent: into, before: null } : columnPlace(app, app.current()!);
   const [table] = await app.doc.insert(tableHtml(rows, styleOf(app), baseOf(app, parent)), parent, before, 'insert table');
   if (!into) placeTable(app, table as HTMLTableElement);
+  else fillSlot(app, table as HTMLTableElement, into);
   return table as HTMLTableElement;
+}
+
+// the columns of a new table in a slot share the inner width of the slot, written on the cells of
+// its first row, since a table of empty cells is otherwise only a few rules wide
+function fillSlot(app: App, table: HTMLTableElement, slot: Element): void {
+  const cells = [...(table.rows[0]?.cells ?? [])];
+  const s = getComputedStyle(slot);
+  const inner = (slot as HTMLElement).clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight);
+  if (!cells.length || !(inner > 0)) return;
+  const set = (w: number) => { for (const c of cells) app.doc.setTag(c, { style: { width: `${Math.max(0, Math.floor(w))}px` } }, 'insert table'); };
+  const w = inner / cells.length;
+  set(w);
+  set(w + (inner - table.offsetWidth) / cells.length);
 }
 
 // a new empty table of size, as one entry of the history, with the caret in its first cell
@@ -370,7 +384,7 @@ function placeTable(app: App, table: HTMLTableElement): void {
   const h = (slide as HTMLElement).offsetHeight || 1080;
   const foot = [...slide.querySelectorAll(':scope > .foot')].map((f) => takenBox(app, f)).find((b) => !!b);
   const floor = Math.min(h - BOTTOM, foot ? foot.top - BOTTOM : Infinity);
-  const skip = (el: Element) => el === table || el.matches('aside.notes, script, style');
+  const skip = (el: Element) => el === table || el.matches('aside.notes, script, style, .backdrop');
   const taken = (els: Element[]) => els.filter((el) => !skip(el)).map((el) => ({ el, box: takenBox(app, el) })).filter((o): o is { el: Element; box: SlideBox } => !!o.box);
   const above = [...parent.children].slice(0, [...parent.children].indexOf(table)).filter((el) => !el.matches('.run, .foot, [data-generated]'));
   const before = taken(above).map((o) => o.box);

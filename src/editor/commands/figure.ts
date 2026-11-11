@@ -8,6 +8,7 @@ import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { CONTAINER, twinOf } from '../canvas/hit.ts';
 import type { TagEdit } from '../tags.ts';
+import { placeCaret } from '../text/typing.ts';
 
 // the longest text of a QR code, in bytes of UTF-8, as src/qr.ts encodes it at level M
 export const QR_MAX = 2331;
@@ -27,6 +28,25 @@ function mediaOf(app: App, tag: string): HTMLElement | null {
 }
 
 export const imageOf = (app: App) => mediaOf(app, 'img') as HTMLImageElement | null;
+
+// the one image or video of the figure of the selection that the mode of the slide hides and that
+// does not have a twin, e.g. after Dark on an image in light mode. its pane is kept, so that Shown
+// in and the file for the other mode stay in reach
+export function hiddenOf(app: App): HTMLImageElement | HTMLVideoElement | null {
+  const el = app.selection.only();
+  if (!el?.matches(CONTAINER)) return null;
+  const all = [...el.querySelectorAll('img, video')].filter((m) => !!app.pairing?.elements.get(m)?.open);
+  const m = all.length === 1 ? (all[0] as HTMLImageElement | HTMLVideoElement) : null;
+  return m && !shown(m) && modeOf(m) !== 'both' && !twinOf(app, m) ? m : null;
+}
+
+// the image and the video of the pane of the selection, also when the mode of the slide hides it
+const hiddenTag = (app: App, tag: string) => {
+  const h = hiddenOf(app);
+  return h?.localName === tag ? h : null;
+};
+export const paneImageOf = (app: App) => imageOf(app) ?? (hiddenTag(app, 'img') as HTMLImageElement | null);
+export const paneVideoOf = (app: App) => videoOf(app) ?? (hiddenTag(app, 'video') as HTMLVideoElement | null);
 export const videoOf = (app: App) => mediaOf(app, 'video') as HTMLVideoElement | null;
 export const qrOf = (app: App) => mediaOf(app, '.qr');
 
@@ -85,7 +105,7 @@ function invertible(app: App, el: Element | null): Element | null {
 const imageMenu = (order: number): Command['menu'] => ({ bar: 'Format', group: 'image', order, submenu: 'Image' });
 const has = (name: string) => (el: Element) => el.hasAttribute(name);
 const flag = (name: string) => (on: boolean): TagEdit => ({ attrs: { [name]: on ? '' : null } });
-const visual = (app: App) => imageOf(app) ?? videoOf(app);
+const visual = (app: App) => imageOf(app) ?? videoOf(app) ?? hiddenOf(app);
 
 const modeClasses = (m: Mode) => ({ 'for-dark': m === 'dark', 'for-light': m === 'light' });
 const otherMode = (m: Mode): Mode => (m === 'dark' ? 'light' : 'dark');
@@ -115,8 +135,39 @@ async function setMode(app: App, el: Element, mode: Mode): Promise<void> {
   if (mode !== back.mode) setTag(app, node, { classes: modeClasses(otherMode(mode)) }, 'mode');
 }
 
+// the figure or the zone of the picture of the selection, or of the caption that the caret is in,
+// which takes a caption under the picture
+function captionHost(app: App): Element | null {
+  const typed = app.selection.kind === 'text' ? app.selection.items[0]?.closest('figcaption, .caption') : null;
+  const host = typed ? typed.parentElement : visual(app)?.parentElement;
+  return host?.matches('figure, .zone') && !host.matches('.plate, .plot') ? host : null;
+}
+const captionOf = (host: Element) => host.querySelector(':scope > figcaption, :scope > .caption');
+
 export function commands(): Command[] {
   const list: Command[] = [
+    {
+      // a caption under the picture, as Caption in the Style tab of Keynote: a figcaption in a
+      // figure and a caption paragraph in a zone, with the caret in it
+      id: 'figure.caption',
+      label: 'Caption',
+      menu: imageMenu(12),
+      undoable: true,
+      enabled: (app) => !!captionHost(app),
+      checked: (app) => {
+        const host = captionHost(app);
+        return host ? !!captionOf(host) : false;
+      },
+      run: async (app) => {
+        const host = captionHost(app);
+        if (!host) return;
+        const old = captionOf(host);
+        if (old) return void (await app.doc.remove(old, 'caption'));
+        const tag = host.localName === 'figure' ? 'figcaption' : 'p';
+        const [node] = await app.doc.insert(`<${tag} class="caption"></${tag}>`, host, null, 'caption');
+        if (node) setTimeout(() => node.matches('[contenteditable="true"]') && placeCaret(node));
+      },
+    },
     {
       // with a text as arg, e.g. from the field of the Image pane, the alt is written. without one,
       // the Image pane is shown with the field focused, as Alt Text in the context menu of PowerPoint

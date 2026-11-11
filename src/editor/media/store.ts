@@ -12,7 +12,8 @@ export const FOLDER = 'media';
 
 const DB = 'beeson-media';
 const STORE = 'files';
-const DECK = location.href.split(/[?#]/)[0];
+// read when used, since the model of the deck, which a test loads without a page, imports the store
+const deck = () => location.href.split(/[?#]/)[0];
 
 const IMAGE_EXT = /\.(png|jpe?g|gif|webp|avif|svg|bmp)$/i;
 const VIDEO_EXT = /\.(mp4|m4v|webm|mov|ogv)$/i;
@@ -63,7 +64,7 @@ async function tx<T>(mode: IDBTransactionMode, fn: (s: IDBObjectStore) => IDBReq
   return request(fn(s));
 }
 
-const ofDeck = () => IDBKeyRange.bound([DECK, ''], [DECK, '￿']);
+const ofDeck = () => IDBKeyRange.bound([deck(), ''], [deck(), '￿']);
 
 export class MediaStore {
   private readonly byPath = new Map<string, MediaFile>();
@@ -85,7 +86,7 @@ export class MediaStore {
   private put(f: MediaFile, keep: boolean): MediaFile {
     this.byPath.set(f.path, f);
     this.byUrl.set(f.url, f);
-    if (keep) this.keep(() => tx('readwrite', (s) => s.put({ deck: DECK, path: f.path, blob: f.blob } satisfies Row)));
+    if (keep) this.keep(() => tx('readwrite', (s) => s.put({ deck: deck(), path: f.path, blob: f.blob } satisfies Row)));
     return f;
   }
 
@@ -118,7 +119,7 @@ export class MediaStore {
   saved(files: MediaFile[]): void {
     for (const f of files) {
       f.saved = true;
-      this.keep(() => tx('readwrite', (s) => s.delete([DECK, f.path])));
+      this.keep(() => tx('readwrite', (s) => s.delete([deck(), f.path])));
     }
   }
 

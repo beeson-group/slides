@@ -8,6 +8,7 @@
 import type { Entry } from '../history.ts';
 import { contentWithTex, setContentWithTex, type MathLookup } from '../math.ts';
 import { childSpace, detached, renderDeck, renderUnit, type Pairing } from '../render.ts';
+import { media } from '../media/store.ts';
 import type { Source, SrcEl } from '../source.ts';
 import { mergeEdit, renderTag, stateOf, translateIn, translateText, type TagEdit, type TagState } from '../tags.ts';
 import { tokenize } from '../tokens.ts';
@@ -411,6 +412,9 @@ export class Doc {
     if (!container || pairing.byLive.has(parent)) throw new Error(`the ${parent.localName} does not take elements`);
     const fragment = parseFragment((lead ?? childSpace(container, this.eol(), this.style().step)) + text, source.crlf, parent);
     const node = document.importNode(fragmentRoot(fragment)!.node, true) as Element;
+    // an image of a file not yet saved is shown from its object URL before the browser asks the
+    // server for its path, which it does only once the task has run
+    media.resolve(node);
     parent.insertBefore(node, before && before.parentNode === parent ? before : null);
     // every step is shown while the deck is edited, which reveal.js marks only on the fragments of
     // its start, hence the highlights of a new slide are colored once its fragments are marked. an

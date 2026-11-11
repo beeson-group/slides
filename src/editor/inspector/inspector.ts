@@ -10,7 +10,7 @@
 import type { App } from '../app.ts';
 import { hasText } from '../canvas/hit.ts';
 import { install as installAlign } from '../commands/align.ts';
-import { install as installFigure, imageOf, onAltRequest, qrOf, videoOf } from '../commands/figure.ts';
+import { install as installFigure, onAltRequest, paneImageOf, paneVideoOf, qrOf } from '../commands/figure.ts';
 import { make } from '../ui/dom.ts';
 import { arrangePane } from './arrange.ts';
 import { installStyle, keepFocus, runner, type Control } from './controls.ts';
@@ -46,7 +46,7 @@ function viewOf(app: App): { tabs: PaneKind[]; items: readonly Element[] } {
   const el = els[0];
   if (el.localName === 'table') return { tabs: ['table', 'arrange'], items: els };
   // a figure is shown with the pane of its picture, as an image with a caption in Keynote
-  const img = imageOf(app), video = videoOf(app), qr = qrOf(app);
+  const img = paneImageOf(app), video = paneVideoOf(app), qr = qrOf(app);
   if (img) return { tabs: ['image', 'arrange'], items: [el, img] };
   if (video) return { tabs: ['video', 'arrange'], items: [el, video] };
   if (qr) return { tabs: ['qr', 'arrange'], items: [el, qr] };

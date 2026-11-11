@@ -272,7 +272,7 @@ for (const platform of PLATFORMS) {
     assert.equal(await page.evaluate('document.activeElement.localName'), 'th');
     assert.equal(await undoLabel(page), 'Undo Insert Table');
     const edited = await roundTrip(page);
-    assert.match(edited, /<div class="zone">\s*<table>\s*<tbody>\s*<tr><th><\/th><th><\/th><\/tr>\s*<tr><td><\/td><td><\/td><\/tr>\s*<\/tbody>\s*<\/table>\s*<\/div>/);
+    assert.match(edited, /<div class="zone">\s*<table>\s*<tbody>\s*<tr><th style="width: \d+px"><\/th><th style="width: \d+px"><\/th><\/tr>\s*<tr><td><\/td><td><\/td><\/tr>\s*<\/tbody>\s*<\/table>\s*<\/div>/);
   });
 
   test(`the Image icon of a placeholder inserts the file chosen into its plate (${platform})`, async (t) => {

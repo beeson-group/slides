@@ -27,8 +27,9 @@ const boxOf = (app: App, el: Element): Box | null => {
 };
 
 // the offset in slide px that puts el in free space, with the width in px of its picture when it is
-// drawn smaller, or null when it stays
-export function freePlace(app: App, el: Element, picture?: HTMLElement): { x: number; y: number; width?: number } | null {
+// drawn smaller, or null when it stays. with strict, el is moved only off every text and figure,
+// e.g. a plot, which the theme does not draw smaller
+export function freePlace(app: App, el: Element, picture?: HTMLElement, strict = false): { x: number; y: number; width?: number } | null {
   const slide = el.closest('section') as HTMLElement | null;
   if (!slide || !el.getClientRects().length) return null;
   const w = slide.offsetWidth || 1920;
@@ -78,7 +79,7 @@ export function freePlace(app: App, el: Element, picture?: HTMLElement): { x: nu
   const media = !!picture?.matches('img, video');
   const scales = (all: boolean) => (!picture ? [1] : all ? (media ? [1, 0.75, 0.5, 0.35, 0.25] : [1, 0.75, 0.5]) : media ? [0.5] : [1]);
   try {
-    for (const all of [true, false]) {
+    for (const all of strict ? [true] : [true, false]) {
       for (const k of scales(all)) {
         if (picture) picture.style.width = k === 1 ? kept : `${Math.round(base * k)}px`;
         const b = own();
@@ -89,6 +90,7 @@ export function freePlace(app: App, el: Element, picture?: HTMLElement): { x: nu
   } finally {
     if (picture) picture.style.width = kept;
   }
+  if (strict) return null;
   return { x: Math.round((w - b0.left - b0.right) / 2), y: Math.round((h - b0.top - b0.bottom) / 2) };
 }
 
@@ -99,8 +101,8 @@ export function translateOf(el: Element): { x: number; y: number } {
 }
 
 // a new element of the file put in free space by freePlace, with the width of its picture
-export function placeNew(app: App, el: Element, picture?: HTMLElement): void {
-  const f = freePlace(app, el, picture);
+export function placeNew(app: App, el: Element, picture?: HTMLElement, strict = false): void {
+  const f = freePlace(app, el, picture, strict);
   if (!f) return;
   if (f.width && picture) app.doc.setTag(picture, { style: { width: `${f.width}px` } }, 'move');
   const t = translateOf(el);

@@ -8,7 +8,7 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { LAYOUTS, sampleText, textStyle, type Layout } from '../model/templates.ts';
+import { LAYOUTS, layoutText, sampleText, textStyle, type Layout } from '../model/templates.ts';
 import { childrenIn, eolOf, indentAt, spaceOf, unitsOf } from '../model/units.ts';
 import type { Navigator } from '../navigator/navigator.ts';
 import { drawInto, laidOut } from '../navigator/thumbs.ts';
@@ -79,6 +79,15 @@ export function arrange(kinds: Kind[], layout: Layout): Item[] {
   if (!wrapper.parts.length && w.takes.includes('heading')) out.unshift(wrapper);
   return out;
 }
+
+// the empty placeholders of the words of a new slide of the layout, without white space, e.g.
+// <p class="caption"></p> of a figure slide
+const holdersOf = (layout: Layout): string[] =>
+  layoutText(layout, { eol: '\n', step: '' }).replace(/\s+(?=<)/g, '').match(/<p[^>]*><\/p>|<ul><li><\/li><\/ul>/g) ?? [];
+const holderOf = (body: string): string | null => {
+  const sig = body.replace(/\s+(?=<)/g, '');
+  return /^(<p( class="[\w ]+")?><\/p>|<ul><li><\/li><\/ul>)$/.test(sig) ? sig : null;
+};
 
 const headingTag = (layout: Layout) => (layout === 'title' || layout === 'closing' ? 'h1' : 'h2');
 
@@ -158,6 +167,19 @@ export function relayout(body: string, layout: Layout, step: string): string {
     }
   };
   read({ start: open.end, end: close.start }, 1, '');
+  // an empty placeholder that the layout does not have is dropped, and a slide left without words
+  // gets the placeholders of a new slide of the layout after its heading, as Change Layout of
+  // PowerPoint replaces the placeholders of a slide by those of the new layout
+  const same = ((LAYOUT_CLASSES as Layout[]).find((c) => classesOf(open).includes(c)) ?? 'content') === layout;
+  const holders = holdersOf(layout);
+  const kept = parts.filter((p) => same || p.lead.trim() || !holderOf(p.body) || holders.includes(holderOf(p.body)!));
+  if (!same && !kept.some((p) => ['words', 'caption'].includes(kindOf(p.name, p.classes)))) {
+    const at = kept.findIndex((p) => p.name === 'h1' || p.name === 'h2') + 1;
+    const head = headingTag(layout);
+    if (!at && layout !== 'section') holders.unshift(`<${head}></${head}>`);
+    kept.splice(at, 0, ...holders.map((b) => ({ name: b.slice(1, 3).replace(/\W/g, ''), classes: /class="([^"]*)"/.exec(b)?.[1].split(' ') ?? [], lead: '', blank: false, body: b.replace('<ul><li></li></ul>', `<ul>${eol}${step}<li></li>${eol}</ul>`), indent: '' })));
+  }
+  parts.splice(0, parts.length, ...kept);
   const h = headingTag(layout);
   const ind = (d: number) => base + step.repeat(d);
   const firstHeading = parts.findIndex((p) => p.name === 'h1' || p.name === 'h2');

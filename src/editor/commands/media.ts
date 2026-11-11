@@ -12,7 +12,7 @@ import { ACCEPT, capturePoster, chooseFiles, insertFiles, replaceFile } from '..
 import { install as installDrop } from '../media/drop.ts';
 import { install as installSave } from '../media/save.ts';
 import { media } from '../media/store.ts';
-import { imageOf, videoOf } from './figure.ts';
+import { hiddenOf, imageOf, modeOf, videoOf } from './figure.ts';
 
 type Arg = { el?: Element; files?: File[] } | undefined;
 
@@ -22,7 +22,7 @@ const filesOf = (arg: unknown): File[] | null => (arg as Arg)?.files ?? null;
 function mediaOf(app: App, arg: unknown): HTMLImageElement | HTMLVideoElement | null {
   const el = (arg as Arg)?.el;
   if (el?.isConnected && (el instanceof HTMLImageElement || el instanceof HTMLVideoElement)) return el;
-  return imageOf(app) ?? videoOf(app);
+  return imageOf(app) ?? videoOf(app) ?? hiddenOf(app);
 }
 
 // the file of an image or a video as the deck names it, with the name of its last segment: a new
@@ -127,7 +127,12 @@ export function install(app: App): void {
     },
     {
       id: 'media.replace',
-      label: (a) => (videoOf(a) ? 'Replace Video…' : 'Replace Image…'),
+      // on a picture that the mode hides, the file is chosen for the other mode
+      label: (a) => {
+        const h = hiddenOf(a);
+        const kind = (h ?? videoOf(a))?.localName === 'video' ? 'Video' : 'Image';
+        return h ? `Choose ${kind} for ${modeOf(h) === 'dark' ? 'Light' : 'Dark'} Mode…` : `Replace ${kind}…`;
+      },
       menu: { bar: 'Format', group: 'file', order: 5, submenu: 'Image' },
       context: ['element'],
       enabled: (a) => !!mediaOf(a, undefined),

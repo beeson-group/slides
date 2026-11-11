@@ -11,6 +11,7 @@ import { make } from '../ui/dom.ts';
 import { firstFrame } from './poster.ts';
 import { REVEAL_CLASSES } from '../model/scope.ts';
 import { placeNew } from '../commands/place.ts';
+import { twinOf } from '../canvas/hit.ts';
 import { kindOf, media, type Kind, type MediaFile } from './store.ts';
 
 export const ACCEPT: Record<Kind | 'any', string> = {
@@ -50,8 +51,17 @@ export function mediaIn(app: App, el: Element): HTMLImageElement | HTMLVideoElem
   const ok = (m: Element) => m.matches('img, video') && paired(app, m);
   if (ok(el)) return el as HTMLImageElement;
   if (!isSlot(app, el)) return null;
-  const found = [...el.children].filter((m) => ok(m) && m.getBoundingClientRect().width > 0);
+  const all = [...el.children].filter(ok);
+  const found = all.filter((m) => m.getBoundingClientRect().width > 0);
+  if (!found.length && all.length === 1 && pairMode(app, all[0])) return all[0] as HTMLImageElement;
   return found.length === 1 ? (found[0] as HTMLImageElement | HTMLVideoElement) : null;
+}
+
+// the mode of the twin that a file put onto el gets, when the mode of the slide hides el and el
+// does not have a twin, and else null
+export function pairMode(app: App, el: Element): 'dark' | 'light' | null {
+  if (el.getBoundingClientRect().width > 0 || twinOf(app, el)) return null;
+  return el.classList.contains('for-dark') ? 'light' : el.classList.contains('for-light') ? 'dark' : null;
 }
 
 export const kindOfElement = (el: Element): Kind => (el.localName === 'video' ? 'video' : 'image');
@@ -208,12 +218,28 @@ function setFiles(app: App, el: Element, attrs: Record<string, string | null>, l
 export async function replaceFile(app: App, el: HTMLImageElement | HTMLVideoElement, file: File): Promise<void> {
   if (!kindOf(file)) throw new Error(`${file.name} is not an image or a video`);
   const [r] = await prepare(app, [file]);
-  const label = `Replace ${kindName(kindOfElement(el))}`;
+  const pair = r.kind === kindOfElement(el) ? pairMode(app, el) : null;
+  const label = pair ? `Add ${kindName(r.kind)} for ${pair === 'dark' ? 'Dark' : 'Light'} Mode` : `Replace ${kindName(kindOfElement(el))}`;
   const held = app.selection.kind === 'elements' && app.selection.elements().some((s) => s !== el && s.contains(el));
   const select = (node: Element) => {
     if (!held) app.selection.set('elements', [node]);
   };
   await app.history.selecting(label, async () => {
+    // a file put onto a picture that the mode hides is its twin for the mode shown, at its size
+    if (pair && el.parentElement) {
+      const own = app.doc.tagState(el);
+      const size = Object.entries(own.style).filter(([k]) => k === 'width' || k === 'height').map(([k, v]) => `${k}: ${v}`).join('; ');
+      const attrs: Record<string, string> = {};
+      if (el.hasAttribute('alt')) attrs.alt = el.getAttribute('alt')!;
+      if (size) attrs.style = size;
+      const pending = app.doc.insert(mediaText(r, [`for-${pair}`], attrs), el.parentElement, el.nextElementSibling, label);
+      media.resolve(el.parentElement);
+      const [node] = await pending;
+      media.resolve(node);
+      watch(app, node);
+      select(node);
+      return;
+    }
     if (r.kind === kindOfElement(el)) {
       setFiles(app, el, r.kind === 'image' ? { src: r.file.path } : { src: r.file.path, poster: r.poster?.path ?? null }, label);
       select(el);
