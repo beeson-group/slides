@@ -586,3 +586,52 @@ test('a command with a key that needs AltGr shows a key that every layout has, a
   }
   assert.deepEqual(errors(page), []);
 });
+
+// round 4 of the juror: in a window 760 px wide, the navigator is hidden beside the docked
+// inspector. the whole slide is shown at Fit, the navigator comes back when the window is widened,
+// and View > Navigator reads as on and shows the navigator in place of the inspector
+const SHELL = `(() => {
+  const box = (sel) => { const el = document.querySelector(sel); if (!el || !el.getClientRects().length) return null; const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; };
+  return { nav: box('.beeson-edit-nav'), inspector: box('.beeson-edit-inspector'), canvas: box('.beeson-edit-canvas'), slide: box('.reveal') };
+})()`;
+async function resizeTo(page, width, height = 700) {
+  await page.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+  await sleep(250);
+  await frames(page);
+}
+function whole(b, what) {
+  const right = Math.min(b.canvas.right, b.inspector?.left ?? Infinity);
+  const s = b.slide;
+  assert.ok(s.left >= b.canvas.left - 1 && s.right <= right + 1 && s.top >= b.canvas.top - 1 && s.bottom <= b.canvas.bottom + 1, `the slide ${js(s)} is not whole on the canvas ${js(b.canvas)} ${what}`);
+}
+const stateOf = (page, id) => page.evaluate(`window.BeesonEditor.state(${js(id)})`);
+for (const platform of PLATFORMS) {
+  test(`in a window 760 px wide the slide is whole at Fit beside the inspector, and the navigator is still on and shown when asked for (${platform})`, async (t) => {
+    const page = await load(t, platform, { width: 760 });
+    if (!(await stateOf(page, 'shell.format')).checked) await run(page, 'shell.format');
+    await frames(page);
+    let b = await page.evaluate(SHELL);
+    assert.ok(b.inspector && !b.nav, `the inspector and the navigator at 760 px: ${js(b)}`);
+    assert.equal(await page.evaluate('window.BeesonEditorShell.stage.zoom'), null, 'the zoom is not Fit');
+    whole(b, 'at 760 px');
+    assert.equal((await stateOf(page, 'view.navigator')).checked, true, 'View > Navigator does not read as on');
+    // widened again, the navigator is shown again
+    await resizeTo(page, 1440);
+    assert.ok((await page.evaluate(SHELL)).nav, 'the navigator is not shown again at 1440 px');
+    await resizeTo(page, 760);
+    // View > Navigator shows the navigator, with the inspector closed in its place
+    await run(page, 'view.navigator');
+    await frames(page);
+    b = await page.evaluate(SHELL);
+    assert.ok(b.nav, 'View > Navigator does not show the navigator at 760 px');
+    assert.equal(b.inspector, null, 'the inspector is not closed for the navigator');
+    assert.equal((await stateOf(page, 'view.navigator')).checked, true);
+    whole(b, 'with the navigator at 760 px');
+    // a second run hides the navigator, which is then not shown again at 1440 px
+    await run(page, 'view.navigator');
+    await resizeTo(page, 1440);
+    assert.equal((await page.evaluate(SHELL)).nav, null, 'the navigator is shown though it was hidden');
+    assert.equal((await stateOf(page, 'view.navigator')).checked, false);
+    assert.deepEqual(errors(page), []);
+  });
+}
