@@ -133,11 +133,13 @@ for (const platform of PLATFORMS) {
   test(`a typed Height of a figure with a caption reads back as typed (${platform})`, async (t) => {
     const page = await load(t, platform);
     await click(page, IMG);
+    let last = page.source;
     for (const h of [975, 700, 775, 950]) {
+      last = await render(page);
       await typeField(page, 'height', h);
       assert.equal(await fieldValue(page, 'height'), h, `a typed Height of ${h}`);
     }
-    await checkEdit(page, `r14-5-height-${platform}.html`, page.source);
+    await checkEdit(page, `r14-5-height-${platform}.html`, last);
     assert.deepEqual(errors(page), []);
   });
 }

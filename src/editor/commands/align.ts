@@ -337,6 +337,17 @@ export function commands(): Command[] {
           const again = left(captionHeight(app, objects[i]));
           if (again.h !== h) put(again);
         }
+        // the width is written in whole px, which can put the height 1 px off, hence the width 1 px
+        // either side is taken where it gives the typed height
+        const to = placeOf(el);
+        if (h !== undefined && to.width != null && (to.height ?? null) === null && !isTextSized(el)) {
+          const read = () => sizeOf(el).h + captionHeight(app, objects[i]);
+          const best = [0, -1, 1].map((d) => {
+            writePlace(app, el, { ...to, width: to.width! + d });
+            return { d, off: Math.abs(read() - h) };
+          }).reduce((a, b) => (b.off + 0.01 < a.off ? b : a));
+          writePlace(app, el, { ...to, width: to.width + best.d });
+        }
         return { el, from, to: placeOf(el) };
       }));
       record(app, 'resize', changes);
