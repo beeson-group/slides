@@ -291,6 +291,8 @@ for (const platform of PLATFORMS) {
     assert.equal(await undoLabel(page), 'Undo Remove Bullet');
     assert.deepEqual(await caretIn(page), { tag: 'p', text: 'Dark and light mode: export o', editing: true, active: 'p', collapsed: true });
     await roundTrip(page);
+    await click(page, await pointOf(page, PARA, 'Dark and light', 0, true));
+    await press(page, 'Home');
     await press(page, 'Backspace');
     assert.match(listPart(await render(page)), /frameless\.Dark and light mode/);
   });
