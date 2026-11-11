@@ -13,7 +13,7 @@ import { injectStyle } from '../ui/dom.ts';
 import { groupOf } from '../commands/order.ts';
 import { turnersOf } from './drag.ts';
 import type { Box, Guide, Handle, Spacing } from './snap.ts';
-import { BY_ITSELF, CONTAINER, RESIZABLE, frameOf, isTextSized, movableOf, orientedBox, pictureOf, sizedOf, toScreen, turnable as turns, visualRect } from './hit.ts';
+import { BY_ITSELF, CONTAINER, RESIZABLE, frameOf, frameRect, isTextSized, movableOf, orientedBox, pictureOf, sizedOf, toScreen, turnable as turns } from './hit.ts';
 
 export const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 
@@ -84,22 +84,10 @@ const grow = (b: Box, by: number): Box => ({ left: b.left - by, top: b.top - by,
 // the angle of el in degrees, from its computed rotate
 const angleOf = (el: Element): number => parseFloat(getComputedStyle(el).rotate) || 0;
 
-// box grown over the shown caption of the figure el, as Keynote frames an image with its caption
-function withCaption(el: Element, box: Box): Box {
-  const caps = el.matches(CONTAINER) ? [...el.querySelectorAll(':scope > figcaption, :scope > .caption')].map((c) => c.getBoundingClientRect()).filter((r) => r.width && r.height) : [];
-  if (!caps.length) return box;
-  const left = Math.min(box.left, ...caps.map((r) => r.left)), top = Math.min(box.top, ...caps.map((r) => r.top));
-  const right = Math.max(box.left + box.width, ...caps.map((r) => r.right)), bottom = Math.max(box.top + box.height, ...caps.map((r) => r.bottom));
-  return { left, top, width: right - left, height: bottom - top };
-}
-
-// the box on the screen that a member el of a group reaches: a figure that holds a picture at the
-// picture and over its caption, and another element at its box seen. the frame of a group, its
-// readout in a resize, and W, H, X, and Y of the Arrange pane are the union of these boxes
-export const reachOf = (el: Element): Box => (el.matches(RESIZABLE) || el.matches(CONTAINER) ? withCaption(el, visualRect(pictureOf(el))) : visualRect(el));
-
+// the frame of a group, its readout in a resize, and W, H, X, and Y of the Arrange pane for it, at
+// the union of the frames of its members
 export function groupReach(els: Element[]): Box {
-  const seen = els.map(reachOf);
+  const seen = els.map(frameRect);
   const left = Math.min(...seen.map((b) => b.left)), top = Math.min(...seen.map((b) => b.top));
   return { left, top, width: Math.max(...seen.map((b) => b.left + b.width)) - left, height: Math.max(...seen.map((b) => b.top + b.height)) - top };
 }
@@ -111,7 +99,7 @@ function orientOf(el: Element, scale: number): { box: Box; deg: number } {
   const pic = pictureOf(el);
   const deg = angleOf(el) + (pic === el ? 0 : angleOf(pic));
   const box = orientedBox(pic, scale, deg);
-  return { box: deg ? box : withCaption(el, box), deg };
+  return { box: deg ? box : frameRect(el), deg };
 }
 
 // the point x, y turned by deg about the center of box
@@ -323,7 +311,7 @@ export class Frames {
     const hot = this.current();
     const framed = hot && selected.includes(hot);
     this.hoverFrame.hidden = !hot || !!framed || !!view.moving;
-    if (hot && !framed && !view.moving) place(this.hoverFrame, grow(reachOf(hot), 6));
+    if (hot && !framed && !view.moving) place(this.hoverFrame, grow(frameRect(hot), 6));
     // a figure is dragged by itself, as in Keynote, and a viewer, which a drag turns, and a text
     // block, whose text a press edits, by its handle
     this.handle.hidden = !hot || (hot.matches(BY_ITSELF) && !hot.matches('tycho-viewer')) || (!!this.gripsOf(hot) && !isTextSized(hot));

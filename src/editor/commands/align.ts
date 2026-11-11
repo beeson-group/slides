@@ -6,7 +6,7 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { CONTAINER, RESIZABLE, STRETCHED, aspectOf, constrained, cssWidth, frameOf, isTextSized, kindOf, movableOf, objectsOf, pictureOf, pictureSize, sizedOf, snapBoxOf, toSlide, visualRect } from '../canvas/hit.ts';
+import { CONTAINER, RESIZABLE, STRETCHED, aspectOf, constrained, cssWidth, frameOf, frameRect, isTextSized, kindOf, movableOf, objectsOf, pictureOf, pictureSize, sizedOf, snapBoxOf, toSlide } from '../canvas/hit.ts';
 import type { Box } from '../canvas/snap.ts';
 import { placeOf, record, withCaptions, withCorners, writePlace, type Place } from '../canvas/drag.ts';
 import { groupReach } from '../canvas/frames.ts';
@@ -43,8 +43,8 @@ export function targetsOf(app: App, arg?: unknown): Element[] {
 // the element whose size is set for el: the shown picture of a figure, or el
 export const sizedTarget = (el: Element): Element => (el.matches(CONTAINER) ? pictureOf(el) : el);
 
-// the box of el in slide pixels, as the frames draw it
-export const boxOf = (app: App, el: Element): Box => toSlide(frameOf(app), visualRect(el));
+// the box of el in slide pixels at its frame, as the frames draw it
+export const boxOf = (app: App, el: Element): Box => toSlide(frameOf(app), frameRect(el));
 
 // the box in slide pixels of els when they are one whole group, at the frame of the group, or null
 export function groupBoxOf(app: App, els: Element[]): Box | null {
