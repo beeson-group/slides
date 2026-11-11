@@ -574,8 +574,12 @@ export function install(app: App): void {
     p.moved = true;
     const f = frameOf(app);
     if (p.kind === 'marquee') {
-      const left = Math.min(p.x, ev.clientX), top = Math.min(p.y, ev.clientY);
-      const box = { left, top, width: Math.abs(ev.clientX - p.x), height: Math.abs(ev.clientY - p.y) };
+      // the start corner stays on its point of the slide while the canvas scrolls at an edge
+      const s = scrollOf(app);
+      const x0 = p.x - s.x + p.scroll.x, y0 = p.y - s.y + p.scroll.y;
+      const left = Math.min(x0, ev.clientX), top = Math.min(y0, ev.clientY);
+      const box = { left, top, width: Math.abs(ev.clientX - x0), height: Math.abs(ev.clientY - y0) };
+      app.stage?.edgeScroll(ev, () => press === p && onMove(ev));
       view.marquee = box;
       const touched = movablesOf(app).filter((el) => {
         const r = frameRect(el);
