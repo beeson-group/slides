@@ -174,8 +174,8 @@ export class Commands {
     if (!c) return [];
     const p = this.app.platform;
     return keysOf(c, p).filter((k) => {
-      const k2 = parseKey(k, p);
-      const runs = this.forKey({ key: k2.key === 'Space' ? ' ' : k2.key, shiftKey: k2.shift, altKey: k2.alt, ctrlKey: k2.ctrl, metaKey: k2.meta }, region);
+      const chord = parseKey(k, p);
+      const runs = this.forKey({ key: chord.key === 'Space' ? ' ' : chord.key, shiftKey: chord.shift, altKey: chord.alt, ctrlKey: chord.ctrl, metaKey: chord.meta }, region);
       return !runs || [runs.id, runs.runsAs?.(this.app)].some((r) => r === c.id || r === id);
     });
   }
