@@ -256,3 +256,87 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// the box in slide px of the prompt of each empty block of the current slide that shows its
+// placeholder, i.e. of the text of the placeholder as it is drawn
+const promptBoxes = (page) => page.evaluate(`(() => {
+  const slides = document.querySelector('.reveal .slides');
+  const s = slides.getBoundingClientRect();
+  const k = s.width / slides.offsetWidth;
+  const ctx = document.createElement('canvas').getContext('2d');
+  return [...document.querySelectorAll('.reveal section.present :is(h1, h2, h3, p)')].filter((el) => el.getClientRects().length && !['none', 'normal'].includes(getComputedStyle(el, '::before').content)).map((el) => {
+    const before = getComputedStyle(el, '::before');
+    ctx.font = before.font;
+    const r = el.getBoundingClientRect();
+    const left = (r.left - s.left) / k + parseFloat(getComputedStyle(el).paddingLeft);
+    return { name: el.localName + (el.className ? '.' + el.classList[0] : ''), left, top: (r.top - s.top) / k, right: left + ctx.measureText(JSON.parse(before.content)).width, bottom: (r.bottom - s.top) / k };
+  });
+})()`);
+// the box in slide px of the first shown element of selector
+const slideRect = (page, selector) => page.evaluate(`(() => {
+  const slides = document.querySelector('.reveal .slides');
+  const s = slides.getBoundingClientRect();
+  const k = s.width / slides.offsetWidth;
+  const el = [...document.querySelectorAll(${js(selector)})].find((e) => e.getClientRects().length);
+  if (!el) return null;
+  const r = el.getBoundingClientRect();
+  return { left: (r.left - s.left) / k, top: (r.top - s.top) / k, right: (r.right - s.left) / k, bottom: (r.bottom - s.top) / k };
+})()`);
+
+// the file chosen for an insert of a picture, given to the file chooser of the page
+async function choose(page, id, file) {
+  const chosen = exec(page, id);
+  await page.waitFor(`!!document.querySelector('input.beeson-media-input')`);
+  const { result } = await page.send('Runtime.evaluate', { expression: `document.querySelector('input.beeson-media-input')` });
+  await page.send('DOM.setFileInputFiles', { files: [resolve(file)], objectId: result.objectId });
+  await chosen;
+}
+
+// each insert as its name, its run on the current slide, and the selector of the element it makes
+const NEW = '.reveal section.present';
+const INSERTS = [
+  ['a table', (page) => exec(page, 'insert.table', { rows: 3, columns: 3 }), `${NEW} table`],
+  ['a QR code', (page) => exec(page, 'insert.qr'), `${NEW} .qr`],
+  ['a text box', (page) => exec(page, 'insert.text'), `${NEW} .beeson-pending`],
+  ['a code box', (page) => exec(page, 'insert.code'), `${NEW} pre.beeson-pending`],
+  ['a formula', async (page) => {
+    await exec(page, 'insert.formula');
+    await sheetOpen(page);
+    await type(page, 'x^2 + y^2 = r^2');
+    await press(page, 'Mod+Enter');
+    await sheetClosed(page);
+  }, `${NEW} div.math`],
+  ['an image', (page) => choose(page, 'insert.image', 'demo/figure-light.png'), `${NEW} img`],
+  ['a video', (page) => choose(page, 'insert.video', 'demo/clip-dark.mp4'), `${NEW} video`],
+];
+
+// gap 3 of R8.6: an empty block that shows its placeholder counted as taken space for a new table
+// only. each insert is run on a new slide of each layout with two placeholders, with nothing
+// selected, and its element is kept off both placeholders and inside the slide
+for (const platform of PLATFORMS) {
+  for (const layout of ['content', 'split', 'figure']) {
+    test(`every insert on a new ${layout} slide keeps its element off the two placeholders (${platform})`, async (t) => {
+      const page = await load(t, platform, 0, 'index.html');
+      for (const [what, run, selector] of INSERTS) {
+        await exec(page, `slide.new.${layout}`);
+        await frames(page);
+        // the caret of the new slide is in its title, and the second Esc leaves its block
+        await press(page, 'Escape');
+        await press(page, 'Escape');
+        await frames(page);
+        const holders = await promptBoxes(page);
+        assert.equal(holders.length, 2, `the new ${layout} slide does not show two placeholders`);
+        await run(page);
+        await sleep(300);
+        await frames(page);
+        const box = await slideRect(page, selector);
+        assert.ok(box, `${what} is not on the new ${layout} slide`);
+        for (const h of holders) assert.ok(!meets(box, h), `${what} at ${js(box)} is drawn over the placeholder ${h.name} at ${js(h)} of a new ${layout} slide`);
+        assert.ok(box.left >= -0.5 && box.top >= -0.5 && box.right <= 1920.5 && box.bottom <= 1080.5, `${what} at ${js(box)} is not inside the new ${layout} slide`);
+        await page.evaluate(`Reveal.slide(0)`);
+        await frames(page);
+      }
+      assert.deepEqual(errors(page), []);
+    });
+  }
+}
