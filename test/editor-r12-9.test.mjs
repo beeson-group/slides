@@ -159,3 +159,34 @@ test('a deck opened by itself does not take Return, Backspace, or a number', asy
   assert.deepEqual(await here(), [2, -1]);
   assert.deepEqual(errors(page), []);
 });
+
+// the presenter display with a customized layout plays the show in its tab: Esc first ends the
+// customizing with the show kept, and Esc then ends the display and the show tab
+const rectOf = (page, selector) => page.evaluate(`(() => { const e = document.querySelector(${js(selector)}); if (!e) return null; const r = e.getBoundingClientRect(); return { left: r.left, top: r.top }; })()`);
+for (const platform of PLATFORMS) {
+  test(`the presenter display keeps its customized layout with the show tab, and Esc ends the customizing before the show (${platform})`, async (t) => {
+    const page = await load(t, platform, 1);
+    await page.evaluate(`localStorage.setItem('beeson-presenter-layout:' + location.pathname, ${js(JSON.stringify({ notes: { x: 0.05, y: 0.6, w: 0.4, h: 0.3 } }))}), true`);
+    await press(page, 'Alt+Enter');
+    await page.waitFor(`!!document.querySelector(${js(DISPLAY)}) && !!${TAB}?.Reveal?.isReady()`, 20000);
+    await sleep(300);
+    const notes = await rectOf(page, `${DISPLAY} .notes`);
+    assert.ok(Math.abs(notes.left - 80) <= 2 && Math.abs(notes.top - 600) <= 2, `the notes are at ${js(notes)}, not at the stored layout`);
+    await click(page, `${DISPLAY} .bar.top button[aria-label="Display Options"]`);
+    await click(page, `${DISPLAY} .parts button`);
+    await page.waitFor(`!!document.querySelector('${DISPLAY} .layout:not([hidden])')`, 3000);
+    await press(page, 'ArrowRight');
+    await page.waitFor(`${TAB}.Reveal.getIndices().h === 2`, 5000);
+    // the timer of a tab behind the show tab is slowed, and its frames are not drawn
+    await press(page, 'Escape');
+    await sleep(300);
+    assert.ok(await page.evaluate(`!!document.querySelector(${js(DISPLAY)})`), 'Esc while the display is customized ends the display');
+    assert.equal(await page.evaluate(tabClosed), false, 'Esc while the display is customized ends the show');
+    await press(page, 'Escape');
+    await page.waitFor(`!document.querySelector(${js(DISPLAY)})`);
+    await sleep(300);
+    assert.equal(await page.evaluate(tabClosed), true, 'Esc leaves the show tab open');
+    await byteExact(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
