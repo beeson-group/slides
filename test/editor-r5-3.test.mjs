@@ -315,10 +315,10 @@ for (const platform of PLATFORMS) {
       for (const k of shown) assert.ok(!TAKEN[platform].includes(k), `${c.id} shows ${k}, which a browser takes before the page`);
     }
     const pinned = Object.fromEntries(keys.map((c) => [c.id, c.keys]));
-    assert.deepEqual(pinned['view.rulers'], mac ? ['Mod+R', 'Ctrl+Mod+R'] : undefined);
+    assert.deepEqual(pinned['view.rulers'], mac ? ['Mod+R', 'Ctrl+Mod+R'] : ['Alt+Shift+R']);
     assert.deepEqual(pinned['arrange.lock'], mac ? ['Mod+L', 'Ctrl+Mod+L'] : ['Mod+L']);
     const view = Object.fromEntries((await barMenu(page, 'View')).map((r) => [r.label, r.keys]));
-    assert.equal(view.Rulers, mac ? '⌘R' : '');
+    assert.equal(view.Rulers, mac ? '⌘R' : 'Alt+Shift+R');
     const arrange = Object.fromEntries((await barMenu(page, 'Arrange')).map((r) => [r.label, r.keys]));
     assert.equal(arrange.Lock, mac ? '⌘L' : 'Ctrl+L');
     await page.evaluate('window.BeesonEditorShell.closeMenus()');
