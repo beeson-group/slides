@@ -161,6 +161,33 @@ export function insertPlain(host: Element, text: string): void {
   });
 }
 
+// a text of several lines pasted into a list item of a slide is an item for each line, as Return
+// makes a new item, in Keynote and PowerPoint. one newline at the end of the text is dropped, and
+// the paste is one entry of the history
+export function pastesItems(app: App, host: Element, text: string): boolean {
+  return host.matches('li') && /\r?\n/.test(text.replace(/\r?\n$/, '')) && app.commands.enabled('text.newParagraph');
+}
+
+export async function pasteItems(app: App, text: string): Promise<void> {
+  const caretHost = () => {
+    const n = window.getSelection()?.anchorNode;
+    return app.hostOf(n instanceof Element ? n : n?.parentElement ?? null);
+  };
+  app.history.break();
+  await app.history.transact('Paste', async () => {
+    const lines = text.replace(/\r?\n$/, '').split(/\r?\n/);
+    for (const [i, line] of lines.entries()) {
+      if (i) await app.commands.run('text.newParagraph');
+      const host = caretHost();
+      if (!host || !line) continue;
+      app.history.beforeTyping(host, 'Paste');
+      document.execCommand('insertText', false, line);
+      app.history.afterTyping(host);
+      app.history.break();
+    }
+  });
+}
+
 // Chrome types a newline of insertText in a pre as a split of its code element, hence a text with
 // lines is put at the caret as a text node. a newline at the end of a pre is drawn only before
 // another character, thus a second newline is put after the caret there, which the numbers of
@@ -247,6 +274,11 @@ export function install(app: App): void {
       history.break();
       app.markDirty();
       app.invalidate('content');
+      return;
+    }
+    if (type === 'insertFromPaste' && pastesItems(app, host, ev.dataTransfer?.getData('text/plain') ?? '')) {
+      ev.preventDefault();
+      void pasteItems(app, ev.dataTransfer?.getData('text/plain') ?? '').catch((e) => app.fail(e));
       return;
     }
     // a new line starts a new entry of the history, as in a text editor

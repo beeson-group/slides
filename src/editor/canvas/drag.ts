@@ -171,8 +171,10 @@ export function turn(app: App, spin: Element, carrier: Element, deg: number, wan
 }
 
 // a member of a group at the start of a turn of the group: the element that takes its angle, its
-// angle, and the center of this element on the screen, about which its rotate turns it
-export type Turner = { el: Element; spin: Element; angle: number; center: { x: number; y: number } };
+// angle, and the center of this element on the screen, about which its rotate turns it. a member of
+// a group in a multiple selection has the center of the frame of its group and the angle of the
+// group, about which and from which it is turned with the group
+export type Turner = { el: Element; spin: Element; angle: number; center: { x: number; y: number }; group?: { pivot: { x: number; y: number }; angle: number } };
 
 // the members of a selected group that a turn moves, in the order of the page, whose first sets the
 // angle of the group, or null when els are not one whole group that every member of can be turned
@@ -187,16 +189,28 @@ export function turnersOf(app: App, els: Element[]): Turner[] | null {
   });
 }
 
-// the elements of a multiple selection outside any group, each turned about its own center by a
-// drag of the rotate handle, as PowerPoint turns the objects of a selection, or null when one of
-// them is in a group or cannot be turned
+// the objects of a multiple selection, each turned about its own center by a drag of the rotate
+// handle, as PowerPoint turns the objects of a selection. an object is an element outside any group
+// or a whole group, turned about the center of its frame. null when the selection is one group, or
+// when one of its elements cannot be turned
 export function apartOf(app: App, els: Element[]): Turner[] | null {
   const top = els.filter((el) => !els.some((o) => o !== el && o.contains(el)) && el.getClientRects().length);
-  if (top.length < 2 || !top.every((el) => !groupOf(el) && turnable(el))) return null;
-  return top.map((el) => {
+  const ids = new Set(top.map(groupOf).filter((id) => id !== null));
+  if (top.length < 2 || (ids.size === 1 && top.every(groupOf))) return null;
+  const out: Turner[] = [];
+  for (const el of top) {
+    if (groupOf(el)) continue;
+    if (!turnable(el)) return null;
     const spin = spinOf(el);
-    return { el, spin, angle: angleOf(el), center: seenCenter(app, spin) };
-  });
+    out.push({ el, spin, angle: angleOf(el), center: seenCenter(app, spin) });
+  }
+  for (const id of ids) {
+    const members = turnersOf(app, top.filter((el) => groupOf(el) === id));
+    if (!members) return null;
+    const group = { pivot: pivotOf(members.map((t) => t.el), members[0].angle), angle: members[0].angle };
+    out.push(...members.map((t) => ({ ...t, group })));
+  }
+  return out.sort((a, b) => (a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
 }
 
 // the elements whose places a turn of turners changes
@@ -669,7 +683,7 @@ export function install(app: App): void {
     if (p.turners) {
       // the angle of a group is that of its first member, as in the field Angle
       const by = deg - was;
-      for (const t of p.turners) turnMember(app, t, p.apart ? t.center : c, by, true);
+      for (const t of p.turners) turnMember(app, t, p.apart ? (t.group?.pivot ?? t.center) : c, by, true);
       if (view.turn) view.turn.deg = deg;
     } else turn(app, p.els[0], p.carrier ?? p.els[0], deg, c, true);
     view.moving = p.els;

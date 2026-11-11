@@ -13,6 +13,7 @@ import { groupsOf, sectionHeading } from '../navigator/sorter.ts';
 import { drawInto } from '../navigator/thumbs.ts';
 import { setOwnTex } from '../text/blocks.ts';
 import { tokenize } from '../tokens.ts';
+import { nextShown, setTransition, transitionOf } from '../review/transitions.ts';
 import { sample } from './layout.ts';
 import { injectStyle } from '../ui/dom.ts';
 
@@ -386,7 +387,18 @@ export function install(app: App): void {
         const focus = inNav();
         const doc = docOf(a);
         const copies: Element[] = [];
-        for (const s of targets(a)) copies.push(await doc.duplicate(s));
+        for (const s of targets(a)) {
+          // the copy is the next shown slide of s, and it takes the data-transition of s, which is
+          // the transition into s. the transition out of s is thus set again where the copy changed
+          // it, and the copy leaves by the old transition out of s, which stays on the slide after it
+          const out = transitionOf(a, s);
+          const raw = nextShown(a, s)?.getAttribute('data-transition') ?? null;
+          const copy = await doc.duplicate(s);
+          copies.push(copy);
+          if (nextShown(a, s) !== copy) continue;
+          if (!out) doc.setTag(copy, { attrs: { 'data-transition': raw } }, 'transition');
+          else if (transitionOf(a, s) !== out) setTransition(a, s, out);
+        }
         land(a, copies, copies.at(-1) ?? null, focus);
       },
     },

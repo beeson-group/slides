@@ -16,6 +16,7 @@ import { applyPending } from '../text/carry.ts';
 import { insertPlain, placeCaret } from '../text/typing.ts';
 import { injectStyle } from '../ui/dom.ts';
 import { columnOf } from './clipboard.ts';
+import { onCaptionBox } from './figure.ts';
 import { docOf } from './slide.ts';
 import { freePlace, placeNew, translateOf } from './place.ts';
 
@@ -23,7 +24,7 @@ const CSS = `
 html.beeson-editor .reveal .slides .beeson-pending:not(.foot) { position: relative; }
 html.beeson-editor .reveal .slides .beeson-pending { min-height: 1.4em; min-width: 8em; }
 /* a new text box is put at the gap of the theme between two paragraphs, not at the 14 px of a list item */
-html.beeson-editor .reveal .slides p.beeson-pending:not(:first-child) { margin-top: 24px; }
+html.beeson-editor .reveal .slides p.beeson-pending:not(:first-child):not(.caption) { margin-top: 24px; }
 html.beeson-editor .reveal .slides .foot.beeson-pending { min-width: 13em; }
 html.beeson-editor .reveal .slides .beeson-pending[data-prompt][contenteditable]:empty::before { content: attr(data-prompt); position: absolute; left: 0; top: 0; color: var(--muted, #888); white-space: nowrap; pointer-events: none; }
 html.beeson-editor .reveal .slides pre.beeson-pending { box-sizing: border-box; min-height: calc(1.25em + 48px); padding: 24px; font-size: 22px; line-height: 1.25; }
@@ -32,9 +33,11 @@ html.beeson-editor .reveal .slides div.math.beeson-empty { position: relative; m
 html.beeson-editor .reveal .slides div.math.beeson-empty::before { content: "Click to add a formula"; position: absolute; left: 0; top: 0; color: var(--muted, #888); font-size: 48px; white-space: nowrap; pointer-events: none; }
 `;
 
-// a text element that the first input writes into the file
-type Kind = 'text' | 'code' | 'foot';
-const PENDING: Record<Kind, { label: string; prompt: string; make(): HTMLElement; html(text: string): string }> = {
+// a text element that the first input writes into the file. a caption is a figcaption in a figure
+// and a caption paragraph in a zone
+type Kind = 'text' | 'code' | 'foot' | 'caption';
+const captionTag = (host: Element) => (host.localName === 'figure' ? 'figcaption' : 'p');
+const PENDING: Record<Kind, { label: string; prompt: string; make(parent: Element): HTMLElement; html(text: string, parent: Element): string }> = {
   text: { label: 'Text Box', prompt: 'Click to add text', make: () => document.createElement('p'), html: (t) => `<p>${lines(t)}</p>` },
   code: { label: 'Code Box', prompt: 'Click to add code', make: () => document.createElement('pre'), html: (t) => `<pre><code class="language-python">${escape(t)}</code></pre>` },
   foot: {
@@ -42,6 +45,12 @@ const PENDING: Record<Kind, { label: string; prompt: string; make(): HTMLElement
     prompt: 'Click to add a footnote',
     make: () => Object.assign(document.createElement('div'), { className: 'foot' }),
     html: (t) => `<div class="foot">${lines(t)}</div>`,
+  },
+  caption: {
+    label: 'Caption',
+    prompt: 'Click to add a caption',
+    make: (host) => Object.assign(document.createElement(captionTag(host)), { className: 'caption' }),
+    html: (t, host) => `<${captionTag(host)} class="caption">${lines(t)}</${captionTag(host)}>`,
   },
 };
 
@@ -252,7 +261,7 @@ export function install(app: App): void {
   const begin = (kind: Kind, parent: Element, before: Node | null) => {
     drop();
     const def = PENDING[kind];
-    const el = def.make();
+    const el = def.make(parent);
     el.classList.add('beeson-pending');
     el.setAttribute('data-generated', '');
     el.setAttribute('contenteditable', 'true');
@@ -261,7 +270,7 @@ export function install(app: App): void {
     const next = before && before.parentNode === parent ? before : null;
     const show = () => {
       parent.insertBefore(el, next && next.parentNode === parent ? next : null);
-      if (kind !== 'foot') {
+      if (kind === 'text' || kind === 'code') {
         el.style.translate = '';
         const y = textOffset(app, el);
         el.style.translate = y ? `0px ${y}px` : '';
@@ -342,7 +351,7 @@ export function install(app: App): void {
         // a box moved by textOffset or centerOffset is written with the same offset
         const [x0, y0] = p.el.style.translate.split(' ');
         const x = parseFloat(x0 ?? '') || 0, y = parseFloat(y0 ?? '') || 0;
-        const [node] = await docOf(app).insert(def.html(text), p.parent, p.el, def.label);
+        const [node] = await docOf(app).insert(def.html(text, p.parent), p.parent, p.el, def.label);
         written!.node = node;
         made = [node];
         p.el.remove();
@@ -434,6 +443,8 @@ export function install(app: App): void {
       if (entry && node.isConnected && node.classList.contains('beeson-empty')) void app.history.retract(entry).catch(fail);
     }, 100);
   };
+
+  onCaptionBox({ begin: (host) => begin('caption', host, null), drop });
 
   const pendingText = (kind: Kind) => (a: App) => {
     const slide = a.current()!;

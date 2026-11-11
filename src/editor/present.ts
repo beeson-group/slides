@@ -876,6 +876,8 @@ export class Presenter {
   }
 
   private onKey(ev: KeyboardEvent): void {
+    // a typed slide number is dropped at another key, as in the show played by Present
+    if (!/^[0-9]$/.test(ev.key) && ev.key !== 'Enter') this.typed = '';
     const inPopover = this.popover.contains(ev.target as Node);
     if (this.customizing && ev.key === 'Escape') this.customize(false);
     else if (!this.popover.hidden && ev.key === 'Escape') this.showParts(false);
@@ -888,7 +890,8 @@ export class Presenter {
     } else if (ev.metaKey || ev.ctrlKey || ev.altKey) return;
     else if (/^[0-9]$/.test(ev.key)) this.typed = (this.typed + ev.key).slice(-4);
     else if (ev.key === 'Enter' && this.typed) {
-      this.goTo(Number(this.typed) - 1);
+      // a number out of range goes to the first or the last slide, as reveal.js does in the show
+      this.goTo(Math.min(Math.max(Number(this.typed) - 1, 0), this.list.length - 1));
       this.typed = '';
     } else if (['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter', 'n', 'N'].includes(ev.key)) this.go(1);
     else if (['ArrowLeft', 'ArrowUp', 'PageUp', 'Backspace', 'p', 'P'].includes(ev.key)) this.go(-1);
