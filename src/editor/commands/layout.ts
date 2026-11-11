@@ -11,7 +11,7 @@ import type { Command } from '../commands.ts';
 import { LAYOUTS, sampleText, textStyle, type Layout } from '../model/templates.ts';
 import { childrenIn, eolOf, indentAt, spaceOf, unitsOf } from '../model/units.ts';
 import type { Navigator } from '../navigator/navigator.ts';
-import { drawInto } from '../navigator/thumbs.ts';
+import { drawInto, laidOut } from '../navigator/thumbs.ts';
 import { classesOf, tokenize, type Range, type Token } from '../tokens.ts';
 import { injectStyle } from '../ui/dom.ts';
 import { install as installOrder } from './order.ts';
@@ -299,27 +299,6 @@ function fitPanel(app: App, slide: Element): void {
     if (classes.length) continue;
     app.doc.setTag(el, { classes: { small: true } }, 'layout');
     fitted.add(el);
-  }
-}
-
-// measure run on slide shown as the current slide is, and invisible, with its inline style put back
-function laidOut<T>(slide: HTMLElement, measure: () => T): T {
-  const style = slide.getAttribute('style');
-  const hidden = slide.hidden;
-  const present = slide.classList.contains('present');
-  slide.hidden = false;
-  slide.style.display = 'block';
-  if (!present) {
-    slide.style.visibility = 'hidden';
-    slide.classList.add('present');
-  }
-  try {
-    return measure();
-  } finally {
-    if (!present) slide.classList.remove('present');
-    if (style === null) slide.removeAttribute('style');
-    else slide.setAttribute('style', style);
-    slide.hidden = hidden;
   }
 }
 

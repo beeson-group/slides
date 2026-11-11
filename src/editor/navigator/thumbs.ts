@@ -80,6 +80,27 @@ function deckStyles(): { links: HTMLLinkElement[]; adopted: CSSStyleSheet[] } {
   return { links, adopted: [...fromLinks.filter((x): x is CSSStyleSheet => !!x), ...styles, sheetOf(CSS.replaceAll('BRAND', brandUrl(all)))] };
 }
 
+// measure run on slide shown as the current slide is, and invisible, with its inline style put back
+export function laidOut<T>(slide: HTMLElement, measure: () => T): T {
+  const style = slide.getAttribute('style');
+  const hidden = slide.hidden;
+  const present = slide.classList.contains('present');
+  slide.hidden = false;
+  slide.style.display = 'block';
+  if (!present) {
+    slide.style.visibility = 'hidden';
+    slide.classList.add('present');
+  }
+  try {
+    return measure();
+  } finally {
+    if (!present) slide.classList.remove('present');
+    if (style === null) slide.removeAttribute('style');
+    else slide.setAttribute('style', style);
+    slide.hidden = hidden;
+  }
+}
+
 // a clone of slide for its thumbnail, with every step shown, or the first layer of a slide whose
 // elements are hidden at a step. its canvases are painted from the originals at the scale of the
 // thumbnail. a tycho viewer is replaced by an empty box, since its clone would start a second
@@ -87,12 +108,17 @@ function deckStyles(): { links: HTMLLinkElement[]; adopted: CSSStyleSheet[] } {
 export function cloneSlide(slide: Element, scale: number): HTMLElement {
   const clone = slide.cloneNode(true) as HTMLElement;
   clone.querySelectorAll('aside.notes').forEach((n) => n.remove());
-  const from = slide.querySelectorAll('canvas');
+  const from = [...slide.querySelectorAll('canvas')];
   const ratio = Math.min(2, window.devicePixelRatio || 1);
+  // the sizes of the canvases in slide px. a slide far from the current one is not laid out by
+  // reveal.js, and the size of the buffer of its canvas is in device px, hence it is laid out
+  const size = () => from.map((c) => [c.offsetWidth, c.offsetHeight]);
+  let sizes = size();
+  if (sizes.some(([w]) => !w) && slide instanceof HTMLElement) sizes = laidOut(slide, size);
   clone.querySelectorAll('canvas').forEach((canvas, i) => {
     const source = from[i];
-    const w = source.offsetWidth || parseFloat(source.style.width) || source.width;
-    const h = source.offsetHeight || parseFloat(source.style.height) || source.height;
+    const w = sizes[i][0] || parseFloat(source.style.width) || source.width;
+    const h = sizes[i][1] || parseFloat(source.style.height) || source.height;
     canvas.width = Math.max(1, Math.round(w * scale * ratio));
     canvas.height = Math.max(1, Math.round(h * scale * ratio));
     canvas.style.width = `${w}px`;
