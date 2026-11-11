@@ -10,7 +10,7 @@ import { resolve } from 'node:path';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { drag, saveAndReopen } from './helpers/editor.mjs';
+import { click, drag, saveAndReopen } from './helpers/editor.mjs';
 
 const DECK = 'index.html';
 // the slides of index.html with a list beside a backdrop, with a figure in a zone, and with a video
@@ -237,5 +237,45 @@ for (const platform of PLATFORMS) {
       assert.deepEqual(saved.files, ['figure-dark.png', 'figure-light.png']);
       assert.deepEqual(errors(page), []);
     }
+  });
+
+  // feel-3. a caption is switched on in the Image pane, as with Caption in the Style tab of Keynote
+  // (K34), and edited in place
+  test(`a picture is given a caption by the Caption switch of the Image pane, and the caption is typed into (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: STEPS });
+    const insert = page.evaluate(`window.BeesonEditor.exec('insert.image').then(() => true)`);
+    await choose(page, [DARK_FILE]);
+    await insert;
+    await waitText(page, 'media/figure-dark.png');
+    await frames(page);
+    const before = await render(page);
+    const box = await page.evaluate(`(() => [...document.querySelectorAll('.beeson-edit-inspector label')].some((l) => l.textContent.trim() === 'Caption'))()`);
+    assert.ok(box, 'the Image pane does not have a Caption switch');
+    const state = await page.evaluate(`window.BeesonEditor.state('figure.caption')`);
+    assert.deepEqual([state.enabled, state.checked], [true, false]);
+    await exec(page, 'figure.caption');
+    await frames(page);
+    await page.send('Input.insertText', { text: 'A new caption' });
+    await frames(page);
+    const edited = await render(page);
+    assert.match(edited, /<img src="media\/figure-dark.png"[^>]*>\s*<figcaption class="caption">A new caption<\/figcaption>\s*<\/figure>/);
+    assert.equal((await page.evaluate(`window.BeesonEditor.state('figure.caption')`)).checked, true);
+    // the switch is one entry and the typing another
+    await undo(page);
+    await undo(page);
+    assert.equal(await render(page), before);
+    await redo(page);
+    await redo(page);
+    assert.equal(await render(page), edited);
+    const saved = await saveInto(page, `r12-4-caption-${platform}`);
+    assert.equal(saved.text, edited);
+    // Caption off takes the caption off
+    await page.evaluate(`Reveal.slide(${STEPS})`);
+    await frames(page);
+    await click(page, '.reveal section.present > figure img');
+    await frames(page);
+    await exec(page, 'figure.caption');
+    assert.equal(await render(page), before);
+    assert.deepEqual(errors(page), []);
   });
 }
