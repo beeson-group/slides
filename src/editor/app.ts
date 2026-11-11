@@ -60,7 +60,8 @@ export interface Files {
   save(): Promise<void>;
   saveAs(): Promise<void>;
   openFile(): Promise<void>;
-  present(): Promise<void>;
+  // the show at hash, in place or in a new tab, with its window, or null when it is not played
+  present(hash?: string, tab?: boolean): Promise<{ win: Window | null } | null>;
   toggleAutosave(): void;
   line(): Line;
   // the card of the texts that cannot be edited, and the card that asks before Open or Present

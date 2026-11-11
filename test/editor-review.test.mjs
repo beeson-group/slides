@@ -125,7 +125,7 @@ async function menuOf(page, name) {
 }
 
 for (const platform of PLATFORMS) {
-  test(`the Play menu holds Present and the presenter view, and Mod+Enter opens the saved deck at the current slide on ${platform}`, async () => {
+  test(`the Play menu holds Present and the presenter view, and Mod+Enter plays the saved deck in place at the current slide on ${platform}`, async () => {
     const page = await reviewPage(platform, 4);
     const titles = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menubar [aria-haspopup="menu"]')].map((b) => b.textContent)`);
     assert.deepEqual(titles.slice(-3), ['View', 'Play', 'Help']);
@@ -135,11 +135,14 @@ for (const platform of PLATFORMS) {
     await press(page, 'Escape');
     await page.evaluate(`window.open = (url) => { window.__opened = url; return null; }`);
     await press(page, 'Mod+Enter');
-    await page.waitFor('!!window.__opened');
-    assert.ok((await page.evaluate('window.__opened')).endsWith(`?still&edit-platform=${platform}#/4`));
+    await page.waitFor(`!!document.querySelector('.beeson-edit-show iframe')?.getAttribute('src')`);
+    assert.ok((await page.evaluate(`document.querySelector('.beeson-edit-show iframe').getAttribute('src')`)).endsWith(`?still&edit-platform=${platform}&postMessageEvents=true#/4`));
+    assert.equal(await page.evaluate('window.__opened ?? null'), null);
     assert.equal(await page.evaluate(`!!document.querySelector('dialog.beeson-edit-presenter[open]')`), false);
-    // Alt+Enter opens the show and the presenter view over the editor
-    await page.evaluate('window.__opened = null');
+    await page.waitFor(`(() => { const w = document.querySelector('.beeson-edit-show iframe').contentWindow; return !!w.Reveal?.isReady() && (w.MathJax?.startup?.promise?.then(() => true) ?? false); })()`);
+    await press(page, 'Escape');
+    await page.waitFor(`!document.querySelector('.beeson-edit-show')`);
+    // Alt+Enter opens the show in a tab and the presenter view over the editor
     await press(page, 'Alt+Enter');
     await page.waitFor(`!!document.querySelector('dialog.beeson-edit-presenter[open]')`);
     assert.ok((await page.evaluate('window.__opened')).endsWith('#/4'));
