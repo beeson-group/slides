@@ -117,13 +117,18 @@ const ASK = {
     save: ['Save and export', 'Save the edits into the file, then open its print view in a new tab'],
     discard: ['Export the saved file', 'Open the print view of the deck as saved in a new tab, and keep the edits here'],
   },
+  print: {
+    text: 'The slides are printed from the file. Save the edits into it first, print the saved file without them, or go on editing.',
+    save: ['Save and print', 'Save the edits into the file, then open its print view in a new tab'],
+    discard: ['Print the saved file', 'Open the print view of the deck as saved in a new tab, and keep the edits here'],
+  },
 };
 
 // the actions of the File menu that are not services of app.files, set at the install
 export type FileActions = {
   revert(): Promise<void>;
   openRecent(r: Recent): Promise<void>;
-  exportPdf(): Promise<void>;
+  exportPdf(action?: 'export' | 'print'): Promise<void>;
   exportHtml(): Promise<void>;
 };
 let actions: FileActions | null = null;
@@ -388,7 +393,7 @@ export function install(app: App): void {
   }
 
   // with unsaved changes, the user is asked first, and false is returned for no export or show
-  async function savedFirst(action: 'present' | 'export'): Promise<boolean> {
+  async function savedFirst(action: 'present' | 'export' | 'print'): Promise<boolean> {
     if (!app.dirty) return true;
     const choice = await askFirst(action);
     if (!choice) return false;
@@ -399,19 +404,20 @@ export function install(app: App): void {
   // the print view of the saved deck, with one page per step as npm run pdf prints it, opened in a
   // new tab and printed there once it is ready. a view that the page cannot read, e.g. on file:,
   // where each file is an origin of its own, is printed with the key of the browser
-  async function exportPdf(): Promise<void> {
-    if (!(await savedFirst('export'))) return;
+  async function exportPdf(action: 'export' | 'print' = 'export'): Promise<void> {
+    if (!(await savedFirst(action))) return;
     const win = window.open(deckAddress(['print-pdf', 'still']), '_blank');
     const key = display('Mod+P', app.platform);
+    const then = action === 'print' ? 'choose a printer' : 'choose Save as PDF';
     if (!win) {
-      app.note = { text: 'The browser did not open the print view. Allow this page to open a tab, and export again', warn: true };
+      app.note = { text: `The browser did not open the print view. Allow this page to open a tab, and ${action} again`, warn: true };
       app.report();
       return;
     }
-    app.note = { text: `The print view of ${fileName()} is open in a new tab, with one page per step. Choose Save as PDF in its print dialog`, warn: false };
+    app.note = { text: `The print view of ${fileName()} is open in a new tab, with one page per step. In its print dialog, ${then}`, warn: false };
     app.report();
     if (!(await printWhenReady(win))) {
-      app.note = { text: `The print view of ${fileName()} is open in a new tab, with one page per step. Press ${key} there and choose Save as PDF`, warn: false };
+      app.note = { text: `The print view of ${fileName()} is open in a new tab, with one page per step. Press ${key} there and ${then}`, warn: false };
       app.report();
     }
   }
