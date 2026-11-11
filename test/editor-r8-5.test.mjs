@@ -354,3 +354,44 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// the widths written on the images of slide n of a text
+const widthsOf = (text, n) => tagsOf(text, n, ['img']).map((tag) => /\bwidth: (\d+)px/.exec(tag)?.[1] ?? null);
+
+for (const platform of PLATFORMS) {
+  for (const mode of MODES) {
+    test(`a width typed in the W field and Reset Size keep the upper left corner of the picture of a figure, on ${platform} in ${mode} mode`, async (t) => {
+      for (const n of [ZONE_PAIR, ZONE_ONE, PLATE_PAIR, PLATE_ONE]) {
+        for (const from of ['figure', 'picture']) {
+          const page = await load(t, platform, mode, n);
+          await pick(page, from);
+          const pic = await pictureOf(page);
+          const caption = await rectOf(page, CAPTION);
+          await typeField(page, 'width', 400);
+          const edited = await render(page);
+          const where = `a width typed for ${NAMES[n]} from the ${from}`;
+          assert.deepEqual(widthsOf(edited, n), new Array(page.parts.images).fill('400'), `${where} is not written on every image`);
+          const sized = await pictureOf(page);
+          assert.ok(near(sized.left, pic.left) && near(sized.top, pic.top), `${where} moves the corner of the picture from ${Math.round(pic.left)}, ${Math.round(pic.top)} to ${Math.round(sized.left)}, ${Math.round(sized.top)}`);
+          // the caption of a zone stays under its picture, and the caption of a figure slide in its layout
+          const under = await rectOf(page, CAPTION);
+          if (n === ZONE_PAIR || n === ZONE_ONE) assert.ok(near(under.top - (sized.top + sized.height), caption.top - (pic.top + pic.height)), `${where} leaves the caption away from its picture`);
+          else assert.ok(near(under.top, caption.top) && near(under.left, caption.left), `${where} moves the caption of the layout`);
+          assert.equal(await fieldValue(page, 'width'), 400);
+          // Reset Size keeps the corner as well
+          assert.equal((await state(page, 'arrange.resetSize')).enabled, true);
+          await exec(page, 'arrange.resetSize');
+          await frames(page);
+          const reset = await pictureOf(page);
+          assert.ok(near(reset.left, pic.left) && near(reset.top, pic.top) && near(reset.width, pic.width), `Reset Size after ${where} moves the corner of the picture to ${Math.round(reset.left)}, ${Math.round(reset.top)}`);
+          await byteExact(page);
+          await undo(page);
+          await frames(page);
+          assert.equal(await render(page), edited);
+          await roundTrip(page, edited);
+          assert.deepEqual(errors(page), []);
+        }
+      }
+    });
+  }
+}
