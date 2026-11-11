@@ -444,3 +444,42 @@ for (const platform of PLATFORMS) {
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Duplicate Slides');
   });
 }
+
+// finding 12 (state 54 of round 4, and Add Section of PowerPoint): the context menus of a thumbnail
+// and of the empty part of the navigator list New Section after New Slide, which inserts a section
+// slide after the slide under the pointer, or at the end of the deck, as one entry of the history
+const MENU = `[...([...document.querySelectorAll('.beeson-edit-menu')].at(-1)?.querySelectorAll('.item') ?? [])].map((el) => el.dataset.command).filter(Boolean)`;
+async function pick(page, id) {
+  const at = await page.evaluate(`(() => { const r = [...document.querySelectorAll('.beeson-edit-menu')].at(-1).querySelector('.item[data-command="${id}"]').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  await click(page, at);
+  await sleep(200);
+  await frames(page);
+}
+const LAYOUT_AT = (i) => `(() => { const s = document.querySelectorAll('.reveal .slides > section')[${i}]; return ['title', 'section', 'closing', 'figure', 'split'].find((c) => s.classList.contains(c)) ?? 'content'; })()`;
+for (const platform of PLATFORMS) {
+  test(`New Section in the menus of the navigator inserts a section slide after the slide or at the end (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    const at = await page.evaluate(`(() => { const r = document.querySelectorAll('.beeson-edit-nav .row')[2]; r.scrollIntoView({ block: 'nearest' }); const b = r.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`);
+    await click(page, at, { button: 'right' });
+    await frames(page);
+    const items = await page.evaluate(MENU);
+    assert.equal(items[items.indexOf('slide.new') + 1], 'slide.newSection', `the menu of a thumbnail lists ${items.join(', ')}`);
+    await pick(page, 'slide.newSection');
+    assert.equal(await page.evaluate(LAYOUT_AT(3)), 'section', 'the new section slide is not after slide 3');
+    await agree(page, 'after New Section on slide 3', { n: 13, current: 4, selected: [4], focus: false, card: false });
+    assert.equal((await state(page, 'edit.undo')).label, 'Undo New Section');
+    await page.evaluate('window.BeesonEditor.undo()');
+    await byteExact(page);
+    const nav = await page.evaluate(`(() => { const r = document.querySelector('.beeson-edit-nav').getBoundingClientRect(); return { x: r.left + 20, y: r.bottom - 20 }; })()`);
+    await page.evaluate(`window.BeesonEditorShell.context('navigator', ${nav.x}, ${nav.y})`);
+    await frames(page);
+    const empty = await page.evaluate(MENU);
+    assert.equal(empty[empty.indexOf('slide.new') + 1], 'slide.newSection', `the menu of the navigator lists ${empty.join(', ')}`);
+    await pick(page, 'slide.newSection');
+    assert.equal(await page.evaluate(LAYOUT_AT(12)), 'section', 'the new section slide is not at the end');
+    assert.equal((await state(page, 'edit.undo')).label, 'Undo New Section');
+    await page.evaluate('window.BeesonEditor.undo()');
+    await byteExact(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
