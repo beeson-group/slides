@@ -441,3 +441,58 @@ for (const platform of PLATFORMS) {
     await roundTrip(page, 3);
   });
 }
+
+// finding steps-transitions-present-5: a Shift or Mod click on a row of the Steps list selected its
+// element alone, and the commands of the chip menu acted on one element, hence several elements
+// could not be given a step together
+const ROW = (text) => `[...document.querySelectorAll('.beeson-edit-side .rows .row')].find((r) => r.querySelector('.text').textContent.startsWith(${js(text)}))`;
+const pointIn = (page, el, fx = 0.5) => page.evaluate(`(() => { const el = ${el}; el.scrollIntoView({ block: 'nearest' }); const r = el.getBoundingClientRect(); return { x: r.left + r.width * ${fx}, y: r.top + r.height / 2 }; })()`);
+const SELECTED_ROWS = `[...document.querySelectorAll('.beeson-edit-side .rows .row.selected')].map((r) => r.querySelector('.text').textContent.slice(0, 15))`;
+async function choose(page, label) {
+  const item = await pointIn(page, `[...document.querySelectorAll('.beeson-edit-menu .item')].find((i) => i.querySelector('.label').textContent === ${js(label)} && i.getAttribute('aria-disabled') !== 'true')`);
+  await sleep(300);
+  await click(page, item);
+}
+const openSteps = async (page) => {
+  if (!(await page.evaluate(`window.BeesonEditor.state('view.steps').checked`))) await page.evaluate(`window.BeesonEditor.exec('view.steps')`);
+  await frames(page);
+};
+const [HEADING, PARA, LAST] = ['Show your steps', 'Design the comp', 'When exporting '];
+for (const platform of PLATFORMS) {
+  test(`Shift and Mod clicks on rows of the Steps list add their elements to the selection (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 2 });
+    await openSteps(page);
+    await click(page, await pointIn(page, ROW(HEADING), 0.7));
+    await click(page, await pointIn(page, ROW(PARA), 0.7), { modifiers: 'Shift' });
+    await frames(page);
+    assert.deepEqual(await page.evaluate(SELECTED_ROWS), [HEADING, PARA], 'Shift does not add a row to the selection');
+    await click(page, await pointIn(page, ROW(LAST), 0.7), { modifiers: 'Mod' });
+    await frames(page);
+    assert.deepEqual(await page.evaluate(SELECTED_ROWS), [HEADING, PARA, LAST], 'Mod does not add a row to the selection');
+    await click(page, await pointIn(page, ROW(LAST), 0.7), { modifiers: 'Mod' });
+    await frames(page);
+    assert.deepEqual(await page.evaluate(SELECTED_ROWS), [HEADING, PARA], 'Mod does not take a row off the selection');
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`the chip menu of a selected row gives every selected element one step together, as one entry of the history (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 2 });
+    await openSteps(page);
+    // the paragraph and the heading selected on the canvas
+    await click(page, '.reveal section.present > p');
+    await press(page, 'Escape');
+    await click(page, '.reveal section.present > h2', { modifiers: 'Shift' });
+    await frames(page);
+    assert.deepEqual(await page.evaluate(SELECTED_ROWS), [HEADING, PARA]);
+    await click(page, await pointIn(page, `${ROW(PARA)}.querySelector('.chip')`));
+    await page.waitFor(`!!document.querySelector('.beeson-edit-menu')`);
+    assert.deepEqual(await page.evaluate(SELECTED_ROWS), [HEADING, PARA], 'the chip menu selects its row alone');
+    await choose(page, 'New Step at End');
+    await frames(page);
+    const steps = await page.evaluate(`[${ROW(HEADING)}.dataset.step, ${ROW(PARA)}.dataset.step, ${ROW(LAST)}.dataset.step]`);
+    assert.equal(steps[0], steps[1], 'the two elements are not given one step');
+    assert.equal(Number(steps[0]), Number(steps[2]) + 1, 'the step is not new at the end');
+    await roundTrip(page, 1);
+  });
+}
