@@ -91,6 +91,38 @@ export function inkBox(app: App, el: Element): Box | null {
   return { left: (r.left - s.left) / k, top: (r.top - s.top) / k, right: (r.right - s.left) / k, bottom: (r.bottom - s.top) / k };
 }
 
+// the blocks of a text column, whose box is the box of their text
+const TEXT = 'h1, h2, h3, h4, p, ul, ol, dl, table, pre, blockquote, div.math';
+
+// the box of the prompt of an empty block that shows its placeholder, i.e. of the text of its
+// ::before as it is drawn, or null for a block without a prompt
+function promptBox(app: App, el: Element): Box | null {
+  const before = getComputedStyle(el, '::before');
+  if (['none', 'normal'].includes(before.content)) return null;
+  const box = slideBox(app, el);
+  let text: string;
+  try {
+    text = JSON.parse(before.content);
+  } catch {
+    return box;
+  }
+  const ctx = document.createElement('canvas').getContext('2d');
+  if (!ctx) return box;
+  ctx.font = before.font;
+  const left = box.left + (parseFloat(getComputedStyle(el).paddingLeft) || 0);
+  return { left, top: box.top, right: Math.min(box.right, left + ctx.measureText(text).width), bottom: box.bottom };
+}
+
+// the space that el takes on its slide in slide px, the one rule of every insert: the box of the
+// text of a block that is not moved, the box of the prompt of an empty block that shows its
+// placeholder, e.g. Text on a new slide, and else the box of the element with its translate
+export function takenBox(app: App, el: Element): Box | null {
+  if (!el.getClientRects().length) return null;
+  const moved = el instanceof HTMLElement && !!el.style.translate;
+  if (!el.matches(TEXT) || moved) return slideBox(app, el);
+  return inkBox(app, el) ?? promptBox(app, el);
+}
+
 // the box where the layout of slide puts a zone, when nothing of the slide but el is drawn there. it
 // is measured on a hidden zone of the theme, taken off at once
 export function freeZone(app: App, slide: Element, el: Element): Box | null {
@@ -103,26 +135,24 @@ export function freeZone(app: App, slide: Element, el: Element): Box | null {
   const zone = slideBox(app, probe);
   probe.remove();
   if (zone.right - zone.left < 1 || zone.bottom - zone.top < 1) return null;
-  const text = 'h1, h2, h3, h4, p, ul, ol, dl, table, pre, blockquote, div.math, .col, .panel, .block';
+  const columns = '.col, .panel, .block';
   for (const other of slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *')) {
     if (other === el || other.contains(el) || other.matches('aside.notes, .foot, .run, [data-generated]')) continue;
-    if (!other.getClientRects().length) continue;
-    const moved = other instanceof HTMLElement && !!other.style.translate;
-    const box = other.matches(text) && !moved ? inkBox(app, other) : slideBox(app, other);
+    const box = other.matches(columns) && !(other instanceof HTMLElement && other.style.translate) ? inkBox(app, other) : takenBox(app, other);
     if (box && meets(zone, box)) return null;
   }
   return zone;
 }
 
-// a new figure that does not fit under the last block of the text column is moved to the center of
-// the free area where the layout puts a zone, and else to the center of the slide, where Keynote
-// puts a new object, with a translate in slide px
-function centerIfOut(app: App, el: Element): void {
+// a new figure that does not fit under the last block of the text column, i.e. over floor, is moved
+// to the center of the free area where the layout puts a zone, and else to the center of the slide,
+// where Keynote puts a new object, with a translate in slide px
+function centerIfOut(app: App, el: Element, floor = FLOOR): void {
   const b = slideBox(app, el);
   const slide = el.closest('section') as HTMLElement | null;
   const w = slide?.offsetWidth || 1920;
-  if (b.bottom <= FLOOR && b.top >= 0 && b.right <= w) return;
   const h = slide?.offsetHeight || 1080;
+  if (b.bottom <= Math.min(floor, h) && b.top >= 0 && b.right <= w) return;
   const zone = slide ? freeZone(app, slide, el) : null;
   const fits = zone && b.right - b.left <= zone.right - zone.left && b.bottom - b.top <= zone.bottom - zone.top;
   const [cx, cy] = fits ? [(zone.left + zone.right) / 2, (zone.top + zone.bottom) / 2] : [w / 2, h / 2];
@@ -157,7 +187,9 @@ function centerOffset(app: App, el: HTMLElement): { x: number; y: number } | nul
   if (!slide) return null;
   const w = slide.offsetWidth || 1920, h = slide.offsetHeight || 1080;
   const b = slideBox(app, el);
-  const feet = [...slide.querySelectorAll('.foot')].filter((f) => f !== el && f.getClientRects().length).map((f) => slideBox(app, f));
+  // the footnotes and the prompts of the empty placeholders, which the box is kept off
+  const prompts = [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *')].filter((o) => o !== el && !o.matches('.foot') && !o.textContent?.trim()).map((o) => (o.getClientRects().length ? promptBox(app, o) : null)).filter((p): p is Box => !!p);
+  const feet = [...[...slide.querySelectorAll('.foot')].filter((f) => f !== el && f.getClientRects().length).map((f) => slideBox(app, f)), ...prompts];
   if (b.top >= 0 && b.right <= w && b.bottom <= h - MARGIN && !feet.some((f) => meets(b, f))) return null;
   // the visible part of the slide in the canvas, in slide px
   const v = app.stage?.viewport ?? new DOMRect(0, 0, innerWidth, innerHeight);
@@ -434,6 +466,9 @@ export function install(app: App): void {
         await a.history.selecting('Insert Formula', async () => {
           const { parent, before } = columnPlace(a, a.current()!);
           const [node] = await docOf(a).insertElement('formula', parent, before, { tex: '' });
+          // a formula grows with its TeX, hence it is moved only when it is under the slide, e.g.
+          // after the caption of a figure slide
+          centerIfOut(a, node, Infinity);
           a.selection.set('elements', [node]);
           markEmpty();
           const math = node.querySelector('mjx-container');
