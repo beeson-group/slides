@@ -348,9 +348,9 @@ for (const platform of PLATFORMS) {
     const page = await load(t, platform);
     await row(page, 8);
     await exec(page, 'slide.hide');
+    // a range by Shift, since Ctrl with a click is a click of the right button on macOS
     await row(page, 6);
-    await row(page, 7, 'Mod');
-    await row(page, 8, 'Mod');
+    await row(page, 8, 'Shift');
     const pane = await page.evaluate(`(() => {
       const box = document.querySelector('.ed-check input[data-command="slide.hide"]');
       return { card: document.querySelector('.ed-chooser .what > span:last-child').textContent, mixed: box.indeterminate, column: !!document.querySelector('[aria-label="Width of the text column"]') };
@@ -359,12 +359,15 @@ for (const platform of PLATFORMS) {
     await click(page, '.ed-chooser');
     await page.waitFor(`!!document.querySelector('.beeson-edit-layouts')`);
     assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-layouts .tile[aria-selected="true"]')].map((t) => t.dataset.layout)`), []);
+    const classes = `[5, 6, 7].map((i) => document.querySelectorAll('.reveal .slides > section')[i].className.replace(/\\b(present|past|future)\\b/g, '').trim())`;
+    const first = await page.evaluate(classes);
     await click(page, '.beeson-edit-layouts .tile[data-layout="wide"]');
     await sleep(200);
-    const classes = `[5, 6, 7].map((i) => document.querySelectorAll('.reveal .slides > section')[i].className.replace(/\\b(present|past|future)\\b/g, '').trim())`;
     assert.deepEqual(await page.evaluate(classes), ['wide', 'wide', 'wide']);
+    // the change of the three slides is one entry of the history
     await page.evaluate('window.BeesonEditor.undo()');
     await frames(page);
+    assert.deepEqual(await page.evaluate(classes), first);
     await click(page, '.ed-check:has(input[data-command="slide.hide"])');
     await sleep(200);
     assert.deepEqual(await page.evaluate(`[5, 6, 7].map((i) => document.querySelectorAll('.reveal .slides > section')[i].getAttribute('data-visibility'))`), ['hidden', 'hidden', 'hidden']);
