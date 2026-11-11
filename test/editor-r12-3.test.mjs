@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { click, press } from './helpers/editor.mjs';
+import { click, drag, press } from './helpers/editor.mjs';
 
 const DECK = 'index.html';
 const PLATFORMS = ['mac', 'other'];
@@ -317,6 +317,52 @@ for (const platform of PLATFORMS) {
     const rows = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-nav .row')].map((r) => r.getAttribute('aria-selected'))`);
     assert.ok(rows.length > 5);
     assert.deepEqual(rows, rows.map(() => 'true'));
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+// the center of the tile of the slide of index i in the light table
+const tileAt = (page, i) =>
+  page.evaluate(`(() => {
+    const r = document.querySelectorAll('.beeson-edit-sorter .tile .pic')[${i}].getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2, w: r.width };
+  })()`);
+
+// the index of the focused tile, or -1 when the focus is elsewhere, and the indices of the
+// selected tiles
+const tiles = (page) =>
+  page.evaluate(`(() => {
+    const all = [...document.querySelectorAll('.beeson-edit-sorter .tile')];
+    return { focus: all.indexOf(document.activeElement), selected: all.flatMap((t, i) => (t.getAttribute('aria-selected') === 'true' ? [i] : [])) };
+  })()`);
+
+// navigator-slides-canvas-3: after an undo in the light table, the focus is on the tile of the
+// restored slide, from which the arrow keys move
+for (const platform of PLATFORMS) {
+  test(`an undo in the light table leaves the focus on the restored slide (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await openTable(page);
+    await click(page, await tileAt(page, 3));
+    await press(page, 'Backspace');
+    await sleep(200);
+    await press(page, 'Mod+Z');
+    await sleep(300);
+    assert.deepEqual(await tiles(page), { focus: 3, selected: [3] }, 'after an undo of Delete');
+    await press(page, 'ArrowRight');
+    await sleep(100);
+    assert.deepEqual(await tiles(page), { focus: 4, selected: [4] });
+    const from = await tileAt(page, 2);
+    const to = await tileAt(page, 4);
+    await drag(page, from, { dx: to.x + to.w / 4 - from.x, dy: to.y - from.y });
+    await sleep(300);
+    assert.notDeepEqual(await page.evaluate('window.BeesonEditor.render()'), page.source, 'the drag did not move the slide');
+    await press(page, 'Mod+Z');
+    await sleep(300);
+    assert.equal(await page.evaluate('window.BeesonEditor.render()'), page.source);
+    assert.deepEqual(await tiles(page), { focus: 2, selected: [2] }, 'after an undo of a drag');
+    await press(page, 'ArrowRight');
+    await sleep(100);
+    assert.deepEqual(await tiles(page), { focus: 3, selected: [3] });
     assert.deepEqual(errors(page), []);
   });
 }
