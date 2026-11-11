@@ -91,6 +91,21 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
+  // the press on the menu bar leaves the focus in the cell, and Paste of the Edit menu fills the
+  // cells from the focused one, as the key does
+  test(`Paste of the Edit menu in a cell of the Plot Data window fills the cells as the key does (${platform})`, async () => {
+    const page = await deckPage(platform);
+    await click(page, '.reveal section.present .plot');
+    await press(page, 'Mod+Shift+D');
+    await page.waitFor(`!!document.querySelector('${WINDOW}:not([hidden])')`);
+    await page.evaluate(`(() => { const i = document.querySelector(${JSON.stringify(cell(0, 1))}); i.focus(); i.select(); return true; })()`);
+    await page.evaluate(`Promise.resolve(window.BeesonEditor.exec('edit.paste', '0.25\\t0.75')).then(() => true)`);
+    await page.waitFor(`window.BeesonEditor.render() !== ${JSON.stringify(page.source)}`).catch(() => {});
+    await frames(page);
+    assert.deepEqual(await grid(page), [['0', '0.25', '0.75', '0', '0'], ['1', '1', '1', '1', '0']]);
+    assert.deepEqual(errors(page), []);
+  });
+
   test(`Undo in a cell with a typed text that is not written yet is left to the field (${platform})`, async () => {
     const page = await deckPage(platform);
     await click(page, '.reveal section.present .plot');
