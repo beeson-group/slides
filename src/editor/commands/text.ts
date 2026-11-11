@@ -88,7 +88,7 @@ export function install(app: App): void {
   });
   define({
     id: 'text.joinBackward',
-    label: 'Join Paragraphs',
+    label: (a) => (!inNotes(a) && blocks.removesBullet(a) ? 'Remove Bullet' : 'Join Paragraphs'),
     keys: { mac: ['Backspace'], other: ['Backspace'] },
     in: [...TEXT, 'notes'],
     undoable: true,

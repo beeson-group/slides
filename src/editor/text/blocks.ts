@@ -361,15 +361,28 @@ async function join(app: App, before: Element, after: Element): Promise<void> {
   selectIn(before, at);
 }
 
-type Join = { kind: 'join'; before: Element; after: Element } | { kind: 'outdent' } | null;
+type Join = { kind: 'join'; before: Element; after: Element } | { kind: 'outdent' } | { kind: 'unlist'; item: Element } | null;
 
 function joinBack(app: App): Join {
   const at = itemAt(app);
   if (!at || !at.range.collapsed) return null;
   if (!blank(rangeOf(at.item, null, [at.range.startContainer, at.range.startOffset]))) return null;
   if (at.nested) return { kind: 'outdent' };
-  const before = structural(app, at.item) ? prevBlock(app, at.item) : null;
-  return before ? { kind: 'join', before, after: at.item } : null;
+  if (!structural(app, at.item)) return null;
+  const before = prevBlock(app, at.item);
+  if (before) return { kind: 'join', before, after: at.item };
+  // the first item of a list has its dash taken off, as in Keynote and PowerPoint
+  return at.item.localName === 'li' && !at.item.previousElementSibling && !at.item.querySelector(LIST) ? { kind: 'unlist', item: at.item } : null;
+}
+
+export const removesBullet = (app: App): boolean => joinBack(app)?.kind === 'unlist';
+
+// the first item of a list made a paragraph before the list, with the attributes of the item
+async function unlist(app: App, li: Element): Promise<void> {
+  const list = li.parentElement!;
+  const [p] = await app.doc.insert(`${startTag(app, li, 'p')}${rangeTex(li, rangeOf(li, null, null)).trim()}</p>`, list.parentElement!, list, 'list');
+  await app.doc.remove(list.querySelectorAll(':scope > li').length > 1 ? li : list, 'list');
+  selectIn(p, 0);
 }
 
 function joinAhead(app: App): Join {
@@ -383,12 +396,14 @@ function joinAhead(app: App): Join {
 export const canJoinBack = (app: App): boolean => joinBack(app) !== null;
 export const canJoinAhead = (app: App): boolean => joinAhead(app) !== null;
 
-// Backspace at the start of a block joins it to the block before, and at the start of a nested
-// item it takes the item out of its list, as Shift+Tab does
+// Backspace at the start of a block joins it to the block before, at the start of a nested item it
+// takes the item out of its list, as Shift+Tab does, and at the start of a first item of a list it
+// takes the dash off the item
 export async function joinBackward(app: App): Promise<void> {
   const j = joinBack(app);
   if (j?.kind === 'join') await join(app, j.before, j.after);
   else if (j?.kind === 'outdent') await outdent(app);
+  else if (j?.kind === 'unlist') await unlist(app, j.item);
 }
 
 // Delete at the end of a block joins the block after it to it
