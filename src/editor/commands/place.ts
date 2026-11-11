@@ -189,9 +189,10 @@ export function placeNew(app: App, el: Element, picture?: HTMLElement, strict = 
 // the plate of a figure slide is in the flow and as large as the slide, hence an element with an
 // offset that is written beside it moves when the plate is taken off the slide. keepBeside measures
 // these elements before the removal of outer, and through move, the function that it returns gives
-// each of them the offset that keeps its drawn place
+// each of them the offset that keeps its drawn place. on another slide, a plate is a block of the
+// text column, and the elements after it move up with the column
 export function keepBeside(app: App, outer: Element[]): (move: (el: Element, translate: { x: number; y: number }) => void) => void {
-  const beside = [...new Set(outer.filter((el) => el.matches('.plate')).flatMap((el) => [...(el.parentElement?.children ?? [])]))].filter(
+  const beside = [...new Set(outer.filter((el) => el.matches('section.figure .plate')).flatMap((el) => [...(el.parentElement?.children ?? [])]))].filter(
     (el) => !outer.includes(el) && !!(el as HTMLElement).style?.translate && !!app.pairing?.elements.has(el),
   );
   const places = beside.map((el) => slideBox(app, el));
