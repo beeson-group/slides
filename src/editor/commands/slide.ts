@@ -95,11 +95,12 @@ async function newSlide(app: App, layout: Layout): Promise<Element> {
   return slide;
 }
 
-// the layout of the slide that New Slide adds: the layout of a content slide, or content
+// the layout of the slide that New Slide adds: the layout of a content, figure, or split slide,
+// as PowerPoint repeats the layout of the slide before, and content after a title, section, or
+// closing slide
 function nextLayout(app: App): Layout {
   const s = navOf(app).selected().at(-1);
-  if (!s || s.matches('.title, .section, .closing, .figure, .split')) return 'content';
-  return s.classList.contains('narrow') ? 'narrow' : s.classList.contains('wide') ? 'wide' : 'content';
+  return (['narrow', 'wide', 'figure', 'split'] as Layout[]).find((l) => s?.classList.contains(l)) ?? 'content';
 }
 
 // the slides put into the order of desired, one move per slide out of place
