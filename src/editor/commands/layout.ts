@@ -228,17 +228,31 @@ async function rewrite(app: App, slides: Element[], write: (body: string, slide:
 
 export async function changeLayout(app: App, slides: Element[], layout: Layout): Promise<Element[]> {
   const step = stepOf(app);
-  // the places among the words of each slide of the blocks that the fit of its panel shrank
-  const shrunk = slides.map((s) => (layout === 'split' ? [] : wordsOf(app, s).flatMap((el, i) => (fitted.has(el) && el.classList.contains('small') ? [i] : []))));
-  const out = await rewrite(app, slides, (body) => relayout(body, layout, step), 'layout');
+  const from = slides.map((s) => {
+    const body = app.doc.elementText(s);
+    const o = origins.get(s);
+    return o && o.last === body ? o : { text: body, layout: layoutOf(s), last: body };
+  });
+  // the places among the words of each slide of the blocks that the fit of its panel shrank. a
+  // slide written from its first text has none
+  const shrunk = slides.map((s, k) => (layout === 'split' || from[k].text !== from[k].last ? [] : wordsOf(app, s).flatMap((el, i) => (fitted.has(el) && el.classList.contains('small') ? [i] : []))));
+  const out = await rewrite(app, slides, (_, s) => {
+    const o = from[slides.indexOf(s)];
+    return layout === o.layout ? o.text : relayout(o.text, layout, step);
+  }, 'layout');
   out.forEach((s, k) => {
     if (slides.includes(s)) return;
     const words = wordsOf(app, s);
     for (const i of shrunk[k]) if (words[i]) app.doc.setTag(words[i], { classes: { small: false } }, 'layout');
     fitPanel(app, s);
+    origins.set(s, { ...from[k], last: app.doc.elementText(s) });
   });
   return out;
 }
+
+// the text of each slide before a run of changes of layout without an edit between them, and its
+// layout. a change back to this layout gives the text again, as the file has it
+const origins = new WeakMap<Element, { text: string; layout: Layout; last: string }>();
 
 // the blocks set in the style Small by the fit of a panel in this session. an undo and a redo put
 // the same elements back, hence a change of layout away from Split takes the style off these
