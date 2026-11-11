@@ -20,7 +20,7 @@ export type Deck = {
   layout(): void;
   sync?(): void;
   getScale(): number;
-  getIndices(slide?: Element): { h: number; v: number };
+  getIndices(slide?: Element): { h: number; v?: number };
   getCurrentSlide(): HTMLElement;
   getSlidePastCount(): number;
   getTotalSlides(): number;
@@ -222,9 +222,20 @@ export class App {
   showSlide(el: Element): void {
     const d = this.deck();
     const section = el.closest('section');
-    if (d && section && section !== d.getCurrentSlide()) {
-      const { h, v } = d.getIndices(section);
-      d.slide(h, v);
+    if (d && section) {
+      const was = d.getCurrentSlide();
+      const at = d.getIndices();
+      // a current slide taken off the page, e.g. by an undo, is first replaced by the slide at its
+      // index, since reveal.js would otherwise animate from it
+      if (!was?.isConnected) d.slide(at.h, at.v);
+      const { h, v = 0 } = d.getIndices(section);
+      const moved = h !== at.h || v !== (at.v ?? 0);
+      if (moved || section !== d.getCurrentSlide()) d.slide(h, v);
+      // reveal.js announces a change of its index only, and not another slide put at the index
+      if (!moved && d.getCurrentSlide() !== was) {
+        this.emit('slide');
+        this.invalidate();
+      }
     }
     this.layers?.reveal(el);
   }

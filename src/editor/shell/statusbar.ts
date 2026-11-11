@@ -170,6 +170,7 @@ export function install(app: App, layers: HTMLElement): void {
     percent.refresh();
   };
   app.listen('slide', count);
+  app.listen('history', count);
   app.listen('resize', () => {
     count();
     zoomState();

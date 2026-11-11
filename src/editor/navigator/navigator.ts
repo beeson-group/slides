@@ -1,5 +1,5 @@
 // the navigator at the left, as the slide navigator of Keynote: a thumbnail of each slide with its
-// number, its place in the deck, three dots on a slide with steps, a corner at the lower right
+// number, its place in the show, three dots on a slide with steps, a corner at the lower right
 // of a slide with a transition other than the default Fade or None, as the corner of Keynote, and a
 // hidden slide collapsed to a thin double bar without a number. a click selects a slide, Shift extends the selection to a
 // range, and the command modifier adds or removes one slide. a drag moves the selected slides, with
@@ -62,11 +62,18 @@ export function numbers(slides: Element[], written: (slide: Element) => string |
   });
 }
 
-// the number of each slide in the navigator: its place in the deck, 1 to N, as in the status bar and
-// in the navigators of Keynote and PowerPoint, and none on a hidden slide, which is drawn as the
-// bar of a skipped slide of Keynote
+// the place of each slide in the show, 1 to N, as the navigators of Keynote and PowerPoint number
+// the slides. a hidden slide is not in the show, and it is given the place that it would take
+export function showPlaces(slides: Element[]): number[] {
+  let n = 0;
+  return slides.map((s) => (isHidden(s) ? n + 1 : ++n));
+}
+
+// the number of each slide in the navigator, and none on a hidden slide, which is drawn as the bar
+// of a skipped slide of Keynote
 export function places(slides: Element[]): string[] {
-  return slides.map((s, i) => (isHidden(s) ? '' : String(i + 1)));
+  const at = showPlaces(slides);
+  return slides.map((s, i) => (isHidden(s) ? '' : String(at[i])));
 }
 
 // the width in px from which a thumbnail is read without a preview, as in Keynote, whose thumbnails
@@ -127,6 +134,9 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
 `;
 
 type Row = { el: HTMLButtonElement; no: HTMLElement; pic: HTMLElement; dots: HTMLElement; trans: HTMLElement; num: HTMLElement; title: HTMLElement; kind: HTMLElement };
+
+// the current slide, the selected slides, and whether the focus is in the navigator
+type Place = { current: Element | null; slides: Element[]; nav: boolean };
 
 type Drag = { slide: Element; x: number; y: number; id: number; on: boolean; slides: Element[]; gap: number; ghost: HTMLElement | null; scroll: number };
 
@@ -275,6 +285,22 @@ export class Navigator implements Pane {
     if (slide) this.select([slide], slide);
   }
 
+  // fn as a part of the history after whose undo the current slide, the selected slides, and the
+  // focus in the navigator are those before fn, and after whose redo those after it, as the
+  // selecting() of history.ts keeps the elements
+  keeping<T>(label: string, fn: () => T | Promise<T>): Promise<T> {
+    const take = (): Place => ({ current: this.app.current(), slides: this.selected(), nav: this.app.region() === 'navigator' });
+    return this.app.history.keeping(label, take, (p) => this.restore(p), fn);
+  }
+
+  private restore(p: Place): void {
+    const slides = p.slides.filter((s) => s.isConnected);
+    const current = p.current?.isConnected ? p.current : (slides.at(-1) ?? null);
+    if (!current) return;
+    this.select(slides.length ? slides : [current], current);
+    if (p.nav || this.app.region() === 'navigator' || document.activeElement === document.body) this.focus(current);
+  }
+
   // the row of slide gets the focus, e.g. after a command run in the navigator
   focus(slide: Element | null = this.app.current()): void {
     const row = slide ? this.rows.get(slide) : null;
@@ -332,6 +358,8 @@ export class Navigator implements Pane {
   // the selection. a row is kept with its thumbnail while its slide is on the page
   refresh(): void {
     this.outline.refresh();
+    // a focused row moved in the list loses the focus, e.g. by Move Slide Up
+    const focusIn = this.list.contains(document.activeElement);
     const slides = this.slides();
     const nums = places(slides);
     const kept = new Set(slides);
@@ -370,15 +398,14 @@ export class Navigator implements Pane {
       row.el.title = `Slide ${i + 1}: ${title}`;
     });
     if (changed && this.thumbs) this.thumbs.setHosts(new Map([...this.rows].map(([s, r]) => [s, r.pic])));
-    this.paint();
+    this.paint(focusIn || this.list.contains(document.activeElement));
   }
 
   // the current row and the selected rows are marked, the current row is kept in view, and the
   // focus follows the current slide while it is in the list
-  private paint(): void {
+  private paint(focusIn = this.list.contains(document.activeElement)): void {
     const current = this.app.current();
     const sel = this.app.selection?.kind === 'slides' ? new Set(this.selected()) : new Set(current ? [current] : []);
-    const focusIn = this.list.contains(document.activeElement);
     for (const [slide, row] of this.rows) {
       const here = slide === current;
       row.el.setAttribute('aria-current', here ? 'true' : 'false');
@@ -583,11 +610,11 @@ export class Navigator implements Pane {
       const [{ insertFiles }, { kindOf }] = await Promise.all([import('../media/actions.ts'), import('../media/store.ts')]);
       const files = dropped.filter((f) => kindOf(f));
       if (!files.length) return;
-      await this.app.history.transact(files.length > 1 ? 'Media' : 'New Slide', async () => {
+      await this.app.history.transact(files.length > 1 ? 'Media' : 'New Slide', () => this.keeping('New Slide', async () => {
         const slide = await this.app.doc.insertSlide('figure', before);
         this.select([slide], slide);
         await insertFiles(this.app, files, slide.querySelector('.plate'));
-      });
+      }));
     };
     run().catch((e) => this.app.fail(e));
   }

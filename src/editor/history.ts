@@ -121,18 +121,23 @@ export class History {
   // a transaction, or a part of the open one, after whose undo the elements selected before fn are
   // selected again, and after whose redo those selected after fn, e.g. a paragraph made a list
   async selecting<T>(label: string, fn: () => T | Promise<T>): Promise<T> {
-    if (!this.open) return await this.transact(label, () => this.selecting(label, fn));
+    return this.keeping(label, this.selected, (els) => void (els && this.reselect(els)), fn);
+  }
+
+  // a transaction, or a part of the open one, after whose undo put is given what take read before
+  // fn, and after whose redo what it read after fn, e.g. the current slide of a slide command
+  async keeping<T, S>(label: string, take: () => S, put: (state: S) => void, fn: () => T | Promise<T>): Promise<T> {
+    if (!this.open) return await this.transact(label, () => this.keeping(label, take, put, fn));
     const entries = this.open;
     const at = entries.length;
-    const before = this.selected();
+    const before = take();
     try {
       return await fn();
     } finally {
-      const after = this.selected();
+      const after = take();
       if (entries.length > at) {
-        const put = (els: Element[] | null) => () => void (els && this.reselect(els));
-        entries.splice(at, 0, { label, undo: put(before), redo: () => {} });
-        entries.push({ label, undo: () => {}, redo: put(after) });
+        entries.splice(at, 0, { label, undo: () => put(before), redo: () => {} });
+        entries.push({ label, undo: () => {}, redo: () => put(after) });
       }
     }
   }

@@ -366,7 +366,7 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 
 /* figure, plate: a figure or backdrop over the whole slide, the head at the top left, the caption at the lower left */
 .reveal .slides section.figure > h2 { position: absolute; left: 120px; top: 100px; width: 1200px; margin: 0; }
-.reveal .slides section.figure .caption { left: 120px; bottom: 130px; width: 900px; margin: 0; }
+.reveal .slides section.figure > .caption { left: 120px; bottom: 130px; width: 900px; margin: 0; }
 .reveal .slides section.figure .plate { display: block; padding: 200px 120px 250px; box-sizing: border-box; }
 .reveal .slides section.figure .plate > img,
 .reveal .slides section.figure .plate > svg,

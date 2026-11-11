@@ -241,7 +241,8 @@ for (const platform of PLATFORMS) {
     const list = await navRows(page);
     assert.deepEqual(list[3], { no: '', skip: true, height: list[3].height, pic: false });
     assert.ok(list[3].height <= 14, `the bar of the skipped slide is ${list[3].height} px high`);
-    assert.deepEqual(list.map((r) => r.no), Array.from({ length: total }, (_, i) => (i === 3 ? '' : String(i + 1))));
+    // the slides after it are numbered in show order, as in the navigators of Keynote and PowerPoint
+    assert.deepEqual(list.map((r) => r.no), Array.from({ length: total }, (_, i) => (i === 3 ? '' : String(i < 3 ? i + 1 : i))));
     // the bar is selected by a click, and the slide is shown again from its context menu
     await page.evaluate('Reveal.slide(0)');
     await frames(page);

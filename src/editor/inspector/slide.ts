@@ -31,6 +31,13 @@ const contentSlides = (app: App) => {
   return list.length && list.every((s) => layoutOf(s) === 'content') ? list : [];
 };
 
+// the name of the layout of a slide, with the width of a content slide
+const nameOf = (s: Element | null) => {
+  const name = LAYOUT_NAMES[layoutOf(s)];
+  return s && layoutOf(s) === 'content' && widthOf(s) !== 'normal' ? `${name}, ${widthOf(s) === 'narrow' ? 'Narrow' : 'Wide'}` : name;
+};
+const isHidden = (s: Element) => s.getAttribute('data-visibility') === 'hidden';
+
 const footOf = (slide: Element | null) => slide?.querySelector('.foot:not([data-generated])') ?? null;
 
 export function commands(): Command[] {
@@ -144,12 +151,11 @@ export function slidePane(app: App, run: Run): Control[] {
   untypeset(typesetNotes);
   typesetNotes = [];
   const slide = app.current();
-  const layout = layoutOf(slide);
-  const layoutCard = card(() => sketch(layoutOf(app.current()), slide ? widthOf(slide) : 'normal'), 'Slide Layout', () => {
-    const s = app.current();
-    const name = LAYOUT_NAMES[layoutOf(s)];
-    return s && layoutOf(s) === 'content' && widthOf(s) !== 'normal' ? `${name}, ${widthOf(s) === 'narrow' ? 'Narrow' : 'Wide'}` : name;
-  });
+  // the selected slides of several layouts show Multiple Layouts, and the controls of one layout
+  // are shown only when every selected slide has it
+  const mixed = () => new Set(slidesOf(app).map(nameOf)).size > 1;
+  const layout = mixed() ? 'mixed' : layoutOf(slide);
+  const layoutCard = card(() => sketch(layoutOf(app.current()), slide ? widthOf(slide) : 'normal'), 'Slide Layout', () => (mixed() ? 'Multiple Layouts' : nameOf(app.current())));
   // the card is the button of the chooser of the layouts of commands/layout.ts
   const chooser = layoutCard.el;
   chooser.classList.add('ed-chooser');
@@ -177,8 +183,16 @@ export function slidePane(app: App, run: Run): Control[] {
       note(() => 'The width of the column of words, 1000 px when normal.'),
     ]));
   }
+  const hidden = checkbox(app, run, 'slide.hide', 'Hidden in the show', () => slidesOf(app).every(isHidden));
+  const box = hidden.el.querySelector('input')!;
+  const sync = hidden.sync;
+  hidden.sync = () => {
+    sync();
+    box.indeterminate = slidesOf(app).some(isHidden) && !box.checked;
+  };
+  hidden.sync();
   parts.push(section('Appearance', [
-    checkbox(app, run, 'slide.hide', 'Hidden in the show', () => app.current()?.getAttribute('data-visibility') === 'hidden'),
+    hidden,
     checkbox(app, run, 'slide.footnote', 'Footnote'),
   ]));
   if (layout === 'section') {
@@ -194,7 +208,7 @@ export function slidePane(app: App, run: Run): Control[] {
       commit: (value) => run('slide.runningHead', { value, el: slide }),
       hint: () => ({ text: 'Shown at the top of the slides of this section. Leave it empty to show the heading.', warn: false }),
     })]));
-  } else if (!['title', 'closing'].includes(layout)) {
+  } else if (!['title', 'closing', 'mixed'].includes(layout)) {
     parts.push(section('Running Head', [typesetNote(() => {
       const el = app.current()?.querySelector(':scope > .run[data-generated]');
       const run = el ? sourceText(el) : '';

@@ -261,7 +261,7 @@ for (const platform of ['mac', 'other']) {
     assert.equal(list[3].skip, true);
     assert.deepEqual(
       list.map((r) => r.no),
-      ['1', '2', '3', '', '5', '6', '7', '8', '9', '10', '11', '12'],
+      ['1', '2', '3', '', '4', '5', '6', '7', '8', '9', '10', '11'],
     );
     const edited = await page.evaluate('window.BeesonEditor.render()');
     const original = slideText(page.source, 'Equations are first class citizens');
