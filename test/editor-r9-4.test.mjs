@@ -416,3 +416,27 @@ for (const platform of PLATFORMS) {
     await roundTrip(page);
   });
 }
+
+// finding tables-equations-insert-7: a TeX error was shown twice in the sheet of a formula, as the
+// error box of MathJax in the preview and again as the red line under it
+for (const platform of PLATFORMS) {
+  test(`a TeX error is shown once in the sheet of a formula (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 5 });
+    await page.evaluate(`window.BeesonEditor.exec('insert.formula')`);
+    await page.waitFor(`!!document.querySelector('.beeson-math textarea')`);
+    await page.evaluate(`(() => { const f = document.querySelector('.beeson-math textarea'); f.focus(); f.select(); })()`);
+    await type(page, 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}{2a}');
+    await page.waitFor(`!!document.querySelector('.beeson-math .error:not(.prompt)')?.textContent`);
+    await sleep(300);
+    const sheet = await page.evaluate(`(() => { const m = document.querySelector('.beeson-math'); return { boxes: m.querySelectorAll('.preview [data-mjx-error], .preview mjx-merror').length, message: m.querySelector('.error').textContent, insert: m.querySelector('button.primary').disabled }; })()`);
+    assert.equal(sheet.boxes, 0, 'the preview shows the error box of MathJax beside the message under it');
+    assert.match(sheet.message, /brace/i);
+    assert.equal(sheet.insert, true);
+    // a TeX without an error is previewed again
+    await page.evaluate(`document.querySelector('.beeson-math textarea').select()`);
+    await type(page, 'x = \\frac{-b \\pm \\sqrt{b^2 - 4ac}}{2a}');
+    await page.waitFor(`!document.querySelector('.beeson-math .error').textContent`);
+    assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-math .preview svg').length`), 1);
+    assert.deepEqual(errors(page), []);
+  });
+}
