@@ -100,7 +100,7 @@ for (const platform of PLATFORMS) {
       const bar = await page.evaluate(BAR);
       assert.deepEqual(bar.off, [], `${width}: buttons off screen`);
       assert.ok(bar.over <= 0, `${width}: the toolbar overflows by ${bar.over} px`);
-      assert.ok(bar.buttons.some((b) => b.id === 'more'), `${width}: no » menu`);
+      assert.ok(bar.buttons.some((b) => b.id === "more"), `${width}: no » menu ${js(bar)}`);
       assert.ok(bar.buttons.every((b) => b.label), `${width}: the labels are hidden`);
       // the folded buttons are items of the menu », and none of them is also in the toolbar
       await click(page, '.beeson-edit-top .more-groups');
@@ -124,6 +124,95 @@ for (const platform of PLATFORMS) {
     // with Icon Only, the labels stay hidden at a width at which they fit
     const page = await load(t, platform, { width: 1600, height: 900, stored: { [TOOLBAR_KEY]: js({ items: null, show: 'icon' }) } });
     assert.ok((await page.evaluate(BAR)).buttons.every((b) => !b.label), 'a label is shown with Icon Only');
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+// the slide of the demo deck with the figure and the paragraph that starts with Export, counted
+// from 0
+const FIGURES = 4;
+const KEYS = {
+  toolbar: { mac: ['Alt+Mod+T', '⌥⌘T'], other: ['Ctrl+F1', 'Ctrl+F1'] },
+  format: { mac: ['Ctrl+Mod+1', '⌃⌘1'], other: ['Ctrl+Shift+1', 'Ctrl+Shift+1'] },
+  steps: { mac: ['Ctrl+Mod+2', '⌃⌘2'], other: ['Ctrl+Shift+2', 'Ctrl+Shift+2'] },
+  notes: { mac: ['Ctrl+Mod+3', '⌃⌘3'], other: ['Ctrl+Shift+3', 'Ctrl+Shift+3'] },
+  deselect: { mac: ['Mod+Shift+A', '⇧⌘A'], other: ['Mod+Shift+A', 'Ctrl+Shift+A'] },
+  useSelection: { mac: ['Mod+E', '⌘E'], other: ['Mod+E', 'Ctrl+E'] },
+};
+
+// the rows of the sheet of keyboard shortcuts, each as its label and its keys
+async function sheetRows(page) {
+  await run(page, 'help.keys');
+  const rows = await page.evaluate(`Object.fromEntries([...document.querySelectorAll('.beeson-edit-keys .row')].map((r) => [r.children[0].textContent, r.children[1].textContent]))`);
+  await press(page, 'Escape');
+  return rows;
+}
+
+// the items of a menu of the menu bar, each as its label and its key
+async function menuKeys(page, title) {
+  await click(page, `.beeson-edit-menubar [role=menuitem]:nth-child(${(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].findIndex((b) => b.textContent === ${js(title)})`)) + 1})`);
+  const items = await page.evaluate(`Object.fromEntries([...document.querySelectorAll('.beeson-edit-menu .item')].map((i) => [i.querySelector('.label')?.textContent, i.querySelector('.keys, .key, kbd')?.textContent ?? '']))`);
+  await press(page, 'Escape');
+  return items;
+}
+
+const checked = (page, id) => page.evaluate(`window.BeesonEditor.state(${js(id)}).checked`);
+
+// shell-5 and menus-keys-10: the toolbar could not be hidden, the panes did not have keys, and
+// Deselect All and Use Selection for Find of Keynote did nothing
+for (const platform of PLATFORMS) {
+  test(`View has Hide Toolbar, and the toolbar, the panes, Deselect All, and Use Selection for Find have keys in the menus and the sheet (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: FIGURES });
+    const key = (name) => KEYS[name][platform][0];
+    const shown = (name) => KEYS[name][platform][1];
+    const view = await menuKeys(page, 'View');
+    assert.equal(view['Hide Toolbar'], shown('toolbar'), 'View > Hide Toolbar');
+    assert.equal(view.Format, shown('format'));
+    assert.equal(view.Steps, shown('steps'));
+    assert.equal(view.Notes, shown('notes'));
+    const edit = await menuKeys(page, 'Edit');
+    assert.match(edit.Deselect ?? edit['Deselect All'], new RegExp(shown('deselect').replace(/[+]/g, '\\+')));
+    assert.equal(edit['Use Selection for Find'], shown('useSelection'));
+    const sheet = await sheetRows(page);
+    assert.equal(sheet['Hide Toolbar'], shown('toolbar'));
+    assert.equal(sheet['Use Selection for Find'], shown('useSelection'));
+    for (const name of ['format', 'steps', 'notes']) assert.ok(Object.values(sheet).includes(shown(name)), `the sheet does not list ${shown(name)}`);
+
+    // the toolbar is hidden and shown again, and the slide gets its row
+    const topShown = () => page.evaluate(`document.querySelector('.beeson-edit-top').getClientRects().length > 0`);
+    await press(page, key('toolbar'));
+    assert.equal(await topShown(), false, 'the key does not hide the toolbar');
+    assert.equal((await menuKeys(page, 'View'))['Show Toolbar'], shown('toolbar'));
+    await press(page, key('toolbar'));
+    assert.equal(await topShown(), true, 'the key does not show the toolbar again');
+
+    // the inspector, the steps, and the notes are switched by their keys
+    assert.equal(await checked(page, 'shell.format'), true);
+    await press(page, key('format'));
+    assert.equal(await checked(page, 'shell.format'), false, 'the key of Format does not hide the inspector');
+    await press(page, key('steps'));
+    assert.equal(await checked(page, 'view.steps'), true, 'the key of Steps does not show the steps');
+    await press(page, key('format'));
+    assert.equal(await checked(page, 'shell.format'), true, 'the key of Format does not show the Format tab');
+    const notes = await checked(page, 'view.notes');
+    await press(page, key('notes'));
+    assert.equal(await checked(page, 'view.notes'), !notes, 'the key of Notes does not switch the notes');
+    await press(page, key('notes'));
+
+    // Deselect All clears a selected figure
+    await click(page, '.reveal section.present figure img');
+    assert.ok((await page.evaluate('window.BeesonEditor.selection().length')) > 0, 'the figure is not selected');
+    await press(page, key('deselect'));
+    assert.equal(await page.evaluate('window.BeesonEditor.selection().length'), 0, 'Deselect All leaves the figure selected');
+
+    // Use Selection for Find takes a word selected in a text as the query
+    const word = await center(page, '.reveal section.present > p');
+    await click(page, { x: word.x - 200, y: word.y });
+    await click(page, { x: word.x - 200, y: word.y }, { count: 2 });
+    const selected = await page.evaluate('getSelection().toString().trim()');
+    assert.ok(selected.length > 1, 'no word is selected');
+    await press(page, key('useSelection'));
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-find input')?.value`), selected, 'the selection is not the query of Find');
     assert.deepEqual(errors(page), []);
   });
 }
