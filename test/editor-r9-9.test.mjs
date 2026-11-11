@@ -437,3 +437,64 @@ for (const platform of PLATFORMS) {
     assert.equal(await render(page), page.source);
   });
 }
+
+const shownVideo = `.reveal:not(.beeson-peek) .slides > section.present video`;
+const focused = (page) => page.evaluate(`(() => { const a = document.activeElement; return a ? a.localName + (a.type ? '.' + a.type : '') : null; })()`);
+const rectOf = (page, selector) => page.evaluate(`(() => { const el = [...document.querySelectorAll(${js(selector)})].find((e) => e.getBoundingClientRect().width > 0); if (!el) return null; const r = el.getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, height: r.height }; })()`);
+
+// the video of the current slide selected by itself, with its pane in the Format tab
+async function selectVideo(page) {
+  const at = await centerOf(page, shownVideo);
+  await click(page, at);
+  await click(page, at);
+  await frames(page);
+  assert.deepEqual((await selection(page)).map((s) => s.split('.')[0]), ['video']);
+  await page.waitFor(`!!document.querySelector('${PANEL} input[name=poster-frame]:not([disabled])')`, 10000);
+}
+
+// undoRedoKeys asserts that the keys of Undo and Redo, with the focus left on the control,
+// take the deck back to before and forward to edited
+async function undoRedoKeys(page, platform, before, edited, control) {
+  assert.equal(await focused(page), control, `the focus is not on the ${control}`);
+  await press(page, 'Mod+Z');
+  await page.waitFor(`window.BeesonEditor.render() === ${js(before)}`, 5000).catch(() => {});
+  assert.equal(await render(page), before, `Undo does nothing with the focus on the ${control}`);
+  await press(page, platform === 'mac' ? 'Mod+Shift+Z' : 'Mod+Y');
+  await page.waitFor(`window.BeesonEditor.render() === ${js(edited)}`, 5000).catch(() => {});
+  assert.equal(await render(page), edited, `Redo does nothing with the focus on the ${control}`);
+}
+for (const platform of PLATFORMS) {
+  test(`${platform}: Undo and Redo act on the deck with the focus on a slider or a checkbox of the inspector, and not in a text field`, async (t) => {
+    const page = await load(t, platform, { n: VIDEO });
+    await selectVideo(page);
+    // a click on the Poster Frame slider, which captures the frame as the poster
+    const before = await render(page);
+    const r = await rectOf(page, `${PANEL} input[name=poster-frame]`);
+    await click(page, { x: r.left + r.width * 0.6, y: r.top + r.height / 2 });
+    await page.waitFor(`window.BeesonEditor.render() !== ${js(before)}`, 20000);
+    const poster = await render(page);
+    await undoRedoKeys(page, platform, before, poster, 'input.range');
+
+    // the Loop checkbox of the pane, reached with Tab and checked with Space, since a click keeps
+    // the focus where it is
+    const onLoop = `document.activeElement?.closest('label.ed-check')?.textContent.trim() === 'Loop'`;
+    for (let i = 0; i < 8 && !(await page.evaluate(onLoop)); i++) await press(page, 'Tab');
+    assert.ok(await page.evaluate(onLoop), 'Tab does not reach the Loop checkbox');
+    await press(page, 'Space');
+    await frames(page);
+    const looped = await render(page);
+    assert.notEqual(looped, poster, 'Loop does not change the file');
+    await undoRedoKeys(page, platform, poster, looped, 'input.checkbox');
+
+    // Undo in a text field of the inspector is the undo of its typing, and not of the deck
+    await tap(page, 'Arrange');
+    const x = await rectOf(page, `${PANEL} input[name=X]:not([disabled])`);
+    await click(page, { x: x.left + x.width / 2, y: x.top + x.height / 2 });
+    assert.equal(await focused(page), 'input.text');
+    await type(page, '9');
+    await press(page, 'Mod+Z');
+    await frames(page);
+    assert.equal(await render(page), looped, 'Undo in a text field undoes the deck');
+    assert.equal((await state(page, 'edit.undo')).label, 'Undo Loop');
+  });
+}
