@@ -497,3 +497,30 @@ for (const platform of PLATFORMS) {
     await roundTrip(page, 1);
   });
 }
+
+// steps-transitions-present-6 and -7: the chip of a row with a start mark or Show Last is kept
+// off the text of its row, and the two Preview buttons of the Steps tab are told apart
+const TWO = 'Two elements wi';
+const overlap = (text) => `(() => { const r = ${ROW(text)}; return r.querySelector('.chip').getBoundingClientRect().right - r.querySelector('.text').getBoundingClientRect().left; })()`;
+for (const platform of PLATFORMS) {
+  test(`the chip of a row with a start mark or Show Last does not cover its text (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 2 });
+    await openSteps(page);
+    for (const [row, label] of [[TWO, 'With Previous'], [TWO, 'After Previous'], [LAST, 'Show Last']]) {
+      await click(page, await pointIn(page, `${ROW(row)}.querySelector('.chip')`));
+      await page.waitFor(`!!document.querySelector('.beeson-edit-menu')`);
+      await choose(page, label);
+      await frames(page);
+      assert.ok((await page.evaluate(overlap(row))) <= 0, `the chip of ${label} covers the text of its row by ${await page.evaluate(overlap(row))} px`);
+    }
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`the two Preview buttons of the Steps tab name what they play (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 2 });
+    await openSteps(page);
+    const labels = await page.evaluate(`[document.querySelector('.beeson-edit-transition .preview'), document.querySelector('.beeson-edit-side .head button.play')].map((b) => b?.textContent.trim())`);
+    assert.deepEqual(labels, ['Preview Transition', 'Preview Steps']);
+    assert.deepEqual(errors(page), []);
+  });
+}
