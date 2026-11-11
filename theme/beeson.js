@@ -4703,8 +4703,22 @@ void main() {
   var plots = [];
   var EDITING = new URLSearchParams(location.search).has("edit");
   var PLAYED = !EDITING && window.parent !== window && new URLSearchParams(location.search).has("from-editor");
-  var toEditor = (eventName) => window.parent.postMessage(JSON.stringify({ namespace: "beeson", eventName, state: window.Reveal.getState() }), "*");
+  var RECEIVER = window.parent !== window && /receiver/i.test(location.search);
+  var toEditor = (eventName) => (RECEIVER ? window.parent.opener : window.parent)?.postMessage(JSON.stringify({ namespace: "beeson", eventName, state: window.Reveal.getState() }), "*");
+  var speaker = null;
+  function fromSpeaker(ev) {
+    let m = null;
+    try {
+      const from = ev.source;
+      if (from?.opener === window) speaker = from;
+      if (from?.parent?.opener === window && typeof ev.data === "string") m = JSON.parse(ev.data);
+    } catch {
+      return;
+    }
+    if (m?.namespace === "beeson" && m.eventName === "edit") PLAYED ? toEditor("edit") : edit();
+  }
   function edit() {
+    speaker?.close();
     const params = new URLSearchParams(location.search);
     params.set("edit", "");
     location.href = `${location.href.split(/[?#]/)[0]}?${params.toString().replace(/=(?=&|$)/g, "")}${location.hash}`;
@@ -4853,8 +4867,10 @@ void main() {
         if (ev.keyCode === 83 && forDeck(ev)) toEditor("speaker");
       }, true);
     } else if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: "E", description: "Edit the deck" }, (ev) => {
-      if (forDeck(ev)) edit();
+      if (forDeck(ev)) RECEIVER ? toEditor("edit") : edit();
     });
+    if (!EDITING && !RECEIVER) window.addEventListener("message", fromSpeaker);
+    if (PLAYED) window.addEventListener("pagehide", () => speaker?.close());
     if (still2()) completeAll();
     else show(deck.getCurrentSlide());
     deck.on("slidechanged", (event) => {
