@@ -512,3 +512,49 @@ for (const platform of PLATFORMS) {
     assert.equal((await cmd(page, 'edit.stopSpeaking')).enabled, false);
   });
 }
+
+// the tab of the Format pane that is shown, and the field of the TeX in it
+const formatTab = (page) => page.evaluate(`document.querySelector('.beeson-edit-inspector .ed-tabs [aria-selected="true"]')?.textContent ?? null`);
+
+// a check of the pictures of round 4: while the Formula pane was shown for a display formula, the
+// formula was not framed on the slide, which thus did not show what the pane edits
+for (const platform of PLATFORMS) {
+  test(`a display formula is framed while its Formula pane is shown (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 3 });
+    const math = '.reveal section.present div.math';
+    const ways = {
+      'reached with Tab': async () => page.evaluate(`document.querySelector(${js(math)} + ' mjx-container').focus()`),
+      'clicked': async () => {
+        await click(page, math);
+        await sleep(300);
+      },
+      'selected by Esc from its sheet': async () => {
+        await click(page, math);
+        await sleep(300);
+        await press(page, 'Escape');
+      },
+    };
+    for (const [how, reach] of Object.entries(ways)) {
+      await reach();
+      await frames(page);
+      assert.equal(await formatTab(page), 'Formula', `the Formula pane is not shown for a display ${how}`);
+      assert.equal(await framed(page), 1, `a display ${how} is not framed while its pane is shown`);
+      // the focus in the TeX field of the pane keeps the frame. the TeX is edited in the sheet while
+      // the sheet is open
+      if (how === 'clicked') {
+        assert.equal(await sheetOpen(page), true);
+        await press(page, 'Escape');
+        continue;
+      }
+      await click(page, '.beeson-edit-inspector textarea');
+      await frames(page);
+      assert.equal(await formatTab(page), 'Formula');
+      assert.equal(await framed(page), 1, `a display ${how} is not framed while its TeX is in the pane`);
+      await click(page, { x: 1300, y: 960 });
+      await press(page, 'Escape');
+      await frames(page);
+    }
+    await byteExact(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
