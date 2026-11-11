@@ -559,16 +559,25 @@ export function install(app: App): void {
   for (const d of defs) c.define(d.undoable ? { ...d, run: (a, arg) => navOf(a).keeping(d.id, () => d.run(a, arg)) } : d);
 
   // the clipboard keys in the navigator act on the slides, through the events that carry the
-  // clipboard in every browser
+  // clipboard in every browser. in a text of the outline they act on the text, and a paste is
+  // its plain text on one line
   const onClip = (ev: ClipboardEvent) => {
     if (ev.defaultPrevented || app.region() !== 'navigator' || !ready(app)) return;
+    const active = document.activeElement;
+    const typing = active instanceof HTMLElement && active.isContentEditable;
     if (ev.type === 'paste') {
       const text = ev.clipboardData?.getData('text/plain') || ev.clipboardData?.getData('text/html') || '';
-      if (!slidesIn(text)?.length) return;
+      if (!slidesIn(text)?.length) {
+        if (!typing) return;
+        ev.preventDefault();
+        document.execCommand('insertText', false, (ev.clipboardData?.getData('text/plain') ?? '').replace(/\s*\n\s*/g, ' '));
+        return;
+      }
       ev.preventDefault();
       void c.run('slide.paste', text).catch((e) => app.fail(e));
       return;
     }
+    if (typing) return;
     ev.preventDefault();
     void c.run(ev.type === 'cut' ? 'slide.cut' : 'slide.copy', ev.clipboardData).catch((e) => app.fail(e));
   };
