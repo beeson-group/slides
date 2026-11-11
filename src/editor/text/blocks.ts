@@ -372,14 +372,15 @@ function joinBack(app: App): Join {
   const before = prevBlock(app, at.item);
   if (before) return { kind: 'join', before, after: at.item };
   // the first item of a list has its dash taken off, as in Keynote and PowerPoint
-  return at.item.localName === 'li' && !at.item.previousElementSibling && !at.item.querySelector(LIST) ? { kind: 'unlist', item: at.item } : null;
+  return at.item.localName === 'li' && !at.item.previousElementSibling ? { kind: 'unlist', item: at.item } : null;
 }
 
 // what Backspace does at the caret, for the name of its entry
 export const joinKind = (app: App): 'join' | 'outdent' | 'unlist' | null => joinBack(app)?.kind ?? null;
 
-// the first item of a list made a paragraph before the list, with the attributes of the item. an
-// undo puts the caret at the start of the item, and a redo at the start of the paragraph
+// the first item of a list made a paragraph before the list, with the attributes of the item. the
+// items of its nested lists take its place in the list. an undo puts the caret at the start of the
+// item, and a redo at the start of the paragraph
 async function unlist(app: App, li: Element): Promise<void> {
   const list = li.parentElement!;
   let at = li;
@@ -387,7 +388,9 @@ async function unlist(app: App, li: Element): Promise<void> {
     const el = at;
     return () => selectIn(el, 0);
   });
-  const [p] = await app.doc.insert(`${startTag(app, li, 'p')}${rangeTex(li, rangeOf(li, null, null)).trim()}</p>`, list.parentElement!, list, 'list');
+  const [p] = await app.doc.insert(`${startTag(app, li, 'p')}${ownTex(li)}</p>`, list.parentElement!, list, 'list');
+  const subs = [...texCopy(li).querySelectorAll(':scope > :is(ul, ol) > li')].map((s) => s.outerHTML);
+  if (subs.length) await app.doc.insert(subs, list, li, 'list');
   await app.doc.remove(list.querySelectorAll(':scope > li').length > 1 ? li : list, 'list');
   selectIn(p, 0);
   at = p;
