@@ -764,7 +764,9 @@ export function install(app: App): void {
     follow(p, h, after.width / at.width, after.height / at.height, o.center);
     view.moving = p.els;
     view.resizing = true;
-    view.readout = { text: wh(size.width, size.height), x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
+    // the height of a figure with a caption is that of its picture with its caption, as in the field H
+    const caption = p.framed && !upright && captionsOf(p.framed).length ? frame.height - after.height : 0;
+    view.readout = { text: wh(size.width, size.height + caption), x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     frames.draw();
     app.invalidate('content');
   };
