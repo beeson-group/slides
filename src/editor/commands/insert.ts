@@ -62,10 +62,11 @@ const lines = (t: string) => escape(t).replace(/\r?\n/g, '<br>');
 const BLOCK = 'h1, h2, h3, h4, p, ul, ol, dl, table, pre, blockquote, div.math, .col, .qr';
 
 // the parent and the node before which a new element of the text column of slide is put: after its
-// last block, and else at the start of the column
+// last block, and else at the start of the column. the plate of a figure slide is in the flow and
+// as large as the slide, hence a new element is put after it, where it does not push the plate down
 export function columnPlace(app: App, slide: Element): { parent: Element; before: Node | null } {
   const parent = columnOf(slide);
-  const blocks = [...parent.children].filter((el) => el.matches(BLOCK) && !el.matches('.caption, .foot') && !!app.pairing?.elements.has(el));
+  const blocks = [...parent.children].filter((el) => (el.matches(BLOCK) || el.matches('.plate')) && !el.matches('.caption, .foot') && !!app.pairing?.elements.has(el));
   const last = blocks.at(-1);
   if (last) {
     let n = last.nextSibling;
