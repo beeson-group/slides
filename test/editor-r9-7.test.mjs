@@ -384,3 +384,47 @@ for (const [platform, answer] of [['mac', 'save'], ['other', 'cancel']]) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// dialogs-undo-a11y-7: the results of the accessibility checker are a tree in ARIA, but the arrow
+// keys did nothing in it, and every row and every Fix button was a Tab stop
+const A11Y = '.beeson-edit-a11y [role="tree"]';
+const focused = (page) => page.evaluate(`(() => { const a = document.activeElement; return a.closest(${js(A11Y)}) ? (a.matches('.check') ? 'head:' + a.dataset.check : a.matches('.item') ? 'item:' + a.dataset.i : 'other:' + a.className) : 'outside'; })()`);
+for (const platform of PLATFORMS) {
+  test(`the arrow keys move in the tree of the accessibility checker, and the tree is one Tab stop (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: FIGURES });
+    await page.evaluate(`(() => { for (const i of document.querySelectorAll('.reveal .slides > section')[${FIGURES}].querySelectorAll('img')) i.removeAttribute('alt'); return true; })()`);
+    await run(page, 'view.accessibility');
+    await frames(page);
+    const items = await page.evaluate(`[...document.querySelectorAll('${A11Y} .item[data-check="alt"]')].map((r) => 'item:' + r.dataset.i)`);
+    assert.ok(items.length >= 2, `the check lists ${items.length} images`);
+    assert.equal(await focused(page), 'head:alt');
+    const stops = () => page.evaluate(`[...document.querySelectorAll('${A11Y} :is(button, [tabindex])')].filter((e) => e.tabIndex >= 0).length`);
+    assert.equal(await stops(), 1, 'the tree is not one Tab stop');
+    await press(page, 'ArrowDown');
+    assert.equal(await focused(page), items[0], 'ArrowDown does not move to the first image');
+    await press(page, 'ArrowDown');
+    assert.equal(await focused(page), items[1]);
+    await press(page, 'ArrowUp');
+    assert.equal(await focused(page), items[0]);
+    assert.equal(await stops(), 1);
+    await press(page, 'ArrowLeft');
+    assert.equal(await focused(page), 'head:alt', 'ArrowLeft does not move to the head');
+    await press(page, 'ArrowLeft');
+    assert.equal(await page.evaluate(`document.querySelector('${A11Y} .check[data-check="alt"]').getAttribute('aria-expanded')`), 'false', 'ArrowLeft does not collapse the head');
+    await press(page, 'ArrowRight');
+    assert.equal(await page.evaluate(`document.querySelector('${A11Y} .check[data-check="alt"]').getAttribute('aria-expanded')`), 'true', 'ArrowRight does not expand the head');
+    await press(page, 'ArrowRight');
+    assert.equal(await focused(page), items[0], 'ArrowRight does not move to the first image');
+    // the menu of fixes of a row is opened from the row with the key of the context menu
+    await press(page, 'Shift+F10');
+    await page.waitFor(`!!document.querySelector('.beeson-edit-menu')`);
+    assert.ok((await menuLabels(page)).includes('Add Alt Text…'), 'Shift+F10 does not open the fixes');
+    await press(page, 'Escape');
+    assert.equal(await focused(page), items[0], 'the focus does not go back to the row');
+    await press(page, 'Tab');
+    assert.equal(await focused(page), 'outside', 'Tab stops in the tree twice');
+    await press(page, 'Shift+Tab');
+    assert.equal(await focused(page), items[0], 'Shift+Tab does not go back to the row');
+    assert.deepEqual(errors(page), []);
+  });
+}
