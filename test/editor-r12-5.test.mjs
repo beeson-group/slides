@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { click, drag, press, saveAndReopen } from './helpers/editor.mjs';
+import { click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
 
 const DECK = 'index.html';
 // the indexes of the figures slide and of the closing slide with its QR code in index.html
@@ -47,6 +47,32 @@ const boxOf = (page, selector) => page.evaluate(`(() => {
 })()`);
 // whether every selected element is on the shown slide
 const selectionShown = (page) => page.evaluate('window.BeesonEditor.selection().every((el) => Reveal.getCurrentSlide().contains(el))');
+
+const PANEL = '#beeson-edit-panel-format';
+async function fieldValue(page, id) {
+  await page.evaluate(`[...document.querySelectorAll('${PANEL} .ed-tabs button')].find((b) => b.textContent === 'Arrange')?.click()`);
+  await frames(page);
+  return Number(await page.evaluate(`document.querySelector('#beeson-edit-num-${id}')?.value`));
+}
+async function typeField(page, id, value) {
+  await fieldValue(page, id);
+  await page.evaluate(`(() => { const i = document.querySelector('#beeson-edit-num-${id}'); i.focus(); i.select(); })()`);
+  await type(page, String(value));
+  await press(page, 'Enter');
+  await frames(page);
+}
+// the box in slide pixels of the picture of the figure of the current slide, fitted into its image
+// box at its center, and with caption set the union of it and the caption
+const figureBox = (page, caption = true) => page.evaluate(`(() => {
+  const s = document.querySelector('.reveal .slides').getBoundingClientRect(), k = s.width / 1920;
+  const img = Reveal.getCurrentSlide().querySelector('figure img.for-light'), i = img.getBoundingClientRect();
+  const q = Math.min(i.width / img.naturalWidth, i.height / img.naturalHeight), w = img.naturalWidth * q, h = img.naturalHeight * q;
+  const boxes = [{ left: i.left + (i.width - w) / 2, top: i.top + (i.height - h) / 2, right: i.left + (i.width + w) / 2, bottom: i.top + (i.height + h) / 2 }];
+  if (${caption}) boxes.push(Reveal.getCurrentSlide().querySelector('figcaption').getBoundingClientRect());
+  const left = Math.min(...boxes.map((b) => b.left)), top = Math.min(...boxes.map((b) => b.top));
+  const right = Math.max(...boxes.map((b) => b.right)), bottom = Math.max(...boxes.map((b) => b.bottom));
+  return { left: (left - s.left) / k, top: (top - s.top) / k, width: (right - left) / k, height: (bottom - top) / k };
+})()`);
 
 async function load(t, platform, n) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
@@ -203,6 +229,27 @@ for (const platform of PLATFORMS) {
     const p1 = await centerOf(':scope > p'), i1 = await centerOf('figure img.for-light');
     assert.ok(near(p1.x, p0.x) && near(p1.y, p0.y) && near(i1.x, i0.x) && near(i1.y, i0.y), `each element kept its center: ${js({ p0, p1, i0, i1 })}`);
     await checkEdit(page, `r12-5-rotor-${platform}.html`);
+    assert.deepEqual(errors(page), []);
+  });
+  test(`the Height of a figure selected as one object gives its picture with its caption (${platform})`, async (t) => {
+    const page = await load(t, platform, FIGURES);
+    await click(page, 'section.present figure img.for-light');
+    const f0 = await figureBox(page);
+    assert.ok(f0.height > 800, `the frame holds the caption: ${js(f0)}`);
+    for (const [id, v] of [['x', f0.left], ['y', f0.top], ['width', f0.width], ['height', f0.height]]) {
+      assert.ok(near(await fieldValue(page, id), v, 1), `${id} reads ${await fieldValue(page, id)}, not ${Math.round(v)} of the frame`);
+    }
+    // a typed Height sets the picture so that the picture with its caption has this height
+    await typeField(page, 'height', 700);
+    const f1 = await figureBox(page);
+    assert.ok(near(f1.height, 700, 3) && near(f1.left, f0.left) && near(f1.top, f0.top), `the frame is ${js(f1)}`);
+    assert.ok(near(await fieldValue(page, 'height'), 700, 3), `Height reads ${await fieldValue(page, 'height')}`);
+    await checkEdit(page, `r12-5-figure-height-${platform}.html`);
+    // the picture alone, selected by a second click, gives its own height
+    await click(page, 'section.present figure img.for-light');
+    const h = await fieldValue(page, 'height');
+    const pic = await figureBox(page, false);
+    assert.ok(near(h, pic.height, 2) && h < 700 - 50, `the picture alone reads ${h} against its box ${js(pic)}`);
     assert.deepEqual(errors(page), []);
   });
 }
