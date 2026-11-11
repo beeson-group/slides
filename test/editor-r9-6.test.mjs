@@ -170,3 +170,135 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+const ITEM = '.reveal section.present ul > li';
+const ITEMS = [
+  '<li class="fragment" data-fragment-index="1">Dark and light mode: export one file per mode, mark them <code>for-dark</code> and <code>for-light</code>.</li>',
+  '<li class="fragment" data-fragment-index="2">You might have noticed a toggle on the top right: try clicking it on this slide.</li>',
+  '<li class="fragment" data-fragment-index="3">You should give black-on-white plots the class <code>invert</code> to invert them in dark mode.</li>',
+];
+// the caret put at the end of the text of item i of the list
+const caretAtEnd = (page, i) => page.evaluate(`(() => {
+  const li = document.querySelectorAll(${js(ITEM)})[${i}];
+  const w = document.createTreeWalker(li, NodeFilter.SHOW_TEXT);
+  let last = null;
+  for (let n = w.nextNode(); n; n = w.nextNode()) if (n.data.trim()) last = n;
+  getSelection().collapse(last, last.length);
+})()`);
+// the text of the block of the caret, from its start
+const hostText = (page) => page.evaluate(`(() => {
+  const n = getSelection().focusNode;
+  return (n.nodeType === 1 ? n : n.parentElement).closest('[contenteditable="true"]')?.textContent.trim() ?? null;
+})()`);
+// the li written in the file whose text starts with head
+const written = (text, head) => text.split('\n').find((l) => l.includes(`>${head}`) || l.includes(`<strong>${head}`) || l.includes(`<em>${head}`))?.trim();
+
+// finding text-lists-find-2: each item of a list was a text of its own, hence the arrows, Shift with
+// the arrows, a drag, Mod+A, Bold, and Tab stopped at the border of an item
+for (const platform of PLATFORMS) {
+  test(`the arrows move the caret over the border of two items and of two paragraphs (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, await pointOf(page, ITEM, 'Dark and light', 2));
+    await caretAtEnd(page, 0);
+    await press(page, 'ArrowRight');
+    assert.match(await hostText(page), /^You might/, 'ArrowRight at the end of an item stays in it');
+    await press(page, 'ArrowLeft');
+    assert.match(await hostText(page), /^Dark and light/, 'ArrowLeft at the start of an item stays in it');
+    await press(page, 'ArrowDown');
+    assert.match(await hostText(page), /^You might/, 'ArrowDown on the last line of an item stays in it');
+    await press(page, 'ArrowDown');
+    await press(page, 'ArrowDown');
+    assert.match(await hostText(page), /^You should/, 'ArrowDown does not reach the third item');
+    await press(page, 'ArrowUp');
+    await press(page, 'ArrowUp');
+    await press(page, 'ArrowUp');
+    assert.match(await hostText(page), /^Dark and light/, 'ArrowUp on the first line of an item stays in it');
+    await caretAtEnd(page, 0);
+    await press(page, 'ArrowRight');
+    await type(page, 'Q');
+    assert.equal(written(await render(page), 'QYou'), ITEMS[1].replace('>You', '>QYou'));
+    await roundTrip(page);
+
+    // two paragraphs of one text column on slide 9
+    await page.evaluate('Reveal.slide(8)');
+    await frames(page);
+    await click(page, await pointOf(page, '.reveal section.present > p', 'gravitational', 2));
+    await caretAt(page, '.reveal section.present > p', 'blue,', 5);
+    await press(page, 'ArrowRight');
+    assert.match(await hostText(page), /^and the centrifugal/, 'ArrowRight at the end of a paragraph stays in it');
+    await press(page, 'ArrowUp');
+    assert.match(await hostText(page), /^The gravitational/, 'ArrowUp on the first line of a paragraph stays in it');
+  });
+
+  // a drag from "toggle" in item 2 to the end of item 3, with the left button held on every move
+  const dragOver = async (page) => {
+    const from = await pointOf(page, ITEM, 'toggle', 0);
+    const to = await pointOf(page, ITEM, 'mode.', 4);
+    const [x0, x1] = [from.x - 3, to.x + 8];
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x0, y: from.y });
+    await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: x0, y: from.y, button: 'left', buttons: 1, clickCount: 1 });
+    for (let i = 1; i <= 10; i++) await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x0 + ((x1 - x0) * i) / 10, y: from.y + ((to.y - from.y) * i) / 10, button: 'left', buttons: 1 });
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x1, y: to.y, button: 'left', clickCount: 1 });
+    await frames(page);
+  };
+
+  test(`a drag from one item into the next selects over both, and Bold acts on both (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await dragOver(page);
+    await press(page, 'Mod+B');
+    const text = await render(page);
+    assert.equal(written(text, 'You might'), ITEMS[1].replace('toggle on the top right: try clicking it on this slide.', '<strong>toggle on the top right: try clicking it on this slide.</strong>'));
+    assert.equal(written(text, 'You should'), ITEMS[2].replace('>You should', '><strong>You should').replace('mode.</li>', 'mode.</strong></li>'));
+    await roundTrip(page);
+  });
+
+  test(`Tab after a drag over two items indents both (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await dragOver(page);
+    await press(page, 'Tab');
+    const nested = /for-light<\/code>\.\s*<ul>\s*<li class="fragment" data-fragment-index="2">You might[^\n]*<\/li>\s*<li class="fragment" data-fragment-index="3">You should[^\n]*<\/li>\s*<\/ul>\s*<\/li>/;
+    assert.match(await render(page), nested, 'Tab does not indent both items');
+    await roundTrip(page);
+    // Shift+Tab after a drag over the two nested items takes both out again
+    const tabbed = page.source;
+    await dragOver(page);
+    await press(page, 'Shift+Tab');
+    assert.equal(await render(page), readFileSync('index.html', 'utf8'), 'Shift+Tab does not outdent both items');
+    await page.evaluate('window.BeesonEditor.undo()');
+    assert.equal(await render(page), tabbed);
+  });
+
+  test(`Mod+A in an item selects the text of the whole list, and Bold acts on every item (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, await pointOf(page, ITEM, 'toggle', 2));
+    await press(page, 'Mod+A');
+    await press(page, 'Mod+B');
+    const text = await render(page);
+    for (const [i, head] of [[0, 'Dark'], [1, 'You might'], [2, 'You should']]) {
+      assert.equal(written(text, head), ITEMS[i].replace(/(data-fragment-index="\d">)(.*)<\/li>/, '$1<strong>$2</strong></li>'));
+    }
+    await roundTrip(page);
+  });
+
+  test(`Shift with the arrows selects over the border of two items, and Backspace deletes the selection (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, await pointOf(page, ITEM, 'toggle', 2));
+    await caretAt(page, ITEM, 'slide.', 5);
+    for (let i = 0; i < 5; i++) await press(page, 'Shift+ArrowRight');
+    await press(page, 'Backspace');
+    const text = await render(page);
+    assert.equal(written(text, 'You might'), ITEMS[1].replace('slide.</li>', 'slide should give black-on-white plots the class <code>invert</code> to invert them in dark mode.</li>'));
+    assert.equal(written(text, 'You should'), undefined);
+    await roundTrip(page);
+  });
+
+  test(`a typed character replaces a selection over two items (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, await pointOf(page, ITEM, 'toggle', 2));
+    await caretAt(page, ITEM, 'slide.', 5);
+    for (let i = 0; i < 5; i++) await press(page, 'Shift+ArrowRight');
+    await type(page, 'Z');
+    assert.equal(written(await render(page), 'You might'), ITEMS[1].replace('slide.</li>', 'slideZ should give black-on-white plots the class <code>invert</code> to invert them in dark mode.</li>'));
+    await roundTrip(page);
+  });
+}
