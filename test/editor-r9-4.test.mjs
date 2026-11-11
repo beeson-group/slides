@@ -235,3 +235,76 @@ for (const platform of PLATFORMS) {
     await roundTrip(page);
   });
 }
+
+// the center of the menu item named label in the open menu
+const itemAt = (page, label) => page.evaluate(`(() => { const i = [...document.querySelectorAll('.beeson-edit-menu .item')].filter((i) => i.getClientRects().length).find((i) => i.querySelector('.label')?.textContent === ${js(label)}); const r = i.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+
+// asserts that a right-click at at keeps the selection sel and opens the element menu with Lock
+async function objectMenu(page, at, sel, what) {
+  await click(page, at, { button: 'right' });
+  await sleep(250);
+  assert.deepEqual(await selected(page), sel, `a right-click on ${what} drops the selection`);
+  const m = await menu(page);
+  assert.ok(m, `a right-click on ${what} does not open a menu of the editor`);
+  assert.match(m.cls, /\belement\b/, `a right-click on ${what} opens the ${m.cls} menu`);
+  assert.ok(item(m, 'Lock') || item(m, 'Unlock'), `the menu of ${what} does not offer Lock`);
+  return m;
+}
+
+// finding menus-keys-2: a right-click on a text block selected as an object, a code box included,
+// on one of several selected blocks, or on a member of a selected group dropped the selection and
+// opened the text menu, and a right-click on the handle of a block opened no menu of the editor
+for (const platform of PLATFORMS) {
+  test(`a right-click on a selected block, several blocks, a group, or the handle opens the element menu (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 4 });
+    const para = '.reveal section.present > p';
+    const head = '.reveal section.present > h2';
+    await click(page, para);
+    await press(page, 'Escape');
+    await frames(page);
+    assert.deepEqual(await selected(page), ['p']);
+    await objectMenu(page, para, ['p'], 'a selected block');
+    await closeMenu(page);
+    // the handle of the selected block
+    const handle = await center(page, '.beeson-handle:not([hidden])');
+    await objectMenu(page, handle, ['p'], 'the handle of a block');
+    await closeMenu(page);
+    // two blocks, then the two grouped
+    await click(page, head);
+    await press(page, 'Escape');
+    await click(page, para, { modifiers: 'Shift' });
+    await frames(page);
+    assert.deepEqual(await selected(page), ['h2', 'p']);
+    let m = await objectMenu(page, para, ['h2', 'p'], 'one of two selected blocks');
+    assert.equal(item(m, 'Group')?.off, false);
+    await closeMenu(page);
+    await page.evaluate(`window.BeesonEditor.exec('arrange.group')`);
+    await frames(page);
+    m = await objectMenu(page, para, ['h2', 'p'], 'a member of a selected group');
+    assert.equal(item(m, 'Ungroup')?.off, false);
+    await closeMenu(page);
+    await roundTrip(page);
+    // Delete of the menu of a selected block
+    await click(page, '.reveal section.present > ul', { button: 'left' });
+    await press(page, 'Escape');
+    await frames(page);
+    assert.deepEqual(await selected(page), ['ul']);
+    await objectMenu(page, '.reveal section.present > ul li', ['ul'], 'a selected list');
+    await click(page, await itemAt(page, 'Delete'));
+    await frames(page);
+    assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present > ul').length`), 0);
+    await roundTrip(page);
+  });
+
+  test(`a right-click on a code box selected as an object opens the element menu (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 5 });
+    await click(page, '.reveal section.present pre code');
+    await press(page, 'Escape');
+    await frames(page);
+    assert.deepEqual(await selected(page), ['pre']);
+    const m = await objectMenu(page, '.reveal section.present pre code', ['pre'], 'a selected code box');
+    assert.equal(item(m, 'Delete')?.off, false);
+    await closeMenu(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
