@@ -14,6 +14,7 @@ import { injectStyle, make, store, stored } from '../ui/dom.ts';
 import { fillFormat as fillPanes } from '../inspector/inspector.ts';
 import { closeMenus, openContextMenu, openMenu, menuItems, type MenuItem } from '../ui/menu.ts';
 import { keyClashes, sheetClashes } from './keys-sheet.ts';
+import { overlay } from '../canvas/frames.ts';
 
 const NAV_KEY = 'beeson-nav-w';
 const NAV_MIN = 140;
@@ -286,10 +287,14 @@ export function install(app: App): void {
     }
     if (target.closest('.beeson-edit-nav')) return { kind: 'navigator', target: null };
     if (target.closest('.beeson-edit-canvas')) return { kind: 'canvas', target: app.current() };
-    if (!target.closest('.reveal:not(.beeson-peek)')) return null;
+    // the handle of a block, outside the slide, stands for its block
+    const handle = target.closest('.beeson-handle') ? overlay().current() : null;
+    if (!handle && !target.closest('.reveal:not(.beeson-peek)')) return null;
+    const el = handle ?? app.move.movableOf(target);
+    // a text whose block is selected as an object, alone, with others, or in its group, gets the
+    // menu of the object
     const host = app.hostOf(target);
-    if (host) return { kind: 'text', target: host };
-    const el = app.move.movableOf(target);
+    if (host && !(el && app.selection.kind === 'elements' && app.selection.has(el))) return { kind: 'text', target: host };
     if (el) {
       if (!app.selection.has(el)) app.selection.set('elements', [el]);
       return { kind: 'element', target: el };

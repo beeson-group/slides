@@ -152,14 +152,17 @@ export function install(app: App): void {
   // on a Mac, as in the text fields of macOS, or the caret is put under it elsewhere. the range
   // before the press is kept, since the press of the right button may collapse it
   let before: Range | null = null;
+  // a right press on a selected object keeps it selected for its element menu, without a caret
+  const onSelected = (ev: MouseEvent) => kind === 'elements' && ev.target instanceof Element && items.includes(pickOf(app, ev.target) as Element);
   document.addEventListener('mousedown', (ev) => {
+    if ((ev.button === 2 || (ev.ctrlKey && app.platform === 'mac')) && onSelected(ev)) ev.preventDefault();
     const s = getSelection();
     before = ev.button === 2 && s && s.rangeCount && !s.isCollapsed ? s.getRangeAt(0).cloneRange() : null;
   }, true);
   document.addEventListener('contextmenu', (ev) => {
     const target = ev.target instanceof Element ? ev.target : null;
     const host = app.hostOf(target);
-    if (!host || !app.current()?.contains(host) || host.closest('aside.notes') || target?.closest('mjx-container')) return;
+    if (!host || !app.current()?.contains(host) || host.closest('aside.notes') || target?.closest('mjx-container') || onSelected(ev)) return;
     const s = getSelection();
     if (!s) return;
     const kept = before ?? (s.rangeCount && !s.isCollapsed ? s.getRangeAt(0) : null);
