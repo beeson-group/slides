@@ -398,15 +398,11 @@ for (const combo of COMBOS) {
   test(`the four order commands move the figure from the figure and from its picture (${named(combo)})`, async (t) => {
     const page = await load(t, platform, mode, n);
     assert.deepEqual(orderOf(page.source, n), ['h2', 'under', 'figure', 'over']);
-    // each paragraph is a layer of its own, and Send to Back passes the heading in the flow by a
-    // z-index of -1 on the figure, which stays at its place in the file
+    // the heading is in the flow and passed over, and each paragraph is a layer of its own
     const up = ['h2', 'under', 'over', 'figure'], down = ['h2', 'figure', 'under', 'over'];
     let last = null;
-    for (const [order, want] of [['front', up], ['forward', up], ['backward', down], ['back', orderOf(page.source, n)]]) {
-      last = await check(page, order, () => press(page, keys[order]), (edited) => {
-        assert.deepEqual(orderOf(edited, n), want, `${order} puts the figure at ${js(orderOf(edited, n))}`);
-        if (order === 'back') assert.match(slideOf(edited, n), /<figure[^>]*z-index: -1/, 'Send to Back does not put the figure behind the heading');
-      });
+    for (const [order, want] of [['front', up], ['forward', up], ['backward', down], ['back', down]]) {
+      last = await check(page, order, () => press(page, keys[order]), (edited) => assert.deepEqual(orderOf(edited, n), want, `${order} puts the figure at ${js(orderOf(edited, n))}`));
     }
     await saved(page, last);
   });

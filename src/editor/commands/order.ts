@@ -53,9 +53,6 @@ export function drawnUnder(a: Element, b: Element): boolean {
   return under(keyOf(x), keyOf(y));
 }
 
-// an element with a box on the slide, which the object list shows
-const drawn = (el: Element): boolean => getComputedStyle(el).display !== 'none' && el.getClientRects().length > 0;
-
 // the siblings of el in the file, in the order of the page
 function siblingsOf(app: App, el: Element): Element[] {
   const parent = el.parentElement;
@@ -63,12 +60,12 @@ function siblingsOf(app: App, el: Element): Element[] {
   return [...parent.children].filter((s) => !s.hasAttribute('data-generated') && !!app.pairing?.elements.has(s));
 }
 
-// the drawn siblings of el from back to front, as the object list shows them, and the last one that
-// a command puts el past, with the selected ones passed over, or null when el does not move. a
-// plate, the back layer of its layout, is not ordered
+// the layers among the siblings of el from back to front, and the last one that a command puts el
+// past, with the selected ones passed over, or null when el does not move. a plate, the back layer
+// of its layout, is not ordered
 function pickOf(app: App, el: Element, order: Order, selected: Set<Element>): { list: Element[]; pick: Element } | null {
   if (el.matches('.plate')) return null;
-  const list = siblingsOf(app, el).filter((s) => s !== el && drawn(s)).sort((a, b) => (under(keyOf(a), keyOf(b)) ? -1 : 1));
+  const list = siblingsOf(app, el).filter((s) => s !== el && isLayer(s)).sort((a, b) => (under(keyOf(a), keyOf(b)) ? -1 : 1));
   const k = keyOf(el);
   const up = order === 'front' || order === 'forward';
   const passed = list.filter((s) => !selected.has(s) && (up ? under(k, keyOf(s)) : under(keyOf(s), k)));
@@ -96,8 +93,10 @@ function planOf(app: App, el: Element, order: Order, selected: Set<Element>): Pl
   if (!found) return home && (up ? under(keyOf(el), home) : under(home, keyOf(el))) ? { z: baseZ(el), home: true } : null;
   const { list, pick } = found;
   const at = list.indexOf(pick);
-  const lo = up ? pick : list[at - 1];
-  const hi = up ? list[at + 1] : pick;
+  // the first step forward of an element that is not a layer makes it the layer at the back
+  const first = order === 'forward' && !isLayer(el);
+  const lo = up && !first ? pick : list[at - 1];
+  const hi = up && !first ? list[at + 1] : pick;
   const fits = (z: number, i: number) => (!lo || under(keyOf(lo), [z, i])) && (!hi || under([z, i], keyOf(hi)));
   if (home && fits(...home)) return { z: home[0], home: true };
   const base = baseZ(el);
@@ -110,11 +109,10 @@ function planOf(app: App, el: Element, order: Order, selected: Set<Element>): Pl
   if (move && fits(base, anchor)) return { z: base, ...move };
   // else the z-index nearest to that of the theme with which el stays in the file, or, for an
   // element in the flow that cannot stay between lo and hi, the z-index that passes the layer picked
-  // a layer of z-index 0 is drawn over a sibling that is not a layer, and one of -1 under it
-  const zmin = !lo ? -Infinity : !isLayer(lo) ? 0 : i > indexOf(lo) ? zOf(lo) : zOf(lo) + 1;
-  const zmax = !hi ? Infinity : !isLayer(hi) ? -1 : i < indexOf(hi) ? zOf(hi) : zOf(hi) - 1;
+  const zmin = lo ? (i > indexOf(lo) ? zOf(lo) : zOf(lo) + 1) : -Infinity;
+  const zmax = hi ? (i < indexOf(hi) ? zOf(hi) : zOf(hi) - 1) : Infinity;
   if (zmin <= zmax) return { z: Math.min(Math.max(base, zmin), zmax) };
-  if (move && isLayer(lo ?? hi)) return { z: zOf(lo ?? hi), ...move };
+  if (move) return { z: zOf(lo ?? hi), ...move };
   // the order of the file, when it passes the same layers as this z-index
   const z = up ? zmin : zmax;
   const [a, b]: Key[] = up ? [[z, i], home ?? [z, i]] : [home ?? [z, i], [z, i]];
@@ -139,23 +137,6 @@ async function applyPlan(app: App, el: Element, plan: Plan): Promise<void> {
   if (Object.keys(style).length) app.doc.setTag(el, { style }, 'order');
 }
 
-// the declarations of applyPlan taken off every element of the slide of el, when its siblings are
-// drawn in the same order without them, so that the style of each one is the one of the file
-function tidy(app: App, el: Element): void {
-  const slide = el.closest('section');
-  const parents = new Set([...(slide?.querySelectorAll('[style]') ?? [])].filter(ordered).map((e) => e.parentElement!));
-  for (const parent of parents) {
-    const sibs = [...parent.children].filter((s) => !s.hasAttribute('data-generated') && !!app.pairing?.elements.has(s) && drawn(s));
-    const sort = (key: (e: Element) => Key) => sibs.slice().sort((a, b) => (under(key(a), key(b)) ? -1 : 1));
-    const home = sort((e) => (ordered(e) ? homeOf(e) : keyOf(e)));
-    if (sort(keyOf).some((e, n) => e !== home[n])) continue;
-    for (const e of sibs.filter(ordered)) {
-      const s = (e as HTMLElement).style;
-      app.doc.setTag(e, { style: { ...(s.position === 'relative' ? { position: null } : {}), ...(s.zIndex ? { 'z-index': null } : {}) } }, 'order');
-    }
-  }
-}
-
 // whether Bring Forward, or Send Backward with up false, would move el by itself
 export const canStep = (app: App, el: Element, up: boolean): boolean => planOf(app, el, up ? 'forward' : 'backward', new Set([el])) !== null;
 
@@ -169,7 +150,6 @@ export async function stepLayer(app: App, el: Element, up: boolean): Promise<boo
   const plan = planOf(app, el, up ? 'forward' : 'backward', new Set([el]));
   if (!plan) return false;
   await applyPlan(app, el, plan);
-  tidy(app, el);
   return true;
 }
 
@@ -201,7 +181,6 @@ async function reorder(app: App, order: Order): Promise<void> {
     const plan = planOf(app, el, order, set);
     if (plan) await applyPlan(app, el, plan);
   }
-  if (els[0]) tidy(app, els[0]);
   app.selection.set('elements', before.filter((el) => el.isConnected));
   app.invalidate('content');
 }
