@@ -71,7 +71,7 @@ test('a video of the style play shows its poster until its step, and it is playe
 // the second clip is held back on a local port, and the first one is held at its first frame until
 // the second one can be played. Both are then started in one task
 test('two videos of one step are started together, also when one of them is loaded later', { timeout: 120000 }, async (t) => {
-  const server = await serve('.', { delay: (path) => (path.endsWith('clip-light.mp4') ? 3000 : 0) });
+  const server = await serve('.', { delay: (path) => (path.endsWith('clip-b.mp4') ? 3000 : 0) });
   const browser = await launch({ offline: false });
   t.after(async () => {
     await browser.close();

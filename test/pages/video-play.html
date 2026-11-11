@@ -12,7 +12,9 @@
 <!-- the three cases of a video started on a click in PowerPoint: a clip shown with its poster and
      started at its step, two clips side by side started together, and two clips in one place, the
      second shown over the first at the next step. On the last slide, a clip appears at its step,
-     and it is not dimmed at the next one. The light clip stands for a second clip -->
+     and it is not dimmed at the next one. The clips are two looped test patterns of 240 by 320 px,
+     written with ffmpeg from its testsrc2 and testsrc, so that the tests decode little beside the
+     other browser tests -->
 <div class="reveal">
   <div class="slides">
     <section>
@@ -20,27 +22,27 @@
       <p class="fragment" data-fragment-index="1">The clip is started at the next step.</p>
       <p class="fragment" data-fragment-index="3">A later step.</p>
       <div class="zone">
-        <video id="play" class="fragment play" data-fragment-index="2" src="../../demo/clip-dark.mp4" poster="../../demo/clip-dark.png" muted></video>
+        <video id="play" class="fragment play" data-fragment-index="2" src="clip-a.mp4" poster="clip-a.png" muted loop></video>
       </div>
     </section>
     <section class="figure">
       <h2>Two clips together</h2>
       <div class="plate row">
-        <video id="left" class="fragment play" data-fragment-index="1" src="../../demo/clip-dark.mp4" poster="../../demo/clip-dark.png" muted></video>
-        <video id="right" class="fragment play" data-fragment-index="1" src="../../demo/clip-light.mp4" poster="../../demo/clip-light.png" muted></video>
+        <video id="left" class="fragment play" data-fragment-index="1" src="clip-a.mp4" poster="clip-a.png" muted loop></video>
+        <video id="right" class="fragment play" data-fragment-index="1" src="clip-b.mp4" poster="clip-b.png" muted loop></video>
       </div>
     </section>
     <section>
       <h2>Two clips in one place</h2>
       <div class="zone">
-        <video id="first" class="fragment play" data-fragment-index="1" src="../../demo/clip-dark.mp4" poster="../../demo/clip-dark.png" muted></video>
-        <video id="second" class="fragment" data-fragment-index="2" src="../../demo/clip-light.mp4" poster="../../demo/clip-light.png" muted data-autoplay></video>
+        <video id="first" class="fragment play" data-fragment-index="1" src="clip-a.mp4" poster="clip-a.png" muted loop></video>
+        <video id="second" class="fragment" data-fragment-index="2" src="clip-b.mp4" poster="clip-b.png" muted loop data-autoplay></video>
       </div>
     </section>
     <section>
       <h2>A clip that appears at its step</h2>
       <div class="zone fragment" data-fragment-index="1">
-        <video id="inside" src="../../demo/clip-dark.mp4" poster="../../demo/clip-dark.png" muted data-autoplay></video>
+        <video id="inside" src="clip-a.mp4" poster="clip-a.png" muted loop data-autoplay></video>
       </div>
       <p class="fragment" data-fragment-index="2">A paragraph after the clip.</p>
     </section>

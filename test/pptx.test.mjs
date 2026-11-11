@@ -150,10 +150,10 @@ test('a video is started on the click of its step, and two videos of one step to
   // the steps after the step of the clip are clicks on its slide
   assert.equal(slides[2].match(/nodeType="clickEffect"/g).length, 2);
   assert.deepEqual([...slides[4].matchAll(/presetClass="mediacall"[^>]*nodeType="(\w+)"/g)].map((m) => m[1]), ['afterEffect', 'withEffect']);
-  // the clips of a slide, the dark one and then the light one on the slide of two
+  // the clips of a slide, the first test pattern and then the second on the slide of two
   const clips = (n) => [...new Set([...relationships(parts, `ppt/slides/slide${n}.xml`).values()].filter((name) => name.endsWith('.mp4')))];
-  const [dark, light] = clips(5);
-  assert.deepEqual([clips(7), clips(8)], [[dark], [light]], 'the second clip is shown in place of the first');
+  const [a, b] = clips(5);
+  assert.deepEqual([clips(7), clips(8)], [[a], [b]], 'the second clip is shown in place of the first');
 });
 
 test('the demo deck is exported with a step for each page of its PDF', () => {
