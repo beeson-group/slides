@@ -193,3 +193,39 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+const CARD = 'dialog.beeson-edit-card[open]';
+const STEP = '<span class="fragment" data-plot-tab="two"></span>';
+const TAB_TWO = ',\n      { "name": "two", "values": [0, 1], "data": { "dot": [[1, 0], [0, 1]], "path": [[0, 0], [1, 1]] } }';
+
+async function chooseSheet(page, name) {
+  await click(page, await page.evaluate(`(() => { const r = [...document.querySelectorAll('${WINDOW} .sheets button[role="tab"]')].find((b) => b.textContent === ${js(name)}).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`));
+}
+
+for (const platform of PLATFORMS) {
+  // a tab named by data-plot-tab of a step could not be deleted. Delete Tab now asks, naming the
+  // step, and takes the attribute off the step in the same entry of the history
+  test(`a tab that a step shows is deleted after a confirmation that names the step, with the step, as one entry (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await openData(page);
+    await chooseSheet(page, 'two');
+    await click(page, `${WINDOW} button[data-command="plot.deleteTab"]`);
+    await page.waitFor(`!!document.querySelector('${CARD}')`);
+    assert.match(await page.evaluate(`document.querySelector('${CARD}').textContent`), /step 2/);
+    // Esc keeps the tab and the step
+    await press(page, 'Escape');
+    await page.waitFor(`!document.querySelector('${CARD}')`);
+    await byteExact(page);
+    assert.deepEqual(await sheets(page), ['one', 'two', 'Axes']);
+    await click(page, `${WINDOW} button[data-command="plot.deleteTab"]`);
+    await page.waitFor(`!!document.querySelector('${CARD}')`);
+    await click(page, `${CARD} button.primary`);
+    await page.waitFor(`!document.querySelector('${CARD}')`);
+    const deleted = [[STEP, '<span class="fragment"></span>'], ...plate([TAB_TWO, ''])];
+    await roundTrip(page, deleted, 'Delete Tab');
+    assert.deepEqual(await sheets(page), ['one', 'Axes']);
+    assert.equal(await page.evaluate(`document.querySelector('.reveal section.present [data-plot-tab]')`), null);
+    await saved(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
