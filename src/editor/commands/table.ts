@@ -31,7 +31,7 @@ import { emptySlot } from '../media/actions.ts';
 import { textStyle } from '../model/templates.ts';
 import {
   CELL, GRID, MOST, around, fillLine, boxOf, cellAfter, cellBeside, cellHtml, cellOver, columnName, columnsOf, emptyRows, gridOf, grow, hasHeader, numericOf, sortOrder,
-  parseHtmlTable, parseTabular, placeOf, placesOf, rowHtml, spotsIn, tableHtml, type Box, type Place,
+  CELLS, parseEditorTable, parseHtmlTable, parseTabular, placeOf, placesOf, rowHtml, spotsIn, tableHtml, type Box, type Place,
 } from '../table.ts';
 import { placeCaret } from '../text/typing.ts';
 import { Dialog } from '../ui/dialog.ts';
@@ -39,6 +39,7 @@ import { injectStyle, make } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { closeMenus, menuOpen, openMenu, type MenuItem } from '../ui/menu.ts';
 import { columnPlace, freeZone, meets, slideBox, takenBox, type Box as SlideBox } from './insert.ts';
+import { coverOf, leastCover } from './place.ts';
 import { MARK } from './slide.ts';
 
 // the widths of the frame of the cell of the caret and of the cells selected as a block
@@ -271,12 +272,14 @@ function baseOf(app: App, parent: Element): string {
 
 const right = (cell: Element) => (cell as HTMLElement).style.textAlign === 'right';
 
-// the text of a cell with a formula read as its TeX, e.g. 2.69 for \(2.69\)
-function cellText(cell: Element): string {
+// the text of a cell with a formula read as its TeX, e.g. 2.69 for \(2.69\), or with delimiters
+// set, as the file has it
+function cellText(cell: Element, delimiters = false): string {
   const tex = mathLookup();
   let out = '';
   const walk = (n: Node) => {
-    if (n instanceof Element && n.localName === 'mjx-container') out += tex(n)?.tex ?? '';
+    const info = n instanceof Element && n.localName === 'mjx-container' ? tex(n) : undefined;
+    if (info !== undefined) out += info ? (delimiters ? info.open + info.tex + info.close : info.tex) : '';
     else if (n.nodeType === 3) out += (n as Text).data;
     else n.childNodes.forEach(walk);
   };
@@ -435,9 +438,9 @@ const STEP = 20;
 // a new table put where it fits on its slide, with every row and with room around it for its bars
 // at the zoom of the canvas: under the blocks before it, else at the center of the free area where
 // the layout puts a zone, else at the free place nearest to it at the right of the text or below it,
-// and else at the center of the slide over what is there, as Keynote inserts a table, where the
-// fill of the theme hides what is under it. the space that an element takes is the rule takenBox of
-// insert.ts. the move is a translate in slide px
+// and else over what is there, at the place that covers the least of the slide by leastCover of
+// place.ts, where the fill of the theme hides what is under it. the space that an element takes
+// is the rule takenBox of insert.ts. the move is a translate in slide px
 function placeTable(app: App, table: HTMLTableElement): void {
   const slide = table.closest('section');
   const parent = table.parentElement;
@@ -483,7 +486,13 @@ function placeTable(app: App, table: HTMLTableElement): void {
     }
   }
   place ??= best;
-  place ??= at((w - tw) / 2, (h - th) / 2);
+  if (!place) {
+    // the place of the grid inside the slide and above the floor that covers the least of the slide
+    const places: SlideBox[] = [];
+    for (let y = room; y + th <= floor; y += STEP) for (let x = room; x + tw + room <= w; x += STEP) places.push(at(x, y));
+    const els = all.map((o) => o.el).filter((el) => !el.matches('.col, .panel, .block'));
+    place = leastCover(coverOf(app, els), places, at(t.left, top)) ?? at((w - tw) / 2, (h - th) / 2);
+  }
   const x = Math.round(place.left - t.left);
   const y = Math.round(place.top - t.top);
   if (x || y) app.doc.setTag(table, { translate: { x, y } }, 'insert table');
@@ -780,8 +789,9 @@ function columnWidths(table: HTMLTableElement, nowrap: boolean, from = 0, to = I
 const fitWidths = (t: Target) => columnWidths(t.table, true, t.box?.c0, t.box?.c1);
 
 // the cells of rows written into the table of cell from cell on, with rows and columns added at the
-// end as they are needed. with asBlock set, the cells written are then selected as a block
-async function pasteCells(app: App, cell: HTMLTableCellElement, rows: string[][], asBlock = false): Promise<void> {
+// end as they are needed. with asBlock set, the cells written are then selected as a block, and
+// with markup set, each cell of rows is HTML rather than text
+async function pasteCells(app: App, cell: HTMLTableCellElement, rows: string[][], asBlock = false, markup = false): Promise<void> {
   const start = placeOf(cell)!;
   const table = cell.closest('table') as HTMLTableElement;
   while (table.rows.length < start.row + rows.length) await addRow(app, { table, cell: null, box: null }, true);
@@ -794,7 +804,7 @@ async function pasteCells(app: App, cell: HTMLTableCellElement, rows: string[][]
       const target = cellOver(table, start.row + i, start.col + j);
       if (!target || done.has(target)) continue;
       done.add(target);
-      const html = cellHtml('td', text).replace(/^<td>|<\/td>$/g, '');
+      const html = markup ? text : cellHtml('td', text).replace(/^<td>|<\/td>$/g, '');
       await app.doc.setContent(target, html, 'paste');
       last = target;
     }
@@ -807,8 +817,9 @@ async function pasteCells(app: App, cell: HTMLTableCellElement, rows: string[][]
 // Delete key does, as in Keynote, and on which Duplicate is dimmed
 export const selectedRange = (app: App): Target | null => (inBlock(app) ? targetOf(app) : null);
 
-// the cells of the range of t as tab-separated text and as a table, with a merged cell in its
-// first row and column and empty cells in its other places
+// the cells of the range of t as tab-separated text and as a table marked with CELLS, with a merged
+// cell in its first row and column and empty cells in its other places. a formula keeps its
+// delimiters, and a cell of the table is its HTML as the file has it
 export function rangeText(t: Target): { plain: string; html: string } {
   const g = gridOf(t.table);
   const b = t.box!;
@@ -816,15 +827,19 @@ export function rangeText(t: Target): { plain: string; html: string } {
   const plain: string[] = [];
   const html: string[] = [];
   for (let r = b.r0; r <= b.r1; r++) {
-    const row: { tag: 'td' | 'th'; text: string }[] = [];
+    const texts: string[] = [];
+    let row = '';
     for (let c = b.c0; c <= b.c1; c++) {
       const s = g.grid[r]?.[c];
-      row.push({ tag: s?.cell.localName === 'th' ? 'th' : 'td', text: s && s.row === r && s.col === c ? cellText(s.cell) : '' });
+      const own = s && s.row === r && s.col === c ? s.cell : null;
+      const tag = s?.cell.localName === 'th' ? 'th' : 'td';
+      texts.push(own ? cellText(own, true) : '');
+      row += `<${tag}>${own ? contentWithTex(own) : ''}</${tag}>`;
     }
-    plain.push(row.map((x) => quote(x.text)).join('\t'));
-    html.push(rowHtml(row));
+    plain.push(texts.map(quote).join('\t'));
+    html.push(`<tr>${row}</tr>`);
   }
-  return { plain: plain.join('\n'), html: `<table>${html.join('')}</table>` };
+  return { plain: plain.join('\n'), html: `<table ${CELLS}>${html.join('')}</table>` };
 }
 
 // a change of the cells selected as a block, after whose undo the range before it is selected
@@ -855,10 +870,11 @@ export function clearRange(app: App): Promise<void> {
 export async function pasteRange(app: App, text: string, html = ''): Promise<boolean> {
   const t = selectedRange(app);
   const lines = text.replace(/\r\n?/g, '\n').replace(/\n+$/, '');
-  const rows = parseHtmlTable(html) ?? parseTabular(text) ?? (lines ? lines.split('\n').map((l) => [l]) : null);
+  const marked = parseEditorTable(html);
+  const rows = marked ?? parseHtmlTable(html) ?? parseTabular(text) ?? (lines ? lines.split('\n').map((l) => [l]) : null);
   const first = t?.box ? cellOver(t.table, t.box.r0, t.box.c0) : null;
   if (!first || !rows) return false;
-  await keepingRange(app, () => pasteCells(app, first, rows, true));
+  await keepingRange(app, () => pasteCells(app, first, rows, true, !!marked));
   return true;
 }
 
@@ -2091,13 +2107,14 @@ export function install(app: App): void {
     }
     const cell = region === 'text' ? cellAt(app) : null;
     if (region !== 'canvas' && !cell) return;
-    const rows = parseHtmlTable(html) ?? parseTabular(text);
+    const marked = cell ? parseEditorTable(html) : null;
+    const rows = marked ?? parseHtmlTable(html) ?? parseTabular(text);
     if (!rows) return;
     ev.preventDefault();
     ev.stopImmediatePropagation();
     closeMenus();
     if (cell) {
-      void app.history.transact('Paste', () => pasteCells(app, cell, rows)).catch(fail);
+      void app.history.transact('Paste', () => pasteCells(app, cell, rows, false, !!marked)).catch(fail);
       return;
     }
     void app.history.transact('Paste Table', async () => {

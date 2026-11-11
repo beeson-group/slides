@@ -2,8 +2,9 @@
 // layout puts it while it lies over nothing, and else it is moved to the free place nearest to it
 // under the heading, as placeTable of table.ts places a new table. a free place is off every text
 // and the chrome, i.e. the running head, the footnote line, and the slide number, and first off the
-// figures as well, for which a new picture is drawn smaller. without a free place, the element is
-// put at the center of the slide, where Keynote puts a new object
+// figures as well, for which a new picture is drawn smaller. without a free place, a plot is put at
+// the place of the grid that covers the least of the slide by leastCover, and another element at
+// the center of the slide, where Keynote puts a new object
 
 import type { App } from '../app.ts';
 import { CONTAINER, snapBoxOf } from '../canvas/hit.ts';
@@ -35,11 +36,15 @@ export function freePlace(app: App, el: Element, picture?: HTMLElement, strict =
   const w = slide.offsetWidth || 1920;
   const h = slide.offsetHeight || 1080;
   const others: { box: Box; text: boolean }[] = [];
+  const els: Element[] = [];
   const num = document.querySelector('.reveal .slide-number');
   for (const o of [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *, :scope > .block > *'), ...(num ? [num] : [])]) {
     if (o === el || o.contains(el) || el.contains(o) || o.matches(SKIP)) continue;
     const box = boxOf(app, o);
-    if (box && box.right - box.left > 1 && box.bottom - box.top > 1) others.push({ box, text: !o.matches(FIGURE) });
+    if (box && box.right - box.left > 1 && box.bottom - box.top > 1) {
+      others.push({ box, text: !o.matches(FIGURE) });
+      els.push(o);
+    }
   }
   const own = () => (el.matches(FIGURE) ? boxOf(app, el) : slideBox(app, el))!;
   const fits = (b: Box, all: boolean, room: number) => b.left >= 0 && b.top >= 0 && b.right <= w && b.bottom <= h &&
@@ -90,8 +95,77 @@ export function freePlace(app: App, el: Element, picture?: HTMLElement, strict =
   } finally {
     if (picture) picture.style.width = kept;
   }
-  if (strict) return null;
+  if (strict) {
+    const bw = b0.right - b0.left, bh = b0.bottom - b0.top;
+    const side = bw + 2 * MARGIN <= w ? MARGIN : ROOM;
+    const places: Box[] = [];
+    for (const y of steps(ROOM, h - bh - ROOM, [])) for (const x of steps(side, w - bw - side, [])) places.push({ left: x, top: y, right: x + bw, bottom: y + bh });
+    const p = leastCover(coverOf(app, els), places, b0);
+    return p && { x: Math.round(p.left - b0.left), y: Math.round(p.top - b0.top) };
+  }
   return { x: Math.round((w - b0.left - b0.right) / 2), y: Math.round((h - b0.top - b0.bottom) / 2) };
+}
+
+// what a new element covers on its slide where it does not have a free place: the boxes of the
+// figures and the tables, which hide what is under them, and the lines of the texts
+export type Cover = { box: Box; figure: boolean }[];
+
+const SOLID = `${FIGURE}, table`;
+
+export function coverOf(app: App, els: Element[]): Cover {
+  const s = (app.slides() as HTMLElement).getBoundingClientRect();
+  const k = s.width / ((app.slides() as HTMLElement).offsetWidth || 1) || 1;
+  const box = (r: DOMRect): Box => ({ left: (r.left - s.left) / k, top: (r.top - s.top) / k, right: (r.right - s.left) / k, bottom: (r.bottom - s.top) / k });
+  const out: Cover = [];
+  for (const el of els) {
+    if (!el.getClientRects().length) continue;
+    if (el.matches(SOLID)) {
+      out.push({ box: box(el.getBoundingClientRect()), figure: true });
+      continue;
+    }
+    const n = out.length;
+    const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+    const range = document.createRange();
+    for (let t = walk.nextNode(); t; t = walk.nextNode()) {
+      if (!t.textContent?.trim()) continue;
+      range.selectNodeContents(t);
+      for (const r of range.getClientRects()) if (r.width > 1 && r.height > 1) out.push({ box: box(r), figure: false });
+    }
+    for (const m of el.querySelectorAll(`mjx-container, ${SOLID}`)) {
+      const r = m.getBoundingClientRect();
+      if (r.width > 1 && r.height > 1) out.push({ box: box(r), figure: m.matches(SOLID) });
+    }
+    if (out.length === n) out.push({ box: box(el.getBoundingClientRect()), figure: false });
+  }
+  return out;
+}
+
+const overlap = (a: Box, b: Box) =>
+  Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
+
+// the place that covers the least of cover, nearest to from among equals. an area of a figure counts
+// four times an area of text, and a figure covered more than half counts more than any text, hence
+// a new element is not put on the box of a figure while another place exists
+export function leastCover(cover: Cover, places: Box[], from: Box): Box | null {
+  let best: Box | null = null;
+  let least = Infinity;
+  let near = Infinity;
+  for (const p of places) {
+    let c = 0;
+    for (const o of cover) {
+      const a = overlap(p, o.box);
+      if (!a) continue;
+      if (!o.figure) c += a;
+      else c += 4 * a + (a > overlap(o.box, o.box) / 2 ? 1e9 : 0);
+    }
+    const d = Math.hypot(p.left - from.left, p.top - from.top);
+    if (c < least - 1 || (c <= least + 1 && d < near)) {
+      least = Math.min(c, least);
+      near = d;
+      best = p;
+    }
+  }
+  return best;
 }
 
 // the translate of el in slide px

@@ -99,6 +99,36 @@ export function parseHtmlTable(html: string): string[][] | null {
   return square(rows.filter((r) => r.length));
 }
 
+// the mark of a table that a cut or a copy of a range of cells of the editor writes
+export const CELLS = 'data-beeson="cells"';
+
+// the HTML of the children of el with only the inline elements of the theme, i.e. strong, em, s, a
+// span of one class tone-*, and br. every other element is reduced to its text, without a script
+// or a style
+function inlineHtml(el: Element): string {
+  let out = '';
+  for (const n of el.childNodes) {
+    if (n.nodeType === 3) out += escape((n as Text).data).replace(/\u00a0/g, '&nbsp;');
+    if (!(n instanceof Element) || ['script', 'style'].includes(n.localName)) continue;
+    const tone = n.localName === 'span' && n.classList.length === 1 && /^tone-(accent|violet|blue|red|subtle|muted)$/.test(n.className);
+    if (n.localName === 'br') out += '<br>';
+    else if (['strong', 'em', 's'].includes(n.localName)) out += `<${n.localName}>${inlineHtml(n)}</${n.localName}>`;
+    else if (tone) out += `<span class="${n.className}">${inlineHtml(n)}</span>`;
+    else out += inlineHtml(n);
+  }
+  return out;
+}
+
+// the inner HTML of each cell of a table marked with CELLS, kept to the inline elements of the
+// theme and to formulas, with a cell of colspan followed by empty cells. null without such a table
+export function parseEditorTable(html: string): string[][] | null {
+  if (!html.includes(CELLS)) return null;
+  const table = new DOMParser().parseFromString(html, 'text/html').querySelector(`table[${CELLS}]`) as HTMLTableElement | null;
+  if (!table) return null;
+  const rows = [...table.rows].map((tr) => [...tr.cells].flatMap((c) => [inlineHtml(c), ...Array<string>(Math.max(0, c.colSpan - 1)).fill('')]));
+  return square(rows.filter((r) => r.length));
+}
+
 // the columns of rows that hold numbers, i.e. every cell below the header row that is not empty is
 // a number, and at least one is
 export function numericColumns(rows: string[][]): boolean[] {
