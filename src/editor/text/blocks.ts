@@ -598,9 +598,13 @@ export async function setList(app: App, kind: ListKind): Promise<void> {
 
 // each selected block given the list of kind as a whole: a paragraph becomes a list of one item, a
 // list is retagged, and each item of a list becomes a paragraph with the attributes of the item.
-// the blocks made are selected
-async function setBlockList(app: App, blocks: Element[], kind: ListKind): Promise<void> {
-  if (!canSetList(app, kind)) return;
+// the blocks made are selected, and the blocks before them again after an undo
+function setBlockList(app: App, blocks: Element[], kind: ListKind): Promise<void> {
+  if (!canSetList(app, kind)) return Promise.resolve();
+  return app.history.selecting('List', () => listBlocksAs(app, blocks, kind));
+}
+
+async function listBlocksAs(app: App, blocks: Element[], kind: ListKind): Promise<void> {
   const made: Element[] = [];
   for (const el of blocks) {
     const now = blockList(app, el);
@@ -680,7 +684,7 @@ export function paragraphStyle(app: App): ParagraphStyle | null {
 
 export const canStyle = (app: App, style?: ParagraphStyle): boolean => styled(app).some((el) => !style || fits(el, style));
 
-async function restyle(app: App, el: Element, style: ParagraphStyle, caret: number | null): Promise<void> {
+async function restyle(app: App, el: Element, style: ParagraphStyle, caret: number | null): Promise<Element> {
   const classes: Record<string, boolean> = {};
   for (const [s, c] of Object.entries(STYLE_CLASSES)) if (el.classList.contains(c) !== (s === style)) classes[c] = s === style;
   const tag = el.localName === 'li' ? 'li' : STYLE_TAG[style];
@@ -689,16 +693,28 @@ async function restyle(app: App, el: Element, style: ParagraphStyle, caret: numb
     if (Object.keys(classes).length) app.doc.setTag(el, { classes }, 'paragraph style');
   } else node = await app.doc.retag(el, tag, { classes }, 'paragraph style');
   if (caret !== null) selectIn(node, caret);
+  return node;
 }
 
+// the style set on the block of the text, or on the selected blocks, which are selected again after
+// a retag, and after an undo and a redo
 export async function setStyle(app: App, style: ParagraphStyle | ((s: ParagraphStyle) => ParagraphStyle)): Promise<void> {
   const t = textTarget(app);
   const caret = t ? offsetIn(t.host, t.range.startContainer, t.range.startOffset) : null;
-  for (const el of styled(app)) {
-    const now = styleOf(app, el)!;
-    const next = typeof style === 'function' ? style(now) : style;
-    if (next !== now && fits(el, next)) await restyle(app, el, next, caret);
-  }
+  const each = async () => {
+    const made: Element[] = [];
+    for (const el of styled(app)) {
+      const now = styleOf(app, el)!;
+      const next = typeof style === 'function' ? style(now) : style;
+      made.push(next !== now && fits(el, next) ? await restyle(app, el, next, caret) : el);
+    }
+    return made;
+  };
+  if (t) return void (await each());
+  await app.history.selecting('Paragraph Style', async () => {
+    const made = await each();
+    if (made.length) app.selection.set('elements', made);
+  });
 }
 
 // why a style or a step of the size is not set on the blocks of the selection, by the scope rule,

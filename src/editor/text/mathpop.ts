@@ -7,6 +7,7 @@
 // inspector. openInsert opens the sheet for an inline formula at the caret of a text
 
 import { HOST, type App, type MathPop } from '../app.ts';
+import type { Entry } from '../history.ts';
 import { completionText, completions, contentWithInline, contentWithTex, deckMacros, glyphOf, isName, mathLookup, previewTex, type Macro } from '../math.ts';
 import { popoverBeside, type Side } from '../ui/dialog.ts';
 import { injectStyle, make } from '../ui/dom.ts';
@@ -210,8 +211,9 @@ export function texEditor(options: { display(): boolean; label: string; placehol
 
 // the sheet of a TeX: its title, its first TeX, whether it is a display, the label of its button,
 // the block that it is put beside and kept clear of, and commit, which writes the TeX and throws an
-// error to be shown at the field
-type Sheet = { title: string; tex: string; display: boolean; open: string; close: string; primary: string; block(): Element; commit(tex: string): Promise<void>; done?(): void };
+// error to be shown at the field. with made, the sheet of a new formula, a click away commits a
+// TeX that is not empty, and made is selected after the commit
+type Sheet = { title: string; tex: string; display: boolean; open: string; close: string; primary: string; block(): Element; commit(tex: string): Promise<void>; done?(): void; made?: Element };
 
 // the sheet is put at the right of the text column, over the figure of the slide, or at the left,
 // and above or below a block that fills the slide. its width of 440 px fits at the right of the
@@ -262,6 +264,8 @@ export function install(app: App): void {
   let popover: HTMLElement | null = null;
   let back: (() => void) | null = null;
   let unplace: (() => void) | null = null;
+  // the commit of the open sheet at a click away, or null for a close
+  let away: (() => Promise<void>) | null = null;
 
   // the keys of an open completion list are taken before the keys of the editor and of the sheet
   window.addEventListener('keydown', (ev) => {
@@ -294,6 +298,7 @@ export function install(app: App): void {
     unplace = null;
     popover?.remove();
     popover = null;
+    away = null;
     openFor = null;
     const restore = back;
     back = null;
@@ -347,14 +352,14 @@ export function install(app: App): void {
     // the commit key is held until the TeX typed before it is typeset, since Apply is dimmed or
     // lit by the preview of an earlier TeX until then. a TeX with an error is not committed
     let committing = false;
-    const submit = async () => {
+    const submit = async (focus = !!target && !sheet.made) => {
       if (committing) return;
       committing = true;
       try {
         await ed.settle();
         if (popover !== box || !ed.ok()) return;
         await sheet.commit(field.value);
-        closeMath(!!target);
+        closeMath(focus);
         sheet.done?.();
       } catch (e) {
         ed.message.classList.remove('prompt');
@@ -384,6 +389,12 @@ export function install(app: App): void {
       stops[(at + (ev.shiftKey ? -1 : 1) + stops.length) % stops.length].focus();
     });
     popover = box;
+    away = sheet.made
+      ? async () => {
+          if (field.value.trim()) await submit(false);
+          if (popover === box) closeMath(false);
+        }
+      : null;
     openFor = target;
     const host = target?.closest(HOST);
     const at = host && target ? [...host.querySelectorAll('mjx-container')].indexOf(target) : -1;
@@ -412,10 +423,14 @@ export function install(app: App): void {
     app.invalidate('selection');
   }
 
-  function openMath(container: Element): void {
+  // with into, the entry of the insert of a new formula, the TeX is written into this entry, and a
+  // click away commits it
+  function openMath(container: Element, into?: Entry): void {
     const info = mathLookup()(container);
     if (!info) return;
     const fresh = !info.tex.trim();
+    // the block is taken now, since a commit draws the formula again in a new container
+    const block = blockOf(container);
     openSheet({
       title: fresh ? 'Insert Formula' : 'Edit Formula',
       tex: info.tex,
@@ -423,8 +438,14 @@ export function install(app: App): void {
       open: info.open,
       close: info.close,
       primary: fresh ? 'Insert' : 'Apply',
-      block: () => blockOf(container),
-      commit: (tex) => setMath(container, tex),
+      block: () => block,
+      commit: into
+        ? (tex) => app.history.amend(into, async () => {
+            await setMath(container, tex);
+            if (block.isConnected) app.selection.set('elements', [block]);
+          })
+        : (tex) => setMath(container, tex),
+      made: into ? block : undefined,
     }, container);
   }
 
@@ -437,7 +458,10 @@ export function install(app: App): void {
     if (container && app.hostOf(container)) {
       ev.preventDefault();
       openMath(container);
-    } else if (popover && target && !popover.contains(target) && !target.closest('.beeson-complete')) closeMath(false);
+    } else if (popover && target && !popover.contains(target) && !target.closest('.beeson-complete')) {
+      if (away) void away();
+      else closeMath(false);
+    }
   });
   app.listen('slide', () => closeMath(false));
 }

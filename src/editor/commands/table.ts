@@ -36,7 +36,7 @@ import { Dialog } from '../ui/dialog.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { closeMenus, menuOpen, openMenu, type MenuItem } from '../ui/menu.ts';
-import { columnPlace, freeZone, inkBox, meets, slideBox, type Box as SlideBox } from './insert.ts';
+import { columnPlace, freeZone, meets, slideBox, takenBox, type Box as SlideBox } from './insert.ts';
 import { MARK } from './slide.ts';
 
 // the widths of the frame of the cell of the caret and of the cells selected as a block
@@ -318,28 +318,17 @@ export function pickTableInto(app: App, zone: Element, anchor: DOMRect): void {
   openPicker(app, anchor, (s) => void into(s), (rested) => void askSize(app, rested).then((s) => s && into(s)).catch(fail));
 }
 
-const TEXT = 'h1, h2, h3, h4, p, ul, ol, dl, table, pre, blockquote, div.math';
 // the band in slide px over the bottom of the slide, where the slide number is drawn, and over the
 // footnote line, which a new table does not reach into
 const BOTTOM = 40;
 
-// the box in slide px of an element of a slide, i.e. the box of the text of a block that is not
-// moved, and else the box of the element with its translate. an empty block that shows its
-// placeholder, e.g. Text on a new slide, counts with its whole box
-const holds = (el: Element) => !['none', 'normal'].includes(getComputedStyle(el, '::before').content);
-function shownBox(app: App, el: Element): SlideBox | null {
-  if (!el.getClientRects().length) return null;
-  const moved = el instanceof HTMLElement && !!el.style.translate;
-  if (!el.matches(TEXT) || moved) return slideBox(app, el);
-  return inkBox(app, el) ?? (holds(el) ? slideBox(app, el) : null);
-}
-
 // a new table put where it fits on its slide, with every row and with room around it for its bars
 // at the zoom of the canvas: under the blocks before it, else at the center of the free area where
 // the layout puts a zone, else moved up until its bottom is BOTTOM over the footnote line or the
-// bottom of the slide, and else at the center of the slide over what is there, as Keynote inserts
-// a table. the table of a slide of the theme is put into its text column, and it is not put over
-// the text while free space is left. the move is a translate in slide px
+// bottom of the slide over the blocks with text of its column, and else at the center of the slide
+// over what is there, as Keynote inserts a table. the table of a slide of the theme is put into its
+// text column, and it is not put over the text while free space is left. the space that an element
+// takes is the rule takenBox of insert.ts. the move is a translate in slide px
 function placeTable(app: App, table: HTMLTableElement): void {
   const slide = table.closest('section');
   const parent = table.parentElement;
@@ -349,12 +338,17 @@ function placeTable(app: App, table: HTMLTableElement): void {
   const room = (GAP + BAR + 2) / k;
   const w = (slide as HTMLElement).offsetWidth || 1920;
   const h = (slide as HTMLElement).offsetHeight || 1080;
-  const foot = [...slide.querySelectorAll(':scope > .foot')].map((f) => shownBox(app, f)).find((b) => !!b);
+  const foot = [...slide.querySelectorAll(':scope > .foot')].map((f) => takenBox(app, f)).find((b) => !!b);
   const floor = Math.min(h - BOTTOM, foot ? foot.top - BOTTOM : Infinity);
   const skip = (el: Element) => el === table || el.matches('aside.notes, script, style');
-  const boxes = (els: Element[]) => els.filter((el) => !skip(el)).map((el) => shownBox(app, el)).filter((b): b is SlideBox => !!b);
-  const before = boxes([...parent.children].slice(0, [...parent.children].indexOf(table)).filter((el) => !el.matches('.run, .foot, [data-generated]')));
-  const others = boxes([...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *')].filter((el) => !el.contains(table)));
+  const taken = (els: Element[]) => els.filter((el) => !skip(el)).map((el) => ({ el, box: takenBox(app, el) })).filter((o): o is { el: Element; box: SlideBox } => !!o.box);
+  const above = [...parent.children].slice(0, [...parent.children].indexOf(table)).filter((el) => !el.matches('.run, .foot, [data-generated]'));
+  const before = taken(above).map((o) => o.box);
+  const all = taken([...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *')].filter((el) => !el.contains(table)));
+  const others = all.map((o) => o.box);
+  // a table moved up may cover the blocks with text of its column before it, and not a caption
+  // or an empty placeholder
+  const covered = (el: Element) => above.includes(el) && !el.matches('.caption') && !!el.textContent?.trim();
   const tw = t.right - t.left;
   const th = t.bottom - t.top;
   const at = (left: number, top: number): SlideBox => ({ left, top, right: left + tw, bottom: top + th });
@@ -368,7 +362,8 @@ function placeTable(app: App, table: HTMLTableElement): void {
     if (free(b)) place = b;
   }
   const raised = Math.min(top, floor - th);
-  if (!place && raised - room >= 0) place = at(t.left, raised);
+  const over = (b: SlideBox) => all.some((o) => meets(b, o.box) && !covered(o.el));
+  if (!place && raised - room >= 0 && !over(at(t.left, raised))) place = at(t.left, raised);
   place ??= at((w - tw) / 2, (h - th) / 2);
   const x = Math.round(place.left - t.left);
   const y = Math.round(place.top - t.top);
