@@ -1,7 +1,8 @@
 // the commands of the order, the groups, the locks, and the rotation of the elements, as in the
-// Arrange menu of Keynote. the order of an element is the order of its unit among its siblings,
-// since an element of the theme does not set a z-index, and a later sibling is drawn over an
-// earlier one. a group is the elements with the same data-group, selected and dragged together,
+// Arrange menu of Keynote. an element is drawn over its siblings of a lower z-index, and over the
+// earlier siblings of the same z-index. an element out of the flow is ordered by a move of its unit
+// among its siblings, and an element in the flow by a z-index, since a move would change the layout
+// of its slide. a group is the elements with the same data-group, selected and dragged together,
 // and a locked element, with data-locked, is not moved by the pointer, the keys, or the fields.
 // each command is one entry of the history
 
