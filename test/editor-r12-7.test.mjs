@@ -93,6 +93,12 @@ const CLEARED = [
   ['<tr><td>Europa</td><td>2.53e-5</td><td>Jupiter</td></tr>', '<tr><td></td><td></td><td>Jupiter</td></tr>'],
 ];
 
+// the cells from Moon to 2.53e-5 filled with a b and c d
+const FILLED = [
+  ['<tr><td>Moon</td><td>\\(0.01215\\)</td><td>Earth and Moon</td></tr>', '<tr><td>a</td><td>b</td><td>Earth and Moon</td></tr>'],
+  ['<tr><td>Europa</td><td>2.53e-5</td><td>Jupiter</td></tr>', '<tr><td>c</td><td>d</td><td>Jupiter</td></tr>'],
+];
+
 // roundTrip checks the edits byte for byte, the source after an undo, the edit again after a
 // redo, and an open of the saved edit without problems
 async function roundTrip(page, edits) {
@@ -115,7 +121,7 @@ for (const platform of PLATFORMS) {
     await exec(page, 'element.delete');
     await frames(page);
     assert.equal(await tables(page), 1, 'Delete removed the table');
-    assert.equal(await undoLabel(page), 'Undo Clear Cells');
+    assert.equal(await undoLabel(page), 'Undo Delete');
     assert.equal(await inBlock(page), true, 'the range is not selected after Delete');
     await roundTrip(page, CLEARED);
   });
@@ -130,9 +136,10 @@ for (const platform of PLATFORMS) {
     assert.equal(out.plain, 'Moon\t0.01215\nEuropa\t2.53e-5');
     assert.equal(await undoLabel(page), 'Undo Cut');
     await roundTrip(page, CLEARED);
-    // Cut of the Edit menu clears the same cells
-    await page.evaluate('window.BeesonEditor.undo()');
-    page.source = await render(page);
+  });
+
+  test(`Cut of the Edit menu on a range of cells clears the cells (${platform})`, async (t) => {
+    const page = await load(t, platform);
     await range(page, 'Moon', '2.53e-5');
     await exec(page, 'edit.cut');
     await frames(page);
@@ -172,19 +179,16 @@ for (const platform of PLATFORMS) {
     assert.equal(await tables(page), 1, 'the paste added a table');
     assert.equal(await undoLabel(page), 'Undo Paste');
     assert.equal(await inBlock(page), true, 'the pasted cells are not selected');
-    const filled = [
-      ['<tr><td>Moon</td><td>\\(0.01215\\)</td><td>Earth and Moon</td></tr>', '<tr><td>a</td><td>b</td><td>Earth and Moon</td></tr>'],
-      ['<tr><td>Europa</td><td>2.53e-5</td><td>Jupiter</td></tr>', '<tr><td>c</td><td>d</td><td>Jupiter</td></tr>'],
-    ];
-    await roundTrip(page, filled);
-    // Paste of the Edit menu fills the same cells
-    await page.evaluate('window.BeesonEditor.undo()');
-    page.source = await render(page);
+    await roundTrip(page, FILLED);
+  });
+
+  test(`Paste of the Edit menu onto a range of cells fills them from its first cell (${platform})`, async (t) => {
+    const page = await load(t, platform);
     await range(page, 'Moon', '2.53e-5');
     await exec(page, 'edit.paste', 'a\tb\nc\td');
     await frames(page);
     assert.equal(await tables(page), 1, 'Edit > Paste added a table');
-    await byteExact(page, filled);
+    await byteExact(page, FILLED);
   });
 
   test(`Backspace on a range of cells keeps the range selected (${platform})`, async (t) => {
@@ -215,19 +219,22 @@ for (const platform of PLATFORMS) {
     const value = () => page.evaluate(`document.querySelector(${js(field)}).value`);
     assert.equal(await rows(), 6);
     assert.equal(await page.evaluate('document.activeElement.id'), 'beeson-edit-num-rows');
+    const count = `Reveal.getCurrentSlide().querySelector('table').rows.length`;
     await press(page, 'Mod+Z');
-    await frames(page);
+    await page.waitFor(`${count} === 4`).catch(() => {});
     assert.equal(await rows(), 4, 'the undo in the field did not undo the table');
     assert.equal(await value(), '4');
     await byteExact(page);
     await press(page, 'Mod+Shift+Z');
-    await frames(page);
+    await page.waitFor(`${count} === 6`).catch(() => {});
     assert.equal(await rows(), 6);
     assert.equal(await value(), '6');
     // a blur after the redo does not add an entry to the history
-    await click(page, { x: 20, y: 980 });
+    await page.evaluate('document.activeElement.blur()');
     await frames(page);
     assert.equal(await rows(), 6);
+    assert.equal(await undoLabel(page), 'Undo Set Row Count');
+    assert.equal((await state(page, 'edit.redo')).enabled, false);
     await page.evaluate('window.BeesonEditor.undo()');
     await byteExact(page);
   });
