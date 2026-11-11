@@ -164,7 +164,7 @@ export class Navigator implements Pane {
     this.app = app;
     this.pane.className = 'beeson-edit-nav';
     this.pane.setAttribute('aria-label', 'Slides');
-    this.button.textContent = 'Slides';
+    this.button.textContent = 'Navigator';
     this.button.title = 'Show the navigator of the slides at the left';
     this.list.className = 'rows';
     this.list.setAttribute('role', 'listbox');

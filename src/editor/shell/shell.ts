@@ -52,6 +52,7 @@ html.beeson-editor body > .beeson-edit-header { grid-area: top; position: relati
 html.beeson-editor body > .beeson-edit-nav { grid-area: nav; position: relative; inset: auto; width: auto; min-width: 0; min-height: 0; z-index: 50; background: var(--ed-panel); border-right: 1px solid var(--ed-line); color: var(--ed-text); font: 12px/1.4 var(--ed-font); }
 html.beeson-editor body > .beeson-edit-nav-edge { grid-area: nav; justify-self: end; position: relative; z-index: 55; width: 7px; margin-right: -4px; display: none; cursor: ew-resize; touch-action: none; }
 html.beeson-editor.beeson-nav body > .beeson-edit-nav-edge { display: block; }
+html.beeson-resizing, html.beeson-resizing * { cursor: ew-resize !important; user-select: none !important; }
 html.beeson-editor body > .beeson-edit-nav-edge:hover, html.beeson-editor body > .beeson-edit-nav-edge:focus-visible { outline: none; background: color-mix(in srgb, var(--ed-select) 45%, transparent); }
 html.beeson-editor .beeson-edit-peek { left: calc(var(--ed-nav-col) + 8px); }
 html.beeson-editor body > .beeson-edit-pane { grid-area: notes; position: relative; inset: auto; height: auto; min-height: 0; z-index: 0; background: var(--ed-panel); border-top: 1px solid var(--ed-line); color: var(--ed-faint); font: 11px/1.4 var(--ed-font); padding: 6px 12px; }
@@ -142,8 +143,12 @@ export function install(app: App): void {
     ev.stopPropagation();
     const startX = ev.clientX;
     const start = navWidth;
+    // the resize cursor is kept past the limits of the width, as the pointer is captured
+    edge.setPointerCapture(ev.pointerId);
+    html.classList.add('beeson-resizing');
     const onMove = (e: PointerEvent) => setNavWidth(start + e.clientX - startX, false);
     const onUp = () => {
+      html.classList.remove('beeson-resizing');
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       store(NAV_KEY, String(navWidth));
@@ -211,7 +216,7 @@ export function install(app: App): void {
     // the key stands for Hide Inspector of Keynote, whose ⌥⌘I opens the developer tools
     ...PANE_KEYS(1),
     run: () => setFormat(!format),
-    menu: { bar: 'View', group: 'panes', order: 13 },
+    menu: { bar: 'View', group: 'panes', order: 11 },
     toolbar: { group: 'inspector', order: 60, icon: 'format' },
   });
 

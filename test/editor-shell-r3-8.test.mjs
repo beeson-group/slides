@@ -550,11 +550,11 @@ for (const platform of PLATFORMS) {
     // the Zoom popup shows the zoom, and sets a level or Fit
     const zoom = '.beeson-edit-top [data-command="toolbar.zoom"]';
     const face = () => page.evaluate(`document.querySelector('${zoom} .readout').textContent`);
-    assert.equal(await face(), 'Fit');
+    assert.match(await face(), /^\d+%$/);
     await click(page, zoom);
     await frames(page);
     const levels = (await openMenuItems(page)).map((i) => i.label);
-    assert.deepEqual(levels, ['Fit', 'Actual Size', 'Zoom to Selection', '25%', '33%', '50%', '67%', '75%', '100%', '125%', '150%', '200%', '300%', '400%']);
+    assert.deepEqual(levels, ['Fit Slide', 'Actual Size', 'Zoom to Selection', '25%', '33%', '50%', '67%', '75%', '100%', '125%', '150%', '200%', '300%', '400%']);
     await pickItem(page, '200%');
     await frames(page);
     assert.equal(await page.evaluate('window.BeesonEditorShell.stage.zoom'), 2);
@@ -562,10 +562,10 @@ for (const platform of PLATFORMS) {
     await click(page, zoom);
     await frames(page);
     assert.equal((await openMenuItems(page)).find((i) => i.label === '200%').checked, true);
-    await pickItem(page, 'Fit');
+    await pickItem(page, 'Fit Slide');
     await frames(page);
     assert.equal(await page.evaluate('window.BeesonEditorShell.stage.zoom'), null);
-    assert.equal(await face(), 'Fit');
+    assert.match(await face(), /^\d+%$/);
     assert.equal(await render(page), page.source);
     assert.deepEqual(errors(page), []);
   });

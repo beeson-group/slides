@@ -38,7 +38,7 @@ export function install(app: App): void {
   const menu = (group: string, order: number) => ({ bar: 'View', group, order, submenu: 'Zoom' });
   c.define({
     id: 'zoom.fit',
-    label: 'Fit',
+    label: 'Fit Slide',
     keys: { mac: ['Mod+Alt+0', 'Shift+1'], other: ['Shift+1'] },
     menu: menu('zoom', 20),
     checked: (a) => a.stage.zoom === null,

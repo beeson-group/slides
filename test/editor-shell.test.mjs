@@ -35,11 +35,11 @@ test('the slide is set off from the pasteboard in both modes of the slide', asyn
 
 // a regression test of the focus left on Slides and Steps after a pointer click, since nav.ts and
 // steps.ts wire them without the blur of wire()
-test('a pointer click on Slides or Steps leaves the focus off the button', async (t) => {
+test('a pointer click on Navigator or Steps leaves the focus off the button', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
   const page = await editorPage(browser);
-  for (const name of ['Slides', 'Steps']) {
+  for (const name of ['Navigator', 'Steps']) {
     const at = await page.evaluate(`(() => { const r = [...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === ${JSON.stringify(name)}).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
     await click(page, at);
     await frames(page);
@@ -244,7 +244,7 @@ test('the labels of the toolbar are kept while they fit, and the late groups go 
     assert.equal(bar.more, more, `${width}: the menu More`);
     // Format and Steps stay after More, since Format opens and closes the inspector, beside which
     // the navigator is hidden in a narrow window
-    assert.deepEqual(bar.texts, more ? ['View', 'FitZoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', 'Media', 'Format', 'Steps'] : ['View', 'FitZoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', 'Media', 'Present', 'Save', 'Format', 'Steps']);
+    assert.deepEqual(bar.texts.map((x) => x.replace(/^\d+%/, '%')), more ? ['View', '%Zoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', 'Media', 'Format', 'Steps'] : ['View', '%Zoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', 'Media', 'Present', 'Save', 'Format', 'Steps']);
     const cell = await boxOf(page, '.beeson-edit-canvas');
     assert.ok(cell.w > 0 && cell.h > 0);
     assert.deepEqual(page.errors, []);

@@ -112,6 +112,7 @@ html.beeson-no-toolbar .beeson-edit-top { display: none; }
 .beeson-edit-customize .item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 2px; border-radius: 8px; text-align: center; font-size: 11px; color: var(--ed-muted); cursor: grab; }
 .beeson-edit-customize .item .well { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--ed-hover); color: var(--ed-text); }
 .beeson-edit-customize .item:hover .well { background: var(--ed-pressed); }
+.beeson-edit-customize .item[aria-disabled="true"] { opacity: 0.4; cursor: default; }
 .beeson-edit-customize .item:focus-visible, .beeson-edit-customize .default:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: 1px; }
 .beeson-edit-customize .default { display: flex; align-items: center; gap: 2px; padding: 6px 8px; margin-bottom: 12px; border: 1px solid var(--ed-line); border-radius: 8px; font-size: 10px; color: var(--ed-muted); overflow: hidden; cursor: grab; }
 .beeson-edit-customize .default .mini { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 40px; }
@@ -164,15 +165,15 @@ export function install(app: App): void {
   more.append(icon('more'), make('span', 'label', 'More'));
   const fail = (e: unknown) => app.fail(e);
 
-  const zoomText = () => (app.stage?.zoom == null ? 'Fit' : percent(app.stage.zoom));
+  const zoomText = () => percent(app.stage?.zoom ?? app.stage?.fitScale() ?? 1);
   const ids = (list: string[]): MenuItem[] => list.filter((id) => app.commands.get(id)).map((id) => ({ command: id }));
   const popupItems = (id: string): MenuItem[] => {
     if (id === 'toolbar.view') {
-      return [...ids(['view.navigator', 'view.slideOnly', 'view.outline', 'view.lightTable']), { rule: true }, ...ids(['shell.format', 'view.steps', 'view.notes']), { rule: true }, ...ids(['view.rulers', 'view.guides', 'view.grid'])];
+      return [...ids(['view.navigator', 'view.slideOnly', 'view.lightTable', 'view.outline']), { rule: true }, ...ids(['shell.format', 'view.steps', 'view.notes']), { rule: true }, ...ids(['view.rulers', 'view.guides', 'view.grid'])];
     }
     const zoom = app.stage.zoom;
     return [
-      { label: 'Fit', checked: zoom === null, run: () => app.stage.setZoom(null) },
+      { label: 'Fit Slide', checked: zoom === null, run: () => app.stage.setZoom(null) },
       ...ids(['zoom.actual', 'zoom.selection']),
       { rule: true },
       ...ZOOMS.map((z): MenuItem => ({ label: percent(z), checked: zoom !== null && Math.abs(zoom - z) < 0.005, run: () => app.stage.setZoom(z) })),
@@ -455,6 +456,18 @@ export function install(app: App): void {
     store(storeKey(), kept || show !== 'both' ? JSON.stringify({ items: kept, show }) : null);
     showButton.textContent = SHOWS.find(([v]) => v === show)![1];
     render();
+    dim();
+  };
+  // an item that the toolbar holds is dimmed, as in Keynote, since a command is on the toolbar once
+  const dim = () => {
+    const list = layout();
+    for (const el of palette.querySelectorAll<HTMLElement>('.item')) {
+      const id = el.dataset.item!;
+      const held = !isMark(id) && list.includes(id);
+      if (held) el.setAttribute('aria-disabled', 'true');
+      else el.removeAttribute('aria-disabled');
+      el.title = held ? `${nameOf(id)} is in the toolbar` : `Drag ${nameOf(id)} into the toolbar, or press Return to add it`;
+    }
   };
   const isMark = (id: string) => id === SEPARATOR || id === SPACE;
   const nameOf = (id: string) => (isMark(id) ? MARKS[id].label : toolbarLabel(app, app.commands.get(id)!));
@@ -475,9 +488,9 @@ export function install(app: App): void {
       el.dataset.item = id;
       el.tabIndex = 0;
       el.setAttribute('role', 'button');
-      el.title = `Drag ${nameOf(id)} into the toolbar, or press Return to add it`;
       return el;
     }));
+    dim();
     defaultRow.replaceChildren(...defaults(app.commands.forToolbar()).map((id) => {
       if (isMark(id)) return make('span', `mini ${id === SEPARATOR ? 'sep' : 'space'}`);
       const m = make('span', 'mini');
@@ -660,7 +673,7 @@ export function install(app: App): void {
   };
   const pressed = (ev: KeyboardEvent) => ev.key === 'Enter' || ev.key === ' ';
   palette.addEventListener('pointerdown', (ev) => {
-    const el = (ev.target as Element).closest<HTMLElement>('.item');
+    const el = (ev.target as Element).closest<HTMLElement>('.item:not([aria-disabled])');
     if (el) begin(ev, 'add', el.dataset.item!, -1);
   });
   palette.addEventListener('keydown', (ev) => {
