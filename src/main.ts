@@ -73,6 +73,11 @@ const plots: PlotView[] = [];
 // with the URL parameter edit, the in-place editor is loaded, and the deck is drawn still while it
 // is edited, without the traced backdrops and the tint at the pointer
 const EDITING = new URLSearchParams(location.search).has('edit');
+// with the parameter from-editor, the deck is the show that the editor plays in a frame. Esc and E
+// return to the editor, F takes the stage of the editor into full screen and out, and S warns the
+// editor that the speaker view leaves full screen, hence the keys are posted to the editor
+const PLAYED = !EDITING && window.parent !== window && new URLSearchParams(location.search).has('from-editor');
+const toEditor = (eventName: string) => window.parent.postMessage(JSON.stringify({ namespace: 'beeson', eventName, state: window.Reveal.getState() }), '*');
 
 function edit(): void {
   const params = new URLSearchParams(location.search);
@@ -197,17 +202,20 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   deck.addKeyBinding({ keyCode: 68, key: 'D', description: 'Switch dark and light' }, (ev) => { if (forDeck(ev)) toggle(); });
   deck.addKeyBinding({ keyCode: 80, key: 'P', description: 'Pointer' }, (ev) => { if (forDeck(ev)) togglePointer(); });
   // F enters full screen as in reveal.js, and it leaves it too
-  deck.addKeyBinding(70, (ev) => { if (forDeck(ev)) toggleFullscreen(); });
+  deck.addKeyBinding(70, (ev) => { if (forDeck(ev)) (PLAYED ? toEditor('fullscreen') : toggleFullscreen()); });
   deck.registerKeyboardShortcut('F', 'Full screen on and off');
   // the print view is not shown on a screen, and the editor keeps the bottom of the window
   if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) {
-    initFullscreen();
+    if (!PLAYED) initFullscreen();
     initScrub(deck);
     // a click on a slide moves the show on, as in PowerPoint and Keynote
     if (internal) initClick(deck, () => internal.cueAutoSlide());
   }
   // E opens the same slide in the editor, and the other parameters of the address are kept
-  if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: 'E', description: 'Edit the deck' }, (ev) => { if (forDeck(ev)) edit(); });
+  if (PLAYED) {
+    for (const keyCode of [27, 69]) deck.addKeyBinding(keyCode, (ev) => { if (forDeck(ev)) toEditor('edit'); });
+    document.addEventListener('keydown', (ev) => { if (ev.keyCode === 83 && forDeck(ev)) toEditor('speaker'); }, true);
+  } else if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: 'E', description: 'Edit the deck' }, (ev) => { if (forDeck(ev)) edit(); });
 
   if (still()) completeAll();
   else show(deck.getCurrentSlide());

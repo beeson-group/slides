@@ -136,7 +136,7 @@ for (const platform of PLATFORMS) {
     await page.evaluate(`window.open = (url) => { window.__opened = url; return null; }`);
     await press(page, 'Mod+Enter');
     await page.waitFor(`!!document.querySelector('.beeson-edit-show iframe')?.getAttribute('src')`);
-    assert.ok((await page.evaluate(`document.querySelector('.beeson-edit-show iframe').getAttribute('src')`)).endsWith(`?still&edit-platform=${platform}&postMessageEvents=true#/4`));
+    assert.ok((await page.evaluate(`document.querySelector('.beeson-edit-show iframe').getAttribute('src')`)).endsWith(`?still&edit-platform=${platform}&postMessageEvents=true&from-editor#/4`));
     assert.equal(await page.evaluate('window.__opened ?? null'), null);
     assert.equal(await page.evaluate(`!!document.querySelector('dialog.beeson-edit-presenter[open]')`), false);
     await page.waitFor(`(() => { const w = document.querySelector('.beeson-edit-show iframe').contentWindow; return !!w.Reveal?.isReady() && (w.MathJax?.startup?.promise?.then(() => true) ?? false); })()`);
