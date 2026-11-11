@@ -113,3 +113,56 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the labels and the keys of the menu of the menu bar named bar, opened by a trusted click and
+// closed again
+async function readMenu(page, bar) {
+  const i = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].findIndex((b) => b.textContent === ${js(bar)})`);
+  await click(page, `.beeson-edit-menubar [role=menuitem]:nth-child(${i + 1})`);
+  const items = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item')].map((i) => ({ label: i.querySelector('.label')?.textContent, keys: i.querySelector('.keys')?.textContent ?? '', enabled: i.getAttribute('aria-disabled') !== 'true' }))`);
+  await page.evaluate('window.BeesonEditorShell.closeMenus(); true');
+  return items;
+}
+
+// a listener of the page after the one of the editor, which records whether each keydown of P was
+// prevented, and a window.open that records the address it is given
+const SPY = `(() => {
+  window.__keys = [];
+  window.__opened = [];
+  window.addEventListener('keydown', (ev) => { if (ev.key === 'p' || ev.key === 'P') window.__keys.push(ev.defaultPrevented); }, true);
+  window.open = (url) => { window.__opened.push(String(url)); return null; };
+  return true;
+})()`;
+
+// menus-keys-2: File > Print… is the last item of the File menu with Mod+P, which the editor takes
+// from the browser and which opens the print view of the deck, after a question while edits are
+// unsaved
+for (const platform of PLATFORMS) {
+  test(`Mod+P and File > Print… open the print view of the deck (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 4 });
+    await page.evaluate(SPY);
+    const file = await readMenu(page, 'File');
+    assert.deepEqual(file.at(-1), { label: 'Print…', keys: platform === 'mac' ? '⌘P' : 'Ctrl+P', enabled: true });
+    await click(page, { x: 700, y: 200 });
+    await press(page, 'Mod+P');
+    await sleep(300);
+    assert.deepEqual(await page.evaluate('window.__keys'), [true], 'the key is left to the browser');
+    const opened = await page.evaluate('window.__opened');
+    assert.equal(opened.length, 1);
+    assert.match(opened[0], /[?&]print-pdf/);
+    assert.doesNotMatch(opened[0], /[?&]edit(&|$)/);
+    await choose(page, 'File', 'Print…');
+    await sleep(300);
+    assert.equal((await page.evaluate('window.__opened')).length, 2);
+    // with an unsaved edit, the user is asked first, and Cancel prints nothing
+    await exec(page, 'slide.hide');
+    await press(page, 'Mod+P');
+    await page.waitFor(`[...document.querySelectorAll('dialog[open] button')].some((b) => b.textContent === 'Save and print')`);
+    const buttons = await page.evaluate(`[...document.querySelectorAll('dialog[open] button')].map((b) => b.textContent)`);
+    assert.deepEqual(buttons.slice(-3), ['Save and print', 'Print the saved file', 'Cancel']);
+    await press(page, 'Escape');
+    await sleep(200);
+    assert.equal((await page.evaluate('window.__opened')).length, 2);
+    assert.deepEqual(errors(page), []);
+  });
+}
