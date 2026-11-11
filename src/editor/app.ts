@@ -305,7 +305,8 @@ export class App {
   region(): Region {
     const active = document.activeElement;
     if (!(active instanceof Element) || active === document.body) return 'canvas';
-    if (active.closest('.beeson-math, .beeson-edit-card:not([hidden]), dialog[open]')) return 'dialog';
+    // a popover, e.g. the grid of Insert Table, leaves the toolbar and the commands enabled
+    if (active.closest('.beeson-math, .beeson-edit-card:not([hidden]), dialog[open]:not([data-popover])')) return 'dialog';
     if (active.matches('input, textarea, select')) return 'field';
     if (active.closest('aside.notes')) return 'notes';
     if (this.hostOf(active)) return 'text';

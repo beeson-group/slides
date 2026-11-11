@@ -725,7 +725,7 @@ let current: App | null = null;
 const BLOCK_KEYS: Command[] = [];
 window.addEventListener('keydown', (ev) => {
   const app = current;
-  if (!app || ev.isComposing || menuOpen() || app.region() !== 'canvas' || !inBlock(app)) return;
+  if (!app || ev.isComposing || menuOpen() || picker || app.region() !== 'canvas' || !inBlock(app)) return;
   const c = BLOCK_KEYS.find((x) => keysOf(x, app.platform).some((k) => matches(ev, k, app.platform)));
   if (!c) return;
   ev.preventDefault();
@@ -775,12 +775,18 @@ window.addEventListener('keydown', (ev) => {
   openCellMenu(app, cell, { x: r.left + 8, y: r.top + Math.min(r.height, 24) });
 }, true);
 
+// the close of the open grid of Insert Table, or null
+let picker: ((restore: boolean) => void) | null = null;
+
 // the grid of the Insert Table popover, under its anchor. a cell of the grid chooses the size of
-// the table up to it, shown above the grid as columns by rows, and a click or Return inserts it
+// the table up to it, shown above the grid as columns by rows, and a click or Return inserts it.
+// it is a popover, hence the toolbar stays enabled and the Table button is drawn pressed under it
 function openPicker(app: App, anchor: DOMRect | null, done: (size: Size) => void, more?: (rested?: Size) => void): void {
-  document.querySelector('dialog.beeson-table-picker')?.remove();
+  picker?.(false);
   const back = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const box = make('dialog', 'beeson-table-picker');
+  box.dataset.popover = '';
+  const button = document.querySelector('.beeson-edit-top [data-command="insert.table"]');
   box.setAttribute('aria-label', 'Insert Table');
   const size = make('div', 'size', 'Insert Table');
   const grid = make('div', 'grid');
@@ -812,6 +818,9 @@ function openPicker(app: App, anchor: DOMRect | null, done: (size: Size) => void
     if (off.signal.aborted) return;
     off.abort();
     box.remove();
+    picker = null;
+    button?.setAttribute('aria-expanded', 'false');
+    app.invalidate('selection');
     if (restore && back?.isConnected) back.focus({ preventScroll: true });
   };
   const choose = (s: Size | null) => {
@@ -844,6 +853,9 @@ function openPicker(app: App, anchor: DOMRect | null, done: (size: Size) => void
   });
   document.body.append(box);
   box.show();
+  picker = close;
+  button?.setAttribute('aria-expanded', 'true');
+  app.invalidate('selection');
   const w = box.offsetWidth;
   const v = app.stage?.viewport;
   const left = anchor ? anchor.left : v ? v.left + (v.width - w) / 2 : 100;
@@ -853,7 +865,8 @@ function openPicker(app: App, anchor: DOMRect | null, done: (size: Size) => void
   setTimeout(() => {
     const signal = off.signal;
     window.addEventListener('pointerdown', (ev) => {
-      if (!(ev.target instanceof Node) || !box.contains(ev.target)) close(true);
+      // a press on the Table button is left to its click, which closes the grid
+      if (!(ev.target instanceof Element) || !(box.contains(ev.target) || button?.contains(ev.target))) close(true);
     }, { capture: true, signal });
     for (const type of ['resize', 'blur']) window.addEventListener(type, () => close(true), { signal });
   }, 0);
@@ -1382,8 +1395,10 @@ export function install(app: App): void {
     menu: { bar: 'Insert', group: 'element', order: 22 },
     toolbar: { group: 'insert', order: 20, icon: 'table', label: 'Table' },
     enabled: ready,
+    checked: () => picker ? true : null,
     run: async (a, arg) => {
       const size = arg && typeof arg === 'object' && 'rows' in arg ? (arg as Size) : null;
+      if (!size && picker) return picker(true);
       if (!size) return openPicker(a, toolbarButton('insert.table'), (s) => void a.commands.run('insert.table', s).catch(fail), (rested) => void a.commands.run('insert.tableSize', rested).catch(fail));
       // a table fills the first empty slot of the slide, as the table icon of its placeholder does
       await newTable(a, size, emptySlot(a, a.current()!));
