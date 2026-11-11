@@ -355,3 +355,38 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// finding 4, as the juror amended it: the presenter display and the rehearsal were drawn in the
+// gray of the chrome in the light appearance, while the presenter displays of Keynote and
+// PowerPoint are black in both appearances (K50, K51, and P45)
+const LOOK = `(() => {
+  const d = document.querySelector('dialog.beeson-edit-presenter[open]');
+  const bg = (el, pseudo) => getComputedStyle(el, pseudo).backgroundColor;
+  return { stage: bg(d), head: bg(d.querySelector('.bar')), foot: bg(d.querySelector('.bar.foot')), backdrop: bg(d, '::backdrop'), text: getComputedStyle(d).color };
+})()`;
+for (const platform of PLATFORMS) {
+  test(`the presenter display and the rehearsal are drawn on a black stage in the light and the dark appearance (${platform})`, async (t) => {
+    const looks = [];
+    for (const mode of ['light', 'dark']) {
+      const page = await load(t, platform, { mode, n: 2 });
+      await press(page, 'Alt+Enter');
+      await page.waitFor(`!!document.querySelector('dialog.beeson-edit-presenter[open]')`, 20000);
+      looks.push(['presenter display', mode, await page.evaluate(LOOK)]);
+      await press(page, 'Escape');
+      await page.waitFor(`!document.querySelector('dialog.beeson-edit-presenter[open]')`);
+      await page.evaluate(`${TAB}?.close(), true`);
+      await page.evaluate(`window.BeesonEditor.exec('play.rehearse'), true`);
+      await page.waitFor(`!!document.querySelector('dialog.beeson-edit-presenter.rehearse[open]')`, 20000);
+      looks.push(['rehearsal', mode, await page.evaluate(LOOK)]);
+      assert.deepEqual(errors(page), []);
+      await page.close();
+    }
+    // each part that is not black, and the text where it is not light
+    const off = [];
+    for (const [what, mode, look] of looks) {
+      for (const part of ['stage', 'head', 'foot', 'backdrop']) if (look[part] !== 'rgb(0, 0, 0)') off.push(`${what}, ${mode}: ${part} ${look[part]}`);
+      if (Math.min(...look.text.match(/\d+/g).slice(0, 3).map(Number)) <= 200) off.push(`${what}, ${mode}: text ${look.text}`);
+    }
+    assert.deepEqual(off, [], 'the presenter display or the rehearsal is not drawn on a black stage');
+  });
+}
