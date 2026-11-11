@@ -160,21 +160,32 @@ for (const platform of PLATFORMS) {
   test(`${platform}: a drag of a row moves its object by the layers of Bring Forward and Send Backward, and a row that cannot move is not dragged`, async (t) => {
     const page = await load(t, platform);
     await openList(page, platform);
-    // the heading is in the flow among elements in the flow, which the layer commands do not move
-    const fixed = await rowBox(page, 5);
-    const first = await rowBox(page, 0);
-    await drag(page, { x: fixed.x, y: fixed.y }, { dy: first.top + 2 - fixed.y, steps: 8 });
+    // the list, an element in the flow that is not a layer, is not sent behind the other blocks
+    const fixed = await rowBox(page, 1);
+    const last = await rowBox(page, 5);
+    await drag(page, { x: fixed.x, y: fixed.y }, { dy: last.bottom - 2 - fixed.y, steps: 8 });
     assert.equal(await render(page), page.source);
     assert.equal((await page.evaluate('window.BeesonEditor.status()')).undo, false);
+    // the heading is brought in front of the figure by a z-index, which does not move it in the file
+    const heading = await rowBox(page, 5);
+    const first = await rowBox(page, 0);
+    await drag(page, { x: heading.x, y: heading.y }, { dy: first.top + 2 - heading.y, steps: 8 });
+    const raised = await render(page);
+    assert.equal(raised, page.source.replace('<h2>Math, an ordered list', '<h2 style="position: relative; z-index: 1">Math, an ordered list'));
+    assert.equal((await rows(page))[0], '1 Text: Math, an ordered list, and a zone *');
+    await undo(page);
+    assert.equal(await render(page), page.source);
     // a nudge makes the lead-in a layer, which the figure is then dragged behind
     await click(page, `${ROW}:nth-child(5)`);
     await press(page, 'Escape');
     await press(page, 'ArrowRight');
     const nudged = await render(page);
+    // the rows are in the order of the drawing, with the layers over the other blocks
+    assert.deepEqual((await rows(page)).slice(0, 2), ['1 Figure: A caption under a zone.', '1 Text: The lead-in of a display *']);
     const from = await rowBox(page, 0);
     const to = await rowBox(page, 4);
     await drag(page, { x: from.x, y: from.y }, { dy: to.bottom - 2 - from.y, steps: 8 });
-    assert.deepEqual((await rows(page)).slice(3, 6), ['1 Text: The lead-in of a display', '1 Figure: A caption under a zone. *', '1 Text: Math, an ordered list, and a zone']);
+    assert.deepEqual((await rows(page)).slice(0, 2), ['1 Text: The lead-in of a display', '1 Figure: A caption under a zone. *']);
     const edited = await render(page);
     assert.ok(edited.indexOf('<figure class="zone') < edited.indexOf('The lead-in of a display'));
     await undo(page);

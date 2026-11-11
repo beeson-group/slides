@@ -13,7 +13,7 @@ import type { App } from '../app.ts';
 import { OUTSIDE_DIALOGS } from '../commands.ts';
 import { CONTAINER, LINE, hasText, linesOf, movablesOf, objectOf } from '../canvas/hit.ts';
 import { locked } from '../canvas/drag.ts';
-import { canStep, enterGroup, groupOf, stepLayer } from '../commands/order.ts';
+import { canStep, drawnUnder, enterGroup, groupOf, stepLayer } from '../commands/order.ts';
 import { injectStyle, make, store, stored } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 
@@ -134,8 +134,8 @@ type Item = { el: Element; group: null } | { el: null; group: string; members: E
 type Key = Element | string;
 const keyOf = (item: Item): Key => item.el ?? `group:${item.group}`;
 
-// whether b comes after a in the document, i.e. is drawn over it among the same siblings
-const before = (a: Element, b: Element): boolean => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+// whether a is drawn under b, by the order of the layer commands
+const before = drawnUnder;
 
 export function install(app: App): void {
   injectStyle('objects', CSS);
@@ -169,7 +169,7 @@ export function install(app: App): void {
   const mod = (ev: MouseEvent | KeyboardEvent) => (app.platform === 'mac' ? ev.metaKey : ev.ctrlKey);
   const outlineShown = () => !!(app.nav as unknown as { outline?: { shown: boolean } }).outline?.shown;
 
-  // the objects of the current slide from front to back, i.e. in the reverse order of the page
+  // the objects of the current slide from front to back
   const objects = (): Element[] => {
     if (app.state !== 'loaded') return [];
     const found = [...movablesOf(app), ...linesOf(app)];

@@ -76,6 +76,9 @@ export function themeClasses(css: string): string[] {
 // the reason a declaration is out of the scope rule on an element, or null when it is in it
 export function declarationProblem(tag: string, classes: string[], name: string, value: string): string | null {
   if (name === 'translate' || name === 'rotate') return null;
+  // the order of the layers of commands/order.ts, which is geometry as an offset is
+  if (name === 'z-index') return /^-?\d+$/.test(value.trim()) ? null : `z-index ${value} on a ${tag}`;
+  if (name === 'position') return value.trim() === 'relative' ? null : `position ${value} on a ${tag}`;
   // the width of a column is written in px on the cells of the first row of a table
   if (name === 'width' && (tag === 'td' || tag === 'th')) return /^\d+px$/.test(value.trim()) ? null : `width ${value} on a ${tag}`;
   if (name === 'width' && (SIZED_TAGS.has(tag) || classes.includes('qr'))) return null;
