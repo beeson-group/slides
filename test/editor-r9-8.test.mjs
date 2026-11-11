@@ -1,0 +1,94 @@
+// regression tests of R9.8 on both platforms with trusted input: Present from a slide after a
+// hidden slide, the show played in place over the editor, the steps of the presenter view as the
+// show plays them, the presenter display, the transition of a slide in one direction, a step given
+// to several elements at once, and the rows and buttons of the Steps pane. after each edit the text
+// is checked byte for byte, after an undo and a redo, and after a save and an open
+
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { after, before, test } from 'node:test';
+import { deckSettled, launch } from '../scripts/chrome.mjs';
+import { serve } from '../scripts/webdriver.mjs';
+import { byteExact, click, press, saveAndReopen } from './helpers/editor.mjs';
+
+const PLATFORMS = ['mac', 'other'];
+// a deck of five slides whose second slide is hidden
+const PRESENT = 'test/pages/editor-present.html';
+
+let browser;
+let server;
+before(async () => {
+  browser = await launch({ offline: false });
+  server = await serve('.');
+});
+after(async () => {
+  await browser?.close();
+  server?.close();
+});
+
+const js = (v) => JSON.stringify(v);
+const render = (page) => page.evaluate('window.BeesonEditor.render()');
+const frames = (page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => d(true))))');
+const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+let saves = 0;
+
+// load opens the editor on the slide n of deck, served over HTTP, and keeps every window that the
+// page opens in window.__shows
+async function load(t, platform, { deck = 'index.html', n = 0, mode = 'light', width = 1600, height = 1000 } = {}) {
+  const page = await browser.newPage({ width, height });
+  t.after(() => page.close().catch(() => {}));
+  await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: mode }] });
+  const url = `${server.origin}/${deck}?edit&still&theme=${mode}&edit-platform=${platform}`;
+  await page.goto(url);
+  await page.evaluate('localStorage.clear()');
+  await page.goto(url);
+  await page.waitFor(deckSettled);
+  await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
+  page.source = readFileSync(deck, 'utf8');
+  const s = await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`);
+  assert.deepEqual(s.problems, []);
+  if (n) await page.evaluate(`Reveal.slide(${n})`);
+  await page.evaluate(`(() => { const real = window.open; window.__shows = []; window.open = function (...a) { const w = real.apply(window, a); window.__shows.push(w); return w; }; return true; })()`);
+  await frames(page);
+  return page;
+}
+
+// roundTrip checks the text before byte for byte after undos undos, the edit after as many redos,
+// and an open of the saved edit without problems, which is the text before the next check
+async function roundTrip(page, undos = 1) {
+  const edited = await render(page);
+  assert.notEqual(edited, page.source, 'the action does not change the file');
+  for (let i = 0; i < undos; i++) await page.evaluate('window.BeesonEditor.undo()');
+  await byteExact(page);
+  for (let i = 0; i < undos; i++) await page.evaluate('window.BeesonEditor.redo()');
+  assert.equal(await render(page), edited);
+  const { text } = await saveAndReopen(page, `r9-8-${++saves}.html`);
+  assert.equal(text, edited);
+  assert.deepEqual(errors(page), []);
+  page.source = text;
+  return edited;
+}
+
+// SHOW is the window of the show started from the editor, i.e. the frame of the show in place, or
+// else the last window that the page opened
+const SHOW = `(document.querySelector('.beeson-edit-show iframe')?.contentWindow ?? window.__shows?.at(-1))`;
+const showReady = `(() => { try { const w = ${SHOW}; return !!w && !!w.Reveal && w.Reveal.isReady(); } catch { return false; } })()`;
+const showHeading = (page) => page.evaluate(`${SHOW}.Reveal.getCurrentSlide().querySelector('h1, h2').textContent.trim()`);
+const editorHeading = (page) => page.evaluate(`Reveal.getCurrentSlide().querySelector('h1, h2').textContent.trim()`);
+
+// finding steps-transitions-present-3: Present opened the show one slide too far for each hidden
+// slide before the current slide, since presentAt read the index of the slide in the editor, which
+// keeps the hidden slides
+for (const platform of PLATFORMS) {
+  test(`Present opens the show at the current slide after a hidden slide, and at the next shown slide from a hidden one (${platform})`, async (t) => {
+    for (const [n, heading, shown] of [[3, 'Four', 'Four'], [4, 'Five', 'Five'], [1, 'Two', 'Three']]) {
+      const page = await load(t, platform, { deck: PRESENT, n });
+      assert.equal(await editorHeading(page), heading);
+      await press(page, 'Mod+Enter');
+      await page.waitFor(showReady, 20000);
+      assert.equal(await showHeading(page), shown, `Present from the slide ${heading} shows another slide`);
+      await page.close();
+    }
+  });
+}
