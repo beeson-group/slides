@@ -324,7 +324,8 @@ for (const platform of PLATFORMS) {
         await frames(page);
         const edited = await render(page);
         assert.equal(figureOf(edited, n), locked, `a file dropped onto the locked picture of ${NAMES[n]} changes its figure`);
-        assert.match(slideOf(edited, n), /<figure class="zone">\s*<img src="media\/clip-dark\.png">/, 'the file is not added in a zone of its own');
+        // since R9.9, the new picture is placed in the free space of the slide, with a translate and a width
+        assert.match(slideOf(edited, n), /<figure class="zone"(?: style="[^"]*")?>\s*<img src="media\/clip-dark\.png"(?: style="[^"]*")?>/, 'the file is not added in a zone of its own');
         await roundTrip(page, edited);
         assert.deepEqual(errors(page), []);
       }

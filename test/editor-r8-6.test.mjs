@@ -209,16 +209,17 @@ const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((e
 
 // gap 2 of R8.6: an undo and a redo dropped the selection of a list made with Dashes of the Text
 // pane from a paragraph selected as a block. each conversion of the Text pane and of the Format
-// menu is checked on the same paragraph, as [name, label of the entry, control, block made]
+// menu is checked on the same paragraph, as [name, label of the entry, control, block made]. since
+// R9.6, the entry of a list is named List Style and that of a paragraph style Paragraph Style
 const CONVERSIONS = [
-  ['Dashes of the Text pane', 'Dashes', { pane: 'text.list.ul' }, 'ul'],
-  ['Numbers of the Text pane', 'Numbers', { pane: 'text.list.ol' }, 'ol'],
-  ['Dashes of the Format menu', 'Dashes', { exec: 'text.list.ul' }, 'ul'],
-  ['Numbers of the Format menu', 'Numbers', { exec: 'text.list.ol' }, 'ol'],
-  ['Small of the Format menu', 'Small', { exec: 'text.style.small' }, 'p.small'],
-  ['Subheading of the Format menu', 'Subheading', { exec: 'text.style.subheading' }, 'h3'],
-  ['Caption of the Format menu', 'Caption', { exec: 'text.style.caption' }, 'p.caption'],
-  ['Footnote of the Format menu', 'Footnote', { exec: 'text.style.footnote' }, 'div.foot'],
+  ['Dashes of the Text pane', 'List Style', { pane: 'text.list.ul' }, 'ul'],
+  ['Numbers of the Text pane', 'List Style', { pane: 'text.list.ol' }, 'ol'],
+  ['Dashes of the Format menu', 'List Style', { exec: 'text.list.ul' }, 'ul'],
+  ['Numbers of the Format menu', 'List Style', { exec: 'text.list.ol' }, 'ol'],
+  ['Small of the Format menu', 'Paragraph Style', { exec: 'text.style.small' }, 'p.small'],
+  ['Subheading of the Format menu', 'Paragraph Style', { exec: 'text.style.subheading' }, 'h3'],
+  ['Caption of the Format menu', 'Paragraph Style', { exec: 'text.style.caption' }, 'p.caption'],
+  ['Footnote of the Format menu', 'Paragraph Style', { exec: 'text.style.footnote' }, 'div.foot'],
   ['Smaller of the Text pane', 'Smaller', { pane: 'text.smaller' }, 'p.small'],
   ['Bigger of the Text pane', 'Bigger', { pane: 'text.bigger' }, 'h3'],
 ];

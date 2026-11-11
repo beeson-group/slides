@@ -318,6 +318,9 @@ for (const platform of PLATFORMS) {
     await frames(page);
     assert.equal(await render(page), both);
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Distribute Evenly');
+    // with several text blocks selected, the Text pane is shown first since R10.2
+    await page.evaluate(`[...document.querySelectorAll('${PANEL} [role=tab]')].find((t) => t.textContent === 'Arrange')?.click()`);
+    await frames(page);
     const buttons = await page.evaluate(`[...document.querySelectorAll('${PANEL} button')].map((b) => b.textContent.trim())`);
     assert.deepEqual(buttons.filter((b) => ['Horizontally', 'Vertically', 'Evenly'].includes(b)), ['Horizontally', 'Vertically', 'Evenly']);
     await roundTrip(page);
