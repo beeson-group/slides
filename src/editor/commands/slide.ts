@@ -370,7 +370,7 @@ export function install(app: App): void {
       keys: { mac: ['Mod+D'], other: ['Mod+D'] },
       in: ['navigator'],
       menu: slideMenu(20),
-      context: ['slide'],
+      context: ['slide', 'canvas'],
       enabled: (a) => targets(a).length > 0,
       undoable: true,
       run: async (a) => {
@@ -387,7 +387,7 @@ export function install(app: App): void {
       keys: { mac: ['Backspace', 'Delete'], other: ['Delete', 'Backspace'] },
       in: ['navigator'],
       menu: slideMenu(30),
-      context: ['slide'],
+      context: ['slide', 'canvas'],
       enabled: (a) => targets(a).length > 0 && targets(a).length < sections(a).length,
       undoable: true,
       run: (a) => deleteSlides(a, targets(a), inNav()),
