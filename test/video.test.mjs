@@ -3,12 +3,15 @@
 // plate of the class row started together, two clips in one place, the second shown over the first,
 // and a clip in a fragment that appears at its step. After a step, each state is waited for rather
 // than read after a fixed time, since the fades of 400 ms and the rewinds after them are late on a
-// busy runner. The tests share one Chrome and one local port, and each closes its page, since they
-// run beside the surfaces and the mode flip on a runner of four cores
+// busy runner. The tests share one Chrome, and each closes its page, since they run beside the
+// surfaces and the mode flip on a runner of four cores. The deck is opened from its file, as in the
+// other tests, and only the test of a clip loaded later serves it from a local port. The port does not
+// answer a request for a range of bytes, and in Chrome on Windows a clip of the deck then failed to
+// load in some of its videos, which share its address
 
 import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { deckSettled, launch, printView } from '../scripts/chrome.mjs';
+import { deckSettled, deckUrl, launch, printView } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 
 const DECK = 'test/pages/video-play.html';
@@ -30,14 +33,9 @@ after(async () => {
   server?.close();
 });
 
-const deckAt = (query, hash) => `${server.origin}/${DECK}${query ? `?${query}` : ''}${hash ? `#${hash}` : ''}`;
-
-// the page of a test is brought to the front, since Chrome defers the play of a video in a tab
-// that is not shown, and the pages of the tests share one Chrome
 async function newPage(t) {
   const page = await browser.newPage();
   t.after(() => page.close());
-  await page.send('Page.bringToFront');
   return page;
 }
 
@@ -54,7 +52,7 @@ const recordEvents = `(() => {
 
 async function open(t, hash) {
   const page = await newPage(t);
-  await page.goto(deckAt('', hash));
+  await page.goto(deckUrl(DECK, '', hash));
   await page.waitFor(deckSettled);
   await page.evaluate(recordEvents);
   return page;
@@ -102,7 +100,7 @@ test('two videos of one step are started together, also when one of them is load
   t.after(() => { slow = false; });
   const page = await newPage(t);
   // the load event of a page waits for its videos, hence the step is made before it
-  await page.send('Page.navigate', { url: deckAt('', '/1') });
+  await page.send('Page.navigate', { url: `${server.origin}/${DECK}#/1` });
   await page.waitFor('!!window.Reveal?.isReady?.()');
   await page.evaluate('Reveal.next()');
   await sleep(1000);
@@ -182,7 +180,7 @@ test('a video in a fragment is played from its step on, and it does not call for
 // the pages of the four slides: five with the step added to restore the dimmed paragraph, two, three, and three
 test('the print view shows each video of a step, with the video under a later one hidden', { timeout: 120000 }, async (t) => {
   const page = await newPage(t);
-  await printView(page, deckAt('print-pdf'));
+  await printView(page, deckUrl(DECK, 'print-pdf'));
   const shown = await page.evaluate(`[...document.querySelectorAll('.pdf-page')].map((page) => [...page.querySelectorAll('video')]
     .filter((video) => getComputedStyle(video).visibility !== 'hidden').map((video) => video.id).join(' '))`);
   assert.deepEqual(shown, [
