@@ -250,3 +250,42 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the center on the screen of the first shown element matched by selector
+const centerOf = (page, selector) => page.evaluate(`(() => { const r = [...Reveal.getCurrentSlide().querySelectorAll(${js(selector)})].map((e) => e.getBoundingClientRect()).find((r) => r.width); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+const gap = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+const rotorShown = (page) => page.evaluate(`(() => { const g = document.querySelector('.beeson-rotor'); return !!g && getComputedStyle(g).display !== 'none' && g.getBoundingClientRect().width > 0; })()`);
+
+// finding r12-5-select-arrange 2: in a selection of a group and another element, the rotate handle
+// was missing, and a typed Angle turned each member of the group about its own center
+for (const platform of PLATFORMS) {
+  test(`a group in a selection of several elements is turned as one object about its center (${platform})`, async (t) => {
+    const page = await load(t, platform, 4);
+    await selectFigure(page, 'img.for-light');
+    await click(page, '.reveal section.present > p', { modifiers: 'Shift' });
+    await exec(page, 'arrange.group');
+    await click(page, '.reveal section.present > h2', { modifiers: 'Shift' });
+    await frames(page);
+    assert.equal(await page.evaluate('window.BeesonEditor.selection().length'), 3);
+    assert.equal(await rotorShown(page), true, 'the selection does not have a rotate handle');
+    const grouped = await render(page);
+    const before = { p: await centerOf(page, 'p'), img: await centerOf(page, 'img.for-light'), h2: await centerOf(page, 'h2') };
+    await page.evaluate(`window.BeesonEditor.exec('arrange.setRotation', { deg: 20 })`);
+    await frames(page);
+    const now = { p: await centerOf(page, 'p'), img: await centerOf(page, 'img.for-light'), h2: await centerOf(page, 'h2') };
+    assert.ok(Math.abs(gap(now.p, now.img) - gap(before.p, before.img)) < 2, 'the members of the group are moved apart');
+    assert.ok(gap(now.p, before.p) > 20, 'the group is not turned about its center');
+    assert.ok(gap(now.h2, before.h2) < 2, 'the heading is not turned about its own center');
+    // the line from the paragraph to the picture is turned by 20 degrees
+    const angle = (a, b) => (Math.atan2(b.y - a.y, b.x - a.x) * 180) / Math.PI;
+    assert.ok(Math.abs(angle(now.p, now.img) - angle(before.p, before.img) - 20) < 1.5, 'the group is not turned by the angle');
+    const turned = await render(page);
+    assert.match(turned, /<h2 style="rotate: 20deg">/);
+    await page.evaluate('window.BeesonEditor.undo()');
+    assert.equal(await render(page), grouped);
+    await page.evaluate('window.BeesonEditor.redo()');
+    assert.equal(await render(page), turned);
+    await saveAndReopen(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
