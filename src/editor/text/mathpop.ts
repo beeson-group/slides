@@ -457,7 +457,9 @@ export function install(app: App): void {
     const container = target?.closest('mjx-container');
     if (container && app.hostOf(container)) {
       ev.preventDefault();
-      openMath(container);
+      // a Shift-click or a command-click only adds the object of the formula to the selection or
+      // takes it out
+      if (!ev.shiftKey && !(app.platform === 'mac' ? ev.metaKey : ev.ctrlKey)) openMath(container);
     } else if (popover && target && !popover.contains(target) && !target.closest('.beeson-complete, .beeson-edit-menu')) {
       if (away) void away();
       else closeMath(false);
