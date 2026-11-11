@@ -750,20 +750,22 @@ export function styleOf(app: App, el: Element): ParagraphStyle | null {
 
 // the blocks that a style is set on: the blocks of a text selected over several of them, the block
 // of the text, or the selected blocks
-function styled(app: App): Element[] {
+function chosen(app: App): Element[] {
   const spanned = flow.spanTargets(app).map((t) => t.host);
   const t = spanned.length ? null : textTarget(app);
-  const list = spanned.length ? spanned : t ? [t.host] : selectedBlocks(app);
-  return list.filter((el) => styleOf(app, el) !== null);
+  return spanned.length ? spanned : t ? [t.host] : selectedBlocks(app);
 }
+
+const styled = (app: App): Element[] => chosen(app).filter((el) => styleOf(app, el) !== null);
 
 // a list item takes the styles that are a class on its tag, i.e. Body and Small
 const ITEM_STYLES: ParagraphStyle[] = ['body', 'small'];
 export const fits = (el: Element, style: ParagraphStyle): boolean => el.localName !== 'li' || ITEM_STYLES.includes(style);
 
-// the style of every block that a style is set on, or null when they differ or there are none
+// the style of every chosen block, or null when they differ, e.g. on a heading and a paragraph, as
+// the menu of Keynote does not check a style over blocks of different styles
 export function paragraphStyle(app: App): ParagraphStyle | null {
-  const styles = new Set(styled(app).map((el) => styleOf(app, el)));
+  const styles = new Set(chosen(app).map((el) => styleOf(app, el)));
   return styles.size === 1 ? [...styles][0] : null;
 }
 
