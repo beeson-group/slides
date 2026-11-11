@@ -22,6 +22,7 @@
 // outline around the cell of the caret or the range
 
 import type { App } from '../app.ts';
+import { overlay } from '../canvas/frames.ts';
 import { keysOf, type Command } from '../commands.ts';
 import { matches } from '../keymap.ts';
 import { childSpace } from '../render.ts';
@@ -63,7 +64,8 @@ dialog.beeson-table-size .fields input:focus-visible{outline:3px solid var(--ed-
 .beeson-table-bars .corner{width:11px;height:11px;border-radius:50%;background:#fff;box-shadow:0 0 0 1.5px var(--ed-select),0 0 0 2.5px #0004;touch-action:none}
 .beeson-table-bars .corner[data-corner="upper-left"]{cursor:nwse-resize}
 .beeson-table-bars .corner:not([data-corner="upper-left"]){cursor:nesw-resize}
-.beeson-table-bars :is(.fill,.corner,.spread)[hidden]{display:none}
+.beeson-table-bars :is(.fill,.corner,.spread,.beeson-grip)[hidden]{display:none}
+.beeson-table-bars .beeson-grip{box-sizing:content-box}
 .beeson-table-bars .spread{border:2px dashed #e0a800;border-radius:2px;pointer-events:none}
 html.beeson-autofilling,html.beeson-autofilling *{cursor:crosshair!important}
 .beeson-table-bars{position:fixed;inset:0;z-index:52;pointer-events:none}
@@ -172,6 +174,20 @@ function selectCells(app: App, anchor: HTMLTableCellElement, focus: HTMLTableCel
   caretCell = null;
   app.invalidate('selection');
 }
+
+// the table selected as an object, without a cell selected, as after Select Table of Keynote
+function selectTable(app: App, table: HTMLTableElement): void {
+  const host = app.hostOf(document.activeElement);
+  if (host instanceof HTMLElement) host.blur();
+  window.getSelection()?.removeAllRanges();
+  app.selection.set('elements', [table]);
+  block = null;
+  caretCell = null;
+  app.invalidate('selection');
+}
+
+// whether table is selected as an object, which its move handle and its edge grips act on
+const asObject = (app: App, table: HTMLTableElement) => app.selection.only() === table && !inBlock(app) && !cellAt(app);
 
 // a cell of the file on the current slide at target
 function liveCell(target: EventTarget | null): HTMLTableCellElement | null {
@@ -897,7 +913,7 @@ function installBars(app: App): void {
     });
     return b;
   };
-  const grab = round('Select Table', 'table', (t) => app.selection.set('elements', [t.table]));
+  const grab = round('Select Table', 'table', (t) => selectTable(app, t.table));
   const addCol = round('Add Column', 'plus', (t) => app.commands.run('table.columnAfter', { cell: lastCell(t.table, 'column') }));
   const addRow = round('Add Row', 'plus', (t) => app.commands.run('table.rowBelow', { cell: lastCell(t.table, 'row') }));
   // a grip on the border at the right of each cell of the first row, whose drag sets the widths
@@ -922,7 +938,17 @@ function installBars(app: App): void {
     c.hidden = true;
     return c;
   });
-  layer.append(cols, rows, grab, addCol, addRow, outline, grips, guide, spread, ...corners, handle);
+  // the grips at the left and right edges of a table selected as an object, whose drag sets the
+  // widths of its columns in proportion, which is the only size of a table that the theme lets the
+  // editor write. a drag of the left grip moves the table, so that its right edge stays
+  const sides = (['w', 'e'] as const).map((h) => {
+    const g = make('div', app.platform === 'mac' ? 'beeson-grip square' : 'beeson-grip');
+    g.dataset.handle = h;
+    g.title = 'Drag to resize the table';
+    g.hidden = true;
+    return g;
+  });
+  layer.append(cols, rows, grab, addCol, addRow, outline, grips, guide, spread, ...corners, handle, ...sides);
   document.body.append(layer);
   // a press on the bars keeps the caret in its cell
   for (const type of ['pointerdown', 'mousedown']) layer.addEventListener(type, (ev) => ev.preventDefault());
@@ -1062,6 +1088,55 @@ function installBars(app: App): void {
     for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) c.addEventListener(type, () => (stretching = null));
   }
 
+  // the drag of an edge grip: the cells of the first row with their outer widths and the widths of
+  // their content, and their styles at the press, the translate of the table, and its width
+  let widening: { table: HTMLTableElement; cells: HTMLTableCellElement[]; outer: number[]; content: number[]; styles: string[]; at: number[]; moved: string; left: boolean; x: number; scale: number; width: number } | null = null;
+  const widen = (ev: PointerEvent) => {
+    const r = widening!;
+    const d = ((ev.clientX - r.x) / r.scale) * (r.left ? -1 : 1);
+    const k = Math.max(0.05, (r.width + d) / r.width);
+    const widths = new Map(r.cells.map((c, i) => [c, Math.round(Math.max(NARROWEST, r.outer[i] * k - r.outer[i] + r.content[i]))]));
+    for (const [c, w] of widths) c.style.width = `${w}px`;
+    const shift = r.left ? r.width - r.table.offsetWidth : 0;
+    r.table.style.translate = shift ? `${r.at[0] + shift}px ${r.at[1]}px` : r.moved;
+    return { widths, shift };
+  };
+  for (const g of sides) {
+    g.addEventListener('pointerdown', (ev) => {
+      if (!shown || ev.button !== 0 || !asObject(app, shown.table)) return;
+      const table = shown.table;
+      const cells = (gridOf(table).spots[0] ?? []).map((s) => s.cell);
+      const at = (table.style.translate || '0 0').split(/\s+/).map((v) => parseFloat(v) || 0);
+      widening = {
+        table, cells, outer: cells.map((c) => c.offsetWidth), content: cells.map(contentWidth), styles: cells.map((c) => c.style.width), at: [at[0] ?? 0, at[1] ?? 0],
+        moved: table.style.translate, left: g.dataset.handle === 'w', x: ev.clientX, scale: table.getBoundingClientRect().width / (table.offsetWidth || 1) || 1, width: table.offsetWidth || 1,
+      };
+      g.setPointerCapture(ev.pointerId);
+      document.documentElement.classList.add('beeson-resizing');
+    });
+    g.addEventListener('pointermove', (ev) => {
+      if (widening) widen(ev);
+    });
+    const end = (ev: PointerEvent | null) => {
+      const r = widening;
+      if (!r) return;
+      const done = ev && Math.abs(ev.clientX - r.x) >= 1 ? widen(ev) : null;
+      widening = null;
+      document.documentElement.classList.remove('beeson-resizing');
+      r.cells.forEach((c, i) => (c.style.width = r.styles[i]));
+      r.table.style.translate = r.moved;
+      if (!done) return;
+      void app.history.transact('Resize Table', () => {
+        writeWidths(app, done.widths, 'resize table');
+        const x = r.at[0] + done.shift;
+        if (done.shift) app.doc.setTag(r.table, { translate: x || r.at[1] ? { x, y: r.at[1] } : null }, 'resize table');
+      }).catch((e) => app.fail(e));
+    };
+    g.addEventListener('pointerup', (ev) => end(ev));
+    g.addEventListener('pointercancel', () => end(null));
+    g.addEventListener('lostpointercapture', () => end(null));
+  }
+
   const draw = () => {
     const t = shown;
     if (!t || !t.table.isConnected) return hide();
@@ -1123,6 +1198,11 @@ function installBars(app: App): void {
         if (!c.hidden) place(c, x - 6, y - 6, 11, 11);
       }
     } else for (const c of corners) c.hidden = true;
+    const whole = !!widening || (asObject(app, t.table) && !t.table.hasAttribute('data-locked'));
+    for (const g of sides) {
+      g.hidden = !whole;
+      if (whole) g.style.cssText = `left:${g.dataset.handle === 'w' ? box.left : box.right}px;top:${(box.top + box.bottom) / 2}px`;
+    }
     const reached = filling && !sameBox(filling.to, filling.from) ? boxRect(filling.table, filling.to) : null;
     spread.hidden = !reached;
     if (reached) place(spread, reached.left - 2, reached.top - 2, reached.right - reached.left + 4, reached.bottom - reached.top + 4);
@@ -1508,6 +1588,19 @@ export function install(app: App): void {
       }));
     }
   }
+  // Esc from the cells selected as a block selects the table as an object, and the next one clears
+  // the selection, as in Keynote
+  BLOCK_KEYS.push(c.define({
+    id: 'table.selectTable',
+    label: 'Select Table',
+    keys: { mac: ['Escape'], other: ['Escape'] },
+    in: ['canvas'],
+    enabled: inBlock,
+    run: (a) => {
+      const t = need(a);
+      selectTable(a, t.table);
+    },
+  }));
   BLOCK_KEYS.push(c.define({
     id: 'table.editCell',
     label: 'Edit Cell',
@@ -1618,6 +1711,9 @@ export function install(app: App): void {
   window.addEventListener('pointerdown', (ev) => {
     press = null;
     held = false;
+    // a press on the move handle of a table selects it as an object, as Select Table does
+    const moving = ev.target instanceof Element && ev.target.closest('.beeson-handle') ? overlay().current() : null;
+    if (moving instanceof HTMLTableElement && ev.button === 0) selectTable(app, moving);
     const cell = liveCell(ev.target);
     if (!cell || !ready(app)) return;
     if (ev.button === 2 || (ev.button === 0 && ev.ctrlKey && app.platform === 'mac')) {
