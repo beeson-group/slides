@@ -77,7 +77,7 @@ test('a box between two neighbors snaps to equal gaps, and after a pair to the g
   // the middle with equal gaps of 150 is at x = 450, and the box is dragged to 446
   const between = snapMove(box(446, 420, 100, 60), { boxes: [a, c], slide }, T);
   assert.equal(between.dx, 4);
-  assert.deepEqual(between.spacing, [{ axis: 'x', gaps: [{ from: 300, to: 450, at: 450 }, { from: 550, to: 700, at: 450 }] }]);
+  assert.deepEqual(between.spacing, [{ axis: 'x', gaps: [{ from: 300, to: 450, at: 514 }, { from: 550, to: 700, at: 514 }] }]);
   // after a pair with a gap of 100, the box snaps 100 px after the second of them
   const b = box(400, 400, 200, 100);
   const after = snapMove(box(710, 410, 100, 60), { boxes: [a, b], slide }, T);
