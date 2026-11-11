@@ -281,6 +281,10 @@ for (const platform of PLATFORMS) {
     await checkEdit(page, back, nudged);
     // Bring Forward puts the list over the paragraph again, as in the file, and takes the
     // declarations off
+    await click(page, '.reveal section.present > ul li');
+    await press(page, 'Escape');
+    await frames(page);
+    assert.deepEqual(await selected(page), ['ul']);
     await press(page, KEYS[platform].forward);
     await frames(page);
     assert.equal(await render(page), nudged, 'Bring Forward leaves declarations on the list back in the order of the file');
