@@ -366,7 +366,7 @@ export function install(app: App): void {
     ev.preventDefault();
     ev.stopImmediatePropagation();
     const text = ev.inputType.startsWith('insert') ? (ev.data ?? ev.dataTransfer?.getData('text/plain') ?? '') : '';
-    void app.history.transact('typing', () => removeSpan(app, text)).catch((e) => app.fail(e));
+    void app.history.transact(ev.inputType === 'insertFromPaste' ? 'Paste' : 'typing', () => removeSpan(app, text)).catch((e) => app.fail(e));
   }, true);
   for (const kind of ['copy', 'cut'] as const) {
     document.addEventListener(kind, (ev) => {

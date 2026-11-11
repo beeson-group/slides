@@ -22,7 +22,7 @@ import * as flow from './flow.ts';
 
 // an empty item gets a line to put the caret on, after the dash drawn by its ::before
 const CSS = `
-html.beeson-editing .reveal li[contenteditable="true"]:empty::after { content: "\\200b"; }
+html.beeson-editing .reveal li[contenteditable="true"]:empty::after, html.beeson-editing .reveal [contenteditable="true"] li:empty::after { content: "\\200b"; }
 `;
 
 const ATOM = 'mjx-container, br, img';
@@ -191,6 +191,8 @@ function itemAt(app: App): Item | null {
   const t = textTarget(app);
   if (!t || t.host.matches('aside.notes')) return null;
   const node = t.range.startContainer;
+  // a caret between the items of a list is not in an item
+  if ((node instanceof Element ? node : node.parentElement)?.matches(LIST)) return null;
   const li = (node instanceof Element ? node : node.parentElement)?.closest('li');
   const item = li && t.host.contains(li) ? li : t.host;
   return { host: t.host, item, nested: item !== t.host, range: t.range };
@@ -274,7 +276,9 @@ export async function split(app: App): Promise<void> {
     if (at.nested) return outdent(app);
     const list = item.parentElement!;
     const followers = [...list.children].slice([...list.children].indexOf(item) + 1).filter((c) => c.localName === 'li');
-    const texts = ['<p></p>'];
+    // a paragraph after items of a moved list is moved with them, so that it is not drawn over them
+    const move = list.querySelector(':scope > li') !== item && (list as HTMLElement).style.translate;
+    const texts = [move ? `<p style="translate: ${move}"></p>` : '<p></p>'];
     if (followers.length) {
       const { base, step, eol } = indentOf(app, list);
       const rest = followers.map((f) => `${eol}${base}${step}${app.doc.elementText(f)}`).join('');
@@ -357,15 +361,28 @@ async function join(app: App, before: Element, after: Element): Promise<void> {
   selectIn(before, at);
 }
 
-type Join = { kind: 'join'; before: Element; after: Element } | { kind: 'outdent' } | null;
+type Join = { kind: 'join'; before: Element; after: Element } | { kind: 'outdent' } | { kind: 'unlist'; item: Element } | null;
 
 function joinBack(app: App): Join {
   const at = itemAt(app);
   if (!at || !at.range.collapsed) return null;
   if (!blank(rangeOf(at.item, null, [at.range.startContainer, at.range.startOffset]))) return null;
   if (at.nested) return { kind: 'outdent' };
-  const before = structural(app, at.item) ? prevBlock(app, at.item) : null;
-  return before ? { kind: 'join', before, after: at.item } : null;
+  if (!structural(app, at.item)) return null;
+  const before = prevBlock(app, at.item);
+  if (before) return { kind: 'join', before, after: at.item };
+  // the first item of a list has its dash taken off, as in Keynote and PowerPoint
+  return at.item.localName === 'li' && !at.item.previousElementSibling && !at.item.querySelector(LIST) ? { kind: 'unlist', item: at.item } : null;
+}
+
+export const removesBullet = (app: App): boolean => joinBack(app)?.kind === 'unlist';
+
+// the first item of a list made a paragraph before the list, with the attributes of the item
+async function unlist(app: App, li: Element): Promise<void> {
+  const list = li.parentElement!;
+  const [p] = await app.doc.insert(`${startTag(app, li, 'p')}${rangeTex(li, rangeOf(li, null, null)).trim()}</p>`, list.parentElement!, list, 'list');
+  await app.doc.remove(list.querySelectorAll(':scope > li').length > 1 ? li : list, 'list');
+  selectIn(p, 0);
 }
 
 function joinAhead(app: App): Join {
@@ -379,12 +396,14 @@ function joinAhead(app: App): Join {
 export const canJoinBack = (app: App): boolean => joinBack(app) !== null;
 export const canJoinAhead = (app: App): boolean => joinAhead(app) !== null;
 
-// Backspace at the start of a block joins it to the block before, and at the start of a nested
-// item it takes the item out of its list, as Shift+Tab does
+// Backspace at the start of a block joins it to the block before, at the start of a nested item it
+// takes the item out of its list, as Shift+Tab does, and at the start of a first item of a list it
+// takes the dash off the item
 export async function joinBackward(app: App): Promise<void> {
   const j = joinBack(app);
   if (j?.kind === 'join') await join(app, j.before, j.after);
   else if (j?.kind === 'outdent') await outdent(app);
+  else if (j?.kind === 'unlist') await unlist(app, j.item);
 }
 
 // Delete at the end of a block joins the block after it to it
@@ -574,11 +593,14 @@ export function listWhy(app: App, label: string): string | null {
 export async function setList(app: App, kind: ListKind): Promise<void> {
   const blocks = listBlocks(app);
   if (blocks) return setBlockList(app, blocks, kind);
+  if (flow.active() && (await setSpanList(app, kind))) return;
   const at = itemAt(app);
   const now = listKind(app);
   if (!at || now === null || now === kind || !canSetList(app, kind)) return;
   const { host, item } = at;
   const offset = offsetIn(item, at.range.startContainer, at.range.startOffset);
+  // the selected text is selected again in the block made
+  const stop = item.contains(at.range.endContainer) ? offsetIn(item, at.range.endContainer, at.range.endOffset) : offset;
   if (at.nested) {
     const k = itemsOf(host).indexOf(item);
     const copy = texCopy(host);
@@ -589,7 +611,7 @@ export async function setList(app: App, kind: ListKind): Promise<void> {
     list.replaceWith(other);
     await app.doc.setContent(host, copy.innerHTML, 'list');
     const li = host.querySelectorAll('li')[k];
-    if (li) selectIn(li, offset);
+    if (li) selectIn(li, offset, stop);
     return;
   }
   const parent = item.parentElement!;
@@ -601,14 +623,14 @@ export async function setList(app: App, kind: ListKind): Promise<void> {
     const [list] = await app.doc.insert(`<${kind}>${eol}${base}${step}${li}${content}</li>${eol}${base}</${kind}>`, parent, item, 'list');
     await app.doc.remove(item, 'list');
     const first = list.querySelector('li');
-    if (first) selectIn(first, offset);
+    if (first) selectIn(first, offset, stop);
     return;
   }
   if (kind !== 'none') {
     const index = [...parent.children].indexOf(item);
     const list = await app.doc.retag(parent, kind, {}, 'list');
     const li = list.children[index];
-    if (li) selectIn(li, offset);
+    if (li) selectIn(li, offset, stop);
     return;
   }
   const items = [...parent.children];
@@ -622,7 +644,39 @@ export async function setList(app: App, kind: ListKind): Promise<void> {
   for (const f of followers) await app.doc.remove(f, 'list');
   await app.doc.remove(item, 'list');
   if (!parent.querySelector(':scope > li')) await app.doc.remove(parent, 'list');
-  selectIn(p, offset);
+  selectIn(p, offset, stop);
+}
+
+// a list style on a text selected over items of one list of the first level: the list is retagged,
+// or its items are made paragraphs, and the same text is selected after it. false where the span
+// is not over such items
+async function setSpanList(app: App, kind: ListKind): Promise<boolean> {
+  const p = flow.places(app);
+  const run = flow.spanTargets(app).map((t) => t.host);
+  const list = run[0]?.parentElement;
+  if (!p || !list?.matches(LIST) || !run.every((h) => h.localName === 'li' && h.parentElement === list && structural(app, h))) return false;
+  if (list.localName === kind || (kind === 'none' && run.some((h) => h.querySelector(LIST)))) return true;
+  const [a, f] = p.map(([el, at]) => [run.indexOf(el), at] as const);
+  const items = [...list.children].filter((c) => c.localName === 'li');
+  let made: Element[];
+  if (kind !== 'none') {
+    const now = await app.doc.retag(list, kind, {}, 'list');
+    const kids = [...now.children].filter((c) => c.localName === 'li');
+    made = run.map((h) => kids[items.indexOf(h)]);
+  } else {
+    const { base, step, eol } = indentOf(app, list);
+    const followers = items.slice(items.indexOf(run[run.length - 1]) + 1);
+    const texts = run.map((li) => `${startTag(app, li, 'p')}${rangeTex(li, rangeOf(li, null, null)).trim()}</p>`);
+    if (followers.length) {
+      const rest = followers.map((f) => `${eol}${base}${step}${app.doc.elementText(f)}`).join('');
+      texts.push(`${startTag(app, list, list.localName, { attrs: { id: null } })}${rest}${eol}${base}</${list.localName}>`);
+    }
+    made = (await app.doc.insert(texts, list.parentElement!, nextOf(app, list), 'list')).slice(0, run.length);
+    for (const el of [...followers, ...run]) await app.doc.remove(el, 'list');
+    if (!list.querySelector(':scope > li')) await app.doc.remove(list, 'list');
+  }
+  if (made[a[0]] && made[f[0]]) flow.select(app, [made[a[0]], a[1]], [made[f[0]], f[1]]);
+  return true;
 }
 
 // each selected block given the list of kind as a whole: a paragraph becomes a list of one item, a
@@ -696,20 +750,22 @@ export function styleOf(app: App, el: Element): ParagraphStyle | null {
 
 // the blocks that a style is set on: the blocks of a text selected over several of them, the block
 // of the text, or the selected blocks
-function styled(app: App): Element[] {
+function chosen(app: App): Element[] {
   const spanned = flow.spanTargets(app).map((t) => t.host);
   const t = spanned.length ? null : textTarget(app);
-  const list = spanned.length ? spanned : t ? [t.host] : selectedBlocks(app);
-  return list.filter((el) => styleOf(app, el) !== null);
+  return spanned.length ? spanned : t ? [t.host] : selectedBlocks(app);
 }
+
+const styled = (app: App): Element[] => chosen(app).filter((el) => styleOf(app, el) !== null);
 
 // a list item takes the styles that are a class on its tag, i.e. Body and Small
 const ITEM_STYLES: ParagraphStyle[] = ['body', 'small'];
 export const fits = (el: Element, style: ParagraphStyle): boolean => el.localName !== 'li' || ITEM_STYLES.includes(style);
 
-// the style of every block that a style is set on, or null when they differ or there are none
+// the style of every chosen block, or null when they differ, e.g. on a heading and a paragraph, as
+// the menu of Keynote does not check a style over blocks of different styles
 export function paragraphStyle(app: App): ParagraphStyle | null {
-  const styles = new Set(styled(app).map((el) => styleOf(app, el)));
+  const styles = new Set(chosen(app).map((el) => styleOf(app, el)));
   return styles.size === 1 ? [...styles][0] : null;
 }
 

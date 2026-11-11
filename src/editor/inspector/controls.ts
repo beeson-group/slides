@@ -101,6 +101,8 @@ const CSS = `
 .beeson-edit-inspector .ed-btn { flex: 1; height: 26px; padding: 0 10px; border: 0; border-radius: 7px; background: var(--ed-pressed); color: var(--ed-text); display: flex; align-items: center; justify-content: center; gap: 5px; font: 12px/1 var(--ed-font); white-space: nowrap; cursor: default; }
 .beeson-edit-inspector .ed-btn:not(:disabled):hover { background: color-mix(in srgb, var(--ed-pressed), var(--ed-text) 6%); }
 .beeson-edit-inspector .ed-btn:disabled { color: var(--ed-faint); }
+.beeson-edit-inspector .beeson-edit-select { height: 24px; padding: 0 6px 0 9px; border: 0; border-radius: 6px; background: var(--ed-control); box-shadow: inset 0 0 0 1px var(--ed-control-line); color: var(--ed-text); font: 12px/1 var(--ed-font); cursor: default; }
+.beeson-edit-inspector .beeson-edit-select:disabled { color: var(--ed-faint); }
 .beeson-edit-inspector .ed-num { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
 .beeson-edit-inspector .ed-num .box { display: flex; align-items: center; gap: 3px; }
 .beeson-edit-inspector .ed-num input { flex: 1; min-width: 0; height: 24px; box-sizing: border-box; padding: 0 7px; border: 0; border-radius: 6px; background: var(--ed-control); box-shadow: inset 0 0 0 1px var(--ed-control-line); color: var(--ed-text); text-align: right; font: 12px/1 var(--ed-font); font-variant-numeric: tabular-nums; }
