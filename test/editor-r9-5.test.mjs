@@ -384,3 +384,16 @@ for (const [platform, mode] of [['mac', 'light'], ['other', 'dark']]) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// finding tables-equations-insert-11: the header option of the Table pane was labeled with the
+// element of HTML it writes, Header row, written as th
+for (const platform of PLATFORMS) {
+  test(`the header option of the Table pane reads Header Row, as in the menus (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: 'test/pages/editor-tables.html', n: 1 });
+    await click(page, cellOf(2, 2));
+    await frames(page);
+    const label = await page.evaluate(`document.querySelector('#beeson-edit-panel-format input[data-command="table.header"]')?.parentElement.textContent ?? null`);
+    assert.equal(label, 'Header Row', 'the header option of the Table pane is not labeled Header Row');
+    assert.deepEqual(errors(page), []);
+  });
+}
