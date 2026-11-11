@@ -1137,7 +1137,8 @@ function installBars(app: App): void {
     r.cells.forEach((c, i) => {
       c.style.width = r.styles[i];
     });
-    if (widths && ev && Math.abs(ev.clientX - r.x) >= 1) {
+    // a drag that ends at the widths of the press, e.g. held by the narrowest width, writes nothing
+    if (widths && [...widths].some(([c, w]) => Math.abs(w - r.widths[r.cells.indexOf(c)]) >= 0.5)) {
       void app.history.transact('Resize Column', () => writeWidths(app, widths, 'resize column')).catch((e) => app.fail(e));
     }
   };
