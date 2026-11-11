@@ -6,6 +6,7 @@
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
@@ -19,6 +20,8 @@ const VIDEO = 10;
 // the slide of editor-layouts.html with a heading and a backdrop
 const GLIDE = 13;
 const PLATFORMS = ['mac', 'other'];
+const DARK_FILE = resolve('demo/figure-dark.png');
+const LIGHT_FILE = resolve('demo/figure-light.png');
 
 let browser;
 let server;
@@ -53,12 +56,12 @@ const meets = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < 
 
 // the editor on a deck served over HTTP, with the storage of the origin emptied first, and with
 // slide n shown
-async function load(t, platform, { deck = DECK, n = 0, size = { width: 1600, height: 1000 } } = {}) {
+async function load(t, platform, { deck = DECK, n = 0, size = { width: 1600, height: 1000 }, query = '' } = {}) {
   const page = await browser.newPage(size);
   t.after(() => page.close().catch(() => {}));
   await page.goto(`${server.origin}/theme/beeson.css`);
   await page.evaluate('localStorage.clear()');
-  await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
+  await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}${query}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
   page.source = readFileSync(deck, 'utf8');
@@ -81,6 +84,49 @@ async function checkEdit(page, before, name) {
   const { text } = await saveAndReopen(page, name);
   assert.equal(text, edited);
   return edited;
+}
+
+// the files at paths given to the open file chooser of the editor, as a person picks them
+async function choose(page, paths) {
+  await page.waitFor(`!!document.querySelector('input.beeson-media-input')`);
+  const { result } = await page.send('Runtime.evaluate', { expression: `document.querySelector('input.beeson-media-input')` });
+  await page.send('DOM.setFileInputFiles', { files: paths, objectId: result.objectId });
+}
+
+// a trusted drag of the files at paths from the Finder, dropped at the point at. it returns the
+// tag of the drop outline before the drop
+async function dropFiles(page, at, paths) {
+  const data = { items: [], files: paths, dragOperationsMask: 1 };
+  await page.send('Input.dispatchDragEvent', { type: 'dragEnter', x: at.x, y: at.y, data });
+  await page.send('Input.dispatchDragEvent', { type: 'dragOver', x: at.x, y: at.y, data });
+  const outline = await page.evaluate(`(() => { const b = document.querySelector('.beeson-drop'); return b && !b.hidden ? b.textContent : null; })()`);
+  await page.send('Input.dispatchDragEvent', { type: 'drop', x: at.x, y: at.y, data });
+  return outline;
+}
+
+const waitText = (page, text) => page.waitFor(`window.BeesonEditor.render().includes(${js(text)})`, 30000);
+const tabs = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-inspector .ed-tabs button')].map((t) => t.textContent.trim())`);
+
+// a save into a folder of the private file system, which a stub of showDirectoryPicker gives as the
+// folder that the person chooses, and an open of the saved text. it returns the saved text and the
+// names of the files of its media/
+async function saveInto(page, folder) {
+  const saved = await page.evaluate(`(async () => {
+    const root = await navigator.storage.getDirectory();
+    const dir = await root.getDirectoryHandle(${js(folder)}, { create: true });
+    const deck = await dir.getFileHandle('deck.html', { create: true });
+    window.showDirectoryPicker = async () => dir;
+    window.BeesonEditor.attach(deck);
+    await window.BeesonEditor.save();
+    const files = [];
+    try {
+      for await (const [name] of (await dir.getDirectoryHandle('media')).entries()) files.push(name);
+    } catch {}
+    return { text: await (await deck.getFile()).text(), files: files.sort() };
+  })()`);
+  const status = await page.evaluate(`window.BeesonEditor.open(${js(saved.text)})`);
+  assert.deepEqual(status.problems, []);
+  return saved;
 }
 
 for (const platform of PLATFORMS) {
@@ -146,6 +192,50 @@ for (const platform of PLATFORMS) {
       await frames(page);
       await frames(page);
       assert.equal((await page.evaluate('window.BeesonEditor.status()')).overflow, 0, `after an undo of ${id}, the slide is still reported`);
+    }
+  });
+
+  // media-arrange-2
+  test(`a picture hidden by Dark in light mode keeps its Image pane, and a drop or Replace adds its twin for light mode (${platform})`, async (t) => {
+    for (const how of ['drop', 'replace']) {
+      const page = await load(t, platform, { n: STEPS, query: '&theme=light' });
+      const insert = page.evaluate(`window.BeesonEditor.exec('insert.image').then(() => true)`);
+      await choose(page, [DARK_FILE]);
+      await insert;
+      await waitText(page, 'media/figure-dark.png');
+      await frames(page);
+      await exec(page, 'figure.mode.dark');
+      await frames(page);
+      const before = await render(page);
+      assert.match(before, /<img src="media\/figure-dark.png" class="for-dark"/);
+      assert.ok((await tabs(page)).includes('Image'), `the inspector shows only ${await tabs(page)}`);
+      const replace = await page.evaluate(`window.BeesonEditor.state('media.replace')`);
+      assert.equal(replace.enabled, true);
+      assert.match(replace.label, /Light Mode/);
+      assert.equal((await page.evaluate(`window.BeesonEditor.state('figure.mode.both')`)).enabled, true);
+      if (how === 'drop') {
+        const at = await page.evaluate(`(() => { const f = window.BeesonEditor.selection()[0]; const r = f.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+        const outline = await dropFiles(page, at, [LIGHT_FILE]);
+        assert.match(outline ?? '', /Light Mode/);
+      } else {
+        const run = page.evaluate(`window.BeesonEditor.exec('media.replace').then(() => true)`);
+        await choose(page, [LIGHT_FILE]);
+        await run;
+      }
+      await waitText(page, 'media/figure-light.png');
+      await frames(page);
+      const edited = await render(page);
+      assert.match(edited, /<img src="media\/figure-dark.png" class="for-dark">\s*<img class="for-light" src="media\/figure-light.png"/);
+      assert.equal(edited.split('<figure').length, before.split('<figure').length, 'the file was added as a new figure');
+      assert.equal(await page.evaluate(`[...document.querySelectorAll('.reveal section.present img.for-light')].filter((e) => e.getBoundingClientRect().width > 0).length`), 1);
+      await undo(page);
+      assert.equal(await render(page), before);
+      await redo(page);
+      assert.equal(await render(page), edited);
+      const saved = await saveInto(page, `r12-4-pair-${how}-${platform}`);
+      assert.equal(saved.text, edited);
+      assert.deepEqual(saved.files, ['figure-dark.png', 'figure-light.png']);
+      assert.deepEqual(errors(page), []);
     }
   });
 }
