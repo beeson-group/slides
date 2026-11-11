@@ -354,7 +354,8 @@ function placeTable(app: App, table: HTMLTableElement): void {
   const tw = t.right - t.left;
   const th = t.bottom - t.top;
   const at = (left: number, top: number): SlideBox => ({ left, top, right: left + tw, bottom: top + th });
-  const free = (b: SlideBox) => b.top - room >= 0 && b.bottom <= floor && b.right + room <= w &&
+  // a box measured at the zoom of the canvas may pass the floor by a fraction of a slide px
+  const free = (b: SlideBox) => b.top - room >= 0 && b.bottom <= floor + 1 && b.right + room <= w &&
     !others.some((o) => meets({ left: b.left - room, top: b.top - room, right: b.right + room, bottom: b.bottom + room }, o));
   const top = Math.max(t.top, ...before.map((b) => b.bottom + room));
   let best: SlideBox | null = null;
