@@ -123,7 +123,7 @@ for (const platform of PLATFORMS) {
       const under = (await lines(page, ':scope > p, :scope > ul > li, :scope > h2')).filter((l) => meets(plot, l));
       if (under.length) {
         const s = await page.evaluate('window.BeesonEditor.status()');
-        assert.ok(s.overFigure > 0 && /over a figure/.test(s.message), `the texts under the plot are not named in the status: ${js(s)}`);
+        assert.ok(s.overflow > 0 && /over a figure/.test(s.message), `the texts under the plot are not named in the status: ${js(s)}`);
       }
       await checkEdit(page, before, `r13-4-plot-${n}-${platform}.html`);
       await exec(page, 'insert.plot');
