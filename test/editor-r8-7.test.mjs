@@ -7,6 +7,7 @@
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
@@ -73,17 +74,17 @@ const cx = (b) => b.left + b.width / 2;
 const cy = (b) => b.top + b.height / 2;
 const toScreen = (f, x, y) => ({ x: f.left + x * f.k, y: f.top + y * f.k });
 
-async function load(t, platform, mode, n) {
+async function load(t, platform, mode, n, deck = DECK) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  const url = `${server.origin}/${DECK}?edit&still&edit-platform=${platform}`;
+  const url = `${server.origin}/${deck}?edit&still&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
   if ((await page.evaluate('Beeson.theme.get()')) !== mode) await page.evaluate('Beeson.theme.toggle()');
-  page.source = SOURCE;
+  page.source = deck === DECK ? SOURCE : readFileSync(deck, 'utf8');
   const s = await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`);
   assert.deepEqual(s.problems, []);
   if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
@@ -513,4 +514,105 @@ for (const platform of PLATFORMS) {
 function slideOf(text, n) {
   const at = [...text.matchAll(/<section[ >]/g)][n].index;
   return text.slice(at, text.indexOf('</section>', at));
+}
+
+// the file chosen for an insert of a picture, given to the file chooser of the page
+async function choose(page, id, file) {
+  const chosen = exec(page, id);
+  await page.waitFor(`!!document.querySelector('input.beeson-media-input')`);
+  const { result } = await page.send('Runtime.evaluate', { expression: `document.querySelector('input.beeson-media-input')` });
+  await page.send('DOM.setFileInputFiles', { files: [resolve(file)], objectId: result.objectId });
+  await chosen;
+}
+
+// each insert whose kind the placeholder of an empty slot offers, as its name, its run, and the
+// start of the tag of its element in the file
+const SLOTTED = [
+  ['Insert > Table', (page) => exec(page, 'insert.table', { rows: 3, columns: 3 }), 'table', '<table'],
+  ['Insert > QR Code', (page) => exec(page, 'insert.qr'), '.qr', '<div class="qr"'],
+  ['Insert > Image', (page) => choose(page, 'insert.image', 'demo/figure-light.png'), 'img', '<img'],
+  ['Insert > Video', (page) => choose(page, 'insert.video', 'demo/clip-dark.mp4'), 'video', '<video'],
+];
+const SLOT_OF = { figure: '.plate', split: '.zone' };
+const TAG_OF = { figure: '<div class="plate">', split: '<div class="zone">' };
+const holders = (page) => page.evaluate(`[...document.querySelectorAll('.reveal section.present > :is(.zone, .plate)')].map((s) => !!s.querySelector(':scope > .beeson-placeholder'))`);
+const holds = (page, slot, el) => page.evaluate(`[...document.querySelectorAll('.reveal section.present > ${slot}')].map((s) => !!s.querySelector(':scope > ${el}'))`);
+const settle = async (page) => {
+  await page.evaluate('new Promise((d) => setTimeout(d, 300))');
+  await frames(page);
+};
+
+// gap 5 of R8.7: Insert > Table and Insert > QR Code put their element over the empty slot of a
+// new figure or split slide, with the placeholder of the slot drawn through it. each insert that
+// the placeholder offers fills the slot, as the icon of its kind does, and the placeholder is gone
+for (const platform of PLATFORMS) {
+  for (const layout of ['figure', 'split']) {
+    test(`every insert of a kind of the placeholder fills the empty slot of a new ${layout} slide, on ${platform}`, async (t) => {
+      const page = await load(t, platform, 'dark', 0);
+      const slot = SLOT_OF[layout];
+      for (const [what, run, el, tag] of SLOTTED) {
+        await exec(page, `slide.new.${layout}`);
+        await frames(page);
+        // the caret of the new slide is in its title, and the second Esc leaves its block
+        await press(page, 'Escape');
+        await press(page, 'Escape');
+        await frames(page);
+        const n = await page.evaluate('Reveal.getIndices().h');
+        const before = await render(page);
+        assert.deepEqual(await holders(page), [true], `the new ${layout} slide does not show the placeholder of its slot`);
+        await run(page);
+        await settle(page);
+        const edited = await render(page);
+        assert.deepEqual(await holds(page, slot, el), [true], `${what} does not put its element into the ${slot} of a new ${layout} slide`);
+        assert.ok(new RegExp(`${TAG_OF[layout]}\\s*${tag}`).test(slideOf(edited, n)), `${what} does not write its element into the ${slot} of the file:\n${slideOf(edited, n)}`);
+        assert.deepEqual(await holders(page), [false], `${what} leaves the placeholder of the ${slot} of a new ${layout} slide`);
+        inScope(edited, before);
+        await undo(page);
+        await settle(page);
+        assert.equal(await render(page), before, `an undo of ${what} does not give the file back`);
+        assert.deepEqual(await holders(page), [true], `an undo of ${what} does not show the placeholder again`);
+        await redo(page);
+        await settle(page);
+        assert.equal(await render(page), edited, `a redo of ${what} does not write it again`);
+        assert.deepEqual(await holds(page, slot, el), [true], `a redo of ${what} does not put its element into the ${slot}`);
+        assert.deepEqual(await holders(page), [false], `a redo of ${what} shows the placeholder again`);
+      }
+      assert.deepEqual(errors(page), []);
+    });
+  }
+}
+
+// on a slide with two empty slots, an insert fills the first, and the icon of a slot fills its slot
+const TWO = 'test/pages/editor-two-slots.html';
+for (const platform of PLATFORMS) {
+  test(`an insert fills the first of two empty slots and an icon fills its own, on ${platform}`, async (t) => {
+    const page = await load(t, platform, 'dark', 0, TWO);
+    const runs = [
+      ...SLOTTED.map(([what, run, el, tag]) => [what, run, el, tag, [true, false]]),
+      ['the QR icon of the second slot', (page) => click(page, '.reveal section.present > .zone:last-of-type .beeson-placeholder button[data-insert="qr"]'), '.qr', '<div class="qr"', [false, true]],
+    ];
+    for (const [what, run, el, tag, into] of runs) {
+      await exec(page, 'selection.clear');
+      await frames(page);
+      assert.deepEqual(await holders(page), [true, true]);
+      await run(page);
+      await settle(page);
+      const edited = await render(page);
+      assert.deepEqual(await holds(page, '.zone', el), into, `${what} does not fill the slot ${into.indexOf(true) + 1} of two`);
+      assert.deepEqual(await holders(page), into.map((x) => !x), `${what} does not take off the placeholder of the slot it fills only`);
+      const zones = [...slideOf(edited, 0).matchAll(/<div class="zone"[^>]*>([\s\S]*?)<\/div>\n/g)].map((m) => m[1].trimStart().startsWith(tag));
+      assert.deepEqual(zones, into, `${what} does not write its element into the slot ${into.indexOf(true) + 1} of the file:\n${slideOf(edited, 0)}`);
+      inScope(edited, page.source);
+      await undo(page);
+      await settle(page);
+      await byteExact(page);
+      await redo(page);
+      await settle(page);
+      assert.equal(await render(page), edited, `a redo of ${what} does not write it again`);
+      await undo(page);
+      await settle(page);
+      await byteExact(page);
+    }
+    assert.deepEqual(errors(page), []);
+  });
 }
