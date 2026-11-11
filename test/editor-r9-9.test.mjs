@@ -565,3 +565,67 @@ for (const platform of PLATFORMS) {
     }
   });
 }
+
+// the selected video, the Play button of its pane, and the Poster Frame slider beside it
+const PLAYED = `(() => {
+  const v = window.BeesonEditor.selection()[0];
+  const slider = document.querySelector('${PANEL} input[name=poster-frame]');
+  const play = slider?.parentElement.querySelector('button.ed-play');
+  return { paused: v.paused, time: v.currentTime, slider: Number(slider?.value), label: play?.getAttribute('aria-label') ?? null, before: !!play && !!(play.compareDocumentPosition(slider) & Node.DOCUMENT_POSITION_FOLLOWING) };
+})()`;
+const playAt = (page) => page.evaluate(`(() => { const r = document.querySelector('${PANEL} button.ed-play').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: Play in the Video pane plays the video in place from the frame of the slider, as a preview that stops on a change of the selection or the slide`, async (t) => {
+    const page = await load(t, platform, { n: VIDEO, query: 'edit' });
+    await selectVideo(page);
+    // the frame at half of the video, captured as the poster
+    const r = await rectOf(page, `${PANEL} input[name=poster-frame]`);
+    await click(page, { x: r.left + r.width * 0.5, y: r.top + r.height / 2 });
+    await page.waitFor(`window.BeesonEditor.render() !== ${js(page.source)}`, 20000);
+    const edited = await render(page);
+    const undo = (await state(page, 'edit.undo')).label;
+    const from = (await page.evaluate(PLAYED)).slider;
+    let s = await page.evaluate(PLAYED);
+    assert.equal(s.label, 'Play', 'the Video pane does not have a Play button');
+    assert.ok(s.before, 'the Play button is not beside the slider');
+
+    await click(page, await playAt(page));
+    await sleep(900);
+    s = await page.evaluate(PLAYED);
+    assert.equal(s.paused, false, 'the video does not play');
+    assert.equal(s.label, 'Pause');
+    assert.ok(s.time > from && s.time < from + 2, `the video plays from ${s.time} and not from the frame ${from} of the slider`);
+    assert.ok(Math.abs(s.slider - s.time) < 0.5, `the slider at ${s.slider} does not follow the video at ${s.time}`);
+    // Pause pauses it, and the preview is not an edit
+    await click(page, await playAt(page));
+    await frames(page);
+    s = await page.evaluate(PLAYED);
+    assert.equal(s.paused, true, 'Pause does not pause the video');
+    assert.equal(s.label, 'Play');
+    assert.equal(await render(page), edited, 'the preview changes the file');
+    assert.equal((await state(page, 'edit.undo')).label, undo, 'the preview is an entry of the history');
+
+    // a change of the slide, and of the selection, stops the preview
+    await click(page, await playAt(page));
+    await sleep(300);
+    const video = `[...document.querySelectorAll(${js(shownVideo)})].find((v) => v.getBoundingClientRect().width > 0)`;
+    await page.evaluate(`window.__played = ${video}`);
+    assert.equal(await page.evaluate('window.__played.paused'), false);
+    await page.evaluate(`Reveal.slide(${VIDEO - 1})`);
+    await sleep(300);
+    assert.equal(await page.evaluate('window.__played.paused'), true, 'the video plays on after a change of the slide');
+    await page.evaluate(`Reveal.slide(${VIDEO})`);
+    await frames(page);
+    await selectVideo(page);
+    await click(page, await playAt(page));
+    await sleep(300);
+    assert.equal(await page.evaluate('window.__played.paused'), false);
+    await click(page, await page.evaluate(`(() => { const r = document.querySelector('.reveal .slides > section.present').getBoundingClientRect(); return { x: r.left + 40, y: r.bottom - 60 }; })()`));
+    await sleep(300);
+    assert.deepEqual(await selection(page), []);
+    assert.equal(await page.evaluate('window.__played.paused'), true, 'the video plays on after a change of the selection');
+    assert.equal(await render(page), edited);
+    assert.deepEqual(errors(page), []);
+  });
+}
