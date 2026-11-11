@@ -34,6 +34,14 @@ function inCode(app: App): boolean {
 }
 
 const TONE_LABELS: Record<inline.Tone, string> = { accent: 'Accent', violet: 'Violet', blue: 'Blue', red: 'Red', subtle: 'Subtle', muted: 'Muted' };
+// fn run so that an undo and a redo select the text of the slide again, e.g. the caret before an
+// outdent, which the history of the blocks alone puts at the end of the text that changed
+async function marked(app: App, fn: () => void | Promise<void>): Promise<void> {
+  const kept = app.history.keep(() => flow.mark(app));
+  await fn();
+  kept();
+}
+
 const STYLE_LABELS: Record<blocks.ParagraphStyle, string> = { body: 'Body', small: 'Small', subheading: 'Subheading', caption: 'Caption', footnote: 'Footnote' };
 const LIST_LABELS: Record<blocks.ListKind, string> = { none: 'Paragraphs', ul: 'Dashes', ol: 'Numbers' };
 // the labels of Change Case in PowerPoint, each written in its case
@@ -96,7 +104,7 @@ export function install(app: App): void {
     in: [...TEXT, 'notes'],
     undoable: true,
     enabled: (a) => (inNotes(a) ? notes.canJoinNotesItem(a) : blocks.canJoinBack(a)),
-    run: (a) => (inNotes(a) ? notes.joinNotesItem(a) : blocks.joinBackward(a)),
+    run: (a) => marked(a, () => (inNotes(a) ? notes.joinNotesItem(a) : blocks.joinBackward(a))),
   });
   define({ id: 'text.joinForward', label: 'Join Paragraphs', keys: { mac: ['Delete'], other: ['Delete'] }, in: TEXT, undoable: true, enabled: blocks.canJoinAhead, run: blocks.joinForward });
 
@@ -211,8 +219,8 @@ export function install(app: App): void {
   // does not move the focus out of the text. ⌘] and ⌘[ are Keynote's keys, shown in the menu, and
   // Ctrl+] and Ctrl+[ those of Google Docs elsewhere, where the menu shows Tab and Shift+Tab, since
   // ] and [ are typed with AltGr on a German or an Italian keyboard
-  define({ id: 'text.indent', label: 'Increase Indent Level', keys: { mac: ['Mod+]', 'Tab'], other: ['Tab', 'Mod+]'] }, in: TEXT, menu: menu('list', 70, 'List'), undoable: true, enabled: (a) => blocks.inList(a) || flow.canLevel(a), run: (a) => flow.level(a, true) });
-  define({ id: 'text.outdent', label: 'Decrease Indent Level', keys: { mac: ['Mod+[', 'Shift+Tab'], other: ['Shift+Tab', 'Mod+['] }, in: TEXT, menu: menu('list', 71, 'List'), undoable: true, enabled: (a) => blocks.inList(a) || flow.canLevel(a), run: (a) => flow.level(a, false) });
+  define({ id: 'text.indent', label: 'Increase Indent Level', keys: { mac: ['Mod+]', 'Tab'], other: ['Tab', 'Mod+]'] }, in: TEXT, menu: menu('list', 70, 'List'), undoable: true, enabled: (a) => blocks.inList(a) || flow.canLevel(a), run: (a) => marked(a, () => flow.level(a, true)) });
+  define({ id: 'text.outdent', label: 'Decrease Indent Level', keys: { mac: ['Mod+[', 'Shift+Tab'], other: ['Shift+Tab', 'Mod+['] }, in: TEXT, menu: menu('list', 71, 'List'), undoable: true, enabled: (a) => blocks.inList(a) || flow.canLevel(a), run: (a) => marked(a, () => flow.level(a, false)) });
   // Tab and Shift+Tab in a text outside a list and a table keep the focus in the text, as a text
   // box of Keynote takes them. a tab is not typed, since the theme draws it as a space. the key
   // stops at each formula of the block, which Enter opens, and goes on from the last to the text
