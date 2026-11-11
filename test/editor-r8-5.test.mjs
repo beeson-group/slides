@@ -420,6 +420,8 @@ for (const platform of PLATFORMS) {
         await page.waitFor(`window.BeesonEditor.render().split('<figure').length === ${count(SOURCE, '<figure') + 2}`);
         edited = await render(page);
         assert.equal(count(edited, ID), 2, `a copy by a drag from the ${from} repeats the data-id`);
+        // Chrome on a Mac opens the context menu at a press with Ctrl, which is closed here
+        if (await page.evaluate(`!!document.querySelector('.beeson-edit-menu')?.getClientRects().length`)) await press(page, 'Escape');
         await roundTrip(page, edited);
         // Copy and Paste on the slide of the figure
         await pick(page, from);
