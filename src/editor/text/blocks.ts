@@ -276,7 +276,9 @@ export async function split(app: App): Promise<void> {
     if (at.nested) return outdent(app);
     const list = item.parentElement!;
     const followers = [...list.children].slice([...list.children].indexOf(item) + 1).filter((c) => c.localName === 'li');
-    const texts = ['<p></p>'];
+    // a paragraph after items of a moved list is moved with them, so that it is not drawn over them
+    const move = list.querySelector(':scope > li') !== item && (list as HTMLElement).style.translate;
+    const texts = [move ? `<p style="translate: ${move}"></p>` : '<p></p>'];
     if (followers.length) {
       const { base, step, eol } = indentOf(app, list);
       const rest = followers.map((f) => `${eol}${base}${step}${app.doc.elementText(f)}`).join('');
