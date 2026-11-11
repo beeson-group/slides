@@ -149,6 +149,28 @@ for (const platform of PLATFORMS) {
     });
   }
 
+  // on a content slide, a plate is a block of the text column, and the elements after it move up
+  // with the column when it is deleted
+  test(`a deleted plate does not write an offset on the element beside it once the slide is a content slide (${platform})`, async (t) => {
+    const page = await load(t, platform, 6);
+    await exec(page, 'insert.qr');
+    await frames(page);
+    await press(page, 'Escape');
+    await frames(page);
+    await exec(page, 'slide.layout.content');
+    await frames(page);
+    const offset = (text) => /<div class="qr"[^>]*translate: ([^;"]*)/.exec(text)?.[1];
+    const written = offset(await render(page));
+    assert.ok(written, 'the QR code does not have an offset');
+    await click(page, '.reveal section.present .plate img');
+    await frames(page);
+    await exec(page, 'element.delete');
+    await frames(page);
+    assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present .plate').length`), 0, 'the plate was not deleted');
+    assert.equal(offset(await render(page)), written, 'the delete of the plate changed the offset of the QR code');
+    assert.deepEqual(errors(page), []);
+  });
+
   // the plate of a plot is as large as the slide, and a new element may lie over it, but not over
   // another new element while a place off it exists
   test(`a second QR code on a figure slide with a plot is put off the first (${platform})`, async (t) => {
