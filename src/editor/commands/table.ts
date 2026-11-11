@@ -39,6 +39,7 @@ import { injectStyle, make } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { closeMenus, menuOpen, openMenu, type MenuItem } from '../ui/menu.ts';
 import { columnPlace, freeZone, meets, slideBox, takenBox, type Box as SlideBox } from './insert.ts';
+import { coverOf, leastCover } from './place.ts';
 import { MARK } from './slide.ts';
 
 // the widths of the frame of the cell of the caret and of the cells selected as a block
@@ -372,9 +373,9 @@ const STEP = 20;
 // a new table put where it fits on its slide, with every row and with room around it for its bars
 // at the zoom of the canvas: under the blocks before it, else at the center of the free area where
 // the layout puts a zone, else at the free place nearest to it at the right of the text or below it,
-// and else at the center of the slide over what is there, as Keynote inserts a table, where the
-// fill of the theme hides what is under it. the space that an element takes is the rule takenBox of
-// insert.ts. the move is a translate in slide px
+// and else over what is there, at the place that covers the least of the slide by leastCover of
+// place.ts, where the fill of the theme hides what is under it. the space that an element takes
+// is the rule takenBox of insert.ts. the move is a translate in slide px
 function placeTable(app: App, table: HTMLTableElement): void {
   const slide = table.closest('section');
   const parent = table.parentElement;
@@ -420,7 +421,13 @@ function placeTable(app: App, table: HTMLTableElement): void {
     }
   }
   place ??= best;
-  place ??= at((w - tw) / 2, (h - th) / 2);
+  if (!place) {
+    // the place of the grid inside the slide and above the floor that covers the least of the slide
+    const places: SlideBox[] = [];
+    for (let y = room; y + th <= floor; y += STEP) for (let x = room; x + tw + room <= w; x += STEP) places.push(at(x, y));
+    const els = all.map((o) => o.el).filter((el) => !el.matches('.col, .panel, .block'));
+    place = leastCover(coverOf(app, els), places, at(t.left, top)) ?? at((w - tw) / 2, (h - th) / 2);
+  }
   const x = Math.round(place.left - t.left);
   const y = Math.round(place.top - t.top);
   if (x || y) app.doc.setTag(table, { translate: { x, y } }, 'insert table');
