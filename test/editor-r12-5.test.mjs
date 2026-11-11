@@ -167,4 +167,21 @@ for (const platform of PLATFORMS) {
       assert.deepEqual(errors(page), []);
     });
   }
+  test(`a held corner grip keeps its diagonal cursor through the resize (${platform})`, async (t) => {
+    const page = await load(t, platform, FIGURES);
+    await click(page, 'section.present figure img.for-light');
+    const grip = await page.evaluate(`(() => { const g = [...document.querySelectorAll('.beeson-grip[data-handle="se"]')].find((g) => g.getClientRects().length && !g.hidden); const r = g.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    const cursor = (x, y) => page.evaluate(`getComputedStyle(document.elementFromPoint(${x}, ${y})).cursor`);
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: grip.x, y: grip.y });
+    assert.equal(await cursor(grip.x, grip.y), 'nwse-resize');
+    await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: grip.x, y: grip.y, button: 'left', buttons: 1, clickCount: 1 });
+    for (let i = 1; i <= 8; i++) await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: grip.x - 15 * i, y: grip.y - 4 * i, button: 'left', buttons: 1 });
+    await frames(page);
+    assert.equal(await cursor(grip.x - 120, grip.y - 32), 'nwse-resize', 'the held grip keeps its cursor');
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: grip.x - 120, y: grip.y - 32, button: 'left', buttons: 0, clickCount: 1 });
+    await frames(page);
+    assert.notEqual(await cursor(grip.x - 120, grip.y - 32), 'nwse-resize');
+    await checkEdit(page, `r12-5-grip-${platform}.html`);
+    assert.deepEqual(errors(page), []);
+  });
 }
