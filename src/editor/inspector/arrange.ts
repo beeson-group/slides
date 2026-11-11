@@ -66,6 +66,7 @@ export function arrangePane(app: App, run: Run): Control[] {
       row([
         button(app, run, { command: 'arrange.distribute.horizontal', icon: 'distribute-h', text: 'Horizontally' }),
         button(app, run, { command: 'arrange.distribute.vertical', icon: 'distribute-v', text: 'Vertically' }),
+        button(app, run, { command: 'arrange.distribute.evenly', icon: 'distribute-e', text: 'Evenly' }),
       ]),
     ]),
     section('Size', [
