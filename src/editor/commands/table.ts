@@ -89,6 +89,9 @@ html.beeson-autofilling,html.beeson-autofilling *{cursor:crosshair!important}
 .beeson-table-bars .grip:hover::after,html.beeson-column-resizing .beeson-table-bars .grip::after{opacity:1;background:var(--ed-select)}
 .beeson-table-bars .guide{width:1px;background:var(--ed-select);pointer-events:none}
 .beeson-table-bars .guide[hidden]{display:none}
+.beeson-table-bars .drop{border-radius:1.5px;background:var(--ed-select);pointer-events:none}
+.beeson-table-bars .drop[hidden]{display:none}
+html.beeson-line-moving,html.beeson-line-moving *{cursor:grabbing!important}
 html.beeson-column-resizing,html.beeson-column-resizing *{cursor:col-resize!important}
 html.beeson-cell-range .reveal *{user-select:none!important;-webkit-user-select:none!important}
 .beeson-table-bars .cell.block{border-width:${FRAME_BLOCK}px;background:color-mix(in srgb,var(--ed-select) 12%,transparent)}
@@ -317,6 +320,68 @@ async function sortRows(app: App, t: Target, descending: boolean): Promise<void>
     const now = sortable(t.table)!;
     if (now[i] !== tr) await app.doc.move(tr, now[i].parentElement!, now[i], label);
   }
+}
+
+type Line = 'row' | 'column';
+
+// whether a row is a header row: in a thead, or of th only at the start of the table
+function headRows(table: HTMLTableElement): boolean[] {
+  let head = true;
+  return [...table.rows].map((tr) => {
+    head &&= tr.parentElement?.localName === 'thead' || (tr.cells.length > 0 && [...tr.cells].every((c) => c.localName === 'th'));
+    return head;
+  });
+}
+
+// whether the rows or the columns lo to hi of table are moved to the gap before line to, as Keynote
+// moves them: to a gap outside them in the table, with header rows and body rows apart, and
+// without a merged cell across a line between lo and to
+function movable(table: HTMLTableElement, kind: Line, lo: number, hi: number, to: number): boolean {
+  const g = gridOf(table);
+  if (to < 0 || to > (kind === 'row' ? g.grid.length : g.width) || (to >= lo && to <= hi + 1)) return false;
+  const a = Math.min(lo, to), b = Math.max(hi, to - 1);
+  if (kind === 'row') {
+    const rows = [...table.rows].slice(a, b + 1);
+    const head = headRows(table).slice(a, b + 1);
+    if (rows.some((tr) => tr.parentElement !== rows[0].parentElement) || head.some((h) => h !== head[0])) return false;
+  }
+  const spots = kind === 'row' ? g.grid.slice(a, b + 1).flat() : g.grid.flatMap((r) => r.slice(a, b + 1));
+  return spots.every((x) => !!x && x.rows === 1 && (kind === 'row' || x.span === 1));
+}
+
+// the lines moved by a command of the way from the box of t, or null where they are not moved
+function moveOf(t: Target | null, kind: Line, way: -1 | 1): { lo: number; hi: number; to: number } | null {
+  const box = t?.box;
+  if (!t || !box) return null;
+  const [lo, hi] = kind === 'row' ? [box.r0, box.r1] : [box.c0, box.c1];
+  const to = way < 0 ? lo - 1 : hi + 2;
+  return movable(t.table, kind, lo, hi, to) ? { lo, hi, to } : null;
+}
+
+// the rows or the columns lo to hi of table moved in the file to the gap before line to. the
+// widths of the columns are written on the first row, hence they stay on the row that is first
+// after a move of rows, and they go with their column in a move of columns
+async function moveLines(app: App, table: HTMLTableElement, kind: Line, lo: number, hi: number, to: number): Promise<void> {
+  const label = `move ${kind}`;
+  const first = table.rows[0];
+  const widths = new Map((gridOf(table).spots[0] ?? []).map((s) => [s.col, app.doc.tagState(s.cell).style.width ?? null]));
+  // the lines after the moved ones and before the gap are moved before them, as the same order
+  const lines = (all: Element[]) => (to < lo ? { move: all.slice(lo, hi + 1), before: all[to] } : { move: all.slice(hi + 1, to), before: all[lo] });
+  if (kind === 'row') {
+    const { move, before } = lines([...table.rows]);
+    for (const tr of move) await app.doc.move(tr, before.parentElement!, before, label);
+  } else {
+    for (const row of gridOf(table).grid) {
+      const { move, before } = lines(row.map((x) => x!.cell));
+      for (const cell of move) await app.doc.move(cell, before.parentElement!, before, label);
+    }
+  }
+  if (kind !== 'row' || table.rows[0] === first) return;
+  for (const s of placesOf(table)[0]) {
+    const w = widths.get(s.col) ?? null;
+    if ((app.doc.tagState(s.cell).style.width ?? null) !== w) app.doc.setTag(s.cell, { style: { width: w } }, label);
+  }
+  for (const cell of first.cells) if (app.doc.tagState(cell).style.width) app.doc.setTag(cell, { style: { width: null } }, label);
 }
 
 // a table of rows of cells put at its place in the layout of the current slide, and then moved
@@ -815,6 +880,15 @@ export async function pasteRange(app: App, text: string, html = ''): Promise<boo
 
 let current: App | null = null;
 
+// Esc during a drag of rows or columns by their bar cancels it. the listener is added at the
+// import of this module, before BLOCK_KEYS and the keys of the editor take Esc
+let cancelMove: (() => boolean) | null = null;
+window.addEventListener('keydown', (ev) => {
+  if (ev.key !== 'Escape' || !cancelMove?.()) return;
+  ev.preventDefault();
+  ev.stopImmediatePropagation();
+}, true);
+
 // the commands of the keys of the cells selected as a block, run before the commands of a
 // selected element, e.g. the arrows before a nudge and Delete before the delete of the table
 const BLOCK_KEYS: Command[] = [];
@@ -839,6 +913,8 @@ function cellItems(cell: HTMLTableCellElement): MenuItem[] {
     ...ids(['edit.cut', 'edit.copy', 'edit.paste']).map((i) => ({ command: (i as { command: string }).command })),
     { rule: true },
     ...ids(['table.rowAbove', 'table.rowBelow', 'table.columnBefore', 'table.columnAfter']),
+    { rule: true },
+    ...ids(['table.moveRowUp', 'table.moveRowDown', 'table.moveColumnLeft', 'table.moveColumnRight']),
     { rule: true },
     ...ids(['table.deleteRow', 'table.deleteColumn']),
     { rule: true },
@@ -1082,7 +1158,10 @@ function installBars(app: App): void {
     g.hidden = true;
     return g;
   });
-  layer.append(cols, rows, grab, addCol, addRow, outline, grips, guide, spread, ...corners, handle, ...sides);
+  // the line at the gap where the rows or the columns dragged by their bar land
+  const gapLine = make('div', 'drop');
+  gapLine.hidden = true;
+  layer.append(cols, rows, grab, addCol, addRow, outline, grips, guide, spread, ...corners, handle, ...sides, gapLine);
   document.body.append(layer);
   // a press on the bars keeps the caret in its cell
   for (const type of ['pointerdown', 'mousedown']) layer.addEventListener(type, (ev) => ev.preventDefault());
@@ -1092,7 +1171,7 @@ function installBars(app: App): void {
   // menu of the column or the row
   const pick = (ev: MouseEvent, column: boolean) => {
     const seg = ev.target instanceof Element ? ev.target.closest<HTMLElement>('[data-index]') : null;
-    if (!seg || !shown) return;
+    if (!seg || !shown || (ev.type === 'click' && dragged)) return;
     const table = shown.table;
     const g = gridOf(table);
     const i = Number(seg.dataset.index);
@@ -1108,8 +1187,8 @@ function installBars(app: App): void {
     ev.preventDefault();
     const arg = { cell: column ? anchor : focus };
     const ids = column
-      ? [['table.columnBefore', 'table.columnAfter'], ['table.deleteColumn'], ['table.distributeColumns', 'table.fitColumn'], ['table.sortAscending', 'table.sortDescending']]
-      : [['table.rowAbove', 'table.rowBelow'], ['table.deleteRow']];
+      ? [['table.columnBefore', 'table.columnAfter'], ['table.moveColumnLeft', 'table.moveColumnRight'], ['table.deleteColumn'], ['table.distributeColumns', 'table.fitColumn'], ['table.sortAscending', 'table.sortDescending']]
+      : [['table.rowAbove', 'table.rowBelow'], ['table.moveRowUp', 'table.moveRowDown'], ['table.deleteRow']];
     const items: MenuItem[] = ids.flatMap((group, k) => [...(k ? [{ rule: true as const }] : []), ...group.map((command) => ({ command, arg }))]);
     openMenu(app, items, { anchor: seg.getBoundingClientRect(), placement: column ? 'below' : 'beside', label: `${seg.title} menu` });
   };
@@ -1117,6 +1196,63 @@ function installBars(app: App): void {
     bar.addEventListener('click', (ev) => pick(ev, column));
     bar.addEventListener('contextmenu', (ev) => pick(ev, column));
   }
+
+  // a press on the bar of selected whole rows or columns, moved past a few px, drags them to a gap
+  // among the others, as in Keynote, and a press on a bar that is not selected still selects. the
+  // gap is the one past the row or the column under the pointer, and Esc cancels the drag
+  let moving: { kind: Line; table: HTMLTableElement; lo: number; hi: number; x: number; y: number; to: number | null; on: boolean } | null = null;
+  let dragged = false;
+  const gapAt = (m: NonNullable<typeof moving>, x: number, y: number): number | null => {
+    const spans = m.kind === 'row' ? [...m.table.rows].map((tr) => { const b = tr.getBoundingClientRect(); return [b.top, b.bottom]; }) : columnEdges(m.table);
+    const at = m.kind === 'row' ? y : x;
+    let k = spans.findIndex(([, end]) => at < end);
+    if (k < 0) k = spans.length - 1;
+    const to = k < m.lo ? k : k > m.hi ? k + 1 : null;
+    return to !== null && movable(m.table, m.kind, m.lo, m.hi, to) ? to : null;
+  };
+  const endMove = (ev: PointerEvent | null) => {
+    const m = moving;
+    if (!m) return;
+    moving = null;
+    document.documentElement.classList.remove('beeson-line-moving');
+    const to = ev && m.on ? gapAt(m, ev.clientX, ev.clientY) : null;
+    if (to === null) return;
+    const range = block && { ...block };
+    void app.history.transact(m.kind === 'row' ? 'Move Row' : 'Move Column', () => moveLines(app, m.table, m.kind, m.lo, m.hi, to)).then(() => {
+      if (range) selectCells(app, range.anchor, range.focus);
+    }).catch((e) => app.fail(e));
+  };
+  for (const [bar, column] of [[cols, true], [rows, false]] as const) {
+    bar.addEventListener('pointerdown', (ev) => {
+      dragged = false;
+      const seg = ev.target instanceof Element && !ev.target.closest('.more') ? ev.target.closest<HTMLElement>('[data-index]') : null;
+      const b = shown?.box;
+      if (!seg || !shown || !b || ev.button !== 0 || ev.shiftKey || !inBlock(app)) return;
+      const g = gridOf(shown.table);
+      const whole = column ? b.r0 === 0 && b.r1 === g.grid.length - 1 : b.c0 === 0 && b.c1 === g.width - 1;
+      const [lo, hi] = column ? [b.c0, b.c1] : [b.r0, b.r1];
+      const i = Number(seg.dataset.index);
+      if (!whole || i < lo || i > hi) return;
+      moving = { kind: column ? 'column' : 'row', table: shown.table, lo, hi, x: ev.clientX, y: ev.clientY, to: null, on: false };
+      bar.setPointerCapture(ev.pointerId);
+    });
+    bar.addEventListener('pointermove', (ev) => {
+      const m = moving;
+      if (!m || (!m.on && Math.hypot(ev.clientX - m.x, ev.clientY - m.y) < 4)) return;
+      m.on = dragged = true;
+      document.documentElement.classList.add('beeson-line-moving');
+      m.to = gapAt(m, ev.clientX, ev.clientY);
+    });
+    bar.addEventListener('pointerup', (ev) => endMove(ev));
+    bar.addEventListener('pointercancel', () => endMove(null));
+    bar.addEventListener('lostpointercapture', () => endMove(null));
+  }
+  cancelMove = () => {
+    if (!moving?.on) return false;
+    moving = null;
+    document.documentElement.classList.remove('beeson-line-moving');
+    return true;
+  };
 
   const place = (el: Element, left: number, top: number, width: number, height: number) => {
     (el as HTMLElement).style.cssText = `left:${left}px;top:${top}px;width:${width}px;height:${height}px`;
@@ -1326,6 +1462,15 @@ function installBars(app: App): void {
       if (resize?.i === i) place(guide, x, box.top, 1, box.height);
     });
     guide.hidden = !resize;
+    const gap = moving?.on && moving.table === t.table ? moving.to : null;
+    gapLine.hidden = gap === null;
+    if (gap !== null && moving!.kind === 'row') {
+      const y = gap < rowBoxes.length ? rowBoxes[gap].top : rowBoxes[rowBoxes.length - 1].bottom;
+      place(gapLine, box.left, y - 1.5, box.width, 3);
+    } else if (gap !== null) {
+      const x = gap < edges.length ? edges[gap][0] : edges[edges.length - 1][1];
+      place(gapLine, x - 1.5, box.top, 3, box.height);
+    }
     // the buttons are kept inside the canvas, also for a table at its edge
     const v = app.stage?.viewport;
     const inX = (x: number) => (v ? Math.max(v.left + 2, Math.min(x, v.right - BAR - 2)) : x);
@@ -1560,6 +1705,28 @@ export function install(app: App): void {
   });
   columnCommand('table.columnBefore', 'Add Column Before', 82, false, 'Alt+ArrowLeft');
   columnCommand('table.columnAfter', 'Add Column After', 83, true, 'Alt+ArrowRight');
+  // the rows or the columns of the range, or of the cell of the caret, moved by one line, which
+  // stay selected. they do not have a key, as in Keynote
+  const moveCommand = (id: string, label: string, order: number, kind: Line, way: -1 | 1) => c.define({
+    id,
+    label,
+    menu: menu('move', order),
+    enabled: (a, arg?: unknown) => ready(a) && !!moveOf(targetOf(a, arg), kind, way),
+    undoable: true,
+    run: async (a, arg) => {
+      const t = need(a, arg);
+      const m = moveOf(t, kind, way);
+      if (!m) return;
+      const range = blocked(a, t) && block ? { ...block } : null;
+      await moveLines(a, t.table, kind, m.lo, m.hi, m.to);
+      if (range) selectCells(a, range.anchor, range.focus);
+      else if (t.cell) focusCell(t.cell, 'start');
+    },
+  });
+  moveCommand('table.moveRowUp', 'Move Row Up', 83.1, 'row', -1);
+  moveCommand('table.moveRowDown', 'Move Row Down', 83.2, 'row', 1);
+  moveCommand('table.moveColumnLeft', 'Move Column Left', 83.3, 'column', -1);
+  moveCommand('table.moveColumnRight', 'Move Column Right', 83.4, 'column', 1);
   c.define({
     id: 'table.deleteRow',
     label: 'Delete Row',

@@ -88,7 +88,10 @@ export function install(app: App): void {
   });
   define({
     id: 'text.joinBackward',
-    label: (a) => (!inNotes(a) && blocks.removesBullet(a) ? 'Remove Bullet' : 'Join Paragraphs'),
+    label: (a) => {
+      const kind = inNotes(a) ? null : blocks.joinKind(a);
+      return kind === 'unlist' ? 'Remove Bullet' : kind === 'outdent' ? c.label('text.outdent') : 'Join Paragraphs';
+    },
     keys: { mac: ['Backspace'], other: ['Backspace'] },
     in: [...TEXT, 'notes'],
     undoable: true,
@@ -201,6 +204,9 @@ export function install(app: App): void {
         kept();
       },
     }));
+  // Start at of the Bullets and Numbering dialog of PowerPoint, typed into the Text pane as
+  // { start: n }
+  define({ id: 'text.list.start', label: 'Start At', in: TEXT, undoable: true, enabled: (a) => !!blocks.startList(a), run: (a, arg) => blocks.setStart(a, Number((arg as { start?: unknown } | undefined)?.start)) });
   // Tab is taken in every item of a list, also where it does not change the level, so that it
   // does not move the focus out of the text. ⌘] and ⌘[ are Keynote's keys, shown in the menu, and
   // Ctrl+] and Ctrl+[ those of Google Docs elsewhere, where the menu shows Tab and Shift+Tab, since

@@ -344,6 +344,10 @@ type NumberOptions = {
   min?: number;
   max?: number;
   step?: number;
+  // the reason the field is dimmed, shown in its tooltip and in those of its stepper
+  why?(): string;
+  // the command of the field, named on its stepper as on the buttons of a pane
+  command?: string;
 };
 
 export function numberField(app: App, o: NumberOptions): Control & { input: HTMLInputElement } {
@@ -354,7 +358,7 @@ export function numberField(app: App, o: NumberOptions): Control & { input: HTML
   input.inputMode = 'decimal';
   input.autocomplete = 'off';
   input.name = o.label;
-  input.id = `beeson-edit-num-${o.label.toLowerCase()}`;
+  input.id = `beeson-edit-num-${o.label.toLowerCase().replace(/\s+/g, '-')}`;
   const unit = make('span', 'unit', o.unit ?? 'px');
   const stepper = make('div', 'stepper');
   const up = make('button');
@@ -363,6 +367,7 @@ export function numberField(app: App, o: NumberOptions): Control & { input: HTML
     b.type = 'button';
     b.tabIndex = -1;
     b.setAttribute('aria-label', `${text} ${o.label}`);
+    if (o.command) b.dataset.command = o.command;
     b.append(glyph(name, 12));
     keepFocus(b);
   }
@@ -430,6 +435,7 @@ export function numberField(app: App, o: NumberOptions): Control & { input: HTML
     const on = o.enabled();
     input.disabled = up.disabled = down.disabled = !on;
     el.classList.toggle('off', !on);
+    if (o.why) el.title = up.title = down.title = on ? '' : o.why();
     // a focused field follows a change made elsewhere, e.g. an undo, unless a value is typed into it
     if (document.activeElement === input) {
       const v = o.value();

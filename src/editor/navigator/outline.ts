@@ -285,8 +285,15 @@ export class Outline {
     const e = this.entries.find((x) => x.text === document.activeElement);
     if (!e || ev.isComposing) return;
     if (ev.metaKey || ev.ctrlKey || ev.altKey) {
+      const id = this.app.commands.forKey(ev, this.app.region())?.id;
+      if (id === 'edit.undo' || id === 'edit.redo') {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        void this.step(e, id).catch((err) => this.app.fail(err));
+        return;
+      }
       // the keys of a text, e.g. Select All and the clipboard, stay with the field
-      if (/^[acvxz]$/i.test(ev.key) && !(ev.key.toLowerCase() === 'z')) ev.stopImmediatePropagation();
+      if (/^[acvx]$/i.test(ev.key)) ev.stopImmediatePropagation();
       return;
     }
     ev.stopImmediatePropagation();
@@ -338,6 +345,27 @@ export class Outline {
         return;
       }
       this.done(() => this.entries[what === 'return' ? k + 1 : k]?.text ?? null, what === 'return' ? 0 : at);
+    } finally {
+      this.busy = false;
+    }
+  }
+
+  // Undo or Redo in a field: a text typed since the field was last written is written first, as an
+  // entry of its own, and the caret is put at the end of the first line changed by the step, or
+  // else in the line of the same block, or in the line before it
+  private async step(e: Entry, id: 'edit.undo' | 'edit.redo'): Promise<void> {
+    if (this.busy) return;
+    this.busy = true;
+    try {
+      await this.commit(e);
+      const k = this.entries.indexOf(e);
+      const before = new Map(this.entries.map((x) => [x.el, x.shown]));
+      await this.app.commands.run(id);
+      await this.app.history.idle();
+      this.done(() => {
+        const changed = this.entries.find((x) => before.get(x.el) !== x.shown);
+        return (changed ?? this.entries.find((x) => x.el === e.el) ?? this.entries[Math.max(0, k - 1)])?.text ?? null;
+      });
     } finally {
       this.busy = false;
     }

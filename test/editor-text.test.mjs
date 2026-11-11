@@ -169,7 +169,7 @@ for (const platform of PLATFORMS) {
     await select(page, '.reveal section.present li li', 'nested item', 0);
     await press(page, 'Backspace');
     const out = ['<li>A nested item</li>\n      </ul>\n    </li>', '<li>A </li>\n      </ul>\n    </li>\n    <li>nested item</li>'];
-    await roundTrip(page, [out], 'Join Paragraphs', [nested]);
+    await roundTrip(page, [out], 'Decrease Indent Level', [nested]);
     await saved(page, [out]);
     assert.deepEqual(errors(page), []);
   });
