@@ -366,3 +366,39 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// the center of the button of the Find panel with label
+const findButton = (page, label) => page.evaluate(`(() => {
+  const b = [...document.querySelectorAll('.beeson-find button')].find((e) => e.textContent.trim() === ${js(label)});
+  const r = b.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+})()`);
+const findOpen = (page) => page.evaluate(`(() => { const f = document.querySelector('.beeson-find'); return !!f && !f.hidden; })()`);
+
+// finding text-lists-find-3: a Replace or a Replace All that left no match disabled the clicked
+// button, the focus went to the replaced text of the slide, and the next keys typed into it
+for (const platform of PLATFORMS) {
+  for (const label of ['Replace All', 'Replace']) {
+    test(`after ${label} leaves no match, the focus stays in the Find panel and Esc closes it (${platform})`, async (t) => {
+      const page = await load(t, platform);
+      await press(page, 'Ctrl+H');
+      await page.waitFor(`document.activeElement?.closest('.beeson-find') !== null`);
+      await type(page, 'frameless');
+      await click(page, await page.evaluate(`(() => {
+        const r = document.querySelectorAll('.beeson-find input')[1].getBoundingClientRect();
+        return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+      })()`));
+      await type(page, 'borderless');
+      await click(page, await findButton(page, label));
+      await page.waitFor(`window.BeesonEditor.render().includes('borderless')`);
+      await frames(page);
+      const active = await page.evaluate(`(() => { const a = document.activeElement; return a.closest('.beeson-find') ? 'panel' : a.outerHTML.slice(0, 60); })()`);
+      assert.equal(active, 'panel', `after ${label}, the focus is on ${active}`);
+      await type(page, 'Z');
+      assert.ok(!(await render(page)).includes('borderZ'), `the Z after ${label} is typed into the slide`);
+      await press(page, 'Escape');
+      assert.equal(await findOpen(page), false, `Esc after ${label} leaves the Find panel open`);
+      await roundTrip(page);
+    });
+  }
+}
