@@ -701,8 +701,8 @@ function columnWidths(table: HTMLTableElement, nowrap: boolean, from = 0, to = I
 const fitWidths = (t: Target) => columnWidths(t.table, true, t.box?.c0, t.box?.c1);
 
 // the cells of rows written into the table of cell from cell on, with rows and columns added at the
-// end as they are needed
-async function pasteCells(app: App, cell: HTMLTableCellElement, rows: string[][]): Promise<void> {
+// end as they are needed. with asBlock set, the cells written are then selected as a block
+async function pasteCells(app: App, cell: HTMLTableCellElement, rows: string[][], asBlock = false): Promise<void> {
   const start = placeOf(cell)!;
   const table = cell.closest('table') as HTMLTableElement;
   while (table.rows.length < start.row + rows.length) await addRow(app, { table, cell: null, box: null }, true);
@@ -720,7 +720,55 @@ async function pasteCells(app: App, cell: HTMLTableCellElement, rows: string[][]
       last = target;
     }
   }
-  if (last) focusCell(last, 'end');
+  if (last && asBlock) selectCells(app, cell, last);
+  else if (last) focusCell(last, 'end');
+}
+
+// the cells selected as a block, which Cut, Copy, Paste, and Delete of the Edit menu act on as the
+// Delete key does, as in Keynote, and on which Duplicate is dimmed
+export const selectedRange = (app: App): Target | null => (inBlock(app) ? targetOf(app) : null);
+
+// the cells of the range of t as tab-separated text and as a table, with a merged cell in its
+// first row and column and empty cells in its other places
+export function rangeText(t: Target): { plain: string; html: string } {
+  const g = gridOf(t.table);
+  const b = t.box!;
+  const quote = (v: string) => (/[\t\n"]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
+  const plain: string[] = [];
+  const html: string[] = [];
+  for (let r = b.r0; r <= b.r1; r++) {
+    const row: { tag: 'td' | 'th'; text: string }[] = [];
+    for (let c = b.c0; c <= b.c1; c++) {
+      const s = g.grid[r]?.[c];
+      row.push({ tag: s?.cell.localName === 'th' ? 'th' : 'td', text: s && s.row === r && s.col === c ? cellText(s.cell) : '' });
+    }
+    plain.push(row.map((x) => quote(x.text)).join('\t'));
+    html.push(rowHtml(row));
+  }
+  return { plain: plain.join('\n'), html: `<table>${html.join('')}</table>` };
+}
+
+// the text of each cell of the selected range cleared, with the range kept selected
+export async function clearRange(app: App): Promise<void> {
+  const t = selectedRange(app);
+  const kept = block;
+  if (!t?.box || !kept) return;
+  for (const p of spotsIn(gridOf(t.table), t.box)) {
+    if (p.cell.childNodes.length) await app.doc.setContent(p.cell, '', 'clear cells');
+  }
+  selectCells(app, kept.anchor, kept.focus);
+}
+
+// a paste of an HTML table, of tab-separated text, or of lines onto the selected range, from its
+// first cell on. false when no range is selected or there is nothing to paste
+export async function pasteRange(app: App, text: string, html = ''): Promise<boolean> {
+  const t = selectedRange(app);
+  const lines = text.replace(/\r\n?/g, '\n').replace(/\n+$/, '');
+  const rows = parseHtmlTable(html) ?? parseTabular(text) ?? (lines ? lines.split('\n').map((l) => [l]) : null);
+  const first = t?.box ? cellOver(t.table, t.box.r0, t.box.c0) : null;
+  if (!first || !rows) return false;
+  await pasteCells(app, first, rows, true);
+  return true;
 }
 
 let current: App | null = null;
@@ -731,7 +779,10 @@ const BLOCK_KEYS: Command[] = [];
 window.addEventListener('keydown', (ev) => {
   const app = current;
   if (!app || ev.isComposing || menuOpen() || picker || app.region() !== 'canvas' || !inBlock(app)) return;
-  const c = BLOCK_KEYS.find((x) => keysOf(x, app.platform).some((k) => matches(ev, k, app.platform)));
+  const hit = (x: Command | undefined) => !!x && keysOf(x, app.platform).some((k) => matches(ev, k, app.platform));
+  const c = BLOCK_KEYS.find(hit);
+  // the key of Duplicate, dimmed on a range, is not left to the browser, where Ctrl+D adds a bookmark
+  if (!c && hit(app.commands.get('edit.duplicate'))) ev.preventDefault();
   if (!c) return;
   ev.preventDefault();
   ev.stopImmediatePropagation();
@@ -1696,12 +1747,7 @@ export function install(app: App): void {
     in: ['canvas'],
     enabled: inBlock,
     undoable: true,
-    run: async (a) => {
-      const t = need(a);
-      for (const p of spotsIn(gridOf(t.table), t.box!)) {
-        if (p.cell.childNodes.length) await a.doc.setContent(p.cell, '', 'clear cells');
-      }
-    },
+    run: (a) => clearRange(a),
   }));
 
   // Tab and Shift+Tab go to the next and the previous cell, with its text selected, as in
@@ -1834,8 +1880,8 @@ export function install(app: App): void {
   window.addEventListener('pointercancel', release, true);
 
   // a paste of tab-separated text or of an HTML table: onto the slide it is a new table, selected,
-  // and into a cell it fills the cells from that cell on. a paste of elements or slides of the
-  // editor, marked by MARK, is left to commands/clipboard.ts
+  // and into a cell or onto a range of cells it fills the cells from its first cell on. a paste of
+  // elements or slides of the editor, marked by MARK, is left to commands/clipboard.ts
   window.addEventListener('paste', (ev) => {
     const data = ev.clipboardData;
     if (ev.defaultPrevented || !data || !ready(app)) return;
@@ -1843,6 +1889,12 @@ export function install(app: App): void {
     const text = data.getData('text/plain');
     if (html.includes(MARK) || text.includes(MARK)) return;
     const region = app.region();
+    if (region === 'canvas' && (text.trim() || html) && selectedRange(app)) {
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      void app.history.transact('Paste', () => pasteRange(app, text, html)).catch(fail);
+      return;
+    }
     const cell = region === 'text' ? cellAt(app) : null;
     if (region !== 'canvas' && !cell) return;
     const rows = parseHtmlTable(html) ?? parseTabular(text);

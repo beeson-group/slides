@@ -22,6 +22,7 @@ import { withTwins } from '../canvas/hit.ts';
 import { VOID } from '../source.ts';
 import { tokenize } from '../tokens.ts';
 import { MARK, docOf, slidesIn } from './slide.ts';
+import { clearRange, pasteRange, rangeText, selectedRange } from './table.ts';
 
 // the offset of a paste or a duplicate that would cover its source, in slide pixels
 export const STEP = 20;
@@ -91,10 +92,24 @@ let clip: Clip | null = null;
 function copy(app: App, els: Element[], data: DataTransfer | null): void {
   const text = clipText(app, els);
   clip = { text, sources: els, paths: els.map(pathOf), pasted: 0, last: [] };
+  write(data, text, text);
+}
+
+function write(data: DataTransfer | null, plain: string, html: string): void {
   if (data) {
-    data.setData('text/plain', text);
-    data.setData('text/html', text);
-  } else void navigator.clipboard?.writeText(text).catch(() => {});
+    data.setData('text/plain', plain);
+    data.setData('text/html', html);
+  } else void navigator.clipboard?.writeText(plain).catch(() => {});
+}
+
+// the cells of a selected range copied as tab-separated text and as a table, or false without a range
+function copyRange(app: App, data: DataTransfer | null): boolean {
+  const t = selectedRange(app);
+  if (!t) return false;
+  const { plain, html } = rangeText(t);
+  clip = { text: plain, sources: [], paths: [], pasted: 0, last: [] };
+  write(data, plain, html);
+  return true;
 }
 
 // the box of el in slide pixels
@@ -269,6 +284,7 @@ export function install(app: App): void {
       const data = arg instanceof DataTransfer ? arg : null;
       // in a text, the command of the browser, which a click on a menu item allows
       if (inText(a)) return void document.execCommand('cut');
+      if (copyRange(a, data)) return clearRange(a);
       // the image of the other mode beside a cut image goes with it
       const els = withTwins(a, selectedElements(a));
       if (!els.length) return a.commands.run('slide.cut', data ?? undefined);
@@ -289,6 +305,7 @@ export function install(app: App): void {
     run: (a, arg) => {
       const data = arg instanceof DataTransfer ? arg : null;
       if (inText(a)) return void document.execCommand('copy');
+      if (copyRange(a, data)) return;
       const els = selectedElements(a);
       if (!els.length) return a.commands.run('slide.copy', data ?? undefined);
       copy(a, els, data);
@@ -313,6 +330,7 @@ export function install(app: App): void {
       if (match && host) insertPlain(host, els || slides ? wordsOf(text) : text);
       else if (!els && !slides) document.execCommand('insertText', false, text);
     } else if (els) await pasteElements(a, els);
+    else if (!slides && (await pasteRange(a, text))) return;
     else if (slides) await a.commands.run('slide.paste', slides);
   };
   c.define({
@@ -346,7 +364,7 @@ export function install(app: App): void {
     in: ['canvas'],
     menu: menu(30, 'select'),
     context: ['element'],
-    enabled: (a) => ready(a) && (selectedElements(a).length > 0 || a.commands.enabled('slide.duplicate')),
+    enabled: (a) => ready(a) && !selectedRange(a) && (selectedElements(a).length > 0 || a.commands.enabled('slide.duplicate')),
     undoable: true,
     run: async (a) => {
       const els = selectedElements(a);
