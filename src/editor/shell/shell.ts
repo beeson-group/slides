@@ -300,8 +300,9 @@ export function install(app: App): void {
     const tile = target.closest('.beeson-edit-sorter .tile');
     if (tile) return { kind: 'slide', target: tileSlide.get(tile) ?? null };
     if (target.closest('.beeson-edit-canvas')) return { kind: 'canvas', target: app.current() };
-    // the handle of a block, outside the slide, stands for its block
-    const handle = target.closest('.beeson-handle') ? overlay().current() : null;
+    // the handle of a block, outside the slide, stands for its block, and a grip or the rotate
+    // handle for the selected object
+    const handle = target.closest('.beeson-handle') ? overlay().current() : target.closest('.beeson-grip, .beeson-rotor') ? (app.selection.elements()[0] ?? null) : null;
     if (!handle && !target.closest('.reveal:not(.beeson-peek)')) return null;
     const el = handle ?? app.move.movableOf(target);
     // a text whose block is selected as an object, alone, with others, or in its group, gets the
