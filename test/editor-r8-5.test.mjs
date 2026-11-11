@@ -6,6 +6,7 @@
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
@@ -278,6 +279,75 @@ for (const platform of PLATFORMS) {
         // the picture is carried about the center of the group
         assert.ok(!near(turned.x, pic.x, 4) || !near(turned.y, pic.y, 4), `${where} leaves the picture in place`);
         assert.equal(await fieldValue(page, 'angle'), turned.own, `the Angle field after ${where}`);
+        await roundTrip(page, edited);
+        assert.deepEqual(errors(page), []);
+      }
+    });
+  }
+}
+
+// a trusted drag of the file at path from the Finder, dropped at the point at. the label of the
+// outline drawn while the file is over the point is returned
+async function dropFile(page, at, path) {
+  const data = { items: [], files: [resolve(path)], dragOperationsMask: 1 };
+  for (const type of ['dragEnter', 'dragOver']) await page.send('Input.dispatchDragEvent', { type, x: at.x, y: at.y, data });
+  const outline = await page.evaluate(`(() => { const b = document.querySelector('.beeson-drop'); return b && !b.hidden ? b.textContent : null; })()`);
+  await page.send('Input.dispatchDragEvent', { type: 'drop', x: at.x, y: at.y, data });
+  return outline;
+}
+const waitText = (page, text) => page.waitFor(`window.BeesonEditor.render().includes(${js(text)})`, 30000);
+
+// the text of the figure of slide n, i.e. of its zone or plate
+function figureOf(text, n) {
+  const slide = slideOf(text, n);
+  const at = slide.search(/<(figure|div) class="(zone|plate)/);
+  const end = slide.indexOf(slide[at + 1] === 'f' ? '</figure>' : '</div>', at);
+  return slide.slice(at, end);
+}
+
+for (const platform of PLATFORMS) {
+  for (const mode of MODES) {
+    test(`a file dropped onto the picture of a locked figure does not replace it, on ${platform} in ${mode} mode`, async (t) => {
+      for (const n of [ZONE_PAIR, PLATE_PAIR]) {
+        const page = await load(t, platform, mode, n);
+        await pick(page, 'figure');
+        await exec(page, 'arrange.lock');
+        await frames(page);
+        page.source = await render(page);
+        const locked = figureOf(page.source, n);
+        assert.match(locked, /^<(figure|div) class="(zone|plate)" data-locked>/);
+        const pic = await pictureOf(page);
+        // as in Keynote, the file is added to the slide beside the locked picture
+        const outline = await dropFile(page, pic, 'demo/clip-dark.png');
+        assert.equal(outline, 'Add Image', `the outline over the picture of a locked figure of ${NAMES[n]}`);
+        await waitText(page, 'media/clip-dark.png');
+        await frames(page);
+        const edited = await render(page);
+        assert.equal(figureOf(edited, n), locked, `a file dropped onto the locked picture of ${NAMES[n]} changes its figure`);
+        assert.match(slideOf(edited, n), /<figure class="zone">\s*<img src="media\/clip-dark\.png">/, 'the file is not added in a zone of its own');
+        await roundTrip(page, edited);
+        assert.deepEqual(errors(page), []);
+      }
+    });
+
+    test(`Replace with a video keeps the mode, the step, the id, and the place of an image, on ${platform} in ${mode} mode`, async (t) => {
+      for (const from of ['figure', 'picture']) {
+        const page = await load(t, platform, mode, STEPPED);
+        await pick(page, from);
+        const pic = await pictureOf(page);
+        assert.equal(await dropFile(page, pic, 'demo/clip-dark.mp4'), 'Replace Image');
+        await waitText(page, 'media/clip-dark.mp4');
+        await frames(page);
+        const edited = await render(page);
+        const videos = tagsOf(edited, STEPPED, ['video']);
+        assert.equal(videos.length, 1, 'the image of the mode is not replaced with one video');
+        for (const part of [`class="for-${mode} fragment"`, 'data-fragment-index="1"', 'data-id="curves"', 'style="translate: 12px 8px; width: 500px"', 'src="media/clip-dark.mp4"', 'poster="media/clip-dark.png"']) {
+          assert.ok(videos[0].includes(part), `the video ${videos[0]} of a Replace from the ${from} is written without ${part}`);
+        }
+        assert.ok(!videos[0].includes('alt='), `the video ${videos[0]} keeps the alt text of the image`);
+        // the image of the other mode is left, and the selection is on the same object
+        assert.equal(tagsOf(edited, STEPPED, ['img']).length, 1);
+        assert.deepEqual(await selected(page), [from === 'figure' ? 'figure.zone' : `video.for-${mode}`], `the selection after a Replace from the ${from}`);
         await roundTrip(page, edited);
         assert.deepEqual(errors(page), []);
       }
