@@ -64,6 +64,7 @@ html.beeson-dragging, html.beeson-dragging * { cursor: move !important; user-sel
 html.beeson-resizing, html.beeson-resizing * { user-select: none !important; }
 html.beeson-band, html.beeson-band .reveal * { cursor: move; }
 html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .slides section video, html.beeson-editing .reveal .slides section .zone, html.beeson-editing .reveal .slides section .plate, html.beeson-editing .reveal .slides section .qr { cursor: move; }
+html.beeson-editing .reveal .slides section [data-locked]:is(img, video, .zone, .plate, .qr), html.beeson-editing .reveal .slides section [data-locked] :is(img, video, .qr) { cursor: default; }
 `;
 
 const div = (className: string, parent: HTMLElement): HTMLDivElement => {
@@ -313,8 +314,8 @@ export class Frames {
     this.hoverFrame.hidden = !hot || !!framed || !!view.moving;
     if (hot && !framed && !view.moving) place(this.hoverFrame, grow(frameRect(hot), 6));
     // a figure is dragged by itself, as in Keynote, and a viewer, which a drag turns, and a text
-    // block, whose text a press edits, by its handle
-    this.handle.hidden = !hot || (hot.matches(BY_ITSELF) && !hot.matches('tycho-viewer')) || (!!this.gripsOf(hot) && !isTextSized(hot));
+    // block, whose text a press edits, by its handle. a locked element does not have a handle
+    this.handle.hidden = !hot || hot.hasAttribute('data-locked') || (hot.matches(BY_ITSELF) && !hot.matches('tycho-viewer')) || (!!this.gripsOf(hot) && !isTextSized(hot));
     if (!this.handle.hidden && hot) {
       // left of the frame, 6 px outside the text, at its top edge, clear of the grips at its corners
       const r = hot.getBoundingClientRect();
