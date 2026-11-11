@@ -619,6 +619,8 @@ const GHOST_WIDTH = 240;
 
 type Row = { el: Element; i: number; row: HTMLElement; chip: HTMLButtonElement };
 type Head = { list: Element; head: HTMLElement; chip: HTMLButtonElement; run: Run };
+// the facts of a row that the fields under the rows show
+type Facts = { el: Element; stepped: boolean; start: StartKind | null; delay: number | null; effect: { id: Effect | null; label: string }; final: boolean };
 
 export class Steps {
   readonly pane = make('div', 'beeson-edit-side');
@@ -694,10 +696,12 @@ export class Steps {
     });
     // the delay of After Previous in seconds, with the stepper of the number fields of the Arrange
     // pane in steps of 0.1 s, as the Delay of the Timing of PowerPoint and of Build Order in Keynote.
-    // a value is committed with Return, at a blur, or by the stepper
-    const after = () => {
-      const s = this.selected();
-      return s?.start === 'after' && !s.final ? s : null;
+    // a value is committed with Return, at a blur, or by the stepper, into each selected row that
+    // starts After Previous. the field is empty while these rows differ
+    const after = () => this.picked().filter((s) => s.start === 'after' && !s.final);
+    const shared = () => {
+      const ms = new Set(after().map((s) => s.delay));
+      return ms.size === 1 ? [...ms][0] : null;
     };
     const delay = numberField(app, {
       label: 'Delay',
@@ -706,13 +710,12 @@ export class Steps {
       min: MIN_DELAY / 1000,
       max: 600,
       value: () => {
-        const s = after();
-        return s && s.delay !== null ? s.delay / 1000 : null;
+        const ms = shared();
+        return ms === null ? null : ms / 1000;
       },
-      enabled: () => !!after(),
+      enabled: () => after().length > 0,
       commit: (v) => {
-        const s = after();
-        if (s && Math.round(v * 1000) !== s.delay) this.runOn('steps.delay', { delay: v });
+        if (after().some((s) => Math.round(v * 1000) !== s.delay)) this.runOn('steps.delay', { delay: v });
       },
     });
     delay.input.classList.add('delay');
@@ -1012,14 +1015,20 @@ export class Steps {
     this.syncDetail();
   }
 
-  // the facts of the one selected row, for the fields under the rows
-  private selected(): { el: Element; stepped: boolean; start: StartKind | null; delay: number | null; effect: { id: Effect | null; label: string }; final: boolean } | null {
+  // the facts of the first selected row, for the fields under the rows
+  private selected(): Facts | null {
+    return this.picked()[0] ?? null;
+  }
+
+  // the facts of each selected row, apart from the rows of lines
+  private picked(): Facts[] {
     const m = this.model;
     const app = this.app;
-    const r = this.rows.find((r) => r.row.classList.contains('selected') && !m?.lines[r.i]);
-    if (!m || !app || !r) return null;
-    const { start, delay } = startAt(app, m, r.i);
-    return { el: r.el, stepped: stepAt(m.plan, r.i) >= 0, start, delay, effect: effectOf(classesOf(app, r.el)), final: m.plan.finals.includes(r.i) };
+    if (!m || !app) return [];
+    return this.rows.filter((r) => r.row.classList.contains('selected') && !m.lines[r.i]).map((r) => {
+      const { start, delay } = startAt(app, m, r.i);
+      return { el: r.el, stepped: stepAt(m.plan, r.i) >= 0, start, delay, effect: effectOf(classesOf(app, r.el)), final: m.plan.finals.includes(r.i) };
+    });
   }
 
   private syncDetail(): void {
@@ -1030,6 +1039,7 @@ export class Steps {
       (this.start as HTMLButtonElement & { refresh(): void }).refresh();
     }
     this.delay?.sync();
+    if (this.delay) this.delay.input.placeholder = new Set(this.picked().filter((r) => r.start === 'after' && !r.final).map((r) => r.delay)).size > 1 ? 'Multiple' : '';
     if (this.effect) {
       this.effect.disabled = !s?.stepped;
       (this.effect as HTMLButtonElement & { refresh(): void }).refresh();
@@ -1046,12 +1056,11 @@ export class Steps {
     this.none.disabled = !steps;
   }
 
-  // with several rows selected, a command of the fields acts on each of their elements, apart from
-  // the delay
+  // with several rows selected, a command of the fields acts on each of their elements
   private runOn(id: string, arg: Record<string, unknown>): void {
     const s = this.selected();
     const app = this.app;
-    if (s && app) void app.commands.run(id, this.several() && id !== 'steps.delay' ? arg : { el: s.el, ...arg }).catch((e) => app.fail(e));
+    if (s && app) void app.commands.run(id, this.several() ? arg : { el: s.el, ...arg }).catch((e) => app.fail(e));
   }
 
   private several(): boolean {
