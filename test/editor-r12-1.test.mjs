@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, deckUrl, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { click, press } from './helpers/editor.mjs';
+import { click, contrast, press } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 
@@ -188,22 +188,13 @@ for (const platform of PLATFORMS) {
       for (let i = 0; i < 20 && !(await page.evaluate(`document.activeElement.matches('.parts input[type=checkbox]')`)); i++) await press(page, 'Tab');
       ring = await page.evaluate(RING);
       assert.ok(ring.visible);
-      assert.equal(ring.color, ring.focus, 'Display Options');
+      // the dialog sets --ed-focus of its own, hence the ring is measured against its bar
+      const bar = await page.evaluate(ON_BAR);
+      assert.ok(contrast(bar.ring, bar.bg) >= 3, `Display Options: ${bar.ring} on ${bar.bg} is ${contrast(bar.ring, bar.bg).toFixed(2)}:1`);
       assert.ok(ring.width >= 2 && ring.style === 'solid', JSON.stringify(ring));
       assert.deepEqual(errors(page), []);
     });
   }
-}
-
-// the contrast ratio of WCAG 2 of two rgb() colors, the first drawn with its alpha over the second
-function contrast(fg, bg) {
-  const num = (c) => c.match(/[\d.]+/g).map(Number);
-  const [r, g, b, a = 1] = num(fg);
-  const under = num(bg);
-  const top = [r, g, b].map((v, i) => v * a + under[i] * (1 - a));
-  const lum = ([x, y, z]) => [x, y, z].map((v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
-  const [hi, lo] = [lum(top), lum(under)].sort((p, q) => q - p);
-  return (hi + 0.05) / (lo + 0.05);
 }
 
 // the ring of the focused element and the first opaque background of its ancestors, i.e. its bar
