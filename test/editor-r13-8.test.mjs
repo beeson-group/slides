@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, saveAndReopen, selectFigure } from './helpers/editor.mjs';
+import { byteExact, click, press, saveAndReopen, selectFigure } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 
@@ -145,6 +145,108 @@ for (const platform of PLATFORMS) {
     await page.send('Input.insertText', { text: 'A caption' });
     await frames(page);
     assert.match(await render(page), /<figcaption class="caption">A caption<\/figcaption>\s*<\/figure>/);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+// the frame of the show played by Present, and its slide and step
+const SHOW = `document.querySelector('.beeson-edit-show iframe')?.contentWindow`;
+const showReady = `(() => { try { const w = ${SHOW}; return !!w?.Reveal?.isReady() && (!w.MathJax || (w.MathJax.startup?.promise?.then(() => true) ?? false)); } catch { return false; } })()`;
+async function present(t, platform, n) {
+  const page = await load(t, platform, n);
+  await press(page, 'Mod+Enter');
+  await page.waitFor(showReady, 20000);
+  await sleep(300);
+  return page;
+}
+
+// finding r12-9-show 1: the show played by Present stayed at the closing slide at every key forward
+for (const platform of PLATFORMS) {
+  test(`the show played by Present returns to the editor at a move forward past its last slide (${platform})`, async (t) => {
+    for (const key of ['ArrowRight', 'Enter', 'Space', 'PageDown', 'n']) {
+      const page = await present(t, platform, 11);
+      assert.equal(await page.evaluate(`${SHOW}.Reveal.isLastSlide()`), true);
+      await press(page, key);
+      await page.waitFor(`!document.querySelector('.beeson-edit-show')`, 5000).catch(() => {});
+      assert.equal(await page.evaluate(`!!document.querySelector('.beeson-edit-show')`), false, `${js(key)} at the last slide does not end the show`);
+      assert.equal(await page.evaluate('Reveal.getIndices().h'), 11);
+      await byteExact(page);
+      assert.deepEqual(errors(page), []);
+      await page.close();
+    }
+  });
+
+  test(`the show played by Present goes through the steps of its last slides before it ends (${platform})`, async (t) => {
+    const page = await present(t, platform, 10);
+    const steps = await page.evaluate(`${SHOW}.Reveal.availableFragments().next`);
+    await press(page, 'ArrowRight');
+    await sleep(200);
+    if (steps) assert.equal(await page.evaluate(`${SHOW}.Reveal.getIndices().h`), 10, 'a step of slide 11 is skipped');
+    for (let i = 0; i < 10 && (await page.evaluate(`${SHOW}.Reveal.getIndices().h`)) < 11; i++) {
+      await press(page, 'ArrowRight');
+      await sleep(200);
+    }
+    assert.equal(await page.evaluate(`${SHOW}.Reveal.getIndices().h`), 11);
+    assert.equal(await page.evaluate(`!!document.querySelector('.beeson-edit-show')`), true, 'the show ends at the arrival on its last slide');
+    await press(page, 'Escape');
+    await page.waitFor(`!document.querySelector('.beeson-edit-show')`);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+// a deck opened by itself keeps the keys of reveal.js at its last slide
+test('a deck opened by itself stays at its last slide at a key forward', async (t) => {
+  const page = await browser.newPage({ width: 1600, height: 1000 });
+  t.after(() => page.close().catch(() => {}));
+  await page.goto(`${server.origin}/index.html?still#/11`);
+  await page.waitFor(deckSettled);
+  for (const key of ['ArrowRight', 'Space', 'Enter']) await press(page, key);
+  await sleep(300);
+  assert.equal(await page.evaluate('Reveal.getIndices().h'), 11);
+  assert.equal(await page.evaluate('location.search'), '?still');
+  assert.deepEqual(errors(page), []);
+});
+
+// the presenter display of the editor, opened by Alt+Return
+const DISPLAY = 'dialog.beeson-edit-presenter[open]';
+async function display(t, platform, n) {
+  const page = await load(t, platform, n);
+  await page.evaluate(`(() => { window.open = () => null; return true; })()`);
+  await press(page, 'Alt+Enter');
+  await page.waitFor(`!!document.querySelector(${js(DISPLAY)})`, 20000);
+  await sleep(300);
+  return page;
+}
+const slideOf = (page) => page.evaluate(`(() => { const m = document.querySelector(${js(DISPLAY)}).textContent.match(/Slide (\\d+) of/); return m ? Number(m[1]) : null; })()`);
+
+// finding r12-9-show 2: a number typed in the presenter display was kept after other keys, and a
+// number out of range was read differently by the two shows
+for (const platform of PLATFORMS) {
+  test(`the presenter display drops a typed number at another key, and a number out of range goes to the first or the last slide (${platform})`, async (t) => {
+    const page = await display(t, platform, 5);
+    assert.equal(await slideOf(page), 6);
+    for (const key of ['2', 'ArrowLeft', 'Enter']) await press(page, key);
+    await sleep(200);
+    assert.equal(await slideOf(page), 6, 'the number is kept after another key');
+    for (const key of ['9', '9', 'Enter']) await press(page, key);
+    await sleep(200);
+    assert.equal(await slideOf(page), 12, '99 and Return do not go to the last slide');
+    for (const key of ['0', 'Enter']) await press(page, key);
+    await sleep(200);
+    assert.equal(await slideOf(page), 1, '0 and Return do not go to the first slide');
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`the show played by Present goes to the first or the last slide for a number out of range (${platform})`, async (t) => {
+    const page = await present(t, platform, 5);
+    for (const key of ['9', '9', 'Enter']) await press(page, key);
+    await sleep(300);
+    assert.equal(await page.evaluate(`${SHOW}.Reveal.getIndices().h`), 11);
+    for (const key of ['0', 'Enter']) await press(page, key);
+    await sleep(300);
+    assert.equal(await page.evaluate(`${SHOW}.Reveal.getIndices().h`), 0);
+    await press(page, 'Escape');
+    await page.waitFor(`!document.querySelector('.beeson-edit-show')`);
     assert.deepEqual(errors(page), []);
   });
 }
