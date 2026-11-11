@@ -397,3 +397,43 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the frame of the cell or the range drawn on the table, and the boxes of the glyphs of the cells
+// with the given texts, which are beside the range
+const BESIDE = (texts) => `(() => {
+  const frame = document.querySelector('.beeson-table-bars .cell:not([hidden])')?.getBoundingClientRect();
+  const cells = [...document.querySelectorAll('.reveal section.present table :is(td,th)')].filter((c) => ${js(texts)}.includes(c.textContent.trim()));
+  const glyphs = cells.flatMap((c) => {
+    const r = document.createRange();
+    r.selectNodeContents(c);
+    return [...r.getClientRects()].filter((b) => b.width > 0).map((b) => ({ text: c.textContent.trim(), left: b.left, top: b.top, right: b.right, bottom: b.bottom }));
+  });
+  return { frame: frame && { left: frame.left, top: frame.top, right: frame.right, bottom: frame.bottom }, glyphs, cells: cells.length };
+})()`;
+const OUTSIDE = ['Body', 'Mass ratio', 'System', 'Earth and Moon', 'Jupiter', 'Titan', '2.37e-4', 'Saturn'];
+
+async function clearOf(page, what) {
+  const s = await page.evaluate(BESIDE(OUTSIDE));
+  assert.equal(s.cells, OUTSIDE.length);
+  assert.ok(s.frame, `the frame is not drawn ${what}`);
+  const covered = s.glyphs.filter((g) => meets(g, s.frame)).map((g) => g.text);
+  assert.deepEqual(covered, [], `the frame ${what} at ${js(s.frame)} covers the glyphs of ${covered.join(', ')} beside it`);
+}
+
+// the check of a round of the council: the frame of a range of cells and of a merged cell was drawn
+// outside the cells, over the first glyph of the column after it
+for (const platform of PLATFORMS) {
+  test(`the frame of a range of cells and of a merged cell is drawn on their edges, clear of the text beside them (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: 'test/pages/editor-tables.html', n: 1 });
+    await click(page, cellOf(1, 0));
+    await click(page, cellOf(2, 1), { modifiers: 'Shift' });
+    await frames(page);
+    assert.match(await page.evaluate(PANE_NOTE), /cells A2:B3/);
+    await clearOf(page, 'of the range A2:B3');
+    await exec(page, 'table.merge');
+    await frames(page);
+    assert.equal(await page.evaluate(`document.querySelector('.reveal section.present table tr:nth-child(2) > td').colSpan`), 2);
+    await clearOf(page, 'of the merged cell A2:B3');
+    assert.deepEqual(errors(page), []);
+  });
+}
