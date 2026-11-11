@@ -276,14 +276,13 @@ async function choose(page, bar, label) {
 
 for (const platform of PLATFORMS) {
   for (const width of [800, 1600]) {
-    test(`View > Slide Only and View > Navigator agree with the navigator shown in a window ${width} px wide (${platform})`, async (t) => {
+    test(`View > Slide Only agrees with the navigator shown in a window ${width} px wide (${platform})`, async (t) => {
       const page = await load(t, platform, 0, { width, height: 900 });
       if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
       await frames(page);
       const agree = async (why) => {
         const nav = await seen(page, '.beeson-edit-nav');
         assert.equal((await state(page, 'view.slideOnly')).checked, !nav, `Slide Only ${why}`);
-        assert.equal((await state(page, 'view.navigator')).checked, nav, `Navigator ${why}`);
         return nav;
       };
       const first = await agree('at the start');

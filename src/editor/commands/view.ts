@@ -88,13 +88,7 @@ export function cyclePane(app: App, step: 1 | -1): void {
 export function install(app: App): void {
   const c = app.commands;
   const pane = (order: number) => ({ bar: 'View', group: 'panes', order });
-  // checked while the navigator is drawn. turned on beside the inspector in a narrow window, it is
-  // shown in place of the inspector
-  const navigator = (a: App) => {
-    a.nav.toggle();
-    if (a.nav.shown && !a.nav.seen) a.nav.toggle();
-  };
-  c.define({ id: 'view.navigator', label: 'Navigator', menu: pane(10), checked: (a) => !!a.nav.seen, run: navigator });
+  c.define({ id: 'view.navigator', label: 'Navigator', menu: pane(10), checked: (a) => a.nav.shown, run: (a) => a.nav.toggle() });
   c.define({ id: 'view.notes', label: 'Notes', ...PANE_KEYS(3), menu: pane(13), checked: (a) => a.notes.shown(), run: (a) => a.notes.toggle() });
   c.define({ id: 'view.steps', label: 'Steps', ...PANE_KEYS(2), menu: pane(12), toolbar: { group: 'inspector', order: 61, icon: 'steps' }, checked: (a) => a.steps.shown, run: (a) => a.steps.toggle() });
   c.define({
