@@ -10,7 +10,7 @@ import { CONTAINER, RESIZABLE, containerOf, frameRect, mediaIn, movableOf, movab
 import type { Place } from '../canvas/drag.ts';
 import { placeOf, record, withCorners, writePlace } from '../canvas/drag.ts';
 import { view, xy } from '../canvas/frames.ts';
-import { fieldOf } from './clipboard.ts';
+import { fieldOf } from './order.ts';
 import { onSlides } from './slide.ts';
 
 // the nudges of the same elements closer than this, in ms, are one entry of the history

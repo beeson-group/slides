@@ -10,7 +10,6 @@ import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { angleOf, apartOf, locked, pivotOf, placeOf, record, seenCenter, spinOf, turn, turnMember, turnedEls, turnersOf } from '../canvas/drag.ts';
 import { objectOf, objectsOf, turnable, twinOf } from '../canvas/hit.ts';
-import { fieldOf } from './clipboard.ts';
 
 export type Order = 'front' | 'forward' | 'backward' | 'back';
 
@@ -476,6 +475,14 @@ const CHANGES = new RegExp([
   '^steps\\.(set|add|remove|start|delay|deliver|listDelivery|final|move|earlier|later|effect)$',
   '^(edit\\.cut|selection\\.editText)$',
 ].join('|'));
+
+// the focused text that is not a text of the slides, i.e. a line of the outline or a field of a
+// pane. the commands of the Edit menu act on its text, and not on the selection of the canvas
+export const fieldOf = (app: App): HTMLElement | null => {
+  const f = document.activeElement;
+  const typed = f instanceof HTMLElement && (f.isContentEditable || f.matches('textarea, input:not([type=range], [type=checkbox], [type=radio], [type=button], [type=color])'));
+  return typed && !app.hostOf(f) ? f : null;
+};
 
 // whether the selection holds a locked element, an element inside one, or a text of one
 export function lockedSelection(app: App): boolean {

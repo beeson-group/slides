@@ -17,7 +17,7 @@ import { insertFiles } from '../media/actions.ts';
 import { kindOf } from '../media/store.ts';
 import { insertPlain, pasteItems, pastesItems } from '../text/typing.ts';
 import { objectsOf } from '../canvas/hit.ts';
-import { settleCopies, freshGroup } from './order.ts';
+import { fieldOf, settleCopies, freshGroup } from './order.ts';
 import { withTwins } from '../canvas/hit.ts';
 import { VOID } from '../source.ts';
 import { tokenize } from '../tokens.ts';
@@ -258,13 +258,6 @@ async function readMedia(): Promise<File[]> {
   }
 }
 
-// the focused text that is not a text of the slides, i.e. a line of the outline or a field of a
-// pane. the commands of the Edit menu act on its text, and not on the selection of the canvas
-export const fieldOf = (app: App): HTMLElement | null => {
-  const f = document.activeElement;
-  const typed = f instanceof HTMLElement && (f.isContentEditable || f.matches('textarea, input:not([type=range], [type=checkbox], [type=radio], [type=button], [type=color])'));
-  return typed && !app.hostOf(f) ? f : null;
-};
 // the work that a handler of the paste event of a field starts. Paste of the Edit menu waits for
 // it, hence its changes are in the entry of the Paste, as after the key
 export const pasteWork = new WeakMap<Event, Promise<unknown>>();
