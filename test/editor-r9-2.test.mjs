@@ -259,3 +259,91 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+const exec = (page, id, arg) => page.evaluate(`window.BeesonEditor.exec(${js(id)}${arg === undefined ? '' : `, ${js(arg)}`})`);
+const meets = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+// the new table of the current slide with its bars, the boxes of the other elements of the slide
+// that a table must not mix with, i.e. the ink of the text of each block and the box of each figure
+// and drawing, and whether the table hides what is under it. a box is in CSS px of the window
+const TABLE_STATE = `(() => {
+  const slide = document.querySelector('.reveal section.present');
+  const table = slide.querySelector('table');
+  const box = (r) => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+  const t = box(table.getBoundingClientRect());
+  const all = { ...t };
+  for (const el of document.querySelectorAll('.beeson-table-bars > *')) {
+    const r = el.getBoundingClientRect();
+    if (!r.width || !r.height || el.matches('.cell, .fill, .spread, .guide')) continue;
+    all.left = Math.min(all.left, r.left); all.top = Math.min(all.top, r.top);
+    all.right = Math.max(all.right, r.right); all.bottom = Math.max(all.bottom, r.bottom);
+  }
+  const ink = (el) => { const r = document.createRange(); r.selectNodeContents(el); const b = r.getBoundingClientRect(); return b.width && b.height ? box(b) : null; };
+  const others = [];
+  for (const el of slide.querySelectorAll('h2, p, li, .math, pre, .foot, .caption, figcaption')) {
+    if (table.contains(el) || el.closest('aside.notes') || !el.getClientRects().length) continue;
+    const b = ink(el);
+    if (b) others.push({ what: el.localName + ':' + el.textContent.trim().slice(0, 24), box: b });
+  }
+  for (const el of slide.querySelectorAll('.zone, .plate, .surface, figure img:not([hidden])')) {
+    const r = el.getBoundingClientRect();
+    if (r.width && r.height && getComputedStyle(el).display !== 'none') others.push({ what: el.localName + '.' + el.className, box: box(r) });
+  }
+  // a point of each cell is drawn by the table, and not by an element under it or over it
+  const hidden = [...table.querySelectorAll('td, th')].every((c) => {
+    const r = c.getBoundingClientRect();
+    return [[0.25, 0.3], [0.5, 0.5], [0.75, 0.7]].every(([u, v]) => table.contains(document.elementFromPoint(r.left + u * r.width, r.top + v * r.height)));
+  });
+  const opaque = [table, ...table.querySelectorAll('td, th')].some((el) => { const c = getComputedStyle(el).backgroundColor; return c !== 'transparent' && !/rgba\\(.*, 0\\)$/.test(c); });
+  return { table: t, all, slide: box(slide.getBoundingClientRect()), others, hidden, opaque, shape: [...table.rows].map((r) => r.cells.length) };
+})()`;
+
+// a new table of columns by rows inserted on the current slide by Insert Table, as from the grid of
+// the button Table, after the last list item of the slide is selected as a block, as in state 93
+async function insertTableOn(page, columns, rows) {
+  const last = '.reveal section.present ul > li:last-child';
+  if (await page.evaluate(`!!document.querySelector('${last}')`)) {
+    await click(page, last);
+    await press(page, 'Escape');
+  }
+  await exec(page, 'insert.table', { rows, columns });
+  await frames(page);
+  return page.evaluate(TABLE_STATE);
+}
+
+// finding 3: a new table that did not fit under the text of its slide was moved up over the last
+// lines of the text, with its column bar over the last line of the list, and the two texts mixed.
+// a new table is put in the free space of its slide with its bars, and where it does not fit, at
+// the center of the slide over the content, which it hides as a table with fills does
+const TABLES = [
+  // slide, columns, rows, and whether the slide has free space for the table with its bars
+  [4, 3, 3, false, 'the slide with the figure, as in state 93'],
+  [4, 4, 6, false, 'the slide with the figure, as in shot 10 of the opus report'],
+  [8, 3, 3, false, 'the slide with the surface, as in shot 11 of the opus report'],
+  [5, 3, 3, true, 'the slide with the code box'],
+  [1, 3, 3, true, 'a section slide'],
+];
+for (const platform of PLATFORMS) {
+  for (const [n, columns, rows, room, what] of TABLES) {
+    test(`a new table of ${columns} by ${rows} cells on ${what} is put where it fits with its bars, or at the center over the content, readable (${platform})`, async (t) => {
+      const page = await load(t, platform, { n });
+      const s = await insertTableOn(page, columns, rows);
+      assert.deepEqual(s.shape, Array(rows).fill(columns), 'the table is not inserted with every row chosen');
+      const inside = s.all.left >= s.slide.left - 1 && s.all.right <= s.slide.right + 1 && s.all.top >= s.slide.top - 1;
+      const hit = s.others.filter((o) => meets(s.all, o.box)).map((o) => o.what);
+      if (room) {
+        assert.deepEqual(hit, [], `the table with its bars at ${js(s.all)} is drawn over the content of the slide, where it has free space`);
+        assert.ok(inside && s.table.bottom <= s.slide.bottom + 1, `the table with its bars at ${js(s.all)} runs past the slide at ${js(s.slide)}`);
+      } else if (hit.length) {
+        const cx = (s.table.left + s.table.right) / 2 - (s.slide.left + s.slide.right) / 2;
+        const cy = (s.table.top + s.table.bottom) / 2 - (s.slide.top + s.slide.bottom) / 2;
+        assert.ok(Math.abs(cx) < 3 && Math.abs(cy) < 3, `the table over ${js(hit)} is not at the center of the slide, but ${Math.round(cx)}, ${Math.round(cy)} px off it`);
+        assert.ok(s.opaque, 'the table over the content of the slide does not have a fill, and its text mixes with the text under it');
+        assert.ok(s.hidden, 'a cell of the table over the content of the slide is drawn under another element');
+      }
+      assert.ok(s.hidden, 'a cell of the table is drawn under another element');
+      assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Insert Table');
+      await roundTrip(page);
+    });
+  }
+}
