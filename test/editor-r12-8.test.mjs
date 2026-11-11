@@ -142,3 +142,42 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+const WINDOW = '.beeson-plotdata';
+const PANEL = '#beeson-edit-panel-format';
+// the stroke of each trace of the plot of the current slide, and the pressed swatch of each series
+const strokes = (page) => page.evaluate(`[...document.querySelectorAll('.reveal section.present .plot path.plot-trace')].map((p) => getComputedStyle(p).stroke)`);
+const pressed = (page) => page.evaluate(`[...document.querySelectorAll('${PANEL} .ed-series .ed-swatches')].map((g) => [g.getAttribute('aria-label'), [...g.querySelectorAll('button[aria-pressed="true"]')].map((b) => b.dataset.tone)])`);
+
+for (const platform of PLATFORMS) {
+  // plots-objects-outline-3: in Keynote and PowerPoint, a new series takes the next color of the
+  // chart, and the color well of each series shows its color. a new series was drawn in the
+  // accent of the first one, and no swatch of Series Colors was pressed
+  test(`a series added in Plot Data takes the next data color, and its swatch is pressed (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 2 });
+    if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
+    await exec(page, 'insert.plot');
+    await page.waitFor(`!!document.querySelector('${WINDOW}:not([hidden])')`);
+    page.source = await render(page);
+    await click(page, await page.evaluate(`(() => {
+      const r = [...document.querySelectorAll('${WINDOW} button')].find((b) => b.textContent === 'Add Series').getBoundingClientRect();
+      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+    })()`));
+    await settle(page);
+    const added = await render(page);
+    assert.match(added, /\{ "id": "series-1", "panel": "main", "kind": "trace", "tone": "data-1" \}/);
+    const [one, two] = await strokes(page);
+    assert.notEqual(one, two);
+    assert.equal((await state(page, 'edit.undo')).label, 'Undo Add Series');
+    await page.evaluate('window.BeesonEditor.undo()');
+    await byteExact(page);
+    await page.evaluate('window.BeesonEditor.redo()');
+    assert.equal(await render(page), added);
+    // the swatch of the color in effect is pressed, the accent for a series without a tone
+    await press(page, 'Escape');
+    await click(page, '.reveal section.present .plot');
+    await settle(page);
+    assert.deepEqual(await pressed(page), [['Color of line', ['accent']], ['Color of series-1', ['data-1']]]);
+    assert.deepEqual(errors(page), []);
+  });
+}
