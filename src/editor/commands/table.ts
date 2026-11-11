@@ -748,15 +748,27 @@ export function rangeText(t: Target): { plain: string; html: string } {
   return { plain: plain.join('\n'), html: `<table>${html.join('')}</table>` };
 }
 
+// a change of the cells selected as a block, after whose undo the range before it is selected
+// again, and after whose redo the range after it
+function keepingRange<T>(app: App, fn: () => Promise<T>): Promise<T> {
+  const take = () => (block ? { ...block } : null);
+  const put = (b: typeof block) => {
+    if (b?.anchor.isConnected && b.focus.isConnected) selectCells(app, b.anchor, b.focus);
+  };
+  return app.history.keeping('Clear Cells', take, put, fn);
+}
+
 // the text of each cell of the selected range cleared, with the range kept selected
-export async function clearRange(app: App): Promise<void> {
-  const t = selectedRange(app);
-  const kept = block;
-  if (!t?.box || !kept) return;
-  for (const p of spotsIn(gridOf(t.table), t.box)) {
-    if (p.cell.childNodes.length) await app.doc.setContent(p.cell, '', 'clear cells');
-  }
-  selectCells(app, kept.anchor, kept.focus);
+export function clearRange(app: App): Promise<void> {
+  return keepingRange(app, async () => {
+    const t = selectedRange(app);
+    const kept = block;
+    if (!t?.box || !kept) return;
+    for (const p of spotsIn(gridOf(t.table), t.box)) {
+      if (p.cell.childNodes.length) await app.doc.setContent(p.cell, '', 'clear cells');
+    }
+    selectCells(app, kept.anchor, kept.focus);
+  });
 }
 
 // a paste of an HTML table, of tab-separated text, or of lines onto the selected range, from its
@@ -767,7 +779,7 @@ export async function pasteRange(app: App, text: string, html = ''): Promise<boo
   const rows = parseHtmlTable(html) ?? parseTabular(text) ?? (lines ? lines.split('\n').map((l) => [l]) : null);
   const first = t?.box ? cellOver(t.table, t.box.r0, t.box.c0) : null;
   if (!first || !rows) return false;
-  await pasteCells(app, first, rows, true);
+  await keepingRange(app, () => pasteCells(app, first, rows, true));
   return true;
 }
 
