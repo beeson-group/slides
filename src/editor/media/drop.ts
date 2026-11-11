@@ -53,6 +53,13 @@ function draggedKind(dt: DataTransfer): 'image' | 'video' | null {
 
 const hasFiles = (e: DragEvent) => !!e.dataTransfer && [...e.dataTransfer.types].includes('Files');
 
+// whether every dragged file has a type that is not of an image or a video. a file without a type
+// is known only by its name at the drop
+const noMedia = (dt: DataTransfer) => {
+  const files = [...dt.items].filter((i) => i.kind === 'file');
+  return files.length > 0 && files.every((i) => i.type && !kindOf({ type: i.type, name: '' }));
+};
+
 export function install(app: App): void {
   injectStyle('media-drop', CSS);
   installPlaceholder(app);
@@ -78,7 +85,7 @@ export function install(app: App): void {
     (e) => {
       if (!hasFiles(e)) return;
       e.preventDefault();
-      const t = targetAt(app, e.clientX, e.clientY);
+      const t = noMedia(e.dataTransfer!) ? null : targetAt(app, e.clientX, e.clientY);
       e.dataTransfer!.dropEffect = t ? 'copy' : 'none';
       if (t) show(t, draggedKind(e.dataTransfer!));
       else hide();
