@@ -1,15 +1,19 @@
 name: check
 
+# a branch is checked through its pull request, hence a push is checked only on main
 on:
   push:
+    branches: [main]
   pull_request:
 
+# the tests and each browser are separate jobs, so that they run on separate runners at once
 jobs:
-  check:
+  test:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest, windows-latest]
+        # the macOS runners draw WebGL in SwiftShader, too slowly for the timings of the tests
+        os: [ubuntu-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 15
     steps:
@@ -22,26 +26,47 @@ jobs:
       - run: npm run vendor
       - run: npm run build
       - run: npm run typecheck
-      # the Chrome preinstalled on each runner is found in scripts/chrome.mjs
-      # the macOS runners draw WebGL in SwiftShader, too slowly for the timings of the tests, hence
-      # the tests are run on Ubuntu and Windows, and the deck is checked in Chrome and Safari on macOS.
       # the tests read the demo deck, hence a talk made with "Use this template" checks only its deck
       - run: npm test
-        if: ${{ matrix.os != 'macos-latest' && github.repository == 'beeson-group/slides' }}
+        if: ${{ github.repository == 'beeson-group/slides' }}
+
+  check:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-latest, browser: chrome }
+          - { os: ubuntu-latest, browser: firefox }
+          - { os: macos-latest, browser: chrome }
+          - { os: macos-latest, browser: safari }
+          - { os: windows-latest, browser: chrome }
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run vendor
+      - run: npm run build
+      # the Chrome preinstalled on each runner is found in scripts/chrome.mjs
       - run: npm run check
+        if: ${{ matrix.browser == 'chrome' }}
       # Firefox on Linux has WebGL in software only in a window, hence Xvfb
       - run: xvfb-run -a -s "-screen 0 1920x1080x24" npm run check -- --browser firefox --out check/firefox
-        if: ${{ !cancelled() && matrix.os == 'ubuntu-latest' }}
+        if: ${{ matrix.browser == 'firefox' }}
       - run: sudo safaridriver --enable && npm run check -- --browser safari --out check/safari
-        if: ${{ !cancelled() && matrix.os == 'macos-latest' }}
+        if: ${{ matrix.browser == 'safari' }}
       - run: npm run pdf
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.browser == 'chrome' }}
       - run: npm run pptx
-        if: ${{ !cancelled() }}
+        if: ${{ !cancelled() && matrix.browser == 'chrome' }}
       - uses: actions/upload-artifact@v7
         if: ${{ !cancelled() }}
         with:
-          name: slides-${{ matrix.os }}
+          name: slides-${{ matrix.os }}-${{ matrix.browser }}
           path: |
             check/**/*.png
             slides.pdf
