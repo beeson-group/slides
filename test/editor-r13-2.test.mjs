@@ -424,7 +424,7 @@ for (const platform of PLATFORMS) {
   });
 
   test(`a typed Height of a turned figure comes back as typed and gives the same size at Angle 0 (${platform})`, async (t) => {
-    let page = await load(t, platform, FIGURES);
+    const page = await load(t, platform, FIGURES);
     await click(page, 'section.present figure img.for-light');
     await typeField(page, 'angle', 29);
     const turned = await render(page);
@@ -435,10 +435,11 @@ for (const platform of PLATFORMS) {
     await typeField(page, 'height', 700);
     const at29 = await sizeFields(page);
     assert.ok(near(at29.h, 700, 2) && at29.angle === 29, `the typed Height reads ${js(at29)}`);
-    await checkEdit(page, `r13-2-turned-height-${platform}.html`, turned);
+    const typed = await render(page);
     await typeField(page, 'angle', 0);
     const at0 = await sizeFields(page);
     assert.ok(near(at0.h, 700, 2) && near(at0.w, at29.w, 1), `at Angle 0 the size is ${js(at0)} against ${js(at29)}`);
+    await checkEdit(page, `r13-2-turned-height-${platform}.html`, typed);
     assert.deepEqual(errors(page), []);
   });
 
