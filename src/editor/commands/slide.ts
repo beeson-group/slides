@@ -366,7 +366,7 @@ export function install(app: App): void {
     },
     {
       id: 'slide.duplicate',
-      label: 'Duplicate Slide',
+      label: (a) => (targets(a).length > 1 ? 'Duplicate Slides' : 'Duplicate Slide'),
       keys: { mac: ['Mod+D'], other: ['Mod+D'] },
       in: ['navigator'],
       menu: slideMenu(20),
