@@ -374,16 +374,6 @@ export function install(app: App): void {
       }),
     ),
     {
-      // Select All of the Edit menu acts on the elements of the slide, and in the navigator the
-      // same keys select every slide, as in the navigators of Keynote and PowerPoint
-      id: 'slide.selectAll',
-      label: 'Select All Slides',
-      keys: { mac: ['Mod+A'], other: ['Mod+A'] },
-      in: ['navigator'],
-      enabled: (a) => sections(a).length > 0,
-      run: (a) => land(a, sections(a), a.current(), true),
-    },
-    {
       id: 'slide.duplicate',
       label: (a) => (targets(a).length > 1 ? 'Duplicate Slides' : 'Duplicate Slide'),
       keys: { mac: ['Mod+D'], other: ['Mod+D'] },
@@ -526,6 +516,18 @@ export function install(app: App): void {
         if (!text) text = (await navigator.clipboard?.readText().catch(() => '')) || copied;
         await pasteSlides(a, text, inNav());
       },
+    },
+    {
+      // Select All of the Edit menu acts on the elements of the slide, and in the navigator the
+      // same keys select every slide, as in the navigators of Keynote and PowerPoint. it follows
+      // Paste in the thumbnail menu, as in both apps
+      id: 'slide.selectAll',
+      label: 'Select All Slides',
+      keys: { mac: ['Mod+A'], other: ['Mod+A'] },
+      in: ['navigator'],
+      context: ['slide'],
+      enabled: (a) => sections(a).length > 0,
+      run: (a) => land(a, sections(a), a.current(), true),
     },
   ];
   // an undo and a redo of a slide command show and select the slides from before and after it

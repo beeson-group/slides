@@ -444,7 +444,7 @@ for (const platform of PLATFORMS) {
   test(`File > Export To > PDF… prints the print view of the saved deck with a page per step (${platform})`, async (t) => {
     const deck = 'test/pages/layers.html';
     const page = await load(t, platform, { deck, n: 2 });
-    assert.deepEqual((await menuLabels(page, 'File')).slice(-2), ['|', '{Export To}']);
+    assert.deepEqual((await menuLabels(page, 'File')).slice(-4), ['|', '{Export To}', '|', 'Print…']);
     assert.deepEqual(await menuLabels(page, 'File', 'Export To'), ['PDF…', 'HTML…']);
     // the tab of the print view is kept for the test, and its print is recorded
     await page.evaluate(`(() => {

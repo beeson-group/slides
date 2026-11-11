@@ -1,7 +1,8 @@
 // the commands of the File menu, in the groups of the File menu of Keynote: Open… and Open Recent,
-// then Save, Save As…, Autosave, and Revert to Saved, then Export To. Save and Save As take their
-// keys everywhere, so that the save page dialog of the browser is never opened. Present and
-// Present from Start have the keys of PowerPoint, since F5 reloads the page in a browser
+// then Save, Save As…, Autosave, and Revert to Saved, then Export To, and Print… last. Save and
+// Save As take their keys everywhere, so that the save page dialog of the browser is never opened.
+// Present and Present from Start have the keys of PowerPoint, since F5 reloads the page in a
+// browser
 
 import type { App } from '../app.ts';
 import { EVERYWHERE, OUTSIDE_DIALOGS, type Command } from '../commands.ts';
@@ -121,6 +122,17 @@ export function install(app: App): void {
     menu: exportTo(41),
     enabled: (a) => a.state === 'loaded' && !!a.pairing,
     run: () => fileActions().exportHtml(),
+  });
+  // Print… of the File menu of Keynote, last in the menu, prints the print view of PDF…. the key is
+  // taken everywhere, since the print of the browser would print the editor
+  c.define({
+    id: 'file.print',
+    label: 'Print…',
+    keys: both('Mod+P'),
+    in: EVERYWHERE,
+    menu: { bar: 'File', group: 'print', order: 60 },
+    enabled: (a) => a.state === 'loaded',
+    run: () => fileActions().exportPdf('print'),
   });
   c.define({
     id: 'file.present',

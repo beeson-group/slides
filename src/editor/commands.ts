@@ -5,7 +5,7 @@
 // which runs the command of a key
 
 import type { App, Deck, Platform, Region } from './app.ts';
-import { display, fallback, matches, type KeyEvent } from './keymap.ts';
+import { display, fallback, matches, parseKey, type KeyEvent } from './keymap.ts';
 
 export type Context = 'element' | 'text' | 'canvas' | 'slide' | 'navigator';
 
@@ -27,6 +27,9 @@ export type Command = {
   // the id of the command whose keys a menu lists for this one, for an item that stands for it,
   // e.g. Unlock in a context menu, which runs the Unlock of the Arrange menu
   listedAs?(app: App): string;
+  // the id of the command whose run this one hands its run to in the present state, e.g. Duplicate,
+  // which duplicates the slide while nothing is selected. a menu lists the key at both
+  runsAs?(app: App): string;
   enabled?(app: App): boolean;
   // true or false for a switch, null or absent for a plain command
   checked?(app: App): boolean | null;
@@ -60,10 +63,9 @@ export function boundKeys(c: Command, platform: Platform): string[] {
   return c.keys?.[platform] ?? [];
 }
 
-// the keys of a command that the menus and the sheet of shortcuts list on the platform: each key
-// that runs it in its own regions, once. a key is thus listed at every command that it runs, e.g.
-// ⌘D at Duplicate on the canvas and at Duplicate Slide in the navigator, as in the menus of both
-// apps
+// the keys of a command on the platform: each key that runs it in its own regions, once. the sheet
+// of shortcuts thus lists a key at every command that it runs, e.g. ⌘D at Duplicate on the canvas
+// and at Duplicate Slide in the navigator, and a menu only where the focus is, through keysIn
 export function keysOf(c: Command, platform: Platform): string[] {
   return [...new Set(c.keys?.[platform] ?? CLIPBOARD_KEYS[c.id] ?? [])];
 }
@@ -163,6 +165,19 @@ export class Commands {
   shortcuts(id: string): string[] {
     const c = this.listed(id);
     return c ? keysOf(c, this.app.platform).map((k) => display(k, this.app.platform)) : [];
+  }
+
+  // the keys of the command of id that a menu opened in region lists. a key that runs another
+  // command there is left out, e.g. ⌘D at Duplicate Slide while a figure is selected on the canvas
+  keysIn(id: string, region: Region): string[] {
+    const c = this.listed(id);
+    if (!c) return [];
+    const p = this.app.platform;
+    return keysOf(c, p).filter((k) => {
+      const chord = parseKey(k, p);
+      const runs = this.forKey({ key: chord.key === 'Space' ? ' ' : chord.key, shiftKey: chord.shift, altKey: chord.alt, ctrlKey: chord.ctrl, metaKey: chord.meta }, region);
+      return !runs || [runs.id, runs.runsAs?.(this.app)].some((r) => r === c.id || r === id);
+    });
   }
 
   // the first enabled command taken in region whose keys match ev, and else the first one whose

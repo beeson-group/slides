@@ -93,7 +93,10 @@ export function install(app: App): void {
       field.value = String(Math.round((a.stage.zoom ?? a.stage.fitScale()) * 100));
       const body = make('label');
       body.append(make('span', '', 'Percent'), field, make('span', '', '%'));
-      const answer = await ask({ title: 'Zoom', body, className: 'form', buttons: [{ label: 'Cancel', value: 'cancel' }, { label: 'OK', value: 'ok', primary: true }] }, 'input[name="percent"]');
+      const asked = ask({ title: 'Zoom', body, className: 'form', buttons: [{ label: 'Cancel', value: 'cancel' }, { label: 'OK', value: 'ok', primary: true }] }, 'input[name="percent"]');
+      // the value is selected, as in PowerPoint, so that a typed value replaces it
+      field.select();
+      const answer = await asked;
       const typed = parseFloat(field.value);
       if (answer === 'ok' && Number.isFinite(typed)) a.stage.setZoom(Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, typed / 100)));
     },

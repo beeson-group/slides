@@ -365,6 +365,7 @@ export function install(app: App): void {
     menu: menu(30, 'select'),
     context: ['element'],
     enabled: (a) => ready(a) && !selectedRange(a) && (selectedElements(a).length > 0 || a.commands.enabled('slide.duplicate')),
+    runsAs: (a) => (selectedElements(a).length ? 'edit.duplicate' : 'slide.duplicate'),
     undoable: true,
     run: async (a) => {
       const els = selectedElements(a);
