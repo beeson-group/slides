@@ -19,7 +19,8 @@ export const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 
 // what the drag and the keys show, besides the selection: the element under the pointer, the
 // elements being moved, the guides and gaps of a snap, the readout, the marquee in screen pixels,
-// and the frame of a group at the start of its turn with the angle it is turned by
+// the frame of a group at the start of its turn with the angle it is turned by, and the grip or
+// rotate handle held, drawn alone in its gesture as in Keynote and PowerPoint
 export const view: {
   hover: Element | null;
   moving: Element[] | null;
@@ -29,7 +30,8 @@ export const view: {
   readout: { text: string; x: number; y: number; at: 'pointer' | 'frame' } | null;
   marquee: Box | null;
   turn: { box: Box; deg: number } | null;
-} = { hover: null, moving: null, resizing: false, guides: [], spacing: [], readout: null, marquee: null, turn: null };
+  held: HTMLElement | null;
+} = { hover: null, moving: null, resizing: false, guides: [], spacing: [], readout: null, marquee: null, turn: null, held: null };
 
 const CSS = `
 .beeson-overlay { position: fixed; inset: 0; z-index: 51; pointer-events: none; }
@@ -282,6 +284,8 @@ export class Frames {
       this.union.style.rotate = this.groupDeg ? `${this.groupDeg}deg` : '';
       for (const f of this.frames) f.hidden = true;
     } else this.union.hidden = true;
+    const held = view.moving ? view.held : null;
+    if (held) for (const f of [...this.frames, this.union]) f.hidden = true;
 
     const only = app.selection.only();
     const gripped = turn || (view.moving && !view.resizing) ? [] : this.group ? [{ el: selected[0], i: -1, grips: selected.some((el) => el.hasAttribute('data-locked')) ? 'locked' as const : 'live' as const }] : selected.map((el, i) => ({ el, i, grips: this.gripsOf(el) })).filter((m) => m.grips);
@@ -301,7 +305,7 @@ export class Frames {
         }
         const b = m.i < 0 ? (this.group as Box) : boxes[m.i];
         const at = turned(b, m.i < 0 ? this.groupDeg : orients[m.i].deg, h.includes('w') ? b.left : h.includes('e') ? b.left + b.width : b.left + b.width / 2, h.includes('n') ? b.top : h.includes('s') ? b.top + b.height : b.top + b.height / 2);
-        g.hidden = false;
+        g.hidden = !!held && g !== held;
         g.classList.toggle('locked', m.grips === 'locked');
         Object.assign(g.style, { left: `${at.x}px`, top: `${at.y}px` });
       }
@@ -311,7 +315,8 @@ export class Frames {
     const rotating = document.documentElement.classList.contains('beeson-rotating');
     const turnGroup = !!this.group && (!!turn || !!turnersOf(app, selected));
     const turnable = (turnGroup || (!!only && boxes.length === 1 && turns(only as Element))) && (!view.moving || rotating);
-    this.rotor.hidden = this.stem.hidden = !turnable;
+    this.rotor.hidden = !turnable || (!!held && held !== this.rotor);
+    this.stem.hidden = !turnable || !!held;
     if (turnable) {
       const b = turnGroup ? (this.group as Box) : boxes[0], deg = turnGroup ? this.groupDeg : orients[0].deg;
       const cx = b.left + b.width / 2;

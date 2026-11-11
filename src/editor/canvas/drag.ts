@@ -469,6 +469,7 @@ export function install(app: App): void {
         p.carrier = carrier as Element;
       }
       Object.assign(p, { center, angle: Math.atan2(ev.clientY - center.y, ev.clientX - center.x) * 180 / Math.PI });
+      view.held = frames.rotor;
       document.documentElement.classList.add('beeson-rotating');
       return;
     }
@@ -488,6 +489,7 @@ export function install(app: App): void {
       const p = Object.assign(start('resize', ev, followers[0].el, followers.map((m) => m.el), null), { handle: (grip as HTMLElement).dataset.handle as Handle, followers, group: true, was: frames.groupTurn() });
       for (const m of followers.flatMap((m) => m.sized)) if (!p.from.has(m)) p.from.set(m, placeOf(m));
       p.base = toSlide(f, frames.groupBox() ?? union(followers.map((m) => visualRect(m.pic))));
+      view.held = grip as HTMLElement;
       document.documentElement.classList.add('beeson-resizing');
       return;
     }
@@ -516,6 +518,7 @@ export function install(app: App): void {
       for (const m of [...sized, ...followers.flatMap((m) => m.sized)]) if (!p.from.has(m)) p.from.set(m, placeOf(m));
       p.picture = toSlide(f, p.framed ? pictureReach(p.framed) : visualRect(pic));
       p.base = toSlide(f, p.framed ? frameRect(p.framed) : visualRect(pic));
+      view.held = grip as HTMLElement;
       document.documentElement.classList.add('beeson-resizing');
       return;
     }
@@ -844,6 +847,7 @@ export function install(app: App): void {
     view.moving = null;
     view.resizing = false;
     view.turn = null;
+    view.held = null;
     view.guides = [];
     view.spacing = [];
     view.marquee = null;
