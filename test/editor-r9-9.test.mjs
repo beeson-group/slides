@@ -161,4 +161,28 @@ for (const platform of PLATFORMS) {
     await byteExact(page2, [[DARK.replace('for-dark', 'for-light'), DARK], [LIGHT.replace('for-light', 'for-dark'), LIGHT]]);
     await shownIn(page2, files);
   });
+
+  test(`${platform}: Invert and Decorative on an image of a pair act on the image where they take effect, and on both`, async (t) => {
+    const page = await load(t, platform, { n: FIGURE });
+    await selectPicture(page);
+    assert.equal((await state(page, 'figure.invert')).enabled, true);
+    await tap(page, 'Invert in dark mode');
+    await byteExact(page, [[DARK, DARK.replace('for-dark', 'for-dark invert')]]);
+    assert.equal((await state(page, 'figure.invert')).checked, true);
+    await setMode(page, 'dark');
+    assert.notEqual((await page.evaluate(SHOWN)).filters[0], 'none', 'the dark image is not inverted');
+    await setMode(page, 'light');
+    await roundTrip(page);
+
+    const page2 = await load(t, platform, { n: FIGURE });
+    await selectPicture(page2);
+    await tap(page2, 'Decorative');
+    // the empty alt of a decorative image is written as the bare attribute
+    const bare = (tag) => tag.replace(/alt="[^"]*"/, 'alt');
+    await byteExact(page2, [[DARK, bare(DARK)], [LIGHT, bare(LIGHT)]]);
+    await roundTrip(page2);
+    await selectPicture(page2);
+    await tap(page2, 'Decorative');
+    await byteExact(page2, [[bare(DARK), DARK.replace(/ alt="[^"]*"/, '')], [bare(LIGHT), LIGHT.replace(/ alt="[^"]*"/, '')]]);
+  });
 }
