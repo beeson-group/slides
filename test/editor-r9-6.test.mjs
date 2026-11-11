@@ -341,3 +341,28 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// the trusted key Mod+Shift with key on a US layout, which press() does not know, with Mod as Cmd
+// on a Mac and Ctrl elsewhere
+async function modShift(page, platform, key, code, keyCode) {
+  const base = { key, code, windowsVirtualKeyCode: keyCode, modifiers: (platform === 'mac' ? 4 : 2) | 8 };
+  await page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...base });
+  await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+}
+
+// finding menus-keys-13: Bigger and Smaller on a selected word put a caret at its start
+for (const platform of PLATFORMS) {
+  for (const [name, key, code, keyCode] of [['Bigger', '>', 'Period', 190], ['Smaller', '<', 'Comma', 188]]) {
+    test(`${name} on a selected word keeps the word selected (${platform})`, async (t) => {
+      const page = await load(t, platform);
+      await click(page, await pointOf(page, PARA, 'figure', 2));
+      await selectText(page, PARA, 'figure');
+      await modShift(page, platform, key, code, keyCode);
+      await frames(page);
+      assert.notEqual(await render(page), page.source, `Mod+Shift+${key} does not change the paragraph`);
+      const s = await selection(page);
+      assert.equal(s.text, 'figure', `after ${name}, "${s.text}" is selected, with "${s.before}" before the caret`);
+      await roundTrip(page);
+    });
+  }
+}
