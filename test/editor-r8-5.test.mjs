@@ -395,3 +395,66 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+const count = (text, part) => text.split(part).length - 1;
+const ID = 'data-id="curves"';
+
+for (const platform of PLATFORMS) {
+  for (const mode of MODES) {
+    test(`a copy of a figure does not repeat a data-id of its slide, on ${platform} in ${mode} mode`, async (t) => {
+      assert.equal(count(SOURCE, ID), 2);
+      for (const from of ['figure', 'picture']) {
+        const page = await load(t, platform, mode, STEPPED);
+        // Duplicate, with both images of the pair in the copy
+        await pick(page, from);
+        await press(page, 'Mod+D');
+        await frames(page);
+        let edited = await render(page);
+        assert.equal(count(slideOf(edited, STEPPED), '<img class="for-'), 4, `Duplicate from the ${from} does not copy both images`);
+        assert.equal(count(edited, ID), 2, `Duplicate from the ${from} repeats the data-id`);
+        assert.equal(count(slideOf(edited, STEPPED), 'data-fragment-index="1"'), 4, 'the copy does not keep the step of its images');
+        await roundTrip(page, edited);
+        // a copy made by a drag with the copy modifier
+        await pick(page, from);
+        await drag(page, IMG, { dx: 80, dy: 30, modifiers: platform === 'mac' ? 'Alt' : 'Ctrl' });
+        await page.waitFor(`window.BeesonEditor.render().split('<figure').length === ${count(SOURCE, '<figure') + 2}`);
+        edited = await render(page);
+        assert.equal(count(edited, ID), 2, `a copy by a drag from the ${from} repeats the data-id`);
+        await roundTrip(page, edited);
+        // Copy and Paste on the slide of the figure
+        await pick(page, from);
+        await exec(page, 'edit.copy');
+        await exec(page, 'edit.paste');
+        await frames(page);
+        edited = await render(page);
+        assert.equal(count(slideOf(edited, STEPPED), '<img class="for-'), 4);
+        assert.equal(count(edited, ID), 2, `Paste on the slide of the figure from the ${from} repeats the data-id`);
+        await roundTrip(page, edited);
+        // on another slide the first copy keeps the id, by which reveal.js pairs the elements of two
+        // slides, and a second copy does not repeat it
+        await pick(page, from);
+        await exec(page, 'edit.copy');
+        await page.evaluate(`Reveal.slide(${EMPTY})`);
+        await frames(page);
+        await exec(page, 'edit.paste');
+        await frames(page);
+        edited = await render(page);
+        assert.equal(count(slideOf(edited, EMPTY), ID), 2, 'the first copy on another slide does not keep the data-id');
+        assert.deepEqual(await selected(page), ['figure.zone'], 'the pasted figure is not selected');
+        await exec(page, 'edit.paste');
+        await frames(page);
+        const twice = await render(page);
+        assert.equal(count(slideOf(twice, EMPTY), '<img class="for-'), 4);
+        assert.equal(count(slideOf(twice, EMPTY), ID), 2, 'a second copy on another slide repeats the data-id');
+        inScope(twice, SOURCE);
+        await undo(page);
+        await frames(page);
+        assert.equal(await render(page), edited);
+        await undo(page);
+        await frames(page);
+        await byteExact(page);
+        assert.deepEqual(errors(page), []);
+      }
+    });
+  }
+}
