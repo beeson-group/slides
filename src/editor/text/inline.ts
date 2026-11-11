@@ -40,7 +40,7 @@ const elementOf = (n: Node): Element | null => (n instanceof Element ? n : n.par
 
 // the range around the word at a collapsed caret strictly inside it, or the range itself. a caret
 // at the edge of a word is left to the typing style of carry.ts, as in Word and PowerPoint, unless
-// edge is set, as for the Format Painter, whose click paints the word clicked
+// edge is set, as for a link and the Format Painter, which take the word at the caret
 function wordRange(range: Range, edge: boolean): Range {
   if (!range.collapsed || !(range.startContainer instanceof Text)) return range;
   const text = range.startContainer;
@@ -276,7 +276,7 @@ function linkTargets(app: App): Target[] {
       return [{ host: t.host, range }];
     }
   }
-  return inlineTargets(app);
+  return inlineTargets(app, false, true);
 }
 
 export const canLink = (app: App): boolean => linkTargets(app).length > 0;
