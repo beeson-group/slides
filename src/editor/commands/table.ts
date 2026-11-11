@@ -390,14 +390,12 @@ function placeTable(app: App, table: HTMLTableElement): void {
   const before = taken(above).map((o) => o.box);
   const all = taken([...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *')].filter((el) => !el.contains(table)));
   const others = all.map((o) => o.box);
-  // the texts, which a table is kept off where a figure is not
-  const texts = all.filter((o) => !o.el.matches('figure, .zone, .plate, img, video, .qr, .plot, .surface, tycho-viewer, svg.line')).map((o) => o.box);
   const tw = t.right - t.left;
   const th = t.bottom - t.top;
   const at = (left: number, top: number): SlideBox => ({ left, top, right: left + tw, bottom: top + th });
   // a box measured at the zoom of the canvas may pass the floor by a fraction of a slide px
-  const free = (b: SlideBox, of = others) => b.top - room >= 0 && b.bottom <= floor + 1 && b.right + room <= w &&
-    !of.some((o) => meets({ left: b.left - room, top: b.top - room, right: b.right + room, bottom: b.bottom + room }, o));
+  const free = (b: SlideBox) => b.top - room >= 0 && b.bottom <= floor + 1 && b.right + room <= w &&
+    !others.some((o) => meets({ left: b.left - room, top: b.top - room, right: b.right + room, bottom: b.bottom + room }, o));
   const top = Math.max(t.top, ...before.map((b) => b.bottom + room));
   let best: SlideBox | null = null;
   let place: SlideBox | null = free(at(t.left, top)) ? at(t.left, top) : null;
@@ -409,17 +407,13 @@ function placeTable(app: App, table: HTMLTableElement): void {
   // the free places on a grid of STEP px under the heading of the slide, the nearest one taken
   const head = slide.querySelector(':scope > h2, :scope > h1');
   const under = head ? (takenBox(app, head)?.bottom ?? 0) + room : room;
-  // the places off every text, over a figure, are taken where no place is free of both
-  for (const of of [others, texts]) {
-    if (place || best) break;
-    let near = Infinity;
-    for (let y = under; y + th <= floor; y += STEP) {
-      for (let x = room; x + tw + room <= w; x += STEP) {
-        const d = Math.hypot(x - t.left, y - top);
-        if (d < near && free(at(x, y), of)) {
-          near = d;
-          best = at(x, y);
-        }
+  let near = Infinity;
+  for (let y = under; !place && y + th <= floor; y += STEP) {
+    for (let x = room; x + tw + room <= w; x += STEP) {
+      const d = Math.hypot(x - t.left, y - top);
+      if (d < near && free(at(x, y))) {
+        near = d;
+        best = at(x, y);
       }
     }
   }
