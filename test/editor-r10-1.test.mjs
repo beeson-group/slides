@@ -341,6 +341,23 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
+  test(`the size of a range stays in the state of the data window while the editor is refreshed (${platform})`, async () => {
+    const page = await deckPage(platform, PLOT_SLIDE);
+    await openData(page);
+    await focusCell(page, 0, 1);
+    await press(page, 'Shift+ArrowDown');
+    await press(page, 'Shift+ArrowRight');
+    assert.equal(await status(page), '2 × 2 cells selected.');
+    // a switch of the View menu refreshes every pane, as a late event of the selection does
+    for (const id of ['view.rulers', 'view.rulers']) {
+      await exec(page, id);
+      await frames(page);
+      assert.deepEqual(await picked(page), ['0,1', '0,2', '1,1', '1,2']);
+      assert.equal(await status(page), '2 × 2 cells selected.');
+    }
+    assert.deepEqual(errors(page), []);
+  });
+
   test(`a tab is added and deleted in the data window, and a tab named by a step is kept at Esc of its confirmation (${platform})`, async () => {
     const page = await deckPage(platform, PLOT_SLIDE);
     await openData(page);
