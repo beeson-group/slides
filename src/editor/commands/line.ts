@@ -11,7 +11,7 @@ import { injectStyle, make } from '../ui/dom.ts';
 import { overlay, view, xy } from '../canvas/frames.ts';
 import { frameOf, frameRect, linePoints, movablesOf, onCanvas, snapBoxOf, toSlide, type Frame } from '../canvas/hit.ts';
 import { LAYOUT_GUIDES, snapMove, snapPoint, type Box, type Targets } from '../canvas/snap.ts';
-import { locked, placeOf, record, writePlace, type Place } from '../canvas/drag.ts';
+import { locked, placeOf, record, scrollOf, writePlace, type Place } from '../canvas/drag.ts';
 
 export type Point = { x: number; y: number };
 export type Ends = { x1: number; y1: number; x2: number; y2: number };
@@ -165,7 +165,7 @@ function showEnds(svg: Element, e: Ends): void {
 
 type Press =
   | { kind: 'end'; svg: Element; which: 1 | 2; from: Ends; off: Point; x: number; y: number; moved: boolean }
-  | { kind: 'move'; svg: Element; els: Element[]; places: Map<Element, Place>; base: Box; x: number; y: number; moved: boolean; click: (() => void) | null }
+  | { kind: 'move'; svg: Element; els: Element[]; places: Map<Element, Place>; base: Box; x: number; y: number; scroll: { x: number; y: number }; moved: boolean; click: (() => void) | null }
   | { kind: 'draw'; heads: Heads; start: Point; end: Point; x: number; y: number; moved: boolean };
 
 type Grip = HTMLElement & { line?: Element };
@@ -372,7 +372,7 @@ export function install(app: App): void {
     const boxes = els.map((e) => snapBoxOf(app, e));
     const left = Math.min(...boxes.map((b) => b.left)), top = Math.min(...boxes.map((b) => b.top));
     const base = { left, top, width: Math.max(...boxes.map((b) => b.left + b.width)) - left, height: Math.max(...boxes.map((b) => b.top + b.height)) - top };
-    press = { kind: 'move', svg, els, places: new Map(els.map((e) => [e, placeOf(e)])), base, x: at.x, y: at.y, moved: false, click };
+    press = { kind: 'move', svg, els, places: new Map(els.map((e) => [e, placeOf(e)])), base, x: at.x, y: at.y, scroll: scrollOf(app), moved: false, click };
     app.invalidate('selection');
   };
 
@@ -385,6 +385,7 @@ export function install(app: App): void {
     ev.preventDefault();
     const f = frameOf(app);
     view.guides = [];
+    app.stage?.edgeScroll(ev, () => press === p && onMove(ev));
     if (p.kind === 'draw') {
       p.end = pointAt(ev, p.start, []);
       showDraft(p.start, p.end, p.heads);
@@ -398,7 +399,8 @@ export function install(app: App): void {
       readout({ x1: fixed.x, y1: fixed.y, x2: to.x, y2: to.y }, ev);
     } else {
       if (!p.els.length) return;
-      let dx = (ev.clientX - p.x) / f.scale, dy = (ev.clientY - p.y) / f.scale;
+      const s = scrollOf(app);
+      let dx = (ev.clientX - p.x + s.x - p.scroll.x) / f.scale, dy = (ev.clientY - p.y + s.y - p.scroll.y) / f.scale;
       const lock = ev.shiftKey ? (Math.abs(dx) >= Math.abs(dy) ? 'x' : 'y') : null;
       if (lock === 'x') dy = 0;
       if (lock === 'y') dx = 0;
@@ -425,6 +427,7 @@ export function install(app: App): void {
     const p = press;
     if (!p) return;
     press = null;
+    app.stage?.edgeScroll(null);
     view.guides = [];
     view.spacing = [];
     view.readout = null;

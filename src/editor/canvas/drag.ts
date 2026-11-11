@@ -237,6 +237,8 @@ type Press = {
   from: Map<Element, Place>;
   // the union of the boxes of els at the press, in slide pixels
   base: Box;
+  // the scroll of the canvas at the press
+  scroll: { x: number; y: number };
   // what a click without a move does at the release
   click: (() => void) | null;
   handle?: Handle;
@@ -279,6 +281,9 @@ type Follower = { el: Element; sized: Element[]; pic: Element; deg: number; base
 
 // the angle of el and of the picture inside it, as its style sets them
 const angleIn = (el: Element, pic: Element): number => (placeOf(el).rotate ?? 0) + (pic === el ? 0 : (placeOf(pic).rotate ?? 0));
+
+// the scroll of the canvas, which moves the slide under a held pointer
+export const scrollOf = (app: App) => ({ x: app.stage?.el.scrollLeft ?? 0, y: app.stage?.el.scrollTop ?? 0 });
 
 const union = (boxes: Box[]): Box => {
   const left = Math.min(...boxes.map((b) => b.left)), top = Math.min(...boxes.map((b) => b.top));
@@ -400,6 +405,7 @@ export function install(app: App): void {
       kind, x: ev.clientX, y: ev.clientY, moved: false, el, els, click, selected: app.selection.elements().slice(), corner: el ? snapBoxOf(app, el) : null,
       from: new Map(els.map((e) => [e, placeOf(e)])),
       base: els.length ? union(els.map((e) => snapBoxOf(app, e))) : { left: 0, top: 0, width: 0, height: 0 },
+      scroll: scrollOf(app),
     };
     press = p;
     view.hover = null;
@@ -581,8 +587,11 @@ export function install(app: App): void {
       frames.draw();
       return;
     }
-    let dx = (ev.clientX - p.x) / f.scale;
-    let dy = (ev.clientY - p.y) / f.scale;
+    // the pointer on the slide, which a scroll of the canvas moves too
+    const s = scrollOf(app);
+    let dx = (ev.clientX - p.x + s.x - p.scroll.x) / f.scale;
+    let dy = (ev.clientY - p.y + s.y - p.scroll.y) / f.scale;
+    if (p.kind !== 'rotate') app.stage?.edgeScroll(ev, () => press === p && onMove(ev));
     if (p.kind === 'resize') {
       resize(p, ev, dx, dy);
       return;
@@ -843,6 +852,7 @@ export function install(app: App): void {
     const p = press;
     if (!p) return;
     press = null;
+    app.stage?.edgeScroll(null);
     document.documentElement.classList.remove('beeson-dragging', 'beeson-resizing', 'beeson-rotating');
     view.moving = null;
     view.resizing = false;
