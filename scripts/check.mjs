@@ -170,7 +170,9 @@ async function checkHeads() {
     const headed = Beeson.backdrops.find((backdrop) => backdrop.headed);
     if (!headed) return null;
     const { h, v } = Reveal.getIndices(headed.el.closest('section'));
-    Reveal.slide(h, v);
+    // a backdrop that is a step is traced only from its step on
+    const step = headed.el.closest('.fragment');
+    Reveal.slide(h, v, step ? Number(step.dataset.fragmentIndex) : undefined);
     return headed.headAfter;
   })()`);
   if (after !== null) {
