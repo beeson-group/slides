@@ -1,7 +1,8 @@
-// the place of a new table on a figure slide, on both platforms: the plate of a figure slide is as
-// large as the slide, hence the table does not have a free place there. it is put off the heading
-// and the caption with the room of its bars, off what is drawn in the plate, and with its bars
-// inside the slide
+// a new element on a figure slide, on both platforms. the plate of a figure slide is in the flow and
+// as large as the slide, hence a new element is written after it, and what is drawn in the plate
+// stays where the theme puts it. a new table does not have a free place there. it is put off the
+// heading and the caption with the room of its bars, off a paper image, on less than a twentieth
+// of a video or a plot, and with its bars inside the slide
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -62,6 +63,9 @@ const measure = (page, selector, texts) => page.evaluate(`(() => {
   return { k, boxes, lines };
 })()`);
 const meets = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+// the share of the area of b that a covers
+const covers = (a, b) => (Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top))) / ((b.right - b.left) * (b.bottom - b.top));
+const round = (boxes) => boxes.map((b) => [b.left, b.top, b.right, b.bottom].map(Math.round));
 const grown = (b, d) => ({ left: b.left - d, top: b.top - d, right: b.right + d, bottom: b.bottom + d });
 
 async function load(t, platform, n) {
@@ -81,6 +85,24 @@ async function load(t, platform, n) {
 }
 
 for (const platform of PLATFORMS) {
+  for (const [id, name] of [['insert.text', 'text'], ['insert.formula', 'formula'], ['insert.qr', 'QR code']]) {
+    test(`a new ${name} on a figure slide with a paper image does not move the image (${platform})`, async (t) => {
+      const page = await load(t, platform, 6);
+      const before = await render(page);
+      const { boxes: media } = await measure(page, '.plate > img', ':scope > h2');
+      assert.equal(media.length, 1);
+      await exec(page, id);
+      await frames(page);
+      // an empty text box is written into the file only once it has text
+      if (id !== 'insert.text') assert.notEqual(await render(page), before, 'nothing was inserted');
+      const { boxes: after } = await measure(page, '.plate > img', ':scope > h2');
+      assert.deepEqual(round(after), round(media), `the insert of a ${name} moved the image of the plate`);
+      await undo(page);
+      assert.equal(await render(page), before);
+      assert.deepEqual(errors(page), []);
+    });
+  }
+
   for (const [n, what, drawn] of SLIDES) {
     test(`a new table on a figure slide with ${what} is put off the heading and the caption with the room of its bars (${platform})`, async (t) => {
       const page = await load(t, platform, n);
@@ -95,7 +117,13 @@ for (const platform of PLATFORMS) {
       const bars = grown(table, room);
       assert.ok(bars.left >= -1 && bars.top >= -1 && table.right <= 1921 && table.bottom <= 1081, `the table at ${js(table)} does not have its bars inside the slide`);
       for (const l of lines) assert.ok(!meets(bars, l), `the table at ${js(table)} with the room of its bars lies over a line of text at ${js(l)}`);
-      for (const m of media) assert.ok(!meets(table, m), `the table at ${js(table)} lies over what is drawn in the plate at ${js(m)}`);
+      // what is drawn in the plate is where it was before the insert
+      const { boxes: after } = await measure(page, drawn, ':scope > h2');
+      assert.deepEqual(round(after), round(media), 'the insert of a table moved what is drawn in the plate');
+      for (const m of media) {
+        if (what === 'a paper image') assert.ok(!meets(table, m), `the table at ${js(table)} lies over the image at ${js(m)}`);
+        else assert.ok(covers(table, m) < 0.05, `the table at ${js(table)} covers more than a twentieth of what is drawn in the plate at ${js(m)}`);
+      }
       // the insert is one entry of the history, taken back and made again byte for byte
       const edited = await render(page);
       assert.notEqual(edited, before);
