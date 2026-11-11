@@ -279,9 +279,12 @@ export class Checker {
   }
 
   refresh(): void {
-    // the row or head with the focus is focused again in the new list, or else the panel
+    // the row or head with the focus is focused again in the new list. a row whose issue is gone,
+    // e.g. after a fix, gives the focus to the row now at its place in its check, or to the head
     const active = document.activeElement;
-    const had = active instanceof HTMLElement && this.list.contains(active) ? (active.dataset.i ? `[data-i="${active.dataset.i}"]` : active.dataset.check ? `:is(.check, .tiphead)[data-check="${active.dataset.check}"]` : null) : null;
+    const row = active instanceof HTMLElement && this.list.contains(active) && active.dataset.check ? active : null;
+    const was = row?.dataset.i ? this.issues[Number(row.dataset.i)] : null;
+    const nth = row ? [...this.list.querySelectorAll(`[data-i][data-check="${row.dataset.check}"]`)].indexOf(row) : -1;
     this.issues = inspect(this.app);
     const errors = this.issues.filter((i) => severityOf(i) === 'error').length;
     const warnings = this.issues.filter((i) => severityOf(i) === 'warning').length;
@@ -299,8 +302,15 @@ export class Checker {
     if (this.picked && !this.issues.some((i) => this.same(i, this.picked))) this.picked = null;
     this.showInfo();
     this.showSummary();
-    this.rove((had && this.list.querySelector<HTMLElement>(had)) || this.list.querySelector<HTMLElement>('[role="treeitem"]'));
-    if (had && !this.editing) (this.list.querySelector<HTMLElement>(had) ?? this.el).focus({ preventScroll: true });
+    let back: HTMLElement | null = null;
+    if (row) {
+      const i = was ? this.issues.findIndex((x) => this.same(x, was)) : -1;
+      const items = [...this.list.querySelectorAll<HTMLElement>(`[data-i][data-check="${row.dataset.check}"]`)];
+      back = i >= 0 ? this.list.querySelector<HTMLElement>(`[data-i="${i}"]`) : nth >= 0 && items.length ? items[Math.min(nth, items.length - 1)] : null;
+      back ??= this.list.querySelector<HTMLElement>(`:is(.check, .tiphead)[data-check="${row.dataset.check}"]`) ?? this.list.querySelector<HTMLElement>('[role="treeitem"]');
+    }
+    this.rove(back ?? this.list.querySelector<HTMLElement>('[role="treeitem"]'));
+    if (row && !this.editing) (back ?? this.el).focus({ preventScroll: true });
   }
 
   // the tree is one Tab stop, the row to of a roving tabindex
@@ -338,7 +348,12 @@ export class Checker {
 
   private openFixes(issue: Issue, fix: HTMLElement, keyboard: boolean, owner: HTMLElement | null): void {
     void this.pick(issue);
-    openMenu(this.app, this.fixes(issue), { anchor: fix.getBoundingClientRect(), placement: 'below', owner, keyboard, label: 'Fixes' });
+    // the tree may be built again while the menu is open, hence its row is found again at the close
+    const onClose = () => {
+      const i = this.issues.findIndex((x) => this.same(x, issue));
+      if (keyboard && !owner) this.list.querySelector<HTMLElement>(`[data-i="${i}"]`)?.focus({ preventScroll: true });
+    };
+    openMenu(this.app, this.fixes(issue), { anchor: fix.getBoundingClientRect(), placement: 'below', owner, keyboard, label: 'Fixes', onClose });
   }
 
   private same(a: Issue, b: Issue | null): boolean {
