@@ -325,7 +325,8 @@ for (const platform of PLATFORMS) {
 }
 
 // the guides of the current slide, as drawn, the title of the slide, the guides kept in the
-// storage of the browser by the index of their slide, and the center of a row of the navigator
+// storage of the browser by an editor before data-guides, by the index of their slide, and the
+// center of a row of the navigator
 const handGuides = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-hand-guide')].filter((g) => !g.hidden && !g.classList.contains('off')).map((g) => [g.dataset.axis, Number(g.dataset.at)])`);
 const goTo = async (page, n) => {
   await page.evaluate(`Reveal.slide(${n})`);
@@ -341,20 +342,24 @@ const navRow = (page, i) => page.evaluate(`(() => {
 })()`);
 
 for (const platform of PLATFORMS) {
-  test(`${platform}: a guide follows its slide when slides are moved, added, duplicated, and deleted, and through an undo of each`, async () => {
+  test(`${platform}: a guide follows its slide when slides are moved, added, duplicated, pasted, and deleted, and through an undo of each`, async () => {
     const page = await editor(platform);
     const title = await titleOf(page);
     await exec(page, 'view.guides.add', { x: [640], y: [300] });
     await frames(page);
     assert.deepEqual(await handGuides(page), [['x', 640], ['y', 300]]);
-    const check = async (n, what) => {
+    // the guides are in data-guides on the section of the slide, and not in the storage
+    const written = (page) => page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].map((s) => s.getAttribute('data-guides'))`);
+    const check = async (n, what, copies = [n]) => {
       await goTo(page, n);
       assert.equal(await titleOf(page), title, `the slide is not at ${n} after ${what}`);
       assert.deepEqual(await handGuides(page), [['x', 640], ['y', 300]], `the guides do not follow the slide after ${what}`);
-      const saved = await stored(page);
-      assert.deepEqual(saved[n], { x: [640], y: [300] }, `the stored guides are not at index ${n} after ${what}: ${JSON.stringify(saved)}`);
-      assert.ok(saved.every((g, i) => i === n || (!g.x.length && !g.y.length)), `another slide is stored with guides after ${what}`);
+      const attrs = await written(page);
+      assert.deepEqual(attrs.flatMap((a, i) => (a === null ? [] : [[i, a]])), copies.map((i) => [i, 'x640 y300']), `data-guides is not on the slides ${copies} after ${what}: ${JSON.stringify(attrs)}`);
+      assert.equal((await render(page)).split('data-guides="x640 y300"').length - 1, copies.length, `the file does not hold the guides of ${copies.length} slides after ${what}`);
+      assert.deepEqual(await stored(page), [], `guides are kept in the storage after ${what}`);
     };
+    await check(MATH, 'the add');
     // moved up with the navigator, and back with an undo
     await click(page, await navRow(page, MATH));
     await exec(page, 'slide.moveUp');
@@ -380,20 +385,33 @@ for (const platform of PLATFORMS) {
     await click(page, await navRow(page, MATH));
     await exec(page, 'slide.duplicate');
     await frames(page);
-    await goTo(page, MATH + 1);
-    assert.deepEqual(await handGuides(page), [['x', 640], ['y', 300]], 'the duplicated slide does not get the guides of its source');
-    const both = await stored(page);
-    assert.deepEqual([both[MATH], both[MATH + 1]], [{ x: [640], y: [300] }, { x: [640], y: [300] }], `the guides of the copy are not stored: ${JSON.stringify(both)}`);
+    await check(MATH + 1, 'a duplicate', [MATH, MATH + 1]);
     await undo(page);
     await check(MATH, 'an undo of the duplicate');
+    // copied and pasted after it: the pasted slide keeps the guides, as in Keynote
+    await click(page, await navRow(page, MATH));
+    await exec(page, 'slide.copy');
+    await exec(page, 'slide.paste');
+    await frames(page);
+    await check(MATH + 1, 'a paste', [MATH, MATH + 1]);
+    await undo(page);
+    await check(MATH, 'an undo of the paste');
+    // an undo of the add takes the guides off the file
+    const tag = '<section>\n  <h2>Math, an ordered list, and a zone</h2>';
+    await byteExact(page, [[tag, tag.replace('<section>', '<section data-guides="x640 y300">')]]);
+    await undo(page);
+    await frames(page);
+    assert.deepEqual(await handGuides(page), []);
     await byteExact(page);
     assert.deepEqual(errors(page), []);
   });
 
   test(`${platform}: a guide stored in an earlier session is read at its slide after a slide is added before it`, async () => {
+    // the guide as an editor before data-guides kept it, in the storage of the browser by the index
+    // of its slide
     const first = await editor(platform);
-    await exec(first, 'view.guides.add', { x: [640] });
-    await frames(first);
+    const legacy = SECTIONS.map((_, i) => ({ x: i === MATH ? [640] : [], y: [] }));
+    await first.evaluate(`localStorage.setItem('beeson-edit-guides:' + location.pathname, ${JSON.stringify(JSON.stringify(legacy))})`);
     // the next session adds a slide at the start before it shows the slide of the guide
     const page = await editor(platform, 0, { keep: true });
     await click(page, await navRow(page, 0));
