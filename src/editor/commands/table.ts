@@ -322,7 +322,21 @@ async function insertTable(app: App, rows: string[][], into: Element | null = nu
   const { parent, before } = into ? { parent: into, before: null } : columnPlace(app, app.current()!);
   const [table] = await app.doc.insert(tableHtml(rows, styleOf(app), baseOf(app, parent)), parent, before, 'insert table');
   if (!into) placeTable(app, table as HTMLTableElement);
+  else fillSlot(app, table as HTMLTableElement, into);
   return table as HTMLTableElement;
+}
+
+// the columns of a new table in a slot share the inner width of the slot, written on the cells of
+// its first row, since a table of empty cells is otherwise only a few rules wide
+function fillSlot(app: App, table: HTMLTableElement, slot: Element): void {
+  const cells = [...(table.rows[0]?.cells ?? [])];
+  const s = getComputedStyle(slot);
+  const inner = (slot as HTMLElement).clientWidth - parseFloat(s.paddingLeft) - parseFloat(s.paddingRight);
+  if (!cells.length || !(inner > 0)) return;
+  const set = (w: number) => { for (const c of cells) app.doc.setTag(c, { style: { width: `${Math.max(0, Math.floor(w))}px` } }, 'insert table'); };
+  const w = inner / cells.length;
+  set(w);
+  set(w + (inner - table.offsetWidth) / cells.length);
 }
 
 // a new empty table of size, as one entry of the history, with the caret in its first cell
