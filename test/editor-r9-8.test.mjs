@@ -170,3 +170,62 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// VIEW reads the presenter view: the slide and step it shows, from 1 and from 0, the number of
+// steps of its slide, and the opacity of each fragment of its current slide, 0 for one not shown
+const VIEW = `(() => {
+  const d = document.querySelector('dialog.beeson-edit-presenter');
+  const [at] = d.querySelector('.count').textContent.split('/').map(Number);
+  const m = /Step (\\d+) of (\\d+)/.exec(d.textContent);
+  const clone = d.querySelector('.shot.current .pic').shadowRoot.querySelector('.slides > section');
+  const opacity = [...clone.querySelectorAll('.fragment')].map((f) => (getComputedStyle(f).visibility === 'hidden' ? 0 : Number(getComputedStyle(f).opacity)));
+  return { at, step: m ? Number(m[1]) : 0, n: m ? Number(m[2]) : 0, opacity };
+})()`;
+const TAB = `window.__shows.at(-1)`;
+
+// finding steps-transitions-present-2: the presenter view counted the steps of a slide without the
+// step that the theme adds to restore the dimmed fragments, and it did not dim the earlier steps,
+// hence the view and the show fell out of step
+for (const platform of PLATFORMS) {
+  test(`the presenter view counts and draws the steps of each slide as the show plays them, the restore step included (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 2 });
+    await press(page, 'Alt+Enter');
+    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-presenter[open]') && !!${TAB}?.Reveal?.isReady()`, 20000);
+    await sleep(300);
+    // slide 3 has three steps, and the theme adds a fourth that restores the dimmed ones
+    let view = await page.evaluate(VIEW);
+    assert.deepEqual([view.at, view.step, view.n], [3, 0, 4], 'the view does not count the restore step of slide 3');
+    await press(page, 'ArrowRight');
+    await press(page, 'ArrowRight');
+    view = await page.evaluate(VIEW);
+    assert.deepEqual(view.opacity, [0.45, 1, 0], 'the view does not dim the earlier step of slide 3 as the show does');
+    await press(page, 'ArrowRight');
+    await press(page, 'ArrowRight');
+    view = await page.evaluate(VIEW);
+    assert.deepEqual(view.opacity, [1, 1, 1], 'the restore step of slide 3 does not show every step at full opacity');
+    assert.deepEqual(await page.evaluate(`${TAB}.Reveal.getIndices()`), { h: 2, v: 0, f: 3 }, 'the show does not play the restore step of slide 3');
+    // the view moved on through every slide of the deck, with the show at its slide and step
+    for (let i = 0; i < 60 && !(await page.evaluate(`/End of the show/.test(document.querySelector('dialog.beeson-edit-presenter').textContent)`)); i++) {
+      await press(page, 'ArrowRight');
+      view = await page.evaluate(VIEW);
+      const show = await page.evaluate(`${TAB}.Reveal.getIndices()`);
+      assert.deepEqual([show.h, show.f ?? -1], [view.at - 1, view.step - 1], `the show is not at slide ${view.at}, step ${view.step} of the view`);
+      const steps = await page.evaluate(`new Set([...${TAB}.Reveal.getCurrentSlide().querySelectorAll('.fragment')].map((f) => f.dataset.fragmentIndex)).size`);
+      assert.equal(view.n, steps, `the view counts ${view.n} steps on slide ${view.at}, and the show ${steps}`);
+    }
+    // the show moved on by itself, and the view follows it through the restore step of slide 3
+    await page.evaluate(`${TAB}.Reveal.slide(2, 0, -1), true`);
+    await sleep(600);
+    for (let k = 1; k <= 4; k++) {
+      await page.evaluate(`${TAB}.Reveal.next(), true`);
+      await sleep(400);
+      view = await page.evaluate(VIEW);
+      assert.deepEqual([view.at, view.step, view.n], [3, k, 4], `the view does not follow step ${k} of the show`);
+    }
+    await press(page, 'Escape');
+    await page.waitFor(`!document.querySelector('dialog.beeson-edit-presenter[open]')`);
+    await page.evaluate(`${TAB}.close(), true`);
+    await byteExact(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
