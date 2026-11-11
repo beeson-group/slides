@@ -57,6 +57,8 @@ export const EVERYWHERE: Region[] = [...OUTSIDE_DIALOGS, 'dialog'];
 // the keys that the menus list for a command whose keys reach it as clipboard events, since the
 // browser takes them in a text
 const CLIPBOARD_KEYS: Record<string, string[]> = { 'edit.cut': ['Mod+X'], 'edit.copy': ['Mod+C'], 'edit.paste': ['Mod+V'] };
+// the keys that the browser runs as events of the clipboard in every region, which a menu thus lists
+const NATIVE_KEYS = new Set(['Mod+X', 'Mod+C', 'Mod+V', 'Mod+Shift+V', 'Mod+Alt+Shift+V']);
 
 // the keys that run a command on the platform
 export function boundKeys(c: Command, platform: Platform): string[] {
@@ -179,7 +181,7 @@ export class Commands {
     return keysOf(c, p).filter((k) => {
       const chord = parseKey(k, p);
       const runs = this.forKey({ key: chord.key === 'Space' ? ' ' : chord.key, shiftKey: chord.shift, altKey: chord.alt, ctrlKey: chord.ctrl, metaKey: chord.meta }, region);
-      return runs ? [runs.id, runs.runsAs?.(this.app)].some((r) => r === c.id || r === id) : !boundKeys(c, p).includes(k) || (c.in ?? DEFAULT_REGIONS).includes(region) || !this.enabled(c.id);
+      return runs ? [runs.id, runs.runsAs?.(this.app)].some((r) => r === c.id || r === id) : !boundKeys(c, p).includes(k) || NATIVE_KEYS.has(k) || (c.in ?? DEFAULT_REGIONS).includes(region) || !this.enabled(c.id);
     });
   }
 
