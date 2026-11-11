@@ -29,7 +29,8 @@ export function install(app: App): void {
       const meets = (r: DOMRect, b: DOMRect | undefined) => !!b && b.height > 0 && r.bottom > b.top + 1 && r.top < b.bottom - 1 && r.right > b.left + 1 && r.left < b.right - 1;
       const above = slide.matches('.figure') ? [...slide.querySelectorAll(':scope > h2, :scope > .run')].map((e) => e.getBoundingClientRect()) : [];
       const partOf = (el: Element) => [...slide.children].find((c) => c.contains(el));
-      const figures = [...slide.querySelectorAll(FIGURE)].filter((f) => !f.closest('.plate, .backdrop, .surface') && !f.parentElement?.closest('.plot'))
+      // an empty new code box is not in the file yet
+      const figures = [...slide.querySelectorAll(FIGURE)].filter((f) => !f.closest('.plate, .backdrop, .surface') && !f.parentElement?.closest('.plot') && !f.matches('pre.beeson-pending'))
         .map((f) => ({ part: partOf(f), r: f.getBoundingClientRect() })).filter((f) => f.r.width > 0 && f.r.height > 0);
       const lines = (el: Element) => {
         const range = document.createRange();
