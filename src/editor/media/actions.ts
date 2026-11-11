@@ -10,6 +10,7 @@ import { ask, host } from '../ui/dialog.ts';
 import { make } from '../ui/dom.ts';
 import { firstFrame } from './poster.ts';
 import { REVEAL_CLASSES } from '../model/scope.ts';
+import { placeNew } from '../commands/place.ts';
 import { kindOf, media, type Kind, type MediaFile } from './store.ts';
 
 export const ACCEPT: Record<Kind | 'any', string> = {
@@ -154,8 +155,20 @@ async function addZone(app: App, slide: Element, r: Ready): Promise<Element> {
   else if (el && !r.poster) app.doc.setTag(el, { attrs: { poster: null } }, 'poster');
   media.resolve(zone);
   watch(app, zone);
+  // the new zone is put in free space once the size of its picture is known
+  if (el) await sized(el);
+  if (el instanceof HTMLElement) placeNew(app, zone, el);
   return zone;
 }
+
+// resolves once the size of the picture of el is known, or after 3 s
+const sized = (el: Element): Promise<void> => new Promise((done) => {
+  const known = el instanceof HTMLImageElement ? el.complete && el.naturalWidth > 0 : el instanceof HTMLVideoElement && el.readyState >= 1;
+  if (known) return done();
+  el.addEventListener(el.localName === 'img' ? 'load' : 'loadedmetadata', () => done(), { once: true });
+  el.addEventListener('error', () => done(), { once: true });
+  setTimeout(done, 3000);
+});
 
 const report = (app: App, ready: Ready[]) => {
   const problems = ready.map((r) => r.problem).filter(Boolean);
