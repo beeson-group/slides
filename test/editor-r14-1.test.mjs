@@ -155,4 +155,33 @@ for (const platform of PLATFORMS) {
       assert.deepEqual(errors(page), []);
     }
   });
+
+  // D29. a typed caption under a new picture meets the box of the footnote but not its text, which
+  // ends left of the caption, and it is not reported as running into the footnote
+  test(`a caption beside the end of the footnote text is not reported as running into it (${platform})`, async (t) => {
+    const page = await load(t, platform, STEPS);
+    const insert = page.evaluate(`window.BeesonEditor.exec('insert.image').then(() => true)`);
+    await choose(page, [DARK_FILE]);
+    await insert;
+    await page.waitFor(`window.BeesonEditor.render().includes('media/figure-dark.png')`, 30000);
+    await frames(page);
+    await exec(page, 'figure.caption');
+    await frames(page);
+    await page.send('Input.insertText', { text: 'A new caption' });
+    await frames(page);
+    const m = await page.evaluate(`(() => {
+      const slide = document.querySelector('.reveal .slides > section.present');
+      const foot = slide.querySelector(':scope > .foot');
+      const cap = slide.querySelector('figure > figcaption').getBoundingClientRect();
+      const range = document.createRange();
+      range.selectNodeContents(foot);
+      const text = Math.max(...[...range.getClientRects()].map((r) => r.right));
+      const f = foot.getBoundingClientRect();
+      return { boxMeets: cap.left < f.right && cap.bottom > f.top, textClear: text < cap.left };
+    })()`);
+    assert.deepEqual(m, { boxMeets: true, textClear: true }, 'the slide does not show the case of D29');
+    const s = await status(page);
+    assert.equal(s.overflow, 0, `the caption is reported: ${s.message}`);
+    assert.deepEqual(errors(page), []);
+  });
 }
