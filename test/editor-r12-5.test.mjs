@@ -265,6 +265,25 @@ for (const platform of PLATFORMS) {
   });
 }
 
+for (const platform of PLATFORMS) {
+  test(`a turned group keeps the size of its frame and of its W and H fields (${platform})`, async (t) => {
+    const page = await load(t, platform, FIGURES);
+    await groupOnFigures(page);
+    const grouped = await render(page);
+    const w0 = await fieldValue(page, 'width'), h0 = await fieldValue(page, 'height');
+    const frame = () => page.evaluate(`(() => { const f = document.querySelector('.beeson-frame.union.group'); return f.hidden ? null : { width: f.offsetWidth, height: f.offsetHeight, rotate: f.style.rotate }; })()`);
+    const f0 = await frame();
+    for (const deg of [20, 45]) {
+      await typeField(page, 'angle', deg);
+      const w = await fieldValue(page, 'width'), h = await fieldValue(page, 'height'), f = await frame();
+      assert.ok(near(w, w0, 3) && near(h, h0, 3), `at ${deg} degrees W and H read ${w} by ${h}, not ${w0} by ${h0}`);
+      assert.ok(near(f.width, f0.width, 3) && near(f.height, f0.height, 3) && f.rotate === `${deg}deg`, `at ${deg} degrees the frame is ${js(f)}, not ${js(f0)} turned`);
+    }
+    await checkEdit(page, `r12-5-turned-group-${platform}.html`, grouped);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
 // the marks of equal gaps are drawn under the boxes, clear of the guide of their centers and of
 // their lower edges, as PowerPoint draws them (P22), since a mark on a guide merges with it
 test('the marks of equal gaps are drawn clear of the guides along the same axis', () => {
