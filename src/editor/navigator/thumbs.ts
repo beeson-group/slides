@@ -123,12 +123,38 @@ export function cloneSlide(slide: Element, scale: number): HTMLElement {
     // the classes of the marks of a plot are set at run time too, and the theme paints the marks by them
     for (const c of [...el.classList]) if (isRuntimeClass(c) && !c.startsWith('plot-')) el.classList.remove(c);
   }
+  if (window.MathJax) hideTex(clone);
   const layers = layersOf(clone);
   showLayer(clone, layers.length > 1 ? layers[0] : null);
   clone.classList.add('present');
   clone.style.display = 'block';
   clone.style.top = '0';
   return clone;
+}
+
+// the formulas of clone that are not typeset yet, i.e. in raw TeX, are hidden in place, so that a
+// picture shows the rest of its slide while MathJax typesets. a code box and the notes are kept
+const TEX = /\\\((?:[\s\S]*?\\\)|[\s\S]*$)|\\\[(?:[\s\S]*?\\\]|[\s\S]*$)/g;
+function hideTex(clone: Element): void {
+  const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
+  const raw: Text[] = [];
+  for (let t = walker.nextNode() as Text | null; t; t = walker.nextNode() as Text | null) {
+    if (/\\[([]/.test(t.data) && !t.parentElement?.closest('mjx-container, pre, code, script, style, textarea')) raw.push(t);
+  }
+  for (const t of raw) {
+    const parts = document.createDocumentFragment();
+    let at = 0;
+    for (const m of t.data.matchAll(TEX)) {
+      parts.append(t.data.slice(at, m.index));
+      const hidden = document.createElement('span');
+      hidden.style.visibility = 'hidden';
+      hidden.textContent = m[0];
+      parts.append(hidden);
+      at = m.index + m[0].length;
+    }
+    parts.append(t.data.slice(at));
+    t.replaceWith(parts);
+  }
 }
 
 // MathJax keeps its glyphs in one cache of the page, named by use elements, and a use element does
@@ -312,15 +338,14 @@ export class Thumbs {
     const host = this.hosts.get(slide);
     this.dirty.delete(slide);
     if (!host || !this.width || !slide.isConnected) return;
-    // the last picture is kept until the formulas of the slide are typeset, since the thumbnail
-    // would show their TeX in the meantime
+    // the last picture is kept until the formulas of the slide are typeset. a thumbnail without a
+    // picture is drawn at once with its raw TeX hidden, and drawn again once they are typeset
     const waited = this.waits.get(slide) ?? 0;
     if (waited < WAITS && rawTex(slide)) {
       this.waits.set(slide, waited + 1);
       this.soon(slide);
-      return;
-    }
-    this.waits.delete(slide);
+      if (host.shadowRoot?.querySelector('.beeson-thumb')) return;
+    } else this.waits.delete(slide);
     drawInto(host, slide, this.deck(), this.width);
     host.dataset.drawn = String(Number(host.dataset.drawn ?? 0) + 1);
   }

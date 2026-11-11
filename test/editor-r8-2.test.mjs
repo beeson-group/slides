@@ -278,8 +278,8 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// every drawing of a thumbnail with a formula of the deck in raw TeX, kept in window.rawThumbs,
-// and the number of drawings of the thumbnail of slide 5 with typeset formulas
+// every drawing of a thumbnail with a shown formula of the deck in raw TeX, kept in
+// window.rawThumbs, and the number of drawings of the thumbnail of slide 5 with typeset formulas
 const WATCH = `(() => {
   window.rawThumbs = [];
   window.typesetThumbs = 0;
@@ -292,7 +292,7 @@ const WATCH = `(() => {
       wrap.dataset.checked = '1';
       const walker = document.createTreeWalker(wrap, NodeFilter.SHOW_TEXT);
       for (let t = walker.nextNode(); t; t = walker.nextNode()) {
-        if (t.parentElement.closest('pre, code, mjx-container')) continue;
+        if (t.parentElement.closest('pre, code, mjx-container') || getComputedStyle(t.parentElement).visibility === 'hidden') continue;
         const m = /\\\\[(\\[].{0,16}/.exec(t.data);
         if (m) window.rawThumbs.push({ slide: i + 1, text: m[0] });
       }
