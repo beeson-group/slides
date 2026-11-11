@@ -428,3 +428,24 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+for (const platform of PLATFORMS) {
+  test(`Show with Slide on a figure whose images are a step takes the step off both images, on ${platform}`, async (t) => {
+    for (const mode of MODES) {
+      const page = await load(t, platform, mode, STEPPED);
+      page.figure = 'figure.zone';
+      await pick(page);
+      assert.equal((await state(page, 'steps.remove')).enabled, true, 'Show with Slide is dimmed on a figure whose images are a step');
+      await exec(page, 'steps.remove');
+      await frames(page);
+      const edited = await render(page);
+      const tags = [...edited.matchAll(/<img class="for-(dark|light)[^"]*" [^>]*data-id="curves"[^>]*>/g)].map((m) => m[0]);
+      assert.equal(tags.length, 2);
+      for (const tag of tags) assert.ok(!/fragment/.test(tag), `Show with Slide leaves the step on ${tag}`);
+      assert.equal((await state(page, 'steps.add')).enabled, true, `${ADD} is dimmed once the figure is not a step`);
+      await roundTrip(page, edited);
+      assert.deepEqual(errors(page), []);
+      await page.close();
+    }
+  });
+}
