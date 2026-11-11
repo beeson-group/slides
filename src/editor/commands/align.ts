@@ -6,7 +6,7 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { CONTAINER, RESIZABLE, STRETCHED, aspectOf, constrained, cssWidth, frameOf, frameRect, isTextSized, kindOf, movableOf, objectsOf, orientedBox, pictureOf, pictureSize, sizedOf, snapBoxOf, toSlide } from '../canvas/hit.ts';
+import { CONTAINER, RESIZABLE, STRETCHED, aspectOf, captionsOf, pictureReach, constrained, cssWidth, frameOf, frameRect, isTextSized, kindOf, movableOf, objectsOf, orientedBox, pictureOf, pictureSize, sizedOf, snapBoxOf, toSlide } from '../canvas/hit.ts';
 import type { Box } from '../canvas/snap.ts';
 import { angleOf, locked, placeOf, record, withCorners, writePlace, type Change, type Place } from '../canvas/drag.ts';
 import { groupFrame, groupReach, turned } from '../canvas/frames.ts';
@@ -190,6 +190,13 @@ export function positionOf(app: App, el: Element): { x: number; y: number } {
 // the size of an element in slide pixels, unscaled, at its picture for an image, a video, or a figure
 export const sizeOf = (el: Element): { w: number; h: number } => pictureSize(sizedTarget(el));
 
+// the height that the caption of a figure adds to its picture, in slide pixels, which the field H
+// of the figure selected as one object gives with the picture, as its frame holds both
+export function captionHeight(app: App, el: Element): number {
+  if (!el.matches(CONTAINER) || !captionsOf(el).length) return 0;
+  return Math.max(0, frameRect(el).height - pictureReach(el).height) / frameOf(app).scale;
+}
+
 export function commands(): Command[] {
   const list: Command[] = [];
   for (const [i, side] of SIDES.entries()) {
@@ -273,7 +280,8 @@ export function commands(): Command[] {
     undoable: true,
     enabled: (app) => resizable(targetsOf(app)) || !!groupBoxOf(app, targetsOf(app)),
     run: (app, arg) => {
-      const a = (arg ?? {}) as { w?: number; h?: number };
+      const typed = (arg ?? {}) as { w?: number; h?: number };
+      const a = typed;
       const frame = groupFrameOf(app, targetsOf(app, arg));
       if (frame) {
         const all = targetsOf(app, arg);
@@ -284,26 +292,35 @@ export function commands(): Command[] {
         app.invalidate('content');
         return;
       }
-      const els = targetsOf(app, arg).map(sizedTarget);
+      const objects = targetsOf(app, arg);
+      const els = objects.map(sizedTarget);
       if (!resizable(els)) return;
-      const changes = withCorners(app, els, () => els.map((el) => {
+      const caps = objects.map((o) => captionHeight(app, o));
+      const changes = withCorners(app, els, () => els.map((el, i) => {
         const from = placeOf(el);
         const now = sizeOf(el);
-        if (isTextSized(el)) {
-          if (a.w !== undefined) writePlace(app, el, { ...from, width: Math.max(1, cssWidth(el, a.w)) });
-        } else if (el.matches(STRETCHED)) {
-          const keep = constrained(el);
-          const aspect = now.w / Math.max(1, now.h);
-          let w = now.w, h = now.h;
-          if (a.w !== undefined) [w, h] = [a.w, keep ? a.w / aspect : now.h];
-          else if (a.h !== undefined) [w, h] = [keep ? a.h * aspect : now.w, a.h];
-          const stretch = !keep || (from.height ?? null) !== null;
-          writePlace(app, el, { ...from, width: Math.max(1, w), height: stretch ? Math.max(1, h) : null });
-        } else {
-          const aspect = aspectOf(el) ?? now.w / Math.max(1, now.h);
-          const w = a.w ?? (a.h !== undefined ? a.h * aspect : now.w);
-          writePlace(app, el, { ...from, width: Math.max(1, w) });
-        }
+        const put = (a: { w?: number; h?: number }) => {
+          if (isTextSized(el)) {
+            if (a.w !== undefined) writePlace(app, el, { ...from, width: Math.max(1, cssWidth(el, a.w)) });
+          } else if (el.matches(STRETCHED)) {
+            const keep = constrained(el);
+            const aspect = now.w / Math.max(1, now.h);
+            let w = now.w, h = now.h;
+            if (a.w !== undefined) [w, h] = [a.w, keep ? a.w / aspect : now.h];
+            else if (a.h !== undefined) [w, h] = [keep ? a.h * aspect : now.w, a.h];
+            const stretch = !keep || (from.height ?? null) !== null;
+            writePlace(app, el, { ...from, width: Math.max(1, w), height: stretch ? Math.max(1, h) : null });
+          } else {
+            const aspect = aspectOf(el) ?? now.w / Math.max(1, now.h);
+            const w = a.w ?? (a.h !== undefined ? a.h * aspect : now.w);
+            writePlace(app, el, { ...from, width: Math.max(1, w) });
+          }
+        };
+        // a typed H of a figure with a caption is the height of its picture with its caption. the
+        // caption wraps anew at the new width of the picture, hence its height is measured again
+        const h = typed.h;
+        put(h === undefined ? typed : { ...typed, h: Math.max(1, h - caps[i]) });
+        if (h !== undefined && caps[i]) put({ ...typed, h: Math.max(1, h - captionHeight(app, objects[i])) });
         return { el, from, to: placeOf(el) };
       }));
       record(app, 'resize', changes);
