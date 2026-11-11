@@ -204,6 +204,10 @@ export class App {
         const live = els.filter((el) => el.isConnected);
         if (live.length) this.selection.set('elements', live);
       },
+      view: () => {
+        const slide = this.current();
+        return slide ? () => void (slide.isConnected && this.showSlide(slide)) : null;
+      },
     });
     this.commands = new Commands(this);
   }

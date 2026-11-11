@@ -135,7 +135,9 @@ function spacingStarts(box: Box, axis: Axis, boxes: Box[]): number[] {
 function spacingOf(box: Box, axis: Axis, boxes: Box[]): Spacing | null {
   const { before, after } = neighbors(box, axis, boxes);
   const across = other(axis);
-  const gap = (from: Box, to: Box) => ({ from: end(from, axis), to: start(to, axis), at: (Math.max(start(from, across), start(to, across)) + Math.min(end(from, across), end(to, across))) / 2 });
+  // the mark of a gap is drawn under the two boxes, clear of the guides of their centers and their
+  // edges, as PowerPoint draws its spacing guides
+  const gap = (from: Box, to: Box) => ({ from: end(from, axis), to: start(to, axis), at: Math.max(end(from, across), end(to, across)) + SIZE_MARK });
   const [a, b] = before;
   const [c, d] = after;
   const near: ReturnType<typeof gap>[] = [];

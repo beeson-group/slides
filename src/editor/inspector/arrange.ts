@@ -7,7 +7,7 @@
 // every other element is set by its layout
 
 import type { App } from '../app.ts';
-import { groupBoxOf, groupFrameOf, heightSet, positionOf, resizable, selectedTargets, sizeOf, targetsOf } from '../commands/align.ts';
+import { captionHeight, groupBoxOf, groupFrameOf, heightSet, positionOf, resizable, selectedTargets, sizeOf, sizedTarget, targetsOf } from '../commands/align.ts';
 import { angleOf, groupAngle } from '../commands/order.ts';
 import { imageOf } from '../commands/figure.ts';
 import { turnable } from '../canvas/hit.ts';
@@ -43,6 +43,9 @@ export function arrangePane(app: App, run: Run): Control[] {
   const group = () => groupBoxOf(app, live());
   const frame = () => groupFrameOf(app, live())?.box;
   const sized = () => !group() && resizable(live());
+  // H of a figure selected as one object gives its picture with its caption, as its frame, and H of
+  // the picture selected inside it the picture alone
+  const whole = (el: Element) => (turned.includes(el) ? el : sizedTarget(el));
   const field = (label: string, value: () => number | null, commit: (v: number) => unknown, enabled: () => boolean, min?: number) =>
     numberField(app, { label, value, commit, enabled, min });
   return [
@@ -75,7 +78,7 @@ export function arrangePane(app: App, run: Run): Control[] {
     section('Size', [
       row([
         field('Width', () => frame()?.width ?? shared(live().map((el) => sizeOf(el).w)), (w) => run('arrange.setSize', { w, els: live() }), () => !!group() || sized(), 1),
-        field('Height', () => frame()?.height ?? shared(live().map((el) => sizeOf(el).h)), (h) => run('arrange.setSize', { h, els: live() }), () => !!group() || heightSet(live()), 1),
+        field('Height', () => frame()?.height ?? shared(live().map((el) => sizeOf(el).h + captionHeight(app, whole(el)))), (h) => run('arrange.setSize', { h, els: group() ? live() : live().map(whole) }), () => !!group() || heightSet(live()), 1),
       ]),
       note(() => (!els.length || sized() || group() ? '' : 'Set by the layout of the slide.')),
       row([checkbox(app, run, 'arrange.constrainProportions', 'Constrain Proportions')]),

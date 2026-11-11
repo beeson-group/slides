@@ -6,7 +6,7 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { CONTAINER, RESIZABLE, STRETCHED, aspectOf, constrained, cssWidth, frameOf, frameRect, isTextSized, kindOf, movableOf, objectsOf, orientedBox, pictureOf, pictureSize, sizedOf, snapBoxOf, toSlide } from '../canvas/hit.ts';
+import { CONTAINER, RESIZABLE, STRETCHED, aspectOf, captionsOf, pictureReach, constrained, cssWidth, frameOf, frameRect, isTextSized, kindOf, movableOf, objectsOf, orientedBox, pictureOf, pictureSize, sizedOf, snapBoxOf, toSlide } from '../canvas/hit.ts';
 import type { Box } from '../canvas/snap.ts';
 import { angleOf, locked, placeOf, record, withCorners, writePlace, type Change, type Place } from '../canvas/drag.ts';
 import { groupFrame, groupReach, turned } from '../canvas/frames.ts';
@@ -101,7 +101,18 @@ const union = (boxes: Box[]): Box => {
   return { left, top, width: Math.max(...boxes.map((b) => b.left + b.width)) - left, height: Math.max(...boxes.map((b) => b.top + b.height)) - top };
 };
 
-const toSlideRef = (els: Element[]) => reference === 'slide' || els.length === 1;
+// the objects that Align and Distribute move: each whole group of the targets is one object at the
+// box of its frame, whose members are moved together, as a group of Keynote is one object
+function objects(app: App): { els: Element[]; b: Box }[] {
+  const byGroup = new Map<string | Element, Element[]>();
+  for (const el of targetsOf(app)) {
+    const key = groupOf(el) ?? el;
+    byGroup.set(key, [...(byGroup.get(key) ?? []), el]);
+  }
+  return [...byGroup.values()].map((els) => ({ els, b: groupBoxOf(app, els) ?? boxOf(app, els[0]) }));
+}
+
+const toSlideRef = (n: number) => reference === 'slide' || n === 1;
 
 // each element moved by its offset dx and dy, as one entry of the history
 function shift(app: App, label: string, moves: { el: Element; dx: number; dy: number }[]): void {
@@ -116,10 +127,9 @@ function shift(app: App, label: string, moves: { el: Element; dx: number; dy: nu
 }
 
 function align(app: App, side: Side): void {
-  const els = targetsOf(app);
-  if (!els.length) return;
-  const boxes = els.map((el) => boxOf(app, el));
-  const ref = toSlideRef(els) ? slideBox(app) : union(boxes);
+  const items = objects(app);
+  if (!items.length) return;
+  const ref = toSlideRef(items.length) ? slideBox(app) : union(items.map((i) => i.b));
   const at = (b: Box) => {
     switch (side) {
       case 'left': return { dx: ref.left - b.left, dy: 0 };
@@ -130,33 +140,32 @@ function align(app: App, side: Side): void {
       case 'bottom': return { dx: 0, dy: ref.top + ref.height - (b.top + b.height) };
     }
   };
-  shift(app, `align ${side}`, els.map((el, i) => ({ el, ...at(boxes[i]) })));
+  shift(app, `align ${side}`, items.flatMap((i) => i.els.map((el) => ({ el, ...at(i.b) }))));
 }
 
 // the elements spaced evenly along an axis, with the first and the last of them kept in place, or
 // put at the edges of the slide with Align to Slide, as in PowerPoint. one element is spaced
 // evenly across the slide, i.e. centered on it, since PowerPoint aligns one object to the slide
 function distribute(app: App, axis: 'x' | 'y'): void {
-  const els = targetsOf(app);
-  const items = els.map((el) => ({ el, b: boxOf(app, el) }));
+  const items = objects(app);
   const start = (b: Box) => (axis === 'x' ? b.left : b.top);
   const size = (b: Box) => (axis === 'x' ? b.width : b.height);
   items.sort((a, b) => start(a.b) - start(b.b));
-  const ref = toSlideRef(els) ? slideBox(app) : union(items.map((i) => i.b));
+  const ref = toSlideRef(items.length) ? slideBox(app) : union(items.map((i) => i.b));
   const total = items.reduce((s, i) => s + size(i.b), 0);
   const one = items.length === 1;
   const gap = one ? 0 : (size(ref) - total) / (items.length - 1);
   let at = start(ref) + (one ? (size(ref) - total) / 2 : 0);
-  const moves = items.map((i) => {
+  const moves = items.flatMap((i) => {
     const d = at - start(i.b);
     at += size(i.b) + gap;
-    return { el: i.el, dx: axis === 'x' ? d : 0, dy: axis === 'y' ? d : 0 };
+    return i.els.map((el) => ({ el, dx: axis === 'x' ? d : 0, dy: axis === 'y' ? d : 0 }));
   });
   shift(app, `distribute ${axis === 'x' ? 'horizontally' : 'vertically'}`, moves);
 }
 
 const canDistribute = (app: App) => {
-  const n = targetsOf(app).length;
+  const n = objects(app).length;
   return n === 1 || n >= 3 || (reference === 'slide' && n === 2);
 };
 
@@ -181,6 +190,13 @@ export function positionOf(app: App, el: Element): { x: number; y: number } {
 // the size of an element in slide pixels, unscaled, at its picture for an image, a video, or a figure
 export const sizeOf = (el: Element): { w: number; h: number } => pictureSize(sizedTarget(el));
 
+// the height that the caption of a figure adds to its picture, in slide pixels, which the field H
+// of the figure selected as one object gives with the picture, as its frame holds both
+export function captionHeight(app: App, el: Element): number {
+  if (!el.matches(CONTAINER) || !captionsOf(el).length) return 0;
+  return Math.max(0, frameRect(el).height - pictureReach(el).height) / frameOf(app).scale;
+}
+
 export function commands(): Command[] {
   const list: Command[] = [];
   for (const [i, side] of SIDES.entries()) {
@@ -198,9 +214,9 @@ export function commands(): Command[] {
       id: `arrange.alignTo.${ref}`,
       label: ref === 'slide' ? 'Align to Slide' : 'Align to Selection',
       menu: { bar: 'Arrange', group: 'reference', order: 30 + i, submenu: 'Align' },
-      // one element is aligned to the slide, hence Align to Selection is dimmed for it, as in PowerPoint
-      enabled: (app) => ref === 'slide' || targetsOf(app).length !== 1,
-      checked: (app) => (targetsOf(app).length === 1 ? ref === 'slide' : reference === ref),
+      // one object is aligned to the slide, hence Align to Selection is dimmed for it, as in PowerPoint
+      enabled: (app) => ref === 'slide' || objects(app).length !== 1,
+      checked: (app) => (objects(app).length === 1 ? ref === 'slide' : reference === ref),
       run: (app) => {
         reference = ref;
         app.invalidate('selection');
@@ -264,7 +280,8 @@ export function commands(): Command[] {
     undoable: true,
     enabled: (app) => resizable(targetsOf(app)) || !!groupBoxOf(app, targetsOf(app)),
     run: (app, arg) => {
-      const a = (arg ?? {}) as { w?: number; h?: number };
+      const typed = (arg ?? {}) as { w?: number; h?: number };
+      const a = typed;
       const frame = groupFrameOf(app, targetsOf(app, arg));
       if (frame) {
         const all = targetsOf(app, arg);
@@ -275,25 +292,39 @@ export function commands(): Command[] {
         app.invalidate('content');
         return;
       }
-      const els = targetsOf(app, arg).map(sizedTarget);
+      const objects = targetsOf(app, arg);
+      const els = objects.map(sizedTarget);
       if (!resizable(els)) return;
-      const changes = withCorners(app, els, () => els.map((el) => {
+      const caps = objects.map((o) => captionHeight(app, o));
+      const changes = withCorners(app, els, () => els.map((el, i) => {
         const from = placeOf(el);
         const now = sizeOf(el);
-        if (isTextSized(el)) {
-          if (a.w !== undefined) writePlace(app, el, { ...from, width: Math.max(1, cssWidth(el, a.w)) });
-        } else if (el.matches(STRETCHED)) {
-          const keep = constrained(el);
-          const aspect = now.w / Math.max(1, now.h);
-          let w = now.w, h = now.h;
-          if (a.w !== undefined) [w, h] = [a.w, keep ? a.w / aspect : now.h];
-          else if (a.h !== undefined) [w, h] = [keep ? a.h * aspect : now.w, a.h];
-          const stretch = !keep || (from.height ?? null) !== null;
-          writePlace(app, el, { ...from, width: Math.max(1, w), height: stretch ? Math.max(1, h) : null });
-        } else {
-          const aspect = aspectOf(el) ?? now.w / Math.max(1, now.h);
-          const w = a.w ?? (a.h !== undefined ? a.h * aspect : now.w);
-          writePlace(app, el, { ...from, width: Math.max(1, w) });
+        const put = (a: { w?: number; h?: number }) => {
+          if (isTextSized(el)) {
+            if (a.w !== undefined) writePlace(app, el, { ...from, width: Math.max(1, cssWidth(el, a.w)) });
+          } else if (el.matches(STRETCHED)) {
+            const keep = constrained(el);
+            const aspect = now.w / Math.max(1, now.h);
+            let w = now.w, h = now.h;
+            if (a.w !== undefined) [w, h] = [a.w, keep ? a.w / aspect : now.h];
+            else if (a.h !== undefined) [w, h] = [keep ? a.h * aspect : now.w, a.h];
+            const stretch = !keep || (from.height ?? null) !== null;
+            writePlace(app, el, { ...from, width: Math.max(1, w), height: stretch ? Math.max(1, h) : null });
+          } else {
+            const aspect = aspectOf(el) ?? now.w / Math.max(1, now.h);
+            const w = a.w ?? (a.h !== undefined ? a.h * aspect : now.w);
+            writePlace(app, el, { ...from, width: Math.max(1, w) });
+          }
+        };
+        // a typed H of a figure with a caption is the height of its picture with its caption. the
+        // caption wraps anew at the new width of the picture, hence its height is measured again. a
+        // caption that leaves less than 1 px gives the picture alone the typed height
+        const h = typed.h;
+        const left = (cap: number) => (h !== undefined && h - cap >= 1 ? { ...typed, h: h - cap } : typed);
+        put(left(caps[i]));
+        if (h !== undefined && caps[i] && h - caps[i] >= 1) {
+          const again = left(captionHeight(app, objects[i]));
+          if (again.h !== h) put(again);
         }
         return { el, from, to: placeOf(el) };
       }));

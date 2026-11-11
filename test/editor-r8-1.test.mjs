@@ -381,12 +381,17 @@ for (const combo of COMBOS) {
       assert.ok(near(now.left, rest.left) && near(now.top, rest.top), `the corner across from the grip moves from ${js(rest)} to ${js(now)}`);
       assert.ok(underPicture(now), `the caption is at ${js([now.dx, now.dy])} from the picture, not under it`);
     }, sized(), { same: (text) => text.replace(/width: \d+px/g, 'width: Npx') });
-    const typed = await check(page, 'a typed W', async () => {
+    // H of the figure gives its picture with its caption, and H of the picture the picture alone
+    const tall = {};
+    const typed = await check(page, 'a typed W', async (from) => {
       await typeField(page, 'width', 300);
       assert.ok(underPicture(await pictureOf(page)), 'the caption is not kept under the picture');
+      tall[from] = await fieldValue(page, 'height');
     }, sized(300));
+    assert.equal(tall.picture, 360);
+    assert.ok(tall.figure > 360, `H of the figure is ${tall.figure}, without its caption`);
     // the picture of 1200 by 1440 px is 300 px wide at a height of 360 px
-    const last = await check(page, 'a typed H', () => typeField(page, 'height', 360), (edited) => assert.equal(edited, typed, 'a typed H does not write the width at the aspect of the picture'));
+    const last = await check(page, 'a typed H', (from) => typeField(page, 'height', tall[from]), (edited) => assert.equal(edited, typed, 'a typed H does not write the width at the aspect of the picture'));
     await saved(page, last);
   });
 

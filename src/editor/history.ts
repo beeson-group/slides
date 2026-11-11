@@ -31,13 +31,17 @@ export class History {
   // the selected elements, or null for a selection of another kind, and their selection again
   private readonly selected: () => Element[] | null;
   private readonly reselect: (els: Element[]) => void;
+  // read at the start of a transaction, the function that shows its slide again before its undo and
+  // its redo, as Keynote and PowerPoint show the slide of an undone change
+  private readonly view: () => (() => void) | null;
 
-  constructor(options: { snapshot(host: Element): string; restore(host: Element, content: string): Promise<void>; onChange(): void; selected?(): Element[] | null; reselect?(els: Element[]): void }) {
+  constructor(options: { snapshot(host: Element): string; restore(host: Element, content: string): Promise<void>; onChange(): void; selected?(): Element[] | null; reselect?(els: Element[]): void; view?(): (() => void) | null }) {
     this.snapshot = options.snapshot;
     this.restore = options.restore;
     this.onChange = options.onChange;
     this.selected = options.selected ?? (() => null);
     this.reselect = options.reselect ?? (() => {});
+    this.view = options.view ?? (() => null);
   }
 
   get canUndo(): boolean {
@@ -93,6 +97,7 @@ export class History {
   async transact<T>(label: string, fn: () => T | Promise<T>): Promise<T> {
     if (this.open) return await fn();
     const entries: Entry[] = [];
+    const show = this.view();
     this.open = entries;
     this.typing = null;
     try {
@@ -104,9 +109,11 @@ export class History {
         const entry: Entry = {
           label,
           undo: async () => {
+            show?.();
             for (const e of [...entries].reverse()) await e.undo();
           },
           redo: async () => {
+            show?.();
             for (const e of entries) await e.redo();
           },
         };

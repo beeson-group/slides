@@ -121,6 +121,13 @@ const pictureBox = (page, selector) => page.evaluate(`(() => {
   return { left: (b.left - sr.left) / k, top: (b.top - sr.top) / k, width: b.width / k, height: b.height / k };
 })()`);
 
+// the height in slide px that the caption of the figure of ZONE_IMG adds to its picture, which the
+// field H of the figure selected as one object gives with the picture, as its frame holds both
+async function captionBand(page) {
+  const pic = await pictureBox(page, ZONE_IMG), cap = await slideBox(page, '.reveal section.present .zone > figcaption');
+  return Math.max(pic.top + pic.height, cap.top + cap.height) - Math.min(pic.top, cap.top) - pic.height;
+}
+
 // the Arrange pane of the Format tab shown, and the values of its fields W and H
 async function arrange(page) {
   if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
@@ -196,7 +203,8 @@ for (const platform of PLATFORMS) {
     const pic = await pictureBox(page, ZONE_IMG);
     const box = await slideBox(page, ZONE_IMG);
     assert.ok(box.height - pic.height > 40, 'the picture fills the box of the image, which this test needs to tell them apart');
-    assert.deepEqual([Number(fields.w), Number(fields.h)], [Math.round(pic.width), Math.round(pic.height)], `W and H are ${fields.w} and ${fields.h}, and the picture is ${Math.round(pic.width)} by ${Math.round(pic.height)}`);
+    const band = await captionBand(page);
+    assert.deepEqual([Number(fields.w), Number(fields.h)], [Math.round(pic.width), Math.round(pic.height + band)], `W and H are ${fields.w} and ${fields.h}, and the picture is ${Math.round(pic.width)} by ${Math.round(pic.height)} with a caption of ${Math.round(band)}`);
     assert.equal(await render(page), page.source, 'the pane writes into the file');
     assert.deepEqual(errors(page), []);
   });
@@ -462,19 +470,20 @@ for (const platform of PLATFORMS) {
     assert.equal(await fitOf(page, ZONE_IMG), 'fill', 'the stretched picture is fitted in its box, not stretched to it');
     let edited = await render(page);
     assert.match(edited, IMG_STYLE('width: 500px; height: 720px(; translate: [^"]+)?'), 'the width and the height are not written on the image');
-    assert.deepEqual(await sizeFields(page), { w: '500', h: '720', wOff: false, hOff: false });
+    assert.deepEqual(await sizeFields(page), { w: '500', h: String(Math.round(720 + (await captionBand(page)))), wOff: false, hOff: false });
     await roundTrip(page, edited);
 
-    // the field H with the switch off sets the height alone
+    // the field H with the switch off sets the height alone, of the picture with its caption
     page = await editor(platform);
     await selectZoneFigure(page);
     await arrange(page);
     await toggleConstrain(page);
     await setField(page, 'height', 400);
     box = await slideBox(page, ZONE_IMG);
-    assert.ok(near(box.width, 600) && near(box.height, 400), `the image of height 400 is drawn at ${Math.round(box.width)} by ${Math.round(box.height)}`);
+    const band = await captionBand(page);
+    assert.ok(near(box.width, 600) && near(box.height + band, 400), `the image of a figure of height 400 is drawn at ${Math.round(box.width)} by ${Math.round(box.height)} over a caption of ${Math.round(band)}`);
     edited = await render(page);
-    assert.match(edited, IMG_STYLE('width: 600px; height: 400px(; translate: [^"]+)?'));
+    assert.match(edited, IMG_STYLE('width: 600px; height: \\d+px(; translate: [^"]+)?'));
     await roundTrip(page, edited);
     assert.deepEqual(errors(page), []);
   });
@@ -510,6 +519,9 @@ for (const platform of PLATFORMS) {
     await frames(page);
     box = await slideBox(page, ZONE_IMG);
     assert.ok(near(box.width / box.height, aspect, 0.01), `the grip e of a stretched image changes its aspect from ${aspect.toFixed(3)} to ${(box.width / box.height).toFixed(3)}`);
+    // the fields of the picture selected inside its figure give the picture alone
+    await click(page, ZONE_IMG);
+    await frames(page);
     await setField(page, 'width', 200);
     box = await slideBox(page, ZONE_IMG);
     assert.ok(near(box.width, 200) && near(box.height, 200 / aspect), `the field W of a stretched image draws it at ${Math.round(box.width)} by ${Math.round(box.height)}`);

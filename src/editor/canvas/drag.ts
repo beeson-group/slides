@@ -17,7 +17,16 @@ import { injectStyle } from '../ui/dom.ts';
 
 const CSS = `
 html.beeson-dragging.beeson-copying, html.beeson-dragging.beeson-copying * { cursor: copy !important; }
+html.beeson-sizing, html.beeson-sizing * { cursor: var(--beeson-grip-cursor) !important; user-select: none !important; }
 `;
+
+// the cursor of a held grip kept over the page while it is dragged, as the resize cursor of a held
+// handle of Keynote and PowerPoint stays through the drag
+function holdGrip(grip: HTMLElement): void {
+  view.held = grip;
+  document.documentElement.style.setProperty('--beeson-grip-cursor', getComputedStyle(grip).cursor);
+  document.documentElement.classList.add('beeson-sizing');
+}
 
 // a drag shorter than this, in screen pixels, is a click
 const CLICK = 3;
@@ -178,6 +187,18 @@ export function turnersOf(app: App, els: Element[]): Turner[] | null {
   });
 }
 
+// the elements of a multiple selection outside any group, each turned about its own center by a
+// drag of the rotate handle, as PowerPoint turns the objects of a selection, or null when one of
+// them is in a group or cannot be turned
+export function apartOf(app: App, els: Element[]): Turner[] | null {
+  const top = els.filter((el) => !els.some((o) => o !== el && o.contains(el)) && el.getClientRects().length);
+  if (top.length < 2 || !top.every((el) => !groupOf(el) && turnable(el))) return null;
+  return top.map((el) => {
+    const spin = spinOf(el);
+    return { el, spin, angle: angleOf(el), center: seenCenter(app, spin) };
+  });
+}
+
 // the elements whose places a turn of turners changes
 export const turnedEls = (turners: Turner[]): Element[] => [...new Set(turners.flatMap((t) => [t.el, t.spin]))];
 
@@ -201,12 +222,13 @@ function cornerOf(app: App, el: Element): { x: number; y: number } {
   return { x: b.left, y: b.top };
 }
 
-// the changes of the sizes of els made by change, with the upper left corner of each image or video
-// kept where it is, as a typed width of Keynote and PowerPoint keeps it. the layout of a zone or a
-// plate puts a picture with a width at another place, hence the offset of its figure is changed, as
-// a resize by a grip changes it
+// the changes of the sizes of els made by change, with the upper left corner of each picture kept
+// where it is, as a typed width of Keynote and PowerPoint keeps it. the layout of a zone or a plate
+// puts a picture with a width at another place, and the theme pins the QR code of a closing slide
+// by its lower right corner, hence the offset of its object is changed, as a resize by a grip
+// changes it
 export function withCorners(app: App, els: Element[], change: () => Change[]): Change[] {
-  const marks = els.filter((el) => el.matches(STRETCHED) && el.getClientRects().length).map((el) => ({ el, carrier: objectOf(app, el), at: cornerOf(app, el) }));
+  const marks = els.filter((el) => el.matches(RESIZABLE) && el.getClientRects().length).map((el) => ({ el, carrier: objectOf(app, el), at: cornerOf(app, el) }));
   const from = new Map(marks.map((m) => [m.carrier, placeOf(m.carrier)]));
   const changes = change();
   const k = frameOf(app).scale;
@@ -266,8 +288,10 @@ type Press = {
   picture?: Box;
   // whether the grips of a group are pressed, which scale all its members about one anchor
   group?: boolean;
-  // the members of a group turned by its rotate handle about the center of its frame
+  // the members of a group turned by its rotate handle about the center of its frame, or with
+  // apart set the elements of a multiple selection, each about its own center
   turners?: Turner[];
+  apart?: boolean;
   // the angle at the press of the element turned, or of the first member of a group, and the
   // element whose offset keeps the center of a turned picture, i.e. its figure
   was?: number;
@@ -452,7 +476,7 @@ export function install(app: App): void {
     if (target === frames.rotor) {
       const el = sel.only();
       const box = frames.groupBox();
-      const turners = !el && box ? turnersOf(app, sel.elements()) : null;
+      const turners = el ? null : box ? turnersOf(app, sel.elements()) : apartOf(app, sel.elements());
       // the picture of a figure takes the angle, from the figure and from the picture selected
       const spin = el ? spinOf(el) : null;
       const carrier = spin ? objectOf(app, spin) : null;
@@ -468,6 +492,11 @@ export function install(app: App): void {
         p.turners = turners;
         p.was = turners[0].angle;
         view.turn = { box, deg: frames.groupTurn() };
+      } else if (turners) {
+        // the handle is drawn on the frame of the first element, which the angle is read from
+        center = turners[0].center;
+        p = start('rotate', ev, turners[0].el, turnedEls(turners), null);
+        Object.assign(p, { turners, apart: true, was: turners[0].angle });
       } else {
         center = seenCenter(app, spin as Element);
         p = start('rotate', ev, spin, [...new Set([spin as Element, carrier as Element])], null);
@@ -495,8 +524,7 @@ export function install(app: App): void {
       const p = Object.assign(start('resize', ev, followers[0].el, followers.map((m) => m.el), null), { handle: (grip as HTMLElement).dataset.handle as Handle, followers, group: true, was: frames.groupTurn() });
       for (const m of followers.flatMap((m) => m.sized)) if (!p.from.has(m)) p.from.set(m, placeOf(m));
       p.base = toSlide(f, frames.groupBox() ?? union(followers.map((m) => visualRect(m.pic))));
-      view.held = grip as HTMLElement;
-      document.documentElement.classList.add('beeson-resizing');
+      holdGrip(grip as HTMLElement);
       return;
     }
     if (grip && !grip.classList.contains('locked')) {
@@ -524,8 +552,7 @@ export function install(app: App): void {
       for (const m of [...sized, ...followers.flatMap((m) => m.sized)]) if (!p.from.has(m)) p.from.set(m, placeOf(m));
       p.picture = toSlide(f, p.framed ? pictureReach(p.framed) : visualRect(pic));
       p.base = toSlide(f, p.framed ? frameRect(p.framed) : visualRect(pic));
-      view.held = grip as HTMLElement;
-      document.documentElement.classList.add('beeson-resizing');
+      holdGrip(grip as HTMLElement);
       return;
     }
     if (target === frames.handle) {
@@ -642,7 +669,7 @@ export function install(app: App): void {
     if (p.turners) {
       // the angle of a group is that of its first member, as in the field Angle
       const by = deg - was;
-      for (const t of p.turners) turnMember(app, t, c, by, true);
+      for (const t of p.turners) turnMember(app, t, p.apart ? t.center : c, by, true);
       if (view.turn) view.turn.deg = deg;
     } else turn(app, p.els[0], p.carrier ?? p.els[0], deg, c, true);
     view.moving = p.els;
@@ -737,7 +764,9 @@ export function install(app: App): void {
     follow(p, h, after.width / at.width, after.height / at.height, o.center);
     view.moving = p.els;
     view.resizing = true;
-    view.readout = { text: wh(size.width, size.height), x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
+    // the height of a figure with a caption is that of its picture with its caption, as in the field H
+    const caption = p.framed && !upright && captionsOf(p.framed).length ? frame.height - after.height : 0;
+    view.readout = { text: wh(size.width, size.height + caption), x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     frames.draw();
     app.invalidate('content');
   };
@@ -857,7 +886,7 @@ export function install(app: App): void {
     if (!p) return;
     press = null;
     app.stage?.edgeScroll(null);
-    document.documentElement.classList.remove('beeson-dragging', 'beeson-resizing', 'beeson-rotating');
+    document.documentElement.classList.remove('beeson-dragging', 'beeson-sizing', 'beeson-rotating');
     view.moving = null;
     view.resizing = false;
     view.turn = null;

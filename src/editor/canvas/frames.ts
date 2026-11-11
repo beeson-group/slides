@@ -11,7 +11,7 @@ import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
 import { injectStyle } from '../ui/dom.ts';
 import { groupOf } from '../commands/order.ts';
-import { turnersOf } from './drag.ts';
+import { apartOf, turnersOf } from './drag.ts';
 import type { Box, Guide, Handle, Spacing } from './snap.ts';
 import { BY_ITSELF, CONTAINER, RESIZABLE, captionsOf, frameOf, frameRect, isTextSized, movableOf, orientedBox, pictureOf, scaleAt, sizedOf, toScreen, turnable as turns } from './hit.ts';
 
@@ -68,7 +68,6 @@ html.beeson-rotating, html.beeson-rotating * { cursor: grabbing !important; user
 .beeson-marquee { position: fixed; box-sizing: border-box; border: 1px solid var(--ed-select, #7048e8); background: color-mix(in srgb, var(--ed-select, #7048e8) 12%, transparent); }
 html.beeson-editing .reveal .beeson-movable:focus-visible { outline: 2px solid var(--ed-select, #7048e8); outline-offset: 6px; }
 html.beeson-dragging, html.beeson-dragging * { cursor: move !important; user-select: none !important; }
-html.beeson-resizing, html.beeson-resizing * { user-select: none !important; }
 html.beeson-band, html.beeson-band .reveal * { cursor: move; }
 html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .slides section video, html.beeson-editing .reveal .slides section .zone, html.beeson-editing .reveal .slides section .plate, html.beeson-editing .reveal .slides section .qr { cursor: move; }
 html.beeson-editing .reveal .slides section [data-locked]:is(img, video, .zone, .plate, .qr), html.beeson-editing .reveal .slides section [data-locked] :is(img, video, .qr) { cursor: default; }
@@ -125,20 +124,27 @@ export function turned(box: Box, deg: number, x: number, y: number): { x: number
 }
 
 // the frame of a group on the screen turned by deg, the angle of its first member, as Keynote
-// turns the frame of a group: the least box at this angle around the turned pictures of the
-// members and their upright captions, without its rotation about its center
+// turns the frame of a group, without its rotation about its center. each member is taken in the
+// axes of the frame at its angle to the group, about its center turned back, and its upright
+// caption is carried with it, hence a turn changes the angle of the frame and not its size, as a
+// turn of one element does (K79, P71)
 export function groupFrame(els: Element[], deg: number): Box {
   if (!deg) return groupReach(els);
-  const corners = (b: Box, d: number) => [[0, 0], [1, 0], [1, 1], [0, 1]].map(([x, y]) => turned(b, d, b.left + x * b.width, b.top + y * b.height));
+  const a = (deg * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a);
+  const back = (x: number, y: number) => ({ x: x * cos + y * sin, y: y * cos - x * sin });
   const points = els.flatMap((el) => {
     const pic = pictureOf(el), d = angleOf(el) + (pic === el ? 0 : angleOf(pic));
-    return [...corners(orientedBox(pic, scaleAt(el), d), d), ...captionsOf(el).flatMap((r) => corners(r, 0))];
+    const b = orientedBox(pic, scaleAt(el), d);
+    const at = back(b.left + b.width / 2, b.top + b.height / 2);
+    // the box of the picture at its angle to the group, and each caption at its place to the picture
+    const boxes = [{ x: at.x, y: at.y, w: b.width, h: b.height, d: d - deg }, ...captionsOf(el).map((r) => ({ x: at.x + r.left + r.width / 2 - (b.left + b.width / 2), y: at.y + r.top + r.height / 2 - (b.top + b.height / 2), w: r.width, h: r.height, d: 0 }))];
+    return boxes.flatMap(({ x, y, w, h, d }) => {
+      const c = { left: x - w / 2, top: y - h / 2, width: w, height: h };
+      return [[0, 0], [1, 0], [1, 1], [0, 1]].map(([u, v]) => turned(c, d, c.left + u * w, c.top + v * h));
+    });
   });
-  // the box of the points turned back by deg about the origin, whose center is turned by deg again
-  const a = (deg * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a);
-  const back = points.map((p) => ({ x: p.x * cos + p.y * sin, y: p.y * cos - p.x * sin }));
-  const left = Math.min(...back.map((p) => p.x)), top = Math.min(...back.map((p) => p.y));
-  const width = Math.max(...back.map((p) => p.x)) - left, height = Math.max(...back.map((p) => p.y)) - top;
+  const left = Math.min(...points.map((p) => p.x)), top = Math.min(...points.map((p) => p.y));
+  const width = Math.max(...points.map((p) => p.x)) - left, height = Math.max(...points.map((p) => p.y)) - top;
   const cx = left + width / 2, cy = top + height / 2;
   return { left: cx * cos - cy * sin - width / 2, top: cx * sin + cy * cos - height / 2, width, height };
 }
@@ -329,10 +335,12 @@ export class Frames {
       }
     });
     // the rotate handle, also while it is dragged, on one element that is turned, i.e. not locked
-    // and not a table or a range of its cells, or on a group whose every member is turned
+    // and not a table or a range of its cells, on a group whose every member is turned, or on the
+    // first frame of a multiple selection of such elements outside any group
     const rotating = document.documentElement.classList.contains('beeson-rotating');
     const turnGroup = !!this.group && (!!turn || !!turnersOf(app, selected));
-    const turnable = (turnGroup || (!!only && boxes.length === 1 && turns(only as Element))) && (!view.moving || rotating);
+    const apart = !this.group && boxes.length > 1 && !!apartOf(app, selected);
+    const turnable = (turnGroup || apart || (!!only && boxes.length === 1 && turns(only as Element))) && (!view.moving || rotating);
     this.rotor.hidden = !turnable || (!!held && held !== this.rotor);
     this.stem.hidden = !turnable || !!held;
     if (turnable) {
@@ -343,7 +351,7 @@ export class Frames {
       // the slide, hence it is pressed also where it covers a text
       const knobAt = (d: number) => turned(b, deg, cx, b.top - d);
       if (!rotating) {
-        const lines = this.linesBesides(turnGroup ? selected : [only as Element]);
+        const lines = this.linesBesides(turnGroup || apart ? selected : [only as Element]);
         const free = (d: number) => {
           const k = knobAt(d);
           return !lines.some((r) => k.x + KNOB > r.left && k.x - KNOB < r.right && k.y + KNOB > r.top && k.y - KNOB < r.bottom);
