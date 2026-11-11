@@ -378,3 +378,64 @@ export function install(app: App): void {
     }, true);
   }
 }
+
+// the text nodes of slide that hold more than white space, each with its block, i.e. without the
+// indent between the blocks and items that a list style writes
+function inked(slide: Element): { text: Text; block: Element | null }[] {
+  const out: { text: Text; block: Element | null }[] = [];
+  const walker = document.createTreeWalker(slide, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    const el = n.parentElement;
+    if (!/\S/.test((n as Text).data) || el?.closest('mjx-container, aside.notes')) continue;
+    out.push({ text: n as Text, block: el?.closest('p, li, h1, h2, h3, h4, h5, h6, dt, dd, td, th, figcaption, .caption, .foot, pre, blockquote') ?? null });
+  }
+  return out;
+}
+
+// the place of the point (node, offset) counted over the inked text of slide, with one more at the
+// border of two blocks, which a change of the blocks around the text keeps, e.g. Dashes on a
+// paragraph or Paragraphs on a list
+function countTo(slide: Element, node: Node, offset: number): number {
+  const point = document.createRange();
+  point.setStart(node, offset);
+  let n = 0;
+  let block: Element | null | undefined;
+  for (const t of inked(slide)) {
+    if (block !== undefined && t.block !== block) n += 1;
+    block = t.block;
+    if (t.text === node) return n + offset;
+    if (point.comparePoint(t.text, t.text.length) > 0) return n;
+    n += t.text.length;
+  }
+  return n;
+}
+
+function pointOf(slide: Element, n: number): [Node, number] | null {
+  let block: Element | null | undefined;
+  let left = n;
+  for (const t of inked(slide)) {
+    if (block !== undefined && t.block !== block) left -= 1;
+    block = t.block;
+    if (left < 0) return [t.text, 0];
+    if (left <= t.text.length) return [t.text, left];
+    left -= t.text.length;
+  }
+  return null;
+}
+
+// the text selection of the current slide as a function that selects it again, after the blocks
+// that hold it were made again, e.g. by an undo of a list style. null where it is not in the slide
+export function mark(app: App): (() => void) | null {
+  const p = places(app);
+  const slide = app.current();
+  if (!p || !slide || !p.every(([host]) => slide.contains(host) && !host.closest('aside.notes'))) return null;
+  const [a, f] = p.map(([host, at]) => countTo(slide, ...pointAt(host, at)));
+  return () => {
+    const ends = [a, f].map((n) => pointOf(slide, n));
+    const at = ends.map((e) => {
+      const host = e && app.hostOf(elementOf(e[0]));
+      return host ? ([host, offsetIn(host, e![0], e![1])] as Place) : null;
+    });
+    if (at[0] && at[1]) select(app, at[0], at[1]);
+  };
+}

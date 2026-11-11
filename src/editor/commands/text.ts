@@ -197,7 +197,12 @@ export function install(app: App): void {
       enabled: (a) => (notes.notesListKind(a) ? notes.canSetNotesList(a, kind) : blocks.canSetList(a, kind) || carry.canList(a)),
       why: (a) => blocks.listWhy(a, LIST_LABELS[kind]),
       checked: (a) => (notes.notesListKind(a) ?? (carry.canList(a) ? carry.listOf(a) : blocks.listKind(a))) === kind,
-      run: (a) => (notes.notesListKind(a) ? notes.setNotesList(a, kind) : carry.canList(a) ? carry.chooseList(a, kind) : blocks.setList(a, kind)),
+      // an undo and a redo select the text again, as an undo of a format does in Keynote
+      run: async (a) => {
+        const kept = a.history.keep(() => flow.mark(a));
+        await (notes.notesListKind(a) ? notes.setNotesList(a, kind) : carry.canList(a) ? carry.chooseList(a, kind) : blocks.setList(a, kind));
+        kept();
+      },
     }));
   // Start at of the Bullets and Numbering dialog of PowerPoint, typed into the Text pane as
   // { start: n }

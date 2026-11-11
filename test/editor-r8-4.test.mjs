@@ -160,12 +160,12 @@ for (const platform of PLATFORMS) {
     const bar = await menuBarRows(page);
     assert.ok(bar.some((b) => b.command === 'arrange.unlock' && b.keys), 'Arrange > Unlock is not listed with its keys');
     const found = [];
-    const context = async (at, where) => {
+    const context = async (at, where, keys = bar) => {
       await click(page, at, { button: 'right' });
       await frames(page);
       const rows = await page.evaluate(ROWS);
       assert.ok(rows.length > 2, `the context menu of ${where} is not open`);
-      found.push(...differences(bar, rows, where));
+      found.push(...differences(keys, rows, where));
       await press(page, 'Escape');
       await frames(page);
       return rows;
@@ -177,12 +177,17 @@ for (const platform of PLATFORMS) {
     const locked = await context(IMAGE, 'a locked element');
     assert.ok(locked.some((r) => r.label === 'Unlock'), 'the menu of a locked element does not list Unlock');
     await context('.reveal section.present > p', 'a text');
-    await context('.beeson-edit-nav .row', 'a slide of the navigator');
+    // a menu lists a key where it runs its command, hence the menus of the navigator are compared
+    // with the menu bar opened in the navigator, where Delete Slide takes its key
+    await click(page, '.beeson-edit-nav .row');
+    await frames(page);
+    const navBar = await menuBarRows(page);
+    await context('.beeson-edit-nav .row', 'a slide of the navigator', navBar);
     const canvas = await boxOf(page, '.beeson-edit-canvas');
     await context({ x: canvas.left + 12, y: canvas.top + 12 }, 'the canvas');
     const nav = await boxOf(page, '.beeson-edit-nav');
     await page.evaluate(`window.BeesonEditorShell.context('navigator', ${nav.left + 20}, ${nav.bottom - 20})`);
-    found.push(...differences(bar, await page.evaluate(ROWS), 'the navigator'));
+    found.push(...differences(navBar, await page.evaluate(ROWS), 'the navigator'));
     await press(page, 'Escape');
     assert.deepEqual(found, []);
     assert.deepEqual(errors(page), []);

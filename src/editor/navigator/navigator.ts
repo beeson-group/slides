@@ -239,6 +239,12 @@ export class Navigator implements Pane {
     return this.on;
   }
 
+  // whether the navigator is drawn, i.e. on and not hidden for the width of the window beside the
+  // inspector
+  get seen(): boolean {
+    return this.on && this.pane.getClientRects().length > 0;
+  }
+
   useThumbs(thumbs: Thumbs): void {
     this.thumbs = thumbs;
     this.thumbs.setHosts(new Map([...this.rows].map(([s, r]) => [s, r.pic])));

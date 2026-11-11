@@ -6,7 +6,7 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { CONTAINER, RESIZABLE, STRETCHED, aspectOf, captionsOf, pictureReach, constrained, cssWidth, frameOf, frameRect, isTextSized, kindOf, movableOf, objectsOf, orientedBox, pictureOf, pictureSize, sizedOf, snapBoxOf, toSlide } from '../canvas/hit.ts';
+import { CONTAINER, RESIZABLE, STRETCHED, aspectOf, captionsOf, pictureReach, constrained, cssWidth, frameOf, frameRect, isTextSized, kindOf, movableOf, objectsOf, orientedBox, pictureOf, pictureSize, sizedOf, snapBoxOf, toSlide, unturnedRect } from '../canvas/hit.ts';
 import type { Box } from '../canvas/snap.ts';
 import { angleOf, locked, placeOf, record, withCorners, writePlace, type Change, type Place } from '../canvas/drag.ts';
 import { groupFrame, groupReach, turned } from '../canvas/frames.ts';
@@ -191,10 +191,12 @@ export function positionOf(app: App, el: Element): { x: number; y: number } {
 export const sizeOf = (el: Element): { w: number; h: number } => pictureSize(sizedTarget(el));
 
 // the height that the caption of a figure adds to its picture, in slide pixels, which the field H
-// of the figure selected as one object gives with the picture, as its frame holds both
+// of the figure selected as one object gives with the picture, as its frame holds both. it is taken
+// before the picture is turned, hence it is the same at every angle
 export function captionHeight(app: App, el: Element): number {
   if (!el.matches(CONTAINER) || !captionsOf(el).length) return 0;
-  return Math.max(0, frameRect(el).height - pictureReach(el).height) / frameOf(app).scale;
+  const { box, picture } = unturnedRect(el);
+  return Math.max(0, box.height - picture.height) / frameOf(app).scale;
 }
 
 export function commands(): Command[] {

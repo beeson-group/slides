@@ -124,6 +124,8 @@ export interface Pane {
   readonly pane: HTMLElement;
   readonly button: HTMLButtonElement;
   readonly shown: boolean;
+  // nav.ts: whether the pane is drawn, which the width of the window can prevent while it is shown
+  readonly seen?: boolean;
   toggle(): void;
   refresh(): void;
 }

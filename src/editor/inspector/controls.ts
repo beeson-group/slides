@@ -436,7 +436,15 @@ export function numberField(app: App, o: NumberOptions): Control & { input: HTML
     input.disabled = up.disabled = down.disabled = !on;
     el.classList.toggle('off', !on);
     if (o.why) el.title = up.title = down.title = on ? '' : o.why();
-    if (document.activeElement === input) return;
+    // a focused field follows a change made elsewhere, e.g. an undo, unless a value is typed into it
+    if (document.activeElement === input) {
+      const v = o.value();
+      if (round(typed()) !== shown || v === null || round(v) === shown) return;
+      const all = input.selectionStart === 0 && input.selectionEnd === input.value.length;
+      show(v);
+      if (all) input.select();
+      return;
+    }
     show(o.value());
   };
   sync();
