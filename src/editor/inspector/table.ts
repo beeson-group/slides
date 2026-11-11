@@ -41,7 +41,7 @@ export function tablePane(app: App, run: Run): Control[] {
       button(app, run, { command: 'table.merge', text: 'Merge' }),
       button(app, run, { command: 'table.unmerge', text: 'Unmerge' }),
     ])]),
-    section('Header', [checkbox(app, run, 'table.header', 'Header row, written as th')]),
+    section('Header', [checkbox(app, run, 'table.header', 'Header Row')]),
     section('Rows', [
       row([segmented(app, run, [
         { command: 'table.rowAbove', text: 'Above', title: 'Add Row Above' },
