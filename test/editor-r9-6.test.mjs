@@ -451,3 +451,20 @@ for (const platform of PLATFORMS) {
     await roundTrip(page);
   });
 }
+
+// the edge rule of Bold and Italic (finding text-lists-find-1) is not the rule of a link: Mod+K with
+// the caret at the end of a word links the word, as it did before
+for (const platform of PLATFORMS) {
+  test(`Mod+K with the caret at the end of a word links the word (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, await pointOf(page, PARA, 'figure', 2));
+    await caretAt(page, PARA, 'template', 8);
+    await press(page, 'Mod+K');
+    await page.waitFor(`document.querySelector('dialog.beeson-edit-link[open]') !== null`);
+    await type(page, 'example.com');
+    await press(page, 'Enter');
+    await frames(page);
+    assert.ok((await render(page)).includes('the <a href="https://example.com">template</a>.'), 'the word is not linked');
+    await roundTrip(page);
+  });
+}
