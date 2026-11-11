@@ -449,3 +449,68 @@ for (const platform of PLATFORMS) {
     }
   });
 }
+
+// a trusted press of the command modifier with a letter, sent with the editing command that the
+// browser makes of it. Chrome on a Mac turns ⌘X into Cut in its Edit menu, and Chrome on Windows
+// and Linux turns Ctrl+X into Cut in the page, and over the DevTools protocol a key without its
+// command is not turned into one on a Mac
+async function pressEdit(page, platform, letter, command) {
+  const base = { key: letter, code: `Key${letter.toUpperCase()}`, windowsVirtualKeyCode: letter.toUpperCase().charCodeAt(0), modifiers: platform === 'mac' ? 4 : 2 };
+  await page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...base, commands: [command] });
+  await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+  await page.evaluate('new Promise((d) => setTimeout(d, 100))');
+  await frames(page);
+}
+
+const EMPTY = 4;
+const count = (text, part) => text.split(part).length - 1;
+
+for (const platform of PLATFORMS) {
+  for (const mode of MODES) {
+    test(`Cut, Copy, and Paste of a figure by their keys, on ${platform} in ${mode} mode`, async (t) => {
+      for (const n of [ZONE_PAIR, PLATE_ONE]) {
+        const page = await load(t, platform, mode, n);
+        const where = `${NAMES[n]} on ${platform} in ${mode} mode`;
+        await page.send('Browser.grantPermissions', { origin: server.origin, permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] });
+        await pick(page);
+        const caption = n === ZONE_PAIR ? 'A caption under the pair.' : 'A caption of the one image in a plate.';
+        const img = n === ZONE_PAIR ? '<img class="for-dark"' : '<img src="../../demo/figure-light.png" alt="A plate in both modes">';
+
+        await pressEdit(page, platform, 'x', 'cut');
+        const cut = await render(page);
+        assert.equal(count(slideOf(cut, n), img), 0, `the key of Cut leaves ${where}`);
+        assert.deepEqual(await selected(page), [], `the key of Cut leaves ${where} selected`);
+        await undo(page);
+        await frames(page);
+        await byteExact(page);
+        assert.deepEqual(await selected(page), [page.figure], `an undo of a Cut of ${where} does not select it again`);
+        await redo(page);
+        await frames(page);
+        assert.equal(await render(page), cut);
+        await undo(page);
+        await frames(page);
+
+        await pressEdit(page, platform, 'c', 'copy');
+        await byteExact(page);
+        await page.evaluate(`Reveal.slide(${EMPTY})`);
+        await frames(page);
+        await exec(page, 'selection.clear');
+        await pressEdit(page, platform, 'v', 'paste');
+        const pasted = await render(page);
+        assert.equal(count(slideOf(pasted, EMPTY), img), 1, `the keys of Copy and Paste do not put ${where} on another slide`);
+        assert.equal(count(slideOf(pasted, EMPTY), caption), n === ZONE_PAIR ? 1 : 0, `the keys of Copy and Paste of ${where} do not bring the caption that it holds`);
+        // a plate pasted onto a content slide is made a zone
+        assert.deepEqual(await selected(page), [n === ZONE_PAIR ? 'figure.zone' : 'div.zone'], `the figure pasted from ${where} is not selected`);
+        await roundTrip(page, pasted);
+        assert.deepEqual(errors(page), []);
+        await page.close();
+      }
+    });
+  }
+}
+
+// the text of slide n
+function slideOf(text, n) {
+  const at = [...text.matchAll(/<section[ >]/g)][n].index;
+  return text.slice(at, text.indexOf('</section>', at));
+}
