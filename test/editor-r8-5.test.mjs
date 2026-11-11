@@ -611,3 +611,55 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// the items of the open context menu, each with its text and whether it is dimmed
+const menuItems = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item')].filter((i) => i.getClientRects().length).map((i) => ({ text: i.textContent.trim().replace(/\\s+/g, ' '), off: i.classList.contains('disabled') || i.getAttribute('aria-disabled') === 'true' }))`);
+
+// a click on the item of the open context menu whose text starts with name
+async function chooseItem(page, name) {
+  const at = await page.evaluate(`(() => {
+    const i = [...document.querySelectorAll('.beeson-edit-menu .item')].find((i) => i.getClientRects().length && i.textContent.trim().startsWith(${js(name)}));
+    if (!i) return null;
+    const r = i.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  })()`);
+  assert.ok(at, `the context menu does not have an item ${name}`);
+  await click(page, at);
+  await frames(page);
+}
+
+for (const platform of PLATFORMS) {
+  for (const mode of MODES) {
+    test(`Lock and Unlock of the context menu of a figure and of its picture are written on the figure, on ${platform} in ${mode} mode`, async (t) => {
+      for (const n of [ZONE_PAIR, PLATE_PAIR]) {
+        for (const from of ['figure', 'picture']) {
+          const page = await load(t, platform, mode, n);
+          await pick(page, from);
+          await click(page, IMG, { button: 'right' });
+          await frames(page);
+          assert.deepEqual(await selected(page), [from === 'figure' ? page.parts.figure : page.parts.pic], 'a right click changes the selection');
+          await chooseItem(page, 'Lock');
+          const edited = await render(page);
+          const tag = n === ZONE_PAIR ? '<figure class="zone" data-locked>' : '<div class="plate" data-locked>';
+          assert.equal(edited, SOURCE.replace(tag.replace(' data-locked', ''), tag), `Lock of the context menu of ${NAMES[n]} from the ${from} is not written on the figure alone`);
+          // the menu of the locked figure lists Unlock with its key, and dims what changes the figure
+          await click(page, IMG, { button: 'right' });
+          await frames(page);
+          const items = await menuItems(page);
+          const unlock = items.find((i) => i.text.startsWith('Unlock'));
+          assert.ok(unlock && !unlock.off, 'Unlock is missing or dimmed in the menu of a locked figure');
+          assert.equal(unlock.text, platform === 'mac' ? 'Unlock⌥⌘L' : 'UnlockCtrl+Shift+L');
+          for (const name of ['Cut', 'Delete', 'Bring to Front', 'Flip Horizontal']) assert.ok(items.find((i) => i.text.startsWith(name))?.off, `${name} is live in the menu of a locked figure`);
+          for (const name of ['Copy', 'Duplicate']) assert.equal(items.find((i) => i.text.startsWith(name))?.off, false, `${name} is dimmed in the menu of a locked figure`);
+          await chooseItem(page, 'Unlock');
+          await byteExact(page);
+          await undo(page);
+          await frames(page);
+          assert.equal(await render(page), edited);
+          await roundTrip(page, edited);
+          assert.deepEqual(errors(page), []);
+        }
+      }
+    });
+  }
+}
