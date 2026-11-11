@@ -302,3 +302,42 @@ for (const platform of PLATFORMS) {
     await roundTrip(page);
   });
 }
+
+// the k characters of needle from its start selected in the text node that holds it, its block
+// focused
+const selectText = (page, selector, needle, k = needle.length) => page.evaluate(`(() => {
+  const el = ${find(selector, needle)};
+  const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  for (let n = w.nextNode(); n; n = w.nextNode()) {
+    const i = n.data.indexOf(${js(needle)});
+    if (i < 0) continue;
+    el.closest('[contenteditable="true"]').focus();
+    return void getSelection().setBaseAndExtent(n, i, n, i + ${k});
+  }
+})()`);
+
+// finding dialogs-undo-a11y-3: an undo or a redo of a format put the caret at the end of the
+// change, where an undo of a move of an element selects the element again
+for (const platform of PLATFORMS) {
+  for (const [name, run] of [
+    ['Bold', (page) => press(page, 'Mod+B')],
+    ['Italic', (page) => press(page, 'Mod+I')],
+    ['a text color', (page) => page.evaluate(`window.BeesonEditor.exec('text.tone.accent')`)],
+  ]) {
+    test(`an undo and a redo of ${name} on a word select the word again (${platform})`, async (t) => {
+      const page = await load(t, platform);
+      await click(page, await pointOf(page, PARA, 'figure', 2));
+      await selectText(page, PARA, 'figure');
+      await run(page);
+      assert.equal((await selection(page)).text, 'figure');
+      for (const step of ['undo', 'redo']) {
+        await caretAt(page, PARA, 'Export', 0);
+        await page.evaluate(`window.BeesonEditor.${step}()`);
+        await frames(page);
+        const s = await selection(page);
+        assert.equal(s.text, 'figure', `after the ${step}, "${s.text}" is selected, with "${s.before}" before the caret`);
+      }
+      await roundTrip(page);
+    });
+  }
+}
