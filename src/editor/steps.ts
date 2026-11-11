@@ -583,7 +583,7 @@ ${P} .foot { margin: 0; padding: 8px 12px 10px; border-top: 1px solid var(--ed-l
 .beeson-steps-ghost .meta { color: var(--ed-muted); font-size: 11px; }
 html.beeson-dragging-step, html.beeson-dragging-step * { cursor: grabbing !important; }
 .beeson-badges { position: fixed; inset: 0; z-index: 52; pointer-events: none; }
-.beeson-badge { position: absolute; transform: translate(-50%, -50%); min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box; border: 1px solid rgba(0, 0, 0, 0.25); border-radius: 5px; background: var(--ed-guide, #e0651f); color: #fff; font: 600 12px/18px var(--ed-font, system-ui, sans-serif); font-variant-numeric: tabular-nums; text-align: center; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); }
+.beeson-badge { position: absolute; transform: translate(-50%, -50%); min-width: 20px; height: 20px; padding: 0 5px; box-sizing: border-box; border: 1px solid rgba(0, 0, 0, 0.25); border-radius: 5px; background: #b8470c; color: #fff; font: 600 12px/18px var(--ed-font, system-ui, sans-serif); font-variant-numeric: tabular-nums; text-align: center; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2); }
 .beeson-badge.on { background: var(--ed-select, #8a2be2); }
 html.beeson-editing .reveal .beeson-hover { outline: 2px solid var(--ed-guide, #f80) !important; outline-offset: 6px; }
 html.beeson-previewing .beeson-badges, html.beeson-previewing .beeson-overlay, html.beeson-previewing .beeson-frame, html.beeson-previewing .beeson-handle { visibility: hidden !important; }

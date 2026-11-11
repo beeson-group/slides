@@ -101,6 +101,13 @@ html.beeson-no-toolbar .beeson-edit-top { display: none; }
 .beeson-edit-top.show-text .tb > .beeson-icon { display: none; }
 .beeson-edit-top.show-text .tb .label { display: inline; font-size: 12px; }
 .beeson-edit-top.customizing .tb { cursor: grab; }
+.beeson-edit-top.customizing.compact.show-text .tb > .beeson-icon { display: inline-block; }
+.beeson-edit-top.customizing.compact.show-text .tb .label { display: none; }
+.beeson-edit-top.customizing.compact.show-text .tb { min-width: 36px; }
+.beeson-edit-top.tight { padding: 0 4px; gap: 0; }
+.beeson-edit-top.customizing.tight .tb { min-width: 28px; padding: 3px 2px 2px; }
+.beeson-edit-top.tight .sep { width: 7px; }
+.beeson-edit-top.tight .space { flex-basis: 8px; min-width: 8px; }
 .beeson-edit-top .sep { flex: none; align-self: center; width: 13px; height: 28px; background: linear-gradient(var(--ed-line), var(--ed-line)) center / 1px 100% no-repeat; }
 .beeson-edit-top .space { flex: 1 1 24px; min-width: 24px; align-self: stretch; margin: 6px 0; border: 1px dashed var(--ed-line); border-radius: 6px; }
 .beeson-edit-top .sep:focus-visible, .beeson-edit-top .space:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: -2px; }
@@ -334,7 +341,7 @@ export function install(app: App): void {
       top.replaceChildren(...parts);
     };
     const over = () => top.isConnected && top.scrollWidth > top.clientWidth + 0.5;
-    top.classList.remove('compact');
+    top.classList.remove('compact', 'tight');
     draw(new Set());
     const fold = (order: number[]) => {
       const folded = new Set<number>();
@@ -353,11 +360,14 @@ export function install(app: App): void {
     update();
   }
 
-  // the items are not folded into » while they are dragged, hence they are drawn as icons
-  // where their labels do not fit the window
+  // the items are not folded into » while they are dragged, hence they are drawn as icons, also
+  // in Text Only, where their labels do not fit the window, and closer together where the icons
+  // do not fit either
   function fit(): void {
-    top.classList.remove('compact');
-    if (top.scrollWidth > top.clientWidth + 0.5) top.classList.add('compact');
+    top.classList.remove('compact', 'tight');
+    const over = () => top.scrollWidth > top.clientWidth + 0.5;
+    if (over()) top.classList.add('compact');
+    if (over()) top.classList.add('tight');
   }
 
   // the state of each button, and the one tab stop on the first button that can be pressed

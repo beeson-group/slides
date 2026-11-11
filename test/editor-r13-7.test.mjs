@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { contrast, GROUND, press } from './helpers/editor.mjs';
+import { contrast, GROUND, INK, press } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 const SCHEMES = ['light', 'dark'];
@@ -48,8 +48,8 @@ async function load(t, platform, scheme, { width = 1600, height = 1000 } = {}) {
 
 const below = (rows, min) => rows.filter((r) => contrast(r.fg, r.bg) < min).map((r) => `${r.what}: ${r.fg} on ${r.bg} is ${contrast(r.fg, r.bg).toFixed(2)}:1`);
 
-// every visible text of the chrome drawn in --ed-muted, with its ground. a disabled control is left
-// out, since WCAG does not ask a contrast of it
+// every visible text of the chrome drawn in --ed-muted, with its ground and the opacity of its
+// ancestors. a disabled control is left out, since WCAG does not ask a contrast of it
 const MUTED = `(() => {
   const probe = document.createElement('i');
   probe.style.color = 'var(--ed-muted)';
@@ -58,12 +58,12 @@ const MUTED = `(() => {
   probe.remove();
   const ground = ${GROUND};
   const out = [];
-  for (const el of document.querySelectorAll('.beeson-edit-header *, .beeson-edit-nav *, .beeson-edit-inspector *, .beeson-edit-bottom *')) {
+  for (const el of document.querySelectorAll('.beeson-edit-header *, .beeson-edit-nav *, .beeson-edit-inspector *, .beeson-edit-bottom *, .beeson-edit-notes-zoom *')) {
     if (![...el.childNodes].some((n) => n.nodeType === 3 && n.textContent.trim())) continue;
     if (!el.getClientRects().length || el.closest(':disabled, [aria-disabled="true"], [hidden]')) continue;
     const cs = getComputedStyle(el);
     if (cs.color !== muted || cs.visibility !== 'visible') continue;
-    out.push({ what: el.textContent.trim().slice(0, 30), fg: cs.color, bg: ground(el) });
+    out.push({ what: el.textContent.trim().slice(0, 30), fg: ${INK}(el), bg: ground(el) });
   }
   return out;
 })()`;
@@ -75,10 +75,11 @@ for (const platform of PLATFORMS) {
     test(`every muted label of the chrome has a contrast of 4.5:1 on its ground (${platform}, ${scheme})`, async (t) => {
       const page = await load(t, platform, scheme);
       if (!(await page.evaluate(`document.documentElement.classList.contains('beeson-format')`))) await exec(page, 'shell.format');
+      await exec(page, 'view.notes');
       await frames(page);
       const rows = await page.evaluate(MUTED);
       const texts = rows.map((r) => r.what);
-      for (const want of ['1', 'Slide Layout']) assert.ok(texts.includes(want), `${want} is not among ${js(texts)}`);
+      for (const want of ['1', 'Slide Layout', '100%']) assert.ok(texts.includes(want), `${want} is not among ${js(texts)}`);
       assert.ok(texts.some((x) => /unsaved|saved/i.test(x)), `the save state is not among ${js(texts)}`);
       assert.deepEqual(below(rows, 4.5), []);
       assert.deepEqual(errors(page), []);

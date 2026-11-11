@@ -42,9 +42,8 @@ html.beeson-resizing-rows, html.beeson-resizing-rows * { cursor: row-resize !imp
 html.beeson-editor .beeson-edit-resize::after { content: ''; position: absolute; left: 50%; top: 2px; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: var(--ed-faint); opacity: 0.6; }
 html.beeson-editor .beeson-edit-resize:hover::after, html.beeson-editor .beeson-edit-resize.dragging::after, html.beeson-editor .beeson-edit-resize:focus-visible::after { opacity: 1; background: var(--ed-muted); }
 html.beeson-editor .beeson-edit-resize:hover, html.beeson-editor .beeson-edit-resize.dragging, html.beeson-editor .beeson-edit-resize:focus-visible { outline: none; background: linear-gradient(transparent 3px, color-mix(in srgb, var(--ed-select) 55%, transparent) 3px 5px, transparent 5px); }
-html.beeson-editor .beeson-edit-notes-zoom { position: fixed; z-index: 57; display: none; align-items: center; gap: 2px; height: 22px; padding: 0 2px; box-sizing: border-box; border: 1px solid var(--ed-line); border-radius: 6px; background: var(--ed-panel); color: var(--ed-muted); font: 11px/1 var(--ed-font); font-variant-numeric: tabular-nums; opacity: 0.7; transition: opacity 120ms; user-select: none; -webkit-user-select: none; }
+html.beeson-editor .beeson-edit-notes-zoom { position: fixed; z-index: 57; display: none; align-items: center; gap: 2px; height: 22px; padding: 0 2px; box-sizing: border-box; border: 1px solid var(--ed-line); border-radius: 6px; background: var(--ed-panel); color: var(--ed-muted); font: 11px/1 var(--ed-font); font-variant-numeric: tabular-nums; user-select: none; -webkit-user-select: none; }
 html.beeson-editor.beeson-notes .beeson-edit-notes-zoom { display: flex; }
-html.beeson-editor .beeson-edit-notes-zoom:hover, html.beeson-editor .beeson-edit-notes-zoom:focus-within, html.beeson-editor.beeson-notes-hot .beeson-edit-notes-zoom { opacity: 1; }
 html.beeson-editor .beeson-edit-notes-zoom button { display: inline-flex; align-items: center; justify-content: center; min-width: 20px; height: 18px; padding: 0 3px; border: 0; border-radius: 4px; background: transparent; color: var(--ed-text); font: 500 11px/1 var(--ed-font); cursor: default; }
 html.beeson-editor .beeson-edit-notes-zoom button.big { font-size: 15px; }
 html.beeson-editor .beeson-edit-notes-zoom button:hover { background: var(--ed-hover); }
@@ -240,8 +239,6 @@ export function install(app: App): void {
   window.addEventListener('gestureend', () => {
     pinch = null;
   });
-  // the zoom buttons are brought up while the pointer is over the notes
-  document.addEventListener('pointerover', (ev) => root.classList.toggle('beeson-notes-hot', inNotes(ev)));
 
   app.listen('slide', () => {
     ensure();
