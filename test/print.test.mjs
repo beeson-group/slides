@@ -113,3 +113,16 @@ test('the check fails on a video without a poster', () => {
     rmSync(out, { recursive: true, force: true });
   }
 });
+
+// the title backdrop of test/pages/title-step.html is a step of its slide, traced only from this
+// step on, hence checkHeads in scripts/check.mjs must show the step before it reads the heads
+test('the check reads the heads of a backdrop that is a step', { timeout: 120000 }, () => {
+  const out = mkdtempSync(join(tmpdir(), 'beeson-heads-'));
+  try {
+    const run = spawnSync(process.execPath, ['scripts/check.mjs', '--deck', 'test/pages/title-step.html', '--out', out], { encoding: 'utf8' });
+    assert.doesNotMatch(run.stdout + run.stderr, /heads are not painted/);
+    assert.equal(run.status, 0, run.stdout + run.stderr);
+  } finally {
+    rmSync(out, { recursive: true, force: true });
+  }
+});
