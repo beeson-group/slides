@@ -175,3 +175,22 @@ for (const platform of PLATFORMS) {
     await roundTrip(page, 1);
   });
 }
+
+for (const platform of PLATFORMS) {
+  // D5: after an undo of Decrease Indent Level the caret was after the nested list
+  for (const [name, keys] of [['Shift+Tab', ['Shift+Tab']], ['Backspace', ['Home', 'Backspace']]]) {
+    test(`after an undo of the outdent of ${name}, typing lands where the caret was before the outdent (${platform})`, async (t) => {
+      const page = await load(t, platform);
+      await click(page, await pointOf(page, ITEM, 'You might', 4));
+      await press(page, 'Home');
+      await press(page, 'Tab');
+      const nested = await render(page);
+      for (const key of keys) await press(page, key);
+      assert.notEqual(await render(page), nested, `${name} does not outdent the item`);
+      await undo(page);
+      assert.equal(await render(page), nested);
+      await type(page, 'Q');
+      assert.match(listPart(await render(page)), />QYou might have noticed/, `Q is not typed at the start of the item: ${(await render(page)).match(/[^>]{0,20}Q<\/li>|>[^<]{0,10}Q[^<]{0,10}/)?.[0]}`);
+    });
+  }
+}
