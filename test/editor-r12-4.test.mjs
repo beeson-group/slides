@@ -372,4 +372,18 @@ for (const platform of PLATFORMS) {
     }
     assert.deepEqual(errors(page), []);
   });
+  // feel-5
+  test(`the Steps pane names a new picture by the name of its file, not by its object URL (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: STEPS });
+    const insert = page.evaluate(`window.BeesonEditor.exec('insert.image').then(() => true)`);
+    await choose(page, [DARK_FILE]);
+    await insert;
+    await waitText(page, 'media/figure-dark.png');
+    if (!(await page.evaluate(`window.BeesonEditor.state('view.steps').checked`))) await exec(page, 'view.steps');
+    await frames(page);
+    const rows = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-side [aria-label]')].map((r) => r.getAttribute('aria-label')).filter((l) => /Figure/.test(l))`);
+    assert.ok(rows.some((l) => l.includes('figure-dark.png')), `the rows read ${js(rows)}`);
+    assert.ok(!rows.some((l) => /[0-9a-f]{8}-[0-9a-f]{4}-/.test(l)), `a row names the object URL: ${js(rows)}`);
+    assert.deepEqual(errors(page), []);
+  });
 }
