@@ -256,6 +256,32 @@ function indentOf(app: App, el: Element): Indent {
   return { base, step: textStyle(app.source?.text ?? '').step, eol: app.source?.crlf ? '\r\n' : '\n' };
 }
 
+// the attribute start of the items of a numbered list after its item k, cut off from it, so that
+// they go on with its count, as the items after a cut list of Keynote do
+function goOn(list: Element, k: number): Record<string, string | null> {
+  if (!(list instanceof HTMLOListElement)) return {};
+  const n = list.start + k;
+  return { start: n === 1 ? null : String(n) };
+}
+
+// a list of dashes does not take the attribute start of a numbered list
+const listEdit = (kind: string): TagEdit => (kind === 'ul' ? { attrs: { start: null } } : {});
+
+// the numbered list of the caret, or the one numbered list selected as an object
+export function startList(app: App): HTMLOListElement | null {
+  const blocks = listBlocks(app);
+  const el = blocks ? (blocks.length === 1 ? blocks[0] : null) : itemAt(app)?.item.parentElement ?? null;
+  return el instanceof HTMLOListElement && !!app.pairing?.elements.has(el) && !app.pairing.byLive.has(el) ? el : null;
+}
+
+// Start At of the Text pane: the number of the first item of the numbered list, written as start,
+// which a 1 takes off
+export function setStart(app: App, n: number): void {
+  const list = startList(app);
+  if (!list || !Number.isInteger(n) || n < 1 || n === list.start) return;
+  app.doc.setTag(list, { attrs: { start: n === 1 ? null : String(n) } }, 'start at');
+}
+
 export function canSplit(app: App): boolean {
   const at = itemAt(app);
   return !!at && (at.nested || structural(app, at.item));
@@ -275,14 +301,15 @@ export async function split(app: App): Promise<void> {
   if (item.localName === 'li' && !item.textContent?.trim() && !item.querySelector('mjx-container, img, ul, ol')) {
     if (at.nested) return outdent(app);
     const list = item.parentElement!;
-    const followers = [...list.children].slice([...list.children].indexOf(item) + 1).filter((c) => c.localName === 'li');
+    const items = [...list.children].filter((c) => c.localName === 'li');
+    const followers = items.slice(items.indexOf(item) + 1);
     // a paragraph after items of a moved list is moved with them, so that it is not drawn over them
     const move = list.querySelector(':scope > li') !== item && (list as HTMLElement).style.translate;
     const texts = [move ? `<p style="translate: ${move}"></p>` : '<p></p>'];
     if (followers.length) {
       const { base, step, eol } = indentOf(app, list);
       const rest = followers.map((f) => `${eol}${base}${step}${app.doc.elementText(f)}`).join('');
-      texts.push(`${startTag(app, list, list.localName, { attrs: { id: null } })}${rest}${eol}${base}</${list.localName}>`);
+      texts.push(`${startTag(app, list, list.localName, { attrs: { id: null, ...goOn(list, items.indexOf(item)) } })}${rest}${eol}${base}</${list.localName}>`);
     }
     const [p] = await app.doc.insert(texts, list.parentElement!, nextOf(app, list), 'new paragraph');
     for (const f of followers) await app.doc.remove(f, 'new paragraph');
@@ -628,7 +655,7 @@ export async function setList(app: App, kind: ListKind): Promise<void> {
   }
   if (kind !== 'none') {
     const index = [...parent.children].indexOf(item);
-    const list = await app.doc.retag(parent, kind, {}, 'list');
+    const list = await app.doc.retag(parent, kind, listEdit(kind), 'list');
     const li = list.children[index];
     if (li) selectIn(li, offset, stop);
     return;
@@ -638,7 +665,8 @@ export async function setList(app: App, kind: ListKind): Promise<void> {
   const texts = [`${startTag(app, item, 'p')}${content.trim()}</p>`];
   if (followers.length) {
     const rest = followers.map((f) => `${eol}${base}${step}${app.doc.elementText(f)}`).join('');
-    texts.push(`${startTag(app, parent)}${rest}${eol}${base}</${parent.localName}>`);
+    const k = items.filter((c) => c.localName === 'li').indexOf(item);
+    texts.push(`${startTag(app, parent, parent.localName, { attrs: goOn(parent, k) })}${rest}${eol}${base}</${parent.localName}>`);
   }
   const [p] = await app.doc.insert(texts, parent.parentElement!, nextOf(app, parent), 'list');
   for (const f of followers) await app.doc.remove(f, 'list');
@@ -660,7 +688,7 @@ async function setSpanList(app: App, kind: ListKind): Promise<boolean> {
   const items = [...list.children].filter((c) => c.localName === 'li');
   let made: Element[];
   if (kind !== 'none') {
-    const now = await app.doc.retag(list, kind, {}, 'list');
+    const now = await app.doc.retag(list, kind, listEdit(kind), 'list');
     const kids = [...now.children].filter((c) => c.localName === 'li');
     made = run.map((h) => kids[items.indexOf(h)]);
   } else {
@@ -669,7 +697,7 @@ async function setSpanList(app: App, kind: ListKind): Promise<boolean> {
     const texts = run.map((li) => `${startTag(app, li, 'p')}${rangeTex(li, rangeOf(li, null, null)).trim()}</p>`);
     if (followers.length) {
       const rest = followers.map((f) => `${eol}${base}${step}${app.doc.elementText(f)}`).join('');
-      texts.push(`${startTag(app, list, list.localName, { attrs: { id: null } })}${rest}${eol}${base}</${list.localName}>`);
+      texts.push(`${startTag(app, list, list.localName, { attrs: { id: null, ...goOn(list, items.indexOf(run[0])) } })}${rest}${eol}${base}</${list.localName}>`);
     }
     made = (await app.doc.insert(texts, list.parentElement!, nextOf(app, list), 'list')).slice(0, run.length);
     for (const el of [...followers, ...run]) await app.doc.remove(el, 'list');
@@ -701,7 +729,7 @@ async function listBlocksAs(app: App, blocks: Element[], kind: ListKind): Promis
       const content = rangeTex(el, rangeOf(el, null, null));
       made.push(...(await app.doc.insert(`<${kind}>${eol}${base}${step}${li}${content}</li>${eol}${base}</${kind}>`, el.parentElement!, el, 'list')));
       await app.doc.remove(el, 'list');
-    } else if (kind !== 'none') made.push(await app.doc.retag(el, kind, {}, 'list'));
+    } else if (kind !== 'none') made.push(await app.doc.retag(el, kind, listEdit(kind), 'list'));
     else {
       const texts = [...el.children].filter((c) => c.localName === 'li').map((li) => `${startTag(app, li, 'p')}${rangeTex(li, rangeOf(li, null, null)).trim()}</p>`);
       made.push(...(await app.doc.insert(texts, el.parentElement!, nextOf(app, el), 'list')));

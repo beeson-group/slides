@@ -5,11 +5,11 @@
 // of the type scale and the tones of the theme are offered
 
 import type { App } from '../app.ts';
-import { listKind, selectedBlocks, styleOf, styleWhy } from '../text/blocks.ts';
+import { listKind, selectedBlocks, startList, styleOf, styleWhy } from '../text/blocks.ts';
 import { around, FORMATS, inlineTargets, isTone, type FormatName } from '../text/inline.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { openMenu, type MenuItem } from '../ui/menu.ts';
-import { button, glyph, keepFocus, row, section, segmented, type Control, type Run } from './controls.ts';
+import { button, glyph, keepFocus, numberField, row, section, segmented, type Control, type Run } from './controls.ts';
 
 const STYLES = ['body', 'small', 'subheading', 'caption', 'footnote'];
 const CASES = ['sentence', 'lower', 'upper', 'title', 'toggle'];
@@ -250,6 +250,14 @@ export function textPane(app: App, run: Run): Control[] {
         { command: 'text.outdent', icon: 'outdent', title: 'Decrease Indent Level' },
         { command: 'text.indent', icon: 'indent', title: 'Increase Indent Level' },
       ], 'Indent level')]),
+      row([numberField(app, {
+        label: 'Start at',
+        unit: '',
+        min: 1,
+        value: () => startList(app)?.start ?? null,
+        enabled: () => app.commands.enabled('text.list.start'),
+        commit: (n) => run('text.list.start', { start: n }),
+      })]),
     ]),
     section('Link', [
       row([

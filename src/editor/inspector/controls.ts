@@ -354,7 +354,7 @@ export function numberField(app: App, o: NumberOptions): Control & { input: HTML
   input.inputMode = 'decimal';
   input.autocomplete = 'off';
   input.name = o.label;
-  input.id = `beeson-edit-num-${o.label.toLowerCase()}`;
+  input.id = `beeson-edit-num-${o.label.toLowerCase().replace(/\s+/g, '-')}`;
   const unit = make('span', 'unit', o.unit ?? 'px');
   const stepper = make('div', 'stepper');
   const up = make('button');
