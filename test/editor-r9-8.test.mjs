@@ -73,7 +73,9 @@ async function roundTrip(page, undos = 1) {
 // SHOW is the window of the show started from the editor, i.e. the frame of the show in place, or
 // else the last window that the page opened
 const SHOW = `(document.querySelector('.beeson-edit-show iframe')?.contentWindow ?? window.__shows?.at(-1))`;
-const showReady = `(() => { try { const w = ${SHOW}; return !!w && !!w.Reveal && w.Reveal.isReady(); } catch { return false; } })()`;
+// showReady is true once reveal.js and MathJax are ready in the show, before which a jump to a
+// slide with formulas is not made by a presenter
+const showReady = `(() => { try { const w = ${SHOW}; if (!w?.Reveal?.isReady()) return false; return !w.MathJax || (w.MathJax.startup?.promise?.then(() => true) ?? false); } catch { return false; } })()`;
 const showHeading = (page) => page.evaluate(`${SHOW}.Reveal.getCurrentSlide().querySelector('h1, h2').textContent.trim()`);
 const editorHeading = (page) => page.evaluate(`Reveal.getCurrentSlide().querySelector('h1, h2').textContent.trim()`);
 
@@ -149,6 +151,22 @@ for (const platform of PLATFORMS) {
     await press(page, 'Escape');
     await page.waitFor(stageGone);
     assert.equal(await page.evaluate('window.BeesonEditor.status().dirty'), true);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+// with Use Rehearsed Timings on, the show in place is moved on after the timing of its slide
+for (const platform of PLATFORMS) {
+  test(`with Use Rehearsed Timings on, the show in place moves on after the timing of its slide (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: PRESENT, n: 3 });
+    await page.evaluate(`localStorage.setItem('beeson-use-timings', '1'), true`);
+    await press(page, 'Mod+Enter');
+    await page.waitFor(showReady, 20000);
+    assert.equal(await showHeading(page), 'Four');
+    await page.waitFor(`${SHOW}.Reveal.getCurrentSlide().querySelector('h2').textContent === 'Five'`, 5000);
+    await press(page, 'Escape');
+    await page.waitFor(stageGone);
+    assert.equal(await editorHeading(page), 'Five');
     assert.deepEqual(errors(page), []);
   });
 }
