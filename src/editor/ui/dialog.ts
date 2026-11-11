@@ -38,6 +38,8 @@ dialog.beeson-edit-card .row button.primary { border-color: transparent; backgro
 dialog.beeson-edit-card .row button[hidden] { display: none; }
 dialog.beeson-edit-card button:focus-visible { outline: 3px solid var(--ed-focus); outline-offset: 1px; }
 dialog.beeson-edit-card :is(input, select, textarea):focus-visible { outline: 3px solid var(--ed-focus); outline-offset: 0; }
+dialog.beeson-edit-card.form label { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
+dialog.beeson-edit-card.form input[type="number"] { width: 7ch; font: inherit; padding: 2px 6px; border: 1px solid var(--ed-control-line, var(--ed-line)); border-radius: 5px; background: var(--ed-control); color: var(--ed-text); }
 [data-beside] { --arrow: 50%; }
 [data-beside]::before { content: ""; position: absolute; width: 12px; height: 12px; box-sizing: border-box; background: inherit; border: 0 solid; border-color: inherit; transform: rotate(45deg); pointer-events: none; }
 [data-beside="below"]::before { top: -7px; left: calc(var(--arrow) - 6px); border-width: 1px 0 0 1px; }

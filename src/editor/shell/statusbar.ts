@@ -102,10 +102,10 @@ export function install(app: App, layers: HTMLElement): void {
   const percent = chromeSelect(app, {
     label: 'Zoom',
     className: 'percent',
-    choices: () => [{ value: 'fit', label: 'Fit' }, ...ZOOMS.map((z) => ({ value: String(z), label: `${Math.round(z * 100)}%` }))],
+    choices: () => [{ value: 'fit', label: 'Fit' }, ...ZOOMS.map((z) => ({ value: String(z), label: `${Math.round(z * 100)}%` })), { value: 'custom', label: 'Zoom…' }],
     value: () => (app.stage?.zoom === null ? 'fit' : String(app.stage?.zoom)),
     text: () => `${Math.round(current() * 100)}%`,
-    onChange: (v) => app.stage.setZoom(v === 'fit' ? null : Number(v)),
+    onChange: (v) => (v === 'custom' ? void app.commands.run('zoom.custom').catch(fail) : app.stage.setZoom(v === 'fit' ? null : Number(v))),
   }) as HTMLButtonElement & { refresh(): void };
   const fitButton = button('Fit', 'Fit the slide into the window');
   zoomBox.append(outButton, track, inButton, percent, fitButton);
