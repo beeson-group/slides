@@ -629,3 +629,39 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the tag of the outline of a drop, and the buttons of the placeholder drawn under it
+const TAGGED = `(() => {
+  const tag = document.querySelector('.beeson-drop:not([hidden]) span')?.getBoundingClientRect();
+  const shown = [...document.querySelectorAll('.reveal section.present .beeson-placeholder button')].filter((b) => getComputedStyle(b).visibility === 'visible' && b.getBoundingClientRect().width > 0);
+  const meets = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+  return { tag: !!tag, buttons: shown.length, under: tag ? shown.filter((b) => meets(tag, b.getBoundingClientRect())).map((b) => b.getAttribute('aria-label')) : [] };
+})()`;
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: the tag of a file dragged over an empty zone is not drawn over the buttons of its placeholder`, async (t) => {
+    const path = 'test/pages/editor-empty-zone.html';
+    const page = await browser.newPage({ width: 1600, height: 1000 });
+    t.after(() => page.close().catch(() => {}));
+    await page.goto(`${server.origin}/${path}?edit&still&theme=light&edit-platform=${platform}`);
+    await page.waitFor(deckSettled);
+    await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
+    assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${js(readFileSync(path, 'utf8'))})`)).problems, []);
+    await page.evaluate('Reveal.slide(1)');
+    await frames(page);
+    assert.equal((await page.evaluate(TAGGED)).buttons, 4);
+    const at = await centerOf(page, '.reveal section.present .zone');
+    const data = { items: [], files: [resolve('demo/figure-light.png')], dragOperationsMask: 1 };
+    await page.send('Input.dispatchDragEvent', { type: 'dragEnter', x: at.x, y: at.y, data });
+    await page.send('Input.dispatchDragEvent', { type: 'dragOver', x: at.x, y: at.y, data });
+    await frames(page);
+    const over = await page.evaluate(TAGGED);
+    assert.ok(over.tag, 'the zone is not outlined');
+    assert.deepEqual(over.under, [], 'the tag is drawn over buttons of the placeholder');
+    await page.send('Input.dispatchDragEvent', { type: 'dragCancel', x: at.x, y: at.y, data });
+    // the leave of the window, as the browser sends it at the end of the drag
+    await page.evaluate(`(() => { const d = new DataTransfer(); d.items.add(new File(['x'], 'a.png', { type: 'image/png' })); window.dispatchEvent(new DragEvent('dragleave', { dataTransfer: d })); })()`);
+    await frames(page);
+    assert.equal((await page.evaluate(TAGGED)).buttons, 4, 'the buttons are not drawn again after the drag');
+  });
+}
