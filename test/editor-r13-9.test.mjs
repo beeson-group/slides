@@ -103,6 +103,12 @@ for (const platform of PLATFORMS) {
     await page.waitFor(`window.BeesonEditor.render() !== ${JSON.stringify(page.source)}`).catch(() => {});
     await frames(page);
     assert.deepEqual(await grid(page), [['0', '0.25', '0.75', '0', '0'], ['1', '1', '1', '1', '0']]);
+    // the cells are one entry of the history, named as after the key, and an undo takes them back
+    assert.equal((await state(page, 'edit.undo')).label, 'Undo Paste');
+    await page.evaluate('Promise.resolve(window.BeesonEditor.undo()).then(() => true)');
+    await frames(page);
+    await byteExact(page);
+    assert.deepEqual(await grid(page), [['0', '0', '0', '0', '0'], ['1', '1', '1', '1', '0']]);
     assert.deepEqual(errors(page), []);
   });
 
