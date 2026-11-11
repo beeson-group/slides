@@ -155,7 +155,7 @@ for (const platform of ['mac', 'other']) {
     // the group find of the Edit menu is drawn as one run of items after a rule
     const edit = (await items()).map((i) => i[0]);
     const find = edit.indexOf('Find…');
-    assert.deepEqual(edit.slice(find, find + 4), ['Find…', 'Find Next', 'Find Previous', 'Replace…'], JSON.stringify(edit));
+    assert.deepEqual(edit.slice(find, find + 5), ['Find…', 'Find Next', 'Find Previous', 'Use Selection for Find', 'Replace…'], JSON.stringify(edit));
     // Right in an open menu opens the menu beside it
     await press(page, 'ArrowRight');
     assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-menubar [aria-expanded=true]').textContent`), 'Insert');
