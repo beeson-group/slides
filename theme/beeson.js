@@ -4702,6 +4702,8 @@ void main() {
   var surfaces = [];
   var plots = [];
   var EDITING = new URLSearchParams(location.search).has("edit");
+  var PLAYED = !EDITING && window.parent !== window && new URLSearchParams(location.search).has("from-editor");
+  var toEditor = (eventName) => window.parent.postMessage(JSON.stringify({ namespace: "beeson", eventName, state: window.Reveal.getState() }), "*");
   function edit() {
     const params = new URLSearchParams(location.search);
     params.set("edit", "");
@@ -4835,15 +4837,22 @@ void main() {
       if (forDeck(ev)) togglePointer();
     });
     deck.addKeyBinding(70, (ev) => {
-      if (forDeck(ev)) toggleFullscreen();
+      if (forDeck(ev)) PLAYED ? toEditor("fullscreen") : toggleFullscreen();
     });
     deck.registerKeyboardShortcut("F", "Full screen on and off");
     if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) {
-      initFullscreen();
+      if (!PLAYED) initFullscreen();
       initScrub(deck);
       if (internal) initClick(deck, () => internal.cueAutoSlide());
     }
-    if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: "E", description: "Edit the deck" }, (ev) => {
+    if (PLAYED) {
+      for (const keyCode of [27, 69]) deck.addKeyBinding(keyCode, (ev) => {
+        if (forDeck(ev)) toEditor("edit");
+      });
+      document.addEventListener("keydown", (ev) => {
+        if (ev.keyCode === 83 && forDeck(ev)) toEditor("speaker");
+      }, true);
+    } else if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: "E", description: "Edit the deck" }, (ev) => {
       if (forDeck(ev)) edit();
     });
     if (still2()) completeAll();
