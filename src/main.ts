@@ -100,6 +100,8 @@ function fromSpeaker(ev: MessageEvent): void {
 }
 
 function edit(): void {
+  // the speaker view does not follow the editor, hence it is closed with the show
+  speaker?.close();
   const params = new URLSearchParams(location.search);
   params.set('edit', '');
   location.href = `${location.href.split(/[?#]/)[0]}?${params.toString().replace(/=(?=&|$)/g, '')}${location.hash}`;
