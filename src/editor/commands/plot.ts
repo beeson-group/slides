@@ -7,7 +7,8 @@
 // after every change of its block, also at an undo
 
 import type { App } from '../app.ts';
-import type { Command } from '../commands.ts';
+import { keysOf, type Command } from '../commands.ts';
+import { matches } from '../keymap.ts';
 import { CONTAINER } from '../canvas/hit.ts';
 import { make, injectStyle } from '../ui/dom.ts';
 import { install as installSurface } from '../inspector/surface.ts';
@@ -636,6 +637,18 @@ class DataWindow {
   private key(ev: KeyboardEvent): void {
     const hit = this.cellOf(ev.target);
     if (!hit) return;
+    // Undo and Redo in a cell without a typed text of its own act on the history, e.g. on the value
+    // that Enter wrote, and not on the text of the field, as in a field of the inspector
+    const history = ['edit.undo', 'edit.redo'].find((id) => {
+      const c = this.app.commands.get(id);
+      return c && keysOf(c, this.app.platform).some((k) => matches(ev, k, this.app.platform));
+    });
+    if (history && hit.input.value === hit.cell.text && !this.drafts.has(key(hit.cell))) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      void this.app.commands.run(history).then(() => this.focusCell({ r: hit.r, c: hit.c })).catch((e) => this.fail(e));
+      return;
+    }
     const rows = this.inputs.length;
     const go = (r: number) => {
       ev.preventDefault();
