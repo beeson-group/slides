@@ -174,7 +174,8 @@ test('Zoom to Selection fills the cell with the selected figure and centers it',
   await page.evaluate(`window.BeesonEditor.exec('zoom.selection')`);
   await frames(page);
   const s = await stage(page);
-  const img = await rectOf(page, FIG);
+  // the frame of the figure, i.e. its picture with its caption
+  const img = await rectOf(page, '.beeson-frame.selected');
   const v = s.viewport;
   // the figure is centered as far as the canvas scrolls: it is at the right edge of the slide, hence
   // the canvas is scrolled to its right end
@@ -184,8 +185,6 @@ test('Zoom to Selection fills the cell with the selected figure and centers it',
   assert.ok(Math.abs(img.top + img.height / 2 - (v.top + v.height / 2)) < 2, JSON.stringify({ img, v }));
   // the figure is taller than wide, hence it fills the height of the cell within the margin
   assert.ok(img.height <= v.height && img.height > v.height - 100, `the figure is ${img.height} px high in a cell of ${v.height}`);
-  const frame = await rectOf(page, '.beeson-frame.selected');
-  assert.ok(Math.abs(frame.left - img.left) < 2 && Math.abs(frame.width - img.width) < 4, 'the frame is not at the box of the figure');
   assert.deepEqual(page.errors, []);
 });
 

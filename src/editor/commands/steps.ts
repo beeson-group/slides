@@ -7,7 +7,7 @@
 import type { App } from '../app.ts';
 import { moveTo, oneByOne, placedIndex, setFinal, setIndexReader, setStart, setStep, shift, stepAt, type Plan, type Start } from '../layers.ts';
 import type { TagEdit } from '../tags.ts';
-import { AFTER_DEFAULT, MIN_DELAY, WITH_SLIDE, afterable, carryDelays, classesOf, deliverPlan, deliveryOf, delaysOf, effectEdit, effectOf, indexIn, listItems, listOf, modelAt, modelOf, startAt, writePlan, type Delivery, type Effect, type StartKind, type Steps } from '../steps.ts';
+import { AFTER_DEFAULT, MIN_DELAY, WITH_SLIDE, afterable, carryDelays, classesOf, deliverPlan, deliveryOf, delaysOf, effectEdit, effectOf, indexIn, listItems, listOf, modelAt, modelOf, startAt, writePlan, type Delivery, type Effect, type Model, type StartKind, type Steps } from '../steps.ts';
 
 type Arg = { el?: Element } & Record<string, unknown>;
 
@@ -29,11 +29,17 @@ function change(app: App, arg: unknown, fn: (plan: Plan, i: number) => Plan): vo
   if (m) writePlan(app, m, fn(m.plan, m.i));
 }
 
-const stepped = (app: App, arg?: unknown): boolean => {
-  const el = itemOf(app, arg);
+// the positions of the items that are a step for the item el: el itself, or the items held by
+// el that are a step when el is not one, e.g. the images of a figure, by which the figure counts
+// as a step
+function stepsFor(app: App, el: Element | null): { m: Model & { i: number }; at: number[] } | null {
   const m = el ? modelAt(app, el) : null;
-  return !!m && stepAt(m.plan, m.i) >= 0;
-};
+  if (!m || !el) return null;
+  if (stepAt(m.plan, m.i) >= 0) return { m, at: [m.i] };
+  return { m, at: m.els.flatMap((x, k) => (k !== m.i && !m.lines[k] && el.contains(x) && stepAt(m.plan, k) >= 0 ? [k] : [])) };
+}
+
+const stepped = (app: App, arg?: unknown): boolean => !!stepsFor(app, itemOf(app, arg))?.at.length;
 
 // a delay given in seconds, in ms from 0.1 s to 10 min
 function msOf(seconds: number): number {
@@ -190,7 +196,10 @@ export function install(app: App): void {
     context: ['element'],
     enabled: (a) => stepped(a),
     undoable: true,
-    run: (a, arg) => change(a, arg, (p, i) => setStep(p, i, null)),
+    run: (a, arg) => {
+      const s = stepsFor(a, itemOf(a, arg));
+      if (s?.at.length) writePlan(a, s.m, s.at.reduce((p, k) => setStep(p, k, null), s.m.plan));
+    },
   });
   // On Click, With Previous, or After Previous with a delay in seconds, the last one written as
   // data-autoslide on the step before by writePlan of steps.ts

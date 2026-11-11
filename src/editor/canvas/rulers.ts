@@ -8,7 +8,7 @@
 import type { App } from '../app.ts';
 import { OUTSIDE_DIALOGS } from '../commands.ts';
 import { injectStyle, make, store, stored } from '../ui/dom.ts';
-import { frameOf, visualRect } from './hit.ts';
+import { frameOf, frameRect } from './hit.ts';
 
 // the thickness of a ruler, in CSS px
 export const RULER = 18;
@@ -108,7 +108,7 @@ export function install(app: App): void {
     const els = app.selection.elements().filter((el) => el.isConnected);
     if (!els.length) return null;
     const f = frameOf(app);
-    const rs = els.map(visualRect).filter((r) => r.width || r.height);
+    const rs = els.map(frameRect).filter((r) => r.width || r.height);
     if (!rs.length) return null;
     const lo = (v: number, o: number) => (v - o) / f.scale;
     return {

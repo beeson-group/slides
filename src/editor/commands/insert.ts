@@ -11,6 +11,7 @@
 import type { App } from '../app.ts';
 import type { Entry } from '../history.ts';
 import { mathLookup } from '../math.ts';
+import { emptySlot, isEmptySlot } from '../media/actions.ts';
 import { applyPending } from '../text/carry.ts';
 import { insertPlain, placeCaret } from '../text/typing.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -207,11 +208,6 @@ function centerOffset(app: App, el: HTMLElement): { x: number; y: number } | nul
   if (under.length) cy = Math.max(bh / 2, Math.min(...under.map((f) => f.top)) - 24 - bh / 2);
   return { x: Math.round(cx - (b.left + b.right) / 2), y: Math.round(cy - (b.top + b.bottom) / 2) };
 }
-
-// the zone of slide without content, into which a figure is put. the placeholder that the editor
-// draws in an empty zone is not content
-const emptyZone = (slide: Element): Element | null =>
-  [...slide.querySelectorAll(':scope > .zone, :scope > .panel ~ .zone')].find((z) => ![...z.children].some((c) => !c.hasAttribute('data-generated')) && !z.textContent?.trim()) ?? null;
 
 export function install(app: App): void {
   injectStyle('insert', CSS);
@@ -490,9 +486,10 @@ export function install(app: App): void {
     menu: insertMenu(26),
     toolbar: tool(24.2, 'qr', { split: 'Media' }),
     enabled: ready,
-    run: (a) => a.history.transact('Insert QR Code', async () => {
+    // a QR code fills the empty slot given, as by the icon of its placeholder, else the first one
+    run: (a, arg) => a.history.transact('Insert QR Code', async () => {
       const slide = a.current()!;
-      const zone = emptyZone(slide);
+      const zone = arg instanceof Element && slide.contains(arg) && isEmptySlot(a, arg) ? arg : emptySlot(a, slide);
       const place = zone ? { parent: zone, before: null } : slide.matches('.title, .closing') ? { parent: slide, before: slide.querySelector(':scope > aside.notes') } : columnPlace(a, slide);
       const [node] = await docOf(a).insertElement('qr', place.parent, place.before, { qr: 'https://example.com' });
       if (!zone) centerIfOut(a, node);

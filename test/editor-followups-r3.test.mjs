@@ -172,7 +172,8 @@ for (const platform of PLATFORMS) {
     await click(page, fig);
     await exec(page, 'zoom.selection');
     await frames(page);
-    const r = await page.evaluate(`(() => { const v = window.BeesonEditorShell.stage.viewport; const i = [...document.querySelectorAll(${JSON.stringify(fig)})].map((e) => e.getBoundingClientRect()).find((b) => b.width); return { cx: i.left + i.width / 2 - (v.left + v.width / 2), cy: i.top + i.height / 2 - (v.top + v.height / 2) }; })()`);
+    // the frame of the figure, i.e. its picture with its caption, is centered
+    const r = await page.evaluate(`(() => { const v = window.BeesonEditorShell.stage.viewport; const i = document.querySelector('.beeson-overlay > .beeson-frame.selected:not([hidden])').getBoundingClientRect(); return { cx: i.left + i.width / 2 - (v.left + v.width / 2), cy: i.top + i.height / 2 - (v.top + v.height / 2) }; })()`);
     assert.ok(Math.abs(r.cx) < 2 && Math.abs(r.cy) < 2, `the figure is off the center of the canvas by ${JSON.stringify(r)}`);
     const p = await pasteboard(page);
     assert.ok(Math.abs(p.left - p.right) < 1 && Math.abs(p.top - p.bottom) < 1 && Math.abs(p.left - p.top) < 1 && p.left > 32, JSON.stringify(p));

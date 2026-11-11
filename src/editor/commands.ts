@@ -121,9 +121,16 @@ export class Commands {
     this.vetoes.push(check);
   }
 
+  // whether the command applies to the selection by its own enabled, i.e. before the vetoes, as a
+  // command of a locked element does, which its context menu shows dimmed
+  applies(id: string): boolean {
+    const c = this.byId.get(id);
+    return !!c && (c.enabled?.(this.app) ?? true);
+  }
+
   enabled(id: string): boolean {
     const c = this.byId.get(id);
-    return !!c && (c.enabled?.(this.app) ?? true) && !this.vetoes.some((v) => v(this.app, c));
+    return !!c && this.applies(id) && !this.vetoes.some((v) => v(this.app, c));
   }
 
   state(id: string): CommandState {
