@@ -117,6 +117,35 @@ for (const platform of PLATFORMS) {
   }
 }
 
+// the prompts of empty notes, i.e. Click to add notes in the notes pane and the line of the notes of
+// the presenter display, are the placeholders of the notes, and were drawn in --ed-faint
+for (const platform of PLATFORMS) {
+  for (const scheme of SCHEMES) {
+    test(`the prompts of empty notes have a contrast of 4.5:1 (${platform}, ${scheme})`, async (t) => {
+      const page = await load(t, platform, scheme);
+      const n = await page.evaluate(`Reveal.getSlides().findIndex((s) => !s.querySelector(':scope > aside.notes'))`);
+      assert.ok(n >= 0);
+      await page.evaluate(`Reveal.slide(${n})`);
+      await exec(page, 'view.notes');
+      await frames(page);
+      const seen = [await page.evaluate(`(() => {
+        const a = document.querySelector('.reveal .slides section.present > aside.notes');
+        return { what: getComputedStyle(a, '::before').content, fg: getComputedStyle(a, '::before').color, bg: ${GROUND}(a) };
+      })()`)];
+      await page.evaluate(`(() => { window.open = () => null; return true; })()`);
+      await exec(page, 'play.customizePresenter');
+      await page.waitFor(`!!document.querySelector('dialog.beeson-edit-presenter[open] .notes .text.empty')`);
+      seen.push(await page.evaluate(`(() => {
+        const e = document.querySelector('dialog.beeson-edit-presenter .notes .text.empty');
+        return { what: e.textContent, fg: getComputedStyle(e).color, bg: ${GROUND}(e) };
+      })()`));
+      assert.match(seen[0].what, /Click to add notes/);
+      assert.deepEqual(below(seen, 4.5), []);
+      assert.deepEqual(errors(page), []);
+    });
+  }
+}
+
 // the ring of the focused element of the presenter display and the ground of its control
 const RING = `(() => {
   const a = document.activeElement;
