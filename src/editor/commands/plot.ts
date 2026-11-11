@@ -13,6 +13,8 @@ import { make, injectStyle } from '../ui/dom.ts';
 import { install as installSurface } from '../inspector/surface.ts';
 import { addRow, addSeries, addTab, cellsIn, clearCells, deleteRow, deleteSeries, deleteTab, literal, moveSeries, parseTsv, pasteCells, setCell, setKey, sheetsOf, type Cell, type Result, type Sheet } from '../plotdata.ts';
 import { emptySlot } from '../media/actions.ts';
+import { modelAt } from '../steps.ts';
+import { ask } from '../ui/dialog.ts';
 
 // the tones that a mark of a new color takes, the data colors of the theme
 export const DATA_TONES = ['data-1', 'data-2', 'data-3', 'data-4', 'data-5', 'data-6', 'data-7', 'data-8'];
@@ -78,13 +80,24 @@ async function write(app: App, plot: Element, json: string): Promise<void> {
   });
 }
 
-// the plot drawn again from its block, at the tab of tab when it is given
+// the count of the tabs of the JSON text of a plot, or 0 for a text that cannot be read
+function tabCount(text: string): number {
+  try {
+    return (JSON.parse(text) as { tabs?: unknown[] }).tabs?.length ?? 0;
+  } catch {
+    return 0;
+  }
+}
+
+// the plot drawn again from its block, at the tab of tab when it is given and the block has it,
+// since the tab of the window is read again only after a deleted tab is drawn
 function redraw(plot: HTMLElement, text: string | null = null, tab: number | null = null): void {
   const view = viewOf(plot);
   if (!view) return;
   view.reload(text);
   page().Beeson?.mount?.(plot);
-  if (tab !== null) view.setTab(tab);
+  const id = plot.getAttribute('data-plot');
+  if (tab !== null && tab < tabCount(text ?? (id ? document.getElementById(id)?.textContent : null) ?? '')) view.setTab(tab);
 }
 
 const STYLE = `
@@ -751,16 +764,60 @@ function moveBy(w: DataWindow, sheet: Sheet, way: -1 | 1): Result & { at?: { r: 
   return { ...res, at: { r: w.at.r, c: columnOf(res.text, sheet.key, id, w.at.c - sheet.series.indexOf(id)) } };
 }
 
-// the tab of a tab sheet, unless a step of the slide of the plot names it, since the step would
-// then show a tab that is not there
-function tabToDelete(w: DataWindow, sheet: Sheet): string | null {
-  if (sheet.tab === null || !sheet.key.startsWith('tab:')) return null;
+const NAMING = ['data-plot-tab', 'data-plot-tabs', 'data-plot-show'];
+
+// the elements of the slide of plot whose attributes of NAMING name the tab name, with the edit
+// that takes the name off each, i.e. the attribute without the name, or without the attribute
+function namersOf(plot: Element, name: string): { el: Element; attrs: Record<string, string | null> }[] {
+  const slide = plot.closest('section');
+  return [...(slide?.querySelectorAll(NAMING.map((a) => `[${a}]`).join(', ')) ?? [])].flatMap((el) => {
+    const attrs: Record<string, string | null> = {};
+    for (const a of NAMING) {
+      const words = (el.getAttribute(a) ?? '').split(/\s+/).filter(Boolean);
+      if (words.includes(name)) attrs[a] = words.filter((w) => w !== name).join(' ') || null;
+    }
+    return Object.keys(attrs).length ? [{ el, attrs }] : [];
+  });
+}
+
+// the words of the confirmation for each element that names a tab: its step, or a plot that offers
+// the tab
+function namerText(app: App, el: Element): string {
+  const m = el.classList.contains('fragment') ? modelAt(app, el) : null;
+  if (!m) return 'a plot of the slide';
+  const k = m.plan.groups.findIndex((g) => g.includes(m.i));
+  return `step ${k >= 0 ? k + 1 : m.plan.groups.length + 1}`;
+}
+
+// Delete Tab. a tab that a step or a plot of the slide names is deleted after a confirmation that
+// names them, and the name is taken off them in the same entry, so that one undo brings back both
+async function deleteTabOf(app: App): Promise<void> {
+  const w = open();
+  const sheet = w?.current();
+  const plot = w?.plot;
+  if (!w || !sheet || !plot || sheet.tab === null || !sheet.key.startsWith('tab:')) return;
+  w.flush();
   const name = sheet.key.slice(4);
-  const slide = w.plot?.closest('section');
-  const named = [...(slide?.querySelectorAll('[data-plot-tab], [data-plot-tabs], [data-plot-show]') ?? [])].some((el) =>
-    ['data-plot-tab', 'data-plot-tabs', 'data-plot-show'].some((a) => (el.getAttribute(a) ?? '').split(/\s+/).includes(name)));
-  if (named) throw new Error(`a step or a plot of the slide names the tab ${name}`);
-  return name;
+  const namers = namersOf(plot, name);
+  if (namers.length) {
+    const who = [...new Set(namers.map((n) => namerText(app, n.el)))];
+    const list = who.length > 1 ? `${who.slice(0, -1).join(', ')} and ${who.at(-1)}` : who[0];
+    const answer = await ask({
+      title: `Delete the tab ${name}?`,
+      text: `The tab ${name} is named by ${list} of the slide. The tab is deleted, and its name is taken off ${who.length > 1 ? 'them' : 'it'}.`,
+      className: 'ask',
+      buttons: [{ label: 'Cancel', value: 'cancel' }, { label: 'Delete Tab', value: 'delete', primary: true }],
+    }, 'delete');
+    if (answer !== 'delete' || !w.open || w.plot !== plot) return;
+  }
+  const res = deleteTab(w.text, sheet.tab);
+  if (res.error !== null) throw new Error(res.error);
+  w.at = { r: 0, c: 0 };
+  w.range = null;
+  await app.history.transact('Delete Tab', async () => {
+    await write(app, plot, res.text);
+    for (const n of namers) app.doc.setTag(n.el, { attrs: n.attrs }, 'plot tab');
+  });
 }
 
 // the place of a new plot: the first empty zone or plate of the current slide, which the plot
@@ -911,12 +968,11 @@ export function commands(): Command[] {
       id: 'plot.deleteTab',
       label: 'Delete Tab',
       menu: plotMenu(31),
-      undoable: true,
       enabled: () => {
         const sheet = open()?.current();
         return !!sheet?.key.startsWith('tab:') && sheetsOf(open()!.text).filter((x) => x.key.startsWith('tab:')).length > 1;
       },
-      run: (app) => windowChange(app, (w, sheet) => (tabToDelete(w, sheet) === null ? null : { ...deleteTab(w.text, sheet.tab!), at: { r: 0, c: 0 } })),
+      run: deleteTabOf,
     },
     {
       // rows of texts arg.rows pasted from row arg.r and column arg.c of the sheet shown

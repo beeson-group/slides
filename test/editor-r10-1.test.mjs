@@ -341,7 +341,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`a tab is added and deleted in the data window, and a tab named by a step is kept (${platform})`, async () => {
+  test(`a tab is added and deleted in the data window, and a tab named by a step is kept at Esc of its confirmation (${platform})`, async () => {
     const page = await deckPage(platform, PLOT_SLIDE);
     await openData(page);
     await click(page, `${WINDOW} button[data-command="plot.addTab"]`);
@@ -354,10 +354,13 @@ for (const platform of PLATFORMS) {
     await roundTrip(page, [], 'Delete Tab', copy);
     // the tab two is shown by a step of the slide
     await click(page, await page.evaluate(`(() => { const r = [...document.querySelectorAll('${WINDOW} .sheets button[role="tab"]')].find((b) => b.textContent === 'two').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`));
+    // a confirmation names the step, and Esc keeps the tab
     await click(page, `${WINDOW} button[data-command="plot.deleteTab"]`);
-    await frames(page);
+    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-card[open]')`);
+    assert.match(await page.evaluate(`document.querySelector('dialog.beeson-edit-card[open]').textContent`), /tab two is named by step 2/);
+    await press(page, 'Escape');
+    await page.waitFor(`!document.querySelector('dialog.beeson-edit-card[open]')`);
     await byteExact(page);
-    assert.match(await status(page), /names the tab two/);
     await saved(page);
     assert.deepEqual(errors(page), []);
   });
