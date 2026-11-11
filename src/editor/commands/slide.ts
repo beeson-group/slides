@@ -570,7 +570,10 @@ export function install(app: App): void {
       if (!slidesIn(text)?.length) {
         if (!typing) return;
         ev.preventDefault();
-        document.execCommand('insertText', false, (ev.clipboardData?.getData('text/plain') ?? '').replace(/\s*\n\s*/g, ' '));
+        // the elements of the editor are their source on the clipboard, and they are not pasted
+        // into a line, as into a text of the slide. an empty text would delete the selected words
+        const plain = (ev.clipboardData?.getData('text/plain') ?? '').replace(/\s*\n\s*/g, ' ');
+        if (plain.trim() && !plain.trimStart().startsWith(MARK)) document.execCommand('insertText', false, plain);
         return;
       }
       ev.preventDefault();
