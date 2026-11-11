@@ -10,6 +10,7 @@ import { CONTAINER, RESIZABLE, containerOf, frameRect, mediaIn, movableOf, movab
 import type { Place } from '../canvas/drag.ts';
 import { placeOf, record, withCorners, writePlace } from '../canvas/drag.ts';
 import { view, xy } from '../canvas/frames.ts';
+import { fieldOf } from './clipboard.ts';
 import { onSlides } from './slide.ts';
 
 // the nudges of the same elements closer than this, in ms, are one entry of the history
@@ -90,10 +91,17 @@ export function commands(): Command[] {
       in: ['canvas', 'text'],
       menu: { bar: 'Edit', group: 'select', order: 31 },
       context: ['canvas'],
-      enabled: (app) => (onSlides(app) ? app.commands.enabled('slide.selectAll') : !!app.current() && (onCanvas() || app.selection.kind === 'text')),
+      enabled: (app) => (onSlides(app) ? app.commands.enabled('slide.selectAll') : !!fieldOf(app) || (!!app.current() && (onCanvas() || app.selection.kind === 'text'))),
       listedAs: (app) => (onSlides(app) ? 'slide.selectAll' : 'selection.all'),
       runsAs: (app) => (onSlides(app) ? 'slide.selectAll' : 'selection.all'),
-      run: (app) => (onSlides(app) ? app.commands.run('slide.selectAll') : app.selection.selectAll()),
+      run: (app) => {
+        if (onSlides(app)) return app.commands.run('slide.selectAll');
+        // in a line of the outline or a field of a pane, the text of the line or of the field
+        const field = fieldOf(app);
+        if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) return field.select();
+        if (field) return void getSelection()?.selectAllChildren(field);
+        app.selection.selectAll();
+      },
     },
     {
       // Esc on an image selected inside its figure selects the figure, and else clears

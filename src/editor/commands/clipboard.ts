@@ -257,12 +257,21 @@ async function readMedia(): Promise<File[]> {
   }
 }
 
-export const inText = (app: App) => app.selection.kind === 'text' || app.region() === 'text';
+// the focused text that is not a text of the slides, i.e. a line of the outline or a field of a
+// pane. the commands of the Edit menu act on its text, and not on the selection of the canvas
+export const fieldOf = (app: App): HTMLElement | null => {
+  const f = document.activeElement;
+  const typed = f instanceof HTMLElement && (f.isContentEditable || f.matches('textarea, input:not([type=range], [type=checkbox], [type=radio], [type=button], [type=color])'));
+  return typed && !app.hostOf(f) ? f : null;
+};
+export const inText = (app: App) => app.selection.kind === 'text' || app.region() === 'text' || !!fieldOf(app);
 const onSlides = (app: App) => app.region() === 'navigator' || app.selection.kind === 'slides';
 
 // whether the range of the document is not collapsed, i.e. a text has something to cut or copy, as
 // in both apps, where Cut and Copy are disabled at a caret
 export const hasRange = () => {
+  const f = document.activeElement;
+  if (f instanceof HTMLInputElement || f instanceof HTMLTextAreaElement) return f.selectionStart !== f.selectionEnd;
   const s = getSelection();
   return !!s && s.rangeCount > 0 && !s.isCollapsed;
 };
@@ -325,7 +334,13 @@ export function install(app: App): void {
     text ||= clip?.text || '';
     const els = elementsIn(text);
     const slides = slidesIn(text)?.length ? text : null;
-    if (inText(a)) {
+    const field = fieldOf(a);
+    if (field) {
+      // a field takes plain text, and a line of the outline one line of it. slides are pasted from
+      // the outline as from the navigator
+      if (slides && a.region() === 'navigator') await a.commands.run('slide.paste', slides);
+      else if (!els && !slides) document.execCommand('insertText', false, field.closest('.beeson-edit-outline') ? text.replace(/\s*\n\s*/g, ' ') : text);
+    } else if (inText(a)) {
       const at = getSelection()?.anchorNode ?? document.activeElement;
       const host = a.hostOf(at instanceof Element ? at : at?.parentElement ?? null);
       if (host && !els && !slides && pastesItems(a, host, text)) await pasteItems(a, text);
