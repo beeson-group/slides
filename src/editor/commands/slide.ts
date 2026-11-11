@@ -314,6 +314,8 @@ export function install(app: App): void {
   injectStyle('slide', CSS);
   const c = app.commands;
   const inNav = () => app.region() === 'navigator';
+  // on the canvas, Alt with an arrow adds a row to a selected table, and it moves the slide otherwise
+  const rowKeys = (a: App) => a.region() === 'canvas' && a.commands.enabled('table.rowAbove');
   const slideMenu = (order: number, group = 'slide') => ({ bar: 'Slide', group, order });
   const defs: Command[] = [
     {
@@ -410,10 +412,10 @@ export function install(app: App): void {
       id: 'slide.moveUp',
       label: 'Move Slide Up',
       keys: { mac: ['Alt+ArrowUp'], other: ['Alt+ArrowUp'] },
-      in: ['navigator'],
+      in: ['navigator', 'canvas'],
       menu: slideMenu(50, 'move'),
       context: ['slide'],
-      enabled: (a) => canShift(a, true),
+      enabled: (a) => canShift(a, true) && !rowKeys(a),
       undoable: true,
       run: async (a) => {
         const t = targets(a);
@@ -425,10 +427,10 @@ export function install(app: App): void {
       id: 'slide.moveDown',
       label: 'Move Slide Down',
       keys: { mac: ['Alt+ArrowDown'], other: ['Alt+ArrowDown'] },
-      in: ['navigator'],
+      in: ['navigator', 'canvas'],
       menu: slideMenu(51, 'move'),
       context: ['slide'],
-      enabled: (a) => canShift(a, false),
+      enabled: (a) => canShift(a, false) && !rowKeys(a),
       undoable: true,
       run: async (a) => {
         const t = targets(a);
