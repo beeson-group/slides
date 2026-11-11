@@ -338,6 +338,8 @@ for (const platform of PLATFORMS) {
     await click(page, video);
     await settle(page);
     const before = (await page.evaluate('window.BeesonEditor.status()')).message;
+    // the Video pane is filled after the click, and under load later than one settle
+    await page.waitFor(`!!document.querySelector(${js(SLIDER)}) || !!document.querySelector('${PANEL} [data-command="media.poster"]')`);
     if (await page.evaluate(`!!document.querySelector(${js(SLIDER)})`)) {
       await page.waitFor(`!document.querySelector(${js(SLIDER)}).disabled`);
       await slideTo(page, 0.5);
