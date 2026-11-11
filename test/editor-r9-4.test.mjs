@@ -174,3 +174,64 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+const framed = (page) => page.evaluate(`document.querySelectorAll('.beeson-frame.selected:not([hidden])').length`);
+
+// findings select-move-resize-1 and tables-equations-insert-5: Esc from the sheet of a formula left
+// nothing selected, with the focus on the formula, which the editor took for a text. Delete and the
+// arrow keys did nothing until a second Esc
+for (const platform of PLATFORMS) {
+  test(`Esc from the sheet of a display selects it as an object for Delete and the arrow keys (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 3 });
+    const math = '.reveal section.present div.math';
+    for (const how of ['the key', 'Cancel']) {
+      await click(page, math);
+      await sleep(300);
+      assert.equal(await sheetOpen(page), true, 'a click on a formula does not open its sheet');
+      if (how === 'Cancel') await click(page, '.beeson-math button:not(.primary)');
+      else await press(page, 'Escape');
+      await frames(page);
+      assert.equal(await sheetOpen(page), false);
+      assert.deepEqual(await selected(page), ['div.math'], `the formula is not selected after ${how}`);
+      assert.equal(await framed(page), 1);
+      await press(page, 'ArrowRight');
+      await frames(page);
+      assert.match((await styleOf(page, math)) ?? '', /translate/, `an arrow key after ${how} does not nudge the formula`);
+      await roundTrip(page);
+      // one more Esc clears the selection
+      await click(page, math);
+      await sleep(300);
+      await press(page, 'Escape');
+      await frames(page);
+      await press(page, 'Escape');
+      await frames(page);
+      assert.deepEqual(await selected(page), [], `a second Esc after ${how} does not clear the selection`);
+      assert.equal(await framed(page), 0);
+      assert.equal(await page.evaluate(`document.activeElement.closest('mjx-container') === null`), true, 'the formula keeps the focus after the selection is cleared');
+    }
+    // Backspace deletes the formula selected by Esc
+    await click(page, math);
+    await sleep(300);
+    await press(page, 'Escape');
+    await frames(page);
+    await press(page, 'Backspace');
+    await frames(page);
+    assert.equal(await page.evaluate(`document.querySelectorAll(${js(math)}).length`), 0, 'Backspace does not delete the formula');
+    await roundTrip(page);
+  });
+
+  test(`Esc from the sheet of an inline formula selects its block as an object (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 3 });
+    const para = '.reveal section.present p[data-fragment-index="2"]';
+    await click(page, `${para} mjx-container`);
+    await sleep(300);
+    assert.equal(await sheetOpen(page), true);
+    await press(page, 'Escape');
+    await frames(page);
+    assert.deepEqual(await selected(page), ['p.fragment']);
+    await press(page, 'ArrowDown');
+    await frames(page);
+    assert.match((await styleOf(page, para)) ?? '', /translate/, 'an arrow key does not nudge the block of the formula');
+    await roundTrip(page);
+  });
+}
