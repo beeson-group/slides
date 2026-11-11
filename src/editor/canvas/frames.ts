@@ -68,7 +68,6 @@ html.beeson-rotating, html.beeson-rotating * { cursor: grabbing !important; user
 .beeson-marquee { position: fixed; box-sizing: border-box; border: 1px solid var(--ed-select, #7048e8); background: color-mix(in srgb, var(--ed-select, #7048e8) 12%, transparent); }
 html.beeson-editing .reveal .beeson-movable:focus-visible { outline: 2px solid var(--ed-select, #7048e8); outline-offset: 6px; }
 html.beeson-dragging, html.beeson-dragging * { cursor: move !important; user-select: none !important; }
-html.beeson-resizing, html.beeson-resizing * { user-select: none !important; }
 html.beeson-band, html.beeson-band .reveal * { cursor: move; }
 html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .slides section video, html.beeson-editing .reveal .slides section .zone, html.beeson-editing .reveal .slides section .plate, html.beeson-editing .reveal .slides section .qr { cursor: move; }
 html.beeson-editing .reveal .slides section [data-locked]:is(img, video, .zone, .plate, .qr), html.beeson-editing .reveal .slides section [data-locked] :is(img, video, .qr) { cursor: default; }

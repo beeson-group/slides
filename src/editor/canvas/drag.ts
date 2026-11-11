@@ -17,7 +17,16 @@ import { injectStyle } from '../ui/dom.ts';
 
 const CSS = `
 html.beeson-dragging.beeson-copying, html.beeson-dragging.beeson-copying * { cursor: copy !important; }
+html.beeson-sizing, html.beeson-sizing * { cursor: var(--beeson-grip-cursor) !important; user-select: none !important; }
 `;
+
+// the cursor of a held grip kept over the page while it is dragged, as the resize cursor of a held
+// handle of Keynote and PowerPoint stays through the drag
+function holdGrip(grip: HTMLElement): void {
+  view.held = grip;
+  document.documentElement.style.setProperty('--beeson-grip-cursor', getComputedStyle(grip).cursor);
+  document.documentElement.classList.add('beeson-sizing');
+}
 
 // a drag shorter than this, in screen pixels, is a click
 const CLICK = 3;
@@ -496,8 +505,7 @@ export function install(app: App): void {
       const p = Object.assign(start('resize', ev, followers[0].el, followers.map((m) => m.el), null), { handle: (grip as HTMLElement).dataset.handle as Handle, followers, group: true, was: frames.groupTurn() });
       for (const m of followers.flatMap((m) => m.sized)) if (!p.from.has(m)) p.from.set(m, placeOf(m));
       p.base = toSlide(f, frames.groupBox() ?? union(followers.map((m) => visualRect(m.pic))));
-      view.held = grip as HTMLElement;
-      document.documentElement.classList.add('beeson-resizing');
+      holdGrip(grip as HTMLElement);
       return;
     }
     if (grip && !grip.classList.contains('locked')) {
@@ -525,8 +533,7 @@ export function install(app: App): void {
       for (const m of [...sized, ...followers.flatMap((m) => m.sized)]) if (!p.from.has(m)) p.from.set(m, placeOf(m));
       p.picture = toSlide(f, p.framed ? pictureReach(p.framed) : visualRect(pic));
       p.base = toSlide(f, p.framed ? frameRect(p.framed) : visualRect(pic));
-      view.held = grip as HTMLElement;
-      document.documentElement.classList.add('beeson-resizing');
+      holdGrip(grip as HTMLElement);
       return;
     }
     if (target === frames.handle) {
@@ -858,7 +865,7 @@ export function install(app: App): void {
     if (!p) return;
     press = null;
     app.stage?.edgeScroll(null);
-    document.documentElement.classList.remove('beeson-dragging', 'beeson-resizing', 'beeson-rotating');
+    document.documentElement.classList.remove('beeson-dragging', 'beeson-sizing', 'beeson-rotating');
     view.moving = null;
     view.resizing = false;
     view.turn = null;
