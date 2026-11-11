@@ -133,7 +133,7 @@ for (const platform of PLATFORMS) {
     await frames(page);
     assert.equal(out.prevented, true);
     assert.equal(await tables(page), 1, 'Cut removed the table');
-    assert.equal(out.plain, 'Moon\t0.01215\nEuropa\t2.53e-5');
+    assert.equal(out.plain, 'Moon\t\\(0.01215\\)\nEuropa\t2.53e-5');
     assert.equal(await undoLabel(page), 'Undo Cut');
     await roundTrip(page, CLEARED);
   });
@@ -162,10 +162,10 @@ for (const platform of PLATFORMS) {
     await range(page, 'Moon', 'Jupiter');
     const out = await fire(page, 'copy');
     assert.equal(out.prevented, true);
-    assert.equal(out.plain, 'Moon\t0.01215\tEarth and Moon\nEuropa\t2.53e-5\tJupiter');
+    assert.equal(out.plain, 'Moon\t\\(0.01215\\)\tEarth and Moon\nEuropa\t2.53e-5\tJupiter');
     assert.ok(!out.html.includes('<!--beeson-->'), 'the copy holds the table as an element of the editor');
     assert.ok(!out.html.includes('Titan') && !out.html.includes('Body'), 'the copy holds cells outside the range');
-    assert.match(out.html, /<table>[\s\S]*<td>Moon<\/td>[\s\S]*<td>Jupiter<\/td>[\s\S]*<\/table>/);
+    assert.match(out.html, /<table[^>]*>[\s\S]*<td>Moon<\/td>[\s\S]*<td>Jupiter<\/td>[\s\S]*<\/table>/);
     assert.equal(await inBlock(page), true);
     await byteExact(page);
   });

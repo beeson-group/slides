@@ -85,8 +85,9 @@ function nextKept(el: Element): Node | null {
 }
 
 // the last copy, with its sources, the number of times it was pasted on the slide of its sources,
-// and the elements of the last such paste, after which the next one is put
-type Clip = { text: string; sources: Element[]; paths: string[][]; pasted: number; last: Element[] };
+// and the elements of the last such paste, after which the next one is put. html is the table of a
+// copy of a range of cells
+type Clip = { text: string; sources: Element[]; paths: string[][]; pasted: number; last: Element[]; html?: string };
 let clip: Clip | null = null;
 
 function copy(app: App, els: Element[], data: DataTransfer | null): void {
@@ -107,7 +108,7 @@ function copyRange(app: App, data: DataTransfer | null): boolean {
   const t = selectedRange(app);
   if (!t) return false;
   const { plain, html } = rangeText(t);
-  clip = { text: plain, sources: [], paths: [], pasted: 0, last: [] };
+  clip = { text: plain, sources: [], paths: [], pasted: 0, last: [], html };
   write(data, plain, html);
   return true;
 }
@@ -330,7 +331,7 @@ export function install(app: App): void {
       if (match && host) insertPlain(host, els || slides ? wordsOf(text) : text);
       else if (!els && !slides) document.execCommand('insertText', false, text);
     } else if (els) await pasteElements(a, els);
-    else if (!slides && (await pasteRange(a, text))) return;
+    else if (!slides && (await pasteRange(a, text, text === clip?.text ? clip.html : ''))) return;
     else if (slides) await a.commands.run('slide.paste', slides);
   };
   c.define({
