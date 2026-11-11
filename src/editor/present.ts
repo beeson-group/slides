@@ -1,6 +1,7 @@
 // the presenter display of the editor, as the presenter display of Keynote and the presenter view
 // of PowerPoint: the current slide at its step, the next slide or step, the notes with A- and A+,
-// the clock, and the elapsed time with pause and reset. with Presenter View, the saved deck is
+// the clock, and the elapsed time with pause and reset. each part can be hidden in the popover of
+// Display Options, as in Keynote, and the choice is kept in the storage for the deck. with Presenter View, the saved deck is
 // played in another tab and kept at the slide and step of the display. with Rehearse Timings, each
 // slide is timed, and at the end the seconds spent on each slide shown are written into its
 // data-timing, as one entry of the history. the slides are drawn from the page of the editor,
@@ -169,6 +170,23 @@ export function playTimings(win: Window, time = 30000): Promise<number> {
 }
 
 const NOTES_KEY = 'beeson-presenter-notes';
+// the parts of the display that can be hidden, with the labels of Keynote
+const PARTS = [
+  ['current', 'Current Slide'],
+  ['next', 'Next Slide'],
+  ['notes', 'Presenter Notes'],
+  ['clock', 'Clock'],
+  ['timer', 'Timer'],
+] as const;
+const partsKey = () => `beeson-presenter-parts:${location.pathname}`;
+function hiddenParts(): string[] {
+  try {
+    const v: unknown = JSON.parse(stored(partsKey()) ?? '[]');
+    return Array.isArray(v) ? v.filter((p) => PARTS.some(([id]) => id === p)) : [];
+  } catch {
+    return [];
+  }
+}
 // the sizes of the text of the notes, in CSS px
 const NOTE_SIZES = [14, 16, 18, 21, 24, 28, 32, 40];
 
@@ -181,6 +199,16 @@ dialog.beeson-edit-presenter::backdrop { background: #000; }
 .beeson-edit-presenter .bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; padding: 0 14px; background: var(--ed-bg); border-bottom: 1px solid var(--ed-line); user-select: none; -webkit-user-select: none; }
 .beeson-edit-presenter .bar.foot { grid-row: 3; border-bottom: 0; border-top: 1px solid var(--ed-line); }
 .beeson-edit-presenter .bar > :last-child { justify-self: end; }
+.beeson-edit-presenter .parts { position: absolute; top: 44px; right: 10px; z-index: 2; display: flex; flex-direction: column; gap: 2px; min-width: 180px; padding: 6px; border: 1px solid var(--ed-menu-line); border-radius: 10px; background: var(--ed-panel); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4); user-select: none; -webkit-user-select: none; }
+.beeson-edit-presenter .parts[hidden] { display: none; }
+.beeson-edit-presenter .parts label { display: flex; align-items: center; gap: 8px; height: 26px; padding: 0 8px; border-radius: 6px; }
+.beeson-edit-presenter .parts label:hover { background: var(--ed-hover); }
+.beeson-edit-presenter .parts input { margin: 0; accent-color: var(--ed-select); }
+.beeson-edit-presenter.no-clock .clock, .beeson-edit-presenter.no-timer .timer { visibility: hidden; }
+.beeson-edit-presenter.no-current .col.now, .beeson-edit-presenter.no-next .next, .beeson-edit-presenter.no-notes .notes, .beeson-edit-presenter.no-next.no-notes .col.side { display: none; }
+.beeson-edit-presenter:is(.no-current, .no-next.no-notes) .stage { grid-template-columns: minmax(0, 1fr); }
+.beeson-edit-presenter.no-current .shot.next { align-self: center; width: min(100%, calc((100vh - 150px) * 16 / 9)); }
+.beeson-edit-presenter.no-current:not(.no-notes) .shot.next { width: min(100%, calc((100vh - 330px) * 16 / 9)); }
 .beeson-edit-presenter .group { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .beeson-edit-presenter button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 28px; min-width: 28px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: 12px/1 var(--ed-font); cursor: default; white-space: nowrap; }
 .beeson-edit-presenter button:hover:not(:disabled) { background: var(--ed-hover); }
@@ -265,7 +293,9 @@ export class Presenter {
   private readonly parts: Record<string, HTMLElement> = {};
   private readonly current = make('div', 'pic');
   private readonly next = make('div', 'pic');
-  private readonly nextShot = make('div', 'shot');
+  private readonly nextShot = make('div', 'shot next');
+  private readonly options = tool('', 'Display Options', 'inspector');
+  private readonly popover = make('div', 'parts');
   private readonly endMark = make('div', 'end-mark', 'End of the show');
   private done: ((kept: boolean | null) => void) | null = null;
 
@@ -290,12 +320,40 @@ export class Presenter {
     pause.addEventListener('click', () => this.togglePause());
     const reset = tool('Reset', 'Set the timer back to zero');
     reset.addEventListener('click', () => this.resetTimer());
-    const middle = make('div', 'group');
+    const middle = make('div', 'group timer');
     middle.append(pause, elapsed, reset);
     const clock = make('span', 'clock');
     clock.setAttribute('aria-label', 'Clock');
+    this.options.setAttribute('aria-haspopup', 'dialog');
+    this.options.setAttribute('aria-expanded', 'false');
+    this.options.addEventListener('click', () => this.showParts(this.popover.hidden));
+    const right = make('div', 'group');
+    right.append(clock, this.options);
     const top = make('div', 'bar top');
-    top.append(left, middle, clock);
+    top.append(left, middle, right);
+    this.popover.hidden = true;
+    this.popover.setAttribute('role', 'dialog');
+    this.popover.setAttribute('aria-label', 'Display Options');
+    for (const [id, text] of PARTS) {
+      const box = make('input') as HTMLInputElement;
+      box.type = 'checkbox';
+      box.name = id;
+      box.addEventListener('change', () => {
+        const hidden = new Set(hiddenParts());
+        if (box.checked) hidden.delete(id);
+        else hidden.add(id);
+        store(partsKey(), hidden.size ? JSON.stringify(PARTS.map(([p]) => p).filter((p) => hidden.has(p))) : null);
+        this.applyParts();
+      });
+      const label = make('label');
+      label.append(box, text);
+      this.popover.append(label);
+    }
+    // a click outside the popover closes it
+    el.addEventListener('pointerdown', (ev) => {
+      const at = ev.target as Node;
+      if (!this.popover.hidden && !this.popover.contains(at) && !this.options.contains(at)) this.showParts(false);
+    });
 
     const shotCurrent = make('div', 'shot current');
     shotCurrent.append(this.current);
@@ -304,10 +362,10 @@ export class Presenter {
       if (ev.button === 0 && !ev.ctrlKey && !ev.metaKey && !ev.altKey && !ev.shiftKey) this.go(1);
     });
     const currentLabel = make('div', 'label');
-    const colLeft = make('div', 'col');
+    const colLeft = make('div', 'col now');
     colLeft.append(currentLabel, shotCurrent);
     this.nextShot.append(this.next, this.endMark);
-    const nextLabel = make('div', 'label');
+    const nextLabel = make('div', 'label next');
     const notes = make('div', 'notes');
     const head = make('div', 'head');
     const smaller = tool('A−', 'Make the notes smaller');
@@ -317,7 +375,7 @@ export class Presenter {
     head.append(make('span', '', 'Notes'), smaller, bigger);
     const text = make('div', 'text');
     notes.append(head, text);
-    const colRight = make('div', 'col');
+    const colRight = make('div', 'col side');
     colRight.append(nextLabel, this.nextShot, notes);
     const stage = make('div', 'stage');
     stage.append(colLeft, colRight);
@@ -333,10 +391,10 @@ export class Presenter {
     slideTime.append(document.createTextNode('This slide'), make('b', '', '0:00'));
     const hint = make('span', 'hint', '→ or Space next, ← back, a number and Return to go, Esc to end');
     const audience = make('span', 'audience');
-    const right = make('div', 'group');
-    right.append(audience, hint);
+    const info = make('div', 'group');
+    info.append(audience, hint);
     const foot = make('div', 'bar foot');
-    foot.append(nav, slideTime, right);
+    foot.append(nav, slideTime, info);
 
     const summary = make('div', 'summary');
     const card = make('div', 'card');
@@ -355,14 +413,16 @@ export class Presenter {
     card.append(h3, said, buttons);
     summary.append(card);
 
-    el.append(top, stage, summary, foot);
+    el.append(top, stage, summary, foot, this.popover);
     Object.assign(this.parts, { title, elapsed, clock, currentLabel, nextLabel, text, count, slideTime: slideTime.lastChild as HTMLElement, audience, said, pause, back, keep });
     el.addEventListener('keydown', (ev) => this.onKey(ev));
     el.addEventListener('cancel', (ev) => {
       ev.preventDefault();
       this.finish();
     });
-    new ResizeObserver(() => this.draw()).observe(shotCurrent);
+    const resized = new ResizeObserver(() => this.draw());
+    resized.observe(shotCurrent);
+    resized.observe(this.nextShot);
   }
 
   get isOpen(): boolean {
@@ -376,8 +436,9 @@ export class Presenter {
 
   // opens the display at slide from, or at the first slide shown after it. the promise is resolved
   // at the end of the show, with true when the timings of a rehearsal were kept, false when they
-  // were not, and null for a show without a rehearsal
-  open(mode: Mode, from: Element | null, audience: Window | null = null): Promise<boolean | null> {
+  // were not, and null for a show without a rehearsal. with customize, the popover of the parts is
+  // open
+  open(mode: Mode, from: Element | null, audience: Window | null = null, customize = false): Promise<boolean | null> {
     if (this.isOpen) this.close(null);
     this.mode = mode;
     this.list = this.shown();
@@ -404,6 +465,8 @@ export class Presenter {
     this.el.showModal();
     this.el.focus({ preventScroll: true });
     this.applyNotes();
+    this.applyParts();
+    this.showParts(customize);
     this.render();
     this.timer = window.setInterval(() => this.tick(), 250);
     return new Promise((resolve) => {
@@ -490,6 +553,20 @@ export class Presenter {
 
   private applyNotes(): void {
     this.parts.text.style.fontSize = `${this.noteSize}px`;
+  }
+
+  // the parts hidden in the storage of the deck are hidden, and their checkboxes cleared
+  private applyParts(): void {
+    const hidden = hiddenParts();
+    for (const [id] of PARTS) this.el.classList.toggle(`no-${id}`, hidden.includes(id));
+    for (const box of this.popover.querySelectorAll('input')) box.checked = !hidden.includes(box.name);
+    this.draw();
+  }
+
+  private showParts(open: boolean): void {
+    this.popover.hidden = !open;
+    this.options.setAttribute('aria-expanded', String(open));
+    if (!open && this.popover.contains(document.activeElement)) this.el.focus({ preventScroll: true });
   }
 
   private slideTime(): number {
@@ -596,7 +673,11 @@ export class Presenter {
   }
 
   private onKey(ev: KeyboardEvent): void {
-    if (this.el.classList.contains('asking')) {
+    const inPopover = this.popover.contains(ev.target as Node);
+    if (!this.popover.hidden && ev.key === 'Escape') this.showParts(false);
+    // a checkbox of the popover takes Space and Return
+    else if (inPopover && (ev.key === ' ' || ev.key === 'Enter')) return;
+    else if (this.el.classList.contains('asking')) {
       if (ev.key === 'Enter') this.answer(true);
       else if (ev.key === 'Escape') this.answer(false);
       else return;
@@ -655,6 +736,7 @@ export class Presenter {
     const last = this.list[this.at];
     if (this.el.open) this.el.close();
     this.el.classList.remove('asking');
+    this.showParts(false);
     this.audience = null;
     if (last?.isConnected) this.app.showSlide(last);
     if (resolve) this.resolve(result);
