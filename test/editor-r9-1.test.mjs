@@ -303,5 +303,54 @@ for (const platform of PLATFORMS) {
       });
     }
 
+    test(`a turned figure is framed upright around its picture and its caption, with its grips at the corners, and resized by them, on ${platform} in ${mode} mode`, async (t) => {
+      for (const n of [ZONE_PAIR, ZONE_ONE]) {
+        const where = `${NAMES[n]} turned by 30° on ${platform} in ${mode} mode`;
+        const page = await load(t, platform, mode, n);
+        await pick(page, 'figure');
+        const upright = await look(page);
+        await exec(page, 'arrange.setRotation', { deg: 30 });
+        await frames(page);
+        page.source = await render(page);
+        const rest = await look(page);
+        assert.equal(rest.pictures[0].deg, 30, `${where}: the picture is not turned`);
+        // the caption stays upright and in place
+        assert.ok(sameBox(rest.cap, upright.cap, 0.5) && rest.capDeg === 0, `${where}: the caption moves from ${show(upright.cap)} to ${show(rest.cap)}`);
+        const around = union(reach(rest.pictures[0].corners), rest.cap);
+        assert.equal(rest.frameDeg, 0, `${where}: the frame is turned by ${rest.frameDeg}°`);
+        assert.ok(sameBox(rest.frame, around), `${where}: the frame is at ${show(rest.frame)}, not around the turned picture and the caption at ${show(around)}`);
+        for (const h of HANDLES) {
+          const want = gripOn(rest.frame, 0, h), g = rest.grips[h];
+          assert.ok(g && near(g.x, want.x) && near(g.y, want.y), `${where}: the grip ${h} is at ${js(g)}, not at ${js(want)}`);
+        }
+        // a corner grip scales the picture, which stays turned, with the frame kept around it and
+        // the caption, and the corner across from the grip in place
+        const { dx, dy } = inward('se');
+        const g = rest.grips.se, ptr = { x: g.x + dx, y: g.y + dy };
+        await drag(page, g, { dx, dy, modifiers: FREE[platform], hold: true });
+        for (const stage of ['in the drag', 'after the drag']) {
+          if (stage === 'after the drag') {
+            await release(page, ptr);
+            await frames(page);
+          }
+          const now = await look(page);
+          const at = `${where}, a drag of the grip se ${stage}`;
+          assert.equal(now.pictures[0].deg, 30, `${at}: the picture is not turned`);
+          assert.ok(now.pictures[0].width < rest.pictures[0].width - 20, `${at}: the picture is not made smaller`);
+          const held = union(reach(now.pictures[0].corners), now.cap);
+          assert.equal(now.frameDeg, 0, `${at}: the frame is turned`);
+          assert.ok(sameBox(now.frame, held), `${at}: the frame is at ${show(now.frame)}, not around ${show(held)}`);
+          captionUnder(now, at);
+          assert.ok(near(now.frame.left, rest.frame.left) && near(now.frame.top, rest.frame.top), `${at}: the corner across from the grip moves from ${show(rest.frame)} to ${show(now.frame)}`);
+          const turnedPicture = reach(now.pictures[0].corners);
+          atPointer(now.grips.se, ptr, 'se', turnedPicture.width / turnedPicture.height, at);
+        }
+        const edited = await render(page);
+        for (const l of changedLines(page.source, edited)) assert.match(l, /^<(figure class="zone"|img )/, `${where}: the resize writes ${l}`);
+        await roundTrip(page, edited);
+        await saved(page, edited, `r9-1-turned-${n}.html`);
+      }
+    });
+
   }
 }
