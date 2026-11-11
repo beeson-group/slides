@@ -5,13 +5,15 @@
 // the file of an image or a video is shown in a well with Replace…, and the poster of a video in a
 // well with Capture Poster, as the Replace button of the Image tab of Keynote. the Poster Frame
 // slider of the Movie tab of Keynote chooses the time of the frame: a move of it shows the frame on
-// the slide, and its release captures the frame as the poster
+// the slide, and its release captures the frame as the poster. Play beside it plays the video on
+// the slide from that frame, as the play button of the Movie tab
 
 import type { App } from '../app.ts';
 import { QR_MAX, bytesOf, imageOf, qrOf, videoOf } from '../commands/figure.ts';
 import { posterTime, setPosterTime, unreadable } from '../media/actions.ts';
 import { media } from '../media/store.ts';
 import { make, injectStyle } from '../ui/dom.ts';
+import { icon } from '../ui/icons.ts';
 import { button, checkbox, note, row, section, segmented, textField, type Control, type Run } from './controls.ts';
 
 const CSS = `
@@ -19,7 +21,8 @@ const CSS = `
 .beeson-edit-inspector .ed-well .thumb { grid-row: span 2; width: 56px; height: 40px; border-radius: 5px; background: var(--ed-pressed) center / contain no-repeat; box-shadow: inset 0 0 0 1px var(--ed-line); }
 .beeson-edit-inspector .ed-well .name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 12px/1.3 var(--ed-font); color: var(--ed-text); }
 .beeson-edit-inspector .ed-well .ed-btn { flex: 0 0 auto; justify-self: start; }
-.beeson-edit-inspector .ed-frame { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; font: 12px/1.3 var(--ed-font); color: var(--ed-text); }
+.beeson-edit-inspector .ed-frame { display: grid; grid-template-columns: auto auto 1fr auto; gap: 8px; align-items: center; font: 12px/1.3 var(--ed-font); color: var(--ed-text); }
+.beeson-edit-inspector .ed-frame .ed-play { width: 24px; height: 22px; padding: 0; border: 0; border-radius: 5px; background: var(--ed-pressed); color: var(--ed-text); display: flex; align-items: center; justify-content: center; }
 .beeson-edit-inspector .ed-frame input { width: 100%; min-width: 0; margin: 0; accent-color: var(--ed-select); }
 .beeson-edit-inspector .ed-frame output { min-width: 4.5em; text-align: right; color: var(--ed-muted); font-variant-numeric: tabular-nums; }
 .beeson-edit-inspector .ed-frame.off { opacity: 0.45; }
@@ -117,6 +120,15 @@ export const clock = (s: number): string => {
   return `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
 };
 
+// the video played by Play of the Video pane. the play is a preview, which changes neither the file
+// nor the history, and it is paused when the selection or the slide changes
+let previewed: HTMLVideoElement | null = null;
+const stopPreview = () => {
+  previewed?.pause();
+  previewed = null;
+};
+const stopping = new WeakSet<App>();
+
 // the Poster Frame slider over the length of the video, with the time of the frame. a move seeks
 // the video on the slide to the frame, and a release captures it as the poster
 function frameSlider(app: App, run: Run, video: HTMLVideoElement | null): Control {
@@ -128,13 +140,50 @@ function frameSlider(app: App, run: Run, video: HTMLVideoElement | null): Contro
   input.name = 'poster-frame';
   input.setAttribute('aria-label', 'Poster Frame');
   const time = make('output');
-  el.append(make('span', '', 'Frame'), input, time);
+  const play = make('button', 'ed-play');
+  el.append(make('span', '', 'Frame'), play, input, time);
+  // the icon is drawn again only when it changes, since a click is lost on an icon replaced under it
+  let was: boolean | null = null;
+  const shown = () => {
+    const on = !!video && previewed === video && !video.paused;
+    if (on === was) return;
+    was = on;
+    play.replaceChildren(icon(on ? 'pause' : 'play', 14));
+    play.setAttribute('aria-label', on ? 'Pause' : 'Play');
+    play.title = on ? 'Pause the video' : 'Play the video from the frame of the slider';
+  };
+  if (!stopping.has(app)) {
+    stopping.add(app);
+    app.selection.listen(stopPreview);
+    app.listen('slide', stopPreview);
+  }
+  play.addEventListener('click', () => {
+    if (!video) return;
+    if (previewed === video && !video.paused) return stopPreview();
+    stopPreview();
+    previewed = video;
+    video.currentTime = Number(input.value);
+    void video.play().catch(() => {});
+  });
+  // the slider follows the video while it plays
+  const follow = () => {
+    if (!input.isConnected) return void video?.removeEventListener('timeupdate', follow);
+    if (video && previewed === video) {
+      input.value = String(video.currentTime);
+      setPosterTime(video, video.currentTime);
+      time.textContent = clock(video.currentTime);
+    }
+    shown();
+  };
+  for (const type of ['timeupdate', 'play', 'pause'] as const) video?.addEventListener(type, follow);
   const length = () => (video && Number.isFinite(video.duration) ? video.duration : 0);
   const sync = () => {
     const d = length();
     const enabled = !!video?.isConnected && d > 0 && !!app.commands.get('media.poster') && app.commands.state('media.poster').enabled;
     input.disabled = !enabled;
+    play.disabled = !enabled;
     el.classList.toggle('off', !enabled);
+    shown();
     input.max = String(d || 1);
     if (document.activeElement !== input && video) input.value = String(Math.min(posterTime(video), d));
     time.textContent = clock(Number(input.value));
