@@ -8,14 +8,27 @@ import { EVERYWHERE, OUTSIDE_DIALOGS, type Command } from '../commands.ts';
 import { canPick, canWrite, fileActions } from '../file/files.ts';
 import { clearRecents, MAX_RECENT, recentLabel, recents } from '../file/recent.ts';
 
+const hidden = (s: Element | null) => s?.getAttribute('data-visibility') === 'hidden';
+const sections = (parent: Element) => [...parent.children].filter((s) => s.localName === 'section' && !hidden(s));
+
+// the indices of slide in the show, where reveal.js removes the hidden slides that the editor
+// keeps. a hidden slide is shown from the next shown slide, or from the last one
+export function showIndices(app: App, slide: Element | null): { h: number; v: number } {
+  const leaves = [...app.slides().querySelectorAll('section')].filter((s) => !s.querySelector('section'));
+  const shown = leaves.filter((s) => !hidden(s) && !hidden(s.parentElement));
+  const at = slide ? leaves.indexOf(slide) : 0;
+  const to = shown.find((s) => leaves.indexOf(s) >= at) ?? shown.at(-1);
+  if (!to) return { h: 0, v: 0 };
+  const top = to.parentElement?.localName === 'section' ? to.parentElement : to;
+  return { h: Math.max(0, sections(app.slides()).indexOf(top)), v: top === to ? 0 : Math.max(0, sections(top).indexOf(to)) };
+}
+
 // the saved deck from a slide. the presentation is opened at the address of the editor, whose
 // hash reveal.js does not keep up to date while the deck is edited. the hash is thus set to the
 // slide for the time of the call, and replaceState does not fire a hashchange, hence the slide of
 // the editor is kept
 async function presentAt(app: App, fromStart: boolean): Promise<void> {
-  const d = app.deck();
-  const current = app.current();
-  const { h, v } = !fromStart && d && current ? d.getIndices(current) : { h: 0, v: 0 };
+  const { h, v } = fromStart ? { h: 0, v: 0 } : showIndices(app, app.current());
   // the first slide is opened without a hash
   const to = v ? `#/${h}/${v}` : h ? `#/${h}` : '';
   const hash = location.hash;
