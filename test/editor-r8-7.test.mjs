@@ -396,3 +396,35 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+const STEPPED = 5;
+const ADD = 'Add as Last Step';
+
+for (const platform of PLATFORMS) {
+  for (const mode of MODES) {
+    test(`a figure whose images are a step is not offered Add as Last Step, and one that is not a step is, on ${platform} in ${mode} mode`, async (t) => {
+      const page = await load(t, platform, mode, STEPPED);
+      page.figure = 'figure.zone';
+      await pick(page);
+      assert.equal((await state(page, 'steps.add')).enabled, false, 'Add as Last Step is enabled on a figure whose images are a step');
+      await click(page, IMG, { button: 'right' });
+      await frames(page);
+      const item = (await menuItems(page)).find((i) => i.text.startsWith(ADD));
+      assert.ok(!item || item.off, `the menu of a figure whose images are a step offers ${ADD}`);
+      await press(page, 'Escape');
+      await page.close();
+
+      // a figure without a step takes it on its tag
+      const other = await load(t, platform, mode, ZONE_ONE);
+      await pick(other);
+      assert.equal((await state(other, 'steps.add')).enabled, true, `${ADD} is dimmed on a figure without a step`);
+      await exec(other, 'steps.add');
+      await frames(other);
+      const edited = await render(other);
+      assert.equal(edited, SOURCE.replace('<figure class="zone">\n        <img src="../../demo/figure-light.png" alt="A figure in both modes">', '<figure class="zone fragment" data-fragment-index="1">\n        <img src="../../demo/figure-light.png" alt="A figure in both modes">'));
+      assert.equal((await state(other, 'steps.add')).enabled, false, `${ADD} is enabled on a figure that it made a step`);
+      await roundTrip(other, edited);
+      assert.deepEqual(errors(other), []);
+    });
+  }
+}
