@@ -7,6 +7,7 @@ import { button, injectStyle, make, wire } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { chromeSelect } from '../ui/menu.ts';
 import { ZOOMS } from './canvas.ts';
+import { isHidden, showPlaces } from '../navigator/navigator.ts';
 
 const CSS = `
 .beeson-edit-bottom { grid-area: status; position: relative; z-index: 60; display: flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; box-sizing: border-box; background: var(--ed-bg); border-top: 1px solid var(--ed-line); color: var(--ed-muted); font: 12px/1 var(--ed-font); user-select: none; -webkit-user-select: none; }
@@ -157,9 +158,24 @@ export function install(app: App, layers: HTMLElement): void {
     document.querySelector('.theme-switch')?.dispatchEvent(new MouseEvent('click', { bubbles: true, detail: 1, clientX: r.left + r.width / 2, clientY: r.top + r.height / 2 }));
   }, fail);
 
+  // the place of the current slide in the show and the count of the slides in the show, as the
+  // navigator numbers them. a hidden slide reads the struck number that it would take
   const count = () => {
     const d = app.deck();
-    if (d) countEl.textContent = `Slide ${d.getSlidePastCount() + 1} of ${d.getTotalSlides()}`;
+    if (!d) return;
+    const slides = [...app.slides().querySelectorAll(':scope > section')];
+    const cur = app.current();
+    const i = cur ? slides.indexOf(cur) : -1;
+    if (i < 0) {
+      countEl.textContent = `Slide ${d.getSlidePastCount() + 1} of ${d.getTotalSlides()}`;
+      return;
+    }
+    const n = String(showPlaces(slides)[i]);
+    const total = slides.filter((s) => !isHidden(s)).length;
+    const hidden = isHidden(slides[i]);
+    countEl.replaceChildren('Slide ', hidden ? make('s', '', n) : n, ` of ${total}${hidden ? ', hidden' : ''}`);
+    if (hidden) countEl.setAttribute('aria-label', `Slide ${n} of ${total}, hidden`);
+    else countEl.removeAttribute('aria-label');
   };
   const zoomState = () => {
     if (!app.stage) return;
