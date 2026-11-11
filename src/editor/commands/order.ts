@@ -53,6 +53,18 @@ function targetOf(app: App, el: Element, order: Order, selected: Set<Element>): 
   return order === 'forward' || order === 'backward' ? reached[0] : reached[reached.length - 1];
 }
 
+// whether Bring Forward, or Send Backward with up false, would move el by itself
+export const canStep = (app: App, el: Element, up: boolean): boolean => targetOf(app, el, up ? 'forward' : 'backward', new Set([el])) !== null;
+
+// el moved by one layer, as Bring Forward or Send Backward moves it, for a drag of a row of
+// navigator/objects.ts. it returns false when el does not move
+export async function stepLayer(app: App, el: Element, up: boolean): Promise<boolean> {
+  const target = targetOf(app, el, up ? 'forward' : 'backward', new Set([el]));
+  if (!target) return false;
+  await app.doc.move(el, el.parentElement!, up ? target.nextSibling : target, 'order');
+  return true;
+}
+
 // the selected elements that a command acts on, without an element inside another one
 const selectedEls = (app: App): Element[] => {
   const els = app.selection.elements();
