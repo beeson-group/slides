@@ -182,3 +182,29 @@ export async function byteExact(page, edits = []) {
   }
   assert.equal(await page.evaluate('window.BeesonEditor.render()'), expected);
 }
+
+// the contrast ratio of WCAG 2 of two rgb() colors, the first drawn with its alpha over the second
+export function contrast(fg, bg) {
+  const num = (c) => c.match(/[\d.]+/g).map(Number);
+  const [r, g, b, a = 1] = num(fg);
+  const under = num(bg);
+  const top = [r, g, b].map((v, i) => v * a + under[i] * (1 - a));
+  const lum = ([x, y, z]) => [x, y, z].map((v) => ((v /= 255) <= 0.04045 ? v / 12.92 : ((v + 0.055) / 1.055) ** 2.4)).reduce((s, v, i) => s + v * [0.2126, 0.7152, 0.0722][i], 0);
+  const [hi, lo] = [lum(top), lum(under)].sort((p, q) => q - p);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+// GROUND is a function of the page that returns the ground of an element as rgb(), i.e. the
+// backgrounds of the element and of its ancestors composited down to the first opaque one, or white
+export const GROUND = `((el) => {
+  const layers = [];
+  for (let e = el; e; e = e.parentElement) {
+    const c = getComputedStyle(e).backgroundColor.match(/[\\d.]+/g).map(Number);
+    const a = c.length > 3 ? c[3] : 1;
+    if (a > 0) layers.push([c[0], c[1], c[2], a]);
+    if (a === 1) break;
+  }
+  let rgb = [255, 255, 255];
+  for (const [r, g, b, a] of layers.reverse()) rgb = [r, g, b].map((v, i) => v * a + rgb[i] * (1 - a));
+  return 'rgb(' + rgb.map(Math.round).join(', ') + ')';
+})`;

@@ -223,7 +223,7 @@ const NOTE_SIZES = [14, 16, 18, 21, 24, 28, 32, 40];
 // the presenter display and the rehearsal are black in both appearances, as in Keynote and
 // PowerPoint, hence the dialog sets the tokens of the editor for a black stage
 const CSS = `
-dialog.beeson-edit-presenter { --ed-bg: #000; --ed-canvas: #000; --ed-panel: #161618; --ed-text: #f2f2f4; --ed-muted: #a1a1a6; --ed-faint: #6c6c71; --ed-line: #2c2c2e; --ed-guide: #f08050; --ed-select: #9d47d8; --ed-focus: rgba(201, 79, 230, 0.6); --ed-hover: rgba(255, 255, 255, 0.08); --ed-pressed: rgba(255, 255, 255, 0.14); --ed-edge: rgba(255, 255, 255, 0.14); --ed-menu-line: rgba(255, 255, 255, 0.12); color-scheme: dark; box-sizing: border-box; width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: var(--ed-canvas); color: var(--ed-text); font: 13px/1.35 var(--ed-font); outline: none; overflow: hidden; }
+dialog.beeson-edit-presenter { --ed-bg: #000; --ed-canvas: #000; --ed-panel: #161618; --ed-text: #f2f2f4; --ed-muted: #a1a1a6; --ed-faint: #6c6c71; --ed-line: #2c2c2e; --ed-guide: #f08050; --ed-select: #9d47d8; --ed-focus: #c94fe6; --ed-hover: rgba(255, 255, 255, 0.08); --ed-pressed: rgba(255, 255, 255, 0.14); --ed-edge: rgba(255, 255, 255, 0.14); --ed-menu-line: rgba(255, 255, 255, 0.12); color-scheme: dark; box-sizing: border-box; width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: var(--ed-canvas); color: var(--ed-text); font: 13px/1.35 var(--ed-font); outline: none; overflow: hidden; }
 dialog.beeson-edit-presenter[open] { display: grid; grid-template-rows: 48px minmax(0, 1fr) 44px; }
 dialog.beeson-edit-presenter::backdrop { background: #000; }
 .beeson-edit-presenter .bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; padding: 0 14px; background: var(--ed-bg); border-bottom: 1px solid var(--ed-line); user-select: none; -webkit-user-select: none; }
@@ -284,7 +284,7 @@ dialog.beeson-edit-presenter::backdrop { background: #000; }
 .beeson-edit-presenter .notes .head button { height: 24px; min-width: 30px; padding: 0 6px; font-weight: 600; }
 .beeson-edit-presenter .notes .text { flex: 1; overflow: auto; padding: 10px 14px 14px; font-family: var(--ed-font); line-height: 1.45; user-select: text; -webkit-user-select: text; }
 .beeson-edit-presenter .notes .text p { margin: 0 0 0.6em; }
-.beeson-edit-presenter .notes .text.empty { color: var(--ed-faint); }
+.beeson-edit-presenter .notes .text.empty { color: var(--ed-muted); }
 .beeson-edit-presenter .count { min-width: 72px; text-align: center; font-variant-numeric: tabular-nums; }
 .beeson-edit-presenter .slide-time { visibility: hidden; display: inline-flex; align-items: baseline; gap: 8px; color: var(--ed-muted); }
 .beeson-edit-presenter.rehearse .slide-time { visibility: visible; }
