@@ -180,3 +180,82 @@ for (const platform of PLATFORMS) {
     await noRawTex(page);
   });
 }
+
+// text typed key by key at the caret, as the shoot of the council types it, with a frame after
+// each key so that the substitution of the key is made before the next one
+async function typeKeys(page, text) {
+  for (const ch of text) {
+    await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: ch, text: ch, unmodifiedText: ch });
+    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: ch });
+  }
+  await frames(page);
+}
+
+// the caret put into the block of selector by a click, then moved after the first occurrence of
+// mark in its text, or to its start or end for the marks 'start' and 'end'
+async function caretAt(page, selector, mark) {
+  // a click on a block selected after an open of the text may select it, and a second one edits it
+  for (let i = 0; i < 2; i++) {
+    await click(page, selector);
+    await frames(page);
+    if (await page.evaluate(`document.querySelector(${js(selector)}).contains(document.activeElement)`)) break;
+  }
+  const ok = await page.evaluate(`(() => {
+    const host = document.querySelector(${js(selector)});
+    const sel = getSelection();
+    if (${js(mark)} === 'start' || ${js(mark)} === 'end') {
+      const range = document.createRange();
+      range.selectNodeContents(host);
+      range.collapse(${js(mark)} === 'start');
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return document.activeElement === host || host.contains(document.activeElement);
+    }
+    const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+    for (let t = walker.nextNode(); t; t = walker.nextNode()) {
+      const i = t.data.indexOf(${js(mark)});
+      if (i >= 0) { sel.collapse(t, i + ${js(mark)}.length); return true; }
+    }
+    return false;
+  })()`);
+  assert.ok(ok, `the caret is not put at ${mark} of ${selector}`);
+}
+
+const PARA = '<p>Export your matplotlib figure with the styles of the template. It will show frameless.</p>';
+const ITEM = '<li class="fragment" data-fragment-index="2">You might have noticed a toggle on the top right: try clicking it on this slide.</li>';
+const DASHED = [
+  ['paragraph', '.reveal section.present > p', PARA],
+  ['list item', '.reveal section.present li:nth-child(2)', ITEM],
+];
+
+// finding 2: a space typed after an en dash at the end of a paragraph was reported lost, " - ok"
+// written as "–ok". an en dash keeps the spaces typed around it at the start, in the middle, and at
+// the end of a paragraph and of a list item, with a plain space between it and the next word
+for (const platform of PLATFORMS) {
+  for (const [what, selector, html] of DASHED) {
+    test(`a hyphen typed between spaces becomes an en dash and keeps the space after it, at the start, the middle, and the end of a ${what} (${platform})`, async (t) => {
+      const inner = /^<[^>]*>([^]*)<\/[a-z]+>$/.exec(html)[1];
+      const words = inner.split(' ').slice(0, 3).join(' ');
+      const cases = [
+        ['start', 'ok - go ', `ok – go ${inner}`],
+        [words, ' - ok', inner.replace(words, `${words} – ok`)],
+        ['end', ' - ok', `${inner} – ok`],
+        ['end', ' - ', `${inner} – `],
+      ];
+      for (const [mark, typed, now] of cases) {
+        const page = await load(t, platform, { n: 4 });
+        await caretAt(page, selector, mark);
+        await typeKeys(page, typed);
+        await press(page, 'Escape');
+        await frames(page);
+        const want = html.replace(inner, now);
+        const lines = (await render(page)).split('\n').filter((l) => !page.source.split('\n').includes(l));
+        assert.deepEqual(lines.map((l) => l.trim()), [want], `${js(typed)} typed at ${mark} of the ${what} is not written as in Keynote`);
+        await byteExact(page, [[html, want]]);
+        // the typing before the dash, the dash, and the typing after it are undone one at a time
+        await roundTrip(page, 3);
+        await page.close();
+      }
+    });
+  }
+}
