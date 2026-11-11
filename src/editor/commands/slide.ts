@@ -68,11 +68,11 @@ function placeAfter(app: App): { root: Element; before: Element | null } {
 }
 
 // the slides shown and selected after a command, with the focus kept in the navigator when the
-// command was run from it
+// command was run from it, and on the tile of the current slide while the light table is shown
 function land(app: App, slides: Element[], current: Element | null, focusNav: boolean): void {
   const nav = navOf(app);
   nav.select(slides, current);
-  if (focusNav) nav.focus(current);
+  if (focusNav || nav.table?.shown) nav.focus(current);
 }
 
 // the caret is put into the first empty heading of slide, or else at the start of its first block

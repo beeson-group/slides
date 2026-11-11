@@ -147,8 +147,8 @@ for (const platform of PLATFORMS) {
 
   // tables-equations-insert-6. the theme draws a plot at the size of a zone, 600 by 800 slide px,
   // and the slides of index.html with a figure or a video in the zone do not have a free place of
-  // that size, where the plot stays in the zone off every text. the slide of editor-layouts.html
-  // with a QR code moved into the zone has one, at the left over its backdrop
+  // that size, where the plot is put off the zone, which editor-r13-4 checks. the slide of
+  // editor-layouts.html with a QR code moved into the zone has one, at the left over its backdrop
   test(`a new plot is put off the figures and the texts already on the slide (${platform})`, async (t) => {
     for (const [deck, n, first] of [['test/pages/editor-layouts.html', GLIDE, 'insert.qr'], [DECK, FIGURES], [DECK, VIDEO]]) {
       const page = await load(t, platform, { deck, n });
@@ -170,7 +170,8 @@ for (const platform of PLATFORMS) {
       assert.ok(plot, 'no plot was inserted');
       assert.equal(figures.length, first ? 1 : 0);
       if (first) assert.ok(figures[0].left > 1100, `the QR code was not moved into the zone place: ${js(figures[0])}`);
-      for (const b of [...texts, ...figures]) assert.ok(!meets(plot, b), `on slide ${n} of ${deck}, the plot at ${js(plot)} lies over ${js(b)}`);
+      const zones = first ? [] : await boxes(page, ':scope > .zone:not(.plot)');
+      for (const b of first ? [...texts, ...figures] : zones) assert.ok(!meets(plot, b), `on slide ${n} of ${deck}, the plot at ${js(plot)} lies over ${js(b)}`);
       if (!first) await checkEdit(page, before, `r12-4-plot-${n}-${platform}.html`);
       assert.deepEqual(errors(page), []);
     }

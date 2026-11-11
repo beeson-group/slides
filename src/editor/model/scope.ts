@@ -90,8 +90,10 @@ export function declarationProblem(tag: string, classes: string[], name: string,
   return `the declaration ${name}`;
 }
 
-// the reason an attribute is out of the scope rule, or null when it is in it
-export function attributeProblem(name: string, template = false, tag = ''): string | null {
+// the reason an attribute is out of the scope rule, or null when it is in it. start is the number
+// of the first item of a numbered list, which the theme draws
+export function attributeProblem(name: string, template = false, tag = '', value = ''): string | null {
+  if (name === 'start') return tag === 'ol' && /^\d+$/.test(value) ? null : `the attribute ${name}`;
   if (name === 'class' || name === 'style' || DATA_ATTRS.includes(name) || STANDARD_ATTRS.includes(name)) return null;
   if (LINE_ATTRS[tag]?.includes(name)) return null;
   if (template && TEMPLATE_ATTRS.includes(name)) return null;
@@ -110,7 +112,7 @@ export function editProblems(tag: string, fileAttrs: Parameters<typeof stateOf>[
   for (const c of after.classes) if (!before.classes.includes(c) && !allowedClass(c, theme)) out.push(`the class ${c}`);
   for (const [name, value] of Object.entries(after.attrs)) {
     if (before.attrs[name] === value) continue;
-    const problem = attributeProblem(name, false, tag);
+    const problem = attributeProblem(name, false, tag, value);
     if (problem) out.push(problem);
   }
   for (const [name, value] of Object.entries(after.style)) {
@@ -128,8 +130,8 @@ export function textProblems(html: string, theme: Set<string>): string[] {
     if (t.type !== 'start') continue;
     const s = stateOf(t.attrs);
     for (const c of s.classes) if (!allowedClass(c, theme)) out.push(`the class ${c} on a ${t.name}`);
-    for (const name of Object.keys(s.attrs)) {
-      const problem = attributeProblem(name, true, t.name);
+    for (const [name, value] of Object.entries(s.attrs)) {
+      const problem = attributeProblem(name, true, t.name, value);
       if (problem) out.push(`${problem} on a ${t.name}`);
     }
     for (const [name, value] of Object.entries(s.style)) {
