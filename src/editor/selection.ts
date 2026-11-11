@@ -85,18 +85,6 @@ function dropRange(app: App): void {
   if (app.hostOf(s.anchorNode instanceof Element ? s.anchorNode : s.anchorNode?.parentElement ?? null)) s.removeAllRanges();
 }
 
-// an entry of the open transaction of a command that adds or removes elements, by which an undo
-// selects undone and a redo redone, as Keynote selects an object again that an undo puts back. an
-// element that is off the page or on another slide is left out. the entry is pushed before the
-// elements are removed and after they are added, so that they are on the page when it is run
-export function reselect(app: App, undone: readonly Element[] | null, redone: readonly Element[] | null): void {
-  const select = (els: readonly Element[] | null) => {
-    const kept = (els ?? []).filter((el) => el.isConnected && !!app.current()?.contains(el));
-    if (kept.length) app.selection.set('elements', kept);
-  };
-  app.history.push({ label: 'select', undo: () => select(undone), redo: () => select(redone) });
-}
-
 export function install(app: App): void {
   let kind: SelectionKind = 'none';
   let items: Element[] = [];

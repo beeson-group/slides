@@ -13,7 +13,6 @@ import { LAYOUT_GUIDES, lockedAxis, resizeBox, snapMove, snapResize } from './sn
 import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, constrained, containerOf, cssWidth, frameOf, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, visualRect } from './hit.ts';
 import { groupReach, overlay, view } from './frames.ts';
 import { enterGroup, freshDataIds, freshGroup, groupOf } from '../commands/order.ts';
-import { reselect } from '../selection.ts';
 import { injectStyle } from '../ui/dom.ts';
 
 const CSS = `
@@ -911,7 +910,7 @@ export function install(app: App): void {
     const f = frameOf(app);
     const dropped = p.els.map((el) => ({ el, box: toSlide(f, visualRect(el)) }));
     for (const el of [...p.els, ...(p.trail ?? []).map((t) => t.caption)]) writeLive(el, p.from.get(el) as Place);
-    await app.history.transact('Duplicate', async () => {
+    await app.history.selecting('Duplicate', async () => {
       const copies: Element[] = [];
       // the copies of a group are a new group
       const groups = new Map<string, string>();
@@ -928,7 +927,6 @@ export function install(app: App): void {
         copies.push(copy);
       }
       freshDataIds(app, copies);
-      reselect(app, p.selected, copies);
       app.selection.set('elements', copies);
     });
     frames.draw();
