@@ -10,7 +10,7 @@ import type { App } from '../app.ts';
 import type { TagEdit, Translate } from '../tags.ts';
 import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, anchored, fitPicture, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
-import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, constrained, containerOf, cssWidth, frameOf, frameRect, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, visualRect } from './hit.ts';
+import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, captionsOf, constrained, containerOf, cssWidth, frameOf, frameRect, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, pictureReach, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, visualRect } from './hit.ts';
 import { groupReach, overlay, view } from './frames.ts';
 import { enterGroup, settleCopies, freshGroup, groupOf } from '../commands/order.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -508,7 +508,7 @@ export function install(app: App): void {
         framed: member && member.matches(CONTAINER) ? member : null,
       });
       for (const m of [...sized, ...followers.flatMap((m) => m.sized)]) if (!p.from.has(m)) p.from.set(m, placeOf(m));
-      p.picture = toSlide(f, visualRect(pic));
+      p.picture = toSlide(f, p.framed ? pictureReach(p.framed) : visualRect(pic));
       p.base = toSlide(f, p.framed ? frameRect(p.framed) : visualRect(pic));
       document.documentElement.classList.add('beeson-resizing');
       return;
@@ -660,7 +660,8 @@ export function install(app: App): void {
   // pressed element keeps the side of the frame across from the handle in place. the layout of a
   // figure puts the caption under its picture, which can change the margins of the frame, e.g. at
   // the first width of a picture fitted into its zone, hence the size is fitted again to the
-  // margins measured, up to three times
+  // margins measured, up to three times. a turned picture with a caption is framed upright around
+  // both, and the box upright around the picture keeps its aspect
   const resize = (p: Press, ev: PointerEvent, dx: number, dy: number) => {
     if (p.group) {
       groupResize(p, ev, dx, dy);
@@ -672,20 +673,24 @@ export function install(app: App): void {
     const mode = modeOf(p, ev);
     const o = { aspect: mode.aspect, center: aboutCenter(ev), free: mode.free };
     const deg = (p.from.get(el)?.rotate ?? 0) + (pic === el ? 0 : (p.from.get(pic)?.rotate ?? 0));
-    if (deg) {
+    const upright = !!deg && !!p.framed && captionsOf(p.framed).length > 0;
+    if (deg && !upright) {
       rotatedResize(p, ev, dx, dy, deg, o, mode.height);
       return;
     }
     const h = p.handle as Handle;
-    const seen = () => toSlide(f, visualRect(pic));
+    const seen = () => toSlide(f, p.framed ? pictureReach(p.framed) : visualRect(pic));
     const framed = () => toSlide(f, p.framed ? frameRect(p.framed) : visualRect(pic));
     const at = p.picture as Box;
+    if (upright) Object.assign(o, { aspect: at.width / at.height, free: false });
+    // the picture without its rotation, which is smaller than the box upright around it
+    const plain = () => (upright ? toSlide(f, orientedBox(pic, f.scale, deg)) : seen());
     const fit = (want: Box) => {
       for (let i = 0; i < 3; i++) {
-        const frame = framed(), now = seen();
+        const frame = framed(), now = seen(), own = plain();
         const size = fitPicture(want, frame.width - now.width, frame.height - now.height, h, o, at);
         if (i && Math.abs(size.width - now.width) < 0.5 && Math.abs(size.height - now.height) < 0.5) break;
-        setSize(p, size.width, mode.height ? size.height : null);
+        setSize(p, (size.width * own.width) / now.width, mode.height ? (size.height * own.height) / now.height : null);
       }
     };
     fit(resizeBox(p.base, h, dx, dy, { aspect: null, center: o.center, free: true }));
@@ -706,11 +711,11 @@ export function install(app: App): void {
     const box = anchored(p.base, h, frame.width, frame.height, o.center);
     const now = placeOf(el);
     writeLive(el, { ...now, translate: { x: (now.translate?.x ?? 0) + box.left - frame.left, y: (now.translate?.y ?? 0) + (isTextSized(pic) ? p.base.top : box.top) - frame.top } });
-    const after = seen();
+    const after = seen(), size = plain();
     follow(p, h, after.width / at.width, after.height / at.height, o.center);
     view.moving = p.els;
     view.resizing = true;
-    view.readout = { text: `${Math.round(after.width)} × ${Math.round(after.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
+    view.readout = { text: `${Math.round(size.width)} × ${Math.round(size.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     frames.draw();
     app.invalidate('content');
   };

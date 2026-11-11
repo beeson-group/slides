@@ -93,13 +93,31 @@ function pictureIn(el: Element): { width: number; height: number; dx: number; dy
   return { width: w, height: ht, dx: at(px, box.width - w) + w / 2 - box.width / 2, dy: at(py, box.height - ht) + ht / 2 - box.height / 2 };
 }
 
+// the boxes on the screen of the captions that the figure el holds and shows
+export function captionsOf(el: Element): DOMRect[] {
+  return el.matches(CONTAINER) ? [...el.querySelectorAll(':scope > figcaption, :scope > .caption')].map((c) => c.getBoundingClientRect()).filter((r) => r.width && r.height) : [];
+}
+
+// the box on the screen of the picture of the figure el as it is seen, upright around the picture
+// where the picture or the figure is turned
+export function pictureReach(el: Element): Box {
+  const pic = pictureOf(el);
+  const deg = (parseFloat(getComputedStyle(el).rotate) || 0) + (pic === el ? 0 : parseFloat(getComputedStyle(pic).rotate) || 0);
+  if (!deg) return visualRect(pic);
+  const slides = el.closest('.slides') as HTMLElement | null;
+  const b = orientedBox(pic, slides?.offsetWidth ? slides.getBoundingClientRect().width / slides.offsetWidth : 1, deg);
+  const a = (deg * Math.PI) / 180, c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a));
+  const width = b.width * c + b.height * s, height = b.width * s + b.height * c;
+  return { left: b.left + (b.width - width) / 2, top: b.top + (b.height - height) / 2, width, height };
+}
+
 // the box of el on the screen at its frame, as Keynote and PowerPoint take the box of an object in
 // every field and command: a figure that holds a picture at the picture and over the caption that it
-// holds, and another element at its box seen
+// holds, which is not turned with the picture, and another element at its box seen
 export function frameRect(el: Element): Box {
-  const box = visualRect(el.matches(RESIZABLE) || el.matches(CONTAINER) ? pictureOf(el) : el);
-  const caps = el.matches(CONTAINER) ? [...el.querySelectorAll(':scope > figcaption, :scope > .caption')].map((c) => c.getBoundingClientRect()).filter((r) => r.width && r.height) : [];
-  if (!caps.length) return box;
+  const caps = captionsOf(el);
+  if (!caps.length) return visualRect(el.matches(RESIZABLE) || el.matches(CONTAINER) ? pictureOf(el) : el);
+  const box = pictureReach(el);
   const left = Math.min(box.left, ...caps.map((r) => r.left)), top = Math.min(box.top, ...caps.map((r) => r.top));
   const right = Math.max(box.left + box.width, ...caps.map((r) => r.right)), bottom = Math.max(box.top + box.height, ...caps.map((r) => r.bottom));
   return { left, top, width: right - left, height: bottom - top };

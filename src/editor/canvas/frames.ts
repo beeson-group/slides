@@ -13,7 +13,7 @@ import { injectStyle } from '../ui/dom.ts';
 import { groupOf } from '../commands/order.ts';
 import { turnersOf } from './drag.ts';
 import type { Box, Guide, Handle, Spacing } from './snap.ts';
-import { BY_ITSELF, CONTAINER, RESIZABLE, frameOf, frameRect, isTextSized, movableOf, orientedBox, pictureOf, sizedOf, toScreen, turnable as turns } from './hit.ts';
+import { BY_ITSELF, CONTAINER, RESIZABLE, captionsOf, frameOf, frameRect, isTextSized, movableOf, orientedBox, pictureOf, sizedOf, toScreen, turnable as turns } from './hit.ts';
 
 export const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 
@@ -94,12 +94,12 @@ export function groupReach(els: Element[]): Box {
 
 // the box of el on the screen without its rotation, about the center of the box seen, and the
 // angle that it is turned by. a figure that holds a picture is framed at the picture, where its
-// grips resize it, and over its caption while it is not turned
+// grips resize it, and over its caption, which is not turned with the picture, hence a turned
+// figure with a caption is framed upright around both
 function orientOf(el: Element, scale: number): { box: Box; deg: number } {
   const pic = pictureOf(el);
   const deg = angleOf(el) + (pic === el ? 0 : angleOf(pic));
-  const box = orientedBox(pic, scale, deg);
-  return { box: deg ? box : frameRect(el), deg };
+  return deg && !captionsOf(el).length ? { box: orientedBox(pic, scale, deg), deg } : { box: frameRect(el), deg: 0 };
 }
 
 // the point x, y turned by deg about the center of box
