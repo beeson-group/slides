@@ -236,6 +236,13 @@ function nextBlock(app: App, el: Element): Element | null {
   return n && structural(app, n) && sameKind(n, el) ? n : null;
 }
 
+// the block before or after el in one text with it, as text/flow.ts reads it: an item of the same
+// list, or a paragraph of the same column. a block with a translate of its own is a box apart
+export function besideBlock(app: App, el: Element, ahead: boolean): Element | null {
+  const n = structural(app, el) ? (ahead ? nextBlock : prevBlock)(app, el) : null;
+  return n && !(n as HTMLElement).style.translate && !(el as HTMLElement).style.translate ? n : null;
+}
+
 type Indent = { base: string; step: string; eol: string };
 
 // the indentation of el in the file, the step of indentation of the file, and its line end
@@ -320,8 +327,11 @@ function joined(before: Element, after: string): string {
   return copy.innerHTML + space;
 }
 
+// the visible offset of the end of the text of el, in its last nested item
+export const endOf = (el: Element): number => offsetIn(el, ...textEnd(joinTarget(el)));
+
 async function join(app: App, before: Element, after: Element): Promise<void> {
-  const at = offsetIn(before, ...textEnd(joinTarget(before)));
+  const at = endOf(before);
   const content = joined(before, rangeTex(after, rangeOf(after, null, null)));
   await app.doc.setContent(before, content, 'join');
   await app.doc.remove(after, 'join');

@@ -12,6 +12,7 @@ import type { Command } from '../commands.ts';
 import * as blocks from '../text/blocks.ts';
 import * as carry from '../text/carry.ts';
 import * as inline from '../text/inline.ts';
+import * as flow from '../text/flow.ts';
 import { openLink, applyLink, type LinkKind } from '../text/link.ts';
 import { isSmart, setSmart, type Smart } from '../text/substitute.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -45,6 +46,7 @@ html.beeson-painting .reveal .slides, html.beeson-painting .reveal .slides * { c
 `;
 
 export function install(app: App): void {
+  flow.install(app);
   carry.install(app);
   const c = app.commands;
   const define = (command: Command) => c.define(command);
@@ -170,8 +172,8 @@ export function install(app: App): void {
   // Tab is taken in every item of a list, also where it does not change the level, so that it
   // does not move the focus out of the text. ⌘] and ⌘[ are Keynote's keys, shown in the menu, and
   // Ctrl+] and Ctrl+[ those of Google Docs elsewhere
-  define({ id: 'text.indent', label: 'Increase Indent Level', keys: { mac: ['Mod+]', 'Tab'], other: ['Mod+]', 'Tab'] }, in: TEXT, menu: menu('list', 70, 'List'), undoable: true, enabled: blocks.inList, run: blocks.indent });
-  define({ id: 'text.outdent', label: 'Decrease Indent Level', keys: { mac: ['Mod+[', 'Shift+Tab'], other: ['Mod+[', 'Shift+Tab'] }, in: TEXT, menu: menu('list', 71, 'List'), undoable: true, enabled: blocks.inList, run: blocks.outdent });
+  define({ id: 'text.indent', label: 'Increase Indent Level', keys: { mac: ['Mod+]', 'Tab'], other: ['Mod+]', 'Tab'] }, in: TEXT, menu: menu('list', 70, 'List'), undoable: true, enabled: (a) => blocks.inList(a) || flow.canLevel(a), run: (a) => flow.level(a, true) });
+  define({ id: 'text.outdent', label: 'Decrease Indent Level', keys: { mac: ['Mod+[', 'Shift+Tab'], other: ['Mod+[', 'Shift+Tab'] }, in: TEXT, menu: menu('list', 71, 'List'), undoable: true, enabled: (a) => blocks.inList(a) || flow.canLevel(a), run: (a) => flow.level(a, false) });
 
   // the link opens its dialog, which makes the change one entry of the history. a test or a script
   // gives the address as arg, e.g. { href: '#/7' }, or the kind of link shown first, e.g.

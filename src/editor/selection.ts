@@ -7,6 +7,7 @@
 import type { App, Selector } from './app.ts';
 import type { Pairing } from './render.ts';
 import { BY_ITSELF, MOVABLE, OUTSIDE, movablesOf, pickOf } from './canvas/hit.ts';
+import { selectRun } from './text/flow.ts';
 
 export type SelectionKind = 'none' | 'elements' | 'text' | 'slides';
 
@@ -117,6 +118,7 @@ export function install(app: App): void {
       if (kind === 'slides') return set('slides', [...app.slides().querySelectorAll(':scope > section')]);
       const host = kind === 'text' ? items[0] : null;
       const s = getSelection();
+      if (host && selectRun(app, host)) return;
       if (host && s && !wholly(s, host)) return void s.selectAllChildren(host);
       if (host && host.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
       if (host) s?.removeAllRanges();

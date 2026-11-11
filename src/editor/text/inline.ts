@@ -5,6 +5,7 @@
 // after, as typing is, and the command around it makes it one entry of the history
 
 import type { App } from '../app.ts';
+import * as flow from './flow.ts';
 import { canSetList, listKind, offsetIn, paragraphStyle, selectedBlocks, selectIn, setList, setStyle, styleOf, textTarget, type ListKind, type ParagraphStyle, type Target } from './blocks.ts';
 
 export type Match = (el: Element) => boolean;
@@ -58,6 +59,8 @@ function wordRange(range: Range, edge: boolean): Range {
 // the ranges that a format is set on: the text of the window or the word at its caret, and else
 // the whole text of each selected block. notes take only bold and italic
 export function inlineTargets(app: App, notes = false, edge = false): Target[] {
+  const spanned = flow.spanTargets(app);
+  if (spanned.length) return spanned;
   const t = textTarget(app);
   if (t) {
     if (!notes && t.host.matches('aside.notes')) return [];
@@ -175,12 +178,15 @@ function prune(host: Element): void {
 // was, so that the typing goes on at the caret
 export function edit(app: App, targets: Target[], change: (host: Element, range: Range) => Node[]): void {
   const t = textTarget(app);
+  const spanning = flow.active();
   const caret = t?.range.collapsed ? offsetIn(t.host, t.range.startContainer, t.range.startOffset) : null;
   for (const { host, range } of targets) {
     app.history.beforeTyping(host);
     const nodes = change(host, range);
     prune(host);
-    if (caret !== null && host === t!.host) selectIn(host, caret);
+    if (spanning) {
+      // the span keeps its places, which a format does not move
+    } else if (caret !== null && host === t!.host) selectIn(host, caret);
     else if (t && nodes.length) {
       const connected = nodes.filter((n) => n.isConnected);
       (host as HTMLElement).focus({ preventScroll: true });
@@ -196,6 +202,7 @@ export function edit(app: App, targets: Target[], change: (host: Element, range:
     host.normalize();
     app.history.afterTyping(host);
   }
+  if (spanning) flow.repaint(app);
   app.markDirty();
   app.invalidate('content');
 }
