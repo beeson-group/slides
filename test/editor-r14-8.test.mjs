@@ -9,6 +9,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
+import { click, press } from './helpers/editor.mjs';
 
 const DECK = 'test/pages/editor-layouts.html';
 // the figure slides of editor-layouts.html, with what is drawn in the plate of each
@@ -99,6 +100,49 @@ for (const platform of PLATFORMS) {
       assert.deepEqual(round(after), round(media), `the insert of a ${name} moved the image of the plate`);
       await undo(page);
       assert.equal(await render(page), before);
+      assert.deepEqual(errors(page), []);
+    });
+  }
+
+  // an element written after the plate is under it in the flow, hence its offset would carry it above
+  // the slide once the plate is deleted
+  for (const [id, name, selector, arg] of [['insert.table', 'table', ':scope > table', { rows: 3, columns: 3 }], ['insert.qr', 'QR code', ':scope > .qr', undefined]]) {
+    test(`a new ${name} on a figure slide stays in its place when the plate is deleted (${platform})`, async (t) => {
+      const page = await load(t, platform, 6);
+      await exec(page, id, arg);
+      await frames(page);
+      await press(page, 'Escape');
+      await press(page, 'Escape');
+      await frames(page);
+      const edited = await render(page);
+      const { boxes: placed } = await measure(page, selector, ':scope > h2');
+      assert.equal(placed.length, 1, `no ${name} was inserted`);
+      // a point of the image that is not under the new element, the heading, or the caption
+      const at = await page.evaluate(`(() => {
+        const r = document.querySelector('.reveal section.present .plate img').getBoundingClientRect();
+        for (let fy = 0.9; fy > 0.1; fy -= 0.05) for (let fx = 0.1; fx < 0.9; fx += 0.05) {
+          const x = r.left + r.width * fx, y = r.top + r.height * fy;
+          const hit = document.elementsFromPoint(x, y);
+          if (hit.find((e) => e.tagName === 'IMG') && !hit.find((e) => e.closest('table, .qr, h2, .caption'))) return { x, y };
+        }
+        return null;
+      })()`);
+      assert.ok(at, 'the image does not have a point clear of the other elements');
+      await click(page, at);
+      await frames(page);
+      await exec(page, 'element.delete');
+      await frames(page);
+      assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present .plate').length`), 0, 'the plate was not deleted');
+      const { boxes: left } = await measure(page, selector, ':scope > h2');
+      assert.deepEqual(round(left), round(placed), `the ${name} moved when the plate was deleted`);
+      // the delete is one entry of the history, taken back and made again byte for byte
+      const deleted = await render(page);
+      await undo(page);
+      assert.equal(await render(page), edited);
+      const { boxes: back } = await measure(page, selector, ':scope > h2');
+      assert.deepEqual(round(back), round(placed));
+      await redo(page);
+      assert.equal(await render(page), deleted);
       assert.deepEqual(errors(page), []);
     });
   }
