@@ -125,7 +125,7 @@ async function menuOf(page, name) {
 }
 
 for (const platform of PLATFORMS) {
-  test(`the Play menu holds Present and the presenter view, and Mod+Enter opens the saved deck at the current slide on ${platform}`, async () => {
+  test(`the Play menu holds Present and the presenter view, and Mod+Enter plays the saved deck in place at the current slide on ${platform}`, async () => {
     const page = await reviewPage(platform, 4);
     const titles = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menubar [aria-haspopup="menu"]')].map((b) => b.textContent)`);
     assert.deepEqual(titles.slice(-3), ['View', 'Play', 'Help']);
@@ -135,11 +135,14 @@ for (const platform of PLATFORMS) {
     await press(page, 'Escape');
     await page.evaluate(`window.open = (url) => { window.__opened = url; return null; }`);
     await press(page, 'Mod+Enter');
-    await page.waitFor('!!window.__opened');
-    assert.ok((await page.evaluate('window.__opened')).endsWith(`?still&edit-platform=${platform}#/4`));
+    await page.waitFor(`!!document.querySelector('.beeson-edit-show iframe')?.getAttribute('src')`);
+    assert.ok((await page.evaluate(`document.querySelector('.beeson-edit-show iframe').getAttribute('src')`)).endsWith(`?still&edit-platform=${platform}&postMessageEvents=true&from-editor#/4`));
+    assert.equal(await page.evaluate('window.__opened ?? null'), null);
     assert.equal(await page.evaluate(`!!document.querySelector('dialog.beeson-edit-presenter[open]')`), false);
-    // Alt+Enter opens the show and the presenter view over the editor
-    await page.evaluate('window.__opened = null');
+    await page.waitFor(`(() => { const w = document.querySelector('.beeson-edit-show iframe').contentWindow; return !!w.Reveal?.isReady() && (w.MathJax?.startup?.promise?.then(() => true) ?? false); })()`);
+    await press(page, 'Escape');
+    await page.waitFor(`!document.querySelector('.beeson-edit-show')`);
+    // Alt+Enter opens the show in a tab and the presenter view over the editor
     await press(page, 'Alt+Enter');
     await page.waitFor(`!!document.querySelector('dialog.beeson-edit-presenter[open]')`);
     assert.ok((await page.evaluate('window.__opened')).endsWith('#/4'));
@@ -194,12 +197,14 @@ for (const platform of PLATFORMS) {
     assert.equal(await page.evaluate('window.BeesonEditor.status().dirty'), false);
   });
 
-  test(`the transitions None and Fade are written as data-transition on ${platform}`, async () => {
+  // as in Keynote, the transition of a slide is played when the show leaves it, and reveal.js plays
+  // the data-transition of the slide entered, hence it is written on the next slide
+  test(`the transitions None and Fade are written as data-transition of the next slide on ${platform}`, async () => {
     const page = await reviewPage(platform, 4);
     assert.equal((await state(page, 'slide.transition.fade')).checked, true);
     await exec(page, 'slide.transition.none');
     assert.equal((await state(page, 'slide.transition.none')).checked, true);
-    const none = [[NARROW, '<section class="narrow" data-transition="none">']];
+    const none = [[WIDE, '<section class="wide" data-transition="none">']];
     await roundTrip(page, none);
     await exec(page, 'slide.transition.fade');
     await byteExact(page);
@@ -214,7 +219,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await pressed(), ['slide.transition.none']);
     await click(page, '.beeson-edit-transition [data-command="slide.transition.fade"]');
     await frames(page);
-    await byteExact(page, [[none[0][1], NARROW]]);
+    await byteExact(page, [[none[0][1], WIDE]]);
     assert.deepEqual(await pressed(), ['slide.transition.fade']);
     await click(page, '.reveal section.present > h2');
     await frames(page);

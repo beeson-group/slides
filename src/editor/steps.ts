@@ -2,8 +2,8 @@
 // reveal.js fragments and in which order, as the Animation Pane of PowerPoint and the Build Order of
 // Keynote. each step is a card with a row per element shown at it, and the elements shown with the
 // slide are listed under the cards. a row is dragged to another place in the order, and its step
-// chip opens a menu of its step, its start, its effect, and Show Last. Preview plays the steps of
-// the slide in place. the number of the step of each element is drawn at its upper left on the
+// chip opens a menu of its step, its start, its effect, and Show Last. Preview Steps plays the steps
+// of the slide in place. the number of the step of each element is drawn at its upper left on the
 // slide. every change is a command of commands/steps.ts, written through app.doc as one entry of
 // the history
 
@@ -504,10 +504,10 @@ const CSS = `
 .beeson-edit-side { display: none; flex-direction: column; }
 html.beeson-steps .beeson-edit-side { display: flex; }
 ${P} { font: 12px/1.35 var(--ed-font, system-ui, sans-serif); color: var(--ed-text); user-select: none; -webkit-user-select: none; }
-${P} .head { display: flex; align-items: center; gap: 4px; padding: 2px 12px 10px; border-bottom: 1px solid var(--ed-line); }
-${P} .head .gap { flex: 1; }
+${P} .head { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 2px 12px 10px; border-bottom: 1px solid var(--ed-line); }
+${P} .head button.play { grid-column: 1 / -1; }
 ${P} .row.line .grip { visibility: hidden; }
-${P} .head button { display: inline-flex; align-items: center; gap: 4px; height: 24px; padding: 0 7px; border: 1px solid var(--ed-control-line); border-radius: 6px; background: var(--ed-control); color: var(--ed-text); font: 500 12px/1 var(--ed-font); white-space: nowrap; cursor: default; }
+${P} .head button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; height: 24px; padding: 0 7px; border: 1px solid var(--ed-control-line); border-radius: 6px; background: var(--ed-control); color: var(--ed-text); font: 500 12px/1 var(--ed-font); white-space: nowrap; cursor: default; }
 ${P} .head button:hover { background: color-mix(in srgb, var(--ed-control) 85%, var(--ed-text)); }
 ${P} .head button:disabled { color: var(--ed-faint); }
 ${P} .head button.play[aria-pressed="true"] { background: var(--ed-select); border-color: var(--ed-select); color: var(--ed-on-select); }
@@ -544,6 +544,7 @@ ${P} .rows .list-head:hover { background: var(--ed-hover); }
 ${P} .rows .list-head.selected { background: var(--ed-select); color: var(--ed-on-select); }
 ${P} .rows .list-head .chip { width: 52px; }
 ${P} .rows .row.nested { padding-left: 16px; grid-template-columns: 8px 32px minmax(0, 1fr); }
+${P} .rows.wide .row, ${P} .rows.wide .row.nested { grid-template-columns: 8px 44px minmax(0, 1fr); }
 ${P} .rows .list-head + .row.nested::before, ${P} .rows .row.nested + .row.nested::before { content: ""; position: absolute; left: 61px; right: 10px; top: 0; border-top: 1px solid var(--ed-line); }
 ${P} .rows .list-head.selected + .row::before { border-top-color: transparent; }
 ${P} .detail .delay-box { display: flex; align-items: center; }
@@ -665,7 +666,7 @@ export class Steps {
     this.none.type = 'button';
     this.none.title = 'Show every element with the slide';
     this.setPlaying(false);
-    head.append(this.play, make('span', 'gap'), this.each, this.none);
+    head.append(this.play, this.each, this.none);
     this.list.setAttribute('role', 'group');
     this.list.setAttribute('aria-label', 'Steps of the slide');
     const foot = make('p', 'foot', 'Drag a row to change when it appears. The rows of a card appear together, at one click.');
@@ -812,6 +813,7 @@ export class Steps {
     this.rows = [];
     this.heads = [];
     this.list.replaceChildren();
+    this.list.classList.remove('wide');
     if (!els.length) {
       this.list.append(make('div', 'card empty', 'This slide has no element that can be a step.'));
       return;
@@ -843,7 +845,11 @@ export class Steps {
       if (mark) chip.append(mark);
       chip.dataset.start = step < 0 ? '' : final ? 'last' : (start ?? '');
       chip.append(step < 0 ? '–' : final ? 'Last' : String(step + 1), icon('chevron-down', 9));
-      if (final || mark) chip.style.width = '44px';
+      // a chip with a start mark or Last widens the chip column of every row, to keep the texts aligned
+      if (final || mark) {
+        chip.style.width = '44px';
+        this.list.classList.add('wide');
+      }
       const meta = make('span', 'meta');
       meta.append(make('span', 'kind', kind), ` · ${how}`);
       const body = make('span', 'body');
@@ -1040,10 +1046,16 @@ export class Steps {
     this.none.disabled = !steps;
   }
 
+  // with several rows selected, a command of the fields acts on each of their elements, apart from
+  // the delay
   private runOn(id: string, arg: Record<string, unknown>): void {
     const s = this.selected();
     const app = this.app;
-    if (s && app) void app.commands.run(id, { el: s.el, ...arg }).catch((e) => app.fail(e));
+    if (s && app) void app.commands.run(id, this.several() && id !== 'steps.delay' ? arg : { el: s.el, ...arg }).catch((e) => app.fail(e));
+  }
+
+  private several(): boolean {
+    return this.rows.filter((r) => r.row.classList.contains('selected') && !this.model?.lines[r.i]).length > 1;
   }
 
   private select(r: Row): void {
@@ -1066,7 +1078,9 @@ export class Steps {
     const app = this.app;
     const m = this.model;
     if (!app || !m) return;
-    this.select(r);
+    // the menu of a row among several selected rows acts on each of them
+    const many = this.several() && r.row.classList.contains('selected') && !m.lines[r.i];
+    if (!many) this.select(r);
     const { plan } = m;
     const at = stepAt(plan, r.i);
     // Play From plays the steps of the slide from this one, as in the Animation Pane of PowerPoint
@@ -1082,7 +1096,7 @@ export class Steps {
     const { start } = startAt(app, m, r.i);
     const effect = effectOf(classesOf(app, r.el)).id;
     const first = at === 0 && start === 'click';
-    const run = (id: string, arg: Record<string, unknown>) => () => void app.commands.run(id, { el: r.el, ...arg }).catch((e) => app.fail(e));
+    const run = (id: string, arg: Record<string, unknown>) => () => void app.commands.run(id, many ? arg : { el: r.el, ...arg }).catch((e) => app.fail(e));
     const items: MenuItem[] = [
       { label: 'With the Slide', checked: at < 0, run: run('steps.set', { to: null }) },
       ...plan.groups.map((_, k): MenuItem => ({ label: `Step ${k + 1}`, checked: at === k, run: run('steps.set', { to: k }) })),
@@ -1107,7 +1121,9 @@ export class Steps {
   }
 
   // a press on a row selects its element. a press on its chip opens the menu of the chip, and a
-  // press elsewhere that is moved by 4 px drags the row to another place in the order
+  // press elsewhere that is moved by 4 px drags the row to another place in the order. with Shift,
+  // the element is added to the selection, and with ⌘ (Ctrl) it is added or taken off, as in the
+  // Animation Pane of PowerPoint
   private press(ev: PointerEvent, r: Row): void {
     if (ev.button !== 0 || !this.app || !this.model) return;
     ev.preventDefault();
@@ -1119,6 +1135,13 @@ export class Steps {
     r.row.focus({ preventScroll: true });
     if (onChip) {
       this.openChip(r, false);
+      return;
+    }
+    if ((ev.shiftKey || (this.app.platform === 'mac' ? ev.metaKey : ev.ctrlKey)) && !this.model.lines[r.i]) {
+      const sel = this.app.selection;
+      if (!ev.shiftKey) sel.toggle(r.el);
+      else if (!sel.items.includes(r.el)) sel.add(r.el);
+      this.current = r;
       return;
     }
     this.select(r);
@@ -1247,7 +1270,7 @@ export class Steps {
   // Animation Pane of PowerPoint
   private setPlaying(on: boolean): void {
     const from = on ? null : this.selectedStep();
-    const label = on ? 'Stop' : from !== null ? 'Play From' : 'Preview';
+    const label = on ? 'Stop' : from !== null ? 'Play From' : 'Preview Steps';
     if (this.play.textContent === label) return;
     this.play.replaceChildren(icon(on ? 'square' : 'play', 12), label);
     this.play.setAttribute('aria-pressed', String(on));

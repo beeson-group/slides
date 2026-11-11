@@ -1,6 +1,6 @@
 // the transition of the slide at the head of the Steps tab, as in the Animate inspector of Keynote
-// with no element selected: None or Fade into the slide, Magic Move to the next slide, Magic Move
-// to a copy of the slide, Preview, and the time of the slide in the last rehearsal. each button
+// with no element selected: None, Fade, or Magic Move from the slide to the next slide, Magic Move
+// to a copy of the slide, Preview Transition, and the time of the slide in the last rehearsal. each button
 // runs a command of commands/review.ts, and the block is hidden while an element or a text is
 // selected
 
@@ -16,9 +16,9 @@ html.beeson-editor .beeson-edit-side .slot[hidden] { display: none; }
 .beeson-edit-transition .seg button { flex: 1; height: 22px; padding: 0 6px; border: 0; border-radius: 5px; background: transparent; color: var(--ed-text); font: 500 12px/1 var(--ed-font); white-space: nowrap; cursor: default; }
 .beeson-edit-transition .seg button[aria-pressed="true"] { background: var(--ed-control); box-shadow: 0 1px 2px rgba(0, 0, 0, 0.18), inset 0 0 0 1px var(--ed-control-line); }
 .beeson-edit-transition .seg button:disabled { color: var(--ed-faint); }
-.beeson-edit-transition .acts { display: flex; gap: 6px; margin-top: 8px; }
-.beeson-edit-transition .acts button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; flex: 1 1 auto; min-width: 0; height: 24px; border: 1px solid var(--ed-control-line); border-radius: 6px; background: var(--ed-control); color: var(--ed-text); font: 500 12px/1 var(--ed-font); cursor: default; }
-.beeson-edit-transition .acts .preview { flex: none; padding: 0 10px; }
+.beeson-edit-transition .acts { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.beeson-edit-transition .acts button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; flex: 1 1 auto; min-width: 0; height: 24px; border: 1px solid var(--ed-control-line); border-radius: 6px; background: var(--ed-control); color: var(--ed-text); font: 500 12px/1 var(--ed-font); white-space: nowrap; cursor: default; }
+.beeson-edit-transition .acts .preview { padding: 0 10px; }
 .beeson-edit-transition .acts button:disabled { color: var(--ed-faint); }
 .beeson-edit-transition button:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: 1px; }
 .beeson-edit-transition .note { margin: 8px 0 0; color: var(--ed-muted); font: 11px/1.35 var(--ed-font); }
@@ -26,8 +26,8 @@ html.beeson-editor .beeson-edit-side .slot[hidden] { display: none; }
 `;
 
 const KINDS: [string, string, string][] = [
-  ['none', 'None', 'Cut into this slide from the slide before, without an effect'],
-  ['fade', 'Fade', 'Fade into this slide from the slide before, the default of the theme'],
+  ['none', 'None', 'Cut from this slide to the next slide, without an effect'],
+  ['fade', 'Fade', 'Fade from this slide into the next slide, the default of the theme'],
   ['magic', 'Magic Move', 'Move the matched elements to their places on the next slide'],
 ];
 
@@ -38,7 +38,7 @@ export function install(app: App): void {
   const box = make('div', 'beeson-edit-transition');
   const seg = make('div', 'seg');
   seg.setAttribute('role', 'group');
-  seg.setAttribute('aria-label', 'Transition of the slide');
+  seg.setAttribute('aria-label', 'Transition from this slide to the next slide');
   const run = (id: string) => void app.commands.run(id).catch((e) => app.fail(e));
   const buttons = KINDS.map(([t, text, title]) => {
     const b = make('button', '', text);
@@ -58,7 +58,7 @@ export function install(app: App): void {
   play.type = 'button';
   play.dataset.command = 'slide.previewTransition';
   play.title = 'Play the transition of the slide on the canvas';
-  play.append(icon('play', 12), document.createTextNode('Preview'));
+  play.append(icon('play', 12), document.createTextNode('Preview Transition'));
   play.addEventListener('click', () => run('slide.previewTransition'));
   const acts = make('div', 'acts');
   acts.append(copy, play);

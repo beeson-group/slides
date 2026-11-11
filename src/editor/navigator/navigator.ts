@@ -9,7 +9,7 @@
 
 import type { App, Pane } from '../app.ts';
 import { layersOf, showLayer } from '../layers.ts';
-import { transitionOf } from '../review/transitions.ts';
+import { nextShown, transitionOf } from '../review/transitions.ts';
 import { injectStyle, stored, store } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { Outline } from './outline.ts';
@@ -35,7 +35,7 @@ export function describe(slide: Element): { title: string; kind: string } {
 function transitionName(app: App, slide: Element): string | null {
   const t = transitionOf(app, slide);
   if (t === 'magic') return 'Magic Move';
-  if (t === null) return slide.getAttribute('data-transition');
+  if (t === null) return nextShown(app, slide)?.getAttribute('data-transition') ?? null;
   return null;
 }
 

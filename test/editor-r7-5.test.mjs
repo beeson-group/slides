@@ -384,7 +384,7 @@ for (const platform of PLATFORMS) {
     const page = await open(t, platform, { deck, tab: 'steps' });
     const play = `${SIDE} .head .play`;
     const label = () => page.evaluate(`document.querySelector(${js(play)}).textContent`);
-    assert.equal(await label(), 'Preview');
+    assert.equal(await label(), 'Preview Steps');
     // a chosen row turns the button into Play From, as in the Animation Pane of PowerPoint
     await click(page, await rowPart(page, 'if len(members)'));
     await frames(page);
