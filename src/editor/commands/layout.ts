@@ -324,14 +324,14 @@ function fitPanel(app: App, slide: Element): void {
   }
 }
 
-// the elements of a slide with a place of the editor: a translate, a rotate, or the width of a
-// figure that the editor resizes
+// the elements of a slide with a place of the editor: a translate, a rotate, the width of a
+// figure that the editor resizes, or the z-index and the position of a layer command
 const SIZED = 'img, video, .qr, tycho-viewer';
 function placed(app: App, slide: Element): Element[] {
   return [...slide.querySelectorAll('*')].filter((el) => {
     if (!app.pairing?.elements.get(el)?.open) return false;
     const s = app.doc.tagState(el).style;
-    return 'translate' in s || 'rotate' in s || ('width' in s && el.matches(SIZED));
+    return 'translate' in s || 'rotate' in s || 'z-index' in s || 'position' in s || ('width' in s && el.matches(SIZED));
   });
 }
 
@@ -500,7 +500,7 @@ export function install(app: App): void {
           for (const el of placed(a, s)) {
             const has = a.doc.tagState(el).style;
             const style: Record<string, null> = {};
-            for (const k of ['translate', 'rotate', 'width']) if (k in has && (k !== 'width' || el.matches(SIZED))) style[k] = null;
+            for (const k of ['translate', 'rotate', 'width', 'z-index', 'position']) if (k in has && (k !== 'width' || el.matches(SIZED))) style[k] = null;
             a.doc.setTag(el, { style }, 'reset slide');
           }
         }
