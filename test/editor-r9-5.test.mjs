@@ -223,3 +223,50 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// what is open of the menus: the labels of the items of the one menu shown, or null
+const MENU = `(() => {
+  const m = [...document.querySelectorAll('.beeson-edit-menu')].find((el) => el.getClientRects().length);
+  return m ? [...m.querySelectorAll('[role^="menuitem"]')].map((i) => i.textContent.trim()) : null;
+})()`;
+const segment = (bar, i) => `.beeson-table-bars .bar.${bar} > [data-index="${i}"]`;
+
+// finding tables-equations-insert-3: a click on a column letter or a row number opened the menu of
+// the table and moved the caret, and did not select the column or the row
+for (const platform of PLATFORMS) {
+  test(`a click on a column letter or a row number selects the column or the row, Shift extends it, and the arrow and a right-click open its menu (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: 'test/pages/editor-tables.html', n: 1 });
+    await click(page, cellOf(2, 2));
+    await frames(page);
+    assert.match(await page.evaluate(PANE_NOTE), /cell C3$/);
+    for (const [bar, i, modifiers, range] of [['cols', 1, '', 'B1:B4'], ['cols', 2, 'Shift', 'B1:C4'], ['rows', 3, '', 'A4:C4'], ['rows', 1, 'Shift', 'A2:C4'], ['cols', 0, '', 'A1:A4']]) {
+      const what = `after a ${modifiers ? 'Shift-' : ''}click on ${bar === 'cols' ? 'the letter' : 'the number'} ${bar === 'cols' ? 'ABC'[i] : i + 1}`;
+      await click(page, segment(bar, i), { modifiers });
+      await frames(page);
+      assert.equal(await page.evaluate(MENU), null, `a menu is opened ${what}`);
+      assert.match(await page.evaluate(PANE_NOTE), new RegExp(`cells ${range}$`), `the cells ${range} are not selected ${what}`);
+      assert.ok((await page.evaluate(TABLE)).block, `the cells are not selected as a block ${what}`);
+    }
+    assert.equal(await render(page), page.source, 'a selection in the bars edits the file');
+
+    // the menu of a column from a right-click and from the arrow of its letter, with the commands
+    // of a column
+    await click(page, segment('cols', 1), { button: 'right' });
+    await frames(page);
+    let items = await page.evaluate(MENU);
+    assert.ok(items?.some((l) => l.startsWith('Add Column Before')), `a right-click on the letter B does not open the menu of the column: ${js(items)}`);
+    assert.ok(!items.some((l) => l.startsWith('Delete Row')), 'the menu of a column offers Delete Row');
+    assert.match(await page.evaluate(PANE_NOTE), /cells B1:B4$/);
+    await press(page, 'Escape');
+    await frames(page);
+    await click(page, `${segment('cols', 2)} .more`);
+    await frames(page);
+    items = await page.evaluate(MENU);
+    assert.ok(items?.some((l) => l.startsWith('Delete Column')), `the arrow of the letter C does not open the menu of the column: ${js(items)}`);
+    await click(page, await page.evaluate(`(() => { const i = [...document.querySelectorAll('.beeson-edit-menu [role^="menuitem"]')].find((el) => el.textContent.trim().startsWith('Delete Column')); const r = i.getBoundingClientRect(); return { x: r.left + 20, y: r.top + r.height / 2 }; })()`));
+    await frames(page);
+    assert.equal(await page.evaluate(`document.querySelector('.reveal section.present table tr').cells.length`), 2, 'Delete Column of the menu of the letter C does not delete the column C');
+    await roundTrip(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
