@@ -345,7 +345,7 @@ function contentRect(el: Element): Box {
 // the stand-ins of the elements of a copy by a drag, which stay at their places while the elements
 // are dragged. each is a copy of the page only, marked data-generated, which the save and the
 // pairing pass over, laid out over the place of its element without taking room in the flow
-function standIns() {
+export function standIns() {
   let list: Element[] = [];
   const make = (el: Element, from: Place): Element => {
     const h = el as HTMLElement;
@@ -381,7 +381,7 @@ function standIns() {
   };
   return {
     shown: () => list.length > 0,
-    show(p: Press, on: boolean) {
+    show(p: { els: Element[]; from: Map<Element, Place> }, on: boolean) {
       document.documentElement.classList.toggle('beeson-copying', on);
       if (on === list.length > 0) return;
       for (const c of list) c.remove();

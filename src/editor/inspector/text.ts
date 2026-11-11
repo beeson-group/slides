@@ -5,7 +5,8 @@
 // of the type scale and the tones of the theme are offered
 
 import type { App } from '../app.ts';
-import { styleWhy } from '../text/blocks.ts';
+import { listKind, selectedBlocks, styleOf, styleWhy } from '../text/blocks.ts';
+import { around, FORMATS, inlineTargets, isTone, type FormatName } from '../text/inline.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { openMenu, type MenuItem } from '../ui/menu.ts';
 import { button, glyph, keepFocus, row, section, segmented, type Control, type Run } from './controls.ts';
@@ -92,9 +93,48 @@ const TONES: [string, string, string][] = [
   ['red', 'Red', '--red'],
 ];
 
+// for several selected blocks, a value of each text of the blocks outside a formula, as the mixed
+// state of a control of Keynote is read, and else null
+function perText<T>(app: App, value: (host: Element, text: Node) => T): T[] | null {
+  if (app.selection.kind !== 'elements' || app.selection.elements().length < 2) return null;
+  return inlineTargets(app, true).flatMap(({ host, range }) => {
+    const out: T[] = [];
+    const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+    for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+      if (range.intersectsNode(n) && n.textContent!.trim() && !n.parentElement?.closest('mjx-container')) out.push(value(host, n));
+    }
+    return out;
+  });
+}
+
+// a format on every text of several blocks, on none, or on some
+function formatState(app: App, name: FormatName): () => boolean | 'mixed' | null {
+  return () => {
+    const on = perText(app, (host, n) => !!around(host, n, FORMATS[name].match));
+    if (!on) return app.commands.get(`text.${name}`) ? app.commands.state(`text.${name}`).checked : null;
+    return on.length > 0 && on.every(Boolean) ? true : on.some(Boolean) ? 'mixed' : false;
+  };
+}
+
+// the tones of the texts of several blocks, with text for the text color of the theme
+const tonesOf = (app: App): Set<string> | null => {
+  const tones = perText(app, (host, n) => around(host, n, isTone)?.classList[0].slice(5) ?? 'text');
+  return tones && new Set(tones);
+};
+
+// the kind of list of each of several blocks, or null when they share one or one has none
+function listState(app: App, kind: string): () => boolean | 'mixed' | null {
+  return () => {
+    const els = app.selection.kind === 'elements' ? app.selection.elements() : [];
+    if (els.length < 2 || listKind(app) !== null) return app.commands.get(`text.list.${kind}`) ? app.commands.state(`text.list.${kind}`).checked : null;
+    const kinds = els.map((el) => (el.matches('ul, ol') ? el.localName : el.localName === 'p' ? 'none' : null));
+    return kinds.includes(null) ? null : kinds.includes(kind) ? 'mixed' : false;
+  };
+}
+
 // the name of a block that is not in the paragraph styles, e.g. a heading
-function tagName(app: App): string {
-  const host = app.selection.kind === 'text' ? app.selection.items[0] : app.selection.only();
+function tagName(app: App, block?: Element): string {
+  const host = block ?? (app.selection.kind === 'text' ? app.selection.items[0] : app.selection.only());
   const el = host?.closest('h1, h2, h3, li, td, th, p, div') ?? host;
   switch (el?.localName) {
     case 'h1': return 'Title';
@@ -127,7 +167,13 @@ function stylePopup(app: App): Control {
   });
   const sync = () => {
     const on = ids.find((id) => app.commands.state(id).checked);
-    text.textContent = on ? app.commands.label(on) : tagName(app);
+    // several blocks of different styles show Mixed, as in Keynote
+    const blocks = app.selection.kind === 'elements' && app.selection.elements().length > 1 ? selectedBlocks(app) : [];
+    const names = new Set(blocks.map((el) => {
+      const s = styleOf(app, el);
+      return s && app.commands.get(`text.style.${s}`) ? app.commands.label(`text.style.${s}`) : tagName(app, el);
+    }));
+    text.textContent = names.size > 1 ? 'Mixed' : on ? app.commands.label(on) : tagName(app);
     b.disabled = !ids.some((id) => app.commands.enabled(id));
     b.title = (b.disabled && styleWhy(app, 'Paragraph Style')) || 'Paragraph Style';
   };
@@ -154,12 +200,14 @@ function swatches(app: App, run: Run): Control {
   const sync = () => {
     const slide = app.current() ?? document.querySelector('.reveal');
     const style = slide ? getComputedStyle(slide) : null;
+    const tones = tonesOf(app);
     for (const { b, tone, token } of buttons) {
       const id = `text.tone.${tone}`;
       const s = app.commands.get(id) ? app.commands.state(id) : null;
       b.style.setProperty('--swatch', style?.getPropertyValue(token).trim() || 'transparent');
       b.disabled = !s?.enabled;
-      b.setAttribute('aria-pressed', String(!!s?.checked && !b.disabled));
+      const on = tones && tones.size > 1 ? (tones.has(tone) ? 'mixed' : 'false') : String(!!s?.checked);
+      b.setAttribute('aria-pressed', b.disabled ? 'false' : on);
     }
   };
   sync();
@@ -179,12 +227,12 @@ export function textPane(app: App, run: Run): Control[] {
     section(null, [row([painter(app, run)])]),
     section('Font', [
       row([segmented(app, run, [
-        { command: 'text.bold', text: () => make('span', 'b', 'B'), title: 'Bold' },
-        { command: 'text.italic', text: () => make('span', 'i', 'I'), title: 'Italic' },
-        { command: 'text.strike', text: () => make('span', 's', 'S'), title: 'Strikethrough' },
-        { command: 'text.code', text: () => make('span', 'mono', '{ }'), title: 'Code' },
-        { command: 'text.superscript', text: script('x', '2', 'sup'), title: 'Superscript' },
-        { command: 'text.subscript', text: script('x', '2', 'sub'), title: 'Subscript' },
+        { command: 'text.bold', text: () => make('span', 'b', 'B'), title: 'Bold', pressed: formatState(app, 'bold') },
+        { command: 'text.italic', text: () => make('span', 'i', 'I'), title: 'Italic', pressed: formatState(app, 'italic') },
+        { command: 'text.strike', text: () => make('span', 's', 'S'), title: 'Strikethrough', pressed: formatState(app, 'strike') },
+        { command: 'text.code', text: () => make('span', 'mono', '{ }'), title: 'Code', pressed: formatState(app, 'code') },
+        { command: 'text.superscript', text: script('x', '2', 'sup'), title: 'Superscript', pressed: formatState(app, 'superscript') },
+        { command: 'text.subscript', text: script('x', '2', 'sub'), title: 'Subscript', pressed: formatState(app, 'subscript') },
       ], 'Font')]),
       row([segmented(app, run, [
         { command: 'text.smaller', icon: 'minus', text: 'Smaller' },
@@ -195,9 +243,9 @@ export function textPane(app: App, run: Run): Control[] {
     section('Text Color', [row([swatches(app, run)])]),
     section('Bullets & Lists', [
       row([segmented(app, run, [
-        { command: 'text.list.none', icon: 'list-none', title: 'Paragraphs' },
-        { command: 'text.list.ul', icon: 'list-dash', title: 'Dashes' },
-        { command: 'text.list.ol', icon: 'list-number', title: 'Numbers' },
+        { command: 'text.list.none', icon: 'list-none', title: 'Paragraphs', pressed: listState(app, 'none') },
+        { command: 'text.list.ul', icon: 'list-dash', title: 'Dashes', pressed: listState(app, 'ul') },
+        { command: 'text.list.ol', icon: 'list-number', title: 'Numbers', pressed: listState(app, 'ol') },
       ], 'List'), segmented(app, run, [
         { command: 'text.outdent', icon: 'outdent', title: 'Decrease Indent Level' },
         { command: 'text.indent', icon: 'indent', title: 'Increase Indent Level' },

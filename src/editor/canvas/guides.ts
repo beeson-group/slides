@@ -1,12 +1,12 @@
 // the guides placed by hand, as the guides of Keynote: a guide is dragged out of a ruler of
 // canvas/rulers.ts, with its place in slide px shown during the drag, moved by a drag on the canvas
 // where no element is under the pointer, and removed by a drag back onto a ruler or off the
-// canvas. an element snaps to the guides as it snaps to the other elements in snap.ts. the guides
-// are not part of the deck: they are kept per slide element during the session, so that they follow
-// a slide that is moved, added before, or deleted, and a duplicated slide gets a copy of the guides
-// of its source, as in Keynote. they are stored in the storage of the browser per deck, by the index
-// of each slide in the order of the page, after every change of the slides. Show Guides, Clear All
-// Guides on Slide, Copy Guides, and Paste Guides are the commands of Keynote
+// canvas. an element snaps to the guides as it snaps to the other elements in snap.ts. the guides of
+// a slide are written into data-guides on its section, e.g. data-guides="x480 y270" in slide px,
+// which only the editor reads, and each change of them is one entry of the history. guides kept in
+// the storage of the browser by an earlier editor, by the index of each slide in the order of the
+// page, are shown until the next change of the guides of their slide writes them into the file.
+// Show Guides, Clear All Guides on Slide, Copy Guides, and Paste Guides are the commands of Keynote
 
 import type { App } from '../app.ts';
 import { injectStyle, make, store, stored } from '../ui/dom.ts';
@@ -43,6 +43,15 @@ const clean = (g: Partial<Guides> | null | undefined): Guides => ({
 export function merged(a: Guides, b: Guides): Guides {
   const join = (p: number[], q: number[]) => [...new Set([...p, ...q])].sort((m, n) => m - n);
   return { x: join(a.x, b.x), y: join(a.y, b.y) };
+}
+
+// the guides as the value of data-guides, x before y, each in order
+const format = (g: Guides): string => [...[...g.x].sort((m, n) => m - n).map((v) => `x${v}`), ...[...g.y].sort((m, n) => m - n).map((v) => `y${v}`)].join(' ');
+
+function parse(text: string): Guides {
+  const g = empty();
+  for (const [, axis, v] of text.matchAll(/(?:^|\s)([xy])(-?\d+(?:\.\d+)?)(?=\s|$)/g)) g[axis as 'x' | 'y'].push(Number(v));
+  return clean(g);
 }
 
 function read<T>(key: string, fallback: T): T {
@@ -84,6 +93,8 @@ export function install(app: App): void {
   const of = (slide: Element | null): Guides => {
     if (!seeded) seed();
     if (!slide) return empty();
+    const attr = slide.getAttribute('data-guides');
+    if (attr !== null) return parse(attr);
     let g = kept.get(slide);
     if (!g) {
       g = empty();
@@ -94,14 +105,14 @@ export function install(app: App): void {
   const persist = () => {
     of(null);
     order = sections();
-    const all = order.map((s) => of(s));
+    const all = order.map((s) => kept.get(s) ?? empty());
     const text = all.some((g) => g.x.length || g.y.length) ? JSON.stringify(all) : null;
     if (text !== stored(keyOf())) store(keyOf(), text);
   };
-  // a copy of a slide gets a copy of its guides
+  // a copy of a slide gets a copy of the guides kept in the storage for it
   const duplicate = app.doc.duplicate.bind(app.doc);
   app.doc.duplicate = async (el) => {
-    const source = el.parentElement === app.slides() && el.matches('section') ? of(el) : null;
+    const source = el.parentElement === app.slides() && el.matches('section') && !el.hasAttribute('data-guides') ? of(el) : null;
     const copy = await duplicate(el);
     if (source) {
       kept.set(copy, clean(source));
@@ -109,9 +120,29 @@ export function install(app: App): void {
     }
     return copy;
   };
+  // the guides of slide written into the file as one entry of the history, with those kept in the
+  // storage for it dropped, and kept again by an undo
   const setOf = (slide: Element, g: Guides) => {
-    kept.set(slide, clean(g));
-    persist();
+    const text = format(clean(g));
+    const old = kept.get(slide);
+    const legacy = !!old && old.x.length + old.y.length > 0;
+    if (!legacy && text === (slide.getAttribute('data-guides') ?? '')) {
+      draw();
+      return;
+    }
+    const keep = (on: Guides) => {
+      kept.set(slide, on);
+      persist();
+      draw();
+      app.invalidate('layout');
+    };
+    void app.history.transact('Guides', () => {
+      if (legacy && old) {
+        keep(empty());
+        app.history.push({ label: 'Guides', undo: () => keep(old), redo: () => keep(empty()) });
+      }
+      app.doc.setTag(slide, { attrs: { 'data-guides': text || null } }, 'guides');
+    }).catch((e) => app.fail(e));
     draw();
     app.invalidate('layout');
   };

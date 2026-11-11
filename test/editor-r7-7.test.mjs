@@ -286,10 +286,10 @@ for (const platform of PLATFORMS) {
     await byteExact(page, [[plain, start]]);
     assert.equal((await state(page, 'line.heads.start')).checked, true);
     assert.equal(await page.evaluate(`document.querySelector('${PANEL} [data-command="line.heads.start"]').getAttribute('aria-pressed')`), 'true');
-    // the grip of the start is drawn past its head, and the grip of the end at the end
+    // the grip of each end is drawn on its end, the tip of the head at the start
     const grips = await page.evaluate(`Object.fromEntries([...document.querySelectorAll('.beeson-line-end')].filter((g) => !g.hidden).map((g) => { const r = g.getBoundingClientRect(); return [g.dataset.end, r.left + r.width / 2]; }))`);
     const ends = await page.evaluate(`(() => { const s = document.querySelector('.reveal .slides'), r = s.getBoundingClientRect(), k = r.width / s.offsetWidth; return [r.left + 300 * k, r.left + 800 * k]; })()`);
-    assert.ok(grips[1] < ends[0] - 4, `the grip of the start at ${grips[1]} covers the head at ${ends[0]}`);
+    assert.ok(Math.abs(grips[1] - ends[0]) <= 1, `the grip of the start is at ${grips[1]}, and the start at ${ends[0]}`);
     assert.ok(Math.abs(grips[2] - ends[1]) <= 1, `the grip of the end is at ${grips[2]}, and the end at ${ends[1]}`);
     await roundTrip(page, await render(page));
     // Format > Line > Arrowhead at Start, from an arrowhead at the end, on the line selected again
