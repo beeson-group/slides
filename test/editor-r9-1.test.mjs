@@ -17,6 +17,7 @@ import { byteExact, click, drag, press, saveAndReopen, type } from './helpers/ed
 const PLATFORMS = ['mac', 'other'];
 const MODES = ['dark', 'light'];
 const DECK = 'test/pages/editor-r8-5.html';
+const GROUP_DECK = 'test/pages/editor-r9-1.html';
 const ZONE_PAIR = 0, ZONE_ONE = 1, PLATE_PAIR = 2, PLATE_ONE = 3;
 const FIGURES = [ZONE_PAIR, ZONE_ONE, PLATE_PAIR, PLATE_ONE];
 const NAMES = ['a pair in a zone', 'one image in a zone', 'a pair in a plate', 'one image in a plate'];
@@ -268,6 +269,26 @@ function resized(now, rest, h, ptr, from, where) {
 // the pointer offset of a drag of grip h inward, in screen px
 const inward = (h, by = 40) => ({ dx: -SIGN[h][0] * by, dy: -SIGN[h][1] * by });
 
+// the group of two pairs, selected by a click on a member
+async function pickGroup(t, platform, mode) {
+  const page = await load(t, platform, mode, 0, GROUP_DECK);
+  page.figure = 'figure.zone';
+  await click(page, IMG);
+  await frames(page);
+  assert.deepEqual(await selected(page), ['figure.zone', 'figure.zone'], 'a click on a member does not select the group');
+  return page;
+}
+
+// a drag of the rotate handle of the group with the frame box that turns it by deg, held at the
+// point that it ends at, which is returned
+async function turnGroup(page, box, deg) {
+  assert.ok(box, 'the frame of the group is not drawn');
+  const rotor = await page.evaluate(`(() => { const r = document.querySelector('.beeson-rotor').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  const to = turned(box, deg, rotor.x, rotor.y);
+  await drag(page, rotor, { dx: to.x - rotor.x, dy: to.y - rotor.y, hold: true });
+  return to;
+}
+
 for (const platform of PLATFORMS) {
   for (const mode of MODES) {
     for (const n of FIGURES) {
@@ -350,6 +371,76 @@ for (const platform of PLATFORMS) {
         await roundTrip(page, edited);
         await saved(page, edited, `r9-1-turned-${n}.html`);
       }
+    });
+
+    test(`a turned group keeps its frame turned with its grips on it, and its W and H fields scale it, on ${platform} in ${mode} mode`, async (t) => {
+      const where = `a group of two pairs on ${platform} in ${mode} mode`;
+      const page = await pickGroup(t, platform, mode);
+      const rest = await look(page);
+
+      // W and H are typed fields that scale the group about its upper left corner, as one entry of
+      // the history each, and with Constrain Proportions off a typed W stretches the pictures
+      assert.equal(await fieldEnabled(page, 'width'), true, `${where}: the field W is dimmed`);
+      assert.equal(await fieldEnabled(page, 'height'), true, `${where}: the field H is dimmed`);
+      const w0 = await fieldValue(page, 'width'), h0 = await fieldValue(page, 'height');
+      const x0 = await fieldValue(page, 'x'), y0 = await fieldValue(page, 'y');
+      const typed = async (id, value, want) => {
+        await typeField(page, id, value);
+        const got = { width: await fieldValue(page, 'width'), height: await fieldValue(page, 'height'), x: await fieldValue(page, 'x'), y: await fieldValue(page, 'y') };
+        for (const [k, v] of Object.entries(want)) assert.ok(near(got[k], v, 1), `${where}: a typed ${id} of ${value} gives ${js(got)}, not ${js(want)}`);
+        const edited = await render(page);
+        for (const l of changedLines(page.source, edited)) assert.match(l, /^<(figure class="zone"|img )/, `${where}: a typed ${id} writes ${l}`);
+        await roundTrip(page, edited);
+        return edited;
+      };
+      const w1 = Math.round(w0 * 0.8), h1 = Math.round(h0 * 0.8);
+      await typed('width', w1, { width: w1, height: h0 * 0.8, x: x0, y: y0 });
+      await typed('height', h1, { width: w0 * 0.8, height: h1, x: x0, y: y0 });
+      await exec(page, 'arrange.constrainProportions');
+      assert.equal((await state(page, 'arrange.constrainProportions')).checked, false, `${where}: Constrain Proportions is not turned off`);
+      const stretched = await typed('width', w1, { width: w1, height: h0, x: x0, y: y0 });
+      assert.match(stretched, /style="width: \d+px; height: \d+px"/, `${where}: a typed W with Constrain Proportions off does not stretch the pictures`);
+      await exec(page, 'arrange.constrainProportions');
+
+      // after a turn by the rotate handle, the frame of the group stays turned by the angle of its
+      // first member, around every member, with the grips on it, and W and H give its size
+      const to = await turnGroup(page, rest.group, 30);
+      await release(page, to);
+      await frames(page);
+      const now = await look(page);
+      const at = `${where} after a turn by 30°`;
+      assert.ok(now.pictures.every((p) => p.deg === 30), `${at}: the pictures are turned by ${js(now.pictures.map((p) => p.deg))}`);
+      assert.ok(now.group, `${at}: the frame of the group is not drawn`);
+      assert.ok(near(now.groupDeg, 30, 0.5), `${at}: the frame of the group is turned by ${now.groupDeg}°`);
+      const tight = reach(now.pictures.flatMap((p) => p.corners).map((c) => turned(now.group, -30, c.x, c.y)));
+      assert.ok(sameBox(tight, now.group), `${at}: the frame of the group, at ${show(now.group)} turned, is not around its members at ${show(tight)}`);
+      for (const h of HANDLES) {
+        const want = gripOn(now.group, 30, h), g = now.grips[h];
+        assert.ok(g && near(g.x, want.x) && near(g.y, want.y), `${at}: the grip ${h} is at ${js(g)}, not at ${js(want)}`);
+      }
+      assert.ok(near(await fieldValue(page, 'width'), now.group.width / now.k, 1) && near(await fieldValue(page, 'height'), now.group.height / now.k, 1), `${at}: W and H are not the size of the turned frame`);
+      const turnedText = await render(page);
+      const shown = changedLines(page.source, turnedText).filter((l) => l.startsWith(`<img class="for-${mode}"`));
+      assert.equal(shown.length, 2, `${where}: the turn writes ${js(shown)}`);
+      for (const l of shown) assert.match(l, /rotate: 30deg/, `${where}: the turn writes ${l}`);
+      await roundTrip(page, turnedText);
+      await redo(page);
+      await frames(page);
+      page.source = turnedText;
+
+      // a typed W scales the turned group about the upper left corner of its frame
+      const before = await look(page);
+      const corner = gripOn(before.group, 30, 'nw');
+      const w2 = Math.round((before.group.width / before.k) * 0.8);
+      await typeField(page, 'width', w2);
+      const after = await look(page);
+      const moved = gripOn(after.group, 30, 'nw');
+      assert.ok(near(after.groupDeg, 30, 0.5), `${where}: a typed W turns the frame of the group to ${after.groupDeg}°`);
+      assert.ok(near(moved.x, corner.x) && near(moved.y, corner.y), `${where}: a typed W moves the upper left corner of the turned group from ${js(corner)} to ${js(moved)}`);
+      assert.ok(near(await fieldValue(page, 'width'), w2, 1), `${where}: a typed W of ${w2} gives ${await fieldValue(page, 'width')}`);
+      const edited = await render(page);
+      await roundTrip(page, edited);
+      await saved(page, edited, 'r9-1-group.html');
     });
 
   }
