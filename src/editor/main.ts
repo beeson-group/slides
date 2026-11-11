@@ -193,8 +193,14 @@ async function init(): Promise<void> {
     // the slides change without a transition and with every step shown, as in the editing view
     // of PowerPoint, and the keys of reveal.js for the overview (Esc, O), the black and the white
     // screen (B, V, the period), fullscreen (F), the help (the question mark), and the speaker view
-    // (S) are off. the viewport of reveal.js is laid out again between the bars
-    d.configure({ transition: 'none', backgroundTransition: 'none', fragments: false, keyboard: { 27: null, 79: null, 66: null, 86: null, 190: null, 70: null, 191: null, 83: null } });
+    // (S) are off. the viewport of reveal.js is laid out again between the bars. a video is held at
+    // its poster, as a movie of Keynote in the editing view, and played only from the Video pane
+    d.configure({ transition: 'none', backgroundTransition: 'none', fragments: false, autoPlayMedia: false, keyboard: { 27: null, 79: null, 66: null, 86: null, 190: null, 70: null, 191: null, 83: null } });
+    for (const v of document.querySelectorAll<HTMLVideoElement>('.reveal .slides video')) {
+      if (v.paused) continue;
+      v.pause();
+      v.load();
+    }
     d.on('slidechanged', () => {
       app.emit('slide');
       app.invalidate();
