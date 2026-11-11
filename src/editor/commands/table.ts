@@ -74,6 +74,10 @@ html.beeson-autofilling,html.beeson-autofilling *{cursor:crosshair!important}
 .beeson-table-bars .bar{border-radius:5px;background:var(--ed-panel);box-shadow:0 0 0 1px var(--ed-control-line);color:var(--ed-muted);font:10px/1 var(--ed-font);overflow:hidden}
 .beeson-table-bars .bar>div{position:absolute;display:grid;place-items:center;box-shadow:-1px -1px 0 var(--ed-line)}
 .beeson-table-bars .bar>div:hover{background:var(--ed-hover);color:var(--ed-text)}
+.beeson-table-bars .bar .more{position:absolute;right:2px;top:50%;display:grid;width:14px;height:14px;margin-top:-7px;border-radius:3px;opacity:0}
+.beeson-table-bars .bar.rows .more{right:auto;left:50%;top:auto;bottom:1px;margin:0 0 0 -7px}
+.beeson-table-bars .bar>:hover>.more{opacity:1}
+.beeson-table-bars .bar .more:hover{background:var(--ed-control-line)}
 .beeson-table-bars .bar>.on{background:color-mix(in srgb,var(--ed-select) 20%,transparent);color:var(--ed-text);font-weight:600}
 .beeson-table-bars .round{padding:0;border:0;border-radius:50%;display:grid;place-items:center;background:var(--ed-panel);box-shadow:0 0 0 1px var(--ed-control-line);color:var(--ed-select)}
 .beeson-table-bars .round:hover{background:var(--ed-hover)}
@@ -953,21 +957,36 @@ function installBars(app: App): void {
   // a press on the bars keeps the caret in its cell
   for (const type of ['pointerdown', 'mousedown']) layer.addEventListener(type, (ev) => ev.preventDefault());
 
-  // a click on a letter or a number opens the menu of the table for a cell of its column or row
-  const segmentMenu = (ev: MouseEvent, column: boolean) => {
+  // a click on a letter or a number selects its column or row as a block, and with Shift the
+  // columns or rows from the range to it, as in Keynote. its arrow and a right-click then open the
+  // menu of the column or the row
+  const pick = (ev: MouseEvent, column: boolean) => {
     const seg = ev.target instanceof Element ? ev.target.closest<HTMLElement>('[data-index]') : null;
     if (!seg || !shown) return;
+    const table = shown.table;
+    const g = gridOf(table);
     const i = Number(seg.dataset.index);
-    const home = shown.cell ? placeOf(shown.cell)! : { row: 0, col: 0 };
-    const tr = shown.table.rows[column ? home.row : i];
-    const cell = tr && (cellOver(shown.table, column ? home.row : i, column ? i : home.col) ?? tr.cells[tr.cells.length - 1]);
-    if (!cell) return;
-    const anchor = seg.getBoundingClientRect();
-    focusCell(cell, 'end');
-    openMenu(app, cellItems(cell).slice(4), { anchor, placement: column ? 'below' : 'beside', label: seg.title });
+    const b = ev.shiftKey ? shown.box : null;
+    const from = b ? Math.min(i, column ? b.c0 : b.r0) : i;
+    const to = b ? Math.max(i, column ? b.c1 : b.r1) : i;
+    const at = (r: number, c: number) => g.grid[r]?.[c]?.cell;
+    const anchor = column ? at(0, from) : at(from, 0);
+    const focus = column ? at(g.grid.length - 1, to) : at(to, g.width - 1);
+    if (!anchor || !focus) return;
+    if (!b || !inBlock(app) || block?.anchor !== anchor || block.focus !== focus) selectCells(app, anchor, focus);
+    if (ev.type === 'click' && !(ev.target as Element).closest('.more')) return;
+    ev.preventDefault();
+    const arg = { cell: column ? anchor : focus };
+    const ids = column
+      ? [['table.columnBefore', 'table.columnAfter'], ['table.deleteColumn'], ['table.distributeColumns', 'table.fitColumn'], ['table.sortAscending', 'table.sortDescending']]
+      : [['table.rowAbove', 'table.rowBelow'], ['table.deleteRow']];
+    const items: MenuItem[] = ids.flatMap((group, k) => [...(k ? [{ rule: true as const }] : []), ...group.map((command) => ({ command, arg }))]);
+    openMenu(app, items, { anchor: seg.getBoundingClientRect(), placement: column ? 'below' : 'beside', label: `${seg.title} menu` });
   };
-  cols.addEventListener('click', (ev) => segmentMenu(ev, true));
-  rows.addEventListener('click', (ev) => segmentMenu(ev, false));
+  for (const [bar, column] of [[cols, true], [rows, false]] as const) {
+    bar.addEventListener('click', (ev) => pick(ev, column));
+    bar.addEventListener('contextmenu', (ev) => pick(ev, column));
+  }
 
   const place = (el: Element, left: number, top: number, width: number, height: number) => {
     (el as HTMLElement).style.cssText = `left:${left}px;top:${top}px;width:${width}px;height:${height}px`;
@@ -977,6 +996,10 @@ function installBars(app: App): void {
       const d = make('div', on(i) ? 'on' : '', name);
       d.dataset.index = String(i);
       d.title = `${word} ${name}`;
+      const more = make('span', 'more');
+      more.title = `${word} ${name} Menu`;
+      more.append(icon('chevron-down', 14));
+      d.append(more);
       return d;
     }));
 
