@@ -112,6 +112,7 @@ export function install(app: App): void {
         return !!s && !!nextShown(a, s) && transitionOf(a, s) === t;
       },
       undoable: true,
+      undo: 'Transition',
       run: (a) => {
         const list = targets(a).filter((s) => nextShown(a, s));
         for (const s of list) setTransition(a, s, t);

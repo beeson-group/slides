@@ -204,17 +204,17 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await state(page, 'text.list.ul'), { id: 'text.list.ul', label: 'Dashes', enabled: true, checked: true });
     await exec(page, 'text.list.ol');
     const ol = [LIST, LIST.replace(/^<ul>/, '<ol>').replace(/<\/ul>$/, '</ol>')];
-    await roundTrip(page, [ol], 'Numbers');
+    await roundTrip(page, [ol], 'List Style');
     await undo(page);
     await select(page, '.reveal section.present li', 'A first item', 3);
     await exec(page, 'text.list.none');
     const none = [`<ul>\n    ${FIRST}`, '<p class="fragment" data-fragment-index="1">A first item</p>\n  <ul>'];
-    await roundTrip(page, [none], 'Paragraphs');
+    await roundTrip(page, [none], 'List Style');
     await undo(page);
     await select(page, '.reveal section.present > p', 'A paragraph', 3);
     await exec(page, 'text.list.ul');
     const ul = [PARAGRAPH, `<ul>\n    ${PARAGRAPH.replace(/^<p>/, '<li>').replace(/<\/p>$/, '</li>')}\n  </ul>`];
-    await roundTrip(page, [ul], 'Dashes');
+    await roundTrip(page, [ul], 'List Style');
     await saved(page, [ul]);
     assert.deepEqual(errors(page), []);
   });
@@ -314,12 +314,12 @@ for (const platform of PLATFORMS) {
     const bigger = () => raw(page, '>', 'Period', 190, mod | 8);
     // each style after the one before, with the caret kept in the retagged block
     const steps = [
-      [() => exec(page, 'text.style.subheading'), as('<h3>', '</h3>'), 'Subheading', 'h3'],
+      [() => exec(page, 'text.style.subheading'), as('<h3>', '</h3>'), 'Paragraph Style', 'h3'],
       [smaller, as('<p>', '</p>'), 'Smaller', 'p'],
       [smaller, as('<p class="small">', '</p>'), 'Smaller', 'p'],
       [smaller, as('<div class="foot">', '</div>'), 'Smaller', 'div'],
       [bigger, as('<p class="small">', '</p>'), 'Bigger', 'p'],
-      [() => exec(page, 'text.style.caption'), as('<p class="caption">', '</p>'), 'Caption', 'p'],
+      [() => exec(page, 'text.style.caption'), as('<p class="caption">', '</p>'), 'Paragraph Style', 'p'],
     ];
     await block();
     assert.equal((await state(page, 'text.style.body')).checked, true);

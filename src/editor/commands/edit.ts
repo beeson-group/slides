@@ -84,7 +84,7 @@ export function install(app: App): void {
   const c = app.commands;
   c.define({
     id: 'edit.undo',
-    label: (a) => (a.history.undoLabel ? `Undo ${titled(a.history.undoLabel)}` : 'Undo'),
+    label: (a) => (a.history.undoLabel ? `Undo ${titled(a.history.undoLabel.replace(/…$/, ''))}` : 'Undo'),
     keys: { mac: ['Mod+Z'], other: ['Mod+Z'] },
     in: IN,
     menu: { bar: 'Edit', group: 'history', order: 10 },
@@ -94,7 +94,7 @@ export function install(app: App): void {
   });
   c.define({
     id: 'edit.redo',
-    label: (a) => (a.history.redoLabel ? `Redo ${titled(a.history.redoLabel)}` : 'Redo'),
+    label: (a) => (a.history.redoLabel ? `Redo ${titled(a.history.redoLabel.replace(/…$/, ''))}` : 'Redo'),
     keys: { mac: ['Mod+Shift+Z', 'Mod+Y'], other: ['Mod+Y', 'Mod+Shift+Z'] },
     in: IN,
     menu: { bar: 'Edit', group: 'history', order: 11 },
