@@ -13,7 +13,7 @@ import { injectStyle } from '../ui/dom.ts';
 import { groupOf } from '../commands/order.ts';
 import { turnersOf } from './drag.ts';
 import type { Box, Guide, Handle, Spacing } from './snap.ts';
-import { BY_ITSELF, CONTAINER, RESIZABLE, captionsOf, frameOf, frameRect, isTextSized, movableOf, orientedBox, pictureOf, sizedOf, toScreen, turnable as turns } from './hit.ts';
+import { BY_ITSELF, CONTAINER, RESIZABLE, captionsOf, frameOf, frameRect, isTextSized, movableOf, orientedBox, pictureOf, scaleAt, sizedOf, toScreen, turnable as turns } from './hit.ts';
 
 export const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
 
@@ -103,11 +103,30 @@ function orientOf(el: Element, scale: number): { box: Box; deg: number } {
 }
 
 // the point x, y turned by deg about the center of box
-function turned(box: Box, deg: number, x: number, y: number): { x: number; y: number } {
+export function turned(box: Box, deg: number, x: number, y: number): { x: number; y: number } {
   if (!deg) return { x, y };
   const a = (deg * Math.PI) / 180;
   const cx = box.left + box.width / 2, cy = box.top + box.height / 2;
   return { x: cx + (x - cx) * Math.cos(a) - (y - cy) * Math.sin(a), y: cy + (x - cx) * Math.sin(a) + (y - cy) * Math.cos(a) };
+}
+
+// the frame of a group on the screen turned by deg, the angle of its first member, as Keynote
+// turns the frame of a group: the least box at this angle around the turned pictures of the
+// members and their upright captions, without its rotation about its center
+export function groupFrame(els: Element[], deg: number): Box {
+  if (!deg) return groupReach(els);
+  const corners = (b: Box, d: number) => [[0, 0], [1, 0], [1, 1], [0, 1]].map(([x, y]) => turned(b, d, b.left + x * b.width, b.top + y * b.height));
+  const points = els.flatMap((el) => {
+    const pic = pictureOf(el), d = angleOf(el) + (pic === el ? 0 : angleOf(pic));
+    return [...corners(orientedBox(pic, scaleAt(el), d), d), ...captionsOf(el).flatMap((r) => corners(r, 0))];
+  });
+  // the box of the points turned back by deg about the origin, whose center is turned by deg again
+  const a = (deg * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a);
+  const back = points.map((p) => ({ x: p.x * cos + p.y * sin, y: p.y * cos - p.x * sin }));
+  const left = Math.min(...back.map((p) => p.x)), top = Math.min(...back.map((p) => p.y));
+  const width = Math.max(...back.map((p) => p.x)) - left, height = Math.max(...back.map((p) => p.y)) - top;
+  const cx = left + width / 2, cy = top + height / 2;
+  return { left: cx * cos - cy * sin - width / 2, top: cx * sin + cy * cos - height / 2, width, height };
 }
 
 // the distance of the center of the rotate handle above the top edge of a frame, and its radius,
@@ -143,8 +162,10 @@ export class Frames {
   private readonly union: HTMLDivElement;
   // the distance of the rotate handle above the frame, kept while it is dragged
   private rotorAt = ROTOR;
-  // the box of a selected group on the screen, as last drawn, which its one set of grips resizes
+  // the box of a selected group on the screen, as last drawn, which its one set of grips resizes,
+  // without its rotation about its center, and the angle that it is turned by
   private group: Box | null = null;
+  private groupDeg = 0;
   private readonly guides: HTMLDivElement[] = [];
   private readonly gaps: HTMLDivElement[] = [];
   readonly readout: HTMLDivElement;
@@ -192,6 +213,10 @@ export class Frames {
 
   groupBox(): Box | null {
     return this.group;
+  }
+
+  groupTurn(): number {
+    return this.groupDeg;
   }
 
   // the selected element that grip resizes
@@ -246,12 +271,15 @@ export class Frames {
     const id = selected.length > 1 ? groupOf(selected[0]) : null;
     const grouped = !!id && selected.every((el) => groupOf(el) === id);
     this.group = null;
-    // a group being turned is framed at its frame at the start of the turn, turned with it
+    this.groupDeg = 0;
+    // a group being turned is framed at its frame at the start of the turn, turned with it, and
+    // another group at its frame turned by the angle of its first member, as the field Angle gives it
     const turn = grouped ? view.turn : null;
     if (boxes.length > 1 && grouped) {
-      this.group = turn?.box ?? groupReach(selected);
+      this.groupDeg = turn ? turn.deg : (turnersOf(app, selected)?.[0].angle ?? 0);
+      this.group = turn?.box ?? groupFrame(selected, this.groupDeg);
       place(this.union, this.group);
-      this.union.style.rotate = turn?.deg ? `${turn.deg}deg` : '';
+      this.union.style.rotate = this.groupDeg ? `${this.groupDeg}deg` : '';
       for (const f of this.frames) f.hidden = true;
     } else this.union.hidden = true;
 
@@ -272,7 +300,7 @@ export class Frames {
           continue;
         }
         const b = m.i < 0 ? (this.group as Box) : boxes[m.i];
-        const at = turned(b, m.i < 0 ? 0 : orients[m.i].deg, h.includes('w') ? b.left : h.includes('e') ? b.left + b.width : b.left + b.width / 2, h.includes('n') ? b.top : h.includes('s') ? b.top + b.height : b.top + b.height / 2);
+        const at = turned(b, m.i < 0 ? this.groupDeg : orients[m.i].deg, h.includes('w') ? b.left : h.includes('e') ? b.left + b.width : b.left + b.width / 2, h.includes('n') ? b.top : h.includes('s') ? b.top + b.height : b.top + b.height / 2);
         g.hidden = false;
         g.classList.toggle('locked', m.grips === 'locked');
         Object.assign(g.style, { left: `${at.x}px`, top: `${at.y}px` });
@@ -285,7 +313,7 @@ export class Frames {
     const turnable = (turnGroup || (!!only && boxes.length === 1 && turns(only as Element))) && (!view.moving || rotating);
     this.rotor.hidden = this.stem.hidden = !turnable;
     if (turnable) {
-      const b = turnGroup ? (this.group as Box) : boxes[0], deg = turnGroup ? (turn?.deg ?? 0) : orients[0].deg;
+      const b = turnGroup ? (this.group as Box) : boxes[0], deg = turnGroup ? this.groupDeg : orients[0].deg;
       const cx = b.left + b.width / 2;
       // above the middle of the top edge of the frame, as in PowerPoint, on a stem cut short where
       // the full stem would put the handle over the text of another block. the handle is drawn over

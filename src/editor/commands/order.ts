@@ -323,7 +323,7 @@ export function commands(app: App): Command[] {
         };
         const turners = turnersOf(app, els);
         if (turners) {
-          const pivot = pivotOf(turners.map((t) => t.el));
+          const pivot = pivotOf(turners.map((t) => t.el), turners[0].angle);
           turned(turnedEls(turners), () => {
             for (const t of turners) turnMember(app, t, pivot, deg - turners[0].angle);
           });

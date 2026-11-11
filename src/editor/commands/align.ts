@@ -6,11 +6,11 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { CONTAINER, RESIZABLE, STRETCHED, aspectOf, constrained, cssWidth, frameOf, frameRect, isTextSized, kindOf, movableOf, objectsOf, pictureOf, pictureSize, sizedOf, snapBoxOf, toSlide } from '../canvas/hit.ts';
+import { CONTAINER, RESIZABLE, STRETCHED, aspectOf, constrained, cssWidth, frameOf, frameRect, isTextSized, kindOf, movableOf, objectsOf, orientedBox, pictureOf, pictureSize, sizedOf, snapBoxOf, toSlide } from '../canvas/hit.ts';
 import type { Box } from '../canvas/snap.ts';
-import { placeOf, record, withCorners, writePlace, type Place } from '../canvas/drag.ts';
-import { groupReach } from '../canvas/frames.ts';
-import { groupOf } from './order.ts';
+import { angleOf, locked, placeOf, record, withCorners, writePlace, type Change, type Place } from '../canvas/drag.ts';
+import { groupFrame, groupReach, turned } from '../canvas/frames.ts';
+import { groupAngle, groupOf } from './order.ts';
 import { declarationProblem } from '../model/scope.ts';
 import { store } from '../ui/dom.ts';
 
@@ -51,6 +51,44 @@ export function groupBoxOf(app: App, els: Element[]): Box | null {
   const id = els.length > 1 ? groupOf(els[0]) : null;
   if (!id || !els.every((el) => groupOf(el) === id)) return null;
   return toSlide(frameOf(app), groupReach(els));
+}
+
+// the frame of els when they are one whole group, in slide pixels without its rotation about its
+// center, and the angle of its first member that it is turned by, or null
+export function groupFrameOf(app: App, els: Element[]): { box: Box; deg: number } | null {
+  if (!groupBoxOf(app, els)) return null;
+  const deg = groupAngle(app, els) ?? 0;
+  return { box: toSlide(frameOf(app), groupFrame(els, deg)), deg };
+}
+
+// the members of a group scaled by kx and ky along the axes of its frame, turned by deg, about the
+// upper left corner of the frame, as a drag of its corner grip scales them. a picture is stretched
+// where kx and ky differ, and a text block keeps the place of its top under its wrapped text
+function scaleGroup(app: App, els: Element[], frame: { box: Box; deg: number }, kx: number, ky: number): Change[] {
+  const f = frameOf(app);
+  const corner = turned(frame.box, frame.deg, frame.box.left, frame.box.top);
+  const a = (frame.deg * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a);
+  const changes: Change[] = [];
+  for (const el of els.filter((el) => !locked(el) && !els.some((o) => o !== el && o.contains(el)))) {
+    const s = sizedTarget(el), pic = pictureOf(el), deg = angleOf(el);
+    const point = () => {
+      const b = toSlide(f, orientedBox(pic, f.scale, deg));
+      return { b, x: b.left + b.width / 2, y: isTextSized(pic) ? b.top : b.top + b.height / 2 };
+    };
+    const was = point(), place = placeOf(el), size = placeOf(s);
+    if (s.matches(RESIZABLE) || isTextSized(s)) {
+      const stretch = s.matches(STRETCHED) && (kx !== ky || (size.height ?? null) !== null);
+      writePlace(app, s, { ...size, width: Math.max(1, cssWidth(s, was.b.width * kx)), height: stretch ? Math.max(1, was.b.height * ky) : size.height });
+    }
+    // the point of the member in the axes of the frame, scaled from the corner
+    const vx = was.x - corner.x, vy = was.y - corner.y;
+    const lx = (vx * cos + vy * sin) * kx, ly = (vy * cos - vx * sin) * ky;
+    const now = point(), at = placeOf(el);
+    writePlace(app, el, { ...at, translate: { x: (at.translate?.x ?? 0) + corner.x + lx * cos - ly * sin - now.x, y: (at.translate?.y ?? 0) + corner.y + lx * sin + ly * cos - now.y } });
+    changes.push({ el, from: place, to: placeOf(el) });
+    if (s !== el) changes.push({ el: s, from: size, to: placeOf(s) });
+  }
+  return changes;
 }
 
 function slideBox(app: App): Box {
@@ -205,14 +243,26 @@ export function commands(): Command[] {
   });
   // arg is { w, h, els }. an image or a video with its switch Constrain Proportions on keeps the
   // aspect that it has, and with the switch off it is stretched, with its height written. for any
-  // other picture, a height is written as the width at its aspect, and a text block takes a width
+  // other picture, a height is written as the width at its aspect, and a text block takes a width.
+  // a whole group is scaled about the upper left corner of its frame, on both axes where every
+  // picture of it keeps its aspect, else on the axis typed
   list.push({
     id: 'arrange.setSize',
     label: 'Size',
     undoable: true,
-    enabled: (app) => resizable(targetsOf(app)),
+    enabled: (app) => resizable(targetsOf(app)) || !!groupBoxOf(app, targetsOf(app)),
     run: (app, arg) => {
       const a = (arg ?? {}) as { w?: number; h?: number };
+      const frame = groupFrameOf(app, targetsOf(app, arg));
+      if (frame) {
+        const all = targetsOf(app, arg);
+        const keep = all.flatMap(sizedOf).filter((m) => m.matches(STRETCHED) && m.getClientRects().length).every(constrained);
+        const kw = a.w !== undefined ? a.w / frame.box.width : null, kh = a.h !== undefined ? a.h / frame.box.height : null;
+        const kx = kw ?? (keep && kh ? kh : 1), ky = kh ?? (keep && kw ? kw : 1);
+        record(app, 'resize', scaleGroup(app, all, frame, kx, ky));
+        app.invalidate('content');
+        return;
+      }
       const els = targetsOf(app, arg).map(sizedTarget);
       if (!resizable(els)) return;
       const changes = withCorners(app, els, () => els.map((el) => {

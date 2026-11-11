@@ -361,10 +361,11 @@ export function numberField(app: App, o: NumberOptions): Control & { input: HTML
   const step = o.step ?? 1;
   const digits = Math.max(0, -Math.floor(Math.log10(step) + 1e-9));
   const round = (v: number) => Number((Math.round(v / step) * step).toFixed(digits));
+  // the value as the field shows it, rounded to its step, hence a flush commits a typed value only
   let shown: number | null = null;
   const show = (v: number | null) => {
-    shown = v;
-    input.value = v === null ? '' : String(round(v));
+    shown = v === null ? null : round(v);
+    input.value = v === null ? '' : String(shown);
   };
   const commit = (v: number) => {
     const value = Math.min(o.max ?? Infinity, Math.max(o.min ?? -Infinity, round(v)));

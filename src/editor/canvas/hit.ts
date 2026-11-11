@@ -98,14 +98,19 @@ export function captionsOf(el: Element): DOMRect[] {
   return el.matches(CONTAINER) ? [...el.querySelectorAll(':scope > figcaption, :scope > .caption')].map((c) => c.getBoundingClientRect()).filter((r) => r.width && r.height) : [];
 }
 
+// the screen pixels per slide pixel of the slides that hold el
+export function scaleAt(el: Element): number {
+  const slides = el.closest('.slides') as HTMLElement | null;
+  return slides?.offsetWidth ? slides.getBoundingClientRect().width / slides.offsetWidth : 1;
+}
+
 // the box on the screen of the picture of the figure el as it is seen, upright around the picture
 // where the picture or the figure is turned
 export function pictureReach(el: Element): Box {
   const pic = pictureOf(el);
   const deg = (parseFloat(getComputedStyle(el).rotate) || 0) + (pic === el ? 0 : parseFloat(getComputedStyle(pic).rotate) || 0);
   if (!deg) return visualRect(pic);
-  const slides = el.closest('.slides') as HTMLElement | null;
-  const b = orientedBox(pic, slides?.offsetWidth ? slides.getBoundingClientRect().width / slides.offsetWidth : 1, deg);
+  const b = orientedBox(pic, scaleAt(el), deg);
   const a = (deg * Math.PI) / 180, c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a));
   const width = b.width * c + b.height * s, height = b.width * s + b.height * c;
   return { left: b.left + (b.width - width) / 2, top: b.top + (b.height - height) / 2, width, height };

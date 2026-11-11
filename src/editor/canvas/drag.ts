@@ -11,7 +11,7 @@ import type { TagEdit, Translate } from '../tags.ts';
 import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, anchored, fitPicture, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
 import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, captionsOf, constrained, containerOf, cssWidth, frameOf, frameRect, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, pictureReach, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, visualRect } from './hit.ts';
-import { groupReach, overlay, view } from './frames.ts';
+import { groupFrame, overlay, turned, view } from './frames.ts';
 import { enterGroup, settleCopies, freshGroup, groupOf } from '../commands/order.ts';
 import { injectStyle } from '../ui/dom.ts';
 
@@ -183,9 +183,9 @@ export function turnMember(app: App, t: Turner, pivot: { x: number; y: number },
   turn(app, t.spin, t.el, t.angle + deg, { x: pivot.x + dx * Math.cos(a) - dy * Math.sin(a), y: pivot.y + dx * Math.sin(a) + dy * Math.cos(a) }, live);
 }
 
-// the center of the frame of a group on the screen, about which the group is turned
-export function pivotOf(els: Element[]): { x: number; y: number } {
-  const b = groupReach(els);
+// the center of the frame of a group on the screen, turned by deg, about which the group is turned
+export function pivotOf(els: Element[], deg = 0): { x: number; y: number } {
+  const b = groupFrame(els, deg);
   return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
 }
 
@@ -455,7 +455,7 @@ export function install(app: App): void {
         p = start('rotate', ev, turners[0].el, turnedEls(turners), null);
         p.turners = turners;
         p.was = turners[0].angle;
-        view.turn = { box, deg: 0 };
+        view.turn = { box, deg: frames.groupTurn() };
       } else {
         center = seenCenter(app, spin as Element);
         p = start('rotate', ev, spin, [...new Set([spin as Element, carrier as Element])], null);
@@ -479,7 +479,7 @@ export function install(app: App): void {
         return { el: o, sized: sizedOf(o), pic, deg, base: toSlide(f, orientedBox(pic, f.scale, deg)) };
       });
       if (!followers.length) return;
-      const p = Object.assign(start('resize', ev, followers[0].el, followers.map((m) => m.el), null), { handle: (grip as HTMLElement).dataset.handle as Handle, followers, group: true });
+      const p = Object.assign(start('resize', ev, followers[0].el, followers.map((m) => m.el), null), { handle: (grip as HTMLElement).dataset.handle as Handle, followers, group: true, was: frames.groupTurn() });
       for (const m of followers.flatMap((m) => m.sized)) if (!p.from.has(m)) p.from.set(m, placeOf(m));
       p.base = toSlide(f, frames.groupBox() ?? union(followers.map((m) => visualRect(m.pic))));
       document.documentElement.classList.add('beeson-resizing');
@@ -621,7 +621,7 @@ export function install(app: App): void {
       // the angle of a group is that of its first member, as in the field Angle
       const by = deg - was;
       for (const t of p.turners) turnMember(app, t, c, by, true);
-      if (view.turn) view.turn.deg = by;
+      if (view.turn) view.turn.deg = deg;
     } else turn(app, p.els[0], p.carrier ?? p.els[0], deg, c, true);
     view.moving = p.els;
     view.resizing = true;
@@ -761,19 +761,20 @@ export function install(app: App): void {
 
   // a resize of a group by its grips, without snapping: the box of the group keeps its aspect at a
   // corner unless Shift is held, and each member is scaled by the ratio of the box, with its center
-  // moved away from the edge or corner across from the grip, or from the center of the group
+  // moved away from the edge or corner across from the grip, or from the center of the group. the
+  // pointer is taken in the axes of the frame, which is turned by the angle of the group
   const groupResize = (p: Press, ev: PointerEvent, dx: number, dy: number) => {
     const f = frameOf(app);
     const h = p.handle as Handle;
     const corner = h.length === 2;
     const center = aboutCenter(ev);
-    const box = resizeBox(p.base, h, dx, dy, { aspect: corner && !ev.shiftKey ? p.base.width / p.base.height : null, center, free: true });
+    const deg = p.was ?? 0, r = (deg * Math.PI) / 180;
+    const box = resizeBox(p.base, h, dx * Math.cos(r) + dy * Math.sin(r), dy * Math.cos(r) - dx * Math.sin(r), { aspect: corner && !ev.shiftKey ? p.base.width / p.base.height : null, center, free: true });
     const sx = h.includes('w') ? -1 : h.includes('e') ? 1 : 0;
     const sy = h.includes('n') ? -1 : h.includes('s') ? 1 : 0;
     const k = sx ? box.width / p.base.width : box.height / p.base.height;
     const b = p.base;
-    const ax = center || !sx ? b.left + b.width / 2 : sx > 0 ? b.left : b.left + b.width;
-    const ay = center || !sy ? b.top + b.height / 2 : sy > 0 ? b.top : b.top + b.height;
+    const { x: ax, y: ay } = turned(b, deg, center || !sx ? b.left + b.width / 2 : sx > 0 ? b.left : b.left + b.width, center || !sy ? b.top + b.height / 2 : sy > 0 ? b.top : b.top + b.height);
     for (const m of p.followers ?? []) {
       for (const s of m.sized) {
         (s as HTMLElement).style.width = `${Math.round(cssWidth(s, m.base.width * k))}px`;
@@ -796,7 +797,7 @@ export function install(app: App): void {
     // the size that the members reach with the captions under their pictures, as W and H of the
     // Arrange pane give it, since the layout sets the height of a zone and a text block, which can
     // differ from box
-    const reached = toSlide(f, groupReach(p.els));
+    const reached = toSlide(f, groupFrame(p.els, deg));
     view.readout = { text: `${Math.round(reached.width)} × ${Math.round(reached.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     frames.draw();
     app.invalidate('content');
