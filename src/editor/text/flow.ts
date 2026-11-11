@@ -18,6 +18,9 @@ const STYLE = '::highlight(beeson-span) { background-color: color-mix(in srgb, H
 let span: { anchor: Place; focus: Place } | null = null;
 // a drag of the browser, which holds the window in the block where it started
 let drag: { from: Element; anchor: Place | null } | null = null;
+// the column that ArrowUp and ArrowDown keep, as the left x of the caret in client px, while the
+// focus is at the place where the last of these arrows put it
+let column: { x: number; at: Place } | null = null;
 
 const elementOf = (n: Node): Element | null => (n instanceof Element ? n : n.parentElement);
 const end = (host: Element): number => offsetIn(host, host, host.childNodes.length);
@@ -167,17 +170,39 @@ function placeIn(to: Element, way: Way, x: number): number {
   return p && to.contains(p[0]) ? offsetIn(to, ...p) : fallback;
 }
 
-// the place that the focus of the window goes to toward way when it is at the edge of its block and
-// a block of the same text is beside it, or null. a range moves only with Shift
-function step(app: App, way: Way, extend: boolean): Place | null {
+// the focus of the window as a place, which a range has only with Shift
+function focusOf(app: App, extend: boolean): Place | null {
   const s = getSelection();
   if (!s?.focusNode || (!extend && !s.isCollapsed)) return null;
   const host = app.hostOf(elementOf(s.focusNode));
-  const to = host ? besideBlock(app, host, ahead(way)) : null;
-  if (!host || !to) return null;
-  const at = offsetIn(host, s.focusNode, s.focusOffset);
-  if (!atEdge(host, at, way)) return null;
-  return [to, placeIn(to, way, caretBox(host, at)?.left ?? 0)];
+  return host ? [host, offsetIn(host, s.focusNode, s.focusOffset)] : null;
+}
+
+// the x that the focus at of host keeps toward way: the column while it holds, else the caret
+function xOf(host: Element, at: number, way: Way): number {
+  const kept = (way === 'up' || way === 'down') && column && column.at[0] === host && column.at[1] === at;
+  return kept ? column!.x : (caretBox(host, at)?.left ?? 0);
+}
+
+// the place that the focus of the window goes to toward way when it is at the edge of its block and
+// a block of the same text is beside it, or null
+function step(app: App, way: Way, extend: boolean): Place | null {
+  const f = focusOf(app, extend);
+  const to = f ? besideBlock(app, f[0], ahead(way)) : null;
+  if (!f || !to || !atEdge(f[0], f[1], way)) return null;
+  return [to, placeIn(to, way, xOf(f[0], f[1], way))];
+}
+
+// the place on the line above or below the focus in its own block at the column, while the column
+// holds. the browser keeps a column only over its own moves, and an arrow that leaves a short line
+// of another block thus goes back to the column
+function within(app: App, way: Way, extend: boolean): Place | null {
+  const f = focusOf(app, extend);
+  if (!f || !column || column.at[0] !== f[0] || column.at[1] !== f[1] || (way !== 'up' && way !== 'down') || atEdge(f[0], f[1], way)) return null;
+  const caret = caretBox(f[0], f[1]);
+  if (!caret) return null;
+  const p = fromPoint(column.x, way === 'down' ? caret.bottom + caret.height / 2 : caret.top - caret.height / 2);
+  return p && f[0].contains(p[0]) ? [f[0], offsetIn(f[0], ...p)] : null;
 }
 
 // an arrow collapses a span to its start or its end, or moves the caret into the block beside it.
@@ -189,9 +214,13 @@ function move(app: App, way: Way, extend: boolean): void {
     clear();
     return selectIn(host, at);
   }
-  const to = step(app, way, extend);
+  const from = focusOf(app, extend);
+  const x = from ? xOf(from[0], from[1], way) : 0;
+  const to = step(app, way, extend) ?? within(app, way, extend);
   const anchor = extend ? (span?.anchor ?? windowPlaces(app)?.[0]) : to;
-  if (to && anchor) select(app, anchor, to);
+  if (!to || !anchor) return;
+  select(app, anchor, to);
+  column = way === 'up' || way === 'down' ? { x, at: to } : null;
 }
 
 // ⌘A in a block of a text of several blocks selects the whole text, and returns false once it is
@@ -264,8 +293,8 @@ export function install(app: App): void {
   const c = app.commands;
   const WAYS: [Way, string, string][] = [['left', 'ArrowLeft', 'Left'], ['right', 'ArrowRight', 'Right'], ['up', 'ArrowUp', 'Up'], ['down', 'ArrowDown', 'Down']];
   for (const [way, key, name] of WAYS) {
-    c.define({ id: `text.flow.${way}`, label: `Move ${name}`, keys: { mac: [key], other: [key] }, in: ['text'], enabled: (a) => !!span || !!step(a, way, false), run: (a) => move(a, way, false) });
-    c.define({ id: `text.flow.extend.${way}`, label: `Extend Selection ${name}`, keys: { mac: [`Shift+${key}`], other: [`Shift+${key}`] }, in: ['text'], enabled: (a) => !!step(a, way, true), run: (a) => move(a, way, true) });
+    c.define({ id: `text.flow.${way}`, label: `Move ${name}`, keys: { mac: [key], other: [key] }, in: ['text'], enabled: (a) => !!span || !!step(a, way, false) || !!within(a, way, false), run: (a) => move(a, way, false) });
+    c.define({ id: `text.flow.extend.${way}`, label: `Extend Selection ${name}`, keys: { mac: [`Shift+${key}`], other: [`Shift+${key}`] }, in: ['text'], enabled: (a) => !!step(a, way, true) || !!within(a, way, true), run: (a) => move(a, way, true) });
   }
   c.define({ id: 'text.flow.delete', label: 'Delete', keys: { mac: ['Backspace', 'Delete'], other: ['Backspace', 'Delete'] }, in: ['text'], undoable: true, enabled: active, run: removeSpan });
   c.define({
@@ -302,6 +331,29 @@ export function install(app: App): void {
     span = { anchor: drag.anchor, focus: [over, offsetIn(over, ...p)] };
     paint(app, drag.from);
   }, true);
+  // a Shift+click in another block of the same text selects from the anchor of the selection to the
+  // click, over the blocks between, before the canvas takes the click as one more selected object.
+  // the press is cancelled, so that the browser does not move the caret into the clicked block
+  let shifted = false;
+  window.addEventListener('pointerdown', (ev) => {
+    shifted = false;
+    if (ev.button !== 0 || !ev.shiftKey) return;
+    const to = app.hostOf(ev.target);
+    const anchor = places(app)?.[0];
+    if (!to || !anchor || (anchor[0] === to && !span) || !runOf(app, anchor[0]).includes(to)) return;
+    const p = fromPoint(ev.clientX, ev.clientY);
+    if (!p || !to.contains(p[0])) return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    shifted = true;
+    select(app, anchor, [to, offsetIn(to, ...p)]);
+  }, true);
+  window.addEventListener('mousedown', (ev) => {
+    if (!shifted) return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+  }, true);
+
   document.addEventListener('pointerup', () => {
     if (!drag) return;
     drag = null;

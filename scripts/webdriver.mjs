@@ -163,5 +163,8 @@ export async function launch(browser, { env = process.env, timeout = 120000 } = 
     }
   }
 
-  return { newPage, close };
+  // a command of the session, e.g. session('POST', '/actions', { actions }) for trusted input
+  const session = (method, path, body) => request(method, `/session/${id}${path}`, body);
+
+  return { newPage, close, session };
 }

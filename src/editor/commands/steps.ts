@@ -254,17 +254,20 @@ export function install(app: App): void {
       writePlan(a, s.m, plan, new Map(), delays);
     },
   });
+  // the delay of each item of the argument or of the selection that starts After Previous
   c.define({
     id: 'steps.delay',
     label: 'Set Delay of Step',
     undoable: true,
     run: (a, arg) => {
-      const el = itemOf(a, arg);
-      const m = el ? modelAt(a, el) : null;
-      if (!m || startAt(a, m, m.i).start !== 'after') return;
-      const delays = delaysOf(a, m);
-      delays.set(m.i, msOf((arg as { delay: number }).delay));
-      writePlan(a, m, m.plan, new Map(), delays);
+      const s = itemsOf(a, arg);
+      if (!s) return;
+      const delays = delaysOf(a, s.m);
+      const after = s.items.filter(({ i }) => startAt(a, s.m, i, delays).start === 'after');
+      if (!after.length) return;
+      const ms = msOf((arg as { delay: number }).delay);
+      for (const { i } of after) delays.set(i, ms);
+      writePlan(a, s.m, s.m.plan, new Map(), delays);
     },
   });
   // the delivery of a list from the menu of its row: all, item, or null for the slide

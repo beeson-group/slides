@@ -18,6 +18,7 @@ import { isRuntimeClass } from '../render.ts';
 import { renderTag, type TagEdit } from '../tags.ts';
 import { textStyle } from '../model/templates.ts';
 import { injectStyle } from '../ui/dom.ts';
+import * as flow from './flow.ts';
 
 // an empty item gets a line to put the caret on, after the dash drawn by its ::before
 const CSS = `
@@ -266,16 +267,23 @@ export async function split(app: App): Promise<void> {
   const at = itemAt(app);
   if (!at || !canSplit(app)) return;
   const { host, item, range } = at;
-  // Return on an empty item moves it out one level, and on the first level ends the list with a
-  // paragraph after it, as in Keynote and PowerPoint
+  // Return on an empty item moves it out one level, and on the first level takes the item off its
+  // list as a paragraph, as in Keynote and PowerPoint. the items after it go into a list of their
+  // own after the paragraph, with the attributes of their list apart from its id
   if (item.localName === 'li' && !item.textContent?.trim() && !item.querySelector('mjx-container, img, ul, ol')) {
     if (at.nested) return outdent(app);
     const list = item.parentElement!;
-    if (!nextOf(app, item)) {
-      const [p] = await app.doc.insert('<p></p>', list.parentElement!, nextOf(app, list), 'new paragraph');
-      await app.doc.remove(list.querySelectorAll(':scope > li').length > 1 ? item : list, 'new paragraph');
-      return selectIn(p, 0);
+    const followers = [...list.children].slice([...list.children].indexOf(item) + 1).filter((c) => c.localName === 'li');
+    const texts = ['<p></p>'];
+    if (followers.length) {
+      const { base, step, eol } = indentOf(app, list);
+      const rest = followers.map((f) => `${eol}${base}${step}${app.doc.elementText(f)}`).join('');
+      texts.push(`${startTag(app, list, list.localName, { attrs: { id: null } })}${rest}${eol}${base}</${list.localName}>`);
     }
+    const [p] = await app.doc.insert(texts, list.parentElement!, nextOf(app, list), 'new paragraph');
+    for (const f of followers) await app.doc.remove(f, 'new paragraph');
+    await app.doc.remove(list.querySelectorAll(':scope > li').length > 1 ? item : list, 'new paragraph');
+    return selectIn(p, 0);
   }
   if (!range.collapsed) range.deleteContents();
   const caret: [Node, number] = [range.startContainer, range.startOffset];
@@ -686,10 +694,12 @@ export function styleOf(app: App, el: Element): ParagraphStyle | null {
   return one('p', null) || one('li', null) ? 'body' : null;
 }
 
-// the blocks that a style is set on: the block of the text, or the selected blocks
+// the blocks that a style is set on: the blocks of a text selected over several of them, the block
+// of the text, or the selected blocks
 function styled(app: App): Element[] {
-  const t = textTarget(app);
-  const list = t ? [t.host] : selectedBlocks(app);
+  const spanned = flow.spanTargets(app).map((t) => t.host);
+  const t = spanned.length ? null : textTarget(app);
+  const list = spanned.length ? spanned : t ? [t.host] : selectedBlocks(app);
   return list.filter((el) => styleOf(app, el) !== null);
 }
 
@@ -720,17 +730,25 @@ async function restyle(app: App, el: Element, style: ParagraphStyle, kept: [numb
 // the style set on the block of the text, whose selection is kept, or on the selected blocks, which
 // are selected again after a retag, and after an undo and a redo
 export async function setStyle(app: App, style: ParagraphStyle | ((s: ParagraphStyle) => ParagraphStyle)): Promise<void> {
-  const t = textTarget(app);
+  const spanned = flow.active() ? flow.places(app) : null;
+  const t = spanned ? null : textTarget(app);
   const kept: [number, number] | null = t && [offsetIn(t.host, t.range.startContainer, t.range.startOffset), offsetIn(t.host, t.range.endContainer, t.range.endOffset)];
+  const blocks = styled(app);
   const each = async () => {
     const made: Element[] = [];
-    for (const el of styled(app)) {
+    for (const el of blocks) {
       const now = styleOf(app, el)!;
       const next = typeof style === 'function' ? style(now) : style;
       made.push(next !== now && fits(el, next) ? await restyle(app, el, next, kept) : el);
     }
     return made;
   };
+  if (spanned) {
+    // a retag makes a new element of a block of the span, in which its place is kept
+    const made = await each();
+    const place = ([el, at]: [Element, number]): [Element, number] => [made[blocks.indexOf(el)] ?? el, at];
+    return flow.select(app, place(spanned[0]), place(spanned[1]));
+  }
   if (t) return void (await each());
   await app.history.selecting('Paragraph Style', async () => {
     const made = await each();
