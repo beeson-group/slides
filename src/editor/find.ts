@@ -240,7 +240,6 @@ const CSS = `
 .beeson-find .field { display: flex; align-items: center; gap: 6px; height: 26px; padding: 0 4px 0 7px; box-sizing: border-box; background: var(--ed-control); border: 1px solid var(--ed-control-line); border-radius: 5px; min-width: 0; }
 .beeson-find .field:focus-within { border-color: var(--ed-select); box-shadow: 0 0 0 3px var(--ed-focus); }
 .beeson-find .field input { flex: 1; min-width: 0; border: 0; outline: 0; padding: 0; background: transparent; color: var(--ed-text); font: inherit; font-size: 14px; user-select: text; -webkit-user-select: text; }
-.beeson-find .field input::placeholder { color: var(--ed-faint); }
 .beeson-find .count { color: var(--ed-muted); font-size: 12px; white-space: nowrap; font-variant-numeric: tabular-nums; }
 .beeson-find .count.none { color: #d1453b; }
 .beeson-find .field .clear { width: 16px; height: 16px; padding: 0; border: 0; border-radius: 50%; background: var(--ed-text); color: var(--ed-control); display: grid; place-items: center; }

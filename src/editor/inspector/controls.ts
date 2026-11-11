@@ -124,7 +124,6 @@ const CSS = `
 .beeson-edit-inspector .ed-field textarea, .beeson-edit-inspector .ed-field input { width: 100%; box-sizing: border-box; padding: 6px 8px; border: 0; border-radius: 6px; background: var(--ed-control); box-shadow: inset 0 0 0 1px var(--ed-control-line); color: var(--ed-text); font: 12px/1.4 var(--ed-font); resize: vertical; }
 .beeson-edit-inspector .ed-field input { height: 26px; padding: 0 8px; }
 .beeson-edit-inspector .ed-field textarea:disabled, .beeson-edit-inspector .ed-field input:disabled { color: var(--ed-faint); background: transparent; }
-.beeson-edit-inspector .ed-field ::placeholder { color: var(--ed-faint); }
 .beeson-edit-inspector .ed-note { color: var(--ed-muted); font: 11px/1.35 var(--ed-font); }
 .beeson-edit-inspector .ed-note.warn { color: var(--ed-guide); }
 .beeson-edit-inspector .ed-note[hidden] { display: none; }

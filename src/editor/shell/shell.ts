@@ -48,6 +48,7 @@ html.beeson-editor.beeson-notes { --ed-notes-row: var(--beeson-pane, 200px); }
 ${CHROME} { --bg: var(--ed-panel); --text: var(--ed-text); --subtle: var(--ed-muted); --muted: var(--ed-muted); --line: var(--ed-line); --violet: var(--ed-select); --accent: var(--ed-guide); }
 html.beeson-editor body.reveal-viewport { display: grid !important; grid-template-columns: var(--ed-nav-col) minmax(0, 1fr) var(--ed-a11y-col) var(--ed-insp-col); grid-template-rows: auto minmax(0, 1fr) var(--ed-notes-row) 28px; grid-template-areas: "top top top top" "nav canvas a11y insp" "nav notes a11y insp" "status status status status"; width: 100vw; height: 100vh; height: 100dvh; margin: 0; overflow: hidden; color: var(--ed-text); font: 12px/1.35 var(--ed-font); }
 html.beeson-editor body > * { grid-area: canvas; }
+html.beeson-editor ::placeholder { color: var(--ed-muted); opacity: 1; }
 html.beeson-editor body > .beeson-edit-bottom { grid-area: status; }
 html.beeson-editor body > .beeson-edit-a11y { grid-area: a11y; }
 html.beeson-editor.beeson-a11y .beeson-edit-resize { right: calc(var(--ed-insp-col) + var(--ed-a11y-col)); }
