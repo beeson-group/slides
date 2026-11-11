@@ -635,3 +635,31 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// round 4, picture 162: in the Code pane, the switch of the line numbers was dimmed while the code
+// box had line steps, and the pane did not say why
+const CODE = 5;
+const numbersSwitch = `(() => {
+  const input = document.querySelector('.beeson-edit-inspector input[data-command="code.numbers"]');
+  const label = input?.closest('label');
+  const next = label?.nextElementSibling;
+  return { disabled: input?.disabled, title: label?.title ?? '', note: next?.matches('.ed-note') && !next.hidden ? next.textContent : '', warn: !!next?.classList.contains('warn') };
+})()`;
+for (const platform of PLATFORMS) {
+  test(`the dimmed switch of the line numbers says that the line steps need them (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: CODE });
+    if (!(await stateOf(page, 'shell.format')).checked) await run(page, 'shell.format');
+    await click(page, '.reveal section.present pre');
+    await page.waitFor(`!!document.querySelector('.beeson-edit-inspector input[data-command="code.numbers"]')`);
+    const dim = await page.evaluate(numbersSwitch);
+    assert.equal(dim.disabled, true);
+    assert.match(dim.title, /line steps need the line numbers/, 'the dimmed switch does not have a tooltip');
+    assert.match(dim.note, /line steps need the line numbers/, 'the pane does not say why the switch is dimmed');
+    assert.equal(dim.warn, false, 'the note is not muted');
+    // without line steps, the switch is not dimmed and the note is not shown
+    await page.evaluate(`window.BeesonEditor.exec('code.lines', { el: document.querySelector('.reveal section.present pre code'), value: '' })`);
+    await frames(page);
+    assert.deepEqual(await page.evaluate(numbersSwitch), { disabled: false, title: '', note: '', warn: false });
+    await roundTrip(page);
+  });
+}
