@@ -191,6 +191,8 @@ function itemAt(app: App): Item | null {
   const t = textTarget(app);
   if (!t || t.host.matches('aside.notes')) return null;
   const node = t.range.startContainer;
+  // a caret between the items of a list is not in an item
+  if ((node instanceof Element ? node : node.parentElement)?.matches(LIST)) return null;
   const li = (node instanceof Element ? node : node.parentElement)?.closest('li');
   const item = li && t.host.contains(li) ? li : t.host;
   return { host: t.host, item, nested: item !== t.host, range: t.range };

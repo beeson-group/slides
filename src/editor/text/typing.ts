@@ -27,6 +27,8 @@ export function changeEnd(before: string, after: string): number | null {
   return after.length - tail;
 }
 
+const loose = (n: Text): boolean => !n.data.trim() && !!n.parentElement?.matches('ul, ol');
+
 // the caret is put at the offset into the text of host, or at its end. an offset inside a formula
 // puts it after the formula
 export function placeCaret(host: Element, offset: number | null = null): void {
@@ -42,6 +44,19 @@ export function placeCaret(host: Element, offset: number | null = null): void {
     let left = offset;
     for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
       if (left <= node.length) {
+        // white space between the items of a list does not take the caret, which goes to the end of
+        // the text before it, or else to the start of the text after it
+        if (loose(node)) {
+          const near = (way: 'previousNode' | 'nextNode') => {
+            walker.currentNode = node!;
+            let n = walker[way]() as Text | null;
+            while (n && loose(n)) n = walker[way]() as Text | null;
+            return n;
+          };
+          const before = near('previousNode');
+          const after = before ? null : near('nextNode');
+          if (before || after) [node, left] = before ? [before, before.length] : [after!, 0];
+        }
         const math = node.parentElement?.closest('mjx-container');
         if (math && host.contains(math)) range.setStartAfter(math);
         else range.setStart(node, left);
