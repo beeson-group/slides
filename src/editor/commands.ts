@@ -169,8 +169,9 @@ export class Commands {
 
   // the keys of the command of id that a menu opened in region lists. a key that runs another
   // command there is left out, e.g. ⌘D at Duplicate Slide while a figure is selected on the canvas,
-  // and so is a key that the command does not take there, e.g. ⌫ at Delete Slide on the canvas. a
-  // key of a disabled command taken there is listed
+  // and so is a key that an enabled command does not take there, e.g. ⌫ at Delete Slide on the
+  // canvas. a dimmed item keeps its key, as in Keynote, and the keys of the clipboard are listed
+  // everywhere
   keysIn(id: string, region: Region): string[] {
     const c = this.listed(id);
     if (!c) return [];
@@ -178,7 +179,7 @@ export class Commands {
     return keysOf(c, p).filter((k) => {
       const chord = parseKey(k, p);
       const runs = this.forKey({ key: chord.key === 'Space' ? ' ' : chord.key, shiftKey: chord.shift, altKey: chord.alt, ctrlKey: chord.ctrl, metaKey: chord.meta }, region);
-      return runs ? [runs.id, runs.runsAs?.(this.app)].some((r) => r === c.id || r === id) : (c.in ?? DEFAULT_REGIONS).includes(region);
+      return runs ? [runs.id, runs.runsAs?.(this.app)].some((r) => r === c.id || r === id) : !boundKeys(c, p).includes(k) || (c.in ?? DEFAULT_REGIONS).includes(region) || !this.enabled(c.id);
     });
   }
 

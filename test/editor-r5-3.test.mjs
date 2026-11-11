@@ -143,7 +143,8 @@ for (const platform of PLATFORMS) {
     const mac = platform === 'mac';
     const slide = Object.fromEntries((await barMenu(page, 'Slide')).map((r) => [r.label, r.keys]));
     assert.equal(slide['Duplicate Slide'], mac ? '⌘D' : 'Ctrl+D');
-    assert.equal(slide['Delete Slide'], mac ? '⌫' : 'Delete');
+    // the key of Delete Slide is taken only in the navigator, hence it is not listed on the canvas
+    assert.equal(slide['Delete Slide'], '');
     assert.equal(slide['Move Slide Up'], mac ? '⌥↑' : 'Alt+Up Arrow');
     assert.equal(slide['Move Slide Down'], mac ? '⌥↓' : 'Alt+Down Arrow');
     const edit = Object.fromEntries((await barMenu(page, 'Edit')).map((r) => [r.label, r.keys]));
