@@ -11,8 +11,6 @@
 // browser
 
 import type { App } from '../app.ts';
-import { keysOf } from '../commands.ts';
-import { matches } from '../keymap.ts';
 import { injectStyle, make, stored, store } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { transitionOf } from '../review/transitions.ts';
@@ -440,13 +438,6 @@ export class Sorter {
   private onKey(ev: KeyboardEvent): void {
     if (ev.target instanceof HTMLInputElement) return;
     const target = ev.target instanceof Element ? ev.target.closest('.tile') : null;
-    // a tile is outside the navigator, where the keys of Select All Slides are bound
-    const all = this.app.commands.get('slide.selectAll');
-    if (target && all && keysOf(all, this.app.platform).some((k) => matches(ev, k, this.app.platform))) {
-      ev.preventDefault();
-      void this.app.commands.run(all.id).catch((e) => this.app.fail(e));
-      return;
-    }
     if (ev.altKey || ev.metaKey || ev.ctrlKey) return;
     if (ev.key === 'Escape') {
       ev.preventDefault();
