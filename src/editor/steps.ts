@@ -13,6 +13,7 @@ import type { Pairing } from './render.ts';
 import type { TagEdit, TagState } from './tags.ts';
 import { OFF, fragmentIndex, fragmentsOf, type Layers, itemsOf, planOf, remapKeep, showLayer, shownAt, startOf, stepAt, type Item, type Plan, type Start } from './layers.ts';
 import { twinOf } from './canvas/hit.ts';
+import { media as store } from './media/store.ts';
 import { codeAt, dimLines, lineRect, linesOf, stepsOf } from './commands/code.ts';
 import { numberField } from './inspector/controls.ts';
 import { injectStyle, make } from './ui/dom.ts';
@@ -384,7 +385,8 @@ export function describe(el: Element, tex: Ctx['tex']): { kind: string; text: st
   const kind = KINDS.find(([selector]) => el.matches(selector))?.[1] ?? (el.localName === 'span' ? 'Text' : el.localName);
   const media = el.matches('img, video') ? el : el.querySelector('img, video');
   let text = textOf(el, tex).replace(/\s+/g, ' ').trim();
-  if (!text && media) text = media.getAttribute('alt') || (media.getAttribute('src') ?? media.querySelector('source')?.getAttribute('src') ?? '').split('/').pop() || '';
+  // a new picture is shown from an object URL, hence it is named by the path of its file
+  if (!text && media) text = media.getAttribute('alt') || (store.pathOf(media.getAttribute('src') ?? media.querySelector('source')?.getAttribute('src') ?? null) ?? '').split('/').pop() || '';
   if (!text && el.matches('tycho-viewer')) text = sceneTitle(el);
   if (!text) {
     const named = [['data-plot-show', 'Show'], ['data-plot-tab', 'Tab'], ['data-surface-stage', 'Stage'], ['data-scene', 'Scene'], ['data-strands', 'Strands']].find(([a]) => el.hasAttribute(a));
