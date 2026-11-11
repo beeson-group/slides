@@ -375,7 +375,8 @@ function joinBack(app: App): Join {
   return at.item.localName === 'li' && !at.item.previousElementSibling && !at.item.querySelector(LIST) ? { kind: 'unlist', item: at.item } : null;
 }
 
-export const removesBullet = (app: App): boolean => joinBack(app)?.kind === 'unlist';
+// what Backspace does at the caret, for the name of its entry
+export const joinKind = (app: App): 'join' | 'outdent' | 'unlist' | null => joinBack(app)?.kind ?? null;
 
 // the first item of a list made a paragraph before the list, with the attributes of the item. an
 // undo puts the caret at the start of the item, and a redo at the start of the paragraph

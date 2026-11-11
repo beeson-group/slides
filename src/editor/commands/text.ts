@@ -88,7 +88,10 @@ export function install(app: App): void {
   });
   define({
     id: 'text.joinBackward',
-    label: (a) => (!inNotes(a) && blocks.removesBullet(a) ? 'Remove Bullet' : 'Join Paragraphs'),
+    label: (a) => {
+      const kind = inNotes(a) ? null : blocks.joinKind(a);
+      return kind === 'unlist' ? 'Remove Bullet' : kind === 'outdent' ? c.label('text.outdent') : 'Join Paragraphs';
+    },
     keys: { mac: ['Backspace'], other: ['Backspace'] },
     in: [...TEXT, 'notes'],
     undoable: true,
