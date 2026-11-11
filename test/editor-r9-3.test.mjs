@@ -96,6 +96,8 @@ const VIEWS = `(() => {
     focus: rows.indexOf(document.activeElement) + 1,
     card: document.querySelector('.ed-chooser .what > span:last-child')?.textContent ?? '',
     layout: layout(cur),
+    // the layouts of the selected slides, of which several read Multiple Layouts
+    layouts: [...new Set(rows.flatMap((r, i) => (r.getAttribute('aria-selected') === 'true' ? [layout(secs[i]) + (secs[i].classList.contains('narrow') ? ' narrow' : secs[i].classList.contains('wide') ? ' wide' : '')] : [])))].length,
   };
 })()`;
 
@@ -103,14 +105,15 @@ const NAMES = { content: 'Content', section: 'Section', title: 'Title', closing:
 
 // agree asserts that every view is on slide current, with the rows of selected selected, the focus
 // on the current row when focus is set, and the layout of the slide in the card of the inspector
-// when card is set, i.e. when the caret is not in a text
+// when card is set, i.e. when the caret is not in a text, or Multiple Layouts for selected slides
+// of several layouts
 async function agree(page, what, { n, current, selected, focus = true, card = true }) {
   const v = await page.evaluate(VIEWS);
   const want = { n, reveal: current, canvas: current, row: current, status: `Slide ${current} of ${n}`, selected };
   const got = { n: v.n, reveal: v.reveal, canvas: v.canvas, row: v.row, status: v.status, selected: v.selected };
   assert.deepEqual(got, want, `the views disagree ${what}`);
   if (focus) assert.equal(v.focus, current, `the focus is not on the row of the current slide ${what}`);
-  if (card) assert.ok(v.card.startsWith(NAMES[v.layout]), `the inspector reads the layout "${v.card}" on a ${v.layout} slide ${what}`);
+  if (card) assert.ok(v.card.startsWith(v.layouts > 1 ? 'Multiple Layouts' : NAMES[v.layout]), `the inspector reads the layout "${v.card}" on a ${v.layout} slide ${what}`);
 }
 
 // finding 1 (navigator-slides-canvas-2, dialogs-undo-a11y-1 and 2): an undo puts back the current
