@@ -87,8 +87,7 @@ function caretInto(slide: Element): void {
   sel?.addRange(range);
 }
 
-async function newSlide(app: App, layout: Layout): Promise<Element> {
-  const { before } = placeAfter(app);
+async function newSlide(app: App, layout: Layout, before = placeAfter(app).before): Promise<Element> {
   const slide = await docOf(app).insertSlide(layout, before);
   navOf(app).select([slide], slide);
   caretInto(slide);
@@ -327,6 +326,22 @@ export function install(app: App): void {
       enabled: ready,
       undoable: true,
       run: async (a) => void (await newSlide(a, nextLayout(a))),
+    },
+    {
+      // Add Section of the menus of the navigator of PowerPoint, as Insert > New Slide > Section:
+      // a section slide after the slide under the pointer or the selected slides, or at the end
+      // from the empty part of the navigator
+      id: 'slide.newSection',
+      label: 'New Section',
+      menu: slideMenu(11),
+      context: ['slide', 'navigator'],
+      enabled: ready,
+      undoable: true,
+      run: async (a, arg) => {
+        const { kind, target } = (arg ?? {}) as { kind?: string; target?: Element | null };
+        const after = kind === 'navigator' ? null : target?.isConnected ? target : navOf(a).selected().at(-1);
+        await newSlide(a, 'section', after ? after.nextElementSibling : null);
+      },
     },
     {
       id: 'slide.newAfter',
