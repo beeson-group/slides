@@ -2690,10 +2690,18 @@
   }
 
   // src/qr.ts
-  var ECC = [10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26, 26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28];
-  var BLOCKS = [1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16, 17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49];
-  var LEVEL_BITS = 0;
+  var ECC = {
+    M: [10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26, 26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28],
+    H: [17, 28, 22, 16, 22, 28, 26, 26, 24, 28, 24, 28, 22, 24, 24, 30, 28, 28, 26, 28, 30, 24, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30]
+  };
+  var BLOCKS = {
+    M: [1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16, 17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49],
+    H: [1, 1, 2, 4, 4, 4, 5, 6, 8, 8, 11, 11, 16, 16, 18, 16, 19, 21, 25, 25, 25, 34, 30, 32, 35, 37, 40, 42, 45, 48, 51, 54, 57, 60, 63, 66, 70, 74, 77, 81]
+  };
+  var LEVEL_BITS = { M: 0, H: 2 };
   var QUIET = 4;
+  var LOGO = 0.3;
+  var GAP2 = 0.8;
   function dataModules(version) {
     const size = 4 * version + 17;
     let n = size * size - 3 * 64 - 2 * (size - 16) - 31;
@@ -2704,8 +2712,8 @@
     if (version >= 7) n -= 36;
     return n;
   }
-  var dataCodewords = (version) => Math.floor(dataModules(version) / 8) - ECC[version - 1] * BLOCKS[version - 1];
-  var capacity = (version) => Math.floor((dataCodewords(version) * 8 - 4 - (version < 10 ? 8 : 16)) / 8);
+  var dataCodewords = (version, level) => Math.floor(dataModules(version) / 8) - ECC[level][version - 1] * BLOCKS[level][version - 1];
+  var capacity = (version, level = "M") => Math.floor((dataCodewords(version, level) * 8 - 4 - (version < 10 ? 8 : 16)) / 8);
   function alignment(version) {
     if (version === 1) return [];
     const k = Math.floor(version / 7) + 2;
@@ -2714,6 +2722,32 @@
     const out = [6];
     for (let i = k - 2; i >= 0; i--) out.push(last - i * step2);
     return out;
+  }
+  function alignmentCenters(version) {
+    const centers = alignment(version);
+    const last = centers.length - 1;
+    const out = [];
+    for (const [i, r] of centers.entries()) {
+      for (const [j, c] of centers.entries()) {
+        if (!(i === 0 && (j === 0 || j === last) || i === last && j === 0)) out.push([r, c]);
+      }
+    }
+    return out;
+  }
+  function covered(n, r, c) {
+    const dx = Math.max(Math.abs(c + 0.5 - n / 2) - 0.5, 0), dy = Math.max(Math.abs(r + 0.5 - n / 2) - 0.5, 0);
+    return dx * dx + dy * dy < (LOGO * n / 2 + GAP2) ** 2;
+  }
+  function reached(version) {
+    const n = 4 * version + 17;
+    return alignmentCenters(version).filter(([r, c]) => {
+      for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) if (covered(n, r + dr, c + dc)) return true;
+      return false;
+    });
+  }
+  function hidden(code, r, c) {
+    if (!code.logo) return false;
+    return covered(code.size, r, c) || reached(code.version).some(([ar, ac]) => Math.abs(ar - r) <= 2 && Math.abs(ac - c) <= 2);
   }
   var EXP = new Uint8Array(512);
   var LOG = new Uint8Array(256);
@@ -2745,7 +2779,7 @@
     }
     return r;
   }
-  function codewords(bytes, version) {
+  function codewords(bytes, version, level) {
     const bits = [];
     const put = (value, n) => {
       for (let i = n - 1; i >= 0; i--) bits.push(value >>> i & 1);
@@ -2753,7 +2787,7 @@
     put(4, 4);
     put(bytes.length, version < 10 ? 8 : 16);
     for (const b of bytes) put(b, 8);
-    const total = dataCodewords(version) * 8;
+    const total = dataCodewords(version, level) * 8;
     put(0, Math.min(4, total - bits.length));
     put(0, (8 - bits.length % 8) % 8);
     for (let pad = 236; bits.length < total; pad ^= 236 ^ 17) put(pad, 8);
@@ -2761,8 +2795,8 @@
     for (let i = 0; i < bits.length; i++) out[i >>> 3] |= bits[i] << 7 - (i & 7);
     return out;
   }
-  function interleave(data, version) {
-    const n = BLOCKS[version - 1], ecc = ECC[version - 1];
+  function interleave(data, version, level) {
+    const n = BLOCKS[level][version - 1], ecc = ECC[level][version - 1];
     const total = Math.floor(dataModules(version) / 8);
     const short = Math.floor(total / n) - ecc;
     const shortBlocks = n - total % n;
@@ -2822,15 +2856,10 @@
       grid.set(6, i, i % 2 === 0);
       grid.set(i, 6, i % 2 === 0);
     }
-    const centers = alignment(version);
-    const last = centers.length - 1;
-    for (const [i, r] of centers.entries()) {
-      for (const [j, c] of centers.entries()) {
-        if (i === 0 && (j === 0 || j === last) || i === last && j === 0) continue;
-        for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) grid.set(r + dr, c + dc, Math.max(Math.abs(dr), Math.abs(dc)) !== 1);
-      }
+    for (const [r, c] of alignmentCenters(version)) {
+      for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) grid.set(r + dr, c + dc, Math.max(Math.abs(dr), Math.abs(dc)) !== 1);
     }
-    format(grid, 0);
+    format(grid, "M", 0);
     if (version >= 7) {
       const bits = bch(version, 6, 7973);
       for (let i = 0; i < 18; i++) {
@@ -2841,9 +2870,9 @@
       }
     }
   }
-  function format(grid, mask) {
+  function format(grid, level, mask) {
     const n = grid.size;
-    const bits = bch(LEVEL_BITS << 3 | mask, 5, 1335) ^ 21522;
+    const bits = bch(LEVEL_BITS[level] << 3 | mask, 5, 1335) ^ 21522;
     const bit = (i) => (bits >>> i & 1) === 1;
     for (let i = 0; i <= 5; i++) grid.set(i, 8, bit(i));
     grid.set(7, 8, bit(6));
@@ -2854,7 +2883,7 @@
     for (let i = 8; i < 15; i++) grid.set(n - 15 + i, 8, bit(i));
     grid.set(n - 8, 8, true);
   }
-  function place(grid, data) {
+  function walk(grid, visit) {
     const n = grid.size;
     let i = 0;
     for (let right = n - 1; right >= 1; right -= 2) {
@@ -2862,13 +2891,35 @@
       const up = (right + 1 & 2) === 0;
       for (let k = 0; k < n; k++) {
         const r = up ? n - 1 - k : k;
-        for (const c of [right, right - 1]) {
-          if (grid.fixed[r][c]) continue;
-          grid.dark[r][c] = i < data.length * 8 && (data[i >>> 3] >>> 7 - (i & 7) & 1) === 1;
-          i++;
-        }
+        for (const c of [right, right - 1]) if (!grid.fixed[r][c]) visit(r, c, i++);
       }
     }
+  }
+  function place(grid, data) {
+    walk(grid, (r, c, i) => {
+      grid.dark[r][c] = i < data.length * 8 && (data[i >>> 3] >>> 7 - (i & 7) & 1) === 1;
+    });
+  }
+  function logoFits(version) {
+    const grid = new Grid(4 * version + 17);
+    functionPatterns(grid, version);
+    const n = BLOCKS.H[version - 1], ecc = ECC.H[version - 1];
+    const patterns = reached(version);
+    for (let r = 0; r < grid.size; r++) {
+      for (let c = 0; c < grid.size; c++) {
+        if (grid.fixed[r][c] && covered(grid.size, r, c) && !patterns.some(([ar, ac]) => Math.abs(ar - r) <= 2 && Math.abs(ac - c) <= 2)) return false;
+      }
+    }
+    const total = Math.floor(dataModules(version) / 8);
+    const short = Math.floor(total / n) - ecc, shortBlocks = n - total % n;
+    const blockOf = [];
+    for (let i = 0; i <= short; i++) for (let b = 0; b < n; b++) if (i < short || b >= shortBlocks) blockOf.push(b);
+    for (let i = 0; i < ecc; i++) for (let b = 0; b < n; b++) blockOf.push(b);
+    const wrong = Array.from({ length: n }, () => /* @__PURE__ */ new Set());
+    walk(grid, (r, c, i) => {
+      if (i < total * 8 && covered(grid.size, r, c)) wrong[blockOf[i >>> 3]].add(i >>> 3);
+    });
+    return wrong.every((words3) => 3 * words3.size <= 2 * Math.floor(ecc / 2));
   }
   function applyMask(grid, mask) {
     const m = MASKS[mask];
@@ -2909,19 +2960,21 @@
     score += 10 * Math.floor(Math.abs(count * 100 / (n * n) - 50) / 5);
     return score;
   }
-  function encode(text) {
+  function encode(text, logo = false) {
     const bytes = new TextEncoder().encode(text);
+    const level = logo ? "H" : "M";
     let version = 1;
-    while (version <= 40 && capacity(version) < bytes.length) version++;
+    while (version <= 40 && (capacity(version, level) < bytes.length || logo && !logoFits(version))) version++;
+    if (version > 40 && logo) return encode(text);
     if (version > 40) throw new Error(`the text is ${bytes.length} bytes long, and a QR code at level M holds at most ${capacity(40)}`);
-    const data = interleave(codewords(bytes, version), version);
+    const data = interleave(codewords(bytes, version, level), version, level);
     let best = null, bestMask = 0, bestScore = Infinity;
     for (let mask = 0; mask < 8; mask++) {
       const grid2 = new Grid(4 * version + 17);
       functionPatterns(grid2, version);
       place(grid2, data);
       applyMask(grid2, mask);
-      format(grid2, mask);
+      format(grid2, level, mask);
       const score = penalty(grid2.dark);
       if (score < bestScore) {
         best = grid2;
@@ -2930,37 +2983,57 @@
       }
     }
     const grid = best;
-    return { version, size: grid.size, mask: bestMask, dark: grid.dark };
+    return { version, size: grid.size, mask: bestMask, level, logo, dark: grid.dark };
   }
   var SVG2 = "http://www.w3.org/2000/svg";
+  var fixed3 = (x) => +x.toFixed(3);
+  function rounded(x, y, a, r) {
+    const s = fixed3(a - 2 * r);
+    return `M${fixed3(x - a / 2 + r)} ${fixed3(y - a / 2)}h${s}a${r} ${r} 0 0 1 ${r} ${r}v${s}a${r} ${r} 0 0 1 ${-r} ${r}h${-s}a${r} ${r} 0 0 1 ${-r} ${-r}v${-s}a${r} ${r} 0 0 1 ${r} ${-r}z`;
+  }
   function svgOf(code, label) {
-    const side = code.size + 2 * QUIET;
+    const n = code.size, side = n + 2 * QUIET;
     const svg2 = document.createElementNS(SVG2, "svg");
     svg2.setAttribute("viewBox", `0 0 ${side} ${side}`);
-    svg2.setAttribute("shape-rendering", "crispEdges");
     svg2.setAttribute("role", "img");
     svg2.setAttribute("aria-label", label);
     const tile = document.createElementNS(SVG2, "rect");
     tile.setAttribute("class", "qr-tile");
     tile.setAttribute("width", String(side));
     tile.setAttribute("height", String(side));
-    tile.setAttribute("rx", String(+(side * 0.03).toFixed(2)));
+    tile.setAttribute("rx", String(fixed3(side * 0.05)));
     tile.setAttribute("fill", "#fff");
-    tile.setAttribute("shape-rendering", "geometricPrecision");
-    let d = "";
-    code.dark.forEach((row, r) => {
-      for (let c = 0; c < code.size; c++) {
-        if (!row[c]) continue;
+    const patterns = [[3, 3, 7], [3, n - 4, 7], [n - 4, 3, 7]];
+    for (const [r, c] of alignmentCenters(code.version)) patterns.push([r, c, 5]);
+    const lost = code.dark.map((row, r) => row.map((_, c) => hidden(code, r, c)));
+    const on = (r, c) => r >= 0 && c >= 0 && r < n && c < n && code.dark[r][c] && !lost[r][c] && !patterns.some(([pr, pc, a]) => Math.abs(pr - r) < a / 2 && Math.abs(pc - c) < a / 2);
+    let d = "", eyes = "";
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (!on(r, c)) continue;
         const start3 = c;
-        while (c + 1 < code.size && row[c + 1]) c++;
-        d += `M${start3 + QUIET} ${r + QUIET}h${c - start3 + 1}v1h${start3 - c - 1}z`;
+        while (on(r, c + 1)) c++;
+        const x0 = start3 + QUIET, x1 = c + 1 + QUIET, y = r + QUIET;
+        const tl = on(r - 1, start3) ? 0 : 0.5, tr = on(r - 1, c) ? 0 : 0.5, br = on(r + 1, c) ? 0 : 0.5, bl = on(r + 1, start3) ? 0 : 0.5;
+        d += `M${x0 + tl} ${y}H${x1 - tr}${tr ? "a.5 .5 0 0 1 .5 .5" : ""}V${y + 1 - br}${br ? "a.5 .5 0 0 1 -.5 .5" : ""}H${x0 + bl}${bl ? "a.5 .5 0 0 1 -.5 -.5" : ""}V${y + tl}${tl ? "a.5 .5 0 0 1 .5 -.5" : ""}z`;
       }
-    });
+    }
+    for (const [r, c, a] of patterns) {
+      if (lost[r][c]) continue;
+      const x = c + QUIET + 0.5, y = r + QUIET + 0.5;
+      d += rounded(x, y, a, fixed3(a * 0.3)) + rounded(x, y, a - 2, fixed3((a - 2) * 0.24));
+      eyes += rounded(x, y, a - 4, fixed3((a - 4) * 0.22));
+    }
     const ink = document.createElementNS(SVG2, "path");
     ink.setAttribute("class", "qr-ink");
     ink.setAttribute("d", d);
     ink.setAttribute("fill", "#000");
-    svg2.append(tile, ink);
+    ink.setAttribute("fill-rule", "evenodd");
+    const eye = document.createElementNS(SVG2, "path");
+    eye.setAttribute("class", "qr-eye");
+    eye.setAttribute("d", eyes);
+    eye.setAttribute("fill", "#000");
+    svg2.append(tile, ink, eye);
     return svg2;
   }
   function mountQr(root2) {
@@ -2969,7 +3042,15 @@
       const text = el.dataset.qr ?? "";
       try {
         if (!text) throw new Error("data-qr is empty");
-        el.append(svgOf(encode(text), `QR code of ${text}`));
+        const image = getComputedStyle(el).getPropertyValue("--qr-logo").trim();
+        const code = encode(text, image !== "" && image !== "none");
+        el.append(svgOf(code, `QR code of ${text}`));
+        if (code.logo) {
+          const logo = document.createElement("div");
+          logo.className = "qr-logo";
+          logo.style.width = `${(100 * LOGO * code.size / (code.size + 2 * QUIET)).toFixed(2)}%`;
+          el.append(logo);
+        }
       } catch (error) {
         const box2 = document.createElement("div");
         box2.className = "qr-error";
@@ -3004,7 +3085,7 @@
       return at;
     });
   }
-  var GAP2 = 3.2;
+  var GAP3 = 3.2;
   var REACH2 = 48;
   function initScrub(deck) {
     const reveal = deck.getRevealElement();
@@ -3052,7 +3133,7 @@
       zone = band.getBoundingClientRect();
       const em = parseFloat(getComputedStyle(band).fontSize) || 16;
       const spacing = zone.width / Math.max(1, ticks.length - 1);
-      const k = Math.max(1, Math.ceil(GAP2 * em / spacing));
+      const k = Math.max(1, Math.ceil(GAP3 * em / spacing));
       ticks.forEach((t, i) => t.el.classList.toggle("quiet", i % k !== 0 && i !== ticks.length - 1));
     };
     const mark = () => {
@@ -3640,8 +3721,8 @@ void main() {
       }
       group2.visible = false;
       this.scene.add(group2);
-      const hidden = { lift: 0, alpha: 0 };
-      const s = { group: group2, mesh, depth, layer: "", A: this.zeros, B: this.zeros, from: hidden, to: hidden, shown: hidden, paintA: paint, paintB: paint, toneFrom: 1, tone: 1, now: null };
+      const hidden2 = { lift: 0, alpha: 0 };
+      const s = { group: group2, mesh, depth, layer: "", A: this.zeros, B: this.zeros, from: hidden2, to: hidden2, shown: hidden2, paintA: paint, paintB: paint, toneFrom: 1, tone: 1, now: null };
       this.sheets[i] = s;
       return s;
     }
