@@ -7,6 +7,7 @@
 import type { App, Selector } from './app.ts';
 import type { Pairing } from './render.ts';
 import { BY_ITSELF, MOVABLE, OUTSIDE, movablesOf, pickOf } from './canvas/hit.ts';
+import { selectRun } from './text/flow.ts';
 
 export type SelectionKind = 'none' | 'elements' | 'text' | 'slides';
 
@@ -117,6 +118,7 @@ export function install(app: App): void {
       if (kind === 'slides') return set('slides', [...app.slides().querySelectorAll(':scope > section')]);
       const host = kind === 'text' ? items[0] : null;
       const s = getSelection();
+      if (host && selectRun(app, host)) return;
       if (host && s && !wholly(s, host)) return void s.selectAllChildren(host);
       if (host && host.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
       if (host) s?.removeAllRanges();
@@ -144,7 +146,10 @@ export function install(app: App): void {
   document.addEventListener('focusin', (ev) => {
     const target = ev.target instanceof Element ? ev.target : null;
     const host = app.hostOf(target);
-    if (host && app.current()?.contains(host) && !host.closest('aside.notes')) set('text', [host]);
+    // a focused display is an object, framed while its TeX is edited in the sheet or the pane
+    if (host?.matches('div.math') && target?.matches('mjx-container') && app.current()?.contains(host)) {
+      if (!(kind === 'elements' && items.includes(host))) set('elements', [host]);
+    } else if (host && app.current()?.contains(host) && !host.closest('aside.notes')) set('text', [host]);
     else if (target?.classList.contains('beeson-movable') && !(kind === 'elements' && items.some((el) => el !== target && target.contains(el)))) set('elements', [target]);
   });
   // a right-click in a text, before its context menu is opened in shell.ts: inside the selection
@@ -152,14 +157,17 @@ export function install(app: App): void {
   // on a Mac, as in the text fields of macOS, or the caret is put under it elsewhere. the range
   // before the press is kept, since the press of the right button may collapse it
   let before: Range | null = null;
+  // a right press on a selected object keeps it selected for its element menu, without a caret
+  const onSelected = (ev: MouseEvent) => kind === 'elements' && ev.target instanceof Element && items.includes(pickOf(app, ev.target) as Element);
   document.addEventListener('mousedown', (ev) => {
+    if ((ev.button === 2 || (ev.ctrlKey && app.platform === 'mac')) && onSelected(ev)) ev.preventDefault();
     const s = getSelection();
     before = ev.button === 2 && s && s.rangeCount && !s.isCollapsed ? s.getRangeAt(0).cloneRange() : null;
   }, true);
   document.addEventListener('contextmenu', (ev) => {
     const target = ev.target instanceof Element ? ev.target : null;
     const host = app.hostOf(target);
-    if (!host || !app.current()?.contains(host) || host.closest('aside.notes') || target?.closest('mjx-container')) return;
+    if (!host || !app.current()?.contains(host) || host.closest('aside.notes') || target?.closest('mjx-container') || onSelected(ev)) return;
     const s = getSelection();
     if (!s) return;
     const kept = before ?? (s.rangeCount && !s.isCollapsed ? s.getRangeAt(0) : null);

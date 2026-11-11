@@ -189,7 +189,8 @@ export function texEditor(options: { display(): boolean; label: string; placehol
     if (n !== seq) return;
     shown = typeset;
     const empty = !field.value.trim();
-    preview.replaceChildren(...(result.node ? [result.node] : [make('span', 'empty', 'A preview of the formula appears here.')]));
+    // the error of a TeX is shown once, in the message under the preview
+    preview.replaceChildren(...(result.node && !result.error ? [result.node] : empty ? [make('span', 'empty', 'A preview of the formula appears here.')] : []));
     message.textContent = result.error ?? '';
     message.classList.toggle('prompt', empty);
     if (empty || !result.error) message.removeAttribute('role');
@@ -398,7 +399,8 @@ export function install(app: App): void {
     openFor = target;
     const host = target?.closest(HOST);
     const at = host && target ? [...host.querySelectorAll('mjx-container')].indexOf(target) : -1;
-    // the focus goes back to the formula, or to the caret of the text of an inline formula
+    // the focus goes back to the formula, whose object is selected for the keys of the slide, or to
+    // the caret of the text of an inline formula
     const sel = window.getSelection();
     const caret = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
     const from = document.activeElement as HTMLElement | null;
@@ -406,6 +408,8 @@ export function install(app: App): void {
       ? () => {
           const now = target.isConnected ? target : host?.querySelectorAll('mjx-container')[at] ?? null;
           (now as HTMLElement | null)?.focus({ preventScroll: true });
+          const el = now && app.move.movableOf(now);
+          if (el) app.selection.set('elements', [el]);
         }
       : () => {
           if (!from?.isConnected) return;
@@ -457,8 +461,10 @@ export function install(app: App): void {
     const container = target?.closest('mjx-container');
     if (container && app.hostOf(container)) {
       ev.preventDefault();
-      openMath(container);
-    } else if (popover && target && !popover.contains(target) && !target.closest('.beeson-complete')) {
+      // a Shift-click or a command-click only adds the object of the formula to the selection or
+      // takes it out
+      if (!ev.shiftKey && !(app.platform === 'mac' ? ev.metaKey : ev.ctrlKey)) openMath(container);
+    } else if (popover && target && !popover.contains(target) && !target.closest('.beeson-complete, .beeson-edit-menu')) {
       if (away) void away();
       else closeMath(false);
     }

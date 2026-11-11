@@ -24,9 +24,10 @@ jobs:
       - run: npm run typecheck
       # the Chrome preinstalled on each runner is found in scripts/chrome.mjs
       # the macOS runners draw WebGL in SwiftShader, too slowly for the timings of the tests, hence
-      # the tests are run on Ubuntu and Windows, and the deck is checked in Chrome and Safari on macOS
+      # the tests are run on Ubuntu and Windows, and the deck is checked in Chrome and Safari on macOS.
+      # the tests read the demo deck, hence a talk made with "Use this template" checks only its deck
       - run: npm test
-        if: ${{ matrix.os != 'macos-latest' }}
+        if: ${{ matrix.os != 'macos-latest' && github.repository == 'beeson-group/slides' }}
       - run: npm run check
       # Firefox on Linux has WebGL in software only in a window, hence Xvfb
       - run: xvfb-run -a -s "-screen 0 1920x1080x24" npm run check -- --browser firefox --out check/firefox

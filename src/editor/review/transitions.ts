@@ -1,12 +1,12 @@
 // the transition of a slide, as in the Animate inspector of Keynote, limited by the scope rule of
-// the plan to None, Fade, and Magic Move. reveal.js plays the None or Fade of a slide when the show
-// enters it, as PowerPoint plays its Transition to This Slide, since the slide entered is drawn
-// over the slide left (z-index 11 on section.present in reveal.css) and faded in by its own
-// data-transition. Magic Move is played from a slide into the next one. Fade is the default of the
-// theme (transition: 'fade' in src/main.ts),
-// hence it is written as the absence of data-transition, and None as data-transition="none".
-// Magic Move is the auto-animate of reveal.js: data-auto-animate on the slide and on the next one,
-// and the same data-id on each pair of matched elements
+// the plan to None, Fade, and Magic Move. as in Keynote, the transition of a slide is played when
+// the show leaves it for the next shown slide. reveal.js plays a None or a Fade when the show
+// enters a slide, since the slide entered is drawn over the slide left (z-index 11 on
+// section.present in reveal.css) and faded in by its own data-transition, hence the None or Fade
+// of a slide is written on the next shown slide. Fade is the default of the theme (transition:
+// 'fade' in src/main.ts), hence it is written as the absence of data-transition, and None as
+// data-transition="none". Magic Move is the auto-animate of reveal.js: data-auto-animate on the
+// slide and on the next one, and the same data-id on each pair of matched elements
 
 import type { App } from '../app.ts';
 import { drawInto } from '../navigator/thumbs.ts';
@@ -30,10 +30,12 @@ function previousShown(app: App, slide: Element): Element | null {
 
 const magic = (s: Element | null): boolean => !!s?.hasAttribute('data-auto-animate');
 
-// the transition of slide, or null for an effect of reveal.js outside the scope, e.g. slide
+// the transition by which the show leaves slide, or null for an effect of reveal.js outside the
+// scope, e.g. slide. the last shown slide has the default Fade
 export function transitionOf(app: App, slide: Element): Transition | null {
-  if (magic(slide) && magic(nextShown(app, slide))) return 'magic';
-  const t = slide.getAttribute('data-transition');
+  const next = nextShown(app, slide);
+  if (magic(slide) && magic(next)) return 'magic';
+  const t = next?.getAttribute('data-transition') ?? null;
   if (t === null || t === '' || t === 'fade') return 'fade';
   if (t === 'none') return 'none';
   return null;
@@ -129,20 +131,20 @@ const setMagic = (app: App, s: Element, on: boolean) => {
 // loses it when it is not moved into the slide after it
 export function setTransition(app: App, slide: Element, t: Transition): void {
   const next = nextShown(app, slide);
+  if (!next) throw new Error('A transition needs a slide after this one');
   if (t === 'magic') {
-    if (!next) throw new Error('Magic Move needs a slide after this one');
     setMagic(app, slide, true);
     setMagic(app, next, true);
     linkPairs(app, slide, next);
     return;
   }
   const value = t === 'none' ? 'none' : null;
-  if (slide.getAttribute('data-transition') !== value && !(value === null && !slide.hasAttribute('data-transition'))) {
-    app.doc.setTag(slide, { attrs: { 'data-transition': value } }, 'transition');
+  if (next.getAttribute('data-transition') !== value && !(value === null && !next.hasAttribute('data-transition'))) {
+    app.doc.setTag(next, { attrs: { 'data-transition': value } }, 'transition');
   }
-  if (transitionOf(app, slide) === 'magic' || magic(slide)) {
+  if (magic(slide)) {
     if (!magic(previousShown(app, slide))) setMagic(app, slide, false);
-    if (next && magic(next) && !magic(nextShown(app, next))) setMagic(app, next, false);
+    if (magic(next) && !magic(nextShown(app, next))) setMagic(app, next, false);
   }
 }
 
@@ -155,21 +157,15 @@ export async function magicMoveCopy(app: App, slide: Element): Promise<Element> 
   return app.doc.duplicate(slide);
 }
 
-// Preview of the transition, as the Preview button of the Animate pane of Keynote and of the
-// Transitions tab of PowerPoint. in reveal.js a slide is faded or cut into by the data-transition
-// of this slide, hence a Fade or None is played from the slide before, at its last step, into the
-// slide at its first step. a slide with Magic Move is played into the next slide, and a slide
-// moved into by Magic Move from the slide before is played from it. the clones of the slides are
-// drawn on a layer over the canvas, which is taken down at the end, at a press, or at Esc, and the
-// page is not changed
+// Preview of the transition, as the Preview button of the Animate pane of Keynote. the transition
+// of the slide is played from the slide, at its last step, into the next shown slide at its first
+// step. the clones of the slides are drawn on a layer over the canvas, which is taken down at the
+// end, at a press, or at Esc, and the page is not changed
 export type Plan = { kind: Transition; from: Element | null; to: Element };
 
-export function previewOf(app: App, slide: Element): Plan {
+export function previewOf(app: App, slide: Element): Plan | null {
   const next = nextShown(app, slide);
-  if (next && transitionOf(app, slide) === 'magic') return { kind: 'magic', from: slide, to: next };
-  const before = previousShown(app, slide);
-  if (before && transitionOf(app, before) === 'magic') return { kind: 'magic', from: before, to: slide };
-  return { kind: slide.getAttribute('data-transition') === 'none' ? 'none' : 'fade', from: before, to: slide };
+  return next && { kind: transitionOf(app, slide) ?? 'fade', from: slide, to: next };
 }
 
 // FADE_MS is the fade of theme/beeson.css, and HOLD_MS the time each end of the preview is held,
@@ -211,7 +207,7 @@ export function preview(app: App, slide: Element): Promise<void> {
   const plan = previewOf(app, slide);
   const stage = app.slides() as HTMLElement;
   const box = stage.getBoundingClientRect();
-  if (!box.width || !box.height) return Promise.resolve();
+  if (!plan || !box.width || !box.height) return Promise.resolve();
   injectStyle('preview', PREVIEW_CSS);
   const deck = { width: stage.offsetWidth || 1920, height: stage.offsetHeight || 1080 };
   const layer = make('div', 'beeson-edit-preview');

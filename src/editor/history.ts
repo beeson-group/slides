@@ -121,20 +121,41 @@ export class History {
   // a transaction, or a part of the open one, after whose undo the elements selected before fn are
   // selected again, and after whose redo those selected after fn, e.g. a paragraph made a list
   async selecting<T>(label: string, fn: () => T | Promise<T>): Promise<T> {
-    if (!this.open) return await this.transact(label, () => this.selecting(label, fn));
+    return this.keeping(label, this.selected, (els) => void (els && this.reselect(els)), fn);
+  }
+
+  // a transaction, or a part of the open one, after whose undo put is given what take read before
+  // fn, and after whose redo what it read after fn, e.g. the current slide of a slide command
+  async keeping<T, S>(label: string, take: () => S, put: (state: S) => void, fn: () => T | Promise<T>): Promise<T> {
+    if (!this.open) return await this.transact(label, () => this.keeping(label, take, put, fn));
     const entries = this.open;
     const at = entries.length;
-    const before = this.selected();
+    const before = take();
     try {
       return await fn();
     } finally {
-      const after = this.selected();
+      const after = take();
       if (entries.length > at) {
-        const put = (els: Element[] | null) => () => void (els && this.reselect(els));
-        entries.splice(at, 0, { label, undo: put(before), redo: () => {} });
-        entries.push({ label, undo: () => {}, redo: put(after) });
+        entries.splice(at, 0, { label, undo: () => put(before), redo: () => {} });
+        entries.push({ label, undo: () => {}, redo: () => put(after) });
       }
     }
+  }
+
+  // a part of the open transaction after whose undo the selection that take reads now is put back,
+  // and after whose redo the one that it reads at the call of the function returned, e.g. a word
+  // made bold. take gives the function that puts the selection back
+  keep(take: () => (() => void) | null): () => void {
+    const entries = this.open;
+    if (!entries) return () => {};
+    const at = entries.length;
+    const before = take();
+    return () => {
+      if (entries.length === at) return;
+      const after = take();
+      entries.splice(at, 0, { label: 'select', undo: () => before?.(), redo: () => {} });
+      entries.push({ label: 'select', undo: () => {}, redo: () => after?.() });
+    };
   }
 
   // called when host is focused or put back, so that its content before the next input is known

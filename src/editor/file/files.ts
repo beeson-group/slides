@@ -11,6 +11,7 @@ import { make, store, stored } from '../ui/dom.ts';
 import { Dialog, host } from '../ui/dialog.ts';
 import { display } from '../keymap.ts';
 import { forget, loadRecents, pageOf, recentsOfPage, remember, type Recent } from './recent.ts';
+import { startShow } from '../show.ts';
 
 type PickerOptions = { types?: { description: string; accept: Record<string, string[]> }[]; multiple?: boolean; suggestedName?: string };
 type Pickers = {
@@ -108,8 +109,8 @@ const ASK = {
   },
   present: {
     text: 'Save them into the file first, present the saved file without them, or go on editing.',
-    save: ['Save and present', 'Save the edits into the file, then show the deck in a new tab'],
-    discard: ['Present the saved file', 'Show the deck as saved in a new tab, and keep the edits here'],
+    save: ['Save and present', 'Save the edits into the file, then play the show'],
+    discard: ['Present the saved file', 'Play the show of the deck as saved, and keep the edits here'],
   },
   export: {
     text: 'The PDF is printed from the file. Save the edits into it first, export the saved file without them, or go on editing.',
@@ -546,10 +547,20 @@ export function install(app: App): void {
     app.report();
   }
 
-  // the saved deck in a new tab, without the editor. with unsaved changes, the user is asked first
-  async function present(): Promise<void> {
-    if (!(await savedFirst('present'))) return;
-    window.open(`${deckAddress()}${location.hash}`, '_blank');
+  // the saved deck at hash, without the editor, played in place or, with tab, in a new tab. with
+  // unsaved changes, the user is asked first. the show in place takes the full screen before the
+  // save, while the click on the card still counts. null is returned when nothing is played
+  async function present(hash = '', tab = false): Promise<{ win: Window | null } | null> {
+    const choice = app.dirty ? await askFirst('present') : 'saved';
+    if (!choice) return null;
+    const show = tab ? null : startShow(app);
+    if (choice === 'save') await save();
+    if (choice === 'save' && app.dirty) {
+      show?.end();
+      return null;
+    }
+    const url = `${deckAddress()}${hash}`;
+    return { win: show ? show.load(url) : window.open(url, '_blank') };
   }
 
   const files: Files = {

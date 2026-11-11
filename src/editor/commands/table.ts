@@ -22,6 +22,7 @@
 // outline around the cell of the caret or the range
 
 import type { App } from '../app.ts';
+import { overlay } from '../canvas/frames.ts';
 import { keysOf, type Command } from '../commands.ts';
 import { matches } from '../keymap.ts';
 import { childSpace } from '../render.ts';
@@ -60,7 +61,11 @@ dialog.beeson-table-size .fields{display:grid;grid-template-columns:auto 72px;ga
 dialog.beeson-table-size .fields input{box-sizing:border-box;width:100%;padding:3px 6px;border:1px solid var(--ed-control-line);border-radius:6px;background:var(--ed-field,var(--ed-control));color:var(--ed-text);font:inherit;font-variant-numeric:tabular-nums}
 dialog.beeson-table-size .fields input:focus-visible{outline:3px solid var(--ed-focus);outline-offset:0}
 .beeson-table-bars .fill{width:11px;height:11px;border-radius:50%;background:#ffc400;box-shadow:0 0 0 1.5px #fff,0 0 0 2.5px #0006;cursor:crosshair;touch-action:none}
-.beeson-table-bars .fill[hidden],.beeson-table-bars .spread[hidden]{display:none}
+.beeson-table-bars .corner{width:11px;height:11px;border-radius:50%;background:#fff;box-shadow:0 0 0 1.5px var(--ed-select),0 0 0 2.5px #0004;touch-action:none}
+.beeson-table-bars .corner[data-corner="upper-left"]{cursor:nwse-resize}
+.beeson-table-bars .corner:not([data-corner="upper-left"]){cursor:nesw-resize}
+.beeson-table-bars :is(.fill,.corner,.spread,.beeson-grip)[hidden]{display:none}
+.beeson-table-bars .beeson-grip{box-sizing:content-box}
 .beeson-table-bars .spread{border:2px dashed #e0a800;border-radius:2px;pointer-events:none}
 html.beeson-autofilling,html.beeson-autofilling *{cursor:crosshair!important}
 .beeson-table-bars{position:fixed;inset:0;z-index:52;pointer-events:none}
@@ -69,6 +74,10 @@ html.beeson-autofilling,html.beeson-autofilling *{cursor:crosshair!important}
 .beeson-table-bars .bar{border-radius:5px;background:var(--ed-panel);box-shadow:0 0 0 1px var(--ed-control-line);color:var(--ed-muted);font:10px/1 var(--ed-font);overflow:hidden}
 .beeson-table-bars .bar>div{position:absolute;display:grid;place-items:center;box-shadow:-1px -1px 0 var(--ed-line)}
 .beeson-table-bars .bar>div:hover{background:var(--ed-hover);color:var(--ed-text)}
+.beeson-table-bars .bar .more{position:absolute;right:2px;top:50%;display:grid;width:14px;height:14px;margin-top:-7px;border-radius:3px;opacity:0}
+.beeson-table-bars .bar.rows .more{right:auto;left:50%;top:auto;bottom:1px;margin:0 0 0 -7px}
+.beeson-table-bars .bar>:hover>.more{opacity:1}
+.beeson-table-bars .bar .more:hover{background:var(--ed-control-line)}
 .beeson-table-bars .bar>.on{background:color-mix(in srgb,var(--ed-select) 20%,transparent);color:var(--ed-text);font-weight:600}
 .beeson-table-bars .round{padding:0;border:0;border-radius:50%;display:grid;place-items:center;background:var(--ed-panel);box-shadow:0 0 0 1px var(--ed-control-line);color:var(--ed-select)}
 .beeson-table-bars .round:hover{background:var(--ed-hover)}
@@ -169,6 +178,20 @@ function selectCells(app: App, anchor: HTMLTableCellElement, focus: HTMLTableCel
   caretCell = null;
   app.invalidate('selection');
 }
+
+// the table selected as an object, without a cell selected, as after Select Table of Keynote
+function selectTable(app: App, table: HTMLTableElement): void {
+  const host = app.hostOf(document.activeElement);
+  if (host instanceof HTMLElement) host.blur();
+  window.getSelection()?.removeAllRanges();
+  app.selection.set('elements', [table]);
+  block = null;
+  caretCell = null;
+  app.invalidate('selection');
+}
+
+// whether table is selected as an object, which its move handle and its edge grips act on
+const asObject = (app: App, table: HTMLTableElement) => app.selection.only() === table && !inBlock(app) && !cellAt(app);
 
 // a cell of the file on the current slide at target
 function liveCell(target: EventTarget | null): HTMLTableCellElement | null {
@@ -322,14 +345,15 @@ export function pickTableInto(app: App, zone: Element, anchor: DOMRect): void {
 // the band in slide px over the bottom of the slide, where the slide number is drawn, and over the
 // footnote line, which a new table does not reach into
 const BOTTOM = 40;
+// the step in slide px of the grid on which a new table looks for a free place
+const STEP = 20;
 
 // a new table put where it fits on its slide, with every row and with room around it for its bars
 // at the zoom of the canvas: under the blocks before it, else at the center of the free area where
-// the layout puts a zone, else moved up until its bottom is BOTTOM over the footnote line or the
-// bottom of the slide over the blocks with text of its column, and else at the center of the slide
-// over what is there, as Keynote inserts a table. the table of a slide of the theme is put into its
-// text column, and it is not put over the text while free space is left. the space that an element
-// takes is the rule takenBox of insert.ts. the move is a translate in slide px
+// the layout puts a zone, else at the free place nearest to it at the right of the text or below it,
+// and else at the center of the slide over what is there, as Keynote inserts a table, where the
+// fill of the theme hides what is under it. the space that an element takes is the rule takenBox of
+// insert.ts. the move is a translate in slide px
 function placeTable(app: App, table: HTMLTableElement): void {
   const slide = table.closest('section');
   const parent = table.parentElement;
@@ -347,24 +371,34 @@ function placeTable(app: App, table: HTMLTableElement): void {
   const before = taken(above).map((o) => o.box);
   const all = taken([...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *')].filter((el) => !el.contains(table)));
   const others = all.map((o) => o.box);
-  // a table moved up may cover the blocks with text of its column before it, and not a caption
-  // or an empty placeholder
-  const covered = (el: Element) => above.includes(el) && !el.matches('.caption') && !!el.textContent?.trim();
   const tw = t.right - t.left;
   const th = t.bottom - t.top;
   const at = (left: number, top: number): SlideBox => ({ left, top, right: left + tw, bottom: top + th });
-  const free = (b: SlideBox) => b.top - room >= 0 && b.bottom <= floor && b.right + room <= w &&
+  // a box measured at the zoom of the canvas may pass the floor by a fraction of a slide px
+  const free = (b: SlideBox) => b.top - room >= 0 && b.bottom <= floor + 1 && b.right + room <= w &&
     !others.some((o) => meets({ left: b.left - room, top: b.top - room, right: b.right + room, bottom: b.bottom + room }, o));
   const top = Math.max(t.top, ...before.map((b) => b.bottom + room));
+  let best: SlideBox | null = null;
   let place: SlideBox | null = free(at(t.left, top)) ? at(t.left, top) : null;
   const zone = place ? null : freeZone(app, slide, table);
   if (zone) {
     const b = at((zone.left + zone.right - tw) / 2, (zone.top + zone.bottom - th) / 2);
     if (free(b)) place = b;
   }
-  const raised = Math.min(top, floor - th);
-  const over = (b: SlideBox) => all.some((o) => meets(b, o.box) && !covered(o.el));
-  if (!place && raised - room >= 0 && !over(at(t.left, raised))) place = at(t.left, raised);
+  // the free places on a grid of STEP px under the heading of the slide, the nearest one taken
+  const head = slide.querySelector(':scope > h2, :scope > h1');
+  const under = head ? (takenBox(app, head)?.bottom ?? 0) + room : room;
+  let near = Infinity;
+  for (let y = under; !place && y + th <= floor; y += STEP) {
+    for (let x = room; x + tw + room <= w; x += STEP) {
+      const d = Math.hypot(x - t.left, y - top);
+      if (d < near && free(at(x, y))) {
+        near = d;
+        best = at(x, y);
+      }
+    }
+  }
+  place ??= best;
   place ??= at((w - tw) / 2, (h - th) / 2);
   const x = Math.round(place.left - t.left);
   const y = Math.round(place.top - t.top);
@@ -474,6 +508,31 @@ async function deleteRow(app: App, t: Target): Promise<void> {
   land(app, cellOver(t.table, row, box.c0) ?? t.table.rows[row].cells[0], 'end', asBlock);
 }
 
+// one column taken out. a cell that reaches over another column gets a column less
+async function removeColumn(app: App, table: HTMLTableElement, c: number): Promise<void> {
+  const g = gridOf(table);
+  for (const s of new Set(g.grid.map((row) => row[c]).filter((x): x is Place => !!x))) {
+    if (s.span > 1) app.doc.setTag(s.cell, { attrs: { colspan: spanText(s.span - 1) } }, 'delete column');
+    else await app.doc.remove(s.cell, 'delete column');
+  }
+}
+
+// the rows or the columns of a table added or taken out at its end, until it has count of them,
+// as the fields Rows and Columns of the Table tab of Keynote set them. the selection is kept, and a
+// cell taken out is dropped from it
+export async function setCount(app: App, table: HTMLTableElement, kind: 'rows' | 'columns', count: number): Promise<void> {
+  const n = Math.max(1, Math.min(MOST[kind], Math.round(count)));
+  const t = { table, cell: null, box: null };
+  if (kind === 'rows') {
+    while (table.rows.length < n) await addRow(app, t, true);
+    while (table.rows.length > n) await removeRow(app, table, table.rows.length - 1);
+    return;
+  }
+  while (columnsOf(table) < n) await addColumn(app, t, true);
+  while (columnsOf(table) > n) await removeColumn(app, table, columnsOf(table) - 1);
+  await dropEmptyRows(app, table, 'delete column');
+}
+
 // the columns of the cells of t taken out, or the table with its last columns. a cell that reaches
 // over another column gets a column less, and a row left without a cell is taken out
 async function deleteColumn(app: App, t: Target): Promise<void> {
@@ -481,13 +540,7 @@ async function deleteColumn(app: App, t: Target): Promise<void> {
   if (!box) return;
   if (box.c1 - box.c0 + 1 >= columnsOf(t.table)) return deleteTable(app, t);
   const asBlock = blocked(app, t);
-  for (let c = box.c1; c >= box.c0; c--) {
-    const g = gridOf(t.table);
-    for (const s of new Set(g.grid.map((row) => row[c]).filter((x): x is Place => !!x))) {
-      if (s.span > 1) app.doc.setTag(s.cell, { attrs: { colspan: spanText(s.span - 1) } }, 'delete column');
-      else await app.doc.remove(s.cell, 'delete column');
-    }
-  }
+  for (let c = box.c1; c >= box.c0; c--) await removeColumn(app, t.table, c);
   await dropEmptyRows(app, t.table, 'delete column');
   const row = Math.min(box.r0, t.table.rows.length - 1);
   const col = Math.min(box.c0, columnsOf(t.table) - 1);
@@ -672,7 +725,7 @@ let current: App | null = null;
 const BLOCK_KEYS: Command[] = [];
 window.addEventListener('keydown', (ev) => {
   const app = current;
-  if (!app || ev.isComposing || menuOpen() || app.region() !== 'canvas' || !inBlock(app)) return;
+  if (!app || ev.isComposing || menuOpen() || picker || app.region() !== 'canvas' || !inBlock(app)) return;
   const c = BLOCK_KEYS.find((x) => keysOf(x, app.platform).some((k) => matches(ev, k, app.platform)));
   if (!c) return;
   ev.preventDefault();
@@ -722,12 +775,18 @@ window.addEventListener('keydown', (ev) => {
   openCellMenu(app, cell, { x: r.left + 8, y: r.top + Math.min(r.height, 24) });
 }, true);
 
+// the close of the open grid of Insert Table, or null
+let picker: ((restore: boolean) => void) | null = null;
+
 // the grid of the Insert Table popover, under its anchor. a cell of the grid chooses the size of
-// the table up to it, shown above the grid as columns by rows, and a click or Return inserts it
+// the table up to it, shown above the grid as columns by rows, and a click or Return inserts it.
+// it is a popover, hence the toolbar stays enabled and the Table button is drawn pressed under it
 function openPicker(app: App, anchor: DOMRect | null, done: (size: Size) => void, more?: (rested?: Size) => void): void {
-  document.querySelector('dialog.beeson-table-picker')?.remove();
+  picker?.(false);
   const back = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   const box = make('dialog', 'beeson-table-picker');
+  box.dataset.popover = '';
+  const button = document.querySelector('.beeson-edit-top [data-command="insert.table"]');
   box.setAttribute('aria-label', 'Insert Table');
   const size = make('div', 'size', 'Insert Table');
   const grid = make('div', 'grid');
@@ -759,6 +818,9 @@ function openPicker(app: App, anchor: DOMRect | null, done: (size: Size) => void
     if (off.signal.aborted) return;
     off.abort();
     box.remove();
+    picker = null;
+    button?.setAttribute('aria-expanded', 'false');
+    app.invalidate('selection');
     if (restore && back?.isConnected) back.focus({ preventScroll: true });
   };
   const choose = (s: Size | null) => {
@@ -791,6 +853,9 @@ function openPicker(app: App, anchor: DOMRect | null, done: (size: Size) => void
   });
   document.body.append(box);
   box.show();
+  picker = close;
+  button?.setAttribute('aria-expanded', 'true');
+  app.invalidate('selection');
   const w = box.offsetWidth;
   const v = app.stage?.viewport;
   const left = anchor ? anchor.left : v ? v.left + (v.width - w) / 2 : 100;
@@ -800,7 +865,8 @@ function openPicker(app: App, anchor: DOMRect | null, done: (size: Size) => void
   setTimeout(() => {
     const signal = off.signal;
     window.addEventListener('pointerdown', (ev) => {
-      if (!(ev.target instanceof Node) || !box.contains(ev.target)) close(true);
+      // a press on the Table button is left to its click, which closes the grid
+      if (!(ev.target instanceof Element) || !(box.contains(ev.target) || button?.contains(ev.target))) close(true);
     }, { capture: true, signal });
     for (const type of ['resize', 'blur']) window.addEventListener(type, () => close(true), { signal });
   }, 0);
@@ -883,7 +949,7 @@ function installBars(app: App): void {
     });
     return b;
   };
-  const grab = round('Select Table', 'table', (t) => app.selection.set('elements', [t.table]));
+  const grab = round('Select Table', 'table', (t) => selectTable(app, t.table));
   const addCol = round('Add Column', 'plus', (t) => app.commands.run('table.columnAfter', { cell: lastCell(t.table, 'column') }));
   const addRow = round('Add Row', 'plus', (t) => app.commands.run('table.rowBelow', { cell: lastCell(t.table, 'row') }));
   // a grip on the border at the right of each cell of the first row, whose drag sets the widths
@@ -899,26 +965,60 @@ function installBars(app: App): void {
   handle.hidden = true;
   const spread = make('div', 'spread');
   spread.hidden = true;
-  layer.append(cols, rows, grab, addCol, addRow, outline, grips, guide, spread, handle);
+  // the handles at the other corners of the cells selected as a block, whose drag moves that corner
+  // of the range to the cell under the pointer while the opposite corner stays
+  const corners = (['upper-left', 'upper-right', 'lower-left'] as const).map((name) => {
+    const c = make('div', 'corner');
+    c.dataset.corner = name;
+    c.title = 'Drag to extend or shorten the selection';
+    c.hidden = true;
+    return c;
+  });
+  // the grips at the left and right edges of a table selected as an object, whose drag sets the
+  // widths of its columns in proportion, which is the only size of a table that the theme lets the
+  // editor write. a drag of the left grip moves the table, so that its right edge stays
+  const sides = (['w', 'e'] as const).map((h) => {
+    const g = make('div', app.platform === 'mac' ? 'beeson-grip square' : 'beeson-grip');
+    g.dataset.handle = h;
+    g.title = 'Drag to resize the table';
+    g.hidden = true;
+    return g;
+  });
+  layer.append(cols, rows, grab, addCol, addRow, outline, grips, guide, spread, ...corners, handle, ...sides);
   document.body.append(layer);
   // a press on the bars keeps the caret in its cell
   for (const type of ['pointerdown', 'mousedown']) layer.addEventListener(type, (ev) => ev.preventDefault());
 
-  // a click on a letter or a number opens the menu of the table for a cell of its column or row
-  const segmentMenu = (ev: MouseEvent, column: boolean) => {
+  // a click on a letter or a number selects its column or row as a block, and with Shift the
+  // columns or rows from the range to it, as in Keynote. its arrow and a right-click then open the
+  // menu of the column or the row
+  const pick = (ev: MouseEvent, column: boolean) => {
     const seg = ev.target instanceof Element ? ev.target.closest<HTMLElement>('[data-index]') : null;
     if (!seg || !shown) return;
+    const table = shown.table;
+    const g = gridOf(table);
     const i = Number(seg.dataset.index);
-    const home = shown.cell ? placeOf(shown.cell)! : { row: 0, col: 0 };
-    const tr = shown.table.rows[column ? home.row : i];
-    const cell = tr && (cellOver(shown.table, column ? home.row : i, column ? i : home.col) ?? tr.cells[tr.cells.length - 1]);
-    if (!cell) return;
-    const anchor = seg.getBoundingClientRect();
-    focusCell(cell, 'end');
-    openMenu(app, cellItems(cell).slice(4), { anchor, placement: column ? 'below' : 'beside', label: seg.title });
+    const b = ev.shiftKey ? shown.box : null;
+    const from = b ? Math.min(i, column ? b.c0 : b.r0) : i;
+    const to = b ? Math.max(i, column ? b.c1 : b.r1) : i;
+    const at = (r: number, c: number) => g.grid[r]?.[c]?.cell;
+    const anchor = column ? at(0, from) : at(from, 0);
+    const focus = column ? at(g.grid.length - 1, to) : at(to, g.width - 1);
+    if (!anchor || !focus) return;
+    if (!b || !inBlock(app) || block?.anchor !== anchor || block.focus !== focus) selectCells(app, anchor, focus);
+    if (ev.type === 'click' && !(ev.target as Element).closest('.more')) return;
+    ev.preventDefault();
+    const arg = { cell: column ? anchor : focus };
+    const ids = column
+      ? [['table.columnBefore', 'table.columnAfter'], ['table.deleteColumn'], ['table.distributeColumns', 'table.fitColumn'], ['table.sortAscending', 'table.sortDescending']]
+      : [['table.rowAbove', 'table.rowBelow'], ['table.deleteRow']];
+    const items: MenuItem[] = ids.flatMap((group, k) => [...(k ? [{ rule: true as const }] : []), ...group.map((command) => ({ command, arg }))]);
+    openMenu(app, items, { anchor: seg.getBoundingClientRect(), placement: column ? 'below' : 'beside', label: `${seg.title} menu` });
   };
-  cols.addEventListener('click', (ev) => segmentMenu(ev, true));
-  rows.addEventListener('click', (ev) => segmentMenu(ev, false));
+  for (const [bar, column] of [[cols, true], [rows, false]] as const) {
+    bar.addEventListener('click', (ev) => pick(ev, column));
+    bar.addEventListener('contextmenu', (ev) => pick(ev, column));
+  }
 
   const place = (el: Element, left: number, top: number, width: number, height: number) => {
     (el as HTMLElement).style.cssText = `left:${left}px;top:${top}px;width:${width}px;height:${height}px`;
@@ -928,6 +1028,10 @@ function installBars(app: App): void {
       const d = make('div', on(i) ? 'on' : '', name);
       d.dataset.index = String(i);
       d.title = `${word} ${name}`;
+      const more = make('span', 'more');
+      more.title = `${word} ${name} Menu`;
+      more.append(icon('chevron-down', 14));
+      d.append(more);
       return d;
     }));
 
@@ -1018,6 +1122,76 @@ function installBars(app: App): void {
   handle.addEventListener('pointerup', (ev) => endFill(ev));
   handle.addEventListener('pointercancel', () => endFill(null));
 
+  // the drag of a corner handle: the table and the cell at the corner of the range that stays
+  let stretching: { table: HTMLTableElement; row: number; col: number } | null = null;
+  for (const c of corners) {
+    c.addEventListener('pointerdown', (ev) => {
+      const at = shown?.box;
+      if (!at || !shown || ev.button !== 0 || !inBlock(app)) return;
+      const name = c.dataset.corner;
+      stretching = { table: shown.table, row: name === 'lower-left' ? at.r0 : at.r1, col: name === 'upper-right' ? at.c0 : at.c1 };
+      c.setPointerCapture(ev.pointerId);
+    });
+    c.addEventListener('pointermove', (ev) => {
+      const s = stretching;
+      if (!s || !s.table.isConnected) return;
+      const { row, col } = spotAt(s.table, ev.clientX, ev.clientY);
+      const a = cellOver(s.table, s.row, s.col);
+      const b = cellOver(s.table, row, col);
+      if (a && b && (block?.anchor !== a || block?.focus !== b)) selectCells(app, a, b);
+    });
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) c.addEventListener(type, () => (stretching = null));
+  }
+
+  // the drag of an edge grip: the cells of the first row with their outer widths and the widths of
+  // their content, and their styles at the press, the translate of the table, and its width
+  let widening: { table: HTMLTableElement; cells: HTMLTableCellElement[]; outer: number[]; content: number[]; styles: string[]; at: number[]; moved: string; left: boolean; x: number; scale: number; width: number } | null = null;
+  const widen = (ev: PointerEvent) => {
+    const r = widening!;
+    const d = ((ev.clientX - r.x) / r.scale) * (r.left ? -1 : 1);
+    const k = Math.max(0.05, (r.width + d) / r.width);
+    const widths = new Map(r.cells.map((c, i) => [c, Math.round(Math.max(NARROWEST, r.outer[i] * k - r.outer[i] + r.content[i]))]));
+    for (const [c, w] of widths) c.style.width = `${w}px`;
+    const shift = r.left ? r.width - r.table.offsetWidth : 0;
+    r.table.style.translate = shift ? `${r.at[0] + shift}px ${r.at[1]}px` : r.moved;
+    return { widths, shift };
+  };
+  for (const g of sides) {
+    g.addEventListener('pointerdown', (ev) => {
+      if (!shown || ev.button !== 0 || !asObject(app, shown.table)) return;
+      const table = shown.table;
+      const cells = (gridOf(table).spots[0] ?? []).map((s) => s.cell);
+      const at = (table.style.translate || '0 0').split(/\s+/).map((v) => parseFloat(v) || 0);
+      widening = {
+        table, cells, outer: cells.map((c) => c.offsetWidth), content: cells.map(contentWidth), styles: cells.map((c) => c.style.width), at: [at[0] ?? 0, at[1] ?? 0],
+        moved: table.style.translate, left: g.dataset.handle === 'w', x: ev.clientX, scale: table.getBoundingClientRect().width / (table.offsetWidth || 1) || 1, width: table.offsetWidth || 1,
+      };
+      g.setPointerCapture(ev.pointerId);
+      document.documentElement.classList.add('beeson-resizing');
+    });
+    g.addEventListener('pointermove', (ev) => {
+      if (widening) widen(ev);
+    });
+    const end = (ev: PointerEvent | null) => {
+      const r = widening;
+      if (!r) return;
+      const done = ev && Math.abs(ev.clientX - r.x) >= 1 ? widen(ev) : null;
+      widening = null;
+      document.documentElement.classList.remove('beeson-resizing');
+      r.cells.forEach((c, i) => (c.style.width = r.styles[i]));
+      r.table.style.translate = r.moved;
+      if (!done) return;
+      void app.history.transact('Resize Table', () => {
+        writeWidths(app, done.widths, 'resize table');
+        const x = r.at[0] + done.shift;
+        if (done.shift) app.doc.setTag(r.table, { translate: x || r.at[1] ? { x, y: r.at[1] } : null }, 'resize table');
+      }).catch((e) => app.fail(e));
+    };
+    g.addEventListener('pointerup', (ev) => end(ev));
+    g.addEventListener('pointercancel', () => end(null));
+    g.addEventListener('lostpointercapture', () => end(null));
+  }
+
   const draw = () => {
     const t = shown;
     if (!t || !t.table.isConnected) return hide();
@@ -1066,12 +1240,29 @@ function installBars(app: App): void {
     handle.hidden = !blocked && !filling;
     if (at) {
       const r = boxRect(t.table, at);
-      // the frame is drawn outside the cells, off the text at their edges
+      // the frame is drawn on the edges of the cells, on the side of each edge with the padding of a
+      // cell, i.e. inside at the right of the theme and outside at the left, off the text on both sides
       const f = blocked ? FRAME_BLOCK : FRAME;
-      place(outline, r.left - f, r.top - f, r.right - r.left + 2 * f, r.bottom - r.top + 2 * f);
+      const g = gridOf(t.table).grid;
+      const first = g[at.r0]?.[at.c0]?.cell, last = g[at.r1]?.[at.c1]?.cell;
+      const k = first ? first.getBoundingClientRect().width / (first.offsetWidth || 1) : 1;
+      const out = (c: HTMLElement | undefined, side: 'Left' | 'Top' | 'Right' | 'Bottom') => !c || parseFloat(getComputedStyle(c)[`padding${side}`]) * k < f ? f : 0;
+      const x0 = r.left - out(first, 'Left'), y0 = r.top - out(first, 'Top');
+      place(outline, x0, y0, r.right + out(last, 'Right') - x0, r.bottom + out(last, 'Bottom') - y0);
       // the handle is under the pointer while it is dragged
       if (filling) place(handle, filling.x - 5.5, filling.y - 5.5, 11, 11);
       else if (!handle.hidden) place(handle, r.right - 5, r.bottom - 5, 11, 11);
+      const ends = { 'upper-left': [r.left, r.top], 'upper-right': [r.right, r.top], 'lower-left': [r.left, r.bottom] };
+      for (const c of corners) {
+        c.hidden = !blocked || !!filling;
+        const [x, y] = ends[c.dataset.corner as keyof typeof ends];
+        if (!c.hidden) place(c, x - 6, y - 6, 11, 11);
+      }
+    } else for (const c of corners) c.hidden = true;
+    const whole = !!widening || (asObject(app, t.table) && !t.table.hasAttribute('data-locked'));
+    for (const g of sides) {
+      g.hidden = !whole;
+      if (whole) g.style.cssText = `left:${g.dataset.handle === 'w' ? box.left : box.right}px;top:${(box.top + box.bottom) / 2}px`;
     }
     const reached = filling && !sameBox(filling.to, filling.from) ? boxRect(filling.table, filling.to) : null;
     spread.hidden = !reached;
@@ -1127,16 +1318,22 @@ function boxRect(table: HTMLTableElement, at: Box): { left: number; top: number;
   return r;
 }
 
+// the row and the column of a table at the point x, y, those at its edge for a point outside it
+function spotAt(table: HTMLTableElement, x: number, y: number): { row: number; col: number } {
+  const rows = [...table.rows].map((tr) => tr.getBoundingClientRect());
+  const edges = columnEdges(table);
+  const row = rows.findIndex((r) => y < r.bottom);
+  const col = edges.findIndex(([, r]) => x < r);
+  return { row: Math.max(0, row < 0 ? rows.length - 1 : row), col: Math.max(0, col < 0 ? edges.length - 1 : col) };
+}
+
 const sameBox = (a: Box, b: Box) => a.r0 === b.r0 && a.c0 === b.c0 && a.r1 === b.r1 && a.c1 === b.c1;
 
 // the range that a drag of the fill handle to the point x, y reaches from the range from: from
 // grown along one axis, the one in which the point is farther past it in cells, to the row or the
 // column of the point, kept inside the table
 function reach(table: HTMLTableElement, from: Box, x: number, y: number): Box {
-  const rows = [...table.rows].map((tr) => tr.getBoundingClientRect());
-  const edges = columnEdges(table);
-  const row = Math.max(0, rows.findIndex((r) => y < r.bottom) < 0 ? rows.length - 1 : rows.findIndex((r) => y < r.bottom));
-  const col = Math.max(0, edges.findIndex(([, r]) => x < r) < 0 ? edges.length - 1 : edges.findIndex(([, r]) => x < r));
+  const { row, col } = spotAt(table, x, y);
   const dr = row > from.r1 ? row - from.r1 : row < from.r0 ? from.r0 - row : 0;
   const dc = col > from.c1 ? col - from.c1 : col < from.c0 ? from.c0 - col : 0;
   if (dr && dr >= dc) return row > from.r1 ? { ...from, r1: row } : { ...from, r0: row };
@@ -1204,8 +1401,10 @@ export function install(app: App): void {
     menu: { bar: 'Insert', group: 'element', order: 22 },
     toolbar: { group: 'insert', order: 20, icon: 'table', label: 'Table' },
     enabled: ready,
+    checked: () => picker ? true : null,
     run: async (a, arg) => {
       const size = arg && typeof arg === 'object' && 'rows' in arg ? (arg as Size) : null;
+      if (!size && picker) return picker(true);
       if (!size) return openPicker(a, toolbarButton('insert.table'), (s) => void a.commands.run('insert.table', s).catch(fail), (rested) => void a.commands.run('insert.tableSize', rested).catch(fail));
       // a table fills the first empty slot of the slide, as the table icon of its placeholder does
       await newTable(a, size, emptySlot(a, a.current()!));
@@ -1265,7 +1464,7 @@ export function install(app: App): void {
   c.define({
     id: 'table.deleteRow',
     label: 'Delete Row',
-    keys: { mac: ['Mod+Alt+Backspace'] },
+    keys: { mac: ['Mod+Alt+Backspace'], other: ['Ctrl+Shift+Backspace'] },
     in: ['text', 'canvas'],
     menu: menu('delete', 84),
     enabled: withCell,
@@ -1275,7 +1474,7 @@ export function install(app: App): void {
   c.define({
     id: 'table.deleteColumn',
     label: 'Delete Column',
-    keys: { mac: ['Ctrl+Mod+Backspace'] },
+    keys: { mac: ['Ctrl+Mod+Backspace'], other: ['Alt+Shift+Backspace'] },
     in: ['text', 'canvas'],
     menu: menu('delete', 85),
     enabled: withCell,
@@ -1317,7 +1516,7 @@ export function install(app: App): void {
   c.define({
     id: 'table.autoAlign',
     label: 'Auto-Align',
-    keys: { mac: ['Alt+Mod+U'] },
+    keys: { mac: ['Alt+Mod+U'], other: ['Alt+Shift+U'] },
     in: ['text', 'canvas'],
     menu: menu('options', 87.5),
     enabled: (a, arg?: unknown) => {
@@ -1344,6 +1543,16 @@ export function install(app: App): void {
   });
   sortCommand('table.sortAscending', 'Sort Ascending', 87.6, false);
   sortCommand('table.sortDescending', 'Sort Descending', 87.7, true);
+  // the counts of the rows and the columns typed into the fields of the Table pane
+  for (const [kind, label] of [['rows', 'Set Row Count'], ['columns', 'Set Column Count']] as const) {
+    c.define({
+      id: `table.${kind}`,
+      label,
+      enabled: withTable,
+      undoable: true,
+      run: (a, arg) => setCount(a, need(a, arg).table, kind, Number((arg as { count?: unknown } | undefined)?.count)),
+    });
+  }
   c.define({
     id: 'table.delete',
     label: 'Delete Table',
@@ -1356,7 +1565,7 @@ export function install(app: App): void {
   c.define({
     id: 'table.merge',
     label: 'Merge Cells',
-    keys: { mac: ['Ctrl+Mod+M'] },
+    keys: { mac: ['Ctrl+Mod+M'], other: ['Alt+Shift+M'] },
     in: ['text', 'canvas'],
     menu: menu('merge', 79.7),
     enabled: (a, arg?: unknown) => ready(a) && mergeable(targetOf(a, arg)),
@@ -1452,6 +1661,19 @@ export function install(app: App): void {
       }));
     }
   }
+  // Esc from the cells selected as a block selects the table as an object, and the next one clears
+  // the selection, as in Keynote
+  BLOCK_KEYS.push(c.define({
+    id: 'table.selectTable',
+    label: 'Select Table',
+    keys: { mac: ['Escape'], other: ['Escape'] },
+    in: ['canvas'],
+    enabled: inBlock,
+    run: (a) => {
+      const t = need(a);
+      selectTable(a, t.table);
+    },
+  }));
   BLOCK_KEYS.push(c.define({
     id: 'table.editCell',
     label: 'Edit Cell',
@@ -1562,6 +1784,9 @@ export function install(app: App): void {
   window.addEventListener('pointerdown', (ev) => {
     press = null;
     held = false;
+    // a press on the move handle of a table selects it as an object, as Select Table does
+    const moving = ev.target instanceof Element && ev.target.closest('.beeson-handle') ? overlay().current() : null;
+    if (moving instanceof HTMLTableElement && ev.button === 0) selectTable(app, moving);
     const cell = liveCell(ev.target);
     if (!cell || !ready(app)) return;
     if (ev.button === 2 || (ev.button === 0 && ev.ctrlKey && app.platform === 'mac')) {

@@ -1,4 +1,4 @@
-// the menu bar, with the menus File, Edit, Insert, Format, Arrange, Slide, View, and Help drawn
+// the menu bar, with the menus File, Edit, Insert, Slide, Format, Arrange, View, and Help drawn
 // from the commands of the registry when they are opened, the name and the state of the file in
 // the middle, and at the right Which? and the Autosave switch. a title is a menu item of a menubar
 // with a roving tabindex: Left and Right move between the titles, and Down, Enter, or Space opens
@@ -15,7 +15,8 @@ import { closeMenus, menuItems, menuOpen, openMenu, type OpenMenu } from '../ui/
 // the least width of the title of the file, in CSS px
 const MIN_TITLE = 40;
 
-export const MENUS = ['File', 'Edit', 'Insert', 'Format', 'Arrange', 'Slide', 'View', 'Help'];
+// the order of the menu bar of Keynote
+export const MENUS = ['File', 'Edit', 'Insert', 'Slide', 'Format', 'Arrange', 'View', 'Help'];
 
 const CSS = `
 .beeson-edit-titlebar { display: grid; grid-template-columns: minmax(max-content, 1fr) minmax(0, max-content) minmax(max-content, 1fr); align-items: center; column-gap: 12px; height: 28px; padding: 0 8px 0 6px; box-sizing: border-box; font: 13px/1 var(--ed-font); color: var(--ed-text); user-select: none; -webkit-user-select: none; }

@@ -14,6 +14,9 @@ import { injectStyle, make, store, stored } from '../ui/dom.ts';
 import { fillFormat as fillPanes } from '../inspector/inspector.ts';
 import { closeMenus, openContextMenu, openMenu, menuItems, type MenuItem } from '../ui/menu.ts';
 import { keyClashes, sheetClashes } from './keys-sheet.ts';
+import { overlay } from '../canvas/frames.ts';
+import { lineAt, onCanvas } from '../canvas/hit.ts';
+import { PANE_KEYS } from '../commands/view.ts';
 
 const NAV_KEY = 'beeson-nav-w';
 const NAV_MIN = 140;
@@ -23,8 +26,9 @@ const NAV_DEFAULT = 200;
 const INSPECTOR_KEY = 'beeson-inspector';
 const INSPECTOR_W = 288;
 // the window width under which the navigator at its smallest width and the inspector would leave
-// the canvas less than half of the window. the inspector is then drawn over the canvas as a sheet
-const SHEET_BELOW = 2 * (NAV_MIN + INSPECTOR_W);
+// the canvas less than half of the window. the navigator is then hidden while the inspector is open,
+// and the inspector stays docked beside the canvas, as in Keynote
+const SOLO_BELOW = 2 * (NAV_MIN + INSPECTOR_W);
 
 const TOKENS_LIGHT = `--ed-bg: #ececec; --ed-panel: #f6f6f6; --ed-text: #1d1d1f; --ed-muted: #6e6e73; --ed-faint: #a9a9ae; --ed-line: #d4d4d6; --ed-canvas: #e1e1e3; --ed-select: #8a2be2; --ed-on-select: #fff; --ed-guide: #e0651f; --ed-error: #d70015; --ed-menu: rgba(248, 248, 248, 0.94); --ed-menu-line: rgba(0, 0, 0, 0.14); --ed-control: #fff; --ed-control-line: #c6c6ca; --ed-segment: #fff; --ed-focus: rgba(138, 43, 226, 0.5); --ed-hover: rgba(0, 0, 0, 0.06); --ed-pressed: rgba(0, 0, 0, 0.11); --ed-edge: rgba(0, 0, 0, 0.16); color-scheme: light;`;
 const TOKENS_DARK = `--ed-bg: #2b2b2d; --ed-panel: #232325; --ed-text: #ececee; --ed-muted: #9a9a9f; --ed-faint: #5e5e63; --ed-line: #3b3b3e; --ed-canvas: #1a1a1c; --ed-select: #9d47d8; --ed-on-select: #fff; --ed-guide: #f08050; --ed-error: #ff6961; --ed-menu: rgba(44, 44, 46, 0.94); --ed-menu-line: rgba(255, 255, 255, 0.12); --ed-control: #3a3a3c; --ed-control-line: #4a4a4e; --ed-segment: #636366; --ed-focus: rgba(201, 79, 230, 0.6); --ed-hover: rgba(255, 255, 255, 0.07); --ed-pressed: rgba(255, 255, 255, 0.13); --ed-edge: rgba(255, 255, 255, 0.14); color-scheme: dark;`;
@@ -50,15 +54,16 @@ html.beeson-editor body > .beeson-edit-header { grid-area: top; position: relati
 html.beeson-editor body > .beeson-edit-nav { grid-area: nav; position: relative; inset: auto; width: auto; min-width: 0; min-height: 0; z-index: 50; background: var(--ed-panel); border-right: 1px solid var(--ed-line); color: var(--ed-text); font: 12px/1.4 var(--ed-font); }
 html.beeson-editor body > .beeson-edit-nav-edge { grid-area: nav; justify-self: end; position: relative; z-index: 55; width: 7px; margin-right: -4px; display: none; cursor: ew-resize; touch-action: none; }
 html.beeson-editor.beeson-nav body > .beeson-edit-nav-edge { display: block; }
+html.beeson-resizing, html.beeson-resizing * { cursor: ew-resize !important; user-select: none !important; }
 html.beeson-editor body > .beeson-edit-nav-edge:hover, html.beeson-editor body > .beeson-edit-nav-edge:focus-visible { outline: none; background: color-mix(in srgb, var(--ed-select) 45%, transparent); }
 html.beeson-editor .beeson-edit-peek { left: calc(var(--ed-nav-col) + 8px); }
 html.beeson-editor body > .beeson-edit-pane { grid-area: notes; position: relative; inset: auto; height: auto; min-height: 0; z-index: 0; background: var(--ed-panel); border-top: 1px solid var(--ed-line); color: var(--ed-faint); font: 11px/1.4 var(--ed-font); padding: 6px 12px; }
 html.beeson-editor body > .beeson-edit-inspector { grid-area: insp; position: relative; z-index: 50; min-width: 0; min-height: 0; display: none; flex-direction: column; background: var(--ed-panel); border-left: 1px solid var(--ed-line); color: var(--ed-text); font: 12px/1.4 var(--ed-font); }
 html.beeson-editor.beeson-steps body > .beeson-edit-inspector, html.beeson-editor.beeson-format body > .beeson-edit-inspector { display: flex; }
-@media (max-width: ${SHEET_BELOW - 0.02}px) {
+@media (max-width: ${SOLO_BELOW - 0.02}px) {
   html.beeson-editor.beeson-nav { --ed-nav-col: ${NAV_MIN}px; }
-  html.beeson-editor.beeson-steps, html.beeson-editor.beeson-format { --ed-insp-col: 0px; }
-  html.beeson-editor body > .beeson-edit-inspector { grid-row: 2 / 4; grid-column: 2 / 5; justify-self: end; width: ${INSPECTOR_W}px; z-index: 56; box-shadow: -8px 0 24px rgba(0, 0, 0, 0.18); }
+  html.beeson-editor.beeson-nav:is(.beeson-steps, .beeson-format) { --ed-nav-col: 0px; }
+  html.beeson-editor.beeson-nav:is(.beeson-steps, .beeson-format) body > :is(.beeson-edit-nav, .beeson-edit-nav-edge) { display: none; }
 }
 .beeson-edit-inspector .tabs { display: flex; margin: 10px 12px 6px; padding: 2px; border-radius: 7px; background: var(--ed-pressed); }
 .beeson-edit-inspector .tabs button { flex: 1; padding: 3px 0; border: 0; border-radius: 5px; background: transparent; color: var(--ed-text); font: 500 12px/1.3 var(--ed-font); cursor: default; }
@@ -140,8 +145,12 @@ export function install(app: App): void {
     ev.stopPropagation();
     const startX = ev.clientX;
     const start = navWidth;
+    // the resize cursor is kept past the limits of the width, as the pointer is captured
+    edge.setPointerCapture(ev.pointerId);
+    html.classList.add('beeson-resizing');
     const onMove = (e: PointerEvent) => setNavWidth(start + e.clientX - startX, false);
     const onUp = () => {
+      html.classList.remove('beeson-resizing');
       window.removeEventListener('pointermove', onMove);
       window.removeEventListener('pointerup', onUp);
       store(NAV_KEY, String(navWidth));
@@ -206,8 +215,10 @@ export function install(app: App): void {
     id: 'shell.format',
     label: 'Format',
     checked: () => format,
+    // the key stands for Hide Inspector of Keynote, whose ⌥⌘I opens the developer tools
+    ...PANE_KEYS(1),
     run: () => setFormat(!format),
-    menu: { bar: 'View', group: 'panes', order: 13 },
+    menu: { bar: 'View', group: 'panes', order: 11 },
     toolbar: { group: 'inspector', order: 60, icon: 'format' },
   });
 
@@ -285,10 +296,14 @@ export function install(app: App): void {
     }
     if (target.closest('.beeson-edit-nav')) return { kind: 'navigator', target: null };
     if (target.closest('.beeson-edit-canvas')) return { kind: 'canvas', target: app.current() };
-    if (!target.closest('.reveal:not(.beeson-peek)')) return null;
+    // the handle of a block, outside the slide, stands for its block
+    const handle = target.closest('.beeson-handle') ? overlay().current() : null;
+    if (!handle && !target.closest('.reveal:not(.beeson-peek)')) return null;
+    const el = handle ?? app.move.movableOf(target);
+    // a text whose block is selected as an object, alone, with others, or in its group, gets the
+    // menu of the object
     const host = app.hostOf(target);
-    if (host) return { kind: 'text', target: host };
-    const el = app.move.movableOf(target);
+    if (host && !(el && app.selection.kind === 'elements' && app.selection.has(el))) return { kind: 'text', target: host };
     if (el) {
       if (!app.selection.has(el)) app.selection.set('elements', [el]);
       return { kind: 'element', target: el };
@@ -296,6 +311,20 @@ export function install(app: App): void {
     return { kind: 'canvas', target: app.current() };
   }
 
+  // a right-click on the stroke of a line, whose svg does not take the pointer, selects it and opens
+  // its element menu, and its press does not put a caret into a text under the line
+  const lineOf = (ev: MouseEvent) => (app.state === 'loaded' && ev.target instanceof Element && onCanvas(ev.target, app, { x: ev.clientX, y: ev.clientY }) && !document.documentElement.classList.contains('beeson-drawing-line') ? lineAt(app, ev.clientX, ev.clientY) : null);
+  window.addEventListener('mousedown', (ev) => {
+    if ((ev.button === 2 || (ev.ctrlKey && app.platform === 'mac')) && lineOf(ev)) ev.preventDefault();
+  }, true);
+  window.addEventListener('contextmenu', (ev) => {
+    const svg = lineOf(ev);
+    if (!svg || ev.altKey) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (!app.selection.has(svg)) app.selection.set('elements', [svg]);
+    openContextMenu(app, 'element', svg, { x: ev.clientX, y: ev.clientY });
+  }, true);
   document.addEventListener('contextmenu', (ev) => {
     const place = placeOf(ev.target instanceof Element ? ev.target : null);
     if (!place) return;

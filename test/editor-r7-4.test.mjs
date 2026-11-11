@@ -211,12 +211,14 @@ for (const platform of PLATFORMS) {
     const outdented = await render(page);
     assert.notEqual(outdented, page.source, `${KEY[platform].outdent} did not outdent the item`);
     await roundTrip(page, outdented);
-    // the List submenu of Format > Text shows the bracket keys, Keynote's keys of the two items
+    // the List submenu of Format > Text shows the bracket keys, Keynote's keys of the two items, on
+    // a Mac, and elsewhere Tab and Shift+Tab, since ] and [ are typed with AltGr on some layouts
+    const shown = platform === 'mac' ? KEY.mac : { indent: 'Tab', outdent: 'Shift+Tab' };
     await caretIn(page, '.reveal section.present > ul > li:nth-child(1)', 'A fir');
     await openPath(page, ['Format', 'Text']);
     const items = await lastMenu(page);
-    assert.deepEqual(items.find((i) => i[0] === 'Increase Indent Level')?.[1], KEY[platform].indent);
-    assert.deepEqual(items.find((i) => i[0] === 'Decrease Indent Level')?.[1], KEY[platform].outdent);
+    assert.deepEqual(items.find((i) => i[0] === 'Increase Indent Level')?.[1], shown.indent);
+    assert.deepEqual(items.find((i) => i[0] === 'Decrease Indent Level')?.[1], shown.outdent);
     await press(page, 'Escape');
     assert.deepEqual(errors(page), []);
   });
@@ -434,7 +436,7 @@ for (const platform of PLATFORMS) {
     const items = await lastMenu(page);
     assert.deepEqual(items.filter((i) => ['Paragraphs', 'Dashes', 'Numbers'].includes(i[0])).map((i) => [i[0], i[2]]), [['Paragraphs', false], ['Dashes', false], ['Numbers', true]]);
     await choose(page, 'Dashes');
-    assert.equal(await undoLabel(page), 'Undo Dashes');
+    assert.equal(await undoLabel(page), 'Undo List Style');
     assert.equal((await state(page, 'text.list.ul')).checked, true);
     const listed = '<aside class="notes"><ul><li>Notes of a content slide.</li></ul></aside>';
     await roundTrip(page, page.source.replace(notes, listed));

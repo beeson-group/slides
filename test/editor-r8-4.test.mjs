@@ -283,7 +283,7 @@ for (const platform of PLATFORMS) {
 // URL parameter edit-browser, or else in the headless Chrome of the tests
 const LISTED = {
   mac: { chrome: { Lock: '⌘L', Unlock: '⌥⌘L', Rulers: '⌘R' }, safari: { Lock: '⌃⌘L', Unlock: '⌃⌥⌘L', Rulers: '⌃⌘R' } },
-  other: { chrome: { Lock: 'Ctrl+L', Unlock: 'Ctrl+Shift+L', Rulers: '' }, safari: { Lock: 'Ctrl+L', Unlock: 'Ctrl+Shift+L', Rulers: '' } },
+  other: { chrome: { Lock: 'Ctrl+L', Unlock: 'Ctrl+Shift+L', Rulers: 'Alt+Shift+R' }, safari: { Lock: 'Ctrl+L', Unlock: 'Ctrl+Shift+L', Rulers: 'Alt+Shift+R' } },
 };
 
 // finding 8: Lock was listed with the fallback of Safari, Ctrl+Cmd+L, in a browser that passes the
@@ -479,8 +479,8 @@ const shellBoxes = (page) => page.evaluate(`(() => {
 
 // finding 4: at a window width of 760 px the canvas was 258 px wide, between the navigator and the
 // inspector. the canvas is at least half of the window down to 760 px: the navigator is narrowed
-// to its smallest width first, and then the inspector is drawn over the canvas as a sheet, which
-// the Format button of the toolbar opens and closes
+// to its smallest width first, and then hidden while the inspector is open, which stays docked
+// beside the canvas and is opened and closed by the Format button of the toolbar
 for (const platform of PLATFORMS) {
   test(`the canvas is at least half of a window of 1440, 1024, 900, and 760 px (${platform})`, async (t) => {
     const narrow = [];
@@ -491,26 +491,25 @@ for (const platform of PLATFORMS) {
       const b = await shellBoxes(page);
       assert.ok(b.inspector, `the Format tab is not shown at ${width} px`);
       if (b.canvas.width < width / 2) {
-        narrow.push(`the canvas is ${Math.round(b.canvas.width)} px wide in a window of ${width} px, beside a navigator of ${Math.round(b.nav.width)} px`);
+        narrow.push(`the canvas is ${Math.round(b.canvas.width)} px wide in a window of ${width} px, beside a navigator of ${Math.round(b.nav?.width ?? 0)} px`);
         await page.close();
         continue;
       }
-      const over = b.inspector.left < b.canvas.right - 1;
-      if (over) assert.ok(Math.abs(b.nav.width - 140) <= 1, `the inspector is drawn over the canvas at ${width} px before the navigator is at its smallest width of 140 px`);
-      if (width >= 1024) assert.ok(!over && Math.abs(b.nav.width - 200) <= 1, `the navigator or the inspector is changed at ${width} px`);
+      assert.ok(b.inspector.left >= b.canvas.right - 1, `the inspector is drawn over the canvas at ${width} px`);
+      if (width >= 1024) assert.ok(Math.abs(b.nav.width - 200) <= 1, `the navigator is changed at ${width} px`);
       if (width === 760) {
-        assert.ok(over, 'the inspector is not drawn over the canvas at 760 px');
+        assert.equal(b.nav, null, 'the navigator is shown beside the inspector at 760 px');
         assert.ok(b.format, 'the Format button is not in the toolbar at 760 px');
         await click(page, { x: (b.format.left + b.format.right) / 2, y: (b.format.top + b.format.bottom) / 2 });
         await sleep(150);
         await frames(page);
         const closed = await shellBoxes(page);
-        assert.equal(closed.inspector, null, 'the Format button does not close the sheet');
-        assert.ok(Math.abs(closed.canvas.width - b.canvas.width) <= 1, 'the canvas changes width when the sheet is closed');
+        assert.equal(closed.inspector, null, 'the Format button does not close the inspector');
+        assert.ok(closed.nav && Math.abs(closed.nav.width - 140) <= 1, 'the navigator is not shown at its smallest width once the inspector is closed');
         await click(page, { x: (b.format.left + b.format.right) / 2, y: (b.format.top + b.format.bottom) / 2 });
         await sleep(150);
         await frames(page);
-        assert.ok((await shellBoxes(page)).inspector, 'the Format button does not open the sheet');
+        assert.ok((await shellBoxes(page)).inspector, 'the Format button does not open the inspector');
       }
       assert.deepEqual(errors(page), []);
       await page.close();

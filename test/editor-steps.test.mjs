@@ -253,7 +253,7 @@ for (const platform of PLATFORMS) {
     await page.waitFor(`!document.documentElement.classList.contains('beeson-previewing')`, 8000);
     assert.deepEqual(await layers(), ['Up to step 2', '*From step 3']);
     assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-pv-off, .beeson-pv-dim').length`), 0);
-    assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-side .head .play').textContent`), 'Preview');
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-side .head .play').textContent`), 'Preview Steps');
 
     // Esc stops a preview, which also ends on the last layer
     await page.evaluate(`[...document.querySelectorAll('.beeson-layers button')][0].click()`);

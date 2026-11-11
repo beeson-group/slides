@@ -4,9 +4,9 @@
 // split button. the commands of a group that name the same split are its variants, e.g. Image…,
 // Video…, and QR Code under Media, as the Pictures button of PowerPoint: the main part runs the
 // first of them, and its arrow lists them with the commands of the submenu of that name of the
-// menu of the first. below a window width of 1100 px
-// the labels are hidden and kept as the text of the buttons, and below 820 px the groups after
-// Present are put into a menu ». the toolbar has one tab stop, and the arrow keys move in it. the
+// menu of the first. while the toolbar is wider than the window, its last groups are put into a
+// menu » at its right end, as in Keynote, first those after Present and then those before it.
+// the labels are hidden only while the toolbar does not fit with them. the toolbar has one tab stop, and the arrow keys move in it. the
 // View and Zoom popups at its left are as in Keynote: View with the views of the slides and the
 // panes, and Zoom with Fit, Actual Size, Zoom to Selection, and the levels, showing the zoom on its
 // face. the items of the toolbar and whether it shows icons, labels, or both are set in the sheet
@@ -14,13 +14,12 @@
 // each deck, never in the file
 
 import type { App } from '../app.ts';
-import type { Command, Group } from '../commands.ts';
+import { OUTSIDE_DIALOGS, type Command, type Group } from '../commands.ts';
 import { injectStyle, make, store, stored, wire } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { closeMenus, commandKeys, menuItems, openMenu, splitButton, type MenuItem } from '../ui/menu.ts';
 import { ZOOMS } from './canvas.ts';
 
-const NARROW = 820;
 const POPUPS = new Set(['toolbar.view', 'toolbar.zoom']);
 const percent = (z: number) => `${Math.round(z * 100)}%`;
 
@@ -77,6 +76,7 @@ function glyph(face: string | string[]): SVGSVGElement {
 
 const CSS = `
 .beeson-edit-top { display: flex; align-items: center; gap: 2px; height: 52px; padding: 0 10px; box-sizing: border-box; font: 11px/1.2 var(--ed-font); color: var(--ed-text); user-select: none; -webkit-user-select: none; }
+html.beeson-no-toolbar .beeson-edit-top { display: none; }
 .beeson-edit-top .group { display: flex; align-items: center; gap: 2px; }
 .beeson-edit-top .group + .group::before { content: ''; align-self: center; width: 1px; height: 28px; margin: 0 6px; background: var(--ed-line); }
 .beeson-edit-top .group.right { margin-left: auto; }
@@ -96,9 +96,8 @@ const CSS = `
 .beeson-edit-split .tb { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .beeson-edit-split .more { width: 16px; height: 44px; padding: 0; border: 0; border-radius: 0 6px 6px 0; background: transparent; color: var(--ed-muted); cursor: default; }
 .beeson-edit-split .more:hover, .beeson-edit-split .more[aria-expanded="true"] { background: var(--ed-hover); }
-@media (max-width: 1099px) { .beeson-edit-top .tb .label { display: none; } .beeson-edit-top .tb { min-width: 36px; } }
-.beeson-edit-top.show-icon .tb .label { display: none; }
-.beeson-edit-top.show-icon .tb { min-width: 36px; }
+.beeson-edit-top:is(.show-icon, .compact:not(.show-text)) .tb .label { display: none; }
+.beeson-edit-top:is(.show-icon, .compact:not(.show-text)) .tb { min-width: 36px; }
 .beeson-edit-top.show-text .tb > .beeson-icon { display: none; }
 .beeson-edit-top.show-text .tb .label { display: inline; font-size: 12px; }
 .beeson-edit-top.customizing .tb { cursor: grab; }
@@ -113,6 +112,7 @@ const CSS = `
 .beeson-edit-customize .item { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 6px 2px; border-radius: 8px; text-align: center; font-size: 11px; color: var(--ed-muted); cursor: grab; }
 .beeson-edit-customize .item .well { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--ed-hover); color: var(--ed-text); }
 .beeson-edit-customize .item:hover .well { background: var(--ed-pressed); }
+.beeson-edit-customize .item[aria-disabled="true"] { opacity: 0.4; cursor: default; }
 .beeson-edit-customize .item:focus-visible, .beeson-edit-customize .default:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: 1px; }
 .beeson-edit-customize .default { display: flex; align-items: center; gap: 2px; padding: 6px 8px; margin-bottom: 12px; border: 1px solid var(--ed-line); border-radius: 8px; font-size: 10px; color: var(--ed-muted); overflow: hidden; cursor: grab; }
 .beeson-edit-customize .default .mini { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 40px; }
@@ -145,7 +145,6 @@ export function install(app: App): void {
   top.setAttribute('aria-label', 'Toolbar');
   let shown: Shown[] = [];
   let signature = '';
-  let narrow = innerWidth < NARROW;
   let late: { commands: Command[] }[] = [];
   // the layout kept for this deck, with null for the default set
   let kept: string[] | null = null;
@@ -166,15 +165,15 @@ export function install(app: App): void {
   more.append(icon('more'), make('span', 'label', 'More'));
   const fail = (e: unknown) => app.fail(e);
 
-  const zoomText = () => (app.stage?.zoom == null ? 'Fit' : percent(app.stage.zoom));
+  const zoomText = () => percent(app.stage?.zoom ?? app.stage?.fitScale() ?? 1);
   const ids = (list: string[]): MenuItem[] => list.filter((id) => app.commands.get(id)).map((id) => ({ command: id }));
   const popupItems = (id: string): MenuItem[] => {
     if (id === 'toolbar.view') {
-      return [...ids(['view.navigator', 'view.slideOnly', 'view.outline', 'view.lightTable']), { rule: true }, ...ids(['shell.format', 'view.steps', 'view.notes']), { rule: true }, ...ids(['view.rulers', 'view.guides', 'view.grid'])];
+      return [...ids(['view.navigator', 'view.slideOnly', 'view.lightTable', 'view.outline']), { rule: true }, ...ids(['shell.format', 'view.steps', 'view.notes']), { rule: true }, ...ids(['view.rulers', 'view.guides', 'view.grid'])];
     }
     const zoom = app.stage.zoom;
     return [
-      { label: 'Fit', checked: zoom === null, run: () => app.stage.setZoom(null) },
+      { label: 'Fit Slide', checked: zoom === null, run: () => app.stage.setZoom(null) },
       ...ids(['zoom.actual', 'zoom.selection']),
       { rule: true },
       ...ZOOMS.map((z): MenuItem => ({ label: percent(z), checked: zoom !== null && Math.abs(zoom - z) < 0.005, run: () => app.stage.setZoom(z) })),
@@ -248,7 +247,7 @@ export function install(app: App): void {
     return list[0] === c ? list : [c];
   };
 
-  const signatureOf = (groups: Group[]) => JSON.stringify([innerWidth < NARROW, customizing, show, layout(groups), groups.map((g) => [g.group, g.commands.map((c) => c.id)])]);
+  const signatureOf = (groups: Group[]) => JSON.stringify([customizing, show, layout(groups), groups.map((g) => [g.group, g.commands.map((c) => c.id)])]);
 
   function render(): void {
     const groups = app.commands.forToolbar();
@@ -258,8 +257,9 @@ export function install(app: App): void {
     late = [];
     top.classList.toggle('customizing', customizing);
     for (const [v] of SHOWS) top.classList.toggle(`show-${v}`, v === show);
-    const parts: HTMLElement[] = [];
     if (customizing) {
+      top.classList.remove('compact');
+      const parts: HTMLElement[] = [];
       // while the sheet is open, every item is drawn by itself, to be dragged
       for (const [i, id] of list.entries()) {
         let el: HTMLElement;
@@ -288,46 +288,72 @@ export function install(app: App): void {
       else boxes[boxes.length - 1].commands.push(app.commands.get(id)!);
     }
     const spaced = boxes.findIndex((b) => b.right);
-    // below NARROW the groups after the space go into the menu More, apart from the group of
-    // Format, which opens and closes the inspector drawn over the canvas as a sheet in a narrow
-    // window, and is put after More
-    const kept: HTMLElement[] = [];
-    let right = false;
-    for (const [i, box] of boxes.entries()) {
-      right ||= box.right;
-      if (!box.commands.length) continue;
-      const fold = narrow && spaced >= 0 && i >= spaced;
-      if (fold && !box.commands.some((c) => c.id === 'shell.format')) {
-        late.push(box);
-        continue;
+    // the groups that may be folded into », from the right: those after the space, then those
+    // before it but the first. the group of Format, which opens and closes the inspector, stays,
+    // and the labels are hidden only where the toolbar does not fit with every group folded
+    const filled = boxes.map((b, i) => i).filter((i) => boxes[i].commands.length && !boxes[i].commands.some((c) => c.id === 'shell.format'));
+    const after = filled.filter((i) => spaced >= 0 && i >= spaced).reverse();
+    const before = filled.filter((i) => !after.includes(i)).slice(1).reverse();
+    const draw = (folded: Set<number>) => {
+      shown = [];
+      late = [];
+      const parts: HTMLElement[] = [];
+      const kept: HTMLElement[] = [];
+      let right = false;
+      for (const [i, box] of boxes.entries()) {
+        right ||= box.right;
+        if (!box.commands.length) continue;
+        if (folded.has(i)) {
+          late.push(box);
+          continue;
+        }
+        const el = make('div', 'group');
+        el.dataset.group = box.commands[0].toolbar?.group ?? 'custom';
+        if (right) el.classList.add('right');
+        right = false;
+        for (const c of box.commands) {
+          const variants = variantsOf(c, groups);
+          const b = button(c);
+          shown.push({ c, el: b, variants });
+          if (c.toolbar?.split) el.append(splitButton(app, b, () => splitItems(c, variants), `${toolbarLabel(app, c)} options`));
+          else el.append(b);
+        }
+        // the group of Format after a folded group is put after »
+        (late.length && box.commands.some((c) => c.id === 'shell.format') ? kept : parts).push(el);
       }
-      const el = make('div', 'group');
-      el.dataset.group = box.commands[0].toolbar?.group ?? 'custom';
-      if (right && !fold) el.classList.add('right');
-      if (!fold) right = false;
-      for (const c of box.commands) {
-        const variants = variantsOf(c, groups);
-        const b = button(c);
-        shown.push({ c, el: b, variants });
-        if (c.toolbar?.split) el.append(splitButton(app, b, () => splitItems(c, variants), `${toolbarLabel(app, c)} options`));
-        else el.append(b);
+      if (late.length) {
+        const box = make('div', 'group');
+        if (!parts.some((p) => p.classList.contains('right'))) box.classList.add('right');
+        kept.forEach((k) => k.classList.remove('right'));
+        box.append(more);
+        parts.push(box);
       }
-      (fold ? kept : parts).push(el);
+      parts.push(...kept);
+      top.replaceChildren(...parts);
+    };
+    const over = () => top.isConnected && top.scrollWidth > top.clientWidth + 0.5;
+    top.classList.remove('compact');
+    draw(new Set());
+    const fold = (order: number[]) => {
+      const folded = new Set<number>();
+      for (const i of order) {
+        if (!over()) return;
+        folded.add(i);
+        draw(folded);
+      }
+    };
+    fold([...after, ...before]);
+    if (over()) {
+      top.classList.add('compact');
+      draw(new Set());
+      fold([...after, ...before]);
     }
-    if (late.length) {
-      const box = make('div', 'group right');
-      box.append(more);
-      parts.push(box);
-    } else kept[0]?.classList.add('right');
-    parts.push(...kept);
-    top.replaceChildren(...parts);
     update();
   }
 
   // the state of each button, and the one tab stop on the first button that can be pressed
   function update(): void {
     if (signatureOf(app.commands.forToolbar()) !== signature) {
-      narrow = innerWidth < NARROW;
       render();
       return;
     }
@@ -430,6 +456,18 @@ export function install(app: App): void {
     store(storeKey(), kept || show !== 'both' ? JSON.stringify({ items: kept, show }) : null);
     showButton.textContent = SHOWS.find(([v]) => v === show)![1];
     render();
+    dim();
+  };
+  // an item that the toolbar holds is dimmed, as in Keynote, since a command is on the toolbar once
+  const dim = () => {
+    const list = layout();
+    for (const el of palette.querySelectorAll<HTMLElement>('.item')) {
+      const id = el.dataset.item!;
+      const held = !isMark(id) && list.includes(id);
+      if (held) el.setAttribute('aria-disabled', 'true');
+      else el.removeAttribute('aria-disabled');
+      el.title = held ? `${nameOf(id)} is in the toolbar` : `Drag ${nameOf(id)} into the toolbar, or press Return to add it`;
+    }
   };
   const isMark = (id: string) => id === SEPARATOR || id === SPACE;
   const nameOf = (id: string) => (isMark(id) ? MARKS[id].label : toolbarLabel(app, app.commands.get(id)!));
@@ -450,9 +488,9 @@ export function install(app: App): void {
       el.dataset.item = id;
       el.tabIndex = 0;
       el.setAttribute('role', 'button');
-      el.title = `Drag ${nameOf(id)} into the toolbar, or press Return to add it`;
       return el;
     }));
+    dim();
     defaultRow.replaceChildren(...defaults(app.commands.forToolbar()).map((id) => {
       if (isMark(id)) return make('span', `mini ${id === SEPARATOR ? 'sep' : 'space'}`);
       const m = make('span', 'mini');
@@ -489,7 +527,34 @@ export function install(app: App): void {
     else if (sheet.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
     back = null;
   }
-  app.commands.define({ id: 'view.customizeToolbar', label: 'Customize Toolbar…', menu: { bar: 'View', group: 'toolbar', order: 90 }, run: () => (customizing ? closeSheet() : openSheet()) });
+  // Show Toolbar and Hide Toolbar of the View menu of Keynote, with its key ⌥⌘T, and elsewhere
+  // with Ctrl+F1, the key of the ribbon of PowerPoint for Windows. the choice is kept per browser
+  const hidden = () => document.documentElement.classList.contains('beeson-no-toolbar');
+  const setHidden = (on: boolean) => {
+    if (on && top.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
+    document.documentElement.classList.toggle('beeson-no-toolbar', on);
+    store('beeson-toolbar-hidden', on ? '1' : null);
+    app.relayout();
+  };
+  if (stored('beeson-toolbar-hidden') === '1') document.documentElement.classList.add('beeson-no-toolbar');
+  app.commands.define({
+    id: 'view.toolbar',
+    label: () => (hidden() ? 'Show Toolbar' : 'Hide Toolbar'),
+    keys: { mac: ['Alt+Mod+T'], other: ['Ctrl+F1'] },
+    in: OUTSIDE_DIALOGS,
+    menu: { bar: 'View', group: 'toolbar', order: 89 },
+    run: () => setHidden(!hidden()),
+  });
+  app.commands.define({
+    id: 'view.customizeToolbar',
+    label: 'Customize Toolbar…',
+    menu: { bar: 'View', group: 'toolbar', order: 90 },
+    run: () => {
+      if (hidden()) setHidden(false);
+      if (customizing) closeSheet();
+      else openSheet();
+    },
+  });
 
   // a drag adds an item of the sheet, moves an item of the toolbar or takes it off when it is
   // dropped outside, or puts the default set back. it starts once the pointer moves 4 px
@@ -608,7 +673,7 @@ export function install(app: App): void {
   };
   const pressed = (ev: KeyboardEvent) => ev.key === 'Enter' || ev.key === ' ';
   palette.addEventListener('pointerdown', (ev) => {
-    const el = (ev.target as Element).closest<HTMLElement>('.item');
+    const el = (ev.target as Element).closest<HTMLElement>('.item:not([aria-disabled])');
     if (el) begin(ev, 'add', el.dataset.item!, -1);
   });
   palette.addEventListener('keydown', (ev) => {
@@ -644,7 +709,13 @@ export function install(app: App): void {
   app.listen('history', update);
   app.listen('report', update);
   app.onRefresh(['content', 'selection', 'slide', 'structure', 'layout'], update);
-  window.addEventListener('resize', update);
+  // the toolbar is laid out again when its width changes, e.g. with the window
+  let width = 0;
+  new ResizeObserver(() => {
+    if (top.clientWidth === width) return;
+    width = top.clientWidth;
+    if (!customizing) render();
+  }).observe(top);
   // a mode that ends without a change of the file, e.g. the drawing of a line left with Esc, is
   // shown on its switch after the key or the release that ends it
   for (const type of ['keyup', 'pointerup']) window.addEventListener(type, () => requestAnimationFrame(update), true);

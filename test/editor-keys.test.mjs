@@ -246,7 +246,6 @@ for (const platform of PLATFORMS) {
       window.BeesonEditor.attach({ name: 'deck.html', createWritable: async () => ({ write: async (text) => window.__written.push(text), close: async () => {} }) });
       window.showSaveFilePicker = async () => { window.__picker = 'save'; throw new DOMException('cancelled', 'AbortError'); };
       window.showOpenFilePicker = async () => { window.__picker = 'open'; throw new DOMException('cancelled', 'AbortError'); };
-      window.open = (url) => { window.__opened = url; return null; };
     })()`);
     await page.evaluate('Reveal.slide(2)');
     await click(page, '.reveal section.present > h2');
@@ -261,16 +260,23 @@ for (const platform of PLATFORMS) {
     await blur(page);
     await press(page, 'Mod+O');
     await page.waitFor(`window.__picker === 'open'`);
-    const hash = await page.evaluate('location.hash');
-    await press(page, 'Mod+Enter');
-    await page.waitFor('!!window.__opened');
-    assert.ok((await page.evaluate('window.__opened')).endsWith(`?still&edit-platform=${platform}#/2`));
-    await page.evaluate('window.__opened = null');
-    await press(page, 'Mod+Shift+Enter');
-    await page.waitFor('!!window.__opened');
-    assert.ok((await page.evaluate('window.__opened')).endsWith(`?still&edit-platform=${platform}`));
-    assert.equal(await page.evaluate('location.hash'), hash);
-    assert.equal(await slide(page), 2);
+    // Present plays the deck in a frame over the editor, and Esc in the show returns to the editor.
+    // the frame is of another origin on file:, hence the show is ready at the event posted by reveal.js
+    const SHOW = `document.querySelector('.beeson-edit-show iframe')`;
+    await page.evaluate(`window.addEventListener('message', (e) => { try { if (JSON.parse(e.data).eventName === 'ready') window.__ready = true; } catch {} })`);
+    const present = async (key, end) => {
+      await page.evaluate('window.__ready = false');
+      await press(page, key);
+      await page.waitFor(`!!${SHOW}?.getAttribute('src')`);
+      assert.ok((await page.evaluate(`${SHOW}.src`)).endsWith(end));
+      await page.waitFor('window.__ready', 30000);
+      await press(page, 'Escape');
+      await page.waitFor(`!document.querySelector('.beeson-edit-show')`);
+    };
+    await present('Mod+Enter', `?still&edit-platform=${platform}&postMessageEvents=true&from-editor#/2`);
+    await present('Mod+Shift+Enter', `?still&edit-platform=${platform}&postMessageEvents=true&from-editor`);
+    // the editor is at the slide shown last, the first slide of the show from the start
+    assert.equal(await slide(page), 0);
     assert.deepEqual(page.errors, []);
   });
 }

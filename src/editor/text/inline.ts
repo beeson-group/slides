@@ -5,7 +5,8 @@
 // after, as typing is, and the command around it makes it one entry of the history
 
 import type { App } from '../app.ts';
-import { canSetList, listKind, paragraphStyle, selectedBlocks, setList, setStyle, styleOf, textTarget, type ListKind, type ParagraphStyle, type Target } from './blocks.ts';
+import * as flow from './flow.ts';
+import { canSetList, listKind, offsetIn, paragraphStyle, selectedBlocks, selectIn, setList, setStyle, styleOf, textTarget, type ListKind, type ParagraphStyle, type Target } from './blocks.ts';
 
 export type Match = (el: Element) => boolean;
 
@@ -37,13 +38,16 @@ const BLOCKISH = 'ul, ol, li, p, div, table, pre, h1, h2, h3, h4, h5, h6, mjx-co
 
 const elementOf = (n: Node): Element | null => (n instanceof Element ? n : n.parentElement);
 
-// the range around the word at a collapsed caret, or the range itself
-function wordRange(range: Range): Range {
+// the range around the word at a collapsed caret strictly inside it, or the range itself. a caret
+// at the edge of a word is left to the typing style of carry.ts, as in Word and PowerPoint, unless
+// edge is set, as for a link and the Format Painter, which take the word at the caret
+function wordRange(range: Range, edge: boolean): Range {
   if (!range.collapsed || !(range.startContainer instanceof Text)) return range;
   const text = range.startContainer;
   const word = /[\p{L}\p{N}_'’-]/u;
   let start = range.startOffset;
   let end = start;
+  if (!edge && (!word.test(text.data[start - 1] ?? '') || !word.test(text.data[end] ?? ''))) return range;
   while (start > 0 && word.test(text.data[start - 1])) start--;
   while (end < text.length && word.test(text.data[end])) end++;
   const r = document.createRange();
@@ -54,11 +58,13 @@ function wordRange(range: Range): Range {
 
 // the ranges that a format is set on: the text of the window or the word at its caret, and else
 // the whole text of each selected block. notes take only bold and italic
-export function inlineTargets(app: App, notes = false): Target[] {
+export function inlineTargets(app: App, notes = false, edge = false): Target[] {
+  const spanned = flow.spanTargets(app);
+  if (spanned.length) return spanned;
   const t = textTarget(app);
   if (t) {
     if (!notes && t.host.matches('aside.notes')) return [];
-    const range = wordRange(t.range);
+    const range = wordRange(t.range, edge);
     return range.collapsed ? [] : [{ host: t.host, range }];
   }
   // an item takes its own text, without its nested list, which is a block of its own
@@ -168,14 +174,25 @@ function prune(host: Element): void {
 }
 
 // the change of a format on each target, recorded in the history as the content of its block
-// before and after. a target of the window keeps the formatted text selected
+// before and after. a target of the window keeps the formatted text selected, or the caret where it
+// was, so that the typing goes on at the caret
 export function edit(app: App, targets: Target[], change: (host: Element, range: Range) => Node[]): void {
-  const fromWindow = textTarget(app) !== null;
+  const t = textTarget(app);
+  const spanning = flow.active();
+  const caret = t?.range.collapsed ? offsetIn(t.host, t.range.startContainer, t.range.startOffset) : null;
+  // an undo and a redo select the text again, as History.selecting does an element
+  const kept = app.history.keep(() => {
+    const p = flow.places(app);
+    return p && (() => flow.select(app, ...p));
+  });
   for (const { host, range } of targets) {
     app.history.beforeTyping(host);
     const nodes = change(host, range);
     prune(host);
-    if (fromWindow && nodes.length) {
+    if (spanning) {
+      // the span keeps its places, which a format does not move
+    } else if (caret !== null && host === t!.host) selectIn(host, caret);
+    else if (t && nodes.length) {
       const connected = nodes.filter((n) => n.isConnected);
       (host as HTMLElement).focus({ preventScroll: true });
       const r = document.createRange();
@@ -190,6 +207,8 @@ export function edit(app: App, targets: Target[], change: (host: Element, range:
     host.normalize();
     app.history.afterTyping(host);
   }
+  if (spanning) flow.repaint(app);
+  kept();
   app.markDirty();
   app.invalidate('content');
 }
@@ -257,7 +276,7 @@ function linkTargets(app: App): Target[] {
       return [{ host: t.host, range }];
     }
   }
-  return inlineTargets(app);
+  return inlineTargets(app, false, true);
 }
 
 export const canLink = (app: App): boolean => linkTargets(app).length > 0;
@@ -445,13 +464,13 @@ function paint(host: Element, range: Range, style: TextStyle): Node[] {
   return nodes.filter((n) => n.isConnected);
 }
 
-export const canPaint = (app: App): boolean => inlineTargets(app).length > 0;
+export const canPaint = (app: App): boolean => inlineTargets(app, false, true).length > 0;
 
 // style set on the words of the selection, as Paste Style and the Format Painter set it. where the
 // whole text of a block is selected, the kind of list is set too in a text, as the list commands are,
 // then the paragraph style. a list item hence becomes a paragraph after the style of a paragraph
 export async function pasteStyle(app: App, style: TextStyle): Promise<void> {
-  const targets = inlineTargets(app);
+  const targets = inlineTargets(app, false, true);
   if (!targets.length) return;
   const t = textTarget(app);
   const whole = !t || covers(t.host, t.range);

@@ -87,19 +87,19 @@ function caretInto(slide: Element): void {
   sel?.addRange(range);
 }
 
-async function newSlide(app: App, layout: Layout): Promise<Element> {
-  const { before } = placeAfter(app);
+async function newSlide(app: App, layout: Layout, before = placeAfter(app).before): Promise<Element> {
   const slide = await docOf(app).insertSlide(layout, before);
   navOf(app).select([slide], slide);
   caretInto(slide);
   return slide;
 }
 
-// the layout of the slide that New Slide adds: the layout of a content slide, or content
+// the layout of the slide that New Slide adds: the layout of a content, figure, or split slide,
+// as PowerPoint repeats the layout of the slide before, and content after a title, section, or
+// closing slide
 function nextLayout(app: App): Layout {
   const s = navOf(app).selected().at(-1);
-  if (!s || s.matches('.title, .section, .closing, .figure, .split')) return 'content';
-  return s.classList.contains('narrow') ? 'narrow' : s.classList.contains('wide') ? 'wide' : 'content';
+  return (['narrow', 'wide', 'figure', 'split'] as Layout[]).find((l) => s?.classList.contains(l)) ?? 'content';
 }
 
 // the slides put into the order of desired, one move per slide out of place
@@ -313,6 +313,10 @@ export function install(app: App): void {
   injectStyle('slide', CSS);
   const c = app.commands;
   const inNav = () => app.region() === 'navigator';
+  // Move Slide Up and Down are dimmed while the slide has the focus, where Alt with an arrow does
+  // not move the slide, as it adds a row to a table there. a menu opened with the pointer leaves
+  // the focus where it was
+  const onSlide = (a: App) => a.region() === 'canvas' && !document.activeElement?.closest('.beeson-edit-menu');
   const slideMenu = (order: number, group = 'slide') => ({ bar: 'Slide', group, order });
   const defs: Command[] = [
     {
@@ -324,6 +328,22 @@ export function install(app: App): void {
       enabled: ready,
       undoable: true,
       run: async (a) => void (await newSlide(a, nextLayout(a))),
+    },
+    {
+      // Add Section of the menus of the navigator of PowerPoint, as Insert > New Slide > Section:
+      // a section slide after the slide under the pointer or the selected slides, or at the end
+      // from the empty part of the navigator
+      id: 'slide.newSection',
+      label: 'New Section',
+      menu: slideMenu(11),
+      context: ['slide', 'navigator'],
+      enabled: ready,
+      undoable: true,
+      run: async (a, arg) => {
+        const { kind, target } = (arg ?? {}) as { kind?: string; target?: Element | null };
+        const after = kind === 'navigator' ? null : target?.isConnected ? target : navOf(a).selected().at(-1);
+        await newSlide(a, 'section', after ? after.nextElementSibling : null);
+      },
     },
     {
       id: 'slide.newAfter',
@@ -352,12 +372,22 @@ export function install(app: App): void {
       }),
     ),
     {
+      // Select All of the Edit menu acts on the elements of the slide, and in the navigator the
+      // same keys select every slide, as in the navigators of Keynote and PowerPoint
+      id: 'slide.selectAll',
+      label: 'Select All Slides',
+      keys: { mac: ['Mod+A'], other: ['Mod+A'] },
+      in: ['navigator'],
+      enabled: (a) => sections(a).length > 0,
+      run: (a) => land(a, sections(a), a.current(), true),
+    },
+    {
       id: 'slide.duplicate',
-      label: 'Duplicate Slide',
+      label: (a) => (targets(a).length > 1 ? 'Duplicate Slides' : 'Duplicate Slide'),
       keys: { mac: ['Mod+D'], other: ['Mod+D'] },
       in: ['navigator'],
       menu: slideMenu(20),
-      context: ['slide'],
+      context: ['slide', 'canvas'],
       enabled: (a) => targets(a).length > 0,
       undoable: true,
       run: async (a) => {
@@ -374,7 +404,7 @@ export function install(app: App): void {
       keys: { mac: ['Backspace', 'Delete'], other: ['Delete', 'Backspace'] },
       in: ['navigator'],
       menu: slideMenu(30),
-      context: ['slide'],
+      context: ['slide', 'canvas'],
       enabled: (a) => targets(a).length > 0 && targets(a).length < sections(a).length,
       undoable: true,
       run: (a) => deleteSlides(a, targets(a), inNav()),
@@ -382,7 +412,7 @@ export function install(app: App): void {
     {
       id: 'slide.hide',
       label: (a) => (targets(a).length && targets(a).every(isHidden) ? 'Show Slide' : 'Hide Slide'),
-      keys: { mac: ['Mod+Shift+H'] },
+      keys: { mac: ['Mod+Shift+H'], other: ['Ctrl+Shift+H'] },
       in: ['navigator', 'canvas'],
       menu: slideMenu(40),
       context: ['slide', 'canvas'],
@@ -402,7 +432,7 @@ export function install(app: App): void {
       in: ['navigator'],
       menu: slideMenu(50, 'move'),
       context: ['slide'],
-      enabled: (a) => canShift(a, true),
+      enabled: (a) => canShift(a, true) && !onSlide(a),
       undoable: true,
       run: async (a) => {
         const t = targets(a);
@@ -417,7 +447,7 @@ export function install(app: App): void {
       in: ['navigator'],
       menu: slideMenu(51, 'move'),
       context: ['slide'],
-      enabled: (a) => canShift(a, false),
+      enabled: (a) => canShift(a, false) && !onSlide(a),
       undoable: true,
       run: async (a) => {
         const t = targets(a);
@@ -496,7 +526,8 @@ export function install(app: App): void {
       },
     },
   ];
-  for (const d of defs) c.define(d);
+  // an undo and a redo of a slide command show and select the slides from before and after it
+  for (const d of defs) c.define(d.undoable ? { ...d, run: (a, arg) => navOf(a).keeping(d.id, () => d.run(a, arg)) } : d);
 
   // the clipboard keys in the navigator act on the slides, through the events that carry the
   // clipboard in every browser

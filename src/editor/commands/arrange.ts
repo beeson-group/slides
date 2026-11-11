@@ -96,7 +96,8 @@ export function commands(): Command[] {
       // Esc on an image selected inside its figure selects the figure, and else clears
       id: 'selection.clear',
       label: 'Deselect',
-      keys: { mac: ['Escape'], other: ['Escape'] },
+      // ⇧⌘A is Deselect All of Keynote
+      keys: { mac: ['Mod+Shift+A', 'Escape'], other: ['Mod+Shift+A', 'Escape'] },
       in: ['canvas'],
       menu: { bar: 'Edit', group: 'select', order: 32 },
       enabled: (app) => app.selection.kind === 'elements' || app.selection.kind === 'text',
@@ -104,7 +105,7 @@ export function commands(): Command[] {
         const only = app.selection.only();
         const up = only?.matches(RESIZABLE) ? containerOf(app, only) : null;
         const a = document.activeElement;
-        if (a instanceof HTMLElement && (app.selection.has(a) || a.classList.contains('beeson-handle'))) a.blur();
+        if (a instanceof HTMLElement && (app.selection.items.some((el) => el.contains(a)) || a.classList.contains('beeson-handle'))) a.blur();
         if (up) app.selection.set('elements', [up]);
         else app.selection.clear();
       },

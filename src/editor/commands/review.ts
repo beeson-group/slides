@@ -11,7 +11,8 @@ import type { App } from '../app.ts';
 import { OUTSIDE_DIALOGS } from '../commands.ts';
 import type { Navigator } from '../navigator/navigator.ts';
 import { Sorter } from '../navigator/sorter.ts';
-import { playTimings, Presenter, useTimings, usingTimings } from '../present.ts';
+import { Presenter, useTimings, usingTimings } from '../present.ts';
+import { presentAt } from './file.ts';
 import { Checker, useHeaderRow } from '../review/accessibility.ts';
 import { install as installAnimate } from '../review/animate.ts';
 import { magicMoveCopy, nextShown, paired, preview, setTransition, transitionOf, type Transition } from '../review/transitions.ts';
@@ -26,46 +27,15 @@ const ready = (app: App): boolean => !!app.pairing?.root;
 const slidesOf = (app: App): Element[] => [...app.slides().querySelectorAll(':scope > section')];
 const targets = (app: App): Element[] => (ready(app) ? navOf(app).selected().filter((s) => paired(app, s)) : []);
 
-// the window of the show that fn opens, if any. window.open is wrapped for the time of the call,
-// and a show that was not opened, e.g. after Cancel on the card of the unsaved changes, is
-// returned as not opened
-async function capture(fn: () => unknown): Promise<{ opened: boolean; win: Window | null }> {
-  const real = window.open;
-  let opened = false;
-  let win: Window | null = null;
-  window.open = (...args: Parameters<typeof window.open>) => {
-    opened = true;
-    win = real.apply(window, args);
-    return win;
-  };
-  try {
-    await fn();
-  } finally {
-    window.open = real;
-  }
-  return { opened, win };
-}
-
-// the show opened through Present or Present from Start, with the window of its tab
-const openShow = (app: App, fromStart: boolean) => capture(() => app.commands.run(fromStart ? 'file.presentStart' : 'file.present'));
-
 export function install(app: App): void {
   const c = app.commands;
   const presenter = new Presenter(app);
   const sorter = new Sorter(app);
   const checker = new Checker(app);
   const play = (order: number) => ({ bar: 'Play', group: 'play', order });
-  // with Use Rehearsed Timings on, the show opened by Present or Present from Start, also under
-  // the presenter view, is moved on after the timings of its slides
   for (const [id, order] of [['file.present', 10], ['file.presentStart', 11]] as const) {
     const command = c.get(id);
-    if (!command) continue;
-    command.menu = play(order);
-    const run = command.run;
-    command.run = async (a, arg) => {
-      const { win } = await capture(() => run(a, arg));
-      if (win && usingTimings()) void playTimings(win);
-    };
+    if (command) command.menu = play(order);
   }
   const showing = () => presenter.isOpen;
 
@@ -77,9 +47,10 @@ export function install(app: App): void {
     menu: play(20),
     enabled: (a) => ready(a) && !showing(),
     run: async (a) => {
+      // the show is played in a tab of its own, which is moved to the screen of the audience
       const from = a.current();
-      const { opened, win } = await openShow(a, false);
-      if (opened) void presenter.open('present', from, win);
+      const shown = await presentAt(a, false, true);
+      if (shown) void presenter.open('present', from, shown.win);
     },
   });
   c.define({
@@ -124,14 +95,15 @@ export function install(app: App): void {
       id: `slide.transition.${t}`,
       label,
       menu: { bar: 'Slide', group: 'transition', order: 60 + i, submenu: 'Transition' },
-      enabled: (a) => targets(a).length > 0 && (t !== 'magic' || targets(a).some((s) => !!nextShown(a, s))),
+      enabled: (a) => targets(a).some((s) => !!nextShown(a, s)),
       checked: (a) => {
         const s = a.current();
-        return !!s && transitionOf(a, s) === t;
+        return !!s && !!nextShown(a, s) && transitionOf(a, s) === t;
       },
       undoable: true,
+      undo: 'Transition',
       run: (a) => {
-        const list = targets(a).filter((s) => t !== 'magic' || nextShown(a, s));
+        const list = targets(a).filter((s) => nextShown(a, s));
         for (const s of list) setTransition(a, s, t);
         a.invalidate('content');
       },
@@ -159,7 +131,10 @@ export function install(app: App): void {
     id: 'slide.previewTransition',
     label: 'Preview Transition',
     menu: { bar: 'Slide', group: 'transition', order: 66 },
-    enabled: (a) => ready(a) && !!a.current(),
+    enabled: (a) => {
+      const s = a.current();
+      return ready(a) && !!s && !!nextShown(a, s);
+    },
     run: (a) => {
       const s = a.current();
       if (s) void preview(a, s).catch((e) => a.fail(e));
@@ -169,7 +144,7 @@ export function install(app: App): void {
   c.define({
     id: 'view.lightTable',
     label: 'Light Table',
-    menu: { bar: 'View', group: 'panes', order: 9 },
+    menu: { bar: 'View', group: 'panes', order: 10.3 },
     enabled: (a) => ready(a),
     checked: () => sorter.shown,
     run: () => sorter.toggle(),

@@ -358,9 +358,17 @@ for (const platform of PLATFORMS) {
     await click(page, cellAt(3, 0));
     await press(page, 'Escape');
     await frames(page);
+    // its frame is on the edges of the cell, on its padding at the right, the top, and the bottom,
+    // hence the box of its text, without the padding, is inside the frame
     const one = await frameInside(page);
-    const cell = await rectOf(page, cellAt(3, 0));
-    assert.ok(inside(cell, one), `the cell at ${js(cell)} is drawn under its frame, whose inside is ${js(one)}`);
+    const text = await page.evaluate(`(() => {
+      const c = document.querySelector(${js(cellAt(3, 0))});
+      const r = c.getBoundingClientRect();
+      const k = r.width / c.offsetWidth;
+      const p = (side) => parseFloat(getComputedStyle(c)['padding' + side]) * k;
+      return { left: r.left + p('Left'), top: r.top + p('Top'), right: r.right - p('Right'), bottom: r.bottom - p('Bottom') };
+    })()`);
+    assert.ok(inside(text, one), `the box of the text of the cell at ${js(text)} is drawn under its frame, whose inside is ${js(one)}`);
     assert.deepEqual(errors(page), []);
   });
 }

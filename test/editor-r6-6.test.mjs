@@ -137,17 +137,16 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// reveal.js fades a slide in by its own data-transition, over the slide left (z-index 11 on
-// section.present in theme/vendor/reveal/reveal.css), hence a Fade set on a slide is played into it
+// as in Keynote, the transition of a slide is played when the show leaves it for the next slide
 for (const platform of PLATFORMS) {
-  test(`the label of Fade says that it is played into the slide on ${platform}`, async () => {
+  test(`the label of Fade says that it is played from the slide into the next slide on ${platform}`, async () => {
     const page = await editor(platform, 3);
     const [title, group] = await page.evaluate(`[
       document.querySelector('.beeson-edit-transition button[data-command="slide.transition.fade"]').title,
       document.querySelector('.beeson-edit-transition .seg').getAttribute('aria-label'),
     ]`);
-    assert.equal(title, 'Fade into this slide from the slide before, the default of the theme');
-    assert.doesNotMatch(group, /next slide/);
+    assert.equal(title, 'Fade from this slide into the next slide, the default of the theme');
+    assert.match(group, /next slide/);
     assert.deepEqual(errors(page), []);
   });
 }

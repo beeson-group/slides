@@ -10,12 +10,21 @@ import type { Command } from '../commands.ts';
 import { CONTAINER, onCanvas } from '../canvas/hit.ts';
 import { overlay, view as frameView } from '../canvas/frames.ts';
 import { openContextMenu } from '../ui/menu.ts';
-import { make } from '../ui/dom.ts';
+import { injectStyle, make } from '../ui/dom.ts';
 import { button, glyph, keepFocus, note, row, section, type Control, type Run } from './controls.ts';
 
 type Written = { azimuth: number; elevation: number; zoom: number; turn: number; zscale: number };
 type Live = { el: HTMLElement; turn(dx: number, dy: number): void; view(): { azimuth: number; elevation: number; zoom: number; written: Written }; configure(): void };
 type Page = { Beeson?: { surfaces?: Live[] } };
+
+// the azimuth and the elevation that a drag in the editor left on a surface and that are not
+// written, which its fields show until Use Current View writes them or an attribute changes, and
+// the fields drawn again at each move of the drag
+const turned = new WeakMap<Element, { azimuth: number; elevation: number }>();
+const followers = new Map<HTMLElement, () => void>();
+const follow = () => {
+  for (const [el, sync] of followers) if (el.isConnected) sync(); else followers.delete(el);
+};
 
 const liveOf = (el: Element | null): Live | null => (el ? ((window as unknown as Page).Beeson?.surfaces?.find((s) => s.el === el) ?? null) : null);
 
@@ -114,6 +123,7 @@ export function commands(): Command[] {
         const live = liveOf(el);
         if (!el || !live) return;
         const v = live.view();
+        turned.delete(el);
         const zoom = clean('zoom', v.zoom);
         writeAll(app, el, {
           'data-azimuth': text(clean('azimuth', v.azimuth)),
@@ -168,10 +178,12 @@ function decimalField(app: App, run: Run, el: HTMLElement | null, field: Field):
   const label = make('label', '', f.label);
   label.htmlFor = input.id;
   wrap.append(box, label);
-  const value = () => {
+  const written = () => {
     const w = liveOf(el)?.view().written;
     return w ? w[field] : null;
   };
+  const drag = () => (el && (field === 'azimuth' || field === 'elevation') ? (turned.get(el)?.[field] ?? null) : null);
+  const value = () => drag() ?? written();
   let shown: number | null = null;
   const show = (v: number | null) => {
     shown = v;
@@ -186,7 +198,7 @@ function decimalField(app: App, run: Run, el: HTMLElement | null, field: Field):
   const flush = () => {
     if (input.disabled) return;
     const v = typed();
-    if (Number.isFinite(v) && clean(field, v) !== shown) commit(v);
+    if (Number.isFinite(v) && clean(field, v) !== (drag() === null ? shown : written())) commit(v);
     else show(shown);
   };
   input.addEventListener('blur', flush);
@@ -212,12 +224,18 @@ function decimalField(app: App, run: Run, el: HTMLElement | null, field: Field):
     const on = !!el?.isConnected && !!liveOf(el);
     input.disabled = up.disabled = down.disabled = !on;
     wrap.classList.toggle('off', !on);
+    const unwritten = drag() !== null && clean(field, drag()!) !== written();
+    wrap.classList.toggle('turned', unwritten);
+    input.title = unwritten ? 'Turned by a drag. Use Current View writes it.' : '';
     if (document.activeElement === input) return;
     show(value());
   };
   sync();
+  followers.set(wrap, sync);
   return { el: wrap, sync, flush };
 }
+
+const followed = (c: Control): Control => (followers.set(c.el, c.sync), c);
 
 export function surfacePane(app: App, run: Run): Control[] {
   const el = surfaceOf(app);
@@ -233,7 +251,7 @@ export function surfacePane(app: App, run: Run): Control[] {
       row([decimalField(app, run, el, 'azimuth'), decimalField(app, run, el, 'elevation')]),
       row([decimalField(app, run, el, 'zoom'), decimalField(app, run, el, 'turn')]),
       row([button(app, run, { command: 'surface.useView', arg: { el }, text: 'Use Current View' }), button(app, run, { command: 'surface.resetView', arg: { el }, text: 'Reset' })]),
-      note(() => 'Drag the surface to turn it, and then use its view. A turn of 0 s keeps it still.'),
+      followed(note(() => (el && turned.has(el) && liveOf(el) ? 'The fields show the view turned by the drag, which Use Current View writes.' : 'Drag the surface to turn it, and then use its view. A turn of 0 s keeps it still.'))),
       note(linked),
     ]),
     // an empty cell beside Z Scale keeps the field at the width of the fields above
@@ -261,6 +279,7 @@ function surfaceAt(app: App, target: Element, x: number, y: number): HTMLElement
 }
 
 export function install(app: App): void {
+  injectStyle('surface-pane', '.beeson-edit-inspector .ed-num.turned input { color: var(--ed-select); }');
   for (const c of commands()) app.commands.define(c);
   // a press on a surface selects it. a drag inside it turns its camera, and a drag from its edge is
   // handed to canvas/drag.ts as a drag of its handle, which moves it with the snapping of the slide
@@ -286,13 +305,21 @@ export function install(app: App): void {
     const live = liveOf(el);
     if (!live) return;
     let x = ev.clientX, y = ev.clientY;
+    // the angles of the camera at the pointer, as the angle of a rotation is shown
     const move = (e: PointerEvent) => {
       live.turn(e.clientX - x, e.clientY - y);
       x = e.clientX;
       y = e.clientY;
+      const v = live.view();
+      const angles = { azimuth: clean('azimuth', v.azimuth), elevation: clean('elevation', v.elevation) };
+      turned.set(el, angles);
+      frameView.readout = { text: `${angles.azimuth}°  ${angles.elevation}°`, x: e.clientX + 14, y: e.clientY + 18, at: 'pointer' };
+      follow();
       app.invalidate('layout');
     };
     const up = () => {
+      frameView.readout = null;
+      app.invalidate('layout');
       window.removeEventListener('pointermove', move, true);
       window.removeEventListener('pointerup', up, true);
       window.removeEventListener('pointercancel', up, true);
@@ -316,7 +343,9 @@ export function install(app: App): void {
     const seen = new Set<Element>();
     for (const r of records) if (r.target instanceof HTMLElement && r.target.matches('.surface') && !seen.has(r.target)) {
       seen.add(r.target);
+      turned.delete(r.target);
       liveOf(r.target)?.configure();
+      follow();
     }
   }).observe(app.slides(), { subtree: true, attributes: true, attributeFilter: Object.values(FIELDS).map((f) => f.attr) });
 }

@@ -11,7 +11,7 @@ import type { Command } from '../commands.ts';
 import { LAYOUTS, sampleText, textStyle, type Layout } from '../model/templates.ts';
 import { childrenIn, eolOf, indentAt, spaceOf, unitsOf } from '../model/units.ts';
 import type { Navigator } from '../navigator/navigator.ts';
-import { drawInto } from '../navigator/thumbs.ts';
+import { drawInto, laidOut } from '../navigator/thumbs.ts';
 import { classesOf, tokenize, type Range, type Token } from '../tokens.ts';
 import { injectStyle } from '../ui/dom.ts';
 import { install as installOrder } from './order.ts';
@@ -19,17 +19,23 @@ import { install as installOrder } from './order.ts';
 export const LABELS: Record<Layout, string> = { title: 'Title', section: 'Section', content: 'Content', narrow: 'Content, Narrow', wide: 'Content, Wide', figure: 'Figure', split: 'Split', closing: 'Closing' };
 
 const LAYOUT_CLASSES = ['title', 'section', 'closing', 'figure', 'split', 'narrow', 'wide'];
-const WRAPPER_CLASSES = ['panel', 'block', 'sec'];
+const WRAPPER_CLASSES = ['panel', 'block', 'sec', 'caption'];
 
 export type Kind = 'heading' | 'words' | 'caption' | 'foot' | 'visual' | 'other';
 
-// the wrapper of each layout that has one, and the kinds of parts that it takes
+// the wrapper of each layout that has one, and the kinds of parts that it takes. the words of a
+// figure slide are its caption at the lower left, since the plate takes the rest of the slide
 const WRAP: Partial<Record<Layout, { cls: string; takes: Kind[] }>> = {
   title: { cls: 'block', takes: ['heading', 'words', 'caption'] },
   closing: { cls: 'block', takes: ['heading', 'words', 'caption'] },
   section: { cls: 'sec', takes: ['heading', 'words'] },
   split: { cls: 'panel', takes: ['heading', 'words', 'foot'] },
+  figure: { cls: 'caption', takes: ['words'] },
 };
+
+// the empty plate of a figure slide, as a new one has, which is added to a slide without a figure
+// and taken off again at a change to another layout
+const PLATE = '<div class="plate"></div>';
 
 const VISUAL_CLASSES = ['backdrop', 'surface', 'zone', 'plate', 'qr', 'plot'];
 const VISUAL_TAGS = ['figure', 'img', 'video', 'tycho-viewer', 'canvas', 'svg', 'iframe', 'object'];
@@ -70,7 +76,7 @@ export function arrange(kinds: Kind[], layout: Layout): Item[] {
       wrapper.parts.push(i);
     }
   });
-  if (!wrapper.parts.length) out.unshift(wrapper);
+  if (!wrapper.parts.length && w.takes.includes('heading')) out.unshift(wrapper);
   return out;
 }
 
@@ -162,8 +168,12 @@ export function relayout(body: string, layout: Layout, step: string): string {
     return (p.blank ? eol : '') + eol + ind(d) + shift(p.lead + text, p.indent, ind(d));
   };
   let out = openTag(body, open, layoutClasses(classesOf(open), layout));
-  const items = arrange(parts.map((p) => kindOf(p.name, p.classes)), layout);
-  if (!items.length) return out + body.slice(open.end);
+  // an empty element, e.g. a span that is a step of a plot, is not a text of the caption
+  const empty = (p: Part) => /^<([\w-]+)[^>]*>\s*<\/\1\s*>$/.test(p.body);
+  const kinds = parts.map((p) => kindOf(p.name, p.classes)).map((k, i) => (layout === 'figure' && k === 'words' && empty(parts[i]) ? 'other' : k));
+  const items = arrange(kinds, layout).filter((i) => typeof i !== 'number' || layout === 'figure' || parts[i].body !== PLATE);
+  if (layout === 'figure' && !kinds.includes('visual')) out += eol + ind(1) + PLATE;
+  else if (!items.length) return out + body.slice(open.end);
   for (const item of items) {
     if (typeof item === 'number') out += put(item, 1);
     else {
@@ -228,17 +238,31 @@ async function rewrite(app: App, slides: Element[], write: (body: string, slide:
 
 export async function changeLayout(app: App, slides: Element[], layout: Layout): Promise<Element[]> {
   const step = stepOf(app);
-  // the places among the words of each slide of the blocks that the fit of its panel shrank
-  const shrunk = slides.map((s) => (layout === 'split' ? [] : wordsOf(app, s).flatMap((el, i) => (fitted.has(el) && el.classList.contains('small') ? [i] : []))));
-  const out = await rewrite(app, slides, (body) => relayout(body, layout, step), 'layout');
+  const from = slides.map((s) => {
+    const body = app.doc.elementText(s);
+    const o = origins.get(s);
+    return o && o.last === body ? o : { text: body, layout: layoutOf(s), last: body };
+  });
+  // the places among the words of each slide of the blocks that the fit of its panel shrank. a
+  // slide written from its first text has none
+  const shrunk = slides.map((s, k) => (layout === 'split' || from[k].text !== from[k].last ? [] : wordsOf(app, s).flatMap((el, i) => (fitted.has(el) && el.classList.contains('small') ? [i] : []))));
+  const out = await rewrite(app, slides, (_, s) => {
+    const o = from[slides.indexOf(s)];
+    return layout === o.layout ? o.text : relayout(o.text, layout, step);
+  }, 'layout');
   out.forEach((s, k) => {
     if (slides.includes(s)) return;
     const words = wordsOf(app, s);
     for (const i of shrunk[k]) if (words[i]) app.doc.setTag(words[i], { classes: { small: false } }, 'layout');
     fitPanel(app, s);
+    origins.set(s, { ...from[k], last: app.doc.elementText(s) });
   });
   return out;
 }
+
+// the text of each slide before a run of changes of layout without an edit between them, and its
+// layout. a change back to this layout gives the text again, as the file has it
+const origins = new WeakMap<Element, { text: string; layout: Layout; last: string }>();
 
 // the blocks set in the style Small by the fit of a panel in this session. an undo and a redo put
 // the same elements back, hence a change of layout away from Split takes the style off these
@@ -275,27 +299,6 @@ function fitPanel(app: App, slide: Element): void {
     if (classes.length) continue;
     app.doc.setTag(el, { classes: { small: true } }, 'layout');
     fitted.add(el);
-  }
-}
-
-// measure run on slide shown as the current slide is, and invisible, with its inline style put back
-function laidOut<T>(slide: HTMLElement, measure: () => T): T {
-  const style = slide.getAttribute('style');
-  const hidden = slide.hidden;
-  const present = slide.classList.contains('present');
-  slide.hidden = false;
-  slide.style.display = 'block';
-  if (!present) {
-    slide.style.visibility = 'hidden';
-    slide.classList.add('present');
-  }
-  try {
-    return measure();
-  } finally {
-    if (!present) slide.classList.remove('present');
-    if (style === null) slide.removeAttribute('style');
-    else slide.setAttribute('style', style);
-    slide.hidden = hidden;
   }
 }
 
@@ -383,7 +386,8 @@ export function openChooser(app: App, anchor: Element | null, item: DOMRect | nu
   grid.setAttribute('aria-label', 'Layouts');
   const stage = app.slides() as HTMLElement;
   const deck = { width: stage.offsetWidth || 1920, height: stage.offsetHeight || 1080 };
-  const now = layoutOf(slide);
+  // slides of several layouts mark none of them, as Multiple Layouts in Keynote
+  const now = new Set(targets(app).map(layoutOf)).size > 1 ? null : layoutOf(slide);
   const tiles = LAYOUTS.map((layout) => {
     const tile = document.createElement('button');
     tile.type = 'button';
@@ -442,6 +446,7 @@ export function install(app: App): void {
           return list.length > 0 && list.every((s) => layoutOf(s) === layout);
         },
         undoable: true,
+        undo: 'Change Layout',
         run: async (a) => void (await changeLayout(a, targets(a), layout)),
       }),
     ),
@@ -481,7 +486,7 @@ export function install(app: App): void {
       },
     },
   ];
-  for (const d of defs) app.commands.define(d);
+  for (const d of defs) app.commands.define(d.undoable ? { ...d, run: (a, arg) => navOf(a).keeping(d.id, () => d.run(a, arg)) } : d);
   // the commands of the order, the groups, the locks, and the rotation, from the same install line
   // of main.ts
   installOrder(app);

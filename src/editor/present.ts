@@ -6,6 +6,7 @@
 // data-timing, as one entry of the history. the slides are drawn from the page of the editor,
 // hence a rehearsal needs no save
 
+import { addRestoreSteps, applySteps } from '../steps.ts';
 import type { App } from './app.ts';
 import { drawInto } from './navigator/thumbs.ts';
 import { injectStyle, make, store, stored } from './ui/dom.ts';
@@ -57,15 +58,57 @@ function fragOf(el: Element): Frag {
   return { index, kind, final: el.hasAttribute('data-final') && index === null };
 }
 
-export const stepsOfSlide = (slide: Element): number => stepCount(stepsOf(fragsOf(slide).map(fragOf)));
+// the steps of a slide of the editor as the show plays them, counted on a copy of the slide with
+// what the show adds: a copy of a code box for each group of lines of its data-line-numbers after
+// the first, as the highlight plugin of reveal.js makes them, and the step that addRestoreSteps of
+// src/steps.ts adds. steps is the step of each fragment of the slide, from 0, and n the count
+export function showSteps(slide: Element): { steps: number[]; n: number } {
+  const copy = slide.cloneNode(true) as Element;
+  copy.querySelectorAll('aside.notes').forEach((n) => n.remove());
+  const own = fragsOf(copy);
+  for (const code of copy.querySelectorAll('pre > code[data-line-numbers]')) {
+    let at = parseInt(code.getAttribute('data-fragment-index') ?? '', 10);
+    for (const _ of (code.getAttribute('data-line-numbers') ?? '').split('|').slice(1)) {
+      const step = code.cloneNode(true) as Element;
+      step.classList.add('fragment');
+      if (Number.isNaN(at)) step.removeAttribute('data-fragment-index');
+      else step.setAttribute('data-fragment-index', String(at++));
+      code.parentElement?.append(step);
+    }
+  }
+  const wrap = make('div', 'reveal');
+  wrap.append(make('div', 'slides'));
+  wrap.firstChild?.appendChild(copy);
+  addRestoreSteps(wrap);
+  const all = fragsOf(copy);
+  const steps = stepsOf(all.map(fragOf));
+  return { steps: own.map((f) => steps[all.indexOf(f)]), n: stepCount(steps) };
+}
 
-// the clone of slide drawn into host is shown at step k: each fragment not seen at k is hidden
+export const stepsOfSlide = (slide: Element): number => showSteps(slide).n;
+
+// the clone of slide drawn into host is shown at step k as the show draws it: each fragment not
+// seen at k is hidden, and until the slide is complete, the earlier steps are dimmed to the 0.45
+// of theme/beeson.css, apart from a backdrop, a fragment inside a shown one, and a fragment held
+// with data-keep. the classes highlighted at k are colored by applySteps of src/steps.ts
 export function showStep(host: HTMLElement, slide: Element, k: number): void {
   const clone = host.shadowRoot?.querySelector('.beeson-thumb .slides > section');
   if (!clone) return;
   const frags = fragsOf(clone);
-  const steps = stepsOf(fragsOf(slide).map(fragOf));
-  frags.forEach((f, i) => f.classList.toggle('beeson-off', i < steps.length && !seenAt(fragOf(f).kind, steps[i], k)));
+  const kinds = fragsOf(slide).map((f) => fragOf(f).kind);
+  const { steps, n } = showSteps(slide);
+  frags.forEach((f, i) => {
+    f.setAttribute('data-fragment-index', String(steps[i] ?? 0));
+    f.classList.toggle('visible', steps[i] < k);
+    f.classList.toggle('current-fragment', steps[i] === k - 1);
+  });
+  applySteps(clone);
+  (frags as HTMLElement[]).forEach((f, i) => {
+    const seen = i >= steps.length || seenAt(kinds[i], steps[i], k);
+    const dim = seen && k < n && steps[i] < k - 1 && !f.matches('.backdrop, [data-held]') && !f.parentElement?.closest('.fragment.visible');
+    f.classList.toggle('beeson-off', !seen);
+    f.style.setProperty('opacity', dim ? '0.45' : '', dim ? 'important' : '');
+  });
 }
 
 // Use Rehearsed Timings of the Play menu, as the switch of PowerPoint, kept in the storage. a show
@@ -112,7 +155,8 @@ export function playTimings(win: Window, time = 30000): Promise<number> {
       clearInterval(poll);
       let n = 0;
       for (const s of win.document.querySelectorAll('.reveal .slides section[data-timing]')) {
-        const delay = stepDelay(s.getAttribute('data-timing'), stepsOfSlide(s));
+        // the slides of the show have their added steps already
+        const delay = stepDelay(s.getAttribute('data-timing'), stepCount(stepsOf(fragsOf(s).map(fragOf))));
         if (delay === null || s.hasAttribute('data-autoslide')) continue;
         s.setAttribute('data-autoslide', String(delay));
         n++;
@@ -128,10 +172,12 @@ const NOTES_KEY = 'beeson-presenter-notes';
 // the sizes of the text of the notes, in CSS px
 const NOTE_SIZES = [14, 16, 18, 21, 24, 28, 32, 40];
 
+// the presenter display and the rehearsal are black in both appearances, as in Keynote and
+// PowerPoint, hence the dialog sets the tokens of the editor for a black stage
 const CSS = `
-dialog.beeson-edit-presenter { box-sizing: border-box; width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: var(--ed-canvas); color: var(--ed-text); font: 13px/1.35 var(--ed-font); outline: none; overflow: hidden; }
+dialog.beeson-edit-presenter { --ed-bg: #000; --ed-canvas: #000; --ed-panel: #161618; --ed-text: #f2f2f4; --ed-muted: #a1a1a6; --ed-faint: #6c6c71; --ed-line: #2c2c2e; --ed-guide: #f08050; --ed-select: #9d47d8; --ed-focus: rgba(201, 79, 230, 0.6); --ed-hover: rgba(255, 255, 255, 0.08); --ed-pressed: rgba(255, 255, 255, 0.14); --ed-edge: rgba(255, 255, 255, 0.14); --ed-menu-line: rgba(255, 255, 255, 0.12); color-scheme: dark; box-sizing: border-box; width: 100vw; height: 100vh; max-width: none; max-height: none; margin: 0; padding: 0; border: 0; background: var(--ed-canvas); color: var(--ed-text); font: 13px/1.35 var(--ed-font); outline: none; overflow: hidden; }
 dialog.beeson-edit-presenter[open] { display: grid; grid-template-rows: 48px minmax(0, 1fr) 44px; }
-dialog.beeson-edit-presenter::backdrop { background: var(--ed-canvas); }
+dialog.beeson-edit-presenter::backdrop { background: #000; }
 .beeson-edit-presenter .bar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 12px; padding: 0 14px; background: var(--ed-bg); border-bottom: 1px solid var(--ed-line); user-select: none; -webkit-user-select: none; }
 .beeson-edit-presenter .bar.foot { grid-row: 3; border-bottom: 0; border-top: 1px solid var(--ed-line); }
 .beeson-edit-presenter .bar > :last-child { justify-self: end; }

@@ -59,9 +59,10 @@ html.beeson-rotating, html.beeson-rotating * { cursor: grabbing !important; user
 .beeson-guide { position: fixed; background: var(--ed-guide, #e8590c); }
 .beeson-guide.v { width: 1px; }
 .beeson-guide.h { height: 1px; }
-.beeson-gap { position: fixed; box-sizing: border-box; border-color: var(--ed-guide, #e8590c); border-style: solid; border-width: 0; }
-.beeson-gap.h { height: 7px; margin-top: -3px; border-left-width: 1px; border-right-width: 1px; background: linear-gradient(var(--ed-guide, #e8590c), var(--ed-guide, #e8590c)) center / 100% 1px no-repeat; }
-.beeson-gap.v { width: 7px; margin-left: -3px; border-top-width: 1px; border-bottom-width: 1px; background: linear-gradient(var(--ed-guide, #e8590c), var(--ed-guide, #e8590c)) center / 1px 100% no-repeat; }
+.beeson-gap { position: fixed; color: var(--ed-guide, #e8590c); }
+.beeson-gap.h { margin-top: -3.5px; }
+.beeson-gap.v { margin-left: -3.5px; }
+.beeson-gap svg { display: block; overflow: visible; }
 .beeson-offset { position: fixed; height: 22px; padding: 0 7px; box-sizing: border-box; border-radius: 5px; background: var(--ed-guide, #e8590c); color: #fff; font: 600 12px/22px system-ui, sans-serif; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .beeson-offset.frame { transform: translateX(-100%); }
 .beeson-marquee { position: fixed; box-sizing: border-box; border: 1px solid var(--ed-select, #7048e8); background: color-mix(in srgb, var(--ed-select, #7048e8) 12%, transparent); }
@@ -70,6 +71,7 @@ html.beeson-dragging, html.beeson-dragging * { cursor: move !important; user-sel
 html.beeson-resizing, html.beeson-resizing * { user-select: none !important; }
 html.beeson-band, html.beeson-band .reveal * { cursor: move; }
 html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .slides section video, html.beeson-editing .reveal .slides section .zone, html.beeson-editing .reveal .slides section .plate, html.beeson-editing .reveal .slides section .qr { cursor: move; }
+html.beeson-editing .reveal .slides section [data-locked]:is(img, video, .zone, .plate, .qr), html.beeson-editing .reveal .slides section [data-locked] :is(img, video, .qr) { cursor: default; }
 `;
 
 const div = (className: string, parent: HTMLElement): HTMLDivElement => {
@@ -152,6 +154,9 @@ const WORDS = 'h1, h2, h3, p, li, dt, dd, div.math, .caption, figcaption, td, th
 // the handle of a block is drawn this far left of the frame, clear of its grips, in screen px
 const HANDLE = 22;
 const HANDLE_GAP = 10;
+// the bar of the row numbers of a table with its gap, in commands/table.ts, which the handle of a
+// table is drawn left of
+const ROW_BAR = 24;
 
 // the overlay of the editor. the handle of a block and the resize handles are its only parts that
 // take the pointer
@@ -359,12 +364,13 @@ export class Frames {
     this.hoverFrame.hidden = !hot || !!framed || !!view.moving;
     if (hot && !framed && !view.moving) place(this.hoverFrame, grow(frameRect(hot), 6));
     // a figure is dragged by itself, as in Keynote, and a viewer, which a drag turns, and a text
-    // block, whose text a press edits, by its handle
-    this.handle.hidden = !hot || (hot.matches(BY_ITSELF) && !hot.matches('tycho-viewer')) || (!!this.gripsOf(hot) && !isTextSized(hot));
+    // block, whose text a press edits, by its handle. a locked element does not have a handle
+    this.handle.hidden = !hot || hot.hasAttribute('data-locked') || (hot.matches(BY_ITSELF) && !hot.matches('tycho-viewer')) || (!!this.gripsOf(hot) && !isTextSized(hot));
     if (!this.handle.hidden && hot) {
       // left of the frame, 6 px outside the text, at its top edge, clear of the grips at its corners
       const r = hot.getBoundingClientRect();
-      Object.assign(this.handle.style, { left: `${r.left - 6 - HANDLE_GAP - HANDLE}px`, top: `${r.top - 6}px` });
+      const bar = hot.localName === 'table' ? ROW_BAR : 0;
+      Object.assign(this.handle.style, { left: `${r.left - 6 - HANDLE_GAP - HANDLE - bar}px`, top: `${r.top - 6}px` });
     }
     this.drawGuides();
     if (view.marquee) place(this.marquee, view.marquee);
@@ -414,6 +420,16 @@ export class Frames {
         d.className = `beeson-gap ${s.axis === 'x' ? 'h' : 'v'}`;
         const b = s.axis === 'x' ? toScreen(f, { left: gap.from, top: gap.at, width: gap.to - gap.from, height: 0 }) : toScreen(f, { left: gap.at, top: gap.from, width: 0, height: gap.to - gap.from });
         place(d, s.axis === 'x' ? { ...b, height: 7 } : { ...b, width: 7 });
+        // a double arrow between the two edges, as PowerPoint marks equal gaps
+        const len = Math.round(s.axis === 'x' ? b.width : b.height);
+        const key = `${s.axis}${len}`;
+        if (d.dataset.mark !== key) {
+          d.dataset.mark = key;
+          const h = Math.round(Math.min(6, len / 3) * 10) / 10;
+          const pt = (u: number, v: number) => (s.axis === 'x' ? `${u},${v}` : `${v},${u}`);
+          const [w, ht] = s.axis === 'x' ? [len, 7] : [7, len];
+          d.innerHTML = `<svg width="${w}" height="${ht}" aria-hidden="true"><path d="M${pt(0, 3.5)}L${pt(len, 3.5)}" stroke="currentColor"/><path d="M${pt(0, 3.5)}L${pt(h, 0.5)}L${pt(h, 6.5)}ZM${pt(len, 3.5)}L${pt(len - h, 0.5)}L${pt(len - h, 6.5)}Z" fill="currentColor"/></svg>`;
+        }
       }
     }
     this.gaps.slice(n).forEach((d) => (d.hidden = true));

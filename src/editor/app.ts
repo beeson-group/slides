@@ -20,7 +20,7 @@ export type Deck = {
   layout(): void;
   sync?(): void;
   getScale(): number;
-  getIndices(slide?: Element): { h: number; v: number };
+  getIndices(slide?: Element): { h: number; v?: number };
   getCurrentSlide(): HTMLElement;
   getSlidePastCount(): number;
   getTotalSlides(): number;
@@ -60,7 +60,8 @@ export interface Files {
   save(): Promise<void>;
   saveAs(): Promise<void>;
   openFile(): Promise<void>;
-  present(): Promise<void>;
+  // the show at hash, in place or in a new tab, with its window, or null when it is not played
+  present(hash?: string, tab?: boolean): Promise<{ win: Window | null } | null>;
   toggleAutosave(): void;
   line(): Line;
   // the card of the texts that cannot be edited, and the card that asks before Open or Present
@@ -222,9 +223,20 @@ export class App {
   showSlide(el: Element): void {
     const d = this.deck();
     const section = el.closest('section');
-    if (d && section && section !== d.getCurrentSlide()) {
-      const { h, v } = d.getIndices(section);
-      d.slide(h, v);
+    if (d && section) {
+      const was = d.getCurrentSlide();
+      const at = d.getIndices();
+      // a current slide taken off the page, e.g. by an undo, is first replaced by the slide at its
+      // index, since reveal.js would otherwise animate from it
+      if (!was?.isConnected) d.slide(at.h, at.v);
+      const { h, v = 0 } = d.getIndices(section);
+      const moved = h !== at.h || v !== (at.v ?? 0);
+      if (moved || section !== d.getCurrentSlide()) d.slide(h, v);
+      // reveal.js announces a change of its index only, and not another slide put at the index
+      if (!moved && d.getCurrentSlide() !== was) {
+        this.emit('slide');
+        this.invalidate();
+      }
     }
     this.layers?.reveal(el);
   }
@@ -305,12 +317,15 @@ export class App {
   region(): Region {
     const active = document.activeElement;
     if (!(active instanceof Element) || active === document.body) return 'canvas';
-    if (active.closest('.beeson-math, .beeson-edit-card:not([hidden]), dialog[open]')) return 'dialog';
+    // a popover, e.g. the grid of Insert Table, leaves the toolbar and the commands enabled
+    if (active.closest('.beeson-math, .beeson-edit-card:not([hidden]), dialog[open]:not([data-popover])')) return 'dialog';
     if (active.matches('input, textarea, select')) return 'field';
     if (active.closest('aside.notes')) return 'notes';
-    if (this.hostOf(active)) return 'text';
+    // a formula focused in an object that is selected takes the keys of the slide
+    if (this.hostOf(active) && !(active.matches('mjx-container') && this.selection.items.some((el) => this.selection.kind === 'elements' && el.contains(active)))) return 'text';
     if (active.closest('.beeson-edit-nav')) return 'navigator';
-    if (active.closest('.beeson-edit-inspector, .beeson-edit-side')) return 'inspector';
+    // the object list of navigator/objects.ts takes its own keys, as a pane of controls
+    if (active.closest('.beeson-edit-inspector, .beeson-edit-side, .beeson-edit-objects')) return 'inspector';
     return 'canvas';
   }
 }

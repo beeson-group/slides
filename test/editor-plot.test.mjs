@@ -313,7 +313,8 @@ for (const platform of PLATFORMS) {
     assert.ok(turned.elevation > 32);
     await byteExact(page);
     assert.equal(await page.evaluate(`document.querySelector('${PANEL} .ed-panes').dataset.pane`), 'surface');
-    assert.equal(await page.evaluate(`document.querySelector('${PANEL} input[name="azimuth"]').value`), '-60');
+    // the field shows the azimuth of the drag, which is not written until Use Current View
+    assert.equal(await page.evaluate(`document.querySelector('${PANEL} input[name="azimuth"]').value`), String(Math.round(turned.azimuth)));
     await click(page, `${PANEL} button[data-command="surface.useView"]`);
     const az = Math.round(turned.azimuth), el = Math.round(turned.elevation);
     const tag = '<div class="surface" data-function="effective-potential" data-mu="0.05">';

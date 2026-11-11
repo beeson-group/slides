@@ -11,7 +11,11 @@ import type { Command } from '../commands.ts';
 import { CONTAINER } from '../canvas/hit.ts';
 import { make, injectStyle } from '../ui/dom.ts';
 import { install as installSurface } from '../inspector/surface.ts';
-import { addRow, deleteRow, setCell, sheetsOf, type Cell, type Result, type Sheet } from '../plotdata.ts';
+import { addRow, addSeries, addTab, cellsIn, clearCells, deleteRow, deleteSeries, deleteTab, moveSeries, parseTsv, pasteCells, setCell, setKey, sheetsOf, type Cell, type Result, type Sheet } from '../plotdata.ts';
+import { emptySlot } from '../media/actions.ts';
+
+// the tones that a mark of a new color takes, the data colors of the theme
+export const DATA_TONES = ['data-1', 'data-2', 'data-3', 'data-4', 'data-5', 'data-6', 'data-7', 'data-8'];
 
 type View = { el: HTMLElement; reload(text?: string | null): void; setTab(i: number): void };
 type Page = { Beeson?: { plots?: View[]; mount?(root: Element): void } };
@@ -114,6 +118,15 @@ const STYLE = `
 .beeson-plotdata td input:focus { box-shadow: inset 0 0 0 2px var(--ed-select); }
 .beeson-plotdata td.bad { background: rgba(209, 69, 59, 0.14); }
 .beeson-plotdata td.bad input { color: #d1453b; }
+.beeson-plotdata .bar { flex-wrap: wrap; }
+.beeson-plotdata .rows .more { min-width: 24px; padding: 0 6px; }
+.beeson-plotdata .rows { display: flex; gap: 6px; }
+.beeson-plotdata thead th[data-series] { cursor: grab; touch-action: none; }
+.beeson-plotdata thead th.moving, .beeson-plotdata td.moving { opacity: 0.45; }
+.beeson-plotdata thead th.drop-before { box-shadow: inset 2px 0 0 var(--ed-select); }
+.beeson-plotdata thead th.drop-after { box-shadow: inset -2px 0 0 var(--ed-select); }
+.beeson-plotdata td.sel { background: color-mix(in srgb, var(--ed-select) 16%, transparent); }
+.beeson-plotdata thead th.sel, .beeson-plotdata tbody tr th.sel { color: var(--ed-text); background: color-mix(in srgb, var(--ed-select) 12%, var(--ed-panel)); }
 .beeson-plotdata .state { flex: none; min-height: 16px; padding: 8px 12px 10px; color: var(--ed-muted); font-size: 12px; }
 .beeson-plotdata .state.bad { color: #d1453b; }
 `;
@@ -129,6 +142,10 @@ class DataWindow {
   private readonly tabs = make('div', 'sheets');
   private readonly add = make('button', '', 'Add Row');
   private readonly del = make('button', '', 'Delete Row');
+  private readonly addCol = make('button', '', 'Add Series');
+  private readonly delCol = make('button', '', 'Delete Series');
+  private readonly addSheet = make('button', 'more', '+');
+  private readonly delSheet = make('button', 'more', '−');
   private readonly grid = make('div', 'grid');
   private readonly state = make('div', 'state');
   plot: HTMLElement | null = null;
@@ -138,6 +155,11 @@ class DataWindow {
   sheet = 0;
   // the cell focused last, as row and column
   at: { r: number; c: number } | null = null;
+  // a range of cells from the focused cell a to the cell b, selected by a drag, by Shift with a
+  // click, or by Shift with the arrow keys, while the focus stays in a, as in a spreadsheet
+  range: { a: { r: number; c: number }; b: { r: number; c: number } } | null = null;
+  // the key of the sheet shown after the next read, e.g. of a new tab
+  want: string | null = null;
   // the texts typed into cells and not written, by the path of the cell, with the fault of a text
   // that cannot be read, which is shown in red. a refresh of the window keeps them
   private readonly drafts = new Map<string, { typed: string; error: string | null }>();
@@ -156,15 +178,20 @@ class DataWindow {
     close.addEventListener('click', () => void app.commands.run('plot.closeData'));
     this.title.append(close, this.name);
     const rows = make('div', 'rows');
-    for (const [b, id] of [[this.add, 'plot.addRow'], [this.del, 'plot.deleteRow']] as const) {
+    this.addSheet.title = 'Add Tab';
+    this.delSheet.title = 'Delete Tab';
+    for (const [b, id] of [[this.add, 'plot.addRow'], [this.del, 'plot.deleteRow'], [this.addCol, 'plot.addSeries'], [this.delCol, 'plot.deleteSeries'], [this.addSheet, 'plot.addTab'], [this.delSheet, 'plot.deleteTab']] as const) {
       b.type = 'button';
       b.dataset.command = id;
       b.addEventListener('pointerdown', (ev) => ev.preventDefault());
       b.addEventListener('click', () => void app.commands.run(id).catch((e) => this.fail(e)));
-      rows.append(b);
+      if (b.classList.contains('more')) b.setAttribute('aria-label', b.title);
+      else rows.append(b);
     }
+    const more = make('div', 'rows');
+    more.append(this.addSheet, this.delSheet);
     const bar = make('div', 'bar');
-    bar.append(this.tabs, make('span', 'grow'), rows);
+    bar.append(this.tabs, more, make('span', 'grow'), rows);
     this.el.append(this.title, bar, this.grid, this.state);
     this.state.setAttribute('aria-live', 'polite');
     this.dragTitle();
@@ -172,6 +199,9 @@ class DataWindow {
     this.grid.addEventListener('focusout', (ev) => this.left(ev.target));
     this.grid.addEventListener('input', (ev) => this.typed(ev.target));
     this.grid.addEventListener('keydown', (ev) => this.key(ev));
+    this.pickRange();
+    this.dragColumns();
+    for (const type of ['copy', 'cut', 'paste'] as const) this.grid.addEventListener(type, (ev) => this.clip(ev));
     document.body.append(this.el);
   }
 
@@ -188,6 +218,7 @@ class DataWindow {
       this.plot = plot;
       this.sheet = 0;
       this.at = null;
+      this.range = null;
       this.drafts.clear();
     }
     this.el.hidden = false;
@@ -220,6 +251,9 @@ class DataWindow {
       this.say(`The block cannot be read: ${(e as Error).message}`, true);
       return;
     }
+    const wanted = this.want ? this.sheets.findIndex((s) => s.key === this.want) : -1;
+    this.want = null;
+    if (wanted >= 0) this.sheet = wanted;
     this.sheet = Math.min(this.sheet, this.sheets.length - 1);
     for (const [k, d] of this.drafts) if (!this.sheets.some((s) => s.rows.some((row) => row.some((c) => c && key(c) === k && c.text !== d.typed)))) this.drafts.delete(k);
     this.fill();
@@ -255,18 +289,27 @@ class DataWindow {
         input.closest('td')?.classList.toggle('bad', !!draft?.error);
       }));
     }
-    this.add.disabled = !this.app.commands.enabled('plot.addRow');
-    this.del.disabled = !this.app.commands.enabled('plot.deleteRow');
+    for (const [b, id] of [[this.add, 'plot.addRow'], [this.del, 'plot.deleteRow'], [this.addCol, 'plot.addSeries'], [this.delCol, 'plot.deleteSeries'], [this.addSheet, 'plot.addTab'], [this.delSheet, 'plot.deleteTab']] as const) b.disabled = !this.app.commands.enabled(id);
+    if (this.range && sheet && !(this.inputs[this.range.b.r] && this.range.b.c < sheet.columns.length)) this.range = null;
     this.mark();
   }
 
   private build(sheet: Sheet | null): void {
-    const focus = this.at;
+    const focus = this.el.contains(document.activeElement) ? this.at : null;
     this.inputs = [];
     if (!sheet) return void this.grid.replaceChildren();
     const table = make('table');
     const head = make('tr');
-    head.append(make('th'), ...sheet.columns.map((c) => make('th', '', c)));
+    head.append(make('th'), ...sheet.columns.map((name, c) => {
+      const th = make('th', '', name);
+      th.dataset.c = String(c);
+      const id = sheet.series[c];
+      if (id) {
+        th.dataset.series = id;
+        th.title = `Drag to move the series ${id}`;
+      }
+      return th;
+    }));
     const body = make('tbody');
     sheet.rows.forEach((row, r) => {
       const tr = make('tr');
@@ -295,21 +338,157 @@ class DataWindow {
     thead.append(head);
     table.append(thead, body);
     this.grid.replaceChildren(table);
-    if (focus && this.el.contains(document.activeElement)) this.focusCell(focus);
+    if (focus) this.focusCell(focus);
   }
 
   private choose(i: number): void {
     this.flush();
     this.sheet = i;
     this.at = null;
+    this.range = null;
     this.fill();
     this.preview(null);
     this.focusCell({ r: 0, c: 0 });
   }
 
-  // the row of the focused cell, which the row names show
+  // the row of the focused cell, which the row names show, and the cells of the range with their
+  // heads
   private mark(): void {
-    this.grid.querySelectorAll('tbody tr').forEach((tr, r) => tr.classList.toggle('at', r === this.at?.r));
+    const box = this.box();
+    const inRow = (r: number) => !!box && r >= box.r0 && r <= box.r1;
+    const inCol = (c: number) => !!box && c >= box.c0 && c <= box.c1;
+    this.grid.querySelectorAll('tbody tr').forEach((tr, r) => {
+      tr.classList.toggle('at', r === this.at?.r);
+      tr.querySelector('th')?.classList.toggle('sel', inRow(r));
+      tr.querySelectorAll('td').forEach((td, c) => td.classList.toggle('sel', inRow(r) && inCol(c)));
+    });
+    this.grid.querySelectorAll<HTMLElement>('thead th[data-c]').forEach((th) => th.classList.toggle('sel', inCol(Number(th.dataset.c))));
+  }
+
+  // the rows and columns of the range, or null for one cell
+  box(): { r0: number; c0: number; r1: number; c1: number } | null {
+    const g = this.range;
+    if (!g || (g.a.r === g.b.r && g.a.c === g.b.c)) return null;
+    return { r0: Math.min(g.a.r, g.b.r), c0: Math.min(g.a.c, g.b.c), r1: Math.max(g.a.r, g.b.r), c1: Math.max(g.a.c, g.b.c) };
+  }
+
+  private extend(b: { r: number; c: number }): void {
+    const sheet = this.current();
+    if (!sheet || !this.at) return;
+    const r = Math.max(0, Math.min(sheet.rows.length - 1, b.r)), c = Math.max(0, Math.min(sheet.columns.length - 1, b.c));
+    this.range = { a: this.range?.a ?? this.at, b: { r, c } };
+    this.mark();
+    const box = this.box();
+    this.say(box ? `${box.r1 - box.r0 + 1} × ${box.c1 - box.c0 + 1} cells selected.` : '');
+  }
+
+  // the cells of the range, or the focused cell, by row
+  selected(): { r: number; c: number; cells: (Cell | null)[][] } | null {
+    const sheet = this.current();
+    const box = this.box() ?? (this.at ? { r0: this.at.r, c0: this.at.c, r1: this.at.r, c1: this.at.c } : null);
+    if (!sheet || !box) return null;
+    return { r: box.r0, c: box.c0, cells: cellsIn(sheet, box.r0, box.c0, box.r1, box.c1) };
+  }
+
+  // a range picked by a drag over the cells, or by Shift with a click, which keeps the focus
+  private pickRange(): void {
+    const at = (target: EventTarget | null) => {
+      const td = target instanceof Element ? target.closest('td') : null;
+      const tr = td?.parentElement;
+      if (!td || !tr || !this.grid.contains(td)) return null;
+      return { r: [...tr.parentElement!.children].indexOf(tr), c: [...tr.children].indexOf(td) - 1 };
+    };
+    let from: { r: number; c: number } | null = null;
+    this.grid.addEventListener('pointerdown', (ev) => {
+      const hit = at(ev.target);
+      if (ev.button !== 0 || !hit) return;
+      if (ev.shiftKey && this.at) {
+        ev.preventDefault();
+        this.extend(hit);
+        return;
+      }
+      from = hit;
+    });
+    this.grid.addEventListener('pointermove', (ev) => {
+      if (!from || !(ev.buttons & 1)) return;
+      const hit = at(document.elementFromPoint(ev.clientX, ev.clientY));
+      if (!hit || (!this.range && hit.r === from.r && hit.c === from.c)) return;
+      this.range = { a: from, b: from };
+      this.extend(hit);
+    });
+    const end = () => (from = null);
+    window.addEventListener('pointerup', end, true);
+    window.addEventListener('pointercancel', end, true);
+  }
+
+  // a series is moved by a drag of the head of one of its columns onto the head of another series
+  private dragColumns(): void {
+    this.grid.addEventListener('pointerdown', (ev) => {
+      const th = ev.target instanceof Element ? ev.target.closest<HTMLElement>('thead th[data-series]') : null;
+      if (ev.button !== 0 || !th) return;
+      ev.preventDefault();
+      const id = th.dataset.series!;
+      const x0 = ev.clientX;
+      let moving = false;
+      let drop: { to: string; after: boolean } | null = null;
+      const heads = () => [...this.grid.querySelectorAll<HTMLElement>('thead th[data-series]')];
+      const own = () => heads().filter((h) => h.dataset.series === id).map((h) => Number(h.dataset.c));
+      const clear = () => this.grid.querySelectorAll('.moving, .drop-before, .drop-after').forEach((e) => e.classList.remove('moving', 'drop-before', 'drop-after'));
+      const move = (e: PointerEvent) => {
+        if (!moving && Math.abs(e.clientX - x0) < 4) return;
+        moving = true;
+        clear();
+        const cols = own();
+        for (const h of heads()) if (cols.includes(Number(h.dataset.c))) h.classList.add('moving');
+        this.inputs.forEach((row) => cols.forEach((c) => row[c]?.closest('td')?.classList.add('moving')));
+        const target = heads().find((h) => {
+          const r = h.getBoundingClientRect();
+          return e.clientX >= r.left && e.clientX < r.right;
+        });
+        drop = null;
+        if (!target || target.dataset.series === id) return;
+        const group = heads().filter((h) => h.dataset.series === target.dataset.series);
+        const left = group[0].getBoundingClientRect().left, right = group.at(-1)!.getBoundingClientRect().right;
+        const after = e.clientX > (left + right) / 2;
+        drop = { to: target.dataset.series!, after };
+        (after ? group.at(-1)! : group[0]).classList.add(after ? 'drop-after' : 'drop-before');
+      };
+      const up = () => {
+        window.removeEventListener('pointermove', move, true);
+        window.removeEventListener('pointerup', up, true);
+        window.removeEventListener('pointercancel', up, true);
+        clear();
+        if (drop) void this.app.commands.run('plot.moveSeries', { id, ...drop }).catch((e) => this.fail(e));
+      };
+      window.addEventListener('pointermove', move, true);
+      window.addEventListener('pointerup', up, true);
+      window.addEventListener('pointercancel', up, true);
+    });
+  }
+
+  // a range is copied as text with tabs between the cells and a line per row, which a spreadsheet
+  // takes, and a paste of such a text fills the cells from the upper left of the range. a text of
+  // one cell is pasted into every cell of a range, and into the text of a cell without one
+  private clip(ev: ClipboardEvent): void {
+    const data = ev.clipboardData;
+    const sel = this.selected();
+    if (!data || !sel || !this.cellOf(ev.target)) return;
+    const box = this.box();
+    if (ev.type === 'paste') {
+      const rows = parseTsv(data.getData('text/plain'));
+      const one = rows.length === 1 && rows[0].length === 1;
+      if (one && !box) return;
+      ev.preventDefault();
+      ev.stopPropagation();
+      const fill = one && box ? sel.cells.map((row) => row.map(() => rows[0][0])) : rows;
+      void this.app.commands.run('plot.pasteCells', { r: sel.r, c: sel.c, rows: fill }).catch((e) => this.fail(e));
+      return;
+    }
+    if (!box) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    data.setData('text/plain', sel.cells.map((row) => row.map((c) => (c ? (this.drafts.get(key(c))?.typed ?? c.text) : '')).join('\t')).join('\n'));
+    if (ev.type === 'cut') void this.app.commands.run('plot.clearCells').catch((e) => this.fail(e));
   }
 
   focusCell(at: { r: number; c: number }): void {
@@ -334,6 +513,7 @@ class DataWindow {
     const hit = this.cellOf(target);
     if (!hit) return;
     this.at = { r: hit.r, c: hit.c };
+    if (this.range && (this.range.a.r !== hit.r || this.range.a.c !== hit.c)) this.range = null;
     this.mark();
     const error = this.drafts.get(key(hit.cell))?.error ?? null;
     this.say(error ?? '', !!error);
@@ -405,6 +585,29 @@ class DataWindow {
       this.commit(hit);
       this.focusCell({ r: Math.max(0, Math.min(rows - 1, r)), c: hit.c });
     };
+    const arrows: Record<string, [number, number]> = { ArrowUp: [-1, 0], ArrowDown: [1, 0], ArrowLeft: [0, -1], ArrowRight: [0, 1] };
+    const whole = hit.input.selectionStart === 0 && hit.input.selectionEnd === hit.input.value.length;
+    if (ev.shiftKey && arrows[ev.key] && (whole || !arrows[ev.key][1]) && !ev.altKey && !ev.metaKey && !ev.ctrlKey) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      const b = this.range?.b ?? { r: hit.r, c: hit.c };
+      this.extend({ r: b.r + arrows[ev.key][0], c: b.c + arrows[ev.key][1] });
+      return;
+    }
+    if ((ev.key === 'Delete' || ev.key === 'Backspace') && this.box()) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      void this.app.commands.run('plot.clearCells').catch((e) => this.fail(e));
+      return;
+    }
+    if (ev.key === 'Escape' && this.box()) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      this.range = null;
+      this.mark();
+      this.say('');
+      return;
+    }
     if (ev.key === 'Enter') go(hit.r + (ev.shiftKey ? -1 : 1));
     else if (ev.key === 'ArrowDown') go(hit.r + 1);
     else if (ev.key === 'ArrowUp') go(hit.r - 1);
@@ -483,11 +686,88 @@ function rowChange(app: App, change: typeof addRow): Promise<void> | void {
   w.flush();
   const res = change(w.text, at.sheet, at.r);
   if (res.error !== null) throw new Error(res.error);
+  w.range = null;
   w.at = { r: change === addRow ? at.r + 1 : Math.max(0, at.r - (at.r >= at.sheet.rows.length - 1 ? 1 : 0)), c: w.at?.c ?? 0 };
   return write(app, w.plot, res.text);
 }
 
 const plotMenu = (order: number): Command['menu'] => ({ bar: 'Format', group: 'plot', order, submenu: 'Plot' });
+
+// the text of the window changed by change, written as the entry of the command, with the focused
+// cell and the range put where at says once the window reads the text again
+function windowChange(app: App, change: (w: DataWindow, sheet: Sheet) => (Result & { at?: { r: number; c: number }; range?: DataWindow['range'] }) | null): Promise<void> | void {
+  const w = open();
+  const sheet = w?.current();
+  if (!w || !sheet || !w.plot) return;
+  w.flush();
+  const res = change(w, sheet);
+  if (!res) return;
+  if (res.error !== null) throw new Error(res.error);
+  if (res.at) w.at = res.at;
+  w.range = res.range ?? null;
+  return write(app, w.plot, res.text);
+}
+
+// the series of the focused column of the sheet of a tab
+const seriesAt = (w: DataWindow | null): string | null => (w?.at ? (w.current()?.series[w.at.c] ?? null) : null);
+
+// the series before or after the series id in the columns of sheet
+function neighbor(sheet: Sheet, id: string, way: -1 | 1): string | null {
+  const order = [...new Set(sheet.series.filter((x): x is string => !!x))];
+  return order[order.indexOf(id) + way] ?? null;
+}
+
+// the column of the cell at offset k in the columns of the series id, read from text
+function columnOf(text: string, key: string, id: string, k: number): number {
+  const sheet = sheetsOf(text).find((x) => x.key === key);
+  const first = sheet?.series.indexOf(id) ?? -1;
+  return Math.max(0, first + k);
+}
+
+function moveBy(w: DataWindow, sheet: Sheet, way: -1 | 1): Result & { at?: { r: number; c: number } } | null {
+  const id = seriesAt(w);
+  const to = id && neighbor(sheet, id, way);
+  if (!id || !to || !w.at) return null;
+  const res = moveSeries(w.text, id, to, way > 0);
+  if (res.error !== null) return res;
+  return { ...res, at: { r: w.at.r, c: columnOf(res.text, sheet.key, id, w.at.c - sheet.series.indexOf(id)) } };
+}
+
+// the tab of a tab sheet, unless a step of the slide of the plot names it, since the step would
+// then show a tab that is not there
+function tabToDelete(w: DataWindow, sheet: Sheet): string | null {
+  if (sheet.tab === null || !sheet.key.startsWith('tab:')) return null;
+  const name = sheet.key.slice(4);
+  const slide = w.plot?.closest('section');
+  const named = [...(slide?.querySelectorAll('[data-plot-tab], [data-plot-tabs], [data-plot-show]') ?? [])].some((el) =>
+    ['data-plot-tab', 'data-plot-tabs', 'data-plot-show'].some((a) => (el.getAttribute(a) ?? '').split(/\s+/).includes(name)));
+  if (named) throw new Error(`a step or a plot of the slide names the tab ${name}`);
+  return name;
+}
+
+// the place of a new plot: the first empty zone or plate of the current slide, which the plot
+// takes, and else a new zone before the footnote and the notes, where an image is put
+async function insertPlot(app: App): Promise<HTMLElement> {
+  const slide = app.current()!;
+  const slot = emptySlot(app, slide);
+  const fills = slot?.localName === 'div' ? slot : null;
+  const parent = fills?.parentElement ?? slide;
+  const before = fills ?? slide.querySelector(':scope > .foot, :scope > aside.notes');
+  const [plot] = await app.doc.insertElement('plot', parent, before, { plate: !!fills?.matches('.plate') });
+  if (fills) await app.doc.remove(fills, 'Insert Plot');
+  return plot as HTMLElement;
+}
+
+// the JSON text of the block of a plot of the Plot pane, given as arg { el }, changed by change
+function paneChange(app: App, arg: unknown, change: (json: string) => Result): Promise<void> | void {
+  const el = (arg as { el?: HTMLElement } | undefined)?.el;
+  const plot = el?.isConnected ? el : plotOf(app);
+  const block = blockOf(app, plot);
+  if (!plot || !block) return;
+  const res = change(jsonOf(app, block));
+  if (res.error !== null) throw new Error(res.error);
+  return write(app, plot, res.text);
+}
 
 export function commands(): Command[] {
   return [
@@ -537,6 +817,161 @@ export function commands(): Command[] {
         return !!at?.sheet.arrays && at.sheet.rows.length > at.sheet.least;
       },
       run: (app) => rowChange(app, deleteRow),
+    },
+    {
+      id: 'plot.addSeries',
+      label: 'Add Series',
+      menu: plotMenu(22),
+      undoable: true,
+      enabled: () => !!open()?.current()?.key.startsWith('tab:'),
+      run: (app) => windowChange(app, (w, sheet) => {
+        const c = w.at?.c ?? sheet.columns.length - 1;
+        const res = addSeries(w.text, sheet, c);
+        return res.error === null ? { ...res, at: { r: w.at?.r ?? 0, c: columnOf(res.text, sheet.key, res.id!, 0) } } : res;
+      }),
+    },
+    {
+      id: 'plot.deleteSeries',
+      label: 'Delete Series',
+      menu: plotMenu(23),
+      undoable: true,
+      enabled: () => !!seriesAt(open()),
+      run: (app) => windowChange(app, (w, sheet) => {
+        const id = seriesAt(w);
+        if (!id) return null;
+        const res = deleteSeries(w.text, id);
+        return res.error === null ? { ...res, at: { r: w.at?.r ?? 0, c: Math.max(0, sheet.series.indexOf(id) - 1) } } : res;
+      }),
+    },
+    {
+      id: 'plot.moveSeriesLeft',
+      label: 'Move Series Left',
+      menu: plotMenu(24),
+      undoable: true,
+      enabled: () => {
+        const w = open(), id = seriesAt(w);
+        return !!id && !!neighbor(w!.current()!, id, -1);
+      },
+      run: (app) => windowChange(app, (w, sheet) => moveBy(w, sheet, -1)),
+    },
+    {
+      id: 'plot.moveSeriesRight',
+      label: 'Move Series Right',
+      menu: plotMenu(25),
+      undoable: true,
+      enabled: () => {
+        const w = open(), id = seriesAt(w);
+        return !!id && !!neighbor(w!.current()!, id, 1);
+      },
+      run: (app) => windowChange(app, (w, sheet) => moveBy(w, sheet, 1)),
+    },
+    {
+      // the series arg.id put before the series arg.to, or after it with arg.after, by a drag of a head
+      id: 'plot.moveSeries',
+      label: 'Move Series',
+      undoable: true,
+      enabled: () => !!open(),
+      run: (app, arg) => windowChange(app, (w, sheet) => {
+        const a = arg as { id: string; to: string; after?: boolean };
+        const res = moveSeries(w.text, a.id, a.to, !!a.after);
+        return res.error === null ? { ...res, at: { r: w.at?.r ?? 0, c: columnOf(res.text, sheet.key, a.id, 0) } } : res;
+      }),
+    },
+    {
+      id: 'plot.addTab',
+      label: 'Add Tab',
+      menu: plotMenu(30),
+      undoable: true,
+      enabled: () => !!open()?.current()?.key.startsWith('tab:'),
+      run: (app) => windowChange(app, (w, sheet) => {
+        const res = addTab(w.text, sheet.tab!);
+        if (res.error === null) w.want = `tab:${res.name}`;
+        return res.error === null ? { ...res, at: { r: 0, c: 0 } } : res;
+      }),
+    },
+    {
+      id: 'plot.deleteTab',
+      label: 'Delete Tab',
+      menu: plotMenu(31),
+      undoable: true,
+      enabled: () => {
+        const sheet = open()?.current();
+        return !!sheet?.key.startsWith('tab:') && sheetsOf(open()!.text).filter((x) => x.key.startsWith('tab:')).length > 1;
+      },
+      run: (app) => windowChange(app, (w, sheet) => (tabToDelete(w, sheet) === null ? null : { ...deleteTab(w.text, sheet.tab!), at: { r: 0, c: 0 } })),
+    },
+    {
+      // rows of texts arg.rows pasted from row arg.r and column arg.c of the sheet shown
+      id: 'plot.pasteCells',
+      label: 'Paste',
+      undoable: true,
+      enabled: () => !!open(),
+      run: (app, arg) => windowChange(app, (w, sheet) => {
+        const a = arg as { r: number; c: number; rows: string[][] };
+        const res = pasteCells(w.text, sheet.key, a.r, a.c, a.rows);
+        const b = { r: a.r + a.rows.length - 1, c: a.c + Math.max(...a.rows.map((x) => x.length)) - 1 };
+        return res.error === null ? { ...res, at: { r: a.r, c: a.c }, range: { a: { r: a.r, c: a.c }, b } } : res;
+      }),
+    },
+    {
+      id: 'plot.clearCells',
+      label: 'Clear Cells',
+      undoable: true,
+      enabled: () => !!open()?.selected(),
+      run: (app) => windowChange(app, (w) => {
+        const sel = w.selected();
+        if (!sel) return null;
+        return { ...clearCells(w.text, sel.cells), at: w.at ?? undefined, range: w.range };
+      }),
+    },
+    {
+      // the title of a panel or of an axis, given as arg { el, panel, axis, text }, where axis is x,
+      // y, or null for the panel. an empty title is taken out of the block
+      id: 'plot.title',
+      label: 'Axis Title',
+      undoable: true,
+      enabled: (app) => !!blockOf(app, plotOf(app)),
+      run: (app, arg) => paneChange(app, arg, (json) => {
+        const a = arg as { panel: number; axis: 'x' | 'y' | null; text: string };
+        return setKey(json, a.axis ? ['panels', a.panel, a.axis] : ['panels', a.panel], 'title', a.text.trim() ? JSON.stringify(a.text.trim()) : null);
+      }),
+    },
+    {
+      // an end of the range of an axis, given as arg { el, panel, axis, end, text }
+      id: 'plot.range',
+      label: 'Axis Range',
+      undoable: true,
+      enabled: (app) => !!blockOf(app, plotOf(app)),
+      run: (app, arg) => paneChange(app, arg, (json) => {
+        const a = arg as { panel: number; axis: 'x' | 'y'; end: 0 | 1; text: string };
+        const range = sheetsOf(json).find((x) => x.key === 'axes')?.rows[a.panel]?.[(a.axis === 'y' ? 2 : 0) + a.end];
+        if (!range) return { text: null, error: `the ${a.axis} axis of the panel does not have a range` };
+        return setCell(json, range, a.text);
+      }),
+    },
+    {
+      // the tone of a mark, given as arg { el, mark, tone }, one of the data tokens of the theme
+      id: 'plot.tone',
+      label: 'Series Color',
+      undoable: true,
+      enabled: (app) => !!blockOf(app, plotOf(app)),
+      run: (app, arg) => paneChange(app, arg, (json) => {
+        const a = arg as { mark: number; tone: string };
+        if (!DATA_TONES.includes(a.tone)) return { text: null, error: `${a.tone} is not a data color of the theme` };
+        return setKey(json, ['marks', a.mark], 'tone', JSON.stringify(a.tone));
+      }),
+    },
+    {
+      id: 'insert.plot',
+      label: 'Plot',
+      menu: { bar: 'Insert', group: 'element', order: 22.5 },
+      toolbar: { group: 'insert', order: 20.5, icon: 'plot', label: 'Plot' },
+      enabled: (app) => !!app.pairing?.root && !!app.current() && app.region() !== 'dialog',
+      run: async (app) => {
+        const plot = await app.history.transact('Insert Plot', () => insertPlot(app));
+        app.selection.set('elements', [plot]);
+        await app.commands.run('plot.editData');
+      },
     },
     {
       id: 'plot.closeData',

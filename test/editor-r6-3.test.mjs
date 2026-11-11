@@ -247,7 +247,7 @@ for (const platform of PLATFORMS) {
     const levels = (items) => items.map((i) => i.label).filter((l) => /%$/.test(l));
     assert.deepEqual(levels(popup), levels(bar));
     assert.deepEqual(levels(bar), ['25%', '33%', '50%', '67%', '75%', '100%', '125%', '150%', '200%', '300%', '400%']);
-    assert.deepEqual(popup.slice(0, 3).map((i) => i.label), ['Fit', 'Actual Size', 'Zoom to Selection']);
+    assert.deepEqual(popup.slice(0, 3).map((i) => i.label), ['Fit Slide', 'Actual Size', 'Zoom to Selection']);
     // Zoom to Selection is dimmed without a selection, as in the View menu
     assert.equal(popup[2].disabled, true);
     await click(page, '.beeson-edit-top [data-command="toolbar.zoom"]');
@@ -338,6 +338,8 @@ for (const platform of PLATFORMS) {
     await click(page, video);
     await settle(page);
     const before = (await page.evaluate('window.BeesonEditor.status()')).message;
+    // the Video pane is filled after the click, and under load later than one settle
+    await page.waitFor(`!!document.querySelector(${js(SLIDER)}) || !!document.querySelector('${PANEL} [data-command="media.poster"]')`);
     if (await page.evaluate(`!!document.querySelector(${js(SLIDER)})`)) {
       await page.waitFor(`!document.querySelector(${js(SLIDER)}).disabled`);
       await slideTo(page, 0.5);

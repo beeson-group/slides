@@ -272,6 +272,16 @@ export function lineEnds(svg: Element): [{ x: number; y: number }, { x: number; 
   return [at(n('x1'), n('y1')), at(n('x2'), n('y2'))];
 }
 
+// the shown line of the current slide whose stroke is within 6 px of the point x, y on the screen
+export function lineAt(app: App, x: number, y: number): Element | null {
+  return linesOf(app).reverse().find((svg) => {
+    const [a, b] = lineEnds(svg);
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / (dx * dx + dy * dy || 1)));
+    return Math.hypot(x - a.x - t * dx, y - a.y - t * dy) <= 6;
+  }) ?? null;
+}
+
 // the ends and the middle of each line of the current slide outside skip, in slide pixels, which a
 // drag snaps to
 export function linePoints(app: App, skip: Element[] = []): { x: number; y: number }[] {

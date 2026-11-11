@@ -7,25 +7,18 @@ import type { App } from '../app.ts';
 import { EVERYWHERE, OUTSIDE_DIALOGS, type Command } from '../commands.ts';
 import { canPick, canWrite, fileActions } from '../file/files.ts';
 import { clearRecents, MAX_RECENT, recentLabel, recents } from '../file/recent.ts';
+import { playTimings, usingTimings } from '../present.ts';
+import { showIndices } from '../show.ts';
 
-// the saved deck from a slide. the presentation is opened at the address of the editor, whose
-// hash reveal.js does not keep up to date while the deck is edited. the hash is thus set to the
-// slide for the time of the call, and replaceState does not fire a hashchange, hence the slide of
-// the editor is kept
-async function presentAt(app: App, fromStart: boolean): Promise<void> {
-  const d = app.deck();
-  const current = app.current();
-  const { h, v } = !fromStart && d && current ? d.getIndices(current) : { h: 0, v: 0 };
+// the saved deck from a slide, played in place or, with tab, in a new tab, with the window of the
+// show, or null when it is not played. with Use Rehearsed Timings on, the show is moved on after
+// the timings of its slides
+export async function presentAt(app: App, fromStart: boolean, tab = false): Promise<{ win: Window | null } | null> {
+  const { h, v } = fromStart ? { h: 0, v: 0 } : showIndices(app, app.current());
   // the first slide is opened without a hash
-  const to = v ? `#/${h}/${v}` : h ? `#/${h}` : '';
-  const hash = location.hash;
-  const at = (fragment: string) => history.replaceState(history.state, '', fragment || location.pathname + location.search);
-  at(to);
-  try {
-    await app.files.present();
-  } finally {
-    if (location.hash === to) at(hash);
-  }
+  const shown = await app.files.present(v ? `#/${h}/${v}` : h ? `#/${h}` : '', tab);
+  if (shown?.win && usingTimings()) void playTimings(shown.win);
+  return shown;
 }
 
 export function install(app: App): void {
@@ -136,7 +129,7 @@ export function install(app: App): void {
     in: OUTSIDE_DIALOGS,
     menu: { bar: 'File', group: 'present', order: 30 },
     toolbar: { group: 'present', order: 40, icon: 'play' },
-    run: (a) => presentAt(a, false),
+    run: async (a) => void (await presentAt(a, false)),
   });
   c.define({
     id: 'file.presentStart',
@@ -144,6 +137,6 @@ export function install(app: App): void {
     keys: both('Mod+Shift+Enter'),
     in: OUTSIDE_DIALOGS,
     menu: { bar: 'File', group: 'present', order: 31 },
-    run: (a) => presentAt(a, true),
+    run: async (a) => void (await presentAt(a, true)),
   });
 }

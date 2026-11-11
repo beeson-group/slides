@@ -12,6 +12,7 @@ import type { Command } from '../commands.ts';
 import * as blocks from '../text/blocks.ts';
 import * as carry from '../text/carry.ts';
 import * as inline from '../text/inline.ts';
+import * as flow from '../text/flow.ts';
 import { openLink, applyLink, type LinkKind } from '../text/link.ts';
 import { isSmart, setSmart, type Smart } from '../text/substitute.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -45,6 +46,7 @@ html.beeson-painting .reveal .slides, html.beeson-painting .reveal .slides * { c
 `;
 
 export function install(app: App): void {
+  flow.install(app);
   carry.install(app);
   const c = app.commands;
   const define = (command: Command) => c.define(command);
@@ -126,6 +128,7 @@ export function install(app: App): void {
     in: FORMAT,
     menu: menu('tone', 40, 'Text Color'),
     undoable: true,
+    undo: 'Text Color',
     enabled: (a) => inline.inlineTargets(a).length > 0 || carry.canFormat(a),
     checked: (a) => (carry.canFormat(a) ? carry.toneOf(a) === null : inline.inlineTargets(a).length > 0 && inline.toneAt(a) === null),
     run: (a) => (carry.canFormat(a) ? carry.chooseTone(a, null) : inline.setTone(a, null)),
@@ -137,6 +140,7 @@ export function install(app: App): void {
       in: FORMAT,
       menu: menu('tone', 41 + i, 'Text Color'),
       undoable: true,
+      undo: 'Text Color',
       enabled: (a) => inline.inlineTargets(a).length > 0 || carry.canFormat(a),
       checked: (a) => (carry.canFormat(a) ? carry.toneOf(a) : inline.toneAt(a)) === tone,
       run: (a) => (carry.canFormat(a) ? carry.chooseTone(a, tone) : inline.setTone(a, tone)),
@@ -149,6 +153,7 @@ export function install(app: App): void {
       in: FORMAT,
       menu: menu('style', 50 + i, 'Paragraph Style'),
       undoable: true,
+      undo: 'Paragraph Style',
       enabled: (a) => blocks.canStyle(a, style) || carry.canStyle(a),
       why: (a) => blocks.styleWhy(a, STYLE_LABELS[style]) ?? `${STYLE_LABELS[style]} is not available, since a list item takes only Body and Small`,
       checked: (a) => (carry.canStyle(a) ? carry.styleOf(a) : blocks.paragraphStyle(a)) === style,
@@ -162,6 +167,7 @@ export function install(app: App): void {
       in: [...TEXT, 'notes'],
       menu: menu('list', 60 + i, 'List'),
       undoable: true,
+      undo: 'List Style',
       enabled: (a) => (notes.notesListKind(a) ? notes.canSetNotesList(a, kind) : blocks.canSetList(a, kind) || carry.canList(a)),
       why: (a) => blocks.listWhy(a, LIST_LABELS[kind]),
       checked: (a) => (notes.notesListKind(a) ?? (carry.canList(a) ? carry.listOf(a) : blocks.listKind(a))) === kind,
@@ -169,9 +175,10 @@ export function install(app: App): void {
     }));
   // Tab is taken in every item of a list, also where it does not change the level, so that it
   // does not move the focus out of the text. ⌘] and ⌘[ are Keynote's keys, shown in the menu, and
-  // Ctrl+] and Ctrl+[ those of Google Docs elsewhere
-  define({ id: 'text.indent', label: 'Increase Indent Level', keys: { mac: ['Mod+]', 'Tab'], other: ['Mod+]', 'Tab'] }, in: TEXT, menu: menu('list', 70, 'List'), undoable: true, enabled: blocks.inList, run: blocks.indent });
-  define({ id: 'text.outdent', label: 'Decrease Indent Level', keys: { mac: ['Mod+[', 'Shift+Tab'], other: ['Mod+[', 'Shift+Tab'] }, in: TEXT, menu: menu('list', 71, 'List'), undoable: true, enabled: blocks.inList, run: blocks.outdent });
+  // Ctrl+] and Ctrl+[ those of Google Docs elsewhere, where the menu shows Tab and Shift+Tab, since
+  // ] and [ are typed with AltGr on a German or an Italian keyboard
+  define({ id: 'text.indent', label: 'Increase Indent Level', keys: { mac: ['Mod+]', 'Tab'], other: ['Tab', 'Mod+]'] }, in: TEXT, menu: menu('list', 70, 'List'), undoable: true, enabled: (a) => blocks.inList(a) || flow.canLevel(a), run: (a) => flow.level(a, true) });
+  define({ id: 'text.outdent', label: 'Decrease Indent Level', keys: { mac: ['Mod+[', 'Shift+Tab'], other: ['Shift+Tab', 'Mod+['] }, in: TEXT, menu: menu('list', 71, 'List'), undoable: true, enabled: (a) => blocks.inList(a) || flow.canLevel(a), run: (a) => flow.level(a, false) });
 
   // the link opens its dialog, which makes the change one entry of the history. a test or a script
   // gives the address as arg, e.g. { href: '#/7' }, or the kind of link shown first, e.g.

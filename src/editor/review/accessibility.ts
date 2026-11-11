@@ -5,27 +5,33 @@
 // a table without a header row, a video without a poster, and the texts that the editor cannot
 // edit, and two checks of PowerPoint: the reading order of a slide and link text that does not
 // name its target. the list is read again after each change while the pane is open, and else the
-// state of the deck is read for the button Accessibility: Investigate of the status bar
+// state of the deck is read for the button Accessibility: Investigate of the status bar. the
+// contrast of text is measured in contrast.ts, and its tips do not change that state
 
 import type { App } from '../app.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { openMenu, type MenuItem } from '../ui/menu.ts';
+import { contrastIssues, type Mode } from './contrast.ts';
 import { paired } from './transitions.ts';
 
-export type CheckId = 'alt' | 'heading' | 'header' | 'poster' | 'order' | 'link' | 'editable';
-export type Severity = 'error' | 'warning';
-export type Issue = { check: CheckId; slide: Element | null; el: Element | null; what: string };
+export type CheckId = 'alt' | 'heading' | 'header' | 'contrast' | 'poster' | 'order' | 'link' | 'editable' | 'behind';
+export type Severity = 'error' | 'warning' | 'tip';
+export type Issue = { check: CheckId; slide: Element | null; el: Element | null; what: string; mode?: Mode };
 
 export const CHECKS: { id: CheckId; severity: Severity; title: string; why: string; how: string }[] = [
   { id: 'alt', severity: 'error', title: 'Missing alternative text', why: 'A screen reader reads the alt text of an image in its place, and a reader of the PDF or of the page without images sees it.', how: 'Choose Add Alt Text and describe what the image shows, or mark an image that is only decoration as decorative.' },
   { id: 'heading', severity: 'error', title: 'Missing slide title', why: 'A slide is found and named by its title in the outline of a screen reader, in the navigator, and in the running head.', how: 'Give the slide an h2, or an h1 on a title slide.' },
   { id: 'header', severity: 'error', title: 'Missing table header', why: 'A screen reader names each cell by the header of its column, which it reads from a header row of th cells.', how: 'Choose Use First Row as Header.' },
+  { id: 'contrast', severity: 'warning', title: 'Hard-to-read text contrast', why: 'Text too close in color to what is behind it is hard to read on a projector, in daylight, and with low vision. WCAG 2 asks for a contrast of 4.5:1, or 3:1 for text of 36 px and more.', how: 'Choose Select and Show, and give the text another tone, e.g. Text or Subtle, that reads in both modes.' },
   { id: 'poster', severity: 'warning', title: 'Video without a poster', why: 'A video without a poster is blank in the PDF, in the print view, and until it plays.', how: 'Give the video a poster, a PNG of its first frame, as AGENTS.md asks.' },
   { id: 'order', severity: 'warning', title: 'Check reading order', why: 'A screen reader reads the elements of a slide in the order of the file, and here an element drawn above another is read after it.', how: 'Choose Select and Show, and move the element back to its place, or move its text in the file before the element under it.' },
   { id: 'link', severity: 'warning', title: 'Unclear link text', why: 'A screen reader can list the links of a slide by their text alone, and a link named "here" or by its address does not say where it goes.', how: 'Choose Edit Link, and give the link a few words that name its target.' },
   { id: 'editable', severity: 'warning', title: 'Texts that cannot be edited', why: 'The editor did not match these texts to the file, hence an edit of them would not be saved.', how: 'Choose Show the Texts, and correct the markup of each one in the file.' },
+  { id: 'behind', severity: 'tip', title: 'Check text over a picture', why: 'The color behind a text over a backdrop, a surface, or a picture is not one color, hence its contrast is not measured.', how: 'Look at the slide in both modes, and move the text where the drawing is hard to read under it.' },
 ];
+
+const severityOf = (i: Issue): Severity => CHECKS.find((c) => c.id === i.check)?.severity ?? 'warning';
 
 const fileName = (src: string | null): string => (src ?? '').split(/[?#]/)[0].split('/').pop() || 'image';
 
@@ -114,6 +120,7 @@ export function inspect(app: App): Issue[] {
     if (outside(a) && unclearLink(a)) out.push({ check: 'link', slide: s, el: a, what: `Link ${quote((a.textContent ?? '').trim() || a.getAttribute('href') || '')}` });
   }
   for (const p of app.pairing?.problems ?? []) out.push({ check: 'editable', slide: p.slide, el: null, what: `${p.tag}: ${p.reason}` });
+  out.push(...contrastIssues(slides));
   return out;
 }
 
@@ -130,21 +137,21 @@ const CSS = `
 .beeson-edit-a11y .status .sub { margin-left: auto; color: var(--ed-muted); font-weight: 400; }
 .beeson-edit-a11y .list { flex: 1 1 auto; min-height: 0; overflow: auto; padding: 6px 6px 8px; }
 .beeson-edit-a11y .kind { margin: 8px 8px 4px; color: var(--ed-muted); font-size: 11px; font-weight: 600; letter-spacing: 0.02em; }
-.beeson-edit-a11y .check { display: flex; align-items: center; gap: 6px; width: 100%; height: 26px; padding: 0 8px 0 4px; border: 0; border-radius: 5px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: default; }
-.beeson-edit-a11y .check:hover { background: var(--ed-hover); }
-.beeson-edit-a11y .check svg { flex: none; color: var(--ed-muted); transition: transform 120ms; }
-.beeson-edit-a11y .check[aria-expanded="true"] svg { transform: rotate(90deg); }
-.beeson-edit-a11y .check .n { margin-left: auto; color: var(--ed-muted); font-variant-numeric: tabular-nums; }
+.beeson-edit-a11y :is(.check, .tiphead) { display: flex; align-items: center; gap: 6px; width: 100%; height: 26px; padding: 0 8px 0 4px; border: 0; border-radius: 5px; background: transparent; color: inherit; font: inherit; text-align: left; cursor: default; }
+.beeson-edit-a11y :is(.check, .tiphead):hover { background: var(--ed-hover); }
+.beeson-edit-a11y :is(.check, .tiphead) svg { flex: none; color: var(--ed-muted); transition: transform 120ms; }
+.beeson-edit-a11y :is(.check, .tiphead)[aria-expanded="true"] svg { transform: rotate(90deg); }
+.beeson-edit-a11y :is(.check, .tiphead) .n { margin-left: auto; color: var(--ed-muted); font-variant-numeric: tabular-nums; }
 .beeson-edit-a11y .items[hidden] { display: none; }
-.beeson-edit-a11y .item { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; min-height: 26px; margin: 1px 0; padding: 0 4px 0 28px; border-radius: 5px; cursor: default; }
-.beeson-edit-a11y .item:hover { background: var(--ed-hover); }
-.beeson-edit-a11y .item[aria-selected="true"] { background: var(--ed-select); color: var(--ed-on-select); }
-.beeson-edit-a11y .item .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.beeson-edit-a11y .item .where { color: var(--ed-muted); }
-.beeson-edit-a11y .item[aria-selected="true"] .where { color: inherit; opacity: 0.8; }
-.beeson-edit-a11y .item .fix { height: 20px; padding: 0 4px 0 7px; border: 0; border-radius: 4px; background: var(--ed-pressed); color: inherit; font: 12px/1 var(--ed-font); display: inline-flex; align-items: center; gap: 2px; cursor: default; }
-.beeson-edit-a11y .item .fix:hover { box-shadow: inset 0 0 0 100px var(--ed-hover); }
-.beeson-edit-a11y .item .fix:focus-visible, .beeson-edit-a11y button:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: 1px; }
+.beeson-edit-a11y :is(.item, .hint) { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 6px; min-height: 26px; margin: 1px 0; padding: 0 4px 0 28px; border-radius: 5px; cursor: default; }
+.beeson-edit-a11y :is(.item, .hint):hover { background: var(--ed-hover); }
+.beeson-edit-a11y :is(.item, .hint)[aria-selected="true"] { background: var(--ed-select); color: var(--ed-on-select); }
+.beeson-edit-a11y :is(.item, .hint) .what { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.beeson-edit-a11y :is(.item, .hint) .where { color: var(--ed-muted); }
+.beeson-edit-a11y :is(.item, .hint)[aria-selected="true"] .where { color: inherit; opacity: 0.8; }
+.beeson-edit-a11y :is(.item, .hint) .fix { height: 20px; padding: 0 4px 0 7px; border: 0; border-radius: 4px; background: var(--ed-pressed); color: inherit; font: 12px/1 var(--ed-font); display: inline-flex; align-items: center; gap: 2px; cursor: default; }
+.beeson-edit-a11y :is(.item, .hint) .fix:hover { box-shadow: inset 0 0 0 100px var(--ed-hover); }
+.beeson-edit-a11y :is(.item, .hint) .fix:focus-visible, .beeson-edit-a11y button:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: 1px; }
 .beeson-edit-a11y .alt { display: flex; gap: 6px; margin: 2px 4px 6px 28px; }
 .beeson-edit-a11y .alt input { flex: 1; min-width: 0; height: 24px; box-sizing: border-box; padding: 0 7px; border: 1px solid var(--ed-control-line); border-radius: 5px; background: var(--ed-control); color: var(--ed-text); font: inherit; user-select: text; -webkit-user-select: text; }
 .beeson-edit-a11y .alt input:focus { outline: none; border-color: var(--ed-select); box-shadow: 0 0 0 3px var(--ed-focus); }
@@ -161,11 +168,11 @@ type Theme = { get(): string; set(theme: 'dark' | 'light'): void };
 const theme = (): Theme | undefined => (window as unknown as { Beeson?: { theme?: Theme } }).Beeson?.theme;
 const frame = () => new Promise((done) => requestAnimationFrame(done));
 
-// the slide is flipped into the mode of el when el is shown in the other mode only, and the
-// promise is resolved once el has a box, or after 1.5 s. the theme applies a mode at the end of
-// the first frame of its view transition
-async function shownInMode(el: Element): Promise<void> {
-  const mode = el.closest('.for-light') ? 'light' : el.closest('.for-dark') ? 'dark' : null;
+// the slide is flipped into the mode of el when el is shown in the other mode only, or into the
+// mode of its issue, and the promise is resolved once el has a box, or after 1.5 s. the theme
+// applies a mode at the end of the first frame of its view transition
+async function shownInMode(el: Element, of?: Mode): Promise<void> {
+  const mode = el.closest('.for-light') ? 'light' : el.closest('.for-dark') ? 'dark' : (of ?? null);
   const t = theme();
   if (!mode || !t || t.get() === mode) return;
   t.set(mode);
@@ -206,6 +213,8 @@ export class Checker {
     this.list.setAttribute('role', 'tree');
     this.list.setAttribute('aria-label', 'Inspection results');
     this.el.append(title, this.status, this.list, this.info);
+    this.list.addEventListener('focusin', (ev) => this.rove((ev.target as Element).closest<HTMLElement>('[role="treeitem"]')));
+    this.list.addEventListener('keydown', (ev) => this.treeKey(ev));
     this.el.addEventListener('keydown', (ev) => {
       if (ev.key !== 'Escape' || (ev.target as Element).matches('input')) return;
       ev.preventDefault();
@@ -261,35 +270,75 @@ export class Checker {
     if (!b) return;
     const ready = !!this.app.pairing?.root;
     b.hidden = !ready;
-    const state = this.issues.length ? 'Investigate' : 'Good to go';
+    const bad = this.issues.some((i) => severityOf(i) !== 'tip');
+    const state = bad ? 'Investigate' : 'Good to go';
     const text = b.querySelector('.text');
     if (text) text.textContent = `Accessibility: ${state}`;
-    b.title = this.issues.length ? 'Open the accessibility pane to see the issues of the deck' : 'No accessibility issues were found in this deck';
+    b.title = bad ? 'Open the accessibility pane to see the issues of the deck' : 'No accessibility issues were found in this deck';
     b.setAttribute('aria-pressed', String(this.shown));
   }
 
   refresh(): void {
     // the row or head with the focus is focused again in the new list, or else the panel
     const active = document.activeElement;
-    const had = active instanceof HTMLElement && this.list.contains(active) ? (active.dataset.i ? `.item[data-i="${active.dataset.i}"]` : active.matches('.check') ? `.check[data-check="${active.dataset.check}"]` : null) : null;
+    const had = active instanceof HTMLElement && this.list.contains(active) ? (active.dataset.i ? `[data-i="${active.dataset.i}"]` : active.dataset.check ? `:is(.check, .tiphead)[data-check="${active.dataset.check}"]` : null) : null;
     this.issues = inspect(this.app);
-    const errors = this.issues.filter((i) => CHECKS.find((c) => c.id === i.check)?.severity === 'error').length;
-    const warnings = this.issues.length - errors;
-    this.status.classList.toggle('bad', this.issues.length > 0);
+    const errors = this.issues.filter((i) => severityOf(i) === 'error').length;
+    const warnings = this.issues.filter((i) => severityOf(i) === 'warning').length;
+    this.status.classList.toggle('bad', errors + warnings > 0);
     const sub = [errors && `${errors} ${errors === 1 ? 'error' : 'errors'}`, warnings && `${warnings} ${warnings === 1 ? 'warning' : 'warnings'}`].filter(Boolean).join(', ');
-    this.status.replaceChildren(make('span', 'dot'), make('span', '', this.issues.length ? 'Investigate' : 'Good to go'), make('span', 'sub', sub));
+    this.status.replaceChildren(make('span', 'dot'), make('span', '', errors + warnings ? 'Investigate' : 'Good to go'), make('span', 'sub', sub));
     this.list.replaceChildren();
-    if (!this.issues.length) this.list.append(make('div', 'good', 'No accessibility issues were found in this deck.'));
-    for (const severity of ['error', 'warning'] as Severity[]) {
+    if (!(errors + warnings)) this.list.append(make('div', 'good', 'No accessibility issues were found in this deck.'));
+    for (const severity of ['error', 'warning', 'tip'] as Severity[]) {
       const checks = CHECKS.filter((c) => c.severity === severity && this.issues.some((i) => i.check === c.id));
       if (!checks.length) continue;
-      this.list.append(make('div', 'kind', severity === 'error' ? 'Errors' : 'Warnings'));
+      this.list.append(make('div', 'kind', severity === 'error' ? 'Errors' : severity === 'warning' ? 'Warnings' : 'Tips'));
       for (const c of checks) this.list.append(...this.checkRows(c));
     }
     if (this.picked && !this.issues.some((i) => this.same(i, this.picked))) this.picked = null;
     this.showInfo();
     this.showSummary();
+    this.rove((had && this.list.querySelector<HTMLElement>(had)) || this.list.querySelector<HTMLElement>('[role="treeitem"]'));
     if (had && !this.editing) (this.list.querySelector<HTMLElement>(had) ?? this.el).focus({ preventScroll: true });
+  }
+
+  // the tree is one Tab stop, the row to of a roving tabindex
+  private rove(to: HTMLElement | null): void {
+    if (to) for (const r of this.list.querySelectorAll<HTMLElement>('[role="treeitem"]')) r.tabIndex = r === to ? 0 : -1;
+  }
+
+  // the keys of a tree of ARIA: the up and down arrows go between the shown rows, Home and End to
+  // the first and the last, the right arrow opens a head or goes into it, the left arrow closes a
+  // head or goes up to it, and the key of the context menu opens the fixes of a row
+  private treeKey(ev: KeyboardEvent): void {
+    const at = ev.target as HTMLElement;
+    if (!at.matches('[role="treeitem"]') || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    const rows = [...this.list.querySelectorAll<HTMLElement>('[role="treeitem"]')].filter((r) => r.getClientRects().length > 0);
+    const i = rows.indexOf(at);
+    const expanded = at.getAttribute('aria-expanded');
+    let to: HTMLElement | null | undefined = null;
+    if (ev.key === 'ContextMenu' || (ev.key === 'F10' && ev.shiftKey)) {
+      const issue = this.issues[Number(at.dataset.i)];
+      if (!issue) return;
+      this.openFixes(issue, at.querySelector('.fix')!, true, null);
+    } else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') to = rows[i + (ev.key === 'ArrowDown' ? 1 : -1)];
+    else if (ev.key === 'Home' || ev.key === 'End') to = ev.key === 'Home' ? rows[0] : rows[rows.length - 1];
+    else if (ev.key === 'ArrowRight' && expanded) {
+      if (expanded === 'false') at.click();
+      else to = rows[i + 1];
+    } else if (ev.key === 'ArrowLeft') {
+      if (expanded === 'true') at.click();
+      else to = this.list.querySelector<HTMLElement>(`.check[data-check="${at.dataset.check}"]`);
+    } else return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    to?.focus({ preventScroll: true });
+  }
+
+  private openFixes(issue: Issue, fix: HTMLElement, keyboard: boolean, owner: HTMLElement | null): void {
+    void this.pick(issue);
+    openMenu(this.app, this.fixes(issue), { anchor: fix.getBoundingClientRect(), placement: 'below', owner, keyboard, label: 'Fixes' });
   }
 
   private same(a: Issue, b: Issue | null): boolean {
@@ -298,10 +347,13 @@ export class Checker {
 
   private checkRows(c: (typeof CHECKS)[number]): HTMLElement[] {
     const list = this.issues.filter((i) => i.check === c.id);
-    const head = make('button', 'check');
+    // a tip is drawn as a check, under classes of its own, since it does not count as an issue
+    const tip = c.severity === 'tip';
+    const head = make('button', tip ? 'tiphead' : 'check');
     head.type = 'button';
     head.dataset.check = c.id;
     head.setAttribute('role', 'treeitem');
+    head.tabIndex = -1;
     const open = !this.closed.has(c.id);
     head.setAttribute('aria-expanded', String(open));
     head.append(icon('chevron-right', 14), make('span', '', c.title), make('span', 'n', String(list.length)));
@@ -315,14 +367,14 @@ export class Checker {
       head.setAttribute('aria-expanded', String(now));
       items.hidden = !now;
     });
-    for (const issue of list) items.append(...this.itemRows(issue));
+    for (const issue of list) items.append(...this.itemRows(issue, tip));
     return [head, items];
   }
 
-  private itemRows(issue: Issue): HTMLElement[] {
-    const row = make('div', 'item');
+  private itemRows(issue: Issue, tip = false): HTMLElement[] {
+    const row = make('div', tip ? 'hint' : 'item');
     row.setAttribute('role', 'treeitem');
-    row.tabIndex = 0;
+    row.tabIndex = -1;
     row.dataset.check = issue.check;
     row.dataset.i = String(this.issues.indexOf(issue));
     row.setAttribute('aria-selected', String(this.same(issue, this.picked)));
@@ -331,12 +383,12 @@ export class Checker {
     label.append(make('span', issue.what ? 'where' : '', whereOf(this.app, issue.slide)));
     const fix = make('button', 'fix');
     fix.type = 'button';
+    fix.tabIndex = -1;
     fix.title = 'Recommended actions';
     fix.append(document.createTextNode('Fix'), icon('chevron-down', 12));
     fix.addEventListener('click', (ev) => {
       ev.stopPropagation();
-      void this.pick(issue);
-      openMenu(this.app, this.fixes(issue), { anchor: fix.getBoundingClientRect(), placement: 'below', owner: fix, keyboard: ev.detail === 0, label: 'Fixes' });
+      this.openFixes(issue, fix, ev.detail === 0, fix);
     });
     row.append(label, fix);
     row.addEventListener('click', () => void this.pick(issue));
@@ -356,14 +408,15 @@ export class Checker {
   async pick(issue: Issue): Promise<void> {
     this.picked = issue;
     const i = String(this.issues.findIndex((x) => this.same(x, issue)));
-    for (const r of this.list.querySelectorAll<HTMLElement>('.item')) r.setAttribute('aria-selected', String(r.dataset.i === i));
+    for (const r of this.list.querySelectorAll<HTMLElement>('.item, .hint')) r.setAttribute('aria-selected', String(r.dataset.i === i));
     this.showInfo();
     const target = issue.el ?? issue.slide;
     if (target?.isConnected) this.app.showSlide(target);
     if (!issue.el?.isConnected || !issue.el.closest('section')) return;
-    await shownInMode(issue.el);
+    await shownInMode(issue.el, issue.mode);
     if (this.picked !== issue || !issue.el.isConnected) return;
-    const box = issue.check === 'link' ? (issue.el.closest('p, li, h1, h2, h3, h4, td, th, .caption, .foot') ?? issue.el) : (issue.el.closest('.zone, .plate, figure') ?? issue.el);
+    const text = issue.check === 'contrast' || issue.check === 'behind';
+    const box = issue.check === 'link' ? (issue.el.closest('p, li, h1, h2, h3, h4, td, th, .caption, .foot') ?? issue.el) : text ? (this.app.move.movableOf(issue.el) ?? issue.el) : (issue.el.closest('.zone, .plate, figure') ?? issue.el);
     this.app.selection.set('elements', [issue.el.matches('img, video, .qr') ? issue.el : box]);
     this.app.invalidate('layout');
   }

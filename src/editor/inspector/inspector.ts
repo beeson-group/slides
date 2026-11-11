@@ -1,7 +1,7 @@
 // the Format tab of the inspector, whose panes follow the selection as in the Format inspector of
 // Keynote: the Slide pane with nothing selected, Text and Arrange for a text or a block, Image,
-// Video, or QR with Arrange for a picture, and Arrange alone for a figure around an image or a
-// video, for another element, or for several.
+// Video, or QR with Arrange for a picture, Text and Arrange for several text blocks, and Arrange
+// alone for a figure around an image or a video, for another element, or for several others.
 // with more than one pane, the panes are tabs of a segmented control, and the tab chosen last is
 // kept for the next selection that has it. the panes are built again only when the selection or
 // the slide changes, and else read again in place, so that a field keeps its focus while the deck
@@ -30,6 +30,8 @@ import { lockedSelection } from '../commands/order.ts';
 export type PaneKind = 'slide' | 'table' | 'text' | 'image' | 'video' | 'qr' | 'formula' | 'code' | 'plot' | 'surface' | 'line' | 'arrange';
 const TAB_NAMES: Record<PaneKind, string> = { slide: 'Slide', table: 'Table', text: 'Text', image: 'Image', video: 'Video', qr: 'QR Code', formula: 'Formula', code: 'Code', plot: 'Plot', surface: 'Surface', line: 'Line', arrange: 'Arrange' };
 const isCode = (el: Element | undefined) => !!el?.closest('pre')?.querySelector(':scope > code');
+// a block of words, which the Text pane formats together with others, as text boxes in Keynote
+const TEXT_BLOCK = 'h1, h2, h3, p, ul, ol, div.foot';
 
 // the panes of the selection, and the elements that tell one selection from another
 function viewOf(app: App): { tabs: PaneKind[]; items: readonly Element[] } {
@@ -40,7 +42,7 @@ function viewOf(app: App): { tabs: PaneKind[]; items: readonly Element[] } {
   const els = sel.elements();
   if (!els.length) return { tabs: ['slide'], items: [app.current()].filter((s): s is Element => !!s) };
   if (selectedLines(app).length === els.length) return { tabs: ['line', 'arrange'], items: els };
-  if (els.length > 1) return { tabs: ['arrange'], items: els };
+  if (els.length > 1) return { tabs: els.every((el) => el.matches(TEXT_BLOCK) && hasText(el)) ? ['text', 'arrange'] : ['arrange'], items: els };
   const el = els[0];
   if (el.localName === 'table') return { tabs: ['table', 'arrange'], items: els };
   // a figure is shown with the pane of its picture, as an image with a caption in Keynote

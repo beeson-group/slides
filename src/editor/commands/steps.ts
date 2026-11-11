@@ -2,7 +2,8 @@
 // an element, i.e. its step, its start, its effect, Show Last, a move by a drag, and a move one
 // step earlier or later. each change is written as a new plan of the slide by writePlan of
 // steps.ts, as one entry of the history. a command of a row takes the element of the row in its
-// argument, and otherwise the selected element, or the item of the slide around it
+// argument, and otherwise the selected element, or the item of the slide around it. Set Step, Add
+// as Last Step, Show with Slide, the start, the effect, and Show Last act on each selected element
 
 import type { App } from '../app.ts';
 import { moveTo, oneByOne, placedIndex, setFinal, setIndexReader, setStart, setStep, shift, stepAt, type Plan, type Start } from '../layers.ts';
@@ -29,14 +30,33 @@ function change(app: App, arg: unknown, fn: (plan: Plan, i: number) => Plan): vo
   if (m) writePlan(app, m, fn(m.plan, m.i));
 }
 
-// the positions of the items that are a step for the item el: el itself, or the items held by
-// el that are a step when el is not one, e.g. the images of a figure, by which the figure counts
-// as a step
+// the items of the argument, or of each selected element when several are selected, on the slide
+// of the first, with their positions in the order of the slide
+function itemsOf(app: App, arg: unknown): { m: Model; items: { el: Element; i: number }[] } | null {
+  const sel = app.selection;
+  const many = !((arg as Arg | undefined)?.el instanceof Element) && sel.kind === 'elements' && sel.items.length > 1;
+  const els = many ? [...new Set(sel.items.flatMap((el) => itemOf(app, { el }) ?? []))] : [itemOf(app, arg)].flatMap((el) => el ?? []);
+  const m = els.length ? modelOf(app, els[0].closest('section')) : null;
+  const items = m ? els.map((el) => ({ el, i: indexIn(m, el) })).filter((x) => x.i >= 0).sort((a, b) => a.i - b.i) : [];
+  return m && items.length ? { m, items } : null;
+}
+
+// fn applied to the plan at each item, as one change. first is the position of the first item,
+// whose step the others join
+function changeEach(app: App, arg: unknown, fn: (plan: Plan, i: number, first: number) => Plan): void {
+  const s = itemsOf(app, arg);
+  if (s) writePlan(app, s.m, s.items.reduce((p, { i }) => fn(p, i, s.items[0].i), s.m.plan));
+}
+
+// the positions of the items that are a step for the item at i: the item itself, or the items
+// held by it that are a step when it is not one, e.g. the images of a figure, by which the figure
+// counts as a step
+const stepsIn = (m: Model, i: number): number[] =>
+  stepAt(m.plan, i) >= 0 ? [i] : m.els.flatMap((x, k) => (k !== i && !m.lines[k] && m.els[i].contains(x) && stepAt(m.plan, k) >= 0 ? [k] : []));
+
 function stepsFor(app: App, el: Element | null): { m: Model & { i: number }; at: number[] } | null {
   const m = el ? modelAt(app, el) : null;
-  if (!m || !el) return null;
-  if (stepAt(m.plan, m.i) >= 0) return { m, at: [m.i] };
-  return { m, at: m.els.flatMap((x, k) => (k !== m.i && !m.lines[k] && el.contains(x) && stepAt(m.plan, k) >= 0 ? [k] : [])) };
+  return m ? { m, at: stepsIn(m, m.i) } : null;
 }
 
 const stepped = (app: App, arg?: unknown): boolean => !!stepsFor(app, itemOf(app, arg))?.at.length;
@@ -176,29 +196,33 @@ export function install(app: App): void {
   // the step chosen in the menu of a chip: an index of the plan, 'first' or 'last' for a new step,
   // or null for the slide. the commands of a row are enabled without a selection, since enabled
   // does not see the element of the argument
+  // several items are given one step: the first item takes the step chosen, and the others join it
+  const join = (to: number | 'first' | 'last' | null) => (p: Plan, i: number, first: number) => setStep(p, i, i === first || to === null ? to : stepAt(p, first));
   c.define({
     id: 'steps.set',
     label: 'Set Step',
     undoable: true,
-    run: (a, arg) => change(a, arg, (p, i) => setStep(p, i, (arg as { to: number | 'first' | 'last' | null }).to)),
+    run: (a, arg) => changeEach(a, arg, join((arg as { to: number | 'first' | 'last' | null }).to)),
   });
+  const all = (a: App) => itemsOf(a, undefined)?.items ?? [];
   c.define({
     id: 'steps.add',
     label: 'Add as Last Step',
     context: ['element'],
-    enabled: (a) => !!itemOf(a, undefined) && !stepped(a),
+    enabled: (a) => all(a).some(({ el }) => !stepped(a, { el })),
     undoable: true,
-    run: (a, arg) => change(a, arg, (p, i) => setStep(p, i, 'last')),
+    run: (a, arg) => changeEach(a, arg, join('last')),
   });
   c.define({
     id: 'steps.remove',
     label: 'Show with Slide',
     context: ['element'],
-    enabled: (a) => stepped(a),
+    enabled: (a) => all(a).some(({ el }) => stepped(a, { el })),
     undoable: true,
     run: (a, arg) => {
-      const s = stepsFor(a, itemOf(a, arg));
-      if (s?.at.length) writePlan(a, s.m, s.at.reduce((p, k) => setStep(p, k, null), s.m.plan));
+      const s = itemsOf(a, arg);
+      const at = s ? s.items.flatMap(({ i }) => stepsIn(s.m, i)) : [];
+      if (s && at.length) writePlan(a, s.m, at.reduce((p, k) => setStep(p, k, null), s.m.plan));
     },
   });
   // On Click, With Previous, or After Previous with a delay in seconds, the last one written as
@@ -208,22 +232,26 @@ export function install(app: App): void {
     label: 'Set Start of Step',
     undoable: true,
     run: (a, arg) => {
-      const el = itemOf(a, arg);
-      const m = el ? modelAt(a, el) : null;
-      if (!m) return;
+      const s = itemsOf(a, arg);
+      if (!s) return;
       const { start, delay } = arg as { start: StartKind; delay?: number };
-      const delays = delaysOf(a, m);
-      const g = m.plan.groups.findIndex((g) => g.includes(m.i));
-      if (start !== 'after') {
-        delays.delete(m.i);
-        if (start === 'with' && g >= 0) delays.delete(Math.min(...m.plan.groups[g]));
-        writePlan(a, m, setStart(m.plan, m.i, start as Start), new Map(), delays);
-        return;
+      const delays = delaysOf(a, s.m);
+      let plan = s.m.plan;
+      for (const { i } of s.items) {
+        const m = { ...s.m, plan };
+        const g = plan.groups.findIndex((g) => g.includes(i));
+        if (start !== 'after') {
+          delays.delete(i);
+          if (start === 'with' && g >= 0) delays.delete(Math.min(...plan.groups[g]));
+          plan = setStart(plan, i, start as Start);
+          continue;
+        }
+        if (g <= 0 && Math.min(...(plan.groups[g] ?? [i])) === i) throw new Error('the first step of a slide is shown at a click, and it cannot start after a step before it');
+        if (!afterable(m, i)) throw new Error('the step before is set in the text of a block, and a delay cannot be written on it');
+        delays.set(i, delay === undefined ? (startAt(a, m, i, delays).delay ?? AFTER_DEFAULT) : msOf(delay));
+        plan = setStart(plan, i, 'click');
       }
-      if (g <= 0 && Math.min(...(m.plan.groups[g] ?? [m.i])) === m.i) throw new Error('the first step of a slide is shown at a click, and it cannot start after a step before it');
-      if (!afterable(m, m.i)) throw new Error('the step before is set in the text of a block, and a delay cannot be written on it');
-      delays.set(m.i, delay === undefined ? (startAt(a, m, m.i, delays).delay ?? AFTER_DEFAULT) : msOf(delay));
-      writePlan(a, m, setStart(m.plan, m.i, 'click'), new Map(), delays);
+      writePlan(a, s.m, plan, new Map(), delays);
     },
   });
   c.define({
@@ -269,7 +297,7 @@ export function install(app: App): void {
     id: 'steps.final',
     label: 'Show Last',
     undoable: true,
-    run: (a, arg) => change(a, arg, (p, i) => setFinal(p, i, !!(arg as { on?: boolean }).on)),
+    run: (a, arg) => changeEach(a, arg, (p, i) => setFinal(p, i, !!(arg as { on?: boolean }).on)),
   });
   // a drop of a row in the gap before the step at position gap, or with the slide for null
   c.define({
@@ -298,19 +326,27 @@ export function install(app: App): void {
     undoable: true,
     run: (a, arg) => change(a, arg, (p, i) => shift(p, i, 1)),
   });
-  // the effect of a step: Fade In, Fade Out, or Only at Its Step. an element shown with the slide
-  // becomes the last step first
+  // the effect of a step: Fade In, Fade Out, or Only at Its Step. the elements shown with the slide
+  // become one last step first
   c.define({
     id: 'steps.effect',
     label: 'Set Effect of Step',
     undoable: true,
     run: (a, arg) => {
-      const el = itemOf(a, arg);
-      const m = el ? modelAt(a, el) : null;
-      if (!el || !m || m.locked[m.i]) return;
-      const edit = effectEdit(a.doc.tagState(el), (arg as { effect: Effect }).effect);
-      const extra = new Map(Object.keys(edit).length ? [[el, edit]] : []);
-      writePlan(a, m, stepAt(m.plan, m.i) >= 0 ? m.plan : setStep(m.plan, m.i, 'last'), extra);
+      const s = itemsOf(a, arg);
+      if (!s) return;
+      const extra = new Map<Element, TagEdit>();
+      let plan = s.m.plan;
+      let first = -1;
+      for (const { el, i } of s.items) {
+        if (s.m.locked[i]) continue;
+        const edit = effectEdit(a.doc.tagState(el), (arg as { effect: Effect }).effect);
+        if (Object.keys(edit).length) extra.set(el, edit);
+        if (stepAt(plan, i) >= 0) continue;
+        plan = setStep(plan, i, first < 0 ? 'last' : stepAt(plan, first));
+        if (first < 0) first = i;
+      }
+      if (extra.size || plan !== s.m.plan) writePlan(a, s.m, plan, extra);
     },
   });
 }

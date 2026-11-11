@@ -20,6 +20,11 @@ const queryOf = (arg: unknown): string | undefined => (typeof arg === 'string' ?
 export function install(app: App): void {
   const finder = createFinder(app, { next: NEXT[app.platform], previous: PREVIOUS[app.platform] }, { open: openMenu, close: closeMenus });
   const c = app.commands;
+  // F3 with Shift or Ctrl is a key of the find bar of Chrome and Edge, hence it is never left to the
+  // browser, also where it does not run a command, e.g. without a query or outside a text
+  window.addEventListener('keydown', (ev) => {
+    if (ev.key === 'F3' && !ev.altKey) ev.preventDefault();
+  }, true);
   c.define({
     id: 'find.open',
     label: 'Find…',
@@ -46,6 +51,17 @@ export function install(app: App): void {
     menu: { bar: 'Edit', group: 'find', order: 42 },
     enabled: () => !!finder.query,
     run: () => finder.step(-1, !finder.open),
+  });
+  // Use Selection for Find of Keynote: the text selected in a block becomes the query
+  const selected = () => getSelection()?.toString().trim() ?? '';
+  c.define({
+    id: 'find.useSelection',
+    label: 'Use Selection for Find',
+    keys: { mac: ['Mod+E'], other: ['Mod+E'] },
+    in: IN,
+    menu: { bar: 'Edit', group: 'find', order: 42.5 },
+    enabled: () => !!selected() && !selected().includes('\n'),
+    run: () => finder.show('find', selected()),
   });
   c.define({
     id: 'find.replace',

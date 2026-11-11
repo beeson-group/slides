@@ -3,13 +3,15 @@
 // heading, a paragraph, or an item is edited in place, and its text is written into the block of
 // the slide through app.doc when the field is left, as a text typed on the canvas. Return splits a
 // paragraph or an item and adds a slide after a heading, and Tab and Shift+Tab change the level of
-// an item, with the commands of text/blocks.ts at the same place of the block. a block that is not
-// edited here, e.g. a formula, a table, or a text with other markup, is drawn dimmed. the math of
-// a line is typeset, apart from the line with the caret, which shows its TeX to be edited
+// an item, with the commands of text/blocks.ts at the same place of the block, or move a line
+// across slides with promote.ts. a block that is not edited here, e.g. a formula, a table, or a
+// text with other markup, is drawn dimmed. the math of a line is typeset, apart from the line with
+// the caret, which shows its TeX to be edited
 
 import type { App } from '../app.ts';
 import { canIndent, canOutdent, canSplit, indent, offsetIn, outdent, ownTex, selectIn, setOwnTex, split } from '../text/blocks.ts';
 import { hasTex, typeset, untypeset } from '../typeset.ts';
+import { demote, promote } from './promote.ts';
 import { injectStyle, make, store, stored } from '../ui/dom.ts';
 
 const KEY = 'beeson-outline';
@@ -298,6 +300,13 @@ export class Outline {
         this.app.showSlide(e.slide);
         await this.app.commands.run('slide.new');
         this.done(() => this.titleOf(this.app.current()));
+        return;
+      }
+      // Shift+Tab on a first-level line and Tab on a title move the line across slides
+      const moved = what === 'outdent' && e.kind !== 'title' ? await promote(this.app, e.el) : what === 'indent' && e.kind === 'title' ? await demote(this.app, e.el) : null;
+      if (moved) {
+        this.app.showSlide(moved.slide);
+        this.done(() => this.entries.find((x) => x.el === moved.line)?.text ?? null);
         return;
       }
       const end = (e.el.textContent ?? '').length;

@@ -53,7 +53,7 @@ export function layoutText(layout: Layout, style: TextStyle, base = ''): string 
   }
 }
 
-export type ElementOptions = { src?: string; alt?: string; poster?: string; tex?: string; language?: string; qr?: string; id?: string; columns?: number; rows?: number; scene?: string };
+export type ElementOptions = { src?: string; alt?: string; poster?: string; tex?: string; language?: string; qr?: string; id?: string; columns?: number; rows?: number; scene?: string; plate?: boolean };
 
 // the units of a new element of the kind, each without the white space before it, in the order in
 // which they are inserted. base is the indentation of the children of the container, and a plot is
@@ -88,12 +88,12 @@ export function elementText(kind: ElementKind, style: TextStyle, base: string, o
       const json: [number, string][] = [
         [0, `<script type="application/json" id="${id}">{`],
         [1, '"duration": 2,'],
-        [1, '"panels": [{ "id": "main", "x": { "range": [0, 1] }, "y": { "range": [0, 1] } }],'],
+        [1, '"panels": [{ "id": "main", "x": { "range": [0, 1], "title": "$x$" }, "y": { "range": [0, 1], "title": "$y$" } }],'],
         [1, '"marks": [{ "id": "line", "panel": "main", "kind": "trace" }],'],
-        [1, '"tabs": [{ "name": "data", "values": [0, 1], "data": { "line": [[0, 0], [1, 1]] } }]'],
+        [1, '"tabs": [{ "name": "data", "values": [0, 0.25, 0.5, 0.75, 1], "data": { "line": [[0, 0.1], [0.25, 0.45], [0.5, 0.6], [0.75, 0.7], [1, 0.9]] } }]'],
         [0, '}</script>'],
       ];
-      return [`<div class="plot zone" data-plot="${id}"></div>`, lines(json, style, base)];
+      return [`<div class="plot ${o.plate ? 'plate' : 'zone'}" data-plot="${id}"></div>`, lines(json, style, base)];
     }
     case 'backdrop':
       return [`<div class="backdrop" data-scene="${attr(o.scene ?? 'nest')}" data-cx="0.97" data-cy="0" data-half="0.5"></div>`];

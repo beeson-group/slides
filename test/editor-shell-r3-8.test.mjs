@@ -241,7 +241,8 @@ for (const platform of PLATFORMS) {
     const list = await navRows(page);
     assert.deepEqual(list[3], { no: '', skip: true, height: list[3].height, pic: false });
     assert.ok(list[3].height <= 14, `the bar of the skipped slide is ${list[3].height} px high`);
-    assert.deepEqual(list.map((r) => r.no), Array.from({ length: total }, (_, i) => (i === 3 ? '' : String(i + 1))));
+    // the slides after it are numbered in show order, as in the navigators of Keynote and PowerPoint
+    assert.deepEqual(list.map((r) => r.no), Array.from({ length: total }, (_, i) => (i === 3 ? '' : String(i < 3 ? i + 1 : i))));
     // the bar is selected by a click, and the slide is shown again from its context menu
     await page.evaluate('Reveal.slide(0)');
     await frames(page);
@@ -249,7 +250,8 @@ for (const platform of PLATFORMS) {
     await click(page, bar);
     await frames(page);
     assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-nav .row')[3].getAttribute('aria-selected')`), 'true');
-    assert.equal(await count(page), `Slide 4 of ${total}`);
+    // the status counts the slides in the show, and names the hidden slide with its struck number
+    assert.equal(await count(page), `Slide 4 of ${total - 1}, hidden`);
     await click(page, bar, { button: 'right' });
     await frames(page);
     const item = `[...document.querySelectorAll('.beeson-edit-menu [role="menuitem"]')].find((m) => m.textContent.includes('Show Slide'))`;
@@ -477,11 +479,25 @@ const keySheet = (page) =>
     return { tokens, bg: getComputedStyle(d).backgroundColor, fg: getComputedStyle(d).color, box: { left: box.left, right: box.right, bottom: box.bottom }, sections, scrolls: body.scrollHeight > body.clientHeight + 1 || body.scrollWidth > body.clientWidth + 1 };
   })()`);
 
-// the labels of the items of a menu of the menu bar, in their order
+// the labels of the items of a menu of the menu bar, in their order, with the items of a submenu
+// after its own label, as the keyboard sheet lists them
 async function menuLabels(page, bar) {
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].find((m) => m.textContent.trim() === ${JSON.stringify(bar)}).click()`);
   await frames(page);
-  const labels = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item .label')].map((l) => l.textContent)`);
+  const read = (nth) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu')[${nth}]?.querySelectorAll('.item') ?? []].map((i) => ({ label: i.querySelector('.label').textContent, submenu: i.getAttribute('aria-haspopup') === 'menu' }))`);
+  const labels = [];
+  const top = await read(0);
+  for (const [n, item] of top.entries()) {
+    labels.push(item.label);
+    if (!item.submenu) continue;
+    const at = await page.evaluate(`(() => { const r = document.querySelectorAll('.beeson-edit-menu')[0].querySelectorAll('.item')[${n}].getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.x, y: at.y });
+    // a submenu is opened after a rest of the pointer on its row, in place of the one open before
+    await sleep(350);
+    assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-menu').length`), 2, `the submenu ${item.label} of ${bar} is not opened`);
+    labels.push(...(await read(1)).map((i) => i.label));
+  }
+  await press(page, 'Escape');
   await press(page, 'Escape');
   await frames(page);
   return labels;
@@ -550,11 +566,11 @@ for (const platform of PLATFORMS) {
     // the Zoom popup shows the zoom, and sets a level or Fit
     const zoom = '.beeson-edit-top [data-command="toolbar.zoom"]';
     const face = () => page.evaluate(`document.querySelector('${zoom} .readout').textContent`);
-    assert.equal(await face(), 'Fit');
+    assert.match(await face(), /^\d+%$/);
     await click(page, zoom);
     await frames(page);
     const levels = (await openMenuItems(page)).map((i) => i.label);
-    assert.deepEqual(levels, ['Fit', 'Actual Size', 'Zoom to Selection', '25%', '33%', '50%', '67%', '75%', '100%', '125%', '150%', '200%', '300%', '400%']);
+    assert.deepEqual(levels, ['Fit Slide', 'Actual Size', 'Zoom to Selection', '25%', '33%', '50%', '67%', '75%', '100%', '125%', '150%', '200%', '300%', '400%']);
     await pickItem(page, '200%');
     await frames(page);
     assert.equal(await page.evaluate('window.BeesonEditorShell.stage.zoom'), 2);
@@ -562,10 +578,10 @@ for (const platform of PLATFORMS) {
     await click(page, zoom);
     await frames(page);
     assert.equal((await openMenuItems(page)).find((i) => i.label === '200%').checked, true);
-    await pickItem(page, 'Fit');
+    await pickItem(page, 'Fit Slide');
     await frames(page);
     assert.equal(await page.evaluate('window.BeesonEditorShell.stage.zoom'), null);
-    assert.equal(await face(), 'Fit');
+    assert.match(await face(), /^\d+%$/);
     assert.equal(await render(page), page.source);
     assert.deepEqual(errors(page), []);
   });

@@ -80,6 +80,27 @@ function deckStyles(): { links: HTMLLinkElement[]; adopted: CSSStyleSheet[] } {
   return { links, adopted: [...fromLinks.filter((x): x is CSSStyleSheet => !!x), ...styles, sheetOf(CSS.replaceAll('BRAND', brandUrl(all)))] };
 }
 
+// measure run on slide shown as the current slide is, and invisible, with its inline style put back
+export function laidOut<T>(slide: HTMLElement, measure: () => T): T {
+  const style = slide.getAttribute('style');
+  const hidden = slide.hidden;
+  const present = slide.classList.contains('present');
+  slide.hidden = false;
+  slide.style.display = 'block';
+  if (!present) {
+    slide.style.visibility = 'hidden';
+    slide.classList.add('present');
+  }
+  try {
+    return measure();
+  } finally {
+    if (!present) slide.classList.remove('present');
+    if (style === null) slide.removeAttribute('style');
+    else slide.setAttribute('style', style);
+    slide.hidden = hidden;
+  }
+}
+
 // a clone of slide for its thumbnail, with every step shown, or the first layer of a slide whose
 // elements are hidden at a step. its canvases are painted from the originals at the scale of the
 // thumbnail. a tycho viewer is replaced by an empty box, since its clone would start a second
@@ -87,12 +108,17 @@ function deckStyles(): { links: HTMLLinkElement[]; adopted: CSSStyleSheet[] } {
 export function cloneSlide(slide: Element, scale: number): HTMLElement {
   const clone = slide.cloneNode(true) as HTMLElement;
   clone.querySelectorAll('aside.notes').forEach((n) => n.remove());
-  const from = slide.querySelectorAll('canvas');
+  const from = [...slide.querySelectorAll('canvas')];
   const ratio = Math.min(2, window.devicePixelRatio || 1);
+  // the sizes of the canvases in slide px. a slide far from the current one is not laid out by
+  // reveal.js, and the size of the buffer of its canvas is in device px, hence it is laid out
+  const size = () => from.map((c) => [c.offsetWidth, c.offsetHeight]);
+  let sizes = size();
+  if (sizes.some(([w]) => !w) && slide instanceof HTMLElement) sizes = laidOut(slide, size);
   clone.querySelectorAll('canvas').forEach((canvas, i) => {
     const source = from[i];
-    const w = source.offsetWidth || parseFloat(source.style.width) || source.width;
-    const h = source.offsetHeight || parseFloat(source.style.height) || source.height;
+    const w = sizes[i][0] || parseFloat(source.style.width) || source.width;
+    const h = sizes[i][1] || parseFloat(source.style.height) || source.height;
     canvas.width = Math.max(1, Math.round(w * scale * ratio));
     canvas.height = Math.max(1, Math.round(h * scale * ratio));
     canvas.style.width = `${w}px`;
@@ -123,12 +149,38 @@ export function cloneSlide(slide: Element, scale: number): HTMLElement {
     // the classes of the marks of a plot are set at run time too, and the theme paints the marks by them
     for (const c of [...el.classList]) if (isRuntimeClass(c) && !c.startsWith('plot-')) el.classList.remove(c);
   }
+  if (window.MathJax) hideTex(clone);
   const layers = layersOf(clone);
   showLayer(clone, layers.length > 1 ? layers[0] : null);
   clone.classList.add('present');
   clone.style.display = 'block';
   clone.style.top = '0';
   return clone;
+}
+
+// the formulas of clone that are not typeset yet, i.e. in raw TeX, are hidden in place, so that a
+// picture shows the rest of its slide while MathJax typesets. a code box and the notes are kept
+const TEX = /\\\((?:[\s\S]*?\\\)|[\s\S]*$)|\\\[(?:[\s\S]*?\\\]|[\s\S]*$)/g;
+function hideTex(clone: Element): void {
+  const walker = document.createTreeWalker(clone, NodeFilter.SHOW_TEXT);
+  const raw: Text[] = [];
+  for (let t = walker.nextNode() as Text | null; t; t = walker.nextNode() as Text | null) {
+    if (/\\[([]/.test(t.data) && !t.parentElement?.closest('mjx-container, pre, code, script, style, textarea')) raw.push(t);
+  }
+  for (const t of raw) {
+    const parts = document.createDocumentFragment();
+    let at = 0;
+    for (const m of t.data.matchAll(TEX)) {
+      parts.append(t.data.slice(at, m.index));
+      const hidden = document.createElement('span');
+      hidden.style.visibility = 'hidden';
+      hidden.textContent = m[0];
+      parts.append(hidden);
+      at = m.index + m[0].length;
+    }
+    parts.append(t.data.slice(at));
+    t.replaceWith(parts);
+  }
 }
 
 // MathJax keeps its glyphs in one cache of the page, named by use elements, and a use element does
@@ -312,15 +364,14 @@ export class Thumbs {
     const host = this.hosts.get(slide);
     this.dirty.delete(slide);
     if (!host || !this.width || !slide.isConnected) return;
-    // the last picture is kept until the formulas of the slide are typeset, since the thumbnail
-    // would show their TeX in the meantime
+    // the last picture is kept until the formulas of the slide are typeset. a thumbnail without a
+    // picture is drawn at once with its raw TeX hidden, and drawn again once they are typeset
     const waited = this.waits.get(slide) ?? 0;
     if (waited < WAITS && rawTex(slide)) {
       this.waits.set(slide, waited + 1);
       this.soon(slide);
-      return;
-    }
-    this.waits.delete(slide);
+      if (host.shadowRoot?.querySelector('.beeson-thumb')) return;
+    } else this.waits.delete(slide);
     drawInto(host, slide, this.deck(), this.width);
     host.dataset.drawn = String(Number(host.dataset.drawn ?? 0) + 1);
   }
