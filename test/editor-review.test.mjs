@@ -197,12 +197,14 @@ for (const platform of PLATFORMS) {
     assert.equal(await page.evaluate('window.BeesonEditor.status().dirty'), false);
   });
 
-  test(`the transitions None and Fade are written as data-transition on ${platform}`, async () => {
+  // as in Keynote, the transition of a slide is played when the show leaves it, and reveal.js plays
+  // the data-transition of the slide entered, hence it is written on the next slide
+  test(`the transitions None and Fade are written as data-transition of the next slide on ${platform}`, async () => {
     const page = await reviewPage(platform, 4);
     assert.equal((await state(page, 'slide.transition.fade')).checked, true);
     await exec(page, 'slide.transition.none');
     assert.equal((await state(page, 'slide.transition.none')).checked, true);
-    const none = [[NARROW, '<section class="narrow" data-transition="none">']];
+    const none = [[WIDE, '<section class="wide" data-transition="none">']];
     await roundTrip(page, none);
     await exec(page, 'slide.transition.fade');
     await byteExact(page);
@@ -217,7 +219,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await pressed(), ['slide.transition.none']);
     await click(page, '.beeson-edit-transition [data-command="slide.transition.fade"]');
     await frames(page);
-    await byteExact(page, [[none[0][1], NARROW]]);
+    await byteExact(page, [[none[0][1], WIDE]]);
     assert.deepEqual(await pressed(), ['slide.transition.fade']);
     await click(page, '.reveal section.present > h2');
     await frames(page);

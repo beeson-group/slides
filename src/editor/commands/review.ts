@@ -95,14 +95,14 @@ export function install(app: App): void {
       id: `slide.transition.${t}`,
       label,
       menu: { bar: 'Slide', group: 'transition', order: 60 + i, submenu: 'Transition' },
-      enabled: (a) => targets(a).length > 0 && (t !== 'magic' || targets(a).some((s) => !!nextShown(a, s))),
+      enabled: (a) => targets(a).some((s) => !!nextShown(a, s)),
       checked: (a) => {
         const s = a.current();
-        return !!s && transitionOf(a, s) === t;
+        return !!s && !!nextShown(a, s) && transitionOf(a, s) === t;
       },
       undoable: true,
       run: (a) => {
-        const list = targets(a).filter((s) => t !== 'magic' || nextShown(a, s));
+        const list = targets(a).filter((s) => nextShown(a, s));
         for (const s of list) setTransition(a, s, t);
         a.invalidate('content');
       },
@@ -130,7 +130,10 @@ export function install(app: App): void {
     id: 'slide.previewTransition',
     label: 'Preview Transition',
     menu: { bar: 'Slide', group: 'transition', order: 66 },
-    enabled: (a) => ready(a) && !!a.current(),
+    enabled: (a) => {
+      const s = a.current();
+      return ready(a) && !!s && !!nextShown(a, s);
+    },
     run: (a) => {
       const s = a.current();
       if (s) void preview(a, s).catch((e) => a.fail(e));

@@ -1,5 +1,5 @@
 // the transition of the slide at the head of the Steps tab, as in the Animate inspector of Keynote
-// with no element selected: None or Fade into the slide, Magic Move to the next slide, Magic Move
+// with no element selected: None, Fade, or Magic Move from the slide to the next slide, Magic Move
 // to a copy of the slide, Preview, and the time of the slide in the last rehearsal. each button
 // runs a command of commands/review.ts, and the block is hidden while an element or a text is
 // selected
@@ -26,8 +26,8 @@ html.beeson-editor .beeson-edit-side .slot[hidden] { display: none; }
 `;
 
 const KINDS: [string, string, string][] = [
-  ['none', 'None', 'Cut into this slide from the slide before, without an effect'],
-  ['fade', 'Fade', 'Fade into this slide from the slide before, the default of the theme'],
+  ['none', 'None', 'Cut from this slide to the next slide, without an effect'],
+  ['fade', 'Fade', 'Fade from this slide into the next slide, the default of the theme'],
   ['magic', 'Magic Move', 'Move the matched elements to their places on the next slide'],
 ];
 
@@ -38,7 +38,7 @@ export function install(app: App): void {
   const box = make('div', 'beeson-edit-transition');
   const seg = make('div', 'seg');
   seg.setAttribute('role', 'group');
-  seg.setAttribute('aria-label', 'Transition of the slide');
+  seg.setAttribute('aria-label', 'Transition from this slide to the next slide');
   const run = (id: string) => void app.commands.run(id).catch((e) => app.fail(e));
   const buttons = KINDS.map(([t, text, title]) => {
     const b = make('button', '', text);
