@@ -588,6 +588,67 @@ for (const platform of PLATFORMS) {
       await held(page, await centerOf(page, '.beeson-grip[data-group="1"][data-handle="se"]'), { dx: -40, dy: -30 }, WH, `the resize of a group ${where}`, FREE[platform]);
     });
 
+    test(`a drag held at the edge of a zoomed canvas scrolls it, with the element or line under the pointer, on ${platform} in ${mode} mode`, async (t) => {
+      const where = `on ${platform} in ${mode} mode`;
+      const page = await load(t, platform, mode, 0, LAYOUTS);
+      await exec(page, 'insert.line', { from: { x: 300, y: 700 }, to: { x: 800, y: 700 } });
+      await exec(page, 'selection.clear');
+      page.source = await render(page);
+      await exec(page, 'zoom.actual');
+      await frames(page);
+      const canvas = () => page.evaluate(`(() => { const c = document.querySelector('.beeson-edit-canvas'), v = window.BeesonEditorShell.stage.viewport; return { x: c.scrollLeft, y: c.scrollTop, zoomed: c.classList.contains('zoomed'), left: v.left, top: v.top, height: v.height }; })()`);
+      const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+      // the point of the slide in slide px on the screen, with the canvas scrolled to put it at 300 px
+      // right of the left edge of the canvas and in the middle of its height
+      const reveal = (x, y) => page.evaluate(`(() => {
+        const c = document.querySelector('.beeson-edit-canvas'), v = window.BeesonEditorShell.stage.viewport;
+        const at = () => window.BeesonEditorShell.stage.toScreen({ x: ${x}, y: ${y} });
+        c.scrollLeft += at().x - v.left - 300;
+        c.scrollTop += at().y - v.top - v.height / 2;
+        window.BeesonEditorShell.stage.place();
+        return at();
+      })()`);
+      for (const kind of ['QR code', 'line']) {
+        const what = `a ${kind} ${where}`;
+        // the center of the QR code, and the middle of the line, 3 px under it
+        const q = await page.evaluate(`(() => { const r = document.querySelector(${js(QR)}).getBoundingClientRect(); return window.BeesonEditorShell.stage.toSlide({ x: r.left + r.width / 2, y: r.top + r.height / 2 }); })()`);
+        const at = kind === 'line' ? await reveal(550, 700) : await reveal(q.x, q.y);
+        if (kind === 'line') at.y += 3;
+        await frames(page);
+        await click(page, at);
+        await frames(page);
+        const item = kind === 'line' ? `.reveal section.present svg.line` : QR;
+        const centerAt = () => page.evaluate(`(() => { const r = document.querySelector(${js(item)}).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+        const c0 = await centerAt();
+        const before = await canvas();
+        assert.ok(before.zoomed, `${what}: the canvas is not zoomed at Actual Size`);
+        // the drag to 4 px from the left edge of the canvas, held there for a second with small moves
+        const edge = before.left + 4;
+        await drag(page, at, { dx: edge - at.x, dy: 0, modifiers: FREE[platform], hold: true });
+        for (let i = 0; i < 10; i++) {
+          await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: edge - (i % 2), y: at.y, buttons: 1, button: 'left', modifiers: platform === 'mac' ? 4 : 1 });
+          await wait(100);
+        }
+        await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: edge, y: at.y, buttons: 1, button: 'left', modifiers: platform === 'mac' ? 4 : 1 });
+        await frames(page);
+        const held = await canvas();
+        assert.ok(held.x < before.x - 50, `${what}: the canvas is scrolled from ${before.x} to ${held.x} while the drag is held at its left edge`);
+        // the element stays at the pointer while the slide scrolls under it
+        const c1 = await centerAt();
+        assert.ok(near(c1.x - c0.x, edge - at.x, 2) && near(c1.y, c0.y, 2), `${what}: the center moves from ${js(c0)} to ${js(c1)}, and the pointer by ${Math.round(edge - at.x)}`);
+        await release(page, { x: edge, y: at.y });
+        await frames(page);
+        const scrolled = (await canvas()).x;
+        await frames(page);
+        assert.equal((await canvas()).x, scrolled, `${what}: the canvas is still scrolled after the release`);
+        const edited = await render(page);
+        await roundTrip(page, edited);
+        await redo(page);
+        await frames(page);
+        page.source = edited;
+      }
+    });
+
     test(`a turn of a group with a pair turns the image of each mode, in the drag and after it, on ${platform} in ${mode} mode`, async (t) => {
       const where = `a group of two pairs on ${platform} in ${mode} mode`;
       const page = await pickGroup(t, platform, mode);
