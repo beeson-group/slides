@@ -75,6 +75,13 @@ function switchOf(id: string, label: string, target: (app: App) => Element | nul
   };
 }
 
+// the image that Invert in Dark Mode acts on: an image shown in dark mode, or the dark twin of a
+// light image, since the theme inverts an image only in dark mode
+function invertible(app: App, el: Element | null): Element | null {
+  if (!el || !el.classList.contains('for-light') || el.classList.contains('invert')) return el;
+  return twinOf(app, el);
+}
+
 const imageMenu = (order: number): Command['menu'] => ({ bar: 'Format', group: 'image', order, submenu: 'Image' });
 const has = (name: string) => (el: Element) => el.hasAttribute(name);
 const flag = (name: string) => (on: boolean): TagEdit => ({ attrs: { [name]: on ? '' : null } });
@@ -129,10 +136,19 @@ export function commands(): Command[] {
         if (el.getAttribute('alt') !== alt) setTag(app, el, { attrs: { alt } }, 'alt text');
       },
     },
-    // a decorative image has an empty alt, which a screen reader skips
-    switchOf('figure.decorative', 'Decorative', imageOf, (el) => el.getAttribute('alt') === '', (on) => ({ attrs: { alt: on ? '' : null } }), imageMenu(11)),
+    // a decorative image has an empty alt, which a screen reader skips, written on both images of
+    // a pair
+    {
+      ...switchOf('figure.decorative', 'Decorative', imageOf, (el) => el.getAttribute('alt') === '', () => ({}), imageMenu(11)),
+      run: (app, arg) => {
+        const el = given(arg) ?? imageOf(app);
+        if (!el) return;
+        const edit = { attrs: { alt: el.getAttribute('alt') === '' ? null : '' } };
+        for (const m of [el, twinOf(app, el)]) if (m) setTag(app, m, edit, 'decorative');
+      },
+    },
     switchOf('figure.paper', 'Paper', imageOf, (el) => el.classList.contains('paper'), (on) => ({ classes: { paper: on } }), imageMenu(20)),
-    switchOf('figure.invert', 'Invert in Dark Mode', imageOf, (el) => el.classList.contains('invert'), (on) => ({ classes: { invert: on } }), imageMenu(21)),
+    switchOf('figure.invert', 'Invert in Dark Mode', (app) => invertible(app, imageOf(app)), (el) => el.classList.contains('invert'), (on) => ({ classes: { invert: on } }), imageMenu(21)),
     switchOf('figure.autoplay', 'Play Automatically', videoOf, has('data-autoplay'), flag('data-autoplay')),
     switchOf('figure.loop', 'Loop', videoOf, has('loop'), flag('loop')),
     switchOf('figure.muted', 'Muted', videoOf, has('muted'), flag('muted')),
