@@ -5,7 +5,7 @@
 // which runs the command of a key
 
 import type { App, Deck, Platform, Region } from './app.ts';
-import { display, fallback, matches, type KeyEvent } from './keymap.ts';
+import { display, fallback, matches, parseKey, type KeyEvent } from './keymap.ts';
 
 export type Context = 'element' | 'text' | 'canvas' | 'slide' | 'navigator';
 
@@ -163,6 +163,19 @@ export class Commands {
   shortcuts(id: string): string[] {
     const c = this.listed(id);
     return c ? keysOf(c, this.app.platform).map((k) => display(k, this.app.platform)) : [];
+  }
+
+  // the keys of the command of id that a menu opened in region lists. a key that runs another
+  // command there is left out, e.g. ⌘D at Duplicate Slide while a figure is selected on the canvas
+  keysIn(id: string, region: Region): string[] {
+    const c = this.listed(id);
+    if (!c) return [];
+    const p = this.app.platform;
+    return keysOf(c, p).filter((k) => {
+      const k2 = parseKey(k, p);
+      const runs = this.forKey({ key: k2.key === 'Space' ? ' ' : k2.key, shiftKey: k2.shift, altKey: k2.alt, ctrlKey: k2.ctrl, metaKey: k2.meta }, region);
+      return !runs || runs.id === c.id || runs.id === id;
+    });
   }
 
   // the first enabled command taken in region whose keys match ev, and else the first one whose

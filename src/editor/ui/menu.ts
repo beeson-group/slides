@@ -9,7 +9,7 @@
 // in the menu and announced with aria-activedescendant. a menu with a search field, i.e. the Help
 // menu, gives the focus to its field, which lists the commands of the menu bar that match
 
-import type { App, Platform } from '../app.ts';
+import type { App, Platform, Region } from '../app.ts';
 import { keysOf, type Command, type Context, type Group } from '../commands.ts';
 import { display } from '../keymap.ts';
 import { injectStyle, make } from './dom.ts';
@@ -321,6 +321,8 @@ class Menu {
   private readonly app: App;
   readonly options: MenuOptions;
   private readonly restore: Element | null;
+  // the region of the focus at the open of the root, in which the keys listed are taken
+  private readonly region: Region;
   private readonly opened = performance.now();
   private typed = '';
   // the row of the parent menu that opened this submenu
@@ -336,6 +338,7 @@ class Menu {
     this.options = options;
     this.parent = parent;
     this.restore = document.activeElement;
+    this.region = parent ? parent.region : app.region();
     this.el.id = `beeson-edit-menu-${++uid}`;
     this.el.setAttribute('role', 'menu');
     this.el.tabIndex = -1;
@@ -459,8 +462,8 @@ class Menu {
       label = item.label ?? this.app.commands.label(item.command);
       enabled = !!c && this.app.commands.enabled(item.command);
       checked = c?.checked?.(this.app) ?? null;
-      const listed = this.app.commands.listed(item.command);
-      keys = listed ? commandKeys(listed) : '';
+      const k = this.app.commands.keysIn(item.command, this.region)[0];
+      keys = k ? display(k, this.app.platform) : '';
       el.dataset.command = item.command;
     } else if ('items' in item) {
       label = item.label;
