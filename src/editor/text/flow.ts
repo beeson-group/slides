@@ -13,12 +13,7 @@ import { injectStyle } from '../ui/dom.ts';
 type Place = [Element, number];
 type Way = 'left' | 'right' | 'up' | 'down';
 
-// one outline around a list while one of its items has the caret, as around a text box of Keynote
-const STYLE = `
-::highlight(beeson-span) { background-color: color-mix(in srgb, Highlight 60%, transparent); }
-html.beeson-editing .reveal :is(ul, ol):has(> li[contenteditable="true"]:focus) { outline: 2px solid var(--violet, #96f); outline-offset: 6px; border-radius: 2px; }
-html.beeson-editing .reveal :is(ul, ol) > li[contenteditable="true"]:focus { outline-color: transparent; }
-`;
+const STYLE = '::highlight(beeson-span) { background-color: color-mix(in srgb, Highlight 60%, transparent); }';
 
 let span: { anchor: Place; focus: Place } | null = null;
 // a drag of the browser, which holds the window in the block where it started
