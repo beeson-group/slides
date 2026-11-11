@@ -38,7 +38,11 @@ export function install(app: App): void {
         return [...range.getClientRects()].filter((r) => r.width > 1 && r.height > 1);
       };
       for (const el of slide.querySelectorAll(HOST)) {
-        if (el.closest('aside.notes, .backdrop')) continue;
+        // an empty placeholder of the editor is not a text of the slide
+        if (el.closest('aside.notes, .backdrop') || (el.matches('.beeson-pending') && !el.textContent)) {
+          el.classList.remove('beeson-overflow');
+          continue;
+        }
         const r = el.getBoundingClientRect();
         const reach = !!el.closest('section.figure > .caption') && above.some((b) => meets(r, b));
         const part = partOf(el);

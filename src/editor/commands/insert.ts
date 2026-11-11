@@ -21,7 +21,8 @@ import { docOf } from './slide.ts';
 import { freePlace, placeNew, translateOf } from './place.ts';
 
 const CSS = `
-html.beeson-editor .reveal .slides .beeson-pending:not(.foot) { position: relative; }
+/* the caption of a zone keeps the absolute place of the theme under the picture */
+html.beeson-editor .reveal .slides .beeson-pending:not(.foot):not(.zone > .caption) { position: relative; }
 html.beeson-editor .reveal .slides .beeson-pending { min-height: 1.4em; min-width: 8em; }
 /* a new text box is put at the gap of the theme between two paragraphs, not at the 14 px of a list item */
 html.beeson-editor .reveal .slides p.beeson-pending:not(:first-child):not(.caption) { margin-top: 24px; }
