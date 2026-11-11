@@ -99,6 +99,17 @@ async function drawnNumbers(page, selector) {
   return out;
 }
 
+// the numbers drawn before the first items of selector once they are expected, since Chrome
+// updates its tree of accessibility after a change of the page, within 3 s
+async function numbersAre(page, selector, expected) {
+  let now = [];
+  for (const end = Date.now() + 3000; Date.now() < end; await new Promise((d) => setTimeout(d, 100))) {
+    now = (await drawnNumbers(page, selector)).slice(0, expected.length);
+    if (JSON.stringify(now) === JSON.stringify(expected)) return;
+  }
+  assert.deepEqual(now, expected);
+}
+
 // the shown element of selector that holds needle, as an expression
 const find = (selector, needle = '') => `[...document.querySelectorAll(${js(selector)})].find((el) => el.getBoundingClientRect().width && el.textContent.includes(${js(needle)}))`;
 const ITEM = '.reveal section.present ol > li';
@@ -173,7 +184,7 @@ for (const platform of PLATFORMS) {
     const four = await render(page);
     assert.equal(four, page.source.replace('<ol>', '<ol start="4">'));
     assert.equal(await undoLabel(page), 'Undo Start At');
-    assert.deepEqual((await drawnNumbers(page, '.reveal section.present ol > li')).slice(0, 5), ['4', '5', '6', '7', '8']);
+    await numbersAre(page, '.reveal section.present ol > li', ['4', '5', '6', '7', '8']);
     await roundTrip(page);
     // a typed 1 takes the attribute off, which gives the file back
     await click(page, await pointOf(page, ITEM, 'Charlie'));
@@ -205,7 +216,7 @@ for (const platform of PLATFORMS) {
     await press(page, 'Enter');
     const cut = await render(page);
     assert.match(cut, /<li>Bravo<\/li>\n {2}<\/ol>\n {2}<p><\/p>\n {2}<ol start="3">\n {4}<li>Charlie<\/li>/, `the second list does not start at 3: ${cut.match(/Bravo[\s\S]{0,120}/)?.[0]}`);
-    assert.deepEqual((await drawnNumbers(page, '.reveal section.present ol > li')).slice(0, 5), ['1', '2', '3', '4', '5']);
+    await numbersAre(page, '.reveal section.present ol > li', ['1', '2', '3', '4', '5']);
     assert.equal(await undoLabel(page), 'Undo New Paragraph');
     await roundTrip(page, added);
     // a list with a start number goes on from it
