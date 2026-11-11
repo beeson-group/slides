@@ -550,7 +550,7 @@ for (const platform of PLATFORMS) {
     await page.waitFor('window.BeesonEditor.ready.then(() => true)');
     assert.equal(await page.evaluate('Reveal.getIndices().h'), 2, 'the editor is not opened at the slide shown');
     // the speaker view is found by the name of its window
-    const frame = await page.evaluate(`(() => { const v = window.open('', 'reveal.js - Notes'); const f = v.document.querySelector('#current-slide iframe').contentWindow; const out = [f.location.search.includes('&edit'), f.document.documentElement.classList.contains('beeson-editor')]; v.close(); return out; })()`);
+    const frame = await page.evaluate(`(() => { const v = window.open('', 'reveal.js - Notes'); const f = v.document.querySelector('#current-slide iframe').contentWindow; const out = [new URLSearchParams(f.location.search).has('edit'), !!f.document.querySelector('script[src*="editor.js"]')]; v.close(); return out; })()`);
     assert.deepEqual(frame, [false, false], 'the editor is loaded into the frame of the speaker view');
   });
 
