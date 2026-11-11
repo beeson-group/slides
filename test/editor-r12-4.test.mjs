@@ -385,6 +385,7 @@ for (const platform of PLATFORMS) {
       const asked = await page.evaluate(`performance.getEntriesByType('resource').map((e) => e.name).filter((n) => n.includes('media/figure-dark'))`);
       assert.deepEqual(asked, [], `after ${how}`);
       assert.deepEqual(errors(page), [], `after ${how}`);
+      await page.close();
     }
   });
   // state 287 and 304
