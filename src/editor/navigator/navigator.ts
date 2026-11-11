@@ -358,6 +358,8 @@ export class Navigator implements Pane {
   // the selection. a row is kept with its thumbnail while its slide is on the page
   refresh(): void {
     this.outline.refresh();
+    // a focused row moved in the list loses the focus, e.g. by Move Slide Up
+    const focusIn = this.list.contains(document.activeElement);
     const slides = this.slides();
     const nums = places(slides);
     const kept = new Set(slides);
@@ -396,15 +398,14 @@ export class Navigator implements Pane {
       row.el.title = `Slide ${i + 1}: ${title}`;
     });
     if (changed && this.thumbs) this.thumbs.setHosts(new Map([...this.rows].map(([s, r]) => [s, r.pic])));
-    this.paint();
+    this.paint(focusIn || this.list.contains(document.activeElement));
   }
 
   // the current row and the selected rows are marked, the current row is kept in view, and the
   // focus follows the current slide while it is in the list
-  private paint(): void {
+  private paint(focusIn = this.list.contains(document.activeElement)): void {
     const current = this.app.current();
     const sel = this.app.selection?.kind === 'slides' ? new Set(this.selected()) : new Set(current ? [current] : []);
-    const focusIn = this.list.contains(document.activeElement);
     for (const [slide, row] of this.rows) {
       const here = slide === current;
       row.el.setAttribute('aria-current', here ? 'true' : 'false');
