@@ -10,7 +10,7 @@ import type { App } from '../app.ts';
 import type { TagEdit, Translate } from '../tags.ts';
 import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, anchored, fitPicture, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
-import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, captionsOf, constrained, containerOf, cssWidth, frameOf, frameRect, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, pictureReach, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, visualRect } from './hit.ts';
+import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, captionsOf, constrained, containerOf, cssWidth, frameOf, frameRect, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, pictureReach, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, unturnedRect, visualRect } from './hit.ts';
 import { groupFrame, overlay, turned, view, wh, xy } from './frames.ts';
 import { enterGroup, settleCopies, freshGroup, groupOf } from '../commands/order.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -778,8 +778,10 @@ export function install(app: App): void {
     follow(p, h, after.width / at.width, after.height / at.height, o.center);
     view.moving = p.els;
     view.resizing = true;
-    // the height of a figure with a caption is that of its picture with its caption, as in the field H
-    const caption = p.framed && !upright && captionsOf(p.framed).length ? frame.height - after.height : 0;
+    // the height of a figure with a caption is that of its picture with its caption, as in the field
+    // H, taken over the picture without its rotation where the picture is turned
+    const unturned = p.framed && captionsOf(p.framed).length ? unturnedRect(p.framed) : null;
+    const caption = unturned ? (unturned.box.height - unturned.picture.height) / f.scale : 0;
     view.readout = { text: wh(size.width, size.height + caption), x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     frames.draw();
     app.invalidate('content');
