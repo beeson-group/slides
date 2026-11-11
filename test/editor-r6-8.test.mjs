@@ -425,7 +425,8 @@ for (const platform of PLATFORMS) {
       assert.equal(s.frames.length, 1);
       const [f] = s.frames;
       assert.ok(pic.bottom < s.caption.top, `the frame of the image at ${js(pic)} reaches the caption`);
-      assert.ok(Math.abs(f.top - pic.top) <= 1 && f.bottom >= s.caption.bottom - 1 && f.left <= Math.min(pic.left, s.caption.left) + 1 && f.right >= Math.max(pic.right, s.caption.right) - 1, `after ${how} the frame at ${js(f)} leaves out the caption at ${js(s.caption)}`);
+      // the frame of a figure with a caption stands 8 px outside it
+      assert.ok(Math.abs(f.top + 8 - pic.top) <= 1 && f.bottom >= s.caption.bottom - 1 && f.left <= Math.min(pic.left, s.caption.left) + 1 && f.right >= Math.max(pic.right, s.caption.right) - 1, `after ${how} the frame at ${js(f)} leaves out the caption at ${js(s.caption)}`);
       await press(page, 'Escape');
       await frames(page);
     }
@@ -443,12 +444,12 @@ const readoutOf = (page) => page.evaluate(`(() => { const o = document.querySele
 const cornerOf = (page) => page.evaluate(`(() => {
   const s = document.querySelector('.reveal .slides');
   const r = s.getBoundingClientRect(), k = r.width / s.offsetWidth;
-  // the frame of the selected element, which is the picture with its caption for a figure
+  // the frame of the selected element, drawn 8 px outside the picture with its caption of a figure
   const f = document.querySelector('.beeson-overlay > .beeson-frame.selected:not([hidden])').getBoundingClientRect();
-  return { x: Math.round((f.left - r.left) / k), y: Math.round((f.top - r.top) / k) };
+  return { x: Math.round((f.left + 8 - r.left) / k), y: Math.round((f.top + 8 - r.top) / k) };
 })()`);
 const xy = (text) => {
-  const m = /^x (-?\d+)\s+y (-?\d+)$/.exec(text ?? '');
+  const m = /^x: (-?\d+) px\s+y: (-?\d+) px$/.exec(text ?? '');
   assert.ok(m, `the readout ${text} does not give x and y`);
   return { x: m[1], y: m[2] };
 };

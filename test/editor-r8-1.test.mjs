@@ -61,8 +61,8 @@ const rectOf = (page, selector) => page.evaluate(`(() => {
   const r = [...document.querySelectorAll(${js(selector)})].map((e) => e.getBoundingClientRect()).find((r) => r.width);
   return r ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom, x: r.left + r.width / 2, y: r.top + r.height / 2 } : null;
 })()`);
-// the picture of the shown image, i.e. the image fitted into its box with object-fit contain, and
-// the place of the caption from its lower left corner, in screen px
+// the picture of the shown image, i.e. the image fitted into its box with object-fit contain, the
+// place of the caption from its lower left corner, in screen px, and the scale k of the slide
 const pictureOf = (page) => page.evaluate(`(() => {
   const img = [...document.querySelectorAll(${js(IMG)})].find((e) => e.getBoundingClientRect().width);
   const r = img.getBoundingClientRect();
@@ -70,8 +70,11 @@ const pictureOf = (page) => page.evaluate(`(() => {
   const w = img.naturalWidth * k, h = img.naturalHeight * k;
   const left = r.left + (r.width - w) / 2, top = r.top + (r.height - h) / 2;
   const c = document.querySelector(${js(CAPTION)}).getBoundingClientRect();
-  return { left, top, right: left + w, bottom: top + h, x: left + w / 2, y: top + h / 2, dx: c.left - left, dy: c.top - top - h };
+  const s = document.querySelector('.reveal .slides');
+  return { left, top, right: left + w, bottom: top + h, x: left + w / 2, y: top + h / 2, dx: c.left - left, dy: c.top - top - h, k: s.getBoundingClientRect().width / s.offsetWidth };
 })()`);
+// the caption of a picture with a width under it, at the gap of 16 slide px of the theme
+const underPicture = (now) => near(now.dx, 0) && near(now.dy, 16 * now.k);
 const shownFrames = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-frame.selected, .beeson-frame.union')].filter((f) => !f.hidden && f.getBoundingClientRect().width).map((f) => { const r = f.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; })`);
 const shownGrips = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-grip')].filter((g) => !g.hidden && g.getBoundingClientRect().width).length`);
 const tabs = (page) => page.evaluate(`[...document.querySelectorAll('${PANEL} .ed-tabs button')].map((b) => b.textContent)`);
@@ -366,7 +369,9 @@ for (const combo of COMBOS) {
       assert.ok(widths.every((w) => w && w === widths[0]), `the images are given the widths ${js(widths)}`);
       if (width) assert.equal(Number(widths[0]), width);
     };
-    // the corner across from the grip and the place of the caption under the picture are kept
+    // the corner across from the grip is kept, and the caption is under the picture. the frame of
+    // the figure holds the caption, hence the same drag gives a picture of another width from the
+    // figure than from the picture
     await check(page, 'a drag of a grip', async () => {
       const rest = await pictureOf(page);
       await drag(page, await gripAt(page, 'se'), { dx: -90, dy: -90, modifiers: keys.free });
@@ -374,13 +379,11 @@ for (const combo of COMBOS) {
       const now = await pictureOf(page);
       assert.ok(now.right < rest.right - 40, 'the picture is not made smaller by its grip');
       assert.ok(near(now.left, rest.left) && near(now.top, rest.top), `the corner across from the grip moves from ${js(rest)} to ${js(now)}`);
-      assert.ok(near(now.dx, rest.dx) && near(now.dy, rest.dy), `the caption is at ${js([now.dx, now.dy])} from the picture, not at ${js([rest.dx, rest.dy])}`);
-    }, sized());
+      assert.ok(underPicture(now), `the caption is at ${js([now.dx, now.dy])} from the picture, not under it`);
+    }, sized(), { same: (text) => text.replace(/width: \d+px/g, 'width: Npx') });
     const typed = await check(page, 'a typed W', async () => {
-      const rest = await pictureOf(page);
       await typeField(page, 'width', 300);
-      const now = await pictureOf(page);
-      assert.ok(near(now.dx, rest.dx) && near(now.dy, rest.dy), 'the caption is not kept under the picture');
+      assert.ok(underPicture(await pictureOf(page)), 'the caption is not kept under the picture');
     }, sized(300));
     // the picture of 1200 by 1440 px is 300 px wide at a height of 360 px
     const last = await check(page, 'a typed H', () => typeField(page, 'height', 360), (edited) => assert.equal(edited, typed, 'a typed H does not write the width at the aspect of the picture'));

@@ -205,7 +205,7 @@ const SIDES: Record<Handle, { x: -1 | 0 | 1; y: -1 | 0 | 1 }> = {
 
 // a box of width w and height h, anchored at the edge or corner of `from` across from handle, or at
 // its center
-function anchored(from: Box, handle: Handle, w: number, h: number, center: boolean): Box {
+export function anchored(from: Box, handle: Handle, w: number, h: number, center: boolean): Box {
   const { x, y } = SIDES[handle];
   const cx = from.left + from.width / 2, cy = from.top + from.height / 2;
   const left = center || x === 0 ? cx - w / 2 : x === 1 ? from.left : from.left + from.width - w;
@@ -236,6 +236,23 @@ export function resizeBox(from: Box, handle: Handle, dx: number, dy: number, o: 
     if (y && o.free) h = Math.max(MIN, from.height + k * y * dy);
   }
   return anchored(from, handle, w, h, o.center);
+}
+
+// the size of a picture whose frame, i.e. the picture with the margins mx and my around it, e.g.
+// the caption of its figure, comes nearest to the box want of a resize by handle. with an aspect, a
+// corner takes the size whose frame has its corner nearest to that of want, and an edge the size
+// that it moves. without one, each side that handle moves is taken from want, the height only with
+// free, and the other side keeps its length in size
+export function fitPicture(want: Box, mx: number, my: number, handle: Handle, o: { aspect: number | null; free?: boolean }, size: { width: number; height: number }): { width: number; height: number } {
+  const { x, y } = SIDES[handle];
+  const w = want.width - mx, h = want.height - my;
+  if (o.aspect) {
+    const a = o.aspect;
+    const fit = x && y ? (w + h / a) / (1 + 1 / (a * a)) : x ? w : h * a;
+    const width = Math.max(fit, MIN, MIN * a);
+    return { width, height: width / a };
+  }
+  return { width: x ? Math.max(MIN, w) : size.width, height: y && o.free ? Math.max(MIN, h) : size.height };
 }
 
 // the marks of equal size of box on axis: the extent of box and of each other box of the same width,

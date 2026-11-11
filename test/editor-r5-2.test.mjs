@@ -493,14 +493,16 @@ for (const platform of PLATFORMS) {
     await roundTrip(page, edited);
 
     // Shift on a corner frees the aspect, and then the side grip e and the field W keep the aspect
-    // that the stretched image has
+    // that the stretched image has. the grip is on the frame of the figure, which holds the band of
+    // 40 px between the picture fitted into its zone and the caption, and the zone of a picture with
+    // a width is the size of the picture, hence the picture is 40 px higher than the frame shrinks
     page = await editor(platform);
     await selectZoneFigure(page);
     await arrange(page);
     await drag(page, (await gripsAt(page)).se, { dx: -100 * k, dy: -120 * k, modifiers: 'Shift' });
     await frames(page);
     box = await slideBox(page, ZONE_IMG);
-    assert.ok(near(box.width, 500, 3) && near(box.height, 600, 3), `the corner grip with Shift draws the image at ${Math.round(box.width)} by ${Math.round(box.height)}, not at 500 by 600`);
+    assert.ok(near(box.width, 500, 3) && near(box.height, 640, 3), `the corner grip with Shift draws the image at ${Math.round(box.width)} by ${Math.round(box.height)}, not at 500 by 640`);
     edited = await render(page);
     assert.match(edited, IMG_STYLE('width: \\d+px; height: \\d+px'), 'the height of an image stretched with Shift is not written');
     const aspect = box.width / box.height;
@@ -771,8 +773,9 @@ for (const platform of PLATFORMS) {
     await frames(page);
     const v = await groupView(page);
     assert.equal(v.members.length, 2, 'the group of the paragraph and the figure is not selected');
-    const left = Math.min(...v.members.map((m) => m.left)), top = Math.min(...v.members.map((m) => m.top));
-    const right = Math.max(...v.members.map((m) => m.right)), bottom = Math.max(...v.members.map((m) => m.bottom));
+    // the frame stands 8 px outside the members, since the figure holds a caption
+    const left = Math.min(...v.members.map((m) => m.left)) - 8, top = Math.min(...v.members.map((m) => m.top)) - 8;
+    const right = Math.max(...v.members.map((m) => m.right)) + 8, bottom = Math.max(...v.members.map((m) => m.bottom)) + 8;
     assert.equal(v.frames, 0, 'each member of the group is framed by itself');
     assert.equal(v.union.length, 1, 'the group does not have one frame');
     assert.ok(v.union[0].group, 'the frame of the group is drawn as the frame of a multiple selection');
@@ -789,7 +792,7 @@ for (const platform of PLATFORMS) {
     const k = widths.map((w, i) => w / before[i]);
     assert.ok(k.every((x) => x < 0.9), `the members are scaled by ${k}`);
     assert.ok(near(k[0], k[1], 0.03), `the members are scaled by ${k}, not together`);
-    assert.ok(near(Math.min(...after.members.map((m) => m.left)), left, 3) && near(Math.min(...after.members.map((m) => m.top)), top, 3), 'the corner across from the grip moves');
+    assert.ok(near(Math.min(...after.members.map((m) => m.left)), left + 8, 3) && near(Math.min(...after.members.map((m) => m.top)), top + 8, 3), 'the corner across from the grip moves');
     const edited = await render(page);
     const tag = edited.match(/<p [^>]*>The lead-in of a display<\/p>/)?.[0] ?? '';
     assert.ok(/data-group="g1"/.test(tag) && /style="[^"]*width: \d+px/.test(tag), `the width of the paragraph is not written: ${tag}`);

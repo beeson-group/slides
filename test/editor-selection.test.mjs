@@ -217,7 +217,7 @@ for (const size of [{ width: 1920, height: 1080 }, { width: 1280, height: 800 }]
     const before = await page.evaluate(`(() => { const img = [...document.querySelectorAll(${JSON.stringify(IMG)})].find((el) => el.getBoundingClientRect().width); return img.naturalWidth / img.naturalHeight; })()`);
     await drag(page, '.beeson-grip[data-handle="se"]', { dx: -80, dy: -10, modifiers: 'Meta', hold: true });
     const readout = await page.evaluate(`(() => { const o = document.querySelector('.beeson-offset'); return o && !o.hidden && getComputedStyle(o).display !== 'none' ? o.textContent : null; })()`);
-    assert.match(readout ?? '', /^\d+ × \d+$/, 'the readout does not show the width and height');
+    assert.match(readout ?? '', /^w: \d+ px {2}h: \d+ px$/, 'the readout does not show the width and height');
     await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: 0, y: 0, button: 'left', clickCount: 1 });
     const width = await page.evaluate(`[...document.querySelectorAll(${JSON.stringify(IMG)})].find((el) => el.getBoundingClientRect().width).style.width`);
     assert.match(width, /^\d+px$/, 'the width is not written');

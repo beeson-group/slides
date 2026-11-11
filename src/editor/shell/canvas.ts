@@ -34,6 +34,9 @@ export type Stage = {
   // the room at the top and the left of the cell that the viewport leaves, e.g. for the rulers of
   // canvas/rulers.ts, in CSS px
   setRoom(room: { top: number; left: number }): void;
+  // while a drag at the pointer ev is held near an edge of the zoomed canvas, the canvas is scrolled
+  // toward it on each frame, and again is called to drag on with it. null stops it
+  edgeScroll(ev: { clientX: number; clientY: number } | null, again?: () => void): void;
 };
 
 declare module '../app.ts' {
@@ -217,6 +220,28 @@ export function install(app: App): void {
     return { x: o.x + p.x * s, y: o.y + p.y * s };
   }
 
+  // a step of up to 16 px a frame, the deeper the pointer is in the band of 24 px at the edge, as
+  // Keynote and PowerPoint scroll while a dragged object is held at the edge of the window
+  let edge: { x: number; y: number; again: () => void } | null = null;
+  let frame = 0;
+  const tick = () => {
+    frame = 0;
+    if (!edge || !el.classList.contains('zoomed')) return;
+    const x = el.scrollLeft, y = el.scrollTop;
+    el.scrollLeft += edge.x;
+    el.scrollTop += edge.y;
+    if (el.scrollLeft === x && el.scrollTop === y) return;
+    place();
+    edge.again();
+  };
+  const edgeScroll = (ev: { clientX: number; clientY: number } | null, again = () => {}) => {
+    const v = viewport();
+    const by = (d: number) => (d < 24 ? Math.ceil((16 * (24 - Math.max(d, 0))) / 24) : 0);
+    edge = ev && el.classList.contains('zoomed') ? { x: by(v.right - ev.clientX) - by(ev.clientX - v.left), y: by(v.bottom - ev.clientY) - by(ev.clientY - v.top), again } : null;
+    if (edge && !edge.x && !edge.y) edge = null;
+    if (edge && !frame) frame = requestAnimationFrame(tick);
+  };
+
   app.stage = {
     get scale() {
       return scale();
@@ -239,6 +264,7 @@ export function install(app: App): void {
     zoomTo,
     fitScale,
     place,
+    edgeScroll,
     setRoom(next) {
       if (next.top === room.top && next.left === room.left) return;
       room = next;

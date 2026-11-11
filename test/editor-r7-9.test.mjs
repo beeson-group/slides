@@ -114,12 +114,20 @@ const captionFromPicture = (page) => page.evaluate(`(() => {
   }
   const left = r.left + (r.width - w) / 2, bottom = r.top + (r.height + h) / 2;
   const c = document.querySelector(${js(CAPTION)}).getBoundingClientRect();
-  return { dx: c.left - left, dy: c.top - bottom, left, bottom, caption: { left: c.left, top: c.top } };
+  const s = document.querySelector('.reveal .slides');
+  return { dx: c.left - left, dy: c.top - bottom, left, bottom, caption: { left: c.left, top: c.top }, k: s.getBoundingClientRect().width / s.offsetWidth };
 })()`);
 
 function sameOffset(now, before, what) {
   const ok = Math.abs(now.dx - before.dx) <= 1.5 && Math.abs(now.dy - before.dy) <= 1.5;
   assert.ok(ok, `${what}: the caption is at ${js([now.dx, now.dy])} from the lower left corner of the image, and not at ${js([before.dx, before.dy])} as before`);
+}
+
+// the caption under the picture of an image with a width, at the gap of 16 slide px that the theme
+// puts between the picture and the caption of a zone, which is the size of such a picture
+function underPicture(now, what) {
+  const ok = Math.abs(now.dx) <= 1.5 && Math.abs(now.dy - 16 * now.k) <= 1.5;
+  assert.ok(ok, `${what}: the caption is at ${js([now.dx, now.dy])} from the lower left corner of the image, and not under it at the gap of the theme`);
 }
 
 const gripAt = (page, handle) => page.evaluate(`(() => {
@@ -173,10 +181,10 @@ for (const platform of PLATFORMS) {
     await drag(page, at, { dx: -90, dy: -60, hold: true });
     const held = await captionFromPicture(page);
     assert.ok(held.bottom < rest.bottom - 30, 'the image is not shrunk by the drag of its grip');
-    sameOffset(held, rest, 'while the image is resized');
+    underPicture(held, 'while the image is resized');
     await release(page, { x: at.x - 90, y: at.y - 60 });
     await frames(page);
-    sameOffset(await captionFromPicture(page), rest, 'after the resize');
+    underPicture(await captionFromPicture(page), 'after the resize');
     await roundTrip(page);
   });
 
@@ -201,13 +209,13 @@ for (const platform of PLATFORMS) {
 
     await exec(page, 'arrange.setSize', { w: 420 });
     await frames(page);
-    sameOffset(await captionFromPicture(page), rest, 'after a width typed in W');
+    underPicture(await captionFromPicture(page), 'after a width typed in W');
     await roundTrip(page);
     await reselect(page);
 
     await exec(page, 'arrange.resetPosition');
     await frames(page);
-    sameOffset(await captionFromPicture(page), rest, 'after Reset Position');
+    underPicture(await captionFromPicture(page), 'after Reset Position');
     await roundTrip(page);
     await reselect(page);
 

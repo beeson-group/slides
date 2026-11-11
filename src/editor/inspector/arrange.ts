@@ -7,7 +7,7 @@
 // every other element is set by its layout
 
 import type { App } from '../app.ts';
-import { groupBoxOf, heightSet, positionOf, resizable, selectedTargets, sizeOf, targetsOf } from '../commands/align.ts';
+import { groupBoxOf, groupFrameOf, heightSet, positionOf, resizable, selectedTargets, sizeOf, targetsOf } from '../commands/align.ts';
 import { angleOf, groupAngle } from '../commands/order.ts';
 import { imageOf } from '../commands/figure.ts';
 import { turnable } from '../canvas/hit.ts';
@@ -37,9 +37,11 @@ export function arrangePane(app: App, run: Run): Control[] {
   const turned = selectedTargets(app);
   const live = () => els.filter((el) => el.isConnected);
   const liveTurned = () => turned.filter((el) => el.isConnected);
-  // W, H, X, and Y of a group are the size and the corner of its frame, as in Keynote, where a
-  // group is one object. its corner grips scale it, and a typed X or Y moves it as one
+  // W and H of a group are the size of its frame, turned by the angle of its first member, and X
+  // and Y the corner of the box upright around it, as in Keynote, where a group is one object. a
+  // typed W or H scales it as its corner grips do, and a typed X or Y moves it as one
   const group = () => groupBoxOf(app, live());
+  const frame = () => groupFrameOf(app, live())?.box;
   const sized = () => !group() && resizable(live());
   const field = (label: string, value: () => number | null, commit: (v: number) => unknown, enabled: () => boolean, min?: number) =>
     numberField(app, { label, value, commit, enabled, min });
@@ -71,10 +73,10 @@ export function arrangePane(app: App, run: Run): Control[] {
     ]),
     section('Size', [
       row([
-        field('Width', () => group()?.width ?? shared(live().map((el) => sizeOf(el).w)), (w) => run('arrange.setSize', { w, els: live() }), sized, 1),
-        field('Height', () => group()?.height ?? shared(live().map((el) => sizeOf(el).h)), (h) => run('arrange.setSize', { h, els: live() }), () => !group() && heightSet(live()), 1),
+        field('Width', () => frame()?.width ?? shared(live().map((el) => sizeOf(el).w)), (w) => run('arrange.setSize', { w, els: live() }), () => !!group() || sized(), 1),
+        field('Height', () => frame()?.height ?? shared(live().map((el) => sizeOf(el).h)), (h) => run('arrange.setSize', { h, els: live() }), () => !!group() || heightSet(live()), 1),
       ]),
-      note(() => (!els.length || sized() ? '' : group() ? 'The size of the group. Drag a corner grip to scale it.' : 'Set by the layout of the slide.')),
+      note(() => (!els.length || sized() || group() ? '' : 'Set by the layout of the slide.')),
       row([checkbox(app, run, 'arrange.constrainProportions', 'Constrain Proportions')]),
       // a lock turns the checkbox off too, which the note does not explain
       note(() => (sized() && !app.commands.applies('arrange.constrainProportions') ? 'Only the width is written, and the height follows the aspect or the layout.' : '')),

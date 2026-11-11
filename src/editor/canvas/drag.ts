@@ -9,9 +9,9 @@
 import type { App } from '../app.ts';
 import type { TagEdit, Translate } from '../tags.ts';
 import type { Box, Handle, Targets } from './snap.ts';
-import { LAYOUT_GUIDES, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
-import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, constrained, containerOf, cssWidth, frameOf, frameRect, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, visualRect } from './hit.ts';
-import { groupReach, overlay, view } from './frames.ts';
+import { LAYOUT_GUIDES, anchored, fitPicture, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
+import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, captionsOf, constrained, containerOf, cssWidth, frameOf, frameRect, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, pictureReach, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, visualRect } from './hit.ts';
+import { groupFrame, overlay, turned, view, wh, xy } from './frames.ts';
 import { enterGroup, settleCopies, freshGroup, groupOf } from '../commands/order.ts';
 import { injectStyle } from '../ui/dom.ts';
 
@@ -143,9 +143,15 @@ function writeLive(el: Element, p: Place): void {
 // spin turned to deg degrees, with its center on the screen put at want by the offset of carrier,
 // which is spin or the figure around it. an image fitted at a side of its box, e.g. in a plate,
 // thus turns about the center of its picture. a figure that is turned in the file gives its angle
-// to its picture. with live set, the page alone is changed
+// to its picture. with live set, the page alone is changed, with the image of the other mode turned
+// as writePlace turns it
 export function turn(app: App, spin: Element, carrier: Element, deg: number, want: { x: number; y: number }, live = false): void {
-  const put = (el: Element, p: Place) => (live ? writeLive(el, p) : writePlace(app, el, p));
+  const put = (el: Element, p: Place) => {
+    if (!live) return writePlace(app, el, p);
+    writeLive(el, p);
+    const twin = twinOf(app, el);
+    if (twin) writeLive(twin, p);
+  };
   if (carrier !== spin && placeOf(carrier).rotate) put(carrier, { ...placeOf(carrier), rotate: null });
   put(spin, { ...placeOf(spin), rotate: ((Math.round(deg) % 360) + 360) % 360 || null });
   const c = seenCenter(app, spin), k = frameOf(app).scale;
@@ -183,66 +189,10 @@ export function turnMember(app: App, t: Turner, pivot: { x: number; y: number },
   turn(app, t.spin, t.el, t.angle + deg, { x: pivot.x + dx * Math.cos(a) - dy * Math.sin(a), y: pivot.y + dx * Math.sin(a) + dy * Math.cos(a) }, live);
 }
 
-// the center of the frame of a group on the screen, about which the group is turned
-export function pivotOf(els: Element[]): { x: number; y: number } {
-  const b = groupReach(els);
+// the center of the frame of a group on the screen, turned by deg, about which the group is turned
+export function pivotOf(els: Element[], deg = 0): { x: number; y: number } {
+  const b = groupFrame(els, deg);
   return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
-}
-
-// a caption that follows the shown picture of its figure, as a caption of Keynote stays under its
-// image: its place before the change, and its upper left corner and the lower left corner of the
-// picture on the screen before the change
-export type Trailer = { caption: Element; pic: Element; from: Place; at: { x: number; y: number }; corner: { x: number; y: number } };
-
-// the lower left corner of the picture of el on the screen, without the own rotation of el, which
-// thus does not move the caption
-function lowerLeft(app: App, el: Element): { x: number; y: number } {
-  const b = orientedBox(el, frameOf(app).scale, placeOf(el).rotate ?? 0);
-  return { x: b.left, y: b.top + b.height };
-}
-
-// the captions that follow a change of the places of els: the caption of each figure that is not
-// turned and whose shown picture, or the twin of it, is in els. a figure moved by itself carries
-// its caption without an offset, and a caption in els is left to the change
-export function captionsOf(app: App, els: Element[]): Trailer[] {
-  const figures = new Set(els.map((el) => (el.matches(RESIZABLE) ? containerOf(app, el) : null)).filter((f): f is Element => !!f && f.matches(CONTAINER)));
-  const out: Trailer[] = [];
-  for (const fig of figures) {
-    const pic = pictureOf(fig);
-    const twin = twinOf(app, pic);
-    if (pic === fig || placeOf(fig).rotate || !els.some((el) => el === pic || el === twin)) continue;
-    const caption = fig.querySelector(':scope > figcaption, :scope > .caption');
-    if (!caption || els.includes(caption) || locked(caption) || !app.pairing?.elements.get(caption)?.open) continue;
-    const r = caption.getBoundingClientRect();
-    if (!r.width) continue;
-    out.push({ caption, pic, from: placeOf(caption), at: { x: r.left, y: r.top }, corner: lowerLeft(app, pic) });
-  }
-  return out;
-}
-
-// each caption of trailers moved by the move of the lower left corner of its picture since
-// captionsOf, on the page only while live is set, and else with writePlace
-export function followCaptions(app: App, trailers: Trailer[], live = false): void {
-  const k = frameOf(app).scale;
-  for (const t of trailers) {
-    const c = lowerLeft(app, t.pic);
-    const r = t.caption.getBoundingClientRect();
-    const now = placeOf(t.caption);
-    const x = Math.round((now.translate?.x ?? 0) + (t.at.x + c.x - t.corner.x - r.left) / k);
-    const y = Math.round((now.translate?.y ?? 0) + (t.at.y + c.y - t.corner.y - r.top) / k);
-    const to = { ...now, translate: x || y ? { x, y } : null };
-    if (live) (t.caption as HTMLElement).style.translate = x || y ? `${x}px ${y}px` : '';
-    else writePlace(app, t.caption, to);
-  }
-}
-
-// the changes of the places of els made by change, with the changes of the captions that follow
-// them, for record
-export function withCaptions(app: App, els: Element[], change: () => Change[]): Change[] {
-  const trailers = captionsOf(app, els);
-  const changes = change();
-  followCaptions(app, trailers);
-  return [...changes, ...trailers.map((t) => ({ el: t.caption, from: t.from, to: placeOf(t.caption) }))];
 }
 
 // the upper left corner on the screen of the picture of el, without its rotation
@@ -287,6 +237,8 @@ type Press = {
   from: Map<Element, Place>;
   // the union of the boxes of els at the press, in slide pixels
   base: Box;
+  // the scroll of the canvas at the press
+  scroll: { x: number; y: number };
   // what a click without a move does at the release
   click: (() => void) | null;
   handle?: Handle;
@@ -308,6 +260,10 @@ type Press = {
   angle?: number;
   // the size of a rotated element at the press, in slide pixels
   size?: { width: number; height: number };
+  // the figure whose frame, i.e. its picture with its caption, has the grip of a resize, or null for
+  // the picture by itself, and the box of the picture at the press, in slide pixels
+  framed?: Element | null;
+  picture?: Box;
   // whether the grips of a group are pressed, which scale all its members about one anchor
   group?: boolean;
   // the members of a group turned by its rotate handle about the center of its frame
@@ -316,8 +272,6 @@ type Press = {
   // element whose offset keeps the center of a turned picture, i.e. its figure
   was?: number;
   carrier?: Element;
-  // the captions that follow the pictures of the drag, read at its first move
-  trail?: Trailer[];
 };
 
 // an element of a multiple selection that follows a resize by the grip of another: the elements
@@ -327,6 +281,9 @@ type Follower = { el: Element; sized: Element[]; pic: Element; deg: number; base
 
 // the angle of el and of the picture inside it, as its style sets them
 const angleIn = (el: Element, pic: Element): number => (placeOf(el).rotate ?? 0) + (pic === el ? 0 : (placeOf(pic).rotate ?? 0));
+
+// the scroll of the canvas, which moves the slide under a held pointer
+export const scrollOf = (app: App) => ({ x: app.stage?.el.scrollLeft ?? 0, y: app.stage?.el.scrollTop ?? 0 });
 
 const union = (boxes: Box[]): Box => {
   const left = Math.min(...boxes.map((b) => b.left)), top = Math.min(...boxes.map((b) => b.top));
@@ -427,7 +384,10 @@ export function install(app: App): void {
     const frames_: Box[] = [];
     for (const el of els) {
       const up = containerOf(app, el);
-      if (up) frames_.push(toSlide(f, contentRect(up)));
+      const box = up ? contentRect(up) : null;
+      // a zone around a picture with a width is the box of the picture, which does not snap
+      const v = box && el.matches(RESIZABLE) ? visualRect(el) : null;
+      if (box && !(v && Math.abs(v.width - box.width) < 0.5 && Math.abs(v.height - box.height) < 0.5)) frames_.push(toSlide(f, box));
     }
     const slides = app.slides() as HTMLElement;
     return {
@@ -445,6 +405,7 @@ export function install(app: App): void {
       kind, x: ev.clientX, y: ev.clientY, moved: false, el, els, click, selected: app.selection.elements().slice(), corner: el ? snapBoxOf(app, el) : null,
       from: new Map(els.map((e) => [e, placeOf(e)])),
       base: els.length ? union(els.map((e) => snapBoxOf(app, e))) : { left: 0, top: 0, width: 0, height: 0 },
+      scroll: scrollOf(app),
     };
     press = p;
     view.hover = null;
@@ -506,7 +467,7 @@ export function install(app: App): void {
         p = start('rotate', ev, turners[0].el, turnedEls(turners), null);
         p.turners = turners;
         p.was = turners[0].angle;
-        view.turn = { box, deg: 0 };
+        view.turn = { box, deg: frames.groupTurn() };
       } else {
         center = seenCenter(app, spin as Element);
         p = start('rotate', ev, spin, [...new Set([spin as Element, carrier as Element])], null);
@@ -514,6 +475,7 @@ export function install(app: App): void {
         p.carrier = carrier as Element;
       }
       Object.assign(p, { center, angle: Math.atan2(ev.clientY - center.y, ev.clientX - center.x) * 180 / Math.PI });
+      view.held = frames.rotor;
       document.documentElement.classList.add('beeson-rotating');
       return;
     }
@@ -530,9 +492,10 @@ export function install(app: App): void {
         return { el: o, sized: sizedOf(o), pic, deg, base: toSlide(f, orientedBox(pic, f.scale, deg)) };
       });
       if (!followers.length) return;
-      const p = Object.assign(start('resize', ev, followers[0].el, followers.map((m) => m.el), null), { handle: (grip as HTMLElement).dataset.handle as Handle, followers, group: true });
+      const p = Object.assign(start('resize', ev, followers[0].el, followers.map((m) => m.el), null), { handle: (grip as HTMLElement).dataset.handle as Handle, followers, group: true, was: frames.groupTurn() });
       for (const m of followers.flatMap((m) => m.sized)) if (!p.from.has(m)) p.from.set(m, placeOf(m));
       p.base = toSlide(f, frames.groupBox() ?? union(followers.map((m) => visualRect(m.pic))));
+      view.held = grip as HTMLElement;
       document.documentElement.classList.add('beeson-resizing');
       return;
     }
@@ -556,9 +519,12 @@ export function install(app: App): void {
         });
       const p = Object.assign(start('resize', ev, el, [el, ...followers.map((m) => m.el)], null), {
         handle: (grip as HTMLElement).dataset.handle as Handle, aspect: aspectOf(pic), sized, pic, followers, stretch: pic.matches(STRETCHED), keep: constrained(pic),
+        framed: member && member.matches(CONTAINER) ? member : null,
       });
       for (const m of [...sized, ...followers.flatMap((m) => m.sized)]) if (!p.from.has(m)) p.from.set(m, placeOf(m));
-      p.base = toSlide(f, visualRect(pic));
+      p.picture = toSlide(f, p.framed ? pictureReach(p.framed) : visualRect(pic));
+      p.base = toSlide(f, p.framed ? frameRect(p.framed) : visualRect(pic));
+      view.held = grip as HTMLElement;
       document.documentElement.classList.add('beeson-resizing');
       return;
     }
@@ -605,10 +571,6 @@ export function install(app: App): void {
       return;
     }
     if (!p.moved && Math.hypot(ev.clientX - p.x, ev.clientY - p.y) < CLICK) return;
-    if (!p.moved && (p.kind === 'move' || p.kind === 'resize')) {
-      p.trail = captionsOf(app, [...p.els, ...(p.sized ?? []), ...(p.followers ?? []).flatMap((m) => m.sized)]);
-      for (const t of p.trail) p.from.set(t.caption, t.from);
-    }
     p.moved = true;
     const f = frameOf(app);
     if (p.kind === 'marquee') {
@@ -625,8 +587,11 @@ export function install(app: App): void {
       frames.draw();
       return;
     }
-    let dx = (ev.clientX - p.x) / f.scale;
-    let dy = (ev.clientY - p.y) / f.scale;
+    // the pointer on the slide, which a scroll of the canvas moves too
+    const s = scrollOf(app);
+    let dx = (ev.clientX - p.x + s.x - p.scroll.x) / f.scale;
+    let dy = (ev.clientY - p.y + s.y - p.scroll.y) / f.scale;
+    if (p.kind !== 'rotate') app.stage?.edgeScroll(ev, () => press === p && onMove(ev));
     if (p.kind === 'resize') {
       resize(p, ev, dx, dy);
       return;
@@ -654,10 +619,9 @@ export function install(app: App): void {
     // the upper left corner of the pressed element in slide pixels next to the pointer, as Keynote
     // gives its x and y, below and to the right of it, where the guides at the pointer are not covered
     const c = p.corner;
-    const at = c ? `x ${Math.round(c.left + dx)}  y ${Math.round(c.top + dy)}` : '';
+    const at = c ? xy(c.left + dx, c.top + dy) : '';
     view.readout = { text: `${ghosts.shown() ? 'Copy  ' : ''}${at}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     document.documentElement.classList.add('beeson-dragging');
-    if (p.trail?.length) followCaptions(app, p.trail, true);
     frames.draw();
     app.invalidate('content');
   };
@@ -675,7 +639,7 @@ export function install(app: App): void {
       // the angle of a group is that of its first member, as in the field Angle
       const by = deg - was;
       for (const t of p.turners) turnMember(app, t, c, by, true);
-      if (view.turn) view.turn.deg = by;
+      if (view.turn) view.turn.deg = deg;
     } else turn(app, p.els[0], p.carrier ?? p.els[0], deg, c, true);
     view.moving = p.els;
     view.resizing = true;
@@ -709,9 +673,13 @@ export function install(app: App): void {
     return { aspect: keep ? (p.aspect ?? null) : null, free: !keep, height: !keep || stretched };
   };
 
-  // a resize by a handle: the width is the width of the picture, and the offset of the pressed
-  // element, i.e. the picture or the figure around it, is changed so that the edge or corner across
-  // from the handle stays, since the box of a figure is laid out by the theme around its width
+  // a resize by a handle: the picture is sized so that the frame that has the handle, i.e. the
+  // figure with its caption or the picture by itself, meets the pointer, and the offset of the
+  // pressed element keeps the side of the frame across from the handle in place. the layout of a
+  // figure puts the caption under its picture, which can change the margins of the frame, e.g. at
+  // the first width of a picture fitted into its zone, hence the size is fitted again to the
+  // margins measured, up to three times. a turned picture with a caption is framed upright around
+  // both, and the box upright around the picture keeps its aspect
   const resize = (p: Press, ev: PointerEvent, dx: number, dy: number) => {
     if (p.group) {
       groupResize(p, ev, dx, dy);
@@ -723,39 +691,49 @@ export function install(app: App): void {
     const mode = modeOf(p, ev);
     const o = { aspect: mode.aspect, center: aboutCenter(ev), free: mode.free };
     const deg = (p.from.get(el)?.rotate ?? 0) + (pic === el ? 0 : (p.from.get(pic)?.rotate ?? 0));
-    if (deg) {
+    const upright = !!deg && !!p.framed && captionsOf(p.framed).length > 0;
+    if (deg && !upright) {
       rotatedResize(p, ev, dx, dy, deg, o, mode.height);
       return;
     }
-    let box = resizeBox(p.base, p.handle as Handle, dx, dy, o);
+    const h = p.handle as Handle;
+    const seen = () => toSlide(f, p.framed ? pictureReach(p.framed) : visualRect(pic));
+    const framed = () => toSlide(f, p.framed ? frameRect(p.framed) : visualRect(pic));
+    const at = p.picture as Box;
+    if (upright) Object.assign(o, { aspect: at.width / at.height, free: false });
+    // the picture without its rotation, which is smaller than the box upright around it
+    const plain = () => (upright ? toSlide(f, orientedBox(pic, f.scale, deg)) : seen());
+    const fit = (want: Box) => {
+      for (let i = 0; i < 3; i++) {
+        const frame = framed(), now = seen(), own = plain();
+        const size = fitPicture(want, frame.width - now.width, frame.height - now.height, h, o, at);
+        if (i && Math.abs(size.width - now.width) < 0.5 && Math.abs(size.height - now.height) < 0.5) break;
+        setSize(p, (size.width * own.width) / now.width, mode.height ? (size.height * own.height) / now.height : null);
+      }
+    };
+    fit(resizeBox(p.base, h, dx, dy, { aspect: null, center: o.center, free: true }));
     view.guides = [];
     view.spacing = [];
     if (!freeResize(ev)) {
-      const snapped = snapResize(p.base, p.handle as Handle, box, targetsFor([pic, ...(p.followers ?? []).map((m) => m.el)]), SNAP / f.scale, o);
-      box = snapped.box;
+      // the frame snaps, with the aspect that it has where the picture keeps its aspect
+      const frame = framed();
+      const box = anchored(p.base, h, frame.width, frame.height, o.center);
+      const snapped = snapResize(p.base, h, box, targetsFor([pic, ...(p.followers ?? []).map((m) => m.el)]), SNAP / f.scale, { ...o, aspect: o.aspect ? frame.width / frame.height : null });
+      if (snapped.box !== box) fit(snapped.box);
       view.guides = snapped.guides;
       view.spacing = snapped.sizes;
     }
-    setSize(p, box.width, mode.height ? box.height : null);
-    // the offset that puts the anchor of the box seen where the resize put it
-    const seen = toSlide(f, visualRect(pic));
-    const h = p.handle as Handle;
-    const shift = (a: 'x' | 'y') => {
-      const [s, w] = a === 'x' ? ['left', 'width'] as const : ['top', 'height'] as const;
-      const side = a === 'x' ? (h.includes('w') ? -1 : h.includes('e') ? 1 : 0) : (h.includes('n') ? -1 : h.includes('s') ? 1 : 0);
-      // a text block keeps its top, and its wrapped text sets its height
-      if (a === 'y' && isTextSized(pic)) return box.top - seen.top;
-      if (o.center || side === 0) return box[s] + box[w] / 2 - (seen[s] + seen[w] / 2);
-      return side === 1 ? box[s] - seen[s] : box[s] + box[w] - (seen[s] + seen[w]);
-    };
+    // the offset that puts the side of the frame across from the handle where it was. a text block
+    // keeps its top, and its wrapped text sets its height
+    const frame = framed();
+    const box = anchored(p.base, h, frame.width, frame.height, o.center);
     const now = placeOf(el);
-    writeLive(el, { ...now, translate: { x: (now.translate?.x ?? 0) + shift('x'), y: (now.translate?.y ?? 0) + shift('y') } });
-    follow(p, h, box.width / p.base.width, box.height / p.base.height, o.center);
+    writeLive(el, { ...now, translate: { x: (now.translate?.x ?? 0) + box.left - frame.left, y: (now.translate?.y ?? 0) + (isTextSized(pic) ? p.base.top : box.top) - frame.top } });
+    const after = seen(), size = plain();
+    follow(p, h, after.width / at.width, after.height / at.height, o.center);
     view.moving = p.els;
     view.resizing = true;
-    const after = toSlide(f, visualRect(pic));
-    view.readout = { text: `${Math.round(after.width)} × ${Math.round(after.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
-    if (p.trail?.length) followCaptions(app, p.trail, true);
+    view.readout = { text: wh(size.width, size.height), x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     frames.draw();
     app.invalidate('content');
   };
@@ -794,27 +772,27 @@ export function install(app: App): void {
     view.resizing = true;
     view.guides = [];
     view.spacing = [];
-    view.readout = { text: `${Math.round(box.width)} × ${Math.round(box.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
-    if (p.trail?.length) followCaptions(app, p.trail, true);
+    view.readout = { text: wh(box.width, box.height), x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     frames.draw();
     app.invalidate('content');
   };
 
   // a resize of a group by its grips, without snapping: the box of the group keeps its aspect at a
   // corner unless Shift is held, and each member is scaled by the ratio of the box, with its center
-  // moved away from the edge or corner across from the grip, or from the center of the group
+  // moved away from the edge or corner across from the grip, or from the center of the group. the
+  // pointer is taken in the axes of the frame, which is turned by the angle of the group
   const groupResize = (p: Press, ev: PointerEvent, dx: number, dy: number) => {
     const f = frameOf(app);
     const h = p.handle as Handle;
     const corner = h.length === 2;
     const center = aboutCenter(ev);
-    const box = resizeBox(p.base, h, dx, dy, { aspect: corner && !ev.shiftKey ? p.base.width / p.base.height : null, center, free: true });
+    const deg = p.was ?? 0, r = (deg * Math.PI) / 180;
+    const box = resizeBox(p.base, h, dx * Math.cos(r) + dy * Math.sin(r), dy * Math.cos(r) - dx * Math.sin(r), { aspect: corner && !ev.shiftKey ? p.base.width / p.base.height : null, center, free: true });
     const sx = h.includes('w') ? -1 : h.includes('e') ? 1 : 0;
     const sy = h.includes('n') ? -1 : h.includes('s') ? 1 : 0;
     const k = sx ? box.width / p.base.width : box.height / p.base.height;
     const b = p.base;
-    const ax = center || !sx ? b.left + b.width / 2 : sx > 0 ? b.left : b.left + b.width;
-    const ay = center || !sy ? b.top + b.height / 2 : sy > 0 ? b.top : b.top + b.height;
+    const { x: ax, y: ay } = turned(b, deg, center || !sx ? b.left + b.width / 2 : sx > 0 ? b.left : b.left + b.width, center || !sy ? b.top + b.height / 2 : sy > 0 ? b.top : b.top + b.height);
     for (const m of p.followers ?? []) {
       for (const s of m.sized) {
         (s as HTMLElement).style.width = `${Math.round(cssWidth(s, m.base.width * k))}px`;
@@ -837,9 +815,8 @@ export function install(app: App): void {
     // the size that the members reach with the captions under their pictures, as W and H of the
     // Arrange pane give it, since the layout sets the height of a zone and a text block, which can
     // differ from box
-    if (p.trail?.length) followCaptions(app, p.trail, true);
-    const reached = toSlide(f, groupReach(p.els));
-    view.readout = { text: `${Math.round(reached.width)} × ${Math.round(reached.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
+    const reached = toSlide(f, groupFrame(p.els, deg));
+    view.readout = { text: wh(reached.width, reached.height), x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     frames.draw();
     app.invalidate('content');
   };
@@ -875,10 +852,12 @@ export function install(app: App): void {
     const p = press;
     if (!p) return;
     press = null;
+    app.stage?.edgeScroll(null);
     document.documentElement.classList.remove('beeson-dragging', 'beeson-resizing', 'beeson-rotating');
     view.moving = null;
     view.resizing = false;
     view.turn = null;
+    view.held = null;
     view.guides = [];
     view.spacing = [];
     view.marquee = null;
@@ -888,7 +867,7 @@ export function install(app: App): void {
     if (p.kind === 'move' && ev && p.moved && copying && copyHeld(ev)) {
       void copyAt(p).catch((e) => app.fail(e));
     } else if (p.kind !== 'marquee') {
-      const els = [...new Set([...p.els, ...(p.sized ?? []), ...(p.followers ?? []).flatMap((m) => m.sized), ...(p.trail ?? []).map((t) => t.caption)])];
+      const els = [...new Set([...p.els, ...(p.sized ?? []), ...(p.followers ?? []).flatMap((m) => m.sized)])];
       if (ev && p.moved) {
         const changes = els.map((el) => {
           const to = placeOf(el);
@@ -909,7 +888,7 @@ export function install(app: App): void {
   const copyAt = async (p: Press) => {
     const f = frameOf(app);
     const dropped = p.els.map((el) => ({ el, box: toSlide(f, frameRect(el)) }));
-    for (const el of [...p.els, ...(p.trail ?? []).map((t) => t.caption)]) writeLive(el, p.from.get(el) as Place);
+    for (const el of p.els) writeLive(el, p.from.get(el) as Place);
     await app.history.selecting('Duplicate', async () => {
       const copies: Element[] = [];
       // the copies of a group are a new group
@@ -964,10 +943,8 @@ export function install(app: App): void {
     if (!el) return;
     const from = placeOf(el);
     const to = { ...from, translate: null };
-    record(app, 'move', withCaptions(app, [el], () => {
-      writePlace(app, el, to);
-      return [{ el, from, to }];
-    }), [el]);
+    writePlace(app, el, to);
+    record(app, 'move', [{ el, from, to }], [el]);
     if (!app.selection.has(el)) app.selection.set('elements', [el]);
     frames.draw();
   };

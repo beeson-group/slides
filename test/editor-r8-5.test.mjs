@@ -78,7 +78,7 @@ const pictureOf = (page) => page.evaluate(`(() => {
   const flip = parseFloat(s.scale) < 0 ? -1 : 1;
   const x = r.left + r.width / 2 + (flip * dx * Math.cos(a) - dy * Math.sin(a)) * k;
   const y = r.top + r.height / 2 + (flip * dx * Math.sin(a) + dy * Math.cos(a)) * k;
-  return { x, y, width: w * k, height: h * k, left: x - (w * k) / 2, top: y - (h * k) / 2, angle, own: deg(img), figure: deg(img.parentElement) };
+  return { x, y, width: w * k, height: h * k, left: x - (w * k) / 2, top: y - (h * k) / 2, angle, own: deg(img), figure: deg(img.parentElement), k };
 })()`);
 
 // the text of slide n
@@ -374,9 +374,10 @@ for (const platform of PLATFORMS) {
           assert.deepEqual(widthsOf(edited, n), new Array(page.parts.images).fill('400'), `${where} is not written on every image`);
           const sized = await pictureOf(page);
           assert.ok(near(sized.left, pic.left) && near(sized.top, pic.top), `${where} moves the corner of the picture from ${Math.round(pic.left)}, ${Math.round(pic.top)} to ${Math.round(sized.left)}, ${Math.round(sized.top)}`);
-          // the caption of a zone stays under its picture, and the caption of a figure slide in its layout
+          // the caption of a zone is under its picture at the gap of 16 slide px of the theme, and
+          // the caption of a figure slide stays in its layout
           const under = await rectOf(page, CAPTION);
-          if (n === ZONE_PAIR || n === ZONE_ONE) assert.ok(near(under.top - (sized.top + sized.height), caption.top - (pic.top + pic.height)), `${where} leaves the caption away from its picture`);
+          if (n === ZONE_PAIR || n === ZONE_ONE) assert.ok(near(under.top - (sized.top + sized.height), 16 * sized.k), `${where} leaves the caption away from its picture`);
           else assert.ok(near(under.top, caption.top) && near(under.left, caption.left), `${where} moves the caption of the layout`);
           assert.equal(await fieldValue(page, 'width'), 400);
           // Reset Size keeps the corner as well
@@ -536,9 +537,11 @@ for (const platform of PLATFORMS) {
             assert.ok(near(flipped.left, pic.left) && near(flipped.top, pic.top), `${where} moves the picture from ${Math.round(pic.left)}, ${Math.round(pic.top)} to ${Math.round(flipped.left)}, ${Math.round(flipped.top)}`);
             const now = await rectOf(page, CAPTION);
             assert.ok(near(now.left, caption.left, 1) && near(now.top, caption.top, 1), `${where} moves the caption`);
-            // the frame of the selection is drawn at the picture
+            // the frame of the selection is drawn at the picture, 8 px outside a figure in a zone,
+            // which holds its caption
             const frame = await rectOf(page, '.beeson-frame.selected:not([hidden])');
-            assert.ok(near(frame.left, flipped.left) && near(frame.top, flipped.top), `the frame after ${where} is at ${Math.round(frame.left)}, ${Math.round(frame.top)}`);
+            const inset = from === 'figure' && n === ZONE_PAIR ? 8 : 0;
+            assert.ok(near(frame.left, flipped.left - inset) && near(frame.top, flipped.top - inset), `the frame after ${where} is at ${Math.round(frame.left)}, ${Math.round(frame.top)}`);
             await roundTrip(page, edited);
           }
           assert.deepEqual(errors(page), []);

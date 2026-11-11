@@ -92,7 +92,7 @@ for (const platform of PLATFORMS) {
 
     await drag(page, { x: se.x, y: se.y }, { dx: -90, dy: -60, hold: true });
     const readout = await page.evaluate(`(() => { const r = document.querySelector('.beeson-offset'); return r.hidden ? null : r.textContent; })()`);
-    assert.match(readout ?? '', /^\d+ × \d+$/, 'the size is not shown during the resize');
+    assert.match(readout ?? '', /^w: \d+ px {2}h: \d+ px$/, 'the size is not shown during the resize');
     await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: se.x - 90, y: se.y - 60, button: 'left', clickCount: 1 });
     await sleep(50);
 
@@ -600,9 +600,10 @@ for (const platform of PLATFORMS) {
       const r = s.getBoundingClientRect();
       const f = document.querySelector('.beeson-overlay > .beeson-frame.selected:not([hidden])').getBoundingClientRect();
       const scale = r.width / s.offsetWidth;
-      return 'x ' + Math.round((f.left - r.left) / scale) + '  y ' + Math.round((f.top - r.top) / scale);
+      return 'x: ' + Math.round((f.left + 8 - r.left) / scale) + ' px  y: ' + Math.round((f.top + 8 - r.top) / scale) + ' px';
     })()`);
-    // the corner of the frame of the figure, i.e. of its picture with its caption
+    // the corner of the figure, i.e. of its picture with its caption, whose frame is drawn 8 px
+    // outside it
     assert.equal(during.text, corner, 'the readout is not the upper left corner of the figure in slide px');
 
     await page.evaluate('window.BeesonEditor.undo()');

@@ -57,16 +57,22 @@ const SCALE = `(() => { const s = document.querySelector('.reveal .slides'); con
 const scaleOf = (page) => page.evaluate(SCALE);
 
 // the box of the first shown element of selector, or of the frame of the selected element el, in slide px
+// the frame of a figure with a caption, or of a group that holds one, is drawn CAPTIONED px outside
+// it, and measured without them
+const CAPTIONED = 8;
+const inset = (el) => `(${el}.querySelector(':scope > figcaption, :scope > .caption') ? ${CAPTIONED} : 0)`;
 const boxIn = (page, selector) => page.evaluate(`(() => {
   const f = ${SCALE};
+  const sel = window.BeesonEditor.selection();
+  const d = ${js(selector)} === ${js(FRAME)} && sel.length === 1 ? ${inset('sel[0]')} : ${js(selector)}.endsWith('.union') ? Math.max(0, ...sel.map((e) => ${inset('e')})) : 0;
   const r = [...document.querySelectorAll(${js(selector)})].filter((e) => !e.hidden).map((e) => e.getBoundingClientRect()).find((r) => r.width);
-  return r ? { left: (r.left - f.left) / f.k, top: (r.top - f.top) / f.k, width: r.width / f.k, height: r.height / f.k } : null;
+  return r ? { left: (r.left + d - f.left) / f.k, top: (r.top + d - f.top) / f.k, width: (r.width - 2 * d) / f.k, height: (r.height - 2 * d) / f.k } : null;
 })()`);
 const frameOfFigure = (page) => page.evaluate(`(() => {
   const f = ${SCALE};
-  const i = window.BeesonEditor.selection().findIndex((el) => el.matches('figure, .plate'));
+  const sel = window.BeesonEditor.selection(), i = sel.findIndex((el) => el.matches('figure, .plate')), d = ${inset('sel[i]')};
   const r = [...document.querySelectorAll(${js(FRAME)})][i].getBoundingClientRect();
-  return { left: (r.left - f.left) / f.k, top: (r.top - f.top) / f.k, width: r.width / f.k, height: r.height / f.k };
+  return { left: (r.left + d - f.left) / f.k, top: (r.top + d - f.top) / f.k, width: (r.width - 2 * d) / f.k, height: (r.height - 2 * d) / f.k };
 })()`);
 const right = (b) => b.left + b.width;
 const bottom = (b) => b.top + b.height;
@@ -279,7 +285,7 @@ for (const platform of PLATFORMS) {
         await press(page, 'ArrowRight');
         await frames(page);
         const nudged = await boxIn(page, FRAME);
-        assert.equal(await readout(page), `x ${Math.round(nudged.left)}  y ${Math.round(nudged.top)}`, `the readout of a nudge of ${where}, whose frame is at ${show(nudged)}`);
+        assert.equal(await readout(page), `x: ${Math.round(nudged.left)} px  y: ${Math.round(nudged.top)} px`, `the readout of a nudge of ${where}, whose frame is at ${show(nudged)}`);
         await roundTrip(page, await render(page));
 
         // a drag without the snap, with ⌘ on a Mac and Alt elsewhere
@@ -290,7 +296,7 @@ for (const platform of PLATFORMS) {
         const shown = await readout(page);
         await release(page, at.x + d.x * f.k, at.y + d.y * f.k, platform === 'mac' ? 4 : 1);
         await frames(page);
-        assert.equal(shown, `x ${Math.round(frame.left + d.x)}  y ${Math.round(frame.top + d.y)}`, `the readout of a drag of ${where} from its frame at ${show(frame)}`);
+        assert.equal(shown, `x: ${Math.round(frame.left + d.x)} px  y: ${Math.round(frame.top + d.y)} px`, `the readout of a drag of ${where} from its frame at ${show(frame)}`);
         await roundTrip(page, await render(page));
 
         await exec(page, 'zoom.selection');

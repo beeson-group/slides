@@ -72,7 +72,7 @@ const fieldsOf = (page) =>
   page.evaluate(`(() => { const v = (n) => document.querySelector('#beeson-edit-panel-format input[name="' + n + '"]')?.value ?? null; return { w: Number(v('Width')), h: Number(v('Height')) }; })()`);
 // readoutOf returns the size in the readout at the pointer, or null while the readout is hidden
 const readoutOf = (page) =>
-  page.evaluate(`(() => { const t = document.querySelector('.beeson-offset:not([hidden])')?.textContent ?? ''; const m = t.match(/(\\d+) × (\\d+)/); return m ? { w: Number(m[1]), h: Number(m[2]), text: t } : null; })()`);
+  page.evaluate(`(() => { const t = document.querySelector('.beeson-offset:not([hidden])')?.textContent ?? ''; const m = t.match(/w: (\\d+) px  h: (\\d+) px/); return m ? { w: Number(m[1]), h: Number(m[2]), text: t } : null; })()`);
 
 // item 1 of R7.1: in R6.8, a corner grip of a group of a figure and a paragraph moved by -120 by
 // -90 px gave 1446 × 706 in the readout, the box asked for, while the members reached 1524 × 800,
@@ -185,9 +185,10 @@ for (const platform of PLATFORMS) {
   }
 }
 
-// frameOf returns the size in slide px of the one frame of a selected group, or null
+// frameOf returns the size in slide px of the one frame of a selected group, without the 8 px that
+// it is drawn outside a group that holds a caption, or null
 const frameOf = (page) =>
-  page.evaluate(`(() => { const slides = document.querySelector('.reveal .slides'); const s = slides.getBoundingClientRect().width / slides.offsetWidth; const f = document.querySelector('.beeson-frame.union.group:not([hidden])'); if (!f) return null; const r = f.getBoundingClientRect(); return { w: r.width / s, h: r.height / s }; })()`);
+  page.evaluate(`(() => { const slides = document.querySelector('.reveal .slides'); const s = slides.getBoundingClientRect().width / slides.offsetWidth; const f = document.querySelector('.beeson-frame.union.group:not([hidden])'); if (!f) return null; const r = f.getBoundingClientRect(); return { w: (r.width - 16) / s, h: (r.height - 16) / s }; })()`);
 
 // item 4 of R7.1: in picture 178-group-resize of round 3, a group of the paragraph and the image
 // of the slide of figures of index.html was resized, and the readout and the frame read 1443 px
@@ -224,7 +225,8 @@ for (const platform of PLATFORMS) {
     assert.ok(readout, 'a readout is shown during the resize');
     const during = await fieldsOf(page);
     same('during the resize, the readout and the fields', readout, during);
-    same('during the resize, the frame and the fields', await frameOf(page), during);
+    // the held grip is drawn alone, without the frame, as in Keynote (select-move-resize-7)
+    assert.equal(await frameOf(page), null, 'during the resize, the frame of the group is drawn');
     await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: se.x - 120, y: se.y - 90, button: 'left', clickCount: 1 });
     await frames(page);
     const done = await fieldsOf(page);
@@ -237,9 +239,10 @@ for (const platform of PLATFORMS) {
 // positionFieldsOf returns the values of the fields X and Y of the Arrange pane, '' for an empty one
 const positionFieldsOf = (page) =>
   page.evaluate(`(() => { const v = (n) => document.querySelector('#beeson-edit-panel-format input[name="' + n + '"]')?.value ?? null; return { x: v('X'), y: v('Y') }; })()`);
-// cornerOfFrame returns the upper left corner in slide px of the one frame of a selected group
+// cornerOfFrame returns the upper left corner in slide px of the one frame of a selected group,
+// which holds a caption, without the 8 px that the frame is drawn outside it
 const cornerOfFrame = (page) =>
-  page.evaluate(`(() => { const slides = document.querySelector('.reveal .slides'); const o = slides.getBoundingClientRect(); const s = o.width / slides.offsetWidth; const r = document.querySelector('.beeson-frame.union.group:not([hidden])').getBoundingClientRect(); return { x: (r.left - o.left) / s, y: (r.top - o.top) / s }; })()`);
+  page.evaluate(`(() => { const slides = document.querySelector('.reveal .slides'); const o = slides.getBoundingClientRect(); const s = o.width / slides.offsetWidth; const r = document.querySelector('.beeson-frame.union.group:not([hidden])').getBoundingClientRect(); return { x: (r.left + 8 - o.left) / s, y: (r.top + 8 - o.top) / s }; })()`);
 // membersOf returns the upper left corners in slide px of the selected elements
 const membersOf = (page) =>
   page.evaluate(`(() => { const slides = document.querySelector('.reveal .slides'); const o = slides.getBoundingClientRect(); const s = o.width / slides.offsetWidth; return window.BeesonEditor.selection().map((e) => { const r = e.getBoundingClientRect(); return { x: (r.left - o.left) / s, y: (r.top - o.top) / s }; }); })()`);
