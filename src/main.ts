@@ -251,6 +251,15 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
       typed = '';
     });
     deck.addKeyBinding(8, (ev) => { if (forDeck(ev)) deck.prev(); });
+    // a key forward at the last step of the last slide returns to the editor, as the presenter
+    // display ends the show there
+    document.addEventListener('keydown', (ev) => {
+      if (!['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter', 'n', 'N'].includes(ev.key) || (ev.key === 'Enter' && typed)) return;
+      if (!forDeck(ev) || deck.isOverview() || !deck.isLastSlide() || deck.availableFragments().next) return;
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      toEditor('edit');
+    }, true);
   }
   if (!EDITING && !RECEIVER) window.addEventListener('message', fromSpeaker);
   // the editor ends the show by taking its frame away
