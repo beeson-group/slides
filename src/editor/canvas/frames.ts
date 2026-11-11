@@ -389,6 +389,14 @@ export class Frames {
       this.readout.textContent = out.text;
       this.readout.classList.toggle('frame', out.at === 'frame');
       Object.assign(this.readout.style, { left: `${out.x}px`, top: `${out.y}px` });
+      // the readout is kept inside the visible canvas, clear of the rulers and the panes. at the
+      // pointer it is turned to the other side of the pointer where it would cross an edge
+      const v = this.app.stage.viewport, r = this.readout.getBoundingClientRect();
+      const pointer = out.at === 'pointer';
+      let dx = pointer && r.right > v.right ? -(r.width + 28) : 0, dy = pointer && r.bottom > v.bottom ? -(r.height + 36) : 0;
+      dx += Math.max(v.left - (r.left + dx), Math.min(0, v.right - (r.right + dx)));
+      dy += Math.max(v.top - (r.top + dy), Math.min(0, v.bottom - (r.bottom + dy)));
+      if (dx || dy) Object.assign(this.readout.style, { left: `${out.x + dx}px`, top: `${out.y + dy}px` });
     }
   }
 
