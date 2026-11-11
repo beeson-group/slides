@@ -484,3 +484,46 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(titles, PANE_KEYS[platform]);
   });
 }
+
+const undoLabel = (page) => page.evaluate(`window.BeesonEditor.state('edit.undo').label`);
+const exec = (page, id, arg) => page.evaluate(`window.BeesonEditor.exec(${js(id)}${arg === undefined ? '' : `, ${js(arg)}`})`);
+
+// finding dialogs-undo-a11y-4: Undo was named after the value chosen in a control, e.g. Undo Accent
+// or Undo Split, and Undo Edit Alt Text kept the ellipsis of its menu item
+for (const platform of PLATFORMS) {
+  test(`each entry of the history made by a control is named after its action (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    const steps = [
+      ['Text Color', async () => {
+        await click(page, await pointOf(page, PARA, 'figure', 2));
+        await selectText(page, PARA, 'figure');
+        await exec(page, 'text.tone.accent');
+      }],
+      ['Paragraph Style', () => exec(page, 'text.style.small')],
+      ['List Style', async () => {
+        await click(page, await pointOf(page, ITEM, 'Dark and light', 2));
+        await exec(page, 'text.list.ol');
+      }],
+      ['Figure Mode', async () => {
+        await click(page, await page.evaluate(`(() => {
+          const r = [...document.querySelectorAll('.reveal section.present img')].find((i) => i.getClientRects().length).getBoundingClientRect();
+          return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+        })()`));
+        await exec(page, 'figure.mode.both');
+      }],
+      ['Edit Alt Text', () => exec(page, 'figure.alt', 'Zero-velocity curves')],
+      ['Text Column Width', () => exec(page, 'slide.width.wide')],
+      ['Transition', () => exec(page, 'slide.transition.none')],
+      ['Change Layout', () => exec(page, 'slide.layout.split')],
+    ];
+    const labels = [];
+    for (const [, run] of steps) {
+      await run();
+      await frames(page);
+      labels.push(await undoLabel(page));
+    }
+    assert.deepEqual(labels, steps.map(([name]) => `Undo ${name}`));
+    for (let i = 0; i < steps.length; i++) await page.evaluate('window.BeesonEditor.undo()');
+    await byteExact(page);
+  });
+}
