@@ -265,3 +265,20 @@ for (const platform of PLATFORMS) {
     await byteExact(page);
   });
 }
+
+// finding 5: Backspace at the start of a first item with a nested list did nothing
+for (const platform of PLATFORMS) {
+  test(`Backspace at the start of a first item with a nested list takes its dash off and keeps the nested items in the list (${platform})`, async (t) => {
+    const page = await nested(t, platform);
+    await click(page, await pointOf(page, ITEM, 'Dark and light'));
+    await press(page, 'Home');
+    await press(page, 'Backspace');
+    const part = listPart(await render(page));
+    assert.match(part, /frameless\.<\/p>\n {2}<p class="fragment" data-fragment-index="1">Dark and light mode: [^<]*<code>for-dark<\/code> and <code>for-light<\/code>\.<\/p>\n {2}<ul style="translate: 0px 20px">\n {4}<li class="fragment" data-fragment-index="2">You might[^<]*<\/li>\n {4}<li class="fragment" data-fragment-index="3">You should/, part);
+    assert.equal(await undoLabel(page), 'Undo Remove Bullet');
+    await type(page, 'W');
+    assert.ok(listPart(await render(page)).includes('<p class="fragment" data-fragment-index="1">WDark'), 'the caret is not at the start of the paragraph');
+    await page.evaluate('window.BeesonEditor.undo()');
+    await roundTrip(page, 2);
+  });
+}
