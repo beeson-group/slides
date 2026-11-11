@@ -353,6 +353,16 @@ export function install(app: App): void {
       }),
     ),
     {
+      // Select All of the Edit menu acts on the elements of the slide, and in the navigator the
+      // same keys select every slide, as in the navigators of Keynote and PowerPoint
+      id: 'slide.selectAll',
+      label: 'Select All Slides',
+      keys: { mac: ['Mod+A'], other: ['Mod+A'] },
+      in: ['navigator'],
+      enabled: (a) => sections(a).length > 0,
+      run: (a) => land(a, sections(a), a.current(), true),
+    },
+    {
       id: 'slide.duplicate',
       label: 'Duplicate Slide',
       keys: { mac: ['Mod+D'], other: ['Mod+D'] },
