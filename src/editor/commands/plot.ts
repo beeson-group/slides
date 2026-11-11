@@ -11,7 +11,7 @@ import type { Command } from '../commands.ts';
 import { CONTAINER } from '../canvas/hit.ts';
 import { make, injectStyle } from '../ui/dom.ts';
 import { install as installSurface } from '../inspector/surface.ts';
-import { addRow, addSeries, addTab, cellsIn, clearCells, deleteRow, deleteSeries, deleteTab, moveSeries, parseTsv, pasteCells, setCell, setKey, sheetsOf, type Cell, type Result, type Sheet } from '../plotdata.ts';
+import { addRow, addSeries, addTab, cellsIn, clearCells, deleteRow, deleteSeries, deleteTab, literal, moveSeries, parseTsv, pasteCells, setCell, setKey, sheetsOf, type Cell, type Result, type Sheet } from '../plotdata.ts';
 import { emptySlot } from '../media/actions.ts';
 
 // the tones that a mark of a new color takes, the data colors of the theme
@@ -947,6 +947,45 @@ export function commands(): Command[] {
         const range = sheetsOf(json).find((x) => x.key === 'axes')?.rows[a.panel]?.[(a.axis === 'y' ? 2 : 0) + a.end];
         if (!range) return { text: null, error: `the ${a.axis} axis of the panel does not have a range` };
         return setCell(json, range, a.text);
+      }),
+    },
+    {
+      // the scale of an axis, given as arg { el, panel, axis, scale }, where scale is linear, the
+      // default, which is taken out of the block, or asinh
+      id: 'plot.scale',
+      label: 'Axis Scale',
+      undoable: true,
+      enabled: (app) => !!blockOf(app, plotOf(app)),
+      run: (app, arg) => paneChange(app, arg, (json) => {
+        const a = arg as { panel: number; axis: 'x' | 'y'; scale: string };
+        return setKey(json, ['panels', a.panel, a.axis], 'scale', a.scale === 'linear' ? null : JSON.stringify(a.scale));
+      }),
+    },
+    {
+      // the unit u of an asinh axis, given as arg { el, panel, axis, text }. an empty text takes
+      // the unit out of the block, and the default of 1 is drawn
+      id: 'plot.unit',
+      label: 'Axis Unit',
+      undoable: true,
+      enabled: (app) => !!blockOf(app, plotOf(app)),
+      run: (app, arg) => paneChange(app, arg, (json) => {
+        const a = arg as { panel: number; axis: 'x' | 'y'; text: string };
+        const lit = a.text.trim() ? literal({ path: [], kind: 'number', text: '' }, a.text) : null;
+        if (a.text.trim() && lit === null) return { text: null, error: `${a.text.trim()} is not a number` };
+        return setKey(json, ['panels', a.panel, a.axis], 'unit', lit);
+      }),
+    },
+    {
+      // the axes of a panel shown or hidden, given as arg { el, panel }. shown axes are the
+      // default, hence "axes": false is written or taken out
+      id: 'plot.axes',
+      label: 'Show Axes',
+      undoable: true,
+      enabled: (app) => !!blockOf(app, plotOf(app)),
+      run: (app, arg) => paneChange(app, arg, (json) => {
+        const a = arg as { panel: number };
+        const panel = (JSON.parse(json) as { panels?: { axes?: unknown }[] }).panels?.[a.panel];
+        return setKey(json, ['panels', a.panel], 'axes', panel?.axes === false ? null : 'false');
       }),
     },
     {
