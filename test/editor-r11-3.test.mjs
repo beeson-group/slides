@@ -287,3 +287,59 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the focused element as the cell r,c of the window, a control of the window by its command or
+// label, 'outside', or 'body'
+const where = (page) => page.evaluate(`(() => {
+  const a = document.activeElement;
+  if (!a || a === document.body) return 'body';
+  if (!a.closest('${WINDOW}')) return 'outside';
+  if (a.dataset.r !== undefined) return 'cell ' + a.dataset.r + ',' + a.dataset.c;
+  return a.dataset.command ?? a.getAttribute('aria-label') ?? a.textContent;
+})()`);
+// the shown and enabled controls of the window, named as where names them
+const controls = (page) => page.evaluate(`[...document.querySelectorAll('${WINDOW} button:not(:disabled), ${WINDOW} input:not(:disabled)')].filter((e) => e.getClientRects().length).map((a) => a.dataset.r !== undefined ? 'cell ' + a.dataset.r + ',' + a.dataset.c : a.dataset.command ?? a.getAttribute('aria-label') ?? a.textContent)`);
+
+for (const platform of PLATFORMS) {
+  // the Plot Data window was not probed for the keys of a dialog by R9.7, the package of the dialogs
+  test(`the Plot Data window opens on its first cell, keeps Tab and Shift+Tab inside, closes at Esc, and gives the keys back to the slide (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await openData(page);
+    assert.equal(await where(page), 'cell 0,0');
+    const all = await controls(page);
+    for (const key of ['Tab', 'Shift+Tab']) {
+      const seen = new Set();
+      for (let i = 0; i < all.length + 2; i++) {
+        await press(page, key);
+        const at = await where(page);
+        assert.ok(at !== 'outside' && at !== 'body', `${key} ${i + 1} leaves the window`);
+        seen.add(at);
+      }
+      assert.deepEqual(all.filter((c) => !seen.has(c)), [], `${key} does not reach every control`);
+    }
+    // the first Esc leaves a cell that is being edited, without a write, and the second one closes
+    await focusCell(page, 1, 1);
+    await type(page, '7');
+    await press(page, 'Escape');
+    assert.equal(await isOpen(page), true);
+    assert.deepEqual((await grid(page))[1].slice(0, 2), ['1', '1']);
+    await press(page, 'Escape');
+    assert.equal(await isOpen(page), false);
+    await byteExact(page);
+    // the focus is given back to the slide, where the keys of the editor act on the plot
+    assert.equal(await where(page), 'body');
+    assert.deepEqual(await page.evaluate(`window.BeesonEditor.selection().map((el) => el.dataset.plot)`), ['plate-plot']);
+    await press(page, 'Mod+Shift+D');
+    await page.waitFor(`!!document.querySelector('${WINDOW}:not([hidden])')`);
+    assert.equal(await where(page), 'cell 0,0');
+    // Esc on a button of the window closes it as well
+    await click(page, `${WINDOW} .sheets button[role="tab"]`);
+    await focusCell(page, 0, 0);
+    await press(page, 'Shift+Tab');
+    assert.doesNotMatch(await where(page), /^cell/);
+    await press(page, 'Escape');
+    assert.equal(await isOpen(page), false);
+    assert.equal(await where(page), 'body');
+    assert.deepEqual(errors(page), []);
+  });
+}
