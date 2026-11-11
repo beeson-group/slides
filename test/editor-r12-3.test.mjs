@@ -299,3 +299,24 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// menus-keys-6: the thumbnail menu has Select All Slides after Paste, with Mod+A, and it selects
+// every slide
+for (const platform of PLATFORMS) {
+  test(`the thumbnail menu has Select All Slides after Paste (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, '.beeson-edit-nav .row:nth-child(3)', { button: 'right' });
+    await sleep(100);
+    const items = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item')].map((i) => ({ label: i.querySelector('.label').textContent, keys: i.querySelector('.keys').textContent }))`);
+    const at = items.findIndex((i) => i.label === 'Select All Slides');
+    assert.ok(at > 0, items.map((i) => i.label).join(', '));
+    assert.equal(items[at - 1].label, 'Paste');
+    assert.equal(items[at].keys, platform === 'mac' ? '⌘A' : 'Ctrl+A');
+    await click(page, await itemAt(page, 'Select All Slides'));
+    await sleep(100);
+    const rows = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-nav .row')].map((r) => r.getAttribute('aria-selected'))`);
+    assert.ok(rows.length > 5);
+    assert.deepEqual(rows, rows.map(() => 'true'));
+    assert.deepEqual(errors(page), []);
+  });
+}
