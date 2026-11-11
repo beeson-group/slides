@@ -4,9 +4,9 @@
 // split button. the commands of a group that name the same split are its variants, e.g. Image…,
 // Video…, and QR Code under Media, as the Pictures button of PowerPoint: the main part runs the
 // first of them, and its arrow lists them with the commands of the submenu of that name of the
-// menu of the first. below a window width of 1100 px
-// the labels are hidden and kept as the text of the buttons, and below 820 px the groups after
-// Present are put into a menu ». the toolbar has one tab stop, and the arrow keys move in it. the
+// menu of the first. while the toolbar is wider than the window, its last groups are put into a
+// menu » at its right end, as in Keynote, first those after Present and then those before it.
+// the labels are hidden only while the toolbar does not fit with them. the toolbar has one tab stop, and the arrow keys move in it. the
 // View and Zoom popups at its left are as in Keynote: View with the views of the slides and the
 // panes, and Zoom with Fit, Actual Size, Zoom to Selection, and the levels, showing the zoom on its
 // face. the items of the toolbar and whether it shows icons, labels, or both are set in the sheet
@@ -20,7 +20,6 @@ import { icon } from '../ui/icons.ts';
 import { closeMenus, commandKeys, menuItems, openMenu, splitButton, type MenuItem } from '../ui/menu.ts';
 import { ZOOMS } from './canvas.ts';
 
-const NARROW = 820;
 const POPUPS = new Set(['toolbar.view', 'toolbar.zoom']);
 const percent = (z: number) => `${Math.round(z * 100)}%`;
 
@@ -96,9 +95,8 @@ const CSS = `
 .beeson-edit-split .tb { border-top-right-radius: 0; border-bottom-right-radius: 0; }
 .beeson-edit-split .more { width: 16px; height: 44px; padding: 0; border: 0; border-radius: 0 6px 6px 0; background: transparent; color: var(--ed-muted); cursor: default; }
 .beeson-edit-split .more:hover, .beeson-edit-split .more[aria-expanded="true"] { background: var(--ed-hover); }
-@media (max-width: 1099px) { .beeson-edit-top .tb .label { display: none; } .beeson-edit-top .tb { min-width: 36px; } }
-.beeson-edit-top.show-icon .tb .label { display: none; }
-.beeson-edit-top.show-icon .tb { min-width: 36px; }
+.beeson-edit-top:is(.show-icon, .compact:not(.show-text)) .tb .label { display: none; }
+.beeson-edit-top:is(.show-icon, .compact:not(.show-text)) .tb { min-width: 36px; }
 .beeson-edit-top.show-text .tb > .beeson-icon { display: none; }
 .beeson-edit-top.show-text .tb .label { display: inline; font-size: 12px; }
 .beeson-edit-top.customizing .tb { cursor: grab; }
@@ -145,7 +143,6 @@ export function install(app: App): void {
   top.setAttribute('aria-label', 'Toolbar');
   let shown: Shown[] = [];
   let signature = '';
-  let narrow = innerWidth < NARROW;
   let late: { commands: Command[] }[] = [];
   // the layout kept for this deck, with null for the default set
   let kept: string[] | null = null;
@@ -248,7 +245,7 @@ export function install(app: App): void {
     return list[0] === c ? list : [c];
   };
 
-  const signatureOf = (groups: Group[]) => JSON.stringify([innerWidth < NARROW, customizing, show, layout(groups), groups.map((g) => [g.group, g.commands.map((c) => c.id)])]);
+  const signatureOf = (groups: Group[]) => JSON.stringify([customizing, show, layout(groups), groups.map((g) => [g.group, g.commands.map((c) => c.id)])]);
 
   function render(): void {
     const groups = app.commands.forToolbar();
@@ -258,8 +255,9 @@ export function install(app: App): void {
     late = [];
     top.classList.toggle('customizing', customizing);
     for (const [v] of SHOWS) top.classList.toggle(`show-${v}`, v === show);
-    const parts: HTMLElement[] = [];
     if (customizing) {
+      top.classList.remove('compact');
+      const parts: HTMLElement[] = [];
       // while the sheet is open, every item is drawn by itself, to be dragged
       for (const [i, id] of list.entries()) {
         let el: HTMLElement;
@@ -288,45 +286,72 @@ export function install(app: App): void {
       else boxes[boxes.length - 1].commands.push(app.commands.get(id)!);
     }
     const spaced = boxes.findIndex((b) => b.right);
-    // below NARROW the groups after the space go into the menu More, apart from the group of
-    // Format, which opens and closes the inspector, and is put after More
-    const kept: HTMLElement[] = [];
-    let right = false;
-    for (const [i, box] of boxes.entries()) {
-      right ||= box.right;
-      if (!box.commands.length) continue;
-      const fold = narrow && spaced >= 0 && i >= spaced;
-      if (fold && !box.commands.some((c) => c.id === 'shell.format')) {
-        late.push(box);
-        continue;
+    // the groups that may be folded into », from the right: those after the space, then those
+    // before it but the first. the group of Format, which opens and closes the inspector, stays,
+    // and the labels are hidden only where the toolbar does not fit with every group folded
+    const filled = boxes.map((b, i) => i).filter((i) => boxes[i].commands.length && !boxes[i].commands.some((c) => c.id === 'shell.format'));
+    const after = filled.filter((i) => spaced >= 0 && i >= spaced).reverse();
+    const before = filled.filter((i) => !after.includes(i)).slice(1).reverse();
+    const draw = (folded: Set<number>) => {
+      shown = [];
+      late = [];
+      const parts: HTMLElement[] = [];
+      const kept: HTMLElement[] = [];
+      let right = false;
+      for (const [i, box] of boxes.entries()) {
+        right ||= box.right;
+        if (!box.commands.length) continue;
+        if (folded.has(i)) {
+          late.push(box);
+          continue;
+        }
+        const el = make('div', 'group');
+        el.dataset.group = box.commands[0].toolbar?.group ?? 'custom';
+        if (right) el.classList.add('right');
+        right = false;
+        for (const c of box.commands) {
+          const variants = variantsOf(c, groups);
+          const b = button(c);
+          shown.push({ c, el: b, variants });
+          if (c.toolbar?.split) el.append(splitButton(app, b, () => splitItems(c, variants), `${toolbarLabel(app, c)} options`));
+          else el.append(b);
+        }
+        // the group of Format after a folded group is put after »
+        (late.length && box.commands.some((c) => c.id === 'shell.format') ? kept : parts).push(el);
       }
-      const el = make('div', 'group');
-      el.dataset.group = box.commands[0].toolbar?.group ?? 'custom';
-      if (right && !fold) el.classList.add('right');
-      if (!fold) right = false;
-      for (const c of box.commands) {
-        const variants = variantsOf(c, groups);
-        const b = button(c);
-        shown.push({ c, el: b, variants });
-        if (c.toolbar?.split) el.append(splitButton(app, b, () => splitItems(c, variants), `${toolbarLabel(app, c)} options`));
-        else el.append(b);
+      if (late.length) {
+        const box = make('div', 'group');
+        if (!parts.some((p) => p.classList.contains('right'))) box.classList.add('right');
+        kept.forEach((k) => k.classList.remove('right'));
+        box.append(more);
+        parts.push(box);
       }
-      (fold ? kept : parts).push(el);
+      parts.push(...kept);
+      top.replaceChildren(...parts);
+    };
+    const over = () => top.isConnected && top.scrollWidth > top.clientWidth + 0.5;
+    top.classList.remove('compact');
+    draw(new Set());
+    const fold = (order: number[]) => {
+      const folded = new Set<number>();
+      for (const i of order) {
+        if (!over()) return;
+        folded.add(i);
+        draw(folded);
+      }
+    };
+    fold([...after, ...before]);
+    if (over()) {
+      top.classList.add('compact');
+      draw(new Set());
+      fold([...after, ...before]);
     }
-    if (late.length) {
-      const box = make('div', 'group right');
-      box.append(more);
-      parts.push(box);
-    } else kept[0]?.classList.add('right');
-    parts.push(...kept);
-    top.replaceChildren(...parts);
     update();
   }
 
   // the state of each button, and the one tab stop on the first button that can be pressed
   function update(): void {
     if (signatureOf(app.commands.forToolbar()) !== signature) {
-      narrow = innerWidth < NARROW;
       render();
       return;
     }
@@ -643,7 +668,13 @@ export function install(app: App): void {
   app.listen('history', update);
   app.listen('report', update);
   app.onRefresh(['content', 'selection', 'slide', 'structure', 'layout'], update);
-  window.addEventListener('resize', update);
+  // the toolbar is laid out again when its width changes, e.g. with the window
+  let width = 0;
+  new ResizeObserver(() => {
+    if (top.clientWidth === width) return;
+    width = top.clientWidth;
+    if (!customizing) render();
+  }).observe(top);
   // a mode that ends without a change of the file, e.g. the drawing of a line left with Esc, is
   // shown on its switch after the key or the release that ends it
   for (const type of ['keyup', 'pointerup']) window.addEventListener(type, () => requestAnimationFrame(update), true);

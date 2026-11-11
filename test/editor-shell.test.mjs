@@ -234,17 +234,17 @@ test('a dialog keeps Tab inside, answers with the button pressed, and gives the 
   assert.deepEqual(page.errors, []);
 });
 
-test('the labels of the toolbar are hidden below 1100 px and kept as text, and the late groups go into a menu below 820 px', async (t) => {
+test('the labels of the toolbar are kept while they fit, and the late groups go into a menu while they do not', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
-  for (const [width, labels, more] of [[1440, true, false], [1000, false, false], [800, false, true]]) {
+  for (const [width, labels, more] of [[1440, true, false], [1000, true, false], [900, true, true]]) {
     const page = await editorPage(browser, { page: { width, height: 700 } });
     const bar = await page.evaluate(`(() => { const b = [...document.querySelectorAll('.beeson-edit-top .tb')]; return { texts: b.filter((e) => !e.classList.contains('more-groups')).map((e) => e.textContent), label: getComputedStyle(b[0].querySelector('.label')).display !== 'none', more: !!document.querySelector('.beeson-edit-top .more-groups') }; })()`);
     assert.equal(bar.label, labels, `${width}: labels`);
     assert.equal(bar.more, more, `${width}: the menu More`);
     // Format and Steps stay after More, since Format opens and closes the inspector, beside which
     // the navigator is hidden in a narrow window
-    assert.deepEqual(bar.texts, more ? ['View', 'FitZoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', 'Media', 'Present', 'Format', 'Steps'] : ['View', 'FitZoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', 'Media', 'Present', 'Save', 'Format', 'Steps']);
+    assert.deepEqual(bar.texts, more ? ['View', 'FitZoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', 'Media', 'Format', 'Steps'] : ['View', 'FitZoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', 'Media', 'Present', 'Save', 'Format', 'Steps']);
     const cell = await boxOf(page, '.beeson-edit-canvas');
     assert.ok(cell.w > 0 && cell.h > 0);
     assert.deepEqual(page.errors, []);

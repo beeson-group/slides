@@ -204,8 +204,8 @@ const screen = (page, x, y) => page.evaluate(`(() => {
 })()`);
 
 for (const platform of PLATFORMS) {
-  test(`the insert group of the toolbar is Table, Text, Formula, Shape, and Media, with labels above 1100 px (${platform})`, async (t) => {
-    for (const [width, labels] of [[1600, true], [1000, false], [800, false]]) {
+  test(`the insert group of the toolbar is Table, Text, Formula, Shape, and Media, with labels while they fit (${platform})`, async (t) => {
+    for (const [width, labels] of [[1600, true], [1000, true]]) {
       const page = await load(t, platform, { size: { width, height: 800 } });
       const group = await insertGroup(page);
       assert.deepEqual(group.map((b) => [b.id, b.text, b.split]), [
@@ -216,8 +216,7 @@ for (const platform of PLATFORMS) {
         ['insert.image', 'Media', true],
       ], `${width}: the insert group`);
       assert.ok(group.every((b) => b.label === labels), `${width}: the labels`);
-      // the groups after Present but Format go into the menu More below 820 px, and the inserts stay
-      assert.equal(await page.evaluate(`!!document.querySelector('.beeson-edit-top .more-groups')`), width < 820, `${width}: the menu More`);
+      assert.equal(await page.evaluate(`!!document.querySelector('.beeson-edit-top .more-groups')`), false, `${width}: the menu More`);
       const top = await page.evaluate(`(() => { const t = document.querySelector('.beeson-edit-top'); return { scroll: t.scrollWidth - t.clientWidth, h: t.getBoundingClientRect().height }; })()`);
       assert.ok(top.scroll <= 0, `${width}: the toolbar overflows by ${top.scroll} px`);
       assert.equal(top.h, 52);
