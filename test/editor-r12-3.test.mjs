@@ -196,7 +196,8 @@ async function keysIn(page, bar, labels) {
 
 // menus-keys-5: a key is printed only beside the item that it runs where the focus is. with a
 // figure selected on the canvas, Mod+D and Delete are those of Edit > Duplicate and Edit > Delete,
-// and in the navigator those of Slide > Duplicate Slide and Slide > Delete Slide
+// and in the navigator those of Slide > Duplicate Slide and Slide > Delete Slide. Edit > Delete
+// runs Delete Slide there, hence it lists Delete too
 for (const platform of PLATFORMS) {
   test(`a key is printed only beside the item that it runs in the present focus (${platform})`, async (t) => {
     const page = await load(t, platform, { n: 4 });
@@ -212,7 +213,7 @@ for (const platform of PLATFORMS) {
     await click(page, '.beeson-edit-nav .row:nth-child(5)');
     await sleep(100);
     assert.deepEqual(await keysIn(page, 'Slide', ['Duplicate Slide', 'Delete Slide']), { 'Duplicate Slide': dup, 'Delete Slide': del });
-    assert.deepEqual(await keysIn(page, 'Edit', ['Duplicate', 'Delete']), { Duplicate: '', Delete: '' });
+    assert.deepEqual(await keysIn(page, 'Edit', ['Duplicate', 'Delete']), { Duplicate: '', Delete: del });
     assert.deepEqual(errors(page), []);
   });
 }
