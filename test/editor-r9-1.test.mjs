@@ -35,6 +35,9 @@ const SIGN = { nw: [-1, -1], n: [0, -1], ne: [1, -1], e: [1, 0], se: [1, 1], s: 
 const FREE = { mac: 'Meta', other: 'Alt' };
 // the gap of the theme between a picture and its caption in a zone, in slide px
 const GAP = 16;
+// the screen px by which the frame of a figure with a caption stands outside it, clear of the text
+// of its caption, as the frame of a text box in Keynote stands off its text (K58)
+const INSET = 8;
 const TOL = 1.5;
 const THEME = new Set(themeClasses(readFileSync('theme/beeson.css', 'utf8')));
 
@@ -69,6 +72,9 @@ const union = (...boxes) => {
   return { left, top, width: Math.max(...boxes.map(right)) - left, height: Math.max(...boxes.map(bottom)) - top };
 };
 const reach = (points) => union(...points.map((p) => ({ left: p.x, top: p.y, width: 0, height: 0 })));
+const grow = (b, by) => ({ left: b.left - by, top: b.top - by, width: b.width + 2 * by, height: b.height + 2 * by });
+// the frame drawn around the box pic of a picture and the caption of now
+const framed = (pic, now) => (now.cap ? grow(union(pic, now.cap), INSET) : pic);
 // the point x, y turned by deg about the center of box
 const turned = (box, deg, x, y) => {
   const a = (deg * Math.PI) / 180, c = { x: cx(box), y: cy(box) };
@@ -112,11 +118,13 @@ const LOOK = `(() => {
     return { corners, deg: angle(img), width: w, height: h, layout: { left: c.x - w0 / 2, top: c.y - h0 / 2, width: w0, height: h0 } };
   });
   const cap = document.querySelector('.reveal section.present .zone > figcaption, .reveal section.present .zone > .caption');
+  const text = cap && document.createRange();
+  text?.selectNodeContents(cap);
   const frame = shown(${js(FRAME)})[0] ?? null;
   const u = shown(${js(UNION)})[0] ?? null;
   const grips = Object.fromEntries(shown('.beeson-grip').map((g) => { const q = g.getBoundingClientRect(); return [g.dataset.handle, { x: q.left + q.width / 2, y: q.top + q.height / 2 }]; }));
   return {
-    k, pictures, cap: rect(cap), capDeg: cap ? angle(cap) : 0,
+    k, origin: rect(s), pictures, cap: rect(cap), capDeg: cap ? angle(cap) : 0, text: text ? rect(text) : null,
     frame: rect(frame), frameDeg: frame ? angle(frame) : 0,
     group: u ? { left: parseFloat(u.style.left), top: parseFloat(u.style.top), width: parseFloat(u.style.width), height: parseFloat(u.style.height) } : null,
     groupDeg: u ? angle(u) : 0,
@@ -270,7 +278,7 @@ function gripAlone(now, h, box, where) {
 // the box of the picture and its caption of a resize by grip h from the figure or from the picture,
 // with the grip alone drawn in the drag and the frame drawn after it
 function resized(now, rest, h, ptr, from, where, held = false) {
-  const box = from === 'figure' && now.cap ? union(now.pic, now.cap) : now.pic;
+  const box = from === 'figure' ? framed(now.pic, now) : now.pic;
   if (held) gripAlone(now, h, box, where);
   else assert.ok(sameBox(now.frame, box), `${where}: the frame is at ${show(now.frame)}, not around ${show(box)}`);
   captionUnder(now, where);
@@ -347,6 +355,42 @@ for (const platform of PLATFORMS) {
       });
     }
 
+    test(`the frame of a figure and its grips stand off the text of its caption, while X and Y read the box of the figure, on ${platform} in ${mode} mode`, async (t) => {
+      for (const n of [ZONE_PAIR, ZONE_ONE]) {
+        const where = `${NAMES[n]} on ${platform} in ${mode} mode`;
+        const page = await load(t, platform, mode, n);
+        await pick(page, 'figure');
+        for (const stage of ['selected', 'nudged']) {
+          const at = `${where}, ${stage}`;
+          const now = await look(page);
+          const t0 = now.text;
+          assert.ok(t0 && t0.width > 0, `${at}: the caption has no text`);
+          assert.ok(sameBox(now.frame, framed(now.pic, now)), `${at}: the frame is at ${show(now.frame)}, not ${INSET} px outside the picture and the caption at ${show(union(now.pic, now.cap))}`);
+          // the line of the frame, 2 px wide, and each grip, 12 px wide with its shadow of 1 px,
+          // are clear of the text of the caption
+          const inner = grow(now.frame, -2);
+          assert.ok(inner.left < t0.left && inner.top < t0.top && right(inner) > right(t0) && bottom(inner) > bottom(t0), `${at}: the frame at ${show(now.frame)} runs on the text of the caption at ${show(t0)}`);
+          for (const [h, g] of Object.entries(now.grips)) {
+            const box = { left: g.x - 7, top: g.y - 7, width: 14, height: 14 };
+            const over = box.left < right(t0) && right(box) > t0.left && box.top < bottom(t0) && bottom(box) > t0.top;
+            assert.ok(!over, `${at}: the grip ${h} at ${js(g)} is on the text of the caption at ${show(t0)}`);
+          }
+          // X and Y give the corner of the picture and its caption, without the inset of the frame
+          const fig = union(now.pic, now.cap);
+          const x = (fig.left - now.origin.left) / now.k, y = (fig.top - now.origin.top) / now.k;
+          assert.ok(near(await fieldValue(page, 'x'), x, 1) && near(await fieldValue(page, 'y'), y, 1), `${at}: X and Y read ${await fieldValue(page, 'x')}, ${await fieldValue(page, 'y')}, not the corner ${Math.round(x)}, ${Math.round(y)} of the figure`);
+          if (stage === 'nudged') break;
+          await page.evaluate('document.activeElement instanceof HTMLElement && document.activeElement.blur()');
+          await press(page, 'ArrowRight');
+          await frames(page);
+          const edited = await render(page);
+          await roundTrip(page, edited);
+          await redo(page);
+          await frames(page);
+        }
+      }
+    });
+
     test(`a turned figure is framed upright around its picture and its caption, with its grips at the corners, and resized by them, on ${platform} in ${mode} mode`, async (t) => {
       for (const n of [ZONE_PAIR, ZONE_ONE]) {
         const where = `${NAMES[n]} turned by 30° on ${platform} in ${mode} mode`;
@@ -360,7 +404,7 @@ for (const platform of PLATFORMS) {
         assert.equal(rest.pictures[0].deg, 30, `${where}: the picture is not turned`);
         // the caption stays upright and in place
         assert.ok(sameBox(rest.cap, upright.cap, 0.5) && rest.capDeg === 0, `${where}: the caption moves from ${show(upright.cap)} to ${show(rest.cap)}`);
-        const around = union(reach(rest.pictures[0].corners), rest.cap);
+        const around = framed(reach(rest.pictures[0].corners), rest);
         assert.equal(rest.frameDeg, 0, `${where}: the frame is turned by ${rest.frameDeg}°`);
         assert.ok(sameBox(rest.frame, around), `${where}: the frame is at ${show(rest.frame)}, not around the turned picture and the caption at ${show(around)}`);
         for (const h of HANDLES) {
@@ -381,7 +425,7 @@ for (const platform of PLATFORMS) {
           const at = `${where}, a drag of the grip se ${stage}`;
           assert.equal(now.pictures[0].deg, 30, `${at}: the picture is not turned`);
           assert.ok(now.pictures[0].width < rest.pictures[0].width - 20, `${at}: the picture is not made smaller`);
-          const held = union(reach(now.pictures[0].corners), now.cap);
+          const held = framed(reach(now.pictures[0].corners), now);
           if (stage === 'in the drag') gripAlone(now, 'se', held, at);
           else {
             assert.equal(now.frameDeg, 0, `${at}: the frame is turned`);
