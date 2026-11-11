@@ -247,4 +247,24 @@ for (const platform of PLATFORMS) {
     assert.ok(inside(added, now.slide), 'the new picture runs past the slide');
     await roundTrip(page);
   });
+
+  test(`${platform}: a video is held still on the canvas while the deck is edited`, async (t) => {
+    for (const mode of ['light', 'dark']) {
+      const page = await load(t, platform, { n: VIDEO, mode, query: 'edit' });
+      const VIDEOS = `[...document.querySelectorAll('.reveal:not(.beeson-peek) .slides > section.present video')].filter((v) => v.getBoundingClientRect().width > 0).map((v) => ({ paused: v.paused, time: v.currentTime }))`;
+      await sleep(400);
+      const a = await page.evaluate(VIDEOS);
+      await sleep(800);
+      const b = await page.evaluate(VIDEOS);
+      assert.equal(a.length, 1);
+      assert.deepEqual(b, a, `the video plays on the canvas in the ${mode} mode`);
+      assert.equal(b[0].paused, true);
+      // and after the slide is shown again
+      await page.evaluate(`Reveal.slide(${VIDEO - 1})`);
+      await page.evaluate(`Reveal.slide(${VIDEO})`);
+      await sleep(800);
+      assert.equal((await page.evaluate(VIDEOS))[0].paused, true, 'the video plays once its slide is shown again');
+      await page.close();
+    }
+  });
 }
