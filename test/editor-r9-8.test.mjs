@@ -550,8 +550,8 @@ for (const platform of PLATFORMS) {
     await page.waitFor('window.BeesonEditor.ready.then(() => true)');
     assert.equal(await page.evaluate('Reveal.getIndices().h'), 2, 'the editor is not opened at the slide shown');
     // the speaker view is closed with the show, hence the editor is not loaded into its frame. a
-    // window opened by the name of the speaker view is then a new and empty one
-    const left = await page.evaluate(`(() => { const v = window.open('', 'reveal.js - Notes'); const open = !!v.document.querySelector('#current-slide'); v.close(); return open; })()`);
+    // window opened by the name of the speaker view is then a new and empty one, or it is refused
+    const left = await page.evaluate(`(() => { const v = window.open('', 'reveal.js - Notes'); if (!v) return false; const open = !!v.document.querySelector('#current-slide'); if (!open) v.close(); return open; })()`);
     assert.equal(left, false, 'the speaker view is left open after e opens the editor');
   });
 
