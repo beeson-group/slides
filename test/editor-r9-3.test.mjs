@@ -211,7 +211,8 @@ for (const platform of PLATFORMS) {
       }
       const out = p.words.filter((w) => !inside(w)).length;
       assert.equal(p.overflow, out, `slide ${n} has ${out} texts past the slide, and the status reports ${p.overflow}`);
-      if (n !== 3) assert.deepEqual(p.plate, [], `slide ${n} does not get the empty plate of the layout`);
+      // slide 3 has a backdrop and slide 5 a figure, which take the place of the plate
+      if (n === 4 || n === 6) assert.deepEqual(p.plate, [], `slide ${n} does not get the empty plate of the layout`);
       const edited = await render(page);
       await page.evaluate('window.BeesonEditor.undo()');
       await byteExact(page);
@@ -229,6 +230,29 @@ for (const platform of PLATFORMS) {
     const { text } = await saveAndReopen(page, `r9-3-${++saves}.html`);
     assert.equal(text, page.source);
     assert.deepEqual(errors(page), []);
+  });
+}
+
+// finding 2, part 2: a text of the caption of a figure slide that reaches its heading or its
+// running head is marked and counted in the status, as a text past the slide is
+for (const platform of PLATFORMS) {
+  test(`a long text changed to Figure that reaches the heading is reported in the status (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 3 });
+    const at = await page.evaluate(`(() => {
+      const r = Reveal.getCurrentSlide().querySelector(':scope > p').getBoundingClientRect();
+      return { x: r.left + 20, y: r.top + r.height / 2 };
+    })()`);
+    await click(page, at);
+    await press(page, 'End');
+    await page.send('Input.insertText', { text: ' More words that make the caption run up the slide.'.repeat(6) });
+    await press(page, 'Escape');
+    await exec(page, 'slide.layout.figure');
+    await sleep(200);
+    await frames(page);
+    const p = await page.evaluate(PARTS);
+    const reached = p.words.filter((w) => !inside(w) || meets(w, p.heading) || (p.run && meets(w, p.run))).length;
+    assert.ok(reached > 0, 'the probe text does not reach the heading');
+    assert.equal(p.overflow, reached, `${reached} texts are past the slide or over its heading, and the status reports ${p.overflow}`);
   });
 }
 
