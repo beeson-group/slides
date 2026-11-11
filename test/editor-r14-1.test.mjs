@@ -205,4 +205,14 @@ for (const platform of PLATFORMS) {
     assert.ok(s.overflow >= 2, `the status reads ${s.message}`);
     assert.deepEqual(errors(page), []);
   });
+  // a pending element is not written yet, hence the texts under an empty code box are not reported
+  test(`an empty new code box over a text is not reported before it has a text (${platform})`, async (t) => {
+    const page = await load(t, platform, 2);
+    await exec(page, 'insert.code');
+    await frames(page);
+    assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present pre.beeson-pending').length`), 1, 'a pending code box was not inserted');
+    assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present .beeson-overflow').length`), 0, 'a text under the empty code box is marked');
+    assert.equal((await status(page)).overflow, 0);
+    assert.deepEqual(errors(page), []);
+  });
 }
