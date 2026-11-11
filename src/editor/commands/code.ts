@@ -71,6 +71,8 @@ export function languageOf(app: App, code: Element): string | null {
 }
 
 const LINES = 'data-line-numbers';
+// why Number the Lines is dimmed, since reveal.js steps through the lines of a numbered box only
+const NUMBERS_WHY = 'The line steps need the line numbers.';
 // the size of the code of a small box
 const SMALL = '18px';
 
@@ -388,6 +390,7 @@ export function install(app: App): void {
       const code = codeAt(a);
       return !!code && !stepsOf(a, code).groups.length;
     },
+    why: (a) => (codeAt(a) ? NUMBERS_WHY : null),
     checked: (a) => {
       const code = codeAt(a);
       return !!code && stepsOf(a, code).numbers;

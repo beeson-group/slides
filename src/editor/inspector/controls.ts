@@ -251,6 +251,8 @@ export function checkbox(app: App, run: Run, command: string, text: string, chec
     input.disabled = !s?.enabled;
     input.checked = checked ? checked() : !!s?.checked;
     el.classList.toggle('off', input.disabled);
+    // a dimmed control says why in its tooltip
+    el.title = s?.why ?? '';
   };
   sync();
   return { el, sync };

@@ -145,6 +145,7 @@ export function codePane(app: App, run: Run): Control[] {
     ]),
     section('Lines', [
       checkbox(app, run, 'code.numbers', 'Number the lines'),
+      note(() => app.commands.state('code.numbers').why ?? ''),
       field,
       groupList(app, run, code),
       add,
