@@ -575,7 +575,10 @@ export function pasteCells(text: string, key: string, r: number, c: number, rows
   return setCells(out, edits);
 }
 
-// the text with the cells of a range cleared, i.e. a text made empty and a number set to 0, since a
-// number of a plot is not left out
-export const clearCells = (text: string, cells: (Cell | null)[][]): Result =>
-  setCells(text, cells.flat().filter((x): x is Cell => !!x).map((cell) => ({ cell, typed: cell.kind === 'number' ? '0' : '' })));
+// the text with the texts of a range made empty. parsePlot of plot.ts refuses null and a frame
+// without its point, hence a number cell is not cleared, and it is returned in kept
+export function clearCells(text: string, cells: (Cell | null)[][]): Result & { kept: Cell[] } {
+  const all = cells.flat().filter((x): x is Cell => !!x);
+  const res = setCells(text, all.filter((c) => c.kind === 'text').map((cell) => ({ cell, typed: '' })));
+  return { ...res, kept: all.filter((c) => c.kind === 'number') };
+}

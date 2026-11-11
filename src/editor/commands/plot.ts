@@ -163,6 +163,9 @@ class DataWindow {
   // the texts typed into cells and not written, by the path of the cell, with the fault of a text
   // that cannot be read, which is shown in red. a refresh of the window keeps them
   private readonly drafts = new Map<string, { typed: string; error: string | null }>();
+  // the number cells of a range that Delete or Cut could not clear, shown as invalid until a
+  // number is typed into them
+  private refused = new Set<string>();
   private inputs: (HTMLInputElement | null)[][] = [];
   private shape = '';
 
@@ -220,6 +223,7 @@ class DataWindow {
       this.at = null;
       this.range = null;
       this.drafts.clear();
+      this.refused.clear();
     }
     this.el.hidden = false;
     this.read();
@@ -232,6 +236,7 @@ class DataWindow {
     this.el.hidden = true;
     this.plot = null;
     this.drafts.clear();
+    this.refused.clear();
     // a preview of a text that was not written is replaced by the plot of the file
     if (plot?.isConnected) redraw(plot);
   }
@@ -259,7 +264,19 @@ class DataWindow {
     this.fill();
     const hit = this.cellOf(document.activeElement);
     const error = hit ? (this.drafts.get(key(hit.cell))?.error ?? null) : null;
-    this.say(error ?? '', !!error);
+    this.say(error ?? this.refusal(), !!error || this.refused.size > 0);
+  }
+
+  // the number cells of cells marked as not cleared
+  refuse(cells: Cell[]): void {
+    this.refused = new Set(cells.map(key));
+    this.fill();
+    this.say(this.refusal(), this.refused.size > 0);
+  }
+
+  private refusal(): string {
+    const n = this.refused.size;
+    return n ? `A number of a plot cannot be left empty, hence ${n === 1 ? 'a cell keeps its number' : `${n} cells keep their numbers`}.` : '';
   }
 
   // the tabs and the grid of the sheets. a grid of the same shape keeps its inputs, hence a field
@@ -286,7 +303,7 @@ class DataWindow {
         if (!input || !cell) return;
         const draft = this.drafts.get(key(cell));
         input.value = draft?.typed ?? cell.text;
-        input.closest('td')?.classList.toggle('bad', !!draft?.error);
+        input.closest('td')?.classList.toggle('bad', !!draft?.error || this.refused.has(key(cell)));
       }));
     }
     for (const [b, id] of [[this.add, 'plot.addRow'], [this.del, 'plot.deleteRow'], [this.addCol, 'plot.addSeries'], [this.delCol, 'plot.deleteSeries'], [this.addSheet, 'plot.addTab'], [this.delSheet, 'plot.deleteTab']] as const) b.disabled = !this.app.commands.enabled(id);
@@ -528,6 +545,7 @@ class DataWindow {
     const hit = this.cellOf(target);
     if (!hit) return;
     const typed = hit.input.value;
+    this.refused.delete(key(hit.cell));
     const res = typed !== hit.cell.text ? this.result(hit.cell, typed) : { text: this.json, error: null };
     hit.input.closest('td')?.classList.toggle('bad', !!res.error);
     if (typed === hit.cell.text) this.drafts.delete(key(hit.cell));
@@ -921,7 +939,9 @@ export function commands(): Command[] {
       run: (app) => windowChange(app, (w) => {
         const sel = w.selected();
         if (!sel) return null;
-        return { ...clearCells(w.text, sel.cells), at: w.at ?? undefined, range: w.range };
+        const res = clearCells(w.text, sel.cells);
+        w.refuse(res.kept);
+        return { ...res, at: w.at ?? undefined, range: w.range };
       }),
     },
     {

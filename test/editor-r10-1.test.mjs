@@ -82,8 +82,10 @@ test('a range pasted from a spreadsheet fills the cells and grows a tab by rows 
   assert.match(pasteCells(BLOCK, 'tab:one', 0, 1, [['x']]).error, /x is not a number/);
   // the axes do not grow
   assert.equal(pasteCells(BLOCK, 'axes', 0, 2, [['-3', '3', '9']]).text, BLOCK.replace('"y": { "range": [-1, 1] }', '"y": { "range": [-3, 3] }'));
+  // a number cell is not cleared, since a plot does not draw a missing value
   const cleared = clearCells(BLOCK, [[tab.rows[1][3], tab.rows[1][4]]]);
-  assert.match(cleared.text, /"b": \[\[0, 1\], \[0, 0\], \[2, 1\]\]/);
+  assert.equal(cleared.text, BLOCK);
+  assert.deepEqual(cleared.kept, [tab.rows[1][3], tab.rows[1][4]]);
 });
 
 test('a key of the block is set, added at the end of its object, and taken out', () => {
@@ -321,13 +323,15 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await grid(page), [['0', '0', '0.2', '0.3', '0'], ['1', '1', '0.4', '0.5', '0'], ['2', '1', '0.6', '0.7', '0']]);
     assert.deepEqual(await picked(page), ['0,2', '0,3', '1,2', '1,3', '2,2', '2,3']);
     await roundTrip(page, pasted, 'Paste');
-    // Delete clears the range, a number to 0
+    // Delete keeps the numbers of the range, marked invalid, since a plot does not draw a missing
+    // value
     await focusCell(page, 0, 2);
     for (const key of ['Shift+ArrowDown', 'Shift+ArrowDown', 'Shift+ArrowRight']) await press(page, key);
     assert.equal(await status(page), '3 × 2 cells selected.');
     await press(page, 'Delete');
-    const cleared = plate([ONE, '"dot": [[0, 0], [1, 0], [1, 0]], "path": [[0, 0], [0, 0], [0, 0]]'], values);
-    await roundTrip(page, cleared, 'Clear Cells', pasted);
+    await frames(page);
+    await byteExact(page, pasted);
+    assert.equal(await page.evaluate(`document.querySelectorAll('${WINDOW} td.bad').length`), 6);
     // a range picked by a drag over the cells
     await drag(page, cell(0, 1), { dx: (await center(page, cell(1, 2))).x - (await center(page, cell(0, 1))).x, dy: (await center(page, cell(1, 2))).y - (await center(page, cell(0, 1))).y });
     assert.deepEqual(await picked(page), ['0,1', '0,2', '1,1', '1,2']);
