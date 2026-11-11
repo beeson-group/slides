@@ -272,18 +272,22 @@ for (const platform of PLATFORMS) {
 
   test(`${platform}: a page that has not changed its guides does not write the guides it read at its start over those of a newer session`, async () => {
     const key = `beeson-edit-guides:/${LAYOUTS}`;
-    const stored = (page) => page.evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(key)}) ?? '[]')`);
-    // an older session stores a guide at x 640
+    // the guides stored for the slide of the math, none where nothing is stored
+    const stored = async (page) => (await page.evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(key)}) ?? '[]')`))[MATH] ?? { x: [], y: [] };
+    // an editor before data-guides stored a guide at x 640 by the index of its slide
     const older = await editor(platform);
-    await exec(older, 'view.guides.add', { x: [640] });
-    await frames(older);
+    const count = await older.evaluate(`document.querySelectorAll('.reveal .slides > section').length`);
+    const legacy = Array.from({ length: count }, (_, i) => ({ x: i === MATH ? [640] : [], y: [] }));
+    await older.evaluate(`localStorage.setItem(${JSON.stringify(key)}, ${JSON.stringify(JSON.stringify(legacy))})`);
     // a page opened after it reads the guide at its start
     const first = await editor(platform, { keep: true });
-    // a newer session in another tab adds a guide at y 300
+    // a newer session in another tab adds a guide at y 300, which writes both guides into its file
+    // and takes the stored one off
     const newer = await editor(platform, { keep: true, close: false });
     await exec(newer, 'view.guides.add', { y: [300] });
     await frames(newer);
-    assert.deepEqual((await stored(newer))[MATH], { x: [640], y: [300] });
+    assert.ok((await render(newer)).includes('data-guides="x640 y300"'));
+    assert.deepEqual(await stored(newer), { x: [], y: [] });
     // the first page opens the file again and inserts a text box, which change the page but not
     // its guides
     await first.send('Page.bringToFront');
@@ -292,11 +296,11 @@ for (const platform of PLATFORMS) {
     await exec(first, 'insert.text');
     await frames(first);
     await sleep(100);
-    assert.deepEqual((await stored(first))[MATH], { x: [640], y: [300] }, 'the first page writes over the guides of the newer session');
+    assert.deepEqual(await stored(first), { x: [], y: [] }, 'the first page writes over the guides of the newer session');
     // the first page is left, which does not write either
     await first.goto('about:blank');
     await sleep(100);
-    assert.deepEqual((await stored(newer))[MATH], { x: [640], y: [300] }, 'a page that is left writes over the guides of the newer session');
+    assert.deepEqual(await stored(newer), { x: [], y: [] }, 'a page that is left writes over the guides of the newer session');
     await first.close();
     assert.deepEqual(errors(newer), []);
   });
