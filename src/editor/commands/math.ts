@@ -12,6 +12,7 @@ import { classesIn, mathLookup, suggestName, unwrapClass, wrapClass } from '../m
 import { setStep, stepAt } from '../layers.ts';
 import { describe, modelOf, writePlan, type Model } from '../steps.ts';
 import { openInsert, sheetTarget } from '../text/mathpop.ts';
+import { openContextMenu } from '../ui/menu.ts';
 
 export type Tone = 'accent' | 'violet' | 'blue' | 'red';
 export const TONES: [Tone, string][] = [['accent', 'Orange'], ['violet', 'Violet'], ['blue', 'Blue'], ['red', 'Red']];
@@ -19,6 +20,8 @@ export const TONES: [Tone, string][] = [['accent', 'Orange'], ['violet', 'Violet
 // the inline formula focused last in a text, by its block and its place among the formulas of the
 // block, since a formula is replaced by a new container when its block is typeset again
 let focused: { host: Element; index: number } | null = null;
+// the formula of the context menu that is open, which Edit Formula… of this menu edits
+let pointed: Element | null = null;
 
 // the mjx-container of the formula of the selection: the formula of the open sheet, a selected
 // div.math, the formula of a div.math with the caret, or the inline formula focused last in the
@@ -27,6 +30,7 @@ export function formulaOf(app: App): Element | null {
   const open = sheetTarget();
   if (open?.isConnected && app.hostOf(open)) return open;
   const sel = app.selection;
+  if (pointed?.isConnected && sel.items.length === 1 && sel.items[0].contains(pointed)) return pointed;
   const only = sel.only();
   if (only?.matches('div.math')) return only.querySelector('mjx-container');
   if (sel.kind !== 'text') return null;
@@ -218,6 +222,33 @@ export function install(app: App): void {
     if (target.matches('mjx-container') && host) focused = { host, index: [...host.querySelectorAll('mjx-container')].indexOf(target) };
     else if (host || target.closest('.reveal')) focused = null;
   });
+
+  // a right-click on a formula outside a table selects the object around it and opens its element
+  // menu, or the menu of the text that is edited around it, in place of the menu of MathJax. the
+  // right press does not focus the formula, since a focused formula is taken for its text
+  const formulaAt = (ev: MouseEvent): Element | null => {
+    const f = ev.target instanceof Element ? ev.target.closest('mjx-container') : null;
+    return f && app.hostOf(f) && !f.closest('td, th') ? f : null;
+  };
+  document.addEventListener('mousedown', (ev) => {
+    if ((ev.button === 2 || (ev.ctrlKey && app.platform === 'mac')) && formulaAt(ev)) ev.preventDefault();
+  }, true);
+  window.addEventListener('pointerdown', (ev) => {
+    if (!(ev.target instanceof Element && ev.target.closest('.beeson-edit-menu'))) pointed = null;
+  }, true);
+  document.addEventListener('contextmenu', (ev) => {
+    const f = formulaAt(ev);
+    pointed = null;
+    const el = f && app.move.movableOf(f);
+    if (!f || !el) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    const host = app.hostOf(f);
+    const text = app.selection.kind === 'text' && app.selection.items[0] === host;
+    if (!text && !app.selection.has(el)) app.selection.set('elements', [el]);
+    pointed = f;
+    openContextMenu(app, text ? 'text' : 'element', text ? host : el, { x: ev.clientX, y: ev.clientY });
+  }, true);
 
   // an inline formula at the caret of a text. its key, Keynote's key of Insert Equation on a Mac and
   // PowerPoint's on Windows, is bound to insert.formula of commands/insert.ts, which runs this

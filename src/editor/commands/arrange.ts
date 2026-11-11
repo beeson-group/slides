@@ -105,7 +105,7 @@ export function commands(): Command[] {
         const only = app.selection.only();
         const up = only?.matches(RESIZABLE) ? containerOf(app, only) : null;
         const a = document.activeElement;
-        if (a instanceof HTMLElement && (app.selection.has(a) || a.classList.contains('beeson-handle'))) a.blur();
+        if (a instanceof HTMLElement && (app.selection.items.some((el) => el.contains(a)) || a.classList.contains('beeson-handle'))) a.blur();
         if (up) app.selection.set('elements', [up]);
         else app.selection.clear();
       },

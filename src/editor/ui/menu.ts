@@ -276,7 +276,12 @@ export function contextItems(app: App, kind: Context, target: Element | null): M
     const group = kind === 'element' ? sectionOf(c) : `${c.menu?.bar ?? ''}/${c.menu?.group ?? ''}`;
     if (last !== null && group !== last) out.push({ rule: true });
     last = group;
-    out.push({ command: c.id, arg: { kind, target } });
+    // the commands of a submenu of the menu bar are a submenu of the menu of a text, e.g. Speech
+    const sub = kind === 'text' ? c.menu?.submenu : undefined;
+    const prev = out.at(-1);
+    const item: MenuItem = { command: c.id, arg: { kind, target } };
+    if (sub && prev && 'items' in prev && prev.label === sub && Array.isArray(prev.items)) prev.items.push(item);
+    else out.push(sub ? { label: sub, items: [item] } : item);
   }
   if (kind === 'canvas') addGrid(app, out);
   // the menu of the browser, with its spelling guesses, is opened by a second right-click
