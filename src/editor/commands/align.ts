@@ -317,10 +317,15 @@ export function commands(): Command[] {
           }
         };
         // a typed H of a figure with a caption is the height of its picture with its caption. the
-        // caption wraps anew at the new width of the picture, hence its height is measured again
+        // caption wraps anew at the new width of the picture, hence its height is measured again. a
+        // caption that leaves less than 1 px gives the picture alone the typed height
         const h = typed.h;
-        put(h === undefined ? typed : { ...typed, h: Math.max(1, h - caps[i]) });
-        if (h !== undefined && caps[i]) put({ ...typed, h: Math.max(1, h - captionHeight(app, objects[i])) });
+        const left = (cap: number) => (h !== undefined && h - cap >= 1 ? { ...typed, h: h - cap } : typed);
+        put(left(caps[i]));
+        if (h !== undefined && caps[i] && h - caps[i] >= 1) {
+          const again = left(captionHeight(app, objects[i]));
+          if (again.h !== h) put(again);
+        }
         return { el, from, to: placeOf(el) };
       }));
       record(app, 'resize', changes);
