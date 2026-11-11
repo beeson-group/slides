@@ -32,16 +32,31 @@ after(async () => {
 
 const deckAt = (query, hash) => `${server.origin}/${DECK}${query ? `?${query}` : ''}${hash ? `#${hash}` : ''}`;
 
+// the page of a test is brought to the front, since Chrome defers the play of a video in a tab
+// that is not shown, and the pages of the tests share one Chrome
 async function newPage(t) {
   const page = await browser.newPage();
   t.after(() => page.close());
+  await page.send('Page.bringToFront');
   return page;
 }
+
+// the events of each video, kept on the page for the message of a failed check
+const recordEvents = `(() => {
+  window.videoEvents = [];
+  const start = performance.now();
+  for (const video of document.querySelectorAll('video')) {
+    for (const type of ['play', 'playing', 'pause', 'waiting', 'stalled', 'suspend', 'canplay', 'loadeddata', 'emptied', 'error']) {
+      video.addEventListener(type, () => videoEvents.push(video.id + ' ' + type + ' ' + Math.round(performance.now() - start)));
+    }
+  }
+})()`;
 
 async function open(t, hash) {
   const page = await newPage(t);
   await page.goto(deckAt('', hash));
   await page.waitFor(deckSettled);
+  await page.evaluate(recordEvents);
   return page;
 }
 
@@ -65,7 +80,17 @@ async function until(page, id, expected) {
   const matches = `(() => { const state = ${stateOf(id)}; return Object.entries(${JSON.stringify(expected)}).every(([key, value]) => state[key] === value); })()`;
   await page.waitFor(matches).catch(() => {});
   const state = await page.evaluate(stateOf(id));
-  assert.deepEqual(Object.fromEntries(Object.keys(expected).map((key) => [key, state[key]])), expected, id);
+  const seen = Object.fromEntries(Object.keys(expected).map((key) => [key, state[key]]));
+  // the state of the media and of the page, and the last events of the video, for a failure
+  const details = () => page.evaluate(`(() => {
+    const video = document.getElementById('${id}');
+    return JSON.stringify({
+      readyState: video.readyState, networkState: video.networkState, preload: video.preload, error: video.error?.code ?? null,
+      page: document.visibilityState, indices: Reveal.getIndices(),
+      events: (window.videoEvents ?? []).filter((event) => event.startsWith('${id} ')).slice(-12),
+    });
+  })()`);
+  if (JSON.stringify(seen) !== JSON.stringify(expected)) assert.deepEqual(seen, expected, `${id}: ${await details()}`);
   return state;
 }
 
