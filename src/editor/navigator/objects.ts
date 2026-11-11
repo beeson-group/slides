@@ -13,7 +13,7 @@ import type { App } from '../app.ts';
 import { OUTSIDE_DIALOGS } from '../commands.ts';
 import { CONTAINER, LINE, hasText, linesOf, movablesOf, objectOf } from '../canvas/hit.ts';
 import { locked } from '../canvas/drag.ts';
-import { canStep, enterGroup, groupOf, stepLayer } from '../commands/order.ts';
+import { canStep, enterGroup, groupOf, layerLimit, stepLayer } from '../commands/order.ts';
 import { injectStyle, make, store, stored } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 
@@ -337,6 +337,26 @@ export function install(app: App): void {
     });
     return i < 0 ? rows.length : i;
   };
+  // the element of the row before which, or behind which, els of row k are put at gap
+  const passed = (k: number, gap: number) => {
+    const m = membersOf(rows[gap < k ? gap : gap - 1].item);
+    return m[gap < k ? 0 : m.length - 1];
+  };
+  // the gap nearest to gap, toward row k, that Bring to Front or Send to Back lets els reach, or -1
+  // when els stay in place
+  const reachable = (els: Element[], k: number, gap: number): number => {
+    const set = new Set(els);
+    for (let g = gap; k >= 0 && (g < k || g > k + 1); g += g < k ? 1 : -1) {
+      const up = g < k;
+      const other = passed(k, g);
+      const ok = !!other && !set.has(other) && els.some((el) => {
+        const limit = layerLimit(app, el, up, set);
+        return !!limit && (limit === other || (up ? before(other, limit) : before(limit, other)));
+      });
+      if (ok) return g;
+    }
+    return -1;
+  };
   const rowAt = (key: Key) => rows.find((r) => keyOf(r.item) === key)?.row;
   const movable = (item: Item) => {
     const els = membersOf(item);
@@ -363,10 +383,11 @@ export function install(app: App): void {
       rowAt(p.key)?.classList.add('dragged');
       list.setPointerCapture(ev.pointerId);
     }
-    p.gap = gapAt(ev.clientY);
+    p.gap = reachable(p.els, rows.findIndex((r) => keyOf(r.item) === p.key), gapAt(ev.clientY));
+    drop.hidden = p.gap < 0;
+    if (drop.hidden) return;
     const lb = list.getBoundingClientRect();
     const at = p.gap < rows.length ? rows[p.gap].row.getBoundingClientRect().top : (rows.at(-1)?.row.getBoundingClientRect().bottom ?? lb.top);
-    drop.hidden = false;
     drop.style.top = `${at - lb.top + list.scrollTop}px`;
   });
   const endDrag = async (commit: boolean) => {
@@ -376,7 +397,7 @@ export function install(app: App): void {
     if (!p?.on) return;
     rowAt(p.key)?.classList.remove('dragged');
     const k = rows.findIndex((r) => keyOf(r.item) === p.key);
-    if (commit && k >= 0 && (p.gap < k || p.gap > k + 1)) await moveTo(p.els, p.key, k, p.gap);
+    if (commit && k >= 0 && p.gap >= 0 && (p.gap < k || p.gap > k + 1)) await moveTo(p.els, p.key, k, p.gap);
     refresh(true);
   };
   list.addEventListener('pointerup', (ev) => {
@@ -389,8 +410,7 @@ export function install(app: App): void {
   // that goes first is moved first, hence a member of a group does not pass another member
   async function moveTo(els: Element[], key: Key, k: number, gap: number): Promise<void> {
     const up = gap < k;
-    const edge = (item: Item) => membersOf(item)[up ? 0 : membersOf(item).length - 1];
-    const other = edge(rows[up ? gap : gap - 1].item);
+    const other = passed(k, gap);
     if (!other || els.includes(other) || !els.some((el) => canStep(app, el, up))) return;
     await app.history.transact('Reorder', async () => {
       for (const el of up ? els : [...els].reverse()) {
