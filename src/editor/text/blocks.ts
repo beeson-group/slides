@@ -22,7 +22,7 @@ import * as flow from './flow.ts';
 
 // an empty item gets a line to put the caret on, after the dash drawn by its ::before
 const CSS = `
-html.beeson-editing .reveal li[contenteditable="true"]:empty::after { content: "\\200b"; }
+html.beeson-editing .reveal li[contenteditable="true"]:empty::after, html.beeson-editing .reveal [contenteditable="true"] li:empty::after { content: "\\200b"; }
 `;
 
 const ATOM = 'mjx-container, br, img';
