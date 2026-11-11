@@ -1,11 +1,13 @@
 // the presenter display of the editor, as the presenter display of Keynote and the presenter view
 // of PowerPoint: the current slide at its step, the next slide or step, the notes with A- and A+,
 // the clock, and the elapsed time with pause and reset. each part can be hidden in the popover of
-// Display Options, as in Keynote, and the choice is kept in the storage for the deck. with Presenter View, the saved deck is
-// played in another tab and kept at the slide and step of the display. with Rehearse Timings, each
-// slide is timed, and at the end the seconds spent on each slide shown are written into its
-// data-timing, as one entry of the history. the slides are drawn from the page of the editor,
-// hence a rehearsal needs no save
+// Display Options, as in Keynote, and the choice is kept in the storage for the deck. while the
+// display is customized, from the button of the popover, each part is moved by a drag and resized
+// by its corner, and the layout is kept in the storage for the deck. with Presenter View, the
+// saved deck is played in another tab and kept at the slide and step of the display. with
+// Rehearse Timings, each slide is timed, and at the end the seconds spent on each slide shown are
+// written into its data-timing, as one entry of the history. the slides are drawn from the page of
+// the editor, hence a rehearsal needs no save
 
 import { addRestoreSteps, applySteps } from '../steps.ts';
 import type { App } from './app.ts';
@@ -187,6 +189,34 @@ function hiddenParts(): string[] {
     return [];
   }
 }
+// the layout of Customize Presenter Display as fractions of the display: the left x and top y of
+// each part, the width w of a slide and of the notes, and the height h of the notes or, for the
+// clock and the timer, of their text. it is kept in the storage for the deck, never in the file
+type Spot = { x: number; y: number; w?: number; h?: number };
+type Layout = Record<string, Spot>;
+const layoutKey = () => `beeson-presenter-layout:${location.pathname}`;
+const TEXTS = ['clock', 'timer'];
+// the place of a part missing from a layout, e.g. one hidden while the layout was made
+const SPOTS: Layout = { current: { x: 0.02, y: 0.08, w: 0.56 }, next: { x: 0.61, y: 0.08, w: 0.37 }, notes: { x: 0.61, y: 0.5, w: 0.37, h: 0.4 }, clock: { x: 0.86, y: 0.015, h: 0.02 }, timer: { x: 0.42, y: 0.012, h: 0.026 } };
+const fraction = (v: unknown): v is number => typeof v === 'number' && v >= 0 && v <= 1;
+function storedLayout(): Layout | null {
+  try {
+    const v: unknown = JSON.parse(stored(layoutKey()) ?? 'null');
+    if (!v || typeof v !== 'object') return null;
+    const out: Layout = {};
+    for (const [id] of PARTS) {
+      const s = (v as Record<string, Partial<Spot>>)[id];
+      if (!s || !fraction(s.x) || !fraction(s.y)) continue;
+      out[id] = { x: s.x, y: s.y, ...(fraction(s.w) ? { w: s.w } : {}), ...(fraction(s.h) ? { h: s.h } : {}) };
+    }
+    return Object.keys(out).length ? out : null;
+  } catch {
+    return null;
+  }
+}
+const seen = (el: Element): boolean => el.getClientRects().length > 0 && getComputedStyle(el).visibility !== 'hidden';
+const clamp = (v: number, lo: number, hi: number): number => Math.min(Math.max(v, lo), Math.max(lo, hi));
+
 // the sizes of the text of the notes, in CSS px
 const NOTE_SIZES = [14, 16, 18, 21, 24, 28, 32, 40];
 
@@ -205,10 +235,25 @@ dialog.beeson-edit-presenter::backdrop { background: #000; }
 .beeson-edit-presenter .parts label:hover { background: var(--ed-hover); }
 .beeson-edit-presenter .parts input { margin: 0; accent-color: var(--ed-select); }
 .beeson-edit-presenter.no-clock .clock, .beeson-edit-presenter.no-timer .timer { visibility: hidden; }
-.beeson-edit-presenter.no-current .col.now, .beeson-edit-presenter.no-next .next, .beeson-edit-presenter.no-notes .notes, .beeson-edit-presenter.no-next.no-notes .col.side { display: none; }
+.beeson-edit-presenter.no-current .col.now, .beeson-edit-presenter.no-next .upcoming, .beeson-edit-presenter.no-notes .notes, .beeson-edit-presenter.no-next.no-notes .col.side { display: none; }
 .beeson-edit-presenter:is(.no-current, .no-next.no-notes) .stage { grid-template-columns: minmax(0, 1fr); }
 .beeson-edit-presenter.no-current .shot.next { align-self: center; width: min(100%, calc((100vh - 150px) * 16 / 9)); }
 .beeson-edit-presenter.no-current:not(.no-notes) .shot.next { width: min(100%, calc((100vh - 330px) * 16 / 9)); }
+.beeson-edit-presenter .parts > button { margin-top: 6px; background: var(--ed-pressed); }
+.beeson-edit-presenter .col.now { align-self: start; }
+.beeson-edit-presenter .col.upcoming { flex: none; }
+.beeson-edit-presenter.free :is(.col.now, .col.upcoming, .notes, .clock, .group.timer) { position: absolute; z-index: 1; box-sizing: border-box; }
+.beeson-edit-presenter.free .col.upcoming .shot.next { width: 100%; align-self: stretch; }
+.beeson-edit-presenter.free .notes { min-height: 0; }
+.beeson-edit-presenter.free .bar.top > :last-child { grid-column: 3; }
+.beeson-edit-presenter.free .bar button { position: relative; z-index: 2; }
+.beeson-edit-presenter .layout { position: absolute; inset: 0; z-index: 3; user-select: none; -webkit-user-select: none; }
+.beeson-edit-presenter .layout[hidden], .beeson-edit-presenter .layout .frame[hidden] { display: none; }
+.beeson-edit-presenter .layout .frame { position: absolute; box-sizing: border-box; border: 2px solid var(--ed-select); border-radius: 6px; background: color-mix(in srgb, var(--ed-select) 14%, transparent); cursor: move; }
+.beeson-edit-presenter .layout .name { position: absolute; z-index: 1; left: -2px; top: calc(100% + 3px); padding: 1px 6px; border-radius: 4px; background: var(--ed-select); color: var(--ed-on-select, #fff); font-size: 11px; white-space: nowrap; }
+.beeson-edit-presenter .layout .grip { position: absolute; z-index: 1; right: -7px; bottom: -7px; width: 12px; height: 12px; border: 1px solid var(--ed-select); border-radius: 3px; background: #fff; cursor: nwse-resize; }
+.beeson-edit-presenter .layout .tools { position: absolute; z-index: 2; left: 50%; bottom: 8px; transform: translateX(-50%); display: flex; gap: 8px; padding: 6px; border: 1px solid var(--ed-menu-line); border-radius: 10px; background: var(--ed-panel); box-shadow: 0 12px 32px rgba(0, 0, 0, 0.4); }
+.beeson-edit-presenter .layout .tools button:not(.primary) { background: var(--ed-pressed); }
 .beeson-edit-presenter .group { display: flex; align-items: center; gap: 8px; min-width: 0; }
 .beeson-edit-presenter button { display: inline-flex; align-items: center; justify-content: center; gap: 5px; height: 28px; min-width: 28px; padding: 0 9px; border: 0; border-radius: 6px; background: transparent; color: inherit; font: 12px/1 var(--ed-font); cursor: default; white-space: nowrap; }
 .beeson-edit-presenter button:hover:not(:disabled) { background: var(--ed-hover); }
@@ -297,6 +342,12 @@ export class Presenter {
   private readonly options = tool('', 'Display Options', 'inspector');
   private readonly popover = make('div', 'parts');
   private readonly endMark = make('div', 'end-mark', 'End of the show');
+  // the element of each part, the overlay of its frames while the display is customized, and the
+  // drag of a frame or of its corner, with the layout that it changes
+  private readonly blocks: Record<string, HTMLElement> = {};
+  private readonly layout = make('div', 'layout');
+  private readonly frames: Record<string, HTMLElement> = {};
+  private press: { id: string; resize: boolean; x: number; y: number; from: Spot; box: { width: number; height: number }; layout: Layout } | null = null;
   private done: ((kept: boolean | null) => void) | null = null;
 
   constructor(app: App) {
@@ -349,6 +400,9 @@ export class Presenter {
       label.append(box, text);
       this.popover.append(label);
     }
+    const customize = tool('Customize Presenter Display', 'Move and resize the parts of the display');
+    customize.addEventListener('click', () => this.customize(true));
+    this.popover.append(customize);
     // a click outside the popover closes it
     el.addEventListener('pointerdown', (ev) => {
       const at = ev.target as Node;
@@ -366,6 +420,8 @@ export class Presenter {
     colLeft.append(currentLabel, shotCurrent);
     this.nextShot.append(this.next, this.endMark);
     const nextLabel = make('div', 'label next');
+    const upcoming = make('div', 'col upcoming');
+    upcoming.append(nextLabel, this.nextShot);
     const notes = make('div', 'notes');
     const head = make('div', 'head');
     const smaller = tool('A−', 'Make the notes smaller');
@@ -376,7 +432,7 @@ export class Presenter {
     const text = make('div', 'text');
     notes.append(head, text);
     const colRight = make('div', 'col side');
-    colRight.append(nextLabel, this.nextShot, notes);
+    colRight.append(upcoming, notes);
     const stage = make('div', 'stage');
     stage.append(colLeft, colRight);
 
@@ -413,7 +469,31 @@ export class Presenter {
     card.append(h3, said, buttons);
     summary.append(card);
 
-    el.append(top, stage, summary, foot, this.popover);
+    Object.assign(this.blocks, { current: colLeft, next: upcoming, notes, clock, timer: middle });
+    this.layout.hidden = true;
+    for (const [id, text] of PARTS) {
+      const frame = make('div', 'frame');
+      frame.dataset.part = id;
+      frame.append(make('span', 'name', text), make('span', 'grip'));
+      this.frames[id] = frame;
+      this.layout.append(frame);
+    }
+    const tools = make('div', 'tools');
+    const auto = tool('Use Auto Layout', 'Put each part back in the layout of the display');
+    auto.addEventListener('click', () => {
+      store(layoutKey(), null);
+      this.applyLayout();
+    });
+    const done = tool('Done', 'End the customizing (Esc)');
+    done.classList.add('primary');
+    done.addEventListener('click', () => this.customize(false));
+    tools.append(auto, done);
+    this.layout.append(tools);
+    this.layout.addEventListener('pointerdown', (ev) => this.pressFrame(ev));
+    this.layout.addEventListener('pointermove', (ev) => this.dragFrame(ev));
+    for (const type of ['pointerup', 'pointercancel'] as const) this.layout.addEventListener(type, () => this.dropFrame());
+
+    el.append(top, stage, summary, foot, this.popover, this.layout);
     Object.assign(this.parts, { title, elapsed, clock, currentLabel, nextLabel, text, count, slideTime: slideTime.lastChild as HTMLElement, audience, said, pause, back, keep });
     el.addEventListener('keydown', (ev) => this.onKey(ev));
     el.addEventListener('cancel', (ev) => {
@@ -423,6 +503,7 @@ export class Presenter {
     const resized = new ResizeObserver(() => this.draw());
     resized.observe(shotCurrent);
     resized.observe(this.nextShot);
+    resized.observe(el);
   }
 
   get isOpen(): boolean {
@@ -465,7 +546,9 @@ export class Presenter {
     this.el.showModal();
     this.el.focus({ preventScroll: true });
     this.applyNotes();
+    this.customize(false);
     this.applyParts();
+    this.applyLayout();
     this.showParts(customize);
     this.render();
     this.timer = window.setInterval(() => this.tick(), 250);
@@ -563,6 +646,124 @@ export class Presenter {
     this.draw();
   }
 
+  private get customizing(): boolean {
+    return !this.layout.hidden;
+  }
+
+  // the customizing of Keynote: the popover is closed, each shown part is framed, and a drag of a
+  // frame or of its corner moves or resizes the part
+  private customize(on: boolean): void {
+    this.dropFrame();
+    this.layout.hidden = !on;
+    if (on) this.showParts(false);
+    this.drawFrames();
+  }
+
+  // each part at its place in layout, or in the grid of the display without one. the slides keep
+  // their aspect ratio, since their height follows their width
+  private applyLayout(layout = storedLayout()): void {
+    this.el.classList.toggle('free', !!layout);
+    for (const [id] of PARTS) {
+      const s = layout ? layout[id] ?? SPOTS[id] : null;
+      const text = TEXTS.includes(id);
+      Object.assign(this.blocks[id].style, {
+        left: s ? `${s.x * 100}%` : '',
+        top: s ? `${s.y * 100}%` : '',
+        width: s?.w !== undefined && !text ? `${s.w * 100}%` : '',
+        height: s?.h !== undefined && id === 'notes' ? `${s.h * 100}%` : '',
+      });
+      if (text) this.textOf(id).style.fontSize = s?.h !== undefined ? `${s.h * 100}vh` : '';
+    }
+    this.draw();
+  }
+
+  private textOf(id: string): HTMLElement {
+    return id === 'clock' ? this.parts.clock : this.parts.elapsed;
+  }
+
+  // the layout of the parts as they are shown, i.e. the stored layout or the places of the grid
+  private measured(): Layout {
+    const kept = storedLayout();
+    if (kept) return { ...SPOTS, ...kept };
+    const d = this.el.getBoundingClientRect();
+    const out: Layout = { ...SPOTS };
+    for (const [id] of PARTS) {
+      const el = this.blocks[id];
+      if (!seen(el)) continue;
+      const r = el.getBoundingClientRect();
+      const s: Spot = { x: (r.left - d.left) / d.width, y: (r.top - d.top) / d.height };
+      if (TEXTS.includes(id)) s.h = parseFloat(getComputedStyle(this.textOf(id)).fontSize) / d.height;
+      else s.w = r.width / d.width;
+      if (id === 'notes') s.h = r.height / d.height;
+      out[id] = s;
+    }
+    return out;
+  }
+
+  private drawFrames(): void {
+    if (!this.customizing) return;
+    const d = this.el.getBoundingClientRect();
+    for (const [id] of PARTS) {
+      const frame = this.frames[id];
+      frame.hidden = !seen(this.blocks[id]);
+      if (frame.hidden) continue;
+      const r = this.blocks[id].getBoundingClientRect();
+      Object.assign(frame.style, { left: `${r.left - d.left}px`, top: `${r.top - d.top}px`, width: `${r.width}px`, height: `${r.height}px` });
+    }
+  }
+
+  // a press on a frame moves its part, and a press on its corner resizes it. a layout of the grid
+  // is taken as it is shown, so that the other parts stay where they are
+  private pressFrame(ev: PointerEvent): void {
+    const target = ev.target as Element;
+    const frame = target.closest<HTMLElement>('.frame');
+    if (ev.button !== 0 || !frame?.dataset.part) return;
+    ev.preventDefault();
+    const id = frame.dataset.part;
+    const layout = this.measured();
+    this.applyLayout(layout);
+    const d = this.el.getBoundingClientRect();
+    const r = this.blocks[id].getBoundingClientRect();
+    this.press = { id, resize: !!target.closest('.grip'), x: ev.clientX, y: ev.clientY, from: { ...layout[id] }, box: { width: r.width / d.width, height: r.height / d.height }, layout };
+    this.layout.setPointerCapture(ev.pointerId);
+  }
+
+  // a part is kept inside the display. the corner of a slide scales it by the side moved the most,
+  // that of the notes sets both sides, and that of the clock or the timer the size of the text
+  private dragFrame(ev: PointerEvent): void {
+    const p = this.press;
+    if (!p) return;
+    const d = this.el.getBoundingClientRect();
+    const dx = (ev.clientX - p.x) / d.width;
+    const dy = (ev.clientY - p.y) / d.height;
+    const { from: f, box } = p;
+    const s: Spot = { ...f };
+    if (!p.resize) {
+      s.x = clamp(f.x + dx, 0, 1 - box.width);
+      s.y = clamp(f.y + dy, 0, 1 - box.height);
+    } else if (TEXTS.includes(p.id)) s.h = clamp((f.h ?? 0.02) * ((box.height + dy) / box.height), 0.012, 0.2);
+    else if (p.id === 'notes') {
+      s.w = clamp((f.w ?? box.width) + dx, 0.1, 1 - f.x);
+      s.h = clamp((f.h ?? box.height) + dy, 0.08, 1 - f.y);
+    } else {
+      const kx = (box.width + dx) / box.width;
+      const ky = (box.height + dy) / box.height;
+      const k = Math.min(Math.abs(kx - 1) >= Math.abs(ky - 1) ? kx : ky, (1 - f.x) / box.width, (1 - f.y) / box.height);
+      s.w = Math.max(0.12, (f.w ?? box.width) * k);
+    }
+    p.layout[p.id] = s;
+    this.applyLayout(p.layout);
+  }
+
+  private dropFrame(): void {
+    const p = this.press;
+    if (!p) return;
+    this.press = null;
+    const round = (v: number) => Math.round(v * 1e4) / 1e4;
+    const layout = Object.fromEntries(Object.entries(p.layout).map(([id, s]) => [id, Object.fromEntries(Object.entries(s).map(([k, v]) => [k, round(v)]))]));
+    store(layoutKey(), JSON.stringify(layout));
+  }
+
   private showParts(open: boolean): void {
     this.popover.hidden = !open;
     this.options.setAttribute('aria-expanded', String(open));
@@ -648,6 +849,7 @@ export class Presenter {
       drawInto(this.next, nextSlide, deck, nw);
       showStep(this.next, nextSlide, nextStep);
     }
+    this.drawFrames();
   }
 
   private render(push = true): void {
@@ -674,7 +876,8 @@ export class Presenter {
 
   private onKey(ev: KeyboardEvent): void {
     const inPopover = this.popover.contains(ev.target as Node);
-    if (!this.popover.hidden && ev.key === 'Escape') this.showParts(false);
+    if (this.customizing && ev.key === 'Escape') this.customize(false);
+    else if (!this.popover.hidden && ev.key === 'Escape') this.showParts(false);
     // a checkbox of the popover takes Space and Return
     else if (inPopover && (ev.key === ' ' || ev.key === 'Enter')) return;
     else if (this.el.classList.contains('asking')) {
@@ -736,6 +939,7 @@ export class Presenter {
     const last = this.list[this.at];
     if (this.el.open) this.el.close();
     this.el.classList.remove('asking');
+    this.customize(false);
     this.showParts(false);
     this.audience = null;
     if (last?.isConnected) this.app.showSlide(last);
