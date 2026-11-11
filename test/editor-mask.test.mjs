@@ -143,15 +143,14 @@ for (const platform of PLATFORMS) {
     await checkEdit(page, edited);
   });
 
-  test(`Edit Mask from the menu, then Esc leaves the image as it was (${platform})`, async () => {
+  test(`Edit Mask from its key, then Esc leaves the image as it was (${platform})`, async () => {
     const page = await maskPage(platform, 3);
     await click(page, IMG);
     await click(page, IMG);
     assert.equal((await state(page, 'image.editMask')).enabled, true);
-    // the key of Edit Mask is Shift+Cmd+M on a Mac only, and the menu runs it elsewhere
+    // the key of Edit Mask is Shift+Cmd+M on a Mac and Ctrl+Shift+M elsewhere
     await press(page, 'Mod+Shift+M');
-    assert.equal(await editing(page), platform === 'mac');
-    if (platform !== 'mac') await exec(page, 'image.editMask');
+    assert.equal(await editing(page), true);
     await page.waitFor(`!!document.querySelector('${BAR}[open]')`);
     await zoomTo(page, 2);
     assert.equal(await page.evaluate(`document.querySelector(${JSON.stringify(IMG)}).style.scale`), '2');
