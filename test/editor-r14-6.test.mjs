@@ -116,3 +116,48 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+const SHOW = `document.querySelector('.beeson-edit-show iframe')?.contentWindow`;
+const showReady = `(() => { try { const w = ${SHOW}; return !!w?.Reveal?.isReady() && (!w.MathJax || (w.MathJax.startup?.promise?.then(() => true) ?? false)); } catch { return false; } })()`;
+const DISPLAY = 'dialog.beeson-edit-presenter[open]';
+const stepOf = (page) => page.evaluate(`(() => { const m = document.querySelector(${js(DISPLAY)}).textContent.match(/Slide (\\d+) of \\d+.*?Step (\\d+) of (\\d+)/s); return m ? m.slice(1).map(Number) : null; })()`);
+
+// D11: from slide 6, 3 and Return went to slide 3 with its four steps shown in the show played by
+// Present, and to slide 3 before its steps in the presenter display
+for (const platform of PLATFORMS) {
+  test(`a typed slide number that jumps back lands before the steps of its slide in both shows (${platform})`, async (t) => {
+    const page = await load(t, platform, 'light');
+    await page.evaluate(`Reveal.slide(5)`);
+    await frames(page);
+    const steps = await page.evaluate(`[2, 4].map((n) => Reveal.getSlides()[n].querySelectorAll('.fragment').length)`);
+    assert.ok(steps.every((n) => n > 0), js(steps));
+    await page.evaluate(`(() => { window.open = () => null; return true; })()`);
+    await press(page, 'Alt+Enter');
+    await page.waitFor(`!!document.querySelector(${js(DISPLAY)})`, 20000);
+    await sleep(300);
+    for (const [typed, want] of [['3', 3], ['5', 5]]) {
+      for (const key of [typed, 'Enter']) await press(page, key);
+      await sleep(200);
+      const at = await stepOf(page);
+      assert.deepEqual(at?.slice(0, 2), [want, 0], `the presenter display at ${js(at)} after ${typed} and Return`);
+    }
+    await press(page, 'Escape');
+    await page.waitFor(`!document.querySelector(${js(DISPLAY)})`);
+    await page.evaluate(`Reveal.slide(5)`);
+    await frames(page);
+    await press(page, 'Mod+Enter');
+    await page.waitFor(showReady, 20000);
+    await sleep(300);
+    for (const [typed, h] of [['3', 2], ['5', 4]]) {
+      for (const key of [typed, 'Enter']) await press(page, key);
+      await sleep(300);
+      const at = await page.evaluate(`(() => { const w = ${SHOW}; return { h: w.Reveal.getIndices().h, shown: w.Reveal.getCurrentSlide().querySelectorAll('.fragment.visible').length }; })()`);
+      assert.deepEqual(at, { h, shown: 0 }, `the show played by Present after ${typed} and Return`);
+    }
+    await press(page, 'Escape');
+    await page.waitFor(`!document.querySelector('.beeson-edit-show')`);
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+}
