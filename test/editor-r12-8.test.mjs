@@ -212,6 +212,7 @@ for (const platform of PLATFORMS) {
     await settle(page);
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Group');
     assert.equal((await rows(page))[0], '1 Group *');
+    assert.equal(await page.evaluate(`!!document.activeElement.closest('${ROW}')`), true, 'the focus left the Object List');
     const grouped = await render(page);
     await undoKey(page);
     await settle(page);

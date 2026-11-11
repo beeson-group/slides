@@ -405,6 +405,13 @@ export function install(app: App): void {
   list.addEventListener('keydown', (ev) => {
     const i = rows.findIndex((r) => r.row === document.activeElement);
     if (i < 0) return;
+    // the keys of the Arrange menu act on the rows chosen, as in Keynote's object list
+    const arrange = app.commands.forKey(ev, 'canvas');
+    if (arrange?.id.startsWith('arrange.')) {
+      ev.preventDefault();
+      void app.commands.run(arrange.id).catch((e) => app.fail(e));
+      return;
+    }
     const go = (j: number) => {
       const r = rows[Math.max(0, Math.min(rows.length - 1, j))];
       if (!r) return;
