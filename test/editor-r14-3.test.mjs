@@ -225,6 +225,11 @@ for (const platform of PLATFORMS) {
       assert.equal(range.disabled, false, `Edit > Delete is dimmed on a selected text in ${what}`);
       assert.equal(await textOf(), '', `Edit > Delete does not delete the selected text of ${what}`);
       assert.equal(figures(await render(page)), figures(page.source), `Edit > Delete on a selected text in ${what} deleted the figure`);
+      // a paste is plain text in the line or the field, on one line in a line of the outline
+      await page.evaluate(`Promise.resolve(window.BeesonEditor.exec('edit.paste', 'One\\n two')).then(() => true)`);
+      await settle(page);
+      assert.equal(await textOf(), what.includes('outline') ? 'One two' : 'One\n two', `Paste does not put the text into ${what}`);
+      assert.equal(figures(await render(page)), figures(page.source), `Paste with the caret in ${what} changed the figures of the slide`);
       // a press on the figure takes the focus out of the text, and Delete acts on the figure again
       await click(page, await figure(), { button: 'right' });
       await settle(page);
