@@ -184,4 +184,25 @@ for (const platform of PLATFORMS) {
     assert.equal(s.overflow, 0, `the caption is reported: ${s.message}`);
     assert.deepEqual(errors(page), []);
   });
+
+  // D20. after Section on the slide of the code box, the footnote is drawn over the code box, and
+  // both are marked, as a text over a picture is
+  test(`a footnote drawn over a code box is marked with the code box (${platform})`, async (t) => {
+    const page = await load(t, platform, 'Code boxes, you guessed it...');
+    await exec(page, 'slide.layout.section');
+    await frames(page);
+    await frames(page);
+    const m = await page.evaluate(`(() => {
+      const slide = document.querySelector('.reveal .slides > section.present');
+      const a = slide.querySelector('pre').getBoundingClientRect();
+      const foot = slide.querySelector('.foot');
+      const b = foot.getBoundingClientRect();
+      return { meets: a.bottom > b.top && a.top < b.bottom && a.right > b.left && a.left < b.right, foot: foot.classList.contains('beeson-overflow'), pre: slide.querySelector('pre').classList.contains('beeson-overflow') || !!slide.querySelector('pre .beeson-overflow, pre.beeson-overflow') };
+    })()`);
+    assert.equal(m.meets, true, 'the slide does not show the case of D20');
+    assert.deepEqual([m.foot, m.pre], [true, true], `the marks are ${js(m)}`);
+    const s = await status(page);
+    assert.ok(s.overflow >= 2, `the status reads ${s.message}`);
+    assert.deepEqual(errors(page), []);
+  });
 }
