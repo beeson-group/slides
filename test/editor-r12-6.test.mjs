@@ -252,7 +252,7 @@ for (const platform of PLATFORMS) {
     assert.equal(await render(page), pasted);
     await click(page, await pointOf(page, PARA, 'template', 3), { count: 2 });
     await pressCommand(page, 'Mod+x', 'cut');
-    assert.ok(!(await render(page)).includes('template'));
+    assert.ok(listPart(await render(page)).includes('styles of the. It will'), 'the cut does not take the word out');
     assert.equal(await undoLabel(page), 'Undo Cut');
     await undo(page);
     assert.equal(await render(page), pasted);
