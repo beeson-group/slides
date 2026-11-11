@@ -35,7 +35,13 @@ export function install(app: App): void {
       const lines = (el: Element) => {
         const range = document.createRange();
         range.selectNodeContents(el);
-        return [...range.getClientRects()].filter((r) => r.width > 1 && r.height > 1);
+        // a display formula is a block as wide as its column, hence it is measured by its glyphs
+        const shown = [...el.querySelectorAll('mjx-container[display="true"]')];
+        const blocks = shown.map((c) => c.getBoundingClientRect());
+        const same = (a: DOMRect, b: DOMRect) => Math.abs(a.left - b.left) < 1 && Math.abs(a.top - b.top) < 1 && Math.abs(a.right - b.right) < 1 && Math.abs(a.bottom - b.bottom) < 1;
+        const rects = [...range.getClientRects()].filter((r) => !blocks.some((b) => same(r, b)));
+        rects.push(...shown.flatMap((c) => [...c.querySelectorAll(':scope > svg')].map((g) => g.getBoundingClientRect())));
+        return rects.filter((r) => r.width > 1 && r.height > 1);
       };
       for (const el of slide.querySelectorAll(HOST)) {
         // an empty placeholder of the editor is not a text of the slide
