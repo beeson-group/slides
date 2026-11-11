@@ -440,3 +440,75 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// a stub of speechSynthesis that keeps the texts it is given in window.spoken and speaks until it
+// is cancelled, or no speechSynthesis with off
+const STUB = (off) => `(() => {
+  window.spoken = [];
+  const stub = { speaking: false, current: null,
+    speak(u) { this.current = u; this.speaking = true; window.spoken.push(u.text); },
+    cancel() { const u = this.current; this.current = null; if (this.speaking) { this.speaking = false; u?.onend?.(new Event('end')); } } };
+  Object.defineProperty(window, 'speechSynthesis', { value: ${off ? 'undefined' : 'stub'}, configurable: true });
+  return true;
+})()`;
+const cmd = (page, id) => page.evaluate(`window.BeesonEditor.state(${js(id)})`);
+const labels = (items) => items.map((i) => (i.rule ? '-' : i.command ?? i.label));
+
+// the submenu Speech of the Edit menu of Keynote, with Start Speaking and Stop Speaking, which read
+// the selected text, the selected blocks, or the slide aloud
+for (const platform of PLATFORMS) {
+  test(`Edit > Speech reads the selection or the slide aloud (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 3 });
+    await page.evaluate(STUB(false));
+    // the submenu follows Substitutions in the Edit menu
+    const edit = labels(await page.evaluate(`window.BeesonEditorShell.menuItems('Edit')`));
+    assert.ok(edit.includes('Speech'), `the Edit menu does not have Speech: ${edit.join(', ')}`);
+    assert.equal(edit.indexOf('Speech'), edit.indexOf('Substitutions') + 1, 'Speech does not follow Substitutions');
+    assert.deepEqual(labels(await page.evaluate(`window.BeesonEditorShell.menuItems('Edit', 'Speech')`)), ['edit.startSpeaking', 'edit.stopSpeaking']);
+    assert.equal((await cmd(page, 'edit.startSpeaking')).enabled, true);
+    assert.equal((await cmd(page, 'edit.stopSpeaking')).enabled, false);
+    // without a selection, the text of the slide in reading order, from its heading on
+    await page.evaluate(`window.BeesonEditor.exec('edit.startSpeaking')`);
+    let spoken = await page.evaluate('window.spoken');
+    assert.equal(spoken.length, 1);
+    assert.match(spoken[0], /^Equations are first class citizens\s+You can type LaTeX/);
+    assert.doesNotMatch(spoken[0], /\\\\/, 'the TeX of a formula is spoken');
+    assert.equal((await cmd(page, 'edit.stopSpeaking')).enabled, true, 'Stop Speaking is not enabled while a text is spoken');
+    await page.evaluate(`window.BeesonEditor.exec('edit.stopSpeaking')`);
+    assert.equal(await page.evaluate('window.speechSynthesis.speaking'), false);
+    assert.equal((await cmd(page, 'edit.stopSpeaking')).enabled, false);
+    // the selected text, with the key of Keynote on a Mac
+    const para = '.reveal section.present > p:first-of-type';
+    await click(page, para);
+    await page.evaluate(`(() => { const t = document.querySelector(${js(para)}).firstChild; getSelection().setBaseAndExtent(t, 8, t, 16); })()`);
+    if (platform === 'mac') await press(page, 'Mod+Alt+Shift+S');
+    else await page.evaluate(`window.BeesonEditor.exec('edit.startSpeaking')`);
+    spoken = await page.evaluate('window.spoken');
+    assert.equal(spoken.at(-1), 'type LaT');
+    // the text menu has the submenu Speech, as in Keynote
+    await click(page, para, { button: 'right' });
+    await sleep(250);
+    const m = await menu(page);
+    assert.match(m.cls, /\btext\b/);
+    assert.ok(item(m, 'Speech'), 'the text menu does not have Speech');
+    await closeMenu(page);
+    // the selected blocks
+    await press(page, 'Escape');
+    await frames(page);
+    assert.deepEqual(await selected(page), ['p']);
+    await page.evaluate(`window.BeesonEditor.exec('edit.startSpeaking')`);
+    spoken = await page.evaluate('window.spoken');
+    assert.match(spoken.at(-1), /^You can type LaTeX in equation boxes\..*expressed as$/s);
+    // nothing of the file or the history is changed
+    await byteExact(page);
+    assert.equal((await cmd(page, 'edit.undo')).enabled, false);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`Start Speaking and Stop Speaking are dimmed without speechSynthesis (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 3 });
+    await page.evaluate(STUB(true));
+    assert.equal((await cmd(page, 'edit.startSpeaking')).enabled, false);
+    assert.equal((await cmd(page, 'edit.stopSpeaking')).enabled, false);
+  });
+}
