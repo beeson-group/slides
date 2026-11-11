@@ -279,6 +279,15 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(changedTags(nudged, back), ['<ul style="translate: 0px 20px; position: relative; z-index: -1">']);
     assert.deepEqual(await orders(page), { front: true, forward: true, backward: false, back: false });
     await checkEdit(page, back, nudged);
+    // Bring Forward puts the list over the paragraph again, as in the file, and takes the
+    // declarations off
+    await click(page, '.reveal section.present > ul li');
+    await press(page, 'Escape');
+    await frames(page);
+    assert.deepEqual(await selected(page), ['ul']);
+    await press(page, KEYS[platform].forward);
+    await frames(page);
+    assert.equal(await render(page), nudged, 'Bring Forward leaves declarations on the list back in the order of the file');
     const file = `.r13-1-back-${platform}.html`;
     writeFileSync(file, back);
     t.after(() => rmSync(file, { force: true }));
@@ -298,5 +307,70 @@ for (const platform of PLATFORMS) {
     assert.equal(await hit(), 'ul', 'the show does not draw the list');
     await printView(view, deckUrl(file, 'print-pdf&still'));
     assert.equal(await hit(), 'ul', 'the print view draws the list under the background of its page');
+  });
+}
+
+// a paragraph that is not moved, ordered by the commands or by its row and brought back to the
+// order of the file, keeps the style of the file, and Reset Slide takes the order off
+const exec = (page, id) => page.evaluate(`Promise.resolve(window.BeesonEditor.exec(${js(id)})).then(() => true)`);
+async function selectP(page) {
+  await click(page, P);
+  await press(page, 'Escape');
+  await frames(page);
+  assert.deepEqual(await selected(page), ['p']);
+}
+const rowOf = (page, name) => page.evaluate(`(() => { const rs = [...document.querySelectorAll(${js(ROW)})]; const r = rs.find((x) => x.querySelector('.name').textContent.startsWith(${js(name)})).getBoundingClientRect(); const all = rs.map((x) => x.getBoundingClientRect()); return { x: r.left + 60, y: r.top + r.height / 2, top: all[0].top, bottom: all.at(-1).bottom }; })()`);
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: a paragraph that is not moved is put back to the style of the file by Send Backward and Send to Back`, async (t) => {
+    const page = await load(t, platform);
+    await selectP(page);
+    await press(page, KEYS[platform].forward);
+    await frames(page);
+    assert.deepEqual(changedTags(page.source, await render(page)), ['<p style="position: relative">']);
+    assert.deepEqual(await orders(page), { front: true, forward: true, backward: true, back: true }, 'the commands that put the paragraph back are dimmed');
+    await press(page, KEYS[platform].backward);
+    await frames(page);
+    assert.equal(await render(page), page.source, 'Send Backward leaves a declaration on the paragraph');
+    await press(page, KEYS[platform].front);
+    await frames(page);
+    assert.notEqual(await render(page), page.source);
+    await press(page, KEYS[platform].back);
+    await frames(page);
+    assert.equal(await render(page), page.source, 'Send to Back leaves a declaration on the paragraph');
+    assert.deepEqual(await orders(page), { front: true, forward: true, backward: false, back: false });
+    const { text } = await saveAndReopen(page, `r13-1-home-${platform}.html`);
+    assert.equal(text, page.source);
+  });
+
+  test(`${platform}: a paragraph dragged in the object list to the front and back to the bottom keeps the style of the file`, async (t) => {
+    const page = await load(t, platform);
+    await press(page, LIST_KEY[platform]);
+    await frames(page);
+    const NAME = 'Text: Export your matplotlib';
+    let at = await rowOf(page, NAME);
+    await drag(page, { x: at.x, y: at.y }, { dy: at.top + 2 - at.y, steps: 8 });
+    await frames(page);
+    assert.ok((await rows(page))[0].startsWith(NAME), `the row of the paragraph is not in front: ${js(await rows(page))}`);
+    assert.match(await render(page), /<p style="position: relative; z-index: 1">Export/);
+    at = await rowOf(page, NAME);
+    await drag(page, { x: at.x, y: at.y }, { dy: at.bottom - 2 - at.y, steps: 8 });
+    await frames(page);
+    assert.equal(await render(page), page.source, 'a drag back to the order of the file leaves a declaration on the paragraph');
+  });
+
+  test(`${platform}: Reset Slide takes off the z-index and the position written by a layer command`, async (t) => {
+    const page = await load(t, platform);
+    await selectP(page);
+    await press(page, KEYS[platform].front);
+    await frames(page);
+    const front = await render(page);
+    assert.match(front, /<p style="position: relative; z-index: 1">Export/);
+    await exec(page, 'slide.reset');
+    await frames(page);
+    const reset = await render(page);
+    const slide = reset.match(/<section>\s*<h2>Figures are first[\s\S]*?<\/section>/)[0];
+    assert.doesNotMatch(slide, /z-index|position/, 'Reset Slide keeps the order of a layer command');
+    await checkEdit(page, reset, front);
   });
 }

@@ -73,20 +73,32 @@ function pickOf(app: App, el: Element, order: Order, selected: Set<Element>): { 
   return { list, pick: order === 'front' || order === 'backward' ? passed[passed.length - 1] : passed[0] };
 }
 
+// whether el has a declaration of applyPlan, and its place without them, i.e. in the order of the file
+const ordered = (el: Element): boolean => !!((el as HTMLElement).style.zIndex || (el as HTMLElement).style.position);
+function homeOf(el: Element): Key {
+  const c = getComputedStyle(el);
+  const layer = placedByTheme(el) || c.transform !== 'none' || c.translate !== 'none' || c.rotate !== 'none';
+  return [layer ? baseZ(el) : -0.5, indexOf(el)];
+}
+
 // the order that a command gives el: its z-index, and the sibling that it is put before in the
 // file, or undefined when it stays. el is put between the layers lo and hi of its siblings
-type Plan = { z: number; before?: Node | null };
+type Plan = { z: number; before?: Node | null; home?: boolean };
 function planOf(app: App, el: Element, order: Order, selected: Set<Element>): Plan | null {
   const found = pickOf(app, el, order, selected);
-  if (!found) return null;
-  const { list, pick } = found;
   const up = order === 'front' || order === 'forward';
+  // an element with the declarations of a layer command that has no layer left to pass is put back
+  // in the order of the file when this is a step the right way
+  const home = ordered(el) && !el.matches('.plate') ? homeOf(el) : null;
+  if (!found) return home && (up ? under(keyOf(el), home) : under(home, keyOf(el))) ? { z: baseZ(el), home: true } : null;
+  const { list, pick } = found;
   const at = list.indexOf(pick);
   // the first step forward of an element that is not a layer makes it the layer at the back
   const first = order === 'forward' && !isLayer(el);
   const lo = up && !first ? pick : list[at - 1];
   const hi = up && !first ? list[at + 1] : pick;
   const fits = (z: number, i: number) => (!lo || under(keyOf(lo), [z, i])) && (!hi || under([z, i], keyOf(hi)));
+  if (home && fits(...home)) return { z: home[0], home: true };
   const base = baseZ(el);
   const i = indexOf(el);
   // an element out of the flow is moved in the file, after lo or before hi, as far as it can
@@ -101,7 +113,11 @@ function planOf(app: App, el: Element, order: Order, selected: Set<Element>): Pl
   const zmax = hi ? (i < indexOf(hi) ? zOf(hi) : zOf(hi) - 1) : Infinity;
   if (zmin <= zmax) return { z: Math.min(Math.max(base, zmin), zmax) };
   if (move) return { z: zOf(lo ?? hi), ...move };
-  return { z: up ? zmin : zmax };
+  // the order of the file, when it passes the same layers as this z-index
+  const z = up ? zmin : zmax;
+  const [a, b]: Key[] = up ? [[z, i], home ?? [z, i]] : [home ?? [z, i], [z, i]];
+  if (home && (up ? under(keyOf(lo), home) : under(home, keyOf(hi))) && !list.some((s) => under(a, keyOf(s)) && under(keyOf(s), b))) return { z: home[0], home: true };
+  return { z };
 }
 
 // el given the order of plan, by a move in the file and the declarations z-index and position.
@@ -111,10 +127,10 @@ function planOf(app: App, el: Element, order: Order, selected: Set<Element>): Pl
 async function applyPlan(app: App, el: Element, plan: Plan): Promise<void> {
   if (plan.before !== undefined) await app.doc.move(el, el.parentElement!, plan.before, 'order');
   const s = (el as HTMLElement).style;
-  const z = plan.z === baseZ(el) ? null : String(plan.z);
+  const z = plan.home || plan.z === baseZ(el) ? null : String(plan.z);
   const c = getComputedStyle(el);
   const turned = c.transform !== 'none' || c.translate !== 'none' || c.rotate !== 'none';
-  const position = placedByTheme(el) || (z === null && turned) ? null : 'relative';
+  const position = plan.home || placedByTheme(el) || (z === null && turned) ? null : 'relative';
   const style: Record<string, string | null> = {};
   if (!placedByTheme(el) && s.position !== (position ?? '')) style.position = position;
   if (s.zIndex !== (z ?? '')) style['z-index'] = z;
