@@ -273,13 +273,15 @@ for (const platform of PLATFORMS) {
     const w0 = await fieldValue(page, 'width'), h0 = await fieldValue(page, 'height');
     const frame = () => page.evaluate(`(() => { const f = document.querySelector('.beeson-frame.union.group'); return f.hidden ? null : { width: f.offsetWidth, height: f.offsetHeight, rotate: f.style.rotate }; })()`);
     const f0 = await frame();
+    let before = grouped;
     for (const deg of [20, 45]) {
+      if (deg === 45) before = await render(page);
       await typeField(page, 'angle', deg);
       const w = await fieldValue(page, 'width'), h = await fieldValue(page, 'height'), f = await frame();
       assert.ok(near(w, w0, 3) && near(h, h0, 3), `at ${deg} degrees W and H read ${w} by ${h}, not ${w0} by ${h0}`);
       assert.ok(near(f.width, f0.width, 3) && near(f.height, f0.height, 3) && f.rotate === `${deg}deg`, `at ${deg} degrees the frame is ${js(f)}, not ${js(f0)} turned`);
     }
-    await checkEdit(page, `r12-5-turned-group-${platform}.html`, grouped);
+    await checkEdit(page, `r12-5-turned-group-${platform}.html`, before);
     assert.deepEqual(errors(page), []);
   });
 }
