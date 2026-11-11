@@ -468,3 +468,19 @@ for (const platform of PLATFORMS) {
     await roundTrip(page);
   });
 }
+
+// finding text-lists-find-8: the format buttons of the Text pane had tooltips without their keys,
+// where the buttons of the toolbar give theirs
+const PANE_KEYS = {
+  mac: { bold: 'Bold (⌘B)', italic: 'Italic (⌘I)', strike: 'Strikethrough (⇧⌘X)', superscript: 'Superscript (⌃⌘+)', subscript: 'Subscript (⌃⌘−)', outdent: 'Decrease Indent Level (⌘[)', indent: 'Increase Indent Level (⌘])' },
+  other: { bold: 'Bold (Ctrl+B)', italic: 'Italic (Ctrl+I)', strike: 'Strikethrough (Alt+Shift+5)', superscript: 'Superscript (Ctrl+.)', subscript: 'Subscript (Ctrl+,)', outdent: 'Decrease Indent Level (Ctrl+[)', indent: 'Increase Indent Level (Ctrl+])' },
+};
+for (const platform of PLATFORMS) {
+  test(`the format buttons of the Text pane give their keys in their tooltips (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, await pointOf(page, ITEM, 'Dark and light', 2));
+    await frames(page);
+    const titles = await page.evaluate(`Object.fromEntries(${js(Object.keys(PANE_KEYS[platform]))}.map((id) => [id, document.querySelector('#beeson-edit-panel-format [data-command="text.' + id + '"]')?.title ?? null]))`);
+    assert.deepEqual(titles, PANE_KEYS[platform]);
+  });
+}
