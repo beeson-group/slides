@@ -1464,7 +1464,7 @@ export function install(app: App): void {
   c.define({
     id: 'table.deleteRow',
     label: 'Delete Row',
-    keys: { mac: ['Mod+Alt+Backspace'] },
+    keys: { mac: ['Mod+Alt+Backspace'], other: ['Ctrl+Shift+Backspace'] },
     in: ['text', 'canvas'],
     menu: menu('delete', 84),
     enabled: withCell,
@@ -1474,7 +1474,7 @@ export function install(app: App): void {
   c.define({
     id: 'table.deleteColumn',
     label: 'Delete Column',
-    keys: { mac: ['Ctrl+Mod+Backspace'] },
+    keys: { mac: ['Ctrl+Mod+Backspace'], other: ['Alt+Shift+Backspace'] },
     in: ['text', 'canvas'],
     menu: menu('delete', 85),
     enabled: withCell,
@@ -1516,7 +1516,7 @@ export function install(app: App): void {
   c.define({
     id: 'table.autoAlign',
     label: 'Auto-Align',
-    keys: { mac: ['Alt+Mod+U'] },
+    keys: { mac: ['Alt+Mod+U'], other: ['Alt+Shift+U'] },
     in: ['text', 'canvas'],
     menu: menu('options', 87.5),
     enabled: (a, arg?: unknown) => {
@@ -1565,7 +1565,7 @@ export function install(app: App): void {
   c.define({
     id: 'table.merge',
     label: 'Merge Cells',
-    keys: { mac: ['Ctrl+Mod+M'] },
+    keys: { mac: ['Ctrl+Mod+M'], other: ['Alt+Shift+M'] },
     in: ['text', 'canvas'],
     menu: menu('merge', 79.7),
     enabled: (a, arg?: unknown) => ready(a) && mergeable(targetOf(a, arg)),

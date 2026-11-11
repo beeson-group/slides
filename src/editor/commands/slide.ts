@@ -412,7 +412,7 @@ export function install(app: App): void {
     {
       id: 'slide.hide',
       label: (a) => (targets(a).length && targets(a).every(isHidden) ? 'Show Slide' : 'Hide Slide'),
-      keys: { mac: ['Mod+Shift+H'] },
+      keys: { mac: ['Mod+Shift+H'], other: ['Ctrl+Shift+H'] },
       in: ['navigator', 'canvas'],
       menu: slideMenu(40),
       context: ['slide', 'canvas'],

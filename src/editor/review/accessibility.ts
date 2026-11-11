@@ -213,6 +213,8 @@ export class Checker {
     this.list.setAttribute('role', 'tree');
     this.list.setAttribute('aria-label', 'Inspection results');
     this.el.append(title, this.status, this.list, this.info);
+    this.list.addEventListener('focusin', (ev) => this.rove((ev.target as Element).closest<HTMLElement>('[role="treeitem"]')));
+    this.list.addEventListener('keydown', (ev) => this.treeKey(ev));
     this.el.addEventListener('keydown', (ev) => {
       if (ev.key !== 'Escape' || (ev.target as Element).matches('input')) return;
       ev.preventDefault();
@@ -297,7 +299,46 @@ export class Checker {
     if (this.picked && !this.issues.some((i) => this.same(i, this.picked))) this.picked = null;
     this.showInfo();
     this.showSummary();
+    this.rove((had && this.list.querySelector<HTMLElement>(had)) || this.list.querySelector<HTMLElement>('[role="treeitem"]'));
     if (had && !this.editing) (this.list.querySelector<HTMLElement>(had) ?? this.el).focus({ preventScroll: true });
+  }
+
+  // the tree is one Tab stop, the row to of a roving tabindex
+  private rove(to: HTMLElement | null): void {
+    if (to) for (const r of this.list.querySelectorAll<HTMLElement>('[role="treeitem"]')) r.tabIndex = r === to ? 0 : -1;
+  }
+
+  // the keys of a tree of ARIA: the up and down arrows go between the shown rows, Home and End to
+  // the first and the last, the right arrow opens a head or goes into it, the left arrow closes a
+  // head or goes up to it, and the key of the context menu opens the fixes of a row
+  private treeKey(ev: KeyboardEvent): void {
+    const at = ev.target as HTMLElement;
+    if (!at.matches('[role="treeitem"]') || ev.metaKey || ev.ctrlKey || ev.altKey) return;
+    const rows = [...this.list.querySelectorAll<HTMLElement>('[role="treeitem"]')].filter((r) => r.getClientRects().length > 0);
+    const i = rows.indexOf(at);
+    const expanded = at.getAttribute('aria-expanded');
+    let to: HTMLElement | null | undefined = null;
+    if (ev.key === 'ContextMenu' || (ev.key === 'F10' && ev.shiftKey)) {
+      const issue = this.issues[Number(at.dataset.i)];
+      if (!issue) return;
+      this.openFixes(issue, at.querySelector('.fix')!, true, null);
+    } else if (ev.key === 'ArrowDown' || ev.key === 'ArrowUp') to = rows[i + (ev.key === 'ArrowDown' ? 1 : -1)];
+    else if (ev.key === 'Home' || ev.key === 'End') to = ev.key === 'Home' ? rows[0] : rows[rows.length - 1];
+    else if (ev.key === 'ArrowRight' && expanded) {
+      if (expanded === 'false') at.click();
+      else to = rows[i + 1];
+    } else if (ev.key === 'ArrowLeft') {
+      if (expanded === 'true') at.click();
+      else to = this.list.querySelector<HTMLElement>(`.check[data-check="${at.dataset.check}"]`);
+    } else return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    to?.focus({ preventScroll: true });
+  }
+
+  private openFixes(issue: Issue, fix: HTMLElement, keyboard: boolean, owner: HTMLElement | null): void {
+    void this.pick(issue);
+    openMenu(this.app, this.fixes(issue), { anchor: fix.getBoundingClientRect(), placement: 'below', owner, keyboard, label: 'Fixes' });
   }
 
   private same(a: Issue, b: Issue | null): boolean {
@@ -312,6 +353,7 @@ export class Checker {
     head.type = 'button';
     head.dataset.check = c.id;
     head.setAttribute('role', 'treeitem');
+    head.tabIndex = -1;
     const open = !this.closed.has(c.id);
     head.setAttribute('aria-expanded', String(open));
     head.append(icon('chevron-right', 14), make('span', '', c.title), make('span', 'n', String(list.length)));
@@ -332,7 +374,7 @@ export class Checker {
   private itemRows(issue: Issue, tip = false): HTMLElement[] {
     const row = make('div', tip ? 'hint' : 'item');
     row.setAttribute('role', 'treeitem');
-    row.tabIndex = 0;
+    row.tabIndex = -1;
     row.dataset.check = issue.check;
     row.dataset.i = String(this.issues.indexOf(issue));
     row.setAttribute('aria-selected', String(this.same(issue, this.picked)));
@@ -341,12 +383,12 @@ export class Checker {
     label.append(make('span', issue.what ? 'where' : '', whereOf(this.app, issue.slide)));
     const fix = make('button', 'fix');
     fix.type = 'button';
+    fix.tabIndex = -1;
     fix.title = 'Recommended actions';
     fix.append(document.createTextNode('Fix'), icon('chevron-down', 12));
     fix.addEventListener('click', (ev) => {
       ev.stopPropagation();
-      void this.pick(issue);
-      openMenu(this.app, this.fixes(issue), { anchor: fix.getBoundingClientRect(), placement: 'below', owner: fix, keyboard: ev.detail === 0, label: 'Fixes' });
+      this.openFixes(issue, fix, ev.detail === 0, fix);
     });
     row.append(label, fix);
     row.addEventListener('click', () => void this.pick(issue));

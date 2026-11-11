@@ -37,6 +37,9 @@ dialog.beeson-edit-card .row button:hover { filter: brightness(0.97); }
 dialog.beeson-edit-card .row button.primary { border-color: transparent; background: var(--ed-select); color: var(--ed-on-select); }
 dialog.beeson-edit-card .row button[hidden] { display: none; }
 dialog.beeson-edit-card button:focus-visible { outline: 3px solid var(--ed-focus); outline-offset: 1px; }
+dialog.beeson-edit-card :is(input, select, textarea):focus-visible { outline: 3px solid var(--ed-focus); outline-offset: 0; }
+dialog.beeson-edit-card.form label { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
+dialog.beeson-edit-card.form input[type="number"] { width: 7ch; font: inherit; padding: 2px 6px; border: 1px solid var(--ed-control-line, var(--ed-line)); border-radius: 5px; background: var(--ed-control); color: var(--ed-text); }
 [data-beside] { --arrow: 50%; }
 [data-beside]::before { content: ""; position: absolute; width: 12px; height: 12px; box-sizing: border-box; background: inherit; border: 0 solid; border-color: inherit; transform: rotate(45deg); pointer-events: none; }
 [data-beside="below"]::before { top: -7px; left: calc(var(--arrow) - 6px); border-width: 1px 0 0 1px; }
@@ -46,6 +49,20 @@ dialog.beeson-edit-card button:focus-visible { outline: 3px solid var(--ed-focus
 `;
 
 const FOCUSABLE = 'button:not([disabled]):not([hidden]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
+// on a Mac, Return presses the default button of a sheet wherever the focus is in it, and Space the
+// focused button. elsewhere Return presses the focused button, as in Windows
+let returnPressesDefault = false;
+
+// Tab and Shift+Tab go round the shown controls of root, a dialog or a popover, and never leave it
+export function trapTab(root: HTMLElement, ev: KeyboardEvent): void {
+  const list = [...root.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.getClientRects().length > 0 || el === document.activeElement);
+  ev.preventDefault();
+  if (!list.length) return;
+  const at = list.indexOf(document.activeElement as HTMLElement);
+  const next = ev.shiftKey ? (at <= 0 ? list.length - 1 : at - 1) : (at + 1) % list.length;
+  list[next].focus();
+}
 
 export class Dialog {
   readonly el = make('dialog', 'beeson-edit-card') as HTMLDialogElement;
@@ -83,7 +100,15 @@ export class Dialog {
       if (ev.key === 'Escape') {
         ev.preventDefault();
         if (options.dismissable !== false) this.close(null);
-      } else if (ev.key === 'Tab') this.trap(ev);
+      } else if (ev.key === 'Tab') trapTab(this.el, ev);
+      else if (ev.key === 'Enter' && !ev.isComposing && (returnPressesDefault || ev.target instanceof HTMLInputElement)) {
+        // Return in a field, or anywhere in a sheet on a Mac, presses the default button
+        const primary = this.row.querySelector<HTMLButtonElement>('button.primary:not(:disabled)');
+        if (!primary) return;
+        ev.preventDefault();
+        ev.stopPropagation();
+        primary.click();
+      }
       // the keys that press a button are kept from the key handler of reveal.js, which cancels them
       else if ((ev.key === 'Enter' || ev.key === ' ') && ev.target instanceof HTMLButtonElement) ev.stopPropagation();
     });
@@ -147,16 +172,6 @@ export class Dialog {
     this.back = null;
     if (back?.isConnected && !back.closest('[hidden], [inert]')) back.focus({ preventScroll: true });
     done?.(value);
-  }
-
-  // Tab and Shift+Tab go round the controls of the dialog
-  private trap(ev: KeyboardEvent): void {
-    const list = [...this.el.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((el) => el.offsetParent !== null || el === document.activeElement);
-    if (!list.length) return;
-    ev.preventDefault();
-    const at = list.indexOf(document.activeElement as HTMLElement);
-    const next = ev.shiftKey ? (at <= 0 ? list.length - 1 : at - 1) : (at + 1) % list.length;
-    list[next].focus();
   }
 }
 
@@ -335,6 +350,7 @@ export function keepBeside(pop: HTMLElement, target: () => Box | DOMRectReadOnly
   return () => watch.disconnect();
 }
 
-export function install(_app: App): void {
+export function install(app: App): void {
   injectStyle('dialog', CSS);
+  returnPressesDefault = app.platform === 'mac';
 }

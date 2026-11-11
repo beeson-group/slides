@@ -60,7 +60,7 @@ test('a deck without ?edit does not load the editor, with ?edit it does on file:
   const status = await page.evaluate('window.BeesonEditor.status()');
   assert.equal(status.supported, true);
   assert.equal(status.state, 'waiting');
-  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].filter((b) => !b.hidden).map((b) => b.textContent)`), ['View', 'FitZoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', '', 'Media', '', 'Present', 'Save', 'Format', 'Steps']);
+  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].filter((b) => !b.hidden).map((b) => b.textContent.replace(/^\\d+%/, '%'))`), ['View', '%Zoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', '', 'Media', '', 'Present', 'Save', 'Format', 'Steps']);
   // the card asks for the file, with the folder of the deck
   assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-card').hidden`), false);
   assert.match(await page.evaluate(`document.querySelector('.beeson-edit-card p').textContent`), /index\.html in \//);
@@ -568,13 +568,13 @@ test('the list of the slides at the left jumps to a slide, and G jumps to a slid
   await page.evaluate(`(() => { const h = document.querySelector('.reveal section.present h2'); h.firstChild.data = 'Renamed'; h.dispatchEvent(new Event('input', { bubbles: true })); })()`);
   assert.equal((await rows())[5][1], 'Renamed');
   // the Slides button hides the list, and the choice is kept
-  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Slides').click()`);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Navigator').click()`);
   b = await box();
   assert.equal(b.display, 'none');
   // the canvas takes the width of the list, and the slide is centered in it
   assert.ok(Math.abs(b.slideLeft - b.cellLeft - (b.cellRight - b.slideRight)) < 2 && b.slideLeft < 200, JSON.stringify(b));
   assert.equal(await page.evaluate(`localStorage.getItem('beeson-nav')`), '0');
-  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Slides').click()`);
+  await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Navigator').click()`);
   assert.equal((await box()).display, 'flex');
   // G of reveal.js asks for a number
   await page.evaluate(`document.activeElement.blur(); document.dispatchEvent(new KeyboardEvent('keydown', { key: 'g', keyCode: 71, which: 71, bubbles: true, cancelable: true }))`);
@@ -672,13 +672,12 @@ test('a formula is reached with Tab and opened with Enter, and the controls carr
   assert.equal(await page.evaluate(`document.querySelector('.beeson-math').getAttribute('role')`), 'dialog');
   await page.evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true, cancelable: true }))`);
   assert.equal(await page.evaluate(`!!document.querySelector('.beeson-math')`), false);
-  // the arrows of the status bar are named, and the notes show their focus
+  // the arrows of the status bar are named, and the notes show only the caret, as in Keynote
   assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].slice(0, 2).map((b) => b.getAttribute('aria-label'))`), ['Previous slide', 'Next slide']);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Notes').click()`);
   const outline = await page.evaluate(`(() => { const a = document.querySelector('.reveal section.present > aside.notes'); const s = getComputedStyle(a); return { focused: document.activeElement === a, style: s.outlineStyle, width: s.outlineWidth, color: s.outlineColor }; })()`);
   assert.equal(outline.focused, true);
-  assert.equal(outline.style, 'solid');
-  assert.notEqual(outline.color, 'rgba(0, 0, 0, 0)');
+  assert.equal(outline.color, 'rgba(0, 0, 0, 0)');
   assert.deepEqual(page.errors, []);
 });
 
@@ -914,10 +913,10 @@ test('the toggles, the state, the notes, and the formula dialog carry their stat
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
   const pressed = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-header button, .beeson-edit-bottom button')].filter((b) => b.hasAttribute('aria-pressed')).map((b) => [b.textContent, b.getAttribute('aria-pressed')])`);
   // the inspector is shown at the start with its Format tab, as Keynote opens a presentation
-  assert.deepEqual(await pressed(), [['Autosave', 'false'], ['Format', 'true'], ['Steps', 'false'], ['Slides', 'true'], ['Steps', 'false'], ['Notes', 'false'], ['Fit', 'true']]);
+  assert.deepEqual(await pressed(), [['Autosave', 'false'], ['Format', 'true'], ['Steps', 'false'], ['Navigator', 'true'], ['Steps', 'false'], ['Notes', 'false'], ['Fit', 'true']]);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Notes').click()`);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
-  assert.deepEqual(await pressed(), [['Autosave', 'false'], ['Format', 'false'], ['Steps', 'true'], ['Slides', 'true'], ['Steps', 'true'], ['Notes', 'true'], ['Fit', 'true']]);
+  assert.deepEqual(await pressed(), [['Autosave', 'false'], ['Format', 'false'], ['Steps', 'true'], ['Navigator', 'true'], ['Steps', 'true'], ['Notes', 'true'], ['Fit', 'true']]);
   assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-header .state').getAttribute('aria-live')`), 'polite');
   assert.equal(await page.evaluate(`document.querySelector('.reveal section.present > aside.notes').getAttribute('aria-label')`), 'Speaker notes');
   // the strip above the notes is a separator with a value, and the arrows change the height

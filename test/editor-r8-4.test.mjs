@@ -283,7 +283,7 @@ for (const platform of PLATFORMS) {
 // URL parameter edit-browser, or else in the headless Chrome of the tests
 const LISTED = {
   mac: { chrome: { Lock: '⌘L', Unlock: '⌥⌘L', Rulers: '⌘R' }, safari: { Lock: '⌃⌘L', Unlock: '⌃⌥⌘L', Rulers: '⌃⌘R' } },
-  other: { chrome: { Lock: 'Ctrl+L', Unlock: 'Ctrl+Shift+L', Rulers: '' }, safari: { Lock: 'Ctrl+L', Unlock: 'Ctrl+Shift+L', Rulers: '' } },
+  other: { chrome: { Lock: 'Ctrl+L', Unlock: 'Ctrl+Shift+L', Rulers: 'Alt+Shift+R' }, safari: { Lock: 'Ctrl+L', Unlock: 'Ctrl+Shift+L', Rulers: 'Alt+Shift+R' } },
 };
 
 // finding 8: Lock was listed with the fallback of Safari, Ctrl+Cmd+L, in a browser that passes the
