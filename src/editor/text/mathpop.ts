@@ -189,7 +189,8 @@ export function texEditor(options: { display(): boolean; label: string; placehol
     if (n !== seq) return;
     shown = typeset;
     const empty = !field.value.trim();
-    preview.replaceChildren(...(result.node ? [result.node] : [make('span', 'empty', 'A preview of the formula appears here.')]));
+    // the error of a TeX is shown once, in the message under the preview
+    preview.replaceChildren(...(result.node && !result.error ? [result.node] : empty ? [make('span', 'empty', 'A preview of the formula appears here.')] : []));
     message.textContent = result.error ?? '';
     message.classList.toggle('prompt', empty);
     if (empty || !result.error) message.removeAttribute('role');
