@@ -306,7 +306,9 @@ export class App {
     const active = document.activeElement;
     if (!(active instanceof Element) || active === document.body) return 'canvas';
     if (active.closest('.beeson-math, .beeson-edit-card:not([hidden]), dialog[open]')) return 'dialog';
-    if (active.matches('input, textarea, select')) return 'field';
+    // a slider, a checkbox, a button, or a list does not have an undo of its own, hence its region
+    // is that of the pane around it
+    if (active.matches('textarea, input:not([type=range], [type=checkbox], [type=radio], [type=button], [type=color])')) return 'field';
     if (active.closest('aside.notes')) return 'notes';
     if (this.hostOf(active)) return 'text';
     if (active.closest('.beeson-edit-nav')) return 'navigator';
