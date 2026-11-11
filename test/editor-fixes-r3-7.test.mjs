@@ -600,9 +600,10 @@ for (const platform of PLATFORMS) {
       const r = s.getBoundingClientRect();
       const f = document.querySelector('.beeson-overlay > .beeson-frame.selected:not([hidden])').getBoundingClientRect();
       const scale = r.width / s.offsetWidth;
-      return 'x: ' + Math.round((f.left - r.left) / scale) + ' px  y: ' + Math.round((f.top - r.top) / scale) + ' px';
+      return 'x: ' + Math.round((f.left + 8 - r.left) / scale) + ' px  y: ' + Math.round((f.top + 8 - r.top) / scale) + ' px';
     })()`);
-    // the corner of the frame of the figure, i.e. of its picture with its caption
+    // the corner of the figure, i.e. of its picture with its caption, whose frame is drawn 8 px
+    // outside it
     assert.equal(during.text, corner, 'the readout is not the upper left corner of the figure in slide px');
 
     await page.evaluate('window.BeesonEditor.undo()');
