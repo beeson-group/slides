@@ -76,9 +76,12 @@ function land(app: App, slides: Element[], current: Element | null, focusNav: bo
 }
 
 // whether Select All and Delete of the Edit menu act on the slides, i.e. while a row of the navigator
-// or a tile of the Light Table has the focus, as in the Slide Sorter of PowerPoint
+// or a tile of the Light Table has the focus, as in the Slide Sorter of PowerPoint. a text of the
+// outline is in the navigator, and the two are left to its text
 export function onSlides(app: App): boolean {
-  return app.region() === 'navigator' || !!document.activeElement?.closest('.beeson-edit-sorter .tile');
+  const active = document.activeElement;
+  if (active instanceof HTMLElement && (active.isContentEditable || active.matches('input, textarea'))) return false;
+  return app.region() === 'navigator' || !!active?.closest('.beeson-edit-sorter .tile');
 }
 
 // the caret is put into the first empty heading of slide, or else at the start of its first block
