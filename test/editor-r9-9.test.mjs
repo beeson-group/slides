@@ -6,8 +6,9 @@
 // checked byte for byte, after an undo and a redo, and after a save and an open
 
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
@@ -403,4 +404,36 @@ for (const platform of PLATFORMS) {
       await roundTrip(page);
     });
   }
+}
+
+const NOTE = 'Only the width is written';
+const notes = (page) => page.evaluate(`[...document.querySelectorAll('${PANEL} .ed-note')].filter((n) => !n.hidden).map((n) => n.textContent)`);
+// a text file of the Finder, dragged where a picture would be
+const NOTE_FILE = join(mkdtempSync(join(tmpdir(), 'r9-9-')), 'note.txt');
+writeFileSync(NOTE_FILE, 'a note, not a picture\n');
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: the Size section of a locked figure does not have the note on the width`, async (t) => {
+    const page = await load(t, platform, { n: FIGURE });
+    await click(page, await centerOf(page, shownImage));
+    await frames(page);
+    assert.deepEqual(await selection(page), ['figure.zone.beeson-movable']);
+    await tap(page, 'Arrange');
+    assert.ok(!(await notes(page)).some((n) => n.startsWith(NOTE)), 'the note is shown on the figure before the lock');
+    await press(page, 'Mod+L');
+    await frames(page);
+    assert.equal((await state(page, 'arrange.unlock')).enabled, true, 'the figure is not locked');
+    assert.ok(!(await notes(page)).some((n) => n.startsWith(NOTE)), 'the note is shown on the locked figure');
+    await press(page, platform === 'mac' ? 'Mod+Alt+L' : 'Mod+Shift+L');
+    await frames(page);
+    assert.ok(!(await notes(page)).some((n) => n.startsWith(NOTE)), 'the note is shown after the unlock');
+  });
+
+  test(`${platform}: a file that is not a picture is not offered a drop, and a picture still is`, async (t) => {
+    const page = await load(t, platform, { n: 2 });
+    const at = await centerOf(page, '.reveal .slides > section.present > p');
+    assert.equal(await dropFiles(page, at, [NOTE_FILE], { drop: false }), null, 'the slide is outlined for a text file');
+    assert.equal(await dropFiles(page, at, [resolve('demo/figure-light.png')], { drop: false }), 'Add Image');
+    assert.equal(await render(page), page.source);
+  });
 }
