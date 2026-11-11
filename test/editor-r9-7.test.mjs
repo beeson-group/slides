@@ -216,3 +216,45 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// menus-keys-5: eight commands had a key on the Mac only. each is listed in the sheet on Windows
+// and Linux with a key that does not hold Ctrl and Alt together, i.e. AltGr
+const OTHER_KEYS = {
+  'Edit Mask': 'Ctrl+Shift+M',
+  'Merge Cells': 'Alt+Shift+M',
+  'Delete Row': 'Ctrl+Shift+Backspace',
+  'Delete Column': 'Alt+Shift+Backspace',
+  'Auto-Align': 'Alt+Shift+U',
+  'Hide Slide': 'Ctrl+Shift+H',
+  Rulers: 'Alt+Shift+R',
+  'Show Guides': 'Alt+F9',
+};
+
+test('the commands with a key on the Mac have a key on Windows and Linux, listed in the sheet, and the keys run them (other)', async (t) => {
+  const page = await load(t, 'other', { n: FIGURES });
+  const sheet = await sheetRows(page);
+  for (const [label, key] of Object.entries(OTHER_KEYS)) {
+    assert.equal(sheet[label], key, `${label} is listed with ${sheet[label]}`);
+    assert.doesNotMatch(key, /Ctrl\+Alt|Alt\+Ctrl/);
+  }
+  assert.deepEqual(await page.evaluate('window.BeesonEditorShell.sheetClashes()'), []);
+  assert.deepEqual(await page.evaluate('window.BeesonEditorShell.keyClashes(true)'), []);
+  // Rulers and Show Guides are switched by their keys
+  for (const [key, id] of [['Alt+Shift+R', 'view.rulers'], ['Alt+F9', 'view.guides']]) {
+    const was = await checked(page, id);
+    await press(page, key);
+    assert.equal(await checked(page, id), !was, `${key} does not switch ${id}`);
+    await press(page, key);
+  }
+  // Edit Mask is opened on a picture
+  await click(page, '.reveal section.present figure img');
+  await press(page, 'Ctrl+Shift+M');
+  assert.equal(await page.evaluate(`window.BeesonEditor.state('image.editMask').enabled`), false, 'Ctrl+Shift+M does not open the mask');
+  await press(page, 'Escape');
+  await press(page, 'Escape');
+  await press(page, 'Escape');
+  // Hide Slide hides the current slide, as one entry of the history
+  await press(page, 'Ctrl+Shift+H');
+  assert.equal(await page.evaluate(`document.querySelector('.reveal .slides > section.present').dataset.visibility`), 'hidden', 'Ctrl+Shift+H does not hide the slide');
+  await roundTrip(page);
+});
