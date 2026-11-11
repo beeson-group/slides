@@ -623,6 +623,10 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
     reveal(select);
   }
 
+  // the focus put back on el of the panel after a replace, or on the Find field once el is disabled,
+  // since the write put the caret into the replaced block
+  const refocus = (el: HTMLElement | null) => el && (el.matches(':disabled') ? search.input : el).focus({ preventScroll: true });
+
   async function write(block: Element, list: Span[], label: string): Promise<void> {
     const idx = indexedOf(block);
     if (!idx || !list.length) return;
@@ -645,7 +649,7 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
     current = nearest(m.block, m.start + replace.input.value.length);
     sync();
     if (find && current >= 0) reveal(false);
-    keep?.focus({ preventScroll: true });
+    refocus(keep);
   }
 
   // every match is replaced with each block written once, and the count of replacements is shown
@@ -665,7 +669,7 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
     current = -1;
     note = `${total} replaced`;
     sync();
-    keep?.focus({ preventScroll: true });
+    refocus(keep);
     return total;
   }
 
