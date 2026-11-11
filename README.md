@@ -1,61 +1,31 @@
 # slides
 
-The template is in beta, at version 0.9.0-beta.1. The names of its classes and data attributes may still change before version 1.0.
+Our template for HTML slides, built on reveal.js, and themed to the [Beeson Group](https://beeson.princeton.edu/)'s colors (theme `beeson`, available in both dark and light modes). The slides consist of a single [index.html](/index.html) file, which you open with a double click, from any machine (mobile too), without any requirements other than having a browser.
 
-This repository is the HTML slide template of the Beeson group, built on reveal.js with the theme `beeson`. A talk is one `index.html`, which you open with a double click, without a server or a toolchain. The same file is exported to a PDF with one page per step and to PowerPoint with one click per step. Behind the slides are orbits of the circular restricted three-body problem, computed in the browser.
+PRE-RELEASE NOTICE: The template is currently still in beta. View the most up to date version of the template at [beeson-group.github.io/slides](https://beeson-group.github.io/slides/)
 
-The demo deck in `index.html` shows every layout and element of the theme, and it is published at [beeson-group.github.io/slides](https://beeson-group.github.io/slides/).
+## Using this template
 
-## Start a talk
+1. From GitHub, click the green 'Use this template' button on the top right angle of this repo's landing page, then 'Create a new repository'. I recommend toggling 'Include all branches' off and naming your repository something like `talk-{name-of-your-talk}`. The name of the repository becomes part of the URL of the slides on GitHub Pages (where your repo's slides are automatically deployed), e.g. `https://OWNER.github.io/talk-{name-of-your-talk}/`, where OWNER is your GitHub username.
+2. (Optional) Modify `README.md` of the new repository with information about your talk, overwriting the text you are reading right now.
+3. To create and edit your slides, open `index.html` (at the root of this repository) in your favorite browser. Then, press the `e` key on your keyboard. This will enter editor mode.
+(This appends the text `?edit` your browser tab's URL bar, e.g. `https://OWNER.github.io/talk-{name-of-your-talk}?edit`. You can reach the editor by typing this out manually too).
+4. When you are happy, click on the save button, which overwrites your repository's local `index.html`. We also support exports to the PDF and PPTX file formats.
 
-1. Press "Use this template" on GitHub, and name the new repository `talk-` followed by the topic, e.g. `talk-bifurcation-tracking`. The name of the repository becomes the path of the slides on GitHub Pages, e.g. `https://OWNER.github.io/talk-bifurcation-tracking/`, where OWNER is your account.
-2. Replace `README.md` of the new repository with the stub below, and fill in NAME, DESCRIPTION, and the address of the slides. If your account has a custom domain, write it in place of `OWNER.github.io`.
+## Editing with agents
 
-   ```markdown
-   # NAME talk
+To create custom backdrops, animations, or other effects you want in your slides, ask your favorite agent. This repo contains an [AGENTS.md](/AGENTS.md) for this purpose. Collaboration with agents is encouraged to unleash the full expressive power of HTML. I have also been adding useful skills (found at [/.agents/skills/](/.agents/skills/)) which your agent will automatically find and load if it thinks it appropriate. If you don't have access to a coding agent, however, do not worry: you will be able to do everything you know how to do in PowerPoint/Keynote from our editor mode, including creating new slides, modifying, moving, and resizing text boxes or titles, setting up steps to determine the order of appearance of your slide elements in the presentation, and a lot more. You will also be able to accomplish what other slide editor apps do NOT enable you to do: edit LaTeX code boxes directly from the slide they appear on (which compile with one click), edit and animate code in code boxes the same way, set up custom QR codes with ease, and, again, a lot more.
 
-   DESCRIPTION. See the [talk slides](https://OWNER.github.io/talk-NAME/) and the [original template](https://github.com/beeson-group/slides).
-   ```
+## Presenting
 
-3. Write the talk over the demo deck in `index.html`.
-4. Set the layout of each slide with a class on its `section`, as in the table below.
-5. Once a slide is complete, give each element its step, i.e. `class="fragment"` with a `data-fragment-index`.
-6. Run `npm ci`, then `npm run pdf` for `slides.pdf` and `npm run pptx` for `slides.pptx`.
+To present your slides, click on the Present button at the top of your editor. This will enter presentation mode. While in presentation mode, press `d` (or click on the top right toggle) to flip between dark and light themes, `s` to enter speaker view (with your notes), `p` to toggle on/off a pointer, `f` to enter (or leave) full screen mode (which hides the tabs and the address bar), and `Esc` for an overview of your slides. The theme defaults to dark. If you want your slides to to default to light theme, add `?theme=light` to the address.
 
-| Class | Layout |
-|---|---|
-| `title`, `closing` | A plate with the backdrop behind a block of words at the lower left |
-| `section` | The words at the left, the outline of the talk under them, and the backdrop at the right |
-| no class | A text column of 1000 px at the left, and a figure or a backdrop at the right |
-| `figure` | A plate with a figure, the heading at the top, and the caption at the lower left |
-| `split` | The black panel at the left, and a figure at the right |
+Title, section, and closing slides are never numbered, and the slides after the closing slide default to being the appendix, numbered A1, A2, and so on.
 
-During a talk, press `d` to flip between the dark and the light mode, `s` for the speaker view, `p` for the pointer, `f` to enter or leave full screen, and Esc for the overview. To fix the light mode for a venue, add `?theme=light` to the address. Full screen hides the tabs and the address bar. When you make the window full screen from the system, e.g. with the green button in Safari on macOS, the deck is put into full screen at your next key or click. Browsers let a page enter full screen only on a key or a click.
+Move the mouse near the bottom edge of the window to magnify the progress line into a scrubber. You can use the scrubber to jump to any numbered slide, forwards or backwards, so you never have to click through your entire presentation to go back to an earlier slide after a question. You can also set the total time you expect your presentation to last: the scrubber will automatically show the target start time for each numbered slide, based on how many steps the slide takes compared to the total presentation steps. You can also edit these timestamps if you know exactly how you want to pace your presentation.
 
-Title, section, and closing slides are not numbered, and the slides after the closing slide are the appendix, numbered A1, A2, and so on. To leave another slide out of the count, give it `data-visibility="uncounted"`. A slide out of the count is also left out of the pacing of the speaker view and out of the scrubber.
-
-Move the mouse near the bottom edge of the window to magnify the progress line into a scrubber, which stays open while the mouse is over it. In the scrubber, each numbered slide has a tick with its number, and with the time at which it starts when the deck sets `totalTime` or `defaultTiming` in `Beeson.start`. The times are counted as for the pacing of the speaker view, with the seconds of a slide in its `data-timing`. Rest the mouse over a tick to see the title of its slide, and click to jump to the first step of this slide. A key closes the scrubber, and away from the bottom the progress line is drawn as before.
-
-## Edit in the browser
-
-To edit a deck on the slides themselves, press `e` in the deck, or add `?edit` to its address. You can change the words, the formulas, the notes, the steps, and the places of the figures, and only your edits are written into `index.html` at a save. In Chrome and Edge, the edits are saved into the file itself, and in Firefox and Safari, a save is a download of a copy of the file. Set Safari or Firefox to ask where to save each download, and you replace `index.html` with the copy in the dialog of the save. You can also add, duplicate, delete, hide, and reorder slides, change their layout, and insert text boxes, formulas, tables, images, videos, QR codes, code boxes, footnotes, lines, and arrows, as described in [REFERENCE.md](REFERENCE.md) under The editor.
-
-## Elements
-
-The backdrops, surfaces, plots, figures, videos, QR codes, stepped math, and code boxes are described in [REFERENCE.md](REFERENCE.md), together with the formats of their files and the limits of each browser. The vocabulary and the conventions of the theme are written in `AGENTS.md`, for Claude Code and Codex. Ask either of them to tighten or review the slides, and the skill `refine-slides` in `.claude/skills/` is then followed.
-
-## Maintain the theme
-
-The theme is maintained with Node 22 or later, on macOS, Linux, or Windows.
-
-```sh
-npm ci && npm run vendor && npm run build   # dependencies, vendored files, theme/beeson.js and theme/editor.js
-npm run typecheck && npm test               # types and unit tests
-npm run check                               # every slide in both modes, with screenshots and console errors
-```
-
-The compiled `theme/beeson.js` and `theme/editor.js` are committed, hence none of these commands is needed for a talk. The same commands are run on Ubuntu and Windows at every push, and the deck is checked in Chrome and Safari on macOS.
+You can go back to editor mode any time by pressing `e` while in presentation mode.
 
 ## License
 
-The code and the theme are under the MIT license. The Princeton marks and the group logo in `brand/` are trademarks and are outside this license, see `brand/NOTICE.md`.
+The code itself and the `beeson` theme are under the MIT license. The Princeton marks and the group logo in `brand/` are trademarks and are NOT COVERED by this license. See [brand/NOTICE.md](/brand/NOTICE.md) for more information.
