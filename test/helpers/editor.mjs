@@ -208,3 +208,12 @@ export const GROUND = `((el) => {
   for (const [r, g, b, a] of layers.reverse()) rgb = [r, g, b].map((v, i) => v * a + rgb[i] * (1 - a));
   return 'rgb(' + rgb.map(Math.round).join(', ') + ')';
 })`;
+
+// INK is a function of the page that returns the color of the text of an element as rgba(), with the
+// opacity of the element and of its ancestors folded into its alpha
+export const INK = `((el) => {
+  const c = getComputedStyle(el).color.match(/[\\d.]+/g).map(Number);
+  let a = c.length > 3 ? c[3] : 1;
+  for (let e = el; e; e = e.parentElement) a *= Number(getComputedStyle(e).opacity);
+  return 'rgba(' + c.slice(0, 3).join(', ') + ', ' + a + ')';
+})`;
