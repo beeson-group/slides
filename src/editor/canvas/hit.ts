@@ -108,12 +108,30 @@ export function scaleAt(el: Element): number {
 // where the picture or the figure is turned
 export function pictureReach(el: Element): Box {
   const pic = pictureOf(el);
-  const deg = (parseFloat(getComputedStyle(el).rotate) || 0) + (pic === el ? 0 : parseFloat(getComputedStyle(pic).rotate) || 0);
+  const deg = pictureTurn(el);
   if (!deg) return visualRect(pic);
   const b = orientedBox(pic, scaleAt(el), deg);
   const a = (deg * Math.PI) / 180, c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a));
   const width = b.width * c + b.height * s, height = b.width * s + b.height * c;
   return { left: b.left + (b.width - width) / 2, top: b.top + (b.height - height) / 2, width, height };
+}
+
+// the angle in degrees that the picture of el is turned by, with the figure around it
+export function pictureTurn(el: Element): number {
+  const pic = pictureOf(el);
+  return (parseFloat(getComputedStyle(el).rotate) || 0) + (pic === el ? 0 : parseFloat(getComputedStyle(pic).rotate) || 0);
+}
+
+// the box on the screen of the figure el before its picture is turned, i.e. the picture without its
+// rotation over the captions, which are not turned with it, and the box of the picture so taken.
+// the fields W and H of a figure selected as one object give this size at every angle
+export function unturnedRect(el: Element): { box: Box; picture: Box } {
+  const deg = pictureTurn(el);
+  if (!deg) return { box: frameRect(el), picture: pictureReach(el) };
+  const picture = orientedBox(pictureOf(el), scaleAt(el), deg);
+  const all = [{ left: picture.left, top: picture.top, right: picture.left + picture.width, bottom: picture.top + picture.height }, ...captionsOf(el)];
+  const left = Math.min(...all.map((r) => r.left)), top = Math.min(...all.map((r) => r.top));
+  return { box: { left, top, width: Math.max(...all.map((r) => r.right)) - left, height: Math.max(...all.map((r) => r.bottom)) - top }, picture };
 }
 
 // the box of el on the screen at its frame, as Keynote and PowerPoint take the box of an object in
