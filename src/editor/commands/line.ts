@@ -501,6 +501,7 @@ export function install(app: App): void {
       enabled: some,
       checked: (a) => some(a) && selectedLines(a).every((svg) => toneOf(svg) === tone),
       undoable: true,
+      undo: 'Line Color',
       run: (a) => {
         const classes: Record<string, boolean> = {};
         for (const [t] of LINE_TONES) if (t !== 'text') classes[`tone-${t}`] = t === tone;
@@ -517,6 +518,7 @@ export function install(app: App): void {
       enabled: some,
       checked: (a) => some(a) && selectedLines(a).every((svg) => headsOf(svg) === heads),
       undoable: true,
+      undo: 'Arrowheads',
       run: (a) => {
         for (const svg of selectedLines(a)) {
           const line = svg.querySelector('line');

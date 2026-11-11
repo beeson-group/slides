@@ -442,6 +442,7 @@ export function install(app: App): void {
           return list.length > 0 && list.every((s) => layoutOf(s) === layout);
         },
         undoable: true,
+        undo: 'Change Layout',
         run: async (a) => void (await changeLayout(a, targets(a), layout)),
       }),
     ),

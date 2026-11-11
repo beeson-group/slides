@@ -39,6 +39,7 @@ export function commands(): Command[] {
     label: w === 'narrow' ? 'Narrow' : w === 'wide' ? 'Wide' : 'Normal',
     menu: { bar: 'Slide', group: 'width', order: 60 + i, submenu: 'Text Column' },
     undoable: true,
+    undo: 'Text Column Width',
     enabled: (app) => contentSlides(app).length > 0,
     checked: (app) => {
       const list = contentSlides(app);

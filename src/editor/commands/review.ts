@@ -130,6 +130,7 @@ export function install(app: App): void {
         return !!s && transitionOf(a, s) === t;
       },
       undoable: true,
+      undo: 'Transition',
       run: (a) => {
         const list = targets(a).filter((s) => t !== 'magic' || nextShown(a, s));
         for (const s of list) setTransition(a, s, t);
