@@ -11,7 +11,7 @@ import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
 import { injectStyle } from '../ui/dom.ts';
 import { groupOf } from '../commands/order.ts';
-import { turnersOf } from './drag.ts';
+import { apartOf, turnersOf } from './drag.ts';
 import type { Box, Guide, Handle, Spacing } from './snap.ts';
 import { BY_ITSELF, CONTAINER, RESIZABLE, captionsOf, frameOf, frameRect, isTextSized, movableOf, orientedBox, pictureOf, scaleAt, sizedOf, toScreen, turnable as turns } from './hit.ts';
 
@@ -328,10 +328,12 @@ export class Frames {
       }
     });
     // the rotate handle, also while it is dragged, on one element that is turned, i.e. not locked
-    // and not a table or a range of its cells, or on a group whose every member is turned
+    // and not a table or a range of its cells, on a group whose every member is turned, or on the
+    // first frame of a multiple selection of such elements outside any group
     const rotating = document.documentElement.classList.contains('beeson-rotating');
     const turnGroup = !!this.group && (!!turn || !!turnersOf(app, selected));
-    const turnable = (turnGroup || (!!only && boxes.length === 1 && turns(only as Element))) && (!view.moving || rotating);
+    const apart = !this.group && boxes.length > 1 && !!apartOf(app, selected);
+    const turnable = (turnGroup || apart || (!!only && boxes.length === 1 && turns(only as Element))) && (!view.moving || rotating);
     this.rotor.hidden = !turnable || (!!held && held !== this.rotor);
     this.stem.hidden = !turnable || !!held;
     if (turnable) {
@@ -342,7 +344,7 @@ export class Frames {
       // the slide, hence it is pressed also where it covers a text
       const knobAt = (d: number) => turned(b, deg, cx, b.top - d);
       if (!rotating) {
-        const lines = this.linesBesides(turnGroup ? selected : [only as Element]);
+        const lines = this.linesBesides(turnGroup || apart ? selected : [only as Element]);
         const free = (d: number) => {
           const k = knobAt(d);
           return !lines.some((r) => k.x + KNOB > r.left && k.x - KNOB < r.right && k.y + KNOB > r.top && k.y - KNOB < r.bottom);

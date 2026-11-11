@@ -187,6 +187,18 @@ export function turnersOf(app: App, els: Element[]): Turner[] | null {
   });
 }
 
+// the elements of a multiple selection outside any group, each turned about its own center by a
+// drag of the rotate handle, as PowerPoint turns the objects of a selection, or null when one of
+// them is in a group or cannot be turned
+export function apartOf(app: App, els: Element[]): Turner[] | null {
+  const top = els.filter((el) => !els.some((o) => o !== el && o.contains(el)) && el.getClientRects().length);
+  if (top.length < 2 || !top.every((el) => !groupOf(el) && turnable(el))) return null;
+  return top.map((el) => {
+    const spin = spinOf(el);
+    return { el, spin, angle: angleOf(el), center: seenCenter(app, spin) };
+  });
+}
+
 // the elements whose places a turn of turners changes
 export const turnedEls = (turners: Turner[]): Element[] => [...new Set(turners.flatMap((t) => [t.el, t.spin]))];
 
@@ -276,8 +288,10 @@ type Press = {
   picture?: Box;
   // whether the grips of a group are pressed, which scale all its members about one anchor
   group?: boolean;
-  // the members of a group turned by its rotate handle about the center of its frame
+  // the members of a group turned by its rotate handle about the center of its frame, or with
+  // apart set the elements of a multiple selection, each about its own center
   turners?: Turner[];
+  apart?: boolean;
   // the angle at the press of the element turned, or of the first member of a group, and the
   // element whose offset keeps the center of a turned picture, i.e. its figure
   was?: number;
@@ -462,7 +476,7 @@ export function install(app: App): void {
     if (target === frames.rotor) {
       const el = sel.only();
       const box = frames.groupBox();
-      const turners = !el && box ? turnersOf(app, sel.elements()) : null;
+      const turners = el ? null : box ? turnersOf(app, sel.elements()) : apartOf(app, sel.elements());
       // the picture of a figure takes the angle, from the figure and from the picture selected
       const spin = el ? spinOf(el) : null;
       const carrier = spin ? objectOf(app, spin) : null;
@@ -478,6 +492,11 @@ export function install(app: App): void {
         p.turners = turners;
         p.was = turners[0].angle;
         view.turn = { box, deg: frames.groupTurn() };
+      } else if (turners) {
+        // the handle is drawn on the frame of the first element, which the angle is read from
+        center = turners[0].center;
+        p = start('rotate', ev, turners[0].el, turnedEls(turners), null);
+        Object.assign(p, { turners, apart: true, was: turners[0].angle });
       } else {
         center = seenCenter(app, spin as Element);
         p = start('rotate', ev, spin, [...new Set([spin as Element, carrier as Element])], null);
@@ -650,7 +669,7 @@ export function install(app: App): void {
     if (p.turners) {
       // the angle of a group is that of its first member, as in the field Angle
       const by = deg - was;
-      for (const t of p.turners) turnMember(app, t, c, by, true);
+      for (const t of p.turners) turnMember(app, t, p.apart ? t.center : c, by, true);
       if (view.turn) view.turn.deg = deg;
     } else turn(app, p.els[0], p.carrier ?? p.els[0], deg, c, true);
     view.moving = p.els;
