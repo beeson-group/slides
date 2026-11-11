@@ -171,6 +171,131 @@ for (const platform of PLATFORMS) {
   });
 }
 
+// the keys of the section Presenting of the README in the show in place. the frame is at the top
+// left of the window, hence a point of the frame is the same point of the page
+const inShow = (expression) => `(() => { const w = ${SHOW}; return ${expression}; })()`;
+const stageUp = `!!document.querySelector('.beeson-edit-show')`;
+const fullStage = `document.fullscreenElement?.className === 'beeson-edit-show'`;
+async function present(t, platform, options) {
+  const page = await load(t, platform, { n: 2, ...options });
+  await press(page, 'Mod+Enter');
+  await page.waitFor(showReady, 20000);
+  await sleep(300);
+  return page;
+}
+
+for (const platform of PLATFORMS) {
+  test(`in the show in place, d and the toggle at the top right flip the theme of the address, p the pointer, and o the overview (${platform})`, async (t) => {
+    const page = await present(t, platform, { mode: 'light' });
+    assert.equal(await page.evaluate(inShow(`new URL(w.location.href).searchParams.get('theme')`)), 'light', 'the show is not given the theme of the address of the editor');
+    assert.equal(await page.evaluate(inShow('w.document.documentElement.dataset.theme')), 'light');
+    await press(page, 'd');
+    await page.waitFor(inShow(`w.document.documentElement.dataset.theme === 'dark'`), 3000);
+    const toggle = await page.evaluate(inShow(`(() => {
+      const b = w.document.querySelector('.theme-switch');
+      if (!b) return null;
+      const r = b.getBoundingClientRect();
+      const s = w.getComputedStyle(b);
+      const x = r.left + r.width / 2, y = r.top + r.height / 2;
+      return { x, y, shown: r.width > 0 && Number(s.opacity) > 0 && s.visibility === 'visible' && w.document.elementFromPoint(x, y) === b, right: x > w.innerWidth * 0.75 && y < w.innerHeight * 0.25 };
+    })()`));
+    assert.ok(toggle?.shown, 'the toggle of the theme is not shown in the show');
+    assert.ok(toggle.right, 'the toggle of the theme is not at the top right');
+    await click(page, toggle);
+    await page.waitFor(inShow(`w.document.documentElement.dataset.theme === 'light'`), 3000);
+    await press(page, 'p');
+    await page.waitFor(inShow(`!!w.document.querySelector('.pointer-dot')`), 3000);
+    await press(page, 'p');
+    await page.waitFor(inShow(`!w.document.querySelector('.pointer-dot')`), 3000);
+    await press(page, 'o');
+    await sleep(500);
+    assert.ok(await page.evaluate(stageUp), 'o ends the show');
+    assert.equal(await page.evaluate(inShow('w.Reveal.isOverview()')), true, 'o does not open the overview');
+    await press(page, 'o');
+    await page.waitFor(inShow('!w.Reveal.isOverview()'), 3000);
+    assert.ok(await page.evaluate(fullStage));
+    await press(page, 'Escape');
+    await page.waitFor(stageGone);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`in the show in place, f leaves full screen and enters it again, and the show goes on (${platform})`, async (t) => {
+    const page = await present(t, platform);
+    assert.ok(await page.evaluate(fullStage));
+    await press(page, 'f');
+    await sleep(500);
+    assert.ok(await page.evaluate(stageUp), 'f ends the show');
+    assert.equal(await page.evaluate('document.fullscreenElement'), null, 'f does not leave full screen');
+    await press(page, 'ArrowRight');
+    await page.waitFor(`${SHOW}.Reveal.getIndices().f === 0`, 3000);
+    await press(page, 'f');
+    await sleep(500);
+    assert.ok(await page.evaluate(fullStage), 'f does not enter full screen again');
+    await press(page, 'ArrowRight');
+    await page.waitFor(`${SHOW}.Reveal.getIndices().f === 1`, 3000);
+    await press(page, 'Escape');
+    await page.waitFor(stageGone);
+    assert.equal(await page.evaluate('document.fullscreenElement'), null);
+    assert.equal(await editorHeading(page), 'Show your steps one at a time');
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`in the show in place, e returns to the editor at the slide shown, and the deck is never loaded with edit in the frame (${platform})`, async (t) => {
+    const page = await present(t, platform);
+    // the listener of the capture phase runs before the one of the show, which may take the frame away
+    await page.evaluate(`(() => { const f = document.querySelector('.beeson-edit-show iframe'); window.__loads = []; f.addEventListener('load', () => window.__loads.push(f.contentWindow?.location.href ?? null), true); return true; })()`);
+    await page.evaluate(`${SHOW}.Reveal.slide(4), true`);
+    await sleep(300);
+    await press(page, 'e');
+    await page.waitFor(stageGone, 10000);
+    await sleep(300);
+    assert.deepEqual(await page.evaluate('window.__loads'), [], 'e loads another page into the frame of the show');
+    assert.equal(await page.evaluate('document.fullscreenElement'), null);
+    assert.equal(await editorHeading(page), 'Figures are first class citizens, too', 'e does not return to the editor at the slide shown');
+    await byteExact(page);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`in the show in place, s opens the speaker view with the notes, and the show goes on (${platform})`, async (t) => {
+    const page = await present(t, platform);
+    await page.evaluate(inShow(`(() => { const real = w.open; w.open = function (...a) { const v = real.apply(w, a); w.__speaker = v; return v; }; return true; })()`));
+    await press(page, 's');
+    await sleep(1000);
+    assert.ok(await page.evaluate(stageUp), 'the speaker view ends the show');
+    await page.waitFor(inShow(`/A new element is faded in/.test(w.__speaker?.document.querySelector('.speaker-controls-notes .value')?.textContent ?? '')`), 15000);
+    await press(page, 'ArrowRight');
+    await page.waitFor(`${SHOW}.Reveal.getIndices().f === 0`, 3000);
+    await page.evaluate(inShow('(w.__speaker.close(), true)'));
+    await press(page, 'Escape');
+    await page.waitFor(stageGone);
+    assert.equal(await editorHeading(page), 'Show your steps one at a time');
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`in the show in place, the scrubber opens near the bottom edge, and a click on a tick shows its slide (${platform})`, async (t) => {
+    const page = await present(t, platform);
+    const move = (x, y) => page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x, y });
+    await move(800, 990);
+    await page.waitFor(inShow(`w.document.querySelector('.reveal').classList.contains('scrubbing')`), 3000);
+    const target = await page.evaluate(inShow(`(() => {
+      const ticks = [...w.document.querySelectorAll('.scrub-tick')];
+      const slides = w.Reveal.getSlides();
+      const box = w.document.querySelector('.scrub').getBoundingClientRect();
+      const i = 6;
+      return { h: w.Reveal.getIndices(slides[i]).h, now: w.Reveal.getIndices().h, x: box.left + box.width * parseFloat(ticks[i].style.left) / 100 };
+    })()`));
+    assert.notEqual(target.h, target.now);
+    await move(target.x, 990);
+    await click(page, { x: target.x, y: 990 });
+    await page.waitFor(`${SHOW}.Reveal.getIndices().h === ${target.h}`, 3000);
+    const heading = await showHeading(page);
+    await press(page, 'Escape');
+    await page.waitFor(stageGone);
+    assert.equal(await editorHeading(page), heading);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
 // VIEW reads the presenter view: the slide and step it shows, from 1 and from 0, the number of
 // steps of its slide, and the opacity of each fragment of its current slide, 0 for one not shown
 const VIEW = `(() => {
