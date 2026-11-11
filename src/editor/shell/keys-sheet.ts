@@ -14,7 +14,7 @@ import { menuItems, type MenuItem } from '../ui/menu.ts';
 import { MENUS } from './menubar.ts';
 
 const CSS = `
-.beeson-edit-keys { width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 64px); box-sizing: border-box; padding: 0; border: 1px solid var(--ed-line, #555); border-radius: 10px; background: var(--ed-panel, #f6f6f6); color: var(--ed-text, #1d1d1f); font: 12px/1.4 var(--ed-font, system-ui, sans-serif); box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35); }
+.beeson-edit-keys { width: min(980px, calc(100vw - 32px)); max-height: calc(100vh - 32px); box-sizing: border-box; padding: 0; border: 1px solid var(--ed-line, #555); border-radius: 10px; background: var(--ed-panel, #f6f6f6); color: var(--ed-text, #1d1d1f); font: 12px/1.4 var(--ed-font, system-ui, sans-serif); box-shadow: 0 16px 48px rgba(0, 0, 0, 0.35); }
 .beeson-edit-keys.four { width: min(1280px, calc(100vw - 32px)); }
 .beeson-edit-keys[open] { display: flex; flex-direction: column; }
 .beeson-edit-keys::backdrop { background: rgba(0, 0, 0, 0.3); }
@@ -168,6 +168,44 @@ function columns<T>(groups: T[], height: (g: T) => number, n: number): T[][] {
   return out;
 }
 
+type Group = { bar: string; rows: SheetRow[] };
+
+// the groups laid in their order into n columns of about one height, with the heading of a group
+// counted as two rows. a group that does not fit into the rest of its column is continued in the
+// next one under its name, with three rows or more on each side
+function balanced(groups: Group[], n: number): Group[][] {
+  const fill = (limit: number): Group[][] => {
+    const out: Group[][] = [[]];
+    let used = 0;
+    for (const g of groups) {
+      let { bar, rows } = g;
+      while (rows.length) {
+        const room = limit - used - 2;
+        const take = room >= rows.length ? rows.length : Math.min(room, rows.length - 3);
+        if (take >= Math.min(3, rows.length) || !used) {
+          // a column too short for three rows takes its group whole
+          const count = take >= 3 || take === rows.length ? take : rows.length;
+          out.at(-1)!.push({ bar, rows: rows.slice(0, count) });
+          used += count + 2;
+          rows = rows.slice(count);
+          bar = `${g.bar} (continued)`;
+        }
+        if (rows.length) {
+          out.push([]);
+          used = 0;
+        }
+      }
+    }
+    return out;
+  };
+  const total = groups.reduce((a, g) => a + g.rows.length + 2, 0);
+  for (let limit = Math.ceil(total / n); limit < total; limit++) {
+    const out = fill(limit);
+    if (out.length <= n) return out;
+  }
+  return fill(total);
+}
+
 export function install(app: App): void {
   injectStyle('keys', CSS);
   const sheet = make('dialog', 'beeson-edit-keys');
@@ -201,7 +239,7 @@ export function install(app: App): void {
   document.body.append(sheet);
 
   const open = () => {
-    const groups: { bar: string; rows: SheetRow[] }[] = [];
+    const groups: Group[] = [];
     for (const row of sheetRows(app)) {
       const last = groups.at(-1);
       if (last?.bar === row.bar) last.rows.push(row);
@@ -210,9 +248,9 @@ export function install(app: App): void {
     // columns of about 290 px each, as many as the window has room for up to three, with the
     // heading of a group counted as two rows
     const fit = (width: number) => Math.max(1, Math.floor((Math.min(width, innerWidth - 32) - 32) / 290));
-    const units = (g: { rows: SheetRow[] }) => g.rows.length + 2;
-    const draw = (n: number) => body.replaceChildren(
-      ...columns(groups, units, n).map((list) => {
+    const units = (g: Group) => g.rows.length + 2;
+    const draw = (lists: Group[][]) => body.replaceChildren(
+      ...lists.map((list) => {
         const column = make('div', 'column');
         for (const g of list) {
           const section = make('section');
@@ -230,17 +268,21 @@ export function install(app: App): void {
       }),
     );
     sheet.classList.remove('four', 'dense');
-    draw(Math.min(3, fit(980)));
+    let n = Math.min(3, fit(980));
+    draw(columns(groups, units, n));
     back = document.activeElement;
     sheet.showModal();
     // the sheet is measured once shown. while its rows are taller than the window, it gets a fourth
-    // column in a wider sheet, then tighter rows, and else its body scrolls
+    // column in a wider sheet, then tighter rows, then columns of one height with a long group
+    // continued in the next one, and else its body scrolls
     const over = () => body.scrollHeight > body.clientHeight;
     if (over() && fit(1280) >= 4) {
       sheet.classList.add('four');
-      draw(4);
+      n = 4;
+      draw(columns(groups, units, n));
     }
     if (over()) sheet.classList.add('dense');
+    if (over()) draw(balanced(groups, n));
     done.focus();
   };
   app.commands.define({
