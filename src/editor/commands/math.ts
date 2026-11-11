@@ -226,7 +226,7 @@ export function install(app: App): void {
     id: 'math.inline',
     label: 'Inline Formula',
     in: ['text'],
-    menu: { bar: 'Insert', group: 'element', order: 22 },
+    menu: { bar: 'Insert', group: 'element', order: 22.8 },
     context: ['text'],
     enabled: (a) => !!inlineHost(a) && a.region() !== 'dialog',
     run: (a) => {
