@@ -266,16 +266,23 @@ export async function split(app: App): Promise<void> {
   const at = itemAt(app);
   if (!at || !canSplit(app)) return;
   const { host, item, range } = at;
-  // Return on an empty item moves it out one level, and on the first level ends the list with a
-  // paragraph after it, as in Keynote and PowerPoint
+  // Return on an empty item moves it out one level, and on the first level takes the item off its
+  // list as a paragraph, as in Keynote and PowerPoint. the items after it go into a list of their
+  // own after the paragraph, with the attributes of their list apart from its id
   if (item.localName === 'li' && !item.textContent?.trim() && !item.querySelector('mjx-container, img, ul, ol')) {
     if (at.nested) return outdent(app);
     const list = item.parentElement!;
-    if (!nextOf(app, item)) {
-      const [p] = await app.doc.insert('<p></p>', list.parentElement!, nextOf(app, list), 'new paragraph');
-      await app.doc.remove(list.querySelectorAll(':scope > li').length > 1 ? item : list, 'new paragraph');
-      return selectIn(p, 0);
+    const followers = [...list.children].slice([...list.children].indexOf(item) + 1).filter((c) => c.localName === 'li');
+    const texts = ['<p></p>'];
+    if (followers.length) {
+      const { base, step, eol } = indentOf(app, list);
+      const rest = followers.map((f) => `${eol}${base}${step}${app.doc.elementText(f)}`).join('');
+      texts.push(`${startTag(app, list, list.localName, { attrs: { id: null } })}${rest}${eol}${base}</${list.localName}>`);
     }
+    const [p] = await app.doc.insert(texts, list.parentElement!, nextOf(app, list), 'new paragraph');
+    for (const f of followers) await app.doc.remove(f, 'new paragraph');
+    await app.doc.remove(list.querySelectorAll(':scope > li').length > 1 ? item : list, 'new paragraph');
+    return selectIn(p, 0);
   }
   if (!range.collapsed) range.deleteContents();
   const caret: [Node, number] = [range.startContainer, range.startOffset];
