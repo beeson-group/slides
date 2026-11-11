@@ -218,7 +218,8 @@ for (const platform of PLATFORMS) {
     await sleep(600);
     for (let k = 1; k <= 4; k++) {
       await page.evaluate(`${TAB}.Reveal.next(), true`);
-      await sleep(400);
+      // the timer of the view is slowed while the tab of the show is in front
+      await page.waitFor(`(() => { const v = ${VIEW}; return v.at === 3 && v.step === ${k}; })()`, 5000).catch(() => {});
       view = await page.evaluate(VIEW);
       assert.deepEqual([view.at, view.step, view.n], [3, k, 4], `the view does not follow step ${k} of the show`);
     }
