@@ -1,6 +1,6 @@
 // the plots and the surfaces of the editor, on both platforms: Insert > Plot, the series, the
 // ranges, the paste, and the tabs of the Plot Data window, the titles, the ranges, and the colors of
-// the Plot pane. each edit is checked
+// the Plot pane, and the readout of the camera of a surface turned by a drag. each edit is checked
 // byte for byte, after an undo and a redo, against the scope rule, and after a save and an open of
 // the saved text
 
@@ -395,6 +395,34 @@ for (const platform of PLATFORMS) {
     await field('plot-0-x-title', '');
     await roundTrip(page, plate(range, tone), 'Axis Title', toned);
     await saved(page);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`a drag on a surface shows its azimuth and elevation at the pointer, and the fields follow it (${platform})`, async () => {
+    const page = await deckPage(platform, SURFACE_SLIDE);
+    await click(page, '.reveal section.present .surface');
+    await frames(page);
+    const readout = () => page.evaluate(`(() => { const r = [...document.querySelectorAll('.beeson-offset')].find((e) => !e.hidden); return r ? r.textContent : null; })()`);
+    const fields = () => page.evaluate(`['azimuth', 'elevation'].map((n) => document.querySelector('${PANEL} input[name="' + n + '"]').value)`);
+    assert.deepEqual(await fields(), ['-60', '32']);
+    await drag(page, '.reveal section.present .surface', { dx: 80, dy: 30, hold: true });
+    const shown = await readout();
+    const m = /^(-?\d+)°  (\d+)°$/.exec(shown ?? '');
+    assert.ok(m, `the readout is ${shown}`);
+    assert.notEqual(m[1], '-60');
+    assert.deepEqual(await fields(), [m[1], m[2]]);
+    const at = await center(page, '.reveal section.present .surface');
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: at.x + 80, y: at.y + 30, button: 'left', clickCount: 1 });
+    await frames(page);
+    assert.equal(await readout(), null);
+    // the fields keep the view of the drag, marked as not written, until Use Current View writes it
+    assert.deepEqual(await fields(), [m[1], m[2]]);
+    assert.ok(await page.evaluate(`document.querySelector('${PANEL} input[name="azimuth"]').closest('.ed-num').classList.contains('turned')`));
+    await byteExact(page);
+    await click(page, `${PANEL} button[data-command="surface.useView"]`);
+    const tag = '<div class="surface" data-function="effective-potential" data-mu="0.05">';
+    await roundTrip(page, [[tag, tag.replace('>', ` data-azimuth="${m[1]}" data-elevation="${m[2]}">`)]], 'Use Current View');
+    assert.equal(await page.evaluate(`document.querySelector('${PANEL} input[name="azimuth"]').closest('.ed-num').classList.contains('turned')`), false);
     assert.deepEqual(errors(page), []);
   });
 }
