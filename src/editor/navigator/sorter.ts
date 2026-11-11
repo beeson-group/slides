@@ -188,6 +188,7 @@ export class Sorter {
       new MutationObserver(() => thumbs.all()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
     }
     this.el.hidden = !on;
+    (this.app.nav as Navigator).table = this;
     if (on) {
       this.refresh();
       this.measure();

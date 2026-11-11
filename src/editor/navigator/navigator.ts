@@ -168,6 +168,8 @@ export class Navigator implements Pane {
   private anchor: Element | null = null;
   private drag: Drag | null = null;
   private eatClick = false;
+  // the light table of sorter.ts, whose tile takes the focus in place of a row while it is shown
+  table: { shown: boolean; focus(slide: Element | null): void } | null = null;
 
   constructor(app: App) {
     injectStyle('nav', CSS);
@@ -304,6 +306,15 @@ export class Navigator implements Pane {
     const current = p.current?.isConnected ? p.current : (slides.at(-1) ?? null);
     if (!current) return;
     this.select(slides.length ? slides : [current], current);
+    const table = this.table?.shown ? this.table : null;
+    if (table) {
+      // the tiles are drawn again at the refresh that the undo or the redo has made due
+      queueMicrotask(() => {
+        this.app.flush();
+        table.focus(current);
+      });
+      return;
+    }
     if (p.nav || this.app.region() === 'navigator' || document.activeElement === document.body) this.focus(current);
   }
 
