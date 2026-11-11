@@ -14,6 +14,7 @@ import { make, injectStyle } from '../ui/dom.ts';
 import { install as installSurface } from '../inspector/surface.ts';
 import { addRow, addSeries, addTab, cellsIn, clearCells, deleteRow, deleteSeries, deleteTab, literal, moveSeries, parseTsv, pasteCells, setCell, setKey, sheetsOf, type Cell, type Result, type Sheet } from '../plotdata.ts';
 import { emptySlot } from '../media/actions.ts';
+import { pasteWork } from './clipboard.ts';
 import { placeNew } from './place.ts';
 import { modelAt } from '../steps.ts';
 import { ask, trapTab } from '../ui/dialog.ts';
@@ -539,7 +540,7 @@ class DataWindow {
       ev.preventDefault();
       ev.stopPropagation();
       const fill = one && box ? sel.cells.map((row) => row.map(() => rows[0][0])) : rows;
-      void this.app.commands.run('plot.pasteCells', { r: sel.r, c: sel.c, rows: fill }).catch((e) => this.fail(e));
+      pasteWork.set(ev, this.app.commands.run('plot.pasteCells', { r: sel.r, c: sel.c, rows: fill }).catch((e) => this.fail(e)));
       return;
     }
     if (!box) return;

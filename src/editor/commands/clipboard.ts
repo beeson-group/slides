@@ -265,6 +265,9 @@ export const fieldOf = (app: App): HTMLElement | null => {
   const typed = f instanceof HTMLElement && (f.isContentEditable || f.matches('textarea, input:not([type=range], [type=checkbox], [type=radio], [type=button], [type=color])'));
   return typed && !app.hostOf(f) ? f : null;
 };
+// the work that a handler of the paste event of a field starts. Paste of the Edit menu waits for
+// it, hence its changes are in the entry of the Paste, as after the key
+export const pasteWork = new WeakMap<Event, Promise<unknown>>();
 export const inText = (app: App) => app.selection.kind === 'text' || app.region() === 'text' || !!fieldOf(app);
 const onSlides = (app: App) => app.region() === 'navigator' || app.selection.kind === 'slides';
 
@@ -347,7 +350,9 @@ export function install(app: App): void {
       else if (text && !els && !slides) {
         const data = new DataTransfer();
         data.setData('text/plain', text);
-        if (field.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))) document.execCommand('insertText', false, text);
+        const ev = new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true });
+        if (field.dispatchEvent(ev)) document.execCommand('insertText', false, text);
+        else await pasteWork.get(ev);
       }
     } else if (inText(a)) {
       const at = getSelection()?.anchorNode ?? document.activeElement;
