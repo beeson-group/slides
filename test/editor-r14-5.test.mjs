@@ -127,3 +127,17 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+for (const platform of PLATFORMS) {
+  // D17 of round 6: a typed Height of 975 read back as 974, with the picture written 716 px wide
+  test(`a typed Height of a figure with a caption reads back as typed (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, IMG);
+    for (const h of [975, 700, 775, 950]) {
+      await typeField(page, 'height', h);
+      assert.equal(await fieldValue(page, 'height'), h, `a typed Height of ${h}`);
+    }
+    await checkEdit(page, `r14-5-height-${platform}.html`, page.source);
+    assert.deepEqual(errors(page), []);
+  });
+}
