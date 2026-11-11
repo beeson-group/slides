@@ -572,3 +572,36 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// finding 10 of the juror of round 4: Return on an empty item added one more empty item, and the
+// list was never ended. Return on an empty item of a deeper level moves it one level out, and on the
+// first level ends the list, with the caret in a new paragraph after it, each as one entry
+for (const platform of PLATFORMS) {
+  test(`Return on an empty item moves it out one level, then ends the list (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await caretAtEnd(page, 2);
+    await press(page, 'Enter');
+    const added = await render(page);
+    assert.notEqual(added, page.source, 'Return at the end of an item does not add one');
+    await press(page, 'Tab');
+    assert.notEqual(await render(page), added, 'Tab does not indent the empty item');
+    await press(page, 'Enter');
+    assert.equal(await render(page), added, 'Return on an empty nested item does not move it out one level');
+    assert.equal(await undoLabel(page), 'Undo New Paragraph');
+    await press(page, 'Enter');
+    const ended = await render(page);
+    assert.ok(!ended.includes('<li class="fragment" data-fragment-index="3"></li>'), 'Return on an empty item of the first level keeps it');
+    await type(page, 'Z');
+    const typed = await render(page);
+    assert.match(typed, /in dark mode\.<\/li>\s*<\/ul>\s*<p>Z<\/p>/, `the list is not ended: ${typed.match(/in dark mode[\s\S]{0,80}/)?.[0]}`);
+    await page.evaluate('window.BeesonEditor.undo()');
+    await page.evaluate('window.BeesonEditor.undo()');
+    assert.equal(await render(page), added, 'the end of the list is not one entry');
+    await page.evaluate('window.BeesonEditor.redo()');
+    await page.evaluate('window.BeesonEditor.redo()');
+    assert.equal(await render(page), typed);
+    const { text } = await saveAndReopen(page, `r9-6-${++saves}.html`);
+    assert.equal(text, typed);
+    assert.deepEqual(errors(page), []);
+  });
+}
