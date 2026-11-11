@@ -9,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { click, press, saveAndReopen } from './helpers/editor.mjs';
+import { click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
 const DECK = 'index.html';
 // the indexes of the figures slide and of the closing slide with its QR code in index.html
@@ -133,13 +133,14 @@ for (const platform of PLATFORMS) {
 
   for (const [what, act] of [
     ['Duplicate', (page) => press(page, 'Mod+D')],
+    ['a duplicating drag', (page, platform) => drag(page, 'section.present figure img.for-light', { dx: -120, dy: 0, modifiers: platform === 'mac' ? 'Alt' : 'Ctrl' })],
     ['Delete', (page) => press(page, 'Backspace')],
     ['Lock', (page) => press(page, 'Mod+L')],
   ]) {
     test(`an undo and a redo of ${what} show the slide that they change (${platform})`, async (t) => {
       const page = await load(t, platform, FIGURES);
       await click(page, 'section.present figure img.for-light');
-      await act(page);
+      await act(page, platform);
       await frames(page);
       const edited = await render(page);
       assert.notEqual(edited, page.source);
