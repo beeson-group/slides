@@ -558,3 +558,34 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the centers of the shown grips of the ends of a line, and the screen points of its ends, by end
+const ends = (page) => page.evaluate(`(() => {
+  const svg = document.querySelector('.reveal section.present svg.line');
+  const l = svg.querySelector('line'), r = svg.getBoundingClientRect(), k = r.width / svg.width.baseVal.value;
+  const at = (n) => ({ x: r.left + Number(l.getAttribute('x' + n)) * k, y: r.top + Number(l.getAttribute('y' + n)) * k });
+  const grip = (n) => [...document.querySelectorAll('.beeson-line-end')].filter((g) => !g.hidden && g.dataset.end === n).map((g) => { const b = g.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })[0];
+  return [1, 2].map((n) => ({ end: at(n), grip: grip(String(n)) }));
+})()`);
+
+// a check of the pictures of round 4: the grip of an end with an arrowhead was drawn about 9 px
+// beyond the tip, off the line, while the grip of an end without one was on its end
+for (const platform of PLATFORMS) {
+  test(`each grip of a selected line is on the end point of its line, with or without an arrowhead (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 6 });
+    const s = await page.evaluate(`(() => { const r = document.querySelector('.reveal section.present').getBoundingClientRect(); return { l: r.left, t: r.top, w: r.width, h: r.height }; })()`);
+    const at = await drawArrow(page, s.l + s.w * 0.15, s.t + s.h * 0.85);
+    for (const heads of ['end', 'start', 'both', 'none']) {
+      await click(page, at);
+      await page.evaluate(`window.BeesonEditor.exec(${js('line.heads.' + heads)})`);
+      await frames(page);
+      assert.deepEqual(await selected(page), ['svg.line']);
+      for (const [i, e] of (await ends(page)).entries()) {
+        assert.ok(e.grip, `the end ${i + 1} of the line does not have a grip`);
+        const off = Math.hypot(e.grip.x - e.end.x, e.grip.y - e.end.y);
+        assert.ok(off < 1, `with heads ${heads} the grip of the end ${i + 1} is ${off.toFixed(1)} px off the end point of its line`);
+      }
+    }
+    assert.deepEqual(errors(page), []);
+  });
+}
