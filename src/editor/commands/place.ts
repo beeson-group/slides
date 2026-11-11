@@ -73,9 +73,13 @@ export function freePlace(app: App, el: Element, picture?: HTMLElement): { x: nu
   };
   const kept = picture?.style.width ?? '';
   const base = b0.right - b0.left;
+  // an image or a video is drawn as small as a quarter before it lies over a figure, and a text box,
+  // a formula, or a QR code only as small as a half, since a figure may lie under it
+  const media = !!picture?.matches('img, video');
+  const scales = (all: boolean) => (!picture ? [1] : all ? (media ? [1, 0.75, 0.5, 0.35, 0.25] : [1, 0.75, 0.5]) : media ? [0.5] : [1]);
   try {
     for (const all of [true, false]) {
-      for (const k of picture ? (all ? [1, 0.75, 0.5, 0.35, 0.25] : [0.5]) : [1]) {
+      for (const k of scales(all)) {
         if (picture) picture.style.width = k === 1 ? kept : `${Math.round(base * k)}px`;
         const b = own();
         const p = nearest(b, all);
