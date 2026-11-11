@@ -8,6 +8,7 @@
 import type { App } from '../app.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
+import { commandKeys } from '../ui/menu.ts';
 
 const SVG = 'http://www.w3.org/2000/svg';
 
@@ -213,8 +214,11 @@ function itemButton(app: App, run: Run, item: Item, className: string): { el: HT
     if (on === null || on === undefined) b.removeAttribute('aria-pressed');
     else b.setAttribute('aria-pressed', String(on && !b.disabled));
     if (!item.title && s && typeof item.text !== 'string') b.setAttribute('aria-label', s.label);
-    // a dimmed control says why in its tooltip
-    b.title = s?.why ?? item.title ?? (s && typeof item.text !== 'string' ? s.label : '');
+    // a dimmed control says why in its tooltip, and else gives its keys as the toolbar does
+    const name = item.title ?? (s && typeof item.text !== 'string' ? s.label : '');
+    const c = app.commands.get(item.command);
+    const keys = name && c ? commandKeys(c, app.platform) : '';
+    b.title = s?.why ?? (keys ? `${name} (${keys})` : name);
   };
   sync();
   return { el: b, sync };
