@@ -115,3 +115,106 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+const state = (page, id) => page.evaluate(`window.BeesonEditor.state(${js(id)})`);
+const wait = (page, ms = 300) => page.evaluate(`new Promise((d) => setTimeout(() => requestAnimationFrame(() => requestAnimationFrame(() => d(true))), ${ms}))`);
+
+// keys sends one trusted key press with its text for each character, as a keyboard does
+async function keys(page, text) {
+  for (const ch of text) {
+    const code = ch === ' ' ? 'Space' : `Key${ch.toUpperCase()}`;
+    const base = { key: ch, code, windowsVirtualKeyCode: ch.toUpperCase().charCodeAt(0), modifiers: ch !== ch.toLowerCase() ? 8 : 0 };
+    await page.send('Input.dispatchKeyEvent', { type: 'keyDown', ...base, text: ch, unmodifiedText: ch });
+    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+  }
+}
+
+// the outline shown on slide 3, with the caret at the end of its line "Two elements..."
+async function outlineAt(t, platform) {
+  const page = await load(t, platform, 2);
+  if (!(await state(page, 'view.outline')).checked) await page.evaluate(`window.BeesonEditor.exec('view.outline')`);
+  await wait(page);
+  const at = await page.evaluate(`(() => {
+    const t = [...document.querySelectorAll('.beeson-edit-outline .text')].find((e) => e.textContent.startsWith('Two elements'));
+    t.scrollIntoView({ block: 'center' });
+    const r = t.getBoundingClientRect();
+    return { x: r.right - 2, y: r.bottom - 6 };
+  })()`);
+  await click(page, at);
+  await press(page, 'End');
+  await wait(page);
+  assert.ok(await page.evaluate(`document.activeElement.matches('.beeson-edit-outline .text') && document.activeElement.textContent.startsWith('Two elements')`), 'the caret is not in the line of the outline');
+  return page;
+}
+
+const SAME = 'Two elements with the same index are shown together.';
+const itemText = (s) => `<li class="fragment" data-fragment-index="2">${s}</li>`;
+
+// finding 2: an undo after Return and typing in the outline took off the item with its text, and a
+// redo gave back an empty item
+for (const platform of PLATFORMS) {
+  test(`in the outline, the undos after Return and typing take off the typing and then the item, and the redos give both back (${platform})`, async (t) => {
+    const page = await outlineAt(t, platform);
+    await press(page, 'Enter');
+    await wait(page);
+    await keys(page, 'New item');
+    await wait(page);
+    await command(page, 'undo');
+    await wait(page);
+    let text = await render(page);
+    assert.ok(text.includes(`${SAME}</li>\n    ${itemText('')}`), 'the first undo does not keep the empty item');
+    await command(page, 'undo');
+    await wait(page);
+    await byteExact(page);
+    await command(page, 'redo');
+    await wait(page);
+    await command(page, 'redo');
+    await wait(page);
+    text = await render(page);
+    assert.ok(text.includes(`${SAME}</li>\n    ${itemText('New item')}`), 'the redos do not give back the item with its text');
+    const lines = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-outline .slide')][2].textContent`);
+    assert.ok(lines.includes('New item'), 'the outline does not show the text given back');
+    const { text: saved } = await saveAndReopen(page, `r13-6-${++saves}.html`);
+    assert.equal(saved, text);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`in the outline, five undos and five redos after typing and two Returns give the file back (${platform})`, async (t) => {
+    const page = await outlineAt(t, platform);
+    await keys(page, ' A');
+    await press(page, 'Enter');
+    await wait(page);
+    await keys(page, 'B');
+    await press(page, 'Enter');
+    await wait(page);
+    const edited = await render(page);
+    assert.ok(edited.includes(`${SAME} A</li>`), 'the typing is not in the file');
+    for (let i = 0; i < 5; i++) {
+      await command(page, 'undo');
+      await wait(page);
+    }
+    await byteExact(page);
+    for (let i = 0; i < 5; i++) {
+      await command(page, 'redo');
+      await wait(page);
+    }
+    assert.equal(await render(page), edited);
+    assert.deepEqual(errors(page), []);
+  });
+
+  // finding 3: Esc after typing in a new line of the outline was seen to drop the line
+  test(`in the outline, Esc after typing in a new line keeps the line and its text (${platform})`, async (t) => {
+    const page = await outlineAt(t, platform);
+    await press(page, 'Enter');
+    await wait(page);
+    await keys(page, 'New item');
+    await press(page, 'Escape');
+    await wait(page);
+    const text = await render(page);
+    assert.ok(text.includes(`${SAME}</li>\n    ${itemText('New item')}`), 'Esc drops the line or its text');
+    assert.equal(await undoLabel(page), 'Undo Typing');
+    await page.evaluate('window.BeesonEditor.undo()');
+    await page.evaluate('window.BeesonEditor.undo()');
+    await byteExact(page);
+  });
+}
