@@ -302,3 +302,64 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// the client point of the middle of the character at offset k of needle in the first shown
+// element of selector whose text holds needle
+const pointOf = (page, selector, needle, k = 0) => page.evaluate(`(() => {
+  const el = [...document.querySelectorAll(${js(selector)})].find((el) => el.getBoundingClientRect().width && el.textContent.includes(${js(needle)}));
+  const w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
+  for (let n = w.nextNode(); n; n = w.nextNode()) {
+    const i = n.data.indexOf(${js(needle)});
+    if (i < 0) continue;
+    const r = document.createRange();
+    r.setStart(n, i + ${k});
+    r.setEnd(n, i + ${k} + 1);
+    const b = r.getBoundingClientRect();
+    return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
+  }
+})()`);
+// the selected text of the window, the tag of the block that holds it, and whether it is in a text
+const selected = (page) => page.evaluate(`(() => {
+  const s = getSelection();
+  const el = s.focusNode && (s.focusNode.nodeType === 1 ? s.focusNode : s.focusNode.parentElement);
+  return { text: s.toString(), block: el?.closest('p, li, h2')?.localName ?? null, editing: !!el?.closest('[contenteditable="true"]') };
+})()`);
+
+for (const platform of PLATFORMS) {
+  for (const [id, block, back] of [['text.list.ul', 'li', 'p'], ['text.list.ol', 'li', 'p']]) {
+    test(`an undo and a redo of ${id} on a word of a paragraph select the word again (${platform})`, async (t) => {
+      const page = await load(t, platform, FIGURES);
+      await click(page, await pointOf(page, '.reveal section.present > p', 'styles', 2), { count: 2 });
+      assert.deepEqual(await selected(page), { text: 'styles', block: back, editing: true });
+      await exec(page, id);
+      assert.deepEqual(await selected(page), { text: 'styles', block, editing: true }, 'the list style keeps the word');
+      await undo(page);
+      await frames(page);
+      assert.deepEqual(await selected(page), { text: 'styles', block: back, editing: true }, 'the undo selects the word again');
+      assert.equal(await render(page), page.source);
+      await redo(page);
+      await frames(page);
+      assert.deepEqual(await selected(page), { text: 'styles', block, editing: true }, 'the redo selects the word again');
+      await checkEdit(page, `r13-2-list-${id}-${platform}.html`);
+      assert.deepEqual(errors(page), []);
+    });
+  }
+
+  test(`an undo and a redo of Numbers on the items of a list select the items again (${platform})`, async (t) => {
+    const page = await load(t, platform, FIGURES);
+    const ITEM = '.reveal section.present ul > li';
+    await click(page, await pointOf(page, ITEM, 'toggle', 2));
+    await press(page, 'Mod+A');
+    const all = (await selected(page)).text;
+    assert.ok(all.length > 20, `Mod+A selects the list: ${all}`);
+    await exec(page, 'text.list.ol');
+    await undo(page);
+    await frames(page);
+    assert.equal((await selected(page)).text, all, 'the undo selects the items again');
+    await redo(page);
+    await frames(page);
+    assert.equal((await selected(page)).text, all, 'the redo selects the items again');
+    await checkEdit(page, `r13-2-list-items-${platform}.html`);
+    assert.deepEqual(errors(page), []);
+  });
+}
