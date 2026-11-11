@@ -207,3 +207,161 @@ for (const platform of PLATFORMS) {
     await roundTrip(page);
   });
 }
+
+// the trusted key Mod+Shift with key on a US layout, which press() does not know
+async function modShift(page, platform, key, code, keyCode) {
+  const base = { key, code, windowsVirtualKeyCode: keyCode, modifiers: (platform === 'mac' ? 4 : 2) | 8 };
+  await page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...base });
+  await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+}
+const SMALLER = ['<', 'Comma', 188];
+const BIGGER = ['>', 'Period', 190];
+
+// the paragraph and the list of slide 5 selected as objects, by a click, Esc, and a Shift+click
+async function selectBoth(page) {
+  await click(page, await pointOf(page, PARA, 'figure', 2));
+  await press(page, 'Escape');
+  await frames(page);
+  await click(page, await pointOf(page, ITEM, 'toggle', 2), { modifiers: 'Shift' });
+  await frames(page);
+}
+
+// difference 2 of R11.2: Bigger, Smaller, and the paragraph style on several selected blocks and
+// on a text selected over several items acted on one block
+for (const platform of PLATFORMS) {
+  test(`Smaller and Bigger on a paragraph and a list selected as objects act on every block, as one entry each (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await selectBoth(page);
+    await modShift(page, platform, ...SMALLER);
+    await frames(page);
+    const text = await render(page);
+    assert.ok(text.includes('<p class="small">Export your matplotlib figure'), 'Smaller does not set Small on the paragraph');
+    for (const li of SMALL_ITEMS) assert.ok(text.includes(li), `Smaller does not set Small on ${li.slice(0, 70)}`);
+    await roundTrip(page);
+    await selectBoth(page);
+    await modShift(page, platform, ...BIGGER);
+    await frames(page);
+    assert.equal(await render(page), readFileSync('index.html', 'utf8'), 'Bigger does not set Body on every block');
+    await undo(page);
+    assert.equal(await render(page), page.source);
+  });
+
+  test(`a paragraph style of the Text pane on a paragraph and a list selected as objects acts on every block (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await selectBoth(page);
+    await exec(page, 'text.style.small');
+    await frames(page);
+    const text = await render(page);
+    assert.ok(text.includes('<p class="small">Export your matplotlib figure'), 'Small is not set on the paragraph');
+    for (const li of SMALL_ITEMS) assert.ok(text.includes(li), `Small is not set on ${li.slice(0, 70)}`);
+    assert.equal(await undoLabel(page), 'Undo Paragraph Style');
+    await roundTrip(page);
+  });
+
+  for (const [name, how] of [['Smaller', 'key'], ['Small', 'pane']]) {
+    test(`${name} on a text selected over two items acts on both items and keeps the selection (${platform})`, async (t) => {
+      const page = await load(t, platform);
+      await click(page, await pointOf(page, ITEM, 'toggle', 2));
+      await caretAt(page, ITEM, 'slide.', 2);
+      for (let i = 0; i < 8; i++) await press(page, 'Shift+ArrowRight');
+      if (how === 'key') await modShift(page, platform, ...SMALLER);
+      else await exec(page, 'text.style.small');
+      await frames(page);
+      const text = await render(page);
+      assert.equal(line(text, 'Dark and'), ITEMS[0], 'the item before the selection is changed');
+      assert.equal(line(text, 'You might'), SMALL_ITEMS[1], 'the first item of the selection is not Small');
+      assert.equal(line(text, 'You should'), SMALL_ITEMS[2], 'the last item of the selection is not Small');
+      // Backspace deletes the same selection over the two items after the change
+      await press(page, 'Backspace');
+      assert.equal(line(await render(page), 'You might'), SMALL_ITEMS[1].replace('slide.</li>', 'sl should give black-on-white plots the class <code>invert</code> to invert them in dark mode.</li>'), 'the selection over the two items is not kept');
+      await undo(page);
+      await roundTrip(page);
+    });
+  }
+
+  for (const [from, to, way] of [['toggle', 'plots', 'forward'], ['plots', 'toggle', 'backward']]) {
+    test(`a Shift+click in another item extends the selection from the caret across the items, ${way} (${platform})`, async (t) => {
+      const page = await load(t, platform);
+      await click(page, await pointOf(page, ITEM, from, 2));
+      await caretAt(page, ITEM, from, 0);
+      await click(page, await pointOf(page, ITEM, to, 0, true), { modifiers: 'Shift' });
+      await frames(page);
+      await type(page, 'Z');
+      const text = await render(page);
+      assert.equal(line(text, 'You might'), '<li class="fragment" data-fragment-index="2">You might have noticed a Zplots the class <code>invert</code> to invert them in dark mode.</li>', `the Shift+click does not extend the selection: ${line(text, 'You might')}`);
+      assert.equal(line(text, 'You should'), undefined);
+      await roundTrip(page);
+    });
+  }
+}
+
+// the left of the caret in the window, in CSS pixels
+const caretX = (page) => page.evaluate(`(() => {
+  const r = getSelection().getRangeAt(0).cloneRange();
+  const box = r.getClientRects()[0] ?? r.getBoundingClientRect();
+  return box.left;
+})()`);
+
+// the caret put at the client x on the last or the first line of item i
+const caretOnLine = (page, i, x, last) => page.evaluate(`(() => {
+  const li = document.querySelectorAll(${js(ITEM)})[${i}];
+  const r = document.createRange();
+  r.selectNodeContents(li);
+  const lines = [...r.getClientRects()].filter((b) => b.height > 0);
+  const y = ${last} ? Math.max(...lines.map((b) => b.bottom)) - 6 : Math.min(...lines.map((b) => b.top)) + 6;
+  const p = document.caretPositionFromPoint ? document.caretPositionFromPoint(${x}, y) : null;
+  const q = p ? [p.offsetNode, p.offset] : (() => { const c = document.caretRangeFromPoint(${x}, y); return [c.startContainer, c.startOffset]; })();
+  li.closest('[contenteditable="true"]').focus();
+  getSelection().collapse(...q);
+})()`);
+
+// the right of the last line and of the first line of item i, in CSS pixels
+const lineEnds = (page, i) => page.evaluate(`(() => {
+  const li = document.querySelectorAll(${js(ITEM)})[${i}];
+  const r = document.createRange();
+  r.selectNodeContents(li);
+  const lines = [...r.getClientRects()].filter((b) => b.height > 0 && b.width > 0);
+  const bottom = Math.max(...lines.map((b) => b.bottom));
+  const top = Math.min(...lines.map((b) => b.top));
+  return { last: Math.max(...lines.filter((b) => b.bottom > bottom - 4).map((b) => b.right)), first: Math.max(...lines.filter((b) => b.top < top + 4).map((b) => b.right)) };
+})()`);
+
+// the caret keeps its column over a short item between two long ones: the short item takes the
+// caret to its end, and the next arrow puts the caret back in its column, as in a text editor
+for (const platform of PLATFORMS) {
+  test(`ArrowDown and ArrowUp keep the column of the caret across a short item (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, await pointOf(page, ITEM, 'Dark and light', 2));
+    await caretAtEnd(page, 0);
+    await press(page, 'Enter');
+    await type(page, 'ab');
+    const one = await lineEnds(page, 0);
+    const three = await lineEnds(page, 2);
+    const short = await lineEnds(page, 1);
+    const x = Math.min(one.last, three.first) - 40;
+    assert.ok(x > short.last + 60, `the column at ${x} is not right of the short item, which ends at ${short.last}`);
+    await caretOnLine(page, 0, x, true);
+    const x0 = await caretX(page);
+    await press(page, 'ArrowDown');
+    assert.equal((await caretBlock(page)).text, 'ab');
+    await press(page, 'ArrowDown');
+    assert.match((await caretBlock(page)).text, /^You might/);
+    const x1 = await caretX(page);
+    assert.ok(Math.abs(x1 - x0) < 20, `ArrowDown puts the caret at x ${x1}, away from its column at ${x0}`);
+    await press(page, 'ArrowUp');
+    assert.equal((await caretBlock(page)).text, 'ab');
+    await press(page, 'ArrowUp');
+    assert.match((await caretBlock(page)).text, /^Dark and light/);
+    const x2 = await caretX(page);
+    assert.ok(Math.abs(x2 - x0) < 20, `ArrowUp puts the caret at x ${x2}, away from its column at ${x0}`);
+    // a caret moved by ArrowLeft takes a new column
+    await press(page, 'ArrowLeft');
+    await press(page, 'ArrowLeft');
+    const x3 = await caretX(page);
+    await press(page, 'ArrowDown');
+    await press(page, 'ArrowDown');
+    const x4 = await caretX(page);
+    assert.ok(Math.abs(x4 - x3) < 20, `after ArrowLeft, ArrowDown puts the caret at x ${x4}, away from its new column at ${x3}`);
+    assert.deepEqual(errors(page), []);
+  });
+}
