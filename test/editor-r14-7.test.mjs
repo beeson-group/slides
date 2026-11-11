@@ -193,4 +193,31 @@ for (const platform of PLATFORMS) {
       assert.match(listPart(await render(page)), />QYou might have noticed/, `Q is not typed at the start of the item: ${(await render(page)).match(/[^>]{0,20}Q<\/li>|>[^<]{0,10}Q[^<]{0,10}/)?.[0]}`);
     });
   }
+  // the place at the start of a nested item is also the end of the white space before the item in
+  // its list, where the list commands do not act
+  test(`after an undo of an outdent, the caret is in the nested item, and Shift+Tab takes it out again (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, await pointOf(page, ITEM, 'You might', 4));
+    await press(page, 'Home');
+    await press(page, 'Tab');
+    const nested = await render(page);
+    await press(page, 'Shift+Tab');
+    const out = await render(page);
+    assert.notEqual(out, nested);
+    await undo(page);
+    assert.equal(await render(page), nested);
+    const caret = await caretIn(page);
+    assert.equal(caret.tag, 'li', `the caret is in a ${caret.tag}`);
+    assert.match(caret.text, /^You might/);
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('text.outdent').enabled`), true);
+    await press(page, 'Shift+Tab');
+    assert.equal(await render(page), out, 'Shift+Tab does not take the item out again');
+    // a redo of the indent leaves the caret in the nested item as well
+    await undo(page);
+    await undo(page);
+    await redo(page);
+    assert.equal(await render(page), nested);
+    assert.equal((await caretIn(page)).tag, 'li');
+    assert.deepEqual(errors(page), []);
+  });
 }
