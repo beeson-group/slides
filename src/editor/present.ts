@@ -260,6 +260,7 @@ dialog.beeson-edit-presenter::backdrop { background: #000; }
 .beeson-edit-presenter button:active:not(:disabled) { background: var(--ed-pressed); }
 .beeson-edit-presenter button:disabled { color: var(--ed-faint); }
 .beeson-edit-presenter button:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: 1px; }
+.beeson-edit-presenter .parts input:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: 2px; }
 .beeson-edit-presenter button.end { background: var(--ed-pressed); padding-left: 5px; }
 .beeson-edit-presenter button.primary { background: var(--ed-select); color: var(--ed-on-select); padding: 0 14px; }
 .beeson-edit-presenter button.primary:hover { background: color-mix(in srgb, var(--ed-select) 88%, #000); }

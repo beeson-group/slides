@@ -593,7 +593,7 @@ for (const platform of PLATFORMS) {
     assert.ok(!ended.includes('<li class="fragment" data-fragment-index="3"></li>'), 'Return on an empty item of the first level keeps it');
     await type(page, 'Z');
     const typed = await render(page);
-    assert.match(typed, /in dark mode\.<\/li>\s*<\/ul>\s*<p>Z<\/p>/, `the list is not ended: ${typed.match(/in dark mode[\s\S]{0,80}/)?.[0]}`);
+    assert.match(typed, /in dark mode\.<\/li>\s*<\/ul>\s*<p style="translate: 0px 20px">Z<\/p>/, `the list is not ended: ${typed.match(/in dark mode[\s\S]{0,80}/)?.[0]}`);
     await page.evaluate('window.BeesonEditor.undo()');
     await page.evaluate('window.BeesonEditor.undo()');
     assert.equal(await render(page), added, 'the end of the list is not one entry');

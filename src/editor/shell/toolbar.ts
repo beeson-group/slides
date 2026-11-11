@@ -115,7 +115,8 @@ html.beeson-no-toolbar .beeson-edit-top { display: none; }
 .beeson-edit-customize .item[aria-disabled="true"] { opacity: 0.4; cursor: default; }
 .beeson-edit-customize .item:focus-visible, .beeson-edit-customize .default:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: 1px; }
 .beeson-edit-customize .default { display: flex; align-items: center; gap: 2px; padding: 6px 8px; margin-bottom: 12px; border: 1px solid var(--ed-line); border-radius: 8px; font-size: 10px; color: var(--ed-muted); overflow: hidden; cursor: grab; }
-.beeson-edit-customize .default .mini { flex: none; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 40px; }
+.beeson-edit-customize .default .mini { flex: 0 1 auto; display: flex; flex-direction: column; align-items: center; gap: 2px; min-width: 40px; }
+.beeson-edit-customize .default .mini > span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .beeson-edit-customize .default .mini.sep { width: 9px; min-width: 0; align-self: stretch; background: linear-gradient(var(--ed-line), var(--ed-line)) center / 1px 70% no-repeat; }
 .beeson-edit-customize .default .mini.space { flex: 1 1 0; min-width: 8px; }
 .beeson-edit-customize .foot { display: flex; align-items: center; gap: 8px; padding-top: 10px; border-top: 1px solid var(--ed-line); }
@@ -278,6 +279,9 @@ export function install(app: App): void {
         parts.push(el);
       }
       top.replaceChildren(...parts);
+      // the items are not folded into » while they are dragged, hence they are drawn as icons
+      // where their labels do not fit the window
+      if (top.scrollWidth > top.clientWidth + 0.5) top.classList.add('compact');
       update();
       return;
     }

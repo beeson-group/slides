@@ -49,32 +49,36 @@ export function ratio(a: Rgba, b: Rgba): number {
   return (x + 0.05) / (y + 0.05);
 }
 
-// the custom properties of the theme in mode, from the rules on :root and html[data-theme]
-function tokens(mode: Mode): Record<string, string> {
-  const html = document.createElement('html');
-  html.dataset.theme = mode;
-  const out: Record<string, string> = {};
-  for (const sheet of document.styleSheets) {
-    let rules: CSSRuleList;
-    try {
-      rules = sheet.cssRules;
-    } catch {
-      continue;
-    }
-    for (const r of rules) {
-      if (!(r instanceof CSSStyleRule) || !/:root|data-theme/.test(r.selectorText)) continue;
-      let hit = false;
-      try {
-        hit = html.matches(r.selectorText.replace(/:root/g, 'html'));
-      } catch {
-        // a selector that this browser does not parse
-      }
-      if (!hit) continue;
-      for (const p of r.style) if (p.startsWith('--') && !p.startsWith('--ed-')) out[p] = r.style.getPropertyValue(p).trim();
-    }
+// the custom properties of the theme that differ between its modes, in each mode, read on a hidden
+// html element with data-theme, which the rules on html[data-theme] match as they match the root.
+// the rules of a linked sheet cannot be read on file://, and the computed style can
+function tokens(): Record<Mode, Record<string, string>> {
+  const read = (mode: Mode): Map<string, string> => {
+    const probe = document.createElement('html');
+    probe.dataset.theme = mode;
+    probe.style.setProperty('display', 'none', 'important');
+    document.documentElement.append(probe);
+    const cs = getComputedStyle(probe);
+    const out = new Map<string, string>();
+    for (const p of cs) if (p.startsWith('--') && !p.startsWith('--ed-')) out.set(p, cs.getPropertyValue(p).trim());
+    for (const p of NAMED) out.set(p, cs.getPropertyValue(p).trim());
+    probe.remove();
+    return out;
+  };
+  const dark = read('dark');
+  const light = read('light');
+  const out: Record<Mode, Record<string, string>> = { dark: {}, light: {} };
+  for (const [p, v] of dark) {
+    if (v === light.get(p) && p !== '--bg') continue;
+    out.dark[p] = v;
+    out.light[p] = light.get(p) ?? '';
   }
   return out;
 }
+
+// the tokens of the theme, read by name where a browser does not list custom properties in a
+// computed style
+const NAMED = ['--bg', '--text', '--subtle', '--muted', '--line', '--accent', '--violet', '--blue', '--red'];
 
 export const modeNow = (): Mode => (document.documentElement.dataset.theme === 'light' ? 'light' : 'dark');
 
@@ -164,15 +168,17 @@ export function contrastIssues(slides: Element[]): Issue[] {
   }
   const found: Issue[] = [];
   const read = (mode: Mode, t: Record<string, string>) => {
-    const bg = rgba(t['--bg'] ?? '#000');
+    const bg = rgba(t['--bg']);
     for (const { slide, block } of plain) {
       if (block.closest(mode === 'dark' ? '.for-light' : '.for-dark')) continue;
       const low = lowest(block, bg);
       if (low) found.push({ check: 'contrast', slide, el: block, what: `${label(block)} ${shown(low.ratio)} in ${mode} mode`, mode });
     }
   };
+  const all = tokens();
   for (const mode of ['dark', 'light'] as Mode[]) {
-    const t = tokens(mode);
+    const t = all[mode];
+    if (!t['--bg']) continue;
     if (mode === now) {
       read(mode, t);
       continue;

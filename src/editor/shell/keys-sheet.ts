@@ -271,6 +271,10 @@ export function install(app: App): void {
     let n = Math.min(3, fit(980));
     draw(columns(groups, units, n));
     back = document.activeElement;
+    // the sheet is centered with a margin above it that clears the menu bar, as a dialog of
+    // Keynote is not drawn over the titles of the menu bar
+    const bar = document.querySelector('.beeson-edit-menubar')?.getBoundingClientRect().bottom ?? 0;
+    sheet.style.maxHeight = `calc(100vh - ${2 * Math.max(16, Math.ceil(bar) + 8)}px)`;
     sheet.showModal();
     // the sheet is measured once shown. while its rows are taller than the window, it gets a fourth
     // column in a wider sheet, then tighter rows, then columns of one height with a long group
