@@ -8,7 +8,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, press, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
 const DECK = 'index.html';
 const PLATFORMS = ['mac', 'other'];
@@ -237,6 +237,43 @@ for (const platform of PLATFORMS) {
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Send Backward');
     assert.deepEqual((await rows(page)).map((r) => r.replace(' *', '')), [start[1], start[0], start[2], start[3]]);
     await undoKey(page);
+    await settle(page);
+    await byteExact(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+const dropLine = (page) => page.evaluate(`(() => { const d = document.querySelector('${OBJECTS} .drop'); return d && !d.hidden ? d.getBoundingClientRect().top + 1 : null; })()`);
+
+for (const platform of PLATFORMS) {
+  // plots-objects-outline-5: the drop line of a row drag marked a gap past the layers that the
+  // figure can pass, and the figure stopped short of it. the line now stops at the last gap that
+  // Send to Back reaches, and the row lands at the line
+  test(`the drop line of a row drag in the Object List stops where the object can go (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 4 });
+    await press(page, LIST_KEY[platform]);
+    await frames(page);
+    const start = (await rows(page)).map((r) => r.replace(' *', ''));
+    assert.match(start[0], /Figure/);
+    const from = await rowBox(page, 0);
+    const last = await rowBox(page, 3);
+    await drag(page, { x: from.x, y: from.y }, { dy: last.bottom + 10 - from.y, steps: 8, hold: true });
+    const line = await dropLine(page);
+    const reach = await rowBox(page, 2);
+    assert.ok(line !== null && Math.abs(line - reach.top) <= 2, `the drop line is at ${line}, not at the top of row 2 (${reach.top})`);
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: from.x, y: last.bottom + 10, button: 'left', clickCount: 1 });
+    await settle(page);
+    assert.equal((await state(page, 'edit.undo')).label, 'Undo Reorder');
+    const now = (await rows(page)).map((r) => r.replace(' *', ''));
+    assert.deepEqual(now, [start[1], start[0], start[2], start[3]]);
+    await undoKey(page);
+    await settle(page);
+    await byteExact(page);
+    // a row that the layer commands do not move shows no drop line
+    const h2 = await rowBox(page, 3);
+    await drag(page, { x: h2.x, y: h2.y }, { dy: from.top + 2 - h2.y, steps: 8, hold: true });
+    assert.equal(await dropLine(page), null);
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: h2.x, y: from.top + 2, button: 'left', clickCount: 1 });
     await settle(page);
     await byteExact(page);
     assert.deepEqual(errors(page), []);
