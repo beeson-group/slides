@@ -204,7 +204,14 @@ for (const platform of PLATFORMS) {
     for (let i = 1; i <= 8; i++) await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: grip.x - 15 * i, y: grip.y - 4 * i, button: 'left', buttons: 1 });
     await frames(page);
     assert.equal(await cursor(grip.x - 120, grip.y - 32), 'nwse-resize', 'the held grip keeps its cursor');
+    // the readout of the resize of a figure selected as one object gives the height of the field H,
+    // i.e. of the picture with its caption
+    const readout = await page.evaluate(`document.querySelector('.beeson-offset').textContent`);
     await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: grip.x - 120, y: grip.y - 32, button: 'left', buttons: 0, clickCount: 1 });
+    await frames(page);
+    const [, w, h] = readout.match(/w: (\d+) px\s+h: (\d+) px/) ?? [];
+    assert.ok(near(Number(w), await fieldValue(page, 'width'), 1) && near(Number(h), await fieldValue(page, 'height'), 1), `the readout ${readout} is not W ${await fieldValue(page, 'width')} and H ${await fieldValue(page, 'height')}`);
+    await click(page, { x: grip.x - 120, y: grip.y - 32 });
     await frames(page);
     assert.notEqual(await cursor(grip.x - 120, grip.y - 32), 'nwse-resize');
     await checkEdit(page, `r12-5-grip-${platform}.html`);
@@ -246,7 +253,10 @@ for (const platform of PLATFORMS) {
     assert.ok(near(await fieldValue(page, 'height'), 700, 3), `Height reads ${await fieldValue(page, 'height')}`);
     await checkEdit(page, `r12-5-figure-height-${platform}.html`);
     // the picture alone, selected by a second click, gives its own height
+    await click(page, { x: 10, y: 10 });
     await click(page, 'section.present figure img.for-light');
+    await click(page, 'section.present figure img.for-light');
+    assert.deepEqual(await page.evaluate('window.BeesonEditor.selection().map((el) => el.localName)'), ['img']);
     const h = await fieldValue(page, 'height');
     const pic = await figureBox(page, false);
     assert.ok(near(h, pic.height, 2) && h < 700 - 50, `the picture alone reads ${h} against its box ${js(pic)}`);
