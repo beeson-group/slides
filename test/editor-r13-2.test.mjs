@@ -363,3 +363,35 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the keys printed beside the items of the menu bar named bar, by their labels
+async function menuKeys(page, bar) {
+  const i = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].findIndex((b) => b.textContent === ${js(bar)})`);
+  await click(page, `.beeson-edit-menubar [role=menuitem]:nth-child(${i + 1})`);
+  const items = await page.evaluate(`Object.fromEntries([...document.querySelectorAll('.beeson-edit-menu .item')].map((i) => [i.querySelector('.label')?.textContent, i.querySelector('.keys')?.textContent ?? '']))`);
+  await page.evaluate('window.BeesonEditorShell.closeMenus(); true');
+  await frames(page);
+  return items;
+}
+
+for (const platform of PLATFORMS) {
+  test(`the Slide menu lists a key at Delete Slide and Duplicate Slide only where the key runs it, with nothing selected on the canvas (${platform})`, async (t) => {
+    const page = await load(t, platform, FIGURES);
+    // a click on the pasteboard leaves nothing selected on the canvas
+    const c = await canvasBox(page);
+    await click(page, { x: c.left + 8, y: c.bottom - 8 });
+    assert.deepEqual(await page.evaluate('window.BeesonEditor.selection().length'), 0);
+    const keys = await menuKeys(page, 'Slide');
+    const count = () => page.evaluate(`document.querySelectorAll('.reveal .slides > section').length`);
+    for (const [label, key] of [['Delete Slide', platform === 'mac' ? 'Backspace' : 'Delete'], ['Duplicate Slide', 'Mod+D']]) {
+      const before = await count();
+      await press(page, key);
+      await frames(page);
+      const ran = (await count()) !== before;
+      assert.equal(!!keys[label], ran, `${label} lists ${js(keys[label])} and its key ${ran ? 'runs' : 'does not run'} it`);
+      if (ran) await undo(page);
+    }
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+}
