@@ -386,7 +386,8 @@ export function openChooser(app: App, anchor: Element | null, item: DOMRect | nu
   grid.setAttribute('aria-label', 'Layouts');
   const stage = app.slides() as HTMLElement;
   const deck = { width: stage.offsetWidth || 1920, height: stage.offsetHeight || 1080 };
-  const now = layoutOf(slide);
+  // slides of several layouts mark none of them, as Multiple Layouts in Keynote
+  const now = new Set(targets(app).map(layoutOf)).size > 1 ? null : layoutOf(slide);
   const tiles = LAYOUTS.map((layout) => {
     const tile = document.createElement('button');
     tile.type = 'button';
