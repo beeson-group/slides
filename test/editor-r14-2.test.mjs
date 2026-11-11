@@ -196,4 +196,32 @@ for (const platform of PLATFORMS) {
     assert.equal(sections(await render(page)), sections(source), 'a slide was pasted');
     assert.deepEqual(errors(page), []);
   });
+
+  // a line of the outline takes the plain text of the clipboard only. the elements of the editor
+  // are their source on the clipboard, and a picture is a clipboard without a text
+  test(`a paste of elements copied on the canvas, or of a clipboard without a plain text, leaves a line of the outline as it is (${platform})`, async (t) => {
+    const page = await outlineAt(t, platform);
+    const got = await page.evaluate(`(() => {
+      const el = document.activeElement;
+      const paste = (set) => {
+        getSelection().selectAllChildren(el);
+        const data = new DataTransfer();
+        set(data);
+        el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
+        return el.textContent;
+      };
+      const source = '<!--beeson-->\\n<p>A paragraph</p>';
+      return {
+        elements: paste((d) => { d.setData('text/plain', source); d.setData('text/html', source); }),
+        empty: paste(() => {}),
+        html: paste((d) => d.setData('text/html', '<b>Bold</b>')),
+      };
+    })()`);
+    await wait(page);
+    assert.equal(got.elements, SAME, 'the source of the copied elements is pasted into the line');
+    assert.equal(got.empty, SAME, 'a paste without a text deletes the selected text of the line');
+    assert.equal(got.html, SAME, 'a paste without a plain text changes the line');
+    await byteExact(page);
+    assert.deepEqual(errors(page), []);
+  });
 }
