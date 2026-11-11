@@ -269,7 +269,12 @@ const panelFit = (page) =>
     if (!panel) return null;
     const p = panel.getBoundingClientRect();
     const out = [...panel.children].filter((el) => !el.matches('.foot, aside')).filter((el) => el.getBoundingClientRect().bottom > p.bottom + 1).map((el) => el.localName);
-    return { out, marked: document.querySelectorAll('.reveal section.present .beeson-overflow').length };
+    // a text that the theme draws over the footnote of the panel is marked, and no other text is
+    const f = panel.querySelector(':scope > .foot')?.getBoundingClientRect();
+    const onFoot = (el) => { const r = el.getBoundingClientRect(); return !!f && f.height > 0 && !el.closest('.foot') && r.bottom > f.top + 1 && r.top < f.bottom - 1; };
+    const texts = [...panel.querySelectorAll('[contenteditable="true"]')];
+    const wrong = texts.filter((el) => el.classList.contains('beeson-overflow') !== onFoot(el)).map((el) => el.localName);
+    return { out, wrong };
   })()`);
 
 // the text of the slide of a deck whose heading starts with title
@@ -309,7 +314,7 @@ for (const platform of PLATFORMS) {
     for (const title of FOUR) assert.equal(slideText(split, title), alone[title], `the panel text of ${title} is not fit as on the slide shown`);
     await showSlide(page, FOUR[0]);
     await wait(page, 300);
-    assert.deepEqual(await panelFit(page), { out: [], marked: 0 }, `a text runs past the bottom of the panel of ${FOUR[0]}`);
+    assert.deepEqual(await panelFit(page), { out: [], wrong: [] }, `a text runs past the bottom of the panel of ${FOUR[0]}, or its mark is wrong`);
     // the fit is a part of the change of layout, undone and redone with it
     await undo(page);
     assert.equal(await render(page), source);

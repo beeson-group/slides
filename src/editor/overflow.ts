@@ -23,7 +23,7 @@ export function install(app: App): void {
     let n = 0;
     let over = 0;
     if (slide && box.width > 0) {
-      const foot = slide.querySelector(':scope > .foot');
+      const foot = slide.querySelector(':scope > .foot, :scope > .panel > .foot');
       const f = foot?.getBoundingClientRect();
       const past = (r: DOMRect) => r.right > box.right + 1 || r.bottom > box.bottom + 1 || r.left < box.left - 1 || r.top < box.top - 1;
       const meets = (r: DOMRect, b: DOMRect | undefined) => !!b && b.height > 0 && r.bottom > b.top + 1 && r.top < b.bottom - 1 && r.right > b.left + 1 && r.left < b.right - 1;
