@@ -106,6 +106,12 @@ for (const platform of PLATFORMS) {
     await press(page, 'p');
     await page.waitFor(`!${SHOW}.document.querySelector('.pointer-dot')`, 3000);
     assert.deepEqual(await at(page), [2, 0], 'p moves the show');
+    // Return closes the overview of reveal.js, without a move
+    await press(page, 'o');
+    await page.waitFor(`${SHOW}.Reveal.isOverview()`, 3000);
+    await press(page, 'Enter');
+    await page.waitFor(`!${SHOW}.Reveal.isOverview()`, 3000);
+    assert.equal(await page.evaluate(`${SHOW}.Reveal.getIndices().h`), 2, 'Return in the overview moves the show');
     await press(page, 'Escape');
     await page.waitFor(`!document.querySelector('.beeson-edit-show')`);
     await byteExact(page);
