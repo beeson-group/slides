@@ -340,10 +340,15 @@ export function install(app: App): void {
     const slides = slidesIn(text)?.length ? text : null;
     const field = fieldOf(a);
     if (field) {
-      // a field takes plain text, and a line of the outline one line of it. slides are pasted from
-      // the outline as from the navigator
+      // slides are pasted from a line of the outline as from the navigator. a text is given to the
+      // field as the paste of the key first, since the grid of Plot Data fills its cells from it
+      // and a line of the outline takes one line. a field without a handler takes the plain text
       if (slides && a.region() === 'navigator') await a.commands.run('slide.paste', slides);
-      else if (!els && !slides) document.execCommand('insertText', false, field.closest('.beeson-edit-outline') ? text.replace(/\s*\n\s*/g, ' ') : text);
+      else if (text && !els && !slides) {
+        const data = new DataTransfer();
+        data.setData('text/plain', text);
+        if (field.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }))) document.execCommand('insertText', false, text);
+      }
     } else if (inText(a)) {
       const at = getSelection()?.anchorNode ?? document.activeElement;
       const host = a.hostOf(at instanceof Element ? at : at?.parentElement ?? null);
