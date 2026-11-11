@@ -99,6 +99,18 @@ export function freshGroup(app: App): string {
   }
 }
 
+// a copy does not take a data-id that another element of its slide has, since reveal.js pairs the
+// elements of two slides by this id. the images of a pair of modes in a copy share theirs
+export function freshDataIds(app: App, copies: Element[]): void {
+  const slide = app.current();
+  if (!slide) return;
+  const inCopies = (el: Element) => copies.some((c) => c === el || c.contains(el));
+  for (const el of copies.flatMap((c) => [c, ...c.querySelectorAll('[data-id]')])) {
+    const id = el.getAttribute('data-id');
+    if (id && [...slide.querySelectorAll(`[data-id="${CSS.escape(id)}"]`)].some((o) => !inCopies(o))) app.doc.setTag(el, { attrs: { 'data-id': null } }, 'id');
+  }
+}
+
 // two elements or more that are not one group already
 const canGroup = (app: App): boolean => {
   const els = objectEls(app);

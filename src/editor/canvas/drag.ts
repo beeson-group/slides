@@ -12,7 +12,7 @@ import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
 import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, constrained, containerOf, cssWidth, frameOf, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, visualRect } from './hit.ts';
 import { groupReach, overlay, view } from './frames.ts';
-import { enterGroup, freshGroup, groupOf } from '../commands/order.ts';
+import { enterGroup, freshDataIds, freshGroup, groupOf } from '../commands/order.ts';
 import { injectStyle } from '../ui/dom.ts';
 
 const CSS = `
@@ -926,6 +926,7 @@ export function install(app: App): void {
         app.doc.setTag(copy, { translate: { x: Math.round(t.x + box.left - now.left), y: Math.round(t.y + box.top - now.top) } }, 'move');
         copies.push(copy);
       }
+      freshDataIds(app, copies);
       app.selection.set('elements', copies);
     });
     frames.draw();
