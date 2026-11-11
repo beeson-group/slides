@@ -59,6 +59,20 @@ function installSpelling(app: App): void {
   });
 }
 
+// a field of the editor with a text typed into it that is not in the history yet, e.g. a line of
+// the outline. Undo and Redo are run through step of the field that has the focus, which writes
+// the typed text first, as an entry of its own. pending makes Undo read Undo Typing
+export type Typing = { active(): boolean; pending(): boolean; step(run: () => Promise<void>): Promise<void> };
+const typings = new WeakMap<App, Typing>();
+export function holdTyping(app: App, field: Typing): void {
+  typings.set(app, field);
+}
+const pending = (a: App) => typings.get(a)?.pending() ?? false;
+const through = (a: App, run: () => Promise<void>) => {
+  const field = typings.get(a);
+  return field?.active() ? field.step(run) : run();
+};
+
 const frame = () => new Promise((done) => requestAnimationFrame(done));
 
 // the Arrange pane of the Format tab, with the focus in W, or in X when the size is set by the
@@ -84,23 +98,24 @@ export function install(app: App): void {
   const c = app.commands;
   c.define({
     id: 'edit.undo',
-    label: (a) => (a.history.undoLabel ? `Undo ${titled(a.history.undoLabel.replace(/…$/, ''))}` : 'Undo'),
+    label: (a) => (pending(a) ? 'Undo Typing' : a.history.undoLabel ? `Undo ${titled(a.history.undoLabel.replace(/…$/, ''))}` : 'Undo'),
     keys: { mac: ['Mod+Z'], other: ['Mod+Z'] },
     in: IN,
     menu: { bar: 'Edit', group: 'history', order: 10 },
     toolbar: { group: 'history', order: 10, icon: 'undo', label: 'Undo' },
-    enabled: (a) => a.history.canUndo,
-    run: (a) => a.history.undo(),
+    enabled: (a) => pending(a) || a.history.canUndo,
+    run: (a) => through(a, () => a.history.undo()),
   });
   c.define({
     id: 'edit.redo',
-    label: (a) => (a.history.redoLabel ? `Redo ${titled(a.history.redoLabel.replace(/…$/, ''))}` : 'Redo'),
+    label: (a) => (!pending(a) && a.history.redoLabel ? `Redo ${titled(a.history.redoLabel.replace(/…$/, ''))}` : 'Redo'),
     keys: { mac: ['Mod+Shift+Z', 'Mod+Y'], other: ['Mod+Y', 'Mod+Shift+Z'] },
     in: IN,
     menu: { bar: 'Edit', group: 'history', order: 11 },
     toolbar: { group: 'history', order: 11, icon: 'redo', label: 'Redo' },
-    enabled: (a) => a.history.canRedo,
-    run: (a) => a.history.redo(),
+    // a typing clears the redos once it is written
+    enabled: (a) => !pending(a) && a.history.canRedo,
+    run: (a) => through(a, () => a.history.redo()),
   });
   c.define({
     id: 'arrange.sizeAndPosition',

@@ -159,7 +159,7 @@ for (const platform of PLATFORMS) {
     assert.equal(s.label, 'Undo Typing');
     assert.notEqual(s.enabled, false, 'Undo is dimmed');
     // a typing clears the redos, hence Redo is dimmed
-    assert.equal((await state(page, 'edit.redo')).enabled, false, 'Redo is not dimmed');
+    assert.deepEqual(await state(page, 'edit.redo').then((r) => [r.label, r.enabled]), ['Redo', false], 'Redo is not a dimmed Redo');
     assert.equal(await choose(page, 'Undo'), 'Undo Typing');
     await byteExact(page);
     const line = await page.evaluate(`document.activeElement.matches('.beeson-edit-outline .text') ? document.activeElement.textContent : null`);

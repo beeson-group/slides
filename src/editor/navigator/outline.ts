@@ -10,6 +10,7 @@
 
 import type { App } from '../app.ts';
 import { canIndent, canOutdent, canSplit, indent, offsetIn, outdent, ownTex, selectIn, setOwnTex, split } from '../text/blocks.ts';
+import { holdTyping } from '../commands/edit.ts';
 import { hasTex, typeset, untypeset } from '../typeset.ts';
 import { demote, promote } from './promote.ts';
 import { injectStyle, make, store, stored } from '../ui/dom.ts';
@@ -110,6 +111,15 @@ export class Outline {
     // the keys of a field are its own, taken before the keys of the navigator, apart from the
     // keys of the commands with a modifier, e.g. Undo
     window.addEventListener('keydown', (ev) => this.onKey(ev), true);
+    const focused = () => this.entries.find((e) => e.text === document.activeElement);
+    holdTyping(app, {
+      active: () => !!focused(),
+      pending: () => {
+        const e = focused();
+        return !!e && !this.busy && e.text.contentEditable === 'true' && fieldHtml(e.text) !== e.shown;
+      },
+      step: (run) => this.step(focused()!, run),
+    });
     this.el.addEventListener('focusout', (ev) => {
       const t = ev.target instanceof HTMLElement ? this.entries.find((e) => e.text === ev.target) : null;
       if (t && !this.busy) void this.commit(t).then(() => {
@@ -289,7 +299,7 @@ export class Outline {
       if (id === 'edit.undo' || id === 'edit.redo') {
         ev.preventDefault();
         ev.stopImmediatePropagation();
-        void this.step(e, id).catch((err) => this.app.fail(err));
+        void this.app.commands.run(id).catch((err) => this.app.fail(err));
         return;
       }
       // the keys of a text, e.g. Select All and the clipboard, stay with the field
@@ -350,17 +360,17 @@ export class Outline {
     }
   }
 
-  // Undo or Redo in a field: a text typed since the field was last written is written first, as an
-  // entry of its own, and the caret is put at the end of the first line changed by the step, or
+  // Undo or Redo in a field, by its key, the menu, or the toolbar: a text typed since the field was
+  // last written is written first, as an entry of its own, and the caret is put at the end of the first line changed by the step, or
   // else in the line of the same block, or in the line before it
-  private async step(e: Entry, id: 'edit.undo' | 'edit.redo'): Promise<void> {
+  private async step(e: Entry, run: () => Promise<void>): Promise<void> {
     if (this.busy) return;
     this.busy = true;
     try {
       await this.commit(e);
       const k = this.entries.indexOf(e);
       const before = new Map(this.entries.map((x) => [x.el, x.shown]));
-      await this.app.commands.run(id);
+      await run();
       await this.app.history.idle();
       this.done(() => {
         const changed = this.entries.find((x) => before.get(x.el) !== x.shown);
