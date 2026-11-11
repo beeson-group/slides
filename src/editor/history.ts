@@ -119,22 +119,24 @@ export class History {
   }
 
   // a transaction, or a part of the open one, after whose undo the elements selected before fn are
-  // selected again, and after whose redo those selected after fn, e.g. a paragraph made a list
-  async selecting<T>(label: string, fn: () => T | Promise<T>): Promise<T> {
-    return this.keeping(label, this.selected, (els) => void (els && this.reselect(els)), fn);
+  // selected again, and after whose redo those selected after fn, e.g. a paragraph made a list, or
+  // those of then, e.g. a new box that has the caret after fn
+  async selecting<T>(label: string, fn: () => T | Promise<T>, then?: () => Element[]): Promise<T> {
+    return this.keeping(label, this.selected, (els) => void (els && this.reselect(els)), fn, then);
   }
 
   // a transaction, or a part of the open one, after whose undo put is given what take read before
-  // fn, and after whose redo what it read after fn, e.g. the current slide of a slide command
-  async keeping<T, S>(label: string, take: () => S, put: (state: S) => void, fn: () => T | Promise<T>): Promise<T> {
-    if (!this.open) return await this.transact(label, () => this.keeping(label, take, put, fn));
+  // fn, and after whose redo what take, or then, read after fn, e.g. the current slide of a slide
+  // command
+  async keeping<T, S>(label: string, take: () => S, put: (state: S) => void, fn: () => T | Promise<T>, then: () => S = take): Promise<T> {
+    if (!this.open) return await this.transact(label, () => this.keeping(label, take, put, fn, then));
     const entries = this.open;
     const at = entries.length;
     const before = take();
     try {
       return await fn();
     } finally {
-      const after = take();
+      const after = then();
       if (entries.length > at) {
         entries.splice(at, 0, { label, undo: () => put(before), redo: () => {} });
         entries.push({ label, undo: () => {}, redo: () => put(after) });

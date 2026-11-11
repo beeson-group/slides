@@ -319,7 +319,9 @@ export class App {
     if (!(active instanceof Element) || active === document.body) return 'canvas';
     // a popover, e.g. the grid of Insert Table, leaves the toolbar and the commands enabled
     if (active.closest('.beeson-math, .beeson-edit-card:not([hidden]), dialog[open]:not([data-popover])')) return 'dialog';
-    if (active.matches('input, textarea, select')) return 'field';
+    // a slider, a checkbox, a button, or a list does not have an undo of its own, hence its region
+    // is that of the pane around it
+    if (active.matches('textarea, input:not([type=range], [type=checkbox], [type=radio], [type=button], [type=color])')) return 'field';
     if (active.closest('aside.notes')) return 'notes';
     // a formula focused in an object that is selected takes the keys of the slide
     if (this.hostOf(active) && !(active.matches('mjx-container') && this.selection.items.some((el) => this.selection.kind === 'elements' && el.contains(active)))) return 'text';

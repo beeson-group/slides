@@ -17,6 +17,7 @@ import { insertPlain, placeCaret } from '../text/typing.ts';
 import { injectStyle } from '../ui/dom.ts';
 import { columnOf } from './clipboard.ts';
 import { docOf } from './slide.ts';
+import { freePlace, placeNew, translateOf } from './place.ts';
 
 const CSS = `
 html.beeson-editor .reveal .slides .beeson-pending:not(.foot) { position: relative; }
@@ -153,13 +154,16 @@ function centerIfOut(app: App, el: Element, floor = FLOOR): void {
   const slide = el.closest('section') as HTMLElement | null;
   const w = slide?.offsetWidth || 1920;
   const h = slide?.offsetHeight || 1080;
-  if (b.bottom <= Math.min(floor, h) && b.top >= 0 && b.right <= w) return;
+  // a formula and a QR code are drawn narrower where they do not fit
+  const narrow = el instanceof HTMLElement && el.matches('.math, .qr') ? el : undefined;
+  if (b.bottom <= Math.min(floor, h) && b.top >= 0 && b.right <= w) return placeNew(app, el, narrow);
   const zone = slide ? freeZone(app, slide, el) : null;
   const fits = zone && b.right - b.left <= zone.right - zone.left && b.bottom - b.top <= zone.bottom - zone.top;
   const [cx, cy] = fits ? [(zone.left + zone.right) / 2, (zone.top + zone.bottom) / 2] : [w / 2, h / 2];
   const x = Math.round(cx - (b.left + b.right) / 2);
   const y = Math.round(cy - (b.top + b.bottom) / 2);
   docOf(app).setTag(el, { translate: { x, y } }, 'move');
+  placeNew(app, el, narrow);
 }
 
 // the offset in slide px of a new text box el in the text column, under the blocks before it as
@@ -263,6 +267,13 @@ export function install(app: App): void {
         el.style.translate = y ? `0px ${y}px` : '';
         const c = centerOffset(app, el);
         if (c) el.style.translate = `${c.x}px ${y + c.y}px`;
+        // a text box is drawn narrower where its width does not fit, and a code box is not, since
+        // the theme does not set the width of a pre
+        el.style.width = '';
+        const f = freePlace(app, el, kind === 'code' ? undefined : el);
+        const t = translateOf(el);
+        if (f) el.style.translate = `${t.x + f.x}px ${t.y + f.y}px`;
+        if (f?.width) el.style.width = `${f.width}px`;
       }
       pending = { el, kind, parent };
       placeCaret(el);
@@ -325,19 +336,23 @@ export function install(app: App): void {
         keep = true;
         await app.history.undo().finally(() => (keep = false));
       }
-      await app.history.transact(`Insert ${def.label}`, async () => {
+      // the box is selected at a redo
+      let made: Element[] = [];
+      await app.history.selecting(`Insert ${def.label}`, async () => {
         // a box moved by textOffset or centerOffset is written with the same offset
         const [x0, y0] = p.el.style.translate.split(' ');
         const x = parseFloat(x0 ?? '') || 0, y = parseFloat(y0 ?? '') || 0;
         const [node] = await docOf(app).insert(def.html(text), p.parent, p.el, def.label);
         written!.node = node;
+        made = [node];
         p.el.remove();
         if (x || y) docOf(app).setTag(node, { translate: { x, y } }, def.label);
+        if (p.el.style.width) docOf(app).setTag(node, { style: { width: p.el.style.width } }, def.label);
         pending = null;
         // the caret of a code box is in its code element, where the typing after the first key goes
         placeCaret(node, p.kind === 'code' ? (node.textContent ?? '').length : null);
         await applyPending(app, p.el, node);
-      });
+      }, () => made);
       await replay(p.kind);
     } finally {
       writing = false;
@@ -487,7 +502,7 @@ export function install(app: App): void {
     toolbar: tool(24.2, 'qr', { split: 'Media' }),
     enabled: ready,
     // a QR code fills the empty slot given, as by the icon of its placeholder, else the first one
-    run: (a, arg) => a.history.transact('Insert QR Code', async () => {
+    run: (a, arg) => a.history.selecting('Insert QR Code', async () => {
       const slide = a.current()!;
       const zone = arg instanceof Element && slide.contains(arg) && isEmptySlot(a, arg) ? arg : emptySlot(a, slide);
       const place = zone ? { parent: zone, before: null } : slide.matches('.title, .closing') ? { parent: slide, before: slide.querySelector(':scope > aside.notes') } : columnPlace(a, slide);

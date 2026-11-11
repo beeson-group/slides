@@ -298,8 +298,11 @@ export function install(app: App): void {
     const id = app.doc.uniqueId('line');
     const before = slide.querySelector(':scope > aside.notes');
     const label = heads === 'none' ? 'Insert Line' : 'Insert Arrow';
-    const [svg] = await app.history.transact(label, () => app.doc.insert(lineText(e, { id, heads }), slide, before, label));
-    app.selection.set('elements', [svg]);
+    const [svg] = await app.history.selecting(label, async () => {
+      const made = await app.doc.insert(lineText(e, { id, heads }), slide, before, label);
+      app.selection.set('elements', made);
+      return made;
+    });
     app.invalidate('content', 'selection');
     return svg;
   };
