@@ -23,14 +23,21 @@ export class History {
   // the content of each block as it was last seen, for an input that is not announced before it
   // happens, e.g. a replacement from the spelling menu or a script
   private readonly known = new WeakMap<Element, string>();
+  // the entries of each transaction, for an amend of it
+  private readonly parts = new WeakMap<Entry, Entry[]>();
   private readonly snapshot: (host: Element) => string;
   private readonly restore: (host: Element, content: string) => Promise<void>;
   private readonly onChange: () => void;
+  // the selected elements, or null for a selection of another kind, and their selection again
+  private readonly selected: () => Element[] | null;
+  private readonly reselect: (els: Element[]) => void;
 
-  constructor(options: { snapshot(host: Element): string; restore(host: Element, content: string): Promise<void>; onChange(): void }) {
+  constructor(options: { snapshot(host: Element): string; restore(host: Element, content: string): Promise<void>; onChange(): void; selected?(): Element[] | null; reselect?(els: Element[]): void }) {
     this.snapshot = options.snapshot;
     this.restore = options.restore;
     this.onChange = options.onChange;
+    this.selected = options.selected ?? (() => null);
+    this.reselect = options.reselect ?? (() => {});
   }
 
   get canUndo(): boolean {
@@ -48,6 +55,11 @@ export class History {
 
   get redoLabel(): string | null {
     return this.undone.at(-1)?.label ?? null;
+  }
+
+  // the entry that an undo would take back
+  get last(): Entry | null {
+    return this.done.at(-1) ?? null;
   }
 
   // resolved once every undo and redo asked for has run
@@ -89,7 +101,7 @@ export class History {
       this.open = null;
       this.typing = null;
       if (entries.length) {
-        this.done.push({
+        const entry: Entry = {
           label,
           undo: async () => {
             for (const e of [...entries].reverse()) await e.undo();
@@ -97,9 +109,30 @@ export class History {
           redo: async () => {
             for (const e of entries) await e.redo();
           },
-        });
+        };
+        this.parts.set(entry, entries);
+        this.done.push(entry);
         this.undone = [];
         this.onChange();
+      }
+    }
+  }
+
+  // a transaction, or a part of the open one, after whose undo the elements selected before fn are
+  // selected again, and after whose redo those selected after fn, e.g. a paragraph made a list
+  async selecting<T>(label: string, fn: () => T | Promise<T>): Promise<T> {
+    if (!this.open) return await this.transact(label, () => this.selecting(label, fn));
+    const entries = this.open;
+    const at = entries.length;
+    const before = this.selected();
+    try {
+      return await fn();
+    } finally {
+      const after = this.selected();
+      if (entries.length > at) {
+        const put = (els: Element[] | null) => () => void (els && this.reselect(els));
+        entries.splice(at, 0, { label, undo: put(before), redo: () => {} });
+        entries.push({ label, undo: () => {}, redo: put(after) });
       }
     }
   }
@@ -187,6 +220,43 @@ export class History {
       this.onChange();
     });
     // a failed step does not stop the steps after it, and its error is passed to its caller
+    this.queue = run.catch(() => {});
+    return run;
+  }
+
+  // the changes made in fn are added to entry, a transaction, while it is the last entry, e.g. the
+  // TeX of a new formula to its insert, with the selection as selecting() keeps it. otherwise they
+  // are entries of their own
+  async amend<T>(entry: Entry, fn: () => T | Promise<T>): Promise<T> {
+    const entries = this.parts.get(entry);
+    if (this.open || !entries || this.done.at(-1) !== entry) return await this.selecting(entry.label, fn);
+    this.open = entries;
+    this.typing = null;
+    try {
+      return await this.selecting(entry.label, fn);
+    } finally {
+      this.open = null;
+      this.typing = null;
+      this.undone = [];
+      this.onChange();
+    }
+  }
+
+  // entry, if it is still the last one, is undone and taken out of the history without a redo,
+  // e.g. a new formula left empty
+  retract(entry: Entry): Promise<void> {
+    const run = this.queue.then(async () => {
+      if (this.done.at(-1) !== entry) return;
+      this.done.pop();
+      this.typing = null;
+      this.busy = true;
+      try {
+        await entry.undo();
+      } finally {
+        this.busy = false;
+      }
+      this.onChange();
+    });
     this.queue = run.catch(() => {});
     return run;
   }
