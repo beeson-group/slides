@@ -460,3 +460,54 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// whether the one selected element is the last figure of the slide, i.e. a copy put after its source
+const copySelected = (page) => page.evaluate(`(() => { const s = window.BeesonEditor.selection(); const all = document.querySelectorAll('.reveal section.present figure.zone'); return s.length === 1 && all.length === 2 && s[0] === all[1]; })()`);
+
+for (const platform of PLATFORMS) {
+  for (const mode of MODES) {
+    test(`an undo of Delete, Cut, Duplicate, and Paste of a figure selects what was selected, and a redo the copy, on ${platform} in ${mode} mode`, async (t) => {
+      for (const from of ['figure', 'picture']) {
+        const page = await load(t, platform, mode, ZONE_PAIR);
+        const removals = { Delete: () => press(page, platform === 'mac' ? 'Backspace' : 'Delete'), Cut: () => exec(page, 'edit.cut') };
+        for (const [name, act] of Object.entries(removals)) {
+          await pick(page, from);
+          const was = await selected(page);
+          await act();
+          await frames(page);
+          assert.equal(count(await render(page), '<figure'), count(SOURCE, '<figure') - 1, `${name} from the ${from} does not remove the figure`);
+          assert.deepEqual(await selected(page), []);
+          await undo(page);
+          await frames(page);
+          await byteExact(page);
+          assert.deepEqual(await selected(page), was, `an undo of ${name} from the ${from} does not select it again`);
+          await redo(page);
+          await frames(page);
+          assert.deepEqual(await selected(page), [], `a redo of ${name} from the ${from} leaves a selection`);
+          await undo(page);
+          await frames(page);
+          await byteExact(page);
+        }
+        const copies = { Duplicate: () => press(page, 'Mod+D'), Paste: async () => { await exec(page, 'edit.copy'); await exec(page, 'edit.paste'); } };
+        for (const [name, act] of Object.entries(copies)) {
+          await pick(page, from);
+          const was = await selected(page);
+          await act();
+          await frames(page);
+          assert.equal(await copySelected(page), true, `${name} from the ${from} does not select the copy`);
+          await undo(page);
+          await frames(page);
+          await byteExact(page);
+          assert.deepEqual(await selected(page), was, `an undo of ${name} from the ${from} does not select its source again`);
+          await redo(page);
+          await frames(page);
+          assert.equal(await copySelected(page), true, `a redo of ${name} from the ${from} does not select the copy`);
+          await undo(page);
+          await frames(page);
+          await byteExact(page);
+        }
+        assert.deepEqual(errors(page), []);
+      }
+    });
+  }
+}
