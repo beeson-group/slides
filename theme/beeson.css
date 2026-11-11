@@ -384,6 +384,9 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section video[style*="width:"]:not([style*="height:"]) { height: auto !important; }
 .reveal .slides section img[style*="width:"][style*="height:"]:not([style*="object-fit"]),
 .reveal .slides section video[style*="width:"][style*="height:"]:not([style*="object-fit"]) { object-fit: fill !important; }
+/* a zone around a picture with a width is the size of the picture, hence its caption is under the
+   picture and as wide as it */
+.reveal .slides section .zone:has(> img[style*="width:"], > video[style*="width:"], > .qr[style*="width:"]) { width: auto; height: auto; }
 
 /* split: the black panel of the group deck, dark in both modes, with a figure at the right */
 .reveal .slides section.split .panel { left: 0; top: 0; width: 760px; height: 1080px; padding: 120px 80px 0 120px; box-sizing: border-box; background: var(--panel); color: var(--panel-text); }

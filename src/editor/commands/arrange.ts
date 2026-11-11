@@ -8,7 +8,7 @@ import { HOST } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { CONTAINER, RESIZABLE, containerOf, frameRect, mediaIn, movableOf, movablesOf, objectsOf, pictureOf, snapBoxOf } from '../canvas/hit.ts';
 import type { Place } from '../canvas/drag.ts';
-import { captionsOf, placeOf, record, withCaptions, withCorners, writePlace } from '../canvas/drag.ts';
+import { placeOf, record, withCorners, writePlace } from '../canvas/drag.ts';
 import { view } from '../canvas/frames.ts';
 
 // the nudges of the same elements closer than this, in ms, are one entry of the history
@@ -48,13 +48,12 @@ function nudge(app: App, dx: number, dy: number): void {
   const els = movedEls(app);
   if (!els.length) return;
   const now = performance.now();
-  const moved = [...els, ...captionsOf(app, els).map((t) => t.caption)];
-  const same = !!run && now - run.at < PAUSE && run.changes.length === moved.length && run.changes.every((c, i) => c.el === moved[i] && samePlace(placeOf(c.el), c.to));
-  const changes = withCaptions(app, els, () => els.map((el) => {
+  const same = !!run && now - run.at < PAUSE && run.changes.length === els.length && run.changes.every((c, i) => c.el === els[i] && samePlace(placeOf(c.el), c.to));
+  const changes = els.map((el) => {
     const from = placeOf(el);
     writePlace(app, el, { ...from, translate: { x: (from.translate?.x ?? 0) + dx, y: (from.translate?.y ?? 0) + dy } });
     return { el, from, to: placeOf(el) };
-  }));
+  });
   if (same && run) {
     run.at = now;
     run.changes.forEach((c, i) => (c.to = changes[i].to));
@@ -199,12 +198,12 @@ export function commands(): Command[] {
       enabled: (app) => movedEls(app).some((el) => placeOf(el).translate),
       run: (app) => {
         const els = movedEls(app);
-        const changes = withCaptions(app, els, () => els.map((el) => {
+        const changes = els.map((el) => {
           const from = placeOf(el);
           const to = { ...from, translate: null };
           writePlace(app, el, to);
           return { el, from, to };
-        }));
+        });
         record(app, 'move', changes);
       },
     },
@@ -216,12 +215,12 @@ export function commands(): Command[] {
       enabled: (app) => sizedEls(app).some((el) => placeOf(el).width !== null || (placeOf(el).height ?? null) !== null),
       run: (app) => {
         const els = sizedEls(app);
-        const changes = withCaptions(app, els, () => withCorners(app, els, () => els.map((el) => {
+        const changes = withCorners(app, els, () => els.map((el) => {
           const from = placeOf(el);
           const to = { ...from, width: null, ...(from.height !== undefined ? { height: null } : {}) };
           writePlace(app, el, to);
           return { el, from, to };
-        })));
+        }));
         record(app, 'resize', changes);
       },
     },

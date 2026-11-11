@@ -8,7 +8,7 @@ import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { CONTAINER, RESIZABLE, STRETCHED, aspectOf, constrained, cssWidth, frameOf, frameRect, isTextSized, kindOf, movableOf, objectsOf, pictureOf, pictureSize, sizedOf, snapBoxOf, toSlide } from '../canvas/hit.ts';
 import type { Box } from '../canvas/snap.ts';
-import { placeOf, record, withCaptions, withCorners, writePlace, type Place } from '../canvas/drag.ts';
+import { placeOf, record, withCorners, writePlace, type Place } from '../canvas/drag.ts';
 import { groupReach } from '../canvas/frames.ts';
 import { groupOf } from './order.ts';
 import { declarationProblem } from '../model/scope.ts';
@@ -67,12 +67,12 @@ const toSlideRef = (els: Element[]) => reference === 'slide' || els.length === 1
 
 // each element moved by its offset dx and dy, as one entry of the history
 function shift(app: App, label: string, moves: { el: Element; dx: number; dy: number }[]): void {
-  const changes = withCaptions(app, moves.map((m) => m.el), () => moves.map(({ el, dx, dy }) => {
+  const changes = moves.map(({ el, dx, dy }) => {
     const from = placeOf(el);
     const to: Place = { ...from, translate: { x: (from.translate?.x ?? 0) + dx, y: (from.translate?.y ?? 0) + dy } };
     writePlace(app, el, to);
     return { el, from, to: placeOf(el) };
-  }));
+  });
   record(app, label, changes);
   app.invalidate('content');
 }
@@ -191,14 +191,14 @@ export function commands(): Command[] {
       const els = targetsOf(app, arg);
       // a group is moved as one element, by the offset of the corner of its frame
       const group = groupBoxOf(app, els);
-      const changes = withCaptions(app, els, () => els.map((el) => {
+      const changes = els.map((el) => {
         const from = placeOf(el);
         const now = offsetOf(el);
         const at = group ?? snapBoxOf(app, el);
         const to = (v: number | undefined, off: number, edge: number) => (v === undefined ? off : Math.round(off + v - edge));
         writePlace(app, el, { ...from, translate: { x: to(a.x, now.x, at.left), y: to(a.y, now.y, at.top) } });
         return { el, from, to: placeOf(el) };
-      }));
+      });
       record(app, 'position', changes);
       app.invalidate('content');
     },
@@ -215,7 +215,7 @@ export function commands(): Command[] {
       const a = (arg ?? {}) as { w?: number; h?: number };
       const els = targetsOf(app, arg).map(sizedTarget);
       if (!resizable(els)) return;
-      const changes = withCaptions(app, els, () => withCorners(app, els, () => els.map((el) => {
+      const changes = withCorners(app, els, () => els.map((el) => {
         const from = placeOf(el);
         const now = sizeOf(el);
         if (isTextSized(el)) {
@@ -234,7 +234,7 @@ export function commands(): Command[] {
           writePlace(app, el, { ...from, width: Math.max(1, w) });
         }
         return { el, from, to: placeOf(el) };
-      })));
+      }));
       record(app, 'resize', changes);
       app.invalidate('content');
     },
