@@ -1,5 +1,5 @@
 // the navigator at the left, as the slide navigator of Keynote: a thumbnail of each slide with its
-// number, its place in the deck, three dots on a slide with steps, a corner at the lower right
+// number, its place in the show, three dots on a slide with steps, a corner at the lower right
 // of a slide with a transition other than the default Fade or None, as the corner of Keynote, and a
 // hidden slide collapsed to a thin double bar without a number. a click selects a slide, Shift extends the selection to a
 // range, and the command modifier adds or removes one slide. a drag moves the selected slides, with
@@ -62,11 +62,18 @@ export function numbers(slides: Element[], written: (slide: Element) => string |
   });
 }
 
-// the number of each slide in the navigator: its place in the deck, 1 to N, as in the status bar and
-// in the navigators of Keynote and PowerPoint, and none on a hidden slide, which is drawn as the
-// bar of a skipped slide of Keynote
+// the place of each slide in the show, 1 to N, as the navigators of Keynote and PowerPoint number
+// the slides. a hidden slide is not in the show, and it is given the place that it would take
+export function showPlaces(slides: Element[]): number[] {
+  let n = 0;
+  return slides.map((s) => (isHidden(s) ? n + 1 : ++n));
+}
+
+// the number of each slide in the navigator, and none on a hidden slide, which is drawn as the bar
+// of a skipped slide of Keynote
 export function places(slides: Element[]): string[] {
-  return slides.map((s, i) => (isHidden(s) ? '' : String(i + 1)));
+  const at = showPlaces(slides);
+  return slides.map((s, i) => (isHidden(s) ? '' : String(at[i])));
 }
 
 // the width in px from which a thumbnail is read without a preview, as in Keynote, whose thumbnails

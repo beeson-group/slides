@@ -15,7 +15,7 @@ import { injectStyle, make, stored, store } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { transitionOf } from '../review/transitions.ts';
 import type { MoveSection, RenameSection } from '../commands/slide.ts';
-import { describe, droppedOrder, isHidden, type MoveTo, type Navigator } from './navigator.ts';
+import { describe, droppedOrder, isHidden, showPlaces, type MoveTo, type Navigator } from './navigator.ts';
 import { Thumbs } from './thumbs.ts';
 
 const SIZE_KEY = 'beeson-sorter-size';
@@ -221,6 +221,8 @@ export class Sorter {
   // while its slide is on the page
   refresh(): void {
     const slides = this.slides();
+    // the numbers of the navigator, and the struck number that a hidden slide would take
+    const at = showPlaces(slides);
     const kept = new Set(slides);
     for (const s of [...this.tiles.keys()]) if (!kept.has(s)) this.tiles.delete(s);
     const picked = new Set(this.app.selection.kind === 'slides' ? this.app.selection.items : [this.app.current()]);
@@ -243,17 +245,17 @@ export class Sorter {
       box.hidden = !open;
       const want: HTMLElement[] = [];
       for (const s of list) {
-        const i = slides.indexOf(s);
+        const n = at[slides.indexOf(s)];
         const t = this.tiles.get(s) ?? this.makeTile(s);
         this.tiles.set(s, t);
         const { title } = describe(s);
         const hidden = isHidden(s);
-        t.no.textContent = String(i + 1);
+        t.no.textContent = String(n);
         t.el.classList.toggle('hidden-slide', hidden);
         t.el.setAttribute('aria-selected', String(picked.has(s)));
         t.el.tabIndex = s === current ? 0 : -1;
-        t.el.setAttribute('aria-label', `Slide ${i + 1}: ${title}${hidden ? ', hidden' : ''}`);
-        t.el.title = `Slide ${i + 1}: ${title}`;
+        t.el.setAttribute('aria-label', `Slide ${n}: ${title}${hidden ? ', hidden' : ''}`);
+        t.el.title = `Slide ${n}: ${title}`;
         const transition = transitionOf(this.app, s);
         t.corner.hidden = transition === 'fade';
         t.corner.title = transition === 'magic' ? 'Magic Move' : transition === 'none' ? 'No transition' : '';
