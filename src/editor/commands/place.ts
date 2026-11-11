@@ -35,22 +35,25 @@ export function freePlace(app: App, el: Element, picture?: HTMLElement, strict =
   if (!slide || !el.getClientRects().length) return null;
   const w = slide.offsetWidth || 1920;
   const h = slide.offsetHeight || 1080;
-  const others: { box: Box; text: boolean }[] = [];
+  // a plate as large as the slide is the ground of a figure slide. a new element may lie over it
+  // sooner than over another figure
+  const others: { box: Box; text: boolean; ground: boolean }[] = [];
   const els: Element[] = [];
   const num = document.querySelector('.reveal .slide-number');
   for (const o of [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *, :scope > .block > *'), ...(num ? [num] : [])]) {
     if (o === el || o.contains(el) || el.contains(o) || o.matches(SKIP)) continue;
     const box = boxOf(app, o);
     if (box && box.right - box.left > 1 && box.bottom - box.top > 1) {
-      others.push({ box, text: !o.matches(FIGURE) });
+      others.push({ box, text: !o.matches(FIGURE), ground: o.matches('.plate') && box.right - box.left >= w - 1 && box.bottom - box.top >= h - 1 });
       els.push(o);
     }
   }
   const own = () => (el.matches(FIGURE) ? boxOf(app, el) : slideBox(app, el))!;
-  const fits = (b: Box, all: boolean, room: number) => b.left >= 0 && b.top >= 0 && b.right <= w && b.bottom <= h &&
-    !others.some((o) => (all || o.text) && meets({ left: b.left - room, top: b.top - room, right: b.right + room, bottom: b.bottom + room }, o.box));
+  // off every other element at level 0, off all but the ground at level 1, and off the texts at level 2
+  const fits = (b: Box, level: number, room: number) => b.left >= 0 && b.top >= 0 && b.right <= w && b.bottom <= h &&
+    !others.some((o) => (level === 0 || o.text || (level === 1 && !o.ground)) && meets({ left: b.left - room, top: b.top - room, right: b.right + room, bottom: b.bottom + room }, o.box));
   const b0 = own();
-  if (fits(b0, true, 0)) return null;
+  if (fits(b0, 0, 0)) return null;
   const head = slide.querySelector(':scope > h2, :scope > h1');
   const under = Math.max(ROOM, head ? (takenBox(app, head)?.bottom ?? 0) + ROOM : 0);
   // the places on a grid, and those flush with the room after each other element
@@ -59,7 +62,7 @@ export function freePlace(app: App, el: Element, picture?: HTMLElement, strict =
     for (let v = from; v <= to; v += STEP) out.push(v);
     return out;
   };
-  const nearest = (b: Box, all: boolean): Box | null => {
+  const nearest = (b: Box, level: number): Box | null => {
     const bw = b.right - b.left, bh = b.bottom - b.top;
     let best: Box | null = null;
     let near = Infinity;
@@ -69,7 +72,7 @@ export function freePlace(app: App, el: Element, picture?: HTMLElement, strict =
       for (const x of xs) {
         const at = { left: x, top: y, right: x + bw, bottom: y + bh };
         const d = Math.hypot(x - b.left, y - b.top);
-        if (d < near && fits(at, all, ROOM)) {
+        if (d < near && fits(at, level, ROOM)) {
           near = d;
           best = at;
         }
@@ -84,11 +87,11 @@ export function freePlace(app: App, el: Element, picture?: HTMLElement, strict =
   const media = !!picture?.matches('img, video');
   const scales = (all: boolean) => (!picture ? [1] : all ? (media ? [1, 0.75, 0.5, 0.35, 0.25] : [1, 0.75, 0.5]) : media ? [0.5] : [1]);
   try {
-    for (const all of strict ? [true] : [true, false]) {
-      for (const k of scales(all)) {
+    for (const level of strict ? [0] : others.some((o) => o.ground) ? [0, 1, 2] : [0, 2]) {
+      for (const k of scales(level === 0)) {
         if (picture) picture.style.width = k === 1 ? kept : `${Math.round(base * k)}px`;
         const b = own();
-        const p = nearest(b, all);
+        const p = nearest(b, level);
         if (p) return { x: Math.round(p.left - b.left), y: Math.round(p.top - b.top), ...(k < 1 ? { width: Math.round(base * k) } : {}) };
       }
     }

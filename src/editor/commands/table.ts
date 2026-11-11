@@ -503,9 +503,12 @@ function placeTable(app: App, table: HTMLTableElement): void {
     // a plate is as large as the slide, hence what is drawn in it is counted in its place
     const drawn = (el: Element) => (el.matches('.plate') ? [...el.children].filter((c) => c.getClientRects().length) : []);
     const els = all.map((o) => o.el).filter((el) => !el.matches('.col, .panel, .block'));
+    const grown = (b: SlideBox): SlideBox => ({ left: b.left - room, top: b.top - room, right: b.right + room, bottom: b.bottom + room });
+    // another table is counted with the room of the bars as well, also the one that fills the plate
     const cover = [
-      ...coverOf(app, els.filter((el) => !drawn(el).length)).map((o) => (o.figure || !off ? o : { ...o, box: { left: o.box.left - room, top: o.box.top - room, right: o.box.right + room, bottom: o.box.bottom + room } })),
-      ...els.flatMap(drawn).map((c) => ({ box: slideBox(app, c), figure: true })),
+      ...coverOf(app, els.filter((el) => !drawn(el).length && !el.matches('table'))).map((o) => (o.figure || !off ? o : { ...o, box: grown(o.box) })),
+      ...els.filter((el) => el.matches('table')).map((el) => ({ box: off ? grown(slideBox(app, el)) : slideBox(app, el), figure: true })),
+      ...els.flatMap(drawn).map((c) => ({ box: off && c.matches('table') ? grown(slideBox(app, c)) : slideBox(app, c), figure: true })),
     ];
     const center = at((w - tw) / 2, (h - th) / 2);
     place = leastCover(cover, places, off ? center : at(left, top)) ?? center;
