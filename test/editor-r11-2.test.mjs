@@ -148,13 +148,13 @@ for (const platform of PLATFORMS) {
       page.source = added;
       await press(page, 'Enter');
       const cut = await render(page);
-      const shape = new RegExp(`${escape(ITEMS[0])}\\n  </${kind}>\\n  <p></p>\\n  ${escape(open)}\\n    ${escape(ITEMS[1])}\\n    ${escape(ITEMS[2])}\\n  </${kind}>`);
+      const shape = new RegExp(`${escape(ITEMS[0])}\\n  </${kind}>\\n  <p style="translate: 0px 20px"></p>\\n  ${escape(open)}\\n    ${escape(ITEMS[1])}\\n    ${escape(ITEMS[2])}\\n  </${kind}>`);
       assert.match(cut, shape, `the list is not cut at a paragraph: ${cut.match(/for-light<\/code>\.[\s\S]{0,220}/)?.[0]}`);
       assert.equal(await undoLabel(page), 'Undo New Paragraph');
       assert.deepEqual(await caretBlock(page), { tag: 'p', text: '' }, 'the caret is not in the new paragraph');
       await type(page, 'Z');
       const typed = await render(page);
-      assert.ok(typed.includes(`</${kind}>\n  <p>Z</p>\n  ${open}`), 'the typed text is not in the new paragraph');
+      assert.ok(typed.includes(`</${kind}>\n  <p style="translate: 0px 20px">Z</p>\n  ${open}`), 'the typed text is not in the new paragraph');
       await undo(page);
       assert.equal(await render(page), cut);
       await undo(page);
