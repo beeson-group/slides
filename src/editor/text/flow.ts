@@ -436,6 +436,10 @@ export function mark(app: App): (() => void) | null {
       const host = e && app.hostOf(elementOf(e[0]));
       return host ? ([host, offsetIn(host, e![0], e![1])] as Place) : null;
     });
-    if (at[0] && at[1]) select(app, at[0], at[1]);
+    if (!at[0] || !at[1]) return;
+    select(app, at[0], at[1]);
+    // the start of a nested item is the end of the white space before it as well, where the list
+    // commands do not act, hence the window is given the points in the texts
+    if (at[0][0] === at[1][0]) getSelection()?.setBaseAndExtent(...ends[0]!, ...ends[1]!);
   };
 }
