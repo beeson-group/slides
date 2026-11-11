@@ -390,3 +390,54 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(off, [], 'the presenter display or the rehearsal is not drawn on a black stage');
   });
 }
+
+// finding steps-transitions-present-4: the transition control mixed two directions, None and Fade
+// into the slide and Magic Move to the next slide, hence a slide entered by Magic Move showed Fade,
+// and None on it left the Magic Move in place and previewed it. the control now has the direction
+// of Keynote, in which the transition of a slide is played when the show leaves it
+const SEG = `[...document.querySelectorAll('.beeson-edit-transition [data-command^="slide.transition."]')].filter((b) => b.getAttribute('aria-pressed') === 'true').map((b) => b.dataset.command.split('.').pop())`;
+// the data-transition and the data-auto-animate of slides 3 to 5
+const TAGS = `[...document.querySelectorAll('.reveal .slides > section')].slice(2, 5).map((s) => [s.getAttribute('data-transition'), s.hasAttribute('data-auto-animate')])`;
+const segment = (kind) => `.beeson-edit-transition [data-command="slide.transition.${kind}"]`;
+for (const platform of PLATFORMS) {
+  test(`the transition of a slide is played when the show leaves it, as in Keynote, and the control shows the file in that direction (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 2 });
+    if (!(await page.evaluate(`window.BeesonEditor.state('view.steps').checked`))) await page.evaluate(`window.BeesonEditor.exec('view.steps')`);
+    await frames(page);
+    const goTo = async (n) => {
+      await page.evaluate(`Reveal.slide(${n})`);
+      await frames(page);
+    };
+    // Magic Move on slide 3 moves it into slide 4
+    await click(page, segment('magic'));
+    await frames(page);
+    assert.deepEqual(await page.evaluate(SEG), ['magic']);
+    assert.deepEqual(await page.evaluate(TAGS), [[null, true], [null, true], [null, false]]);
+    // None on slide 4 cuts from slide 4 into slide 5, and the Magic Move into slide 4 is kept
+    await goTo(3);
+    assert.deepEqual(await page.evaluate(SEG), ['fade'], 'slide 4 does not show the Fade by which the show leaves it');
+    await click(page, segment('none'));
+    await frames(page);
+    assert.deepEqual(await page.evaluate(TAGS), [[null, true], [null, true], ['none', false]], 'None on slide 4 is not written as the cut from slide 4 into slide 5');
+    assert.deepEqual(await page.evaluate(SEG), ['none']);
+    // Preview on slide 4 plays its own transition, from slide 4 into slide 5
+    await click(page, '.beeson-edit-transition .preview');
+    const plan = await page.evaluate(`(() => { const l = document.querySelector('.beeson-edit-preview'); return l && { kind: l.dataset.kind, shots: [...l.querySelectorAll('.shot')].map((s) => s.shadowRoot.querySelector('h1, h2')?.textContent.trim()) }; })()`);
+    const headings = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].slice(3, 5).map((s) => s.querySelector('h1, h2').textContent.trim())`);
+    assert.deepEqual(plan, { kind: 'none', shots: headings }, 'Preview on slide 4 does not play the cut from slide 4 into slide 5');
+    await press(page, 'Escape');
+    // Fade on slide 3 takes the Magic Move off both slides
+    await goTo(2);
+    assert.deepEqual(await page.evaluate(SEG), ['magic']);
+    await click(page, segment('fade'));
+    await frames(page);
+    assert.deepEqual(await page.evaluate(TAGS), [[null, false], [null, false], ['none', false]]);
+    assert.deepEqual(await page.evaluate(SEG), ['fade']);
+    assert.match(await page.evaluate(`document.querySelector('${segment('fade')}').title`), /next slide/);
+    // the last slide is not left for another slide, hence it has no transition
+    await goTo(11);
+    assert.deepEqual(await page.evaluate(SEG), [], 'the last slide shows a transition');
+    assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-transition [data-command^="slide.transition."]')].every((b) => b.disabled)`), true);
+    await roundTrip(page, 3);
+  });
+}
