@@ -942,6 +942,12 @@ export class Presenter {
     this.el.classList.remove('asking');
     this.customize(false);
     this.showParts(false);
+    // the show tab is ended with the display, as End Show of PowerPoint ends both
+    try {
+      this.audience?.close();
+    } catch {
+      // a tab of another origin is left to its viewer
+    }
     this.audience = null;
     if (last?.isConnected) this.app.showSlide(last);
     if (resolve) this.resolve(result);
