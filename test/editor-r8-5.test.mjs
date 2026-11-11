@@ -536,9 +536,11 @@ for (const platform of PLATFORMS) {
             assert.ok(near(flipped.left, pic.left) && near(flipped.top, pic.top), `${where} moves the picture from ${Math.round(pic.left)}, ${Math.round(pic.top)} to ${Math.round(flipped.left)}, ${Math.round(flipped.top)}`);
             const now = await rectOf(page, CAPTION);
             assert.ok(near(now.left, caption.left, 1) && near(now.top, caption.top, 1), `${where} moves the caption`);
-            // the frame of the selection is drawn at the picture
+            // the frame of the selection is drawn at the picture, 8 px outside a figure in a zone,
+            // which holds its caption
             const frame = await rectOf(page, '.beeson-frame.selected:not([hidden])');
-            assert.ok(near(frame.left, flipped.left) && near(frame.top, flipped.top), `the frame after ${where} is at ${Math.round(frame.left)}, ${Math.round(frame.top)}`);
+            const inset = from === 'figure' && n === ZONE_PAIR ? 8 : 0;
+            assert.ok(near(frame.left, flipped.left - inset) && near(frame.top, flipped.top - inset), `the frame after ${where} is at ${Math.round(frame.left)}, ${Math.round(frame.top)}`);
             await roundTrip(page, edited);
           }
           assert.deepEqual(errors(page), []);

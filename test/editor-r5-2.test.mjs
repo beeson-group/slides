@@ -762,8 +762,9 @@ for (const platform of PLATFORMS) {
     await frames(page);
     const v = await groupView(page);
     assert.equal(v.members.length, 2, 'the group of the paragraph and the figure is not selected');
-    const left = Math.min(...v.members.map((m) => m.left)), top = Math.min(...v.members.map((m) => m.top));
-    const right = Math.max(...v.members.map((m) => m.right)), bottom = Math.max(...v.members.map((m) => m.bottom));
+    // the frame stands 8 px outside the members, since the figure holds a caption
+    const left = Math.min(...v.members.map((m) => m.left)) - 8, top = Math.min(...v.members.map((m) => m.top)) - 8;
+    const right = Math.max(...v.members.map((m) => m.right)) + 8, bottom = Math.max(...v.members.map((m) => m.bottom)) + 8;
     assert.equal(v.frames, 0, 'each member of the group is framed by itself');
     assert.equal(v.union.length, 1, 'the group does not have one frame');
     assert.ok(v.union[0].group, 'the frame of the group is drawn as the frame of a multiple selection');
@@ -780,7 +781,7 @@ for (const platform of PLATFORMS) {
     const k = widths.map((w, i) => w / before[i]);
     assert.ok(k.every((x) => x < 0.9), `the members are scaled by ${k}`);
     assert.ok(near(k[0], k[1], 0.03), `the members are scaled by ${k}, not together`);
-    assert.ok(near(Math.min(...after.members.map((m) => m.left)), left, 3) && near(Math.min(...after.members.map((m) => m.top)), top, 3), 'the corner across from the grip moves');
+    assert.ok(near(Math.min(...after.members.map((m) => m.left)), left + 8, 3) && near(Math.min(...after.members.map((m) => m.top)), top + 8, 3), 'the corner across from the grip moves');
     const edited = await render(page);
     const tag = edited.match(/<p [^>]*>The lead-in of a display<\/p>/)?.[0] ?? '';
     assert.ok(/data-group="g1"/.test(tag) && /style="[^"]*width: \d+px/.test(tag), `the width of the paragraph is not written: ${tag}`);

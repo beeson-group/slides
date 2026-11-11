@@ -244,9 +244,9 @@ for (const platform of PLATFORMS) {
         const s = document.querySelector('.reveal .slides');
         const r = s.getBoundingClientRect();
         const scale = r.width / s.offsetWidth;
-        // the frame of the figure, i.e. its picture with its caption
+        // the frame of the figure, i.e. its picture with its caption, drawn 8 px outside it
         const f = document.querySelector('.beeson-overlay > .beeson-frame.selected:not([hidden])').getBoundingClientRect();
-        return { x: Math.round((f.left - r.left) / scale), y: Math.round((f.top - r.top) / scale) };
+        return { x: Math.round((f.left + 8 - r.left) / scale), y: Math.round((f.top + 8 - r.top) / scale) };
       })()`);
       const m = /^x: (-?\d+) px\s+y: (-?\d+) px$/.exec(text ?? '');
       assert.ok(m, `the readout ${text} does not give x and y`);

@@ -98,6 +98,11 @@ export function groupReach(els: Element[]): Box {
   return { left, top, width: Math.max(...seen.map((b) => b.left + b.width)) - left, height: Math.max(...seen.map((b) => b.top + b.height)) - top };
 }
 
+// a figure with a caption is framed INSET px outside, clear of the text of its caption, as a block
+// of text is framed outside its text and the frame of a text box in Keynote stands off its text
+// (K58). the fields, the snap, and the gestures keep the box of the figure
+const INSET = 8;
+
 // the box of el on the screen without its rotation, about the center of the box seen, and the
 // angle that it is turned by. a figure that holds a picture is framed at the picture, where its
 // grips resize it, and over its caption, which is not turned with the picture, hence a turned
@@ -105,7 +110,8 @@ export function groupReach(els: Element[]): Box {
 function orientOf(el: Element, scale: number): { box: Box; deg: number } {
   const pic = pictureOf(el);
   const deg = angleOf(el) + (pic === el ? 0 : angleOf(pic));
-  return deg && !captionsOf(el).length ? { box: orientedBox(pic, scale, deg), deg } : { box: frameRect(el), deg: 0 };
+  const caps = captionsOf(el).length;
+  return deg && !caps ? { box: orientedBox(pic, scale, deg), deg } : { box: caps ? grow(frameRect(el), INSET) : frameRect(el), deg: 0 };
 }
 
 // the point x, y turned by deg about the center of box
@@ -171,6 +177,7 @@ export class Frames {
   // the box of a selected group on the screen, as last drawn, which its one set of grips resizes,
   // without its rotation about its center, and the angle that it is turned by
   private group: Box | null = null;
+  private reach: Box | null = null;
   private groupDeg = 0;
   private readonly guides: HTMLDivElement[] = [];
   private readonly gaps: HTMLDivElement[] = [];
@@ -217,8 +224,9 @@ export class Frames {
     return set;
   }
 
+  // the frame of a group without the inset that it is drawn with around a caption
   groupBox(): Box | null {
-    return this.group;
+    return this.reach;
   }
 
   groupTurn(): number {
@@ -276,14 +284,15 @@ export class Frames {
     // without a frame around all of them, as in both apps
     const id = selected.length > 1 ? groupOf(selected[0]) : null;
     const grouped = !!id && selected.every((el) => groupOf(el) === id);
-    this.group = null;
+    this.group = this.reach = null;
     this.groupDeg = 0;
     // a group being turned is framed at its frame at the start of the turn, turned with it, and
     // another group at its frame turned by the angle of its first member, as the field Angle gives it
     const turn = grouped ? view.turn : null;
     if (boxes.length > 1 && grouped) {
       this.groupDeg = turn ? turn.deg : (turnersOf(app, selected)?.[0].angle ?? 0);
-      this.group = turn?.box ?? groupFrame(selected, this.groupDeg);
+      this.reach = turn?.box ?? groupFrame(selected, this.groupDeg);
+      this.group = selected.some((el) => captionsOf(el).length) ? grow(this.reach, INSET) : this.reach;
       place(this.union, this.group);
       this.union.style.rotate = this.groupDeg ? `${this.groupDeg}deg` : '';
       for (const f of this.frames) f.hidden = true;
