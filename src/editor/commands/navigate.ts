@@ -11,6 +11,7 @@ const CSS = `
 .beeson-edit-goto { position: fixed; top: 56px; left: 50%; z-index: 70; transform: translateX(-50%); display: flex; align-items: center; gap: 8px; padding: 8px 12px; border: 1px solid var(--line, #555); border-radius: 8px; background: var(--bg, #000); color: var(--text, #eee); font: 13px/1.4 system-ui, sans-serif; box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4); }
 .beeson-edit-goto[hidden] { display: none; }
 .beeson-edit-goto input { width: 6ch; font: inherit; padding: 2px 6px; border: 1px solid var(--line, #555); border-radius: 4px; background: transparent; color: inherit; }
+.beeson-edit-goto input:focus-visible { outline: 3px solid var(--ed-focus); outline-offset: 0; }
 `;
 
 const sections = (app: App): Element[] => [...app.slides().querySelectorAll(':scope > section')];
