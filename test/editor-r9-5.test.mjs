@@ -302,3 +302,41 @@ for (const platform of PLATFORMS) {
     await roundTrip(page);
   });
 }
+
+// the fields of the counts of rows and columns of the Table pane, with their values, or null
+const COUNTS = `(() => {
+  const f = (name) => document.querySelector('#beeson-edit-panel-format #beeson-edit-num-' + name);
+  return f('rows') && f('columns') ? { rows: f('rows').value, columns: f('columns').value } : null;
+})()`;
+const shape = (page) => page.evaluate(`[...document.querySelector('.reveal section.present table').rows].map((r) => r.cells.length)`);
+
+// finding tables-equations-insert-8: the Table pane did not have fields for the counts of rows and
+// columns, as the Table tab of Keynote has
+for (const platform of PLATFORMS) {
+  test(`the Table pane has fields with steppers for the counts of rows and columns, each change one entry of the history (${platform})`, async (t) => {
+    const page = await load(t, platform, { deck: 'test/pages/editor-tables.html', n: 1 });
+    await click(page, cellOf(2, 2));
+    await frames(page);
+    assert.deepEqual(await page.evaluate(COUNTS), { rows: '4', columns: '3' }, 'the Table pane does not show the counts of rows and columns in fields');
+    await click(page, '#beeson-edit-panel-format button[aria-label="Increase Rows"]');
+    await frames(page);
+    assert.deepEqual(await shape(page), [3, 3, 3, 3, 3], 'the stepper of Rows does not add a row at the end');
+    assert.deepEqual(await page.evaluate(COUNTS), { rows: '5', columns: '3' });
+    assert.equal((await state(page, 'edit.undo')).label, 'Undo Set Row Count');
+    await roundTrip(page);
+
+    await click(page, cellOf(1, 0));
+    await frames(page);
+    await click(page, '#beeson-edit-panel-format #beeson-edit-num-columns');
+    // a key with the command modifier sent over the protocol does not run the editing commands of
+    // macOS, hence the text of the field is selected by a script
+    await page.evaluate(`document.querySelector('#beeson-edit-num-columns').select()`);
+    await page.send('Input.insertText', { text: '1' });
+    await press(page, 'Enter');
+    await frames(page);
+    assert.deepEqual(await shape(page), [1, 1, 1, 1, 1], 'a count of 1 typed into Columns does not take out the last two columns');
+    assert.equal((await state(page, 'edit.undo')).label, 'Undo Set Column Count');
+    await roundTrip(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
