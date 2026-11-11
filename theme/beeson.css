@@ -681,6 +681,9 @@ html.reveal-print .theme-switch, html.reveal-print .pointer-dot { display: none;
    edge of the page and not continued on a page of its own */
 html.reveal-print .reveal .pdf-page { overflow: hidden; contain: size; }
 html.reveal-print .reveal .slides section { height: 1080px !important; padding: 120px 120px 0 120px !important; }
+/* a slide stacks its elements by their z-index, as in the show, hence one sent behind the others is not
+   drawn under the background of its page */
+html.reveal-print .reveal .slides section { isolation: isolate; }
 html.reveal-print .reveal .slides section.title,
 html.reveal-print .reveal .slides section.closing,
 html.reveal-print .reveal .slides section.figure,

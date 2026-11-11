@@ -269,11 +269,17 @@ for (const platform of PLATFORMS) {
     await undoKey(page);
     await settle(page);
     await byteExact(page);
-    // a row that the layer commands do not move shows no drop line
+    // the heading in the flow, which Bring to Front puts over the figure by a z-index since R13.1,
+    // shows its drop line at the top of the list and lands there
     const h2 = await rowBox(page, 3);
     await drag(page, { x: h2.x, y: h2.y }, { dy: from.top + 2 - h2.y, steps: 8, hold: true });
-    assert.equal(await dropLine(page), null);
+    const top = await dropLine(page);
+    assert.ok(top !== null && Math.abs(top - from.top) <= 2, `the drop line is at ${top}, not at the top of row 0 (${from.top})`);
     await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: h2.x, y: from.top + 2, button: 'left', clickCount: 1 });
+    await settle(page);
+    assert.equal((await state(page, 'edit.undo')).label, 'Undo Reorder');
+    assert.deepEqual((await rows(page)).map((r) => r.replace(' *', '')), [start[3], start[0], start[1], start[2]]);
+    await undoKey(page);
     await settle(page);
     await byteExact(page);
     assert.deepEqual(errors(page), []);
