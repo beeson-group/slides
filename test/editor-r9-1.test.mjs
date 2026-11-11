@@ -18,6 +18,8 @@ const PLATFORMS = ['mac', 'other'];
 const MODES = ['dark', 'light'];
 const DECK = 'test/pages/editor-r8-5.html';
 const GROUP_DECK = 'test/pages/editor-r9-1.html';
+const LAYOUTS = 'test/pages/editor-layouts.html';
+const QR = '.reveal section.present > .qr';
 const ZONE_PAIR = 0, ZONE_ONE = 1, PLATE_PAIR = 2, PLATE_ONE = 3;
 const FIGURES = [ZONE_PAIR, ZONE_ONE, PLATE_PAIR, PLATE_ONE];
 const NAMES = ['a pair in a zone', 'one image in a zone', 'a pair in a plate', 'one image in a plate'];
@@ -256,15 +258,36 @@ function captionUnder(now, where) {
   assert.equal(now.capDeg, 0, `${where}: the caption is turned`);
 }
 
-// the frame of a resize by grip h from the figure or from the picture, in a drag and after it
-function resized(now, rest, h, ptr, from, where) {
-  const held = from === 'figure' && now.cap ? union(now.pic, now.cap) : now.pic;
-  assert.ok(sameBox(now.frame, held), `${where}: the frame is at ${show(now.frame)}, not around ${show(held)}`);
+// in a drag held by grip h, the grip alone is drawn, without the frame and the other grips, as in
+// Keynote (K77), at its place on box, the frame that the release draws
+function gripAlone(now, h, box, where) {
+  assert.equal(now.frame, null, `${where}: the frame is drawn at ${show(now.frame)}`);
+  assert.deepEqual(Object.keys(now.grips), [h], `${where}: the grips ${js(Object.keys(now.grips))} are drawn`);
+  const want = gripOn(box, 0, h), g = now.grips[h];
+  assert.ok(near(g.x, want.x) && near(g.y, want.y), `${where}: the grip ${h} is at ${js(g)}, not on the frame ${show(box)} at ${js(want)}`);
+}
+
+// the box of the picture and its caption of a resize by grip h from the figure or from the picture,
+// with the grip alone drawn in the drag and the frame drawn after it
+function resized(now, rest, h, ptr, from, where, held = false) {
+  const box = from === 'figure' && now.cap ? union(now.pic, now.cap) : now.pic;
+  if (held) gripAlone(now, h, box, where);
+  else assert.ok(sameBox(now.frame, box), `${where}: the frame is at ${show(now.frame)}, not around ${show(box)}`);
   captionUnder(now, where);
-  const a = anchorOf(now.frame, h), a0 = anchorOf(rest.frame, h);
-  assert.ok(near(a.x, a0.x) && near(a.y, a0.y), `${where}: the frame across from the grip ${h} moves from ${show(rest.frame)} to ${show(now.frame)}`);
+  const a = anchorOf(box, h), a0 = anchorOf(rest.frame, h);
+  assert.ok(near(a.x, a0.x) && near(a.y, a0.y), `${where}: the side across from the grip ${h} moves from ${show(rest.frame)} to ${show(box)}`);
   atPointer(now.grips[h], ptr, h, now.pic.width / now.pic.height, where);
 }
+
+// what the overlay draws: the frames of the selection and of a group, the grips, the rotate handle
+// and its stem, and the readout
+const OVERLAY = `(() => {
+  const v = (e) => !e.closest('[hidden]') && !e.hidden && getComputedStyle(e).display !== 'none' && e.getBoundingClientRect().width > 0;
+  const n = (s) => [...document.querySelectorAll(s)].filter(v).length;
+  return { frames: n('.beeson-frame.selected') + n('.beeson-frame.union'), grips: [...document.querySelectorAll('.beeson-grip')].filter(v).map((g) => g.dataset.handle), rotor: n('.beeson-rotor'), stem: n('.beeson-rotor-stem'), readout: [...document.querySelectorAll('.beeson-offset')].filter(v).map((e) => e.textContent) };
+})()`;
+const overlay = (page) => page.evaluate(OVERLAY);
+const centerOf = (page, sel) => page.evaluate(`(() => { const r = [...document.querySelectorAll(${js(sel)})].find((e) => !e.hidden && e.getBoundingClientRect().width).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
 
 // the pointer offset of a drag of grip h inward, in screen px
 const inward = (h, by = 40) => ({ dx: -SIGN[h][0] * by, dy: -SIGN[h][1] * by });
@@ -306,7 +329,7 @@ for (const platform of PLATFORMS) {
             const { dx, dy } = inward(h);
             const ptr = { x: g.x + dx, y: g.y + dy };
             await drag(page, g, { dx, dy, modifiers: FREE[platform], hold: true });
-            resized(await look(page), rest, h, ptr, from, `${where}, in the drag`);
+            resized(await look(page), rest, h, ptr, from, `${where}, in the drag`, true);
             await release(page, ptr);
             await frames(page);
             resized(await look(page), rest, h, ptr, from, `${where}, after the drag`);
@@ -359,10 +382,13 @@ for (const platform of PLATFORMS) {
           assert.equal(now.pictures[0].deg, 30, `${at}: the picture is not turned`);
           assert.ok(now.pictures[0].width < rest.pictures[0].width - 20, `${at}: the picture is not made smaller`);
           const held = union(reach(now.pictures[0].corners), now.cap);
-          assert.equal(now.frameDeg, 0, `${at}: the frame is turned`);
-          assert.ok(sameBox(now.frame, held), `${at}: the frame is at ${show(now.frame)}, not around ${show(held)}`);
+          if (stage === 'in the drag') gripAlone(now, 'se', held, at);
+          else {
+            assert.equal(now.frameDeg, 0, `${at}: the frame is turned`);
+            assert.ok(sameBox(now.frame, held), `${at}: the frame is at ${show(now.frame)}, not around ${show(held)}`);
+          }
           captionUnder(now, at);
-          assert.ok(near(now.frame.left, rest.frame.left) && near(now.frame.top, rest.frame.top), `${at}: the corner across from the grip moves from ${show(rest.frame)} to ${show(now.frame)}`);
+          assert.ok(near(held.left, rest.frame.left) && near(held.top, rest.frame.top), `${at}: the corner across from the grip moves from ${show(rest.frame)} to ${show(held)}`);
           const turnedPicture = reach(now.pictures[0].corners);
           atPointer(now.grips.se, ptr, 'se', turnedPicture.width / turnedPicture.height, at);
         }
@@ -441,6 +467,40 @@ for (const platform of PLATFORMS) {
       const edited = await render(page);
       await roundTrip(page, edited);
       await saved(page, edited, 'r9-1-group.html');
+    });
+
+    test(`while a grip or the rotate handle is held, it is drawn alone, without the frame and the other handles, for an element and a group, on ${platform} in ${mode} mode`, async (t) => {
+      for (const kind of ['QR code', 'group']) {
+        const where = `a ${kind} on ${platform} in ${mode} mode`;
+        const page = kind === 'group' ? await pickGroup(t, platform, mode) : await load(t, platform, mode, 0, LAYOUTS);
+        if (kind !== 'group') {
+          await click(page, QR);
+          await frames(page);
+          assert.deepEqual(await selected(page), ['div'], `${where}: a click does not select the QR code`);
+        }
+        const all = await overlay(page);
+        assert.ok(all.frames === 1 && all.grips.length === 8 && all.rotor === 1, `${where}: the selection draws ${js(all)}`);
+        // a resize by the grip se, held, and a turn by the rotate handle, held, each released and
+        // checked in the file
+        for (const handle of ['se', 'rotor']) {
+          const from = await centerOf(page, handle === 'rotor' ? '.beeson-rotor' : '.beeson-grip[data-handle="se"]');
+          const by = handle === 'rotor' ? { dx: 90, dy: 20 } : { dx: -40, dy: -40 };
+          await drag(page, from, { ...by, modifiers: handle === 'rotor' ? undefined : FREE[platform], hold: true });
+          await frames(page);
+          const held = await overlay(page);
+          const want = handle === 'rotor' ? { frames: 0, grips: [], rotor: 1, stem: 0 } : { frames: 0, grips: ['se'], rotor: 0, stem: 0 };
+          assert.deepEqual({ frames: held.frames, grips: held.grips, rotor: held.rotor, stem: held.stem }, want, `${where}: the held ${handle === 'rotor' ? 'rotate handle' : 'grip se'} draws ${js(held)}`);
+          await release(page, { x: from.x + by.dx, y: from.y + by.dy });
+          await frames(page);
+          const after = await overlay(page);
+          assert.ok(after.frames === 1 && after.grips.length === 8 && after.rotor === 1, `${where}: after the release, the selection draws ${js(after)}`);
+          const edited = await render(page);
+          await roundTrip(page, edited);
+          await redo(page);
+          await frames(page);
+          page.source = edited;
+        }
+      }
     });
 
     test(`a turn of a group with a pair turns the image of each mode, in the drag and after it, on ${platform} in ${mode} mode`, async (t) => {
