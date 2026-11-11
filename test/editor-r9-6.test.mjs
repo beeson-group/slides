@@ -527,3 +527,48 @@ for (const platform of PLATFORMS) {
     await byteExact(page);
   });
 }
+
+// item of R10.2: Bold on a paragraph with a span colored at a step wrote the classes hl-target and
+// hl-accent, which steps.ts puts on the span at run time, into the file at a save. each action that
+// writes the block is checked on the same paragraph, on a range across the start of the span, and
+// Bold also on the whole span and on the paragraph selected as a block. the editor does not have
+// Underline, since the theme does not define it
+const COLORED = '.reveal section.present > p';
+const acrossSpan = (page) => page.evaluate(`(() => {
+  const p = ${find(COLORED, 'Coriolis')};
+  p.focus();
+  getSelection().setBaseAndExtent(p.firstChild, 1, p.querySelector('span').firstChild, 8);
+})()`);
+const ACTIONS = [
+  ['Bold', (page) => press(page, 'Mod+B')],
+  ['Italic', (page) => press(page, 'Mod+I')],
+  ['Strikethrough', (page) => exec(page, 'text.strike')],
+  ['a text color', (page) => exec(page, 'text.tone.violet')],
+  ['Change Case', (page) => exec(page, 'text.case.upper')],
+  ['a link', (page) => exec(page, 'text.link', { href: 'https://example.com' })],
+  ['Paste and Match Style', (page) => exec(page, 'edit.pasteAndMatchStyle', 'Pasted')],
+];
+const CASES = [
+  ...ACTIONS.map(([name, run]) => [name, 'a range across the start of the span', acrossSpan, run]),
+  ['Bold', 'the whole span', (page) => selectText(page, COLORED, 'Coriolis terms'), ACTIONS[0][1]],
+  ['Bold', 'the paragraph selected as a block', (page) => press(page, 'Escape'), ACTIONS[0][1]],
+];
+for (const platform of PLATFORMS) {
+  for (const [name, shape, pick, run] of CASES) {
+    test(`${name} on ${shape} colored at a step does not write the runtime classes of the span (${platform})`, async (t) => {
+      const page = await load(t, platform, 3);
+      assert.equal(await page.evaluate(`${find(COLORED, 'Coriolis')}.querySelector('span').className`), 'coriolis hl-target hl-accent');
+      await click(page, await pointOf(page, COLORED, 'Coriolis', 2));
+      await pick(page);
+      await run(page);
+      await frames(page);
+      const text = await render(page);
+      assert.notEqual(text, page.source, `${name} does not change the paragraph`);
+      const line = text.split('\n').find((l) => l.includes('couple'))?.trim();
+      assert.ok(!/hl-target|hl-accent/.test(text), `${name} writes ${line}`);
+      const { text: saved } = await saveAndReopen(page, `r9-6-hl-${++saves}.html`);
+      assert.equal(saved, text);
+      assert.deepEqual(errors(page), []);
+    });
+  }
+}
