@@ -4879,7 +4879,7 @@ void main() {
       });
       deck.addKeyBinding(13, (ev) => {
         if (deck.isOverview()) deck.toggleOverview(false);
-        else if (forDeck(ev)) typed ? deck.slide(Number(typed) - 1) : deck.next();
+        else if (forDeck(ev)) typed ? deck.slide(Number(typed) - 1, 0, -1) : deck.next();
         typed = "";
       });
       deck.addKeyBinding(8, (ev) => {
