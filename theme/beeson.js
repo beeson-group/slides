@@ -4885,6 +4885,13 @@ void main() {
       deck.addKeyBinding(8, (ev) => {
         if (forDeck(ev)) deck.prev();
       });
+      document.addEventListener("keydown", (ev) => {
+        if (!["ArrowRight", "ArrowDown", "PageDown", " ", "Enter", "n", "N"].includes(ev.key) || ev.key === "Enter" && typed) return;
+        if (!forDeck(ev) || deck.isOverview() || !deck.isLastSlide() || deck.availableFragments().next) return;
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        toEditor("edit");
+      }, true);
     }
     if (!EDITING && !RECEIVER) window.addEventListener("message", fromSpeaker);
     if (PLAYED) window.addEventListener("pagehide", () => speaker?.close());
