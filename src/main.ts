@@ -237,8 +237,11 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   if (PLAYED) {
     for (const keyCode of [27, 69]) deck.addKeyBinding(keyCode, (ev) => { if (forDeck(ev)) toEditor('edit'); });
     document.addEventListener('keydown', (ev) => { if (ev.keyCode === 83 && forDeck(ev)) toEditor('speaker'); }, true);
+  } else if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: 'E', description: 'Edit the deck' }, (ev) => { if (forDeck(ev)) (RECEIVER ? toEditor('edit') : edit()); });
+  if (PLAYED && !RECEIVER) {
     // Return and Backspace move the show, and a slide number typed before Return goes to its
-    // slide, as in PowerPoint and in the presenter display of the editor
+    // slide, as in PowerPoint and in the presenter display of the editor. the frames of the speaker
+    // view are left with the keys of reveal.js
     let typed = '';
     document.addEventListener('keydown', (ev) => { if (!/^[0-9]$/.test(ev.key) && ev.key !== 'Enter') typed = ''; }, true);
     for (let d = 0; d < 10; d++) for (const keyCode of [48 + d, 96 + d]) deck.addKeyBinding(keyCode, (ev) => { if (forDeck(ev)) typed = (typed + d).slice(-4); });
@@ -248,7 +251,7 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
       typed = '';
     });
     deck.addKeyBinding(8, (ev) => { if (forDeck(ev)) deck.prev(); });
-  } else if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: 'E', description: 'Edit the deck' }, (ev) => { if (forDeck(ev)) (RECEIVER ? toEditor('edit') : edit()); });
+  }
   if (!EDITING && !RECEIVER) window.addEventListener('message', fromSpeaker);
   // the editor ends the show by taking its frame away
   if (PLAYED) window.addEventListener('pagehide', () => speaker?.close());
