@@ -7,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { contrast, GROUND, INK, press } from './helpers/editor.mjs';
+import { click, contrast, GROUND, INK, press } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 const SCHEMES = ['light', 'dark'];
@@ -157,6 +157,45 @@ for (const platform of PLATFORMS) {
     }
     await press(page, 'Escape');
     await page.waitFor(`!document.querySelector('.beeson-edit-show')`);
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+async function resize(page, width, height) {
+  await page.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+  await sleep(150);
+  await frames(page);
+}
+const OUTSIDE = `[...document.querySelectorAll('.beeson-edit-top [data-at]')].filter((el) => { const r = el.getBoundingClientRect(); return r.left < -0.5 || r.right > innerWidth + 0.5 || !r.width; }).map((el) => (el.dataset.command ?? el.className) + ' at ' + Math.round(el.getBoundingClientRect().right))`;
+
+// D10 and r12-2-shell-inspector n1: with Customize Toolbar open, Format and Steps lay past the right
+// edge of a window 640 px wide, and Present and Steps past a window 760 px wide in Text Only
+for (const platform of PLATFORMS) {
+  test(`while Customize Toolbar is open, every toolbar item stays inside a window under 681 px and in Text Only (${platform})`, async (t) => {
+    const page = await load(t, platform, 'light', { width: 1600, height: 800 });
+    await exec(page, 'view.customizeToolbar');
+    await page.waitFor(`!document.querySelector('.beeson-edit-customize').hidden`);
+    await frames(page);
+    for (const width of [640, 560]) {
+      await resize(page, width, 700);
+      assert.deepEqual(await page.evaluate(OUTSIDE), [], `toolbar items lie past the window at ${width} px in Icon and Text`);
+    }
+    await resize(page, 1600, 800);
+    await click(page, '.beeson-edit-customize .foot .show');
+    await page.waitFor(`[...document.querySelectorAll('.beeson-edit-menu [role=menuitemradio], .beeson-edit-menu [role=menuitem], .beeson-edit-menu [role=menuitemcheckbox]')].some((e) => e.textContent.includes('Text Only'))`);
+    const at = await page.evaluate(`(() => { const r = [...document.querySelectorAll('.beeson-edit-menu [role^=menuitem]')].find((e) => e.textContent.includes('Text Only')).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    await click(page, at);
+    await frames(page);
+    assert.match(await page.evaluate(`document.querySelector('.beeson-edit-customize .foot .show').textContent`), /Text Only/);
+    for (const width of [900, 760, 640]) {
+      await resize(page, width, 700);
+      assert.deepEqual(await page.evaluate(OUTSIDE), [], `toolbar items lie past the window at ${width} px in Text Only`);
+    }
+    await resize(page, 1600, 800);
+    assert.deepEqual(await page.evaluate(OUTSIDE), []);
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-top').classList.contains('compact')`), false, 'the labels are not drawn again at 1600 px');
+    await exec(page, 'view.customizeToolbar');
     assert.equal(await render(page), page.source);
     assert.deepEqual(errors(page), []);
   });
