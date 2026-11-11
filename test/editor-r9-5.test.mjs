@@ -270,3 +270,35 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the box of the move handle, and the boxes of the bars and buttons of the table drawn
+const HANDLE = `(() => {
+  const box = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; };
+  const h = document.querySelector('.beeson-overlay .beeson-handle');
+  const parts = [...document.querySelectorAll('.beeson-table-bars > .bar, .beeson-table-bars > .round')].filter((el) => el.getClientRects().length).map((el) => ({ name: el.title || el.className, ...box(el) }));
+  return { handle: h && !h.hidden ? box(h) : null, parts };
+})()`;
+const meets = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+
+// finding select-move-resize-6: the move handle of a selected table was drawn half under the bar of
+// its row numbers
+for (const platform of PLATFORMS) {
+  test(`the move handle of a selected table is drawn clear of its bars, and its drag moves the table (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 2 });
+    await newTable(page);
+    for (const what of ['with the caret in a cell', 'with a cell selected as a block', 'with the table selected as an object']) {
+      if (what !== 'with the caret in a cell') await press(page, 'Escape');
+      await frames(page);
+      const { handle, parts } = await page.evaluate(HANDLE);
+      assert.ok(handle, `the move handle is not drawn ${what}`);
+      for (const p of parts) assert.ok(!meets(handle, p), `the move handle at ${js(handle)} is drawn over ${p.name} at ${js(p)} ${what}`);
+    }
+    const { handle } = await page.evaluate(HANDLE);
+    const was = (await page.evaluate(TABLE)).translate;
+    await drag(page, middle(handle), { dx: 40, dy: 30, steps: 12 });
+    await frames(page);
+    const s = await isObject(page, 'after a drag of the move handle');
+    assert.ok(s.translate[0] > was[0] + 20 && s.translate[1] > was[1] + 15, `a drag of the move handle does not move the table: ${js(was)} to ${js(s.translate)}`);
+    await roundTrip(page);
+  });
+}
