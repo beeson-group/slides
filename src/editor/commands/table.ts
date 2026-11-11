@@ -26,6 +26,7 @@ import { keysOf, type Command } from '../commands.ts';
 import { matches } from '../keymap.ts';
 import { childSpace } from '../render.ts';
 import { contentWithTex, mathLookup } from '../math.ts';
+import { emptySlot } from '../media/actions.ts';
 import { textStyle } from '../model/templates.ts';
 import {
   CELL, GRID, MOST, around, fillLine, boxOf, cellAfter, cellBeside, cellHtml, cellOver, columnName, columnsOf, emptyRows, gridOf, grow, hasHeader, numericOf, sortOrder,
@@ -1206,7 +1207,8 @@ export function install(app: App): void {
     run: async (a, arg) => {
       const size = arg && typeof arg === 'object' && 'rows' in arg ? (arg as Size) : null;
       if (!size) return openPicker(a, toolbarButton('insert.table'), (s) => void a.commands.run('insert.table', s).catch(fail), (rested) => void a.commands.run('insert.tableSize', rested).catch(fail));
-      await newTable(a, size);
+      // a table fills the first empty slot of the slide, as the table icon of its placeholder does
+      await newTable(a, size, emptySlot(a, a.current()!));
     },
   });
 
