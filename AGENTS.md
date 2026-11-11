@@ -59,4 +59,4 @@ npm run pptx                                # slides.pptx, one click per step, w
 
 ## Skills
 
-When someone asks to tighten, shorten, clean up, polish, fix, or review existing slides, follow `.claude/skills/refine-slides/SKILL.md`.
+The skills of the repository are in `.agents/skills/`, and `.claude/skills` is a link to the same folder, since Claude Code reads only that one. When someone asks to tighten, shorten, clean up, polish, fix, or review existing slides, follow `.agents/skills/refine-slides/SKILL.md`.
