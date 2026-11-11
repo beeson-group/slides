@@ -83,6 +83,8 @@ const toScreen = (f, x, y) => ({ x: f.left + x * f.k, y: f.top + y * f.k });
 async function load(t, platform, mode, n, deck = DECK) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
+  // without this, headless Chrome cancels the file chooser, and the cancel races the file of choose
+  await page.send('Page.setInterceptFileChooserDialog', { enabled: true });
   const url = `${server.origin}/${deck}?edit&still&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');

@@ -47,6 +47,8 @@ const meets = (a, b) => a.left < b.right - 0.5 && b.left < a.right - 0.5 && a.to
 async function load(t, platform, n = TEXT, deck = LAYOUTS) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
+  // without this, headless Chrome cancels the file chooser, and the cancel races the file of choose
+  await page.send('Page.setInterceptFileChooserDialog', { enabled: true });
   const url = `${server.origin}/${deck}?edit&still&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
