@@ -90,8 +90,12 @@ function caretInto(slide: Element): void {
 
 async function newSlide(app: App, layout: Layout, before = placeAfter(app).before): Promise<Element> {
   const slide = await docOf(app).insertSlide(layout, before);
-  navOf(app).select([slide], slide);
-  caretInto(slide);
+  // the slide is hidden under the Light Table, hence its tile takes the focus, as at Duplicate
+  if (navOf(app).table?.shown) land(app, [slide], slide, true);
+  else {
+    navOf(app).select([slide], slide);
+    caretInto(slide);
+  }
   return slide;
 }
 
