@@ -143,9 +143,15 @@ function writeLive(el: Element, p: Place): void {
 // spin turned to deg degrees, with its center on the screen put at want by the offset of carrier,
 // which is spin or the figure around it. an image fitted at a side of its box, e.g. in a plate,
 // thus turns about the center of its picture. a figure that is turned in the file gives its angle
-// to its picture. with live set, the page alone is changed
+// to its picture. with live set, the page alone is changed, with the image of the other mode turned
+// as writePlace turns it
 export function turn(app: App, spin: Element, carrier: Element, deg: number, want: { x: number; y: number }, live = false): void {
-  const put = (el: Element, p: Place) => (live ? writeLive(el, p) : writePlace(app, el, p));
+  const put = (el: Element, p: Place) => {
+    if (!live) return writePlace(app, el, p);
+    writeLive(el, p);
+    const twin = twinOf(app, el);
+    if (twin) writeLive(twin, p);
+  };
   if (carrier !== spin && placeOf(carrier).rotate) put(carrier, { ...placeOf(carrier), rotate: null });
   put(spin, { ...placeOf(spin), rotate: ((Math.round(deg) % 360) + 360) % 360 || null });
   const c = seenCenter(app, spin), k = frameOf(app).scale;
