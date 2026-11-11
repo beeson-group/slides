@@ -470,3 +470,91 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// shell-4: the face of the Zoom popup of the toolbar read Fit while the status bar showed the
+// percentage, and its item was Fit rather than Fit Slide as in Keynote
+for (const platform of PLATFORMS) {
+  test(`the face of the Zoom popup shows the percentage, and its item is Fit Slide (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    const face = () => page.evaluate(`document.querySelector('.beeson-edit-top [data-command="toolbar.zoom"] .readout').textContent`);
+    assert.match(await percentText(page), /^\d+%$/);
+    assert.equal(await face(), await percentText(page), 'the face does not show the fitted percentage');
+    await click(page, '.beeson-edit-top [data-command="toolbar.zoom"]');
+    const items = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item')].map((i) => [i.querySelector('.label').textContent, i.getAttribute('aria-checked')])`);
+    assert.deepEqual(items[0], ['Fit Slide', 'true']);
+    await clickItem(page, '200%');
+    await frames(page);
+    assert.equal(await face(), '200%');
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+// shell-6: the status bar showed one sentence of help whatever the selection, cut with an ellipsis
+for (const platform of PLATFORMS) {
+  test(`the status bar does not show a fixed sentence of help (${platform})`, async (t) => {
+    const page = await load(t, platform, { width: 1440 });
+    const cut = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom *')].filter((e) => e.children.length === 0 && e.scrollWidth > e.clientWidth + 1 && getComputedStyle(e).textOverflow === 'ellipsis').map((e) => e.textContent)`);
+    assert.deepEqual(cut, [], 'a text of the status bar is cut');
+    assert.ok(!(await page.evaluate(`document.querySelector('.beeson-edit-bottom').textContent`)).includes('Click a text'), 'the sentence of help is shown');
+  });
+}
+
+// shell-8: Customize Toolbar did not dim the items already in the toolbar
+for (const platform of PLATFORMS) {
+  test(`Customize Toolbar dims the items that the toolbar holds (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await run(page, 'view.customizeToolbar');
+    const item = (id) => page.evaluate(`(() => { const i = document.querySelector('.beeson-edit-customize .item[data-item="${id}"]'); return { disabled: i.getAttribute('aria-disabled'), opacity: Number(getComputedStyle(i).opacity) }; })()`);
+    const undo = await item('edit.undo');
+    assert.equal(undo.disabled, 'true', 'Undo is not dimmed though it is in the toolbar');
+    assert.ok(undo.opacity < 1);
+    assert.deepEqual(await item('file.open'), { disabled: null, opacity: 1 });
+    await page.evaluate(`document.querySelector('.beeson-edit-customize .item[data-item="file.open"]').focus()`);
+    await press(page, 'Enter');
+    assert.equal((await item('file.open')).disabled, 'true', 'Open is not dimmed once added');
+    await click(page, '.beeson-edit-customize .done');
+    assert.deepEqual(errors(page), []);
+  });
+}
+
+// shell-10: the View menu and the View popup listed the views in two orders, and the status bar
+// called the navigator Slides
+const VIEWS = ['Navigator', 'Slide Only', 'Light Table', 'Outline', 'Format', 'Steps', 'Notes'];
+for (const platform of PLATFORMS) {
+  test(`the View menu and the View popup list the views in the order of Keynote, with one name each (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    const menu = Object.keys(await menuKeys(page, 'View')).filter((l) => VIEWS.includes(l));
+    await click(page, '.beeson-edit-top [data-command="toolbar.view"]');
+    const popup = (await menuLabels(page)).filter((l) => VIEWS.includes(l));
+    await press(page, 'Escape');
+    assert.deepEqual(menu, VIEWS, 'the View menu');
+    assert.deepEqual(popup, VIEWS, 'the View popup');
+    assert.ok(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].some((b) => b.textContent === 'Navigator')`), 'the status bar does not name the navigator');
+  });
+}
+
+// shell-11: the resize cursor was lost while the edge of the navigator was dragged past its limit
+for (const platform of PLATFORMS) {
+  test(`the resize cursor stays while the edge of the navigator is dragged past its limit (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    const from = await center(page, '.beeson-edit-nav-edge');
+    await drag(page, from, { dx: 500, hold: true });
+    const at = { x: from.x + 500, y: from.y };
+    const cursor = await page.evaluate(`getComputedStyle(document.elementFromPoint(${at.x}, ${at.y})).cursor`);
+    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: at.x, y: at.y, button: 'left', clickCount: 1 });
+    assert.equal(cursor, 'ew-resize', 'the cursor past the limit');
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-nav').getBoundingClientRect().width`), 360);
+    assert.equal(await page.evaluate(`getComputedStyle(document.body).cursor`), 'auto', 'the cursor is kept after the drag');
+  });
+}
+
+// shell-12: the notes pane had a frame in the color of the focus while the caret was in it
+for (const platform of PLATFORMS) {
+  test(`the notes pane does not have a frame while it has the focus (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await run(page, 'view.notes');
+    await frames(page);
+    const outline = await page.evaluate(`(() => { const n = document.querySelector('.reveal .slides section.present > aside.notes'); return [document.activeElement === n, getComputedStyle(n).outlineColor]; })()`);
+    assert.deepEqual(outline, [true, 'rgba(0, 0, 0, 0)']);
+  });
+}
