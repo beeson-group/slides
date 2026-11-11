@@ -9,6 +9,7 @@
 // empty one is never written, and it is taken off the page with its entry when the caret leaves it
 
 import type { App } from '../app.ts';
+import type { Entry } from '../history.ts';
 import { mathLookup } from '../math.ts';
 import { applyPending } from '../text/carry.ts';
 import { insertPlain, placeCaret } from '../text/typing.ts';
@@ -378,15 +379,16 @@ export function install(app: App): void {
   };
   app.onRefresh(['content', 'structure'], markEmpty);
 
-  // the TeX field of a new formula. a formula left with an empty TeX at the close of the field is
-  // taken off again, as a Cancel of the Insert Equation window of Keynote
-  const openTex = (node: Element, math: Element) => {
-    app.math.open(math);
+  // the TeX field of a new formula, whose TeX is written into entry, the insert. a formula left
+  // with an empty TeX at the close of the field is taken off again without an entry to redo, as a
+  // Cancel of the Insert Equation window of Keynote
+  const openTex = (node: Element, math: Element, entry: Entry | null) => {
+    app.math.open(math, entry ?? undefined);
     const wait = window.setInterval(() => {
       if (app.math.isOpen()) return;
       window.clearInterval(wait);
       markEmpty();
-      if (node.isConnected && node.classList.contains('beeson-empty') && app.history.undoLabel === 'Insert Formula') void app.history.undo().catch(fail);
+      if (entry && node.isConnected && node.classList.contains('beeson-empty')) void app.history.retract(entry).catch(fail);
     }, 100);
   };
 
@@ -416,33 +418,36 @@ export function install(app: App): void {
     menu: insertMenu(21),
     toolbar: tool(22, 'formula'),
     enabled: ready,
-    run: (a) => a.history.transact('Insert Formula', async () => {
+    run: async (a) => {
       // in a text, the button puts an inline formula at the caret, as Insert Equation of Keynote
       // and PowerPoint does, through math.inline of commands/math.ts. the sheet is opened after
       // the click, since the click on the toolbar would close it on its way to the document, and
       // the keys typed until then are held for its TeX field, and not typed into the text
+      const release = a.math.hold();
       if (a.selection.kind === 'text' && a.commands.enabled('math.inline')) {
-        const release = a.math.hold();
         setTimeout(() => void a.commands.run('math.inline').finally(release), 0);
         return;
       }
       // the keys typed while the formula is written are typed into its TeX field
-      const release = a.math.hold();
-      let opens = false;
+      let made: { node: Element; math: Element } | null = null;
       try {
-        const { parent, before } = columnPlace(a, a.current()!);
-        const [node] = await docOf(a).insertElement('formula', parent, before, { tex: '' });
-        a.selection.set('elements', [node]);
-        markEmpty();
-        const math = node.querySelector('mjx-container');
-        if (math) {
-          opens = true;
-          setTimeout(() => (openTex(node, math), release()), 0);
-        }
+        await a.history.selecting('Insert Formula', async () => {
+          const { parent, before } = columnPlace(a, a.current()!);
+          const [node] = await docOf(a).insertElement('formula', parent, before, { tex: '' });
+          a.selection.set('elements', [node]);
+          markEmpty();
+          const math = node.querySelector('mjx-container');
+          if (math) made = { node, math };
+        });
       } finally {
-        if (!opens) release();
+        if (!made) release();
       }
-    }),
+      if (!made) return;
+      const { node, math } = made as { node: Element; math: Element };
+      // the entry is read once the transaction is in the history, for its TeX
+      const entry = a.history.undoLabel === 'Insert Formula' ? a.history.last : null;
+      setTimeout(() => (openTex(node, math, entry), release()), 0);
+    },
   });
   c.define({
     id: 'insert.qr',

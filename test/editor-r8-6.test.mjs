@@ -78,8 +78,9 @@ async function editLabels(page) {
 
 let saves = 0;
 // the edited text, the text before byte for byte after one undo, the labels of the Edit menu
-// before and after the undo, the edit again after one redo, and an open of the saved text
-async function oneEntry(page, label) {
+// before and after the undo, the edit again after one redo, checked further by redone, and an
+// open of the saved text
+async function oneEntry(page, label, redone = async () => {}) {
   const edited = await render(page);
   assert.notEqual(edited, page.source, 'the action does not change the file');
   assert.deepEqual(await editLabels(page), [`Undo ${label}`, 'Redo']);
@@ -91,6 +92,7 @@ async function oneEntry(page, label) {
   await redo(page);
   await frames(page);
   assert.equal(await render(page), edited);
+  await redone();
   assert.deepEqual(await editLabels(page), [`Undo ${label}`, 'Redo']);
   const { text } = await saveAndReopen(page, `r8-6-${++saves}.html`);
   assert.equal(text, edited);
@@ -129,9 +131,10 @@ for (const platform of PLATFORMS) {
     await press(page, 'Mod+Enter');
     await sheetClosed(page);
     await frames(page);
-    const edited = await oneEntry(page, 'Insert Formula');
+    const edited = await oneEntry(page, 'Insert Formula', async () => {
+      assert.deepEqual(await page.evaluate(`window.BeesonEditor.selection().map((e) => e.localName + '.' + e.classList[0])`), ['div.math'], 'the formula is not selected after the redo');
+    });
     assert.match(edited, /<div class="math">\\\[x\^2 \+ y\^2\\\]<\/div>/);
-    assert.deepEqual(await page.evaluate(`window.BeesonEditor.selection().map((e) => e.localName + '.' + e.classList[0])`), ['div.math'], 'the formula is not selected after the redo');
     assert.deepEqual(errors(page), []);
   });
 

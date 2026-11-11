@@ -7,7 +7,7 @@
 import type { Source } from './source.ts';
 import type { Pairing } from './render.ts';
 import type { TagEdit } from './tags.ts';
-import { History } from './history.ts';
+import { History, type Entry } from './history.ts';
 import { contentWithTex } from './math.ts';
 import { Commands } from './commands.ts';
 import type { Selection } from './selection.ts';
@@ -94,7 +94,8 @@ export interface Notes {
 export interface MathPop {
   // text/mathpop.ts: the TeX field of a formula
   isOpen(): boolean;
-  open(container: Element): void;
+  // into is the entry of the insert of a new formula, which its TeX is written into
+  open(container: Element, into?: Entry): void;
   close(back?: boolean): void;
   setMath(container: Element, tex: string): Promise<void>;
   // holds the keys typed until the next open, which types them into its field, and returns the
@@ -195,6 +196,11 @@ export class App {
       snapshot: contentWithTex,
       restore: (host, content) => this.typing.restoreHost(host, content),
       onChange: () => this.emit('history'),
+      selected: () => (this.selection?.kind === 'elements' ? this.selection.elements() : null),
+      reselect: (els) => {
+        const live = els.filter((el) => el.isConnected);
+        if (live.length) this.selection.set('elements', live);
+      },
     });
     this.commands = new Commands(this);
   }
