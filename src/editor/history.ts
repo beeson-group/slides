@@ -119,16 +119,17 @@ export class History {
   }
 
   // a transaction, or a part of the open one, after whose undo the elements selected before fn are
-  // selected again, and after whose redo those selected after fn, e.g. a paragraph made a list
-  async selecting<T>(label: string, fn: () => T | Promise<T>): Promise<T> {
-    if (!this.open) return await this.transact(label, () => this.selecting(label, fn));
+  // selected again, and after whose redo those selected after fn, e.g. a paragraph made a list, or
+  // those of then, e.g. a new box that has the caret after fn
+  async selecting<T>(label: string, fn: () => T | Promise<T>, then?: () => Element[]): Promise<T> {
+    if (!this.open) return await this.transact(label, () => this.selecting(label, fn, then));
     const entries = this.open;
     const at = entries.length;
     const before = this.selected();
     try {
       return await fn();
     } finally {
-      const after = this.selected();
+      const after = then ? then() : this.selected();
       if (entries.length > at) {
         const put = (els: Element[] | null) => () => void (els && this.reselect(els));
         entries.splice(at, 0, { label, undo: put(before), redo: () => {} });

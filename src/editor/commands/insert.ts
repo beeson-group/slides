@@ -325,19 +325,22 @@ export function install(app: App): void {
         keep = true;
         await app.history.undo().finally(() => (keep = false));
       }
-      await app.history.transact(`Insert ${def.label}`, async () => {
+      // the box is selected at a redo
+      let made: Element[] = [];
+      await app.history.selecting(`Insert ${def.label}`, async () => {
         // a box moved by textOffset or centerOffset is written with the same offset
         const [x0, y0] = p.el.style.translate.split(' ');
         const x = parseFloat(x0 ?? '') || 0, y = parseFloat(y0 ?? '') || 0;
         const [node] = await docOf(app).insert(def.html(text), p.parent, p.el, def.label);
         written!.node = node;
+        made = [node];
         p.el.remove();
         if (x || y) docOf(app).setTag(node, { translate: { x, y } }, def.label);
         pending = null;
         // the caret of a code box is in its code element, where the typing after the first key goes
         placeCaret(node, p.kind === 'code' ? (node.textContent ?? '').length : null);
         await applyPending(app, p.el, node);
-      });
+      }, () => made);
       await replay(p.kind);
     } finally {
       writing = false;
@@ -487,7 +490,7 @@ export function install(app: App): void {
     toolbar: tool(24.2, 'qr', { split: 'Media' }),
     enabled: ready,
     // a QR code fills the empty slot given, as by the icon of its placeholder, else the first one
-    run: (a, arg) => a.history.transact('Insert QR Code', async () => {
+    run: (a, arg) => a.history.selecting('Insert QR Code', async () => {
       const slide = a.current()!;
       const zone = arg instanceof Element && slide.contains(arg) && isEmptySlot(a, arg) ? arg : emptySlot(a, slide);
       const place = zone ? { parent: zone, before: null } : slide.matches('.title, .closing') ? { parent: slide, before: slide.querySelector(':scope > aside.notes') } : columnPlace(a, slide);

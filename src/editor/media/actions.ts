@@ -184,13 +184,13 @@ export async function insertFiles(app: App, files: File[], into: Element | null 
   const label = ready.length > 1 ? 'Media' : kindName(ready[0].kind);
   const nodes: Element[] = [];
   // the entry is named Insert and the kind, as every insert of insert.ts
-  await app.history.transact(`Insert ${label}`, async () => {
+  await app.history.selecting(`Insert ${label}`, async () => {
     for (const [i, r] of ready.entries()) {
       const slot = i === 0 && into && slide.contains(into) && isEmptySlot(app, into) ? into : emptySlot(app, slide);
       nodes.push(slot ? await fill(app, slot, r, label) : await addZone(app, slide, r));
     }
+    app.selection.set('elements', nodes);
   });
-  app.selection.set('elements', nodes);
   report(app, ready);
   return nodes;
 }
@@ -203,14 +203,20 @@ function setFiles(app: App, el: Element, attrs: Record<string, string | null>, l
 
 // the file of the image or the video el replaced, as one entry of the history. a video gets the
 // poster of its new file. a file of the other kind replaces el with an element of its kind, which
-// keeps the mode, the step, the id, the group, the lock, and the place of el
+// keeps the mode, the step, the id, the group, the lock, and the place of el. the new picture is
+// selected, unless its figure is
 export async function replaceFile(app: App, el: HTMLImageElement | HTMLVideoElement, file: File): Promise<void> {
   if (!kindOf(file)) throw new Error(`${file.name} is not an image or a video`);
   const [r] = await prepare(app, [file]);
   const label = `Replace ${kindName(kindOfElement(el))}`;
-  await app.history.transact(label, async () => {
+  const held = app.selection.kind === 'elements' && app.selection.elements().some((s) => s !== el && s.contains(el));
+  const select = (node: Element) => {
+    if (!held) app.selection.set('elements', [node]);
+  };
+  await app.history.selecting(label, async () => {
     if (r.kind === kindOfElement(el)) {
       setFiles(app, el, r.kind === 'image' ? { src: r.file.path } : { src: r.file.path, poster: r.poster?.path ?? null }, label);
+      select(el);
       return;
     }
     const parent = el.parentElement;
@@ -221,15 +227,13 @@ export async function replaceFile(app: App, el: HTMLImageElement | HTMLVideoElem
     const kept = Object.fromEntries(Object.entries(own.attrs).filter(([k]) => KEPT.includes(k)));
     const place = Object.entries(own.style).filter(([k]) => PLACE.includes(k)).map(([k, v]) => `${k}: ${v}`).join('; ');
     if (place) kept.style = place;
-    const held = app.selection.has(el);
     const pending = app.doc.insert(mediaText(r, classes, kept), parent, el, label);
     media.resolve(parent);
     const [node] = await pending;
     media.resolve(node);
     watch(app, node);
     await app.doc.remove(el, label);
-    // a picture selected by itself stays selected as its new element
-    if (held) app.selection.set('elements', [node]);
+    select(node);
   });
   app.invalidate('content');
   report(app, [r]);

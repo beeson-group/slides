@@ -309,7 +309,12 @@ async function insertTable(app: App, rows: string[][], into: Element | null = nu
 async function newTable(app: App, size: Size, into: Element | null = null): Promise<void> {
   const rows = Math.max(1, Math.min(MOST.rows, Math.round(size.rows)));
   const columns = Math.max(1, Math.min(MOST.columns, Math.round(size.columns)));
-  const table = await app.history.transact('Insert Table', () => insertTable(app, emptyRows(rows, columns), into));
+  // the table is selected at a redo, as in Keynote
+  const table = await app.history.selecting('Insert Table', async () => {
+    const t = await insertTable(app, emptyRows(rows, columns), into);
+    app.selection.set('elements', [t]);
+    return t;
+  });
   const first = table.rows[0]?.cells[0];
   if (first) placeCaret(first, 0);
 }
