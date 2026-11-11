@@ -321,14 +321,15 @@ export function pickTableInto(app: App, zone: Element, anchor: DOMRect): void {
 // the band in slide px over the bottom of the slide, where the slide number is drawn, and over the
 // footnote line, which a new table does not reach into
 const BOTTOM = 40;
+// the step in slide px of the grid on which a new table looks for a free place
+const STEP = 20;
 
 // a new table put where it fits on its slide, with every row and with room around it for its bars
 // at the zoom of the canvas: under the blocks before it, else at the center of the free area where
-// the layout puts a zone, else moved up until its bottom is BOTTOM over the footnote line or the
-// bottom of the slide over the blocks with text of its column, and else at the center of the slide
-// over what is there, as Keynote inserts a table. the table of a slide of the theme is put into its
-// text column, and it is not put over the text while free space is left. the space that an element
-// takes is the rule takenBox of insert.ts. the move is a translate in slide px
+// the layout puts a zone, else at the free place nearest to it at the right of the text or below it,
+// and else at the center of the slide over what is there, as Keynote inserts a table, where the
+// fill of the theme hides what is under it. the space that an element takes is the rule takenBox of
+// insert.ts. the move is a translate in slide px
 function placeTable(app: App, table: HTMLTableElement): void {
   const slide = table.closest('section');
   const parent = table.parentElement;
@@ -346,24 +347,33 @@ function placeTable(app: App, table: HTMLTableElement): void {
   const before = taken(above).map((o) => o.box);
   const all = taken([...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *')].filter((el) => !el.contains(table)));
   const others = all.map((o) => o.box);
-  // a table moved up may cover the blocks with text of its column before it, and not a caption
-  // or an empty placeholder
-  const covered = (el: Element) => above.includes(el) && !el.matches('.caption') && !!el.textContent?.trim();
   const tw = t.right - t.left;
   const th = t.bottom - t.top;
   const at = (left: number, top: number): SlideBox => ({ left, top, right: left + tw, bottom: top + th });
   const free = (b: SlideBox) => b.top - room >= 0 && b.bottom <= floor && b.right + room <= w &&
     !others.some((o) => meets({ left: b.left - room, top: b.top - room, right: b.right + room, bottom: b.bottom + room }, o));
   const top = Math.max(t.top, ...before.map((b) => b.bottom + room));
+  let best: SlideBox | null = null;
   let place: SlideBox | null = free(at(t.left, top)) ? at(t.left, top) : null;
   const zone = place ? null : freeZone(app, slide, table);
   if (zone) {
     const b = at((zone.left + zone.right - tw) / 2, (zone.top + zone.bottom - th) / 2);
     if (free(b)) place = b;
   }
-  const raised = Math.min(top, floor - th);
-  const over = (b: SlideBox) => all.some((o) => meets(b, o.box) && !covered(o.el));
-  if (!place && raised - room >= 0 && !over(at(t.left, raised))) place = at(t.left, raised);
+  // the free places on a grid of STEP px under the heading of the slide, the nearest one taken
+  const head = slide.querySelector(':scope > h2, :scope > h1');
+  const under = head ? (takenBox(app, head)?.bottom ?? 0) + room : room;
+  let near = Infinity;
+  for (let y = under; !place && y + th <= floor; y += STEP) {
+    for (let x = room; x + tw + room <= w; x += STEP) {
+      const d = Math.hypot(x - t.left, y - top);
+      if (d < near && free(at(x, y))) {
+        near = d;
+        best = at(x, y);
+      }
+    }
+  }
+  place ??= best;
   place ??= at((w - tw) / 2, (h - th) / 2);
   const x = Math.round(place.left - t.left);
   const y = Math.round(place.top - t.top);

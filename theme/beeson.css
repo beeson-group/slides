@@ -234,8 +234,9 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal .hljs-comment { color: var(--muted); font-style: italic; }
 .reveal .hljs-operator { color: var(--subtle); }
 
-/* tables: hairlines, without fills */
+/* tables: hairlines on the color of the slide, which hides what a table is moved over */
 .reveal table { margin: 24px 0 0; border-collapse: collapse; font-size: 36px; line-height: 1.4; }
+.reveal .slides section > table, .reveal .slides section > .col > table { position: relative; z-index: 1; background: var(--bg); }
 .reveal th, .reveal td { padding: 10px 40px 10px 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); font-weight: inherit; }
 .reveal th { color: var(--subtle); font-style: italic; }
 .reveal tr:last-child td { border-bottom: 0; }
