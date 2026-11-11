@@ -72,7 +72,7 @@ const fieldsOf = (page) =>
   page.evaluate(`(() => { const v = (n) => document.querySelector('#beeson-edit-panel-format input[name="' + n + '"]')?.value ?? null; return { w: Number(v('Width')), h: Number(v('Height')) }; })()`);
 // readoutOf returns the size in the readout at the pointer, or null while the readout is hidden
 const readoutOf = (page) =>
-  page.evaluate(`(() => { const t = document.querySelector('.beeson-offset:not([hidden])')?.textContent ?? ''; const m = t.match(/(\\d+) × (\\d+)/); return m ? { w: Number(m[1]), h: Number(m[2]), text: t } : null; })()`);
+  page.evaluate(`(() => { const t = document.querySelector('.beeson-offset:not([hidden])')?.textContent ?? ''; const m = t.match(/w: (\\d+) px  h: (\\d+) px/); return m ? { w: Number(m[1]), h: Number(m[2]), text: t } : null; })()`);
 
 // item 1 of R7.1: in R6.8, a corner grip of a group of a figure and a paragraph moved by -120 by
 // -90 px gave 1446 × 706 in the readout, the box asked for, while the members reached 1524 × 800,

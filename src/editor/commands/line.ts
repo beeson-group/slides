@@ -8,7 +8,7 @@
 
 import type { App } from '../app.ts';
 import { injectStyle, make } from '../ui/dom.ts';
-import { overlay, view } from '../canvas/frames.ts';
+import { overlay, view, xy } from '../canvas/frames.ts';
 import { frameOf, frameRect, linePoints, movablesOf, onCanvas, snapBoxOf, toSlide, type Frame } from '../canvas/hit.ts';
 import { LAYOUT_GUIDES, snapMove, snapPoint, type Box, type Targets } from '../canvas/snap.ts';
 import { locked, placeOf, record, writePlace, type Place } from '../canvas/drag.ts';
@@ -413,7 +413,7 @@ export function install(app: App): void {
       view.spacing = snap?.spacing ?? [];
       // the upper left corner of the line on the slide, as the readout of a move of drag.ts gives it
       const c = snapBoxOf(app, p.svg);
-      view.readout = { text: `x ${round(c.left)}  y ${round(c.top)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
+      view.readout = { text: xy(c.left, c.top), x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     }
     root.classList.add('beeson-dragging');
     frames.draw();

@@ -248,7 +248,7 @@ for (const platform of PLATFORMS) {
         const f = document.querySelector('.beeson-overlay > .beeson-frame.selected:not([hidden])').getBoundingClientRect();
         return { x: Math.round((f.left - r.left) / scale), y: Math.round((f.top - r.top) / scale) };
       })()`);
-      const m = /^x (-?\d+)\s+y (-?\d+)$/.exec(text ?? '');
+      const m = /^x: (-?\d+) px\s+y: (-?\d+) px$/.exec(text ?? '');
       assert.ok(m, `the readout ${text} does not give x and y`);
       assert.ok(near(Number(m[1]), corner.x, 1) && near(Number(m[2]), corner.y, 1), `the readout ${text} is not the upper left corner ${corner.x}, ${corner.y} of the figure`);
       await shot(page, `move-readout-${mode}-${platform}`);
@@ -260,7 +260,7 @@ for (const platform of PLATFORMS) {
       const se = await gripAt(page, 'se');
       await drag(page, se, { dx: -60, dy: -40, hold: true });
       await frames(page);
-      assert.match((await readout(page)) ?? '', /^\d+ × \d+$/, 'the readout of a resize does not give the size');
+      assert.match((await readout(page)) ?? '', /^w: \d+ px {2}h: \d+ px$/, 'the readout of a resize does not give the size');
       await shot(page, `resize-readout-${mode}-${platform}`);
       await release(page, { x: se.x - 60, y: se.y - 40 });
       await frames(page);

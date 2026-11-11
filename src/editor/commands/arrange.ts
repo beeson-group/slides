@@ -9,7 +9,7 @@ import type { Command } from '../commands.ts';
 import { CONTAINER, RESIZABLE, containerOf, frameRect, mediaIn, movableOf, movablesOf, objectsOf, pictureOf, snapBoxOf } from '../canvas/hit.ts';
 import type { Place } from '../canvas/drag.ts';
 import { placeOf, record, withCorners, writePlace } from '../canvas/drag.ts';
-import { view } from '../canvas/frames.ts';
+import { view, xy } from '../canvas/frames.ts';
 
 // the nudges of the same elements closer than this, in ms, are one entry of the history
 const PAUSE = 1000;
@@ -61,7 +61,7 @@ function nudge(app: App, dx: number, dy: number): void {
   // the upper left corner of the first element on the slide at the lower right of the frames
   const boxes = els.map(frameRect);
   const c = snapBoxOf(app, els[0]);
-  view.readout = { text: `x ${Math.round(c.left)}  y ${Math.round(c.top)}`, x: Math.max(...boxes.map((b) => b.left + b.width)) + 6, y: Math.max(...boxes.map((b) => b.top + b.height)) + 10, at: 'frame' };
+  view.readout = { text: xy(c.left, c.top), x: Math.max(...boxes.map((b) => b.left + b.width)) + 6, y: Math.max(...boxes.map((b) => b.top + b.height)) + 10, at: 'frame' };
   app.invalidate('content');
 }
 

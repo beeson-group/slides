@@ -279,7 +279,7 @@ for (const platform of PLATFORMS) {
         await press(page, 'ArrowRight');
         await frames(page);
         const nudged = await boxIn(page, FRAME);
-        assert.equal(await readout(page), `x ${Math.round(nudged.left)}  y ${Math.round(nudged.top)}`, `the readout of a nudge of ${where}, whose frame is at ${show(nudged)}`);
+        assert.equal(await readout(page), `x: ${Math.round(nudged.left)} px  y: ${Math.round(nudged.top)} px`, `the readout of a nudge of ${where}, whose frame is at ${show(nudged)}`);
         await roundTrip(page, await render(page));
 
         // a drag without the snap, with ⌘ on a Mac and Alt elsewhere
@@ -290,7 +290,7 @@ for (const platform of PLATFORMS) {
         const shown = await readout(page);
         await release(page, at.x + d.x * f.k, at.y + d.y * f.k, platform === 'mac' ? 4 : 1);
         await frames(page);
-        assert.equal(shown, `x ${Math.round(frame.left + d.x)}  y ${Math.round(frame.top + d.y)}`, `the readout of a drag of ${where} from its frame at ${show(frame)}`);
+        assert.equal(shown, `x: ${Math.round(frame.left + d.x)} px  y: ${Math.round(frame.top + d.y)} px`, `the readout of a drag of ${where} from its frame at ${show(frame)}`);
         await roundTrip(page, await render(page));
 
         await exec(page, 'zoom.selection');

@@ -448,7 +448,7 @@ const cornerOf = (page) => page.evaluate(`(() => {
   return { x: Math.round((f.left - r.left) / k), y: Math.round((f.top - r.top) / k) };
 })()`);
 const xy = (text) => {
-  const m = /^x (-?\d+)\s+y (-?\d+)$/.exec(text ?? '');
+  const m = /^x: (-?\d+) px\s+y: (-?\d+) px$/.exec(text ?? '');
   assert.ok(m, `the readout ${text} does not give x and y`);
   return { x: m[1], y: m[2] };
 };

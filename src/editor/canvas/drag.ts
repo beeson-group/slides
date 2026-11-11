@@ -11,7 +11,7 @@ import type { TagEdit, Translate } from '../tags.ts';
 import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, anchored, fitPicture, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
 import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, captionsOf, constrained, containerOf, cssWidth, frameOf, frameRect, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, pictureReach, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, visualRect } from './hit.ts';
-import { groupFrame, overlay, turned, view } from './frames.ts';
+import { groupFrame, overlay, turned, view, wh, xy } from './frames.ts';
 import { enterGroup, settleCopies, freshGroup, groupOf } from '../commands/order.ts';
 import { injectStyle } from '../ui/dom.ts';
 
@@ -610,7 +610,7 @@ export function install(app: App): void {
     // the upper left corner of the pressed element in slide pixels next to the pointer, as Keynote
     // gives its x and y, below and to the right of it, where the guides at the pointer are not covered
     const c = p.corner;
-    const at = c ? `x ${Math.round(c.left + dx)}  y ${Math.round(c.top + dy)}` : '';
+    const at = c ? xy(c.left + dx, c.top + dy) : '';
     view.readout = { text: `${ghosts.shown() ? 'Copy  ' : ''}${at}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     document.documentElement.classList.add('beeson-dragging');
     frames.draw();
@@ -724,7 +724,7 @@ export function install(app: App): void {
     follow(p, h, after.width / at.width, after.height / at.height, o.center);
     view.moving = p.els;
     view.resizing = true;
-    view.readout = { text: `${Math.round(size.width)} × ${Math.round(size.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
+    view.readout = { text: wh(size.width, size.height), x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     frames.draw();
     app.invalidate('content');
   };
@@ -763,7 +763,7 @@ export function install(app: App): void {
     view.resizing = true;
     view.guides = [];
     view.spacing = [];
-    view.readout = { text: `${Math.round(box.width)} × ${Math.round(box.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
+    view.readout = { text: wh(box.width, box.height), x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     frames.draw();
     app.invalidate('content');
   };
@@ -807,7 +807,7 @@ export function install(app: App): void {
     // Arrange pane give it, since the layout sets the height of a zone and a text block, which can
     // differ from box
     const reached = toSlide(f, groupFrame(p.els, deg));
-    view.readout = { text: `${Math.round(reached.width)} × ${Math.round(reached.height)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
+    view.readout = { text: wh(reached.width, reached.height), x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     frames.draw();
     app.invalidate('content');
   };

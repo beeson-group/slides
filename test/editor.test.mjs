@@ -1349,7 +1349,7 @@ test('Shift locks a drag to one axis, a run of nudges is one undo, and the offse
     // the upper left corner of the frame of the figure in slide px, i.e. of its picture with its
     // caption, which the readout gives
     const s = document.querySelector('.reveal .slides').getBoundingClientRect(), z = document.querySelector('.beeson-overlay > .beeson-frame.selected:not([hidden])').getBoundingClientRect();
-    const corner = 'x ' + Math.round((z.left - s.left) / scale) + '  y ' + Math.round((z.top - s.top) / scale);
+    const corner = 'x: ' + Math.round((z.left - s.left) / scale) + ' px  y: ' + Math.round((z.top - s.top) / scale) + ' px';
     const during = { shown: !!label() && !label().hidden, corner: label()?.textContent === corner, atPointer: !!l && Math.abs(l.left - (x + 60 * scale) - 14) < 1 && Math.abs(l.top - (y + 20 * scale) - 18) < 1 };
     at('pointerup', x + 60 * scale, y + 20 * scale);
     return { during, after: label()?.hidden, translate: zone.style.translate };
@@ -1370,7 +1370,7 @@ test('Shift locks a drag to one axis, a run of nudges is one undo, and the offse
   assert.deepEqual(await page.evaluate(`(() => {
     const l = document.querySelector('.beeson-offset');
     const scale = Reveal.getScale(), s = document.querySelector('.reveal .slides').getBoundingClientRect(), z = document.querySelector('.beeson-overlay > .beeson-frame.selected:not([hidden])').getBoundingClientRect();
-    return { shown: !l.hidden, corner: l.textContent === 'x ' + Math.round((z.left - s.left) / scale) + '  y ' + Math.round((z.top - s.top) / scale) };
+    return { shown: !l.hidden, corner: l.textContent === 'x: ' + Math.round((z.left - s.left) / scale) + ' px  y: ' + Math.round((z.top - s.top) / scale) + ' px' };
   })()`), { shown: true, corner: true });
   await page.evaluate('window.BeesonEditor.undo()');
   assert.equal(await translate(), '');

@@ -33,6 +33,10 @@ export const view: {
   held: HTMLElement | null;
 } = { hover: null, moving: null, resizing: false, guides: [], spacing: [], readout: null, marquee: null, turn: null, held: null };
 
+// the readouts of a place and a size in slide px, labeled as in Keynote
+export const xy = (x: number, y: number) => `x: ${Math.round(x)} px  y: ${Math.round(y)} px`;
+export const wh = (w: number, h: number) => `w: ${Math.round(w)} px  h: ${Math.round(h)} px`;
+
 const CSS = `
 .beeson-overlay { position: fixed; inset: 0; z-index: 51; pointer-events: none; }
 .beeson-frame { position: fixed; pointer-events: none; box-sizing: border-box; border: 1px dashed var(--ed-muted, var(--subtle, #bbb)); }
