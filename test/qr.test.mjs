@@ -1,6 +1,7 @@
-// checks of the QR codes of src/qr.ts: the encoder at every version, decoded with jsQR from a
-// raster of its modules, and the codes of test/pages/qr.html and of the demo deck in Chrome,
-// decoded from screenshots of the slides in both modes, in the print view, and in the editor
+// checks of the QR codes of src/qr.ts: the encoder at every version, without and with the logo,
+// decoded with jsQR from a raster of its modules, and the codes of test/pages/qr.html and of the
+// demo deck in Chrome, decoded from screenshots of the slides in both modes, under the backdrop of
+// the closing slide, in the print view, and in the editor
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -8,7 +9,7 @@ import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import jsQR from 'jsqr';
 import { deckSettled, deckUrl, launch, printView } from '../scripts/chrome.mjs';
-import { QUIET, capacity, encode } from '../src/qr.ts';
+import { QUIET, capacity, encode, hidden } from '../src/qr.ts';
 
 const PAGE = 'test/pages/qr.html';
 const ADDRESSES = [
@@ -52,8 +53,37 @@ test('a text as long as each version holds is encoded in that version, and decod
     assert.equal(read.version, version);
   }
   // the byte capacities of level M in table 7 of ISO/IEC 18004
-  assert.deepEqual([1, 2, 3, 10, 40].map(capacity), [14, 26, 42, 213, 2331]);
+  assert.deepEqual([1, 2, 3, 10, 40].map((version) => capacity(version)), [14, 26, 42, 213, 2331]);
   assert.throws(() => encode(filler(2332)), /holds at most 2331/);
+});
+
+test('a code with the logo is encoded at level H, and decoded back with every module under the logo inverted', () => {
+  // the byte capacities of level H in table 7 of ISO/IEC 18004
+  assert.deepEqual([1, 2, 3, 10, 40].map((version) => capacity(version, 'H')), [7, 14, 24, 119, 1273]);
+  const versions = new Set();
+  for (let version = 1; version <= 40; version++) {
+    const text = filler(capacity(version, 'H'));
+    const code = encode(text, true);
+    assert.equal(code.logo, true, `version ${version}`);
+    assert.equal(code.level, 'H');
+    assert.ok(code.version >= version);
+    versions.add(code.version);
+    // the worst case of the logo: each module that is not drawn is read as the other color
+    let count = 0;
+    for (let r = 0; r < code.size; r++) for (let c = 0; c < code.size; c++) if (hidden(code, r, c)) { code.dark[r][c] = !code.dark[r][c]; count++; }
+    assert.ok(count / code.size ** 2 > 0.07, `version ${code.version}: ${count} modules are under the logo`);
+    const { px, side } = raster(code);
+    const read = jsQR(px, side, side, { inversionAttempts: 'dontInvert' });
+    assert.equal(read?.data, text, `version ${code.version}`);
+  }
+  // the logo is drawn on the timing patterns at version 1, and on too many codewords of a block at
+  // version 13
+  assert.ok(!versions.has(1) && !versions.has(13) && versions.has(5) && versions.has(40), [...versions].join(' '));
+  assert.equal(encode('https://github.com/beeson-group/slides', true).version, 5);
+  // a text too long for level H is encoded at level M, and drawn without the logo
+  const plain = encode(filler(1274), true);
+  assert.deepEqual([plain.logo, plain.level], [false, 'M']);
+  assert.deepEqual([encode('abc').logo, encode('abc').level], [false, 'M']);
 });
 
 test('a code is read with a square of its modules inverted, hence its error correction is decoded', () => {
@@ -72,7 +102,7 @@ const require = createRequire(import.meta.url);
 const jsqrSource = readFileSync(require.resolve('jsqr/dist/jsQR.js'), 'utf8');
 
 // the text of each code on the current slide of page, read from a screenshot of the slide without
-// inverting its colors, and the colors of the tile and of the ink
+// inverting its colors, and the colors of the tile, of the ink, and of the eye of a finder pattern
 async function readSlide(page) {
   const boxes = await page.evaluate(`[...document.querySelectorAll('.reveal .slides section.present .qr > svg')].map((svg) => {
     const r = svg.getBoundingClientRect();
@@ -81,8 +111,8 @@ async function readSlide(page) {
   const out = [];
   for (const { side, ...box } of boxes) {
     const png = (await page.screenshot({ ...box, scale: 1 })).toString('base64');
-    // the center of the finder at the upper left, a dark module
-    const finder = (QUIET + 3.5) / side;
+    // the ring and the eye of the finder pattern at the upper left
+    const ring = (QUIET + 0.5) / side, eye = (QUIET + 3.5) / side;
     out.push(await page.evaluate(`(async () => {
       if (!window.jsQR) (0, eval)(${JSON.stringify(jsqrSource)});
       const image = new Image();
@@ -96,8 +126,9 @@ async function readSlide(page) {
       const { data } = context.getImageData(0, 0, image.width, image.height);
       const read = window.jsQR(data, image.width, image.height, { inversionAttempts: 'dontInvert' });
       const tile = [...context.getImageData(Math.floor(image.width / 2), 2, 1, 1).data.slice(0, 3)];
-      const ink = [...context.getImageData(Math.floor(image.width * ${finder}), Math.floor(image.height * ${finder}), 1, 1).data.slice(0, 3)];
-      return { text: read?.data ?? null, tile, ink };
+      const ink = [...context.getImageData(Math.floor(image.width * ${ring}), Math.floor(image.height * ${eye}), 1, 1).data.slice(0, 3)];
+      const eye = [...context.getImageData(Math.floor(image.width * ${eye}), Math.floor(image.height * ${eye}), 1, 1).data.slice(0, 3)];
+      return { text: read?.data ?? null, tile, ink, eye };
     })()`));
   }
   return out;
@@ -105,7 +136,7 @@ async function readSlide(page) {
 
 const luminance = ([r, g, b]) => (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
 
-test('each code of the test deck is read back from the slide in both modes, dark on a light tile, without inverting it', { timeout: 90000 }, async (t) => {
+test('each code of the test deck is read back from the slide in both modes, dark on a light tile with the logo in its middle, without inverting it', { timeout: 90000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
@@ -125,7 +156,21 @@ test('each code of the test deck is read back from the slide in both modes, dark
       // the tile is light and the modules dark in both modes
       assert.ok(luminance(codes[0].tile) > 0.9, `${theme}, slide ${h + 1}: the tile is ${codes[0].tile}`);
       assert.ok(luminance(codes[0].ink) < 0.1, `${theme}, slide ${h + 1}: the ink is ${codes[0].ink}`);
+      // the eyes are in the violet of the light mode in both modes
+      assert.deepEqual(codes[0].eye, [138, 43, 226], `${theme}, slide ${h + 1}`);
     }
+    // the logo is a disc of 30 percent of the width of the modules, in the middle of each code
+    const logos = await page.evaluate(`Promise.all([...document.querySelectorAll('.qr > svg')].map(async (svg) => {
+      const logo = svg.parentElement.querySelector(':scope > .qr-logo');
+      const image = new Image();
+      image.src = getComputedStyle(logo).backgroundImage.slice(5, -2);
+      await image.decode();
+      const a = svg.getBoundingClientRect(), b = logo.getBoundingClientRect();
+      // the width of the logo is a percentage of the width of the tile
+      const share = parseFloat(logo.style.width) / 100 / (1 - 2 * ${QUIET} / svg.viewBox.baseVal.width);
+      return [image.src.split('/').slice(-2).join('/'), image.naturalWidth > 0, Math.round(share * 100), Math.round(b.left + b.width / 2 - a.left - a.width / 2), Math.round(b.height - b.width)];
+    }))`);
+    assert.deepEqual(logos, ADDRESSES.map(() => ['brand/logo.png', true, 30, 0, 0]), theme);
     assert.deepEqual(read, ADDRESSES, theme);
     assert.match(await page.evaluate(`document.querySelector('#too-long .qr-error')?.textContent`), /2332 bytes long, and a QR code at level M holds at most 2331/);
     assert.deepEqual(page.errors, []);
@@ -155,7 +200,7 @@ test('every printed page of the test deck carries the code of its slide, as draw
   // a clone of the print view is the code written in the slides
   await page.goto(deckUrl(PAGE, 'still'));
   await page.waitFor(deckSettled);
-  const live = await page.evaluate(`[...document.querySelectorAll('.qr path')].map((p) => p.getAttribute('d'))`);
+  const live = await page.evaluate(`[...document.querySelectorAll('.qr .qr-ink')].map((p) => p.getAttribute('d'))`);
   assert.deepEqual(printed.filter((p) => p.path).map((p) => p.path), [live[0], live[1], live[2], live[2], live[3], live[4]]);
 });
 
@@ -191,4 +236,54 @@ test('the code of the demo deck is read back, moved by a drag in the editor, and
   const tag = '<div class="qr" data-qr="https://github.com/beeson-group/slides">';
   assert.equal(deckText.split(tag).length, 2);
   assert.equal(await page.evaluate('window.BeesonEditor.render()'), deckText.replace(tag, '<div class="qr" data-qr="https://github.com/beeson-group/slides" style="translate: -60px -40px">'));
+});
+
+test('with the logo switched off, a code is drawn at level M without it, and read back', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl('test/pages/qr-plain.html', 'theme=dark&still'));
+  await page.waitFor(deckSettled);
+  const [code] = await readSlide(page);
+  assert.equal(code.text, 'https://github.com/beeson-group/slides');
+  // version 3 of level M, against version 5 of level H with the logo
+  assert.deepEqual(await page.evaluate(`[document.querySelector('.qr > svg').viewBox.baseVal.width, document.querySelectorAll('.qr-logo').length]`), [29 + 2 * QUIET, 0]);
+  assert.deepEqual(page.errors, []);
+});
+
+test('the code of the closing slide of the demo deck is 200 px wide at 50 px from the right and the bottom, and read back under its backdrop while it is traced', { timeout: 90000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  for (const theme of ['dark', 'light']) {
+    await page.goto(deckUrl('index.html', `theme=${theme}`));
+    await page.waitFor(deckSettled);
+    await page.evaluate(`Reveal.slide(Reveal.getIndices(document.querySelector('.qr').closest('section')).h)`);
+    const box = await page.evaluate(`(() => { const qr = document.querySelector('.qr'); return [qr.closest('section').className.includes('closing'), qr.offsetLeft, qr.offsetTop, qr.offsetWidth, qr.offsetHeight]; })()`);
+    assert.deepEqual(box, [true, 1920 - 50 - 200, 1080 - 50 - 200, 200, 200], theme);
+    // during the trace of the backdrop, and once it is complete
+    for (const wait of [400, 800, 1200, 1600, 4000]) {
+      await new Promise((done) => setTimeout(done, wait));
+      const [code] = await readSlide(page);
+      assert.equal(code.text, 'https://github.com/beeson-group/slides', `${theme}, after ${wait} ms more`);
+    }
+    // the strands are drawn over the code: the code is the element under the mouse at its middle,
+    // and the canvas of the backdrop is painted above it
+    const over = await page.evaluate(`(() => {
+      const qr = document.querySelector('.qr'), r = qr.getBoundingClientRect();
+      const canvas = qr.closest('section').querySelector('.backdrop canvas');
+      return [qr.contains(document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2)), Number(getComputedStyle(canvas).zIndex) > 0, getComputedStyle(canvas).pointerEvents];
+    })()`);
+    assert.deepEqual(over, [true, true, 'none'], theme);
+    assert.deepEqual(page.errors, []);
+  }
+});
+
+test('a code on a title slide keeps the default width', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl('test/pages/qr-plain.html', 'still'));
+  await page.waitFor(deckSettled);
+  assert.deepEqual(await page.evaluate(`(() => { const s = getComputedStyle(document.querySelector('.qr')); return [s.position, s.width]; })()`), ['relative', '320px']);
 });
