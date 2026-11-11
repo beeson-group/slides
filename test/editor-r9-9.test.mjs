@@ -165,6 +165,35 @@ const LAID = `(() => {
 const meets = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
 const inside = (a, s) => a.left >= s.left - 1 && a.top >= s.top - 1 && a.right <= s.right + 1 && a.bottom <= s.bottom + 1;
 
+const menuItems = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu')].at(-1) ? [...[...document.querySelectorAll('.beeson-edit-menu')].at(-1).querySelectorAll('.item')].filter((i) => i.getClientRects().length).map((i) => i.textContent.trim().replace(/\\s+/g, ' ')) : []`);
+
+const itemAt = (page, label) => page.evaluate(`(() => {
+  const item = [...document.querySelectorAll('.beeson-edit-menu .item')].filter((i) => i.getClientRects().length).find((i) => i.textContent.trim().startsWith(${js(label)}));
+  if (!item) return null;
+  const r = item.getBoundingClientRect();
+  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+})()`);
+
+// the submenu of the menu bar at the path, e.g. Arrange, Distribute, opened with trusted input
+async function openSubmenu(page, bar, label) {
+  await click(page, await page.evaluate(`(() => {
+    const r = [...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].find((b) => b.textContent.trim() === ${js(bar)}).getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  })()`));
+  await page.waitFor(`!!document.querySelector('.beeson-edit-menu .item')`, 3000);
+  const at = await itemAt(page, label);
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.x, y: at.y });
+  await page.waitFor(`document.querySelectorAll('.beeson-edit-menu').length > 1`, 3000);
+}
+
+// every element of the current slide selected with the key of Select All on the canvas
+async function selectAll(page) {
+  const at = await page.evaluate(`(() => { const r = document.querySelector('.reveal .slides > section.present').getBoundingClientRect(); return { x: r.right - 20, y: r.bottom - 60 }; })()`);
+  await click(page, at);
+  await press(page, 'Mod+A');
+  await frames(page);
+}
+
 const shownImage = `.reveal:not(.beeson-peek) .slides > section.present figure img`;
 async function selectPicture(page) {
   const at = await page.evaluate(`(() => { const r = [...document.querySelectorAll(${js(shownImage)})].map((i) => i.getBoundingClientRect()).find((r) => r.width); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
@@ -266,5 +295,30 @@ for (const platform of PLATFORMS) {
       assert.equal((await page.evaluate(VIDEOS))[0].paused, true, 'the video plays once its slide is shown again');
       await page.close();
     }
+  });
+
+  test(`${platform}: Distribute Evenly follows Vertically in the menu and the pane, and spaces the selection both ways as one entry`, async (t) => {
+    const page = await load(t, platform, { n: 2 });
+    await selectAll(page);
+    assert.ok((await selection(page)).length >= 3, 'the elements of the slide are not selected');
+    // both ways, from a second page with the two commands of the axes
+    const page2 = await load(t, platform, { n: 2 });
+    await selectAll(page2);
+    await exec(page2, 'arrange.distribute.horizontal');
+    await exec(page2, 'arrange.distribute.vertical');
+    const both = await render(page2);
+    assert.notEqual(both, page2.source);
+    await page2.close();
+
+    await openSubmenu(page, 'Arrange', 'Distribute');
+    const items = (await menuItems(page)).map((i) => i.replace(/\s*[⌘⌥⇧^].*$|\s*(Ctrl|Alt)\+.*$/, ''));
+    assert.deepEqual(items.slice(-3), ['Distribute Horizontally', 'Distribute Vertically', 'Distribute Evenly']);
+    await click(page, await itemAt(page, 'Distribute Evenly'));
+    await frames(page);
+    assert.equal(await render(page), both);
+    assert.equal((await state(page, 'edit.undo')).label, 'Undo Distribute Evenly');
+    const buttons = await page.evaluate(`[...document.querySelectorAll('${PANEL} button')].map((b) => b.textContent.trim())`);
+    assert.deepEqual(buttons.filter((b) => ['Horizontally', 'Vertically', 'Evenly'].includes(b)), ['Horizontally', 'Vertically', 'Evenly']);
+    await roundTrip(page);
   });
 }
