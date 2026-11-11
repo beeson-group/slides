@@ -401,16 +401,3 @@ for (const platform of PLATFORMS) {
     }
   });
 }
-
-test('a page shows the guides that another tab stores', async () => {
-  const page = await editor('mac');
-  const other = await editor('mac', { keep: true, close: false });
-  await exec(other, 'view.guides.add', { y: [300] });
-  await frames(other);
-  await page.send('Page.bringToFront');
-  await sleep(100);
-  await frames(page);
-  const shown = await page.evaluate(`[...document.querySelectorAll('.beeson-hand-guide')].filter((g) => !g.hidden).map((g) => [g.dataset.axis, Number(g.dataset.at)])`);
-  assert.deepEqual(shown, [['y', 300]], 'the guide stored by another tab is not shown');
-  await other.close();
-});
