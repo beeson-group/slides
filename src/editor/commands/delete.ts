@@ -8,6 +8,7 @@
 import type { App } from '../app.ts';
 import { locked } from '../canvas/drag.ts';
 import { objectsOf, withTwins } from '../canvas/hit.ts';
+import { reselect } from '../selection.ts';
 import { hasRange, inText } from './clipboard.ts';
 import { docOf } from './slide.ts';
 
@@ -34,6 +35,7 @@ export function install(app: App): void {
       const els = selectedElements(a);
       const kept = els.filter((el) => locked(el));
       const outer = withTwins(a, els.filter((el) => !locked(el) && !els.some((o) => o !== el && o.contains(el))));
+      if (outer.length) reselect(a, a.selection.elements().slice(), null);
       if (kept.length) a.selection.set('elements', kept);
       else a.selection.clear();
       for (const el of outer.reverse()) await doc.remove(el, 'delete');

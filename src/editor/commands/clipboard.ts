@@ -17,6 +17,7 @@ import { insertFiles } from '../media/actions.ts';
 import { kindOf } from '../media/store.ts';
 import { insertPlain } from '../text/typing.ts';
 import { objectsOf } from '../canvas/hit.ts';
+import { reselect } from '../selection.ts';
 import { freshDataIds, freshGroup } from './order.ts';
 import { withTwins } from '../canvas/hit.ts';
 import { VOID } from '../source.ts';
@@ -186,6 +187,7 @@ async function pasteElements(app: App, texts: string[]): Promise<Element[]> {
     own.pasted++;
     own.last = nodes;
   }
+  reselect(app, app.selection.elements().slice(), nodes);
   app.selection.set('elements', nodes);
   return nodes;
 }
@@ -201,6 +203,7 @@ export async function duplicateElements(app: App, els: Element[]): Promise<Eleme
   }
   regroup(app, copies);
   freshDataIds(app, copies);
+  reselect(app, app.selection.elements().slice(), copies);
   app.selection.set('elements', copies);
   return copies;
 }
@@ -263,6 +266,7 @@ export function install(app: App): void {
       const els = withTwins(a, selectedElements(a));
       if (!els.length) return a.commands.run('slide.cut', data ?? undefined);
       copy(a, els, data);
+      reselect(a, a.selection.elements().slice(), null);
       a.selection.clear();
       for (const el of [...els].reverse()) await docOf(a).remove(el, 'cut');
     },
