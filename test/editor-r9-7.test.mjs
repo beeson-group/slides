@@ -258,3 +258,17 @@ test('the commands with a key on the Mac have a key on Windows and Linux, listed
   assert.equal(await page.evaluate(`document.querySelector('.reveal .slides > section.present').dataset.visibility`), 'hidden', 'Ctrl+Shift+H does not hide the slide');
   await roundTrip(page);
 });
+
+// menus-keys-9: Slide came after Arrange, where Keynote puts it between Insert and Format
+for (const platform of PLATFORMS) {
+  test(`the menu bar has the order of Keynote (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    const titles = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].map((b) => b.textContent)`);
+    assert.deepEqual(titles, ['File', 'Edit', 'Insert', 'Slide', 'Format', 'Arrange', 'View', 'Play', 'Help']);
+    // the sheet of shortcuts lists the menus in the same order
+    await run(page, 'help.keys');
+    const heads = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-keys h3')].map((h) => h.textContent).filter((h) => !['Other', 'Mouse'].includes(h))`);
+    assert.deepEqual(heads, titles.filter((h) => heads.includes(h)));
+    assert.deepEqual(errors(page), []);
+  });
+}
