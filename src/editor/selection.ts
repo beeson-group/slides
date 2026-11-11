@@ -144,7 +144,10 @@ export function install(app: App): void {
   document.addEventListener('focusin', (ev) => {
     const target = ev.target instanceof Element ? ev.target : null;
     const host = app.hostOf(target);
-    if (host && app.current()?.contains(host) && !host.closest('aside.notes')) set('text', [host]);
+    // a focused display is an object, framed while its TeX is edited in the sheet or the pane
+    if (host?.matches('div.math') && target?.matches('mjx-container') && app.current()?.contains(host)) {
+      if (!(kind === 'elements' && items.includes(host))) set('elements', [host]);
+    } else if (host && app.current()?.contains(host) && !host.closest('aside.notes')) set('text', [host]);
     else if (target?.classList.contains('beeson-movable') && !(kind === 'elements' && items.some((el) => el !== target && target.contains(el)))) set('elements', [target]);
   });
   // a right-click in a text, before its context menu is opened in shell.ts: inside the selection
