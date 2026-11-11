@@ -42,14 +42,14 @@ test('a series is added after the series of a column with the separators of the 
   assert.equal(added.error, null);
   assert.equal(added.id, 'series-1');
   const expected = BLOCK
-    .replace('"kind": "trace" },\n', '"kind": "trace" },\n    { "id": "series-1", "panel": "p", "kind": "trace" },\n')
+    .replace('"kind": "trace" },\n', '"kind": "trace" },\n    { "id": "series-1", "panel": "p", "kind": "trace", "tone": "data-1" },\n')
     .replace('[2, 0]], "b"', '[2, 0]], "series-1": [[0, -1], [1, 0], [2, 1]], "b"')
     .replace('[1, 1]], "b": [[1, 1]', '[1, 1]], "series-1": [[0, -1], [2, 1]], "b": [[1, 1]');
   assert.equal(added.text, expected);
   assert.deepEqual(sheetsOf(added.text)[0].columns.slice(1), ['a x', 'a y', 'series-1 x', 'series-1 y', 'b x', 'b y']);
   // a move swaps the marks and the data of every tab, and the separators keep their places
   const moved = moveSeries(added.text, 'series-1', 'a', false);
-  assert.match(moved.text, /"marks": \[\n {4}\{ "id": "series-1", "panel": "p", "kind": "trace" \},\n {4}\{ "id": "a",/);
+  assert.match(moved.text, /"marks": \[\n {4}\{ "id": "series-1", "panel": "p", "kind": "trace", "tone": "data-1" \},\n {4}\{ "id": "a",/);
   assert.match(moved.text, /"data": \{ "series-1": \[\[0, -1\], \[1, 0\], \[2, 1\]\], "a": \[\[0, 0\], \[1, 1\], \[2, 0\]\], "b"/);
   assert.equal(moveSeries(moved.text, 'series-1', 'a', true).text, added.text);
   assert.equal(deleteSeries(added.text, 'series-1').text, BLOCK);
@@ -201,7 +201,7 @@ const MARKS = `    "marks": [
     ],`;
 const ONE = '"dot": [[0, 0], [1, 1]], "path": [[0, 0], [1, 0]]';
 const TWO = '"dot": [[1, 0], [0, 1]], "path": [[0, 0], [1, 1]]';
-const MARK = { dot: '{ "id": "dot", "panel": "left", "kind": "points" }', path: '{ "id": "path", "panel": "right", "kind": "trace" }', 'series-1': '{ "id": "series-1", "panel": "left", "kind": "trace" }' };
+const MARK = { dot: '{ "id": "dot", "panel": "left", "kind": "points" }', path: '{ "id": "path", "panel": "right", "kind": "trace" }', 'series-1': '{ "id": "series-1", "panel": "left", "kind": "trace", "tone": "data-1" }' };
 const DATA = [
   { dot: '"dot": [[0, 0], [1, 1]]', path: '"path": [[0, 0], [1, 0]]', 'series-1': '"series-1": [[0, 0], [1, 1]]' },
   { dot: '"dot": [[1, 0], [0, 1]]', path: '"path": [[0, 0], [1, 1]]', 'series-1': '"series-1": [[0, 0], [1, 1]]' },

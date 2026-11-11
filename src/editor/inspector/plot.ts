@@ -6,7 +6,7 @@
 // are not keys of the format of a plot, hence they are not offered
 
 import type { App } from '../app.ts';
-import { blockOf, DATA_TONES, jsonOf, plotOf } from '../commands/plot.ts';
+import { blockOf, jsonOf, plotOf, SERIES_TONES } from '../commands/plot.ts';
 import { sheetsOf } from '../plotdata.ts';
 import { make } from '../ui/dom.ts';
 import { button, checkbox, keepFocus, note, row, section, segmented, textField, type Control, type Run } from './controls.ts';
@@ -103,11 +103,11 @@ function seriesPart(app: App, run: Run, plot: HTMLElement): Control {
       const sw = make('div', 'ed-swatches');
       sw.setAttribute('role', 'group');
       sw.setAttribute('aria-label', `Color of ${m.id}`);
-      for (const tone of DATA_TONES) {
+      for (const tone of SERIES_TONES) {
         const b = make('button');
         b.type = 'button';
-        b.title = `Data ${tone.slice(5)}`;
-        b.setAttribute('aria-label', `${m.id} in data color ${tone.slice(5)}`);
+        b.title = tone === 'accent' ? 'Accent' : `Data ${tone.slice(5)}`;
+        b.setAttribute('aria-label', tone === 'accent' ? `${m.id} in the accent color` : `${m.id} in data color ${tone.slice(5)}`);
         b.dataset.tone = tone;
         keepFocus(b);
         b.addEventListener('click', () => void run('plot.tone', { el: plot, mark: i, tone }));
@@ -129,7 +129,7 @@ function seriesPart(app: App, run: Run, plot: HTMLElement): Control {
     const style = slide ? getComputedStyle(slide) : null;
     for (const { b, mark, tone } of parts) {
       b.style.setProperty('--swatch', style?.getPropertyValue(`--${tone}`).trim() || 'transparent');
-      b.setAttribute('aria-pressed', String(marks[mark]?.tone === tone));
+      b.setAttribute('aria-pressed', String((marks[mark]?.tone ?? 'accent') === tone));
     }
   };
   sync();

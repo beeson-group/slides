@@ -56,6 +56,10 @@ function targetOf(app: App, el: Element, order: Order, selected: Set<Element>): 
 // whether Bring Forward, or Send Backward with up false, would move el by itself
 export const canStep = (app: App, el: Element, up: boolean): boolean => targetOf(app, el, up ? 'forward' : 'backward', new Set([el])) !== null;
 
+// the sibling that Bring to Front, or Send to Back with up false, puts el after or before, with the
+// elements of selected passed over, or null when el does not move
+export const layerLimit = (app: App, el: Element, up: boolean, selected: Set<Element>): Element | null => targetOf(app, el, up ? 'front' : 'back', selected);
+
 // el moved by one layer, as Bring Forward or Send Backward moves it, for a drag of a row of
 // navigator/objects.ts. it returns false when el does not move
 export async function stepLayer(app: App, el: Element, up: boolean): Promise<boolean> {
