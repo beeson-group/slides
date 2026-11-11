@@ -133,3 +133,40 @@ for (const platform of PLATFORMS) {
     }
   }
 }
+
+// the keydown of each F3 is kept in window.f3, so that whether it was prevented is read after it
+const WATCH_F3 = `window.addEventListener('keydown', (e) => { if (e.key === 'F3') window.f3 = e; }, true)`;
+const prevented = async (page, keys) => {
+  await page.evaluate('window.f3 = null');
+  await press(page, keys);
+  return page.evaluate('window.f3 ? window.f3.defaultPrevented : null');
+};
+
+// finding 9 of the tester on Windows and Linux: Shift+F3 outside a text, and F3 with the Find panel
+// open and its field empty, were left to the browser, which opened its own find bar
+for (const platform of PLATFORMS) {
+  test(`F3, Shift+F3, and Mod+Shift+F3 are prevented in every state (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await page.evaluate(WATCH_F3);
+    const states = [
+      ['on the canvas', async () => {
+        await press(page, 'Escape');
+        await press(page, 'Escape');
+      }],
+      ['in a text between two words', async () => {
+        await click(page, await pointOf(page, PARA, 'figure', 2));
+        await caretAt(page, PARA, 'figure', 6);
+      }],
+      ['in the empty field of the Find panel', async () => {
+        await press(page, 'Mod+F');
+        await page.waitFor(`document.activeElement?.closest('.beeson-find') !== null`);
+      }],
+    ];
+    for (const [where, enter] of states) {
+      await enter();
+      for (const keys of ['F3', 'Shift+F3', 'Mod+Shift+F3']) assert.equal(await prevented(page, keys), true, `${keys} ${where} is left to the browser`);
+    }
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+}
