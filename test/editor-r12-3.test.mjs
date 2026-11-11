@@ -359,10 +359,11 @@ for (const platform of PLATFORMS) {
     await press(page, 'Mod+Z');
     await sleep(300);
     assert.equal(await page.evaluate('window.BeesonEditor.render()'), page.source);
-    assert.deepEqual(await tiles(page), { focus: 2, selected: [2] }, 'after an undo of a drag');
+    // the selection from before the drag is restored, with the focus on its tile
+    assert.deepEqual(await tiles(page), { focus: 4, selected: [4] }, 'after an undo of a drag');
     await press(page, 'ArrowRight');
     await sleep(100);
-    assert.deepEqual(await tiles(page), { focus: 3, selected: [3] });
+    assert.deepEqual(await tiles(page), { focus: 5, selected: [5] });
     assert.deepEqual(errors(page), []);
   });
 }
