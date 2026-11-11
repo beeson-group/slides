@@ -74,7 +74,7 @@ const modes = (app: App, run: Run, what: string): Control =>
       { command: 'figure.mode.dark', icon: 'mode-dark', text: 'Dark' },
       { command: 'figure.mode.light', icon: 'mode-light', text: 'Light' },
     ], 'Shown in')]),
-    note(() => `A pair of ${what}s, one for each mode of the deck, is marked Dark and Light.`),
+    note(() => `A pair of ${what}s, one for each mode of the deck, is marked Dark and Light. On a pair, Dark or Light swaps the two, and Both keeps this ${what} alone.`),
   ]);
 
 export function imagePane(app: App, run: Run): Control[] {

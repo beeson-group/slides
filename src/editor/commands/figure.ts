@@ -6,7 +6,7 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { CONTAINER } from '../canvas/hit.ts';
+import { CONTAINER, twinOf } from '../canvas/hit.ts';
 import type { TagEdit } from '../tags.ts';
 
 // the longest text of a QR code, in bytes of UTF-8, as src/qr.ts encodes it at level M
@@ -80,6 +80,34 @@ const has = (name: string) => (el: Element) => el.hasAttribute(name);
 const flag = (name: string) => (on: boolean): TagEdit => ({ attrs: { [name]: on ? '' : null } });
 const visual = (app: App) => imageOf(app) ?? videoOf(app);
 
+const modeClasses = (m: Mode) => ({ 'for-dark': m === 'dark', 'for-light': m === 'light' });
+const otherMode = (m: Mode): Mode => (m === 'dark' ? 'light' : 'dark');
+
+// the unit text of the twin that Both took off an image or a video, with the mode of the image
+// then, so that Dark or Light on the image puts the pair back
+const takenTwin = new WeakMap<Element, { text: string; mode: Mode; after: boolean }>();
+
+// the mode of el set so that each mode of the slide shows one picture. of a pair, Both keeps el
+// alone, and Dark or Light swaps the modes of el and its twin. Dark or Light on an image whose
+// twin Both took off puts the twin back with the other mode
+async function setMode(app: App, el: Element, mode: Mode): Promise<void> {
+  const twin = twinOf(app, el);
+  if (twin && mode === 'both') {
+    takenTwin.set(el, { text: app.doc.elementText(twin), mode: modeOf(el), after: !!(el.compareDocumentPosition(twin) & Node.DOCUMENT_POSITION_FOLLOWING) });
+    await app.doc.remove(twin, 'mode');
+  }
+  setTag(app, el, { classes: modeClasses(mode) }, 'mode');
+  if (twin && mode !== 'both') {
+    setTag(app, twin, { classes: modeClasses(otherMode(mode)) }, 'mode');
+    // a picture selected by itself gives way to its twin, which is the one shown now
+    if (app.selection.only() === el && !shown(el)) app.selection.set('elements', [twin]);
+  }
+  const back = takenTwin.get(el);
+  if (twin || mode === 'both' || !back || !el.parentElement) return;
+  const [node] = await app.doc.insert(back.text, el.parentElement, back.after ? el.nextElementSibling : el, 'mode');
+  if (mode !== back.mode) setTag(app, node, { classes: modeClasses(otherMode(mode)) }, 'mode');
+}
+
 export function commands(): Command[] {
   const list: Command[] = [
     {
@@ -136,7 +164,7 @@ export function commands(): Command[] {
       },
       run: (app, arg) => {
         const el = given(arg) ?? visual(app);
-        if (el && modeOf(el) !== mode) setTag(app, el, { classes: { 'for-dark': mode === 'dark', 'for-light': mode === 'light' } }, 'mode');
+        if (el && modeOf(el) !== mode) return app.history.selecting('mode', () => setMode(app, el, mode));
       },
     });
   }
