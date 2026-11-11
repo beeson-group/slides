@@ -19,17 +19,23 @@ import { install as installOrder } from './order.ts';
 export const LABELS: Record<Layout, string> = { title: 'Title', section: 'Section', content: 'Content', narrow: 'Content, Narrow', wide: 'Content, Wide', figure: 'Figure', split: 'Split', closing: 'Closing' };
 
 const LAYOUT_CLASSES = ['title', 'section', 'closing', 'figure', 'split', 'narrow', 'wide'];
-const WRAPPER_CLASSES = ['panel', 'block', 'sec'];
+const WRAPPER_CLASSES = ['panel', 'block', 'sec', 'caption'];
 
 export type Kind = 'heading' | 'words' | 'caption' | 'foot' | 'visual' | 'other';
 
-// the wrapper of each layout that has one, and the kinds of parts that it takes
+// the wrapper of each layout that has one, and the kinds of parts that it takes. the words of a
+// figure slide are its caption at the lower left, since the plate takes the rest of the slide
 const WRAP: Partial<Record<Layout, { cls: string; takes: Kind[] }>> = {
   title: { cls: 'block', takes: ['heading', 'words', 'caption'] },
   closing: { cls: 'block', takes: ['heading', 'words', 'caption'] },
   section: { cls: 'sec', takes: ['heading', 'words'] },
   split: { cls: 'panel', takes: ['heading', 'words', 'foot'] },
+  figure: { cls: 'caption', takes: ['words'] },
 };
+
+// the empty plate of a figure slide, as a new one has, which is added to a slide without a figure
+// and taken off again at a change to another layout
+const PLATE = '<div class="plate"></div>';
 
 const VISUAL_CLASSES = ['backdrop', 'surface', 'zone', 'plate', 'qr', 'plot'];
 const VISUAL_TAGS = ['figure', 'img', 'video', 'tycho-viewer', 'canvas', 'svg', 'iframe', 'object'];
@@ -70,7 +76,7 @@ export function arrange(kinds: Kind[], layout: Layout): Item[] {
       wrapper.parts.push(i);
     }
   });
-  if (!wrapper.parts.length) out.unshift(wrapper);
+  if (!wrapper.parts.length && w.takes.includes('heading')) out.unshift(wrapper);
   return out;
 }
 
@@ -162,8 +168,12 @@ export function relayout(body: string, layout: Layout, step: string): string {
     return (p.blank ? eol : '') + eol + ind(d) + shift(p.lead + text, p.indent, ind(d));
   };
   let out = openTag(body, open, layoutClasses(classesOf(open), layout));
-  const items = arrange(parts.map((p) => kindOf(p.name, p.classes)), layout);
-  if (!items.length) return out + body.slice(open.end);
+  // an empty element, e.g. a span that is a step of a plot, is not a text of the caption
+  const empty = (p: Part) => /^<([\w-]+)[^>]*>\s*<\/\1\s*>$/.test(p.body);
+  const kinds = parts.map((p) => kindOf(p.name, p.classes)).map((k, i) => (layout === 'figure' && k === 'words' && empty(parts[i]) ? 'other' : k));
+  const items = arrange(kinds, layout).filter((i) => typeof i !== 'number' || layout === 'figure' || parts[i].body !== PLATE);
+  if (layout === 'figure' && !kinds.includes('visual')) out += eol + ind(1) + PLATE;
+  else if (!items.length) return out + body.slice(open.end);
   for (const item of items) {
     if (typeof item === 'number') out += put(item, 1);
     else {
