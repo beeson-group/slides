@@ -8,6 +8,7 @@ import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { CONTAINER, twinOf } from '../canvas/hit.ts';
 import type { TagEdit } from '../tags.ts';
+import { placeCaret } from '../text/typing.ts';
 
 // the longest text of a QR code, in bytes of UTF-8, as src/qr.ts encodes it at level M
 export const QR_MAX = 2331;
@@ -134,8 +135,39 @@ async function setMode(app: App, el: Element, mode: Mode): Promise<void> {
   if (mode !== back.mode) setTag(app, node, { classes: modeClasses(otherMode(mode)) }, 'mode');
 }
 
+// the figure or the zone of the picture of the selection, or of the caption that the caret is in,
+// which takes a caption under the picture
+function captionHost(app: App): Element | null {
+  const typed = app.selection.kind === 'text' ? app.selection.items[0]?.closest('figcaption, .caption') : null;
+  const host = typed ? typed.parentElement : visual(app)?.parentElement;
+  return host?.matches('figure, .zone') && !host.matches('.plate, .plot') ? host : null;
+}
+const captionOf = (host: Element) => host.querySelector(':scope > figcaption, :scope > .caption');
+
 export function commands(): Command[] {
   const list: Command[] = [
+    {
+      // a caption under the picture, as Caption in the Style tab of Keynote: a figcaption in a
+      // figure and a caption paragraph in a zone, with the caret in it
+      id: 'figure.caption',
+      label: 'Caption',
+      menu: imageMenu(12),
+      undoable: true,
+      enabled: (app) => !!captionHost(app),
+      checked: (app) => {
+        const host = captionHost(app);
+        return host ? !!captionOf(host) : false;
+      },
+      run: async (app) => {
+        const host = captionHost(app);
+        if (!host) return;
+        const old = captionOf(host);
+        if (old) return void (await app.doc.remove(old, 'caption'));
+        const tag = host.localName === 'figure' ? 'figcaption' : 'p';
+        const [node] = await app.doc.insert(`<${tag} class="caption"></${tag}>`, host, null, 'caption');
+        if (node) setTimeout(() => node.matches('[contenteditable="true"]') && placeCaret(node));
+      },
+    },
     {
       // with a text as arg, e.g. from the field of the Image pane, the alt is written. without one,
       // the Image pane is shown with the field focused, as Alt Text in the context menu of PowerPoint
