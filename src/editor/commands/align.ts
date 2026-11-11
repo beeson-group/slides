@@ -284,13 +284,22 @@ export function commands(): Command[] {
     run: (app, arg) => {
       const typed = (arg ?? {}) as { w?: number; h?: number };
       const a = typed;
-      const frame = groupFrameOf(app, targetsOf(app, arg));
+      let frame = groupFrameOf(app, targetsOf(app, arg));
       if (frame) {
         const all = targetsOf(app, arg);
         const keep = all.flatMap(sizedOf).filter((m) => m.matches(STRETCHED) && m.getClientRects().length).every(constrained);
-        const kw = a.w !== undefined ? a.w / frame.box.width : null, kh = a.h !== undefined ? a.h / frame.box.height : null;
-        const kx = kw ?? (keep && kh ? kh : 1), ky = kh ?? (keep && kw ? kw : 1);
-        record(app, 'resize', scaleGroup(app, all, frame, kx, ky));
+        // an upright caption and rewrapped text do not scale with a turned frame, hence the frame
+        // is scaled again from its measured size until it reads as typed, in at most four passes
+        const changes = new Map<Element, Change>();
+        for (let pass = 0; frame && pass < 4; pass++) {
+          const off = (v: number | undefined, now: number) => v !== undefined && Math.round(now) !== Math.round(v);
+          if (!off(a.w, frame.box.width) && !off(a.h, frame.box.height)) break;
+          const kw = a.w !== undefined ? a.w / frame.box.width : null, kh = a.h !== undefined ? a.h / frame.box.height : null;
+          const kx = kw ?? (keep && kh ? kh : 1), ky = kh ?? (keep && kw ? kw : 1);
+          for (const c of scaleGroup(app, all, frame, kx, ky)) changes.set(c.el, { ...c, from: changes.get(c.el)?.from ?? c.from });
+          frame = groupFrameOf(app, all);
+        }
+        record(app, 'resize', [...changes.values()]);
         app.invalidate('content');
         return;
       }
