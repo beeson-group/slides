@@ -77,7 +77,27 @@ const EDITING = new URLSearchParams(location.search).has('edit');
 // return to the editor, F takes the stage of the editor into full screen and out, and S warns the
 // editor that the speaker view leaves full screen, hence the keys are posted to the editor
 const PLAYED = !EDITING && window.parent !== window && new URLSearchParams(location.search).has('from-editor');
-const toEditor = (eventName: string) => window.parent.postMessage(JSON.stringify({ namespace: 'beeson', eventName, state: window.Reveal.getState() }), '*');
+// the frame of the current slide in the speaker view of reveal.js, with receiver in its address, is
+// sent the keys of the speaker view, and it posts them to the deck that opened the speaker view
+const RECEIVER = window.parent !== window && /receiver/i.test(location.search);
+const toEditor = (eventName: string) => (RECEIVER ? window.parent.opener : window.parent)?.postMessage(JSON.stringify({ namespace: 'beeson', eventName, state: window.Reveal.getState() }), '*');
+// the speaker view opened by the show, which is closed with the show
+let speaker: Window | null = null;
+
+// E or Esc posted by the speaker view is taken as a key of the deck, and the speaker view is known
+// by the messages that it posts to the deck. a window of another origin is reached by postMessage,
+// and its opener and parent are read
+function fromSpeaker(ev: MessageEvent): void {
+  let m: { namespace?: string; eventName?: string } | null = null;
+  try {
+    const from = ev.source as Window | null;
+    if (from?.opener === window) speaker = from;
+    if (from?.parent?.opener === window && typeof ev.data === 'string') m = JSON.parse(ev.data);
+  } catch {
+    return;
+  }
+  if (m?.namespace === 'beeson' && m.eventName === 'edit') (PLAYED ? toEditor('edit') : edit());
+}
 
 function edit(): void {
   const params = new URLSearchParams(location.search);
@@ -215,7 +235,10 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   if (PLAYED) {
     for (const keyCode of [27, 69]) deck.addKeyBinding(keyCode, (ev) => { if (forDeck(ev)) toEditor('edit'); });
     document.addEventListener('keydown', (ev) => { if (ev.keyCode === 83 && forDeck(ev)) toEditor('speaker'); }, true);
-  } else if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: 'E', description: 'Edit the deck' }, (ev) => { if (forDeck(ev)) edit(); });
+  } else if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: 'E', description: 'Edit the deck' }, (ev) => { if (forDeck(ev)) (RECEIVER ? toEditor('edit') : edit()); });
+  if (!EDITING && !RECEIVER) window.addEventListener('message', fromSpeaker);
+  // the editor ends the show by taking its frame away
+  if (PLAYED) window.addEventListener('pagehide', () => speaker?.close());
 
   if (still()) completeAll();
   else show(deck.getCurrentSlide());

@@ -524,3 +524,64 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the speaker view of reveal.js, which s opens, sends each key pressed in it to its frame of the
+// current slide as triggerKey (setupKeyboard in theme/vendor/reveal/notes.js), and a keydown on its
+// document is sent the same way. the speaker view opened by the window w is kept in w.__speaker
+// and in window.__speakerKept of the page
+const SPEAKER_FRAME = (w) => `${w}.__speaker?.document.querySelector('#current-slide iframe')?.contentWindow`;
+const keepSpeaker = (w) => `(() => { const w = ${w}; const real = w.open; w.open = function (...a) { const v = real.apply(w, a); w.__speaker = v; window.__speakerKept = v; return v; }; return true; })()`;
+const speakerReady = (w) => `(() => { try { return !!${SPEAKER_FRAME(w)}?.Reveal?.isReady?.(); } catch { return false; } })()`;
+const speakerKey = (keyCode) => `(window.__speakerKept.document.dispatchEvent(new KeyboardEvent('keydown', { keyCode: ${keyCode}, bubbles: true })), true)`;
+const within = (page, expression, timeout) => page.waitFor(expression, timeout).then(() => true, () => false);
+
+for (const platform of PLATFORMS) {
+  test(`e in the speaker view of a deck opened by itself opens the editor in the window of the show at the slide shown, and not in the speaker view (${platform})`, async (t) => {
+    const page = await browser.newPage({ width: 1600, height: 1000 });
+    t.after(() => page.close().catch(() => {}));
+    await page.goto(`${server.origin}/index.html?still&edit-platform=${platform}#/2`);
+    await page.waitFor(deckSettled);
+    await page.evaluate(keepSpeaker('window'));
+    await press(page, 's');
+    await page.waitFor(speakerReady('window'), 20000);
+    await sleep(500);
+    await page.evaluate(speakerKey(69));
+    assert.ok(await within(page, `new URLSearchParams(location.search).has('edit') && !!window.BeesonEditor`, 10000), 'e in the speaker view does not open the editor in the window of the show');
+    await page.waitFor('window.BeesonEditor.ready.then(() => true)');
+    assert.equal(await page.evaluate('Reveal.getIndices().h'), 2, 'the editor is not opened at the slide shown');
+    // the speaker view is found by the name of its window
+    const frame = await page.evaluate(`(() => { const v = window.open('', 'reveal.js - Notes'); const f = v.document.querySelector('#current-slide iframe').contentWindow; const out = [new URLSearchParams(f.location.search).has('edit'), !!f.document.querySelector('script[src*="editor.js"]')]; v.close(); return out; })()`);
+    assert.deepEqual(frame, [false, false], 'the editor is loaded into the frame of the speaker view');
+  });
+
+  test(`e and Esc in the speaker view of the show in place end the show and return to the editor at the slide shown (${platform})`, async (t) => {
+    for (const [name, keyCode] of [['e', 69], ['Esc', 27]]) {
+      const page = await present(t, platform);
+      await page.evaluate(`${SHOW}.Reveal.slide(3)`);
+      await page.evaluate(keepSpeaker(SHOW));
+      await press(page, 's');
+      await page.waitFor(speakerReady(SHOW), 20000);
+      await sleep(500);
+      const shown = await showHeading(page);
+      await page.evaluate(speakerKey(keyCode));
+      assert.ok(await within(page, stageGone, 5000), `${name} in the speaker view does not end the show`);
+      assert.equal(await editorHeading(page), shown, `${name} in the speaker view does not return to the slide shown`);
+      assert.deepEqual(errors(page), []);
+    }
+  });
+
+  test(`the speaker view is closed with the show in place, when the show is ended with e or Esc in its own window (${platform})`, async (t) => {
+    for (const key of ['e', 'Escape']) {
+      const page = await present(t, platform);
+      await page.evaluate(keepSpeaker(SHOW));
+      await press(page, 's');
+      await page.waitFor(speakerReady(SHOW), 20000);
+      await sleep(500);
+      await page.evaluate(`${SHOW}.focus()`);
+      await press(page, key);
+      await page.waitFor(stageGone, 5000);
+      assert.ok(await within(page, 'window.__speakerKept.closed', 3000), `the speaker view is left open after ${key} in the show`);
+      assert.deepEqual(errors(page), []);
+    }
+  });
+}
