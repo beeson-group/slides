@@ -32,7 +32,7 @@ type Drag = { slides: Element[]; x: number; y: number; on: boolean; gap: number;
 
 const CSS = `
 html.beeson-editor body > .beeson-edit-sorter, .beeson-edit-sorter { grid-area: 2 / 1 / 4 / 3; position: relative; z-index: 55; display: flex; flex-direction: column; min-height: 0; background: var(--ed-canvas); color: var(--ed-text); font: 12px/1.35 var(--ed-font); --tile-w: 220px; }
-.beeson-edit-sorter[hidden] { display: none; }
+html.beeson-editor body > .beeson-edit-sorter[hidden], .beeson-edit-sorter[hidden] { display: none; }
 .beeson-edit-sorter .groups { position: relative; flex: 1 1 auto; min-height: 0; overflow: auto; padding: 8px 24px 24px; outline: none; }
 .beeson-edit-sorter .head { display: flex; align-items: center; gap: 6px; width: 100%; height: 30px; margin: 10px 0 6px; padding: 0 6px 0 2px; border: 0; border-bottom: 1px solid var(--ed-line); border-radius: 0; background: transparent; color: var(--ed-text); font: 600 13px/1 var(--ed-font); text-align: left; cursor: default; }
 .beeson-edit-sorter .head:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: 1px; }
