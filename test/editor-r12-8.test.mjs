@@ -128,6 +128,8 @@ for (const platform of PLATFORMS) {
     await byteExact(page);
     assert.deepEqual(await outline(page), before);
     assert.equal(await count(page), `Slide 3 of ${slides}`);
+    // the caret is in the item put back
+    assert.equal(await page.evaluate(`document.activeElement.closest('${OUTLINE} .line.item')?.textContent.slice(0, 12)`), 'Two elements');
     await redoKey(page);
     await settle(page);
     assert.equal(await render(page), promoted);

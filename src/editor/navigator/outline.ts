@@ -146,15 +146,32 @@ export class Outline {
     this.refresh();
   }
 
-  // the outline is drawn again after a change, unless one of its fields is edited
+  // the outline is drawn again after a change, unless one of its fields is edited and its lines
+  // are still those of the deck. after an undo they are not, and the caret is put back in the line
+  // of the same block, or of a block with the same text, e.g. an item put back by an undo of
+  // Promote to Slide
   refresh(): void {
     this.pane.classList.toggle('outlined', this.on);
     this.el.hidden = !this.on;
-    if (!this.on || this.busy || this.el.contains(document.activeElement)) {
+    const field = this.entries.find((e) => e.text === document.activeElement);
+    if (!this.on || this.busy || (this.el.contains(document.activeElement) && !(field && this.stale()))) {
       this.mark();
       return;
     }
-    this.build();
+    if (!field) return this.build();
+    const sel = window.getSelection();
+    const at = sel?.rangeCount && field.text.contains(sel.anchorNode) ? offsetIn(field.text, sel.anchorNode!, sel.anchorOffset) : null;
+    const text = field.text.textContent;
+    this.done(() => (this.entries.find((x) => x.el === field.el) ?? this.entries.find((x) => x.text.textContent === text))?.text ?? null, at);
+  }
+
+  // the blocks of the outline are not those of the deck in their order
+  private stale(): boolean {
+    const els = [...this.app.slides().querySelectorAll(':scope > section')].flatMap((slide) => {
+      const title = slide.querySelector('h1, h2');
+      return [...(title ? [title] : []), ...this.blocks(columnOf(slide), title).map((b) => b.el)];
+    });
+    return els.length !== this.entries.length || els.some((el, i) => this.entries[i].el !== el);
   }
 
   private mark(): void {
