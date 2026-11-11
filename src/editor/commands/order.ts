@@ -10,6 +10,7 @@ import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { angleOf, apartOf, locked, pivotOf, placeOf, record, seenCenter, spinOf, turn, turnMember, turnedEls, turnersOf } from '../canvas/drag.ts';
 import { objectOf, objectsOf, turnable, twinOf } from '../canvas/hit.ts';
+import { fieldOf } from './clipboard.ts';
 
 export type Order = 'front' | 'forward' | 'backward' | 'back';
 
@@ -486,9 +487,12 @@ export function lockedSelection(app: App): boolean {
 export function install(app: App): void {
   for (const c of commands(app)) app.commands.define(c);
   keepGroups(app);
-  app.commands.veto((a, c) => (CHANGES.test(c.id) || (c.id === 'edit.paste' && a.selection.kind === 'text')) && lockedSelection(a));
+  // a lock holds an element of the slide, and not the text of a line of the outline or of a field,
+  // on which Cut, Paste, and Delete act while the caret is in it
+  const inField = (a: App, id: string) => /^(edit\.(cut|paste)|element\.delete)$/.test(id) && !!fieldOf(a);
+  app.commands.veto((a, c) => !inField(a, c.id) && (CHANGES.test(c.id) || (c.id === 'edit.paste' && a.selection.kind === 'text')) && lockedSelection(a));
   // Delete skips a locked element, hence it is turned off only when every selected element is locked
-  app.commands.veto((a, c) => c.id === 'element.delete' && a.selection.kind !== 'text' && a.selection.elements().length > 0 && a.selection.elements().every((el) => !!el.closest('[data-locked]')));
+  app.commands.veto((a, c) => c.id === 'element.delete' && !inField(a, c.id) && a.selection.kind !== 'text' && a.selection.elements().length > 0 && a.selection.elements().every((el) => !!el.closest('[data-locked]')));
   // typing, a drop, and the keys that delete or break a line do not go through a command, hence
   // they are cancelled before the browser changes the text of a locked block
   document.addEventListener('beforeinput', (ev) => {
