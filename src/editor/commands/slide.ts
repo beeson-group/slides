@@ -313,8 +313,10 @@ export function install(app: App): void {
   injectStyle('slide', CSS);
   const c = app.commands;
   const inNav = () => app.region() === 'navigator';
-  // on the canvas, Alt with an arrow adds a row to a selected table, and it moves the slide otherwise
-  const rowKeys = (a: App) => a.region() === 'canvas' && a.commands.enabled('table.rowAbove');
+  // Move Slide Up and Down are dimmed while the slide has the focus, where Alt with an arrow does
+  // not move the slide, as it adds a row to a table there. a menu opened with the pointer leaves
+  // the focus where it was
+  const onSlide = (a: App) => a.region() === 'canvas' && !document.activeElement?.closest('.beeson-edit-menu');
   const slideMenu = (order: number, group = 'slide') => ({ bar: 'Slide', group, order });
   const defs: Command[] = [
     {
@@ -427,10 +429,10 @@ export function install(app: App): void {
       id: 'slide.moveUp',
       label: 'Move Slide Up',
       keys: { mac: ['Alt+ArrowUp'], other: ['Alt+ArrowUp'] },
-      in: ['navigator', 'canvas'],
+      in: ['navigator'],
       menu: slideMenu(50, 'move'),
       context: ['slide'],
-      enabled: (a) => canShift(a, true) && !rowKeys(a),
+      enabled: (a) => canShift(a, true) && !onSlide(a),
       undoable: true,
       run: async (a) => {
         const t = targets(a);
@@ -442,10 +444,10 @@ export function install(app: App): void {
       id: 'slide.moveDown',
       label: 'Move Slide Down',
       keys: { mac: ['Alt+ArrowDown'], other: ['Alt+ArrowDown'] },
-      in: ['navigator', 'canvas'],
+      in: ['navigator'],
       menu: slideMenu(51, 'move'),
       context: ['slide'],
-      enabled: (a) => canShift(a, false) && !rowKeys(a),
+      enabled: (a) => canShift(a, false) && !onSlide(a),
       undoable: true,
       run: async (a) => {
         const t = targets(a);
