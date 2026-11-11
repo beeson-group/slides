@@ -48,8 +48,22 @@ export function layoutText(layout: Layout, style: TextStyle, base = ''): string 
       return lines([[0, '<section class="figure">'], [1, '<div class="plate"></div>'], [1, '<h2></h2>'], [1, '<p class="caption"></p>'], [0, '</section>']], style, base);
     case 'split':
       return lines([[0, '<section class="split">'], [1, '<div class="panel">'], [2, '<h2></h2>'], [2, '<p></p>'], [1, '</div>'], [1, '<div class="zone"></div>'], [0, '</section>']], style, base);
+    // a content slide holds a dash list under its paragraph, as a slide of Title & Bullets in
+    // Keynote holds the bullet placeholder of its thumbnail
     default:
-      return lines([[0, layout === 'content' ? '<section>' : `<section class="${layout}">`], [1, '<h2></h2>'], [1, '<p></p>'], [0, '</section>']], style, base);
+      return lines(
+        [
+          [0, layout === 'content' ? '<section>' : `<section class="${layout}">`],
+          [1, '<h2></h2>'],
+          [1, '<p></p>'],
+          [1, '<ul>'],
+          [2, '<li></li>'],
+          [1, '</ul>'],
+          [0, '</section>'],
+        ],
+        style,
+        base,
+      );
   }
 }
 
@@ -114,9 +128,9 @@ const SAMPLE_WORDS: Partial<Record<Layout, [string, string][]>> & { all: [string
 const BOX = 'style="background: color-mix(in srgb, var(--muted) 34%, var(--bg)); background-clip: content-box"';
 
 // the text of a sample slide of the layout for the tiles of the layout chooser: the skeleton of
-// layoutText with placeholder words, a gray box in place of each figure and backdrop, and a gray
-// zone or backdrop on a content slide, at the place of the layout. a sample does not depend on the
-// deck, and it is drawn but never written into a file
+// layoutText with placeholder words, two items in its list, a gray box in place of each figure and
+// backdrop, and a gray backdrop on a narrow slide, at the place of the layout. a sample does not
+// depend on the deck, and it is drawn but never written into a file
 export function sampleText(layout: Layout): string {
   const style = { eol: '\n', step: '  ' };
   let text = layoutText(layout, style);
@@ -126,9 +140,7 @@ export function sampleText(layout: Layout): string {
   text = text
     .replace('<ul class="outline" data-auto></ul>', '<ul class="outline"><li class="now">Chapter one</li><li>Chapter two</li></ul>')
     .replace(/<div class="(backdrop|plate|zone)"[^>]*>/g, (_, cls: string) => `<div class="${cls}" ${BOX}>`);
-  const list = '<ul><li>A first point</li><li>A second point</li></ul>';
-  if (layout === 'content') return text.replace('</section>', `  ${list}\n  <div class="zone" ${BOX}></div>\n</section>`);
-  if (layout === 'narrow') return text.replace('</section>', `  ${list}\n  <div class="backdrop" ${BOX}></div>\n</section>`);
-  if (layout === 'wide') return text.replace('</section>', `  ${list}\n</section>`);
+  text = text.replace(/<ul>\s*<li><\/li>\s*<\/ul>/, '<ul><li>A first point</li><li>A second point</li></ul>');
+  if (layout === 'narrow') return text.replace('</section>', `  <div class="backdrop" ${BOX}></div>\n</section>`);
   return text;
 }

@@ -109,8 +109,8 @@ test('a slide of each layout is written in the style of its file', () => {
     assert.ok(!/[^\r]\n/.test(tab));
     assert.equal(tab.replace(/\r\n\t*/g, ''), text.replace(/\n */g, ''));
   }
-  assert.equal(layoutText('content', lf), '<section>\n  <h2></h2>\n  <p></p>\n</section>');
-  assert.equal(layoutText('wide', lf, '  '), '<section class="wide">\n    <h2></h2>\n    <p></p>\n  </section>');
+  assert.equal(layoutText('content', lf), '<section>\n  <h2></h2>\n  <p></p>\n  <ul>\n    <li></li>\n  </ul>\n</section>');
+  assert.equal(layoutText('wide', lf, '  '), '<section class="wide">\n    <h2></h2>\n    <p></p>\n    <ul>\n      <li></li>\n    </ul>\n  </section>');
 });
 
 test('an element of each kind is written in the style of its file', () => {
