@@ -5,6 +5,11 @@
 import type { App } from '../app.ts';
 import { OUTSIDE_DIALOGS } from '../commands.ts';
 
+// the keys of the panes. Keynote has ⇧⌘P for the notes and ⌥⌘I for the inspector, which Firefox
+// and the developer tools of the browsers take before the page, hence the panes of the inspector
+// and the notes are given ⌃⌘ with a digit on a Mac and Ctrl+Shift with it elsewhere
+export const PANE_KEYS = (n: number) => ({ keys: { mac: [`Ctrl+Mod+${n}`], other: [`Ctrl+Shift+${n}`] }, in: OUTSIDE_DIALOGS });
+
 type Theme = { get(): 'dark' | 'light'; toggle(): void };
 const theme = (): Theme | undefined => (window as unknown as { Beeson?: { theme?: Theme } }).Beeson?.theme;
 
@@ -78,8 +83,8 @@ export function install(app: App): void {
   const c = app.commands;
   const pane = (order: number) => ({ bar: 'View', group: 'panes', order });
   c.define({ id: 'view.navigator', label: 'Navigator', menu: pane(10), checked: (a) => a.nav.shown, run: (a) => a.nav.toggle() });
-  c.define({ id: 'view.notes', label: 'Notes', menu: pane(11), checked: (a) => a.notes.shown(), run: (a) => a.notes.toggle() });
-  c.define({ id: 'view.steps', label: 'Steps', menu: pane(12), toolbar: { group: 'inspector', order: 61, icon: 'steps' }, checked: (a) => a.steps.shown, run: (a) => a.steps.toggle() });
+  c.define({ id: 'view.notes', label: 'Notes', ...PANE_KEYS(3), menu: pane(11), checked: (a) => a.notes.shown(), run: (a) => a.notes.toggle() });
+  c.define({ id: 'view.steps', label: 'Steps', ...PANE_KEYS(2), menu: pane(12), toolbar: { group: 'inspector', order: 61, icon: 'steps' }, checked: (a) => a.steps.shown, run: (a) => a.steps.toggle() });
   c.define({
     id: 'view.slideDark',
     label: 'Slide in Dark Mode',

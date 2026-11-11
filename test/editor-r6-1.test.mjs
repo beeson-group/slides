@@ -114,7 +114,7 @@ async function openBar(page, bar) {
 // clipboard and Delete, Duplicate Selection and the selection, then Find. the labels are those of
 // the commands of the editor, e.g. Duplicate for Duplicate Selection and Select Figure for Select
 // Parent
-const EDIT = ['Undo', 'Redo', '|', 'Cut', 'Copy', 'Paste', 'Paste and Match Style', 'Delete', '|', 'Duplicate', 'Select All', 'Deselect', 'Select Figure', '|', 'Find…', 'Find Next', 'Find Previous', 'Replace…', '|', '{Spelling and Grammar}', '{Substitutions}'];
+const EDIT = ['Undo', 'Redo', '|', 'Cut', 'Copy', 'Paste', 'Paste and Match Style', 'Delete', '|', 'Duplicate', 'Select All', 'Deselect', 'Select Figure', '|', 'Find…', 'Find Next', 'Find Previous', 'Use Selection for Find', 'Replace…', '|', '{Spelling and Grammar}', '{Substitutions}'];
 
 for (const platform of PLATFORMS) {
   // finding opus 10 of round 2: Select All and Find were listed before Cut

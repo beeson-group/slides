@@ -14,6 +14,7 @@ import { injectStyle, make, store, stored } from '../ui/dom.ts';
 import { fillFormat as fillPanes } from '../inspector/inspector.ts';
 import { closeMenus, openContextMenu, openMenu, menuItems, type MenuItem } from '../ui/menu.ts';
 import { keyClashes, sheetClashes } from './keys-sheet.ts';
+import { PANE_KEYS } from '../commands/view.ts';
 
 const NAV_KEY = 'beeson-nav-w';
 const NAV_MIN = 140;
@@ -207,6 +208,8 @@ export function install(app: App): void {
     id: 'shell.format',
     label: 'Format',
     checked: () => format,
+    // the key stands for Hide Inspector of Keynote, whose ⌥⌘I opens the developer tools
+    ...PANE_KEYS(1),
     run: () => setFormat(!format),
     menu: { bar: 'View', group: 'panes', order: 13 },
     toolbar: { group: 'inspector', order: 60, icon: 'format' },

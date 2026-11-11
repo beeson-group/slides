@@ -14,7 +14,7 @@
 // each deck, never in the file
 
 import type { App } from '../app.ts';
-import type { Command, Group } from '../commands.ts';
+import { OUTSIDE_DIALOGS, type Command, type Group } from '../commands.ts';
 import { injectStyle, make, store, stored, wire } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { closeMenus, commandKeys, menuItems, openMenu, splitButton, type MenuItem } from '../ui/menu.ts';
@@ -76,6 +76,7 @@ function glyph(face: string | string[]): SVGSVGElement {
 
 const CSS = `
 .beeson-edit-top { display: flex; align-items: center; gap: 2px; height: 52px; padding: 0 10px; box-sizing: border-box; font: 11px/1.2 var(--ed-font); color: var(--ed-text); user-select: none; -webkit-user-select: none; }
+html.beeson-no-toolbar .beeson-edit-top { display: none; }
 .beeson-edit-top .group { display: flex; align-items: center; gap: 2px; }
 .beeson-edit-top .group + .group::before { content: ''; align-self: center; width: 1px; height: 28px; margin: 0 6px; background: var(--ed-line); }
 .beeson-edit-top .group.right { margin-left: auto; }
@@ -513,7 +514,34 @@ export function install(app: App): void {
     else if (sheet.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
     back = null;
   }
-  app.commands.define({ id: 'view.customizeToolbar', label: 'Customize Toolbar…', menu: { bar: 'View', group: 'toolbar', order: 90 }, run: () => (customizing ? closeSheet() : openSheet()) });
+  // Show Toolbar and Hide Toolbar of the View menu of Keynote, with its key ⌥⌘T, and elsewhere
+  // with Ctrl+F1, the key of the ribbon of PowerPoint for Windows. the choice is kept per browser
+  const hidden = () => document.documentElement.classList.contains('beeson-no-toolbar');
+  const setHidden = (on: boolean) => {
+    if (on && top.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
+    document.documentElement.classList.toggle('beeson-no-toolbar', on);
+    store('beeson-toolbar-hidden', on ? '1' : null);
+    app.relayout();
+  };
+  if (stored('beeson-toolbar-hidden') === '1') document.documentElement.classList.add('beeson-no-toolbar');
+  app.commands.define({
+    id: 'view.toolbar',
+    label: () => (hidden() ? 'Show Toolbar' : 'Hide Toolbar'),
+    keys: { mac: ['Alt+Mod+T'], other: ['Ctrl+F1'] },
+    in: OUTSIDE_DIALOGS,
+    menu: { bar: 'View', group: 'toolbar', order: 89 },
+    run: () => setHidden(!hidden()),
+  });
+  app.commands.define({
+    id: 'view.customizeToolbar',
+    label: 'Customize Toolbar…',
+    menu: { bar: 'View', group: 'toolbar', order: 90 },
+    run: () => {
+      if (hidden()) setHidden(false);
+      if (customizing) closeSheet();
+      else openSheet();
+    },
+  });
 
   // a drag adds an item of the sheet, moves an item of the toolbar or takes it off when it is
   // dropped outside, or puts the default set back. it starts once the pointer moves 4 px
