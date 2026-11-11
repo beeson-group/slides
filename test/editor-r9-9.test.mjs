@@ -498,3 +498,70 @@ for (const platform of PLATFORMS) {
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Loop');
   });
 }
+
+// the box of the new element of the current slide in px of the window, and the boxes of the texts
+// and the chrome it lies over: a heading, a paragraph, a list, a code box, a formula, a caption,
+// the running head, the footnote line, and the slide number
+const OVER = `((el) => {
+  const slide = document.querySelector('.reveal:not(.beeson-peek) .slides > section.present');
+  const box = (r) => ({ left: r.left, top: r.top, right: r.right, bottom: r.bottom });
+  const ink = (t) => { const g = document.createRange(); g.selectNodeContents(t); const r = g.getBoundingClientRect(); return box(r.width ? r : t.getBoundingClientRect()); };
+  const me = box(el.getBoundingClientRect());
+  const meets = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
+  const texts = [...slide.querySelectorAll('h1, h2, p, ul, ol, pre, table, div.math, figcaption, .run, .foot'), document.querySelector('.reveal .slide-number')]
+    .filter((t) => t && t !== el && !el.contains(t) && !t.contains(el) && t.getClientRects().length && !t.closest('aside.notes, ul, ol, table') || t === el);
+  const over = texts.filter((t) => t !== el && meets(me, t.matches('.run, .foot, .slide-number') ? box(t.getBoundingClientRect()) : ink(t)))
+    .map((t) => t.localName + (t.classList.length ? '.' + [...t.classList].filter((c) => !c.startsWith('beeson')).join('.') : ''));
+  const s = slide.getBoundingClientRect();
+  return { me, over, inside: me.left >= s.left - 1 && me.top >= s.top - 1 && me.right <= s.right + 1 && me.bottom <= s.bottom + 1 };
+})`;
+const NEW = {
+  text: `document.querySelector('.beeson-pending')`,
+  code: `document.querySelector('.beeson-pending')`,
+  formula: `window.BeesonEditor.selection()[0]`,
+  qr: `window.BeesonEditor.selection()[0]`,
+};
+
+// the deck at path served over HTTP with the editor, and its slides with the kinds of new element
+// whose place is checked on each
+const PLACES = [
+  ['test/pages/editor-layouts.html', [2, 3, 4, 5, 6, 8], ['text', 'code', 'formula', 'qr']],
+  ['test/pages/editor-empty-zone.html', [0, 1, 2], ['text', 'code', 'formula', 'qr']],
+  ['index.html', [2, 3, 4], ['text', 'formula', 'qr']],
+];
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: a new text box, code box, formula, or QR code is put in free space of each layout, off the texts and the chrome`, async (t) => {
+    for (const [path, slides, kinds] of PLACES) {
+      const page = await browser.newPage({ width: 1600, height: 1000 });
+      t.after(() => page.close().catch(() => {}));
+      const url = `${server.origin}/${path}?edit&still&theme=light&edit-platform=${platform}`;
+      await page.goto(url);
+      await page.evaluate('localStorage.clear()');
+      await page.goto(url);
+      await page.waitFor(deckSettled);
+      await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
+      const source = readFileSync(path, 'utf8');
+      assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${js(source)})`)).problems, []);
+      for (const n of slides) {
+        for (const kind of kinds) {
+          await page.evaluate(`Reveal.slide(${n})`);
+          await frames(page);
+          await exec(page, `insert.${kind}`);
+          await sleep(300);
+          await frames(page);
+          const m = await page.evaluate(`${OVER}(${NEW[kind]})`);
+          const where = `${kind} on the slide ${n} of ${path} at ${JSON.stringify(m.me)}`;
+          assert.deepEqual(m.over, [], `the new ${where} lies over a text or the chrome`);
+          assert.ok(m.inside, `the new ${where} runs past the slide`);
+          // the new element is taken back
+          await press(page, 'Escape');
+          await frames(page);
+          if ((await render(page)) !== source) await page.evaluate('window.BeesonEditor.undo()');
+          assert.equal(await render(page), source, `the new ${kind} is not taken back`);
+        }
+      }
+      await page.close();
+    }
+  });
+}
