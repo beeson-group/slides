@@ -45,6 +45,29 @@ const CSS = `
 html.beeson-painting .reveal .slides, html.beeson-painting .reveal .slides * { cursor: url("data:image/svg+xml,${encodeURIComponent(BRUSH)}") 2 2, copy !important; }
 `;
 
+// tabIn focuses the formula of the block after the caret, or before it with back, and else puts
+// the caret beside the focused formula, or leaves it where it is
+function tabIn(app: App, back: boolean): void {
+  const active = document.activeElement;
+  const host = active && app.hostOf(active);
+  if (!host) return;
+  const s = getSelection();
+  const at = document.createRange();
+  if (active!.matches('mjx-container')) at.selectNode(active!);
+  else if (s?.rangeCount) at.setStart(s.focusNode!, s.focusOffset);
+  else return;
+  const formulas = [...host.querySelectorAll('mjx-container[tabindex]')];
+  const next = back ? formulas.reverse().find((f) => at.comparePoint(f, 0) < 0) : formulas.find((f) => at.comparePoint(f, 0) > 0);
+  if (next) return (next as HTMLElement).focus();
+  if (!active!.matches('mjx-container')) return;
+  (host as HTMLElement).focus({ preventScroll: true });
+  const r = document.createRange();
+  if (back) r.setStartBefore(active!);
+  else r.setStartAfter(active!);
+  s?.removeAllRanges();
+  s?.addRange(r);
+}
+
 export function install(app: App): void {
   flow.install(app);
   carry.install(app);
@@ -65,7 +88,7 @@ export function install(app: App): void {
   });
   define({
     id: 'text.joinBackward',
-    label: 'Join Paragraphs',
+    label: (a) => (!inNotes(a) && blocks.removesBullet(a) ? 'Remove Bullet' : 'Join Paragraphs'),
     keys: { mac: ['Backspace'], other: ['Backspace'] },
     in: [...TEXT, 'notes'],
     undoable: true,
@@ -179,6 +202,13 @@ export function install(app: App): void {
   // ] and [ are typed with AltGr on a German or an Italian keyboard
   define({ id: 'text.indent', label: 'Increase Indent Level', keys: { mac: ['Mod+]', 'Tab'], other: ['Tab', 'Mod+]'] }, in: TEXT, menu: menu('list', 70, 'List'), undoable: true, enabled: (a) => blocks.inList(a) || flow.canLevel(a), run: (a) => flow.level(a, true) });
   define({ id: 'text.outdent', label: 'Decrease Indent Level', keys: { mac: ['Mod+[', 'Shift+Tab'], other: ['Shift+Tab', 'Mod+['] }, in: TEXT, menu: menu('list', 71, 'List'), undoable: true, enabled: (a) => blocks.inList(a) || flow.canLevel(a), run: (a) => flow.level(a, false) });
+  // Tab and Shift+Tab in a text outside a list and a table keep the focus in the text, as a text
+  // box of Keynote takes them. a tab is not typed, since the theme draws it as a space. the key
+  // stops at each formula of the block, which Enter opens, and goes on from the last to the text
+  for (const back of [false, true]) {
+    const key = back ? 'Shift+Tab' : 'Tab';
+    define({ id: back ? 'text.tabBack' : 'text.tab', label: key, keys: { mac: [key], other: [key] }, in: TEXT, enabled: (a) => !document.activeElement?.closest('td, th') && !blocks.inList(a) && !flow.canLevel(a), run: (a) => tabIn(a, back) });
+  }
 
   // the link opens its dialog, which makes the change one entry of the history. a test or a script
   // gives the address as arg, e.g. { href: '#/7' }, or the kind of link shown first, e.g.

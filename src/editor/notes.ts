@@ -38,6 +38,7 @@ html.beeson-editor body > .beeson-edit-pane { display: none; }
 html.beeson-editor.beeson-notes body > .beeson-edit-pane { display: block; }
 html.beeson-editor .beeson-edit-resize { position: fixed; left: var(--ed-nav-col); right: var(--ed-insp-col); bottom: calc(28px + var(--beeson-pane, 200px) - 4px); height: 8px; z-index: 56; display: none; cursor: row-resize; touch-action: none; }
 html.beeson-editor.beeson-notes .beeson-edit-resize { display: block; }
+html.beeson-resizing-rows, html.beeson-resizing-rows * { cursor: row-resize !important; user-select: none !important; }
 html.beeson-editor .beeson-edit-resize::after { content: ''; position: absolute; left: 50%; top: 2px; width: 36px; height: 4px; margin-left: -18px; border-radius: 2px; background: var(--ed-faint); opacity: 0.6; }
 html.beeson-editor .beeson-edit-resize:hover::after, html.beeson-editor .beeson-edit-resize.dragging::after, html.beeson-editor .beeson-edit-resize:focus-visible::after { opacity: 1; background: var(--ed-muted); }
 html.beeson-editor .beeson-edit-resize:hover, html.beeson-editor .beeson-edit-resize.dragging, html.beeson-editor .beeson-edit-resize:focus-visible { outline: none; background: linear-gradient(transparent 3px, color-mix(in srgb, var(--ed-select) 55%, transparent) 3px 5px, transparent 5px); }
@@ -189,6 +190,9 @@ export function install(app: App): void {
     const startHeight = paneHeight;
     let wanted = startHeight;
     resizer.classList.add('dragging');
+    // the resize cursor is kept past the limits of the height, as the pointer is captured
+    resizer.setPointerCapture(ev.pointerId);
+    root.classList.add('beeson-resizing-rows');
     const onMove = (e: PointerEvent) => {
       wanted = startHeight + startY - e.clientY;
       setPane(wanted);
@@ -197,6 +201,7 @@ export function install(app: App): void {
       document.removeEventListener('pointermove', onMove);
       document.removeEventListener('pointerup', onUp);
       resizer.classList.remove('dragging');
+      root.classList.remove('beeson-resizing-rows');
       // dragged down to the bottom, the notes are hidden, and shown again at their height before
       if (wanted < HIDE) {
         setPane(startHeight);

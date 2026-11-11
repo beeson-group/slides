@@ -30,8 +30,8 @@ const INSPECTOR_W = 288;
 // and the inspector stays docked beside the canvas, as in Keynote
 const SOLO_BELOW = 2 * (NAV_MIN + INSPECTOR_W);
 
-const TOKENS_LIGHT = `--ed-bg: #ececec; --ed-panel: #f6f6f6; --ed-text: #1d1d1f; --ed-muted: #6e6e73; --ed-faint: #a9a9ae; --ed-line: #d4d4d6; --ed-canvas: #e1e1e3; --ed-select: #8a2be2; --ed-on-select: #fff; --ed-guide: #e0651f; --ed-error: #d70015; --ed-menu: rgba(248, 248, 248, 0.94); --ed-menu-line: rgba(0, 0, 0, 0.14); --ed-control: #fff; --ed-control-line: #c6c6ca; --ed-segment: #fff; --ed-focus: rgba(138, 43, 226, 0.5); --ed-hover: rgba(0, 0, 0, 0.06); --ed-pressed: rgba(0, 0, 0, 0.11); --ed-edge: rgba(0, 0, 0, 0.16); color-scheme: light;`;
-const TOKENS_DARK = `--ed-bg: #2b2b2d; --ed-panel: #232325; --ed-text: #ececee; --ed-muted: #9a9a9f; --ed-faint: #5e5e63; --ed-line: #3b3b3e; --ed-canvas: #1a1a1c; --ed-select: #9d47d8; --ed-on-select: #fff; --ed-guide: #f08050; --ed-error: #ff6961; --ed-menu: rgba(44, 44, 46, 0.94); --ed-menu-line: rgba(255, 255, 255, 0.12); --ed-control: #3a3a3c; --ed-control-line: #4a4a4e; --ed-segment: #636366; --ed-focus: rgba(201, 79, 230, 0.6); --ed-hover: rgba(255, 255, 255, 0.07); --ed-pressed: rgba(255, 255, 255, 0.13); --ed-edge: rgba(255, 255, 255, 0.14); color-scheme: dark;`;
+const TOKENS_LIGHT = `--ed-bg: #ececec; --ed-panel: #f6f6f6; --ed-text: #1d1d1f; --ed-muted: #6e6e73; --ed-faint: #a9a9ae; --ed-line: #d4d4d6; --ed-canvas: #e1e1e3; --ed-select: #8a2be2; --ed-on-select: #fff; --ed-guide: #e0651f; --ed-error: #d70015; --ed-menu: rgba(248, 248, 248, 0.94); --ed-menu-line: rgba(0, 0, 0, 0.14); --ed-control: #fff; --ed-control-line: #c6c6ca; --ed-segment: #fff; --ed-focus: #8a2be2; --ed-hover: rgba(0, 0, 0, 0.06); --ed-pressed: rgba(0, 0, 0, 0.11); --ed-edge: rgba(0, 0, 0, 0.16); color-scheme: light;`;
+const TOKENS_DARK = `--ed-bg: #2b2b2d; --ed-panel: #232325; --ed-text: #ececee; --ed-muted: #9a9a9f; --ed-faint: #5e5e63; --ed-line: #3b3b3e; --ed-canvas: #1a1a1c; --ed-select: #9d47d8; --ed-on-select: #fff; --ed-guide: #f08050; --ed-error: #ff6961; --ed-menu: rgba(44, 44, 46, 0.94); --ed-menu-line: rgba(255, 255, 255, 0.12); --ed-control: #3a3a3c; --ed-control-line: #4a4a4e; --ed-segment: #636366; --ed-focus: #c94fe6; --ed-hover: rgba(255, 255, 255, 0.07); --ed-pressed: rgba(255, 255, 255, 0.13); --ed-edge: rgba(255, 255, 255, 0.14); color-scheme: dark;`;
 
 // the panes of today read the tokens of the deck, which are given the values of the chrome inside
 // them
@@ -222,31 +222,19 @@ export function install(app: App): void {
     toolbar: { group: 'inspector', order: 60, icon: 'format' },
   });
 
-  // view.slideOnly is Slide Only of the View menu of Keynote. it hides the navigator and the
-  // inspector together, and a second run shows them again as kept, or else the navigator and the
-  // Format tab. it is checked while both are hidden, and it closes the light table
-  let viewKept: { nav: boolean; tab: 'format' | 'steps' | null } | null = null;
-  const slideOnly = () => !app.nav.shown && !format && !app.steps.shown;
+  // view.slideOnly is Slide Only of the View menu of Keynote. it hides the navigator and leaves the
+  // inspector as it is, since in Keynote the view modes change only what is left of the canvas. a
+  // second run shows the navigator again. it is checked while the navigator is hidden, and it
+  // closes the light table
+  const slideOnly = () => !app.nav.shown;
   app.commands.define({
     id: 'view.slideOnly',
     label: 'Slide Only',
     menu: { bar: 'View', group: 'panes', order: 10.2 },
     checked: slideOnly,
     run: async () => {
-      if (slideOnly()) {
-        const was = viewKept ?? { nav: true, tab: 'format' };
-        viewKept = null;
-        if (was.nav) app.nav.toggle();
-        if (was.tab === 'format') setFormat(true);
-        else if (was.tab === 'steps') app.steps.toggle();
-        app.relayout();
-        return;
-      }
-      viewKept = { nav: app.nav.shown, tab: app.steps.shown ? 'steps' : format ? 'format' : null };
-      if (app.commands.get('view.lightTable') && app.commands.state('view.lightTable').checked) await app.commands.run('view.lightTable');
-      if (app.nav.shown) app.nav.toggle();
-      if (app.steps.shown) app.steps.toggle();
-      if (format) setFormat(false);
+      if (!slideOnly() && app.commands.get('view.lightTable') && app.commands.state('view.lightTable').checked) await app.commands.run('view.lightTable');
+      app.nav.toggle();
       app.relayout();
     },
   });
@@ -335,6 +323,8 @@ export function install(app: App): void {
   });
   window.addEventListener('keydown', (ev) => {
     if (!(ev.key === 'ContextMenu' || (ev.key === 'F10' && ev.shiftKey && !ev.metaKey && !ev.ctrlKey && !ev.altKey))) return;
+    // a row of the accessibility checker opens its own menu of fixes
+    if (document.activeElement?.closest('.beeson-edit-a11y [role="tree"]')) return;
     const sel = app.selection.only();
     const at = sel ?? (document.activeElement instanceof Element && document.activeElement !== document.body ? document.activeElement : app.current());
     const place = placeOf(at);

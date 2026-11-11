@@ -6,6 +6,8 @@
 // and Esc puts the shown value back
 
 import type { App } from '../app.ts';
+import { keysOf } from '../commands.ts';
+import { matches } from '../keymap.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { commandKeys } from '../ui/menu.ts';
@@ -101,6 +103,8 @@ const CSS = `
 .beeson-edit-inspector .ed-btn { flex: 1; height: 26px; padding: 0 10px; border: 0; border-radius: 7px; background: var(--ed-pressed); color: var(--ed-text); display: flex; align-items: center; justify-content: center; gap: 5px; font: 12px/1 var(--ed-font); white-space: nowrap; cursor: default; }
 .beeson-edit-inspector .ed-btn:not(:disabled):hover { background: color-mix(in srgb, var(--ed-pressed), var(--ed-text) 6%); }
 .beeson-edit-inspector .ed-btn:disabled { color: var(--ed-faint); }
+.beeson-edit-inspector .beeson-edit-select { height: 24px; padding: 0 6px 0 9px; border: 0; border-radius: 6px; background: var(--ed-control); box-shadow: inset 0 0 0 1px var(--ed-control-line); color: var(--ed-text); font: 12px/1 var(--ed-font); cursor: default; }
+.beeson-edit-inspector .beeson-edit-select:disabled { color: var(--ed-faint); }
 .beeson-edit-inspector .ed-num { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: stretch; gap: 4px; }
 .beeson-edit-inspector .ed-num .box { display: flex; align-items: center; gap: 3px; }
 .beeson-edit-inspector .ed-num input { flex: 1; min-width: 0; height: 24px; box-sizing: border-box; padding: 0 7px; border: 0; border-radius: 6px; background: var(--ed-control); box-shadow: inset 0 0 0 1px var(--ed-control-line); color: var(--ed-text); text-align: right; font: 12px/1 var(--ed-font); font-variant-numeric: tabular-nums; }
@@ -390,7 +394,20 @@ export function numberField(app: App, o: NumberOptions): Control & { input: HTML
   };
   input.addEventListener('blur', flush);
   input.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Enter') {
+    // Undo and Redo after a commit act on the history and not on the text of the field, which then
+    // follows the selection, as in Keynote
+    const history = ['edit.undo', 'edit.redo'].find((id) => {
+      const c = app.commands.get(id);
+      return c && keysOf(c, app.platform).some((k) => matches(ev, k, app.platform));
+    });
+    if (history && round(typed()) === shown) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      void app.commands.run(history).then(() => {
+        show(o.value());
+        input.select();
+      }).catch((e) => app.fail(e));
+    } else if (ev.key === 'Enter') {
       ev.preventDefault();
       flush();
       input.select();

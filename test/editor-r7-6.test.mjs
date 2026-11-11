@@ -110,7 +110,7 @@ const KEY = `beeson-edit-toolbar:/${LAYOUTS}`;
 const kept = (page) => page.evaluate(`JSON.parse(localStorage.getItem(${js(KEY)}) ?? 'null')`);
 
 for (const platform of PLATFORMS) {
-  test(`Slide Only of the View menu and the View popup hides the navigator and the inspector and shows them again (${platform})`, async (t) => {
+  test(`Slide Only of the View menu and the View popup hides the navigator, leaves the inspector open, and shows the navigator again (${platform})`, async (t) => {
     const page = await load(t, platform);
     const canvas = await boxOf(page, '.beeson-edit-canvas');
     assert.deepEqual(await panes(page), { navigator: true, format: true, steps: false, slideOnly: false });
@@ -118,9 +118,9 @@ for (const platform of PLATFORMS) {
     const labels = await menuLabels(page);
     assert.equal(labels[labels.indexOf('Navigator') + 1], 'Slide Only');
     await choose(page, 'Slide Only');
-    assert.deepEqual(await panes(page), { navigator: false, format: false, steps: false, slideOnly: true });
+    assert.deepEqual(await panes(page), { navigator: false, format: true, steps: false, slideOnly: true });
     const wide = await boxOf(page, '.beeson-edit-canvas');
-    assert.ok(wide.w > canvas.w + 400, `the canvas is ${wide.w} px wide in Slide Only and ${canvas.w} px before`);
+    assert.ok(wide.w > canvas.w + 150, `the canvas is ${wide.w} px wide in Slide Only and ${canvas.w} px before`);
     // the View popup of the toolbar lists Slide Only checked after Navigator, and shows the panes again
     await click(page, '.beeson-edit-top [data-command="toolbar.view"]');
     await frames(page);
@@ -130,11 +130,11 @@ for (const platform of PLATFORMS) {
     await choose(page, 'Slide Only');
     assert.deepEqual(await panes(page), { navigator: true, format: true, steps: false, slideOnly: false });
     assert.equal((await boxOf(page, '.beeson-edit-canvas')).w, canvas.w);
-    // the Steps tab shown before Slide Only is shown again after it
+    // the Steps tab is kept open through Slide Only
     await exec(page, 'view.steps');
     await openBar(page, 'View');
     await choose(page, 'Slide Only');
-    assert.equal((await panes(page)).slideOnly, true);
+    assert.deepEqual(await panes(page), { navigator: false, format: false, steps: true, slideOnly: true });
     await openBar(page, 'View');
     await choose(page, 'Slide Only');
     assert.deepEqual(await panes(page), { navigator: true, format: false, steps: true, slideOnly: false });

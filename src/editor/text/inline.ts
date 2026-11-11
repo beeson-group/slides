@@ -35,6 +35,7 @@ export const CLEARED: Match = (el) => tagIs('strong', 'b', 'em', 'i', 'sup', 'su
 
 // the elements that a format is not wrapped around, whose content is formatted instead
 const BLOCKISH = 'ul, ol, li, p, div, table, pre, h1, h2, h3, h4, h5, h6, mjx-container';
+const INNER = 'li, p, div, td, th, pre, h1, h2, h3, h4, h5, h6';
 
 const elementOf = (n: Node): Element | null => (n instanceof Element ? n : n.parentElement);
 
@@ -213,8 +214,35 @@ export function edit(app: App, targets: Target[], change: (host: Element, range:
   app.invalidate('content');
 }
 
+// the parts of range in each block of host that it touches, e.g. an item and its nested items, so
+// that a format does not cut an item in two
+function blockParts(host: Element, range: Range): Range[] {
+  const groups = new Map<Element, Text[]>();
+  const root = range.commonAncestorContainer;
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode() as Text | null; n; n = walker.nextNode() as Text | null) {
+    const edge = (n === range.startContainer && range.startOffset === n.length) || (n === range.endContainer && range.endOffset === 0);
+    if (!range.intersectsNode(n) || edge || !n.data.trim() || n.parentElement?.closest('mjx-container')) continue;
+    const block = n.parentElement!.closest(INNER);
+    const key = block && host.contains(block) && block !== host ? block : host;
+    groups.set(key, [...(groups.get(key) ?? []), n]);
+  }
+  if (groups.size < 2) return [range];
+  return [...groups.values()].map((texts) => {
+    const [a, b] = [texts[0], texts[texts.length - 1]];
+    const r = document.createRange();
+    if (a === range.startContainer) r.setStart(a, range.startOffset);
+    else r.setStart(a, 0);
+    if (b === range.endContainer) r.setEnd(b, range.endOffset);
+    else r.setEnd(b, b.length);
+    return r;
+  });
+}
+
 // the nodes of range taken out of the format of match, and wrapped in an element of make if given
 export function setFormat(host: Element, range: Range, match: Match, make: (() => Element) | null): Node[] {
+  const parts = blockParts(host, range);
+  if (parts.length > 1) return parts.flatMap((r) => setFormat(host, r, match, make));
   const nodes = lift(host, range, match);
   if (make) {
     wrapRuns(nodes, make);

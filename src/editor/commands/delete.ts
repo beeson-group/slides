@@ -10,6 +10,7 @@ import { locked } from '../canvas/drag.ts';
 import { objectsOf, withTwins } from '../canvas/hit.ts';
 import { hasRange, inText } from './clipboard.ts';
 import { docOf } from './slide.ts';
+import { clearRange, selectedRange } from './table.ts';
 
 // the selected elements that are in the file, with the figure of a picture selected inside it, and
 // without the slides
@@ -29,6 +30,8 @@ export function install(app: App): void {
     undoable: true,
     run: async (a) => {
       if (inText(a)) return void document.execCommand('delete');
+      // on a range of cells, the text of the cells is cleared, as by the Delete key
+      if (selectedRange(a)) return clearRange(a);
       const doc = docOf(a);
       // an element inside another selected one goes with it
       const els = selectedElements(a);

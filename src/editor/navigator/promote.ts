@@ -19,6 +19,17 @@ const paired = (app: App, el: Element | null): boolean => !!el && !!app.pairing?
 const container = (app: App, el: Element | null): el is Element => !!el && paired(app, el) && !app.pairing!.byLive.has(el);
 const kept = (el: Element) => !el.hasAttribute('data-generated');
 
+// one entry of the history, after whose undo and redo the slide current before and after it is
+// shown, since the slide made or removed by it was current
+async function keepSlide(app: App, label: string, fn: () => Promise<{ slide: Element; line: Element }>): Promise<{ slide: Element; line: Element }> {
+  const put = (s: Element | null) => void (s?.isConnected && app.showSlide(s));
+  return app.history.keeping(label, () => app.current(), put, async () => {
+    const moved = await fn();
+    app.showSlide(moved.slide);
+    return moved;
+  });
+}
+
 function eol(app: App): string {
   return app.source?.crlf ? '\r\n' : '\n';
 }
@@ -91,7 +102,7 @@ export async function promote(app: App, el: Element): Promise<{ slide: Element; 
   lines.push(`${base}</section>`);
   // a list left without items goes with them
   const whole = !!list && list.querySelector(':scope > li') === el;
-  return app.history.transact('Promote to Slide', async () => {
+  return keepSlide(app, 'Promote to Slide', async () => {
     const [made] = await app.doc.insert(lines.join(n), root, nextPaired(app, slide), 'promote');
     for (const b of [...blocks].reverse()) await app.doc.remove(b, 'promote');
     if (whole) await app.doc.remove(list!, 'promote');
@@ -126,7 +137,7 @@ export async function demote(app: App, title: Element): Promise<{ slide: Element
   const item = `<li>${ownTex(title)}</li>`;
   const body = [...slide.children].filter((b) => kept(b) && b !== title);
   const texts = body.map((b) => shift(app, app.doc.elementText(b), indentOf(app, b), ind));
-  return app.history.transact('Demote Slide', async () => {
+  return keepSlide(app, 'Demote Slide', async () => {
     let line: Element | undefined;
     const into = last?.matches('ul, ol') && container(app, last) ? last : null;
     if (into) [line] = await app.doc.insert(item, into, null, 'demote');
