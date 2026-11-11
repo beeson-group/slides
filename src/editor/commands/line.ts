@@ -11,7 +11,8 @@ import { injectStyle, make } from '../ui/dom.ts';
 import { overlay, view } from '../canvas/frames.ts';
 import { frameOf, frameRect, linePoints, movablesOf, onCanvas, snapBoxOf, toSlide, type Frame } from '../canvas/hit.ts';
 import { LAYOUT_GUIDES, snapMove, snapPoint, type Box, type Targets } from '../canvas/snap.ts';
-import { locked, placeOf, record, writePlace, type Place } from '../canvas/drag.ts';
+import { locked, placeOf, record, standIns, writePlace, type Place } from '../canvas/drag.ts';
+import { freshGroup } from './order.ts';
 
 export type Point = { x: number; y: number };
 export type Ends = { x1: number; y1: number; x2: number; y2: number };
@@ -178,6 +179,9 @@ export function install(app: App): void {
   // the modifiers of drag.ts: a move without the snap, and a press that adds to the selection
   const freeMove = (ev: MouseEvent) => (mac() ? ev.metaKey : ev.altKey);
   const commandHeld = (ev: MouseEvent) => (mac() ? ev.metaKey : ev.ctrlKey);
+  const copyHeld = (ev: MouseEvent) => (mac() ? ev.altKey : ev.ctrlKey);
+  // the originals left in place while a move with the copy key is dragged, as drag.ts shows them
+  const ghosts = standIns();
   const ready = (a: App) => !!a.pairing?.root && !!a.current() && a.region() !== 'dialog';
   const root = document.documentElement;
 
@@ -412,8 +416,9 @@ export function install(app: App): void {
       view.guides = snap?.guides ?? [];
       view.spacing = snap?.spacing ?? [];
       // the upper left corner of the line on the slide, as the readout of a move of drag.ts gives it
+      ghosts.show({ els: p.els, from: p.places }, copyHeld(ev));
       const c = snapBoxOf(app, p.svg);
-      view.readout = { text: `x ${round(c.left)}  y ${round(c.top)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
+      view.readout = { text: `${ghosts.shown() ? 'Copy  ' : ''}x ${round(c.left)}  y ${round(c.top)}`, x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     }
     root.classList.add('beeson-dragging');
     frames.draw();
@@ -429,6 +434,8 @@ export function install(app: App): void {
     view.spacing = [];
     view.readout = null;
     root.classList.remove('beeson-dragging');
+    const copying = ghosts.shown();
+    if (p.kind === 'move') ghosts.show({ els: p.els, from: p.places }, false);
     frames.draw();
     if (p.kind === 'draw') {
       endDrawing();
@@ -439,12 +446,28 @@ export function install(app: App): void {
       const e = endsOf(p.svg);
       showEnds(p.svg, p.from);
       if (p.moved && ev) await setEnds(p.svg, e);
-    } else if (!p.moved || !ev) {
+    } else if (!p.moved || !ev || (copying && copyHeld(ev))) {
+      const to = p.els.map((el) => placeOf(el).translate);
       for (const el of p.els) {
         const from = p.places.get(el) as Place;
         (el as HTMLElement).style.translate = from.translate ? `${from.translate.x}px ${from.translate.y}px` : '';
       }
-      if (ev) p.click?.();
+      if (!p.moved || !ev) p.click?.();
+      // a copy of each element is written after it at the place where it was dropped, and the
+      // copies of a group are a new group
+      else await app.history.selecting('Duplicate', async () => {
+        const groups = new Map<string, string>();
+        const copies: Element[] = [];
+        for (const [i, el] of p.els.entries()) {
+          const copy = await app.doc.duplicate(el);
+          const g = copy.getAttribute('data-group');
+          if (g && !groups.has(g)) groups.set(g, freshGroup(app));
+          const t = to[i];
+          app.doc.setTag(copy, { translate: t ? { x: round(t.x), y: round(t.y) } : null, ...(g ? { attrs: { 'data-group': groups.get(g)! } } : {}) }, 'move');
+          copies.push(copy);
+        }
+        app.selection.set('elements', copies);
+      });
     } else {
       const changes = p.els.map((el) => {
         const to = placeOf(el);
