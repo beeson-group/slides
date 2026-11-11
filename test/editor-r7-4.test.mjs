@@ -436,7 +436,7 @@ for (const platform of PLATFORMS) {
     const items = await lastMenu(page);
     assert.deepEqual(items.filter((i) => ['Paragraphs', 'Dashes', 'Numbers'].includes(i[0])).map((i) => [i[0], i[2]]), [['Paragraphs', false], ['Dashes', false], ['Numbers', true]]);
     await choose(page, 'Dashes');
-    assert.equal(await undoLabel(page), 'Undo Dashes');
+    assert.equal(await undoLabel(page), 'Undo List Style');
     assert.equal((await state(page, 'text.list.ul')).checked, true);
     const listed = '<aside class="notes"><ul><li>Notes of a content slide.</li></ul></aside>';
     await roundTrip(page, page.source.replace(notes, listed));

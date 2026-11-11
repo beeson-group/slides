@@ -31,8 +31,10 @@ export type Command = {
   // true or false for a switch, null or absent for a plain command
   checked?(app: App): boolean | null;
   run(app: App, arg?: unknown): void | Promise<void>;
-  // true runs the command in one transaction of the history, labeled with its label
+  // true runs the command in one transaction of the history, labeled with its label, or with undo,
+  // the name of the action of a family of values, e.g. Text Color for Accent
   undoable?: boolean;
+  undo?: string;
   // why the command is disabled, for the tooltip of its control, e.g. Bigger on a heading
   why?(app: App): string | null;
 };
@@ -147,7 +149,7 @@ export class Commands {
     const c = this.byId.get(id);
     if (!c) throw new Error(`there is no command ${id}`);
     if (!this.enabled(id)) return;
-    if (c.undoable) await this.app.history.transact(this.label(id), () => c.run(this.app, arg));
+    if (c.undoable) await this.app.history.transact(c.undo ?? this.label(id), () => c.run(this.app, arg));
     else await c.run(this.app, arg);
   }
 

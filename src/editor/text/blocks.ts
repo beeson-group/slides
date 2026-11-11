@@ -236,6 +236,13 @@ function nextBlock(app: App, el: Element): Element | null {
   return n && structural(app, n) && sameKind(n, el) ? n : null;
 }
 
+// the block before or after el in one text with it, as text/flow.ts reads it: an item of the same
+// list, or a paragraph of the same column. a block with a translate of its own is a box apart
+export function besideBlock(app: App, el: Element, ahead: boolean): Element | null {
+  const n = structural(app, el) ? (ahead ? nextBlock : prevBlock)(app, el) : null;
+  return n && !(n as HTMLElement).style.translate && !(el as HTMLElement).style.translate ? n : null;
+}
+
 type Indent = { base: string; step: string; eol: string };
 
 // the indentation of el in the file, the step of indentation of the file, and its line end
@@ -259,6 +266,17 @@ export async function split(app: App): Promise<void> {
   const at = itemAt(app);
   if (!at || !canSplit(app)) return;
   const { host, item, range } = at;
+  // Return on an empty item moves it out one level, and on the first level ends the list with a
+  // paragraph after it, as in Keynote and PowerPoint
+  if (item.localName === 'li' && !item.textContent?.trim() && !item.querySelector('mjx-container, img, ul, ol')) {
+    if (at.nested) return outdent(app);
+    const list = item.parentElement!;
+    if (!nextOf(app, item)) {
+      const [p] = await app.doc.insert('<p></p>', list.parentElement!, nextOf(app, list), 'new paragraph');
+      await app.doc.remove(list.querySelectorAll(':scope > li').length > 1 ? item : list, 'new paragraph');
+      return selectIn(p, 0);
+    }
+  }
   if (!range.collapsed) range.deleteContents();
   const caret: [Node, number] = [range.startContainer, range.startOffset];
   const head = rangeTex(item, rangeOf(item, null, caret));
@@ -320,8 +338,11 @@ function joined(before: Element, after: string): string {
   return copy.innerHTML + space;
 }
 
+// the visible offset of the end of the text of el, in its last nested item
+export const endOf = (el: Element): number => offsetIn(el, ...textEnd(joinTarget(el)));
+
 async function join(app: App, before: Element, after: Element): Promise<void> {
-  const at = offsetIn(before, ...textEnd(joinTarget(before)));
+  const at = endOf(before);
   const content = joined(before, rangeTex(after, rangeOf(after, null, null)));
   await app.doc.setContent(before, content, 'join');
   await app.doc.remove(after, 'join');
@@ -684,7 +705,7 @@ export function paragraphStyle(app: App): ParagraphStyle | null {
 
 export const canStyle = (app: App, style?: ParagraphStyle): boolean => styled(app).some((el) => !style || fits(el, style));
 
-async function restyle(app: App, el: Element, style: ParagraphStyle, caret: number | null): Promise<Element> {
+async function restyle(app: App, el: Element, style: ParagraphStyle, kept: [number, number] | null): Promise<Element> {
   const classes: Record<string, boolean> = {};
   for (const [s, c] of Object.entries(STYLE_CLASSES)) if (el.classList.contains(c) !== (s === style)) classes[c] = s === style;
   const tag = el.localName === 'li' ? 'li' : STYLE_TAG[style];
@@ -692,21 +713,21 @@ async function restyle(app: App, el: Element, style: ParagraphStyle, caret: numb
   if (tag === el.localName) {
     if (Object.keys(classes).length) app.doc.setTag(el, { classes }, 'paragraph style');
   } else node = await app.doc.retag(el, tag, { classes }, 'paragraph style');
-  if (caret !== null) selectIn(node, caret);
+  if (kept) selectIn(node, ...kept);
   return node;
 }
 
-// the style set on the block of the text, or on the selected blocks, which are selected again after
-// a retag, and after an undo and a redo
+// the style set on the block of the text, whose selection is kept, or on the selected blocks, which
+// are selected again after a retag, and after an undo and a redo
 export async function setStyle(app: App, style: ParagraphStyle | ((s: ParagraphStyle) => ParagraphStyle)): Promise<void> {
   const t = textTarget(app);
-  const caret = t ? offsetIn(t.host, t.range.startContainer, t.range.startOffset) : null;
+  const kept: [number, number] | null = t && [offsetIn(t.host, t.range.startContainer, t.range.startOffset), offsetIn(t.host, t.range.endContainer, t.range.endOffset)];
   const each = async () => {
     const made: Element[] = [];
     for (const el of styled(app)) {
       const now = styleOf(app, el)!;
       const next = typeof style === 'function' ? style(now) : style;
-      made.push(next !== now && fits(el, next) ? await restyle(app, el, next, caret) : el);
+      made.push(next !== now && fits(el, next) ? await restyle(app, el, next, kept) : el);
     }
     return made;
   };

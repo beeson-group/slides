@@ -129,6 +129,7 @@ export function commands(): Command[] {
       label: mode === 'both' ? 'Both Modes' : mode === 'dark' ? 'Dark Mode Only' : 'Light Mode Only',
       menu: { bar: 'Format', group: 'mode', order: 30 + i, submenu: 'Image' },
       undoable: true,
+      undo: 'Figure Mode',
       enabled: (app) => !!visual(app),
       checked: (app) => {
         const el = visual(app);

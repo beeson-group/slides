@@ -111,6 +111,10 @@ export async function applyLink(app: App, href: string): Promise<void> {
 
 let open: { dialog: HTMLDialogElement; close(apply: boolean): void } | null = null;
 let unplace: (() => void) | null = null;
+// a key or an input at the caret while a popover opened by a click is shown, taken at the load of
+// the module and hence before the one key handler of commands.ts. the unit tests load it in Node
+let atCaret: ((ev: Event) => void) | null = null;
+if (typeof window !== 'undefined') for (const type of ['keydown', 'beforeinput']) window.addEventListener(type, (ev) => atCaret?.(ev), true);
 
 export function linkOpen(): boolean {
   return open !== null;
@@ -125,8 +129,9 @@ function reselect(saved: Target | null): void {
   sel?.addRange(saved.range);
 }
 
-// the popover opens on the kind of the link at the caret, or on kind, or on Webpage
-export function openLink(app: App, kind0?: Kind): void {
+// the popover opens on the kind of the link at the caret, or on kind, or on Webpage. with passive,
+// as after a click into a link, the focus stays at the caret, and a key typed there closes it
+export function openLink(app: App, kind0?: Kind, passive = false): void {
   open?.close(false);
   if (!canLink(app)) return;
   const t = textTarget(app);
@@ -225,24 +230,33 @@ export function openLink(app: App, kind0?: Kind): void {
     for (const b of kinds.querySelectorAll('button')) b.setAttribute('aria-checked', String(b.getAttribute('data-kind') === k));
     for (const r of rows) r.row.hidden = !r.kinds.includes(k);
     update();
-    first[k].focus();
+    if (!passive || dialog.contains(document.activeElement)) first[k].focus();
   };
 
   const close = (apply: boolean) => {
     if (open?.dialog !== dialog) return;
     open = null;
     document.removeEventListener('pointerdown', outside, true);
+    atCaret = null;
     unplace?.();
     unplace = null;
     highlights()?.delete('beeson-link');
     const h = href();
     dialog.close();
     dialog.remove();
-    reselect(saved);
+    if (!passive) reselect(saved);
     if (apply && h) void applyLink(app, h).catch((e) => app.fail(e));
   };
   const outside = (ev: PointerEvent) => {
     if (!dialog.contains(ev.target as Node)) close(false);
+  };
+  // Esc at the caret closes the popover only, and another key goes on at the caret
+  const typed = (ev: Event) => {
+    if (dialog.contains(ev.target as Node)) return;
+    close(false);
+    if ((ev as KeyboardEvent).key !== 'Escape') return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
   };
 
   for (const f of [field, to, subject, number]) f.addEventListener('input', update);
@@ -281,9 +295,20 @@ export function openLink(app: App, kind0?: Kind): void {
   const words = saved && !saved.range.collapsed ? saved.range.getBoundingClientRect() : null;
   unplace = popoverBeside(app, dialog, saved?.host ?? app.selection.elements()[0] ?? document.body, { at: words?.width ? words : undefined });
   document.addEventListener('pointerdown', outside, true);
-  if (kind === 'webpage') field.select();
+  // show() of a dialog focuses its first field
+  if (passive) {
+    reselect(saved);
+    atCaret = typed;
+  } else if (kind === 'webpage') field.select();
 }
 
-export function install(_app: App): void {
+export function install(app: App): void {
   injectStyle('link', CSS);
+  // a click into a link of a block puts the caret there and opens the popover of the link, as in
+  // Keynote
+  document.addEventListener('click', (ev) => {
+    const a = ev.target instanceof Element ? ev.target.closest('a[href]') : null;
+    if (!a || ev.detail !== 1 || ev.shiftKey || ev.metaKey || ev.ctrlKey || ev.altKey || !app.hostOf(a)) return;
+    if (getSelection()?.isCollapsed && linkAt(app) !== null) openLink(app, undefined, true);
+  });
 }

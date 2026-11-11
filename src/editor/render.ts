@@ -187,11 +187,13 @@ export function escape(source: Source, text: string, keepNbsp: boolean): string 
   return source.crlf ? s.replace(/\n/g, '\r\n') : s;
 }
 
-// an element that is not in the file, e.g. a br inserted on the page
+// an element that is not in the file, e.g. a br inserted on the page, or a copy of a span split
+// by a format, without its runtime classes
 function serializeNew(source: Source, el: Element, math: MathLookup): string {
   const tag = el.localName;
   const attrs = [...el.attributes]
-    .map((a) => ({ name: a.name, value: a.name === 'data-fragment-index' ? (fragmentIndex(el) ?? a.value) : a.value }))
+    .map((a) => ({ name: a.name, value: a.name === 'data-fragment-index' ? (fragmentIndex(el) ?? a.value) : a.name === 'class' ? [...el.classList].filter((c) => !isRuntimeClass(c)).join(' ') : a.value }))
+    .filter((a) => a.name !== 'class' || a.value)
     .map((a) => (a.value === '' ? ` ${a.name}` : ` ${a.name}="${a.value.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`))
     .join('');
   if (VOID.has(tag)) return `<${tag}${attrs}>`;

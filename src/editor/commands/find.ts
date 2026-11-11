@@ -20,6 +20,11 @@ const queryOf = (arg: unknown): string | undefined => (typeof arg === 'string' ?
 export function install(app: App): void {
   const finder = createFinder(app, { next: NEXT[app.platform], previous: PREVIOUS[app.platform] }, { open: openMenu, close: closeMenus });
   const c = app.commands;
+  // F3 with Shift or Ctrl is a key of the find bar of Chrome and Edge, hence it is never left to the
+  // browser, also where it does not run a command, e.g. without a query or outside a text
+  window.addEventListener('keydown', (ev) => {
+    if (ev.key === 'F3' && !ev.altKey) ev.preventDefault();
+  }, true);
   c.define({
     id: 'find.open',
     label: 'Find…',

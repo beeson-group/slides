@@ -110,12 +110,12 @@ for (const platform of PLATFORMS) {
 
 // the controls of the Text pane that are not dimmed
 const liveControls = (page) =>
-  page.evaluate(`[...document.querySelectorAll('#beeson-edit-panel-format .ed-panes button')].filter((b) => !b.disabled && !b.closest('.ed-tabs')).map((b) => b.title || b.getAttribute('aria-label') || b.textContent)`);
+  page.evaluate(`[...document.querySelectorAll('#beeson-edit-panel-format .ed-panes button')].filter((b) => !b.disabled && !b.closest('.ed-tabs')).map((b) => b.getAttribute('aria-label') || b.title || b.textContent)`);
 
 // the button of the Format tab with the title, clicked as a user would
 async function tap(page, title) {
   const at = await page.evaluate(`(() => {
-    const b = [...document.querySelectorAll('#beeson-edit-panel-format button')].find((b) => (b.title || b.getAttribute('aria-label') || b.textContent) === ${JSON.stringify(title)});
+    const b = [...document.querySelectorAll('#beeson-edit-panel-format button')].find((b) => (b.getAttribute('aria-label') || b.title || b.textContent) === ${JSON.stringify(title)});
     if (!b || b.disabled) return null;
     const r = b.getBoundingClientRect();
     return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
