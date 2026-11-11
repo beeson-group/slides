@@ -38,14 +38,15 @@ const BLOCKISH = 'ul, ol, li, p, div, table, pre, h1, h2, h3, h4, h5, h6, mjx-co
 const elementOf = (n: Node): Element | null => (n instanceof Element ? n : n.parentElement);
 
 // the range around the word at a collapsed caret strictly inside it, or the range itself. a caret
-// at the edge of a word is left to the typing style of carry.ts, as in Word and PowerPoint
-function wordRange(range: Range): Range {
+// at the edge of a word is left to the typing style of carry.ts, as in Word and PowerPoint, unless
+// edge is set, as for the Format Painter, whose click paints the word clicked
+function wordRange(range: Range, edge: boolean): Range {
   if (!range.collapsed || !(range.startContainer instanceof Text)) return range;
   const text = range.startContainer;
   const word = /[\p{L}\p{N}_'’-]/u;
   let start = range.startOffset;
   let end = start;
-  if (!word.test(text.data[start - 1] ?? '') || !word.test(text.data[end] ?? '')) return range;
+  if (!edge && (!word.test(text.data[start - 1] ?? '') || !word.test(text.data[end] ?? ''))) return range;
   while (start > 0 && word.test(text.data[start - 1])) start--;
   while (end < text.length && word.test(text.data[end])) end++;
   const r = document.createRange();
@@ -56,11 +57,11 @@ function wordRange(range: Range): Range {
 
 // the ranges that a format is set on: the text of the window or the word at its caret, and else
 // the whole text of each selected block. notes take only bold and italic
-export function inlineTargets(app: App, notes = false): Target[] {
+export function inlineTargets(app: App, notes = false, edge = false): Target[] {
   const t = textTarget(app);
   if (t) {
     if (!notes && t.host.matches('aside.notes')) return [];
-    const range = wordRange(t.range);
+    const range = wordRange(t.range, edge);
     return range.collapsed ? [] : [{ host: t.host, range }];
   }
   // an item takes its own text, without its nested list, which is a block of its own
@@ -450,13 +451,13 @@ function paint(host: Element, range: Range, style: TextStyle): Node[] {
   return nodes.filter((n) => n.isConnected);
 }
 
-export const canPaint = (app: App): boolean => inlineTargets(app).length > 0;
+export const canPaint = (app: App): boolean => inlineTargets(app, false, true).length > 0;
 
 // style set on the words of the selection, as Paste Style and the Format Painter set it. where the
 // whole text of a block is selected, the kind of list is set too in a text, as the list commands are,
 // then the paragraph style. a list item hence becomes a paragraph after the style of a paragraph
 export async function pasteStyle(app: App, style: TextStyle): Promise<void> {
-  const targets = inlineTargets(app);
+  const targets = inlineTargets(app, false, true);
   if (!targets.length) return;
   const t = textTarget(app);
   const whole = !t || covers(t.host, t.range);
