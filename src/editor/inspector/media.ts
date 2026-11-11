@@ -67,6 +67,13 @@ function well(app: App, run: Run, url: () => string | null, name: () => string, 
   return { el, sync };
 }
 
+// on a picture that its mode hides, Replace… chooses the twin for the other mode, as the command
+// names it, without the kind that the pane already gives
+const replaceLabel = (app: App): Label => () => {
+  const title = app.commands.state('media.replace').label;
+  return { text: title.startsWith('Choose') ? title.replace(/ (Image|Video) for /, ' for ') : 'Replace…', title: title.startsWith('Choose') ? title : '' };
+};
+
 const keptNote = (value: () => string | null) =>
   note(() => (unsaved(value()) ? `${fileName(value())} is kept in this browser until a save writes it into media/ next to the deck.` : ''));
 
@@ -95,7 +102,7 @@ export function imagePane(app: App, run: Run): Control[] {
   });
   return [
     section('File', [
-      well(app, run, () => img?.currentSrc || img?.src || '', () => fileName(img?.getAttribute('src') ?? null), 'media.replace', { el: img }, 'Replace…'),
+      well(app, run, () => img?.currentSrc || img?.src || '', () => fileName(img?.getAttribute('src') ?? null), 'media.replace', { el: img }, 'Replace…', replaceLabel(app)),
       keptNote(() => img?.getAttribute('src') ?? null),
     ]),
     section(null, [alt, checkbox(app, run, 'figure.decorative', 'Decorative')]),
@@ -212,7 +219,7 @@ export function videoPane(app: App, run: Run): Control[] {
   const poster = () => video?.getAttribute('poster') ?? null;
   return [
     section('File', [
-      well(app, run, poster, () => fileName(video?.getAttribute('src') ?? null), 'media.replace', { el: video }, 'Replace…'),
+      well(app, run, poster, () => fileName(video?.getAttribute('src') ?? null), 'media.replace', { el: video }, 'Replace…', replaceLabel(app)),
       keptNote(() => video?.getAttribute('src') ?? null),
     ]),
     section('Poster', [
