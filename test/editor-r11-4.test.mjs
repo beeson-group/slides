@@ -73,6 +73,151 @@ async function checkEdit(page, before, edited, name) {
   assert.equal(text, edited);
 }
 
+// the element of each part of the presenter display, and the frames drawn around the parts while
+// the display is customized
+const PART = { current: '.col.now', next: '.col.upcoming', notes: '.notes', clock: '.clock', timer: '.group.timer' };
+const DISPLAY = 'dialog.beeson-edit-presenter[open]';
+const LAYOUT_KEY = `localStorage.getItem('beeson-presenter-layout:' + location.pathname)`;
+const PARTS_KEY = `localStorage.getItem('beeson-presenter-parts:' + location.pathname)`;
+const partRect = (page, part) => rectOf(page, `${DISPLAY} ${PART[part]}`);
+const frameRect = (page, part) => rectOf(page, `${DISPLAY} .layout .frame[data-part="${part}"]`);
+const centerOf = (r) => ({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+const gripOf = async (page, part) => {
+  const r = await rectOf(page, `${DISPLAY} .layout .frame[data-part="${part}"] .grip`);
+  assert.ok(r, `the frame of ${part} does not have a grip`);
+  return centerOf(r);
+};
+const shotRatio = (page, which) => page.evaluate(`(() => { const r = document.querySelector('${DISPLAY} .shot.${which}').getBoundingClientRect(); return r.width / r.height; })()`);
+const customizing = (page) => page.evaluate(`!!document.querySelector('${DISPLAY} .layout:not([hidden])')`);
+
+// the customizing started by the button of the popover of Display Options, as in Keynote (K52)
+async function customize(page) {
+  if (await page.evaluate(`!!document.querySelector('${DISPLAY} .parts[hidden]')`)) await click(page, `${DISPLAY} .bar.top button[aria-label="Display Options"]`);
+  const buttons = await page.evaluate(`[...document.querySelectorAll('${DISPLAY} .parts button')].map((b) => b.textContent)`);
+  assert.deepEqual(buttons, ['Customize Presenter Display'], 'the popover does not have the button Customize Presenter Display');
+  await click(page, `${DISPLAY} .parts button`);
+  await frames(page);
+}
+
+for (const platform of PLATFORMS) {
+  test(`while the presenter display is customized, each shown part is framed, moved by a drag, and resized by its corner, and Use Auto Layout puts it back (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 1 });
+    await exec(page, 'play.customizePresenter');
+    await page.waitFor(`!!document.querySelector(${js(DISPLAY)})`);
+    // outside the customizing, a drag does not move a part
+    const auto = {};
+    for (const p of Object.keys(PART)) auto[p] = await partRect(page, p);
+    await press(page, 'Escape');
+    const shot0 = await rectOf(page, `${DISPLAY} .shot.next`);
+    await drag(page, `${DISPLAY} .notes .text`, { dx: -200, dy: 60 });
+    await drag(page, `${DISPLAY} .shot.next`, { dx: -200, dy: 60 });
+    await frames(page);
+    assert.ok(sameRect(await partRect(page, 'notes'), auto.notes), 'a drag moved the notes outside the customizing');
+    assert.ok(sameRect(await rectOf(page, `${DISPLAY} .shot.next`), shot0), 'a drag moved the next slide outside the customizing');
+    assert.equal(await customizing(page), false, 'the frames are drawn outside the customizing');
+
+    await customize(page);
+    assert.equal(await customizing(page), true, 'the button does not start the customizing');
+    assert.equal(await page.evaluate(`!!document.querySelector('${DISPLAY} .parts:not([hidden])')`), false, 'the popover is still open while the display is customized');
+    for (const p of Object.keys(PART)) {
+      const f = await frameRect(page, p);
+      const r = await partRect(page, p);
+      assert.ok(f && r && near(f.left, r.left, 4) && near(f.top, r.top, 4) && near(f.width, r.width, 8) && near(f.height, r.height, 8), `the frame of ${p} is ${js(f)} around ${js(r)}`);
+    }
+    // a drag of the frame of the notes moves them, and the other parts stay
+    const notes0 = await partRect(page, 'notes');
+    const r0 = await partRect(page, 'current');
+    await drag(page, centerOf(notes0), { dx: -300, dy: -40 });
+    await frames(page);
+    const notes1 = await partRect(page, 'notes');
+    assert.ok(near(notes1.left, notes0.left - 300) && near(notes1.top, notes0.top - 40), `the notes moved from ${js(notes0)} to ${js(notes1)}`);
+    assert.ok(sameRect(await partRect(page, 'current'), r0), 'the current slide moved with the notes');
+    // a drag of the corner of the current slide resizes it, and its slide keeps its aspect ratio
+    await drag(page, await gripOf(page, 'current'), { dx: -240, dy: 30 });
+    await frames(page);
+    const r1 = await partRect(page, 'current');
+    assert.ok(near(r1.left, r0.left) && near(r1.top, r0.top), `the corner across from the grip moved from ${js(r0)} to ${js(r1)}`);
+    assert.ok(near(r1.width, r0.width - 240), `the width of the current slide is ${r1.width}, not ${r0.width - 240}`);
+    assert.ok(near(await shotRatio(page, 'current'), 16 / 9, 0.02), 'the current slide does not keep its aspect ratio');
+    // the corners of the next slide and of the notes
+    const n0 = await partRect(page, 'next');
+    await drag(page, await gripOf(page, 'next'), { dx: -100, dy: 10 });
+    await frames(page);
+    const n1 = await partRect(page, 'next');
+    assert.ok(near(n1.width, n0.width - 100), `the width of the next slide is ${n1.width}, not ${n0.width - 100}`);
+    assert.ok(near(await shotRatio(page, 'next'), 16 / 9, 0.02), 'the next slide does not keep its aspect ratio');
+    await drag(page, await gripOf(page, 'notes'), { dx: -50, dy: -30 });
+    await frames(page);
+    const notes2 = await partRect(page, 'notes');
+    assert.ok(near(notes2.width, notes1.width - 50) && near(notes2.height, notes1.height - 30), `the notes are ${js(notes2)} after a resize of ${js(notes1)} by -50, -30`);
+    // the clock is moved, and the text of the timer is made bigger by its corner
+    const c0 = await partRect(page, 'clock');
+    await drag(page, centerOf(c0), { dx: -500, dy: 300 });
+    const c1 = await partRect(page, 'clock');
+    assert.ok(near(c1.left, c0.left - 500) && near(c1.top, c0.top + 300), `the clock moved from ${js(c0)} to ${js(c1)}`);
+    const t0 = await partRect(page, 'timer');
+    await drag(page, await gripOf(page, 'timer'), { dx: 60, dy: 30 });
+    const t1 = await partRect(page, 'timer');
+    assert.ok(t1.height > t0.height + 15, `the timer is ${js(t1)} after a drag of its corner from ${js(t0)}`);
+    // a part is kept inside the display
+    await drag(page, centerOf(c1), { dx: -2000, dy: -2000 });
+    const c2 = await partRect(page, 'clock');
+    assert.ok(near(c2.left, 0) && near(c2.top, 0), `the clock is dragged out of the display to ${js(c2)}`);
+    // the layout is kept in the storage as fractions of the display, and the file is not changed
+    const stored = JSON.parse(await page.evaluate(LAYOUT_KEY));
+    assert.deepEqual(Object.keys(stored).sort(), Object.keys(PART).sort());
+    assert.ok(Object.values(stored).every((b) => Object.values(b).every((v) => v >= 0 && v <= 1)), `the layout ${js(stored)} is not in fractions`);
+    assert.equal(await page.evaluate(PARTS_KEY), null);
+    // the keys of the show stay live while the display is customized, and Esc ends the customizing
+    assert.equal(await page.evaluate(`document.querySelector('${DISPLAY} .count').textContent`), '2 / 3');
+    await press(page, 'ArrowRight');
+    assert.equal(await page.evaluate(`document.querySelector('${DISPLAY} .count').textContent`), '3 / 3');
+    await press(page, 'Escape');
+    assert.equal(await customizing(page), false, 'Esc does not end the customizing');
+    assert.ok(await page.evaluate(`!!document.querySelector(${js(DISPLAY)})`), 'Esc ends the display with the customizing');
+    const placed = {};
+    for (const p of Object.keys(PART)) placed[p] = await partRect(page, p);
+    // the layout holds at another size of the window
+    await page.send('Emulation.setDeviceMetricsOverride', { width: 1200, height: 800, deviceScaleFactor: 1, mobile: false });
+    await frames(page);
+    const small = await partRect(page, 'notes');
+    const scaled = { left: (placed.notes.left * 1200) / 1600, top: (placed.notes.top * 800) / 1000, width: (placed.notes.width * 1200) / 1600, height: (placed.notes.height * 800) / 1000 };
+    assert.ok(sameRect(small, scaled, 3), `the notes are ${js(small)} at 1200 × 800, after ${js(placed.notes)} at 1600 × 1000`);
+    assert.ok(near(await shotRatio(page, 'current'), 16 / 9, 0.02));
+    await page.send('Emulation.setDeviceMetricsOverride', { width: 1600, height: 1000, deviceScaleFactor: 1, mobile: false });
+    await frames(page);
+    // outside the customizing, a drag does not move a part of the layout
+    await drag(page, `${DISPLAY} .notes .text`, { dx: 200, dy: 60 });
+    assert.ok(sameRect(await partRect(page, 'notes'), placed.notes), 'a drag moved the notes after the customizing');
+    // the display is opened again with the layout, a part hidden is not framed, and Use Auto Layout
+    // puts the parts back where they were
+    await press(page, 'Escape');
+    await page.waitFor(`!document.querySelector(${js(DISPLAY)})`);
+    await exec(page, 'play.customizePresenter');
+    await page.waitFor(`!!document.querySelector(${js(DISPLAY)})`);
+    assert.ok(sameRect(await partRect(page, 'notes'), placed.notes), 'the layout is not kept for the deck');
+    await click(page, `${DISPLAY} .parts label:nth-child(4)`);
+    await customize(page);
+    assert.equal(await frameRect(page, 'clock'), null, 'a hidden part is framed');
+    assert.ok(await frameRect(page, 'notes'));
+    const tools = await page.evaluate(`[...document.querySelectorAll('${DISPLAY} .layout button')].map((b) => b.textContent)`);
+    assert.deepEqual(tools, ['Use Auto Layout', 'Done']);
+    await click(page, `${DISPLAY} .layout button:first-of-type`);
+    await frames(page);
+    assert.equal(await page.evaluate(LAYOUT_KEY), null, 'Use Auto Layout does not clear the stored layout');
+    for (const p of ['current', 'next', 'notes', 'timer']) {
+      const r = await partRect(page, p);
+      assert.ok(sameRect(r, auto[p]), `Use Auto Layout puts ${p} at ${js(r)}, not at ${js(auto[p])}`);
+    }
+    await click(page, `${DISPLAY} .layout button:last-of-type`);
+    assert.equal(await customizing(page), false, 'Done does not end the customizing');
+    await press(page, 'Escape');
+    await page.waitFor(`!document.querySelector(${js(DISPLAY)})`);
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+}
+
 // a marquee from the empty slide held at the top edge of a zoomed canvas scrolls it, with the start
 // corner of the marquee kept on its point of the slide, and selects what it covers at the release
 const CANVAS = `(() => { const c = document.querySelector('.beeson-edit-canvas'), v = window.BeesonEditorShell.stage.viewport; return { x: c.scrollLeft, y: c.scrollTop, zoomed: c.classList.contains('zoomed'), left: v.left, top: v.top, width: v.width, height: v.height }; })()`;
