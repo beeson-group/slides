@@ -694,7 +694,7 @@ export function paragraphStyle(app: App): ParagraphStyle | null {
 
 export const canStyle = (app: App, style?: ParagraphStyle): boolean => styled(app).some((el) => !style || fits(el, style));
 
-async function restyle(app: App, el: Element, style: ParagraphStyle, caret: number | null): Promise<Element> {
+async function restyle(app: App, el: Element, style: ParagraphStyle, kept: [number, number] | null): Promise<Element> {
   const classes: Record<string, boolean> = {};
   for (const [s, c] of Object.entries(STYLE_CLASSES)) if (el.classList.contains(c) !== (s === style)) classes[c] = s === style;
   const tag = el.localName === 'li' ? 'li' : STYLE_TAG[style];
@@ -702,21 +702,21 @@ async function restyle(app: App, el: Element, style: ParagraphStyle, caret: numb
   if (tag === el.localName) {
     if (Object.keys(classes).length) app.doc.setTag(el, { classes }, 'paragraph style');
   } else node = await app.doc.retag(el, tag, { classes }, 'paragraph style');
-  if (caret !== null) selectIn(node, caret);
+  if (kept) selectIn(node, ...kept);
   return node;
 }
 
-// the style set on the block of the text, or on the selected blocks, which are selected again after
-// a retag, and after an undo and a redo
+// the style set on the block of the text, whose selection is kept, or on the selected blocks, which
+// are selected again after a retag, and after an undo and a redo
 export async function setStyle(app: App, style: ParagraphStyle | ((s: ParagraphStyle) => ParagraphStyle)): Promise<void> {
   const t = textTarget(app);
-  const caret = t ? offsetIn(t.host, t.range.startContainer, t.range.startOffset) : null;
+  const kept: [number, number] | null = t && [offsetIn(t.host, t.range.startContainer, t.range.startOffset), offsetIn(t.host, t.range.endContainer, t.range.endOffset)];
   const each = async () => {
     const made: Element[] = [];
     for (const el of styled(app)) {
       const now = styleOf(app, el)!;
       const next = typeof style === 'function' ? style(now) : style;
-      made.push(next !== now && fits(el, next) ? await restyle(app, el, next, caret) : el);
+      made.push(next !== now && fits(el, next) ? await restyle(app, el, next, kept) : el);
     }
     return made;
   };
