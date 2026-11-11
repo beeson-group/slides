@@ -370,7 +370,7 @@ function placeTable(app: App, table: HTMLTableElement): void {
   const h = (slide as HTMLElement).offsetHeight || 1080;
   const foot = [...slide.querySelectorAll(':scope > .foot')].map((f) => takenBox(app, f)).find((b) => !!b);
   const floor = Math.min(h - BOTTOM, foot ? foot.top - BOTTOM : Infinity);
-  const skip = (el: Element) => el === table || el.matches('aside.notes, script, style');
+  const skip = (el: Element) => el === table || el.matches('aside.notes, script, style, .backdrop');
   const taken = (els: Element[]) => els.filter((el) => !skip(el)).map((el) => ({ el, box: takenBox(app, el) })).filter((o): o is { el: Element; box: SlideBox } => !!o.box);
   const above = [...parent.children].slice(0, [...parent.children].indexOf(table)).filter((el) => !el.matches('.run, .foot, [data-generated]'));
   const before = taken(above).map((o) => o.box);
