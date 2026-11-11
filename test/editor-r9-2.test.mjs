@@ -316,16 +316,17 @@ async function insertTableOn(page, columns, rows) {
 // a new table is put in the free space of its slide with its bars, and where it does not fit, at
 // the center of the slide over the content, which it hides as a table with fills does
 const TABLES = [
-  // slide, columns, rows, and whether the slide has free space for the table with its bars
-  [4, 3, 3, false, 'the slide with the figure, as in state 93'],
+  // slide, columns, rows, whether the slide has free space for the table with its bars, and the
+  // texts under a table on a slide without free space where they are known
+  [4, 3, 3, false, 'the slide with the figure, as in state 93', ['li:You should give black-on']],
   [4, 4, 6, false, 'the slide with the figure, as in shot 10 of the opus report'],
   [8, 3, 3, false, 'the slide with the surface, as in shot 11 of the opus report'],
   [5, 3, 3, true, 'the slide with the code box'],
   [1, 3, 3, true, 'a section slide'],
 ];
 for (const platform of PLATFORMS) {
-  for (const [n, columns, rows, room, what] of TABLES) {
-    test(`a new table of ${columns} by ${rows} cells on ${what} is put where it fits with its bars, or at the center over the content, readable (${platform})`, async (t) => {
+  for (const [n, columns, rows, room, what, under] of TABLES) {
+    test(`a new table of ${columns} by ${rows} cells on ${what} is put where it fits with its bars, or over the least of the content, readable (${platform})`, async (t) => {
       const page = await load(t, platform, { n });
       const s = await insertTableOn(page, columns, rows);
       assert.deepEqual(s.shape, Array(rows).fill(columns), 'the table is not inserted with every row chosen');
@@ -335,9 +336,14 @@ for (const platform of PLATFORMS) {
         assert.deepEqual(hit, [], `the table with its bars at ${js(s.all)} is drawn over the content of the slide, where it has free space`);
         assert.ok(inside && s.table.bottom <= s.slide.bottom + 1, `the table with its bars at ${js(s.all)} runs past the slide at ${js(s.slide)}`);
       } else if (hit.length) {
-        const cx = (s.table.left + s.table.right) / 2 - (s.slide.left + s.slide.right) / 2;
-        const cy = (s.table.top + s.table.bottom) / 2 - (s.slide.top + s.slide.bottom) / 2;
-        assert.ok(Math.abs(cx) < 3 && Math.abs(cy) < 3, `the table over ${js(hit)} is not at the center of the slide, but ${Math.round(cx)}, ${Math.round(cy)} px off it`);
+        // the table is put inside the slide at the place that covers the least of it, and not on
+        // more than half of the box of a figure
+        assert.ok(inside && s.table.bottom <= s.slide.bottom + 1, `the table at ${js(s.table)} runs past the slide at ${js(s.slide)}`);
+        if (under) assert.deepEqual(hit, under);
+        for (const o of s.others.filter((o) => !/^[a-z0-9]+:/.test(o.what))) {
+          const a = Math.max(0, Math.min(s.table.right, o.box.right) - Math.max(s.table.left, o.box.left)) * Math.max(0, Math.min(s.table.bottom, o.box.bottom) - Math.max(s.table.top, o.box.top));
+          assert.ok(a <= ((o.box.right - o.box.left) * (o.box.bottom - o.box.top)) / 2, `the table at ${js(s.table)} lies on ${o.what} at ${js(o.box)}`);
+        }
         assert.ok(s.opaque, 'the table over the content of the slide does not have a fill, and its text mixes with the text under it');
         assert.ok(s.hidden, 'a cell of the table over the content of the slide is drawn under another element');
       }
