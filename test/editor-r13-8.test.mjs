@@ -298,3 +298,45 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// a trusted Mod+key with the editing command of the browser, e.g. paste
+async function command(page, platform, key, name) {
+  const base = { key, code: `Key${key.toUpperCase()}`, windowsVirtualKeyCode: key.toUpperCase().charCodeAt(0), modifiers: platform === 'mac' ? 4 : 2 };
+  await page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...base, commands: [name] });
+  await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
+}
+
+// finding r12-6-text-lists 4: a paste of several lines into a list item was one item with br breaks
+for (const platform of PLATFORMS) {
+  test(`a paste of several lines into a list item makes an item of each line (${platform})`, async (t) => {
+    const page = await load(t, platform, 2);
+    await page.send('Browser.grantPermissions', { origin: server.origin, permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] }).catch(() => {});
+    // a click on the last character of the item, whose text is drawn on two lines
+    await click(page, await page.evaluate(`(() => {
+      const li = [...Reveal.getCurrentSlide().querySelectorAll('li')].find((e) => e.textContent.includes('Two elements with the same index'));
+      const node = li.lastChild, end = node.data.trimEnd().length;
+      const r = document.createRange();
+      r.setStart(node, end - 2);
+      r.setEnd(node, end - 1);
+      const b = r.getBoundingClientRect();
+      return { x: b.left + 1, y: b.top + b.height / 2 };
+    })()`));
+    await press(page, 'End');
+    await page.evaluate(`navigator.clipboard.writeText(' one\\ntwo\\nthree')`);
+    await command(page, platform, 'v', 'paste');
+    await sleep(200);
+    await frames(page);
+    const pasted = '<li class="fragment" data-fragment-index="2">Two elements with the same index are shown together. one</li>';
+    const text = await render(page);
+    assert.ok(!text.includes('one<br>two'), 'the lines are written as line breaks of one item');
+    assert.ok(text.includes(pasted), 'the first line is not pasted at the caret');
+    assert.match(text.slice(text.indexOf(pasted) + pasted.length), /^\s*<li class="fragment" data-fragment-index="2">two<\/li>\s*<li class="fragment" data-fragment-index="2">three<\/li>/);
+    assert.equal(await page.evaluate(`window.getSelection().anchorNode.parentElement.closest('li')?.textContent`), 'three', 'the caret is not at the end of the last item');
+    await page.evaluate('window.BeesonEditor.undo()');
+    await byteExact(page);
+    await page.evaluate('window.BeesonEditor.redo()');
+    assert.equal(await render(page), text);
+    await saveAndReopen(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
