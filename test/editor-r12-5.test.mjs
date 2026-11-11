@@ -10,6 +10,7 @@ import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
+import { snapMove } from '../src/editor/canvas/snap.ts';
 
 const DECK = 'index.html';
 // the indexes of the figures slide and of the closing slide with its QR code in index.html
@@ -263,3 +264,23 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the marks of equal gaps are drawn under the boxes, clear of the guide of their centers and of
+// their lower edges, as PowerPoint draws them (P22), since a mark on a guide merges with it
+test('the marks of equal gaps are drawn clear of the guides along the same axis', () => {
+  const box = (left, top, width, height) => ({ left, top, width, height });
+  const slide = { width: 1920, height: 1080 };
+  for (const [moved, boxes] of [
+    [box(446, 400, 100, 100), [box(100, 400, 200, 100), box(700, 400, 200, 100)]],
+    [box(446, 420, 100, 60), [box(100, 400, 200, 100), box(700, 400, 200, 100)]],
+  ]) {
+    const snap = snapMove(moved, { boxes, slide }, 16);
+    const gaps = snap.spacing.filter((s) => s.axis === 'x').flatMap((s) => s.gaps);
+    assert.equal(gaps.length, 2);
+    const lines = snap.guides.filter((g) => g.axis === 'y').map((g) => g.at);
+    for (const g of gaps) {
+      assert.ok(lines.every((at) => Math.abs(at - g.at) >= 7), `a mark at y ${g.at} is on a guide of ${js(lines)}`);
+      assert.ok(g.at > Math.max(...boxes.map((b) => b.top + b.height), moved.top + moved.height) - 1, `a mark at y ${g.at} is not under the boxes`);
+    }
+  }
+});
