@@ -205,7 +205,7 @@ const screen = (page, x, y) => page.evaluate(`(() => {
 
 for (const platform of PLATFORMS) {
   test(`the insert group of the toolbar is Table, Plot, Text, Formula, Shape, and Media, with labels while they fit (${platform})`, async (t) => {
-    for (const [width, labels] of [[1600, true], [1000, true]]) {
+    for (const [width, labels] of [[1600, true], [1024, true]]) {
       const page = await load(t, platform, { size: { width, height: 800 } });
       const group = await insertGroup(page);
       assert.deepEqual(group.map((b) => [b.id, b.text, b.split]), [

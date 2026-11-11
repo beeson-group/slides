@@ -113,7 +113,8 @@ for (const platform of PLATFORMS) {
   });
 
   test(`the labels of the default toolbar are kept at every width at which they fit (${platform})`, async (t) => {
-    for (const width of [1100, 1099, 1000]) {
+    // with the button Plot, the default toolbar with its labels is 1010 px wide
+    for (const width of [1100, 1099, 1024]) {
       const page = await load(t, platform, { width, height: 800 });
       const bar = await page.evaluate(BAR);
       assert.ok(bar.buttons.every((b) => b.label), `${width}: the labels are hidden`);
