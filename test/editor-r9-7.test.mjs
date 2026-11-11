@@ -428,3 +428,45 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// navigator-slides-canvas-8: the zoom was set only to the steps of the menu, the slider, or the
+// wheel, without a field for a typed percentage as the Zoom dialog of PowerPoint has
+async function clickItem(page, label) {
+  const at = await page.evaluate(`(() => { const i = [...document.querySelectorAll('.beeson-edit-menu .item')].find((i) => i.querySelector('.label')?.textContent === ${js(label)}); if (!i) return null; const r = i.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  assert.ok(at, `the open menu does not have ${label}`);
+  await click(page, at);
+}
+const percentText = (page) => page.evaluate(`document.querySelector('.beeson-edit-bottom .percent .value').textContent`);
+for (const platform of PLATFORMS) {
+  test(`a typed percentage sets the zoom from the status bar and from View > Zoom (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, '.beeson-edit-bottom .percent');
+    await clickItem(page, 'Zoom…');
+    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-card[open] input[name="percent"]')`);
+    assert.equal(await page.evaluate(`document.activeElement.name`), 'percent');
+    await page.evaluate(`document.activeElement.select()`);
+    await type(page, '140');
+    await enter(page);
+    await frames(page);
+    assert.equal(await percentText(page), '140%', 'the typed percentage is not the zoom');
+    // a percentage out of range is clamped to the range of the slider, 10 to 400 percent
+    for (const [typed, shown] of [['1000', '400%'], ['5', '10%']]) {
+      void run(page, 'zoom.custom');
+      await page.waitFor(`!!document.querySelector('dialog.beeson-edit-card[open] input[name="percent"]')`);
+      await page.evaluate(`document.activeElement.select()`);
+      await type(page, typed);
+      await enter(page);
+      await frames(page);
+      assert.equal(await percentText(page), shown, `${typed} is not clamped`);
+    }
+    // Esc leaves the zoom as it is
+    void run(page, 'zoom.custom');
+    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-card[open] input[name="percent"]')`);
+    assert.equal(await page.evaluate(`document.activeElement.value`), '10');
+    await type(page, '7');
+    await press(page, 'Escape');
+    await frames(page);
+    assert.equal(await percentText(page), '10%');
+    assert.deepEqual(errors(page), []);
+  });
+}
