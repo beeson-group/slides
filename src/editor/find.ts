@@ -623,9 +623,14 @@ export function createFinder(app: App, keys: Keys, menus: Menus): Finder {
     reveal(select);
   }
 
-  // the focus put back on el of the panel after a replace, or on the Find field once el is disabled,
-  // since the write put the caret into the replaced block
-  const refocus = (el: HTMLElement | null) => el && (el.matches(':disabled') ? search.input : el).focus({ preventScroll: true });
+  // the focus put back on el of the panel after a replace, or on the panel once el is disabled, since
+  // the write put the caret into the replaced block. ⌘Z there is still the undo of the deck
+  const refocus = (el: HTMLElement | null) => {
+    if (!el?.matches(':disabled')) return el?.focus({ preventScroll: true });
+    panel.tabIndex = -1;
+    panel.focus({ preventScroll: true });
+    getSelection()?.removeAllRanges();
+  };
 
   async function write(block: Element, list: Span[], label: string): Promise<void> {
     const idx = indexedOf(block);
