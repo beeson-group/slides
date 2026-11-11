@@ -443,7 +443,11 @@ export function addSeries(text: string, sheet: Sheet, c: number): Result & { id?
   const id = fresh(text, 'series');
   const marks = nodeAt(root, ['marks']);
   const splices: Splice[] = [];
-  const mark = `{ "id": "${id}", "panel": "${panel.id}", "kind": "trace" }`;
+  // the first data color that no mark of the panel takes, as a new series of Keynote takes the next
+  // color of the chart
+  const used = new Set(plot.marks.filter((m) => m.panel === panel.id).map((m) => m.tone));
+  const tone = Array.from({ length: 8 }, (_, k) => `data-${k + 1}`).find((t) => !used.has(t));
+  const mark = `{ "id": "${id}", "panel": "${panel.id}", "kind": "trace"${tone ? `, "tone": "${tone}"` : ''} }`;
   if (isArr(marks)) splices.push(insertAt(text, marks, after ? markIndex(marks, after) : -1, mark));
   else splices.push(insertAt(text, root, -1, `"marks": [${mark}]`));
   const [x0, x1] = panel.x.range, [y0, y1] = panel.y.range;

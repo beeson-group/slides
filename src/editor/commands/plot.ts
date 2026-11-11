@@ -18,6 +18,8 @@ import { ask, trapTab } from '../ui/dialog.ts';
 
 // the tones that a mark of a new color takes, the data colors of the theme
 export const DATA_TONES = ['data-1', 'data-2', 'data-3', 'data-4', 'data-5', 'data-6', 'data-7', 'data-8'];
+// the colors of a series in Series Colors, the accent of a mark without a tone and the data colors
+export const SERIES_TONES = ['accent', ...DATA_TONES];
 
 type View = { el: HTMLElement; reload(text?: string | null): void; setTab(i: number): void };
 type Page = { Beeson?: { plots?: View[]; mount?(root: Element): void } };
@@ -1096,7 +1098,7 @@ export function commands(): Command[] {
       enabled: (app) => !!blockOf(app, plotOf(app)),
       run: (app, arg) => paneChange(app, arg, (json) => {
         const a = arg as { mark: number; tone: string };
-        if (!DATA_TONES.includes(a.tone)) return { text: null, error: `${a.tone} is not a data color of the theme` };
+        if (!SERIES_TONES.includes(a.tone)) return { text: null, error: `${a.tone} is not a data color of the theme` };
         return setKey(json, ['marks', a.mark], 'tone', JSON.stringify(a.tone));
       }),
     },
