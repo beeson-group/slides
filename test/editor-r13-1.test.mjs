@@ -39,6 +39,12 @@ const redo = (page) => page.evaluate('Promise.resolve(window.BeesonEditor.redo()
 const state = (page, id) => page.evaluate(`window.BeesonEditor.state(${js(id)})`);
 const errors = (page) => page.errors.filter((e) => !e.includes('favicon.ico'));
 const orders = async (page) => Object.fromEntries(await Promise.all(['front', 'forward', 'backward', 'back'].map(async (o) => [o, (await state(page, `arrange.order.${o}`)).enabled])));
+const undoLabel = (page) => page.evaluate(`window.BeesonEditor.state('edit.undo').label`);
+// the start tags of a text that differ from those of base
+const changedTags = (base, text) => {
+  const a = base.match(/<[a-z][^>]*>/g), b = text.match(/<[a-z][^>]*>/g);
+  return b.filter((t, i) => t !== a[i]);
+};
 const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((e) => e.localName)`);
 
 // the editor on the demo deck served over HTTP, with the storage of the origin emptied first, and
@@ -119,7 +125,11 @@ for (const platform of PLATFORMS) {
     assert.equal(await drawnAt(page, at), 'p', 'the paragraph is not drawn over the picture after Bring to Front');
     assert.deepEqual(await boxes(page), placed, 'an element is moved on the slide by Bring to Front');
     assert.deepEqual(await orders(page), { front: false, forward: false, backward: true, back: true });
+    assert.equal(await undoLabel(page), 'Undo Bring to Front');
     const front = await render(page);
+    const tags = changedTags(dragged, front);
+    assert.equal(tags.length, 1, `Bring to Front changes the tags ${js(tags)}`);
+    assert.deepEqual(tags[0].match(/^<p style="([^"]*)">$/)[1].split('; ').sort(), ['position: relative', 'translate: 700px 111px', 'z-index: 1']);
     await checkEdit(page, front, dragged);
     await frames(page);
     assert.equal(await drawnAt(page, at), 'p');
@@ -134,5 +144,7 @@ for (const platform of PLATFORMS) {
     await frames(page);
     assert.equal(await drawnAt(page, at), 'img', 'the paragraph is not drawn under the picture after Send to Back');
     assert.deepEqual(await boxes(page), placed, 'an element is moved on the slide by Send to Back');
+    assert.equal(await render(page), dragged, 'Send to Back does not take the order of Bring to Front off the paragraph');
+    assert.deepEqual(errors(page), []);
   });
 }
