@@ -132,3 +132,45 @@ test('without edit, a right-click on a formula opens the menu of MathJax as befo
   await sleep(300);
   assert.ok((await mathJaxMenus(page)) > 0);
 });
+
+// the style of the selector, read in the page
+const styleOf = (page, sel) => page.evaluate(`document.querySelector(${js(sel)}).getAttribute('style')`);
+const sheetOpen = (page) => page.evaluate(`!!document.querySelector('.beeson-math')`);
+
+// finding select-move-resize-2: a Shift-click or a command-click on a formula added it to the
+// selection and opened its TeX sheet as well, which took the next keys, and Esc then dropped the
+// whole selection
+for (const platform of PLATFORMS) {
+  for (const mod of platform === 'mac' ? ['Shift', 'Mod'] : ['Shift']) {
+    test(`a ${mod}-click on a formula adds it to the selection or takes it out, without its sheet (${platform})`, async (t) => {
+      const page = await load(t, platform, { n: 3 });
+      const para = '.reveal section.present > p:first-of-type';
+      const math = '.reveal section.present div.math';
+      await click(page, para);
+      await press(page, 'Escape');
+      await frames(page);
+      assert.deepEqual(await selected(page), ['p']);
+      await click(page, math, { modifiers: mod });
+      await sleep(300);
+      assert.equal(await sheetOpen(page), false, `a ${mod}-click on a formula opens its sheet`);
+      assert.deepEqual(await selected(page), ['p', 'div.math']);
+      await click(page, math, { modifiers: mod });
+      await sleep(300);
+      assert.equal(await sheetOpen(page), false);
+      assert.deepEqual(await selected(page), ['p'], `a second ${mod}-click on the formula does not take it out of the selection`);
+      await click(page, math, { modifiers: mod });
+      await sleep(300);
+      assert.deepEqual(await selected(page), ['p', 'div.math']);
+      await press(page, 'ArrowRight');
+      await press(page, 'ArrowRight');
+      await frames(page);
+      assert.match((await styleOf(page, para)) ?? '', /translate/, 'the arrow keys do not nudge the selection');
+      assert.match((await styleOf(page, math)) ?? '', /translate/, 'the arrow keys do not nudge the formula');
+      await press(page, 'Escape');
+      await frames(page);
+      assert.deepEqual(await selected(page), []);
+      await roundTrip(page, 2);
+      assert.deepEqual(errors(page), []);
+    });
+  }
+}
