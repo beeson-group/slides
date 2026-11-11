@@ -8,7 +8,7 @@ import { HOST } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { CONTAINER, RESIZABLE, containerOf, mediaIn, movableOf, movablesOf, objectsOf, pictureOf, snapBoxOf, visualRect } from '../canvas/hit.ts';
 import type { Place } from '../canvas/drag.ts';
-import { captionsOf, placeOf, record, withCaptions, writePlace } from '../canvas/drag.ts';
+import { captionsOf, placeOf, record, withCaptions, withCorners, writePlace } from '../canvas/drag.ts';
 import { view } from '../canvas/frames.ts';
 
 // the nudges of the same elements closer than this, in ms, are one entry of the history
@@ -216,12 +216,12 @@ export function commands(): Command[] {
       enabled: (app) => sizedEls(app).some((el) => placeOf(el).width !== null || (placeOf(el).height ?? null) !== null),
       run: (app) => {
         const els = sizedEls(app);
-        const changes = withCaptions(app, els, () => els.map((el) => {
+        const changes = withCaptions(app, els, () => withCorners(app, els, () => els.map((el) => {
           const from = placeOf(el);
           const to = { ...from, width: null, ...(from.height !== undefined ? { height: null } : {}) };
           writePlace(app, el, to);
           return { el, from, to };
-        }));
+        })));
         record(app, 'resize', changes);
       },
     },

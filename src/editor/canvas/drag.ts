@@ -245,6 +245,33 @@ export function withCaptions(app: App, els: Element[], change: () => Change[]): 
   return [...changes, ...trailers.map((t) => ({ el: t.caption, from: t.from, to: placeOf(t.caption) }))];
 }
 
+// the upper left corner on the screen of the picture of el, without its rotation
+function cornerOf(app: App, el: Element): { x: number; y: number } {
+  const b = orientedBox(el, frameOf(app).scale, angleOf(el));
+  return { x: b.left, y: b.top };
+}
+
+// the changes of the sizes of els made by change, with the upper left corner of each image or video
+// kept where it is, as a typed width of Keynote and PowerPoint keeps it. the layout of a zone or a
+// plate puts a picture with a width at another place, hence the offset of its figure is changed, as
+// a resize by a grip changes it
+export function withCorners(app: App, els: Element[], change: () => Change[]): Change[] {
+  const marks = els.filter((el) => el.matches(STRETCHED) && el.getClientRects().length).map((el) => ({ el, carrier: objectOf(app, el), at: cornerOf(app, el) }));
+  const from = new Map(marks.map((m) => [m.carrier, placeOf(m.carrier)]));
+  const changes = change();
+  const k = frameOf(app).scale;
+  for (const m of marks) {
+    const c = cornerOf(app, m.el);
+    const dx = (m.at.x - c.x) / k, dy = (m.at.y - c.y) / k;
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
+    const now = placeOf(m.carrier);
+    writePlace(app, m.carrier, { ...now, translate: { x: (now.translate?.x ?? 0) + dx, y: (now.translate?.y ?? 0) + dy } });
+  }
+  for (const c of changes) c.to = placeOf(c.el);
+  for (const [el, place] of from) if (!changes.some((c) => c.el === el)) changes.push({ el, from: place, to: placeOf(el) });
+  return changes;
+}
+
 type Press = {
   kind: 'move' | 'resize' | 'rotate' | 'marquee';
   x: number;
