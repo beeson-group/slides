@@ -200,6 +200,12 @@ for (const platform of PLATFORMS) {
     await frames(page);
     assert.equal(await undoLabel(page), 'Undo Clear Cells');
     assert.equal(await inBlock(page), true, 'the range is a caret after Backspace');
+    await press(page, 'Mod+Z');
+    await frames(page);
+    assert.equal(await inBlock(page), true, 'the range is a caret after an undo of the clear');
+    await press(page, 'Mod+Shift+Z');
+    await frames(page);
+    assert.equal(await inBlock(page), true, 'the range is a caret after a redo of the clear');
   });
 
   test(`an undo in the Rows field after a commit undoes the count of the table (${platform})`, async (t) => {
