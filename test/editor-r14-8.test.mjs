@@ -69,15 +69,15 @@ const covers = (a, b) => (Math.max(0, Math.min(a.right, b.right) - Math.max(a.le
 const round = (boxes) => boxes.map((b) => [b.left, b.top, b.right, b.bottom].map(Math.round));
 const grown = (b, d) => ({ left: b.left - d, top: b.top - d, right: b.right + d, bottom: b.bottom + d });
 
-async function load(t, platform, n) {
+async function load(t, platform, n, deck = DECK) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
   await page.goto(`${server.origin}/theme/beeson.css`);
   await page.evaluate('localStorage.clear()');
-  await page.goto(`${server.origin}/${DECK}?edit&still&edit-platform=${platform}`);
+  await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync(DECK, 'utf8');
+  page.source = readFileSync(deck, 'utf8');
   const s = await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`);
   assert.deepEqual(s.problems, []);
   await page.evaluate(`Reveal.slide(${n})`);
@@ -146,6 +146,43 @@ for (const platform of PLATFORMS) {
       assert.deepEqual(errors(page), []);
     });
   }
+
+  // the plate of a plot is as large as the slide, and a new element may lie over it, but not over
+  // another new element while a place off it exists
+  test(`a second QR code on a figure slide with a plot is put off the first (${platform})`, async (t) => {
+    const page = await load(t, platform, 8);
+    for (let i = 0; i < 2; i++) {
+      await exec(page, 'insert.qr');
+      await frames(page);
+      await press(page, 'Escape');
+      await frames(page);
+    }
+    const { boxes } = await measure(page, ':scope > .qr', ':scope > h2');
+    assert.equal(boxes.length, 2, 'two QR codes were not inserted');
+    assert.ok(!meets(boxes[0], boxes[1]), `the QR codes at ${js(boxes[0])} and ${js(boxes[1])} lie over each other`);
+    assert.deepEqual(errors(page), []);
+  });
+
+  // the first table of a new figure slide fills its plate, and a second table keeps the room of its
+  // bars to it, as to a text
+  test(`a second table on a new figure slide is put off the first with the room of its bars (${platform})`, async (t) => {
+    const page = await load(t, platform, 3, 'index.html');
+    await exec(page, 'slide.new');
+    await exec(page, 'slide.layout.figure');
+    await frames(page);
+    for (let i = 0; i < 2; i++) {
+      await exec(page, 'insert.table', { rows: 3, columns: 3 });
+      await frames(page);
+      await press(page, 'Escape');
+      await press(page, 'Escape');
+      await frames(page);
+    }
+    const { k, boxes } = await measure(page, 'table', ':scope > h2');
+    assert.equal(boxes.length, 2, 'two tables were not inserted');
+    const [first, second] = boxes[0].top <= boxes[1].top ? boxes : [boxes[1], boxes[0]];
+    assert.ok(!meets(grown(second, BARS / k), first), `the bars of the table at ${js(second)} lie over the table at ${js(first)}`);
+    assert.deepEqual(errors(page), []);
+  });
 
   for (const [n, what, drawn] of SLIDES) {
     test(`a new table on a figure slide with ${what} is put off the heading and the caption with the room of its bars (${platform})`, async (t) => {
