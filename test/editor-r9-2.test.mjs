@@ -347,3 +347,78 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+const state = (page, id) => page.evaluate(`window.BeesonEditor.state(${js(id)})`);
+
+// the boxes of the navigator, the canvas, the inspector, the slide, and the Format button of the
+// toolbar, each null while it is not shown
+const shellBoxes = (page) => page.evaluate(`(() => {
+  const box = (sel) => {
+    const el = [...document.querySelectorAll(sel)].find((e) => e.getClientRects().length && getComputedStyle(e).visibility !== 'hidden');
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return r.width && r.height ? { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width } : null;
+  };
+  return { nav: box('body > .beeson-edit-nav'), canvas: box('.beeson-edit-canvas'), inspector: box('body > .beeson-edit-inspector'), slide: box('.reveal:not(.beeson-peek) .slides > section.present'), format: box('.beeson-edit-header [data-command="shell.format"]') };
+})()`);
+
+// the window resized to width by height px, as a drag of its edge does
+async function resize(page, width, height = 800) {
+  await page.send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+  await sleep(250);
+  await frames(page);
+}
+
+// asserts that the regions of b are docked side by side and that the slide is shown whole on the
+// canvas, beside the inspector, at the window width named by what
+function docked(b, what) {
+  assert.ok(b.canvas && b.slide, `the canvas or the slide is not shown ${what}`);
+  if (b.inspector) assert.ok(b.inspector.left >= b.canvas.right - 1, `the inspector at ${Math.round(b.inspector.left)} px is drawn over the canvas, which ends at ${Math.round(b.canvas.right)} px, ${what}`);
+  if (b.nav) assert.ok(b.nav.right <= b.canvas.left + 1, `the navigator is drawn over the canvas ${what}`);
+  const s = b.slide;
+  const right = Math.min(b.canvas.right, b.inspector?.left ?? Infinity);
+  assert.ok(s.left >= b.canvas.left - 1 && s.right <= right + 1 && s.top >= b.canvas.top - 1 && s.bottom <= b.canvas.bottom + 1, `the slide at ${js(s)} is not shown whole on the canvas at ${js(b.canvas)} ${what}`);
+}
+
+const pressFormat = async (page) => {
+  const b = await shellBoxes(page);
+  await click(page, { x: (b.format.left + b.format.right) / 2, y: (b.format.top + b.format.bottom) / 2 });
+  await sleep(200);
+  await frames(page);
+};
+
+// finding 4: in a window 760 px wide, the inspector was drawn as a sheet over the right part of
+// the canvas and hid the right half of the slide. the inspector is docked beside the canvas at every
+// width, and the slide is scaled to the rest of the window. in a window too narrow for the
+// navigator, the canvas, and the inspector, the navigator is narrowed to its smallest width first,
+// and then hidden while the inspector is open, as View > Slide Only hides it
+for (const platform of PLATFORMS) {
+  test(`the inspector is docked beside the whole slide at 1440, 1024, 900, and 760 px, and the navigator is hidden only while both do not fit (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 2, width: 1440, height: 800 });
+    if (!(await state(page, 'shell.format')).checked) await page.evaluate(`window.BeesonEditor.exec('shell.format')`);
+    for (const width of [1440, 1024, 900, 760]) {
+      await resize(page, width);
+      const open = await shellBoxes(page);
+      assert.ok(open.inspector, `the inspector is not shown at ${width} px`);
+      docked(open, `at ${width} px with the inspector open`);
+      if (width >= 1024) assert.ok(open.nav && Math.abs(open.nav.width - 200) <= 1, `the navigator is narrowed at ${width} px`);
+      else if (open.nav) assert.ok(open.nav.width < 200, `the navigator keeps its width of 200 px at ${width} px`);
+      if (width === 760) assert.equal(open.nav, null, 'the navigator is shown with the inspector at 760 px, where the slide does not fit between them');
+      await pressFormat(page);
+      const closed = await shellBoxes(page);
+      assert.equal(closed.inspector, null, `the Format button does not close the inspector at ${width} px`);
+      docked(closed, `at ${width} px with the inspector closed`);
+      assert.ok(closed.nav, `the navigator is not shown again when the inspector is closed at ${width} px`);
+      assert.ok(closed.canvas.width > open.canvas.width + 100, `the canvas does not take the place of the inspector at ${width} px`);
+      await pressFormat(page);
+      assert.ok((await shellBoxes(page)).inspector, `the Format button does not open the inspector at ${width} px`);
+    }
+    // the navigator is shown again once the window is wide again
+    await resize(page, 1440);
+    const wide = await shellBoxes(page);
+    docked(wide, 'at 1440 px after 760 px');
+    assert.ok(wide.nav && Math.abs(wide.nav.width - 200) <= 1, 'the navigator is not shown again at its width when the window is wide again');
+    assert.equal((await state(page, 'view.navigator'))?.checked ?? true, true);
+    assert.deepEqual(errors(page), []);
+  });
+}
