@@ -187,3 +187,32 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// the keys printed beside the items of labels in the menu bar of bar
+async function keysIn(page, bar, labels) {
+  const items = await readMenu(page, bar);
+  return Object.fromEntries(labels.map((l) => [l, items.find((i) => i.label === l)?.keys]));
+}
+
+// menus-keys-5: a key is printed only beside the item that it runs where the focus is. with a
+// figure selected on the canvas, Mod+D and Delete are those of Edit > Duplicate and Edit > Delete,
+// and in the navigator those of Slide > Duplicate Slide and Slide > Delete Slide
+for (const platform of PLATFORMS) {
+  test(`a key is printed only beside the item that it runs in the present focus (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 4 });
+    const mac = platform === 'mac';
+    const dup = mac ? '⌘D' : 'Ctrl+D';
+    const del = mac ? '⌫' : 'Delete';
+    await click(page, '.reveal .slides > section.present img');
+    assert.deepEqual(await keysIn(page, 'Slide', ['Duplicate Slide', 'Delete Slide']), { 'Duplicate Slide': '', 'Delete Slide': '' });
+    assert.deepEqual(await keysIn(page, 'Edit', ['Duplicate', 'Delete']), { Duplicate: dup, Delete: del });
+    await press(page, 'Mod+D');
+    await sleep(200);
+    assert.equal(await page.evaluate(`document.querySelectorAll('.reveal .slides > section.present figure').length`), 2, 'Mod+D did not duplicate the figure');
+    await click(page, '.beeson-edit-nav .row:nth-child(5)');
+    await sleep(100);
+    assert.deepEqual(await keysIn(page, 'Slide', ['Duplicate Slide', 'Delete Slide']), { 'Duplicate Slide': dup, 'Delete Slide': del });
+    assert.deepEqual(await keysIn(page, 'Edit', ['Duplicate', 'Delete']), { Duplicate: '', Delete: '' });
+    assert.deepEqual(errors(page), []);
+  });
+}
