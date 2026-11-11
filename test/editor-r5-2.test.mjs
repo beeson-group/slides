@@ -475,14 +475,16 @@ for (const platform of PLATFORMS) {
     await roundTrip(page, edited);
 
     // Shift on a corner frees the aspect, and then the side grip e and the field W keep the aspect
-    // that the stretched image has
+    // that the stretched image has. the grip is on the frame of the figure, which holds the band of
+    // 40 px between the picture fitted into its zone and the caption, and the zone of a picture with
+    // a width is the size of the picture, hence the picture is 40 px higher than the frame shrinks
     page = await editor(platform);
     await selectZoneFigure(page);
     await arrange(page);
     await drag(page, (await gripsAt(page)).se, { dx: -100 * k, dy: -120 * k, modifiers: 'Shift' });
     await frames(page);
     box = await slideBox(page, ZONE_IMG);
-    assert.ok(near(box.width, 500, 3) && near(box.height, 600, 3), `the corner grip with Shift draws the image at ${Math.round(box.width)} by ${Math.round(box.height)}, not at 500 by 600`);
+    assert.ok(near(box.width, 500, 3) && near(box.height, 640, 3), `the corner grip with Shift draws the image at ${Math.round(box.width)} by ${Math.round(box.height)}, not at 500 by 640`);
     edited = await render(page);
     assert.match(edited, IMG_STYLE('width: \\d+px; height: \\d+px'), 'the height of an image stretched with Shift is not written');
     const aspect = box.width / box.height;
