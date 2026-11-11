@@ -12,6 +12,7 @@ const DECK = 'index.html';
 // the slides of index.html with a list beside a backdrop, and with a figure in a zone
 const STEPS = 2;
 const FIGURES = 4;
+const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
 const DARK_FILE = resolve('demo/figure-dark.png');
 
@@ -43,17 +44,17 @@ const box = (page, selector) => page.evaluate(`(() => {
   return { left: (r.left - s.left) / k, top: (r.top - s.top) / k, right: (r.right - s.left) / k, bottom: (r.bottom - s.top) / k };
 })()`);
 
-async function load(t, platform, n, query = '') {
+async function load(t, platform, n, query = '', deck = DECK) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
   await page.goto(`${server.origin}/theme/beeson.css`);
   await page.evaluate('localStorage.clear()');
-  await page.goto(`${server.origin}/${DECK}?edit&still&edit-platform=${platform}${query}`);
+  await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}${query}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  const s = await page.evaluate(`window.BeesonEditor.open(${js(readFileSync(DECK, 'utf8'))})`);
+  const s = await page.evaluate(`window.BeesonEditor.open(${js(readFileSync(deck, 'utf8'))})`);
   assert.deepEqual(s.problems, []);
-  await page.evaluate(`Reveal.slide(${n})`);
+  await page.evaluate(typeof n === 'number' ? `Reveal.slide(${n})` : `Reveal.slide([...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('h2')?.textContent === ${js(n)}))`);
   await frames(page);
   return page;
 }
@@ -132,5 +133,26 @@ for (const platform of PLATFORMS) {
     assert.equal(b?.text, 'Choose for Light Mode…', `the button reads ${js(b)}`);
     assert.equal(b.title, state.label);
     assert.deepEqual(errors(page), []);
+  });
+
+  // D19. a display formula is drawn as a block as wide as the text column, while its glyphs end at
+  // the left of the picture. the formula is measured by the box of its glyphs
+  test(`a display formula whose glyphs end left of the picture is not reported over it (${platform})`, async (t) => {
+    for (const id of ['slide.layout.wide', 'slide.layout.title']) {
+      const page = await load(t, platform, 'Math, an ordered list, and a zone', '', LAYOUTS);
+      await exec(page, id);
+      await frames(page);
+      await frames(page);
+      const m = await page.evaluate(`(() => {
+        const slide = document.querySelector('.reveal .slides > section.present');
+        const math = slide.querySelector('div.math');
+        const glyphs = math.querySelector('mjx-container svg').getBoundingClientRect();
+        const img = [...slide.querySelectorAll('figure img')].find((i) => i.getClientRects().length).getBoundingClientRect();
+        return { marked: math.classList.contains('beeson-overflow'), clear: glyphs.right < img.left, wide: math.getBoundingClientRect().right > img.left };
+      })()`);
+      assert.deepEqual([m.clear, m.wide], [true, true], `the slide does not show the case of D19 after ${id}: ${js(m)}`);
+      assert.equal(m.marked, false, `after ${id}, the formula is reported over the figure`);
+      assert.deepEqual(errors(page), []);
+    }
   });
 }
