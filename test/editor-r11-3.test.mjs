@@ -157,3 +157,39 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+for (const platform of PLATFORMS) {
+  // a cleared range of numbers was written as 0, which draws a point at zero. parsePlot of
+  // src/plot.ts refuses null and a frame of a trace without its point, hence an empty number cell
+  // keeps its number and is shown as invalid, as a typed text that is not a number is
+  test(`a range of numbers cleared with Delete keeps its numbers, marked invalid (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await openData(page);
+    const before = await grid(page);
+    await focusCell(page, 0, 1);
+    await press(page, 'Shift+ArrowDown');
+    await press(page, 'Shift+ArrowRight');
+    await press(page, 'Delete');
+    await frames(page);
+    await byteExact(page);
+    assert.equal((await state(page, 'edit.undo')).enabled, false);
+    assert.deepEqual(await grid(page), before);
+    assert.deepEqual(await bad(page), ['0,1', '0,2', '1,1', '1,2']);
+    assert.match(await status(page), /cannot be left empty/);
+    // a number typed into a cell marked invalid is written, and the mark is taken off
+    await focusCell(page, 0, 1);
+    await type(page, '0.5');
+    await press(page, 'Enter');
+    await roundTrip(page, plate(['"dot": [[0, 0], [1, 1]], "path": [[0, 0], [1, 0]]', '"dot": [[0.5, 0], [1, 1]], "path": [[0, 0], [1, 0]]']), 'Edit Plot Data');
+    assert.deepEqual(await bad(page), ['0,2', '1,1', '1,2']);
+    // a single cell emptied by Backspace is not written either
+    await focusCell(page, 1, 3);
+    await press(page, 'Backspace');
+    await press(page, 'Enter');
+    await frames(page);
+    assert.ok((await bad(page)).includes('1,3'));
+    assert.equal(await render(page), page.source.replace(PLATE, () => plate(['"dot": [[0, 0]', '"dot": [[0.5, 0]'])[0][1]));
+    await saved(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
