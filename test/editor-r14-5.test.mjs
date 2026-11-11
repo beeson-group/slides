@@ -142,4 +142,13 @@ for (const platform of PLATFORMS) {
     await checkEdit(page, `r14-5-height-${platform}.html`, last);
     assert.deepEqual(errors(page), []);
   });
+  // the width 1 px either side of the written one is tried for the typed height, and not under 1 px
+  test(`a typed Height of 1 of a figure with a caption does not write a width of 0 (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await click(page, IMG);
+    await typeField(page, 'height', 1);
+    const widths = await page.evaluate(`[...document.querySelector(${JSON.stringify(IMG)}).closest('figure').querySelectorAll('img')].map((i) => i.style.width)`);
+    assert.ok(widths.length > 0 && widths.every((w) => parseFloat(w) >= 1), `the pictures are written ${JSON.stringify(widths)} wide`);
+    assert.deepEqual(errors(page), []);
+  });
 }
