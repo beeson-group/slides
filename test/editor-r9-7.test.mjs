@@ -558,3 +558,31 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(outline, [true, 'rgba(0, 0, 0, 0)']);
   });
 }
+
+// laptop round 4: on a German or an Italian layout, [, ], and \ are typed with AltGr, hence Ctrl+],
+// Ctrl+[, and Ctrl+\ cannot be pressed there, and the menus showed Ctrl+] and Ctrl+[ first
+const ALTGR = new Set(['[', ']', '\\', '{', '}', '|', '@', '~', '#', '`']);
+const altGr = (key) => ALTGR.has(key.split('+').at(-1));
+test('a command with a key that needs AltGr shows a key that every layout has, and no key of Windows and Linux takes Ctrl+Alt (other)', async (t) => {
+  const page = await load(t, 'other');
+  await page.evaluate(`window.BeesonEditorShell.define({ id: 'test.app', label: 'App', run: (a) => { window.app = a; } })`);
+  await page.evaluate(`window.BeesonEditor.exec('test.app')`);
+  const commands = await page.evaluate(`window.app.commands.list().filter((c) => c.keys?.other?.length).map((c) => ({ id: c.id, label: typeof c.label === 'string' ? c.label : c.id, keys: c.keys.other }))`);
+  for (const c of commands) {
+    for (const k of c.keys) assert.doesNotMatch(k, /(Ctrl|Mod)\+(.*\+)?Alt|Alt\+(.*\+)?(Ctrl|Mod)/, `${c.id} takes ${k}`);
+    if (c.keys.some(altGr)) {
+      assert.ok(c.keys.some((k) => !altGr(k)), `${c.id} has only keys that need AltGr`);
+      assert.ok(!altGr(c.keys[0]), `${c.id} shows ${c.keys[0]} first`);
+    }
+  }
+  // the menus show the first key, and the sheet lists the key with AltGr beside the other
+  const sheet = await sheetRows(page);
+  const labels = await page.evaluate(`Object.fromEntries(['text.indent', 'text.outdent', 'text.clear'].map((id) => [id, window.app.commands.get(id)?.label]))`);
+  for (const [id, label] of Object.entries(labels)) {
+    assert.ok(label, `${id} is not defined`);
+    const keys = sheet[label].split(', ');
+    assert.equal(keys.length, 2, `${label} is listed with ${sheet[label]}`);
+    assert.ok(keys.some((k) => /[\]\[\\]$/.test(k)) && keys.some((k) => !/[\]\[\\]$/.test(k)), `${label} is listed with ${sheet[label]}`);
+  }
+  assert.deepEqual(errors(page), []);
+});
