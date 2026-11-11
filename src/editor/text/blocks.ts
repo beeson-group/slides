@@ -574,11 +574,14 @@ export function listWhy(app: App, label: string): string | null {
 export async function setList(app: App, kind: ListKind): Promise<void> {
   const blocks = listBlocks(app);
   if (blocks) return setBlockList(app, blocks, kind);
+  if (flow.active() && (await setSpanList(app, kind))) return;
   const at = itemAt(app);
   const now = listKind(app);
   if (!at || now === null || now === kind || !canSetList(app, kind)) return;
   const { host, item } = at;
   const offset = offsetIn(item, at.range.startContainer, at.range.startOffset);
+  // the selected text is selected again in the block made
+  const stop = item.contains(at.range.endContainer) ? offsetIn(item, at.range.endContainer, at.range.endOffset) : offset;
   if (at.nested) {
     const k = itemsOf(host).indexOf(item);
     const copy = texCopy(host);
@@ -589,7 +592,7 @@ export async function setList(app: App, kind: ListKind): Promise<void> {
     list.replaceWith(other);
     await app.doc.setContent(host, copy.innerHTML, 'list');
     const li = host.querySelectorAll('li')[k];
-    if (li) selectIn(li, offset);
+    if (li) selectIn(li, offset, stop);
     return;
   }
   const parent = item.parentElement!;
@@ -601,14 +604,14 @@ export async function setList(app: App, kind: ListKind): Promise<void> {
     const [list] = await app.doc.insert(`<${kind}>${eol}${base}${step}${li}${content}</li>${eol}${base}</${kind}>`, parent, item, 'list');
     await app.doc.remove(item, 'list');
     const first = list.querySelector('li');
-    if (first) selectIn(first, offset);
+    if (first) selectIn(first, offset, stop);
     return;
   }
   if (kind !== 'none') {
     const index = [...parent.children].indexOf(item);
     const list = await app.doc.retag(parent, kind, {}, 'list');
     const li = list.children[index];
-    if (li) selectIn(li, offset);
+    if (li) selectIn(li, offset, stop);
     return;
   }
   const items = [...parent.children];
@@ -622,7 +625,39 @@ export async function setList(app: App, kind: ListKind): Promise<void> {
   for (const f of followers) await app.doc.remove(f, 'list');
   await app.doc.remove(item, 'list');
   if (!parent.querySelector(':scope > li')) await app.doc.remove(parent, 'list');
-  selectIn(p, offset);
+  selectIn(p, offset, stop);
+}
+
+// a list style on a text selected over items of one list of the first level: the list is retagged,
+// or its items are made paragraphs, and the same text is selected after it. false where the span
+// is not over such items
+async function setSpanList(app: App, kind: ListKind): Promise<boolean> {
+  const p = flow.places(app);
+  const run = flow.spanTargets(app).map((t) => t.host);
+  const list = run[0]?.parentElement;
+  if (!p || !list?.matches(LIST) || !run.every((h) => h.localName === 'li' && h.parentElement === list && structural(app, h))) return false;
+  if (list.localName === kind || (kind === 'none' && run.some((h) => h.querySelector(LIST)))) return true;
+  const [a, f] = p.map(([el, at]) => [run.indexOf(el), at] as const);
+  const items = [...list.children].filter((c) => c.localName === 'li');
+  let made: Element[];
+  if (kind !== 'none') {
+    const now = await app.doc.retag(list, kind, {}, 'list');
+    const kids = [...now.children].filter((c) => c.localName === 'li');
+    made = run.map((h) => kids[items.indexOf(h)]);
+  } else {
+    const { base, step, eol } = indentOf(app, list);
+    const followers = items.slice(items.indexOf(run[run.length - 1]) + 1);
+    const texts = run.map((li) => `${startTag(app, li, 'p')}${rangeTex(li, rangeOf(li, null, null)).trim()}</p>`);
+    if (followers.length) {
+      const rest = followers.map((f) => `${eol}${base}${step}${app.doc.elementText(f)}`).join('');
+      texts.push(`${startTag(app, list, list.localName, { attrs: { id: null } })}${rest}${eol}${base}</${list.localName}>`);
+    }
+    made = (await app.doc.insert(texts, list.parentElement!, nextOf(app, list), 'list')).slice(0, run.length);
+    for (const el of [...followers, ...run]) await app.doc.remove(el, 'list');
+    if (!list.querySelector(':scope > li')) await app.doc.remove(list, 'list');
+  }
+  if (made[a[0]] && made[f[0]]) flow.select(app, [made[a[0]], a[1]], [made[f[0]], f[1]]);
+  return true;
 }
 
 // each selected block given the list of kind as a whole: a paragraph becomes a list of one item, a
