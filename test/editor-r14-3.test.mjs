@@ -140,14 +140,14 @@ for (const platform of PLATFORMS) {
     assert.deepEqual((await rows(page)).selected, [...Array(n).keys()]);
     await click(page, await row(page, 4));
     await settle(page);
-    const title = await page.evaluate(`document.querySelectorAll('.reveal .slides > section')[4].outerHTML.length`);
     await openBar(page, 'Edit');
     await click(page, await item(page, 'Delete'));
     await settle(page);
     const s = await rows(page);
     assert.equal(s.n, n - 1);
     assert.deepEqual(s.selected, [4]);
-    assert.ok((await render(page)).length < page.source.length - title / 2);
+    const sections = (text) => text.split('<section').length;
+    assert.equal(sections(await render(page)), sections(page.source) - 1);
     await undo(page);
     await settle(page);
     assert.equal(await render(page), page.source);
