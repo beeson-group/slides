@@ -1,11 +1,12 @@
 // the commands of the show and of the review of a deck, after the Play menu of Keynote and the
 // Slide Show and Review tabs of PowerPoint, and the transition at the head of the Steps tab. the
 // Play menu holds Present and Present from Start, moved from the File menu, the presenter view,
-// the rehearsal of timings, Use Rehearsed Timings, and Clear Timings. the Slide menu holds the
-// transition of a slide, Magic Move, and Preview Transition, and the View menu the light table and
-// the accessibility checker. Present keeps the keys of PowerPoint, since F5 reloads the page, and
-// the presenter view takes Alt+Enter, the key of PowerPoint on a Mac. the light table is not given
-// a key, since Chrome takes Mod+1 to Mod+9 for its tabs
+// Customize Presenter Display…, the rehearsal of timings, Use Rehearsed Timings, and Clear
+// Timings. the Slide menu holds the transition of a slide, Magic Move, and Preview Transition, and
+// the View menu the light table and the accessibility checker. Present keeps the keys of
+// PowerPoint, since F5 reloads the page, and the presenter view takes Alt+Enter, the key of
+// PowerPoint on a Mac. the light table is not given a key, since Chrome takes Mod+1 to Mod+9 for
+// its tabs
 
 import type { App } from '../app.ts';
 import { OUTSIDE_DIALOGS } from '../commands.ts';
@@ -51,6 +52,16 @@ export function install(app: App): void {
       const from = a.current();
       const shown = await presentAt(a, false, true);
       if (shown) void presenter.open('present', from, shown.win);
+    },
+  });
+  // the display without the show, with the popover of its parts open, as in Keynote
+  c.define({
+    id: 'play.customizePresenter',
+    label: 'Customize Presenter Display…',
+    menu: play(21),
+    enabled: (a) => ready(a) && !showing(),
+    run: (a) => {
+      void presenter.open('present', a.current(), null, true);
     },
   });
   c.define({
