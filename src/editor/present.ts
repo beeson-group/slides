@@ -6,6 +6,7 @@
 // data-timing, as one entry of the history. the slides are drawn from the page of the editor,
 // hence a rehearsal needs no save
 
+import { addRestoreSteps, applySteps } from '../steps.ts';
 import type { App } from './app.ts';
 import { drawInto } from './navigator/thumbs.ts';
 import { injectStyle, make, store, stored } from './ui/dom.ts';
@@ -57,15 +58,57 @@ function fragOf(el: Element): Frag {
   return { index, kind, final: el.hasAttribute('data-final') && index === null };
 }
 
-export const stepsOfSlide = (slide: Element): number => stepCount(stepsOf(fragsOf(slide).map(fragOf)));
+// the steps of a slide of the editor as the show plays them, counted on a copy of the slide with
+// what the show adds: a copy of a code box for each group of lines of its data-line-numbers after
+// the first, as the highlight plugin of reveal.js makes them, and the step that addRestoreSteps of
+// src/steps.ts adds. steps is the step of each fragment of the slide, from 0, and n the count
+export function showSteps(slide: Element): { steps: number[]; n: number } {
+  const copy = slide.cloneNode(true) as Element;
+  copy.querySelectorAll('aside.notes').forEach((n) => n.remove());
+  const own = fragsOf(copy);
+  for (const code of copy.querySelectorAll('pre > code[data-line-numbers]')) {
+    let at = parseInt(code.getAttribute('data-fragment-index') ?? '', 10);
+    for (const _ of (code.getAttribute('data-line-numbers') ?? '').split('|').slice(1)) {
+      const step = code.cloneNode(true) as Element;
+      step.classList.add('fragment');
+      if (Number.isNaN(at)) step.removeAttribute('data-fragment-index');
+      else step.setAttribute('data-fragment-index', String(at++));
+      code.parentElement?.append(step);
+    }
+  }
+  const wrap = make('div', 'reveal');
+  wrap.append(make('div', 'slides'));
+  wrap.firstChild?.appendChild(copy);
+  addRestoreSteps(wrap);
+  const all = fragsOf(copy);
+  const steps = stepsOf(all.map(fragOf));
+  return { steps: own.map((f) => steps[all.indexOf(f)]), n: stepCount(steps) };
+}
 
-// the clone of slide drawn into host is shown at step k: each fragment not seen at k is hidden
+export const stepsOfSlide = (slide: Element): number => showSteps(slide).n;
+
+// the clone of slide drawn into host is shown at step k as the show draws it: each fragment not
+// seen at k is hidden, and until the slide is complete, the earlier steps are dimmed to the 0.45
+// of theme/beeson.css, apart from a backdrop, a fragment inside a shown one, and a fragment held
+// with data-keep. the classes highlighted at k are colored by applySteps of src/steps.ts
 export function showStep(host: HTMLElement, slide: Element, k: number): void {
   const clone = host.shadowRoot?.querySelector('.beeson-thumb .slides > section');
   if (!clone) return;
   const frags = fragsOf(clone);
-  const steps = stepsOf(fragsOf(slide).map(fragOf));
-  frags.forEach((f, i) => f.classList.toggle('beeson-off', i < steps.length && !seenAt(fragOf(f).kind, steps[i], k)));
+  const kinds = fragsOf(slide).map((f) => fragOf(f).kind);
+  const { steps, n } = showSteps(slide);
+  frags.forEach((f, i) => {
+    f.setAttribute('data-fragment-index', String(steps[i] ?? 0));
+    f.classList.toggle('visible', steps[i] < k);
+    f.classList.toggle('current-fragment', steps[i] === k - 1);
+  });
+  applySteps(clone);
+  (frags as HTMLElement[]).forEach((f, i) => {
+    const seen = i >= steps.length || seenAt(kinds[i], steps[i], k);
+    const dim = seen && k < n && steps[i] < k - 1 && !f.matches('.backdrop, [data-held]') && !f.parentElement?.closest('.fragment.visible');
+    f.classList.toggle('beeson-off', !seen);
+    f.style.setProperty('opacity', dim ? '0.45' : '', dim ? 'important' : '');
+  });
 }
 
 // Use Rehearsed Timings of the Play menu, as the switch of PowerPoint, kept in the storage. a show
@@ -112,7 +155,8 @@ export function playTimings(win: Window, time = 30000): Promise<number> {
       clearInterval(poll);
       let n = 0;
       for (const s of win.document.querySelectorAll('.reveal .slides section[data-timing]')) {
-        const delay = stepDelay(s.getAttribute('data-timing'), stepsOfSlide(s));
+        // the slides of the show have their added steps already
+        const delay = stepDelay(s.getAttribute('data-timing'), stepCount(stepsOf(fragsOf(s).map(fragOf))));
         if (delay === null || s.hasAttribute('data-autoslide')) continue;
         s.setAttribute('data-autoslide', String(delay));
         n++;
