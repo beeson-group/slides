@@ -184,4 +184,25 @@ for (const platform of PLATFORMS) {
     await checkEdit(page, `r12-5-grip-${platform}.html`);
     assert.deepEqual(errors(page), []);
   });
+  test(`a multiple selection is turned by its rotate handle, each element about its own center (${platform})`, async (t) => {
+    const page = await load(t, platform, FIGURES);
+    await click(page, 'section.present > p');
+    await press(page, 'Escape');
+    await click(page, 'section.present figure img.for-light', { modifiers: 'Shift' });
+    assert.deepEqual(await page.evaluate('window.BeesonEditor.selection().map((el) => el.localName)'), ['p', 'figure']);
+    const centerOf = (selector) => page.evaluate(`(() => { const r = Reveal.getCurrentSlide().querySelector(${js(selector)}).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    const p0 = await centerOf(':scope > p'), i0 = await centerOf('figure img.for-light');
+    const rotor = await page.evaluate(`(() => { const r = document.querySelector('.beeson-rotor'); if (!r || r.hidden || !r.getClientRects().length) return null; const b = r.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`);
+    assert.ok(rotor, 'the rotate handle is drawn');
+    // a drag of the handle from above the center of the paragraph to its right, with Shift for
+    // steps of 15 degrees, turns it by 90 degrees
+    await drag(page, rotor, { dx: p0.x - rotor.x + (p0.y - rotor.y), dy: p0.y - rotor.y, steps: 12, modifiers: 'Shift' });
+    await frames(page);
+    const angles = await page.evaluate(`[Reveal.getCurrentSlide().querySelector(':scope > p'), Reveal.getCurrentSlide().querySelector('figure img.for-light')].map((el) => el.style.rotate)`);
+    assert.deepEqual(angles, ['90deg', '90deg']);
+    const p1 = await centerOf(':scope > p'), i1 = await centerOf('figure img.for-light');
+    assert.ok(near(p1.x, p0.x) && near(p1.y, p0.y) && near(i1.x, i0.x) && near(i1.y, i0.y), `each element kept its center: ${js({ p0, p1, i0, i1 })}`);
+    await checkEdit(page, `r12-5-rotor-${platform}.html`);
+    assert.deepEqual(errors(page), []);
+  });
 }
