@@ -171,4 +171,29 @@ for (const platform of PLATFORMS) {
     assert.equal(saved, text);
     assert.deepEqual(errors(page), []);
   });
+  // a line of the outline is in the navigator, where the clipboard keys act on the slides, but
+  // the keys act on its text while the caret is in it
+  test(`Copy and Paste in a line of the outline act on its text, and not on the slide (${platform})`, async (t) => {
+    const page = await outlineAt(t, platform);
+    const source = await render(page);
+    const got = await page.evaluate(`(() => {
+      const el = document.activeElement;
+      const copy = new ClipboardEvent('copy', { clipboardData: new DataTransfer(), bubbles: true, cancelable: true });
+      el.dispatchEvent(copy);
+      const data = new DataTransfer();
+      data.setData('text/plain', ' Again,\\n and again.');
+      data.setData('text/html', '<b> Again,</b><br> and again.');
+      const paste = new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true });
+      el.dispatchEvent(paste);
+      return { copied: copy.defaultPrevented, pasted: paste.defaultPrevented, text: el.textContent, html: el.innerHTML };
+    })()`);
+    await wait(page);
+    assert.equal(got.copied, false, 'the copy is taken from the text and given to the slide');
+    assert.equal(got.pasted, true, 'the paste is left to the browser, which pastes the markup');
+    assert.equal(got.text, `${SAME} Again, and again.`);
+    assert.ok(!/<b>|<br>/.test(got.html), `the pasted text has markup: ${got.html}`);
+    const sections = (text) => text.split('<section').length;
+    assert.equal(sections(await render(page)), sections(source), 'a slide was pasted');
+    assert.deepEqual(errors(page), []);
+  });
 }
