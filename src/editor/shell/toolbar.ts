@@ -289,8 +289,7 @@ export function install(app: App): void {
     }
     const spaced = boxes.findIndex((b) => b.right);
     // below NARROW the groups after the space go into the menu More, apart from the group of
-    // Format, which opens and closes the inspector drawn over the canvas as a sheet in a narrow
-    // window, and is put after More
+    // Format, which opens and closes the inspector, and is put after More
     const kept: HTMLElement[] = [];
     let right = false;
     for (const [i, box] of boxes.entries()) {

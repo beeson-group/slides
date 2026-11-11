@@ -109,7 +109,10 @@ for (const platform of PLATFORMS) {
     const table = await rect(page, '.reveal section.present table');
     const figure = await rect(page, '.reveal section.present figure.zone');
     assert.ok(table.top >= slide.top && table.bottom <= slide.bottom, `the table at ${js(table)} runs past the slide at ${js(slide)}`);
-    assert.ok(!meets(table, figure), 'the table covers the figure');
+    // a table that does not fit beside the figure is put at the center of the slide with a fill
+    const center = Math.abs((table.left + table.right - slide.left - slide.right) / 2) < 3;
+    const fill = await page.evaluate(`getComputedStyle(document.querySelector('.reveal section.present table')).backgroundColor`);
+    assert.ok(!meets(table, figure) || (center && !/^rgba\(.*, 0\)$|^transparent$/.test(fill)), 'the table covers the figure off the center of the slide, or without a fill');
     assert.equal(await undoLabel(page), 'Undo Insert Table');
     const edited = await roundTrip(page);
     assert.equal(count(edited, /<tr>/g), rows + 3);

@@ -60,7 +60,10 @@ dialog.beeson-table-size .fields{display:grid;grid-template-columns:auto 72px;ga
 dialog.beeson-table-size .fields input{box-sizing:border-box;width:100%;padding:3px 6px;border:1px solid var(--ed-control-line);border-radius:6px;background:var(--ed-field,var(--ed-control));color:var(--ed-text);font:inherit;font-variant-numeric:tabular-nums}
 dialog.beeson-table-size .fields input:focus-visible{outline:3px solid var(--ed-focus);outline-offset:0}
 .beeson-table-bars .fill{width:11px;height:11px;border-radius:50%;background:#ffc400;box-shadow:0 0 0 1.5px #fff,0 0 0 2.5px #0006;cursor:crosshair;touch-action:none}
-.beeson-table-bars .fill[hidden],.beeson-table-bars .spread[hidden]{display:none}
+.beeson-table-bars .corner{width:11px;height:11px;border-radius:50%;background:#fff;box-shadow:0 0 0 1.5px var(--ed-select),0 0 0 2.5px #0004;touch-action:none}
+.beeson-table-bars .corner[data-corner="upper-left"]{cursor:nwse-resize}
+.beeson-table-bars .corner:not([data-corner="upper-left"]){cursor:nesw-resize}
+.beeson-table-bars :is(.fill,.corner,.spread)[hidden]{display:none}
 .beeson-table-bars .spread{border:2px dashed #e0a800;border-radius:2px;pointer-events:none}
 html.beeson-autofilling,html.beeson-autofilling *{cursor:crosshair!important}
 .beeson-table-bars{position:fixed;inset:0;z-index:52;pointer-events:none}
@@ -322,14 +325,15 @@ export function pickTableInto(app: App, zone: Element, anchor: DOMRect): void {
 // the band in slide px over the bottom of the slide, where the slide number is drawn, and over the
 // footnote line, which a new table does not reach into
 const BOTTOM = 40;
+// the step in slide px of the grid on which a new table looks for a free place
+const STEP = 20;
 
 // a new table put where it fits on its slide, with every row and with room around it for its bars
 // at the zoom of the canvas: under the blocks before it, else at the center of the free area where
-// the layout puts a zone, else moved up until its bottom is BOTTOM over the footnote line or the
-// bottom of the slide over the blocks with text of its column, and else at the center of the slide
-// over what is there, as Keynote inserts a table. the table of a slide of the theme is put into its
-// text column, and it is not put over the text while free space is left. the space that an element
-// takes is the rule takenBox of insert.ts. the move is a translate in slide px
+// the layout puts a zone, else at the free place nearest to it at the right of the text or below it,
+// and else at the center of the slide over what is there, as Keynote inserts a table, where the
+// fill of the theme hides what is under it. the space that an element takes is the rule takenBox of
+// insert.ts. the move is a translate in slide px
 function placeTable(app: App, table: HTMLTableElement): void {
   const slide = table.closest('section');
   const parent = table.parentElement;
@@ -347,24 +351,34 @@ function placeTable(app: App, table: HTMLTableElement): void {
   const before = taken(above).map((o) => o.box);
   const all = taken([...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *')].filter((el) => !el.contains(table)));
   const others = all.map((o) => o.box);
-  // a table moved up may cover the blocks with text of its column before it, and not a caption
-  // or an empty placeholder
-  const covered = (el: Element) => above.includes(el) && !el.matches('.caption') && !!el.textContent?.trim();
   const tw = t.right - t.left;
   const th = t.bottom - t.top;
   const at = (left: number, top: number): SlideBox => ({ left, top, right: left + tw, bottom: top + th });
-  const free = (b: SlideBox) => b.top - room >= 0 && b.bottom <= floor && b.right + room <= w &&
+  // a box measured at the zoom of the canvas may pass the floor by a fraction of a slide px
+  const free = (b: SlideBox) => b.top - room >= 0 && b.bottom <= floor + 1 && b.right + room <= w &&
     !others.some((o) => meets({ left: b.left - room, top: b.top - room, right: b.right + room, bottom: b.bottom + room }, o));
   const top = Math.max(t.top, ...before.map((b) => b.bottom + room));
+  let best: SlideBox | null = null;
   let place: SlideBox | null = free(at(t.left, top)) ? at(t.left, top) : null;
   const zone = place ? null : freeZone(app, slide, table);
   if (zone) {
     const b = at((zone.left + zone.right - tw) / 2, (zone.top + zone.bottom - th) / 2);
     if (free(b)) place = b;
   }
-  const raised = Math.min(top, floor - th);
-  const over = (b: SlideBox) => all.some((o) => meets(b, o.box) && !covered(o.el));
-  if (!place && raised - room >= 0 && !over(at(t.left, raised))) place = at(t.left, raised);
+  // the free places on a grid of STEP px under the heading of the slide, the nearest one taken
+  const head = slide.querySelector(':scope > h2, :scope > h1');
+  const under = head ? (takenBox(app, head)?.bottom ?? 0) + room : room;
+  let near = Infinity;
+  for (let y = under; !place && y + th <= floor; y += STEP) {
+    for (let x = room; x + tw + room <= w; x += STEP) {
+      const d = Math.hypot(x - t.left, y - top);
+      if (d < near && free(at(x, y))) {
+        near = d;
+        best = at(x, y);
+      }
+    }
+  }
+  place ??= best;
   place ??= at((w - tw) / 2, (h - th) / 2);
   const x = Math.round(place.left - t.left);
   const y = Math.round(place.top - t.top);
@@ -899,7 +913,16 @@ function installBars(app: App): void {
   handle.hidden = true;
   const spread = make('div', 'spread');
   spread.hidden = true;
-  layer.append(cols, rows, grab, addCol, addRow, outline, grips, guide, spread, handle);
+  // the handles at the other corners of the cells selected as a block, whose drag moves that corner
+  // of the range to the cell under the pointer while the opposite corner stays
+  const corners = (['upper-left', 'upper-right', 'lower-left'] as const).map((name) => {
+    const c = make('div', 'corner');
+    c.dataset.corner = name;
+    c.title = 'Drag to extend or shorten the selection';
+    c.hidden = true;
+    return c;
+  });
+  layer.append(cols, rows, grab, addCol, addRow, outline, grips, guide, spread, ...corners, handle);
   document.body.append(layer);
   // a press on the bars keeps the caret in its cell
   for (const type of ['pointerdown', 'mousedown']) layer.addEventListener(type, (ev) => ev.preventDefault());
@@ -1018,6 +1041,27 @@ function installBars(app: App): void {
   handle.addEventListener('pointerup', (ev) => endFill(ev));
   handle.addEventListener('pointercancel', () => endFill(null));
 
+  // the drag of a corner handle: the table and the cell at the corner of the range that stays
+  let stretching: { table: HTMLTableElement; row: number; col: number } | null = null;
+  for (const c of corners) {
+    c.addEventListener('pointerdown', (ev) => {
+      const at = shown?.box;
+      if (!at || !shown || ev.button !== 0 || !inBlock(app)) return;
+      const name = c.dataset.corner;
+      stretching = { table: shown.table, row: name === 'lower-left' ? at.r0 : at.r1, col: name === 'upper-right' ? at.c0 : at.c1 };
+      c.setPointerCapture(ev.pointerId);
+    });
+    c.addEventListener('pointermove', (ev) => {
+      const s = stretching;
+      if (!s || !s.table.isConnected) return;
+      const { row, col } = spotAt(s.table, ev.clientX, ev.clientY);
+      const a = cellOver(s.table, s.row, s.col);
+      const b = cellOver(s.table, row, col);
+      if (a && b && (block?.anchor !== a || block?.focus !== b)) selectCells(app, a, b);
+    });
+    for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) c.addEventListener(type, () => (stretching = null));
+  }
+
   const draw = () => {
     const t = shown;
     if (!t || !t.table.isConnected) return hide();
@@ -1072,7 +1116,13 @@ function installBars(app: App): void {
       // the handle is under the pointer while it is dragged
       if (filling) place(handle, filling.x - 5.5, filling.y - 5.5, 11, 11);
       else if (!handle.hidden) place(handle, r.right - 5, r.bottom - 5, 11, 11);
-    }
+      const ends = { 'upper-left': [r.left, r.top], 'upper-right': [r.right, r.top], 'lower-left': [r.left, r.bottom] };
+      for (const c of corners) {
+        c.hidden = !blocked || !!filling;
+        const [x, y] = ends[c.dataset.corner as keyof typeof ends];
+        if (!c.hidden) place(c, x - 6, y - 6, 11, 11);
+      }
+    } else for (const c of corners) c.hidden = true;
     const reached = filling && !sameBox(filling.to, filling.from) ? boxRect(filling.table, filling.to) : null;
     spread.hidden = !reached;
     if (reached) place(spread, reached.left - 2, reached.top - 2, reached.right - reached.left + 4, reached.bottom - reached.top + 4);
@@ -1127,16 +1177,22 @@ function boxRect(table: HTMLTableElement, at: Box): { left: number; top: number;
   return r;
 }
 
+// the row and the column of a table at the point x, y, those at its edge for a point outside it
+function spotAt(table: HTMLTableElement, x: number, y: number): { row: number; col: number } {
+  const rows = [...table.rows].map((tr) => tr.getBoundingClientRect());
+  const edges = columnEdges(table);
+  const row = rows.findIndex((r) => y < r.bottom);
+  const col = edges.findIndex(([, r]) => x < r);
+  return { row: Math.max(0, row < 0 ? rows.length - 1 : row), col: Math.max(0, col < 0 ? edges.length - 1 : col) };
+}
+
 const sameBox = (a: Box, b: Box) => a.r0 === b.r0 && a.c0 === b.c0 && a.r1 === b.r1 && a.c1 === b.c1;
 
 // the range that a drag of the fill handle to the point x, y reaches from the range from: from
 // grown along one axis, the one in which the point is farther past it in cells, to the row or the
 // column of the point, kept inside the table
 function reach(table: HTMLTableElement, from: Box, x: number, y: number): Box {
-  const rows = [...table.rows].map((tr) => tr.getBoundingClientRect());
-  const edges = columnEdges(table);
-  const row = Math.max(0, rows.findIndex((r) => y < r.bottom) < 0 ? rows.length - 1 : rows.findIndex((r) => y < r.bottom));
-  const col = Math.max(0, edges.findIndex(([, r]) => x < r) < 0 ? edges.length - 1 : edges.findIndex(([, r]) => x < r));
+  const { row, col } = spotAt(table, x, y);
   const dr = row > from.r1 ? row - from.r1 : row < from.r0 ? from.r0 - row : 0;
   const dc = col > from.c1 ? col - from.c1 : col < from.c0 ? from.c0 - col : 0;
   if (dr && dr >= dc) return row > from.r1 ? { ...from, r1: row } : { ...from, r0: row };
