@@ -101,7 +101,18 @@ const union = (boxes: Box[]): Box => {
   return { left, top, width: Math.max(...boxes.map((b) => b.left + b.width)) - left, height: Math.max(...boxes.map((b) => b.top + b.height)) - top };
 };
 
-const toSlideRef = (els: Element[]) => reference === 'slide' || els.length === 1;
+// the objects that Align and Distribute move: each whole group of the targets is one object at the
+// box of its frame, whose members are moved together, as a group of Keynote is one object
+function objects(app: App): { els: Element[]; b: Box }[] {
+  const byGroup = new Map<string | Element, Element[]>();
+  for (const el of targetsOf(app)) {
+    const key = groupOf(el) ?? el;
+    byGroup.set(key, [...(byGroup.get(key) ?? []), el]);
+  }
+  return [...byGroup.values()].map((els) => ({ els, b: groupBoxOf(app, els) ?? boxOf(app, els[0]) }));
+}
+
+const toSlideRef = (n: number) => reference === 'slide' || n === 1;
 
 // each element moved by its offset dx and dy, as one entry of the history
 function shift(app: App, label: string, moves: { el: Element; dx: number; dy: number }[]): void {
@@ -116,10 +127,9 @@ function shift(app: App, label: string, moves: { el: Element; dx: number; dy: nu
 }
 
 function align(app: App, side: Side): void {
-  const els = targetsOf(app);
-  if (!els.length) return;
-  const boxes = els.map((el) => boxOf(app, el));
-  const ref = toSlideRef(els) ? slideBox(app) : union(boxes);
+  const items = objects(app);
+  if (!items.length) return;
+  const ref = toSlideRef(items.length) ? slideBox(app) : union(items.map((i) => i.b));
   const at = (b: Box) => {
     switch (side) {
       case 'left': return { dx: ref.left - b.left, dy: 0 };
@@ -130,33 +140,32 @@ function align(app: App, side: Side): void {
       case 'bottom': return { dx: 0, dy: ref.top + ref.height - (b.top + b.height) };
     }
   };
-  shift(app, `align ${side}`, els.map((el, i) => ({ el, ...at(boxes[i]) })));
+  shift(app, `align ${side}`, items.flatMap((i) => i.els.map((el) => ({ el, ...at(i.b) }))));
 }
 
 // the elements spaced evenly along an axis, with the first and the last of them kept in place, or
 // put at the edges of the slide with Align to Slide, as in PowerPoint. one element is spaced
 // evenly across the slide, i.e. centered on it, since PowerPoint aligns one object to the slide
 function distribute(app: App, axis: 'x' | 'y'): void {
-  const els = targetsOf(app);
-  const items = els.map((el) => ({ el, b: boxOf(app, el) }));
+  const items = objects(app);
   const start = (b: Box) => (axis === 'x' ? b.left : b.top);
   const size = (b: Box) => (axis === 'x' ? b.width : b.height);
   items.sort((a, b) => start(a.b) - start(b.b));
-  const ref = toSlideRef(els) ? slideBox(app) : union(items.map((i) => i.b));
+  const ref = toSlideRef(items.length) ? slideBox(app) : union(items.map((i) => i.b));
   const total = items.reduce((s, i) => s + size(i.b), 0);
   const one = items.length === 1;
   const gap = one ? 0 : (size(ref) - total) / (items.length - 1);
   let at = start(ref) + (one ? (size(ref) - total) / 2 : 0);
-  const moves = items.map((i) => {
+  const moves = items.flatMap((i) => {
     const d = at - start(i.b);
     at += size(i.b) + gap;
-    return { el: i.el, dx: axis === 'x' ? d : 0, dy: axis === 'y' ? d : 0 };
+    return i.els.map((el) => ({ el, dx: axis === 'x' ? d : 0, dy: axis === 'y' ? d : 0 }));
   });
   shift(app, `distribute ${axis === 'x' ? 'horizontally' : 'vertically'}`, moves);
 }
 
 const canDistribute = (app: App) => {
-  const n = targetsOf(app).length;
+  const n = objects(app).length;
   return n === 1 || n >= 3 || (reference === 'slide' && n === 2);
 };
 
@@ -198,9 +207,9 @@ export function commands(): Command[] {
       id: `arrange.alignTo.${ref}`,
       label: ref === 'slide' ? 'Align to Slide' : 'Align to Selection',
       menu: { bar: 'Arrange', group: 'reference', order: 30 + i, submenu: 'Align' },
-      // one element is aligned to the slide, hence Align to Selection is dimmed for it, as in PowerPoint
-      enabled: (app) => ref === 'slide' || targetsOf(app).length !== 1,
-      checked: (app) => (targetsOf(app).length === 1 ? ref === 'slide' : reference === ref),
+      // one object is aligned to the slide, hence Align to Selection is dimmed for it, as in PowerPoint
+      enabled: (app) => ref === 'slide' || objects(app).length !== 1,
+      checked: (app) => (objects(app).length === 1 ? ref === 'slide' : reference === ref),
       run: (app) => {
         reference = ref;
         app.invalidate('selection');
