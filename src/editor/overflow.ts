@@ -2,14 +2,15 @@
 // its bottom, or a text of the caption of a figure slide that reaches up to the heading or the
 // running head, is marked, as the bounds of a text box in PowerPoint, and counted in app.overflow,
 // which the state line reports. a line of a text drawn over a picture, a video, a plot, a QR
-// code, or a table of another part of the slide, e.g. after a change of the layout, is marked and counted as
-// well, in app.overFigure. a plate and a backdrop lie under the words of their layout
+// code, a table, or a code box of another part of the slide, e.g. after a change of the layout, is
+// marked and counted as well, in app.overFigure. a plate and a backdrop lie under the words of
+// their layout
 
 import { ALL, HOST, type App } from './app.ts';
 import { injectStyle } from './ui/dom.ts';
 
-// the pictures and tables that a text is not drawn over
-const FIGURE = 'img, video, canvas, iframe, tycho-viewer, .plot, .qr, table';
+// the pictures, tables, and code boxes that a text is not drawn over
+const FIGURE = 'img, video, canvas, iframe, tycho-viewer, .plot, .qr, table, pre';
 
 const CSS = `
 html.beeson-editing .reveal .beeson-overflow { outline: 2px dashed var(--accent, #f80) !important; outline-offset: 6px; }
