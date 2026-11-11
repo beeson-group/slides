@@ -383,3 +383,36 @@ for (const platform of PLATFORMS) {
     await roundTrip(page);
   });
 }
+
+// the shown handles of a block with their cursor, and the cursor of the element at a point
+const handles = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-handle')].filter((h) => !h.hidden && h.getClientRects().length).map((h) => getComputedStyle(h).cursor)`);
+const cursorAt = (page, p) => page.evaluate(`getComputedStyle(document.elementFromPoint(${p.x}, ${p.y})).cursor`);
+
+// finding select-move-resize-9: a locked block kept its handle with a move cursor, and a locked QR
+// code showed a move cursor, although neither can be dragged
+for (const platform of PLATFORMS) {
+  test(`a locked block or QR code does not show a move cursor (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 11 });
+    const qr = await center(page, '.reveal section.present .qr');
+    assert.equal(await cursorAt(page, qr), 'move', 'the QR code does not show a move cursor before its lock');
+    await click(page, qr);
+    await page.evaluate(`window.BeesonEditor.exec('arrange.lock')`);
+    await frames(page);
+    await roundTrip(page);
+    await click(page, qr);
+    await frames(page);
+    assert.notEqual(await cursorAt(page, qr), 'move', 'a locked QR code shows a move cursor');
+    await page.evaluate('Reveal.slide(3)');
+    await frames(page);
+    const para = '.reveal section.present > p';
+    await click(page, para);
+    await press(page, 'Escape');
+    await frames(page);
+    assert.deepEqual(await handles(page), ['move']);
+    await page.evaluate(`window.BeesonEditor.exec('arrange.lock')`);
+    await frames(page);
+    assert.ok((await page.evaluate(`document.querySelector(${js(para)}).hasAttribute('data-locked')`)));
+    assert.deepEqual((await handles(page)).filter((c) => c === 'move'), [], 'a locked block shows its handle with a move cursor');
+    await roundTrip(page);
+  });
+}
