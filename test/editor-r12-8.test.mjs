@@ -181,3 +181,63 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+const OBJECTS = '.beeson-edit-objects';
+const ROW = `${OBJECTS} .row`;
+const LIST_KEY = { mac: 'Mod+Shift+L', other: 'Alt+F10' };
+// the rows of the object list as level, name, and selection, e.g. '1 Group *'
+const rows = (page) =>
+  page.evaluate(`[...document.querySelectorAll(${js(ROW)})].map((r) => r.getAttribute('aria-level') + ' ' + r.querySelector('.name').textContent + (r.getAttribute('aria-selected') === 'true' ? ' *' : ''))`);
+const rowBox = (page, n) =>
+  page.evaluate(`(() => { const r = document.querySelectorAll(${js(ROW)})[${n}].getBoundingClientRect(); return { x: r.left + 60, y: r.top + r.height / 2, top: r.top, bottom: r.bottom }; })()`);
+const KEYS = {
+  mac: { group: 'Mod+Alt+G', lock: 'Mod+L', backward: 'Mod+Alt+Shift+B' },
+  other: { group: 'Mod+G', lock: 'Mod+L', backward: 'Mod+ArrowDown' },
+};
+
+for (const platform of PLATFORMS) {
+  // plots-objects-outline-4: in Keynote's object list and PowerPoint's Selection Pane, the keys of
+  // the Arrange menu act on the rows chosen. they did nothing while a row had the focus
+  test(`the keys of Group, Lock, and Send Backward act on the rows chosen in the Object List (${platform})`, async (t) => {
+    const page = await load(t, platform, { n: 4 });
+    await press(page, LIST_KEY[platform]);
+    await frames(page);
+    const start = await rows(page);
+    assert.equal(start.length, 4);
+    await click(page, await rowBox(page, 0));
+    await click(page, await rowBox(page, 2), { modifiers: 'Mod' });
+    await frames(page);
+    assert.deepEqual((await rows(page)).filter((r) => r.endsWith('*')).length, 2);
+    await press(page, KEYS[platform].group);
+    await settle(page);
+    assert.equal((await state(page, 'edit.undo')).label, 'Undo Group');
+    assert.equal((await rows(page))[0], '1 Group *');
+    const grouped = await render(page);
+    await undoKey(page);
+    await settle(page);
+    await byteExact(page);
+    await redoKey(page);
+    await settle(page);
+    assert.equal(await render(page), grouped);
+    await undoKey(page);
+    await settle(page);
+    // the figure alone, locked, then sent backward, from its focused row
+    await click(page, await rowBox(page, 0));
+    await press(page, KEYS[platform].lock);
+    await settle(page);
+    assert.equal((await state(page, 'edit.undo')).label, 'Undo Lock');
+    assert.match(await render(page), /<figure class="zone"[^>]* data-locked/);
+    await undoKey(page);
+    await settle(page);
+    await byteExact(page);
+    await click(page, await rowBox(page, 0));
+    await press(page, KEYS[platform].backward);
+    await settle(page);
+    assert.equal((await state(page, 'edit.undo')).label, 'Undo Send Backward');
+    assert.deepEqual((await rows(page)).map((r) => r.replace(' *', '')), [start[1], start[0], start[2], start[3]]);
+    await undoKey(page);
+    await settle(page);
+    await byteExact(page);
+    assert.deepEqual(errors(page), []);
+  });
+}
