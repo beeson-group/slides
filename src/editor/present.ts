@@ -289,7 +289,7 @@ dialog.beeson-edit-presenter::backdrop { background: #000; }
 .beeson-edit-presenter .slide-time { visibility: hidden; display: inline-flex; align-items: baseline; gap: 8px; color: var(--ed-muted); }
 .beeson-edit-presenter.rehearse .slide-time { visibility: visible; }
 .beeson-edit-presenter .slide-time b { color: var(--ed-guide); font: 500 18px/1 var(--ed-font); font-variant-numeric: tabular-nums; }
-.beeson-edit-presenter .hint { color: var(--ed-faint); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.beeson-edit-presenter .hint { color: var(--ed-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .beeson-edit-presenter .audience { color: var(--ed-muted); font-size: 12px; white-space: nowrap; }
 .beeson-edit-presenter .summary { grid-row: 2; display: none; place-items: center; }
 .beeson-edit-presenter.asking .stage { display: none; }

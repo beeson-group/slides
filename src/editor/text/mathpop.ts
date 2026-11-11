@@ -23,11 +23,11 @@ const CSS = `
 .beeson-math button.primary { border-color: transparent; background: var(--ed-select, #96f); color: var(--ed-on-select, #fff); }
 .beeson-math button:focus-visible { outline: 3px solid var(--ed-focus, rgba(150, 100, 255, 0.5)); outline-offset: 1px; }
 .beeson-math button:disabled { opacity: 0.45; }
-.beeson-math .hint { margin-right: auto; color: var(--ed-faint, #888); font-size: 11px; }
+.beeson-math .hint { margin-right: auto; color: var(--ed-muted, #636368); font-size: 11px; }
 .beeson-tex .preview { display: flex; align-items: center; justify-content: center; min-height: 56px; max-height: 200px; overflow: auto; padding: 8px 12px; border-radius: 9px; background: var(--ed-hover, rgba(127, 127, 127, 0.1)); color: var(--ed-text, #eee); font-size: 26px; }
 .beeson-tex .preview mjx-container { margin: 0 !important; max-width: 100%; }
 .beeson-tex .preview svg { max-width: 100%; height: auto; }
-.beeson-tex .preview .empty { color: var(--ed-faint, #888); font: 12px/1.3 var(--ed-font, system-ui, sans-serif); }
+.beeson-tex .preview .empty { color: var(--ed-muted, #636368); font: 12px/1.3 var(--ed-font, system-ui, sans-serif); }
 .beeson-tex .error { color: var(--ed-error, #d70015); font: 12px/1.35 var(--ed-font, system-ui, sans-serif); }
 .beeson-tex .error.prompt { color: var(--ed-muted, #999); }
 .beeson-tex .error:empty { display: none; }
