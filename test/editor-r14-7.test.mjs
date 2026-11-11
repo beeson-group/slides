@@ -135,3 +135,43 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+// caretBefore puts the caret before needle in the item of the slide that holds needle
+const caretBefore = (page, needle) => page.evaluate(`(() => {
+  const li = ${find(ITEM, needle)};
+  const w = document.createTreeWalker(li, NodeFilter.SHOW_TEXT);
+  for (let n = w.nextNode(); n; n = w.nextNode()) {
+    const i = n.data.indexOf(${js(needle)});
+    if (i < 0) continue;
+    li.closest('[contenteditable="true"]').focus();
+    getSelection().collapse(n, i);
+    return;
+  }
+})()`);
+
+const ITEM_2 = '<li class="fragment" data-fragment-index="2">';
+
+for (const platform of PLATFORMS) {
+  // D13: Return and a paste of several lines before a space dropped the space
+  test(`Return before a space keeps the space at the start of the new item (${platform})`, async (t) => {
+    const page = await load(t, platform, 2);
+    await caretBefore(page, ' with the same');
+    await press(page, 'Enter');
+    await type(page, 'X');
+    const text = await render(page);
+    assert.ok(text.includes(`${ITEM_2}Two elements</li>`), 'the first part is not written');
+    assert.ok(text.includes(`${ITEM_2}X with the same index are shown together.</li>`), `the space after the caret is dropped: ${text.match(/>X[^<]*</)?.[0]}`);
+    await roundTrip(page, 2);
+  });
+
+  test(`a paste of several lines before a space keeps the space after the last line (${platform})`, async (t) => {
+    const page = await load(t, platform, 2);
+    await caretBefore(page, ' with the same');
+    await page.evaluate(`window.BeesonEditor.exec('edit.paste', ' one\\ntwo\\nthree')`);
+    await frames(page);
+    const text = await render(page);
+    assert.ok(text.includes(`${ITEM_2}Two elements one</li>`), 'the first line is not pasted at the caret');
+    assert.ok(text.includes(`${ITEM_2}three with the same index are shown together.</li>`), `the space after the caret is dropped: ${text.match(/>three[^<]*</)?.[0]}`);
+    await roundTrip(page, 1);
+  });
+}
