@@ -6,6 +6,8 @@
 // and Esc puts the shown value back
 
 import type { App } from '../app.ts';
+import { keysOf } from '../commands.ts';
+import { matches } from '../keymap.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { commandKeys } from '../ui/menu.ts';
@@ -392,7 +394,20 @@ export function numberField(app: App, o: NumberOptions): Control & { input: HTML
   };
   input.addEventListener('blur', flush);
   input.addEventListener('keydown', (ev) => {
-    if (ev.key === 'Enter') {
+    // Undo and Redo after a commit act on the history and not on the text of the field, which then
+    // follows the selection, as in Keynote
+    const history = ['edit.undo', 'edit.redo'].find((id) => {
+      const c = app.commands.get(id);
+      return c && keysOf(c, app.platform).some((k) => matches(ev, k, app.platform));
+    });
+    if (history && round(typed()) === shown) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      void app.commands.run(history).then(() => {
+        show(o.value());
+        input.select();
+      }).catch((e) => app.fail(e));
+    } else if (ev.key === 'Enter') {
       ev.preventDefault();
       flush();
       input.select();
