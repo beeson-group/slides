@@ -105,9 +105,11 @@ for (const platform of PLATFORMS) {
   }
 
   // an element written after the plate is under it in the flow, hence its offset would carry it above
-  // the slide once the plate is deleted
-  for (const [id, name, selector, arg] of [['insert.table', 'table', ':scope > table', { rows: 3, columns: 3 }], ['insert.qr', 'QR code', ':scope > .qr', undefined]]) {
-    test(`a new ${name} on a figure slide stays in its place when the plate is deleted (${platform})`, async (t) => {
+  // the slide once the plate is deleted or cut
+  const removals = [['deleted', 'element.delete'], ['cut', 'edit.cut']];
+  const inserts = [['insert.table', 'table', ':scope > table', { rows: 3, columns: 3 }], ['insert.qr', 'QR code', ':scope > .qr', undefined]];
+  for (const [verb, command, id, name, selector, arg] of removals.flatMap((r) => inserts.map((i) => [...r, ...i]))) {
+    test(`a new ${name} on a figure slide stays in its place when the plate is ${verb} (${platform})`, async (t) => {
       const page = await load(t, platform, 6);
       await exec(page, id, arg);
       await frames(page);
@@ -130,12 +132,12 @@ for (const platform of PLATFORMS) {
       assert.ok(at, 'the image does not have a point clear of the other elements');
       await click(page, at);
       await frames(page);
-      await exec(page, 'element.delete');
+      await exec(page, command);
       await frames(page);
-      assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present .plate').length`), 0, 'the plate was not deleted');
+      assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present .plate').length`), 0, `the plate was not ${verb}`);
       const { boxes: left } = await measure(page, selector, ':scope > h2');
-      assert.deepEqual(round(left), round(placed), `the ${name} moved when the plate was deleted`);
-      // the delete is one entry of the history, taken back and made again byte for byte
+      assert.deepEqual(round(left), round(placed), `the ${name} moved when the plate was ${verb}`);
+      // the removal is one entry of the history, taken back and made again byte for byte
       const deleted = await render(page);
       await undo(page);
       assert.equal(await render(page), edited);
