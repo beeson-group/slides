@@ -180,3 +180,59 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 }
+
+// a figure selected on the canvas stays selected while the caret is in a line of the outline or in
+// a field of a pane, where Delete and Select All of the Edit menu act on the text of the line or
+// of the field
+for (const platform of PLATFORMS) {
+  for (const [what, field] of [
+    ['a text of the outline', (n) => `document.querySelectorAll('.beeson-edit-outline .slide')[${n}].querySelector('.text[aria-label="Slide title"]')`],
+    ['the Description field of the Format pane', () => `document.querySelector('#beeson-edit-panel-format textarea[name="alt"]')`],
+  ]) {
+    test(`Edit > Delete and Edit > Select All with the caret in ${what} act on its text, and not on the figure selected on the canvas (${platform})`, async (t) => {
+      const page = await load(t, platform);
+      const n = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('figure.zone'))`);
+      await page.evaluate(`Reveal.slide(${n})`);
+      await page.evaluate(`BeesonEditor.exec('view.outline')`);
+      await settle(page);
+      const at = field(n);
+      const figure = () => rect(page, `[...document.querySelectorAll('.reveal section.present figure.zone img')].find((i) => i.getClientRects().length)`);
+      const figures = (text) => text.split('<figure').length;
+      const textOf = () => page.evaluate(`(() => { const f = ${at}; return 'value' in f ? f.value : f.textContent; })()`);
+      const choose = async (label) => {
+        await openBar(page, 'Edit');
+        const state = await itemState(page, label);
+        await click(page, await item(page, label));
+        await settle(page);
+        await closeMenus(page);
+        return state;
+      };
+      await click(page, await figure());
+      await settle(page);
+      await click(page, await rect(page, at));
+      await settle(page);
+      assert.ok(await page.evaluate(`document.activeElement === ${at}`), `the caret is not in ${what}`);
+      const text = await textOf();
+      assert.ok(text.length > 3, `${what} does not have a text`);
+      // at a caret, Delete is dimmed, as in a text of the slide
+      const caret = await choose('Delete');
+      assert.equal(figures(await render(page)), figures(page.source), `Edit > Delete at a caret in ${what} deleted the figure`);
+      assert.equal(caret.disabled, true, `Edit > Delete is not dimmed at a caret in ${what}`);
+      await choose('Select All');
+      const selected = await page.evaluate(`(() => { const f = ${at}; return document.activeElement === f && ('value' in f ? f.value.slice(f.selectionStart, f.selectionEnd) : getSelection().toString()); })()`);
+      assert.equal(selected, text, `Edit > Select All does not select the text of ${what}`);
+      const range = await choose('Delete');
+      assert.equal(range.disabled, false, `Edit > Delete is dimmed on a selected text in ${what}`);
+      assert.equal(await textOf(), '', `Edit > Delete does not delete the selected text of ${what}`);
+      assert.equal(figures(await render(page)), figures(page.source), `Edit > Delete on a selected text in ${what} deleted the figure`);
+      // a press on the figure takes the focus out of the text, and Delete acts on the figure again
+      await click(page, await figure(), { button: 'right' });
+      await settle(page);
+      assert.equal((await itemState(page, 'Delete'))?.disabled, false, 'Delete is dimmed in the menu of the figure');
+      await click(page, await item(page, 'Delete'));
+      await settle(page);
+      assert.equal(figures(await render(page)), figures(page.source) - 1, 'Delete in the menu of the figure does not delete it');
+      assert.deepEqual(errors(page), []);
+    });
+  }
+}
