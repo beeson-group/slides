@@ -3,16 +3,50 @@
 // plate of the class row started together, two clips in one place, the second shown over the first,
 // and a clip in a fragment that appears at its step. After a step, each state is waited for rather
 // than read after a fixed time, since the fades of 400 ms and the rewinds after them are late on a
-// busy runner
+// busy runner. The tests share one Chrome and one local port, and each closes its page, since they
+// run beside the surfaces and the mode flip on a runner of four cores
 
-import { test } from 'node:test';
+import { after, before, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { deckSettled, deckUrl, launch, printView } from '../scripts/chrome.mjs';
+import { deckSettled, launch, printView } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 
 const DECK = 'test/pages/video-play.html';
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
+
+// the second clip is held back while slow is set
+let slow = false;
+let server;
+let browser;
+
+before(async () => {
+  server = await serve('.', { delay: (path) => (slow && path.endsWith('clip-b.mp4') ? 3000 : 0) });
+  browser = await launch({ offline: false });
+});
+
+after(async () => {
+  await browser?.close();
+  server?.close();
+});
+
+const deckAt = (query, hash) => `${server.origin}/${DECK}${query ? `?${query}` : ''}${hash ? `#${hash}` : ''}`;
+
+async function newPage(t) {
+  const page = await browser.newPage();
+  t.after(() => page.close());
+  return page;
+}
+
+async function open(t, hash) {
+  const page = await newPage(t);
+  await page.goto(deckAt('', hash));
+  await page.waitFor(deckSettled);
+  return page;
+}
+
+// a page served from a local port asks for its icon, which the folder does not have
+const errorsOf = (page) => page.errors.filter((error) => !error.includes('/favicon.ico'));
 
 // the state of the video of an id
 const stateOf = (id) => `(() => {
@@ -35,17 +69,30 @@ async function until(page, id, expected) {
   return state;
 }
 
-async function open(t, hash) {
-  const browser = await launch();
-  t.after(() => browser.close());
-  const page = await browser.newPage();
-  await page.goto(deckUrl(DECK, '', hash));
-  await page.waitFor(deckSettled);
-  return page;
-}
-
-// a page served from a local port asks for its icon, which the folder does not have
-const errorsOf = (page) => page.errors.filter((error) => !error.includes('/favicon.ico'));
+// the second clip is held back on the local port, and the first one is held at its first frame
+// until the second one can be played. Both are then started in one task. This test is the first,
+// before a page of the deck has loaded the second clip
+test('two videos of one step are started together, also when one of them is loaded later', { timeout: 120000 }, async (t) => {
+  slow = true;
+  t.after(() => { slow = false; });
+  const page = await newPage(t);
+  // the load event of a page waits for its videos, hence the step is made before it
+  await page.send('Page.navigate', { url: deckAt('', '/1') });
+  await page.waitFor('!!window.Reveal?.isReady?.()');
+  await page.evaluate('Reveal.next()');
+  await sleep(1000);
+  const held = await page.evaluate(`[left, right].map((video) => [video.readyState, video.paused, video.currentTime])`);
+  // HAVE_FUTURE_DATA is 3
+  if (held[1][0] < 3) assert.deepEqual(held[0].slice(1), [true, 0], 'the first clip waits for the second');
+  await page.waitFor('!left.paused && !right.paused && left.currentTime > 0.2', 30000);
+  // within three frames of the clips at 30 frames per second
+  const [left, right] = await page.evaluate('[left.currentTime, right.currentTime]');
+  assert.ok(Math.abs(left - right) < 0.1, `the clips are at ${left} s and ${right} s`);
+  // the plate of the class row puts the clips side by side, in two equal shares
+  const [a, b] = await page.evaluate(`[left, right].map((video) => video.getBoundingClientRect().toJSON())`);
+  assert.ok(a.right <= b.left && a.top === b.top && a.width === b.width && a.height === b.height, JSON.stringify([a, b]));
+  assert.deepEqual(errorsOf(page), []);
+});
 
 test('a video of the style play shows its poster until its step, and it is played from its step on without being dimmed', { timeout: 120000 }, async (t) => {
   const page = await open(t, '/0');
@@ -65,34 +112,6 @@ test('a video of the style play shows its poster until its step, and it is playe
   await page.evaluate('Reveal.prev()');
   await page.evaluate('Reveal.prev()');
   await until(page, 'play', poster);
-  assert.deepEqual(page.errors, []);
-});
-
-// the second clip is held back on a local port, and the first one is held at its first frame until
-// the second one can be played. Both are then started in one task
-test('two videos of one step are started together, also when one of them is loaded later', { timeout: 120000 }, async (t) => {
-  const server = await serve('.', { delay: (path) => (path.endsWith('clip-b.mp4') ? 3000 : 0) });
-  const browser = await launch({ offline: false });
-  t.after(async () => {
-    await browser.close();
-    server.close();
-  });
-  const page = await browser.newPage();
-  // the load event of a page waits for its videos, hence the step is made before it
-  await page.send('Page.navigate', { url: `${server.origin}/${DECK}#/1` });
-  await page.waitFor('!!window.Reveal?.isReady?.()');
-  await page.evaluate('Reveal.next()');
-  await sleep(1000);
-  const held = await page.evaluate(`[left, right].map((video) => [video.readyState, video.paused, video.currentTime])`);
-  // HAVE_FUTURE_DATA is 3
-  if (held[1][0] < 3) assert.deepEqual(held[0].slice(1), [true, 0], 'the first clip waits for the second');
-  await page.waitFor('!left.paused && !right.paused && left.currentTime > 0.2', 30000);
-  // within three frames of the clips at 30 frames per second
-  const [left, right] = await page.evaluate('[left.currentTime, right.currentTime]');
-  assert.ok(Math.abs(left - right) < 0.1, `the clips are at ${left} s and ${right} s`);
-  // the plate of the class row puts the clips side by side, in two equal shares
-  const [a, b] = await page.evaluate(`[left, right].map((video) => video.getBoundingClientRect().toJSON())`);
-  assert.ok(a.right <= b.left && a.top === b.top && a.width === b.width && a.height === b.height, JSON.stringify([a, b]));
   assert.deepEqual(errorsOf(page), []);
 });
 
@@ -106,13 +125,16 @@ test('a video shown in the place of another covers it, and the one under it is p
   await page.evaluate('Reveal.next()');
   await until(page, 'second', { playing: true, visibility: 'visible', covered: false });
   await until(page, 'first', { playing: false, time: 0, visibility: 'hidden', covered: true });
+  // the first clip is started again from its first frame, hence it is not ahead of the time since the step
+  const undone = Date.now();
   await page.evaluate('Reveal.prev()');
   await until(page, 'second', { playing: false, time: 0, opacity: '0', visibility: 'hidden' });
   const again = await until(page, 'first', { playing: true, visibility: 'visible', covered: false });
-  assert.ok(again.time < 1, `the first clip is started again from its start, at ${again.time} s`);
+  const since = (Date.now() - undone) / 1000;
+  assert.ok(again.time <= since + 0.5, `the first clip is at ${again.time} s, ${since} s after the step`);
   await page.evaluate('Reveal.prev()');
   await until(page, 'first', { playing: false, time: 0, opacity: '1', visibility: 'visible', covered: false });
-  assert.deepEqual(page.errors, []);
+  assert.deepEqual(errorsOf(page), []);
 });
 
 test('a video in a fragment is played from its step on, and it does not call for the step that restores the dimmed fragments', { timeout: 120000 }, async (t) => {
@@ -129,15 +151,13 @@ test('a video in a fragment is played from its step on, and it does not call for
   await page.evaluate('Reveal.prev()');
   await page.evaluate('Reveal.prev()');
   await until(page, 'inside', { playing: false, time: 0 });
-  assert.deepEqual(page.errors, []);
+  assert.deepEqual(errorsOf(page), []);
 });
 
 // the pages of the four slides: five with the step added to restore the dimmed paragraph, two, three, and three
 test('the print view shows each video of a step, with the video under a later one hidden', { timeout: 120000 }, async (t) => {
-  const browser = await launch();
-  t.after(() => browser.close());
-  const page = await browser.newPage();
-  await printView(page, deckUrl(DECK, 'print-pdf'));
+  const page = await newPage(t);
+  await printView(page, deckAt('print-pdf'));
   const shown = await page.evaluate(`[...document.querySelectorAll('.pdf-page')].map((page) => [...page.querySelectorAll('video')]
     .filter((video) => getComputedStyle(video).visibility !== 'hidden').map((video) => video.id).join(' '))`);
   assert.deepEqual(shown, [
