@@ -85,3 +85,34 @@ for (const platform of PLATFORMS) {
     });
   }
 }
+
+const state = (page, id) => page.evaluate(`window.BeesonEditor.state(${js(id)})`);
+const shown = (page, selector) => page.evaluate(`!!document.querySelector(${js(selector)})?.getClientRects().length`);
+const panes = async (page) => ({
+  navigator: await shown(page, '.beeson-edit-nav'),
+  inspector: await shown(page, '.beeson-edit-inspector .panel.format'),
+  format: (await state(page, 'shell.format')).checked,
+  slideOnly: (await state(page, 'view.slideOnly')).checked,
+});
+
+// D15: in a window 800 or 700 px wide with the Format pane open, the first Slide Only showed the
+// navigator in place of the inspector, and the second hid both
+for (const platform of PLATFORMS) {
+  for (const width of [800, 700]) {
+    test(`View > Slide Only chosen twice in a window ${width} px wide gives back the panes before the first choice (${platform})`, async (t) => {
+      const page = await load(t, platform, 'light', { width, height: 900 });
+      if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
+      await frames(page);
+      const start = await panes(page);
+      assert.deepEqual(start, { navigator: false, inspector: true, format: true, slideOnly: true });
+      await exec(page, 'view.slideOnly');
+      await frames(page);
+      assert.notDeepEqual(await panes(page), start, 'the first Slide Only does not change the panes');
+      await exec(page, 'view.slideOnly');
+      await frames(page);
+      assert.deepEqual(await panes(page), start);
+      assert.equal(await render(page), page.source);
+      assert.deepEqual(errors(page), []);
+    });
+  }
+}
