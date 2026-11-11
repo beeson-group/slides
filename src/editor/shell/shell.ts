@@ -225,9 +225,9 @@ export function install(app: App): void {
 
   // view.slideOnly is Slide Only of the View menu of Keynote. it hides the navigator and leaves the
   // inspector as it is, since in Keynote the view modes change only what is left of the canvas. a
-  // second run shows the navigator again. it is checked while the navigator is hidden, and it
-  // closes the light table
-  const slideOnly = () => !app.nav.shown;
+  // second run shows the navigator again. it is checked while the navigator is not drawn, also where
+  // the width of the window hides it beside the inspector, and it closes the light table
+  const slideOnly = () => !app.nav.seen;
   app.commands.define({
     id: 'view.slideOnly',
     label: 'Slide Only',
@@ -236,6 +236,8 @@ export function install(app: App): void {
     run: async () => {
       if (!slideOnly() && app.commands.get('view.lightTable') && app.commands.state('view.lightTable').checked) await app.commands.run('view.lightTable');
       app.nav.toggle();
+      // a navigator turned on beside the inspector in a narrow window is shown in its place
+      if (app.nav.shown && !app.nav.seen) app.nav.toggle();
       app.relayout();
     },
   });
