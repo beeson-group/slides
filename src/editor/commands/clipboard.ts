@@ -17,7 +17,7 @@ import { insertFiles } from '../media/actions.ts';
 import { kindOf } from '../media/store.ts';
 import { insertPlain } from '../text/typing.ts';
 import { objectsOf } from '../canvas/hit.ts';
-import { freshGroup } from './order.ts';
+import { settleCopies, freshGroup } from './order.ts';
 import { withTwins } from '../canvas/hit.ts';
 import { VOID } from '../source.ts';
 import { tokenize } from '../tokens.ts';
@@ -154,8 +154,13 @@ function regroup(app: App, copies: Element[]): void {
   }
 }
 
-// the elements of texts pasted onto the current slide. the caller runs it in one transaction
-async function pasteElements(app: App, texts: string[]): Promise<Element[]> {
+// the elements of texts pasted onto the current slide. the caller runs it in one transaction. an
+// undo selects what was selected before the paste, and a redo the pasted elements
+function pasteElements(app: App, texts: string[]): Promise<Element[]> {
+  return app.history.selecting('Paste', () => pasted(app, texts));
+}
+
+async function pasted(app: App, texts: string[]): Promise<Element[]> {
   const slide = app.current();
   if (!slide) return [];
   const doc = docOf(app);
@@ -181,6 +186,7 @@ async function pasteElements(app: App, texts: string[]): Promise<Element[]> {
     nodes.push(node);
   }
   regroup(app, nodes);
+  settleCopies(app, nodes);
   if (own) {
     own.pasted++;
     own.last = nodes;
@@ -189,8 +195,13 @@ async function pasteElements(app: App, texts: string[]): Promise<Element[]> {
   return nodes;
 }
 
-// the copies of els, each after its element and offset by 20 px when it would cover it
-export async function duplicateElements(app: App, els: Element[]): Promise<Element[]> {
+// the copies of els, each after its element and offset by 20 px when it would cover it. an undo
+// selects els again, and a redo the copies
+export function duplicateElements(app: App, els: Element[]): Promise<Element[]> {
+  return app.history.selecting('Duplicate', () => duplicated(app, els));
+}
+
+async function duplicated(app: App, els: Element[]): Promise<Element[]> {
   const doc = docOf(app);
   const copies: Element[] = [];
   for (const el of els) {
@@ -199,6 +210,7 @@ export async function duplicateElements(app: App, els: Element[]): Promise<Eleme
     copies.push(dup);
   }
   regroup(app, copies);
+  settleCopies(app, copies);
   app.selection.set('elements', copies);
   return copies;
 }
@@ -261,8 +273,11 @@ export function install(app: App): void {
       const els = withTwins(a, selectedElements(a));
       if (!els.length) return a.commands.run('slide.cut', data ?? undefined);
       copy(a, els, data);
-      a.selection.clear();
-      for (const el of [...els].reverse()) await docOf(a).remove(el, 'cut');
+      // an undo selects the cut elements again, as in Keynote
+      await a.history.selecting('Cut', async () => {
+        a.selection.clear();
+        for (const el of [...els].reverse()) await docOf(a).remove(el, 'cut');
+      });
     },
   });
   c.define({

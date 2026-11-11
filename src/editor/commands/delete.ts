@@ -34,9 +34,12 @@ export function install(app: App): void {
       const els = selectedElements(a);
       const kept = els.filter((el) => locked(el));
       const outer = withTwins(a, els.filter((el) => !locked(el) && !els.some((o) => o !== el && o.contains(el))));
-      if (kept.length) a.selection.set('elements', kept);
-      else a.selection.clear();
-      for (const el of outer.reverse()) await doc.remove(el, 'delete');
+      // an undo selects the deleted elements again, as in Keynote
+      await a.history.selecting('Delete', async () => {
+        if (kept.length) a.selection.set('elements', kept);
+        else a.selection.clear();
+        for (const el of outer.reverse()) await doc.remove(el, 'delete');
+      });
     },
   });
 }

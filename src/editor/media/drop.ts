@@ -29,6 +29,9 @@ export function targetAt(app: App, x: number, y: number): Target | null {
   const under = document.elementsFromPoint(x, y);
   for (const el of under) {
     if (!slide.contains(el) || el === slide || el.closest('aside.notes')) continue;
+    // a locked picture is not replaced and a locked zone is not filled, nor is a picture under
+    // them. the file is added to the slide, as a file dropped onto a locked image of Keynote
+    if (el.closest('[data-locked]')) break;
     const m = el.closest('img, video');
     const replace = m && slide.contains(m) ? mediaIn(app, m) : null;
     if (replace) return { replace };

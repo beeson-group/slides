@@ -194,8 +194,14 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// the members of the selection, with their angle in degrees and their center in CSS px of the window
-const members = (page) => page.evaluate(`window.BeesonEditor.selection().map((el) => { const r = el.getBoundingClientRect(); return { tag: el.localName, deg: parseFloat(getComputedStyle(el).rotate) || 0, x: r.left + r.width / 2, y: r.top + r.height / 2 }; })`);
+// the members of the selected group, each with its angle in degrees and its center on the screen. a figure is
+// turned at its picture, i.e. its shown image, since its caption is not turned with it
+const members = (page) => page.evaluate(`window.BeesonEditor.selection().map((el) => {
+  const pic = el.matches('figure, .zone, .plate') ? [...el.querySelectorAll('img, video')].find((m) => m.getBoundingClientRect().width) ?? el : el;
+  const r = pic.getBoundingClientRect();
+  const deg = (parseFloat(getComputedStyle(pic).rotate) || 0) + (pic === el ? 0 : parseFloat(getComputedStyle(el).rotate) || 0);
+  return { tag: el.localName, deg, x: r.left + r.width / 2, y: r.top + r.height / 2 };
+})`);
 // the point p turned by deg degrees about the point c
 const turn = (p, c, deg) => {
   const a = (deg * Math.PI) / 180;
@@ -244,7 +250,8 @@ for (const platform of PLATFORMS) {
     turnedAbout(await members(page), before, c, 90, 'after the drag');
     const edited = await render(page);
     assert.match(edited, /<p style="rotate: 90deg; translate: -?\d+px -?\d+px" data-group="g\d+">Export/, 'the paragraph is not written with its offset and its angle');
-    assert.match(edited, /<figure class="zone" style="rotate: 90deg; translate: -?\d+px -?\d+px" data-group="g\d+">/, 'the figure is not written with its offset and its angle');
+    assert.match(edited, /<figure class="zone" style="translate: -?\d+px -?\d+px" data-group="g\d+">/, 'the figure is not written with its offset');
+    assert.equal(edited.match(/<img class="for-(dark|light)" [^>]*style="rotate: 90deg">/g)?.length, 2, 'the images of the figure are not written with its angle');
     assert.deepEqual((await members(page)).map((m) => m.tag).sort(), ['figure', 'p'], 'the group is not selected after the turn');
     inScope(edited, page.source);
     await roundTrip(page);

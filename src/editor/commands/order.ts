@@ -7,8 +7,8 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { locked, pivotOf, placeOf, record, turnedPlace, turnersOf, writePlace } from '../canvas/drag.ts';
-import { frameOf, objectsOf, turnable, twinOf } from '../canvas/hit.ts';
+import { angleOf, locked, pivotOf, placeOf, record, seenCenter, spinOf, turn, turnMember, turnedEls, turnersOf } from '../canvas/drag.ts';
+import { objectOf, objectsOf, turnable, twinOf } from '../canvas/hit.ts';
 
 export type Order = 'front' | 'forward' | 'backward' | 'back';
 
@@ -99,6 +99,35 @@ export function freshGroup(app: App): string {
   }
 }
 
+// a copy does not take a data-id that another element of its slide has, since reveal.js pairs the
+// elements of two slides by this id. the images of a pair of modes in a copy share theirs
+function freshDataIds(app: App, copies: Element[]): void {
+  const slide = app.current();
+  if (!slide) return;
+  const inCopies = (el: Element) => copies.some((c) => c === el || c.contains(el));
+  for (const el of copies.flatMap((c) => [c, ...c.querySelectorAll('[data-id]')])) {
+    const id = el.getAttribute('data-id');
+    if (id && [...slide.querySelectorAll(`[data-id="${CSS.escape(id)}"]`)].some((o) => !inCopies(o))) app.doc.setTag(el, { attrs: { 'data-id': null } }, 'id');
+  }
+}
+
+// the layout of a figure slide has one plate, and another slide has none, hence a copy of a plate
+// is a plate only as the first plate of a figure slide. elsewhere it is made a zone, the box of
+// the theme for a figure beside other content, since a second plate is laid out under the slide
+function plateToZone(app: App, copies: Element[]): void {
+  for (const el of copies) {
+    const slide = el.closest('section');
+    if (!el.matches('.plate') || !slide || (slide.matches('.figure') && slide.querySelector(':scope > .plate') === el)) continue;
+    app.doc.setTag(el, { classes: { plate: false, zone: true } }, 'layout');
+  }
+}
+
+// the copies of a paste, a Duplicate, or a drag with the copy modifier, fitted to their slide
+export function settleCopies(app: App, copies: Element[]): void {
+  freshDataIds(app, copies);
+  plateToZone(app, copies);
+}
+
 // two elements or more that are not one group already
 const canGroup = (app: App): boolean => {
   const els = objectEls(app);
@@ -137,14 +166,13 @@ function setLock(app: App, on: boolean): void {
   app.invalidate('selection');
 }
 
-// the angle of el in degrees, from 0 to 359
-export const angleOf = (el: Element): number => placeOf(el).rotate ?? 0;
+export { angleOf };
 
 // the angle of a whole group, i.e. of its first member in the order of the page, or null when els
 // are not one whole group that can be turned
 export function groupAngle(app: App, els: Element[]): number | null {
   const turners = turnersOf(app, els);
-  return turners ? angleOf(turners[0].el) : null;
+  return turners ? turners[0].angle : null;
 }
 
 // the member of a group selected by itself with enterGroup, which keepGroups leaves alone while it
@@ -286,28 +314,30 @@ export function commands(app: App): Command[] {
         if (typeof a.deg !== 'number' || !Number.isFinite(a.deg)) return;
         const deg = ((Math.round(a.deg) % 360) + 360) % 360;
         const els = (a.els ?? selectedEls(app)).filter((el) => el.isConnected);
+        // the places of the elements that a turn changes, before and after it, as one entry
+        const turned = (moved: Element[], run: () => void) => {
+          const from = new Map(moved.map((el) => [el, placeOf(el)]));
+          run();
+          record(app, 'rotate', moved.map((el) => ({ el, from: from.get(el) as ReturnType<typeof placeOf>, to: placeOf(el) })));
+          app.invalidate('content');
+        };
         const turners = turnersOf(app, els);
         if (turners) {
           const pivot = pivotOf(turners.map((t) => t.el));
-          const scale = frameOf(app).scale;
-          const by = deg - angleOf(turners[0].el);
-          const changes = turners.map((t) => {
-            const to = turnedPlace(t, pivot, by, scale);
-            writePlace(app, t.el, to);
-            return { el: t.el, from: t.from, to };
+          turned(turnedEls(turners), () => {
+            for (const t of turners) turnMember(app, t, pivot, deg - turners[0].angle);
           });
-          record(app, 'rotate', changes);
-          app.invalidate('content');
           return;
         }
-        const changes = els.filter((el) => turnable(el)).map((el) => {
-          const from = placeOf(el);
-          const to = { ...from, rotate: deg || null };
-          writePlace(app, el, to);
-          return { el, from, to };
+        // the picture of a figure takes the angle, from the figure and from the picture selected,
+        // and its figure the offset that keeps the center of the picture
+        const pairs = els.filter((el) => turnable(el)).map((el) => {
+          const spin = spinOf(el);
+          return { spin, carrier: objectOf(app, spin) };
+        }).filter((t) => !locked(t.spin) && !locked(t.carrier));
+        turned([...new Set(pairs.flatMap((t) => [t.spin, t.carrier]))], () => {
+          for (const t of pairs) turn(app, t.spin, t.carrier, deg, seenCenter(app, t.spin));
         });
-        record(app, 'rotate', changes);
-        app.invalidate('content');
       },
     },
     {

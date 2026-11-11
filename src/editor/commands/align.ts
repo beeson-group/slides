@@ -8,7 +8,7 @@ import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { CONTAINER, RESIZABLE, STRETCHED, aspectOf, constrained, cssWidth, frameOf, isTextSized, kindOf, movableOf, objectsOf, pictureOf, pictureSize, sizedOf, snapBoxOf, toSlide, visualRect } from '../canvas/hit.ts';
 import type { Box } from '../canvas/snap.ts';
-import { placeOf, record, withCaptions, writePlace, type Place } from '../canvas/drag.ts';
+import { placeOf, record, withCaptions, withCorners, writePlace, type Place } from '../canvas/drag.ts';
 import { groupReach } from '../canvas/frames.ts';
 import { groupOf } from './order.ts';
 import { declarationProblem } from '../model/scope.ts';
@@ -215,7 +215,7 @@ export function commands(): Command[] {
       const a = (arg ?? {}) as { w?: number; h?: number };
       const els = targetsOf(app, arg).map(sizedTarget);
       if (!resizable(els)) return;
-      const changes = withCaptions(app, els, () => els.map((el) => {
+      const changes = withCaptions(app, els, () => withCorners(app, els, () => els.map((el) => {
         const from = placeOf(el);
         const now = sizeOf(el);
         if (isTextSized(el)) {
@@ -234,7 +234,7 @@ export function commands(): Command[] {
           writePlace(app, el, { ...from, width: Math.max(1, w) });
         }
         return { el, from, to: placeOf(el) };
-      }));
+      })));
       record(app, 'resize', changes);
       app.invalidate('content');
     },

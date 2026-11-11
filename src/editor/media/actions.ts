@@ -9,6 +9,7 @@ import type { App } from '../app.ts';
 import { ask, host } from '../ui/dialog.ts';
 import { make } from '../ui/dom.ts';
 import { firstFrame } from './poster.ts';
+import { REVEAL_CLASSES } from '../model/scope.ts';
 import { kindOf, media, type Kind, type MediaFile } from './store.ts';
 
 export const ACCEPT: Record<Kind | 'any', string> = {
@@ -21,6 +22,12 @@ export const ACCEPT: Record<Kind | 'any', string> = {
 // a viewer of tycho, a surface, or a backdrop, which are drawn by the theme
 const SLOT = 'figure, .zone, .plate';
 const DRAWN = '[data-plot], tycho-viewer, .surface, .backdrop';
+
+// the attributes and the declarations of an image or a video that the element of the other kind
+// put in its place keeps: its step, its id, its group, its lock, and its place. the alt text, the
+// classes, and the mask of an image are those of the image alone
+const KEPT = ['data-fragment-index', 'data-autoslide', 'data-final', 'data-id', 'data-group', 'data-locked'];
+const PLACE = ['translate', 'width', 'height', 'rotate'];
 
 const kindName = (k: Kind) => (k === 'image' ? 'Image' : 'Video');
 const stemOf = (path: string) => path.slice(path.lastIndexOf('/') + 1).replace(/\.[^.]*$/, '');
@@ -183,7 +190,7 @@ function setFiles(app: App, el: Element, attrs: Record<string, string | null>, l
 
 // the file of the image or the video el replaced, as one entry of the history. a video gets the
 // poster of its new file. a file of the other kind replaces el with an element of its kind, which
-// keeps the mode, the group, and the lock of el
+// keeps the mode, the step, the id, the group, the lock, and the place of el
 export async function replaceFile(app: App, el: HTMLImageElement | HTMLVideoElement, file: File): Promise<void> {
   if (!kindOf(file)) throw new Error(`${file.name} is not an image or a video`);
   const [r] = await prepare(app, [file]);
@@ -195,15 +202,21 @@ export async function replaceFile(app: App, el: HTMLImageElement | HTMLVideoElem
     }
     const parent = el.parentElement;
     if (!parent) throw new Error('the figure is not on the page');
-    const classes = ['for-dark', 'for-light'].filter((c) => el.classList.contains(c));
-    const own = app.doc.tagState(el).attrs;
-    const kept = Object.fromEntries(Object.entries(own).filter(([k]) => k === 'data-group' || k === 'data-locked'));
+    // the mode and the step of el, its id, its group, its lock, and its place, in their order
+    const own = app.doc.tagState(el);
+    const classes = own.classes.filter((c) => c === 'for-dark' || c === 'for-light' || REVEAL_CLASSES.includes(c));
+    const kept = Object.fromEntries(Object.entries(own.attrs).filter(([k]) => KEPT.includes(k)));
+    const place = Object.entries(own.style).filter(([k]) => PLACE.includes(k)).map(([k, v]) => `${k}: ${v}`).join('; ');
+    if (place) kept.style = place;
+    const held = app.selection.has(el);
     const pending = app.doc.insert(mediaText(r, classes, kept), parent, el, label);
     media.resolve(parent);
     const [node] = await pending;
     media.resolve(node);
     watch(app, node);
     await app.doc.remove(el, label);
+    // a picture selected by itself stays selected as its new element
+    if (held) app.selection.set('elements', [node]);
   });
   app.invalidate('content');
   report(app, [r]);

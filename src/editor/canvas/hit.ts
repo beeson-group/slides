@@ -109,8 +109,11 @@ export function orientedBox(el: Element, scale: number, deg: number): Box {
   const r = el.getBoundingClientRect();
   const p = pictureIn(el);
   const a = (deg * Math.PI) / 180;
-  const cx = r.left + r.width / 2 + (p.dx * Math.cos(a) - p.dy * Math.sin(a)) * scale;
-  const cy = r.top + r.height / 2 + (p.dx * Math.sin(a) + p.dy * Math.cos(a)) * scale;
+  // a flip mirrors the picture in the box of el
+  const [sx, sy = sx] = getComputedStyle(el).scale.split(/\s+/).map(parseFloat);
+  const dx = sx < 0 ? -p.dx : p.dx, dy = sy < 0 ? -p.dy : p.dy;
+  const cx = r.left + r.width / 2 + (dx * Math.cos(a) - dy * Math.sin(a)) * scale;
+  const cy = r.top + r.height / 2 + (dx * Math.sin(a) + dy * Math.cos(a)) * scale;
   return { left: cx - (p.width * scale) / 2, top: cy - (p.height * scale) / 2, width: p.width * scale, height: p.height * scale };
 }
 
