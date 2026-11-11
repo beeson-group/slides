@@ -1,6 +1,6 @@
 # AGENTS.md
 
-This repository is the slide template of the Beeson group. The reveal.js theme `beeson` is in `theme/`, and a demo deck with the main layouts and elements is in `index.html`. The in-place editor of a deck, loaded with the URL parameter `edit`, is in `src/editor/` and compiled to `theme/editor.js`. The brand marks are in `brand/`, the matplotlib styles in `styles/`, and the maintainer tooling in `src/`, `scripts/`, and `.github/`. A talk made from the template is one `index.html` next to `theme/` and `brand/`.
+This repository is either the slide template of the Beeson group, beeson-group/slides, or a talk made from it with the button "Use this template" of GitHub. The deck is `index.html`, i.e. the demo deck of the main layouts and elements in the template, and the talk in a talk. The reveal.js theme `beeson` is in `theme/`. The in-place editor of a deck, loaded with the URL parameter `edit`, is in `src/editor/` and compiled to `theme/editor.js`. The brand marks are in `brand/`, the matplotlib styles in `styles/`, and the maintainer tooling in `src/`, `scripts/`, and `.github/`. A talk made from the template is one `index.html` next to `theme/` and `brand/`.
 
 ## Vocabulary
 
