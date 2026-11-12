@@ -4,10 +4,9 @@
 // and the chrome, i.e. the running head, the footnote line, and the slide number, and first off the
 // figures as well, for which a new picture is drawn smaller. a free place of a table is inside the
 // margins of the slide, at 120 px from its left and right edges. without a free place, another
-// element is put at the center of the slide, where Keynote puts a new object. a table is put by
-// centerPlace at the center while it lies over nothing there, and else at the place off the
-// figures, the videos, the plots, the QR codes, and the tables that covers the least words, while
-// such a place exists. on a figure slide, the
+// element is put at the center of the slide, where Keynote puts a new object. a table is put there
+// by centerPlace, which may cover words but moves it to the nearest place off the figures, the
+// videos, the plots, the QR codes, and the tables while such a place exists. on a figure slide, the
 // plate as large as the slide is the ground, and what is drawn in it counts in its place
 
 import type { App } from '../app.ts';
@@ -204,11 +203,10 @@ const grow = (b: Box, d: number): Box => ({ left: b.left - d, top: b.top - d, ri
 // the place of a new table of width bw and height bh that does not have a free place on a
 // slide of w by h, inside the margins and at top or below: the center of the slide, where Keynote
 // puts a new object, unless it lies over a solid or a text. else the place nearest to the center
-// that is off every solid with room, then without, and off the texts with room as well. else the
-// place off every solid that covers the least of the texts. else the place that covers the least of
-// the solids, and of these the least of the texts, where the chrome counts as words. a place off
-// the headings is taken first where one is left. room is in slide px, e.g. the room of the bars of
-// a table
+// that is off every solid with room, then without, first one off the texts with room as well. else
+// the place that covers the least of the solids, and of these the least of the texts, where the
+// chrome counts as words. a place off the headings is taken first where one is left. room is in
+// slide px, e.g. the room of the bars of a table
 export function centerPlace(w: number, h: number, bw: number, bh: number, pieces: Pieces, room: number, top: number): Box {
   // the sizes are rounded to 1/8 px, since a box measured at Fit is off by a float error, and an edge
   // that touches another would then meet it at one zoom and not at another
@@ -229,13 +227,13 @@ export function centerPlace(w: number, h: number, bw: number, bh: number, pieces
   const words = (b: Box) => [...texts, ...chrome].reduce((c, t) => c + overlap(b, t), 0);
   const unhead = (all: Box[]) => (all.some((b) => !heads.some((t) => meets(b, t))) ? all.filter((b) => !heads.some((t) => meets(b, t))) : all);
   const least = (all: Box[], cost: (b: Box) => number) => all.reduce<Box | null>((best, b) => (!best || cost(b) < cost(best) - 1 || (cost(b) <= cost(best) + 1 && far(b) < far(best)) ? b : best), null);
-  const off = [room, 0].map((gap) => unhead(places(gap).filter((b) => !solids.some((s) => meets(grow(b, gap), s))).sort((a, b) => far(a) - far(b))));
-  for (const all of off) {
-    const best = all.find((b) => !texts.some((t) => meets(grow(b, room), t)));
+  // the place off the solids nearest to the middle of the slide, also over words, as Keynote and
+  // PowerPoint put a new table at the middle over the other objects
+  for (const gap of [room, 0]) {
+    const all = unhead(places(gap).filter((b) => !solids.some((s) => meets(grow(b, gap), s))).sort((a, b) => far(a) - far(b)));
+    const best = all.find((b) => !texts.some((t) => meets(grow(b, room), t))) ?? all[0];
     if (best) return best;
   }
-  const fewest = least(off.flat(), words);
-  if (fewest) return fewest;
   const cost = (b: Box) => solids.reduce((c, s, i) => c + (pieces.chrome?.includes(pieces.solids[i]) ? 0 : overlap(b, s)), 0);
   const some = unhead(places(0));
   const low = least(some, cost);
