@@ -331,7 +331,8 @@ for (const platform of PLATFORMS) {
     assert.equal((await state(page, 'figure.oval')).checked, false);
     await click(page, `${PANEL} label:has(> [data-command="figure.oval"])`);
     await frames(page);
-    const expected = edited([['<img src="../../demo/figure-light.png" alt="A figure">', '<img src="../../demo/figure-light.png" alt="A figure" class="oval">']]);
+    // the picture is drawn letterboxed in its zone, hence Oval writes its width and keeps it in place
+    const expected = edited([[FIGURE, '<figure class="zone" style="translate: 0px 40px">\n    <img src="../../demo/figure-light.png" alt="A figure" style="width: 600px" class="oval">']]);
     assert.equal(await render(page), expected);
     assert.equal(await style(page, 'figure img', 'clipPath'), 'inset(0px round 50%)');
     assert.equal((await state(page, 'figure.oval')).checked, true);
@@ -349,7 +350,7 @@ for (const platform of PLATFORMS) {
     await frames(page);
     await press(page, 'Enter');
     await frames(page);
-    assert.match(await render(page), /<img src="\.\.\/\.\.\/demo\/figure-light\.png" alt="A figure" class="oval" style="scale: 1\.5; clip-path: inset\(16\.667% round 50%\)">/);
+    assert.match(await render(page), /<img src="\.\.\/\.\.\/demo\/figure-light\.png" alt="A figure" style="width: 600px; scale: 1\.5; clip-path: inset\(16\.667% round 50%\)" class="oval">/);
     assert.equal(await style(page, 'figure img', 'clipPath'), 'inset(16.667% round 50%)');
     assert.deepEqual(errors(page), []);
   });
