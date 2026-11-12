@@ -39,27 +39,44 @@ const WORDS = 'h1, h2, h3, h4, p, ul, ol, dl, blockquote, div.math';
 export const wordBox = (app: App, el: Element): Box | null =>
   !el.getClientRects().length ? null : el.matches(WORDS) ? inkBox(app, el) ?? promptBox(app, el) : takenBox(app, el);
 
-// the drawn cells of CELL slide px of the canvases of a backdrop, by every other pixel of each
+// the drawn cells of CELL slide px of the canvases of a backdrop, read from a copy of each canvas at
+// a quarter of its size in slide px, since the canvas grows with the zoom and the pixel ratio
 const CELL = 20;
+const COPY = 4;
 export function drawnCells(app: App, backdrop: Element): Box[] {
   const cells = new Map<number, Box>();
   const slides = app.slides() as HTMLElement;
   const s = slides.getBoundingClientRect();
   const k = slides.offsetWidth ? s.width / slides.offsetWidth : 1;
+  const copy = document.createElement('canvas');
   for (const c of backdrop.querySelectorAll('canvas')) {
     const r = c.getBoundingClientRect();
+    if (!c.width || !c.height || !r.width) continue;
+    copy.width = Math.ceil(r.width / k / COPY);
+    copy.height = Math.ceil(r.height / k / COPY);
+    const ctx = copy.getContext('2d', { willReadFrequently: true });
     let data: Uint8ClampedArray | undefined;
     try {
-      data = c.width && c.height && r.width ? c.getContext('2d')?.getImageData(0, 0, c.width, c.height).data : undefined;
+      ctx?.clearRect(0, 0, copy.width, copy.height);
+      ctx?.drawImage(c, 0, 0, copy.width, copy.height);
+      data = ctx?.getImageData(0, 0, copy.width, copy.height).data;
     } catch {
       continue;
     }
     if (!data) continue;
-    for (let y = 0; y < c.height; y += 2) {
-      for (let x = 0; x < c.width; x += 2) {
-        if (data[(y * c.width + x) * 4 + 3] <= 20) continue;
-        const i = Math.floor((r.left + (x / c.width) * r.width - s.left) / k / CELL), j = Math.floor((r.top + (y / c.height) * r.height - s.top) / k / CELL);
-        cells.set(j * 1000 + i, { left: i * CELL, top: j * CELL, right: (i + 1) * CELL, bottom: (j + 1) * CELL });
+    // a pixel of the copy is COPY slide px wide, and it marks every cell that it meets. a thin line
+    // is fainter in the copy, hence any ink counts
+    const left = (r.left - s.left) / k, top = (r.top - s.top) / k;
+    const dx = r.width / k / copy.width, dy = r.height / k / copy.height;
+    for (let y = 0; y < copy.height; y++) {
+      for (let x = 0; x < copy.width; x++) {
+        if (!data[(y * copy.width + x) * 4 + 3]) continue;
+        const x0 = left + x * dx, y0 = top + y * dy;
+        for (let j = Math.floor(y0 / CELL); j <= Math.floor((y0 + dy - 0.01) / CELL); j++) {
+          for (let i = Math.floor(x0 / CELL); i <= Math.floor((x0 + dx - 0.01) / CELL); i++) {
+            cells.set(j * 1000 + i, { left: i * CELL, top: j * CELL, right: (i + 1) * CELL, bottom: (j + 1) * CELL });
+          }
+        }
       }
     }
   }
@@ -201,10 +218,15 @@ const grow = (b: Box, d: number): Box => ({ left: b.left - d, top: b.top - d, ri
 // plot, which is as tall as a zone, the place off the solids that covers the least of the texts is
 // taken where none is off them. room is in slide px, e.g. the room of the bars of a table
 export function centerPlace(w: number, h: number, bw: number, bh: number, pieces: Pieces, room: number, top: number, fewest = false): Box {
+  // the sizes are rounded to 1/8 px, since a box measured at Fit is off by a float error, and an edge
+  // that touches another would then meet it at one zoom and not at another
+  const r8 = (v: number) => Math.round(v * 8) / 8;
+  [bw, bh] = [r8(bw), r8(bh)];
+  const snap = (all: Box[] = []) => all.map((b) => ({ left: r8(b.left), top: r8(b.top), right: r8(b.right), bottom: r8(b.bottom) }));
+  const [solids, texts, heads, chrome] = [pieces.solids, pieces.texts, pieces.heads, pieces.chrome].map(snap);
   const at = (x: number, y: number): Box => ({ left: x, top: y, right: x + bw, bottom: y + bh });
   const center = at((w - bw) / 2, (h - bh) / 2);
-  const { solids, texts, heads = [], chrome = [] } = pieces;
-  if (!solids.some((s) => meets(center, s))) return center;
+  if (!solids.some((s) => meets(center, s)) && (!fewest || !texts.some((t) => meets(grow(center, room), t)))) return center;
   const side = bw + 2 * MARGIN <= w ? MARGIN : Math.max(0, (w - bw) / 2);
   const places = (gap: number): Box[] => {
     const xs = steps(side, w - bw - side, [center.left, w - bw - side, ...[...solids, ...texts].flatMap((s) => [s.left - bw - gap, s.right + gap])]);
@@ -215,12 +237,14 @@ export function centerPlace(w: number, h: number, bw: number, bh: number, pieces
   const words = (b: Box) => [...texts, ...chrome].reduce((c, t) => c + overlap(b, t), 0);
   const unhead = (all: Box[]) => (all.some((b) => !heads.some((t) => meets(b, t))) ? all.filter((b) => !heads.some((t) => meets(b, t))) : all);
   const least = (all: Box[], cost: (b: Box) => number) => all.reduce<Box | null>((best, b) => (!best || cost(b) < cost(best) - 1 || (cost(b) <= cost(best) + 1 && far(b) < far(best)) ? b : best), null);
+  // with fewest, a place off the solids is taken only off the headings
+  const offHeads = (all: Box[]) => (fewest ? all.filter((b) => !heads.some((t) => meets(b, t))) : unhead(all));
   for (const gap of [room, 0]) {
-    const all = unhead(places(gap).filter((b) => !solids.some((s) => meets(grow(b, gap), s))).sort((a, b) => far(a) - far(b)));
+    const all = offHeads(places(gap).filter((b) => !solids.some((s) => meets(grow(b, gap), s))).sort((a, b) => far(a) - far(b)));
     const best = all.find((b) => !texts.some((t) => meets(grow(b, room), t))) ?? (fewest ? least(all, words) : all[0]);
     if (best) return best;
   }
-  const cost = (b: Box) => solids.reduce((c, s) => c + (chrome.includes(s) ? 0 : overlap(b, s)), 0);
+  const cost = (b: Box) => solids.reduce((c, s, i) => c + (pieces.chrome?.includes(pieces.solids[i]) ? 0 : overlap(b, s)), 0);
   const some = unhead(places(0));
   const low = least(some, cost);
   return least(some.filter((b) => low && cost(b) <= cost(low) + 1), words) ?? center;
