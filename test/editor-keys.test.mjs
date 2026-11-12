@@ -273,8 +273,8 @@ for (const platform of PLATFORMS) {
       await press(page, 'Escape');
       await page.waitFor(`!document.querySelector('.beeson-edit-show')`);
     };
-    await present('Mod+Enter', `?still&edit-platform=${platform}&postMessageEvents=true&from-editor#/2`);
-    await present('Mod+Shift+Enter', `?still&edit-platform=${platform}&postMessageEvents=true&from-editor`);
+    await present('Mod+Enter', `?still&edit-platform=${platform}&from-editor#/2`);
+    await present('Mod+Shift+Enter', `?still&edit-platform=${platform}&from-editor`);
     // the editor is at the slide shown last, the first slide of the show from the start
     assert.equal(await slide(page), 0);
     assert.deepEqual(page.errors, []);

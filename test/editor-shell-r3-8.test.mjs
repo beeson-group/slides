@@ -250,8 +250,8 @@ for (const platform of PLATFORMS) {
     await click(page, bar);
     await frames(page);
     assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-nav .row')[3].getAttribute('aria-selected')`), 'true');
-    // the status counts the slides in the show, and names the hidden slide with its struck number
-    assert.equal(await count(page), `Slide 4 of ${total - 1}, hidden`);
+    // the status counts the slides in the show, and reads the hidden slide by the slide before it
+    assert.equal(await count(page), `Hidden slide, after slide 3 of ${total - 1}`);
     await click(page, bar, { button: 'right' });
     await frames(page);
     const item = `[...document.querySelectorAll('.beeson-edit-menu [role="menuitem"]')].find((m) => m.textContent.includes('Show Slide'))`;

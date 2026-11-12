@@ -493,9 +493,8 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// the status bar counts in show order, as the navigator numbers the slides: a hidden slide reads
-// the struck number that the navigator gives it and says that it is hidden, with the number as
-// its accessible name
+// the status bar counts in show order, as the navigator numbers the slides: a hidden slide is not
+// numbered, and it is read by the shown slide before it
 const COUNT = `(() => { const c = document.querySelector('.beeson-edit-bottom .count'); return { text: c.textContent, struck: c.querySelector('s')?.textContent ?? null, name: c.getAttribute('aria-label') }; })()`;
 for (const platform of PLATFORMS) {
   test(`the status bar counts the slides in show order, and names a hidden slide (${platform})`, async (t) => {
@@ -505,7 +504,7 @@ for (const platform of PLATFORMS) {
     await row(page, 4);
     await exec(page, 'slide.hide');
     await frames(page);
-    assert.deepEqual(await page.evaluate(COUNT), { text: 'Slide 4 of 11, hidden', struck: '4', name: 'Slide 4 of 11, hidden' });
+    assert.deepEqual(await page.evaluate(COUNT), { text: 'Hidden slide, after slide 3 of 11', struck: null, name: null });
     await row(page, 5);
     assert.deepEqual(await page.evaluate(COUNT), { text: 'Slide 4 of 11', struck: null, name: null });
     await page.evaluate('window.BeesonEditor.undo()');
