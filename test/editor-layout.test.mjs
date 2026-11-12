@@ -185,10 +185,12 @@ for (const platform of PLATFORMS) {
     await byteExact(page, edits);
     await redo(page);
     await byteExact(page);
-    // Send Backward passes one figure, the block
+    // Send Backward passes one row of the object list, the last text of the block, which is raised
+    // over the QR code in the stacking context of the slide
+    const backward = [[BLOCK_END, BLOCK_END.replace('<p class="who">', '<p class="who" style="position: relative; z-index: 1">')]];
     await exec(page, 'arrange.order.backward');
-    await byteExact(page, edits);
-    await saved(page, edits);
+    await byteExact(page, backward);
+    await saved(page, backward);
     assert.deepEqual(errors(page), []);
   });
 
