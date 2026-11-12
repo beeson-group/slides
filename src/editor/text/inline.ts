@@ -12,7 +12,7 @@ export type Match = (el: Element) => boolean;
 
 const tagIs = (...tags: string[]): Match => (el) => tags.includes(el.localName);
 
-export const TONES = ['accent', 'violet', 'blue', 'red', 'subtle', 'muted'] as const;
+export const TONES = ['accent', 'violet', 'blue', 'red', 'subtle', 'muted', 'text'] as const;
 export type Tone = (typeof TONES)[number];
 
 export const isTone: Match = (el) => el.localName === 'span' && el.classList.length === 1 && el.classList[0].startsWith('tone-');
@@ -296,14 +296,30 @@ export function toneAt(app: App): Tone | null {
   return span ? (span.classList[0].slice(5) as Tone) : null;
 }
 
-// the words colored in tone, or given the text color of the theme with null
+// whether the words of host are drawn in a color other than the one that it inherits, as a small
+// paragraph, a caption, and a footnote are
+const ownColor = (host: Element): boolean => !!host.parentElement && getComputedStyle(host).color !== getComputedStyle(host.parentElement).color;
+
+// whether the words at the start of the text are drawn in the text color
+export function textColored(app: App): boolean {
+  const t = inlineTargets(app)[0] ?? textTarget(app);
+  if (!t) return false;
+  const span = around(t.host, textsIn(t.range)[0], isTone);
+  return span ? span.classList.contains('tone-text') : !ownColor(t.host);
+}
+
+// the words colored in tone, or given the text color of the theme with null. the tone text is a
+// span only in a block of a color of its own, and else the tone is taken off
 export function setTone(app: App, tone: Tone | null): void {
   const targets = inlineTargets(app);
-  edit(app, targets, (host, range) => setFormat(host, range, isTone, tone ? () => {
-    const span = document.createElement('span');
-    span.className = `tone-${tone}`;
-    return span;
-  } : null));
+  edit(app, targets, (host, range) => {
+    const t = tone === 'text' && !ownColor(host) ? null : tone;
+    return setFormat(host, range, isTone, t ? () => {
+      const span = document.createElement('span');
+      span.className = `tone-${t}`;
+      return span;
+    } : null);
+  });
 }
 
 export function clearFormatting(app: App): void {

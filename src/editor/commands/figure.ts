@@ -6,7 +6,8 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { CONTAINER, twinOf } from '../canvas/hit.ts';
+import { CONTAINER, pictureSize, twinOf } from '../canvas/hit.ts';
+import { placeOf, record, withCorners, writePlace } from '../canvas/drag.ts';
 import type { TagEdit } from '../tags.ts';
 import { placeCaret } from '../text/typing.ts';
 
@@ -84,6 +85,22 @@ const takenCaption = new WeakMap<Element, string>();
 
 function setTag(app: App, el: Element, edit: TagEdit, label: string): void {
   app.doc.setTag(el, edit, label);
+}
+
+// the width of the picture that el draws smaller than its box under object-fit contain, written on
+// el and its twin with the corner of the picture kept in its place, so that the box of el is the
+// picture. a picture with a width, a crop, or a fit of its own is drawn as its box already
+function fitToPicture(app: App, el: Element): void {
+  const style = app.doc.tagState(el).style;
+  if (placeOf(el).width !== null || style['clip-path'] || style.scale || getComputedStyle(el).objectFit !== 'contain') return;
+  const p = pictureSize(el);
+  const box = el as HTMLElement;
+  if (p.w > box.offsetWidth - 0.5 && p.h > box.offsetHeight - 0.5) return;
+  record(app, 'oval', withCorners(app, [el], () => {
+    const from = placeOf(el);
+    writePlace(app, el, { ...from, width: p.w });
+    return [{ el, from, to: placeOf(el) }];
+  }));
 }
 
 function switchOf(id: string, label: string, target: (app: App) => Element | null, isOn: (el: Element) => boolean, edit: (on: boolean) => TagEdit, menu?: Command['menu']): Command {
@@ -223,6 +240,7 @@ export function commands(): Command[] {
         const el = given(arg) ?? imageOf(app);
         if (!el) return;
         const on = !el.classList.contains('oval');
+        if (on) fitToPicture(app, el);
         for (const m of [el, twinOf(app, el)]) {
           if (!m) continue;
           const edit: TagEdit = { classes: { oval: on } };

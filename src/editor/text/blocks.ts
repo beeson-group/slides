@@ -20,9 +20,12 @@ import { textStyle } from '../model/templates.ts';
 import { injectStyle } from '../ui/dom.ts';
 import * as flow from './flow.ts';
 
-// an empty item gets a line to put the caret on, after the dash drawn by its ::before
+// an empty item gets a line to put the caret on, after the dash drawn by its ::before, which the
+// editor draws as a placeholder and theme/beeson.css takes off in the show
 const CSS = `
 html.beeson-editing .reveal li[contenteditable="true"]:empty::after, html.beeson-editing .reveal [contenteditable="true"] li:empty::after { content: "\\200b"; }
+html.beeson-editor .reveal ul > li:empty::before { content: ""; }
+html.beeson-editor .reveal ol > li:empty::before { content: counter(list-item); }
 `;
 
 const ATOM = 'mjx-container, br, img';

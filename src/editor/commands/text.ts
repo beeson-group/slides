@@ -33,7 +33,7 @@ function inCode(app: App): boolean {
   return app.selection.elements().some((el) => !!el.closest('pre'));
 }
 
-const TONE_LABELS: Record<inline.Tone, string> = { accent: 'Accent', violet: 'Violet', blue: 'Blue', red: 'Red', subtle: 'Subtle', muted: 'Muted' };
+const TONE_LABELS: Record<Exclude<inline.Tone, 'text'>, string> = { accent: 'Accent', violet: 'Violet', blue: 'Blue', red: 'Red', subtle: 'Subtle', muted: 'Muted' };
 // fn run so that an undo and a redo select the text of the slide again, e.g. the caret before an
 // outdent, which the history of the blocks alone puts at the end of the text that changed
 async function marked(app: App, fn: () => void | Promise<void>): Promise<void> {
@@ -194,10 +194,10 @@ export function install(app: App): void {
     undoable: true,
     undo: 'Text Color',
     enabled: (a) => inline.inlineTargets(a).length > 0 || carry.canFormat(a),
-    checked: (a) => (carry.canFormat(a) ? carry.toneOf(a) === null : inline.inlineTargets(a).length > 0 && inline.toneAt(a) === null),
-    run: (a) => (carry.canFormat(a) ? carry.chooseTone(a, null) : inline.setTone(a, null)),
+    checked: (a) => (carry.canFormat(a) ? [null, 'text'].includes(carry.toneOf(a)) : inline.inlineTargets(a).length > 0 && inline.textColored(a)),
+    run: (a) => (carry.canFormat(a) ? carry.chooseTone(a, 'text') : inline.setTone(a, 'text')),
   });
-  inline.TONES.forEach((tone, i) =>
+  inline.TONES.filter((tone) => tone !== 'text').forEach((tone, i) =>
     define({
       id: `text.tone.${tone}`,
       label: TONE_LABELS[tone],

@@ -4830,6 +4830,9 @@ void main() {
     autoAnimateDuration: 0.5,
     autoAnimateEasing: "ease-out",
     autoAnimateUnmatched: true,
+    // the list of reveal.js with translate and rotate, which the editor writes for a move and a turn.
+    // with center off, reveal.js measures an element by its offset, which does not count them
+    autoAnimateStyles: ["opacity", "color", "background-color", "padding", "font-size", "line-height", "letter-spacing", "border-width", "border-color", "border-radius", "outline", "outline-offset", "translate", "rotate"],
     progress: true,
     slideNumber: (slide) => numberOf(slide),
     controls: false,

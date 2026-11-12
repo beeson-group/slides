@@ -321,8 +321,9 @@ export function install(app: App): void {
       placeCaret(el);
       app.invalidate('content');
     };
+    // the box is kept while the sheet of a formula typed into it is open
     el.addEventListener('focusout', () => setTimeout(() => {
-      if (pending?.el === el && document.activeElement !== el && !leaving) drop();
+      if (pending?.el === el && document.activeElement !== el && !leaving && !app.math.isOpen()) drop();
     }, 0));
     show();
     own = true;
@@ -400,6 +401,10 @@ export function install(app: App): void {
         written!.node = node;
         made = [node];
         p.el.remove();
+        // a space at the end of the text is drawn as the browser types it, as a no-break space, since a
+        // plain one is collapsed, and the caret put behind the last word by End would take it off
+        const end = node.lastChild;
+        if (end instanceof Text && end.data.endsWith(' ')) end.data = `${end.data.slice(0, -1)} `;
         // a text box is written where its empty box was drawn, whose margin from the CSS above may
         // differ from the margin of the theme
         if (p.kind === 'text') {

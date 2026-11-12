@@ -11,6 +11,7 @@ import type { Entry } from '../history.ts';
 import { completionText, completions, contentWithInline, contentWithTex, deckMacros, glyphOf, isName, mathLookup, previewTex, type Macro } from '../math.ts';
 import { popoverBeside, type Side } from '../ui/dialog.ts';
 import { injectStyle, make } from '../ui/dom.ts';
+import { placeCaret } from './typing.ts';
 
 const CSS = `
 .beeson-math { position: fixed; z-index: 70; display: flex; flex-direction: column; gap: 10px; width: min(440px, calc(100vw - 32px)); box-sizing: border-box; padding: 16px 18px 14px; border: 1px solid var(--ed-menu-line, #555); border-radius: 14px; background: var(--ed-panel, #222); color: var(--ed-text, #eee); font: 13px/1.4 var(--ed-font, system-ui, sans-serif); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.14); }
@@ -245,6 +246,13 @@ export function openInsert(app: App, host: Element, range: Range): void {
     primary: 'Insert',
     block: () => blockOf(host),
     commit: async (tex) => {
+      // a new empty box is not in the file yet, hence the formula is typed into it, which writes the
+      // box with the formula as one entry, as typed text is written by commands/insert.ts
+      if (host.classList.contains('beeson-pending')) {
+        placeCaret(host);
+        document.execCommand('insertText', false, `\\(${tex}\\)`);
+        return;
+      }
       const { content, index } = contentWithInline(host, kept, tex);
       await app.history.transact('Insert Inline Formula', () => app.doc.setContent(host, content, 'Inline Formula'));
       const math = host.querySelectorAll('mjx-container')[index];

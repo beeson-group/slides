@@ -734,7 +734,7 @@ export class Steps {
     this.effect = chromeSelect(app, {
       label: 'Effect of the step',
       choices: () => EFFECTS.map(([value, label]) => ({ value, label })),
-      value: () => this.selected()?.effect.id ?? '',
+      value: () => (this.selected()?.stepped ? (this.selected()?.effect.id ?? '') : ''),
       text: () => (this.selected()?.stepped ? (this.selected()?.effect.label ?? '') : '—'),
       onChange: (v) => this.runOn('steps.effect', { effect: v }),
     });
@@ -1049,7 +1049,8 @@ export class Steps {
     this.delay?.sync();
     if (this.delay) this.delay.input.placeholder = new Set(this.picked().filter((r) => r.start === 'after' && !r.final).map((r) => r.delay)).size > 1 ? 'Multiple' : '';
     if (this.effect) {
-      this.effect.disabled = !s?.stepped;
+      // an effect chosen for an element shown with the slide makes it the last step
+      this.effect.disabled = !s;
       (this.effect as HTMLButtonElement & { refresh(): void }).refresh();
     }
     if (this.final) {
@@ -1124,7 +1125,7 @@ export class Steps {
       { label: 'With Previous', checked: start === 'with', disabled: at < 0 || final || first, run: run('steps.start', { start: 'with' }) },
       { label: 'After Previous', checked: start === 'after', disabled: at < 0 || final || first || !afterable(m, r.i), run: run('steps.start', { start: 'after' }) },
       { rule: true },
-      ...EFFECTS.map(([id, label]): MenuItem => ({ label, checked: at >= 0 && effect === id, disabled: at < 0, run: run('steps.effect', { effect: id }) })),
+      ...EFFECTS.map(([id, label]): MenuItem => ({ label, checked: at >= 0 && effect === id, run: run('steps.effect', { effect: id }) })),
       { rule: true },
       { label: 'Show Last', checked: final, run: run('steps.final', { on: !final }) },
       { rule: true },

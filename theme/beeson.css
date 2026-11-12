@@ -164,7 +164,9 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal a:hover { color: var(--accent); }
 .reveal sub, .reveal sup { font-size: 0.7em; line-height: 0; }
 
-/* words in a color of the palette, set with Text Color of the editor */
+/* words in a color of the palette, set with Text Color of the editor. tone-text gives the words of
+   a block drawn in another color, e.g. a small paragraph, the text color */
+.reveal .tone-text { color: var(--text); }
 .reveal .tone-accent { color: var(--accent); }
 .reveal .tone-violet { color: var(--violet); }
 .reveal .tone-blue { color: var(--blue); }
@@ -200,6 +202,8 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal ul.arrows > li::before { top: calc(0.72em - 8px); left: 9px; width: 12px; height: 18px; clip-path: polygon(0 0, 30% 0, 100% 50%, 30% 100%, 0 100%, 70% 50%); }
 /* the number is the counter list-item, which a browser starts from the attribute start of an ol */
 .reveal ol > li::before { content: counter(list-item); position: absolute; left: 0; top: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* an empty item, e.g. the placeholder of a new slide left empty, is drawn without its mark */
+.reveal li:empty::before { content: none; }
 /* an item of a centered list is as wide as its words and centered, so that its mark stays beside them */
 .reveal :is(ul, ol).center > li { width: fit-content; margin-left: auto; margin-right: auto; }
 .reveal li ul, .reveal li ol { margin-top: 10px; font-size: 36px; }
