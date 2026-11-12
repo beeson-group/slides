@@ -17,6 +17,10 @@ import { keepSlide, plural, write } from './files.ts';
 import { loadRecents, pageOf, recentsOfPage, remember } from './recent.ts';
 
 const WATCH_DELAY = 1000;
+// a changed file is read again after SETTLE_DELAY until two reads agree, since a write that is not
+// atomic, e.g. on Windows, can be read half done
+const SETTLE_DELAY = 150;
+const SETTLE_TRIES = 20;
 // the message and the changed slides of a reload of the editor, kept for the page after the reload
 const RELOAD_KEY = `beeson-reload:${pageOf()}`;
 
@@ -97,6 +101,17 @@ export function install(app: App): void {
     return response.ok ? response.text() : null;
   }
 
+  async function readSettled(handle: FileSystemFileHandle | null, first: string): Promise<string | null> {
+    let text: string | null = first;
+    for (let i = 0; i < SETTLE_TRIES; i += 1) {
+      await new Promise((done) => setTimeout(done, SETTLE_DELAY));
+      const next = await readText(handle);
+      if (next === text) return text;
+      text = next;
+    }
+    return text;
+  }
+
   async function isKnown(handle: FileSystemFileHandle | null): Promise<boolean> {
     if (!handle || !known) return false;
     if (handle === known) return true;
@@ -126,13 +141,14 @@ export function install(app: App): void {
     const base = app.source;
     const pairing = app.pairing;
     if (!base || !pairing) return 'same';
-    let disk: string | null;
+    let read: string | null;
     try {
-      disk = await readText(target);
+      read = await readText(target);
     } catch {
       return 'same';
     }
-    if (disk === null || disk === base.text) return 'same';
+    if (read === null || read === base.text) return 'same';
+    const disk = (await readSettled(target, read)) ?? read;
     // a file that is not the one read, and that does not hold the last text seen of the deck either
     if (disk !== diskText && !(await isKnown(target))) return 'other';
     const ours = (): { text: string; edits: Edit[] } => {
@@ -155,7 +171,8 @@ export function install(app: App): void {
       }
       // the file is read again after the card, and the edits are rendered again for the changes
       // made meanwhile outside the slides, e.g. in the Steps pane
-      const now = (await readText(target)) ?? disk;
+      const again = await readText(target);
+      const now = (again === null ? null : await readSettled(target, again)) ?? disk;
       const mine = ours();
       const result = merge(base.text, mine.edits, now, prefer);
       if (!result) return 'other';
@@ -187,7 +204,9 @@ export function install(app: App): void {
         if (file.lastModified === stamp) return;
         stamp = file.lastModified;
       }
-      const text = await readText(handle);
+      const read = await readText(handle);
+      if (read === null || read === diskText || saves !== at || saving) return;
+      const text = await readSettled(handle, read);
       if (text === null || text === diskText || saves !== at || saving) return;
       const changed = changedSlides(diskText, text);
       if (!app.dirty && !document.querySelector('dialog.beeson-edit-card[open], .beeson-math')) {
