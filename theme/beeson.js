@@ -606,7 +606,7 @@
     }
     return { s, t, hit: false };
   }
-  function propagate(s0, h, tmax, path, times, stop, t0 = 0) {
+  function propagate(s0, h, tmax, path, times, stop2, t0 = 0) {
     const s = Float64Array.from(s0);
     let t = 0;
     path.push(s[0], s[1], s[2]);
@@ -615,7 +615,7 @@
       t += step(s, h);
       path.push(s[0], s[1], s[2]);
       times.push(t0 + t);
-      if (stop && stop(s)) break;
+      if (stop2 && stop2(s)) break;
     }
     return s;
   }
@@ -692,7 +692,7 @@
     }
     return x;
   }
-  function lyapunovFamily(n, amplitudes, h, start2 = 3e-3) {
+  function lyapunovFamily(n, amplitudes, h, start3 = 3e-3) {
     const xL = lagrange(n);
     const d1 = Math.abs(xL + MU), d2 = Math.abs(xL - 1 + MU);
     const c2 = (1 - MU) / (d1 * d1 * d1) + MU / (d2 * d2 * d2);
@@ -704,7 +704,7 @@
       return s;
     };
     const sign = n === 1 ? -1 : 1;
-    const lead = ramp(start2, amplitudes[0], 1.2);
+    const lead = ramp(start3, amplitudes[0], 1.2);
     const values = lead.concat(amplitudes).map((A) => xL + sign * A);
     return family(guess, 0, values, [4], [3], h, () => 0.3, () => 6, lead.length);
   }
@@ -2129,8 +2129,8 @@
       const names = words(el.dataset.plotTabs);
       this.offered = this.spec.tabs.map((_, i) => i).filter((i) => !names.length || names.includes(this.spec.tabs[i].name));
       if (!this.offered.length) this.offered = [0];
-      const start2 = this.spec.tabs.findIndex((t) => t.name === el.dataset.plotTab);
-      this.tab = start2 >= 0 ? start2 : this.offered[0];
+      const start3 = this.spec.tabs.findIndex((t) => t.name === el.dataset.plotTab);
+      this.tab = start3 >= 0 ? start3 : this.offered[0];
       this.emphasis = new Set(this.spec.tabs.flatMap((t) => t.active?.flat() ?? []));
       this.build();
     }
@@ -3011,10 +3011,10 @@
     for (let r = 0; r < n; r++) {
       for (let c = 0; c < n; c++) {
         if (!on(r, c)) continue;
-        const start2 = c;
+        const start3 = c;
         while (on(r, c + 1)) c++;
-        const x0 = start2 + QUIET, x1 = c + 1 + QUIET, y = r + QUIET;
-        const tl = on(r - 1, start2) ? 0 : 0.5, tr = on(r - 1, c) ? 0 : 0.5, br = on(r + 1, c) ? 0 : 0.5, bl = on(r + 1, start2) ? 0 : 0.5;
+        const x0 = start3 + QUIET, x1 = c + 1 + QUIET, y = r + QUIET;
+        const tl = on(r - 1, start3) ? 0 : 0.5, tr = on(r - 1, c) ? 0 : 0.5, br = on(r + 1, c) ? 0 : 0.5, bl = on(r + 1, start3) ? 0 : 0.5;
         d += `M${x0 + tl} ${y}H${x1 - tr}${tr ? "a.5 .5 0 0 1 .5 .5" : ""}V${y + 1 - br}${br ? "a.5 .5 0 0 1 -.5 .5" : ""}H${x0 + bl}${bl ? "a.5 .5 0 0 1 -.5 -.5" : ""}V${y + tl}${tl ? "a.5 .5 0 0 1 .5 -.5" : ""}z`;
       }
     }
@@ -3226,16 +3226,16 @@
       }
     }
     const out = [], seen = /* @__PURE__ */ new Set();
-    for (const start2 of links.keys()) {
-      if (seen.has(start2)) continue;
+    for (const start3 of links.keys()) {
+      if (seen.has(start3)) continue;
       const p = [];
-      let cur = start2;
+      let cur = start3;
       while (cur && !seen.has(cur)) {
         seen.add(cur);
         const [x, y] = where.get(cur) ?? [0, 0];
         p.push(x, y);
         const next = links.get(cur)?.find((k) => !seen.has(k));
-        if (!next && close && p.length > 4 && links.get(cur)?.includes(start2)) p.push(p[0], p[1]);
+        if (!next && close && p.length > 4 && links.get(cur)?.includes(start3)) p.push(p[0], p[1]);
         cur = next;
       }
       out.push(p);
@@ -3586,8 +3586,8 @@ void main() {
       this.THREE = THREE;
       this.groove = new THREE.Vector3();
       this.zscale = num3(el.dataset.zscale, fn.zscale);
-      const turn = num3(el.dataset.turn, TURN);
-      this.rate = turn > 0 ? 2 * Math.PI / turn : 0;
+      const turn2 = num3(el.dataset.turn, TURN);
+      this.rate = turn2 > 0 ? 2 * Math.PI / turn2 : 0;
       this.azimuth = num3(el.dataset.azimuth, -60) * Math.PI / 180;
       this.elevation = num3(el.dataset.elevation, 32) * Math.PI / 180;
       this.zoom = num3(el.dataset.zoom, 1);
@@ -4098,8 +4098,8 @@ void main() {
         geometry.setAttribute("end", new THREE.BufferAttribute(new Float32Array(18 * this.capacity), 3).setUsage(THREE.DynamicDrawUsage));
       }
       if (!this.capacity) return;
-      const start2 = geometry.getAttribute("start"), end = geometry.getAttribute("end");
-      const a = start2.array, b = end.array, z = this.shown.level * this.zscale;
+      const start3 = geometry.getAttribute("start"), end = geometry.getAttribute("end");
+      const a = start3.array, b = end.array, z = this.shown.level * this.zscale;
       let k = 0;
       for (const c of curves2) {
         for (let i = 0; i + 3 < c.length; i += 2) {
@@ -4113,7 +4113,7 @@ void main() {
           }
         }
       }
-      for (const attribute of [start2, end]) {
+      for (const attribute of [start3, end]) {
         attribute.clearUpdateRanges();
         attribute.addUpdateRange(0, k);
         attribute.needsUpdate = true;
@@ -4306,6 +4306,7 @@ void main() {
   var words2 = (s) => (s ?? "").split(/\s+/).filter(Boolean);
   var hasContent = (f) => f.children.length > 0 || (f.textContent ?? "").trim() !== "";
   var isCopy = (f) => f.matches("pre > code.fragment");
+  var holdsVideo = (f) => f.matches("video") || !!f.querySelector("video");
   function addRestoreSteps(root2) {
     for (const slide of root2.querySelectorAll(".reveal .slides section")) {
       if (slide.querySelector("section, .fragment[data-restore], .fragment[data-final]")) continue;
@@ -4314,7 +4315,7 @@ void main() {
       const last = unindexed.length ? [unindexed[unindexed.length - 1]] : frags.filter((f) => Number(f.dataset.fragmentIndex) === Math.max(...frags.map((g) => Number(g.dataset.fragmentIndex))));
       const boxes = new Set(frags.filter(isCopy).map((f) => f.parentElement));
       const dimsBox = [...boxes].some((box2) => !last.some((f) => f.parentElement === box2 && isCopy(f)));
-      if (!dimsBox && !frags.some((f) => !last.includes(f) && hasContent(f) && !isCopy(f))) continue;
+      if (!dimsBox && !frags.some((f) => !last.includes(f) && hasContent(f) && !isCopy(f) && !holdsVideo(f))) continue;
       const restore = document.createElement("span");
       restore.className = "fragment";
       restore.setAttribute("data-restore", "");
@@ -4494,6 +4495,122 @@ void main() {
     return !target?.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], tycho-viewer');
   }
 
+  // src/video.ts
+  var FADE = 400;
+  var running = /* @__PURE__ */ new WeakSet();
+  var turns = /* @__PURE__ */ new WeakMap();
+  var turn = 0;
+  var guarded = /* @__PURE__ */ new WeakSet();
+  var HIDES = ".fade-out, .fade-in-then-out:not(.current-fragment), .current-visible:not(.current-fragment)";
+  function stepShown(el, slide) {
+    for (let e = el; e && e !== slide; e = e.parentElement) {
+      if (!e.classList.contains("fragment")) continue;
+      if (!e.classList.contains("visible") || e.matches(HIDES)) return false;
+    }
+    return true;
+  }
+  var mode = (v) => v.classList.contains("for-dark") ? "dark" : v.classList.contains("for-light") ? "light" : "";
+  var coveredBy = (v, later) => !mode(later) || mode(later) === mode(v);
+  function cover(slide) {
+    for (const place2 of slide.querySelectorAll(".zone, .plate")) {
+      const videos = [...place2.children].filter((c) => c instanceof HTMLVideoElement);
+      const shown = videos.map((v) => stepShown(v, slide));
+      videos.forEach((v, i) => {
+        const under = !place2.classList.contains("row") && videos.some((later, j) => j > i && shown[j] && coveredBy(v, later));
+        v.toggleAttribute("data-covered", under);
+      });
+    }
+  }
+  function coverAll(root2) {
+    for (const slide of root2.querySelectorAll(".reveal .slides section")) cover(slide);
+  }
+  var plays = (v, slide) => {
+    if (v.hasAttribute("data-autoplay")) return true;
+    const step2 = v.closest(".fragment.play");
+    return !!step2 && slide.contains(step2);
+  };
+  var ready = (v) => v.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA || v.error !== null;
+  var once = (v, types) => new Promise((done) => {
+    for (const type of types) v.addEventListener(type, () => done(), { once: true });
+  });
+  var sleep2 = (ms) => new Promise((done) => setTimeout(done, ms));
+  async function start(videos) {
+    const mine = ++turn;
+    for (const v of videos) {
+      running.add(v);
+      turns.set(v, mine);
+    }
+    const current = () => videos.filter((v) => turns.get(v) === mine && running.has(v));
+    if (!videos.every(ready)) {
+      for (const v of videos) {
+        v.pause();
+        if (!ready(v)) v.preload = "auto";
+      }
+      await Promise.race([Promise.all(videos.filter((v) => !ready(v)).map((v) => once(v, ["canplay", "error"]))), sleep2(5e3)]);
+    }
+    const seeks = current().filter((v) => v.currentTime > 0).map((v) => {
+      v.currentTime = 0;
+      return once(v, ["seeked", "error"]);
+    });
+    if (seeks.length) await Promise.race([Promise.all(seeks), sleep2(1e3)]);
+    for (const v of current()) v.play().catch(() => {
+    });
+  }
+  function stop(v) {
+    const played = !v.paused || v.currentTime > 0;
+    running.delete(v);
+    turns.delete(v);
+    v.pause();
+    if (!played) return;
+    if (getComputedStyle(v).visibility !== "hidden" && !v.hasAttribute("data-covered")) {
+      v.load();
+      return;
+    }
+    setTimeout(() => {
+      if (!running.has(v) && v.currentTime > 0) v.currentTime = 0;
+    }, FADE + 50);
+  }
+  function guard(v) {
+    if (guarded.has(v)) return;
+    guarded.add(v);
+    v.addEventListener("play", () => {
+      if (!running.has(v)) v.pause();
+    });
+  }
+  function syncVideos(slide, speaker = false) {
+    cover(slide);
+    const starts2 = [];
+    for (const v of slide.querySelectorAll("video")) {
+      if (!plays(v, slide) || speaker && !v.muted) continue;
+      guard(v);
+      if (stepShown(v, slide) && !v.hasAttribute("data-covered")) {
+        if (!running.has(v)) starts2.push(v);
+      } else stop(v);
+    }
+    if (starts2.length) void start(starts2);
+  }
+  function leave(slide) {
+    for (const v of slide.querySelectorAll("video")) {
+      running.delete(v);
+      turns.delete(v);
+    }
+  }
+  function initVideos(deck) {
+    const speaker = deck.isSpeakerNotes();
+    const sync = () => {
+      const slide = deck.getCurrentSlide();
+      if (slide) syncVideos(slide, speaker);
+    };
+    deck.on("slidechanged", (event) => {
+      const previous = event.previousSlide;
+      if (previous && previous !== deck.getCurrentSlide()) leave(previous);
+      sync();
+    });
+    deck.on("fragmentshown", sync);
+    deck.on("fragmenthidden", sync);
+    sync();
+  }
+
   // src/main.ts
   function numberOf(slide) {
     if (slide?.dataset.appendix) return [`A${slide.dataset.appendix}`, "", ""];
@@ -4612,7 +4729,7 @@ void main() {
     }
     applyAll(document);
   }
-  async function start(options = {}) {
+  async function start2(options = {}) {
     const deck = window.Reveal;
     const plugins = [...options.plugins ?? []];
     if (window.RevealNotes && !plugins.includes(window.RevealNotes)) plugins.push(window.RevealNotes);
@@ -4623,6 +4740,7 @@ void main() {
     markViewers();
     deck.on("pdf-ready", () => {
       completeAll();
+      coverAll(document);
       void typeset().then(() => applyAll(document));
       syncViewers(get());
       void stillViewers();
@@ -4647,6 +4765,7 @@ void main() {
       initFullscreen();
       initScrub(deck);
     }
+    if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) initVideos(deck);
     if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: "E", description: "Edit the deck" }, (ev) => {
       if (forDeck(ev)) edit();
     });
@@ -4717,7 +4836,7 @@ void main() {
     document.head.append(script2);
   }
   var Beeson = {
-    start,
+    start: start2,
     theme: { get, set: (theme) => set(theme), toggle: () => toggle() },
     backdrops,
     surfaces,

@@ -18,9 +18,11 @@ import { pptx } from './pptx.mjs';
 
 const [deck = 'index.html', output = 'slides.pptx'] = process.argv.slice(2);
 
-// a step is a .pdf-page. A video that is hidden, or in a step still to come, is left out. Its box is
-// the box of the picture, which is smaller than the element under object-fit: contain, and a video
-// of PowerPoint is stretched to its box
+// a step is a .pdf-page. A video that is hidden, e.g. by the style of its fragment or under a later
+// video of its place, or in a step still to come, is left out. A video of the fragment style play
+// is thus in the image of the steps before its own, with its poster. Its box is the box of the
+// picture, which is smaller than the element under object-fit: contain, and a video of PowerPoint is
+// stretched to its box
 const listSteps = `[...document.querySelectorAll('.pdf-page')].map((step) => {
   const page = step.getBoundingClientRect();
   const notes = [...step.querySelectorAll('aside.notes')]
@@ -28,7 +30,8 @@ const listSteps = `[...document.querySelectorAll('.pdf-page')].map((step) => {
     .map((text) => text.replace(/\\s+/g, ' ').trim())
     .filter(Boolean);
   const videos = [...step.querySelectorAll('video')]
-    .filter((video) => video.getClientRects().length && !video.closest('.fragment:not(.visible)'))
+    .filter((video) => video.getClientRects().length && getComputedStyle(video).visibility !== 'hidden'
+      && !video.closest('.fragment:not(.visible)'))
     .map((video) => {
       const box = video.getBoundingClientRect();
       const [left, top] = getComputedStyle(video).objectPosition.split(' ').map((p) => parseFloat(p) / 100);

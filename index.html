@@ -194,6 +194,21 @@ try {
   <aside class="notes">The stable and the unstable manifolds of an \(\LL{1}\) halo orbit of the Earth–Moon system grow in 20 s and hold for 4 s, in the inertial frame at the top and in the rotating frame at the bottom. The arcs that reach the orbit are blue, the arcs that leave it are orange, the z axis is stretched by five, and the camera turns by 60 degrees in each loop. The clip and its poster are given once for each mode, with the classes for-dark and for-light, since a video does not have a transparent background.</aside>
 </section>
 
+<!-- a video at a step: a clip of the fragment style play shows its poster until its step, and it is started on the click of that step -->
+<section>
+  <h2>Starting a video on a click</h2>
+  <p>With the step style <code>play</code>, a video shows its poster until its step, and it starts there, as on a click in PowerPoint.</p>
+  <ul>
+    <li class="fragment" data-fragment-index="2">Videos of one step are started together, in sync.</li>
+    <li class="fragment" data-fragment-index="3">A video shown later in the same <code>zone</code> takes its place.</li>
+  </ul>
+  <div class="zone">
+    <video class="for-dark fragment play" data-fragment-index="1" src="demo/clip-dark.mp4" poster="demo/clip-dark.png" muted loop></video>
+    <video class="for-light fragment play" data-fragment-index="1" src="demo/clip-light.mp4" poster="demo/clip-light.png" muted loop></video>
+  </div>
+  <aside class="notes">The clip waits on its poster until the first click, and it is played from its start then, together with the clip of the other mode, which is hidden. It is not dimmed at the later steps, since it is still played, and it is paused and rewound to its poster when its step is undone.</aside>
+</section>
+
 <section class="closing">
   <div class="backdrop" data-scene="tubes" data-cx="0.42" data-cy="0" data-half="0.6"></div>
   <div class="block">
