@@ -531,7 +531,7 @@ for (const platform of PLATFORMS) {
     }
     await exec(page, 'arrange.order.back');
     await frames(page);
-    assert.match(await render(page), /<section>\n  <svg class="line"[^\n]*<path d="M0 /);
+    assert.match(await render(page), /<svg class="line"[^>]*z-index: -1[^\n]*<path d="M0 /);
     await undo(page);
     await byteExact(page);
     await exec(page, 'arrange.setRotation', { deg: 30 });
