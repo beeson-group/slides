@@ -335,6 +335,8 @@ type Press = {
   base: Box;
   // the scroll of the canvas at the press
   scroll: { x: number; y: number };
+  // the point of the slide under the pointer at the press, in slide pixels
+  at: { x: number; y: number };
   // what a click without a move does at the release
   click: (() => void) | null;
   handle?: Handle;
@@ -532,6 +534,7 @@ export function install(app: App): void {
       from: new Map(els.map((e) => [e, placeOf(e)])),
       base: els.length ? union(els.map((e) => snapBoxOf(app, e))) : { left: 0, top: 0, width: 0, height: 0 },
       scroll: scrollOf(app),
+      at: { x: (ev.clientX - f.left) / f.scale, y: (ev.clientY - f.top) / f.scale },
     };
     press = p;
     view.hover = null;
@@ -750,10 +753,9 @@ export function install(app: App): void {
       frames.draw();
       return;
     }
-    // the pointer on the slide, which a scroll of the canvas moves too
-    const s = scrollOf(app);
-    let dx = (ev.clientX - p.x + s.x - p.scroll.x) / f.scale;
-    let dy = (ev.clientY - p.y + s.y - p.scroll.y) / f.scale;
+    // the pointer on the slide, which a scroll or a zoom of the canvas moves too
+    let dx = (ev.clientX - f.left) / f.scale - p.at.x;
+    let dy = (ev.clientY - f.top) / f.scale - p.at.y;
     if (p.kind !== 'rotate') app.stage?.edgeScroll(ev, () => press === p && onMove(ev));
     if (p.kind === 'resize') {
       resize(p, ev, dx, dy);

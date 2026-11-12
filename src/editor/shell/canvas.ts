@@ -251,10 +251,10 @@ export function install(app: App): void {
     }
   }
 
-  const setZoom = (next: number | null, about?: { x: number; y: number }, now = false): void => holding(() => {
+  const setZoom = (next: number | null, about?: { x: number; y: number }, now = false, held?: { x: number; y: number }): void => holding(() => {
     const v = viewport();
     const at = about ?? { x: v.left + v.width / 2, y: v.top + v.height / 2 };
-    const before = toSlide(at);
+    const before = held ?? toSlide(at);
     pad = MARGIN;
     zoom = next === null ? null : clamp(hundredth(next), MIN_ZOOM, MAX_ZOOM);
     if (zoom !== null && Math.abs(zoom - fitScale()) < 0.005) zoom = null;
@@ -387,7 +387,11 @@ export function install(app: App): void {
   // of one frame are one zoom, at the zoom that each of them would set in turn
   let pinch: number | null = null;
   const LINE = 16;
-  let wheeled: { zoom: number | null; at: { x: number; y: number } } | null = null;
+  let wheeled: { zoom: number | null; at: { x: number; y: number }; held: { x: number; y: number } } | null = null;
+  // the zoom of a pinch before it is floored to a hundredth, so that its small steps add up, and the
+  // point of the slide held under the pointer, so that the rounding of the scroll does not add up.
+  // both are dropped once the zoom shown is not the one that raw gives
+  let raw: { zoom: number; held: { x: number; y: number } } | null = null;
   let wheelFrame = 0;
   let settling = 0;
   const normal = (z: number): number | null => {
@@ -403,13 +407,18 @@ export function install(app: App): void {
     if (ev.ctrlKey) {
       ev.preventDefault();
       if (pinch !== null) return;
-      const now = (wheeled ? wheeled.zoom : zoom) ?? fitScale();
-      wheeled = { zoom: normal(now * Math.exp(-clamp(dy, -50, 50) / 200)), at: { x: ev.clientX, y: ev.clientY } };
+      const shown = wheeled ? wheeled.zoom : zoom;
+      const kept = raw !== null && normal(raw.zoom) === shown ? raw : null;
+      const at = { x: ev.clientX, y: ev.clientY };
+      const seen = kept && toScreen(kept.held);
+      const held = kept && seen && Math.hypot(seen.x - at.x, seen.y - at.y) < 2 ? kept.held : toSlide(at);
+      raw = { zoom: clamp((kept ? kept.zoom : shown ?? fitScale()) * Math.exp(-clamp(dy, -50, 50) / 200), MIN_ZOOM, MAX_ZOOM), held };
+      wheeled = { zoom: normal(raw.zoom), at, held };
       wheelFrame ||= requestAnimationFrame(() => {
         wheelFrame = 0;
         const w = wheeled;
         wheeled = null;
-        if (w) setZoom(w.zoom, w.at, true);
+        if (w) setZoom(w.zoom, w.at, true, w.held);
       });
       clearTimeout(settling);
       settling = window.setTimeout(settleZoom, 200);
