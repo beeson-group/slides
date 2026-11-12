@@ -363,7 +363,7 @@ for (const platform of PLATFORMS) {
     await frames(page);
     const titles = await page.evaluate(`[...document.querySelectorAll('${PANEL} h5')].map((h) => h.textContent)`);
     assert.ok(titles.includes('Backdrop'), `the Slide pane has ${titles}`);
-    assert.ok((await page.evaluate(`document.querySelector('${PANEL}').textContent`)).includes('Nest'));
+    assert.ok((await page.evaluate(`document.querySelector('${PANEL}').textContent`)).includes('Lyapunov Families'));
     await tap(page, 'Select');
     assert.deepEqual(await selected(page), ['backdrop']);
     for (const [id, label] of [['backdrop.edit', 'Edit Window'], ['backdrop.fitWindow', 'Fit Window'], ['backdrop.preview', 'Preview']]) {
@@ -386,7 +386,7 @@ for (const platform of PLATFORMS) {
     const ROWS = '.beeson-edit-objects .row';
     const rowsOf = () => page.evaluate(`[...document.querySelectorAll('${ROWS}')].map((r) => [r.dataset.kind, r.querySelector('.name').textContent, r.getAttribute('aria-selected')])`);
     const names = await rowsOf();
-    assert.deepEqual(names.at(-1).slice(0, 2), ['Backdrop', 'Backdrop: Nest']);
+    assert.deepEqual(names.at(-1).slice(0, 2), ['Backdrop', 'Backdrop: Lyapunov Families']);
     assert.equal(names.filter((r) => r[0] === 'Backdrop').length, 1);
     const rowAt = (i) => page.evaluate(`(() => { const r = [...document.querySelectorAll('${ROWS}')].at(${i}).getBoundingClientRect(); return { x: r.left + r.width / 3, y: r.top + r.height / 2 }; })()`);
     await click(page, await rowAt(-1));

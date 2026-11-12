@@ -113,7 +113,7 @@ for (const platform of PLATFORMS) {
     const ROWS = '.beeson-edit-objects .row';
     const rowAt = (name) => page.evaluate(`(() => { const r = [...document.querySelectorAll('${ROWS}')].find((r) => r.querySelector('.name').textContent.startsWith(${JSON.stringify(name)})).getBoundingClientRect(); return { x: r.left + r.width / 3, y: r.top + r.height / 2 }; })()`);
     const P = 'Text: A paragraph';
-    const B = 'Backdrop: Nest';
+    const B = 'Backdrop: Lyapunov Families';
     for (const modifiers of ['Mod', 'Shift']) {
       await click(page, await rowAt(P));
       assert.deepEqual(await selected(page), ['p']);
