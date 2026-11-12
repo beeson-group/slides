@@ -1,14 +1,12 @@
-// the work of R12.1 on both platforms: the contrast of text measured in the accessibility checker
-// against the tokens of each mode, whatever mode is shown and whether the deck is served or opened
-// from a file, the menu key and the focus in the checker after a fix, and the focus rings of the
-// Go to Slide field, of the popover of the presenter display, and of the bars of the chrome
+// the work of R12.1 on both platforms: the focus rings of the Go to Slide field, of the popover of
+// the presenter display, and of the bars of the chrome
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, deckUrl, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { click, contrast, press } from './helpers/editor.mjs';
+import { contrast, press } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 
@@ -25,9 +23,7 @@ after(async () => {
 
 const js = (v) => JSON.stringify(v);
 const frames = (page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => d(true))))');
-const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 const exec = (page, id, arg) => page.evaluate(`Promise.resolve(window.BeesonEditor.exec(${js(id)}${arg !== undefined ? `, ${js(arg)}` : ''})).then(() => true)`);
-const render = (page) => page.evaluate('window.BeesonEditor.render()');
 const errors = (page) => page.errors.filter((e) => !e.includes('favicon.ico'));
 
 // the editor on index.html, served over HTTP or opened from its file, with query in its URL. the
@@ -45,119 +41,6 @@ async function load(t, { query, file = false, source = readFileSync('index.html'
   await frames(page);
   return page;
 }
-
-const rowsOf = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-a11y .item')].map((r) => r.dataset.check + ' ' + r.querySelector('.what').textContent)`);
-const readout = (page) => page.evaluate(`document.querySelector('.beeson-edit-bottom .a11y').textContent`);
-
-// shell-1 and dialogs-undo-a11y-1: in light mode, and on a deck opened from a file, every text was
-// measured against black, and the checker listed 90 rows of 1.1:1
-for (const platform of PLATFORMS) {
-  test(`the checker lists the same contrast rows in either mode, served or opened from a file (${platform})`, async (t) => {
-    const seen = new Map();
-    for (const file of [false, true]) {
-      for (const theme of ['dark', 'light']) {
-        const page = await load(t, { query: `edit&still&theme=${theme}&edit-platform=${platform}`, file });
-        await sleep(700);
-        const where = `${file ? 'file' : 'http'} ${theme}`;
-        const before = await readout(page);
-        await exec(page, 'view.accessibility');
-        await frames(page);
-        const rows = await rowsOf(page);
-        assert.ok(rows.every((r) => !/ 1\.\d:1 /.test(r)), `${where}: ${rows.slice(0, 3).join(' | ')}`);
-        seen.set(where, rows);
-        const state = /Investigate/.test(await page.evaluate(`document.querySelector('.beeson-edit-a11y .status').textContent`)) ? 'Investigate' : 'Good to go';
-        assert.equal(before, `Accessibility: ${state}`, where);
-        assert.equal(await page.evaluate(`document.documentElement.dataset.theme`), theme);
-        assert.equal(await render(page), page.source);
-        assert.deepEqual(errors(page), []);
-        await page.close();
-      }
-    }
-    const [first] = seen.values();
-    for (const [where, rows] of seen) assert.deepEqual(rows, first, where);
-  });
-}
-
-// shell-1: after D flips the shown mode, the readout of the status bar is the same as before
-for (const platform of PLATFORMS) {
-  test(`the readout of the checker does not change with the mode shown (${platform})`, async (t) => {
-    const page = await load(t, { query: `edit&still&theme=dark&edit-platform=${platform}`, file: true });
-    await sleep(700);
-    const first = await readout(page);
-    for (const theme of ['light', 'dark']) {
-      await click(page, { x: 210, y: 500 });
-      await press(page, 'D');
-      await page.waitFor(`document.documentElement.dataset.theme === ${js(theme)}`);
-      await sleep(900);
-      assert.equal(await readout(page), first, theme);
-    }
-    assert.equal(await render(page), page.source);
-    assert.deepEqual(errors(page), []);
-  });
-}
-
-// the demo deck with the alt text of its two images taken off, in the page and in the file
-const BARE = readFileSync('index.html', 'utf8').replace(/(<img class="for-(?:dark|light)" src="demo\/figure-(?:dark|light)\.png") alt="[^"]*"/g, '$1');
-const STRIP = `(() => { for (const img of document.querySelectorAll('.reveal img[src^="demo/figure-"]')) img.removeAttribute('alt'); return true; })()`;
-const active = (page) => page.evaluate(`(() => { const a = document.activeElement; return { tag: a.localName, inPane: !!a.closest('.beeson-edit-a11y'), row: a.matches('[role="treeitem"]') ? a.textContent : null }; })()`);
-const menuLabel = (page) => page.evaluate(`document.querySelector('[role="menu"]')?.getAttribute('aria-label') ?? null`);
-
-// the row of the second image under Missing alternative text, reached by the keyboard
-async function altRow(t, platform) {
-  assert.notEqual(BARE, readFileSync('index.html', 'utf8'));
-  const page = await load(t, { query: `edit&still&theme=dark&edit-platform=${platform}`, source: BARE, prepare: STRIP });
-  await exec(page, 'view.accessibility');
-  await frames(page);
-  assert.match((await active(page)).row ?? '', /Missing alternative text2/);
-  await press(page, 'ArrowRight');
-  await press(page, 'ArrowDown');
-  assert.match((await active(page)).row ?? '', /figure-light\.png/);
-  return page;
-}
-
-// dialogs-undo-a11y-3: after Enter on a row, its image is selected, and the menu key opened the
-// menu of the image in place of the fixes of the row
-for (const platform of PLATFORMS) {
-  for (const key of ['Shift+F10', 'ContextMenu']) {
-    test(`${key} on a row of the checker opens its fixes after Enter has selected its image (${platform})`, async (t) => {
-      const page = await altRow(t, platform);
-      await press(page, 'Enter');
-      await page.waitFor(`window.BeesonEditor.selection().length === 1`);
-      assert.ok((await active(page)).inPane);
-      if (key === 'ContextMenu') {
-        const base = { key: 'ContextMenu', code: 'ContextMenu', windowsVirtualKeyCode: 93 };
-        await page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...base });
-        await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
-      } else await press(page, key);
-      await page.waitFor(`!!document.querySelector('[role="menu"]')`);
-      assert.equal(await menuLabel(page), 'Fixes');
-      assert.equal(await render(page), page.source);
-      assert.deepEqual(errors(page), []);
-    });
-  }
-}
-
-// dialogs-undo-a11y-4: after a fix chosen by the keyboard, the focus fell to the body
-for (const platform of PLATFORMS) {
-  test(`after Mark as Decorative by the keyboard, the focus stays on a row of the checker (${platform})`, async (t) => {
-    const page = await altRow(t, platform);
-    await press(page, 'Shift+F10');
-    await page.waitFor(`document.querySelector('[role="menu"]')?.getAttribute('aria-label') === 'Fixes'`);
-    await press(page, 'ArrowDown');
-    await page.waitFor(`document.getElementById(document.activeElement.getAttribute('aria-activedescendant'))?.textContent.startsWith('Mark as Decorative')`);
-    await press(page, 'Enter');
-    await page.waitFor(`document.querySelector('.beeson-edit-a11y .check[data-check="alt"] .n')?.textContent === '1'`);
-    await frames(page);
-    const at = await active(page);
-    assert.ok(at.inPane && at.row, JSON.stringify(at));
-    assert.match(at.row, /figure-dark\.png|Missing alternative text1/);
-    await press(page, 'ArrowUp');
-    assert.ok((await active(page)).inPane);
-    assert.notEqual(await render(page), page.source);
-    assert.deepEqual(errors(page), []);
-  });
-}
-
 // the outline of the focused element, and the color of --ed-focus beside it
 const RING = `(() => {
   const a = document.activeElement;

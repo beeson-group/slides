@@ -1,8 +1,8 @@
 // the show and the review of a deck on both platforms: the steps and times of the presenter view,
 // Present at the current slide, the presenter view, a rehearsal that writes data-timing, the
-// transitions None and Fade, Magic Move, the accessibility checker, and the light table. each edit
-// is checked byte for byte, after an undo and a redo, and after a save and an open of the saved
-// text. the system clipboard is not used
+// transitions None and Fade, Magic Move, and the Chapters Table. each edit is checked byte for
+// byte, after an undo and a redo, and after a save and an open of the saved text. the system
+// clipboard is not used
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -11,13 +11,11 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { duration, seconds, seenAt, stepsOf } from '../src/editor/present.ts';
 import { groupsOf } from '../src/editor/navigator/sorter.ts';
-import { byteExact, click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
 const SOURCE = readFileSync(LAYOUTS, 'utf8');
-const PAPER = '<img class="paper" src="../../demo/figure-light.png" alt="A white raster figure">';
-const BARE = '<img class="paper" src="../../demo/figure-light.png">';
 const NARROW = '<section class="narrow">';
 const WIDE = '<section class="wide">';
 
@@ -97,20 +95,6 @@ async function saved(page) {
   const { text } = await saveAndReopen(page, `review-${++saves}.html`);
   assert.equal(text, before);
   page.source = text;
-}
-
-// a click on the item of an open menu whose label starts with name
-async function choose(page, name) {
-  const at = await page.evaluate(`(() => {
-    const items = [...document.querySelectorAll('[role="menu"] .item')];
-    const item = items.find((i) => i.textContent.trim().startsWith(${JSON.stringify(name)}));
-    if (!item) return null;
-    const r = item.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-  })()`);
-  assert.ok(at, `an open menu does not have an item ${name}`);
-  await click(page, at);
-  await frames(page);
 }
 
 // the labels of the items of the menu of the menu bar title name, opened with a click
@@ -257,51 +241,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`the checker lists an image without alt text, and Add Alt Text writes it on ${platform}`, async () => {
-    const text = SOURCE.replace(PAPER, BARE);
-    const page = await reviewPage(platform, 0, text, `document.querySelector('.reveal img.paper').removeAttribute('alt')`);
-    await exec(page, 'view.accessibility');
-    await frames(page);
-    const rows = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-a11y .item')].map((r) => r.dataset.check + ' ' + r.querySelector('.what').textContent)`);
-    assert.deepEqual(rows, ['alt Image figure-light.png Slide 7']);
-    assert.match(await page.evaluate(`document.querySelector('.beeson-edit-a11y .status').textContent`), /1 error/);
-    await click(page, '.beeson-edit-a11y .item .fix');
-    await choose(page, 'Add Alt Text');
-    await page.waitFor(`document.activeElement?.matches('.beeson-edit-a11y .alt input')`);
-    await type(page, 'A paper figure');
-    await press(page, 'Enter');
-    await page.waitFor(`!document.querySelector('.beeson-edit-a11y .item')`);
-    const alt = [[BARE, '<img class="paper" src="../../demo/figure-light.png" alt="A paper figure">']];
-    await roundTrip(page, alt);
-    await saved(page);
-    assert.match(await page.evaluate(`document.querySelector('.beeson-edit-a11y .status').textContent`), /Good to go/);
-    assert.deepEqual(errors(page), []);
-  });
-
-  test(`the checker finds a slide without a heading, a table without a header row, and a video without a poster on ${platform}`, async () => {
-    const text = SOURCE.replace('<h2>A narrow slide</h2>', '<p>A narrow slide</p>')
-      .replace('poster="../../demo/clip-dark.png" muted loop></video>', 'muted loop></video>');
-    const page = await reviewPage(platform, 0, text, `(() => {
-      const h = [...document.querySelectorAll('.reveal h2')].find((e) => e.textContent === 'A narrow slide');
-      const p = document.createElement('p');
-      p.textContent = h.textContent;
-      h.replaceWith(p);
-      document.querySelector('.reveal section.split video').removeAttribute('poster');
-    })()`);
-    await exec(page, 'view.accessibility');
-    await frames(page);
-    const checks = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-a11y .item')].map((r) => r.dataset.check)`);
-    assert.deepEqual(checks, ['heading', 'poster']);
-    // the table of slide 6 has a header row of th cells
-    assert.ok(SOURCE.includes('<th>'));
-    await click(page, '.beeson-edit-a11y .item[data-check="heading"]');
-    assert.equal(await page.evaluate('Reveal.getIndices().h'), 4);
-    assert.match(await page.evaluate(`document.querySelector('.beeson-edit-a11y .info').textContent`), /Why fix/);
-    await press(page, 'Escape');
-    assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-a11y').hidden`), true);
-  });
-
-  test(`the light table groups the slides under the section slides, and a drag moves a slide on ${platform}`, async () => {
+  test(`the Chapters Table groups the slides under the section slides, and a drag moves a slide on ${platform}`, async () => {
     const page = await reviewPage(platform, 4);
     await exec(page, 'view.lightTable');
     await frames(page);
@@ -327,7 +267,7 @@ for (const platform of PLATFORMS) {
     await redo(page);
     assert.equal(await render(page), moved);
     await saved(page);
-    // Return shows the slide on the canvas and closes the light table
+    // Return shows the slide on the canvas and closes the Chapters Table
     await page.evaluate(`document.querySelector('${tile(3)}').focus()`);
     await press(page, 'Enter');
     await frames(page);
@@ -337,7 +277,7 @@ for (const platform of PLATFORMS) {
   });
 }
 
-test('the groups of the light table follow the section and closing slides', () => {
+test('the groups of the Chapters Table follow the section and closing slides', () => {
   const s = (cls = '', h = '') => ({ classList: { contains: (c) => cls.split(' ').includes(c) }, querySelectorAll: () => (h ? [{ textContent: h, closest: () => null }] : []) });
   const deck = [s('title', 'T'), s(), s('section', 'One'), s(), s('section', 'Two'), s('closing', 'Bye'), s(), s('section', 'Late')];
   assert.deepEqual(groupsOf(deck).map((g) => [g.title, g.slides.length]), [['Opening', 2], ['One', 2], ['Two', 2], ['Appendix', 2]]);

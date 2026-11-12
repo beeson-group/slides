@@ -1,8 +1,7 @@
 // tests of R7.6 on both platforms with trusted input: Slide Only in the View menu and the View
-// popup, the tick at 100% of the zoom slider, the sheet Customize Toolbar with its layout kept for
-// the deck, the docked accessibility pane opened from its state in the status bar, and the scopes
-// of Find. the settings do not change the file, and after an edit of the file the text is checked
-// byte for byte, after an undo and a redo, and after a save and an open
+// button, the tick at 100% of the zoom slider, the sheet Customize Toolbar with its layout kept for
+// the deck, and the scopes of Find. the settings do not change the file, and after an edit of the
+// file the text is checked byte for byte, after an undo and a redo, and after a save and an open
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -15,8 +14,6 @@ const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
 const DARK = 'alt="A figure, dark version"';
 const LIGHT = 'alt="A figure, light version"';
-const PAPER = '<img class="paper" src="../../demo/figure-light.png" alt="A white raster figure">';
-const BARE = '<img class="paper" src="../../demo/figure-light.png">';
 
 let browser;
 let server;
@@ -110,7 +107,7 @@ const KEY = `beeson-edit-toolbar:/${LAYOUTS}`;
 const kept = (page) => page.evaluate(`JSON.parse(localStorage.getItem(${js(KEY)}) ?? 'null')`);
 
 for (const platform of PLATFORMS) {
-  test(`Slide Only of the View menu and the View popup hides the navigator, leaves the inspector open, and shows the navigator again (${platform})`, async (t) => {
+  test(`Slide Only of the View menu hides the navigator and leaves the inspector open, and the View button shows the navigator again (${platform})`, async (t) => {
     const page = await load(t, platform);
     const canvas = await boxOf(page, '.beeson-edit-canvas');
     assert.deepEqual(await panes(page), { navigator: true, format: true, steps: false, slideOnly: false });
@@ -121,14 +118,14 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await panes(page), { navigator: false, format: true, steps: false, slideOnly: true });
     const wide = await boxOf(page, '.beeson-edit-canvas');
     assert.ok(wide.w > canvas.w + 150, `the canvas is ${wide.w} px wide in Slide Only and ${canvas.w} px before`);
-    // the View popup of the toolbar lists Slide Only checked after Navigator, and shows the panes again
-    await click(page, '.beeson-edit-top [data-command="toolbar.view"]');
+    // the View button of the toolbar is not pressed in Slide Only, and its main part shows the
+    // navigator again
+    const view = '.beeson-edit-top [data-command="toolbar.view"]';
+    assert.equal(await page.evaluate(`document.querySelector(${js(view)}).getAttribute('aria-pressed')`), 'false');
+    await click(page, view);
     await frames(page);
-    const popup = await menuLabels(page);
-    assert.deepEqual(popup.slice(0, 2), ['Navigator', 'Slide Only']);
-    assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item')].find((i) => i.querySelector('.label')?.textContent === 'Slide Only').getAttribute('aria-checked')`), 'true');
-    await choose(page, 'Slide Only');
     assert.deepEqual(await panes(page), { navigator: true, format: true, steps: false, slideOnly: false });
+    assert.equal(await page.evaluate(`document.querySelector(${js(view)}).getAttribute('aria-pressed')`), 'true');
     assert.equal((await boxOf(page, '.beeson-edit-canvas')).w, canvas.w);
     // the Steps tab is kept open through Slide Only
     await exec(page, 'view.steps');
@@ -284,48 +281,6 @@ for (const platform of PLATFORMS) {
     assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-customize').hidden`), true);
     assert.equal(await kept(page), null);
     assert.equal(await render(page), page.source);
-    assert.deepEqual(errors(page), []);
-  });
-
-  test(`the state of accessibility in the status bar opens the docked pane, where a fix turns it to Good to go (${platform})`, async (t) => {
-    const text = readFileSync(LAYOUTS, 'utf8').replace(PAPER, BARE);
-    const page = await load(t, platform, { text, change: `document.querySelector('.reveal img.paper').removeAttribute('alt')` });
-    const status = '.beeson-edit-bottom .a11y';
-    await page.waitFor(`!document.querySelector(${js(status)}).hidden && document.querySelector(${js(status)}).textContent === 'Accessibility: Investigate'`);
-    const canvas = await boxOf(page, '.beeson-edit-canvas');
-    await click(page, status);
-    await frames(page);
-    assert.equal(await page.evaluate(`document.querySelector(${js(status)}).getAttribute('aria-pressed')`), 'true');
-    // the pane is docked between the canvas and the inspector, which keeps its place
-    const pane = await boxOf(page, '.beeson-edit-a11y');
-    const inspector = await boxOf(page, '.beeson-edit-inspector');
-    const shrunk = await boxOf(page, '.beeson-edit-canvas');
-    assert.ok(Math.abs(pane.right - inspector.x) <= 1, `the pane ends at ${pane.right} and the inspector starts at ${inspector.x}`);
-    assert.ok(Math.abs(shrunk.right - pane.x) <= 1, `the canvas ends at ${shrunk.right} and the pane starts at ${pane.x}`);
-    assert.ok(Math.abs(shrunk.w + pane.w - canvas.w) <= 1);
-    assert.ok(pane.y < shrunk.y + 1 && pane.bottom >= shrunk.bottom, 'the pane runs the height of the canvas');
-    assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-a11y').getAttribute('role')`), 'complementary');
-    // Add Alt Text writes the alt, and the state turns to Good to go
-    await click(page, '.beeson-edit-a11y .item .fix');
-    await frames(page);
-    await choose(page, 'Add Alt Text');
-    await page.waitFor(`document.activeElement?.matches('.beeson-edit-a11y .alt input')`);
-    await type(page, 'A paper figure');
-    await press(page, 'Enter');
-    await page.waitFor(`!document.querySelector('.beeson-edit-a11y .item')`);
-    await page.waitFor(`document.querySelector(${js(status)}).textContent === 'Accessibility: Good to go'`);
-    // the close button of the pane hides it, and the canvas takes its width back
-    await click(page, '.beeson-edit-a11y .title .close');
-    await frames(page);
-    assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-a11y').hidden`), true);
-    assert.equal((await boxOf(page, '.beeson-edit-canvas')).w, canvas.w);
-    assert.equal(await page.evaluate(`document.querySelector(${js(status)}).getAttribute('aria-pressed')`), 'false');
-    // an undo and a redo with the pane closed are seen in the state
-    await press(page, 'Mod+Z');
-    await page.waitFor(`document.querySelector(${js(status)}).textContent === 'Accessibility: Investigate'`);
-    await press(page, platform === 'mac' ? 'Mod+Shift+Z' : 'Mod+Y');
-    await page.waitFor(`document.querySelector(${js(status)}).textContent === 'Accessibility: Good to go'`);
-    await roundTrip(page, [[BARE, '<img class="paper" src="../../demo/figure-light.png" alt="A paper figure">']]);
     assert.deepEqual(errors(page), []);
   });
 

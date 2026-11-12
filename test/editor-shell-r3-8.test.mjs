@@ -1,9 +1,9 @@
 // the findings of round 1 of the council on the shell, the navigator, and the place of an insert,
 // on both platforms: the scroll bars of a zoomed canvas, the inspector at the start, the View and
-// Zoom popups of the toolbar, the numbers and the skipped slides of the navigator, the outline
-// view, the popover of Add Slide, the place of a new text box and QR code, the keyboard sheet, the
-// history after an empty box, Paste Style on a step, and the brand images of the thumbnails. each
-// edit is checked byte for byte, after an undo and a redo, and after a save and an open
+// Zoom popups of the toolbar, the numbers and the skipped slides of the navigator, the popover of
+// Add Slide, the place of a new text box and QR code, the keyboard sheet, the history after an
+// empty box, Paste Style on a step, and the brand images of the thumbnails. each edit is checked
+// byte for byte, after an undo and a redo, and after a save and an open
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -571,19 +571,19 @@ for (const platform of PLATFORMS) {
     assert.equal(bar.fits, true, 'the toolbar is wider than 1280 px');
     assert.equal(bar.rows, 1);
     assert.equal(bar.labels, true);
-    // the View popup opens under its button with the views and the panes
-    const view = '.beeson-edit-top [data-command="toolbar.view"]';
-    await click(page, view);
+    // the arrow of the View button opens its menu under the button, since R22.1 with the Chapters
+    // Table, the rulers, and the gridlines
+    const view = '.beeson-edit-split:has(> [data-command="toolbar.view"])';
+    await click(page, `${view} .more`);
     await frames(page);
     const b = await rectOf(page, view);
     const m = await rectOf(page, '.beeson-edit-menu');
     assert.ok(m && m.top >= b.bottom - 1 && m.top - b.bottom < 12 && Math.abs(m.left - b.left) < 12, `the View menu is at ${JSON.stringify(m)} under ${JSON.stringify(b)}`);
     const items = await openMenuItems(page);
-    for (const label of ['Navigator', 'Outline', 'Light Table', 'Format', 'Steps', 'Notes']) assert.ok(items.some((i) => i.label === label), `the View popup has no ${label}: ${JSON.stringify(items)}`);
-    assert.equal(items.find((i) => i.label === 'Navigator').checked, true);
-    await pickItem(page, 'Notes');
+    assert.deepEqual(items.map((i) => i.label), ['Chapters Table', 'Rulers', 'Gridlines']);
+    await pickItem(page, 'Rulers');
     await frames(page);
-    assert.equal((await state(page, 'view.notes')).checked, true);
+    assert.equal((await state(page, 'view.rulers')).checked, true);
     // the Zoom popup shows the zoom, and sets a level or Fit
     const zoom = '.beeson-edit-top [data-command="toolbar.zoom"]';
     const face = () => page.evaluate(`document.querySelector('${zoom} .readout').textContent`);
@@ -633,98 +633,6 @@ for (const platform of PLATFORMS) {
     assert.ok(Math.abs(start.left - 32) < 1.5 && Math.abs(start.top - 32) < 1.5, `at the upper left the pasteboard is ${JSON.stringify(start)}`);
     const end = await edges(page, 'max', 'max');
     assert.ok(Math.abs(end.right - 32) < 1.5 && Math.abs(end.bottom - 32) < 1.5, `at the lower right the pasteboard is ${JSON.stringify(end)}`);
-    assert.equal(await render(page), page.source);
-    assert.deepEqual(errors(page), []);
-  });
-}
-
-// the lines of the outline of slide n: their kind, level, text, and whether they are dimmed
-const outlineOf = (page, n) =>
-  page.evaluate(`[...document.querySelectorAll('.beeson-edit-outline .slide')[${n}].querySelectorAll('.line')].map((l) => ({
-    kind: [...l.classList].find((c) => ['title', 'para', 'item', 'other'].includes(c)),
-    depth: Number(l.style.getPropertyValue('--depth')),
-    // the TeX of a line whose math is typeset is in its data-tex
-    text: l.querySelector('.text').dataset.tex ?? l.querySelector('.text').textContent,
-    dim: l.classList.contains('dim'),
-  }))`);
-const focusLine = (page, n, text) =>
-  page.evaluate(`(() => {
-    const t = [...document.querySelectorAll('.beeson-edit-outline .slide')[${n}].querySelectorAll('.text')].find((t) => t.textContent === ${JSON.stringify(text)});
-    t.scrollIntoView({ block: 'center' });
-    const r = t.getBoundingClientRect();
-    return { x: r.right - 4, y: r.top + r.height / 2 };
-  })()`);
-const caretToEnd = (page) => page.evaluate(`(() => { const t = document.activeElement; const r = document.createRange(); r.selectNodeContents(t); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); })()`);
-const liveItem = (page, text) =>
-  page.evaluate(`(() => { const li = [...document.querySelectorAll('.reveal section.present li')].find((l) => l.firstChild?.textContent?.trim() === ${JSON.stringify(text)}); return li ? { depth: li.parentElement.closest('li') ? 2 : 1, parent: li.parentElement.closest('li')?.firstChild.textContent.trim() ?? null } : null; })()`);
-
-for (const platform of PLATFORMS) {
-  test(`the outline view lists the headings and the text column of each slide, and edits them in place (${platform})`, async (t) => {
-    const page = await load(t, platform, { n: 2 });
-    const total = (await navRows(page)).length;
-    await exec(page, 'view.outline');
-    await frames(page);
-    assert.equal((await state(page, 'view.outline')).checked, true);
-    assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-outline .slide').length`), total);
-    assert.equal(await page.evaluate(`getComputedStyle(document.querySelector('.beeson-edit-nav .rows')).display`), 'none');
-    assert.deepEqual(await outlineOf(page, 2), [
-      { kind: 'title', depth: 0, text: 'Text, a list, and a backdrop', dim: false },
-      { kind: 'para', depth: 1, text: 'A paragraph with bold, italic, code, and \\(x^2\\) inline.', dim: false },
-      { kind: 'item', depth: 1, text: 'A first item', dim: false },
-      { kind: 'item', depth: 1, text: 'A second item', dim: false },
-      { kind: 'item', depth: 2, text: 'A nested item', dim: false },
-      { kind: 'para', depth: 1, text: 'A small paragraph.', dim: false },
-    ]);
-    // a formula is not edited in the outline, and its line is dimmed
-    assert.deepEqual((await outlineOf(page, 3)).find((l) => l.kind === 'other'), { kind: 'other', depth: 1, text: 'Formula', dim: true });
-    // a heading typed in the outline is written into the slide when the field is left
-    await click(page, await focusLine(page, 2, 'Text, a list, and a backdrop'));
-    await caretToEnd(page);
-    await type(page, ', edited');
-    await press(page, 'Escape');
-    await sleep(150);
-    const titled = await render(page);
-    assert.ok(titled.includes('<h2>Text, a list, and a backdrop, edited</h2>'), titled.slice(0, 2000));
-    assert.equal(await page.evaluate(`document.querySelector('.reveal section.present h2').textContent`), 'Text, a list, and a backdrop, edited');
-    // Return at the end of an item adds an item after it, Tab puts it under the item, and
-    // Shift+Tab takes it out again
-    await click(page, await focusLine(page, 2, 'A first item'));
-    await caretToEnd(page);
-    await press(page, 'Enter');
-    await sleep(150);
-    await type(page, 'An inserted item');
-    await press(page, 'Tab');
-    await sleep(150);
-    assert.deepEqual(await liveItem(page, 'An inserted item'), { depth: 2, parent: 'A first item' });
-    assert.deepEqual((await outlineOf(page, 2))[3], { kind: 'item', depth: 2, text: 'An inserted item', dim: false });
-    await press(page, 'Shift+Tab');
-    await sleep(150);
-    assert.deepEqual(await liveItem(page, 'An inserted item'), { depth: 1, parent: null });
-    await press(page, 'Escape');
-    await sleep(150);
-    const edited = await render(page);
-    assert.match(edited, /<li class="fragment" data-fragment-index="1">A first item<\/li>\n    <li class="fragment" data-fragment-index="1">An inserted item<\/li>\n/);
-    await savedAs(page, edited);
-    // Return at the end of a heading adds a slide after it, with its heading in the outline focused
-    await click(page, await focusLine(page, 2, 'Text, a list, and a backdrop, edited'));
-    await caretToEnd(page);
-    await press(page, 'Enter');
-    await sleep(250);
-    assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-outline .slide').length`), total + 1);
-    assert.equal(await count(page), `Slide 4 of ${total + 1}`);
-    assert.equal(await page.evaluate(`document.activeElement.closest('.beeson-edit-outline .slide') === document.querySelectorAll('.beeson-edit-outline .slide')[3] && document.activeElement.closest('.line').classList.contains('title')`), true);
-    assert.deepEqual(errors(page), []);
-  });
-}
-
-for (const platform of PLATFORMS) {
-  test(`the outline leaves out the generated outline of a section slide, and a dimmed line keeps its math (${platform})`, async (t) => {
-    const page = await load(t, platform, { deck: 'index.html', n: 1 });
-    await exec(page, 'view.outline');
-    await frames(page);
-    assert.deepEqual(await outlineOf(page, 1), [{ kind: 'title', depth: 0, text: 'Chapter one', dim: false }]);
-    // a colored span is not edited in the outline, but its line shows the TeX of the math next to it
-    assert.deepEqual((await outlineOf(page, 3)).find((l) => l.text.includes('Coriolis')), { kind: 'para', depth: 1, text: 'The Coriolis terms couple \\(x\\) and \\(y\\).', dim: true });
     assert.equal(await render(page), page.source);
     assert.deepEqual(errors(page), []);
   });

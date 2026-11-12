@@ -279,6 +279,8 @@ for (const platform of PLATFORMS) {
     const count = await older.evaluate(`document.querySelectorAll('.reveal .slides > section').length`);
     const legacy = Array.from({ length: count }, (_, i) => ({ x: i === MATH ? [640] : [], y: [] }));
     await older.evaluate(`localStorage.setItem(${JSON.stringify(key)}, ${JSON.stringify(JSON.stringify(legacy))})`);
+    // the guides are drawn and added while the rulers are shown
+    await older.evaluate(`localStorage.setItem('beeson-edit-rulers', '1')`);
     // a page opened after it reads the guide at its start
     const first = await editor(platform, { keep: true });
     // a newer session in another tab adds a guide at y 300, which writes both guides into its file

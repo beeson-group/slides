@@ -60,7 +60,7 @@ test('a deck without ?edit does not load the editor, with ?edit it does on file:
   const status = await page.evaluate('window.BeesonEditor.status()');
   assert.equal(status.supported, true);
   assert.equal(status.state, 'waiting');
-  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].filter((b) => !b.hidden).map((b) => b.textContent.replace(/^\\d+%/, '%'))`), ['View', '%Zoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', '', 'Media', '', 'Preview', '', 'Present', 'Save', 'Format', 'Steps']);
+  assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].filter((b) => !b.hidden).map((b) => b.textContent.replace(/^\\d+%/, '%'))`), ['View', '', '%Zoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', '', 'Media', '', 'Preview', '', 'Present', 'Save', 'Format', 'Steps']);
   // the card asks for the file, with the folder of the deck
   assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-card').hidden`), false);
   assert.match(await page.evaluate(`document.querySelector('.beeson-edit-card p').textContent`), /index\.html in \//);
@@ -914,10 +914,10 @@ test('the toggles, the state, the notes, and the formula dialog carry their stat
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
   const pressed = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-header button, .beeson-edit-bottom button')].filter((b) => b.hasAttribute('aria-pressed')).map((b) => [b.textContent, b.getAttribute('aria-pressed')])`);
   // the inspector is shown at the start with its Format tab, as Keynote opens a presentation
-  assert.deepEqual(await pressed(), [['Autosave', 'false'], ['Format', 'true'], ['Steps', 'false'], ['Navigator', 'true'], ['Steps', 'false'], ['Notes', 'false'], ['Fit', 'true']]);
+  assert.deepEqual(await pressed(), [['Autosave', 'false'], ['View', 'true'], ['Format', 'true'], ['Steps', 'false'], ['Navigator', 'true'], ['Steps', 'false'], ['Notes', 'false'], ['Fit', 'true']]);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Notes').click()`);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
-  assert.deepEqual(await pressed(), [['Autosave', 'false'], ['Format', 'false'], ['Steps', 'true'], ['Navigator', 'true'], ['Steps', 'true'], ['Notes', 'true'], ['Fit', 'true']]);
+  assert.deepEqual(await pressed(), [['Autosave', 'false'], ['View', 'true'], ['Format', 'false'], ['Steps', 'true'], ['Navigator', 'true'], ['Steps', 'true'], ['Notes', 'true'], ['Fit', 'true']]);
   assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-header .state').getAttribute('aria-live')`), 'polite');
   assert.equal(await page.evaluate(`document.querySelector('.reveal section.present > aside.notes').getAttribute('aria-label')`), 'Speaker notes');
   // the strip above the notes is a separator with a value, and the arrows change the height

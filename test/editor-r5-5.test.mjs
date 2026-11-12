@@ -1,8 +1,8 @@
 // the fixes of R5.5 on both platforms: the space after a smart dash at the end of a paragraph, the
 // Text pane live in an empty text, the switch Number the lines of the Code pane, the menu of the
 // delivery of a list in the Steps tab, a list in the panel after a change of layout to Split, and
-// typeset math in the outline view and in the running head of the Slide pane. each edit of the
-// file is checked byte for byte, after an undo and a redo, and after a save and an open
+// typeset math in the running head of the Slide pane. each edit of the file is checked byte for
+// byte, after an undo and a redo, and after a save and an open
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -356,15 +356,6 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// the lines of a slide in the outline view, each with its text as typed, its TeX read from data-tex
-// while its math is typeset, and the number of its typeset formulas
-const outlineLines = (page, n) =>
-  page.evaluate(`[...document.querySelectorAll('.beeson-edit-outline .slide')[${n}].querySelectorAll('.line .text')].map((t) => ({
-    tex: t.dataset.tex ?? t.textContent,
-    shown: t.textContent,
-    typeset: t.querySelectorAll('mjx-container').length,
-    focused: t === document.activeElement,
-  }))`);
 const until = async (page, expr, ms = 3000) => {
   for (const end = Date.now() + ms; Date.now() < end; await page.evaluate('new Promise((d) => setTimeout(d, 50))')) if (await page.evaluate(expr)) return true;
   return false;
@@ -372,51 +363,6 @@ const until = async (page, expr, ms = 3000) => {
 const typesetIn = (selector) => `document.querySelectorAll(${JSON.stringify(selector)}).length > 0`;
 
 for (const platform of PLATFORMS) {
-  test(`the outline view shows typeset math in each line that is not edited, and the TeX in the line with the caret, on ${platform}`, async () => {
-    const page = await editor(platform, 2);
-    await exec(page, 'view.outline');
-    assert.ok(await until(page, typesetIn('.beeson-edit-outline .slide:nth-child(3) .text mjx-container')), 'the math of the outline is not typeset');
-    const tex = 'A paragraph with bold, italic, code, and \\(x^2\\) inline.';
-    let line = (await outlineLines(page, 2)).find((l) => l.tex === tex);
-    assert.ok(line, 'the paragraph with math is not in the outline');
-    assert.equal(line.typeset, 1);
-    assert.ok(!line.shown.includes('\\('), `the line shows its TeX: ${line.shown}`);
-    // a click on the formula shows the TeX of the line, with the caret after the TeX of the formula
-    const at = await page.evaluate(`(() => {
-      const r = [...document.querySelectorAll('.beeson-edit-outline .slide')[2].querySelectorAll('.text mjx-container')][0].getBoundingClientRect();
-      return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-    })()`);
-    await click(page, at);
-    await frames(page);
-    line = (await outlineLines(page, 2)).find((l) => l.focused);
-    assert.deepEqual({ shown: line?.shown, typeset: line?.typeset }, { shown: tex, typeset: 0 });
-    const caret = await page.evaluate(`(() => { const r = document.createRange(); r.selectNodeContents(document.activeElement); r.setEnd(getSelection().anchorNode, getSelection().anchorOffset); return r.toString().length; })()`);
-    assert.equal(caret, tex.indexOf(' inline.'), 'the caret is not after the formula');
-    await page.evaluate(`(() => { const t = document.activeElement; const r = document.createRange(); r.selectNodeContents(t); r.collapse(false); getSelection().removeAllRanges(); getSelection().addRange(r); })()`);
-    await type(page, ' Yes');
-    await press(page, 'Escape');
-    await page.evaluate('new Promise((d) => setTimeout(d, 200))');
-    const after = PARAGRAPH.replace(' inline.</p>', ' inline. Yes</p>');
-    await byteExact(page, [[PARAGRAPH, after]]);
-    assert.ok(await until(page, `[...document.querySelectorAll('.beeson-edit-outline .slide')[2].querySelectorAll('.text')].some((t) => t.dataset.tex === ${JSON.stringify(tex.replace('inline.', 'inline. Yes'))} && t.querySelector('mjx-container'))`), 'the edited line is not typeset again');
-    await undo(page);
-    await byteExact(page);
-    await redo(page);
-    await byteExact(page, [[PARAGRAPH, after]]);
-    await saved(page);
-    assert.deepEqual(errors(page), []);
-  });
-
-  test(`a dimmed line of the outline shows its math typeset on ${platform}`, async () => {
-    const page = await stepsPage(platform, 1600, 1000);
-    await exec(page, 'view.outline');
-    assert.ok(await until(page, `[...document.querySelectorAll('.beeson-edit-outline .line.dim .text')].some((t) => (t.dataset.tex ?? '').includes('Coriolis') && t.querySelector('mjx-container'))`), 'the math of a dimmed line is not typeset');
-    const line = await page.evaluate(`(() => { const t = [...document.querySelectorAll('.beeson-edit-outline .line.dim .text')].find((t) => (t.dataset.tex ?? t.textContent).includes('Coriolis')); return { tex: t.dataset.tex, shown: t.textContent }; })()`);
-    assert.equal(line.tex, 'The Coriolis terms couple \\(x\\) and \\(y\\).');
-    assert.ok(!line.shown.includes('\\('));
-    assert.deepEqual(errors(page), []);
-  });
-
   test(`the Slide pane shows the running head of a slide with its math typeset on ${platform}`, async () => {
     const page = await editor(platform, 2);
     const sel = '.beeson-edit-inspector .ed-sec .ed-note.running-head';

@@ -343,11 +343,13 @@ const drawnGuides = (page) =>
   page.evaluate(`[...document.querySelectorAll('.beeson-hand-guide')].filter((g) => !g.hidden && !g.classList.contains('off')).map((g) => [g.dataset.axis, Number(g.dataset.at)]).sort()`);
 const MATH_TAG = '<section>\n  <h2>Math, an ordered list, and a zone</h2>';
 const GUIDES_KEY = `beeson-edit-guides:/${LAYOUTS}`;
+// the guides are shown with the rulers
+const RULERS = { 'beeson-edit-rulers': '1' };
 
 for (const platform of PLATFORMS) {
   test(`${platform}: guides kept in the storage of the browser are shown, and written into data-guides at the next change of the guides of their slide`, async (t) => {
     const legacy = SECTIONS.map((_, i) => (i === MATH ? { x: [300], y: [] } : i === MATH + 1 ? { x: [], y: [200] } : { x: [], y: [] }));
-    const page = await load(t, platform, MATH, { [GUIDES_KEY]: js(legacy) });
+    const page = await load(t, platform, MATH, { [GUIDES_KEY]: js(legacy), ...RULERS });
     assert.deepEqual(await drawnGuides(page), [['x', 300]]);
     await byteExact(page);
     await exec(page, 'view.guides.add', { x: [], y: [500] });
@@ -371,7 +373,7 @@ for (const platform of PLATFORMS) {
   });
 
   test(`${platform}: Clear All Guides on Slide takes data-guides off its section, and Paste Guides writes it on another`, async (t) => {
-    const page = await load(t, platform);
+    const page = await load(t, platform, MATH, RULERS);
     await exec(page, 'view.guides.add', { x: [960], y: [540] });
     await exec(page, 'slide.guides.copy');
     await page.evaluate(`Reveal.slide(${MATH + 1})`);

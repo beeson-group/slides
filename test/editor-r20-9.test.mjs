@@ -1,5 +1,5 @@
-// regression tests of R20.9 on both platforms, for the findings F3, F9, F10, F20, F4, F5, F11,
-// and F21 of the final review of round 7 on the text, the keys, and the fields of the editor
+// regression tests of R20.9 on both platforms, for the findings F3, F20, F4, F5, F11, and F21 of the
+// final review of round 7 on the text, the keys, and the fields of the editor
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -86,63 +86,6 @@ for (const platform of PLATFORMS) {
       await press(page, 'k');
       await wait(page, 600);
       assert.ok(nested(await render(page)).includes(want), nested(await render(page)));
-      assert.deepEqual(errors(page), []);
-    });
-  }
-}
-
-// slide 3 of the demo deck with View > Outline on and the caret at the start of its line 'Each step'
-async function outlineLine(t, platform) {
-  const page = await load(t, platform, { slide: 2 });
-  await exec(page, 'view.outline');
-  await wait(page);
-  const at = await page.evaluate(`(() => { const t = [...document.querySelectorAll('.beeson-edit-outline .text')].find((e) => e.textContent.startsWith('Each step')); t.scrollIntoView({ block: 'center' }); const r = t.getBoundingClientRect(); return { x: r.left + 30, y: r.top + r.height / 2 }; })()`);
-  await click(page, at);
-  await wait(page);
-  await page.evaluate(`(() => { const r = document.createRange(); r.selectNodeContents(document.activeElement); r.collapse(true); getSelection().removeAllRanges(); getSelection().addRange(r); return true; })()`);
-  return page;
-}
-const slidesWith = (page, word) => page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].map((s, i) => s.textContent.includes(${js(word)}) ? i : -1).filter((i) => i >= 0)`);
-
-// F9: Mod+D in a line of the outline writes the typed text first, as an entry of its own, and the
-// copy of the slide holds it
-for (const platform of PLATFORMS) {
-  test(`F9 ${platform}: Mod+D in a line of the outline duplicates the slide with the text typed in the line`, async (t) => {
-    const page = await outlineLine(t, platform);
-    await type(page, 'XYZ ');
-    await wait(page);
-    await press(page, 'Mod+D');
-    await wait(page, 500);
-    assert.equal(await page.evaluate(`document.querySelectorAll('.reveal .slides > section').length`), 13);
-    assert.deepEqual(await slidesWith(page, 'XYZ'), [2, 3]);
-    assert.equal((await render(page)).match(/XYZ/g)?.length, 2);
-    assert.deepEqual(await labels(page), ['Undo Duplicate Slide', 'Redo']);
-    await undo(page);
-    await wait(page, 300);
-    assert.deepEqual(await slidesWith(page, 'XYZ'), [2]);
-    assert.equal((await labels(page))[0], 'Undo Typing');
-    await undo(page);
-    await wait(page, 300);
-    assert.equal(await render(page), page.source);
-    assert.deepEqual(errors(page), []);
-  });
-}
-
-// F10: Mod+B and Mod+I in a line of the outline do not run the native bold or italic of the
-// browser, since a line of the outline does not take a format
-for (const platform of PLATFORMS) {
-  for (const key of ['Mod+B', 'Mod+I']) {
-    test(`F10 ${platform}: ${key} in a line of the outline does not write a tag into the file`, async (t) => {
-      const page = await outlineLine(t, platform);
-      await page.evaluate(`(() => { const w = document.createTreeWalker(document.activeElement, NodeFilter.SHOW_TEXT); for (let n = w.nextNode(); n; n = w.nextNode()) { const i = n.data.indexOf(', with a'); if (i >= 0) { getSelection().collapse(n, i + 7); return true; } } return false; })()`);
-      for (let i = 0; i < 4; i++) await press(page, 'Shift+ArrowRight');
-      assert.equal(await page.evaluate('getSelection().toString()'), 'a da');
-      await press(page, key);
-      await wait(page);
-      assert.equal(await page.evaluate(`document.activeElement.innerHTML.includes('<b>') || document.activeElement.innerHTML.includes('<i>')`), false);
-      await press(page, 'Escape');
-      await wait(page, 300);
-      assert.equal(await render(page), page.source);
       assert.deepEqual(errors(page), []);
     });
   }

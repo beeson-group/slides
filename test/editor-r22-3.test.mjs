@@ -63,8 +63,8 @@ async function loaded(page) {
   await page.evaluate(`(async () => {
     Reveal.slide(2);
     document.querySelector('.reveal section.present').setAttribute('data-guides', 'x480 y270');
-    // both settings are kept in the storage of the browser from an earlier test
-    for (const id of ['view.rulers', 'view.guides']) if (!window.BeesonEditor.state(id).checked) await window.BeesonEditor.exec(id);
+    // the setting is kept in the storage of the browser from an earlier test, and the guides are shown with the rulers
+    if (!window.BeesonEditor.state('view.rulers').checked) await window.BeesonEditor.exec('view.rulers');
   })()`);
   await frames(page);
   const points = await page.evaluate(`[...document.querySelectorAll('.reveal section.present > h2, .reveal section.present > p, .reveal section.present > ul')].map((e) => { const r = e.getBoundingClientRect(); return { x: r.left + 10, y: r.top + Math.min(r.height / 2, 20) }; })`);

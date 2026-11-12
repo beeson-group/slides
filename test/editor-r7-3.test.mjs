@@ -198,7 +198,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual([...errors(page), ...errors(zone)], []);
   });
 
-  test(`the menu of a slide has Grid and Guides with Show Guides, Gridlines, Snap to Grid, and Grid Settings…, then Rulers (${platform})`, async (t) => {
+  test(`the menu of a slide has Grid and Guides with Gridlines, Snap to Grid, and Grid Settings…, then Rulers (${platform})`, async (t) => {
     const page = await load(t, platform);
     await rightClick(page, await empty(page));
     const slide = (await rows(page))[0];
@@ -215,8 +215,8 @@ for (const platform of PLATFORMS) {
     await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...(await itemAt(page, 'Grid and Guides')) });
     await page.waitFor(`document.querySelectorAll('.beeson-edit-menu').length > 1`);
     const grid = (await rows(page))[1];
-    assert.deepEqual(labels(grid), ['Show Guides', 'Gridlines', 'Snap to Grid', 'Grid Settings…']);
-    assert.equal(grid[1].keys, mac ? "⌘'" : "Ctrl+'");
+    assert.deepEqual(labels(grid), ['Gridlines', 'Snap to Grid', 'Grid Settings…']);
+    assert.equal(grid[0].keys, mac ? "⌘'" : "Ctrl+'");
     await pick(page, 'Gridlines');
     assert.equal((await state(page, 'view.grid')).checked, false);
 

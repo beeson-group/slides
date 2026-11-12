@@ -1,7 +1,7 @@
-// regression tests of R18.4 on both platforms, the findings C5, C6, C7, C14, and C15 of the third
-// review of round 7, and the state left by R17.8: the selection after an undo that frames another
-// element or puts back the TeX of an inline formula, Mod+D in the outline and in the Object List,
-// Tab on a title after a locked block that is not a list, and an undo of Hide Slide at a caret
+// regression tests of R18.4 on both platforms, the findings C5, C6, and C15 of the third review of
+// round 7, and the state left by R17.8: the selection after an undo that frames another element or
+// puts back the TeX of an inline formula, Mod+D in the Object List, and an undo of Hide Slide at a
+// caret
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -11,7 +11,6 @@ import { serve } from '../scripts/webdriver.mjs';
 import { click, press, saveAndReopen, type } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
-const OUTLINE = 'test/pages/editor-outline.html';
 // the index of the figures slide and of the slide of the effective potential in index.html
 const FIGURES = 4;
 const POTENTIAL = 3;
@@ -35,7 +34,6 @@ const state = (page, id) => page.evaluate(`window.BeesonEditor.state(${js(id)})`
 const undoLabel = (page) => state(page, 'edit.undo').then((s) => s.label);
 const exec = (page, id) => page.evaluate(`Promise.resolve(window.BeesonEditor.exec(${js(id)})).then(() => true)`);
 const rect = (page, expr) => page.evaluate(`(() => { const el = ${expr}; if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
-const slides = (page) => page.evaluate(`document.querySelectorAll('.reveal .slides > section').length`);
 const count = (page, selector) => page.evaluate(`Reveal.getCurrentSlide().querySelectorAll(${js(selector)}).length`);
 
 async function load(t, platform, n, deck = 'index.html') {
@@ -119,31 +117,6 @@ for (const platform of PLATFORMS) {
     }
   });
 
-  // C14: in the outline, Mod+D duplicates the slide of the line, whatever the canvas selected
-  test(`Mod+D in the outline duplicates the slide after a caret or a figure on the canvas (${platform})`, async (t) => {
-    for (const setup of ['caret', 'figure']) {
-      const page = await load(t, platform, FIGURES);
-      if (setup === 'caret') await caret(page);
-      else await click(page, await rect(page, IMAGE));
-      await wait(page);
-      await exec(page, 'view.outline');
-      await wait(page, 300);
-      await click(page, await rect(page, `[...document.querySelectorAll('.beeson-edit-nav [contenteditable=true]')].filter((e) => e.getClientRects().length).find((e) => e.textContent.startsWith('Figures'))`));
-      await wait(page);
-      const n = await slides(page);
-      await press(page, 'Mod+D');
-      await wait(page, 300);
-      assert.equal(await slides(page), n + 1, `Mod+D in the outline after a ${setup} does not duplicate the slide`);
-      assert.equal(await undoLabel(page), 'Undo Duplicate Slide');
-      assert.equal(await page.evaluate(`document.querySelectorAll('.reveal .slides > section')[${FIGURES}].querySelectorAll('figure').length`), 1, 'the figure is duplicated');
-      await page.evaluate('Promise.resolve(window.BeesonEditor.undo()).then(() => true)');
-      await wait(page);
-      assert.equal(await render(page), page.source);
-      assert.deepEqual(errors(page), []);
-      await page.close();
-    }
-  });
-
   // C15: Mod+D on a row of the Object List duplicates the object of the row
   test(`Mod+D on a row of the Object List duplicates its object (${platform})`, async (t) => {
     const page = await load(t, platform, FIGURES);
@@ -163,55 +136,6 @@ for (const platform of PLATFORMS) {
     assert.equal(await render(page), copied);
     const { text } = await saveAndReopen(page, `r18-4-objects-${platform}.html`);
     assert.equal(text, copied);
-    assert.deepEqual(errors(page), []);
-  });
-}
-
-// C7: the line of the outline that starts with start, with the caret at its start
-async function lineStart(page, start) {
-  if (!(await state(page, 'view.outline')).checked) await exec(page, 'view.outline');
-  await wait(page, 300);
-  await click(page, await page.evaluate(`(() => {
-    const t = [...document.querySelectorAll('.beeson-edit-outline .text')].find((e) => e.textContent.startsWith(${js(start)}));
-    t.scrollIntoView({ block: 'center' });
-    const r = t.getBoundingClientRect();
-    return { x: r.right - 2, y: r.bottom - 6 };
-  })()`));
-  await wait(page);
-  await page.evaluate('getSelection().collapse(document.activeElement, 0)');
-  assert.ok(await page.evaluate(`document.activeElement.matches('.beeson-edit-outline .text') && document.activeElement.textContent.startsWith(${js(start)})`), 'the caret is not in the line of the outline');
-}
-
-for (const platform of PLATFORMS) {
-  test(`Tab in the outline on the title after a slide that ends with a locked formula demotes the title (${platform})`, async (t) => {
-    const page = await load(t, platform, 0, OUTLINE);
-    // a new formula at the end of slide 1, locked by its key
-    await exec(page, 'insert.formula');
-    await wait(page, 300);
-    await type(page, 'x^2');
-    await wait(page);
-    const below = await page.evaluate(`(() => { const r = document.querySelector('.reveal .slides').getBoundingClientRect(); return { x: Math.round(r.left + 6), y: Math.round(r.bottom + 12) }; })()`);
-    await click(page, below);
-    await wait(page);
-    await press(page, 'Mod+L');
-    await wait(page);
-    const locked = await render(page);
-    assert.equal(await page.evaluate(`document.querySelector('.reveal .slides > section').lastElementChild.matches('div.math[data-locked]')`), true, 'slide 1 does not end with a locked formula');
-    const label = await undoLabel(page);
-    await page.evaluate('Reveal.slide(1)');
-    await wait(page);
-    const n = await slides(page);
-    await lineStart(page, 'Transfer budget');
-    await press(page, 'Tab');
-    await wait(page, 300);
-    assert.equal(await slides(page), n - 1, 'Tab after a locked formula does not demote the title');
-    assert.equal(await undoLabel(page), 'Undo Demote Slide');
-    const text = await render(page);
-    assert.match(text, /<div class="math" data-locked>\\\[x\^2\\\]<\/div>\n  <ul>\n    <li>Transfer budget<\/li>/, 'the title is not a new list after the locked formula');
-    await page.evaluate('Promise.resolve(window.BeesonEditor.undo()).then(() => true)');
-    await wait(page);
-    assert.equal(await render(page), locked);
-    assert.equal(await undoLabel(page), label);
     assert.deepEqual(errors(page), []);
   });
 }

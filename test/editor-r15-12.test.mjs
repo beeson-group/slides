@@ -1,7 +1,6 @@
 // regression tests of R15.12 on both platforms, the findings F1, F2, F6, F7, and F11 of the review
 // of round 7: a new text box in the block of a title or a closing slide, Distribute of texts at one
-// margin, the lifted copy of a row at a zoom and at a change of slide, and Shift+Tab or Tab in the
-// outline next to a locked block
+// margin, and the lifted copy of a row at a zoom and at a change of slide
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -12,7 +11,6 @@ import { click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 const TABLES = 'test/pages/editor-r13-3.html';
-const OUTLINE = 'test/pages/editor-outline.html';
 
 let browser;
 let server;
@@ -218,73 +216,4 @@ for (const platform of PLATFORMS) {
       assert.deepEqual(errors(page), []);
     });
   }
-}
-
-// the line of the outline that starts with start, with the caret at its start
-async function lineStart(page, start) {
-  if (!(await state(page, 'view.outline')).checked) await page.evaluate(`window.BeesonEditor.exec('view.outline')`);
-  await wait(page);
-  const at = await page.evaluate(`(() => {
-    const t = [...document.querySelectorAll('.beeson-edit-outline .text')].find((e) => e.textContent.startsWith(${js(start)}));
-    t.scrollIntoView({ block: 'center' });
-    const r = t.getBoundingClientRect();
-    return { x: r.right - 2, y: r.bottom - 6 };
-  })()`);
-  await click(page, at);
-  await wait(page);
-  await page.evaluate('getSelection().collapse(document.activeElement, 0)');
-  assert.ok(await page.evaluate(`document.activeElement.matches('.beeson-edit-outline .text') && document.activeElement.textContent.startsWith(${js(start)})`), 'the caret is not in the line of the outline');
-}
-
-// the block of the current slide at selector selected and locked by its key
-async function lock(page, selector, tag) {
-  await click(page, selector);
-  await press(page, 'Escape');
-  await wait(page);
-  await press(page, 'Mod+L');
-  await wait(page);
-  const locked = await render(page);
-  assert.ok(locked.includes(`<${tag} data-locked>`), `the ${tag} is not locked`);
-  return locked;
-}
-
-const slides = (page) => page.evaluate(`document.querySelectorAll('.reveal .slides > section').length`);
-
-// F11: Shift+Tab on an unlocked line of the outline moved a locked list after it onto a new slide
-for (const platform of PLATFORMS) {
-  test(`Shift+Tab on a line of the outline before a locked list does nothing (${platform})`, async (t) => {
-    const page = await load(t, platform, 2);
-    const locked = await lock(page, 'section.present > ul > li:nth-child(2)', 'ul');
-    const label = await undoLabel(page);
-    const n = await slides(page);
-    await lineStart(page, 'Design the complete');
-    await press(page, 'Shift+Tab');
-    await wait(page);
-    assert.equal(await slides(page), n, 'Shift+Tab makes a new slide');
-    assert.equal(await render(page), locked, 'Shift+Tab changes the file');
-    assert.equal(await undoLabel(page), label, 'Shift+Tab is an entry of the history');
-    assert.deepEqual(errors(page), []);
-  });
-
-  test(`Tab on the title of a slide with a locked block in the outline does nothing, and demotes it without the lock (${platform})`, async (t) => {
-    const title = 'Transfer budget';
-    // without the lock, the slide is demoted
-    const free = await load(t, platform, 1, OUTLINE);
-    await lineStart(free, title);
-    await press(free, 'Tab');
-    await wait(free);
-    assert.notEqual(await render(free), free.source, 'Tab does not demote the slide without a lock');
-    await free.close();
-    const page = await load(t, platform, 1, OUTLINE);
-    const locked = await lock(page, 'section.present > p', 'p');
-    const label = await undoLabel(page);
-    const n = await slides(page);
-    await lineStart(page, title);
-    await press(page, 'Tab');
-    await wait(page);
-    assert.equal(await slides(page), n, 'Tab removes the slide');
-    assert.equal(await render(page), locked, 'Tab changes the file');
-    assert.equal(await undoLabel(page), label, 'Tab is an entry of the history');
-    assert.deepEqual(errors(page), []);
-  });
 }

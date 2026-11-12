@@ -1,8 +1,7 @@
 // regression tests of R15.6 on both platforms with trusted input: the element changed by an undo or
 // a redo is selected as a block, as in Keynote, and a text keeps the caret that was in it (D24).
-// the toolbar buttons Undo and Redo keep the caret in a line of the outline, and the line of a
-// locked block is read only. after each edit the text is checked byte for byte after an undo, the
-// edit again after a redo, and after a save and an open
+// the toolbar button Undo keeps the caret in a text of the slide. after each edit the text is
+// checked byte for byte after an undo, the edit again after a redo, and after a save and an open
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -235,24 +234,6 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// outlineAt shows the outline and puts the caret at the end of the line that starts with start
-async function outlineAt(page, start) {
-  if (!(await state(page, 'view.outline')).checked) await page.evaluate(`window.BeesonEditor.exec('view.outline')`);
-  await wait(page);
-  const at = await page.evaluate(`(() => {
-    const t = [...document.querySelectorAll('.beeson-edit-outline .text')].find((e) => e.textContent.startsWith(${js(start)}));
-    t.scrollIntoView({ block: 'center' });
-    const r = t.getBoundingClientRect();
-    return { x: r.right - 2, y: r.bottom - 6 };
-  })()`);
-  await click(page, at);
-  await press(page, 'End');
-  await wait(page);
-  assert.ok(await page.evaluate(`document.activeElement.matches('.beeson-edit-outline .text') && document.activeElement.textContent.startsWith(${js(start)})`), 'the caret is not in the line of the outline');
-}
-
-const lineText = (page) => page.evaluate(`document.activeElement.matches('.beeson-edit-outline .text') ? document.activeElement.textContent : null`);
-
 // button clicks the toolbar button of the command id
 async function button(page, id) {
   await click(page, await page.evaluate(`(() => {
@@ -262,39 +243,7 @@ async function button(page, id) {
   await wait(page);
 }
 
-// keys sends one trusted key press with its text for each character, as a keyboard does
-async function keys(page, text) {
-  for (const ch of text) {
-    const code = ch === ' ' ? 'Space' : `Key${ch.toUpperCase()}`;
-    const base = { key: ch, code, windowsVirtualKeyCode: ch.toUpperCase().charCodeAt(0), modifiers: ch !== ch.toLowerCase() ? 8 : 0 };
-    await page.send('Input.dispatchKeyEvent', { type: 'keyDown', ...base, text: ch, unmodifiedText: ch });
-    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
-  }
-}
-
-const SAME = 'Two elements with the same index are shown together.';
-const DESIGN = "Design the complete slide first, then break it up into steps. Direct the viewer's attention.";
-
 for (const platform of PLATFORMS) {
-  // Undo of the toolbar moved the caret out of a line of the outline into the block on the slide,
-  // whereas Undo of the Edit menu and of the key kept it there
-  test(`Undo and Redo of the toolbar keep the caret in a line of the outline (${platform})`, async (t) => {
-    const page = await load(t, platform, 2);
-    await outlineAt(page, 'Two elements');
-    await keys(page, ' XY');
-    await wait(page);
-    await button(page, 'edit.undo');
-    await byteExact(page);
-    assert.equal(await lineText(page), SAME, 'the caret is not in the line after the undo');
-    await button(page, 'edit.redo');
-    const text = await render(page);
-    assert.ok(text.includes(`${SAME} XY</li>`), 'the redo does not give back the typing');
-    assert.equal(await lineText(page), `${SAME} XY`, 'the caret is not in the line after the redo');
-    const { text: saved } = await saveAndReopen(page, `r15-6-${++saves}.html`);
-    assert.equal(saved, text);
-    assert.deepEqual(errors(page), []);
-  });
-
   test(`Undo of the toolbar keeps the caret in a text of the slide (${platform})`, async (t) => {
     const page = await load(t, platform, 4);
     await click(page, await center(page, PARA));
@@ -304,144 +253,6 @@ for (const platform of PLATFORMS) {
     await button(page, 'edit.undo');
     await byteExact(page);
     assert.deepEqual(await selected(page), { els: [], caret: 'p' });
-    assert.deepEqual(errors(page), []);
-  });
-
-  // the lock was not checked in the outline, hence a locked block was changed through its line
-  test(`the line of a locked paragraph in the outline is read only, and its text is selected and copied (${platform})`, async (t) => {
-    const page = await load(t, platform, 2);
-    await click(page, await center(page, PARA));
-    await press(page, 'Escape');
-    await press(page, 'Mod+L');
-    await wait(page);
-    const locked = await render(page);
-    assert.ok(locked.includes('<p data-locked>Design the complete'), 'the paragraph is not locked');
-    await outlineAt(page, 'Design the complete');
-    await keys(page, ' XY');
-    await type(page, 'Z');
-    await press(page, 'Backspace');
-    await press(page, 'Enter');
-    await press(page, 'Tab');
-    await wait(page);
-    assert.equal(await lineText(page), DESIGN, 'a key changes the line');
-    assert.equal(await page.evaluate(`document.activeElement.getAttribute('aria-readonly')`), 'true');
-    await page.evaluate('getSelection().selectAllChildren(document.activeElement)');
-    await wait(page);
-    assert.equal(await page.evaluate('getSelection().toString()'), DESIGN);
-    assert.notEqual((await state(page, 'edit.copy')).enabled, false, 'Copy is dimmed');
-    const copy = await page.evaluate(`(() => {
-      const ev = new ClipboardEvent('copy', { clipboardData: new DataTransfer(), bubbles: true, cancelable: true });
-      document.activeElement.dispatchEvent(ev);
-      return ev.defaultPrevented;
-    })()`);
-    assert.equal(copy, false, 'the copy is taken from the line');
-    for (const id of ['edit.cut', 'edit.paste', 'element.delete']) assert.equal((await state(page, id)).enabled, false, `${id} is not dimmed in the line`);
-    await press(page, 'Mod+X');
-    await wait(page);
-    const got = await page.evaluate(`(() => {
-      const el = document.activeElement;
-      const data = new DataTransfer();
-      data.setData('text/plain', ' pasted');
-      el.dispatchEvent(new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }));
-      return el.textContent;
-    })()`);
-    assert.equal(got, DESIGN, 'a cut or a paste changes the line');
-    await click(page, await center(page, `${SLIDE} > h2`));
-    await wait(page);
-    assert.equal(await render(page), locked, 'the file is changed through the line');
-    assert.deepEqual(errors(page), []);
-  });
-
-  test(`the line of an item inside a locked list in the outline is read only (${platform})`, async (t) => {
-    const page = await load(t, platform, 2);
-    await click(page, await center(page, `${SLIDE} > ul > li:nth-child(2)`));
-    await press(page, 'Escape');
-    await wait(page);
-    assert.deepEqual((await selected(page)).els, ['ul']);
-    await press(page, 'Mod+L');
-    await wait(page);
-    const locked = await render(page);
-    assert.ok(locked.includes('<ul data-locked>'), 'the list is not locked');
-    await outlineAt(page, 'Two elements');
-    await keys(page, ' XY');
-    await press(page, 'Backspace');
-    await press(page, 'Enter');
-    await press(page, 'Tab');
-    await wait(page);
-    assert.equal(await lineText(page), SAME, 'a key changes the line');
-    await page.evaluate('getSelection().selectAllChildren(document.activeElement)');
-    for (const id of ['edit.cut', 'edit.paste', 'element.delete']) assert.equal((await state(page, id)).enabled, false, `${id} is not dimmed in the line`);
-    await press(page, 'Escape');
-    await wait(page);
-    assert.equal(await render(page), locked, 'the file is changed through the line');
-    // a line of an unlocked block on the same slide is still edited
-    await outlineAt(page, 'Design the complete');
-    await keys(page, ' XY');
-    await press(page, 'Escape');
-    await wait(page);
-    assert.ok((await render(page)).includes("viewer's attention. XY</p>"), 'the line of an unlocked block is not edited');
-    assert.deepEqual(errors(page), []);
-  });
-}
-
-// startOf puts the caret at the start of the line of the outline that starts with start
-async function startOf(page, start) {
-  await outlineAt(page, start);
-  await page.evaluate('getSelection().collapse(document.activeElement, 0)');
-}
-
-const EXPORTING = 'When exporting to PDF or PPTX, you will get one slide per step.';
-
-for (const platform of PLATFORMS) {
-  // Backspace at the start of a line of the outline did not join it to the line before
-  test(`Backspace at the start of an item in the outline joins it to the item before, in one entry (${platform})`, async (t) => {
-    const page = await load(t, platform, 2);
-    await startOf(page, 'When exporting');
-    await press(page, 'Backspace');
-    await wait(page);
-    const joined = [`<li class="fragment" data-fragment-index="2">${SAME}</li>\n    <li class="fragment" data-fragment-index="3">${EXPORTING}</li>`, `<li class="fragment" data-fragment-index="2">${SAME}${EXPORTING}</li>`];
-    await byteExact(page, [joined]);
-    const text = await render(page);
-    assert.equal(await lineText(page), `${SAME}${EXPORTING}`, 'the caret is not in the joined line');
-    assert.equal(await page.evaluate(`(() => { const s = getSelection(); const r = document.createRange(); r.selectNodeContents(document.activeElement); r.setEnd(s.anchorNode, s.anchorOffset); return r.toString().length; })()`), SAME.length, 'the caret is not at the place of the join');
-    assert.equal((await state(page, 'edit.undo')).label, 'Undo Join Paragraphs');
-    await press(page, 'Mod+Z');
-    await wait(page);
-    await byteExact(page);
-    await press(page, 'Mod+Shift+Z');
-    await wait(page);
-    assert.equal(await render(page), text);
-    const { text: saved } = await saveAndReopen(page, `r15-6-${++saves}.html`);
-    assert.equal(saved, text);
-    assert.deepEqual(errors(page), []);
-  });
-
-  for (const [where, start] of [['the title of a slide', 'Show your steps'], ['a paragraph after the title', 'Design the complete'], ['the first item of a list after a paragraph', 'Each step is']]) {
-    test(`Backspace at the start of ${where} in the outline does nothing (${platform})`, async (t) => {
-      const page = await load(t, platform, 2);
-      await startOf(page, start);
-      const line = await lineText(page);
-      await press(page, 'Backspace');
-      await wait(page);
-      await byteExact(page);
-      assert.equal(await lineText(page), line, 'the line is changed');
-      assert.equal((await state(page, 'edit.undo')).enabled, false, 'an entry is added to the history');
-      assert.deepEqual(errors(page), []);
-    });
-  }
-
-  test(`Backspace at the start of an item of a locked list in the outline does nothing (${platform})`, async (t) => {
-    const page = await load(t, platform, 2);
-    await click(page, await center(page, `${SLIDE} > ul > li:nth-child(2)`));
-    await press(page, 'Escape');
-    await press(page, 'Mod+L');
-    await wait(page);
-    const locked = await render(page);
-    await startOf(page, 'When exporting');
-    await press(page, 'Backspace');
-    await wait(page);
-    assert.equal(await render(page), locked);
-    assert.equal(await lineText(page), EXPORTING);
     assert.deepEqual(errors(page), []);
   });
 }

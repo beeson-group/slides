@@ -1,7 +1,6 @@
 // regression tests of R16.3 on both platforms, the findings G7, G8, and G15 of the second review of
-// round 7: the keys after an undo that frames a block with the caret left in its text, View >
-// Navigator in a narrow window with the inspector open, and Tab in the outline on the title after a
-// slide whose last list is locked
+// round 7: the keys after an undo that frames a block with the caret left in its text, and View >
+// Navigator in a narrow window with the inspector open
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -11,7 +10,6 @@ import { serve } from '../scripts/webdriver.mjs';
 import { click, press, saveAndReopen } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
-const OUTLINE = 'test/pages/editor-outline.html';
 // the index of the figures slide in index.html
 const FIGURES = 4;
 
@@ -190,63 +188,5 @@ for (const platform of PLATFORMS) {
       assert.deepEqual(errors(page), []);
       await page.close();
     }
-  });
-}
-
-// G15: the line of the outline that starts with start, with the caret at its start
-async function lineStart(page, start) {
-  if (!(await state(page, 'view.outline')).checked) await page.evaluate(`window.BeesonEditor.exec('view.outline')`);
-  await wait(page, 300);
-  const at = await page.evaluate(`(() => {
-    const t = [...document.querySelectorAll('.beeson-edit-outline .text')].find((e) => e.textContent.startsWith(${js(start)}));
-    t.scrollIntoView({ block: 'center' });
-    const r = t.getBoundingClientRect();
-    return { x: r.right - 2, y: r.bottom - 6 };
-  })()`);
-  await click(page, at);
-  await wait(page);
-  await page.evaluate('getSelection().collapse(document.activeElement, 0)');
-  assert.ok(await page.evaluate(`document.activeElement.matches('.beeson-edit-outline .text') && document.activeElement.textContent.startsWith(${js(start)})`), 'the caret is not in the line of the outline');
-}
-
-const slides = (page) => page.evaluate(`document.querySelectorAll('.reveal .slides > section').length`);
-const lockedItems = (page) => page.evaluate(`[...document.querySelector('.reveal .slides > section ul[data-locked]').children].map((li) => li.firstChild.textContent.trim())`);
-
-for (const platform of PLATFORMS) {
-  test(`Tab in the outline on the title after a slide whose last list is locked does nothing (${platform})`, async (t) => {
-    const title = 'Transfer budget';
-    const page = await load(t, platform, 0, OUTLINE);
-    // the top-level list of slide 1 selected and locked by its key
-    await click(page, 'section.present > ul > li');
-    await press(page, 'Escape');
-    await wait(page);
-    await press(page, 'Mod+L');
-    await wait(page);
-    const locked = await render(page);
-    assert.ok(locked.includes('<ul data-locked>'), 'the list is not locked');
-    assert.equal(await undoLabel(page), 'Undo Lock');
-    const items = await lockedItems(page);
-    await page.evaluate('Reveal.slide(1)');
-    await wait(page);
-    const n = await slides(page);
-    await lineStart(page, title);
-    await press(page, 'Tab');
-    await wait(page, 300);
-    assert.equal(await slides(page), n, 'Tab removes the slide');
-    assert.equal(await render(page), locked, 'Tab changes the file');
-    assert.equal(await undoLabel(page), 'Undo Lock', 'Tab is an entry of the history');
-    assert.deepEqual(await lockedItems(page), items, 'Tab changes the items of the locked list');
-    // with the lock undone, Tab demotes the title into the list
-    await page.evaluate('Promise.resolve(window.BeesonEditor.undo()).then(() => true)');
-    await wait(page);
-    assert.equal(await render(page), page.source);
-    await page.evaluate('Reveal.slide(1)');
-    await wait(page);
-    await lineStart(page, title);
-    await press(page, 'Tab');
-    await wait(page, 300);
-    assert.equal(await slides(page), n - 1, 'Tab does not demote the title without the lock');
-    assert.equal(await undoLabel(page), 'Undo Demote Slide');
-    assert.deepEqual(errors(page), []);
   });
 }

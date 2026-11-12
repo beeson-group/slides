@@ -374,25 +374,4 @@ for (const platform of PLATFORMS) {
     await settle(page);
     assert.match(await render(page), /<ul class="arrows">\s*<li[^>]*>Item<\/li>\s*<\/ul>/, `the new text is not an arrow list: ${(await render(page)).match(/[^\n]*\n[^\n]*Item[^\n]*\n?[^\n]*/)?.[0]}`);
   });
-
-  test(`Shift+Tab in the outline promotes an item of an arrow list with its followers in an arrow list (${platform})`, async (t) => {
-    const page = await load(t, platform, ARROWS);
-    if (!(await state(page, 'view.outline')).checked) await exec(page, 'view.outline');
-    await frames(page);
-    const at = await page.evaluate(`(() => {
-      const t = [...document.querySelectorAll('.beeson-edit-outline .text')].find((e) => e.textContent === 'Two');
-      t.scrollIntoView({ block: 'center' });
-      const r = t.getBoundingClientRect();
-      return { x: r.left + 10, y: r.top + r.height / 2 };
-    })()`);
-    await click(page, at);
-    await settle(page);
-    await press(page, 'Shift+Tab');
-    await settle(page);
-    const out = await render(page);
-    const made = out.slice(out.indexOf('<h2>Two</h2>'));
-    assert.ok(out.includes('<h2>Two</h2>'), `the item is not promoted: ${out.slice(out.indexOf('<h2>Indented'), out.indexOf('</section>', out.indexOf('<h2>Indented')))}`);
-    assert.match(made, /^<h2>Two<\/h2>\s*<ul class="arrows">\s*<li>Three<\/li>\s*<\/ul>/, `the promoted list lost its kind: ${made.slice(0, 160)}`);
-    await roundTrip(page);
-  });
 }

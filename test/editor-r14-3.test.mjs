@@ -153,47 +153,18 @@ for (const platform of PLATFORMS) {
     assert.equal(await render(page), page.source);
     assert.deepEqual(errors(page), []);
   });
-  // a text of the outline is in the navigator, but Delete and Select All of the Edit menu are not
-  // commands on the slides while the caret is in it
-  test(`Edit > Delete and Edit > Select All with the caret in a text of the outline leave the slides (${platform})`, async (t) => {
-    const page = await load(t, platform);
-    await page.evaluate(`BeesonEditor.exec('view.outline')`);
-    await settle(page);
-    const title = () => rect(page, `document.querySelectorAll('.beeson-edit-outline .text[aria-label="Slide title"]')[4]`);
-    const chosen = () => page.evaluate(`document.querySelectorAll('.beeson-edit-nav [aria-selected="true"]').length`);
-    await click(page, await title());
-    await settle(page);
-    const one = await chosen();
-    await openBar(page, 'Edit');
-    await click(page, await item(page, 'Delete'));
-    await settle(page);
-    await closeMenus(page);
-    assert.equal(await render(page), page.source, 'Edit > Delete deleted the slide of the text');
-    await click(page, await title());
-    await settle(page);
-    await openBar(page, 'Edit');
-    await click(page, await item(page, 'Select All'));
-    await settle(page);
-    await closeMenus(page);
-    assert.equal(await chosen(), one, 'Edit > Select All selected the slides');
-    assert.equal(await render(page), page.source);
-    assert.deepEqual(errors(page), []);
-  });
 }
 
-// a figure selected on the canvas stays selected while the caret is in a line of the outline or in
-// a field of a pane, where Delete and Select All of the Edit menu act on the text of the line or
-// of the field
+// a figure selected on the canvas stays selected while the caret is in a field of a pane, where
+// Delete and Select All of the Edit menu act on the text of the field
 for (const platform of PLATFORMS) {
   for (const [what, field] of [
-    ['a text of the outline', (n) => `document.querySelectorAll('.beeson-edit-outline .slide')[${n}].querySelector('.text[aria-label="Slide title"]')`],
     ['the Description field of the Format pane', () => `document.querySelector('#beeson-edit-panel-format textarea[name="alt"]')`],
   ]) {
     test(`Edit > Delete and Edit > Select All with the caret in ${what} act on its text, and not on the figure selected on the canvas (${platform})`, async (t) => {
       const page = await load(t, platform);
       const n = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('figure.zone'))`);
       await page.evaluate(`Reveal.slide(${n})`);
-      await page.evaluate(`BeesonEditor.exec('view.outline')`);
       await settle(page);
       const at = field(n);
       const figure = () => rect(page, `[...document.querySelectorAll('.reveal section.present figure.zone img')].find((i) => i.getClientRects().length)`);
@@ -225,10 +196,10 @@ for (const platform of PLATFORMS) {
       assert.equal(range.disabled, false, `Edit > Delete is dimmed on a selected text in ${what}`);
       assert.equal(await textOf(), '', `Edit > Delete does not delete the selected text of ${what}`);
       assert.equal(figures(await render(page)), figures(page.source), `Edit > Delete on a selected text in ${what} deleted the figure`);
-      // a paste is plain text in the line or the field, on one line in a line of the outline
+      // a paste is plain text in the field
       await page.evaluate(`Promise.resolve(window.BeesonEditor.exec('edit.paste', 'One\\n two')).then(() => true)`);
       await settle(page);
-      assert.equal(await textOf(), what.includes('outline') ? 'One two' : 'One\n two', `Paste does not put the text into ${what}`);
+      assert.equal(await textOf(), 'One\n two', `Paste does not put the text into ${what}`);
       assert.equal(figures(await render(page)), figures(page.source), `Paste with the caret in ${what} changed the figures of the slide`);
       // a press on the figure takes the focus out of the text, and Delete acts on the figure again
       await click(page, await figure(), { button: 'right' });
@@ -240,38 +211,4 @@ for (const platform of PLATFORMS) {
       assert.deepEqual(errors(page), []);
     });
   }
-}
-
-// a lock holds an element of the slide, and not the text of a line of the outline
-for (const platform of PLATFORMS) {
-  test(`Cut and Delete of the Edit menu act on the selected text of an outline line while a locked figure is selected on the canvas (${platform})`, async (t) => {
-    const page = await load(t, platform);
-    const n = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('figure.zone'))`);
-    await page.evaluate(`Reveal.slide(${n})`);
-    await page.evaluate(`BeesonEditor.exec('view.outline')`);
-    await settle(page);
-    await click(page, await rect(page, `[...document.querySelectorAll('.reveal section.present figure.zone img')].find((i) => i.getClientRects().length)`));
-    await settle(page);
-    await page.evaluate(`Promise.resolve(BeesonEditor.exec('arrange.lock')).then(() => true)`);
-    await settle(page);
-    const locked = await render(page);
-    assert.ok(/<figure[^>]*data-locked/.test(locked), 'the figure is not locked');
-    const at = `document.querySelectorAll('.beeson-edit-outline .slide')[${n}].querySelector('.text[aria-label="Slide title"]')`;
-    await click(page, await rect(page, at));
-    await settle(page);
-    assert.ok(await page.evaluate(`document.activeElement === ${at}`), 'the caret is not in the line of the outline');
-    await openBar(page, 'Edit');
-    await click(page, await item(page, 'Select All'));
-    await settle(page);
-    await closeMenus(page);
-    await openBar(page, 'Edit');
-    assert.equal((await itemState(page, 'Cut'))?.disabled, false, 'Cut is dimmed on the selected text of the line');
-    assert.equal((await itemState(page, 'Delete'))?.disabled, false, 'Delete is dimmed on the selected text of the line');
-    await click(page, await item(page, 'Delete'));
-    await settle(page);
-    await closeMenus(page);
-    assert.equal(await page.evaluate(`${at}.textContent`), '', 'Delete does not delete the selected text of the line');
-    assert.ok(/<figure[^>]*data-locked/.test(await render(page)), 'the locked figure is not in the file any more');
-    assert.deepEqual(errors(page), []);
-  });
 }

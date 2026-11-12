@@ -353,6 +353,8 @@ for (const platform of PLATFORMS) {
   test(`${platform}: a guide follows its slide when slides are moved, added, duplicated, pasted, and deleted, and through an undo of each`, async () => {
     const page = await editor(platform);
     const title = await titleOf(page);
+    // the guides are drawn while the rulers are shown
+    await exec(page, 'view.rulers');
     await exec(page, 'view.guides.add', { x: [640], y: [300] });
     await frames(page);
     assert.deepEqual(await handGuides(page), [['x', 640], ['y', 300]]);
@@ -422,6 +424,7 @@ for (const platform of PLATFORMS) {
     await first.evaluate(`localStorage.setItem('beeson-edit-guides:' + location.pathname, ${JSON.stringify(JSON.stringify(legacy))})`);
     // the next session adds a slide at the start before it shows the slide of the guide
     const page = await editor(platform, 0, { keep: true });
+    await exec(page, 'view.rulers');
     await click(page, await navRow(page, 0));
     await exec(page, 'slide.new');
     await frames(page);

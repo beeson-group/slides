@@ -1,7 +1,6 @@
 // the fixes of R6.2 on both platforms: the ghost of a step dragged in the Steps tab beside its drop
-// line, Preview of the transition of a slide, Use Rehearsed Timings in a show opened from the
-// editor, and the Accessibility check, with Select and Show in dark mode, the reading order of a
-// slide, and link text that says nothing
+// line, Preview of the transition of a slide, and Use Rehearsed Timings in a show opened from the
+// editor
 
 import assert from 'node:assert/strict';
 import { readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -51,27 +50,6 @@ const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 
 const wait = (ms) => new Promise((done) => setTimeout(done, ms));
 
-// a click on the item of an open menu whose label starts with name
-async function choose(page, name) {
-  const at = await page.evaluate(`(() => {
-    const item = [...document.querySelectorAll('[role="menu"] .item')].find((i) => i.textContent.trim().startsWith(${JSON.stringify(name)}));
-    if (!item) return null;
-    const r = item.getBoundingClientRect();
-    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
-  })()`);
-  assert.ok(at, `an open menu does not have an item ${name}`);
-  // an item is taken at a release 250 ms after the press that opened its menu
-  await wait(300);
-  await click(page, at);
-  await frames(page);
-}
-
-// the light figure of the demo deck without its alt text, in the file and on the page
-const LIGHT_ALT = '<img class="for-light" src="demo/figure-light.png" alt="Zero-velocity curves of the Earth–Moon system, light version">';
-const LIGHT_BARE = '<img class="for-light" src="demo/figure-light.png">';
-const bareLight = () => readFileSync('index.html', 'utf8').replace(LIGHT_ALT, LIGHT_BARE);
-const BARE_PAGE = `document.querySelector('.reveal img.for-light[src="demo/figure-light.png"]').removeAttribute('alt')`;
-
 // two boxes overlap when they share an area, or a line of a box of zero height
 const overlap = (a, b) => a.left < b.right && b.left < a.right && a.top <= b.bottom && b.top <= a.bottom;
 
@@ -101,40 +79,6 @@ for (const platform of PLATFORMS) {
     assert.ok(boxes.shown, 'the drag does not show its drop line and its ghost');
     assert.ok(!overlap(boxes.ghost, boxes.line), `the ghost ${JSON.stringify(boxes.ghost)} covers the drop line ${JSON.stringify(boxes.line)}`);
     assert.ok(!overlap(boxes.ghost, boxes.target), `the ghost ${JSON.stringify(boxes.ghost)} covers the row after the drop line ${JSON.stringify(boxes.target)}`);
-    assert.equal(await page.evaluate('window.BeesonEditor.render()'), page.source);
-    assert.deepEqual(errors(page), []);
-  });
-}
-
-for (const platform of PLATFORMS) {
-  // round 2 of the council, finding 33 of qwen3: in dark mode, Select and Show of an image of the
-  // light mode drew the frame of its selection collapsed at 0, 0
-  test(`Select and Show of a light image in dark mode frames the image on ${platform}`, async () => {
-    const page = await editor(platform, { text: bareLight(), change: BARE_PAGE });
-    if ((await page.evaluate('Beeson.theme.get()')) !== 'dark') await page.evaluate(`Beeson.theme.set('dark')`);
-    await page.waitFor(`document.documentElement.dataset.theme === 'dark' && !document.documentElement.classList.contains('to-dark')`);
-    await exec(page, 'view.accessibility');
-    await frames(page);
-    await click(page, '.beeson-edit-a11y .item[data-check="alt"] .fix');
-    await choose(page, 'Select and Show');
-    await page.waitFor(`!!document.querySelector('.beeson-frame.selected:not([hidden])')`);
-    await wait(700);
-    await frames(page);
-    const got = await page.evaluate(`(() => {
-      const img = document.querySelector('.reveal img.for-light[src="demo/figure-light.png"]');
-      const box = (r) => ({ left: Math.round(r.left), top: Math.round(r.top), width: Math.round(r.width), height: Math.round(r.height) });
-      const frame = [...document.querySelectorAll('.beeson-frame.selected')].find((f) => !f.hidden);
-      // the frame of an image is drawn around its picture, fit into its box with object-fit contain
-      const r = img.getBoundingClientRect();
-      const k = Math.min(r.width / img.naturalWidth, r.height / img.naturalHeight);
-      const w = img.naturalWidth * k, h = img.naturalHeight * k;
-      const picture = { left: r.left + (r.width - w) / 2, top: r.top + (r.height - h) / 2, width: w, height: h };
-      return { frame: frame && box(frame.getBoundingClientRect()), image: box(picture), theme: Beeson.theme.get() };
-    })()`);
-    assert.ok(got.frame && got.frame.width > 40 && got.frame.height > 40, `the frame ${JSON.stringify(got.frame)} is collapsed`);
-    assert.ok(got.image.width > 40, 'the light image is not shown');
-    assert.equal(got.theme, 'light');
-    for (const k of ['left', 'top', 'width', 'height']) assert.ok(Math.abs(got.frame[k] - got.image[k]) <= 4, `the frame ${JSON.stringify(got.frame)} is not at the image ${JSON.stringify(got.image)}`);
     assert.equal(await page.evaluate('window.BeesonEditor.render()'), page.source);
     assert.deepEqual(errors(page), []);
   });
@@ -242,67 +186,6 @@ for (const platform of PLATFORMS) {
     // the delays are set in the show only
     assert.equal(readFileSync(file, 'utf8'), text);
     assert.equal(await page.evaluate('window.BeesonEditor.render()'), text);
-    assert.deepEqual(errors(page), []);
-  });
-}
-
-// the deck of layouts with the small paragraph of its first content slide moved above the
-// paragraph before it, and a link named "here" in the paragraph, in the file and on the page
-const LAYOUTS = 'test/pages/editor-layouts.html';
-const SMALL = '<p class="small fragment" data-fragment-index="3">A small paragraph.</p>';
-const SMALL_UP = '<p class="small fragment" data-fragment-index="3" style="translate: 0px -560px">A small paragraph.</p>';
-const INLINE = 'and \\(x^2\\) inline.</p>';
-const LINKED = 'and \\(x^2\\) inline, see <a href="https://example.com">here</a>.</p>';
-const reviewed = () => readFileSync(LAYOUTS, 'utf8').replace(SMALL, SMALL_UP).replace(INLINE, LINKED);
-const REVIEWED_PAGE = `(() => {
-  const p = [...document.querySelectorAll('.reveal p.small')].find((e) => e.textContent === 'A small paragraph.');
-  p.style.translate = '0px -560px';
-  const q = [...document.querySelectorAll('.reveal p')].find((e) => e.textContent.startsWith('A paragraph with'));
-  q.lastChild.textContent = q.lastChild.textContent.replace(/inline\\.$/, 'inline, see ');
-  const a = document.createElement('a');
-  a.href = 'https://example.com';
-  a.textContent = 'here';
-  q.append(a, '.');
-})()`;
-
-for (const platform of PLATFORMS) {
-  test(`the checker warns of a reading order other than the drawn order and of a link named here on ${platform}`, async () => {
-    const page = await editor(platform, { deck: LAYOUTS, text: reviewed(), change: REVIEWED_PAGE, index: 2 });
-    await exec(page, 'view.accessibility');
-    await frames(page);
-    const rows = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-a11y .item')].map((r) => r.dataset.check + ' ' + r.querySelector('.what').textContent)`);
-    assert.equal(rows.length, 2, JSON.stringify(rows));
-    assert.match(rows[0], /^order "A small paragraph\." after "Text, a list, and a bac…" Slide \d+$/);
-    assert.equal(rows[1], 'link Link "here" Slide 3');
-    assert.match(await page.evaluate(`document.querySelector('.beeson-edit-a11y .status').textContent`), /2 warnings/);
-    const heads = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-a11y .check')].map((c) => c.textContent)`);
-    assert.deepEqual(heads, ['Check reading order1', 'Unclear link text1']);
-
-    // Select and Show selects the element drawn above the one read before it
-    await page.evaluate('Reveal.slide(0)');
-    await click(page, '.beeson-edit-a11y .item[data-check="order"] .fix');
-    await choose(page, 'Select and Show');
-    await page.waitFor(`window.BeesonEditor.status().then ? true : true`);
-    await frames(page);
-    assert.equal(await page.evaluate('Reveal.getIndices().h'), 2);
-    assert.match(await page.evaluate(`document.querySelector('.beeson-edit-a11y .info').textContent`), /reads the elements of a slide in the order of the file/);
-
-    // Edit Link opens the dialog of the link
-    await click(page, '.beeson-edit-a11y .item[data-check="link"] .fix');
-    await choose(page, 'Edit Link');
-    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-link[open]')`);
-    await press(page, 'Escape');
-    assert.equal(await page.evaluate('window.BeesonEditor.render()'), page.source);
-    assert.deepEqual(errors(page), []);
-  });
-
-  test(`a deck with links that name their targets and elements in reading order has no warnings on ${platform}`, async () => {
-    const text = readFileSync(LAYOUTS, 'utf8').replace(INLINE, 'and \\(x^2\\) inline, see <a href="https://example.com">the example site</a>.</p>');
-    const page = await editor(platform, { deck: LAYOUTS, text, change: REVIEWED_PAGE.replace("p.style.translate = '0px -560px';", '').replace("a.textContent = 'here';", "a.textContent = 'the example site';") });
-    await exec(page, 'view.accessibility');
-    await frames(page);
-    assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-a11y .item')].map((r) => r.dataset.check)`), []);
-    assert.match(await page.evaluate(`document.querySelector('.beeson-edit-a11y .status').textContent`), /Good to go/);
     assert.deepEqual(errors(page), []);
   });
 }

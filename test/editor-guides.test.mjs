@@ -181,6 +181,8 @@ for (const platform of PLATFORMS) {
 
   test(`guides are copied, pasted, cleared, hidden, and kept over a reload, on ${platform}`, async () => {
     let page = await guidesPage(platform);
+    // the guides are shown with the rulers
+    await exec(page, 'view.rulers');
     await exec(page, 'view.guides.add', { x: [400], y: [300, 700] });
     await frames(page);
     assert.deepEqual((await guides(page)).sort(), [['x', 400], ['y', 300], ['y', 700]]);
@@ -196,16 +198,15 @@ for (const platform of PLATFORMS) {
     await exec(page, 'view.guides.clear');
     await frames(page);
     assert.deepEqual(await guides(page), []);
-    // Show Guides hides them, and an element does not snap to a hidden guide
+    // hidden rulers hide them
     await page.evaluate(`Reveal.slide(${MATH})`);
     await frames(page);
-    if (platform === 'mac') await press(page, 'Mod+Ctrl+Alt+G');
-    else await exec(page, 'view.guides');
+    await exec(page, 'view.rulers');
     await frames(page);
-    assert.equal((await state(page, 'view.guides')).checked, false);
     assert.deepEqual(await guides(page), []);
-    await exec(page, 'view.guides');
+    await exec(page, 'view.rulers');
     await frames(page);
+    assert.deepEqual((await guides(page)).sort(), [['x', 400], ['y', 300], ['y', 700]]);
     await byteExact(page, [mathGuides('x400 y300 y700')]);
     // the guides are in the draft of the unsaved edits, which a reload offers, and not in the
     // storage of the browser

@@ -1,6 +1,5 @@
-// regression tests of R12.8 on both platforms with trusted input: the undo of Tab and Shift+Tab in
-// the outline, the keys of the Arrange menu in the Object List, and the drop line of a row dragged
-// in the Object List. after each edit of the
+// regression tests of R12.8 on both platforms with trusted input: the keys of the Arrange menu in
+// the Object List, and the drop line of a row dragged in the Object List. after each edit of the
 // file the text is checked byte for byte after an undo and again after a redo
 
 import assert from 'node:assert/strict';
@@ -8,7 +7,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, drag, press } from './helpers/editor.mjs';
 
 const DECK = 'index.html';
 const PLATFORMS = ['mac', 'other'];
@@ -25,7 +24,6 @@ after(async () => {
 });
 
 const js = (v) => JSON.stringify(v);
-const exec = (page, id, arg) => page.evaluate(`window.BeesonEditor.exec(${js(id)}${arg ? `, ${js(arg)}` : ''})`);
 const state = (page, id) => page.evaluate(`window.BeesonEditor.state(${js(id)})`);
 const frames = (page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => d(true))))');
 const render = (page) => page.evaluate('window.BeesonEditor.render()');
@@ -54,94 +52,8 @@ async function load(t, platform, { deck = DECK, n = 0 } = {}) {
   return page;
 }
 
-const OUTLINE = '.beeson-edit-outline';
-// each slide of the outline as its number, then the depth and the start of each of its lines
-const outline = (page) => page.evaluate(`[...document.querySelectorAll('${OUTLINE} .slide')].map((g) => [g.querySelector('.no').textContent, ...[...g.querySelectorAll('.line')].map((l) => l.style.getPropertyValue('--depth') + ' ' + l.textContent.slice(0, 20))])`);
-const count = (page) => page.evaluate(`document.querySelector('.beeson-edit-bottom').textContent.match(/Slide \\S+ of \\d+/)?.[0]`);
 const undoKey = (page) => press(page, 'Mod+Z');
 const redoKey = (page) => press(page, 'Mod+Shift+Z');
-
-// the outline shown, with the caret in its line that starts with text, by a click
-async function caretIn(page, text) {
-  if (!(await state(page, 'view.outline')).checked) await exec(page, 'view.outline');
-  await frames(page);
-  const at = await page.evaluate(`(() => {
-    const t = [...document.querySelectorAll('${OUTLINE} .text')].find((e) => e.textContent.startsWith(${js(text)}));
-    t.scrollIntoView({ block: 'center' });
-    const r = t.getBoundingClientRect();
-    return { x: r.left + 30, y: r.top + r.height / 2 };
-  })()`);
-  await click(page, at);
-  await frames(page);
-}
-
-for (const platform of PLATFORMS) {
-  // plots-objects-outline-1: in Keynote and PowerPoint, Tab in the outline demotes an item, and
-  // one undo restores the file. one undo of the indent of the outline left the item twice
-  test(`one undo of Tab in the outline restores the file (${platform})`, async (t) => {
-    const page = await load(t, platform, { n: 2 });
-    await caretIn(page, 'Two elements');
-    await press(page, 'Tab');
-    await settle(page);
-    const indented = await render(page);
-    assert.notEqual(indented, page.source);
-    assert.equal(indented.split('Two elements with the same index').length, 2);
-    assert.equal((await outline(page))[2][4], '2 Two elements with th');
-    await undoKey(page);
-    await settle(page);
-    await byteExact(page);
-    assert.equal((await state(page, 'edit.undo')).enabled, false);
-    assert.deepEqual((await outline(page))[2].slice(3, 6), ['1 Each step is a revea', '1 Two elements with th', '1 When exporting to PD']);
-    await redoKey(page);
-    await settle(page);
-    assert.equal(await render(page), indented);
-    assert.equal((await outline(page))[2][4], '2 Two elements with th');
-    assert.equal((await state(page, 'edit.undo')).label, 'Undo Increase Indent Level');
-    // Shift+Tab on the nested item takes it out again in one entry
-    await caretIn(page, 'Two elements');
-    await press(page, 'Shift+Tab');
-    await settle(page);
-    await byteExact(page);
-    assert.equal((await state(page, 'edit.undo')).label, 'Undo Decrease Indent Level');
-    await undoKey(page);
-    await settle(page);
-    assert.equal(await render(page), indented);
-    const { text } = await saveAndReopen(page, `r12-8-tab-${platform}.html`);
-    assert.equal(text, indented);
-    assert.deepEqual(errors(page), []);
-  });
-
-  // plots-objects-outline-2: after an undo of Promote to Slide, the outline and the slide count
-  // follow the deck, as in Keynote and PowerPoint
-  test(`an undo of Shift+Tab in the outline redraws the outline and the slide count (${platform})`, async (t) => {
-    const page = await load(t, platform, { n: 2 });
-    await caretIn(page, 'Two elements');
-    const before = await outline(page);
-    const slides = before.length;
-    await press(page, 'Shift+Tab');
-    await settle(page);
-    const promoted = await render(page);
-    assert.equal((await outline(page)).length, slides + 1);
-    assert.equal(await count(page), `Slide 4 of ${slides + 1}`);
-    await undoKey(page);
-    await settle(page);
-    await byteExact(page);
-    assert.deepEqual(await outline(page), before);
-    assert.equal(await count(page), `Slide 3 of ${slides}`);
-    // the caret is in the item put back
-    assert.equal(await page.evaluate(`document.activeElement.closest('${OUTLINE} .line.item')?.textContent.slice(0, 12)`), 'Two elements');
-    await redoKey(page);
-    await settle(page);
-    assert.equal(await render(page), promoted);
-    assert.equal((await outline(page)).length, slides + 1);
-    assert.equal(await count(page), `Slide 4 of ${slides + 1}`);
-    await undoKey(page);
-    await settle(page);
-    await byteExact(page);
-    assert.deepEqual(await outline(page), before);
-    assert.deepEqual(errors(page), []);
-  });
-}
 
 const OBJECTS = '.beeson-edit-objects';
 const ROW = `${OBJECTS} .row`;

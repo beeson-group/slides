@@ -91,7 +91,7 @@ for (const platform of PLATFORMS) {
     for (const width of [1280, 1100]) {
       const page = await load(t, platform, { width, height: 900 });
       await run(page, 'view.customizeToolbar');
-      for (const id of ['file.open', 'find.open', 'view.notes', 'view.accessibility', 'play.rehearse', 'arrange.group']) {
+      for (const id of ['file.open', 'find.open', 'view.notes', 'arrange.ungroup', 'play.rehearse', 'arrange.group']) {
         await page.evaluate(`document.querySelector('.beeson-edit-customize .item[data-item="${id}"]').focus()`);
         await press(page, 'Enter');
       }
@@ -228,7 +228,6 @@ const OTHER_KEYS = {
   'Auto-Align': 'Alt+Shift+U',
   'Hide Slide': 'Ctrl+Shift+H',
   Rulers: 'Alt+Shift+R',
-  'Show Guides': 'Alt+F9',
 };
 
 test('the commands with a key on the Mac have a key on Windows and Linux, listed in the sheet, and the keys run them (other)', async (t) => {
@@ -240,8 +239,8 @@ test('the commands with a key on the Mac have a key on Windows and Linux, listed
   }
   assert.deepEqual(await page.evaluate('window.BeesonEditorShell.sheetClashes()'), []);
   assert.deepEqual(await page.evaluate('window.BeesonEditorShell.keyClashes(true)'), []);
-  // Rulers and Show Guides are switched by their keys
-  for (const [key, id] of [['Alt+Shift+R', 'view.rulers'], ['Alt+F9', 'view.guides']]) {
+  // Rulers is switched by its key
+  for (const [key, id] of [['Alt+Shift+R', 'view.rulers']]) {
     const was = await checked(page, id);
     await press(page, key);
     assert.equal(await checked(page, id), !was, `${key} does not switch ${id}`);
@@ -386,50 +385,6 @@ for (const [platform, answer] of [['mac', 'save'], ['other', 'cancel']]) {
   });
 }
 
-// dialogs-undo-a11y-7: the results of the accessibility checker are a tree in ARIA, but the arrow
-// keys did nothing in it, and every row and every Fix button was a Tab stop
-const A11Y = '.beeson-edit-a11y [role="tree"]';
-const focused = (page) => page.evaluate(`(() => { const a = document.activeElement; return a.closest(${js(A11Y)}) ? (a.matches('.check') ? 'head:' + a.dataset.check : a.matches('.item') ? 'item:' + a.dataset.i : 'other:' + a.className) : 'outside'; })()`);
-for (const platform of PLATFORMS) {
-  test(`the arrow keys move in the tree of the accessibility checker, and the tree is one Tab stop (${platform})`, async (t) => {
-    const page = await load(t, platform, { n: FIGURES });
-    await page.evaluate(`(() => { for (const i of document.querySelectorAll('.reveal .slides > section')[${FIGURES}].querySelectorAll('img')) i.removeAttribute('alt'); return true; })()`);
-    await run(page, 'view.accessibility');
-    await frames(page);
-    const items = await page.evaluate(`[...document.querySelectorAll('${A11Y} .item[data-check="alt"]')].map((r) => 'item:' + r.dataset.i)`);
-    assert.ok(items.length >= 2, `the check lists ${items.length} images`);
-    assert.equal(await focused(page), 'head:alt');
-    const stops = () => page.evaluate(`[...document.querySelectorAll('${A11Y} :is(button, [tabindex])')].filter((e) => e.tabIndex >= 0).length`);
-    assert.equal(await stops(), 1, 'the tree is not one Tab stop');
-    await press(page, 'ArrowDown');
-    assert.equal(await focused(page), items[0], 'ArrowDown does not move to the first image');
-    await press(page, 'ArrowDown');
-    assert.equal(await focused(page), items[1]);
-    await press(page, 'ArrowUp');
-    assert.equal(await focused(page), items[0]);
-    assert.equal(await stops(), 1);
-    await press(page, 'ArrowLeft');
-    assert.equal(await focused(page), 'head:alt', 'ArrowLeft does not move to the head');
-    await press(page, 'ArrowLeft');
-    assert.equal(await page.evaluate(`document.querySelector('${A11Y} .check[data-check="alt"]').getAttribute('aria-expanded')`), 'false', 'ArrowLeft does not collapse the head');
-    await press(page, 'ArrowRight');
-    assert.equal(await page.evaluate(`document.querySelector('${A11Y} .check[data-check="alt"]').getAttribute('aria-expanded')`), 'true', 'ArrowRight does not expand the head');
-    await press(page, 'ArrowRight');
-    assert.equal(await focused(page), items[0], 'ArrowRight does not move to the first image');
-    // the menu of fixes of a row is opened from the row with the key of the context menu
-    await press(page, 'Shift+F10');
-    await page.waitFor(`!!document.querySelector('.beeson-edit-menu')`);
-    assert.ok((await menuLabels(page)).includes('Add Alt Text…'), 'Shift+F10 does not open the fixes');
-    await press(page, 'Escape');
-    assert.equal(await focused(page), items[0], 'the focus does not go back to the row');
-    await press(page, 'Tab');
-    assert.equal(await focused(page), 'outside', 'Tab stops in the tree twice');
-    await press(page, 'Shift+Tab');
-    assert.equal(await focused(page), items[0], 'Shift+Tab does not go back to the row');
-    assert.deepEqual(errors(page), []);
-  });
-}
-
 // navigator-slides-canvas-8: the zoom was set only to the steps of the menu, the slider, or the
 // wheel, without a field for a typed percentage as the Zoom dialog of PowerPoint has
 async function clickItem(page, label) {
@@ -519,17 +474,13 @@ for (const platform of PLATFORMS) {
 }
 
 // shell-10: the View menu and the View popup listed the views in two orders, and the status bar
-// called the navigator Slides
-const VIEWS = ['Navigator', 'Slide Only', 'Light Table', 'Outline', 'Format', 'Steps', 'Notes'];
+// called the navigator Slides. the View button of the toolbar is a split button since R22.1
+const VIEWS = ['Navigator', 'Slide Only', 'Chapters Table', 'Format', 'Steps', 'Notes'];
 for (const platform of PLATFORMS) {
-  test(`the View menu and the View popup list the views in the order of Keynote, with one name each (${platform})`, async (t) => {
+  test(`the View menu lists the views in the order of Keynote, with one name each (${platform})`, async (t) => {
     const page = await load(t, platform);
     const menu = Object.keys(await menuKeys(page, 'View')).filter((l) => VIEWS.includes(l));
-    await click(page, '.beeson-edit-top [data-command="toolbar.view"]');
-    const popup = (await menuLabels(page)).filter((l) => VIEWS.includes(l));
-    await press(page, 'Escape');
     assert.deepEqual(menu, VIEWS, 'the View menu');
-    assert.deepEqual(popup, VIEWS, 'the View popup');
     assert.ok(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].some((b) => b.textContent === 'Navigator')`), 'the status bar does not name the navigator');
   });
 }
