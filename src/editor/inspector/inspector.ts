@@ -20,15 +20,13 @@ import { tablePane } from './table.ts';
 import { textPane } from './text.ts';
 import { formulaPane, formulaView } from './formula.ts';
 import { codePane } from './code.ts';
-import { plotPane } from './plot.ts';
 import { surfacePane, surfaceOf } from './surface.ts';
-import { plotOf } from '../commands/plot.ts';
 import { linePane } from './line.ts';
 import { selectedLines } from '../commands/line.ts';
 import { lockedSelection } from '../commands/order.ts';
 
-export type PaneKind = 'slide' | 'table' | 'text' | 'image' | 'video' | 'qr' | 'formula' | 'code' | 'plot' | 'surface' | 'line' | 'arrange';
-const TAB_NAMES: Record<PaneKind, string> = { slide: 'Slide', table: 'Table', text: 'Text', image: 'Image', video: 'Video', qr: 'QR Code', formula: 'Formula', code: 'Code', plot: 'Plot', surface: 'Surface', line: 'Line', arrange: 'Arrange' };
+export type PaneKind = 'slide' | 'table' | 'text' | 'image' | 'video' | 'qr' | 'formula' | 'code' | 'surface' | 'line' | 'arrange';
+const TAB_NAMES: Record<PaneKind, string> = { slide: 'Slide', table: 'Table', text: 'Text', image: 'Image', video: 'Video', qr: 'QR Code', formula: 'Formula', code: 'Code', surface: 'Surface', line: 'Line', arrange: 'Arrange' };
 const isCode = (el: Element | undefined) => !!el?.closest('pre')?.querySelector(':scope > code');
 // a block of words, which the Text pane formats together with others, as text boxes in Keynote
 const TEXT_BLOCK = 'h1, h2, h3, p, ul, ol, div.foot';
@@ -51,8 +49,7 @@ function viewOf(app: App): { tabs: PaneKind[]; items: readonly Element[] } {
   if (video) return { tabs: ['video', 'arrange'], items: [el, video] };
   if (qr) return { tabs: ['qr', 'arrange'], items: [el, qr] };
   if (el.localName === 'pre' && isCode(el)) return { tabs: ['code', 'text', 'arrange'], items: els };
-  const plot = plotOf(app), surface = surfaceOf(app);
-  if (plot) return { tabs: ['plot', 'arrange'], items: [el, plot] };
+  const surface = surfaceOf(app);
   if (surface) return { tabs: ['surface', 'arrange'], items: [el, surface] };
   if (hasText(el)) return { tabs: ['text', 'arrange'], items: els };
   return { tabs: ['arrange'], items: els };
@@ -71,7 +68,6 @@ function paneOf(app: App, kind: PaneKind, run: ReturnType<typeof runner>): Contr
     case 'qr': return qrPane(app, run);
     case 'formula': return formulaPane(app, run);
     case 'code': return codePane(app, run);
-    case 'plot': return plotPane(app, run);
     case 'surface': return surfacePane(app, run);
     case 'line': return linePane(app, run);
     case 'arrange': return arrangePane(app, run);

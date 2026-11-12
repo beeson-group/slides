@@ -644,7 +644,6 @@ export function commands(app: App): Command[] {
 // commands that select or show the selection are kept, and so are Lock and Unlock
 const CHANGES = new RegExp([
   '^(figure|image|media|code|surface|line|backdrop|math|text)\\.',
-  '^plot\\.(?!closeData$)',
   '^arrange\\.(?!(lock|unlock|toggleLock)$)',
   '^table\\.(?!(select|extend|cell\\.))',
   '^steps\\.(set|add|remove|start|delay|deliver|listDelivery|final|move|earlier|later|effect)$',

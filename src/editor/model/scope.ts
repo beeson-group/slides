@@ -31,8 +31,8 @@ export const DATA_ATTRS = [
 // the standard attributes that the editor writes
 export const STANDARD_ATTRS = ['alt', 'src', 'poster', 'href', 'muted', 'loop', 'colspan', 'rowspan'];
 
-// the attributes written only in the text of new content, e.g. the id of the JSON block of a plot
-// and the id renamed in a duplicated slide
+// the attributes written only in the text of new content, e.g. the id renamed in a duplicated or
+// pasted slide
 export const TEMPLATE_ATTRS = ['id', 'type'];
 
 // the attributes of the svg of a line or an arrow of commands/line.ts, by tag

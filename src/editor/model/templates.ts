@@ -8,8 +8,8 @@ import { eolOf } from './units.ts';
 export type Layout = 'title' | 'section' | 'content' | 'narrow' | 'wide' | 'figure' | 'split' | 'closing';
 export const LAYOUTS: Layout[] = ['title', 'section', 'content', 'narrow', 'wide', 'figure', 'split', 'closing'];
 
-export type ElementKind = 'text' | 'image' | 'video' | 'table' | 'formula' | 'code' | 'qr' | 'plot' | 'backdrop';
-export const ELEMENT_KINDS: ElementKind[] = ['text', 'image', 'video', 'table', 'formula', 'code', 'qr', 'plot', 'backdrop'];
+export type ElementKind = 'text' | 'image' | 'video' | 'table' | 'formula' | 'code' | 'qr' | 'backdrop';
+export const ELEMENT_KINDS: ElementKind[] = ['text', 'image', 'video', 'table', 'formula', 'code', 'qr', 'backdrop'];
 
 // the line ending of a file and one step of its indentation
 export type TextStyle = { eol: string; step: string };
@@ -67,11 +67,10 @@ export function layoutText(layout: Layout, style: TextStyle, base = ''): string 
   }
 }
 
-export type ElementOptions = { src?: string; alt?: string; poster?: string; tex?: string; language?: string; qr?: string; id?: string; columns?: number; rows?: number; scene?: string; plate?: boolean };
+export type ElementOptions = { src?: string; alt?: string; poster?: string; tex?: string; language?: string; qr?: string; columns?: number; rows?: number; scene?: string };
 
 // the units of a new element of the kind, each without the white space before it, in the order in
-// which they are inserted. base is the indentation of the children of the container, and a plot is
-// two units, its div and its JSON block
+// which they are inserted. base is the indentation of the children of the container
 export function elementText(kind: ElementKind, style: TextStyle, base: string, options: ElementOptions = {}): string[] {
   const o = options;
   switch (kind) {
@@ -97,18 +96,6 @@ export function elementText(kind: ElementKind, style: TextStyle, base: string, o
       return [`<pre><code class="language-${attr(o.language ?? 'python')}"></code></pre>`];
     case 'qr':
       return [`<div class="qr" data-qr="${attr(o.qr ?? 'https://example.com')}"></div>`];
-    case 'plot': {
-      const id = attr(o.id ?? 'plot-1');
-      const json: [number, string][] = [
-        [0, `<script type="application/json" id="${id}">{`],
-        [1, '"duration": 2,'],
-        [1, '"panels": [{ "id": "main", "x": { "range": [0, 1], "title": "$x$" }, "y": { "range": [0, 1], "title": "$y$" } }],'],
-        [1, '"marks": [{ "id": "line", "panel": "main", "kind": "trace" }],'],
-        [1, '"tabs": [{ "name": "data", "values": [0, 0.25, 0.5, 0.75, 1], "data": { "line": [[0, 0.1], [0.25, 0.45], [0.5, 0.6], [0.75, 0.7], [1, 0.9]] } }]'],
-        [0, '}</script>'],
-      ];
-      return [`<div class="plot ${o.plate ? 'plate' : 'zone'}" data-plot="${id}"></div>`, lines(json, style, base)];
-    }
     case 'backdrop':
       return [`<div class="backdrop" data-scene="${attr(o.scene ?? 'nest')}" data-cx="0.97" data-cy="0" data-half="0.5"></div>`];
   }

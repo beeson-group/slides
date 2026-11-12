@@ -525,20 +525,6 @@ try {
     return `table ${shape[1]} by ${shape[0]}, Tab from ${js(c0)} to ${js(c1)}, Esc selects the table, undone`;
   });
 
-  await check('smoke: Insert > Plot inserts a plot, and Mod+Z takes it back', async () => {
-    await load(2);
-    await openBar('Insert');
-    await choose('Plot');
-    expect(await within(`!!document.querySelector('.reveal section.present div.plot')`, 5000), 'a plot is not inserted');
-    await evaluate(`(window.BeesonEditor.exec('plot.closeData'), true)`).catch(() => {});
-    await frames();
-    expect((await render()) !== SOURCE, 'the plot is not written');
-    await evaluate('window.BeesonEditor.undo()');
-    await frames();
-    await byteExact('after the undo');
-    return 'plot inserted and written, undone';
-  });
-
   await check('smoke: View > Object List lists the objects of the slide', async () => {
     await load(4);
     await openBar('View');

@@ -279,8 +279,7 @@ export class Doc {
 
   // a new element of the kind in parent before the node before, or at the end
   async insertElement(kind: ElementKind, parent: Element, before: Node | null = null, options: ElementOptions = {}): Promise<Element[]> {
-    const o = kind === 'plot' && !options.id ? { ...options, id: this.uniqueId('plot') } : options;
-    return this.insert(elementText(kind, this.style(), this.childIndent(parent), o), parent, before, `new ${kind}`);
+    return this.insert(elementText(kind, this.style(), this.childIndent(parent), options), parent, before, `new ${kind}`);
   }
 
   // a copy of el after it, with each id renamed

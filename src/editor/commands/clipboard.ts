@@ -279,20 +279,7 @@ async function readMedia(): Promise<File[]> {
   }
 }
 
-// the work that a handler of the paste event of a field starts. Paste of the Edit menu waits for
-// it, hence its changes are in the entry of the Paste, as after the key
-export const pasteWork = new WeakMap<Event, Promise<unknown>>();
 export const inText = (app: App) => app.selection.kind === 'text' || app.region() === 'text' || !!fieldOf(app);
-
-// a range of cells selected around a field, e.g. in the grid of the Plot Data window, on which Cut,
-// Copy, and Delete of the Edit menu act as their keys do. commands/plot.ts sets it: selected tells
-// whether the field is in a grid with a range, clear clears the range under label, and clearable
-// tells whether the range has a cell that clear empties, without which Cut and Delete are dimmed
-export const fieldCells = { selected: (_field: Element): boolean => false, clear: async (): Promise<void> => {}, label: '', clearable: (): boolean => true };
-export const inCells = (app: App): boolean => {
-  const f = fieldOf(app);
-  return !!f && fieldCells.selected(f);
-};
 const onSlides = (app: App) => app.region() === 'navigator' || app.selection.kind === 'slides';
 
 // whether the range of the document is not collapsed, i.e. a text has something to cut or copy, as
@@ -316,18 +303,10 @@ export function install(app: App): void {
     label: 'Cut',
     menu: menu(20),
     context: ['element', 'text'],
-    enabled: (a) => ready(a) && (inText(a) ? (inCells(a) ? fieldCells.clearable() : hasRange()) : selectedElements(a).length > 0 || (onSlides(a) && a.commands.enabled('slide.cut'))),
+    enabled: (a) => ready(a) && (inText(a) ? hasRange() : selectedElements(a).length > 0 || (onSlides(a) && a.commands.enabled('slide.cut'))),
     undoable: true,
-    get undo() {
-      return inCells(app) ? fieldCells.label : undefined;
-    },
     run: async (a, arg) => {
       const data = arg instanceof DataTransfer ? arg : null;
-      // on a range of cells, the copy of the grid and its clear, as by the key
-      if (inCells(a)) {
-        document.execCommand('copy');
-        return fieldCells.clear();
-      }
       // in a text, the command of the browser, which a click on a menu item allows
       if (inText(a)) return void document.execCommand('cut');
       if (copyRange(a, data)) return clearRange(a);
@@ -350,7 +329,7 @@ export function install(app: App): void {
     label: 'Copy',
     menu: menu(21),
     context: ['element', 'text'],
-    enabled: (a) => ready(a) && (inText(a) ? hasRange() || inCells(a) : selectedElements(a).length > 0 || (onSlides(a) && a.commands.enabled('slide.copy'))),
+    enabled: (a) => ready(a) && (inText(a) ? hasRange() : selectedElements(a).length > 0 || (onSlides(a) && a.commands.enabled('slide.copy'))),
     run: (a, arg) => {
       const data = arg instanceof DataTransfer ? arg : null;
       if (inText(a)) return void document.execCommand('copy');
@@ -377,15 +356,14 @@ export function install(app: App): void {
     const field = fieldOf(a);
     if (field) {
       // slides are pasted from a line of the outline as from the navigator. a text is given to the
-      // field as the paste of the key first, since the grid of Plot Data fills its cells from it
-      // and a line of the outline takes one line. a field without a handler takes the plain text
+      // field as the paste of the key first, since a line of the outline takes one line. a field
+      // without a handler takes the plain text
       if (slides && a.region() === 'navigator') await a.commands.run('slide.paste', slides);
       else if (text && !els && !slides) {
         const data = new DataTransfer();
         data.setData('text/plain', text);
         const ev = new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true });
         if (field.dispatchEvent(ev)) document.execCommand('insertText', false, text);
-        else await pasteWork.get(ev);
       }
     } else if (inText(a)) {
       const at = getSelection()?.anchorNode ?? document.activeElement;

@@ -15,8 +15,6 @@ const PATHS: Record<string, string[]> = {
   'slide-add': ['M2.5 5h11v8h-11z', 'M16.5 9v6', 'M13.5 12h6'],
   text: ['M4.5 5.5V4h11v1.5', 'M10 4v12', 'M7.5 16h5'],
   formula: ['M14.5 4.5h-9l5 5.5-5 5.5h9'],
-  // a line plot over its axes, for Insert > Plot at the place of the Chart button of Keynote
-  plot: ['M3.5 3.5v13h13', 'M6 13l3-4 2.5 2 4.5-6'],
   table: ['M3 4.5h14v11H3z', 'M3 8.25h14', 'M3 11.75h14', 'M8 4.5v11', 'M12.5 8.25v7.25'],
   image: ['M3 4.5h14v11H3z', 'M3.5 14l4-4.25 3.25 3.25 2.25-2.25L16.5 14', 'F13 8.25a1.25 1.25 0 1 1 0-.01z'],
   video: ['M2.5 5.5h10.5v9H2.5z', 'M13 9l4.5-2.5v7L13 11'],

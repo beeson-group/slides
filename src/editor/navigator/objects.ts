@@ -119,7 +119,7 @@ export function describeObject(el: Element): { kind: string; icon: string; name:
   if (el.matches(CONTAINER)) {
     const caption = el.querySelector(':scope > figcaption, :scope > .caption');
     const words = caption ? wordsOf(caption) : '';
-    if (el.querySelector('.plot')) return named('Plot', 'plot', words);
+    if (el.matches('.plot') || el.querySelector('.plot')) return named('Plot', 'plot', words);
     if (el.querySelector('tycho-viewer')) return named('Scene', 'shape', words);
     if (el.querySelector('video')) return named('Video', 'video', words);
     if (el.querySelector('.qr')) return named('QR Code', 'qr', words);
