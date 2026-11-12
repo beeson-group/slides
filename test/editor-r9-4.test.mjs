@@ -85,6 +85,22 @@ async function closeMenu(page) {
   await frames(page);
 }
 
+// the items of the submenu of an item of the open menu, opened with the pointer. the menus are
+// closed after it
+async function submenu(page, label) {
+  const at = await page.evaluate(`(() => {
+    const m = [...document.querySelectorAll('.beeson-edit-menu')].filter((m) => m.getClientRects().length).at(-1);
+    const r = [...m.querySelectorAll('.item')].find((i) => i.querySelector('.label')?.textContent === ${JSON.stringify(label)}).getBoundingClientRect();
+    return { x: r.x + r.width / 2, y: r.y + r.height / 2 };
+  })()`);
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: at.x, y: at.y });
+  await sleep(350);
+  const m = await menu(page);
+  await page.evaluate('window.BeesonEditorShell.closeMenus()');
+  await frames(page);
+  return m;
+}
+
 // findings menus-keys-1 and tables-equations-insert-1: a right-click on a formula opened the menu of
 // MathJax and never the element menu of the editor, and on a formula of a caption the page was
 // scrolled while this menu was open
@@ -277,12 +293,11 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await selected(page), ['h2', 'p']);
     let m = await objectMenu(page, para, ['h2', 'p'], 'one of two selected blocks');
     assert.equal(item(m, 'Group')?.off, false);
-    await closeMenu(page);
+    assert.equal(item(await submenu(page, 'Group'), 'Group')?.off, false);
     await page.evaluate(`window.BeesonEditor.exec('arrange.group')`);
     await frames(page);
     m = await objectMenu(page, para, ['h2', 'p'], 'a member of a selected group');
-    assert.equal(item(m, 'Ungroup')?.off, false);
-    await closeMenu(page);
+    assert.equal(item(await submenu(page, 'Group'), 'Ungroup')?.off, false);
     await roundTrip(page);
     // Delete of the menu of a selected block
     await click(page, '.reveal section.present > ul', { button: 'left' });

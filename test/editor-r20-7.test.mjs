@@ -452,10 +452,25 @@ for (const platform of PLATFORMS) {
     assert.ok(at('Bring to Front') < at('Bring Forward') && at('Bring Forward') < at('Send Backward') && at('Send Backward') < at('Send to Back'), labels.join(', '));
     at('Rotate Left 90°');
     at('Rotate Right 90°');
+    // on one figure, none of Group, Ungroup, and Regroup can run, hence their submenu is dimmed
+    const dimmed = (label) => page.evaluate(`[...document.querySelector('.beeson-edit-menu').querySelectorAll('.item')].find((i) => i.querySelector('.label')?.textContent === ${js(label)})?.getAttribute('aria-disabled')`);
+    assert.equal(await dimmed('Group'), 'true', 'the submenu Group is offered on one figure');
+    await page.evaluate('window.BeesonEditorShell.closeMenus()');
+    await click(page, 'section.present img[alt="A straight figure"]', { modifiers: 'Shift' });
+    await click(page, 'section.present img[alt="A turned figure"]', { button: 'right' });
+    await sleep(100);
+    assert.notEqual(await dimmed('Group'), 'true', 'the submenu Group is dimmed on two figures');
     await hover(page, 'Group');
     assert.deepEqual(await menuRows(page, 1), ['Group', 'Ungroup', 'Regroup']);
     await hover(page, 'Align');
     assert.deepEqual((await menuRows(page, 1)).slice(0, 6), ['Align Left', 'Align Center', 'Align Right', 'Align Top', 'Align Middle', 'Align Bottom']);
+    // two figures are not distributed, hence the submenu opens once a third element is selected
+    assert.equal(await dimmed('Distribute'), 'true', 'the submenu Distribute is offered on two figures');
+    await page.evaluate('window.BeesonEditorShell.closeMenus()');
+    await click(page, 'section.present > h2', { modifiers: 'Shift' });
+    assert.equal((await selected(page)).length, 3);
+    await click(page, 'section.present img[alt="A turned figure"]', { button: 'right' });
+    await sleep(100);
     await hover(page, 'Distribute');
     assert.ok((await menuRows(page, 1)).includes('Distribute Horizontally'));
     await page.evaluate('window.BeesonEditorShell.closeMenus()');
