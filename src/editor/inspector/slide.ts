@@ -154,16 +154,21 @@ function sketch(layout: string, width: Width): SVGSVGElement {
 // MathJax when the pane is built again, since the inspector drops the old pane
 let typesetNotes: HTMLElement[] = [];
 
+// the selected slides of several layouts show Multiple Layouts, and the controls of one layout
+// are shown only when every selected slide has it
+const mixed = (app: App) => new Set(slidesOf(app).map(nameOf)).size > 1;
+
+// the layout whose sections the Slide pane shows, which inspector.ts adds to the key of the pane,
+// hence the pane is built again when the selected slides or their layouts change it
+export const paneLayout = (app: App): string => (mixed(app) ? 'mixed' : layoutOf(app.current()));
+
 // the Slide pane for the current slide
 export function slidePane(app: App, run: Run): Control[] {
   untypeset(typesetNotes);
   typesetNotes = [];
   const slide = app.current();
-  // the selected slides of several layouts show Multiple Layouts, and the controls of one layout
-  // are shown only when every selected slide has it
-  const mixed = () => new Set(slidesOf(app).map(nameOf)).size > 1;
-  const layout = mixed() ? 'mixed' : layoutOf(slide);
-  const layoutCard = card(() => sketch(layoutOf(app.current()), slide ? widthOf(slide) : 'normal'), 'Slide Layout', () => (mixed() ? 'Multiple Layouts' : nameOf(app.current())));
+  const layout = paneLayout(app);
+  const layoutCard = card(() => sketch(layoutOf(app.current()), slide ? widthOf(slide) : 'normal'), 'Slide Layout', () => (mixed(app) ? 'Multiple Layouts' : nameOf(app.current())));
   // the card is the button of the chooser of the layouts of commands/layout.ts
   const chooser = layoutCard.el;
   chooser.classList.add('ed-chooser');

@@ -137,6 +137,7 @@ const stopPreview = () => {
   previewed = null;
 };
 const stopping = new WeakSet<App>();
+const LOADED = ['loadedmetadata', 'durationchange'] as const;
 
 // the Poster Frame slider over the length of the video, with the time of the frame. a move seeks
 // the video on the slide to the frame, and a release captures it as the poster
@@ -208,8 +209,13 @@ function frameSlider(app: App, run: Run, video: HTMLVideoElement | null): Contro
   input.addEventListener('change', () => {
     if (video) void run('media.poster', { el: video });
   });
-  // the length of a video is known once its metadata is loaded
-  if (video && !(length() > 0)) video.addEventListener('loadedmetadata', sync, { once: true });
+  // the length of a video is known once its metadata is loaded, also again after an undo or a redo
+  // of Replace… sets another src while the pane is kept
+  const loaded = () => {
+    if (input.isConnected) return sync();
+    for (const type of LOADED) video?.removeEventListener(type, loaded);
+  };
+  for (const type of LOADED) video?.addEventListener(type, loaded);
   sync();
   return { el, sync };
 }

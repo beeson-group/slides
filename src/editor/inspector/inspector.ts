@@ -15,7 +15,7 @@ import { make } from '../ui/dom.ts';
 import { arrangePane } from './arrange.ts';
 import { installStyle, keepFocus, runner, type Control } from './controls.ts';
 import { imagePane, qrPane, videoPane } from './media.ts';
-import { commands as slideCommands, slidePane } from './slide.ts';
+import { commands as slideCommands, paneLayout, slidePane } from './slide.ts';
 import { tablePane } from './table.ts';
 import { textPane } from './text.ts';
 import { formulaPane, formulaView } from './formula.ts';
@@ -87,7 +87,8 @@ function paneOf(app: App, kind: PaneKind, run: ReturnType<typeof runner>): Contr
 export function fillFormat(app: App, panel: HTMLElement): void {
   const view = viewOf(app);
   const tab = chosen && view.tabs.includes(chosen) ? chosen : view.tabs[0];
-  const key = `${view.tabs.join(',')}:${tab}`;
+  // the sections of the Slide pane follow the layouts of the selected slides
+  const key = `${view.tabs.join(',')}:${tab}${tab === 'slide' ? `:${paneLayout(app)}` : ''}`;
   const same = shown && shown.panel === panel && shown.key === key && panel.contains(shown.root) &&
     shown.items.length === view.items.length && shown.items.every((el, i) => el === view.items[i]);
   if (same && shown) {

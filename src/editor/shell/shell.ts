@@ -320,6 +320,8 @@ export function install(app: App): void {
   app.listen('resize', () => app.stage.live || syncInspector());
   app.listen('slide', () => format && fillFormat());
   app.onRefresh(['selection', 'content', 'structure'], () => format && fillFormat());
+  // a flip of the mode shows the other twin of a dark and light pair, whose pane is built again
+  new MutationObserver(() => format && fillFormat()).observe(html, { attributes: true, attributeFilter: ['data-theme'] });
 
   // the context menu of the place of a right-click, of a Control-click on a Mac, of Shift+F10,
   // or of the Menu key. where no command is declared for the place, the menu of the browser is kept
