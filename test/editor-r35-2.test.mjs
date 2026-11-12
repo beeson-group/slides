@@ -1,7 +1,8 @@
 // the Steps pane and the Object List, R35.2, on both platforms. after a flip of the mode, the rows
 // of a dark and light pair of pictures in the section are bound to the twin that is shown. a folded
 // group row of the Object List selects and locks the members that its group has now, after a
-// Delete, an undo, a Duplicate of a member, and Arrange > Group
+// Delete, an undo, a Duplicate of a member, and Arrange > Group. a picture selected across a flip
+// keeps its rows marked, while the selection holds the hidden twin
 
 import assert from 'node:assert/strict';
 import { after, before, test } from 'node:test';
@@ -117,6 +118,30 @@ for (const platform of PLATFORMS) {
       await frames(page);
       assert.equal(await page.evaluate('document.documentElement.dataset.theme'), 'dark');
       await pairBound(page, 'img.for-dark', dark);
+      assert.equal(await page.evaluate('window.BeesonEditor.render()'), page.source);
+    });
+
+    test(`the rows of a picture selected on the slide stay marked across a flip of the mode, on slide ${slide + 1} (${platform})`, async () => {
+      const page = await deckPage(platform, slide);
+      await exec(page, 'view.steps');
+      await frames(page);
+      await click(page, { x: 100, y: 950 });
+      await click(page, 'section.present img');
+      // D and then View > Slide in Dark Mode, each while the picture stays selected
+      for (const [flip, theme, twin, alt] of [['D', 'light', 'img.for-light', light], ['view.slideDark', 'dark', 'img.for-dark', dark]]) {
+        if (flip === 'D') await press(page, 'D');
+        else await exec(page, flip);
+        await frames(page);
+        assert.equal(await page.evaluate('document.documentElement.dataset.theme'), theme);
+        assert.equal((await selection(page)).length, 1);
+        const marked = await page.evaluate(MARKED);
+        assert.deepEqual(marked.shown, [twin]);
+        assert.equal(marked.steps.length, 1, `after ${flip}, the Steps row of the selected picture is not marked`);
+        assert.ok(marked.steps[0].startsWith(alt));
+        assert.deepEqual(marked.objects, ['Image'], `after ${flip}, the row Image of the Object List is not marked`);
+        assert.equal(marked.fields, true, `after ${flip}, the fields Start, Delay, and Effect are hidden`);
+        assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-badge.on').length`), 1, `after ${flip}, the number of the step is not marked`);
+      }
       assert.equal(await page.evaluate('window.BeesonEditor.render()'), page.source);
     });
   }
