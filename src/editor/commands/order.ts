@@ -8,7 +8,7 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { angleOf, apartOf, locked, pivotOf, placeOf, record, seenCenter, spinOf, spunEls, turn, turnMember, turnedEls, turnersOf } from '../canvas/drag.ts';
+import { angleOf, apartOf, locked, pivotOf, placeOf, record, seenCenter, spinOf, spunEls, turn, turnMember, turnedEls, turnersOf, withTwins } from '../canvas/drag.ts';
 import { LINE, MOVABLE, OUTSIDE, objectOf, objectsOf, turnable, twinOf } from '../canvas/hit.ts';
 import { stateOf } from '../tags.ts';
 
@@ -577,7 +577,8 @@ export function commands(app: App): Command[] {
         const deg = ((Math.round(a.deg) % 360) + 360) % 360;
         const els = (a.els ?? selectedEls(app)).filter((el) => el.isConnected);
         // the places of the elements that a turn changes, before and after it, as one entry
-        const turned = (moved: Element[], run: () => void) => {
+        const turned = (els: Element[], run: () => void) => {
+          const moved = withTwins(app, els);
           const from = new Map(moved.map((el) => [el, placeOf(el)]));
           run();
           record(app, 'rotate', moved.map((el) => ({ el, from: from.get(el) as ReturnType<typeof placeOf>, to: placeOf(el) })));

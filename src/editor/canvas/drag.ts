@@ -110,9 +110,16 @@ export function record(app: App, label: string, changes: { el: Element; from: Pl
   const moved = changes.filter((c) => !samePlace(c.from, c.to) && !locked(c.el));
   if (!moved.length) return moved;
   const before = selected.slice();
+  // an image whose twin is listed too gets its own place back, as a file edited by hand can turn
+  // one image of a pair alone
+  const listed = new Map(changes.map((c) => [c.el, c]));
   const apply = (way: 'from' | 'to') => {
     app.showSlide(moved[0].el);
-    for (const c of moved) writePlace(app, c.el, c[way], true);
+    for (const c of moved) {
+      const twin = twinOf(app, c.el), own = twin ? listed.get(twin) : undefined;
+      writePlace(app, c.el, c[way], true, !own);
+      if (twin && own) writePlace(app, twin, own[way], true, false);
+    }
     const kept = before.filter((el) => el.isConnected);
     const els = moved.map((c) => c.el);
     app.frame(kept.length ? kept : els.filter((el) => el.getClientRects().length && !els.some((o) => o !== el && o.contains(el))));
@@ -245,6 +252,10 @@ export function apartOf(app: App, els: Element[]): Turner[] | null {
 // the elements whose places a turn of spin changes: spin, and the picture of a figure with a
 // caption, whose angle turn() gives to the figure
 export const spunEls = (spin: Element): Element[] => (spin.matches(CONTAINER) ? [spin, pictureOf(spin)] : [spin]);
+
+// els with the image of the other mode of each, whose own place a turn records, since a turn
+// writes the place of an image onto its twin
+export const withTwins = (app: App, els: Element[]): Element[] => [...new Set(els.flatMap((el) => [el, twinOf(app, el) ?? el]))];
 
 // the elements whose places a turn of turners changes
 export const turnedEls = (turners: Turner[]): Element[] => [...new Set(turners.flatMap((t) => [t.el, ...spunEls(t.spin)]))];
@@ -472,6 +483,7 @@ export function install(app: App): void {
 
   const start = (kind: Press['kind'], ev: PointerEvent, el: Element | null, els: Element[], click: Press['click']): Press => {
     const f = frameOf(app);
+    if (kind === 'rotate') els = withTwins(app, els);
     const p: Press = {
       kind, x: ev.clientX, y: ev.clientY, moved: false, el, els, click, selected: app.selection.elements().slice(), corner: el && kind === 'move' ? cornerBoxOf(app, els, el) : null,
       from: new Map(els.map((e) => [e, placeOf(e)])),
