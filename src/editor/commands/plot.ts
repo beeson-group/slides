@@ -439,12 +439,20 @@ class DataWindow {
   // the size of the range in words, which is kept in the state while the sheets are read again
   private size(): string {
     const box = this.box();
-    return box ? `${box.r1 - box.r0 + 1} × ${box.c1 - box.c0 + 1} cells selected.` : '';
+    if (!box) return '';
+    const why = this.clearable() ? '' : ' A number of a plot cannot be left empty, hence Cut and Delete are dimmed.';
+    return `${box.r1 - box.r0 + 1} × ${box.c1 - box.c0 + 1} cells selected.${why}`;
   }
 
   // whether field is a cell of the grid with a range selected
   holds(field: Element): boolean {
     return this.grid.contains(field) && !!this.box();
+  }
+
+  // whether the range holds a text, which Cut and Delete clear. a number is kept, since parsePlot
+  // of src/plot.ts does not read a missing value
+  clearable(): boolean {
+    return !!this.box() && !!this.selected()?.cells.flat().some((c) => c?.kind === 'text');
   }
 
   // the cells of the range, or the focused cell, by row
@@ -1162,6 +1170,7 @@ export function install(app: App): void {
   fieldCells.selected = (field) => !!open()?.holds(field);
   fieldCells.clear = () => app.commands.run('plot.clearCells');
   fieldCells.label = CLEAR;
+  fieldCells.clearable = () => !!open()?.clearable();
   // a plot is drawn again once its block is replaced, by a write, an undo, or a redo
   new MutationObserver((records) => {
     for (const r of records) {

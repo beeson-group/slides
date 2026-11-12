@@ -23,7 +23,7 @@ import { VOID } from '../source.ts';
 import { tokenize } from '../tokens.ts';
 import { keepBeside } from './place.ts';
 import { MARK, docOf, slidesIn } from './slide.ts';
-import { clearRange, pasteRange, rangeText, selectedRange } from './table.ts';
+import { clearRange, pasteRange, pasteTable, rangeText, selectedRange } from './table.ts';
 import { removeJoining } from '../text/blocks.ts';
 
 // the offset of a paste or a duplicate that would cover its source, in slide pixels
@@ -275,8 +275,9 @@ export const inText = (app: App) => app.selection.kind === 'text' || app.region(
 
 // a range of cells selected around a field, e.g. in the grid of the Plot Data window, on which Cut,
 // Copy, and Delete of the Edit menu act as their keys do. commands/plot.ts sets it: selected tells
-// whether the field is in a grid with a range, and clear clears the range under label
-export const fieldCells = { selected: (_field: Element): boolean => false, clear: async (): Promise<void> => {}, label: '' };
+// whether the field is in a grid with a range, clear clears the range under label, and clearable
+// tells whether the range has a cell that clear empties, without which Cut and Delete are dimmed
+export const fieldCells = { selected: (_field: Element): boolean => false, clear: async (): Promise<void> => {}, label: '', clearable: (): boolean => true };
 export const inCells = (app: App): boolean => {
   const f = fieldOf(app);
   return !!f && fieldCells.selected(f);
@@ -304,7 +305,7 @@ export function install(app: App): void {
     label: 'Cut',
     menu: menu(20),
     context: ['element', 'text'],
-    enabled: (a) => ready(a) && (inText(a) ? hasRange() || inCells(a) : selectedElements(a).length > 0 || (onSlides(a) && a.commands.enabled('slide.cut'))),
+    enabled: (a) => ready(a) && (inText(a) ? (inCells(a) ? fieldCells.clearable() : hasRange()) : selectedElements(a).length > 0 || (onSlides(a) && a.commands.enabled('slide.cut'))),
     undoable: true,
     get undo() {
       return inCells(app) ? fieldCells.label : undefined;
@@ -381,8 +382,13 @@ export function install(app: App): void {
       else if (match && host) insertPlain(host, els || slides ? wordsOf(text) : text);
       else if (!els && !slides) document.execCommand('insertText', false, text);
     } else if (els) await pasteElements(a, els);
-    else if (!slides && (await pasteRange(a, text, text === clip?.text ? clip.html : ''))) return;
     else if (slides) await a.commands.run('slide.paste', slides);
+    else {
+      // a range of cells or a table is pasted onto the selected range, or else onto the slide as a
+      // new table, as by the key
+      const html = text === clip?.text ? clip.html : '';
+      if (!(await pasteRange(a, text, html)) && a.region() === 'canvas') await pasteTable(a, text, html);
+    }
   };
   c.define({
     id: 'edit.paste',

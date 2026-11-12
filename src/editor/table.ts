@@ -122,11 +122,23 @@ function inlineHtml(el: Element): string {
 // the inner HTML of each cell of a table marked with CELLS, kept to the inline elements of the
 // theme and to formulas, with a cell of colspan followed by empty cells. null without such a table
 export function parseEditorTable(html: string): string[][] | null {
-  if (!html.includes(CELLS)) return null;
-  const table = new DOMParser().parseFromString(html, 'text/html').querySelector(`table[${CELLS}]`) as HTMLTableElement | null;
+  const table = editorTable(html);
   if (!table) return null;
   const rows = [...table.rows].map((tr) => [...tr.cells].flatMap((c) => [inlineHtml(c), ...Array<string>(Math.max(0, c.colSpan - 1)).fill('')]));
   return square(rows.filter((r) => r.length));
+}
+
+// whether each cell of a table marked with CELLS is a th, laid out as parseEditorTable lays out
+// its cells, with a cell of colspan followed by cells of its kind
+export function editorHeads(html: string): boolean[][] | null {
+  const table = editorTable(html);
+  if (!table) return null;
+  return [...table.rows].map((tr) => [...tr.cells].flatMap((c) => Array<boolean>(Math.max(1, c.colSpan)).fill(c.localName === 'th'))).filter((r) => r.length);
+}
+
+function editorTable(html: string): HTMLTableElement | null {
+  if (!html.includes(CELLS)) return null;
+  return new DOMParser().parseFromString(html, 'text/html').querySelector(`table[${CELLS}]`);
 }
 
 // the columns of rows that hold numbers, i.e. every cell below the header row that is not empty is
@@ -183,13 +195,16 @@ export function rowHtml(cells: { tag: 'td' | 'th'; text?: string; right?: boolea
 
 // the text of a table of rows of cells, with the first row as the header row, indented at base in
 // the style of the deck, as the template of model/templates.ts writes an empty table. with markup,
-// each cell is HTML of parseEditorTable, whose text decides the columns of numbers
-export function tableHtml(rows: string[][], style: TextStyle, base: string, markup = false): string {
+// each cell is HTML of parseEditorTable, whose text decides the columns of numbers. with heads,
+// a cell is a th where heads holds true, and a cell past the end of its row of heads takes the
+// kind of the first cell of the row
+export function tableHtml(rows: string[][], style: TextStyle, base: string, markup = false, heads: boolean[][] | null = null): string {
   const numeric = numericColumns(markup ? rows.map((r) => r.map((h) => h.replace(/<[^>]*>/g, ''))) : rows);
+  const head = (i: number, c: number) => (heads ? (heads[i]?.[c] ?? heads[i]?.[0] ?? false) : i === 0);
   const lines: [number, string][] = [
     [0, '<table>'],
     [1, '<tbody>'],
-    ...rows.map((r, i): [number, string] => [2, rowHtml(r.map((text, c) => ({ tag: i ? 'td' : 'th', text, right: numeric[c], markup })))]),
+    ...rows.map((r, i): [number, string] => [2, rowHtml(r.map((text, c) => ({ tag: head(i, c) ? 'th' : 'td', text, right: numeric[c], markup })))]),
     [1, '</tbody>'],
     [0, '</table>'],
   ];

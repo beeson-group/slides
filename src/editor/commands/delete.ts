@@ -29,7 +29,7 @@ export function install(app: App): void {
     in: ['canvas', 'navigator'],
     menu: { bar: 'Edit', group: 'clipboard', order: 23 },
     context: ['element'],
-    enabled: (a) => (onSlides(a) ? a.commands.enabled('slide.delete') : inText(a) ? hasRange() || inCells(a) : selectedElements(a).some((el) => !locked(el))),
+    enabled: (a) => (onSlides(a) ? a.commands.enabled('slide.delete') : inText(a) ? (inCells(a) ? fieldCells.clearable() : hasRange()) : selectedElements(a).some((el) => !locked(el))),
     runsAs: (a) => (onSlides(a) ? 'slide.delete' : 'element.delete'),
     undoable: true,
     get undo() {

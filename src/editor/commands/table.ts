@@ -31,7 +31,7 @@ import { emptySlot } from '../media/actions.ts';
 import { textStyle } from '../model/templates.ts';
 import {
   CELL, GRID, MOST, around, fillLine, boxOf, cellAfter, cellBeside, cellHtml, cellOver, columnName, columnsOf, emptyRows, gridOf, grow, hasHeader, numericOf, sortOrder,
-  CELLS, parseEditorTable, parseHtmlTable, parseTabular, placeOf, placesOf, rowHtml, spotsIn, tableHtml, type Box, type Place,
+  CELLS, editorHeads, parseEditorTable, parseHtmlTable, parseTabular, placeOf, placesOf, rowHtml, spotsIn, tableHtml, type Box, type Place,
 } from '../table.ts';
 import { placeCaret } from '../text/typing.ts';
 import { Dialog } from '../ui/dialog.ts';
@@ -96,6 +96,7 @@ html.beeson-autofilling,html.beeson-autofilling *{cursor:crosshair!important}
 .beeson-table-bars .lift[hidden]{display:none}
 .beeson-table-bars .lift>div{position:absolute;box-sizing:border-box;display:grid;overflow:hidden}
 html.beeson-line-moving,html.beeson-line-moving *{cursor:grabbing!important}
+html.beeson-line-refused,html.beeson-line-refused *{cursor:not-allowed!important}
 html.beeson-column-resizing,html.beeson-column-resizing *{cursor:col-resize!important}
 html.beeson-cell-range .reveal *{user-select:none!important;-webkit-user-select:none!important}
 .beeson-table-bars .cell.block{border-width:${FRAME_BLOCK}px;background:color-mix(in srgb,var(--ed-select) 12%,transparent)}
@@ -338,8 +339,9 @@ function headRows(table: HTMLTableElement): boolean[] {
 }
 
 // whether the rows or the columns lo to hi of table are moved to the gap before line to, as Keynote
-// moves them: to a gap outside them in the table, with header rows and body rows apart, and
-// without a merged cell across a line between lo and to
+// moves them: to a gap outside them in the table, with header rows and body rows apart. a merged
+// cell of a moved row lies in the moved rows or in the rows that they pass, and a column is
+// moved without a merged cell between lo and to
 function movable(table: HTMLTableElement, kind: Line, lo: number, hi: number, to: number): boolean {
   const g = gridOf(table);
   if (to < 0 || to > (kind === 'row' ? g.grid.length : g.width) || (to >= lo && to <= hi + 1)) return false;
@@ -348,10 +350,17 @@ function movable(table: HTMLTableElement, kind: Line, lo: number, hi: number, to
     const rows = [...table.rows].slice(a, b + 1);
     const head = headRows(table).slice(a, b + 1);
     if (rows.some((tr) => tr.parentElement !== rows[0].parentElement) || head.some((h) => h !== head[0])) return false;
+    const parts = to < lo ? [[to, lo - 1], [lo, hi]] : [[lo, hi], [hi + 1, to - 1]];
+    const whole = (s: Place) => s.row > b || s.row + s.rows - 1 < a || parts.some(([p, q]) => s.row >= p && s.row + s.rows - 1 <= q);
+    return g.grid.slice(a, b + 1).flat().every((x) => !!x && whole(x));
   }
-  const spots = kind === 'row' ? g.grid.slice(a, b + 1).flat() : g.grid.flatMap((r) => r.slice(a, b + 1));
-  return spots.every((x) => !!x && x.rows === 1 && (kind === 'row' || x.span === 1));
+  const spots = g.grid.flatMap((r) => r.slice(a, b + 1));
+  return spots.every((x) => !!x && x.rows === 1 && x.span === 1);
 }
+
+// whether the rows or the columns lo to hi of table are moved to any gap
+const movableAnywhere = (table: HTMLTableElement, kind: Line, lo: number, hi: number): boolean =>
+  Array.from({ length: (kind === 'row' ? table.rows.length : columnsOf(table)) + 1 }, (_, to) => to).some((to) => movable(table, kind, lo, hi, to));
 
 // the lines moved by a command of the way from the box of t, or null where they are not moved
 function moveOf(t: Target | null, kind: Line, way: -1 | 1): { lo: number; hi: number; to: number } | null {
@@ -390,14 +399,14 @@ async function moveLines(app: App, table: HTMLTableElement, kind: Line, lo: numb
 
 // a table of rows of cells put at its place in the layout of the current slide, and then moved
 // where it fits by placeTable, with every row, or put into the empty zone into. with markup, each
-// cell of rows is HTML rather than text
-async function insertTable(app: App, rows: string[][], into: Element | null = null, markup = false): Promise<HTMLTableElement> {
+// cell of rows is HTML rather than text, and heads are the kinds of the cells of tableHtml
+async function insertTable(app: App, rows: string[][], into: Element | null = null, markup = false, heads: boolean[][] | null = null): Promise<HTMLTableElement> {
   const slide = app.current()!;
   // the block of a title or closing slide is held at its foot, hence a table in it would move its
   // words up. the theme lays out a table of the section, as on a content slide
   const own = slide.matches('.title, .closing') ? { parent: slide, before: slide.querySelector(':scope > .foot, :scope > aside.notes') } : null;
   const { parent, before } = into ? { parent: into, before: null } : own ?? columnPlace(app, slide);
-  const [table] = await app.doc.insert(tableHtml(rows, styleOf(app), baseOf(app, parent), markup), parent, before, 'insert table');
+  const [table] = await app.doc.insert(tableHtml(rows, styleOf(app), baseOf(app, parent), markup, heads), parent, before, 'insert table');
   if (!into) placeTable(app, table as HTMLTableElement);
   else fillSlot(app, table as HTMLTableElement, into);
   return table as HTMLTableElement;
@@ -901,13 +910,28 @@ export async function pasteRange(app: App, text: string, html = ''): Promise<boo
   return true;
 }
 
+// a paste of an HTML table or of tab-separated text onto the current slide as a new table, which
+// is selected. a range of the editor keeps the inline elements and the kind of each of its cells.
+// false when the text is not a table
+export async function pasteTable(app: App, text: string, html = ''): Promise<boolean> {
+  const marked = parseEditorTable(html);
+  const rows = marked ?? parseHtmlTable(html) ?? parseTabular(text);
+  if (!rows) return false;
+  await app.history.transact('Paste Table', async () => {
+    const table = await insertTable(app, rows, null, !!marked, marked ? editorHeads(html) : null);
+    app.selection.set('elements', [table]);
+  });
+  return true;
+}
+
 let current: App | null = null;
 
-// Esc during a drag of rows or columns by their bar cancels it. the listener is added at the
-// import of this module, before BLOCK_KEYS and the keys of the editor take Esc
-let cancelMove: (() => boolean) | null = null;
+// a key while rows or columns are pressed or dragged by their bar is taken, as in Keynote, and Esc
+// cancels the drag. the listener is added at the import of this module, before BLOCK_KEYS and the
+// keys of the editor
+let cancelMove: ((cancel: boolean) => boolean) | null = null;
 window.addEventListener('keydown', (ev) => {
-  if (ev.key !== 'Escape' || !cancelMove?.()) return;
+  if (!cancelMove?.(ev.key === 'Escape')) return;
   ev.preventDefault();
   ev.stopImmediatePropagation();
 }, true);
@@ -1181,14 +1205,14 @@ function installBars(app: App): void {
     g.hidden = true;
     return g;
   });
-  // the line at the gap where the rows or the columns dragged by their bar land
+  // the line at the gap where the rows or the columns dragged by their bar land, drawn over the copy
   const gapLine = make('div', 'drop');
   gapLine.hidden = true;
   // a copy of the rows or the columns dragged by their bar, lifted over the table, which follows the
   // pointer along their axis while the others stay, as in Keynote
   const lift = make('div', 'lift');
   lift.hidden = true;
-  layer.append(cols, rows, grab, addCol, addRow, outline, grips, guide, spread, ...corners, handle, ...sides, gapLine, lift);
+  layer.append(cols, rows, grab, addCol, addRow, outline, grips, guide, spread, ...corners, handle, ...sides, lift, gapLine);
   document.body.append(layer);
   // a press on the bars keeps the caret in its cell
   for (const type of ['pointerdown', 'mousedown']) layer.addEventListener(type, (ev) => ev.preventDefault());
@@ -1279,7 +1303,7 @@ function installBars(app: App): void {
     const m = moving;
     if (!m) return;
     moving = null;
-    document.documentElement.classList.remove('beeson-line-moving');
+    document.documentElement.classList.remove('beeson-line-moving', 'beeson-line-refused');
     unlift();
     // a release after the table has left the current slide writes nothing
     const to = ev && m.on && app.current()?.contains(m.table) ? gapAt(m, ev.clientX, ev.clientY) : null;
@@ -1307,9 +1331,10 @@ function installBars(app: App): void {
       const m = moving;
       if (!m || (!m.on && Math.hypot(ev.clientX - m.x, ev.clientY - m.y) < 4)) return;
       m.at = [ev.clientX, ev.clientY];
-      if (!m.on) lifted(m);
+      // rows or columns that do not have a gap to go to are not lifted
+      if (!m.on && movableAnywhere(m.table, m.kind, m.lo, m.hi)) lifted(m);
       m.on = dragged = true;
-      document.documentElement.classList.add('beeson-line-moving');
+      document.documentElement.classList.add(lift.hidden ? 'beeson-line-refused' : 'beeson-line-moving');
       m.to = gapAt(m, ev.clientX, ev.clientY);
     });
     bar.addEventListener('pointerup', (ev) => endMove(ev));
@@ -1318,12 +1343,12 @@ function installBars(app: App): void {
   }
   const stopMove = () => {
     moving = null;
-    document.documentElement.classList.remove('beeson-line-moving');
+    document.documentElement.classList.remove('beeson-line-moving', 'beeson-line-refused');
     unlift();
   };
-  cancelMove = () => {
-    if (!moving?.on) return false;
-    stopMove();
+  cancelMove = (cancel) => {
+    if (!moving) return false;
+    if (cancel) stopMove();
     return true;
   };
 
@@ -2194,10 +2219,7 @@ export function install(app: App): void {
       void app.history.transact('Paste', () => pasteCells(app, cell, rows, false, !!marked)).catch(fail);
       return;
     }
-    void app.history.transact('Paste Table', async () => {
-      const table = await insertTable(app, rows, null, !!marked);
-      app.selection.set('elements', [table]);
-    }).catch(fail);
+    void pasteTable(app, text, html).catch(fail);
   }, true);
 
   installBars(app);
