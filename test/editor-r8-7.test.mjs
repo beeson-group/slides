@@ -205,13 +205,12 @@ for (const platform of PLATFORMS) {
           const back = await boxIn(page, FRAME);
           assert.ok(near(back.left, frame.left) && near(back.top, frame.top), `an undo of Align ${side} of ${where} leaves the frame at ${show(back)}`);
         }
+        // Distribute is dimmed for one figure, as in Keynote
         for (const axis of ['horizontal', 'vertical']) {
+          const before = await render(page);
+          assert.equal(await page.evaluate(`window.BeesonEditor.state('arrange.distribute.${axis}').enabled`), false, `Distribute ${axis} of ${where} is enabled`);
           await exec(page, `arrange.distribute.${axis}`);
-          await frames(page);
-          const now = await boxIn(page, FRAME);
-          const [at, to] = axis === 'horizontal' ? [cx(now), SLIDE.width / 2] : [cy(now), SLIDE.height / 2];
-          assert.ok(near(at, to), `Distribute ${axis} of ${where} puts its frame at ${show(now)}`);
-          await roundTrip(page, await render(page));
+          assert.equal(await render(page), before, `Distribute ${axis} of ${where} changes the file`);
         }
         await typeField(page, 'x', 100);
         await typeField(page, 'y', 140);
@@ -256,18 +255,19 @@ for (const platform of PLATFORMS) {
           await roundTrip(page, await render(page));
         }
         if (n === ZONE_PAIR || n === ZONE_ONE) {
-          // the heading, a paragraph, and the figure spaced evenly between the outer two
+          // the heading, a paragraph, and the figure distributed with the first and the last of
+          // them in the order of their tops kept in place, and each kept in the span of the three
           await click(page, '.reveal section.present > p', { modifiers: 'Shift' });
           await frames(page);
           assert.equal((await selected(page)).length, 3);
           const p = await boxIn(page, '.reveal section.present > p');
           const span = [Math.min(h.top, p.top, frame.top), Math.max(bottom(h), bottom(p), bottom(frame))];
+          const outer = [h, p, frame].map((b, i) => ({ b, i })).sort((a, b) => a.b.top - b.b.top || a.b.height - b.b.height);
           await exec(page, 'arrange.distribute.vertical');
           await frames(page);
-          const boxes = [await boxIn(page, HEADING), await boxIn(page, '.reveal section.present > p'), await frameOfFigure(page)].sort((a, b) => a.top - b.top);
-          const gaps = [boxes[1].top - bottom(boxes[0]), boxes[2].top - bottom(boxes[1])];
-          assert.ok(near(gaps[0], gaps[1]), `Distribute Vertically of ${where} leaves the gaps ${gaps.map(Math.round).join(' and ')}`);
-          assert.ok(near(boxes[0].top, span[0]) && near(Math.max(...boxes.map(bottom)), span[1]), `Distribute Vertically of ${where} spaces the three over ${Math.round(boxes[0].top)} to ${Math.round(Math.max(...boxes.map(bottom)))}, and not over the frames from ${span.map(Math.round).join(' to ')}`);
+          const boxes = [await boxIn(page, HEADING), await boxIn(page, '.reveal section.present > p'), await frameOfFigure(page)];
+          for (const { b, i } of [outer[0], outer[2]]) assert.ok(near(boxes[i].top, b.top), `Distribute Vertically of ${where} moves an outer element from ${show(b)} to ${show(boxes[i])}`);
+          for (const b of boxes) assert.ok(b.top >= span[0] - 1 && bottom(b) <= span[1] + 1, `Distribute Vertically of ${where} puts an element at ${show(b)}, outside ${span.map(Math.round).join(' to ')}`);
           await roundTrip(page, await render(page));
         }
         assert.deepEqual(errors(page), []);

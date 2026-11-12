@@ -212,36 +212,18 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`Distribute centers one element on the slide, with Align to Selection dimmed for it (${platform})`, async (t) => {
+  // Distribute is dimmed for one element, as in Keynote, which dims it for fewer than three objects
+  test(`Distribute is dimmed for one element, with Align to Selection dimmed for it (${platform})`, async (t) => {
     const page = await load(t, platform, { n: MATH });
     await selectFigure(page, IMG);
     await frames(page);
-    assert.equal((await state(page, 'arrange.distribute.horizontal')).enabled, true);
-    assert.equal((await state(page, 'arrange.distribute.vertical')).enabled, true);
+    for (const id of ['horizontal', 'vertical', 'evenly']) {
+      assert.equal((await state(page, `arrange.distribute.${id}`)).enabled, false);
+      await page.evaluate(`window.BeesonEditor.exec('arrange.distribute.${id}')`);
+    }
     assert.equal((await state(page, 'arrange.alignTo.selection')).enabled, false);
     assert.equal((await state(page, 'arrange.alignTo.slide')).checked, true);
-    // a figure has the Image pane with its tabs, and Distribute is in the tab Arrange
-    await tap(page, 'Arrange');
-    await tap(page, 'Horizontally');
-    const text = await render(page);
-    const dx = Number(text.match(/<figure class="zone fragment" data-fragment-index="2" style="translate: (-?\d+)px 0px">/)?.[1]);
-    assert.ok(dx < 0, `the offset of the figure is ${dx}`);
-    await byteExact(page, [[FIGURE, `${FIGURE.slice(0, -1)} style="translate: ${dx}px 0px">`]]);
-    const slide = await rect(page, '.reveal .slides');
-    // the frame of the figure, i.e. its picture with its caption, is centered
-    const frame = await rect(page, SELECTED);
-    assert.ok(Math.abs(frame.x - slide.x) <= 1.5, `the figure is centered at ${frame.x}, and the slide at ${slide.x}`);
-    await roundTrip(page, text);
-    // the open of the saved text clears the selection
-    await selectFigure(page, IMG);
-    await tap(page, 'Arrange');
-    await tap(page, 'Vertically');
-    const both = await render(page);
-    const dy = Number(both.match(/data-fragment-index="2" style="translate: -?\d+px (-?\d+)px">/)?.[1]);
-    assert.ok(Number.isFinite(dy) && dy !== 0, `the vertical offset of the figure is ${dy}`);
-    const framed = await rect(page, SELECTED);
-    assert.ok(Math.abs(framed.y - slide.y) <= 1.5, `the figure is centered at ${framed.y}, and the slide at ${slide.y}`);
-    await roundTrip(page, both);
+    await byteExact(page);
     assert.deepEqual(errors(page), []);
   });
 
