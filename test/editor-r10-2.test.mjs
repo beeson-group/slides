@@ -186,12 +186,13 @@ for (const platform of PLATFORMS) {
     await press(page, 'Escape');
     await press(page, 'ArrowRight');
     const nudged = await render(page);
-    // the rows are in the order of the drawing, with the layers over the other blocks
-    assert.deepEqual((await rows(page)).slice(0, 2), ['1 Figure: A caption under a zone.', '1 Text: The lead-in of a display *']);
+    // the rows are in the order of the drawing, with the layers over the other blocks. the list,
+    // whose items are positioned, is drawn with the layers, over the lead-in written before it
+    assert.deepEqual((await rows(page)).slice(0, 3), ['1 Figure: A caption under a zone.', '1 Text: A first step A final step', '1 Text: The lead-in of a display *']);
     const from = await rowBox(page, 0);
-    const to = await rowBox(page, 1);
+    const to = await rowBox(page, 2);
     await drag(page, { x: from.x, y: from.y }, { dy: to.bottom - 2 - from.y, steps: 8 });
-    assert.deepEqual((await rows(page)).slice(0, 2), ['1 Text: The lead-in of a display', '1 Figure: A caption under a zone. *']);
+    assert.deepEqual((await rows(page)).slice(0, 3), ['1 Text: A first step A final step', '1 Text: The lead-in of a display', '1 Figure: A caption under a zone. *']);
     const edited = await render(page);
     assert.ok(edited.indexOf('<figure class="zone') < edited.indexOf('The lead-in of a display'));
     await undo(page);

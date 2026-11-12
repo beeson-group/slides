@@ -93,9 +93,13 @@ async function pick(page, names, name) {
   assert.equal((await selected(page)).length, 1);
 }
 
+// whether the row of names[name] is the one row selected in the object list
+const rowSelected = (page, names, name) => page.evaluate(`[...document.querySelectorAll(${js(ROW)})]
+  .filter((r) => r.getAttribute('aria-selected') === 'true').map((r) => r.querySelector('.name').textContent.startsWith(${js(names[name])})).join()`);
+
 // the command of order run by its key on the element of the row of names[name], then undone and
-// redone, which gives the text before and after the command byte for byte. the row is picked
-// first, since a redo selects the elements that the step changed
+// redone, which gives the text before and after the command byte for byte, with the row selected
+// throughout
 async function layer(page, platform, order, names, name) {
   await pick(page, names, name);
   const base = await render(page);
@@ -107,10 +111,11 @@ async function layer(page, platform, order, names, name) {
   await undo(page);
   await frames(page);
   assert.equal(await render(page), base, `the undo of ${LABELS[order]} does not give the text back byte for byte`);
+  assert.equal(await rowSelected(page, names, name), 'true', `the undo of ${LABELS[order]} selects another row`);
   await redo(page);
   await frames(page);
   assert.equal(await render(page), edited);
-  await pick(page, names, name);
+  assert.equal(await rowSelected(page, names, name), 'true', `the redo of ${LABELS[order]} selects another row`);
   return edited;
 }
 
