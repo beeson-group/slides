@@ -333,12 +333,8 @@ for (const platform of PLATFORMS) {
     await press(page, 'Alt+ArrowUp');
     await settle(page);
     assert.deepEqual(await size(page), platform === 'mac' ? [3, 3] : [4, 3]);
-    // the undo takes the caret out of the table, hence a click puts it back into the cell
-    if (platform !== 'mac') {
-      await undo(page);
-      await settle(page);
-      await click(page, await cell(page));
-    }
+    // the undo puts the caret back into the cell (R19.3)
+    if (platform !== 'mac') await undo(page);
     await settle(page);
     assert.equal(await render(page), inserted);
     await press(page, 'Escape');

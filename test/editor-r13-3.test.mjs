@@ -385,7 +385,8 @@ for (const platform of PLATFORMS) {
     await page.evaluate(`Reveal.slide(${MERGED})`);
     await frames(page);
     await selectLine(page, 'Lyapunov', 'rows', 3);
-    assert.equal((await state(page, 'table.moveRowUp')).enabled, false, 'a row moves into a merged cell');
+    // Move Row Up moves the row past the whole merged block, and a drag into the block is refused
+    assert.equal((await state(page, 'table.moveRowUp')).enabled, true, 'Move Row Up of the row under a merged block is dimmed');
     await dragSegment(page, 'rows', 3, -1, true);
     assert.equal(await lineShown(page), false, 'a line is shown inside a merged cell');
     await press(page, 'Escape');

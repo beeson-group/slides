@@ -82,9 +82,9 @@ const ADDS = [
   ['Alt+ArrowRight', [4, 4], 'Add Column After', [1, 2], ROWS.map((r, i) => [r[0], r[1], i === 1 ? 'x' : '', r[2]])],
 ];
 const IDS = { 'Alt+ArrowUp': 'table.rowAbove', 'Alt+ArrowDown': 'table.rowBelow', 'Alt+ArrowLeft': 'table.columnBefore', 'Alt+ArrowRight': 'table.columnAfter' };
-// after the undo of an add with the caret in a cell, from the menu as from a key, the caret is not
-// in a cell and nothing is selected
-const UNDONE = { at: null, block: false, selected: [] };
+// after the undo of an add with the caret in a cell, from the menu as from a key, the caret is back
+// in the cell B2 (R19.3)
+const UNDONE = { at: [1, 1], block: false, selected: [] };
 
 // item 1: with the caret in a cell, the keys did nothing on Windows and Linux, although the menu of
 // the cell lists them
