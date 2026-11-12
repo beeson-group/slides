@@ -106,8 +106,9 @@ export function install(app: App): void {
     run: () => clearRecents(),
   });
 
-  // Export To of Keynote, with the formats that a browser writes. PDF… prints the saved file in its
-  // print view, and HTML… writes a copy of the deck with its edits
+  // Export To of Keynote. PDF… prints the saved file in its print view, and HTML… writes a copy of
+  // the deck with its edits. a page cannot write a PowerPoint file, since scripts/export-pptx.mjs
+  // builds each step from a screenshot of headless Chrome, hence PowerPoint… shows its command
   const exportTo = (order: number): Command['menu'] => ({ bar: 'File', group: 'export', order, submenu: 'Export To' });
   c.define({
     id: 'file.export.pdf',
@@ -122,6 +123,13 @@ export function install(app: App): void {
     menu: exportTo(41),
     enabled: (a) => a.state === 'loaded' && !!a.pairing,
     run: () => fileActions().exportHtml(),
+  });
+  c.define({
+    id: 'file.export.pptx',
+    label: 'PowerPoint…',
+    menu: exportTo(42),
+    enabled: (a) => a.state === 'loaded',
+    run: () => fileActions().exportPptx(),
   });
   // Print… of the File menu of Keynote, last in the menu, prints the print view of PDF…. the key is
   // taken everywhere, since the print of the browser would print the editor

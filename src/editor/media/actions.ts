@@ -11,6 +11,7 @@ import { make } from '../ui/dom.ts';
 import { firstFrame } from './poster.ts';
 import { REVEAL_CLASSES } from '../model/scope.ts';
 import { placeNew } from '../commands/place.ts';
+import { checkOverlaps } from '../overflow.ts';
 import { twinOf } from '../canvas/hit.ts';
 import { kindOf, media, type Kind, type MediaFile } from './store.ts';
 
@@ -199,6 +200,7 @@ export async function insertFiles(app: App, files: File[], into: Element | null 
       const slot = i === 0 && into && slide.contains(into) && isEmptySlot(app, into) ? into : emptySlot(app, slide);
       nodes.push(slot ? await fill(app, slot, r, label) : await addZone(app, slide, r));
     }
+    for (const node of nodes) checkOverlaps(app, slide, node);
     app.selection.set('elements', nodes);
   });
   report(app, ready);

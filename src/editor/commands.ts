@@ -5,7 +5,7 @@
 // which runs the command of a key
 
 import type { App, Deck, Platform, Region } from './app.ts';
-import { display, fallback, matches, parseKey, type KeyEvent } from './keymap.ts';
+import { display, fallback, matches, type KeyEvent } from './keymap.ts';
 
 export type Context = 'element' | 'text' | 'canvas' | 'slide' | 'navigator';
 
@@ -57,8 +57,6 @@ export const EVERYWHERE: Region[] = [...OUTSIDE_DIALOGS, 'dialog'];
 // the keys that the menus list for a command whose keys reach it as clipboard events, since the
 // browser takes them in a text
 const CLIPBOARD_KEYS: Record<string, string[]> = { 'edit.cut': ['Mod+X'], 'edit.copy': ['Mod+C'], 'edit.paste': ['Mod+V'] };
-// the keys that the browser runs as events of the clipboard in every region, which a menu thus lists
-const NATIVE_KEYS = new Set(['Mod+X', 'Mod+C', 'Mod+V', 'Mod+Shift+V', 'Mod+Alt+Shift+V']);
 
 // the keys that run a command on the platform
 export function boundKeys(c: Command, platform: Platform): string[] {
@@ -67,7 +65,7 @@ export function boundKeys(c: Command, platform: Platform): string[] {
 
 // the keys of a command on the platform: each key that runs it in its own regions, once. the sheet
 // of shortcuts thus lists a key at every command that it runs, e.g. ⌘D at Duplicate on the canvas
-// and at Duplicate Slide in the navigator, and a menu only where the focus is, through keysIn
+// and at Duplicate Slide in the navigator
 export function keysOf(c: Command, platform: Platform): string[] {
   return [...new Set(c.keys?.[platform] ?? CLIPBOARD_KEYS[c.id] ?? [])];
 }
@@ -148,12 +146,13 @@ export class Commands {
   }
 
   // a disabled command is not run. an undoable command is one entry of the history, however many
-  // changes it makes
+  // changes it makes, named as the command that it hands its run to names it, e.g. Delete Slide for
+  // Edit > Delete in the navigator
   async run(id: string, arg?: unknown): Promise<void> {
     const c = this.byId.get(id);
     if (!c) throw new Error(`there is no command ${id}`);
     if (!this.enabled(id)) return;
-    if (c.undoable) await this.app.history.transact(c.undo ?? this.label(id), () => c.run(this.app, arg));
+    if (c.undoable) await this.app.history.transact(c.undo ?? this.label(c.runsAs?.(this.app) ?? id), () => c.run(this.app, arg));
     else await c.run(this.app, arg);
   }
 
@@ -163,26 +162,12 @@ export class Commands {
     return (c?.listedAs && this.byId.get(c.listedAs(this.app))) || c;
   }
 
-  // the keys of a command on the platform of the editor, as a menu shows them
+  // the keys of a command on the platform of the editor, as a menu shows them. an item lists its
+  // keys in every region and also while it is dimmed, as in Keynote and PowerPoint, where the key of
+  // an item is fixed
   shortcuts(id: string): string[] {
     const c = this.listed(id);
     return c ? keysOf(c, this.app.platform).map((k) => display(k, this.app.platform)) : [];
-  }
-
-  // the keys of the command of id that a menu opened in region lists. a key that runs another
-  // command there is left out, e.g. ⌘D at Duplicate Slide while a figure is selected on the canvas,
-  // and so is a key that an enabled command does not take there, e.g. ⌫ at Delete Slide on the
-  // canvas. a dimmed item keeps its key, as in Keynote, and the keys of the clipboard are listed
-  // everywhere
-  keysIn(id: string, region: Region): string[] {
-    const c = this.listed(id);
-    if (!c) return [];
-    const p = this.app.platform;
-    return keysOf(c, p).filter((k) => {
-      const chord = parseKey(k, p);
-      const runs = this.forKey({ key: chord.key === 'Space' ? ' ' : chord.key, shiftKey: chord.shift, altKey: chord.alt, ctrlKey: chord.ctrl, metaKey: chord.meta }, region);
-      return runs ? [runs.id, runs.runsAs?.(this.app)].some((r) => r === c.id || r === id) : !boundKeys(c, p).includes(k) || NATIVE_KEYS.has(k) || (c.in ?? DEFAULT_REGIONS).includes(region) || !this.enabled(c.id);
-    });
   }
 
   // the first enabled command taken in region whose keys match ev, and else the first one whose

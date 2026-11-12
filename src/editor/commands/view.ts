@@ -88,7 +88,9 @@ export function cyclePane(app: App, step: 1 | -1): void {
 export function install(app: App): void {
   const c = app.commands;
   const pane = (order: number) => ({ bar: 'View', group: 'panes', order });
-  c.define({ id: 'view.navigator', label: 'Navigator', menu: pane(10), checked: (a) => a.nav.shown, run: (a) => a.nav.toggle() });
+  // Navigator is checked while the navigator is drawn, as Slide Only is checked while it is not. in a
+  // window too narrow for it beside the inspector, a run shows it in place of the inspector
+  c.define({ id: 'view.navigator', label: 'Navigator', menu: pane(10), checked: (a) => a.nav.seen ?? a.nav.shown, run: (a) => a.nav.toggle() });
   c.define({ id: 'view.notes', label: 'Notes', ...PANE_KEYS(3), menu: pane(13), checked: (a) => a.notes.shown(), run: (a) => a.notes.toggle() });
   c.define({ id: 'view.steps', label: 'Steps', ...PANE_KEYS(2), menu: pane(12), toolbar: { group: 'inspector', order: 61, icon: 'steps' }, checked: (a) => a.steps.shown, run: (a) => a.steps.toggle() });
   c.define({

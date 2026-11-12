@@ -7,6 +7,7 @@ import type { App, Files, Line } from '../app.ts';
 import { parseSource } from '../source.ts';
 import { pair, renderDeck, type Pairing } from '../render.ts';
 import { mathLookup } from '../math.ts';
+import { coverSentences } from '../overflow.ts';
 import { make, store, stored } from '../ui/dom.ts';
 import { Dialog, host } from '../ui/dialog.ts';
 import { display } from '../keymap.ts';
@@ -117,6 +118,11 @@ const ASK = {
     save: ['Save and export', 'Save the edits into the file, then open its print view in a new tab'],
     discard: ['Export the saved file', 'Open the print view of the deck as saved in a new tab, and keep the edits here'],
   },
+  pptx: {
+    text: 'The PowerPoint file is written from the file. Save the edits into it first, export the saved file without them, or go on editing.',
+    save: ['Save and export', 'Save the edits into the file, then show the command that writes the PowerPoint file'],
+    discard: ['Export the saved file', 'Show the command that writes the PowerPoint file of the deck as saved, and keep the edits here'],
+  },
   print: {
     text: 'The slides are printed from the file. Save the edits into it first, print the saved file without them, or go on editing.',
     save: ['Save and print', 'Save the edits into the file, then open its print view in a new tab'],
@@ -130,6 +136,7 @@ export type FileActions = {
   openRecent(r: Recent): Promise<void>;
   exportPdf(action?: 'export' | 'print'): Promise<void>;
   exportHtml(): Promise<void>;
+  exportPptx(): Promise<void>;
 };
 let actions: FileActions | null = null;
 export function fileActions(): FileActions {
@@ -171,6 +178,34 @@ export function install(app: App): void {
 
   // the dialog shown when Open or Present is pressed with unsaved changes, as the prompt of PowerPoint
   const ask = new Dialog({ title: 'The deck has unsaved changes', text: '', buttons: [], className: 'ask' });
+
+  // the dialog of PowerPoint… of Export To, with the command that writes the file, since a page
+  // cannot take the screenshots of scripts/export-pptx.mjs
+  const pptxCommand = make('code');
+  const pptxBody = make('p');
+  pptxBody.append(pptxCommand);
+  const pptxCard = new Dialog({
+    title: 'Export to PowerPoint',
+    text: '',
+    body: pptxBody,
+    buttons: [
+      { label: 'Copy Command', title: 'Put the command on the clipboard', value: 'copy', primary: true },
+      { label: 'Close', value: 'close' },
+    ],
+    className: 'pptx',
+    stay: ['copy'],
+    onButton: (value) => {
+      if (value !== 'copy') return;
+      const button = pptxCard.buttons.get('copy');
+      void navigator.clipboard.writeText(pptxCommand.textContent ?? '').then(
+        () => button && (button.textContent = 'Copied'),
+        () => {
+          app.note = { text: 'The browser did not let the page copy the command', warn: true };
+          app.report();
+        },
+      );
+    },
+  });
 
   // the dialog that lists the texts that cannot be edited, opened with Which? after the state
   const problemsList = make('ul');
@@ -226,7 +261,7 @@ export function install(app: App): void {
     if (problems.length) parts.push(`${plural(problems.length, 'text')} cannot be edited`);
     const past = app.overflow - app.overFigure;
     if (past) parts.push(`${plural(past, 'text')} run${past === 1 ? 's' : ''} past the slide or into its footnote`);
-    if (app.overFigure) parts.push(`${plural(app.overFigure, 'text')} ${app.overFigure === 1 ? 'lies' : 'lie'} over a figure`);
+    if (app.overFigure) parts.push(...coverSentences());
     if (app.autosave && !app.handle && canWrite()) parts.push('autosave starts after the first save');
     return { text: parts.join('. '), warn: (app.note?.warn ?? false) || problems.length > 0 || app.overflow > 0, title: problems.map(problemText).join('\n') };
   }
@@ -395,7 +430,7 @@ export function install(app: App): void {
   }
 
   // with unsaved changes, the user is asked first, and false is returned for no export or show
-  async function savedFirst(action: 'present' | 'export' | 'print'): Promise<boolean> {
+  async function savedFirst(action: 'present' | 'export' | 'print' | 'pptx'): Promise<boolean> {
     if (!app.dirty) return true;
     const choice = await askFirst(action);
     if (!choice) return false;
@@ -422,6 +457,17 @@ export function install(app: App): void {
       app.note = { text: `The print view of ${fileName()} is open in a new tab, with one page per step. Press ${key} there and ${then}`, warn: false };
       app.report();
     }
+  }
+
+  // the card of the command that writes the PowerPoint file from the saved deck, run in its folder
+  async function exportPptx(): Promise<void> {
+    if (!(await savedFirst('pptx'))) return;
+    const name = fileName();
+    pptxCommand.textContent = name === 'index.html' ? 'npm run pptx' : `npm run pptx -- ${name}`;
+    pptxCard.text.textContent = `The PowerPoint file is written from the saved ${name} by this command, run in the folder of the deck, i.e. ${folder()}. It writes slides.pptx, with one click per step.`;
+    const copy = pptxCard.buttons.get('copy');
+    if (copy) copy.textContent = 'Copy Command';
+    await pptxCard.open('copy');
   }
 
   // a copy of the deck with the edits, written into a file chosen with the picker or put into the
@@ -587,7 +633,7 @@ export function install(app: App): void {
     cancelAsk: () => ask.close(null),
   };
   app.files = files;
-  actions = { revert, openRecent, exportPdf, exportHtml };
+  actions = { revert, openRecent, exportPdf, exportHtml, exportPptx };
   app.autosave = canWrite() && stored(AUTOSAVE_KEY) === '1';
 
   app.listen('report', () => {

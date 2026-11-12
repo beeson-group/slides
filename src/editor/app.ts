@@ -332,8 +332,9 @@ export class App {
     // is that of the pane around it
     if (active.matches('textarea, input:not([type=range], [type=checkbox], [type=radio], [type=button], [type=color])')) return 'field';
     if (active.closest('aside.notes')) return 'notes';
-    // a formula focused in an object that is selected takes the keys of the slide
-    if (this.hostOf(active) && !(active.matches('mjx-container') && this.selection.items.some((el) => this.selection.kind === 'elements' && el.contains(active)))) return 'text';
+    // a text or a formula focused in an object that is framed takes the keys of the slide, e.g. a new
+    // display after its TeX field is closed, since a text that is typed into is the selection
+    if (this.hostOf(active) && !(this.selection.kind === 'elements' && this.selection.items.some((el) => el.contains(active)))) return 'text';
     if (active.closest('.beeson-edit-nav')) return 'navigator';
     // the object list of navigator/objects.ts takes its own keys, as a pane of controls
     if (active.closest('.beeson-edit-inspector, .beeson-edit-side, .beeson-edit-objects')) return 'inspector';

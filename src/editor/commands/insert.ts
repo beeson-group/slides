@@ -19,6 +19,7 @@ import { columnOf } from './clipboard.ts';
 import { onCaptionBox } from './figure.ts';
 import { docOf } from './slide.ts';
 import { freePlace, placeNew, translateOf } from './place.ts';
+import { checkOverlaps } from '../overflow.ts';
 
 const CSS = `
 /* the caption of a zone keeps the absolute place of the theme under the picture */
@@ -380,6 +381,7 @@ export function install(app: App): void {
         // the caret of a code box is in its code element, where the typing after the first key goes
         placeCaret(node, p.kind === 'code' ? (node.textContent ?? '').length : null);
         await applyPending(app, p.el, node);
+        checkOverlaps(app, app.current(), node);
       }, () => made);
       await replay(p.kind);
     } finally {
@@ -510,6 +512,7 @@ export function install(app: App): void {
           // a formula grows with its TeX, hence it is moved only when it is under the slide, e.g.
           // after the caption of a figure slide
           centerIfOut(a, node, Infinity);
+          checkOverlaps(a, a.current(), node);
           a.selection.set('elements', [node]);
           markEmpty();
           const math = node.querySelector('mjx-container');
@@ -538,6 +541,7 @@ export function install(app: App): void {
       const place = zone ? { parent: zone, before: null } : slide.matches('.title, .closing') ? { parent: slide, before: slide.querySelector(':scope > aside.notes') } : columnPlace(a, slide);
       const [node] = await docOf(a).insertElement('qr', place.parent, place.before, { qr: 'https://example.com' });
       if (!zone) centerIfOut(a, node);
+      checkOverlaps(a, slide, node);
       a.selection.set('elements', [node]);
     }),
   });

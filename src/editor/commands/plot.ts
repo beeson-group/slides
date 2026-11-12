@@ -16,6 +16,7 @@ import { addRow, addSeries, addTab, cellsIn, clearCells, deleteRow, deleteSeries
 import { emptySlot } from '../media/actions.ts';
 import { fieldCells, pasteWork } from './clipboard.ts';
 import { placeNew } from './place.ts';
+import { checkOverlaps } from '../overflow.ts';
 import { modelAt } from '../steps.ts';
 import { ask, trapTab } from '../ui/dialog.ts';
 
@@ -1134,6 +1135,7 @@ export function commands(): Command[] {
       enabled: (app) => !!app.pairing?.root && !!app.current() && app.region() !== 'dialog',
       run: async (app) => {
         const plot = await app.history.transact('Insert Plot', () => insertPlot(app));
+        checkOverlaps(app, app.current(), plot);
         app.selection.set('elements', [plot]);
         await app.commands.run('plot.editData');
       },

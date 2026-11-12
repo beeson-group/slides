@@ -25,11 +25,11 @@ export function install(app: App): void {
     id: 'element.delete',
     label: 'Delete',
     keys: { mac: ['Backspace', 'Delete'], other: ['Delete', 'Backspace'] },
-    in: ['canvas'],
+    // in the navigator, it runs Delete Slide, which is without a key in its menu as in PowerPoint
+    in: ['canvas', 'navigator'],
     menu: { bar: 'Edit', group: 'clipboard', order: 23 },
     context: ['element'],
     enabled: (a) => (onSlides(a) ? a.commands.enabled('slide.delete') : inText(a) ? hasRange() || inCells(a) : selectedElements(a).some((el) => !locked(el))),
-    listedAs: (a) => (onSlides(a) ? 'slide.delete' : 'element.delete'),
     runsAs: (a) => (onSlides(a) ? 'slide.delete' : 'element.delete'),
     undoable: true,
     get undo() {

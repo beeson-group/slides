@@ -16,7 +16,7 @@ import type { Translate } from '../tags.ts';
 import { insertFiles } from '../media/actions.ts';
 import { kindOf } from '../media/store.ts';
 import { insertPlain, pasteItems, pastesItems } from '../text/typing.ts';
-import { objectsOf } from '../canvas/hit.ts';
+import { movableOf, objectsOf } from '../canvas/hit.ts';
 import { fieldOf, settleCopies, freshGroup } from './order.ts';
 import { withTwins } from '../canvas/hit.ts';
 import { VOID } from '../source.ts';
@@ -34,6 +34,15 @@ export const STEP = 20;
 export function selectedElements(app: App): Element[] {
   const els = objectsOf(app, app.selection.elements()).filter((el) => el.isConnected && !el.matches('.reveal .slides > section') && !!app.pairing?.elements.get(el)?.open);
   return els.filter((el) => !els.some((o) => o !== el && o.contains(el)));
+}
+
+// the element that Esc selects in a text of the slide, i.e. the block of the caret, which Duplicate
+// duplicates, as Keynote and PowerPoint duplicate a text box. in a cell, Esc selects the cell,
+// which is not duplicated
+function caretBlock(app: App): Element | null {
+  const host = app.selection.kind === 'text' ? app.hostOf(document.activeElement) : null;
+  const el = host && !host.closest('td, th') ? movableOf(app, host) ?? host : null;
+  return el && app.pairing?.elements.get(el)?.open ? el : null;
 }
 
 // the text of els on the clipboard: the mark, then each element as it is written into the file
@@ -403,13 +412,19 @@ export function install(app: App): void {
     id: 'edit.duplicate',
     label: 'Duplicate',
     keys: { mac: ['Mod+D'], other: ['Mod+D'] },
-    in: ['canvas'],
+    in: ['canvas', 'text'],
     menu: menu(30, 'select'),
     context: ['element'],
-    enabled: (a) => ready(a) && !selectedRange(a) && (selectedElements(a).length > 0 || a.commands.enabled('slide.duplicate')),
-    runsAs: (a) => (selectedElements(a).length ? 'edit.duplicate' : 'slide.duplicate'),
+    enabled: (a) => ready(a) && !selectedRange(a) && (a.selection.kind === 'text' ? !!caretBlock(a) : selectedElements(a).length > 0 || a.commands.enabled('slide.duplicate')),
+    runsAs: (a) => (selectedElements(a).length || caretBlock(a) ? 'edit.duplicate' : 'slide.duplicate'),
     undoable: true,
     run: async (a) => {
+      // in a text, the block of the caret is selected first, as by Esc
+      const block = caretBlock(a);
+      if (block) {
+        (document.activeElement as HTMLElement | null)?.blur();
+        a.selection.set('elements', [block]);
+      }
       const els = selectedElements(a);
       if (els.length) await duplicateElements(a, els);
       else await a.commands.run('slide.duplicate');

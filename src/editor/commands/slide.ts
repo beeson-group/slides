@@ -418,8 +418,8 @@ export function install(app: App): void {
     {
       id: 'slide.delete',
       label: (a) => (targets(a).length > 1 ? 'Delete Slides' : 'Delete Slide'),
-      keys: { mac: ['Backspace', 'Delete'], other: ['Delete', 'Backspace'] },
-      in: ['navigator'],
+      // without a key, as in PowerPoint. ⌫ is the key of Edit > Delete, which runs this command in
+      // the navigator
       menu: slideMenu(30),
       context: ['slide', 'canvas'],
       enabled: (a) => targets(a).length > 0 && targets(a).length < sections(a).length,

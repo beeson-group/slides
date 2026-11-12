@@ -15,6 +15,7 @@ import { drawInto, laidOut } from '../navigator/thumbs.ts';
 import { classesOf, tokenize, type Range, type Token } from '../tokens.ts';
 import { injectStyle } from '../ui/dom.ts';
 import { install as installOrder } from './order.ts';
+import { checkOverlaps } from '../overflow.ts';
 
 export const LABELS: Record<Layout, string> = { title: 'Title', section: 'Section', content: 'Content', narrow: 'Content, Narrow', wide: 'Content, Wide', figure: 'Figure', split: 'Split', closing: 'Closing' };
 
@@ -278,6 +279,7 @@ export async function changeLayout(app: App, slides: Element[], layout: Layout):
     for (const i of shrunk[k]) if (words[i]) app.doc.setTag(words[i], { classes: { small: false } }, 'layout');
     fitPanel(app, s);
     origins.set(s, { ...from[k], last: app.doc.elementText(s) });
+    checkOverlaps(app, s);
   });
   return out;
 }

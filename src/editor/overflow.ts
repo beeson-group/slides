@@ -2,11 +2,14 @@
 // its bottom, or a text of the caption of a figure slide that reaches up to the heading or the
 // running head, is marked, as the bounds of a text box in PowerPoint, and counted in app.overflow,
 // which the state line reports. a line of a text drawn over a picture, a video, a plot, a QR
-// code, a table, or a code box of another part of the slide, e.g. after a change of the layout, is
-// marked and counted as well, in app.overFigure, by the turned box of a turned picture. a plate and a backdrop lie under the words of
-// their layout
+// code, a table, or a code box of another part of the slide is marked and counted as well, in
+// app.overFigure, after a change of the layout of the slide and for a new element that the editor
+// put on it, by the turned box of a turned picture. neither Keynote nor PowerPoint comments on an
+// overlap that the user made, hence an overlap leaves the report once the user moves the text or
+// the figure. a plate and a backdrop lie under the words of their layout
 
 import { ALL, HOST, type App } from './app.ts';
+import { drawnUnder } from './commands/order.ts';
 import { injectStyle } from './ui/dom.ts';
 import { orientedBox, scaleAt } from './canvas/hit.ts';
 
@@ -42,6 +45,63 @@ function cuts(r: DOMRect, q: Turned): boolean {
   return u < q.w + w * c + h * s && v < q.h + w * s + h * c;
 }
 
+// the names of the figures in the state line, by the words of AGENTS.md
+const KINDS: [string, string][] = [['img', 'picture'], ['video', 'video'], ['.plot', 'plot'], ['.qr', 'QR code'], ['table', 'table'], ['pre', 'code box'], ['tycho-viewer', 'scene']];
+const kindOf = (f: Element): string => KINDS.find(([s]) => f.matches(s))?.[1] ?? 'figure';
+
+// a check of the overlaps on slide, made by checkOverlaps. scope is null after a change of the
+// layout, and else the new element whose overlaps are reported. seen maps each element of the
+// file on the slide to its placeOf at the check, and an element whose placeOf differs is left out
+// of the report until an undo puts it back
+type Check = { slide: Element; scope: Element | null; seen: Map<Element, string> };
+const checks: Check[] = [];
+
+// the style of el and of its parents inside slide, which a drag, a nudge, a field, a resize, a
+// rotation, an align, a distribute, and a layer command change. the style of the section is left
+// out, since reveal.js writes it
+const placeOf = (el: Element, slide: Element): string => {
+  let k = '';
+  for (let e: Element | null = el; e && e !== slide; e = e.parentElement) k += `${e.getAttribute('style') ?? ''};`;
+  return k;
+};
+
+// called by the change of a layout, with scope null, and by an insert that the editor places,
+// with the new element. an undo takes the slide or scope off the page, and the check with it
+export function checkOverlaps(app: App, slide: Element | null, scope: Element | null = null): void {
+  if (!slide) return;
+  const seen = new Map<Element, string>();
+  for (const el of slide.querySelectorAll('*')) if (app.pairing?.elements.has(el)) seen.set(el, placeOf(el, slide));
+  checks.push({ slide, scope, seen });
+  if (checks.length > 64) checks.shift();
+  app.invalidate('layout');
+}
+
+// the sentences of the state line on the texts reported over a figure, e.g. "A table covers 1
+// text", which name the one drawn over the other first
+let sentences: string[] = [];
+export const coverSentences = (): string[] => sentences;
+
+const many = (n: number, word: string): string => (n === 1 ? `a ${word}` : `${n} ${word}${word.endsWith('x') ? 'es' : 's'}`);
+const texts = (n: number): string => `${n} text${n === 1 ? '' : 's'}`;
+const verb = (n: number): string => (n === 1 ? 'covers' : 'cover');
+function figures(fs: Set<Element>): string {
+  const kinds = [...fs].map(kindOf);
+  if (new Set(kinds).size === 1) return many(kinds.length, kinds[0]);
+  return kinds.length === 2 ? `a ${kinds[0]} and a ${kinds[1]}` : `${kinds.length} figures`;
+}
+function sentencesOf(pairs: { text: Element; fig: Element }[]): string[] {
+  const out: string[] = [];
+  for (const up of [true, false]) {
+    const some = pairs.filter((p) => drawnUnder(p.text, p.fig) === up);
+    if (!some.length) continue;
+    const fs = new Set(some.map((p) => p.fig));
+    const ts = new Set(some.map((p) => p.text)).size;
+    const named = figures(fs);
+    out.push(up ? `${named[0].toUpperCase()}${named.slice(1)} ${verb(fs.size)} ${texts(ts)}` : `${texts(ts)} ${verb(ts)} ${named}`);
+  }
+  return out;
+}
+
 const CSS = `
 html.beeson-editing .reveal .beeson-overflow { outline: 2px dashed var(--accent, #f80) !important; outline-offset: 6px; }
 `;
@@ -53,15 +113,20 @@ export function install(app: App): void {
     const box = app.slides().getBoundingClientRect();
     let n = 0;
     let over = 0;
+    const pairs: { text: Element; fig: Element }[] = [];
     if (slide && box.width > 0) {
       const foot = slide.querySelector(':scope > .foot, :scope > .panel > .foot');
       const past = (r: DOMRect) => r.right > box.right + 1 || r.bottom > box.bottom + 1 || r.left < box.left - 1 || r.top < box.top - 1;
       const meets = (r: DOMRect, b: DOMRect | undefined) => !!b && b.height > 0 && r.bottom > b.top + 1 && r.top < b.bottom - 1 && r.right > b.left + 1 && r.left < b.right - 1;
       const above = slide.matches('.figure') ? [...slide.querySelectorAll(':scope > h2, :scope > .run')].map((e) => e.getBoundingClientRect()) : [];
       const partOf = (el: Element) => [...slide.children].find((c) => c.contains(el));
+      const live = checks.filter((c) => c.slide === slide && (!c.scope || c.scope.isConnected));
+      const now = new Map<Element, string>();
+      const at = (el: Element) => now.get(el) ?? now.set(el, placeOf(el, slide)).get(el);
+      const checked = (t: Element, f: Element) => live.some((c) => c.seen.get(t) === at(t) && c.seen.get(f) === at(f) && (!c.scope || c.scope.contains(t) || c.scope.contains(f)));
       // an empty new code box is not in the file yet
       const figures = [...slide.querySelectorAll(FIGURE)].filter((f) => !f.closest('.plate, .backdrop, .surface') && !f.parentElement?.closest('.plot') && !f.matches('pre.beeson-pending'))
-        .map((f) => ({ part: partOf(f), r: f.getBoundingClientRect(), q: turnedOf(f, slide) })).filter((f) => f.r.width > 0 && f.r.height > 0);
+        .map((f) => ({ el: f, part: partOf(f), r: f.getBoundingClientRect(), q: turnedOf(f, slide) })).filter((f) => f.r.width > 0 && f.r.height > 0);
       const lines = (el: Element) => {
         const range = document.createRange();
         range.selectNodeContents(el);
@@ -85,9 +150,14 @@ export function install(app: App): void {
         const r = el.getBoundingClientRect();
         const reach = !!el.closest('section.figure > .caption') && above.some((b) => meets(r, b));
         const part = partOf(el);
-        const others = figures.filter((f) => f.part !== part);
-        // a turned picture is met by its turned box, not by the box upright around it
-        const onFigure = others.length > 0 && lines(el).some((l) => others.some((f) => (f.q ? cuts(l, f.q) : meets(l, f.r))));
+        const others = figures.filter((f) => f.part !== part && checked(el, f.el));
+        // a line is tested inside the box r of its text, since the content area of its font is
+        // taller than the box of a heading with a tight line height. a turned picture is met by its
+        // turned box, not by the box upright around it
+        const hit = others.length ? lines(el) : [];
+        const under = others.filter((f) => hit.some((l) => (f.q ? cuts(l, f.q) : meets(l, f.r)) && meets(r, f.r)));
+        for (const f of under) pairs.push({ text: el, fig: f.el });
+        const onFigure = under.length > 0;
         // a turned text, e.g. the caption of a turned figure, runs past by its lines, since the box
         // upright around its turned box runs past them
         const tilted = turnOf(el, slide) ? lines(el) : null;
@@ -98,9 +168,11 @@ export function install(app: App): void {
         if (out && onFigure) over += 1;
       }
     }
-    if (n !== app.overflow || over !== app.overFigure) {
+    const said = sentencesOf(pairs);
+    if (n !== app.overflow || over !== app.overFigure || said.join() !== sentences.join()) {
       app.overflow = n;
       app.overFigure = over;
+      sentences = said;
       app.report();
     }
   });

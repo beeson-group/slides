@@ -122,6 +122,16 @@ export function commands(): Command[] {
       },
     },
     {
+      // ⇧⌘A of Deselect in a text, as the item of the menu, which leaves the text with nothing
+      // selected. Esc in a text is Select Block
+      id: 'selection.clearText',
+      label: 'Deselect',
+      keys: { mac: ['Mod+Shift+A'], other: ['Mod+Shift+A'] },
+      in: ['text'],
+      enabled: (app) => app.commands.enabled('selection.clear'),
+      run: (app) => app.commands.run('selection.clear'),
+    },
+    {
       // the figure around an image, a video, or a QR code selected by a second click on it, as Esc
       // selects it
       id: 'selection.container',

@@ -40,6 +40,7 @@ import { icon } from '../ui/icons.ts';
 import { closeMenus, menuOpen, openMenu, type MenuItem } from '../ui/menu.ts';
 import { columnPlace, freeZone, meets, slideBox, takenBox, type Box as SlideBox } from './insert.ts';
 import { centerPlace, MARGIN, piecesOf } from './place.ts';
+import { checkOverlaps } from '../overflow.ts';
 import { MARK } from './slide.ts';
 
 // the widths of the frame of the cell of the caret and of the cells selected as a block
@@ -418,6 +419,7 @@ async function newTable(app: App, size: Size, into: Element | null = null): Prom
   // the table is selected at a redo, as in Keynote
   const table = await app.history.selecting('Insert Table', async () => {
     const t = await insertTable(app, emptyRows(rows, columns), into);
+    checkOverlaps(app, app.current(), t);
     app.selection.set('elements', [t]);
     return t;
   });

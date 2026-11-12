@@ -35,6 +35,7 @@ const render = (page) => page.evaluate('window.BeesonEditor.render()');
 const undo = (page) => page.evaluate('Promise.resolve(window.BeesonEditor.undo()).then(() => true)');
 const redo = (page) => page.evaluate('Promise.resolve(window.BeesonEditor.redo()).then(() => true)');
 const errors = (page) => page.errors.filter((e) => !e.includes('favicon.ico'));
+const exec = (page, id, arg) => page.evaluate(`Promise.resolve(window.BeesonEditor.exec(${js(id)}${arg !== undefined ? `, ${js(arg)}` : ''})).then(() => true)`);
 const mouse = (page, type, x, y, extra = {}) => page.send('Input.dispatchMouseEvent', { type, x, y, ...extra });
 
 const PANEL = '#beeson-edit-panel-format';
@@ -247,26 +248,36 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  // finding 1: after the turn by 30 degrees, the title bar read "5 texts lie over a figure"
+  // finding 1: after the turn by 30 degrees, the title bar read "5 texts lie over a figure". an
+  // overlap is reported only after a change of the layout or an insert, hence the layout of the
+  // slide is changed and changed back before each look at the report
   test(`a figure turned by the field Angle or by its rotate handle is not reported over the texts that its picture does not cover (${platform})`, async (t) => {
     const page = await load(t, platform);
+    const checked = async () => {
+      await exec(page, 'slide.layout.wide');
+      await exec(page, 'slide.layout.content');
+      await frames(page);
+      await click(page, IMG);
+      return overflow(page);
+    };
     await click(page, IMG);
     assert.deepEqual((await overflow(page)).outlined, []);
     await typeField(page, 'angle', 30);
-    let s = await overflow(page);
+    let s = await checked();
+    assert.equal(await fieldValue(page, 'angle'), 30, 'the change of the layout took the angle off');
     assert.deepEqual(s.outlined, [], `at 30° by the field: ${js(s)}`);
-    assert.doesNotMatch(s.message, /over a figure/);
+    assert.doesNotMatch(s.message, /covers?/);
     await typeField(page, 'angle', 0);
     await dragRotor(page, 38);
-    s = await overflow(page);
     assert.ok((await fieldValue(page, 'angle')) > 30, 'the rotate handle did not turn the figure');
+    s = await checked();
     assert.deepEqual(s.outlined, [], `after the rotate handle: ${js(s)}`);
-    assert.doesNotMatch(s.message, /over a figure/);
-    // the turned figure moved over the paragraph is still reported
+    assert.doesNotMatch(s.message, /covers?/);
+    // the turned figure moved over the paragraph is reported at the next check
     await typeField(page, 'x', 200);
-    s = await overflow(page);
+    s = await checked();
     assert.ok(s.outlined.includes('p'), `the turned figure over the paragraph: ${js(s)}`);
-    assert.match(s.message, /lies? over a figure/);
+    assert.match(s.message, /A picture covers \d+ texts?/);
     assert.deepEqual(errors(page), []);
   });
 

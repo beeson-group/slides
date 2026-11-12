@@ -29,7 +29,6 @@ const MATH = SECTIONS.findIndex((s) => s.includes('<h2>Math, an ordered list, an
 const TITLE = 0;
 const QR = '<div class="qr" data-qr="https://github.com/beeson-group/slides"></div>';
 const BLOCK_END = '    <p class="who">The Beeson group<br>Princeton University</p>\n  </div>\n';
-const BACKDROP = '  <div class="backdrop" data-scene="tubes" data-cx="0.42" data-cy="0" data-half="0.6"></div>\n';
 
 let browser;
 let server;
@@ -168,10 +167,11 @@ for (const platform of PLATFORMS) {
     assert.equal((await state(page, 'arrange.order.front')).enabled, false, 'the QR code is already in front');
     await press(page, KEYS[platform].back);
     await frames(page);
-    const back = [BACKDROP, `  ${QR}\n${BACKDROP}`];
-    const out = [`${BLOCK_END}  ${QR}\n`, BLOCK_END];
-    const edits = [back, out];
+    // the backdrop is the ground of its layout, hence the QR code is put after it, behind the block
+    const edits = [[`${BLOCK_END}  ${QR}\n`, BLOCK_END], ['  <div class="block">\n    <h1>Every layout', `  ${QR}\n  <div class="block">\n    <h1>Every layout`]];
     await byteExact(page, edits);
+    assert.equal((await state(page, 'arrange.order.back')).enabled, false, 'the QR code is already at the back');
+    assert.equal((await state(page, 'arrange.order.backward')).enabled, false, 'the QR code is sent behind the backdrop');
     await inScope(page);
     await undo(page);
     await byteExact(page);
@@ -187,9 +187,8 @@ for (const platform of PLATFORMS) {
     await byteExact(page);
     // Send Backward passes one figure, the block
     await exec(page, 'arrange.order.backward');
-    const backward = [[`${BLOCK_END}  ${QR}\n`, BLOCK_END], ['  <div class="block">\n    <h1>Every layout', `  ${QR}\n  <div class="block">\n    <h1>Every layout`]];
-    await byteExact(page, backward);
-    await saved(page, backward);
+    await byteExact(page, edits);
+    await saved(page, edits);
     assert.deepEqual(errors(page), []);
   });
 
