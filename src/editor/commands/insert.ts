@@ -18,7 +18,7 @@ import { injectStyle } from '../ui/dom.ts';
 import { columnOf } from './clipboard.ts';
 import { onCaptionBox } from './figure.ts';
 import { docOf } from './slide.ts';
-import { freePlace, placeNew, translateOf } from './place.ts';
+import { freePlace, placeNew, titlePlace, translateOf } from './place.ts';
 import { checkOverlaps } from '../overflow.ts';
 
 const CSS = `
@@ -296,7 +296,13 @@ export function install(app: App): void {
     };
     const show = () => {
       parent.insertBefore(el, next && next.parentNode === parent ? next : null);
-      if (kind === 'text' || kind === 'code') {
+      if (kind === 'text' && parent.matches('section:is(.title, .closing)')) {
+        el.style.translate = '';
+        el.style.width = '';
+        const f = titlePlace(app, el);
+        el.style.translate = `${f.x}px ${f.y}px`;
+        if (f.width) el.style.width = `${f.width}px`;
+      } else if (kind === 'text' || kind === 'code') {
         el.style.translate = '';
         const y = textOffset(app, el);
         el.style.translate = y ? `0px ${y}px` : '';
@@ -439,21 +445,32 @@ export function install(app: App): void {
     await app.history.idle();
     const h = app.history;
     if (app.selection.kind === 'elements' && app.selection.elements().includes(node)) app.selection.clear();
-    if (r.alone) {
-      while (typingOf(h.last, node)) await h.retract(h.last!);
-      for (const e of [r.first, r.box]) if (e && h.last === e) await h.retract(e);
-    }
-    if (node.isConnected) {
-      // a box begun since, e.g. by a click on Text, is kept, and put again at its place in the
-      // column without the emptied box
-      const p = pending;
-      leaving = true;
-      try {
-        await h.transact('Delete Text Box', () => docOf(app).remove(node));
-        if (p && pending === p) p.show();
-      } finally {
-        leaving = false;
+    // a box begun since, e.g. by a click on Text, is kept. its entry is taken off while the emptied
+    // box is taken out, and put back over it, so that one undo takes the new box
+    const p = pending;
+    const held = !!p && h.last === p.entry;
+    leaving = true;
+    try {
+      if (held) h.discard();
+      if (r.alone) {
+        while (typingOf(h.last, node)) await h.retract(h.last!);
+        for (const e of [r.first, r.box]) if (e && h.last === e) await h.retract(e);
       }
+      if (node.isConnected) await h.transact('Delete Text Box', () => docOf(app).remove(node));
+      // the undo of the first input shows the emptied box again as the pending one, and the undo of
+      // its insert takes it off, hence the new box is made the pending one again
+      if (p && p.el.isConnected && (pending === p || !pending)) {
+        pending = p;
+        if (held) {
+          own = true;
+          h.push(p.entry);
+          onTop = true;
+        }
+        // the box is put again at its place without the emptied box
+        p.show();
+      }
+    } finally {
+      leaving = false;
     }
     recent = null;
   };
@@ -534,7 +551,7 @@ export function install(app: App): void {
   // as saved, at each change of the history
   app.listen('history', () => {
     const l = app.history.last;
-    if (recent && l !== recent.first && !typingOf(l, recent.node)) recent.alone = false;
+    if (recent && l !== recent.first && !typingOf(l, recent.node) && l !== pending?.entry) recent.alone = false;
     if (own) {
       own = false;
       if (pending) app.markDirty();
@@ -569,9 +586,12 @@ export function install(app: App): void {
 
   onCaptionBox({ begin: (host) => begin('caption', host, null), drop });
 
+  // the block of a title or closing slide is held at its foot, hence a text box in it would move
+  // its words up. a text box of these slides is a child of the section, as a new table is
   const pendingText = (kind: Kind) => (a: App) => {
     const slide = a.current()!;
-    const { parent, before } = columnPlace(a, slide);
+    const plate = kind === 'text' && slide.matches('.title, .closing') ? { parent: slide, before: slide.querySelector(':scope > .foot, :scope > aside.notes') } : null;
+    const { parent, before } = plate ?? columnPlace(a, slide);
     begin(kind, parent, before);
   };
 

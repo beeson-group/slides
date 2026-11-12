@@ -284,3 +284,63 @@ export function keepBeside(app: App, outer: Element[]): (move: (el: Element, tra
       move(el, { x: t.x + dx, y: t.y + dy });
     });
 }
+
+// the offset in slide px of a new text box el of a title or closing slide, a child of the section
+// drawn at its top left, with the width in px that it is drawn at when it is drawn smaller. the
+// place is the free one inside the margins nearest to the center of the slide, off the words of
+// the block, the other elements, the chrome, and the lockup drawn by the theme, with room, and off
+// the drawn cells of the backdrop while such a place exists, with room under it for three lines.
+// the box is drawn as small as a half before it lies over the drawing, and it is put at the center
+// when every place covers words
+export function titlePlace(app: App, el: HTMLElement): { x: number; y: number; width?: number } {
+  const slide = el.closest('section') as HTMLElement;
+  const w = slide.offsetWidth || 1920, h = slide.offsetHeight || 1080;
+  const others: Box[] = [];
+  const num = document.querySelector('.reveal .slide-number');
+  for (const o of [...slide.querySelectorAll(':scope > *, :scope > .block > *'), ...(num ? [num] : [])]) {
+    if (o === el || o.matches(`${SKIP}, .block`)) continue;
+    const b = boxOf(app, o, true);
+    if (b && b.right - b.left > 1 && b.bottom - b.top > 1) others.push(b);
+  }
+  const lockup = getComputedStyle(slide, '::before');
+  if (lockup.content !== 'none' && lockup.position === 'absolute') {
+    const left = parseFloat(lockup.left), top = parseFloat(lockup.top);
+    others.push({ left, top, right: left + parseFloat(lockup.width), bottom: top + parseFloat(lockup.height) });
+  }
+  const cells = new Set([...slide.querySelectorAll(':scope > .backdrop')].flatMap((b) => drawnCells(app, b)).map((c) => (c.top / 20) * 1000 + c.left / 20));
+  const inked = (b: Box) => {
+    for (let j = Math.floor(b.top / 20); j * 20 < b.bottom; j++) for (let i = Math.floor(b.left / 20); i * 20 < b.right; i++) if (cells.has(j * 1000 + i)) return true;
+    return false;
+  };
+  const width = el.style.width;
+  const base = slideBox(app, el).right - slideBox(app, el).left;
+  try {
+    for (const ink of cells.size ? [true, false] : [false]) {
+      for (const k of [1, 0.75, 0.5]) {
+        el.style.width = k === 1 ? width : `${Math.round(base * k)}px`;
+        const b = slideBox(app, el);
+        const bw = b.right - b.left, bh = b.bottom - b.top;
+        const cx = (w - bw) / 2, cy = (h - bh) / 2;
+        let best: Box | null = null;
+        let near = Infinity;
+        // a box grows down by a paragraph at each new line, and the section is scrolled to a caret
+        // under its edge, which moves every text of the slide. the place keeps room for three lines
+        for (const y of steps(ROOM, h - 3 * bh - 3 * ROOM, [cy])) {
+          for (const x of steps(MARGIN, w - bw - MARGIN, [cx])) {
+            const at = { left: x, top: y, right: x + bw, bottom: y + bh };
+            const d = Math.hypot(x - cx, y - cy);
+            if (d < near && !others.some((o) => meets(grow(at, ROOM), o)) && !(ink && inked(at))) {
+              near = d;
+              best = at;
+            }
+          }
+        }
+        if (best) return { x: Math.round(best.left - b.left), y: Math.round(best.top - b.top), ...(k < 1 ? { width: Math.round(base * k) } : {}) };
+      }
+    }
+  } finally {
+    el.style.width = width;
+  }
+  const b = slideBox(app, el);
+  return { x: Math.round((w - b.left - b.right) / 2), y: Math.round((h - b.top - b.bottom) / 2) };
+}
