@@ -33,6 +33,7 @@ import {
   CELL, GRID, MOST, around, fillLine, boxOf, cellAfter, cellBeside, cellHtml, cellOver, columnName, columnsOf, emptyRows, gridOf, grow, hasHeader, numericOf, sortOrder,
   CELLS, editorHeads, parseEditorTable, parseHtmlTable, parseTabular, placeOf, placesOf, rowHtml, spotsIn, tableHtml, type Box, type Place,
 } from '../table.ts';
+import { offsetIn, selectIn } from '../text/blocks.ts';
 import { placeCaret } from '../text/typing.ts';
 import { Dialog } from '../ui/dialog.ts';
 import { injectStyle, make } from '../ui/dom.ts';
@@ -367,8 +368,11 @@ function moveOf(t: Target | null, kind: Line, way: -1 | 1): { lo: number; hi: nu
   const box = t?.box;
   if (!t || !box) return null;
   const [lo, hi] = kind === 'row' ? [box.r0, box.r1] : [box.c0, box.c1];
-  const to = way < 0 ? lo - 1 : hi + 2;
-  return movable(t.table, kind, lo, hi, to) ? { lo, hi, to } : null;
+  // the next gap that keeps every merged cell whole, i.e. past a merged block next to the lines,
+  // as a drag moves them
+  const end = kind === 'row' ? t.table.rows.length : gridOf(t.table).width;
+  for (let to = way < 0 ? lo - 1 : hi + 2; to >= 0 && to <= end; to += way) if (movable(t.table, kind, lo, hi, to)) return { lo, hi, to };
+  return null;
 }
 
 // the rows or the columns lo to hi of table moved in the file to the gap before line to. the
@@ -588,6 +592,19 @@ async function addColumn(app: App, t: Target, after: boolean): Promise<HTMLTable
 
 // true while the table of t is the selection and its cell is selected as a block, not its text
 const blocked = (app: App, t: Target) => app.selection.only() === t.table && !cellAt(app);
+
+// with the caret in a cell, a part of the open transaction after whose undo the caret is put back at
+// its spot, and after whose redo it is put where it is at the call of the function returned
+function keepCaret(app: App, asBlock: boolean): () => void {
+  if (asBlock) return () => {};
+  return app.history.keep(() => {
+    const cell = cellAt(app);
+    const r = cell && caretIn(cell);
+    if (!cell || !r) return null;
+    const at = offsetIn(cell, r.startContainer, r.startOffset);
+    return () => selectIn(cell, at);
+  });
+}
 
 // the cell after an edit: selected as a block in the block state, and else with the caret in it
 function land(app: App, cell: Element | null | undefined, at: 'start' | 'end', asBlock: boolean): void {
@@ -1786,9 +1803,11 @@ export function install(app: App): void {
     run: async (a, arg) => {
       const t = need(a, arg);
       const asBlock = blocked(a, t);
+      const kept = keepCaret(a, asBlock);
       const col = t.cell ? placeOf(t.cell)!.col : 0;
       const tr = await addRow(a, t, below);
       land(a, cellOver(t.table, [...t.table.rows].indexOf(tr), col) ?? tr.cells[0], 'start', asBlock);
+      kept();
     },
   });
   rowCommand('table.rowAbove', 'Add Row Above', 80, false, 'Alt+ArrowUp');
@@ -1805,7 +1824,9 @@ export function install(app: App): void {
     run: async (a, arg) => {
       const t = need(a, arg);
       const asBlock = blocked(a, t);
+      const kept = keepCaret(a, asBlock);
       land(a, await addColumn(a, t, after), 'start', asBlock);
+      kept();
     },
   });
   columnCommand('table.columnBefore', 'Add Column Before', 82, false, 'Alt+ArrowLeft');

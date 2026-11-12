@@ -440,7 +440,9 @@ class DataWindow {
   private size(): string {
     const box = this.box();
     if (!box) return '';
-    const why = this.clearable() ? '' : ' A number of a plot cannot be left empty, hence Cut and Delete are dimmed.';
+    const kinds = new Set(this.selected()?.cells.flat().map((c) => c?.kind));
+    const cause = !kinds.has('text') ? 'A number of a plot cannot be left empty' : kinds.has('number') ? 'The labels are empty, and a number of a plot cannot be left empty' : 'The labels are empty';
+    const why = this.clearable() ? '' : ` ${cause}, hence Cut and Delete are dimmed.`;
     return `${box.r1 - box.r0 + 1} × ${box.c1 - box.c0 + 1} cells selected.${why}`;
   }
 
@@ -449,10 +451,10 @@ class DataWindow {
     return this.grid.contains(field) && !!this.box();
   }
 
-  // whether the range holds a text, which Cut and Delete clear. a number is kept, since parsePlot
-  // of src/plot.ts does not read a missing value
+  // whether the range holds a text that is not empty, which Cut and Delete clear. a number is
+  // kept, since parsePlot of src/plot.ts does not read a missing value
   clearable(): boolean {
-    return !!this.box() && !!this.selected()?.cells.flat().some((c) => c?.kind === 'text');
+    return !!this.box() && !!this.selected()?.cells.flat().some((c) => c?.kind === 'text' && c.text !== '');
   }
 
   // the cells of the range, or the focused cell, by row

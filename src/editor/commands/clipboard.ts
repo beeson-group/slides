@@ -257,6 +257,14 @@ function mediaFiles(data: DataTransfer | null | undefined): File[] {
 }
 
 // the files of an image or a video on the system clipboard, read for Edit > Paste from the menu
+// the HTML of the system clipboard, or '' where it does not have one or the browser refuses the read
+async function readHtml(): Promise<string> {
+  try {
+    for (const item of (await navigator.clipboard?.read?.()) ?? []) if (item.types.includes('text/html')) return await (await item.getType('text/html')).text();
+  } catch {}
+  return '';
+}
+
 async function readMedia(): Promise<File[]> {
   try {
     const items = (await navigator.clipboard?.read?.()) ?? [];
@@ -357,6 +365,7 @@ export function install(app: App): void {
   const paste = async (a: App, arg: unknown, match: boolean) => {
     if (Array.isArray(arg) && arg.every((f) => f instanceof File)) return void (await insertFiles(a, arg));
     let text = typeof arg === 'string' ? arg : '';
+    const read = !text;
     if (!text) text = (await navigator.clipboard?.readText().catch(() => '')) || '';
     if (!text && !inText(a)) {
       const files = await readMedia();
@@ -388,8 +397,9 @@ export function install(app: App): void {
     else if (slides) await a.commands.run('slide.paste', slides);
     else {
       // a range of cells or a table is pasted onto the selected range, or else onto the slide as a
-      // new table, as by the key
-      const html = text === clip?.text ? clip.html : '';
+      // new table, as by the key. a copy of another tab or of the page before a reload is read
+      // from the system clipboard
+      const html = (text === clip?.text ? clip.html : '') || (read && text ? await readHtml() : '');
       if (!(await pasteRange(a, text, html)) && a.region() === 'canvas') await pasteTable(a, text, html);
     }
   };
