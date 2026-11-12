@@ -533,4 +533,23 @@ for (const platform of PLATFORMS) {
     sameText(await rendered(page), page.source);
     assert.deepEqual(errors(page), []);
   });
+
+  // a scene is played again after a preview, as the editor shows it, and the next preview starts it anew
+  test(`${platform}: a preview from a step at which a viewer is shown, after another preview, plays the scene from its start`, async (t) => {
+    const page = await open(t, platform, { deck: VIEWERS });
+    await page.waitFor(`!!document.getElementById('play').state`);
+    await exec(page, 'steps.preview');
+    await page.waitFor(`!document.documentElement.classList.contains('beeson-previewing')`, 20000);
+    await page.waitFor(`document.getElementById('play').playing && document.getElementById('play').time > 1.5`, 20000);
+    // the row of the step after the scene is selected, and the preview is played from the step before it, at which the scene is shown
+    await click(page, await page.evaluate(`(() => { const b = ${ROW('A later step')}.querySelector('.text').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`));
+    await frames(page);
+    await page.evaluate(`window.BeesonEditor.exec('steps.playFrom'); true`);
+    await page.waitFor(`document.documentElement.classList.contains('beeson-previewing')`);
+    await frames(page);
+    const now = await page.evaluate(`({ playing: document.getElementById('play').playing, time: document.getElementById('play').time, step: document.documentElement.dataset.previewStep })`);
+    assert.ok(now.playing && now.time < 1, `the scene is not played from its start: ${JSON.stringify(now)}`);
+    await page.waitFor(`!document.documentElement.classList.contains('beeson-previewing')`, 20000);
+    assert.deepEqual(errors(page), []);
+  });
 }
