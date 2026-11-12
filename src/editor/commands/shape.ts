@@ -12,6 +12,7 @@ import { setItemIcon } from '../ui/icons.ts';
 import { overlay, view, wh } from '../canvas/frames.ts';
 import { frameOf, onCanvas } from '../canvas/hit.ts';
 import { LINE_TONES } from './line.ts';
+import { toFront } from './order.ts';
 import { DRAWN, shapePath } from '../../shapes.ts';
 
 export const SHAPE_KINDS: [string, string][] = [
@@ -164,6 +165,7 @@ export function install(app: App): void {
     const before = slide.querySelector(':scope > aside.notes');
     await app.history.selecting('Insert Shape', async () => {
       const made = await app.doc.insert(shapeText(kind, box), slide, before, 'Insert Shape');
+      await toFront(app, made[0]);
       app.selection.set('elements', made);
       return made;
     });

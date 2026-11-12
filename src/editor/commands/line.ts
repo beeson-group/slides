@@ -15,7 +15,7 @@ import { frameOf, frameRect, lineAt, linePoints, movablesOf, onCanvas, snapBoxOf
 import { bendTo, gripOf, parseStroke, rebend, strokeText, withKind, type Ends, type Kind, type Point, type Stroke } from '../canvas/stroke.ts';
 import { LAYOUT_GUIDES, snapMove, snapPoint, type Box, type Targets } from '../canvas/snap.ts';
 import { angleOf, locked, placeOf, record, scrollOf, standIns, writePlace, type Place } from '../canvas/drag.ts';
-import { freshGroup } from './order.ts';
+import { freshGroup, toFront } from './order.ts';
 import { copiedGroups } from '../model/groups.ts';
 import { glueAt, install as installGlue, recorded, relink, setEnd, showTarget, type End, type Glue } from '../model/glue.ts';
 
@@ -312,6 +312,7 @@ export function install(app: App): void {
     const label = d.kind === 'curve' ? 'Insert Curved Arrow' : d.kind === 'elbow' ? 'Insert Elbow Arrow' : d.heads === 'none' ? 'Insert Line' : 'Insert Arrow';
     const [svg] = await app.history.selecting(label, async () => {
       const made = await app.doc.insert(lineText(withKind(e, d.kind), { id, heads: d.heads }), slide, before, label);
+      await toFront(app, made[0]);
       for (const end of ['from', 'to'] as End[]) if (glue[end]) setEnd(recorded(app), made[0], end, glue[end] as Glue);
       app.selection.set('elements', made);
       return made;

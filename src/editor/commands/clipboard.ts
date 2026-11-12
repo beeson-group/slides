@@ -104,8 +104,10 @@ function nextKept(el: Element): Node | null {
 
 // the last copy, with its sources, the number of times it was pasted on the slide of its sources,
 // and the elements of the last such paste, after which the next one is put. html is the table of a
-// copy of a range of cells
-type Clip = { text: string; sources: Element[]; paths: string[][]; pasted: number; last: Element[]; html?: string };
+// copy of a range of cells. away is the last slide without the sources that the copy was pasted on,
+// with the number of pastes there and the copies of the first one, at the place of the sources
+type Away = { slide: Element; pasted: number; first: Element[] };
+type Clip = { text: string; sources: Element[]; paths: string[][]; pasted: number; last: Element[]; html?: string; away?: Away };
 let clip: Clip | null = null;
 
 function copy(app: App, els: Element[], data: DataTransfer | null): void {
@@ -189,6 +191,10 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
   const doc = docOf(app);
   const own = clip && clip.sources.length === texts.length && clip.sources.every((s) => s.isConnected && slide.contains(s)) ? clip : null;
   const keep = keepPlaces(app, own?.sources ?? []);
+  // a later paste on a slide without the sources is offset from the first one there, and the count
+  // starts again once the first one is undone
+  const was = clip?.away?.slide === slide && clip.away.first.some((e) => e.isConnected) ? clip.away : null;
+  const away = !own && clip && clip.sources.length === texts.length ? (was ?? (clip.away = { slide, pasted: 0, first: [] })) : null;
   const nodes: Element[] = [];
   for (const [i, raw] of texts.entries()) {
     const text = freshIds(app, raw);
@@ -213,6 +219,8 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
     }
     const [node] = await doc.insert(text, parent, before, 'paste');
     if (source && own && !ground && covers(app, node, source)) shift(app, node, own.pasted + 1);
+    const first = away?.first[i];
+    if (away && first?.isConnected && !ground && covers(app, node, first)) shift(app, node, away.pasted);
     nodes.push(node);
   }
   regroup(app, nodes);
@@ -223,6 +231,7 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
     own.pasted++;
     own.last = nodes;
   }
+  if (away && !away.pasted++) away.first = nodes;
   app.selection.set('elements', nodes);
   return nodes;
 }

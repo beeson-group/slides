@@ -326,7 +326,15 @@ function planOf(app: App, all: Element[], moving: Element[], any = false): Plan 
   const facts = target.map((el) => factOf(app, el, moving.includes(el), stacks(el.parentElement!) ? -n : 0));
   const hi = Math.max(0, ...facts.map((f) => f.base)) + n;
   const free = moving.filter((e) => target.includes(e) && !inFlow(e) && !e.matches(BACK));
-  const at = (el: Element) => app.pairing?.elements.get(el)?.open?.start ?? -1;
+  // an element inserted since the file was read is from a text of its own, and its place in the
+  // file is before the next sibling from the text of its parent
+  const at = (el: Element): number => {
+    const src = app.pairing?.elements.get(el), home = app.pairing?.elements.get(el.parentElement!)?.source;
+    if (!src?.source.fragment || src.source === home) return src?.open?.start ?? -1;
+    let n = el.nextElementSibling;
+    while (n && app.pairing?.elements.get(n)?.source !== home) n = n.nextElementSibling;
+    return n ? (app.pairing?.elements.get(n)?.open?.start ?? 0) - 0.5 : Number.MAX_SAFE_INTEGER;
+  };
   // the place of el among its siblings of the file that stay
   const rank = (el: Element, order: Element[]) => order.filter((k) => k === el || (!free.includes(k) && at(k) >= 0)).indexOf(el);
   const kidsOf = (el: Element) => [...el.parentElement!.children];
@@ -408,10 +416,18 @@ async function arrange(app: App, slide: Element, els: Element[], o: Order): Prom
 }
 
 // a new element of a slide drawn under a shape of the slide, put in front of the shapes by the plan
-// of Bring to Front, in the entry of its insert, so that it is seen once it is dragged onto a shape
+// of Bring to Front, in the entry of its insert, so that it is seen once it is dragged onto a shape,
+// as the newest object of Keynote and PowerPoint
 export async function overShapes(app: App, el: Element): Promise<void> {
   const slide = el.closest('section');
   if (slide && [...slide.querySelectorAll('.shape')].some((s) => drawnUnder(el, s))) await arrange(app, slide, [el], 'front');
+}
+
+// a new shape or line put in front of its slide by the plan of Bring to Front, in the entry of its
+// insert, as the newest object of Keynote and PowerPoint. nothing is written where it is in front
+export async function toFront(app: App, el: Element): Promise<void> {
+  const slide = el.closest('section');
+  if (slide) await arrange(app, slide, [el], 'front');
 }
 
 // whether Bring Forward, or Send Backward with up false, would move el by itself
