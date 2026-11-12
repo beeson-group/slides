@@ -264,10 +264,13 @@ export class App {
   }
 
   // els selected by an undo or a redo. a caret left in a text of one of them keeps the text as the
-  // selection, since the keys go to the text of the caret
+  // selection, since the keys go to the text of the caret. a display among them is an object, hence
+  // its formula takes the focus, as at a click on it
   frame(els: Element[]): void {
     const host = this.caretHost();
-    if (host && els.some((el) => el.contains(host))) this.selection.set('text', [host]);
+    const formula = host?.matches('div.math') && els.includes(host) ? host.querySelector<HTMLElement>('mjx-container') : null;
+    formula?.focus({ preventScroll: true });
+    if (host && !formula && els.some((el) => el.contains(host))) this.selection.set('text', [host]);
     else this.selection.set('elements', els);
   }
 
