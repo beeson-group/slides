@@ -1,8 +1,6 @@
-// regression tests of R17.1 on both platforms: a new plot is put off the words of the slide while a
-// place inside the margins avoids every word and figure, and else at the place that covers the
-// least of them (N7, N8, N12, N23). a new table is put off the drawn orbit of the backdrop of a
-// figure slide (requirement 3d, N11), at the same place in slide px in every size of the window
-// (N10), and on a title or closing slide without moving the words of its block (N9)
+// regression tests of R17.1 on both platforms: a new table is put off the drawn orbit of the
+// backdrop of a figure slide (requirement 3d, N11), at the same place in slide px in every size of
+// the window (N10), and on a title or closing slide without moving the words of its block (N9)
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -64,15 +62,9 @@ const insertTable = async (page) => {
   await exec(page, 'insert.table', { rows: 3, columns: 3 });
   await settle(page);
 };
-const insertPlot = async (page) => {
-  await exec(page, 'insert.plot');
-  await exec(page, 'plot.closeData');
-  await settle(page);
-  await settle(page);
-};
 
-// the boxes in slide px of the tables, the plots, and the figures of the current slide, and of
-// each line of the words of its texts outside a table and a plot, by the rects of their text nodes
+// the boxes in slide px of the tables and the figures of the current slide, and of each line of the
+// words of its texts outside a table and a plot, by the rects of their text nodes
 const pieces = (page) => page.evaluate(`(() => {
   const slide = document.querySelector('.reveal .slides > section.present');
   const s = slide.getBoundingClientRect();
@@ -90,7 +82,7 @@ const pieces = (page) => page.evaluate(`(() => {
     range.selectNodeContents(n);
     for (const r of range.getClientRects()) if (r.width > 1 && r.height > 1) words.push({ ...px(r), name: owner.localName + ':' + owner.textContent.trim().slice(0, 16) });
   }
-  return { tables: of('table'), plots: of('.plot'), figures: of('img, video, .qr, figure, .zone'), words };
+  return { tables: of('table'), figures: of('img, video, .qr, figure, .zone'), words };
 })()`);
 const meets = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
 const area = (a, b) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
@@ -103,65 +95,6 @@ async function undone(page, before) {
   assert.notEqual(await render(page), before);
   await undo(page);
   assert.equal(await render(page), before);
-}
-
-for (const platform of PLATFORMS) {
-  // N7: the plot was put at 660, 140 over the heading and the subtitle of the title slide
-  test(`a new plot on the title slide lies off every word, inside the margins (${platform})`, async (t) => {
-    const page = await load(t, platform, DECK, 0);
-    const before = await render(page);
-    await insertPlot(page);
-    const { plots, words } = await pieces(page);
-    assert.equal(plots.length, 1, 'no plot was inserted');
-    const where = `the plot at ${js(round(plots[0]))}`;
-    assert.ok(inside(plots[0]), `${where} is not inside the margins`);
-    assert.deepEqual(wordsUnder(plots[0], words), [], `${where} lies over words`);
-    await undone(page, before);
-    assert.deepEqual(errors(page), []);
-  });
-
-  // N8 and N23: the plot was put at 576, 140 over the heading of slide 5. a plot of 600 by 800
-  // does not fit beside the text column, hence it is put where it covers the least of the words,
-  // off the heading and off the figure
-  test(`a new plot on slide 5 lies off the heading and the figure, and covers less of the words than at its place of round 7 (${platform})`, async (t) => {
-    const page = await load(t, platform, DECK, FIGURES);
-    const before = await render(page);
-    const start = await pieces(page);
-    await insertPlot(page);
-    const { plots, words } = await pieces(page);
-    assert.equal(plots.length, 1, 'no plot was inserted');
-    const plot = plots[0];
-    const where = `the plot at ${js(round(plot))}`;
-    assert.ok(inside(plot), `${where} is not inside the margins`);
-    for (const f of start.figures) assert.ok(!meets(plot, f), `${where} lies over a figure at ${js(round(f))}`);
-    assert.deepEqual(wordsUnder(plot, words.filter((l) => l.name.startsWith('h2:'))), [], `${where} lies over the heading`);
-    const cover = (b) => words.reduce((a, l) => a + area(b, l), 0);
-    // the place of round 7, which is off the figure as well
-    const old = { left: 576, top: 140, right: 1176, bottom: 940 };
-    assert.ok(cover(plot) < cover(old), `${where} covers ${Math.round(cover(plot))} px2 of words, not less than ${Math.round(cover(old))} at 576, 140`);
-    await undone(page, before);
-    assert.deepEqual(errors(page), []);
-  });
-
-  // N12: the plot was put at 120, 140 over the heading and the paragraph of the panel. a plot as
-  // large as the zone of the split slide does not fit off the video and the panel, hence it is put
-  // where it covers the least
-  test(`a new plot on a split slide with a filled zone lies off the heading of the panel (${platform})`, async (t) => {
-    const page = await load(t, platform, LAYOUTS, '.split');
-    const before = await render(page);
-    await insertPlot(page);
-    const { plots, words } = await pieces(page);
-    assert.equal(plots.length, 1, 'no plot was inserted');
-    const plot = plots[0];
-    const where = `the plot at ${js(round(plot))}`;
-    assert.ok(inside(plot), `${where} is not inside the margins`);
-    assert.deepEqual(wordsUnder(plot, words.filter((l) => l.name.startsWith('h2:'))), [], `${where} lies over the heading`);
-    const under = words.filter((l) => meets(plot, l)).reduce((a, l) => a + area(plot, l), 0);
-    const lines = words.filter((l) => /^(h2|p):/.test(l.name)).reduce((a, l) => a + (l.right - l.left) * (l.bottom - l.top), 0);
-    assert.ok(under < lines / 2, `${where} covers ${Math.round(under)} of ${Math.round(lines)} px2 of the words of the panel`);
-    await undone(page, before);
-    assert.deepEqual(errors(page), []);
-  });
 }
 
 // the drawn pixels of the backdrop of the current slide under box, sampled every 4 slide px
@@ -205,32 +138,31 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// the boxes of a table, a plot, and a table inserted on slide 5 in a window of width by height px
-async function three(t, platform, width, height) {
+// the boxes of two tables inserted on slide 5 in a window of width by height px
+async function two(t, platform, width, height) {
   const page = await load(t, platform, DECK, FIGURES, width, height);
   await insertTable(page);
-  await insertPlot(page);
   await insertTable(page);
   const p = await pieces(page);
-  const boxes = [p.tables[0], p.plots[0], p.tables[1]].map(round);
+  const boxes = [p.tables[0], p.tables[1]].map(round);
   assert.deepEqual(errors(page), []);
   await page.close();
   return { boxes, ...p };
 }
 
 for (const platform of PLATFORMS) {
-  // N10: the first table was at x 620, 640, or 665 at the three sizes, and the third table at
+  // N10: the first table was at x 620, 640, or 665 at the three sizes, and the last table at
   // 1920 by 1080 over the words of the heading
-  test(`a table, a plot, and a table on slide 5 are put at the same places in slide px at three sizes of the window (${platform})`, async (t) => {
+  test(`two tables on slide 5 are put at the same places in slide px at three sizes of the window (${platform})`, async (t) => {
     const runs = [];
-    for (const [w, h] of [[1280, 800], [1600, 1000], [1920, 1080]]) runs.push({ size: `${w}x${h}`, ...(await three(t, platform, w, h)) });
+    for (const [w, h] of [[1280, 800], [1600, 1000], [1920, 1080]]) runs.push({ size: `${w}x${h}`, ...(await two(t, platform, w, h)) });
     for (const r of runs.slice(1)) {
       r.boxes.forEach((b, i) => b.forEach((v, j) => assert.ok(Math.abs(v - runs[0].boxes[i][j]) <= 1, `at ${r.size} the boxes are ${js(r.boxes)}, at ${runs[0].size} ${js(runs[0].boxes)}`)));
     }
     for (const r of runs) {
-      const third = r.tables[1];
-      assert.deepEqual(wordsUnder(third, r.words.filter((l) => l.name.startsWith('h2:'))), [], `at ${r.size} the third table at ${js(round(third))} lies over the heading`);
-      assert.ok(inside(third), `at ${r.size} the third table at ${js(round(third))} is not inside the margins`);
+      const second = r.tables[1];
+      assert.deepEqual(wordsUnder(second, r.words.filter((l) => l.name.startsWith('h2:'))), [], `at ${r.size} the second table at ${js(round(second))} lies over the heading`);
+      assert.ok(inside(second), `at ${r.size} the second table at ${js(round(second))} is not inside the margins`);
     }
   });
 }

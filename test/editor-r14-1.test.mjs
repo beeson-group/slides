@@ -101,9 +101,8 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  // D28. a new table on a slide without a free place is reported as a figure that hides a text,
-  // as a new plot is at the same place
-  test(`a new table drawn over a text is reported, as a new plot is (${platform})`, async (t) => {
+  // D28. a new table on a slide without a free place is reported as a figure that hides a text
+  test(`a new table drawn over a text is reported (${platform})`, async (t) => {
     const page = await load(t, platform, FIGURES);
     await exec(page, 'insert.table', { rows: 3, columns: 3 });
     await frames(page);

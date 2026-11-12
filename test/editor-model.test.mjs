@@ -145,7 +145,6 @@ test('an element of each kind is inserted, and an element is removed, moved, and
   const options = {
     image: { src: 'demo/figure-dark.png', alt: 'A figure' },
     video: { src: 'demo/clip-dark.mp4', poster: 'demo/clip-dark.png' },
-    plot: { id: 'plot-test' },
     formula: { tex: 'a^2' },
   };
   for (const kind of ELEMENT_KINDS) {
@@ -257,7 +256,7 @@ test('the edits of a CRLF file are written with CR LF, and the undos give the fi
     const d = ${E}.doc;
     await d.insertSlide('split', ${slide(2)});
     await d.insertElement('table', ${slide(2)}.querySelector('.zone'));
-    await d.insertElement('plot', ${slide(4)}, null, { id: 'plot-crlf' });
+    await d.insertElement('qr', ${slide(4)});
     await d.move(${slide(3)}.querySelector(':scope > p'), ${slide(5)}, null);
     await d.retag(${slide(5)}.querySelector(':scope > p'), 'h3');
     ${slide(2)}.querySelector('h2').textContent = 'Two\\nlines';

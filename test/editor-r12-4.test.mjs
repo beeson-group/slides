@@ -1,6 +1,6 @@
-// the work of R12.4 on both platforms: the place of a new table and of a new plot, a text laid over
-// a figure by a change of the layout, the pair of an image for the two modes, the caption of a
-// picture, the slide made from the Content tile, and the name and the path of an unsaved picture.
+// the work of R12.4 on both platforms: the place of a new table, a text laid over a figure by a
+// change of the layout, the pair of an image for the two modes, the caption of a picture, the
+// slide made from the Content tile, and the name and the path of an unsaved picture.
 // each edit of the file is checked byte for byte, after an undo and a redo, and after a save and
 // an open
 
@@ -13,12 +13,9 @@ import { serve } from '../scripts/webdriver.mjs';
 import { click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
 const DECK = 'index.html';
-// the slides of index.html with a list beside a backdrop, with a figure in a zone, and with a video
+// the slides of index.html with a list beside a backdrop and with a figure in a zone
 const STEPS = 2;
 const FIGURES = 4;
-const VIDEO = 10;
-// the slide of editor-layouts.html with a heading and a backdrop
-const GLIDE = 13;
 const PLATFORMS = ['mac', 'other'];
 const DARK_FILE = resolve('demo/figure-dark.png');
 const LIGHT_FILE = resolve('demo/figure-light.png');
@@ -143,38 +140,6 @@ for (const platform of PLATFORMS) {
     }
     await checkEdit(page, before, `r12-4-table-${platform}.html`);
     assert.deepEqual(errors(page), []);
-  });
-
-  // tables-equations-insert-6. the theme draws a plot at the size of a zone, 600 by 800 slide px,
-  // and the slides of index.html with a figure or a video in the zone do not have a free place of
-  // that size, where the plot is put off the zone, which editor-r13-4 checks. the slide of
-  // editor-layouts.html with a QR code moved into the zone has one, at the left over its backdrop
-  test(`a new plot is put off the figures and the texts already on the slide (${platform})`, async (t) => {
-    for (const [deck, n, first] of [['test/pages/editor-layouts.html', GLIDE, 'insert.qr'], [DECK, FIGURES], [DECK, VIDEO]]) {
-      const page = await load(t, platform, { deck, n });
-      const before = await render(page);
-      if (first) {
-        // the QR code is dragged from the text column into the zone place
-        await exec(page, first);
-        await frames(page);
-        const k = await page.evaluate(`(() => { const s = document.querySelector('.reveal section.present'); return s.getBoundingClientRect().width / s.offsetWidth; })()`);
-        await drag(page, '.reveal section.present > .qr', { dx: 1180 * k, dy: 60 * k });
-        await frames(page);
-      }
-      const texts = await boxes(page, ':scope > p, :scope > ul > li, :scope > .foot');
-      const figures = await boxes(page, ':scope > .qr');
-      await exec(page, 'insert.plot');
-      await exec(page, 'plot.closeData');
-      await frames(page);
-      const [plot] = await boxes(page, ':scope > .plot');
-      assert.ok(plot, 'no plot was inserted');
-      assert.equal(figures.length, first ? 1 : 0);
-      if (first) assert.ok(figures[0].left > 1100, `the QR code was not moved into the zone place: ${js(figures[0])}`);
-      const zones = first ? [] : await boxes(page, ':scope > .zone:not(.plot)');
-      for (const b of first ? [...texts, ...figures] : zones) assert.ok(!meets(plot, b), `on slide ${n} of ${deck}, the plot at ${js(plot)} lies over ${js(b)}`);
-      if (!first) await checkEdit(page, before, `r12-4-plot-${n}-${platform}.html`);
-      assert.deepEqual(errors(page), []);
-    }
   });
 
   // navigator-slides-canvas-1

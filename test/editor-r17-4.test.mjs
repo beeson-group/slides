@@ -1,21 +1,18 @@
 // regression tests of R17.4 on both platforms with trusted input: the drop line of a drag by a bar
 // drawn over the lifted copy, a range of body cells pasted onto a slide as body cells, by the key
-// and by Paste of the Edit menu, a key pressed during a drag by a bar, Cut and Delete of the Edit
-// menu on a range of numbers of the Plot Data window, and a move of rows in a table with a merged
-// cell
+// and by Paste of the Edit menu, a key pressed during a drag by a bar, and a move of rows in a
+// table with a merged cell
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, contrast, press, saveAndReopen } from './helpers/editor.mjs';
+import { click, contrast, press, saveAndReopen } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 const BARS = 'test/pages/editor-r13-3.html';
 const TABLES = 'test/pages/editor-tables.html';
-const LOOP = 'test/pages/plot-loop.html';
-const WINDOW = '.beeson-plotdata';
 const MOD = { mac: 4, other: 2 };
 
 let browser;
@@ -266,55 +263,6 @@ for (const platform of PLATFORMS) {
     await pointer(page, 'mouseReleased', p.x, p.y);
     await wait(page);
     assert.equal(await render(page), now);
-    assert.deepEqual(errors(page), []);
-  });
-}
-
-// the Plot Data window of test/pages/plot-loop.html on the sheet of its tab, whose columns 1 and 2
-// are the x and the y of the mark dot
-const cell = (r, c) => `${WINDOW} input[data-r="${r}"][data-c="${c}"]`;
-const status = (page) => page.evaluate(`document.querySelector('${WINDOW} .state').textContent`);
-async function dataWindow(t, platform) {
-  const page = await load(t, platform, LOOP, 0);
-  await click(page, '.reveal section.present .plot');
-  await wait(page);
-  await press(page, 'Mod+Shift+D');
-  await page.waitFor(`!!document.querySelector('${WINDOW}:not([hidden])')`);
-  await wait(page);
-  return page;
-}
-async function cells(page, a, b) {
-  await click(page, await rect(page, `document.querySelector(${js(cell(...a))})`));
-  await wait(page, 100);
-  await click(page, await rect(page, `document.querySelector(${js(cell(...b))})`), { modifiers: 'Shift' });
-  await wait(page, 100);
-}
-
-// N46: Cut and Delete of the Edit menu on a range of numbers did nothing, without a message or an
-// entry of the history. a plot does not draw a missing value, hence both are dimmed on such a
-// range, and the window says why
-for (const platform of PLATFORMS) {
-  test(`Cut and Delete of the Edit menu are dimmed on a range of numbers of the Plot Data window, which says why (${platform})`, async (t) => {
-    const page = await dataWindow(t, platform);
-    await cells(page, [0, 1], [1, 2]);
-    assert.equal(await page.evaluate(`document.querySelectorAll('${WINDOW} td.sel').length`), 4);
-    assert.match(await status(page), /^2 × 2 cells selected\. .*cannot be left empty.*Cut and Delete/);
-    await openEdit(page);
-    assert.equal(await itemDimmed(page, 'Cut'), true, 'Cut is live on a range of numbers');
-    assert.equal(await itemDimmed(page, 'Delete'), true, 'Delete is live on a range of numbers');
-    assert.equal(await itemDimmed(page, 'Copy'), false, 'Copy is dimmed on a range of numbers');
-    await closeMenus(page);
-    // a range with a text keeps both items, which clear the text
-    const page2 = await dataWindow(t, platform);
-    await click(page2, await rect(page2, `[...document.querySelectorAll('${WINDOW} .sheets button')].find((b) => b.textContent.includes('event'))`));
-    await wait(page2);
-    await cells(page2, [0, 2], [0, 3]);
-    assert.doesNotMatch(await status(page2), /cannot be left empty/);
-    await openEdit(page2);
-    assert.equal(await itemDimmed(page2, 'Cut'), false);
-    assert.equal(await itemDimmed(page2, 'Delete'), false);
-    await closeMenus(page2);
-    await byteExact(page);
     assert.deepEqual(errors(page), []);
   });
 }

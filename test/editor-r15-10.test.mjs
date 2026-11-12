@@ -1,6 +1,6 @@
-// the place of a new table or plot of R15.10, on both platforms. with a free place, the element is
-// put there, inside the margins of the slide. without one, it is put at the center of the slide,
-// or at the place nearest to the center that is off every figure, video, plot, QR code, and table.
+// the place of a new table of R15.10, on both platforms. with a free place, the table is put there,
+// inside the margins of the slide. without one, it is put at the center of the slide, or at the
+// place nearest to the center that is off every figure, video, plot, QR code, and table.
 // each insert is checked byte for byte, after an undo and a redo, and after a save and an open
 
 import assert from 'node:assert/strict';
@@ -74,12 +74,6 @@ const insertTable = async (page) => {
   await exec(page, 'insert.table', { rows: 3, columns: 3 });
   await frames(page);
 };
-const insertPlot = async (page) => {
-  await exec(page, 'insert.plot');
-  await exec(page, 'plot.closeData');
-  await frames(page);
-  await frames(page);
-};
 
 // the rendered text differs from before, an undo gives before and a redo the edited text byte for
 // byte, and the saved text is opened again without problems
@@ -118,25 +112,6 @@ for (const platform of PLATFORMS) {
     assert.ok(inside(tables[1]), `the second table at ${js(round(tables[1]))} is not inside the margins`);
     assert.ok(!meets(tables[1], tables[0]), `the second table at ${js(round(tables[1]))} lies over the first at ${js(round(tables[0]))}`);
     assert.ok(!meets(tables[1], figure), `the second table at ${js(round(tables[1]))} lies over the figure`);
-    assert.deepEqual(errors(page), []);
-  });
-
-  // probe 13 and gap 5 of the juror of round 6. a new plot was put at 600, 244 by the least cover
-  // of the slide. a plot of 600 by 800 does not fit off the words beside the figure, hence it is put
-  // off the figure where it covers the least of the words, under the heading (N8 of round 7)
-  test(`a new plot on slide 5 is put inside the margins off the figure and the heading (${platform})`, async (t) => {
-    const page = await load(t, platform, FIGURES);
-    const before = await render(page);
-    const [figure] = await boxes(page, ':scope > figure.zone');
-    await insertPlot(page);
-    const [plot] = await boxes(page, ':scope > .plot');
-    assert.ok(plot, 'no plot was inserted');
-    assert.ok(inside(plot), `the plot at ${js(round(plot))} is not inside the margins of the slide`);
-    assert.ok(!meets(plot, figure), `the plot at ${js(round(plot))} lies over the figure at ${js(round(figure))}`);
-    const [head] = await boxes(page, ':scope > h2');
-    assert.ok(plot.top >= head.bottom, `the plot at ${js(round(plot))} lies over the heading at ${js(round(head))}`);
-    assert.deepEqual(round(plot), [576, 256, 600, 800]);
-    await checkEdit(page, before, `r15-10-plot-${platform}.html`);
     assert.deepEqual(errors(page), []);
   });
 

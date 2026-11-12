@@ -263,7 +263,7 @@ for (const platform of PLATFORMS) {
     await click(page, '.beeson-edit-top [data-command="slide.gallery"]');
     await frames(page);
     assert.ok(await page.evaluate(`!!document.querySelector('.beeson-edit-gallery[open]')`), 'the gallery is not open');
-    const off = await page.evaluate(`['insert.table', 'insert.plot', 'insert.text', 'insert.formula', 'insert.shape', 'insert.media'].filter((id) => document.querySelector('.beeson-edit-top [data-command="' + id + '"]')?.disabled)`);
+    const off = await page.evaluate(`['insert.table', 'insert.text', 'insert.formula', 'insert.shape', 'insert.media'].filter((id) => document.querySelector('.beeson-edit-top [data-command="' + id + '"]')?.disabled)`);
     assert.deepEqual(off, [], 'insert buttons are dimmed while the gallery is open');
     await click(page, '.beeson-edit-top [data-command="insert.table"]');
     await frames(page);

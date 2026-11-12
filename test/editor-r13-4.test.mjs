@@ -1,7 +1,7 @@
-// the work of R13.4 on both platforms: the place of a new plot and of a new table on a slide
-// without a free place of its size, the width of the navigator in a narrow window, and the
-// selection of a display formula after its TeX is applied. each edit of the file is checked byte
-// for byte, after an undo and a redo, and after a save and an open
+// the work of R13.4 on both platforms: the place of a new table on a slide without a free place
+// of its size, the width of the navigator in a narrow window, and the selection of a display
+// formula after its TeX is applied. each edit of the file is checked byte for byte, after an undo
+// and a redo, and after a save and an open
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -11,10 +11,9 @@ import { serve } from '../scripts/webdriver.mjs';
 import { center, click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
 
 const DECK = 'index.html';
-// the slides of index.html with an equation, with a figure in a zone, and with a video
+// the slides of index.html with an equation and with a figure in a zone
 const EQUATIONS = 3;
 const FIGURES = 4;
-const VIDEO = 10;
 const PLATFORMS = ['mac', 'other'];
 const FORMAT = '#beeson-edit-panel-format';
 
@@ -47,31 +46,6 @@ const boxes = (page, selector) => page.evaluate(`(() => {
     return { left: (r.left - s.left) / k, top: (r.top - s.top) / k, right: (r.right - s.left) / k, bottom: (r.bottom - s.top) / k };
   });
 })()`);
-// the boxes in slide px of the lines of the text of each element of selector, clipped to the box
-// of the element, as overflow.ts tests them, since the content area of a font is taller than the
-// box of a heading with a tight line height
-const lines = (page, selector) => page.evaluate(`(() => {
-  const slide = document.querySelector('.reveal .slides > section.present');
-  const s = slide.getBoundingClientRect();
-  const k = s.width / slide.offsetWidth;
-  const out = [];
-  for (const el of slide.querySelectorAll(${js(selector)})) {
-    const b = el.getBoundingClientRect();
-    const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
-    for (let n = walk.nextNode(); n; n = walk.nextNode()) {
-      if (!n.textContent.trim()) continue;
-      const range = document.createRange();
-      range.selectNodeContents(n);
-      for (const r of range.getClientRects()) {
-        const top = Math.max(r.top, b.top);
-        const bottom = Math.min(r.bottom, b.bottom);
-        if (r.width > 1 && bottom > top) out.push({ left: (r.left - s.left) / k, top: (top - s.top) / k, right: (r.right - s.left) / k, bottom: (bottom - s.top) / k });
-      }
-    }
-  }
-  return out;
-})()`);
-const meets = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
 const area = (a, b) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));
 const size = (a) => (a.right - a.left) * (a.bottom - a.top);
 // the share of the area of b that a covers
@@ -110,43 +84,6 @@ async function checkEdit(page, before, name) {
 }
 
 for (const platform of PLATFORMS) {
-  // plot-placement. the theme draws a plot at 600 by 800 slide px, and the slides with a figure or
-  // a video in the zone do not have a free place of that size
-  test(`a new plot on a slide without a free place of its size is put off the box of the figure or the video, and a second plot off the first (${platform})`, async (t) => {
-    for (const [n, what] of [[FIGURES, ':scope > figure.zone'], [VIDEO, ':scope > .zone:not(.plot)']]) {
-      const page = await load(t, platform, { n });
-      const before = await render(page);
-      const [figure] = await boxes(page, what);
-      assert.ok(figure, `slide ${n} does not have a figure in its zone`);
-      await exec(page, 'insert.plot');
-      await exec(page, 'plot.closeData');
-      await frames(page);
-      await frames(page);
-      const [plot] = await boxes(page, ':scope > .plot');
-      assert.ok(plot, 'no plot was inserted');
-      assert.ok(plot.left >= -1 && plot.top >= -1 && plot.right <= 1921 && plot.bottom <= 1081, `the plot at ${js(plot)} runs past the slide`);
-      assert.ok(covers(plot, figure) < 0.25, `on slide ${n}, the plot at ${js(plot)} covers ${Math.round(100 * covers(plot, figure))} % of the figure at ${js(figure)}`);
-      assert.equal(await page.evaluate(`window.BeesonEditor.selection().length === 1 && window.BeesonEditor.selection()[0].matches('.plot')`), true, 'the new plot is not selected');
-      const under = (await lines(page, ':scope > p, :scope > ul > li, :scope > h2')).filter((l) => meets(plot, l));
-      if (under.length) {
-        const s = await page.evaluate('window.BeesonEditor.status()');
-        assert.ok(s.overflow > 0 && /A plot covers \d+ texts?/.test(s.message), `the texts under the plot are not named in the status: ${js(s)}`);
-      }
-      await checkEdit(page, before, `r13-4-plot-${n}-${platform}.html`);
-      await exec(page, 'insert.plot');
-      await exec(page, 'plot.closeData');
-      await frames(page);
-      const plots = await boxes(page, ':scope > .plot');
-      assert.equal(plots.length, 2);
-      assert.ok(covers(plots[1], plots[0]) < 0.5, `the second plot at ${js(plots[1])} lies on the first at ${js(plots[0])}`);
-      assert.ok(covers(plots[1], figure) < 0.5, `the second plot at ${js(plots[1])} lies on the figure at ${js(figure)}`);
-      assert.deepEqual(errors(page), []);
-      // a page left open keeps its edits as a draft 1 s after the last one, in the storage that the
-      // next page has just cleared, and the card of the draft then takes the focus from the slide
-      await page.close();
-    }
-  });
-
   // table-over-list. by R15.10, a table without a free place is put inside the margins at the
   // middle of the slide, where it may cover words, and off the figure
   test(`a new table on a slide without a free place of its size is put at the middle of the slide off the figure, and a second table off the first (${platform})`, async (t) => {

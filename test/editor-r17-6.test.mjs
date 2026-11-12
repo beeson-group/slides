@@ -201,10 +201,11 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  // N13: two tables and a plot over texts read '3 figures cover 5 texts'
-  test(`the report names two tables and a plot over texts by their kinds and counts (${platform})`, async (t) => {
+  // N13: two tables and a plot over texts read '3 figures cover 5 texts'. a deck plot is named in
+  // editor-r20-1, since a plot is not inserted by the editor
+  test(`the report names two tables and a QR code over texts by their kinds and counts (${platform})`, async (t) => {
     const page = await load(t, platform);
-    for (const [id, arg, x, y] of [['insert.table', { rows: 3, columns: 3 }, 200, 250], ['insert.table', { rows: 3, columns: 3 }, 200, 560], ['insert.plot', undefined, 900, 300]]) {
+    for (const [id, arg, x, y] of [['insert.table', { rows: 3, columns: 3 }, 200, 250], ['insert.table', { rows: 3, columns: 3 }, 200, 560], ['insert.qr', undefined, 900, 300]]) {
       await exec(page, id, arg);
       await wait(page);
       await exec(page, 'arrange.setPosition', { x, y });
@@ -218,7 +219,7 @@ for (const platform of PLATFORMS) {
     assert.ok(m, `the report reads ${js(said)}`);
     const parts = m[1].replace(/^A /, 'a ').split(/, and |, | and /);
     assert.ok(parts.includes('2 tables'), `the report reads ${js(said)}`);
-    assert.ok(parts.includes('a plot'), `the report reads ${js(said)}`);
+    assert.ok(parts.includes('a QR code'), `the report reads ${js(said)}`);
     assert.equal(new Set(parts).size, parts.length, `a kind is named twice in ${js(said)}`);
     assert.deepEqual(errors(page), []);
   });

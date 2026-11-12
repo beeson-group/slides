@@ -499,7 +499,7 @@ for (const platform of PLATFORMS) {
     const rows = await menuRows(page);
     const labels = rows.map((r) => r.label);
     assert.deepEqual(labels.slice(0, 3), ['Cut', 'Copy', 'Paste'], `the menu of an image opens with ${labels.slice(0, 3).join(', ')}`);
-    assert.ok(!labels.includes('Edit Formula…') && !labels.includes('Edit Plot Data…'), 'the items of another kind are offered on an image');
+    assert.ok(!labels.includes('Edit Formula…'), 'the items of another kind are offered on an image');
     const at = (label) => {
       const i = labels.indexOf(label);
       assert.ok(i >= 0, `${label} is not offered on an image: ${labels.join(', ')}`);

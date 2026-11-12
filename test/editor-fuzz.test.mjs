@@ -29,7 +29,7 @@ const run = (seed, edits) => `(async () => {
   const children = (slide) => [...slide.children].filter((c) => !c.hasAttribute('data-generated') && inFile(c));
   const elements = () => slides().flatMap(children);
   const layouts = ['title', 'section', 'content', 'narrow', 'wide', 'figure', 'split', 'closing'];
-  const kinds = ['text', 'image', 'video', 'table', 'formula', 'code', 'qr', 'plot', 'backdrop'];
+  const kinds = ['text', 'image', 'video', 'table', 'formula', 'code', 'qr', 'backdrop'];
   const options = { image: { src: 'demo/figure-dark.png', alt: 'A figure' }, video: { src: 'demo/clip-dark.mp4', poster: 'demo/clip-dark.png' } };
   const log = [];
   const saves = [];

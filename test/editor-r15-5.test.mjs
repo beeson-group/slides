@@ -1,22 +1,17 @@
 // regression tests of R15.5 on both platforms with trusted input: a row or a column dragged by its
 // bar is lifted and follows the pointer along its axis while the button is held, the file changes
-// only at the drop, and Esc puts it back. Cut, Copy, and Delete of the Edit menu act on a range of
-// cells of the Plot Data window as their keys do, each with the name of the history entry that
-// the key gives
+// only at the drop, and Esc puts it back
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
+import { click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
 const TABLES = 'test/pages/editor-r13-3.html';
 const PLAIN = 1;
-const LOOP = 'test/pages/plot-loop.html';
-const WINDOW = '.beeson-plotdata';
 const PLATFORMS = ['mac', 'other'];
-const MOD = { mac: 4, other: 2 };
 
 let browser;
 let server;
@@ -185,131 +180,6 @@ for (const platform of PLATFORMS) {
     await frames(page);
     assert.equal(await render(page), page.source, 'a drag canceled by Esc changes the file');
     assert.equal(await undoLabel(page), before, 'a drag canceled by Esc is an entry of the history');
-    assert.deepEqual(errors(page), []);
-  });
-}
-
-// the Plot Data window of the plot of test/pages/plot-loop.html, on the sheet of its events mark,
-// whose one row holds the frame, x, y, and the text "end"
-const cell = (r, c) => `${WINDOW} input[data-r="${r}"][data-c="${c}"]`;
-const rect = (page, expr) => page.evaluate(`(() => { const el = ${expr}; if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
-const MENU_ITEM = (label) => `[...document.querySelectorAll('.beeson-edit-menu .item')].find((i) => i.getClientRects().length && i.querySelector('.label')?.textContent === ${js(label)})`;
-const itemDimmed = (page, label) => page.evaluate(`${MENU_ITEM(label)}?.getAttribute('aria-disabled') === 'true'`);
-const closeMenus = async (page) => {
-  await page.evaluate('window.BeesonEditorShell?.closeMenus?.(); true');
-  await frames(page);
-};
-const openEdit = async (page) => {
-  await click(page, await rect(page, `[...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].find((b) => b.textContent.trim() === 'Edit')`));
-  await frames(page);
-};
-const clipboard = (page) => page.evaluate('navigator.clipboard.readText()');
-const setClipboard = (page, text) => page.evaluate(`navigator.clipboard.writeText(${js(text)}).then(() => true)`);
-const focusName = (page) => page.evaluate(`(() => { const a = document.activeElement; return a?.closest('${WINDOW}') && a.dataset.r ? a.dataset.r + ',' + a.dataset.c : null; })()`);
-const rangeSize = (page) => page.evaluate(`document.querySelectorAll('${WINDOW} td.sel').length`);
-const caretAtStart = (page) => page.evaluate(`(() => { const i = document.querySelector(${js(cell(0, 2))}); i.focus(); i.setSelectionRange(0, 0); return true; })()`);
-
-// a key with the modifier of the platform and with the editing command of a real keyboard
-async function chord(page, platform, key, code, keyCode, command) {
-  const base = { key, code, windowsVirtualKeyCode: keyCode, modifiers: MOD[platform], commands: [command] };
-  await page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', ...base });
-  await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
-  await frames(page);
-}
-
-// the range of the y and the text of the event, selected by Shift+Right from the y, with the caret
-// at the start of the y, as after a click into its cell
-async function plotRange(t, platform) {
-  const page = await load(t, platform, LOOP, 0);
-  await page.send('Page.bringToFront');
-  await page.send('Browser.grantPermissions', { origin: server.origin, permissions: ['clipboardReadWrite', 'clipboardSanitizedWrite'] });
-  await click(page, '.reveal section.present .plot');
-  await press(page, 'Mod+Shift+D');
-  await page.waitFor(`!!document.querySelector('${WINDOW}:not([hidden])')`);
-  await click(page, await rect(page, `[...document.querySelectorAll('${WINDOW} .sheets button')].find((b) => b.textContent.includes('event'))`));
-  await frames(page);
-  await page.evaluate(`(() => { const i = document.querySelector(${js(cell(0, 2))}); i.focus(); i.select(); return true; })()`);
-  await press(page, 'Shift+ArrowRight');
-  await caretAtStart(page);
-  await frames(page);
-  assert.equal(await rangeSize(page), 2, 'the range is not two cells');
-  assert.equal(await focusName(page), '0,2');
-  return page;
-}
-
-const cleared = (source) => source.replace('"text": "end"', '"text": ""');
-
-for (const platform of PLATFORMS) {
-  test(`Copy of the Edit menu on a range of cells of the Plot Data window copies the range as the key does (${platform})`, async (t) => {
-    const page = await plotRange(t, platform);
-    await setClipboard(page, 'nothing');
-    await chord(page, platform, 'c', 'KeyC', 67, 'copy');
-    const byKey = await clipboard(page);
-    assert.equal(byKey, '-1\tend');
-    await setClipboard(page, 'nothing');
-    await openEdit(page);
-    assert.equal(await itemDimmed(page, 'Copy'), false, 'Copy is dimmed on a range of cells');
-    await click(page, await rect(page, MENU_ITEM('Copy')));
-    await frames(page);
-    await closeMenus(page);
-    assert.equal(await clipboard(page), byKey, 'Copy of the Edit menu does not copy the range');
-    assert.equal(await render(page), page.source);
-    assert.deepEqual(errors(page), []);
-  });
-
-  for (const [item, key] of [
-    ['Cut', (page) => chord(page, platform, 'x', 'KeyX', 88, 'cut')],
-    ['Delete', (page) => press(page, 'Delete')],
-  ]) {
-    test(`${item} of the Edit menu on a range of cells of the Plot Data window clears the range as the key does, as one entry with the name of the key (${platform})`, async (t) => {
-      const page = await plotRange(t, platform);
-      await setClipboard(page, 'nothing');
-      // the key first, whose text and entry of the history are those that the menu must give
-      await key(page);
-      await page.waitFor(`window.BeesonEditor.render() !== ${js(page.source)}`);
-      const byKey = { text: await render(page), label: await undoLabel(page), clip: await clipboard(page) };
-      assert.equal(byKey.text, cleared(page.source));
-      assert.equal(byKey.label, 'Undo Clear Cells');
-      await undo(page);
-      await byteExact(page);
-      await caretAtStart(page);
-      await frames(page);
-      assert.equal(await rangeSize(page), 2, 'the undo does not keep the range');
-      await setClipboard(page, 'nothing');
-      await openEdit(page);
-      assert.equal(await itemDimmed(page, item), false, `${item} is dimmed on a range of cells`);
-      await click(page, await rect(page, MENU_ITEM(item)));
-      await page.waitFor(`window.BeesonEditor.render() !== ${js(page.source)}`).catch(() => {});
-      await frames(page);
-      await closeMenus(page);
-      assert.equal(await render(page), byKey.text, `${item} of the Edit menu does not clear the range as the key does`);
-      assert.equal(await undoLabel(page), byKey.label);
-      if (item === 'Cut') assert.equal(await clipboard(page), byKey.clip, 'Cut of the Edit menu does not copy the range');
-      assert.equal(await page.evaluate(`document.querySelector(${js(cell(0, 2))}).value`), '-1', 'the number of the range is changed');
-      // a single undo gives the file back, hence the menu item is one entry of the history
-      await undo(page);
-      await byteExact(page);
-      await redo(page);
-      assert.equal(await render(page), byKey.text, 'the redo does not clear the range again');
-      const { text } = await saveAndReopen(page, `r15-5-${++saves}.html`);
-      assert.equal(text, byKey.text);
-      assert.deepEqual(errors(page), []);
-    });
-  }
-}
-
-for (const platform of PLATFORMS) {
-  test(`Delete of the Edit menu with the text of the focused cell selected clears the range, and not the text of the one cell (${platform})`, async (t) => {
-    const page = await plotRange(t, platform);
-    await page.evaluate(`(() => { const i = document.querySelector(${js(cell(0, 2))}); i.focus(); i.select(); return true; })()`);
-    await openEdit(page);
-    await click(page, await rect(page, MENU_ITEM('Delete')));
-    await page.waitFor(`window.BeesonEditor.render() !== ${js(page.source)}`).catch(() => {});
-    await frames(page);
-    await closeMenus(page);
-    assert.equal(await page.evaluate(`document.querySelector(${js(cell(0, 2))}).value`), '-1', 'Delete of the Edit menu deletes the text of the focused cell');
-    assert.equal(await render(page), cleared(page.source), 'Delete of the Edit menu does not clear the range');
-    assert.equal(await undoLabel(page), 'Undo Clear Cells');
     assert.deepEqual(errors(page), []);
   });
 }

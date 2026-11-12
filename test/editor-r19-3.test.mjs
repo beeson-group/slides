@@ -1,20 +1,17 @@
 // regression tests of R19.3 on both platforms with trusted input: a range of cells pasted by Paste
-// of the Edit menu after a reload (D5), Cut and Delete of the Plot Data window on emptied labels
-// (D6), Move Row Up and Down of a row next to a merged block (D7), and the caret after an undo of
-// an add of a row or a column
+// of the Edit menu after a reload (D5), Move Row Up and Down of a row next to a merged block (D7),
+// and the caret after an undo of an add of a row or a column
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { byteExact, click, press, saveAndReopen, type } from './helpers/editor.mjs';
+import { click, press, saveAndReopen, type } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 const BARS = 'test/pages/editor-r13-3.html';
 const TABLES = 'test/pages/editor-tables.html';
-const LOOP = 'test/pages/plot-loop.html';
-const WINDOW = '.beeson-plotdata';
 const MOD = { mac: 4, other: 2 };
 
 let browser;
@@ -76,7 +73,6 @@ async function roundTrip(page, base) {
 }
 
 const MENU_ITEM = (label) => `[...document.querySelectorAll('.beeson-edit-menu .item')].find((i) => i.getClientRects().length && i.querySelector('.label')?.textContent === ${js(label)})`;
-const itemDimmed = (page, label) => page.evaluate(`${MENU_ITEM(label)}?.getAttribute('aria-disabled') === 'true'`);
 const openEdit = async (page) => {
   await click(page, await rect(page, `[...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].find((b) => b.textContent.trim() === 'Edit')`));
   await wait(page);
@@ -149,67 +145,6 @@ for (const platform of PLATFORMS) {
     assert.equal(await tables(page), 2, 'the plain text is not pasted as a table');
     const pasted = await render(page);
     assert.ok(pasted.includes(HEAD), `the plain text is not pasted as before:\n${lastTable(pasted)}`);
-    assert.deepEqual(errors(page), []);
-  });
-}
-
-// D6: on a range of emptied labels of the Plot Data window, Cut and Delete stayed live and did
-// nothing, without a sentence in the status line
-const cell = (r, c) => `${WINDOW} input[data-r="${r}"][data-c="${c}"]`;
-const status = (page) => page.evaluate(`document.querySelector('${WINDOW} .state').textContent`);
-const labels = (page) => page.evaluate(`[...document.querySelectorAll('${WINDOW} tbody tr')].map((tr) => tr.querySelector('input[data-c="3"]')?.value)`);
-async function cells(page, a, b) {
-  await click(page, await rect(page, `document.querySelector(${js(cell(...a))})`));
-  await wait(page, 100);
-  await click(page, await rect(page, `document.querySelector(${js(cell(...b))})`), { modifiers: 'Shift' });
-  await wait(page, 100);
-}
-async function eventSheet(t, platform) {
-  const page = await load(t, platform, LOOP, 0);
-  await click(page, '.reveal section.present .plot');
-  await wait(page);
-  await press(page, 'Mod+Shift+D');
-  await page.waitFor(`!!document.querySelector('${WINDOW}:not([hidden])')`);
-  await wait(page);
-  await click(page, await rect(page, `[...document.querySelectorAll('${WINDOW} .sheets button')].find((b) => b.textContent.includes('event'))`));
-  await wait(page);
-  return page;
-}
-async function menuState(page) {
-  await openEdit(page);
-  const s = { cut: await itemDimmed(page, 'Cut'), del: await itemDimmed(page, 'Delete'), copy: await itemDimmed(page, 'Copy') };
-  await closeMenus(page);
-  return s;
-}
-
-for (const platform of PLATFORMS) {
-  test(`Cut and Delete of the Plot Data window are dimmed on a range of emptied labels, which the window says (${platform})`, async (t) => {
-    const page = await eventSheet(t, platform);
-    // a second row with a label, then both labels emptied by Delete of the Edit menu
-    await click(page, await rect(page, `document.querySelector(${js(cell(0, 3))})`));
-    await wait(page, 100);
-    await page.evaluate(`Promise.resolve(window.BeesonEditor.exec('plot.addRow')).then(() => true)`);
-    await wait(page, 400);
-    await click(page, await rect(page, `document.querySelector(${js(cell(1, 3))})`));
-    await wait(page, 100);
-    await type(page, 'go');
-    await press(page, 'Tab');
-    await wait(page, 400);
-    assert.ok((await labels(page)).every((l) => l), 'a label is empty before the Delete');
-    await cells(page, [0, 3], [1, 3]);
-    assert.deepEqual(await menuState(page), { cut: false, del: false, copy: false }, 'on two labels');
-    await menuRun(page, 'Delete');
-    await wait(page, 300);
-    assert.deepEqual(await labels(page), ['', '']);
-    assert.equal(await undoLabel(page), 'Undo Clear Cells');
-    // the emptied labels selected again
-    await cells(page, [0, 3], [1, 3]);
-    assert.deepEqual(await menuState(page), { cut: true, del: true, copy: false }, 'on two emptied labels');
-    assert.match(await status(page), /^2 × 1 cells selected\. .*Cut and Delete are dimmed\.$/);
-    // with a number, the range is the same
-    await cells(page, [0, 2], [1, 3]);
-    assert.deepEqual(await menuState(page), { cut: true, del: true, copy: false }, 'on numbers and emptied labels');
-    assert.match(await status(page), /^2 × 2 cells selected\. .*Cut and Delete are dimmed\.$/);
     assert.deepEqual(errors(page), []);
   });
 }

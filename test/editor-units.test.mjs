@@ -117,13 +117,10 @@ test('an element of each kind is written in the style of its file', () => {
   const style = textStyle('<a>\n  <b></b>\n</a>');
   for (const kind of ELEMENT_KINDS) {
     const units = elementText(kind, style, '  ');
-    assert.equal(units.length, kind === 'plot' ? 2 : 1);
+    assert.equal(units.length, 1);
     for (const u of units) assert.match(u, /^<[a-z]/);
   }
   assert.equal(elementText('image', style, '  ', { src: 'a "b".png' })[0], '<figure class="zone">\n    <img src="a &quot;b&quot;.png" alt="">\n  </figure>');
-  const [div, json] = elementText('plot', style, '', { id: 'p2' });
-  assert.equal(div, '<div class="plot zone" data-plot="p2"></div>');
-  assert.ok(JSON.parse(json.replace(/^<script[^>]*>|<\/script>$/g, '')).panels.length === 1);
   assert.match(elementText('table', style, '', { columns: 3, rows: 2 })[0], /<tr><th><\/th><th><\/th><th><\/th><\/tr>\n    <tr><td>/);
 });
 
