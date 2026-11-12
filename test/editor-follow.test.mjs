@@ -167,3 +167,36 @@ test('after a reload of the editor, the file of the deck is written again withou
   assert.ok((await page.evaluate(h2s)).includes('Equations, by an agent'));
   assert.deepEqual(errors(page), []);
 });
+
+test('a file read while it is written is read again until it is whole, and the changed slide is still marked', async (t) => {
+  const { page, edit } = await servedCopy(t);
+  // the first read of the changed file gives its first 40 percent, as a read during a write that is
+  // not atomic, e.g. on Windows. the file is followed through this handle once it is saved into
+  await page.evaluate(`window.BeesonEditor.attach({
+    name: 'index.html',
+    getFile: async () => ({
+      lastModified: Date.now(),
+      text: async () => {
+        const text = await (await fetch(location.href.split(/[?#]/)[0], { cache: 'no-store' })).text();
+        if (!text.includes('by an agent') || window.__partial) return text;
+        window.__partial = true;
+        return text.slice(0, Math.floor(text.length * 0.4));
+      },
+    }),
+    createWritable: async () => {
+      let body = '';
+      return { write: async (t) => { body = t; }, close: async () => { await fetch(location.href.split(/[?#]/)[0], { method: 'PUT', body }); } };
+    },
+  })`);
+  await page.evaluate(typeH2('Show your steps one at a time', 'Steps, by hand'));
+  await page.evaluate('window.BeesonEditor.save()');
+  assert.equal((await page.evaluate('window.BeesonEditor.status()')).dirty, false);
+  const slide = await page.evaluate(slideOf('Equations are first class citizens'));
+  await page.evaluate('window.__before = true');
+  edit('<h2>Equations are first class citizens</h2>', '<h2>Equations, by an agent</h2>');
+  await until(page, reloaded);
+  const s = await page.evaluate('window.BeesonEditor.status()');
+  assert.deepEqual(s.changed, [slide]);
+  assert.equal(s.message, `Loaded the changes of the file on slide ${slide}`);
+  assert.deepEqual(errors(page), []);
+});
