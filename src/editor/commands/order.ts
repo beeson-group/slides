@@ -9,7 +9,7 @@
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { angleOf, apartOf, locked, pivotOf, placeOf, record, seenCenter, spinOf, turn, turnMember, turnedEls, turnersOf } from '../canvas/drag.ts';
-import { objectOf, objectsOf, turnable, twinOf } from '../canvas/hit.ts';
+import { LINE, MOVABLE, OUTSIDE, objectOf, objectsOf, turnable, twinOf } from '../canvas/hit.ts';
 import { stateOf } from '../tags.ts';
 
 export type Order = 'front' | 'forward' | 'backward' | 'back';
@@ -34,56 +34,120 @@ const RAISED = ':is(section, .col) > table';
 // the z-index that the browser applies to el, 0 for auto
 const zOf = (el: Element): number => (getComputedStyle(el).position === 'static' ? 0 : parseInt(getComputedStyle(el).zIndex, 10) || 0);
 
-// the place of an element in the order of its siblings from back to front: its z-index, then its
-// index in the file. an element that is not a layer is drawn under the layers of z-index 0
-type Key = [number, number];
-const under = (a: Key, b: Key): boolean => a[0] < b[0] || (a[0] === b[0] && a[1] < b[1]);
-const indexOf = (el: Element): number => [...(el.parentElement?.children ?? [])].indexOf(el);
-const keyOf = (el: Element): Key => [isLayer(el) ? zOf(el) : -0.5, indexOf(el)];
+// the place of an element in the order that its slide is drawn, from back to front: for each
+// stacking context around it, a z-index and the path of indices of the context in the file, then
+// its own z-index and path. an element in the flow is drawn under the layers of z-index 0 of its
+// context, together with the content of the positioned element around it that is not a stacking
+// context, its host
+type Level = [number, number[]];
+type Key = Level[];
+function cmp(a: Key, b: Key): number {
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    const [[za, pa], [zb, pb]] = [a[i], b[i]];
+    if (za !== zb) return za - zb;
+    for (let j = 0; j < Math.min(pa.length, pb.length); j++) if (pa[j] !== pb[j]) return pa[j] - pb[j];
+    if (pa.length !== pb.length) return pa.length - pb.length;
+  }
+  return a.length - b.length;
+}
+const under = (a: Key, b: Key): boolean => cmp(a, b) < 0;
 
-// whether a is drawn under b, by the order of the children of their nearest common ancestor
+// the indices from the slide down to el, with the children of a parent of orders in that order
+type Path = (el: Element) => number[];
+const pathIn = (orders: Map<Element, Element[]>): Path => (el) => {
+  const out: number[] = [];
+  const slide = el.closest('section');
+  for (let x: Element = el; x !== slide && x.parentElement; x = x.parentElement) out.unshift((orders.get(x.parentElement) ?? [...x.parentElement.children]).indexOf(x));
+  return out;
+};
+const filePath = pathIn(new Map());
+
+// the stacking contexts around el inside its slide, with their z-index, and its host
+type Around = { stacks: [number, Element][]; host: Element | null };
+function aroundOf(el: Element): Around {
+  const out: Around = { stacks: [], host: null };
+  const slide = el.closest('section');
+  const chain: Element[] = [];
+  for (let x = el.parentElement; x && x !== slide; x = x.parentElement) chain.unshift(x);
+  for (const x of chain) {
+    if (stacks(x)) [out.stacks, out.host] = [[...out.stacks, [zOf(x), x]], null];
+    else if (isLayer(x)) out.host = x;
+  }
+  return out;
+}
+
+// the key of an element of around a, positioned with the z-index z or not, or turned
+function keyIn(el: Element, a: Around, path: Path, placed: boolean, z: number, turned: boolean): Key {
+  const lead = a.stacks.map(([sz, x]): Level => [sz, path(x)]);
+  if (placed) return [...lead, [z, path(el)]];
+  if (turned) return [...lead, [0, path(el)]];
+  return a.host ? [...lead, [0, path(a.host)], [-0.5, path(el)]] : [...lead, [-0.5, path(el)]];
+}
+const keyOf = (el: Element): Key => keyIn(el, aroundOf(el), filePath, getComputedStyle(el).position !== 'static', zOf(el), isLayer(el));
+
+// whether a is drawn under b, by the order of the stacking contexts of their slide
 export function drawnUnder(a: Element, b: Element): boolean {
-  let x: Element = a;
-  while (x.parentElement && !x.parentElement.contains(b)) x = x.parentElement;
-  let y: Element = b;
-  while (y.parentElement && y.parentElement !== x.parentElement) y = y.parentElement;
-  if (x === y || y.parentElement !== x.parentElement) return !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
-  return under(keyOf(x), keyOf(y));
+  if (a.closest('section') !== b.closest('section') || a.contains(b) || b.contains(a)) return !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+  return under(keyOf(a), keyOf(b));
 }
 
 // an element with a box on the slide, which the object list shows
 const drawn = (el: Element): boolean => getComputedStyle(el).display !== 'none' && el.getClientRects().length > 0;
 
-// the drawn children of parent in the file apart from the speaker notes, from back to front, as the
-// object list shows them
-function layersOf(app: App, parent: Element): Element[] {
-  return [...parent.children]
-    .filter((s) => !s.hasAttribute('data-generated') && !!app.pairing?.elements.has(s) && !s.matches('aside.notes') && drawn(s))
-    .sort((a, b) => (under(keyOf(a), keyOf(b)) ? -1 : 1));
+// the objects of a slide that the object list shows, and the children of the slide that hold none,
+// e.g. a backdrop, apart from the speaker notes, from back to front
+const ROWS = `${MOVABLE}, ${LINE}`;
+function layersOf(app: App, slide: Element): Element[] {
+  const ok = (e: Element) => !e.hasAttribute('data-generated') && !!app.pairing?.elements.has(e) && drawn(e);
+  const rows = [...slide.querySelectorAll(ROWS)].filter((e) => !e.closest(OUTSIDE) && !slide.contains(e.parentElement?.closest(ROWS) ?? null));
+  const rest = [...slide.children].filter((e) => !e.matches('aside.notes') && hidden(e));
+  const keys = new Map([...rows, ...rest].filter(ok).map((e) => [e, keyOf(e)]));
+  return [...keys.keys()].sort((x, y) => cmp(keys.get(x)!, keys.get(y)!));
 }
 
 // a plate or a backdrop is the back layer of its layout. a command does not move it, and Send to
-// Back and Send Backward do not pass it
+// Back and Send Backward do not pass one at the back of the order
 const BACK = '.plate, .backdrop';
 const same = (a: Element[], b: Element[]): boolean => a.length === b.length && a.every((e, i) => e === b[i]);
+// an element that the object list does not show, e.g. a backdrop, which a step passes together
+// with the next row of the list
+const hidden = (e: Element): boolean => !e.matches(ROWS) && !e.querySelector(ROWS);
+const seen = (list: Element[]): Element[] => list.filter((e) => !hidden(e));
+// the number of plates and backdrops at the back of list, which a command does not pass
+const groundOf = (list: Element[]): number => {
+  const i = list.findIndex((e) => !e.matches(BACK));
+  return i < 0 ? list.length : i;
+};
 
 // list, from back to front, in the order that a command gives the elements of moving, which keep
-// their own order. Bring Forward and Send Backward pass one element of list
+// their own order. Bring Forward and Send Backward pass one element that the object list shows,
+// and a moving element is put just over the shown element under it
 function targetOf(list: Element[], moving: Set<Element>, order: Order): Element[] {
-  const out = list.slice();
   const m = (e: Element) => moving.has(e) && !e.matches(BACK);
-  if (order === 'front') return [...out.filter((e) => !m(e)), ...out.filter(m)];
-  if (order === 'back') {
-    const first = out.findIndex(m);
-    const rest = out.filter((e) => !m(e));
-    let at = 0;
-    for (let i = 0; i < first; i++) if (out[i].matches(BACK)) at = rest.indexOf(out[i]) + 1;
-    return first < 0 ? out : [...rest.slice(0, at), ...out.filter(m), ...rest.slice(at)];
+  const ground = groundOf(list);
+  if (order === 'front' || order === 'back') {
+    const rest = list.filter((e) => !m(e));
+    const at = order === 'front' ? rest.length : ground;
+    return [...rest.slice(0, at), ...list.filter(m), ...rest.slice(at)];
   }
+  const out = list.slice();
+  const skip = (j: number) => j >= ground && j < out.length && hidden(out[j]) && !m(out[j]);
   if (order === 'forward') {
-    for (let i = out.length - 2; i >= 0; i--) if (m(out[i]) && !m(out[i + 1])) [out[i], out[i + 1]] = [out[i + 1], out[i]];
+    for (let i = out.length - 2; i >= 0; i--) {
+      if (!m(out[i])) continue;
+      let j = i + 1;
+      while (skip(j)) j++;
+      if (j < out.length && !m(out[j])) out.splice(j, 0, ...out.splice(i, 1));
+    }
   } else {
-    for (let i = 1; i < out.length; i++) if (m(out[i]) && !m(out[i - 1]) && !out[i - 1].matches(BACK)) [out[i - 1], out[i]] = [out[i], out[i - 1]];
+    for (let i = 1; i < out.length; i++) {
+      if (!m(out[i])) continue;
+      let j = i - 1;
+      while (skip(j)) j--;
+      if (j < ground || m(out[j])) continue;
+      while (skip(j - 1)) j--;
+      out.splice(j, 0, ...out.splice(i, 1));
+    }
   }
   return out;
 }
@@ -94,11 +158,11 @@ type Choice = { pos: boolean; z: number | null };
 // is turned or moved, its z-index without a z-index in its style, and its declarations now and in
 // the file. ref is the file without the declarations of the form that a layer command writes on an
 // element that the command moves, which the command may thus take off
-type Fact = { el: Element; moving: boolean; placed: boolean; turned: boolean; base: number; now: Choice; file: Choice; ref: Choice; fixPos: boolean; fixZ: boolean };
+type Fact = { el: Element; moving: boolean; placed: boolean; turned: boolean; base: number; now: Choice; file: Choice; ref: Choice; fixPos: boolean; fixZ: boolean; around: Around; lo: number };
 
 const zIn = (v: string | undefined): number | null => (v !== undefined && /^-?\d+$/.test(v.trim()) ? Number(v) : null);
 
-function factOf(app: App, el: Element, moving: boolean): Fact {
+function factOf(app: App, el: Element, moving: boolean, lo: number): Fact {
   const src = app.pairing?.elements.get(el);
   const style = src?.open ? stateOf(src.attrs).style : null;
   const s = (el as HTMLElement).style;
@@ -113,19 +177,19 @@ function factOf(app: App, el: Element, moving: boolean): Fact {
   const base = !fixZ && s.zIndex ? (el.matches(RAISED) ? 1 : 0) : parseInt(c.zIndex, 10) || 0;
   const turned = c.transform !== 'none' || c.translate !== 'none' || c.rotate !== 'none';
   const placed = fixPos ? c.position !== 'static' : !s.position && c.position !== 'static';
-  return { el, moving, placed, turned, base, now, file, ref: form ? { pos: false, z: null } : file, fixPos, fixZ };
+  return { el, moving, placed, turned, base, now, file, ref: form ? { pos: false, z: null } : file, fixPos, fixZ, around: aroundOf(el), lo };
 }
 
-// the place of the element of f with the declarations of c, at index i of the file, as keyOf
-// gives it. a z-index applies to a positioned element only
-const keyWith = (f: Fact, c: Choice, i: number): Key => (f.placed || c.pos ? [c.z ?? f.base, i] : [f.turned ? 0 : -0.5, i]);
+// the place of the element of f with the declarations of c, at the path of path, as keyOf gives
+// it. a z-index applies to a positioned element only
+const keyWith = (f: Fact, c: Choice, path: Path): Key => keyIn(f.el, f.around, path, f.placed || c.pos, c.z ?? f.base, f.turned);
 
 // the declarations that a command may give the element of f. on an element that it does not move,
 // a declaration of the file stays, or is put back once a command has changed it
-function choicesOf(f: Fact, lo: number, hi: number): Choice[] {
+function choicesOf(f: Fact, hi: number): Choice[] {
   const out: Choice[] = [{ pos: false, z: null }, f.now, f.file];
   if (!f.placed && !f.fixPos) out.push({ pos: true, z: null });
-  if (!f.fixZ && (f.placed || !f.fixPos)) for (let z = lo; z <= hi; z++) if (z !== f.base) out.push({ pos: !f.placed, z });
+  if (!f.fixZ && (f.placed || !f.fixPos)) for (let z = f.lo; z <= hi; z++) if (z !== f.base) out.push({ pos: !f.placed, z });
   const kept = (c: Choice) => f.moving || ((!f.file.pos || c.pos === f.file.pos || c.pos === f.now.pos) && (f.file.z === null || c.z === f.file.z || c.z === f.now.z));
   return out.filter((c, i) => (c.pos || c.z === null || f.placed) && kept(c) && out.findIndex((d) => d.pos === c.pos && d.z === c.z) === i);
 }
@@ -139,15 +203,14 @@ const costOf = (f: Fact, c: Choice): number =>
 const MOVE = 5000;
 
 // the choices of facts, from back to front, of the lowest cost that draw them in this order at the
-// indices of index, or null when no choice does
-function solve(facts: Fact[], index: (el: Element) => number, lo: number, hi: number): { cost: number; choices: Choice[] } | null {
+// paths of path, or null when no choice does
+function solve(facts: Fact[], path: Path, hi: number): { cost: number; choices: Choice[] } | null {
   type Step = { key: Key; cost: number; path: Choice[] };
-  let prev: Step[] = [{ key: [-Infinity, -Infinity], cost: 0, path: [] }];
+  let prev: Step[] = [{ key: [[-Infinity, []]], cost: 0, path: [] }];
   for (const f of facts) {
-    const i = index(f.el);
     const next: Step[] = [];
-    for (const c of choicesOf(f, lo, hi)) {
-      const key = keyWith(f, c, i);
+    for (const c of choicesOf(f, hi)) {
+      const key = keyWith(f, c, path);
       const from = prev.filter((p) => under(p.key, key)).reduce<Step | null>((a, p) => (!a || p.cost < a.cost ? p : a), null);
       if (from) next.push({ key, cost: from.cost + costOf(f, c), path: [...from.path, c] });
     }
@@ -166,45 +229,52 @@ function stacks(el: Element): boolean {
   return (s.position !== 'static' && s.zIndex !== 'auto') || s.transform !== 'none' || s.translate !== 'none' || s.rotate !== 'none' || s.scale !== 'none' || Number(s.opacity) < 1 || s.isolation === 'isolate' || s.filter !== 'none';
 }
 
-// the children of parent in the order of the file, and the declarations of each element of
-// target, that draw target from back to front at the lowest cost. an element of moving out of the
-// flow is moved in the file where this saves a declaration, since a move in the file does not
-// move it on the slide
-type Plan = { kids: Element[]; facts: Fact[]; choices: Choice[]; moving: Element[] };
-function planOf(app: App, parent: Element, target: Element[], moving: Element[]): Plan | null {
-  const facts = target.map((el) => factOf(app, el, moving.includes(el)));
-  const lo = stacks(parent) ? -target.length : 0;
-  const hi = Math.max(0, ...facts.map((f) => f.base)) + target.length;
+// the order of the children of each parent of a moved element, and the declarations of each
+// element of target, that draw target from back to front at the lowest cost. an element of moving
+// out of the flow is moved among its siblings where this saves a declaration, since a move in the
+// file does not move it on the slide. a hidden element over the ground may be drawn in any place
+type Plan = { orders: Map<Element, Element[]>; facts: Fact[]; choices: Choice[]; moving: Element[] };
+function planOf(app: App, all: Element[], moving: Element[]): Plan | null {
+  const ground = groundOf(all);
+  const target = all.filter((e, i) => i < ground || !hidden(e));
+  const n = target.length;
+  const facts = target.map((el) => factOf(app, el, moving.includes(el), stacks(el.parentElement!) ? -n : 0));
+  const hi = Math.max(0, ...facts.map((f) => f.base)) + n;
   const free = moving.filter((e) => target.includes(e) && !inFlow(e) && !e.matches(BACK));
-  const kids = [...parent.children];
-  // the place of el among the children that stay
+  // the place of el among its siblings that stay
   const rank = (el: Element, order: Element[]) => order.filter((k) => k === el || !free.includes(k)).indexOf(el);
-  const costIn = (order: Element[]) => {
-    const s = solve(facts, (el) => order.indexOf(el), lo, hi);
-    const moves = free.reduce((sum, el) => sum + (rank(el, order) === rank(el, kids) ? 0 : MOVE + Math.abs(rank(el, order) - rank(el, kids))), 0);
-    return s ? { ...s, cost: s.cost + moves, order } : null;
+  const kidsOf = (el: Element) => [...el.parentElement!.children];
+  const costIn = (orders: Map<Element, Element[]>) => {
+    const s = solve(facts, pathIn(orders), hi);
+    const moves = free.reduce((sum, el) => {
+      const [now, was] = [rank(el, orders.get(el.parentElement!) ?? kidsOf(el)), rank(el, kidsOf(el))];
+      return sum + (now === was ? 0 : MOVE + Math.abs(now - was));
+    }, 0);
+    return s ? { ...s, cost: s.cost + moves, orders } : null;
   };
-  let best = costIn(kids);
+  let best = costIn(new Map());
   for (const el of free) {
-    const now = best?.order ?? kids;
-    const without = now.filter((k) => k !== el);
-    // a move helps only next to the elements just under and over el in target
+    const parent = el.parentElement!;
+    const without = (best?.orders.get(parent) ?? kidsOf(el)).filter((k) => k !== el);
+    // a move helps only next to the siblings that hold the elements just under and over el in target
     const k = target.indexOf(el);
-    const near = [target[k - 1], target[k + 1]].filter((t) => t !== undefined);
+    const near = [target[k - 1], target[k + 1]].map((t) => without.find((w) => w.contains(t ?? null))).filter((t) => t !== undefined);
     for (const at of new Set(near.flatMap((t) => [without.indexOf(t), without.indexOf(t) + 1]))) {
-      const s = costIn([...without.slice(0, at), el, ...without.slice(at)]);
+      const s = costIn(new Map([...(best?.orders ?? []), [parent, [...without.slice(0, at), el, ...without.slice(at)]]]));
       if (s && (!best || s.cost < best.cost)) best = s;
     }
   }
-  return best ? { kids: best.order, facts, choices: best.choices, moving: free } : null;
+  return best ? { orders: best.orders, facts, choices: best.choices, moving: free } : null;
 }
 
-async function applyPlan(app: App, parent: Element, plan: Plan): Promise<void> {
-  for (const [at, el] of plan.kids.entries()) {
-    if (!plan.moving.includes(el)) continue;
-    const prev = plan.kids[at - 1] ?? null;
-    if (el.previousElementSibling === prev) continue;
-    await app.doc.move(el, parent, prev ? prev.nextSibling : parent.firstElementChild, 'order');
+async function applyPlan(app: App, plan: Plan): Promise<void> {
+  for (const [parent, kids] of plan.orders) {
+    for (const [at, el] of kids.entries()) {
+      if (!plan.moving.includes(el)) continue;
+      const prev = kids[at - 1] ?? null;
+      if (el.previousElementSibling === prev) continue;
+      await app.doc.move(el, parent, prev ? prev.nextSibling : parent.firstElementChild, 'order');
+    }
   }
   plan.facts.forEach((f, i) => {
     const c = plan.choices[i];
@@ -215,61 +285,45 @@ async function applyPlan(app: App, parent: Element, plan: Plan): Promise<void> {
   });
 }
 
-// the declarations of the layer commands on the children of every other parent of the slide of el
-// written again at the lowest cost of their order, hence taken off once the order is the one of
-// the file
-async function tidy(app: App, el: Element, done: Iterable<Element>): Promise<void> {
-  const skip = new Set(done);
-  const slide = el.closest('section');
-  const parents = new Set([...(slide?.querySelectorAll('[style]') ?? [])].filter((e) => {
-    const s = (e as HTMLElement).style;
-    return (s.position || s.zIndex) && !!e.parentElement && !skip.has(e.parentElement);
-  }).map((e) => e.parentElement!));
-  for (const parent of parents) {
-    const list = layersOf(app, parent);
-    const plan = planOf(app, parent, list, []);
-    if (plan) await applyPlan(app, parent, plan);
-  }
-}
-
-// whether a command changes the order of the children of parent for the elements of els, and,
-// with solved, whether declarations draw this order
-function changes(app: App, parent: Element | null, els: Set<Element>, o: Order, solved = true): boolean {
-  const list = parent ? layersOf(app, parent) : [];
+// whether a command changes the order of the objects of slide for the elements of els, and, with
+// solved, whether declarations draw this order. the declarations of the other elements of the slide
+// are written again at the lowest cost of their order, hence taken off once the slide is drawn in
+// the order of the file
+function changes(app: App, slide: Element | null, els: Set<Element>, o: Order, solved = true): boolean {
+  const list = slide ? layersOf(app, slide) : [];
   const target = targetOf(list, els, o);
-  return !same(target, list) && (!solved || !!planOf(app, parent!, target, [...els]));
+  return !same(seen(target), seen(list)) && (!solved || !!planOf(app, target, [...els]));
 }
 
-// the order of the children of parent that a command gives to the elements of els, applied, or
+// the order of the objects of slide that a command gives to the elements of els, applied, or
 // false when they stay
-async function arrange(app: App, parent: Element, els: Element[], o: Order): Promise<boolean> {
-  const list = layersOf(app, parent);
+async function arrange(app: App, slide: Element, els: Element[], o: Order): Promise<boolean> {
+  const list = layersOf(app, slide);
   const target = targetOf(list, new Set(els), o);
-  const plan = same(target, list) ? null : planOf(app, parent, target, els);
-  if (plan) await applyPlan(app, parent, plan);
+  const plan = same(seen(target), seen(list)) ? null : planOf(app, target, els);
+  if (plan) await applyPlan(app, plan);
   return !!plan;
 }
 
 // whether Bring Forward, or Send Backward with up false, would move el by itself
-export const canStep = (app: App, el: Element, up: boolean): boolean => changes(app, el.parentElement, new Set([el]), up ? 'forward' : 'backward', false);
+export const canStep = (app: App, el: Element, up: boolean): boolean => changes(app, el.closest('section'), new Set([el]), up ? 'forward' : 'backward', false);
 
 // the last element that Bring to Front, or Send to Back with up false, puts el in front of or
 // behind, with the elements of selected passed over, or null when el does not move
 export function layerLimit(app: App, el: Element, up: boolean, selected: Set<Element>): Element | null {
-  const list = el.parentElement ? layersOf(app, el.parentElement) : [];
+  const slide = el.closest('section');
+  const list = slide ? layersOf(app, slide) : [];
   const target = targetOf(list, selected, up ? 'front' : 'back');
   const k = list.indexOf(el);
-  const passed = list.filter((s, i) => !selected.has(s) && (up ? i > k : i < k && target.indexOf(s) > target.indexOf(el)));
+  const passed = list.filter((s, i) => !selected.has(s) && !hidden(s) && (up ? i > k : i < k && target.indexOf(s) > target.indexOf(el)));
   return (up ? passed.at(-1) : passed[0]) ?? null;
 }
 
 // el moved by one layer, as Bring Forward or Send Backward moves it, for a drag of a row of
 // navigator/objects.ts. it returns false when el does not move
 export async function stepLayer(app: App, el: Element, up: boolean): Promise<boolean> {
-  const parent = el.parentElement;
-  if (!parent || !(await arrange(app, parent, [el], up ? 'forward' : 'backward'))) return false;
-  await tidy(app, el, [parent]);
-  return true;
+  const slide = el.closest('section');
+  return !!slide && arrange(app, slide, [el], up ? 'forward' : 'backward');
 }
 
 // the selected elements that a command acts on, without an element inside another one
@@ -283,21 +337,12 @@ const selectedEls = (app: App): Element[] => {
 // is one object with its caption, and else the selected element
 const objectEls = (app: App): Element[] => objectsOf(app, selectedEls(app));
 
-// the elements of els by their parent
-function byParent(els: Element[]): Map<Element, Element[]> {
-  const out = new Map<Element, Element[]>();
-  for (const el of els) if (el.parentElement) out.set(el.parentElement, [...(out.get(el.parentElement) ?? []), el]);
-  return out;
-}
-
-const canOrder = (app: App, o: Order): boolean => [...byParent(objectEls(app))].some(([parent, els]) => changes(app, parent, new Set(els), o));
+const canOrder = (app: App, o: Order): boolean => changes(app, app.current(), new Set(objectEls(app)), o);
 
 async function reorder(app: App, o: Order): Promise<void> {
   const before = app.selection.elements().slice();
-  const parents = byParent(objectEls(app));
-  for (const [parent, els] of parents) await arrange(app, parent, els, o);
-  const first = [...parents.values()][0]?.[0];
-  if (first) await tidy(app, first, parents.keys());
+  const slide = app.current();
+  if (slide) await arrange(app, slide, objectEls(app), o);
   app.selection.set('elements', before.filter((el) => el.isConnected));
   app.invalidate('content');
 }
