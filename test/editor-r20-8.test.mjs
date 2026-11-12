@@ -398,12 +398,22 @@ test('the slide left by Push is moved out while the next slide is moved in', { t
   // slide has ended its move to its place of a future slide
   await page.evaluate(`(() => { const [a, b] = document.querySelectorAll('.slides > section'); a.dataset.transition = 'fade-in slide-out'; b.dataset.transition = 'slide-in fade-out'; })()`);
   await sleep(1000);
-  await page.evaluate('Reveal.next()');
-  await sleep(250);
-  const [a, b] = await page.evaluate(`[...document.querySelectorAll('.slides > section')].slice(0, 2).map((s) => s.getBoundingClientRect().left)`);
-  const left = await page.evaluate(`document.querySelector('.reveal .slides').getBoundingClientRect().left`);
-  assert.ok(a < left - 100, `the slide left is at ${a}, not moved out to the left of ${left}`);
-  assert.ok(b > left + 100, `the next slide is at ${b}, not moving in from the right of ${left}`);
+  // the places of both slides are read at each frame from the call on, since the move may have
+  // ended by a fixed time on a busy machine
+  const seen = await page.evaluate(`new Promise((done) => {
+    const left = document.querySelector('.reveal .slides').getBoundingClientRect().left;
+    const out = [];
+    const t0 = performance.now();
+    const read = () => {
+      const [a, b] = [...document.querySelectorAll('.slides > section')].slice(0, 2).map((s) => s.getBoundingClientRect().left);
+      out.push({ a: a - left, b: b - left });
+      if (performance.now() - t0 < 2000) requestAnimationFrame(read);
+      else done(out);
+    };
+    Reveal.next();
+    read();
+  })`);
+  assert.ok(seen.some((f) => f.a < -100 && f.b > 100), `no frame had the slide left moved out to the left and the next slide moving in from the right: ${JSON.stringify(seen.filter((_, i) => i % 6 === 0))}`);
   assert.deepEqual(errors(page), []);
 });
 
