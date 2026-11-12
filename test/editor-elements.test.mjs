@@ -157,7 +157,8 @@ for (const platform of ['mac', 'other']) {
     assert.equal(await render(page), page.source.replace(fig, `${fig}\n  ${withTranslate(fig, '20px 20px')}`));
     assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Duplicate');
     await roundTrip(page);
-    // a paragraph, selected by its border, is put under itself by the layout, without an offset
+    // a paragraph, selected by its border, is put under itself by the layout, without an offset, and
+    // the list after it, placed with translate, is kept at its place
     await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(page.source)})`);
     await show(page, '.reveal .slides figure.zone');
     const p = await page.evaluate(`(() => { const r = document.querySelector('.reveal section.present > p').getBoundingClientRect(); return { x: r.right + 3, y: (r.top + r.bottom) / 2 }; })()`);
@@ -165,7 +166,7 @@ for (const platform of ['mac', 'other']) {
     await press(page, 'Mod+D');
     await settle(page);
     const para = '<p>Export your matplotlib figure with the styles of the template. It will show frameless.</p>';
-    assert.equal(await render(page), page.source.replace(para, `${para}\n  ${para}`));
+    assert.equal(await render(page), page.source.replace(para, `${para}\n  ${para}`).replace('<ul style="translate: 0px 20px">', '<ul style="translate: 0px -138px">'));
     assert.deepEqual(errors(page), []);
   });
 

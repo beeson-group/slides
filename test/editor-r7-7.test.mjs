@@ -184,7 +184,7 @@ for (const platform of PLATFORMS) {
     await click(page, '.beeson-edit-top [data-command="slide.gallery"]');
     await frames(page);
     const tiles = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-gallery .tile')].map((t) => { const r = t.getBoundingClientRect(), p = t.querySelector('.pic').getBoundingClientRect(); return { layout: t.dataset.layout, left: Math.round(r.left), top: Math.round(r.top), width: r.width, pic: p.width, ratio: p.width / p.height }; })`);
-    assert.equal(tiles.length, 8);
+    assert.equal(tiles.length, 9);
     for (const tile of tiles) {
       assert.equal(tile.width, 120, `the tile of ${tile.layout} is ${tile.width} px wide`);
       assert.equal(tile.pic, 112);

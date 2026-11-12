@@ -363,7 +363,8 @@ for (const platform of PLATFORMS) {
         window.BeesonEditor.exec(${JSON.stringify(id)});
         return [...document.querySelectorAll('${dialog} .tile .pic')].map((p) => getComputedStyle(p.shadowRoot.querySelector('section h2, section h1')).fontFamily);
       })()`);
-      assert.equal(fonts.length, 8, `the gallery of ${id} is not open`);
+      // New Slide has a tile of Title Only after the eight layouts of the chooser
+      assert.equal(fonts.length, id === 'slide.gallery' ? 9 : 8, `the gallery of ${id} is not open`);
       assert.deepEqual(fonts.filter((f) => !/Latin Modern/.test(f)), [], `tiles of ${id} are drawn before the sheets of the theme`);
       await press(page, 'Escape');
       await frames(page);
@@ -389,7 +390,8 @@ for (const platform of PLATFORMS) {
     const gallery = await tileSlides(page, 'slide.gallery', '.beeson-edit-gallery:not(.beeson-edit-layouts)');
     await press(page, 'Escape');
     assert.equal(chooser.length, 8);
-    assert.deepEqual(gallery.map((g) => g.name), chooser.map((c) => c.name));
+    // New Slide has a tile of Title Only after the eight layouts of the chooser
+    assert.deepEqual(gallery.map((g) => g.name), [...chooser.map((c) => c.name), 'Title Only']);
     for (const [i, c] of chooser.entries()) assert.equal(gallery[i].slide, c.slide, `the tile of ${c.layout} differs`);
     assert.deepEqual(errors(page), []);
   });
