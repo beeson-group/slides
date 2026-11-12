@@ -528,7 +528,9 @@ const loopHeads = `(async () => {
 test('a backdrop of a file with data-loop loops a head on each of its strands', { timeout: 60000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
-  const page = await browser.newPage();
+  // without reduced motion, which is the setting of the Windows runner of GitHub, and under which
+  // a backdrop is drawn complete
+  const page = await browser.newPage({ motion: true });
   await page.goto(deckUrl('test/pages/strands-loop.html'));
   await page.waitFor('document.readyState === "complete"');
   await page.evaluate('new Promise((done) => setTimeout(done, 500))');

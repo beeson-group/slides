@@ -390,7 +390,9 @@ for (const platform of PLATFORMS) {
 // the values of Push move the slide left out to the left while the next one comes in from the
 // right, in the show of the theme
 test('the slide left by Push is moved out while the next slide is moved in', { timeout: 60000 }, async (t) => {
-  const page = await browser.newPage({ width: 1600, height: 900 });
+  // without reduced motion, which is the setting of the Windows runner of GitHub, and under which
+  // a slide is changed without a move
+  const page = await browser.newPage({ width: 1600, height: 900, motion: true });
   t.after(() => page.close().catch(() => {}));
   await page.goto(`${server.origin}/${DECK}`);
   await page.waitFor(deckSettled);
