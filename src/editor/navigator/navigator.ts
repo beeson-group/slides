@@ -103,6 +103,7 @@ html.beeson-nav .beeson-edit-nav { display: flex; }
 .beeson-edit-nav .row:focus-visible { outline: none; }
 .beeson-edit-nav .row[aria-current="true"] { background: var(--nav-current); }
 .beeson-edit-nav .row .no { color: var(--nav-muted); text-align: right; font-variant-numeric: tabular-nums; line-height: 1; padding-bottom: 1px; }
+.beeson-edit-nav .row.changed .no::after { content: ''; display: block; width: 6px; height: 6px; margin: 5px 0 0 auto; border-radius: 50%; background: var(--violet, #96f); }
 .beeson-edit-nav .row .frame { position: relative; border-radius: 5px; box-shadow: var(--nav-shadow); outline: 1px solid var(--nav-line); outline-offset: 0; }
 .beeson-edit-nav .row .pic { display: block; aspect-ratio: 16 / 9; border-radius: 5px; background: var(--bg, #000); }
 .beeson-edit-nav .row:hover:not([aria-selected="true"]):not(.dragged) .frame { outline: 3px solid var(--nav-hover); outline-offset: 2px; }
@@ -166,6 +167,10 @@ export class Navigator implements Pane {
   private anchor: Element | null = null;
   private drag: Drag | null = null;
   private eatClick = false;
+  // the slides changed in the file since they were last shown, see file/follow.ts, and the slide
+  // shown at the last paint, whose mark is taken off once another slide is shown
+  private changed = new Set<Element>();
+  private last: Element | null = null;
   // the Chapters Table of sorter.ts, whose tile takes the focus in place of a row while it is shown
   table: { shown: boolean; focus(slide: Element | null): void } | null = null;
 
@@ -259,6 +264,20 @@ export class Navigator implements Pane {
 
   slides(): Element[] {
     return [...this.app.slides().querySelectorAll(':scope > section')];
+  }
+
+  // the numbers of the slides marked as changed in the file, from 1
+  get marked(): number[] {
+    const slides = this.slides();
+    return [...this.changed].map((s) => slides.indexOf(s) + 1).filter((n) => n > 0).sort((a, b) => a - b);
+  }
+
+  // marks the slides of the numbers, from 1, as changed in the file
+  mark(numbers: number[]): void {
+    const slides = this.slides();
+    for (const n of numbers) if (slides[n - 1]) this.changed.add(slides[n - 1]);
+    this.last = null;
+    this.refresh();
   }
 
   // the selected slides in the order of the deck, or the current slide when no slide is selected
@@ -425,9 +444,14 @@ export class Navigator implements Pane {
   // focus follows the current slide while it is in the list
   private paint(focusIn = this.list.contains(document.activeElement)): void {
     const current = this.app.current();
+    if (current !== this.last) {
+      if (this.last) this.changed.delete(this.last);
+      this.last = current;
+    }
     const sel = this.app.selection?.kind === 'slides' ? new Set(this.selected()) : new Set(current ? [current] : []);
     for (const [slide, row] of this.rows) {
       const here = slide === current;
+      row.el.classList.toggle('changed', this.changed.has(slide));
       row.el.setAttribute('aria-current', here ? 'true' : 'false');
       row.el.setAttribute('aria-selected', sel.has(slide) ? 'true' : 'false');
       row.el.tabIndex = here ? 0 : -1;
