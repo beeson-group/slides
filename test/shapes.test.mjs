@@ -9,10 +9,11 @@ import { DRAWN, shapePath } from '../src/shapes.ts';
 
 const PAGE = 'test/pages/shapes.html';
 
-// the points of a path as pairs of numbers, with the end point of an arc and without its radii
+// the points of a path as pairs of numbers, with the end point of an arc and without its radii, and
+// with the control points of a cubic, which hold the cubic in their hull
 function points(d) {
   const out = [];
-  for (const m of d.matchAll(/([MLAZ])([^MLAZ]*)/g)) {
+  for (const m of d.matchAll(/([MLACZ])([^MLACZ]*)/g)) {
     const n = m[2].trim().split(/[\s,]+/).filter(Boolean).map(Number);
     if (m[1] === 'A') out.push([n[5], n[6]]);
     else for (let i = 0; i + 1 < n.length; i += 2) out.push([n[i], n[i + 1]]);
@@ -42,6 +43,93 @@ test('the path of each geometry is drawn inside its box, inset by half the outli
   assert.equal(head(300, 120), 60);
   assert.equal(head(120, 300), 60);
   assert.equal(shapePath('rounded', 100, 100, 3), '');
+});
+
+// the segments of a path of M, L, and C as lists of points, from the end of the segment before
+function segments(d) {
+  const out = [];
+  let at = null;
+  for (const m of d.matchAll(/([MLC])([^MLC]*)/g)) {
+    const n = m[2].trim().split(/[\s,]+/).map(Number);
+    const ps = [];
+    for (let i = 0; i < n.length; i += 2) ps.push([n[i], n[i + 1]]);
+    if (m[1] !== 'M') out.push({ kind: m[1], ps: [at, ...ps] });
+    at = ps.at(-1);
+  }
+  return out;
+}
+// the unit direction of a segment at its start and at its end
+const unit = ([x, y]) => [x / Math.hypot(x, y), y / Math.hypot(x, y)];
+const start = ({ ps }) => unit([ps[1][0] - ps[0][0], ps[1][1] - ps[0][1]]);
+const end = ({ ps }) => unit([ps.at(-1)[0] - ps.at(-2)[0], ps.at(-1)[1] - ps.at(-2)[1]]);
+const turn = (u, v) => Math.acos(Math.min(1, u[0] * v[0] + u[1] * v[1])) * 180 / Math.PI;
+// the signs of the curvature of a cubic at 20 points, without the points where it is nearly straight
+function bends({ ps: [a, b, c, e] }) {
+  const out = [];
+  for (let k = 1; k < 20; k++) {
+    const t = k / 20, u = 1 - t;
+    const d1 = [0, 1].map((i) => 3 * u * u * (b[i] - a[i]) + 6 * u * t * (c[i] - b[i]) + 3 * t * t * (e[i] - c[i]));
+    const d2 = [0, 1].map((i) => 6 * u * (c[i] - 2 * b[i] + a[i]) + 6 * t * (e[i] - 2 * c[i] + b[i]));
+    const cross = (d1[0] * d2[1] - d1[1] * d2[0]) / Math.hypot(...d1) ** 3;
+    if (Math.abs(cross) > 1e-4) out.push(Math.sign(cross));
+  }
+  return out;
+}
+
+test('a brace is the skeleton of the glyph }, with round hooks, S curves into the cusp, and a corner only at the cusp', () => {
+  for (const [w, h] of [[60, 200], [80, 400], [160, 240]]) {
+    const d = shapePath('brace', w, h, 3), segs = segments(d), size = `${w} by ${h}`;
+    assert.ok(!/[AQSTZ]/.test(d), size);
+    assert.deepEqual(segs[0].ps[0], [1.5, 1.5], size);
+    assert.deepEqual(segs.at(-1).ps.at(-1), [1.5, h - 1.5], size);
+    // the cusp is the end of a segment at the middle of the right side
+    const cusp = segs.findIndex((s) => s.ps.at(-1)[0] === w - 1.5 && s.ps.at(-1)[1] === h / 2);
+    assert.ok(cusp > 0, size);
+    for (let i = 0; i + 1 < segs.length; i++) {
+      const angle = turn(end(segs[i]), start(segs[i + 1]));
+      if (i === cusp) assert.ok(angle > 45, `${size}: the cusp turns by ${angle}`);
+      else assert.ok(angle < 0.5, `${size}: a corner of ${angle} deg after segment ${i}`);
+    }
+    // a hook leaves its tip nearly level, turning down into the stem, and not straight down
+    const tip = start(segs[0]);
+    assert.ok(tip[0] > 0.8 && tip[1] > 0.05, `${size}: the hook leaves its tip along ${tip}`);
+    // the curvature of the upper half changes its sign once, from the hook to the curve of the cusp
+    const signs = segs.slice(0, cusp + 1).filter((s) => s.kind === 'C').flatMap(bends);
+    assert.equal(signs.filter((v, k) => k > 0 && v !== signs[k - 1]).length, 1, `${size}: ${signs}`);
+    // the lower half is the upper half mirrored
+    const ps = points(d), flipped = ps.map(([x, y]) => [x, h - y]).reverse();
+    assert.ok(ps.every(([x, y], k) => Math.abs(x - flipped[k][0]) < 0.011 && Math.abs(y - flipped[k][1]) < 0.011), size);
+  }
+});
+
+test('a tall brace is extensible, with hooks and a cusp sized by its width, and a short brace keeps to its box', () => {
+  const tall = (h) => segments(shapePath('brace', 80, h, 3));
+  const at = (segs, dy) => segs.map(({ kind, ps }) => kind + ps.map(([x, y]) => `${x} ${Math.round((y + dy) * 100) / 100}`).join(' '));
+  const [short, long] = [tall(600), tall(900)];
+  // the hooks keep their place, the curves of the cusp move with the middle, and only the stems grow
+  assert.deepEqual(long.map((s) => s.kind), ['C', 'L', 'C', 'C', 'L', 'C']);
+  assert.deepEqual(at(long, 0)[0], at(short, 0)[0]);
+  assert.deepEqual(at(long, -150).slice(2, 4), at(short, 0).slice(2, 4));
+  assert.deepEqual(at(long, -300)[5], at(short, 0)[5]);
+  for (const segs of [short, long]) {
+    const stem = segs[1].ps;
+    assert.equal(stem[0][0], stem[1][0], 'a stem is vertical');
+  }
+  assert.equal(Math.round(long[1].ps[1][1] - long[1].ps[0][1]), Math.round(short[1].ps[1][1] - short[1].ps[0][1]) + 150);
+  // the curves of the hook and of the cusp take the same share of the height at any height, i.e.
+  // they are sized by the width alone
+  const shares = (segs) => [segs[0].ps[3][1] - segs[0].ps[0][1], segs[2].ps[3][1] - segs[2].ps[0][1]];
+  assert.deepEqual(shares(long).map(Math.round), shares(short).map(Math.round));
+  // a short and wide brace has no stem, and its hook and cusp are scaled down by one factor
+  const wide = segments(shapePath('brace', 160, 240, 3));
+  assert.deepEqual(wide.map((s) => s.kind), ['C', 'C', 'C', 'C']);
+  const scaled = [wide[0].ps[3][1] - wide[0].ps[0][1], wide[1].ps[3][1] - wide[1].ps[0][1]];
+  const unscaled = shares(segments(shapePath('brace', 160, 2000, 3)));
+  assert.ok(Math.abs(scaled[0] / scaled[1] - unscaled[0] / unscaled[1]) < 0.01, `${scaled} ${unscaled}`);
+  assert.ok(Math.abs(scaled[0] + scaled[1] - 118.5) < 0.02, `${scaled}`);
+  for (const [w, h] of [[160, 240], [300, 60], [40, 40]]) {
+    for (const [x, y] of points(shapePath('brace', w, h, 4))) assert.ok(x >= 2 && x <= w - 2 && y >= 2 && y <= h - 2, `${w} by ${h}: ${x} ${y}`);
+  }
 });
 
 // the look of each shape of the current slide: its border, its background, and its svg child
@@ -98,6 +186,7 @@ test('each geometry of the test deck is drawn in both modes, with the outline in
     assert.equal(arrow.stroke, await token(page, '--blue'));
     assert.equal(brace.fill, 'none');
     assert.equal(brace.flip, '-1 1');
+    assert.equal(brace.d, shapePath('brace', 80, 400, 3));
     assert.equal(equals.strokeWidth, '0px');
     assert.deepEqual(page.errors, []);
   }
