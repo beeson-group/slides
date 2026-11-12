@@ -179,12 +179,10 @@ for (const platform of PLATFORMS) {
     // Slide Only is the reference, which shows the navigator from the same state
     for (const item of ['Slide Only', 'Navigator']) {
       const page = await load(t, platform, 1, 'index.html', { width: 800, height: 900 });
-      // the navigator turned off with the inspector closed, then the Format inspector opened
+      // the navigator shown in place of the inspector and turned off again, which gives the
+      // inspector back
       await choose(page, 'View', 'Navigator');
       await choose(page, 'View', 'Navigator');
-      assert.equal((await view(page)).nav, false, 'the second choice does not turn the navigator off');
-      await page.evaluate(`window.BeesonEditor.exec('shell.format')`);
-      await wait(page);
       assert.deepEqual(await view(page), OFF, 'the navigator is not off with the inspector open');
       await choose(page, 'View', item);
       assert.deepEqual(await view(page), ON, `one choice of ${item} does not show the navigator in place of the inspector`);
