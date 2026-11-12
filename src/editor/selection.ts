@@ -135,6 +135,9 @@ export function install(app: App): void {
     elements: () => (kind === 'elements' ? items : []),
     only: () => (kind === 'elements' && items.length === 1 ? items[0] : null),
     changed: () => {
+      // a field of the inspector with the focus keeps the selection, and with it the pane and the
+      // focus, as Start at does in Keynote
+      if (app.region() === 'field' && document.activeElement?.closest('.beeson-edit-inspector')) return () => {};
       const caret = app.hostOf(document.activeElement);
       const was = caret && movableOf(app, caret);
       return (el) => {

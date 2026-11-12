@@ -5,6 +5,7 @@
 // of the type scale and the tones of the theme are offered
 
 import type { App } from '../app.ts';
+import { entering } from '../commands/edit.ts';
 import { listKind, selectedBlocks, startList, styleOf, styleWhy } from '../text/blocks.ts';
 import { around, FORMATS, inlineTargets, isTone, type FormatName } from '../text/inline.ts';
 import { injectStyle, make } from '../ui/dom.ts';
@@ -202,13 +203,18 @@ function startField(app: App, run: Run): Control {
   let typed = false;
   input.addEventListener('focus', () => (typed = false));
   input.addEventListener('input', () => (typed = true));
-  // read in the capture phase, before the field enters or refuses the value
+  // read in the capture phase, before the field enters or refuses the value. it gives true when
+  // the value is refused
   const read = (leave: boolean) => {
     const v = Number(input.value.trim().replace(',', '.'));
-    if (input.disabled || !input.value.trim()) return;
+    if (input.disabled || !input.value.trim()) return false;
     if (!Number.isInteger(v)) input.value = '';
     else if (leave && typed && v === startList(app)?.start) void run('text.list.start', { start: v });
+    return !Number.isInteger(v);
   };
+  // Undo refuses the value as Tab and Return do, and it is then not run
+  const entry = entering.get(input);
+  if (entry) entering.set(input, { ...entry, enter: () => (read(false) ? false : entry.enter()) });
   input.addEventListener('blur', () => read(true), true);
   // the field enters a whole number at Return itself, after which a blur does not enter it again
   input.addEventListener('keydown', (ev) => {

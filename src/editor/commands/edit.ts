@@ -74,16 +74,17 @@ const through = (a: App, run: () => Promise<void>) => {
 };
 
 // a field of the inspector, by its input. enter writes a value typed into it as an entry of its
-// own, and follow shows the value of its targets after an undo or a redo. Undo and Redo enter the
-// value of the focused field first and keep the focus in it, from the menu and the toolbar alike,
-// as in Keynote
+// own, and gives false when the field refuses the value. follow shows the value of its targets
+// after an undo or a redo. Undo enters the value of the focused field first, and a refused value
+// is put back in place of the undo. Redo redoes the entry that it names, whose value then replaces
+// the typed one. both keep the focus in the field, from the menu and the toolbar alike, as in
+// Keynote
 export type Entering = { enter(): unknown; follow(): void };
 export const entering = new WeakMap<Element, Entering>();
-const entered = async (run: () => Promise<void>) => {
+const entered = async (run: () => Promise<void>, enter: boolean) => {
   const field = document.activeElement && entering.get(document.activeElement);
   if (!field) return run();
-  await field.enter();
-  await run();
+  if (!enter || (await field.enter()) !== false) await run();
   field.follow();
 };
 
@@ -118,7 +119,7 @@ export function install(app: App): void {
     menu: { bar: 'Edit', group: 'history', order: 10 },
     toolbar: { group: 'history', order: 10, icon: 'undo', label: 'Undo' },
     enabled: (a) => pending(a) || a.history.canUndo,
-    run: (a) => entered(() => through(a, () => a.history.undo())),
+    run: (a) => entered(() => through(a, () => a.history.undo()), true),
   });
   c.define({
     id: 'edit.redo',
@@ -129,7 +130,7 @@ export function install(app: App): void {
     toolbar: { group: 'history', order: 11, icon: 'redo', label: 'Redo' },
     // a typing clears the redos once it is written
     enabled: (a) => !pending(a) && a.history.canRedo,
-    run: (a) => entered(() => through(a, () => a.history.redo())),
+    run: (a) => entered(() => through(a, () => a.history.redo()), false),
   });
   c.define({
     id: 'arrange.sizeAndPosition',

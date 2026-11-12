@@ -410,6 +410,7 @@ export function numberField(app: App, o: NumberOptions): Control & { input: HTML
     const out = o.refuse && (round(v) < (o.min ?? -Infinity) || round(v) > (o.max ?? Infinity));
     if (Number.isFinite(v) && !out && round(v) !== shown) return commit(v);
     show(shown);
+    return out ? false : undefined;
   };
   entering.set(input, {
     enter: flush,
