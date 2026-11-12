@@ -374,7 +374,7 @@ async function menuKeys(page, bar) {
 }
 
 for (const platform of PLATFORMS) {
-  test(`the Slide menu lists a key at Delete Slide and Duplicate Slide only where the key runs it, with nothing selected on the canvas (${platform})`, async (t) => {
+  test(`the Slide menu lists Delete Slide and Duplicate Slide without a key, and Mod+D of Edit > Duplicate duplicates the slide, with nothing selected on the canvas (${platform})`, async (t) => {
     const page = await load(t, platform, FIGURES);
     // a click on the pasteboard leaves nothing selected on the canvas
     const c = await canvasBox(page);
@@ -382,14 +382,21 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await page.evaluate('window.BeesonEditor.selection().length'), 0);
     const keys = await menuKeys(page, 'Slide');
     const count = () => page.evaluate(`document.querySelectorAll('.reveal .slides > section').length`);
-    for (const [label, key] of [['Delete Slide', platform === 'mac' ? 'Backspace' : 'Delete'], ['Duplicate Slide', 'Mod+D']]) {
-      const before = await count();
-      await press(page, key);
-      await frames(page);
-      const ran = (await count()) !== before;
-      assert.equal(!!keys[label], ran, `${label} lists ${js(keys[label])} and its key ${ran ? 'runs' : 'does not run'} it`);
-      if (ran) await undo(page);
-    }
+    assert.equal(keys['Delete Slide'], '');
+    assert.equal(keys['Duplicate Slide'], '');
+    // the key of Edit > Delete does not delete the slide while the canvas has the focus
+    const before = await count();
+    await press(page, platform === 'mac' ? 'Backspace' : 'Delete');
+    await frames(page);
+    assert.equal(await count(), before);
+    // the key of Edit > Duplicate, which lists it, duplicates the slide
+    assert.ok((await menuKeys(page, 'Edit')).Duplicate);
+    await click(page, { x: c.left + 8, y: c.bottom - 8 });
+    await press(page, 'Mod+D');
+    await frames(page);
+    assert.equal(await count(), before + 1);
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Duplicate Slide');
+    await undo(page);
     assert.equal(await render(page), page.source);
     assert.deepEqual(errors(page), []);
   });

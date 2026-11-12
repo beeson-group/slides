@@ -142,8 +142,9 @@ for (const platform of PLATFORMS) {
     const page = await load(t, platform);
     const mac = platform === 'mac';
     const slide = Object.fromEntries((await barMenu(page, 'Slide')).map((r) => [r.label, r.keys]));
-    assert.equal(slide['Duplicate Slide'], mac ? '⌘D' : 'Ctrl+D');
-    // Delete Slide is without a key, as in PowerPoint. ⌫ is the key of Edit > Delete
+    // Duplicate Slide and Delete Slide are without a key. ⌘D and ⌫ are the keys of Edit > Duplicate
+    // and Edit > Delete
+    assert.equal(slide['Duplicate Slide'], '');
     assert.equal(slide['Delete Slide'], '');
     assert.equal(slide['Move Slide Up'], mac ? '⌥↑' : 'Alt+Up Arrow');
     assert.equal(slide['Move Slide Down'], mac ? '⌥↓' : 'Alt+Down Arrow');
@@ -155,7 +156,8 @@ for (const platform of PLATFORMS) {
     await sleep(100);
     const rows = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-keys .row')].map((r) => ({ label: r.firstElementChild.textContent, keys: r.querySelector('kbd').textContent.split(', ') }))`);
     const keysOf = (label) => rows.find((r) => r.label === label)?.keys ?? [];
-    assert.ok(keysOf('Duplicate Slide').includes(mac ? '⌘D' : 'Ctrl+D'), JSON.stringify(keysOf('Duplicate Slide')));
+    assert.deepEqual(keysOf('Duplicate Slide'), [], JSON.stringify(keysOf('Duplicate Slide')));
+    assert.ok(keysOf('Duplicate').includes(mac ? '⌘D' : 'Ctrl+D'), JSON.stringify(keysOf('Duplicate')));
     assert.deepEqual(keysOf('Delete Slide'), [], JSON.stringify(keysOf('Delete Slide')));
     assert.ok(keysOf('Delete').includes(mac ? '⌫' : 'Delete'), JSON.stringify(keysOf('Delete')));
     assert.ok(keysOf('Move Slide Up').includes(mac ? '⌥↑' : 'Alt+Up Arrow'), JSON.stringify(keysOf('Move Slide Up')));
