@@ -208,14 +208,18 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`${platform}: Send Backward and Bring Forward of the caption of a figure slide with a backdrop give the file back (C2)`, async (t) => {
+  // the heading is drawn under the backdrop over the whole slide, hence Send Backward of the caption,
+  // which would put it under the backdrop, is dimmed and does not change the file (R21.3, V20)
+  test(`${platform}: Send Backward and Send to Back of the caption of a figure slide with a backdrop do not put it under the backdrop (C2)`, async (t) => {
     const page = await load(t, platform, LAYOUTS_SOURCE, BACKDROP, LAYOUTS);
     const list = await named(page, CAP_ROWS);
     await pick(page, CAP_ROWS, 'cap');
-    await layer(page, platform, 'backward');
-    await layer(page, platform, 'forward');
+    assert.deepEqual(await orders(page), { front: false, forward: false, backward: false, back: false });
+    await press(page, KEYS[platform].backward);
+    await press(page, KEYS[platform].back);
+    await frames(page);
     assert.deepEqual(await named(page, CAP_ROWS), list);
-    assert.equal(await render(page), LAYOUTS_SOURCE, 'the caption is left before the backdrop in the file');
+    assert.equal(await render(page), LAYOUTS_SOURCE, 'the caption is moved in the file');
     const at = await page.evaluate(`(() => { const r = document.querySelector(${js(CAP_EL.cap)}).getBoundingClientRect(); return { x: r.left + 20, y: r.top + r.height / 2 }; })()`);
     assert.equal(await topAt(page, at, CAP_EL), 'cap', 'the backdrop is drawn over the caption');
     assert.deepEqual(errors(page), []);
