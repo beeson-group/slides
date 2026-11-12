@@ -5069,11 +5069,11 @@ void main() {
     turns2.delete(v);
     hold(v);
   }
-  function stepViewers(slide) {
+  function stepViewers(slide, shown = (v) => stepShown(v, slide)) {
     const starts2 = [];
     for (const v of slide.querySelectorAll("tycho-viewer")) {
       if (!plays2(v, slide)) continue;
-      if (stepShown(v, slide)) {
+      if (shown(v)) {
         if (!running2.has(v)) starts2.push(v);
       } else stop2(v);
     }

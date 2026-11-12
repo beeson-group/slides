@@ -11,6 +11,7 @@ import type { App } from './app.ts';
 import type { Entry } from './history.ts';
 import type { Pairing } from './render.ts';
 import type { TagEdit, TagState } from './tags.ts';
+import { stepViewers } from '../viewers.ts';
 import { OFF, fragmentIndex, fragmentsOf, type Layers, itemsOf, planOf, remapKeep, showLayer, shownAt, startOf, stepAt, type Item, type Plan, type Start } from './layers.ts';
 import { setPreview } from './canvas/frames.ts';
 import { twinOf } from './canvas/hit.ts';
@@ -71,15 +72,19 @@ export function itemOf(state: TagState): Item {
 
 // the effects of reveal.js that the Steps tab replaces, and the five that it writes: Fade In, the
 // plain fragment, Play, Fade Out, Only at Its Step, and Dim, which semi-fade-out draws at the
-// opacity of a ghost from its step on. Play is the class play of the theme on a video, which shows
-// its poster with the slide and starts it at its step, as the animation Play of PowerPoint
+// opacity of a ghost from its step on. Play is the class play of the theme on a video or a tycho
+// viewer, which shows its poster or its first frame with the slide and starts it at its step, as
+// the animation Play of PowerPoint
 const EFFECT_CLASSES = ['fade-in', 'fade-out', 'fade-up', 'fade-down', 'fade-left', 'fade-right', 'fade-in-then-out', 'fade-in-then-semi-out', 'semi-fade-out', 'current-visible', 'play'];
 export type Effect = 'in' | 'play' | 'out' | 'only' | 'dim';
 export const EFFECTS: [Effect, string][] = [['in', 'Fade In'], ['play', 'Play'], ['out', 'Fade Out'], ['only', 'Only at Its Step'], ['dim', 'Dim']];
 
-// the effects offered in the menu of a row, Play only for a video. with several rows selected, the
-// command sets Play only on their videos
-export const effectsFor = (el: Element | undefined): [Effect, string][] => EFFECTS.filter(([id]) => id !== 'play' || el?.localName === 'video');
+// the elements started at their step by the effect Play
+export const PLAYED = 'video, tycho-viewer';
+
+// the effects offered in the menu of a row, Play only for a video or a tycho viewer. with several
+// rows selected, the command sets Play only on these
+export const effectsFor = (el: Element | undefined): [Effect, string][] => EFFECTS.filter(([id]) => id !== 'play' || !!el?.matches(PLAYED));
 
 // the effect of a fragment with its label. an effect that the tab does not write, e.g. fade-up,
 // keeps its name
@@ -632,8 +637,10 @@ function runsOf(m: Model): Run[] {
 // the videos of slide that the show plays at their step, i.e. of the style play or with
 // data-autoplay in a fragment, for a preview of the Steps pane or of the toolbar. update starts each
 // video that shown gives from its start, as src/video.ts starts it, and pauses and rewinds it to its
-// poster when its step is undone. stop rewinds every video started
-export function stepVideos(slide: Element): { update(shown: (v: HTMLVideoElement) => boolean): void; stop(): void } {
+// poster when its step is undone. stop rewinds every video started. the tycho viewers of the style
+// play are started and held by stepViewers of the theme, and played again at the stop, as the
+// editor shows them
+export function stepVideos(slide: Element): { update(shown: (v: Element) => boolean): void; stop(): void } {
   const videos = [...slide.querySelectorAll('video')].filter((v) => v.closest('section') === slide && !!v.closest('.fragment') && (v.hasAttribute('data-autoplay') || !!v.closest('.fragment.play')));
   const started = new Set<HTMLVideoElement>();
   const rewind = (v: HTMLVideoElement) => {
@@ -651,8 +658,12 @@ export function stepVideos(slide: Element): { update(shown: (v: HTMLVideoElement
           void v.play().catch(() => {});
         } else if (!on && started.has(v)) rewind(v);
       }
+      stepViewers(slide, shown);
     },
-    stop: () => { for (const v of [...started]) rewind(v); },
+    stop: () => {
+      for (const v of [...started]) rewind(v);
+      stepViewers(slide, () => true);
+    },
   };
 }
 

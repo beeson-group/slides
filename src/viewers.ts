@@ -84,12 +84,16 @@ function stop(v: Viewer): void {
   hold(v);
 }
 
-/** Sets the viewers of the style play of a slide to its current step: a viewer that is shown is started with the others shown at the same step, and the others are stopped. */
-export function stepViewers(slide: Element): void {
+/**
+ * Sets the viewers of the style play of a slide to its current step: a viewer that is shown is started with the others shown at
+ * the same step, and the others are stopped. A preview of the editor gives the test of a shown viewer, since it does not set the
+ * classes of reveal.js.
+ */
+export function stepViewers(slide: Element, shown: (v: Element) => boolean = (v) => stepShown(v, slide)): void {
   const starts: Viewer[] = [];
   for (const v of slide.querySelectorAll<Viewer>('tycho-viewer')) {
     if (!plays(v, slide)) continue;
-    if (stepShown(v, slide)) {
+    if (shown(v)) {
       if (!running.has(v)) starts.push(v);
     } else stop(v);
   }

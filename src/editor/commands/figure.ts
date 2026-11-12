@@ -50,6 +50,9 @@ const hiddenTag = (app: App, tag: string) => {
 export const paneImageOf = (app: App) => imageOf(app) ?? (hiddenTag(app, 'img') as HTMLImageElement | null);
 export const paneVideoOf = (app: App) => videoOf(app) ?? (hiddenTag(app, 'video') as HTMLVideoElement | null);
 export const videoOf = (app: App) => mediaOf(app, 'video') as HTMLVideoElement | null;
+export const viewerOf = (app: App) => mediaOf(app, 'tycho-viewer');
+// the video or the tycho viewer that Start on a Click starts at its step
+const playedOf = (app: App) => videoOf(app) ?? viewerOf(app);
 export const qrOf = (app: App) => mediaOf(app, '.qr');
 
 // the target given by a field of the inspector as arg.el, else the one of the selection
@@ -132,7 +135,7 @@ function invertible(app: App, el: Element | null): Element | null {
 const imageMenu = (order: number): Command['menu'] => ({ bar: 'Format', group: 'image', order, submenu: 'Image' });
 const has = (name: string) => (el: Element) => el.hasAttribute(name);
 // a video of the fragment style play, which the theme starts at its step
-const onClick = (el: Element) => el.matches('.fragment.play');
+const onClick = (el: Element) => !!el.closest('.fragment.play');
 const flag = (name: string) => (on: boolean): TagEdit => ({ attrs: { [name]: on ? '' : null } });
 const visual = (app: App) => imageOf(app) ?? videoOf(app) ?? hiddenOf(app);
 
@@ -267,19 +270,19 @@ export function commands(): Command[] {
         return el && onClick(el) ? 'The video is started on a click, at its step' : null;
       },
     },
-    // a video started at its step, as Start Movie on Click of Keynote and the animation Play of
-    // PowerPoint, i.e. a step with the effect Play of the Steps pane
+    // a video or a tycho viewer started at its step, as Start Movie on Click of Keynote and the
+    // animation Play of PowerPoint, i.e. a step with the effect Play of the Steps pane
     {
       id: 'figure.startOnClick',
       label: 'Start on a Click',
       undoable: true,
-      enabled: (app) => !!videoOf(app),
+      enabled: (app) => !!playedOf(app),
       checked: (app) => {
-        const el = videoOf(app);
+        const el = playedOf(app);
         return el ? onClick(el) : false;
       },
       run: (app, arg) => {
-        const el = given(arg) ?? videoOf(app);
+        const el = given(arg) ?? playedOf(app);
         if (el) startOnClick(app, el, !onClick(el));
       },
     },

@@ -9,7 +9,7 @@
 import type { App } from '../app.ts';
 import { captionHeight, groupBoxOf, groupFrameOf, heightSet, positionOf, resizable, selectedTargets, sizeOf, sizedTarget, targetsOf } from '../commands/align.ts';
 import { angleOf, gluedLines, groupAngle } from '../commands/order.ts';
-import { imageOf } from '../commands/figure.ts';
+import { imageOf, viewerOf } from '../commands/figure.ts';
 import { turnable } from '../canvas/hit.ts';
 import { GLYPHS, button, checkbox, note, numberField, row, section, segmented, type Control, type Run } from './controls.ts';
 
@@ -45,6 +45,18 @@ function flipRow(app: App, run: Run): Control {
   return { el: r.el, sync };
 }
 
+// Start on a click of a tycho viewer, as in the Video pane, since a scene is shown the Arrange pane
+// alone. the section is hidden at each sync for any other selection
+function playback(app: App, run: Run): Control {
+  const s = section('Playback', [checkbox(app, run, 'figure.startOnClick', 'Start on a click')]);
+  const sync = () => {
+    s.el.style.display = viewerOf(app) ? '' : 'none';
+    s.sync();
+  };
+  sync();
+  return { el: s.el, sync };
+}
+
 export function arrangePane(app: App, run: Run): Control[] {
   // the fields act on the elements selected when the pane was built, i.e. on the figure of a
   // picture selected inside it, apart from the angle, which turns the picture alone
@@ -64,6 +76,7 @@ export function arrangePane(app: App, run: Run): Control[] {
   const field = (label: string, value: () => number | null, commit: (v: number) => unknown, enabled: () => boolean, min?: number) =>
     numberField(app, { label, value, commit, enabled, min });
   return [
+    playback(app, run),
     section('Align', [
       row([
         segmented(app, run, [

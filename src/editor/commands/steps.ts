@@ -9,7 +9,7 @@ import type { App } from '../app.ts';
 import { twinOf } from '../canvas/hit.ts';
 import { moveTo, oneByOne, placedIndex, setFinal, setIndexReader, setStart, setStep, shift, stepAt, type Plan, type Start } from '../layers.ts';
 import type { TagEdit } from '../tags.ts';
-import { AFTER_DEFAULT, MIN_DELAY, WITH_SLIDE, afterable, carryDelays, classesOf, deliverPlan, deliveryOf, delaysOf, effectEdit, effectOf, indexIn, listItems, listOf, modelAt, modelOf, startAt, writePlan, type Delivery, type Effect, type Model, type StartKind, type Steps } from '../steps.ts';
+import { AFTER_DEFAULT, MIN_DELAY, WITH_SLIDE, afterable, carryDelays, classesOf, deliverPlan, deliveryOf, delaysOf, PLAYED, effectEdit, effectOf, indexIn, listItems, listOf, modelAt, modelOf, startAt, writePlan, type Delivery, type Effect, type Model, type StartKind, type Steps } from '../steps.ts';
 
 type Arg = { el?: Element } & Record<string, unknown>;
 
@@ -132,14 +132,22 @@ function indexOf(app: App, el: Element): string | null {
   return String(me);
 }
 
-// the effect Play of a video set or taken off, as Start on a click of the Video pane. a video that
-// is not a step is made the last step of its slide with the effect Play, and a video taken off Play
-// stays a step with the effect Fade In. a video in a zone or a plate is not an item of the steps
-// until it is a step, hence it is given to the model
+// the effect Play of a video or a tycho viewer set or taken off, as Start on a click of the Video
+// pane. a video that is not a step is made the last step of its slide with the effect Play, and a
+// video taken off Play stays a step with the effect Fade In. a video in a zone or a plate is not an
+// item of the steps until it is a step, hence it is given to the model. Play is taken off the step
+// of the style play that the video is or is in
 export function startOnClick(app: App, video: Element, on: boolean): void {
-  const m = modelOf(app, video.closest('section'), [video]);
-  const i = m ? indexIn(m, video) : -1;
+  const el = video.closest('.fragment.play') ?? video;
+  const m = modelOf(app, el.closest('section'), [el]);
+  const i = m ? indexIn(m, el) : -1;
   if (!m || i < 0) return;
+  // a kiosk viewer that is only a step is played by tycho while it is hidden, hence a viewer taken
+  // off Play is shown and started with its slide again
+  if (!on && el.matches('tycho-viewer, :has(tycho-viewer)')) {
+    writePlan(app, m, setStep(m.plan, i, null));
+    return;
+  }
   const edit = effectEdit(app.doc.tagState(m.els[i]), on ? 'play' : 'in');
   const plan = on && stepAt(m.plan, i) < 0 ? setStep(m.plan, i, 'last') : m.plan;
   writePlan(app, m, plan, Object.keys(edit).length ? new Map([[m.els[i], edit]]) : new Map());
@@ -358,7 +366,7 @@ export function install(app: App): void {
     run: (a, arg) => change(a, arg, (p, i) => shift(p, i, 1)),
   });
   // the effect of a step: Fade In, Play, Fade Out, Only at Its Step, or Dim. the elements shown
-  // with the slide become one last step first. Play is set only on a video
+  // with the slide become one last step first. Play is set only on a video or a tycho viewer
   c.define({
     id: 'steps.effect',
     label: 'Set Effect of Step',
@@ -371,7 +379,7 @@ export function install(app: App): void {
       let plan = s.m.plan;
       let first = -1;
       for (const { el, i } of s.items) {
-        if (s.m.locked[i] || (effect === 'play' && el.localName !== 'video')) continue;
+        if (s.m.locked[i] || (effect === 'play' && !el.matches(PLAYED))) continue;
         const edit = effectEdit(a.doc.tagState(el), effect);
         if (Object.keys(edit).length) extra.set(el, edit);
         if (stepAt(plan, i) >= 0) continue;
