@@ -26,6 +26,9 @@ html.beeson-editor .reveal .slides .beeson-pending:not(.foot):not(.zone > .capti
 html.beeson-editor .reveal .slides .beeson-pending { min-height: 1.4em; min-width: 8em; }
 /* a new text box is put at the gap of the theme between two paragraphs, not at the 14 px of a list item */
 html.beeson-editor .reveal .slides p.beeson-pending:not(:first-child):not(.caption) { margin-top: 24px; }
+/* the block of a title or a closing slide is anchored at its bottom and grows upward, hence a box
+   there takes the margin of the theme, and the texts above it keep their places at the first key */
+html.beeson-editor .reveal .slides section:is(.title, .closing) .block > p.beeson-pending { margin-top: 0; }
 html.beeson-editor .reveal .slides .foot.beeson-pending { min-width: 13em; }
 html.beeson-editor .reveal .slides .beeson-pending[data-prompt][contenteditable]:empty::before { content: attr(data-prompt); position: absolute; left: 0; top: 0; color: var(--muted, #888); white-space: nowrap; pointer-events: none; }
 html.beeson-editor .reveal .slides pre.beeson-pending { box-sizing: border-box; min-height: calc(1.25em + 48px); padding: 24px; font-size: 22px; line-height: 1.25; }
@@ -354,6 +357,11 @@ export function install(app: App): void {
         const [x0, y0] = p.el.style.translate.split(' ');
         let x = parseFloat(x0 ?? '') || 0, y = parseFloat(y0 ?? '') || 0;
         const was = slideBox(app, p.el);
+        // the text before the box, against which the box is measured, since a column anchored at its
+        // bottom or centered moves its texts when the box is replaced
+        let prev = p.el.previousElementSibling;
+        while (prev && (prev.hasAttribute('data-generated') || !prev.getClientRects().length)) prev = prev.previousElementSibling;
+        const prevWas = prev && slideBox(app, prev);
         const [node] = await docOf(app).insert(def.html(text, p.parent), p.parent, p.el, def.label);
         written!.node = node;
         made = [node];
@@ -362,8 +370,9 @@ export function install(app: App): void {
         // differ from the margin of the theme
         if (p.kind === 'text') {
           const now = slideBox(app, node);
-          x = Math.round(was.left - now.left);
-          y = Math.round(was.top - now.top);
+          const prevNow = prev && slideBox(app, prev);
+          x = Math.round(was.left - now.left - (prevWas && prevNow ? prevWas.left - prevNow.left : 0));
+          y = Math.round(was.top - now.top - (prevWas && prevNow ? prevWas.top - prevNow.top : 0));
         }
         if (x || y) docOf(app).setTag(node, { translate: { x, y } }, def.label);
         if (p.el.style.width) docOf(app).setTag(node, { style: { width: p.el.style.width } }, def.label);

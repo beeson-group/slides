@@ -1210,10 +1210,11 @@ function installBars(app: App): void {
   // a press on the bar of selected whole rows or columns, moved past a few px, drags them to a gap
   // among the others, as in Keynote, and a press on a bar that is not selected still selects. the
   // gap is the one past the row or the column under the pointer, and Esc cancels the drag
-  let moving: { kind: Line; table: HTMLTableElement; lo: number; hi: number; x: number; y: number; to: number | null; on: boolean; at: [number, number]; from: [number, number] } | null = null;
+  let moving: { kind: Line; table: HTMLTableElement; lo: number; hi: number; x: number; y: number; to: number | null; on: boolean; at: [number, number]; from: [number, number]; grab: [number, number] } | null = null;
   let dragged = false;
   // the copy of the cells of m, each with the look of its cell, drawn in the slide pixels of the
-  // table and scaled to the screen. from is the offset of the copy from the table on the screen
+  // table and scaled to the screen at each move. from is the offset of the copy from the table and
+  // grab the offset of the press from the copy, both in the pixels of the table, which a zoom keeps
   const lifted = (m: NonNullable<typeof moving>) => {
     const t = m.table.getBoundingClientRect();
     const k = t.width / (m.table.offsetWidth || 1);
@@ -1232,15 +1233,18 @@ function installBars(app: App): void {
       d.append(inner);
       return d;
     }));
-    lift.style.cssText = `width:${width / k}px;height:${height / k}px;transform:scale(${k});background:${getComputedStyle(m.table).getPropertyValue('--bg').trim() || 'Canvas'}`;
-    m.from = [left - t.left, top - t.top];
+    lift.style.cssText = `width:${width / k}px;height:${height / k}px;background:${getComputedStyle(m.table).getPropertyValue('--bg').trim() || 'Canvas'}`;
+    m.from = [(left - t.left) / k, (top - t.top) / k];
+    m.grab = [(m.x - left) / k, (m.y - top) / k];
     follow(m, t);
     lift.hidden = false;
   };
   const follow = (m: NonNullable<typeof moving>, t: DOMRect) => {
     const row = m.kind === 'row';
-    lift.style.left = `${t.left + m.from[0] + (row ? 0 : m.at[0] - m.x)}px`;
-    lift.style.top = `${t.top + m.from[1] + (row ? m.at[1] - m.y : 0)}px`;
+    const k = t.width / (m.table.offsetWidth || 1);
+    lift.style.transform = `scale(${k})`;
+    lift.style.left = `${row ? t.left + m.from[0] * k : m.at[0] - m.grab[0] * k}px`;
+    lift.style.top = `${row ? m.at[1] - m.grab[1] * k : t.top + m.from[1] * k}px`;
   };
   const unlift = () => {
     lift.hidden = true;
@@ -1260,7 +1264,8 @@ function installBars(app: App): void {
     moving = null;
     document.documentElement.classList.remove('beeson-line-moving');
     unlift();
-    const to = ev && m.on ? gapAt(m, ev.clientX, ev.clientY) : null;
+    // a release after the table has left the current slide writes nothing
+    const to = ev && m.on && app.current()?.contains(m.table) ? gapAt(m, ev.clientX, ev.clientY) : null;
     if (to === null) return;
     const range = block && { ...block };
     void app.history.transact(m.kind === 'row' ? 'Move Row' : 'Move Column', () => moveLines(app, m.table, m.kind, m.lo, m.hi, to)).then(() => {
@@ -1278,7 +1283,7 @@ function installBars(app: App): void {
       const [lo, hi] = column ? [b.c0, b.c1] : [b.r0, b.r1];
       const i = Number(seg.dataset.index);
       if (!whole || i < lo || i > hi) return;
-      moving = { kind: column ? 'column' : 'row', table: shown.table, lo, hi, x: ev.clientX, y: ev.clientY, to: null, on: false, at: [ev.clientX, ev.clientY], from: [0, 0] };
+      moving = { kind: column ? 'column' : 'row', table: shown.table, lo, hi, x: ev.clientX, y: ev.clientY, to: null, on: false, at: [ev.clientX, ev.clientY], from: [0, 0], grab: [0, 0] };
       bar.setPointerCapture(ev.pointerId);
     });
     bar.addEventListener('pointermove', (ev) => {
@@ -1294,11 +1299,14 @@ function installBars(app: App): void {
     bar.addEventListener('pointercancel', () => endMove(null));
     bar.addEventListener('lostpointercapture', () => endMove(null));
   }
-  cancelMove = () => {
-    if (!moving?.on) return false;
+  const stopMove = () => {
     moving = null;
     document.documentElement.classList.remove('beeson-line-moving');
     unlift();
+  };
+  cancelMove = () => {
+    if (!moving?.on) return false;
+    stopMove();
     return true;
   };
 
@@ -1573,6 +1581,8 @@ function installBars(app: App): void {
 
   const refresh = () => {
     const t = targetOf(app);
+    // a change of slide ends the drag of a row or a column as Esc does
+    if (moving && !app.current()?.contains(moving.table)) stopMove();
     if (!t || !app.current()?.contains(t.table)) return hide();
     if (shown?.table !== t.table) signature = '';
     shown = t;

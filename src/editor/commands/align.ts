@@ -164,11 +164,11 @@ function distribute(app: App, axis: 'x' | 'y'): void {
   const to = new Map<Box, number>(n === 1 ? [[first, lo + (size(ref) - size(first)) / 2]] : [[first, f], [last, z]]);
   const inner = items.slice(1, -1).map((i) => i.b);
   const gap = n === 1 ? 0 : (z - f - size(first) - inner.reduce((s, b) => s + size(b), 0)) / (n - 1);
-  const c0 = f + size(first) / 2, c1 = z + size(last) / 2;
+  // the gaps are kept equal where they are negative too, as in PowerPoint, hence a column of
+  // objects at one margin is left in place
   let at = f + size(first) + gap;
-  inner.forEach((b, k) => {
-    const want = gap >= 0 ? at : c0 + ((c1 - c0) * (k + 1)) / (n - 1) - size(b) / 2;
-    to.set(b, Math.min(Math.max(want, lo), Math.max(lo, hi - size(b))));
+  inner.forEach((b) => {
+    to.set(b, Math.min(Math.max(at, lo), Math.max(lo, hi - size(b))));
     at += size(b) + gap;
   });
   const moves = items.flatMap((i) => {

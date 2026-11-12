@@ -96,6 +96,8 @@ export async function promote(app: App, el: Element): Promise<{ slide: Element; 
   const followers = list ? [...list.children].slice([...list.children].indexOf(el) + 1).filter((li) => li.localName === 'li' && paired(app, li)) : [];
   for (const li of followers) items.push(shift(app, app.doc.elementText(li), indentOf(app, li), base + step + step));
   const blocks = textAfter(app, list ?? el);
+  // a locked element is not moved, hence nothing is promoted that would carry one along
+  if ([el, ...followers, ...blocks].some((b) => b.closest('[data-locked]'))) return null;
   const lines = [`<section>`, `${base}${step}<h2>${ownTex(el)}</h2>`];
   if (items.length) lines.push(`${base}${step}<${list!.localName}>`, ...items.map((i) => `${base}${step}${step}${i}`), `${base}${step}</${list!.localName}>`);
   for (const b of blocks) lines.push(`${base}${step}${shift(app, app.doc.elementText(b), indentOf(app, b), base + step)}`);
@@ -116,7 +118,7 @@ function demotion(app: App, title: Element): { slide: Element; column: Element }
   const slide = title.parentElement;
   if (title.localName !== 'h2' || !slide?.matches('section') || slide.matches(SPECIAL) || !paired(app, title)) return null;
   const body = [...slide.children].filter(kept);
-  if (!body.every((b) => b === title || (b.matches(TEXT) && paired(app, b)))) return null;
+  if (!body.every((b) => b === title || (b.matches(TEXT) && paired(app, b) && !b.closest('[data-locked]')))) return null;
   const before = slide.previousElementSibling;
   if (!before?.matches('section') || before.matches('.title, .section, .closing, .figure')) return null;
   const column = before.querySelector(':scope > .panel') ?? before;
