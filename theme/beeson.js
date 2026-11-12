@@ -3222,11 +3222,10 @@
         return path(["M", l, cy, "L", x1, t, "L", x1, y1, "L", x2, y1, "L", x2, t, "L", r, cy, "L", x2, b, "L", x2, y2, "L", x1, y2, "L", x1, b, "Z"]);
       }
       case "brace": {
-        const W = r - l, xs = l + 0.508 * W, k = Math.min(1, (cy - t) / ((HOOK[3] + CUSP[3]) * W)) || 0, y1 = t + k * HOOK[3] * W, y2 = cy - k * CUSP[3] * W;
+        const W = r - l, xs = l + 0.508 * W, k = Math.min(1, 0.5 * (cy - t) / ((HOOK[3] + CUSP[3]) * W)) || 0, y1 = t + k * HOOK[3] * W, y2 = cy - k * CUSP[3] * W;
         const miter = Math.hypot(1, CUSP[0][0] / (k * CUSP[0][1])), xc = miter <= 4 ? w - i * miter : r;
         const half = [[l + HOOK[1] * W * HOOK[0][0], t + k * HOOK[1] * W * HOOK[0][1]], [xs, y1 - k * HOOK[2] * W], [xs, y1], [xs, y2], [xs, y2 + k * CUSP[2] * W], [xc - CUSP[1] * W * CUSP[0][0], cy - k * CUSP[1] * W * CUSP[0][1]]];
         const low = half.map(([x, y]) => [x, 2 * cy - y]);
-        const stem = (p) => k < 1 ? [] : ["L", ...p];
         return path([
           "M",
           l,
@@ -3235,7 +3234,8 @@
           ...half[0],
           ...half[1],
           ...half[2],
-          ...stem(half[3]),
+          "L",
+          ...half[3],
           "C",
           ...half[4],
           ...half[5],
@@ -3245,7 +3245,8 @@
           ...low[5],
           ...low[4],
           ...low[3],
-          ...stem(low[2]),
+          "L",
+          ...low[2],
           "C",
           ...low[1],
           ...low[0],
