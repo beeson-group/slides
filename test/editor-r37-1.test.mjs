@@ -4,7 +4,9 @@
 // off, and Play while the slide is shown is dimmed and off while it is checked. a preview of the
 // steps plays a video of the style play at its step and rewinds it to its poster at its end. the
 // class play is in the scope rule, and the hint of the text of a QR code says when the code is
-// drawn without the logo. each change is one entry of the history, an undo gives the file byte for
+// drawn without the logo. a tycho viewer is started at its step in the same way: Play is offered
+// in the Steps pane, Start on a click is in the Arrange pane of a scene, and a preview of the steps
+// holds the scene at its first frame until its step. each change is one entry of the history, an undo gives the file byte for
 // byte, a redo gives the edit, and a save is opened again without problems
 
 import assert from 'node:assert/strict';
@@ -416,5 +418,119 @@ for (const platform of PLATFORMS) {
     await frames(plain);
     await retype(plain, long);
     assert.equal(await hintOf(plain), '1300 of 2331 bytes');
+  });
+}
+
+// the viewers of test/pages/viewer-play.html: the viewer of its first slide, which is a step of the
+// style play, and the viewer of its third slide, in a zone that is the step
+const VIEWERS = 'test/pages/viewer-play.html';
+const scene = (attrs) => `<tycho-viewer theme="dark" kiosk id="play"${attrs}>`;
+const SCENE = scene(' class="zone fragment play" data-fragment-index="2"');
+const LATER = (n) => `<p class="fragment" data-fragment-index="${n}">A later step.</p>`;
+const INSIDE = '<div class="zone fragment play" data-fragment-index="1">\n        <tycho-viewer theme="dark" kiosk id="inside">';
+const AFTER = (n) => `<p class="fragment" data-fragment-index="${n}">A paragraph after the scene.</p>`;
+
+// the viewer of the slide, or the zone around it, selected with a trusted click, with the Arrange pane shown
+async function selectScene(page) {
+  await click(page, '.reveal section.present tycho-viewer');
+  await frames(page);
+  assert.equal(await page.evaluate(`document.querySelector('${PANEL} .ed-panes')?.dataset.pane`), 'arrange');
+}
+
+for (const platform of PLATFORMS) {
+  test(`${platform}: the Steps pane offers Play for a tycho viewer, and writes it as fragment play on its tag`, async (t) => {
+    const page = await open(t, platform, { deck: VIEWERS });
+    const source = page.source;
+    assert.deepEqual(await rowOf(page, 'Scene'), { step: '1', meta: 'Scene · On Click · Play' });
+    const labels = await chipMenu(page, 'Scene');
+    assert.equal(labels[labels.indexOf('Fade In') + 1], 'Play', `the menu of the scene row reads ${labels.join(', ')}`);
+    await pick(page, 'Scene', 'Fade In');
+    const faded = source.replace(SCENE, scene(' class="zone fragment" data-fragment-index="2"'));
+    sameText(await rendered(page), faded);
+    await undoRedo(page, platform, source, faded);
+    await pick(page, 'Scene', 'Play');
+    sameText(await rendered(page), source);
+    assert.equal(await undoLabel(page), 'Undo Set Effect of Step');
+    await undoRedo(page, platform, faded, source);
+    await saved(page, `r37-1-${++saves}.html`);
+  });
+
+  // a kiosk viewer that is only a step is played by tycho while it is hidden, hence a viewer taken
+  // off Start on a click is not left a step
+  test(`${platform}: Start on a click of the Arrange pane of a scene is checked for a viewer of the style play, and its uncheck shows the viewer with its slide`, async (t) => {
+    const page = await open(t, platform, { deck: VIEWERS, pane: 'format' });
+    const source = page.source;
+    await selectScene(page);
+    assert.deepEqual(await checkOf(page, 'figure.startOnClick'), { command: 'figure.startOnClick', text: 'Start on a click', checked: true, disabled: false });
+    await toggle(page, 'figure.startOnClick');
+    const plain = source.replace(SCENE, scene(' class="zone"')).replace(LATER(3), LATER(2));
+    sameText(await rendered(page), plain);
+    assert.equal((await checkOf(page, 'figure.startOnClick')).checked, false);
+    assert.equal(await undoLabel(page), 'Undo Start on a Click');
+    await undoRedo(page, platform, source, plain);
+
+    // a viewer shown with its slide is made the last step of its slide, with the style play
+    await toggle(page, 'figure.startOnClick');
+    const last = plain.replace(scene(' class="zone"'), scene(' class="zone fragment play" data-fragment-index="3"'));
+    sameText(await rendered(page), last);
+    assert.equal((await checkOf(page, 'figure.startOnClick')).checked, true);
+    await undoRedo(page, platform, plain, last);
+    await saved(page, `r37-1-${++saves}.html`);
+  });
+
+  test(`${platform}: Start on a click is checked for a viewer in a zone that is a step of the style play, and its uncheck takes the step off the zone`, async (t) => {
+    const page = await open(t, platform, { deck: VIEWERS, slide: 2, pane: 'format' });
+    const source = page.source;
+    await selectScene(page);
+    assert.equal((await checkOf(page, 'figure.startOnClick')).checked, true);
+    await toggle(page, 'figure.startOnClick');
+    const plain = source.replace(INSIDE, INSIDE.replace(' fragment play" data-fragment-index="1"', '"')).replace(AFTER(2), AFTER(1));
+    sameText(await rendered(page), plain);
+    assert.equal((await checkOf(page, 'figure.startOnClick')).checked, false);
+    await undoRedo(page, platform, source, plain);
+
+    // the step is then written on the tag of the viewer, as the theme reads it
+    await toggle(page, 'figure.startOnClick');
+    const last = plain.replace('<tycho-viewer theme="dark" kiosk id="inside">', '<tycho-viewer theme="dark" kiosk id="inside" class="fragment play" data-fragment-index="2">');
+    sameText(await rendered(page), last);
+    assert.equal((await checkOf(page, 'figure.startOnClick')).checked, true);
+    await undoRedo(page, platform, plain, last);
+    await saved(page, `r37-1-${++saves}.html`);
+  });
+
+  test(`${platform}: a picture and a paragraph do not have Start on a click in their Arrange pane`, async (t) => {
+    const page = await open(t, platform, { pane: 'format' });
+    await click(page, '.reveal section.present h2');
+    await frames(page);
+    assert.equal(await checkOf(page, 'figure.startOnClick'), undefined);
+  });
+
+  test(`${platform}: a preview of the steps holds a viewer of the style play at its first frame until its step, and plays it from its start`, async (t) => {
+    const page = await open(t, platform, { deck: VIEWERS });
+    await page.waitFor(`!!document.getElementById('play').state`);
+    await page.waitFor(`document.getElementById('play').playing`);
+    await page.evaluate(`(() => {
+      window.__seen = [];
+      const v = document.getElementById('play');
+      const look = () => {
+        if (document.documentElement.classList.contains('beeson-previewing')) window.__seen.push({ step: document.documentElement.dataset.previewStep, playing: v.playing, time: v.time });
+        requestAnimationFrame(look);
+      };
+      requestAnimationFrame(look);
+      window.BeesonEditor.exec('steps.preview');
+      return true;
+    })()`);
+    await page.waitFor(`document.documentElement.classList.contains('beeson-previewing')`);
+    await page.waitFor(`!document.documentElement.classList.contains('beeson-previewing')`, 20000);
+    const seen = await page.evaluate('window.__seen');
+    const before = seen.filter((s) => s.step === '0' || s.step === '1');
+    assert.ok(before.length > 0, 'the preview did not show the slide before the step of the scene');
+    assert.deepEqual(before.filter((s) => s.playing || s.time !== 0).slice(0, 3), [], 'the scene is played before its step');
+    const from = seen.find((s) => s.step === '2' && s.playing);
+    assert.ok(from && from.time < 0.5, `the scene is not played from its start at its step: ${JSON.stringify(from)}`);
+    // the editor shows every step, hence the scene is played again after the preview
+    await page.waitFor(`document.getElementById('play').playing`);
+    sameText(await rendered(page), page.source);
+    assert.deepEqual(errors(page), []);
   });
 }
