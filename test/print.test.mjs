@@ -58,6 +58,18 @@ test('a video without a poster is printed with its frame on every step', { timeo
   assert.deepEqual(frames, [1, 1, 1, 1]);
 });
 
+// on a slow runner, some of the videos that are loaded again at once do not get a frame, and the
+// export waits for them until its timeout
+test('the videos of the print view are loaded again one after the other', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await printView(page, deckUrl('test/pages/video-steps.html', 'print-pdf&still'));
+
+  assert.equal(await page.evaluate(`document.querySelectorAll('video').length`), 4);
+  assert.equal(await page.evaluate(`window.loadedAtOnce`), 1);
+});
+
 test('a tycho viewer is printed with its scene', { timeout: 60000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());

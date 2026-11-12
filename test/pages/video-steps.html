@@ -7,6 +7,16 @@
 <link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
 <link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
 <link rel="stylesheet" href="../../theme/beeson.css">
+<!-- the largest number of videos that are loaded again at once, for the test of the print view -->
+<script>
+  const loading = new Set();
+  window.loadedAtOnce = 0;
+  document.addEventListener('emptied', (event) => {
+    loading.add(event.target);
+    window.loadedAtOnce = Math.max(window.loadedAtOnce, loading.size);
+  }, true);
+  document.addEventListener('loadeddata', (event) => loading.delete(event.target), true);
+</script>
 </head>
 <body>
 <!-- a video without a poster on a slide of three steps, which is cloned for each step in the print
