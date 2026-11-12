@@ -103,6 +103,7 @@ export function install(app: App): void {
     for (const fn of listeners) fn();
     app.invalidate('selection');
   };
+  const caretBlock = () => (items[0] ? [movableOf(app, items[0]) ?? items[0]] : []);
   const selection: Selection = {
     get kind() {
       return kind;
@@ -111,10 +112,12 @@ export function install(app: App): void {
       return items;
     },
     set,
-    add: (item) => set(kind === 'none' || kind === 'text' ? 'elements' : kind, [...(kind === 'text' ? [] : items), item]),
+    // the block of a caret counts as selected, as in PowerPoint, hence an object added to a text is
+    // selected with its block, and the block toggled from its text stays selected
+    add: (item) => set(kind === 'none' || kind === 'text' ? 'elements' : kind, [...(kind === 'text' ? caretBlock() : items), item]),
     toggle: (item) => {
-      const base = kind === 'text' ? [] : items;
-      set(kind === 'none' || kind === 'text' ? 'elements' : kind, base.includes(item) ? base.filter((i) => i !== item) : [...base, item]);
+      if (kind === 'text') return set('elements', [...caretBlock(), item]);
+      set(kind === 'none' ? 'elements' : kind, items.includes(item) ? items.filter((i) => i !== item) : [...items, item]);
     },
     clear: () => set('none', []),
     selectAll: () => {

@@ -557,20 +557,22 @@ export function install(app: App): void {
     }
     const grip = target.closest('.beeson-grip');
     if (grip && !grip.classList.contains('locked') && (grip as HTMLElement).dataset.group) {
-      // the grips of a group: each member is a follower of the box of the group
+      // the grips of a group, also of one selected with other objects: each member is a follower
+      // of the box of the group
       ev.preventDefault();
       ev.stopPropagation();
       const f = frameOf(app);
-      const all = sel.elements().filter((o) => !locked(o));
+      const group = frames.groupAt(grip);
+      const all = (group?.els ?? sel.elements()).filter((o) => !locked(o));
       const followers: Follower[] = all.filter((o) => !all.some((x) => x !== o && x.contains(o))).map((o) => {
         const pic = pictureOf(o);
         const deg = angleIn(o, pic);
         return { el: o, sized: sizedOf(o), pic, deg, base: toSlide(f, orientedBox(pic, f.scale, deg)) };
       });
       if (!followers.length) return;
-      const p = Object.assign(start('resize', ev, followers[0].el, followers.map((m) => m.el), null), { handle: (grip as HTMLElement).dataset.handle as Handle, followers, group: true, was: frames.groupTurn() });
+      const p = Object.assign(start('resize', ev, followers[0].el, followers.map((m) => m.el), null), { handle: (grip as HTMLElement).dataset.handle as Handle, followers, group: true, was: group?.deg ?? frames.groupTurn() });
       for (const m of followers.flatMap((m) => m.sized)) if (!p.from.has(m)) p.from.set(m, placeOf(m));
-      p.base = toSlide(f, frames.groupBox() ?? union(followers.map((m) => visualRect(m.pic))));
+      p.base = toSlide(f, group?.reach ?? frames.groupBox() ?? union(followers.map((m) => visualRect(m.pic))));
       holdGrip(grip as HTMLElement);
       return;
     }

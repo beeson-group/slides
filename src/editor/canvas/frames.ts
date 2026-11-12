@@ -88,6 +88,9 @@ const place = (d: HTMLElement, b: Box) => {
   Object.assign(d.style, { left: `${b.left}px`, top: `${b.top}px`, width: `${b.width}px`, height: `${b.height}px` });
 };
 
+// the members of a group, its frame without the inset around a caption, and its angle
+export type FramedGroup = { els: Element[]; reach: Box; deg: number };
+
 const grow = (b: Box, by: number): Box => ({ left: b.left - by, top: b.top - by, width: b.width + 2 * by, height: b.height + 2 * by });
 
 // the angle of el in degrees, from its computed rotate
@@ -182,8 +185,9 @@ export class Frames {
   // the grips of the first selected element, and a set more for each other selected element
   readonly grips: Record<Handle, HTMLDivElement>;
   private readonly gripSets: Record<Handle, HTMLDivElement>[] = [];
-  // the element of each set of grips, as last drawn
+  // the element of each set of grips, as last drawn, and the group that a set resizes
   private members: (Element | null)[] = [];
+  private groups: (FramedGroup | null)[] = [];
   // the rotate handle of the one selected element, on a stem above the middle of its top edge
   readonly rotor: HTMLDivElement;
   private readonly stem: HTMLDivElement;
@@ -252,6 +256,11 @@ export class Frames {
     return this.groupDeg;
   }
 
+  // the members of the group that grip resizes, its frame without the inset, and its angle
+  groupAt(grip: Element): FramedGroup | null {
+    return this.groups[Number((grip as HTMLElement).dataset.member)] ?? null;
+  }
+
   // the selected element that grip resizes
   memberOf(grip: Element): Element | null {
     return this.members[Number((grip as HTMLElement).dataset.member)] ?? null;
@@ -316,9 +325,9 @@ export class Frames {
       this.union.style.rotate = this.groupDeg ? `${this.groupDeg}deg` : '';
       for (const f of this.frames) f.hidden = true;
     } else this.union.hidden = true;
-    // a group selected with other objects is drawn as one frame too, without grips, in place of
-    // the frames of its members
-    const drawn = new Map<Element, { box: Box; deg: number }>();
+    // a group selected with other objects is drawn as one frame too, with its grips, in place of
+    // the frames of its members, as each selected object keeps its handles in Keynote and PowerPoint
+    const drawn = new Map<Element, FramedGroup & { box: Box }>();
     if (!this.group && boxes.length > 1) {
       const ids = new Map<string, Element[]>();
       for (const el of selected) {
@@ -329,7 +338,7 @@ export class Frames {
         if (els.length < 2) continue;
         const deg = turnersOf(app, els)?.[0].angle ?? 0;
         const reach = groupFrame(els, deg);
-        const o = { box: els.some((el) => captionsOf(el).length) ? grow(reach, INSET) : reach, deg };
+        const o = { box: els.some((el) => captionsOf(el).length) ? grow(reach, INSET) : reach, deg, reach, els };
         for (const el of els) drawn.set(el, o);
       }
     }
@@ -350,23 +359,32 @@ export class Frames {
     if (held) for (const f of [...this.frames, this.union, ...this.unions]) f.hidden = true;
 
     const only = app.selection.only();
-    const gripped = turn || (view.moving && !view.resizing) ? [] : this.group ? [{ el: selected[0], i: -1, grips: selected.some((el) => el.hasAttribute('data-locked')) ? 'locked' as const : 'live' as const }] : selected.map((el, i) => ({ el, i, grips: drawn.has(el) ? null : this.gripsOf(el) })).filter((m) => m.grips);
+    // a set of grips for each element with grips, and one for each group, at its frame
+    const gripped: { el: Element; grips: 'live' | 'locked'; box: Box; deg: number; group: FramedGroup | null }[] = [];
+    const lockOf = (els: Element[]) => (els.some((el) => el.hasAttribute('data-locked')) ? 'locked' as const : 'live' as const);
+    const still = !turn && !(view.moving && !view.resizing);
+    if (still && this.group) gripped.push({ el: selected[0], grips: lockOf(selected), box: this.group, deg: this.groupDeg, group: { els: selected, reach: this.reach as Box, deg: this.groupDeg } });
+    else if (still) selected.forEach((el, i) => {
+      const o = drawn.get(el);
+      const grips = o ? (o.els[0] === el ? lockOf(o.els) : null) : this.gripsOf(el);
+      if (grips) gripped.push({ el, grips, box: o ? o.box : boxes[i], deg: o ? o.deg : orients[i].deg, group: o ?? null });
+    });
     while (this.gripSets.length < gripped.length) this.gripSet();
     this.members = this.gripSets.map((_, n) => gripped[n]?.el ?? null);
+    this.groups = this.gripSets.map((_, n) => gripped[n]?.group ?? null);
     this.gripSets.forEach((set, n) => {
       const m = gripped[n];
       // a viewer keeps the height of its layout, and a text block the height of its wrapped text
-      const level = !!m && m.i >= 0 && (m.el.matches('tycho-viewer') || isTextSized(m.el));
+      const level = !!m && !m.group && (m.el.matches('tycho-viewer') || isTextSized(m.el));
       for (const h of HANDLES) {
         const g = set[h];
-        if (m && m.i < 0) g.dataset.group = '1';
+        if (m?.group) g.dataset.group = '1';
         else delete g.dataset.group;
         if (!m || (level && (h === 'n' || h === 's'))) {
           g.hidden = true;
           continue;
         }
-        const b = m.i < 0 ? (this.group as Box) : boxes[m.i];
-        const deg = m.i < 0 ? this.groupDeg : orients[m.i].deg;
+        const b = m.box, deg = m.deg;
         const at = turned(b, deg, h.includes('w') ? b.left : h.includes('e') ? b.left + b.width : b.left + b.width / 2, h.includes('n') ? b.top : h.includes('s') ? b.top + b.height : b.top + b.height / 2);
         g.hidden = !!held && g !== held;
         g.classList.toggle('locked', m.grips === 'locked');
@@ -410,6 +428,14 @@ export class Frames {
       Object.assign(this.stem.style, { left: `${edge.x}px`, top: `${edge.y}px`, height: `${this.rotorAt - KNOB}px`, rotate: `${deg + 180}deg` });
     }
 
+    // the canvas is given room for every grip and the rotate handle past the slide, kept through a
+    // gesture so that the slide does not move under the pointer
+    if (!view.moving && app.stage) {
+      const points = gripped.flatMap((m) => [[0, 0], [1, 0], [1, 1], [0, 1]].map(([u, v]) => turned(m.box, m.deg, m.box.left + u * m.box.width, m.box.top + v * m.box.height)));
+      if (!this.rotor.hidden) points.push({ x: parseFloat(this.rotor.style.left), y: parseFloat(this.rotor.style.top) });
+      const inSlide = points.map((p) => app.stage.toSlide(p));
+      app.stage.setReach(inSlide.length ? { left: Math.min(...inSlide.map((p) => p.x)), top: Math.min(...inSlide.map((p) => p.y)), right: Math.max(...inSlide.map((p) => p.x)), bottom: Math.max(...inSlide.map((p) => p.y)) } : null);
+    }
     const hot = this.current();
     const framed = hot && selected.includes(hot);
     this.hoverFrame.hidden = !hot || !!framed || !!view.moving;

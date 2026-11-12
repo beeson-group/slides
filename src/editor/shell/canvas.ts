@@ -34,6 +34,10 @@ export type Stage = {
   // the room at the top and the left of the cell that the viewport leaves, e.g. for the rulers of
   // canvas/rulers.ts, in CSS px
   setRoom(room: { top: number; left: number }): void;
+  // the box in slide px that the grips and the rotate handle of the selection reach, or null. at
+  // Fit, the pasteboard is grown past an edge of the slide that the box crosses, so that the canvas
+  // scrolls to every grip
+  setReach(box: { left: number; top: number; right: number; bottom: number } | null): void;
   // while a drag at the pointer ev is held near an edge of the zoomed canvas, the canvas is scrolled
   // toward it on each frame, and again is called to drag on with it. null stops it
   edgeScroll(ev: { clientX: number; clientY: number } | null, again?: () => void): void;
@@ -50,6 +54,8 @@ declare module '../app.ts' {
 export const MARGIN = 32;
 export const ZOOMS = [0.25, 0.33, 0.5, 0.67, 0.75, 1, 1.25, 1.5, 2, 3, 4];
 export const MIN_ZOOM = 0.1;
+// the room past a grip at the edge of the pasteboard, in CSS px
+const GRIP = 16;
 export const MAX_ZOOM = 4;
 
 const CSS = `
@@ -86,6 +92,10 @@ export function install(app: App): void {
   let box = { x: 0, y: 0, w: 0, h: 0 };
   let size = { w: 1920, h: 1080 };
   let room = { top: 0, left: 0 };
+  // the overhang of the reach of the selection past each edge of the slide, in slide px, and the
+  // room added left of and above the slide for it, in CSS px, which the scroll is moved by
+  let reach = { left: 0, top: 0, right: 0, bottom: 0 };
+  let added = { x: 0, y: 0 };
   const root = document.documentElement.style;
 
   const reveal = () => document.querySelector<HTMLElement>('.reveal:not(.beeson-peek)');
@@ -130,12 +140,22 @@ export function install(app: App): void {
       const w = Math.ceil(size.w * s);
       const h = Math.ceil(size.h * s);
       const p = zoom === null ? Math.min(pad, fitMargin(v)) : pad;
-      const contentW = Math.max(v.width, w + 2 * p);
-      const contentH = Math.max(v.height, h + 2 * p);
+      const baseW = Math.max(v.width, w + 2 * p);
+      const baseH = Math.max(v.height, h + 2 * p);
+      // at Fit, which does not scroll otherwise, a grip past the pasteboard gets the room of its
+      // overhang and of GRIP more on its side
+      const more = (over: number, has: number) => (over > 0 && zoom === null ? Math.max(0, Math.ceil(over * s + GRIP - has)) : 0);
+      const add = { left: more(reach.left, (baseW - w) / 2), right: more(reach.right, (baseW - w) / 2), top: more(reach.top, (baseH - h) / 2), bottom: more(reach.bottom, (baseH - h) / 2) };
+      const contentW = baseW + add.left + add.right;
+      const contentH = baseH + add.top + add.bottom;
       spacer.style.width = `${contentW + room.left}px`;
       spacer.style.height = `${contentH + room.top}px`;
-      const x = v.left + (contentW - w) / 2 - el.scrollLeft;
-      const y = v.top + (contentH - h) / 2 - el.scrollTop;
+      // the slide stays where it is drawn while room is added or taken off left of it or above it
+      el.scrollLeft += add.left - added.x;
+      el.scrollTop += add.top - added.y;
+      added = { x: add.left, y: add.top };
+      const x = v.left + add.left + (baseW - w) / 2 - el.scrollLeft;
+      const y = v.top + add.top + (baseH - h) / 2 - el.scrollTop;
       const resized = w !== box.w || h !== box.h;
       box = { x, y, w, h };
       root.setProperty('--ed-slide-x', `${x}px`);
@@ -265,6 +285,13 @@ export function install(app: App): void {
     fitScale,
     place,
     edgeScroll,
+    setReach(next) {
+      const over = next ? { left: Math.max(0, -next.left), top: Math.max(0, -next.top), right: Math.max(0, next.right - size.w), bottom: Math.max(0, next.bottom - size.h) } : { left: 0, top: 0, right: 0, bottom: 0 };
+      const same = (Object.keys(over) as (keyof typeof over)[]).every((k) => Math.abs(over[k] - reach[k]) < 1);
+      if (same) return;
+      reach = over;
+      place();
+    },
     setRoom(next) {
       if (next.top === room.top && next.left === room.left) return;
       room = next;
@@ -293,7 +320,7 @@ export function install(app: App): void {
       if (pinch !== null) return;
       const now = zoom ?? fitScale();
       setZoom(now * Math.exp(-clamp(dy, -50, 50) / 200), { x: ev.clientX, y: ev.clientY });
-    } else if (el.classList.contains('zoomed') && t?.closest('.reveal')) {
+    } else if (el.classList.contains('zoomed') ? t?.closest('.reveal') : el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight) {
       ev.preventDefault();
       if (ev.shiftKey && !dx) [dx, dy] = [dy, 0];
       el.scrollLeft += dx;
