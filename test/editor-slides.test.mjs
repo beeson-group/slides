@@ -91,23 +91,23 @@ function slideText(source, heading) {
   return source.slice(start, end);
 }
 
-test('the demo deck shows 12 thumbnails within 1 s, numbered by their places, with a mark on a slide with steps', async (t) => {
+test('the demo deck shows 13 thumbnails within 1 s, numbered by their places, with a mark on a slide with steps', async (t) => {
   const page = await open('mac');
   t.after(() => page.close?.());
   const ms = await page.evaluate(`(async () => {
     const t0 = performance.now();
     const all = () => [...document.querySelectorAll('.beeson-edit-nav .pic')].filter((p) => p.dataset.drawn).length;
-    while (all() < 12 && performance.now() - t0 < 5000) await new Promise((r) => setTimeout(r, 10));
-    return all() === 12 ? performance.now() - t0 : null;
+    while (all() < 13 && performance.now() - t0 < 5000) await new Promise((r) => setTimeout(r, 10));
+    return all() === 13 ? performance.now() - t0 : null;
   })()`);
   assert.ok(ms !== null && ms < 1000, `the thumbnails were drawn in ${ms} ms`);
   const drawn = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-nav .pic')].map((p) => p.shadowRoot?.querySelector('section h1, section h2')?.textContent ?? null)`);
-  assert.equal(drawn.length, 12);
+  assert.equal(drawn.length, 13);
   assert.equal(drawn[2], 'Show your steps one at a time');
   const list = await rows(page);
   assert.deepEqual(
     list.map((r) => r.no),
-    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
+    ['1', '2', '3', '4', '5', '6', '7', '8', '9', '10', '11', '12', '13'],
   );
   const stepped = await page.evaluate(`window.Reveal.getSlides().map((s) => !!s.querySelector('.fragment'))`);
   assert.deepEqual(
@@ -141,7 +141,7 @@ for (const platform of ['mac', 'other']) {
     await click(page, await row(page, 2));
     await press(page, 'Enter');
     await settle(page);
-    assert.equal((await rows(page)).length, 13);
+    assert.equal((await rows(page)).length, 14);
     const caret = await page.evaluate(`(() => {
       const s = window.getSelection();
       const h = s.anchorNode && (s.anchorNode.nodeType === 1 ? s.anchorNode : s.anchorNode.parentElement).closest('h2');
@@ -206,7 +206,7 @@ for (const platform of ['mac', 'other']) {
     await click(page, await row(page, 2));
     await press(page, 'Backspace');
     await settle(page);
-    assert.equal((await rows(page)).length, 11);
+    assert.equal((await rows(page)).length, 12);
     const edited = await page.evaluate('window.BeesonEditor.render()');
     assert.ok(!edited.includes('Show your steps one at a time'));
     assert.ok(!edited.includes('<!-- content, the default layout'), 'the comment above the slide is kept');
@@ -261,7 +261,7 @@ for (const platform of ['mac', 'other']) {
     assert.equal(list[3].skip, true);
     assert.deepEqual(
       list.map((r) => r.no),
-      ['1', '2', '3', '', '4', '5', '6', '7', '8', '9', '10', '11'],
+      ['1', '2', '3', '', '4', '5', '6', '7', '8', '9', '10', '11', '12'],
     );
     const edited = await page.evaluate('window.BeesonEditor.render()');
     const original = slideText(page.source, 'Equations are first class citizens');
@@ -290,8 +290,8 @@ for (const platform of ['mac', 'other']) {
     await click(page, await row(page, 9), { modifiers: 'Shift' });
     await press(page, 'Backspace');
     await settle(page);
-    assert.deepEqual((await titles(page)).slice(6), ['Chapter two', 'Embedding videos', 'Thank you']);
-    assert.equal((await rows(page)).length, 9);
+    assert.deepEqual((await titles(page)).slice(6), ['Chapter two', 'Embedding videos', 'Starting a video on a click', 'Thank you']);
+    assert.equal((await rows(page)).length, 10);
     await roundTrip(page);
   });
 
@@ -310,7 +310,7 @@ for (const platform of ['mac', 'other']) {
     assert.equal(await page.evaluate(`window.BeesonEditor.state('slide.delete').label`), 'Delete Slides');
     await press(page, 'Delete');
     await settle(page);
-    assert.equal((await rows(page)).length, 9);
+    assert.equal((await rows(page)).length, 10);
     const edited = await page.evaluate('window.BeesonEditor.render()');
     for (const gone of ['Show your steps one at a time', 'Code boxes, you guessed it...', 'Color the terms and the marks']) assert.ok(!edited.includes(gone), gone);
     await roundTrip(page);
@@ -323,14 +323,14 @@ for (const platform of ['mac', 'other']) {
       page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: keyName, code, windowsVirtualKeyCode: keyCode, modifiers: mod === 'Meta' ? 4 : 2, commands }).then(() => page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: keyName, code, windowsVirtualKeyCode: keyCode, modifiers: mod === 'Meta' ? 4 : 2 }));
     await click(page, await row(page, 3));
     await key(['copy'], 'c', 'KeyC', 67);
-    await click(page, await row(page, 11));
+    await click(page, await row(page, 12));
     await key(['paste'], 'v', 'KeyV', 86);
     await settle(page);
     const list = await rows(page);
-    assert.equal(list.length, 13);
-    assert.equal(list[12].title, 'Equations are first class citizens');
-    assert.equal(list[12].no, '13');
-    assert.equal(list[12].current, true);
+    assert.equal(list.length, 14);
+    assert.equal(list[13].title, 'Equations are first class citizens');
+    assert.equal(list[13].no, '14');
+    assert.equal(list[13].current, true);
     const copied = slideText(page.source, 'Equations are first class citizens');
     const closing = slideText(page.source, 'Thank you');
     const at = page.source.indexOf(closing) + closing.length;

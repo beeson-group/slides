@@ -232,6 +232,9 @@ for (const size of [{ width: 1920, height: 1080 }, { width: 1280, height: 800 }]
     const browser = await launch();
     t.after(() => browser.close());
     const page = await layouts(browser, { page: size });
+    // the closing slide, whose QR code theme/beeson.css places in the lower right corner
+    await page.evaluate('Reveal.slide(15)');
+    await sleep(200);
     await click(page, QR);
     const before = await boxOf(page, QR);
     await drag(page, '.beeson-grip[data-handle="w"]', { dx: -40, modifiers: 'Meta' });

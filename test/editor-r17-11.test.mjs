@@ -84,7 +84,7 @@ const meets = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom
 // which is held at its foot, hence each line of the box lifted the lines of the block by a line
 for (const platform of PLATFORMS) {
   test(`a new text box on a title or closing slide keeps the lines of the block in place (${platform})`, async (t) => {
-    for (const n of [0, 11]) {
+    for (const n of [0, 12]) {
       const page = await load(t, platform, n);
       const at = `on slide ${n + 1}`;
       const start = await places(page);

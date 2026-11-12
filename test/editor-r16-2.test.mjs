@@ -33,7 +33,7 @@ const ROW = '.beeson-edit-objects .row';
 const FOOT = '<div class="foot">Slides can have backdrops';
 const QR = '<div class="qr" data-qr="https://github.com/beeson-group/slides">';
 const OVERLAPS = SOURCE.replace(FOOT, '<div class="foot" style="translate: 0px -150px">Slides can have backdrops')
-  .replace(QR, '<div class="qr" data-qr="https://github.com/beeson-group/slides" style="translate: -1419px -145px">');
+  .replace(QR, '<div class="qr" data-qr="https://github.com/beeson-group/slides" style="translate: -1589px -245px">');
 
 const STEP_EL = { h2: `${S} > h2`, p: `${S} > p`, ul: `${S} > ul`, foot: `${S} > .foot` };
 const STEP_ROWS = { h2: 'Text: Show your steps', p: 'Text: Design the complete', ul: 'Text: Each step is', foot: 'Text: Slides can have' };

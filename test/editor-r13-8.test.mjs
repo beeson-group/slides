@@ -65,7 +65,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await transitionAt(page, 3), ['fade']);
     const before = await render(page);
     await exec(page, 'slide.duplicate');
-    assert.equal(await page.evaluate('Reveal.getTotalSlides()'), 13);
+    assert.equal(await page.evaluate('Reveal.getTotalSlides()'), 14);
     assert.deepEqual(await transitionAt(page, 2), ['none'], 'the slide before the original lost its transition');
     assert.deepEqual(await transitionAt(page, 3), ['fade'], 'the original lost its transition');
     assert.deepEqual(await transitionAt(page, 4), ['fade'], 'the copy does not have the transition of the original');
@@ -164,12 +164,12 @@ async function present(t, platform, n) {
 for (const platform of PLATFORMS) {
   test(`the show played by Present returns to the editor at a move forward past its last slide (${platform})`, async (t) => {
     for (const key of ['ArrowRight', 'Enter', 'Space', 'PageDown', 'n']) {
-      const page = await present(t, platform, 11);
+      const page = await present(t, platform, 12);
       assert.equal(await page.evaluate(`${SHOW}.Reveal.isLastSlide()`), true);
       await press(page, key);
       await page.waitFor(`!document.querySelector('.beeson-edit-show')`, 5000).catch(() => {});
       assert.equal(await page.evaluate(`!!document.querySelector('.beeson-edit-show')`), false, `${js(key)} at the last slide does not end the show`);
-      assert.equal(await page.evaluate('Reveal.getIndices().h'), 11);
+      assert.equal(await page.evaluate('Reveal.getIndices().h'), 12);
       await byteExact(page);
       assert.deepEqual(errors(page), []);
       await page.close();
@@ -177,16 +177,16 @@ for (const platform of PLATFORMS) {
   });
 
   test(`the show played by Present goes through the steps of its last slides before it ends (${platform})`, async (t) => {
-    const page = await present(t, platform, 10);
+    const page = await present(t, platform, 11);
     const steps = await page.evaluate(`${SHOW}.Reveal.availableFragments().next`);
     await press(page, 'ArrowRight');
     await sleep(200);
-    if (steps) assert.equal(await page.evaluate(`${SHOW}.Reveal.getIndices().h`), 10, 'a step of slide 11 is skipped');
-    for (let i = 0; i < 10 && (await page.evaluate(`${SHOW}.Reveal.getIndices().h`)) < 11; i++) {
+    if (steps) assert.equal(await page.evaluate(`${SHOW}.Reveal.getIndices().h`), 11, 'a step of slide 12 is skipped');
+    for (let i = 0; i < 10 && (await page.evaluate(`${SHOW}.Reveal.getIndices().h`)) < 12; i++) {
       await press(page, 'ArrowRight');
       await sleep(200);
     }
-    assert.equal(await page.evaluate(`${SHOW}.Reveal.getIndices().h`), 11);
+    assert.equal(await page.evaluate(`${SHOW}.Reveal.getIndices().h`), 12);
     assert.equal(await page.evaluate(`!!document.querySelector('.beeson-edit-show')`), true, 'the show ends at the arrival on its last slide');
     await press(page, 'Escape');
     await page.waitFor(`!document.querySelector('.beeson-edit-show')`);
@@ -198,11 +198,11 @@ for (const platform of PLATFORMS) {
 test('a deck opened by itself stays at its last slide at a key forward', async (t) => {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  await page.goto(`${server.origin}/index.html?still#/11`);
+  await page.goto(`${server.origin}/index.html?still#/12`);
   await page.waitFor(deckSettled);
   for (const key of ['ArrowRight', 'Space', 'Enter']) await press(page, key);
   await sleep(300);
-  assert.equal(await page.evaluate('Reveal.getIndices().h'), 11);
+  assert.equal(await page.evaluate('Reveal.getIndices().h'), 12);
   assert.equal(await page.evaluate('location.search'), '?still');
   assert.deepEqual(errors(page), []);
 });
@@ -230,7 +230,7 @@ for (const platform of PLATFORMS) {
     assert.equal(await slideOf(page), 6, 'the number is kept after another key');
     for (const key of ['9', '9', 'Enter']) await press(page, key);
     await sleep(200);
-    assert.equal(await slideOf(page), 12, '99 and Return do not go to the last slide');
+    assert.equal(await slideOf(page), 13, '99 and Return do not go to the last slide');
     for (const key of ['0', 'Enter']) await press(page, key);
     await sleep(200);
     assert.equal(await slideOf(page), 1, '0 and Return do not go to the first slide');
@@ -241,7 +241,7 @@ for (const platform of PLATFORMS) {
     const page = await present(t, platform, 5);
     for (const key of ['9', '9', 'Enter']) await press(page, key);
     await sleep(300);
-    assert.equal(await page.evaluate(`${SHOW}.Reveal.getIndices().h`), 11);
+    assert.equal(await page.evaluate(`${SHOW}.Reveal.getIndices().h`), 12);
     for (const key of ['0', 'Enter']) await press(page, key);
     await sleep(300);
     assert.equal(await page.evaluate(`${SHOW}.Reveal.getIndices().h`), 0);

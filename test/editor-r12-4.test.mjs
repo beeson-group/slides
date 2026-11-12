@@ -144,7 +144,9 @@ for (const platform of PLATFORMS) {
 
   // navigator-slides-canvas-1
   test(`a text laid over the figure of its slide by a change of the layout is marked and named in the status (${platform})`, async (t) => {
-    for (const id of ['slide.layout.wide', 'slide.layout.title', 'slide.layout.closing']) {
+    // beeson.css draws the block of a closing slide in front of the figure, with a z-index of 2,
+    // hence the status names the texts first there
+    for (const [id, said] of [['slide.layout.wide', /A picture covers \d+ texts?/], ['slide.layout.title', /A picture covers \d+ texts?/], ['slide.layout.closing', /\d+ texts? covers? a picture/]]) {
       const page = await load(t, platform, { n: FIGURES });
       assert.equal((await page.evaluate('window.BeesonEditor.status()')).overflow, 0, 'the slide is reported before the change');
       await exec(page, id);
@@ -152,7 +154,7 @@ for (const platform of PLATFORMS) {
       await frames(page);
       const s = await page.evaluate('window.BeesonEditor.status()');
       assert.ok(s.overflow > 0, `after ${id}, the texts over the figure are not counted`);
-      assert.match(s.message, /A picture covers \d+ texts?/, `after ${id}, the status reads ${s.message}`);
+      assert.match(s.message, said, `after ${id}, the status reads ${s.message}`);
       assert.ok(await page.evaluate(`document.querySelectorAll('.reveal section.present .beeson-overflow').length > 0`));
       await undo(page);
       await frames(page);

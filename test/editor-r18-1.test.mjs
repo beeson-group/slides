@@ -35,7 +35,7 @@ const ROW = '.beeson-edit-objects .row';
 const FOOT = '<div class="foot">Slides can have backdrops';
 const MOVED_FOOT = '<div class="foot" style="translate: 0px -150px">Slides can have backdrops';
 const QR = '<div class="qr" data-qr="https://github.com/beeson-group/slides">';
-const OVERLAPS = SOURCE.replace(FOOT, MOVED_FOOT).replace(QR, QR.replace('>', ' style="translate: -1419px -145px">'));
+const OVERLAPS = SOURCE.replace(FOOT, MOVED_FOOT).replace(QR, QR.replace('>', ' style="translate: -1589px -245px">'));
 const FRAGFOOT = SOURCE.replace(/<section[\s\S]*?<\/section>/g, (s) => (s.includes('Show your steps one at a time') ? s.replace(/ data-fragment-index="\d"/g, '') : s))
   .replace(FOOT, '<div class="foot fragment" style="translate: 0px -150px">Slides can have backdrops');
 const footLine = SOURCE.split('\n').find((l) => l.includes(FOOT));

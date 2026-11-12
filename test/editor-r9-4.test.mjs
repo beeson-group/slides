@@ -407,7 +407,7 @@ const cursorAt = (page, p) => page.evaluate(`getComputedStyle(document.elementFr
 // code showed a move cursor, although neither can be dragged
 for (const platform of PLATFORMS) {
   test(`a locked block or QR code does not show a move cursor (${platform})`, async (t) => {
-    const page = await load(t, platform, { n: 11 });
+    const page = await load(t, platform, { n: 12 });
     const qr = await center(page, '.reveal section.present .qr');
     assert.equal(await cursorAt(page, qr), 'move', 'the QR code does not show a move cursor before its lock');
     await click(page, qr);

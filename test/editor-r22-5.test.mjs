@@ -125,7 +125,7 @@ for (const platform of PLATFORMS) {
     // each entry is drawn with its small picture
     await page.waitFor(`[...document.querySelectorAll('${TILES}')].every((b) => b.querySelector('.tile canvas'))`);
     await press(page, 'Escape');
-    assert.deepEqual(await rowNames(page, [0, 1, 2, 6, 11]), [
+    assert.deepEqual(await rowNames(page, [0, 1, 2, 6, 12]), [
       'Backdrop: Beeson Logo',
       'Backdrop: Broucke Families 7 and 11',
       'Backdrop: Lyapunov Families',

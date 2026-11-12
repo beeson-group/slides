@@ -595,7 +595,8 @@ for (const platform of PLATFORMS) {
 
     test(`a drag held at the edge of a zoomed canvas scrolls it, with the element or line under the pointer, on ${platform} in ${mode} mode`, async (t) => {
       const where = `on ${platform} in ${mode} mode`;
-      const page = await load(t, platform, mode, 0, LAYOUTS);
+      // the closing slide, whose QR code theme/beeson.css places in the lower right corner
+      const page = await load(t, platform, mode, 15, LAYOUTS);
       await exec(page, 'insert.line', { from: { x: 300, y: 700 }, to: { x: 800, y: 700 } });
       await exec(page, 'selection.clear');
       page.source = await render(page);
