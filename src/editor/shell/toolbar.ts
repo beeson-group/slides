@@ -106,7 +106,7 @@ html.beeson-no-toolbar .beeson-edit-top { display: none; }
 .beeson-edit-top.customizing.compact.show-text .tb .label { display: none; }
 .beeson-edit-top.customizing.compact.show-text .tb { min-width: 36px; }
 .beeson-edit-top.tight { padding: 0 4px; gap: 0; }
-.beeson-edit-top.customizing.tight .tb { min-width: 28px; padding: 3px 2px 2px; }
+.beeson-edit-top.customizing.tight .tb, .beeson-edit-top.customizing.compact.tight.show-text .tb { min-width: 28px; padding: 3px 2px 2px; }
 .beeson-edit-top.tight .sep { width: 7px; }
 .beeson-edit-top.tight .space { flex-basis: 8px; min-width: 8px; }
 .beeson-edit-top .sep { flex: none; align-self: center; width: 13px; height: 28px; background: linear-gradient(var(--ed-line), var(--ed-line)) center / 1px 100% no-repeat; }

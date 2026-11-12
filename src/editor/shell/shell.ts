@@ -180,6 +180,18 @@ export function install(app: App): void {
   // is off, as Keynote gives its inspector back
   let shownTab: string | null = null;
   let yielded: string | null = null;
+  // a pane yields only to a toggle of the navigator, which closes it to show the navigator in its
+  // place. a pane closed by hand also frees the room for the navigator, and it stays closed
+  let forNav = false;
+  const navToggle = app.nav.toggle.bind(app.nav);
+  app.nav.toggle = () => {
+    forNav = true;
+    try {
+      navToggle();
+    } finally {
+      forNav = false;
+    }
+  };
   const narrow = () => matchMedia(`(max-width: ${SOLO_BELOW - 0.02}px)`).matches;
   const setFormat = (on: boolean) => {
     format = on;
@@ -207,7 +219,7 @@ export function install(app: App): void {
     shownTab = tab;
     let reopen: string | null = null;
     if (tab) yielded = null;
-    else if (was && app.nav.shown && narrow()) yielded = was === 'steps' ? 'view.steps' : 'shell.format';
+    else if (was && forNav && app.nav.shown && narrow()) yielded = was === 'steps' ? 'view.steps' : 'shell.format';
     else if (yielded && (!app.nav.shown || !narrow())) {
       reopen = yielded;
       yielded = null;

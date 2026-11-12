@@ -181,6 +181,14 @@ export function relayout(body: string, layout: Layout, step: string): string {
     kept.splice(at, 0, ...holders.map((b) => ({ name: b.slice(1, 3).replace(/\W/g, ''), classes: /class="([^"]*)"/.exec(b)?.[1].split(' ') ?? [], lead: '', blank: false, body: b.replace('<ul><li></li></ul>', `<ul>${eol}${step}<li></li>${eol}</ul>`), indent: '' })));
   }
   parts.splice(0, parts.length, ...kept);
+  // a plate is laid out only on a figure slide, and on another slide it is the zone at the right
+  if (layout !== 'figure') {
+    for (const p of parts) {
+      if (p.name !== 'div' || !p.classes.includes('plate') || p.body === PLATE) continue;
+      p.body = p.body.replace(/^(<div\b[^>]*?\bclass\s*=\s*["']?[^"'>]*?)\bplate\b/i, '$1zone');
+      p.classes = p.classes.map((c) => (c === 'plate' ? 'zone' : c));
+    }
+  }
   const h = headingTag(layout);
   const ind = (d: number) => base + step.repeat(d);
   const firstHeading = parts.findIndex((p) => p.name === 'h1' || p.name === 'h2');

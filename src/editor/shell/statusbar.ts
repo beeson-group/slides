@@ -36,6 +36,12 @@ const CSS = `
 .beeson-edit-bottom input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.3); }
 .beeson-edit-bottom .beeson-edit-select { min-width: 52px; justify-content: space-between; font-variant-numeric: tabular-nums; }
 @media (max-width: 1099px) { .beeson-edit-bottom .slider { width: 72px; } }
+/* in a narrow window the zoom is left to its buttons, and the state of accessibility to its icon, with
+   its text kept for a screen reader, so that every button of the bar is drawn whole */
+@media (max-width: 759px) {
+  .beeson-edit-bottom .slider { display: none; }
+  .beeson-edit-bottom .a11y .text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+}
 `;
 
 // the slider is linear in the logarithm of the zoom, from 10 to 400 percent, in steps of a
