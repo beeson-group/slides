@@ -9,7 +9,7 @@ import { after, before, test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { LAYOUTS, layoutText, textStyle } from '../src/editor/model/templates.ts';
+import { LAYOUTS, NEW_LAYOUTS, layoutText, textStyle } from '../src/editor/model/templates.ts';
 import { byteExact, click, drag, press, saveAndReopen, selectFigure } from './helpers/editor.mjs';
 
 const LAYOUTS_DECK = 'test/pages/editor-layouts.html';
@@ -166,7 +166,7 @@ for (const platform of ['mac', 'other']) {
     await click(page, await row(page, 4));
     for (const [i, layout] of LAYOUTS.entries()) {
       await page.evaluate(`window.BeesonEditor.exec('slide.gallery')`);
-      assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-gallery .tile .pic').length`), 8);
+      assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-gallery .tile .pic').length`), NEW_LAYOUTS.length);
       await click(page, `.beeson-edit-gallery .tile[data-layout="${layout}"]`);
       await settle(page);
       assert.equal(await page.evaluate(`!!document.querySelector('.beeson-edit-gallery')`), false);
