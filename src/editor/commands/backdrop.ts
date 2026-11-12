@@ -22,7 +22,25 @@ const hooks = (): Hooks => (window as unknown as { Beeson?: Hooks }).Beeson ?? {
 // the attributes that say what is drawn, which a change of drawing replaces, apart from the window
 // and the motion
 export const DRAWING = ['data-scene', 'data-strands', 'data-strands-select', 'data-strands-color', 'data-strands-ramp', 'data-strands-colormap', 'data-strands-shade', 'data-heads'];
-export const SCENES: Record<string, string> = { nest: 'Nest', tubes: 'Tubes', wideRibbon: 'Wide Ribbon' };
+// the names of the drawings in the list of Media > Backdrop… and wherever a drawing is named, for the
+// owner to confirm. a drawing of a file is named by its file, and a drawing of demo/broucke-sample.js
+// by the numbers of the Broucke families it selects
+export const NAMES = {
+  nest: 'Lyapunov Families',
+  tubes: 'Cislunar Manifolds',
+  wideRibbon: 'Earth Manifolds',
+  logo: 'Beeson Logo',
+  logoPart: 'Part of the Beeson Logo',
+  family: (numbers: string[]) => `Broucke ${numbers.length === 1 ? 'Family' : 'Families'} ${numbers.length > 1 ? `${numbers.slice(0, -1).join(', ')} and ${numbers.at(-1)}` : numbers[0]}`,
+  inertial: (name: string) => `${name} (Inertial)`,
+};
+export const SCENES: Record<string, string> = { nest: NAMES.nest, tubes: NAMES.tubes, wideRibbon: NAMES.wideRibbon };
+// the files of the template that the list draws from, and the families of demo/broucke-sample.js
+const LOGO_FILE = 'brand/transfer.js';
+const BROUCKE_FILE = 'demo/broucke-sample.js';
+const BROUCKE_FAMILIES = ['7', '11'];
+// the attributes of the motion of a drawing in the demo deck, which an entry of the list writes
+const MOTION = ['data-duration', 'data-stagger'];
 // the labels of a named scene, with the text and the offsets of the demo deck
 export const LABELS = [
   { at: 'L1', name: 'L1', text: '\\(\\LL{1}\\)', dy: '-34' },
@@ -68,12 +86,37 @@ const given = (arg: unknown): HTMLElement | null => {
 const targetOf = (app: App, arg: unknown) => given(arg) ?? selectedBackdrop(app) ?? slideBackdrop(app);
 const valueOf = (arg: unknown) => (arg as { value?: unknown } | undefined)?.value;
 
-// the name of the drawing of el, i.e. its scene or the name of its file
-export function drawingName(el: Element): string {
-  const scene = el.getAttribute('data-scene');
-  if (scene !== null) return SCENES[scene] ?? scene;
-  const file = el.getAttribute('data-strands') ?? '';
+const isFile = (path: string, file: string) => path === file || path.endsWith(`/${file}`);
+
+// the values of key in the terms key=a|b of a value of data-strands-select
+function selected(spec: string, key: string): string[] {
+  return spec.split(/[;,]/).flatMap((term) => {
+    const m = /^\s*([^=<>\s]+)\s*=\s*(.*?)\s*$/.exec(term);
+    return m && m[1] === key ? m[2].split('|').map((v) => v.trim()) : [];
+  });
+}
+
+// the name of a drawing of the attributes attrs: the name of its scene, of the logo, or of the
+// Broucke families it selects, or else the name of its file
+function nameOf(attrs: Record<string, string | undefined>): string {
+  const scene = attrs['data-scene'];
+  if (scene !== undefined) return SCENES[scene] ?? scene;
+  const file = attrs['data-strands'] ?? '';
+  const spec = attrs['data-strands-select'] ?? '';
+  if (isFile(file, LOGO_FILE)) return spec.trim() ? NAMES.logoPart : NAMES.logo;
+  if (isFile(file, BROUCKE_FILE)) {
+    const chosen = selected(spec, 'family');
+    const numbers = chosen.length ? [...new Set(chosen)].sort((a, b) => +a - +b) : BROUCKE_FAMILIES;
+    const frames = selected(spec, 'frame');
+    const name = NAMES.family(numbers);
+    return frames.length && frames.every((f) => f === 'inertial') ? NAMES.inertial(name) : name;
+  }
   return file.split('/').pop()?.replace(/\.(js|json)$/, '') || 'Backdrop';
+}
+
+// the name of the drawing of el
+export function drawingName(el: Element): string {
+  return nameOf(Object.fromEntries([...el.attributes].map((a) => [a.name, a.value])));
 }
 
 const round = (v: number) => Number(v.toFixed(8));
@@ -107,21 +150,63 @@ function endPreview(): void {
 // the attributes of a drawing of a library entry, with every other drawing attribute taken off
 const drawingEdit = (attrs: Record<string, string>): Record<string, string | null> => Object.fromEntries(DRAWING.map((n) => [n, attrs[n] ?? null]));
 
-// an entry of the gallery: the drawing attributes, the window and the size of the box it was
-// written for, and a name
-type Entry = { key: string; name: string; attrs: Record<string, string>; view: View | null; size: [number, number] | null };
+// an entry of the gallery: the drawing attributes, the motion, the window and the size of the box
+// it was written for, or a null window for a drawing fitted to its box, and a name. missing is true
+// for a drawing of the deck whose file is not found
+type Entry = { key: string; name: string; attrs: Record<string, string>; motion: Record<string, string>; view: View | null; size: [number, number] | null; missing?: boolean };
 
-// the windows of the named scenes in the demo deck, with the size of their boxes
+const SAMPLE = { 'data-strands': BROUCKE_FILE, 'data-strands-color': 'family', 'data-strands-ramp': 'e', 'data-strands-colormap': 'viridis' };
+// a family of demo/broucke-sample.js in a frame, with the colors and the motion of the backdrop of
+// the demo deck, fitted to its box as it is
+const family = (n: string, frame: 'pulsating' | 'inertial'): Entry => {
+  const attrs = { ...SAMPLE, 'data-strands-select': `frame=${frame},family=${n}` };
+  return { key: `broucke-${n}${frame === 'inertial' ? '-inertial' : ''}`, name: nameOf(attrs), attrs, motion: { 'data-duration': '3', 'data-stagger': '0.6' }, view: null, size: null };
+};
+
+// the drawings of the demo deck, with their windows and the size of their boxes, and the families of
+// demo/broucke-sample.js in both of its frames
 const BUILT_IN: Entry[] = [
-  { key: 'nest', name: 'Nest', attrs: { 'data-scene': 'nest' }, view: { cx: 0.97, cy: 0, half: 0.5 }, size: [720, 1080] },
-  { key: 'tubes', name: 'Tubes', attrs: { 'data-scene': 'tubes' }, view: { cx: 0.42, cy: 0, half: 0.6 }, size: [1920, 1080] },
-  { key: 'wideRibbon', name: 'Wide Ribbon', attrs: { 'data-scene': 'wideRibbon' }, view: { cx: 0.2, cy: 0, half: 1.3 }, size: [1920, 1080] },
+  { key: 'logo', name: NAMES.logo, attrs: { 'data-strands': LOGO_FILE }, motion: { 'data-duration': '20' }, view: { cx: -0.84, cy: 0, half: 1.128 }, size: [1920, 1080] },
+  { key: 'nest', name: NAMES.nest, attrs: { 'data-scene': 'nest' }, motion: {}, view: { cx: 0.97, cy: 0, half: 0.5 }, size: [720, 1080] },
+  { key: 'tubes', name: NAMES.tubes, attrs: { 'data-scene': 'tubes' }, motion: {}, view: { cx: 0.42, cy: 0, half: 0.6 }, size: [1920, 1080] },
+  { key: 'wideRibbon', name: NAMES.wideRibbon, attrs: { 'data-scene': 'wideRibbon' }, motion: {}, view: { cx: 0.2, cy: 0, half: 1.3 }, size: [1920, 1080] },
+  ...BROUCKE_FAMILIES.map((n) => family(n, 'pulsating')),
+  ...BROUCKE_FAMILIES.map((n) => family(n, 'inertial')),
 ];
 
-// the named scenes, and each other drawing of the deck, keyed by its drawing attributes
-export function library(app: App): Entry[] {
-  const out = [...BUILT_IN];
-  const keys = new Set(out.map((e) => JSON.stringify(e.attrs)));
+// whether the file of strands at an absolute URL is found and has records, as the theme read it
+const found = new Map<string, boolean>();
+const urlOf = (path: string) => new URL(path, document.baseURI).href;
+const fileOf = (e: Entry) => e.attrs['data-strands'];
+
+// true when the file of strands at path is found next to the deck. the file is read by the theme as
+// it reads the file of a backdrop, i.e. by a script element, and nothing is fetched by the editor
+async function probe(path: string): Promise<boolean> {
+  const url = urlOf(path);
+  const known = found.get(url);
+  if (known !== undefined) return known;
+  const preview = hooks().preview;
+  if (!preview) return true;
+  const el = make('div');
+  el.setAttribute('data-strands', path);
+  const o = preview(el);
+  await o.ready;
+  const ok = ((o as unknown as { strands?: unknown[] }).strands?.length ?? 0) > 0;
+  o.destroy();
+  found.set(url, ok);
+  return ok;
+}
+
+// the files of the entries of the library read, so that library() knows which are found
+export async function probeLibrary(app: App): Promise<void> {
+  const files = new Set([...BUILT_IN, ...deckEntries(app)].map(fileOf).filter((f): f is string => !!f));
+  await Promise.all([...files].map(probe));
+}
+
+// each drawing of the deck that is not an entry of BUILT_IN, keyed by its drawing attributes
+function deckEntries(app: App): Entry[] {
+  const out: Entry[] = [];
+  const keys = new Set(BUILT_IN.map((e) => JSON.stringify(e.attrs)));
   for (const el of app.slides().querySelectorAll<HTMLElement>('.backdrop')) {
     if (!open(app, el)) continue;
     const now = app.doc.tagState(el).attrs;
@@ -129,10 +214,18 @@ export function library(app: App): Entry[] {
     const key = JSON.stringify(attrs);
     if (!Object.keys(attrs).length || keys.has(key)) continue;
     keys.add(key);
+    const motion = Object.fromEntries(MOTION.filter((n) => now[n] !== undefined).map((n) => [n, now[n]]));
     const view = now['data-half'] === undefined ? null : { cx: +(now['data-cx'] ?? 0), cy: +(now['data-cy'] ?? 0), half: +now['data-half'] };
-    out.push({ key: `deck-${out.length}`, name: drawingName(el), attrs, view, size: [el.offsetWidth, el.offsetHeight] });
+    out.push({ key: `deck-${BUILT_IN.length + out.length}`, name: nameOf(attrs), attrs, motion, view, size: [el.offsetWidth, el.offsetHeight] });
   }
   return out;
+}
+
+// the entries of BUILT_IN whose file is found next to the deck, then each other drawing of the deck,
+// marked missing when its file is not found. a file not read yet counts as found
+export function library(app: App): Entry[] {
+  const state = (e: Entry) => (fileOf(e) ? found.get(urlOf(fileOf(e))) : true);
+  return [...BUILT_IN.filter((e) => state(e) !== false), ...deckEntries(app).map((e) => ({ ...e, missing: state(e) === false }))];
 }
 
 // the window of an entry kept on the box of el when the box has the size of the box of the entry,
@@ -142,16 +235,19 @@ async function windowFor(entry: Entry, el: HTMLElement): Promise<View | null> {
   return fitted(el);
 }
 
-// the drawing of entry put on the current slide: in place of the drawing of the backdrop of the
-// slide, or as a new backdrop at the ground of the slide, as one entry of the history
+// the drawing of entry put on the current slide: in place of the drawing and the motion of the
+// backdrop of the slide, or as a new backdrop at the ground of the slide, as one entry of the
+// history. an entry without a window leaves the drawing fitted to its box by the theme
 export async function applyEntry(app: App, entry: Entry): Promise<void> {
   const slide = app.current();
-  if (!slide) return;
+  if (!slide || entry.missing) return;
   const old = slideBackdrop(app);
   if (old) {
     await app.history.transact('Replace Backdrop', async () => {
-      app.doc.setTag(old, { attrs: drawingEdit(entry.attrs) }, 'drawing');
-      const v = await windowFor(entry, old);
+      const motion = Object.fromEntries(MOTION.map((n) => [n, entry.motion[n] ?? null]));
+      const unset: Record<string, null> = entry.view ? {} : { 'data-cx': null, 'data-cy': null, 'data-half': null };
+      app.doc.setTag(old, { attrs: { ...drawingEdit(entry.attrs), ...motion, ...unset } }, 'drawing');
+      const v = entry.view && (await windowFor(entry, old));
       if (v) app.doc.setTag(old, { attrs: windowAttrs(v) }, 'window');
       syncBackdrops();
     });
@@ -159,10 +255,10 @@ export async function applyEntry(app: App, entry: Entry): Promise<void> {
     return;
   }
   await app.history.selecting('Add Backdrop', async () => {
-    const view = entry.view ?? { cx: 0, cy: 0, half: 0.5 };
-    const attrs = Object.entries({ ...entry.attrs, ...windowAttrs(view) }).map(([k, v]) => ` ${k}="${v.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`).join('');
+    const all = { ...entry.attrs, ...entry.motion, ...(entry.view ? windowAttrs(entry.view) : {}) };
+    const attrs = Object.entries(all).map(([k, v]) => ` ${k}="${v.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`).join('');
     const [el] = await app.doc.insert(`<div class="backdrop"${attrs}></div>`, slide, slide.firstElementChild, 'add backdrop');
-    const v = await windowFor(entry, el as HTMLElement);
+    const v = entry.view && (await windowFor(entry, el as HTMLElement));
     if (v) {
       const now = app.doc.tagState(el).attrs;
       const changed = Object.entries(windowAttrs(v)).filter(([k, x]) => now[k] !== x);
@@ -176,22 +272,30 @@ export async function applyEntry(app: App, entry: Entry): Promise<void> {
 // the gallery of Media > Backdrop…, a popover of a tile per entry of the library, drawn by the
 // theme. a click on a tile applies its entry, and Escape or a press outside closes it
 let gallery: { el: HTMLElement; tiles: Live[]; close(): void } | null = null;
+// the last gallery asked for, which is opened once the files of the library are read
+let asked = 0;
 
 const CSS = `
 .beeson-backdrop-gallery { position: fixed; z-index: 60; display: grid; grid-template-columns: repeat(3, 160px); gap: 10px; max-width: calc(100vw - 32px); max-height: calc(100vh - 32px); overflow: auto; padding: 12px; box-sizing: border-box; border-radius: 12px; background: var(--ed-panel, #fff); box-shadow: 0 0 0 1px var(--ed-line, rgba(0, 0, 0, 0.15)), 0 12px 32px rgba(0, 0, 0, 0.25); color: var(--ed-text, #1d1d1f); font: 13px/1.3 var(--ed-font, system-ui, sans-serif); }
 @media (max-width: 560px) { .beeson-backdrop-gallery { grid-template-columns: repeat(2, 1fr); } }
 .beeson-backdrop-gallery h5 { grid-column: 1 / -1; margin: 0 0 2px; font: 600 13px/1.3 var(--ed-font, system-ui, sans-serif); }
 .beeson-backdrop-gallery button { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 4px; border: 0; border-radius: 8px; background: none; color: inherit; font: inherit; text-align: center; cursor: default; }
-.beeson-backdrop-gallery button:hover, .beeson-backdrop-gallery button:focus-visible { background: var(--ed-hover, rgba(0, 0, 0, 0.06)); outline: none; }
+.beeson-backdrop-gallery button:hover:enabled, .beeson-backdrop-gallery button:focus-visible { background: var(--ed-hover, rgba(0, 0, 0, 0.06)); outline: none; }
+.beeson-backdrop-gallery button:disabled { color: var(--ed-muted, #6e6e73); }
+.beeson-backdrop-gallery button:disabled .tile { opacity: 0.4; }
 .beeson-backdrop-gallery .tile { position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden; border-radius: 6px; background: var(--bg); box-shadow: 0 0 0 1px var(--ed-line, rgba(0, 0, 0, 0.15)); }
 .beeson-backdrop-gallery .tile canvas { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
-.beeson-backdrop-gallery .name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.beeson-backdrop-gallery .name { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow-wrap: anywhere; }
+.beeson-backdrop-gallery .reason { margin-top: -4px; font-size: 11px; }
 .beeson-backdrop-cuts { position: fixed; inset: 0; z-index: 51; pointer-events: none; }
 html.beeson-masking .beeson-backdrop-cuts { display: none; }
 `;
 
-export function openGallery(app: App, anchor?: Element | null): void {
+export async function openGallery(app: App, anchor?: Element | null): Promise<void> {
   gallery?.close();
+  const ask = ++asked;
+  await probeLibrary(app);
+  if (ask !== asked) return;
   const el = make('div', 'beeson-backdrop-gallery');
   el.setAttribute('role', 'dialog');
   el.setAttribute('aria-label', 'Backdrops');
@@ -219,11 +323,13 @@ export function openGallery(app: App, anchor?: Element | null): void {
     const b = make('button');
     b.type = 'button';
     b.dataset.tile = entry.key;
-    b.title = entry.name;
+    b.title = entry.missing ? `${fileOf(entry)} is not found next to the deck` : entry.name;
+    b.disabled = !!entry.missing;
     const tile = make('div', 'tile');
     for (const [k, v] of Object.entries(entry.attrs)) tile.setAttribute(k, v);
     if (entry.view) for (const [k, v] of Object.entries(windowAttrs(entry.view))) tile.setAttribute(k, v);
     b.append(tile, make('span', 'name', entry.name));
+    if (entry.missing) b.append(make('span', 'reason', 'File not found'));
     b.addEventListener('click', () => {
       close();
       void applyEntry(app, entry).catch((e) => app.fail(e));
@@ -243,7 +349,7 @@ export function openGallery(app: App, anchor?: Element | null): void {
   gallery = { el, tiles, close };
   window.addEventListener('pointerdown', outside, true);
   window.addEventListener('keydown', key, true);
-  el.querySelector('button')?.focus({ preventScroll: true });
+  el.querySelector<HTMLButtonElement>('button:enabled')?.focus({ preventScroll: true });
 }
 
 // the pans of a run of arrow keys on one backdrop, each within PAUSE ms of the one before, are one
@@ -454,7 +560,7 @@ export function commands(): Command[] {
         const el = targetOf(app, arg);
         const v = String(valueOf(arg) ?? '');
         const entry = library(app).find((e) => e.key === v);
-        if (!el || !entry) return;
+        if (!el || !entry || entry.missing) return;
         endPreview();
         const attrs = drawingEdit(entry.attrs);
         const now = app.doc.tagState(el).attrs;

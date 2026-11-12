@@ -4,7 +4,7 @@
 // runs a command of commands/backdrop.ts, whose writes the theme draws again
 
 import type { App } from '../app.ts';
-import { COLORMAPS, LABELS, drawingName, library, liveOf, selectedBackdrop } from '../commands/backdrop.ts';
+import { COLORMAPS, LABELS, drawingName, library, liveOf, probeLibrary, selectedBackdrop } from '../commands/backdrop.ts';
 import { openMenu, type MenuItem } from '../ui/menu.ts';
 import { make } from '../ui/dom.ts';
 import { button, checkbox, glyph, keepFocus, note, numberField, row, section, type Control, type Run } from './controls.ts';
@@ -48,8 +48,11 @@ export function backdropPane(app: App, run: Run): Control[] {
   const drawing = popup(app, 'Drawing', () => (el ? drawingName(el) : ''), () => library(app).map((e) => ({
     label: e.name,
     checked: !!el && Object.entries(e.attrs).every(([k, v]) => el.getAttribute(k) === v),
+    disabled: !!e.missing,
     run: () => run('backdrop.scene', { value: e.key, el }),
   })), on);
+  // the popup leaves out an entry whose file is not found, once the files are read
+  void probeLibrary(app).catch(() => {});
   const parts: Control[] = [
     section('Drawing', [
       drawing,
