@@ -12,7 +12,7 @@
 import type { App } from '../app.ts';
 import { SHAPE_KINDS, kindOf as shapeKind } from '../commands/shape.ts';
 import { OUTSIDE_DIALOGS } from '../commands.ts';
-import { CONTAINER, LINE, hasText, linesOf, movablesOf, objectOf } from '../canvas/hit.ts';
+import { CONTAINER, LINE, hasText, linesOf, movablesOf, objectOf, twinOf } from '../canvas/hit.ts';
 import { locked } from '../canvas/drag.ts';
 import { canStep, drawnUnder, layerLimit, selectIn, stepLayer } from '../commands/order.ts';
 import { groupsOf } from '../model/groups.ts';
@@ -209,7 +209,12 @@ export function install(app: App): void {
   const selectedObjects = (): Set<Element> => {
     const sel = app.selection;
     if (sel.kind === 'text') return new Set(objects().filter((o) => sel.items.some((h) => o.contains(h))));
-    return new Set(sel.elements().map((el) => objectOf(app, el)));
+    // a picture of a pair also stands for its twin, which the selection may hold after a flip of the mode
+    return new Set(sel.elements().flatMap((el) => {
+      const o = objectOf(app, el);
+      const twin = twinOf(app, o);
+      return twin ? [o, twin] : [o];
+    }));
   };
 
   const shown = () => on && app.nav.shown && getComputedStyle(app.nav.pane).display !== 'none';

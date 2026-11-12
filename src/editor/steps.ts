@@ -1014,7 +1014,10 @@ export class Steps {
     if (!app) return;
     const sel = app.selection;
     const items = sel.kind === 'elements' || sel.kind === 'text' ? sel.items : [];
-    const hit = (el: Element) => items.some((s) => s === el || s.contains(el) || el.contains(s));
+    // the row of a pair is bound to the twin shown, and the selection may hold the other one after
+    // a flip of the mode
+    const twins = this.model?.twins;
+    const hit = (el: Element) => [el, twins?.get(el)].some((e) => e && items.some((s) => s === e || s.contains(e) || e.contains(s)));
     const lines = this.model?.lines ?? [];
     // a line row is marked while it is the row last chosen and its box is selected, in place of the
     // row of the box
