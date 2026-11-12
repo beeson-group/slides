@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor rotate snap deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the deck of the tests of R20.5: a QR code alone, a group of a paragraph and a QR code turned by
+10 degrees, and a paragraph next to a QR code turned by 20 degrees -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>One code</h2>
+  <div class="qr" data-qr="one" style="width: 300px"></div>
+</section>
+
+<section>
+  <h2>A group</h2>
+  <p data-group="g1">Export the styles.</p>
+  <div class="qr" data-qr="two" style="width: 240px; rotate: 10deg" data-group="g1"></div>
+</section>
+
+<section>
+  <h2>Two objects</h2>
+  <p>Export the styles.</p>
+  <div class="qr" data-qr="three" style="width: 240px; rotate: 20deg"></div>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

@@ -193,8 +193,8 @@ for (const platform of PLATFORMS) {
 // Mouse of the sheet: the free modifier is ⌘ on a Mac and Alt elsewhere, and the copy modifier ⌥ on
 // a Mac and Ctrl elsewhere
 const MOUSE = {
-  mac: { 'Lock Axis or Angle, Toggle Aspect': '⇧-drag', 'Move or Resize Without Snapping': '⌘-drag', 'Drag a Copy, Resize About the Center': '⌥-drag' },
-  other: { 'Lock Axis or Angle, Toggle Aspect': 'Shift+drag', 'Move or Resize Without Snapping': 'Alt+drag', 'Drag a Copy, Resize About the Center': 'Ctrl+drag' },
+  mac: { 'Lock Axis or Angle, Toggle Aspect': '⇧-drag', 'Move, Resize, or Rotate Without Snapping': '⌘-drag', 'Drag a Copy, Resize About the Center': '⌥-drag' },
+  other: { 'Lock Axis or Angle, Toggle Aspect': 'Shift+drag', 'Move, Resize, or Rotate Without Snapping': 'Alt+drag', 'Drag a Copy, Resize About the Center': 'Ctrl+drag' },
 };
 
 for (const platform of PLATFORMS) {

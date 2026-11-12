@@ -11,7 +11,7 @@ import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
-import { LAYOUT_GUIDES, snapMove, snapPoint } from '../src/editor/canvas/snap.ts';
+import { LAYOUT_GUIDES, snapAngle, snapMove, snapPoint } from '../src/editor/canvas/snap.ts';
 import { rulerSteps } from '../src/editor/canvas/rulers.ts';
 import { merged } from '../src/editor/canvas/guides.ts';
 import { spacingOf } from '../src/editor/canvas/grid.ts';
@@ -106,6 +106,19 @@ test('the steps of a ruler, the merge of guides, the spacing of the grid, and th
   // a point snaps to the nearest line on each axis
   const p = snapPoint({ x: 515, y: 997 }, { boxes: [], slide: SLIDE, guides: { x: [517], y: [] }, grid: 40 }, 8);
   assert.deepEqual([p.dx, p.dy], [2, 3]);
+});
+
+// the angle of a rotate drag from its raw absolute angle: held at a multiple of 45 within 4
+// degrees, in steps of 15 with Shift, and to the whole degree with the free modifier
+test('the angle of a rotate drag is held at the multiples of 45 degrees', () => {
+  const free = { steps: false, free: false };
+  const cases = [
+    [41, free, 45, true], [49, free, 45, true], [40.4, free, 40, false], [49.6, free, 50, false],
+    [316, free, 315, true], [357, free, 0, true], [-3, free, 0, true], [184, free, 180, true], [-50, free, 310, false], [721, free, 0, true],
+    [37, { steps: true, free: false }, 30, false], [43, { steps: true, free: false }, 45, true],
+    [43, { steps: false, free: true }, 43, false], [45, { steps: false, free: true }, 45, false], [43, { steps: true, free: true }, 45, true],
+  ];
+  for (const [raw, o, deg, held] of cases) assert.deepEqual(snapAngle(raw, o), { deg, held }, `${raw} with ${JSON.stringify(o)}`);
 });
 
 for (const platform of PLATFORMS) {
