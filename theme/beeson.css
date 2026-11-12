@@ -190,10 +190,10 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal ul, .reveal ol { display: block; margin: 24px 0 0; padding: 0; list-style: none; }
 .reveal li { position: relative; margin: 0 0 14px; padding-left: 54px; }
 .reveal ul > li::before { content: ""; position: absolute; left: 0; top: 0.72em; width: 28px; height: 2px; background: var(--accent); }
-/* the items of a ul.dots or a ul.arrows take a dot or an arrowhead in place of the dash, centered
+/* the items of a ul.dots or a ul.arrows take a ring or a chevron in place of the dash, centered
    on its middle. a nested list without the class keeps the dash */
-.reveal ul.dots > li::before { top: calc(0.72em - 5px); left: 8px; width: 12px; height: 12px; border-radius: 50%; }
-.reveal ul.arrows > li::before { top: calc(0.72em - 7px); left: 6px; width: 16px; height: 16px; clip-path: polygon(0 0, 100% 50%, 0 100%); }
+.reveal ul.dots > li::before { top: calc(0.72em - 6px); left: 7px; width: 14px; height: 14px; box-sizing: border-box; border: 2.5px solid var(--accent); border-radius: 50%; background: none; }
+.reveal ul.arrows > li::before { top: calc(0.72em - 8px); left: 9px; width: 12px; height: 18px; clip-path: polygon(0 0, 30% 0, 100% 50%, 30% 100%, 0 100%, 70% 50%); }
 /* the number is the counter list-item, which a browser starts from the attribute start of an ol */
 .reveal ol > li::before { content: counter(list-item); position: absolute; left: 0; top: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
 .reveal li ul, .reveal li ol { margin-top: 10px; font-size: 36px; }
