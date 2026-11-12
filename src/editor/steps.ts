@@ -638,11 +638,12 @@ function runsOf(m: Model): Run[] {
 // data-autoplay in a fragment, for a preview of the Steps pane or of the toolbar. update starts each
 // video that shown gives from its start, as src/video.ts starts it, and pauses and rewinds it to its
 // poster when its step is undone. stop rewinds every video started. the tycho viewers of the style
-// play are started and held by stepViewers of the theme, and played again at the stop, as the
-// editor shows them
+// play are started and held by stepViewers of the theme. they are held from the start, so that each
+// preview starts them anew, and played again at the stop, as the editor shows a kiosk viewer
 export function stepVideos(slide: Element): { update(shown: (v: Element) => boolean): void; stop(): void } {
   const videos = [...slide.querySelectorAll('video')].filter((v) => v.closest('section') === slide && !!v.closest('.fragment') && (v.hasAttribute('data-autoplay') || !!v.closest('.fragment.play')));
   const started = new Set<HTMLVideoElement>();
+  stepViewers(slide, () => false);
   const rewind = (v: HTMLVideoElement) => {
     started.delete(v);
     v.pause();

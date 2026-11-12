@@ -45,18 +45,6 @@ function flipRow(app: App, run: Run): Control {
   return { el: r.el, sync };
 }
 
-// Start on a click of a tycho viewer, as in the Video pane, since a scene is shown the Arrange pane
-// alone. the section is hidden at each sync for any other selection
-function playback(app: App, run: Run): Control {
-  const s = section('Playback', [checkbox(app, run, 'figure.startOnClick', 'Start on a click')]);
-  const sync = () => {
-    s.el.style.display = viewerOf(app) ? '' : 'none';
-    s.sync();
-  };
-  sync();
-  return { el: s.el, sync };
-}
-
 export function arrangePane(app: App, run: Run): Control[] {
   // the fields act on the elements selected when the pane was built, i.e. on the figure of a
   // picture selected inside it, apart from the angle, which turns the picture alone
@@ -76,7 +64,8 @@ export function arrangePane(app: App, run: Run): Control[] {
   const field = (label: string, value: () => number | null, commit: (v: number) => unknown, enabled: () => boolean, min?: number) =>
     numberField(app, { label, value, commit, enabled, min });
   return [
-    playback(app, run),
+    // Start on a click of a tycho viewer, as in the Video pane, since the Arrange pane is the one pane of a scene
+    ...(viewerOf(app) ? [section('Playback', [checkbox(app, run, 'figure.startOnClick', 'Start on a click')])] : []),
     section('Align', [
       row([
         segmented(app, run, [

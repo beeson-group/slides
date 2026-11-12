@@ -134,7 +134,7 @@ function invertible(app: App, el: Element | null): Element | null {
 
 const imageMenu = (order: number): Command['menu'] => ({ bar: 'Format', group: 'image', order, submenu: 'Image' });
 const has = (name: string) => (el: Element) => el.hasAttribute(name);
-// a video of the fragment style play, which the theme starts at its step
+// a video or a tycho viewer that is, or is in, a step of the style play, which the theme starts at its step
 const onClick = (el: Element) => !!el.closest('.fragment.play');
 const flag = (name: string) => (on: boolean): TagEdit => ({ attrs: { [name]: on ? '' : null } });
 const visual = (app: App) => imageOf(app) ?? videoOf(app) ?? hiddenOf(app);
