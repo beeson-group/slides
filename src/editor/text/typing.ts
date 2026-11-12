@@ -163,8 +163,9 @@ export function insertPlain(host: Element, text: string): void {
 
 // a text of several lines pasted into a list item of a slide is an item for each line, as Return
 // makes a new item, in Keynote and PowerPoint. a blank line is dropped, since Return on an empty
-// item ends the list, and the first line typed replaces a selected text in the entry of the paste,
-// which is one entry of the history
+// item ends the list, apart from a blank first line after a text of the item, which starts a new
+// item there. the first line typed replaces a selected text in the entry of the paste, which is one
+// entry of the history, and blank lines alone take the selected text off
 export function pastesItems(app: App, host: Element, text: string): boolean {
   return host.matches('li') && /\r?\n/.test(text.replace(/\r?\n$/, '')) && app.commands.enabled('text.newParagraph');
 }
@@ -175,10 +176,31 @@ export async function pasteItems(app: App, text: string): Promise<void> {
     return app.hostOf(n instanceof Element ? n : n?.parentElement ?? null);
   };
   app.history.break();
+  // the text of the item before the caret, or before the selected text
+  const before = () => {
+    const r = window.getSelection()?.rangeCount ? window.getSelection()!.getRangeAt(0) : null;
+    const start = r?.startContainer;
+    const li = (start instanceof Element ? start : start?.parentElement)?.closest('li');
+    if (!r || !li) return false;
+    const head = document.createRange();
+    head.setStart(li, 0);
+    head.setEnd(r.startContainer, r.startOffset);
+    return !!head.toString().trim() || !!head.cloneContents().querySelector('img, mjx-container');
+  };
   await app.history.transact('Paste', async () => {
-    const lines = text.split(/\r?\n/).filter((line) => line.trim());
+    const all = text.split(/\r?\n/);
+    const lines = all.filter((line) => line.trim());
+    const host = caretHost();
+    if (!lines.length && host && !window.getSelection()?.isCollapsed) {
+      app.history.beforeTyping(host, 'Paste');
+      // a range taken off directly, since execCommand leaves a br in an emptied item
+      window.getSelection()!.getRangeAt(0).deleteContents();
+      app.history.afterTyping(host);
+      app.history.break();
+    }
+    const lead = !!lines.length && !all[0].trim() && before();
     for (const [i, line] of lines.entries()) {
-      if (i) await app.commands.run('text.newParagraph');
+      if (i || lead) await app.commands.run('text.newParagraph');
       const host = caretHost();
       if (!host || !line) continue;
       app.history.beforeTyping(host, 'Paste');

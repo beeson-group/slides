@@ -7,6 +7,16 @@
 
 // els are the elements that the entry changes, and selects is the step at which a part of a
 // transaction puts a selection back
+// the caret put at the end of the last text of host, before the white space of the layout
+function caretAtEnd(host: Element): void {
+  const w = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+  let last: Text | null = null;
+  for (let n = w.nextNode(); n; n = w.nextNode()) if ((n as Text).data.trim()) last = n as Text;
+  (host as HTMLElement).focus({ preventScroll: true });
+  if (last) getSelection()?.collapse(last, last.data.trimEnd().length);
+  else getSelection()?.collapse(host, 0);
+}
+
 export type Entry = { label: string; undo(): Promise<void> | void; redo(): Promise<void> | void; els?: readonly Element[]; selects?: 'undo' | 'redo' };
 
 // the typing into a block is coalesced while the keystrokes are closer than this, in ms
@@ -207,10 +217,19 @@ export class History {
 
   private start(host: Element, before: string, at: number, label = 'typing'): void {
     const state = { before, after: before };
+    // a caret in another text of the slides goes into host at the step, as in Keynote, where
+    // otherwise host is selected as an element
+    const step = async (content: string, way: 'undo' | 'redo') => {
+      const a = document.activeElement;
+      const moves = !!a && a !== host && a.matches('[contenteditable="true"]') && !!a.closest('.reveal .slides');
+      await this.put(host, content);
+      entry.selects = moves && host.isConnected ? way : undefined;
+      if (entry.selects) caretAtEnd(host);
+    };
     const entry: Entry = {
       label,
-      undo: () => this.put(host, state.before),
-      redo: () => this.put(host, state.after),
+      undo: () => step(state.before, 'undo'),
+      redo: () => step(state.after, 'redo'),
       els: [host],
     };
     this.typing = { host, state, entry, at };

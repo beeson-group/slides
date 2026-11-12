@@ -182,6 +182,43 @@ function stylePopup(app: App): Control {
 }
 
 // a swatch of each tone, in the color that the tone has on the slide in its mode
+// Start at of a numbered list. the shown number typed into the field is entered with Return, Tab,
+// or a click outside it, which keeps the start of a list cut off by the editor, and a typed number
+// that is not whole is refused
+function startField(app: App, run: Run): Control {
+  const field = numberField(app, {
+    label: 'Start at',
+    unit: '',
+    min: 1,
+    refuse: true,
+    same: true,
+    value: () => startList(app)?.start ?? null,
+    enabled: () => app.commands.enabled('text.list.start'),
+    why: () => 'Start at is set only on a numbered list',
+    command: 'text.list.start',
+    commit: (n) => run('text.list.start', { start: n }),
+  });
+  const input = field.input;
+  let typed = false;
+  input.addEventListener('focus', () => (typed = false));
+  input.addEventListener('input', () => (typed = true));
+  // read in the capture phase, before the field enters or refuses the value
+  const read = (leave: boolean) => {
+    const v = Number(input.value.trim().replace(',', '.'));
+    if (input.disabled || !input.value.trim()) return;
+    if (!Number.isInteger(v)) input.value = '';
+    else if (leave && typed && v === startList(app)?.start) void run('text.list.start', { start: v });
+  };
+  input.addEventListener('blur', () => read(true), true);
+  // the field enters a whole number at Return itself, after which a blur does not enter it again
+  input.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter') return;
+    read(false);
+    typed = false;
+  }, true);
+  return field;
+}
+
 function swatches(app: App, run: Run): Control {
   const el = make('div', 'ed-swatches');
   el.setAttribute('role', 'group');
@@ -250,18 +287,7 @@ export function textPane(app: App, run: Run): Control[] {
         { command: 'text.outdent', icon: 'outdent', title: 'Decrease Indent Level' },
         { command: 'text.indent', icon: 'indent', title: 'Increase Indent Level' },
       ], 'Indent level')]),
-      row([numberField(app, {
-        label: 'Start at',
-        unit: '',
-        min: 1,
-        refuse: true,
-        same: true,
-        value: () => startList(app)?.start ?? null,
-        enabled: () => app.commands.enabled('text.list.start'),
-        why: () => 'Start at is set only on a numbered list',
-        command: 'text.list.start',
-        commit: (n) => run('text.list.start', { start: n }),
-      })]),
+      row([startField(app, run)]),
     ]),
     section('Link', [
       row([

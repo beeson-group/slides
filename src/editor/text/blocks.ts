@@ -354,11 +354,11 @@ export function canSplit(app: App): boolean {
   return !!at && (at.nested || structural(app, at.item));
 }
 
-// the function that puts the caret at the start of el, unless the focus is in a text outside the
-// slides at its call, e.g. a line of the outline, which keeps it
-const caretAt = (app: App, el: Element) => () => {
+// the function that puts the caret at the visible offset at of el, unless the focus is in a text
+// outside the slides at its call, e.g. a line of the outline, which keeps it
+const caretAt = (app: App, el: Element, at = 0) => () => {
   const a = document.activeElement;
-  if (!a?.matches('input, textarea, [contenteditable="true"]') || app.slides().contains(a)) selectIn(el, 0);
+  if (!a?.matches('input, textarea, [contenteditable="true"]') || app.slides().contains(a)) selectIn(el, at);
 };
 
 // Return: the item at the caret is split in two, and the caret is put at the start of the second
@@ -417,9 +417,14 @@ export async function split(app: App): Promise<void> {
   }
   const tag = item.localName === 'h3' ? 'p' : item.localName;
   const open = item.localName === 'h3' ? '<p>' : startTag(app, item, tag, { attrs: { id: null } });
+  // an undo puts the caret back into the item, and a redo at the start of the second part
+  const off = offsetIn(item, ...caret);
+  let second: Element | null = null;
+  const kept = app.history.keep(() => (second ? caretAt(app, second) : caretAt(app, item, off)));
   await app.doc.setContent(item, head, 'new paragraph');
-  const [node] = await app.doc.insert(`${open}${tail}</${tag}>`, item.parentElement!, nextOf(app, item), 'new paragraph');
-  selectIn(node, 0);
+  [second] = await app.doc.insert(`${open}${tail}</${tag}>`, item.parentElement!, nextOf(app, item), 'new paragraph');
+  selectIn(second, 0);
+  kept();
 }
 
 // the item into which the text of a joined block goes: the last item of the nested lists at the
@@ -468,7 +473,10 @@ async function join(app: App, before: Element, after: Element): Promise<void> {
   selectIn(before, at);
 }
 
-type Join = { kind: 'join'; before: Element; after: Element } | { kind: 'outdent' } | { kind: 'unlist'; item: Element } | { kind: 'drop'; item: Element; list: Element } | null;
+type Join = { kind: 'join'; before: Element; after: Element } | { kind: 'outdent' } | { kind: 'unlist'; item: Element } | { kind: 'drop'; item: Element; to: Element; end: boolean } | null;
+
+const empty = (el: Element) => !el.textContent?.trim() && !el.querySelector('mjx-container, img');
+const liOf = (list: Element) => [...list.children].filter((c) => c.localName === 'li');
 
 function joinBack(app: App): Join {
   const at = itemAt(app);
@@ -478,9 +486,11 @@ function joinBack(app: App): Join {
   if (!structural(app, at.item)) return null;
   const before = prevBlock(app, at.item);
   if (before) return { kind: 'join', before, after: at.item };
-  // an empty paragraph after a list is taken off, with the caret at the end of the list, as in Keynote
+  // a paragraph after a list is taken off, with its text joined onto the last item, as in Keynote.
+  // a locked list takes only the caret of an empty paragraph
   const list = at.item.localName === 'p' ? prevOf(app, at.item) : null;
-  if (fileList(app, list) && list.querySelector(':scope > li') && !at.item.textContent?.trim() && !at.item.querySelector('mjx-container, img')) return { kind: 'drop', item: at.item, list };
+  const last = fileList(app, list) ? liOf(list).at(-1) : null;
+  if (last && (empty(at.item) || !list!.closest('[data-locked]'))) return { kind: 'drop', item: at.item, to: last, end: true };
   // the first item of a list has its dash taken off, as in Keynote and PowerPoint
   return at.item.localName === 'li' && !at.item.previousElementSibling ? { kind: 'unlist', item: at.item } : null;
 }
@@ -512,7 +522,25 @@ function joinAhead(app: App): Join {
   if (!at || !at.range.collapsed || at.nested || !structural(app, at.item)) return null;
   if (!blank(rangeOf(at.item, [at.range.startContainer, at.range.startOffset], null))) return null;
   const after = nextBlock(app, at.item);
-  return after ? { kind: 'join', before: at.item, after } : null;
+  if (after) return { kind: 'join', before: at.item, after };
+  // an empty paragraph before a list is taken off, with the caret at the start of the list
+  const list = at.item.localName === 'p' && empty(at.item) ? nextOf(app, at.item) : null;
+  const first = fileList(app, list) ? liOf(list)[0] : null;
+  return first ? { kind: 'drop', item: at.item, to: first, end: false } : null;
+}
+
+// item, a paragraph next to a list, taken off with its text joined onto the item to, after which
+// the lists around it are joined. the caret goes to the end of the text of to, or with end false to
+// its start. an undo puts the caret at the start of item
+async function drop(app: App, item: Element, to: Element, end: boolean): Promise<void> {
+  const at = end ? endOf(to) : 0;
+  let done = false;
+  const kept = app.history.keep(() => (done ? caretAt(app, to, at) : caretAt(app, item)));
+  if (!empty(item)) await app.doc.setContent(to, joined(to, rangeTex(item, rangeOf(item, null, null))), 'join');
+  await removeJoining(app, [item], 'join');
+  selectIn(to, at);
+  done = true;
+  kept();
 }
 
 export const canJoinBack = (app: App): boolean => joinBack(app) !== null;
@@ -526,22 +554,15 @@ export async function joinBackward(app: App): Promise<void> {
   if (j?.kind === 'join') await join(app, j.before, j.after);
   else if (j?.kind === 'outdent') await outdent(app);
   else if (j?.kind === 'unlist') await unlist(app, j.item);
-  else if (j?.kind === 'drop') {
-    // an undo puts the caret into the empty paragraph, and a redo at the end of the list
-    const last = [...j.list.children].reverse().find((c) => c.localName === 'li')!;
-    let done = false;
-    const kept = app.history.keep(() => (done ? () => selectIn(last, endOf(last)) : caretAt(app, j.item)));
-    await removeJoining(app, [j.item], 'join');
-    selectIn(last, endOf(last));
-    done = true;
-    kept();
-  }
+  else if (j?.kind === 'drop') await drop(app, j.item, j.to, j.end);
 }
 
-// Delete at the end of a block joins the block after it to it
+// Delete at the end of a block joins the block after it to it, and in an empty paragraph before a
+// list takes the paragraph off
 export async function joinForward(app: App): Promise<void> {
   const j = joinAhead(app);
   if (j?.kind === 'join') await join(app, j.before, j.after);
+  else if (j?.kind === 'drop') await drop(app, j.item, j.to, j.end);
 }
 
 export function inList(app: App): boolean {
