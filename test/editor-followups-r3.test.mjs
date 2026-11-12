@@ -523,18 +523,24 @@ for (const platform of PLATFORMS) {
       await press(page, 'Escape');
       await sleep(100);
       await clean();
-      // the first input writes the box, and one undo takes it off with its text
+      // the first input writes the box as an entry over its insert, as in Keynote: one undo leaves
+      // the empty box with the caret, and a second takes it off
       await exec(page, id);
       await frames(page);
       await type(page, 'x');
       await sleep(300);
       assert.ok(unmoved(await render(page)).includes(html), 'the box was not written');
-      assert.equal(await undoLabel(page, 'edit.undo'), `Undo Insert ${label}`);
+      assert.equal(await undoLabel(page, 'edit.undo'), 'Undo Typing');
       await undo(page);
       await sleep(100);
       assert.equal(await render(page), page.source);
+      assert.equal(await page.evaluate(`${PENDING} === document.activeElement`), true, 'the undo of the first input does not leave the empty box with the caret');
+      await undo(page);
+      await sleep(100);
       assert.equal(await page.evaluate(`!!${PENDING}`), false);
-      assert.equal((await status(page)).undo, false, 'the insert is more than one entry of the history');
+      assert.equal((await status(page)).undo, false, 'the insert is more than two entries of the history');
+      await redo(page);
+      await sleep(100);
       await redo(page);
       await sleep(100);
       assert.ok(unmoved(await render(page)).includes(html));

@@ -234,18 +234,21 @@ for (const platform of PLATFORMS) {
       await sleep(150);
       await byteExact(page);
     }
-    // the Edit menu reads Undo Insert Text Box after a text box is typed, and Insert still lists
-    // Text Box
+    // the Edit menu reads Undo Typing after a text box is typed, as Keynote does, with Undo Insert
+    // Text Box under it, and Insert still lists Text Box
     await exec(page, 'insert.text');
     await frames(page);
     await typeKeys(page, 'x');
     await sleep(300);
     await openBar(page, 'Edit');
-    assert.equal((await lastMenu(page))[0][0], 'Undo Insert Text Box');
+    assert.equal((await lastMenu(page))[0][0], 'Undo Typing');
     await press(page, 'Escape');
     await openBar(page, 'Insert');
     assert.ok((await lastMenu(page)).some((i) => i[0] === 'Text Box'), 'Insert does not list Text Box');
     await press(page, 'Escape');
+    await undo(page);
+    await sleep(100);
+    assert.equal(await undoLabel(page), 'Undo Insert Text Box');
     await undo(page);
     await sleep(100);
     await byteExact(page);

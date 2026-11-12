@@ -392,9 +392,10 @@ for (const platform of PLATFORMS) {
     await roundTrip(page);
   });
 
-  // a box written with a key, then left with Esc, which selects it
+  // a box written with a key, then left with Esc, which selects it. its first input is an entry
+  // over the insert of the box, as in Keynote, and a redo of it puts the caret back into the text
   for (const [id, what] of [['insert.text', 'Insert Text Box'], ['insert.code', 'Insert Code Box']]) {
-    test(`${platform}: a redo of ${what} selects the box`, async (t) => {
+    test(`${platform}: a redo of the first input of ${what} puts the caret into the box`, async (t) => {
       const page = await load(t, platform, { n: 5 });
       await exec(page, id);
       await frames(page);
@@ -402,9 +403,15 @@ for (const platform of PLATFORMS) {
       await sleep(200);
       await press(page, 'Escape');
       await frames(page);
+      assert.equal((await state(page, 'edit.undo')).label, 'Undo Typing');
+      await page.evaluate('window.BeesonEditor.undo()');
+      await frames(page);
       assert.equal((await state(page, 'edit.undo')).label, `Undo ${what}`);
-      await redoSelects(page, what);
-      await roundTrip(page);
+      await page.evaluate('window.BeesonEditor.redo()');
+      await frames(page);
+      const caret = `(() => { const n = getSelection().anchorNode; const e = n?.nodeType === 1 ? n : n?.parentElement; return e?.closest('p, pre')?.textContent ?? null; })()`;
+      assert.equal(await page.evaluate(caret), 'Hi', `the redo of the first input of ${what} does not put the caret into the box`);
+      await roundTrip(page, 2);
     });
   }
 }

@@ -270,7 +270,8 @@ test('a text box is put into the text column of each layout', async (t) => {
     parents[where[0]] = where[1];
   }
   assert.deepEqual(parents, { title: 'block', section: 'sec', content: 'section', narrow: 'section', wide: 'section', figure: 'section', split: 'panel', closing: 'block' });
-  await roundTrip(page, count);
+  // the insert of each box and its first input
+  await roundTrip(page, 2 * count);
 });
 
 test('a formula is inserted with Mod+Alt+E, its TeX is applied, and a formula left empty is taken off', async (t) => {
@@ -335,7 +336,8 @@ test('a code box and a footnote are written at the first input, and a QR code is
   assert.match(slideOf(await render(page), h2), /<pre style="translate: -?\d+px -?\d+px"><code class="language-python">x = 1<\/code><\/pre>\n  <div class="qr" data-qr="https:\/\/example.com" style="translate: -?\d+px -?\d+px"><\/div>/, 'the QR code is not after the last block');
   assert.equal(await page.evaluate(`!!document.querySelector('.reveal section.present .qr svg')`), true, 'the QR code is not drawn');
   assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.duplicate').enabled`), true);
-  await roundTrip(page, 3);
+  // the insert and the first input of the code box and of the footnote, and the QR code
+  await roundTrip(page, 5);
 });
 
 test('a QR code is put into an empty zone', async (t) => {
