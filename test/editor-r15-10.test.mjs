@@ -91,7 +91,7 @@ async function checkEdit(page, before, name) {
 for (const platform of PLATFORMS) {
   // probe 13 and requirement 3 of the juror of round 6. slide 5 does not have a free place for a
   // table of 3 by 3, which was put at 48, 808, left of the margin and over the last list item
-  test(`a new table on slide 5 is put inside the margins at the middle of the slide, off the figure, and a second table off the first (${platform})`, async (t) => {
+  test(`a new table on slide 5 is put inside the margins where it covers the least words, off the figure, and a second table off the first (${platform})`, async (t) => {
     const page = await load(t, platform, FIGURES);
     const before = await render(page);
     const [figure] = await boxes(page, ':scope > figure.zone');
@@ -101,10 +101,9 @@ for (const platform of PLATFORMS) {
     assert.ok(table, 'no table was inserted');
     assert.ok(inside(table), `the table at ${js(round(table))} is not inside the margins of the slide`);
     assert.ok(!meets(table, figure), `the table at ${js(round(table))} lies over the figure at ${js(round(figure))}`);
-    assert.ok(Math.abs((table.top + table.bottom) / 2 - 540) <= 1, `the table at ${js(round(table))} is not at the middle of the slide`);
-    // the place nearest to the center of the slide that keeps the room of the bars of the table to
-    // the figure, 48 slide px at every size of the window
-    assert.deepEqual(round(table), [654, 433, 498, 213]);
+    // the place that keeps the room of the bars of the table to the figure, 48 slide px at every
+    // size of the window, and covers the least words of the list (O1 of the final check of round 7)
+    assert.deepEqual(round(table), [702, 843, 498, 213]);
     await checkEdit(page, before, `r15-10-table-${platform}.html`);
     await insertTable(page);
     const tables = await boxes(page, ':scope > table');
