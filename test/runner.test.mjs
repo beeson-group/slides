@@ -39,6 +39,14 @@ test('a test file with a failed cleanup and a server left open is ended', { time
   assert.ok(ended, `node ${options.join(' ')} is still running after 20 s`);
 });
 
+// on Windows, a test file was not ended after its last test, without an error, and the run waited
+// for it until the limit of 45 minutes of its job. With a limit, the file fails by name. The limit
+// is on each test and hook in node 26, and on a whole test file in node 22, hence it is a long one
+test('a test file that does not end fails after 15 to 30 minutes', () => {
+  const limit = Number(/^--test-timeout=(\d+)$/.exec(options.find((option) => option.startsWith('--test-timeout')) ?? '')?.[1]);
+  assert.ok(limit >= 900000 && limit <= 1800000, `the limit of ${command} is ${limit} ms`);
+});
+
 test('the test step of the check workflow is the test command with the shard of its job', () => {
   const workflow = readFileSync('.github/workflows/check.yml', 'utf8');
   const step = /^ +- run: (node --test .*)$/m.exec(workflow)?.[1];
