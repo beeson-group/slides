@@ -577,7 +577,8 @@ export function install(app: App): void {
   };
 
   const onDown = (ev: PointerEvent) => {
-    if (ev.button !== 0 || press) return;
+    // on a Mac, a press with Ctrl is a secondary click, which opens the context menu
+    if (ev.button !== 0 || (ev.ctrlKey && mac()) || press) return;
     const target = ev.target instanceof Element ? ev.target : null;
     if (!target) return;
     const sel = app.selection;
