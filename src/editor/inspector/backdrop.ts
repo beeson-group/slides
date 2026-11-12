@@ -9,8 +9,9 @@ import { openMenu, type MenuItem } from '../ui/menu.ts';
 import { make } from '../ui/dom.ts';
 import { button, checkbox, glyph, keepFocus, note, numberField, row, section, type Control, type Run } from './controls.ts';
 
-// a popup button whose menu runs the items of list, as the Paragraph Style popup of inspector/text.ts
-function popup(app: App, label: string, current: () => string, list: () => MenuItem[], enabled: () => boolean): Control {
+// a popup button whose menu runs the items of list, as the Paragraph Style popup of inspector/text.ts.
+// the menu is opened once ready, if given, has settled
+function popup(app: App, label: string, current: () => string, list: () => MenuItem[], enabled: () => boolean, ready?: () => Promise<void>): Control {
   const b = make('button', 'ed-popup');
   b.type = 'button';
   b.setAttribute('aria-haspopup', 'menu');
@@ -18,7 +19,15 @@ function popup(app: App, label: string, current: () => string, list: () => MenuI
   b.title = label;
   const text = make('span');
   b.append(text, glyph('chevron-down', 16));
-  const show = (keyboard: boolean) => openMenu(app, list(), { anchor: b.getBoundingClientRect(), placement: 'below', owner: b, keyboard, label, className: 'select', onClose: () => sync() });
+  const open = (keyboard: boolean) => openMenu(app, list(), { anchor: b.getBoundingClientRect(), placement: 'below', owner: b, keyboard, label, className: 'select', onClose: () => sync() });
+  let asked = 0;
+  const show = (keyboard: boolean) => {
+    if (!ready) return void open(keyboard);
+    const ask = ++asked;
+    void ready().catch(() => {}).then(() => {
+      if (ask === asked && b.isConnected) open(keyboard);
+    });
+  };
   keepFocus(b);
   b.addEventListener('pointerdown', () => show(false));
   b.addEventListener('click', (ev) => {
@@ -50,9 +59,7 @@ export function backdropPane(app: App, run: Run): Control[] {
     checked: !!el && Object.entries(e.attrs).every(([k, v]) => el.getAttribute(k) === v),
     disabled: !!e.missing,
     run: () => run('backdrop.scene', { value: e.key, el }),
-  })), on);
-  // the popup leaves out an entry whose file is not found, once the files are read
-  void probeLibrary(app).catch(() => {});
+  })), on, () => probeLibrary(app));
   const parts: Control[] = [
     section('Drawing', [
       drawing,

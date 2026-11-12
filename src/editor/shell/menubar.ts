@@ -44,6 +44,9 @@ const CSS = `
 .beeson-edit-titlebar button[aria-pressed="true"] .track { background: var(--ed-select); }
 .beeson-edit-titlebar button[aria-pressed="true"] .track::after { transform: translateX(11px); }
 @media (max-width: 899px) { .beeson-edit-titlebar .doc .state { display: none; } }
+.beeson-edit-titlebar.narrow { overflow: hidden; }
+.beeson-edit-titlebar.narrow .beeson-edit-menubar [role=menuitem] { padding: 0 4px; }
+.beeson-edit-titlebar.narrow .right .name { display: none; }
 `;
 
 export function install(app: App): void {
@@ -62,11 +65,12 @@ export function install(app: App): void {
   which.type = 'button';
   which.title = 'List the texts that cannot be edited';
   which.hidden = true;
-  which.append(icon('warning', 14), document.createTextNode('Which?'));
+  which.append(icon('warning', 14), make('span', 'name', 'Which?'));
   const autosave = make('button', 'autosave');
   autosave.type = 'button';
   autosave.title = 'Save the edits into the file after each change';
-  autosave.append(document.createTextNode('Autosave'), make('span', 'track'));
+  autosave.setAttribute('aria-label', 'Autosave');
+  autosave.append(make('span', 'name', 'Autosave'), make('span', 'track'));
   if (!canWrite()) {
     autosave.disabled = true;
     autosave.title = 'Autosave needs a browser that writes the file in place, i.e. Chrome or Edge';
@@ -163,13 +167,17 @@ export function install(app: App): void {
 
   // the title of the file is centered between the menus and the buttons at the right while there is
   // room for it. with less room, as in PowerPoint and Keynote, the state is left out first, then
-  // the name is cut with an ellipsis, and below a few letters the title is hidden
+  // the name is cut with an ellipsis, and below a few letters the title is hidden. in a window
+  // narrower than the menus and the buttons, e.g. with a wide interface font, the buttons then
+  // lose their names and the menus are set closer, and the row clips what is left over
   function fit(): void {
     doc.classList.remove('tight', 'gone');
+    row.classList.remove('narrow');
     const cut = () => doc.scrollWidth > doc.clientWidth || fileEl.scrollWidth > fileEl.clientWidth;
     if (!cut()) return;
     doc.classList.add('tight');
     if (cut() && doc.clientWidth < MIN_TITLE) doc.classList.add('gone');
+    if (row.scrollWidth > row.clientWidth) row.classList.add('narrow');
   }
 
   const fail = (e: unknown) => app.fail(e);
