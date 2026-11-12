@@ -696,8 +696,9 @@ export function install(app: App): void {
       const editing = host.contains(document.activeElement);
       if (ev.shiftKey || commandHeld(ev) || (grouped && sel.only() !== el && !editing)) pressElement(ev, el, target);
       // a press on the words of a selected shape that are not edited moves the shape, as in
-      // PowerPoint, and a click without a move puts the caret there
-      else if (el.matches('.shape') && sel.only() === el && !editing) {
+      // PowerPoint, and a click without a move puts the caret there. a press on a locked shape is
+      // left to the browser, which selects its words
+      else if (el.matches('.shape') && sel.only() === el && !editing && !locked(el)) {
         const { clientX: x, clientY: y } = ev;
         pressElement(ev, el, target, () => placeCaretAt(host, x, y));
       }

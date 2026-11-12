@@ -36,11 +36,14 @@ export function shapePath(kind: string, w: number, h: number, s: number): string
       // the center line of the extensible } of TeX, with the tips turned nearer to level, in units
       // of the width W from the tips to the cusp, with the stem at 0.508 W. the hook is HOOK[3] W
       // high and the curve into the cusp CUSP[3] W, and both are squeezed by k in a shorter half
-      const W = r - l, xs = l + 0.508 * W, k = Math.min(1, (cy - t) / ((HOOK[3] + CUSP[3]) * W)), y1 = t + k * HOOK[3] * W, y2 = cy - k * CUSP[3] * W;
-      const half = [[l + HOOK[1] * W * HOOK[0][0], t + k * HOOK[1] * W * HOOK[0][1]], [xs, y1 - k * HOOK[2] * W], [xs, y1], [xs, y2], [xs, y2 + k * CUSP[2] * W], [r - CUSP[1] * W * CUSP[0][0], cy - k * CUSP[1] * W * CUSP[0][1]]];
+      const W = r - l, xs = l + 0.508 * W, k = Math.min(1, (cy - t) / ((HOOK[3] + CUSP[3]) * W)) || 0, y1 = t + k * HOOK[3] * W, y2 = cy - k * CUSP[3] * W;
+      // the miter of the cusp reaches i / sin a past its vertex, where a is the angle of the curves
+      // to the level, and a miter longer than the default limit 4 of svg is drawn as a bevel
+      const miter = Math.hypot(1, CUSP[0][0] / (k * CUSP[0][1])), xc = miter <= 4 ? w - i * miter : r;
+      const half = [[l + HOOK[1] * W * HOOK[0][0], t + k * HOOK[1] * W * HOOK[0][1]], [xs, y1 - k * HOOK[2] * W], [xs, y1], [xs, y2], [xs, y2 + k * CUSP[2] * W], [xc - CUSP[1] * W * CUSP[0][0], cy - k * CUSP[1] * W * CUSP[0][1]]];
       const low = half.map(([x, y]) => [x, 2 * cy - y]);
       const stem = (p: number[]) => (k < 1 ? [] : ['L', ...p]);
-      return path(['M', l, t, 'C', ...half[0], ...half[1], ...half[2], ...stem(half[3]), 'C', ...half[4], ...half[5], r, cy,
+      return path(['M', l, t, 'C', ...half[0], ...half[1], ...half[2], ...stem(half[3]), 'C', ...half[4], ...half[5], xc, cy,
         'C', ...low[5], ...low[4], ...low[3], ...stem(low[2]), 'C', ...low[1], ...low[0], l, b]);
     }
     case 'plus': {

@@ -83,12 +83,11 @@ export function inlineTargets(app: App, notes = false, edge = false): Target[] {
     const range = trimEnd(wordRange(t.range, edge));
     return range.collapsed ? [] : [{ host: t.host, range }];
   }
-  // an item takes its own text, without its nested list, which is a block of its own
+  // an item takes its nested items too, which are part of its block, and setFormat cuts the range
+  // at each item
   return selectedBlocks(app).map((host) => {
     const range = document.createRange();
     range.selectNodeContents(host);
-    const nested = [...host.children].find((c) => c.matches('ul, ol'));
-    if (nested) range.setEndBefore(nested);
     return { host, range };
   });
 }
@@ -418,7 +417,9 @@ function splitTexts(range: Range): Text[] {
 // the text of host before node, without its formulas
 function textBefore(host: Element, node: Node): string {
   let out = '';
-  const walker = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+  // a nested item starts a sentence of its own
+  const item = elementOf(node)?.closest(INNER);
+  const walker = document.createTreeWalker(item && host.contains(item) ? item : host, NodeFilter.SHOW_TEXT);
   for (let n = walker.nextNode() as Text | null; n && n !== node; n = walker.nextNode() as Text | null) {
     if (!n.parentElement?.closest('mjx-container')) out += n.data;
   }

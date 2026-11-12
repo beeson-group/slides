@@ -12,7 +12,7 @@ import { setItemIcon } from '../ui/icons.ts';
 import { overlay, view, wh } from '../canvas/frames.ts';
 import { frameOf, onCanvas } from '../canvas/hit.ts';
 import { LINE_TONES } from './line.ts';
-import { DRAWN } from '../../shapes.ts';
+import { DRAWN, shapePath } from '../../shapes.ts';
 
 export const SHAPE_KINDS: [string, string][] = [
   ['rounded', 'Rounded Rectangle'],
@@ -45,6 +45,9 @@ const HOLE_END = `calc(100% - ${2 * NEAR}px - var(--weight))`;
 
 const CSS = `
 html.beeson-drawing-shape .reveal, html.beeson-drawing-shape .reveal *, html.beeson-drawing-shape .beeson-edit-canvas { cursor: crosshair !important; }
+.beeson-shape-ghost { position: fixed; overflow: visible; }
+.beeson-shape-ghost path { fill: color-mix(in srgb, currentColor 20%, var(--ghost-bg)); stroke: currentColor; stroke-width: 3; stroke-linejoin: miter; }
+.beeson-shape-ghost[data-kind=brace] path { fill: none; }
 html.beeson-editor .reveal .slides .shape > p[data-generated] { min-width: 1em; min-height: 1.4em; }
 html.beeson-editing .reveal .slides section .shape.fill-none { pointer-events: none; }
 html.beeson-editing .reveal .slides section .shape.fill-none > :not(svg) { pointer-events: auto; }
@@ -87,6 +90,21 @@ function caretAtEnd(el: Element): void {
 
 type Box = { left: number; top: number; width: number; height: number };
 
+// the outline of a shape of the kind in a box of w by h px, with the outline s px wide drawn inside
+// the box as the theme draws it: by the border of the box for a rectangle, a rounded rectangle, and
+// an ellipse, and by the path of shapes.ts for the other kinds
+function outlineOf(kind: string, w: number, h: number, s: number): string {
+  if (DRAWN.includes(kind)) return shapePath(kind, w, h, s);
+  const i = s / 2, l = i, t = i, r = w - i, b = h - i;
+  if (kind === 'ellipse') {
+    const rx = Math.max(0, r - l) / 2, ry = Math.max(0, b - t) / 2;
+    return `M${l} ${h / 2}A${rx} ${ry} 0 0 1 ${r} ${h / 2}A${rx} ${ry} 0 0 1 ${l} ${h / 2}Z`;
+  }
+  if (kind !== 'rounded') return `M${l} ${t}H${r}V${b}H${l}Z`;
+  const k = Math.max(0, Math.min(24, w / 2, h / 2) - i);
+  return `M${l + k} ${t}H${r - k}A${k} ${k} 0 0 1 ${r} ${t + k}V${b - k}A${k} ${k} 0 0 1 ${r - k} ${b}H${l + k}A${k} ${k} 0 0 1 ${l} ${b - k}V${t + k}A${k} ${k} 0 0 1 ${l + k} ${t}Z`;
+}
+
 export function shapeText(kind: string, b: Box): string {
   const cls = kind === 'rectangle' ? 'shape' : `shape ${kind}`;
   // the translate is last, where the tag writer puts one that a move changes
@@ -110,6 +128,27 @@ export function install(app: App): void {
   // the kind of shape that the next press on the canvas draws, or null, and the press of a drawing
   let drawing: string | null = null;
   let press: { kind: string; x: number; y: number; from: { x: number; y: number }; moved: boolean } | null = null;
+
+  // the shape being drawn by a drag, in the overlay over the canvas, in the tone of the text of the
+  // slide over its tint, as a new shape is drawn
+  const ghost = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  ghost.classList.add('beeson-shape-ghost');
+  ghost.setAttribute('aria-hidden', 'true');
+  ghost.append(document.createElementNS('http://www.w3.org/2000/svg', 'path'));
+  ghost.setAttribute('hidden', '');
+  frames.layer.prepend(ghost);
+  const drawGhost = (kind: string, b: Box | null) => {
+    ghost.toggleAttribute('hidden', !b);
+    const slide = app.current();
+    if (!b || !slide) return;
+    const f = frameOf(app), style = getComputedStyle(slide);
+    ghost.dataset.kind = kind;
+    ghost.setAttribute('viewBox', `0 0 ${b.width} ${b.height}`);
+    Object.assign(ghost.style, { left: `${f.left + b.left * f.scale}px`, top: `${f.top + b.top * f.scale}px`, width: `${b.width * f.scale}px`, height: `${b.height * f.scale}px` });
+    ghost.style.color = style.getPropertyValue('--text');
+    ghost.style.setProperty('--ghost-bg', style.getPropertyValue('--bg'));
+    ghost.firstElementChild!.setAttribute('d', outlineOf(kind, b.width, b.height, 3));
+  };
 
   const endDrawing = () => {
     drawing = null;
@@ -163,8 +202,7 @@ export function install(app: App): void {
     p.moved = true;
     ev.preventDefault();
     const b = boxOf(p.from, slideAt(ev), ev.shiftKey);
-    const f = frameOf(app);
-    view.marquee = { left: f.left + b.left * f.scale, top: f.top + b.top * f.scale, width: b.width * f.scale, height: b.height * f.scale };
+    drawGhost(p.kind, b);
     view.readout = { text: wh(b.width, b.height), x: ev.clientX + 14, y: ev.clientY + 14, at: 'pointer' };
     frames.draw();
   };
@@ -172,7 +210,7 @@ export function install(app: App): void {
     const p = press;
     if (!p) return;
     press = null;
-    view.marquee = null;
+    drawGhost(p.kind, null);
     view.readout = null;
     frames.draw();
     endDrawing();
@@ -256,6 +294,20 @@ export function install(app: App): void {
       document.execCommand('insertText', false, ev.key);
     } else void startWords(el, ev.key).catch((e) => app.fail(e));
   };
+  // a press on the words of a selected shape is taken by the move of canvas/drag.ts, whose click
+  // puts the caret, hence the word at the caret of a double click is selected here, as the browser
+  // selects it in a text. a space or a mark between two words is selected by itself
+  window.addEventListener('dblclick', (ev) => {
+    const el = ev.target instanceof Element ? ev.target.closest('.shape') : null;
+    const host = ev.target instanceof Element ? ev.target.closest(HOST) : null;
+    const s = getSelection(), node = s?.anchorNode;
+    if (!el || !isShape(el) || !host || !el.contains(host) || !s?.isCollapsed || !(node instanceof Text) || !host.contains(node)) return;
+    const words = new Intl.Segmenter(document.documentElement.lang || undefined, { granularity: 'word' }).segment(node.data);
+    const at = s.anchorOffset;
+    const before = at > 0 ? words.containing(at - 1) : undefined;
+    const w = (before?.isWordLike && at === before.index + before.segment.length ? before : words.containing(at)) ?? before;
+    if (w) s.setBaseAndExtent(node, w.index, node, w.index + w.segment.length);
+  });
   window.addEventListener('dblclick', (ev) => {
     const el = ev.target instanceof Element ? ev.target.closest('.shape') : null;
     if (!el || !isShape(el) || el.querySelector(':scope > :not(svg):not([data-generated])') || el.hasAttribute('data-locked')) return;

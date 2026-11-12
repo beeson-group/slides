@@ -6,13 +6,14 @@
 import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { CONTAINER, RESIZABLE, containerOf, frameRect, mediaIn, movableOf, movablesOf, objectsOf, pictureOf, turnable } from '../canvas/hit.ts';
+import { CONTAINER, RESIZABLE, containerOf, frameRect, linesOf, mediaIn, movableOf, movablesOf, objectsOf, pictureOf, turnable } from '../canvas/hit.ts';
 import type { Place } from '../canvas/drag.ts';
 import { placeOf, record, withCorners, writePlace } from '../canvas/drag.ts';
 import { view, xy } from '../canvas/frames.ts';
-import { angleOf, fieldOf, groupAngle, groupOf, leaveGroup } from './order.ts';
+import { angleOf, drawnUnder, fieldOf, groupAngle, groupOf, leaveGroup, selectIn } from './order.ts';
 import { cornerBoxOf } from './align.ts';
-import { nudgeBackdrop } from './backdrop.ts';
+import { nudgeBackdrop, slideBackdrop } from './backdrop.ts';
+import { groupsOf } from '../model/groups.ts';
 import { onSlides } from './slide.ts';
 import { injectStyle } from '../ui/dom.ts';
 
@@ -87,15 +88,38 @@ function nudge(app: App, dx: number, dy: number): void {
   app.invalidate('content');
 }
 
-// the next movable element of the slide after the one selected, or before it with back
+// the objects of the current slide as the rows of the Object List of navigator/objects.ts, from
+// front to back: a group as one row at the place of its member in front, and the backdrop last
+function rowsOf(app: App): Element[][] {
+  const found = [...movablesOf(app), ...linesOf(app)];
+  const els = found.filter((el) => !found.some((o) => o !== el && o.contains(el))).sort((a, b) => (drawnUnder(a, b) ? 1 : -1));
+  const rows: Element[][] = [];
+  const done = new Set<string>();
+  for (const el of els) {
+    const g = groupsOf(el)[0];
+    const members = g ? els.filter((m) => groupsOf(m)[0] === g) : [];
+    if (members.length < 2) rows.push([el]);
+    else if (!done.has(g)) {
+      done.add(g);
+      rows.push(members);
+    }
+  }
+  const ground = slideBackdrop(app);
+  return ground ? [...rows, [ground]] : rows;
+}
+
+// the row of the Object List in front of the selected one, or behind it with back, around both
+// ends, as Tab and Shift+Tab walk the objects from back to front in Keynote and PowerPoint. a
+// locked object is selected as by a click
 function step(app: App, back: boolean): void {
-  const list = movablesOf(app);
-  if (!list.length) return;
-  const sel = app.selection.elements();
-  const at = sel.length ? list.indexOf(sel[back ? 0 : sel.length - 1]) : -1;
-  const next = at < 0 ? list[back ? list.length - 1 : 0] : list[(at + (back ? -1 : 1) + list.length) % list.length];
-  app.selection.set('elements', [next]);
-  if (next.classList.contains('beeson-movable')) (next as HTMLElement).focus({ preventScroll: true });
+  const rows = rowsOf(app).reverse();
+  if (!rows.length) return;
+  const sel = objectsOf(app, app.selection.elements());
+  const at = rows.flatMap((r, i) => (r.some((el) => sel.includes(el)) ? [i] : []));
+  const i = at.length ? (back ? at[0] - 1 : at[at.length - 1] + 1) : back ? -1 : 0;
+  const next = rows[(i + rows.length) % rows.length];
+  selectIn(app, [], next);
+  if (next[0].classList.contains('beeson-movable')) (next[0] as HTMLElement).focus({ preventScroll: true });
   else if (document.activeElement instanceof HTMLElement && document.activeElement !== document.body) document.activeElement.blur();
 }
 
@@ -231,18 +255,18 @@ export function commands(): Command[] {
     },
     {
       id: 'selection.next',
-      label: 'Select Next Element',
+      label: 'Select Next Object',
       keys: { mac: ['Tab'], other: ['Tab'] },
       in: ['canvas'],
-      enabled: (app) => onCanvas() && movablesOf(app).length > 0,
+      enabled: (app) => onCanvas() && rowsOf(app).length > 0,
       run: (app) => step(app, false),
     },
     {
       id: 'selection.previous',
-      label: 'Select Previous Element',
+      label: 'Select Previous Object',
       keys: { mac: ['Shift+Tab'], other: ['Shift+Tab'] },
       in: ['canvas'],
-      enabled: (app) => onCanvas() && movablesOf(app).length > 0,
+      enabled: (app) => onCanvas() && rowsOf(app).length > 0,
       run: (app) => step(app, true),
     },
     {

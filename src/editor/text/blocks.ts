@@ -101,7 +101,7 @@ export function selectedBlocks(app: App): Element[] {
   if (!pairing) return [];
   return app.selection.elements().flatMap((el) => {
     if (pairing.byLive.has(el)) return el.matches('aside.notes') ? [] : [el];
-    if (el.matches('div.shape')) return [...el.querySelectorAll(':scope > p')].filter((p) => pairing.byLive.has(p));
+    if (el.matches('div.shape')) return [...el.querySelectorAll(':scope > p, :scope > ul > li, :scope > ol > li')].filter((p) => pairing.byLive.has(p));
     return el.matches(LIST) && pairing.elements.has(el) ? [...el.querySelectorAll('li')].filter((li) => pairing.byLive.has(li)) : [];
   });
 }
