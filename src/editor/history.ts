@@ -34,6 +34,8 @@ export class History {
   // read at the start of a transaction, the function that shows its slide again before its undo and
   // its redo, as Keynote and PowerPoint show the slide of an undone change
   private readonly view: () => (() => void) | null;
+  // the functions run at the end of each transaction, whose changes are part of it
+  private readonly settlers: (() => void)[] = [];
 
   constructor(options: { snapshot(host: Element): string; restore(host: Element, content: string): Promise<void>; onChange(): void; selected?(): Element[] | null; reselect?(els: Element[]): void; view?(): (() => void) | null }) {
     this.snapshot = options.snapshot;
@@ -71,6 +73,11 @@ export class History {
     return this.queue;
   }
 
+  // fn run at the end of each transaction with changes, e.g. to keep a number in step with them
+  onSettle(fn: () => void): void {
+    this.settlers.push(fn);
+  }
+
   // a change other than typing, already applied
   push(entry: Entry): void {
     this.typing = null;
@@ -103,6 +110,7 @@ export class History {
     try {
       return await fn();
     } finally {
+      if (entries.length) for (const settle of this.settlers) settle();
       this.open = null;
       this.typing = null;
       if (entries.length) {

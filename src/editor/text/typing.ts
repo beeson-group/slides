@@ -162,8 +162,8 @@ export function insertPlain(host: Element, text: string): void {
 }
 
 // a text of several lines pasted into a list item of a slide is an item for each line, as Return
-// makes a new item, in Keynote and PowerPoint. one newline at the end of the text is dropped, and
-// the paste is one entry of the history
+// makes a new item, in Keynote and PowerPoint. a blank line after the first is dropped, since
+// Return on an empty item ends the list, and the paste is one entry of the history
 export function pastesItems(app: App, host: Element, text: string): boolean {
   return host.matches('li') && /\r?\n/.test(text.replace(/\r?\n$/, '')) && app.commands.enabled('text.newParagraph');
 }
@@ -175,7 +175,7 @@ export async function pasteItems(app: App, text: string): Promise<void> {
   };
   app.history.break();
   await app.history.transact('Paste', async () => {
-    const lines = text.replace(/\r?\n$/, '').split(/\r?\n/);
+    const lines = text.split(/\r?\n/).filter((line, i) => !i || line.trim());
     for (const [i, line] of lines.entries()) {
       if (i) await app.commands.run('text.newParagraph');
       const host = caretHost();

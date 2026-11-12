@@ -347,6 +347,9 @@ type NumberOptions = {
   why?(): string;
   // the command of the field, named on its stepper as on the buttons of a pane
   command?: string;
+  // a typed value outside min and max is refused, and the field shows the value before, in place
+  // of the nearest bound
+  refuse?: boolean;
 };
 
 export function numberField(app: App, o: NumberOptions): Control & { input: HTMLInputElement } {
@@ -393,7 +396,8 @@ export function numberField(app: App, o: NumberOptions): Control & { input: HTML
   const flush = () => {
     if (input.disabled) return;
     const v = typed();
-    if (Number.isFinite(v) && round(v) !== shown) commit(v);
+    const out = o.refuse && (round(v) < (o.min ?? -Infinity) || round(v) > (o.max ?? Infinity));
+    if (Number.isFinite(v) && !out && round(v) !== shown) commit(v);
     else show(shown);
   };
   input.addEventListener('blur', flush);

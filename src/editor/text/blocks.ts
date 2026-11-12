@@ -264,6 +264,24 @@ function goOn(list: Element, k: number): Record<string, string | null> {
   return { start: n === 1 ? null : String(n) };
 }
 
+// each numbered list cut off by the editor, with the list before it, whose count its start goes on
+// with at every change, until a start is typed into Start at
+const cutOff = new WeakMap<Element, HTMLOListElement>();
+
+function keepCounts(app: App): void {
+  for (const ol of app.slides().querySelectorAll('ol')) {
+    const first = cutOff.get(ol);
+    if (!first?.isConnected || !(ol instanceof HTMLOListElement)) continue;
+    const n = first.start + first.querySelectorAll(':scope > li').length;
+    if (n !== ol.start) app.doc.setTag(ol, { attrs: { start: n === 1 ? null : String(n) } }, 'start at');
+  }
+}
+
+// second, the list made of the items after a cut of list, goes on with its count
+function goesOn(list: Element, second: Element | undefined): void {
+  if (list instanceof HTMLOListElement && second) cutOff.set(second, list);
+}
+
 // a list of dashes does not take the attribute start of a numbered list
 const listEdit = (kind: string): TagEdit => (kind === 'ul' ? { attrs: { start: null } } : {});
 
@@ -280,6 +298,10 @@ export function setStart(app: App, n: number): void {
   const list = startList(app);
   if (!list || !Number.isInteger(n) || n < 1 || n === list.start) return;
   app.doc.setTag(list, { attrs: { start: n === 1 ? null : String(n) } }, 'start at');
+  const first = cutOff.get(list);
+  if (!first) return;
+  cutOff.delete(list);
+  app.history.push({ label: 'start at', undo: () => void cutOff.set(list, first), redo: () => void cutOff.delete(list) });
 }
 
 export function canSplit(app: App): boolean {
@@ -311,7 +333,8 @@ export async function split(app: App): Promise<void> {
       const rest = followers.map((f) => `${eol}${base}${step}${app.doc.elementText(f)}`).join('');
       texts.push(`${startTag(app, list, list.localName, { attrs: { id: null, ...goOn(list, items.indexOf(item)) } })}${rest}${eol}${base}</${list.localName}>`);
     }
-    const [p] = await app.doc.insert(texts, list.parentElement!, nextOf(app, list), 'new paragraph');
+    const [p, second] = await app.doc.insert(texts, list.parentElement!, nextOf(app, list), 'new paragraph');
+    goesOn(list, second);
     for (const f of followers) await app.doc.remove(f, 'new paragraph');
     await app.doc.remove(list.querySelectorAll(':scope > li').length > 1 ? item : list, 'new paragraph');
     return selectIn(p, 0);
@@ -680,7 +703,8 @@ export async function setList(app: App, kind: ListKind): Promise<void> {
     const k = items.filter((c) => c.localName === 'li').indexOf(item);
     texts.push(`${startTag(app, parent, parent.localName, { attrs: goOn(parent, k) })}${rest}${eol}${base}</${parent.localName}>`);
   }
-  const [p] = await app.doc.insert(texts, parent.parentElement!, nextOf(app, parent), 'list');
+  const [p, second] = await app.doc.insert(texts, parent.parentElement!, nextOf(app, parent), 'list');
+  goesOn(parent, second);
   for (const f of followers) await app.doc.remove(f, 'list');
   await app.doc.remove(item, 'list');
   if (!parent.querySelector(':scope > li')) await app.doc.remove(parent, 'list');
@@ -712,7 +736,9 @@ async function setSpanList(app: App, kind: ListKind): Promise<boolean> {
       const rest = followers.map((f) => `${eol}${base}${step}${app.doc.elementText(f)}`).join('');
       texts.push(`${startTag(app, list, list.localName, { attrs: { id: null, ...goOn(list, items.indexOf(run[0])) } })}${rest}${eol}${base}</${list.localName}>`);
     }
-    made = (await app.doc.insert(texts, list.parentElement!, nextOf(app, list), 'list')).slice(0, run.length);
+    const inserted = await app.doc.insert(texts, list.parentElement!, nextOf(app, list), 'list');
+    if (followers.length) goesOn(list, inserted.at(-1));
+    made = inserted.slice(0, run.length);
     for (const el of [...followers, ...run]) await app.doc.remove(el, 'list');
     if (!list.querySelector(':scope > li')) await app.doc.remove(list, 'list');
   }
@@ -767,6 +793,7 @@ async function listBlocksAs(app: App, blocks: Element[], kind: ListKind): Promis
 
 export function install(app: App): void {
   injectStyle('blocks', CSS);
+  app.history.onSettle(() => keepCounts(app));
   document.addEventListener('selectionchange', () => {
     const sel = window.getSelection();
     if (!sel?.rangeCount) return;
