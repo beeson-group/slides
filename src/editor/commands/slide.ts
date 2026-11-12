@@ -327,10 +327,11 @@ export function install(app: App): void {
   const onSlide = (a: App) => (a.region() === 'canvas' || a.region() === 'text') && !document.activeElement?.closest('.beeson-edit-menu');
   const slideMenu = (order: number, group = 'slide') => ({ bar: 'Slide', group, order });
   // Duplicate Slide and Delete Slide list the keys of Edit > Duplicate and Edit > Delete where the
-  // keys hand their runs to them, e.g. in the navigator
+  // keys hand their runs to them, e.g. in the navigator, and not where the key is dimmed, e.g. with
+  // the caret in a cell
   const keysFrom = (edit: string, id: string) => (a: App) => {
     const c = a.commands.get(edit);
-    return c && (c.in ?? DEFAULT_REGIONS).includes(a.region()) && c.runsAs?.(a) === id ? edit : id;
+    return c && (c.in ?? DEFAULT_REGIONS).includes(a.region()) && c.runsAs?.(a) === id && a.commands.enabled(edit) ? edit : id;
   };
   const defs: Command[] = [
     {
