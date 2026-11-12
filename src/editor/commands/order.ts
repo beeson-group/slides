@@ -11,10 +11,11 @@ import type { Command } from '../commands.ts';
 import { angleOf, apartOf, locked, pivotOf, placeOf, record, seenCenter, spinOf, spunEls, turn, turnMember, turnedEls, turnersOf, withTwins } from '../canvas/drag.ts';
 import { LINE, MOVABLE, OUTSIDE, objectOf, objectsOf, turnable, twinOf } from '../canvas/hit.ts';
 import { stateOf } from '../tags.ts';
+import { groupOf, groupUsed, groupValue, groupsOf, scopeOf, setScope, within } from '../model/groups.ts';
 
 export type Order = 'front' | 'forward' | 'backward' | 'back';
 
-export const groupOf = (el: Element): string | null => el.getAttribute('data-group');
+export { groupOf };
 
 // an element in the flow of its parent, which a move among its siblings would move on the slide
 function inFlow(el: Element): boolean {
@@ -359,17 +360,17 @@ async function reorder(app: App, o: Order): Promise<void> {
   app.invalidate('content');
 }
 
-// the members of a group on the page, apart from the hidden image of a dark and light pair, which
-// follows its twin
-const membersOf = (app: App, id: string): Element[] => [...(app.current() ?? document).querySelectorAll(`[data-group="${CSS.escape(id)}"]`)]
+// the members of a group on the page, at any depth, apart from the hidden image of a dark and light
+// pair, which follows its twin
+export const membersOf = (app: App, id: string): Element[] => [...(app.current() ?? document).querySelectorAll(`[data-group~="${CSS.escape(id)}"]`)]
   .filter((el) => !!app.pairing?.elements.get(el)?.open && !(twinOf(app, el) && !el.getClientRects().length));
 
-// a name of a group that is not on the page or in the file
-export function freshGroup(app: App): string {
+// a name of a group that is not on the page, in the file, or in taken
+export function freshGroup(app: App, taken: Set<string> = new Set()): string {
   const text = app.source?.text ?? '';
   for (let i = 1; ; i++) {
     const id = `g${i}`;
-    if (!document.querySelector(`[data-group="${id}"]`) && !text.includes(`data-group="${id}"`)) return id;
+    if (!taken.has(id) && !groupUsed(id, text)) return id;
   }
 }
 
@@ -408,21 +409,68 @@ const canGroup = (app: App): boolean => {
   const first = groupOf(els[0] ?? document.body);
   return els.length > 1 && !(first && els.every((el) => groupOf(el) === first));
 };
-const canUngroup = (app: App): boolean => objectEls(app).some((el) => groupOf(el));
+// the groups that Ungroup takes apart: those of the selection at the level of the scope, or the
+// entered group of a member selected by itself, as in PowerPoint
+function ungroupIds(app: App): Set<string> {
+  const els = objectEls(app);
+  const ids = new Set(els.map(groupOf).filter((g): g is string => !!g));
+  const inner = scopeOf().at(-1);
+  if (!ids.size && inner && els.length && els.every((el) => within(el))) ids.add(inner);
+  return ids;
+}
 
+const canUngroup = (app: App): boolean => ungroupIds(app).size > 0;
+
+// the depth at which Group and Ungroup act: the level of the scope, or the slide for a selection
+// outside it
+const depthOf = (el: Element): number => (within(el) ? scopeOf().length : 0);
+
+// Group writes a fresh name at the depth of the scope into the list of every selected element, hence
+// a selected group keeps its own name inside the new one
 function group(app: App): void {
   const els = objectEls(app);
   const id = freshGroup(app);
-  for (const el of els) app.doc.setTag(el, { attrs: { 'data-group': id } }, 'group');
+  for (const el of els) {
+    const list = groupsOf(el), d = depthOf(el);
+    app.doc.setTag(el, { attrs: { 'data-group': groupValue([...list.slice(0, d), id, ...list.slice(d)]) } }, 'group');
+  }
   app.selection.set('elements', els);
 }
 
+// the lists of the members of the groups taken apart by the last Ungroup, before and after it,
+// which Regroup writes back. it is kept for the session only, since the file does not hold it
+let ungrouped: { els: Element[]; from: string[]; to: string[] } | null = null;
+
+// Ungroup takes the name at the depth of the scope off every member of each selected group, and
+// selects the former children, an inner group as a whole
 function ungroup(app: App): void {
-  const els = objectEls(app);
-  const ids = new Set(els.map(groupOf).filter((g): g is string => !!g));
-  const all = [...ids].flatMap((id) => membersOf(app, id));
-  for (const el of all) app.doc.setTag(el, { attrs: { 'data-group': null } }, 'ungroup');
+  const ids = ungroupIds(app);
+  if (ids.has(scopeOf().at(-1) as string)) setScope(scopeOf().slice(0, -1));
+  const all = [...new Set([...ids].flatMap((id) => membersOf(app, id)))];
+  const from = all.map((el) => groupValue(groupsOf(el)) ?? '');
+  for (const el of all) app.doc.setTag(el, { attrs: { 'data-group': groupValue(groupsOf(el).filter((n) => !ids.has(n))) } }, 'ungroup');
+  ungrouped = { els: all, from, to: all.map((el) => groupValue(groupsOf(el)) ?? '') };
   app.selection.set('elements', all);
+}
+
+// Regroup gives the members of the last Ungroup their lists back while each of them is on the
+// slide with the list that Ungroup left
+const canRegroup = (app: App): boolean => {
+  const u = ungrouped, slide = app.current();
+  return !!u && !!slide && u.els.every((el, i) => el.isConnected && slide.contains(el) && (groupValue(groupsOf(el)) ?? '') === u.to[i]);
+};
+
+function regroup(app: App): void {
+  const u = ungrouped;
+  if (!u || !canRegroup(app)) return;
+  // a name that another element of the page took since the Ungroup is replaced by a fresh one
+  const names = new Map<string, string>();
+  const taken = (n: string) => [...document.querySelectorAll(`[data-group~="${CSS.escape(n)}"]`)].some((el) => !u.els.includes(el));
+  for (const list of u.from) for (const n of list.split(' ').filter(Boolean)) {
+    if (!names.has(n)) names.set(n, taken(n) ? freshGroup(app, new Set(names.values())) : n);
+  }
+  u.els.forEach((el, i) => app.doc.setTag(el, { attrs: { 'data-group': groupValue(u.from[i].split(' ').filter(Boolean).map((n) => names.get(n) as string)) } }, 'group'));
+  app.selection.set('elements', u.els);
 }
 
 // the elements of a lock or an unlock. a caret or a range in the text of a locked block unlocks
@@ -449,21 +497,36 @@ export function groupAngle(app: App, els: Element[]): number | null {
   return turners ? turners[0].angle : null;
 }
 
-// the member of a group selected by itself with enterGroup, which keepGroups leaves alone while it
-// is the whole selection
-let entered: Element | null = null;
-
-// selects el, a member of a selected group, by itself, as the second click on a member does in
-// Keynote and PowerPoint
+// a click on a member of a selected group enters the group at its next level, as a double click
+// does in Keynote and PowerPoint, and selects the child under the pointer: el, or the inner group
+// that holds it
 export function enterGroup(app: App, el: Element): void {
-  entered = el;
-  app.selection.set('elements', [el]);
+  const g = el.closest('[data-group]') ?? el;
+  const list = groupsOf(g), d = within(g) ? scopeOf().length : 0;
+  if (d < list.length) setScope(list.slice(0, d + 1));
+  const inner = list[d + 1];
+  app.selection.set('elements', inner ? membersOf(app, inner) : [el]);
+  app.invalidate('selection');
 }
 
-// a selection that holds a member of a group holds every member, apart from a member selected by
-// itself with enterGroup. a member taken off a selection that held its whole group and other
-// elements, e.g. by a click with Shift, takes the whole group off, and a click that selects one
-// member of a selected group keeps the group
+// selects els with the scope set to list, e.g. for a row of the Object List
+export function selectIn(app: App, list: string[], els: Element[]): void {
+  setScope(list);
+  app.selection.set('elements', els);
+  app.invalidate('selection');
+}
+
+// Esc in an entered group leaves it and selects it whole, or false outside a group
+export function leaveGroup(app: App): boolean {
+  const list = scopeOf();
+  if (!list.length || app.selection.kind !== 'elements') return false;
+  selectIn(app, list.slice(0, -1), membersOf(app, list[list.length - 1]));
+  return true;
+}
+
+// a selection that holds a child of the scope holds every member of the child, i.e. of an inner
+// group. a child taken off a selection that held it whole and other elements, e.g. by a click with
+// Shift, is taken off whole. the scope is left once the selection holds an element outside it
 function keepGroups(app: App): void {
   let before = new Set<Element>();
   let busy = false;
@@ -471,11 +534,8 @@ function keepGroups(app: App): void {
     if (busy) return;
     const sel = app.selection;
     const els = sel.elements();
-    if (entered && !(els.length === 1 && els[0] === entered)) entered = null;
-    if (entered) {
-      before = new Set(els);
-      return;
-    }
+    const held = sel.kind === 'text' ? sel.items : els;
+    if (scopeOf().length && (!held.length || held.some((el) => !within(el)))) setScope([]);
     const ids = new Set([...els, ...before].map(groupOf).filter((g): g is string => !!g));
     let next = [...els];
     for (const id of ids) {
@@ -494,11 +554,13 @@ function keepGroups(app: App): void {
   });
 }
 
-const ORDERS: { order: Order; label: string; mac: string; other: string }[] = [
-  { order: 'front', label: 'Bring to Front', mac: 'Mod+Shift+F', other: 'Mod+Shift+ArrowUp' },
-  { order: 'forward', label: 'Bring Forward', mac: 'Mod+Alt+Shift+F', other: 'Mod+ArrowUp' },
-  { order: 'backward', label: 'Send Backward', mac: 'Mod+Alt+Shift+B', other: 'Mod+ArrowDown' },
-  { order: 'back', label: 'Send to Back', mac: 'Mod+Shift+B', other: 'Mod+Shift+ArrowDown' },
+// the second keys of Windows and Linux are those of PowerPoint, with the character that Shift
+// gives on a US layout, which a symbol is matched by
+const ORDERS: { order: Order; label: string; mac: string; other: string[] }[] = [
+  { order: 'front', label: 'Bring to Front', mac: 'Mod+Shift+F', other: ['Mod+Shift+ArrowUp', 'Mod+Shift+}'] },
+  { order: 'forward', label: 'Bring Forward', mac: 'Mod+Alt+Shift+F', other: ['Mod+ArrowUp', 'Mod+]'] },
+  { order: 'backward', label: 'Send Backward', mac: 'Mod+Alt+Shift+B', other: ['Mod+ArrowDown', 'Mod+['] },
+  { order: 'back', label: 'Send to Back', mac: 'Mod+Shift+B', other: ['Mod+Shift+ArrowDown', 'Mod+Shift+{'] },
 ];
 
 export function commands(app: App): Command[] {
@@ -506,10 +568,10 @@ export function commands(app: App): Command[] {
   const list: Command[] = ORDERS.map(({ order, label, mac, other }, i) => ({
     id: `arrange.order.${order}`,
     label,
-    keys: { mac: [mac], other: [other] },
+    keys: { mac: [mac], other },
     in: ['canvas'],
     menu: arrange(50 + i),
-    context: order === 'front' || order === 'back' ? ['element'] : undefined,
+    context: ['element'],
     enabled: (app) => canOrder(app, order),
     undoable: true,
     run: (app) => reorder(app, order),
@@ -521,6 +583,7 @@ export function commands(app: App): Command[] {
       keys: { mac: ['Mod+Alt+G'], other: ['Mod+G'] },
       in: ['canvas'],
       menu: arrange(60, 'group'),
+      context: ['element'],
       enabled: canGroup,
       undoable: true,
       run: group,
@@ -531,19 +594,22 @@ export function commands(app: App): Command[] {
       keys: { mac: ['Mod+Alt+Shift+G'], other: ['Mod+Shift+G'] },
       in: ['canvas'],
       menu: arrange(61, 'group'),
+      context: ['element'],
       enabled: canUngroup,
       undoable: true,
       run: ungroup,
     },
     {
-      // the item of the context menu, which groups or ungroups the selection
-      id: 'arrange.toggleGroup',
-      label: (app) => (canUngroup(app) && !canGroup(app) ? 'Ungroup' : 'Group'),
-      listedAs: (app) => (canUngroup(app) && !canGroup(app) ? 'arrange.ungroup' : 'arrange.group'),
+      // Ctrl+Shift+J opens the console of Chrome and Firefox on Windows and Linux, which may keep it
+      id: 'arrange.regroup',
+      label: 'Regroup',
+      keys: { mac: ['Mod+Alt+J'], other: ['Mod+Shift+J'] },
+      in: ['canvas'],
+      menu: arrange(62, 'group'),
       context: ['element'],
-      enabled: (app) => canGroup(app) || canUngroup(app),
+      enabled: canRegroup,
       undoable: true,
-      run: (app) => (canGroup(app) ? group(app) : ungroup(app)),
+      run: regroup,
     },
     {
       id: 'arrange.lock',

@@ -10,7 +10,8 @@
 import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
 import { injectStyle } from '../ui/dom.ts';
-import { groupOf } from '../commands/order.ts';
+import { groupOf, membersOf } from '../commands/order.ts';
+import { scopeOf } from '../model/groups.ts';
 import { apartOf, turnersOf } from './drag.ts';
 import type { Box, Guide, Handle, Spacing } from './snap.ts';
 import { BY_ITSELF, CONTAINER, RESIZABLE, captionsOf, figureFrame, frameOf, frameRect, isTextSized, movableOf, orientedBox, pictureOf, scaleAt, sizedOf, toScreen, turnable as turns } from './hit.ts';
@@ -46,6 +47,7 @@ const CSS = `
 .beeson-frame { position: fixed; pointer-events: none; box-sizing: border-box; border: 1px dashed var(--ed-muted, var(--subtle, #bbb)); }
 .beeson-frame.selected { border: 2px solid var(--ed-select, #7048e8); }
 .beeson-frame.union.group { border: 2px solid var(--ed-select, #7048e8); }
+.beeson-frame.entered { border: 1px dashed var(--ed-select, #7048e8); opacity: 0.6; }
 .beeson-overlay [hidden] { display: none !important; }
 .beeson-grip { position: fixed; width: 9px; height: 9px; margin: -5.5px 0 0 -5.5px; border-radius: 50%; border: 1.5px solid var(--ed-select, #7048e8); background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); pointer-events: auto; touch-action: none; }
 .beeson-frame.selected.locked { border-color: #8a8a8a; }
@@ -200,6 +202,8 @@ export class Frames {
   // the one frame of a selected group, and the frame of each group of a selection with other objects
   private readonly union: HTMLDivElement;
   private readonly unions: HTMLDivElement[] = [];
+  // the group that a click entered, drawn dimmed around its members
+  private readonly entered: HTMLDivElement;
   // the distance of the rotate handle above the frame, kept while it is dragged
   private rotorAt = ROTOR;
   // the box of a selected group on the screen, as last drawn, which its one set of grips resizes,
@@ -221,6 +225,7 @@ export class Frames {
     this.hoverFrame = div('beeson-frame', this.layer);
     this.frames.push(div('beeson-frame selected', this.layer));
     this.union = div('beeson-frame union group', this.layer);
+    this.entered = div('beeson-frame entered', this.layer);
     // the first guide on each axis is always there, at the line snapped to
     this.guides.push(div('beeson-guide v', this.layer), div('beeson-guide h', this.layer));
     this.marquee = div('beeson-marquee', this.layer);
@@ -367,6 +372,10 @@ export class Frames {
     });
     const held = view.moving ? view.held : null;
     if (held) for (const f of [...this.frames, this.union, ...this.unions]) f.hidden = true;
+    const scope = scopeOf();
+    const inside = scope.length && selected.length ? membersOf(app, scope[scope.length - 1]).filter((el) => el.getClientRects().length) : [];
+    this.entered.hidden = !inside.length;
+    if (inside.length) place(this.entered, groupFrame(inside, 0));
 
     const only = app.selection.only();
     // a set of grips for each element with grips, and one for each group, at its frame

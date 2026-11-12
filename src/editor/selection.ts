@@ -6,7 +6,7 @@
 
 import type { App, Selector } from './app.ts';
 import type { Pairing } from './render.ts';
-import { BY_ITSELF, MOVABLE, OUTSIDE, movableOf, movablesOf, pickOf } from './canvas/hit.ts';
+import { BY_ITSELF, MOVABLE, OUTSIDE, linesOf, movableOf, movablesOf, pickOf } from './canvas/hit.ts';
 import { selectRun } from './text/flow.ts';
 
 export type SelectionKind = 'none' | 'elements' | 'text' | 'slides';
@@ -128,7 +128,8 @@ export function install(app: App): void {
       if (host && s && !wholly(s, host)) return void s.selectAllChildren(host);
       if (host && host.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
       if (host) s?.removeAllRanges();
-      set('elements', movablesOf(app));
+      // the lines of the slide too, which are not movable by a press on their box
+      set('elements', [...movablesOf(app), ...linesOf(app)]);
     },
     listen: (fn) => void listeners.push(fn),
     has: (item) => items.includes(item),

@@ -14,7 +14,8 @@ import { SHAPE_KINDS, kindOf as shapeKind } from '../commands/shape.ts';
 import { OUTSIDE_DIALOGS } from '../commands.ts';
 import { CONTAINER, LINE, hasText, linesOf, movablesOf, objectOf } from '../canvas/hit.ts';
 import { locked } from '../canvas/drag.ts';
-import { canStep, drawnUnder, enterGroup, groupOf, layerLimit, stepLayer } from '../commands/order.ts';
+import { canStep, drawnUnder, layerLimit, selectIn, stepLayer } from '../commands/order.ts';
+import { groupsOf } from '../model/groups.ts';
 import { drawingName, slideBackdrop } from '../commands/backdrop.ts';
 import { injectStyle, make, store, stored } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
@@ -132,8 +133,9 @@ export function describeObject(el: Element): { kind: string; icon: string; name:
   return named('Text', 'text', hasText(el) || el.textContent?.trim() ? wordsOf(el) : '');
 }
 
-// a row of the list: an element, or a group with its members
-type Item = { el: Element; group: null } | { el: null; group: string; members: Element[] };
+// a row of the list: an element, or a group with its members at any depth, the rows under it,
+// and the names of the groups around it
+type Item = { el: Element; group: null } | { el: null; group: string; members: Element[]; children: Item[]; path: string[] };
 
 type Key = Element | string;
 const keyOf = (item: Item): Key => item.el ?? `group:${item.group}`;
@@ -183,22 +185,23 @@ export function install(app: App): void {
     return [...els.sort((a, b) => (before(a, b) ? 1 : -1)), ...(ground ? [ground] : [])];
   };
 
-  // the rows in order: a group at the place of its member in front, which holds its members
-  const items = (): Item[] => {
+  // the rows in order: a group at the place of its member in front, which holds its members and
+  // its inner groups, each at the place of its member in front
+  const tree = (els: Element[], path: string[]): Item[] => {
     const out: Item[] = [];
     const done = new Set<string>();
-    const els = objects();
     for (const el of els) {
-      const g = groupOf(el);
-      const members = g ? els.filter((m) => groupOf(m) === g) : [];
+      const g = groupsOf(el)[path.length];
+      const members = g ? els.filter((m) => groupsOf(m)[path.length] === g) : [];
       if (!g || members.length < 2) out.push({ el, group: null });
       else if (!done.has(g)) {
         done.add(g);
-        out.push({ el: null, group: g, members });
+        out.push({ el: null, group: g, members, children: tree(members, [...path, g]), path });
       }
     }
     return out;
   };
+  const items = (): Item[] => tree(objects(), []);
 
   const nameOf = (item: Item): string => (item.el ? describeObject(item.el).name : 'Group');
   const membersOf = (item: Item): Element[] => (item.el ? [item.el] : item.members);
@@ -286,17 +289,17 @@ export function install(app: App): void {
     const query = field.value.trim().toLowerCase();
     const selected = selectedObjects();
     const plan: { item: Item; level: number }[] = [];
-    for (const item of items()) {
+    const hit = (el: Element) => !query || describeObject(el).name.toLowerCase().includes(query);
+    const add = (item: Item, level: number): void => {
       if (item.el) {
-        if (!query || nameOf(item).toLowerCase().includes(query)) plan.push({ item, level: 1 });
-        continue;
+        if (hit(item.el)) plan.push({ item, level });
+        return;
       }
-      const members = item.members.filter((m) => !query || describeObject(m).name.toLowerCase().includes(query));
-      if (query && !members.length && !'group'.includes(query)) continue;
-      plan.push({ item, level: 1 });
-      if (folded.has(item.group) && !query) continue;
-      for (const m of query ? members : item.members) plan.push({ item: { el: m, group: null }, level: 2 });
-    }
+      if (query && !item.members.some(hit) && !'group'.includes(query)) return;
+      plan.push({ item, level });
+      if (!folded.has(item.group) || query) for (const c of item.children) add(c, level + 1);
+    };
+    for (const item of items()) add(item, 1);
     const on2 = (item: Item) => membersOf(item).every((el) => selected.has(el));
     const keys = plan.map((p) => keyOf(p.item));
     const current = focusKey && keys.includes(focusKey) ? focusKey : keys[plan.findIndex((p) => on2(p.item))] ?? keys[0];
@@ -323,8 +326,13 @@ export function install(app: App): void {
       const now = sel.kind === 'elements' ? sel.elements().map((el) => objectOf(app, el)) : [];
       const all = els.every((el) => now.includes(el));
       sel.set('elements', all ? now.filter((el) => !els.includes(el)) : [...now, ...els.filter((el) => !now.includes(el))]);
-    } else if (item.el && groupOf(item.el) && rows.some((r) => !r.item.el && r.item.group === groupOf(item.el))) enterGroup(app, item.el);
-    else sel.set('elements', els);
+    } else if (!item.el) selectIn(app, item.path, els);
+    else {
+      // a member row selects the member inside the groups around it
+      const list = groupsOf(item.el);
+      if (rows.some((r) => !r.item.el && list.includes(r.item.group))) selectIn(app, list, els);
+      else sel.set('elements', els);
+    }
     refresh(true);
   }
 
@@ -467,7 +475,7 @@ export function install(app: App): void {
       case 'ArrowLeft': {
         ev.preventDefault();
         if (!item.el && !folded.has(item.group)) return fold(item.group, true);
-        const g = item.el ? groupOf(item.el) : null;
+        const g = item.el ? groupsOf(item.el).at(-1) : item.path.at(-1);
         const parent = g ? rows.find((r) => !r.item.el && r.item.group === g) : null;
         if (parent) {
           focusKey = keyOf(parent.item);

@@ -276,12 +276,18 @@ export function contextItems(app: App, kind: Context, target: Element | null): M
     const group = kind === 'element' ? sectionOf(c) : `${c.menu?.bar ?? ''}/${c.menu?.group ?? ''}`;
     if (last !== null && group !== last) out.push({ rule: true });
     last = group;
-    // the commands of a submenu of the menu bar are a submenu of the menu of a text, e.g. Speech
-    const sub = kind === 'text' ? c.menu?.submenu : undefined;
+    // the commands of a submenu of the menu bar are a submenu of the menu of a text, e.g. Speech. in
+    // the menu of an element, Align and Distribute are submenus, and so is the group of Group,
+    // Ungroup, and Regroup of the Arrange menu, as in PowerPoint
+    const arranged = kind === 'element' && sectionOf(c) === 'arrange';
+    const sub = kind === 'text' ? c.menu?.submenu : arranged ? (c.menu?.submenu ?? (c.menu?.group === 'group' ? 'Group' : undefined)) : undefined;
     const prev = out.at(-1);
     const item: MenuItem = { command: c.id, arg: { kind, target } };
-    if (sub && prev && 'items' in prev && prev.label === sub && Array.isArray(prev.items)) prev.items.push(item);
-    else out.push(sub ? { label: sub, items: [item] } : item);
+    if (sub && prev && 'items' in prev && prev.label === sub && Array.isArray(prev.items)) {
+      const before = prev.items.at(-1);
+      if (arranged && before && 'command' in before && app.commands.get(before.command)?.menu?.group !== c.menu?.group) prev.items.push({ rule: true });
+      prev.items.push(item);
+    } else out.push(sub ? { label: sub, items: [item] } : item);
   }
   if (kind === 'canvas') addGrid(app, out);
   // the menu of the browser, with its spelling guesses, is opened by a second right-click

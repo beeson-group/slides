@@ -18,6 +18,7 @@ import { kindOf } from '../media/store.ts';
 import { insertPlain, pasteItems, pastesItems } from '../text/typing.ts';
 import { movableOf, objectsOf } from '../canvas/hit.ts';
 import { fieldOf, settleCopies, freshGroup } from './order.ts';
+import { copiedGroups } from '../model/groups.ts';
 import { withTwins } from '../canvas/hit.ts';
 import { VOID } from '../source.ts';
 import { tokenize } from '../tokens.ts';
@@ -177,10 +178,8 @@ export function columnOf(slide: Element): Element {
 function regroup(app: App, copies: Element[]): void {
   const groups = new Map<string, string>();
   for (const el of copies) {
-    const g = el.getAttribute('data-group');
-    if (!g) continue;
-    if (!groups.has(g)) groups.set(g, freshGroup(app));
-    docOf(app).setTag(el, { attrs: { 'data-group': groups.get(g)! } }, 'group');
+    const g = copiedGroups(el, groups, (taken) => freshGroup(app, taken));
+    if (g) docOf(app).setTag(el, { attrs: { 'data-group': g } }, 'group');
   }
 }
 

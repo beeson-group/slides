@@ -13,6 +13,7 @@ import { LAYOUT_GUIDES, anchored, fitPicture, lockedAxis, resizeBox, snapAngle, 
 import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, captionsOf, constrained, containerOf, cssWidth, figureFrame, frameOf, frameRect, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, pictureReach, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, unturnedRect, visualRect } from './hit.ts';
 import { groupFrame, overlay, turned, view, wh, xy } from './frames.ts';
 import { enterGroup, settleCopies, freshGroup, groupOf } from '../commands/order.ts';
+import { copiedGroups, scopeOf, within } from '../model/groups.ts';
 import { cornerBoxOf } from '../commands/align.ts';
 import { backdropAt, pressBackdrop } from '../commands/backdrop.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -650,8 +651,10 @@ export function install(app: App): void {
       // a click into a text puts the caret there, and with Shift or the command modifier the block
       // is added to the selection as a box. a block of a group is selected with its group at the
       // first click and by itself at the second, and only the third puts the caret in it, as in
-      // Keynote and PowerPoint. a shape is selected at the first click on its words, as a group is
-      if (ev.shiftKey || commandHeld(ev) || ((groupOf(el) || el.matches('.shape')) && sel.only() !== el)) pressElement(ev, el, target);
+      // Keynote and PowerPoint. a shape is selected at the first click on its words, as a group
+      // is, and inside an entered group, a block is selected at the first click
+      const grouped = !!groupOf(el) || el.matches('.shape') || (scopeOf().length > 0 && within(el));
+      if (ev.shiftKey || commandHeld(ev) || (grouped && sel.only() !== el)) pressElement(ev, el, target);
       return;
     }
     if (el && (target.closest(BY_ITSELF) || !hasText(el))) {
@@ -1062,11 +1065,8 @@ export function install(app: App): void {
         const copy = await app.doc.duplicate(el);
         // before the copy is put where it was dropped, since a plate made a zone is laid out anew
         settleCopies(app, [copy]);
-        const g = copy.getAttribute('data-group');
-        if (g) {
-          if (!groups.has(g)) groups.set(g, freshGroup(app));
-          app.doc.setTag(copy, { attrs: { 'data-group': groups.get(g)! } }, 'group');
-        }
+        const g = copiedGroups(copy, groups, (taken) => freshGroup(app, taken));
+        if (g) app.doc.setTag(copy, { attrs: { 'data-group': g } }, 'group');
         const now = toSlide(frameOf(app), frameRect(copy));
         const t = placeOf(copy).translate ?? { x: 0, y: 0 };
         app.doc.setTag(copy, { translate: { x: Math.round(t.x + box.left - now.left), y: Math.round(t.y + box.top - now.top) } }, 'move');

@@ -13,6 +13,7 @@ import { frameOf, frameRect, linePoints, movablesOf, onCanvas, snapBoxOf, toSlid
 import { LAYOUT_GUIDES, snapMove, snapPoint, type Box, type Targets } from '../canvas/snap.ts';
 import { locked, placeOf, record, scrollOf, standIns, writePlace, type Place } from '../canvas/drag.ts';
 import { freshGroup } from './order.ts';
+import { copiedGroups } from '../model/groups.ts';
 
 export type Point = { x: number; y: number };
 export type Ends = { x1: number; y1: number; x2: number; y2: number };
@@ -450,10 +451,9 @@ export function install(app: App): void {
         const copies: Element[] = [];
         for (const [i, el] of p.els.entries()) {
           const copy = await app.doc.duplicate(el);
-          const g = copy.getAttribute('data-group');
-          if (g && !groups.has(g)) groups.set(g, freshGroup(app));
+          const g = copiedGroups(copy, groups, (taken) => freshGroup(app, taken));
           const t = to[i];
-          app.doc.setTag(copy, { translate: t ? { x: round(t.x), y: round(t.y) } : null, ...(g ? { attrs: { 'data-group': groups.get(g)! } } : {}) }, 'move');
+          app.doc.setTag(copy, { translate: t ? { x: round(t.x), y: round(t.y) } : null, ...(g ? { attrs: { 'data-group': g } } : {}) }, 'move');
           copies.push(copy);
         }
         app.selection.set('elements', copies);

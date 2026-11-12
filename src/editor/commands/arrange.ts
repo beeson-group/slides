@@ -6,11 +6,11 @@
 import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { CONTAINER, RESIZABLE, containerOf, frameRect, mediaIn, movableOf, movablesOf, objectsOf, pictureOf } from '../canvas/hit.ts';
+import { CONTAINER, RESIZABLE, containerOf, frameRect, mediaIn, movableOf, movablesOf, objectsOf, pictureOf, turnable } from '../canvas/hit.ts';
 import type { Place } from '../canvas/drag.ts';
 import { placeOf, record, withCorners, writePlace } from '../canvas/drag.ts';
 import { view, xy } from '../canvas/frames.ts';
-import { fieldOf } from './order.ts';
+import { angleOf, fieldOf, groupAngle, groupOf, leaveGroup } from './order.ts';
 import { cornerBoxOf } from './align.ts';
 import { nudgeBackdrop } from './backdrop.ts';
 import { onSlides } from './slide.ts';
@@ -101,6 +101,18 @@ function step(app: App, back: boolean): void {
 
 const ARROWS: [string, string, number, number][] = [['left', 'ArrowLeft', -1, 0], ['right', 'ArrowRight', 1, 0], ['up', 'ArrowUp', 0, -1], ['down', 'ArrowDown', 0, 1]];
 
+// each selected object turned by a quarter turn about its own center, a whole group about the
+// center of its frame, as Rotate Left 90° and Rotate Right 90° of PowerPoint
+async function quarter(app: App, by: number): Promise<void> {
+  const els = app.selection.elements().filter((el, _, all) => !all.some((o) => o !== el && o.contains(el)));
+  const units = new Map<Element | string, Element[]>();
+  for (const el of els) units.set(groupOf(el) ?? el, [...(units.get(groupOf(el) ?? el) ?? []), el]);
+  for (const unit of units.values()) {
+    const deg = unit.length > 1 ? groupAngle(app, unit) : turnable(unit[0]) ? angleOf(unit[0]) : null;
+    if (deg !== null) await app.commands.run('arrange.setRotation', { deg: deg + by, els: unit });
+  }
+}
+
 export function commands(): Command[] {
   const list: Command[] = [
     {
@@ -124,7 +136,8 @@ export function commands(): Command[] {
       },
     },
     {
-      // Esc on an image selected inside its figure selects the figure, and else clears
+      // Esc on an image selected inside its figure selects the figure, inside an entered group the
+      // group, and else clears
       id: 'selection.clear',
       label: 'Deselect',
       // ⇧⌘A is Deselect All of Keynote
@@ -138,7 +151,7 @@ export function commands(): Command[] {
         const a = document.activeElement;
         if (a instanceof HTMLElement && (app.selection.items.some((el) => el.contains(a)) || a.classList.contains('beeson-handle'))) a.blur();
         if (up) app.selection.set('elements', [up]);
-        else app.selection.clear();
+        else if (!leaveGroup(app)) app.selection.clear();
       },
     },
     {
@@ -282,6 +295,15 @@ export function commands(): Command[] {
         record(app, 'resize', changes);
       },
     },
+    ...([['Left', -90], ['Right', 90]] as const).map(([side, by], i): Command => ({
+      id: `arrange.rotate${side}`,
+      label: `Rotate ${side} 90°`,
+      menu: { bar: 'Arrange', group: 'rotate', order: 13 + i / 2 },
+      context: ['element'],
+      undoable: true,
+      enabled: (app) => app.commands.enabled('arrange.setRotation'),
+      run: (app) => quarter(app, by),
+    })),
   ];
   for (const [name, key, x, y] of ARROWS) {
     for (const far of [false, true]) {

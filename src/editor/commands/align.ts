@@ -237,6 +237,7 @@ export function commands(): Command[] {
       id: `arrange.align.${side}`,
       label: `Align ${SIDE_LABELS[side]}`,
       menu: { bar: 'Arrange', group: i < 3 ? 'x' : 'y', order: 20 + i, submenu: 'Align' },
+      context: ['element'],
       undoable: true,
       enabled: (app) => targetsOf(app).length > 0,
       run: (app) => align(app, side),
@@ -247,6 +248,7 @@ export function commands(): Command[] {
       id: `arrange.alignTo.${ref}`,
       label: ref === 'slide' ? 'Align to Slide' : 'Align to Selection',
       menu: { bar: 'Arrange', group: 'reference', order: 30 + i, submenu: 'Align' },
+      context: ['element'],
       // one object is aligned to the slide, hence Align to Selection is dimmed for it, as in PowerPoint
       enabled: (app) => ref === 'slide' || objects(app).length !== 1,
       checked: (app) => (objects(app).length === 1 ? ref === 'slide' : reference === ref),
@@ -261,6 +263,7 @@ export function commands(): Command[] {
       id: `arrange.distribute.${axis === 'x' ? 'horizontal' : 'vertical'}`,
       label: axis === 'x' ? 'Distribute Horizontally' : 'Distribute Vertically',
       menu: { bar: 'Arrange', group: 'distribute', order: 40 + i, submenu: 'Distribute' },
+      context: ['element'],
       undoable: true,
       enabled: canDistribute,
       run: (app) => distribute(app, axis),
@@ -271,6 +274,7 @@ export function commands(): Command[] {
     id: 'arrange.distribute.evenly',
     label: 'Distribute Evenly',
     menu: { bar: 'Arrange', group: 'distribute', order: 42, submenu: 'Distribute' },
+    context: ['element'],
     undoable: true,
     enabled: canDistribute,
     run: (app) => {
