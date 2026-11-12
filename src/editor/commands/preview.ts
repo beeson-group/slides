@@ -16,7 +16,7 @@ import { OFF } from '../layers.ts';
 import { drawInto } from '../navigator/thumbs.ts';
 import { showStep, stepsOfSlide } from '../present.ts';
 import { injectStyle, make } from '../ui/dom.ts';
-import { liveOf, slideBackdrop, type Live } from './backdrop.ts';
+import { liveOf, slideBackdrop, spanOf, type Live } from './backdrop.ts';
 
 // the delay of each step in ms, which a test shortens through BeesonEditor.preview
 export const timing = { step: 1000 };
@@ -27,9 +27,6 @@ const CSS = `
 `;
 
 const theme = () => (window as unknown as { Beeson?: { preview?(el: HTMLElement): Live } }).Beeson;
-
-// the seconds in which the drawing of the theme traces its last strand, after its stagger
-const spanOf = (o: Live) => (o as Live & { span?: number }).span ?? 20;
 
 // the preview that plays, whose stop ends its waits, takes its layer down, and completes its traces
 let current: { stop(): void } | null = null;

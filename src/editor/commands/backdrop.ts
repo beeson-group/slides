@@ -9,7 +9,7 @@ import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { frameOf } from '../canvas/hit.ts';
 import type { Handle } from '../canvas/snap.ts';
-import { view as frameView } from '../canvas/frames.ts';
+import { setPreview, view as frameView } from '../canvas/frames.ts';
 import { begin, editing, extentOf, markCuts, orbitOf, setView, syncBackdrops, windowAttrs } from '../canvas/mask.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { select, type StrandRecord } from '../../strands.ts';
@@ -239,12 +239,31 @@ function writeWindow(app: App, el: HTMLElement, view: Partial<View>, label = 'wi
 // the window fitted to the box of el by the theme, or null
 const fitted = async (el: HTMLElement, box?: Box): Promise<View | null> => (await hooks().fitWindow?.(el, box)) ?? null;
 
-// the preview that is traced, which an edit or a change of slide completes
+// the seconds in which the drawing of the theme traces its last strand, after its stagger
+export const spanOf = (o: Live): number => (o as Live & { span?: number }).span ?? 20;
+
+// the preview that is traced, which an edit or a change of slide completes. the selection is not
+// drawn while it is traced, as during a preview of the toolbar, and unhide draws it again: at the
+// end of the trace, after the same seconds for a loop, at Esc, and at a press outside the panes
 let previewed: Live | null = null;
+let unhide: (() => void) | null = null;
 function endPreview(): void {
   const o = previewed;
   previewed = null;
+  unhide?.();
   if (o?.tracing) o.complete();
+}
+function hideSelection(app: App, o: Live): void {
+  const until = performance.now() + spanOf(o) * 1000 + 100;
+  const timer = window.setInterval(() => { if (!o.tracing || performance.now() > until) unhide?.(); }, 50);
+  unhide = () => {
+    unhide = null;
+    clearInterval(timer);
+    setPreview(app, 'pane', false);
+    app.invalidate();
+  };
+  setPreview(app, 'pane', true, endPreview);
+  app.invalidate();
 }
 
 // the attributes of a drawing of a library entry, with every other drawing attribute taken off
@@ -700,6 +719,7 @@ export function commands(): Command[] {
         previewed = o;
         o.reset();
         o.start();
+        hideSelection(app, o);
       },
     },
     {
@@ -899,4 +919,16 @@ export function install(app: App): void {
     endPreview();
     gallery?.close();
   });
+  // Esc ends a preview whose selection is hidden, alone, as it stops a preview of the toolbar, and
+  // a press on the slide draws the selection again under the trace
+  window.addEventListener('keydown', (ev) => {
+    if (!unhide || ev.key !== 'Escape') return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    endPreview();
+  }, true);
+  window.addEventListener('pointerdown', (ev) => {
+    const t = ev.target;
+    if (unhide && !(t instanceof Element && t.closest('.beeson-edit-top, .beeson-edit-menu, .beeson-edit-inspector'))) unhide();
+  }, true);
 }
