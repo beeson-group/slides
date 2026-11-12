@@ -86,13 +86,13 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`the Drawing popup opened before the list of Media > Backdrop… leaves out an entry whose file is not found (${platform})`, async (t) => {
+  test(`the Drawing popup opened before the list of Media > Backdrop… lists an entry whose file is not found at its place (${platform})`, async (t) => {
     const page = await load(t, platform, LAYOUTS, BACKDROP);
     if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
     await exec(page, 'backdrop.select');
     await frames(page);
     const items = await drawingItems(page);
-    assert.deepEqual(items, ['Lyapunov Families', 'Cislunar Manifolds', 'Earth Manifolds', 'mark'], 'the popup lists an entry whose file is not found');
+    assert.deepEqual(items, ['Beeson Logo', 'Lyapunov Families', 'Cislunar Manifolds', 'Earth Manifolds', 'Broucke Families', 'mark'], 'the popup leaves out an entry whose file is not found');
     assert.ok((await requested(page)).length > 0, 'the popup does not read the files');
     assert.deepEqual(errors(page).filter((e) => !FILES.test(e)), []);
   });
