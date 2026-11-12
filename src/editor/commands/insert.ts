@@ -20,6 +20,7 @@ import { onCaptionBox } from './figure.ts';
 import { docOf } from './slide.ts';
 import { freePlace, placeNew, titlePlace, translateOf } from './place.ts';
 import { checkOverlaps } from '../overflow.ts';
+import { overShapes } from './order.ts';
 
 const CSS = `
 /* the caption of a zone keeps the absolute place of the theme under the picture */
@@ -414,6 +415,7 @@ export function install(app: App): void {
         const caret = () => placeCaret(node, p.kind === 'code' ? (node.textContent ?? '').length : null);
         caret();
         await applyPending(app, p.el, node);
+        await overShapes(app, node);
         checkOverlaps(app, app.current(), node);
         if (apart) {
           await replay(p.kind);
@@ -658,6 +660,9 @@ export function install(app: App): void {
           // a formula grows with its TeX, hence it is moved only when it is under the slide, e.g.
           // after the caption of a figure slide
           centerIfOut(a, node, Infinity);
+          // the class of an empty formula positions it in the editor only, and markEmpty sets it again
+          node.classList.remove('beeson-empty');
+          await overShapes(a, node);
           checkOverlaps(a, a.current(), node);
           a.selection.set('elements', [node]);
           markEmpty();

@@ -443,10 +443,11 @@ export function install(app: App): void {
         const from = p.places.get(el) as Place;
         (el as HTMLElement).style.translate = from.translate ? `${from.translate.x}px ${from.translate.y}px` : '';
       }
-      if (!p.moved || !ev) p.click?.();
+      // a cancel keeps the selection of the press
+      if (!p.moved && ev) p.click?.();
       // a copy of each element is written after it at the place where it was dropped, and the
       // copies of a group are a new group
-      else await app.history.selecting('Duplicate', async () => {
+      else if (ev) await app.history.selecting('Duplicate', async () => {
         const groups = new Map<string, string>();
         const copies: Element[] = [];
         for (const [i, el] of p.els.entries()) {

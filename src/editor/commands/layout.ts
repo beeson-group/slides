@@ -336,13 +336,14 @@ function fitPanel(app: App, slide: Element): void {
 
 // the elements of a slide with a place of the editor: a translate, a rotate, the width of a
 // figure that the editor resizes, or the z-index and the position of a layer command. the translate
-// of a shape is its place on the slide, which a reset keeps
+// of a shape or a line is its place on the slide, which a reset keeps
 const SIZED = 'img, video, .qr, tycho-viewer';
+const KEPT = '.shape, svg.line';
 function placed(app: App, slide: Element): Element[] {
   return [...slide.querySelectorAll('*')].filter((el) => {
     if (!app.pairing?.elements.get(el)?.open) return false;
     const s = app.doc.tagState(el).style;
-    return ('translate' in s && !el.matches('.shape')) || 'rotate' in s || 'z-index' in s || 'position' in s || ('width' in s && el.matches(SIZED)) || (('width' in s || 'height' in s) && el.matches('.backdrop'));
+    return ('translate' in s && !el.matches(KEPT)) || 'rotate' in s || 'z-index' in s || 'position' in s || ('width' in s && el.matches(SIZED)) || (('width' in s || 'height' in s) && el.matches('.backdrop'));
   });
 }
 
@@ -513,7 +514,7 @@ export function install(app: App): void {
             const style: Record<string, null> = {};
             // the box of a backdrop resized by its grips is put back with its offset
             const box = el.matches('.backdrop');
-            for (const k of ['translate', 'rotate', 'width', 'height', 'z-index', 'position']) if (k in has && (box || k !== 'width' || el.matches(SIZED)) && (box || k !== 'height') && (k !== 'translate' || !el.matches('.shape'))) style[k] = null;
+            for (const k of ['translate', 'rotate', 'width', 'height', 'z-index', 'position']) if (k in has && (box || k !== 'width' || el.matches(SIZED)) && (box || k !== 'height') && (k !== 'translate' || !el.matches(KEPT))) style[k] = null;
             a.doc.setTag(el, { style }, 'reset slide');
           }
         }

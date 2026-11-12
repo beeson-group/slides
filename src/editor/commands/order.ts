@@ -17,10 +17,31 @@ export type Order = 'front' | 'forward' | 'backward' | 'back';
 
 export { groupOf };
 
-// an element in the flow of its parent, which a move among its siblings would move on the slide
+// an element placed by the flow of its parent, which a move among its siblings would move on the
+// slide: an element in the flow, or an absolute one without insets on an axis, e.g. a caption of a
+// content slide. the browser gives the used insets, hence they are set to auto for a moment, and
+// the answer is kept for the classes and the style of the element
+const flowKept = new WeakMap<Element, { sig: string; value: boolean }>();
 function inFlow(el: Element): boolean {
   const s = getComputedStyle(el);
-  return s.display !== 'none' && s.position !== 'absolute' && s.position !== 'fixed';
+  if (s.display === 'none' || s.position === 'fixed') return false;
+  if (s.position !== 'absolute' || !(el instanceof HTMLElement)) return s.position !== 'absolute';
+  const sig = `${el.className} ${el.getAttribute('style')} ${el.parentElement?.className}`;
+  const kept = flowKept.get(el);
+  if (kept?.sig === sig) return kept.value;
+  const style = el.getAttribute('style');
+  const was = el.getBoundingClientRect();
+  const auto = (a: string, b: string) => {
+    el.style.setProperty(a, 'auto', 'important');
+    el.style.setProperty(b, 'auto', 'important');
+    const r = el.getBoundingClientRect();
+    if (style === null) el.removeAttribute('style');
+    else el.setAttribute('style', style);
+    return Math.abs(r.top - was.top) < 0.5 && Math.abs(r.left - was.left) < 0.5;
+  };
+  const value = auto('top', 'bottom') || auto('left', 'right');
+  flowKept.set(el, { sig, value });
+  return value;
 }
 
 // an element drawn in a layer of its own, i.e. positioned or transformed, whose order among the
@@ -63,6 +84,11 @@ const pathIn = (orders: Map<Element, Element[]>): Path => (el) => {
   const slide = el.closest('section');
   for (let x: Element = el; x !== slide && x.parentElement; x = x.parentElement) out.unshift((orders.get(x.parentElement) ?? [...x.parentElement.children]).indexOf(x));
   return out;
+};
+// pathIn, with the path of each element kept, for a page that does not change meanwhile
+const keptPath = (orders: Map<Element, Element[]>): Path => {
+  const path = pathIn(orders), kept = new Map<Element, number[]>();
+  return (el) => kept.get(el) ?? kept.set(el, path(el)).get(el)!;
 };
 const filePath = pathIn(new Map());
 
@@ -208,21 +234,37 @@ const MOVE = 5000;
 
 // the choices of facts, from back to front, of the lowest cost that draw them in this order at the
 // paths of path, or null when no choice does
-function solve(facts: Fact[], path: Path, hi: number): { cost: number; choices: Choice[] } | null {
-  type Step = { key: Key; cost: number; path: Choice[] };
-  let prev: Step[] = [{ key: [[-Infinity, []]], cost: 0, path: [] }];
-  for (const f of facts) {
+function solve(facts: Fact[], path: Path, options: Choice[][]): { cost: number; choices: Choice[] } | null {
+  type Step = { key: Key; cost: number; c: Choice | null; back: Step | null };
+  let prev: Step[] = [{ key: [[-Infinity, []]], cost: 0, c: null, back: null }];
+  for (const [n, f] of facts.entries()) {
+    // the steps of prev sorted by key, and for each count of them the cheapest, the first in prev on
+    // a tie, since the steps under a key are the first ones in this order
+    const sorted = prev.map((_, i) => i).sort((a, b) => cmp(prev[a].key, prev[b].key));
+    const cheapest: number[] = [];
+    for (const i of sorted) {
+      const b = cheapest.at(-1);
+      cheapest.push(b === undefined || prev[i].cost < prev[b].cost || (prev[i].cost === prev[b].cost && i < b) ? i : b);
+    }
     const next: Step[] = [];
-    for (const c of choicesOf(f, hi)) {
+    for (const c of options[n]) {
       const key = keyWith(f, c, path);
-      const from = prev.filter((p) => under(p.key, key)).reduce<Step | null>((a, p) => (!a || p.cost < a.cost ? p : a), null);
-      if (from) next.push({ key, cost: from.cost + costOf(f, c), path: [...from.path, c] });
+      let [lo, hi] = [0, sorted.length];
+      while (lo < hi) {
+        const mid = (lo + hi) >> 1;
+        if (under(prev[sorted[mid]].key, key)) lo = mid + 1;
+        else hi = mid;
+      }
+      const from = lo ? prev[cheapest[lo - 1]] : null;
+      if (from) next.push({ key, cost: from.cost + costOf(f, c), c, back: from });
     }
     if (!next.length) return null;
     prev = next;
   }
   const best = prev.reduce((a, p) => (p.cost < a.cost ? p : a));
-  return { cost: best.cost, choices: best.path };
+  const choices: Choice[] = [];
+  for (let s: Step | null = best; s?.c; s = s.back) choices.unshift(s.c);
+  return { cost: best.cost, choices };
 }
 
 // whether a child of el with a z-index under 0 is drawn over the ground of el, i.e. whether el
@@ -240,7 +282,33 @@ function stacks(el: Element): boolean {
 // not change the order of the steps without an index. a hidden element over the ground may be
 // drawn in any place
 type Plan = { orders: Map<Element, Element[]>; facts: Fact[]; choices: Choice[]; moving: Element[] };
-function planOf(app: App, all: Element[], moving: Element[]): Plan | null {
+
+// the places in order, the children of the parent of el, that a move of el is tried at: its own,
+// the one after the sibling before it in the file, the two ends, and next to the siblings around the
+// elements drawn just under and just over it in target, each with the places around it up to the
+// next sibling that stays in the file. a plan thus runs a few solves for each moved element
+function placesOf(el: Element, order: Element[], target: Element[], stays: (k: Element) => boolean, prev: Element | undefined): number[] {
+  const without = order.filter((k) => k !== el);
+  const kid = (k: Element | undefined) => {
+    let x: Element | null = k ?? null;
+    while (x && x.parentElement !== el.parentElement) x = x.parentElement;
+    return x && x !== el ? x : null;
+  };
+  const i = target.indexOf(el);
+  const under = target.slice(0, Math.max(0, i)).reverse(), over = target.slice(i + 1);
+  const near = [under[0], under.find(stays), over[0], over.find(stays)].map(kid);
+  const out = new Set<number>();
+  for (const j of [order.indexOf(el), prev ? without.indexOf(prev) + 1 : 0, without.length, ...near.flatMap((k) => (k ? [without.indexOf(k), without.indexOf(k) + 1] : []))]) {
+    if (j < 0 || j > without.length) continue;
+    let [lo, hi] = [j, j];
+    while (lo > 0 && !stays(without[lo - 1])) lo--;
+    while (hi < without.length && !stays(without[hi])) hi++;
+    for (let k = lo; k <= hi; k++) out.add(k);
+  }
+  return [...out];
+}
+
+function planOf(app: App, all: Element[], moving: Element[], any = false): Plan | null {
   const ground = groundOf(all);
   const target = all.filter((e, i) => i < ground || !hidden(e));
   const n = target.length;
@@ -254,11 +322,12 @@ function planOf(app: App, all: Element[], moving: Element[]): Plan | null {
   // the steps without an index in the file, which reveal.js shows in the order of the page
   const steps = [...(target[0]?.closest('section')?.querySelectorAll('.fragment') ?? [])]
     .filter((e) => !!app.pairing?.elements.get(e)?.open && app.doc.tagState(e).attrs['data-fragment-index'] === undefined);
+  const options = facts.map((f) => choicesOf(f, hi));
   const costIn = (orders: Map<Element, Element[]>) => {
-    const path = pathIn(orders);
+    const path = keptPath(orders);
     const keys = steps.map((e): Key => [[0, path(e)]]);
     if (keys.some((k, i) => i && !under(keys[i - 1], k))) return null;
-    const s = solve(facts, path, hi);
+    const s = solve(facts, path, options);
     const moves = free.reduce((sum, el) => {
       const [now, was] = [rank(el, orders.get(el.parentElement!) ?? kidsOf(el)), rank(el, kidsOf(el).sort((a, b) => at(a) - at(b)))];
       return sum + (now === was ? 0 : MOVE + Math.abs(now - was));
@@ -267,9 +336,12 @@ function planOf(app: App, all: Element[], moving: Element[]): Plan | null {
   };
   let best = costIn(new Map());
   for (const el of free) {
+    if (any && best) break;
     const parent = el.parentElement!;
-    const without = (best?.orders.get(parent) ?? kidsOf(el)).filter((k) => k !== el);
-    for (let i = 0; i <= without.length; i++) {
+    const order = best?.orders.get(parent) ?? kidsOf(el);
+    const without = order.filter((k) => k !== el);
+    const file = kidsOf(el).filter((k) => k === el || at(k) >= 0).sort((a, b) => at(a) - at(b));
+    for (const i of placesOf(el, order, target, (k) => !free.includes(k) && at(k) >= 0, file[file.indexOf(el) - 1])) {
       const s = costIn(new Map([...(best?.orders ?? []), [parent, [...without.slice(0, i), el, ...without.slice(i)]]]));
       if (s && (!best || s.cost < best.cost)) best = s;
     }
@@ -300,10 +372,19 @@ async function applyPlan(app: App, plan: Plan): Promise<void> {
 // are written again at the lowest cost of their order, hence taken off once the slide is drawn in
 // the order of the file
 function changes(app: App, slide: Element | null, els: Set<Element>, o: Order, solved = true): boolean {
-  const list = slide ? layersOf(app, slide) : [];
+  const known = asked?.find((a) => a.slide === slide && a.o === o && a.solved === solved && same(a.els, [...els]));
+  if (known) return known.value;
+  if (!asked) queueMicrotask(() => (asked = null));
+  asked ??= [];
+  const list = slide ? (asked.find((a) => a.slide === slide)?.list ?? layersOf(app, slide)) : [];
   const target = targetOf(list, els, o);
-  return !same(seen(target), seen(list)) && (!solved || !!planOf(app, target, [...els]));
+  const value = !same(seen(target), seen(list)) && (!solved || !!planOf(app, target, [...els], true));
+  asked.push({ slide, els: [...els], o, solved, list, value });
+  return value;
 }
+// the answers of changes in one run of the code of the page, e.g. a refresh of the panes and the
+// menus, in which the four Order commands share the order of the slide and each answer
+let asked: { slide: Element | null; els: Element[]; o: Order; solved: boolean; list: Element[]; value: boolean }[] | null = null;
 
 // the order of the objects of slide that a command gives to the elements of els, applied, or
 // false when they stay
@@ -313,6 +394,13 @@ async function arrange(app: App, slide: Element, els: Element[], o: Order): Prom
   const plan = same(seen(target), seen(list)) ? null : planOf(app, target, els);
   if (plan) await applyPlan(app, plan);
   return !!plan;
+}
+
+// a new element of a slide drawn under a shape of the slide, put in front of the shapes by the plan
+// of Bring to Front, in the entry of its insert, so that it is seen once it is dragged onto a shape
+export async function overShapes(app: App, el: Element): Promise<void> {
+  const slide = el.closest('section');
+  if (slide && [...slide.querySelectorAll('.shape')].some((s) => drawnUnder(el, s))) await arrange(app, slide, [el], 'front');
 }
 
 // whether Bring Forward, or Send Backward with up false, would move el by itself

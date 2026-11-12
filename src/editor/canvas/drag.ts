@@ -176,9 +176,16 @@ function writeLive(el: Element, p: Place): void {
 // then turned to deg. with live set, the page alone is changed, with the image of the other mode
 // turned as writePlace turns it
 export function turn(app: App, spin: Element, carrier: Element, deg: number, want: { x: number; y: number }, live = false): void {
-  const was = placeOf(carrier).translate, memo = restOf.get(carrier);
-  const rests = memo && sameOffset(memo.at, was) ? memo.rests : new Map<number, Translate | null>();
-  if (!rests.has(whole(angleOf(spin)))) rests.set(whole(angleOf(spin)), was);
+  const was = placeOf(carrier).translate, memo = restOf.get(carrier), at = whole(angleOf(spin));
+  // a run goes on while each turn starts at the offset where the last one ended, and over a move at
+  // the angle where it ended, e.g. a nudge, which moves the offset of each angle of the run with it
+  const unbroken = !!memo && sameOffset(memo.at, was);
+  const moved = !!memo && !unbroken && memo.deg === at;
+  const d = { x: (was?.x ?? 0) - (memo?.at?.x ?? 0), y: (was?.y ?? 0) - (memo?.at?.y ?? 0) };
+  const shift = (r: Translate | null): Translate | null => (r?.x ?? 0) + d.x || (r?.y ?? 0) + d.y ? { x: (r?.x ?? 0) + d.x, y: (r?.y ?? 0) + d.y } : null;
+  const rests = unbroken ? memo.rests : moved ? new Map([...memo.rests].map(([a, r]) => [a, shift(r)])) : new Map<number, Translate | null>();
+  const turns = unbroken || moved ? memo.turns + 1 : 1;
+  if (!rests.has(at)) rests.set(at, was);
   const put = (el: Element, p: Place) => {
     if (!live) return writePlace(app, el, p);
     writeLive(el, p);
@@ -198,17 +205,18 @@ export function turn(app: App, spin: Element, carrier: Element, deg: number, wan
   const ux = (c.x - e.left - e.width / 2) / k, uy = (c.y - e.top - e.height / 2) / k;
   const vx = ux * Math.cos(a) + uy * Math.sin(a), vy = uy * Math.cos(a) - ux * Math.sin(a);
   if (Math.abs(ux - vx) > 0.01 || Math.abs(uy - vy) > 0.01) [x, y] = [Math.round(x + ux - vx) - ux + vx, Math.round(y + uy - vy) - uy + vy];
-  // the rounding of each turn to whole px adds up, hence a turn back to an angle that a turn of the
-  // run started from, near the offset at this start, writes this offset
-  const rest = rests.get(whole(deg));
-  if (rest !== undefined && Math.abs(x - (rest?.x ?? 0)) <= 2 && Math.abs(y - (rest?.y ?? 0)) <= 2) [x, y] = [rest?.x ?? 0, rest?.y ?? 0];
+  // the rounding of each turn to whole px adds up, by up to a px for each turn of the run, hence a
+  // turn back to an angle that a turn of the run started from, near the offset at this start,
+  // writes this offset
+  const rest = rests.get(whole(deg)), near = 2 + turns;
+  if (rest !== undefined && Math.abs(x - (rest?.x ?? 0)) <= near && Math.abs(y - (rest?.y ?? 0)) <= near) [x, y] = [rest?.x ?? 0, rest?.y ?? 0];
   if (Math.abs(x - (now.translate?.x ?? 0)) >= 0.5 || Math.abs(y - (now.translate?.y ?? 0)) >= 0.5) put(carrier, { ...now, translate: { x, y } });
-  restOf.set(carrier, { rests, at: placeOf(carrier).translate });
+  restOf.set(carrier, { rests, at: placeOf(carrier).translate, deg: whole(deg), turns });
 }
 
-// the offset of an element at each angle that a turn of a run started from, kept while each turn
-// starts where the last ended
-const restOf = new WeakMap<Element, { rests: Map<number, Translate | null>; at: Translate | null }>();
+// the offset of an element at each angle that a turn of a run started from, the offset and the
+// angle where the last turn ended, and the count of the turns of the run
+const restOf = new WeakMap<Element, { rests: Map<number, Translate | null>; at: Translate | null; deg: number; turns: number }>();
 const whole = (deg: number) => ((Math.round(deg) % 360) + 360) % 360;
 const sameOffset = (a: Translate | null, b: Translate | null) => (a?.x ?? 0) === (b?.x ?? 0) && (a?.y ?? 0) === (b?.y ?? 0);
 
@@ -1040,9 +1048,10 @@ export function install(app: App): void {
         for (const el of els) {
           const from = p.from.get(el) as Place, twin = twinOf(app, el);
           writeLive(el, from);
-          // the run of turns goes on from the restored offset
+          // a cancelled turn leaves its run at the restored offset, and a cancelled move does not
+          // revive an older run
           const memo = restOf.get(el);
-          if (memo) restOf.set(el, { ...memo, at: from.translate });
+          if (memo && p.kind === 'rotate') restOf.set(el, { ...memo, at: from.translate });
           if (twin && !els.includes(twin)) writeLive(twin, from);
         }
       } else p.click?.();
