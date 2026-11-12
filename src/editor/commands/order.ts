@@ -10,6 +10,7 @@ import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { angleOf, apartOf, locked, pivotOf, placeOf, record, seenCenter, spinOf, turn, turnMember, turnedEls, turnersOf } from '../canvas/drag.ts';
 import { objectOf, objectsOf, turnable, twinOf } from '../canvas/hit.ts';
+import { stateOf } from '../tags.ts';
 
 export type Order = 'front' | 'forward' | 'backward' | 'back';
 
@@ -30,11 +31,8 @@ function isLayer(el: Element): boolean {
 
 // the elements that theme/beeson.css gives a z-index, which is their z-index without a style
 const RAISED = ':is(section, .col) > table';
-// the z-index that the browser applies to el, 0 for auto, and the one el has without its style
+// the z-index that the browser applies to el, 0 for auto
 const zOf = (el: Element): number => (getComputedStyle(el).position === 'static' ? 0 : parseInt(getComputedStyle(el).zIndex, 10) || 0);
-const baseZ = (el: Element): number => ((el as HTMLElement).style.zIndex ? (el.matches(RAISED) ? 1 : 0) : zOf(el));
-// whether the theme positions el, i.e. whether a z-index applies to it without position: relative
-const placedByTheme = (el: Element): boolean => !(el as HTMLElement).style.position && getComputedStyle(el).position !== 'static';
 
 // the place of an element in the order of its siblings from back to front: its z-index, then its
 // index in the file. an element that is not a layer is drawn under the layers of z-index 0
@@ -53,103 +51,224 @@ export function drawnUnder(a: Element, b: Element): boolean {
   return under(keyOf(x), keyOf(y));
 }
 
-// the siblings of el in the file, in the order of the page
-function siblingsOf(app: App, el: Element): Element[] {
-  const parent = el.parentElement;
-  if (!parent) return [];
-  return [...parent.children].filter((s) => !s.hasAttribute('data-generated') && !!app.pairing?.elements.has(s));
+// an element with a box on the slide, which the object list shows
+const drawn = (el: Element): boolean => getComputedStyle(el).display !== 'none' && el.getClientRects().length > 0;
+
+// the drawn children of parent in the file apart from the speaker notes, from back to front, as the
+// object list shows them
+function layersOf(app: App, parent: Element): Element[] {
+  return [...parent.children]
+    .filter((s) => !s.hasAttribute('data-generated') && !!app.pairing?.elements.has(s) && !s.matches('aside.notes') && drawn(s))
+    .sort((a, b) => (under(keyOf(a), keyOf(b)) ? -1 : 1));
 }
 
-// the layers among the siblings of el from back to front, and the last one that a command puts el
-// past, with the selected ones passed over, or null when el does not move. a plate, the back layer
-// of its layout, is not ordered
-function pickOf(app: App, el: Element, order: Order, selected: Set<Element>): { list: Element[]; pick: Element } | null {
-  if (el.matches('.plate')) return null;
-  const list = siblingsOf(app, el).filter((s) => s !== el && isLayer(s)).sort((a, b) => (under(keyOf(a), keyOf(b)) ? -1 : 1));
-  const k = keyOf(el);
-  const up = order === 'front' || order === 'forward';
-  const passed = list.filter((s) => !selected.has(s) && (up ? under(k, keyOf(s)) : under(keyOf(s), k)));
-  if (!passed.length) return null;
-  return { list, pick: order === 'front' || order === 'backward' ? passed[passed.length - 1] : passed[0] };
+// a plate or a backdrop is the back layer of its layout. a command does not move it, and Send to
+// Back and Send Backward do not pass it
+const BACK = '.plate, .backdrop';
+const same = (a: Element[], b: Element[]): boolean => a.length === b.length && a.every((e, i) => e === b[i]);
+
+// list, from back to front, in the order that a command gives the elements of moving, which keep
+// their own order. Bring Forward and Send Backward pass one element of list
+function targetOf(list: Element[], moving: Set<Element>, order: Order): Element[] {
+  const out = list.slice();
+  const m = (e: Element) => moving.has(e) && !e.matches(BACK);
+  if (order === 'front') return [...out.filter((e) => !m(e)), ...out.filter(m)];
+  if (order === 'back') {
+    const first = out.findIndex(m);
+    const rest = out.filter((e) => !m(e));
+    let at = 0;
+    for (let i = 0; i < first; i++) if (out[i].matches(BACK)) at = rest.indexOf(out[i]) + 1;
+    return first < 0 ? out : [...rest.slice(0, at), ...out.filter(m), ...rest.slice(at)];
+  }
+  if (order === 'forward') {
+    for (let i = out.length - 2; i >= 0; i--) if (m(out[i]) && !m(out[i + 1])) [out[i], out[i + 1]] = [out[i + 1], out[i]];
+  } else {
+    for (let i = 1; i < out.length; i++) if (m(out[i]) && !m(out[i - 1]) && !out[i - 1].matches(BACK)) [out[i - 1], out[i]] = [out[i], out[i - 1]];
+  }
+  return out;
 }
 
-// whether el has a declaration of applyPlan, and its place without them, i.e. in the order of the file
-const ordered = (el: Element): boolean => !!((el as HTMLElement).style.zIndex || (el as HTMLElement).style.position);
-function homeOf(el: Element): Key {
-  const c = getComputedStyle(el);
-  const layer = placedByTheme(el) || c.transform !== 'none' || c.translate !== 'none' || c.rotate !== 'none';
-  return [layer ? baseZ(el) : -0.5, indexOf(el)];
-}
+// the declarations position: relative and z-index in the style of an element
+type Choice = { pos: boolean; z: number | null };
+// what the order of el depends on: whether it is positioned without position: relative, whether it
+// is turned or moved, its z-index without a z-index in its style, and its declarations now and in
+// the file. ref is the file without the declarations of the form that a layer command writes on an
+// element that the command moves, which the command may thus take off
+type Fact = { el: Element; moving: boolean; placed: boolean; turned: boolean; base: number; now: Choice; file: Choice; ref: Choice; fixPos: boolean; fixZ: boolean };
 
-// the order that a command gives el: its z-index, and the sibling that it is put before in the
-// file, or undefined when it stays. el is put between the layers lo and hi of its siblings
-type Plan = { z: number; before?: Node | null; home?: boolean };
-function planOf(app: App, el: Element, order: Order, selected: Set<Element>): Plan | null {
-  const found = pickOf(app, el, order, selected);
-  const up = order === 'front' || order === 'forward';
-  // an element with the declarations of a layer command that has no layer left to pass is put back
-  // in the order of the file when this is a step the right way
-  const home = ordered(el) && !el.matches('.plate') ? homeOf(el) : null;
-  if (!found) return home && (up ? under(keyOf(el), home) : under(home, keyOf(el))) ? { z: baseZ(el), home: true } : null;
-  const { list, pick } = found;
-  const at = list.indexOf(pick);
-  // the first step forward of an element that is not a layer makes it the layer at the back
-  const first = order === 'forward' && !isLayer(el);
-  const lo = up && !first ? pick : list[at - 1];
-  const hi = up && !first ? list[at + 1] : pick;
-  const fits = (z: number, i: number) => (!lo || under(keyOf(lo), [z, i])) && (!hi || under([z, i], keyOf(hi)));
-  if (home && fits(...home)) return { z: home[0], home: true };
-  const base = baseZ(el);
-  const i = indexOf(el);
-  // an element out of the flow is moved in the file, after lo or before hi, as far as it can
-  // keep the z-index of the theme
-  const move = !inFlow(el) ? { before: lo ? lo.nextSibling : hi } : null;
-  const anchor = lo ? indexOf(lo) + 0.5 : indexOf(hi) - 0.5;
-  if (fits(base, i)) return { z: base };
-  if (move && fits(base, anchor)) return { z: base, ...move };
-  // else the z-index nearest to that of the theme with which el stays in the file, or, for an
-  // element in the flow that cannot stay between lo and hi, the z-index that passes the layer picked
-  const zmin = lo ? (i > indexOf(lo) ? zOf(lo) : zOf(lo) + 1) : -Infinity;
-  const zmax = hi ? (i < indexOf(hi) ? zOf(hi) : zOf(hi) - 1) : Infinity;
-  if (zmin <= zmax) return { z: Math.min(Math.max(base, zmin), zmax) };
-  if (move) return { z: zOf(lo ?? hi), ...move };
-  // the order of the file, when it passes the same layers as this z-index
-  const z = up ? zmin : zmax;
-  const [a, b]: Key[] = up ? [[z, i], home ?? [z, i]] : [home ?? [z, i], [z, i]];
-  if (home && (up ? under(keyOf(lo), home) : under(home, keyOf(hi))) && !list.some((s) => under(a, keyOf(s)) && under(keyOf(s), b))) return { z: home[0], home: true };
-  return { z };
-}
+const zIn = (v: string | undefined): number | null => (v !== undefined && /^-?\d+$/.test(v.trim()) ? Number(v) : null);
 
-// el given the order of plan, by a move in the file and the declarations z-index and position.
-// position: relative is written only on an element that the theme does not position, since a
-// z-index applies to a positioned element only, and an element that is not moved or turned is a
-// layer only once it is positioned
-async function applyPlan(app: App, el: Element, plan: Plan): Promise<void> {
-  if (plan.before !== undefined) await app.doc.move(el, el.parentElement!, plan.before, 'order');
+function factOf(app: App, el: Element, moving: boolean): Fact {
+  const src = app.pairing?.elements.get(el);
+  const style = src?.open ? stateOf(src.attrs).style : null;
   const s = (el as HTMLElement).style;
-  const z = plan.home || plan.z === baseZ(el) ? null : String(plan.z);
   const c = getComputedStyle(el);
+  // a position of the author other than relative, or a z-index that is not a whole number, is not
+  // written by a command, and neither is a style without a start tag
+  const fixPos = !style || ('position' in style && style.position.trim() !== 'relative');
+  const fixZ = !style || ('z-index' in style && zIn(style['z-index']) === null);
+  const now = { pos: !fixPos && s.position === 'relative', z: fixZ ? null : zIn(s.zIndex) };
+  const file = { pos: !fixPos && 'position' in style!, z: fixZ ? null : zIn(style!['z-index']) };
+  const form = moving && file.z !== null && !['top', 'right', 'bottom', 'left', 'inset'].some((k) => k in style!);
+  const base = !fixZ && s.zIndex ? (el.matches(RAISED) ? 1 : 0) : parseInt(c.zIndex, 10) || 0;
   const turned = c.transform !== 'none' || c.translate !== 'none' || c.rotate !== 'none';
-  const position = plan.home || placedByTheme(el) || (z === null && turned) ? null : 'relative';
-  const style: Record<string, string | null> = {};
-  if (!placedByTheme(el) && s.position !== (position ?? '')) style.position = position;
-  if (s.zIndex !== (z ?? '')) style['z-index'] = z;
-  if (Object.keys(style).length) app.doc.setTag(el, { style }, 'order');
+  const placed = fixPos ? c.position !== 'static' : !s.position && c.position !== 'static';
+  return { el, moving, placed, turned, base, now, file, ref: form ? { pos: false, z: null } : file, fixPos, fixZ };
+}
+
+// the place of the element of f with the declarations of c, at index i of the file, as keyOf
+// gives it. a z-index applies to a positioned element only
+const keyWith = (f: Fact, c: Choice, i: number): Key => (f.placed || c.pos ? [c.z ?? f.base, i] : [f.turned ? 0 : -0.5, i]);
+
+// the declarations that a command may give the element of f. on an element that it does not move,
+// a declaration of the file stays, or is put back once a command has changed it
+function choicesOf(f: Fact, lo: number, hi: number): Choice[] {
+  const out: Choice[] = [{ pos: false, z: null }, f.now, f.file];
+  if (!f.placed && !f.fixPos) out.push({ pos: true, z: null });
+  if (!f.fixZ && (f.placed || !f.fixPos)) for (let z = lo; z <= hi; z++) if (z !== f.base) out.push({ pos: !f.placed, z });
+  const kept = (c: Choice) => f.moving || ((!f.file.pos || c.pos === f.file.pos || c.pos === f.now.pos) && (f.file.z === null || c.z === f.file.z || c.z === f.now.z));
+  return out.filter((c, i) => (c.pos || c.z === null || f.placed) && kept(c) && out.findIndex((d) => d.pos === c.pos && d.z === c.z) === i);
+}
+
+// the cost of c: its declarations that ref does not have, which count more on an element that the
+// command does not move, then a change of the declarations that the element has, then the size of
+// its z-index
+const costOf = (f: Fact, c: Choice): number =>
+  (Number(c.pos !== f.ref.pos) + Number(c.z !== f.ref.z)) * (f.moving ? 10000 : 25000) + (c.pos !== f.now.pos || c.z !== f.now.z ? 100 : 0) + Math.abs(c.z ?? 0);
+// the cost of a move in the file, which saves a declaration, and its length
+const MOVE = 5000;
+
+// the choices of facts, from back to front, of the lowest cost that draw them in this order at the
+// indices of index, or null when no choice does
+function solve(facts: Fact[], index: (el: Element) => number, lo: number, hi: number): { cost: number; choices: Choice[] } | null {
+  type Step = { key: Key; cost: number; path: Choice[] };
+  let prev: Step[] = [{ key: [-Infinity, -Infinity], cost: 0, path: [] }];
+  for (const f of facts) {
+    const i = index(f.el);
+    const next: Step[] = [];
+    for (const c of choicesOf(f, lo, hi)) {
+      const key = keyWith(f, c, i);
+      const from = prev.filter((p) => under(p.key, key)).reduce<Step | null>((a, p) => (!a || p.cost < a.cost ? p : a), null);
+      if (from) next.push({ key, cost: from.cost + costOf(f, c), path: [...from.path, c] });
+    }
+    if (!next.length) return null;
+    prev = next;
+  }
+  const best = prev.reduce((a, p) => (p.cost < a.cost ? p : a));
+  return { cost: best.cost, choices: best.path };
+}
+
+// whether a child of el with a z-index under 0 is drawn over the ground of el, i.e. whether el
+// makes a stacking context, as a slide does. elsewhere, e.g. in the panel of a split slide or the
+// block of a title slide, the child is drawn under its parent, hidden from a click
+function stacks(el: Element): boolean {
+  const s = getComputedStyle(el);
+  return (s.position !== 'static' && s.zIndex !== 'auto') || s.transform !== 'none' || s.translate !== 'none' || s.rotate !== 'none' || s.scale !== 'none' || Number(s.opacity) < 1 || s.isolation === 'isolate' || s.filter !== 'none';
+}
+
+// the children of parent in the order of the file, and the declarations of each element of
+// target, that draw target from back to front at the lowest cost. an element of moving out of the
+// flow is moved in the file where this saves a declaration, since a move in the file does not
+// move it on the slide
+type Plan = { kids: Element[]; facts: Fact[]; choices: Choice[]; moving: Element[] };
+function planOf(app: App, parent: Element, target: Element[], moving: Element[]): Plan | null {
+  const facts = target.map((el) => factOf(app, el, moving.includes(el)));
+  const lo = stacks(parent) ? -target.length : 0;
+  const hi = Math.max(0, ...facts.map((f) => f.base)) + target.length;
+  const free = moving.filter((e) => target.includes(e) && !inFlow(e) && !e.matches(BACK));
+  const kids = [...parent.children];
+  // the place of el among the children that stay
+  const rank = (el: Element, order: Element[]) => order.filter((k) => k === el || !free.includes(k)).indexOf(el);
+  const costIn = (order: Element[]) => {
+    const s = solve(facts, (el) => order.indexOf(el), lo, hi);
+    const moves = free.reduce((sum, el) => sum + (rank(el, order) === rank(el, kids) ? 0 : MOVE + Math.abs(rank(el, order) - rank(el, kids))), 0);
+    return s ? { ...s, cost: s.cost + moves, order } : null;
+  };
+  let best = costIn(kids);
+  for (const el of free) {
+    const now = best?.order ?? kids;
+    const without = now.filter((k) => k !== el);
+    // a move helps only next to the elements just under and over el in target
+    const k = target.indexOf(el);
+    const near = [target[k - 1], target[k + 1]].filter((t) => t !== undefined);
+    for (const at of new Set(near.flatMap((t) => [without.indexOf(t), without.indexOf(t) + 1]))) {
+      const s = costIn([...without.slice(0, at), el, ...without.slice(at)]);
+      if (s && (!best || s.cost < best.cost)) best = s;
+    }
+  }
+  return best ? { kids: best.order, facts, choices: best.choices, moving: free } : null;
+}
+
+async function applyPlan(app: App, parent: Element, plan: Plan): Promise<void> {
+  for (const [at, el] of plan.kids.entries()) {
+    if (!plan.moving.includes(el)) continue;
+    const prev = plan.kids[at - 1] ?? null;
+    if (el.previousElementSibling === prev) continue;
+    await app.doc.move(el, parent, prev ? prev.nextSibling : parent.firstElementChild, 'order');
+  }
+  plan.facts.forEach((f, i) => {
+    const c = plan.choices[i];
+    const style: Record<string, string | null> = {};
+    if (c.pos !== f.now.pos) style.position = c.pos ? 'relative' : null;
+    if (c.z !== f.now.z) style['z-index'] = c.z === null ? null : String(c.z);
+    if (Object.keys(style).length) app.doc.setTag(f.el, { style }, 'order');
+  });
+}
+
+// the declarations of the layer commands on the children of every other parent of the slide of el
+// written again at the lowest cost of their order, hence taken off once the order is the one of
+// the file
+async function tidy(app: App, el: Element, done: Iterable<Element>): Promise<void> {
+  const skip = new Set(done);
+  const slide = el.closest('section');
+  const parents = new Set([...(slide?.querySelectorAll('[style]') ?? [])].filter((e) => {
+    const s = (e as HTMLElement).style;
+    return (s.position || s.zIndex) && !!e.parentElement && !skip.has(e.parentElement);
+  }).map((e) => e.parentElement!));
+  for (const parent of parents) {
+    const list = layersOf(app, parent);
+    const plan = planOf(app, parent, list, []);
+    if (plan) await applyPlan(app, parent, plan);
+  }
+}
+
+// whether a command changes the order of the children of parent for the elements of els, and,
+// with solved, whether declarations draw this order
+function changes(app: App, parent: Element | null, els: Set<Element>, o: Order, solved = true): boolean {
+  const list = parent ? layersOf(app, parent) : [];
+  const target = targetOf(list, els, o);
+  return !same(target, list) && (!solved || !!planOf(app, parent!, target, [...els]));
+}
+
+// the order of the children of parent that a command gives to the elements of els, applied, or
+// false when they stay
+async function arrange(app: App, parent: Element, els: Element[], o: Order): Promise<boolean> {
+  const list = layersOf(app, parent);
+  const target = targetOf(list, new Set(els), o);
+  const plan = same(target, list) ? null : planOf(app, parent, target, els);
+  if (plan) await applyPlan(app, parent, plan);
+  return !!plan;
 }
 
 // whether Bring Forward, or Send Backward with up false, would move el by itself
-export const canStep = (app: App, el: Element, up: boolean): boolean => planOf(app, el, up ? 'forward' : 'backward', new Set([el])) !== null;
+export const canStep = (app: App, el: Element, up: boolean): boolean => changes(app, el.parentElement, new Set([el]), up ? 'forward' : 'backward', false);
 
-// the layer that Bring to Front, or Send to Back with up false, puts el in front of or behind, with
-// the elements of selected passed over, or null when el does not move
-export const layerLimit = (app: App, el: Element, up: boolean, selected: Set<Element>): Element | null => pickOf(app, el, up ? 'front' : 'back', selected)?.pick ?? null;
+// the last element that Bring to Front, or Send to Back with up false, puts el in front of or
+// behind, with the elements of selected passed over, or null when el does not move
+export function layerLimit(app: App, el: Element, up: boolean, selected: Set<Element>): Element | null {
+  const list = el.parentElement ? layersOf(app, el.parentElement) : [];
+  const target = targetOf(list, selected, up ? 'front' : 'back');
+  const k = list.indexOf(el);
+  const passed = list.filter((s, i) => !selected.has(s) && (up ? i > k : i < k && target.indexOf(s) > target.indexOf(el)));
+  return (up ? passed.at(-1) : passed[0]) ?? null;
+}
 
 // el moved by one layer, as Bring Forward or Send Backward moves it, for a drag of a row of
 // navigator/objects.ts. it returns false when el does not move
 export async function stepLayer(app: App, el: Element, up: boolean): Promise<boolean> {
-  const plan = planOf(app, el, up ? 'forward' : 'backward', new Set([el]));
-  if (!plan) return false;
-  await applyPlan(app, el, plan);
+  const parent = el.parentElement;
+  if (!parent || !(await arrange(app, parent, [el], up ? 'forward' : 'backward'))) return false;
+  await tidy(app, el, [parent]);
   return true;
 }
 
@@ -164,23 +283,21 @@ const selectedEls = (app: App): Element[] => {
 // is one object with its caption, and else the selected element
 const objectEls = (app: App): Element[] => objectsOf(app, selectedEls(app));
 
-const canOrder = (app: App, order: Order): boolean => {
-  const els = objectEls(app);
-  const set = new Set(els);
-  return els.some((el) => planOf(app, el, order, set) !== null);
-};
+// the elements of els by their parent
+function byParent(els: Element[]): Map<Element, Element[]> {
+  const out = new Map<Element, Element[]>();
+  for (const el of els) if (el.parentElement) out.set(el.parentElement, [...(out.get(el.parentElement) ?? []), el]);
+  return out;
+}
 
-async function reorder(app: App, order: Order): Promise<void> {
+const canOrder = (app: App, o: Order): boolean => [...byParent(objectEls(app))].some(([parent, els]) => changes(app, parent, new Set(els), o));
+
+async function reorder(app: App, o: Order): Promise<void> {
   const before = app.selection.elements().slice();
-  const els = objectEls(app);
-  const set = new Set(els);
-  const up = order === 'front' || order === 'forward';
-  // the elements in the order that keeps their own order: the front one first for a move up
-  els.sort((a, b) => (drawnUnder(a, b) === up ? 1 : -1));
-  for (const el of els) {
-    const plan = planOf(app, el, order, set);
-    if (plan) await applyPlan(app, el, plan);
-  }
+  const parents = byParent(objectEls(app));
+  for (const [parent, els] of parents) await arrange(app, parent, els, o);
+  const first = [...parents.values()][0]?.[0];
+  if (first) await tidy(app, first, parents.keys());
   app.selection.set('elements', before.filter((el) => el.isConnected));
   app.invalidate('content');
 }
