@@ -868,8 +868,9 @@ function columnWidths(table: HTMLTableElement, nowrap: boolean, from = 0, to = I
 }
 
 // the widest text of each column of the cells of t on one line, as Resize Column to Fit Content
-// of Keynote
-const fitWidths = (t: Target) => columnWidths(t.table, true, t.box?.c0, t.box?.c1);
+// of Keynote, or of every column of a table selected as an object. a width is written in whole
+// px, hence it is rounded up, since a px less wraps the widest text
+const fitWidths = (t: Target) => new Map([...columnWidths(t.table, true, t.box?.c0, t.box?.c1)].map(([c, w]) => [c, Math.ceil(w - 0.01)]));
 
 // the rows of the range of t, or of the caret, or else every row of the table, and of each the row
 // and the cells that start in it whose style writes a height, which Resize Row to Fit Content of
@@ -2052,9 +2053,10 @@ export function install(app: App): void {
     id: 'table.fitColumn',
     label: 'Resize Column to Fit Content',
     menu: menu('size', 79.9),
+    // a table selected as an object has every column fitted, as Keynote does
     enabled: (a, arg?: unknown) => {
       const t = ready(a) ? targetOf(a, arg) : null;
-      return !!t?.box && gridOf(t.table).spots[0]?.some((s) => s.span === 1 && s.col >= t.box!.c0 && s.col <= t.box!.c1);
+      return !!t && !!gridOf(t.table).spots[0]?.some((s) => s.span === 1 && (!t.box || (s.col >= t.box.c0 && s.col <= t.box.c1)));
     },
     undoable: true,
     run: (a, arg) => {
@@ -2065,7 +2067,7 @@ export function install(app: App): void {
   c.define({
     id: 'table.fitRow',
     label: 'Resize Row to Fit Content',
-    menu: menu('size', 79.95),
+    menu: menu('size', 79.88),
     enabled: (a, arg?: unknown) => {
       const t = ready(a) ? targetOf(a, arg) : null;
       return !!t && writtenHeights(a, t).length > 0;

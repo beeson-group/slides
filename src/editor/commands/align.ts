@@ -407,23 +407,60 @@ export function commands(): Command[] {
             if (Math.round(read()) !== Math.round(h)) writePlace(app, el, { ...to, width: wide(best.d) });
           }
           // the caption wraps anew at some widths, where the height jumps, hence a height still off
-          // is searched for at the other wraps, the nearest width first. at one wrap the height grows
-          // by slope per px of width, and a wider caption is never higher, which bounds each jump of
-          // lo and hi. without a whole width that reads as typed, the nearest height is kept
+          // is searched for over the widths from 1 px to where the picture alone is past it. a
+          // wider caption is never higher, hence a span of widths whose ends have the same caption
+          // is one wrap, where the height grows by slope per px of width and is solved from its
+          // ends. a span with two wraps is halved, and a span that cannot read nearer than the
+          // nearest width found is dropped. the nearest height is kept, at the width nearest the
+          // solve where a width reads as typed, else at the smaller width of two
           if (caps[i] && Math.round(read()) !== Math.round(h)) {
-            const w0 = wide(best.d), slope = sizeOf(el).h / w0, k = slope * 1.01;
-            const off = (w: number) => (writePlace(app, el, { ...to, width: w }), read() - h);
-            let near = { w: w0, off: Math.abs(read() - h) }, lo = w0 - 1, hi = w0 + 1;
-            for (let n = 0; n < 600 && (lo >= 1 || hi * slope <= h + 0.5); n++) {
-              const down = lo >= 1 && (hi * slope > h + 0.5 || w0 - lo <= hi - w0);
-              const w = down ? lo : hi, g = off(w);
-              if (Math.round(g + h) === Math.round(h)) {
-                near = { w, off: -1 };
-                break;
+            const w0 = wide(best.d), slope = sizeOf(el).h / w0;
+            const seen = new Map<number, { h: number; cap: number }>();
+            const at = (w: number) => {
+              let m = seen.get(w);
+              if (!m) {
+                writePlace(app, el, { ...to, width: w });
+                seen.set(w, (m = { h: read(), cap: captionHeight(app, objects[i]) }));
               }
-              if (Math.abs(g) < near.off) near = { w, off: Math.abs(g) };
-              if (down) lo = g > 0 ? Math.min(w - 1, Math.floor(w - (g - 0.5) / k)) : w - 1;
-              else hi = g < 0 ? Math.max(w + 1, Math.ceil(w - (g + 0.5) / k)) : w + 1;
+              return m;
+            };
+            const off = (w: number) => Math.abs(Math.round(at(w).h) - h);
+            // whether width w at the distance d from h is nearer than the width near
+            const nearer = (w: number, d: number) => d < near.d || (d === near.d && (d === 0 ? Math.abs(w - w0) < Math.abs(near.w - w0) || (Math.abs(w - w0) === Math.abs(near.w - w0) && w < near.w) : w < near.w));
+            const near = { w: w0, d: off(w0) };
+            const take = (w: number) => {
+              const d = off(w);
+              if (nearer(w, d)) Object.assign(near, { w, d });
+            };
+            // the least distance from h that a width of a to b can read, with 1% and 1 px to spare
+            // for the slope and the rounding of the picture, and whether a width there can be nearer
+            const bound = (a: number, b: number) => {
+              const lo = (slope / 1.01) * a - 1 + at(b).cap, hi = slope * 1.01 * b + 1 + at(a).cap;
+              return Math.max(0, Math.ceil(lo - 0.5) - h, h - Math.floor(hi + 0.5));
+            };
+            const open = (a: number, b: number) => {
+              const d = bound(a, b);
+              if (d !== near.d) return d < near.d;
+              const w = near.d === 0 ? Math.min(b, Math.max(a, w0)) : a;
+              return nearer(w, d);
+            };
+            const last = Math.max(w0 + 1, Math.ceil((h + near.d + 2) / (slope / 1.01)));
+            const spans: [number, number][] = [[1, w0], [w0, last]];
+            for (const w of [1, last]) take(w);
+            while (spans.length) {
+              const [a, b] = spans.pop()!;
+              if (b - a < 2 || !open(a, b)) continue;
+              const A = at(a), B = at(b);
+              if (Math.abs(A.cap - B.cap) < 0.5) {
+                const w = Math.round(a + ((h - A.h) * (b - a)) / Math.max(0.01, B.h - A.h));
+                for (const v of [w - 1, w, w + 1]) if (v > a && v < b) take(v);
+                continue;
+              }
+              const m = Math.floor((a + b) / 2);
+              take(m);
+              // the span nearer w0 is taken first, which narrows the nearest sooner
+              const halves: [number, number][] = [[a, m], [m, b]];
+              spans.push(...(m < w0 ? halves : halves.reverse()));
             }
             writePlace(app, el, { ...to, width: near.w });
           }
