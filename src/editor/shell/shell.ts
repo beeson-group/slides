@@ -320,7 +320,8 @@ export function install(app: App): void {
   }
 
   document.body.append(header, inspector, edge);
-  app.listen('resize', syncInspector);
+  // a live zoom does not change the inspector, which is synced at the end of the drag
+  app.listen('resize', () => app.stage.live || syncInspector());
   app.listen('slide', () => format && fillFormat());
   app.onRefresh(['selection', 'content', 'structure'], () => format && fillFormat());
 

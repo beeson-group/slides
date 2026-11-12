@@ -4,10 +4,11 @@
 // is thus held at the zoom, with a margin of 0 and the limits of its scale widened. at Fit, the
 // slide is centered with a pasteboard of at least 32 px around it, and past Fit the pasteboard is
 // 32 px on every side, grown by Zoom to Selection to center a box near an edge. the box of the
-// slide is written into custom properties on html. the wheel and a trackpad scroll the canvas past Fit,
-// and a pinch or the wheel with Ctrl zooms about the pointer. every step of a slide is shown,
-// apart from the elements of another layer, and the progress line, the scrubber, the slide
-// number, and the mode switch of the theme are hidden
+// slide is written into custom properties of the elements that read them, which are not
+// inherited, so that a zoom restyles those elements alone. the wheel and a trackpad scroll the
+// canvas past Fit, and a pinch or the wheel with Ctrl zooms about the pointer. every step of a
+// slide is shown, apart from the elements of another layer, and the progress line, the scrubber,
+// the slide number, and the mode switch of the theme are hidden
 
 import type { App } from '../app.ts';
 import { injectStyle, make } from '../ui/dom.ts';
@@ -18,13 +19,20 @@ export type Stage = {
   readonly scale: number;
   readonly origin: { x: number; y: number };
   readonly zoom: number | null;
+  // true while a zoom lays the slide out, when the resize of reveal.js is followed by the stage
+  readonly zooming: boolean;
+  // true while a live zoom is set and told, when a module may leave what is not seen to the end
+  readonly live: boolean;
   // the box of the canvas cell in the viewport, without its scroll bars
   readonly viewport: DOMRect;
   readonly el: HTMLElement;
   toSlide(p: { x: number; y: number }): { x: number; y: number };
   toScreen(p: { x: number; y: number }): { x: number; y: number };
-  // a zoom of null is Fit, and about is the point of the viewport that stays where it is
-  setZoom(zoom: number | null, about?: { x: number; y: number }): void;
+  // a zoom of null is Fit, and about is the point of the viewport that stays where it is. a live
+  // zoom, i.e. a step of a drag, is laid out by reveal.js only at the next zoom that is not live
+  setZoom(zoom: number | null, about?: { x: number; y: number }, live?: boolean): void;
+  // the live zoom laid out by reveal.js, at the end of its drag or pinch
+  settle(): void;
   zoomIn(): void;
   zoomOut(): void;
   // the zoom at which a box in slide px fills the cell, with the box centered in it
@@ -58,7 +66,10 @@ export const MIN_ZOOM = 0.1;
 const GRIP = 16;
 export const MAX_ZOOM = 4;
 
+const BOX = ['--ed-slide-x', '--ed-slide-y', '--ed-slide-w', '--ed-slide-h', '--ed-clip'];
+const CELL = '--ed-cell-clip';
 const CSS = `
+${[...BOX, CELL].map((p) => `@property ${p} { syntax: '*'; inherits: false; }`).join('\n')}
 html.beeson-editor body.reveal-viewport { background: var(--ed-canvas); }
 html.beeson-editor .beeson-edit-canvas { grid-area: canvas; position: relative; min-width: 0; min-height: 0; overflow: hidden; background: var(--ed-canvas); color-scheme: inherit; }
 html.beeson-editor .beeson-edit-canvas.zoomed { overflow: scroll; }
@@ -88,6 +99,16 @@ export function install(app: App): void {
   let pad = MARGIN;
   let configured = false;
   let placing = false;
+  // while a zoom is set, the event resize of each place is held, and sent once after the scroll
+  let held = 0;
+  let owed = false;
+  // the scroll last placed, which a scroll event of the same scroll does not place again
+  let placed = { x: -1, y: -1 };
+  // in a live zoom, the slides are scaled here as reveal.js scales them, and its layout, in which
+  // every backdrop is drawn again at the zoom, is left to the end of the drag. stale is then the
+  // scale that reveal.js has not laid out yet
+  let live = false;
+  let stale: number | null = null;
   // the box of the slide last written, in the viewport, and its size in slide px
   let box = { x: 0, y: 0, w: 0, h: 0 };
   let size = { w: 1920, h: 1080 };
@@ -96,7 +117,13 @@ export function install(app: App): void {
   // room added left of and above the slide for it, in CSS px, which the scroll is moved by
   let reach = { left: 0, top: 0, right: 0, bottom: 0 };
   let added = { x: 0, y: 0 };
-  const root = document.documentElement.style;
+  const vars: Record<string, string> = {};
+  const sheet = injectStyle('canvas-box', '');
+  const write = (next: Record<string, string>) => {
+    Object.assign(vars, next);
+    const text = `.reveal:not(.beeson-peek), .beeson-grid { ${BOX.filter((p) => vars[p]).map((p) => `${p}: ${vars[p]};`).join(' ')} }\n.beeson-badges, .beeson-guides { ${CELL}: ${vars[CELL] ?? 'none'}; }`;
+    if (sheet.textContent !== text) sheet.textContent = text;
+  };
 
   const reveal = () => document.querySelector<HTMLElement>('.reveal:not(.beeson-peek)');
   const viewport = (): DOMRect => {
@@ -111,7 +138,7 @@ export function install(app: App): void {
     const m = fitMargin(v);
     return Math.max(MIN_ZOOM / 4, hundredth(Math.min((v.width - 2 * m) / size.w, (v.height - 2 * m) / size.h)));
   };
-  const scale = (): number => app.deck()?.getScale() ?? (box.w / size.w || 1);
+  const scale = (): number => stale ?? app.deck()?.getScale() ?? (box.w / size.w || 1);
   const origin = (): { x: number; y: number } => {
     const r = app.slides().getBoundingClientRect();
     return { x: r.left, y: r.top };
@@ -160,18 +187,33 @@ export function install(app: App): void {
       const y = v.top + add.top + (baseH - h) / 2 - el.scrollTop;
       const resized = w !== box.w || h !== box.h;
       box = { x, y, w, h };
-      root.setProperty('--ed-slide-x', `${x}px`);
-      root.setProperty('--ed-slide-y', `${y}px`);
-      root.setProperty('--ed-slide-w', `${w}px`);
-      root.setProperty('--ed-slide-h', `${h}px`);
+      write({ '--ed-slide-x': `${x}px`, '--ed-slide-y': `${y}px`, '--ed-slide-w': `${w}px`, '--ed-slide-h': `${h}px` });
       const d = app.deck();
-      if (resized && d?.isReady()) d.layout();
+      if ((resized || stale !== null) && d?.isReady()) {
+        // a backdrop is drawn at the scale of the last layout, hence a live zoom past twice that
+        // scale is laid out, so that a backdrop is not stretched further while the zoom grows
+        if (live && s <= 2 * d.getScale()) scaleSlides(s);
+        else {
+          stale = null;
+          d.layout();
+        }
+      }
       writeRoom(v);
+      placed = { x: el.scrollLeft, y: el.scrollTop };
       app.invalidate('layout');
-      app.emit('resize');
+      if (held) owed = true;
+      else app.emit('resize');
     } finally {
       placing = false;
     }
+  }
+
+  // the transform of the layout of reveal.js at the scale s, which it rounds to a hundredth as the
+  // zoom is, with the box of .reveal as large as the slide at s
+  function scaleSlides(s: number): void {
+    stale = s;
+    const one = s === 1;
+    Object.assign((app.slides() as HTMLElement).style, { left: one ? '' : '50%', top: one ? '' : '50%', bottom: one ? '' : 'auto', right: one ? '' : 'auto', transform: one ? '' : `translate(-50%, -50%) scale(${s})` });
   }
 
   // .reveal is clipped to the cell, and to the notes pane under it, over which notes.ts lays the
@@ -180,11 +222,36 @@ export function install(app: App): void {
   function writeRoom(v: DOMRect): void {
     const notes = document.documentElement.classList.contains('beeson-notes') ? document.querySelector('.beeson-edit-pane')?.getBoundingClientRect() : null;
     const bottom = notes && notes.height ? notes.bottom : v.bottom;
-    root.setProperty('--ed-cell-clip', `inset(${v.top}px ${innerWidth - v.right}px ${innerHeight - v.bottom}px ${v.left}px)`);
-    root.setProperty('--ed-clip', `inset(${v.top - box.y}px ${box.x + box.w - v.right}px ${box.y + box.h - bottom}px ${v.left - box.x}px)`);
+    write({
+      [CELL]: `inset(${v.top}px ${innerWidth - v.right}px ${innerHeight - v.bottom}px ${v.left}px)`,
+      '--ed-clip': `inset(${v.top - box.y}px ${box.x + box.w - v.right}px ${box.y + box.h - bottom}px ${v.left - box.x}px)`,
+    });
   }
 
-  function setZoom(next: number | null, about?: { x: number; y: number }): void {
+  // the modules are told of a zoom once, after its last place, and a place of a listener is skipped
+  // as in place
+  function holding(fn: () => void, now = false): void {
+    held++;
+    live = now;
+    try {
+      fn();
+    } finally {
+      held--;
+      if (!held && owed && !placing) {
+        owed = false;
+        placing = true;
+        try {
+          app.emit('resize');
+        } finally {
+          placing = false;
+        }
+      }
+      app.report();
+      live = false;
+    }
+  }
+
+  const setZoom = (next: number | null, about?: { x: number; y: number }, now = false): void => holding(() => {
     const v = viewport();
     const at = about ?? { x: v.left + v.width / 2, y: v.top + v.height / 2 };
     const before = toSlide(at);
@@ -197,10 +264,11 @@ export function install(app: App): void {
     el.scrollLeft += after.x - at.x;
     el.scrollTop += after.y - at.y;
     place();
-    app.report();
-  }
+  }, now);
 
-  function zoomTo(b: { left: number; top: number; width: number; height: number }): void {
+  const settleZoom = () => stale !== null && holding(place);
+
+  const zoomTo = (b: { left: number; top: number; width: number; height: number }): void => holding(() => {
     const v = viewport();
     const z = hundredth(Math.min((v.width - 2 * MARGIN) / Math.max(b.width, 1), (v.height - 2 * MARGIN) / Math.max(b.height, 1)));
     zoom = z <= fitScale() + 0.005 ? null : clamp(z, MIN_ZOOM, MAX_ZOOM);
@@ -221,8 +289,7 @@ export function install(app: App): void {
     el.scrollLeft += c.x - (w.left + w.width / 2);
     el.scrollTop += c.y - (w.top + w.height / 2);
     place();
-    app.report();
-  }
+  });
 
   const step = (way: 1 | -1) => {
     const now = zoom ?? fitScale();
@@ -274,6 +341,12 @@ export function install(app: App): void {
     get zoom() {
       return zoom;
     },
+    get zooming() {
+      return held > 0;
+    },
+    get live() {
+      return live;
+    },
     get viewport() {
       return viewport();
     },
@@ -281,6 +354,7 @@ export function install(app: App): void {
     toSlide,
     toScreen,
     setZoom,
+    settle: settleZoom,
     zoomIn: () => step(1),
     zoomOut: () => step(-1),
     zoomTo,
@@ -302,15 +376,24 @@ export function install(app: App): void {
   };
 
   new ResizeObserver(() => place()).observe(el);
-  el.addEventListener('scroll', () => place(), { passive: true });
+  el.addEventListener('scroll', () => (el.scrollLeft !== placed.x || el.scrollTop !== placed.y) && place(), { passive: true });
   app.listen('resize', place);
 
   // the wheel over the slide scrolls the canvas past Fit, and Shift turns a wheel without a
   // horizontal delta sideways. with Ctrl, which a pinch of a trackpad sends too, the wheel zooms
   // about the pointer, and a notch of a mouse wheel is a step of at most 28 percent. Safari sends
-  // a pinch as gesture events instead. a figure that takes the wheel keeps it
+  // a pinch as gesture events instead. a figure that takes the wheel keeps it. a pinch is a live
+  // zoom, laid out when its gesture ends, or 200 ms after the last wheel with Ctrl, and the wheels
+  // of one frame are one zoom, at the zoom that each of them would set in turn
   let pinch: number | null = null;
   const LINE = 16;
+  let wheeled: { zoom: number | null; at: { x: number; y: number } } | null = null;
+  let wheelFrame = 0;
+  let settling = 0;
+  const normal = (z: number): number | null => {
+    const c = clamp(hundredth(z), MIN_ZOOM, MAX_ZOOM);
+    return Math.abs(c - fitScale()) < 0.005 ? null : c;
+  };
   const onWheel = (ev: WheelEvent) => {
     const t = ev.target instanceof Element ? ev.target : null;
     if (t?.closest('tycho-viewer, aside.notes, .beeson-edit-menu')) return;
@@ -320,8 +403,16 @@ export function install(app: App): void {
     if (ev.ctrlKey) {
       ev.preventDefault();
       if (pinch !== null) return;
-      const now = zoom ?? fitScale();
-      setZoom(now * Math.exp(-clamp(dy, -50, 50) / 200), { x: ev.clientX, y: ev.clientY });
+      const now = (wheeled ? wheeled.zoom : zoom) ?? fitScale();
+      wheeled = { zoom: normal(now * Math.exp(-clamp(dy, -50, 50) / 200)), at: { x: ev.clientX, y: ev.clientY } };
+      wheelFrame ||= requestAnimationFrame(() => {
+        wheelFrame = 0;
+        const w = wheeled;
+        wheeled = null;
+        if (w) setZoom(w.zoom, w.at, true);
+      });
+      clearTimeout(settling);
+      settling = window.setTimeout(settleZoom, 200);
     } else if (el.classList.contains('zoomed') ? t?.closest('.reveal') : el.scrollWidth > el.clientWidth || el.scrollHeight > el.clientHeight) {
       ev.preventDefault();
       if (ev.shiftKey && !dx) [dx, dy] = [dy, 0];
@@ -343,9 +434,11 @@ export function install(app: App): void {
     if (pinch === null) return;
     ev.preventDefault();
     const g = ev as Gesture;
-    setZoom(pinch * g.scale, { x: g.clientX, y: g.clientY });
+    setZoom(pinch * g.scale, { x: g.clientX, y: g.clientY }, true);
   }, { passive: false });
   window.addEventListener('gestureend', () => {
+    if (pinch === null) return;
     pinch = null;
+    settleZoom();
   });
 }

@@ -211,7 +211,9 @@ async function init(): Promise<void> {
       app.emit('slide');
       app.invalidate();
     });
+    // a zoom of the stage tells the modules itself, once
     d.on('resize', () => {
+      if (app.stage?.zooming) return;
       app.emit('resize');
       app.invalidate();
     });

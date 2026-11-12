@@ -135,19 +135,29 @@ export function install(app: App, layers: HTMLElement): void {
   // a press or a drag on the slider is followed here rather than by the browser, which loses the
   // pointer once the thumb is held at the tick. the thumb of 14 px runs over the width of the
   // slider less its own, measured at the press, and the arrow keys move it one step at a time
-  // without a snap
-  const zoomAt = (at: number) => app.stage.setZoom(Math.exp(LOG_MIN + (at / STEPS) * (LOG_MAX - LOG_MIN)));
+  // without a snap. the moves of one frame are one live zoom, at the last of them, and the release
+  // lays the zoom out
+  const zoomAt = (at: number, live = false) => app.stage.setZoom(Math.exp(LOG_MIN + (at / STEPS) * (LOG_MAX - LOG_MIN)), undefined, live);
   let r = track.getBoundingClientRect();
+  let moved: PointerEvent | null = null;
+  let frame = 0;
+  const flush = () => {
+    cancelAnimationFrame(frame);
+    frame = 0;
+    const ev = moved;
+    moved = null;
+    if (ev) follow(ev);
+  };
   const follow = (ev: PointerEvent) => {
     const span = r.width - 14;
     const at = Math.min(1, Math.max(0, (ev.clientX - r.left - 7) / span));
     if (Math.abs(at - TICK) * span <= SNAP) {
       slider.value = String(Math.round(TICK * STEPS));
-      app.stage.setZoom(1);
+      app.stage.setZoom(1, undefined, true);
       return;
     }
     slider.value = String(Math.round(at * STEPS));
-    zoomAt(Number(slider.value));
+    zoomAt(Number(slider.value), true);
   };
   track.addEventListener('pointerdown', (ev) => {
     if (ev.button !== 0) return;
@@ -157,7 +167,15 @@ export function install(app: App, layers: HTMLElement): void {
     r = track.getBoundingClientRect();
     follow(ev);
   });
-  track.addEventListener('pointermove', (ev) => track.hasPointerCapture(ev.pointerId) && follow(ev));
+  track.addEventListener('pointermove', (ev) => {
+    if (!track.hasPointerCapture(ev.pointerId)) return;
+    moved = ev;
+    if (!frame) frame = requestAnimationFrame(flush);
+  });
+  track.addEventListener('lostpointercapture', () => {
+    flush();
+    app.stage.settle();
+  });
   slider.addEventListener('input', () => zoomAt(Number(slider.value)));
   wire(modeButton, () => {
     const r = modeButton.getBoundingClientRect();
@@ -193,7 +211,7 @@ export function install(app: App, layers: HTMLElement): void {
   app.listen('slide', count);
   app.listen('history', count);
   app.listen('resize', () => {
-    count();
+    if (!app.stage.live) count();
     zoomState();
   });
   app.listen('report', zoomState);
