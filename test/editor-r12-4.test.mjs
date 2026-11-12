@@ -279,9 +279,10 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  // feel-4. a new Content slide holds what its tile in Add Slide shows: a heading, a paragraph, and
-  // a dash list, as a new Title & Bullets slide of Keynote holds the placeholders of its thumbnail
-  // (K95). the tile is drawn from the same skeleton
+  // feel-4. a new Content slide holds the texts that its tile in Add Slide shows: a heading, a
+  // paragraph, and a dash list, as a new Title & Bullets slide of Keynote holds the placeholders of
+  // its thumbnail (K95). the tile is drawn from the same skeleton, with a gray box at the place of
+  // the zone of the layout, which is not written into a new slide
   test(`a new Content slide holds the paragraph and the list of its tile (${platform})`, async (t) => {
     const page = await load(t, platform, { n: STEPS });
     const before = await render(page);
@@ -296,7 +297,7 @@ for (const platform of PLATFORMS) {
     const slide = await page.evaluate(`(() => { const s = document.querySelector('.reveal .slides > section.present'); return { tags: [...s.children].filter((c) => !c.hasAttribute('data-generated') && !c.matches('aside.notes')).map((c) => c.localName + (c.className ? '.' + [...c.classList].filter((k) => !k.startsWith('beeson')).join('.') : '')), items: s.querySelectorAll(':scope > ul > li').length }; })()`);
     assert.deepEqual(slide.tags.filter((x) => !x.startsWith('div.run') && !x.startsWith('div.foot')), ['h2', 'p', 'ul']);
     const { sampleText } = await import('../src/editor/model/templates.ts');
-    assert.ok(!sampleText('content').includes('zone'), 'the Content tile draws a zone that a new slide does not have');
+    assert.match(sampleText('content'), /<section>\s*<h2>[^<]+<\/h2>\s*<p>[^<]+<\/p>\s*<ul>(\s*<li>[^<]+<\/li>)+\s*<\/ul>\s*<div class="zone"[^>]*><\/div>\s*<\/section>/, 'the Content tile draws the texts of a new slide and the place of its zone');
     assert.equal(slide.items, 1);
     // typing into the list item gives a dash item, and Return a second one
     await click(page, '.reveal section.present > ul > li');
