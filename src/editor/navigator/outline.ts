@@ -131,6 +131,8 @@ export class Outline {
       ev.stopImmediatePropagation();
     }, true);
     app.commands.veto((_, c) => /^(edit\.(cut|paste|pasteAndMatchStyle)|element\.delete)$/.test(c.id) && !!focused() && lockedLine(focused()!));
+    // Duplicate of the menu copies the slide after the typed text of the line is written, as Mod+D
+    app.commands.take((id) => (id === 'edit.duplicate' && focused() ? this.step(focused()!, () => app.commands.run('slide.duplicate')) : undefined));
     this.el.addEventListener('focusout', (ev) => {
       const t = ev.target instanceof HTMLElement ? this.entries.find((e) => e.text === ev.target) : null;
       if (t && !this.busy) void this.commit(t).then(() => {
@@ -324,8 +326,9 @@ export class Outline {
         void this.step(e, () => this.app.commands.run('slide.duplicate')).catch((err) => this.app.fail(err));
         return;
       }
-      // a line does not take a format, hence the native bold, italic, and underline are not run
-      if (/^[biu]$/i.test(ev.key) && !ev.altKey) {
+      // a line does not take a format, hence the native bold, italic, and underline are not run.
+      // Control-B of a Mac moves the caret back, and it is left to the line
+      if (/^[biu]$/i.test(ev.key) && !ev.altKey && !(this.app.platform === 'mac' && ev.ctrlKey && !ev.metaKey)) {
         ev.preventDefault();
         ev.stopImmediatePropagation();
         return;
