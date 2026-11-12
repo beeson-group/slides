@@ -190,9 +190,10 @@ for (const platform of PLATFORMS) {
     await frames(page);
     const got = await page.evaluate(STATE);
     assert.equal(await page.evaluate('Reveal.getScale()'), got.zoom);
-    // the zoom, the scroll, the slide, and the guides of the base in a window of 1600 by 1000
+    // the zoom, the scroll, the slide, and the guides in a window of 1600 by 1000. the pinch is held
+    // at the zoom of 4 and then zoomed out by exp(-0.75), to 1.889, which is floored once to 1.88
     assert.deepEqual({ zoom: got.zoom, scroll: got.scroll, slide: got.slide, guides: got.guides, percent: got.percent }, {
-      zoom: 1.84, scroll: [1250, 585], slide: '-999.9 -453.6 3532.8 1987.2', guides: ['-116.69 99 1 873', '218 43.19 1094 1'], percent: '184%',
+      zoom: 1.88, scroll: [1290, 610], slide: '-1039.8 -478.7 3609.6 2030.4', guides: ['-137.39 99 1 873', '218 28.89 1094 1'], percent: '188%',
     });
     assert.ok(got.frames.length > 0, 'the selection is not framed');
     assert.equal(times.length, STEPS);
