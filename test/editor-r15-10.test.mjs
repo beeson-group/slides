@@ -109,8 +109,8 @@ for (const platform of PLATFORMS) {
     assert.ok(!meets(table, figure), `the table at ${js(round(table))} lies over the figure at ${js(round(figure))}`);
     assert.ok(Math.abs((table.top + table.bottom) / 2 - 540) <= 1, `the table at ${js(round(table))} is not at the middle of the slide`);
     // the place nearest to the center of the slide that keeps the room of the bars of the table to
-    // the figure, 62 slide px at the zoom of a window of 1600 by 1000 px
-    assert.deepEqual(round(table), [640, 433, 498, 213]);
+    // the figure, 48 slide px at every size of the window
+    assert.deepEqual(round(table), [654, 433, 498, 213]);
     await checkEdit(page, before, `r15-10-table-${platform}.html`);
     await insertTable(page);
     const tables = await boxes(page, ':scope > table');
@@ -122,8 +122,9 @@ for (const platform of PLATFORMS) {
   });
 
   // probe 13 and gap 5 of the juror of round 6. a new plot was put at 600, 244 by the least cover
-  // of the slide
-  test(`a new plot on slide 5 is put inside the margins at the middle of the slide, off the figure (${platform})`, async (t) => {
+  // of the slide. a plot of 600 by 800 does not fit off the words beside the figure, hence it is put
+  // off the figure where it covers the least of the words, under the heading (N8 of round 7)
+  test(`a new plot on slide 5 is put inside the margins off the figure and the heading (${platform})`, async (t) => {
     const page = await load(t, platform, FIGURES);
     const before = await render(page);
     const [figure] = await boxes(page, ':scope > figure.zone');
@@ -132,8 +133,9 @@ for (const platform of PLATFORMS) {
     assert.ok(plot, 'no plot was inserted');
     assert.ok(inside(plot), `the plot at ${js(round(plot))} is not inside the margins of the slide`);
     assert.ok(!meets(plot, figure), `the plot at ${js(round(plot))} lies over the figure at ${js(round(figure))}`);
-    assert.ok(Math.abs((plot.top + plot.bottom) / 2 - 540) <= 1, `the plot at ${js(round(plot))} is not at the middle of the slide`);
-    assert.deepEqual(round(plot), [576, 140, 600, 800]);
+    const [head] = await boxes(page, ':scope > h2');
+    assert.ok(plot.top >= head.bottom, `the plot at ${js(round(plot))} lies over the heading at ${js(round(head))}`);
+    assert.deepEqual(round(plot), [576, 256, 600, 800]);
     await checkEdit(page, before, `r15-10-plot-${platform}.html`);
     assert.deepEqual(errors(page), []);
   });
