@@ -202,17 +202,19 @@ export function install(app: App): void {
     stepsTab.tabIndex = tab === 'steps' ? 0 : -1;
     formatPanel.hidden = tab !== 'format';
     stepsPanel.hidden = tab !== 'steps';
-    if (started) store(INSPECTOR_KEY, tab ? '1' : '0');
     if (tab === 'format') fillFormat();
     const was = shownTab;
     shownTab = tab;
+    let reopen: string | null = null;
     if (tab) yielded = null;
     else if (was && app.nav.shown && narrow()) yielded = was === 'steps' ? 'view.steps' : 'shell.format';
     else if (yielded && (!app.nav.shown || !narrow())) {
-      const id = yielded;
+      reopen = yielded;
       yielded = null;
-      void app.commands.run(id).catch(fail);
     }
+    // a pane that yielded to the navigator is stored as open, hence it is shown again at a reopen
+    if (started) store(INSPECTOR_KEY, tab || yielded || reopen ? '1' : '0');
+    if (reopen) void app.commands.run(reopen).catch(fail);
   }
   const fail = (e: unknown) => app.fail(e);
   formatTab.addEventListener('click', () => {

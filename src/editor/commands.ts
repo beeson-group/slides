@@ -183,8 +183,9 @@ export class Commands {
   // taken
   forKey(ev: KeyEvent, region: Region, plain = true): Command | undefined {
     const platform = this.app.platform;
-    // a text takes a key that types a character, e.g. Shift+0 of Actual Size, which types )
-    const types = (k: string) => region === 'text' && isPlain(k) && k.split('+').at(-1)!.length === 1;
+    // a text and the notes take a key that types a character, e.g. Shift+0 of Actual Size, which
+    // types )
+    const types = (k: string) => (region === 'text' || region === 'notes') && isPlain(k) && k.split('+').at(-1)!.length === 1;
     const find = (e: KeyEvent) => this.list().find((c) => {
       const inText = c.inText === true || (Array.isArray(c.inText) && c.inText.includes(platform));
       const typed = region === 'text' && inText && !(c.in ?? DEFAULT_REGIONS).includes(region);

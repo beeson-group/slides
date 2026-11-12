@@ -111,7 +111,11 @@ export function install(app: App): void {
   define({ id: 'text.joinForward', label: 'Join Paragraphs', keys: { mac: ['Delete'], other: ['Delete'] }, in: TEXT, undoable: true, enabled: blocks.canJoinAhead, run: blocks.joinForward });
 
   // a display of math is not formatted, since its TeX is the text of its block
-  const onMath = (a: App) => !!a.hostOf(document.activeElement)?.matches('div.math') || a.selection.elements().some((el) => el.matches('div.math'));
+  // a display framed or edited. a text with the focus, e.g. the notes, is not one
+  const onMath = (a: App) => {
+    const host = a.hostOf(document.activeElement);
+    return host ? host.matches('div.math') : a.selection.elements().some((el) => el.matches('div.math'));
+  };
   const format = (name: inline.FormatName, label: string, order: number, keys: Command['keys'], submenu?: string, regions = FORMAT) =>
     define({
       id: `text.${name}`,
