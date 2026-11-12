@@ -311,6 +311,14 @@ export class Navigator implements Pane {
     const slides = p.slides.filter((s) => s.isConnected);
     const current = p.current?.isConnected ? p.current : (slides.at(-1) ?? null);
     if (!current) return;
+    // a caret that stays in a text of the slide, out of the navigator, keeps the text as the
+    // selection, e.g. after an undo of Hide Slide
+    const host = p.nav ? null : this.app.caretHost();
+    if (host && current.contains(host)) {
+      this.app.showSlide(current);
+      this.app.selection.set('text', [host]);
+      return this.refresh();
+    }
     this.select(slides.length ? slides : [current], current);
     const table = this.table?.shown ? this.table : null;
     if (table) {

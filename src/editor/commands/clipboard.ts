@@ -45,6 +45,9 @@ function caretBlock(app: App): Element | null {
   return el && app.pairing?.elements.get(el)?.open ? el : null;
 }
 
+// the thumbnails and the outline, where Duplicate duplicates the slide
+const inNavigator = (app: App): boolean => app.region() === 'navigator';
+
 // the text of els on the clipboard: the mark, then each element as it is written into the file
 export function clipText(app: App, els: Element[]): string {
   const doc = docOf(app);
@@ -421,10 +424,12 @@ export function install(app: App): void {
     in: ['canvas', 'text', 'navigator'],
     menu: menu(30, 'select'),
     context: ['element'],
-    enabled: (a) => ready(a) && !selectedRange(a) && (a.selection.kind === 'text' ? !!caretBlock(a) : selectedElements(a).length > 0 || a.commands.enabled('slide.duplicate')),
-    runsAs: (a) => (selectedElements(a).length || caretBlock(a) ? 'edit.duplicate' : 'slide.duplicate'),
+    // in the navigator, the key duplicates the slide whatever the canvas selected
+    enabled: (a) => (inNavigator(a) ? a.commands.enabled('slide.duplicate') : ready(a) && !selectedRange(a) && (a.selection.kind === 'text' ? !!caretBlock(a) : selectedElements(a).length > 0 || a.commands.enabled('slide.duplicate'))),
+    runsAs: (a) => (!inNavigator(a) && (selectedElements(a).length || caretBlock(a)) ? 'edit.duplicate' : 'slide.duplicate'),
     undoable: true,
     run: async (a) => {
+      if (inNavigator(a)) return a.commands.run('slide.duplicate');
       // in a text, the block of the caret is selected first, as by Esc
       const block = caretBlock(a);
       if (block) {

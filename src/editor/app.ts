@@ -265,13 +265,18 @@ export class App {
 
   // els selected by an undo or a redo. a caret left in a text of one of them keeps the text as the
   // selection, since the keys go to the text of the caret. a display among them is an object, hence
-  // its formula takes the focus, as at a click on it
+  // its formula takes the focus, as at a click on it. a caret in another text is taken off, as in
+  // Keynote, since the keys would else go to the text and the commands to els
   frame(els: Element[]): void {
     const host = this.caretHost();
     const formula = host?.matches('div.math') && els.includes(host) ? host.querySelector<HTMLElement>('mjx-container') : null;
     formula?.focus({ preventScroll: true });
-    if (host && !formula && els.some((el) => el.contains(host))) this.selection.set('text', [host]);
-    else this.selection.set('elements', els);
+    if (host && !formula && els.some((el) => el.contains(host))) return this.selection.set('text', [host]);
+    if (host && !formula) {
+      (document.activeElement as HTMLElement).blur();
+      getSelection()?.removeAllRanges();
+    }
+    this.selection.set('elements', els);
   }
 
   // the editable block around target, on a slide

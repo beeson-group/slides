@@ -425,9 +425,9 @@ export function install(app: App): void {
   list.addEventListener('keydown', (ev) => {
     const i = rows.findIndex((r) => r.row === document.activeElement);
     if (i < 0) return;
-    // the keys of the Arrange menu act on the rows chosen, as in Keynote's object list
+    // the keys of the Arrange menu and Duplicate act on the rows chosen, as in Keynote's object list
     const arrange = app.commands.forKey(ev, 'canvas', false);
-    if (arrange && /^arrange\.(order\.|group|ungroup|lock|unlock)/.test(arrange.id)) {
+    if (arrange && /^(arrange\.(order\.|group|ungroup|lock|unlock)|edit\.duplicate$)/.test(arrange.id)) {
       ev.preventDefault();
       void app.commands.run(arrange.id).catch((e) => app.fail(e));
       return;

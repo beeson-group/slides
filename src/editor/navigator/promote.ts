@@ -134,8 +134,9 @@ export async function demote(app: App, title: Element): Promise<{ slide: Element
   const n = eol(app);
   const children = [...column.children].filter((c) => kept(c) && paired(app, c));
   const last = children.filter((c) => c.matches(LINES) && !c.matches('h1, h2')).at(-1) ?? null;
-  // a locked list does not take the title as an item
-  if (last?.closest('[data-locked]')) return null;
+  // a locked list does not take the title as an item. after another locked block, the title starts
+  // a new list
+  if (last?.matches('ul, ol') && last.closest('[data-locked]')) return null;
   const anchor = last ?? children.find((c) => c.matches('h2')) ?? null;
   const ind = children[0] ? indentOf(app, children[0]) : indentOf(app, column) + step;
   const item = `<li>${ownTex(title)}</li>`;

@@ -282,7 +282,8 @@ export function install(app: App): void {
   }
 
   // a block is put back to a content of the history, on its slide, with the caret at the end of
-  // the text that changed
+  // the text that changed. a block framed as an object stays framed without a caret, e.g. a
+  // paragraph after Apply of the TeX of its inline formula
   async function restoreHost(host: Element, content: string): Promise<void> {
     app.showSlide(host);
     if (host.matches('aside.notes') && !app.notes.shown()) app.notes.toggle();
@@ -291,7 +292,8 @@ export function install(app: App): void {
     markMath(host);
     history.track(host);
     app.markDirty();
-    placeCaret(host, changeEnd(before, host.textContent ?? ''));
+    const framed = app.selection.kind === 'elements' && app.selection.items.includes(host);
+    if (!framed) placeCaret(host, changeEnd(before, host.textContent ?? ''));
     app.invalidate('content');
   }
 
