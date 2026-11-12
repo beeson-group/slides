@@ -265,7 +265,7 @@ for (const platform of PLATFORMS) {
 
   test(`${platform}: the Text pane shows the values that several text blocks do not share as mixed, and Bold sets bold on each`, async (t) => {
     const page = await mixedBlocks(t);
-    assert.deepEqual(await inspector(page), { tabs: ['Text*', 'Arrange'], style: 'Mixed', on: ['text.bold=mixed', 'text.tone.text=mixed', 'text.tone.accent=mixed'] });
+    assert.deepEqual(await inspector(page), { tabs: ['Text*', 'Arrange'], style: 'Mixed', on: ['text.bold=mixed', 'text.tone.text=mixed', 'text.tone.accent=mixed', 'text.align.left=true'] });
     const base = await render(page);
     await click(page, '.beeson-edit-inspector button[data-command="text.bold"]');
     assert.equal((await inspector(page)).on[0], 'text.bold=true');
@@ -279,7 +279,7 @@ for (const platform of PLATFORMS) {
     const page = await mixedBlocks(t);
     const base = await render(page);
     await click(page, '.beeson-edit-inspector .ed-swatches button[data-command="text.tone.violet"]');
-    assert.deepEqual((await inspector(page)).on, ['text.bold=mixed', 'text.tone.violet=true']);
+    assert.deepEqual((await inspector(page)).on, ['text.bold=mixed', 'text.tone.violet=true', 'text.align.left=true']);
     const violet = await render(page);
     assert.equal(violet.split('tone-violet').length, 3);
     assert.equal(violet.includes('tone-accent'), false);
@@ -291,10 +291,10 @@ for (const platform of PLATFORMS) {
     await openList(page, platform);
     await click(page, `${ROW}:nth-child(5)`);
     await click(page, `${ROW}:nth-child(6)`, { modifiers: 'Mod' });
-    assert.deepEqual(await inspector(page), { tabs: ['Text*', 'Arrange'], style: 'Mixed', on: ['text.tone.text=true'] });
+    assert.deepEqual(await inspector(page), { tabs: ['Text*', 'Arrange'], style: 'Mixed', on: ['text.tone.text=true', 'text.align.left=true'] });
     await click(page, `${ROW}:nth-child(6)`, { modifiers: 'Mod' });
     await click(page, `${ROW}:nth-child(2)`, { modifiers: 'Mod' });
-    assert.deepEqual((await inspector(page)).on, ['text.tone.text=true', 'text.list.none=mixed', 'text.list.ol=mixed']);
+    assert.deepEqual((await inspector(page)).on, ['text.tone.text=true', 'text.align.left=true', 'text.list.none=mixed', 'text.list.ol=mixed']);
     // a formula among them leaves Arrange alone
     await click(page, `${ROW}:nth-child(4)`, { modifiers: 'Mod' });
     assert.deepEqual((await inspector(page)).tabs, []);
