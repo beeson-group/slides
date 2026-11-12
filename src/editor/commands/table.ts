@@ -917,7 +917,7 @@ export async function pasteTable(app: App, text: string, html = ''): Promise<boo
   const marked = parseEditorTable(html);
   const rows = marked ?? parseHtmlTable(html) ?? parseTabular(text);
   if (!rows) return false;
-  await app.history.transact('Paste Table', async () => {
+  await app.history.transact('Paste', async () => {
     const table = await insertTable(app, rows, null, !!marked, marked ? editorHeads(html) : null);
     app.selection.set('elements', [table]);
   });
