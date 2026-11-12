@@ -4,7 +4,7 @@
 // order of the menu and its submenus. a command without a menu, e.g. Next Slide on an arrow key,
 // is listed with the command of its label in a menu, and else in the group Other
 
-import type { App } from '../app.ts';
+import type { App, Region } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { DEFAULT_REGIONS, boundKeys, keysOf } from '../commands.ts';
 import { display } from '../keymap.ts';
@@ -93,12 +93,15 @@ export function sheetRows(app: App): SheetRow[] {
   return [...sorted, ...MOUSE.map(([name, mac, other]) => ({ bar: 'Mouse', label: name, keys: [platform === 'mac' ? mac : other], commands: [] }))];
 }
 
-// the keys listed at two rows of the menus whose commands are taken in one pane, each as the key
+// the keys listed at two rows of the menus whose commands are taken in one place, each as the key
 // and its rows, e.g. Shift+F3: Edit > Find Previous, Format > Change Case. the slide list is one
-// pane and the slide with the inspector the other, hence Delete may be listed at Delete and at
-// Delete Slide, as in both apps. the rows of Other and Mouse are not counted
+// place, a text with the notes a second, and the slide with the inspector the third. Delete may
+// thus be listed at Delete and at Delete Slide, and Ctrl+] at Increase Indent Level of a text and
+// at Bring Forward of an element, as in PowerPoint. the rows of Other and Mouse are not counted
 export function sheetClashes(app: App): string[] {
-  const panes = (r: SheetRow) => new Set(r.commands.flatMap((c) => (c.in ?? DEFAULT_REGIONS).map((region) => (region === 'navigator' ? 'navigator' : 'slide'))));
+  const place = (region: Region) => (region === 'navigator' ? 'navigator' : region === 'text' || region === 'notes' ? 'text' : 'slide');
+  const inText = (c: Command) => c.inText === true || (Array.isArray(c.inText) && c.inText.includes(app.platform));
+  const panes = (r: SheetRow) => new Set(r.commands.flatMap((c) => [...(c.in ?? DEFAULT_REGIONS).map(place), ...(inText(c) ? ['text'] : [])]));
   const by = new Map<string, SheetRow[]>();
   for (const r of sheetRows(app)) if (r.bar !== 'Other' && r.bar !== 'Mouse') for (const k of r.keys) by.set(k, [...(by.get(k) ?? []), r]);
   const out: string[] = [];

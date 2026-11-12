@@ -289,6 +289,10 @@ export function contextItems(app: App, kind: Context, target: Element | null): M
       prev.items.push(item);
     } else out.push(sub ? { label: sub, items: [item] } : item);
   }
+  // a submenu without an item that can run is dimmed, e.g. Align of a locked element
+  for (const m of out) {
+    if ('items' in m && Array.isArray(m.items)) m.disabled = !canRun(app, m.items.flatMap((i) => ('command' in i ? app.commands.get(i.command) ?? [] : [])));
+  }
   if (kind === 'canvas') addGrid(app, out);
   // the menu of the browser, with its spelling guesses, is opened by a second right-click
   if (kind === 'text' && out.length) out.push({ rule: true }, { note: browserNote(app) });
