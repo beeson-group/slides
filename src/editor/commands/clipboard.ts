@@ -104,10 +104,11 @@ function nextKept(el: Element): Node | null {
 
 // the last copy, with its sources, the number of times it was pasted on the slide of its sources,
 // and the elements of the last such paste, after which the next one is put. html is the table of a
-// copy of a range of cells. away is the last slide without the sources that the copy was pasted on,
-// with the number of pastes there and the copies of the first one, at the place of the sources
-type Away = { slide: Element; pasted: number; first: Element[] };
-type Clip = { text: string; sources: Element[]; paths: string[][]; pasted: number; last: Element[]; html?: string; away?: Away };
+// copy of a range of cells. away holds, for each slide that the copy was pasted on, the elements of
+// each paste there, and the boxes of the first paste there without the sources, at the place of the
+// sources. the pastes made while the sources were on the slide are kept for when they are deleted
+type Away = { pastes: Element[][]; base?: Box[] };
+type Clip = { text: string; sources: Element[]; paths: string[][]; pasted: number; last: Element[]; html?: string; away?: Map<Element, Away> };
 let clip: Clip | null = null;
 
 function copy(app: App, els: Element[], data: DataTransfer | null): void {
@@ -134,7 +135,8 @@ function copyRange(app: App, data: DataTransfer | null): boolean {
 }
 
 // the box of el in slide pixels
-function boxOf(app: App, el: Element) {
+type Box = { x: number; y: number; w: number; h: number };
+function boxOf(app: App, el: Element): Box {
   const slides = app.slides() as HTMLElement;
   const s = slides.getBoundingClientRect();
   const k = slides.offsetWidth ? s.width / slides.offsetWidth : 1;
@@ -142,11 +144,13 @@ function boxOf(app: App, el: Element) {
   return { x: (r.left - s.left) / k, y: (r.top - s.top) / k, w: r.width / k, h: r.height / k };
 }
 
+// whether the box p moved by d slide pixels down and to the right is the box q within a slide pixel
+const same = (p: Box, q: Box, d = 0): boolean => Math.abs(p.x + d - q.x) < 1 && Math.abs(p.y + d - q.y) < 1 && Math.abs(p.w - q.w) < 1 && Math.abs(p.h - q.h) < 1;
+
 // whether the boxes of a and b are the same within a slide pixel, i.e. a copy a covers its source b.
 // a block of the text column is put under its source by the layout, and is not offset
 export function covers(app: App, a: Element, b: Element): boolean {
-  const p = boxOf(app, a), q = boxOf(app, b);
-  return Math.abs(p.x - q.x) < 1 && Math.abs(p.y - q.y) < 1 && Math.abs(p.w - q.w) < 1 && Math.abs(p.h - q.h) < 1;
+  return same(boxOf(app, a), boxOf(app, b));
 }
 
 const translateOf = (v: string | undefined): Translate => {
@@ -191,11 +195,9 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
   const doc = docOf(app);
   const own = clip && clip.sources.length === texts.length && clip.sources.every((s) => s.isConnected && slide.contains(s)) ? clip : null;
   const keep = keepPlaces(app, own?.sources ?? []);
-  // a later paste on a slide without the sources is offset from the first one there, and the count
-  // starts again once the first one is undone
-  const was = clip?.away?.slide === slide && clip.away.first.some((e) => e.isConnected) ? clip.away : null;
-  const away = !own && clip && clip.sources.length === texts.length ? (was ?? (clip.away = { slide, pasted: 0, first: [] })) : null;
+  const away = clip && clip.sources.length === texts.length ? (clip.away ??= new Map()) : null;
   const nodes: Element[] = [];
+  const grounds: boolean[] = [];
   for (const [i, raw] of texts.entries()) {
     const text = freshIds(app, raw);
     const source = own?.sources[i] ?? null;
@@ -219,10 +221,12 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
     }
     const [node] = await doc.insert(text, parent, before, 'paste');
     if (source && own && !ground && covers(app, node, source)) shift(app, node, own.pasted + 1);
-    const first = away?.first[i];
-    if (away && first?.isConnected && !ground && covers(app, node, first)) shift(app, node, away.pasted);
     nodes.push(node);
+    grounds.push(ground);
   }
+  const on = away && (away.get(slide) ?? away.set(slide, { pastes: [] }).get(slide));
+  if (on && !own) placeAway(app, on, nodes, grounds);
+  on?.pastes.push(nodes);
   regroup(app, nodes);
   settleCopies(app, nodes);
   relink(app, nodes);
@@ -231,9 +235,23 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
     own.pasted++;
     own.last = nodes;
   }
-  if (away && !away.pasted++) away.first = nodes;
   app.selection.set('elements', nodes);
   return nodes;
+}
+
+// a paste on a slide without the sources is put at the place of the sources, then moved in steps
+// of 20 px to the first place that a copy of the clipboard on this slide does not take now. a copy
+// that is deleted or undone does not take a place, and a block of the text column, which the layout
+// puts after the copies before it, is not moved
+function placeAway(app: App, on: Away, nodes: Element[], grounds: boolean[]): void {
+  const boxes = nodes.map((n) => boxOf(app, n));
+  const base = (on.base ??= boxes);
+  const { pastes } = on;
+  const moves = nodes.map((_, i) => !grounds[i] && !!base[i] && same(boxes[i], base[i]));
+  const taken = (n: number) => pastes.some((p) => p.some((c, i) => moves[i] && c.isConnected && same(boxes[i], boxOf(app, c), STEP * n)));
+  let n = 0;
+  while (taken(n)) n++;
+  if (n) nodes.forEach((node, i) => moves[i] && shift(app, node, n));
 }
 
 // the copies of els, each after its element and offset by 20 px when it would cover it. an undo
