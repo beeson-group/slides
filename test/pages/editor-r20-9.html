@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor text fixes deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the deck of the tests of R20.9: a numbered list with a nested list, and paragraphs with a
+     word that is the whole text of an inline element -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>A nested list</h2>
+  <ol start="3">
+    <li>Alpha</li>
+    <li>Bravo
+      <ul>
+        <li>Nested one</li>
+        <li>Nested two</li>
+      </ul>
+    </li>
+  </ol>
+</section>
+
+<section>
+  <h2>Inline elements</h2>
+  <p>Some <em>styles </em>of it.</p>
+  <p>See the <em>word</em> here.</p>
+  <p>Call the <strong>big</strong> fox, now.</p>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>
