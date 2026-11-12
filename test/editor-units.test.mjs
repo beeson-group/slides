@@ -129,7 +129,7 @@ test('the classes of a stylesheet are read without comments, numbers, and addres
   assert.deepEqual(themeClasses(css).sort(), ['b-c', 'reveal', 'slides', 'wide', 'zone']);
   const theme = new Set(themeClasses(readFileSync(new URL('../theme/beeson.css', import.meta.url), 'utf8')));
   for (const c of ['wide', 'narrow', 'zone', 'plate', 'backdrop', 'qr', 'math', 'caption', 'dots', 'arrows']) assert.ok(theme.has(c), c);
-  for (const c of ['shape', 'rounded', 'ellipse', 'triangle', 'arrow', 'arrow-both', 'brace', 'plus', 'equals', 'round-s', 'round-l', 'fill-none', 'fill-ground', 'veil', 'weight-6', 'weight-8', 'no-outline', 'flip-x', 'flip-y']) assert.ok(theme.has(c), c);
+  for (const c of ['shape', 'rounded', 'ellipse', 'triangle', 'arrow', 'arrow-both', 'brace', 'plus', 'equals', 'round-s', 'round-l', 'fill-none', 'fill-ground', 'veil', 'weight-6', 'weight-8', 'no-outline', 'flip-x', 'flip-y', 'left']) assert.ok(theme.has(c), c);
 });
 
 test('the scope rule allows the writes of AGENTS.md and names the others', () => {
