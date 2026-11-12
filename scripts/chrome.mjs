@@ -261,13 +261,23 @@ export async function printView(page, url) {
   // reveal.js clones a slide for each of its steps after the load event, which does not wait for
   // the clones, and a video that has not loaded a frame is printed as a black panel. A clone with
   // preload none or metadata is printed black as well when its server answers Range requests, hence
-  // every video is loaded with preload auto. A hidden video is not printed, and it may not load a
-  // frame at all. A tycho viewer is replaced by its still in src/print.ts, unless it shows an error
-  await page.evaluate(`document.querySelectorAll('video').forEach((video) => {
-    if (video.preload === 'auto') return;
-    video.preload = 'auto';
-    video.load();
-  })`);
+  // every video is loaded with preload auto. The videos are loaded one after the other, since on a
+  // slow machine some of the videos that are loaded at once do not get a frame. A hidden video is not
+  // printed, and it may not load a frame at all. A tycho viewer is replaced by its still in
+  // src/print.ts, unless it shows an error
+  await page.evaluate(`(async () => {
+    for (const video of document.querySelectorAll('video')) {
+      if (video.preload === 'auto') continue;
+      video.preload = 'auto';
+      video.load();
+      if (!video.getClientRects().length) continue;
+      await new Promise((done) => {
+        video.addEventListener('loadeddata', done, { once: true });
+        video.addEventListener('error', done, { once: true });
+        setTimeout(done, 5000);
+      });
+    }
+  })()`);
   await page.waitFor(`[...document.querySelectorAll('video')].every((video) => video.readyState >= 2 || video.error || !video.getClientRects().length)
     && [...document.querySelectorAll('tycho-viewer')].every((viewer) => viewer.shadowRoot?.querySelector('.status.error'))
     && [...document.images].every((image) => image.complete)`, 60000);
