@@ -82,8 +82,9 @@ test('a brace is the skeleton of the glyph }, with round hooks, S curves into th
     assert.ok(!/[AQSTZ]/.test(d), size);
     assert.deepEqual(segs[0].ps[0], [1.5, 1.5], size);
     assert.deepEqual(segs.at(-1).ps.at(-1), [1.5, h - 1.5], size);
-    // the cusp is the end of a segment at the middle of the right side, drawn in by its miter
-    const cusp = segs.findIndex((s) => s.ps.at(-1)[0] >= w - 4 * 1.5 && s.ps.at(-1)[0] < w - 1.5 && s.ps.at(-1)[1] === h / 2);
+    // the cusp is the end of a segment at the middle of the right side, drawn in by its miter, or
+    // at the edge of the outline where the miter is cut to a bevel
+    const cusp = segs.findIndex((s) => s.ps.at(-1)[0] >= w - 4 * 1.5 && s.ps.at(-1)[0] <= w - 1.5 && s.ps.at(-1)[1] === h / 2);
     assert.ok(cusp > 0, size);
     for (let i = 0; i + 1 < segs.length; i++) {
       const angle = turn(end(segs[i]), start(segs[i + 1]));
@@ -102,10 +103,10 @@ test('a brace is the skeleton of the glyph }, with round hooks, S curves into th
   }
 });
 
-test('a tall brace is extensible, with hooks and a cusp sized by its width, and a short brace keeps to its box', () => {
+test('a tall brace is extensible, with hooks and a cusp sized by its width, and a brace keeps to its box', () => {
   const tall = (h) => segments(shapePath('brace', 80, h, 3));
   const at = (segs, dy) => segs.map(({ kind, ps }) => kind + ps.map(([x, y]) => `${x} ${Math.round((y + dy) * 100) / 100}`).join(' '));
-  const [short, long] = [tall(600), tall(900)];
+  const [short, long] = [tall(700), tall(1000)];
   // the hooks keep their place, the curves of the cusp move with the middle, and only the stems grow
   assert.deepEqual(long.map((s) => s.kind), ['C', 'L', 'C', 'C', 'L', 'C']);
   assert.deepEqual(at(long, 0)[0], at(short, 0)[0]);
@@ -120,16 +121,25 @@ test('a tall brace is extensible, with hooks and a cusp sized by its width, and 
   // they are sized by the width alone
   const shares = (segs) => [segs[0].ps[3][1] - segs[0].ps[0][1], segs[2].ps[3][1] - segs[2].ps[0][1]];
   assert.deepEqual(shares(long).map(Math.round), shares(short).map(Math.round));
-  // a short and wide brace has no stem, and its hook and cusp are scaled down by one factor
-  const wide = segments(shapePath('brace', 160, 240, 3));
-  assert.deepEqual(wide.map((s) => s.kind), ['C', 'C', 'C', 'C']);
-  const scaled = [wide[0].ps[3][1] - wide[0].ps[0][1], wide[1].ps[3][1] - wide[1].ps[0][1]];
-  const unscaled = shares(segments(shapePath('brace', 160, 2000, 3)));
-  assert.ok(Math.abs(scaled[0] / scaled[1] - unscaled[0] / unscaled[1]) < 0.01, `${scaled} ${unscaled}`);
-  assert.ok(Math.abs(scaled[0] + scaled[1] - 118.5) < 0.02, `${scaled}`);
   for (const [w, h] of [[160, 240], [300, 60], [40, 40]]) {
     for (const [x, y] of points(shapePath('brace', w, h, 4))) assert.ok(x >= 2 && x <= w - 2 && y >= 2 && y <= h - 2, `${w} by ${h}: ${x} ${y}`);
   }
+});
+
+test('a brace under about 8 widths high is the brace of this height drawn lower, with a tight cusp', () => {
+  // the hook and the curve into the cusp take half of each half of the brace at most, hence the
+  // cusp is not drawn wider along the brace on a short brace than on a tall one
+  for (const [w, h] of [[80, 160], [80, 240], [80, 400], [160, 240], [40, 200]]) {
+    const segs = segments(shapePath('brace', w, h, 3)), size = `${w} by ${h}`, half = h / 2 - 1.5;
+    assert.deepEqual(segs.map((s) => s.kind), ['C', 'L', 'C', 'C', 'L', 'C'], `${size}: a short brace has its stems`);
+    const hook = segs[0].ps[3][1] - segs[0].ps[0][1], stem = segs[1].ps[1][1] - segs[1].ps[0][1], cusp = segs[2].ps[3][1] - segs[2].ps[0][1];
+    assert.ok(Math.abs((hook + cusp) / half - 0.5) < 0.005, `${size}: the hook and the cusp take ${(hook + cusp) / half} of a half`);
+    assert.ok(Math.abs(stem / half - 0.5) < 0.005, `${size}: a stem takes ${stem / half} of a half`);
+    assert.ok(Math.abs(hook / cusp - 0.95) < 0.005, `${size}: ${hook} ${cusp}`);
+  }
+  // from this height on, the hooks and the cusp are sized by the width alone
+  const tall = segments(shapePath('brace', 80, 700, 3));
+  assert.ok(Math.abs(tall[2].ps[3][1] - tall[2].ps[0][1] - 77) < 0.02);
 });
 
 // the look of each shape of the current slide: its border, its background, and its svg child
