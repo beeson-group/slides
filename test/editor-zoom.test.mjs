@@ -26,8 +26,8 @@ after(async () => {
 
 // the editor on the demo deck served over HTTP, so that a save is written into the origin private
 // file system, in a window of 1600 by 1000
-async function open(t, platform) {
-  const page = await browser.newPage({ width: 1600, height: 1000 });
+async function open(t, platform, width = 1600) {
+  const page = await browser.newPage({ width, height: 1000 });
   t.after(() => page.close());
   await page.goto(`${server.origin}/index.html?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
@@ -210,7 +210,10 @@ test('the frames and handles are clipped to the canvas at a zoom', async (t) => 
 
 for (const platform of PLATFORMS) {
   test(`a drag and a resize of a figure write the same slide px at 50, 100, and 200 percent as at Fit, on the platform ${platform}`, async (t) => {
-    const page = await open(t, platform);
+    // in a window of 1800 px, the ends of the drag to the center of the slide at 200 percent are
+    // over 100 px inside the cell. In one of 1600 px they were in the band of 24 px at its edges,
+    // where the canvas is scrolled while a drag is held, by an amount that depends on the timing
+    const page = await open(t, platform, 1800);
     await figureSlide(page);
     // what the file gets: the text rendered by the editor, cut to the lines that differ from the deck
     const lines = page.source.split('\n');
