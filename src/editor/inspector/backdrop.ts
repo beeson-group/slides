@@ -1,10 +1,11 @@
 // the pane Backdrop of the inspector, for a selected backdrop: its drawing, chosen from a popup or
-// from the gallery of Choose…, its window, i.e. its center and its half height, the labels of the
-// points of a named scene, and its motion, with the Lock button of the Arrange pane. each control
-// runs a command of commands/backdrop.ts, whose writes the theme draws again
+// from the gallery of Choose…, the family and the colormap of a drawing of a file, its window, i.e.
+// its center and its half height, the labels of the points of a named scene, and its motion, with the
+// Lock button of the Arrange pane. each control runs a command of commands/backdrop.ts, whose writes
+// the theme draws again
 
 import type { App } from '../app.ts';
-import { COLORMAPS, LABELS, drawingName, library, liveOf, probeLibrary, selectedBackdrop } from '../commands/backdrop.ts';
+import { COLORMAPS, LABELS, colormapName, drawnBy, entryName, families, isBroucke, library, liveOf, probeLibrary, sameSelection, selectedBackdrop } from '../commands/backdrop.ts';
 import { openMenu, type MenuItem } from '../ui/menu.ts';
 import { make } from '../ui/dom.ts';
 import { button, checkbox, glyph, keepFocus, note, numberField, row, section, type Control, type Run } from './controls.ts';
@@ -41,12 +42,25 @@ function popup(app: App, label: string, current: () => string, list: () => MenuI
   return { el: b, sync };
 }
 
+// parts in a box that is shown while shown() is true, so that the pane follows a change of the
+// drawing between a scene and a file without being built again
+function when(shown: () => boolean, parts: Control[]): Control {
+  const box = make('div');
+  box.append(...parts.map((p) => p.el));
+  const sync = () => {
+    box.hidden = !shown();
+    for (const p of parts) p.sync();
+  };
+  sync();
+  return { el: box, sync, flush: () => parts.forEach((p) => p.flush?.()) };
+}
+
 export function backdropPane(app: App, run: Run): Control[] {
   const el = selectedBackdrop(app);
   const live = () => liveOf(el);
   const view = () => live()?.view ?? null;
   const on = () => !!el?.isConnected && !!live() && !el.hasAttribute('data-locked');
-  const file = !!el?.hasAttribute('data-strands');
+  const file = () => !!el?.hasAttribute('data-strands');
   const field = (label: string, key: 'cx' | 'cy' | 'half', id: string) => numberField(app, {
     label, unit: '', step: 0.01, min: key === 'half' ? 0.01 : -100, max: 100,
     value: () => view()?.[key] ?? null,
@@ -54,9 +68,9 @@ export function backdropPane(app: App, run: Run): Control[] {
     command: `backdrop.${id}`,
     commit: (value) => run(`backdrop.${id}`, { value, el }),
   });
-  const drawing = popup(app, 'Drawing', () => (el ? drawingName(el) : ''), () => library(app).map((e) => ({
+  const drawing = popup(app, 'Drawing', () => (el ? entryName(el) : ''), () => library(app).map((e) => ({
     label: e.name,
-    checked: !!el && Object.entries(e.attrs).every(([k, v]) => el.getAttribute(k) === v),
+    checked: !!el && drawnBy(e, el),
     disabled: !!e.missing,
     run: () => run('backdrop.scene', { value: e.key, el }),
   })), on, () => probeLibrary(app));
@@ -64,14 +78,19 @@ export function backdropPane(app: App, run: Run): Control[] {
     section('Drawing', [
       drawing,
       row([button(app, run, { command: 'backdrop.choose', text: 'Choose…' })]),
-      ...(file ? [
-        popup(app, 'Colormap', () => el?.getAttribute('data-strands-colormap') ?? 'Palette', () => [null, ...COLORMAPS].map((c) => ({
-          label: c ?? 'Palette',
+      when(file, [
+        when(() => isBroucke(el), [popup(app, 'Family', () => (el && isBroucke(el) ? families(app, el).find((f) => sameSelection(f.spec, el.getAttribute('data-strands-select')))?.name ?? '' : ''), () => (el ? families(app, el) : []).map((f) => ({
+          label: f.name,
+          checked: sameSelection(el?.getAttribute('data-strands-select') ?? null, f.spec),
+          run: () => run('backdrop.family', { value: f.spec, el }),
+        })), on)]),
+        popup(app, 'Colormap', () => colormapName(el?.getAttribute('data-strands-colormap') ?? null), () => [null, ...COLORMAPS].map((c) => ({
+          label: colormapName(c),
           checked: (el?.getAttribute('data-strands-colormap') ?? null) === c,
           run: () => run('backdrop.colormap', { value: c, el }),
         })), on),
         note(() => 'The strands are chosen and colored by the data-strands attributes of the file, as REFERENCE.md describes.'),
-      ] : []),
+      ]),
     ]),
     section('Window', [
       row([field('Center X', 'cx', 'cx'), field('Center Y', 'cy', 'cy')]),
@@ -81,12 +100,10 @@ export function backdropPane(app: App, run: Run): Control[] {
       note(() => 'Drag the drawing or use the arrow keys to pan it, and drag a handle to resize its box.'),
     ]),
   ];
-  if (!file) {
-    parts.push(section('Labels', [
-      row(LABELS.slice(0, 2).map((l) => labelBox(app, run, el, l.at, l.name))),
-      row(LABELS.slice(2).map((l) => labelBox(app, run, el, l.at, l.name))),
-    ]));
-  }
+  parts.push(when(() => !file(), [section('Labels', [
+    row(LABELS.slice(0, 2).map((l) => labelBox(app, run, el, l.at, l.name))),
+    row(LABELS.slice(2).map((l) => labelBox(app, run, el, l.at, l.name))),
+  ])]));
   const traced = !!el?.closest('section')?.matches('.title, .section, .closing');
   parts.push(
     section('Motion', [

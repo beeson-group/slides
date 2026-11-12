@@ -24,15 +24,17 @@ const hooks = (): Hooks => (window as unknown as { Beeson?: Hooks }).Beeson ?? {
 export const DRAWING = ['data-scene', 'data-strands', 'data-strands-select', 'data-strands-color', 'data-strands-ramp', 'data-strands-colormap', 'data-strands-shade', 'data-heads'];
 // the names of the drawings in the list of Media > Backdrop… and wherever a drawing is named, for the
 // owner to confirm. a drawing of a file is named by its file, and a drawing of demo/broucke-sample.js
-// by the numbers of the Broucke families it selects
+// by the numbers of the Broucke families it selects, which are chosen in the entry Broucke Families
 export const NAMES = {
   nest: 'Lyapunov Families',
   tubes: 'Cislunar Manifolds',
   wideRibbon: 'Earth Manifolds',
   logo: 'Beeson Logo',
   logoPart: 'Part of the Beeson Logo',
-  family: (numbers: string[]) => `Broucke ${numbers.length === 1 ? 'Family' : 'Families'} ${numbers.length > 1 ? `${numbers.slice(0, -1).join(', ')} and ${numbers.at(-1)}` : numbers[0]}`,
+  broucke: 'Broucke Families',
+  family: (numbers: string[]) => `${numbers.length === 1 ? 'Family' : 'Families'} ${numbers.length > 1 ? `${numbers.slice(0, -1).join(', ')} and ${numbers.at(-1)}` : numbers[0]}`,
   inertial: (name: string) => `${name} (Inertial)`,
+  both: (name: string) => `${name} (Both Frames)`,
 };
 export const SCENES: Record<string, string> = { nest: NAMES.nest, tubes: NAMES.tubes, wideRibbon: NAMES.wideRibbon };
 // the files of the template that the list draws from, and the families of demo/broucke-sample.js
@@ -49,6 +51,10 @@ export const LABELS = [
   { at: 'earth', name: 'Earth', text: 'Earth', dy: '36' },
 ];
 export const COLORMAPS = ['viridis', 'plasma', 'Blues_r'];
+const COLORMAP_NAMES: Record<string, string> = { viridis: 'Viridis', plasma: 'Plasma', Blues_r: 'Blues (Reversed)' };
+// the name of a value of data-strands-colormap, or Palette for none. a value that is not a name of
+// COLORMAPS alone is shown as it is written
+export const colormapName = (value: string | null): string => (value === null ? 'Palette' : COLORMAP_NAMES[value] ?? value);
 // the factor of a zoom of the window
 const ZOOM = 1.25;
 // the least size of a box resized by a grip, in slide px
@@ -96,6 +102,30 @@ function selected(spec: string, key: string): string[] {
   });
 }
 
+// the name of the Broucke families that spec, a value of data-strands-select, selects, in the Family
+// popup of the Backdrop pane
+export function familyName(spec: string | null): string {
+  const chosen = selected(spec ?? '', 'family');
+  const numbers = chosen.length ? [...new Set(chosen)].sort((a, b) => +a - +b) : BROUCKE_FAMILIES;
+  const frames = new Set(selected(spec ?? '', 'frame'));
+  const name = NAMES.family(numbers);
+  if (!frames.size || (frames.has('pulsating') && frames.has('inertial'))) return NAMES.both(name);
+  return [...frames].every((f) => f === 'inertial') ? NAMES.inertial(name) : name;
+}
+
+// spec, a value of data-strands-select, with its groups, the terms of each group, and the values of
+// each term sorted, so that two values that differ only in their order are equal
+function selectionKey(spec: string | null): string {
+  const term = (t: string) => {
+    const m = /^\s*([^=<>\s]+)\s*(<=|>=|=|<|>)\s*(.*?)\s*$/.exec(t);
+    return !m ? t.trim() : `${m[1]}${m[2]}${m[2] === '=' ? m[3].split('|').map((v) => v.trim()).sort().join('|') : m[3]}`;
+  };
+  return (spec ?? '').split(';').map((g) => g.split(',').map(term).filter(Boolean).sort().join(',')).filter(Boolean).sort().join(';');
+}
+
+// true when the values a and b of data-strands-select select the same records by the same terms
+export const sameSelection = (a: string | null, b: string | null): boolean => selectionKey(a) === selectionKey(b);
+
 // the name of a drawing of the attributes attrs: the name of its scene, of the logo, or of the
 // Broucke families it selects, or else the name of its file
 function nameOf(attrs: Record<string, string | undefined>): string {
@@ -104,20 +134,20 @@ function nameOf(attrs: Record<string, string | undefined>): string {
   const file = attrs['data-strands'] ?? '';
   const spec = attrs['data-strands-select'] ?? '';
   if (isFile(file, LOGO_FILE)) return spec.trim() ? NAMES.logoPart : NAMES.logo;
-  if (isFile(file, BROUCKE_FILE)) {
-    const chosen = selected(spec, 'family');
-    const numbers = chosen.length ? [...new Set(chosen)].sort((a, b) => +a - +b) : BROUCKE_FAMILIES;
-    const frames = selected(spec, 'frame');
-    const name = NAMES.family(numbers);
-    return frames.length && frames.every((f) => f === 'inertial') ? NAMES.inertial(name) : name;
-  }
+  if (isFile(file, BROUCKE_FILE)) return `Broucke ${familyName(spec)}`;
   return file.split('/').pop()?.replace(/\.(js|json)$/, '') || 'Backdrop';
 }
+
+// true when el draws demo/broucke-sample.js, i.e. is a backdrop of the entry Broucke Families
+export const isBroucke = (el: Element | null): boolean => !!el && isFile(el.getAttribute('data-strands') ?? '', BROUCKE_FILE);
 
 // the name of the drawing of el
 export function drawingName(el: Element): string {
   return nameOf(Object.fromEntries([...el.attributes].map((a) => [a.name, a.value])));
 }
+
+// the name of the entry of el in the Drawing popup, which is Broucke Families for any family
+export const entryName = (el: Element): string => (isBroucke(el) ? NAMES.broucke : drawingName(el));
 
 const round = (v: number) => Number(v.toFixed(8));
 
@@ -155,24 +185,48 @@ const drawingEdit = (attrs: Record<string, string>): Record<string, string | nul
 // for a drawing of the deck whose file is not found
 type Entry = { key: string; name: string; attrs: Record<string, string>; motion: Record<string, string>; view: View | null; size: [number, number] | null; missing?: boolean };
 
-const SAMPLE = { 'data-strands': BROUCKE_FILE, 'data-strands-color': 'family', 'data-strands-ramp': 'e', 'data-strands-colormap': 'viridis' };
-// a family of demo/broucke-sample.js in a frame, with the colors and the motion of the backdrop of
-// the demo deck, fitted to its box as it is
-const family = (n: string, frame: 'pulsating' | 'inertial'): Entry => {
-  const attrs = { ...SAMPLE, 'data-strands-select': `frame=${frame},family=${n}` };
-  return { key: `broucke-${n}${frame === 'inertial' ? '-inertial' : ''}`, name: nameOf(attrs), attrs, motion: { 'data-duration': '3', 'data-stagger': '0.6' }, view: null, size: null };
-};
+// the families of demo/broucke-sample.js in both of its frames, as values of data-strands-select
+const FAMILY_SPECS = BROUCKE_FAMILIES.flatMap((n) => [`frame=pulsating,family=${n}`, `frame=inertial,family=${n}`]);
 
-// the drawings of the demo deck, with their windows and the size of their boxes, and the families of
-// demo/broucke-sample.js in both of its frames
-const BUILT_IN: Entry[] = [
-  { key: 'logo', name: NAMES.logo, attrs: { 'data-strands': LOGO_FILE }, motion: { 'data-duration': '20' }, view: { cx: -0.84, cy: 0, half: 1.128 }, size: [1920, 1080] },
-  { key: 'nest', name: NAMES.nest, attrs: { 'data-scene': 'nest' }, motion: {}, view: { cx: 0.97, cy: 0, half: 0.5 }, size: [720, 1080] },
-  { key: 'tubes', name: NAMES.tubes, attrs: { 'data-scene': 'tubes' }, motion: {}, view: { cx: 0.42, cy: 0, half: 0.6 }, size: [1920, 1080] },
-  { key: 'wideRibbon', name: NAMES.wideRibbon, attrs: { 'data-scene': 'wideRibbon' }, motion: {}, view: { cx: 0.2, cy: 0, half: 1.3 }, size: [1920, 1080] },
-  ...BROUCKE_FAMILIES.map((n) => family(n, 'pulsating')),
-  ...BROUCKE_FAMILIES.map((n) => family(n, 'inertial')),
-];
+// the drawings of the demo deck, with their windows and the size of their boxes, and the entry
+// Broucke Families, which draws the first family with the colors and the motion of the backdrop of
+// the demo deck, fitted to its box as it is. its file is the one of the Broucke drawings of the deck,
+// if any, so that a deck in another folder finds it
+function builtIn(app: App): Entry[] {
+  const file = [...app.slides().querySelectorAll<HTMLElement>('.backdrop')].find((el) => open(app, el) && isBroucke(el))?.getAttribute('data-strands') ?? BROUCKE_FILE;
+  return [
+    { key: 'logo', name: NAMES.logo, attrs: { 'data-strands': LOGO_FILE }, motion: { 'data-duration': '20' }, view: { cx: -0.84, cy: 0, half: 1.128 }, size: [1920, 1080] },
+    { key: 'nest', name: NAMES.nest, attrs: { 'data-scene': 'nest' }, motion: {}, view: { cx: 0.97, cy: 0, half: 0.5 }, size: [720, 1080] },
+    { key: 'tubes', name: NAMES.tubes, attrs: { 'data-scene': 'tubes' }, motion: {}, view: { cx: 0.42, cy: 0, half: 0.6 }, size: [1920, 1080] },
+    { key: 'wideRibbon', name: NAMES.wideRibbon, attrs: { 'data-scene': 'wideRibbon' }, motion: {}, view: { cx: 0.2, cy: 0, half: 1.3 }, size: [1920, 1080] },
+    {
+      key: 'broucke', name: NAMES.broucke, view: null, size: null, motion: { 'data-duration': '3', 'data-stagger': '0.6' },
+      attrs: { 'data-strands': file, 'data-strands-select': FAMILY_SPECS[0], 'data-strands-color': 'family', 'data-strands-ramp': 'e', 'data-strands-colormap': 'viridis' },
+    },
+  ];
+}
+
+// true when the backdrop el is drawn by entry, which for Broucke Families is any of its families
+export const drawnBy = (entry: Entry, el: Element): boolean =>
+  entry.key === 'broucke' ? isBroucke(el) : Object.entries(entry.attrs).every(([k, v]) => el.getAttribute(k) === v);
+
+// the choices of the Family popup of el, as values of data-strands-select with their names: the
+// families of the file in both frames, then each other selection of the file in the deck, once per
+// selection. a name that an earlier choice has is followed by the value as it is written
+export function families(app: App, el: Element): { spec: string | null; name: string }[] {
+  const out: { spec: string | null; name: string }[] = [];
+  const add = (spec: string | null) => {
+    if (out.some((f) => sameSelection(f.spec, spec))) return;
+    const name = familyName(spec);
+    out.push({ spec, name: out.some((f) => f.name === name) ? `${name} (${spec ?? ''})` : name });
+  };
+  FAMILY_SPECS.forEach(add);
+  for (const b of app.slides().querySelectorAll<HTMLElement>('.backdrop')) {
+    if (open(app, b) && isBroucke(b)) add(app.doc.tagState(b).attrs['data-strands-select'] ?? null);
+  }
+  if (isBroucke(el)) add(el.getAttribute('data-strands-select'));
+  return out;
+}
 
 // whether the file of strands at an absolute URL is found and has records, as the theme read it
 const found = new Map<string, boolean>();
@@ -199,16 +253,18 @@ async function probe(path: string): Promise<boolean> {
 
 // the files of the entries of the library read, so that library() knows which are found
 export async function probeLibrary(app: App): Promise<void> {
-  const files = new Set([...BUILT_IN, ...deckEntries(app)].map(fileOf).filter((f): f is string => !!f));
+  const files = new Set([...builtIn(app), ...deckEntries(app)].map(fileOf).filter((f): f is string => !!f));
   await Promise.all([...files].map(probe));
 }
 
-// each drawing of the deck that is not an entry of BUILT_IN, keyed by its drawing attributes
+// each drawing of the deck that is not an entry of builtIn, keyed by its drawing attributes. a
+// drawing of the Broucke families is one of the entry Broucke Families
 function deckEntries(app: App): Entry[] {
   const out: Entry[] = [];
-  const keys = new Set(BUILT_IN.map((e) => JSON.stringify(e.attrs)));
+  const built = builtIn(app);
+  const keys = new Set(built.map((e) => JSON.stringify(e.attrs)));
   for (const el of app.slides().querySelectorAll<HTMLElement>('.backdrop')) {
-    if (!open(app, el)) continue;
+    if (!open(app, el) || isBroucke(el)) continue;
     const now = app.doc.tagState(el).attrs;
     const attrs = Object.fromEntries(DRAWING.filter((n) => now[n] !== undefined).map((n) => [n, now[n]]));
     const key = JSON.stringify(attrs);
@@ -216,16 +272,16 @@ function deckEntries(app: App): Entry[] {
     keys.add(key);
     const motion = Object.fromEntries(MOTION.filter((n) => now[n] !== undefined).map((n) => [n, now[n]]));
     const view = now['data-half'] === undefined ? null : { cx: +(now['data-cx'] ?? 0), cy: +(now['data-cy'] ?? 0), half: +now['data-half'] };
-    out.push({ key: `deck-${BUILT_IN.length + out.length}`, name: nameOf(attrs), attrs, motion, view, size: [el.offsetWidth, el.offsetHeight] });
+    out.push({ key: `deck-${built.length + out.length}`, name: nameOf(attrs), attrs, motion, view, size: [el.offsetWidth, el.offsetHeight] });
   }
   return out;
 }
 
-// the entries of BUILT_IN whose file is found next to the deck, then each other drawing of the deck,
+// the entries of builtIn whose file is found next to the deck, then each other drawing of the deck,
 // marked missing when its file is not found. a file not read yet counts as found
 export function library(app: App): Entry[] {
   const state = (e: Entry) => (fileOf(e) ? found.get(urlOf(fileOf(e))) : true);
-  return [...BUILT_IN.filter((e) => state(e) !== false), ...deckEntries(app).map((e) => ({ ...e, missing: state(e) === false }))];
+  return [...builtIn(app).filter((e) => state(e) !== false), ...deckEntries(app).map((e) => ({ ...e, missing: state(e) === false }))];
 }
 
 // the window of an entry kept on the box of el when the box has the size of the box of the entry,
@@ -247,6 +303,7 @@ export async function applyEntry(app: App, entry: Entry): Promise<void> {
       const motion = Object.fromEntries(MOTION.map((n) => [n, entry.motion[n] ?? null]));
       const unset: Record<string, null> = entry.view ? {} : { 'data-cx': null, 'data-cy': null, 'data-half': null };
       app.doc.setTag(old, { attrs: { ...drawingEdit(entry.attrs), ...motion, ...unset } }, 'drawing');
+      await dropLabels(app, old, entry);
       const v = entry.view && (await windowFor(entry, old));
       if (v) app.doc.setTag(old, { attrs: windowAttrs(v) }, 'window');
       syncBackdrops();
@@ -267,6 +324,13 @@ export async function applyEntry(app: App, entry: Entry): Promise<void> {
     syncBackdrops();
     app.selection.set('elements', [el]);
   });
+}
+
+// the labels of the points of a named scene taken off el when entry is drawn from a file, since the
+// theme would draw them at the points of the Earth and the Moon over the drawing of the file
+async function dropLabels(app: App, el: HTMLElement, entry: Entry): Promise<void> {
+  if (entry.attrs['data-scene'] !== undefined) return;
+  for (const lab of [...el.querySelectorAll(':scope > .lab')].filter((l) => open(app, l))) await app.doc.remove(lab, 'label');
 }
 
 // the gallery of Media > Backdrop…, a popover of a tile per entry of the library, drawn by the
@@ -549,23 +613,42 @@ export function commands(): Command[] {
       },
     },
     {
-      // arg { value, el }: a named scene, or the key of an entry of the library. the window, the
-      // labels, and the motion are kept
+      // arg { value, el }: a named scene, or the key of an entry of the library. the window and the
+      // motion are kept, and the labels unless the entry is drawn from a file. Broucke Families on a
+      // backdrop of a family keeps its family
       id: 'backdrop.scene',
       label: 'Backdrop Drawing',
       undoable: true,
       undo: 'Change Drawing',
       enabled: (app) => !!targetOf(app, undefined),
-      run: (app, arg) => {
+      run: async (app, arg) => {
         const el = targetOf(app, arg);
         const v = String(valueOf(arg) ?? '');
         const entry = library(app).find((e) => e.key === v);
-        if (!el || !entry || entry.missing) return;
+        if (!el || !entry || entry.missing || (entry.key === 'broucke' && isBroucke(el))) return;
         endPreview();
         const attrs = drawingEdit(entry.attrs);
         const now = app.doc.tagState(el).attrs;
         const changed = Object.entries(attrs).filter(([k, x]) => (now[k] ?? null) !== x);
         if (changed.length) app.doc.setTag(el, { attrs: Object.fromEntries(changed) }, 'drawing');
+        await dropLabels(app, el, entry);
+      },
+    },
+    {
+      // arg { value, el }: a value of data-strands-select of the Family popup, or null for every
+      // record of the file
+      id: 'backdrop.family',
+      label: 'Backdrop Family',
+      undoable: true,
+      undo: 'Family',
+      enabled: (app) => isBroucke(targetOf(app, undefined)),
+      run: (app, arg) => {
+        const el = targetOf(app, arg);
+        const v = valueOf(arg);
+        const value = typeof v === 'string' ? v : null;
+        if (!el || !isBroucke(el) || !families(app, el).some((f) => f.spec === value)) return;
+        endPreview();
+        if (!sameSelection(el.getAttribute('data-strands-select'), value)) app.doc.setTag(el, { attrs: { 'data-strands-select': value } }, 'drawing');
       },
     },
     {
