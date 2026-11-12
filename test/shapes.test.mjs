@@ -142,6 +142,16 @@ test('a brace under about 8 widths high is the brace of this height drawn lower,
   assert.ok(Math.abs(tall[2].ps[3][1] - tall[2].ps[0][1] - 77) < 0.02);
 });
 
+test('the ink of the cusp of a brace reaches the edge of its box, as a miter or as a bevel', () => {
+  // a miter longer than 4 half widths of the outline is cut to a bevel in svg, i.e. to a flat tip
+  // that reaches sin a of a half width past the vertex, where a is the angle of the curves to the level
+  for (const [w, h, s] of [[160, 240, 3], [160, 240, 8], [300, 60, 4], [40, 40, 4], [80, 160, 3], [80, 400, 3]]) {
+    const segs = segments(shapePath('brace', w, h, s)), miter = 1 / Math.abs(end(segs[2])[1]), size = `${w} by ${h} at ${s}`;
+    const ink = segs[2].ps[3][0] + s / 2 * (miter <= 4 ? miter : 1 / miter);
+    assert.ok(Math.abs(ink - w) < 0.1, `${size}: the ink of the cusp reaches ${ink} with a miter of ${miter} half widths`);
+  }
+});
+
 // the look of each shape of the current slide: its border, its background, and its svg child
 const looks = (page) => page.evaluate(`[...Reveal.getCurrentSlide().querySelectorAll('.shape')].map((el) => {
   const s = getComputedStyle(el);
