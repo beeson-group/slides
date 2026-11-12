@@ -9,6 +9,7 @@ import type { Command } from '../commands.ts';
 import { CONTAINER, RESIZABLE, containerOf, frameRect, linesOf, mediaIn, movableOf, movablesOf, objectsOf, pictureOf, turnable } from '../canvas/hit.ts';
 import type { Place } from '../canvas/drag.ts';
 import { placeOf, record, withCorners, writePlace } from '../canvas/drag.ts';
+import { followAgain } from '../model/glue.ts';
 import { view, xy } from '../canvas/frames.ts';
 import { angleOf, drawnUnder, fieldOf, groupAngle, groupOf, leaveGroup, selectIn } from './order.ts';
 import { cornerBoxOf } from './align.ts';
@@ -79,6 +80,7 @@ function nudge(app: App, dx: number, dy: number): void {
   if (same && run) {
     run.at = now;
     run.changes.forEach((c, i) => (c.to = changes[i].to));
+    followAgain(app);
   } else run = { at: now, changes: record(app, 'move', changes) };
   // the upper left corner of the elements on the slide that the fields X and Y give, at the lower
   // right of the frames

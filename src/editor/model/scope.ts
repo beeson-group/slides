@@ -14,7 +14,8 @@ export const REVEAL_CLASSES = [
 ];
 
 // the data attributes of AGENTS.md and REFERENCE.md, those of reveal.js that the theme gives a
-// meaning, and data-group and data-locked, which are new and named among the open decisions
+// meaning, and data-group and data-locked, which are new and named among the open decisions, and
+// the glue of model/glue.ts, which only the editor reads
 export const DATA_ATTRS = [
   'data-at', 'data-auto', 'data-auto-animate', 'data-autoplay', 'data-azimuth', 'data-cx', 'data-cy', 'data-duration',
   'data-dx', 'data-dy', 'data-elevation', 'data-final', 'data-fragment-index', 'data-function', 'data-half',
@@ -25,7 +26,7 @@ export const DATA_ATTRS = [
   'data-strands-select', 'data-strands-shade', 'data-surface-accent', 'data-surface-marks', 'data-surface-stage',
   'data-surface-violet', 'data-tone', 'data-turn', 'data-unhighlight', 'data-zoom', 'data-zscale',
   'data-visibility', 'data-timing', 'data-transition', 'data-group', 'data-locked', 'data-autoslide',
-  'data-guides',
+  'data-guides', 'data-anchor', 'data-from', 'data-to',
 ];
 
 // the standard attributes that the editor writes

@@ -14,6 +14,7 @@ import { LAYOUT_GUIDES, anchored, fitPicture, lockedAxis, resizeBox, snapAngle, 
 import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, captionsOf, constrained, containerOf, cssWidth, figureFrame, frameOf, frameRect, hasText, isTextSized, linePoints, linesOf, lineTouches, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, pictureReach, sizedOf, snapBoxOf, toSlide, turnable, twinOf, unturnedRect, visualRect } from './hit.ts';
 import { groupFrame, overlay, turned, view, wh, xy } from './frames.ts';
 import { enterGroup, settleCopies, freshGroup, groupOf } from '../commands/order.ts';
+import { afterMove, relink } from '../model/glue.ts';
 import { copiedGroups, scopeOf, within } from '../model/groups.ts';
 import { cornerBoxOf } from '../commands/align.ts';
 import { backdropAt, pressBackdrop } from '../commands/backdrop.ts';
@@ -129,7 +130,9 @@ export function record(app: App, label: string, changes: { el: Element; from: Pl
     app.frame(kept.length ? kept : els.filter((el) => el.getClientRects().length && !els.some((o) => o !== el && o.contains(el))));
     app.invalidate('content');
   };
-  app.history.push({ label, undo: () => apply('from'), redo: () => apply('to') });
+  // the glued ends of lines follow the moved elements in the same entry
+  const glue = afterMove(app, moved.map((c) => c.el));
+  app.history.push({ label, undo: () => (glue.undo(), apply('from')), redo: () => (apply('to'), glue.redo()) });
   return moved;
 }
 
@@ -1120,6 +1123,7 @@ export function install(app: App): void {
       copiedGroups(copies, (taken) => freshGroup(app, taken)).forEach((g, i) => {
         if (g !== copies[i].getAttribute('data-group')) app.doc.setTag(copies[i], { attrs: { 'data-group': g } }, 'group');
       });
+      relink(app, copies);
       keep((el, translate) => app.doc.setTag(el, { translate }, 'move'));
       app.selection.set('elements', copies);
     });

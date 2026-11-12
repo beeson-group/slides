@@ -19,6 +19,7 @@ import { insertPlain, pasteItems, pastesItems, spaced } from '../text/typing.ts'
 import { movableOf, objectsOf } from '../canvas/hit.ts';
 import { fieldOf, settleCopies, freshGroup } from './order.ts';
 import { copiedGroups } from '../model/groups.ts';
+import { relink } from '../model/glue.ts';
 import { withTwins } from '../canvas/hit.ts';
 import { VOID } from '../source.ts';
 import { tokenize } from '../tokens.ts';
@@ -216,6 +217,7 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
   }
   regroup(app, nodes);
   settleCopies(app, nodes);
+  relink(app, nodes);
   keep((el, translate) => doc.setTag(el, { translate }, 'move'));
   if (own) {
     own.pasted++;
@@ -242,6 +244,7 @@ async function duplicated(app: App, els: Element[]): Promise<Element[]> {
   }
   regroup(app, copies);
   settleCopies(app, copies);
+  relink(app, copies);
   keep((el, translate) => doc.setTag(el, { translate }, 'move'));
   app.selection.set('elements', copies);
   return copies;

@@ -1,12 +1,15 @@
 // the Line pane of the Format tab, for a selected line or arrow, as the Line section of the Style
 // tab of Keynote: a swatch of each tone of the theme, the arrowheads (none, at the start, at the
 // end, or at both ends), the kind (straight, curved, or elbow, as Connection of Keynote), the weight
-// in px, and a dash. each control runs a command of commands/line.ts by its id
+// in px, a dash, and the element that each glued end is glued to. each control runs a command of
+// commands/line.ts by its id
 
 import type { App } from '../app.ts';
-import { HEADS, KINDS, LINE_TONES, WEIGHTS } from '../commands/line.ts';
+import { HEADS, KINDS, LINE_TONES, WEIGHTS, selectedLines } from '../commands/line.ts';
+import { glueOf, type End } from '../model/glue.ts';
+import { describeObject } from '../navigator/objects.ts';
 import { make } from '../ui/dom.ts';
-import { checkbox, keepFocus, row, section, segmented, type Control, type Run } from './controls.ts';
+import { button, checkbox, keepFocus, row, section, segmented, type Control, type Run } from './controls.ts';
 
 const SVG = 'http://www.w3.org/2000/svg';
 
@@ -63,6 +66,35 @@ export function swatches(app: App, run: Run, prefix = 'line.tone', label = 'Line
   return { el, sync };
 }
 
+// a row of a glued end of the one selected line, e.g. Start: Rounded Rectangle, with the name of its
+// element or group in the Object List and a button that takes its glue off. it is hidden without
+// glue, as the section is without a row
+function glueRow(app: App, run: Run, end: End): Control {
+  const label = make('span', 'ed-label');
+  const detach = button(app, run, { command: `line.unglue.${end === 'from' ? 'start' : 'end'}`, text: 'Detach' });
+  const r = row([{ el: label, sync: () => {} }, detach]);
+  const sync = () => {
+    const lines = selectedLines(app);
+    const els = lines.length === 1 ? glueOf(lines[0], end) : [];
+    r.el.style.display = els.length ? '' : 'none';
+    label.textContent = els.length ? `${end === 'from' ? 'Start' : 'End'}: ${els.length > 1 ? 'Group' : describeObject(els[0]).name}` : '';
+    detach.sync();
+  };
+  sync();
+  return { el: r.el, sync };
+}
+
+function connections(app: App, run: Run): Control {
+  const rows = [glueRow(app, run, 'from'), glueRow(app, run, 'to')];
+  const s = section('Connections', rows);
+  const sync = () => {
+    s.sync();
+    s.el.style.display = rows.some((r) => r.el.style.display !== 'none') ? '' : 'none';
+  };
+  sync();
+  return { el: s.el, sync };
+}
+
 export function linePane(app: App, run: Run): Control[] {
   const heads = HEADS.map(([h, label]) => ({ command: `line.heads.${h}`, title: label, text: () => glyphOf(h) }));
   const shapes: Record<string, string> = { straight: 'M3 9L25 3', curve: 'M3 10Q14-4 25 10', elbow: 'M3 10H14V2H25' };
@@ -73,5 +105,6 @@ export function linePane(app: App, run: Run): Control[] {
     section('Arrowheads', [segmented(app, run, heads, 'Arrowheads')]),
     section('Kind', [segmented(app, run, kinds, 'Kind')]),
     section('Weight', [segmented(app, run, weights, 'Weight'), checkbox(app, run, 'line.dashed', 'Dashed')]),
+    connections(app, run),
   ];
 }
