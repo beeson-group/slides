@@ -349,6 +349,11 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section .zone > svg,
 .reveal .slides section .zone > video { display: block; width: 100%; height: 100%; object-fit: contain; }
 .reveal .slides section tycho-viewer.zone { display: block; }
+/* a viewer in a zone or a plate fills it, as a video does, and so does its still in the print view, see src/print.ts */
+.reveal .slides section .zone > tycho-viewer,
+.reveal .slides section .zone > .viewer-still,
+.reveal .slides section.figure .plate > tycho-viewer,
+.reveal .slides section.figure .plate > .viewer-still { width: 100%; height: 100%; }
 .reveal .slides section .zone > figcaption,
 .reveal .slides section .zone > .caption { position: absolute; left: 0; right: 0; top: 100%; margin-top: 16px; }
 .reveal .slides section.narrow > h2,
@@ -423,8 +428,8 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section img[style*="width:"][style*="height:"]:not([style*="object-fit"]),
 .reveal .slides section video[style*="width:"][style*="height:"]:not([style*="object-fit"]) { object-fit: fill !important; }
 /* a zone around a picture with a width is the size of the picture, hence its caption is under the
-   picture and as wide as it */
-.reveal .slides section .zone:has(> img[style*="width:"], > video[style*="width:"], > .qr[style*="width:"]) { width: auto; height: auto; }
+   picture and as wide as it. the still of a viewer in the print view keeps the box of its viewer */
+.reveal .slides section .zone:not(.viewer-still):has(> img[style*="width:"], > video[style*="width:"], > .qr[style*="width:"]) { width: auto; height: auto; }
 /* the videos of a zone or a plate are stacked in one place, and a video under a later one that is shown is hidden
    once the later one has faded in, see src/video.ts. in a plate of the class row, the figures are side by side,
    each in an equal share of the plate */
@@ -559,10 +564,13 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
 .reveal .slides section .fragment.visible .fragment.visible { opacity: 1; }
 /* a backdrop shown at a step is not dimmed at the later steps */
 .reveal .slides section:not([data-complete]) .backdrop.fragment.visible:not(.current-fragment) { opacity: 1; }
-/* nor is a video, which is still played. a video in a fragment of the style play is shown with its poster before
-   its step, and played from its step on */
+/* nor is a video or a tycho viewer, which is still played, or the still of a viewer in the print view, see
+   src/print.ts. a video in a fragment of the style play is shown with its poster before its step, and a viewer
+   with the first frame of its scene, and both are played from their step on */
 .reveal .slides section:not([data-complete]) video.fragment.visible:not(.current-fragment),
-.reveal .slides section:not([data-complete]) .fragment.visible:not(.current-fragment):has(video) { opacity: 1; }
+.reveal .slides section:not([data-complete]) tycho-viewer.fragment.visible:not(.current-fragment),
+.reveal .slides section:not([data-complete]) .viewer-still.fragment.visible:not(.current-fragment),
+.reveal .slides section:not([data-complete]) .fragment.visible:not(.current-fragment):has(video, tycho-viewer, .viewer-still) { opacity: 1; }
 .reveal .slides section .fragment.play { opacity: 1; visibility: inherit; }
 /* the step added to restore the dimmed fragments, kept out of the layout of its slide */
 .reveal .slides section > .fragment[data-restore] { position: absolute; width: 0; height: 0; overflow: hidden; }

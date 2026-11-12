@@ -1,7 +1,7 @@
 // the entry point of beeson.js. window.Beeson.start() is called in a deck to initialize reveal.js
 // with the defaults of the theme, and to start the orbit backdrops, the surfaces, the plots, the QR
-// codes, the fragment steps, the videos, the mode switch, the pointer, and the click that moves the
-// show on
+// codes, the fragment steps, the videos and the tycho viewers at their steps, the mode switch, the pointer,
+// and the click that moves the show on
 
 import { Orbits, mount } from './orbits.ts';
 import { initChrome, refreshChrome } from './chrome.ts';
@@ -20,6 +20,7 @@ import { scene } from './scenes.ts';
 import { addRestoreSteps, applyAll, applySteps, initSteps, initTimedSteps, typeset, type Internal } from './steps.ts';
 import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.ts';
 import { coverAll, initVideos } from './video.ts';
+import { initViewers } from './viewers.ts';
 import type { RevealOptions, SlideEvent } from './reveal.d.ts';
 
 // the number of a slide out of the numbered slides. a slide with data-visibility="uncounted", e.g. a
@@ -281,8 +282,10 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) {
     if (!PLAYED) initFullscreen();
     initScrub(deck);
-    // the videos are played at their steps, and not while the deck is edited, when every step is shown
+    // the videos and the viewers of the style play are played at their steps, and not while the deck
+    // is edited, when every step is shown
     initVideos(deck);
+    initViewers(deck);
     // a click on a slide moves the show on, as in PowerPoint and Keynote, and a click past the end
     // of the show played from the editor returns to the editor, as a key forward does below
     if (internal) initClick(deck, () => internal.cueAutoSlide(), ENDS ? () => toEditor('edit') : undefined);

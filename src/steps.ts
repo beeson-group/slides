@@ -63,9 +63,9 @@ const hasContent = (f: Element) => f.children.length > 0 || (f.textContent ?? ''
 // outside it is shown, see theme/beeson.css
 const isCopy = (f: Element) => f.matches('pre > code.fragment');
 
-// a video shown at a step, or a fragment that holds one, is not dimmed at the later steps, since it is
-// still played, see theme/beeson.css
-const holdsVideo = (f: Element) => f.matches('video') || !!f.querySelector('video');
+// a video or a tycho viewer shown at a step, or a fragment that holds one, is not dimmed at the later
+// steps, since it is still played, see theme/beeson.css
+const holdsVideo = (f: Element) => f.matches('video, tycho-viewer') || !!f.querySelector('video, tycho-viewer');
 
 /**
  * Appends the step that restores the dimmed fragments to every slide under root whose last step
