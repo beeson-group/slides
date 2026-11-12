@@ -328,7 +328,11 @@ export function install(app: App): void {
     const els = membersOf(item);
     const sel = app.selection;
     if (extend) {
-      const now = sel.kind === 'elements' ? sel.elements().map((el) => objectOf(app, el)) : [];
+      // the row of a pair is bound to the twin shown, and the selection may hold the other one
+      const now = (sel.kind === 'elements' ? sel.elements().map((el) => objectOf(app, el)) : []).map((o) => {
+        const twin = twinOf(app, o);
+        return twin && els.includes(twin) ? twin : o;
+      });
       const all = els.every((el) => now.includes(el));
       sel.set('elements', all ? now.filter((el) => !els.includes(el)) : [...now, ...els.filter((el) => !now.includes(el))]);
     } else if (!item.el) selectIn(app, item.path, els);

@@ -1170,8 +1170,11 @@ export class Steps {
     }
     if ((ev.shiftKey || (this.app.platform === 'mac' ? ev.metaKey : ev.ctrlKey)) && !this.model.lines[r.i]) {
       const sel = this.app.selection;
-      if (!ev.shiftKey) sel.toggle(r.el);
-      else if (!sel.items.includes(r.el)) sel.add(r.el);
+      // the row of a pair is bound to the twin shown, and the selection may hold the other one
+      const twin = this.model.twins?.get(r.el);
+      const held = twin && sel.items.includes(twin) && !sel.items.includes(r.el) ? twin : r.el;
+      if (!ev.shiftKey) sel.toggle(held);
+      else if (!sel.items.includes(held)) sel.add(r.el);
       this.current = r;
       return;
     }
