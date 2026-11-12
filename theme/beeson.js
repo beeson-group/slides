@@ -4705,7 +4705,9 @@ void main() {
   var EDITING = new URLSearchParams(location.search).has("edit");
   var PLAYED = !EDITING && window.parent !== window && new URLSearchParams(location.search).has("from-editor");
   var RECEIVER = window.parent !== window && /receiver/i.test(location.search);
-  var toEditor = (eventName) => (RECEIVER ? window.parent.opener : window.parent)?.postMessage(JSON.stringify({ namespace: "beeson", eventName, state: window.Reveal.getState() }), "*");
+  var TAB = !EDITING && window.parent === window && !!window.opener && new URLSearchParams(location.search).has("from-editor");
+  var ENDS = (PLAYED || TAB) && !/controls=false/.test(location.search);
+  var toEditor = (eventName) => (RECEIVER ? window.parent.opener : TAB ? window.opener : window.parent)?.postMessage(JSON.stringify({ namespace: "beeson", eventName, state: window.Reveal.getState() }), "*");
   var speaker = null;
   function fromSpeaker(ev) {
     let m = null;
@@ -4716,7 +4718,7 @@ void main() {
     } catch {
       return;
     }
-    if (m?.namespace === "beeson" && m.eventName === "edit") PLAYED ? toEditor("edit") : edit();
+    if (m?.namespace === "beeson" && m.eventName === "edit") PLAYED || TAB ? toEditor("edit") : edit();
   }
   function edit() {
     speaker?.close();
@@ -4837,7 +4839,7 @@ void main() {
       hooks.internal = reveal;
       addRestoreSteps(document);
     } });
-    const editing = EDITING ? { showHiddenSlides: true } : {};
+    const editing = EDITING ? { showHiddenSlides: true } : PLAYED && !RECEIVER ? { postMessageEvents: true } : {};
     await deck.initialize({ ...DEFAULTS, ...editing, ...options, plugins });
     initChrome();
     initSteps(deck);
@@ -4858,7 +4860,7 @@ void main() {
     if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) {
       if (!PLAYED) initFullscreen();
       initScrub(deck);
-      if (internal) initClick(deck, () => internal.cueAutoSlide(), PLAYED && !RECEIVER ? () => toEditor("edit") : void 0);
+      if (internal) initClick(deck, () => internal.cueAutoSlide(), ENDS ? () => toEditor("edit") : void 0);
     }
     if (PLAYED) {
       for (const keyCode of [27, 69]) deck.addKeyBinding(keyCode, (ev) => {
@@ -4870,8 +4872,8 @@ void main() {
     } else if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: "E", description: "Edit the deck" }, (ev) => {
       if (forDeck(ev)) RECEIVER ? toEditor("edit") : edit();
     });
+    let typed = "";
     if (PLAYED && !RECEIVER) {
-      let typed = "";
       document.addEventListener("keydown", (ev) => {
         if (!/^[0-9]$/.test(ev.key) && ev.key !== "Enter") typed = "";
       }, true);
@@ -4886,14 +4888,14 @@ void main() {
       deck.addKeyBinding(8, (ev) => {
         if (forDeck(ev)) deck.prev();
       });
-      document.addEventListener("keydown", (ev) => {
-        if (!["ArrowRight", "ArrowDown", "PageDown", " ", "Enter", "n", "N"].includes(ev.key) || ev.key === "Enter" && typed) return;
-        if (!forDeck(ev) || deck.isOverview() || !deck.isLastSlide() || deck.availableFragments().next) return;
-        ev.preventDefault();
-        ev.stopImmediatePropagation();
-        toEditor("edit");
-      }, true);
     }
+    if (ENDS) document.addEventListener("keydown", (ev) => {
+      if (!["ArrowRight", "ArrowDown", "PageDown", " ", "Enter", "n", "N"].includes(ev.key) || ev.key === "Enter" && typed) return;
+      if (!forDeck(ev) || deck.isOverview() || !deck.isLastSlide() || deck.availableFragments().next) return;
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      toEditor("edit");
+    }, true);
     if (!EDITING && !RECEIVER) window.addEventListener("message", fromSpeaker);
     if (PLAYED) window.addEventListener("pagehide", () => speaker?.close());
     if (still2()) completeAll();

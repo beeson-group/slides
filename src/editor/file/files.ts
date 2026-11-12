@@ -613,7 +613,8 @@ export function install(app: App): void {
       show?.end();
       return null;
     }
-    const url = `${deckAddress()}${hash}`;
+    // from-editor lets the show in a tab end at a click past its last step (src/main.ts)
+    const url = `${deckAddress(show ? [] : ['from-editor'])}${hash}`;
     return { win: show ? show.load(url) : window.open(url, '_blank') };
   }
 

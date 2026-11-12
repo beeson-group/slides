@@ -159,7 +159,8 @@ export function install(app: App, layers: HTMLElement): void {
   }, fail);
 
   // the place of the current slide in the show and the count of the slides in the show, as the
-  // navigator numbers them. a hidden slide reads the struck number that it would take
+  // navigator numbers them. a hidden slide is not numbered, as the navigator draws it as the bar of
+  // a skipped slide of Keynote, and it is read by the shown slide before it
   const count = () => {
     const d = app.deck();
     if (!d) return;
@@ -170,12 +171,11 @@ export function install(app: App, layers: HTMLElement): void {
       countEl.textContent = `Slide ${d.getSlidePastCount() + 1} of ${d.getTotalSlides()}`;
       return;
     }
-    const n = String(showPlaces(slides)[i]);
+    const n = showPlaces(slides)[i];
     const total = slides.filter((s) => !isHidden(s)).length;
-    const hidden = isHidden(slides[i]);
-    countEl.replaceChildren('Slide ', hidden ? make('s', '', n) : n, ` of ${total}${hidden ? ', hidden' : ''}`);
-    if (hidden) countEl.setAttribute('aria-label', `Slide ${n} of ${total}, hidden`);
-    else countEl.removeAttribute('aria-label');
+    if (!isHidden(slides[i])) countEl.textContent = `Slide ${n} of ${total}`;
+    else if (n > 1) countEl.textContent = `Hidden slide, after slide ${n - 1} of ${total}`;
+    else countEl.textContent = total ? `Hidden slide, before slide 1 of ${total}` : 'Hidden slide, no slide in the show';
   };
   const zoomState = () => {
     if (!app.stage) return;

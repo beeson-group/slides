@@ -80,7 +80,14 @@ const PLAYED = !EDITING && window.parent !== window && new URLSearchParams(locat
 // the frame of the current slide in the speaker view of reveal.js, with receiver in its address, is
 // sent the keys of the speaker view, and it posts them to the deck that opened the speaker view
 const RECEIVER = window.parent !== window && /receiver/i.test(location.search);
-const toEditor = (eventName: string) => (RECEIVER ? window.parent.opener : window.parent)?.postMessage(JSON.stringify({ namespace: 'beeson', eventName, state: window.Reveal.getState() }), '*');
+// with from-editor, the deck in a tab of its own is the show of Presenter View, which posts to the
+// editor that opened it
+const TAB = !EDITING && window.parent === window && !!window.opener && new URLSearchParams(location.search).has('from-editor');
+// the show played by the editor, in its frame or its tab, and the current slide of its speaker
+// view, end at a click or a key forward past the last step. the speaker view gives its frame of the
+// upcoming slide controls=false
+const ENDS = (PLAYED || TAB) && !/controls=false/.test(location.search);
+const toEditor = (eventName: string) => (RECEIVER ? window.parent.opener : TAB ? window.opener : window.parent)?.postMessage(JSON.stringify({ namespace: 'beeson', eventName, state: window.Reveal.getState() }), '*');
 // the speaker view opened by the show, which is closed with the show
 let speaker: Window | null = null;
 
@@ -96,7 +103,7 @@ function fromSpeaker(ev: MessageEvent): void {
   } catch {
     return;
   }
-  if (m?.namespace === 'beeson' && m.eventName === 'edit') (PLAYED ? toEditor('edit') : edit());
+  if (m?.namespace === 'beeson' && m.eventName === 'edit') (PLAYED || TAB ? toEditor('edit') : edit());
 }
 
 function edit(): void {
@@ -211,7 +218,10 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   if (!EDITING) plugins.push({ id: 'beeson-restore', init: (reveal: unknown) => { hooks.internal = reveal as Internal; addRestoreSteps(document); } });
   // a hidden slide is removed from the page by reveal.js unless showHiddenSlides is set, and it
   // must be on the page to be edited
-  const editing: Partial<RevealOptions> = EDITING ? { showHiddenSlides: true } : {};
+  // the show in the frame of the editor posts its events to the editor. the option is not in the
+  // address, which the speaker view copies into its frame of the upcoming slide, whose events
+  // would then move the show a step on
+  const editing: Partial<RevealOptions> = EDITING ? { showHiddenSlides: true } : PLAYED && !RECEIVER ? { postMessageEvents: true } : {};
   await deck.initialize({ ...DEFAULTS, ...editing, ...options, plugins });
 
   initChrome();
@@ -232,18 +242,18 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
     initScrub(deck);
     // a click on a slide moves the show on, as in PowerPoint and Keynote, and a click past the end
     // of the show played from the editor returns to the editor, as a key forward does below
-    if (internal) initClick(deck, () => internal.cueAutoSlide(), PLAYED && !RECEIVER ? () => toEditor('edit') : undefined);
+    if (internal) initClick(deck, () => internal.cueAutoSlide(), ENDS ? () => toEditor('edit') : undefined);
   }
   // E opens the same slide in the editor, and the other parameters of the address are kept
   if (PLAYED) {
     for (const keyCode of [27, 69]) deck.addKeyBinding(keyCode, (ev) => { if (forDeck(ev)) toEditor('edit'); });
     document.addEventListener('keydown', (ev) => { if (ev.keyCode === 83 && forDeck(ev)) toEditor('speaker'); }, true);
   } else if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: 'E', description: 'Edit the deck' }, (ev) => { if (forDeck(ev)) (RECEIVER ? toEditor('edit') : edit()); });
+  let typed = '';
   if (PLAYED && !RECEIVER) {
     // Return and Backspace move the show, and a slide number typed before Return goes to its
     // slide before its steps, as in PowerPoint and in the presenter display of the editor. the
     // frames of the speaker view are left with the keys of reveal.js
-    let typed = '';
     document.addEventListener('keydown', (ev) => { if (!/^[0-9]$/.test(ev.key) && ev.key !== 'Enter') typed = ''; }, true);
     for (let d = 0; d < 10; d++) for (const keyCode of [48 + d, 96 + d]) deck.addKeyBinding(keyCode, (ev) => { if (forDeck(ev)) typed = (typed + d).slice(-4); });
     deck.addKeyBinding(13, (ev) => {
@@ -252,16 +262,16 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
       typed = '';
     });
     deck.addKeyBinding(8, (ev) => { if (forDeck(ev)) deck.prev(); });
-    // a key forward at the last step of the last slide returns to the editor, as the presenter
-    // display ends the show there
-    document.addEventListener('keydown', (ev) => {
-      if (!['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter', 'n', 'N'].includes(ev.key) || (ev.key === 'Enter' && typed)) return;
-      if (!forDeck(ev) || deck.isOverview() || !deck.isLastSlide() || deck.availableFragments().next) return;
-      ev.preventDefault();
-      ev.stopImmediatePropagation();
-      toEditor('edit');
-    }, true);
   }
+  // a key forward at the last step of the last slide returns to the editor, as the presenter
+  // display ends the show there
+  if (ENDS) document.addEventListener('keydown', (ev) => {
+    if (!['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter', 'n', 'N'].includes(ev.key) || (ev.key === 'Enter' && typed)) return;
+    if (!forDeck(ev) || deck.isOverview() || !deck.isLastSlide() || deck.availableFragments().next) return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    toEditor('edit');
+  }, true);
   if (!EDITING && !RECEIVER) window.addEventListener('message', fromSpeaker);
   // the editor ends the show by taking its frame away
   if (PLAYED) window.addEventListener('pagehide', () => speaker?.close());

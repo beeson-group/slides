@@ -2,8 +2,8 @@
 // the whole screen. the deck is loaded without edit into a frame over the window of the editor, and
 // full screen is asked for on the stage of the frame while the key or click of Present still
 // counts, as the Fullscreen API asks. where the browser refuses it, the show fills the window.
-// reveal.js in the frame posts its events to the editor (postMessageEvents), also on file:, where
-// the frame is of another origin, and the deck posts Esc, E, F, and S (from-editor in src/main.ts).
+// reveal.js in the frame posts its events to the editor, also on file:, where the frame is of
+// another origin, and the deck posts Esc, E, F, and S (from-editor in src/main.ts).
 // the show ends at Esc and E, at a load of another page in the frame, and when it leaves full
 // screen otherwise than at F or S, e.g. at an Esc that the browser keeps from the page. the editor
 // is then at the slide shown last
@@ -137,7 +137,6 @@ export function startShow(app: App): Stage {
     load(url: string) {
       if (!el.isConnected) return null;
       const u = new URL(url, location.href);
-      u.searchParams.set('postMessageEvents', 'true');
       u.searchParams.set('from-editor', '');
       frame.src = u.href.replace(/=(?=&|$|#)/g, '');
       frame.focus();

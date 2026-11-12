@@ -501,6 +501,16 @@ export class Presenter {
       ev.preventDefault();
       this.finish();
     });
+    // the show in the tab posts edit at a click or a key forward past its last step (src/main.ts)
+    window.addEventListener('message', (ev) => {
+      if (!this.isOpen || !this.audience || ev.source !== this.audience || typeof ev.data !== 'string') return;
+      try {
+        const m = JSON.parse(ev.data);
+        if (m?.namespace === 'beeson' && m.eventName === 'edit') this.finish();
+      } catch {
+        // a message that is not of the show
+      }
+    });
     const resized = new ResizeObserver(() => this.draw());
     resized.observe(shotCurrent);
     resized.observe(this.nextShot);
