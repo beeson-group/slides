@@ -19,8 +19,9 @@ export type Command = {
   // where the keys are taken, by default on the canvas and in the navigator
   in?: Region[];
   // true takes the keys with Mod, Ctrl, Alt, or Meta also in a text, whose browser does not use
-  // them, e.g. Ctrl+M of New Slide. the text takes a bare key and Shift with a key
-  inText?: boolean;
+  // them, e.g. Ctrl+M of New Slide, and a list of platforms takes them in a text only there. the
+  // text takes a bare key and Shift with a key
+  inText?: boolean | Platform[];
   menu?: { bar: string; group: string; order: number; submenu?: string };
   // label is a short label of the toolbar that does not change, e.g. Undo for Undo Typing. split
   // draws a split button, whose list holds the commands of the group with the same split and the
@@ -185,7 +186,8 @@ export class Commands {
     // a text takes a key that types a character, e.g. Shift+0 of Actual Size, which types )
     const types = (k: string) => region === 'text' && isPlain(k) && k.split('+').at(-1)!.length === 1;
     const find = (e: KeyEvent) => this.list().find((c) => {
-      const typed = region === 'text' && !!c.inText && !(c.in ?? DEFAULT_REGIONS).includes(region);
+      const inText = c.inText === true || (Array.isArray(c.inText) && c.inText.includes(platform));
+      const typed = region === 'text' && inText && !(c.in ?? DEFAULT_REGIONS).includes(region);
       return (typed || (c.in ?? DEFAULT_REGIONS).includes(region)) &&
         boundKeys(c, platform).some((k) => (plain || !isPlain(k)) && !(typed && isPlain(k)) && !types(k) && matches(e, k, platform)) &&
         this.enabled(c.id);

@@ -1769,14 +1769,17 @@ export function install(app: App): void {
     },
   });
 
-  // the keys of the rows and the columns are taken on the canvas only, while a cell is selected as
-  // a block, as in Keynote. in a text, Option with an arrow moves the caret by a word or a paragraph
-  // on a Mac, and Alt with Left or Right is Back or Forward of a browser on Windows and Linux
+  // the keys of the rows and the columns are taken while a cell is selected as a block, as in
+  // Keynote, and with the caret in a cell on Windows and Linux, where the text does not use them.
+  // on a Mac, Option with an arrow moves the caret by a word or a paragraph, hence the text keeps
+  // them. on Windows and Linux, Alt with Left or Right is Back or Forward of a browser, which the
+  // command keeps from it
   const rowCommand = (id: string, label: string, order: number, below: boolean, key: string) => c.define({
     id,
     label,
     keys: { mac: [key], other: [key] },
     in: ['canvas'],
+    inText: ['other'],
     menu: menu('add', order),
     enabled: withTable,
     undoable: true,
@@ -1795,6 +1798,7 @@ export function install(app: App): void {
     label,
     keys: { mac: [key], other: [key] },
     in: ['canvas'],
+    inText: ['other'],
     menu: menu('add', order),
     enabled: withTable,
     undoable: true,
