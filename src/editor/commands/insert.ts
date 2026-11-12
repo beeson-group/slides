@@ -194,6 +194,9 @@ function textOffset(app: App, el: HTMLElement): number {
   return Math.max(0, Math.round(Math.max(...drawn) - Math.max(...placed)));
 }
 
+// the inputs that are typing into a text, and not a new line, a paste, or a composition
+const TYPED = ['insertText', 'insertReplacementText', 'deleteContentBackward', 'deleteContentForward', 'deleteWordBackward', 'deleteWordForward'];
+
 // the bottom margin of a slide in slide px, where the theme ends the foot line
 const MARGIN = 50;
 
@@ -235,17 +238,20 @@ export function install(app: App): void {
   const ready = (a: App) => !!a.pairing?.root && !!a.current() && a.region() !== 'dialog';
 
   // the element of the editor that waits for its first input, and whether it is being written
-  let pending: { el: HTMLElement; kind: Kind; parent: Element } | null = null;
+  let pending: { el: HTMLElement; kind: Kind; parent: Element; show(): void; entry: Entry } | null = null;
   let writing = false;
   // the kind and the element written in place of the box while it is written, and the input taken
   // meanwhile, in order: a text, or the inputType of a deletion
   let written: { kind: Kind; node: Element | null } | null = null;
   let typed: string[] = [];
   // the entry of the empty box is the last one of the history, a change of the history is made by
-  // that entry, and an undo of it keeps the box, which the first input then writes
+  // that entry or by the first input, and an undo of the entry keeps the box, which the first
+  // input of a caption then writes
   let onTop = false;
   let own = false;
   let keep = false;
+  // an emptied text box is being taken out of the file, which does not drop a new box
+  let leaving = false;
 
   const take = () => {
     if (!pending) return;
@@ -258,7 +264,7 @@ export function install(app: App): void {
   // history does not offer a Redo of an empty box
   const drop = () => {
     if (!pending || writing) return;
-    const last = onTop;
+    const last = onTop && app.history.last === pending.entry;
     onTop = false;
     take();
     if (last) app.history.discard();
@@ -274,6 +280,20 @@ export function install(app: App): void {
     el.setAttribute('data-prompt', def.prompt);
     el.setAttribute('aria-label', def.label);
     const next = before && before.parentNode === parent ? before : null;
+    const entry: Entry = {
+      label: `Insert ${def.label}`,
+      undo: () => {
+        own = true;
+        onTop = false;
+        if (!keep && pending?.el === el) take();
+      },
+      redo: () => {
+        own = true;
+        app.showSlide(parent);
+        show();
+        onTop = true;
+      },
+    };
     const show = () => {
       parent.insertBefore(el, next && next.parentNode === parent ? next : null);
       if (kind === 'text' || kind === 'code') {
@@ -290,28 +310,16 @@ export function install(app: App): void {
         if (f) el.style.translate = `${t.x + f.x}px ${t.y + f.y}px`;
         if (f?.width) el.style.width = `${f.width}px`;
       }
-      pending = { el, kind, parent };
+      pending = { el, kind, parent, show, entry };
       placeCaret(el);
       app.invalidate('content');
     };
     el.addEventListener('focusout', () => setTimeout(() => {
-      if (pending?.el === el && document.activeElement !== el) drop();
+      if (pending?.el === el && document.activeElement !== el && !leaving) drop();
     }, 0));
     show();
     own = true;
-    app.history.push({
-      label: `Insert ${def.label}`,
-      undo: () => {
-        own = true;
-        onTop = false;
-        if (!keep && pending?.el === el) take();
-      },
-      redo: () => {
-        own = true;
-        show();
-        onTop = true;
-      },
-    });
+    app.history.push(entry);
     onTop = true;
   };
 
@@ -338,22 +346,40 @@ export function install(app: App): void {
   // the first text typed into the element of the editor writes it into the file in its place. every
   // input into the box or into the element written for it is taken until the write ends, since the
   // element is not yet a block of the pairing that the typing of text/typing.ts records
-  const write = async (text: string) => {
+  const write = async (text: string, label = 'typing') => {
     const p = pending;
     if (!p) return;
     writing = true;
     written = { kind: p.kind, node: null };
     typed = [];
     const def = PENDING[p.kind];
+    // the first input is an entry of its own over the insert of the box, as in Keynote and
+    // PowerPoint, and its undo leaves the empty box with the caret. a caption is written in place of
+    // the entry of its box, which is one entry with the Caption switch that made it
+    const apart = p.kind !== 'caption';
     try {
-      // the entry of the empty box is undone with the box kept, so that the written box is one entry
-      if (onTop) {
+      if (onTop && !apart) {
         keep = true;
         await app.history.undo().finally(() => (keep = false));
       }
-      // the box is selected at a redo
       let made: Element[] = [];
-      await app.history.selecting(`Insert ${def.label}`, async () => {
+      const body = async () => {
+        if (apart) {
+          app.history.push({
+            label,
+            undo: () => {
+              own = true;
+              onTop = true;
+              p.el.textContent = '';
+              p.show();
+            },
+            redo: () => {
+              p.el.remove();
+              pending = null;
+            },
+            selects: 'undo',
+          });
+        }
         // a box moved by textOffset or centerOffset is written with the same offset
         const [x0, y0] = p.el.style.translate.split(' ');
         let x = parseFloat(x0 ?? '') || 0, y = parseFloat(y0 ?? '') || 0;
@@ -379,16 +405,61 @@ export function install(app: App): void {
         if (p.el.style.width) docOf(app).setTag(node, { style: { width: p.el.style.width } }, def.label);
         pending = null;
         // the caret of a code box is in its code element, where the typing after the first key goes
-        placeCaret(node, p.kind === 'code' ? (node.textContent ?? '').length : null);
+        const caret = () => placeCaret(node, p.kind === 'code' ? (node.textContent ?? '').length : null);
+        caret();
         await applyPending(app, p.el, node);
         checkOverlaps(app, app.current(), node);
-      }, () => made);
-      await replay(p.kind);
+        if (apart) {
+          await replay(p.kind);
+          app.history.push({ label, undo: () => {}, redo: caret, selects: 'redo' });
+        }
+      };
+      // a redo of a caption selects it
+      if (apart) await app.history.transact(label, body);
+      else await app.history.selecting(`Insert ${def.label}`, body, () => made);
+      if (apart && made[0]) watch(made[0], p.kind, p.entry, app.history.last);
+      if (!apart) await replay(p.kind);
     } finally {
       writing = false;
       written = null;
       typed = [];
     }
+  };
+
+  // the last new box written, with the entries of its insert and of its first input, whether every
+  // change of the history since then is one of these entries or a typing into it, and the time of
+  // its last input
+  let recent: { node: Element; kind: Kind; box: Entry; first: Entry | null; alone: boolean; at: number } | null = null;
+  const typingOf = (e: Entry | null, node: Element) => !!e && e.els?.length === 1 && e.els[0] === node && ['typing', 'Cut', 'Paste'].includes(e.label);
+  // a new text box left empty is taken out of the file, with its entries while they are the last
+  // ones of the history, and else as an entry of its own, as Keynote deletes an empty text box
+  const leave = async (node: Element) => {
+    const r = recent;
+    if (r?.node !== node || r.kind !== 'text' || writing || !node.isConnected || node.contains(document.activeElement) || node.textContent?.trim() || node.querySelector('img, svg, mjx-container')) return;
+    await app.history.idle();
+    const h = app.history;
+    if (app.selection.kind === 'elements' && app.selection.elements().includes(node)) app.selection.clear();
+    if (r.alone) {
+      while (typingOf(h.last, node)) await h.retract(h.last!);
+      for (const e of [r.first, r.box]) if (e && h.last === e) await h.retract(e);
+    }
+    if (node.isConnected) {
+      // a box begun since, e.g. by a click on Text, is kept, and put again at its place in the
+      // column without the emptied box
+      const p = pending;
+      leaving = true;
+      try {
+        await h.transact('Delete Text Box', () => docOf(app).remove(node));
+        if (p && pending === p) p.show();
+      } finally {
+        leaving = false;
+      }
+    }
+    recent = null;
+  };
+  const watch = (node: Element, kind: Kind, box: Entry, first: Entry | null) => {
+    recent = { node, kind, box, first, alone: true, at: performance.now() };
+    node.addEventListener('focusout', () => setTimeout(() => void leave(node).catch(fail), 0));
   };
 
   // whether an input goes to the box, or to the element written in its place while it is written
@@ -401,6 +472,25 @@ export function install(app: App): void {
   // the input into the element of the editor is taken before the typing of text/typing.ts, which
   // records the blocks of the file
   window.addEventListener('beforeinput', (ev) => {
+    // a key typed into a new box within the pause of the typing of history.ts after a typed first
+    // input is a part of the entry of that input, as a word typed into a new box is one entry in
+    // Keynote.
+    // the key is applied and recorded by text/typing.ts at the input event after this one, and the
+    // entry is open until then, or until the next task when the key does not change the text
+    const r = recent;
+    const a = getSelection()?.anchorNode;
+    if (r?.first?.label === 'typing' && !writing && app.history.last === r.first && !!a && r.node.contains(a) && performance.now() - r.at < 1000 && TYPED.includes(ev.inputType)) {
+      r.at = performance.now();
+      const input = new Promise<void>((done) => {
+        const end = () => {
+          window.removeEventListener('input', end);
+          done();
+        };
+        window.addEventListener('input', end);
+        setTimeout(end, 0);
+      });
+      void app.history.amend(r.first, () => input).catch(fail);
+    }
     if (!intoBox(ev.target)) return;
     ev.stopImmediatePropagation();
     const type = ev.inputType;
@@ -416,10 +506,20 @@ export function install(app: App): void {
     else if (writing && (type === 'deleteContentBackward' || type === 'deleteContentForward')) typed.push(type);
     if (!text) return;
     if (writing) typed.push(text);
-    else void write(text).catch(fail);
+    else void write(text, type === 'insertFromPaste' ? 'Paste' : 'typing').catch(fail);
   }, true);
+  // an input into the box without a beforeinput, i.e. the insertText of Edit > Paste, is written
+  // after the transaction of the paste command has ended
   window.addEventListener('input', (ev) => {
-    if (pending && ev.target === pending.el) ev.stopImmediatePropagation();
+    if (!pending || ev.target !== pending.el) return;
+    ev.stopImmediatePropagation();
+    if ((ev as InputEvent).isComposing || writing) return;
+    const p = pending;
+    setTimeout(() => {
+      const text = p.el.innerText.replace(/\n$/, '');
+      if (pending !== p || writing || !text.trim()) return;
+      void write(text, 'Paste').catch(fail);
+    }, 0);
   }, true);
   // a text composed with an input method is written at its end
   window.addEventListener('compositionend', (ev) => {
@@ -433,13 +533,15 @@ export function install(app: App): void {
   // the deck is marked edited after the check of files.ts, which marks it clean when its text reads
   // as saved, at each change of the history
   app.listen('history', () => {
+    const l = app.history.last;
+    if (recent && l !== recent.first && !typingOf(l, recent.node)) recent.alone = false;
     if (own) {
       own = false;
       if (pending) app.markDirty();
       return;
     }
     onTop = false;
-    if (!writing) drop();
+    if (!writing && !leaving) drop();
   });
 
   // the prompt of a formula whose TeX is empty, as a class of the page only

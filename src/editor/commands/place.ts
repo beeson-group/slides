@@ -131,9 +131,10 @@ export function freePlace(app: App, el: Element, picture?: HTMLElement, strict =
   const width = picture?.style.width ?? '';
   const base = b0.right - b0.left;
   // an image or a video is drawn as small as a quarter before it lies over a figure, and a text box,
-  // a formula, or a QR code only as small as a half, since a figure may lie under it
+  // a formula, or a QR code only as small as a half, since a figure may lie under it. over a figure
+  // these three are drawn as small as a half again before they are put at the center over the texts
   const media = !!picture?.matches('img, video');
-  const scales = (all: boolean) => (!picture ? [1] : all ? (media ? [1, 0.75, 0.5, 0.35, 0.25] : [1, 0.75, 0.5]) : media ? [0.5] : [1]);
+  const scales = (all: boolean) => (!picture ? [1] : media ? (all ? [1, 0.75, 0.5, 0.35, 0.25] : [0.5]) : [1, 0.75, 0.5]);
   try {
     const ground = others.some((o) => o.ground);
     for (const level of strict ? (ground ? [0, 1] : [0]) : ground ? [0, 1, 2] : [0, 2]) {
