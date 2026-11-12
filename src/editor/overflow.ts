@@ -52,9 +52,10 @@ const kindOf = (f: Element): string => KINDS.find(([s]) => f.matches(s))?.[1] ??
 // a check of the overlaps on slide, made by checkOverlaps. scope is null after a change of the
 // layout, and else the new element whose overlaps are reported. seen maps each element of the
 // file on the slide to its placeOf at the check, and an element whose placeOf differs is left out
-// of the report until an undo puts it back
-type Check = { slide: Element; scope: Element | null; seen: Map<Element, string> };
-const checks: Check[] = [];
+// of the report until an undo puts it back. the checks are kept per slide, at most 64 of them,
+// hence the inserts on one slide do not take the report of another away
+type Check = { scope: Element | null; seen: Map<Element, string> };
+const checks = new WeakMap<Element, Check[]>();
 
 // the style of el and of its parents inside slide, which a drag, a nudge, a field, a resize, a
 // rotation, an align, a distribute, and a layer command change. the style of the section is left
@@ -66,13 +67,15 @@ const placeOf = (el: Element, slide: Element): string => {
 };
 
 // called by the change of a layout, with scope null, and by an insert that the editor places,
-// with the new element. an undo takes the slide or scope off the page, and the check with it
+// with the new element. an undo takes the slide or scope off the page, and the check with it. a
+// check whose scope is off the page is dropped at the next check of its slide, since this check is
+// made in a new entry of the history, after which an undone insert is not redone
 export function checkOverlaps(app: App, slide: Element | null, scope: Element | null = null): void {
   if (!slide) return;
   const seen = new Map<Element, string>();
   for (const el of slide.querySelectorAll('*')) if (app.pairing?.elements.has(el)) seen.set(el, placeOf(el, slide));
-  checks.push({ slide, scope, seen });
-  if (checks.length > 64) checks.shift();
+  const all = [...(checks.get(slide) ?? []).filter((c) => !c.scope || c.scope.isConnected), { scope, seen }];
+  checks.set(slide, all.slice(-64));
   app.invalidate('layout');
 }
 
@@ -120,7 +123,7 @@ export function install(app: App): void {
       const meets = (r: DOMRect, b: DOMRect | undefined) => !!b && b.height > 0 && r.bottom > b.top + 1 && r.top < b.bottom - 1 && r.right > b.left + 1 && r.left < b.right - 1;
       const above = slide.matches('.figure') ? [...slide.querySelectorAll(':scope > h2, :scope > .run')].map((e) => e.getBoundingClientRect()) : [];
       const partOf = (el: Element) => [...slide.children].find((c) => c.contains(el));
-      const live = checks.filter((c) => c.slide === slide && (!c.scope || c.scope.isConnected));
+      const live = (checks.get(slide) ?? []).filter((c) => !c.scope || c.scope.isConnected);
       const now = new Map<Element, string>();
       const at = (el: Element) => now.get(el) ?? now.set(el, placeOf(el, slide)).get(el);
       const checked = (t: Element, f: Element) => live.some((c) => c.seen.get(t) === at(t) && c.seen.get(f) === at(f) && (!c.scope || c.scope.contains(t) || c.scope.contains(f)));
@@ -151,11 +154,11 @@ export function install(app: App): void {
         const reach = !!el.closest('section.figure > .caption') && above.some((b) => meets(r, b));
         const part = partOf(el);
         const others = figures.filter((f) => f.part !== part && checked(el, f.el));
-        // a line is tested inside the box r of its text, since the content area of its font is
-        // taller than the box of a heading with a tight line height. a turned picture is met by its
-        // turned box, not by the box upright around it
-        const hit = others.length ? lines(el) : [];
-        const under = others.filter((f) => hit.some((l) => (f.q ? cuts(l, f.q) : meets(l, f.r)) && meets(r, f.r)));
+        // a line is clipped to the box r of its text, since the content area of its font is taller
+        // than the box of a heading with a tight line height. a turned picture is met by its turned
+        // box, not by the box upright around it
+        const hit = (others.length ? lines(el) : []).map((l) => DOMRect.fromRect({ x: Math.max(l.left, r.left), y: Math.max(l.top, r.top), width: Math.min(l.right, r.right) - Math.max(l.left, r.left), height: Math.min(l.bottom, r.bottom) - Math.max(l.top, r.top) })).filter((l) => l.width > 1 && l.height > 1);
+        const under = others.filter((f) => hit.some((l) => (f.q ? cuts(l, f.q) : meets(l, f.r))));
         for (const f of under) pairs.push({ text: el, fig: f.el });
         const onFigure = under.length > 0;
         // a turned text, e.g. the caption of a turned figure, runs past by its lines, since the box

@@ -132,7 +132,7 @@ export function piecesOf(app: App, el: Element): { solids: Box[]; texts: Box[] }
     if (box && box.right - box.left > 1 && box.bottom - box.top > 1) (o.matches(SOLID) || o.matches('.slide-number') ? out.solids : out.texts).push(box);
   };
   const num = document.querySelector('.reveal .slide-number');
-  for (const o of [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *, :scope > .block > *'), ...(num ? [num] : [])]) {
+  for (const o of [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *, :scope > .block > *, :scope > .sec > *'), ...(num ? [num] : [])]) {
     if (o === el || o.contains(el) || el.contains(o) || o.matches(SKIP)) continue;
     const box = boxOf(app, o);
     const all = o.matches('.plate') && o.getClientRects().length ? slideBox(app, o) : null;

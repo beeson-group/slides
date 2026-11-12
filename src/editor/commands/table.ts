@@ -465,7 +465,9 @@ function placeTable(app: App, table: HTMLTableElement): void {
   const taken = (els: Element[]) => els.filter((el) => !skip(el)).map((el) => takenBox(app, el)).filter((b): b is SlideBox => !!b);
   const above = [...parent.children].slice(0, [...parent.children].indexOf(table)).filter((el) => !el.matches('.run, .foot, [data-generated]'));
   const before = taken(above.filter((el) => !ground(el)));
-  const kids = [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *')].filter((el) => !el.contains(table));
+  // the words and the tables of the block of a title, section, or closing slide are counted, also
+  // in the block that holds the new table
+  const kids = [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *, :scope > .block > *, :scope > .sec > *')].filter((el) => !el.contains(table));
   const others = taken(kids.flatMap((el) => (ground(el) ? [...el.children].filter((c) => c.getClientRects().length) : [el])));
   const tw = t.right - t.left;
   const th = t.bottom - t.top;
