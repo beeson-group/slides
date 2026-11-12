@@ -23,10 +23,12 @@ import { codePane } from './code.ts';
 import { surfacePane, surfaceOf } from './surface.ts';
 import { linePane } from './line.ts';
 import { selectedLines } from '../commands/line.ts';
+import { shapePane } from './shape.ts';
+import { selectedShapes } from '../commands/shape.ts';
 import { lockedSelection } from '../commands/order.ts';
 
-export type PaneKind = 'slide' | 'table' | 'text' | 'image' | 'video' | 'qr' | 'formula' | 'code' | 'surface' | 'line' | 'arrange';
-const TAB_NAMES: Record<PaneKind, string> = { slide: 'Slide', table: 'Table', text: 'Text', image: 'Image', video: 'Video', qr: 'QR Code', formula: 'Formula', code: 'Code', surface: 'Surface', line: 'Line', arrange: 'Arrange' };
+export type PaneKind = 'slide' | 'table' | 'text' | 'image' | 'video' | 'qr' | 'formula' | 'code' | 'surface' | 'line' | 'shape' | 'arrange';
+const TAB_NAMES: Record<PaneKind, string> = { slide: 'Slide', table: 'Table', text: 'Text', image: 'Image', video: 'Video', qr: 'QR Code', formula: 'Formula', code: 'Code', surface: 'Surface', line: 'Line', shape: 'Shape', arrange: 'Arrange' };
 const isCode = (el: Element | undefined) => !!el?.closest('pre')?.querySelector(':scope > code');
 // a block of words, which the Text pane formats together with others, as text boxes in Keynote
 const TEXT_BLOCK = 'h1, h2, h3, p, ul, ol, div.foot';
@@ -40,6 +42,7 @@ function viewOf(app: App): { tabs: PaneKind[]; items: readonly Element[] } {
   const els = sel.elements();
   if (!els.length) return { tabs: ['slide'], items: [app.current()].filter((s): s is Element => !!s) };
   if (selectedLines(app).length === els.length) return { tabs: ['line', 'arrange'], items: els };
+  if (selectedShapes(app).length) return { tabs: els.some(hasText) ? ['shape', 'text', 'arrange'] : ['shape', 'arrange'], items: els };
   if (els.length > 1) return { tabs: els.every((el) => el.matches(TEXT_BLOCK) && hasText(el)) ? ['text', 'arrange'] : ['arrange'], items: els };
   const el = els[0];
   if (el.localName === 'table') return { tabs: ['table', 'arrange'], items: els };
@@ -70,6 +73,7 @@ function paneOf(app: App, kind: PaneKind, run: ReturnType<typeof runner>): Contr
     case 'code': return codePane(app, run);
     case 'surface': return surfacePane(app, run);
     case 'line': return linePane(app, run);
+    case 'shape': return shapePane(app, run);
     case 'arrange': return arrangePane(app, run);
   }
 }

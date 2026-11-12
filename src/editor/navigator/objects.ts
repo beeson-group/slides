@@ -10,6 +10,7 @@
 // renamed or hidden
 
 import type { App } from '../app.ts';
+import { SHAPE_KINDS, kindOf as shapeKind } from '../commands/shape.ts';
 import { OUTSIDE_DIALOGS } from '../commands.ts';
 import { CONTAINER, LINE, hasText, linesOf, movablesOf, objectOf } from '../canvas/hit.ts';
 import { locked } from '../canvas/drag.ts';
@@ -109,6 +110,7 @@ export function describeObject(el: Element): { kind: string; icon: string; name:
     const line = el.querySelector('line');
     return line?.hasAttribute('marker-end') || line?.hasAttribute('marker-start') ? named('Arrow', 'arrow') : named('Line', 'line');
   }
+  if (el.matches('.shape')) return named(SHAPE_KINDS.find(([k]) => k === shapeKind(el))![1], 'shape', wordsOf(el));
   if (el.matches('div.math')) return named('Formula', 'formula');
   if (el.matches('table')) return named('Table', 'table');
   if (el.matches('pre')) return named('Code', 'code');

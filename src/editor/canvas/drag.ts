@@ -647,8 +647,8 @@ export function install(app: App): void {
       // a click into a text puts the caret there, and with Shift or the command modifier the block
       // is added to the selection as a box. a block of a group is selected with its group at the
       // first click and by itself at the second, and only the third puts the caret in it, as in
-      // Keynote and PowerPoint
-      if (ev.shiftKey || commandHeld(ev) || (groupOf(el) && sel.only() !== el)) pressElement(ev, el, target);
+      // Keynote and PowerPoint. a shape is selected at the first click on its words, as a group is
+      if (ev.shiftKey || commandHeld(ev) || ((groupOf(el) || el.matches('.shape')) && sel.only() !== el)) pressElement(ev, el, target);
       return;
     }
     if (el && (target.closest(BY_ITSELF) || !hasText(el))) {

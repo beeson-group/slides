@@ -30,19 +30,20 @@ function glyphOf(heads: string): SVGSVGElement {
   return svg;
 }
 
-// a swatch of each tone, in the color that the tone has on the slide in its mode
-function swatches(app: App, run: Run): Control {
+// a swatch of each tone, in the color that the tone has on the slide in its mode, each running the
+// command of the tone after prefix, e.g. line.tone
+export function swatches(app: App, run: Run, prefix = 'line.tone', label = 'Line color'): Control {
   const el = make('div', 'ed-swatches');
   el.setAttribute('role', 'group');
-  el.setAttribute('aria-label', 'Line color');
+  el.setAttribute('aria-label', label);
   const buttons = LINE_TONES.map(([tone, label, token]) => {
     const b = make('button');
     b.type = 'button';
     b.title = label;
     b.setAttribute('aria-label', label);
-    b.dataset.command = `line.tone.${tone}`;
+    b.dataset.command = `${prefix}.${tone}`;
     keepFocus(b);
-    b.addEventListener('click', () => void run(`line.tone.${tone}`));
+    b.addEventListener('click', () => void run(`${prefix}.${tone}`));
     el.append(b);
     return { b, tone, token };
   });
@@ -50,7 +51,7 @@ function swatches(app: App, run: Run): Control {
     const slide = app.current() ?? document.querySelector('.reveal');
     const style = slide ? getComputedStyle(slide) : null;
     for (const { b, tone, token } of buttons) {
-      const s = app.commands.state(`line.tone.${tone}`);
+      const s = app.commands.state(`${prefix}.${tone}`);
       b.style.setProperty('--swatch', style?.getPropertyValue(token).trim() || 'transparent');
       b.disabled = !s.enabled;
       b.setAttribute('aria-pressed', String(!!s.checked && !b.disabled));

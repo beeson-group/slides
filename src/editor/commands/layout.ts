@@ -49,7 +49,7 @@ export function layoutOf(slide: Element | null): Layout {
 
 // the kind of a part of a slide, from its tag name and its classes
 export function kindOf(name: string, classes: string[]): Kind {
-  if (OTHER_TAGS.includes(name) || classes.includes('run') || classes.includes('lockup')) return 'other';
+  if (OTHER_TAGS.includes(name) || classes.includes('run') || classes.includes('lockup') || classes.includes('shape')) return 'other';
   if (name === 'h1' || name === 'h2') return 'heading';
   if (classes.includes('caption')) return 'caption';
   if (classes.includes('foot')) return 'foot';
@@ -327,13 +327,14 @@ function fitPanel(app: App, slide: Element): void {
 }
 
 // the elements of a slide with a place of the editor: a translate, a rotate, the width of a
-// figure that the editor resizes, or the z-index and the position of a layer command
+// figure that the editor resizes, or the z-index and the position of a layer command. the translate
+// of a shape is its place on the slide, which a reset keeps
 const SIZED = 'img, video, .qr, tycho-viewer';
 function placed(app: App, slide: Element): Element[] {
   return [...slide.querySelectorAll('*')].filter((el) => {
     if (!app.pairing?.elements.get(el)?.open) return false;
     const s = app.doc.tagState(el).style;
-    return 'translate' in s || 'rotate' in s || 'z-index' in s || 'position' in s || ('width' in s && el.matches(SIZED));
+    return ('translate' in s && !el.matches('.shape')) || 'rotate' in s || 'z-index' in s || 'position' in s || ('width' in s && el.matches(SIZED));
   });
 }
 
@@ -502,7 +503,7 @@ export function install(app: App): void {
           for (const el of placed(a, s)) {
             const has = a.doc.tagState(el).style;
             const style: Record<string, null> = {};
-            for (const k of ['translate', 'rotate', 'width', 'z-index', 'position']) if (k in has && (k !== 'width' || el.matches(SIZED))) style[k] = null;
+            for (const k of ['translate', 'rotate', 'width', 'z-index', 'position']) if (k in has && (k !== 'width' || el.matches(SIZED)) && (k !== 'translate' || !el.matches('.shape'))) style[k] = null;
             a.doc.setTag(el, { style }, 'reset slide');
           }
         }

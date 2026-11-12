@@ -450,7 +450,7 @@
     const script2 = document.currentScript;
     if (script2 instanceof HTMLScriptElement && script2.src) given.set(script2.src, data);
   }
-  function read(url, path) {
+  function read(url, path2) {
     if (!/\.js$/i.test(new URL(url).pathname)) {
       if (location.protocol === "file:") {
         return Promise.reject(
@@ -468,17 +468,17 @@
     return new Promise((done, fail2) => {
       const script2 = document.createElement("script");
       script2.src = url;
-      script2.onload = () => given.has(url) ? done(given.get(url)) : fail2(new Error(`${path} does not call Beeson.strands`));
+      script2.onload = () => given.has(url) ? done(given.get(url)) : fail2(new Error(`${path2} does not call Beeson.strands`));
       script2.onerror = () => fail2(new Error("it was not found"));
       document.head.append(script2);
     });
   }
-  function load(path) {
-    const url = new URL(path, document.baseURI).href;
+  function load(path2) {
+    const url = new URL(path2, document.baseURI).href;
     let out = files.get(url);
     if (!out) {
-      out = read(url, path).then(parse).catch((error) => {
-        console.warn(`beeson: the backdrop file ${path} is not drawn, since ${error.message}`);
+      out = read(url, path2).then(parse).catch((error) => {
+        console.warn(`beeson: the backdrop file ${path2} is not drawn, since ${error.message}`);
         return null;
       });
       files.set(url, out);
@@ -500,13 +500,13 @@
     return map;
   }
   async function strandsFor(el) {
-    const path = el.dataset.strands ?? "";
-    const file = await load(path);
+    const path2 = el.dataset.strands ?? "";
+    const file = await load(path2);
     if (!file) return { strands: [], dots: [] };
     try {
       const chosen = select(file.families, el.dataset.strandsSelect);
       if (!chosen.length)
-        console.warn(`beeson: data-strands-select="${el.dataset.strandsSelect}" does not match a record of ${path}`);
+        console.warn(`beeson: data-strands-select="${el.dataset.strandsSelect}" does not match a record of ${path2}`);
       return {
         strands: strandsOf(
           file,
@@ -519,7 +519,7 @@
         dots: bodiesOf(file, chosen)
       };
     } catch (error) {
-      console.warn(`beeson: the backdrop of ${path} is not drawn, since ${error.message}`);
+      console.warn(`beeson: the backdrop of ${path2} is not drawn, since ${error.message}`);
       return { strands: [], dots: [] };
     }
   }
@@ -580,11 +580,11 @@
     for (let i = 0; i < 6; i++) s[i] += dt / 6 * (K1[i] + 2 * K2[i] + 2 * K3[i] + K4[i]);
     return dt;
   }
-  function toCrossing(s0, h, tmin, tmax, path, times, count = 1, axis2 = 1) {
+  function toCrossing(s0, h, tmin, tmax, path2, times, count = 1, axis2 = 1) {
     const s = Float64Array.from(s0);
     let t = 0;
     const record = () => {
-      if (path) path.push(s[0], s[1], s[2]);
+      if (path2) path2.push(s[0], s[1], s[2]);
       if (times) times.push(t);
     };
     record();
@@ -606,14 +606,14 @@
     }
     return { s, t, hit: false };
   }
-  function propagate(s0, h, tmax, path, times, stop, t0 = 0) {
+  function propagate(s0, h, tmax, path2, times, stop, t0 = 0) {
     const s = Float64Array.from(s0);
     let t = 0;
-    path.push(s[0], s[1], s[2]);
+    path2.push(s[0], s[1], s[2]);
     times.push(t0);
     while (t < tmax) {
       t += step(s, h);
-      path.push(s[0], s[1], s[2]);
+      path2.push(s[0], s[1], s[2]);
       times.push(t0 + t);
       if (stop && stop(s)) break;
     }
@@ -621,14 +621,14 @@
   }
   function correct(s0, free, target, h, tmin, tmax, iters, count = 1, axis2 = 1) {
     const s = Float64Array.from(s0);
-    let path = [], times = [];
+    let path2 = [], times = [];
     for (let it = 0; it < iters; it++) {
-      path = [];
+      path2 = [];
       times = [];
-      const base = toCrossing(s, h, tmin, tmax, path, times, count, axis2);
+      const base = toCrossing(s, h, tmin, tmax, path2, times, count, axis2);
       if (!base.hit) return null;
       const f = target.map((i) => base.s[i]);
-      if (f.every((v) => Math.abs(v) < 1e-6)) return { s, path, times, t: base.t };
+      if (f.every((v) => Math.abs(v) < 1e-6)) return { s, path: path2, times, t: base.t };
       const J = [];
       for (let j = 0; j < free.length; j++) {
         const d = 1e-6;
@@ -647,10 +647,10 @@
       if (!dx.every((v) => Math.abs(v) < 0.1)) return null;
       for (let j = 0; j < free.length; j++) s[free[j]] -= dx[j];
     }
-    path = [];
+    path2 = [];
     times = [];
-    const r = toCrossing(s, h, tmin, tmax, path, times, count, axis2);
-    return r.hit ? { s, path, times, t: r.t } : null;
+    const r = toCrossing(s, h, tmin, tmax, path2, times, count, axis2);
+    return r.hit ? { s, path: path2, times, t: r.t } : null;
   }
   function family(guess, p, values, free, target, h, tmin, tmax, skip, count = 1, axis2 = 1) {
     const out = [];
@@ -740,11 +740,11 @@
     }
     return { pts, times: tt, T: 2 * T };
   }
-  function open(path, times) {
+  function open(path2, times) {
     const n = times.length, pts = new Float64Array(2 * n);
     for (let i = 0; i < n; i++) {
-      pts[2 * i] = path[3 * i];
-      pts[2 * i + 1] = path[3 * i + 1];
+      pts[2 * i] = path2[3 * i];
+      pts[2 * i + 1] = path2[3 * i + 1];
     }
     return { pts, times: Float32Array.from(times), T: times[n - 1] };
   }
@@ -816,17 +816,17 @@
     for (let k = 0, m = 0; k < n; k++) if (mark[k]) keep[m++] = k;
     return { px, keep, ctl };
   }
-  function pointOn(path, j, f) {
-    const p = path.px, n = p.length / 2;
+  function pointOn(path2, j, f) {
+    const p = path2.px, n = p.length / 2;
     if (j >= n - 1) return [p[2 * n - 2], p[2 * n - 1]];
     const x1 = p[2 * j], y1 = p[2 * j + 1], x2 = p[2 * j + 2], y2 = p[2 * j + 3];
-    if (!curved(path.ctl, j)) return [x1 + f * (x2 - x1), y1 + f * (y2 - y1)];
-    const c = path.ctl, k = 4 * j, g = 1 - f;
+    if (!curved(path2.ctl, j)) return [x1 + f * (x2 - x1), y1 + f * (y2 - y1)];
+    const c = path2.ctl, k = 4 * j, g = 1 - f;
     const w0 = g * g * g, w1 = 3 * g * g * f, w2 = 3 * g * f * f, w3 = f * f * f;
     return [w0 * x1 + w1 * c[k] + w2 * c[k + 2] + w3 * x2, w0 * y1 + w1 * c[k + 1] + w2 * c[k + 3] + w3 * y2];
   }
-  function trace(pen, path, j, f, from = 0) {
-    const { px: p, keep, ctl } = path, n = p.length / 2;
+  function trace(pen, path2, j, f, from = 0) {
+    const { px: p, keep, ctl } = path2, n = p.length / 2;
     pen.moveTo(p[2 * from], p[2 * from + 1]);
     let last = from, lo = 0, hi = keep.length;
     while (lo < hi) {
@@ -845,10 +845,10 @@
       const x1 = p[2 * j], y1 = p[2 * j + 1], k = 4 * j;
       const ax = x1 + f * (ctl[k] - x1), ay = y1 + f * (ctl[k + 1] - y1);
       const mx = ctl[k] + f * (ctl[k + 2] - ctl[k]), my = ctl[k + 1] + f * (ctl[k + 3] - ctl[k + 1]);
-      const [ex, ey] = pointOn(path, j, f);
+      const [ex, ey] = pointOn(path2, j, f);
       pen.bezierCurveTo(ax, ay, ax + f * (mx - ax), ay + f * (my - ay), ex, ey);
     } else {
-      const [x, y] = pointOn(path, j, f);
+      const [x, y] = pointOn(path2, j, f);
       pen.lineTo(x, y);
     }
   }
@@ -1153,11 +1153,11 @@
     // in bands of equal time, which begin and end at its points, at an opacity that falls to zero at its
     // last point. a stroke from a later point draws the pixels of the same bands beyond this point
     stroke(ctx, i, j, f, from = 0) {
-      const path = this.paths[i], ends = this.bands[i];
+      const path2 = this.paths[i], ends = this.bands[i];
       const part = (a2, b, g) => {
         if (b < from || b === from && !(g > 0)) return;
         ctx.beginPath();
-        trace(ctx, path, b, g, Math.max(a2, from));
+        trace(ctx, path2, b, g, Math.max(a2, from));
         ctx.stroke();
       };
       let a = ends ? Math.min(ends[0], j) : j;
@@ -1728,70 +1728,70 @@
   var KINDS = ["points", "trace", "label", "events"];
   var PATCH = ["x", "y", "title", "regions", "curves", "labels"];
   var MARGIN2 = [52, 20, 84, 76];
-  function fail(path, what) {
-    throw new Error(`${path}: ${what}`);
+  function fail(path2, what) {
+    throw new Error(`${path2}: ${what}`);
   }
   var isObject2 = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
-  function num(v, path, fallback) {
+  function num(v, path2, fallback) {
     if (v === void 0 && fallback !== void 0) return fallback;
-    if (typeof v !== "number" || !Number.isFinite(v)) fail(path, "a number is expected");
+    if (typeof v !== "number" || !Number.isFinite(v)) fail(path2, "a number is expected");
     return v;
   }
-  function str(v, path, fallback) {
+  function str(v, path2, fallback) {
     if (v === void 0 && fallback !== void 0) return fallback;
-    if (typeof v !== "string") fail(path, "a string is expected");
+    if (typeof v !== "string") fail(path2, "a string is expected");
     return v;
   }
-  function list(v, path, fallback) {
+  function list(v, path2, fallback) {
     if (v === void 0 && fallback !== void 0) return fallback;
-    if (!Array.isArray(v)) fail(path, "a list is expected");
+    if (!Array.isArray(v)) fail(path2, "a list is expected");
     return v;
   }
-  function pair(v, path) {
-    const a = list(v, path);
-    if (a.length !== 2) fail(path, "a pair [x, y] is expected");
-    return [num(a[0], `${path}[0]`), num(a[1], `${path}[1]`)];
+  function pair(v, path2) {
+    const a = list(v, path2);
+    if (a.length !== 2) fail(path2, "a pair [x, y] is expected");
+    return [num(a[0], `${path2}[0]`), num(a[1], `${path2}[1]`)];
   }
-  var pairs = (v, path) => list(v, path).map((p, i) => pair(p, `${path}[${i}]`));
-  function anchor(v, path) {
-    const a = str(v, path, "middle");
-    if (a !== "start" && a !== "middle" && a !== "end") fail(path, "start, middle, or end is expected");
+  var pairs = (v, path2) => list(v, path2).map((p, i) => pair(p, `${path2}[${i}]`));
+  function anchor(v, path2) {
+    const a = str(v, path2, "middle");
+    if (a !== "start" && a !== "middle" && a !== "end") fail(path2, "start, middle, or end is expected");
     return a;
   }
-  function item(o, path, tone) {
-    const cls = str(o.class, `${path}.class`, "").split(/\s+/).filter(Boolean);
-    return { id: o.id === void 0 ? null : str(o.id, `${path}.id`), tone: str(o.tone, `${path}.tone`, tone), cls };
+  function item(o, path2, tone) {
+    const cls = str(o.class, `${path2}.class`, "").split(/\s+/).filter(Boolean);
+    return { id: o.id === void 0 ? null : str(o.id, `${path2}.id`), tone: str(o.tone, `${path2}.tone`, tone), cls };
   }
-  function axis(v, path) {
-    if (!isObject2(v)) fail(path, "an axis { range, ticks, title } is expected");
-    const range = pair(v.range, `${path}.range`);
-    if (!(range[1] > range[0])) fail(`${path}.range`, "the second end must be larger than the first");
-    const scale = str(v.scale, `${path}.scale`, "linear");
-    if (scale !== "linear" && scale !== "asinh") fail(`${path}.scale`, "linear or asinh is expected");
-    const unit = num(v.unit, `${path}.unit`, 1);
-    if (!(unit > 0)) fail(`${path}.unit`, "a positive number is expected");
-    const ticks = list(v.ticks, `${path}.ticks`, []).map((t, i) => {
-      const p = `${path}.ticks[${i}]`;
+  function axis(v, path2) {
+    if (!isObject2(v)) fail(path2, "an axis { range, ticks, title } is expected");
+    const range = pair(v.range, `${path2}.range`);
+    if (!(range[1] > range[0])) fail(`${path2}.range`, "the second end must be larger than the first");
+    const scale = str(v.scale, `${path2}.scale`, "linear");
+    if (scale !== "linear" && scale !== "asinh") fail(`${path2}.scale`, "linear or asinh is expected");
+    const unit = num(v.unit, `${path2}.unit`, 1);
+    if (!(unit > 0)) fail(`${path2}.unit`, "a positive number is expected");
+    const ticks = list(v.ticks, `${path2}.ticks`, []).map((t, i) => {
+      const p = `${path2}.ticks[${i}]`;
       if (typeof t === "number") return { at: num(t, p), text: formatNumber(t) };
       if (!isObject2(t)) fail(p, "a number or a tick { at, text } is expected");
       const at = num(t.at, `${p}.at`);
       return { at, text: str(t.text, `${p}.text`, formatNumber(at)) };
     });
-    return { range, ticks, title: str(v.title, `${path}.title`, ""), scale, unit };
+    return { range, ticks, title: str(v.title, `${path2}.title`, ""), scale, unit };
   }
   function scaled(a, v) {
     return a.scale === "asinh" ? Math.asinh(v / a.unit) : v;
   }
-  function regions(v, path) {
-    return list(v, path, []).map((r, i) => {
-      const p = `${path}[${i}]`;
+  function regions(v, path2) {
+    return list(v, path2, []).map((r, i) => {
+      const p = `${path2}[${i}]`;
       if (!isObject2(r)) fail(p, "a region is expected");
       return { ...item(r, p, "violet"), points: pairs(r.points, `${p}.points`), opacity: num(r.opacity, `${p}.opacity`, 0.12) };
     });
   }
-  function curves(v, path) {
-    return list(v, path, []).map((c, i) => {
-      const p = `${path}[${i}]`;
+  function curves(v, path2) {
+    return list(v, path2, []).map((c, i) => {
+      const p = `${path2}[${i}]`;
       if (!isObject2(c)) fail(p, "a curve is expected");
       let circle = null;
       if (c.circle !== void 0) {
@@ -1803,75 +1803,75 @@
       return { ...item(c, p, "subtle"), points: circle ? null : pairs(c.points, `${p}.points`), circle, width: num(c.width, `${p}.width`, 2), dash };
     });
   }
-  function labels(v, path) {
-    return list(v, path, []).map((l, i) => {
-      const p = `${path}[${i}]`;
+  function labels(v, path2) {
+    return list(v, path2, []).map((l, i) => {
+      const p = `${path2}[${i}]`;
       if (!isObject2(l)) fail(p, "a label is expected");
       return { ...item(l, p, "subtle"), at: pair(l.at, `${p}.at`), text: str(l.text, `${p}.text`), anchor: anchor(l.anchor, `${p}.anchor`), dx: num(l.dx, `${p}.dx`, 0), dy: num(l.dy, `${p}.dy`, 0) };
     });
   }
-  function panel(v, path) {
-    if (!isObject2(v)) fail(path, "a panel is expected");
+  function panel(v, path2) {
+    if (!isObject2(v)) fail(path2, "a panel is expected");
     let margin = [...MARGIN2];
     if (v.margin !== void 0) {
-      const m = list(v.margin, `${path}.margin`).map((x, i) => num(x, `${path}.margin[${i}]`));
-      if (m.length !== 4) fail(`${path}.margin`, "a margin [top, right, bottom, left] is expected");
+      const m = list(v.margin, `${path2}.margin`).map((x, i) => num(x, `${path2}.margin[${i}]`));
+      if (m.length !== 4) fail(`${path2}.margin`, "a margin [top, right, bottom, left] is expected");
       margin = [m[0], m[1], m[2], m[3]];
     }
-    const size = num(v.size, `${path}.size`, 1);
-    if (!(size > 0)) fail(`${path}.size`, "a positive number is expected");
+    const size = num(v.size, `${path2}.size`, 1);
+    if (!(size > 0)) fail(`${path2}.size`, "a positive number is expected");
     return {
-      id: str(v.id, `${path}.id`),
-      x: axis(v.x, `${path}.x`),
-      y: axis(v.y, `${path}.y`),
+      id: str(v.id, `${path2}.id`),
+      x: axis(v.x, `${path2}.x`),
+      y: axis(v.y, `${path2}.y`),
       equal: v.equal === true,
       axes: v.axes !== false,
-      title: str(v.title, `${path}.title`, ""),
-      regions: regions(v.regions, `${path}.regions`),
-      curves: curves(v.curves, `${path}.curves`),
-      labels: labels(v.labels, `${path}.labels`),
+      title: str(v.title, `${path2}.title`, ""),
+      regions: regions(v.regions, `${path2}.regions`),
+      curves: curves(v.curves, `${path2}.curves`),
+      labels: labels(v.labels, `${path2}.labels`),
       size,
       margin
     };
   }
-  function patch(v, path) {
-    if (!isObject2(v)) fail(path, "a panel is expected");
-    for (const key of Object.keys(v)) if (!PATCH.includes(key)) fail(`${path}.${key}`, `one of ${PATCH.join(", ")} is expected`);
+  function patch(v, path2) {
+    if (!isObject2(v)) fail(path2, "a panel is expected");
+    for (const key of Object.keys(v)) if (!PATCH.includes(key)) fail(`${path2}.${key}`, `one of ${PATCH.join(", ")} is expected`);
     const out = {};
-    if (v.x !== void 0) out.x = axis(v.x, `${path}.x`);
-    if (v.y !== void 0) out.y = axis(v.y, `${path}.y`);
-    if (v.title !== void 0) out.title = str(v.title, `${path}.title`);
-    if (v.regions !== void 0) out.regions = regions(v.regions, `${path}.regions`);
-    if (v.curves !== void 0) out.curves = curves(v.curves, `${path}.curves`);
-    if (v.labels !== void 0) out.labels = labels(v.labels, `${path}.labels`);
+    if (v.x !== void 0) out.x = axis(v.x, `${path2}.x`);
+    if (v.y !== void 0) out.y = axis(v.y, `${path2}.y`);
+    if (v.title !== void 0) out.title = str(v.title, `${path2}.title`);
+    if (v.regions !== void 0) out.regions = regions(v.regions, `${path2}.regions`);
+    if (v.curves !== void 0) out.curves = curves(v.curves, `${path2}.curves`);
+    if (v.labels !== void 0) out.labels = labels(v.labels, `${path2}.labels`);
     return out;
   }
-  function markData(m, v, frames, path) {
-    const perFrame = (n) => n === 1 || n === frames || fail(path, `${n} frames are given, and the tab has ${frames} values`);
+  function markData(m, v, frames, path2) {
+    const perFrame = (n) => n === 1 || n === frames || fail(path2, `${n} frames are given, and the tab has ${frames} values`);
     if (m.kind === "points") {
-      const a = list(v, path).map((f, i) => list(f, `${path}[${i}]`).map((x, j) => num(x, `${path}[${i}][${j}]`)));
+      const a = list(v, path2).map((f, i) => list(f, `${path2}[${i}]`).map((x, j) => num(x, `${path2}[${i}][${j}]`)));
       perFrame(a.length);
-      a.forEach((f, i) => f.length % 2 === 0 || fail(`${path}[${i}]`, "pairs of x and y are expected"));
+      a.forEach((f, i) => f.length % 2 === 0 || fail(`${path2}[${i}]`, "pairs of x and y are expected"));
       return a;
     }
     if (m.kind === "trace") {
       const given2 = isObject2(v) ? v : { points: v };
-      const points = pairs(given2.points, isObject2(v) ? `${path}.points` : path);
+      const points = pairs(given2.points, isObject2(v) ? `${path2}.points` : path2);
       perFrame(points.length);
-      const ghost = num(given2.ghost, `${path}.ghost`, points.length - 1);
-      if (!Number.isInteger(ghost) || ghost < 0 || ghost > points.length - 1) fail(`${path}.ghost`, `a frame from 0 to ${points.length - 1} is expected`);
+      const ghost = num(given2.ghost, `${path2}.ghost`, points.length - 1);
+      if (!Number.isInteger(ghost) || ghost < 0 || ghost > points.length - 1) fail(`${path2}.ghost`, `a frame from 0 to ${points.length - 1} is expected`);
       return { points, ghost };
     }
     if (m.kind === "label") {
-      if (!isObject2(v)) fail(path, "a label { at, text } is expected");
-      const at = Array.isArray(v.at) && Array.isArray(v.at[0]) ? pairs(v.at, `${path}.at`) : [pair(v.at, `${path}.at`)];
-      const text = Array.isArray(v.text) ? v.text.map((t, i) => str(t, `${path}.text[${i}]`)) : [str(v.text, `${path}.text`)];
+      if (!isObject2(v)) fail(path2, "a label { at, text } is expected");
+      const at = Array.isArray(v.at) && Array.isArray(v.at[0]) ? pairs(v.at, `${path2}.at`) : [pair(v.at, `${path2}.at`)];
+      const text = Array.isArray(v.text) ? v.text.map((t, i) => str(t, `${path2}.text[${i}]`)) : [str(v.text, `${path2}.text`)];
       perFrame(at.length);
       perFrame(text.length);
       return { at, text };
     }
-    return list(v, path).map((e, i) => {
-      const p = `${path}[${i}]`;
+    return list(v, path2).map((e, i) => {
+      const p = `${path2}[${i}]`;
       if (!isObject2(e)) fail(p, "an event { frame, at, text } is expected");
       const frame = num(e.frame, `${p}.frame`);
       if (frame < 0 || frame > frames - 1) fail(`${p}.frame`, `a frame from 0 to ${frames - 1} is expected`);
@@ -1975,10 +1975,10 @@
     if (a.length !== b.length) return nearest(frames, v);
     return a.map((x, k) => x + f * (b[k] - x));
   }
-  function traceTo(path, u) {
-    const n = path.length, v = clamp(u, 0, n - 1), i = Math.floor(v), f = v - i;
-    const out = path.slice(0, i + 1);
-    if (f > 0 && i < n - 1) out.push([path[i][0] + f * (path[i + 1][0] - path[i][0]), path[i][1] + f * (path[i + 1][1] - path[i][1])]);
+  function traceTo(path2, u) {
+    const n = path2.length, v = clamp(u, 0, n - 1), i = Math.floor(v), f = v - i;
+    const out = path2.slice(0, i + 1);
+    if (f > 0 && i < n - 1) out.push([path2[i][0] + f * (path2[i + 1][0] - path2[i][0]), path2[i][1] + f * (path2[i + 1][1] - path2[i][1])]);
     return out;
   }
   function passLength(n, duration, times) {
@@ -2167,10 +2167,10 @@
   var toneColor = (tone) => /^[a-z][a-z0-9-]*$/.test(tone) ? `var(--${tone})` : tone;
   var words = (s) => (s ?? "").split(/\s+/).filter(Boolean);
   var GAP = 56;
-  function cells(sizes, total, gap) {
-    const free = total - gap * (sizes.length - 1), sum = sizes.reduce((a, b) => a + b, 0);
+  function cells(sizes2, total, gap) {
+    const free = total - gap * (sizes2.length - 1), sum = sizes2.reduce((a, b) => a + b, 0);
     let at = 0;
-    return sizes.map((size) => {
+    return sizes2.map((size) => {
       const cell = [at, free * size / sum];
       at += cell[1] + gap;
       return cell;
@@ -3102,6 +3102,120 @@
     }
   }
 
+  // src/shapes.ts
+  var SVG3 = "http://www.w3.org/2000/svg";
+  var DRAWN = ["triangle", "arrow", "arrow-both", "brace", "plus", "equals"];
+  var num2 = (v) => String(Math.round(v * 100) / 100);
+  var path = (parts) => parts.map((p) => typeof p === "number" ? num2(p) : p).join(" ").replace(/ ?([A-Z]) ?/g, "$1");
+  function shapePath(kind, w, h, s) {
+    const i = s / 2;
+    const l = i, t = i, r = w - i, b = h - i, cx = w / 2, cy = h / 2, m = Math.min(w, h);
+    switch (kind) {
+      case "triangle":
+        return path(["M", cx, t, "L", r, b, "L", l, b, "Z"]);
+      case "arrow": {
+        const x1 = r - m / 2, y1 = cy - (b - t) / 4, y2 = cy + (b - t) / 4;
+        return path(["M", l, y1, "L", x1, y1, "L", x1, t, "L", r, cy, "L", x1, b, "L", x1, y2, "L", l, y2, "Z"]);
+      }
+      case "arrow-both": {
+        const x1 = l + m / 2, x2 = r - m / 2, y1 = cy - (b - t) / 4, y2 = cy + (b - t) / 4;
+        return path(["M", l, cy, "L", x1, t, "L", x1, y1, "L", x2, y1, "L", x2, t, "L", r, cy, "L", x2, b, "L", x2, y2, "L", x1, y2, "L", x1, b, "Z"]);
+      }
+      case "brace": {
+        const a = (r - l) / 2, d = 0.0833 * m;
+        return path(["M", l, t, "A", a, d, 0, 0, 1, cx, t + d, "L", cx, cy - d, "A", a, d, 0, 0, 0, r, cy, "A", a, d, 0, 0, 0, cx, cy + d, "L", cx, b - d, "A", a, d, 0, 0, 1, l, b]);
+      }
+      case "plus": {
+        const p = 0.3675 * w, q = 0.3675 * h, k = 0.1176 * m;
+        return path([
+          "M",
+          cx - p,
+          cy - k,
+          "L",
+          cx - k,
+          cy - k,
+          "L",
+          cx - k,
+          cy - q,
+          "L",
+          cx + k,
+          cy - q,
+          "L",
+          cx + k,
+          cy - k,
+          "L",
+          cx + p,
+          cy - k,
+          "L",
+          cx + p,
+          cy + k,
+          "L",
+          cx + k,
+          cy + k,
+          "L",
+          cx + k,
+          cy + q,
+          "L",
+          cx - k,
+          cy + q,
+          "L",
+          cx - k,
+          cy + k,
+          "L",
+          cx - p,
+          cy + k,
+          "Z"
+        ]);
+      }
+      case "equals": {
+        const p = 0.3675 * w, g = 0.0588 * h, bar = 0.2352 * h;
+        const rect = (y0, y1) => ["M", cx - p, y0, "L", cx + p, y0, "L", cx + p, y1, "L", cx - p, y1, "Z"];
+        return path([...rect(cy - g - bar, cy - g), ...rect(cy + g, cy + g + bar)]);
+      }
+      default:
+        return "";
+    }
+  }
+  var kindOf = (el) => DRAWN.find((k) => el.classList.contains(k)) ?? null;
+  function draw(el) {
+    const kind = kindOf(el);
+    let svg2 = el.querySelector(":scope > svg");
+    if (!kind) {
+      svg2?.remove();
+      return;
+    }
+    const style = getComputedStyle(el);
+    const w = el.offsetWidth || parseFloat(style.width) || 0, h = el.offsetHeight || parseFloat(style.height) || 0;
+    const s = parseFloat(style.getPropertyValue("--shape-weight")) || 0;
+    if (!svg2) {
+      svg2 = document.createElementNS(SVG3, "svg");
+      svg2.setAttribute("aria-hidden", "true");
+      svg2.append(document.createElementNS(SVG3, "path"));
+      el.prepend(svg2);
+    }
+    svg2.setAttribute("viewBox", `0 0 ${num2(w || 1)} ${num2(h || 1)}`);
+    svg2.querySelector("path")?.setAttribute("d", shapePath(kind, w, h, s));
+  }
+  var sizes = null;
+  var classes = null;
+  var watched = /* @__PURE__ */ new WeakSet();
+  function mountShapes(root2) {
+    sizes ?? (sizes = new ResizeObserver((entries) => {
+      for (const e of entries) draw(e.target);
+    }));
+    classes ?? (classes = new MutationObserver((records) => {
+      for (const r of records) draw(r.target);
+    }));
+    const own = root2 instanceof HTMLElement && root2.matches(".shape") ? [root2] : [];
+    for (const el of [...own, ...root2.querySelectorAll(".reveal .slides section .shape")]) {
+      draw(el);
+      if (watched.has(el)) continue;
+      watched.add(el);
+      sizes.observe(el);
+      classes.observe(el, { attributes: true, attributeFilter: ["class"] });
+    }
+  }
+
   // src/scrub.ts
   function minutes(seconds) {
     const s = Math.max(0, Math.round(seconds));
@@ -3291,7 +3405,7 @@
     reds: ["#fff5f0", "#fee0d2", "#fcbba1", "#fc9272", "#fb6a4a", "#ef3b2c", "#cb181d", "#a50f15", "#67000d"],
     magma_r: ["#fcfdbf", "#fdda9c", "#feb67c", "#fc9065", "#f56b5c", "#e24d66", "#c43c75", "#a3307e", "#832681", "#641a80"]
   };
-  var num2 = (value, fallback) => value !== void 0 && value.trim() !== "" && Number.isFinite(Number(value)) ? Number(value) : fallback;
+  var num3 = (value, fallback) => value !== void 0 && value.trim() !== "" && Number.isFinite(Number(value)) ? Number(value) : fallback;
   function effectivePotential(mu) {
     const wells = (x, y) => -(1 - mu) / Math.hypot(x + mu, y) - mu / Math.hypot(x - 1 + mu, y);
     const bowl = (x, y) => -(x * x + y * y) / 2;
@@ -3335,7 +3449,7 @@
     // intersection of the plane with the surface is the zero-velocity curve, and Hill's region is
     // where the surface is under the plane. C is the value at L1 when data-C is not given
     "effective-potential": (attributes) => {
-      const mu = num2(attributes.mu, 0.05);
+      const mu = num3(attributes.mu, 0.05);
       const { wells, bowl, sum } = effectivePotential(mu);
       const marks = librationPoints(mu);
       const C1 = -2 * sum(marks[0].x, 0);
@@ -3356,7 +3470,7 @@
           bowl: () => ({ sheets: [{ layer: "wells", lift: 0 }, { layer: "bowl", lift: BOWL_LIFT }], marks: false, level: null }),
           sum: plain("sum"),
           extrema: () => ({ sheets: one("sum"), marks: true, level: null }),
-          cut: (a) => ({ sheets: one("sum"), marks: true, level: -num2(a.c, C1) / 2 })
+          cut: (a) => ({ sheets: one("sum"), marks: true, level: -num3(a.c, C1) / 2 })
         }
       };
     }
@@ -3382,7 +3496,7 @@
   var ease = (t) => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
   var lerp = (a, b, t) => a + (b - a) * t;
   var clamp2 = (v, a, b) => Math.min(b, Math.max(a, v));
-  var num3 = (v, fallback) => v !== void 0 && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : fallback;
+  var num4 = (v, fallback) => v !== void 0 && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : fallback;
   var mix3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
   function rgb(css, fallback) {
     const s = css.trim();
@@ -3627,12 +3741,12 @@ void main() {
       this.fn = fn;
       this.THREE = THREE;
       this.groove = new THREE.Vector3();
-      this.zscale = num3(el.dataset.zscale, fn.zscale);
-      const turn = num3(el.dataset.turn, TURN);
+      this.zscale = num4(el.dataset.zscale, fn.zscale);
+      const turn = num4(el.dataset.turn, TURN);
       this.rate = turn > 0 ? 2 * Math.PI / turn : 0;
-      this.azimuth = num3(el.dataset.azimuth, -60) * Math.PI / 180;
-      this.elevation = num3(el.dataset.elevation, 32) * Math.PI / 180;
-      this.zoom = num3(el.dataset.zoom, 1);
+      this.azimuth = num4(el.dataset.azimuth, -60) * Math.PI / 180;
+      this.elevation = num4(el.dataset.elevation, 32) * Math.PI / 180;
+      this.zoom = num4(el.dataset.zoom, 1);
       for (const old of el.querySelectorAll(":scope > canvas.surface-image")) old.remove();
       this.canvas = document.createElement("canvas");
       this.canvas.className = "surface-image";
@@ -3857,7 +3971,7 @@ void main() {
     target() {
       let best = null, index = -Infinity;
       for (const f of this.el.closest("section")?.querySelectorAll(".fragment.visible[data-surface-stage]") ?? []) {
-        const i = num3(f.dataset.fragmentIndex, 0);
+        const i = num4(f.dataset.fragmentIndex, 0);
         if (i >= index) {
           best = f;
           index = i;
@@ -4071,7 +4185,7 @@ void main() {
         const lab = this.labels.find((l) => l.dataset.at === this.fn.marks[i].name);
         if (!lab) return null;
         this.markAt(i, p).project(camera);
-        const x = (p.x + 1) / 2 * this.w + num3(lab.dataset.dx, 0), y = (1 - p.y) / 2 * this.h + num3(lab.dataset.dy, -34);
+        const x = (p.x + 1) / 2 * this.w + num4(lab.dataset.dx, 0), y = (1 - p.y) / 2 * this.h + num4(lab.dataset.dy, -34);
         return Math.hypot(parseFloat(lab.style.left) - x, parseFloat(lab.style.top) - y);
       };
       return {
@@ -4226,8 +4340,8 @@ void main() {
         const i = this.fn.marks.findIndex((m) => m.name === lab.dataset.at);
         if (i < 0) continue;
         this.markAt(i, p).project(this.camera);
-        lab.style.left = `${(p.x + 1) / 2 * this.w + num3(lab.dataset.dx, 0)}px`;
-        lab.style.top = `${(1 - p.y) / 2 * this.h + num3(lab.dataset.dy, -34)}px`;
+        lab.style.left = `${(p.x + 1) / 2 * this.w + num4(lab.dataset.dx, 0)}px`;
+        lab.style.top = `${(1 - p.y) / 2 * this.h + num4(lab.dataset.dy, -34)}px`;
         lab.style.opacity = String(this.shown.marks ** 2 * this.seen[i] * this.lit[i]);
       }
     }
@@ -4296,7 +4410,7 @@ void main() {
         azimuth: this.azimuth * deg,
         elevation: this.elevation * deg,
         zoom: this.zoom,
-        written: { azimuth: num3(d.azimuth, -60), elevation: num3(d.elevation, 32), zoom: num3(d.zoom, 1), turn: num3(d.turn, TURN), zscale: num3(d.zscale, this.fn.zscale) }
+        written: { azimuth: num4(d.azimuth, -60), elevation: num4(d.elevation, 32), zoom: num4(d.zoom, 1), turn: num4(d.turn, TURN), zscale: num4(d.zscale, this.fn.zscale) }
       };
     }
     /** Reads the camera, the turn, and the scale of the heights from the attributes of the element again, e.g. after the editor changed them. */
@@ -4784,6 +4898,7 @@ void main() {
   function mountWithin(root2) {
     remount();
     mountQr(root2);
+    mountShapes(root2);
     for (const o of backdrops) if (root2.contains(o.el)) {
       o.fit();
       o.complete();
@@ -4827,9 +4942,11 @@ void main() {
     initSwitcher();
     if (!EDITING) markUncounted(document);
     mountQr(document);
+    mountShapes(document);
     markViewers();
     deck.on("pdf-ready", () => {
       completeAll();
+      mountShapes(document);
       void typeset2().then(() => applyAll(document));
       syncViewers(get());
       void stillViewers();

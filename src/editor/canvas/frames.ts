@@ -74,8 +74,9 @@ html.beeson-rotating, html.beeson-rotating * { cursor: grabbing !important; user
 html.beeson-editing .reveal .beeson-movable:focus-visible { outline: 2px solid var(--ed-select, #7048e8); outline-offset: 6px; }
 html.beeson-dragging, html.beeson-dragging * { cursor: move !important; user-select: none !important; }
 html.beeson-band, html.beeson-band .reveal * { cursor: move; }
-html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .slides section video, html.beeson-editing .reveal .slides section .zone, html.beeson-editing .reveal .slides section .plate, html.beeson-editing .reveal .slides section .qr { cursor: move; }
-html.beeson-editing .reveal .slides section [data-locked]:is(img, video, .zone, .plate, .qr), html.beeson-editing .reveal .slides section [data-locked] :is(img, video, .qr) { cursor: default; }
+html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .slides section video, html.beeson-editing .reveal .slides section .zone, html.beeson-editing .reveal .slides section .plate, html.beeson-editing .reveal .slides section .qr, html.beeson-editing .reveal .slides section .shape { cursor: move; }
+html.beeson-editing .reveal .slides section .shape { pointer-events: auto; }
+html.beeson-editing .reveal .slides section [data-locked]:is(img, video, .zone, .plate, .qr, .shape), html.beeson-editing .reveal .slides section [data-locked] :is(img, video, .qr) { cursor: default; }
 `;
 
 const div = (className: string, parent: HTMLElement): HTMLDivElement => {
@@ -295,6 +296,9 @@ export class Frames {
     if (v) this.layer.style.clipPath = `inset(${v.top}px ${innerWidth - v.right}px ${innerHeight - v.bottom}px ${v.left}px)`;
     if (view.hover && !view.hover.isConnected) view.hover = null;
     const selected = app.selection.elements().filter((el) => el.isConnected);
+    // a shape keeps its frame while the caret is in its words, as in Keynote
+    const words = document.activeElement?.closest('.reveal .slides section .shape [contenteditable="true"]')?.closest('.shape');
+    if (!selected.length && words) selected.push(words);
     const scale = frameOf(app).scale;
     // a figure is framed at its edge, where its handles are, and a block 6 px outside its text
     const orients = selected.map((el) => {

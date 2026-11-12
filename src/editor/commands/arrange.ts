@@ -24,6 +24,10 @@ function onCanvas(): boolean {
   return !a || a === document.body || a.classList.contains('beeson-handle') || (!!a.closest('.reveal .slides') && !a.closest(HOST));
 }
 
+// the elements that Reset Position and Reset Size act on, without the shapes, whose place and size
+// are set in their style alone
+const resettable = (els: Element[]) => els.filter((el) => !el.matches('.shape'));
+
 // the caret at the end of the text of el
 function caretAtEnd(el: Element): void {
   (el as HTMLElement).focus({ preventScroll: true });
@@ -219,9 +223,9 @@ export function commands(): Command[] {
       label: 'Reset Position',
       menu: { bar: 'Arrange', group: 'reset', order: 10 },
       context: ['element'],
-      enabled: (app) => movedEls(app).some((el) => placeOf(el).translate),
+      enabled: (app) => resettable(movedEls(app)).some((el) => placeOf(el).translate),
       run: (app) => {
-        const els = movedEls(app);
+        const els = resettable(movedEls(app));
         const changes = els.map((el) => {
           const from = placeOf(el);
           const to = { ...from, translate: null };
@@ -236,9 +240,9 @@ export function commands(): Command[] {
       label: 'Reset Size',
       menu: { bar: 'Arrange', group: 'reset', order: 11 },
       context: ['element'],
-      enabled: (app) => sizedEls(app).some((el) => placeOf(el).width !== null || (placeOf(el).height ?? null) !== null),
+      enabled: (app) => resettable(sizedEls(app)).some((el) => placeOf(el).width !== null || (placeOf(el).height ?? null) !== null),
       run: (app) => {
-        const els = sizedEls(app);
+        const els = resettable(sizedEls(app));
         const changes = withCorners(app, els, () => els.map((el) => {
           const from = placeOf(el);
           const to = { ...from, width: null, ...(from.height !== undefined ? { height: null } : {}) };

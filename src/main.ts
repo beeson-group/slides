@@ -10,6 +10,7 @@ import { initFullscreen, toggleFullscreen } from './fullscreen.ts';
 import { mountPlots, type PlotView } from './plot.ts';
 import { markViewers, stillViewers } from './print.ts';
 import { mountQr } from './qr.ts';
+import { mountShapes } from './shapes.ts';
 import { initScrub } from './scrub.ts';
 import { mount as mountSurfaces } from './surface.ts';
 import type { Surface } from './surface.ts';
@@ -175,6 +176,7 @@ function show(slide: HTMLElement): void {
 function mountWithin(root: Element): void {
   remount();
   mountQr(root);
+  mountShapes(root);
   for (const o of backdrops) if (root.contains(o.el)) { o.fit(); o.complete(); }
   for (const s of surfaces) if (root.contains(s.el)) { s.fit(); s.sync(false); s.draw(); }
   for (const p of plots) if (root.contains(p.el)) { p.fit(); p.syncSteps(); p.still(); }
@@ -200,13 +202,15 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   initSwitcher();
   // the editor counts the slides of the file, hence every slide is numbered while the deck is edited
   if (!EDITING) markUncounted(document);
-  // the QR codes are drawn before reveal.js clones the slides of the print view
+  // the QR codes and the shapes are drawn before reveal.js clones the slides of the print view
   mountQr(document);
+  mountShapes(document);
   // in the print view, a page is cloned per fragment state after ready, and the clones are
   // mounted here. the viewers are numbered before the clones are made
   markViewers();
   deck.on('pdf-ready', () => {
     completeAll();
+    mountShapes(document);
     void typeset().then(() => applyAll(document));
     syncViewers(get());
     void stillViewers();

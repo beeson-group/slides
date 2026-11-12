@@ -227,7 +227,8 @@ export function install(app: App): void {
   };
 
   // the list of a split button: its variants, with a rule where their group of the menu changes,
-  // then the submenu that the split names in the menu of the first
+  // then the submenu that the split names in the menu of the first, unless the variants list it,
+  // e.g. the shapes of Insert > Shape
   const splitItems = (first: Command, variants: Command[]): MenuItem[] => {
     const out: MenuItem[] = [];
     let last: string | undefined;
@@ -236,7 +237,8 @@ export function install(app: App): void {
       last = v.menu?.group;
       out.push({ command: v.id });
     }
-    const sub = first.menu && first.toolbar?.split ? menuItems(app, first.menu.bar, first.toolbar.split) : [];
+    let sub = first.menu && first.toolbar?.split ? menuItems(app, first.menu.bar, first.toolbar.split) : [];
+    if (sub.every((i) => 'rule' in i || ('command' in i && variants.some((v) => v.id === i.command)))) sub = [];
     return out.length && sub.length ? [...out, { rule: true }, ...sub] : [...out, ...sub];
   };
 

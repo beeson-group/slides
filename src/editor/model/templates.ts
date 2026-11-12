@@ -8,8 +8,8 @@ import { eolOf } from './units.ts';
 export type Layout = 'title' | 'section' | 'content' | 'narrow' | 'wide' | 'figure' | 'split' | 'closing';
 export const LAYOUTS: Layout[] = ['title', 'section', 'content', 'narrow', 'wide', 'figure', 'split', 'closing'];
 
-export type ElementKind = 'text' | 'image' | 'video' | 'table' | 'formula' | 'code' | 'qr' | 'backdrop';
-export const ELEMENT_KINDS: ElementKind[] = ['text', 'image', 'video', 'table', 'formula', 'code', 'qr', 'backdrop'];
+export type ElementKind = 'text' | 'image' | 'video' | 'table' | 'formula' | 'code' | 'qr' | 'backdrop' | 'shape';
+export const ELEMENT_KINDS: ElementKind[] = ['text', 'image', 'video', 'table', 'formula', 'code', 'qr', 'backdrop', 'shape'];
 
 // the line ending of a file and one step of its indentation
 export type TextStyle = { eol: string; step: string };
@@ -96,6 +96,8 @@ export function elementText(kind: ElementKind, style: TextStyle, base: string, o
       return [`<pre><code class="language-${attr(o.language ?? 'python')}"></code></pre>`];
     case 'qr':
       return [`<div class="qr" data-qr="${attr(o.qr ?? 'https://example.com')}"></div>`];
+    case 'shape':
+      return ['<div class="shape rounded" style="width: 240px; height: 240px"></div>'];
     case 'backdrop':
       return [`<div class="backdrop" data-scene="${attr(o.scene ?? 'nest')}" data-cx="0.97" data-cy="0" data-half="0.5"></div>`];
   }

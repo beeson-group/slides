@@ -9,13 +9,13 @@ import type { Box } from './snap.ts';
 import { stored } from '../ui/dom.ts';
 
 // the outermost of these elements under the pointer is moved, outside the notes and the backdrop
-export const MOVABLE = 'h1, h2, h3, p, ul, ol, dl, table, pre, blockquote, div.math, .caption, .foot, img, video, figure, .zone, .plate, .qr, tycho-viewer';
+export const MOVABLE = 'h1, h2, h3, p, ul, ol, dl, table, pre, blockquote, div.math, .caption, .foot, img, video, figure, .zone, .plate, .qr, tycho-viewer, .shape';
 // an element without text to edit, dragged by itself. a tycho-viewer is turned by a drag, hence it
 // is moved by its handle or its border only
-export const BY_ITSELF = 'img, video, figure, .zone, .plate, .qr';
+export const BY_ITSELF = 'img, video, figure, .zone, .plate, .qr, .shape';
 export const OUTSIDE = 'aside.notes, .backdrop';
 // the elements whose width the editor writes, by the scope rule of the plan
-export const RESIZABLE = 'img, video, .qr, tycho-viewer';
+export const RESIZABLE = 'img, video, .qr, tycho-viewer, .shape';
 
 // whether el is turned by a rotation, which leaves out a table and its cells, as PowerPoint and
 // Keynote do not turn a table
@@ -24,8 +24,8 @@ export const turnable = (el: Element): boolean => !el.hasAttribute('data-locked'
 // the text blocks whose width their grips set, as a text box of Keynote and PowerPoint, with the
 // height set by their wrapped text
 export const TEXT_SIZED = 'h1, h2, h3, p, ul, ol, div.math, .caption';
-// the pictures whose height the editor writes as well, which a resize stretches
-export const STRETCHED = 'img, video';
+// the pictures and shapes whose height the editor writes as well, which a resize stretches
+export const STRETCHED = 'img, video, .shape';
 // a figure whose size is set by its layout. its grips resize the image, video, or QR code that it
 // holds, and a figure that does not hold one is drawn without grips
 export const CONTAINER = 'figure, .zone, .plate';
@@ -225,14 +225,14 @@ export function aspectOf(el: Element): number | null {
 export const isTextSized = (el: Element): boolean => el.matches(TEXT_SIZED) && !el.matches(RESIZABLE);
 
 // the kind of a picture, by which the switch Constrain Proportions is kept in the browser
-export const kindOf = (el: Element): string => (el.matches('img') ? 'image' : el.matches('video') ? 'video' : el.matches('.qr') ? 'qr' : 'viewer');
+export const kindOf = (el: Element): string => (el.matches('img') ? 'image' : el.matches('video') ? 'video' : el.matches('.qr') ? 'qr' : el.matches('.shape') ? 'shape' : 'viewer');
 
 // whether a resize of the picture el keeps its aspect: the switch of its kind for an image or a
-// video, on by default, and else whenever it has an aspect, since its height then follows its
+// video, on by default, off for a shape, and else whenever it has an aspect, since its height then follows its
 // width. a QR code thus keeps its square, and a viewer keeps the height of its layout
 export function constrained(el: Element): boolean {
   if (!el.matches(STRETCHED)) return aspectOf(el) !== null;
-  return (stored(`beeson-edit-constrain-${kindOf(el)}`) ?? 'on') === 'on';
+  return (stored(`beeson-edit-constrain-${kindOf(el)}`) ?? (el.matches('.shape') ? 'off' : 'on')) === 'on';
 }
 
 // the width in the style of el that gives it the border box of width w, in slide pixels
