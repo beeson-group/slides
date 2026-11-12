@@ -230,7 +230,7 @@ for (const platform of PLATFORMS) {
     assert.equal(await undoLabel(page), 'Undo Insert Elbow Arrow');
     await roundTrip(page);
     // the Shape button and the Insert menu list the two after Arrow
-    const shape = await page.evaluate(`(() => { const r = document.querySelector('.beeson-edit-split:has([data-command="insert.line"]) .more').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+    const shape = await page.evaluate(`(() => { const r = document.querySelector('.beeson-edit-split:has([data-command="insert.shape.rounded"]) .more').getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
     await click(page, shape);
     await frames(page);
     const listed = await page.evaluate(`[...[...document.querySelectorAll('.beeson-edit-menu')].filter((m) => m.getClientRects().length).at(-1).querySelectorAll('.item')].map((i) => i.dataset.command)`);

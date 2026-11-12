@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <title>Shapes</title>
+  <link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+  <link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+  <link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+  <link rel="stylesheet" href="../../theme/beeson.css">
+</head>
+<body>
+  <!-- the deck of test/shapes.test.mjs: the three shapes of CSS, the six of an svg, and a shape at a step -->
+  <div class="reveal"><div class="slides">
+    <section>
+      <h2>Boxes</h2>
+      <div class="shape" style="translate: 100px 300px; width: 300px; height: 200px"><p>Plain</p></div>
+      <div class="shape rounded tone-accent weight-6" style="translate: 500px 300px; width: 400px; height: 200px"><p>Goal</p></div>
+      <div class="shape ellipse tone-red fill-none" style="translate: 1000px 300px; width: 300px; height: 200px"></div>
+      <div class="shape veil" style="translate: 1400px 300px; width: 300px; height: 200px"></div>
+    </section>
+    <section>
+      <h2>Drawn</h2>
+      <div class="shape triangle" style="translate: 100px 300px; width: 200px; height: 160px"></div>
+      <div class="shape arrow tone-blue" style="translate: 400px 300px; width: 300px; height: 120px"></div>
+      <div class="shape arrow-both" style="translate: 800px 300px; width: 300px; height: 120px"></div>
+      <div class="shape brace flip-x" style="translate: 1200px 300px; width: 80px; height: 400px"></div>
+      <div class="shape plus" style="translate: 100px 700px; width: 140px; height: 140px"></div>
+      <div class="shape equals no-outline" style="translate: 400px 700px; width: 140px; height: 140px"></div>
+    </section>
+    <section>
+      <h2>A step</h2>
+      <div class="shape triangle fragment" data-fragment-index="1" style="translate: 300px 300px; width: 200px; height: 200px"></div>
+    </section>
+  </div></div>
+  <script src="../../theme/vendor/reveal/reveal.js"></script>
+  <script src="../../theme/vendor/reveal/notes.js"></script>
+  <script src="../../theme/beeson.js"></script>
+  <script>Beeson.start({});</script>
+</body>
+</html>

@@ -217,7 +217,7 @@ for (const platform of PLATFORMS) {
         ['insert.table', 'Table', false],
         ['insert.text', 'Text', false],
         ['insert.formula', 'Formula', false],
-        ['insert.line', 'Shape', true],
+        ['insert.shape.rounded', 'Shape', true],
         ['insert.image', 'Media', true],
       ], `${width}: the insert group`);
       assert.ok(group.every((b) => b.label === labels), `${width}: the labels`);
@@ -255,22 +255,22 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`Shape draws a line from its main part and an arrow from its list, and is pressed while one is drawn (${platform})`, async (t) => {
+  test(`Shape draws a rounded rectangle from its main part and an arrow from its list, and is pressed while one is drawn (${platform})`, async (t) => {
     const page = await load(t, platform, { deck: LAYOUTS });
     await page.evaluate(`Reveal.slide(${MATH})`);
     await sleep(200);
-    const shape = '.beeson-edit-top [data-command="insert.line"]';
+    const shape = '.beeson-edit-top [data-command="insert.shape.rounded"]';
     const pressed = () => page.evaluate(`document.querySelector('${shape}').getAttribute('aria-pressed')`);
     await click(page, await center(page, shape));
     await sleep(50);
-    assert.equal((await state(page, 'insert.line')).checked, true, 'the main part of Shape does not draw a line');
+    assert.equal((await state(page, 'insert.shape.rounded')).checked, true, 'the main part of Shape does not draw a rounded rectangle');
     assert.equal(await pressed(), 'true');
     await press(page, 'Escape');
     await sleep(50);
     assert.notEqual(await pressed(), 'true', 'Shape is still pressed');
-    await click(page, await center(page, '.beeson-edit-split:has([data-command="insert.line"]) .more'));
+    await click(page, await center(page, '.beeson-edit-split:has([data-command="insert.shape.rounded"]) .more'));
     await sleep(100);
-    assert.deepEqual((await menuRows(page)).map((r) => r.label), ['Line', 'Arrow', 'Curved Arrow', 'Elbow Arrow']);
+    assert.deepEqual((await menuRows(page)).map((r) => r.label), ['Rounded Rectangle', 'Rectangle', 'Ellipse', 'Triangle', 'Block Arrow', 'Double Block Arrow', 'Brace', 'Plus', 'Equals', 'Line', 'Arrow', 'Curved Arrow', 'Elbow Arrow']);
     await click(page, await center(page, '.beeson-edit-menu .item[data-command="insert.arrow"]'));
     await sleep(50);
     assert.equal((await state(page, 'insert.arrow')).checked, true);

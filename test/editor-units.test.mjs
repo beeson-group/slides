@@ -129,6 +129,7 @@ test('the classes of a stylesheet are read without comments, numbers, and addres
   assert.deepEqual(themeClasses(css).sort(), ['b-c', 'reveal', 'slides', 'wide', 'zone']);
   const theme = new Set(themeClasses(readFileSync(new URL('../theme/beeson.css', import.meta.url), 'utf8')));
   for (const c of ['wide', 'narrow', 'zone', 'plate', 'backdrop', 'qr', 'math', 'caption', 'dots', 'arrows']) assert.ok(theme.has(c), c);
+  for (const c of ['shape', 'rounded', 'ellipse', 'triangle', 'arrow', 'arrow-both', 'brace', 'plus', 'equals', 'round-s', 'round-l', 'fill-none', 'fill-ground', 'veil', 'weight-6', 'weight-8', 'no-outline', 'flip-x', 'flip-y']) assert.ok(theme.has(c), c);
 });
 
 test('the scope rule allows the writes of AGENTS.md and names the others', () => {
@@ -143,6 +144,10 @@ test('the scope rule allows the writes of AGENTS.md and names the others', () =>
   assert.match(declarationProblem('p', [], 'width', '40%'), /width/);
   assert.equal(declarationProblem('img', [], 'height', '300px'), null);
   assert.match(declarationProblem('div', ['qr'], 'height', '300px'), /height/);
+  // a shape is placed and sized in its style, in px
+  assert.equal(declarationProblem('div', ['shape', 'ellipse'], 'width', '300px'), null);
+  assert.equal(declarationProblem('div', ['shape'], 'height', '160px'), null);
+  assert.match(declarationProblem('div', ['shape'], 'height', '40%'), /height 40% on a shape/);
   assert.equal(declarationProblem('pre', [], 'font-size', '18px'), null);
   assert.equal(declarationProblem('td', [], 'text-align', 'right'), null);
   assert.equal(declarationProblem('th', [], 'width', '240px'), null);
