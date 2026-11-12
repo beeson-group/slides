@@ -14,8 +14,10 @@ jobs:
       matrix:
         # the macOS runners draw WebGL in SwiftShader, too slowly for the timings of the tests
         os: [ubuntu-latest, windows-latest]
+        # the test files are split over four runners, since the suite is over an hour long on one
+        shard: [1, 2, 3, 4]
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
       - uses: actions/setup-node@v7
@@ -27,7 +29,8 @@ jobs:
       - run: npm run build
       - run: npm run typecheck
       # the tests read the demo deck, hence a talk made with "Use this template" checks only its deck
-      - run: npm test
+      # npm test with the shard of the job, an option that is read only before the files
+      - run: node --test --test-shard=${{ matrix.shard }}/4 "test/*.test.mjs"
         if: ${{ github.repository == 'beeson-group/slides' }}
 
   check:
