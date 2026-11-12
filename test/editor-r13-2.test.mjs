@@ -324,21 +324,28 @@ const selected = (page) => page.evaluate(`(() => {
   return { text: s.toString(), block: el?.closest('p, li, h2')?.localName ?? null, editing: !!el?.closest('[contenteditable="true"]') };
 })()`);
 
+// the same without the white space at the end of the text, since a double-click on Windows selects
+// a word with the space after it
+const word = async (page) => {
+  const s = await selected(page);
+  return { ...s, text: s.text.trimEnd() };
+};
+
 for (const platform of PLATFORMS) {
   for (const [id, block, back] of [['text.list.ul', 'li', 'p'], ['text.list.ol', 'li', 'p']]) {
     test(`an undo and a redo of ${id} on a word of a paragraph select the word again (${platform})`, async (t) => {
       const page = await load(t, platform, FIGURES);
       await click(page, await pointOf(page, '.reveal section.present > p', 'styles', 2), { count: 2 });
-      assert.deepEqual(await selected(page), { text: 'styles', block: back, editing: true });
+      assert.deepEqual(await word(page), { text: 'styles', block: back, editing: true });
       await exec(page, id);
-      assert.deepEqual(await selected(page), { text: 'styles', block, editing: true }, 'the list style keeps the word');
+      assert.deepEqual(await word(page), { text: 'styles', block, editing: true }, 'the list style keeps the word');
       await undo(page);
       await frames(page);
-      assert.deepEqual(await selected(page), { text: 'styles', block: back, editing: true }, 'the undo selects the word again');
+      assert.deepEqual(await word(page), { text: 'styles', block: back, editing: true }, 'the undo selects the word again');
       assert.equal(await render(page), page.source);
       await redo(page);
       await frames(page);
-      assert.deepEqual(await selected(page), { text: 'styles', block, editing: true }, 'the redo selects the word again');
+      assert.deepEqual(await word(page), { text: 'styles', block, editing: true }, 'the redo selects the word again');
       await checkEdit(page, `r13-2-list-${id}-${platform}.html`);
       assert.deepEqual(errors(page), []);
     });

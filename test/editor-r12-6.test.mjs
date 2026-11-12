@@ -244,7 +244,8 @@ for (const platform of PLATFORMS) {
     await type(page, ' abc ');
     await pressCommand(page, 'Mod+v', 'paste');
     const pasted = await render(page);
-    assert.ok(pasted.includes('frameless. abc matplotlib</p>'), `the paste is not in the text: ${pasted.match(/frameless\.[^<]*/)?.[0]}`);
+    // a double-click on Windows selects the space after the word as well, and it is copied with it
+    assert.match(pasted, /frameless\. abc matplotlib ?<\/p>/, `the paste is not in the text: ${pasted.match(/frameless\.[^<]*/)?.[0]}`);
     assert.equal(await undoLabel(page), 'Undo Paste');
     await undo(page);
     assert.ok((await render(page)).includes('frameless. abc </p>'), 'the undo of the paste takes back the typing too');

@@ -388,6 +388,9 @@ for (const platform of PLATFORMS) {
           await redo(page);
           await frames(page);
         }
+        // the draft of an edited page left open may reach the storage after the next load clears it,
+        // and its card then makes the page inert
+        await page.close();
       }
     });
 
@@ -438,6 +441,9 @@ for (const platform of PLATFORMS) {
         for (const l of changedLines(page.source, edited)) assert.match(l, /^<(figure class="zone"|img )/, `${where}: the resize writes ${l}`);
         await roundTrip(page, edited);
         await saved(page, edited, `r9-1-turned-${n}.html`);
+        // the draft of an edited page left open may reach the storage after the next load clears it,
+        // and its card then makes the page inert
+        await page.close();
       }
     });
 

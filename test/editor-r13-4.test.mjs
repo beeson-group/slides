@@ -141,6 +141,9 @@ for (const platform of PLATFORMS) {
       assert.ok(covers(plots[1], plots[0]) < 0.5, `the second plot at ${js(plots[1])} lies on the first at ${js(plots[0])}`);
       assert.ok(covers(plots[1], figure) < 0.5, `the second plot at ${js(plots[1])} lies on the figure at ${js(figure)}`);
       assert.deepEqual(errors(page), []);
+      // a page left open keeps its edits as a draft 1 s after the last one, in the storage that the
+      // next page has just cleared, and the card of the draft then takes the focus from the slide
+      await page.close();
     }
   });
 
