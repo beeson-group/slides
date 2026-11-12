@@ -8,6 +8,7 @@
 import type { App } from '../app.ts';
 import { OUTSIDE_DIALOGS } from '../commands.ts';
 import { injectStyle, make, store, stored } from '../ui/dom.ts';
+import { previewPlays } from './frames.ts';
 import { frameOf, frameRect } from './hit.ts';
 
 // the thickness of a ruler, in CSS px
@@ -122,7 +123,7 @@ export function install(app: App): void {
     if (!shown || app.state !== 'loaded') return;
     const v = stage.viewport;
     Object.assign(corner.style, { left: `${v.left - RULER}px`, top: `${v.top - RULER}px` });
-    const e = extent();
+    const e = previewPlays() ? null : extent();
     paint(top, 'x', e?.x ?? null);
     paint(left, 'y', e?.y ?? null);
   };

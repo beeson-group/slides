@@ -79,7 +79,26 @@ html.beeson-band, html.beeson-band .reveal * { cursor: move; }
 html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .slides section video, html.beeson-editing .reveal .slides section .zone, html.beeson-editing .reveal .slides section .plate, html.beeson-editing .reveal .slides section .qr, html.beeson-editing .reveal .slides section .shape { cursor: move; }
 html.beeson-editing .reveal .slides section .shape { pointer-events: auto; }
 html.beeson-editing .reveal .slides section [data-locked]:is(img, video, .zone, .plate, .qr, .shape), html.beeson-editing .reveal .slides section [data-locked] :is(img, video, .qr) { cursor: default; }
+html.beeson-playing :is(.beeson-overlay, .beeson-line-layer, .beeson-guides, .beeson-backdrop-cuts, .beeson-glue-target) { visibility: hidden !important; }
+html.beeson-playing .reveal .slides, html.beeson-playing .reveal .slides * { caret-color: transparent !important; }
+html.beeson-playing .reveal .beeson-movable:focus-visible { outline: none; }
 `;
+
+// the previews that play, by kind. while one plays, the frames, grips, and handles of the
+// selection, the outline under the pointer, the ends of a line, the guides, the band of the rulers,
+// and the caret are not drawn, as Keynote and PowerPoint hide them during a preview, and they are
+// drawn again at its end. stop ends the preview of its kind
+const previews = new Map<string, () => void>();
+export const previewPlays = (): boolean => previews.size > 0;
+export const stopPreviews = (): void => { for (const stop of [...previews.values()]) stop(); };
+export function setPreview(app: App, kind: string, on: boolean, stop: () => void = () => {}): void {
+  const was = previewPlays();
+  if (on) previews.set(kind, stop);
+  else previews.delete(kind);
+  if (was === previewPlays()) return;
+  document.documentElement.classList.toggle('beeson-playing', previewPlays());
+  app.invalidate('selection');
+}
 
 const div = (className: string, parent: HTMLElement): HTMLDivElement => {
   const d = document.createElement('div');

@@ -12,6 +12,7 @@ import type { Entry } from './history.ts';
 import type { Pairing } from './render.ts';
 import type { TagEdit, TagState } from './tags.ts';
 import { OFF, fragmentIndex, fragmentsOf, type Layers, itemsOf, planOf, remapKeep, showLayer, shownAt, startOf, stepAt, type Item, type Plan, type Start } from './layers.ts';
+import { setPreview } from './canvas/frames.ts';
 import { twinOf } from './canvas/hit.ts';
 import { media as store } from './media/store.ts';
 import { codeAt, dimLines, lineRect, linesOf, stepsOf } from './commands/code.ts';
@@ -1340,6 +1341,7 @@ export class Steps {
         for (const f of frags) f.el.classList.remove('beeson-pv-off', 'beeson-pv-dim', 'beeson-pv-ghost');
         if (lines.length) dimLines(null, null);
         html.classList.remove('beeson-previewing');
+        if (this.app) setPreview(this.app, 'steps', false);
         this.playing = null;
         this.setPlaying(false);
         window.removeEventListener('keydown', esc, true);
@@ -1380,6 +1382,7 @@ export class Steps {
     };
     showLayer(slide, null);
     html.classList.add('beeson-previewing');
+    if (this.app) setPreview(this.app, 'steps', true, () => finish());
     this.badges.replaceChildren();
     this.setPlaying(true);
     window.addEventListener('keydown', esc, true);

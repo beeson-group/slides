@@ -13,6 +13,7 @@
 // slide and slide-in fade-out on the next one
 
 import type { App } from '../app.ts';
+import { setPreview } from '../canvas/frames.ts';
 import { drawInto } from '../navigator/thumbs.ts';
 import { showStep, stepsOfSlide } from '../present.ts';
 import { injectStyle, make } from '../ui/dom.ts';
@@ -276,6 +277,7 @@ export function preview(app: App, slide: Element): Promise<void> {
     const stop = () => {
       if (stopPreview !== stop) return;
       stopPreview = null;
+      setPreview(app, 'transition', false);
       for (const t of timers) clearTimeout(t);
       for (const a of animations) a.cancel();
       window.removeEventListener('pointerdown', stop, true);
@@ -290,6 +292,7 @@ export function preview(app: App, slide: Element): Promise<void> {
       stop();
     };
     stopPreview = stop;
+    setPreview(app, 'transition', true, stop);
     window.addEventListener('pointerdown', stop, true);
     window.addEventListener('keydown', key, true);
     const later = (ms: number, fn: () => void) => timers.push(window.setTimeout(fn, ms));

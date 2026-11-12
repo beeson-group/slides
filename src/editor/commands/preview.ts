@@ -5,9 +5,10 @@
 // canvas, one per timing.step ms, each by showStep of present.ts as the show draws it. a preview
 // stops at a click on Stop, Esc, a press outside the toolbar and the menus, a change of slide, an
 // edit, and Chapters Table, after which the slide is drawn complete. it does not change the file,
-// the history, or the selection
+// the history, or the selection, which is not drawn while it plays
 
 import type { App } from '../app.ts';
+import { previewPlays, setPreview, stopPreviews } from '../canvas/frames.ts';
 import { showFormat } from '../inspector/inspector.ts';
 import { OFF } from '../layers.ts';
 import { drawInto } from '../navigator/thumbs.ts';
@@ -37,6 +38,7 @@ function halt(app: App): void {
   if (!c) return;
   current = null;
   c.stop();
+  setPreview(app, 'play', false);
   app.invalidate();
 }
 
@@ -61,6 +63,7 @@ async function play(app: App, parts: Part[]): Promise<void> {
   let stopped = false;
   const me = { stop: () => { stopped = true; for (const end of ends.splice(0)) end(); } };
   current = me;
+  setPreview(app, 'play', true, () => halt(app));
   app.invalidate();
   // Chapters Table stops the preview, and the layer of the steps follows the slide at every frame
   let place: (() => void) | null = null;
@@ -222,13 +225,30 @@ export function install(app: App): void {
   // a press outside the toolbar and the menus, Esc, a change of slide, and an edit stop a preview.
   // Esc stops it alone, without the Deselect of its key. the keymap matches a key before the
   // listener below, hence a command is turned off only during the keydown of Esc, and Deselect keeps
-  // Mod+Shift+A
+  // Mod+Shift+A. the same holds for Preview Steps of the Steps pane and Preview Transition
   const esc = () => { const ev = window.event; return ev instanceof KeyboardEvent && ev.type === 'keydown' && ev.key === 'Escape'; };
-  c.veto((_, cmd) => playing() && esc() && Object.values(cmd.keys ?? {}).some((k) => k.includes('Escape')));
+  c.veto((_, cmd) => previewPlays() && esc() && Object.values(cmd.keys ?? {}).some((k) => k.includes('Escape')));
   window.addEventListener('pointerdown', (ev) => {
     const t = ev.target;
     if (playing() && !(t instanceof Element && t.closest('.beeson-edit-top, .beeson-edit-menu'))) halt(app);
   }, true);
+  // a press on Preview, on the Play button of the Steps pane, or on Preview of the Transition pane
+  // leaves the caret in a text, as Undo and Redo of the toolbar do, hence it is where it was at the
+  // end of the preview
+  const starts = '.beeson-edit-top [data-command="preview.slide"], .beeson-edit-side button.play, [data-command="slide.previewTransition"]';
+  window.addEventListener('mousedown', (ev) => {
+    const t = ev.target;
+    if (t instanceof Element && t.closest(starts) && (document.activeElement as HTMLElement | null)?.isContentEditable) ev.preventDefault();
+  }, true);
+  // a key typed in that text, or an input into it, stops every preview before it is written, hence
+  // it is not written into a text that a preview hides, under a caret that is not drawn. the
+  // command of a key, e.g. Enter, runs before the listener below, hence its key stops the previews
+  // in the veto, which is checked before the command runs
+  const typing = () => previewPlays() && !!(document.activeElement as HTMLElement | null)?.isContentEditable;
+  const typed = (ev: Event | undefined) => ev instanceof KeyboardEvent && ev.type === 'keydown' && ev.key !== 'Escape' && !['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(ev.key) && typing();
+  c.veto(() => { if (typed(window.event)) stopPreviews(); return false; });
+  window.addEventListener('keydown', (ev) => { if (typed(ev)) stopPreviews(); }, true);
+  window.addEventListener('beforeinput', () => { if (typing()) stopPreviews(); }, true);
   window.addEventListener('keydown', (ev) => {
     if (!playing() || ev.key !== 'Escape') return;
     ev.preventDefault();
