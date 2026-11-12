@@ -412,7 +412,13 @@ export async function split(app: App): Promise<void> {
     to = p;
     return kept();
   }
-  if (!range.collapsed) range.deleteContents();
+  // a selected text is taken off in an entry of its own, which the undo reads before the change
+  if (!range.collapsed) {
+    app.history.beforeTyping(host, 'new paragraph');
+    range.deleteContents();
+    app.history.afterTyping(host);
+    app.history.break();
+  }
   const caret: [Node, number] = [range.startContainer, range.startOffset];
   const head = rangeTex(item, rangeOf(item, null, caret));
   const tail = rangeTex(item, rangeOf(item, caret, null));
@@ -554,7 +560,11 @@ async function drop(app: App, item: Element, to: Element, end: boolean): Promise
   let done = false;
   const kept = app.history.keep(() => (done ? caretAt(app, to, at) : caretAt(app, item)));
   if (!empty(item)) await app.doc.setContent(to, joined(to, rangeTex(item, rangeOf(item, null, null))), 'join');
+  // with end false, to is in the list after item, whose items are copied into the list before it
+  const first = end ? null : prevOf(app, item);
+  const n = fileList(app, first) ? liOf(first).length : 0;
   await removeJoining(app, [item], 'join');
+  if (!to.isConnected && first) to = liOf(first)[n] ?? to;
   selectIn(to, at);
   done = true;
   kept();
