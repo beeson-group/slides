@@ -200,11 +200,26 @@ export function slidePane(app: App, run: Run): Control[] {
   };
   hidden.sync();
   if (layout !== 'mixed') {
-    // the backdrop of the slide, selected from here as well as by a click on it
-    const back = slideBackdrop(app);
-    parts.push(section('Backdrop', back ? [
-      row([note(() => drawingName(back)), button(app, run, { command: 'backdrop.select', text: 'Select' })]),
-    ] : [row([button(app, run, { command: 'backdrop.choose', text: 'Add Backdrop…' })])]));
+    // the backdrop of the slide, selected from here as well as by a click on it. the pane is kept
+    // while the slide and the selection stay the same, hence the row is made again at a sync for
+    // another backdrop, e.g. once the file is opened, and at an undo of Add Backdrop
+    const sec = section('Backdrop', []);
+    let back: HTMLElement | null | undefined;
+    let line: Control | null = null;
+    const sync = () => {
+      const now = slideBackdrop(app);
+      if (now !== back || !line) {
+        back = now;
+        line?.el.remove();
+        line = now
+          ? row([note(() => drawingName(now)), button(app, run, { command: 'backdrop.select', text: 'Select' })])
+          : row([button(app, run, { command: 'backdrop.choose', text: 'Add Backdrop…' })]);
+        sec.el.append(line.el);
+      }
+      line.sync();
+    };
+    sync();
+    parts.push({ el: sec.el, sync });
   }
   parts.push(section('Appearance', [
     hidden,
