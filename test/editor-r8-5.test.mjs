@@ -178,10 +178,12 @@ async function fieldValue(page, id) {
 // the angles written on slide n of a text, by the name of the tag
 const anglesOf = (text, n) => [...slideOf(text, n).matchAll(/<([a-z0-9-]+)\b[^>]*\brotate: (\d+)deg/g)].map((m) => `${m[1]} ${m[2]}`);
 
-// a turn of the picture of slide n from the figure and from the picture: the angle is written on
-// every image of the figure and on no other tag, the caption stays where it is, upright, and the
-// picture turns about its own center. act returns the angle that it asks for, or null for the
-// angle of a drag
+// a turn of the picture of slide n from the figure and from the picture. a figure with its caption
+// in it, selected as one object, is turned as one object: the angle is written on the figure and on
+// no other tag, and the picture and the caption are carried about the center of both. else the
+// angle is written on every image of the figure and on no other tag, the caption stays where it
+// is, upright, and the picture turns about its own center. act returns the angle that it asks for,
+// or null for the angle of a drag
 async function turns(t, platform, mode, n, what, act) {
   for (const from of ['figure', 'picture']) {
     const page = await load(t, platform, mode, n);
@@ -189,27 +191,37 @@ async function turns(t, platform, mode, n, what, act) {
     const was = await selected(page);
     const caption = await rectOf(page, CAPTION);
     const pic = await pictureOf(page);
+    const whole = from === 'figure' && page.parts.figure === 'figure.zone';
+    const left = Math.min(pic.left, caption.left), top = Math.min(pic.top, caption.top);
+    const c = { x: (left + Math.max(pic.left + pic.width, caption.right)) / 2, y: (top + Math.max(pic.top + pic.height, caption.bottom)) / 2 };
     const asked = await act(page);
     await frames(page);
     const edited = await render(page);
     const angles = anglesOf(edited, n);
     const where = `${what} of ${NAMES[n]} from the ${from}`;
-    assert.equal(angles.length, page.parts.images, `${where} writes the angle on ${angles.join(', ') || 'no tag'}`);
-    assert.ok(angles.every((a) => a.startsWith('img ') && a === angles[0]), `${where} writes the angle on ${angles.join(', ')}`);
-    if (asked !== null) assert.equal(angles[0], `img ${asked}`);
+    const tag = whole ? 'figure' : 'img';
+    assert.equal(angles.length, whole ? 1 : page.parts.images, `${where} writes the angle on ${angles.join(', ') || 'no tag'}`);
+    assert.ok(angles.every((a) => a.startsWith(`${tag} `) && a === angles[0]), `${where} writes the angle on ${angles.join(', ')}`);
+    if (asked !== null) assert.equal(angles[0], `${tag} ${asked}`);
     const now = await rectOf(page, CAPTION);
-    assert.ok(near(now.left, caption.left, 1) && near(now.top, caption.top, 1) && near(now.width, caption.width, 1) && near(now.height, caption.height, 1), `${where} moves or turns the caption`);
     const turned = await pictureOf(page);
-    assert.equal(turned.figure, 0, `${where} turns the figure`);
-    assert.ok(turned.own > 0, `${where} does not turn the picture`);
-    assert.ok(near(turned.x, pic.x) && near(turned.y, pic.y), `${where} moves the center of the picture from ${Math.round(pic.x)}, ${Math.round(pic.y)} to ${Math.round(turned.x)}, ${Math.round(turned.y)}`);
+    // a point carried about c by the angle of the turn
+    const a = (turned.angle * Math.PI) / 180;
+    const at = (o) => (whole ? { x: c.x + (o.x - c.x) * Math.cos(a) - (o.y - c.y) * Math.sin(a), y: c.y + (o.x - c.x) * Math.sin(a) + (o.y - c.y) * Math.cos(a) } : o);
+    const q = at(caption);
+    if (whole) assert.ok(near(now.x, q.x) && near(now.y, q.y), `${where} does not carry the caption with the picture`);
+    else assert.ok(near(now.left, caption.left, 1) && near(now.top, caption.top, 1) && near(now.width, caption.width, 1) && near(now.height, caption.height, 1), `${where} moves or turns the caption`);
+    assert.equal(whole ? turned.own : turned.figure, 0, `${where} turns the ${whole ? 'picture in' : ''} figure`);
+    assert.ok(turned.angle > 0, `${where} does not turn the picture`);
+    const p = at(pic);
+    assert.ok(near(turned.x, p.x) && near(turned.y, p.y), `${where} moves the center of the picture from ${Math.round(p.x)}, ${Math.round(p.y)} to ${Math.round(turned.x)}, ${Math.round(turned.y)}`);
     assert.deepEqual(await selected(page), was, `${where} changes the selection`);
     // the angle is shown in the field from both selections, and the image of the other mode has it
-    assert.equal(await fieldValue(page, 'angle'), turned.own, `the Angle field after ${where}`);
+    assert.equal(await fieldValue(page, 'angle'), turned.angle, `the Angle field after ${where}`);
     await page.evaluate('Beeson.theme.toggle()');
     await frames(page);
     const other = await pictureOf(page);
-    assert.ok(other.own === turned.own && near(other.x, pic.x) && near(other.y, pic.y), `${where} is not kept in the other mode`);
+    assert.ok(other.own === turned.own && other.figure === turned.figure && near(other.x, p.x) && near(other.y, p.y), `${where} is not kept in the other mode`);
     await page.evaluate('Beeson.theme.toggle()');
     await frames(page);
     // Reset Rotation puts the file back
@@ -271,14 +283,17 @@ for (const platform of PLATFORMS) {
         const edited = await render(page);
         const angles = anglesOf(edited, n);
         const where = `a turn of a group with ${NAMES[n]}`;
-        assert.deepEqual(angles.map((a) => a.split(' ')[0]).sort(), ['h2', 'img', 'img'], `${where} writes the angle on ${angles.join(', ')}`);
+        // a figure with its caption in it is turned with its caption, as one object, and a plate
+        // turns its pictures and leaves the caption of the slide upright
+        const whole = n === ZONE_PAIR;
+        assert.deepEqual(angles.map((a) => a.split(' ')[0]).sort(), whole ? ['figure', 'h2'] : ['h2', 'img', 'img'], `${where} writes the angle on ${angles.join(', ')}`);
         assert.equal(new Set(angles.map((a) => a.split(' ')[1])).size, 1, `${where} writes the angles ${angles.join(', ')}`);
         const turned = await pictureOf(page);
-        assert.equal(turned.figure, 0, `${where} turns the figure`);
-        assert.equal(await page.evaluate(`getComputedStyle(document.querySelector(${js(CAPTION)})).rotate`), 'none', `${where} turns the caption`);
+        assert.equal(whole ? turned.own : turned.figure, 0, `${where} turns the ${whole ? 'picture in its' : ''} figure`);
+        assert.equal(await page.evaluate(`getComputedStyle(document.querySelector(${js(CAPTION)}).parentElement).rotate`), whole ? `${turned.angle}deg` : 'none', `${where} turns the caption`);
         // the picture is carried about the center of the group
         assert.ok(!near(turned.x, pic.x, 4) || !near(turned.y, pic.y, 4), `${where} leaves the picture in place`);
-        assert.equal(await fieldValue(page, 'angle'), turned.own, `the Angle field after ${where}`);
+        assert.equal(await fieldValue(page, 'angle'), turned.angle, `the Angle field after ${where}`);
         await roundTrip(page, edited);
         assert.deepEqual(errors(page), []);
       }

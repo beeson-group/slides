@@ -225,17 +225,23 @@ for (const platform of PLATFORMS) {
     await click(page, 'section.present figure img.for-light', { modifiers: 'Shift' });
     assert.deepEqual(await page.evaluate('window.BeesonEditor.selection().map((el) => el.localName)'), ['p', 'figure']);
     const centerOf = (selector) => page.evaluate(`(() => { const r = Reveal.getCurrentSlide().querySelector(${js(selector)}).getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
-    const p0 = await centerOf(':scope > p'), i0 = await centerOf('figure img.for-light');
+    const p0 = await centerOf(':scope > p'), i0 = await centerOf('figure img.for-light'), q0 = await centerOf('figcaption');
+    // the center on the screen of the picture with its caption, about which the figure is turned
+    const s = await page.evaluate(`(() => { const r = document.querySelector('.reveal .slides').getBoundingClientRect(); return { left: r.left, top: r.top, k: r.width / 1920 }; })()`);
+    const f = await figureBox(page), c = { x: s.left + (f.left + f.width / 2) * s.k, y: s.top + (f.top + f.height / 2) * s.k };
     const rotor = await page.evaluate(`(() => { const r = document.querySelector('.beeson-rotor'); if (!r || r.hidden || !r.getClientRects().length) return null; const b = r.getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`);
     assert.ok(rotor, 'the rotate handle is drawn');
     // a drag of the handle from above the center of the paragraph to its right, with Shift for
     // steps of 15 degrees, turns it by 90 degrees
     await drag(page, rotor, { dx: p0.x - rotor.x + (p0.y - rotor.y), dy: p0.y - rotor.y, steps: 12, modifiers: 'Shift' });
     await frames(page);
-    const angles = await page.evaluate(`[Reveal.getCurrentSlide().querySelector(':scope > p'), Reveal.getCurrentSlide().querySelector('figure img.for-light')].map((el) => el.style.rotate)`);
+    // the figure is turned as one object, its picture and its caption about the center of both
+    const angles = await page.evaluate(`[Reveal.getCurrentSlide().querySelector(':scope > p'), Reveal.getCurrentSlide().querySelector('figure.zone')].map((el) => el.style.rotate)`);
     assert.deepEqual(angles, ['90deg', '90deg']);
-    const p1 = await centerOf(':scope > p'), i1 = await centerOf('figure img.for-light');
-    assert.ok(near(p1.x, p0.x) && near(p1.y, p0.y) && near(i1.x, i0.x) && near(i1.y, i0.y), `each element kept its center: ${js({ p0, p1, i0, i1 })}`);
+    const p1 = await centerOf(':scope > p'), i1 = await centerOf('figure img.for-light'), q1 = await centerOf('figcaption');
+    const at = (o) => ({ x: c.x - (o.y - c.y), y: c.y + (o.x - c.x) });
+    assert.ok(near(p1.x, p0.x) && near(p1.y, p0.y), `the paragraph kept its center: ${js({ p0, p1 })}`);
+    assert.ok([[i1, at(i0)], [q1, at(q0)]].every(([a, b]) => near(a.x, b.x) && near(a.y, b.y)), `the figure kept the center of its picture with its caption: ${js({ c, i0, i1, q0, q1 })}`);
     await checkEdit(page, `r12-5-rotor-${platform}.html`);
     assert.deepEqual(errors(page), []);
   });

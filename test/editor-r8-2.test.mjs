@@ -250,8 +250,9 @@ for (const platform of PLATFORMS) {
     turnedAbout(await members(page), before, c, 90, 'after the drag');
     const edited = await render(page);
     assert.match(edited, /<p style="rotate: 90deg; translate: -?\d+px -?\d+px" data-group="g\d+">Export/, 'the paragraph is not written with its offset and its angle');
-    assert.match(edited, /<figure class="zone" style="translate: -?\d+px -?\d+px" data-group="g\d+">/, 'the figure is not written with its offset');
-    assert.equal(edited.match(/<img class="for-(dark|light)" [^>]*style="rotate: 90deg">/g)?.length, 2, 'the images of the figure are not written with its angle');
+    // the figure, with its caption in it, is turned as one object, with the angle on the figure
+    assert.match(edited, /<figure class="zone" style="rotate: 90deg; translate: -?\d+px -?\d+px" data-group="g\d+">/, 'the figure is not written with its offset and its angle');
+    assert.equal(edited.match(/<img class="for-(dark|light)" [^>]*style="[^"]*rotate/g), null, 'the images of the figure are written with an angle');
     assert.deepEqual((await members(page)).map((m) => m.tag).sort(), ['figure', 'p'], 'the group is not selected after the turn');
     inScope(edited, page.source);
     await roundTrip(page);
