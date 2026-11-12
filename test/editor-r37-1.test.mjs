@@ -54,8 +54,10 @@ const undoLabel = (page) => page.evaluate(`window.BeesonEditor.state('edit.undo'
 const exec = (page, id, arg) => page.evaluate(`Promise.resolve(window.BeesonEditor.exec(${js(id)}${arg === undefined ? '' : `, ${js(arg)}`})).then(() => true)`);
 
 // the editor on a deck served over HTTP at a slide, with the Steps pane or the Format tab shown
-async function open(t, platform, { deck = DECK, slide = 0, pane = 'steps' } = {}) {
-  const page = await browser.newPage({ width: 1920, height: 1080 });
+// reduced motion is the setting of the Windows runner of GitHub, and under it a kiosk viewer is
+// not started by the tycho runtime at its load. With motion, the page is shown without it
+async function open(t, platform, { deck = DECK, slide = 0, pane = 'steps', motion = false } = {}) {
+  const page = await browser.newPage({ width: 1920, height: 1080, motion });
   t.after(() => page.close().catch(() => {}));
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
@@ -506,7 +508,7 @@ for (const platform of PLATFORMS) {
   });
 
   test(`${platform}: a preview of the steps holds a viewer of the style play at its first frame until its step, and plays it from its start`, async (t) => {
-    const page = await open(t, platform, { deck: VIEWERS });
+    const page = await open(t, platform, { deck: VIEWERS, motion: true });
     await page.waitFor(`!!document.getElementById('play').state`);
     await page.waitFor(`document.getElementById('play').playing`);
     await page.evaluate(`(() => {
@@ -536,7 +538,7 @@ for (const platform of PLATFORMS) {
 
   // a scene is played again after a preview, as the editor shows it, and the next preview starts it anew
   test(`${platform}: a preview from a step at which a viewer is shown, after another preview, plays the scene from its start`, async (t) => {
-    const page = await open(t, platform, { deck: VIEWERS });
+    const page = await open(t, platform, { deck: VIEWERS, motion: true });
     await page.waitFor(`!!document.getElementById('play').state`);
     await exec(page, 'steps.preview');
     await page.waitFor(`!document.documentElement.classList.contains('beeson-previewing')`, 20000);
