@@ -3107,6 +3107,9 @@
   var DRAWN = ["triangle", "arrow", "arrow-both", "brace", "plus", "equals"];
   var num2 = (v) => String(Math.round(v * 100) / 100);
   var path = (parts) => parts.map((p) => typeof p === "number" ? num2(p) : p).join(" ").replace(/ ?([A-Z]) ?/g, "$1");
+  var dir = (deg) => [Math.cos(deg * Math.PI / 180), Math.sin(deg * Math.PI / 180)];
+  var HOOK = [dir(16), 0.4, 0.5, 0.95];
+  var CUSP = [dir(40), 0.4, 0.5, 1];
   function shapePath(kind, w, h, s) {
     const i = s / 2;
     const l = i, t = i, r = w - i, b = h - i, cx = w / 2, cy = h / 2, m = Math.min(w, h);
@@ -3122,8 +3125,35 @@
         return path(["M", l, cy, "L", x1, t, "L", x1, y1, "L", x2, y1, "L", x2, t, "L", r, cy, "L", x2, b, "L", x2, y2, "L", x1, y2, "L", x1, b, "Z"]);
       }
       case "brace": {
-        const a = (r - l) / 2, d = 0.0833 * m;
-        return path(["M", l, t, "A", a, d, 0, 0, 1, cx, t + d, "L", cx, cy - d, "A", a, d, 0, 0, 0, r, cy, "A", a, d, 0, 0, 0, cx, cy + d, "L", cx, b - d, "A", a, d, 0, 0, 1, l, b]);
+        const W = r - l, xs = l + 0.508 * W, k = Math.min(1, (cy - t) / ((HOOK[3] + CUSP[3]) * W)), y1 = t + k * HOOK[3] * W, y2 = cy - k * CUSP[3] * W;
+        const half = [[l + HOOK[1] * W * HOOK[0][0], t + k * HOOK[1] * W * HOOK[0][1]], [xs, y1 - k * HOOK[2] * W], [xs, y1], [xs, y2], [xs, y2 + k * CUSP[2] * W], [r - CUSP[1] * W * CUSP[0][0], cy - k * CUSP[1] * W * CUSP[0][1]]];
+        const low = half.map(([x, y]) => [x, 2 * cy - y]);
+        const stem = (p) => k < 1 ? [] : ["L", ...p];
+        return path([
+          "M",
+          l,
+          t,
+          "C",
+          ...half[0],
+          ...half[1],
+          ...half[2],
+          ...stem(half[3]),
+          "C",
+          ...half[4],
+          ...half[5],
+          r,
+          cy,
+          "C",
+          ...low[5],
+          ...low[4],
+          ...low[3],
+          ...stem(low[2]),
+          "C",
+          ...low[1],
+          ...low[0],
+          l,
+          b
+        ]);
       }
       case "plus": {
         const p = 0.3675 * w, q = 0.3675 * h, k = 0.1176 * m;
