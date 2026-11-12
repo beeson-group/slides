@@ -9,7 +9,9 @@
 
 import type { App } from '../app.ts';
 import { previewPlays, setPreview, stopPreviews } from '../canvas/frames.ts';
+import { boundKeys, type Command } from '../commands.ts';
 import { showFormat } from '../inspector/inspector.ts';
+import { fallback, matches } from '../keymap.ts';
 import { OFF } from '../layers.ts';
 import { drawInto } from '../navigator/thumbs.ts';
 import { showStep, stepsOfSlide } from '../present.ts';
@@ -243,11 +245,23 @@ export function install(app: App): void {
   // a key typed in that text, or an input into it, stops every preview before it is written, hence
   // it is not written into a text that a preview hides, under a caret that is not drawn. the
   // command of a key, e.g. Enter, runs before the listener below, hence its key stops the previews
-  // in the veto, which is checked before the command runs
+  // in the veto, which is checked before the command runs. the veto is also checked for the other
+  // commands while a command of the key runs, e.g. for the toolbar, hence it stops the previews
+  // only for a command of the key. a zoom key changes the view alone, and the preview plays on at
+  // the new zoom
   const typing = () => previewPlays() && !!(document.activeElement as HTMLElement | null)?.isContentEditable;
-  const typed = (ev: Event | undefined) => ev instanceof KeyboardEvent && ev.type === 'keydown' && ev.key !== 'Escape' && !['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(ev.key) && typing();
-  c.veto(() => { if (typed(window.event)) stopPreviews(); return false; });
-  window.addEventListener('keydown', (ev) => { if (typed(ev)) stopPreviews(); }, true);
+  const typed = (ev: Event | undefined): ev is KeyboardEvent => ev instanceof KeyboardEvent && ev.type === 'keydown' && ev.key !== 'Escape' && !['Shift', 'Control', 'Alt', 'Meta', 'CapsLock'].includes(ev.key) && typing();
+  const zooms = (cmd: Command | undefined) => !!cmd?.id.startsWith('zoom.');
+  const keyOf = (cmd: Command, ev: KeyboardEvent) => {
+    const alt = fallback(ev, app.platform);
+    return boundKeys(cmd, app.platform).some((k) => matches(ev, k, app.platform) || (!!alt && matches(alt, k, app.platform)));
+  };
+  c.veto((_, cmd) => {
+    const ev = window.event;
+    if (typed(ev) && !zooms(cmd) && keyOf(cmd, ev)) stopPreviews();
+    return false;
+  });
+  window.addEventListener('keydown', (ev) => { if (typed(ev) && !zooms(c.forKey(ev, app.region()))) stopPreviews(); }, true);
   window.addEventListener('beforeinput', () => { if (typing()) stopPreviews(); }, true);
   window.addEventListener('keydown', (ev) => {
     if (!playing() || ev.key !== 'Escape') return;

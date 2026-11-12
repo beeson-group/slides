@@ -23,7 +23,7 @@
 // outline around the cell of the caret or the range
 
 import type { App } from '../app.ts';
-import { overlay } from '../canvas/frames.ts';
+import { overlay, previewPlays } from '../canvas/frames.ts';
 import { keysOf, type Command } from '../commands.ts';
 import { matches } from '../keymap.ts';
 import { childSpace } from '../render.ts';
@@ -1013,6 +1013,8 @@ const BLOCK_KEYS: Command[] = [];
 window.addEventListener('keydown', (ev) => {
   const app = current;
   if (!app || ev.isComposing || menuOpen() || picker || app.region() !== 'canvas' || !inBlock(app)) return;
+  // Esc during a preview is left to the preview, which it stops
+  if (ev.key === 'Escape' && previewPlays()) return;
   const hit = (x: Command | undefined) => !!x && keysOf(x, app.platform).some((k) => matches(ev, k, app.platform));
   const c = BLOCK_KEYS.find(hit);
   // the key of Duplicate, dimmed on a range, is not left to the browser, where Ctrl+D adds a bookmark
