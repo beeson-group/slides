@@ -12,7 +12,7 @@
 
 import type { App } from '../app.ts';
 import { CONTAINER, snapBoxOf } from '../canvas/hit.ts';
-import { meets, slideBox, takenBox, type Box } from './insert.ts';
+import { inkBox, meets, promptBox, slideBox, takenBox, type Box } from './insert.ts';
 
 // what a new element may lie over when nothing else is free: a figure or a drawing, but not a text
 const FIGURE = `${CONTAINER}, img, video, .qr, .surface, .plot, tycho-viewer, svg.line`;
@@ -31,9 +31,45 @@ const steps = (from: number, to: number, edges: number[]) => {
   return out;
 };
 
-const boxOf = (app: App, el: Element): Box | null => {
+// the texts whose words a new table or plot is kept off
+const WORDS = 'h1, h2, h3, h4, p, ul, ol, dl, blockquote, div.math';
+
+// the space that el takes by its words: the box of the text of a block, also of one moved by a
+// translate, whose box is as wide as its column, or the box of its prompt, and else takenBox
+export const wordBox = (app: App, el: Element): Box | null =>
+  !el.getClientRects().length ? null : el.matches(WORDS) ? inkBox(app, el) ?? promptBox(app, el) : takenBox(app, el);
+
+// the drawn cells of CELL slide px of the canvases of a backdrop, by every other pixel of each
+const CELL = 20;
+export function drawnCells(app: App, backdrop: Element): Box[] {
+  const cells = new Map<number, Box>();
+  const slides = app.slides() as HTMLElement;
+  const s = slides.getBoundingClientRect();
+  const k = slides.offsetWidth ? s.width / slides.offsetWidth : 1;
+  for (const c of backdrop.querySelectorAll('canvas')) {
+    const r = c.getBoundingClientRect();
+    let data: Uint8ClampedArray | undefined;
+    try {
+      data = c.width && c.height && r.width ? c.getContext('2d')?.getImageData(0, 0, c.width, c.height).data : undefined;
+    } catch {
+      continue;
+    }
+    if (!data) continue;
+    for (let y = 0; y < c.height; y += 2) {
+      for (let x = 0; x < c.width; x += 2) {
+        if (data[(y * c.width + x) * 4 + 3] <= 20) continue;
+        const i = Math.floor((r.left + (x / c.width) * r.width - s.left) / k / CELL), j = Math.floor((r.top + (y / c.height) * r.height - s.top) / k / CELL);
+        cells.set(j * 1000 + i, { left: i * CELL, top: j * CELL, right: (i + 1) * CELL, bottom: (j + 1) * CELL });
+      }
+    }
+  }
+  return [...cells.values()];
+}
+
+// the box of el, by its words with words
+const boxOf = (app: App, el: Element, words = false): Box | null => {
   if (!el.getClientRects().length) return null;
-  if (!el.matches(FIGURE)) return el.matches('.run, .foot') ? slideBox(app, el) : takenBox(app, el);
+  if (!el.matches(FIGURE)) return el.matches('.run, .foot') ? slideBox(app, el) : words ? wordBox(app, el) : takenBox(app, el);
   const b = snapBoxOf(app, el);
   return { left: b.left, top: b.top, right: b.left + b.width, bottom: b.top + b.height };
 };
@@ -52,7 +88,8 @@ export function freePlace(app: App, el: Element, picture?: HTMLElement, strict =
   const num = document.querySelector('.reveal .slide-number');
   for (const o of [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *, :scope > .block > *'), ...(num ? [num] : [])]) {
     if (o === el || o.contains(el) || el.contains(o) || o.matches(SKIP)) continue;
-    const box = boxOf(app, o);
+    // a plot is kept off the words of a text
+    const box = boxOf(app, o, strict);
     if (box && box.right - box.left > 1 && box.bottom - box.top > 1) {
       // the frame of a plate of an image or a video is the box of its picture, hence a plot finds
       // the ground by the box of the plate
@@ -111,7 +148,7 @@ export function freePlace(app: App, el: Element, picture?: HTMLElement, strict =
     if (picture) picture.style.width = width;
   }
   if (strict) {
-    const p = centerPlace(w, h, b0.right - b0.left, b0.bottom - b0.top, piecesOf(app, el), ROOM, ROOM);
+    const p = centerPlace(w, h, b0.right - b0.left, b0.bottom - b0.top, piecesOf(app, el), ROOM, ROOM, true);
     return { x: Math.round(p.left - b0.left), y: Math.round(p.top - b0.top) };
   }
   return { x: Math.round((w - b0.left - b0.right) / 2), y: Math.round((h - b0.top - b0.bottom) / 2) };
@@ -122,19 +159,25 @@ export function freePlace(app: App, el: Element, picture?: HTMLElement, strict =
 // place of the plate, and the chrome
 const SOLID = 'figure, .zone, .plate, img, video, .qr, .surface, .plot, tycho-viewer, table, .run, .foot';
 
-// the boxes in slide px of the solids and of the texts of the slide of el, other than el
-export function piecesOf(app: App, el: Element): { solids: Box[]; texts: Box[] } {
+type Pieces = { solids: Box[]; texts: Box[]; heads?: Box[]; chrome?: Box[] };
+
+// the boxes in slide px of the solids and of the texts of the slide of el, other than el, with the
+// headings among the texts and the chrome among the solids
+export function piecesOf(app: App, el: Element): Pieces {
   const slide = el.closest('section') as HTMLElement;
   const w = slide.offsetWidth || 1920;
   const h = slide.offsetHeight || 1080;
-  const out = { solids: [] as Box[], texts: [] as Box[] };
+  const out = { solids: [] as Box[], texts: [] as Box[], heads: [] as Box[], chrome: [] as Box[] };
   const add = (o: Element, box: Box | null) => {
-    if (box && box.right - box.left > 1 && box.bottom - box.top > 1) (o.matches(SOLID) || o.matches('.slide-number') ? out.solids : out.texts).push(box);
+    if (!box || box.right - box.left <= 1 || box.bottom - box.top <= 1) return;
+    (o.matches(SOLID) || o.matches('.slide-number') ? out.solids : out.texts).push(box);
+    if (o.matches('h1, h2')) out.heads.push(box);
+    if (o.matches('.run, .foot, .slide-number')) out.chrome.push(box);
   };
   const num = document.querySelector('.reveal .slide-number');
   for (const o of [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *, :scope > .block > *, :scope > .sec > *'), ...(num ? [num] : [])]) {
     if (o === el || o.contains(el) || el.contains(o) || o.matches(SKIP)) continue;
-    const box = boxOf(app, o);
+    const box = boxOf(app, o, true);
     const all = o.matches('.plate') && o.getClientRects().length ? slideBox(app, o) : null;
     if (all && all.right - all.left >= w - 1 && all.bottom - all.top >= h - 1) {
       for (const c of o.children) if (c.getClientRects().length) out.solids.push(slideBox(app, c));
@@ -152,11 +195,14 @@ const grow = (b: Box, d: number): Box => ({ left: b.left - d, top: b.top - d, ri
 // slide of w by h, inside the margins and at top or below: the center of the slide, where Keynote
 // puts a new object, unless it lies over a solid. else the place nearest to the center that is off
 // every solid with room, then without, first one off the texts with room as well. else the place
-// that covers the least of the solids. room is in slide px, e.g. the room of the bars of a table
-export function centerPlace(w: number, h: number, bw: number, bh: number, pieces: { solids: Box[]; texts: Box[] }, room: number, top: number): Box {
+// that covers the least of the solids, and of these the least of the texts, where the chrome counts
+// as words. a place off the headings is taken first where one is left. with fewest, e.g. for a
+// plot, which is as tall as a zone, the place off the solids that covers the least of the texts is
+// taken where none is off them. room is in slide px, e.g. the room of the bars of a table
+export function centerPlace(w: number, h: number, bw: number, bh: number, pieces: Pieces, room: number, top: number, fewest = false): Box {
   const at = (x: number, y: number): Box => ({ left: x, top: y, right: x + bw, bottom: y + bh });
   const center = at((w - bw) / 2, (h - bh) / 2);
-  const { solids, texts } = pieces;
+  const { solids, texts, heads = [], chrome = [] } = pieces;
   if (!solids.some((s) => meets(center, s))) return center;
   const side = bw + 2 * MARGIN <= w ? MARGIN : Math.max(0, (w - bw) / 2);
   const places = (gap: number): Box[] => {
@@ -165,13 +211,18 @@ export function centerPlace(w: number, h: number, bw: number, bh: number, pieces
     return ys.flatMap((y) => xs.map((x) => at(x, y)));
   };
   const far = (b: Box) => Math.hypot(b.left - center.left, b.top - center.top);
+  const words = (b: Box) => [...texts, ...chrome].reduce((c, t) => c + overlap(b, t), 0);
+  const unhead = (all: Box[]) => (all.some((b) => !heads.some((t) => meets(b, t))) ? all.filter((b) => !heads.some((t) => meets(b, t))) : all);
+  const least = (all: Box[], cost: (b: Box) => number) => all.reduce<Box | null>((best, b) => (!best || cost(b) < cost(best) - 1 || (cost(b) <= cost(best) + 1 && far(b) < far(best)) ? b : best), null);
   for (const gap of [room, 0]) {
-    const all = places(gap).filter((b) => !solids.some((s) => meets(grow(b, gap), s))).sort((a, b) => far(a) - far(b));
-    const best = all.find((b) => !texts.some((t) => meets(grow(b, room), t))) ?? all[0];
+    const all = unhead(places(gap).filter((b) => !solids.some((s) => meets(grow(b, gap), s))).sort((a, b) => far(a) - far(b)));
+    const best = all.find((b) => !texts.some((t) => meets(grow(b, room), t))) ?? (fewest ? least(all, words) : all[0]);
     if (best) return best;
   }
-  const cost = (b: Box) => solids.reduce((c, s) => c + overlap(b, s), 0);
-  return places(0).reduce<Box | null>((best, b) => (!best || cost(b) < cost(best) - 1 || (cost(b) <= cost(best) + 1 && far(b) < far(best)) ? b : best), null) ?? center;
+  const cost = (b: Box) => solids.reduce((c, s) => c + (chrome.includes(s) ? 0 : overlap(b, s)), 0);
+  const some = unhead(places(0));
+  const low = least(some, cost);
+  return least(some.filter((b) => low && cost(b) <= cost(low) + 1), words) ?? center;
 }
 
 // the translate of el in slide px

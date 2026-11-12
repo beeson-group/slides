@@ -39,7 +39,7 @@ import { injectStyle, make } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { closeMenus, menuOpen, openMenu, type MenuItem } from '../ui/menu.ts';
 import { columnPlace, freeZone, meets, slideBox, takenBox, type Box as SlideBox } from './insert.ts';
-import { centerPlace, MARGIN, piecesOf } from './place.ts';
+import { centerPlace, drawnCells, MARGIN, piecesOf, wordBox } from './place.ts';
 import { checkOverlaps } from '../overflow.ts';
 import { MARK } from './slide.ts';
 
@@ -392,7 +392,11 @@ async function moveLines(app: App, table: HTMLTableElement, kind: Line, lo: numb
 // where it fits by placeTable, with every row, or put into the empty zone into. with markup, each
 // cell of rows is HTML rather than text
 async function insertTable(app: App, rows: string[][], into: Element | null = null, markup = false): Promise<HTMLTableElement> {
-  const { parent, before } = into ? { parent: into, before: null } : columnPlace(app, app.current()!);
+  const slide = app.current()!;
+  // the block of a title or closing slide is held at its foot, hence a table in it would move its
+  // words up. the theme lays out a table of the section, as on a content slide
+  const own = slide.matches('.title, .closing') ? { parent: slide, before: slide.querySelector(':scope > .foot, :scope > aside.notes') } : null;
+  const { parent, before } = into ? { parent: into, before: null } : own ?? columnPlace(app, slide);
   const [table] = await app.doc.insert(tableHtml(rows, styleOf(app), baseOf(app, parent), markup), parent, before, 'insert table');
   if (!into) placeTable(app, table as HTMLTableElement);
   else fillSlot(app, table as HTMLTableElement, into);
@@ -442,9 +446,10 @@ const BOTTOM = 40;
 const STEP = 20;
 
 // a new table put where it fits on its slide, with every row, inside the margins of the slide, and
-// with room around it for its bars at the zoom of the canvas: under the blocks before it, else at
+// with room around it for its bars: under the blocks before it, else at
 // the center of the free area where the layout puts a zone, else at the free place nearest to it.
-// the space that an element takes is the rule takenBox of insert.ts. without a free place, the table
+// the space that an element takes is the rule wordBox of place.ts, and a backdrop that is not behind
+// the words of its layout takes its drawn cells. without a free place, the table
 // is put by centerPlace of place.ts at the center of the slide or near it, off the figures and the
 // other tables. the move is a translate in slide px. on a figure slide, the plate as large as the
 // slide is the ground, and what is drawn in it is counted in its place. the layout puts the table
@@ -454,15 +459,18 @@ function placeTable(app: App, table: HTMLTableElement): void {
   const parent = table.parentElement;
   if (!slide || !parent || !table.getClientRects().length) return;
   const t = slideBox(app, table);
-  const k = table.getBoundingClientRect().width / (table.offsetWidth || 1) || 1;
-  const room = (GAP + BAR + 2) / k;
+  // the room of the bars in slide px at the Fit zoom of a window of 1600 by 1000, the same at every
+  // size of the window
+  const room = (GAP + BAR + 2) / 0.54;
   const w = (slide as HTMLElement).offsetWidth || 1920;
   const h = (slide as HTMLElement).offsetHeight || 1080;
   const foot = [...slide.querySelectorAll(':scope > .foot')].map((f) => takenBox(app, f)).find((b) => !!b);
   const floor = Math.min(h - BOTTOM, foot ? foot.top - BOTTOM : Infinity);
   const ground = (el: Element) => el.matches('.plate') && el.getBoundingClientRect().width >= (slide.getBoundingClientRect().width - 1);
-  const skip = (el: Element) => el === table || el.matches('aside.notes, script, style, .backdrop');
-  const taken = (els: Element[]) => els.filter((el) => !skip(el)).map((el) => takenBox(app, el)).filter((b): b is SlideBox => !!b);
+  // the words of a block are counted in their place
+  const skip = (el: Element) => el === table || el.matches('aside.notes, script, style, .backdrop, .block, .sec');
+  const taken = (els: Element[]) => els.filter((el) => !skip(el)).map((el) => wordBox(app, el)).filter((b): b is SlideBox => !!b);
+  const drawn = slide.matches('.title, .section, .closing') ? [] : [...slide.querySelectorAll(':scope > .backdrop')].flatMap((b) => drawnCells(app, b));
   const above = [...parent.children].slice(0, [...parent.children].indexOf(table)).filter((el) => !el.matches('.run, .foot, [data-generated]'));
   const before = taken(above.filter((el) => !ground(el)));
   // the words and the tables of the block of a title, section, or closing slide are counted, also
@@ -474,33 +482,38 @@ function placeTable(app: App, table: HTMLTableElement): void {
   const at = (left: number, top: number): SlideBox => ({ left, top, right: left + tw, bottom: top + th });
   const side = tw + 2 * MARGIN <= w ? MARGIN : room;
   // a box measured at the zoom of the canvas may pass the floor by a fraction of a slide px
+  // a place off the drawing of a backdrop is looked for first
+  let ink = drawn;
   const free = (b: SlideBox) => b.left >= side - 1 && b.top - room >= 0 && b.bottom <= floor + 1 && b.right <= w - side + 1 &&
-    !others.some((o) => meets({ left: b.left - room, top: b.top - room, right: b.right + room, bottom: b.bottom + room }, o));
+    !others.some((o) => meets({ left: b.left - room, top: b.top - room, right: b.right + room, bottom: b.bottom + room }, o)) && !ink.some((o) => meets(b, o));
   const head = slide.querySelector(':scope > h2, :scope > h1');
   const headBox = head ? takenBox(app, head) : null;
   // the bars of a table at the edge of the slide would be outside it
   const left = t.left >= room ? t.left : (headBox?.left ?? room);
   const top = Math.max(t.top, ...before.map((b) => b.bottom + room));
   const center = at((w - tw) / 2, (h - th) / 2);
-  const from = top >= h ? center : at(left, top);
+  const from = top >= h || parent === slide && slide.matches('.title, .closing') ? center : at(left, top);
   let best: SlideBox | null = null;
-  let place: SlideBox | null = free(at(left, top)) ? at(left, top) : null;
-  const zone = place ? null : freeZone(app, slide, table);
-  if (zone) {
-    const b = at((zone.left + zone.right - tw) / 2, (zone.top + zone.bottom - th) / 2);
-    if (free(b)) place = b;
-  }
+  let place: SlideBox | null = null;
+  const zone = free(at(left, top)) ? null : freeZone(app, slide, table);
   // the free places on a grid of STEP px under the heading of the slide, the nearest one taken
   const under = head ? (headBox?.bottom ?? 0) + room : room;
-  let near = Infinity;
-  for (const y of place ? [] : [from.top, ...Array.from({ length: Math.max(0, Math.floor((floor - th - under) / STEP) + 1) }, (_, i) => under + i * STEP)]) {
-    for (const x of [from.left, ...Array.from({ length: Math.max(0, Math.floor((w - 2 * side - tw) / STEP) + 1) }, (_, i) => side + i * STEP)]) {
-      const d = Math.hypot(x - from.left, y - from.top);
-      if (d < near && free(at(x, y))) {
-        near = d;
-        best = at(x, y);
+  for (const d of drawn.length ? [drawn, []] : [drawn]) {
+    ink = d;
+    place = free(at(left, top)) ? at(left, top) : null;
+    const b = zone && at((zone.left + zone.right - tw) / 2, (zone.top + zone.bottom - th) / 2);
+    if (!place && b && free(b)) place = b;
+    let near = Infinity;
+    for (const y of place ? [] : [from.top, ...Array.from({ length: Math.max(0, Math.floor((floor - th - under) / STEP) + 1) }, (_, i) => under + i * STEP)]) {
+      for (const x of [from.left, ...Array.from({ length: Math.max(0, Math.floor((w - 2 * side - tw) / STEP) + 1) }, (_, i) => side + i * STEP)]) {
+        const d = Math.hypot(x - from.left, y - from.top);
+        if (d < near && free(at(x, y))) {
+          near = d;
+          best = at(x, y);
+        }
       }
     }
+    if (place ?? best) break;
   }
   place ??= best ?? centerPlace(w, h, tw, th, piecesOf(app, table), room, room);
   const x = Math.round(place.left - t.left);

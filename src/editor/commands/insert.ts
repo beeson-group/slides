@@ -113,7 +113,7 @@ const TEXT = 'h1, h2, h3, h4, p, ul, ol, dl, table, pre, blockquote, div.math';
 
 // the box of the prompt of an empty block that shows its placeholder, i.e. of the text of its
 // ::before as it is drawn, or null for a block without a prompt
-function promptBox(app: App, el: Element): Box | null {
+export function promptBox(app: App, el: Element): Box | null {
   const before = getComputedStyle(el, '::before');
   if (['none', 'normal'].includes(before.content)) return null;
   const box = slideBox(app, el);
