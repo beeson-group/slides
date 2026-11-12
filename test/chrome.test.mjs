@@ -73,6 +73,25 @@ test('a profile is removed while a helper process of Chrome still writes to it',
   assert.ok(!existsSync(profile));
 });
 
+// with the network allowed, Chrome downloads components and models into its profile in the
+// background, about 13 s after its start. On Windows, such a file is still locked at close(), and
+// the removal of the profile fails
+test('Chrome does not download a component or a model into its profile', { timeout: 90000 }, async (t) => {
+  const browser = await launch({ offline: false });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto('chrome://version');
+  // the path is filled in after the load of the page
+  await page.waitFor(`!!document.getElementById('profile_path')?.textContent.trim()`);
+  const profile = dirname(await page.evaluate(`document.getElementById('profile_path').textContent.trim()`));
+  assert.ok(existsSync(join(profile, 'Local State')), `${profile} is not the profile of the browser`);
+  await sleep(25000);
+  // the folders of the models, of the components, and of one component. Without a download, Chrome
+  // writes only the index of the components
+  const downloaded = ['optimization_guide_model_store', 'component_crx_cache', 'WidevineCdm'].flatMap((name) => (existsSync(join(profile, name)) ? readdirSync(join(profile, name)).map((file) => `${name}/${file}`) : []));
+  assert.deepEqual(downloaded.filter((file) => file !== 'component_crx_cache/metadata.json'), []);
+});
+
 test('an early exit of Chrome is reported', (t) => {
   const out = mkdtempSync(join(tmpdir(), 'slides-check-'));
   t.after(() => rmSync(out, { recursive: true, force: true }));
