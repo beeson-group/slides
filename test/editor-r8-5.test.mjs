@@ -336,6 +336,8 @@ for (const platform of PLATFORMS) {
         const outline = await dropFile(page, pic, 'demo/clip-dark.png');
         assert.equal(outline, 'Add Image', `the outline over the picture of a locked figure of ${NAMES[n]}`);
         await waitText(page, 'media/clip-dark.png');
+        // the picture is in the text before it is placed and sized, hence the text is read once its entry is in the history
+        await page.waitFor(`/Insert/.test(window.BeesonEditor.state('edit.undo').label)`, 30000);
         await frames(page);
         const edited = await render(page);
         assert.equal(figureOf(edited, n), locked, `a file dropped onto the locked picture of ${NAMES[n]} changes its figure`);

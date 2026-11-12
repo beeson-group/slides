@@ -140,27 +140,34 @@ export class History {
     try {
       return await fn();
     } finally {
-      if (entries.length) for (const settle of this.settlers) settle();
-      this.open = null;
-      this.typing = null;
-      if (entries.length) {
-        const entry: Entry = {
-          label,
-          undo: async () => {
-            show?.();
-            for (const e of [...entries].reverse()) await e.undo();
-          },
-          redo: async () => {
-            show?.();
-            for (const e of entries) await e.redo();
-          },
-        };
-        this.parts.set(entry, entries);
-        this.done.push(entry);
-        this.undone = [];
-        this.onChange();
+      // the transaction is closed also when a settler or a listener throws, since an undo waits for it
+      try {
+        if (entries.length) for (const settle of this.settlers) settle();
+      } finally {
+        this.open = null;
+        this.typing = null;
+        try {
+          if (entries.length) {
+            const entry: Entry = {
+              label,
+              undo: async () => {
+                show?.();
+                for (const e of [...entries].reverse()) await e.undo();
+              },
+              redo: async () => {
+                show?.();
+                for (const e of entries) await e.redo();
+              },
+            };
+            this.parts.set(entry, entries);
+            this.done.push(entry);
+            this.undone = [];
+            this.onChange();
+          }
+        } finally {
+          close();
+        }
       }
-      close();
     }
   }
 
@@ -295,7 +302,8 @@ export class History {
 
   // the entry is taken when its turn in the queue comes, hence a second undo asked for during the
   // first one takes the entry before it. the turn comes after the end of an open transaction, whose
-  // changes are in the file before its entry is in the history, e.g. a dropped picture that is sized
+  // changes are in the file before its entry is in the history, e.g. a dropped picture that is
+  // sized. an amend of an entry is not waited for
   private step(way: 'undo' | 'redo'): Promise<void> {
     const run = this.queue.then(() => this.closed).then(async () => {
       // the stacks are read at the turn of the step, since clear() replaces them
