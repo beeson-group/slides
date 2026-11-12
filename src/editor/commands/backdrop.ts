@@ -257,6 +257,9 @@ type Entry = { key: string; name: string; attrs: Record<string, string>; motion:
 
 // the families of demo/broucke-sample.js in both of its frames, as values of data-strands-select
 const FAMILY_SPECS = BROUCKE_FAMILIES.flatMap((n) => [`frame=pulsating,family=${n}`, `frame=inertial,family=${n}`]);
+// the fixed choices of the Family popup: each family in each frame, then all the families of each
+// frame, written as the backdrop of the demo deck writes them
+const FIXED_SPECS = [...FAMILY_SPECS, ...FRAMES.map((fr) => `frame=${fr}`)];
 
 // the drawings of the demo deck, with their windows and the size of their boxes, and the entry
 // Broucke Families, which draws the first family with the colors and the motion of the backdrop of
@@ -281,8 +284,8 @@ export const drawnBy = (entry: Entry, el: Element): boolean =>
   entry.key === 'broucke' ? isBroucke(el) : Object.entries(entry.attrs).every(([k, v]) => el.getAttribute(k) === v);
 
 // the choices of the Family popup of el, as values of data-strands-select with their names: the
-// families of the file in both frames, then each other selection of the file in the deck, once per
-// drawing. a choice is the value whose own terms give its name, e.g. frame=pulsating before begin=ray
+// fixed choices, which are listed whatever the deck draws, then each other selection of the file in
+// the deck, once per drawing. a choice is the value whose own terms give its name, e.g. frame=pulsating before begin=ray
 export function families(app: App, el: Element): { spec: string | null; name: string }[] {
   const out: { spec: string | null; name: string }[] = [];
   const add = (spec: string | null) => {
@@ -291,7 +294,7 @@ export function families(app: App, el: Element): { spec: string | null; name: st
     if (!same) out.push({ spec, name });
     else if (familyName(same.spec) !== same.name && familyName(spec) === same.name) same.spec = spec;
   };
-  FAMILY_SPECS.forEach(add);
+  FIXED_SPECS.forEach(add);
   for (const b of app.slides().querySelectorAll<HTMLElement>('.backdrop')) {
     if (open(app, b) && isBroucke(b)) add(app.doc.tagState(b).attrs['data-strands-select'] ?? null);
   }
@@ -299,9 +302,14 @@ export function families(app: App, el: Element): { spec: string | null; name: st
   return out;
 }
 
-// the files of the Broucke drawings of the deck, in the order of the deck
-const brouckeFiles = (app: App): string[] =>
-  [...app.slides().querySelectorAll<HTMLElement>('.backdrop')].filter((el) => open(app, el) && isBroucke(el)).map((el) => el.getAttribute('data-strands') ?? '');
+// the files of the Broucke drawings of the deck, in the order of the deck, then each file of one that
+// an earlier call saw, so that the entry Broucke Families keeps its file once no drawing has it
+const seenBroucke: string[] = [];
+function brouckeFiles(app: App): string[] {
+  const now = [...app.slides().querySelectorAll<HTMLElement>('.backdrop')].filter((el) => open(app, el) && isBroucke(el)).map((el) => el.getAttribute('data-strands') ?? '');
+  for (const f of now) if (!seenBroucke.includes(f)) seenBroucke.push(f);
+  return [...new Set([...now, ...seenBroucke])];
+}
 
 // whether the file of strands at an absolute URL is found and has records, as the theme read it
 const found = new Map<string, boolean>();
