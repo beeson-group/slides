@@ -230,21 +230,39 @@ for (const platform of PLATFORMS) {
     assert.match(await hostText(page), /^The gravitational/, 'ArrowUp on the first line of a paragraph stays in it');
   });
 
-  // a drag from "toggle" in item 2 to the end of item 3, with the left button held on every move
-  const dragOver = async (page) => {
+  // a drag from "toggle" in item 2 to the end of item 3, with the left button held on every move.
+  // with quick, the moves and the release are sent at once, as in a quick drag
+  const dragOver = async (page, quick = false) => {
     const from = await pointOf(page, ITEM, 'toggle', 0);
     const to = await pointOf(page, ITEM, 'mode.', 4);
     const [x0, x1] = [from.x - 3, to.x + 8];
     await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x0, y: from.y });
     await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: x0, y: from.y, button: 'left', buttons: 1, clickCount: 1 });
-    for (let i = 1; i <= 10; i++) await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x0 + ((x1 - x0) * i) / 10, y: from.y + ((to.y - from.y) * i) / 10, button: 'left', buttons: 1 });
-    await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x1, y: to.y, button: 'left', clickCount: 1 });
+    const sent = [];
+    for (let i = 1; i <= 10; i++) {
+      sent.push(page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: x0 + ((x1 - x0) * i) / 10, y: from.y + ((to.y - from.y) * i) / 10, button: 'left', buttons: 1 }));
+      if (!quick) await sent.at(-1);
+    }
+    sent.push(page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: x1, y: to.y, button: 'left', clickCount: 1 }));
+    await Promise.all(sent);
     await frames(page);
   };
 
   test(`a drag from one item into the next selects over both, and Bold acts on both (${platform})`, async (t) => {
     const page = await load(t, platform);
     await dragOver(page);
+    await press(page, 'Mod+B');
+    const text = await render(page);
+    assert.equal(written(text, 'You might'), ITEMS[1].replace('toggle on the top right: try clicking it on this slide.', '<strong>toggle on the top right: try clicking it on this slide.</strong>'));
+    assert.equal(written(text, 'You should'), ITEMS[2].replace('>You should', '><strong>You should').replace('mode.</li>', 'mode.</strong></li>'));
+    await roundTrip(page);
+  });
+
+  // after a quick drag, the change of the selection of the browser is reported after the release,
+  // and the selection over both items was then lost. On a slow runner, the test above failed at times
+  test(`a quick drag from one item into the next selects over both (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await dragOver(page, true);
     await press(page, 'Mod+B');
     const text = await render(page);
     assert.equal(written(text, 'You might'), ITEMS[1].replace('toggle on the top right: try clicking it on this slide.', '<strong>toggle on the top right: try clicking it on this slide.</strong>'));
