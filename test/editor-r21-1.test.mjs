@@ -74,6 +74,14 @@ async function clickShape(page, selector = '.shape') {
   await frames(page);
 }
 
+// the shape selected as an object whatever is selected before: a click on a shape that is selected
+// already puts the caret into its words
+async function selectShape(page) {
+  await exec(page, 'selection.clear');
+  await frames(page);
+  await clickShape(page);
+}
+
 // the tag that the command id writes on the paragraph of the slide WORDS selected as a block, with
 // the words of the paragraph replaced by those of the shape
 async function blockEdit(page, id) {
@@ -122,7 +130,7 @@ for (const platform of PLATFORMS) {
     for (const id of [...ids, 'text.italic', 'text.smaller', 'text.tone.violet', 'text.align.left']) assert.equal((await state(page, id)).enabled, true, id);
     assert.deepEqual((await disabledInText(page)).filter((b) => !paragraphDisabled.includes(b)), [], 'the buttons of the Text tab disabled for a selected shape and not for a paragraph');
     for (const id of ids) {
-      await clickShape(page);
+      await selectShape(page);
       await exec(page, id);
       await frames(page);
       await byteExact(page, [[SHAPE_P, `translate: 1100px 400px">${edits[id]}</div>`]]);
@@ -133,7 +141,7 @@ for (const platform of PLATFORMS) {
       await undo(page);
     }
     // Dashes sets the words as a list, and the shape stays selected
-    await clickShape(page);
+    await selectShape(page);
     await exec(page, 'text.list.ul');
     await frames(page);
     await byteExact(page, [[SHAPE_P, 'translate: 1100px 400px"><ul>\n  <li>Goal</li>\n</ul></div>']]);
@@ -141,7 +149,7 @@ for (const platform of PLATFORMS) {
     await exec(page, 'text.list.none');
     await frames(page);
     await byteExact(page);
-    await clickShape(page);
+    await selectShape(page);
     await exec(page, 'text.tone.accent');
     const { text } = await saveAndReopen(page, `r21-1-v1-${platform}.html`);
     assert.ok(text.includes(`${edits['text.tone.accent']}</div>`));
