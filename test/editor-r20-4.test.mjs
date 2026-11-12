@@ -1,5 +1,5 @@
 // tests of R20.4 on both platforms with trusted input: the bullet kinds of a list, i.e. the dash of
-// a ul, the dot of a ul.dots, and the arrowhead of a ul.arrows, drawn by the theme in the show and
+// a ul, the ring of a ul.dots, and the chevron of a ul.arrows, drawn by the theme in the show and
 // in the print view, and written by Dots and Arrows of Format > Text and of the Text pane. after
 // each edit of the file the text is checked byte for byte after an undo, the edit again after a
 // redo, and after a save and an open
@@ -122,12 +122,14 @@ const marks = (page, selector) => page.evaluate(`(() => {
       width: px(s.width), height: px(s.height), left: px(s.left), middle: px(parseFloat(s.top) + parseFloat(s.height) / 2),
       round: s.borderRadius, clip: s.clipPath, mask: s.maskImage || s.webkitMaskImage || 'none', content: s.content,
       accent: s.backgroundColor === accent, pad: getComputedStyle(li).paddingLeft,
+      hollow: s.backgroundColor === 'rgba(0, 0, 0, 0)', ring: px(s.borderTopWidth), ringAccent: s.borderTopColor === accent,
+      points: s.clipPath.split(',').length,
     };
   });
 })()`);
 
 // checkMarks tests the marks of the items Alpha, Dot one, Arrow one, and Inner dash of the first
-// slide: a dash, a round dot, a triangle, and a dash, each in --accent and centered on the middle
+// slide: a dash, a hollow ring, a chevron, and a dash, each in --accent and centered on the middle
 // of the dash, with the text of each item at 54 px
 function checkMarks(all) {
   const by = Object.fromEntries(all.map((m) => [m.text, m]));
@@ -135,21 +137,23 @@ function checkMarks(all) {
   assert.deepEqual([dash.width, dash.height, dash.clip, dash.round], [28, 2, 'none', '0px'], `the dash changed: ${js(dash)}`);
   const dot = by['Dot one'];
   assert.ok(dot.width === dot.height && dot.width >= 8 && dot.width <= 16 && dot.round === '50%' && dot.clip === 'none', `the dot is not round: ${js(dot)}`);
+  assert.ok(dot.hollow && dot.ringAccent && dot.ring >= 2 && dot.ring <= 3, `the dot is not a hollow ring in --accent: ${js(dot)}`);
   const arrow = by['Arrow one'];
   assert.match(arrow.clip, /^polygon\(/, `the arrowhead is not a polygon: ${js(arrow)}`);
+  assert.equal(arrow.points, 6, `the arrowhead is not a chevron of six points: ${js(arrow)}`);
   assert.ok(arrow.width > 0 && arrow.height > 0 && arrow.left + arrow.width <= 28, `the arrowhead is not inside the place of the dash: ${js(arrow)}`);
   const inner = by['Inner dash'];
   assert.deepEqual([inner.width, inner.height, inner.clip], [28, 2, 'none'], `a dash list in an arrow list does not keep the dash: ${js(inner)}`);
   for (const m of [dash, dot, arrow, inner]) {
     assert.equal(m.content, '""', `the mark of ${m.text} is a glyph`);
     assert.equal(m.mask, 'none', `the mark of ${m.text} has a mask`);
-    assert.ok(m.accent, `the mark of ${m.text} is not in --accent`);
+    assert.ok(m === dot ? m.ringAccent : m.accent, `the mark of ${m.text} is not in --accent`);
     assert.equal(m.pad, '54px', `the text of ${m.text} moved`);
   }
   for (const m of [dot, arrow]) assert.ok(Math.abs(m.middle - dash.middle) < 0.75, `the mark of ${m.text} is not centered on the dash: ${m.middle} and ${dash.middle}`);
 }
 
-test('the theme draws a dash, a dot, and an arrowhead in --accent in both modes, in the show and in the print view', async (t) => {
+test('the theme draws a dash, a ring, and a chevron in --accent in both modes, in the show and in the print view', async (t) => {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
   for (const [query, items] of [['still', '.reveal .slides section li'], ['print-pdf&still', '.pdf-page li']]) {
