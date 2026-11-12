@@ -373,7 +373,23 @@ export async function split(app: App): Promise<void> {
   // list as a paragraph, as in Keynote and PowerPoint. the items after it go into a list of their
   // own after the paragraph, with the attributes of their list apart from its id
   if (item.localName === 'li' && !item.textContent?.trim() && !item.querySelector('mjx-container, img, ul, ol')) {
-    if (at.nested) return outdent(app);
+    if (at.nested) {
+      // the caret goes back into the empty nested item at an undo, and into the item made of it at a
+      // redo. an item of host is found again by its index, since its content is replaced
+      const place = (el: Element | null) => {
+        if (!el || !host.contains(el)) return el && caretAt(app, el);
+        const i = itemsOf(host).indexOf(el);
+        return () => {
+          const li = itemsOf(host)[i];
+          if (li) caretAt(app, li)();
+        };
+      };
+      let done = false;
+      const kept = app.history.keep(() => place(done ? (itemAt(app)?.item ?? null) : item));
+      await outdent(app);
+      done = true;
+      return kept();
+    }
     const list = item.parentElement!;
     const items = [...list.children].filter((c) => c.localName === 'li');
     const followers = items.slice(items.indexOf(item) + 1);
@@ -487,10 +503,10 @@ function joinBack(app: App): Join {
   const before = prevBlock(app, at.item);
   if (before) return { kind: 'join', before, after: at.item };
   // a paragraph after a list is taken off, with its text joined onto the last item, as in Keynote.
-  // a locked list takes only the caret of an empty paragraph
+  // a locked list is left alone, and so is the paragraph after it
   const list = at.item.localName === 'p' ? prevOf(app, at.item) : null;
-  const last = fileList(app, list) ? liOf(list).at(-1) : null;
-  if (last && (empty(at.item) || !list!.closest('[data-locked]'))) return { kind: 'drop', item: at.item, to: last, end: true };
+  const last = fileList(app, list) && !list.closest('[data-locked]') ? liOf(list).at(-1) : null;
+  if (last) return { kind: 'drop', item: at.item, to: last, end: true };
   // the first item of a list has its dash taken off, as in Keynote and PowerPoint
   return at.item.localName === 'li' && !at.item.previousElementSibling ? { kind: 'unlist', item: at.item } : null;
 }
@@ -523,9 +539,10 @@ function joinAhead(app: App): Join {
   if (!blank(rangeOf(at.item, [at.range.startContainer, at.range.startOffset], null))) return null;
   const after = nextBlock(app, at.item);
   if (after) return { kind: 'join', before: at.item, after };
-  // an empty paragraph before a list is taken off, with the caret at the start of the list
+  // an empty paragraph before a list is taken off, with the caret at the start of the list, unless
+  // the list is locked
   const list = at.item.localName === 'p' && empty(at.item) ? nextOf(app, at.item) : null;
-  const first = fileList(app, list) ? liOf(list)[0] : null;
+  const first = fileList(app, list) && !list.closest('[data-locked]') ? liOf(list)[0] : null;
   return first ? { kind: 'drop', item: at.item, to: first, end: false } : null;
 }
 
@@ -792,7 +809,7 @@ export async function setList(app: App, kind: ListKind): Promise<void> {
   if (followers.length) {
     const rest = followers.map((f) => `${eol}${base}${step}${app.doc.elementText(f)}`).join('');
     const k = items.filter((c) => c.localName === 'li').indexOf(item);
-    texts.push(`${startTag(app, parent, parent.localName, { attrs: goOn(parent, k) })}${rest}${eol}${base}</${parent.localName}>`);
+    texts.push(`${startTag(app, parent, parent.localName, { attrs: { id: null, ...goOn(parent, k) } })}${rest}${eol}${base}</${parent.localName}>`);
   }
   const [p, second] = await app.doc.insert(texts, parent.parentElement!, nextOf(app, parent), 'list');
   goesOn(parent, second, items.filter((c) => c.localName === 'li').indexOf(item));
