@@ -6,7 +6,7 @@
 
 import type { App, Selector } from './app.ts';
 import type { Pairing } from './render.ts';
-import { BY_ITSELF, MOVABLE, OUTSIDE, movablesOf, pickOf } from './canvas/hit.ts';
+import { BY_ITSELF, MOVABLE, OUTSIDE, movableOf, movablesOf, pickOf } from './canvas/hit.ts';
 import { selectRun } from './text/flow.ts';
 
 export type SelectionKind = 'none' | 'elements' | 'text' | 'slides';
@@ -29,6 +29,9 @@ export interface Selection {
   elements(): Element[];
   // the one selected element, or null when none or several are selected
   only(): Element | null;
+  // read before an undo or a redo, the function that selects the element changed by its entry as a
+  // block, as Keynote does, unless the caret was in its text before the step
+  changed(): (el: Element) => void;
 }
 
 const inOrder = (items: Element[]): Element[] =>
@@ -128,6 +131,19 @@ export function install(app: App): void {
     has: (item) => items.includes(item),
     elements: () => (kind === 'elements' ? items : []),
     only: () => (kind === 'elements' && items.length === 1 ? items[0] : null),
+    changed: () => {
+      const caret = app.hostOf(document.activeElement);
+      return (el) => {
+        const block = el.isConnected && app.current()?.contains(el) && !el.closest('aside.notes') ? movableOf(app, el) : null;
+        if (!block || (caret && (caret === el || el.contains(caret)))) return;
+        const host = app.hostOf(document.activeElement);
+        if (host) {
+          (host as HTMLElement).blur();
+          getSelection()?.removeAllRanges();
+        }
+        set('elements', [block]);
+      };
+    },
   };
   app.selection = selection;
 

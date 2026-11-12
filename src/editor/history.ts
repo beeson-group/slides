@@ -5,7 +5,9 @@
 // and after. the typing into one block within a short time is one entry. an undo or a redo asked
 // for while another one runs is queued, and the changes made in a transaction are one entry
 
-export type Entry = { label: string; undo(): Promise<void> | void; redo(): Promise<void> | void };
+// els are the elements that the entry changes, and selects is the step at which a part of a
+// transaction puts a selection back
+export type Entry = { label: string; undo(): Promise<void> | void; redo(): Promise<void> | void; els?: readonly Element[]; selects?: 'undo' | 'redo' };
 
 // the typing into a block is coalesced while the keystrokes are closer than this, in ms
 const PAUSE = 1000;
@@ -36,14 +38,17 @@ export class History {
   private readonly view: () => (() => void) | null;
   // the functions run at the end of each transaction, whose changes are part of it
   private readonly settlers: (() => void)[] = [];
+  // read before an undo or a redo, the function that selects the one element changed by its entry
+  private readonly changed: () => (el: Element) => void;
 
-  constructor(options: { snapshot(host: Element): string; restore(host: Element, content: string): Promise<void>; onChange(): void; selected?(): Element[] | null; reselect?(els: Element[]): void; view?(): (() => void) | null }) {
+  constructor(options: { snapshot(host: Element): string; restore(host: Element, content: string): Promise<void>; onChange(): void; selected?(): Element[] | null; reselect?(els: Element[]): void; view?(): (() => void) | null; changed?(): (el: Element) => void }) {
     this.snapshot = options.snapshot;
     this.restore = options.restore;
     this.onChange = options.onChange;
     this.selected = options.selected ?? (() => null);
     this.reselect = options.reselect ?? (() => {});
     this.view = options.view ?? (() => null);
+    this.changed = options.changed ?? (() => () => {});
   }
 
   get canUndo(): boolean {
@@ -153,8 +158,8 @@ export class History {
     } finally {
       const after = then();
       if (entries.length > at) {
-        entries.splice(at, 0, { label, undo: () => put(before), redo: () => {} });
-        entries.push({ label, undo: () => {}, redo: () => put(after) });
+        entries.splice(at, 0, { label, undo: () => put(before), redo: () => {}, ...(before != null && { selects: 'undo' as const }) });
+        entries.push({ label, undo: () => {}, redo: () => put(after), ...(after != null && { selects: 'redo' as const }) });
       }
     }
   }
@@ -170,8 +175,8 @@ export class History {
     return () => {
       if (entries.length === at) return;
       const after = take();
-      entries.splice(at, 0, { label: 'select', undo: () => before?.(), redo: () => {} });
-      entries.push({ label: 'select', undo: () => {}, redo: () => after?.() });
+      entries.splice(at, 0, { label: 'select', undo: () => before?.(), redo: () => {}, ...(before && { selects: 'undo' as const }) });
+      entries.push({ label: 'select', undo: () => {}, redo: () => after?.(), ...(after && { selects: 'redo' as const }) });
     };
   }
 
@@ -196,6 +201,7 @@ export class History {
       label,
       undo: () => this.put(host, state.before),
       redo: () => this.put(host, state.after),
+      els: [host],
     };
     this.typing = { host, state, entry, at };
     this.known.set(host, before);
@@ -251,17 +257,26 @@ export class History {
       if (!entry) return;
       this.typing = null;
       this.busy = true;
+      const select = this.changed();
       try {
         await entry[way]();
       } finally {
         this.busy = false;
       }
+      const els = this.touched(entry, way);
+      if (els?.length === 1) select(els[0]);
       to.push(entry);
       this.onChange();
     });
     // a failed step does not stop the steps after it, and its error is passed to its caller
     this.queue = run.catch(() => {});
     return run;
+  }
+
+  // the elements that entry changes, or null when one of its parts puts a selection back at the step
+  private touched(entry: Entry, way: 'undo' | 'redo'): Element[] | null {
+    const parts = this.parts.get(entry) ?? [entry];
+    return parts.some((p) => p.selects === way) ? null : [...new Set(parts.flatMap((p) => p.els ?? []))];
   }
 
   // the changes made in fn are added to entry, a transaction, while it is the last entry, e.g. the

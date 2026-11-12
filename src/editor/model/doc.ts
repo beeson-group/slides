@@ -219,6 +219,7 @@ export class Doc {
       label,
       undo: () => [...writes].reverse().forEach((w) => this.applyTag(w.el, w.back)),
       redo: () => writes.forEach((w) => this.applyTag(w.el, w.e)),
+      els: [el],
     });
   }
 
@@ -362,7 +363,7 @@ export class Doc {
       this.host.changed();
     };
     await put(content);
-    this.host.record({ label, undo: () => put(before), redo: () => put(content) });
+    this.host.record({ label, undo: () => put(before), redo: () => put(content), els: [block] });
   }
 
   // takes el off the page, with the text of its unit. its unit is then left out of the file

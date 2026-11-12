@@ -206,6 +206,7 @@ export class App {
         const live = els.filter((el) => el.isConnected);
         if (live.length) this.selection.set('elements', live);
       },
+      changed: () => this.selection?.changed() ?? (() => {}),
       view: () => {
         const slide = this.current();
         return slide ? () => void (slide.isConnected && this.showSlide(slide)) : null;

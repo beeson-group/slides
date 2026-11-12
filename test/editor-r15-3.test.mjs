@@ -260,29 +260,32 @@ const distributeOn = async (page) => {
   return page.evaluate(`${js(DISTRIBUTE)}.map((id) => [window.BeesonEditor.state(id).enabled, !document.querySelector('${PANEL} [data-command="' + id + '"]')?.disabled])`);
 };
 
-// finding qwen3 73 of round 6: with one selected object, the three Distribute commands were enabled
-// and moved it, where Keynote dims Distribute for fewer than three objects
+// ruling 4 of the juror of round 6: with one selected object the pane reads Align to Slide, and
+// Distribute acts on the object against the slide, as in PowerPoint. a group alone is one object
 for (const platform of PLATFORMS) {
-  test(`Distribute is dimmed for one selected object, a group among them, and acts on three (${platform})`, async (t) => {
+  test(`Distribute is enabled for one selected object, and centers a group alone on the slide as one object (${platform})`, async (t) => {
     const page = await load(t, platform, FIGURES);
-    const off = DISTRIBUTE.map(() => [false, false]);
+    const on = DISTRIBUTE.map(() => [true, true]);
     await click(page, 'section.present figure img.for-light');
     await frames(page);
     assert.equal(await page.evaluate('window.BeesonEditor.selection().length'), 1);
-    assert.deepEqual(await distributeOn(page), off, 'Distribute is enabled for one figure');
-    for (const id of DISTRIBUTE) await exec(page, id);
-    await byteExact(page);
+    assert.deepEqual(await distributeOn(page), on, 'Distribute is dimmed for one figure');
     await groupAndSelect(page, platform);
-    // the group alone is one object
     await click(page, 'section.present > ul > li');
     await click(page, 'section.present figure img.for-light');
     await frames(page);
     assert.equal(await page.evaluate('window.BeesonEditor.selection().length'), 2);
-    assert.deepEqual(await distributeOn(page), off, 'Distribute is enabled for one group');
-    await click(page, 'section.present h2', { modifiers: 'Shift' });
-    await click(page, 'section.present > ul > li', { modifiers: 'Shift' });
-    await frames(page);
-    assert.deepEqual(await distributeOn(page), DISTRIBUTE.map(() => [true, true]), 'Distribute is dimmed for three objects');
+    assert.deepEqual(await distributeOn(page), on, 'Distribute is dimmed for one group');
+    const was = await page.evaluate(OBJECTS);
+    const grouped = await render(page);
+    await exec(page, 'arrange.distribute.vertical');
+    const now = await page.evaluate(OBJECTS);
+    const dy = now.p.top - was.p.top;
+    assert.ok(Math.abs(dy) > 1 && near(now.f.top - was.f.top, dy), `the members of the group are moved by ${dy} and ${now.f.top - was.f.top}`);
+    assert.ok(near((now.group.top + now.group.bottom) / 2, 540, 1.5), `the group is not centered on the slide: ${js(now.group)}`);
+    assert.ok(near(now.p.left, was.p.left) && near(now.f.left, was.f.left), 'Distribute Vertically moves the group along x');
+    await undo(page);
+    assert.equal(await render(page), grouped, 'an undo of Distribute does not give the file back');
     assert.deepEqual(errors(page), []);
   });
 }

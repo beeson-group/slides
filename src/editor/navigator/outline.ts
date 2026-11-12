@@ -9,7 +9,7 @@
 // the caret, which shows its TeX to be edited
 
 import type { App } from '../app.ts';
-import { canIndent, canOutdent, canSplit, indent, offsetIn, outdent, ownTex, selectIn, setOwnTex, split } from '../text/blocks.ts';
+import { besideBlock, canIndent, canOutdent, canSplit, indent, joinBackward, joinKind, offsetIn, outdent, ownTex, selectIn, setOwnTex, split } from '../text/blocks.ts';
 import { holdTyping } from '../commands/edit.ts';
 import { hasTex, typeset, untypeset } from '../typeset.ts';
 import { demote, promote } from './promote.ts';
@@ -45,6 +45,10 @@ const OTHER: [string, string][] = [['div.math', 'Formula'], ['table', 'Table'], 
 
 type Kind = 'title' | 'para' | 'item' | 'other';
 type Entry = { slide: Element; el: Element; kind: Kind; text: HTMLElement; shown: string };
+
+// the line of a locked block, or of a block inside a locked element, is read only, as the block is
+// on the slide: its text is selected and copied, and nothing changes it
+const lockedLine = (e: Entry) => !!e.el.closest('[data-locked]');
 
 function plain(html: string): boolean {
   const div = document.createElement('div');
@@ -120,6 +124,13 @@ export class Outline {
       },
       step: (run) => this.step(focused()!, run),
     });
+    for (const type of ['beforeinput', 'cut', 'paste', 'drop']) this.el.addEventListener(type, (ev) => {
+      const t = this.entries.find((e) => e.text.contains(ev.target as Node));
+      if (!t || !lockedLine(t)) return;
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+    }, true);
+    app.commands.veto((_, c) => /^(edit\.(cut|paste|pasteAndMatchStyle)|element\.delete)$/.test(c.id) && !!focused() && lockedLine(focused()!));
     this.el.addEventListener('focusout', (ev) => {
       const t = ev.target instanceof HTMLElement ? this.entries.find((e) => e.text === ev.target) : null;
       if (t && !this.busy) void this.commit(t).then(() => {
@@ -265,6 +276,7 @@ export class Outline {
       text.setAttribute('role', 'textbox');
       text.setAttribute('aria-label', kind === 'title' ? 'Slide title' : kind === 'item' ? 'List item' : 'Paragraph');
       text.dataset.prompt = kind === 'title' ? 'Title' : 'Text';
+      if (el.closest('[data-locked]')) text.setAttribute('aria-readonly', 'true');
     } else {
       row.classList.add('dim');
       const name = OTHER.find(([s]) => el.matches(s))?.[1];
@@ -287,6 +299,8 @@ export class Outline {
     if (e.text.contentEditable !== 'true' || !e.el.isConnected) return;
     const html = fieldHtml(e.text);
     if (html === e.shown) return;
+    // a text that reached a locked line anyway, e.g. from an input method, is taken back
+    if (lockedLine(e)) return void (e.text.innerHTML = e.shown);
     e.shown = html;
     await setOwnTex(this.app, e.el, html);
   }
@@ -307,7 +321,8 @@ export class Outline {
       return;
     }
     ev.stopImmediatePropagation();
-    if (ev.key === 'Escape') {
+    if (lockedLine(e) && ['Enter', 'Tab', 'Backspace'].includes(ev.key)) ev.preventDefault();
+    else if (ev.key === 'Escape') {
       ev.preventDefault();
       e.text.blur();
     } else if (ev.key === 'Enter' && !ev.shiftKey) {
@@ -316,12 +331,21 @@ export class Outline {
     } else if (ev.key === 'Tab') {
       ev.preventDefault();
       void this.act(e, ev.shiftKey ? 'outdent' : 'indent').catch((err) => this.app.fail(err));
+    } else if (ev.key === 'Backspace' && e.kind !== 'title' && this.atStart(e)) {
+      ev.preventDefault();
+      void this.act(e, 'join').catch((err) => this.app.fail(err));
     }
   }
 
-  // Return, Tab, or Shift+Tab in a field: its text is written, the caret is put at the same place
-  // of the block on the slide, and the command of the canvas is run there
-  private async act(e: Entry, what: 'return' | 'indent' | 'outdent'): Promise<void> {
+  // the caret is collapsed at the start of the field of e
+  private atStart(e: Entry): boolean {
+    const sel = window.getSelection();
+    return !!sel?.rangeCount && sel.isCollapsed && e.text.contains(sel.anchorNode) && offsetIn(e.text, sel.anchorNode!, sel.anchorOffset) === 0;
+  }
+
+  // Return, Tab, Shift+Tab, or Backspace at the start of a field: its text is written, the caret is
+  // put at the same place of the block on the slide, and the command of the canvas is run there
+  private async act(e: Entry, what: 'return' | 'indent' | 'outdent' | 'join'): Promise<void> {
     if (this.busy) return;
     this.busy = true;
     try {
@@ -347,6 +371,18 @@ export class Outline {
       selectIn(e.el, math || at === null ? end : at);
       // one entry of the history with the label of the command of the canvas
       const run = (id: string, fn: (app: App) => Promise<void>) => this.app.history.transact(this.app.commands.label(id), () => fn(this.app));
+      // Backspace joins two paragraphs or items of one text, as in the outline of Keynote, and
+      // does nothing at the start of a text or next to a locked block
+      if (what === 'join') {
+        selectIn(e.el, 0);
+        const before = besideBlock(this.app, e.el, false);
+        const prev = this.entries[k - 1];
+        if (joinKind(this.app) !== 'join' || !before || before.closest('[data-locked]') || !prev) return this.done(() => this.entries[k]?.text ?? null, 0);
+        const len = (prev.text.dataset.tex ?? prev.text.textContent ?? '').length;
+        await run('text.joinBackward', joinBackward);
+        this.done(() => this.entries[k - 1]?.text ?? null, len);
+        return;
+      }
       if (what === 'return' && canSplit(this.app)) await run('text.newParagraph', split);
       else if (what === 'indent' && canIndent(this.app)) await run('text.indent', indent);
       else if (what === 'outdent' && canOutdent(this.app)) await run('text.outdent', outdent);

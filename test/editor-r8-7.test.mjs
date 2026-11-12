@@ -205,12 +205,13 @@ for (const platform of PLATFORMS) {
           const back = await boxIn(page, FRAME);
           assert.ok(near(back.left, frame.left) && near(back.top, frame.top), `an undo of Align ${side} of ${where} leaves the frame at ${show(back)}`);
         }
-        // Distribute is dimmed for one figure, as in Keynote
         for (const axis of ['horizontal', 'vertical']) {
-          const before = await render(page);
-          assert.equal(await page.evaluate(`window.BeesonEditor.state('arrange.distribute.${axis}').enabled`), false, `Distribute ${axis} of ${where} is enabled`);
           await exec(page, `arrange.distribute.${axis}`);
-          assert.equal(await render(page), before, `Distribute ${axis} of ${where} changes the file`);
+          await frames(page);
+          const now = await boxIn(page, FRAME);
+          const [at, to] = axis === 'horizontal' ? [cx(now), SLIDE.width / 2] : [cy(now), SLIDE.height / 2];
+          assert.ok(near(at, to), `Distribute ${axis} of ${where} puts its frame at ${show(now)}`);
+          await roundTrip(page, await render(page));
         }
         await typeField(page, 'x', 100);
         await typeField(page, 'y', 140);

@@ -146,10 +146,11 @@ function align(app: App, side: Side): void {
 // the objects spaced evenly along an axis in the order of their start, as in Keynote: the first and
 // the last of them are kept in place, or put at the edges of the slide with Align to Slide, and the
 // gaps between them are made equal. objects that do not fit between the two have their centers
-// spaced evenly instead, and each is kept inside the span of the selection
+// spaced evenly instead, and each is kept inside the span of the selection. one object is spaced
+// evenly across the slide, i.e. centered on it, since PowerPoint distributes one object on the slide
 function distribute(app: App, axis: 'x' | 'y'): void {
   const items = objects(app);
-  if (items.length < 2) return;
+  if (!items.length) return;
   const start = (b: Box) => (axis === 'x' ? b.left : b.top);
   const size = (b: Box) => (axis === 'x' ? b.width : b.height);
   items.sort((a, b) => start(a.b) - start(b.b) || size(a.b) - size(b.b));
@@ -159,9 +160,9 @@ function distribute(app: App, axis: 'x' | 'y'): void {
   const lo = start(ref), hi = lo + size(ref);
   const first = items[0].b, last = items[n - 1].b;
   const f = toSlide ? lo : start(first), z = toSlide ? hi - size(last) : start(last);
-  const to = new Map<Box, number>([[first, f], [last, z]]);
+  const to = new Map<Box, number>(n === 1 ? [[first, lo + (size(ref) - size(first)) / 2]] : [[first, f], [last, z]]);
   const inner = items.slice(1, -1).map((i) => i.b);
-  const gap = (z - f - size(first) - inner.reduce((s, b) => s + size(b), 0)) / (n - 1);
+  const gap = n === 1 ? 0 : (z - f - size(first) - inner.reduce((s, b) => s + size(b), 0)) / (n - 1);
   const c0 = f + size(first) / 2, c1 = z + size(last) / 2;
   let at = f + size(first) + gap;
   inner.forEach((b, k) => {
@@ -176,10 +177,11 @@ function distribute(app: App, axis: 'x' | 'y'): void {
   shift(app, `distribute ${axis === 'x' ? 'horizontally' : 'vertically'}`, moves);
 }
 
-// Distribute is dimmed for one object, as in Keynote, and for two within their own span
+// Distribute acts on one object, which is aligned to the slide, and is dimmed for two objects within
+// their own span
 const canDistribute = (app: App) => {
   const n = objects(app).length;
-  return n >= 3 || (reference === 'slide' && n === 2);
+  return n === 1 || n >= 3 || (reference === 'slide' && n === 2);
 };
 
 // whether the width of every target is written by the editor, by the scope rule, and whether its
