@@ -31,10 +31,7 @@ Object.assign(GLYPHS, {
 const shared = (values: number[]): number | null => (values.length && values.every((v) => Math.round(v) === Math.round(values[0])) ? values[0] : null);
 
 // a flip is offered for a shown image only, hence the row is hidden at each sync while the mode of
-// the slide or an undo hides the image of a kept pane. a flip of the mode does not sync the Format
-// tab, thus the row of the shown pane follows the attribute data-theme of the page itself
-let flips: Control | null = null;
-let observed = false;
+// the slide or an undo hides the image of a kept pane
 function flipRow(app: App, run: Run): Control {
   const r = row([
     button(app, run, { command: 'arrange.flipHorizontal', icon: 'flip-h', text: 'Flip Horizontal' }),
@@ -45,12 +42,7 @@ function flipRow(app: App, run: Run): Control {
     r.sync();
   };
   sync();
-  flips = { el: r.el, sync };
-  if (!observed) {
-    observed = true;
-    new MutationObserver(() => flips?.el.isConnected && flips.sync()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-  }
-  return flips;
+  return { el: r.el, sync };
 }
 
 export function arrangePane(app: App, run: Run): Control[] {
