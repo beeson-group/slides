@@ -84,9 +84,9 @@ async function checkEdit(page, before, name) {
 }
 
 for (const platform of PLATFORMS) {
-  // table-over-list. by R20.12, a table without a free place is put inside the margins and off the
-  // figure, at the place with the fewest words under it, which editor-r15-10 pins
-  test(`a new table on a slide without a free place of its size is put inside the margins off the figure, and a second table off the first (${platform})`, async (t) => {
+  // table-over-list. by R15.10, a table without a free place is put inside the margins at the
+  // middle of the slide, where it may cover words, and off the figure
+  test(`a new table on a slide without a free place of its size is put at the middle of the slide off the figure, and a second table off the first (${platform})`, async (t) => {
     const page = await load(t, platform, { n: FIGURES });
     const before = await render(page);
     await click(page, '.reveal section.present ul > li:last-child');
@@ -97,6 +97,7 @@ for (const platform of PLATFORMS) {
     const [table] = await boxes(page, ':scope > table');
     assert.ok(table, 'no table was inserted');
     assert.ok(table.left >= 119 && table.top >= -1 && table.right <= 1801 && table.bottom <= 1081, `the table at ${js(table)} is not inside the margins of the slide`);
+    assert.ok(Math.abs((table.top + table.bottom) / 2 - 540) <= 1, `the table at ${js(table)} is not at the middle of the slide`);
     assert.equal(area(table, figure), 0, `the table at ${js(table)} lies over the figure at ${js(figure)}`);
     await checkEdit(page, before, `r13-4-table-${platform}.html`);
     await exec(page, 'insert.table', { rows: 3, columns: 3 });

@@ -317,10 +317,9 @@ async function insertTableOn(page, columns, rows) {
 // the center of the slide over the content, which it hides as a table with fills does
 const TABLES = [
   // slide, columns, rows, whether the slide has free space for the table with its bars, and the
-  // what a table with its bars meets on a slide without free space where it is known. by R20.12,
-  // the table of state 93 is put off the figure at the place that covers the least words, i.e.
-  // beside the last list item and the caption, with the room of its bars over the edge of the zone
-  [4, 3, 3, false, 'the slide with the figure, as in state 93', ['li:You should give black-on', 'figcaption:Zero-velocity curves at ', 'figure.zone beeson-movable', 'img.for-light']],
+  // texts under a table on a slide without free space where they are known. by R15.10, the table
+  // of state 93 is put at the middle of the slide off the figure, over the first two list items
+  [4, 3, 3, false, 'the slide with the figure, as in state 93', ['li:Dark and light mode: exp', 'li:You might have noticed a']],
   [4, 4, 6, false, 'the slide with the figure, as in shot 10 of the opus report'],
   [8, 3, 3, false, 'the slide with the surface, as in shot 11 of the opus report'],
   [5, 3, 3, true, 'the slide with the code box'],

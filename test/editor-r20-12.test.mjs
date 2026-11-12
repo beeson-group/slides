@@ -253,24 +253,23 @@ const PIECES = `(() => {
   return { tables, figures, lines };
 })()`;
 
-// O1: a new table without a free place was put at the place off the figures nearest to the center
-// of the slide, which on slide 5 covers about seven times more words than the least covered place
+// O1: a new table without a free place is put at the place off the figures nearest to the middle
+// of the slide, as the juror of round 6 ruled (finding 64 of glm in round 9)
 for (const platform of PLATFORMS) {
-  test(`a new table without a free place is put where it covers the least words (${platform})`, async (t) => {
+  test(`a new table without a free place is put at the middle of the slide, off the figure and the first table (${platform})`, async (t) => {
     const page = await load(t, platform, DECK, 4);
     const base = await render(page);
     await exec(page, 'insert.table', { rows: 3, columns: 3 });
     await sleep(300);
     await exec(page, 'insert.table', { rows: 3, columns: 3 });
     await sleep(300);
-    const { tables, figures, lines } = await page.evaluate(PIECES);
+    const { tables, figures } = await page.evaluate(PIECES);
     assert.equal(tables.length, 2);
     assert.ok(!meets(tables[0], tables[1]), `the tables lie over each other: ${js(tables)}`);
     for (const [i, b] of tables.entries()) {
       for (const f of figures) assert.ok(!meets(b, f), `table ${i + 1} ${js(b)} lies over the figure ${js(f)}`);
-      const words = lines.reduce((c, l) => c + area(b, l), 0);
-      assert.ok(words < 30000, `table ${i + 1} ${js(b)} covers ${Math.round(words)} px2 of words`);
     }
+    assert.ok(Math.abs((tables[0].top + tables[0].bottom) / 2 - 540) <= 1, `table 1 ${js(tables[0])} is not at the middle of the slide`);
     await undo(page);
     await undo(page);
     assert.equal(await render(page), base);
