@@ -606,7 +606,7 @@
     }
     return { s, t, hit: false };
   }
-  function propagate(s0, h, tmax, path, times, stop2, t0 = 0) {
+  function propagate(s0, h, tmax, path, times, stop3, t0 = 0) {
     const s = Float64Array.from(s0);
     let t = 0;
     path.push(s[0], s[1], s[2]);
@@ -615,7 +615,7 @@
       t += step(s, h);
       path.push(s[0], s[1], s[2]);
       times.push(t0 + t);
-      if (stop2 && stop2(s)) break;
+      if (stop3 && stop3(s)) break;
     }
     return s;
   }
@@ -692,7 +692,7 @@
     }
     return x;
   }
-  function lyapunovFamily(n, amplitudes, h, start3 = 3e-3) {
+  function lyapunovFamily(n, amplitudes, h, start4 = 3e-3) {
     const xL = lagrange(n);
     const d1 = Math.abs(xL + MU), d2 = Math.abs(xL - 1 + MU);
     const c2 = (1 - MU) / (d1 * d1 * d1) + MU / (d2 * d2 * d2);
@@ -704,7 +704,7 @@
       return s;
     };
     const sign = n === 1 ? -1 : 1;
-    const lead = ramp(start3, amplitudes[0], 1.2);
+    const lead = ramp(start4, amplitudes[0], 1.2);
     const values = lead.concat(amplitudes).map((A) => xL + sign * A);
     return family(guess, 0, values, [4], [3], h, () => 0.3, () => 6, lead.length);
   }
@@ -1895,14 +1895,14 @@
     }
     return lo + (tau - times[lo]) / (times[lo + 1] - times[lo]);
   }
-  function loopFrame(t, n, duration, hold, times = null) {
+  function loopFrame(t, n, duration, hold2, times = null) {
     if (n < 2) return 0;
-    const period = passLength(n, duration, times) + hold;
+    const period = passLength(n, duration, times) + hold2;
     const tau = (t % period + period) % period;
     return frameAt(tau, n, duration, times);
   }
-  function loopFade(t, length, hold, fade) {
-    const f = Math.min(fade, length), period = length + hold;
+  function loopFade(t, length, hold2, fade) {
+    const f = Math.min(fade, length), period = length + hold2;
     if (!(f > 0) || !(period > 0) || t < 0) return 1;
     const pass = Math.floor(t / period), tau = t - pass * period;
     const a = pass > 0 && tau < f ? tau / f : 1;
@@ -2129,8 +2129,8 @@
       const names = words(el.dataset.plotTabs);
       this.offered = this.spec.tabs.map((_, i) => i).filter((i) => !names.length || names.includes(this.spec.tabs[i].name));
       if (!this.offered.length) this.offered = [0];
-      const start3 = this.spec.tabs.findIndex((t) => t.name === el.dataset.plotTab);
-      this.tab = start3 >= 0 ? start3 : this.offered[0];
+      const start4 = this.spec.tabs.findIndex((t) => t.name === el.dataset.plotTab);
+      this.tab = start4 >= 0 ? start4 : this.offered[0];
       this.emphasis = new Set(this.spec.tabs.flatMap((t) => t.active?.flat() ?? []));
       this.build();
     }
@@ -2604,14 +2604,14 @@
       this.t0 = performance.now() - this.timeOf(this.u) * 1e3;
       this.pass = 0;
       const tick = (now) => {
-        const t = (now - this.t0) / 1e3, { duration, hold, fade } = this.plot, length = this.length;
-        const pass = length + hold > 0 ? Math.floor(t / (length + hold)) : 0;
+        const t = (now - this.t0) / 1e3, { duration, hold: hold2, fade } = this.plot, length = this.length;
+        const pass = length + hold2 > 0 ? Math.floor(t / (length + hold2)) : 0;
         if (pass !== this.pass) {
           this.pass = pass;
           if (fade > 0) this.holdLast();
         }
-        this.u = loopFrame(t, this.frames, duration, hold, this.plot.tabs[this.tab].times);
-        this.fade = loopFade(t, length, hold, fade);
+        this.u = loopFrame(t, this.frames, duration, hold2, this.plot.tabs[this.tab].times);
+        this.fade = loopFade(t, length, hold2, fade);
         if (this.fade >= 1) this.release();
         this.draw();
         this.raf = requestAnimationFrame(tick);
@@ -2653,13 +2653,15 @@
   function box(viewer) {
     const still3 = document.createElement("div");
     still3.className = viewer.className;
+    still3.classList.add("viewer-still");
     still3.style.cssText = viewer.style.cssText;
+    still3.style.position = getComputedStyle(viewer).position;
     viewer.replaceWith(still3);
     return still3;
   }
   async function still(viewer) {
-    const failed = () => viewer.shadowRoot?.querySelector(".status.error");
-    while (!viewer.renderer && !failed()) await sleep(50);
+    const failed2 = () => viewer.shadowRoot?.querySelector(".status.error");
+    while (!viewer.renderer && !failed2()) await sleep(50);
     if (!viewer.canvas || !viewer.renderer) return null;
     viewer.pause();
     viewer.draw();
@@ -3011,10 +3013,10 @@
     for (let r = 0; r < n; r++) {
       for (let c = 0; c < n; c++) {
         if (!on(r, c)) continue;
-        const start3 = c;
+        const start4 = c;
         while (on(r, c + 1)) c++;
-        const x0 = start3 + QUIET, x1 = c + 1 + QUIET, y = r + QUIET;
-        const tl = on(r - 1, start3) ? 0 : 0.5, tr = on(r - 1, c) ? 0 : 0.5, br = on(r + 1, c) ? 0 : 0.5, bl = on(r + 1, start3) ? 0 : 0.5;
+        const x0 = start4 + QUIET, x1 = c + 1 + QUIET, y = r + QUIET;
+        const tl = on(r - 1, start4) ? 0 : 0.5, tr = on(r - 1, c) ? 0 : 0.5, br = on(r + 1, c) ? 0 : 0.5, bl = on(r + 1, start4) ? 0 : 0.5;
         d += `M${x0 + tl} ${y}H${x1 - tr}${tr ? "a.5 .5 0 0 1 .5 .5" : ""}V${y + 1 - br}${br ? "a.5 .5 0 0 1 -.5 .5" : ""}H${x0 + bl}${bl ? "a.5 .5 0 0 1 -.5 -.5" : ""}V${y + tl}${tl ? "a.5 .5 0 0 1 .5 -.5" : ""}z`;
       }
     }
@@ -3226,16 +3228,16 @@
       }
     }
     const out = [], seen = /* @__PURE__ */ new Set();
-    for (const start3 of links.keys()) {
-      if (seen.has(start3)) continue;
+    for (const start4 of links.keys()) {
+      if (seen.has(start4)) continue;
       const p = [];
-      let cur = start3;
+      let cur = start4;
       while (cur && !seen.has(cur)) {
         seen.add(cur);
         const [x, y] = where.get(cur) ?? [0, 0];
         p.push(x, y);
         const next = links.get(cur)?.find((k) => !seen.has(k));
-        if (!next && close && p.length > 4 && links.get(cur)?.includes(start3)) p.push(p[0], p[1]);
+        if (!next && close && p.length > 4 && links.get(cur)?.includes(start4)) p.push(p[0], p[1]);
         cur = next;
       }
       out.push(p);
@@ -3586,8 +3588,8 @@ void main() {
       this.THREE = THREE;
       this.groove = new THREE.Vector3();
       this.zscale = num3(el.dataset.zscale, fn.zscale);
-      const turn2 = num3(el.dataset.turn, TURN);
-      this.rate = turn2 > 0 ? 2 * Math.PI / turn2 : 0;
+      const turn3 = num3(el.dataset.turn, TURN);
+      this.rate = turn3 > 0 ? 2 * Math.PI / turn3 : 0;
       this.azimuth = num3(el.dataset.azimuth, -60) * Math.PI / 180;
       this.elevation = num3(el.dataset.elevation, 32) * Math.PI / 180;
       this.zoom = num3(el.dataset.zoom, 1);
@@ -4098,8 +4100,8 @@ void main() {
         geometry.setAttribute("end", new THREE.BufferAttribute(new Float32Array(18 * this.capacity), 3).setUsage(THREE.DynamicDrawUsage));
       }
       if (!this.capacity) return;
-      const start3 = geometry.getAttribute("start"), end = geometry.getAttribute("end");
-      const a = start3.array, b = end.array, z = this.shown.level * this.zscale;
+      const start4 = geometry.getAttribute("start"), end = geometry.getAttribute("end");
+      const a = start4.array, b = end.array, z = this.shown.level * this.zscale;
       let k = 0;
       for (const c of curves2) {
         for (let i = 0; i + 3 < c.length; i += 2) {
@@ -4113,7 +4115,7 @@ void main() {
           }
         }
       }
-      for (const attribute of [start3, end]) {
+      for (const attribute of [start4, end]) {
         attribute.clearUpdateRanges();
         attribute.addUpdateRange(0, k);
         attribute.needsUpdate = true;
@@ -4306,7 +4308,7 @@ void main() {
   var words2 = (s) => (s ?? "").split(/\s+/).filter(Boolean);
   var hasContent = (f) => f.children.length > 0 || (f.textContent ?? "").trim() !== "";
   var isCopy = (f) => f.matches("pre > code.fragment");
-  var holdsVideo = (f) => f.matches("video") || !!f.querySelector("video");
+  var holdsVideo = (f) => f.matches("video, tycho-viewer") || !!f.querySelector("video, tycho-viewer");
   function addRestoreSteps(root2) {
     for (const slide of root2.querySelectorAll(".reveal .slides section")) {
       if (slide.querySelector("section, .fragment[data-restore], .fragment[data-final]")) continue;
@@ -4611,6 +4613,88 @@ void main() {
     sync();
   }
 
+  // src/viewers.ts
+  var running2 = /* @__PURE__ */ new WeakSet();
+  var turns2 = /* @__PURE__ */ new WeakMap();
+  var turn2 = 0;
+  var loads = /* @__PURE__ */ new WeakMap();
+  var sleep3 = (ms) => new Promise((done) => setTimeout(done, ms));
+  var loaded = (v) => (v.state ?? null) !== null;
+  var failed = (v) => !!v.shadowRoot?.querySelector(".status.error");
+  function whenLoaded(v) {
+    let load2 = loads.get(v);
+    if (!load2) {
+      const until = performance.now() + 6e4;
+      load2 = new Promise((done) => {
+        const poll = () => loaded(v) || failed(v) || performance.now() > until ? done() : setTimeout(poll, 50);
+        poll();
+      });
+      loads.set(v, load2);
+    }
+    return load2;
+  }
+  var plays2 = (v, slide) => {
+    const step2 = v.closest(".fragment.play");
+    return !!step2 && slide.contains(step2);
+  };
+  function hold(v) {
+    if (loaded(v)) v.seek(0);
+  }
+  async function start2(viewers) {
+    const mine = ++turn2;
+    for (const v of viewers) {
+      running2.add(v);
+      turns2.set(v, mine);
+    }
+    const waiting2 = viewers.filter((v) => !loaded(v));
+    if (waiting2.length) {
+      for (const v of viewers) hold(v);
+      await Promise.race([Promise.all(waiting2.map(whenLoaded)), sleep3(5e3)]);
+    }
+    const current = viewers.filter((v) => turns2.get(v) === mine && running2.has(v) && loaded(v));
+    for (const v of current) v.seek(0);
+    for (const v of current) v.play();
+  }
+  function stop2(v) {
+    running2.delete(v);
+    turns2.delete(v);
+    hold(v);
+  }
+  function stepViewers(slide) {
+    const starts2 = [];
+    for (const v of slide.querySelectorAll("tycho-viewer")) {
+      if (!plays2(v, slide)) continue;
+      if (stepShown(v, slide)) {
+        if (!running2.has(v)) starts2.push(v);
+      } else stop2(v);
+    }
+    if (starts2.length) void start2(starts2);
+  }
+  function leave2(slide) {
+    for (const v of slide.querySelectorAll("tycho-viewer")) if (plays2(v, slide)) stop2(v);
+  }
+  function initViewers(deck) {
+    for (const v of document.querySelectorAll(".reveal .slides tycho-viewer")) {
+      const slide = v.closest("section");
+      if (!slide || !plays2(v, slide)) continue;
+      void whenLoaded(v).then(() => {
+        if (!running2.has(v)) hold(v);
+      });
+    }
+    const sync = () => {
+      const slide = deck.getCurrentSlide();
+      if (slide) stepViewers(slide);
+    };
+    deck.on("slidechanged", (event) => {
+      const previous = event.previousSlide;
+      if (previous && previous !== deck.getCurrentSlide()) leave2(previous);
+      sync();
+    });
+    deck.on("fragmentshown", sync);
+    deck.on("fragmenthidden", sync);
+    sync();
+  }
+
   // src/main.ts
   function numberOf(slide) {
     if (slide?.dataset.appendix) return [`A${slide.dataset.appendix}`, "", ""];
@@ -4729,7 +4813,7 @@ void main() {
     }
     applyAll(document);
   }
-  async function start2(options = {}) {
+  async function start3(options = {}) {
     const deck = window.Reveal;
     const plugins = [...options.plugins ?? []];
     if (window.RevealNotes && !plugins.includes(window.RevealNotes)) plugins.push(window.RevealNotes);
@@ -4765,7 +4849,10 @@ void main() {
       initFullscreen();
       initScrub(deck);
     }
-    if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) initVideos(deck);
+    if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) {
+      initVideos(deck);
+      initViewers(deck);
+    }
     if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: "E", description: "Edit the deck" }, (ev) => {
       if (forDeck(ev)) edit();
     });
@@ -4836,7 +4923,7 @@ void main() {
     document.head.append(script2);
   }
   var Beeson = {
-    start: start2,
+    start: start3,
     theme: { get, set: (theme) => set(theme), toggle: () => toggle() },
     backdrops,
     surfaces,

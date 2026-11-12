@@ -156,6 +156,18 @@ test('a video is started on the click of its step, and two videos of one step to
   assert.deepEqual([clips(7), clips(8)], [[a], [b]], 'the second clip is shown in place of the first');
 });
 
+// a tycho viewer of the style play is in the image of each step of its slide, as the still of its
+// first frame, since a scene is not a video of PowerPoint. The stills themselves are checked in the
+// print view, in test/viewers.test.mjs
+test('a tycho viewer of the style play is exported as its still on every step of its slide', () => {
+  const parts = exportDeck('test/pages/viewer-play.html');
+  assertPackage(parts);
+  assert.equal(slideCount(parts), 10);
+  const slides = Array.from({ length: 10 }, (_, n) => text(parts, `ppt/slides/slide${n + 1}.xml`));
+  assert.deepEqual(slides.map((slide) => slide.match(/name="Step /g)?.length ?? 0), Array(10).fill(1));
+  assert.ok(![...parts.keys()].some((name) => name.endsWith('.mp4')));
+});
+
 test('the demo deck is exported with a step for each page of its PDF', () => {
   const parts = exportDeck('index.html');
   assertPackage(parts);

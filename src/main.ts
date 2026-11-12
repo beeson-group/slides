@@ -1,6 +1,6 @@
 // the entry point of beeson.js. window.Beeson.start() is called in a deck to initialize reveal.js
 // with the defaults of the theme, and to start the orbit backdrops, the surfaces, the plots, the QR
-// codes, the fragment steps, the videos, the mode switch, and the pointer
+// codes, the fragment steps, the videos and the tycho viewers at their steps, the mode switch, and the pointer
 
 import { Orbits, mount } from './orbits.ts';
 import { initChrome } from './chrome.ts';
@@ -16,6 +16,7 @@ import { register } from './strands.ts';
 import { addRestoreSteps, applyAll, applySteps, initSteps, typeset } from './steps.ts';
 import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.ts';
 import { coverAll, initVideos } from './video.ts';
+import { initViewers } from './viewers.ts';
 import type { RevealOptions, SlideEvent } from './reveal.d.ts';
 
 // the number of a slide out of the numbered slides. a slide with data-visibility="uncounted", e.g. a
@@ -179,8 +180,12 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   deck.registerKeyboardShortcut('F', 'Full screen on and off');
   // the print view is not shown on a screen, and the editor keeps the bottom of the window
   if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) { initFullscreen(); initScrub(deck); }
-  // the videos are played at their steps, and not while the deck is edited, when every step is shown
-  if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) initVideos(deck);
+  // the videos and the viewers of the style play are played at their steps, and not while the deck is
+  // edited, when every step is shown
+  if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) {
+    initVideos(deck);
+    initViewers(deck);
+  }
   // E opens the same slide in the editor, and the other parameters of the address are kept
   if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: 'E', description: 'Edit the deck' }, (ev) => { if (forDeck(ev)) edit(); });
 
