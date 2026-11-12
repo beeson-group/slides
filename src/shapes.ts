@@ -39,8 +39,9 @@ export function shapePath(kind: string, w: number, h: number, s: number): string
       // than half of a half, so that a short brace is the tall one drawn lower, with a tight cusp
       const W = r - l, xs = l + 0.508 * W, k = Math.min(1, 0.5 * (cy - t) / ((HOOK[3] + CUSP[3]) * W)) || 0, y1 = t + k * HOOK[3] * W, y2 = cy - k * CUSP[3] * W;
       // the miter of the cusp reaches i / sin a past its vertex, where a is the angle of the curves
-      // to the level, and a miter longer than the default limit 4 of svg is drawn as a bevel
-      const miter = Math.hypot(1, CUSP[0][0] / (k * CUSP[0][1])), xc = miter <= 4 ? w - i * miter : r;
+      // to the level. a miter longer than the default limit 4 of svg is drawn as a bevel, which
+      // reaches i sin a past the vertex
+      const miter = Math.hypot(1, CUSP[0][0] / (k * CUSP[0][1])), xc = w - i * (miter <= 4 ? miter : 1 / miter);
       const half = [[l + HOOK[1] * W * HOOK[0][0], t + k * HOOK[1] * W * HOOK[0][1]], [xs, y1 - k * HOOK[2] * W], [xs, y1], [xs, y2], [xs, y2 + k * CUSP[2] * W], [xc - CUSP[1] * W * CUSP[0][0], cy - k * CUSP[1] * W * CUSP[0][1]]];
       const low = half.map(([x, y]) => [x, 2 * cy - y]);
       return path(['M', l, t, 'C', ...half[0], ...half[1], ...half[2], 'L', ...half[3], 'C', ...half[4], ...half[5], xc, cy,

@@ -27,7 +27,8 @@ test('the path of each geometry is drawn inside its box, inset by half the outli
   for (const kind of DRAWN) {
     const p = points(shapePath(kind, 300, 120, 6));
     assert.ok(p.length >= 3, kind);
-    for (const [x, y] of p) assert.ok(x >= 3 - 1e-9 && x <= 297 + 1e-9 && y >= 3 - 1e-9 && y <= 117 + 1e-9, `${kind}: ${x} ${y}`);
+    // the vertex of the cusp of a short brace, whose miter is cut to a bevel, is nearer to the edge
+    for (const [x, y] of p) assert.ok(x >= 3 - 1e-9 && (x <= 297 + 1e-9 || (kind === 'brace' && y === 60 && x < 300)) && y >= 3 - 1e-9 && y <= 117 + 1e-9, `${kind}: ${x} ${y}`);
   }
   const xs = (d) => points(d).map(([x]) => x);
   assert.equal(Math.min(...xs(shapePath('arrow', 300, 120, 6))), 3);
@@ -83,8 +84,8 @@ test('a brace is the skeleton of the glyph }, with round hooks, S curves into th
     assert.deepEqual(segs[0].ps[0], [1.5, 1.5], size);
     assert.deepEqual(segs.at(-1).ps.at(-1), [1.5, h - 1.5], size);
     // the cusp is the end of a segment at the middle of the right side, drawn in by its miter, or
-    // at the edge of the outline where the miter is cut to a bevel
-    const cusp = segs.findIndex((s) => s.ps.at(-1)[0] >= w - 4 * 1.5 && s.ps.at(-1)[0] <= w - 1.5 && s.ps.at(-1)[1] === h / 2);
+    // by the smaller reach of its bevel where the miter is cut
+    const cusp = segs.findIndex((s) => s.ps.at(-1)[0] >= w - 4 * 1.5 && s.ps.at(-1)[0] < w && s.ps.at(-1)[1] === h / 2);
     assert.ok(cusp > 0, size);
     for (let i = 0; i + 1 < segs.length; i++) {
       const angle = turn(end(segs[i]), start(segs[i + 1]));
@@ -122,7 +123,8 @@ test('a tall brace is extensible, with hooks and a cusp sized by its width, and 
   const shares = (segs) => [segs[0].ps[3][1] - segs[0].ps[0][1], segs[2].ps[3][1] - segs[2].ps[0][1]];
   assert.deepEqual(shares(long).map(Math.round), shares(short).map(Math.round));
   for (const [w, h] of [[160, 240], [300, 60], [40, 40]]) {
-    for (const [x, y] of points(shapePath('brace', w, h, 4))) assert.ok(x >= 2 && x <= w - 2 && y >= 2 && y <= h - 2, `${w} by ${h}: ${x} ${y}`);
+    // the vertex of a cusp that is cut to a bevel is under half of the outline from the edge
+    for (const [x, y] of points(shapePath('brace', w, h, 4))) assert.ok(x >= 2 && (x <= w - 2 || (y === h / 2 && x < w)) && y >= 2 && y <= h - 2, `${w} by ${h}: ${x} ${y}`);
   }
 });
 
