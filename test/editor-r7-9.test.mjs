@@ -115,7 +115,7 @@ const captionFromPicture = (page) => page.evaluate(`(() => {
   const left = r.left + (r.width - w) / 2, bottom = r.top + (r.height + h) / 2;
   const c = document.querySelector(${js(CAPTION)}).getBoundingClientRect();
   const s = document.querySelector('.reveal .slides');
-  return { dx: c.left - left, dy: c.top - bottom, left, bottom, caption: { left: c.left, top: c.top }, k: s.getBoundingClientRect().width / s.offsetWidth };
+  return { dx: c.left - left, dy: c.top - bottom, left, bottom, caption: { left: c.left, top: c.top }, k: s.getBoundingClientRect().width / s.offsetWidth, box: { dx: c.left - r.left, dy: c.top - r.bottom } };
 })()`);
 
 function sameOffset(now, before, what) {
@@ -128,6 +128,13 @@ function sameOffset(now, before, what) {
 function underPicture(now, what) {
   const ok = Math.abs(now.dx) <= 1.5 && Math.abs(now.dy - 16 * now.k) <= 1.5;
   assert.ok(ok, `${what}: the caption is at ${js([now.dx, now.dy])} from the lower left corner of the image, and not under it at the gap of the theme`);
+}
+
+// the caption under the box of an image whose picture object-fit contain draws inside it, e.g.
+// an image of a zone typed to a width, at the gap of 16 slide px of the theme
+function underBox(now, what) {
+  const ok = Math.abs(now.box.dx) <= 1.5 && Math.abs(now.box.dy - 16 * now.k) <= 1.5;
+  assert.ok(ok, `${what}: the caption is at ${js([now.box.dx, now.box.dy])} from the lower left corner of the image box, and not under it at the gap of the theme`);
 }
 
 const gripAt = (page, handle) => page.evaluate(`(() => {
@@ -209,13 +216,13 @@ for (const platform of PLATFORMS) {
 
     await exec(page, 'arrange.setSize', { w: 420 });
     await frames(page);
-    underPicture(await captionFromPicture(page), 'after a width typed in W');
+    underBox(await captionFromPicture(page), 'after a width typed in W');
     await roundTrip(page);
     await reselect(page);
 
     await exec(page, 'arrange.resetPosition');
     await frames(page);
-    underPicture(await captionFromPicture(page), 'after Reset Position');
+    underBox(await captionFromPicture(page), 'after Reset Position');
     await roundTrip(page);
     await reselect(page);
 

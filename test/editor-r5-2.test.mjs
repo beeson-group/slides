@@ -168,7 +168,7 @@ for (const platform of PLATFORMS) {
     const pic = await pictureBox(page, ZONE_IMG);
     assert.ok(near(pic.width, 1000) && near(pic.height, 1200), `the image of width 1000 is drawn at ${Math.round(pic.width)} by ${Math.round(pic.height)}`);
     const edited = await render(page);
-    assert.match(edited, /<img class="for-dark"[^>]* style="width: 1000px"/, 'the width is not written on the image');
+    assert.match(edited, /<img class="for-dark"[^>]* style="object-fit: contain; width: 1000px; height: 1333px"/, 'the box of the image is not written at the ratio of its zone');
     await roundTrip(page, edited);
     assert.deepEqual(errors(page), []);
 

@@ -62,7 +62,8 @@ const rectOf = (page, selector) => page.evaluate(`(() => {
   return r ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom, x: r.left + r.width / 2, y: r.top + r.height / 2 } : null;
 })()`);
 // the picture of the shown image, i.e. the image fitted into its box with object-fit contain, the
-// place of the caption from its lower left corner, in screen px, and the scale k of the slide
+// place of the caption from its lower left corner and from the lower left corner of the box of the
+// image (bx, by), in screen px, and the scale k of the slide
 const pictureOf = (page) => page.evaluate(`(() => {
   const img = [...document.querySelectorAll(${js(IMG)})].find((e) => e.getBoundingClientRect().width);
   const r = img.getBoundingClientRect();
@@ -71,10 +72,12 @@ const pictureOf = (page) => page.evaluate(`(() => {
   const left = r.left + (r.width - w) / 2, top = r.top + (r.height - h) / 2;
   const c = document.querySelector(${js(CAPTION)}).getBoundingClientRect();
   const s = document.querySelector('.reveal .slides');
-  return { left, top, right: left + w, bottom: top + h, x: left + w / 2, y: top + h / 2, dx: c.left - left, dy: c.top - top - h, k: s.getBoundingClientRect().width / s.offsetWidth };
+  return { left, top, right: left + w, bottom: top + h, x: left + w / 2, y: top + h / 2, dx: c.left - left, dy: c.top - top - h, bx: c.left - r.left, by: c.top - r.bottom, k: s.getBoundingClientRect().width / s.offsetWidth };
 })()`);
 // the caption of a picture with a width under it, at the gap of 16 slide px of the theme
 const underPicture = (now) => near(now.dx, 0) && near(now.dy, 16 * now.k);
+// the caption of a picture whose box keeps its letterbox under the box, at the same gap
+const underBox = (now) => near(now.bx, 0) && near(now.by, 16 * now.k);
 const shownFrames = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-frame.selected, .beeson-frame.union')].filter((f) => !f.hidden && f.getBoundingClientRect().width).map((f) => { const r = f.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; })`);
 const shownGrips = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-grip')].filter((g) => !g.hidden && g.getBoundingClientRect().width).length`);
 const tabs = (page) => page.evaluate(`[...document.querySelectorAll('${PANEL} .ed-tabs button')].map((b) => b.textContent)`);
@@ -365,7 +368,7 @@ for (const combo of COMBOS) {
     const sized = (width) => (edited) => {
       const c = changedTags(page.source, edited);
       assert.ok(Object.keys(c).every((id) => [fig, cap, ...imgs].includes(id)), `the resize changes ${js(c)}`);
-      const widths = imgs.map((id) => c[id]?.match(/ style="width: (\d+)px"/)?.[1]);
+      const widths = imgs.map((id) => c[id]?.match(/ style="(?:object-fit: contain; )?width: (\d+)px/)?.[1]);
       assert.ok(widths.every((w) => w && w === widths[0]), `the images are given the widths ${js(widths)}`);
       if (width) assert.equal(Number(widths[0]), width);
     };
@@ -385,7 +388,7 @@ for (const combo of COMBOS) {
     const tall = {};
     const typed = await check(page, 'a typed W', async (from) => {
       await typeField(page, 'width', 300);
-      assert.ok(underPicture(await pictureOf(page)), 'the caption is not kept under the picture');
+      assert.ok(underBox(await pictureOf(page)), 'the caption is not kept under the box of the picture');
       tall[from] = await fieldValue(page, 'height');
     }, sized(300));
     assert.equal(tall.picture, 360);

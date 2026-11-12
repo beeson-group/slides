@@ -130,7 +130,8 @@ for (const platform of PLATFORMS) {
     const h = Math.round(1080 - y - 20);
     await typeField(page, 'height', h);
     const g = await geometry(page);
-    assert.ok(near(g.box, g.aspect, 0.01), `the image box keeps the aspect of the picture: ${js(g)}`);
+    assert.ok(near(g.drawn, g.aspect, 0.01), `the drawn picture keeps its aspect: ${js(g)}`);
+    assert.ok(near(g.box, 0.75, 0.01), `the image box keeps the ratio of the zone of 600 by 800 px: ${js(g)}`);
     const bottom = g.caption.top + g.caption.height;
     assert.ok(near(bottom - g.picture.top, h, 3), `the figure is ${bottom - g.picture.top} high against ${h}: ${js(g)}`);
     assert.ok(bottom <= 1080 + 1, `the caption ends at ${bottom}`);

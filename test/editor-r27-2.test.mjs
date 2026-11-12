@@ -113,10 +113,10 @@ for (const platform of PLATFORMS) {
   test(`a typed Height of a figure with a caption reads back as typed, with the aspect of the picture kept (${platform})`, async (t) => {
     const page = await load(t, platform);
     await click(page, `.reveal ${IMG}`);
-    // a width 1 px wider adds 1.2 px to the picture. no whole width gives 820, which lies between
-    // the heights at the widths 587 and 588 px, hence it is read 1 px off. each other height is
-    // given by a whole width, also 600, which the widths 197, 238, 280, and 321 px give
-    for (const [h, off] of [[610, 0], [700, 0], [820, 1], [900, 0], [600, 0]]) {
+    // the box of the picture keeps its letterbox, hence a width 1 px wider adds 1.2 px to the
+    // picture and 0.07 px to the letterbox under it. each height is given by a whole width, also
+    // 820, which the width 517 px gives
+    for (const [h, off] of [[610, 0], [700, 0], [820, 0], [900, 0], [600, 0]]) {
       await typeField(page, 'height', h);
       const read = await fieldValue(page, 'height');
       assert.ok(Math.abs(read - h) <= off, `a typed Height of ${h} reads ${read}`);
@@ -136,11 +136,12 @@ for (const platform of PLATFORMS) {
 
   // the repair of R27.2: the solve stayed on the wrap of the caption where it started, and a height
   // that a whole px of width gives on another wrap read 1 px off, e.g. a typed 750 read 751 at
-  // width 488, where width 529 gives 750
+  // width 488, where width 529 gave 750. the box of the picture keeps its letterbox since R36.2,
+  // which gives each width another height
   test(`a typed Height that a whole px of width gives reads back as typed, also on another wrap of the caption (${platform})`, async (t) => {
     const page = await load(t, platform);
     await click(page, `.reveal ${IMG}`);
-    for (const [h, w] of [[750, 529], [600, 321], [790, 521], [568, 253], [648, 154]]) {
+    for (const [h, w] of [[785, 529], [621, 321], [825, 521], [585, 253], [658, 154]]) {
       await typeField(page, 'width', w);
       assert.equal(await fieldValue(page, 'height'), h, `a typed Width of ${w} does not give ${h}`);
       await undo(page);

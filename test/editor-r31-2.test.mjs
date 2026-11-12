@@ -71,33 +71,41 @@ const size = async (page) => ({ w: await fieldValue(page, 'width'), h: await fie
 
 // the height that the field Height reads at each whole width from 1 to most px of the images of the
 // figure of img: the height of the picture with the height that its caption adds, as the editor
-// measures them, where the picture of an image with object-fit contain is fitted into its box. the
-// widths written in the page are put back
+// measures them, where the picture of an image with object-fit contain is fitted into its box. a
+// picture drawn smaller than its box keeps the ratio of the box, written as a height with
+// object-fit contain, and the letterbox under the picture is added. the first entry tells whether
+// the box is kept. the widths written in the page are put back
 const heightsAt = (page, img, most) => page.evaluate(`(() => {
   const i = document.querySelector(${js(img)});
   const f = i.closest('figure');
   const all = [...f.querySelectorAll('img')];
-  const kept = all.map((o) => o.style.width);
+  const kept = all.map((o) => [o.style.width, o.style.height, o.style.objectFit]);
   const k = Reveal.getScale();
   const fit = getComputedStyle(i).objectFit === 'contain';
-  const out = [null];
+  const s = Math.min(i.offsetWidth / i.naturalWidth, i.offsetHeight / i.naturalHeight);
+  const ratio = fit && (i.offsetWidth - s * i.naturalWidth > 0.5 || i.offsetHeight - s * i.naturalHeight > 0.5) ? i.offsetHeight / i.offsetWidth : 0;
+  const out = [!!ratio];
   for (let w = 1; w <= ${most}; w++) {
-    for (const o of all) o.style.width = w + 'px';
+    for (const o of all) {
+      o.style.width = w + 'px';
+      if (ratio) Object.assign(o.style, { height: Math.round(w * ratio) + 'px', objectFit: 'contain' });
+    }
     const a = i.getBoundingClientRect();
     const boxes = [a, ...[...f.querySelectorAll(':scope > figcaption')].map((c) => c.getBoundingClientRect())];
     const box = Math.max(...boxes.map((b) => b.bottom)) - Math.min(...boxes.map((b) => b.top));
     const picture = fit ? Math.min(i.offsetWidth / i.naturalWidth, i.offsetHeight / i.naturalHeight) * i.naturalHeight : i.offsetHeight;
-    out.push(picture + Math.max(0, box - a.height) / k);
+    out.push(picture + (i.offsetHeight - picture) / 2 + Math.max(0, box - a.height) / k);
   }
-  all.forEach((o, n) => (o.style.width = kept[n]));
+  all.forEach((o, n) => ([o.style.width, o.style.height, o.style.objectFit] = kept[n]));
   return out;
 })()`);
 
-// the nearest height to h that a whole width gives, and the smallest width that gives it
+// the nearest height to h that a whole width gives, and the smallest width that gives it. a kept
+// box may be 2 px higher or lower than its ratio gives, which reaches 1 px either side
 function nearest(map, h) {
   let best = null;
   for (let w = 1; w < map.length; w++) {
-    const d = Math.abs(Math.round(map[w]) - h);
+    const d = Math.max(0, Math.abs(Math.round(map[w]) - h) - (map[0] ? 1 : 0));
     if (!best || d < best.d) best = { w, h: Math.round(map[w]), d };
   }
   return best;
@@ -106,8 +114,8 @@ function nearest(map, h) {
 // the decks of the item, with the slide of the figure, its image, the typed heights, and the width
 // and height that the brief gives where no width gives the typed height
 const FIGURE_CASES = [
-  ['index.html', FIGURES, IMG, [[200, { w: 200, h: 554 }], [422, { w: 200, h: 554 }], [496, { w: 200, h: 554 }], [437], [570]]],
-  [DECK, 0, '.reveal section.present figure img', [[200, { w: 116, h: 403 }], [311], [385], [422]]],
+  ['index.html', FIGURES, IMG, [[200, { w: 159, h: 564 }], [422, { w: 159, h: 564 }], [496, { w: 159, h: 564 }], [437], [570]]],
+  [DECK, 0, '.reveal section.present figure img', [[200, { w: 116, h: 410 }], [311], [385], [422]]],
 ];
 
 for (const platform of PLATFORMS) {

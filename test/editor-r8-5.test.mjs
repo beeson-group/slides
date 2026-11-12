@@ -386,13 +386,16 @@ for (const platform of PLATFORMS) {
           await typeField(page, 'width', 400);
           const edited = await render(page);
           const where = `a width typed for ${NAMES[n]} from the ${from}`;
-          assert.deepEqual(widthsOf(edited, n), new Array(page.parts.images).fill('400'), `${where} is not written on every image`);
+          // a letterboxed picture keeps its box, whose width is written, and W reads 400 below
+          const written = widthsOf(edited, n);
+          assert.ok(written.length === page.parts.images && written.every((w) => w && w === written[0]), `${where} is not written on every image`);
           const sized = await pictureOf(page);
           assert.ok(near(sized.left, pic.left) && near(sized.top, pic.top), `${where} moves the corner of the picture from ${Math.round(pic.left)}, ${Math.round(pic.top)} to ${Math.round(sized.left)}, ${Math.round(sized.top)}`);
-          // the caption of a zone is under its picture at the gap of 16 slide px of the theme, and
-          // the caption of a figure slide stays in its layout
+          // the caption of a zone is under the box of its image at the gap of 16 slide px of the
+          // theme, since the box keeps its letterbox, and the caption of a figure slide stays in
+          // its layout
           const under = await rectOf(page, CAPTION);
-          if (n === ZONE_PAIR || n === ZONE_ONE) assert.ok(near(under.top - (sized.top + sized.height), 16 * sized.k), `${where} leaves the caption away from its picture`);
+          if (n === ZONE_PAIR || n === ZONE_ONE) assert.ok(near(under.top - (await rectOf(page, IMG)).bottom, 16 * sized.k), `${where} leaves the caption away from the box of its picture`);
           else assert.ok(near(under.top, caption.top) && near(under.left, caption.left), `${where} moves the caption of the layout`);
           assert.equal(await fieldValue(page, 'width'), 400);
           // Reset Size keeps the corner as well
