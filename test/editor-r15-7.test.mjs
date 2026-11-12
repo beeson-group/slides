@@ -275,24 +275,25 @@ const ADD = ['Add Row Above', 'Add Row Below', 'Add Column Before', 'Add Column 
 for (const platform of PLATFORMS) {
   const K = KEYS[platform];
 
-  // item 1, the exception: Delete Slide and Duplicate Slide are without a key in every region, and
-  // their keys are listed at Edit > Delete and Edit > Duplicate, which act on the slide in the navigator
-  test(`Delete Slide and Duplicate Slide list no key in any region, and Edit > Delete and Edit > Duplicate list their keys in the navigator (${platform})`, async (t) => {
+  // item 1, the exception: Delete Slide and Duplicate Slide list the keys of Edit > Delete and Edit >
+  // Duplicate only where the keys act on the slide, i.e. in the navigator, and Mod+D also with
+  // nothing selected on the canvas
+  test(`Delete Slide and Duplicate Slide list their keys only where the keys run them, and Edit > Delete and Edit > Duplicate list their keys in the navigator (${platform})`, async (t) => {
     const page = await load(t, platform);
     await click(page, await below(page));
     await settle(page);
-    assert.deepEqual(await itemsIn(page, 'Slide', ['Delete Slide', 'Duplicate Slide']), { 'Delete Slide': { keys: '', dimmed: false }, 'Duplicate Slide': { keys: '', dimmed: false } });
+    assert.deepEqual(await itemsIn(page, 'Slide', ['Delete Slide', 'Duplicate Slide']), { 'Delete Slide': { keys: '', dimmed: false }, 'Duplicate Slide': { keys: K.duplicate, dimmed: false } });
     await click(page, '.reveal .slides > section.present img');
     await settle(page);
     assert.deepEqual(await itemsIn(page, 'Slide', ['Delete Slide', 'Duplicate Slide']), { 'Delete Slide': { keys: '', dimmed: false }, 'Duplicate Slide': { keys: '', dimmed: false } });
     const row = await rect(page, `document.querySelectorAll('.beeson-edit-nav .row')[${FIGURES}]`);
     await click(page, row);
     await settle(page);
-    assert.deepEqual(await itemsIn(page, 'Slide', ['Delete Slide']), { 'Delete Slide': { keys: '', dimmed: false } });
+    assert.deepEqual(await itemsIn(page, 'Slide', ['Delete Slide']), { 'Delete Slide': { keys: K.delete, dimmed: false } });
     assert.deepEqual(await itemsIn(page, 'Edit', ['Delete', 'Duplicate']), { Delete: { keys: K.delete, dimmed: false }, Duplicate: { keys: K.duplicate, dimmed: false } });
     await click(page, row, { button: 'right' });
     await settle(page);
-    assert.deepEqual(await openItems(page, ['Delete Slide']), { 'Delete Slide': { keys: '', dimmed: false } });
+    assert.deepEqual(await openItems(page, ['Delete Slide']), { 'Delete Slide': { keys: K.delete, dimmed: false } });
     await closeMenus(page);
     await click(page, row);
     await press(page, K.press);

@@ -381,7 +381,7 @@ async function menuKeys(page, bar) {
 }
 
 for (const platform of PLATFORMS) {
-  test(`the Slide menu lists Delete Slide and Duplicate Slide without a key, and Mod+D of Edit > Duplicate duplicates the slide, with nothing selected on the canvas (${platform})`, async (t) => {
+  test(`the Slide menu lists Delete Slide without a key and Duplicate Slide with Mod+D, which duplicates the slide, with nothing selected on the canvas (${platform})`, async (t) => {
     const page = await load(t, platform, FIGURES);
     // a click on the pasteboard leaves nothing selected on the canvas
     const c = await canvasBox(page);
@@ -390,7 +390,7 @@ for (const platform of PLATFORMS) {
     const keys = await menuKeys(page, 'Slide');
     const count = () => page.evaluate(`document.querySelectorAll('.reveal .slides > section').length`);
     assert.equal(keys['Delete Slide'], '');
-    assert.equal(keys['Duplicate Slide'], '');
+    assert.equal(keys['Duplicate Slide'], platform === 'mac' ? '⌘D' : 'Ctrl+D');
     // the key of Edit > Delete does not delete the slide while the canvas has the focus
     const before = await count();
     await press(page, platform === 'mac' ? 'Backspace' : 'Delete');

@@ -142,9 +142,9 @@ for (const platform of PLATFORMS) {
     const page = await load(t, platform);
     const mac = platform === 'mac';
     const slide = Object.fromEntries((await barMenu(page, 'Slide')).map((r) => [r.label, r.keys]));
-    // Duplicate Slide and Delete Slide are without a key. ⌘D and ⌫ are the keys of Edit > Duplicate
-    // and Edit > Delete
-    assert.equal(slide['Duplicate Slide'], '');
+    // ⌘D and ⌫ are the keys of Edit > Duplicate and Edit > Delete. with nothing selected on the
+    // canvas, ⌘D duplicates the slide and ⌫ does nothing, hence only Duplicate Slide lists its key
+    assert.equal(slide['Duplicate Slide'], mac ? '⌘D' : 'Ctrl+D');
     assert.equal(slide['Delete Slide'], '');
     assert.equal(slide['Move Slide Up'], mac ? '⌥↑' : 'Alt+Up Arrow');
     assert.equal(slide['Move Slide Down'], mac ? '⌥↓' : 'Alt+Down Arrow');

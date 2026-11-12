@@ -197,10 +197,10 @@ async function keysIn(page, bar, labels) {
 // menus-keys-5: a key is printed beside its item in every focus, as in Keynote and PowerPoint,
 // where the key of an item is fixed. with a figure selected on the canvas, Mod+D and Delete run
 // Edit > Duplicate and Edit > Delete, and in the navigator Edit > Duplicate and Edit > Delete hand
-// their runs to Duplicate Slide and Delete Slide. Duplicate Slide and Delete Slide are without a
-// key, since their keys are the keys of the two items of the Edit menu
+// their runs to Duplicate Slide and Delete Slide. Duplicate Slide and Delete Slide print the keys
+// of the two items of the Edit menu only where the keys run them, i.e. in the navigator
 for (const platform of PLATFORMS) {
-  test(`a key is printed beside its item in every focus, and Duplicate Slide and Delete Slide are without a key (${platform})`, async (t) => {
+  test(`a key is printed beside its item in every focus, and Duplicate Slide and Delete Slide print a key only where it runs them (${platform})`, async (t) => {
     const page = await load(t, platform, { n: 4 });
     const mac = platform === 'mac';
     const dup = mac ? '⌘D' : 'Ctrl+D';
@@ -213,7 +213,7 @@ for (const platform of PLATFORMS) {
     assert.equal(await page.evaluate(`document.querySelectorAll('.reveal .slides > section.present figure').length`), 2, 'Mod+D did not duplicate the figure');
     await click(page, '.beeson-edit-nav .row:nth-child(5)');
     await sleep(100);
-    assert.deepEqual(await keysIn(page, 'Slide', ['Duplicate Slide', 'Delete Slide']), { 'Duplicate Slide': '', 'Delete Slide': '' });
+    assert.deepEqual(await keysIn(page, 'Slide', ['Duplicate Slide', 'Delete Slide']), { 'Duplicate Slide': dup, 'Delete Slide': del });
     assert.deepEqual(await keysIn(page, 'Edit', ['Duplicate', 'Delete']), { Duplicate: dup, Delete: del });
     assert.deepEqual(errors(page), []);
   });

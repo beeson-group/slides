@@ -1,7 +1,7 @@
 // the key of Duplicate Slide of R16.7 on both platforms, with trusted input. Mod+D is the key of
 // Edit > Duplicate, which duplicates the selected figure, and the slide in the navigator and with
-// nothing selected. the Slide menu thus lists Duplicate Slide without a key in every region, as it
-// lists Delete Slide, and the item stays live
+// nothing selected. the Slide menu thus lists Duplicate Slide with the key only where the key runs
+// it, as it lists Delete Slide, and the item stays live
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -102,11 +102,11 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`in the navigator, Mod+D duplicates the slide as Edit > Duplicate, and Duplicate Slide is listed without a key (${platform})`, async (t) => {
+  test(`in the navigator, Mod+D duplicates the slide as Edit > Duplicate, and Duplicate Slide is listed with the key (${platform})`, async (t) => {
     const page = await load(t, platform);
     await click(page, await rect(page, `document.querySelectorAll('.beeson-edit-nav .row')[${FIGURES}]`));
     await settle(page);
-    assert.deepEqual(await itemIn(page, 'Slide', 'Duplicate Slide'), live);
+    assert.deepEqual(await itemIn(page, 'Slide', 'Duplicate Slide'), keyed);
     assert.deepEqual(await itemIn(page, 'Edit', 'Duplicate'), keyed);
     await click(page, await rect(page, `document.querySelectorAll('.beeson-edit-nav .row')[${FIGURES}]`));
     await settle(page);
@@ -119,12 +119,12 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`with nothing selected on the canvas, Mod+D duplicates the slide, and Duplicate Slide is listed without a key (${platform})`, async (t) => {
+  test(`with nothing selected on the canvas, Mod+D duplicates the slide, and Duplicate Slide is listed with the key (${platform})`, async (t) => {
     const page = await load(t, platform);
     await click(page, await below(page));
     await settle(page);
     assert.equal(await page.evaluate('window.BeesonEditor.selection().length'), 0);
-    assert.deepEqual(await itemIn(page, 'Slide', 'Duplicate Slide'), live);
+    assert.deepEqual(await itemIn(page, 'Slide', 'Duplicate Slide'), keyed);
     assert.deepEqual(await itemIn(page, 'Edit', 'Duplicate'), keyed);
     await click(page, await below(page));
     await settle(page);
