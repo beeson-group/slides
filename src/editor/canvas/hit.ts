@@ -96,7 +96,7 @@ function pictureIn(el: Element): { width: number; height: number; dx: number; dy
 }
 
 // the captions that the figure el holds and shows
-const captionEls = (el: Element): HTMLElement[] =>
+export const captionEls = (el: Element): HTMLElement[] =>
   el.matches(CONTAINER) ? [...el.querySelectorAll<HTMLElement>(':scope > figcaption, :scope > .caption')].filter((c) => c.offsetWidth && c.offsetHeight) : [];
 
 // the boxes on the screen of the captions that the figure el holds and shows

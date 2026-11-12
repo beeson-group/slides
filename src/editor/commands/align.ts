@@ -6,7 +6,7 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { CONTAINER, LINE, RESIZABLE, STRETCHED, aspectOf, captionsOf, pictureReach, constrained, cssWidth, frameOf, frameRect, isTextSized, kindOf, movableOf, objectsOf, orientedBox, pictureOf, pictureSize, sizedOf, snapBoxOf, toSlide, unturnedRect } from '../canvas/hit.ts';
+import { CONTAINER, LINE, RESIZABLE, STRETCHED, aspectOf, captionEls, captionsOf, pictureReach, constrained, cssWidth, frameOf, frameRect, isTextSized, kindOf, movableOf, objectsOf, orientedBox, pictureOf, pictureSize, sizedOf, snapBoxOf, toSlide, unturnedRect } from '../canvas/hit.ts';
 import type { Box } from '../canvas/snap.ts';
 import { angleOf, locked, placeOf, record, withCorners, writePlace, type Change, type Place } from '../canvas/drag.ts';
 import { groupFrame, groupReach, turned } from '../canvas/frames.ts';
@@ -487,45 +487,67 @@ export function commands(): Command[] {
               }
               return m;
             };
-            const off = (w: number) => Math.abs(Math.round(at(w).h) - h);
-            // whether width w at the distance d from h is nearer than the width near
-            const nearer = (w: number, d: number) => d < near.d || (d === near.d && (d === 0 ? Math.abs(w - w0) < Math.abs(near.w - w0) || (Math.abs(w - w0) === Math.abs(near.w - w0) && w < near.w) : w < near.w));
-            const near = { w: w0, d: off(w0) };
-            const take = (w: number) => {
-              const d = off(w);
-              if (nearer(w, d)) Object.assign(near, { w, d });
-            };
-            // the least distance from h that a width of a to b can read, with 1% and 1 px to spare
-            // for the slope and the rounding of the picture, and whether a width there can be nearer
-            const bound = (a: number, b: number) => {
-              const lo = (slope / 1.01) * a - 1 + at(b).cap, hi = slope * 1.01 * b + 1 + at(a).cap;
-              return Math.max(0, Math.ceil(lo - 0.5) - h, h - Math.floor(hi + 0.5));
-            };
-            const open = (a: number, b: number) => {
-              const d = bound(a, b);
-              if (d !== near.d) return d < near.d;
-              const w = near.d === 0 ? Math.min(b, Math.max(a, w0)) : a;
-              return nearer(w, d);
-            };
-            const last = Math.max(w0 + 1, Math.ceil((h + near.d + 2) / (slope / 1.01)));
-            const spans: [number, number][] = [[1, w0], [w0, last]];
-            for (const w of [1, last]) take(w);
-            while (spans.length) {
-              const [a, b] = spans.pop()!;
-              if (b - a < 2 || !open(a, b)) continue;
-              const A = at(a), B = at(b);
-              if (Math.abs(A.cap - B.cap) < 0.5) {
-                const w = Math.round(a + ((h - A.h) * (b - a)) / Math.max(0.01, B.h - A.h));
-                for (const v of [w - 1, w, w + 1]) if (v > a && v < b) take(v);
-                continue;
+            // the width from a0 to b0 whose height reads nearest t, with its distance d from t. b0
+            // of 0 is the width at which the picture alone is past t
+            const solve = (t: number, a0: number, b0: number) => {
+              const off = (w: number) => Math.abs(Math.round(at(w).h) - t);
+              // whether width w at the distance d from t is nearer than the width near
+              const nearer = (w: number, d: number) => d < near.d || (d === near.d && (d === 0 ? Math.abs(w - w0) < Math.abs(near.w - w0) || (Math.abs(w - w0) === Math.abs(near.w - w0) && w < near.w) : w < near.w));
+              const near = { w: w0, d: off(w0) };
+              const take = (w: number) => {
+                const d = off(w);
+                if (nearer(w, d)) Object.assign(near, { w, d });
+              };
+              // the least distance from t that a width of a to b can read, with 1% and 1 px to spare
+              // for the slope and the rounding of the picture, and whether a width there can be nearer
+              const bound = (a: number, b: number) => {
+                const lo = (slope / 1.01) * a - 1 + at(b).cap, hi = slope * 1.01 * b + 1 + at(a).cap;
+                return Math.max(0, Math.ceil(lo - 0.5) - t, t - Math.floor(hi + 0.5));
+              };
+              const open = (a: number, b: number) => {
+                const d = bound(a, b);
+                if (d !== near.d) return d < near.d;
+                const w = near.d === 0 ? Math.min(b, Math.max(a, w0)) : a;
+                return nearer(w, d);
+              };
+              const last = b0 || Math.max(w0 + 1, Math.ceil((t + near.d + 2) / (slope / 1.01)));
+              const spans: [number, number][] = [[a0, w0], [w0, last]];
+              for (const w of [a0, last]) take(w);
+              while (spans.length) {
+                const [a, b] = spans.pop()!;
+                if (b - a < 2 || !open(a, b)) continue;
+                const A = at(a), B = at(b);
+                if (Math.abs(A.cap - B.cap) < 0.5) {
+                  const w = Math.round(a + ((t - A.h) * (b - a)) / Math.max(0.01, B.h - A.h));
+                  for (const v of [w - 1, w, w + 1]) if (v > a && v < b) take(v);
+                  continue;
+                }
+                const m = Math.floor((a + b) / 2);
+                take(m);
+                // the span nearer w0 is taken first, which narrows the nearest sooner
+                const halves: [number, number][] = [[a, m], [m, b]];
+                spans.push(...(m < w0 ? halves : halves.reverse()));
               }
-              const m = Math.floor((a + b) / 2);
-              take(m);
-              // the span nearer w0 is taken first, which narrows the nearest sooner
-              const halves: [number, number][] = [[a, m], [m, b]];
-              spans.push(...(m < w0 ? halves : halves.reverse()));
+              return near;
+            };
+            // a narrower figure is a lower one down to the width at which its caption gains more
+            // height than its picture loses. under this width a narrower figure is a higher one,
+            // and the typed height would be read at a collapsed figure, e.g. at 110 by 752 for a
+            // figure of 600 by 875. the search thus starts at the lowest figure. the widths are
+            // stepped down by 15% to where the figure is 1.5 lines of its caption higher than at
+            // the lowest step, and the lowest figure is the nearest height to 0 from there to w0
+            const words = captionEls(objects[i])[0];
+            const style = words && getComputedStyle(words);
+            const line = style ? parseFloat(style.lineHeight) || 1.2 * parseFloat(style.fontSize) : 0;
+            let stop = w0;
+            for (let lowest = at(w0).h; stop > 1; ) {
+              stop = Math.max(1, Math.floor(stop * 0.85));
+              const now = at(stop).h;
+              if (now > lowest + 1.5 * line) break;
+              lowest = Math.min(lowest, now);
             }
-            writePlace(app, el, sized(near.w));
+            const low = stop < w0 ? solve(0, stop, w0).w : w0;
+            writePlace(app, el, sized(solve(h, low, 0).w));
           }
           // the letterbox under the picture is half of what the box adds to it, hence a box up to
           // 2 px higher or lower than its ratio gives, which moves the field by half as much, is
