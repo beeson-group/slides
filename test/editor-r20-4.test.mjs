@@ -372,6 +372,6 @@ for (const platform of PLATFORMS) {
     assert.equal((await state(page, 'text.list.ul')).checked, false);
     await type(page, 'Item');
     await settle(page);
-    assert.match(await render(page), /<ul class="arrows">\s*<li[^>]*>Item<\/li>\s*<\/ul>/, `the new text is not an arrow list: ${(await render(page)).match(/[^\n]*\n[^\n]*Item[^\n]*\n?[^\n]*/)?.[0]}`);
+    assert.match(await render(page), /<ul class="arrows"(?: style="[^"]*")?>\s*<li>Item<\/li>\s*<\/ul>/, `the new text is not an arrow list: ${(await render(page)).match(/[^\n]*\n[^\n]*Item[^\n]*\n?[^\n]*/)?.[0]}`);
   });
 }

@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor moved lists deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the deck of the tests of R32.2: a paragraph moved with a translate, and a list whose items are each moved with a translate -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>A moved paragraph</h2>
+  <p>Words that stay in place.</p>
+  <p style="translate: 0px 24px">A moved paragraph of words.</p>
+  <p>More words after it.</p>
+</section>
+
+<section>
+  <h2>Moved items</h2>
+  <p>Words that stay in place.</p>
+  <ol>
+    <li style="translate: 0px 24px">Alpha</li>
+    <li style="translate: 0px 24px">Beta</li>
+  </ol>
+  <p>More words after it.</p>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

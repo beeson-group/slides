@@ -80,9 +80,10 @@ const ITEM = '.reveal section.present ul > li';
 
 // finding 1: after an undo or a redo of Remove Bullet, the focus was on body and the typing was lost
 for (const platform of PLATFORMS) {
-  for (const [n, needle] of [
-    [2, 'Each step is'],
-    [4, 'Dark and light mode'],
+  // the paragraph takes the translate of a moved list, as the list of slide 5
+  for (const [n, needle, place] of [
+    [2, 'Each step is', ''],
+    [4, 'Dark and light mode', ' style="translate: 0px 20px"'],
   ]) {
     test(`after an undo and a redo of Remove Bullet on slide ${n + 1}, the next key goes into the text (${platform})`, async (t) => {
       const page = await load(t, platform, n);
@@ -91,7 +92,7 @@ for (const platform of PLATFORMS) {
       await press(page, 'Backspace');
       assert.equal(await undoLabel(page), 'Undo Remove Bullet');
       const unlisted = await render(page);
-      assert.ok(unlisted.includes(`<p class="fragment" data-fragment-index="1">${needle}`), 'the item is not made a paragraph');
+      assert.ok(unlisted.includes(`<p class="fragment" data-fragment-index="1"${place}>${needle}`), 'the item is not made a paragraph');
       await command(page, 'undo');
       await byteExact(page);
       await type(page, 'Q');
@@ -107,7 +108,7 @@ for (const platform of PLATFORMS) {
       assert.equal(await render(page), unlisted);
       await type(page, 'W');
       const typed = await render(page);
-      assert.ok(typed.includes(`<p class="fragment" data-fragment-index="1">W${needle}`), `the W is not the first character of the paragraph, the focus is in ${await page.evaluate('document.activeElement.localName')}`);
+      assert.ok(typed.includes(`<p class="fragment" data-fragment-index="1"${place}>W${needle}`), `the W is not the first character of the paragraph, the focus is in ${await page.evaluate('document.activeElement.localName')}`);
       const { text } = await saveAndReopen(page, `r13-6-${++saves}.html`);
       assert.equal(text, typed);
       assert.deepEqual(errors(page), []);
@@ -170,10 +171,10 @@ for (const platform of PLATFORMS) {
     await press(page, 'Home');
     await press(page, 'Backspace');
     const part = listPart(await render(page));
-    assert.match(part, /frameless\.<\/p>\n {2}<p class="fragment" data-fragment-index="1">Dark and light mode: [^<]*<code>for-dark<\/code> and <code>for-light<\/code>\.<\/p>\n {2}<ul style="translate: 0px 20px">\n {4}<li class="fragment" data-fragment-index="2">You might[^<]*<\/li>\n {4}<li class="fragment" data-fragment-index="3">You should/, part);
+    assert.match(part, /frameless\.<\/p>\n {2}<p class="fragment" data-fragment-index="1" style="translate: 0px 20px">Dark and light mode: [^<]*<code>for-dark<\/code> and <code>for-light<\/code>\.<\/p>\n {2}<ul style="translate: 0px 20px">\n {4}<li class="fragment" data-fragment-index="2">You might[^<]*<\/li>\n {4}<li class="fragment" data-fragment-index="3">You should/, part);
     assert.equal(await undoLabel(page), 'Undo Remove Bullet');
     await type(page, 'W');
-    assert.ok(listPart(await render(page)).includes('<p class="fragment" data-fragment-index="1">WDark'), 'the caret is not at the start of the paragraph');
+    assert.ok(listPart(await render(page)).includes('<p class="fragment" data-fragment-index="1" style="translate: 0px 20px">WDark'), 'the caret is not at the start of the paragraph');
     await page.evaluate('window.BeesonEditor.undo()');
     await roundTrip(page, 2);
   });

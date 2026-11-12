@@ -288,7 +288,7 @@ for (const platform of PLATFORMS) {
     await press(page, 'Home');
     await press(page, 'Backspace');
     const text = listPart(await render(page));
-    assert.match(text, /frameless\.<\/p>\n {2}<p class="fragment" data-fragment-index="1">Dark and light mode: [^<]*<code>for-dark<\/code> and <code>for-light<\/code>\.<\/p>\n {2}<ul style="translate: 0px 20px">\n {4}<li class="fragment" data-fragment-index="2">/, text);
+    assert.match(text, /frameless\.<\/p>\n {2}<p class="fragment" data-fragment-index="1" style="translate: 0px 20px">Dark and light mode: [^<]*<code>for-dark<\/code> and <code>for-light<\/code>\.<\/p>\n {2}<ul style="translate: 0px 20px">\n {4}<li class="fragment" data-fragment-index="2">/, text);
     assert.equal(await undoLabel(page), 'Undo Remove Bullet');
     assert.deepEqual(await caretIn(page), { tag: 'p', text: 'Dark and light mode: export o', editing: true, active: 'p', collapsed: true });
     await roundTrip(page);
