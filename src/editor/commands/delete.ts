@@ -8,7 +8,7 @@
 import type { App } from '../app.ts';
 import { locked } from '../canvas/drag.ts';
 import { objectsOf, withTwins } from '../canvas/hit.ts';
-import { hasRange, inText } from './clipboard.ts';
+import { hasRange, inText, keepCopies } from './clipboard.ts';
 import { keepBeside } from './place.ts';
 import { docOf, onSlides } from './slide.ts';
 import { clearRange, selectedRange } from './table.ts';
@@ -42,14 +42,17 @@ export function install(app: App): void {
       const els = selectedElements(a);
       const kept = els.filter((el) => locked(el));
       const outer = withTwins(a, els.filter((el) => !locked(el) && !els.some((o) => o !== el && o.contains(el))));
-      // an element with an offset beside a deleted plate is kept in its place
+      // an element with an offset beside a deleted plate or a deleted copy in the flow is kept in
+      // its place
       const keep = keepBeside(a, [...outer]);
+      const held = keepCopies(a, [...outer]);
       // an undo selects the deleted elements again, as in Keynote
       await a.history.selecting('Delete', async () => {
         if (kept.length) a.selection.set('elements', kept);
         else a.selection.clear();
         await removeJoining(a, outer.reverse(), 'delete');
         keep((el, translate) => doc.setTag(el, { translate }, 'move'));
+        held((el, translate) => doc.setTag(el, { translate }, 'move'));
       });
     },
   });

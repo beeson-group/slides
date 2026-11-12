@@ -2,10 +2,10 @@
 // selected, they act on the elements, and in the navigator on the slides, through the commands of
 // commands/slide.ts. the text on the clipboard is the format of commands/slide.ts: the mark
 // <!--beeson-->, then each element as it is written into the file. a paste on the slide of its
-// source is put after the source, offset by 20 px when it would cover it, and a paste on another
-// slide is put into the container on the same path from its slide, at the same offset. the keys
-// of the clipboard are taken from the events cut, copy, and paste, which carry the clipboard in
-// every browser, and ⌘D or Ctrl+D duplicates. an image or a video on the clipboard, e.g. a
+// source is put after the source, and drawn 20 px off it when it would cover it or is a block in
+// the flow. a paste on another slide is put into the container on the same path from its slide, at
+// the same offset. the keys of the clipboard are taken from the events cut, copy, and paste, which
+// carry the clipboard in every browser, and ⌘D or Ctrl+D duplicates. an image or a video on the clipboard, e.g. a
 // screenshot or an image copied in another app, is put on the slide through the media store of
 // media/store.ts, into an empty zone or a new one, and its file is written under media/ at the save.
 // Paste and Match Style pastes the words of the clipboard into a text in the style at the caret,
@@ -165,6 +165,58 @@ export function shift(app: App, el: Element, n: number): void {
   docOf(app).setTag(el, { translate: { x: t.x + STEP * n, y: t.y + STEP * n } }, 'move');
 }
 
+// whether el is a block in the flow of the current slide or of its text column, whose copy the
+// layout puts under its source
+function inFlow(app: App, el: Element): boolean {
+  const slide = app.current();
+  const up = el.parentElement;
+  return !!slide && !!up && (up === slide || up === columnOf(slide)) && !el.matches('.backdrop') && /^(static|relative)$/.test(getComputedStyle(el).position);
+}
+
+// keepPlaces of canvas/drag.ts, which holds the siblings of near with an offset at their places,
+// and also the siblings without one in the flow of the slide or of its text column, which a copy in
+// the flow moves down, or up in a block anchored at its bottom, e.g. the block of a title slide
+function keepAll(app: App, near: Element[]): (move: (el: Element, translate: Translate) => void) => void {
+  const keep = keepPlaces(app, near);
+  const slide = app.current();
+  const ups = new Set(near.map((el): Element | null => el.parentElement).filter((up): up is Element => !!slide && (up === slide || up === columnOf(slide))));
+  const free = [...ups].flatMap((up) => [...up.children]).filter((el) => !(el as HTMLElement).style?.translate && !!app.pairing?.elements.has(el));
+  const places = free.map((el) => boxOf(app, el));
+  return (move) => {
+    keep(move);
+    free.forEach((el, i) => {
+      const b = boxOf(app, el);
+      const [dx, dy] = [places[i].x - b.x, places[i].y - b.y].map((d) => Math.round(d * 10) / 10);
+      if (!el.isConnected || !(dx || dy)) return;
+      bare.add(el);
+      move(el, { x: dx, y: dy });
+    });
+  };
+}
+
+// the copies in the flow that duplicated and pasted moved onto their sources, and the siblings
+// that keepAll gave an offset where they had none
+const floating = new WeakSet<Element>();
+const bare = new WeakSet<Element>();
+
+// keepCopies measures the siblings with an offset of the copies of floating among els, which a
+// delete or a cut takes off, and the function that it returns holds these siblings at their drawn
+// places, so that the slide is drawn as before the copy. an offset of a sibling in bare that comes
+// back to 0 is taken off, so that the file is given back too
+export function keepCopies(app: App, els: Element[]): (move: (el: Element, translate: Translate | null) => void) => void {
+  const keep = keepPlaces(app, els.filter((el) => floating.has(el)), els);
+  return (move) => keep((el, t) => move(el, bare.has(el) && Math.abs(t.x) < 0.5 && Math.abs(t.y) < 0.5 ? null : t));
+}
+
+// the offset of a copy moved so that it is drawn on the place of its source, as a change of the
+// history
+function onto(app: App, copy: Element, source: Element): void {
+  const [a, b] = [boxOf(app, copy), boxOf(app, source)];
+  const t = translateOf(docOf(app).tagState(copy).style.translate);
+  const r = (v: number) => Math.round(v * 10) / 10;
+  docOf(app).setTag(copy, { translate: { x: r(t.x + b.x - a.x), y: r(t.y + b.y - a.y) } }, 'move');
+}
+
 // text with each id that is already on the page renamed, together with the plots that name it
 function freshIds(app: App, text: string): string {
   return docOf(app).freshIds(text, (id) => !!document.getElementById(id));
@@ -195,7 +247,7 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
   if (!slide) return [];
   const doc = docOf(app);
   const own = clip && clip.sources.length === texts.length && clip.sources.every((s) => s.isConnected && slide.contains(s)) ? clip : null;
-  const keep = keepPlaces(app, own?.sources ?? []);
+  const keep = keepAll(app, own?.sources ?? []);
   const away = clip && clip.sources.length === texts.length ? (clip.away ??= new Map()) : null;
   const on = away && (away.get(slide) ?? away.set(slide, { pastes: [] }).get(slide));
   // a paste on the slide of its sources is put after the last copy of the clipboard that is still
@@ -228,8 +280,11 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
     nodes.push(node);
     grounds.push(ground);
   }
-  if (on && own) placeOwn(app, own, on, nodes, grounds);
-  else if (on) placeAway(app, on, nodes, grounds);
+  // a block in the flow, which the layout puts under its source, is placed with the others of its
+  // paste once it is moved onto its source
+  const flow = nodes.map((n, i) => !!own && !grounds[i] && !covers(app, n, own.sources[i]) && inFlow(app, n));
+  if (on && own && !flow.some(Boolean)) placeOwn(app, own, on, nodes, grounds);
+  else if (on && !own) placeAway(app, on, nodes, grounds);
   const older = on ? [...on.pastes] : [];
   on?.pastes.push(nodes);
   regroup(app, nodes);
@@ -237,12 +292,15 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
   relink(app, nodes);
   keep((el, translate) => doc.setTag(el, { translate }, 'move'));
   if (own) {
-    // a paste in the flow that lands on a source or a copy, which keep holds at its place, is
-    // moved on from where it lands
+    // a paste that lands on a source or a copy, which keep holds at its place, is moved on from
+    // where it lands, and a paste with a block in the flow from 20 px off its sources. a plate made
+    // a zone by settleCopies is not in the flow
+    const inflow = flow.map((f, i) => f && inFlow(app, nodes[i]));
+    inflow.forEach((f, i) => f && (floating.add(nodes[i]), onto(app, nodes[i], own.sources[i])));
     const others = (i: number) => [own.sources[i], ...older.map((p) => p[i])];
     const boxes = nodes.map((n) => boxOf(app, n));
-    const moves = nodes.map((_, i) => !grounds[i] && others(i).some((c) => c?.isConnected && same(boxes[i], boxOf(app, c))));
-    if (moves.some(Boolean)) moveOn(app, nodes, boxes, moves, others, 0);
+    const moves = nodes.map((_, i) => inflow[i] || (!grounds[i] && others(i).some((c) => c?.isConnected && same(boxes[i], boxOf(app, c)))));
+    if (moves.some(Boolean)) moveOn(app, nodes, boxes, moves, others, inflow.some(Boolean) ? 1 : 0);
     own.pasted++;
   }
   app.selection.set('elements', nodes);
@@ -287,9 +345,9 @@ const duplicates = new WeakMap<Element, Element[]>();
 
 // the copies of els, each after its element. a copy that covers its element is moved by 20 px, and
 // on to the first place that the element, the element it was first duplicated from, or a duplicate
-// of the latter on this slide does not take now. a copy in the flow that lands on such a duplicate,
-// which keepPlaces holds at its place, is moved on from where it lands. an undo selects els again,
-// and a redo the copies
+// of the latter on this slide does not take now. a copy of a block in the flow, which the layout
+// puts under its element, is moved onto it and then in the same way. an undo selects els again, and
+// a redo the copies
 export function duplicateElements(app: App, els: Element[]): Promise<Element[]> {
   return app.history.selecting('Duplicate', () => duplicated(app, els));
 }
@@ -297,7 +355,7 @@ export function duplicateElements(app: App, els: Element[]): Promise<Element[]> 
 async function duplicated(app: App, els: Element[]): Promise<Element[]> {
   const doc = docOf(app);
   const copies: Element[] = [];
-  const keep = keepPlaces(app, els);
+  const keep = keepAll(app, els);
   for (const el of els) copies.push(await doc.duplicate(el));
   const slide = app.current();
   const roots = els.map((el) => origins.get(el) ?? el);
@@ -307,9 +365,13 @@ async function duplicated(app: App, els: Element[]): Promise<Element[]> {
   settleCopies(app, copies);
   relink(app, copies);
   keep((el, translate) => doc.setTag(el, { translate }, 'move'));
+  // a block in the flow, which the layout puts under its element, is moved onto it first. a plate
+  // made a zone by settleCopies is not in the flow
+  const flow = copies.map((dup, i) => !cover[i] && inFlow(app, dup));
+  flow.forEach((f, i) => f && (floating.add(copies[i]), onto(app, copies[i], els[i])));
   const boxes = copies.map((c) => boxOf(app, c));
-  const moves = copies.map((dup, i) => cover[i] || (!dup.matches('.backdrop') && family(i).some((c) => same(boxes[i], boxOf(app, c)))));
-  if (moves.some(Boolean)) moveOn(app, copies, boxes, moves, family, cover.some(Boolean) ? 1 : 0);
+  const moves = copies.map((dup, i) => cover[i] || flow[i] || (!dup.matches('.backdrop') && family(i).some((c) => same(boxes[i], boxOf(app, c)))));
+  if (moves.some(Boolean)) moveOn(app, copies, boxes, moves, family, cover.some(Boolean) || flow.some(Boolean) ? 1 : 0);
   copies.forEach((dup, i) => {
     origins.set(dup, roots[i]);
     duplicates.set(roots[i], [...(duplicates.get(roots[i]) ?? []), dup]);
@@ -387,13 +449,16 @@ export function install(app: App): void {
       const els = withTwins(a, selectedElements(a));
       if (!els.length) return a.commands.run('slide.cut', data ?? undefined);
       copy(a, els, data);
-      // an element with an offset beside a cut plate is kept in its place, as at a delete
+      // an element with an offset beside a cut plate or a cut copy in the flow is kept in its
+      // place, as at a delete
       const keep = keepBeside(a, els);
+      const held = keepCopies(a, els);
       // an undo selects the cut elements again, as in Keynote
       await a.history.selecting('Cut', async () => {
         a.selection.clear();
         await removeJoining(a, [...els].reverse(), 'cut');
         keep((el, translate) => docOf(a).setTag(el, { translate }, 'move'));
+        held((el, translate) => docOf(a).setTag(el, { translate }, 'move'));
       });
     },
   });
