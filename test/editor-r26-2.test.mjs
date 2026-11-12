@@ -150,7 +150,7 @@ for (const platform of PLATFORMS) {
     await selectBackdrop(page);
     assert.equal(await popupText(page, 'Family'), 'Families 7 and 11');
     const items = await popupItems(page, 'Family');
-    assert.deepEqual(items.map((i) => i[0]), [...FAMILIES, 'Families 7 and 11']);
+    assert.deepEqual(items.map((i) => i[0]), [...FAMILIES, 'Families 7 and 11', 'Families 7 and 11 (Inertial)']);
     assert.deepEqual(items.filter((i) => i[1]).map((i) => i[0]), ['Families 7 and 11']);
     await choose(page, 'Family 11 (Inertial)', page.source);
     const text = await render(page);
@@ -287,7 +287,7 @@ for (const platform of PLATFORMS) {
     const items = await popupItems(page, 'Family');
     const names = items.map((i) => i[0]);
     assert.equal(new Set(names).size, names.length, names.join(', '));
-    assert.deepEqual(names, [...FAMILIES, 'Families 7 and 11 (Both Frames)', 'Families 7 and 11']);
+    assert.deepEqual(names, [...FAMILIES, 'Families 7 and 11', 'Families 7 and 11 (Inertial)', 'Families 7 and 11 (Both Frames)']);
     assert.deepEqual(items.filter((i) => i[1]).map((i) => i[0]), ['Family 7']);
     // the family of the backdrop chosen again changes nothing
     await choose(page, 'Family 7');

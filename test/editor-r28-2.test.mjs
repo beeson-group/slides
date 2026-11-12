@@ -20,11 +20,11 @@ const TILES = '.beeson-backdrop-gallery [data-tile]';
 const MENU = '.beeson-edit-menu.select';
 const FAMILIES = ['Family 7', 'Family 7 (Inertial)', 'Family 11', 'Family 11 (Inertial)'];
 // the names of the Family popup on the deck NAMES, one per drawing
-const ITEMS = [...FAMILIES, 'Families 7 and 11 (Both Frames)', 'Families 7 and 11', 'Family 7 and Family 11 (Inertial)', 'Families 7 and 11 (Thin 1)'];
+const ITEMS = [...FAMILIES, 'Families 7 and 11', 'Families 7 and 11 (Inertial)', 'Families 7 and 11 (Both Frames)', 'Family 7 and Family 11 (Inertial)', 'Families 7 and 11 (Thin 1)'];
 // the name of the drawing of each slide of the deck NAMES in the Family popup
 const CHECKED = ['Families 7 and 11 (Both Frames)', 'Families 7 and 11 (Both Frames)', 'Families 7 and 11', 'Families 7 and 11 (Both Frames)', 'Family 7 and Family 11 (Inertial)', 'Families 7 and 11 (Thin 1)', 'Families 7 and 11'];
 // the names of the Family popup on the deck SAME, and the name of the drawing of each of its slides
-const SAME_ITEMS = [...FAMILIES, 'Families 7 and 11 (Both Frames)', 'Families 7 and 11', 'No Records'];
+const SAME_ITEMS = [...FAMILIES, 'Families 7 and 11', 'Families 7 and 11 (Inertial)', 'Families 7 and 11 (Both Frames)', 'No Records'];
 const SAME_CHECKED = ['Families 7 and 11 (Both Frames)', 'Families 7 and 11 (Both Frames)', 'Families 7 and 11', 'Families 7 and 11', 'Families 7 and 11', 'No Records', 'No Records'];
 
 let browser;
