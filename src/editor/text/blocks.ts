@@ -173,10 +173,11 @@ const trimEnd = (el: Element) => {
 // nothing but white space between the points of r
 const blank = (r: Range) => !r.toString().trim() && !r.cloneContents().querySelector(ATOM);
 
-// the classes of a paragraph that is split and joined as a body paragraph. a caption, a subtitle,
-// or a footnote is placed by the theme, and Return writes a br in it. a class that reveal.js or the
-// editor sets at run time, e.g. visible on a step while every step is shown, is never a style
-const PLAIN = /^(small|fragment|fade-[\w-]+|semi-fade-out|current-visible|grow|shrink|strike|highlight-[\w-]+)$/;
+// the classes of a paragraph that is split and joined as a body paragraph, with its alignment and
+// its ghost. a caption, a subtitle, or a footnote is placed by the theme, and Return writes a br in
+// it. a class that reveal.js or the editor sets at run time, e.g. visible on a step while every
+// step is shown, is never a style
+const PLAIN = /^(small|center|ghost|fragment|fade-[\w-]+|semi-fade-out|current-visible|grow|shrink|strike|highlight-[\w-]+)$/;
 const plainClass = (c: string): boolean => PLAIN.test(c) || isRuntimeClass(c);
 
 type Item = {

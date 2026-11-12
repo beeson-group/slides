@@ -54,12 +54,13 @@ const PX = /^\d+px$/;
 
 // the declarations of the mask and the flip of an image, written by canvas/mask.ts, with the form
 // of their values. object-fit contain keeps the aspect of a picture whose box was resized in Edit
-// Mask, which theme/beeson.css otherwise stretches to the width and the height of its style
+// Mask, which theme/beeson.css otherwise stretches to the width and the height of its style, and
+// the inset of an oval picture is rounded to its ellipse
 const NUMBER = '-?\\d+(\\.\\d+)?';
 const AT = `(${NUMBER}(%|px)|0)`;
 const MASK_DECLARATIONS: Record<string, RegExp> = {
   scale: new RegExp(`^${NUMBER}( ${NUMBER})?$`),
-  'clip-path': new RegExp(`^inset\\(${NUMBER}%\\)$`),
+  'clip-path': new RegExp(`^inset\\(${NUMBER}%( round 50%)?\\)$`),
   'object-position': new RegExp(`^${AT} ${AT}$`),
   'object-fit': /^(cover|contain)$/,
 };
@@ -102,8 +103,14 @@ export function attributeProblem(name: string, template = false, tag = '', value
   return `the attribute ${name}`;
 }
 
+// the classes of the theme that are not written on a slide: center, which reveal.js reads on a
+// section in its print layout
+export const NOT_ON_SLIDE = ['center'];
+
 // a class of the theme or of reveal.js, or the language of a code box
-const allowedClass = (name: string, theme: Set<string>) => theme.has(name) || REVEAL_CLASSES.includes(name) || /^language-[\w-]+$/.test(name);
+const allowedClass = (name: string, theme: Set<string>, tag = '') =>
+  !(tag === 'section' && NOT_ON_SLIDE.includes(name)) && (theme.has(name) || REVEAL_CLASSES.includes(name) || /^language-[\w-]+$/.test(name));
+const classProblem = (name: string, tag: string) => (tag === 'section' && NOT_ON_SLIDE.includes(name) ? `the class ${name} on a section` : `the class ${name}`);
 
 // the writes of edit on an element with the tag and the attributes of the file that are out of the
 // scope rule, each as a sentence. theme is the set of the classes of themeClasses
@@ -111,7 +118,7 @@ export function editProblems(tag: string, fileAttrs: Parameters<typeof stateOf>[
   const out: string[] = [];
   const before = stateOf(fileAttrs);
   const after = stateOf(fileAttrs, edit);
-  for (const c of after.classes) if (!before.classes.includes(c) && !allowedClass(c, theme)) out.push(`the class ${c}`);
+  for (const c of after.classes) if (!before.classes.includes(c) && !allowedClass(c, theme, tag)) out.push(classProblem(c, tag));
   for (const [name, value] of Object.entries(after.attrs)) {
     if (before.attrs[name] === value) continue;
     const problem = attributeProblem(name, false, tag, value);
@@ -131,7 +138,7 @@ export function textProblems(html: string, theme: Set<string>): string[] {
   for (const t of tokenize(html)) {
     if (t.type !== 'start') continue;
     const s = stateOf(t.attrs);
-    for (const c of s.classes) if (!allowedClass(c, theme)) out.push(`the class ${c} on a ${t.name}`);
+    for (const c of s.classes) if (!allowedClass(c, theme, t.name)) out.push(`the class ${c} on a ${t.name}`);
     for (const [name, value] of Object.entries(s.attrs)) {
       const problem = attributeProblem(name, true, t.name, value);
       if (problem) out.push(`${problem} on a ${t.name}`);

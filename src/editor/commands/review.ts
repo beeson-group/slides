@@ -100,7 +100,7 @@ export function install(app: App): void {
 
   // the transition of the selected slides, as a submenu of the Slide menu with a check at the
   // transition of the current slide
-  const names: [Transition, string][] = [['none', 'None'], ['fade', 'Fade'], ['magic', 'Magic Move']];
+  const names: [Transition, string][] = [['none', 'None'], ['fade', 'Fade'], ['magic', 'Magic Move'], ['push', 'Push']];
   names.forEach(([t, label], i) => {
     c.define({
       id: `slide.transition.${t}`,

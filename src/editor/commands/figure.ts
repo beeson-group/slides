@@ -215,6 +215,23 @@ export function commands(): Command[] {
       },
     },
     switchOf('figure.paper', 'Paper', imageOf, (el) => el.classList.contains('paper'), (on) => ({ classes: { paper: on } }), imageMenu(20)),
+    // an oval picture is clipped to its ellipse, and the inset of its crop is rounded with it, on both
+    // images of a pair
+    {
+      ...switchOf('figure.oval', 'Oval', imageOf, (el) => el.classList.contains('oval'), () => ({}), imageMenu(22)),
+      run: (app, arg) => {
+        const el = given(arg) ?? imageOf(app);
+        if (!el) return;
+        const on = !el.classList.contains('oval');
+        for (const m of [el, twinOf(app, el)]) {
+          if (!m) continue;
+          const edit: TagEdit = { classes: { oval: on } };
+          const inset = /^inset\((-?[\d.]+%)( round 50%)?\)$/.exec(app.doc.tagState(m).style['clip-path'] ?? '');
+          if (inset) edit.style = { 'clip-path': `inset(${inset[1]}${on ? ' round 50%' : ''})` };
+          setTag(app, m, edit, 'oval');
+        }
+      },
+    },
     switchOf('figure.invert', 'Invert in Dark Mode', (app) => invertible(app, imageOf(app)), (el) => el.classList.contains('invert'), (on) => ({ classes: { invert: on } }), imageMenu(21)),
     switchOf('figure.autoplay', 'Play Automatically', videoOf, has('data-autoplay'), flag('data-autoplay')),
     switchOf('figure.loop', 'Loop', videoOf, has('loop'), flag('loop')),

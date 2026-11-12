@@ -76,6 +76,28 @@ function tabIn(app: App, back: boolean): void {
   s?.addRange(r);
 }
 
+// the blocks that Left and Center act on: the heading, the paragraph, the list, the caption, or the
+// display of the text or of the selection, paired with the file, outside a cell and the notes. a
+// list is aligned as a whole
+const ALIGNED = 'h1, h2, h3, p, ul, ol, .caption, div.math';
+function alignTargets(app: App): Element[] {
+  const pairing = app.pairing;
+  if (!pairing) return [];
+  const els = app.selection.kind === 'elements' ? app.selection.elements() : [...flow.spanTargets(app).map((t) => t.host), blocks.textTarget(app)?.host].filter((el): el is Element => !!el);
+  const out = new Set<Element>();
+  for (const el of els) {
+    const block = el.localName === 'li' ? el.closest('ul, ol') : el;
+    if (block?.matches(ALIGNED) && pairing.elements.get(block)?.open && !block.closest('td, th, aside.notes')) out.add(block);
+  }
+  return [...out];
+}
+
+function setCenter(app: App, on: boolean): void {
+  for (const el of alignTargets(app)) if (el.classList.contains('center') !== on) app.doc.setTag(el, { classes: { center: on } }, 'align');
+  app.markDirty();
+  app.invalidate('content');
+}
+
 export function install(app: App): void {
   flow.install(app);
   carry.install(app);
@@ -220,6 +242,25 @@ export function install(app: App): void {
         kept();
       },
     }));
+  // Left and Center of the alignment of Keynote, written as the class center of the theme, with
+  // Keynote's key of Center on a Mac. its key of Left, Cmd+{, is taken by the browser, and Ctrl+E
+  // and Ctrl+L elsewhere are taken by the editor
+  (['left', 'center'] as const).forEach((align, i) =>
+    define({
+      id: `text.align.${align}`,
+      label: align === 'left' ? 'Align Left' : 'Center',
+      ...(align === 'center' ? { keys: { mac: ['Mod+Shift+|'] } } : {}),
+      in: FORMAT,
+      menu: menu('align', 65 + i, 'Alignment'),
+      undoable: true,
+      undo: 'Alignment',
+      enabled: (a) => alignTargets(a).length > 0,
+      checked: (a) => {
+        const els = alignTargets(a);
+        return els.length > 0 && els.every((el) => el.classList.contains('center') === (align === 'center'));
+      },
+      run: (a) => setCenter(a, align === 'center'),
+    }));
   // Start at of the Bullets and Numbering dialog of PowerPoint, typed into the Text pane as
   // { start: n }
   define({ id: 'text.list.start', label: 'Start At', in: TEXT, undoable: true, enabled: (a) => !!blocks.startList(a), run: (a, arg) => blocks.setStart(a, Number((arg as { start?: unknown } | undefined)?.start)) });
@@ -310,7 +351,7 @@ type MenuOf = (group: string, order: number, submenu?: string) => Command['menu'
 // the style of a figure that Copy Style takes and Paste Style sets, as the Image pane sets it: the
 // classes paper and invert of an image, null when taken from a video, and the mode it is shown in
 type FigureStyle = { paper: boolean | null; invert: boolean | null; mode: Mode };
-type Copied = { text: inline.TextStyle } | { figure: FigureStyle };
+type Copied = { text: inline.TextStyle; center: boolean | null } | { figure: FigureStyle };
 
 // the images and videos of the selected elements: a selected one, or the one shown in a selected
 // figure, zone, or plate
@@ -335,7 +376,8 @@ function readCopied(app: App): Copied | null {
   const [figure] = figuresOf(app);
   if (figure) return { figure: readFigure(figure) };
   const text = inline.readStyle(app);
-  return text ? { text } : null;
+  const [block] = alignTargets(app);
+  return text ? { text, center: block ? block.classList.contains('center') : null } : null;
 }
 
 // the mode on every figure, and paper and invert on an image, each class changed only where it
@@ -391,7 +433,13 @@ function installStyles(app: App, define: Define, menu: MenuOf): void {
     menu: menu('copy-style', 87),
     undoable: true,
     enabled: canPaste,
-    run: (a) => (!copied ? undefined : 'figure' in copied ? pasteFigure(a, copied.figure) : inline.pasteStyle(a, copied.text)),
+    run: (a) => {
+      if (!copied) return;
+      if ('figure' in copied) return pasteFigure(a, copied.figure);
+      // the alignment is carried with the style of the text, as by the Format Painter of PowerPoint
+      if (copied.center !== null) setCenter(a, copied.center);
+      return inline.pasteStyle(a, copied.text);
+    },
   });
   // a script or the double click gives { sticky: true }, which arms the painter until it is
   // switched off. without it, a run switches the painter. an armed painter stays live, so that a

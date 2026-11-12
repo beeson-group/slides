@@ -249,9 +249,9 @@ export async function replaceFile(app: App, el: HTMLImageElement | HTMLVideoElem
     }
     const parent = el.parentElement;
     if (!parent) throw new Error('the figure is not on the page');
-    // the mode and the step of el, its id, its group, its lock, and its place, in their order
+    // the mode, the step, and the ghost of el, its id, its group, its lock, and its place, in their order
     const own = app.doc.tagState(el);
-    const classes = own.classes.filter((c) => c === 'for-dark' || c === 'for-light' || REVEAL_CLASSES.includes(c));
+    const classes = own.classes.filter((c) => c === 'for-dark' || c === 'for-light' || c === 'ghost' || REVEAL_CLASSES.includes(c));
     const kept = Object.fromEntries(Object.entries(own.attrs).filter(([k]) => KEPT.includes(k)));
     const place = Object.entries(own.style).filter(([k]) => PLACE.includes(k)).map(([k, v]) => `${k}: ${v}`).join('; ');
     if (place) kept.style = place;

@@ -110,6 +110,7 @@ export function imagePane(app: App, run: Run): Control[] {
       checkbox(app, run, 'figure.caption', 'Caption'),
       checkbox(app, run, 'figure.paper', 'Paper, framed as a white raster figure'),
       checkbox(app, run, 'figure.invert', 'Invert in dark mode, for a black-on-white plot'),
+      checkbox(app, run, 'figure.oval', 'Oval, clipped to the ellipse of its box'),
     ]),
     section('Mask', [
       row([

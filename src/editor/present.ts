@@ -15,9 +15,9 @@ import { drawInto } from './navigator/thumbs.ts';
 import { injectStyle, make, store, stored } from './ui/dom.ts';
 import { icon } from './ui/icons.ts';
 
-// the kind of a fragment: shown from its step on, hidden from its step on (fade-out), or shown only
-// at its step (current-visible)
-export type FragKind = 'in' | 'out' | 'current';
+// the kind of a fragment: shown from its step on, hidden from its step on (fade-out), shown only
+// at its step (current-visible), or shown from the start and dimmed from its step on (semi-fade-out)
+export type FragKind = 'in' | 'out' | 'current' | 'dim';
 export type Frag = { index: number | null; kind: FragKind; final: boolean };
 
 // the step of each fragment, from 0, in the order of reveal.js: the fragments with an index in the
@@ -36,6 +36,7 @@ export const stepCount = (steps: number[]): number => (steps.length ? Math.max(.
 // whether a fragment of kind at step s is seen once k steps are shown
 export function seenAt(kind: FragKind, s: number, k: number): boolean {
   if (kind === 'out') return s >= k;
+  if (kind === 'dim') return true;
   if (kind === 'current') return s === k - 1;
   return s < k;
 }
@@ -57,7 +58,7 @@ const fragsOf = (slide: Element): Element[] => [...slide.querySelectorAll('.frag
 function fragOf(el: Element): Frag {
   const raw = el.getAttribute('data-fragment-index');
   const index = raw !== null && raw.trim() !== '' && Number.isFinite(Number(raw)) ? Number(raw) : null;
-  const kind: FragKind = el.classList.contains('fade-out') ? 'out' : el.classList.contains('current-visible') ? 'current' : 'in';
+  const kind: FragKind = el.classList.contains('fade-out') ? 'out' : el.classList.contains('current-visible') ? 'current' : el.classList.contains('semi-fade-out') ? 'dim' : 'in';
   return { index, kind, final: el.hasAttribute('data-final') && index === null };
 }
 
@@ -108,7 +109,7 @@ export function showStep(host: HTMLElement, slide: Element, k: number): void {
   applySteps(clone);
   (frags as HTMLElement[]).forEach((f, i) => {
     const seen = i >= steps.length || seenAt(kinds[i], steps[i], k);
-    const dim = seen && k < n && steps[i] < k - 1 && !f.matches('.backdrop, [data-held]') && !f.parentElement?.closest('.fragment.visible');
+    const dim = seen && k < n && steps[i] < k - 1 && kinds[i] !== 'dim' && !f.matches('.backdrop, [data-held], .ghost') && !f.parentElement?.closest('.fragment.visible');
     f.classList.toggle('beeson-off', !seen);
     f.style.setProperty('opacity', dim ? '0.45' : '', dim ? 'important' : '');
   });

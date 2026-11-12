@@ -1,6 +1,6 @@
 // the Text pane of the Format tab, for a text with the caret or a selected block, as the Text tab
 // of Keynote: the paragraph style in a pop-up, the Format Painter of PowerPoint, the formats of the
-// words with Change Case, the tone swatches, the kind of list, and the link. every control runs a command of commands/text.ts by its id, and a
+// words with Change Case, the tone swatches, the alignment, the kind of list, and the link. every control runs a command of commands/text.ts by its id, and a
 // control of a command that is not defined is drawn disabled. by the scope rule, only the styles
 // of the type scale and the tones of the theme are offered
 
@@ -10,7 +10,13 @@ import { kindOf, listKind, type ListKind, selectedBlocks, startList, styleOf, st
 import { around, FORMATS, inlineTargets, isTone, type FormatName } from '../text/inline.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { openMenu, type MenuItem } from '../ui/menu.ts';
-import { button, glyph, keepFocus, numberField, row, section, segmented, type Control, type Run } from './controls.ts';
+import { GLYPHS, button, glyph, keepFocus, numberField, row, section, segmented, type Control, type Run } from './controls.ts';
+
+// the glyphs of the alignment of a text, on the grid of GLYPHS
+Object.assign(GLYPHS, {
+  'text-left': ['M3.5 5h13', 'M3.5 8.5h9', 'M3.5 12h13', 'M3.5 15.5h9'],
+  'text-center': ['M3.5 5h13', 'M5.5 8.5h9', 'M3.5 12h13', 'M5.5 15.5h9'],
+});
 
 const STYLES = ['body', 'small', 'subheading', 'caption', 'footnote'];
 const CASES = ['sentence', 'lower', 'upper', 'title', 'toggle'];
@@ -284,6 +290,10 @@ export function textPane(app: App, run: Run): Control[] {
       row([changeCase(app)], 'Case'),
     ]),
     section('Text Color', [row([swatches(app, run)])]),
+    section('Alignment', [row([segmented(app, run, [
+      { command: 'text.align.left', icon: 'text-left', title: 'Align Left' },
+      { command: 'text.align.center', icon: 'text-center', title: 'Center' },
+    ], 'Alignment')])]),
     section('Bullets & Lists', [
       row([segmented(app, run, [
         { command: 'text.list.none', icon: 'list-none', title: 'Paragraphs', pressed: listState(app, 'none') },

@@ -164,8 +164,9 @@ function positionText(f: Fit, size: { w: number; h: number }, lx: number, ly: nu
   return `${axis(f.w, size.w, lx)} ${axis(f.h, size.h, ly)}`;
 }
 
-// the declarations of the state st, each null where it is not needed
-export function imageStyle(f: Fit, st: ImageState): Record<string, string | null> {
+// the declarations of the state st, each null where it is not needed. the inset of an oval picture
+// is rounded, so that the crop is cut to its ellipse as the class oval cuts the whole picture
+export function imageStyle(f: Fit, st: ImageState, oval = false): Record<string, string | null> {
   const flip = scaleText(st.sx, st.sy);
   const out: Record<string, string | null> = { scale: flip, 'clip-path': null, 'object-fit': f.pin ? 'contain' : null, 'object-position': null };
   const lx = (st.sx * st.ox) / st.z, ly = (st.sy * st.oy) / st.z;
@@ -184,7 +185,7 @@ export function imageStyle(f: Fit, st: ImageState): Record<string, string | null
     return out;
   }
   out.scale = scaleText(st.sx * st.z, st.sy * st.z);
-  out['clip-path'] = `inset(${round(((1 - 1 / st.z) / 2) * 100, 3)}%)`;
+  out['clip-path'] = `inset(${round(((1 - 1 / st.z) / 2) * 100, 3)}%${oval ? ' round 50%' : ''})`;
   if (!home) out['object-position'] = positionText(f, { w: f.bw, h: f.bh }, lx, ly);
   return out;
 }
@@ -456,9 +457,11 @@ function imageSession(app: App, img: HTMLImageElement): Session | null {
   // translate
   let grip: { win: Edges; pic: Edges; pw: number; ox: number; oy: number; cx: number; cy: number; cw: number; ch: number; t: Translate } | null = null;
   const natural = img.naturalWidth / img.naturalHeight;
-  // the preview is the picture scaled in its whole box, without the clip
+  // the preview is the picture scaled in its whole box, without the clip, and without the ellipse of
+  // an oval picture
   const preview = () => {
-    s.removeProperty('clip-path');
+    if (img.classList.contains('oval')) s.setProperty('clip-path', 'none');
+    else s.removeProperty('clip-path');
     if (fit.pin) s.setProperty('object-fit', 'contain');
     else s.removeProperty('object-fit');
     const sc = scaleText(st.sx * st.z, st.sy * st.z);
@@ -580,7 +583,7 @@ function imageSession(app: App, img: HTMLImageElement): Session | null {
     edit: async () => {
       const box = { width: s.width || null, height: s.height || null, translate: translateOf(s.translate) };
       syncLive(app, img);
-      const style = imageStyle(fit, st);
+      const style = imageStyle(fit, st, img.classList.contains('oval'));
       if (resized) Object.assign(style, { width: box.width, height: box.height });
       const edit: TagEdit = styleEdit(app, img, style) ?? {};
       const t = box.translate.x || box.translate.y ? box.translate : null;

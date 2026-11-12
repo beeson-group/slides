@@ -40,7 +40,7 @@ export type Ctx = {
 // heading and the footnote can be a step too, as any text box in PowerPoint, but One by one
 // leaves them with the slide. a list is a step of its own only when it is shown all at once, and
 // otherwise its items are the steps
-const CANDIDATES = 'h1, h2, h3, p, li, ul.fragment, ol.fragment, table, pre, blockquote, div.math, figure, .zone, .plate, .qr, tycho-viewer, .caption, .foot, img, video';
+const CANDIDATES = 'h1, h2, h3, p, li, ul.fragment, ol.fragment, table, pre, blockquote, div.math, figure, .zone, .plate, .qr, tycho-viewer, .caption, .foot, img, video, svg.line, .shape';
 export const WITH_SLIDE = 'h1, h2, h3, .foot';
 const OUTSIDE = 'aside.notes, .backdrop';
 
@@ -68,17 +68,19 @@ export function itemOf(state: TagState): Item {
   return { fragment: state.classes.includes('fragment'), index, final: 'data-final' in state.attrs };
 }
 
-// the effects of reveal.js that the Steps tab replaces, and the three that it writes: Fade In, the
-// plain fragment, Fade Out, and Only at Its Step
+// the effects of reveal.js that the Steps tab replaces, and the four that it writes: Fade In, the
+// plain fragment, Fade Out, Only at Its Step, and Dim, which semi-fade-out draws at the opacity of
+// a ghost from its step on
 const EFFECT_CLASSES = ['fade-in', 'fade-out', 'fade-up', 'fade-down', 'fade-left', 'fade-right', 'fade-in-then-out', 'fade-in-then-semi-out', 'semi-fade-out', 'current-visible'];
-export type Effect = 'in' | 'out' | 'only';
-export const EFFECTS: [Effect, string][] = [['in', 'Fade In'], ['out', 'Fade Out'], ['only', 'Only at Its Step']];
+export type Effect = 'in' | 'out' | 'only' | 'dim';
+export const EFFECTS: [Effect, string][] = [['in', 'Fade In'], ['out', 'Fade Out'], ['only', 'Only at Its Step'], ['dim', 'Dim']];
 
 // the effect of a fragment with its label. an effect that the tab does not write, e.g. fade-up,
 // keeps its name
 export function effectOf(classes: string[]): { id: Effect | null; label: string } {
   if (classes.includes('fade-out')) return { id: 'out', label: 'Fade Out' };
   if (classes.includes('current-visible')) return { id: 'only', label: 'Only at Its Step' };
+  if (classes.includes('semi-fade-out')) return { id: 'dim', label: 'Dim' };
   const other = EFFECT_CLASSES.find((c) => c !== 'fade-in' && classes.includes(c));
   if (other) return { id: null, label: other.split('-').map((w) => w[0].toUpperCase() + w.slice(1)).join(' ') };
   return { id: 'in', label: 'Fade In' };
@@ -349,14 +351,14 @@ export function writePlan(app: App, m: Model, plan: Plan, extra: Map<Element, Ta
 
 // the classes of an effect written into the tag of el, and the others of EFFECT_CLASSES taken off
 export function effectEdit(state: TagState, effect: Effect): TagEdit {
-  const want = effect === 'out' ? 'fade-out' : effect === 'only' ? 'current-visible' : null;
+  const want = effect === 'out' ? 'fade-out' : effect === 'only' ? 'current-visible' : effect === 'dim' ? 'semi-fade-out' : null;
   const classes: Record<string, boolean> = {};
   for (const c of state.classes) if (EFFECT_CLASSES.includes(c) && c !== want) classes[c] = false;
   if (want && !state.classes.includes(want)) classes[want] = true;
   return Object.keys(classes).length ? { classes } : {};
 }
 
-const KINDS: [string, string][] = [['h1, h2, h3', 'Heading'], ['.foot', 'Footnote'], ['li', 'Item'], ['ul, ol', 'List'], ['p', 'Paragraph'], ['div.math', 'Formula'], ['table', 'Table'], ['tr', 'Table row'], ['pre, code', 'Code'], ['blockquote', 'Quotation'], ['video', 'Video'], ['tycho-viewer', 'Scene'], ['.qr', 'QR code'], ['.caption', 'Caption'], ['.backdrop', 'Backdrop'], ['.surface', 'Surface'], ['.plot', 'Plot'], ['[data-plot-show], [data-plot-tab]', 'Plot step'], ['[data-surface-stage]', 'Surface step'], ['img, figure, .zone, .plate', 'Figure']];
+const KINDS: [string, string][] = [['h1, h2, h3', 'Heading'], ['.foot', 'Footnote'], ['li', 'Item'], ['ul, ol', 'List'], ['p', 'Paragraph'], ['div.math', 'Formula'], ['table', 'Table'], ['tr', 'Table row'], ['pre, code', 'Code'], ['blockquote', 'Quotation'], ['video', 'Video'], ['tycho-viewer', 'Scene'], ['.qr', 'QR code'], ['.caption', 'Caption'], ['.backdrop', 'Backdrop'], ['.surface', 'Surface'], ['.plot', 'Plot'], ['[data-plot-show], [data-plot-tab]', 'Plot step'], ['[data-surface-stage]', 'Surface step'], ['img, figure, .zone, .plate', 'Figure'], ['svg.line', 'Line'], ['.shape', 'Shape']];
 
 // the text of el with each formula given by its TeX, since an mjx-container does not have text
 function textOf(el: Element, tex: Ctx['tex']): string {
@@ -593,6 +595,7 @@ html.beeson-previewing .beeson-badges, html.beeson-previewing .beeson-overlay, h
 html.beeson-editing.beeson-previewing .reveal .slides section .fragment { transition: opacity 400ms ease-out !important; }
 html.beeson-editing.beeson-previewing .reveal .slides section .fragment.beeson-pv-dim { opacity: 0.45 !important; }
 html.beeson-editing.beeson-previewing .reveal .slides section .fragment.beeson-pv-off { opacity: 0 !important; }
+html.beeson-editing.beeson-previewing .reveal .slides section .fragment.beeson-pv-ghost { opacity: 0.25 !important; }
 @media (prefers-reduced-motion: reduce) { html.beeson-editing.beeson-previewing .reveal .slides section .fragment { transition: none !important; } }
 `;
 
@@ -1333,7 +1336,7 @@ export class Steps {
     const done = new Promise<void>((resolve) => {
       finish = () => {
         timers.forEach(clearTimeout);
-        for (const f of frags) f.el.classList.remove('beeson-pv-off', 'beeson-pv-dim');
+        for (const f of frags) f.el.classList.remove('beeson-pv-off', 'beeson-pv-dim', 'beeson-pv-ghost');
         if (lines.length) dimLines(null, null);
         html.classList.remove('beeson-previewing');
         this.playing = null;
@@ -1362,9 +1365,12 @@ export class Steps {
     };
     const frame = (k: number, restored = false) => {
       for (const f of frags) {
-        const shown = shownAt(f, k);
+        // a dimmed step is seen from the start, and a ghost keeps its opacity of the theme
+        const dims = f.el.classList.contains('semi-fade-out');
+        const shown = dims || shownAt(f, k);
         f.el.classList.toggle('beeson-pv-off', !shown);
-        f.el.classList.toggle('beeson-pv-dim', shown && !restored && f.kind === 'in' && f.step < k && !nested(f.el) && !held(f, k));
+        f.el.classList.toggle('beeson-pv-dim', shown && !dims && !restored && f.kind === 'in' && f.step < k && !nested(f.el) && !held(f, k) && !f.el.classList.contains('ghost'));
+        f.el.classList.toggle('beeson-pv-ghost', dims && f.step <= k);
       }
       if (restored) {
         if (lines.length) dimLines(null, null);

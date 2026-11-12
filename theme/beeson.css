@@ -172,6 +172,10 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal .tone-subtle { color: var(--subtle); }
 .reveal .tone-muted { color: var(--muted); }
 
+/* a text block centered with Center of the editor. reveal.js reads the class center on a section, hence the
+   editor writes it only on a text block */
+.reveal .center { text-align: center; }
+
 /* a line or an arrow on a slide, set with Insert > Line of the editor: an svg as large as the box of
    its line, placed at the upper left of the slide and moved by its translate, stroked in --text or
    in the tone of its class at the width of a mark of a plot. an arrowhead is the marker of the svg,
@@ -206,6 +210,7 @@ html, body, .reveal-viewport { background: var(--bg); }
 /* math: the size of the MathJax output is inherited, and a display block is a little larger and left aligned */
 .reveal .math { margin: 28px 0 4px; font-size: 52px; }
 .reveal mjx-container[display="true"] { margin: 0 !important; text-align: left !important; }
+.reveal .math.center mjx-container[display="true"] { text-align: center !important; }
 .reveal mjx-container { color: inherit; }
 
 /* code: the system monospace, since a monospace face is not vendored with the theme */
@@ -459,6 +464,9 @@ html:not([data-theme="light"]) .reveal .slides section.split .panel { box-shadow
 .reveal .paper { background: var(--paper); padding: 24px; border-radius: 2px; box-sizing: border-box; }
 .reveal .paper > img { background: var(--paper); }
 html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); }
+/* a picture clipped to the ellipse of its box. the crop of the editor writes its inset with the same
+   round 50% on an oval picture, which cuts the ellipse of the cropped box */
+.reveal img.oval { clip-path: inset(0 round 50%); }
 /* a QR code, square at the width of its div, with the quiet zone of four modules inside its tile */
 .reveal .qr { width: 320px; aspect-ratio: 1; }
 .reveal .qr > svg { display: block; width: 100%; height: 100%; }
@@ -513,6 +521,11 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
 /* stepped math: a held fragment is not dimmed, and the classes named by a shown data-highlight are colored. the
    colors are important, since the tone of a mark of a plot is set in its style attribute */
 .reveal .slides section:not([data-complete]) .fragment.visible[data-held]:not(.current-fragment) { opacity: 1; }
+/* a dimmed step, Dim of the editor, is drawn from its step on at the opacity of a ghost, also on the complete
+   slide. a ghost is an element set with Ghosted of the editor, and its opacity is important, since the steps
+   set the opacity of a fragment */
+.reveal .slides section .fragment.visible.semi-fade-out:not([data-held]) { opacity: 0.25; }
+.reveal .slides section .ghost { opacity: 0.25 !important; }
 .reveal .hl-target { transition: color 400ms ease-out; }
 .reveal .hl-accent { color: var(--accent) !important; }
 .reveal .hl-violet { color: var(--violet) !important; }

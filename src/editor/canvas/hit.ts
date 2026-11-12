@@ -54,7 +54,7 @@ export function visualRect(el: Element): Box {
   const natural = el instanceof HTMLImageElement ? [el.naturalWidth, el.naturalHeight] : el instanceof HTMLVideoElement ? [el.videoWidth, el.videoHeight] : null;
   if (!natural || !natural[0] || !natural[1] || !r.width || !r.height) return box;
   const style = getComputedStyle(el);
-  const inset = /^inset\(\s*([\d.]+)%\s*\)$/.exec(style.clipPath)?.[1];
+  const inset = /^inset\(\s*([\d.]+)%(?:\s+round\s+50%)?\s*\)$/.exec(style.clipPath)?.[1];
   const q = inset ? parseFloat(inset) / 100 : 0;
   const clip = { left: r.left + q * r.width, top: r.top + q * r.height, right: r.right - q * r.width, bottom: r.bottom - q * r.height };
   const cut = (b: Box): Box => {

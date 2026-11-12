@@ -13,6 +13,17 @@ import { view, xy } from '../canvas/frames.ts';
 import { fieldOf } from './order.ts';
 import { cornerBoxOf } from './align.ts';
 import { onSlides } from './slide.ts';
+import { injectStyle } from '../ui/dom.ts';
+
+// a ghosted step is drawn ghosted while every step is shown at full opacity, as in theme/beeson.css
+const CSS = `html.beeson-editing .reveal .slides section .fragment.ghost { opacity: 0.25 !important; }`;
+
+// the objects that Ghosted acts on: the figure of a picture selected inside it, a block, a line
+const ghostEls = (app: App): Element[] => movedEls(app).filter((el) => el.localName !== 'section' && !!app.pairing?.elements.get(el)?.open);
+const ghosted = (app: App): boolean => {
+  const els = ghostEls(app);
+  return els.length > 0 && els.every((el) => el.classList.contains('ghost'));
+};
 
 // the nudges of the same elements closer than this, in ms, are one entry of the history
 const PAUSE = 1000;
@@ -219,6 +230,22 @@ export function commands(): Command[] {
       run: (app) => step(app, true),
     },
     {
+      // the opacity of Keynote and PowerPoint as one token of the theme, the class ghost, on every
+      // selected object, or off every one when each is ghosted
+      id: 'arrange.ghost',
+      label: 'Ghosted',
+      in: ['canvas'],
+      undoable: true,
+      enabled: (app) => ghostEls(app).length > 0,
+      checked: ghosted,
+      run: (app) => {
+        const on = !ghosted(app);
+        for (const el of ghostEls(app)) if (el.classList.contains('ghost') !== on) app.doc.setTag(el, { classes: { ghost: on } }, 'ghost');
+        app.markDirty();
+        app.invalidate('content');
+      },
+    },
+    {
       id: 'arrange.resetPosition',
       label: 'Reset Position',
       menu: { bar: 'Arrange', group: 'reset', order: 10 },
@@ -269,6 +296,7 @@ export function commands(): Command[] {
 }
 
 export function install(app: App): void {
+  injectStyle('arrange', CSS);
   for (const c of commands()) app.commands.define(c);
   app.selection.listen(() => (run = null));
 }

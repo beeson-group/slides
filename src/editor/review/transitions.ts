@@ -1,19 +1,27 @@
 // the transition of a slide, as in the Animate inspector of Keynote, limited by the scope rule of
-// the plan to None, Fade, and Magic Move. as in Keynote, the transition of a slide is played when
-// the show leaves it for the next shown slide. reveal.js plays a None or a Fade when the show
+// the plan to None, Fade, Magic Move, and Push. as in Keynote, the transition of a slide is played
+// when the show leaves it for the next shown slide. reveal.js plays a None or a Fade when the show
 // enters a slide, since the slide entered is drawn over the slide left (z-index 11 on
 // section.present in reveal.css) and faded in by its own data-transition, hence the None or Fade
 // of a slide is written on the next shown slide. Fade is the default of the theme (transition:
 // 'fade' in src/main.ts), hence it is written as the absence of data-transition, and None as
 // data-transition="none". Magic Move is the auto-animate of reveal.js: data-auto-animate on the
-// slide and on the next one, and the same data-id on each pair of matched elements
+// slide and on the next one, and the same data-id on each pair of matched elements. Push is the
+// slide of reveal.js, by which the show moves the slide left out to the left while the next slide
+// comes in from the right only when the slide is left by slide-out and the next one is entered by
+// slide-in. Push is thus written as the halves of data-transition, e.g. fade-in slide-out on the
+// slide and slide-in fade-out on the next one
 
 import type { App } from '../app.ts';
 import { drawInto } from '../navigator/thumbs.ts';
 import { showStep, stepsOfSlide } from '../present.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 
-export type Transition = 'none' | 'fade' | 'magic';
+export type Transition = 'none' | 'fade' | 'magic' | 'push';
+
+// the classes of a step and of its run time, and ghost, which Magic Move animates as an opacity,
+// left out of the key of a shape
+const RUNTIME = new Set(['fragment', 'visible', 'current-fragment', 'ghost']);
 
 const slidesOf = (app: App): Element[] => [...app.slides().querySelectorAll(':scope > section')];
 
@@ -30,15 +38,33 @@ function previousShown(app: App, slide: Element): Element | null {
 
 const magic = (s: Element | null): boolean => !!s?.hasAttribute('data-auto-animate');
 
+// the effects by which the show enters s and leaves it, read from its data-transition, e.g. fade
+// and slide from fade-in slide-out, with the fade of the theme for a half that is not given
+export function halvesOf(s: Element): [string, string] {
+  const v = (s.getAttribute('data-transition') ?? '').trim();
+  const enter = /(\S+)-in\b/.exec(v)?.[1];
+  const leave = /(\S+)-out\b/.exec(v)?.[1];
+  if (enter || leave) return [enter ?? 'fade', leave ?? 'fade'];
+  return [v || 'fade', v || 'fade'];
+}
+
+// the value of data-transition for two halves, without the attribute for the fade of the theme
+const joined = (enter: string, leave: string): string | null => (enter !== leave ? `${enter}-in ${leave}-out` : enter === 'fade' ? null : enter);
+
+const setHalves = (app: App, s: Element, enter: string, leave: string) => {
+  const value = joined(enter, leave);
+  if (s.getAttribute('data-transition') !== value) app.doc.setTag(s, { attrs: { 'data-transition': value } }, 'transition');
+};
+
 // the transition by which the show leaves slide, or null for an effect of reveal.js outside the
-// scope, e.g. slide. the last shown slide has the default Fade
+// scope, e.g. zoom. the last shown slide has the default Fade
 export function transitionOf(app: App, slide: Element): Transition | null {
   const next = nextShown(app, slide);
   if (magic(slide) && magic(next)) return 'magic';
-  const t = next?.getAttribute('data-transition') ?? null;
-  if (t === null || t === '' || t === 'fade') return 'fade';
-  if (t === 'none') return 'none';
-  return null;
+  if (!next) return 'fade';
+  const [enter] = halvesOf(next);
+  if (enter === 'slide' && halvesOf(slide)[1] === 'slide') return 'push';
+  return enter === 'fade' || enter === 'none' ? enter : null;
 }
 
 // a slide and its file element are paired, with a start tag that the document model can write
@@ -47,9 +73,10 @@ export function paired(app: App, el: Element): boolean {
   return !!s?.open;
 }
 
-// the elements of a slide that Magic Move matches: its heading and its figures, the outermost of
-// each nest, outside the notes
-const FIGURES = 'img, video, figure, .zone, .plate, .qr, tycho-viewer, div.math, table, pre, .backdrop, .surface';
+// the elements of a slide that Magic Move matches: its heading, its figures, its lines, and its
+// shapes, the outermost of each nest, outside the notes. reveal.js matches an svg only by its
+// data-id, and fades out and in again a line without one
+const FIGURES = 'img, video, figure, .zone, .plate, .qr, tycho-viewer, div.math, table, pre, .backdrop, .surface, svg.line, .shape';
 
 export function candidates(slide: Element): Element[] {
   const heading = [...slide.querySelectorAll('h1, h2')].find((h) => !h.closest('aside.notes'));
@@ -58,10 +85,17 @@ export function candidates(slide: Element): Element[] {
 }
 
 // the key under which an element is matched with an element of the other slide: a heading by its
-// tag, a picture by its source, a QR code by its text, and a backdrop by its drawing
+// tag, a picture by its source, a QR code by its text, a backdrop by its drawing, a line by its
+// tone and its arrowheads, and a shape by its classes
 export function keyOf(el: Element): string {
   const tag = el.localName;
   if (tag === 'h1' || tag === 'h2') return 'heading';
+  if (el.matches('svg.line')) {
+    const line = el.querySelector('line');
+    const tone = [...el.classList].find((c) => c.startsWith('tone-')) ?? '';
+    return `line:${tone}:${line?.hasAttribute('marker-start') ? 'start' : ''}:${line?.hasAttribute('marker-end') ? 'end' : ''}`;
+  }
+  if (el.matches('.shape')) return `shape:${[...el.classList].filter((c) => !RUNTIME.has(c)).sort().join(' ')}`;
   const media = el.matches('img, video, tycho-viewer') ? el : el.querySelector('img, video, tycho-viewer');
   if (media) return `media:${media.getAttribute('src') ?? ''}`;
   if (el.matches('.qr')) return `qr:${el.getAttribute('data-qr') ?? ''}`;
@@ -132,15 +166,23 @@ const setMagic = (app: App, s: Element, on: boolean) => {
 export function setTransition(app: App, slide: Element, t: Transition): void {
   const next = nextShown(app, slide);
   if (!next) throw new Error('A transition needs a slide after this one');
+  // a slide is left by slide-out only while it is pushed, and else as it is entered. the next slide
+  // keeps its slide-out while it pushes the slide after it
+  const [enter, leave] = halvesOf(slide);
+  const pushes = (s: Element) => halvesOf(s)[1] === 'slide';
+  if (leave === 'slide' && t !== 'push') setHalves(app, slide, enter, enter === 'slide' ? 'fade' : enter);
   if (t === 'magic') {
     setMagic(app, slide, true);
     setMagic(app, next, true);
     linkPairs(app, slide, next);
     return;
   }
-  const value = t === 'none' ? 'none' : null;
-  if (next.getAttribute('data-transition') !== value && !(value === null && !next.hasAttribute('data-transition'))) {
-    app.doc.setTag(next, { attrs: { 'data-transition': value } }, 'transition');
+  if (t === 'push') {
+    setHalves(app, slide, enter, 'slide');
+    setHalves(app, next, 'slide', pushes(next) ? 'slide' : 'fade');
+  } else {
+    const value = t === 'none' ? 'none' : 'fade';
+    if (halvesOf(next)[0] !== value || (!pushes(next) && halvesOf(next)[1] !== value)) setHalves(app, next, value, pushes(next) ? 'slide' : value);
   }
   if (magic(slide)) {
     if (!magic(previousShown(app, slide))) setMagic(app, slide, false);
@@ -171,6 +213,8 @@ export function previewOf(app: App, slide: Element): Plan | null {
 // FADE_MS is the fade of theme/beeson.css, and HOLD_MS the time each end of the preview is held,
 // both in ms
 const FADE_MS = 400;
+// the slide of reveal.js at its default speed
+const PUSH_MS = 800;
 const HOLD_MS = 350;
 
 const PREVIEW_CSS = `
@@ -248,7 +292,7 @@ export function preview(app: App, slide: Element): Promise<void> {
     window.addEventListener('pointerdown', stop, true);
     window.addEventListener('keydown', key, true);
     const later = (ms: number, fn: () => void) => timers.push(window.setTimeout(fn, ms));
-    const ms = plan.kind === 'magic' ? magicMs() : plan.kind === 'none' ? 0 : FADE_MS;
+    const ms = plan.kind === 'magic' ? magicMs() : plan.kind === 'none' ? 0 : plan.kind === 'push' ? PUSH_MS : FADE_MS;
     later(HOLD_MS, () => {
       layer.dataset.phase = 'play';
       if (plan.kind === 'magic' && from) {
@@ -267,6 +311,11 @@ export function preview(app: App, slide: Element): Promise<void> {
           animations.push(y.animate([{ transform: start, transformOrigin: '0 0' }, { transform: 'none', transformOrigin: '0 0' }], { duration: ms, easing: 'ease-out' }));
         }
         if (b) for (const el of unmatched(b, new Set(pairs.map(([, y]) => y)))) animations.push(el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: ms, easing: 'ease-out' }));
+      } else if (plan.kind === 'push') {
+        to.style.opacity = '1';
+        const ease = { duration: ms, easing: 'cubic-bezier(0.26, 0.86, 0.44, 0.985)', fill: 'forwards' as const };
+        animations.push(to.animate([{ transform: 'translateX(100%)' }, { transform: 'none' }], ease));
+        if (from) animations.push(from.animate([{ transform: 'none' }, { transform: 'translateX(-100%)' }], ease));
       } else if (ms) {
         to.style.opacity = '1';
         animations.push(to.animate([{ opacity: 0 }, { opacity: 1 }], { duration: ms, easing: 'ease-out' }));
