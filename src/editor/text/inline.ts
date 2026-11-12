@@ -137,8 +137,10 @@ function lift(host: Element, range: Range, match: Match): Node[] {
     const before = outer.cloneNode(false) as Element;
     before.append(head.extractContents());
     nodes = [...outer.childNodes];
-    outer.before(before);
-    outer.after(after);
+    // a part of white space alone is not kept in an element of its own
+    const part = (el: Element) => (el.textContent!.trim() || el.querySelector('mjx-container, img, br') ? [el] : [...el.childNodes]);
+    outer.before(...part(before));
+    outer.after(...part(after));
     outer.replaceWith(...nodes);
   } else {
     const fragment = range.extractContents();

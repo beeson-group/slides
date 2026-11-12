@@ -193,7 +193,10 @@ export class Commands {
         boundKeys(c, platform).some((k) => (plain || !isPlain(k)) && !(typed && isPlain(k)) && !types(k) && matches(e, k, platform)) &&
         this.enabled(c.id);
     });
-    const alt = fallback(ev, platform);
+    // on a Mac, a text and the notes keep the Control keys of the text system of macOS, e.g.
+    // Control-D, which deletes forward, rather than taking them as Command with the letter
+    const cocoa = platform === 'mac' && (region === 'text' || region === 'notes') && ev.ctrlKey && !ev.metaKey && /^[abdefhklnoptvy]$/i.test(ev.key);
+    const alt = cocoa ? null : fallback(ev, platform);
     return find(ev) ?? (alt ? find(alt) : undefined);
   }
 

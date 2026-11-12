@@ -316,6 +316,20 @@ export class Outline {
         void this.app.commands.run(id).catch((err) => this.app.fail(err));
         return;
       }
+      // the copy of the slide is made after the typed text of the line is written. the write puts
+      // the focus into the slide, hence the command of the navigator is run rather than Duplicate
+      if (id === 'edit.duplicate') {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        void this.step(e, () => this.app.commands.run('slide.duplicate')).catch((err) => this.app.fail(err));
+        return;
+      }
+      // a line does not take a format, hence the native bold, italic, and underline are not run
+      if (/^[biu]$/i.test(ev.key) && !ev.altKey) {
+        ev.preventDefault();
+        ev.stopImmediatePropagation();
+        return;
+      }
       // the keys of a text, e.g. Select All and the clipboard, stay with the field
       if (/^[acvx]$/i.test(ev.key)) ev.stopImmediatePropagation();
       return;

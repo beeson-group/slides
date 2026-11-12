@@ -84,7 +84,13 @@ export const entering = new WeakMap<Element, Entering>();
 const entered = async (run: () => Promise<void>, enter: boolean) => {
   const field = document.activeElement && entering.get(document.activeElement);
   if (!field) return run();
+  // the typed value is dropped before a redo, since a pane rebuilt for the selection of the redone
+  // entry would commit it to the targets of the field
+  if (!enter) field.follow();
+  const input = document.activeElement;
   if (!enter || (await field.enter()) !== false) await run();
+  // a step that put a text selection back, e.g. the undo of Bold, keeps it and its focus
+  if (document.activeElement !== input && document.activeElement?.closest('[contenteditable="true"]')) return;
   field.follow();
 };
 

@@ -455,10 +455,19 @@ export async function split(app: App): Promise<void> {
     second.innerHTML = tail;
     const space = spaceBefore(li);
     li.after(...(space ? [space.cloneNode()] : []), second);
+    // the items of host are found again by their index, since its content is replaced
+    const off = offsetIn(item, ...caret);
+    let done = false;
+    const nth = (i: number, at = 0) => () => {
+      const el = itemsOf(host)[i];
+      if (el) caretAt(app, el, at)();
+    };
+    const kept = app.history.keep(() => (done ? nth(k + 1) : nth(k, off)));
     await app.doc.setContent(host, copy.innerHTML, 'new paragraph');
     const now = host.querySelectorAll('li')[k + 1];
     if (now) selectIn(now, 0);
-    return;
+    done = true;
+    return kept();
   }
   const tag = item.localName === 'h3' ? 'p' : item.localName;
   const open = item.localName === 'h3' ? '<p>' : startTag(app, item, tag, { attrs: { id: null } });

@@ -348,7 +348,16 @@ export function install(app: App): void {
     const n = s?.focusNode;
     const k = s?.focusOffset ?? 0;
     if (!s?.isCollapsed || !(n instanceof Text) || k === 0 || n.parentElement?.closest('pre, code')) return;
-    if (!/[ \u00a0]/.test(n.data[k - 1]) || !/[\s.,;:!?)\]]/.test(n.data[k] ?? '')) return;
+    // a word that was the whole text of an inline element leaves the caret at the end of n, and
+    // the character after it is read from the next text of the block
+    let next = n.data[k];
+    const host = next === undefined ? app.hostOf(n.parentElement) : null;
+    if (host) {
+      const w = document.createTreeWalker(host, NodeFilter.SHOW_TEXT);
+      w.currentNode = n;
+      for (let t = w.nextNode() as Text | null; t && next === undefined; t = w.nextNode() as Text | null) next = t.data[0];
+    }
+    if (!/[ \u00a0]/.test(n.data[k - 1]) || !/[\s.,;:!?)\]]/.test(next ?? '')) return;
     n.deleteData(k - 1, 1);
     s.collapse(n, k - 1);
   }

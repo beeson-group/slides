@@ -424,7 +424,7 @@ export function numberField(app: App, o: NumberOptions): Control & { input: HTML
   input.addEventListener('blur', flush);
   input.addEventListener('keydown', (ev) => {
     // Undo and Redo after a commit act on the history and not on the text of the field, which then
-    // follows the selection, as in Keynote
+    // follows the selection, as in Keynote. the command shows the value with follow of the field
     const history = ['edit.undo', 'edit.redo'].find((id) => {
       const c = app.commands.get(id);
       return c && keysOf(c, app.platform).some((k) => matches(ev, k, app.platform));
@@ -432,10 +432,7 @@ export function numberField(app: App, o: NumberOptions): Control & { input: HTML
     if (history && round(typed()) === shown) {
       ev.preventDefault();
       ev.stopPropagation();
-      void app.commands.run(history).then(() => {
-        show(o.value());
-        input.select();
-      }).catch((e) => app.fail(e));
+      void app.commands.run(history).catch((e) => app.fail(e));
     } else if (ev.key === 'Enter') {
       ev.preventDefault();
       if (o.same && !input.disabled && round(typed()) === shown) commit(typed());
