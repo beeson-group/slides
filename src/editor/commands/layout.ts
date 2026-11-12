@@ -13,6 +13,7 @@ import { childrenIn, eolOf, indentAt, spaceOf, unitsOf } from '../model/units.ts
 import type { Navigator } from '../navigator/navigator.ts';
 import { drawInto, laidOut } from '../navigator/thumbs.ts';
 import { classesOf, tokenize, type Range, type Token } from '../tokens.ts';
+import { translateIn } from '../tags.ts';
 import { injectStyle } from '../ui/dom.ts';
 import { install as installOrder } from './order.ts';
 import { checkOverlaps } from '../overflow.ts';
@@ -277,12 +278,14 @@ export async function changeLayout(app: App, slides: Element[], layout: Layout):
   // the places among the words of each slide of the blocks that the fit of its panel shrank. a
   // slide written from its first text has none
   const shrunk = slides.map((s, k) => (layout === 'split' || from[k].text !== from[k].last ? [] : wordsOf(app, s).flatMap((el, i) => (fitted.has(el) && el.classList.contains('small') ? [i] : []))));
+  const codes = slides.map((s) => drawnCodes(app, s));
   const out = await rewrite(app, slides, (_, s) => {
     const o = from[slides.indexOf(s)];
     return layout === o.layout ? o.text : relayout(o.text, layout, step);
   }, 'layout');
   out.forEach((s, k) => {
     if (slides.includes(s)) return;
+    if (layout !== from[k].layout) keepCodes(app, s, codes[k]);
     const words = wordsOf(app, s);
     for (const i of shrunk[k]) if (words[i]) app.doc.setTag(words[i], { classes: { small: false } }, 'layout');
     fitPanel(app, s);
@@ -290,6 +293,59 @@ export async function changeLayout(app: App, slides: Element[], layout: Layout):
     checkOverlaps(app, s);
   });
   return out;
+}
+
+// the QR codes of a slide in their order, each with the center of its drawn box and its width in
+// slide px, its computed position, and the translate and the width of its style, or null for a
+// code that is not shown. the center does not move with a rotate about it
+type Drawn = { x: number; y: number; width: number; position: string; translate?: string; w?: string } | null;
+function drawnCodes(app: App, slide: Element): Drawn[] {
+  if (!(slide instanceof HTMLElement)) return [];
+  return laidOut(slide, () => {
+    const s = slide.getBoundingClientRect();
+    const k = slide.offsetWidth ? s.width / slide.offsetWidth : 1;
+    return [...slide.querySelectorAll<HTMLElement>('.qr')].map((q) => {
+      if (!app.pairing?.elements.get(q)?.open || !q.getClientRects().length) return null;
+      const r = q.getBoundingClientRect();
+      const style = app.doc.tagState(q).style;
+      return { x: (r.left + r.width / 2 - s.left) / k, y: (r.top + r.height / 2 - s.top) / k, width: q.offsetWidth, position: getComputedStyle(q).position, translate: style.translate, w: style.width };
+    });
+  });
+}
+
+// each QR code with a translate or a width keeps its place in the new layout of slide. a code that
+// the theme places in the same way in both layouts keeps the translate and the width of its style,
+// also where the slide was written from its text before a run of changes. a code that the theme
+// places in another way, e.g. at the lower right of a closing slide and in the flow elsewhere, keeps
+// the box drawn before the change, as PowerPoint keeps an object that is not a placeholder: its
+// translate is written again, and its width where the default width of the layout differs. a code
+// without a translate and a width takes the place and the size of the layout
+function keepCodes(app: App, slide: Element, was: Drawn[]): void {
+  [...slide.querySelectorAll<HTMLElement>('.qr')].forEach((q, i) => {
+    const old = was[i];
+    if (!old || !app.pairing?.elements.get(q)?.open || (old.translate === undefined && old.w === undefined)) return;
+    const put = (key: 'translate' | 'width', value: string | undefined) => {
+      if (app.doc.tagState(q).style[key] !== value) app.doc.setTag(q, { style: { [key]: value ?? null } }, 'layout');
+    };
+    const first = app.doc.tagState(q).style.width;
+    put('width', old.w);
+    const at = drawnCodes(app, slide)[i];
+    if (!at || at.position === old.position) return put('translate', old.translate);
+    // the width of the text before the run, none, or the old width, whichever draws the old size,
+    // so that a width written by an earlier change is taken off where the layout draws it by default
+    const fits = (w: string | undefined) => {
+      put('width', w);
+      return drawnCodes(app, slide)[i]?.width === old.width;
+    };
+    if (!fits(first) && !fits(undefined) && !(old.w !== undefined && fits(old.w))) put('width', `${Math.round(old.width)}px`);
+    const moved = drawnCodes(app, slide)[i]!;
+    const now = app.doc.tagState(q).style.translate;
+    const t = now === undefined ? { x: 0, y: 0 } : translateIn(`translate: ${now}`);
+    if (!t) return;
+    const x = Math.round(t.x + old.x - moved.x);
+    const y = Math.round(t.y + old.y - moved.y);
+    if (now === undefined ? x || y : x !== t.x || y !== t.y) app.doc.setTag(q, { translate: { x, y } }, 'layout');
+  });
 }
 
 // the text of each slide before a run of changes of layout without an edit between them, and its
