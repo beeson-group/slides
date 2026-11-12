@@ -128,9 +128,11 @@ const SAMPLE_WORDS: Partial<Record<Layout, [string, string][]>> & { all: [string
 const BOX = 'style="background: color-mix(in srgb, var(--muted) 34%, var(--bg)); background-clip: content-box"';
 
 // the text of a sample slide of the layout for the tiles of the layout chooser: the skeleton of
-// layoutText with placeholder words, two items in its list, a gray box in place of each figure and
-// backdrop, and a gray backdrop on a narrow slide, at the place of the layout. a sample does not
-// depend on the deck, and it is drawn but never written into a file
+// layoutText with placeholder words, two items in its list, and a gray box in place of each figure
+// and backdrop. a content slide and a narrow slide are written without a figure, hence their
+// samples get a gray zone and a gray backdrop at the place of the layout, and a wide slide is
+// without one, since its text column runs over this place. a sample does not depend on the deck,
+// and it is drawn but never written into a file
 export function sampleText(layout: Layout): string {
   const style = { eol: '\n', step: '  ' };
   let text = layoutText(layout, style);
@@ -141,6 +143,6 @@ export function sampleText(layout: Layout): string {
     .replace('<ul class="outline" data-auto></ul>', '<ul class="outline"><li class="now">Chapter one</li><li>Chapter two</li></ul>')
     .replace(/<div class="(backdrop|plate|zone)"[^>]*>/g, (_, cls: string) => `<div class="${cls}" ${BOX}>`);
   text = text.replace(/<ul>\s*<li><\/li>\s*<\/ul>/, '<ul><li>A first point</li><li>A second point</li></ul>');
-  if (layout === 'narrow') return text.replace('</section>', `  <div class="backdrop" ${BOX}></div>\n</section>`);
-  return text;
+  const place = layout === 'content' ? 'zone' : layout === 'narrow' ? 'backdrop' : null;
+  return place ? text.replace('</section>', `  <div class="${place}" ${BOX}></div>\n</section>`) : text;
 }

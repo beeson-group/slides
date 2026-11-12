@@ -134,9 +134,10 @@ function sketch(layout: string, width: Width): SVGSVGElement {
       rect(31, 6, 29, 24, faint);
       break;
     default: {
-      const w = width === 'narrow' ? 22 : width === 'wide' ? 40 : 30;
+      // the text column of a wide slide runs over the place of the zone, up to the right margin
+      const w = width === 'narrow' ? 22 : width === 'wide' ? 54 : 30;
       words(5, 5, w, 5);
-      rect(w + 9, 6, 59 - (w + 9), 24, faint);
+      if (width !== 'wide') rect(w + 9, 6, 59 - (w + 9), 24, faint);
     }
   }
   svg.append(frame);
