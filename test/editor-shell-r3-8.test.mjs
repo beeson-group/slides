@@ -357,7 +357,16 @@ for (const platform of PLATFORMS) {
     await press(page, 'Escape');
     await frames(page);
     const edited = await render(page);
-    assert.match(edited, /<\/ol>\n  <p>A new paragraph.<\/p>\n/);
+    // the paragraph is written where its empty box was drawn: 10 px under its place in the flow,
+    // i.e. the 24 px between two paragraphs less the 14 px under a list item
+    assert.match(edited, /<\/ol>\n  <p style="translate: 0px 10px">A new paragraph.<\/p>\n/);
+    const written = await page.evaluate(`(() => {
+      const p = document.querySelector('.reveal section.present > ol + p');
+      const slides = document.querySelector('.reveal .slides');
+      const k = slides.getBoundingClientRect().width / slides.offsetWidth;
+      return (p.getBoundingClientRect().top - p.previousElementSibling.getBoundingClientRect().bottom) / k;
+    })()`);
+    assert.ok(Math.abs(written - theme) < 1, `the written paragraph is ${written} px under the list, and paragraphs are ${theme} px apart`);
     await undoRedo(page, page.source, edited);
     assert.deepEqual(errors(page), []);
   });
