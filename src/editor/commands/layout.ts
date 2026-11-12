@@ -340,8 +340,14 @@ function keepCodes(app: App, slide: Element, was: Drawn[]): void {
     if (!fits(first) && !fits(undefined) && !(old.w !== undefined && fits(old.w))) put('width', `${Math.round(old.width)}px`);
     const moved = drawnCodes(app, slide)[i]!;
     const now = app.doc.tagState(q).style.translate;
-    const t = now === undefined ? { x: 0, y: 0 } : translateIn(`translate: ${now}`);
-    if (!t) return;
+    // a translate that is not written in px, e.g. with a bare 0 or as a share of the box, is read
+    // from the computed style, where a share is of the drawn box of the code, which is square
+    const drawn = () => {
+      const [a = '0', b = '0'] = getComputedStyle(q).translate.split(/\s+/);
+      const px = (v: string) => (v.endsWith('%') ? parseFloat(v) / 100 * moved.width : parseFloat(v)) || 0;
+      return { x: px(a), y: px(b) };
+    };
+    const t = now === undefined ? { x: 0, y: 0 } : translateIn(`translate: ${now}`) ?? drawn();
     const x = Math.round(t.x + old.x - moved.x);
     const y = Math.round(t.y + old.y - moved.y);
     if (now === undefined ? x || y : x !== t.x || y !== t.y) app.doc.setTag(q, { translate: { x, y } }, 'layout');
