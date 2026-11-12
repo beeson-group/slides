@@ -131,7 +131,7 @@ test('the classes of a stylesheet are read without comments, numbers, and addres
   const css = '/* .nope */ .reveal .slides section.wide > .zone, a.b-c:hover { margin: .5em; background: url(x.png); content: ".q"; }';
   assert.deepEqual(themeClasses(css).sort(), ['b-c', 'reveal', 'slides', 'wide', 'zone']);
   const theme = new Set(themeClasses(readFileSync(new URL('../theme/beeson.css', import.meta.url), 'utf8')));
-  for (const c of ['wide', 'narrow', 'zone', 'plate', 'backdrop', 'qr', 'math', 'caption']) assert.ok(theme.has(c), c);
+  for (const c of ['wide', 'narrow', 'zone', 'plate', 'backdrop', 'qr', 'math', 'caption', 'dots', 'arrows']) assert.ok(theme.has(c), c);
 });
 
 test('the scope rule allows the writes of AGENTS.md and names the others', () => {
