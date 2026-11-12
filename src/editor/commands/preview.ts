@@ -15,6 +15,7 @@ import { fallback, matches } from '../keymap.ts';
 import { OFF } from '../layers.ts';
 import { drawInto } from '../navigator/thumbs.ts';
 import { showStep, stepsOfSlide } from '../present.ts';
+import { stepVideos } from '../steps.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { liveOf, slideBackdrop, spanOf, type Live } from './backdrop.ts';
 
@@ -132,11 +133,20 @@ async function play(app: App, parts: Part[]): Promise<void> {
       if (shot) shot.style.transform = `scale(${b.width / deck.width})`;
     };
     place();
+    // the videos of the copy that the show plays at their step, once each fragment around them is shown
+    const copy = host.shadowRoot?.querySelector('.beeson-thumb .slides > section');
+    const videos = copy ? stepVideos(copy) : null;
+    if (videos) ends.push(() => videos.stop());
+    const reached = (v: Element) => {
+      for (let f = v.closest('.fragment'); f; f = f.parentElement?.closest('.fragment') ?? null) if (!f.classList.contains('visible') || f.classList.contains(OFF)) return false;
+      return true;
+    };
     const n = stepsOfSlide(slide);
     for (let k = 0; k <= n && !stopped; k++) {
       if (k) await pause(timing.step);
       if (stopped) return;
       showStep(host, slide, k);
+      videos?.update(reached);
       // a backdrop that is a step is traced from its step on, as the show traces it
       const now = '.backdrop.fragment.current-fragment:not(.beeson-off)';
       for (const el of host.shadowRoot?.querySelectorAll<HTMLElement>(now) ?? []) {

@@ -10,6 +10,7 @@ import { CONTAINER, pictureSize, twinOf } from '../canvas/hit.ts';
 import { placeOf, record, withCorners, writePlace } from '../canvas/drag.ts';
 import type { TagEdit } from '../tags.ts';
 import { placeCaret } from '../text/typing.ts';
+import { startOnClick } from './steps.ts';
 
 // the longest text of a QR code, in bytes of UTF-8, as src/qr.ts encodes it at level M
 export const QR_MAX = 2331;
@@ -130,6 +131,8 @@ function invertible(app: App, el: Element | null): Element | null {
 
 const imageMenu = (order: number): Command['menu'] => ({ bar: 'Format', group: 'image', order, submenu: 'Image' });
 const has = (name: string) => (el: Element) => el.hasAttribute(name);
+// a video of the fragment style play, which the theme starts at its step
+const onClick = (el: Element) => el.matches('.fragment.play');
 const flag = (name: string) => (on: boolean): TagEdit => ({ attrs: { [name]: on ? '' : null } });
 const visual = (app: App) => imageOf(app) ?? videoOf(app) ?? hiddenOf(app);
 
@@ -251,7 +254,35 @@ export function commands(): Command[] {
       },
     },
     switchOf('figure.invert', 'Invert in Dark Mode', (app) => invertible(app, imageOf(app)), (el) => el.classList.contains('invert'), (on) => ({ classes: { invert: on } }), imageMenu(21)),
-    switchOf('figure.autoplay', 'Play Automatically', videoOf, has('data-autoplay'), flag('data-autoplay')),
+    // a video started on a click is not played with its slide, hence Play Automatically is dimmed
+    // and off while Start on a Click is on
+    {
+      ...switchOf('figure.autoplay', 'Play Automatically', videoOf, (el) => has('data-autoplay')(el) && !onClick(el), flag('data-autoplay')),
+      enabled: (app) => {
+        const el = videoOf(app);
+        return !!el && !onClick(el);
+      },
+      why: (app) => {
+        const el = videoOf(app);
+        return el && onClick(el) ? 'The video is started on a click, at its step' : null;
+      },
+    },
+    // a video started at its step, as Start Movie on Click of Keynote and the animation Play of
+    // PowerPoint, i.e. a step with the effect Play of the Steps pane
+    {
+      id: 'figure.startOnClick',
+      label: 'Start on a Click',
+      undoable: true,
+      enabled: (app) => !!videoOf(app),
+      checked: (app) => {
+        const el = videoOf(app);
+        return el ? onClick(el) : false;
+      },
+      run: (app, arg) => {
+        const el = given(arg) ?? videoOf(app);
+        if (el) startOnClick(app, el, !onClick(el));
+      },
+    },
     switchOf('figure.loop', 'Loop', videoOf, has('loop'), flag('loop')),
     switchOf('figure.muted', 'Muted', videoOf, has('muted'), flag('muted')),
     {
@@ -295,7 +326,7 @@ type Page = { Beeson?: { mount?(root: Element): void } };
 // the svg of a QR code is drawn by the theme once, hence it is drawn again from its new text. the
 // theme draws the codes under the root it is given, which is thus the parent of the code
 function redrawQr(el: Element): void {
-  for (const old of el.querySelectorAll(':scope > svg, :scope > .qr-error')) old.remove();
+  for (const old of el.querySelectorAll(':scope > svg, :scope > .qr-error, :scope > .qr-logo')) old.remove();
   if (el.parentElement) (window as unknown as Page).Beeson?.mount?.(el.parentElement);
 }
 

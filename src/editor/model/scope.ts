@@ -13,6 +13,10 @@ export const REVEAL_CLASSES = [
   'highlight-green', 'highlight-blue', 'highlight-current-red', 'highlight-current-green', 'highlight-current-blue',
 ];
 
+// play of the theme, the style of a step of a video started at its step. it is not one of
+// REVEAL_CLASSES, which an image that replaces a video keeps in media/actions.ts
+const STEP_CLASSES = ['play'];
+
 // the data attributes of AGENTS.md and REFERENCE.md, those of reveal.js that the theme gives a
 // meaning, and data-group and data-locked, which are new and named among the open decisions, and
 // the glue of model/glue.ts, which only the editor reads
@@ -115,7 +119,7 @@ export const NOT_ON_SLIDE = ['center'];
 
 // a class of the theme or of reveal.js, or the language of a code box
 const allowedClass = (name: string, theme: Set<string>, tag = '') =>
-  !(tag === 'section' && NOT_ON_SLIDE.includes(name)) && (theme.has(name) || REVEAL_CLASSES.includes(name) || /^language-[\w-]+$/.test(name));
+  !(tag === 'section' && NOT_ON_SLIDE.includes(name)) && (theme.has(name) || REVEAL_CLASSES.includes(name) || STEP_CLASSES.includes(name) || /^language-[\w-]+$/.test(name));
 const classProblem = (name: string, tag: string) => (tag === 'section' && NOT_ON_SLIDE.includes(name) ? `the class ${name} on a section` : `the class ${name}`);
 
 // the writes of edit on an element with the tag and the attributes of the file that are out of the

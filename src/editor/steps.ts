@@ -69,16 +69,22 @@ export function itemOf(state: TagState): Item {
   return { fragment: state.classes.includes('fragment'), index, final: 'data-final' in state.attrs };
 }
 
-// the effects of reveal.js that the Steps tab replaces, and the four that it writes: Fade In, the
-// plain fragment, Fade Out, Only at Its Step, and Dim, which semi-fade-out draws at the opacity of
-// a ghost from its step on
-const EFFECT_CLASSES = ['fade-in', 'fade-out', 'fade-up', 'fade-down', 'fade-left', 'fade-right', 'fade-in-then-out', 'fade-in-then-semi-out', 'semi-fade-out', 'current-visible'];
-export type Effect = 'in' | 'out' | 'only' | 'dim';
-export const EFFECTS: [Effect, string][] = [['in', 'Fade In'], ['out', 'Fade Out'], ['only', 'Only at Its Step'], ['dim', 'Dim']];
+// the effects of reveal.js that the Steps tab replaces, and the five that it writes: Fade In, the
+// plain fragment, Play, Fade Out, Only at Its Step, and Dim, which semi-fade-out draws at the
+// opacity of a ghost from its step on. Play is the class play of the theme on a video, which shows
+// its poster with the slide and starts it at its step, as the animation Play of PowerPoint
+const EFFECT_CLASSES = ['fade-in', 'fade-out', 'fade-up', 'fade-down', 'fade-left', 'fade-right', 'fade-in-then-out', 'fade-in-then-semi-out', 'semi-fade-out', 'current-visible', 'play'];
+export type Effect = 'in' | 'play' | 'out' | 'only' | 'dim';
+export const EFFECTS: [Effect, string][] = [['in', 'Fade In'], ['play', 'Play'], ['out', 'Fade Out'], ['only', 'Only at Its Step'], ['dim', 'Dim']];
+
+// the effects offered in the menu of a row, Play only for a video. with several rows selected, the
+// command sets Play only on their videos
+export const effectsFor = (el: Element | undefined): [Effect, string][] => EFFECTS.filter(([id]) => id !== 'play' || el?.localName === 'video');
 
 // the effect of a fragment with its label. an effect that the tab does not write, e.g. fade-up,
 // keeps its name
 export function effectOf(classes: string[]): { id: Effect | null; label: string } {
+  if (classes.includes('play')) return { id: 'play', label: 'Play' };
   if (classes.includes('fade-out')) return { id: 'out', label: 'Fade Out' };
   if (classes.includes('current-visible')) return { id: 'only', label: 'Only at Its Step' };
   if (classes.includes('semi-fade-out')) return { id: 'dim', label: 'Dim' };
@@ -350,13 +356,16 @@ export function writePlan(app: App, m: Model, plan: Plan, extra: Map<Element, Ta
   return true;
 }
 
-// the classes of an effect written into the tag of el, and the others of EFFECT_CLASSES taken off
+// the classes of an effect written into the tag of el, and the others of EFFECT_CLASSES taken off.
+// Play takes data-autoplay off, since a video of the class play is started at its step
 export function effectEdit(state: TagState, effect: Effect): TagEdit {
-  const want = effect === 'out' ? 'fade-out' : effect === 'only' ? 'current-visible' : effect === 'dim' ? 'semi-fade-out' : null;
+  const want = effect === 'out' ? 'fade-out' : effect === 'only' ? 'current-visible' : effect === 'dim' ? 'semi-fade-out' : effect === 'play' ? 'play' : null;
   const classes: Record<string, boolean> = {};
   for (const c of state.classes) if (EFFECT_CLASSES.includes(c) && c !== want) classes[c] = false;
   if (want && !state.classes.includes(want)) classes[want] = true;
-  return Object.keys(classes).length ? { classes } : {};
+  const out: TagEdit = Object.keys(classes).length ? { classes } : {};
+  if (effect === 'play' && 'data-autoplay' in state.attrs) out.attrs = { 'data-autoplay': null };
+  return out;
 }
 
 const KINDS: [string, string][] = [['h1, h2, h3', 'Heading'], ['.foot', 'Footnote'], ['li', 'Item'], ['ul, ol', 'List'], ['p', 'Paragraph'], ['div.math', 'Formula'], ['table', 'Table'], ['tr', 'Table row'], ['pre, code', 'Code'], ['blockquote', 'Quotation'], ['video', 'Video'], ['tycho-viewer', 'Scene'], ['.qr', 'QR code'], ['.caption', 'Caption'], ['.backdrop', 'Backdrop'], ['.surface', 'Surface'], ['.plot', 'Plot'], ['[data-plot-show], [data-plot-tab]', 'Plot step'], ['[data-surface-stage]', 'Surface step'], ['img, figure, .zone, .plate', 'Figure'], ['svg.line', 'Line'], ['.shape', 'Shape']];
@@ -620,6 +629,33 @@ function runsOf(m: Model): Run[] {
   return out;
 }
 
+// the videos of slide that the show plays at their step, i.e. of the style play or with
+// data-autoplay in a fragment, for a preview of the Steps pane or of the toolbar. update starts each
+// video that shown gives from its start, as src/video.ts starts it, and pauses and rewinds it to its
+// poster when its step is undone. stop rewinds every video started
+export function stepVideos(slide: Element): { update(shown: (v: HTMLVideoElement) => boolean): void; stop(): void } {
+  const videos = [...slide.querySelectorAll('video')].filter((v) => v.closest('section') === slide && !!v.closest('.fragment') && (v.hasAttribute('data-autoplay') || !!v.closest('.fragment.play')));
+  const started = new Set<HTMLVideoElement>();
+  const rewind = (v: HTMLVideoElement) => {
+    started.delete(v);
+    v.pause();
+    v.load();
+  };
+  return {
+    update: (shown) => {
+      for (const v of videos) {
+        const on = shown(v);
+        if (on && !started.has(v) && v.getClientRects().length) {
+          started.add(v);
+          v.currentTime = 0;
+          void v.play().catch(() => {});
+        } else if (!on && started.has(v)) rewind(v);
+      }
+    },
+    stop: () => { for (const v of [...started]) rewind(v); },
+  };
+}
+
 // the seconds of a step of a preview, and of the last frame, in which every element is restored
 const STEP_MS = 800;
 const END_MS = 700;
@@ -741,7 +777,7 @@ export class Steps {
     delayBox.append(delay.el);
     this.effect = chromeSelect(app, {
       label: 'Effect of the step',
-      choices: () => EFFECTS.map(([value, label]) => ({ value, label })),
+      choices: () => effectsFor(this.selected()?.el).map(([value, label]) => ({ value, label })),
       value: () => (this.selected()?.stepped ? (this.selected()?.effect.id ?? '') : ''),
       text: () => (this.selected()?.stepped ? (this.selected()?.effect.label ?? '') : '—'),
       onChange: (v) => this.runOn('steps.effect', { effect: v }),
@@ -1138,7 +1174,7 @@ export class Steps {
       { label: 'With Previous', checked: start === 'with', disabled: at < 0 || final || first, run: run('steps.start', { start: 'with' }) },
       { label: 'After Previous', checked: start === 'after', disabled: at < 0 || final || first || !afterable(m, r.i), run: run('steps.start', { start: 'after' }) },
       { rule: true },
-      ...EFFECTS.map(([id, label]): MenuItem => ({ label, checked: at >= 0 && effect === id, run: run('steps.effect', { effect: id }) })),
+      ...effectsFor(r.el).map(([id, label]): MenuItem => ({ label, checked: at >= 0 && effect === id, run: run('steps.effect', { effect: id }) })),
       { rule: true },
       { label: 'Show Last', checked: final, run: run('steps.final', { on: !final }) },
       { rule: true },
@@ -1349,10 +1385,12 @@ export class Steps {
       dimLines(l.code, reached.length ? l.lines : (stepsOf(this.app as App, l.code).groups[0] ?? null));
     };
     const timers: number[] = [];
+    const videos = stepVideos(slide);
     let finish = () => {};
     const done = new Promise<void>((resolve) => {
       finish = () => {
         timers.forEach(clearTimeout);
+        videos.stop();
         for (const f of frags) f.el.classList.remove('beeson-pv-off', 'beeson-pv-dim', 'beeson-pv-ghost');
         if (lines.length) dimLines(null, null);
         html.classList.remove('beeson-previewing');
@@ -1383,16 +1421,19 @@ export class Steps {
     };
     const frame = (k: number, restored = false) => {
       for (const f of frags) {
-        // a dimmed step is seen from the start, and a ghost keeps its opacity of the theme
+        // a dimmed step is seen from the start, and a ghost keeps its opacity of the theme. a video
+        // of the style play shows its poster from the start, and a video is not dimmed, as in the
+        // show
         const dims = f.el.classList.contains('semi-fade-out');
-        const shown = dims || shownAt(f, k);
+        const shown = dims || f.el.classList.contains('play') || shownAt(f, k);
         f.el.classList.toggle('beeson-pv-off', !shown);
-        f.el.classList.toggle('beeson-pv-dim', shown && !dims && !restored && f.kind === 'in' && f.step < k && !nested(f.el) && !held(f, k) && !f.el.classList.contains('ghost'));
+        f.el.classList.toggle('beeson-pv-dim', shown && !dims && !restored && f.kind === 'in' && f.step < k && !nested(f.el) && !held(f, k) && !f.el.matches('.ghost, video, :has(video)'));
         f.el.classList.toggle('beeson-pv-ghost', dims && f.step <= k);
       }
       if (restored) {
         if (lines.length) dimLines(null, null);
       } else dim(k);
+      videos.update((v) => frags.every((f) => !f.el.contains(v) || shownAt(f, k)));
       html.dataset.previewStep = String(k);
     };
     showLayer(slide, null);

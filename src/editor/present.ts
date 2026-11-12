@@ -93,8 +93,9 @@ export const stepsOfSlide = (slide: Element): number => showSteps(slide).n;
 
 // the clone of slide drawn into host is shown at step k as the show draws it: each fragment not
 // seen at k is hidden, and until the slide is complete, the earlier steps are dimmed to the 0.45
-// of theme/beeson.css, apart from a backdrop, a fragment inside a shown one, and a fragment held
-// with data-keep. a step set to Dim is drawn at the ghost opacity from its step on, since the
+// of theme/beeson.css, apart from a backdrop, a video, a fragment inside a shown one, and a fragment
+// held with data-keep. a video of the style play is seen with its poster before its step. a step
+// set to Dim is drawn at the ghost opacity from its step on, since the
 // rules of the thumbnails show every fragment at full opacity. the classes highlighted at k are
 // colored by applySteps of src/steps.ts
 export function showStep(host: HTMLElement, slide: Element, k: number): void {
@@ -110,8 +111,8 @@ export function showStep(host: HTMLElement, slide: Element, k: number): void {
   });
   applySteps(clone);
   (frags as HTMLElement[]).forEach((f, i) => {
-    const seen = i >= steps.length || seenAt(kinds[i], steps[i], k);
-    const dim = seen && k < n && steps[i] < k - 1 && kinds[i] !== 'dim' && !f.matches('.backdrop, [data-held], .ghost') && !f.parentElement?.closest('.fragment.visible');
+    const seen = i >= steps.length || seenAt(kinds[i], steps[i], k) || f.classList.contains('play');
+    const dim = seen && k < n && steps[i] < k - 1 && kinds[i] !== 'dim' && !f.matches('.backdrop, [data-held], .ghost, video, :has(video)') && !f.parentElement?.closest('.fragment.visible');
     f.classList.toggle('beeson-off', !seen);
     const ghost = kinds[i] === 'dim' && steps[i] < k && !f.matches('[data-held]');
     f.style.setProperty('opacity', dim ? '0.45' : ghost ? '0.25' : '', dim || ghost ? 'important' : '');

@@ -9,6 +9,7 @@
 // the slide from that frame, as the play button of the Movie tab
 
 import type { App } from '../app.ts';
+import { capacity } from '../../qr.ts';
 import { QR_MAX, bytesOf, paneImageOf, paneVideoOf, qrOf } from '../commands/figure.ts';
 import { posterTime, setPosterTime, unreadable } from '../media/actions.ts';
 import { media } from '../media/store.ts';
@@ -240,12 +241,23 @@ export function videoPane(app: App, run: Run): Control[] {
     ]),
     section('Playback', [
       checkbox(app, run, 'figure.autoplay', 'Play while the slide is shown'),
+      checkbox(app, run, 'figure.startOnClick', 'Start on a click'),
       checkbox(app, run, 'figure.loop', 'Loop'),
       checkbox(app, run, 'figure.muted', 'Muted'),
     ]),
     modes(app, run, 'video'),
   ];
 }
+
+// the longest text of a QR code drawn with the logo, at level H in version 40, after which src/qr.ts
+// draws it without the logo at level M
+const LOGO_MAX = capacity(40, 'H');
+
+// the codes of the deck are drawn with the logo, unless --qr-logo is none, as with no-logo on the body
+const withLogo = (qr: Element) => {
+  const image = getComputedStyle(qr).getPropertyValue('--qr-logo').trim();
+  return image !== '' && image !== 'none';
+};
 
 export function qrPane(app: App, run: Run): Control[] {
   const qr = qrOf(app);
@@ -260,7 +272,8 @@ export function qrPane(app: App, run: Run): Control[] {
       commit: (value) => run('figure.qr', { value, el: qr }),
       hint: (text) => {
         const n = bytesOf(text);
-        return { text: !text.trim() ? 'The text cannot be empty.' : `${n} of ${QR_MAX} bytes`, warn: !text.trim() || n > QR_MAX };
+        const plain = n > LOGO_MAX && n <= QR_MAX && !!qr && withLogo(qr) ? ', drawn without the logo' : '';
+        return { text: !text.trim() ? 'The text cannot be empty.' : `${n} of ${QR_MAX} bytes${plain}`, warn: !text.trim() || n > QR_MAX };
       },
     })]),
     section(null, [note(() => 'A shorter text is drawn with fewer and larger modules, which are read from farther back in the room.')]),

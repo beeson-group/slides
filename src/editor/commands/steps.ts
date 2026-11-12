@@ -6,6 +6,7 @@
 // as Last Step, Show with Slide, the start, the effect, and Show Last act on each selected element
 
 import type { App } from '../app.ts';
+import { twinOf } from '../canvas/hit.ts';
 import { moveTo, oneByOne, placedIndex, setFinal, setIndexReader, setStart, setStep, shift, stepAt, type Plan, type Start } from '../layers.ts';
 import type { TagEdit } from '../tags.ts';
 import { AFTER_DEFAULT, MIN_DELAY, WITH_SLIDE, afterable, carryDelays, classesOf, deliverPlan, deliveryOf, delaysOf, effectEdit, effectOf, indexIn, listItems, listOf, modelAt, modelOf, startAt, writePlan, type Delivery, type Effect, type Model, type StartKind, type Steps } from '../steps.ts';
@@ -129,6 +130,33 @@ function indexOf(app: App, el: Element): string | null {
   if (lo) return String(lo.file + me - lo.page);
   if (hi) return String(hi.file - (hi.page - me));
   return String(me);
+}
+
+// the effect Play of a video set or taken off, as Start on a click of the Video pane. a video that
+// is not a step is made the last step of its slide with the effect Play, and a video taken off Play
+// stays a step with the effect Fade In. a video in a zone or a plate is not an item of the steps
+// until it is a step, hence it is given to the model
+export function startOnClick(app: App, video: Element, on: boolean): void {
+  const m = modelOf(app, video.closest('section'), [video]);
+  const i = m ? indexIn(m, video) : -1;
+  if (!m || i < 0) return;
+  const edit = effectEdit(app.doc.tagState(m.els[i]), on ? 'play' : 'in');
+  const plan = on && stepAt(m.plan, i) < 0 ? setStep(m.plan, i, 'last') : m.plan;
+  writePlan(app, m, plan, Object.keys(edit).length ? new Map([[m.els[i], edit]]) : new Map());
+  playAfterFragment(app, m.els[i]);
+}
+
+// a video made a step with Play is written as the theme writes it, fragment play, since a tag edit
+// puts a new class before the class fragment that it adds. the order is set on each of a pair
+function playAfterFragment(app: App, video: Element): void {
+  for (const el of [video, twinOf(app, video)]) {
+    if (!el) continue;
+    const s = app.doc.tagState(el);
+    if (!s.classes.includes('fragment') || s.classes.indexOf('play') > s.classes.indexOf('fragment')) continue;
+    const classes = s.classes.filter((c) => c !== 'play');
+    classes.splice(classes.indexOf('fragment') + 1, 0, 'play');
+    app.doc.setTag(el, { order: { attrs: Object.keys(s.attrs), classes, style: Object.keys(s.style) } }, 'steps');
+  }
 }
 
 export function install(app: App): void {
@@ -329,8 +357,8 @@ export function install(app: App): void {
     undoable: true,
     run: (a, arg) => change(a, arg, (p, i) => shift(p, i, 1)),
   });
-  // the effect of a step: Fade In, Fade Out, or Only at Its Step. the elements shown with the slide
-  // become one last step first
+  // the effect of a step: Fade In, Play, Fade Out, Only at Its Step, or Dim. the elements shown
+  // with the slide become one last step first. Play is set only on a video
   c.define({
     id: 'steps.effect',
     label: 'Set Effect of Step',
@@ -338,18 +366,20 @@ export function install(app: App): void {
     run: (a, arg) => {
       const s = itemsOf(a, arg);
       if (!s) return;
+      const effect = (arg as { effect: Effect }).effect;
       const extra = new Map<Element, TagEdit>();
       let plan = s.m.plan;
       let first = -1;
       for (const { el, i } of s.items) {
-        if (s.m.locked[i]) continue;
-        const edit = effectEdit(a.doc.tagState(el), (arg as { effect: Effect }).effect);
+        if (s.m.locked[i] || (effect === 'play' && el.localName !== 'video')) continue;
+        const edit = effectEdit(a.doc.tagState(el), effect);
         if (Object.keys(edit).length) extra.set(el, edit);
         if (stepAt(plan, i) >= 0) continue;
         plan = setStep(plan, i, first < 0 ? 'last' : stepAt(plan, first));
         if (first < 0) first = i;
       }
       if (extra.size || plan !== s.m.plan) writePlan(a, s.m, plan, extra);
+      if (effect === 'play') for (const el of extra.keys()) playAfterFragment(a, el);
     },
   });
 }
