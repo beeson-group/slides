@@ -29,8 +29,9 @@ jobs:
       - run: npm run build
       - run: npm run typecheck
       # the tests read the demo deck, hence a talk made with "Use this template" checks only its deck
-      # npm test with the shard of the job, an option that is read only before the files
-      - run: node --test --test-shard=${{ matrix.shard }}/4 "test/*.test.mjs"
+      # npm test with the shard of the job, an option that is read only before the files. With
+      # --test-force-exit, a test file that leaves a server open after a failed cleanup is ended
+      - run: node --test --test-force-exit --test-shard=${{ matrix.shard }}/4 "test/*.test.mjs"
         if: ${{ github.repository == 'beeson-group/slides' }}
 
   check:

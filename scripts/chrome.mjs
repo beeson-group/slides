@@ -55,8 +55,8 @@ export async function removeProfile(profile) {
 
 /**
  * Starts Chrome and returns an object with newPage() and close(). With offline set, every host
- * name is mapped to a failed lookup, thus each network load of a deck is reported as an error. A
- * request that is not answered within timeout ms fails.
+ * name is mapped to a failed lookup, thus each network load of a deck is reported as an error.
+ * Without it, only 127.0.0.1 is reached. A request that is not answered within timeout ms fails.
  */
 export async function launch({ offline = true, timeout = 120000 } = {}) {
   const chrome = findChrome();
@@ -77,7 +77,10 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
     ...(process.env.CI && process.platform === 'darwin' ? ['--use-angle=swiftshader'] : []),
     // the sandbox of Chrome cannot be started on the Ubuntu runners of GitHub, and the pages are local
     ...(process.platform === 'linux' ? ['--no-sandbox'] : []),
-    ...(offline ? ['--host-resolver-rules=MAP * ~NOTFOUND'] : []),
+    // without offline, only the server of scripts/webdriver.mjs at 127.0.0.1 is reached. With the
+    // network, Chrome downloads components and models into the profile in the background, and on
+    // Windows such a file is still locked when the profile is removed
+    `--host-resolver-rules=MAP * ~NOTFOUND${offline ? '' : ', EXCLUDE 127.0.0.1'}`,
     'about:blank',
   ];
   const child = spawn(chrome, args, { stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] });
