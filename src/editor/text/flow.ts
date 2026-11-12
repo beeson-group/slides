@@ -354,10 +354,16 @@ export function install(app: App): void {
     ev.stopImmediatePropagation();
   }, true);
 
+  // the drag is held until the window is moved, since a change of the window that the browser
+  // reports after the release, while the window is still in the first block, would end the span
   document.addEventListener('pointerup', () => {
-    if (!drag) return;
-    drag = null;
-    if (span) setTimeout(() => repaint(app), 0);
+    const held = drag;
+    if (!held) return;
+    if (!span) return void (drag = null);
+    setTimeout(() => {
+      if (drag === held) drag = null;
+      repaint(app);
+    }, 0);
   }, true);
 
   // typing replaces the span, as one entry of the history
