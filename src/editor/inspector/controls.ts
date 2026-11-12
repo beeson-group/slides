@@ -7,6 +7,7 @@
 
 import type { App } from '../app.ts';
 import { keysOf } from '../commands.ts';
+import { entering } from '../commands/edit.ts';
 import { matches } from '../keymap.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
@@ -303,8 +304,16 @@ export function textField(app: App, o: FieldOptions): Control & { input: HTMLInp
   const flush = () => {
     if (input.value === shown || input.disabled) return;
     shown = input.value;
-    Promise.resolve(o.commit(input.value)).catch((e) => app.fail(e));
+    return Promise.resolve(o.commit(input.value)).catch((e) => app.fail(e));
   };
+  entering.set(input, {
+    enter: flush,
+    follow: () => {
+      shown = o.value() ?? '';
+      input.value = shown;
+      showHint();
+    },
+  });
   input.addEventListener('input', showHint);
   input.addEventListener('blur', flush);
   (input as HTMLElement).addEventListener('keydown', (ev: KeyboardEvent) => {
@@ -392,16 +401,23 @@ export function numberField(app: App, o: NumberOptions): Control & { input: HTML
   const commit = (v: number) => {
     const value = Math.min(o.max ?? Infinity, Math.max(o.min ?? -Infinity, round(v)));
     show(value);
-    Promise.resolve(o.commit(value)).catch((e) => app.fail(e));
+    return Promise.resolve(o.commit(value)).catch((e) => app.fail(e));
   };
   const typed = () => (input.value.trim() === '' ? NaN : Number(input.value.trim().replace(/\s*(px|s)$/i, '').replace(',', '.')));
   const flush = () => {
     if (input.disabled) return;
     const v = typed();
     const out = o.refuse && (round(v) < (o.min ?? -Infinity) || round(v) > (o.max ?? Infinity));
-    if (Number.isFinite(v) && !out && round(v) !== shown) commit(v);
-    else show(shown);
+    if (Number.isFinite(v) && !out && round(v) !== shown) return commit(v);
+    show(shown);
   };
+  entering.set(input, {
+    enter: flush,
+    follow: () => {
+      show(o.value());
+      input.select();
+    },
+  });
   input.addEventListener('blur', flush);
   input.addEventListener('keydown', (ev) => {
     // Undo and Redo after a commit act on the history and not on the text of the field, which then

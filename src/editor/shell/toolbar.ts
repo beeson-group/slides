@@ -15,6 +15,7 @@
 
 import type { App } from '../app.ts';
 import { OUTSIDE_DIALOGS, type Command, type Group } from '../commands.ts';
+import { entering } from '../commands/edit.ts';
 import { injectStyle, make, store, stored, wire } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { closeMenus, commandKeys, menuItems, openMenu, splitButton, type MenuItem } from '../ui/menu.ts';
@@ -203,9 +204,10 @@ export function install(app: App): void {
     const face = c.id === 'toolbar.zoom' ? make('span', 'readout', zoomText()) : glyph(faceOf(c));
     b.append(face, make('span', 'label', label));
     if (!POPUPS.has(c.id)) {
-      // Undo and Redo leave the focus in a text or a line of the outline, as the Edit menu does. a
-      // field of the inspector is left, hence a value typed into it is entered before the undo
-      if (c.toolbar?.group === 'history') b.addEventListener('mousedown', (ev) => void ((document.activeElement as HTMLElement | null)?.isContentEditable && ev.preventDefault()));
+      // Undo and Redo leave the focus in a text, a line of the outline, or a field of the inspector,
+      // as the Edit menu does, and they enter a value typed into the field first
+      const kept = (a: Element | null) => !!a && ((a as HTMLElement).isContentEditable || entering.has(a));
+      if (c.toolbar?.group === 'history') b.addEventListener('mousedown', (ev) => void (kept(document.activeElement) && ev.preventDefault()));
       wire(b, () => app.commands.run(c.id), fail);
       return b;
     }

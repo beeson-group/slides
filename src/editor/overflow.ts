@@ -57,12 +57,13 @@ const kindOf = (f: Element): string => KINDS.find(([s]) => f.matches(s))?.[1] ??
 type Check = { scope: Element | null; seen: Map<Element, string> };
 const checks = new WeakMap<Element, Check[]>();
 
-// the style of el and of its parents inside slide, which a drag, a nudge, a field, a resize, a
-// rotation, an align, a distribute, and a layer command change. the style of the section is left
-// out, since reveal.js writes it
+// the declarations of the style of el and of its parents inside slide, which a drag, a nudge, a
+// field, a resize, a rotation, an align, a distribute, and a layer command change. they are read
+// as the browser serializes them, since an undo may give the attribute back with a closing
+// semicolon. the style of the section is left out, since reveal.js writes it
 const placeOf = (el: Element, slide: Element): string => {
   let k = '';
-  for (let e: Element | null = el; e && e !== slide; e = e.parentElement) k += `${e.getAttribute('style') ?? ''};`;
+  for (let e: Element | null = el; e && e !== slide; e = e.parentElement) k += `${(e as HTMLElement).style?.cssText ?? ''}|`;
   return k;
 };
 
@@ -87,10 +88,13 @@ export const coverSentences = (): string[] => sentences;
 const many = (n: number, word: string): string => (n === 1 ? `a ${word}` : `${n} ${word}${word.endsWith('x') ? 'es' : 's'}`);
 const texts = (n: number): string => `${n} text${n === 1 ? '' : 's'}`;
 const verb = (n: number): string => (n === 1 ? 'covers' : 'cover');
+// the figures by kind, in the order in which they are met, e.g. 2 tables and a plot, or a
+// picture, a table, and a QR code
 function figures(fs: Set<Element>): string {
-  const kinds = [...fs].map(kindOf);
-  if (new Set(kinds).size === 1) return many(kinds.length, kinds[0]);
-  return kinds.length === 2 ? `a ${kinds[0]} and a ${kinds[1]}` : `${kinds.length} figures`;
+  const count = new Map<string, number>();
+  for (const f of fs) count.set(kindOf(f), (count.get(kindOf(f)) ?? 0) + 1);
+  const named = [...count].map(([kind, n]) => many(n, kind));
+  return named.length < 3 ? named.join(' and ') : `${named.slice(0, -1).join(', ')}, and ${named.at(-1)}`;
 }
 function sentencesOf(pairs: { text: Element; fig: Element }[]): string[] {
   const out: string[] = [];

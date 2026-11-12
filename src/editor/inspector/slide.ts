@@ -137,7 +137,12 @@ function sketch(layout: string, width: Width): SVGSVGElement {
       // the text column of a wide slide runs over the place of the zone, up to the right margin
       const w = width === 'narrow' ? 22 : width === 'wide' ? 54 : 30;
       words(5, 5, w, 5);
-      if (width !== 'wide') rect(w + 9, 6, 59 - (w + 9), 24, faint);
+      // the backdrop of a narrow slide runs from 920 px of 1920 to the right edge at full height,
+      // as in its tile, and its left corners are square
+      if (width === 'narrow') {
+        rect(920 / 30, 0.5, 63.5 - 920 / 30, 35, faint, 3);
+        rect(920 / 30, 0.5, 3, 35, faint, 0);
+      } else if (width !== 'wide') rect(w + 9, 6, 59 - (w + 9), 24, faint);
     }
   }
   svg.append(frame);

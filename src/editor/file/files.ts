@@ -462,9 +462,12 @@ export function install(app: App): void {
   // the card of the command that writes the PowerPoint file from the saved deck, run in its folder
   async function exportPptx(): Promise<void> {
     if (!(await savedFirst('pptx'))) return;
-    const name = fileName();
+    // the attached file is named as it is, and its folder is not known to the page. the folder of
+    // the address is that of the deck only on file:, since a server maps an address to a folder
+    const name = app.handle?.name ?? fileName();
+    const where = location.protocol === 'file:' && name === fileName() ? `, i.e. ${folder()}` : '';
     pptxCommand.textContent = name === 'index.html' ? 'npm run pptx' : `npm run pptx -- ${name}`;
-    pptxCard.text.textContent = `The PowerPoint file is written from the saved ${name} by this command, run in the folder of the deck, i.e. ${folder()}. It writes slides.pptx, with one click per step.`;
+    pptxCard.text.textContent = `The PowerPoint file is written from the saved ${name} by this command, run in the folder of the deck${where}. It writes slides.pptx, with one click per step.`;
     const copy = pptxCard.buttons.get('copy');
     if (copy) copy.textContent = 'Copy Command';
     await pptxCard.open('copy');
