@@ -269,7 +269,7 @@ test('a text box is put into the text column of each layout', async (t) => {
     const where = await page.evaluate(`(() => { const p = document.activeElement; const s = p.closest('section'); return [s.className.split(' ').find((c) => ['title', 'section', 'narrow', 'wide', 'figure', 'split', 'closing'].includes(c)) ?? 'content', p.parentElement === s ? 'section' : p.parentElement.className]; })()`);
     parents[where[0]] = where[1];
   }
-  assert.deepEqual(parents, { title: 'block', section: 'sec', content: 'section', narrow: 'section', wide: 'section', figure: 'section', split: 'panel', closing: 'block' });
+  assert.deepEqual(parents, { title: 'section', section: 'sec', content: 'section', narrow: 'section', wide: 'section', figure: 'section', split: 'panel', closing: 'section' });
   // the insert of each box and its first input
   await roundTrip(page, 2 * count);
 });

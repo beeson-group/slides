@@ -52,12 +52,14 @@ async function load(t, platform, n, deck = 'index.html') {
   return page;
 }
 
-// the texts of the block of the current slide in slide px: the box of each and the boxes of its
-// lines, with the box of an empty text as its one line
+// the texts of the block of the current slide in slide px, and the new text box, a child of the
+// section after them: the box of each and the boxes of its lines, with the box of an empty text as
+// its one line
 const TEXTS = `(() => {
   const s = document.querySelector('.reveal .slides'), S = s.getBoundingClientRect(), k = S.width / s.offsetWidth;
   const px = (r) => ({ top: (r.top - S.top) / k, bottom: (r.bottom - S.top) / k, left: (r.left - S.left) / k, right: (r.right - S.left) / k });
-  return [...Reveal.getCurrentSlide().querySelector('.block').children].map((e) => {
+  const c = Reveal.getCurrentSlide();
+  return [...c.querySelector('.block').children, ...c.querySelectorAll(':scope > p')].map((e) => {
     const range = document.createRange();
     range.selectNodeContents(e);
     const lines = [...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0).map(px);
@@ -75,7 +77,7 @@ for (const platform of PLATFORMS) {
       await click(page, '.beeson-edit-top [data-command="insert.text"]');
       await wait(page, 200);
       const empty = await page.evaluate(TEXTS);
-      assert.equal(empty.at(-1)?.name, 'box', `Text does not add an empty box at the end of the block of slide ${n + 1}`);
+      assert.equal(empty.at(-1)?.name, 'box', `Text does not add an empty box after the texts of the block of slide ${n + 1}`);
       await type(page, 'Hq');
       await wait(page);
       const written = await page.evaluate(TEXTS);
@@ -90,7 +92,7 @@ for (const platform of PLATFORMS) {
         for (const a of box.lines) for (const b of other.lines) assert.ok(!meets(a, b), `a line of the box on slide ${n + 1} lies over a line of the ${other.name}: ${js({ a, b })}`);
       }
       const text = await render(page);
-      assert.match(text, /<p class="who"[^>]*>[\s\S]*?<\/p>\s*<p>Hq<\/p>\s*<\/div>/, `the box of slide ${n + 1} is not written as a plain paragraph after the who line`);
+      assert.match(text, /<\/div>\s*(<div class="qr"[^>]*><\/div>\s*)?<p style="(width: \d+px; )?translate: \d+px \d+px;?">Hq<\/p>/, `the box of slide ${n + 1} is not written as a paragraph with its translate after the block`);
       const { text: saved } = await saveAndReopen(page, `r15-12-${++saves}.html`);
       assert.equal(saved, text);
       assert.deepEqual(errors(page), []);
