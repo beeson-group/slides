@@ -53,6 +53,21 @@ const stepRow = (page) => page.evaluate(`(() => {
   return { text: r.querySelector('.body').textContent, x: b.left + b.width * 0.6, y: b.top + b.height / 2 };
 })()`);
 
+// a press with Mod at a point of a row. on a Mac host, a trusted press with Ctrl also opens the
+// menu of a right click, hence it is dispatched there for the platform other
+async function modPress(page, at) {
+  const ctrl = process.platform === 'darwin' && (await page.evaluate(`new URLSearchParams(location.search).get('edit-platform')`)) === 'other';
+  if (!ctrl) await click(page, at, { modifiers: 'Mod' });
+  else {
+    await page.evaluate(`(() => {
+      const el = document.elementFromPoint(${at.x}, ${at.y});
+      for (const type of ['pointerdown', 'pointerup']) el.dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, button: 0, pointerId: 1, ctrlKey: true, clientX: ${at.x}, clientY: ${at.y} }));
+      return true;
+    })()`);
+  }
+  await frames(page);
+}
+
 // the picture that is shown, the marked rows of the two lists, whether the fields of the step are
 // shown, and the picture at which the number of the step is drawn
 const MARKED = `({
@@ -141,6 +156,35 @@ for (const platform of PLATFORMS) {
         assert.deepEqual(marked.objects, ['Image'], `after ${flip}, the row Image of the Object List is not marked`);
         assert.equal(marked.fields, true, `after ${flip}, the fields Start, Delay, and Effect are hidden`);
         assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-badge.on').length`), 1, `after ${flip}, the number of the step is not marked`);
+      }
+      assert.equal(await page.evaluate('window.BeesonEditor.render()'), page.source);
+    });
+  }
+
+  for (const slide of [0, 2]) {
+    test(`a Mod+click on the marked row of a picture selected across a flip takes it off the selection, on slide ${slide + 1} (${platform})`, async () => {
+      const page = await deckPage(platform, slide);
+      await exec(page, 'view.steps');
+      await frames(page);
+      for (const list of ['Object List', 'Steps pane']) {
+        const row = () => (list === 'Object List' ? objectRow(page, 'Image') : stepRow(page));
+        await click(page, { x: 100, y: 950 });
+        await click(page, 'section.present img');
+        assert.equal((await selection(page)).length, 1);
+        await press(page, 'D');
+        await frames(page);
+        assert.ok((await selection(page))[0].endsWith('(hidden)'), 'the selection does not hold the hidden twin after D');
+        await modPress(page, await row());
+        assert.deepEqual(await selection(page), [], `a Mod+click on the marked row of the ${list} keeps the picture selected`);
+        const marked = await page.evaluate(MARKED);
+        assert.deepEqual([marked.steps.length, marked.objects.length], [0, 0], `rows stay marked after the Mod+click in the ${list}`);
+        // a second Mod+click selects the twin that is shown
+        await modPress(page, await row());
+        const now = await selection(page);
+        assert.equal(now.length, 1, `a second Mod+click in the ${list} selects ${JSON.stringify(now)}`);
+        assert.ok(!now[0].endsWith('(hidden)'), `a second Mod+click in the ${list} selects the hidden twin`);
+        await press(page, 'D');
+        await frames(page);
       }
       assert.equal(await page.evaluate('window.BeesonEditor.render()'), page.source);
     });
