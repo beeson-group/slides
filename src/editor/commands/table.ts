@@ -388,10 +388,11 @@ async function moveLines(app: App, table: HTMLTableElement, kind: Line, lo: numb
 }
 
 // a table of rows of cells put at its place in the layout of the current slide, and then moved
-// where it fits by placeTable, with every row, or put into the empty zone into
-async function insertTable(app: App, rows: string[][], into: Element | null = null): Promise<HTMLTableElement> {
+// where it fits by placeTable, with every row, or put into the empty zone into. with markup, each
+// cell of rows is HTML rather than text
+async function insertTable(app: App, rows: string[][], into: Element | null = null, markup = false): Promise<HTMLTableElement> {
   const { parent, before } = into ? { parent: into, before: null } : columnPlace(app, app.current()!);
-  const [table] = await app.doc.insert(tableHtml(rows, styleOf(app), baseOf(app, parent)), parent, before, 'insert table');
+  const [table] = await app.doc.insert(tableHtml(rows, styleOf(app), baseOf(app, parent), markup), parent, before, 'insert table');
   if (!into) placeTable(app, table as HTMLTableElement);
   else fillSlot(app, table as HTMLTableElement, into);
   return table as HTMLTableElement;
@@ -2173,7 +2174,8 @@ export function install(app: App): void {
     }
     const cell = region === 'text' ? cellAt(app) : null;
     if (region !== 'canvas' && !cell) return;
-    const marked = cell ? parseEditorTable(html) : null;
+    // a range of the editor keeps the inline elements of its cells, in a new table as well
+    const marked = parseEditorTable(html);
     const rows = marked ?? parseHtmlTable(html) ?? parseTabular(text);
     if (!rows) return;
     ev.preventDefault();
@@ -2184,7 +2186,7 @@ export function install(app: App): void {
       return;
     }
     void app.history.transact('Paste Table', async () => {
-      const table = await insertTable(app, rows);
+      const table = await insertTable(app, rows, null, !!marked);
       app.selection.set('elements', [table]);
     }).catch(fail);
   }, true);

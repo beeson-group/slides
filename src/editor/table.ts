@@ -172,23 +172,24 @@ export function sortOrder(keys: string[], descending = false): number[] {
 
 const escape = (t: string) => t.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-// a cell with its text, set at the right in a column of numbers
-export function cellHtml(tag: 'td' | 'th', text = '', right = false): string {
-  return `<${tag}${right ? ' style="text-align: right"' : ''}>${escape(text).replace(/\n/g, '<br>')}</${tag}>`;
+// a cell with its text, or with markup its HTML, set at the right in a column of numbers
+export function cellHtml(tag: 'td' | 'th', text = '', right = false, markup = false): string {
+  return `<${tag}${right ? ' style="text-align: right"' : ''}>${markup ? text : escape(text).replace(/\n/g, '<br>')}</${tag}>`;
 }
 
-export function rowHtml(cells: { tag: 'td' | 'th'; text?: string; right?: boolean }[]): string {
-  return `<tr>${cells.map((c) => cellHtml(c.tag, c.text, c.right)).join('')}</tr>`;
+export function rowHtml(cells: { tag: 'td' | 'th'; text?: string; right?: boolean; markup?: boolean }[]): string {
+  return `<tr>${cells.map((c) => cellHtml(c.tag, c.text, c.right, c.markup)).join('')}</tr>`;
 }
 
 // the text of a table of rows of cells, with the first row as the header row, indented at base in
-// the style of the deck, as the template of model/templates.ts writes an empty table
-export function tableHtml(rows: string[][], style: TextStyle, base: string): string {
-  const numeric = numericColumns(rows);
+// the style of the deck, as the template of model/templates.ts writes an empty table. with markup,
+// each cell is HTML of parseEditorTable, whose text decides the columns of numbers
+export function tableHtml(rows: string[][], style: TextStyle, base: string, markup = false): string {
+  const numeric = numericColumns(markup ? rows.map((r) => r.map((h) => h.replace(/<[^>]*>/g, ''))) : rows);
   const lines: [number, string][] = [
     [0, '<table>'],
     [1, '<tbody>'],
-    ...rows.map((r, i): [number, string] => [2, rowHtml(r.map((text, c) => ({ tag: i ? 'td' : 'th', text, right: numeric[c] })))]),
+    ...rows.map((r, i): [number, string] => [2, rowHtml(r.map((text, c) => ({ tag: i ? 'td' : 'th', text, right: numeric[c], markup })))]),
     [1, '</tbody>'],
     [0, '</table>'],
   ];

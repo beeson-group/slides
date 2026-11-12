@@ -282,6 +282,45 @@ function goesOn(list: Element, second: Element | undefined): void {
   if (list instanceof HTMLOListElement && second) cutOff.set(second, list);
 }
 
+// a list of the file at the level of the blocks, e.g. the ul of a slide or of its div.col
+const fileList = (app: App, el: Element | null): el is Element => !!el?.matches(LIST) && !!app.pairing?.elements.has(el) && !app.pairing.byLive.has(el);
+
+// the attributes of the start tag of list in the file, apart from start
+function listAttrs(app: App, list: Element): string {
+  const start = tokenize(app.doc.elementText(list)).find((t) => t.type === 'start');
+  return start?.type === 'start' ? start.attrs.filter((a) => a.name !== 'start').map((a) => `${a.name}=${a.value ?? ''}`).sort().join(' ') : '';
+}
+
+function prevOf(app: App, el: Element): Element | null {
+  let n = el.previousElementSibling;
+  while (n && !app.pairing?.elements.has(n)) n = n.previousElementSibling;
+  return n;
+}
+
+// els taken off the page in order, after which the lists before and after each are one list when
+// they have one tag and the same attributes apart from start, as a list of Keynote and PowerPoint is
+// a run of paragraphs. the items of the second list are moved to the end of the first, which drops
+// its start
+export async function removeJoining(app: App, els: Element[], label: string): Promise<void> {
+  const around: [Element | null, Element | null][] = [];
+  for (const el of els) {
+    around.push([prevOf(app, el), nextOf(app, el)]);
+    await app.doc.remove(el, label);
+  }
+  // a list joined into the list before it, for the joins after it
+  const into = new Map<Element, Element>();
+  for (let [first, second] of around) {
+    while (first && into.has(first)) first = into.get(first)!;
+    if (!fileList(app, first) || !fileList(app, second) || !first.isConnected || !second.isConnected || first.localName !== second.localName) continue;
+    if (nextOf(app, first) !== second || listAttrs(app, first) !== listAttrs(app, second)) continue;
+    const items = [...second.children].filter((c) => c.localName === 'li' && app.pairing?.elements.has(c));
+    const end = first.lastChild instanceof Text && !first.lastChild.data.trim() ? first.lastChild : null;
+    await app.doc.insert(items.map((li) => app.doc.elementText(li)), first, end, label);
+    await app.doc.remove(second, label);
+    into.set(second, first);
+  }
+}
+
 // a list of dashes does not take the attribute start of a numbered list
 const listEdit = (kind: string): TagEdit => (kind === 'ul' ? { attrs: { start: null } } : {});
 
@@ -411,7 +450,7 @@ async function join(app: App, before: Element, after: Element): Promise<void> {
   selectIn(before, at);
 }
 
-type Join = { kind: 'join'; before: Element; after: Element } | { kind: 'outdent' } | { kind: 'unlist'; item: Element } | null;
+type Join = { kind: 'join'; before: Element; after: Element } | { kind: 'outdent' } | { kind: 'unlist'; item: Element } | { kind: 'drop'; item: Element; list: Element } | null;
 
 function joinBack(app: App): Join {
   const at = itemAt(app);
@@ -421,12 +460,15 @@ function joinBack(app: App): Join {
   if (!structural(app, at.item)) return null;
   const before = prevBlock(app, at.item);
   if (before) return { kind: 'join', before, after: at.item };
+  // an empty paragraph after a list is taken off, with the caret at the end of the list, as in Keynote
+  const list = at.item.localName === 'p' ? prevOf(app, at.item) : null;
+  if (fileList(app, list) && list.querySelector(':scope > li') && !at.item.textContent?.trim() && !at.item.querySelector('mjx-container, img')) return { kind: 'drop', item: at.item, list };
   // the first item of a list has its dash taken off, as in Keynote and PowerPoint
   return at.item.localName === 'li' && !at.item.previousElementSibling ? { kind: 'unlist', item: at.item } : null;
 }
 
 // what Backspace does at the caret, for the name of its entry
-export const joinKind = (app: App): 'join' | 'outdent' | 'unlist' | null => joinBack(app)?.kind ?? null;
+export const joinKind = (app: App): 'join' | 'outdent' | 'unlist' | 'drop' | null => joinBack(app)?.kind ?? null;
 
 // the first item of a list made a paragraph before the list, with the attributes of the item. the
 // items of its nested lists take its place in the list. an undo puts the caret at the start of the
@@ -466,6 +508,11 @@ export async function joinBackward(app: App): Promise<void> {
   if (j?.kind === 'join') await join(app, j.before, j.after);
   else if (j?.kind === 'outdent') await outdent(app);
   else if (j?.kind === 'unlist') await unlist(app, j.item);
+  else if (j?.kind === 'drop') {
+    const last = [...j.list.children].reverse().find((c) => c.localName === 'li')!;
+    await removeJoining(app, [j.item], 'join');
+    selectIn(last, endOf(last));
+  }
 }
 
 // Delete at the end of a block joins the block after it to it

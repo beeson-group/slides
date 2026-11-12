@@ -24,6 +24,7 @@ import { tokenize } from '../tokens.ts';
 import { keepBeside } from './place.ts';
 import { MARK, docOf, slidesIn } from './slide.ts';
 import { clearRange, pasteRange, rangeText, selectedRange } from './table.ts';
+import { removeJoining } from '../text/blocks.ts';
 
 // the offset of a paste or a duplicate that would cover its source, in slide pixels
 export const STEP = 20;
@@ -318,7 +319,7 @@ export function install(app: App): void {
       // an undo selects the cut elements again, as in Keynote
       await a.history.selecting('Cut', async () => {
         a.selection.clear();
-        for (const el of [...els].reverse()) await docOf(a).remove(el, 'cut');
+        await removeJoining(a, [...els].reverse(), 'cut');
         keep((el, translate) => docOf(a).setTag(el, { translate }, 'move'));
       });
     },

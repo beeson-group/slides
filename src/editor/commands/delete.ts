@@ -12,6 +12,7 @@ import { fieldCells, hasRange, inCells, inText } from './clipboard.ts';
 import { keepBeside } from './place.ts';
 import { docOf, onSlides } from './slide.ts';
 import { clearRange, selectedRange } from './table.ts';
+import { removeJoining } from '../text/blocks.ts';
 
 // the selected elements that are in the file, with the figure of a picture selected inside it, and
 // without the slides
@@ -52,7 +53,7 @@ export function install(app: App): void {
       await a.history.selecting('Delete', async () => {
         if (kept.length) a.selection.set('elements', kept);
         else a.selection.clear();
-        for (const el of outer.reverse()) await doc.remove(el, 'delete');
+        await removeJoining(a, outer.reverse(), 'delete');
         keep((el, translate) => doc.setTag(el, { translate }, 'move'));
       });
     },
