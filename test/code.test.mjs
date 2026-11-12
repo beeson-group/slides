@@ -17,6 +17,18 @@ const view = (root) => `(() => {
   return { lit: lit.map((row) => rows.indexOf(row) + 1), opacity: [opacity(top), opacity(lit[0]), opacity(dim)] };
 })()`;
 
+// resolves once the transitions of the current slide have ended, i.e. the fades of 400 ms of a step.
+// On a busy runner a fade starts late, and it is not over after a fixed wait of 600 ms
+const still = `(async () => {
+  const frame = () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+  await frame();
+  for (let running; (running = Reveal.getCurrentSlide().getAnimations({ subtree: true }).filter((a) => a instanceof CSSTransition)).length;) {
+    await Promise.all(running.map((a) => a.finished.catch(() => {})));
+    await frame();
+  }
+  return true;
+})()`;
+
 const EXPECTED = [[1, 2, 3], [4], [5, 6, 7], [8, 9]].map((lit) => ({ lit, opacity: ['1', '1', '0.35'] }));
 const SLIDE = `[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('pre code'))`;
 
@@ -39,8 +51,7 @@ test('the code box of the demo deck is colored, and each step lights the next gr
   const seen = [];
   for (let i = 0; i < EXPECTED.length; i++) {
     if (i) await page.evaluate('Reveal.next()');
-    // after the fade of 400 ms
-    await new Promise((done) => setTimeout(done, 600));
+    await page.evaluate(still);
     seen.push(await page.evaluate(view('Reveal.getCurrentSlide()')));
   }
   assert.deepEqual(seen, EXPECTED);
@@ -71,7 +82,7 @@ test('a step outside a code box dims the box or is dimmed by it, and a step is a
     const seen = [];
     for (let i = 0; i < expected.length; i++) {
       if (i) await page.evaluate('Reveal.next()');
-      await new Promise((done) => setTimeout(done, 600));
+      await page.evaluate(still);
       seen.push(await page.evaluate(state));
     }
     assert.deepEqual(seen, expected);

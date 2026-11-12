@@ -606,7 +606,7 @@
     }
     return { s, t, hit: false };
   }
-  function propagate(s0, h, tmax, path2, times, stop, t0 = 0) {
+  function propagate(s0, h, tmax, path2, times, stop2, t0 = 0) {
     const s = Float64Array.from(s0);
     let t = 0;
     path2.push(s[0], s[1], s[2]);
@@ -615,7 +615,7 @@
       t += step(s, h);
       path2.push(s[0], s[1], s[2]);
       times.push(t0 + t);
-      if (stop && stop(s)) break;
+      if (stop2 && stop2(s)) break;
     }
     return s;
   }
@@ -692,7 +692,7 @@
     }
     return x;
   }
-  function lyapunovFamily(n, amplitudes, h, start2 = 3e-3) {
+  function lyapunovFamily(n, amplitudes, h, start3 = 3e-3) {
     const xL = lagrange(n);
     const d1 = Math.abs(xL + MU), d2 = Math.abs(xL - 1 + MU);
     const c2 = (1 - MU) / (d1 * d1 * d1) + MU / (d2 * d2 * d2);
@@ -704,7 +704,7 @@
       return s;
     };
     const sign = n === 1 ? -1 : 1;
-    const lead = ramp(start2, amplitudes[0], 1.2);
+    const lead = ramp(start3, amplitudes[0], 1.2);
     const values = lead.concat(amplitudes).map((A) => xL + sign * A);
     return family(guess, 0, values, [4], [3], h, () => 0.3, () => 6, lead.length);
   }
@@ -2267,8 +2267,8 @@
       const names = words(el.dataset.plotTabs);
       this.offered = this.spec.tabs.map((_, i) => i).filter((i) => !names.length || names.includes(this.spec.tabs[i].name));
       if (!this.offered.length) this.offered = [0];
-      const start2 = this.spec.tabs.findIndex((t) => t.name === el.dataset.plotTab);
-      this.tab = start2 >= 0 ? start2 : this.offered[0];
+      const start3 = this.spec.tabs.findIndex((t) => t.name === el.dataset.plotTab);
+      this.tab = start3 >= 0 ? start3 : this.offered[0];
       this.emphasis = new Set(this.spec.tabs.flatMap((t) => t.active?.flat() ?? []));
       this.build();
     }
@@ -2828,10 +2828,18 @@
   }
 
   // src/qr.ts
-  var ECC = [10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26, 26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28];
-  var BLOCKS = [1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16, 17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49];
-  var LEVEL_BITS = 0;
+  var ECC = {
+    M: [10, 16, 26, 18, 24, 16, 18, 22, 22, 26, 30, 22, 22, 24, 24, 28, 28, 26, 26, 26, 26, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28, 28],
+    H: [17, 28, 22, 16, 22, 28, 26, 26, 24, 28, 24, 28, 22, 24, 24, 30, 28, 28, 26, 28, 30, 24, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30, 30]
+  };
+  var BLOCKS = {
+    M: [1, 1, 1, 2, 2, 4, 4, 4, 5, 5, 5, 8, 9, 9, 10, 10, 11, 13, 14, 16, 17, 17, 18, 20, 21, 23, 25, 26, 28, 29, 31, 33, 35, 37, 38, 40, 43, 45, 47, 49],
+    H: [1, 1, 2, 4, 4, 4, 5, 6, 8, 8, 11, 11, 16, 16, 18, 16, 19, 21, 25, 25, 25, 34, 30, 32, 35, 37, 40, 42, 45, 48, 51, 54, 57, 60, 63, 66, 70, 74, 77, 81]
+  };
+  var LEVEL_BITS = { M: 0, H: 2 };
   var QUIET = 4;
+  var LOGO = 0.3;
+  var GAP2 = 0.8;
   function dataModules(version) {
     const size = 4 * version + 17;
     let n = size * size - 3 * 64 - 2 * (size - 16) - 31;
@@ -2842,8 +2850,8 @@
     if (version >= 7) n -= 36;
     return n;
   }
-  var dataCodewords = (version) => Math.floor(dataModules(version) / 8) - ECC[version - 1] * BLOCKS[version - 1];
-  var capacity = (version) => Math.floor((dataCodewords(version) * 8 - 4 - (version < 10 ? 8 : 16)) / 8);
+  var dataCodewords = (version, level) => Math.floor(dataModules(version) / 8) - ECC[level][version - 1] * BLOCKS[level][version - 1];
+  var capacity = (version, level = "M") => Math.floor((dataCodewords(version, level) * 8 - 4 - (version < 10 ? 8 : 16)) / 8);
   function alignment(version) {
     if (version === 1) return [];
     const k = Math.floor(version / 7) + 2;
@@ -2852,6 +2860,32 @@
     const out = [6];
     for (let i = k - 2; i >= 0; i--) out.push(last - i * step2);
     return out;
+  }
+  function alignmentCenters(version) {
+    const centers = alignment(version);
+    const last = centers.length - 1;
+    const out = [];
+    for (const [i, r] of centers.entries()) {
+      for (const [j, c] of centers.entries()) {
+        if (!(i === 0 && (j === 0 || j === last) || i === last && j === 0)) out.push([r, c]);
+      }
+    }
+    return out;
+  }
+  function covered(n, r, c) {
+    const dx = Math.max(Math.abs(c + 0.5 - n / 2) - 0.5, 0), dy = Math.max(Math.abs(r + 0.5 - n / 2) - 0.5, 0);
+    return dx * dx + dy * dy < (LOGO * n / 2 + GAP2) ** 2;
+  }
+  function reached(version) {
+    const n = 4 * version + 17;
+    return alignmentCenters(version).filter(([r, c]) => {
+      for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) if (covered(n, r + dr, c + dc)) return true;
+      return false;
+    });
+  }
+  function hidden(code, r, c) {
+    if (!code.logo) return false;
+    return covered(code.size, r, c) || reached(code.version).some(([ar, ac]) => Math.abs(ar - r) <= 2 && Math.abs(ac - c) <= 2);
   }
   var EXP = new Uint8Array(512);
   var LOG = new Uint8Array(256);
@@ -2883,7 +2917,7 @@
     }
     return r;
   }
-  function codewords(bytes, version) {
+  function codewords(bytes, version, level) {
     const bits = [];
     const put = (value, n) => {
       for (let i = n - 1; i >= 0; i--) bits.push(value >>> i & 1);
@@ -2891,7 +2925,7 @@
     put(4, 4);
     put(bytes.length, version < 10 ? 8 : 16);
     for (const b of bytes) put(b, 8);
-    const total = dataCodewords(version) * 8;
+    const total = dataCodewords(version, level) * 8;
     put(0, Math.min(4, total - bits.length));
     put(0, (8 - bits.length % 8) % 8);
     for (let pad = 236; bits.length < total; pad ^= 236 ^ 17) put(pad, 8);
@@ -2899,8 +2933,8 @@
     for (let i = 0; i < bits.length; i++) out[i >>> 3] |= bits[i] << 7 - (i & 7);
     return out;
   }
-  function interleave(data, version) {
-    const n = BLOCKS[version - 1], ecc = ECC[version - 1];
+  function interleave(data, version, level) {
+    const n = BLOCKS[level][version - 1], ecc = ECC[level][version - 1];
     const total = Math.floor(dataModules(version) / 8);
     const short = Math.floor(total / n) - ecc;
     const shortBlocks = n - total % n;
@@ -2960,15 +2994,10 @@
       grid.set(6, i, i % 2 === 0);
       grid.set(i, 6, i % 2 === 0);
     }
-    const centers = alignment(version);
-    const last = centers.length - 1;
-    for (const [i, r] of centers.entries()) {
-      for (const [j, c] of centers.entries()) {
-        if (i === 0 && (j === 0 || j === last) || i === last && j === 0) continue;
-        for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) grid.set(r + dr, c + dc, Math.max(Math.abs(dr), Math.abs(dc)) !== 1);
-      }
+    for (const [r, c] of alignmentCenters(version)) {
+      for (let dr = -2; dr <= 2; dr++) for (let dc = -2; dc <= 2; dc++) grid.set(r + dr, c + dc, Math.max(Math.abs(dr), Math.abs(dc)) !== 1);
     }
-    format(grid, 0);
+    format(grid, "M", 0);
     if (version >= 7) {
       const bits = bch(version, 6, 7973);
       for (let i = 0; i < 18; i++) {
@@ -2979,9 +3008,9 @@
       }
     }
   }
-  function format(grid, mask) {
+  function format(grid, level, mask) {
     const n = grid.size;
-    const bits = bch(LEVEL_BITS << 3 | mask, 5, 1335) ^ 21522;
+    const bits = bch(LEVEL_BITS[level] << 3 | mask, 5, 1335) ^ 21522;
     const bit = (i) => (bits >>> i & 1) === 1;
     for (let i = 0; i <= 5; i++) grid.set(i, 8, bit(i));
     grid.set(7, 8, bit(6));
@@ -2992,7 +3021,7 @@
     for (let i = 8; i < 15; i++) grid.set(n - 15 + i, 8, bit(i));
     grid.set(n - 8, 8, true);
   }
-  function place(grid, data) {
+  function walk(grid, visit) {
     const n = grid.size;
     let i = 0;
     for (let right = n - 1; right >= 1; right -= 2) {
@@ -3000,13 +3029,35 @@
       const up = (right + 1 & 2) === 0;
       for (let k = 0; k < n; k++) {
         const r = up ? n - 1 - k : k;
-        for (const c of [right, right - 1]) {
-          if (grid.fixed[r][c]) continue;
-          grid.dark[r][c] = i < data.length * 8 && (data[i >>> 3] >>> 7 - (i & 7) & 1) === 1;
-          i++;
-        }
+        for (const c of [right, right - 1]) if (!grid.fixed[r][c]) visit(r, c, i++);
       }
     }
+  }
+  function place(grid, data) {
+    walk(grid, (r, c, i) => {
+      grid.dark[r][c] = i < data.length * 8 && (data[i >>> 3] >>> 7 - (i & 7) & 1) === 1;
+    });
+  }
+  function logoFits(version) {
+    const grid = new Grid(4 * version + 17);
+    functionPatterns(grid, version);
+    const n = BLOCKS.H[version - 1], ecc = ECC.H[version - 1];
+    const patterns = reached(version);
+    for (let r = 0; r < grid.size; r++) {
+      for (let c = 0; c < grid.size; c++) {
+        if (grid.fixed[r][c] && covered(grid.size, r, c) && !patterns.some(([ar, ac]) => Math.abs(ar - r) <= 2 && Math.abs(ac - c) <= 2)) return false;
+      }
+    }
+    const total = Math.floor(dataModules(version) / 8);
+    const short = Math.floor(total / n) - ecc, shortBlocks = n - total % n;
+    const blockOf = [];
+    for (let i = 0; i <= short; i++) for (let b = 0; b < n; b++) if (i < short || b >= shortBlocks) blockOf.push(b);
+    for (let i = 0; i < ecc; i++) for (let b = 0; b < n; b++) blockOf.push(b);
+    const wrong = Array.from({ length: n }, () => /* @__PURE__ */ new Set());
+    walk(grid, (r, c, i) => {
+      if (i < total * 8 && covered(grid.size, r, c)) wrong[blockOf[i >>> 3]].add(i >>> 3);
+    });
+    return wrong.every((words3) => 3 * words3.size <= 2 * Math.floor(ecc / 2));
   }
   function applyMask(grid, mask) {
     const m = MASKS[mask];
@@ -3047,19 +3098,21 @@
     score += 10 * Math.floor(Math.abs(count * 100 / (n * n) - 50) / 5);
     return score;
   }
-  function encode(text) {
+  function encode(text, logo = false) {
     const bytes = new TextEncoder().encode(text);
+    const level = logo ? "H" : "M";
     let version = 1;
-    while (version <= 40 && capacity(version) < bytes.length) version++;
+    while (version <= 40 && (capacity(version, level) < bytes.length || logo && !logoFits(version))) version++;
+    if (version > 40 && logo) return encode(text);
     if (version > 40) throw new Error(`the text is ${bytes.length} bytes long, and a QR code at level M holds at most ${capacity(40)}`);
-    const data = interleave(codewords(bytes, version), version);
+    const data = interleave(codewords(bytes, version, level), version, level);
     let best = null, bestMask = 0, bestScore = Infinity;
     for (let mask = 0; mask < 8; mask++) {
       const grid2 = new Grid(4 * version + 17);
       functionPatterns(grid2, version);
       place(grid2, data);
       applyMask(grid2, mask);
-      format(grid2, mask);
+      format(grid2, level, mask);
       const score = penalty(grid2.dark);
       if (score < bestScore) {
         best = grid2;
@@ -3068,37 +3121,57 @@
       }
     }
     const grid = best;
-    return { version, size: grid.size, mask: bestMask, dark: grid.dark };
+    return { version, size: grid.size, mask: bestMask, level, logo, dark: grid.dark };
   }
   var SVG2 = "http://www.w3.org/2000/svg";
+  var fixed3 = (x) => +x.toFixed(3);
+  function rounded(x, y, a, r) {
+    const s = fixed3(a - 2 * r);
+    return `M${fixed3(x - a / 2 + r)} ${fixed3(y - a / 2)}h${s}a${r} ${r} 0 0 1 ${r} ${r}v${s}a${r} ${r} 0 0 1 ${-r} ${r}h${-s}a${r} ${r} 0 0 1 ${-r} ${-r}v${-s}a${r} ${r} 0 0 1 ${r} ${-r}z`;
+  }
   function svgOf(code, label) {
-    const side = code.size + 2 * QUIET;
+    const n = code.size, side = n + 2 * QUIET;
     const svg2 = document.createElementNS(SVG2, "svg");
     svg2.setAttribute("viewBox", `0 0 ${side} ${side}`);
-    svg2.setAttribute("shape-rendering", "crispEdges");
     svg2.setAttribute("role", "img");
     svg2.setAttribute("aria-label", label);
     const tile = document.createElementNS(SVG2, "rect");
     tile.setAttribute("class", "qr-tile");
     tile.setAttribute("width", String(side));
     tile.setAttribute("height", String(side));
-    tile.setAttribute("rx", String(+(side * 0.03).toFixed(2)));
+    tile.setAttribute("rx", String(fixed3(side * 0.05)));
     tile.setAttribute("fill", "#fff");
-    tile.setAttribute("shape-rendering", "geometricPrecision");
-    let d = "";
-    code.dark.forEach((row, r) => {
-      for (let c = 0; c < code.size; c++) {
-        if (!row[c]) continue;
-        const start2 = c;
-        while (c + 1 < code.size && row[c + 1]) c++;
-        d += `M${start2 + QUIET} ${r + QUIET}h${c - start2 + 1}v1h${start2 - c - 1}z`;
+    const patterns = [[3, 3, 7], [3, n - 4, 7], [n - 4, 3, 7]];
+    for (const [r, c] of alignmentCenters(code.version)) patterns.push([r, c, 5]);
+    const lost = code.dark.map((row, r) => row.map((_, c) => hidden(code, r, c)));
+    const on = (r, c) => r >= 0 && c >= 0 && r < n && c < n && code.dark[r][c] && !lost[r][c] && !patterns.some(([pr, pc, a]) => Math.abs(pr - r) < a / 2 && Math.abs(pc - c) < a / 2);
+    let d = "", eyes = "";
+    for (let r = 0; r < n; r++) {
+      for (let c = 0; c < n; c++) {
+        if (!on(r, c)) continue;
+        const start3 = c;
+        while (on(r, c + 1)) c++;
+        const x0 = start3 + QUIET, x1 = c + 1 + QUIET, y = r + QUIET;
+        const tl = on(r - 1, start3) ? 0 : 0.5, tr = on(r - 1, c) ? 0 : 0.5, br = on(r + 1, c) ? 0 : 0.5, bl = on(r + 1, start3) ? 0 : 0.5;
+        d += `M${x0 + tl} ${y}H${x1 - tr}${tr ? "a.5 .5 0 0 1 .5 .5" : ""}V${y + 1 - br}${br ? "a.5 .5 0 0 1 -.5 .5" : ""}H${x0 + bl}${bl ? "a.5 .5 0 0 1 -.5 -.5" : ""}V${y + tl}${tl ? "a.5 .5 0 0 1 .5 -.5" : ""}z`;
       }
-    });
+    }
+    for (const [r, c, a] of patterns) {
+      if (lost[r][c]) continue;
+      const x = c + QUIET + 0.5, y = r + QUIET + 0.5;
+      d += rounded(x, y, a, fixed3(a * 0.3)) + rounded(x, y, a - 2, fixed3((a - 2) * 0.24));
+      eyes += rounded(x, y, a - 4, fixed3((a - 4) * 0.22));
+    }
     const ink = document.createElementNS(SVG2, "path");
     ink.setAttribute("class", "qr-ink");
     ink.setAttribute("d", d);
     ink.setAttribute("fill", "#000");
-    svg2.append(tile, ink);
+    ink.setAttribute("fill-rule", "evenodd");
+    const eye = document.createElementNS(SVG2, "path");
+    eye.setAttribute("class", "qr-eye");
+    eye.setAttribute("d", eyes);
+    eye.setAttribute("fill", "#000");
+    svg2.append(tile, ink, eye);
     return svg2;
   }
   function mountQr(root2) {
@@ -3108,7 +3181,15 @@
       const text = el.dataset.qr ?? "";
       try {
         if (!text) throw new Error("data-qr is empty");
-        el.append(svgOf(encode(text), `QR code of ${text}`));
+        const image = getComputedStyle(el).getPropertyValue("--qr-logo").trim();
+        const code = encode(text, image !== "" && image !== "none");
+        el.append(svgOf(code, `QR code of ${text}`));
+        if (code.logo) {
+          const logo = document.createElement("div");
+          logo.className = "qr-logo";
+          logo.style.width = `${(100 * LOGO * code.size / (code.size + 2 * QUIET)).toFixed(2)}%`;
+          el.append(logo);
+        }
       } catch (error) {
         const box2 = document.createElement("div");
         box2.className = "qr-error";
@@ -3288,7 +3369,7 @@
       return at;
     });
   }
-  var GAP2 = 3.2;
+  var GAP3 = 3.2;
   var REACH2 = 48;
   function initScrub(deck) {
     const reveal = deck.getRevealElement();
@@ -3336,7 +3417,7 @@
       zone = band.getBoundingClientRect();
       const em = parseFloat(getComputedStyle(band).fontSize) || 16;
       const spacing = zone.width / Math.max(1, ticks.length - 1);
-      const k = Math.max(1, Math.ceil(GAP2 * em / spacing));
+      const k = Math.max(1, Math.ceil(GAP3 * em / spacing));
       ticks.forEach((t, i) => t.el.classList.toggle("quiet", i % k !== 0 && i !== ticks.length - 1));
     };
     const mark = () => {
@@ -3429,16 +3510,16 @@
       }
     }
     const out = [], seen = /* @__PURE__ */ new Set();
-    for (const start2 of links.keys()) {
-      if (seen.has(start2)) continue;
+    for (const start3 of links.keys()) {
+      if (seen.has(start3)) continue;
       const p = [];
-      let cur = start2;
+      let cur = start3;
       while (cur && !seen.has(cur)) {
         seen.add(cur);
         const [x, y] = where.get(cur) ?? [0, 0];
         p.push(x, y);
         const next = links.get(cur)?.find((k) => !seen.has(k));
-        if (!next && close && p.length > 4 && links.get(cur)?.includes(start2)) p.push(p[0], p[1]);
+        if (!next && close && p.length > 4 && links.get(cur)?.includes(start3)) p.push(p[0], p[1]);
         cur = next;
       }
       out.push(p);
@@ -3789,8 +3870,8 @@ void main() {
       this.THREE = THREE;
       this.groove = new THREE.Vector3();
       this.zscale = num4(el.dataset.zscale, fn.zscale);
-      const turn = num4(el.dataset.turn, TURN);
-      this.rate = turn > 0 ? 2 * Math.PI / turn : 0;
+      const turn2 = num4(el.dataset.turn, TURN);
+      this.rate = turn2 > 0 ? 2 * Math.PI / turn2 : 0;
       this.azimuth = num4(el.dataset.azimuth, -60) * Math.PI / 180;
       this.elevation = num4(el.dataset.elevation, 32) * Math.PI / 180;
       this.zoom = num4(el.dataset.zoom, 1);
@@ -3924,8 +4005,8 @@ void main() {
       }
       group2.visible = false;
       this.scene.add(group2);
-      const hidden = { lift: 0, alpha: 0 };
-      const s = { group: group2, mesh, depth, layer: "", A: this.zeros, B: this.zeros, from: hidden, to: hidden, shown: hidden, paintA: paint, paintB: paint, toneFrom: 1, tone: 1, now: null };
+      const hidden2 = { lift: 0, alpha: 0 };
+      const s = { group: group2, mesh, depth, layer: "", A: this.zeros, B: this.zeros, from: hidden2, to: hidden2, shown: hidden2, paintA: paint, paintB: paint, toneFrom: 1, tone: 1, now: null };
       this.sheets[i] = s;
       return s;
     }
@@ -4301,8 +4382,8 @@ void main() {
         geometry.setAttribute("end", new THREE.BufferAttribute(new Float32Array(18 * this.capacity), 3).setUsage(THREE.DynamicDrawUsage));
       }
       if (!this.capacity) return;
-      const start2 = geometry.getAttribute("start"), end = geometry.getAttribute("end");
-      const a = start2.array, b = end.array, z = this.shown.level * this.zscale;
+      const start3 = geometry.getAttribute("start"), end = geometry.getAttribute("end");
+      const a = start3.array, b = end.array, z = this.shown.level * this.zscale;
       let k = 0;
       for (const c of curves2) {
         for (let i = 0; i + 3 < c.length; i += 2) {
@@ -4316,7 +4397,7 @@ void main() {
           }
         }
       }
-      for (const attribute of [start2, end]) {
+      for (const attribute of [start3, end]) {
         attribute.clearUpdateRanges();
         attribute.addUpdateRange(0, k);
         attribute.needsUpdate = true;
@@ -4541,6 +4622,7 @@ void main() {
   var MOVES_ON = "data-moves-on";
   var hasContent = (f) => f.children.length > 0 || (f.textContent ?? "").trim() !== "";
   var isCopy = (f) => f.matches("pre > code.fragment");
+  var holdsVideo = (f) => f.matches("video") || !!f.querySelector("video");
   function addRestoreSteps(root2) {
     for (const slide of root2.querySelectorAll(".reveal .slides section")) {
       if (slide.querySelector("section, .fragment[data-restore], .fragment[data-final]")) continue;
@@ -4549,7 +4631,7 @@ void main() {
       const last = unindexed.length ? [unindexed[unindexed.length - 1]] : frags.filter((f) => Number(f.dataset.fragmentIndex) === Math.max(...frags.map((g) => Number(g.dataset.fragmentIndex))));
       const boxes = new Set(frags.filter(isCopy).map((f) => f.parentElement));
       const dimsBox = [...boxes].some((box2) => !last.some((f) => f.parentElement === box2 && isCopy(f)));
-      if (!dimsBox && !frags.some((f) => !last.includes(f) && hasContent(f) && !isCopy(f))) continue;
+      if (!dimsBox && !frags.some((f) => !last.includes(f) && hasContent(f) && !isCopy(f) && !holdsVideo(f))) continue;
       if (last.some(delayed)) {
         slide.setAttribute(MOVES_ON, "");
         continue;
@@ -4660,8 +4742,8 @@ void main() {
     };
     const delayedAt = (at) => !!at && at.f >= 0 && fragmentsAt(slides()[at.slide], at.f).some(delayed);
     const same = (a, b) => !!a && !!b && a.slide === b.slide && a.f === b.f;
-    const reached = /* @__PURE__ */ new Map();
-    const byDelay = (at) => reached.get(`${at.slide}:${at.f}`) ?? delayedAt(before(at));
+    const reached2 = /* @__PURE__ */ new Map();
+    const byDelay = (at) => reached2.get(`${at.slide}:${at.f}`) ?? delayedAt(before(at));
     let last = here();
     let held = [];
     const change = () => {
@@ -4675,7 +4757,7 @@ void main() {
       const from = last;
       last = now;
       const back = now.slide < from.slide || now.slide === from.slide && now.f < from.f;
-      if (!back) reached.set(`${now.slide}:${now.f}`, timer);
+      if (!back) reached2.set(`${now.slide}:${now.f}`, timer);
       if (!back || deck.isOverview()) return;
       if (delayedAt(now)) {
         held = fragmentsAt(slides()[now.slide], now.f).filter((el) => el.hasAttribute(AUTOSLIDE));
@@ -4819,6 +4901,122 @@ void main() {
     if (ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey) return false;
     const target = (ev.target instanceof Element ? ev.target : null) ?? document.activeElement;
     return !target?.closest('input, textarea, select, [contenteditable=""], [contenteditable="true"], tycho-viewer');
+  }
+
+  // src/video.ts
+  var FADE = 400;
+  var running = /* @__PURE__ */ new WeakSet();
+  var turns = /* @__PURE__ */ new WeakMap();
+  var turn = 0;
+  var guarded = /* @__PURE__ */ new WeakSet();
+  var HIDES = ".fade-out, .fade-in-then-out:not(.current-fragment), .current-visible:not(.current-fragment)";
+  function stepShown(el, slide) {
+    for (let e = el; e && e !== slide; e = e.parentElement) {
+      if (!e.classList.contains("fragment")) continue;
+      if (!e.classList.contains("visible") || e.matches(HIDES)) return false;
+    }
+    return true;
+  }
+  var mode = (v) => v.classList.contains("for-dark") ? "dark" : v.classList.contains("for-light") ? "light" : "";
+  var coveredBy = (v, later) => !mode(later) || mode(later) === mode(v);
+  function cover(slide) {
+    for (const place2 of slide.querySelectorAll(".zone, .plate")) {
+      const videos = [...place2.children].filter((c) => c instanceof HTMLVideoElement);
+      const shown = videos.map((v) => stepShown(v, slide));
+      videos.forEach((v, i) => {
+        const under = !place2.classList.contains("row") && videos.some((later, j) => j > i && shown[j] && coveredBy(v, later));
+        v.toggleAttribute("data-covered", under);
+      });
+    }
+  }
+  function coverAll(root2) {
+    for (const slide of root2.querySelectorAll(".reveal .slides section")) cover(slide);
+  }
+  var plays = (v, slide) => {
+    if (v.hasAttribute("data-autoplay")) return true;
+    const step2 = v.closest(".fragment.play");
+    return !!step2 && slide.contains(step2);
+  };
+  var ready = (v) => v.readyState >= HTMLMediaElement.HAVE_FUTURE_DATA || v.error !== null;
+  var once = (v, types) => new Promise((done) => {
+    for (const type of types) v.addEventListener(type, () => done(), { once: true });
+  });
+  var sleep2 = (ms) => new Promise((done) => setTimeout(done, ms));
+  async function start(videos) {
+    const mine = ++turn;
+    for (const v of videos) {
+      running.add(v);
+      turns.set(v, mine);
+    }
+    const current = () => videos.filter((v) => turns.get(v) === mine && running.has(v));
+    if (!videos.every(ready)) {
+      for (const v of videos) {
+        v.pause();
+        if (!ready(v)) v.preload = "auto";
+      }
+      await Promise.race([Promise.all(videos.filter((v) => !ready(v)).map((v) => once(v, ["canplay", "error"]))), sleep2(5e3)]);
+    }
+    const seeks = current().filter((v) => v.currentTime > 0).map((v) => {
+      v.currentTime = 0;
+      return once(v, ["seeked", "error"]);
+    });
+    if (seeks.length) await Promise.race([Promise.all(seeks), sleep2(1e3)]);
+    for (const v of current()) v.play().catch(() => {
+    });
+  }
+  function stop(v) {
+    const played = !v.paused || v.currentTime > 0;
+    running.delete(v);
+    turns.delete(v);
+    v.pause();
+    if (!played) return;
+    if (getComputedStyle(v).visibility !== "hidden" && !v.hasAttribute("data-covered")) {
+      v.load();
+      return;
+    }
+    setTimeout(() => {
+      if (!running.has(v) && v.currentTime > 0) v.currentTime = 0;
+    }, FADE + 50);
+  }
+  function guard(v) {
+    if (guarded.has(v)) return;
+    guarded.add(v);
+    v.addEventListener("play", () => {
+      if (!running.has(v)) v.pause();
+    });
+  }
+  function syncVideos(slide, speaker2 = false) {
+    cover(slide);
+    const starts2 = [];
+    for (const v of slide.querySelectorAll("video")) {
+      if (!plays(v, slide) || speaker2 && !v.muted) continue;
+      guard(v);
+      if (stepShown(v, slide) && !v.hasAttribute("data-covered")) {
+        if (!running.has(v)) starts2.push(v);
+      } else stop(v);
+    }
+    if (starts2.length) void start(starts2);
+  }
+  function leave(slide) {
+    for (const v of slide.querySelectorAll("video")) {
+      running.delete(v);
+      turns.delete(v);
+    }
+  }
+  function initVideos(deck) {
+    const speaker2 = deck.isSpeakerNotes();
+    const sync = () => {
+      const slide = deck.getCurrentSlide();
+      if (slide) syncVideos(slide, speaker2);
+    };
+    deck.on("slidechanged", (event) => {
+      const previous = event.previousSlide;
+      if (previous && previous !== deck.getCurrentSlide()) leave(previous);
+      sync();
+    });
+    deck.on("fragmentshown", sync);
+    deck.on("fragmenthidden", sync);
+    sync();
   }
 
   // src/main.ts
@@ -5005,7 +5203,7 @@ void main() {
     }
     applyAll(document);
   }
-  async function start(options = {}) {
+  async function start2(options = {}) {
     const deck = window.Reveal;
     const plugins = [...options.plugins ?? []];
     if (window.RevealNotes && !plugins.includes(window.RevealNotes)) plugins.push(window.RevealNotes);
@@ -5018,6 +5216,7 @@ void main() {
     deck.on("pdf-ready", () => {
       completeAll();
       mountShapes(document);
+      coverAll(document);
       void typeset2().then(() => applyAll(document));
       syncViewers(get());
       void stillViewers();
@@ -5048,6 +5247,7 @@ void main() {
     if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) {
       if (!PLAYED) initFullscreen();
       initScrub(deck);
+      initVideos(deck);
       if (internal) initClick(deck, () => internal.cueAutoSlide(), ENDS ? () => toEditor("edit") : void 0);
     }
     if (PLAYED || TAB) for (const keyCode of [27, 69]) deck.addKeyBinding(keyCode, (ev) => {
@@ -5152,7 +5352,7 @@ void main() {
     document.head.append(script2);
   }
   var Beeson = {
-    start,
+    start: start2,
     theme: { get, set: (theme) => set(theme), toggle: () => toggle() },
     backdrops,
     surfaces,

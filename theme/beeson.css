@@ -38,6 +38,9 @@ html[data-theme="dark"] {
      inverted code */
   --qr-ink: #050505;
   --qr-tile: #f2f2ef;
+  /* the eyes of its finder patterns are in the violet of the light mode in both modes, for its
+     contrast on the tile */
+  --qr-eye: #8a2be2;
 }
 html[data-theme="light"] {
   color-scheme: light;
@@ -61,7 +64,7 @@ html[data-theme="light"] {
   --strand-7: #3b3fb0;
   --strand-8: #141413;
   --qr-ink: #141413;
-  --qr-tile: #ffffff;
+  --qr-tile: var(--bg);
 }
 /* the Okabe–Ito set for data, the same in both modes */
 :root {
@@ -294,6 +297,9 @@ html:not([data-theme="light"]) .reveal .for-light, html[data-theme="light"] .rev
 .reveal .slides section.title::after,
 .reveal .slides section.closing::after,
 body.no-logo .reveal .slides section::after { content: none; }
+/* the group logo in the middle of a QR code. without it, a code is drawn at a lower error correction level */
+.reveal { --qr-logo: url("../brand/logo.png"); }
+body.no-logo .reveal { --qr-logo: none; }
 .reveal .slides section.title::before,
 .reveal .slides section.closing::before {
   content: "";
@@ -385,9 +391,10 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section.closing .who { margin: 44px 0 0; font-size: 36px; line-height: 1.5; color: var(--subtle); }
 .reveal .slides section.title .who strong,
 .reveal .slides section.closing .who strong { color: var(--text); font-weight: 400; }
-/* a QR code on a title or closing slide, at the lower right, level with the foot of the block */
-.reveal .slides section.title .qr,
-.reveal .slides section.closing .qr { position: absolute; right: 120px; bottom: 150px; width: 300px; }
+/* a QR code on a closing slide, in the lower right corner. the backdrop is drawn over it, and under the words */
+.reveal .slides section.closing .qr { position: absolute; right: 50px; bottom: 50px; width: 200px; }
+.reveal .slides section.closing .backdrop canvas { z-index: 1; pointer-events: none; }
+.reveal .slides section.closing .block { z-index: 2; }
 
 /* section: the words at the left, the outline of the talk under them, the backdrop at the right */
 .reveal .slides section.section .sec { left: 120px; top: 360px; width: 900px; }
@@ -418,6 +425,17 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 /* a zone around a picture with a width is the size of the picture, hence its caption is under the
    picture and as wide as it */
 .reveal .slides section .zone:has(> img[style*="width:"], > video[style*="width:"], > .qr[style*="width:"]) { width: auto; height: auto; }
+/* the videos of a zone or a plate are stacked in one place, and a video under a later one that is shown is hidden
+   once the later one has faded in, see src/video.ts. in a plate of the class row, the figures are side by side,
+   each in an equal share of the plate */
+.reveal .slides section .zone:has(> video ~ video),
+.reveal .slides section.figure .plate:not(.row):has(> video ~ video) { display: grid; grid-template: 100% / 100%; }
+.reveal .slides section .zone > video,
+.reveal .slides section.figure .plate:not(.row) > video { grid-area: 1 / 1; }
+.reveal .slides section video[data-covered],
+.reveal .slides section video.fragment[data-covered] { visibility: hidden; transition: opacity 400ms ease-out, visibility 0s 400ms; }
+.reveal .slides section.figure .plate.row { display: flex; gap: 60px; }
+.reveal .slides section.figure .plate.row > * { flex: 1 1 0; min-width: 0; object-position: center; }
 
 /* split: the black panel of the group deck, dark in both modes, with a figure at the right */
 .reveal .slides section.split .panel { left: 0; top: 0; width: 760px; height: 1080px; padding: 120px 80px 0 120px; box-sizing: border-box; background: var(--panel); color: var(--panel-text); }
@@ -490,10 +508,12 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
    round 50% on an oval picture, which cuts the ellipse of the cropped box */
 .reveal img.oval { clip-path: inset(0 round 50%); }
 /* a QR code, square at the width of its div, with the quiet zone of four modules inside its tile */
-.reveal .qr { width: 320px; aspect-ratio: 1; }
+.reveal .qr { position: relative; width: 320px; aspect-ratio: 1; }
 .reveal .qr > svg { display: block; width: 100%; height: 100%; }
 .reveal .qr .qr-tile { fill: var(--qr-tile); }
 .reveal .qr .qr-ink { fill: var(--qr-ink); }
+.reveal .qr .qr-eye { fill: var(--qr-eye); }
+.reveal .qr .qr-logo { position: absolute; left: 50%; top: 50%; translate: -50% -50%; aspect-ratio: 1; border-radius: 50%; background: var(--qr-logo) center / contain no-repeat; }
 .reveal .qr-error { font-size: 28px; color: var(--accent); }
 
 /* ---- shapes: a box placed and sized in its style, set with Insert > Shape of the editor, with an outline of 3 px in
@@ -539,6 +559,11 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
 .reveal .slides section .fragment.visible .fragment.visible { opacity: 1; }
 /* a backdrop shown at a step is not dimmed at the later steps */
 .reveal .slides section:not([data-complete]) .backdrop.fragment.visible:not(.current-fragment) { opacity: 1; }
+/* nor is a video, which is still played. a video in a fragment of the style play is shown with its poster before
+   its step, and played from its step on */
+.reveal .slides section:not([data-complete]) video.fragment.visible:not(.current-fragment),
+.reveal .slides section:not([data-complete]) .fragment.visible:not(.current-fragment):has(video) { opacity: 1; }
+.reveal .slides section .fragment.play { opacity: 1; visibility: inherit; }
 /* the step added to restore the dimmed fragments, kept out of the layout of its slide */
 .reveal .slides section > .fragment[data-restore] { position: absolute; width: 0; height: 0; overflow: hidden; }
 /* stepped math: a held fragment is not dimmed, and the classes named by a shown data-highlight are colored. the
@@ -763,6 +788,8 @@ html.reveal-print .reveal .slides section.section,
 html.reveal-print .reveal .slides section.split { padding: 0 !important; }
 html.reveal-print .reveal .slide-number-pdf { right: 120px; bottom: 50px; font-size: 22px; color: var(--muted); background: transparent; padding: 0; font-family: inherit; }
 html.reveal-print .reveal .slides section .fragment,
+html.reveal-print .reveal .slides section video[data-covered],
+html.reveal-print .reveal .slides section video.fragment[data-covered],
 html.reveal-print .reveal .hl-target,
 html.reveal-print .reveal .plot * { transition: none; }
 html.reveal-print .reveal .plot-play { display: none; }
@@ -770,6 +797,8 @@ html.reveal-print .reveal .plot-play { display: none; }
 /* reduced motion: transitions are turned off */
 @media (prefers-reduced-motion: reduce) {
   .reveal .slides section .fragment,
+  .reveal .slides section video[data-covered],
+  .reveal .slides section video.fragment[data-covered],
   .reveal .hl-target,
   .reveal .plot .plot-body *,
   .reveal.fade .slides > section,
