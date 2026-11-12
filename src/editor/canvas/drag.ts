@@ -154,6 +154,7 @@ function writeLive(el: Element, p: Place): void {
   if (el.matches(STRETCHED) && p.height !== undefined) style.height = p.height === null ? '' : `${Math.round(p.height)}px`;
   if (p.rotate !== undefined) {
     if (!p.rotate && style.rotate) unturned.add(el);
+    else if (p.rotate) unturned.delete(el);
     style.rotate = p.rotate ? `${Math.round(p.rotate)}deg` : '';
   }
 }
@@ -166,6 +167,8 @@ function writeLive(el: Element, p: Place): void {
 // then turned to deg. with live set, the page alone is changed, with the image of the other mode
 // turned as writePlace turns it
 export function turn(app: App, spin: Element, carrier: Element, deg: number, want: { x: number; y: number }, live = false): void {
+  const was = placeOf(carrier).translate, memo = restOf.get(carrier);
+  const rest = memo && sameOffset(memo.at, was) ? memo.rest : angleOf(spin) ? undefined : was;
   const put = (el: Element, p: Place) => {
     if (!live) return writePlace(app, el, p);
     writeLive(el, p);
@@ -185,9 +188,16 @@ export function turn(app: App, spin: Element, carrier: Element, deg: number, wan
   const ux = (c.x - e.left - e.width / 2) / k, uy = (c.y - e.top - e.height / 2) / k;
   const vx = ux * Math.cos(a) + uy * Math.sin(a), vy = uy * Math.cos(a) - ux * Math.sin(a);
   if (Math.abs(ux - vx) > 0.01 || Math.abs(uy - vy) > 0.01) [x, y] = [Math.round(x + ux - vx) - ux + vx, Math.round(y + uy - vy) - uy + vy];
-  if (Math.abs(x - (now.translate?.x ?? 0)) < 0.5 && Math.abs(y - (now.translate?.y ?? 0)) < 0.5) return;
-  put(carrier, { ...now, translate: { x, y } });
+  // the rounding of each turn to whole px adds up, hence a turn back to 0 near the offset before
+  // the turns writes this offset
+  if (!deg && rest !== undefined && Math.abs(x - (rest?.x ?? 0)) <= 2 && Math.abs(y - (rest?.y ?? 0)) <= 2) [x, y] = [rest?.x ?? 0, rest?.y ?? 0];
+  if (Math.abs(x - (now.translate?.x ?? 0)) >= 0.5 || Math.abs(y - (now.translate?.y ?? 0)) >= 0.5) put(carrier, { ...now, translate: { x, y } });
+  if (rest !== undefined) restOf.set(carrier, { rest, at: placeOf(carrier).translate });
 }
+
+// the offset of an element before a run of turns, kept while each turn starts where the last ended
+const restOf = new WeakMap<Element, { rest: Translate | null; at: Translate | null }>();
+const sameOffset = (a: Translate | null, b: Translate | null) => (a?.x ?? 0) === (b?.x ?? 0) && (a?.y ?? 0) === (b?.y ?? 0);
 
 // a member of a group at the start of a turn of the group: the element that takes its angle, its
 // angle, and the center of this element on the screen, about which its rotate turns it. a member of
@@ -971,7 +981,12 @@ export function install(app: App): void {
         });
         record(app, p.kind === 'resize' ? 'resize' : p.kind === 'rotate' ? 'rotate' : 'move', changes, p.selected);
       } else if (p.moved) {
-        for (const el of els) writeLive(el, p.from.get(el) as Place);
+        // the image of the other mode was turned with its image, as writePlace turns it
+        for (const el of els) {
+          const from = p.from.get(el) as Place, twin = twinOf(app, el);
+          writeLive(el, from);
+          if (twin && !els.includes(twin)) writeLive(twin, from);
+        }
       } else p.click?.();
     }
     frames.draw();
@@ -1058,6 +1073,16 @@ export function install(app: App): void {
   document.addEventListener('pointermove', onMove);
   document.addEventListener('pointerup', onUp, true);
   document.addEventListener('pointercancel', () => onUp(null), true);
+  // Esc puts the elements of a drag back where they were at the press, as in Keynote, in place of
+  // the commands of the key, which would change the selection under the drag
+  const held = () => !!press?.moved && press.kind !== 'marquee';
+  app.commands.veto((_, c) => held() && Object.values(c.keys ?? {}).some((k) => k.includes('Escape')));
+  window.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape' || !held()) return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    onUp(null);
+  }, true);
   // the native drag of an image would take the pointer
   document.addEventListener('dragstart', (ev) => {
     if (ev.target instanceof Element && movableOf(app, ev.target)) ev.preventDefault();

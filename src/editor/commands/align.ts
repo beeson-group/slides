@@ -350,6 +350,8 @@ export function commands(): Command[] {
       const els = objects.map(sizedTarget);
       if (!resizable(els)) return;
       const caps = objects.map((o) => captionHeight(app, o));
+      // the box of a turned object that the fields X and Y give, and its place, before the change
+      const turned = objects.map((o) => (angleOf(o) ? { o, box: unturnedBoxOf(app, o), from: placeOf(o) } : null));
       const changes = withCorners(app, els, () => els.map((el, i) => {
         const from = placeOf(el);
         const now = sizeOf(el);
@@ -394,6 +396,18 @@ export function commands(): Command[] {
         }
         return { el, from, to: placeOf(el) };
       }));
+      // withCorners keeps the corner of a picture, and a turned figure turns its caption about the
+      // center of both, hence the figure is moved back until X and Y read as before
+      for (const t of turned) {
+        if (!t) continue;
+        const b = unturnedBoxOf(app, t.o), dx = t.box.left - b.left, dy = t.box.top - b.top;
+        if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
+        const at = placeOf(t.o);
+        writePlace(app, t.o, { ...at, translate: { x: (at.translate?.x ?? 0) + dx, y: (at.translate?.y ?? 0) + dy } });
+        const c = changes.find((c) => c.el === t.o);
+        if (c) c.to = placeOf(t.o);
+        else changes.push({ el: t.o, from: t.from, to: placeOf(t.o) });
+      }
       record(app, 'resize', changes);
       app.invalidate('content');
     },
