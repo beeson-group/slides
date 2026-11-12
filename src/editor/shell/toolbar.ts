@@ -445,11 +445,32 @@ export function install(app: App): void {
     for (const b of items()) b.tabIndex = b === ev.target ? 0 : -1;
   });
 
+  // a folded split button whose arrow has a list is a submenu of » with the items of this list, as
+  // a folded item with a menu is in Keynote. the command of its main part is put first, before a
+  // rule, where the list does not hold it, e.g. Navigator of View. while a preview plays, Play
+  // Slide reads Stop, as the main part of Preview does
+  const folded = (c: Command, groups: Group[]): MenuItem => {
+    const label = toolbarLabel(app, c);
+    if (!c.toolbar?.split) return { command: c.id, label };
+    const main = c.id === 'toolbar.view' ? 'view.navigator' : c.id;
+    const list = (): MenuItem[] => {
+      const items = (c.id === 'toolbar.view' ? viewItems() : splitItems(c, variantsOf(c, groups)))
+        .map((i) => ('command' in i && i.command === 'preview.slide' && playing() ? { ...i, label: 'Stop' } : i));
+      const held = items.some((i) => 'command' in i && i.command === main);
+      return held || !app.commands.get(main) ? items : [{ command: main }, { rule: true }, ...items];
+    };
+    const items = list();
+    if (!items.some((i) => !('rule' in i))) return { command: c.id, label };
+    const can = (i: MenuItem) => ('command' in i ? app.commands.enabled(i.command) : ('run' in i || 'items' in i) && !i.disabled);
+    return { label, items: list, disabled: !items.some(can) };
+  };
+
   const openMore = (keyboard: boolean) => {
+    const groups = app.commands.forToolbar();
     const out: MenuItem[] = [];
     for (const g of late) {
       if (out.length) out.push({ rule: true });
-      for (const c of g.commands) out.push({ command: c.id, label: toolbarLabel(app, c) });
+      for (const c of g.commands) out.push(folded(c, groups));
     }
     openMenu(app, out, { anchor: more.getBoundingClientRect(), placement: 'below', owner: more, keyboard, label: 'More' });
   };
