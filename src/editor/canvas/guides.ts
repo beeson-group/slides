@@ -6,7 +6,8 @@
 // which only the editor reads, and each change of them is one entry of the history. guides kept in
 // the storage of the browser by an earlier editor, by the index of each slide in the order of the
 // page, are shown until the next change of the guides of their slide writes them into the file.
-// Show Guides, Clear All Guides on Slide, Copy Guides, and Paste Guides are the commands of Keynote
+// the guides are drawn and snapped to while the rulers of View > Rulers are shown. Clear All Guides
+// on Slide, Copy Guides, and Paste Guides are the commands of Keynote
 
 import type { App } from '../app.ts';
 import { injectStyle, make, store, stored } from '../ui/dom.ts';
@@ -17,7 +18,6 @@ export type Guides = { x: number[]; y: number[] };
 
 // the distance in screen px within which a press grabs a guide
 const GRAB = 4;
-const SHOWN = 'beeson-edit-guides-shown';
 const CLIP = 'beeson-edit-guides-copied';
 const keyOf = () => `beeson-edit-guides:${location.pathname}`;
 
@@ -74,7 +74,7 @@ export function install(app: App): void {
   document.body.append(readout);
   const root = document.documentElement;
 
-  let shown = stored(SHOWN) !== '0';
+  const shown = () => app.commands.get('view.rulers')?.checked?.(app) === true;
   // the guides of each slide element. every slide of the page is read by its index from the storage
   // of the deck at the first use, before a slide can be moved, and a slide added later has none
   const kept = new WeakMap<Element, Guides>();
@@ -147,7 +147,7 @@ export function install(app: App): void {
     app.invalidate('layout');
   };
 
-  provideLines(() => (shown ? { guides: of(app.current()) } : {}));
+  provideLines(() => (shown() ? { guides: of(app.current()) } : {}));
 
   let press: Press | null = null;
   const lines: HTMLElement[] = [];
@@ -155,7 +155,7 @@ export function install(app: App): void {
   const draw = () => {
     const f = frameOf(app);
     const v = stage.viewport;
-    const g = shown ? of(app.current()) : empty();
+    const g = shown() ? of(app.current()) : empty();
     const all: { axis: 'x' | 'y'; at: number; off: boolean }[] = [
       ...g.x.map((at, i) => ({ axis: 'x' as const, at, off: press?.axis === 'x' && press.index === i })),
       ...g.y.map((at, i) => ({ axis: 'y' as const, at, off: press?.axis === 'y' && press.index === i })),
@@ -186,7 +186,7 @@ export function install(app: App): void {
 
   // the guide within GRAB of the point x, y in screen px, or null
   const guideAt = (x: number, y: number): { axis: 'x' | 'y'; index: number } | null => {
-    if (!shown) return null;
+    if (!shown()) return null;
     const f = frameOf(app);
     const g = of(app.current());
     let best: { axis: 'x' | 'y'; index: number; d: number } | null = null;
@@ -232,7 +232,6 @@ export function install(app: App): void {
     if (!grab) return;
     ev.preventDefault();
     ev.stopPropagation();
-    if (!shown) set(true);
     press = { ...grab, at: 0, x: ev.clientX, y: ev.clientY };
     root.classList.add(`beeson-guide-${grab.axis}`);
     track(ev);
@@ -284,33 +283,17 @@ export function install(app: App): void {
     if (app.state === 'loaded' && seeded && (now.length !== order.length || now.some((s, i) => s !== order[i]))) persist();
   });
 
-  const set = (on: boolean) => {
-    shown = on;
-    store(SHOWN, on ? null : '0');
-    draw();
-    app.invalidate('layout');
-  };
-
   const has = (a: App) => {
     const g = of(a.current());
-    return !!(g.x.length || g.y.length);
+    return shown() && !!(g.x.length || g.y.length);
   };
   const menu = (order: number) => ({ bar: 'View', group: 'guides', order, submenu: 'Guides' });
   const c = app.commands;
-  c.define({
-    id: 'view.guides',
-    label: 'Show Guides',
-    // Alt+F9 is the key of the guides of PowerPoint for Windows
-    keys: { mac: ['Mod+Ctrl+Alt+G'], other: ['Alt+F9'] },
-    menu: menu(51),
-    checked: () => shown,
-    run: () => set(!shown),
-  });
   // with an arg { x, y } of lists in slide px, the guides are added at once, e.g. by a test
   c.define({
     id: 'view.guides.add',
     label: 'Add Guides',
-    enabled: (a) => !!a.current(),
+    enabled: (a) => shown() && !!a.current(),
     run: (a, arg) => {
       const slide = a.current();
       if (slide) setOf(slide, merged(of(slide), clean(arg as Partial<Guides>)));
@@ -338,7 +321,7 @@ export function install(app: App): void {
     id: 'slide.guides.paste',
     label: 'Paste Guides',
     menu: slideMenu(71),
-    enabled: (a) => !!a.current() && stored(CLIP) !== null,
+    enabled: (a) => shown() && !!a.current() && stored(CLIP) !== null,
     run: (a) => {
       const slide = a.current();
       if (slide) setOf(slide, merged(of(slide), clean(read<Partial<Guides> | null>(CLIP, null))));

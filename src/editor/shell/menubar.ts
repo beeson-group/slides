@@ -26,9 +26,9 @@ const CSS = `
 .beeson-edit-menubar [role=menuitem]:hover, .beeson-edit-menubar [role=menuitem][aria-expanded="true"] { background: var(--ed-pressed); }
 .beeson-edit-menubar [role=menuitem][aria-disabled="true"] { color: var(--ed-faint); }
 .beeson-edit-menubar [role=menuitem]:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: -2px; }
-.beeson-edit-titlebar .doc { min-width: 0; display: flex; gap: 6px; align-items: baseline; overflow: hidden; white-space: nowrap; }
+.beeson-edit-titlebar .doc { min-width: 0; display: flex; gap: 12px; align-items: baseline; overflow: hidden; white-space: nowrap; }
 .beeson-edit-titlebar .file { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-weight: 600; }
-.beeson-edit-titlebar .doc.tight .dash, .beeson-edit-titlebar .doc.tight .state { display: none; }
+.beeson-edit-titlebar .doc.tight .state { display: none; }
 .beeson-edit-titlebar .doc.gone { visibility: hidden; }
 .beeson-edit-titlebar .state { min-width: 0; overflow: hidden; text-overflow: ellipsis; color: var(--ed-muted); }
 .beeson-edit-titlebar .state.warn { color: var(--ed-guide); }
@@ -43,7 +43,7 @@ const CSS = `
 .beeson-edit-titlebar .track::after { content: ''; position: absolute; top: 2px; left: 2px; width: 11px; height: 11px; border-radius: 50%; background: #fff; box-shadow: 0 0.5px 1.5px rgba(0, 0, 0, 0.3); transition: transform 120ms; }
 .beeson-edit-titlebar button[aria-pressed="true"] .track { background: var(--ed-select); }
 .beeson-edit-titlebar button[aria-pressed="true"] .track::after { transform: translateX(11px); }
-@media (max-width: 899px) { .beeson-edit-titlebar .doc .dash, .beeson-edit-titlebar .doc .state { display: none; } }
+@media (max-width: 899px) { .beeson-edit-titlebar .doc .state { display: none; } }
 `;
 
 export function install(app: App): void {
@@ -56,7 +56,7 @@ export function install(app: App): void {
   const fileEl = make('span', 'file');
   const stateEl = make('span', 'state');
   stateEl.setAttribute('aria-live', 'polite');
-  doc.append(fileEl, make('span', 'dash', '—'), stateEl);
+  doc.append(fileEl, stateEl);
   const right = make('div', 'right');
   const which = make('button', 'which');
   which.type = 'button';

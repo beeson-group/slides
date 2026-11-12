@@ -804,8 +804,8 @@ const CHANGES = new RegExp([
   '^(edit\\.cut|selection\\.editText)$',
 ].join('|'));
 
-// the focused text that is not a text of the slides, i.e. a line of the outline or a field of a
-// pane. the commands of the Edit menu act on its text, and not on the selection of the canvas
+// the focused text that is not a text of the slides, i.e. a field of a pane. the commands of the
+// Edit menu act on its text, and not on the selection of the canvas
 export const fieldOf = (app: App): HTMLElement | null => {
   const f = document.activeElement;
   const typed = f instanceof HTMLElement && (f.isContentEditable || f.matches('textarea, input:not([type=range], [type=checkbox], [type=radio], [type=button], [type=color])'));
@@ -822,8 +822,8 @@ export function lockedSelection(app: App): boolean {
 export function install(app: App): void {
   for (const c of commands(app)) app.commands.define(c);
   keepGroups(app);
-  // a lock holds an element of the slide, and not the text of a line of the outline or of a field,
-  // on which Cut, Paste, and Delete act while the caret is in it
+  // a lock holds an element of the slide, and not the text of a field, on which Cut, Paste, and
+  // Delete act while the caret is in it
   const inField = (a: App, id: string) => /^(edit\.(cut|paste)|element\.delete)$/.test(id) && !!fieldOf(a);
   app.commands.veto((a, c) => !inField(a, c.id) && (CHANGES.test(c.id) || (c.id === 'edit.paste' && a.selection.kind === 'text')) && lockedSelection(a));
   // Delete skips a locked element, hence it is turned off only when every selected element is locked

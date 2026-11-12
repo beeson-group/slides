@@ -381,7 +381,7 @@ export function canSplit(app: App): boolean {
 }
 
 // the function that puts the caret at the visible offset at of el, unless the focus is in a text
-// outside the slides at its call, e.g. a line of the outline, which keeps it
+// outside the slides at its call, e.g. a field of a pane, which keeps it
 const caretAt = (app: App, el: Element, at = 0) => () => {
   const a = document.activeElement;
   if (!a?.matches('input, textarea, [contenteditable="true"]') || app.slides().contains(a)) selectIn(el, at);

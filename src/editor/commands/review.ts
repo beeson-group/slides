@@ -3,10 +3,9 @@
 // Play menu holds Present and Present from Start, moved from the File menu, the presenter view,
 // Customize Presenter Display…, the rehearsal of timings, Use Rehearsed Timings, and Clear
 // Timings. the Slide menu holds the transition of a slide, Magic Move, and Preview Transition, and
-// the View menu the light table and the accessibility checker. Present keeps the keys of
-// PowerPoint, since F5 reloads the page, and the presenter view takes Alt+Enter, the key of
-// PowerPoint on a Mac. the light table is not given a key, since Chrome takes Mod+1 to Mod+9 for
-// its tabs
+// the View menu the Chapters Table. Present keeps the keys of PowerPoint, since F5 reloads the
+// page, and the presenter view takes Alt+Enter, the key of PowerPoint on a Mac. the Chapters Table
+// is not given a key, since Chrome takes Mod+1 to Mod+9 for its tabs
 
 import type { App } from '../app.ts';
 import { OUTSIDE_DIALOGS } from '../commands.ts';
@@ -14,7 +13,6 @@ import type { Navigator } from '../navigator/navigator.ts';
 import { Sorter } from '../navigator/sorter.ts';
 import { Presenter, useTimings, usingTimings } from '../present.ts';
 import { presentAt } from './file.ts';
-import { Checker, useHeaderRow } from '../review/accessibility.ts';
 import { install as installAnimate } from '../review/animate.ts';
 import { magicMoveCopy, nextShown, paired, preview, setTransition, transitionOf, type Transition } from '../review/transitions.ts';
 import { MENUS } from '../shell/menubar.ts';
@@ -32,7 +30,6 @@ export function install(app: App): void {
   const c = app.commands;
   const presenter = new Presenter(app);
   const sorter = new Sorter(app);
-  const checker = new Checker(app);
   const play = (order: number) => ({ bar: 'Play', group: 'play', order });
   for (const [id, order] of [['file.present', 10], ['file.presentStart', 11]] as const) {
     const command = c.get(id);
@@ -154,44 +151,11 @@ export function install(app: App): void {
 
   c.define({
     id: 'view.lightTable',
-    label: 'Light Table',
+    label: 'Chapters Table',
     menu: { bar: 'View', group: 'panes', order: 10.3 },
     enabled: (a) => ready(a),
     checked: () => sorter.shown,
     run: () => sorter.toggle(),
-  });
-  c.define({
-    id: 'view.accessibility',
-    label: 'Check Accessibility',
-    menu: { bar: 'View', group: 'review', order: 40 },
-    enabled: (a) => ready(a),
-    checked: () => checker.shown,
-    run: () => checker.toggle(),
-  });
-
-  // the fixes of the checker, each one entry of the history
-  c.define({
-    id: 'review.altText',
-    label: 'Add Alt Text',
-    enabled: () => true,
-    undoable: true,
-    run: (a, arg) => {
-      const { el, value } = (arg ?? {}) as { el?: Element; value?: string };
-      if (!el || value === undefined || !paired(a, el)) return;
-      a.doc.setTag(el, { attrs: { alt: value } }, 'alt');
-      a.invalidate('content');
-    },
-  });
-  c.define({
-    id: 'review.tableHeader',
-    label: 'Use First Row as Header',
-    enabled: () => true,
-    undoable: true,
-    run: async (a, arg) => {
-      const { el } = (arg ?? {}) as { el?: Element };
-      if (el) await useHeaderRow(a, el);
-      a.invalidate('content');
-    },
   });
   installAnimate(app);
 }

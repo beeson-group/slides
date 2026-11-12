@@ -28,8 +28,8 @@ const SPELLING_KEY = 'beeson-spelling';
 
 // the switch of the spelling of the browser, which underlines a misspelled word in a block. it is
 // set as spellcheck="false" on the html element of the page, which every block inherits, and the
-// file is not changed. a field of the editor that asks for spelling itself, e.g. a line of the
-// outline, is switched when it is focused
+// file is not changed. a field of the editor that asks for spelling itself is switched when it is
+// focused
 function installSpelling(app: App): void {
   let on = stored(SPELLING_KEY) !== '0';
   const asked = new WeakSet<HTMLElement>();
@@ -58,20 +58,6 @@ function installSpelling(app: App): void {
     },
   });
 }
-
-// a field of the editor with a text typed into it that is not in the history yet, e.g. a line of
-// the outline. Undo and Redo are run through step of the field that has the focus, which writes
-// the typed text first, as an entry of its own. pending makes Undo read Undo Typing
-export type Typing = { active(): boolean; pending(): boolean; step(run: () => Promise<void>): Promise<void> };
-const typings = new WeakMap<App, Typing>();
-export function holdTyping(app: App, field: Typing): void {
-  typings.set(app, field);
-}
-const pending = (a: App) => typings.get(a)?.pending() ?? false;
-const through = (a: App, run: () => Promise<void>) => {
-  const field = typings.get(a);
-  return field?.active() ? field.step(run) : run();
-};
 
 // a field of the inspector, by its input. enter writes a value typed into it as an entry of its
 // own, and gives false when the field refuses the value. follow shows the value of its targets
@@ -119,24 +105,23 @@ export function install(app: App): void {
   const c = app.commands;
   c.define({
     id: 'edit.undo',
-    label: (a) => (pending(a) ? 'Undo Typing' : a.history.undoLabel ? `Undo ${titled(a.history.undoLabel.replace(/…$/, ''))}` : 'Undo'),
+    label: (a) => (a.history.undoLabel ? `Undo ${titled(a.history.undoLabel.replace(/…$/, ''))}` : 'Undo'),
     keys: { mac: ['Mod+Z'], other: ['Mod+Z'] },
     in: IN,
     menu: { bar: 'Edit', group: 'history', order: 10 },
     toolbar: { group: 'history', order: 10, icon: 'undo', label: 'Undo' },
-    enabled: (a) => pending(a) || a.history.canUndo,
-    run: (a) => entered(() => through(a, () => a.history.undo()), true),
+    enabled: (a) => a.history.canUndo,
+    run: (a) => entered(() => a.history.undo(), true),
   });
   c.define({
     id: 'edit.redo',
-    label: (a) => (!pending(a) && a.history.redoLabel ? `Redo ${titled(a.history.redoLabel.replace(/…$/, ''))}` : 'Redo'),
+    label: (a) => (a.history.redoLabel ? `Redo ${titled(a.history.redoLabel.replace(/…$/, ''))}` : 'Redo'),
     keys: { mac: ['Mod+Shift+Z', 'Mod+Y'], other: ['Mod+Y', 'Mod+Shift+Z'] },
     in: IN,
     menu: { bar: 'Edit', group: 'history', order: 11 },
     toolbar: { group: 'history', order: 11, icon: 'redo', label: 'Redo' },
-    // a typing clears the redos once it is written
-    enabled: (a) => !pending(a) && a.history.canRedo,
-    run: (a) => entered(() => through(a, () => a.history.redo()), false),
+    enabled: (a) => a.history.canRedo,
+    run: (a) => entered(() => a.history.redo(), false),
   });
   c.define({
     id: 'arrange.sizeAndPosition',

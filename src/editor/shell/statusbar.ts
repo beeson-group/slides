@@ -1,6 +1,6 @@
-// the status bar: the previous and next slide with the number of the current one, the state of
-// accessibility of the deck, the layer switch, the buttons Navigator, Steps, and Notes, the zoom (−,
-// a slider, +, the percentage as a menu, and Fit), and the switch ◐ of the mode of the slide
+// the status bar: the previous and next slide with the number of the current one, the layer
+// switch, the buttons Navigator, Steps, and Notes, the zoom (−, a slider, +, the percentage as a
+// menu, and Fit), and the switch ◐ of the mode of the slide
 
 import type { App } from '../app.ts';
 import { button, injectStyle, make, wire } from '../ui/dom.ts';
@@ -21,8 +21,6 @@ const CSS = `
 .beeson-edit-bottom .beeson-layers[hidden] { display: none; }
 .beeson-edit-bottom .beeson-layers > span { margin-right: 4px; }
 .beeson-edit-bottom .gap { flex: 1; }
-.beeson-edit-bottom .a11y[hidden] { display: none; }
-.beeson-edit-bottom .a11y svg { flex: none; color: var(--ed-muted); }
 .beeson-edit-bottom .zoom { display: flex; align-items: center; gap: 2px; }
 .beeson-edit-bottom .zoom button { padding: 0 4px; }
 /* the percentage keeps one width, so that the slider stays under the pointer while the zoom changes */
@@ -36,11 +34,9 @@ const CSS = `
 .beeson-edit-bottom input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: #fff; box-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.35), 0 1px 2px rgba(0, 0, 0, 0.3); }
 .beeson-edit-bottom .beeson-edit-select { min-width: 52px; justify-content: space-between; font-variant-numeric: tabular-nums; }
 @media (max-width: 1099px) { .beeson-edit-bottom .slider { width: 72px; } }
-/* in a narrow window the zoom is left to its buttons, and the state of accessibility to its icon, with
-   its text kept for a screen reader, so that every button of the bar is drawn whole */
+/* in a narrow window the zoom is left to its buttons, so that every button of the bar is drawn whole */
 @media (max-width: 759px) {
   .beeson-edit-bottom .slider { display: none; }
-  .beeson-edit-bottom .a11y .text { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
 }
 `;
 
@@ -53,27 +49,6 @@ const STEPS = 1000;
 const TICK = -LOG_MIN / (LOG_MAX - LOG_MIN);
 const SNAP = 4;
 
-// the figure of the accessibility button, drawn as the icons of ui/icons.ts on their grid of 20 px
-function person(): SVGSVGElement {
-  const ns = 'http://www.w3.org/2000/svg';
-  const svg = document.createElementNS(ns, 'svg');
-  svg.setAttribute('viewBox', '0 0 20 20');
-  svg.setAttribute('width', '14');
-  svg.setAttribute('height', '14');
-  svg.setAttribute('aria-hidden', 'true');
-  for (const d of ['M10 3a1.6 1.6 0 1 1 0 3.2 1.6 1.6 0 0 1 0-3.2z', 'M4 7.75 10 8.5l6-.75', 'M10 8.5v4', 'M10 12.5 7 17', 'M10 12.5 13 17']) {
-    const path = document.createElementNS(ns, 'path');
-    path.setAttribute('d', d);
-    path.setAttribute('fill', 'none');
-    path.setAttribute('stroke', 'currentColor');
-    path.setAttribute('stroke-width', '1.5');
-    path.setAttribute('stroke-linecap', 'round');
-    path.setAttribute('stroke-linejoin', 'round');
-    svg.append(path);
-  }
-  return svg;
-}
-
 // layers is the switch of layers.ts, placed after the slide number
 export function install(app: App, layers: HTMLElement): void {
   injectStyle('statusbar', CSS);
@@ -81,13 +56,6 @@ export function install(app: App, layers: HTMLElement): void {
   const prevButton = button('‹', 'Previous slide', 'Previous slide');
   const countEl = make('span', 'count');
   const nextButton = button('›', 'Next slide', 'Next slide');
-
-  // the state of the checker of review/accessibility.ts, which writes its text, as the button
-  // Accessibility: Investigate of the status bar of PowerPoint, and opens its pane
-  const a11yButton = button('', 'Check Accessibility', '');
-  a11yButton.className = 'a11y';
-  a11yButton.hidden = true;
-  a11yButton.append(person(), make('span', 'text'));
 
   const zoomBox = make('div', 'zoom');
   const outButton = button('', 'Zoom out', 'Zoom out');
@@ -121,12 +89,11 @@ export function install(app: App, layers: HTMLElement): void {
   modeButton.append(icon('contrast', 14));
 
   const rule = () => make('span', 'rule');
-  bottom.append(prevButton, countEl, nextButton, a11yButton, layers, make('span', 'gap'), app.nav.button, app.steps.button, app.notes.button, rule(), zoomBox, rule(), modeButton);
+  bottom.append(prevButton, countEl, nextButton, layers, make('span', 'gap'), app.nav.button, app.steps.button, app.notes.button, rule(), zoomBox, rule(), modeButton);
   const fail = (e: unknown) => app.fail(e);
   wire(prevButton, () => app.commands.run('navigate.previous'), fail);
   wire(nextButton, () => app.commands.run('navigate.next'), fail);
   wire(app.notes.button, () => app.commands.run('view.notes'), fail);
-  wire(a11yButton, () => app.commands.run('view.accessibility'), fail);
   // the panes wire Slides and Steps themselves, and a pointer click leaves the focus on the slide
   for (const b of [app.nav.button, app.steps.button]) b.addEventListener('click', (ev) => ev.detail > 0 && b.blur());
   wire(outButton, () => app.stage.zoomOut(), fail);

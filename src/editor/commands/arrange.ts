@@ -128,7 +128,7 @@ export function commands(): Command[] {
       runsAs: (app) => (onSlides(app) ? 'slide.selectAll' : 'selection.all'),
       run: (app) => {
         if (onSlides(app)) return app.commands.run('slide.selectAll');
-        // in a line of the outline or a field of a pane, the text of the line or of the field
+        // in a field of a pane, the text of the field
         const field = fieldOf(app);
         if (field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement) return field.select();
         if (field) return void getSelection()?.selectAllChildren(field);

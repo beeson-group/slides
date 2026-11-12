@@ -1,7 +1,6 @@
 // the grid of the window: the menu bar and the toolbar in the header, the navigator at the left,
-// the canvas with the notes under it, the accessibility pane while it is docked, the inspector at
-// the right, and the status bar. Slide Only of the View menu hides the navigator and the
-// inspector together, as in Keynote. the chrome
+// the canvas with the notes under it, the inspector at the right, and the status bar. Slide Only
+// of the View menu hides the navigator and the inspector together, as in Keynote. the chrome
 // is painted in tokens of its own, which follow prefers-color-scheme and not the mode of the deck,
 // hence D flips only the slide. the regions are put into the order of the DOM in which Tab and F6
 // reach them, and the shell also holds the inspector with its tabs Format and Steps, the edge
@@ -40,19 +39,16 @@ const TOKENS_DARK = `--ed-bg: #2b2b2d; --ed-panel: #232325; --ed-text: #ececee; 
 const CHROME = 'html.beeson-editor .beeson-edit-header, html.beeson-editor .beeson-edit-inspector, html.beeson-editor .beeson-edit-bottom, html.beeson-editor .beeson-edit-pane, html.beeson-editor dialog.beeson-edit-card, html.beeson-editor .beeson-edit-menus';
 
 const CSS = `
-html.beeson-editor { ${TOKENS_LIGHT} --ed-nav-col: 0px; --ed-insp-col: 0px; --ed-a11y-col: 0px; --ed-notes-row: 0px; --ed-font: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif; }
+html.beeson-editor { ${TOKENS_LIGHT} --ed-nav-col: 0px; --ed-insp-col: 0px; --ed-notes-row: 0px; --ed-font: system-ui, -apple-system, "Segoe UI", Roboto, Ubuntu, sans-serif; }
 @media (prefers-color-scheme: dark) { html.beeson-editor { ${TOKENS_DARK} } }
-html.beeson-editor.beeson-nav { --ed-nav-col: clamp(${NAV_MIN}px, calc(50vw - var(--ed-insp-col) - var(--ed-a11y-col)), var(--ed-nav-w, ${NAV_DEFAULT}px)); }
+html.beeson-editor.beeson-nav { --ed-nav-col: clamp(${NAV_MIN}px, calc(50vw - var(--ed-insp-col)), var(--ed-nav-w, ${NAV_DEFAULT}px)); }
 html.beeson-editor.beeson-steps, html.beeson-editor.beeson-format { --ed-insp-col: ${INSPECTOR_W}px; }
-html.beeson-editor.beeson-a11y { --ed-a11y-col: min(300px, 30vw); }
 html.beeson-editor.beeson-notes { --ed-notes-row: var(--beeson-pane, 200px); }
 ${CHROME} { --bg: var(--ed-panel); --text: var(--ed-text); --subtle: var(--ed-muted); --muted: var(--ed-muted); --line: var(--ed-line); --violet: var(--ed-select); --accent: var(--ed-guide); }
-html.beeson-editor body.reveal-viewport { display: grid !important; grid-template-columns: var(--ed-nav-col) minmax(0, 1fr) var(--ed-a11y-col) var(--ed-insp-col); grid-template-rows: auto minmax(0, 1fr) var(--ed-notes-row) 28px; grid-template-areas: "top top top top" "nav canvas a11y insp" "nav notes a11y insp" "status status status status"; width: 100vw; height: 100vh; height: 100dvh; margin: 0; overflow: hidden; color: var(--ed-text); font: 12px/1.35 var(--ed-font); }
+html.beeson-editor body.reveal-viewport { display: grid !important; grid-template-columns: var(--ed-nav-col) minmax(0, 1fr) var(--ed-insp-col); grid-template-rows: auto minmax(0, 1fr) var(--ed-notes-row) 28px; grid-template-areas: "top top top" "nav canvas insp" "nav notes insp" "status status status"; width: 100vw; height: 100vh; height: 100dvh; margin: 0; overflow: hidden; color: var(--ed-text); font: 12px/1.35 var(--ed-font); }
 html.beeson-editor body > * { grid-area: canvas; }
 html.beeson-editor ::placeholder { color: var(--ed-muted); opacity: 1; }
 html.beeson-editor body > .beeson-edit-bottom { grid-area: status; }
-html.beeson-editor body > .beeson-edit-a11y { grid-area: a11y; }
-html.beeson-editor.beeson-a11y .beeson-edit-resize { right: calc(var(--ed-insp-col) + var(--ed-a11y-col)); }
 html.beeson-editor body > .beeson-edit-header { grid-area: top; position: relative; z-index: 60; display: flex; flex-direction: column; background: var(--ed-bg); border-bottom: 1px solid var(--ed-line); }
 html.beeson-editor body > .beeson-edit-nav { grid-area: nav; position: relative; inset: auto; width: auto; min-width: 0; min-height: 0; z-index: 50; background: var(--ed-panel); border-right: 1px solid var(--ed-line); color: var(--ed-text); font: 12px/1.4 var(--ed-font); }
 html.beeson-editor body > .beeson-edit-nav-edge { grid-area: nav; justify-self: end; position: relative; z-index: 55; width: 7px; margin-right: -4px; display: none; cursor: ew-resize; touch-action: none; }
@@ -264,7 +260,7 @@ export function install(app: App): void {
   // view.slideOnly is Slide Only of the View menu of Keynote. it hides the navigator and leaves the
   // inspector as it is, since in Keynote the view modes change only what is left of the canvas. a
   // second run shows the navigator again. it is checked while the navigator is not drawn, also where
-  // the width of the window hides it beside the inspector, and it closes the light table. where the
+  // the width of the window hides it beside the inspector, and it closes the Chapters Table. where the
   // first run closed the inspector to show the navigator, the second opens that pane of the inspector
   // again, as reopen
   const slideOnly = () => !app.nav.seen;
@@ -337,7 +333,7 @@ export function install(app: App): void {
       return { kind: 'slide', target: slide };
     }
     if (target.closest('.beeson-edit-nav')) return { kind: 'navigator', target: null };
-    // a tile of the light table stands for its slide, as a row of the navigator does
+    // a tile of the Chapters Table stands for its slide, as a row of the navigator does
     const tile = target.closest('.beeson-edit-sorter .tile');
     if (tile) return { kind: 'slide', target: tileSlide.get(tile) ?? null };
     if (target.closest('.beeson-edit-canvas')) return { kind: 'canvas', target: app.current() };
@@ -391,8 +387,6 @@ export function install(app: App): void {
   });
   window.addEventListener('keydown', (ev) => {
     if (!(ev.key === 'ContextMenu' || (ev.key === 'F10' && ev.shiftKey && !ev.metaKey && !ev.ctrlKey && !ev.altKey))) return;
-    // a row of the accessibility checker opens its own menu of fixes
-    if (document.activeElement?.closest('.beeson-edit-a11y [role="tree"]')) return;
     const sel = app.selection.only();
     const at = sel ?? (document.activeElement instanceof Element && document.activeElement !== document.body ? document.activeElement : app.current());
     const place = placeOf(at);

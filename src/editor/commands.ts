@@ -133,14 +133,6 @@ export class Commands {
     this.vetoes.push(check);
   }
 
-  // the fields that run a command in their own way, e.g. a line of the outline, which writes its
-  // typed text before Duplicate copies its slide. a taker returns undefined for a command it leaves
-  private readonly takers: ((id: string) => Promise<void> | undefined)[] = [];
-
-  take(taker: (id: string) => Promise<void> | undefined): void {
-    this.takers.push(taker);
-  }
-
   // whether the command applies to the selection by its own enabled, i.e. before the vetoes, as a
   // command of a locked element does, which its context menu shows dimmed
   applies(id: string): boolean {
@@ -168,10 +160,6 @@ export class Commands {
     const c = this.byId.get(id);
     if (!c) throw new Error(`there is no command ${id}`);
     if (!this.enabled(id)) return;
-    for (const take of this.takers) {
-      const taken = take(id);
-      if (taken) return taken;
-    }
     if (c.undoable) await this.app.history.transact(c.undo ?? this.label(c.runsAs?.(this.app) ?? id), () => c.run(this.app, arg));
     else await c.run(this.app, arg);
   }
@@ -205,7 +193,7 @@ export class Commands {
         boundKeys(c, platform).some((k) => (plain || !isPlain(k)) && !(typed && isPlain(k)) && !types(k) && matches(e, k, platform)) &&
         this.enabled(c.id);
     });
-    // on a Mac, a text, the notes, and a field such as a line of the outline keep the Control keys
+    // on a Mac, a text, the notes, and an editable field keep the Control keys
     // of the text system of macOS, e.g. Control-D, which deletes forward, rather than taking them
     // as Command with the letter
     const editable = region === 'text' || region === 'notes' || (document.activeElement as HTMLElement | null)?.isContentEditable === true;

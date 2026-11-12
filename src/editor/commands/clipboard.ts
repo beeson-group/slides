@@ -47,7 +47,7 @@ function caretBlock(app: App): Element | null {
   return el && app.pairing?.elements.get(el)?.open ? el : null;
 }
 
-// the thumbnails and the outline, where Duplicate duplicates the slide
+// the thumbnails, where Duplicate duplicates the slide
 const inNavigator = (app: App): boolean => app.region() === 'navigator';
 
 // the text of els on the clipboard: the mark, then each element as it is written into the file
@@ -367,11 +367,9 @@ export function install(app: App): void {
     const slides = slidesIn(text)?.length ? text : null;
     const field = fieldOf(a);
     if (field) {
-      // slides are pasted from a line of the outline as from the navigator. a text is given to the
-      // field as the paste of the key first, since a line of the outline takes one line. a field
-      // without a handler takes the plain text
-      if (slides && a.region() === 'navigator') await a.commands.run('slide.paste', slides);
-      else if (text && !els && !slides) {
+      // a text is given to the field as the paste of the key first, and a field without a handler
+      // takes the plain text
+      if (text && !els && !slides) {
         const data = new DataTransfer();
         data.setData('text/plain', text);
         const ev = new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true });

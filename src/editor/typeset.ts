@@ -1,14 +1,14 @@
-// formulas typeset in the chrome of the editor, e.g. in the outline view and in the inspector, as
+// formulas typeset in the chrome of the editor, e.g. in the inspector, as
 // the running heads of the deck are typeset by refreshChrome of src/chrome.ts. the TeX of a text is
 // kept in its data-tex, since the text of a typeset formula is not its source. a text with the
 // focus is not typeset, since its TeX is edited there
 
-export const hasTex = (s: string): boolean => /\\\(|\\\[/.test(s);
+const hasTex = (s: string): boolean => /\\\(|\\\[/.test(s);
 
 // one typesetting at a time, as MathJax asks of a page
 let queue: Promise<unknown> = Promise.resolve();
 
-export function typeset(nodes: Element[]): Promise<unknown> {
+function typeset(nodes: Element[]): Promise<unknown> {
   const mj = window.MathJax;
   if (!nodes.length || !mj?.typesetPromise) return Promise.resolve();
   queue = queue

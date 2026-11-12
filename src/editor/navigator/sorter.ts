@@ -136,7 +136,7 @@ export class Sorter {
     this.app = app;
     injectStyle('sorter', CSS);
     this.el.hidden = true;
-    this.el.setAttribute('aria-label', 'Light Table');
+    this.el.setAttribute('aria-label', 'Chapters Table');
     this.scroller.setAttribute('role', 'listbox');
     this.scroller.setAttribute('aria-multiselectable', 'true');
     this.scroller.setAttribute('aria-label', 'Slides');
@@ -164,7 +164,7 @@ export class Sorter {
     size.append(icon('slide', 14), this.slider, icon('slide', 20));
     const done = make('button', 'done', 'Done');
     done.type = 'button';
-    done.title = 'Close the light table';
+    done.title = 'Close the Chapters Table';
     done.addEventListener('click', () => this.toggle(false));
     bar.append(hideLabel, this.count, size, done);
     this.scroller.append(this.drop);
@@ -516,7 +516,7 @@ export class Sorter {
   }
 
   // the gap of a section is the start of the group whose head is nearest the pointer, or the end of
-  // the deck below the last group, drawn as a line across the light table
+  // the deck below the last group, drawn as a line across the Chapters Table
   private onHeadMove(ev: PointerEvent, d: Drag): void {
     const all = this.slides();
     const box = this.scroller.getBoundingClientRect();
@@ -575,7 +575,7 @@ export class Sorter {
     this.scrollNear(ev);
   }
 
-  // the light table scrolled while a drag is near its top or its bottom
+  // the Chapters Table scrolled while a drag is near its top or its bottom
   private scrollNear(ev: PointerEvent): void {
     const r = this.scroller.getBoundingClientRect();
     if (ev.clientY < r.top + 28) this.scroller.scrollTop -= 12;

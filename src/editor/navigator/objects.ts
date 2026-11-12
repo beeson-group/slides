@@ -173,7 +173,6 @@ export function install(app: App): void {
   let press: { els: Element[]; key: Key; x: number; y: number; id: number; on: boolean; gap: number } | null = null;
 
   const mod = (ev: MouseEvent | KeyboardEvent) => (app.platform === 'mac' ? ev.metaKey : ev.ctrlKey);
-  const outlineShown = () => !!(app.nav as unknown as { outline?: { shown: boolean } }).outline?.shown;
 
   // the objects of the current slide from front to back
   const objects = (): Element[] => {
@@ -213,7 +212,7 @@ export function install(app: App): void {
     return new Set(sel.elements().map((el) => objectOf(app, el)));
   };
 
-  const shown = () => on && app.nav.shown && !outlineShown() && getComputedStyle(app.nav.pane).display !== 'none';
+  const shown = () => on && app.nav.shown && getComputedStyle(app.nav.pane).display !== 'none';
 
   function lockButton(item: Item): HTMLButtonElement {
     const els = membersOf(item);
@@ -283,7 +282,7 @@ export function install(app: App): void {
   let built = '';
   function refresh(keepFocus = root.contains(document.activeElement) && document.activeElement !== field): void {
     if (root.previousElementSibling !== app.nav.pane) app.nav.pane.after(root);
-    document.documentElement.classList.toggle('beeson-objects', on && app.nav.shown && !outlineShown());
+    document.documentElement.classList.toggle('beeson-objects', on && app.nav.shown);
     root.hidden = !shown();
     if (root.hidden || press?.on) return;
     const query = field.value.trim().toLowerCase();

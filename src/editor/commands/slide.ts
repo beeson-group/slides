@@ -1,6 +1,6 @@
 // the commands of the Slide menu: new slide with the gallery of the layouts, duplicate, delete,
 // hide and show, move up and down, and cut, copy, and paste of slides, and the move and the rename
-// of a section of the light table. each command acts on the slides selected in the navigator, or on
+// of a section of the Chapters Table. each command acts on the slides selected in the navigator, or on
 // the current slide, through the document model, and is one entry of the history however many
 // slides it changes
 
@@ -68,7 +68,7 @@ function placeAfter(app: App): { root: Element; before: Element | null } {
 }
 
 // the slides shown and selected after a command, with the focus kept in the navigator when the
-// command was run from it, and on the tile of the current slide while the light table is shown
+// command was run from it, and on the tile of the current slide while the Chapters Table is shown
 function land(app: App, slides: Element[], current: Element | null, focusNav: boolean): void {
   const nav = navOf(app);
   nav.select(slides, current);
@@ -76,8 +76,7 @@ function land(app: App, slides: Element[], current: Element | null, focusNav: bo
 }
 
 // whether Select All and Delete of the Edit menu act on the slides, i.e. while a row of the navigator
-// or a tile of the Light Table has the focus, as in the Slide Sorter of PowerPoint. a text of the
-// outline is in the navigator, and the two are left to its text
+// or a tile of the Chapters Table has the focus, as in the Slide Sorter of PowerPoint
 export function onSlides(app: App): boolean {
   const active = document.activeElement;
   if (active instanceof HTMLElement && (active.isContentEditable || active.matches('input, textarea'))) return false;
@@ -99,7 +98,7 @@ function caretInto(slide: Element): void {
 
 async function newSlide(app: App, layout: Layout, before = placeAfter(app).before): Promise<Element> {
   const slide = await docOf(app).insertSlide(layout, before);
-  // the slide is hidden under the Light Table, hence its tile takes the focus, as at Duplicate
+  // the slide is hidden under the Chapters Table, hence its tile takes the focus, as at Duplicate
   if (navOf(app).table?.shown) land(app, [slide], slide, true);
   else {
     navOf(app).select([slide], slide);
@@ -213,7 +212,7 @@ async function pasteSlides(app: App, text: string, focusNav: boolean): Promise<b
   return true;
 }
 
-// a section of the light table, i.e. a section slide with the slides under it, moved to gap, an
+// a section of the Chapters Table, i.e. a section slide with the slides under it, moved to gap, an
 // index in the slides of the deck, and the name of a section, i.e. the heading of its section slide
 export type MoveSection = { head: Element; gap: number };
 export type RenameSection = { head: Element; text: string };
@@ -561,28 +560,16 @@ export function install(app: App): void {
   for (const d of defs) c.define(d.undoable ? { ...d, run: (a, arg) => navOf(a).keeping(d.id, () => d.run(a, arg)) } : d);
 
   // the clipboard keys in the navigator act on the slides, through the events that carry the
-  // clipboard in every browser. in a text of the outline they act on the text, and a paste is
-  // its plain text on one line
+  // clipboard in every browser
   const onClip = (ev: ClipboardEvent) => {
     if (ev.defaultPrevented || app.region() !== 'navigator' || !ready(app)) return;
-    const active = document.activeElement;
-    const typing = active instanceof HTMLElement && active.isContentEditable;
     if (ev.type === 'paste') {
       const text = ev.clipboardData?.getData('text/plain') || ev.clipboardData?.getData('text/html') || '';
-      if (!slidesIn(text)?.length) {
-        if (!typing) return;
-        ev.preventDefault();
-        // the elements of the editor are their source on the clipboard, and they are not pasted
-        // into a line, as into a text of the slide. an empty text would delete the selected words
-        const plain = (ev.clipboardData?.getData('text/plain') ?? '').replace(/\s*\n\s*/g, ' ');
-        if (plain.trim() && !plain.trimStart().startsWith(MARK)) document.execCommand('insertText', false, plain);
-        return;
-      }
+      if (!slidesIn(text)?.length) return;
       ev.preventDefault();
       void c.run('slide.paste', text).catch((e) => app.fail(e));
       return;
     }
-    if (typing) return;
     ev.preventDefault();
     void c.run(ev.type === 'cut' ? 'slide.cut' : 'slide.copy', ev.clipboardData).catch((e) => app.fail(e));
   };

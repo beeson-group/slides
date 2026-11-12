@@ -301,7 +301,7 @@ export function contextItems(app: App, kind: Context, target: Element | null): M
 
 // the submenu Grid and Guides and the switch of the rulers of the menu of a slide in PowerPoint,
 // after the items of the slide and before those of its backdrop
-const GRID: (string | null)[] = ['view.guides', 'view.grid', null, 'view.grid.snap', null, 'view.grid.settings'];
+const GRID: (string | null)[] = ['view.grid', null, 'view.grid.snap', null, 'view.grid.settings'];
 
 function addGrid(app: App, out: MenuItem[]): void {
   const items: MenuItem[] = GRID.filter((id) => id === null || app.commands.get(id)).map((id) => (id === null ? { rule: true } : { command: id }));

@@ -7,9 +7,9 @@
 // menu of the first. while the toolbar is wider than the window, its last groups are put into a
 // menu » at its right end, as in Keynote, first those after Present and then those before it.
 // the labels are hidden only while the toolbar does not fit with them. the toolbar has one tab stop, and the arrow keys move in it. the
-// View and Zoom popups at its left are as in Keynote: View with the views of the slides and the
-// panes, and Zoom with Fit, Actual Size, Zoom to Selection, and the levels, showing the zoom on its
-// face. the items of the toolbar and whether it shows icons, labels, or both are set in the sheet
+// View button at its left shows and hides the navigator, and its arrow lists the Chapters Table,
+// the rulers, and the gridlines. the Zoom popup beside it is as in Keynote, with Fit, Actual Size,
+// Zoom to Selection, and the levels, showing the zoom on its face. the items of the toolbar and whether it shows icons, labels, or both are set in the sheet
 // Customize Toolbar of the View menu, as in Keynote, and kept in the storage of the browser for
 // each deck, never in the file
 
@@ -21,7 +21,7 @@ import { icon } from '../ui/icons.ts';
 import { closeMenus, commandKeys, menuItems, openMenu, splitButton, type MenuItem } from '../ui/menu.ts';
 import { ZOOMS } from './canvas.ts';
 
-const POPUPS = new Set(['toolbar.view', 'toolbar.zoom']);
+const POPUPS = new Set(['toolbar.zoom']);
 const percent = (z: number) => `${Math.round(z * 100)}%`;
 
 // an item of the layout is a command, a separator, or a space that pushes the items after it to
@@ -38,7 +38,6 @@ const EXTRA: Record<string, { label: string; icon: string | string[] }> = {
   'file.open': { label: 'Open', icon: 'open' },
   'find.open': { label: 'Find', icon: ['M8.5 3.5a5 5 0 1 0 0 10 5 5 0 0 0 0-10z', 'M12.25 12.25 16.5 16.5'] },
   'view.notes': { label: 'Notes', icon: 'notes' },
-  'view.accessibility': { label: 'Accessibility', icon: ['F10 2.5a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2z', 'M4.5 7.25 10 8.25l5.5-1', 'M10 8.25v4', 'M10 12.25 7.5 17', 'M10 12.25 12.5 17'] },
   'play.rehearse': { label: 'Rehearse', icon: ['M3 4.5h14v9H3z', 'M8.75 7v4l3.25-2z', 'M7 16.5h6'] },
   'arrange.group': { label: 'Group', icon: ['M2.75 2.75h14.5v14.5H2.75z', 'M5.5 5.5H10V10H5.5z', 'M10 10h4.5v4.5H10z'] },
   'arrange.ungroup': { label: 'Ungroup', icon: ['M3.5 3.5h6v6h-6z', 'M10.5 10.5h6v6h-6z'] },
@@ -79,7 +78,7 @@ const CSS = `
 .beeson-edit-top { display: flex; align-items: center; gap: 2px; height: 52px; padding: 0 10px; box-sizing: border-box; font: 11px/1.2 var(--ed-font); color: var(--ed-text); user-select: none; -webkit-user-select: none; }
 html.beeson-no-toolbar .beeson-edit-top { display: none; }
 .beeson-edit-top .group { display: flex; align-items: center; gap: 2px; }
-.beeson-edit-top .group + .group::before { content: ''; align-self: center; width: 1px; height: 28px; margin: 0 6px; background: var(--ed-line); }
+.beeson-edit-top .group + .group::before { content: ''; align-self: center; width: 1px; height: 28px; margin: 0 4px; background: var(--ed-line); }
 .beeson-edit-top .group.right { margin-left: auto; }
 .beeson-edit-top .group.right ~ .group.right { margin-left: 0; }
 .beeson-edit-top .group[hidden] { display: none; }
@@ -176,10 +175,8 @@ export function install(app: App): void {
 
   const zoomText = () => percent(app.stage?.zoom ?? app.stage?.fitScale() ?? 1);
   const ids = (list: string[]): MenuItem[] => list.filter((id) => app.commands.get(id)).map((id) => ({ command: id }));
-  const popupItems = (id: string): MenuItem[] => {
-    if (id === 'toolbar.view') {
-      return [...ids(['view.navigator', 'view.slideOnly', 'view.lightTable', 'view.outline']), { rule: true }, ...ids(['shell.format', 'view.steps', 'view.notes']), { rule: true }, ...ids(['view.rulers', 'view.guides', 'view.grid'])];
-    }
+  const viewItems = (): MenuItem[] => ids(['view.lightTable', 'view.rulers', 'view.grid']);
+  const popupItems = (): MenuItem[] => {
     const zoom = app.stage.zoom;
     return [
       { label: 'Fit Slide', checked: zoom === null, run: () => app.stage.setZoom(null) },
@@ -191,9 +188,16 @@ export function install(app: App): void {
   const openPopup = (id: string, b: HTMLElement | null, keyboard: boolean) => {
     const owner = b ?? top.querySelector<HTMLElement>(`[data-command="${id}"]`);
     if (!owner?.getClientRects().length) return;
-    openMenu(app, popupItems(id), { anchor: owner.getBoundingClientRect(), placement: 'below', owner, keyboard, label: id === 'toolbar.view' ? 'View' : 'Zoom', className: id === 'toolbar.zoom' ? 'select' : undefined });
+    openMenu(app, popupItems(), { anchor: owner.getBoundingClientRect(), placement: 'below', owner, keyboard, label: 'Zoom', className: 'select' });
   };
-  app.commands.define({ id: 'toolbar.view', label: 'View', toolbar: { group: 'view', order: 1, icon: 'navigator' }, run: () => openPopup('toolbar.view', null, document.activeElement?.matches('[data-command="toolbar.view"]') ?? false) });
+  app.commands.define({
+    id: 'toolbar.view',
+    label: 'View',
+    toolbar: { group: 'view', order: 1, icon: 'navigator', split: 'View' },
+    enabled: (a) => a.commands.enabled('view.navigator'),
+    checked: (a) => a.commands.get('view.navigator')?.checked?.(a) === true,
+    run: (a) => a.commands.run('view.navigator'),
+  });
   app.commands.define({ id: 'toolbar.zoom', label: 'Zoom', toolbar: { group: 'view', order: 2, icon: 'fit' }, run: () => openPopup('toolbar.zoom', null, document.activeElement?.matches('[data-command="toolbar.zoom"]') ?? false) });
 
   const button = (c: Command): HTMLButtonElement => {
@@ -204,7 +208,7 @@ export function install(app: App): void {
     const face = c.id === 'toolbar.zoom' ? make('span', 'readout', zoomText()) : glyph(faceOf(c));
     b.append(face, make('span', 'label', label));
     if (!POPUPS.has(c.id)) {
-      // Undo and Redo leave the focus in a text, a line of the outline, or a field of the inspector,
+      // Undo and Redo leave the focus in a text or a field of the inspector,
       // as the Edit menu does, and they enter a value typed into the field first
       const kept = (a: Element | null) => !!a && ((a as HTMLElement).isContentEditable || entering.has(a));
       if (c.toolbar?.group === 'history') b.addEventListener('mousedown', (ev) => void (kept(document.activeElement) && ev.preventDefault()));
@@ -331,7 +335,7 @@ export function install(app: App): void {
           const variants = variantsOf(c, groups);
           const b = button(c);
           shown.push({ c, el: b, variants });
-          if (c.toolbar?.split) el.append(splitButton(app, b, () => splitItems(c, variants), `${toolbarLabel(app, c)} options`));
+          if (c.toolbar?.split) el.append(splitButton(app, b, () => (c.id === 'toolbar.view' ? viewItems() : splitItems(c, variants)), `${toolbarLabel(app, c)} options`));
           else el.append(b);
         }
         // the group of Format after a folded group is put after »
