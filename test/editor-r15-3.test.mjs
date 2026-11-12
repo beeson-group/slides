@@ -241,10 +241,14 @@ for (const platform of PLATFORMS) {
       // the members of the group keep their places in it
       assert.ok(near(b.f.left - b.p.left, b0.f.left - b0.p.left) && near(b.f.top - b.p.top, b0.f.top - b0.p.top), `the members of the group are moved apart: ${js({ b0, b })}`);
       const edited = await render(page);
-      await undo(page);
-      assert.equal(await render(page), grouped);
-      await redo(page);
-      assert.equal(await render(page), edited);
+      // the three start at the left margin, where equal gaps leave them, as in PowerPoint
+      if (axis === 'horizontal') assert.equal(edited, grouped, 'Distribute Horizontally of objects at one left margin changes the file');
+      else {
+        await undo(page);
+        assert.equal(await render(page), grouped);
+        await redo(page);
+        assert.equal(await render(page), edited);
+      }
       assert.deepEqual(errors(page), []);
       await page.close();
     }
