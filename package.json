@@ -3,7 +3,7 @@
   "version": "0.9.0-beta.1",
   "description": "HTML slides on beeson, the reveal.js theme of the Beeson group, with the tooling of beeson-group/slides",
   "scripts": {
-    "test": "node --test --test-force-exit \"test/*.test.mjs\"",
+    "test": "node --test --test-force-exit --test-timeout=1200000 \"test/*.test.mjs\"",
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "vendor": "node scripts/vendor.mjs",
