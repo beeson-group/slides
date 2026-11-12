@@ -449,12 +449,24 @@ export function install(app: App): void {
     // box is taken out, and put back over it, so that one undo takes the new box
     const p = pending;
     const held = !!p && h.last === p.entry;
+    // the undo of the entries of the emptied box puts the caret into it, hence the place of the
+    // click that left it is put back after them
+    const active = document.activeElement as HTMLElement | null;
+    const sel = getSelection();
+    const range = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
     leaving = true;
     try {
       if (held) h.discard();
       if (r.alone) {
-        while (typingOf(h.last, node)) await h.retract(h.last!);
-        for (const e of [r.first, r.box]) if (e && h.last === e) await h.retract(e);
+        while (typingOf(h.last, node)) await h.retract(h.last!, true);
+        for (const e of [r.first, r.box]) if (e && h.last === e) await h.retract(e, true);
+        if (active?.isConnected && active !== document.body && !node.contains(active)) {
+          active.focus({ preventScroll: true });
+          if (range?.startContainer.isConnected && active.contains(range.startContainer)) {
+            sel!.removeAllRanges();
+            sel!.addRange(range);
+          }
+        }
       }
       if (node.isConnected) await h.transact('Delete Text Box', () => docOf(app).remove(node));
       // the undo of the first input shows the emptied box again as the pending one, and the undo of

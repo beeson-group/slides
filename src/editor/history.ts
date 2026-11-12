@@ -28,6 +28,7 @@ export class History {
   // the typing in progress: the block, its content before and after, and the time of the last key
   private typing: { host: Element; state: { before: string; after: string }; entry: Entry; at: number } | null = null;
   private busy = false;
+  private still = false;
   // the undos and redos asked for, run one after the other
   private queue: Promise<void> = Promise.resolve();
   // the entries of the open transaction, which are put into the history as one entry at its end
@@ -327,17 +328,19 @@ export class History {
   }
 
   // entry, if it is still the last one, is undone and taken out of the history without a redo,
-  // e.g. a new formula left empty
-  retract(entry: Entry): Promise<void> {
+  // e.g. a new formula left empty. the slide shown is kept at a quiet retract
+  retract(entry: Entry, quiet = false): Promise<void> {
     const run = this.queue.then(async () => {
       if (this.done.at(-1) !== entry) return;
       this.done.pop();
       this.typing = null;
       this.busy = true;
+      this.still = quiet;
       try {
         await entry.undo();
       } finally {
         this.busy = false;
+        this.still = false;
       }
       this.onChange();
     });
@@ -345,11 +348,18 @@ export class History {
     return run;
   }
 
+  // whether an entry is retracted quietly, during which the editor does not show another slide
+  get quiet(): boolean {
+    return this.still;
+  }
+
   // the last entry is taken out of the history without an undo, e.g. the insert of an empty box
-  // that the editor has already taken off the page. it is taken at once, so that an entry pushed
-  // right after it is kept
+  // that the editor has already taken off the page, and the redo stack is cleared, since its
+  // entries were made over the one taken. it is taken at once, so that an entry pushed right
+  // after it is kept
   discard(): void {
     this.typing = null;
+    this.undone = [];
     if (this.done.pop()) this.onChange();
   }
 

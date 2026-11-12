@@ -230,6 +230,7 @@ export class App {
   // the slide of el is shown in the layer in which el is seen, e.g. for an undo of a change on
   // another slide
   showSlide(el: Element): void {
+    if (this.history.quiet) return;
     const d = this.deck();
     const section = el.closest('section');
     if (d && section) {
