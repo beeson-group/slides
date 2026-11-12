@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor Broucke drawings deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- selections of demo/broucke-sample.js that draw the same records by terms other than family and
+     frame, for test/editor-r28-2.test.mjs -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>Either thin</h2>
+  <p>A paragraph beside the drawing.</p>
+  <div class="backdrop" data-strands="../../demo/broucke-sample.js" data-strands-select="thin=0|1" data-strands-color="family" data-strands-ramp="e"></div>
+</section>
+
+<section>
+  <h2>Every record</h2>
+  <p>A paragraph beside the drawing.</p>
+  <div class="backdrop" data-strands="../../demo/broucke-sample.js" data-strands-color="family" data-strands-ramp="e"></div>
+</section>
+
+<section>
+  <h2>Begin ray</h2>
+  <p>A paragraph beside the drawing.</p>
+  <div class="backdrop" data-strands="../../demo/broucke-sample.js" data-strands-select="begin=ray" data-strands-color="family" data-strands-ramp="e"></div>
+</section>
+
+<section>
+  <h2>Rotating</h2>
+  <p>A paragraph beside the drawing.</p>
+  <div class="backdrop" data-strands="../../demo/broucke-sample.js" data-strands-select="frame=pulsating" data-strands-color="family" data-strands-ramp="e"></div>
+</section>
+
+<section>
+  <h2>Rotating twice</h2>
+  <p>A paragraph beside the drawing.</p>
+  <div class="backdrop" data-strands="../../demo/broucke-sample.js" data-strands-select="frame=pulsating;frame=pulsating,thin=1" data-strands-color="family" data-strands-ramp="e"></div>
+</section>
+
+<section>
+  <h2>Upper key</h2>
+  <p>A paragraph beside the drawing.</p>
+  <div class="backdrop" data-strands="../../demo/broucke-sample.js" data-strands-select="Thin=1" data-strands-color="family" data-strands-ramp="e"></div>
+</section>
+
+<section>
+  <h2>Family eight</h2>
+  <p>A paragraph beside the drawing.</p>
+  <div class="backdrop" data-strands="../../demo/broucke-sample.js" data-strands-select="family=8" data-strands-color="family" data-strands-ramp="e"></div>
+</section>
+
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>
