@@ -12,10 +12,11 @@ import type { Handle } from '../canvas/snap.ts';
 import { view as frameView } from '../canvas/frames.ts';
 import { begin, editing, extentOf, markCuts, orbitOf, setView, syncBackdrops, windowAttrs } from '../canvas/mask.ts';
 import { injectStyle, make } from '../ui/dom.ts';
+import { select, type StrandRecord } from '../../strands.ts';
 
 type View = { cx: number; cy: number; half: number };
 type Box = { left: number; top: number; width: number; height: number };
-export type Live = { el: HTMLElement; view: View; done: boolean; tracing: boolean; ready: Promise<void>; fit(): void; reset(): void; start(): void; complete(): void; destroy(): void };
+export type Live = { el: HTMLElement; view: View; done: boolean; tracing: boolean; ready: Promise<void>; records?: StrandRecord[] | null; fit(): void; reset(): void; start(): void; complete(): void; destroy(): void };
 type Hooks = { backdrops?: Live[]; remount?(el: HTMLElement): Live; preview?(el: HTMLElement): Live; fitWindow?(el: HTMLElement, box?: Box): Promise<View | null> };
 const hooks = (): Hooks => (window as unknown as { Beeson?: Hooks }).Beeson ?? {};
 
@@ -33,14 +34,16 @@ export const NAMES = {
   logoPart: 'Part of the Beeson Logo',
   broucke: 'Broucke Families',
   family: (numbers: string[]) => `${numbers.length === 1 ? 'Family' : 'Families'} ${numbers.length > 1 ? `${numbers.slice(0, -1).join(', ')} and ${numbers.at(-1)}` : numbers[0]}`,
-  inertial: (name: string) => `${name} (Inertial)`,
-  both: (name: string) => `${name} (Both Frames)`,
+  inertial: 'Inertial',
+  both: 'Both Frames',
+  none: 'No Records',
 };
 export const SCENES: Record<string, string> = { nest: NAMES.nest, tubes: NAMES.tubes, wideRibbon: NAMES.wideRibbon };
 // the files of the template that the list draws from, and the families of demo/broucke-sample.js
 const LOGO_FILE = 'brand/transfer.js';
 const BROUCKE_FILE = 'demo/broucke-sample.js';
 const BROUCKE_FAMILIES = ['7', '11'];
+const FRAMES = ['pulsating', 'inertial'];
 // the attributes of the motion of a drawing in the demo deck, which an entry of the list writes
 const MOTION = ['data-duration', 'data-stagger'];
 // the labels of a named scene, with the text and the offsets of the demo deck
@@ -94,47 +97,114 @@ const valueOf = (arg: unknown) => (arg as { value?: unknown } | undefined)?.valu
 
 const isFile = (path: string, file: string) => path === file || path.endsWith(`/${file}`);
 
-// the values of key in the terms key=a|b of a value of data-strands-select
-function selected(spec: string, key: string): string[] {
-  return spec.split(/[;,]/).flatMap((term) => {
-    const m = /^\s*([^=<>\s]+)\s*=\s*(.*?)\s*$/.exec(term);
-    return m && m[1] === key ? m[2].split('|').map((v) => v.trim()) : [];
-  });
+// a term of data-strands-select, as the theme reads it in src/strands.ts
+const TERM = /^\s*([^=<>\s]+)\s*(<=|>=|=|<|>)\s*(.*?)\s*$/;
+const OPS: Record<string, string> = { '=': '', '<': 'Below', '<=': 'at Most', '>': 'Above', '>=': 'at Least' };
+const title = (w: string) => (w.length > 1 ? w[0].toUpperCase() + w.slice(1) : w);
+const valuesOf = (v: string) => [...new Set(v.split('|').map((s) => s.trim()))].sort();
+
+// the groups of spec, a value of data-strands-select, each as the pairs of a family and a frame of
+// demo/broucke-sample.js that it selects and its other terms sorted. groups with the same other terms
+// are merged, and a group without a pair is left out, thus two values that draw the same records by
+// family and frame have the same groups
+function groupsOf(spec: string | null): { pairs: string[]; rest: string[] }[] {
+  const merged = new Map<string, Set<string>>();
+  for (const group of spec?.trim() ? spec.split(';') : ['']) {
+    let fams = BROUCKE_FAMILIES, frames = FRAMES;
+    const rest = new Set<string>();
+    for (const t of group.split(',').filter((t) => t.trim())) {
+      const m = TERM.exec(t);
+      if (m && m[2] === '=' && m[1] === 'family') fams = fams.filter((f) => valuesOf(m[3]).includes(f));
+      else if (m && m[2] === '=' && m[1] === 'frame') frames = frames.filter((f) => valuesOf(m[3]).includes(f));
+      else rest.add(m ? `${m[1]}${m[2]}${m[2] === '=' ? valuesOf(m[3]).join('|') : m[3]}` : t.trim());
+    }
+    const key = [...rest].sort().join(',');
+    const pairs = merged.get(key) ?? new Set<string>();
+    for (const f of fams) for (const fr of frames) pairs.add(`${f} ${fr}`);
+    merged.set(key, pairs);
+  }
+  return [...merged].filter(([, p]) => p.size).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([key, p]) => ({ pairs: [...p].sort(), rest: key ? key.split(',') : [] }));
+}
+
+// a term of data-strands-select in words, e.g. Thin 1 for thin=1
+function termWords(term: string): string {
+  const m = TERM.exec(term);
+  if (!m) return term;
+  return [title(m[1]), OPS[m[2]], m[2] === '=' ? m[3].split('|').map(title).join(' or ') : m[3]].filter(Boolean).join(' ');
 }
 
 // the name of the Broucke families that spec, a value of data-strands-select, selects, in the Family
-// popup of the Backdrop pane
+// popup of the Backdrop pane: the families of each set of frames, followed by the frames and the
+// other terms in words, e.g. Family 7 and Family 11 (Inertial). two values get one name only when
+// sameSelection holds for them
 export function familyName(spec: string | null): string {
-  const chosen = selected(spec ?? '', 'family');
-  const numbers = chosen.length ? [...new Set(chosen)].sort((a, b) => +a - +b) : BROUCKE_FAMILIES;
-  const frames = new Set(selected(spec ?? '', 'frame'));
-  const name = NAMES.family(numbers);
-  if (!frames.size || (frames.has('pulsating') && frames.has('inertial'))) return NAMES.both(name);
-  return [...frames].every((f) => f === 'inertial') ? NAMES.inertial(name) : name;
+  const groups = groupsOf(spec).map(({ pairs, rest }) => {
+    const parts = new Map<string, string[]>();
+    for (const f of BROUCKE_FAMILIES) {
+      const frames = FRAMES.filter((fr) => pairs.includes(`${f} ${fr}`)).join('|');
+      if (frames) parts.set(frames, [...(parts.get(frames) ?? []), f]);
+    }
+    return [...parts].map(([frames, numbers]) => {
+      const words = [frames === 'inertial' ? NAMES.inertial : frames === 'pulsating' ? '' : NAMES.both, ...rest.map(termWords)].filter(Boolean);
+      return `${NAMES.family(numbers)}${words.length ? ` (${words.join(', ')})` : ''}`;
+    }).join(' and ');
+  });
+  return groups.join(' or ') || NAMES.none;
 }
 
-// spec, a value of data-strands-select, with its groups, the terms of each group, and the values of
-// each term sorted, so that two values that differ only in their order are equal
-function selectionKey(spec: string | null): string {
-  const term = (t: string) => {
-    const m = /^\s*([^=<>\s]+)\s*(<=|>=|=|<|>)\s*(.*?)\s*$/.exec(t);
-    return !m ? t.trim() : `${m[1]}${m[2]}${m[2] === '=' ? m[3].split('|').map((v) => v.trim()).sort().join('|') : m[3]}`;
-  };
-  return (spec ?? '').split(';').map((g) => g.split(',').map(term).filter(Boolean).sort().join(',')).filter(Boolean).sort().join(';');
+// the records of the file of the Broucke drawing el as the theme read them, or null before the file
+// is loaded or when it is missing. they are kept by the URL of the file for a backdrop drawn again
+const recordsByFile = new Map<string, StrandRecord[]>();
+function recordsOf(el: Element | null | undefined): StrandRecord[] | null {
+  if (!el || !isBroucke(el)) return null;
+  const url = urlOf(el.getAttribute('data-strands') ?? '');
+  const live = liveOf(el)?.records;
+  if (live) recordsByFile.set(url, live);
+  return recordsByFile.get(url) ?? null;
 }
 
-// true when the values a and b of data-strands-select select the same records by the same terms
-export const sameSelection = (a: string | null, b: string | null): boolean => selectionKey(a) === selectionKey(b);
+// the records of records that spec draws, none for a value that the theme does not draw
+function drawn(records: StrandRecord[], spec: string | null): Set<StrandRecord> {
+  try {
+    return new Set(select(records, spec ?? undefined));
+  } catch {
+    return new Set();
+  }
+}
+const sameSet = <T>(a: Set<T>, b: Set<T>) => a.size === b.size && [...a].every((x) => b.has(x));
+
+// true when the values a and b of data-strands-select draw the same records of the file of el, or
+// without its records, the same records of demo/broucke-sample.js by family and frame with the same
+// other terms
+export function sameSelection(a: string | null, b: string | null, el?: Element | null): boolean {
+  const records = recordsOf(el);
+  return records ? sameSet(drawn(records, a), drawn(records, b)) : JSON.stringify(groupsOf(a)) === JSON.stringify(groupsOf(b));
+}
+
+// the name of spec, a value of data-strands-select, for the backdrop el: No Records when it draws no
+// record of the file of el, and the name of the families and frames of the records it draws when it
+// draws every record of these, whatever its terms. thus two values that draw the same records get one
+// name, and two that draw others never do
+export function selectionName(spec: string | null, el?: Element | null): string {
+  const records = recordsOf(el);
+  if (!records) return familyName(spec);
+  const chosen = drawn(records, spec);
+  if (!chosen.size) return NAMES.none;
+  const pairs = [...new Set([...chosen].map((r) => `family=${String(r.family)},frame=${String(r.frame)}`))];
+  const whole = pairs.join(';');
+  const known = groupsOf(whole)[0]?.pairs.length === pairs.length;
+  return known && sameSet(drawn(records, whole), chosen) ? familyName(whole) : familyName(spec);
+}
 
 // the name of a drawing of the attributes attrs: the name of its scene, of the logo, or of the
 // Broucke families it selects, or else the name of its file
-function nameOf(attrs: Record<string, string | undefined>): string {
+function nameOf(attrs: Record<string, string | undefined>, el?: Element): string {
   const scene = attrs['data-scene'];
   if (scene !== undefined) return SCENES[scene] ?? scene;
   const file = attrs['data-strands'] ?? '';
   const spec = attrs['data-strands-select'] ?? '';
   if (isFile(file, LOGO_FILE)) return spec.trim() ? NAMES.logoPart : NAMES.logo;
-  if (isFile(file, BROUCKE_FILE)) return `Broucke ${familyName(spec)}`;
+  if (isFile(file, BROUCKE_FILE)) return `Broucke ${selectionName(spec, el)}`;
   return file.split('/').pop()?.replace(/\.(js|json)$/, '') || 'Backdrop';
 }
 
@@ -143,7 +213,7 @@ export const isBroucke = (el: Element | null): boolean => !!el && isFile(el.getA
 
 // the name of the drawing of el
 export function drawingName(el: Element): string {
-  return nameOf(Object.fromEntries([...el.attributes].map((a) => [a.name, a.value])));
+  return nameOf(Object.fromEntries([...el.attributes].map((a) => [a.name, a.value])), el);
 }
 
 // the name of the entry of el in the Drawing popup, which is Broucke Families for any family
@@ -190,10 +260,10 @@ const FAMILY_SPECS = BROUCKE_FAMILIES.flatMap((n) => [`frame=pulsating,family=${
 
 // the drawings of the demo deck, with their windows and the size of their boxes, and the entry
 // Broucke Families, which draws the first family with the colors and the motion of the backdrop of
-// the demo deck, fitted to its box as it is. its file is the one of the Broucke drawings of the deck,
-// if any, so that a deck in another folder finds it
+// the demo deck, fitted to its box as it is. its file is the one of the first Broucke drawing of the
+// deck whose file is found, if any, so that a deck in another folder finds it
 function builtIn(app: App): Entry[] {
-  const file = [...app.slides().querySelectorAll<HTMLElement>('.backdrop')].find((el) => open(app, el) && isBroucke(el))?.getAttribute('data-strands') ?? BROUCKE_FILE;
+  const file = brouckeFiles(app).find((f) => found.get(urlOf(f)) !== false) ?? BROUCKE_FILE;
   return [
     { key: 'logo', name: NAMES.logo, attrs: { 'data-strands': LOGO_FILE }, motion: { 'data-duration': '20' }, view: { cx: -0.84, cy: 0, half: 1.128 }, size: [1920, 1080] },
     { key: 'nest', name: NAMES.nest, attrs: { 'data-scene': 'nest' }, motion: {}, view: { cx: 0.97, cy: 0, half: 0.5 }, size: [720, 1080] },
@@ -212,13 +282,14 @@ export const drawnBy = (entry: Entry, el: Element): boolean =>
 
 // the choices of the Family popup of el, as values of data-strands-select with their names: the
 // families of the file in both frames, then each other selection of the file in the deck, once per
-// selection. a name that an earlier choice has is followed by the value as it is written
+// drawing. a choice is the value whose own terms give its name, e.g. frame=pulsating before begin=ray
 export function families(app: App, el: Element): { spec: string | null; name: string }[] {
   const out: { spec: string | null; name: string }[] = [];
   const add = (spec: string | null) => {
-    if (out.some((f) => sameSelection(f.spec, spec))) return;
-    const name = familyName(spec);
-    out.push({ spec, name: out.some((f) => f.name === name) ? `${name} (${spec ?? ''})` : name });
+    const name = selectionName(spec, el);
+    const same = out.find((f) => sameSelection(f.spec, spec, el));
+    if (!same) out.push({ spec, name });
+    else if (familyName(same.spec) !== same.name && familyName(spec) === same.name) same.spec = spec;
   };
   FAMILY_SPECS.forEach(add);
   for (const b of app.slides().querySelectorAll<HTMLElement>('.backdrop')) {
@@ -227,6 +298,10 @@ export function families(app: App, el: Element): { spec: string | null; name: st
   if (isBroucke(el)) add(el.getAttribute('data-strands-select'));
   return out;
 }
+
+// the files of the Broucke drawings of the deck, in the order of the deck
+const brouckeFiles = (app: App): string[] =>
+  [...app.slides().querySelectorAll<HTMLElement>('.backdrop')].filter((el) => open(app, el) && isBroucke(el)).map((el) => el.getAttribute('data-strands') ?? '');
 
 // whether the file of strands at an absolute URL is found and has records, as the theme read it
 const found = new Map<string, boolean>();
@@ -253,6 +328,8 @@ async function probe(path: string): Promise<boolean> {
 
 // the files of the entries of the library read, so that library() knows which are found
 export async function probeLibrary(app: App): Promise<void> {
+  // the file of Broucke Families is the first of these that is found
+  await Promise.all(brouckeFiles(app).map(probe));
   const files = new Set([...builtIn(app), ...deckEntries(app)].map(fileOf).filter((f): f is string => !!f));
   await Promise.all([...files].map(probe));
 }
@@ -648,7 +725,7 @@ export function commands(): Command[] {
         const value = typeof v === 'string' ? v : null;
         if (!el || !isBroucke(el) || !families(app, el).some((f) => f.spec === value)) return;
         endPreview();
-        if (!sameSelection(el.getAttribute('data-strands-select'), value)) app.doc.setTag(el, { attrs: { 'data-strands-select': value } }, 'drawing');
+        if (!sameSelection(el.getAttribute('data-strands-select'), value, el)) app.doc.setTag(el, { attrs: { 'data-strands-select': value } }, 'drawing');
       },
     },
     {

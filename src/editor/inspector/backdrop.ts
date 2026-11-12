@@ -79,9 +79,9 @@ export function backdropPane(app: App, run: Run): Control[] {
       drawing,
       row([button(app, run, { command: 'backdrop.choose', text: 'Choose…' })]),
       when(file, [
-        when(() => isBroucke(el), [popup(app, 'Family', () => (el && isBroucke(el) ? families(app, el).find((f) => sameSelection(f.spec, el.getAttribute('data-strands-select')))?.name ?? '' : ''), () => (el ? families(app, el) : []).map((f) => ({
+        when(() => isBroucke(el), [popup(app, 'Family', () => (el && isBroucke(el) ? families(app, el).find((f) => sameSelection(f.spec, el.getAttribute('data-strands-select'), el))?.name ?? '' : ''), () => (el ? families(app, el) : []).map((f) => ({
           label: f.name,
-          checked: sameSelection(el?.getAttribute('data-strands-select') ?? null, f.spec),
+          checked: sameSelection(el?.getAttribute('data-strands-select') ?? null, f.spec, el),
           run: () => run('backdrop.family', { value: f.spec, el }),
         })), on)]),
         popup(app, 'Colormap', () => colormapName(el?.getAttribute('data-strands-colormap') ?? null), () => [null, ...COLORMAPS].map((c) => ({
