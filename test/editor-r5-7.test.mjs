@@ -52,9 +52,17 @@ const render = (page) => page.evaluate('window.BeesonEditor.render()');
 const frames = (page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => d(true))))');
 const wait = (page, ms) => page.evaluate(`new Promise((d) => setTimeout(() => d(true), ${ms}))`);
 const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
-const until = async (page, expr, ms = 3000) => {
+// on a loaded runner, the keys of a burst are written seconds later, hence a state is read until
+// it is the expected one, for 15 s at most
+const until = async (page, expr, ms = 15000) => {
   for (const end = Date.now() + ms; Date.now() < end; await wait(page, 50)) if (await page.evaluate(expr)) return true;
   return false;
+};
+// the text rendered by the editor once it has the pattern, or the last text read
+const renderedWith = async (page, pattern, ms = 15000) => {
+  let text = await render(page);
+  for (const end = Date.now() + ms; !pattern.test(text) && Date.now() < end; text = await render(page)) await wait(page, 50);
+  return text;
 };
 
 let saves = 0;
@@ -113,7 +121,7 @@ for (const platform of PLATFORMS) {
       await page.evaluate(`(() => { const t = MathJax.typesetPromise.bind(MathJax); MathJax.typesetPromise = (n) => new Promise((d) => setTimeout(d, 150)).then(() => t(n)); })()`);
       await burst(page, keys);
       await wait(page, 600);
-      const text = await render(page);
+      const text = await renderedWith(page, written);
       assert.match(text, written, `a key is lost: ${JSON.stringify(text.split('\n').filter((l) => !source.includes(l)))}`);
       await undoAll(page, source);
       await saved(page);
@@ -135,6 +143,7 @@ for (const platform of PLATFORMS) {
     })()`);
     await burst(page, '\nz');
     await wait(page, 200);
+    await renderedWith(page, /x = 1\ny = x \+ 1\nz<\/code>/);
     await byteExact(page, [[CODE, 'x = 1\ny = x + 1\nz</code>']]);
     assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present pre code').length`), 1);
     await undoAll(page, page.source);
@@ -147,6 +156,7 @@ for (const platform of PLATFORMS) {
     await exec(page, 'insert.formula');
     await burst(page, 'abc d');
     await wait(page, 300);
+    await until(page, `(() => { const f = document.querySelector('.beeson-math textarea'); return !!f && f.value === 'abc d' && f === document.activeElement; })()`);
     const field = await page.evaluate(`(() => { const f = document.querySelector('.beeson-math textarea'); return f && { value: f.value, focused: f === document.activeElement }; })()`);
     assert.deepEqual(field, { value: 'abc d', focused: true });
     assert.deepEqual(errors(page), []);
@@ -163,6 +173,7 @@ for (const platform of PLATFORMS) {
     await burst(page, 'abc d');
     assert.ok(await until(page, `!!document.querySelector('.beeson-math textarea')`), 'the TeX field does not open');
     await wait(page, 300);
+    await until(page, `(() => { const f = document.querySelector('.beeson-math textarea'); return !!f && f.value === 'abc d' && f === document.activeElement; })()`);
     const field = await page.evaluate(`(() => { const f = document.querySelector('.beeson-math textarea'); return { value: f.value, focused: f === document.activeElement }; })()`);
     assert.deepEqual(field, { value: 'abc d', focused: true });
     assert.equal((await state(page, 'view.slideDark')).checked, dark, 'a key of the TeX flips the mode of the slide');
@@ -188,7 +199,9 @@ const caretIn = (page, selector, whole = false) =>
     getSelection().addRange(r);
     return true;
   })()`);
-const painterOn = async (page) => (await state(page, 'text.formatPainter')).enabled;
+// the change of the selection is reported to the editor in a later task, hence the state of the
+// painter is read until it is the expected one
+const painterIs = (page, on) => until(page, `window.BeesonEditor.state('text.formatPainter').enabled === ${on}`);
 
 for (const platform of PLATFORMS) {
   test(`the Format Painter is dimmed in a code box and live again in a text on ${platform}`, async () => {
@@ -196,22 +209,22 @@ for (const platform of PLATFORMS) {
     const source = page.source;
     await caretIn(page, '.reveal section.present h2');
     await frames(page);
-    assert.equal(await painterOn(page), true, 'the painter is dimmed in a heading');
+    assert.ok(await painterIs(page, true), 'the painter is dimmed in a heading');
     await caretIn(page, '.reveal section.present pre code');
     await frames(page);
-    assert.equal(await painterOn(page), false, 'the painter is live with the caret in a code box');
+    assert.ok(await painterIs(page, false), 'the painter is live with the caret in a code box');
     await caretIn(page, '.reveal section.present pre code', true);
     await frames(page);
-    assert.equal(await painterOn(page), false, 'the painter is live with the code of a box selected');
+    assert.ok(await painterIs(page, false), 'the painter is live with the code of a box selected');
     // Esc leaves the text of the code box and selects the box
     await page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
     await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Escape', code: 'Escape', windowsVirtualKeyCode: 27 });
     await frames(page);
     assert.equal(await page.evaluate(`document.activeElement?.closest?.('pre') ? 'text' : 'element'`), 'element');
-    assert.equal(await painterOn(page), false, 'the painter is live with a code box selected');
+    assert.ok(await painterIs(page, false), 'the painter is live with a code box selected');
     await caretIn(page, '.reveal section.present td');
     await frames(page);
-    assert.equal(await painterOn(page), true, 'the painter is dimmed in a cell after a code box');
+    assert.ok(await painterIs(page, true), 'the painter is dimmed in a cell after a code box');
     // a painter armed in a text does not paint a code box
     await caretIn(page, '.reveal section.present h2', true);
     await exec(page, 'text.formatPainter');
