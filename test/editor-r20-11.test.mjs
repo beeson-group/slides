@@ -145,75 +145,94 @@ async function undoAll(page) {
   assert.equal(await render(page), page.source);
 }
 
-// a slide of index.html with a heading, n paragraphs in the flow, m translated figures, and a foot
-function manyChildren(n, m) {
+// a slide with a heading, n paragraphs in the flow, m translated figures, and a foot, put before
+// the closing slide of source, and its index
+function manyChildren(n, m, source = SOURCE, title = 'Many children') {
   const ps = Array.from({ length: n }, (_, i) => `  <p style="font-size: 22px; margin: 0">Paragraph number ${i} of a long slide.</p>`).join('\n');
   const figs = Array.from({ length: m }, (_, i) => `  <div class="zone" style="translate: ${-900 + i * 40}px ${-300 + i * 30}px"><img src="demo/figure-dark.png" alt="f${i}"></div>`).join('\n');
-  const slide = `<section>\n  <h2>Many children</h2>\n${ps}\n${figs}\n  <div class="foot">A foot.</div>\n</section>\n\n`;
-  const text = SOURCE.replace('<section class="closing">', `${slide}<section class="closing">`);
-  return { text, n: slideOf(text, (s) => s.includes('Many children')) };
+  const slide = `<section>\n  <h2>${title}</h2>\n${ps}\n${figs}\n  <div class="foot">A foot.</div>\n</section>\n\n`;
+  const text = source.replace('<section class="closing">', `${slide}<section class="closing">`);
+  return { text, n: slideOf(text, (s) => s.includes(title)) };
 }
 
-// the bounds of the measures of F1 in ms, about three times the times asked for, since other tests
-// load this machine at once. before the fix, the menu took about 970 ms, a command 700 ms, and a
-// Shift-click 5 to 12 s
-const MENU_MS = 300;
-const COMMAND_MS = 300;
-const SHIFT_MS = 450;
+// the times in ms on the slide n, with the object list shown: the Arrange menu opened with the
+// first figure selected, the four Order commands on it, Shift-clicks on the rows of the next four
+// figures, and Bring to Front of the five. the slide is given back after each command
+async function layerTimes(page, platform, n) {
+  await page.evaluate(`Reveal.slide(${n})`);
+  await frames(page);
+  const names = await rowNames(page);
+  const figs = names.map((r, i) => [r, i]).filter(([r]) => /^(Figure|Image|Picture)/.test(r)).map(([, i]) => i);
+  assert.ok(figs.length >= 5, js(names));
+  await click(page, await rowAt(page, figs[0]));
+  await frames(page);
+  const at = await page.evaluate(`(() => { const b = [...document.querySelectorAll('.beeson-edit-menubar button')].find((x) => x.textContent === 'Arrange'); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  const menu = await ms(async () => {
+    await click(page, at);
+    await frames(page);
+  });
+  await page.evaluate('window.BeesonEditorShell.closeMenus()');
+  await frames(page);
+  const commands = {};
+  for (const o of ['back', 'forward', 'front', 'backward']) {
+    const base = await render(page);
+    commands[o] = await ms(async () => {
+      await press(page, KEYS[platform][o]);
+      await frames(page);
+    });
+    if ((await render(page)) !== base) {
+      await undo(page);
+      await frames(page);
+    }
+    assert.equal(await render(page), base);
+  }
+  const shifts = [];
+  for (const i of figs.slice(1, 5)) {
+    const row = await rowAt(page, i);
+    shifts.push(await ms(async () => {
+      await click(page, row, { modifiers: 'Shift' });
+      await frames(page);
+    }));
+  }
+  assert.equal((await selected(page)).split(',').length, 5);
+  const base = await render(page);
+  const front = await ms(async () => {
+    await press(page, KEYS[platform].front);
+    await frames(page);
+  });
+  assert.notEqual(await render(page), base);
+  await undo(page);
+  await frames(page);
+  assert.equal(await render(page), base);
+  return { rows: names.length, menu, command: Math.max(...Object.values(commands)), shift: Math.max(...shifts), front };
+}
+
+// each time on a slide with 47 rows is bounded by RATIO times the same time on a slide with 9 rows,
+// and SLACK ms for the pauses of a machine that other tests load at once. the bound thus scales
+// with a slower machine. before the fix of F1, the menu took about 970 ms, a command 700 ms, a
+// Shift-click 5 to 12 s, and Bring to Front of 5 about 45 s on the slide with 47 rows
+const RATIO = 4;
+const SLACK = 150;
 
 for (const platform of PLATFORMS) {
   // F1: every place among the siblings was tried for each moved element, by each of the four Order
   // commands at each refresh of the inspector
   test(`the Arrange menu, a layer command, and a Shift-click run without a pause on a slide with 47 rows (${platform})`, { timeout: 180000 }, async (t) => {
-    const { text, n } = manyChildren(25, 20);
+    const few = manyChildren(2, 5, SOURCE, 'Few children');
+    const { text, n } = manyChildren(25, 20, few.text);
     const page = await load(t, platform, text, n, `.r20-11-many-${platform}.html`);
     await showList(page, platform);
     const names = await rowNames(page);
     assert.ok(names.filter((r) => !r.startsWith('Backdrop')).length >= 47, `the slide has ${names.length} rows`);
-    const figs = names.map((r, i) => [r, i]).filter(([r]) => /^(Figure|Image|Picture)/.test(r)).map(([, i]) => i);
-    assert.equal(figs.length, 20, js(names));
-    await click(page, await rowAt(page, figs[0]));
-    await frames(page);
-    const at = await page.evaluate(`(() => { const b = [...document.querySelectorAll('.beeson-edit-menubar button')].find((x) => x.textContent === 'Arrange'); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
-    const menu = await ms(async () => {
-      await click(page, at);
-      await frames(page);
-    });
-    await page.evaluate('window.BeesonEditorShell.closeMenus()');
-    await frames(page);
-    const commands = {};
-    for (const o of ['back', 'forward', 'front', 'backward']) {
-      const base = await render(page);
-      commands[o] = await ms(async () => {
-        await press(page, KEYS[platform][o]);
-        await frames(page);
-      });
-      if ((await render(page)) !== base) {
-        await undo(page);
-        await frames(page);
-      } else commands[o] = `${commands[o]} (no change)`;
-      assert.equal(await render(page), base);
+    assert.equal(names.filter((r) => /^(Figure|Image|Picture)/.test(r)).length, 20, js(names));
+    // the slide with few rows is measured first, after which the code of the editor is warm
+    await layerTimes(page, platform, few.n);
+    const small = await layerTimes(page, platform, few.n);
+    const large = await layerTimes(page, platform, n);
+    t.diagnostic(`with ${small.rows} rows ${js(small)}, with ${large.rows} rows ${js(large)}`);
+    for (const k of ['menu', 'command', 'shift', 'front']) {
+      assert.ok(large[k] < RATIO * small[k] + SLACK, `${k} took ${large[k]} ms with ${large.rows} rows, and ${small[k]} ms with ${small.rows} rows`);
     }
-    const shifts = [];
-    for (const i of figs.slice(1, 5)) {
-      const row = await rowAt(page, i);
-      shifts.push(await ms(async () => {
-        await click(page, row, { modifiers: 'Shift' });
-        await frames(page);
-      }));
-    }
-    assert.equal((await selected(page)).split(',').length, 5);
-    const base = await render(page);
-    const front = await ms(async () => {
-      await press(page, KEYS[platform].front);
-      await frames(page);
-    });
-    assert.notEqual(await render(page), base);
-    t.diagnostic(`menu ${menu} ms, commands ${js(commands)}, Shift-clicks ${js(shifts)}, front of 5 ${front} ms`);
-    assert.ok(menu < MENU_MS, `the Arrange menu took ${menu} ms`);
-    for (const [o, d] of Object.entries(commands)) assert.ok(parseInt(d, 10) < COMMAND_MS, `${o} took ${d} ms`);
-    for (const d of shifts) assert.ok(d < SHIFT_MS, `a Shift-click took ${d} ms`);
-    assert.ok(front < 2 * COMMAND_MS, `Bring to Front of 5 took ${front} ms`);
     assert.deepEqual(errors(page), []);
   });
 
@@ -460,6 +479,9 @@ for (const platform of PLATFORMS) {
       await frames(page);
       results.push(await render(page));
       assert.deepEqual(errors(page), []);
+      // a page left open keeps its draft 1 s after its last edit, and on a slow machine this draft
+      // was kept after the next page emptied the storage, whose card then took the click on IMG
+      await page.close();
     }
     assert.match(results[0], /<figure class="zone" style="translate: [^"]+">/);
     assert.equal(results[1], results[0]);

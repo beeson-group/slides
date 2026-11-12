@@ -42,6 +42,9 @@ const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 async function load(t, platform, { deck = LAYOUTS, n = 0, size = { width: 1600, height: 1000 } } = {}) {
   const page = await browser.newPage(size);
   t.after(() => page.close().catch(() => {}));
+  // an earlier test that keeps its page open 1 s after its last edit leaves a draft in the storage
+  // of the origin, and the card of this draft then covers the slide of the next page of the deck
+  await page.send('Storage.clearDataForOrigin', { origin: server.origin, storageTypes: 'local_storage' });
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');

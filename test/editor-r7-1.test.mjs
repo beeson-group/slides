@@ -40,6 +40,9 @@ const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 async function load(t, platform, { deck = LAYOUTS, n = 0, size = { width: 1600, height: 1000 } } = {}) {
   const page = await browser.newPage(size);
   t.after(() => page.close().catch(() => {}));
+  // an earlier test that keeps its page open 1 s after its last edit leaves a draft in the storage
+  // of the origin, and the card of this draft then covers the slide of the next page of the deck
+  await page.send('Storage.clearDataForOrigin', { origin: server.origin, storageTypes: 'local_storage' });
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
@@ -326,15 +329,13 @@ async function loadTime(t, platform) {
 
 // item 3 of R7.1: a second tab of the deck of layouts, opened while the first was open, took about
 // 15 s to load, since the two clips of 12 MB in demo/ held the connections of the first tab. the
-// budget is several times the load of one tab, about 0.6 s
-const BUDGET = 4000;
+// second tab is compared with the first, which takes about 0.6 s here and several s on a slow machine
 for (const platform of PLATFORMS) {
   test(`a second tab of a deck with videos loads as fast as the first (${platform})`, async (t) => {
     const first = await loadTime(t, platform);
     await first.page.evaluate(`window.BeesonEditor.open(${js(readFileSync(LAYOUTS, 'utf8'))})`);
-    assert.ok(first.ms < BUDGET, `the first tab takes ${first.ms} ms to load`);
     const second = await loadTime(t, platform);
-    assert.ok(second.ms < BUDGET, `the second tab takes ${second.ms} ms to load, and the first ${first.ms} ms`);
+    assert.ok(second.ms < 2 * first.ms, `the second tab takes ${second.ms} ms to load, and the first ${first.ms} ms`);
     assert.deepEqual(errors(first.page), []);
     assert.deepEqual(errors(second.page), []);
   });

@@ -51,6 +51,9 @@ const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 // the editor on a deck served over HTTP, with the Format tab shown
 async function open(platform, { deck = 'index.html', size = { width: 1440, height: 900 } } = {}) {
   const page = await browser.newPage(size);
+  // an earlier test that keeps its page open 1 s after its last edit leaves a draft in the storage
+  // of the origin, and the card of this draft then covers the slide of the next page of the deck
+  await page.send('Storage.clearDataForOrigin', { origin: server.origin, storageTypes: 'local_storage' });
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
@@ -329,7 +332,7 @@ for (const platform of PLATFORMS) {
   // the browser keeps the frames of a video of the folder from the page, and the Video pane must
   // still offer a way to set the poster
   test(`in a deck opened from a file, the Video pane offers a way to set the poster, and the slider captures through the chosen file (${platform})`, async (t) => {
-    const page = await editorPage(browser, { query: `edit&still&edit-platform=${platform}`, page: { width: 1440, height: 900 } });
+    const page = await editorPage(browser, { query: `edit&still&edit-platform=${platform}`, page: { width: 1440, height: 900 }, clear: true });
     t.after(() => page.close?.());
     assert.equal(await page.evaluate('location.protocol'), 'file:');
     if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');

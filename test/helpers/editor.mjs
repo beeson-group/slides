@@ -52,9 +52,12 @@ async function platformOf(page) {
 /**
  * The editor on a deck, with every block paired with its file. deck is the path of the deck from
  * the root of the repository, and text is the text passed to open(), by default the file itself.
+ * With clear, the local storage of the file origin is emptied before the deck is loaded.
  */
-export async function editorPage(browser, { deck = 'index.html', query = 'edit&still', text, page: options } = {}) {
+export async function editorPage(browser, { deck = 'index.html', query = 'edit&still', text, page: options, clear = false } = {}) {
   const page = await browser.newPage(options);
+  // with clear, a draft that an earlier page of the deck left is dropped, whose card covers the slide
+  if (clear) await page.send('Storage.clearDataForOrigin', { origin: 'file://', storageTypes: 'local_storage' });
   await page.goto(deckUrl(deck, query));
   await page.waitFor(deckSettled);
   await page.waitFor(ready);

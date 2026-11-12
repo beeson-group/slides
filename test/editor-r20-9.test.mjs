@@ -248,7 +248,8 @@ for (const platform of PLATFORMS) {
       const word = await rect(page, `(() => { const p = Reveal.getCurrentSlide().querySelector(':scope > p'); const w = document.createTreeWalker(p, NodeFilter.SHOW_TEXT); for (let n = w.nextNode(); n; n = w.nextNode()) { const i = n.data.indexOf('Export'); if (i >= 0) { const r = document.createRange(); r.setStart(n, i + 1); r.setEnd(n, i + 2); return r; } } return null; })()`);
       await click(page, word, { count: 2 });
       await wait(page);
-      assert.equal(await page.evaluate('getSelection().toString()'), 'Export');
+      // a double click takes the space after the word on Windows, and not on the Mac
+      assert.match(await page.evaluate('getSelection().toString()'), /^Export ?$/);
       await press(page, 'Mod+B');
       await wait(page, 400);
       assert.equal((await labels(page))[0], 'Undo Bold');
