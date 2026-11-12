@@ -368,6 +368,19 @@ async function windowFor(entry: Entry, el: HTMLElement): Promise<View | null> {
   return fitted(el);
 }
 
+// the drawing, the motion, and the window of entry put on the backdrop el, with the labels of a named
+// scene taken off for a drawing of a file. an entry without a window leaves the drawing fitted to its
+// box by the theme
+async function replaceDrawing(app: App, el: HTMLElement, entry: Entry): Promise<void> {
+  const motion = Object.fromEntries(MOTION.map((n) => [n, entry.motion[n] ?? null]));
+  const unset: Record<string, null> = entry.view ? {} : { 'data-cx': null, 'data-cy': null, 'data-half': null };
+  app.doc.setTag(el, { attrs: { ...drawingEdit(entry.attrs), ...motion, ...unset } }, 'drawing');
+  await dropLabels(app, el, entry);
+  const v = entry.view && (await windowFor(entry, el));
+  if (v) app.doc.setTag(el, { attrs: windowAttrs(v) }, 'window');
+  syncBackdrops();
+}
+
 // the drawing of entry put on the current slide: in place of the drawing and the motion of the
 // backdrop of the slide, or as a new backdrop at the ground of the slide, as one entry of the
 // history. an entry without a window leaves the drawing fitted to its box by the theme
@@ -376,15 +389,7 @@ export async function applyEntry(app: App, entry: Entry): Promise<void> {
   if (!slide || entry.missing) return;
   const old = slideBackdrop(app);
   if (old) {
-    await app.history.transact('Replace Backdrop', async () => {
-      const motion = Object.fromEntries(MOTION.map((n) => [n, entry.motion[n] ?? null]));
-      const unset: Record<string, null> = entry.view ? {} : { 'data-cx': null, 'data-cy': null, 'data-half': null };
-      app.doc.setTag(old, { attrs: { ...drawingEdit(entry.attrs), ...motion, ...unset } }, 'drawing');
-      await dropLabels(app, old, entry);
-      const v = entry.view && (await windowFor(entry, old));
-      if (v) app.doc.setTag(old, { attrs: windowAttrs(v) }, 'window');
-      syncBackdrops();
-    });
+    await app.history.transact('Replace Backdrop', () => replaceDrawing(app, old, entry));
     app.selection.set('elements', [old]);
     return;
   }
@@ -690,9 +695,11 @@ export function commands(): Command[] {
       },
     },
     {
-      // arg { value, el }: a named scene, or the key of an entry of the library. the window and the
-      // motion are kept, and the labels unless the entry is drawn from a file. Broucke Families on a
-      // backdrop of a family keeps its family
+      // arg { value, el }: a named scene, or the key of an entry of the library. between two named
+      // scenes, which are drawn in one frame, the window, the labels, and the motion are kept. a
+      // drawing of a file is drawn in a frame of its own, hence where the old or the new drawing is
+      // drawn from a file, the window and the motion of the entry are written as its tile in the
+      // gallery writes them. Broucke Families on a backdrop of a family keeps its family
       id: 'backdrop.scene',
       label: 'Backdrop Drawing',
       undoable: true,
@@ -707,8 +714,9 @@ export function commands(): Command[] {
         const attrs = drawingEdit(entry.attrs);
         const now = app.doc.tagState(el).attrs;
         const changed = Object.entries(attrs).filter(([k, x]) => (now[k] ?? null) !== x);
-        if (changed.length) app.doc.setTag(el, { attrs: Object.fromEntries(changed) }, 'drawing');
-        await dropLabels(app, el, entry);
+        if (!changed.length) return;
+        if (now['data-scene'] === undefined || entry.attrs['data-scene'] === undefined) return replaceDrawing(app, el, entry);
+        app.doc.setTag(el, { attrs: Object.fromEntries(changed) }, 'drawing');
       },
     },
     {
