@@ -143,8 +143,7 @@ for (const platform of PLATFORMS) {
 const X = '#beeson-edit-num-x';
 
 for (const platform of PLATFORMS) {
-  // F10: the button kept the focus in the field, hence it undid the entry before the typed value,
-  // which Tab then entered over the redo
+  // F10: the button undid the entry before the typed value, which Tab then entered over the redo
   test(`the toolbar button Undo enters a value typed into a field of the inspector, then undoes it (${platform})`, async (t) => {
     const page = await load(t, platform, 'index.html', 4);
     await click(page, await center(page, `${SLIDE} figure.zone img.for-dark`));
@@ -164,7 +163,8 @@ for (const platform of PLATFORMS) {
     await wait(page, 500);
     assert.equal(await render(page), moved, 'the toolbar Undo does not undo the typed value alone');
     assert.deepEqual(await labels(page), ['Undo Move', 'Redo Position']);
-    assert.notEqual(await page.evaluate(`document.activeElement === document.querySelector(${js(X)})`), true, 'the field keeps the focus');
+    // the field keeps the focus after the typed value is entered and undone, as in Keynote (N32 of R17.6)
+    assert.equal(await page.evaluate(`document.activeElement === document.querySelector(${js(X)})`), true, 'the field does not keep the focus');
     await press(page, 'Tab');
     await wait(page, 500);
     assert.equal(await render(page), moved, 'Tab enters a value after the undo');

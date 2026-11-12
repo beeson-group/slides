@@ -95,10 +95,12 @@ for (const platform of PLATFORMS) {
 
   test(`the well Slide Layout draws the block of the figure for Content and Content, Narrow, and not for Content, Wide (${platform})`, async (t) => {
     const page = await load(t, platform, SLIDES.content);
-    // the blocks of the sketch that are as high as the figure of a content slide
+    // the blocks of the sketch that are at least as high as the figure of a content slide, i.e. the
+    // zone of Content and the backdrop of Content, Narrow, whose square left corners are drawn
+    // by a second rect with rx 0
     const blocks = () => page.evaluate(`(() => {
       const svg = document.querySelector('.beeson-edit-inspector .ed-card .thumb svg');
-      return svg ? [...svg.querySelectorAll('rect')].filter((r) => r.getAttribute('height') === '24').length : null;
+      return svg ? [...svg.querySelectorAll('rect')].filter((r) => r.getAttribute('fill') === 'var(--ed-faint)' && Number(r.getAttribute('height')) >= 24 && r.getAttribute('rx') !== '0').length : null;
     })()`);
     const name = () => page.evaluate(`document.querySelector('.beeson-edit-inspector .ed-card .what span:last-child')?.textContent ?? null`);
     for (const [layout, label, n] of [['content', 'Content', 1], ['narrow', 'Content, Narrow', 1], ['wide', 'Content, Wide', 0]]) {
