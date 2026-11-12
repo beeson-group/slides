@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor shapes and selection deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the deck of the tests of R26.3: a shape with words and a locked one, a shape whose words are a list, the objects of a slide with a locked one, a group, and a line, an empty slide to draw on, and a list and a table -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>Words</h2>
+  <div class="shape rounded tone-blue" style="width: 500px; height: 300px; translate: 1100px 400px"><p>Build the bridge</p></div>
+  <div class="shape rounded" style="width: 800px; height: 200px; translate: 150px 600px" data-locked><p>Locked words here</p></div>
+</section>
+
+<section>
+  <h2>List</h2>
+  <div class="shape rounded tone-accent" style="width: 500px; height: 300px; translate: 1100px 400px"><ul>
+    <li>Goal</li>
+    <li>Path</li>
+  </ul></div>
+</section>
+
+<section>
+  <h2>Objects</h2>
+  <p>A paragraph.</p>
+  <div class="shape" style="width: 300px; height: 200px; translate: 1000px 250px"><p>Back</p></div>
+  <div class="shape ellipse" style="width: 300px; height: 200px; translate: 1400px 250px" data-locked><p>Locked</p></div>
+  <div class="shape rounded" style="width: 300px; height: 150px; translate: 1000px 550px" data-group="g1"><p>One</p></div>
+  <div class="shape rounded" style="width: 300px; height: 150px; translate: 1400px 550px" data-group="g1"><p>Two</p></div>
+  <svg class="line" width="400" height="50" style="translate: 1000px 850px"><line x1="0" y1="25" x2="400" y2="25"></line></svg>
+</section>
+
+<section>
+  <h2>Blank</h2>
+</section>
+
+<section>
+  <h2>Text</h2>
+  <ul>
+    <li>First item</li>
+    <li>Second item</li>
+  </ul>
+  <table>
+    <tbody>
+      <tr><td>A1</td><td>B1</td></tr>
+      <tr><td>A2</td><td>B2</td></tr>
+    </tbody>
+  </table>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

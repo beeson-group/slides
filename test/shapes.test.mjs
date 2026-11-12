@@ -82,8 +82,8 @@ test('a brace is the skeleton of the glyph }, with round hooks, S curves into th
     assert.ok(!/[AQSTZ]/.test(d), size);
     assert.deepEqual(segs[0].ps[0], [1.5, 1.5], size);
     assert.deepEqual(segs.at(-1).ps.at(-1), [1.5, h - 1.5], size);
-    // the cusp is the end of a segment at the middle of the right side
-    const cusp = segs.findIndex((s) => s.ps.at(-1)[0] === w - 1.5 && s.ps.at(-1)[1] === h / 2);
+    // the cusp is the end of a segment at the middle of the right side, drawn in by its miter
+    const cusp = segs.findIndex((s) => s.ps.at(-1)[0] >= w - 4 * 1.5 && s.ps.at(-1)[0] < w - 1.5 && s.ps.at(-1)[1] === h / 2);
     assert.ok(cusp > 0, size);
     for (let i = 0; i + 1 < segs.length; i++) {
       const angle = turn(end(segs[i]), start(segs[i + 1]));
