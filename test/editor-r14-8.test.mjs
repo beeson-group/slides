@@ -149,8 +149,8 @@ for (const platform of PLATFORMS) {
     });
   }
 
-  // on a content slide, a plate is a block of the text column, and the elements after it move up
-  // with the column when it is deleted
+  // on a content slide, the plate of the figure slide is the zone at the right, and its delete
+  // does not move the elements beside it
   test(`a deleted plate does not write an offset on the element beside it once the slide is a content slide (${platform})`, async (t) => {
     const page = await load(t, platform, 6);
     await exec(page, 'insert.qr');
@@ -162,11 +162,11 @@ for (const platform of PLATFORMS) {
     const offset = (text) => /<div class="qr"[^>]*translate: ([^;"]*)/.exec(text)?.[1];
     const written = offset(await render(page));
     assert.ok(written, 'the QR code does not have an offset');
-    await click(page, '.reveal section.present .plate img');
+    await click(page, '.reveal section.present .zone img');
     await frames(page);
     await exec(page, 'element.delete');
     await frames(page);
-    assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present .plate').length`), 0, 'the plate was not deleted');
+    assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present .zone').length`), 0, 'the plate was not deleted');
     assert.equal(offset(await render(page)), written, 'the delete of the plate changed the offset of the QR code');
     assert.deepEqual(errors(page), []);
   });
