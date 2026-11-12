@@ -184,7 +184,10 @@ for (const platform of PLATFORMS) {
   // N22: a picture, a table, and a QR code over texts read '3 figures cover 4 texts'
   test(`the report names a picture, a table, and a QR code over texts by their kinds (${platform})`, async (t) => {
     const page = await load(t, platform);
+    // a new table is put off the words where it can be, hence it is moved over the list
     await exec(page, 'insert.table', { rows: 3, columns: 3 });
+    await wait(page);
+    await exec(page, 'arrange.setPosition', { x: 200, y: 560 });
     await wait(page);
     await exec(page, 'insert.qr');
     await wait(page);
