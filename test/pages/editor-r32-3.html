@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor preview deck of R32.3</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the slides of the tests of R32.3: a slide with a block, a figure, a shape, a line, a group, a backdrop, guides, and a step, and a slide after it for the preview of a transition -->
+<div class="reveal">
+<div class="slides">
+
+<section data-guides="x480 y270">
+  <h2>Every kind of element</h2>
+  <p>A paragraph of the text column.</p>
+  <figure class="zone" style="translate: -760px 380px; width: 400px">
+    <img src="../../demo/figure-light.png" alt="A figure">
+  </figure>
+  <div class="shape tone-blue" style="width: 300px; height: 160px; translate: 200px 560px"><p>A shape</p></div>
+  <svg class="line" width="400" height="1" style="translate: 200px 800px"><defs><marker id="r32-3-arrow" orient="auto-start-reverse"><path d="M-4-2.5 1 0-4 2.5z"></path></marker></defs><line x1="0" y1="0" x2="400" y2="0" marker-end="url(#r32-3-arrow)"></line></svg>
+  <div class="shape tone-accent" data-group="g1" style="width: 160px; height: 120px; translate: 700px 560px"><p>One</p></div>
+  <div class="shape tone-violet" data-group="g1" style="width: 160px; height: 120px; translate: 900px 560px"><p>Two</p></div>
+  <p class="fragment" data-fragment-index="1">A step after the trace.</p>
+  <div class="backdrop" data-strands="../../demo/broucke-sample.js" data-strands-select="frame=pulsating,family=7" data-strands-color="family" data-strands-ramp="e" data-duration="2"></div>
+</section>
+
+<section>
+  <h2>The slide after</h2>
+  <p>The end of the transition.</p>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>
