@@ -29,6 +29,9 @@ function isLayer(el: Element): boolean {
   return s.display !== 'none' && (s.position !== 'static' || s.translate !== 'none' || s.rotate !== 'none' || s.transform !== 'none');
 }
 
+// a list whose items theme/beeson.css positions, which is thus drawn with the layers of z-index 0
+const listed = (el: Element): boolean => el.matches('ul, ol') && [...el.children].some((c) => getComputedStyle(c).position !== 'static');
+
 // the elements that theme/beeson.css gives a z-index, which is their z-index without a style
 const RAISED = ':is(section, .col) > table';
 // the z-index that the browser applies to el, 0 for auto
@@ -83,7 +86,7 @@ function keyIn(el: Element, a: Around, path: Path, placed: boolean, z: number, t
   if (turned) return [...lead, [0, path(el)]];
   return a.host ? [...lead, [0, path(a.host)], [-0.5, path(el)]] : [...lead, [-0.5, path(el)]];
 }
-const keyOf = (el: Element): Key => keyIn(el, aroundOf(el), filePath, getComputedStyle(el).position !== 'static', zOf(el), isLayer(el));
+const keyOf = (el: Element): Key => keyIn(el, aroundOf(el), filePath, getComputedStyle(el).position !== 'static', zOf(el), isLayer(el) || listed(el));
 
 // whether a is drawn under b, by the order of the stacking contexts of their slide
 export function drawnUnder(a: Element, b: Element): boolean {
@@ -175,7 +178,7 @@ function factOf(app: App, el: Element, moving: boolean, lo: number): Fact {
   const file = { pos: !fixPos && 'position' in style!, z: fixZ ? null : zIn(style!['z-index']) };
   const form = moving && file.z !== null && !['top', 'right', 'bottom', 'left', 'inset'].some((k) => k in style!);
   const base = !fixZ && s.zIndex ? (el.matches(RAISED) ? 1 : 0) : parseInt(c.zIndex, 10) || 0;
-  const turned = c.transform !== 'none' || c.translate !== 'none' || c.rotate !== 'none';
+  const turned = c.transform !== 'none' || c.translate !== 'none' || c.rotate !== 'none' || listed(el);
   const placed = fixPos ? c.position !== 'static' : !s.position && c.position !== 'static';
   return { el, moving, placed, turned, base, now, file, ref: form ? { pos: false, z: null } : file, fixPos, fixZ, around: aroundOf(el), lo };
 }
@@ -232,7 +235,9 @@ function stacks(el: Element): boolean {
 // the order of the children of each parent of a moved element, and the declarations of each
 // element of target, that draw target from back to front at the lowest cost. an element of moving
 // out of the flow is moved among its siblings where this saves a declaration, since a move in the
-// file does not move it on the slide. a hidden element over the ground may be drawn in any place
+// file does not move it on the slide. a move from its place in the file is a cost, and a move does
+// not change the order of the steps without an index. a hidden element over the ground may be
+// drawn in any place
 type Plan = { orders: Map<Element, Element[]>; facts: Fact[]; choices: Choice[]; moving: Element[] };
 function planOf(app: App, all: Element[], moving: Element[]): Plan | null {
   const ground = groundOf(all);
@@ -241,13 +246,20 @@ function planOf(app: App, all: Element[], moving: Element[]): Plan | null {
   const facts = target.map((el) => factOf(app, el, moving.includes(el), stacks(el.parentElement!) ? -n : 0));
   const hi = Math.max(0, ...facts.map((f) => f.base)) + n;
   const free = moving.filter((e) => target.includes(e) && !inFlow(e) && !e.matches(BACK));
-  // the place of el among its siblings that stay
-  const rank = (el: Element, order: Element[]) => order.filter((k) => k === el || !free.includes(k)).indexOf(el);
+  const at = (el: Element) => app.pairing?.elements.get(el)?.open?.start ?? -1;
+  // the place of el among its siblings of the file that stay
+  const rank = (el: Element, order: Element[]) => order.filter((k) => k === el || (!free.includes(k) && at(k) >= 0)).indexOf(el);
   const kidsOf = (el: Element) => [...el.parentElement!.children];
+  // the steps without an index in the file, which reveal.js shows in the order of the page
+  const steps = [...(target[0]?.closest('section')?.querySelectorAll('.fragment') ?? [])]
+    .filter((e) => !!app.pairing?.elements.get(e)?.open && app.doc.tagState(e).attrs['data-fragment-index'] === undefined);
   const costIn = (orders: Map<Element, Element[]>) => {
-    const s = solve(facts, pathIn(orders), hi);
+    const path = pathIn(orders);
+    const keys = steps.map((e): Key => [[0, path(e)]]);
+    if (keys.some((k, i) => i && !under(keys[i - 1], k))) return null;
+    const s = solve(facts, path, hi);
     const moves = free.reduce((sum, el) => {
-      const [now, was] = [rank(el, orders.get(el.parentElement!) ?? kidsOf(el)), rank(el, kidsOf(el))];
+      const [now, was] = [rank(el, orders.get(el.parentElement!) ?? kidsOf(el)), rank(el, kidsOf(el).sort((a, b) => at(a) - at(b)))];
       return sum + (now === was ? 0 : MOVE + Math.abs(now - was));
     }, 0);
     return s ? { ...s, cost: s.cost + moves, orders } : null;
@@ -256,11 +268,8 @@ function planOf(app: App, all: Element[], moving: Element[]): Plan | null {
   for (const el of free) {
     const parent = el.parentElement!;
     const without = (best?.orders.get(parent) ?? kidsOf(el)).filter((k) => k !== el);
-    // a move helps only next to the siblings that hold the elements just under and over el in target
-    const k = target.indexOf(el);
-    const near = [target[k - 1], target[k + 1]].map((t) => without.find((w) => w.contains(t ?? null))).filter((t) => t !== undefined);
-    for (const at of new Set(near.flatMap((t) => [without.indexOf(t), without.indexOf(t) + 1]))) {
-      const s = costIn(new Map([...(best?.orders ?? []), [parent, [...without.slice(0, at), el, ...without.slice(at)]]]));
+    for (let i = 0; i <= without.length; i++) {
+      const s = costIn(new Map([...(best?.orders ?? []), [parent, [...without.slice(0, i), el, ...without.slice(i)]]]));
       if (s && (!best || s.cost < best.cost)) best = s;
     }
   }
@@ -342,8 +351,11 @@ const canOrder = (app: App, o: Order): boolean => changes(app, app.current(), ne
 async function reorder(app: App, o: Order): Promise<void> {
   const before = app.selection.elements().slice();
   const slide = app.current();
+  // the selection stays over the undo and the redo, which may change other elements
+  const held = app.history.holding();
   if (slide) await arrange(app, slide, objectEls(app), o);
   app.selection.set('elements', before.filter((el) => el.isConnected));
+  held();
   app.invalidate('content');
 }
 
