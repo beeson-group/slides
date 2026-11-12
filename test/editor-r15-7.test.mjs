@@ -326,12 +326,20 @@ for (const platform of PLATFORMS) {
       assert.deepEqual(await openItems(page, ADD), listed, `with the ${how}`);
       await closeMenus(page);
     }
-    // with the caret in the cell, the text takes the keys
+    // with the caret in the cell, the text takes the keys on a Mac, where Option with an arrow moves
+    // the caret, and the key adds a row on Windows and Linux (R17.10)
     await click(page, await cell(page));
     await settle(page);
     await press(page, 'Alt+ArrowUp');
     await settle(page);
-    assert.deepEqual(await size(page), [3, 3]);
+    assert.deepEqual(await size(page), platform === 'mac' ? [3, 3] : [4, 3]);
+    // the undo takes the caret out of the table, hence a click puts it back into the cell
+    if (platform !== 'mac') {
+      await undo(page);
+      await settle(page);
+      await click(page, await cell(page));
+    }
+    await settle(page);
     assert.equal(await render(page), inserted);
     await press(page, 'Escape');
     await press(page, 'Alt+ArrowUp');

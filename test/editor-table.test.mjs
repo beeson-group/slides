@@ -373,11 +373,14 @@ for (const platform of ['mac', 'other']) {
     const block = () => page.evaluate(`!!document.querySelector('.beeson-table-bars .cell.block:not([hidden])')`);
     await show(page, '.reveal .slides table');
     await click(page, cellSelector(1, 0));
-    // in the text of a cell the keys add nothing
-    await press(page, 'Alt+ArrowDown');
-    await press(page, 'Alt+ArrowUp');
-    await settle(page);
-    assert.equal(await render(page), page.source);
+    // on a Mac the text of a cell takes the keys, which add nothing there. on Windows and Linux they
+    // act in the text too, as test/editor-r17-10.test.mjs checks
+    if (platform === 'mac') {
+      await press(page, 'Alt+ArrowDown');
+      await press(page, 'Alt+ArrowUp');
+      await settle(page);
+      assert.equal(await render(page), page.source);
+    }
     assert.equal(await block(), false);
     await press(page, 'Escape');
     await settle(page);
@@ -426,11 +429,13 @@ for (const platform of ['mac', 'other']) {
       await page.evaluate('window.BeesonEditor.undo()');
     }
     await byteExact(page);
-    // a click puts the caret into the text of a cell again, where the keys add nothing
+    // a click puts the caret into the text of a cell again, where the keys add nothing on a Mac
     await click(page, cellSelector(0, 0));
-    await press(page, 'Alt+ArrowDown');
-    await settle(page);
-    assert.equal(await render(page), page.source);
+    if (platform === 'mac') {
+      await press(page, 'Alt+ArrowDown');
+      await settle(page);
+      assert.equal(await render(page), page.source);
+    }
     // a row added with a key is one entry, undone byte for byte and saved without problems
     await press(page, 'Escape');
     await press(page, 'Alt+ArrowDown');
