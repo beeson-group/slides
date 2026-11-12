@@ -89,13 +89,16 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// the left of the mark, of the first words, and of the box of each item of the n-th list of the
-// slide, the right of the box, and the width of the list, in slide px from the left of the list. the mark is the
-// ::before of its item, placed from the left of the item
-const marks = (page, n) => page.evaluate(`(() => {
+// the left of the mark, the left and the right of the first words, and the left and the right of
+// the box of each item of the n-th list of the slide, and the width of the list, in slide px from
+// the left of the list. the mark is the box of the ::before of its item, read from the box model of
+// the DevTools protocol, since a centered list draws it in the line of the words
+const marks = async (page, n) => {
+  const items = await page.evaluate(`(() => {
   const list = document.querySelectorAll('${SLIDE} > :is(ul, ol)')[${n}];
   const box = list.getBoundingClientRect();
   const scale = box.width / list.offsetWidth;
+  window.probed = [...list.children];
   return [...list.children].map((li) => {
     const r = li.getBoundingClientRect();
     const node = li.firstChild;
@@ -104,9 +107,25 @@ const marks = (page, n) => page.evaluate(`(() => {
     range.setEnd(node, node.data.trimEnd().length);
     const words = range.getBoundingClientRect();
     const at = (x) => Math.round((x - box.left) / scale);
-    return { mark: at(r.left) + parseFloat(getComputedStyle(li, '::before').left), words: at(words.left), left: at(r.left), right: at(r.right), width: Math.round(box.width / scale) };
+    return { origin: box.left, scale, words: at(words.left), end: at(words.right), left: at(r.left), right: at(r.right), width: Math.round(box.width / scale) };
   });
 })()`);
+  // the protocol hands out the node of an object only after the document is requested
+  await page.send('DOM.getDocument', { depth: -1 });
+  const { result } = await page.send('Runtime.evaluate', { expression: 'window.probed', returnByValue: false });
+  const { result: props } = await page.send('Runtime.getProperties', { objectId: result.objectId, ownProperties: true });
+  const lis = props.filter((p) => /^\d+$/.test(p.name)).sort((a, b) => a.name - b.name);
+  for (const [i, m] of items.entries()) {
+    const { nodeId } = await page.send('DOM.requestNode', { objectId: lis[i].value.objectId });
+    const { node } = await page.send('DOM.describeNode', { nodeId, depth: 1 });
+    const before = node.pseudoElements.find((p) => p.pseudoType === 'before');
+    const { model } = await page.send('DOM.getBoxModel', { backendNodeId: before.backendNodeId });
+    m.mark = Math.round((model.border[0] - m.origin) / m.scale);
+    delete m.origin;
+    delete m.scale;
+  }
+  return items;
+};
 
 // V15 and V21. each mark of a centered list is drawn beside the words of its item, at the distance
 // of an uncentered list, and the item with its mark is centered on the list. the four lists of
@@ -125,7 +144,9 @@ for (const platform of PLATFORMS) {
       for (const [i, m] of (await marks(page, n)).entries()) {
         // an item that holds a nested list is as wide as the nested list, and its words are centered in it
         assert.ok(Math.abs(m.words - m.mark - (before[i].words - before[i].mark)) <= 2, `${kind}, item ${i + 1}: the mark at ${js(m)} is not beside its words`);
-        assert.ok(Math.abs(m.left + m.right - m.width) <= 2 && m.left > 0, `${kind}, item ${i + 1}: the item at ${js(m)} is not centered on the list`);
+        // the item with its mark runs from its words less the padding of an uncentered item to the end of its words
+        const start = m.words - (before[i].words - before[i].left);
+        assert.ok(Math.abs(start + m.end - m.width) <= 2 && start > 0, `${kind}, item ${i + 1}: the item at ${js(m)} is not centered on the list`);
       }
     }
     for (let i = 0; i < KINDS.length; i++) await undo(page);
