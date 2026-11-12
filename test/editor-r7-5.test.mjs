@@ -271,7 +271,8 @@ for (const platform of PLATFORMS) {
     await type(page, 'a');
     await page.waitFor(`[...document.querySelectorAll('.beeson-complete [role=option]')].every((o) => o.querySelector('.glyph svg') || o.querySelector('.name').textContent === '\\\\class')`);
     assert.ok((await options(page)).some((o) => o.text === String.raw`\class` && !o.glyph));
-    await page.evaluate(`(() => { const mj = window.MathJax, f = mj.tex2svgPromise; window.typeset = 0; mj.tex2svgPromise = (...a) => { window.typeset++; return f.apply(mj, a); }; })()`);
+    // the preview of the formula, which is typeset 150 ms after a key, is not counted as a glyph
+    await page.evaluate(`(() => { const mj = window.MathJax, f = mj.tex2svgPromise, field = document.querySelector(${js(`${PANEL} textarea[name="tex"]`)}); window.typeset = 0; mj.tex2svgPromise = (...a) => { if (a[0] !== field.value) window.typeset++; return f.apply(mj, a); }; })()`);
     await press(page, 'Backspace');
     await frames(page);
     assert.deepEqual(await options(page), first);
