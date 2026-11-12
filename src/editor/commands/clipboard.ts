@@ -103,18 +103,18 @@ function nextKept(el: Element): Node | null {
 }
 
 // the last copy, with its sources, the number of times it was pasted on the slide of its sources,
-// and the elements of the last such paste, after which the next one is put. html is the table of a
+// where a paste goes after the last of its copies still on the slide. html is the table of a
 // copy of a range of cells. away holds, for each slide that the copy was pasted on, the elements of
 // each paste there, and the boxes of the first paste there without the sources, at the place of the
 // sources. the pastes made while the sources were on the slide are kept for when they are deleted.
 // boxes are the boxes of the sources at the copy, where a copy that is not in the flow is pasted
 type Away = { pastes: Element[][]; base?: Box[] };
-type Clip = { text: string; sources: Element[]; paths: string[][]; pasted: number; last: Element[]; html?: string; away?: Map<Element, Away>; boxes?: Box[] };
+type Clip = { text: string; sources: Element[]; paths: string[][]; pasted: number; html?: string; away?: Map<Element, Away>; boxes?: Box[] };
 let clip: Clip | null = null;
 
 function copy(app: App, els: Element[], data: DataTransfer | null): void {
   const text = clipText(app, els);
-  clip = { text, sources: els, paths: els.map(pathOf), pasted: 0, last: [], boxes: els.map((el) => boxOf(app, el)) };
+  clip = { text, sources: els, paths: els.map(pathOf), pasted: 0, boxes: els.map((el) => boxOf(app, el)) };
   write(data, text, text);
 }
 
@@ -130,7 +130,7 @@ function copyRange(app: App, data: DataTransfer | null): boolean {
   const t = selectedRange(app);
   if (!t) return false;
   const { plain, html } = rangeText(t);
-  clip = { text: plain, sources: [], paths: [], pasted: 0, last: [], html };
+  clip = { text: plain, sources: [], paths: [], pasted: 0, html };
   write(data, plain, html);
   return true;
 }
@@ -197,6 +197,10 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
   const own = clip && clip.sources.length === texts.length && clip.sources.every((s) => s.isConnected && slide.contains(s)) ? clip : null;
   const keep = keepPlaces(app, own?.sources ?? []);
   const away = clip && clip.sources.length === texts.length ? (clip.away ??= new Map()) : null;
+  const on = away && (away.get(slide) ?? away.set(slide, { pastes: [] }).get(slide));
+  // a paste on the slide of its sources is put after the last copy of the clipboard that is still
+  // in the slide, hence a paste after an undone or deleted one takes the place that it freed
+  const copies = new Set((on?.pastes ?? []).flat().filter((c: Element) => c.isConnected));
   const nodes: Element[] = [];
   const grounds: boolean[] = [];
   for (const [i, raw] of texts.entries()) {
@@ -206,7 +210,7 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
     let before: Node | null;
     if (source?.parentElement) {
       parent = source.parentElement;
-      const prev = [nodes.at(-1), own?.last.at(-1)].find((n) => n?.parentElement === parent);
+      const prev = nodes.at(-1)?.parentElement === parent ? nodes.at(-1) : [...parent.children].reverse().find((c) => copies.has(c));
       before = nextKept(prev ?? source);
     } else {
       let at: Element | null = slide;
@@ -224,17 +228,22 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
     nodes.push(node);
     grounds.push(ground);
   }
-  const on = away && (away.get(slide) ?? away.set(slide, { pastes: [] }).get(slide));
   if (on && own) placeOwn(app, own, on, nodes, grounds);
   else if (on) placeAway(app, on, nodes, grounds);
+  const older = on ? [...on.pastes] : [];
   on?.pastes.push(nodes);
   regroup(app, nodes);
   settleCopies(app, nodes);
   relink(app, nodes);
   keep((el, translate) => doc.setTag(el, { translate }, 'move'));
   if (own) {
+    // a paste in the flow that lands on a source or a copy, which keep holds at its place, is
+    // moved on from where it lands
+    const others = (i: number) => [own.sources[i], ...older.map((p) => p[i])];
+    const boxes = nodes.map((n) => boxOf(app, n));
+    const moves = nodes.map((_, i) => !grounds[i] && others(i).some((c) => c?.isConnected && same(boxes[i], boxOf(app, c))));
+    if (moves.some(Boolean)) moveOn(app, nodes, boxes, moves, others, 0);
     own.pasted++;
-    own.last = nodes;
   }
   app.selection.set('elements', nodes);
   return nodes;
