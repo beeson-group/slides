@@ -191,9 +191,10 @@ for (const platform of PLATFORMS) {
 }
 
 // F7: a drag by a bar went on after a change of slide, and the release moved the row of the slide
-// that was left, as an entry of the history
+// that was left, as an entry of the history. a key does not change the slide during the drag, as
+// test/editor-r17-4.test.mjs checks for PageDown
 for (const platform of PLATFORMS) {
-  for (const [how, go] of [['PageDown', (page) => press(page, 'PageDown')], ['Reveal.slide', (page) => page.evaluate('Reveal.slide(2)')]]) {
+  for (const [how, go] of [['Reveal.slide', (page) => page.evaluate('Reveal.slide(2)')]]) {
     test(`a change of slide by ${how} ends the drag of a row by its bar without a change of the file (${platform})`, async (t) => {
       const page = await load(t, platform, 1, TABLES);
       const before = await undoLabel(page);

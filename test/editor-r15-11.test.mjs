@@ -238,9 +238,10 @@ for (const platform of PLATFORMS) {
     await page.evaluate('document.activeElement?.blur()');
     await paste(page, plain, html);
     const pasted = await render(page);
-    // the place of the table is left to placeTable, and the column of 2.53e-5 is one of numbers
+    // the place of the table is left to placeTable, the column of 2.53e-5 is one of numbers, and
+    // the cells of the range keep their kind
     const right = '<td style="text-align: right">';
-    const table = `<tbody>\n      <tr><th>Moon</th><th style="text-align: right">\\(0.01215\\)</th></tr>\n      <tr><td><strong>Europa</strong></td>${right}2.53e-5</td></tr>\n    </tbody>\n  </table>`;
+    const table = `<tbody>\n      <tr><td>Moon</td><td style="text-align: right">\\(0.01215\\)</td></tr>\n      <tr><td><strong>Europa</strong></td>${right}2.53e-5</td></tr>\n    </tbody>\n  </table>`;
     assert.ok(pasted.includes(table), `the new table is not written with its bold and its formula:\n${pasted.slice(pasted.indexOf('</table>') + 8, pasted.indexOf('A plain table'))}`);
     assert.equal(await undoLabel(page), 'Undo Paste Table');
     assert.equal(await page.evaluate(`Reveal.getCurrentSlide().querySelectorAll('table')[1].querySelectorAll('strong').length`), 1);

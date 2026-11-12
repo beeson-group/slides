@@ -308,7 +308,7 @@ for (const platform of PLATFORMS) {
     await press(page, 'Shift+ArrowDown');
     await press(page, 'Shift+ArrowRight');
     assert.deepEqual(await picked(page), ['0,1', '0,2', '1,1', '1,2']);
-    assert.equal(await status(page), '2 × 2 cells selected.');
+    assert.equal(await status(page), '2 × 2 cells selected. A number of a plot cannot be left empty, hence Cut and Delete are dimmed.');
     assert.equal(await clipboard(page, 'copy'), '0\t0\n1\t1');
     // a click with Shift picks the range up to its cell, and the focus stays in the first cell
     await click(page, cell(1, 4), { modifiers: 'Shift' });
@@ -327,7 +327,7 @@ for (const platform of PLATFORMS) {
     // value
     await focusCell(page, 0, 2);
     for (const key of ['Shift+ArrowDown', 'Shift+ArrowDown', 'Shift+ArrowRight']) await press(page, key);
-    assert.equal(await status(page), '3 × 2 cells selected.');
+    assert.equal(await status(page), '3 × 2 cells selected. A number of a plot cannot be left empty, hence Cut and Delete are dimmed.');
     await press(page, 'Delete');
     await frames(page);
     await byteExact(page, pasted);
@@ -347,13 +347,13 @@ for (const platform of PLATFORMS) {
     await focusCell(page, 0, 1);
     await press(page, 'Shift+ArrowDown');
     await press(page, 'Shift+ArrowRight');
-    assert.equal(await status(page), '2 × 2 cells selected.');
+    assert.equal(await status(page), '2 × 2 cells selected. A number of a plot cannot be left empty, hence Cut and Delete are dimmed.');
     // a switch of the View menu refreshes every pane, as a late event of the selection does
     for (const id of ['view.rulers', 'view.rulers']) {
       await exec(page, id);
       await frames(page);
       assert.deepEqual(await picked(page), ['0,1', '0,2', '1,1', '1,2']);
-      assert.equal(await status(page), '2 × 2 cells selected.');
+      assert.equal(await status(page), '2 × 2 cells selected. A number of a plot cannot be left empty, hence Cut and Delete are dimmed.');
     }
     assert.deepEqual(errors(page), []);
   });
