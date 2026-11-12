@@ -434,14 +434,15 @@ for (const platform of PLATFORMS) {
         assert.equal(count(edited, ID), 2, `Duplicate from the ${from} repeats the data-id`);
         assert.equal(count(slideOf(edited, STEPPED), 'data-fragment-index="1"'), 4, 'the copy does not keep the step of its images');
         await roundTrip(page, edited);
-        // a copy made by a drag with the copy modifier
+        // a copy made by a drag with the copy modifier. Chrome on a Mac opens the context menu at a
+        // press with Ctrl, and a release of the drag over one of its items runs the item, e.g. Send
+        // to Back. the menu is thus kept closed on the platform other, as it is off a Mac
+        if (platform !== 'mac') await page.evaluate(`window.addEventListener('contextmenu', (ev) => { if (ev.ctrlKey && ev.button === 0) { ev.preventDefault(); ev.stopImmediatePropagation(); } }, true)`);
         await pick(page, from);
         await drag(page, IMG, { dx: 80, dy: 30, modifiers: platform === 'mac' ? 'Alt' : 'Ctrl' });
         await page.waitFor(`window.BeesonEditor.render().split('<figure').length === ${count(SOURCE, '<figure') + 2}`);
         edited = await render(page);
         assert.equal(count(edited, ID), 2, `a copy by a drag from the ${from} repeats the data-id`);
-        // Chrome on a Mac opens the context menu at a press with Ctrl, which is closed here
-        if (await page.evaluate(`!!document.querySelector('.beeson-edit-menu')?.getClientRects().length`)) await press(page, 'Escape');
         await roundTrip(page, edited);
         // Copy and Paste on the slide of the figure
         await pick(page, from);
