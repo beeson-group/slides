@@ -89,6 +89,8 @@ export function declarationProblem(tag: string, classes: string[], name: string,
   // the box of a backdrop resized by its grips
   if ((name === 'width' || name === 'height') && tag === 'div' && classes.includes('backdrop')) return PX.test(value.trim()) ? null : `${name} ${value} on a backdrop`;
   if (name === 'width') return textBlock(tag, classes) && PX.test(value.trim()) ? null : `width on a ${tag}`;
+  // the height of a row is written in px on its tr by Distribute Rows Evenly
+  if (name === 'height' && tag === 'tr') return PX.test(value.trim()) ? null : `height ${value} on a tr`;
   if (name === 'height') return STRETCHED_TAGS.has(tag) && PX.test(value.trim()) ? null : `height ${value} on a ${tag}`;
   if (name === 'font-size') return tag === 'pre' && /^(22|18)px$/.test(value.trim()) ? null : `font-size ${value} on a ${tag}`;
   if (name === 'text-align') return (tag === 'td' || tag === 'th') && value.trim() === 'right' ? null : `text-align ${value} on a ${tag}`;

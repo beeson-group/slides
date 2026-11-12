@@ -10,7 +10,8 @@
 // a drag across cells, a Shift-click, Esc in a cell, or Select Row and Select Column, and is merged
 // and unmerged as a colspan and a rowspan. the widths of the columns are set by a drag of a border
 // in the bar of the columns, Distribute Columns Evenly, and Resize Column to Fit Content, and are
-// written in the style of the cells of the first row. Auto-Align sets the columns of numbers at the
+// written in the style of the cells of the first row. the heights of the rows are set by Distribute
+// Rows Evenly and written in the style of each row. Auto-Align sets the columns of numbers at the
 // right. the handle at the lower right corner of the cells selected as a block is dragged over the
 // cells beside them, which are filled as Autofill of Keynote fills them. each change is one entry
 // of the history, written through app.doc
@@ -812,6 +813,39 @@ function distributeColumns(app: App, t: Target): void {
   writeWidths(app, new Map(cells.map((s, i) => [s.cell, each * s.span - (outer[i] - contentWidth(s.cell))])), 'distribute columns');
 }
 
+// the rows of the range of t, or every row where the range is one row high or there is none
+function rowsIn(t: Target): HTMLTableRowElement[] {
+  const rows = [...t.table.rows];
+  return t.box && t.box.r1 > t.box.r0 ? rows.slice(t.box.r0, t.box.r1 + 1) : rows;
+}
+
+// the rows of the range of t, or of the table, made as high as each other, with the height of all
+// of them kept, as Distribute Rows Evenly of Keynote. a row is not drawn lower than its words, hence
+// the rows are as high as the highest of them where it needs more than the share. the height is
+// written in px on each tr, less what a row is drawn past its written height
+function distributeRows(app: App, t: Target): void {
+  const rows = rowsIn(t);
+  const slides = app.slides() as HTMLElement;
+  const k = slides.offsetWidth ? slides.getBoundingClientRect().width / slides.offsetWidth : 1;
+  const high = (r: HTMLTableRowElement) => r.getBoundingClientRect().height / k;
+  const outer = rows.map(high);
+  // the height of the words of each row, measured with the row set a px high
+  const least = rows.map((r) => {
+    const kept = r.style.height;
+    r.style.height = '1px';
+    const h = high(r);
+    r.style.height = kept;
+    return h;
+  });
+  const each = Math.max(outer.reduce((a, b) => a + b, 0) / rows.length, ...least);
+  const write = (r: HTMLTableRowElement, h: number) => {
+    const text = `${Math.max(1, Math.round(h))}px`;
+    if (r.style.height !== text) app.doc.setTag(r, { style: { height: text } }, 'distribute rows');
+  };
+  for (const r of rows) write(r, each);
+  for (const r of rows) if (Math.abs(high(r) - each) >= 0.5) write(r, 2 * each - high(r));
+}
+
 // the width of the content of each cell of the first row of table, measured with the cell set a
 // px wide, so that its column is as narrow as its cells let it be: as wide as its longest word, or
 // with nowrap as its widest text on one line. the style of each cell is put back before the next
@@ -997,7 +1031,7 @@ function cellItems(cell: HTMLTableCellElement): MenuItem[] {
     { rule: true },
     ...ids(['table.merge', 'table.unmerge']),
     { rule: true },
-    ...ids(['table.distributeColumns', 'table.fitColumn']),
+    ...ids(['table.distributeRows', 'table.distributeColumns', 'table.fitColumn']),
     { rule: true },
     ...ids(['table.sortAscending', 'table.sortDescending']),
     { rule: true },
@@ -1984,6 +2018,17 @@ export function install(app: App): void {
     run: (a, arg) => unmergeCells(a, need(a, arg)),
   });
 
+  c.define({
+    id: 'table.distributeRows',
+    label: 'Distribute Rows Evenly',
+    menu: menu('size', 79.84),
+    enabled: (a, arg?: unknown) => {
+      const t = ready(a) ? targetOf(a, arg) : null;
+      return !!t && rowsIn(t).length > 1;
+    },
+    undoable: true,
+    run: (a, arg) => distributeRows(a, need(a, arg)),
+  });
   c.define({
     id: 'table.distributeColumns',
     label: 'Distribute Columns Evenly',
