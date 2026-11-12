@@ -21,8 +21,9 @@ const CURSORS = ['ew-resize', 'nwse-resize', 'ns-resize', 'nesw-resize'];
 
 // what the drag and the keys show, besides the selection: the element under the pointer, the
 // elements being moved, the guides and gaps of a snap, the readout, the marquee in screen pixels,
-// the frame of a group at the start of its turn with the angle it is turned by, and the grip or
-// rotate handle held, drawn alone in its gesture as in Keynote and PowerPoint
+// the frame of a group at the start of its turn with the angle it is turned by, the angle guide of a
+// turn held at a multiple of 45 degrees, through its center on the screen and reach px past it, and
+// the grip or rotate handle held, drawn alone in its gesture as in Keynote and PowerPoint
 export const view: {
   hover: Element | null;
   moving: Element[] | null;
@@ -32,8 +33,9 @@ export const view: {
   readout: { text: string; x: number; y: number; at: 'pointer' | 'frame' } | null;
   marquee: Box | null;
   turn: { box: Box; deg: number } | null;
+  spoke: { x: number; y: number; deg: number; reach: number } | null;
   held: HTMLElement | null;
-} = { hover: null, moving: null, resizing: false, guides: [], spacing: [], readout: null, marquee: null, turn: null, held: null };
+} = { hover: null, moving: null, resizing: false, guides: [], spacing: [], readout: null, marquee: null, turn: null, spoke: null, held: null };
 
 // the readouts of a place and a size in slide px, labeled as in Keynote
 export const xy = (x: number, y: number) => `x: ${Math.round(x)} px  y: ${Math.round(y)} px`;
@@ -61,6 +63,7 @@ html.beeson-rotating, html.beeson-rotating * { cursor: grabbing !important; user
 .beeson-guide { position: fixed; background: var(--ed-guide, #e8590c); }
 .beeson-guide.v { width: 1px; }
 .beeson-guide.h { height: 1px; }
+.beeson-guide.spoke { width: 1px; margin-left: -0.5px; }
 .beeson-gap { position: fixed; color: var(--ed-guide, #e8590c); }
 .beeson-gap.h { margin-top: -3.5px; }
 .beeson-gap.v { margin-left: -3.5px; }
@@ -191,6 +194,7 @@ export class Frames {
   // the rotate handle of the one selected element, on a stem above the middle of its top edge
   readonly rotor: HTMLDivElement;
   private readonly stem: HTMLDivElement;
+  private readonly spoke: HTMLDivElement;
   private readonly frames: HTMLDivElement[] = [];
   // the one frame of a selected group, and the frame of each group of a selection with other objects
   private readonly union: HTMLDivElement;
@@ -223,7 +227,8 @@ export class Frames {
     this.stem = div('beeson-rotor-stem', this.layer);
     this.rotor = div('beeson-rotor', this.layer);
     this.rotor.textContent = '↻';
-    this.rotor.title = 'Drag to rotate, with Shift in steps of 15°';
+    this.rotor.title = 'Drag to rotate, held at multiples of 45°, with Shift in steps of 15°';
+    this.spoke = div('beeson-guide spoke', this.layer);
     this.handle = div('beeson-handle', this.layer);
     this.handle.textContent = '⠿';
     this.handle.title = 'Drag to move, double-click to put back, arrow keys nudge';
@@ -450,6 +455,10 @@ export class Frames {
       Object.assign(this.handle.style, { left: `${r.left - 6 - HANDLE_GAP - HANDLE - bar}px`, top: `${r.top - 6}px` });
     }
     this.drawGuides();
+    // the angle guide runs along the turned vertical axis, as the stem of the rotate handle
+    const spoke = view.spoke;
+    this.spoke.hidden = !spoke;
+    if (spoke) Object.assign(this.spoke.style, { left: `${spoke.x}px`, top: `${spoke.y - spoke.reach}px`, height: `${2 * spoke.reach}px`, rotate: `${spoke.deg}deg` });
     if (view.marquee) place(this.marquee, view.marquee);
     else this.marquee.hidden = true;
     const out = view.readout;

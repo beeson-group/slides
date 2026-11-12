@@ -51,11 +51,12 @@ function commandsOf(app: App, items: MenuItem[]): Command[] {
 // the modifiers of a drag on the canvas, as canvas/drag.ts and commands/line.ts read them, one row
 // per modifier in the group Mouse after the menus, as Keynote describes them. Shift locks a move to
 // an axis, a rotation to steps of 15 degrees, and a line to steps of 45, and turns Constrain
-// Proportions over on a corner. the free modifier turns the snapping off, and the copy modifier
-// drops a copy of a move or resizes about the center
+// Proportions over on a corner. the free modifier turns the snapping off, also the hold of a
+// rotation at the multiples of 45 degrees, and the copy modifier drops a copy of a move or resizes
+// about the center
 const MOUSE: [label: string, mac: string, other: string][] = [
   ['Lock Axis or Angle, Toggle Aspect', '⇧-drag', 'Shift+drag'],
-  ['Move or Resize Without Snapping', '⌘-drag', 'Alt+drag'],
+  ['Move, Resize, or Rotate Without Snapping', '⌘-drag', 'Alt+drag'],
   ['Drag a Copy, Resize About the Center', '⌥-drag', 'Ctrl+drag'],
 ];
 

@@ -1,15 +1,15 @@
 // the pointer on the canvas: a press selects, a drag moves every selected element as one entry of
 // the history, a drag of a resize handle writes the width of an image, a video, a QR code, or a
 // viewer, and a drag from an empty point draws a marquee. Shift locks a move to one axis, the free
-// modifier, ⌘ on a Mac and Alt elsewhere, turns the snapping off, and the copy modifier, ⌥ on a Mac
-// and Ctrl elsewhere, held at the release leaves the elements and writes a copy of each where they
-// were dropped. the offset of an element is the declaration translate of its style, and its size
+// modifier, ⌘ on a Mac and Alt elsewhere, turns the snapping off, also the hold of a turn at the
+// multiples of 45 degrees, and the copy modifier, ⌥ on a Mac and Ctrl elsewhere, held at the
+// release leaves the elements and writes a copy of each where they were dropped. the offset of an element is the declaration translate of its style, and its size
 // the declaration width, in slide pixels
 
 import type { App } from '../app.ts';
 import type { TagEdit, Translate } from '../tags.ts';
 import type { Box, Handle, Targets } from './snap.ts';
-import { LAYOUT_GUIDES, anchored, fitPicture, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
+import { LAYOUT_GUIDES, anchored, fitPicture, lockedAxis, resizeBox, snapAngle, snapMove, snapResize } from './snap.ts';
 import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, captionsOf, constrained, containerOf, cssWidth, figureFrame, frameOf, frameRect, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, pictureReach, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, unturnedRect, visualRect } from './hit.ts';
 import { groupFrame, overlay, turned, view, wh, xy } from './frames.ts';
 import { enterGroup, settleCopies, freshGroup, groupOf } from '../commands/order.ts';
@@ -736,15 +736,16 @@ export function install(app: App): void {
     app.invalidate('content');
   };
 
-  // a turn by the rotate handle about the center of the element. Shift snaps the angle to steps of
-  // 15 degrees, and the angle is shown at the pointer
+  // a turn by the rotate handle about the center of the element. the angle is held at a multiple of
+  // 45 degrees near it, unless the free modifier is held, and Shift snaps it to steps of 15. the
+  // angle is shown at the pointer, and a held angle by an angle guide through the center
   const rotate = (p: Press, ev: PointerEvent) => {
     const c = p.center as { x: number; y: number };
     const now = Math.atan2(ev.clientY - c.y, ev.clientX - c.x) * 180 / Math.PI;
     const was = p.was ?? 0;
-    let deg = was + now - (p.angle ?? 0);
-    deg = ev.shiftKey ? Math.round(deg / 15) * 15 : Math.round(deg);
-    deg = ((deg % 360) + 360) % 360;
+    const snapped = snapAngle(was + now - (p.angle ?? 0), { steps: ev.shiftKey, free: freeMove(ev) });
+    const deg = snapped.deg;
+    view.spoke = snapped.held ? { x: c.x, y: c.y, deg, reach: Math.hypot(ev.clientX - c.x, ev.clientY - c.y) + 24 } : null;
     if (p.turners) {
       // the angle of a group is that of its first member, as in the field Angle
       const by = deg - was;
@@ -1005,6 +1006,7 @@ export function install(app: App): void {
     view.moving = null;
     view.resizing = false;
     view.turn = null;
+    view.spoke = null;
     view.held = null;
     view.guides = [];
     view.spacing = [];

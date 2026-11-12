@@ -317,6 +317,21 @@ export function snapResize(from: Box, handle: Handle, box: Box, targets: Targets
   return { box: out, guides, sizes };
 }
 
+// the angle of a rotate drag in whole degrees from 0 to 359, from its absolute angle raw: in steps of
+// 15 with Shift, else held at the nearest multiple of 45 within ANGLE_SNAP degrees unless free is
+// set. held tells that the angle is a multiple of 45 that the overlay marks with an angle guide
+export const ANGLE_SNAP = 4;
+export function snapAngle(raw: number, o: { steps: boolean; free: boolean }): { deg: number; held: boolean } {
+  const wrap = (d: number) => ((d % 360) + 360) % 360;
+  if (o.steps) {
+    const deg = wrap(Math.round(raw / 15) * 15);
+    return { deg, held: deg % 45 === 0 };
+  }
+  const major = Math.round(raw / 45) * 45;
+  if (!o.free && Math.abs(raw - major) <= ANGLE_SNAP) return { deg: wrap(major), held: true };
+  return { deg: wrap(Math.round(raw)), held: false };
+}
+
 export function install(_app: App): void {
   // the engine is pure, and canvas/drag.ts calls it
 }
