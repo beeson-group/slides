@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor leftovers deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the deck of the tests of R29.1: a slide with an inline formula and an empty shape, a slide of an item and a paragraph with a line break in their words, and a slide of a paragraph above a table in the flow with a shape to glue a line to -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>Formula</h2>
+  <p>A formula \(a\) in words.</p>
+  <div class="shape tone-red" style="width: 300px; height: 160px; translate: 1200px 650px"></div>
+</section>
+
+<section>
+  <h2>Breaks</h2>
+  <ul>
+    <li>First line<br>second line</li>
+    <li>Keep</li>
+    <li>Words<br>kept here</li>
+  </ul>
+  <p>Para one<br>Para two</p>
+  <p>Tail</p>
+</section>
+
+<section>
+  <h2>Flow</h2>
+  <p>Short words.</p>
+  <table><tr><th>A</th><th>B</th></tr><tr><td>1</td><td>2</td></tr></table>
+  <div class="shape" style="width: 200px; height: 120px; translate: 1300px 700px"></div>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>
