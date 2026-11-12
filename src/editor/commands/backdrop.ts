@@ -381,11 +381,14 @@ function deckEntries(app: App): Entry[] {
   return out;
 }
 
-// the entries of builtIn whose file is found next to the deck, then each other drawing of the deck,
-// marked missing when its file is not found. a file not read yet counts as found
+// the entries of builtIn, then each other drawing of the deck, each marked missing when its file is
+// not found next to the deck. a file not read yet counts as found. a missing entry of builtIn is left
+// out when a drawing of the deck of the same name is found, e.g. Beeson Logo drawn from ../brand/
 export function library(app: App): Entry[] {
-  const state = (e: Entry) => (fileOf(e) ? found.get(urlOf(fileOf(e))) : true);
-  return [...builtIn(app).filter((e) => state(e) !== false), ...deckEntries(app).map((e) => ({ ...e, missing: state(e) === false }))];
+  const mark = (e: Entry) => ({ ...e, missing: (fileOf(e) ? found.get(urlOf(fileOf(e))) : true) === false });
+  const deck = deckEntries(app).map(mark);
+  const offered = new Set(deck.filter((e) => !e.missing).map((e) => e.name));
+  return [...builtIn(app).map(mark).filter((e) => !e.missing || !offered.has(e.name)), ...deck];
 }
 
 // the window of an entry kept on the box of el when the box has the size of the box of the entry,
