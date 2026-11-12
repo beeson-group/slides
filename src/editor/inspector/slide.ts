@@ -8,7 +8,8 @@ import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { contentWithTex } from '../math.ts';
 import { showText, untypeset } from '../typeset.ts';
-import { card, checkbox, glyph, note, row, section, segmented, textField, type Control, type Run } from './controls.ts';
+import { button, card, checkbox, glyph, note, row, section, segmented, textField, type Control, type Run } from './controls.ts';
+import { drawingName, slideBackdrop } from '../commands/backdrop.ts';
 
 const SVG = 'http://www.w3.org/2000/svg';
 
@@ -198,6 +199,13 @@ export function slidePane(app: App, run: Run): Control[] {
     box.indeterminate = slidesOf(app).some(isHidden) && !box.checked;
   };
   hidden.sync();
+  if (layout !== 'mixed') {
+    // the backdrop of the slide, selected from here as well as by a click on it
+    const back = slideBackdrop(app);
+    parts.push(section('Backdrop', back ? [
+      row([note(() => drawingName(back)), button(app, run, { command: 'backdrop.select', text: 'Select' })]),
+    ] : [row([button(app, run, { command: 'backdrop.choose', text: 'Add Backdrop…' })])]));
+  }
   parts.push(section('Appearance', [
     hidden,
     checkbox(app, run, 'slide.footnote', 'Footnote'),

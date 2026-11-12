@@ -13,6 +13,7 @@ import { install as installDrop } from '../media/drop.ts';
 import { install as installSave } from '../media/save.ts';
 import { media } from '../media/store.ts';
 import { hiddenOf, imageOf, modeOf, videoOf } from './figure.ts';
+import { install as installBackdrop, openGallery } from './backdrop.ts';
 
 type Arg = { el?: Element; files?: File[] } | undefined;
 
@@ -81,6 +82,7 @@ function savePicture(app: App, picture: Picture): void {
 export function install(app: App): void {
   installSave(app);
   installDrop(app);
+  installBackdrop(app);
   // the files of a draft are kept with it, and else IndexedDB is cleared of them
   void media.load(app.drafts.hasDraft()).then((n) => n && media.resolve(app.slides()));
   // a src or a poster written on the page from the file, e.g. by an undo of a removal or by a
@@ -114,6 +116,16 @@ export function install(app: App): void {
       toolbar: { group: 'insert', order: 24.1, icon: 'video', split: 'Media' },
       enabled: ready,
       run: insert(ACCEPT.video, false),
+    },
+    {
+      // a backdrop from the gallery of commands/backdrop.ts, at the ground of the slide, or in place
+      // of the drawing of the backdrop of the slide
+      id: 'insert.backdrop',
+      label: 'Backdrop…',
+      menu: { bar: 'Insert', group: 'element', order: 26.5 },
+      toolbar: { group: 'insert', order: 24.25, icon: 'orbit', split: 'Media' },
+      enabled: ready,
+      run: (a, arg) => openGallery(a, arg instanceof Element ? arg : null),
     },
     {
       // Ctrl+Shift+V is Paste and Match Style outside the Mac, hence the key is only ⇧⌘V there

@@ -4916,6 +4916,27 @@ void main() {
     const slide = root2.closest(".reveal .slides section");
     if (slide) applySteps(slide);
   }
+  function remountBackdrop(el) {
+    const at = backdrops.findIndex((o2) => o2.el === el);
+    (at >= 0 ? backdrops[at] : Orbits.of(el))?.destroy();
+    const o = new Orbits(el);
+    if (at >= 0) backdrops.splice(at, 1, o);
+    else backdrops.push(o);
+    o.complete();
+    void o.ready.then(() => o.complete());
+    return o;
+  }
+  function preview(el) {
+    const o = new Orbits(el);
+    o.complete();
+    void o.ready.then(() => o.complete());
+    return o;
+  }
+  async function fitWindow(el, box2) {
+    const strands = el.dataset.strands !== void 0 ? (await strandsFor(el)).strands : scene(el.dataset.scene ?? "");
+    const b = box2 ?? { left: el.offsetLeft, top: el.offsetTop, width: el.offsetWidth, height: el.offsetHeight };
+    return b.width && b.height ? fitView(strands, b, { width: 1920, height: 1080 }) : null;
+  }
   function completeAll() {
     remount();
     for (const o of backdrops) {
@@ -5090,6 +5111,10 @@ void main() {
     strands: register,
     // called by the editor after a structural change of the slides
     mount: mountWithin,
+    // called by the editor on a backdrop, see remountBackdrop, preview, and fitWindow
+    remount: remountBackdrop,
+    preview,
+    fitWindow,
     refreshChrome,
     version: "0.9.0-beta.1"
   };

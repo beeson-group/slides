@@ -14,6 +14,7 @@ import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, captionsO
 import { groupFrame, overlay, turned, view, wh, xy } from './frames.ts';
 import { enterGroup, settleCopies, freshGroup, groupOf } from '../commands/order.ts';
 import { cornerBoxOf } from '../commands/align.ts';
+import { backdropAt, pressBackdrop } from '../commands/backdrop.ts';
 import { injectStyle } from '../ui/dom.ts';
 
 const CSS = `
@@ -597,6 +598,8 @@ export function install(app: App): void {
     if (grip && !grip.classList.contains('locked')) {
       // the grips of a picture selected inside its figure resize the figure
       const member = frames.memberOf(grip);
+      // a grip of a backdrop resizes its box, with its drawing kept in place
+      if (member?.matches('.backdrop')) return pressBackdrop(app, ev, member as HTMLElement, (grip as HTMLElement).dataset.handle as Handle);
       const el = member ? objectOf(app, member) : null;
       const sized = el ? sizedOf(el) : [];
       if (!el || !sized.length || locked(el)) return;
@@ -661,13 +664,17 @@ export function install(app: App): void {
       pressElement(ev, band, null);
       return;
     }
+    // a drag on a selected backdrop pans its drawing, and a click on one selects it, while a drag
+    // from one that is not selected starts a marquee, since a backdrop may cover the whole slide
+    const back = backdropAt(app, target);
+    const add = ev.shiftKey || commandHeld(ev);
+    if (back && !add && sel.only() === back) return pressBackdrop(app, ev, back, null);
     // an empty point of the slide or of the canvas around it starts a marquee
     ev.preventDefault();
     leaveText();
-    const add = ev.shiftKey || commandHeld(ev);
     const initial = add ? sel.elements().slice() : [];
     if (!add) sel.clear();
-    start('marquee', ev, null, [], null).initial = initial;
+    start('marquee', ev, null, [], back && !add ? () => sel.set('elements', [back]) : null).initial = initial;
   };
 
   const onMove = (ev: PointerEvent) => {
@@ -1036,7 +1043,7 @@ export function install(app: App): void {
           if (twin && !els.includes(twin)) writeLive(twin, from);
         }
       } else p.click?.();
-    }
+    } else if (!p.moved) p.click?.();
     frames.draw();
     app.invalidate('content');
   };

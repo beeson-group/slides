@@ -16,6 +16,7 @@ import { closeMenus, openContextMenu, openMenu, menuItems, type MenuItem } from 
 import { keyClashes, sheetClashes } from './keys-sheet.ts';
 import { overlay } from '../canvas/frames.ts';
 import { lineAt, onCanvas } from '../canvas/hit.ts';
+import { backdropAt } from '../commands/backdrop.ts';
 import { PANE_KEYS } from '../commands/view.ts';
 import { tileSlide } from '../navigator/sorter.ts';
 
@@ -368,6 +369,16 @@ export function install(app: App): void {
     ev.stopPropagation();
     if (!app.selection.has(svg)) app.selection.set('elements', [svg]);
     openContextMenu(app, 'element', svg, { x: ev.clientX, y: ev.clientY });
+  }, true);
+  // a right-click on a backdrop outside its labels and texts selects it and opens its element menu
+  window.addEventListener('contextmenu', (ev) => {
+    if (!(ev.target instanceof Element) || !onCanvas(ev.target, app, { x: ev.clientX, y: ev.clientY })) return;
+    const el = backdropAt(app, ev.target);
+    if (!el || app.hostOf(ev.target)) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+    if (!app.selection.has(el)) app.selection.set('elements', [el]);
+    openContextMenu(app, 'element', el, { x: ev.clientX, y: ev.clientY });
   }, true);
   document.addEventListener('contextmenu', (ev) => {
     const place = placeOf(ev.target instanceof Element ? ev.target : null);

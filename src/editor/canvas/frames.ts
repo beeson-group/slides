@@ -287,7 +287,7 @@ export class Frames {
   gripsOf(el: Element | null): 'live' | 'locked' | null {
     if (!el || !this.app.selection.elements().includes(el)) return null;
     if (el.hasAttribute('data-locked')) return 'locked';
-    return sizedOf(el).length ? 'live' : null;
+    return sizedOf(el).length || el.matches('.backdrop') ? 'live' : null;
   }
 
   draw(): void {
@@ -300,10 +300,11 @@ export class Frames {
     const words = document.activeElement?.closest('.reveal .slides section .shape [contenteditable="true"]')?.closest('.shape');
     if (!selected.length && words) selected.push(words);
     const scale = frameOf(app).scale;
-    // a figure is framed at its edge, where its handles are, and a block 6 px outside its text
+    // a figure and a backdrop are framed at their edges, where their handles are, and a block 6 px
+    // outside its text
     const orients = selected.map((el) => {
       const o = orientOf(el, scale);
-      return el.matches(RESIZABLE) || el.matches(CONTAINER) ? o : { ...o, box: grow(o.box, 6) };
+      return el.matches(RESIZABLE) || el.matches(CONTAINER) || el.matches('.backdrop') ? o : { ...o, box: grow(o.box, 6) };
     });
     const boxes = orients.map((o) => o.box);
     while (this.frames.length < boxes.length) this.frames.push(div('beeson-frame selected', this.layer));
@@ -409,7 +410,7 @@ export class Frames {
     const rotating = document.documentElement.classList.contains('beeson-rotating');
     const turnGroup = !!this.group && (!!turn || !!turnersOf(app, selected));
     const apart = !this.group && boxes.length > 1 && !!apartOf(app, selected);
-    const turnable = (turnGroup || apart || (!!only && boxes.length === 1 && turns(only as Element))) && (!view.moving || rotating);
+    const turnable = (turnGroup || apart || (!!only && boxes.length === 1 && turns(only as Element) && !only.matches('.backdrop'))) && (!view.moving || rotating);
     this.rotor.hidden = !turnable || (!!held && held !== this.rotor);
     this.stem.hidden = !turnable || !!held;
     if (turnable) {

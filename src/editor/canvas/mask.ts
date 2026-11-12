@@ -220,7 +220,7 @@ const orbits = (): Orbit[] => (window as unknown as { Beeson?: { backdrops?: Orb
 export const orbitOf = (el: Element): Orbit | null => orbits().find((o) => o.el === el) ?? null;
 
 // the window of the drawing of o set to view, or fitted again to its strands with null
-function setView(o: Orbit, view: { cx: number; cy: number; half: number } | null): void {
+export function setView(o: Orbit, view: { cx: number; cy: number; half: number } | null): void {
   const f = o as unknown as OrbitFields;
   if (view) {
     f.fitted = false;
@@ -246,7 +246,7 @@ export function syncBackdrops(): void {
 }
 
 // the extent of the drawing of o in its units, or null before its strands are loaded
-function extentOf(o: Orbit): { x0: number; x1: number; y0: number; y1: number } | null {
+export function extentOf(o: Orbit): { x0: number; x1: number; y0: number; y1: number } | null {
   let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
   for (const s of (o as unknown as OrbitFields).strands ?? []) {
     const p = s.pts;
@@ -273,6 +273,29 @@ export function cutEdges(extent: { x0: number; x1: number; y0: number; y1: numbe
   if (inside.bottom && extent.y0 < view.cy - view.half) out.push('bottom');
   if (inside.left && extent.x0 < view.cx - view.half * aspect) out.push('left');
   return out;
+}
+
+// the marks in red of the edges of the box of the backdrop el at which its drawing of extent is
+// cut in view, drawn into layer in place of the marks old
+export function markCuts(app: App, el: HTMLElement, view: { cx: number; cy: number; half: number }, extent: ReturnType<typeof extentOf>, layer: HTMLElement, old: HTMLElement[]): HTMLElement[] {
+  const f = frameOf(app);
+  const r = el.getBoundingClientRect();
+  const section = el.closest('section') as HTMLElement | null;
+  const box = { left: (r.left - f.left) / f.scale, top: (r.top - f.top) / f.scale, width: r.width / f.scale, height: r.height / f.scale };
+  const edges = extent ? cutEdges(extent, view, box, { width: section?.offsetWidth || 1920, height: section?.offsetHeight || 1080 }) : [];
+  for (const c of old) c.remove();
+  return edges.map((edge) => {
+    const mark = make('div', 'beeson-mask-cut');
+    mark.dataset.edge = edge;
+    const v = edge === 'left' || edge === 'right';
+    const x = edge === 'right' ? r.right - 2 : r.left - (v ? 1 : 0), y = edge === 'bottom' ? r.bottom - 2 : r.top - (v ? 0 : 1);
+    Object.assign(mark.style, { left: `${x}px`, top: `${y}px`, width: v ? '3px' : `${r.width}px`, height: v ? `${r.height}px` : '3px' });
+    const note = make('span', '', 'The drawing is cut here');
+    Object.assign(note.style, v ? { top: '50%', [edge === 'left' ? 'left' : 'right']: '8px', transform: 'translateY(-50%)' } : { left: '50%', [edge === 'top' ? 'top' : 'bottom']: '8px', transform: 'translateX(-50%)' });
+    mark.append(note);
+    layer.append(mark);
+    return mark;
+  });
 }
 
 // the attributes of a window, rounded to about a thousandth of its half height
@@ -607,25 +630,9 @@ function backdropSession(app: App, el: HTMLElement): Session | null {
   };
   const draw = () => {
     if (!ui) return;
-    const f = frameOf(app);
     const r = el.getBoundingClientRect();
     drawStage(app, el, { left: r.left, top: r.top, width: r.width, height: r.height }, null, 0);
-    const section = el.closest('section') as HTMLElement | null;
-    const box = { left: (r.left - f.left) / f.scale, top: (r.top - f.top) / f.scale, width: r.width / f.scale, height: r.height / f.scale };
-    const edges = extent ? cutEdges(extent, view, box, { width: section?.offsetWidth || 1920, height: section?.offsetHeight || 1080 }) : [];
-    for (const c of ui.cuts) c.remove();
-    ui.cuts = edges.map((edge) => {
-      const mark = make('div', 'beeson-mask-cut');
-      mark.dataset.edge = edge;
-      const v = edge === 'left' || edge === 'right';
-      const x = edge === 'right' ? r.right - 2 : r.left - (v ? 1 : 0), y = edge === 'bottom' ? r.bottom - 2 : r.top - (v ? 0 : 1);
-      Object.assign(mark.style, { left: `${x}px`, top: `${y}px`, width: v ? '3px' : `${r.width}px`, height: v ? `${r.height}px` : '3px' });
-      const note = make('span', '', 'The drawing is cut here');
-      Object.assign(note.style, v ? { top: '50%', [edge === 'left' ? 'left' : 'right']: '8px', transform: 'translateY(-50%)' } : { left: '50%', [edge === 'top' ? 'top' : 'bottom']: '8px', transform: 'translateX(-50%)' });
-      mark.append(note);
-      ui!.layer.append(mark);
-      return mark;
-    });
+    ui.cuts = markCuts(app, el, view, extent, ui.layer, ui.cuts);
     syncBar();
   };
   return {

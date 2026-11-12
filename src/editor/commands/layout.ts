@@ -342,7 +342,7 @@ function placed(app: App, slide: Element): Element[] {
   return [...slide.querySelectorAll('*')].filter((el) => {
     if (!app.pairing?.elements.get(el)?.open) return false;
     const s = app.doc.tagState(el).style;
-    return ('translate' in s && !el.matches('.shape')) || 'rotate' in s || 'z-index' in s || 'position' in s || ('width' in s && el.matches(SIZED));
+    return ('translate' in s && !el.matches('.shape')) || 'rotate' in s || 'z-index' in s || 'position' in s || ('width' in s && el.matches(SIZED)) || (('width' in s || 'height' in s) && el.matches('.backdrop'));
   });
 }
 
@@ -511,7 +511,9 @@ export function install(app: App): void {
           for (const el of placed(a, s)) {
             const has = a.doc.tagState(el).style;
             const style: Record<string, null> = {};
-            for (const k of ['translate', 'rotate', 'width', 'z-index', 'position']) if (k in has && (k !== 'width' || el.matches(SIZED)) && (k !== 'translate' || !el.matches('.shape'))) style[k] = null;
+            // the box of a backdrop resized by its grips is put back with its offset
+            const box = el.matches('.backdrop');
+            for (const k of ['translate', 'rotate', 'width', 'height', 'z-index', 'position']) if (k in has && (box || k !== 'width' || el.matches(SIZED)) && (box || k !== 'height') && (k !== 'translate' || !el.matches('.shape'))) style[k] = null;
             a.doc.setTag(el, { style }, 'reset slide');
           }
         }

@@ -15,6 +15,7 @@ import { OUTSIDE_DIALOGS } from '../commands.ts';
 import { CONTAINER, LINE, hasText, linesOf, movablesOf, objectOf } from '../canvas/hit.ts';
 import { locked } from '../canvas/drag.ts';
 import { canStep, drawnUnder, enterGroup, groupOf, layerLimit, stepLayer } from '../commands/order.ts';
+import { drawingName, slideBackdrop } from '../commands/backdrop.ts';
 import { injectStyle, make, store, stored } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 
@@ -118,6 +119,7 @@ export function describeObject(el: Element): { kind: string; icon: string; name:
   if (el.matches('video')) return named('Video', 'video');
   if (el.matches('.qr')) return named('QR Code', 'qr');
   if (el.matches('tycho-viewer')) return named('Scene', 'shape');
+  if (el.matches('.backdrop')) return named('Backdrop', 'orbit', drawingName(el));
   if (el.matches(CONTAINER)) {
     const caption = el.querySelector(':scope > figcaption, :scope > .caption');
     const words = caption ? wordsOf(caption) : '';
@@ -176,7 +178,9 @@ export function install(app: App): void {
     if (app.state !== 'loaded') return [];
     const found = [...movablesOf(app), ...linesOf(app)];
     const els = found.filter((el) => !found.some((o) => o !== el && o.contains(el)));
-    return els.sort((a, b) => (before(a, b) ? 1 : -1));
+    // the backdrop is the last row, at the ground, where the layer commands keep it
+    const ground = slideBackdrop(app);
+    return [...els.sort((a, b) => (before(a, b) ? 1 : -1)), ...(ground ? [ground] : [])];
   };
 
   // the rows in order: a group at the place of its member in front, which holds its members

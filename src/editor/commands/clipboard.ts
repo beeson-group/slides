@@ -211,8 +211,14 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
       parent = at && app.pairing?.elements.has(at) && !app.pairing.byLive.has(at) ? at : columnOf(slide);
       before = parent.querySelector(':scope > aside.notes');
     }
+    // a backdrop goes to the ground of the slide, under every other element
+    const ground = /^\s*<div\b[^>]*\bclass="(?:[^"]*\s)?backdrop[\s"]/.test(text);
+    if (ground) {
+      parent = slide;
+      before = slide.firstElementChild;
+    }
     const [node] = await doc.insert(text, parent, before, 'paste');
-    if (source && own && covers(app, node, source)) shift(app, node, own.pasted + 1);
+    if (source && own && !ground && covers(app, node, source)) shift(app, node, own.pasted + 1);
     nodes.push(node);
   }
   regroup(app, nodes);
@@ -236,7 +242,7 @@ async function duplicated(app: App, els: Element[]): Promise<Element[]> {
   const copies: Element[] = [];
   for (const el of els) {
     const dup = await doc.duplicate(el);
-    if (covers(app, dup, el)) shift(app, dup, 1);
+    if (!dup.matches('.backdrop') && covers(app, dup, el)) shift(app, dup, 1);
     copies.push(dup);
   }
   regroup(app, copies);

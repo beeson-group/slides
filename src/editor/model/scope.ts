@@ -85,6 +85,8 @@ export function declarationProblem(tag: string, classes: string[], name: string,
   // a shape is placed and sized in its style, as a box of Keynote and PowerPoint
   if ((name === 'width' || name === 'height') && tag === 'div' && classes.includes('shape')) return PX.test(value.trim()) ? null : `${name} ${value} on a shape`;
   if (name === 'width' && (SIZED_TAGS.has(tag) || classes.includes('qr'))) return null;
+  // the box of a backdrop resized by its grips
+  if ((name === 'width' || name === 'height') && tag === 'div' && classes.includes('backdrop')) return PX.test(value.trim()) ? null : `${name} ${value} on a backdrop`;
   if (name === 'width') return textBlock(tag, classes) && PX.test(value.trim()) ? null : `width on a ${tag}`;
   if (name === 'height') return STRETCHED_TAGS.has(tag) && PX.test(value.trim()) ? null : `height ${value} on a ${tag}`;
   if (name === 'font-size') return tag === 'pre' && /^(22|18)px$/.test(value.trim()) ? null : `font-size ${value} on a ${tag}`;

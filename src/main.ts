@@ -14,7 +14,8 @@ import { mountShapes } from './shapes.ts';
 import { initScrub } from './scrub.ts';
 import { mount as mountSurfaces } from './surface.ts';
 import type { Surface } from './surface.ts';
-import { register } from './strands.ts';
+import { fitView, register, strandsFor, type View } from './strands.ts';
+import { scene } from './scenes.ts';
 import { addRestoreSteps, applyAll, applySteps, initSteps, initTimedSteps, typeset, type Internal } from './steps.ts';
 import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.ts';
 import type { RevealOptions, SlideEvent } from './reveal.d.ts';
@@ -182,6 +183,35 @@ function mountWithin(root: Element): void {
   for (const p of plots) if (root.contains(p.el)) { p.fit(); p.syncSteps(); p.still(); }
   const slide = root.closest('.reveal .slides section');
   if (slide) applySteps(slide);
+}
+
+// the backdrop el drawn complete by a new Orbits in place of its drawing, at its index of
+// backdrops, after a change of its drawing or of its labels in the editor
+function remountBackdrop(el: HTMLElement): Orbits {
+  const at = backdrops.findIndex((o) => o.el === el);
+  (at >= 0 ? backdrops[at] : Orbits.of(el))?.destroy();
+  const o = new Orbits(el);
+  if (at >= 0) backdrops.splice(at, 1, o);
+  else backdrops.push(o);
+  o.complete();
+  void o.ready.then(() => o.complete());
+  return o;
+}
+
+// a drawing of the attributes of el, a div outside the slides, drawn complete for a tile of the
+// gallery of the editor, and left out of backdrops. the caller destroys it
+function preview(el: HTMLElement): Orbits {
+  const o = new Orbits(el);
+  o.complete();
+  void o.ready.then(() => o.complete());
+  return o;
+}
+
+// the window of the drawing of el fitted to box, by default its box on its slide, in slide px
+async function fitWindow(el: HTMLElement, box?: { left: number; top: number; width: number; height: number }): Promise<View | null> {
+  const strands = el.dataset.strands !== undefined ? (await strandsFor(el)).strands : scene(el.dataset.scene ?? '');
+  const b = box ?? { left: el.offsetLeft, top: el.offsetTop, width: el.offsetWidth, height: el.offsetHeight };
+  return b.width && b.height ? fitView(strands, b, { width: 1920, height: 1080 }) : null;
 }
 
 function completeAll(): void {
@@ -369,6 +399,10 @@ const Beeson = {
   strands: register,
   // called by the editor after a structural change of the slides
   mount: mountWithin,
+  // called by the editor on a backdrop, see remountBackdrop, preview, and fitWindow
+  remount: remountBackdrop,
+  preview,
+  fitWindow,
   refreshChrome,
   version: __VERSION__,
 };

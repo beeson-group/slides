@@ -21,14 +21,16 @@ import { textPane } from './text.ts';
 import { formulaPane, formulaView } from './formula.ts';
 import { codePane } from './code.ts';
 import { surfacePane, surfaceOf } from './surface.ts';
+import { backdropPane } from './backdrop.ts';
+import { selectedBackdrop } from '../commands/backdrop.ts';
 import { linePane } from './line.ts';
 import { selectedLines } from '../commands/line.ts';
 import { shapePane } from './shape.ts';
 import { selectedShapes } from '../commands/shape.ts';
 import { lockedSelection } from '../commands/order.ts';
 
-export type PaneKind = 'slide' | 'table' | 'text' | 'image' | 'video' | 'qr' | 'formula' | 'code' | 'surface' | 'line' | 'shape' | 'arrange';
-const TAB_NAMES: Record<PaneKind, string> = { slide: 'Slide', table: 'Table', text: 'Text', image: 'Image', video: 'Video', qr: 'QR Code', formula: 'Formula', code: 'Code', surface: 'Surface', line: 'Line', shape: 'Shape', arrange: 'Arrange' };
+export type PaneKind = 'slide' | 'table' | 'text' | 'image' | 'video' | 'qr' | 'formula' | 'code' | 'surface' | 'line' | 'shape' | 'backdrop' | 'arrange';
+const TAB_NAMES: Record<PaneKind, string> = { slide: 'Slide', table: 'Table', text: 'Text', image: 'Image', video: 'Video', qr: 'QR Code', formula: 'Formula', code: 'Code', surface: 'Surface', line: 'Line', shape: 'Shape', backdrop: 'Backdrop', arrange: 'Arrange' };
 const isCode = (el: Element | undefined) => !!el?.closest('pre')?.querySelector(':scope > code');
 // a block of words, which the Text pane formats together with others, as text boxes in Keynote
 const TEXT_BLOCK = 'h1, h2, h3, p, ul, ol, div.foot';
@@ -46,6 +48,8 @@ function viewOf(app: App): { tabs: PaneKind[]; items: readonly Element[] } {
   if (els.length > 1) return { tabs: els.every((el) => el.matches(TEXT_BLOCK) && hasText(el)) ? ['text', 'arrange'] : ['arrange'], items: els };
   const el = els[0];
   if (el.localName === 'table') return { tabs: ['table', 'arrange'], items: els };
+  // a backdrop is placed by the layout of its slide, hence without the Arrange pane
+  if (selectedBackdrop(app) === el) return { tabs: ['backdrop'], items: els };
   // a figure is shown with the pane of its picture, as an image with a caption in Keynote
   const img = paneImageOf(app), video = paneVideoOf(app), qr = qrOf(app);
   if (img) return { tabs: ['image', 'arrange'], items: [el, img] };
@@ -74,6 +78,7 @@ function paneOf(app: App, kind: PaneKind, run: ReturnType<typeof runner>): Contr
     case 'surface': return surfacePane(app, run);
     case 'line': return linePane(app, run);
     case 'shape': return shapePane(app, run);
+    case 'backdrop': return backdropPane(app, run);
     case 'arrange': return arrangePane(app, run);
   }
 }

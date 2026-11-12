@@ -12,6 +12,7 @@ import { placeOf, record, withCorners, writePlace } from '../canvas/drag.ts';
 import { view, xy } from '../canvas/frames.ts';
 import { fieldOf } from './order.ts';
 import { cornerBoxOf } from './align.ts';
+import { nudgeBackdrop } from './backdrop.ts';
 import { onSlides } from './slide.ts';
 import { injectStyle } from '../ui/dom.ts';
 
@@ -63,6 +64,8 @@ const movedEls = (app: App): Element[] => objectsOf(app, app.selection.elements(
 const sizedEls = (app: App): Element[] => movedEls(app).map((el) => (el.matches(CONTAINER) ? pictureOf(el) : el));
 
 function nudge(app: App, dx: number, dy: number): void {
+  // a selected backdrop is not moved, and its drawing is panned instead
+  if (nudgeBackdrop(app, dx, dy)) return;
   const els = movedEls(app);
   if (!els.length) return;
   const now = performance.now();
