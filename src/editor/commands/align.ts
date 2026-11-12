@@ -21,6 +21,23 @@ const SIDE_LABELS: Record<Side, string> = { left: 'Left', center: 'Center', righ
 // the reference of Align and Distribute, kept for the session
 let reference: 'slide' | 'selection' = 'selection';
 
+// the last typed size of objects on the axis w or h: the values that its field showed before, the
+// changes of the places, and the pictures given object-fit contain for their box
+let lastSize: { axis: 'w' | 'h'; objects: Element[]; shown: number[]; changes: Change[]; fitted: Element[] } | null = null;
+
+// the fraction with the least denominator from lo to hi, found down the Stern-Brocot tree, or the
+// middle of both where it is not found in 100 steps
+function simplest(lo: number, hi: number): number {
+  let [a, b, c, d] = [0, 1, 1, 0];
+  for (let i = 0; i < 100; i++) {
+    const p = a + c, q = b + d;
+    if (p / q < lo) [a, b] = [p, q];
+    else if (p / q > hi) [c, d] = [p, q];
+    else return p / q;
+  }
+  return (lo + hi) / 2;
+}
+
 // the elements selected on the canvas, or the block of a text that has the caret. a backdrop is
 // left out, since only its grips write its box
 export function selectedTargets(app: App): Element[] {
@@ -355,14 +372,55 @@ export function commands(): Command[] {
       const els = objects.map(sizedTarget);
       if (!resizable(els)) return;
       const caps = objects.map((o) => captionHeight(app, o));
-      // the box of a turned object that the fields X and Y give, and its place, before the change
-      const turned = objects.map((o) => (angleOf(o) ? { o, box: unturnedBoxOf(app, o), from: placeOf(o) } : null));
+      const axis = typed.w !== undefined ? 'w' : 'h';
+      const value = typed[axis];
+      // the value that the field of axis showed before the last typed value is typed back: the
+      // places before it are written again, which the whole px of a size and another wrap of a
+      // caption would not give back
+      const back = lastSize;
+      lastSize = null;
+      const same = (a: Place, b: Place) => JSON.stringify(a) === JSON.stringify(b);
+      if (back && value !== undefined && back.axis === axis && back.objects.length === objects.length && back.objects.every((o, i) => o === objects[i]) && back.shown.every((v) => Math.abs(v - value) < 0.5) && back.changes.every((c) => same(placeOf(c.el), c.to))) {
+        for (const c of [...back.changes].reverse()) writePlace(app, c.el, c.from);
+        record(app, 'resize', back.changes.map((c) => ({ el: c.el, from: c.to, to: c.from })));
+        for (const el of back.fitted) app.doc.setTag(el, { style: { 'object-fit': null } }, 'resize');
+        app.invalidate('content');
+        return;
+      }
+      const shown = objects.map((o, i) => (axis === 'w' ? sizeOf(o).w : sizeOf(o).h + caps[i]));
+      const fitted: Element[] = [];
+      // the box of each object that the fields X and Y give, and its place, before the change, and
+      // the indexes of the objects whose picture keeps its box
+      const corners = objects.map((o) => ({ o, box: unturnedBoxOf(app, o), from: placeOf(o) }));
+      const kept = new Set<number>();
       const changes = withCorners(app, els, () => els.map((el, i) => {
         const from = placeOf(el);
         const now = sizeOf(el);
+        // a picture that object-fit contain draws inside a larger box, e.g. the image of a zone
+        // without a width, keeps its box with the ratio of the box, which a width alone would
+        // shrink to the picture. the box is written with object-fit contain, since the theme
+        // stretches a picture with a width and a height to its box. the box is the content box, and
+        // pad is the padding and border around it, e.g. the paper of a paper image
+        const cs = getComputedStyle(el);
+        const edge = (side: string) => (parseFloat(cs.getPropertyValue(`padding-${side}`)) || 0) + (parseFloat(cs.getPropertyValue(`border-${side}-width`)) || 0);
+        const pad = { w: edge('left') + edge('right'), h: edge('top') + edge('bottom') };
+        const box = { w: (el as HTMLElement).offsetWidth - pad.w, h: (el as HTMLElement).offsetHeight - pad.h };
+        const boxed = el.matches(STRETCHED) && constrained(el) && cs.objectFit === 'contain' && (box.w - now.w > 0.5 || box.h - now.h > 0.5);
+        // the height of the box is written in whole px, hence its ratio is the simplest within this
+        // rounding, which does not drift from one typed value to the next
+        const ratio = boxed ? simplest((box.h - 0.5) / box.w, (box.h + 0.5) / box.w) : 0;
+        if (boxed) kept.add(i);
+        if (boxed && !(el as HTMLElement).style.objectFit) {
+          app.doc.setTag(el, { style: { 'object-fit': 'contain' } }, 'resize');
+          fitted.push(el);
+        }
         const put = (a: { w?: number; h?: number }) => {
           if (isTextSized(el)) {
             if (a.w !== undefined) writePlace(app, el, { ...from, width: Math.max(1, cssWidth(el, a.w)) });
+          } else if (boxed) {
+            const k = a.w !== undefined ? a.w / now.w : a.h !== undefined ? a.h / now.h : 1;
+            const w = Math.max(1, Math.round(box.w * k + pad.w));
+            writePlace(app, el, { ...from, width: w, height: Math.max(1, (w - pad.w) * ratio + pad.h) });
           } else if (el.matches(STRETCHED)) {
             const keep = constrained(el);
             const aspect = now.w / Math.max(1, now.h);
@@ -392,19 +450,24 @@ export function commands(): Command[] {
         // the width is written in whole px, which can put the height 1 px off, hence the width 1 px
         // either side is taken where it gives the typed height
         const to = placeOf(el);
-        if (h !== undefined && to.width != null && (to.height ?? null) === null && !isTextSized(el)) {
+        if (h !== undefined && to.width != null && (boxed || (to.height ?? null) === null) && !isTextSized(el)) {
           const read = () => sizeOf(el).h + captionHeight(app, objects[i]);
           const wide = (d: number) => Math.max(1, to.width! + d);
+          // the place at the width w, with the height of the box at its ratio where it is kept
+          const sized = (w: number | null): Place => ({ ...to, width: w, ...(boxed && { height: w === null ? null : Math.max(1, (w - pad.w) * ratio + pad.h) }) });
+          // the height under the picture that the caption adds, without the letterbox under the
+          // picture, which grows with the width
+          const gap = () => (boxed ? ((el as HTMLElement).offsetHeight - pad.h - sizeOf(el).h) / 2 : 0);
           const best = [0, -1, 1].map((d) => {
-            writePlace(app, el, { ...to, width: wide(d) });
+            writePlace(app, el, sized(wide(d)));
             return { d, off: Math.abs(read() - h) };
           }).reduce((a, b) => (b.off + 0.01 < a.off ? b : a));
-          writePlace(app, el, { ...to, width: wide(best.d) });
+          writePlace(app, el, sized(wide(best.d)));
           // the width of the layout, i.e. none written, is kept where it reads as typed, hence a
           // height typed back gives the file back
           if (caps[i]) {
-            writePlace(app, el, { ...to, width: null });
-            if (Math.round(read()) !== Math.round(h)) writePlace(app, el, { ...to, width: wide(best.d) });
+            writePlace(app, el, sized(null));
+            if (Math.round(read()) !== Math.round(h)) writePlace(app, el, sized(wide(best.d)));
           }
           // the caption wraps anew at some widths, where the height jumps, hence a height still off
           // is searched for over the widths from 1 px to where the picture alone is past it. a
@@ -414,13 +477,13 @@ export function commands(): Command[] {
           // nearest width found is dropped. the nearest height is kept, at the width nearest the
           // solve where a width reads as typed, else at the smaller width of two
           if (caps[i] && Math.round(read()) !== Math.round(h)) {
-            const w0 = wide(best.d), slope = sizeOf(el).h / w0;
+            const w0 = wide(best.d), slope = (sizeOf(el).h + gap()) / w0;
             const seen = new Map<number, { h: number; cap: number }>();
             const at = (w: number) => {
               let m = seen.get(w);
               if (!m) {
-                writePlace(app, el, { ...to, width: w });
-                seen.set(w, (m = { h: read(), cap: captionHeight(app, objects[i]) }));
+                writePlace(app, el, sized(w));
+                seen.set(w, (m = { h: read(), cap: captionHeight(app, objects[i]) - gap() }));
               }
               return m;
             };
@@ -462,15 +525,31 @@ export function commands(): Command[] {
               const halves: [number, number][] = [[a, m], [m, b]];
               spans.push(...(m < w0 ? halves : halves.reverse()));
             }
-            writePlace(app, el, { ...to, width: near.w });
+            writePlace(app, el, sized(near.w));
+          }
+          // the letterbox under the picture is half of what the box adds to it, hence a box up to
+          // 2 px higher or lower than its ratio gives, which moves the field by half as much, is
+          // taken where it reads nearer the typed height
+          const at = placeOf(el);
+          if (boxed && at.height != null) {
+            const off = () => Math.abs(Math.round(read()) - Math.round(h));
+            let best = { d: 0, off: off() };
+            for (const d of [1, -1, 2, -2]) {
+              if (!best.off) break;
+              writePlace(app, el, { ...at, height: Math.max(1, at.height + d) });
+              if (off() < best.off) best = { d, off: off() };
+            }
+            writePlace(app, el, { ...at, height: Math.max(1, at.height + best.d) });
           }
         }
         return { el, from, to: placeOf(el) };
       }));
-      // withCorners keeps the corner of a picture, and a turned figure turns its caption about the
-      // center of both, hence the figure is moved back until X and Y read as before
-      for (const t of turned) {
-        if (!t) continue;
+      // withCorners keeps the corner of a picture. a turned figure turns its caption about the
+      // center of both, and a picture that keeps its box moves inside it, e.g. the pillarboxed
+      // picture under a caption that spans the box, hence such an object is moved back until X and
+      // Y read as before
+      for (const [i, t] of corners.entries()) {
+        if (!angleOf(t.o) && !kept.has(i)) continue;
         const b = unturnedBoxOf(app, t.o), dx = t.box.left - b.left, dy = t.box.top - b.top;
         if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) continue;
         const at = placeOf(t.o);
@@ -479,7 +558,8 @@ export function commands(): Command[] {
         if (c) c.to = placeOf(t.o);
         else changes.push({ el: t.o, from: t.from, to: placeOf(t.o) });
       }
-      record(app, 'resize', changes);
+      const moved = record(app, 'resize', changes);
+      if (moved.length) lastSize = { axis, objects, shown, changes: moved.map((c) => ({ ...c })), fitted };
       app.invalidate('content');
     },
   });

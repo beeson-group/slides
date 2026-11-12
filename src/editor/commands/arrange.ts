@@ -309,6 +309,7 @@ export function commands(): Command[] {
       label: 'Reset Size',
       menu: { bar: 'Arrange', group: 'reset', order: 11 },
       context: ['element'],
+      undoable: true,
       enabled: (app) => resettable(sizedEls(app)).some((el) => placeOf(el).width !== null || (placeOf(el).height ?? null) !== null),
       run: (app) => {
         const els = resettable(sizedEls(app));
@@ -319,6 +320,10 @@ export function commands(): Command[] {
           return { el, from, to };
         }));
         record(app, 'resize', changes);
+        // object-fit contain, which a typed size writes with the box of a letterboxed picture, does
+        // not change a picture without a width and a height, hence it is taken off with them
+        for (const el of els) if ((el as HTMLElement).style.objectFit === 'contain') app.doc.setTag(el, { style: { 'object-fit': null } }, 'resize');
+        app.invalidate('content');
       },
     },
     ...([['Left', -90], ['Right', 90]] as const).map(([side, by], i): Command => ({
