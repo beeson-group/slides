@@ -14,7 +14,7 @@ import { make, injectStyle } from '../ui/dom.ts';
 import { install as installSurface } from '../inspector/surface.ts';
 import { addRow, addSeries, addTab, cellsIn, clearCells, deleteRow, deleteSeries, deleteTab, literal, moveSeries, parseTsv, pasteCells, setCell, setKey, sheetsOf, type Cell, type Result, type Sheet } from '../plotdata.ts';
 import { emptySlot } from '../media/actions.ts';
-import { pasteWork } from './clipboard.ts';
+import { fieldCells, pasteWork } from './clipboard.ts';
 import { placeNew } from './place.ts';
 import { modelAt } from '../steps.ts';
 import { ask, trapTab } from '../ui/dialog.ts';
@@ -439,6 +439,11 @@ class DataWindow {
   private size(): string {
     const box = this.box();
     return box ? `${box.r1 - box.r0 + 1} × ${box.c1 - box.c0 + 1} cells selected.` : '';
+  }
+
+  // whether field is a cell of the grid with a range selected
+  holds(field: Element): boolean {
+    return this.grid.contains(field) && !!this.box();
   }
 
   // the cells of the range, or the focused cell, by row
@@ -887,6 +892,8 @@ function paneChange(app: App, arg: unknown, change: (json: string) => Result): P
   return write(app, plot, res.text);
 }
 
+const CLEAR = 'Clear Cells';
+
 export function commands(): Command[] {
   return [
     {
@@ -1032,7 +1039,7 @@ export function commands(): Command[] {
     },
     {
       id: 'plot.clearCells',
-      label: 'Clear Cells',
+      label: CLEAR,
       undoable: true,
       enabled: () => !!open()?.selected(),
       run: (app) => windowChange(app, (w) => {
@@ -1150,6 +1157,9 @@ export function install(app: App): void {
   injectStyle('plot-data', STYLE);
   for (const c of commands()) app.commands.define(c);
   installSurface(app);
+  fieldCells.selected = (field) => !!open()?.holds(field);
+  fieldCells.clear = () => app.commands.run('plot.clearCells');
+  fieldCells.label = CLEAR;
   // a plot is drawn again once its block is replaced, by a write, an undo, or a redo
   new MutationObserver((records) => {
     for (const r of records) {

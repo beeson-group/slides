@@ -8,7 +8,7 @@
 import type { App } from '../app.ts';
 import { locked } from '../canvas/drag.ts';
 import { objectsOf, withTwins } from '../canvas/hit.ts';
-import { hasRange, inText } from './clipboard.ts';
+import { fieldCells, hasRange, inCells, inText } from './clipboard.ts';
 import { keepBeside } from './place.ts';
 import { docOf, onSlides } from './slide.ts';
 import { clearRange, selectedRange } from './table.ts';
@@ -27,12 +27,17 @@ export function install(app: App): void {
     in: ['canvas'],
     menu: { bar: 'Edit', group: 'clipboard', order: 23 },
     context: ['element'],
-    enabled: (a) => (onSlides(a) ? a.commands.enabled('slide.delete') : inText(a) ? hasRange() : selectedElements(a).some((el) => !locked(el))),
+    enabled: (a) => (onSlides(a) ? a.commands.enabled('slide.delete') : inText(a) ? hasRange() || inCells(a) : selectedElements(a).some((el) => !locked(el))),
     listedAs: (a) => (onSlides(a) ? 'slide.delete' : 'element.delete'),
     runsAs: (a) => (onSlides(a) ? 'slide.delete' : 'element.delete'),
     undoable: true,
+    get undo() {
+      return inCells(app) ? fieldCells.label : undefined;
+    },
     run: async (a) => {
       if (onSlides(a)) return a.commands.run('slide.delete');
+      // on a range of cells around a field, the cells are cleared, as by the Delete key
+      if (inCells(a)) return fieldCells.clear();
       if (inText(a)) return void document.execCommand('delete');
       // on a range of cells, the text of the cells is cleared, as by the Delete key
       if (selectedRange(a)) return clearRange(a);

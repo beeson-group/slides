@@ -91,6 +91,9 @@ html.beeson-autofilling,html.beeson-autofilling *{cursor:crosshair!important}
 .beeson-table-bars .guide[hidden]{display:none}
 .beeson-table-bars .drop{border-radius:1.5px;background:var(--ed-select);pointer-events:none}
 .beeson-table-bars .drop[hidden]{display:none}
+.beeson-table-bars .lift{overflow:hidden;opacity:.85;box-shadow:0 0 0 1px var(--ed-select),0 10px 28px #0006;transform-origin:0 0;pointer-events:none}
+.beeson-table-bars .lift[hidden]{display:none}
+.beeson-table-bars .lift>div{position:absolute;box-sizing:border-box;display:grid;overflow:hidden}
 html.beeson-line-moving,html.beeson-line-moving *{cursor:grabbing!important}
 html.beeson-column-resizing,html.beeson-column-resizing *{cursor:col-resize!important}
 html.beeson-cell-range .reveal *{user-select:none!important;-webkit-user-select:none!important}
@@ -1181,7 +1184,11 @@ function installBars(app: App): void {
   // the line at the gap where the rows or the columns dragged by their bar land
   const gapLine = make('div', 'drop');
   gapLine.hidden = true;
-  layer.append(cols, rows, grab, addCol, addRow, outline, grips, guide, spread, ...corners, handle, ...sides, gapLine);
+  // a copy of the rows or the columns dragged by their bar, lifted over the table, which follows the
+  // pointer along their axis while the others stay, as in Keynote
+  const lift = make('div', 'lift');
+  lift.hidden = true;
+  layer.append(cols, rows, grab, addCol, addRow, outline, grips, guide, spread, ...corners, handle, ...sides, gapLine, lift);
   document.body.append(layer);
   // a press on the bars keeps the caret in its cell
   for (const type of ['pointerdown', 'mousedown']) layer.addEventListener(type, (ev) => ev.preventDefault());
@@ -1220,8 +1227,42 @@ function installBars(app: App): void {
   // a press on the bar of selected whole rows or columns, moved past a few px, drags them to a gap
   // among the others, as in Keynote, and a press on a bar that is not selected still selects. the
   // gap is the one past the row or the column under the pointer, and Esc cancels the drag
-  let moving: { kind: Line; table: HTMLTableElement; lo: number; hi: number; x: number; y: number; to: number | null; on: boolean } | null = null;
+  let moving: { kind: Line; table: HTMLTableElement; lo: number; hi: number; x: number; y: number; to: number | null; on: boolean; at: [number, number]; from: [number, number] } | null = null;
   let dragged = false;
+  // the copy of the cells of m, each with the look of its cell, drawn in the slide pixels of the
+  // table and scaled to the screen. from is the offset of the copy from the table on the screen
+  const lifted = (m: NonNullable<typeof moving>) => {
+    const t = m.table.getBoundingClientRect();
+    const k = t.width / (m.table.offsetWidth || 1);
+    const cells = new Set(gridOf(m.table).grid.flatMap((row, r) => row.filter((s, c) => s && (m.kind === 'row' ? r : c) >= m.lo && (m.kind === 'row' ? r : c) <= m.hi).map((s) => s!.cell)));
+    const boxes = [...cells].map((c) => c.getBoundingClientRect());
+    const left = Math.min(...boxes.map((b) => b.left)), top = Math.min(...boxes.map((b) => b.top));
+    const width = Math.max(...boxes.map((b) => b.right)) - left, height = Math.max(...boxes.map((b) => b.bottom)) - top;
+    lift.replaceChildren(...[...cells].map((cell, i) => {
+      const b = boxes[i];
+      const s = getComputedStyle(cell);
+      const d = make('div');
+      d.style.cssText = `left:${(b.left - left) / k}px;top:${(b.top - top) / k}px;width:${b.width / k}px;height:${b.height / k}px;align-content:${s.verticalAlign === 'middle' ? 'center' : s.verticalAlign === 'bottom' ? 'end' : 'start'}`;
+      for (const p of ['font', 'line-height', 'letter-spacing', 'color', 'text-align', 'padding', 'border-top', 'border-right', 'border-bottom', 'border-left', 'background-color']) d.style.setProperty(p, s.getPropertyValue(p));
+      const inner = make('div');
+      inner.append(...[...cell.childNodes].map((n) => n.cloneNode(true)));
+      d.append(inner);
+      return d;
+    }));
+    lift.style.cssText = `width:${width / k}px;height:${height / k}px;transform:scale(${k});background:${getComputedStyle(m.table).getPropertyValue('--bg').trim() || 'Canvas'}`;
+    m.from = [left - t.left, top - t.top];
+    follow(m, t);
+    lift.hidden = false;
+  };
+  const follow = (m: NonNullable<typeof moving>, t: DOMRect) => {
+    const row = m.kind === 'row';
+    lift.style.left = `${t.left + m.from[0] + (row ? 0 : m.at[0] - m.x)}px`;
+    lift.style.top = `${t.top + m.from[1] + (row ? m.at[1] - m.y : 0)}px`;
+  };
+  const unlift = () => {
+    lift.hidden = true;
+    lift.replaceChildren();
+  };
   const gapAt = (m: NonNullable<typeof moving>, x: number, y: number): number | null => {
     const spans = m.kind === 'row' ? [...m.table.rows].map((tr) => { const b = tr.getBoundingClientRect(); return [b.top, b.bottom]; }) : columnEdges(m.table);
     const at = m.kind === 'row' ? y : x;
@@ -1235,6 +1276,7 @@ function installBars(app: App): void {
     if (!m) return;
     moving = null;
     document.documentElement.classList.remove('beeson-line-moving');
+    unlift();
     const to = ev && m.on ? gapAt(m, ev.clientX, ev.clientY) : null;
     if (to === null) return;
     const range = block && { ...block };
@@ -1253,12 +1295,14 @@ function installBars(app: App): void {
       const [lo, hi] = column ? [b.c0, b.c1] : [b.r0, b.r1];
       const i = Number(seg.dataset.index);
       if (!whole || i < lo || i > hi) return;
-      moving = { kind: column ? 'column' : 'row', table: shown.table, lo, hi, x: ev.clientX, y: ev.clientY, to: null, on: false };
+      moving = { kind: column ? 'column' : 'row', table: shown.table, lo, hi, x: ev.clientX, y: ev.clientY, to: null, on: false, at: [ev.clientX, ev.clientY], from: [0, 0] };
       bar.setPointerCapture(ev.pointerId);
     });
     bar.addEventListener('pointermove', (ev) => {
       const m = moving;
       if (!m || (!m.on && Math.hypot(ev.clientX - m.x, ev.clientY - m.y) < 4)) return;
+      m.at = [ev.clientX, ev.clientY];
+      if (!m.on) lifted(m);
       m.on = dragged = true;
       document.documentElement.classList.add('beeson-line-moving');
       m.to = gapAt(m, ev.clientX, ev.clientY);
@@ -1271,6 +1315,7 @@ function installBars(app: App): void {
     if (!moving?.on) return false;
     moving = null;
     document.documentElement.classList.remove('beeson-line-moving');
+    unlift();
     return true;
   };
 
@@ -1491,6 +1536,7 @@ function installBars(app: App): void {
       const x = gap < edges.length ? edges[gap][0] : edges[edges.length - 1][1];
       place(gapLine, x - 1.5, box.top, 3, box.height);
     }
+    if (moving?.on && moving.table === t.table) follow(moving, box);
     // the buttons are kept inside the canvas, also for a table at its edge
     const v = app.stage?.viewport;
     const inX = (x: number) => (v ? Math.max(v.left + 2, Math.min(x, v.right - BAR - 2)) : x);
