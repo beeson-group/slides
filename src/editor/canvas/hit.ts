@@ -93,9 +93,42 @@ function pictureIn(el: Element): { width: number; height: number; dx: number; dy
   return { width: w, height: ht, dx: at(px, box.width - w) + w / 2 - box.width / 2, dy: at(py, box.height - ht) + ht / 2 - box.height / 2 };
 }
 
+// the captions that the figure el holds and shows
+const captionEls = (el: Element): HTMLElement[] =>
+  el.matches(CONTAINER) ? [...el.querySelectorAll<HTMLElement>(':scope > figcaption, :scope > .caption')].filter((c) => c.offsetWidth && c.offsetHeight) : [];
+
 // the boxes on the screen of the captions that the figure el holds and shows
 export function captionsOf(el: Element): DOMRect[] {
-  return el.matches(CONTAINER) ? [...el.querySelectorAll(':scope > figcaption, :scope > .caption')].map((c) => c.getBoundingClientRect()).filter((r) => r.width && r.height) : [];
+  return captionEls(el).map((c) => c.getBoundingClientRect()).filter((r) => r.width && r.height);
+}
+
+// the frame of the figure el with a caption, which its rotate turns with its picture as one
+// object: the box on the screen of its picture and captions in the axes of the figure, without its
+// rotation, about the center of the frame as it is seen, the angle of the figure, and the box of
+// the picture so taken. a picture turned by itself in the file is taken at its angle in the frame
+export function figureFrame(el: Element): { box: Box; deg: number; picture: Box } {
+  const scale = scaleAt(el);
+  const deg = parseFloat(getComputedStyle(el).rotate) || 0;
+  const pic = pictureOf(el);
+  const own = pic === el ? 0 : parseFloat(getComputedStyle(pic).rotate) || 0;
+  const picture = orientedBox(pic, scale, deg + own);
+  const r = el.getBoundingClientRect();
+  const cx = r.left + r.width / 2, cy = r.top + r.height / 2;
+  const a = (deg * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a);
+  const parts = [{ x: picture.left + picture.width / 2, y: picture.top + picture.height / 2, w: picture.width, h: picture.height, d: own }, ...captionEls(el).map((c) => {
+    const b = c.getBoundingClientRect();
+    return { x: b.left + b.width / 2, y: b.top + b.height / 2, w: c.offsetWidth * scale, h: c.offsetHeight * scale, d: 0 };
+  })];
+  // each part about the center of the figure turned back, with its corners at its angle in the frame
+  const points = parts.flatMap(({ x, y, w, h, d }) => {
+    const u = (x - cx) * cos + (y - cy) * sin, v = (y - cy) * cos - (x - cx) * sin;
+    const b = (d * Math.PI) / 180;
+    return [[-1, -1], [1, -1], [1, 1], [-1, 1]].map(([i, j]) => ({ x: u + (i * w * Math.cos(b) - j * h * Math.sin(b)) / 2, y: v + (i * w * Math.sin(b) + j * h * Math.cos(b)) / 2 }));
+  });
+  const left = Math.min(...points.map((p) => p.x)), top = Math.min(...points.map((p) => p.y));
+  const width = Math.max(...points.map((p) => p.x)) - left, height = Math.max(...points.map((p) => p.y)) - top;
+  const u = left + width / 2, v = top + height / 2;
+  return { box: { left: cx + u * cos - v * sin - width / 2, top: cy + u * sin + v * cos - height / 2, width, height }, deg, picture };
 }
 
 // the screen pixels per slide pixel of the slides that hold el
@@ -122,12 +155,15 @@ export function pictureTurn(el: Element): number {
   return (parseFloat(getComputedStyle(el).rotate) || 0) + (pic === el ? 0 : parseFloat(getComputedStyle(pic).rotate) || 0);
 }
 
-// the box on the screen of the figure el before its picture is turned, i.e. the picture without its
-// rotation over the captions, which are not turned with it, and the box of the picture so taken.
-// the fields W and H of a figure selected as one object give this size at every angle
+// the box on the screen of the figure el before its picture is turned, i.e. its frame without its
+// rotation where the figure is turned as one object, else the picture without its rotation over
+// the upright captions, and the box of the picture so taken. the fields W and H of a figure
+// selected as one object give this size at every angle
 export function unturnedRect(el: Element): { box: Box; picture: Box } {
   const deg = pictureTurn(el);
   if (!deg) return { box: frameRect(el), picture: pictureReach(el) };
+  const whole = captionsOf(el).length ? figureFrame(el) : null;
+  if (whole?.deg) return whole;
   const picture = orientedBox(pictureOf(el), scaleAt(el), deg);
   const all = [{ left: picture.left, top: picture.top, right: picture.left + picture.width, bottom: picture.top + picture.height }, ...captionsOf(el)];
   const left = Math.min(...all.map((r) => r.left)), top = Math.min(...all.map((r) => r.top));
@@ -136,10 +172,16 @@ export function unturnedRect(el: Element): { box: Box; picture: Box } {
 
 // the box of el on the screen at its frame, as Keynote and PowerPoint take the box of an object in
 // every field and command: a figure that holds a picture at the picture and over the caption that it
-// holds, which is not turned with the picture, and another element at its box seen
+// holds, upright around both where the figure is turned, and another element at its box seen
 export function frameRect(el: Element): Box {
   const caps = captionsOf(el);
   if (!caps.length) return visualRect(el.matches(RESIZABLE) || el.matches(CONTAINER) ? pictureOf(el) : el);
+  const whole = figureFrame(el);
+  if (whole.deg) {
+    const a = (whole.deg * Math.PI) / 180, c = Math.abs(Math.cos(a)), s = Math.abs(Math.sin(a)), b = whole.box;
+    const width = b.width * c + b.height * s, height = b.width * s + b.height * c;
+    return { left: b.left + (b.width - width) / 2, top: b.top + (b.height - height) / 2, width, height };
+  }
   const box = pictureReach(el);
   const left = Math.min(box.left, ...caps.map((r) => r.left)), top = Math.min(box.top, ...caps.map((r) => r.top));
   const right = Math.max(box.left + box.width, ...caps.map((r) => r.right)), bottom = Math.max(box.top + box.height, ...caps.map((r) => r.bottom));

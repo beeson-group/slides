@@ -10,7 +10,7 @@ import type { App } from '../app.ts';
 import type { TagEdit, Translate } from '../tags.ts';
 import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, anchored, fitPicture, lockedAxis, resizeBox, snapMove, snapResize } from './snap.ts';
-import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, captionsOf, constrained, containerOf, cssWidth, frameOf, frameRect, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, pictureReach, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, unturnedRect, visualRect } from './hit.ts';
+import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, captionsOf, constrained, containerOf, cssWidth, figureFrame, frameOf, frameRect, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, pictureReach, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, unturnedRect, visualRect } from './hit.ts';
 import { groupFrame, overlay, turned, view, wh, xy } from './frames.ts';
 import { enterGroup, settleCopies, freshGroup, groupOf } from '../commands/order.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -119,14 +119,15 @@ export function record(app: App, label: string, changes: { el: Element; from: Pl
 
 export type Change = { el: Element; from: Place; to: Place };
 
-// the element whose style takes the angle of el: the shown picture of a figure, since the caption
-// of a figure is not turned with its picture, as a caption of PowerPoint is not, and else el
-export const spinOf = (el: Element): Element => (el.matches(CONTAINER) ? pictureOf(el) : el);
+// the element whose style takes the angle of el: a figure with a caption, which is turned with its
+// picture as one object, as an image with its caption of Keynote, the shown picture of another
+// figure, and else el
+export const spinOf = (el: Element): Element => (el.matches(CONTAINER) ? (captionsOf(el).length ? el : pictureOf(el)) : el);
 
 // the angle of el in degrees, from 0 to 359: the angle of the picture of a figure, with the angle
-// of a figure that is turned in the file
+// of the figure around it
 export function angleOf(el: Element): number {
-  const spin = spinOf(el);
+  const spin = el.matches(CONTAINER) ? pictureOf(el) : el;
   const up = spin !== el ? el : spin.matches(RESIZABLE) ? spin.parentElement?.closest(CONTAINER) : null;
   return (((placeOf(spin).rotate ?? 0) + (up ? (placeOf(up).rotate ?? 0) : 0)) % 360 + 360) % 360;
 }
@@ -134,7 +135,7 @@ export function angleOf(el: Element): number {
 // the center on the screen of spin as it is seen, i.e. of the picture of an image or a video,
 // about which a turn turns it
 export function seenCenter(app: App, spin: Element): { x: number; y: number } {
-  const b = orientedBox(spin, frameOf(app).scale, angleOf(spin));
+  const b = spin.matches(CONTAINER) && captionsOf(spin).length ? figureFrame(spin).box : orientedBox(spin, frameOf(app).scale, angleOf(spin));
   return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
 }
 
@@ -151,9 +152,10 @@ function writeLive(el: Element, p: Place): void {
 
 // spin turned to deg degrees, with its center on the screen put at want by the offset of carrier,
 // which is spin or the figure around it. an image fitted at a side of its box, e.g. in a plate,
-// thus turns about the center of its picture. a figure that is turned in the file gives its angle
-// to its picture. with live set, the page alone is changed, with the image of the other mode turned
-// as writePlace turns it
+// thus turns about the center of its picture, and a figure with a caption about the center of its
+// frame. a figure without a caption that is turned in the file gives its angle to its picture, and
+// a picture turned in the file keeps its angle in its figure with a caption. with live set, the page
+// alone is changed, with the image of the other mode turned as writePlace turns it
 export function turn(app: App, spin: Element, carrier: Element, deg: number, want: { x: number; y: number }, live = false): void {
   const put = (el: Element, p: Place) => {
     if (!live) return writePlace(app, el, p);
@@ -162,12 +164,20 @@ export function turn(app: App, spin: Element, carrier: Element, deg: number, wan
     if (twin) writeLive(twin, p);
   };
   if (carrier !== spin && placeOf(carrier).rotate) put(carrier, { ...placeOf(carrier), rotate: null });
-  put(spin, { ...placeOf(spin), rotate: ((Math.round(deg) % 360) + 360) % 360 || null });
+  const pic = spin.matches(CONTAINER) ? pictureOf(spin) : spin;
+  const own = pic !== spin ? (placeOf(pic).rotate ?? 0) : 0;
+  put(spin, { ...placeOf(spin), rotate: ((Math.round(deg - own) % 360) + 360) % 360 || null });
   const c = seenCenter(app, spin), k = frameOf(app).scale;
-  const dx = (want.x - c.x) / k, dy = (want.y - c.y) / k;
-  if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) return;
   const now = placeOf(carrier);
-  put(carrier, { ...now, translate: { x: (now.translate?.x ?? 0) + dx, y: (now.translate?.y ?? 0) + dy } });
+  let x = (now.translate?.x ?? 0) + (want.x - c.x) / k, y = (now.translate?.y ?? 0) + (want.y - c.y) / k;
+  // the offset u of the seen center from the center of spin, which is v at angle 0. the offset that
+  // the turn gives at angle 0 is rounded, so that turns back to 0 come back to the place of the file
+  const e = spin.getBoundingClientRect(), a = (((pic !== spin ? placeOf(spin).rotate : angleOf(spin)) ?? 0) * Math.PI) / 180;
+  const ux = (c.x - e.left - e.width / 2) / k, uy = (c.y - e.top - e.height / 2) / k;
+  const vx = ux * Math.cos(a) + uy * Math.sin(a), vy = uy * Math.cos(a) - ux * Math.sin(a);
+  if (Math.abs(ux - vx) > 0.01 || Math.abs(uy - vy) > 0.01) [x, y] = [Math.round(x + ux - vx) - ux + vx, Math.round(y + uy - vy) - uy + vy];
+  if (Math.abs(x - (now.translate?.x ?? 0)) < 0.5 && Math.abs(y - (now.translate?.y ?? 0)) < 0.5) return;
+  put(carrier, { ...now, translate: { x, y } });
 }
 
 // a member of a group at the start of a turn of the group: the element that takes its angle, its
@@ -723,8 +733,8 @@ export function install(app: App): void {
   // pressed element keeps the side of the frame across from the handle in place. the layout of a
   // figure puts the caption under its picture, which can change the margins of the frame, e.g. at
   // the first width of a picture fitted into its zone, hence the size is fitted again to the
-  // margins measured, up to three times. a turned picture with a caption is framed upright around
-  // both, and the box upright around the picture keeps its aspect
+  // margins measured, up to three times. a picture turned by itself in a figure with a caption is
+  // framed upright around both, and the box upright around the picture keeps its aspect
   const resize = (p: Press, ev: PointerEvent, dx: number, dy: number) => {
     if (p.group) {
       groupResize(p, ev, dx, dy);
@@ -736,9 +746,12 @@ export function install(app: App): void {
     const mode = modeOf(p, ev);
     const o = { aspect: mode.aspect, center: aboutCenter(ev), free: mode.free };
     const deg = (p.from.get(el)?.rotate ?? 0) + (pic === el ? 0 : (p.from.get(pic)?.rotate ?? 0));
-    const upright = !!deg && !!p.framed && captionsOf(p.framed).length > 0;
-    if (deg && !upright) {
-      rotatedResize(p, ev, dx, dy, deg, o, mode.height);
+    // a figure with a caption turned as one object is resized in the axes of its frame
+    const whole = !!p.framed && captionsOf(p.framed).length > 0;
+    const frameDeg = whole ? (p.from.get(el)?.rotate ?? 0) : deg;
+    const upright = !!deg && whole && !frameDeg;
+    if (frameDeg) {
+      rotatedResize(p, ev, dx, dy, frameDeg, o, mode.height);
       return;
     }
     const h = p.handle as Handle;
@@ -789,39 +802,59 @@ export function install(app: App): void {
 
   // a resize of a rotated element, without snapping: the pointer offset is turned into the frame of
   // the element, and the offset is changed so that the edge or corner across from the handle stays
-  // where it was on the slide
+  // where it was on the slide. a figure with a caption turned as one object is resized at its frame,
+  // whose picture is fitted to it as in resize
   const rotatedResize = (p: Press, ev: PointerEvent, dx: number, dy: number, deg: number, o: { aspect: number | null; center: boolean; free: boolean }, height: boolean) => {
     const el = p.els[0] as HTMLElement;
     const pic = p.pic ?? el;
+    const whole = p.framed && captionsOf(p.framed).length ? p.framed : null;
     const f = frameOf(app);
     const a = (deg * Math.PI) / 180;
     const turn = (x: number, y: number, by: number) => ({ x: x * Math.cos(by) - y * Math.sin(by), y: x * Math.sin(by) + y * Math.cos(by) });
     const local = turn(dx, dy, -a);
     const from = p.from.get(el) as Place;
-    // the box of the picture without its rotation at the press, about the center of the picture
+    // the box of the picture, or of the frame of a whole figure, without its rotation, about its
+    // center
     const center = () => {
-      const b = toSlide(f, orientedBox(pic, f.scale, deg));
+      const b = toSlide(f, whole ? figureFrame(whole).box : orientedBox(pic, f.scale, deg));
       return { x: b.left + b.width / 2, y: b.top + b.height / 2, width: b.width, height: b.height };
     };
+    const picture = () => toSlide(f, whole ? figureFrame(whole).picture : orientedBox(pic, f.scale, deg));
     if (!p.size) {
       const c = center();
       p.size = { width: c.width, height: c.height };
       p.base = { left: c.x - c.width / 2, top: c.y - c.height / 2, width: c.width, height: c.height };
+      p.picture = picture();
     }
     const cx = p.base.left + p.base.width / 2, cy = p.base.top + p.base.height / 2;
-    const box = resizeBox(p.base, p.handle as Handle, local.x, local.y, o);
-    setSize(p, box.width, height ? box.height : null);
+    const h = p.handle as Handle;
+    let box: Box;
+    if (whole) {
+      const want = resizeBox(p.base, h, local.x, local.y, { aspect: null, center: o.center, free: true });
+      for (let i = 0; i < 3; i++) {
+        const frame = center(), now = picture();
+        const size = fitPicture(want, frame.width - now.width, frame.height - now.height, h, o, p.picture as Box);
+        if (i && Math.abs(size.width - now.width) < 0.5 && Math.abs(size.height - now.height) < 0.5) break;
+        setSize(p, size.width, height ? size.height : null);
+      }
+      const frame = center();
+      box = anchored(p.base, h, frame.width, frame.height, o.center);
+    } else {
+      box = resizeBox(p.base, h, local.x, local.y, o);
+      setSize(p, box.width, height ? box.height : null);
+    }
     const move = turn(box.left + box.width / 2 - cx, box.top + box.height / 2 - cy, a);
     const seen = center();
     const now = placeOf(el);
     const sx = cx + move.x - seen.x, sy = cy + move.y - seen.y;
     writeLive(el, { ...now, translate: { x: (now.translate?.x ?? 0) + sx, y: (now.translate?.y ?? 0) + sy }, rotate: from.rotate });
-    follow(p, p.handle as Handle, box.width / p.base.width, box.height / p.base.height, o.center);
+    follow(p, h, box.width / p.base.width, box.height / p.base.height, o.center);
     view.moving = p.els;
     view.resizing = true;
     view.guides = [];
     view.spacing = [];
-    view.readout = { text: wh(box.width, box.height), x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
+    // W of a whole figure is the width of its picture, as in the field W
+    view.readout = { text: wh(whole ? picture().width : box.width, box.height), x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
     frames.draw();
     app.invalidate('content');
   };

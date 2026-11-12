@@ -6,7 +6,7 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { CONTAINER, RESIZABLE, STRETCHED, aspectOf, captionsOf, pictureReach, constrained, cssWidth, frameOf, frameRect, isTextSized, kindOf, movableOf, objectsOf, orientedBox, pictureOf, pictureSize, sizedOf, snapBoxOf, toSlide, unturnedRect } from '../canvas/hit.ts';
+import { CONTAINER, LINE, RESIZABLE, STRETCHED, aspectOf, captionsOf, pictureReach, constrained, cssWidth, frameOf, frameRect, isTextSized, kindOf, movableOf, objectsOf, orientedBox, pictureOf, pictureSize, sizedOf, snapBoxOf, toSlide, unturnedRect } from '../canvas/hit.ts';
 import type { Box } from '../canvas/snap.ts';
 import { angleOf, locked, placeOf, record, withCorners, writePlace, type Change, type Place } from '../canvas/drag.ts';
 import { groupFrame, groupReach, turned } from '../canvas/frames.ts';
@@ -71,9 +71,10 @@ function scaleGroup(app: App, els: Element[], frame: { box: Box; deg: number }, 
   const changes: Change[] = [];
   for (const el of els.filter((el) => !locked(el) && !els.some((o) => o !== el && o.contains(el)))) {
     const s = sizedTarget(el), pic = pictureOf(el), deg = angleOf(el);
+    // the center of the member, or the middle of the top of a text block, turned with it
     const point = () => {
-      const b = toSlide(f, orientedBox(pic, f.scale, deg));
-      return { b, x: b.left + b.width / 2, y: isTextSized(pic) ? b.top : b.top + b.height / 2 };
+      const b = toSlide(f, orientedBox(pic, f.scale, deg)), up = isTextSized(pic) ? b.height / 2 : 0, r = (deg * Math.PI) / 180;
+      return { b, x: b.left + b.width / 2 + up * Math.sin(r), y: b.top + b.height / 2 - up * Math.cos(r) };
     };
     const was = point(), place = placeOf(el), size = placeOf(s);
     if (s.matches(RESIZABLE) || isTextSized(s)) {
@@ -195,10 +196,20 @@ export function offsetOf(el: Element): { x: number; y: number } {
   return { x: t?.x ?? 0, y: t?.y ?? 0 };
 }
 
-// the upper left corner of an element on the slide in slide pixels, as the readout of a move gives
-// it, which the X and Y fields show
+// the box of el in slide pixels that the fields X and Y give, as in Keynote and PowerPoint, where a
+// turn about the center of an object does not change them: the box without its rotation of a
+// turned figure with its caption, picture, or text, about its center as it is seen, else the box of
+// the readout of a move
+export function unturnedBoxOf(app: App, el: Element): Box {
+  const deg = el.matches(LINE) ? 0 : angleOf(el);
+  if (!deg) return snapBoxOf(app, el);
+  const f = frameOf(app);
+  return toSlide(f, captionsOf(el).length ? unturnedRect(el).box : orientedBox(pictureOf(el), f.scale, deg));
+}
+
+// the upper left corner of an element on the slide in slide pixels, which the X and Y fields show
 export function positionOf(app: App, el: Element): { x: number; y: number } {
-  const b = snapBoxOf(app, el);
+  const b = unturnedBoxOf(app, el);
   return { x: Math.round(b.left), y: Math.round(b.top) };
 }
 
@@ -272,12 +283,13 @@ export function commands(): Command[] {
     run: (app, arg) => {
       const a = (arg ?? {}) as { x?: number; y?: number };
       const els = targetsOf(app, arg);
-      // a group is moved as one element, by the offset of the corner of its frame
-      const group = groupBoxOf(app, els);
+      // a group is moved as one element, by the offset of the corner of its frame without its
+      // rotation, as the fields give it
+      const group = groupFrameOf(app, els)?.box;
       const changes = els.map((el) => {
         const from = placeOf(el);
         const now = offsetOf(el);
-        const at = group ?? snapBoxOf(app, el);
+        const at = group ?? unturnedBoxOf(app, el);
         const to = (v: number | undefined, off: number, edge: number) => (v === undefined ? off : Math.round(off + v - edge));
         writePlace(app, el, { ...from, translate: { x: to(a.x, now.x, at.left), y: to(a.y, now.y, at.top) } });
         return { el, from, to: placeOf(el) };

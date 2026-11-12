@@ -37,9 +37,9 @@ export function arrangePane(app: App, run: Run): Control[] {
   const turned = selectedTargets(app);
   const live = () => els.filter((el) => el.isConnected);
   const liveTurned = () => turned.filter((el) => el.isConnected);
-  // W and H of a group are the size of its frame, turned by the angle of its first member, and X
-  // and Y the corner of the box upright around it, as in Keynote, where a group is one object. a
-  // typed W or H scales it as its corner grips do, and a typed X or Y moves it as one
+  // W, H, X, and Y of a group are those of its frame without its rotation by the angle of its first
+  // member, as in Keynote, where a group is one object. a typed W or H scales it as its corner grips
+  // do, and a typed X or Y moves it as one
   const group = () => groupBoxOf(app, live());
   const frame = () => groupFrameOf(app, live())?.box;
   const sized = () => !group() && resizable(live());
@@ -88,8 +88,8 @@ export function arrangePane(app: App, run: Run): Control[] {
     ]),
     section('Position', [
       row([
-        field('X', () => (group() ? Math.round(group()!.left) : shared(live().map((el) => positionOf(app, el).x))), (x) => run('arrange.setPosition', { x, els: live() }), () => live().length > 0),
-        field('Y', () => (group() ? Math.round(group()!.top) : shared(live().map((el) => positionOf(app, el).y))), (y) => run('arrange.setPosition', { y, els: live() }), () => live().length > 0),
+        field('X', () => (group() ? Math.round(frame()!.left) : shared(live().map((el) => positionOf(app, el).x))), (x) => run('arrange.setPosition', { x, els: live() }), () => live().length > 0),
+        field('Y', () => (group() ? Math.round(frame()!.top) : shared(live().map((el) => positionOf(app, el).y))), (y) => run('arrange.setPosition', { y, els: live() }), () => live().length > 0),
       ]),
       note(() => (group() ? 'The upper left corner of the group on the slide.' : 'The upper left corner of the element on the slide.')),
       row([button(app, run, { command: 'arrange.resetPosition', icon: 'reset', text: 'Reset Position' })]),

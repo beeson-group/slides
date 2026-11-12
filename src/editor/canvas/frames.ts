@@ -13,9 +13,11 @@ import { injectStyle } from '../ui/dom.ts';
 import { groupOf } from '../commands/order.ts';
 import { apartOf, turnersOf } from './drag.ts';
 import type { Box, Guide, Handle, Spacing } from './snap.ts';
-import { BY_ITSELF, CONTAINER, RESIZABLE, captionsOf, frameOf, frameRect, isTextSized, movableOf, orientedBox, pictureOf, scaleAt, sizedOf, toScreen, turnable as turns } from './hit.ts';
+import { BY_ITSELF, CONTAINER, RESIZABLE, captionsOf, figureFrame, frameOf, frameRect, isTextSized, movableOf, orientedBox, pictureOf, scaleAt, sizedOf, toScreen, turnable as turns } from './hit.ts';
 
 export const HANDLES: Handle[] = ['nw', 'n', 'ne', 'e', 'se', 's', 'sw', 'w'];
+// the resize cursors from the direction of the grip e on, by eighths of a turn clockwise
+const CURSORS = ['ew-resize', 'nwse-resize', 'ns-resize', 'nesw-resize'];
 
 // what the drag and the keys show, besides the selection: the element under the pointer, the
 // elements being moved, the guides and gaps of a snap, the readout, the marquee in screen pixels,
@@ -106,13 +108,16 @@ const INSET = 8;
 
 // the box of el on the screen without its rotation, about the center of the box seen, and the
 // angle that it is turned by. a figure that holds a picture is framed at the picture, where its
-// grips resize it, and over its caption, which is not turned with the picture, hence a turned
-// figure with a caption is framed upright around both
+// grips resize it, and over its caption, which is turned with the figure as one object. a picture
+// turned by itself in a figure with a caption is framed upright around both
 function orientOf(el: Element, scale: number): { box: Box; deg: number } {
+  if (captionsOf(el).length) {
+    const whole = figureFrame(el);
+    return { box: grow(whole.deg ? whole.box : frameRect(el), INSET), deg: whole.deg };
+  }
   const pic = pictureOf(el);
-  const deg = angleOf(el) + (pic === el ? 0 : angleOf(pic));
-  const caps = captionsOf(el).length;
-  return deg && !caps ? { box: orientedBox(pic, scale, deg), deg } : { box: caps ? grow(frameRect(el), INSET) : frameRect(el), deg: 0 };
+  const deg = angleOf(el) + (pic === el ? 0 : angleOf(pic)) + (el.matches(RESIZABLE) && el.parentElement?.closest(CONTAINER) ? angleOf(el.parentElement.closest(CONTAINER) as Element) : 0);
+  return deg ? { box: orientedBox(pic, scale, deg), deg } : { box: frameRect(el), deg: 0 };
 }
 
 // the point x, y turned by deg about the center of box
@@ -125,19 +130,21 @@ export function turned(box: Box, deg: number, x: number, y: number): { x: number
 
 // the frame of a group on the screen turned by deg, the angle of its first member, as Keynote
 // turns the frame of a group, without its rotation about its center. each member is taken in the
-// axes of the frame at its angle to the group, about its center turned back, and its upright
-// caption is carried with it, hence a turn changes the angle of the frame and not its size, as a
-// turn of one element does (K79, P71)
+// axes of the frame at its angle to the group, about its center turned back, with the upright
+// caption of a picture turned by itself carried with it, hence a turn changes the angle of the
+// frame and not its size, as a turn of one element does (K79, P71)
 export function groupFrame(els: Element[], deg: number): Box {
   if (!deg) return groupReach(els);
   const a = (deg * Math.PI) / 180, cos = Math.cos(a), sin = Math.sin(a);
   const back = (x: number, y: number) => ({ x: x * cos + y * sin, y: y * cos - x * sin });
   const points = els.flatMap((el) => {
     const pic = pictureOf(el), d = angleOf(el) + (pic === el ? 0 : angleOf(pic));
-    const b = orientedBox(pic, scaleAt(el), d);
+    const whole = captionsOf(el).length ? figureFrame(el) : null;
+    const b = whole?.deg ? whole.box : orientedBox(pic, scaleAt(el), d);
     const at = back(b.left + b.width / 2, b.top + b.height / 2);
-    // the box of the picture at its angle to the group, and each caption at its place to the picture
-    const boxes = [{ x: at.x, y: at.y, w: b.width, h: b.height, d: d - deg }, ...captionsOf(el).map((r) => ({ x: at.x + r.left + r.width / 2 - (b.left + b.width / 2), y: at.y + r.top + r.height / 2 - (b.top + b.height / 2), w: r.width, h: r.height, d: 0 }))];
+    // the box of the picture at its angle to the group, and each caption at its place to the
+    // picture, or the frame of a figure turned as one object at its angle to the group
+    const boxes = whole?.deg ? [{ x: at.x, y: at.y, w: b.width, h: b.height, d: whole.deg - deg }] : [{ x: at.x, y: at.y, w: b.width, h: b.height, d: d - deg }, ...captionsOf(el).map((r) => ({ x: at.x + r.left + r.width / 2 - (b.left + b.width / 2), y: at.y + r.top + r.height / 2 - (b.top + b.height / 2), w: r.width, h: r.height, d: 0 }))];
     return boxes.flatMap(({ x, y, w, h, d }) => {
       const c = { left: x - w / 2, top: y - h / 2, width: w, height: h };
       return [[0, 0], [1, 0], [1, 1], [0, 1]].map(([u, v]) => turned(c, d, c.left + u * w, c.top + v * h));
@@ -181,8 +188,9 @@ export class Frames {
   readonly rotor: HTMLDivElement;
   private readonly stem: HTMLDivElement;
   private readonly frames: HTMLDivElement[] = [];
-  // the one frame of a selected group
+  // the one frame of a selected group, and the frame of each group of a selection with other objects
   private readonly union: HTMLDivElement;
+  private readonly unions: HTMLDivElement[] = [];
   // the distance of the rotate handle above the frame, kept while it is dragged
   private rotorAt = ROTOR;
   // the box of a selected group on the screen, as last drawn, which its one set of grips resizes,
@@ -308,11 +316,41 @@ export class Frames {
       this.union.style.rotate = this.groupDeg ? `${this.groupDeg}deg` : '';
       for (const f of this.frames) f.hidden = true;
     } else this.union.hidden = true;
+    // a group selected with other objects is drawn as one frame too, without grips, in place of
+    // the frames of its members
+    const drawn = new Map<Element, { box: Box; deg: number }>();
+    if (!this.group && boxes.length > 1) {
+      const ids = new Map<string, Element[]>();
+      for (const el of selected) {
+        const g = groupOf(el);
+        if (g) ids.set(g, [...(ids.get(g) ?? []), el]);
+      }
+      for (const els of ids.values()) {
+        if (els.length < 2) continue;
+        const deg = turnersOf(app, els)?.[0].angle ?? 0;
+        const reach = groupFrame(els, deg);
+        const o = { box: els.some((el) => captionsOf(el).length) ? grow(reach, INSET) : reach, deg };
+        for (const el of els) drawn.set(el, o);
+      }
+    }
+    const shown = [...new Set(drawn.values())];
+    while (this.unions.length < shown.length) this.unions.push(div('beeson-frame union group', this.layer));
+    this.unions.forEach((u, n) => {
+      if (!shown[n]) {
+        u.hidden = true;
+        return;
+      }
+      place(u, shown[n].box);
+      u.style.rotate = shown[n].deg ? `${shown[n].deg}deg` : '';
+    });
+    selected.forEach((el, i) => {
+      if (drawn.has(el)) this.frames[i].hidden = true;
+    });
     const held = view.moving ? view.held : null;
-    if (held) for (const f of [...this.frames, this.union]) f.hidden = true;
+    if (held) for (const f of [...this.frames, this.union, ...this.unions]) f.hidden = true;
 
     const only = app.selection.only();
-    const gripped = turn || (view.moving && !view.resizing) ? [] : this.group ? [{ el: selected[0], i: -1, grips: selected.some((el) => el.hasAttribute('data-locked')) ? 'locked' as const : 'live' as const }] : selected.map((el, i) => ({ el, i, grips: this.gripsOf(el) })).filter((m) => m.grips);
+    const gripped = turn || (view.moving && !view.resizing) ? [] : this.group ? [{ el: selected[0], i: -1, grips: selected.some((el) => el.hasAttribute('data-locked')) ? 'locked' as const : 'live' as const }] : selected.map((el, i) => ({ el, i, grips: drawn.has(el) ? null : this.gripsOf(el) })).filter((m) => m.grips);
     while (this.gripSets.length < gripped.length) this.gripSet();
     this.members = this.gripSets.map((_, n) => gripped[n]?.el ?? null);
     this.gripSets.forEach((set, n) => {
@@ -328,10 +366,14 @@ export class Frames {
           continue;
         }
         const b = m.i < 0 ? (this.group as Box) : boxes[m.i];
-        const at = turned(b, m.i < 0 ? this.groupDeg : orients[m.i].deg, h.includes('w') ? b.left : h.includes('e') ? b.left + b.width : b.left + b.width / 2, h.includes('n') ? b.top : h.includes('s') ? b.top + b.height : b.top + b.height / 2);
+        const deg = m.i < 0 ? this.groupDeg : orients[m.i].deg;
+        const at = turned(b, deg, h.includes('w') ? b.left : h.includes('e') ? b.left + b.width : b.left + b.width / 2, h.includes('n') ? b.top : h.includes('s') ? b.top + b.height : b.top + b.height / 2);
         g.hidden = !!held && g !== held;
         g.classList.toggle('locked', m.grips === 'locked');
-        Object.assign(g.style, { left: `${at.x}px`, top: `${at.y}px` });
+        // the cursor of a grip on a turned frame points along its turned direction, to the nearest
+        // eighth of a turn, while it is not held
+        const cursor = deg ? CURSORS[Math.round((((HANDLES.indexOf(h) * 45 + 225 + deg) % 360) + 360) % 360 / 45) % 4] : '';
+        Object.assign(g.style, { left: `${at.x}px`, top: `${at.y}px`, ...(held ? {} : { cursor }) });
       }
     });
     // the rotate handle, also while it is dragged, on one element that is turned, i.e. not locked
@@ -344,7 +386,8 @@ export class Frames {
     this.rotor.hidden = !turnable || (!!held && held !== this.rotor);
     this.stem.hidden = !turnable || !!held;
     if (turnable) {
-      const b = turnGroup ? (this.group as Box) : boxes[0], deg = turnGroup ? this.groupDeg : orients[0].deg;
+      const first = drawn.get(selected[0]) ?? orients[0];
+      const b = turnGroup ? (this.group as Box) : first.box, deg = turnGroup ? this.groupDeg : first.deg;
       const cx = b.left + b.width / 2;
       // above the middle of the top edge of the frame, as in PowerPoint, on a stem cut short where
       // the full stem would put the handle over the text of another block. the handle is drawn over
