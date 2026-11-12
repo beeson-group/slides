@@ -13,8 +13,9 @@ import { serve } from '../scripts/webdriver.mjs';
 
 const deckText = readFileSync('index.html', 'utf8');
 const ready = 'window.BeesonEditor && window.BeesonEditor.ready.then(() => true)';
-// the page after a reload of its own, which a test marks before with window.__before
-const reloaded = '!window.__before && !!window.BeesonEditor && window.BeesonEditor.status().blocks > 0';
+// the page after a reload of its own, which a test marks before with window.__before. the editor is
+// ready once the message and the marks of the reload are shown, after its file is read again
+const reloaded = '!window.__before && !!window.BeesonEditor && window.BeesonEditor.ready.then(() => window.BeesonEditor.status().blocks > 0)';
 
 function replaced(oldText, newText) {
   assert.equal(deckText.split(oldText).length, 2, `${oldText} is not unique in index.html`);
