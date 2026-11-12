@@ -15,7 +15,7 @@ import { mathLookup } from '../math.ts';
 import { fileIndexes } from '../layers.ts';
 import { tokenize } from '../tokens.ts';
 import { isRuntimeClass } from '../render.ts';
-import { renderTag, type TagEdit } from '../tags.ts';
+import { renderTag, stateOf, translateIn, type TagEdit } from '../tags.ts';
 import { textStyle } from '../model/templates.ts';
 import { injectStyle } from '../ui/dom.ts';
 import * as flow from './flow.ts';
@@ -225,6 +225,42 @@ function startTag(app: App, el: Element, tag = el.localName, edit: TagEdit = {})
   return open.replace(/^<[\w-]+/, `<${tag}`);
 }
 
+// the declarations of the place of a box on its slide. a list is moved as a whole, hence a list
+// takes them from the paragraph it is made of, and its items are written without them
+const PLACE = ['width', 'translate'];
+
+// the declarations of PLACE in the start tag of el as the file has it with its edits, in its order
+function placeOf(app: App, el: Element): [string, string][] {
+  const start = tokenize(app.doc.elementText(el)).find((t) => t.type === 'start');
+  return start?.type === 'start' ? Object.entries(stateOf(start.attrs).style).filter(([n]) => PLACE.includes(n)) : [];
+}
+
+// the start tag of a list of kind made of the block el, with the place of el, and the start tag of
+// its item
+function placedList(app: App, el: Element, kind: ListKind): { open: string; li: string } {
+  const style = placeOf(app, el).map(([n, v]) => `${n}: ${v}`).join('; ').replace(/"/g, '&quot;');
+  return { open: style ? openList(kind).replace(/>$/, ` style="${style}">`) : openList(kind), li: startTag(app, el, 'li', { classes: { small: false }, style: { width: null, translate: null } }) };
+}
+
+// the start tag of a paragraph made of the item li of list, which takes the place of list where li
+// does not have its own, so that it is drawn where the list was
+function placedParagraph(app: App, li: Element, list: Element): string {
+  const own = placeOf(app, li).map(([n]) => n);
+  return startTag(app, li, 'p', { style: Object.fromEntries(placeOf(app, list).filter(([n]) => !own.includes(n))) });
+}
+
+// the translate of the items of list moved to list where each item of its first level has the same
+// one in the file, so that an item made without it is drawn under them. false where they differ
+function hoist(app: App, list: Element): boolean {
+  const moves = liOf(list).map((li) => translateIn(`translate: ${placeOf(app, li).find(([n]) => n === 'translate')?.[1] ?? ''}`));
+  const t = moves[0];
+  if (!t || moves.some((m) => m?.x !== t.x || m.y !== t.y)) return false;
+  const own = translateIn(`translate: ${placeOf(app, list).find(([n]) => n === 'translate')?.[1] ?? ''}`) ?? { x: 0, y: 0 };
+  app.doc.setTag(list, { translate: { x: own.x + t.x, y: own.y + t.y } }, 'new paragraph');
+  for (const li of liOf(list)) app.doc.setTag(li, { style: { translate: null } }, 'new paragraph');
+  return true;
+}
+
 // the element after el that is in the file, before which an element after el is inserted
 function nextOf(app: App, el: Element): Element | null {
   let n = el.nextElementSibling;
@@ -245,10 +281,11 @@ function nextBlock(app: App, el: Element): Element | null {
 }
 
 // the block before or after el in one text with it, as text/flow.ts reads it: an item of the same
-// list, or a paragraph of the same column. a block with a translate of its own is a box apart
+// list, or a paragraph of the same column. a block with a translate other than that of the block
+// beside it is a box apart, and the paragraphs made of the items of a moved list are one text
 export function besideBlock(app: App, el: Element, ahead: boolean): Element | null {
   const n = structural(app, el) ? (ahead ? nextBlock : prevBlock)(app, el) : null;
-  return n && !(n as HTMLElement).style.translate && !(el as HTMLElement).style.translate ? n : null;
+  return n && (n as HTMLElement).style.translate === (el as HTMLElement).style.translate ? n : null;
 }
 
 type Indent = { base: string; step: string; eol: string };
@@ -420,9 +457,12 @@ export async function split(app: App): Promise<void> {
     const list = item.parentElement!;
     const items = [...list.children].filter((c) => c.localName === 'li');
     const followers = items.slice(items.indexOf(item) + 1);
-    // a paragraph after items of a moved list is moved with them, so that it is not drawn over them
+    // a paragraph after items of a moved list is moved with them, so that it is not drawn over them,
+    // and it takes the width of the list with the translate
     const move = list.querySelector(':scope > li') !== item && (list as HTMLElement).style.translate;
-    const texts = [move ? `<p style="translate: ${move}"></p>` : '<p></p>'];
+    const place = move ? placeOf(app, list) : [];
+    if (move && !place.some(([n]) => n === 'translate')) place.push(['translate', move]);
+    const texts = [move ? `<p style="${place.map(([n, v]) => `${n}: ${v}`).join('; ').replace(/"/g, '&quot;')}"></p>` : '<p></p>'];
     // an undo puts the caret into the empty item, and a redo into the paragraph
     let to = item;
     const kept = app.history.keep(() => caretAt(app, to));
@@ -474,7 +514,10 @@ export async function split(app: App): Promise<void> {
     return kept();
   }
   const tag = item.localName === 'h3' ? 'p' : item.localName;
-  const open = item.localName === 'h3' ? '<p>' : startTag(app, item, tag, { attrs: { id: null } });
+  // a new item is written without a translate, which the list takes from items that have one. an
+  // item whose translate differs from that of another item gives it to the new item
+  const moved = item.localName === 'li' && placeOf(app, item).some(([n]) => n === 'translate') && !hoist(app, item.parentElement!);
+  const open = item.localName === 'h3' ? '<p>' : startTag(app, item, tag, { attrs: { id: null }, ...(item.localName === 'li' && !moved ? { style: { translate: null } } : {}) });
   // an undo puts the caret back into the item, and a redo at the start of the second part
   const off = offsetIn(item, ...caret);
   let second: Element | null = null;
@@ -566,7 +609,7 @@ async function unlist(app: App, li: Element): Promise<void> {
     const el = at;
     return () => selectIn(el, 0);
   });
-  const [p] = await app.doc.insert(`${startTag(app, li, 'p')}${ownTex(li)}</p>`, list.parentElement!, list, 'list');
+  const [p] = await app.doc.insert(`${placedParagraph(app, li, list)}${ownTex(li)}</p>`, list.parentElement!, list, 'list');
   const subs = [...texCopy(li).querySelectorAll(':scope > :is(ul, ol) > li')].map((s) => s.outerHTML);
   if (subs.length) await app.doc.insert(subs, list, li, 'list');
   await app.doc.remove(list.querySelectorAll(':scope > li').length > 1 ? li : list, 'list');
@@ -844,9 +887,9 @@ export async function setList(app: App, kind: ListKind): Promise<void> {
   const content = rangeTex(item, rangeOf(item, null, null));
   const { base, step, eol } = indentOf(app, now === 'none' ? item : parent);
   if (now === 'none') {
-    // the attributes of the paragraph go to its item, apart from its paragraph style
-    const li = startTag(app, item, 'li', { classes: { small: false } });
-    const [list] = await app.doc.insert(`${openList(kind)}${eol}${base}${step}${li}${content}</li>${eol}${base}</${tagOf(kind)}>`, parent, item, 'list');
+    // the attributes of the paragraph go to its item, apart from its paragraph style and its place
+    const { open, li } = placedList(app, item, kind);
+    const [list] = await app.doc.insert(`${open}${eol}${base}${step}${li}${content}</li>${eol}${base}</${tagOf(kind)}>`, parent, item, 'list');
     await app.doc.remove(item, 'list');
     const first = list.querySelector('li');
     if (first) selectIn(first, offset, stop);
@@ -861,7 +904,7 @@ export async function setList(app: App, kind: ListKind): Promise<void> {
   }
   const items = [...parent.children];
   const followers = items.slice(items.indexOf(item) + 1).filter((c) => c.localName === 'li');
-  const texts = [`${startTag(app, item, 'p')}${content.trim()}</p>`];
+  const texts = [`${placedParagraph(app, item, parent)}${content.trim()}</p>`];
   if (followers.length) {
     const rest = followers.map((f) => `${eol}${base}${step}${app.doc.elementText(f)}`).join('');
     const k = items.filter((c) => c.localName === 'li').indexOf(item);
@@ -895,7 +938,7 @@ async function setSpanList(app: App, kind: ListKind): Promise<boolean> {
   } else {
     const { base, step, eol } = indentOf(app, list);
     const followers = items.slice(items.indexOf(run[run.length - 1]) + 1);
-    const texts = run.map((li) => `${startTag(app, li, 'p')}${rangeTex(li, rangeOf(li, null, null)).trim()}</p>`);
+    const texts = run.map((li) => `${placedParagraph(app, li, list)}${rangeTex(li, rangeOf(li, null, null)).trim()}</p>`);
     if (followers.length) {
       const rest = followers.map((f) => `${eol}${base}${step}${app.doc.elementText(f)}`).join('');
       texts.push(`${startTag(app, list, list.localName, { attrs: { id: null, ...goOn(list, items.indexOf(run[0])) } })}${rest}${eol}${base}</${list.localName}>`);
@@ -914,8 +957,8 @@ async function setSpanList(app: App, kind: ListKind): Promise<boolean> {
 async function spanParagraphs(app: App, run: Element[], p: [flow.Place, flow.Place], kind: ListKind): Promise<boolean> {
   if (kind === 'none') return true;
   const { base, step, eol } = indentOf(app, run[0]);
-  const items = run.map((el) => `${eol}${base}${step}${startTag(app, el, 'li', { classes: { small: false } })}${rangeTex(el, rangeOf(el, null, null))}</li>`).join('');
-  const [list] = await app.doc.insert(`${openList(kind)}${items}${eol}${base}</${tagOf(kind)}>`, run[0].parentElement!, run[0], 'list');
+  const items = run.map((el) => `${eol}${base}${step}${placedList(app, el, kind).li}${rangeTex(el, rangeOf(el, null, null))}</li>`).join('');
+  const [list] = await app.doc.insert(`${placedList(app, run[0], kind).open}${items}${eol}${base}</${tagOf(kind)}>`, run[0].parentElement!, run[0], 'list');
   for (const el of run) await app.doc.remove(el, 'list');
   const made = [...list.children].filter((c) => c.localName === 'li');
   const [a, f] = p.map(([el, at]) => [made[run.indexOf(el)], at] as const);
@@ -940,13 +983,13 @@ async function listBlocksAs(app: App, blocks: Element[], kind: ListKind): Promis
     if (now === kind) made.push(el);
     else if (now === 'none') {
       const { base, step, eol } = indentOf(app, el);
-      const li = startTag(app, el, 'li', { classes: { small: false } });
+      const { open, li } = placedList(app, el, kind);
       const content = rangeTex(el, rangeOf(el, null, null));
-      made.push(...(await app.doc.insert(`${openList(kind)}${eol}${base}${step}${li}${content}</li>${eol}${base}</${tagOf(kind)}>`, el.parentElement!, el, 'list')));
+      made.push(...(await app.doc.insert(`${open}${eol}${base}${step}${li}${content}</li>${eol}${base}</${tagOf(kind)}>`, el.parentElement!, el, 'list')));
       await app.doc.remove(el, 'list');
     } else if (kind !== 'none') made.push(await relist(app, el, kind));
     else {
-      const texts = [...el.children].filter((c) => c.localName === 'li').map((li) => `${startTag(app, li, 'p')}${rangeTex(li, rangeOf(li, null, null)).trim()}</p>`);
+      const texts = [...el.children].filter((c) => c.localName === 'li').map((li) => `${placedParagraph(app, li, el)}${rangeTex(li, rangeOf(li, null, null)).trim()}</p>`);
       made.push(...(await app.doc.insert(texts, el.parentElement!, nextOf(app, el), 'list')));
       await app.doc.remove(el, 'list');
     }
