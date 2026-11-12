@@ -175,6 +175,12 @@ export function install(app: App): void {
   let format = false;
   let stepsBefore = false;
   let started = false;
+  // the pane of the inspector closed while the navigator is on in a narrow window, i.e. to show the
+  // navigator in its place. it is opened again once the window has room for both, or the navigator
+  // is off, as Keynote gives its inspector back
+  let shownTab: string | null = null;
+  let yielded: string | null = null;
+  const narrow = () => matchMedia(`(max-width: ${SOLO_BELOW - 0.02}px)`).matches;
   const setFormat = (on: boolean) => {
     format = on;
     html.classList.toggle('beeson-format', on);
@@ -198,6 +204,15 @@ export function install(app: App): void {
     stepsPanel.hidden = tab !== 'steps';
     if (started) store(INSPECTOR_KEY, tab ? '1' : '0');
     if (tab === 'format') fillFormat();
+    const was = shownTab;
+    shownTab = tab;
+    if (tab) yielded = null;
+    else if (was && app.nav.shown && narrow()) yielded = was === 'steps' ? 'view.steps' : 'shell.format';
+    else if (yielded && (!app.nav.shown || !narrow())) {
+      const id = yielded;
+      yielded = null;
+      void app.commands.run(id).catch(fail);
+    }
   }
   const fail = (e: unknown) => app.fail(e);
   formatTab.addEventListener('click', () => {

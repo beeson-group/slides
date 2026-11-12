@@ -329,16 +329,17 @@ export function install(app: App): void {
   injectStyle('slide', CSS);
   const c = app.commands;
   const inNav = () => app.region() === 'navigator';
-  // Move Slide Up and Down are dimmed while the slide has the focus, where Alt with an arrow does
-  // not move the slide, as it adds a row to a table there. a menu opened with the pointer leaves
-  // the focus where it was
-  const onSlide = (a: App) => a.region() === 'canvas' && !document.activeElement?.closest('.beeson-edit-menu');
+  // Move Slide Up and Down are dimmed while the slide or a text of it has the focus, where Alt with
+  // an arrow does not move the slide, as it adds a row to a table or moves the caret there. a menu
+  // opened with the pointer leaves the focus where it was
+  const onSlide = (a: App) => (a.region() === 'canvas' || a.region() === 'text') && !document.activeElement?.closest('.beeson-edit-menu');
   const slideMenu = (order: number, group = 'slide') => ({ bar: 'Slide', group, order });
   const defs: Command[] = [
     {
       id: 'slide.new',
       label: 'New Slide',
       keys: { mac: ['Ctrl+M'], other: ['Ctrl+M'] },
+      inText: true,
       menu: slideMenu(10),
       context: ['slide', 'navigator', 'canvas'],
       enabled: ready,
@@ -431,6 +432,7 @@ export function install(app: App): void {
       label: (a) => (targets(a).length && targets(a).every(isHidden) ? 'Show Slide' : 'Hide Slide'),
       keys: { mac: ['Mod+Shift+H'], other: ['Ctrl+Shift+H'] },
       in: ['navigator', 'canvas'],
+      inText: true,
       menu: slideMenu(40),
       context: ['slide', 'canvas'],
       enabled: (a) => targets(a).length > 0,

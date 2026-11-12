@@ -40,6 +40,7 @@ export function install(app: App): void {
     id: 'zoom.fit',
     label: 'Fit Slide',
     keys: { mac: ['Mod+Alt+0', 'Shift+1'], other: ['Shift+1'] },
+    inText: true,
     menu: menu('zoom', 20),
     checked: (a) => a.stage.zoom === null,
     run: (a) => a.stage.setZoom(null),
@@ -56,6 +57,7 @@ export function install(app: App): void {
     id: 'zoom.selection',
     label: 'Zoom to Selection',
     keys: { mac: ['Mod+Shift+0', 'Shift+2'], other: ['Shift+2'] },
+    inText: true,
     menu: menu('zoom', 22),
     enabled: (a) => !!selectionBox(a),
     run: (a) => {

@@ -18,6 +18,9 @@ export type Command = {
   keys?: { mac?: string[]; other?: string[] };
   // where the keys are taken, by default on the canvas and in the navigator
   in?: Region[];
+  // true takes the keys with Mod, Ctrl, Alt, or Meta also in a text, whose browser does not use
+  // them, e.g. Ctrl+M of New Slide. the text takes a bare key and Shift with a key
+  inText?: boolean;
   menu?: { bar: string; group: string; order: number; submenu?: string };
   // label is a short label of the toolbar that does not change, e.g. Undo for Undo Typing. split
   // draws a split button, whose list holds the commands of the group with the same split and the
@@ -53,6 +56,10 @@ export const DEFAULT_REGIONS: Region[] = ['canvas', 'navigator'];
 // every region but a dialog, e.g. for Undo, and every region, e.g. for Save
 export const OUTSIDE_DIALOGS: Region[] = ['canvas', 'text', 'field', 'navigator', 'notes', 'inspector'];
 export const EVERYWHERE: Region[] = [...OUTSIDE_DIALOGS, 'dialog'];
+
+// the keys that are kept from the browser wherever the editor has the focus, also where their
+// command is dimmed, since the browser would open a dialog of its own, e.g. its bookmark for Mod+D
+const HELD = ['Mod+D'];
 
 // the keys that the menus list for a command whose keys reach it as clipboard events, since the
 // browser takes them in a text
@@ -175,12 +182,21 @@ export class Commands {
   // taken
   forKey(ev: KeyEvent, region: Region, plain = true): Command | undefined {
     const platform = this.app.platform;
-    const find = (e: KeyEvent) => this.list().find((c) =>
-      (c.in ?? DEFAULT_REGIONS).includes(region) &&
-      boundKeys(c, platform).some((k) => (plain || !isPlain(k)) && matches(e, k, platform)) &&
-      this.enabled(c.id));
+    // a text takes a key that types a character, e.g. Shift+0 of Actual Size, which types )
+    const types = (k: string) => region === 'text' && isPlain(k) && k.split('+').at(-1)!.length === 1;
+    const find = (e: KeyEvent) => this.list().find((c) => {
+      const typed = region === 'text' && !!c.inText && !(c.in ?? DEFAULT_REGIONS).includes(region);
+      return (typed || (c.in ?? DEFAULT_REGIONS).includes(region)) &&
+        boundKeys(c, platform).some((k) => (plain || !isPlain(k)) && !(typed && isPlain(k)) && !types(k) && matches(e, k, platform)) &&
+        this.enabled(c.id);
+    });
     const alt = fallback(ev, platform);
     return find(ev) ?? (alt ? find(alt) : undefined);
+  }
+
+  // whether ev is a key that does not reach the browser, also where its command is dimmed
+  held(ev: KeyEvent): boolean {
+    return HELD.some((k) => matches(ev, k, this.app.platform));
   }
 
   // the commands of a menu of the menu bar, or of one of its submenus, in groups
@@ -213,6 +229,7 @@ export function installKeys(app: App): void {
     const active = document.activeElement;
     const onBar = region === 'canvas' && active instanceof Element && active !== document.body && active !== document.documentElement && !active.closest('.reveal, .beeson-handle');
     const command = app.commands.forKey(ev, region, !onBar);
+    if (!command && app.commands.held(ev)) ev.preventDefault();
     if (!command) return;
     ev.preventDefault();
     ev.stopPropagation();

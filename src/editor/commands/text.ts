@@ -110,6 +110,8 @@ export function install(app: App): void {
   });
   define({ id: 'text.joinForward', label: 'Join Paragraphs', keys: { mac: ['Delete'], other: ['Delete'] }, in: TEXT, undoable: true, enabled: blocks.canJoinAhead, run: blocks.joinForward });
 
+  // a display of math is not formatted, since its TeX is the text of its block
+  const onMath = (a: App) => !!a.hostOf(document.activeElement)?.matches('div.math') || a.selection.elements().some((el) => el.matches('div.math'));
   const format = (name: inline.FormatName, label: string, order: number, keys: Command['keys'], submenu?: string, regions = FORMAT) =>
     define({
       id: `text.${name}`,
@@ -118,7 +120,7 @@ export function install(app: App): void {
       in: regions,
       menu: menu(submenu ? 'script' : 'font', order, submenu),
       undoable: true,
-      enabled: (a) => inline.inlineTargets(a, name === 'bold' || name === 'italic').length > 0 || carry.canFormat(a, name === 'bold' || name === 'italic'),
+      enabled: (a) => !onMath(a) && (inline.inlineTargets(a, name === 'bold' || name === 'italic').length > 0 || carry.canFormat(a, name === 'bold' || name === 'italic')),
       checked: (a) => (carry.canFormat(a, true) ? carry.formatOn(a, name) : inline.isOn(a, name)),
       run: (a) => (carry.canFormat(a, true) ? carry.toggleFormat(a, name) : inline.toggle(a, name)),
       ...(name === 'bold' || name === 'italic' ? { context: ['text' as const] } : {}),
