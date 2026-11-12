@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor preview deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the slides of the tests of Preview: a backdrop and steps, a backdrop alone, steps alone, neither, and a backdrop that is a step -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>A backdrop and two steps</h2>
+  <p class="fragment" data-fragment-index="1">The first step.</p>
+  <p class="fragment" data-fragment-index="2">The second step.</p>
+  <div class="backdrop" data-scene="nest" data-cx="0.97" data-cy="0" data-half="0.5" data-duration="1"></div>
+</section>
+
+<section>
+  <h2>A backdrop alone</h2>
+  <p>A paragraph beside the drawing.</p>
+  <div class="backdrop" data-scene="nest" data-cx="0.97" data-cy="0" data-half="0.5" data-duration="1"></div>
+</section>
+
+<section>
+  <h2>Steps alone</h2>
+  <p class="fragment" data-fragment-index="1">Shown at the first step.</p>
+  <p class="fragment fade-out" data-fragment-index="2">Hidden at the second step.</p>
+  <p class="fragment" data-fragment-index="3" data-highlight="key">The third step colors the <span class="key">key</span>.</p>
+</section>
+
+<section>
+  <h2>Neither</h2>
+  <p>A paragraph alone.</p>
+</section>
+
+<section>
+  <h2>A backdrop that is a step</h2>
+  <p>A paragraph from the start.</p>
+  <div class="backdrop fragment" data-fragment-index="1" data-scene="nest" data-cx="0.97" data-cy="0" data-half="0.5" data-duration="2"></div>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

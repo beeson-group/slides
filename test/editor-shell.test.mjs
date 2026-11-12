@@ -243,10 +243,10 @@ test('the labels of the toolbar are kept while they fit, and the late groups go 
     assert.equal(bar.label, labels, `${width}: labels`);
     assert.equal(bar.more, !!more, `${width}: the menu More`);
     // Format and Steps stay after More, since Format opens and closes the inspector, beside which
-    // the navigator is hidden in a narrow window. At 900 px Present and Save are folded, and at 840
-    // px the group of the inserts is folded too
+    // the navigator is hidden in a narrow window. At 900 px Preview, Present, and Save are folded,
+    // and at 840 px the group of the inserts is folded too
     const inserts = ['Table', 'Text', 'Formula', 'Shape', 'Media'];
-    assert.deepEqual(bar.texts.map((x) => x.replace(/^\d+%/, '%')), more ? ['View', '%Zoom', 'Undo', 'Redo', 'Add Slide', ...(more === 'file' ? inserts : []), 'Format', 'Steps'] : ['View', '%Zoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', 'Media', 'Present', 'Save', 'Format', 'Steps']);
+    assert.deepEqual(bar.texts.map((x) => x.replace(/^\d+%/, '%')), more ? ['View', '%Zoom', 'Undo', 'Redo', 'Add Slide', ...(more === 'file' ? inserts : []), 'Format', 'Steps'] : ['View', '%Zoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', 'Media', 'Preview', 'Present', 'Save', 'Format', 'Steps']);
     const cell = await boxOf(page, '.beeson-edit-canvas');
     assert.ok(cell.w > 0 && cell.h > 0);
     assert.deepEqual(page.errors, []);
