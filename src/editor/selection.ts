@@ -133,10 +133,18 @@ export function install(app: App): void {
     only: () => (kind === 'elements' && items.length === 1 ? items[0] : null),
     changed: () => {
       const caret = app.hostOf(document.activeElement);
+      const was = caret && movableOf(app, caret);
       return (el) => {
         const block = el.isConnected && app.current()?.contains(el) && !el.closest('aside.notes') ? movableOf(app, el) : null;
-        if (!block || (caret && (caret === el || el.contains(caret)))) return;
         const host = app.hostOf(document.activeElement);
+        // a caret in the block of el is kept, since a list is one text as in Keynote, and so is the
+        // caret put into this block by the step where it takes off the text of the caret, e.g. the
+        // undo of Return
+        const kept = caret && (caret === el || el.contains(caret) || was === block || (!caret.isConnected && host && movableOf(app, host) === block));
+        // el selected, inside a selected element, or around one keeps the selection, and with it the
+        // focus in the inspector
+        const held = kind === 'elements' && items.some((i) => i === el || i.contains(el) || el.contains(i));
+        if (!block || kept || held) return;
         if (host) {
           (host as HTMLElement).blur();
           getSelection()?.removeAllRanges();

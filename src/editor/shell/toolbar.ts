@@ -203,8 +203,9 @@ export function install(app: App): void {
     const face = c.id === 'toolbar.zoom' ? make('span', 'readout', zoomText()) : glyph(faceOf(c));
     b.append(face, make('span', 'label', label));
     if (!POPUPS.has(c.id)) {
-      // Undo and Redo leave the focus in a text or a line of the outline, as the Edit menu does
-      if (c.toolbar?.group === 'history') b.addEventListener('mousedown', (ev) => ev.preventDefault());
+      // Undo and Redo leave the focus in a text or a line of the outline, as the Edit menu does. a
+      // field of the inspector is left, hence a value typed into it is entered before the undo
+      if (c.toolbar?.group === 'history') b.addEventListener('mousedown', (ev) => void ((document.activeElement as HTMLElement | null)?.isContentEditable && ev.preventDefault()));
       wire(b, () => app.commands.run(c.id), fail);
       return b;
     }

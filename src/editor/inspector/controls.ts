@@ -350,6 +350,8 @@ type NumberOptions = {
   // a typed value outside min and max is refused, and the field shows the value before, in place
   // of the nearest bound
   refuse?: boolean;
+  // Return enters the shown value as well, e.g. to keep the start of a list
+  same?: boolean;
 };
 
 export function numberField(app: App, o: NumberOptions): Control & { input: HTMLInputElement } {
@@ -417,7 +419,8 @@ export function numberField(app: App, o: NumberOptions): Control & { input: HTML
       }).catch((e) => app.fail(e));
     } else if (ev.key === 'Enter') {
       ev.preventDefault();
-      flush();
+      if (o.same && !input.disabled && round(typed()) === shown) commit(typed());
+      else flush();
       input.select();
     } else if (ev.key === 'Escape') {
       ev.preventDefault();

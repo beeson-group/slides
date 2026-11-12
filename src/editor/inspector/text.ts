@@ -255,6 +255,7 @@ export function textPane(app: App, run: Run): Control[] {
         unit: '',
         min: 1,
         refuse: true,
+        same: true,
         value: () => startList(app)?.start ?? null,
         enabled: () => app.commands.enabled('text.list.start'),
         why: () => 'Start at is set only on a numbered list',

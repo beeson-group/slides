@@ -264,22 +264,24 @@ function goOn(list: Element, k: number): Record<string, string | null> {
   return { start: n === 1 ? null : String(n) };
 }
 
-// each numbered list cut off by the editor, with the list before it, whose count its start goes on
-// with at every change, until a start is typed into Start at
-const cutOff = new WeakMap<Element, HTMLOListElement>();
+// each numbered list cut off by the editor, whose start goes on at every change with the count of
+// the list before it as the page has it, until a start is entered into Start at
+const cutOff = new WeakSet<Element>();
 
 function keepCounts(app: App): void {
   for (const ol of app.slides().querySelectorAll('ol')) {
-    const first = cutOff.get(ol);
-    if (!first?.isConnected || !(ol instanceof HTMLOListElement)) continue;
-    const n = first.start + first.querySelectorAll(':scope > li').length;
+    if (!cutOff.has(ol) || !(ol instanceof HTMLOListElement)) continue;
+    let first = ol.previousElementSibling;
+    while (first && !first.matches('ol, ul')) first = first.previousElementSibling;
+    // 1 after a dash list or without a list before
+    const n = first instanceof HTMLOListElement ? first.start + first.querySelectorAll(':scope > li').length : 1;
     if (n !== ol.start) app.doc.setTag(ol, { attrs: { start: n === 1 ? null : String(n) } }, 'start at');
   }
 }
 
 // second, the list made of the items after a cut of list, goes on with its count
 function goesOn(list: Element, second: Element | undefined): void {
-  if (list instanceof HTMLOListElement && second) cutOff.set(second, list);
+  if (list instanceof HTMLOListElement && second) cutOff.add(second);
 }
 
 // a list of the file at the level of the blocks, e.g. the ul of a slide or of its div.col
@@ -332,15 +334,13 @@ export function startList(app: App): HTMLOListElement | null {
 }
 
 // Start At of the Text pane: the number of the first item of the numbered list, written as start,
-// which a 1 takes off
+// which a 1 takes off. the shown number entered keeps the start of a cut-off list
 export function setStart(app: App, n: number): void {
   const list = startList(app);
-  if (!list || !Number.isInteger(n) || n < 1 || n === list.start) return;
-  app.doc.setTag(list, { attrs: { start: n === 1 ? null : String(n) } }, 'start at');
-  const first = cutOff.get(list);
-  if (!first) return;
-  cutOff.delete(list);
-  app.history.push({ label: 'start at', undo: () => void cutOff.set(list, first), redo: () => void cutOff.delete(list) });
+  if (!list || !Number.isInteger(n) || n < 1 || (n === list.start && !cutOff.has(list))) return;
+  if (n !== list.start) app.doc.setTag(list, { attrs: { start: n === 1 ? null : String(n) } }, 'start at');
+  if (!cutOff.delete(list)) return;
+  app.history.push({ label: 'start at', undo: () => void cutOff.add(list), redo: () => void cutOff.delete(list) });
 }
 
 export function canSplit(app: App): boolean {
