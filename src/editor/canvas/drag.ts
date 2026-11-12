@@ -110,7 +110,7 @@ export function record(app: App, label: string, changes: { el: Element; from: Pl
     for (const c of moved) writePlace(app, c.el, c[way], true);
     const kept = before.filter((el) => el.isConnected);
     const els = moved.map((c) => c.el);
-    app.selection.set('elements', kept.length ? kept : els.filter((el) => el.getClientRects().length && !els.some((o) => o !== el && o.contains(el))));
+    app.frame(kept.length ? kept : els.filter((el) => el.getClientRects().length && !els.some((o) => o !== el && o.contains(el))));
     app.invalidate('content');
   };
   app.history.push({ label, undo: () => apply('from'), redo: () => apply('to') });

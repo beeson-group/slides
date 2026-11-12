@@ -204,7 +204,7 @@ export class App {
       selected: () => (this.selection?.kind === 'elements' ? this.selection.elements() : null),
       reselect: (els) => {
         const live = els.filter((el) => el.isConnected);
-        if (live.length) this.selection.set('elements', live);
+        if (live.length) this.frame(live);
       },
       changed: () => this.selection?.changed() ?? (() => {}),
       view: () => {
@@ -254,6 +254,21 @@ export class App {
     if (!slide) return null;
     const d = this.deck();
     return d ? d.getIndices(slide).h + 1 : null;
+  }
+
+  // the focused text of a slide with the caret in it, apart from a formula
+  caretHost(): Element | null {
+    const active = document.activeElement, sel = getSelection();
+    const host = active?.matches('mjx-container') ? null : this.hostOf(active);
+    return host && sel?.rangeCount && active!.contains(sel.anchorNode) ? host : null;
+  }
+
+  // els selected by an undo or a redo. a caret left in a text of one of them keeps the text as the
+  // selection, since the keys go to the text of the caret
+  frame(els: Element[]): void {
+    const host = this.caretHost();
+    if (host && els.some((el) => el.contains(host))) this.selection.set('text', [host]);
+    else this.selection.set('elements', els);
   }
 
   // the editable block around target, on a slide
@@ -332,9 +347,10 @@ export class App {
     // is that of the pane around it
     if (active.matches('textarea, input:not([type=range], [type=checkbox], [type=radio], [type=button], [type=color])')) return 'field';
     if (active.closest('aside.notes')) return 'notes';
-    // a text or a formula focused in an object that is framed takes the keys of the slide, e.g. a new
-    // display after its TeX field is closed, since a text that is typed into is the selection
-    if (this.hostOf(active) && !(this.selection.kind === 'elements' && this.selection.items.some((el) => el.contains(active)))) return 'text';
+    // a formula, or a text without a caret, focused in an object that is framed takes the keys of the
+    // slide, e.g. a new display after its TeX field is closed. a caret in a text keeps the keys of the
+    // text, also where an undo framed its block
+    if (this.caretHost() || (this.hostOf(active) && !(this.selection.kind === 'elements' && this.selection.items.some((el) => el.contains(active))))) return 'text';
     if (active.closest('.beeson-edit-nav')) return 'navigator';
     // the object list of navigator/objects.ts takes its own keys, as a pane of controls
     if (active.closest('.beeson-edit-inspector, .beeson-edit-side, .beeson-edit-objects')) return 'inspector';
