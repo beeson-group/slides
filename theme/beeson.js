@@ -1587,7 +1587,7 @@
   ].join(", ");
   var SLOP = 4;
   var selected = () => String(window.getSelection() ?? "");
-  function initClick(deck, cue) {
+  function initClick(deck, cue, end) {
     const root2 = deck.getRevealElement();
     let down = null;
     document.addEventListener("pointerdown", (ev) => {
@@ -1609,6 +1609,7 @@
         else own.pause();
       }
       if (own || deck.isOverview() || deck.isPaused()) return;
+      if (end && deck.isLastSlide() && !deck.availableFragments().next) return end();
       deck.next();
       cue();
     });
@@ -4857,7 +4858,7 @@ void main() {
     if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) {
       if (!PLAYED) initFullscreen();
       initScrub(deck);
-      if (internal) initClick(deck, () => internal.cueAutoSlide());
+      if (internal) initClick(deck, () => internal.cueAutoSlide(), PLAYED && !RECEIVER ? () => toEditor("edit") : void 0);
     }
     if (PLAYED) {
       for (const keyCode of [27, 69]) deck.addKeyBinding(keyCode, (ev) => {

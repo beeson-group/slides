@@ -21,9 +21,10 @@ const selected = () => String(window.getSelection() ?? '');
 
 /**
  * Moves the deck on at a click on a slide. cue starts the delay of the step shown, which reveal.js
- * starts by itself only at a key or at a change of slide.
+ * starts by itself only at a key or at a change of slide. end, where given, is called in place of a
+ * move at a click past the last step of the last slide.
  */
-export function initClick(deck: Deck, cue: () => void): void {
+export function initClick(deck: Deck, cue: () => void, end?: () => void): void {
   const root = deck.getRevealElement() as HTMLElement;
   let down: { x: number; y: number; text: string } | null = null;
   document.addEventListener('pointerdown', (ev) => {
@@ -45,6 +46,7 @@ export function initClick(deck: Deck, cue: () => void): void {
       else own.pause();
     }
     if (own || deck.isOverview() || deck.isPaused()) return;
+    if (end && deck.isLastSlide() && !deck.availableFragments().next) return end();
     deck.next();
     cue();
   });

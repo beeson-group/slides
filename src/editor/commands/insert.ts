@@ -352,11 +352,19 @@ export function install(app: App): void {
       await app.history.selecting(`Insert ${def.label}`, async () => {
         // a box moved by textOffset or centerOffset is written with the same offset
         const [x0, y0] = p.el.style.translate.split(' ');
-        const x = parseFloat(x0 ?? '') || 0, y = parseFloat(y0 ?? '') || 0;
+        let x = parseFloat(x0 ?? '') || 0, y = parseFloat(y0 ?? '') || 0;
+        const was = slideBox(app, p.el);
         const [node] = await docOf(app).insert(def.html(text, p.parent), p.parent, p.el, def.label);
         written!.node = node;
         made = [node];
         p.el.remove();
+        // a text box is written where its empty box was drawn, whose margin from the CSS above may
+        // differ from the margin of the theme
+        if (p.kind === 'text') {
+          const now = slideBox(app, node);
+          x = Math.round(was.left - now.left);
+          y = Math.round(was.top - now.top);
+        }
         if (x || y) docOf(app).setTag(node, { translate: { x, y } }, def.label);
         if (p.el.style.width) docOf(app).setTag(node, { style: { width: p.el.style.width } }, def.label);
         pending = null;

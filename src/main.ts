@@ -230,8 +230,9 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) {
     if (!PLAYED) initFullscreen();
     initScrub(deck);
-    // a click on a slide moves the show on, as in PowerPoint and Keynote
-    if (internal) initClick(deck, () => internal.cueAutoSlide());
+    // a click on a slide moves the show on, as in PowerPoint and Keynote, and a click past the end
+    // of the show played from the editor returns to the editor, as a key forward does below
+    if (internal) initClick(deck, () => internal.cueAutoSlide(), PLAYED && !RECEIVER ? () => toEditor('edit') : undefined);
   }
   // E opens the same slide in the editor, and the other parameters of the address are kept
   if (PLAYED) {
