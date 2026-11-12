@@ -47,19 +47,26 @@ const boxes = (page, selector) => page.evaluate(`(() => {
     return { left: (r.left - s.left) / k, top: (r.top - s.top) / k, right: (r.right - s.left) / k, bottom: (r.bottom - s.top) / k };
   });
 })()`);
-// the boxes in slide px of the lines of the text of each element of selector
+// the boxes in slide px of the lines of the text of each element of selector, clipped to the box
+// of the element, as overflow.ts tests them, since the content area of a font is taller than the
+// box of a heading with a tight line height
 const lines = (page, selector) => page.evaluate(`(() => {
   const slide = document.querySelector('.reveal .slides > section.present');
   const s = slide.getBoundingClientRect();
   const k = s.width / slide.offsetWidth;
   const out = [];
   for (const el of slide.querySelectorAll(${js(selector)})) {
+    const b = el.getBoundingClientRect();
     const walk = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
     for (let n = walk.nextNode(); n; n = walk.nextNode()) {
       if (!n.textContent.trim()) continue;
       const range = document.createRange();
       range.selectNodeContents(n);
-      for (const r of range.getClientRects()) if (r.width > 1) out.push({ left: (r.left - s.left) / k, top: (r.top - s.top) / k, right: (r.right - s.left) / k, bottom: (r.bottom - s.top) / k });
+      for (const r of range.getClientRects()) {
+        const top = Math.max(r.top, b.top);
+        const bottom = Math.min(r.bottom, b.bottom);
+        if (r.width > 1 && bottom > top) out.push({ left: (r.left - s.left) / k, top: (top - s.top) / k, right: (r.right - s.left) / k, bottom: (bottom - s.top) / k });
+      }
     }
   }
   return out;
@@ -123,7 +130,7 @@ for (const platform of PLATFORMS) {
       const under = (await lines(page, ':scope > p, :scope > ul > li, :scope > h2')).filter((l) => meets(plot, l));
       if (under.length) {
         const s = await page.evaluate('window.BeesonEditor.status()');
-        assert.ok(s.overflow > 0 && /over a figure/.test(s.message), `the texts under the plot are not named in the status: ${js(s)}`);
+        assert.ok(s.overflow > 0 && /A plot covers \d+ texts?/.test(s.message), `the texts under the plot are not named in the status: ${js(s)}`);
       }
       await checkEdit(page, before, `r13-4-plot-${n}-${platform}.html`);
       await exec(page, 'insert.plot');

@@ -187,7 +187,7 @@ for (const platform of PLATFORMS) {
       await frames(page);
       const s = await page.evaluate('window.BeesonEditor.status()');
       assert.ok(s.overflow > 0, `after ${id}, the texts over the figure are not counted`);
-      assert.match(s.message, /over a figure/, `after ${id}, the status reads ${s.message}`);
+      assert.match(s.message, /A picture covers \d+ texts?/, `after ${id}, the status reads ${s.message}`);
       assert.ok(await page.evaluate(`document.querySelectorAll('.reveal section.present .beeson-overflow').length > 0`));
       await undo(page);
       await frames(page);

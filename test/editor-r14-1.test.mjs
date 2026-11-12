@@ -92,7 +92,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(shown, { prompt: '"Click to add a caption"', caret: true });
     const s = await status(page);
     assert.equal(s.overflow, 0, `the empty caption is reported: ${s.message}`);
-    assert.ok(!/past the slide|over a figure/.test(s.message), s.message);
+    assert.ok(!/past the slide|cover/.test(s.message), s.message);
     // the typed caption stays at the same place
     await page.send('Input.insertText', { text: 'A' });
     await frames(page);
@@ -108,7 +108,7 @@ for (const platform of PLATFORMS) {
     await exec(page, 'insert.table', { rows: 3, columns: 3 });
     await frames(page);
     const s = await status(page);
-    assert.ok(s.overflow > 0 && /over a figure/.test(s.message), `the table is not reported: ${js({ overflow: s.overflow, message: s.message })}`);
+    assert.ok(s.overflow > 0 && /A table covers \d+ texts?/.test(s.message), `the table is not reported: ${js({ overflow: s.overflow, message: s.message })}`);
     const marked = await page.evaluate(`[...document.querySelectorAll('.reveal section.present .beeson-overflow')].map((e) => e.localName)`);
     assert.ok(marked.length > 0 && !marked.some((n) => n === 'th' || n === 'td'), `the cells of the table are marked: ${js(marked)}`);
     assert.deepEqual(errors(page), []);
