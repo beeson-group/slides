@@ -142,7 +142,8 @@ export function install(app: App): void {
     id: 'arrange.sizeAndPosition',
     label: 'Size and Position…',
     context: ['element'],
-    enabled: (a) => a.selection.elements().length > 0 && a.region() !== 'dialog',
+    // a backdrop does not have the Arrange pane
+    enabled: (a) => a.selection.elements().some((el) => !el.matches('.backdrop')) && a.region() !== 'dialog',
     run: (a) => sizeAndPosition(a),
   });
 }

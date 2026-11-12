@@ -18,8 +18,8 @@ export const OUTSIDE = 'aside.notes, .backdrop';
 export const RESIZABLE = 'img, video, .qr, tycho-viewer, .shape';
 
 // whether el is turned by a rotation, which leaves out a table and its cells, as PowerPoint and
-// Keynote do not turn a table
-export const turnable = (el: Element): boolean => !el.hasAttribute('data-locked') && !el.closest('table');
+// Keynote do not turn a table, and a backdrop
+export const turnable = (el: Element): boolean => !el.hasAttribute('data-locked') && !el.closest('table') && !el.matches('.backdrop');
 
 // the text blocks whose width their grips set, as a text box of Keynote and PowerPoint, with the
 // height set by their wrapped text

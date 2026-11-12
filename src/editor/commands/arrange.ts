@@ -37,8 +37,8 @@ function onCanvas(): boolean {
 }
 
 // the elements that Reset Position and Reset Size act on, without the shapes, whose place and size
-// are set in their style alone
-const resettable = (els: Element[]) => els.filter((el) => !el.matches('.shape'));
+// are set in their style alone, and the backdrops, whose box Reset Slide puts back
+const resettable = (els: Element[]) => els.filter((el) => !el.matches('.shape, .backdrop'));
 
 // the caret at the end of the text of el
 function caretAtEnd(el: Element): void {

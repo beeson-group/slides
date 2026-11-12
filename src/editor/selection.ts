@@ -94,7 +94,13 @@ export function install(app: App): void {
   let items: Element[] = [];
   const listeners: (() => void)[] = [];
   const set = (k: SelectionKind, next: Element[]) => {
-    const ordered = k === 'none' ? [] : inOrder(next);
+    let ordered = k === 'none' ? [] : inOrder(next);
+    // a backdrop is selected by itself. of a backdrop added to other elements, the backdrop is
+    // kept, and of elements added to a backdrop, the elements
+    if (k === 'elements' && ordered.length > 1 && ordered.some((el) => el.matches('.backdrop'))) {
+      const added = ordered.filter((el) => !items.includes(el) && el.matches('.backdrop')).at(-1);
+      ordered = added ? [added] : ordered.filter((el) => !el.matches('.backdrop'));
+    }
     const nextKind = ordered.length ? k : 'none';
     if (nextKind === kind && ordered.length === items.length && ordered.every((el, i) => el === items[i])) return;
     items = ordered;

@@ -21,14 +21,15 @@ const SIDE_LABELS: Record<Side, string> = { left: 'Left', center: 'Center', righ
 // the reference of Align and Distribute, kept for the session
 let reference: 'slide' | 'selection' = 'selection';
 
-// the elements selected on the canvas, or the block of a text that has the caret
+// the elements selected on the canvas, or the block of a text that has the caret. a backdrop is
+// left out, since only its grips write its box
 export function selectedTargets(app: App): Element[] {
   if (app.selection.kind === 'text') {
     const host = app.selection.items[0];
     const el = host ? (movableOf(app, host) ?? host) : null;
     return el && app.pairing?.elements.get(el)?.open ? [el] : [];
   }
-  return app.selection.elements().filter((el) => app.pairing?.elements.get(el)?.open);
+  return app.selection.elements().filter((el) => app.pairing?.elements.get(el)?.open && !el.matches('.backdrop'));
 }
 
 // the elements that the commands of this file act on: the selected ones, with the figure of a
@@ -36,7 +37,7 @@ export function selectedTargets(app: App): Element[] {
 // field of the inspector, is taken in their place
 export function targetsOf(app: App, arg?: unknown): Element[] {
   const given = (arg as { els?: Element[] } | undefined)?.els;
-  if (given) return given.filter((el) => el.isConnected);
+  if (given) return given.filter((el) => el.isConnected && !el.matches('.backdrop'));
   return objectsOf(app, selectedTargets(app));
 }
 

@@ -544,33 +544,40 @@ export function commands(): Command[] {
 }
 
 // the drawing of a backdrop made again by the theme after a change of its drawing attributes or of
-// its labels, also at an undo
+// its labels, and fitted to its box after a change of its style, e.g. by Reset Slide, also at an undo
 function watch(app: App): void {
   const pending = new Set<HTMLElement>();
+  const boxed = new Set<HTMLElement>();
   const WINDOW = ['data-cx', 'data-cy', 'data-half'];
   let queued = false;
+  let moved = false;
   const flush = () => {
     queued = false;
+    // a box alone, e.g. during a drag of a grip, keeps the window that is drawn
+    for (const el of boxed) if (!pending.has(el)) liveOf(el)?.fit();
+    boxed.clear();
+    if (!pending.size && !moved) return;
     for (const el of pending) if (el.isConnected && liveOf(el)) hooks().remount?.(el);
     pending.clear();
+    moved = false;
     syncBackdrops();
     app.invalidate('content');
   };
   new MutationObserver((records) => {
-    let moved = false;
     for (const r of records) {
       const t = r.target;
       if (!(t instanceof HTMLElement) || !t.matches('.backdrop')) continue;
       const labs = [...r.addedNodes, ...r.removedNodes].some((n) => n instanceof Element && n.matches('.lab'));
       // a window alone, e.g. of an undo or of a file opened again, is set without a new drawing
       if (r.type === 'attributes' && WINDOW.includes(r.attributeName ?? '')) moved = true;
+      else if (r.attributeName === 'style') boxed.add(t);
       else if (r.type === 'attributes' || labs) pending.add(t);
     }
-    if ((pending.size || moved) && !queued) {
+    if ((pending.size || boxed.size || moved) && !queued) {
       queued = true;
       queueMicrotask(flush);
     }
-  }).observe(app.slides(), { subtree: true, childList: true, attributes: true, attributeFilter: [...DRAWING, ...WINDOW, 'data-dx', 'data-dy'] });
+  }).observe(app.slides(), { subtree: true, childList: true, attributes: true, attributeFilter: [...DRAWING, ...WINDOW, 'data-dx', 'data-dy', 'style'] });
 }
 
 // the red marks of the edges at which the drawing of the selected backdrop is cut
@@ -603,6 +610,9 @@ export function install(app: App): void {
   cuts(app);
   // a preview ends at an edit, at a change of slide, and at a change of the selection
   app.listen('history', endPreview);
+  app.selection.listen(() => {
+    if (previewed && !app.selection.has(previewed.el)) endPreview();
+  });
   app.listen('slide', () => {
     endPreview();
     gallery?.close();
