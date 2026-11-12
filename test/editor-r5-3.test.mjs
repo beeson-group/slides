@@ -270,7 +270,7 @@ for (const platform of PLATFORMS) {
     assert.notEqual(await pressed(), 'true', 'Shape is still pressed');
     await click(page, await center(page, '.beeson-edit-split:has([data-command="insert.line"]) .more'));
     await sleep(100);
-    assert.deepEqual((await menuRows(page)).map((r) => r.label), ['Line', 'Arrow']);
+    assert.deepEqual((await menuRows(page)).map((r) => r.label), ['Line', 'Arrow', 'Curved Arrow', 'Elbow Arrow']);
     await click(page, await center(page, '.beeson-edit-menu .item[data-command="insert.arrow"]'));
     await sleep(50);
     assert.equal((await state(page, 'insert.arrow')).checked, true);
