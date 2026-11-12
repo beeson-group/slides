@@ -87,9 +87,11 @@ test('Chrome does not download a component or a model into its profile', { timeo
   assert.ok(existsSync(join(profile, 'Local State')), `${profile} is not the profile of the browser`);
   await sleep(25000);
   // the folders of the models, of the components, and of one component. Without a download, Chrome
-  // writes only the index of the components
+  // writes only the index of the components and, on Linux, the path of the Widevine module that is
+  // installed with it. A downloaded module is in a folder of its version
+  const written = ['component_crx_cache/metadata.json', 'WidevineCdm/latest-component-updated-widevine-cdm'];
   const downloaded = ['optimization_guide_model_store', 'component_crx_cache', 'WidevineCdm'].flatMap((name) => (existsSync(join(profile, name)) ? readdirSync(join(profile, name)).map((file) => `${name}/${file}`) : []));
-  assert.deepEqual(downloaded.filter((file) => file !== 'component_crx_cache/metadata.json'), []);
+  assert.deepEqual(downloaded.filter((file) => !written.includes(file)), []);
 });
 
 test('an early exit of Chrome is reported', (t) => {
