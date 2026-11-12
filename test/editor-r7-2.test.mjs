@@ -445,7 +445,7 @@ for (const platform of PLATFORMS) {
     const deck = 'test/pages/layers.html';
     const page = await load(t, platform, { deck, n: 2 });
     assert.deepEqual((await menuLabels(page, 'File')).slice(-4), ['|', '{Export To}', '|', 'Print…']);
-    assert.deepEqual(await menuLabels(page, 'File', 'Export To'), ['PDF…', 'HTML…']);
+    assert.deepEqual(await menuLabels(page, 'File', 'Export To'), ['PDF…', 'HTML…', 'PowerPoint…']);
     // the tab of the print view is kept for the test, and its print is recorded
     await page.evaluate(`(() => {
       const real = window.open;

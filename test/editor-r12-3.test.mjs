@@ -194,26 +194,26 @@ async function keysIn(page, bar, labels) {
   return Object.fromEntries(labels.map((l) => [l, items.find((i) => i.label === l)?.keys]));
 }
 
-// menus-keys-5: a key is printed only beside the item that it runs where the focus is. with a
-// figure selected on the canvas, Mod+D and Delete are those of Edit > Duplicate and Edit > Delete,
-// and in the navigator those of Slide > Duplicate Slide and Slide > Delete Slide. Edit > Delete
-// runs Delete Slide there, hence it lists Delete too
+// menus-keys-5: a key is printed beside its item in every focus, as in Keynote and PowerPoint,
+// where the key of an item is fixed. with a figure selected on the canvas, Mod+D and Delete run
+// Edit > Duplicate and Edit > Delete, and in the navigator Edit > Duplicate and Edit > Delete hand
+// their runs to Duplicate Slide and Delete Slide. Delete Slide is without a key, as in PowerPoint
 for (const platform of PLATFORMS) {
-  test(`a key is printed only beside the item that it runs in the present focus (${platform})`, async (t) => {
+  test(`a key is printed beside its item in every focus, and Delete Slide is without a key (${platform})`, async (t) => {
     const page = await load(t, platform, { n: 4 });
     const mac = platform === 'mac';
     const dup = mac ? '⌘D' : 'Ctrl+D';
     const del = mac ? '⌫' : 'Delete';
     await click(page, '.reveal .slides > section.present img');
-    assert.deepEqual(await keysIn(page, 'Slide', ['Duplicate Slide', 'Delete Slide']), { 'Duplicate Slide': '', 'Delete Slide': '' });
+    assert.deepEqual(await keysIn(page, 'Slide', ['Duplicate Slide', 'Delete Slide']), { 'Duplicate Slide': dup, 'Delete Slide': '' });
     assert.deepEqual(await keysIn(page, 'Edit', ['Duplicate', 'Delete']), { Duplicate: dup, Delete: del });
     await press(page, 'Mod+D');
     await sleep(200);
     assert.equal(await page.evaluate(`document.querySelectorAll('.reveal .slides > section.present figure').length`), 2, 'Mod+D did not duplicate the figure');
     await click(page, '.beeson-edit-nav .row:nth-child(5)');
     await sleep(100);
-    assert.deepEqual(await keysIn(page, 'Slide', ['Duplicate Slide', 'Delete Slide']), { 'Duplicate Slide': dup, 'Delete Slide': del });
-    assert.deepEqual(await keysIn(page, 'Edit', ['Duplicate', 'Delete']), { Duplicate: '', Delete: del });
+    assert.deepEqual(await keysIn(page, 'Slide', ['Duplicate Slide', 'Delete Slide']), { 'Duplicate Slide': dup, 'Delete Slide': '' });
+    assert.deepEqual(await keysIn(page, 'Edit', ['Duplicate', 'Delete']), { Duplicate: dup, Delete: del });
     assert.deepEqual(errors(page), []);
   });
 }

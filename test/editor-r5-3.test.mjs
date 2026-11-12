@@ -143,19 +143,21 @@ for (const platform of PLATFORMS) {
     const mac = platform === 'mac';
     const slide = Object.fromEntries((await barMenu(page, 'Slide')).map((r) => [r.label, r.keys]));
     assert.equal(slide['Duplicate Slide'], mac ? '⌘D' : 'Ctrl+D');
-    // the key of Delete Slide is taken only in the navigator, hence it is not listed on the canvas
+    // Delete Slide is without a key, as in PowerPoint. ⌫ is the key of Edit > Delete
     assert.equal(slide['Delete Slide'], '');
     assert.equal(slide['Move Slide Up'], mac ? '⌥↑' : 'Alt+Up Arrow');
     assert.equal(slide['Move Slide Down'], mac ? '⌥↓' : 'Alt+Down Arrow');
     const edit = Object.fromEntries((await barMenu(page, 'Edit')).map((r) => [r.label, r.keys]));
     assert.equal(edit.Duplicate, mac ? '⌘D' : 'Ctrl+D');
+    assert.equal(edit.Delete, mac ? '⌫' : 'Delete');
     await page.evaluate('window.BeesonEditorShell.closeMenus()');
     await page.evaluate(`window.BeesonEditor.exec('help.keys')`);
     await sleep(100);
     const rows = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-keys .row')].map((r) => ({ label: r.firstElementChild.textContent, keys: r.querySelector('kbd').textContent.split(', ') }))`);
     const keysOf = (label) => rows.find((r) => r.label === label)?.keys ?? [];
     assert.ok(keysOf('Duplicate Slide').includes(mac ? '⌘D' : 'Ctrl+D'), JSON.stringify(keysOf('Duplicate Slide')));
-    assert.ok(keysOf('Delete Slide').includes(mac ? '⌫' : 'Delete'), JSON.stringify(keysOf('Delete Slide')));
+    assert.deepEqual(keysOf('Delete Slide'), [], JSON.stringify(keysOf('Delete Slide')));
+    assert.ok(keysOf('Delete').includes(mac ? '⌫' : 'Delete'), JSON.stringify(keysOf('Delete')));
     assert.ok(keysOf('Move Slide Up').includes(mac ? '⌥↑' : 'Alt+Up Arrow'), JSON.stringify(keysOf('Move Slide Up')));
     assert.ok(keysOf('Move Slide Down').includes(mac ? '⌥↓' : 'Alt+Down Arrow'), JSON.stringify(keysOf('Move Slide Down')));
     assert.ok(keysOf('Add Row Above').includes(mac ? '⌥↑' : 'Alt+Up Arrow'), 'Add Row Above lost its key');

@@ -615,10 +615,12 @@ for (const platform of PLATFORMS) {
     assert.ok(b.inspector && !b.nav, `the inspector and the navigator at 760 px: ${js(b)}`);
     assert.equal(await page.evaluate('window.BeesonEditorShell.stage.zoom'), null, 'the zoom is not Fit');
     whole(b, 'at 760 px');
-    assert.equal((await stateOf(page, 'view.navigator')).checked, true, 'View > Navigator does not read as on');
+    // View > Navigator is checked only while the navigator is drawn, as Slide Only is not
+    assert.equal((await stateOf(page, 'view.navigator')).checked, false, 'View > Navigator reads as on while the navigator is hidden');
     // widened again, the navigator is shown again
     await resizeTo(page, 1440);
     assert.ok((await page.evaluate(SHELL)).nav, 'the navigator is not shown again at 1440 px');
+    assert.equal((await stateOf(page, 'view.navigator')).checked, true);
     await resizeTo(page, 760);
     // View > Navigator shows the navigator, with the inspector closed in its place
     await run(page, 'view.navigator');
