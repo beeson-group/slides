@@ -77,13 +77,13 @@ function tabIn(app: App, back: boolean): void {
 }
 
 // the blocks that Left and Center act on: the heading, the paragraph, the list, the caption, or the
-// display of the text or of the selection, paired with the file, outside a cell and the notes. a
-// list is aligned as a whole
+// display of the text or of the selection, and the words of a selected shape, paired with the file,
+// outside a cell and the notes. a list is aligned as a whole
 const ALIGNED = 'h1, h2, h3, p, ul, ol, .caption, div.math';
 function alignTargets(app: App): Element[] {
   const pairing = app.pairing;
   if (!pairing) return [];
-  const els = app.selection.kind === 'elements' ? app.selection.elements() : [...flow.spanTargets(app).map((t) => t.host), blocks.textTarget(app)?.host].filter((el): el is Element => !!el);
+  const els = app.selection.kind === 'elements' ? app.selection.elements().flatMap((el) => (el.matches('div.shape') ? [...el.children] : [el])) : [...flow.spanTargets(app).map((t) => t.host), blocks.textTarget(app)?.host].filter((el): el is Element => !!el);
   const out = new Set<Element>();
   for (const el of els) {
     const block = el.localName === 'li' ? el.closest('ul, ol') : el;
@@ -92,8 +92,15 @@ function alignTargets(app: App): Element[] {
   return [...out];
 }
 
+// the theme centers the words of a shape, which the class left aligns to the left
+const inShape = (el: Element): boolean => !!el.parentElement?.matches('div.shape');
+const centered = (el: Element): boolean => (inShape(el) ? !el.classList.contains('left') : el.classList.contains('center'));
+
 function setCenter(app: App, on: boolean): void {
-  for (const el of alignTargets(app)) if (el.classList.contains('center') !== on) app.doc.setTag(el, { classes: { center: on } }, 'align');
+  for (const el of alignTargets(app)) {
+    const classes: Record<string, boolean> = inShape(el) ? { left: !on, center: false } : { center: on };
+    if (Object.entries(classes).some(([c, v]) => el.classList.contains(c) !== v)) app.doc.setTag(el, { classes }, 'align');
+  }
   app.markDirty();
   app.invalidate('content');
 }
@@ -242,9 +249,9 @@ export function install(app: App): void {
         kept();
       },
     }));
-  // Left and Center of the alignment of Keynote, written as the class center of the theme, with
-  // Keynote's key of Center on a Mac. its key of Left, Cmd+{, is taken by the browser, and Ctrl+E
-  // and Ctrl+L elsewhere are taken by the editor
+  // Left and Center of the alignment of Keynote, written as the class center of the theme, or as
+  // the class left in the words of a shape, with Keynote's key of Center on a Mac. its key of Left,
+  // Cmd+{, is taken by the browser, and Ctrl+E and Ctrl+L elsewhere are taken by the editor
   (['left', 'center'] as const).forEach((align, i) =>
     define({
       id: `text.align.${align}`,
@@ -257,7 +264,7 @@ export function install(app: App): void {
       enabled: (a) => alignTargets(a).length > 0,
       checked: (a) => {
         const els = alignTargets(a);
-        return els.length > 0 && els.every((el) => el.classList.contains('center') === (align === 'center'));
+        return els.length > 0 && els.every((el) => centered(el) === (align === 'center'));
       },
       run: (a) => setCenter(a, align === 'center'),
     }));
@@ -377,7 +384,7 @@ function readCopied(app: App): Copied | null {
   if (figure) return { figure: readFigure(figure) };
   const text = inline.readStyle(app);
   const [block] = alignTargets(app);
-  return text ? { text, center: block ? block.classList.contains('center') : null } : null;
+  return text ? { text, center: block ? centered(block) : null } : null;
 }
 
 // the mode on every figure, and paper and invert on an image, each class changed only where it

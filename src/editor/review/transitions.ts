@@ -19,9 +19,9 @@ import { injectStyle, make } from '../ui/dom.ts';
 
 export type Transition = 'none' | 'fade' | 'magic' | 'push';
 
-// the classes of a step and of its run time, and ghost, which Magic Move animates as an opacity,
-// left out of the key of a shape
-const RUNTIME = new Set(['fragment', 'visible', 'current-fragment', 'ghost']);
+// the classes of a step, of its effect, and of its run time, and ghost, which Magic Move animates
+// as an opacity, left out of the key of a shape
+const RUNTIME = /^(fragment|visible|current-fragment|ghost|fade-[\w-]+|semi-fade-out|current-visible|grow|shrink|strike|highlight-[\w-]+)$/;
 
 const slidesOf = (app: App): Element[] => [...app.slides().querySelectorAll(':scope > section')];
 
@@ -91,11 +91,12 @@ export function keyOf(el: Element): string {
   const tag = el.localName;
   if (tag === 'h1' || tag === 'h2') return 'heading';
   if (el.matches('svg.line')) {
-    const line = el.querySelector('line');
+    // the stroke of a straight line is a line, and that of a curve or an elbow a path
+    const line = el.querySelector(':scope > line, :scope > path');
     const tone = [...el.classList].find((c) => c.startsWith('tone-')) ?? '';
     return `line:${tone}:${line?.hasAttribute('marker-start') ? 'start' : ''}:${line?.hasAttribute('marker-end') ? 'end' : ''}`;
   }
-  if (el.matches('.shape')) return `shape:${[...el.classList].filter((c) => !RUNTIME.has(c)).sort().join(' ')}`;
+  if (el.matches('.shape')) return `shape:${[...el.classList].filter((c) => !RUNTIME.test(c)).sort().join(' ')}`;
   const media = el.matches('img, video, tycho-viewer') ? el : el.querySelector('img, video, tycho-viewer');
   if (media) return `media:${media.getAttribute('src') ?? ''}`;
   if (el.matches('.qr')) return `qr:${el.getAttribute('data-qr') ?? ''}`;

@@ -1,12 +1,16 @@
-// the text of a new slide of each of the eight layouts and of a new element of each kind, written
-// in the line endings and the indentation of the file of the deck. a placeholder is empty in the
-// text, and the editor shows its prompt from its own stylesheet. the skeletons follow the
-// vocabulary of AGENTS.md. pure, without the DOM
+// the text of a new slide of each of the eight layouts and of Title Only, and of a new element of
+// each kind, written in the line endings and the indentation of the file of the deck. a
+// placeholder is empty in the text, and the editor shows its prompt from its own stylesheet. the
+// skeletons follow the vocabulary of AGENTS.md. pure, without the DOM
 
 import { eolOf } from './units.ts';
 
 export type Layout = 'title' | 'section' | 'content' | 'narrow' | 'wide' | 'figure' | 'split' | 'closing';
 export const LAYOUTS: Layout[] = ['title', 'section', 'content', 'narrow', 'wide', 'figure', 'split', 'closing'];
+// a new slide may also be Title Only, a content slide with its h2 and nothing else, which Change
+// Layout reads as Content
+export type NewLayout = Layout | 'titleOnly';
+export const NEW_LAYOUTS: NewLayout[] = [...LAYOUTS, 'titleOnly'];
 
 export type ElementKind = 'text' | 'image' | 'video' | 'table' | 'formula' | 'code' | 'qr' | 'backdrop' | 'shape';
 export const ELEMENT_KINDS: ElementKind[] = ['text', 'image', 'video', 'table', 'formula', 'code', 'qr', 'backdrop', 'shape'];
@@ -31,7 +35,7 @@ function lines(rows: [number, string][], style: TextStyle, base: string): string
 
 // a section of the layout, without the white space before it. base is the indentation of the
 // slides of the file, empty in the demo deck
-export function layoutText(layout: Layout, style: TextStyle, base = ''): string {
+export function layoutText(layout: NewLayout, style: TextStyle, base = ''): string {
   const block: [number, string][] = [[1, '<div class="block">'], [2, '<h1></h1>'], [2, '<p class="sub"></p>'], [2, '<p class="who"></p>'], [1, '</div>']];
   switch (layout) {
     case 'title':
@@ -48,6 +52,8 @@ export function layoutText(layout: Layout, style: TextStyle, base = ''): string 
       return lines([[0, '<section class="figure">'], [1, '<div class="plate"></div>'], [1, '<h2></h2>'], [1, '<p class="caption"></p>'], [0, '</section>']], style, base);
     case 'split':
       return lines([[0, '<section class="split">'], [1, '<div class="panel">'], [2, '<h2></h2>'], [2, '<p></p>'], [1, '</div>'], [1, '<div class="zone"></div>'], [0, '</section>']], style, base);
+    case 'titleOnly':
+      return lines([[0, '<section>'], [1, '<h2></h2>'], [0, '</section>']], style, base);
     // a content slide holds a dash list under its paragraph, as a slide of Title & Bullets in
     // Keynote holds the bullet placeholder of its thumbnail
     default:
@@ -104,7 +110,7 @@ export function elementText(kind: ElementKind, style: TextStyle, base: string, o
 }
 
 // the words of the placeholders of the samples, by the tag and the class of the empty element
-const SAMPLE_WORDS: Partial<Record<Layout, [string, string][]>> & { all: [string, string][] } = {
+const SAMPLE_WORDS: Partial<Record<NewLayout, [string, string][]>> & { all: [string, string][] } = {
   title: [['<h1></h1>', 'Title of the talk'], ['<p class="sub"></p>', 'Subtitle of the talk'], ['<p class="who"></p>', 'Name of the speaker']],
   closing: [['<h1></h1>', 'Thank you'], ['<p class="sub"></p>', 'Questions'], ['<p class="who"></p>', '']],
   section: [['<h2></h2>', 'Title of the section']],
@@ -122,7 +128,7 @@ const BOX = 'style="background: color-mix(in srgb, var(--muted) 34%, var(--bg));
 // samples get a gray zone and a gray backdrop at the place of the layout, and a wide slide is
 // without one, since its text column runs over this place. a sample does not depend on the deck,
 // and it is drawn but never written into a file
-export function sampleText(layout: Layout): string {
+export function sampleText(layout: NewLayout): string {
   const style = { eol: '\n', step: '  ' };
   let text = layoutText(layout, style);
   for (const [empty, words] of [...(SAMPLE_WORDS[layout] ?? []), ...SAMPLE_WORDS.all]) {

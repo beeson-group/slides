@@ -17,7 +17,8 @@ import type { App } from '../app.ts';
 import { OUTSIDE_DIALOGS, type Command, type Group } from '../commands.ts';
 import { entering } from '../commands/edit.ts';
 import { injectStyle, make, store, stored, wire } from '../ui/dom.ts';
-import { icon } from '../ui/icons.ts';
+import { icon, itemIcon } from '../ui/icons.ts';
+import { playing } from '../commands/preview.ts';
 import { closeMenus, commandKeys, menuItems, openMenu, splitButton, type MenuItem } from '../ui/menu.ts';
 import { ZOOMS } from './canvas.ts';
 
@@ -239,7 +240,7 @@ export function install(app: App): void {
     for (const v of variants.length > 1 ? variants : []) {
       if (out.length && v.menu?.group !== last) out.push({ rule: true });
       last = v.menu?.group;
-      out.push({ command: v.id });
+      out.push({ command: v.id, icon: itemIcon(v.id) });
     }
     let sub = first.menu && first.toolbar?.split ? menuItems(app, first.menu.bar, first.toolbar.split) : [];
     if (sub.every((i) => 'rule' in i || ('command' in i && variants.some((v) => v.id === i.command)))) sub = [];
@@ -397,6 +398,20 @@ export function install(app: App): void {
       if (on.some((x) => x !== null) && !customizing) el.setAttribute('aria-pressed', String(on.some((x) => x === true)));
       else el.removeAttribute('aria-pressed');
       if (c.id === 'file.save') el.classList.toggle('on', app.dirty);
+      // the main part of Preview is pressed and reads Stop with the icon pause while a preview plays
+      if (c.id === 'preview.slide' && !customizing) {
+        const on = playing();
+        const face = on ? 'pause' : String(faceOf(c));
+        const svg = el.querySelector<SVGSVGElement>(':scope > svg');
+        if (svg && svg.dataset.face !== face) {
+          const g = glyph(face);
+          g.dataset.face = face;
+          svg.replaceWith(g);
+        }
+        el.querySelector('.label')!.textContent = on ? 'Stop' : toolbarLabel(app, c);
+        if (on) el.title = 'Stop';
+        if (on) el.setAttribute('aria-pressed', 'true');
+      }
       if (c.id === 'toolbar.zoom') {
         const r = el.querySelector('.readout');
         if (r) r.textContent = zoomText();

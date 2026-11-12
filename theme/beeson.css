@@ -179,16 +179,24 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal .center { text-align: center; }
 
 /* a line or an arrow on a slide, set with Insert > Line of the editor: an svg as large as the box of
-   its line, placed at the upper left of the slide and moved by its translate, stroked in --text or
-   in the tone of its class at the width of a mark of a plot. an arrowhead is the marker of the svg,
-   drawn in the same color */
+   its line, or of the path of a curve or an elbow, placed at the upper left of the slide and moved
+   by its translate, stroked in --text or in the tone of its class at the width of a mark of a plot.
+   an arrowhead is the marker of the svg, drawn in the same color */
 .reveal .slides section svg.line { position: absolute; left: 0; top: 0; margin: 0; overflow: visible; pointer-events: none; color: var(--text); }
 .reveal .slides section svg.line.tone-accent { color: var(--accent); }
 .reveal .slides section svg.line.tone-violet { color: var(--violet); }
 .reveal .slides section svg.line.tone-blue { color: var(--blue); }
 .reveal .slides section svg.line.tone-red { color: var(--red); }
 .reveal .slides section svg.line.tone-muted { color: var(--muted); }
-.reveal svg.line line { stroke: currentColor; stroke-width: 3; stroke-linecap: butt; fill: none; }
+/* the weight in px of the stroke of a line and of the outline of a shape, 3 without a class */
+.reveal :where(svg.line, .shape) { --weight: 3px; }
+.reveal :where(svg.line, .shape).weight-2 { --weight: 2px; }
+.reveal :where(svg.line, .shape).weight-6 { --weight: 6px; }
+.reveal :where(svg.line, .shape).weight-8 { --weight: 8px; }
+.reveal svg.line > line, .reveal svg.line > path { stroke: currentColor; stroke-width: var(--weight); stroke-linecap: butt; fill: none; }
+/* a dash of three weights with a gap of two. the head of an arrow is in units of the stroke
+   width, hence it grows with the weight */
+.reveal svg.line.dashed > line, .reveal svg.line.dashed > path { stroke-dasharray: calc(3 * var(--weight)) calc(2 * var(--weight)); }
 .reveal svg.line marker { overflow: visible; }
 .reveal svg.line marker path { fill: currentColor; stroke: none; }
 
@@ -204,6 +212,9 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal ol > li::before { content: counter(list-item); position: absolute; left: 0; top: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
 /* an empty item, e.g. the placeholder of a new slide left empty, is drawn without its mark */
 .reveal li:empty::before { content: none; }
+/* an empty paragraph or item takes the height of a line, as in the editor, where its prompt is
+   drawn, so that an element placed with translate under it is drawn at the same place in both */
+.reveal .slides section :is(p, li):empty { min-height: 1lh; }
 /* an item of a centered list is as wide as its words and centered, so that its mark stays beside them */
 .reveal :is(ul, ol).center > li { width: fit-content; margin-left: auto; margin-right: auto; }
 .reveal li ul, .reveal li ol { margin-top: 10px; font-size: 36px; }
@@ -482,7 +493,7 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
 
 /* ---- shapes: a box placed and sized in its style, set with Insert > Shape of the editor, with an outline of 3 px in
    its tone over a tint of the tone and its words centered. the other geometries are an svg that beeson.js draws ---- */
-.reveal .slides section .shape { --shape-weight: 3px; position: absolute; left: 0; top: 0; margin: 0; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 12px 24px; color: var(--text); border: var(--shape-weight) solid currentColor; background: color-mix(in srgb, currentColor 20%, var(--bg)); pointer-events: none; }
+.reveal .slides section .shape { position: absolute; left: 0; top: 0; margin: 0; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 12px 24px; color: var(--text); border: var(--weight) solid currentColor; background: color-mix(in srgb, currentColor 20%, var(--bg)); pointer-events: none; }
 .reveal .slides section .shape.tone-accent { color: var(--accent); }
 .reveal .slides section .shape.tone-violet { color: var(--violet); }
 .reveal .slides section .shape.tone-blue { color: var(--blue); }
@@ -492,19 +503,20 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
 .reveal .slides section .shape > :not(svg) { margin: 0; position: relative; }
 .reveal :where(.shape) > :where(:not(svg)) { color: var(--text); }
 .reveal .slides section .shape a { pointer-events: auto; }
+/* the words of a shape aligned left with Align Left of the editor */
+.reveal .slides section .shape > .left { align-self: stretch; text-align: left; }
 .reveal .slides section .shape.rounded { border-radius: 24px; }
 .reveal .slides section .shape.rounded.round-s { border-radius: 12px; }
 .reveal .slides section .shape.rounded.round-l { border-radius: 48px; }
 .reveal .slides section .shape.ellipse { border-radius: 50%; }
-.reveal .slides section .shape.weight-6 { --shape-weight: 6px; }
-.reveal .slides section .shape.weight-8 { --shape-weight: 8px; }
-.reveal .slides section .shape.no-outline { --shape-weight: 0px; }
+.reveal .slides section .shape.no-outline { --weight: 0px; }
 .reveal .slides section .shape.fill-none { background: none; }
 .reveal .slides section .shape.fill-ground { background: var(--bg); }
-.reveal .slides section .shape.veil { --shape-weight: 0px; background: color-mix(in srgb, var(--bg) 75%, transparent); }
+.reveal .slides section .shape.veil { background: color-mix(in srgb, var(--bg) 75%, transparent); }
+.reveal .slides section .shape.veil:not(.weight-6, .weight-8) { --weight: 0px; }
 .reveal .slides section .shape:is(.triangle, .arrow, .arrow-both, .brace, .plus, .equals) { border: 0; background: none; }
 .reveal .slides section .shape > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
-.reveal .slides section .shape > svg path { fill: color-mix(in srgb, currentColor 20%, var(--bg)); stroke: currentColor; stroke-width: var(--shape-weight); stroke-linejoin: miter; }
+.reveal .slides section .shape > svg path { fill: color-mix(in srgb, currentColor 20%, var(--bg)); stroke: currentColor; stroke-width: var(--weight); stroke-linejoin: miter; }
 .reveal .slides section .shape.fill-none > svg path, .reveal .slides section .shape.brace > svg path { fill: none; }
 .reveal .slides section .shape.fill-ground > svg path { fill: var(--bg); }
 .reveal .slides section .shape.veil > svg path { fill: color-mix(in srgb, var(--bg) 75%, transparent); }

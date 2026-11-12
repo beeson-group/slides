@@ -1,29 +1,31 @@
 // the Line pane of the Format tab, for a selected line or arrow, as the Line section of the Style
-// tab of Keynote: a swatch of each tone of the theme, and the arrowheads (none, at the start, at the
-// end, or at both ends). each control runs a command of commands/line.ts by its id
+// tab of Keynote: a swatch of each tone of the theme, the arrowheads (none, at the start, at the
+// end, or at both ends), the kind (straight, curved, or elbow, as Connection of Keynote), the weight
+// in px, and a dash. each control runs a command of commands/line.ts by its id
 
 import type { App } from '../app.ts';
-import { HEADS, LINE_TONES } from '../commands/line.ts';
+import { HEADS, KINDS, LINE_TONES, WEIGHTS } from '../commands/line.ts';
 import { make } from '../ui/dom.ts';
-import { keepFocus, row, section, segmented, type Control, type Run } from './controls.ts';
+import { checkbox, keepFocus, row, section, segmented, type Control, type Run } from './controls.ts';
 
 const SVG = 'http://www.w3.org/2000/svg';
 
-// a short line with the arrowheads of heads, on the grid of the glyphs of controls.ts
-function glyphOf(heads: string): SVGSVGElement {
+// a short line with the arrowheads of heads, on the grid of the glyphs of controls.ts, drawn along
+// the path line at the stroke width width
+function glyphOf(heads: string, line = 'M3 6h22', width = 1.5): SVGSVGElement {
   const svg = document.createElementNS(SVG, 'svg');
   svg.setAttribute('viewBox', '0 0 28 12');
   svg.setAttribute('width', '28');
   svg.setAttribute('height', '12');
   svg.setAttribute('aria-hidden', 'true');
-  const d = ['M3 6h22'];
+  const d = [line];
   if (heads === 'end' || heads === 'both') d.push('M20 2l5 4-5 4');
   if (heads === 'start' || heads === 'both') d.push('M8 2L3 6l5 4');
   const path = document.createElementNS(SVG, 'path');
   path.setAttribute('d', d.join(''));
   path.setAttribute('fill', 'none');
   path.setAttribute('stroke', 'currentColor');
-  path.setAttribute('stroke-width', '1.5');
+  path.setAttribute('stroke-width', String(width));
   path.setAttribute('stroke-linecap', 'round');
   path.setAttribute('stroke-linejoin', 'round');
   svg.append(path);
@@ -63,8 +65,13 @@ export function swatches(app: App, run: Run, prefix = 'line.tone', label = 'Line
 
 export function linePane(app: App, run: Run): Control[] {
   const heads = HEADS.map(([h, label]) => ({ command: `line.heads.${h}`, title: label, text: () => glyphOf(h) }));
+  const shapes: Record<string, string> = { straight: 'M3 9L25 3', curve: 'M3 10Q14-4 25 10', elbow: 'M3 10H14V2H25' };
+  const kinds = KINDS.map(([k, label]) => ({ command: `line.kind.${k}`, title: label, text: () => glyphOf('none', shapes[k]) }));
+  const weights = WEIGHTS.map((w) => ({ command: `line.weight.${w}`, title: `${w} px`, text: () => glyphOf('none', 'M3 6h22', w / 2 + 0.5) }));
   return [
     section('Color', [row([swatches(app, run)])]),
     section('Arrowheads', [segmented(app, run, heads, 'Arrowheads')]),
+    section('Kind', [segmented(app, run, kinds, 'Kind')]),
+    section('Weight', [segmented(app, run, weights, 'Weight'), checkbox(app, run, 'line.dashed', 'Dashed')]),
   ];
 }

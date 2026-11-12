@@ -13,6 +13,7 @@
 import type { App } from '../app.ts';
 import { CONTAINER, snapBoxOf } from '../canvas/hit.ts';
 import { inkBox, meets, promptBox, slideBox, takenBox, type Box } from './insert.ts';
+import { keepPlaces } from '../canvas/drag.ts';
 
 // what a new element may lie over when nothing else is free: a figure or a drawing, but not a text
 const FIGURE = `${CONTAINER}, img, video, .qr, .surface, .plot, tycho-viewer, svg.line`;
@@ -262,18 +263,7 @@ export function placeNew(app: App, el: Element, picture?: HTMLElement): void {
 // each of them the offset that keeps its drawn place. on another slide, a plate is a block of the
 // text column, and the elements after it move up with the column
 export function keepBeside(app: App, outer: Element[]): (move: (el: Element, translate: { x: number; y: number }) => void) => void {
-  const beside = [...new Set(outer.filter((el) => el.matches('section.figure .plate')).flatMap((el) => [...(el.parentElement?.children ?? [])]))].filter(
-    (el) => !outer.includes(el) && !!(el as HTMLElement).style?.translate && !!app.pairing?.elements.has(el),
-  );
-  const places = beside.map((el) => slideBox(app, el));
-  return (move) =>
-    beside.forEach((el, i) => {
-      const now = slideBox(app, el);
-      const [dx, dy] = [places[i].left - now.left, places[i].top - now.top].map((d) => Math.round(d * 10) / 10);
-      if (!dx && !dy) return;
-      const t = translateOf(el);
-      move(el, { x: t.x + dx, y: t.y + dy });
-    });
+  return keepPlaces(app, outer.filter((el) => el.matches('section.figure .plate')), outer);
 }
 
 // the offset in slide px of a new text box el of a title or closing slide, a child of the section

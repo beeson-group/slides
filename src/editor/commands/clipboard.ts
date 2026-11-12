@@ -23,6 +23,7 @@ import { withTwins } from '../canvas/hit.ts';
 import { VOID } from '../source.ts';
 import { tokenize } from '../tokens.ts';
 import { keepBeside } from './place.ts';
+import { keepPlaces } from '../canvas/drag.ts';
 import { MARK, docOf, slidesIn } from './slide.ts';
 import { cellAt, clearRange, pasteAtCell, pasteRange, pasteTable, rangeText, selectedRange } from './table.ts';
 import { display } from '../keymap.ts';
@@ -158,14 +159,7 @@ export function shift(app: App, el: Element, n: number): void {
 
 // text with each id that is already on the page renamed, together with the plots that name it
 function freshIds(app: App, text: string): string {
-  const doc = docOf(app);
-  let out = text;
-  for (const id of new Set([...text.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]))) {
-    if (!document.getElementById(id)) continue;
-    const next = doc.uniqueId(id);
-    out = out.split(`id="${id}"`).join(`id="${next}"`).split(`data-plot="${id}"`).join(`data-plot="${next}"`);
-  }
-  return out;
+  return docOf(app).freshIds(text, (id) => !!document.getElementById(id));
 }
 
 // the container of the text column of slide, i.e. the panel of a split slide, the block of a title
@@ -177,11 +171,9 @@ export function columnOf(slide: Element): Element {
 // the copies of a group are a new group, as the copies of a drag with the copy modifier in
 // canvas/drag.ts are
 function regroup(app: App, copies: Element[]): void {
-  const groups = new Map<string, string>();
-  for (const el of copies) {
-    const g = copiedGroups(el, groups, (taken) => freshGroup(app, taken));
-    if (g) docOf(app).setTag(el, { attrs: { 'data-group': g } }, 'group');
-  }
+  copiedGroups(copies, (taken) => freshGroup(app, taken)).forEach((g, i) => {
+    if (g !== copies[i].getAttribute('data-group')) docOf(app).setTag(copies[i], { attrs: { 'data-group': g } }, 'group');
+  });
 }
 
 // the elements of texts pasted onto the current slide. the caller runs it in one transaction. an
@@ -195,6 +187,7 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
   if (!slide) return [];
   const doc = docOf(app);
   const own = clip && clip.sources.length === texts.length && clip.sources.every((s) => s.isConnected && slide.contains(s)) ? clip : null;
+  const keep = keepPlaces(app, own?.sources ?? []);
   const nodes: Element[] = [];
   for (const [i, raw] of texts.entries()) {
     const text = freshIds(app, raw);
@@ -223,6 +216,7 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
   }
   regroup(app, nodes);
   settleCopies(app, nodes);
+  keep((el, translate) => doc.setTag(el, { translate }, 'move'));
   if (own) {
     own.pasted++;
     own.last = nodes;
@@ -240,6 +234,7 @@ export function duplicateElements(app: App, els: Element[]): Promise<Element[]> 
 async function duplicated(app: App, els: Element[]): Promise<Element[]> {
   const doc = docOf(app);
   const copies: Element[] = [];
+  const keep = keepPlaces(app, els);
   for (const el of els) {
     const dup = await doc.duplicate(el);
     if (!dup.matches('.backdrop') && covers(app, dup, el)) shift(app, dup, 1);
@@ -247,6 +242,7 @@ async function duplicated(app: App, els: Element[]): Promise<Element[]> {
   }
   regroup(app, copies);
   settleCopies(app, copies);
+  keep((el, translate) => doc.setTag(el, { translate }, 'move'));
   app.selection.set('elements', copies);
   return copies;
 }

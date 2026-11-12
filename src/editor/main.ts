@@ -61,6 +61,7 @@ import { install as installInspector } from './inspector/inspector.ts';
 import { install as installZoomCommands } from './commands/zoom.ts';
 import { install as installLayoutCommands } from './commands/layout.ts';
 import { install as installReviewCommands } from './commands/review.ts';
+import { install as installPreviewCommands, timing as previewTiming } from './commands/preview.ts';
 import { install as installSurfaceCommands } from './inspector/surface.ts';
 import { install as installLineCommands } from './commands/line.ts';
 import { install as installShapeCommands } from './commands/shape.ts';
@@ -173,6 +174,7 @@ installInspector(app);
 installZoomCommands(app);
 installLayoutCommands(app);
 installReviewCommands(app);
+installPreviewCommands(app);
 installSurfaceCommands(app);
 installLineCommands(app);
 installShapeCommands(app);
@@ -278,6 +280,8 @@ const BeesonEditor = {
   // the selected elements, a line among them
   selection: () => app.selection.elements(),
   doc,
+  // the delay of a step of Preview in ms, which a test shortens
+  preview: previewTiming,
   version: __VERSION__,
 };
 

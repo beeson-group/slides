@@ -35,12 +35,13 @@ export const STANDARD_ATTRS = ['alt', 'src', 'poster', 'href', 'muted', 'loop', 
 // pasted slide
 export const TEMPLATE_ATTRS = ['id', 'type'];
 
-// the attributes of the svg of a line or an arrow of commands/line.ts, by tag
+// the attributes of the svg of a line or an arrow of commands/line.ts, by tag. a path is the head
+// of a marker, or the stroke of a curve or an elbow of canvas/stroke.ts
 export const LINE_ATTRS: Record<string, string[]> = {
   svg: ['width', 'height'],
   line: ['x1', 'y1', 'x2', 'y2', 'marker-start', 'marker-end'],
   marker: ['orient'],
-  path: ['d'],
+  path: ['d', 'marker-start', 'marker-end'],
 };
 
 // the elements whose width is set in a style, by tag or by class, and those whose height is set as

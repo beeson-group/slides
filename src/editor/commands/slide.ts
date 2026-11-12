@@ -7,7 +7,7 @@
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import type { Doc } from '../model/doc.ts';
-import { LAYOUTS, type Layout } from '../model/templates.ts';
+import { NEW_LAYOUTS, type Layout, type NewLayout } from '../model/templates.ts';
 import { droppedOrder, isHidden, type MoveTo, type Navigator } from '../navigator/navigator.ts';
 import { groupsOf, sectionHeading } from '../navigator/sorter.ts';
 import { drawInto } from '../navigator/thumbs.ts';
@@ -26,7 +26,7 @@ export const MARK = '<!--beeson-->';
 const PIC = 112;
 const COLUMNS = 3;
 
-const LABELS: Record<Layout, string> = { title: 'Title', section: 'Section', content: 'Content', narrow: 'Content, Narrow', wide: 'Content, Wide', figure: 'Figure', split: 'Split', closing: 'Closing' };
+const LABELS: Record<NewLayout, string> = { title: 'Title', section: 'Section', content: 'Content', titleOnly: 'Title Only', narrow: 'Content, Narrow', wide: 'Content, Wide', figure: 'Figure', split: 'Split', closing: 'Closing' };
 
 // the prompts of the empty blocks of a new slide, which are not written into the file
 const CSS = `
@@ -96,7 +96,7 @@ function caretInto(slide: Element): void {
   sel?.addRange(range);
 }
 
-async function newSlide(app: App, layout: Layout, before = placeAfter(app).before): Promise<Element> {
+async function newSlide(app: App, layout: NewLayout, before = placeAfter(app).before): Promise<Element> {
   const slide = await docOf(app).insertSlide(layout, before);
   // the slide is hidden under the Chapters Table, hence its tile takes the focus, as at Duplicate
   if (navOf(app).table?.shown) land(app, [slide], slide, true);
@@ -170,14 +170,7 @@ export function slidesIn(text: string): string[] | null {
 // an id that is already on the page is renamed in a pasted slide, together with the plots that
 // name it, so that a cut slide is pasted with its own ids
 function freshIds(app: App, text: string): string {
-  const doc = docOf(app);
-  let out = text;
-  for (const id of new Set([...text.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]))) {
-    if (!document.getElementById(id)) continue;
-    const next = doc.uniqueId(id);
-    out = out.split(`id="${id}"`).join(`id="${next}"`).split(`data-plot="${id}"`).join(`data-plot="${next}"`);
-  }
-  return out;
+  return docOf(app).freshIds(text, (id) => !!document.getElementById(id));
 }
 
 // the text last copied, for a paste from a menu where the clipboard of the system cannot be read
@@ -221,7 +214,7 @@ export const sectionSlides = (app: App, head: Element): Element[] => groupsOf(se
 
 const escapeText = (text: string): string => text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-// the gallery of the eight layouts, drawn as the samples of the layout chooser of
+// the gallery of the eight layouts and of Title Only, drawn as the samples of the layout chooser of
 // commands/layout.ts. a click or Enter on a layout adds a slide of it after the current one. back
 // is the element that had the focus before the gallery was opened
 type Gallery = HTMLDialogElement & { anchor?: HTMLElement | null; back?: HTMLElement | null };
@@ -258,7 +251,7 @@ function openGallery(app: App, anchor: HTMLElement | null): void {
   grid.setAttribute('aria-label', 'Layouts');
   const stage = app.slides() as HTMLElement;
   const deck = { width: stage.offsetWidth || 1920, height: stage.offsetHeight || 1080 };
-  const tiles = LAYOUTS.map((layout) => {
+  const tiles = NEW_LAYOUTS.map((layout) => {
     const tile = document.createElement('button');
     tile.type = 'button';
     tile.className = 'tile';
@@ -377,7 +370,7 @@ export function install(app: App): void {
       enabled: ready,
       run: (a, arg) => openGallery(a, arg instanceof HTMLElement ? arg : null),
     },
-    ...LAYOUTS.map(
+    ...NEW_LAYOUTS.map(
       (layout, i): Command => ({
         id: `slide.new.${layout}`,
         label: LABELS[layout],

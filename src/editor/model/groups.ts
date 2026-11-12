@@ -35,10 +35,17 @@ export function groupUsed(name: string, text: string): boolean {
   return !!document.querySelector(`[data-group~="${CSS.escape(name)}"]`) || new RegExp(`data-group="(?:[^"]*\\s)?${esc}(?:\\s[^"]*)?"`).test(text);
 }
 
-// the list of a copy of el, with each name mapped once to a fresh name, so that the copies of one
-// selection keep the nesting of their originals
-export function copiedGroups(el: Element, names: Map<string, string>, fresh: (taken: Set<string>) => string): string | null {
-  const list = groupsOf(el);
-  for (const n of list) if (!names.has(n)) names.set(n, fresh(new Set(names.values())));
-  return groupValue(list.map((n) => names.get(n) as string));
+// the lists of the copies els of one selection, with each name mapped once to a fresh name, so that
+// the copies keep the nesting of their originals. a name of one copy is left out, and so is a name
+// that holds the same copies as the name inside it, e.g. the entered group of a copied inner group
+export function copiedGroups(els: Element[], fresh: (taken: Set<string>) => string): (string | null)[] {
+  const lists = els.map(groupsOf);
+  const holders = new Map<string, string>();
+  lists.forEach((list, i) => list.forEach((n) => holders.set(n, `${holders.get(n) ?? ''} ${i}`)));
+  const shared = (n: string) => holders.get(n)!.includes(' ', 1);
+  const names = new Map<string, string>();
+  return lists.map((list) => groupValue(list.filter((n, k) => shared(n) && holders.get(n) !== holders.get(list[k + 1])).map((n) => {
+    if (!names.has(n)) names.set(n, fresh(new Set(names.values())));
+    return names.get(n) as string;
+  })));
 }

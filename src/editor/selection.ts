@@ -64,6 +64,13 @@ function caretAt(x: number, y: number): { node: Text; offset: number } | null {
   return r && r.startContainer instanceof Text ? { node: r.startContainer, offset: r.startOffset } : null;
 }
 
+// the caret put into host at the point x, y of the viewport
+export function placeCaretAt(host: Element, x: number, y: number): void {
+  const at = caretAt(x, y);
+  (host as HTMLElement).focus({ preventScroll: true });
+  if (at && host.contains(at.node)) getSelection()?.setBaseAndExtent(at.node, at.offset, at.node, at.offset);
+}
+
 // the start and the end in node of the word at offset, or at its end, or null between two words
 function wordAround(node: Text, offset: number): [number, number] | null {
   const words = [...new Intl.Segmenter(document.documentElement.lang || undefined, { granularity: 'word' }).segment(node.data)].filter((w) => w.isWordLike);

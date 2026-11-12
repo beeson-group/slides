@@ -301,10 +301,11 @@ export function textPane(app: App, run: Run): Control[] {
         { command: 'text.list.dots', icon: 'list-dot', title: 'Dots', pressed: listState(app, 'dots') },
         { command: 'text.list.arrows', icon: 'list-arrow', title: 'Arrows', pressed: listState(app, 'arrows') },
         { command: 'text.list.ol', icon: 'list-number', title: 'Numbers', pressed: listState(app, 'ol') },
-      ], 'List'), segmented(app, run, [
+      ], 'List')]),
+      row([segmented(app, run, [
         { command: 'text.outdent', icon: 'outdent', title: 'Decrease Indent Level' },
         { command: 'text.indent', icon: 'indent', title: 'Increase Indent Level' },
-      ], 'Indent level')]),
+      ], 'Indent level')], 'Indent'),
       row([startField(app, run)]),
     ]),
     section('Link', [

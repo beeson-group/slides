@@ -246,6 +246,12 @@ export function openInsert(app: App, host: Element, range: Range): void {
     primary: 'Insert',
     block: () => blockOf(host),
     commit: async (tex) => {
+      // the empty words of a shape are not in the file yet, hence the formula is sent to them as typed
+      // text, which commands/shape.ts writes as the words of the shape in one entry
+      if (host.hasAttribute('data-generated')) {
+        host.dispatchEvent(new InputEvent('beforeinput', { inputType: 'insertText', data: `\\(${tex}\\)`, bubbles: true, cancelable: true }));
+        return;
+      }
       // a new empty box is not in the file yet, hence the formula is typed into it, which writes the
       // box with the formula as one entry, as typed text is written by commands/insert.ts
       if (host.classList.contains('beeson-pending')) {

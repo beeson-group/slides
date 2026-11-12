@@ -17,10 +17,11 @@ import { icon } from './icons.ts';
 
 // an item of a menu: a command of the registry by its id, a submenu, an action of the chrome, or a
 // rule between groups. a command item may give a label of its own, e.g. a short one in a submenu,
-// and the path of its menu, e.g. in the results of a search. a note is a line of gray text, and a
-// search is the field at the top of the Help menu over the commands of the menus of bars
+// the path of its menu, e.g. in the results of a search, and an icon of ui/icons.ts. a note is a
+// line of gray text, and a search is the field at the top of the Help menu over the commands of
+// the menus of bars
 export type MenuItem =
-  | { command: string; arg?: unknown; label?: string; path?: string[] }
+  | { command: string; arg?: unknown; label?: string; path?: string[]; icon?: string }
   | { label: string; items: MenuItem[] | (() => MenuItem[]); disabled?: boolean }
   | { label: string; run: () => unknown; checked?: boolean | null; disabled?: boolean; keys?: string }
   | { note: string }
@@ -62,6 +63,7 @@ const CSS = `
 .beeson-edit-menu .item { display: grid; grid-template-columns: 18px 1fr auto 14px; align-items: center; column-gap: 4px; min-height: 22px; padding: 0 8px 0 4px; border-radius: 4px; cursor: default; white-space: nowrap; }
 .beeson-edit-menu .item .check { display: flex; justify-content: center; }
 .beeson-edit-menu .item .label { overflow: hidden; text-overflow: ellipsis; }
+.beeson-edit-menu .item .label > .beeson-icon { margin: -2px 8px -2px 0; vertical-align: -4px; }
 .beeson-edit-menu .item .keys { padding-left: 24px; color: var(--ed-muted); font-variant-numeric: tabular-nums; letter-spacing: 0.04em; }
 .beeson-edit-menu .item .arrow { display: flex; justify-content: flex-end; color: var(--ed-muted); }
 .beeson-edit-menu .item.hi { background: var(--ed-select); color: var(--ed-on-select); }
@@ -492,6 +494,7 @@ class Menu {
     if (submenu) arrow.append(icon('chevron-right', 12));
     const name = make('span', 'label', label);
     if ('path' in item && item.path?.length) name.append(make('span', 'path', item.path.join(' ▸ ')));
+    if ('icon' in item && item.icon) name.prepend(icon(item.icon, 16));
     el.append(check, name, make('span', 'keys', keys), arrow);
     return { el, item, enabled, submenu, text: label.toLowerCase() };
   }

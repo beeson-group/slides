@@ -8,7 +8,7 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { LAYOUTS, layoutText, sampleText, textStyle, type Layout } from '../model/templates.ts';
+import { LAYOUTS, layoutText, sampleText, textStyle, type Layout, type NewLayout } from '../model/templates.ts';
 import { childrenIn, eolOf, indentAt, spaceOf, unitsOf } from '../model/units.ts';
 import type { Navigator } from '../navigator/navigator.ts';
 import { drawInto, laidOut } from '../navigator/thumbs.ts';
@@ -367,7 +367,7 @@ const CSS = `
 
 // the sample slide of a layout, parsed from its text, for the tiles of this chooser and of the New
 // Slide gallery of commands/slide.ts
-export function sample(layout: Layout): Element {
+export function sample(layout: NewLayout): Element {
   const t = document.createElement('template');
   t.innerHTML = sampleText(layout);
   return t.content.firstElementChild!;

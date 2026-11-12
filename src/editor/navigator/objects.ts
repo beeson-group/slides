@@ -109,7 +109,7 @@ function wordsOf(el: Element): string {
 export function describeObject(el: Element): { kind: string; icon: string; name: string } {
   const named = (kind: string, glyphName: string, words = '') => ({ kind, icon: glyphName, name: words ? `${kind}: ${words}` : kind });
   if (el.matches(LINE)) {
-    const line = el.querySelector('line');
+    const line = el.querySelector(':scope > line, :scope > path');
     return line?.hasAttribute('marker-end') || line?.hasAttribute('marker-start') ? named('Arrow', 'arrow') : named('Line', 'line');
   }
   if (el.matches('.shape')) return named(SHAPE_KINDS.find(([k]) => k === shapeKind(el))![1], 'shape', wordsOf(el));

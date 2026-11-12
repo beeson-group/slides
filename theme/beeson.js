@@ -3216,7 +3216,7 @@
     }
     const style = getComputedStyle(el);
     const w = el.offsetWidth || parseFloat(style.width) || 0, h = el.offsetHeight || parseFloat(style.height) || 0;
-    const s = parseFloat(style.getPropertyValue("--shape-weight")) || 0;
+    const s = parseFloat(style.getPropertyValue("--weight")) || 0;
     if (!svg2) {
       svg2 = document.createElementNS(SVG3, "svg");
       svg2.setAttribute("aria-hidden", "true");

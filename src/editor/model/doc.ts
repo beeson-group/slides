@@ -13,7 +13,7 @@ import type { Source, SrcEl } from '../source.ts';
 import { mergeEdit, renderTag, stateOf, translateIn, translateText, type TagEdit, type TagState } from '../tags.ts';
 import { tokenize } from '../tokens.ts';
 import { fragmentRoot, mergePairing, pairFragment, parseFragment } from './fragments.ts';
-import { elementText, layoutText, textStyle, type ElementKind, type ElementOptions, type Layout } from './templates.ts';
+import { elementText, layoutText, textStyle, type ElementKind, type ElementOptions, type NewLayout } from './templates.ts';
 
 // what the document model is given by the editor. tags are the start tags changed since the last
 // save, changed is called after each change, and restore puts a block back with its formulas
@@ -135,16 +135,6 @@ function applyLive(el: Element, edit: TagEdit): void {
     else style.setProperty(n, v);
   }
   if (edit.translate !== undefined) style.translate = edit.translate ? translateText(edit.translate) : '';
-}
-
-// the text with each id renamed by fresh, together with the plots that name it
-function renameIds(text: string, fresh: (id: string) => string): string {
-  let out = text;
-  for (const m of new Set([...text.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]))) {
-    const id = fresh(m);
-    out = out.split(`id="${m}"`).join(`id="${id}"`).split(`data-plot="${m}"`).join(`data-plot="${id}"`);
-  }
-  return out;
 }
 
 export class Doc {
@@ -269,7 +259,7 @@ export class Doc {
   }
 
   // a new slide of the layout before the slide before, or at the end
-  async insertSlide(layout: Layout, before: Element | null = null): Promise<Element> {
+  async insertSlide(layout: NewLayout, before: Element | null = null): Promise<Element> {
     const { pairing } = this.need();
     if (!pairing.root) throw new Error('the deck does not have a div.slides element');
     const base = this.childIndent(pairing.root);
@@ -286,7 +276,7 @@ export class Doc {
   async duplicate(el: Element): Promise<Element> {
     const parent = el.parentElement;
     if (!parent) throw new Error('the element is not on the page');
-    const text = renameIds(this.elementText(el), (id) => this.uniqueId(id));
+    const text = this.freshIds(this.elementText(el));
     const [copy] = await this.insert(text, parent, nextKept(el), 'duplicate');
     return copy;
   }
@@ -322,18 +312,26 @@ export class Doc {
   // el replaced by an element of the tag with the same attributes and content, and with the edit
   // applied to its start tag, e.g. a p made an h3
   async retag(el: Element, tag: string, edit: TagEdit = {}, label = 'retag'): Promise<Element> {
+    const old = el.localName;
+    return this.rewrite(el, (text) => {
+      let body = text.replace(new RegExp(`^<${old}(?=[\\s/>])`, 'i'), `<${tag}`).replace(new RegExp(`</${old}(\\s*)>$`, 'i'), `</${tag}$1>`);
+      const start = tokenize(body).find((t) => t.type === 'start');
+      const e = normalizeEdit(edit);
+      if (start?.type === 'start' && Object.keys(e).length) {
+        const open = renderTag(body, start, start.attrs, e);
+        if (open !== null) body = body.slice(0, start.start) + open + body.slice(start.end);
+      }
+      return body;
+    }, label);
+  }
+
+  // el replaced by the element of the text that edit makes of its text, with the lead and the trail
+  // of its unit kept, e.g. the line of the svg of a line made a path
+  async rewrite(el: Element, edit: (body: string) => string, label = 'rewrite'): Promise<Element> {
     const parent = el.parentElement;
     if (!parent) throw new Error('the element is not on the page');
     const u = this.unit(el);
-    const old = el.localName;
-    let body = u.body.replace(new RegExp(`^<${old}(?=[\\s/>])`, 'i'), `<${tag}`).replace(new RegExp(`</${old}(\\s*)>$`, 'i'), `</${tag}$1>`);
-    const start = tokenize(body).find((t) => t.type === 'start');
-    const e = normalizeEdit(edit);
-    if (start?.type === 'start' && Object.keys(e).length) {
-      const open = renderTag(body, start, start.attrs, e);
-      if (open !== null) body = body.slice(0, start.start) + open + body.slice(start.end);
-    }
-    const node = await this.place(body + u.trail, parent, el, u.lead);
+    const node = await this.place(edit(u.body) + u.trail, parent, el, u.lead);
     let rec = this.detach(el);
     await this.after(parent);
     let back: Detached | null = null;
@@ -388,14 +386,29 @@ export class Doc {
     if (refresh) await this.after(node);
   }
 
-  // an id that is not on the page or in the file, from base
-  uniqueId(base: string): string {
+  // an id that is not on the page, in the file, or in taken, from base
+  uniqueId(base: string, taken?: Set<string>): string {
     const stem = base.replace(/-\d+$/, '');
     const text = this.host.source()?.text ?? '';
     for (let i = 1; ; i++) {
       const id = `${stem}-${i}`;
-      if (!document.getElementById(id) && !text.includes(`id="${id}"`)) return id;
+      if (!document.getElementById(id) && !text.includes(`id="${id}"`) && !taken?.has(id)) return id;
     }
+  }
+
+  // text with each id for which rename holds renamed, together with the plots that name it. each
+  // new id is handed out once, so that the two markers of a copied slide get two ids
+  freshIds(text: string, rename: (id: string) => boolean = () => true): string {
+    const ids = new Set([...text.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]));
+    const taken = new Set(ids);
+    let out = text;
+    for (const m of ids) {
+      if (!rename(m)) continue;
+      const id = this.uniqueId(m, taken);
+      taken.add(id);
+      out = out.split(`id="${m}"`).join(`id="${id}"`).split(`data-plot="${m}"`).join(`data-plot="${id}"`);
+    }
+    return out;
   }
 
   // the indentation of the children of parent in the file

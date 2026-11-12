@@ -8,6 +8,7 @@
 import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
 import { injectStyle } from '../ui/dom.ts';
+import { setItemIcon } from '../ui/icons.ts';
 import { overlay, view, wh } from '../canvas/frames.ts';
 import { frameOf, onCanvas } from '../canvas/hit.ts';
 import { LINE_TONES } from './line.ts';
@@ -33,10 +34,14 @@ export const CORNERS: [string, string, string | null][] = [['small', 'Small', 'r
 // the side of a shape placed by a click, and the pointer travel under which a press is a click
 const CLICKED = 240;
 const CLICK = 3;
-// the band about the outline of a shape without a fill in which a press hits it, in slide px. inside
-// the band, a press goes through the shape, e.g. to start a marquee. the band of a drawn geometry
-// is its stroke
+// the band in which a press hits a shape without a fill: its outline and NEAR slide px on each side
+// of it. inside the band, a press goes through the shape, e.g. to start a marquee. the band of a
+// drawn geometry is its stroke
 const NEAR = 6;
+// the inner edge of the band, measured from the edge of the ::before box, which is NEAR px outside
+// the outline
+const HOLE = `calc(${2 * NEAR}px + var(--weight))`;
+const HOLE_END = `calc(100% - ${2 * NEAR}px - var(--weight))`;
 
 const CSS = `
 html.beeson-drawing-shape .reveal, html.beeson-drawing-shape .reveal *, html.beeson-drawing-shape .beeson-edit-canvas { cursor: crosshair !important; }
@@ -44,7 +49,7 @@ html.beeson-editor .reveal .slides .shape > p[data-generated] { min-width: 1em; 
 html.beeson-editing .reveal .slides section .shape.fill-none { pointer-events: none; }
 html.beeson-editing .reveal .slides section .shape.fill-none > :not(svg) { pointer-events: auto; }
 html.beeson-editing .reveal .slides section .shape.fill-none > svg path { pointer-events: stroke; }
-html.beeson-editing .reveal .slides section .shape.fill-none:not(:is(${DRAWN.map((k) => `.${k}`).join(", ")}))::before { content: ""; position: absolute; inset: calc(-${NEAR}px - var(--shape-weight)); pointer-events: auto; clip-path: polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${2 * NEAR}px ${2 * NEAR}px, ${2 * NEAR}px calc(100% - ${2 * NEAR}px), calc(100% - ${2 * NEAR}px) calc(100% - ${2 * NEAR}px), calc(100% - ${2 * NEAR}px) ${2 * NEAR}px, ${2 * NEAR}px ${2 * NEAR}px); }
+html.beeson-editing .reveal .slides section .shape.fill-none:not(:is(${DRAWN.map((k) => `.${k}`).join(", ")}))::before { content: ""; position: absolute; inset: calc(-${NEAR}px - var(--weight)); pointer-events: auto; clip-path: polygon(evenodd, 0 0, 100% 0, 100% 100%, 0 100%, 0 0, ${HOLE} ${HOLE}, ${HOLE} ${HOLE_END}, ${HOLE_END} ${HOLE_END}, ${HOLE_END} ${HOLE}, ${HOLE} ${HOLE}); }
 `;
 
 export const isShape = (el: Element): boolean => el.matches('.reveal .slides section .shape');
@@ -215,7 +220,8 @@ export function install(app: App): void {
       close();
       void startWords(el, text).catch((e) => app.fail(e));
     });
-    p.addEventListener('focusout', () => setTimeout(() => opened === p && document.activeElement !== p && close(), 0));
+    // the words are kept while the sheet of a formula typed into them is open
+    p.addEventListener('focusout', () => setTimeout(() => opened === p && document.activeElement !== p && !app.math.isOpen() && close(), 0));
     p.focus({ preventScroll: true });
   };
   const emptyShape = () => {
@@ -238,6 +244,8 @@ export function install(app: App): void {
   }, true);
   typed = (ev) => {
     if (ev.isComposing || ev.key.length !== 1 || ev.key === ' ' || ev.ctrlKey || ev.metaKey || app.state !== 'loaded' || app.region() !== 'canvas') return;
+    // an Alt key of a command, e.g. Alt+= of Insert Formula on other, runs the command
+    if (ev.altKey && app.commands.forKey(ev, 'canvas')) return;
     const el = app.selection.only();
     if (!el || !isShape(el) || el.hasAttribute('data-locked')) return;
     ev.preventDefault();
@@ -274,6 +282,7 @@ export function install(app: App): void {
       checked: () => (drawing === kind ? true : null),
       run: startDrawing(kind),
     });
+    setItemIcon(`insert.shape.${kind}`, `shape:${kind}`);
   });
 
   // Return on an empty shape puts the caret into it, before Edit Text of commands/arrange.ts
@@ -291,15 +300,15 @@ export function install(app: App): void {
 
   const some = (a: App) => ready(a) && selectedShapes(a).length > 0;
   const shapeMenu = (group: string, order: number) => ({ bar: 'Format', group, order, submenu: 'Shape' });
-  const family = (prefix: string, list: [string, string, string | null][], undo: string, group: string, at: number, only?: (el: Element) => boolean) =>
+  const family = (prefix: string, list: [string, string, string | null][], undo: string, group: string, at: number, only?: (el: Element, id: string) => boolean, read = (el: Element) => choiceOf(el, list)) =>
     list.forEach(([id, label], i) => {
-      const fit = (a: App) => some(a) && (!only || selectedShapes(a).every(only));
+      const fit = (a: App) => some(a) && (!only || selectedShapes(a).every((el) => only(el, id)));
       c.define({
         id: `shape.${prefix}.${id}`,
         label,
         menu: shapeMenu(group, at + i),
         enabled: fit,
-        checked: (a) => fit(a) && selectedShapes(a).every((el) => choiceOf(el, list) === id),
+        checked: (a) => fit(a) && selectedShapes(a).every((el) => read(el) === id),
         undoable: true,
         undo,
         run: (a) => {
@@ -310,7 +319,10 @@ export function install(app: App): void {
     });
   family('tone', LINE_TONES.map(([t, label]) => [t, label, t === 'text' ? null : `tone-${t}`]), 'Shape Color', 'shape-tone', 80);
   family('fill', FILLS, 'Shape Fill', 'shape-fill', 90);
-  family('weight', WEIGHTS, 'Outline', 'shape-weight', 100);
+  // a veil is drawn without an outline unless it has weight-6 or weight-8, hence 3 px, which does not
+  // have a class, is not offered on a veil, and the outline of a veil without a class reads as None
+  const veil = (el: Element) => el.classList.contains('veil');
+  family('weight', WEIGHTS, 'Outline', 'shape-weight', 100, (el, id) => id !== '3' || !veil(el), (el) => (veil(el) && choiceOf(el, WEIGHTS) === '3' ? 'none' : choiceOf(el, WEIGHTS)));
   family('corner', CORNERS, 'Corners', 'shape-corner', 110, (el) => el.classList.contains('rounded'));
   SHAPE_KINDS.forEach(([kind, label], i) => {
     c.define({

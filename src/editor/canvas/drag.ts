@@ -3,19 +3,21 @@
 // viewer, and a drag from an empty point draws a marquee. Shift locks a move to one axis, the free
 // modifier, ⌘ on a Mac and Alt elsewhere, turns the snapping off, also the hold of a turn at the
 // multiples of 45 degrees, and the copy modifier, ⌥ on a Mac and Ctrl elsewhere, held at the
-// release leaves the elements and writes a copy of each where they were dropped. the offset of an element is the declaration translate of its style, and its size
-// the declaration width, in slide pixels
+// release leaves the elements and writes a copy of each where they were dropped. the offset of an
+// element is the declaration translate of its style, and its size the declaration width, in slide
+// pixels
 
 import type { App } from '../app.ts';
 import type { TagEdit, Translate } from '../tags.ts';
 import type { Box, Handle, Targets } from './snap.ts';
 import { LAYOUT_GUIDES, anchored, fitPicture, lockedAxis, resizeBox, snapAngle, snapMove, snapResize } from './snap.ts';
-import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, captionsOf, constrained, containerOf, cssWidth, figureFrame, frameOf, frameRect, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, pictureReach, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, unturnedRect, visualRect } from './hit.ts';
+import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, captionsOf, constrained, containerOf, cssWidth, figureFrame, frameOf, frameRect, hasText, isTextSized, linePoints, linesOf, lineTouches, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, pictureReach, sizedOf, snapBoxOf, toSlide, turnable, twinOf, unturnedRect, visualRect } from './hit.ts';
 import { groupFrame, overlay, turned, view, wh, xy } from './frames.ts';
 import { enterGroup, settleCopies, freshGroup, groupOf } from '../commands/order.ts';
 import { copiedGroups, scopeOf, within } from '../model/groups.ts';
 import { cornerBoxOf } from '../commands/align.ts';
 import { backdropAt, pressBackdrop } from '../commands/backdrop.ts';
+import { placeCaretAt } from '../selection.ts';
 import { injectStyle } from '../ui/dom.ts';
 
 const CSS = `
@@ -445,6 +447,31 @@ export function standIns() {
   };
 }
 
+// keepPlaces measures each sibling of the elements of near that has an offset, apart from those of
+// left, and the function that it returns gives each of them the offset that keeps its drawn place,
+// e.g. after a copy is written into the flow ahead of a label
+export function keepPlaces(app: App, near: Element[], left: Element[] = []): (move: (el: Element, translate: Translate) => void) => void {
+  const beside = [...new Set(near.flatMap((el) => [...(el.parentElement?.children ?? [])]))].filter(
+    (el) => !left.includes(el) && !!(el as HTMLElement).style?.translate && !!app.pairing?.elements.has(el),
+  );
+  // the place of el in slide px, from the scale of the slides
+  const at = (el: Element) => {
+    const s = app.slides() as HTMLElement;
+    const k = s.offsetWidth ? s.getBoundingClientRect().width / s.offsetWidth : 1;
+    const r = el.getBoundingClientRect();
+    return { x: r.left / k, y: r.top / k };
+  };
+  const places = beside.map(at);
+  return (move) =>
+    beside.forEach((el, i) => {
+      const now = at(el);
+      const [dx, dy] = [places[i].x - now.x, places[i].y - now.y].map((d) => Math.round(d * 10) / 10);
+      if (!dx && !dy) return;
+      const t = placeOf(el).translate ?? { x: 0, y: 0 };
+      move(el, { x: t.x + dx, y: t.y + dy });
+    });
+}
+
 export function install(app: App): void {
   injectStyle('drag', CSS);
   const frames = overlay();
@@ -516,7 +543,7 @@ export function install(app: App): void {
   // all of it is dragged, and a click on it then selects it alone, or the picture inside an
   // unlocked figure. a click on a member of a group that is selected as the whole selection
   // selects the member by itself
-  const pressElement = (ev: PointerEvent, el: Element, target: Element | null) => {
+  const pressElement = (ev: PointerEvent, el: Element, target: Element | null, onClick: Press['click'] = null) => {
     ev.preventDefault();
     leaveText();
     const sel = app.selection;
@@ -540,7 +567,7 @@ export function install(app: App): void {
     const moved = objectsOf(app, sel.elements());
     const els = moved.filter((e) => !moved.some((o) => o !== e && o.contains(e)) && !locked(e));
     const lead = objectOf(app, el);
-    start('move', ev, els.includes(lead) ? lead : (els[0] ?? null), els, click);
+    start('move', ev, els.includes(lead) ? lead : (els[0] ?? null), els, onClick ?? click);
   };
 
   const onDown = (ev: PointerEvent) => {
@@ -662,7 +689,15 @@ export function install(app: App): void {
       // Keynote and PowerPoint. a shape is selected at the first click on its words, as a group
       // is, and inside an entered group, a block is selected at the first click
       const grouped = !!groupOf(el) || el.matches('.shape') || (scopeOf().length > 0 && within(el));
-      if (ev.shiftKey || commandHeld(ev) || (grouped && sel.only() !== el)) pressElement(ev, el, target);
+      // a press in the text that is edited puts the caret there or selects words
+      const editing = host.contains(document.activeElement);
+      if (ev.shiftKey || commandHeld(ev) || (grouped && sel.only() !== el && !editing)) pressElement(ev, el, target);
+      // a press on the words of a selected shape that are not edited moves the shape, as in
+      // PowerPoint, and a click without a move puts the caret there
+      else if (el.matches('.shape') && sel.only() === el && !editing) {
+        const { clientX: x, clientY: y } = ev;
+        pressElement(ev, el, target, () => placeCaretAt(host, x, y));
+      }
       return;
     }
     if (el && (target.closest(BY_ITSELF) || !hasText(el))) {
@@ -710,7 +745,7 @@ export function install(app: App): void {
         return r.left <= box.left + box.width && r.left + r.width >= box.left && r.top <= box.top + box.height && r.top + r.height >= box.top;
       });
       // a line is touched where the marquee touches the line itself, not only its box
-      for (const svg of linesOf(app)) if (segmentTouches(...lineEnds(svg), box)) touched.push(svg);
+      for (const svg of linesOf(app)) if (lineTouches(svg, box)) touched.push(svg);
       app.selection.set('elements', [...(p.initial ?? []), ...touched]);
       frames.draw();
       return;
@@ -1066,21 +1101,23 @@ export function install(app: App): void {
     const f = frameOf(app);
     const dropped = p.els.map((el) => ({ el, box: toSlide(f, frameRect(el)) }));
     for (const el of p.els) writeLive(el, p.from.get(el) as Place);
+    const keep = keepPlaces(app, p.els);
     await app.history.selecting('Duplicate', async () => {
       const copies: Element[] = [];
-      // the copies of a group are a new group
-      const groups = new Map<string, string>();
       for (const { el, box } of dropped) {
         const copy = await app.doc.duplicate(el);
         // before the copy is put where it was dropped, since a plate made a zone is laid out anew
         settleCopies(app, [copy]);
-        const g = copiedGroups(copy, groups, (taken) => freshGroup(app, taken));
-        if (g) app.doc.setTag(copy, { attrs: { 'data-group': g } }, 'group');
         const now = toSlide(frameOf(app), frameRect(copy));
         const t = placeOf(copy).translate ?? { x: 0, y: 0 };
         app.doc.setTag(copy, { translate: { x: Math.round(t.x + box.left - now.left), y: Math.round(t.y + box.top - now.top) } }, 'move');
         copies.push(copy);
       }
+      // the copies of a group are a new group
+      copiedGroups(copies, (taken) => freshGroup(app, taken)).forEach((g, i) => {
+        if (g !== copies[i].getAttribute('data-group')) app.doc.setTag(copies[i], { attrs: { 'data-group': g } }, 'group');
+      });
+      keep((el, translate) => app.doc.setTag(el, { translate }, 'move'));
       app.selection.set('elements', copies);
     });
     frames.draw();

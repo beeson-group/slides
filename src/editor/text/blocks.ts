@@ -94,13 +94,14 @@ export function selectIn(root: Element, start: number, end = start): void {
 // a range in a block, which a text command works on
 export type Target = { host: Element; range: Range };
 
-// the blocks of the selected elements: a selected block, and each item of a selected list, as on a
-// text box selected as an object in Keynote
+// the blocks of the selected elements: a selected block, each item of a selected list, and the words
+// of a selected shape, as on a text box or a shape selected as an object in Keynote
 export function selectedBlocks(app: App): Element[] {
   const pairing = app.pairing;
   if (!pairing) return [];
   return app.selection.elements().flatMap((el) => {
     if (pairing.byLive.has(el)) return el.matches('aside.notes') ? [] : [el];
+    if (el.matches('div.shape')) return [...el.querySelectorAll(':scope > p')].filter((p) => pairing.byLive.has(p));
     return el.matches(LIST) && pairing.elements.has(el) ? [...el.querySelectorAll('li')].filter((li) => pairing.byLive.has(li)) : [];
   });
 }
@@ -774,10 +775,11 @@ function blockList(app: App, el: Element): ListKind | null {
 }
 
 // the blocks selected as elements, each of which a list is set on as a whole, as on a text box
-// selected as an object in Keynote, or null when a selected element is not such a block
+// selected as an object in Keynote, with the words of a selected shape, or null when a selected
+// element is not such a block
 function listBlocks(app: App): Element[] | null {
   if (app.selection.kind !== 'elements') return null;
-  const els = app.selection.elements();
+  const els = app.selection.elements().flatMap((el) => (el.matches('div.shape') ? [...el.children].filter((c) => blockList(app, c) !== null) : [el]));
   return els.length && els.every((el) => blockList(app, el) !== null) ? els : null;
 }
 
@@ -930,6 +932,8 @@ function setBlockList(app: App, blocks: Element[], kind: ListKind): Promise<void
 }
 
 async function listBlocksAs(app: App, blocks: Element[], kind: ListKind): Promise<void> {
+  // a selected shape stays selected, with its words set as a list
+  const shapes = app.selection.elements().filter((el) => el.matches('div.shape'));
   const made: Element[] = [];
   for (const el of blocks) {
     const now = blockList(app, el);
@@ -948,7 +952,7 @@ async function listBlocksAs(app: App, blocks: Element[], kind: ListKind): Promis
     }
     if (tagOf(kind) === 'ul') await markNested(app, made.at(-1)!, kind);
   }
-  app.selection.set('elements', made);
+  app.selection.set('elements', [...shapes, ...made.filter((el) => !shapes.some((s) => s.contains(el)))]);
 }
 
 // the nested ul lists of the list block made of kind, as a text box of PowerPoint takes a bullet at

@@ -1,22 +1,25 @@
 // a line or an arrow on a slide, as Insert > Line and Insert > Arrow of Keynote and PowerPoint. a
-// line is an inline svg as large as the box of its line, at the upper left of the slide and placed
-// by its translate, with one line element and the marker of its arrowheads. it is drawn by a drag
-// from point to point, with Shift in steps of 45 degrees, selected by a press within NEAR px of it,
-// moved as an element, and edited by its two end handles. its tone and its arrowheads are set with
+// line is an inline svg as large as the box of its stroke, at the upper left of the slide and placed
+// by its translate, with one line element, or the path of a curve or an elbow of canvas/stroke.ts,
+// and the marker of its arrowheads. it is drawn by a drag from point to point, with Shift in steps
+// of 45 degrees, selected by a press near its stroke, moved as an element, and edited by its two
+// end handles and the grip of its bend. its tone, arrowheads, kind, weight, and dash are set with
 // the commands of Format > Line, which the Line pane of inspector/line.ts runs. the rules of its
 // look are in theme/beeson.css, so that a deck draws it without the editor
 
 import type { App } from '../app.ts';
 import { injectStyle, make } from '../ui/dom.ts';
+import { setItemIcon } from '../ui/icons.ts';
 import { overlay, view, xy } from '../canvas/frames.ts';
-import { frameOf, frameRect, linePoints, movablesOf, onCanvas, snapBoxOf, toSlide, type Frame } from '../canvas/hit.ts';
+import { frameOf, frameRect, lineAt, linePoints, movablesOf, onCanvas, snapBoxOf, strokeOf, toSlide, type Frame } from '../canvas/hit.ts';
+import { bendTo, gripOf, parseStroke, rebend, strokeText, withKind, type Ends, type Kind, type Point, type Stroke } from '../canvas/stroke.ts';
 import { LAYOUT_GUIDES, snapMove, snapPoint, type Box, type Targets } from '../canvas/snap.ts';
-import { locked, placeOf, record, scrollOf, standIns, writePlace, type Place } from '../canvas/drag.ts';
+import { angleOf, locked, placeOf, record, scrollOf, standIns, writePlace, type Place } from '../canvas/drag.ts';
 import { freshGroup } from './order.ts';
 import { copiedGroups } from '../model/groups.ts';
 
-export type Point = { x: number; y: number };
-export type Ends = { x1: number; y1: number; x2: number; y2: number };
+export { distance } from '../canvas/stroke.ts';
+export type { Ends, Point };
 export type Heads = 'none' | 'start' | 'end' | 'both';
 
 // the tones of a line, with the token that each is drawn in
@@ -29,12 +32,15 @@ export const LINE_TONES: [string, string, string][] = [
   ['red', 'Red', '--red'],
 ];
 export const HEADS: [Heads, string][] = [['none', 'No Arrowheads'], ['start', 'Arrowhead at Start'], ['end', 'Arrowhead at End'], ['both', 'Arrowheads at Both Ends']];
+export const KINDS: [Kind, string][] = [['straight', 'Straight'], ['curve', 'Curved'], ['elbow', 'Elbow']];
+// the weights in px, each the class weight-N on the svg apart from the 3 px of the theme
+export const WEIGHTS = [2, 3, 6, 8];
 
 // the arrowhead in units of the stroke width. its tip is one unit past the end of the line, where
 // the head is as wide as the stroke
 const HEAD = 'M-4-2.5 1 0-4 2.5z';
-// in screen px: the distance within which a press selects a line, the snap, and a click
-const NEAR = 6;
+// in screen px: the snap and a click. a press selects a line within 6 px of it, in lineAt of
+// canvas/hit.ts
 const SNAP = 8;
 const CLICK = 3;
 // the length of a line inserted with a click, in slide px
@@ -44,11 +50,12 @@ const CSS = `
 .beeson-line-layer { position: fixed; inset: 0; z-index: 52; pointer-events: none; }
 .beeson-line-layer [hidden] { display: none !important; }
 .beeson-line-end { position: fixed; width: 11px; height: 11px; margin: -7px 0 0 -7px; border-radius: 50%; border: 1.5px solid var(--ed-select, #7048e8); background: #fff; box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.25); pointer-events: auto; touch-action: none; cursor: crosshair; }
+.beeson-line-end.bend { background: var(--ed-select, #7048e8); border-color: #fff; }
 .beeson-line-end.locked { border-color: #8a8a8a; background: #d9d9d9; pointer-events: none; }
 .beeson-line-draft { position: fixed; left: 0; top: 0; width: 100%; height: 100%; overflow: visible; color: var(--ed-select, #7048e8); }
-.beeson-line-draft line { stroke: currentColor; stroke-width: 2; }
+.beeson-line-draft > path { stroke: currentColor; stroke-width: 2; fill: none; }
 .beeson-line-draft marker { overflow: visible; }
-.beeson-line-draft path { fill: currentColor; }
+.beeson-line-draft marker path { fill: currentColor; }
 html.beeson-line-only .beeson-overlay .beeson-frame, html.beeson-line-only .beeson-overlay .beeson-rotor, html.beeson-line-only .beeson-overlay .beeson-rotor-stem,
 html.beeson-line-only .beeson-overlay .beeson-handle, html.beeson-line-only .beeson-overlay .beeson-grip { display: none !important; }
 html.beeson-drawing-line .reveal, html.beeson-drawing-line .reveal *, html.beeson-drawing-line .beeson-edit-canvas { cursor: crosshair !important; }
@@ -67,26 +74,29 @@ const headAttrs = (heads: Heads, id: string): Record<'marker-start' | 'marker-en
   'marker-end': heads === 'end' || heads === 'both' ? `url(#${id})` : null,
 });
 
-// the ends of a line relative to the box of its svg
-function local(e: Ends): Record<'x1' | 'y1' | 'x2' | 'y2', string> {
-  const b = boxOf(e);
-  return { x1: String(round(e.x1) - b.left), y1: String(round(e.y1) - b.top), x2: String(round(e.x2) - b.left), y2: String(round(e.y2) - b.top) };
+const strokeFrom = (e: Ends | Stroke): Stroke => ('kind' in e ? e : withKind(e, 'straight'));
+
+// the text of the stroke s with the arrowheads at the marker id, i.e. a line or a path element. the
+// end tag is written, since source.ts pairs an element with the end tag of its name
+function childText(s: Stroke, heads: Heads, id: string): string {
+  const t = strokeText(s);
+  const attrs = { ...t.attrs, ...headAttrs(heads, id) };
+  return `<${t.tag}${Object.entries(attrs).map(([k, v]) => (v ? ` ${k}="${v}"` : '')).join('')}></${t.tag}>`;
 }
 
-// the text of a line between the ends in slide px, with its marker named id. the end tags are
-// written, since source.ts pairs an element with the end tag of its name
-export function lineText(e: Ends, o: { id: string; tone?: string; heads?: Heads }): string {
-  const b = boxOf(e);
+// the text of a line between the ends in slide px, or of a curve or an elbow, with its marker
+// named id
+export function lineText(e: Ends | Stroke, o: { id: string; tone?: string; heads?: Heads }): string {
+  const s = strokeFrom(e);
+  const b = strokeText(s).box;
   const cls = o.tone && o.tone !== 'text' ? `line tone-${o.tone}` : 'line';
   const style = b.left || b.top ? ` style="translate: ${b.left}px ${b.top}px"` : '';
-  const ends = Object.entries(local(e)).map(([k, v]) => ` ${k}="${v}"`).join('');
-  const heads = Object.entries(headAttrs(o.heads ?? 'none', o.id)).map(([k, v]) => (v ? ` ${k}="${v}"` : '')).join('');
-  return `<svg class="${cls}" width="${b.width}" height="${b.height}"${style}><defs><marker id="${o.id}" orient="auto-start-reverse"><path d="${HEAD}"></path></marker></defs><line${ends}${heads}></line></svg>`;
+  return `<svg class="${cls}" width="${b.width}" height="${b.height}"${style}><defs><marker id="${o.id}" orient="auto-start-reverse"><path d="${HEAD}"></path></marker></defs>${childText(s, o.heads ?? 'none', o.id)}</svg>`;
 }
 
-// the text with the arrowheads of each line pointed at the marker of its own svg. renameIds of
-// model/doc.ts and its kin in the clipboard and slide commands rename the id of a copied marker,
-// but not the url() that names it
+// the text with the arrowheads of each line pointed at the marker of its own svg. Doc.freshIds of
+// model/doc.ts, which the clipboard and slide commands call, renames the id of a copied marker, but
+// not the url() that names it
 export function fixHeads(text: string): string {
   return text.replace(/<svg\b[^>]*\bclass="(?:[^"]*\s)?line(?:\s[^"]*)?"[\s\S]*?<\/svg>/g, (svg) => {
     const id = /<marker\b[^>]*\sid="([^"]+)"/.exec(svg)?.[1];
@@ -103,26 +113,22 @@ export function stepped(from: Point, to: Point): Point {
   return { x: from.x + len * Math.cos(a), y: from.y + len * Math.sin(a) };
 }
 
-// the distance of p from the segment from a to b
-export function distance(p: Point, a: Point, b: Point): number {
-  const dx = b.x - a.x, dy = b.y - a.y;
-  const l2 = dx * dx + dy * dy;
-  const t = l2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2)) : 0;
-  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
-}
-
 export const isLine = (el: Element): boolean => el.matches('.reveal .slides section svg.line');
 
-// the ends of the line of svg in slide px
+// the stroke of svg in slide px, or null for a path that the editor does not write
+export const strokeAt = (svg: Element): Stroke | null => parseStroke(strokeOf(svg), placeOf(svg).translate ?? { x: 0, y: 0 });
+
+// the ends of the stroke of svg in slide px
 export function endsOf(svg: Element): Ends {
-  const line = svg.querySelector('line');
-  const t = placeOf(svg).translate ?? { x: 0, y: 0 };
-  const n = (a: string) => parseFloat(line?.getAttribute(a) ?? '') || 0;
-  return { x1: t.x + n('x1'), y1: t.y + n('y1'), x2: t.x + n('x2'), y2: t.y + n('y2') };
+  const s = strokeAt(svg);
+  return s ? { x1: s.x1, y1: s.y1, x2: s.x2, y2: s.y2 } : { x1: 0, y1: 0, x2: 0, y2: 0 };
 }
 
+export const kindOf = (svg: Element): Kind | null => strokeAt(svg)?.kind ?? null;
+export const weightOf = (svg: Element): number => WEIGHTS.find((w) => svg.classList.contains(`weight-${w}`)) ?? 3;
+
 export function headsOf(svg: Element): Heads {
-  const line = svg.querySelector('line');
+  const line = strokeOf(svg);
   const start = !!line?.hasAttribute('marker-start');
   const end = !!line?.hasAttribute('marker-end');
   return start && end ? 'both' : start ? 'start' : end ? 'end' : 'none';
@@ -140,20 +146,25 @@ export function selectedLines(app: App): Element[] {
 const screenOf = (f: Frame, p: Point): Point => ({ x: f.left + p.x * f.scale, y: f.top + p.y * f.scale });
 const slideOf = (f: Frame, p: Point): Point => ({ x: (p.x - f.left) / f.scale, y: (p.y - f.top) / f.scale });
 
-// svg set to the ends on the page only, while one of its ends is dragged
-function showEnds(svg: Element, e: Ends): void {
-  const b = boxOf(e);
+// svg set to the stroke on the page only, while one of its ends or its bend is dragged
+function showStroke(svg: Element, s: Stroke): void {
+  const t = strokeText(s);
+  const b = t.box;
   svg.setAttribute('width', String(b.width));
   svg.setAttribute('height', String(b.height));
   (svg as SVGElement).style.translate = b.left || b.top ? `${b.left}px ${b.top}px` : '';
-  const line = svg.querySelector('line');
-  for (const [k, v] of Object.entries(local(e))) line?.setAttribute(k, v);
+  const child = strokeOf(svg);
+  for (const [k, v] of Object.entries(t.attrs)) child?.setAttribute(k, v);
 }
 
+type Drawing = { heads: Heads; kind: Kind };
+
+type Grab = { svg: Element; which: 1 | 2; from: Stroke; off: Point; x: number; y: number; moved: boolean };
 type Press =
-  | { kind: 'end'; svg: Element; which: 1 | 2; from: Ends; off: Point; x: number; y: number; moved: boolean }
+  | ({ kind: 'end' } & Grab)
+  | ({ kind: 'bend' } & Grab)
   | { kind: 'move'; svg: Element; els: Element[]; places: Map<Element, Place>; base: Box; x: number; y: number; scroll: { x: number; y: number }; moved: boolean; click: (() => void) | null }
-  | { kind: 'draw'; heads: Heads; start: Point; end: Point; x: number; y: number; moved: boolean };
+  | { kind: 'draw'; draw: Drawing; start: Point; end: Point; x: number; y: number; moved: boolean };
 
 type Grip = HTMLElement & { line?: Element };
 
@@ -179,13 +190,13 @@ export function install(app: App): void {
   const grips: Grip[] = [];
   const draft = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   draft.classList.add('beeson-line-draft');
-  draft.innerHTML = `<defs><marker id="beeson-line-draft-head" orient="auto-start-reverse"><path d="${HEAD}"></path></marker></defs><line></line>`;
+  draft.innerHTML = `<defs><marker id="beeson-line-draft-head" orient="auto-start-reverse"><path d="${HEAD}"></path></marker></defs><path></path>`;
   draft.setAttribute('hidden', '');
   layer.append(draft);
 
   let press: Press | null = null;
-  // the arrowheads of the line that the next drag on the canvas draws, or null
-  let drawing: Heads | null = null;
+  // the arrowheads and the kind of the line that the next drag on the canvas draws, or null
+  let drawing: Drawing | null = null;
 
   const targets = (skip: Element[]): Targets => {
     const f = frameOf(app);
@@ -219,25 +230,6 @@ export function install(app: App): void {
     view.readout = { text: `${round(len)} px  ${deg}°`, x: ev.clientX + 14, y: ev.clientY + 14, at: 'pointer' };
   };
 
-  // the line nearest to the point x, y in screen px within NEAR, the last in the file on a tie
-  const lineAt = (x: number, y: number): Element | null => {
-    const slide = app.current();
-    if (!slide) return null;
-    const f = frameOf(app);
-    let best: Element | null = null;
-    let near = NEAR;
-    for (const svg of slide.querySelectorAll('svg.line')) {
-      if (!isLine(svg) || !app.pairing?.elements.get(svg)?.open || !svg.getClientRects().length) continue;
-      const e = endsOf(svg);
-      const d = distance({ x, y }, screenOf(f, { x: e.x1, y: e.y1 }), screenOf(f, { x: e.x2, y: e.y2 }));
-      if (d <= near) {
-        near = d;
-        best = svg;
-      }
-    }
-    return best;
-  };
-
   // the end handles of the selected lines. the frames of drag.ts are hidden while only lines are
   // selected, since the box of a line is not what a user moves or resizes
   const draw = () => {
@@ -250,10 +242,13 @@ export function install(app: App): void {
     const shown = only && !(press?.kind === 'move' && press.moved);
     const ends = shown
       ? lines.flatMap((svg) => {
-          const e = endsOf(svg);
+          const s = strokeAt(svg);
+          if (!s) return [];
+          const bend = gripOf(s);
           return [
-            { svg, which: 1, p: screenOf(f, { x: e.x1, y: e.y1 }) },
-            { svg, which: 2, p: screenOf(f, { x: e.x2, y: e.y2 }) },
+            { svg, which: '1', p: screenOf(f, { x: s.x1, y: s.y1 }) },
+            { svg, which: '2', p: screenOf(f, { x: s.x2, y: s.y2 }) },
+            ...(bend ? [{ svg, which: 'bend', p: screenOf(f, bend) }] : []),
           ];
         })
       : [];
@@ -268,18 +263,24 @@ export function install(app: App): void {
       if (!end) return;
       g.style.left = `${end.p.x}px`;
       g.style.top = `${end.p.y}px`;
-      g.dataset.end = String(end.which);
+      g.dataset.end = end.which;
+      g.classList.toggle('bend', end.which === 'bend');
       g.classList.toggle('locked', locked(end.svg));
       g.line = end.svg;
     });
   };
 
-  const showDraft = (from: Point, to: Point, heads: Heads) => {
+  // the stroke of the kind from a to b on the screen, whose text is in whole screen px
+  const showDraft = (from: Point, to: Point, d: Drawing) => {
     const f = frameOf(app);
     const a = screenOf(f, from), b = screenOf(f, to);
-    const line = draft.querySelector('line') as SVGLineElement;
-    for (const [k, v] of Object.entries({ x1: a.x, y1: a.y, x2: b.x, y2: b.y })) line.setAttribute(k, String(v));
-    for (const [k, v] of Object.entries(headAttrs(heads, 'beeson-line-draft-head'))) {
+    const t = strokeText(withKind({ x1: a.x, y1: a.y, x2: b.x, y2: b.y }, d.kind));
+    const line = draft.querySelector(':scope > path') as SVGPathElement;
+    const box = t.box;
+    const at = (k: string, v: string) => String(Number(v) + (k === 'x1' || k === 'x2' ? box.left : box.top));
+    line.setAttribute('d', t.tag === 'path' ? t.attrs.d : `M${at('x1', t.attrs.x1)} ${at('y1', t.attrs.y1)} L${at('x2', t.attrs.x2)} ${at('y2', t.attrs.y2)}`);
+    line.setAttribute('transform', t.tag === 'path' ? `translate(${box.left} ${box.top})` : '');
+    for (const [k, v] of Object.entries(headAttrs(d.heads, 'beeson-line-draft-head'))) {
       if (v) line.setAttribute(k, v);
       else line.removeAttribute(k);
     }
@@ -292,15 +293,16 @@ export function install(app: App): void {
     draft.setAttribute('hidden', '');
   };
 
-  // a new line between the ends in slide px, on the current slide before its notes, selected
-  const add = async (e: Ends, heads: Heads): Promise<Element | null> => {
+  // a new line of the kind between the ends in slide px, on the current slide before its notes,
+  // selected
+  const add = async (e: Ends, d: Drawing): Promise<Element | null> => {
     const slide = app.current();
     if (!slide) return null;
     const id = app.doc.uniqueId('line');
     const before = slide.querySelector(':scope > aside.notes');
-    const label = heads === 'none' ? 'Insert Line' : 'Insert Arrow';
+    const label = d.kind === 'curve' ? 'Insert Curved Arrow' : d.kind === 'elbow' ? 'Insert Elbow Arrow' : d.heads === 'none' ? 'Insert Line' : 'Insert Arrow';
     const [svg] = await app.history.selecting(label, async () => {
-      const made = await app.doc.insert(lineText(e, { id, heads }), slide, before, label);
+      const made = await app.doc.insert(lineText(withKind(e, d.kind), { id, heads: d.heads }), slide, before, label);
       app.selection.set('elements', made);
       return made;
     });
@@ -308,13 +310,14 @@ export function install(app: App): void {
     return svg;
   };
 
-  // the ends of a line as one entry of the history, written into the start tags of its svg and line
-  const setEnds = (svg: Element, e: Ends) =>
-    app.history.transact('Move Line End', () => {
-      const b = boxOf(e);
-      const line = svg.querySelector('line') as Element;
+  // the stroke of a line as one entry of the history, written into the start tags of its svg and
+  // its line or path
+  const setStroke = (svg: Element, s: Stroke, label: string) =>
+    app.history.transact(label, () => {
+      const t = strokeText(s);
+      const b = t.box;
       app.doc.setTag(svg, { attrs: { width: String(b.width), height: String(b.height) }, translate: b.left || b.top ? { x: b.left, y: b.top } : null }, 'line');
-      app.doc.setTag(line, { attrs: local(e) }, 'line');
+      app.doc.setTag(strokeOf(svg) as Element, { attrs: t.attrs }, 'line');
       app.invalidate('content');
     });
 
@@ -330,23 +333,26 @@ export function install(app: App): void {
       ev.preventDefault();
       ev.stopPropagation();
       const start = pointAt(ev, null, []);
-      press = { kind: 'draw', heads: drawing, start, end: start, x: at.x, y: at.y, moved: false };
+      press = { kind: 'draw', draw: drawing, start, end: start, x: at.x, y: at.y, moved: false };
       return;
     }
     const grip = target.closest('.beeson-line-end') as Grip | null;
-    if (grip?.line) {
+    const from = grip?.line ? strokeAt(grip.line) : null;
+    if (grip?.line && from) {
       ev.preventDefault();
       ev.stopPropagation();
-      // the end keeps its offset from the pointer, which a grip past an arrowhead is drawn at
+      // the end or the bend keeps its offset from the pointer, which a grip past an arrowhead is
+      // drawn at
+      const bend = grip.dataset.end === 'bend';
       const which = grip.dataset.end === '1' ? 1 : 2;
-      const from = endsOf(grip.line);
       const p = slideOf(frameOf(app), at);
-      const off = which === 1 ? { x: p.x - from.x1, y: p.y - from.y1 } : { x: p.x - from.x2, y: p.y - from.y2 };
-      press = { kind: 'end', svg: grip.line, which, from, off, x: at.x, y: at.y, moved: false };
+      const g = bend ? (gripOf(from) as Point) : which === 1 ? { x: from.x1, y: from.y1 } : { x: from.x2, y: from.y2 };
+      const grab = { svg: grip.line, which: which as 1 | 2, from, off: { x: p.x - g.x, y: p.y - g.y }, x: at.x, y: at.y, moved: false };
+      press = bend ? { kind: 'bend', ...grab } : { kind: 'end', ...grab };
       return;
     }
     if (!onCanvas(target, app, at) || target.closest('[contenteditable="true"]:focus')) return;
-    const svg = lineAt(at.x, at.y);
+    const svg = lineAt(app, at.x, at.y);
     if (!svg) return;
     ev.preventDefault();
     ev.stopPropagation();
@@ -380,15 +386,28 @@ export function install(app: App): void {
     app.stage?.edgeScroll(ev, () => press === p && onMove(ev));
     if (p.kind === 'draw') {
       p.end = pointAt(ev, p.start, []);
-      showDraft(p.start, p.end, p.heads);
+      showDraft(p.start, p.end, p.draw);
       readout({ x1: p.start.x, y1: p.start.y, x2: p.end.x, y2: p.end.y }, ev);
     } else if (p.kind === 'end') {
       if (p.svg.isConnected && locked(p.svg)) return;
       const fixed = p.which === 1 ? { x: p.from.x2, y: p.from.y2 } : { x: p.from.x1, y: p.from.y1 };
       const to = pointAt(ev, fixed, [p.svg], p.off);
       const e = p.which === 1 ? { x1: to.x, y1: to.y, x2: fixed.x, y2: fixed.y } : { x1: fixed.x, y1: fixed.y, x2: to.x, y2: to.y };
-      showEnds(p.svg, e);
+      showStroke(p.svg, rebend(p.from, e));
       readout({ x1: fixed.x, y1: fixed.y, x2: to.x, y2: to.y }, ev);
+    } else if (p.kind === 'bend') {
+      if (p.svg.isConnected && locked(p.svg)) return;
+      // with Shift the grip of a curve stays on the perpendicular bisector of its chord, which gives
+      // a symmetric arc. the middle segment of an elbow lands on the line of an end within SNAP
+      const s = p.from;
+      let to = pointAt(ev, null, [p.svg], p.off);
+      if (ev.shiftKey && s.kind === 'curve') {
+        const m = { x: (s.x1 + s.x2) / 2, y: (s.y1 + s.y2) / 2 }, n = { x: s.y1 - s.y2, y: s.x2 - s.x1 };
+        const k = ((to.x - m.x) * n.x + (to.y - m.y) * n.y) / (n.x * n.x + n.y * n.y || 1);
+        to = { x: m.x + k * n.x, y: m.y + k * n.y };
+      }
+      showStroke(p.svg, bendTo(s, to, freeMove(ev) ? 0 : SNAP / f.scale));
+      view.readout = null;
     } else {
       if (!p.els.length) return;
       const s = scrollOf(app);
@@ -432,11 +451,11 @@ export function install(app: App): void {
       endDrawing();
       if (!ev) return;
       const end = p.moved ? p.end : { x: p.start.x + CLICKED, y: p.start.y };
-      await add({ x1: p.start.x, y1: p.start.y, x2: end.x, y2: end.y }, p.heads);
-    } else if (p.kind === 'end') {
-      const e = endsOf(p.svg);
-      showEnds(p.svg, p.from);
-      if (p.moved && ev) await setEnds(p.svg, e);
+      await add({ x1: p.start.x, y1: p.start.y, x2: end.x, y2: end.y }, p.draw);
+    } else if (p.kind === 'end' || p.kind === 'bend') {
+      const s = strokeAt(p.svg);
+      showStroke(p.svg, p.from);
+      if (p.moved && ev && s) await setStroke(p.svg, s, p.kind === 'bend' ? 'Bend Line' : 'Move Line End');
     } else if (!p.moved || !ev || (copying && copyHeld(ev))) {
       const to = p.els.map((el) => placeOf(el).translate);
       for (const el of p.els) {
@@ -448,15 +467,13 @@ export function install(app: App): void {
       // a copy of each element is written after it at the place where it was dropped, and the
       // copies of a group are a new group
       else if (ev) await app.history.selecting('Duplicate', async () => {
-        const groups = new Map<string, string>();
         const copies: Element[] = [];
-        for (const [i, el] of p.els.entries()) {
-          const copy = await app.doc.duplicate(el);
-          const g = copiedGroups(copy, groups, (taken) => freshGroup(app, taken));
-          const t = to[i];
-          app.doc.setTag(copy, { translate: t ? { x: round(t.x), y: round(t.y) } : null, ...(g ? { attrs: { 'data-group': g } } : {}) }, 'move');
-          copies.push(copy);
-        }
+        for (const el of p.els) copies.push(await app.doc.duplicate(el));
+        const groups = copiedGroups(copies, (taken) => freshGroup(app, taken));
+        copies.forEach((copy, i) => {
+          const t = to[i], g = groups[i];
+          app.doc.setTag(copy, { translate: t ? { x: round(t.x), y: round(t.y) } : null, ...(g !== copy.getAttribute('data-group') ? { attrs: { 'data-group': g } } : {}) }, 'move');
+        });
         app.selection.set('elements', copies);
       });
     } else {
@@ -475,6 +492,8 @@ export function install(app: App): void {
   window.addEventListener('pointermove', onMove, true);
   window.addEventListener('pointerup', (ev) => void finish(ev).catch((e) => app.fail(e)), true);
   window.addEventListener('pointercancel', () => void finish(null), true);
+  // Esc puts back a dragged end or bend in place of the commands of the key, as in drag.ts
+  app.commands.veto((_, cmd) => !!press?.moved && Object.values(cmd.keys ?? {}).some((k) => k.includes('Escape')));
   window.addEventListener('keydown', (ev) => {
     if (ev.key !== 'Escape' || (!drawing && !press)) return;
     ev.preventDefault();
@@ -487,23 +506,27 @@ export function install(app: App): void {
   app.onRefresh(['content', 'selection', 'slide', 'layout'], draw);
 
   // with an arg { from, to } in slide px the line is inserted at once, e.g. by a test
-  const startDrawing = (heads: Heads) => async (a: App, arg?: unknown) => {
+  const startDrawing = (heads: Heads, kind: Kind = 'straight') => async (a: App, arg?: unknown) => {
     const at = arg as { from?: Point; to?: Point } | undefined;
     if (at?.from && at.to) {
-      await add({ x1: at.from.x, y1: at.from.y, x2: at.to.x, y2: at.to.y }, heads);
+      await add({ x1: at.from.x, y1: at.from.y, x2: at.to.x, y2: at.to.y }, { heads, kind });
       return;
     }
     const host = a.hostOf(document.activeElement);
     if (host) (host as HTMLElement).blur();
-    drawing = heads;
+    drawing = { heads, kind };
     root.classList.add('beeson-drawing-line');
   };
+  const isDrawing = (heads: Heads, kind: Kind) => () => (drawing?.heads === heads && drawing.kind === kind ? true : null);
 
   const insertMenu = (order: number) => ({ bar: 'Insert', group: 'element', order });
   // the Shape button of the toolbar, whose main part draws a line
   const shape = (order: number) => ({ group: 'insert', order, icon: 'shape', label: 'Shape', split: 'Shape' });
-  c.define({ id: 'insert.line', label: 'Line', menu: insertMenu(30), toolbar: shape(23), enabled: ready, checked: () => (drawing === 'none' ? true : null), run: startDrawing('none') });
-  c.define({ id: 'insert.arrow', label: 'Arrow', menu: insertMenu(31), toolbar: shape(23.1), enabled: ready, checked: () => (drawing === 'end' ? true : null), run: startDrawing('end') });
+  c.define({ id: 'insert.line', label: 'Line', menu: insertMenu(30), toolbar: shape(23), enabled: ready, checked: isDrawing('none', 'straight'), run: startDrawing('none') });
+  c.define({ id: 'insert.arrow', label: 'Arrow', menu: insertMenu(31), toolbar: shape(23.1), enabled: ready, checked: isDrawing('end', 'straight'), run: startDrawing('end') });
+  c.define({ id: 'insert.curve', label: 'Curved Arrow', menu: insertMenu(31.1), toolbar: shape(23.2), enabled: ready, checked: isDrawing('end', 'curve'), run: startDrawing('end', 'curve') });
+  c.define({ id: 'insert.elbow', label: 'Elbow Arrow', menu: insertMenu(31.2), toolbar: shape(23.3), enabled: ready, checked: isDrawing('end', 'elbow'), run: startDrawing('end', 'elbow') });
+  for (const [id, face] of [['insert.line', 'straight'], ['insert.arrow', 'arrow'], ['insert.curve', 'curve'], ['insert.elbow', 'elbow']]) setItemIcon(id, `line-${face}`);
 
   const some = (a: App) => ready(a) && selectedLines(a).length > 0;
   const lineMenu = (group: string, order: number) => ({ bar: 'Format', group, order, submenu: 'Line' });
@@ -535,12 +558,75 @@ export function install(app: App): void {
       undo: 'Arrowheads',
       run: (a) => {
         for (const svg of selectedLines(a)) {
-          const line = svg.querySelector('line');
+          const line = strokeOf(svg);
           const id = svg.querySelector('marker')?.id;
           if (line && id) a.doc.setTag(line, { attrs: headAttrs(heads, id) }, 'arrowheads');
         }
         a.invalidate('content');
       },
     });
+  });
+  // a change of kind replaces the child of the svg, keeping its ends, its arrowheads, its marker,
+  // and every attribute of the svg, hence a line made a curve and back is written as before
+  KINDS.forEach(([kind, label], i) => {
+    c.define({
+      id: `line.kind.${kind}`,
+      label,
+      menu: lineMenu('line-kind', 100 + i),
+      enabled: (a) => some(a) && selectedLines(a).every((svg) => !!kindOf(svg)),
+      checked: (a) => some(a) && selectedLines(a).every((svg) => kindOf(svg) === kind),
+      run: (a) =>
+        a.history.selecting('Line Kind', async () => {
+          const made = [...a.selection.elements()];
+          for (const svg of selectedLines(a)) {
+            const s = strokeAt(svg);
+            const id = svg.querySelector('marker')?.id;
+            if (!s || !id || s.kind === kind) continue;
+            const next = withKind(s, kind);
+            const text = childText(next, headsOf(svg), id);
+            const node = await a.doc.rewrite(svg, (body) => body.replace(/(<\/defs>\s*)<(line|path)\b[^>]*>(?:\s*<\/\2>)?/, (_, lead: string) => lead + text), 'line kind');
+            const b = strokeText(next).box, was = strokeText(s).box;
+            // the svg is turned about the center of its box, hence a turned line is moved by the turn of
+            // the step from the old center to the new one, which keeps its ends on the slide
+            const r = (angleOf(svg) * Math.PI) / 180, dx = b.left + b.width / 2 - was.left - was.width / 2, dy = b.top + b.height / 2 - was.top - was.height / 2;
+            const x = round(b.left + dx * (Math.cos(r) - 1) - dy * Math.sin(r)), y = round(b.top + dx * Math.sin(r) + dy * (Math.cos(r) - 1));
+            a.doc.setTag(node, { attrs: { width: String(b.width), height: String(b.height) }, translate: x || y ? { x, y } : null }, 'line kind');
+            made.splice(made.indexOf(svg), 1, node);
+          }
+          a.selection.set('elements', made);
+          a.invalidate('content', 'selection');
+        }),
+    });
+  });
+  WEIGHTS.forEach((w, i) => {
+    c.define({
+      id: `line.weight.${w}`,
+      label: `${w} px`,
+      menu: lineMenu('line-weight', 110 + i),
+      enabled: some,
+      checked: (a) => some(a) && selectedLines(a).every((svg) => weightOf(svg) === w),
+      undoable: true,
+      undo: 'Line Weight',
+      run: (a) => {
+        const classes: Record<string, boolean> = {};
+        for (const o of WEIGHTS) if (o !== 3) classes[`weight-${o}`] = o === w;
+        for (const svg of selectedLines(a)) a.doc.setTag(svg, { classes }, 'line weight');
+        a.invalidate('content');
+      },
+    });
+  });
+  c.define({
+    id: 'line.dashed',
+    label: 'Dashed',
+    menu: lineMenu('line-dash', 120),
+    enabled: some,
+    checked: (a) => some(a) && selectedLines(a).every((svg) => svg.classList.contains('dashed')),
+    undoable: true,
+    undo: 'Dashed',
+    run: (a) => {
+      const on = !selectedLines(a).every((svg) => svg.classList.contains('dashed'));
+      for (const svg of selectedLines(a)) a.doc.setTag(svg, { classes: { dashed: on } }, 'dashed');
+      a.invalidate('content');
+    },
   });
 }

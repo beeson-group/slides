@@ -148,7 +148,7 @@ export function install(app: App): void {
     keys: both('Mod+Enter'),
     in: OUTSIDE_DIALOGS,
     menu: { bar: 'File', group: 'present', order: 30 },
-    toolbar: { group: 'present', order: 40, icon: 'play' },
+    toolbar: { group: 'present', order: 40, icon: 'present' },
     run: async (a) => void (await presentAt(a, false)),
   });
   c.define({

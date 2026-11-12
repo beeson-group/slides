@@ -148,34 +148,45 @@ const groundOf = (list: Element[]): number => {
   const i = list.findIndex((e) => !e.matches(BACK));
   return i < 0 ? list.length : i;
 };
+// whether the plate or backdrop b covers the middle of el, where it would take the clicks of el
+const covers = (b: Element, el: Element): boolean => {
+  const r = b.getBoundingClientRect(), e = el.getBoundingClientRect(), x = e.left + e.width / 2, y = e.top + e.height / 2;
+  return x > r.left && x < r.right && y > r.top && y < r.bottom;
+};
+// the index in list after the ground and after the last plate or backdrop under the index i that
+// covers an element of els, which a command does not pass
+const floorOf = (list: Element[], i: number, els: Element[]): number => {
+  const ground = groundOf(list);
+  while (i > ground && !(list[i - 1].matches(BACK) && els.some((e) => covers(list[i - 1], e)))) i--;
+  return Math.max(i, ground);
+};
 
 // list, from back to front, in the order that a command gives the elements of moving, which keep
 // their own order. Bring Forward and Send Backward pass one element that the object list shows,
 // and a moving element is put just over the shown element under it
 function targetOf(list: Element[], moving: Set<Element>, order: Order): Element[] {
   const m = (e: Element) => moving.has(e) && !e.matches(BACK);
-  const ground = groundOf(list);
   if (order === 'front' || order === 'back') {
     const rest = list.filter((e) => !m(e));
-    const at = order === 'front' ? rest.length : ground;
+    const at = order === 'front' ? rest.length : floorOf(list, list.findIndex(m), list.filter(m));
     return [...rest.slice(0, at), ...list.filter(m), ...rest.slice(at)];
   }
   const out = list.slice();
-  const skip = (j: number) => j >= ground && j < out.length && hidden(out[j]) && !m(out[j]);
+  const skip = (j: number, i: number) => j >= floorOf(out, i, [out[i]]) && j < out.length && hidden(out[j]) && !m(out[j]);
   if (order === 'forward') {
     for (let i = out.length - 2; i >= 0; i--) {
       if (!m(out[i])) continue;
       let j = i + 1;
-      while (skip(j)) j++;
+      while (skip(j, i)) j++;
       if (j < out.length && !m(out[j])) out.splice(j, 0, ...out.splice(i, 1));
     }
   } else {
     for (let i = 1; i < out.length; i++) {
       if (!m(out[i])) continue;
       let j = i - 1;
-      while (skip(j)) j--;
-      if (j < ground || m(out[j])) continue;
-      while (skip(j - 1)) j--;
+      while (skip(j, i)) j--;
+      if (j < floorOf(out, i, [out[i]]) || m(out[j])) continue;
+      while (skip(j - 1, i)) j--;
       out.splice(j, 0, ...out.splice(i, 1));
     }
   }
@@ -280,7 +291,7 @@ function stacks(el: Element): boolean {
 // out of the flow is moved among its siblings where this saves a declaration, since a move in the
 // file does not move it on the slide. a move from its place in the file is a cost, and a move does
 // not change the order of the steps without an index. a hidden element over the ground may be
-// drawn in any place
+// drawn in any place, unless it is a backdrop that covers a moved element
 type Plan = { orders: Map<Element, Element[]>; facts: Fact[]; choices: Choice[]; moving: Element[] };
 
 // the places in order, the children of the parent of el, that a move of el is tried at: its own,
@@ -310,7 +321,7 @@ function placesOf(el: Element, order: Element[], target: Element[], stays: (k: E
 
 function planOf(app: App, all: Element[], moving: Element[], any = false): Plan | null {
   const ground = groundOf(all);
-  const target = all.filter((e, i) => i < ground || !hidden(e));
+  const target = all.filter((e, i) => i < ground || !hidden(e) || (e.matches(BACK) && moving.some((k) => covers(e, k))));
   const n = target.length;
   const facts = target.map((el) => factOf(app, el, moving.includes(el), stacks(el.parentElement!) ? -n : 0));
   const hi = Math.max(0, ...facts.map((f) => f.base)) + n;
@@ -551,11 +562,13 @@ const canRegroup = (app: App): boolean => {
 function regroup(app: App): void {
   const u = ungrouped;
   if (!u || !canRegroup(app)) return;
-  // a name that another element of the page took since the Ungroup is replaced by a fresh one
+  // a name that Ungroup took off and that another element of the page took since is replaced by a
+  // fresh one. the names of the outer groups, which Ungroup left, are kept
   const names = new Map<string, string>();
   const taken = (n: string) => [...document.querySelectorAll(`[data-group~="${CSS.escape(n)}"]`)].some((el) => !u.els.includes(el));
+  const left = new Set(u.to.flatMap((l) => l.split(' ')));
   for (const list of u.from) for (const n of list.split(' ').filter(Boolean)) {
-    if (!names.has(n)) names.set(n, taken(n) ? freshGroup(app, new Set(names.values())) : n);
+    if (!names.has(n)) names.set(n, !left.has(n) && taken(n) ? freshGroup(app, new Set(names.values())) : n);
   }
   u.els.forEach((el, i) => app.doc.setTag(el, { attrs: { 'data-group': groupValue(u.from[i].split(' ').filter(Boolean).map((n) => names.get(n) as string)) } }, 'group'));
   app.selection.set('elements', u.els);

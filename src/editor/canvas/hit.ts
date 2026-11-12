@@ -6,6 +6,7 @@
 import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
 import type { Box } from './snap.ts';
+import { gripOf, parseStroke, pointsOf, reach, type Point } from './stroke.ts';
 import { stored } from '../ui/dom.ts';
 
 // the outermost of these elements under the pointer is moved, outside the notes and the backdrop
@@ -80,10 +81,11 @@ export function visualRect(el: Element): Box {
 // the picture of el inside its own box, in CSS px of el without its scale and rotation: its size,
 // and the offset of its center from the center of the box
 function pictureIn(el: Element): { width: number; height: number; dx: number; dy: number } {
-  const h = el as HTMLElement;
-  const box = { width: h.offsetWidth, height: h.offsetHeight, dx: 0, dy: 0 };
-  const natural = el instanceof HTMLImageElement ? [el.naturalWidth, el.naturalHeight] : el instanceof HTMLVideoElement ? [el.videoWidth, el.videoHeight] : null;
   const style = getComputedStyle(el);
+  // an svg, e.g. a line, does not have an offset size, hence it is measured by its CSS box
+  const h = el instanceof HTMLElement ? el : null;
+  const box = { width: h ? h.offsetWidth : parseFloat(style.width) || 0, height: h ? h.offsetHeight : parseFloat(style.height) || 0, dx: 0, dy: 0 };
+  const natural = el instanceof HTMLImageElement ? [el.naturalWidth, el.naturalHeight] : el instanceof HTMLVideoElement ? [el.videoWidth, el.videoHeight] : null;
   if (!natural || !natural[0] || !natural[1] || !box.width || !box.height || (style.objectFit !== 'contain' && style.objectFit !== 'scale-down')) return box;
   let s = Math.min(box.width / natural[0], box.height / natural[1]);
   if (style.objectFit === 'scale-down') s = Math.min(s, 1);
@@ -311,9 +313,11 @@ export function movablesOf(app: App): Element[] {
   return [...slide.querySelectorAll(MOVABLE)].filter((el) => movableOf(app, el) === el && el.getBoundingClientRect().width > 0);
 }
 
-// a line or an arrow of commands/line.ts: an svg as large as the box of its line element, whose
-// x1, y1, x2, and y2 are in px of the svg. the marquee selects it, and a drag snaps to its ends
+// a line or an arrow of commands/line.ts: an svg as large as the box of its stroke, a line element
+// or the path of a curve or an elbow of canvas/stroke.ts, in px of the svg. the marquee selects it,
+// and a drag snaps to its ends
 export const LINE = 'svg.line';
+export const strokeOf = (svg: Element): Element | null => svg.querySelector(':scope > line, :scope > path');
 
 // the shown lines of the current slide that are paired with the file
 export function linesOf(app: App): Element[] {
@@ -322,43 +326,62 @@ export function linesOf(app: App): Element[] {
   return [...slide.querySelectorAll(LINE)].filter((svg) => !!app.pairing?.elements.get(svg)?.open && svg.getClientRects().length > 0 && !svg.closest(OUTSIDE));
 }
 
-// the two ends of the line of svg on the screen
-export function lineEnds(svg: Element): [{ x: number; y: number }, { x: number; y: number }] {
+// the polyline of the stroke of svg on the screen, and its grip of the bend. a path that the editor
+// does not write is taken as the outline of its box
+export function lineStroke(svg: Element): { pts: Point[]; mid: Point } {
   const r = svg.getBoundingClientRect();
   const w = Number(svg.getAttribute('width')) || r.width || 1, h = Number(svg.getAttribute('height')) || r.height || 1;
-  const line = svg.querySelector('line');
-  const n = (a: string) => parseFloat(line?.getAttribute(a) ?? '') || 0;
-  const at = (x: number, y: number) => ({ x: r.left + (x * r.width) / w, y: r.top + (y * r.height) / h });
-  return [at(n('x1'), n('y1')), at(n('x2'), n('y2'))];
+  const at = (p: Point) => ({ x: r.left + (p.x * r.width) / w, y: r.top + (p.y * r.height) / h });
+  const s = parseStroke(strokeOf(svg));
+  const pts = s ? pointsOf(s) : [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }, { x: 0, y: 0 }];
+  const mid = (s && gripOf(s)) ?? { x: s ? (s.x1 + s.x2) / 2 : w / 2, y: s ? (s.y1 + s.y2) / 2 : h / 2 };
+  return { pts: pts.map(at), mid: at(mid) };
 }
 
-// the shown line of the current slide whose stroke is within 6 px of the point x, y on the screen
+// the two ends of the stroke of svg on the screen
+export function lineEnds(svg: Element): [Point, Point] {
+  const { pts } = lineStroke(svg);
+  return [pts[0], pts[pts.length - 1]];
+}
+
+// whether the stroke of svg has a point in box, on the screen
+export const lineTouches = (svg: Element, box: Box): boolean => lineStroke(svg).pts.some((p, i, all) => i > 0 && segmentTouches(all[i - 1], p, box));
+
+// the shown line of the current slide whose stroke is nearest to the point x, y on the screen within
+// 6 px, the last in the file on a tie
 export function lineAt(app: App, x: number, y: number): Element | null {
-  return linesOf(app).reverse().find((svg) => {
-    const [a, b] = lineEnds(svg);
-    const dx = b.x - a.x, dy = b.y - a.y;
-    const t = Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / (dx * dx + dy * dy || 1)));
-    return Math.hypot(x - a.x - t * dx, y - a.y - t * dy) <= 6;
-  }) ?? null;
+  let best: Element | null = null;
+  let near = 6;
+  for (const svg of linesOf(app)) {
+    const d = reach({ x, y }, lineStroke(svg).pts);
+    if (d <= near) {
+      near = d;
+      best = svg;
+    }
+  }
+  return best;
 }
 
 // the ends and the middle of each line of the current slide outside skip, in slide pixels, which a
-// drag snaps to
-export function linePoints(app: App, skip: Element[] = []): { x: number; y: number }[] {
+// drag snaps to. the middle of a curve or an elbow is its grip of the bend
+export function linePoints(app: App, skip: Element[] = []): Point[] {
   const f = frameOf(app);
+  const slide = (p: Point) => ({ x: (p.x - f.left) / f.scale, y: (p.y - f.top) / f.scale });
   return linesOf(app).filter((svg) => !skip.includes(svg)).flatMap((svg) => {
-    const [a, b] = lineEnds(svg).map((p) => ({ x: (p.x - f.left) / f.scale, y: (p.y - f.top) / f.scale }));
-    return [a, b, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }];
+    const { pts, mid } = lineStroke(svg);
+    return [slide(pts[0]), slide(pts[pts.length - 1]), slide(mid)];
   });
 }
 
-// the box that a drag of el snaps by, in slide pixels: the box of the ends of a line, whose edges
-// and center are its ends and its middle, and the frame of any other element
+// the box that a drag of el snaps by, in slide pixels: the box of the stroke of a line, whose edges
+// and center are the ends and the middle of a straight line, and the frame of any other element
 export function snapBoxOf(app: App, el: Element): Box {
   const f = frameOf(app);
   if (!el.matches(LINE)) return toSlide(f, frameRect(el));
-  const [a, b] = lineEnds(el);
-  return toSlide(f, { left: Math.min(a.x, b.x), top: Math.min(a.y, b.y), width: Math.abs(b.x - a.x), height: Math.abs(b.y - a.y) });
+  const { pts } = lineStroke(el);
+  const xs = pts.map((p) => p.x), ys = pts.map((p) => p.y);
+  const left = Math.min(...xs), top = Math.min(...ys);
+  return toSlide(f, { left, top, width: Math.max(...xs) - left, height: Math.max(...ys) - top });
 }
 
 // whether the segment from a to b has a point in box, by the clip of Liang and Barsky

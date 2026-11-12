@@ -71,7 +71,7 @@ function draw(el: HTMLElement): void {
   }
   const style = getComputedStyle(el);
   const w = el.offsetWidth || parseFloat(style.width) || 0, h = el.offsetHeight || parseFloat(style.height) || 0;
-  const s = parseFloat(style.getPropertyValue('--shape-weight')) || 0;
+  const s = parseFloat(style.getPropertyValue('--weight')) || 0;
   if (!svg) {
     svg = document.createElementNS(SVG, 'svg');
     svg.setAttribute('aria-hidden', 'true');
