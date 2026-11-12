@@ -51,7 +51,8 @@ const errors = (page) => page.errors.filter((e) => !e.includes('favicon.ico'));
 const orders = async (page) => Object.fromEntries(await Promise.all(['front', 'forward', 'backward', 'back'].map(async (o) => [o, (await state(page, `arrange.order.${o}`)).enabled])));
 const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((e) => e.localName)`);
 // the rows of the object list from front to back, and the same rows by their key in ROWS
-const rows = (page) => page.evaluate(`[...document.querySelectorAll(${js(ROW)})].map((r) => r.querySelector('.name').textContent)`);
+// the rows without the row of the backdrop, which is at the ground of the list
+const rows = (page) => page.evaluate(`[...document.querySelectorAll(${js(ROW)})].filter((r) => r.dataset.kind !== 'Backdrop').map((r) => r.querySelector('.name').textContent)`);
 const named = async (page) => (await rows(page)).map((r) => Object.keys(ROWS).find((k) => r.startsWith(ROWS[k])) ?? r);
 
 async function load(t, platform, { n = FIGURES, deck = DECK } = {}) {

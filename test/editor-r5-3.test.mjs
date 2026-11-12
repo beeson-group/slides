@@ -238,7 +238,7 @@ for (const platform of PLATFORMS) {
     await click(page, await center(page, '.beeson-edit-split:has([data-command="insert.image"]) .more'));
     await sleep(100);
     const rows = await menuRows(page);
-    assert.deepEqual(rows.map((r) => r.label), ['Image…', 'Video…', 'QR Code', 'Choose File…']);
+    assert.deepEqual(rows.map((r) => r.label), ['Image…', 'Video…', 'QR Code', 'Backdrop…', 'Choose File…']);
     assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-menu .rule').length`), 1, 'Choose File… is not set apart by a rule');
     await click(page, await center(page, '.beeson-edit-menu .item[data-command="insert.qr"]'));
     await sleep(300);

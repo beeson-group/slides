@@ -60,7 +60,8 @@ const state = (page, id) => page.evaluate(`window.BeesonEditor.state(${js(id)})`
 const errors = (page) => page.errors.filter((e) => !e.includes('favicon.ico'));
 const orders = async (page) => Object.fromEntries(await Promise.all(['front', 'forward', 'backward', 'back'].map(async (o) => [o, (await state(page, `arrange.order.${o}`)).enabled])));
 const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((e) => e.localName)`);
-const rows = (page) => page.evaluate(`[...document.querySelectorAll(${js(ROW)})].map((r) => r.querySelector('.name').textContent)`);
+// the rows without the row of the backdrop, which is at the ground of the list
+const rows = (page) => page.evaluate(`[...document.querySelectorAll(${js(ROW)})].filter((r) => r.dataset.kind !== 'Backdrop').map((r) => r.querySelector('.name').textContent)`);
 // the rows of the object list from front to back, each by its key in names
 const named = async (page, names) => (await rows(page)).map((r) => Object.keys(names).find((k) => r.startsWith(names[k])) ?? r);
 

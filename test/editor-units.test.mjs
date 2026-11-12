@@ -148,6 +148,7 @@ test('the scope rule allows the writes of AGENTS.md and names the others', () =>
   assert.equal(declarationProblem('div', ['shape', 'ellipse'], 'width', '300px'), null);
   assert.equal(declarationProblem('div', ['shape'], 'height', '160px'), null);
   assert.match(declarationProblem('div', ['shape'], 'height', '40%'), /height 40% on a shape/);
+  assert.equal(declarationProblem('div', ['backdrop'], 'height', '1080px'), null);
   assert.equal(declarationProblem('pre', [], 'font-size', '18px'), null);
   assert.equal(declarationProblem('td', [], 'text-align', 'right'), null);
   assert.equal(declarationProblem('th', [], 'width', '240px'), null);
