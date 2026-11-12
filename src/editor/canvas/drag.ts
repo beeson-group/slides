@@ -175,7 +175,8 @@ function writeLive(el: Element, p: Place): void {
 // turned as writePlace turns it
 export function turn(app: App, spin: Element, carrier: Element, deg: number, want: { x: number; y: number }, live = false): void {
   const was = placeOf(carrier).translate, memo = restOf.get(carrier);
-  const rest = memo && sameOffset(memo.at, was) ? memo.rest : angleOf(spin) ? undefined : was;
+  const rests = memo && sameOffset(memo.at, was) ? memo.rests : new Map<number, Translate | null>();
+  if (!rests.has(whole(angleOf(spin)))) rests.set(whole(angleOf(spin)), was);
   const put = (el: Element, p: Place) => {
     if (!live) return writePlace(app, el, p);
     writeLive(el, p);
@@ -185,7 +186,7 @@ export function turn(app: App, spin: Element, carrier: Element, deg: number, wan
   if (carrier !== spin && placeOf(carrier).rotate) put(carrier, { ...placeOf(carrier), rotate: null });
   const pic = spin.matches(CONTAINER) ? pictureOf(spin) : spin;
   if (pic !== spin && placeOf(pic).rotate) put(pic, { ...placeOf(pic), rotate: null });
-  put(spin, { ...placeOf(spin), rotate: ((Math.round(deg) % 360) + 360) % 360 || null });
+  put(spin, { ...placeOf(spin), rotate: whole(deg) || null });
   const c = seenCenter(app, spin), k = frameOf(app).scale;
   const now = placeOf(carrier);
   let x = (now.translate?.x ?? 0) + (want.x - c.x) / k, y = (now.translate?.y ?? 0) + (want.y - c.y) / k;
@@ -195,15 +196,18 @@ export function turn(app: App, spin: Element, carrier: Element, deg: number, wan
   const ux = (c.x - e.left - e.width / 2) / k, uy = (c.y - e.top - e.height / 2) / k;
   const vx = ux * Math.cos(a) + uy * Math.sin(a), vy = uy * Math.cos(a) - ux * Math.sin(a);
   if (Math.abs(ux - vx) > 0.01 || Math.abs(uy - vy) > 0.01) [x, y] = [Math.round(x + ux - vx) - ux + vx, Math.round(y + uy - vy) - uy + vy];
-  // the rounding of each turn to whole px adds up, hence a turn back to 0 near the offset before
-  // the turns writes this offset
-  if (!deg && rest !== undefined && Math.abs(x - (rest?.x ?? 0)) <= 2 && Math.abs(y - (rest?.y ?? 0)) <= 2) [x, y] = [rest?.x ?? 0, rest?.y ?? 0];
+  // the rounding of each turn to whole px adds up, hence a turn back to an angle that a turn of the
+  // run started from, near the offset at this start, writes this offset
+  const rest = rests.get(whole(deg));
+  if (rest !== undefined && Math.abs(x - (rest?.x ?? 0)) <= 2 && Math.abs(y - (rest?.y ?? 0)) <= 2) [x, y] = [rest?.x ?? 0, rest?.y ?? 0];
   if (Math.abs(x - (now.translate?.x ?? 0)) >= 0.5 || Math.abs(y - (now.translate?.y ?? 0)) >= 0.5) put(carrier, { ...now, translate: { x, y } });
-  if (rest !== undefined) restOf.set(carrier, { rest, at: placeOf(carrier).translate });
+  restOf.set(carrier, { rests, at: placeOf(carrier).translate });
 }
 
-// the offset of an element before a run of turns, kept while each turn starts where the last ended
-const restOf = new WeakMap<Element, { rest: Translate | null; at: Translate | null }>();
+// the offset of an element at each angle that a turn of a run started from, kept while each turn
+// starts where the last ended
+const restOf = new WeakMap<Element, { rests: Map<number, Translate | null>; at: Translate | null }>();
+const whole = (deg: number) => ((Math.round(deg) % 360) + 360) % 360;
 const sameOffset = (a: Translate | null, b: Translate | null) => (a?.x ?? 0) === (b?.x ?? 0) && (a?.y ?? 0) === (b?.y ?? 0);
 
 // a member of a group at the start of a turn of the group: the element that takes its angle, its
@@ -1024,6 +1028,9 @@ export function install(app: App): void {
         for (const el of els) {
           const from = p.from.get(el) as Place, twin = twinOf(app, el);
           writeLive(el, from);
+          // the run of turns goes on from the restored offset
+          const memo = restOf.get(el);
+          if (memo) restOf.set(el, { ...memo, at: from.translate });
           if (twin && !els.includes(twin)) writeLive(twin, from);
         }
       } else p.click?.();

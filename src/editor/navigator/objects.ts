@@ -404,6 +404,16 @@ export function install(app: App): void {
     if (press && ev.pointerId === press.id) void endDrag(true).catch((e) => app.fail(e));
   });
   list.addEventListener('pointercancel', () => void endDrag(false));
+  // Esc ends a drag of a row without a change, wherever the focus is, in place of the commands of
+  // the key, as Esc ends a drag on the canvas
+  app.commands.veto((_, c) => !!press?.on && Object.values(c.keys ?? {}).some((k) => k.includes('Escape')));
+  window.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Escape' || !press?.on) return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    if (list.hasPointerCapture(press.id)) list.releasePointerCapture(press.id);
+    void endDrag(false).catch((e) => app.fail(e));
+  }, true);
 
   // the elements els of row k, from front to back, moved by layers until each is drawn in front of
   // the row at gap, or behind the row before gap, or until the layer commands stop it. the element
