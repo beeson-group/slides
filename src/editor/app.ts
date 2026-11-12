@@ -72,6 +72,22 @@ export interface Files {
   cancelAsk(): void;
 }
 
+export interface Follow {
+  // file/follow.ts: the file followed while the editor is open. start() begins after the first
+  // read of the file, read() and written() tell it the text of the file read by an open or written
+  // by a save, and begin() and end() bracket a save
+  start(): Promise<void>;
+  read(text: string): void;
+  written(text: string): void;
+  begin(): void;
+  end(): void;
+  // the edits merged into the file of target when it changed since it was read: same when it did
+  // not change, other when it holds another deck, which a save then overwrites
+  merge(target: FileSystemFileHandle): Promise<'same' | 'other' | 'merged' | 'cancelled'>;
+  line(): string | null;
+  status(): { changed: number[]; stale: number[] | null; watching: boolean };
+}
+
 export interface Drafts {
   // file/drafts.ts: the unsaved edits kept in the storage of the browser
   keepSoon(): void;
@@ -181,6 +197,7 @@ export class App {
 
   files!: Files;
   drafts!: Drafts;
+  follow!: Follow;
   notes!: Notes;
   math!: MathPop;
   typing!: Typing;
