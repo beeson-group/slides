@@ -33,6 +33,8 @@ export class History {
   private queue: Promise<void> = Promise.resolve();
   // the entries of the open transaction, which are put into the history as one entry at its end
   private open: Entry[] | null = null;
+  // resolved at the end of the open transaction
+  private closed: Promise<void> = Promise.resolve();
   // the content of each block as it was last seen, for an input that is not announced before it
   // happens, e.g. a replacement from the spelling menu or a script
   private readonly known = new WeakMap<Element, string>();
@@ -131,6 +133,10 @@ export class History {
     const show = this.view();
     this.open = entries;
     this.typing = null;
+    let close = () => {};
+    this.closed = new Promise((done) => {
+      close = done;
+    });
     try {
       return await fn();
     } finally {
@@ -154,6 +160,7 @@ export class History {
         this.undone = [];
         this.onChange();
       }
+      close();
     }
   }
 
@@ -287,9 +294,10 @@ export class History {
   }
 
   // the entry is taken when its turn in the queue comes, hence a second undo asked for during the
-  // first one takes the entry before it
+  // first one takes the entry before it. the turn comes after the end of an open transaction, whose
+  // changes are in the file before its entry is in the history, e.g. a dropped picture that is sized
   private step(way: 'undo' | 'redo'): Promise<void> {
-    const run = this.queue.then(async () => {
+    const run = this.queue.then(() => this.closed).then(async () => {
       // the stacks are read at the turn of the step, since clear() replaces them
       const [from, to] = way === 'undo' ? [this.done, this.undone] : [this.undone, this.done];
       const entry = from.pop();
