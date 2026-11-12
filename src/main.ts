@@ -87,15 +87,16 @@ const TAB = !EDITING && window.parent === window && !!window.opener && new URLSe
 // view, end at a click or a key forward past the last step. the speaker view gives its frame of the
 // upcoming slide controls=false
 const ENDS = (PLAYED || TAB) && !/controls=false/.test(location.search);
-const toEditor = (eventName: string) => (RECEIVER ? window.parent.opener : TAB ? window.opener : window.parent)?.postMessage(JSON.stringify({ namespace: 'beeson', eventName, state: window.Reveal.getState() }), '*');
+const toEditor = (eventName: string, state: unknown = window.Reveal.getState()) => (RECEIVER ? window.parent.opener : TAB ? window.opener : window.parent)?.postMessage(JSON.stringify({ namespace: 'beeson', eventName, state }), '*');
 // the speaker view opened by the show, which is closed with the show
 let speaker: Window | null = null;
 
 // E or Esc posted by the speaker view is taken as a key of the deck, and the speaker view is known
 // by the messages that it posts to the deck. a window of another origin is reached by postMessage,
-// and its opener and parent are read
+// and its opener and parent are read. the editor is given the state of the speaker view, which the
+// deck takes over only after a delay
 function fromSpeaker(ev: MessageEvent): void {
-  let m: { namespace?: string; eventName?: string } | null = null;
+  let m: { namespace?: string; eventName?: string; state?: unknown } | null = null;
   try {
     const from = ev.source as Window | null;
     if (from?.opener === window) speaker = from;
@@ -103,7 +104,7 @@ function fromSpeaker(ev: MessageEvent): void {
   } catch {
     return;
   }
-  if (m?.namespace === 'beeson' && m.eventName === 'edit') (PLAYED || TAB ? toEditor('edit') : edit());
+  if (m?.namespace === 'beeson' && m.eventName === 'edit') (PLAYED || TAB ? toEditor('edit', m.state ?? window.Reveal.getState()) : edit());
 }
 
 function edit(): void {

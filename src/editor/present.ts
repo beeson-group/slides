@@ -501,12 +501,20 @@ export class Presenter {
       ev.preventDefault();
       this.finish();
     });
-    // the show in the tab posts edit at a click or a key forward past its last step (src/main.ts)
+    // the show in the tab posts edit at a click or a key forward past its last step (src/main.ts),
+    // with its state, which the display takes before it ends, since it polls the tab only at a tick
     window.addEventListener('message', (ev) => {
       if (!this.isOpen || !this.audience || ev.source !== this.audience || typeof ev.data !== 'string') return;
       try {
         const m = JSON.parse(ev.data);
-        if (m?.namespace === 'beeson' && m.eventName === 'edit') this.finish();
+        if (m?.namespace !== 'beeson' || m.eventName !== 'edit') return;
+        const { indexh: h, indexf: f } = m.state ?? {};
+        if (typeof h === 'number' && h >= 0 && h < this.list.length) {
+          if (h !== this.at) this.account();
+          this.at = h;
+          this.step = (typeof f === 'number' ? f : -1) + 1;
+        }
+        this.finish();
       } catch {
         // a message that is not of the show
       }

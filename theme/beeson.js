@@ -4707,7 +4707,7 @@ void main() {
   var RECEIVER = window.parent !== window && /receiver/i.test(location.search);
   var TAB = !EDITING && window.parent === window && !!window.opener && new URLSearchParams(location.search).has("from-editor");
   var ENDS = (PLAYED || TAB) && !/controls=false/.test(location.search);
-  var toEditor = (eventName) => (RECEIVER ? window.parent.opener : TAB ? window.opener : window.parent)?.postMessage(JSON.stringify({ namespace: "beeson", eventName, state: window.Reveal.getState() }), "*");
+  var toEditor = (eventName, state = window.Reveal.getState()) => (RECEIVER ? window.parent.opener : TAB ? window.opener : window.parent)?.postMessage(JSON.stringify({ namespace: "beeson", eventName, state }), "*");
   var speaker = null;
   function fromSpeaker(ev) {
     let m = null;
@@ -4718,7 +4718,7 @@ void main() {
     } catch {
       return;
     }
-    if (m?.namespace === "beeson" && m.eventName === "edit") PLAYED || TAB ? toEditor("edit") : edit();
+    if (m?.namespace === "beeson" && m.eventName === "edit") PLAYED || TAB ? toEditor("edit", m.state ?? window.Reveal.getState()) : edit();
   }
   function edit() {
     speaker?.close();
