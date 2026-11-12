@@ -84,8 +84,9 @@ const DRAWN = `(() => {
   if (top && !top.hidden && sel.length) {
     const r = sel[0].getBoundingClientRect(), t = top.getBoundingClientRect();
     const g = top.getContext('2d');
-    const px = g.getImageData(Math.round((r.left + r.width / 2 - t.left) * devicePixelRatio), 2, 1, 1).data;
-    const bg = g.getImageData(1, 2, 1, 1).data;
+    // the first row, since the labels are drawn from the third row on, and the ticks from the fourth
+    const px = g.getImageData(Math.round((r.left + r.width / 2 - t.left) * devicePixelRatio), 0, 1, 1).data;
+    const bg = g.getImageData(1, 0, 1, 1).data;
     if (px[0] !== bg[0] || px[1] !== bg[1] || px[2] !== bg[2]) drawn.band = 1;
   }
   const a = document.activeElement;
