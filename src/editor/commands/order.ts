@@ -12,6 +12,7 @@ import { angleOf, apartOf, locked, pivotOf, placeOf, record, seenCenter, spinOf,
 import { LINE, MOVABLE, OUTSIDE, objectOf, objectsOf, turnable, twinOf } from '../canvas/hit.ts';
 import { stateOf } from '../tags.ts';
 import { groupOf, groupUsed, groupValue, groupsOf, scopeOf, setScope, within } from '../model/groups.ts';
+import { glueOf } from '../model/glue.ts';
 
 export type Order = 'front' | 'forward' | 'backward' | 'back';
 
@@ -607,6 +608,10 @@ function setLock(app: App, on: boolean): void {
 
 export { angleOf };
 
+// whether every one of els is a line with a glued end, which is not turned until each end is
+// detached, as a connection line of Keynote
+export const gluedLines = (els: Element[]): boolean => els.length > 0 && els.every((el) => el.matches(LINE) && (glueOf(el, 'from').length > 0 || glueOf(el, 'to').length > 0));
+
 // the angle of a whole group, i.e. of its first member in the order of the page, or null when els
 // are not one whole group that can be turned
 export function groupAngle(app: App, els: Element[]): number | null {
@@ -765,7 +770,7 @@ export function commands(app: App): Command[] {
       // a whole group is turned about the center of its frame until its first member is at deg
       id: 'arrange.setRotation',
       label: 'Rotate',
-      enabled: (app) => selectedEls(app).some(turnable),
+      enabled: (app) => selectedEls(app).some(turnable) && !gluedLines(selectedEls(app)),
       run: (app, arg) => {
         const a = (arg ?? {}) as { deg?: number; els?: Element[] };
         if (typeof a.deg !== 'number' || !Number.isFinite(a.deg)) return;
@@ -813,6 +818,7 @@ export function commands(app: App): Command[] {
       menu: { bar: 'Arrange', group: 'reset', order: 12 },
       enabled: (app) => {
         const els = selectedEls(app);
+        if (gluedLines(els)) return false;
         const group = groupAngle(app, els);
         return group !== null ? group !== 0 : els.some((el) => turnable(el) && angleOf(el) !== 0);
       },
