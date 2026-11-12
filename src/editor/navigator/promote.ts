@@ -6,7 +6,7 @@
 
 import type { App } from '../app.ts';
 import { textStyle } from '../model/templates.ts';
-import { ownTex } from '../text/blocks.ts';
+import { kindOf, openList, ownTex } from '../text/blocks.ts';
 
 // the blocks of a text column that a promoted line takes with it, and that a demoted slide holds
 const TEXT = 'p, h3, ul, ol';
@@ -99,7 +99,8 @@ export async function promote(app: App, el: Element): Promise<{ slide: Element; 
   // a locked element is not moved, hence nothing is promoted that would carry one along
   if ([el, ...followers, ...blocks].some((b) => b.closest('[data-locked]'))) return null;
   const lines = [`<section>`, `${base}${step}<h2>${ownTex(el)}</h2>`];
-  if (items.length) lines.push(`${base}${step}<${list!.localName}>`, ...items.map((i) => `${base}${step}${step}${i}`), `${base}${step}</${list!.localName}>`);
+  // the new list keeps the mark of the list of el
+  if (items.length) lines.push(`${base}${step}${openList(kindOf(list!))}`, ...items.map((i) => `${base}${step}${step}${i}`), `${base}${step}</${list!.localName}>`);
   for (const b of blocks) lines.push(`${base}${step}${shift(app, app.doc.elementText(b), indentOf(app, b), base + step)}`);
   lines.push(`${base}</section>`);
   // a list left without items goes with them

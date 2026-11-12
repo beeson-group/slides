@@ -43,7 +43,7 @@ async function marked(app: App, fn: () => void | Promise<void>): Promise<void> {
 }
 
 const STYLE_LABELS: Record<blocks.ParagraphStyle, string> = { body: 'Body', small: 'Small', subheading: 'Subheading', caption: 'Caption', footnote: 'Footnote' };
-const LIST_LABELS: Record<blocks.ListKind, string> = { none: 'Paragraphs', ul: 'Dashes', ol: 'Numbers' };
+const LIST_LABELS: Record<blocks.ListKind, string> = { none: 'Paragraphs', ul: 'Dashes', dots: 'Dots', arrows: 'Arrows', ol: 'Numbers' };
 // the labels of Change Case in PowerPoint, each written in its case
 const CASE_LABELS: [inline.Case, string][] = [['sentence', 'Sentence case.'], ['lower', 'lowercase'], ['upper', 'UPPERCASE'], ['title', 'Capitalize Each Word'], ['toggle', 'tOGGLE cASE']];
 
@@ -202,7 +202,7 @@ export function install(app: App): void {
       run: (a) => (carry.canStyle(a) ? carry.chooseStyle(a, style) : blocks.setStyle(a, style)),
     }));
 
-  (['none', 'ul', 'ol'] as const).forEach((kind, i) =>
+  (['none', 'ul', 'dots', 'arrows', 'ol'] as const).forEach((kind, i) =>
     define({
       id: `text.list.${kind}`,
       label: LIST_LABELS[kind],

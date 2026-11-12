@@ -329,8 +329,30 @@ export async function removeJoining(app: App, els: Element[], label: string): Pr
   }
 }
 
-// a list of dashes does not take the attribute start of a numbered list
-const listEdit = (kind: string): TagEdit => (kind === 'ul' ? { attrs: { start: null } } : {});
+// the tag edit of a list made of kind. a ul does not take the attribute start of a numbered list,
+// and an ol does not take the class of a mark
+const listEdit = (kind: ListKind): TagEdit => ({ ...(kind === 'ol' ? {} : { attrs: { start: null } }), classes: { dots: kind === 'dots', arrows: kind === 'arrows' } });
+
+// the list of the page el made of kind, retagged only where its tag changes
+async function relist(app: App, el: Element, kind: ListKind): Promise<Element> {
+  if (el.localName !== tagOf(kind)) return app.doc.retag(el, tagOf(kind), listEdit(kind), 'list');
+  app.doc.setTag(el, listEdit(kind), 'list');
+  return el;
+}
+
+// list, an element of a copy of a block, made of kind in place, with its other attributes kept
+function markList(list: Element, kind: ListKind): void {
+  let out = list;
+  if (list.localName !== tagOf(kind)) {
+    out = document.createElement(tagOf(kind));
+    for (const a of list.attributes) out.setAttribute(a.name, a.value);
+    out.append(...list.childNodes);
+    list.replaceWith(out);
+  }
+  for (const m of MARKS) out.classList.toggle(m, m === kind);
+  if (!out.classList.length) out.removeAttribute('class');
+  if (kind !== 'ol') out.removeAttribute('start');
+}
 
 // the numbered list of the caret, or the one numbered list selected as an object
 export function startList(app: App): HTMLOListElement | null {
@@ -609,12 +631,15 @@ export function canOutdent(app: App): boolean {
   return !!at && at.nested;
 }
 
-// the list at the end of item, which is made of the tag when item does not end with a list
-function childList(item: Element, tag: string, indent: Indent | null): Element {
+// the list at the end of item, which is made like the list from when item does not end with a list
+function childList(item: Element, from: Element, indent: Indent | null): Element {
   const end = item.lastElementChild;
   if (end?.matches(LIST) && !(end.nextSibling instanceof Text && end.nextSibling.data.trim())) return end;
   trimEnd(item);
-  const list = document.createElement(tag);
+  // the tag and the mark of the list from
+  const list = document.createElement(from.localName);
+  const mark = kindOf(from);
+  if (tagOf(mark) !== mark) list.className = mark;
   if (indent) item.append(`${indent.eol}${indent.base}${indent.step}`, list, `${indent.eol}${indent.base}`);
   else item.append(list);
   return list;
@@ -656,9 +681,9 @@ export async function indent(app: App): Promise<void> {
     const copy = texCopy(host);
     const li = copy.querySelectorAll('li')[k];
     const before = li.previousElementSibling!;
-    const tag = li.parentElement!.localName;
+    const from = li.parentElement!;
     takeOut(li);
-    appendItem(childList(before, tag, null), li, null);
+    appendItem(childList(before, from, null), li, null);
     await app.doc.setContent(host, copy.innerHTML, 'indent');
     const now = host.querySelectorAll('li')[k];
     if (now) selectIn(now, offset);
@@ -670,7 +695,7 @@ export async function indent(app: App): Promise<void> {
   const template = document.createElement('template');
   template.innerHTML = app.doc.elementText(item);
   const li = template.content.firstElementChild!;
-  appendItem(childList(copy, item.parentElement!.localName, ind), li, ind);
+  appendItem(childList(copy, item.parentElement!, ind), li, ind);
   const k = itemsOf(copy).indexOf(li);
   await app.doc.setContent(before, copy.innerHTML, 'indent');
   await app.doc.remove(item, 'indent');
@@ -692,7 +717,7 @@ export async function outdent(app: App): Promise<void> {
   const owner = list.parentElement!.closest('li') ?? copy;
   const followers = [...list.children].slice([...list.children].indexOf(li) + 1).filter((c) => c.localName === 'li');
   if (followers.length) {
-    const sub = childList(li, list.localName, null);
+    const sub = childList(li, list, null);
     for (const f of followers) {
       spaceBefore(f)?.remove();
       appendItem(sub, f, null);
@@ -713,7 +738,17 @@ export async function outdent(app: App): Promise<void> {
   selectIn(node, offset);
 }
 
-export type ListKind = 'none' | 'ul' | 'ol';
+// a list of dashes, dots, or arrows is a ul, the last two with the class of their mark
+export type ListKind = 'none' | 'ul' | 'dots' | 'arrows' | 'ol';
+const MARKS = ['dots', 'arrows'] as const;
+const tagOf = (kind: ListKind): string => (kind === 'dots' || kind === 'arrows' ? 'ul' : kind);
+export const openList = (kind: ListKind): string => (tagOf(kind) === kind ? `<${kind}>` : `<ul class="${kind}">`);
+
+// the kind of the list element list
+export function kindOf(list: Element): ListKind {
+  if (list.localName === 'ol') return 'ol';
+  return MARKS.find((m) => list.classList.contains(m)) ?? 'ul';
+}
 
 // the kind of list of a block selected as an element: a body paragraph, or a list of the file that
 // is not inside a block, e.g. the ul of a slide or of its div.col
@@ -722,7 +757,7 @@ function blockList(app: App, el: Element): ListKind | null {
   const pairing = app.pairing;
   const parent = el.parentElement;
   if (!el.matches(LIST) || !pairing?.elements.has(el) || pairing.byLive.has(el) || !parent || !pairing.elements.has(parent) || pairing.byLive.has(parent)) return null;
-  return el.localName as ListKind;
+  return kindOf(el);
 }
 
 // the blocks selected as elements, each of which a list is set on as a whole, as on a text box
@@ -743,7 +778,7 @@ export function listKind(app: App): ListKind | null {
   }
   const at = itemAt(app);
   if (!at) return null;
-  if (at.item.localName === 'li') return at.nested || structural(app, at.item) ? (at.item.parentElement!.localName as ListKind) : null;
+  if (at.item.localName === 'li') return at.nested || structural(app, at.item) ? kindOf(at.item.parentElement!) : null;
   return at.item.localName === 'p' && structural(app, at.item) ? 'none' : null;
 }
 
@@ -784,11 +819,7 @@ export async function setList(app: App, kind: ListKind): Promise<void> {
   if (at.nested) {
     const k = itemsOf(host).indexOf(item);
     const copy = texCopy(host);
-    const list = copy.querySelectorAll('li')[k].parentElement!;
-    const other = document.createElement(kind);
-    for (const a of list.attributes) other.setAttribute(a.name, a.value);
-    other.append(...list.childNodes);
-    list.replaceWith(other);
+    markList(copy.querySelectorAll('li')[k].parentElement!, kind);
     await app.doc.setContent(host, copy.innerHTML, 'list');
     const li = host.querySelectorAll('li')[k];
     if (li) selectIn(li, offset, stop);
@@ -800,7 +831,7 @@ export async function setList(app: App, kind: ListKind): Promise<void> {
   if (now === 'none') {
     // the attributes of the paragraph go to its item, apart from its paragraph style
     const li = startTag(app, item, 'li', { classes: { small: false } });
-    const [list] = await app.doc.insert(`<${kind}>${eol}${base}${step}${li}${content}</li>${eol}${base}</${kind}>`, parent, item, 'list');
+    const [list] = await app.doc.insert(`${openList(kind)}${eol}${base}${step}${li}${content}</li>${eol}${base}</${tagOf(kind)}>`, parent, item, 'list');
     await app.doc.remove(item, 'list');
     const first = list.querySelector('li');
     if (first) selectIn(first, offset, stop);
@@ -808,7 +839,7 @@ export async function setList(app: App, kind: ListKind): Promise<void> {
   }
   if (kind !== 'none') {
     const index = [...parent.children].indexOf(item);
-    const list = await app.doc.retag(parent, kind, listEdit(kind), 'list');
+    const list = await relist(app, parent, kind);
     const li = list.children[index];
     if (li) selectIn(li, offset, stop);
     return;
@@ -838,12 +869,12 @@ async function setSpanList(app: App, kind: ListKind): Promise<boolean> {
   const list = run[0]?.parentElement;
   if (p && list && run.every((h) => h.localName === 'p' && h.parentElement === list && structural(app, h))) return spanParagraphs(app, run, p, kind);
   if (!p || !list?.matches(LIST) || !run.every((h) => h.localName === 'li' && h.parentElement === list && structural(app, h))) return false;
-  if (list.localName === kind || (kind === 'none' && run.some((h) => h.querySelector(LIST)))) return true;
+  if (kindOf(list) === kind || (kind === 'none' && run.some((h) => h.querySelector(LIST)))) return true;
   const [a, f] = p.map(([el, at]) => [run.indexOf(el), at] as const);
   const items = [...list.children].filter((c) => c.localName === 'li');
   let made: Element[];
   if (kind !== 'none') {
-    const now = await app.doc.retag(list, kind, listEdit(kind), 'list');
+    const now = await relist(app, list, kind);
     const kids = [...now.children].filter((c) => c.localName === 'li');
     made = run.map((h) => kids[items.indexOf(h)]);
   } else {
@@ -869,7 +900,7 @@ async function spanParagraphs(app: App, run: Element[], p: [flow.Place, flow.Pla
   if (kind === 'none') return true;
   const { base, step, eol } = indentOf(app, run[0]);
   const items = run.map((el) => `${eol}${base}${step}${startTag(app, el, 'li', { classes: { small: false } })}${rangeTex(el, rangeOf(el, null, null))}</li>`).join('');
-  const [list] = await app.doc.insert(`<${kind}>${items}${eol}${base}</${kind}>`, run[0].parentElement!, run[0], 'list');
+  const [list] = await app.doc.insert(`${openList(kind)}${items}${eol}${base}</${tagOf(kind)}>`, run[0].parentElement!, run[0], 'list');
   for (const el of run) await app.doc.remove(el, 'list');
   const made = [...list.children].filter((c) => c.localName === 'li');
   const [a, f] = p.map(([el, at]) => [made[run.indexOf(el)], at] as const);
@@ -889,24 +920,33 @@ async function listBlocksAs(app: App, blocks: Element[], kind: ListKind): Promis
   const made: Element[] = [];
   for (const el of blocks) {
     const now = blockList(app, el);
-    if (now === kind) {
-      made.push(el);
-      continue;
-    }
-    if (now === 'none') {
+    if (now === kind) made.push(el);
+    else if (now === 'none') {
       const { base, step, eol } = indentOf(app, el);
       const li = startTag(app, el, 'li', { classes: { small: false } });
       const content = rangeTex(el, rangeOf(el, null, null));
-      made.push(...(await app.doc.insert(`<${kind}>${eol}${base}${step}${li}${content}</li>${eol}${base}</${kind}>`, el.parentElement!, el, 'list')));
+      made.push(...(await app.doc.insert(`${openList(kind)}${eol}${base}${step}${li}${content}</li>${eol}${base}</${tagOf(kind)}>`, el.parentElement!, el, 'list')));
       await app.doc.remove(el, 'list');
-    } else if (kind !== 'none') made.push(await app.doc.retag(el, kind, listEdit(kind), 'list'));
+    } else if (kind !== 'none') made.push(await relist(app, el, kind));
     else {
       const texts = [...el.children].filter((c) => c.localName === 'li').map((li) => `${startTag(app, li, 'p')}${rangeTex(li, rangeOf(li, null, null)).trim()}</p>`);
       made.push(...(await app.doc.insert(texts, el.parentElement!, nextOf(app, el), 'list')));
       await app.doc.remove(el, 'list');
     }
+    if (tagOf(kind) === 'ul') await markNested(app, made.at(-1)!, kind);
   }
   app.selection.set('elements', made);
+}
+
+// the nested ul lists of the list block made of kind, as a text box of PowerPoint takes a bullet at
+// every level. a nested ol is kept
+async function markNested(app: App, block: Element, kind: ListKind): Promise<void> {
+  for (const li of block.querySelectorAll(':scope > li')) {
+    if ([...li.querySelectorAll('ul')].every((ul) => kindOf(ul) === kind)) continue;
+    const copy = texCopy(li);
+    for (const ul of copy.querySelectorAll('ul')) markList(ul, kind);
+    await app.doc.setContent(li, copy.innerHTML, 'list');
+  }
 }
 
 export function install(app: App): void {

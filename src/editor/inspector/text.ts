@@ -6,7 +6,7 @@
 
 import type { App } from '../app.ts';
 import { entering } from '../commands/edit.ts';
-import { listKind, selectedBlocks, startList, styleOf, styleWhy } from '../text/blocks.ts';
+import { kindOf, listKind, type ListKind, selectedBlocks, startList, styleOf, styleWhy } from '../text/blocks.ts';
 import { around, FORMATS, inlineTargets, isTone, type FormatName } from '../text/inline.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { openMenu, type MenuItem } from '../ui/menu.ts';
@@ -124,11 +124,11 @@ const tonesOf = (app: App): Set<string> | null => {
 };
 
 // the kind of list of each of several blocks, or null when they share one or one has none
-function listState(app: App, kind: string): () => boolean | 'mixed' | null {
+function listState(app: App, kind: ListKind): () => boolean | 'mixed' | null {
   return () => {
     const els = app.selection.kind === 'elements' ? app.selection.elements() : [];
     if (els.length < 2 || listKind(app) !== null) return app.commands.get(`text.list.${kind}`) ? app.commands.state(`text.list.${kind}`).checked : null;
-    const kinds = els.map((el) => (el.matches('ul, ol') ? el.localName : el.localName === 'p' ? 'none' : null));
+    const kinds = els.map((el) => (el.matches('ul, ol') ? kindOf(el) : el.localName === 'p' ? 'none' : null));
     return kinds.includes(null) ? null : kinds.includes(kind) ? 'mixed' : false;
   };
 }
@@ -288,6 +288,8 @@ export function textPane(app: App, run: Run): Control[] {
       row([segmented(app, run, [
         { command: 'text.list.none', icon: 'list-none', title: 'Paragraphs', pressed: listState(app, 'none') },
         { command: 'text.list.ul', icon: 'list-dash', title: 'Dashes', pressed: listState(app, 'ul') },
+        { command: 'text.list.dots', icon: 'list-dot', title: 'Dots', pressed: listState(app, 'dots') },
+        { command: 'text.list.arrows', icon: 'list-arrow', title: 'Arrows', pressed: listState(app, 'arrows') },
         { command: 'text.list.ol', icon: 'list-number', title: 'Numbers', pressed: listState(app, 'ol') },
       ], 'List'), segmented(app, run, [
         { command: 'text.outdent', icon: 'outdent', title: 'Decrease Indent Level' },

@@ -375,14 +375,14 @@ export function notesListKind(app: App): 'ul' | 'none' | null {
   return !c ? null : c.li ? 'ul' : 'none';
 }
 
-// the notes take dashes and lines, and not numbers
-export function canSetNotesList(app: App, kind: 'none' | 'ul' | 'ol'): boolean {
-  return kind !== 'ol' && notesListKind(app) !== null;
+// the notes take dashes and lines, and not numbers, dots, or arrows
+export function canSetNotesList(app: App, kind: string): boolean {
+  return (kind === 'none' || kind === 'ul') && notesListKind(app) !== null;
 }
 
-export function setNotesList(app: App, kind: 'none' | 'ul' | 'ol'): void {
+export function setNotesList(app: App, kind: string): void {
   const c = caretOf(app);
-  if (!c || kind === 'ol' || (kind === 'ul') === !!c.li) return;
+  if (!c || !canSetNotesList(app, kind) || (kind === 'ul') === !!c.li) return;
   change(app, c, () => (c.li ? toLine(c.aside, c.li) : toItem(c)));
 }
 
