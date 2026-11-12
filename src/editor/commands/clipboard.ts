@@ -24,7 +24,8 @@ import { VOID } from '../source.ts';
 import { tokenize } from '../tokens.ts';
 import { keepBeside } from './place.ts';
 import { MARK, docOf, slidesIn } from './slide.ts';
-import { clearRange, pasteRange, pasteTable, rangeText, selectedRange } from './table.ts';
+import { cellAt, clearRange, pasteAtCell, pasteRange, pasteTable, rangeText, selectedRange } from './table.ts';
+import { display } from '../keymap.ts';
 import { removeJoining } from '../text/blocks.ts';
 
 // the offset of a paste or a duplicate that would cover its source, in slide pixels
@@ -350,12 +351,18 @@ export function install(app: App): void {
     if (Array.isArray(arg) && arg.every((f) => f instanceof File)) return void (await insertFiles(a, arg));
     let text = typeof arg === 'string' ? arg : '';
     const read = !text;
-    if (!text) text = (await navigator.clipboard?.readText().catch(() => '')) || '';
+    let refused = false;
+    if (!text) text = (await navigator.clipboard?.readText().catch((e) => void (refused = e?.name === 'NotAllowedError'))) || '';
     if (!text && !inText(a)) {
       const files = await readMedia();
       if (files.length) return void (await insertFiles(a, files));
     }
     text ||= clip?.text || '';
+    // the key pastes from its own event, which the browser allows where it refuses the read
+    if (!text && refused) {
+      a.note = { text: `The browser did not let the editor read the clipboard. Press ${display('Mod+V', a.platform)} to paste`, warn: true };
+      return void a.report();
+    }
     const els = elementsIn(text);
     const slides = slidesIn(text)?.length ? text : null;
     const field = fieldOf(a);
@@ -375,7 +382,11 @@ export function install(app: App): void {
       const host = a.hostOf(at instanceof Element ? at : at?.parentElement ?? null);
       if (host && !els && !slides && pastesItems(a, host, text)) await pasteItems(a, text);
       else if (match && host) insertPlain(host, els || slides ? wordsOf(text) : text);
-      else if (!els && !slides) document.execCommand('insertText', false, text);
+      else if (!els && !slides) {
+        // a range pasted into a cell fills the cells from it, as the paste of the key in table.ts
+        const html = cellAt(a) ? (text === clip?.text ? clip.html : '') || (read ? await readHtml() : '') : '';
+        if (!(await pasteAtCell(a, text, html))) document.execCommand('insertText', false, text);
+      }
     } else if (els) await pasteElements(a, els);
     else if (slides) await a.commands.run('slide.paste', slides);
     else {

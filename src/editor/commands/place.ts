@@ -4,9 +4,10 @@
 // and the chrome, i.e. the running head, the footnote line, and the slide number, and first off the
 // figures as well, for which a new picture is drawn smaller. a free place of a table is inside the
 // margins of the slide, at 120 px from its left and right edges. without a free place, another
-// element is put at the center of the slide, where Keynote puts a new object. a table is put there
-// by centerPlace, which may cover words but moves it to the nearest place off the figures, the
-// videos, the plots, the QR codes, and the tables while such a place exists. on a figure slide, the
+// element is put at the center of the slide, where Keynote puts a new object. a table is put by
+// centerPlace at the center while it lies over nothing there, and else at the place off the
+// figures, the videos, the plots, the QR codes, and the tables that covers the least words, while
+// such a place exists. on a figure slide, the
 // plate as large as the slide is the ground, and what is drawn in it counts in its place
 
 import type { App } from '../app.ts';
@@ -81,6 +82,10 @@ export function drawnCells(app: App, backdrop: Element): Box[] {
   }
   return [...cells.values()];
 }
+
+// whether el is a new text box of a title or closing slide, a child of the section outside the
+// block, whose words grow into its frame, hence it takes the space of its frame and not of its words
+export const framed = (el: Element) => el.matches(WORDS) && el.getClientRects().length > 0 && !!el.parentElement?.matches('section.title, section.closing');
 
 // the box of el, by its words with words
 const boxOf = (app: App, el: Element, words = false): Box | null => {
@@ -181,7 +186,7 @@ export function piecesOf(app: App, el: Element): Pieces {
   const num = document.querySelector('.reveal .slide-number');
   for (const o of [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *, :scope > .block > *, :scope > .sec > *'), ...(num ? [num] : [])]) {
     if (o === el || o.contains(el) || el.contains(o) || o.matches(SKIP)) continue;
-    const box = boxOf(app, o, true);
+    const box = framed(o) ? slideBox(app, o) : boxOf(app, o, true);
     const all = o.matches('.plate') && o.getClientRects().length ? slideBox(app, o) : null;
     if (all && all.right - all.left >= w - 1 && all.bottom - all.top >= h - 1) {
       for (const c of o.children) if (c.getClientRects().length) out.solids.push(slideBox(app, c));
@@ -197,11 +202,12 @@ const grow = (b: Box, d: number): Box => ({ left: b.left - d, top: b.top - d, ri
 
 // the place of a new table of width bw and height bh that does not have a free place on a
 // slide of w by h, inside the margins and at top or below: the center of the slide, where Keynote
-// puts a new object, unless it lies over a solid. else the place nearest to the center that is off
-// every solid with room, then without, first one off the texts with room as well. else the place
-// that covers the least of the solids, and of these the least of the texts, where the chrome counts
-// as words. a place off the headings is taken first where one is left. room is in slide px, e.g.
-// the room of the bars of a table
+// puts a new object, unless it lies over a solid or a text. else the place nearest to the center
+// that is off every solid with room, then without, and off the texts with room as well. else the
+// place off every solid that covers the least of the texts. else the place that covers the least of
+// the solids, and of these the least of the texts, where the chrome counts as words. a place off
+// the headings is taken first where one is left. room is in slide px, e.g. the room of the bars of
+// a table
 export function centerPlace(w: number, h: number, bw: number, bh: number, pieces: Pieces, room: number, top: number): Box {
   // the sizes are rounded to 1/8 px, since a box measured at Fit is off by a float error, and an edge
   // that touches another would then meet it at one zoom and not at another
@@ -211,7 +217,7 @@ export function centerPlace(w: number, h: number, bw: number, bh: number, pieces
   const [solids, texts, heads, chrome] = [pieces.solids, pieces.texts, pieces.heads, pieces.chrome].map(snap);
   const at = (x: number, y: number): Box => ({ left: x, top: y, right: x + bw, bottom: y + bh });
   const center = at((w - bw) / 2, (h - bh) / 2);
-  if (!solids.some((s) => meets(center, s))) return center;
+  if (![...solids, ...texts].some((s) => meets(center, s))) return center;
   const side = bw + 2 * MARGIN <= w ? MARGIN : Math.max(0, (w - bw) / 2);
   const places = (gap: number): Box[] => {
     const xs = steps(side, w - bw - side, [center.left, w - bw - side, ...[...solids, ...texts].flatMap((s) => [s.left - bw - gap, s.right + gap])]);
@@ -222,11 +228,13 @@ export function centerPlace(w: number, h: number, bw: number, bh: number, pieces
   const words = (b: Box) => [...texts, ...chrome].reduce((c, t) => c + overlap(b, t), 0);
   const unhead = (all: Box[]) => (all.some((b) => !heads.some((t) => meets(b, t))) ? all.filter((b) => !heads.some((t) => meets(b, t))) : all);
   const least = (all: Box[], cost: (b: Box) => number) => all.reduce<Box | null>((best, b) => (!best || cost(b) < cost(best) - 1 || (cost(b) <= cost(best) + 1 && far(b) < far(best)) ? b : best), null);
-  for (const gap of [room, 0]) {
-    const all = unhead(places(gap).filter((b) => !solids.some((s) => meets(grow(b, gap), s))).sort((a, b) => far(a) - far(b)));
-    const best = all.find((b) => !texts.some((t) => meets(grow(b, room), t))) ?? all[0];
+  const off = [room, 0].map((gap) => unhead(places(gap).filter((b) => !solids.some((s) => meets(grow(b, gap), s))).sort((a, b) => far(a) - far(b))));
+  for (const all of off) {
+    const best = all.find((b) => !texts.some((t) => meets(grow(b, room), t)));
     if (best) return best;
   }
+  const fewest = least(off.flat(), words);
+  if (fewest) return fewest;
   const cost = (b: Box) => solids.reduce((c, s, i) => c + (pieces.chrome?.includes(pieces.solids[i]) ? 0 : overlap(b, s)), 0);
   const some = unhead(places(0));
   const low = least(some, cost);
@@ -273,8 +281,8 @@ export function keepBeside(app: App, outer: Element[]): (move: (el: Element, tra
 // place is the free one inside the margins nearest to the center of the slide, off the words of
 // the block, the other elements, the chrome, and the lockup drawn by the theme, with room, and off
 // the drawn cells of the backdrop while such a place exists, with room under it for three lines.
-// the box is drawn as small as a half before it lies over the drawing, and it is put at the center
-// when every place covers words
+// the box is drawn as small as 0.35 of its width before it lies over the drawing, and it is put at
+// the center when every place covers words
 export function titlePlace(app: App, el: HTMLElement): { x: number; y: number; width?: number } {
   const slide = el.closest('section') as HTMLElement;
   const w = slide.offsetWidth || 1920, h = slide.offsetHeight || 1080;
@@ -282,7 +290,7 @@ export function titlePlace(app: App, el: HTMLElement): { x: number; y: number; w
   const num = document.querySelector('.reveal .slide-number');
   for (const o of [...slide.querySelectorAll(':scope > *, :scope > .block > *'), ...(num ? [num] : [])]) {
     if (o === el || o.matches(`${SKIP}, .block`)) continue;
-    const b = boxOf(app, o, true);
+    const b = framed(o) ? slideBox(app, o) : boxOf(app, o, true);
     if (b && b.right - b.left > 1 && b.bottom - b.top > 1) others.push(b);
   }
   const lockup = getComputedStyle(slide, '::before');
@@ -299,7 +307,7 @@ export function titlePlace(app: App, el: HTMLElement): { x: number; y: number; w
   const base = slideBox(app, el).right - slideBox(app, el).left;
   try {
     for (const ink of cells.size ? [true, false] : [false]) {
-      for (const k of [1, 0.75, 0.5]) {
+      for (const k of [1, 0.75, 0.5, 0.35]) {
         el.style.width = k === 1 ? width : `${Math.round(base * k)}px`;
         const b = slideBox(app, el);
         const bw = b.right - b.left, bh = b.bottom - b.top;

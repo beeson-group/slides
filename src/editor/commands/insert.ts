@@ -454,6 +454,9 @@ export function install(app: App): void {
     const active = document.activeElement as HTMLElement | null;
     const sel = getSelection();
     const range = sel?.rangeCount ? sel.getRangeAt(0).cloneRange() : null;
+    // the elements selected by the click, e.g. a figure, which the caret in the old box would replace
+    const kept = app.selection.kind === 'elements' ? app.selection.elements().filter((e) => e !== node) : [];
+    const slide = node.closest('section');
     leaving = true;
     try {
       if (held) h.discard();
@@ -467,8 +470,17 @@ export function install(app: App): void {
             sel!.addRange(range);
           }
         }
+        if (kept.length && kept.every((e) => e.isConnected)) app.selection.set('elements', kept);
       }
-      if (node.isConnected) await h.transact('Delete Text Box', () => docOf(app).remove(node));
+      // a click on a row of the navigator shows another slide before the entry is opened, hence a
+      // part of the entry shows the slide of the box after the view of the entry at an undo or a redo
+      if (node.isConnected) {
+        await h.transact('Delete Text Box', () => {
+          const show = () => void (slide?.isConnected && app.showSlide(slide));
+          h.push({ label: 'show', undo: show, redo: show });
+          docOf(app).remove(node);
+        });
+      }
       // the undo of the first input shows the emptied box again as the pending one, and the undo of
       // its insert takes it off, hence the new box is made the pending one again
       if (p && p.el.isConnected && (pending === p || !pending)) {

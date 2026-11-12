@@ -40,7 +40,7 @@ import { injectStyle, make } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { closeMenus, menuOpen, openMenu, type MenuItem } from '../ui/menu.ts';
 import { columnPlace, freeZone, meets, slideBox, takenBox, type Box as SlideBox } from './insert.ts';
-import { centerPlace, drawnCells, MARGIN, piecesOf, wordBox } from './place.ts';
+import { centerPlace, drawnCells, framed, MARGIN, piecesOf, wordBox } from './place.ts';
 import { checkOverlaps } from '../overflow.ts';
 import { MARK } from './slide.ts';
 
@@ -482,7 +482,7 @@ function placeTable(app: App, table: HTMLTableElement): void {
   const ground = (el: Element) => el.matches('.plate') && el.getBoundingClientRect().width >= (slide.getBoundingClientRect().width - 1);
   // the words of a block are counted in their place
   const skip = (el: Element) => el === table || el.matches('aside.notes, script, style, .backdrop, .block, .sec');
-  const taken = (els: Element[]) => els.filter((el) => !skip(el)).map((el) => wordBox(app, el)).filter((b): b is SlideBox => !!b);
+  const taken = (els: Element[]) => els.filter((el) => !skip(el)).map((el) => (framed(el) ? slideBox(app, el) : wordBox(app, el))).filter((b): b is SlideBox => !!b);
   const drawn = slide.matches('.title, .section, .closing') ? [] : [...slide.querySelectorAll(':scope > .backdrop')].flatMap((b) => drawnCells(app, b));
   const above = [...parent.children].slice(0, [...parent.children].indexOf(table)).filter((el) => !el.matches('.run, .foot, [data-generated]'));
   const before = taken(above.filter((el) => !ground(el)));
@@ -924,6 +924,17 @@ export async function pasteRange(app: App, text: string, html = ''): Promise<boo
   const first = t?.box ? cellOver(t.table, t.box.r0, t.box.c0) : null;
   if (!first || !rows) return false;
   await keepingRange(app, () => pasteCells(app, first, rows, true, !!marked));
+  return true;
+}
+
+// a paste of an HTML table or of tab-separated text into the cell of the caret, which fills the
+// cells from this cell on, as the paste of the key. false without a cell or a table to paste
+export async function pasteAtCell(app: App, text: string, html = ''): Promise<boolean> {
+  const cell = cellAt(app);
+  const marked = parseEditorTable(html);
+  const rows = cell && (marked ?? parseHtmlTable(html) ?? parseTabular(text));
+  if (!rows) return false;
+  await pasteCells(app, cell, rows, false, !!marked);
   return true;
 }
 
