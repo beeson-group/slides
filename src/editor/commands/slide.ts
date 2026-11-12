@@ -390,8 +390,8 @@ export function install(app: App): void {
     {
       id: 'slide.duplicate',
       label: (a) => (targets(a).length > 1 ? 'Duplicate Slides' : 'Duplicate Slide'),
-      keys: { mac: ['Mod+D'], other: ['Mod+D'] },
-      in: ['navigator'],
+      // without a key, as Delete Slide. Mod+D is the key of Edit > Duplicate, which runs this command
+      // in the navigator and with nothing selected, and duplicates a selected element
       menu: slideMenu(20),
       context: ['slide', 'canvas'],
       enabled: (a) => targets(a).length > 0,

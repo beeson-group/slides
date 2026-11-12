@@ -412,7 +412,7 @@ export function install(app: App): void {
     id: 'edit.duplicate',
     label: 'Duplicate',
     keys: { mac: ['Mod+D'], other: ['Mod+D'] },
-    in: ['canvas', 'text'],
+    in: ['canvas', 'text', 'navigator'],
     menu: menu(30, 'select'),
     context: ['element'],
     enabled: (a) => ready(a) && !selectedRange(a) && (a.selection.kind === 'text' ? !!caretBlock(a) : selectedElements(a).length > 0 || a.commands.enabled('slide.duplicate')),
