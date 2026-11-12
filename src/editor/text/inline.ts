@@ -57,6 +57,21 @@ function wordRange(range: Range, edge: boolean): Range {
   return r;
 }
 
+// range without the white space at its end, e.g. the space that a double-click on Windows selects
+// after a word, which Word and PowerPoint leave out of a format. a range of white space alone is
+// kept
+function trimEnd(range: Range): Range {
+  const end = range.endContainer;
+  if (range.collapsed || !(end instanceof Text)) return range;
+  const from = end === range.startContainer ? range.startOffset : 0;
+  let k = range.endOffset;
+  while (k > from && /\s/.test(end.data[k - 1])) k--;
+  if (k === range.endOffset || (k === from && end === range.startContainer)) return range;
+  const r = range.cloneRange();
+  r.setEnd(end, k);
+  return r;
+}
+
 // the ranges that a format is set on: the text of the window or the word at its caret, and else
 // the whole text of each selected block. notes take only bold and italic
 export function inlineTargets(app: App, notes = false, edge = false): Target[] {
@@ -65,7 +80,7 @@ export function inlineTargets(app: App, notes = false, edge = false): Target[] {
   const t = textTarget(app);
   if (t) {
     if (!notes && t.host.matches('aside.notes')) return [];
-    const range = wordRange(t.range, edge);
+    const range = trimEnd(wordRange(t.range, edge));
     return range.collapsed ? [] : [{ host: t.host, range }];
   }
   // an item takes its own text, without its nested list, which is a block of its own

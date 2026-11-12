@@ -341,14 +341,28 @@ export function install(app: App): void {
     }
   }
 
+  // the space left before a cut word when a space or a punctuation mark follows it, which Chrome
+  // takes out only on macOS, and Word and PowerPoint on every platform. a space of code is kept
+  function smartCut(): void {
+    const s = getSelection();
+    const n = s?.focusNode;
+    const k = s?.focusOffset ?? 0;
+    if (!s?.isCollapsed || !(n instanceof Text) || k === 0 || n.parentElement?.closest('pre, code')) return;
+    if (!/[ \u00a0]/.test(n.data[k - 1]) || !/[\s.,;:!?)\]]/.test(n.data[k] ?? '')) return;
+    n.deleteData(k - 1, 1);
+    s.collapse(n, k - 1);
+  }
+
   const typing: Typing = { attach, markMath, restoreHost };
   app.typing = typing;
   document.addEventListener('beforeinput', onBeforeInput);
   document.addEventListener('input', (ev) => {
     const host = app.hostOf(ev.target);
     if (!host) return;
+    const cut = (ev as InputEvent).inputType === 'deleteByCut';
+    if (cut) smartCut();
     history.afterTyping(host);
-    if ((ev as InputEvent).inputType === 'deleteByCut') history.break();
+    if (cut) history.break();
     app.markDirty();
     app.invalidate('content');
   });
