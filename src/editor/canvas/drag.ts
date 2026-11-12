@@ -359,7 +359,9 @@ type Press = {
 // an element of a multiple selection that follows a resize by the grip of another: the elements
 // whose width it writes, its picture, its angle, and the box of its picture at the press without
 // its rotation, about the center of the picture, in slide pixels
-type Follower = { el: Element; sized: Element[]; pic: Element; deg: number; base: Box };
+// a follower of a resize, and for a member of a group selected with other objects the frame of
+// its group in slide px without its rotation, with its angle, about which the group is scaled
+type Follower = { el: Element; sized: Element[]; pic: Element; deg: number; base: Box; group?: { box: Box; deg: number } };
 
 // the angle of el and of the picture inside it, as its style sets them
 const angleIn = (el: Element, pic: Element): number => (placeOf(el).rotate ?? 0) + (pic === el ? 0 : (placeOf(pic).rotate ?? 0));
@@ -599,12 +601,24 @@ export function install(app: App): void {
       const pic = pictureOf(el);
       const f = frameOf(app);
       const all = sel.elements();
+      // a group of two selected members or more is scaled as one about its frame, as by its grips
+      const groups = new Map<string, { box: Box; deg: number }>();
+      const groupFor = (o: Element) => {
+        const id = groupOf(o);
+        const els = id ? all.filter((x) => groupOf(x) === id) : [];
+        if (!id || els.length < 2) return undefined;
+        if (!groups.has(id)) {
+          const deg = turnersOf(app, els)?.[0].angle ?? 0;
+          groups.set(id, { box: toSlide(f, groupFrame(els, deg)), deg });
+        }
+        return groups.get(id);
+      };
       const followers: Follower[] = all
-        .filter((o) => o !== el && !locked(o) && !o.contains(el) && !el.contains(o) && !all.some((x) => x !== o && x.contains(o)) && sizedOf(o).length)
+        .filter((o) => o !== el && !locked(o) && !o.contains(el) && !el.contains(o) && !all.some((x) => x !== o && x.contains(o)) && (sizedOf(o).length || groupFor(o)))
         .map((o) => {
           const pic = pictureOf(o);
           const deg = angleIn(o, pic);
-          return { el: o, sized: sizedOf(o), pic, deg, base: toSlide(f, orientedBox(pic, f.scale, deg)) };
+          return { el: o, sized: sizedOf(o), pic, deg, base: toSlide(f, orientedBox(pic, f.scale, deg)), group: groupFor(o) };
         });
       const p = Object.assign(start('resize', ev, el, [el, ...followers.map((m) => m.el)], null), {
         handle: (grip as HTMLElement).dataset.handle as Handle, aspect: aspectOf(pic), sized, pic, followers, stretch: pic.matches(STRETCHED), keep: constrained(pic),
@@ -956,13 +970,24 @@ export function install(app: App): void {
         if ((p.from.get(s)?.height ?? null) !== null) (s as HTMLElement).style.height = `${Math.round(m.base.height * k)}px`;
       }
       const seen = toSlide(f, orientedBox(m.pic, f.scale, m.deg));
+      const now = placeOf(m.el);
+      const from = p.from.get(m.el) as Place;
+      if (m.group) {
+        // a member of a group is scaled about the side or the corner of the frame of its group across
+        // from handle, as a grip of the group scales it, and a text block keeps the place of its top
+        const b = m.group.box;
+        const { x: ax, y: ay } = turned(b, m.group.deg, center || !sx ? b.left + b.width / 2 : sx > 0 ? b.left : b.left + b.width, center || !sy ? b.top + b.height / 2 : sy > 0 ? b.top : b.top + b.height);
+        const text = isTextSized(m.pic);
+        const cx = ax + (m.base.left + m.base.width / 2 - ax) * k;
+        const cy = ay + ((text ? m.base.top : m.base.top + m.base.height / 2) - ay) * k;
+        writeLive(m.el, { ...now, translate: { x: (now.translate?.x ?? 0) + cx - (seen.left + seen.width / 2), y: (now.translate?.y ?? 0) + cy - (text ? seen.top : seen.top + seen.height / 2) }, rotate: from.rotate });
+        continue;
+      }
       // the center of the picture moves by half its growth away from the anchor, turned by its angle
       const a = (m.deg * Math.PI) / 180;
       const lx = center ? 0 : (sx * (seen.width - m.base.width)) / 2, ly = center ? 0 : (sy * (seen.height - m.base.height)) / 2;
       const cx = m.base.left + m.base.width / 2 + lx * Math.cos(a) - ly * Math.sin(a);
       const cy = m.base.top + m.base.height / 2 + lx * Math.sin(a) + ly * Math.cos(a);
-      const now = placeOf(m.el);
-      const from = p.from.get(m.el) as Place;
       writeLive(m.el, { ...now, translate: { x: (now.translate?.x ?? 0) + cx - (seen.left + seen.width / 2), y: (now.translate?.y ?? 0) + cy - (seen.top + seen.height / 2) }, rotate: from.rotate });
     }
   };

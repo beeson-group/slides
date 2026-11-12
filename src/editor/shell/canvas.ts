@@ -148,11 +148,13 @@ export function install(app: App): void {
       const add = { left: more(reach.left, (baseW - w) / 2), right: more(reach.right, (baseW - w) / 2), top: more(reach.top, (baseH - h) / 2), bottom: more(reach.bottom, (baseH - h) / 2) };
       const contentW = baseW + add.left + add.right;
       const contentH = baseH + add.top + add.bottom;
+      // the slide stays where it is drawn while room is added or taken off left of it or above it.
+      // the scroll is read before the spacer is resized, which clamps it to a shrunk room
+      const sx = el.scrollLeft, sy = el.scrollTop;
       spacer.style.width = `${contentW + room.left}px`;
       spacer.style.height = `${contentH + room.top}px`;
-      // the slide stays where it is drawn while room is added or taken off left of it or above it
-      el.scrollLeft += add.left - added.x;
-      el.scrollTop += add.top - added.y;
+      el.scrollLeft = sx + add.left - added.x;
+      el.scrollTop = sy + add.top - added.y;
       added = { x: add.left, y: add.top };
       const x = v.left + add.left + (baseW - w) / 2 - el.scrollLeft;
       const y = v.top + add.top + (baseH - h) / 2 - el.scrollTop;
