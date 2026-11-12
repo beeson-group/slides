@@ -648,6 +648,13 @@ export class Steps {
   // what the rows show, so that they are built again only when it changes, since a menu that is
   // open on a chip would be lost
   private key = '';
+  // a number for each element of a row in the key, since the twin of a pair has the same words
+  private readonly ids = new WeakMap<Element, number>();
+  private lastId = 0;
+  private idOf(el: Element): number {
+    if (!this.ids.has(el)) this.ids.set(el, ++this.lastId);
+    return this.ids.get(el) as number;
+  }
   private rows: Row[] = [];
   private heads: Head[] = [];
   private model: Model | null = null;
@@ -752,6 +759,8 @@ export class Steps {
     this.detail.append(label);
     app.listen('slide', () => this.stop());
     app.selection.listen(() => this.mark());
+    // a flip of the mode shows the other twin of a dark and light pair, to which the rows are bound
+    new MutationObserver(() => this.refresh()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
   }
 
   toggle(): void {
@@ -810,7 +819,7 @@ export class Steps {
     const described = els.map((el, i) => (m.lines[i] ? describeLines(m.lines[i] as LineStep) : describe(el, this.ctx.tex)));
     const effects = els.map((el, i) => (m.lines[i] ? 'Highlight' : effectOf(classesOf(app, el)).label));
     const delays = delaysOf(app, m);
-    const key = [app.pairing?.sections.findIndex((s) => s.live === m.slide), JSON.stringify(plan), JSON.stringify([...delays]), ...els.map((_, i) => `${described[i].kind}|${described[i].text}|${effects[i]}|${items[i].final}`)].join('\n');
+    const key = [app.pairing?.sections.findIndex((s) => s.live === m.slide), JSON.stringify(plan), JSON.stringify([...delays]), ...els.map((el, i) => `${this.idOf(el)}|${described[i].kind}|${described[i].text}|${effects[i]}|${items[i].final}`)].join('\n');
     if (key !== this.key) {
       this.key = key;
       this.build(m, described, effects, delays);

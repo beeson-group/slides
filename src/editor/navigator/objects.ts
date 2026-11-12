@@ -302,7 +302,8 @@ export function install(app: App): void {
     const on2 = (item: Item) => membersOf(item).every((el) => selected.has(el));
     const keys = plan.map((p) => keyOf(p.item));
     const current = focusKey && keys.includes(focusKey) ? focusKey : keys[plan.findIndex((p) => on2(p.item))] ?? keys[0];
-    const sig = [query, ...plan.map((p) => [idOf(keyOf(p.item)), p.level, nameOf(p.item), on2(p.item), membersOf(p.item).every(locked), !p.item.el && folded.has(p.item.group)].join('|'))].join('\n');
+    // a group row holds its members, which a folded row does not show as rows of their own
+    const sig = [query, ...plan.map((p) => [idOf(keyOf(p.item)), p.level, nameOf(p.item), on2(p.item), membersOf(p.item).every(locked), !p.item.el && folded.has(p.item.group), !p.item.el && p.item.members.map(idOf).join(',')].join('|'))].join('\n');
     if (sig !== built) {
       built = sig;
       rows = plan.map((p) => ({ item: p.item, row: rowOf(p.item, p.level, selected) }));
@@ -518,6 +519,8 @@ export function install(app: App): void {
   app.onRefresh(['content', 'selection', 'slide', 'structure', 'layout'], () => refresh());
   app.listen('resize', () => refresh());
   app.listen('slide', () => (focusKey = null));
+  // a flip of the mode shows the other twin of a dark and light pair, whose row is built again
+  new MutationObserver(() => refresh()).observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
 
   const toggle = () => {
     on = !on;
