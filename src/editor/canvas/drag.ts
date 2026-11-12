@@ -13,6 +13,7 @@ import { LAYOUT_GUIDES, anchored, fitPicture, lockedAxis, resizeBox, snapMove, s
 import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, captionsOf, constrained, containerOf, cssWidth, figureFrame, frameOf, frameRect, hasText, isTextSized, lineEnds, linePoints, linesOf, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, pictureReach, segmentTouches, sizedOf, snapBoxOf, toSlide, turnable, twinOf, unturnedRect, visualRect } from './hit.ts';
 import { groupFrame, overlay, turned, view, wh, xy } from './frames.ts';
 import { enterGroup, settleCopies, freshGroup, groupOf } from '../commands/order.ts';
+import { cornerBoxOf } from '../commands/align.ts';
 import { injectStyle } from '../ui/dom.ts';
 
 const CSS = `
@@ -72,6 +73,9 @@ function declare(el: Element, edit: TagEdit & { style?: Record<string, string | 
   if (value !== null || had || edit.style?.[name] !== undefined) edit.style = { ...edit.style, [name]: value };
 }
 
+// the elements whose rotate writeLive took off during a drag, which the release writes as removed
+const unturned = new WeakSet<Element>();
+
 // the one function that writes the place of an element: on the page, and as the tag edit that a
 // save writes into its start tag. the width is written as a declaration of the style, which the
 // writer of the tags of the document model takes. it does not record the history, which the caller
@@ -90,8 +94,9 @@ export function writePlace(app: App, el: Element, p: Place, force = false, twin 
   if (el.matches(STRETCHED) && p.height !== undefined) declare(el, edit, 'height', p.height === null ? null : `${Math.round(p.height)}px`);
   if (p.rotate !== undefined) {
     const r = p.rotate ? ((Math.round(p.rotate) % 360) + 360) % 360 : 0;
+    const had = unturned.delete(el) || /(^|;)\s*rotate\s*:/.test(el.getAttribute('style') ?? '');
     style.rotate = r ? `${r}deg` : '';
-    if (r || edit.style?.rotate !== undefined || /(^|;)\s*rotate\s*:/.test(el.getAttribute('style') ?? '')) edit.style = { ...edit.style, rotate: r ? `${r}deg` : null };
+    if (r || had || edit.style?.rotate !== undefined) edit.style = { ...edit.style, rotate: r ? `${r}deg` : null };
   }
   app.tagEdits.set(el, edit);
   app.markDirty();
@@ -132,10 +137,10 @@ export function angleOf(el: Element): number {
   return (((placeOf(spin).rotate ?? 0) + (up ? (placeOf(up).rotate ?? 0) : 0)) % 360 + 360) % 360;
 }
 
-// the center on the screen of spin as it is seen, i.e. of the picture of an image or a video,
-// about which a turn turns it
+// the center on the screen of spin as it is seen, i.e. of the picture of an image or a video, and
+// of the box of a figure with a caption that the fields X and Y give, about which a turn turns it
 export function seenCenter(app: App, spin: Element): { x: number; y: number } {
-  const b = spin.matches(CONTAINER) && captionsOf(spin).length ? figureFrame(spin).box : orientedBox(spin, frameOf(app).scale, angleOf(spin));
+  const b = spin.matches(CONTAINER) && captionsOf(spin).length ? unturnedRect(spin).box : orientedBox(spin, frameOf(app).scale, angleOf(spin));
   return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
 }
 
@@ -147,15 +152,19 @@ function writeLive(el: Element, p: Place): void {
   style.translate = t ? `${Math.round(t.x)}px ${Math.round(t.y)}px` : '';
   if (el.matches(RESIZABLE) || isTextSized(el)) style.width = p.width === null ? '' : `${Math.round(p.width)}px`;
   if (el.matches(STRETCHED) && p.height !== undefined) style.height = p.height === null ? '' : `${Math.round(p.height)}px`;
-  if (p.rotate !== undefined) style.rotate = p.rotate ? `${Math.round(p.rotate)}deg` : '';
+  if (p.rotate !== undefined) {
+    if (!p.rotate && style.rotate) unturned.add(el);
+    style.rotate = p.rotate ? `${Math.round(p.rotate)}deg` : '';
+  }
 }
 
 // spin turned to deg degrees, with its center on the screen put at want by the offset of carrier,
 // which is spin or the figure around it. an image fitted at a side of its box, e.g. in a plate,
 // thus turns about the center of its picture, and a figure with a caption about the center of its
 // frame. a figure without a caption that is turned in the file gives its angle to its picture, and
-// a picture turned in the file keeps its angle in its figure with a caption. with live set, the page
-// alone is changed, with the image of the other mode turned as writePlace turns it
+// a picture turned in the file or by itself gives its angle to its figure with a caption, which is
+// then turned to deg. with live set, the page alone is changed, with the image of the other mode
+// turned as writePlace turns it
 export function turn(app: App, spin: Element, carrier: Element, deg: number, want: { x: number; y: number }, live = false): void {
   const put = (el: Element, p: Place) => {
     if (!live) return writePlace(app, el, p);
@@ -165,14 +174,14 @@ export function turn(app: App, spin: Element, carrier: Element, deg: number, wan
   };
   if (carrier !== spin && placeOf(carrier).rotate) put(carrier, { ...placeOf(carrier), rotate: null });
   const pic = spin.matches(CONTAINER) ? pictureOf(spin) : spin;
-  const own = pic !== spin ? (placeOf(pic).rotate ?? 0) : 0;
-  put(spin, { ...placeOf(spin), rotate: ((Math.round(deg - own) % 360) + 360) % 360 || null });
+  if (pic !== spin && placeOf(pic).rotate) put(pic, { ...placeOf(pic), rotate: null });
+  put(spin, { ...placeOf(spin), rotate: ((Math.round(deg) % 360) + 360) % 360 || null });
   const c = seenCenter(app, spin), k = frameOf(app).scale;
   const now = placeOf(carrier);
   let x = (now.translate?.x ?? 0) + (want.x - c.x) / k, y = (now.translate?.y ?? 0) + (want.y - c.y) / k;
   // the offset u of the seen center from the center of spin, which is v at angle 0. the offset that
   // the turn gives at angle 0 is rounded, so that turns back to 0 come back to the place of the file
-  const e = spin.getBoundingClientRect(), a = (((pic !== spin ? placeOf(spin).rotate : angleOf(spin)) ?? 0) * Math.PI) / 180;
+  const e = spin.getBoundingClientRect(), a = (angleOf(spin) * Math.PI) / 180;
   const ux = (c.x - e.left - e.width / 2) / k, uy = (c.y - e.top - e.height / 2) / k;
   const vx = ux * Math.cos(a) + uy * Math.sin(a), vy = uy * Math.cos(a) - ux * Math.sin(a);
   if (Math.abs(ux - vx) > 0.01 || Math.abs(uy - vy) > 0.01) [x, y] = [Math.round(x + ux - vx) - ux + vx, Math.round(y + uy - vy) - uy + vy];
@@ -223,8 +232,12 @@ export function apartOf(app: App, els: Element[]): Turner[] | null {
   return out.sort((a, b) => (a.el.compareDocumentPosition(b.el) & Node.DOCUMENT_POSITION_FOLLOWING ? -1 : 1));
 }
 
+// the elements whose places a turn of spin changes: spin, and the picture of a figure with a
+// caption, whose angle turn() gives to the figure
+export const spunEls = (spin: Element): Element[] => (spin.matches(CONTAINER) ? [spin, pictureOf(spin)] : [spin]);
+
 // the elements whose places a turn of turners changes
-export const turnedEls = (turners: Turner[]): Element[] => [...new Set(turners.flatMap((t) => [t.el, t.spin]))];
+export const turnedEls = (turners: Turner[]): Element[] => [...new Set(turners.flatMap((t) => [t.el, ...spunEls(t.spin)]))];
 
 // a member t of a group turned by deg degrees from its angle at the start, about the point pivot
 // on the screen, about which its center is carried
@@ -277,7 +290,7 @@ type Press = {
   el: Element | null;
   // the selection at the press, which an undo and a redo of the change select again
   selected: Element[];
-  // the box of el at the press, in slide pixels, whose upper left corner the readout of a move gives
+  // the box at the press of a move, in slide pixels, whose upper left corner the readout gives
   corner: Box | null;
   els: Element[];
   from: Map<Element, Place>;
@@ -450,7 +463,7 @@ export function install(app: App): void {
   const start = (kind: Press['kind'], ev: PointerEvent, el: Element | null, els: Element[], click: Press['click']): Press => {
     const f = frameOf(app);
     const p: Press = {
-      kind, x: ev.clientX, y: ev.clientY, moved: false, el, els, click, selected: app.selection.elements().slice(), corner: el ? snapBoxOf(app, el) : null,
+      kind, x: ev.clientX, y: ev.clientY, moved: false, el, els, click, selected: app.selection.elements().slice(), corner: el && kind === 'move' ? cornerBoxOf(app, els, el) : null,
       from: new Map(els.map((e) => [e, placeOf(e)])),
       base: els.length ? union(els.map((e) => snapBoxOf(app, e))) : { left: 0, top: 0, width: 0, height: 0 },
       scroll: scrollOf(app),
@@ -523,7 +536,7 @@ export function install(app: App): void {
         Object.assign(p, { turners, apart: true, was: turners[0].angle });
       } else {
         center = seenCenter(app, spin as Element);
-        p = start('rotate', ev, spin, [...new Set([spin as Element, carrier as Element])], null);
+        p = start('rotate', ev, spin, [...new Set([...spunEls(spin as Element), carrier as Element])], null);
         p.was = angleOf(spin as Element);
         p.carrier = carrier as Element;
       }

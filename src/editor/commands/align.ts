@@ -207,6 +207,11 @@ export function unturnedBoxOf(app: App, el: Element): Box {
   return toSlide(f, captionsOf(el).length ? unturnedRect(el).box : orientedBox(pictureOf(el), f.scale, deg));
 }
 
+// the box whose upper left corner the fields X and Y give for the moved elements els, which the
+// readout of a move gives too: the frame of a whole group without its rotation, else the box of
+// lead without its rotation
+export const cornerBoxOf = (app: App, els: Element[], lead: Element): Box => groupFrameOf(app, els)?.box ?? unturnedBoxOf(app, lead);
+
 // the upper left corner of an element on the slide in slide pixels, which the X and Y fields show
 export function positionOf(app: App, el: Element): { x: number; y: number } {
   const b = unturnedBoxOf(app, el);
@@ -318,6 +323,7 @@ export function commands(): Command[] {
         // an upright caption and rewrapped text do not scale with a turned frame, hence the frame
         // is scaled again from its measured size until it reads as typed, in at most four passes
         const changes = new Map<Element, Change>();
+        const start = frame.deg ? frame.box : null;
         for (let pass = 0; frame && pass < 4; pass++) {
           const off = (v: number | undefined, now: number) => v !== undefined && Math.round(now) !== Math.round(v);
           if (!off(a.w, frame.box.width) && !off(a.h, frame.box.height)) break;
@@ -325,6 +331,16 @@ export function commands(): Command[] {
           const kx = kw ?? (keep && kh ? kh : 1), ky = kh ?? (keep && kw ? kw : 1);
           for (const c of scaleGroup(app, all, frame, kx, ky)) changes.set(c.el, { ...c, from: changes.get(c.el)?.from ?? c.from });
           frame = groupFrameOf(app, all);
+        }
+        // the scale keeps the turned corner on the screen, hence the members are moved back until
+        // the upper left corner of the frame without its rotation is where it was, as for a figure
+        if (frame && start) {
+          const dx = start.left - frame.box.left, dy = start.top - frame.box.top;
+          for (const el of all.filter((el) => !locked(el) && !all.some((o) => o !== el && o.contains(el)))) {
+            const at = placeOf(el);
+            writePlace(app, el, { ...at, translate: { x: (at.translate?.x ?? 0) + dx, y: (at.translate?.y ?? 0) + dy } });
+            changes.set(el, { el, from: changes.get(el)?.from ?? at, to: placeOf(el) });
+          }
         }
         record(app, 'resize', [...changes.values()]);
         app.invalidate('content');

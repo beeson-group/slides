@@ -8,7 +8,7 @@
 
 import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
-import { angleOf, apartOf, locked, pivotOf, placeOf, record, seenCenter, spinOf, turn, turnMember, turnedEls, turnersOf } from '../canvas/drag.ts';
+import { angleOf, apartOf, locked, pivotOf, placeOf, record, seenCenter, spinOf, spunEls, turn, turnMember, turnedEls, turnersOf } from '../canvas/drag.ts';
 import { LINE, MOVABLE, OUTSIDE, objectOf, objectsOf, turnable, twinOf } from '../canvas/hit.ts';
 import { stateOf } from '../tags.ts';
 
@@ -606,7 +606,7 @@ export function commands(app: App): Command[] {
           const spin = spinOf(el);
           return { spin, carrier: objectOf(app, spin) };
         }).filter((t) => !locked(t.spin) && !locked(t.carrier));
-        turned([...new Set(pairs.flatMap((t) => [t.spin, t.carrier]))], () => {
+        turned([...new Set(pairs.flatMap((t) => [...spunEls(t.spin), t.carrier]))], () => {
           for (const t of pairs) turn(app, t.spin, t.carrier, deg, seenCenter(app, t.spin));
         });
       },
