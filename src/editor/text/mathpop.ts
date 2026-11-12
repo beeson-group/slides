@@ -214,8 +214,9 @@ export function texEditor(options: { display(): boolean; label: string; placehol
 // the sheet of a TeX: its title, its first TeX, whether it is a display, the label of its button,
 // the block that it is put beside and kept clear of, and commit, which writes the TeX and throws an
 // error to be shown at the field. with made, the sheet of a new formula, a click away commits a
-// TeX that is not empty, and made is selected after the commit
-type Sheet = { title: string; tex: string; display: boolean; open: string; close: string; primary: string; block(): Element; commit(tex: string): Promise<void>; done?(): void; made?: Element };
+// TeX that is not empty, and made is selected after the commit. left is run after a click away
+// that closes the sheet without a commit
+type Sheet = { title: string; tex: string; display: boolean; open: string; close: string; primary: string; block(): Element; commit(tex: string): Promise<void>; done?(): void; made?: Element; left?(): void };
 
 // the sheet is put at the right of the text column, over the figure of the slide, or at the left,
 // and above or below a block that fills the slide. its width of 440 px fits at the right of the
@@ -271,6 +272,9 @@ export function openInsert(app: App, host: Element, range: Range): void {
       sel?.removeAllRanges();
       sel?.addRange(after);
     },
+    // a new empty box, or the empty words of a shape, kept while the sheet was open, are given the
+    // focusout of the click away, at which commands/insert.ts and commands/shape.ts drop them
+    left: host.matches('.beeson-pending, [data-generated]') ? () => host.dispatchEvent(new FocusEvent('focusout')) : undefined,
   }, null);
 }
 
@@ -415,7 +419,12 @@ export function install(app: App): void {
           if (field.value.trim()) await submit(false);
           if (popover === box) closeMath(false);
         }
-      : null;
+      : sheet.left
+        ? async () => {
+            closeMath(false);
+            sheet.left?.();
+          }
+        : null;
     openFor = target;
     const host = target?.closest(HOST);
     const at = host && target ? [...host.querySelectorAll('mjx-container')].indexOf(target) : -1;

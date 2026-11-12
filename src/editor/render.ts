@@ -139,6 +139,8 @@ export function pairElement(s: SrcEl, el: Element, slide: Element | null, math: 
 function verify(s: SrcEl, el: Element, math: MathLookup, inner?: Map<Element, SrcEl>): string | null {
   const items = virtualChildren(el, math);
   const kids = s.children;
+  // an empty item or paragraph of the file reads as the same one emptied in the editor, see contentOf
+  if (!kids.length && EMPTIED.has(s.tag.toLowerCase()) && items.length === 1 && items[0].kind === 'element' && items[0].el.localName === 'br') return null;
   if (items.length !== kids.length) return `the ${s.tag} has ${kids.length} parts in the file and ${items.length} on the page`;
   for (let i = 0; i < kids.length; i++) {
     const k = kids[i], it = items[i];
@@ -317,11 +319,20 @@ function serializeElement(source: Source, s: SrcEl, el: Element, math: MathLooku
     const inner = innerRange(s);
     return open + (inner ? text.slice(inner.start, inner.end) : '') + close;
   }
-  return open + serializeChildren(source, s, el, math, tags) + close;
+  return open + contentOf(source, s, el, math, tags) + close;
+}
+
+// the content of an element. the <br> that the browser puts into an item or a paragraph emptied in
+// the editor, also a nested item, is not written, so that the theme draws it as empty, e.g. an item
+// without its mark. other tags keep it, since the theme gives the height of a line only to these two
+const EMPTIED = new Set(['li', 'p']);
+function contentOf(source: Source, s: SrcEl, el: Element, math: MathLookup, tags: Map<Element, TagEdit>): string {
+  const out = serializeChildren(source, s, el, math, tags);
+  return out === '<br>' && EMPTIED.has(s.tag.toLowerCase()) && !s.children.some((c) => c.kind === 'element' && c.tag.toLowerCase() === 'br') ? '' : out;
 }
 
 export function renderBlock(source: Source, block: Block, math: MathLookup, tags: Map<Element, TagEdit> = new Map()): string {
-  return serializeChildren(source, block.src, block.live, math, tags);
+  return contentOf(source, block.src, block.live, math, tags);
 }
 
 export type Edit = { start: number; end: number; text: string };
@@ -410,7 +421,7 @@ class Renderer {
     if (RAW_TEXT.has(s.tag)) return open + verbatim + close;
     const block = this.pairing.byLive.get(live);
     if (block?.src === s) {
-      const content = serializeChildren(s.source, s, live, this.math, this.tags);
+      const content = contentOf(s.source, s, live, this.math, this.tags);
       if (content !== verbatim) {
         this.edits.push({ start: inner?.start ?? range.start, end: inner?.end ?? range.start, text: content });
         this.changed.push(block);

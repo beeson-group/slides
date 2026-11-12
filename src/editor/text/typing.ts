@@ -214,7 +214,15 @@ export async function pasteItems(app: App, text: string): Promise<void> {
 // one word with the space after it, as a double click takes it on Windows, is pasted with the
 // spaces of PowerPoint. the space is dropped before a space, a closing mark, or the end of the
 // text, and a space is put after a letter, a digit, or a closing mark. a paste into a word or
-// into code is kept as it is
+// into code is kept as it is. a line break is read as a new line, and a formula or a picture as
+// a word, which Range.toString() skips
+const spacedText = (r: Range): string => {
+  const f = r.cloneContents();
+  f.querySelectorAll('br').forEach((b) => b.replaceWith('\n'));
+  f.querySelectorAll('mjx-container, img').forEach((m) => m.replaceWith('x'));
+  return f.textContent ?? '';
+};
+
 export function spaced(host: Element, text: string): string {
   const r = getSelection()?.rangeCount ? getSelection()!.getRangeAt(0) : null;
   const at = r?.startContainer;
@@ -225,8 +233,8 @@ export function spaced(host: Element, text: string): string {
   const tail = document.createRange();
   tail.setStart(r.endContainer, r.endOffset);
   tail.setEnd(host, host.childNodes.length);
-  const before = head.toString().slice(-1);
-  const next = tail.toString().charAt(0);
+  const before = spacedText(head).slice(-1);
+  const next = spacedText(tail).charAt(0);
   const word = /[\p{L}\p{N}]/u;
   const close = /[.,;:!?)\]}’”»]/;
   if (word.test(before) && word.test(next)) return text;

@@ -406,7 +406,8 @@ export class Doc {
       if (!rename(m)) continue;
       const id = this.uniqueId(m, taken);
       taken.add(id);
-      out = out.split(`id="${m}"`).join(`id="${id}"`).split(`data-plot="${m}"`).join(`data-plot="${id}"`);
+      // only the attribute id is renamed, and a data-id equal to it is kept for Magic Move
+      out = out.replace(/(\s)id="([^"]+)"/g, (all, space, v) => (v === m ? `${space}id="${id}"` : all)).split(`data-plot="${m}"`).join(`data-plot="${id}"`);
     }
     return out;
   }

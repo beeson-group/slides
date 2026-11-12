@@ -206,17 +206,22 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal ul > li::before { content: ""; position: absolute; left: 0; top: 0.72em; width: 28px; height: 2px; background: var(--accent); }
 /* the items of a ul.dots or a ul.arrows take a ring or a chevron in place of the dash, centered
    on its middle. a nested list without the class keeps the dash */
-.reveal ul.dots > li::before { top: calc(0.72em - 6px); left: 7px; width: 14px; height: 14px; box-sizing: border-box; border: 2.5px solid var(--accent); border-radius: 50%; background: none; }
-.reveal ul.arrows > li::before { top: calc(0.72em - 8px); left: 9px; width: 12px; height: 18px; clip-path: polygon(0 0, 30% 0, 100% 50%, 30% 100%, 0 100%, 70% 50%); }
-/* the number is the counter list-item, which a browser starts from the attribute start of an ol */
-.reveal ol > li::before { content: counter(list-item); position: absolute; left: 0; top: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+.reveal ul.dots > li::before { --mark-width: 14px; top: calc(0.72em - 6px); left: 7px; width: 14px; height: 14px; box-sizing: border-box; border: 2.5px solid var(--accent); border-radius: 50%; background: none; }
+.reveal ul.arrows > li::before { --mark-width: 12px; top: calc(0.72em - 8px); left: 9px; width: 12px; height: 18px; clip-path: polygon(0 0, 30% 0, 100% 50%, 30% 100%, 0 100%, 70% 50%); }
+/* the number is the counter list-item, which a browser starts from the attribute start of an ol.
+   it ends where a number of one digit ends, so that the gap before the words is the same for any
+   number of digits */
+.reveal ol > li::before { --mark-width: 1ch; content: counter(list-item); position: absolute; right: calc(100% - 1ch); top: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
 /* an empty item, e.g. the placeholder of a new slide left empty, is drawn without its mark */
 .reveal li:empty::before { content: none; }
 /* an empty paragraph or item takes the height of a line, as in the editor, where its prompt is
    drawn, so that an element placed with translate under it is drawn at the same place in both */
 .reveal .slides section :is(p, li):empty { min-height: 1lh; }
-/* an item of a centered list is as wide as its words and centered, so that its mark stays beside them */
-.reveal :is(ul, ol).center > li { width: fit-content; margin-left: auto; margin-right: auto; }
+/* in a centered list, nested lists too, and in a list of a shape not aligned to the left, the mark
+   is drawn in the line before the words and centered with them. its box, --mark-width wide,
+   starts 54 px before the words, and the mark is drawn where it is drawn at the left */
+.reveal :is(ul.center, ol.center, .shape > :is(ul, ol):not(.left)) li { padding-left: 0; }
+.reveal :is(ul.center, ol.center, .shape > :is(ul, ol):not(.left)) li::before { position: relative; right: auto; display: inline-block; vertical-align: top; margin-right: calc(54px - var(--mark-width, 28px)); }
 .reveal li ul, .reveal li ol { margin-top: 10px; font-size: 36px; }
 .reveal .outline { font-size: 36px; line-height: 1.7; color: var(--muted); margin: 48px 0 0; }
 .reveal .outline > li { margin: 0; padding-left: 42px; }
