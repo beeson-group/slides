@@ -39,7 +39,7 @@ import { injectStyle, make } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { closeMenus, menuOpen, openMenu, type MenuItem } from '../ui/menu.ts';
 import { columnPlace, freeZone, meets, slideBox, takenBox, type Box as SlideBox } from './insert.ts';
-import { coverOf, leastCover } from './place.ts';
+import { centerPlace, MARGIN, piecesOf } from './place.ts';
 import { MARK } from './slide.ts';
 
 // the widths of the frame of the cell of the caret and of the cells selected as a block
@@ -439,15 +439,14 @@ const BOTTOM = 40;
 // the step in slide px of the grid on which a new table looks for a free place
 const STEP = 20;
 
-// a new table put where it fits on its slide, with every row and with room around it for its bars
-// at the zoom of the canvas: under the blocks before it, else at the center of the free area where
-// the layout puts a zone, else at the free place nearest to it at the right of the text or below it,
-// and else over what is there, at the place that covers the least of the slide by leastCover of
-// place.ts, where the fill of the theme hides what is under it. the space that an element takes
-// is the rule takenBox of insert.ts. the move is a translate in slide px. on a figure slide, where
-// the layout puts the table at the edge of the slide and the plate is as large as the slide, the
-// table is put under the heading at its left, and else at the place nearest to the center of the
-// slide that is off what is drawn in the plate and off the texts with the room of the bars
+// a new table put where it fits on its slide, with every row, inside the margins of the slide, and
+// with room around it for its bars at the zoom of the canvas: under the blocks before it, else at
+// the center of the free area where the layout puts a zone, else at the free place nearest to it.
+// the space that an element takes is the rule takenBox of insert.ts. without a free place, the table
+// is put by centerPlace of place.ts at the center of the slide or near it, off the figures and the
+// other tables. the move is a translate in slide px. on a figure slide, the plate as large as the
+// slide is the ground, and what is drawn in it is counted in its place. the layout puts the table
+// under the plate, hence its free place is the one nearest to the center of the slide
 function placeTable(app: App, table: HTMLTableElement): void {
   const slide = table.closest('section');
   const parent = table.parentElement;
@@ -459,23 +458,27 @@ function placeTable(app: App, table: HTMLTableElement): void {
   const h = (slide as HTMLElement).offsetHeight || 1080;
   const foot = [...slide.querySelectorAll(':scope > .foot')].map((f) => takenBox(app, f)).find((b) => !!b);
   const floor = Math.min(h - BOTTOM, foot ? foot.top - BOTTOM : Infinity);
+  const ground = (el: Element) => el.matches('.plate') && el.getBoundingClientRect().width >= (slide.getBoundingClientRect().width - 1);
   const skip = (el: Element) => el === table || el.matches('aside.notes, script, style, .backdrop');
-  const taken = (els: Element[]) => els.filter((el) => !skip(el)).map((el) => ({ el, box: takenBox(app, el) })).filter((o): o is { el: Element; box: SlideBox } => !!o.box);
+  const taken = (els: Element[]) => els.filter((el) => !skip(el)).map((el) => takenBox(app, el)).filter((b): b is SlideBox => !!b);
   const above = [...parent.children].slice(0, [...parent.children].indexOf(table)).filter((el) => !el.matches('.run, .foot, [data-generated]'));
-  const before = taken(above).map((o) => o.box);
-  const all = taken([...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *')].filter((el) => !el.contains(table)));
-  const others = all.map((o) => o.box);
+  const before = taken(above.filter((el) => !ground(el)));
+  const kids = [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *')].filter((el) => !el.contains(table));
+  const others = taken(kids.flatMap((el) => (ground(el) ? [...el.children].filter((c) => c.getClientRects().length) : [el])));
   const tw = t.right - t.left;
   const th = t.bottom - t.top;
   const at = (left: number, top: number): SlideBox => ({ left, top, right: left + tw, bottom: top + th });
+  const side = tw + 2 * MARGIN <= w ? MARGIN : room;
   // a box measured at the zoom of the canvas may pass the floor by a fraction of a slide px
-  const free = (b: SlideBox) => b.left - room >= 0 && b.top - room >= 0 && b.bottom <= floor + 1 && b.right + room <= w &&
+  const free = (b: SlideBox) => b.left >= side - 1 && b.top - room >= 0 && b.bottom <= floor + 1 && b.right <= w - side + 1 &&
     !others.some((o) => meets({ left: b.left - room, top: b.top - room, right: b.right + room, bottom: b.bottom + room }, o));
   const head = slide.querySelector(':scope > h2, :scope > h1');
   const headBox = head ? takenBox(app, head) : null;
   // the bars of a table at the edge of the slide would be outside it
   const left = t.left >= room ? t.left : (headBox?.left ?? room);
   const top = Math.max(t.top, ...before.map((b) => b.bottom + room));
+  const center = at((w - tw) / 2, (h - th) / 2);
+  const from = top >= h ? center : at(left, top);
   let best: SlideBox | null = null;
   let place: SlideBox | null = free(at(left, top)) ? at(left, top) : null;
   const zone = place ? null : freeZone(app, slide, table);
@@ -486,37 +489,16 @@ function placeTable(app: App, table: HTMLTableElement): void {
   // the free places on a grid of STEP px under the heading of the slide, the nearest one taken
   const under = head ? (headBox?.bottom ?? 0) + room : room;
   let near = Infinity;
-  for (let y = under; !place && y + th <= floor; y += STEP) {
-    for (let x = room; x + tw + room <= w; x += STEP) {
-      const d = Math.hypot(x - left, y - top);
+  for (const y of place ? [] : [from.top, ...Array.from({ length: Math.max(0, Math.floor((floor - th - under) / STEP) + 1) }, (_, i) => under + i * STEP)]) {
+    for (const x of [from.left, ...Array.from({ length: Math.max(0, Math.floor((w - 2 * side - tw) / STEP) + 1) }, (_, i) => side + i * STEP)]) {
+      const d = Math.hypot(x - from.left, y - from.top);
       if (d < near && free(at(x, y))) {
         near = d;
         best = at(x, y);
       }
     }
   }
-  place ??= best;
-  if (!place) {
-    // the place of the grid inside the slide and above the floor that covers the least of the slide.
-    // a table that the layout puts under the slide, i.e. after the plate of a figure slide, goes
-    // under the heading and near the center, where Keynote puts it, and its texts are counted with
-    // the room of the bars around them
-    const off = top >= h;
-    const places: SlideBox[] = [];
-    for (let y = off ? under : room; y + th <= floor; y += STEP) for (let x = room; x + tw + room <= w; x += STEP) places.push(at(x, y));
-    // a plate is as large as the slide, hence what is drawn in it is counted in its place
-    const drawn = (el: Element) => (el.matches('.plate') ? [...el.children].filter((c) => c.getClientRects().length) : []);
-    const els = all.map((o) => o.el).filter((el) => !el.matches('.col, .panel, .block'));
-    const grown = (b: SlideBox): SlideBox => ({ left: b.left - room, top: b.top - room, right: b.right + room, bottom: b.bottom + room });
-    // another table is counted with the room of the bars as well, also the one that fills the plate
-    const cover = [
-      ...coverOf(app, els.filter((el) => !drawn(el).length && !el.matches('table'))).map((o) => (o.figure || !off ? o : { ...o, box: grown(o.box) })),
-      ...els.filter((el) => el.matches('table')).map((el) => ({ box: off ? grown(slideBox(app, el)) : slideBox(app, el), figure: true })),
-      ...els.flatMap(drawn).map((c) => ({ box: off && c.matches('table') ? grown(slideBox(app, c)) : slideBox(app, c), figure: true })),
-    ];
-    const center = at((w - tw) / 2, (h - th) / 2);
-    place = leastCover(cover, places, off ? center : at(left, top)) ?? center;
-  }
+  place ??= best ?? centerPlace(w, h, tw, th, piecesOf(app, table), room, room);
   const x = Math.round(place.left - t.left);
   const y = Math.round(place.top - t.top);
   if (x || y) app.doc.setTag(table, { translate: { x, y } }, 'insert table');
