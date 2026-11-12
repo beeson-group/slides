@@ -980,6 +980,13 @@ export class Orbits {
     return this.strands.some((_, i) => this.headOf(i) > 0);
   }
 
+  // the seconds into the trace at which its last strand is traced to its end, with strand i started
+  // i times the stagger late
+  get span(): number {
+    if (!(this.Tmax > 0)) return this.duration;
+    return Math.max(...this.strands.map((s, i) => (s.times[s.times.length - 1] / this.Tmax) * this.duration + i * this.stagger));
+  }
+
   // the seconds into the trace at which its first head is drawn, e.g. at the start of a record of a file
   get headAfter(): number {
     if (!(this.Tmax > 0)) return 0;

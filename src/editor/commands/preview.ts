@@ -3,12 +3,13 @@
 // Backdrop and Play Steps alone, Select Backdrop, and Add Backdrop…. the backdrop is traced on the
 // canvas as Preview of the Backdrop pane traces it, and the steps are drawn on a layer over the
 // canvas, one per timing.step ms, each by showStep of present.ts as the show draws it. a preview
-// stops at a click on Stop, Esc, a press outside the toolbar and the menus, a change of slide, and
-// an edit, after which the slide is drawn complete. it does not change the file, the history, or
-// the selection
+// stops at a click on Stop, Esc, a press outside the toolbar and the menus, a change of slide, an
+// edit, and Chapters Table, after which the slide is drawn complete. it does not change the file,
+// the history, or the selection
 
 import type { App } from '../app.ts';
 import { showFormat } from '../inspector/inspector.ts';
+import { OFF } from '../layers.ts';
 import { drawInto } from '../navigator/thumbs.ts';
 import { showStep, stepsOfSlide } from '../present.ts';
 import { injectStyle, make } from '../ui/dom.ts';
@@ -23,6 +24,9 @@ const CSS = `
 `;
 
 const theme = () => (window as unknown as { Beeson?: { preview?(el: HTMLElement): Live } }).Beeson;
+
+// the seconds in which the drawing of the theme traces its last strand, after its stagger
+const spanOf = (o: Live) => (o as Live & { span?: number }).span ?? 20;
 
 // the preview that plays, whose stop ends its waits, takes its layer down, and completes its traces
 let current: { stop(): void } | null = null;
@@ -39,6 +43,13 @@ function halt(app: App): void {
 const ready = (app: App) => !!app.pairing?.root && !!app.current();
 const backdropOf = (app: App) => (ready(app) ? slideBackdrop(app) : null);
 const hasSteps = (app: App) => ready(app) && stepsOfSlide(app.current()!) > 0;
+const tableShown = (app: App) => !!app.commands.get('view.lightTable') && !!app.commands.state('view.lightTable').checked;
+// the backdrop that a trace on the canvas shows, i.e. not one hidden in the layer of the editor
+const traceable = (app: App) => {
+  const el = tableShown(app) ? null : backdropOf(app);
+  return el && !el.classList.contains(OFF) ? el : null;
+};
+const playable = (app: App) => !tableShown(app) && hasSteps(app);
 
 type Part = 'backdrop' | 'steps';
 
@@ -51,13 +62,24 @@ async function play(app: App, parts: Part[]): Promise<void> {
   const me = { stop: () => { stopped = true; for (const end of ends.splice(0)) end(); } };
   current = me;
   app.invalidate();
+  // Chapters Table stops the preview, and the layer of the steps follows the slide at every frame
+  let place: (() => void) | null = null;
+  let frame = 0;
+  const follow = () => {
+    if (stopped) return;
+    if (tableShown(app)) { halt(app); return; }
+    place?.();
+    frame = requestAnimationFrame(follow);
+  };
+  frame = requestAnimationFrame(follow);
+  ends.push(() => cancelAnimationFrame(frame));
   // a wait of ms, or until the preview stops
   const pause = (ms: number) => new Promise<void>((done) => {
     const t = window.setTimeout(done, ms);
     ends.push(() => { clearTimeout(t); done(); });
   });
 
-  // the backdrop on the canvas, until its trace ends, or after its duration for a loop
+  // the backdrop on the canvas, until its last strand is traced, or after the same seconds for a loop
   const trace = async (el: HTMLElement) => {
     const o = liveOf(el);
     if (!o) return;
@@ -66,8 +88,8 @@ async function play(app: App, parts: Part[]): Promise<void> {
     ends.push(() => { if (o.tracing) o.complete(); });
     o.reset();
     o.start();
-    // the duration of the trace in s, which the drawing of the theme gives
-    const until = performance.now() + ((o as Live & { duration?: number }).duration ?? 20) * 1000 + 100;
+    // a loop is cut after the same seconds
+    const until = performance.now() + spanOf(o) * 1000 + 100;
     while (!stopped && o.tracing && performance.now() < until) await pause(50);
     if (o.tracing) o.complete();
   };
@@ -79,22 +101,35 @@ async function play(app: App, parts: Part[]): Promise<void> {
     if (!box.width || !box.height) return;
     injectStyle('play', CSS);
     const layer = make('div', 'beeson-edit-play');
-    layer.style.cssText = `left: ${box.left}px; top: ${box.top}px; width: ${box.width}px; height: ${box.height}px;`;
     layer.style.background = getComputedStyle(stage.closest('.reveal') ?? document.body).backgroundColor;
-    const v = app.stage?.viewport;
-    if (v) {
-      const cut = [v.top - box.top, box.right - v.right, box.bottom - v.bottom, v.left - box.left];
-      layer.style.clipPath = `inset(${cut.map((d) => `${Math.max(0, d)}px`).join(' ')})`;
-    }
     const host = make('div', 'shot');
     layer.append(host);
     document.body.append(layer);
     const traced: Live[] = [];
+    // the backdrops that are steps and still traced
+    const busy: (() => boolean)[] = [];
     ends.push(() => {
       for (const o of traced) o.destroy();
       layer.remove();
     });
-    drawInto(host, slide, { width: stage.offsetWidth || 1920, height: stage.offsetHeight || 1080 }, box.width);
+    const deck = { width: stage.offsetWidth || 1920, height: stage.offsetHeight || 1080 };
+    drawInto(host, slide, deck, box.width);
+    // the layer at the box of the slide, clipped to the viewport, after a zoom or a scroll too
+    place = () => {
+      const b = stage.getBoundingClientRect();
+      layer.style.left = `${b.left}px`;
+      layer.style.top = `${b.top}px`;
+      layer.style.width = `${b.width}px`;
+      layer.style.height = `${b.height}px`;
+      const v = app.stage?.viewport;
+      if (v) {
+        const cut = [v.top - b.top, b.right - v.right, b.bottom - v.bottom, v.left - b.left];
+        layer.style.clipPath = `inset(${cut.map((d) => `${Math.max(0, d)}px`).join(' ')})`;
+      }
+      const shot = host.shadowRoot?.querySelector<HTMLElement>('.slides');
+      if (shot) shot.style.transform = `scale(${b.width / deck.width})`;
+    };
+    place();
     const n = stepsOfSlide(slide);
     for (let k = 0; k <= n && !stopped; k++) {
       if (k) await pause(timing.step);
@@ -111,16 +146,19 @@ async function play(app: App, parts: Part[]): Promise<void> {
           if (stopped) return;
           o.reset();
           o.start();
+          const until = performance.now() + spanOf(o) * 1000 + 100;
+          busy.push(() => o.tracing && performance.now() < until);
         });
       }
     }
     await pause(timing.step);
+    while (!stopped && busy.some((b) => b())) await pause(50);
   };
 
   try {
     for (const part of parts) {
       if (stopped) break;
-      const el = backdropOf(app);
+      const el = traceable(app);
       if (part === 'backdrop' && el) await trace(el);
       else if (part === 'steps' && stepsOfSlide(slide) > 0) await steps();
     }
@@ -142,7 +180,7 @@ export function install(app: App): void {
     menu: menu(25),
     toolbar: preview(39),
     // a click on the main part while a preview plays stops it
-    enabled: (a) => playing() || !!backdropOf(a) || hasSteps(a),
+    enabled: (a) => playing() || !!traceable(a) || playable(a),
     run: (a) => (playing() ? halt(a) : start(a, ['backdrop', 'steps'])),
   });
   c.define({
@@ -150,7 +188,7 @@ export function install(app: App): void {
     label: 'Trace Backdrop',
     menu: menu(26),
     toolbar: preview(39.01),
-    enabled: (a) => !!backdropOf(a),
+    enabled: (a) => !!traceable(a),
     run: (a) => start(a, ['backdrop']),
   });
   c.define({
@@ -158,7 +196,7 @@ export function install(app: App): void {
     label: 'Play Steps',
     menu: menu(27),
     toolbar: preview(39.02),
-    enabled: hasSteps,
+    enabled: playable,
     run: (a) => start(a, ['steps']),
   });
   c.define({
@@ -181,7 +219,12 @@ export function install(app: App): void {
     run: (a) => a.commands.run('insert.backdrop'),
   });
 
-  // a press outside the toolbar and the menus, Esc, a change of slide, and an edit stop a preview
+  // a press outside the toolbar and the menus, Esc, a change of slide, and an edit stop a preview.
+  // Esc stops it alone, without the Deselect of its key. the keymap matches a key before the
+  // listener below, hence a command is turned off only during the keydown of Esc, and Deselect keeps
+  // Mod+Shift+A
+  const esc = () => { const ev = window.event; return ev instanceof KeyboardEvent && ev.type === 'keydown' && ev.key === 'Escape'; };
+  c.veto((_, cmd) => playing() && esc() && Object.values(cmd.keys ?? {}).some((k) => k.includes('Escape')));
   window.addEventListener('pointerdown', (ev) => {
     const t = ev.target;
     if (playing() && !(t instanceof Element && t.closest('.beeson-edit-top, .beeson-edit-menu'))) halt(app);
