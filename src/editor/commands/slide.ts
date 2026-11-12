@@ -5,7 +5,7 @@
 // slides it changes
 
 import type { App } from '../app.ts';
-import type { Command } from '../commands.ts';
+import { DEFAULT_REGIONS, type Command } from '../commands.ts';
 import type { Doc } from '../model/doc.ts';
 import { NEW_LAYOUTS, type Layout, type NewLayout } from '../model/templates.ts';
 import { droppedOrder, isHidden, type MoveTo, type Navigator } from '../navigator/navigator.ts';
@@ -326,6 +326,12 @@ export function install(app: App): void {
   // opened with the pointer leaves the focus where it was
   const onSlide = (a: App) => (a.region() === 'canvas' || a.region() === 'text') && !document.activeElement?.closest('.beeson-edit-menu');
   const slideMenu = (order: number, group = 'slide') => ({ bar: 'Slide', group, order });
+  // Duplicate Slide and Delete Slide list the keys of Edit > Duplicate and Edit > Delete where the
+  // keys hand their runs to them, e.g. in the navigator
+  const keysFrom = (edit: string, id: string) => (a: App) => {
+    const c = a.commands.get(edit);
+    return c && (c.in ?? DEFAULT_REGIONS).includes(a.region()) && c.runsAs?.(a) === id ? edit : id;
+  };
   const defs: Command[] = [
     {
       id: 'slide.new',
@@ -383,9 +389,10 @@ export function install(app: App): void {
     {
       id: 'slide.duplicate',
       label: (a) => (targets(a).length > 1 ? 'Duplicate Slides' : 'Duplicate Slide'),
-      // without a key, as Delete Slide. Mod+D is the key of Edit > Duplicate, which runs this command
-      // in the navigator and with nothing selected, and duplicates a selected element
+      // its key is Mod+D of Edit > Duplicate, which runs this command in the navigator and with
+      // nothing selected, and duplicates a selected element
       menu: slideMenu(20),
+      listedAs: keysFrom('edit.duplicate', 'slide.duplicate'),
       context: ['slide', 'canvas'],
       enabled: (a) => targets(a).length > 0,
       undoable: true,
@@ -411,9 +418,9 @@ export function install(app: App): void {
     {
       id: 'slide.delete',
       label: (a) => (targets(a).length > 1 ? 'Delete Slides' : 'Delete Slide'),
-      // without a key, as in PowerPoint. ⌫ is the key of Edit > Delete, which runs this command in
-      // the navigator
+      // its key is ⌫ of Edit > Delete, which runs this command in the navigator
       menu: slideMenu(30),
+      listedAs: keysFrom('element.delete', 'slide.delete'),
       context: ['slide', 'canvas'],
       enabled: (a) => targets(a).length > 0 && targets(a).length < sections(a).length,
       undoable: true,

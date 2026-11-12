@@ -871,6 +871,14 @@ function columnWidths(table: HTMLTableElement, nowrap: boolean, from = 0, to = I
 // of Keynote
 const fitWidths = (t: Target) => columnWidths(t.table, true, t.box?.c0, t.box?.c1);
 
+// the rows of the range of t, or of the caret, or else every row of the table, and of each the row
+// and the cells that start in it whose style writes a height, which Resize Row to Fit Content of
+// Keynote takes off
+function writtenHeights(app: App, t: Target): Element[] {
+  const rows = [...t.table.rows].slice(t.box?.r0 ?? 0, t.box ? t.box.r1 + 1 : undefined);
+  return rows.flatMap((tr) => [tr, ...tr.cells]).filter((el) => app.pairing?.elements.get(el)?.open && app.doc.tagState(el).style.height);
+}
+
 // the cells of rows written into the table of cell from cell on, with rows and columns added at the
 // end as they are needed. with asBlock set, the cells written are then selected as a block, and
 // with markup set, each cell of rows is HTML rather than text
@@ -1031,7 +1039,7 @@ function cellItems(cell: HTMLTableCellElement): MenuItem[] {
     { rule: true },
     ...ids(['table.merge', 'table.unmerge']),
     { rule: true },
-    ...ids(['table.distributeRows', 'table.distributeColumns', 'table.fitColumn']),
+    ...ids(['table.distributeRows', 'table.distributeColumns', 'table.fitRow', 'table.fitColumn']),
     { rule: true },
     ...ids(['table.sortAscending', 'table.sortDescending']),
     { rule: true },
@@ -1301,7 +1309,7 @@ function installBars(app: App): void {
     const arg = { cell: column ? anchor : focus };
     const ids = column
       ? [['table.columnBefore', 'table.columnAfter'], ['table.moveColumnLeft', 'table.moveColumnRight'], ['table.deleteColumn'], ['table.distributeColumns', 'table.fitColumn'], ['table.sortAscending', 'table.sortDescending']]
-      : [['table.rowAbove', 'table.rowBelow'], ['table.moveRowUp', 'table.moveRowDown'], ['table.deleteRow']];
+      : [['table.rowAbove', 'table.rowBelow'], ['table.moveRowUp', 'table.moveRowDown'], ['table.deleteRow'], ['table.distributeRows', 'table.fitRow']];
     const items: MenuItem[] = ids.flatMap((group, k) => [...(k ? [{ rule: true as const }] : []), ...group.map((command) => ({ command, arg }))]);
     openMenu(app, items, { anchor: seg.getBoundingClientRect(), placement: column ? 'below' : 'beside', label: `${seg.title} menu` });
   };
@@ -2052,6 +2060,19 @@ export function install(app: App): void {
     run: (a, arg) => {
       const t = need(a, arg);
       writeWidths(a, fitWidths(t), 'fit column');
+    },
+  });
+  c.define({
+    id: 'table.fitRow',
+    label: 'Resize Row to Fit Content',
+    menu: menu('size', 79.95),
+    enabled: (a, arg?: unknown) => {
+      const t = ready(a) ? targetOf(a, arg) : null;
+      return !!t && writtenHeights(a, t).length > 0;
+    },
+    undoable: true,
+    run: (a, arg) => {
+      for (const el of writtenHeights(a, need(a, arg))) a.doc.setTag(el, { style: { height: null } }, 'fit row');
     },
   });
 

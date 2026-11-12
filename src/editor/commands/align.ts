@@ -378,14 +378,16 @@ export function commands(): Command[] {
           }
         };
         // a typed H of a figure with a caption is the height of its picture with its caption. the
-        // caption wraps anew at the new width of the picture, hence its height is measured again. a
-        // caption that leaves less than 1 px gives the picture alone the typed height
+        // caption wraps anew at the new width of the picture, hence its height is measured again
+        // until it holds, in at most four passes. a caption that leaves less than 1 px gives the
+        // picture alone the typed height
         const h = typed.h;
         const left = (cap: number) => (h !== undefined && h - cap >= 1 ? { ...typed, h: h - cap } : typed);
         put(left(caps[i]));
-        if (h !== undefined && caps[i] && h - caps[i] >= 1) {
-          const again = left(captionHeight(app, objects[i]));
-          if (again.h !== h) put(again);
+        for (let pass = 0, cap = caps[i]; h !== undefined && cap && h - cap >= 1 && pass < 4; pass++) {
+          const now = captionHeight(app, objects[i]);
+          if (Math.abs(now - cap) < 0.5) break;
+          put(left((cap = now)));
         }
         // the width is written in whole px, which can put the height 1 px off, hence the width 1 px
         // either side is taken where it gives the typed height
@@ -398,6 +400,33 @@ export function commands(): Command[] {
             return { d, off: Math.abs(read() - h) };
           }).reduce((a, b) => (b.off + 0.01 < a.off ? b : a));
           writePlace(app, el, { ...to, width: wide(best.d) });
+          // the width of the layout, i.e. none written, is kept where it reads as typed, hence a
+          // height typed back gives the file back
+          if (caps[i]) {
+            writePlace(app, el, { ...to, width: null });
+            if (Math.round(read()) !== Math.round(h)) writePlace(app, el, { ...to, width: wide(best.d) });
+          }
+          // the caption wraps anew at some widths, where the height jumps, hence a height still off
+          // is searched for at the other wraps, the nearest width first. at one wrap the height grows
+          // by slope per px of width, and a wider caption is never higher, which bounds each jump of
+          // lo and hi. without a whole width that reads as typed, the nearest height is kept
+          if (caps[i] && Math.round(read()) !== Math.round(h)) {
+            const w0 = wide(best.d), slope = sizeOf(el).h / w0, k = slope * 1.01;
+            const off = (w: number) => (writePlace(app, el, { ...to, width: w }), read() - h);
+            let near = { w: w0, off: Math.abs(read() - h) }, lo = w0 - 1, hi = w0 + 1;
+            for (let n = 0; n < 600 && (lo >= 1 || hi * slope <= h + 0.5); n++) {
+              const down = lo >= 1 && (hi * slope > h + 0.5 || w0 - lo <= hi - w0);
+              const w = down ? lo : hi, g = off(w);
+              if (Math.round(g + h) === Math.round(h)) {
+                near = { w, off: -1 };
+                break;
+              }
+              if (Math.abs(g) < near.off) near = { w, off: Math.abs(g) };
+              if (down) lo = g > 0 ? Math.min(w - 1, Math.floor(w - (g - 0.5) / k)) : w - 1;
+              else hi = g < 0 ? Math.max(w + 1, Math.ceil(w - (g + 0.5) / k)) : w + 1;
+            }
+            writePlace(app, el, { ...to, width: near.w });
+          }
         }
         return { el, from, to: placeOf(el) };
       }));

@@ -48,7 +48,10 @@ export function tablePane(app: App, run: Run): Control[] {
         { command: 'table.rowBelow', text: 'Below', title: 'Add Row Below' },
       ], 'Add Row')], 'Add'),
       row([button(app, run, { command: 'table.deleteRow', text: 'Delete Row' })]),
-      row([button(app, run, { command: 'table.distributeRows', text: 'Distribute Evenly', title: 'Distribute Rows Evenly' })]),
+      row([
+        button(app, run, { command: 'table.distributeRows', text: 'Distribute Evenly', title: 'Distribute Rows Evenly' }),
+        button(app, run, { command: 'table.fitRow', text: 'Fit to Content', title: 'Resize Row to Fit Content' }),
+      ]),
       row([segmented(app, run, [
         { command: 'table.sortAscending', text: 'Ascending', title: 'Sort Ascending' },
         { command: 'table.sortDescending', text: 'Descending', title: 'Sort Descending' },

@@ -25,7 +25,7 @@ export function install(app: App): void {
     id: 'element.delete',
     label: 'Delete',
     keys: { mac: ['Backspace', 'Delete'], other: ['Delete', 'Backspace'] },
-    // in the navigator, it runs Delete Slide, which is without a key in its menu as in PowerPoint
+    // in the navigator, it runs Delete Slide, whose menu item prints this key there
     in: ['canvas', 'navigator'],
     menu: { bar: 'Edit', group: 'clipboard', order: 23 },
     context: ['element'],
