@@ -242,20 +242,36 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await stepsOf(t, text, STEPS, `.r18-1-${platform}-show-c.html`), await stepsOf(t, FOOTFIRST, STEPS, `.r18-1-${platform}-show-d.html`));
   });
 
-  test(`${platform}: the QR code stays selected over the undo and the redo of Send Backward, and a second Send Backward moves it (C4)`, async (t) => {
+  // the theme draws the block of the closing slide in front of the QR code, and the block is a
+  // stacking context, hence the QR code passes all of its texts at once
+  test(`${platform}: the QR code stays selected over the undo and the redo of Bring to Front, and Send to Back then moves it (C4)`, async (t) => {
     const page = await load(t, platform, OVERLAPS, CLOSING);
-    assert.deepEqual(await named(page, CLOSE_ROWS), ['qr', 'who', 'sub', 'h1']);
+    const pair = { h1: `${S} .block > h1`, qr: `${S} > .qr` };
+    const at = await overlap(page, pair.h1, pair.qr);
+    assert.ok(at, 'the QR code is not over the heading');
+    assert.deepEqual(await named(page, CLOSE_ROWS), ['who', 'sub', 'h1', 'qr']);
+    assert.equal(await topAt(page, at, pair), 'h1');
     await pick(page, CLOSE_ROWS, 'qr');
-    await layer(page, platform, 'backward');
-    assert.deepEqual(await named(page, CLOSE_ROWS), ['who', 'qr', 'sub', 'h1']);
+    const base = await render(page);
+    const edited = await layer(page, platform, 'front');
+    assert.deepEqual(await named(page, CLOSE_ROWS), ['qr', 'who', 'sub', 'h1']);
+    assert.equal(await topAt(page, at, pair), 'qr');
     await press(page, KEYS[platform].undo);
     await frames(page);
+    assert.equal(await render(page), base, 'the undo does not give the file back byte for byte');
     assert.deepEqual(await selected(page), ['div.qr'], 'the undo selects another element');
+    assert.deepEqual(await named(page, CLOSE_ROWS), ['who', 'sub', 'h1', 'qr']);
+    assert.equal(await topAt(page, at, pair), 'h1');
     await press(page, KEYS[platform].redo);
     await frames(page);
+    assert.equal(await render(page), edited);
     assert.deepEqual(await selected(page), ['div.qr'], 'the redo selects another element');
-    await layer(page, platform, 'backward');
-    assert.deepEqual(await named(page, CLOSE_ROWS), ['who', 'sub', 'qr', 'h1'], 'the second Send Backward does not move the QR code');
+    assert.deepEqual(await named(page, CLOSE_ROWS), ['qr', 'who', 'sub', 'h1']);
+    assert.equal(await topAt(page, at, pair), 'qr');
+    await layer(page, platform, 'back');
+    assert.deepEqual(await named(page, CLOSE_ROWS), ['who', 'sub', 'h1', 'qr'], 'Send to Back after the redo does not move the QR code');
+    assert.equal(await topAt(page, at, pair), 'h1');
+    assert.equal(await render(page), base, 'a declaration is left once the slide is in the order of the file');
     assert.deepEqual(await selected(page), ['div.qr']);
     assert.deepEqual(errors(page), []);
   });

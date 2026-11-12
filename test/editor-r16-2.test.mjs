@@ -187,8 +187,12 @@ for (const platform of PLATFORMS) {
     const pair = { h1: CLOSE_EL.h1, qr: CLOSE_EL.qr };
     const at = await overlap(page, CLOSE_EL.h1, CLOSE_EL.qr);
     assert.ok(at, 'the QR code is not over the heading');
+    // the theme draws the block of a closing slide in front of the QR code
+    assert.deepEqual(await named(page, CLOSE_ROWS), ['who', 'sub', 'h1', 'qr']);
+    assert.equal(await topAt(page, at, pair), 'h1');
+    await layer(page, platform, 'front', CLOSE_ROWS, 'qr');
     assert.deepEqual(await named(page, CLOSE_ROWS), ['qr', 'who', 'sub', 'h1']);
-    assert.equal(await topAt(page, at, pair), 'qr');
+    assert.equal(await topAt(page, at, pair), 'qr', 'the QR code brought to the front is drawn under the heading');
     // the steps of the finding: Bring to Front of the heading, of the subtitle, and of the heading
     for (const name of ['h1', 'sub', 'h1']) {
       await layer(page, platform, 'front', CLOSE_ROWS, name);
@@ -202,6 +206,10 @@ for (const platform of PLATFORMS) {
     if (o.front) await layer(page, platform, 'front', CLOSE_ROWS, 'qr');
     assert.equal((await named(page, CLOSE_ROWS))[0], 'qr');
     assert.equal(await topAt(page, at, pair), 'qr', 'the QR code brought to the front is drawn under the heading');
+    await layer(page, platform, 'back', CLOSE_ROWS, 'qr');
+    assert.deepEqual(await named(page, CLOSE_ROWS), ['who', 'sub', 'h1', 'qr']);
+    assert.equal(await topAt(page, at, pair), 'h1', 'the QR code sent to the back is drawn over the heading');
+    assert.equal(await render(page), page.source, 'a declaration is left once the slide is in the order of the file');
     await saveAndReopen(page, `.r16-2-g5-${platform}.html`);
     assert.deepEqual(errors(page), []);
   });
@@ -214,45 +222,51 @@ for (const platform of PLATFORMS) {
     const atSub = await overlap(page, CLOSE_EL.sub, CLOSE_EL.qr);
     assert.ok(at && atSub, 'the QR code is not over the heading and the subtitle');
 
-    // Bring to Front of the heading passes the QR code
-    await pick(page, CLOSE_ROWS, 'h1');
-    assert.deepEqual(await orders(page), { front: true, forward: true, backward: false, back: false });
-    await layer(page, platform, 'front', CLOSE_ROWS, 'h1');
-    assert.deepEqual(await named(page, CLOSE_ROWS), ['h1', 'qr', 'who', 'sub'], 'Bring to Front of the heading stops under the QR code');
+    // the theme draws the block of a closing slide in front of the QR code. the block is a stacking
+    // context, hence the QR code passes all of its texts or none, and Bring Forward and Send Backward
+    // of the QR code, which pass one row, are dimmed
+    assert.deepEqual(await named(page, CLOSE_ROWS), ['who', 'sub', 'h1', 'qr']);
     assert.equal(await topAt(page, at, pair), 'h1');
-    assert.deepEqual(await orders(page), { front: false, forward: false, backward: true, back: true });
-    await layer(page, platform, 'backward', CLOSE_ROWS, 'h1');
-    assert.deepEqual(await named(page, CLOSE_ROWS), ['qr', 'h1', 'who', 'sub']);
-    assert.equal(await topAt(page, at, pair), 'qr');
-    await layer(page, platform, 'back', CLOSE_ROWS, 'h1');
-    assert.deepEqual(await named(page, CLOSE_ROWS), ['qr', 'who', 'sub', 'h1']);
-    assert.equal(await render(page), page.source, 'a declaration is left once the slide is in the order of the file');
-
-    // Send to Back of the QR code, then Bring Forward passes one row at a time
+    assert.equal(await topAt(page, atSub, subPair), 'sub');
     await pick(page, CLOSE_ROWS, 'qr');
+    assert.deepEqual(await orders(page), { front: true, forward: false, backward: false, back: false });
+    await layer(page, platform, 'front', CLOSE_ROWS, 'qr');
+    assert.deepEqual(await named(page, CLOSE_ROWS), ['qr', 'who', 'sub', 'h1'], 'Bring to Front of the QR code stops under the block');
+    assert.equal(await topAt(page, at, pair), 'qr');
+    assert.equal(await topAt(page, atSub, subPair), 'qr');
+    assert.deepEqual(await orders(page), { front: false, forward: false, backward: false, back: true });
     await layer(page, platform, 'back', CLOSE_ROWS, 'qr');
     assert.deepEqual(await named(page, CLOSE_ROWS), ['who', 'sub', 'h1', 'qr']);
     assert.equal(await topAt(page, at, pair), 'h1');
-    assert.deepEqual(await orders(page), { front: true, forward: true, backward: false, back: false });
-    await layer(page, platform, 'forward', CLOSE_ROWS, 'qr');
-    assert.deepEqual(await named(page, CLOSE_ROWS), ['who', 'sub', 'qr', 'h1'], 'Bring Forward of the QR code does not pass one row');
-    assert.equal(await topAt(page, at, pair), 'qr');
     assert.equal(await topAt(page, atSub, subPair), 'sub');
-    await layer(page, platform, 'forward', CLOSE_ROWS, 'qr');
-    assert.deepEqual(await named(page, CLOSE_ROWS), ['who', 'qr', 'sub', 'h1']);
-    assert.equal(await topAt(page, atSub, subPair), 'qr');
-    await layer(page, platform, 'forward', CLOSE_ROWS, 'qr');
-    assert.deepEqual(await named(page, CLOSE_ROWS), ['qr', 'who', 'sub', 'h1']);
+    assert.equal(await render(page), page.source, 'a declaration is left once the slide is in the order of the file');
+
+    // the heading passes one text of the block at a time, in front of the QR code
+    await pick(page, CLOSE_ROWS, 'h1');
+    assert.deepEqual(await orders(page), { front: true, forward: true, backward: false, back: false });
+    await layer(page, platform, 'forward', CLOSE_ROWS, 'h1');
+    assert.deepEqual(await named(page, CLOSE_ROWS), ['who', 'h1', 'sub', 'qr'], 'Bring Forward of the heading does not pass one row');
+    assert.equal(await topAt(page, at, pair), 'h1');
+    await layer(page, platform, 'front', CLOSE_ROWS, 'h1');
+    assert.deepEqual(await named(page, CLOSE_ROWS), ['h1', 'who', 'sub', 'qr']);
+    assert.equal(await topAt(page, at, pair), 'h1');
+    assert.deepEqual(await orders(page), { front: false, forward: false, backward: true, back: false });
+    await layer(page, platform, 'backward', CLOSE_ROWS, 'h1');
+    assert.deepEqual(await named(page, CLOSE_ROWS), ['who', 'h1', 'sub', 'qr']);
+    await layer(page, platform, 'backward', CLOSE_ROWS, 'h1');
+    assert.deepEqual(await named(page, CLOSE_ROWS), ['who', 'sub', 'h1', 'qr']);
+    assert.equal(await topAt(page, at, pair), 'h1');
     assert.equal(await render(page), page.source, 'a declaration is left once the slide is in the order of the file');
 
     // a drag of the row of the heading to the top of the list
     const box = (name) => page.evaluate(`(() => { const r = [...document.querySelectorAll(${js(ROW)})].find((x) => x.querySelector('.name').textContent.startsWith(${js(CLOSE_ROWS[name])})).getBoundingClientRect(); return { x: r.left + 60, y: r.top + r.height / 2, top: r.top }; })()`);
     const from = await box('h1');
-    const top = await box('qr');
+    const top = await box('who');
     await drag(page, from, { dy: top.top + 2 - from.y, steps: 8 });
     await frames(page);
-    assert.deepEqual(await named(page, CLOSE_ROWS), ['h1', 'qr', 'who', 'sub'], 'the row of the heading is not dragged over the QR code');
+    assert.deepEqual(await named(page, CLOSE_ROWS), ['h1', 'who', 'sub', 'qr'], 'the row of the heading is not dragged to the top');
     assert.equal(await topAt(page, at, pair), 'h1');
+    assert.equal(await topAt(page, atSub, subPair), 'sub');
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Reorder');
     const dragged = await render(page);
     await undo(page);

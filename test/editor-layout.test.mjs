@@ -1,7 +1,7 @@
 // the layout and the arrangement of the elements of a slide on both platforms, driven with trusted
 // input: a content slide changed to split from the chooser of the Slide pane writes div.panel
-// around its words and keeps its zone, Bring to Front and Send to Back of a QR code move its unit
-// among the other figures, a grouped pair is selected, moved, and deleted together, a lock keeps
+// around its words and keeps its zone, Bring to Front and Send to Back of a QR code in the flow
+// write a z-index, a grouped pair is selected, moved, and deleted together, a lock keeps
 // an element from a drag, a rotation with Shift snaps to 15 degrees, and Reset Slide takes it
 // off. each edit is checked byte for byte, after an undo and a redo, against the scope rule, and
 // after a save and an open of the saved text. the tests do not use the system clipboard
@@ -28,6 +28,7 @@ const SECTIONS = [...readFileSync(LAYOUTS, 'utf8').matchAll(/<section[\s\S]*?<\/
 const MATH = SECTIONS.findIndex((s) => s.includes('<h2>Math, an ordered list, and a zone</h2>'));
 const TITLE = 0;
 const QR = '<div class="qr" data-qr="https://github.com/beeson-group/slides"></div>';
+const BACKDROP = '<div class="backdrop" data-scene="tubes" data-cx="0.42" data-cy="0" data-half="0.6">';
 const BLOCK_END = '    <p class="who">The Beeson group<br>Princeton University</p>\n  </div>\n';
 
 let browser;
@@ -73,6 +74,32 @@ const shownFrames = (page) => page.evaluate(`(() => {
   const frames = [...document.querySelectorAll('.beeson-frame.selected')].filter((f) => !f.hidden && f.getBoundingClientRect().width).length;
   const group = [...document.querySelectorAll('.beeson-frame.union.group')].some((f) => !f.hidden);
   return group ? window.BeesonEditor.selection().filter((e) => e.getBoundingClientRect().width).length : frames;
+})()`);
+
+// the element drawn on top, 'qr' or another one, where the QR code of the current slide meets the
+// first line of the words of the who and sub paragraphs of its block, and the backdrop. the QR
+// code is moved over each paragraph for the moment of the hit test, by a translate in its style,
+// which does not change its order
+const drawnOver = (page) => page.evaluate(`(() => {
+  const s = Reveal.getCurrentSlide(), q = s.querySelector(':scope > .qr'), style = q.getAttribute('style');
+  const k = s.getBoundingClientRect().width / s.offsetWidth;
+  const top = (x, y, other) => {
+    const hit = document.elementsFromPoint(x, y).find((e) => q.contains(e) || other.contains(e));
+    return hit ? (q.contains(hit) ? 'qr' : 'text') : null;
+  };
+  const over = (el) => {
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    const line = range.getClientRects()[0], b = q.getBoundingClientRect();
+    q.style.translate = (line.left - b.left) / k + 'px ' + (line.top - b.top) / k + 'px';
+    const hit = top(line.left + 12, line.top + line.height / 2, el);
+    if (style === null) q.removeAttribute('style');
+    else q.setAttribute('style', style);
+    return hit;
+  };
+  const r = q.getBoundingClientRect();
+  const backdrop = top(r.left + r.width / 2, r.top + r.height / 2, s.querySelector(':scope > .backdrop'));
+  return { who: over(s.querySelector('.block > .who')), sub: over(s.querySelector('.block > .sub')), backdrop: backdrop === 'text' ? 'backdrop' : backdrop };
 })()`);
 
 // the problems of the scope rule in the rendered text that the file did not have before
@@ -161,15 +188,18 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`Send to Back and Bring to Front of a QR code move its unit among the figures on ${platform}`, async () => {
+  // a QR code of a title slide is in the flow, hence a layer command orders it by a z-index
+  test(`Send to Back and Bring to Front of a QR code in the flow write a z-index on ${platform}`, async () => {
     const page = await layoutPage(platform, TITLE);
     await click(page, '.reveal section.present > .qr');
     assert.equal((await state(page, 'arrange.order.front')).enabled, false, 'the QR code is already in front');
+    assert.deepEqual(await drawnOver(page), { who: 'qr', sub: 'qr', backdrop: 'qr' });
     await press(page, KEYS[platform].back);
     await frames(page);
-    // the backdrop is the ground of its layout, hence the QR code is put after it, behind the block
-    const edits = [[`${BLOCK_END}  ${QR}\n`, BLOCK_END], ['  <div class="block">\n    <h1>Every layout', `  ${QR}\n  <div class="block">\n    <h1>Every layout`]];
+    // the backdrop is the ground of its layout, hence it is put under the QR code, behind the block
+    const edits = [[`${QR}\n`, `${QR.replace('>', ' style="z-index: -1">')}\n`], [BACKDROP, BACKDROP.replace('>', ' style="z-index: -1">')]];
     await byteExact(page, edits);
+    assert.deepEqual(await drawnOver(page), { who: 'text', sub: 'text', backdrop: 'qr' }, 'the QR code sent to the back is not drawn behind the block and over the backdrop');
     assert.equal((await state(page, 'arrange.order.back')).enabled, false, 'the QR code is already at the back');
     assert.equal((await state(page, 'arrange.order.backward')).enabled, false, 'the QR code is sent behind the backdrop');
     await inScope(page);
@@ -177,10 +207,11 @@ for (const platform of PLATFORMS) {
     await byteExact(page);
     await redo(page);
     await byteExact(page, edits);
-    // Bring to Front puts it after the backdrop and the block again, and is one entry
+    // Bring to Front takes the declarations off again, and is one entry
     await press(page, KEYS[platform].front);
     await frames(page);
     await byteExact(page);
+    assert.deepEqual(await drawnOver(page), { who: 'qr', sub: 'qr', backdrop: 'qr' });
     await undo(page);
     await byteExact(page, edits);
     await redo(page);
@@ -190,6 +221,7 @@ for (const platform of PLATFORMS) {
     const backward = [[BLOCK_END, BLOCK_END.replace('<p class="who">', '<p class="who" style="position: relative; z-index: 1">')]];
     await exec(page, 'arrange.order.backward');
     await byteExact(page, backward);
+    assert.deepEqual(await drawnOver(page), { who: 'text', sub: 'qr', backdrop: 'qr' }, 'the QR code sent backward is not drawn between the last two texts of the block');
     await saved(page, backward);
     assert.deepEqual(errors(page), []);
   });
