@@ -49,6 +49,8 @@ export class History {
   private readonly view: () => (() => void) | null;
   // the functions run at the end of each transaction, whose changes are part of it
   private readonly settlers: (() => void)[] = [];
+  // the functions run after each input recorded into an entry of typing outside a transaction
+  private readonly typers: ((entry: Entry) => void)[] = [];
   // read before an undo or a redo, the function that selects the one element changed by its entry
   private readonly changed: () => (el: Element) => void;
 
@@ -92,6 +94,12 @@ export class History {
   // fn run at the end of each transaction with changes, e.g. to keep a number in step with them
   onSettle(fn: () => void): void {
     this.settlers.push(fn);
+  }
+
+  // fn run with the entry of the typing after each input recorded into it outside a transaction,
+  // whose changes fn adds to the entry. inside one, the settlers run at its end
+  onTyped(fn: (entry: Entry) => void): void {
+    this.typers.push(fn);
   }
 
   // a change other than typing, already applied
@@ -261,6 +269,7 @@ export class History {
     this.known.set(host, typing.state.after);
     if (typing.state.after === typing.state.before && !this.recorded(typing.entry)) return;
     if (!this.recorded(typing.entry)) this.record(typing.entry);
+    if (!this.open) for (const fn of this.typers) fn(typing.entry);
     this.onChange();
   }
 

@@ -285,6 +285,10 @@ export function install(app: App): void {
   let unplace: (() => void) | null = null;
   // the commit of the open sheet at a click away, or null for a close
   let away: (() => Promise<void>) | null = null;
+  // left of the open sheet, run when another sheet replaces it. the focusout that it sends is read
+  // a task later, until when the next sheet is not seen as open
+  let leftOf: (() => void) | null = null;
+  let leaving = false;
 
   // the keys of an open completion list are taken before the keys of the editor and of the sheet
   window.addEventListener('keydown', (ev) => {
@@ -318,6 +322,7 @@ export function install(app: App): void {
     popover?.remove();
     popover = null;
     away = null;
+    leftOf = null;
     openFor = null;
     const restore = back;
     back = null;
@@ -353,7 +358,13 @@ export function install(app: App): void {
   }
 
   function openSheet(sheet: Sheet, target: Element | null): void {
+    const replaced = leftOf;
     closeMath(false);
+    if (replaced) {
+      leaving = true;
+      replaced();
+      setTimeout(() => (leaving = false), 0);
+    }
     const box = make('div', 'beeson-math beeson-tex');
     box.setAttribute('role', 'dialog');
     box.setAttribute('aria-modal', 'true');
@@ -425,6 +436,7 @@ export function install(app: App): void {
             sheet.left?.();
           }
         : null;
+    leftOf = sheet.left ?? null;
     openFor = target;
     const host = target?.closest(HOST);
     const at = host && target ? [...host.querySelectorAll('mjx-container')].indexOf(target) : -1;
@@ -483,7 +495,7 @@ export function install(app: App): void {
   }
 
   sheetApi = { open: openSheet };
-  const math: MathPop = { isOpen: () => !!popover, open: openMath, close: closeMath, setMath, hold };
+  const math: MathPop = { isOpen: () => !!popover && !leaving, open: openMath, close: closeMath, setMath, hold };
   app.math = math;
   document.addEventListener('click', (ev) => {
     const target = ev.target instanceof Element ? ev.target : null;

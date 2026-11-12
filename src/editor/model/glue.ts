@@ -6,10 +6,11 @@
 // a group takes glue as one object, with its name on each member, hence data-anchor is a list of
 // names as data-group is. the theme does not read these attributes. a name is written with the first end glued to its
 // element and taken off with the last. a glued end is put at its place again at the end of each
-// transaction of the history, and by record() of canvas/drag.ts for a change outside one, in the
-// same entry as the change of the element
+// transaction of the history, after each input of typing, and by record() of canvas/drag.ts for a
+// change outside one, in the same entry as the change of the element
 
 import type { App } from '../app.ts';
+import type { Entry } from '../history.ts';
 import { mergeEdit, type TagEdit, type Translate } from '../tags.ts';
 import { injectStyle } from '../ui/dom.ts';
 import { frameOf, LINE, movablesOf, pictureTurn, strokeOf, toScreen, toSlide, turnable, unturnedRect, type Frame } from '../canvas/hit.ts';
@@ -366,5 +367,26 @@ export function install(app: App): void {
     const p = new Patch(app);
     follow(app, p.write);
     if (!p.empty) app.history.push({ label: 'glue', undo: () => p.undo(), redo: () => p.redo() });
+  });
+  // an element pushed by typed words, e.g. a table in the flow under a paragraph that wraps, is
+  // followed in the entry of the typing. a slide without a glued end is not measured
+  const typed = new WeakMap<Entry, Patch>();
+  app.history.onTyped((entry) => {
+    if (!glued(app.current()).length) return;
+    let p = typed.get(entry);
+    if (!p) {
+      const patch = new Patch(app);
+      const { undo, redo } = entry;
+      entry.undo = async () => {
+        await undo.call(entry);
+        patch.undo();
+      };
+      entry.redo = async () => {
+        await redo.call(entry);
+        patch.redo();
+      };
+      typed.set(entry, (p = patch));
+    }
+    follow(app, p.write);
   });
 }

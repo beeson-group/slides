@@ -322,13 +322,17 @@ function serializeElement(source: Source, s: SrcEl, el: Element, math: MathLooku
   return open + contentOf(source, s, el, math, tags) + close;
 }
 
-// the content of an element. the <br> that the browser puts into an item or a paragraph emptied in
-// the editor, also a nested item, is not written, so that the theme draws it as empty, e.g. an item
-// without its mark. other tags keep it, since the theme gives the height of a line only to these two
+// the content of an element. the line breaks that the browser leaves in an item or a paragraph
+// emptied in the editor, also a nested item, are not written, so that the theme draws it as empty,
+// e.g. an item without its mark. a block of only line breaks in the file, e.g. <p><br></p>, keeps
+// them. other tags keep them, since the theme gives the height of a line only to these two
 const EMPTIED = new Set(['li', 'p']);
+const BREAKS = /^(?:\s*<br\s*\/?>)+\s*$/i;
 function contentOf(source: Source, s: SrcEl, el: Element, math: MathLookup, tags: Map<Element, TagEdit>): string {
   const out = serializeChildren(source, s, el, math, tags);
-  return out === '<br>' && EMPTIED.has(s.tag.toLowerCase()) && !s.children.some((c) => c.kind === 'element' && c.tag.toLowerCase() === 'br') ? '' : out;
+  if (!EMPTIED.has(s.tag.toLowerCase()) || !BREAKS.test(out)) return out;
+  const r = contentRange(s);
+  return r && BREAKS.test(s.source.text.slice(r.start, r.end)) ? out : '';
 }
 
 export function renderBlock(source: Source, block: Block, math: MathLookup, tags: Map<Element, TagEdit> = new Map()): string {
