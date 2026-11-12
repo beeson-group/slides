@@ -44,8 +44,14 @@ const copyKey = (platform) => (platform === 'mac' ? 'Alt' : 'Ctrl');
 // a function of the page called with the arguments
 const call = (page, fn, ...args) => page.evaluate(`(${fn})(${args.map(js).join(', ')})`);
 
+// the page loaded before it in the file is closed first. Within 1 s of the last change of a page,
+// its unsaved edits are kept in the storage of the browser, and they would then be offered on a
+// card over the slide of the next page
+let last = null;
 async function load(t, platform, slide = EMPTY, text = SOURCE) {
+  await last?.close().catch(() => {});
   const page = await browser.newPage({ width: 1600, height: 1000 });
+  last = page;
   t.after(() => page.close().catch(() => {}));
   const url = `${server.origin}/${DECK}?edit&still&edit-platform=${platform}`;
   await page.goto(url);
