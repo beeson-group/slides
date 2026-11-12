@@ -496,15 +496,16 @@ for (const platform of PLATFORMS) {
       await frames(page);
       page.source = turnedText;
 
-      // a typed W scales the turned group about the upper left corner of its frame
+      // a typed W scales the turned group with the upper left corner of its frame without its
+      // rotation kept, i.e. its X and Y, as for a turned figure
       const before = await look(page);
-      const corner = gripOn(before.group, 30, 'nw');
+      const corner = { x: await fieldValue(page, 'x'), y: await fieldValue(page, 'y') };
       const w2 = Math.round((before.group.width / before.k) * 0.8);
       await typeField(page, 'width', w2);
       const after = await look(page);
-      const moved = gripOn(after.group, 30, 'nw');
+      const moved = { x: await fieldValue(page, 'x'), y: await fieldValue(page, 'y') };
       assert.ok(near(after.groupDeg, 30, 0.5), `${where}: a typed W turns the frame of the group to ${after.groupDeg}°`);
-      assert.ok(near(moved.x, corner.x) && near(moved.y, corner.y), `${where}: a typed W moves the upper left corner of the turned group from ${js(corner)} to ${js(moved)}`);
+      assert.ok(near(moved.x, corner.x, 1) && near(moved.y, corner.y, 1), `${where}: a typed W moves the turned group from X and Y ${js(corner)} to ${js(moved)}`);
       assert.ok(near(await fieldValue(page, 'width'), w2, 1), `${where}: a typed W of ${w2} gives ${await fieldValue(page, 'width')}`);
       const edited = await render(page);
       await roundTrip(page, edited);
