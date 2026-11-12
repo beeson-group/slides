@@ -525,7 +525,7 @@ for (const platform of ['mac', 'other']) {
     // the new table is selected, and its bars are shown without a cell marked
     assert.equal(await page.evaluate(`window.BeesonEditor.state('table.delete').enabled`), true);
     assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-table-bars:not([hidden]) .bar > div')].length`), 5);
-    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Paste Table');
+    assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Paste');
     await roundTrip(page);
   });
 

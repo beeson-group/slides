@@ -243,7 +243,7 @@ for (const platform of PLATFORMS) {
     const right = '<td style="text-align: right">';
     const table = `<tbody>\n      <tr><td>Moon</td><td style="text-align: right">\\(0.01215\\)</td></tr>\n      <tr><td><strong>Europa</strong></td>${right}2.53e-5</td></tr>\n    </tbody>\n  </table>`;
     assert.ok(pasted.includes(table), `the new table is not written with its bold and its formula:\n${pasted.slice(pasted.indexOf('</table>') + 8, pasted.indexOf('A plain table'))}`);
-    assert.equal(await undoLabel(page), 'Undo Paste Table');
+    assert.equal(await undoLabel(page), 'Undo Paste');
     assert.equal(await page.evaluate(`Reveal.getCurrentSlide().querySelectorAll('table')[1].querySelectorAll('strong').length`), 1);
     assert.equal(await page.evaluate(`Reveal.getCurrentSlide().querySelectorAll('table')[1].querySelectorAll('mjx-container').length`), 1);
     await roundTrip(page, bold);

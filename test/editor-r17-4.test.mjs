@@ -199,7 +199,7 @@ for (const platform of PLATFORMS) {
     assert.ok(pasted.includes(BODY), `the new table is not of body cells:\n${pasted.slice(pasted.lastIndexOf('<table>'), pasted.lastIndexOf('</table>'))}`);
     const look = await page.evaluate(`(() => { const c = Reveal.getCurrentSlide().querySelectorAll('table')[1].rows[0].cells[0]; const s = getComputedStyle(c); return { tag: c.localName, style: s.fontStyle }; })()`);
     assert.deepEqual(look, { tag: 'td', style: 'normal' });
-    assert.equal(await undoLabel(page), 'Undo Paste Table');
+    assert.equal(await undoLabel(page), 'Undo Paste');
     await roundTrip(page, page.source);
   });
 
