@@ -333,7 +333,7 @@ export function install(app: App): void {
       insertPlain(host, '\n');
     } else if (type === 'insertFromPaste') {
       ev.preventDefault();
-      insertPlain(host, ev.dataTransfer?.getData('text/plain') ?? '');
+      insertPlain(host, spaced(host, ev.dataTransfer?.getData('text/plain') ?? ''));
       history.afterTyping(host);
       history.break();
     } else if (type === 'insertFromDrop' || type.startsWith('format') || type.startsWith('insertOrdered') || type.startsWith('insertUnordered') || type === 'insertHorizontalRule' || type === 'insertLink') {
@@ -360,6 +360,28 @@ export function install(app: App): void {
     if (!/[ \u00a0]/.test(n.data[k - 1]) || !/[\s.,;:!?)\]]/.test(next ?? '')) return;
     n.deleteData(k - 1, 1);
     s.collapse(n, k - 1);
+  }
+
+  // one word with the space after it, as a double click takes it on Windows, is pasted with the
+  // spaces of PowerPoint. the space is dropped before a space, a closing mark, or the end of the
+  // text, and a space is put after a letter, a digit, or a closing mark. a paste into a word or
+  // into code is kept as it is
+  function spaced(host: Element, text: string): string {
+    const r = getSelection()?.rangeCount ? getSelection()!.getRangeAt(0) : null;
+    const at = r?.startContainer;
+    if (!r || !/^\S+ $/.test(text) || (at instanceof Element ? at : at?.parentElement)?.closest('pre, code')) return text;
+    const head = document.createRange();
+    head.setStart(host, 0);
+    head.setEnd(r.startContainer, r.startOffset);
+    const tail = document.createRange();
+    tail.setStart(r.endContainer, r.endOffset);
+    tail.setEnd(host, host.childNodes.length);
+    const before = head.toString().slice(-1);
+    const next = tail.toString().charAt(0);
+    const word = /[\p{L}\p{N}]/u;
+    const close = /[.,;:!?)\]}’”»]/;
+    if (word.test(before) && word.test(next)) return text;
+    return (word.test(before) || close.test(before) ? ' ' : '') + (!next || /\s/.test(next) || close.test(next) ? text.slice(0, -1) : text);
   }
 
   const typing: Typing = { attach, markMath, restoreHost };

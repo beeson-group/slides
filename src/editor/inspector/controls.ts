@@ -433,6 +433,13 @@ export function numberField(app: App, o: NumberOptions): Control & { input: HTML
       ev.preventDefault();
       ev.stopPropagation();
       void app.commands.run(history).catch((e) => app.fail(e));
+    } else if (history === 'edit.undo') {
+      // Undo of a value typed and not entered puts the shown value back in one step, where the
+      // undo of the browser takes off one typed character on Windows
+      ev.preventDefault();
+      ev.stopPropagation();
+      show(shown);
+      input.select();
     } else if (ev.key === 'Enter') {
       ev.preventDefault();
       if (o.same && !input.disabled && round(typed()) === shown) commit(typed());
