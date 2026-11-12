@@ -104,7 +104,9 @@ export function install(app: App): void {
     in: [...TEXT, 'notes'],
     undoable: true,
     enabled: (a) => (inNotes(a) ? notes.canJoinNotesItem(a) : blocks.canJoinBack(a)),
-    run: (a) => marked(a, () => (inNotes(a) ? notes.joinNotesItem(a) : blocks.joinBackward(a))),
+    // the caret of a drop is kept by joinBackward, since an empty paragraph does not change the
+    // count of characters by which marked() puts it back
+    run: (a) => (!inNotes(a) && blocks.joinKind(a) === 'drop' ? blocks.joinBackward(a) : marked(a, () => (inNotes(a) ? notes.joinNotesItem(a) : blocks.joinBackward(a)))),
   });
   define({ id: 'text.joinForward', label: 'Join Paragraphs', keys: { mac: ['Delete'], other: ['Delete'] }, in: TEXT, undoable: true, enabled: blocks.canJoinAhead, run: blocks.joinForward });
 

@@ -279,9 +279,11 @@ function keepCounts(app: App): void {
   }
 }
 
-// second, the list made of the items after a cut of list, goes on with its count
-function goesOn(list: Element, second: Element | undefined): void {
-  if (list instanceof HTMLOListElement && second) cutOff.add(second);
+// second, the list made of the items of list after its item k, goes on with the count of list
+// when item k is not its first item. otherwise list is taken off, and second keeps its start, or
+// goes on with the list before as list did
+function goesOn(list: Element, second: Element | undefined, k: number): void {
+  if (list instanceof HTMLOListElement && second && (k > 0 || cutOff.has(list))) cutOff.add(second);
 }
 
 // a list of the file at the level of the blocks, e.g. the ul of a slide or of its div.col
@@ -299,14 +301,16 @@ function prevOf(app: App, el: Element): Element | null {
   return n;
 }
 
-// els taken off the page in order, after which the lists before and after each are one list when
-// they have one tag and the same attributes apart from start, as a list of Keynote and PowerPoint is
-// a run of paragraphs. the items of the second list are moved to the end of the first, which drops
-// its start
+// els taken off the page in order, after which the lists before and after each text of the flow of
+// their column are one list when they have one tag and the same attributes apart from start, as a
+// list of Keynote and PowerPoint is a run of paragraphs. the items of the second list are moved to
+// the end of the first, which drops its start
 export async function removeJoining(app: App, els: Element[], label: string): Promise<void> {
   const around: [Element | null, Element | null][] = [];
   for (const el of els) {
-    around.push([prevOf(app, el), nextOf(app, el)]);
+    // an element out of the flow of the column, e.g. a figure of the zone, is not between the lists
+    const inFlow = el.matches('p, h1, h2, h3, h4, h5, h6, ul, ol, div.math, blockquote, pre') && !/^(absolute|fixed)$/.test(getComputedStyle(el).position);
+    around.push(inFlow ? [prevOf(app, el), nextOf(app, el)] : [null, null]);
     await app.doc.remove(el, label);
   }
   // a list joined into the list before it, for the joins after it
@@ -314,6 +318,8 @@ export async function removeJoining(app: App, els: Element[], label: string): Pr
   for (let [first, second] of around) {
     while (first && into.has(first)) first = into.get(first)!;
     if (!fileList(app, first) || !fileList(app, second) || !first.isConnected || !second.isConnected || first.localName !== second.localName) continue;
+    // a locked list does not take items, and is not taken off
+    if (first.closest('[data-locked]') || second.closest('[data-locked]')) continue;
     if (nextOf(app, first) !== second || listAttrs(app, first) !== listAttrs(app, second)) continue;
     const items = [...second.children].filter((c) => c.localName === 'li' && app.pairing?.elements.has(c));
     const end = first.lastChild instanceof Text && !first.lastChild.data.trim() ? first.lastChild : null;
@@ -348,6 +354,13 @@ export function canSplit(app: App): boolean {
   return !!at && (at.nested || structural(app, at.item));
 }
 
+// the function that puts the caret at the start of el, unless the focus is in a text outside the
+// slides at its call, e.g. a line of the outline, which keeps it
+const caretAt = (app: App, el: Element) => () => {
+  const a = document.activeElement;
+  if (!a?.matches('input, textarea, [contenteditable="true"]') || app.slides().contains(a)) selectIn(el, 0);
+};
+
 // Return: the item at the caret is split in two, and the caret is put at the start of the second
 // part. the second part of a subheading is a body paragraph, and every other second part keeps the
 // tag and the attributes of the item, apart from its id. the nested lists of an item go with its
@@ -367,16 +380,21 @@ export async function split(app: App): Promise<void> {
     // a paragraph after items of a moved list is moved with them, so that it is not drawn over them
     const move = list.querySelector(':scope > li') !== item && (list as HTMLElement).style.translate;
     const texts = [move ? `<p style="translate: ${move}"></p>` : '<p></p>'];
+    // an undo puts the caret into the empty item, and a redo into the paragraph
+    let to = item;
+    const kept = app.history.keep(() => caretAt(app, to));
     if (followers.length) {
       const { base, step, eol } = indentOf(app, list);
       const rest = followers.map((f) => `${eol}${base}${step}${app.doc.elementText(f)}`).join('');
       texts.push(`${startTag(app, list, list.localName, { attrs: { id: null, ...goOn(list, items.indexOf(item)) } })}${rest}${eol}${base}</${list.localName}>`);
     }
     const [p, second] = await app.doc.insert(texts, list.parentElement!, nextOf(app, list), 'new paragraph');
-    goesOn(list, second);
+    goesOn(list, second, items.indexOf(item));
     for (const f of followers) await app.doc.remove(f, 'new paragraph');
     await app.doc.remove(list.querySelectorAll(':scope > li').length > 1 ? item : list, 'new paragraph');
-    return selectIn(p, 0);
+    selectIn(p, 0);
+    to = p;
+    return kept();
   }
   if (!range.collapsed) range.deleteContents();
   const caret: [Node, number] = [range.startContainer, range.startOffset];
@@ -509,9 +527,14 @@ export async function joinBackward(app: App): Promise<void> {
   else if (j?.kind === 'outdent') await outdent(app);
   else if (j?.kind === 'unlist') await unlist(app, j.item);
   else if (j?.kind === 'drop') {
+    // an undo puts the caret into the empty paragraph, and a redo at the end of the list
     const last = [...j.list.children].reverse().find((c) => c.localName === 'li')!;
+    let done = false;
+    const kept = app.history.keep(() => (done ? () => selectIn(last, endOf(last)) : caretAt(app, j.item)));
     await removeJoining(app, [j.item], 'join');
     selectIn(last, endOf(last));
+    done = true;
+    kept();
   }
 }
 
@@ -751,7 +774,7 @@ export async function setList(app: App, kind: ListKind): Promise<void> {
     texts.push(`${startTag(app, parent, parent.localName, { attrs: goOn(parent, k) })}${rest}${eol}${base}</${parent.localName}>`);
   }
   const [p, second] = await app.doc.insert(texts, parent.parentElement!, nextOf(app, parent), 'list');
-  goesOn(parent, second);
+  goesOn(parent, second, items.filter((c) => c.localName === 'li').indexOf(item));
   for (const f of followers) await app.doc.remove(f, 'list');
   await app.doc.remove(item, 'list');
   if (!parent.querySelector(':scope > li')) await app.doc.remove(parent, 'list');
@@ -784,7 +807,7 @@ async function setSpanList(app: App, kind: ListKind): Promise<boolean> {
       texts.push(`${startTag(app, list, list.localName, { attrs: { id: null, ...goOn(list, items.indexOf(run[0])) } })}${rest}${eol}${base}</${list.localName}>`);
     }
     const inserted = await app.doc.insert(texts, list.parentElement!, nextOf(app, list), 'list');
-    if (followers.length) goesOn(list, inserted.at(-1));
+    if (followers.length) goesOn(list, inserted.at(-1), items.indexOf(run[0]));
     made = inserted.slice(0, run.length);
     for (const el of [...followers, ...run]) await app.doc.remove(el, 'list');
     if (!list.querySelector(':scope > li')) await app.doc.remove(list, 'list');
