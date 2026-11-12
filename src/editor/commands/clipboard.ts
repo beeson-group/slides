@@ -106,14 +106,15 @@ function nextKept(el: Element): Node | null {
 // and the elements of the last such paste, after which the next one is put. html is the table of a
 // copy of a range of cells. away holds, for each slide that the copy was pasted on, the elements of
 // each paste there, and the boxes of the first paste there without the sources, at the place of the
-// sources. the pastes made while the sources were on the slide are kept for when they are deleted
+// sources. the pastes made while the sources were on the slide are kept for when they are deleted.
+// boxes are the boxes of the sources at the copy, where a copy that is not in the flow is pasted
 type Away = { pastes: Element[][]; base?: Box[] };
-type Clip = { text: string; sources: Element[]; paths: string[][]; pasted: number; last: Element[]; html?: string; away?: Map<Element, Away> };
+type Clip = { text: string; sources: Element[]; paths: string[][]; pasted: number; last: Element[]; html?: string; away?: Map<Element, Away>; boxes?: Box[] };
 let clip: Clip | null = null;
 
 function copy(app: App, els: Element[], data: DataTransfer | null): void {
   const text = clipText(app, els);
-  clip = { text, sources: els, paths: els.map(pathOf), pasted: 0, last: [] };
+  clip = { text, sources: els, paths: els.map(pathOf), pasted: 0, last: [], boxes: els.map((el) => boxOf(app, el)) };
   write(data, text, text);
 }
 
@@ -220,12 +221,12 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
       before = slide.firstElementChild;
     }
     const [node] = await doc.insert(text, parent, before, 'paste');
-    if (source && own && !ground && covers(app, node, source)) shift(app, node, own.pasted + 1);
     nodes.push(node);
     grounds.push(ground);
   }
   const on = away && (away.get(slide) ?? away.set(slide, { pastes: [] }).get(slide));
-  if (on && !own) placeAway(app, on, nodes, grounds);
+  if (on && own) placeOwn(app, own, on, nodes, grounds);
+  else if (on) placeAway(app, on, nodes, grounds);
   on?.pastes.push(nodes);
   regroup(app, nodes);
   settleCopies(app, nodes);
@@ -248,14 +249,38 @@ function placeAway(app: App, on: Away, nodes: Element[], grounds: boolean[]): vo
   const base = (on.base ??= boxes);
   const { pastes } = on;
   const moves = nodes.map((_, i) => !grounds[i] && !!base[i] && same(boxes[i], base[i]));
-  const taken = (n: number) => pastes.some((p) => p.some((c, i) => moves[i] && c.isConnected && same(boxes[i], boxOf(app, c), STEP * n)));
-  let n = 0;
+  moveOn(app, nodes, boxes, moves, (i) => pastes.map((p) => p[i]), 0);
+}
+
+// a paste on the slide of its sources is moved by one step more than the pastes there before it
+// where it covers its source, and else not, then on to the first place that a source or a copy of
+// the clipboard on this slide does not take now. a copy that is not at the place of the sources at
+// the copy, e.g. a block of the text column, is not moved
+function placeOwn(app: App, own: Clip, on: Away, nodes: Element[], grounds: boolean[]): void {
+  const boxes = nodes.map((n) => boxOf(app, n));
+  const cover = nodes.map((n, i) => !grounds[i] && covers(app, n, own.sources[i]));
+  const moves = nodes.map((_, i) => cover[i] || (!grounds[i] && !!own.boxes?.[i] && same(boxes[i], own.boxes[i])));
+  moveOn(app, nodes, boxes, moves, (i) => [own.sources[i], ...on.pastes.map((p) => p[i])], cover.some(Boolean) ? own.pasted + 1 : 0);
+}
+
+// nodes moved by the first count of steps of 20 px from from on at which none of the nodes that
+// moves names is on a connected element of others(i), where boxes are the boxes of nodes now
+function moveOn(app: App, nodes: Element[], boxes: Box[], moves: boolean[], others: (i: number) => (Element | undefined)[], from: number): void {
+  const taken = (n: number) => nodes.some((_, i) => moves[i] && others(i).some((c) => c?.isConnected && same(boxes[i], boxOf(app, c), STEP * n)));
+  let n = from;
   while (taken(n)) n++;
   if (n) nodes.forEach((node, i) => moves[i] && shift(app, node, n));
 }
 
-// the copies of els, each after its element and offset by 20 px when it would cover it. an undo
-// selects els again, and a redo the copies
+// the element that each duplicate was first duplicated from, and the duplicates of each such element
+const origins = new WeakMap<Element, Element>();
+const duplicates = new WeakMap<Element, Element[]>();
+
+// the copies of els, each after its element. a copy that covers its element is moved by 20 px, and
+// on to the first place that the element, the element it was first duplicated from, or a duplicate
+// of the latter on this slide does not take now. a copy in the flow that lands on such a duplicate,
+// which keepPlaces holds at its place, is moved on from where it lands. an undo selects els again,
+// and a redo the copies
 export function duplicateElements(app: App, els: Element[]): Promise<Element[]> {
   return app.history.selecting('Duplicate', () => duplicated(app, els));
 }
@@ -264,15 +289,22 @@ async function duplicated(app: App, els: Element[]): Promise<Element[]> {
   const doc = docOf(app);
   const copies: Element[] = [];
   const keep = keepPlaces(app, els);
-  for (const el of els) {
-    const dup = await doc.duplicate(el);
-    if (!dup.matches('.backdrop') && covers(app, dup, el)) shift(app, dup, 1);
-    copies.push(dup);
-  }
+  for (const el of els) copies.push(await doc.duplicate(el));
+  const slide = app.current();
+  const roots = els.map((el) => origins.get(el) ?? el);
+  const cover = copies.map((dup, i) => !dup.matches('.backdrop') && covers(app, dup, els[i]));
+  const family = (i: number) => [els[i], roots[i], ...(duplicates.get(roots[i]) ?? [])].filter((c) => slide?.contains(c));
   regroup(app, copies);
   settleCopies(app, copies);
   relink(app, copies);
   keep((el, translate) => doc.setTag(el, { translate }, 'move'));
+  const boxes = copies.map((c) => boxOf(app, c));
+  const moves = copies.map((dup, i) => cover[i] || (!dup.matches('.backdrop') && family(i).some((c) => same(boxes[i], boxOf(app, c)))));
+  if (moves.some(Boolean)) moveOn(app, copies, boxes, moves, family, cover.some(Boolean) ? 1 : 0);
+  copies.forEach((dup, i) => {
+    origins.set(dup, roots[i]);
+    duplicates.set(roots[i], [...(duplicates.get(roots[i]) ?? []), dup]);
+  });
   app.selection.set('elements', copies);
   return copies;
 }
