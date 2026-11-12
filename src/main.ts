@@ -245,11 +245,12 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
     // of the show played from the editor returns to the editor, as a key forward does below
     if (internal) initClick(deck, () => internal.cueAutoSlide(), ENDS ? () => toEditor('edit') : undefined);
   }
-  // E opens the same slide in the editor, and the other parameters of the address are kept
-  if (PLAYED) {
-    for (const keyCode of [27, 69]) deck.addKeyBinding(keyCode, (ev) => { if (forDeck(ev)) toEditor('edit'); });
-    document.addEventListener('keydown', (ev) => { if (ev.keyCode === 83 && forDeck(ev)) toEditor('speaker'); }, true);
-  } else if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: 'E', description: 'Edit the deck' }, (ev) => { if (forDeck(ev)) (RECEIVER ? toEditor('edit') : edit()); });
+  // E opens the same slide in the editor, and the other parameters of the address are kept. the
+  // frame of the upcoming slide in the speaker view is a step ahead of the show, hence it posts a
+  // null state, and the deck that opened the speaker view gives the editor its own state
+  if (PLAYED || TAB) for (const keyCode of [27, 69]) deck.addKeyBinding(keyCode, (ev) => { if (forDeck(ev)) toEditor('edit', ENDS ? undefined : null); });
+  else if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: 'E', description: 'Edit the deck' }, (ev) => { if (forDeck(ev)) (RECEIVER ? toEditor('edit') : edit()); });
+  if (PLAYED) document.addEventListener('keydown', (ev) => { if (ev.keyCode === 83 && forDeck(ev)) toEditor('speaker'); }, true);
   let typed = '';
   if (PLAYED && !RECEIVER) {
     // Return and Backspace move the show, and a slide number typed before Return goes to its
@@ -274,8 +275,8 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
     toEditor('edit');
   }, true);
   if (!EDITING && !RECEIVER) window.addEventListener('message', fromSpeaker);
-  // the editor ends the show by taking its frame away
-  if (PLAYED) window.addEventListener('pagehide', () => speaker?.close());
+  // the editor ends the show by taking its frame away, or by closing its tab
+  if (PLAYED || TAB) window.addEventListener('pagehide', () => speaker?.close());
 
   if (still()) completeAll();
   else show(deck.getCurrentSlide());

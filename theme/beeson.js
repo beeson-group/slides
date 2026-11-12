@@ -4862,16 +4862,15 @@ void main() {
       initScrub(deck);
       if (internal) initClick(deck, () => internal.cueAutoSlide(), ENDS ? () => toEditor("edit") : void 0);
     }
-    if (PLAYED) {
-      for (const keyCode of [27, 69]) deck.addKeyBinding(keyCode, (ev) => {
-        if (forDeck(ev)) toEditor("edit");
-      });
-      document.addEventListener("keydown", (ev) => {
-        if (ev.keyCode === 83 && forDeck(ev)) toEditor("speaker");
-      }, true);
-    } else if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: "E", description: "Edit the deck" }, (ev) => {
+    if (PLAYED || TAB) for (const keyCode of [27, 69]) deck.addKeyBinding(keyCode, (ev) => {
+      if (forDeck(ev)) toEditor("edit", ENDS ? void 0 : null);
+    });
+    else if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: "E", description: "Edit the deck" }, (ev) => {
       if (forDeck(ev)) RECEIVER ? toEditor("edit") : edit();
     });
+    if (PLAYED) document.addEventListener("keydown", (ev) => {
+      if (ev.keyCode === 83 && forDeck(ev)) toEditor("speaker");
+    }, true);
     let typed = "";
     if (PLAYED && !RECEIVER) {
       document.addEventListener("keydown", (ev) => {
@@ -4897,7 +4896,7 @@ void main() {
       toEditor("edit");
     }, true);
     if (!EDITING && !RECEIVER) window.addEventListener("message", fromSpeaker);
-    if (PLAYED) window.addEventListener("pagehide", () => speaker?.close());
+    if (PLAYED || TAB) window.addEventListener("pagehide", () => speaker?.close());
     if (still2()) completeAll();
     else show(deck.getCurrentSlide());
     deck.on("slidechanged", (event) => {
