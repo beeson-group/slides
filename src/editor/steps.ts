@@ -339,8 +339,11 @@ export function writePlan(app: App, m: Model, plan: Plan, extra: Map<Element, Ta
   const changed = [...edits].filter(([, e]) => Object.keys(e).length);
   if (!changed.length) return false;
   const first = changed[0][0];
+  // the selected step stays selected through an undo and a redo, which may change another element
+  const held = app.history.holding();
   app.history.push({ label: 'steps', undo: () => app.showSlide(first), redo: () => app.showSlide(first) });
   for (const [el, e] of changed) app.doc.setTag(el, e, 'steps');
+  held();
   return true;
 }
 

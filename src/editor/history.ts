@@ -180,6 +180,16 @@ export class History {
     };
   }
 
+  // a part of the open transaction after whose undo and redo the elements selected now are selected
+  // again, e.g. the step of a delay, which is written on the step before
+  holding(): () => void {
+    return this.keep(() => {
+      const els = this.selected();
+      const held = els?.length ? [...els] : null;
+      return held && (() => this.reselect(held));
+    });
+  }
+
   // called when host is focused or put back, so that its content before the next input is known
   track(host: Element): void {
     this.known.set(host, this.snapshot(host));
