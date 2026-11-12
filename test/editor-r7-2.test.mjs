@@ -246,14 +246,19 @@ for (const platform of PLATFORMS) {
       await click(page, P);
       await press(page, 'Escape');
     }
-    // the paragraph selected as a block is copied, and pasted on the slide after it
+    // the paragraph selected as a block is copied, and pasted on the slide after it, drawn 20 px off
+    // it, while the list and the small paragraph after it are kept at their places
     await frames(page);
     assert.equal((await status(page)).dirty, false);
     await exec(page, 'edit.copy');
     if (mac) await press(page, 'Mod+Alt+Shift+V');
     else await choose(page, 'Edit', 'Paste and Match Style');
     await page.waitFor(`document.querySelectorAll(${js(P)}).length === 2`);
-    await roundTrip(page, [[PARAGRAPH, `${PARAGRAPH}\n  ${PARAGRAPH}`]]);
+    const SMALL = '<p class="small fragment" data-fragment-index="3"';
+    await roundTrip(page, [
+      [`${PARAGRAPH}\n  <ul>`, `${PARAGRAPH}\n  ${PARAGRAPH.replace('<p>', '<p style="translate: 20px -141px">')}\n  <ul style="translate: 0px -161px">`],
+      [`${SMALL}>`, `${SMALL} style="translate: 0px -161px">`],
+    ]);
     assert.deepEqual(errors(page), []);
   });
 

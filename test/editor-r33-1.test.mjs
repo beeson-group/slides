@@ -54,7 +54,7 @@ const KINDS = {
   shape: { all: ':scope > .shape:not([data-group])', pick: ':scope > .shape:not([data-group]) p', at: [1205, 305], of: (d, e = 0) => [`${1200 + d}px ${300 + d + e}px`] },
   group: { all: ':scope > .shape[data-group]', pick: ':scope > .shape[data-group]', at: [205, 655], of: (d, e = 0) => [`${200 + d}px ${650 + d + e}px`, `${400 + d}px ${650 + d + e}px`] },
   line: { all: ':scope > svg.line', pick: ':scope > svg.line > line', at: [1205, 700], of: (d, e = 0) => [`${1200 + d}px ${700 + d + e}px`] },
-  qr: { deck: FLOW, all: ':scope > .qr', at: [1430, 500], of: (d, e = 0) => [`${1300 + d}px ${160 + d + e}px`] },
+  qr: { deck: FLOW, all: ':scope > .qr', at: [1425, 640], of: (d, e = 0) => [`${1300 + d}px ${160 + d + e}px`] },
 };
 
 async function load(t, platform, what) {
@@ -284,27 +284,26 @@ for (const platform of PLATFORMS) {
     });
   }
 
-  // item 4, the case dupQrTwice of the skeptic of R33.1: a duplicate of a QR code in the flow goes
-  // under it, and a second duplicate goes between the two, while the offset of the first is
-  // rewritten to keep its place. the second is thus moved on 20 px past the first rather than on it
+  // item 4, the case dupQrTwice of the skeptic of R33.1: a duplicate of a QR code in the flow is
+  // drawn 20 px off it, and a second duplicate is moved on 20 px past the first rather than on it
   test(`4: a QR code in the flow duplicated twice from the same element is put on two places (${platform})`, async (t) => {
     const { page, pick, duplicate, boxes } = await load(t, platform, 'qr');
     const [[x, y]] = await boxes();
     await pick(0);
     await duplicate();
-    assert.deepEqual(await boxes(), [[x, y], [x, y + 160]]);
+    assert.deepEqual(await boxes(), [[x, y], [x + 20, y + 20]]);
     await pick(0);
     const before = await render(page);
     await duplicate();
     const p = await boxes();
     assert.deepEqual(twice(p.map(js)), [], `a second duplicate of the QR code lands on the first: ${js(p)}`);
-    assert.deepEqual(p, [[x, y], [x + 20, y + 180], [x, y + 160]]);
+    assert.deepEqual(p, [[x, y], [x + 40, y + 40], [x + 20, y + 20]]);
     await entry(page, before, 'Duplicate');
   });
 
-  // item 4, the case dupQrMoved of the same skeptic: the duplicate moved onto 20 px past the place
-  // of a duplicate, then the QR code duplicated twice, which takes the free place under it and then
-  // moves past both older duplicates
+  // item 4, the case dupQrMoved of the same skeptic: the duplicate moved 20 px on, then the QR code
+  // duplicated twice, which takes the free place 20 px off it and then moves past both older
+  // duplicates
   test(`4: a QR code in the flow duplicated after its older duplicate was moved onto the next place is not put on it (${platform})`, async (t) => {
     const { page, pick, duplicate, boxes, onto } = await load(t, platform, 'qr');
     const [[x, y]] = await boxes();
@@ -313,13 +312,13 @@ for (const platform of PLATFORMS) {
     await onto();
     await pick(0);
     await duplicate();
-    assert.deepEqual(await boxes(), [[x, y], [x, y + 160], [x + 20, y + 180]]);
+    assert.deepEqual(await boxes(), [[x, y], [x + 20, y + 20], [x + 40, y + 40]]);
     await pick(0);
     const before = await render(page);
     await duplicate();
     const p = await boxes();
     assert.deepEqual(twice(p.map(js)), [], `a duplicate of the QR code after the older one was moved lands on an older duplicate: ${js(p)}`);
-    assert.deepEqual(p, [[x, y], [x + 40, y + 200], [x, y + 160], [x + 20, y + 180]]);
+    assert.deepEqual(p, [[x, y], [x + 60, y + 60], [x + 20, y + 20], [x + 40, y + 40]]);
     await entry(page, before, 'Duplicate');
   });
 }

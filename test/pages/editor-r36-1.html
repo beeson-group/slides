@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor copies of blocks in the flow deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the deck of the tests of R36.1: a paragraph and a QR code of 320 px in the flow of a slide, a
+     paragraph in the panel of a split slide, a closing slide whose block has no offsets, and a
+     slide whose blocks have no offsets -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>Glue</h2>
+  <p>Text</p>
+  <div class="qr" data-qr="https://example.com" style="width: 320px"></div>
+</section>
+
+<section class="split">
+  <div class="panel">
+    <h2>Panel</h2>
+    <p>Words in the panel.</p>
+  </div>
+  <div class="zone"></div>
+</section>
+
+<section class="closing">
+  <div class="block">
+    <h1>Thank you</h1>
+    <p class="sub">Questions</p>
+  </div>
+</section>
+
+<section>
+  <h2>Plain</h2>
+  <p>Alpha words.</p>
+  <ul>
+    <li>One</li>
+    <li>Two</li>
+  </ul>
+  <p>Omega words.</p>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

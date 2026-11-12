@@ -224,13 +224,13 @@ for (const platform of PLATFORMS) {
     await copy();
     await paste();
     await paste();
-    assert.deepEqual(await boxes(), [[x, y], [x, y + 160], [x, y + 320]]);
+    assert.deepEqual(await boxes(), [[x, y], [x + 20, y + 20], [x + 40, y + 40]]);
     await undo(page);
     const before = await render(page);
     await paste();
     const p = await boxes();
     assert.deepEqual(twice(p.map(js)), [], `a paste after an undone paste lands on the first copy: ${js(p)}`);
-    assert.deepEqual(p, [[x, y], [x, y + 160], [x, y + 320]]);
+    assert.deepEqual(p, [[x, y], [x + 20, y + 20], [x + 40, y + 40]]);
     await entry(page, before, 'Paste');
   });
 
@@ -243,34 +243,34 @@ for (const platform of PLATFORMS) {
     await paste();
     await press(page, 'Delete');
     await frames(page);
-    assert.deepEqual(await boxes(), [[x, y], [x, y + 160]]);
+    assert.deepEqual(await boxes(), [[x, y], [x + 20, y + 20]]);
     const before = await render(page);
     await paste();
     const p = await boxes();
     assert.deepEqual(twice(p.map(js)), [], `a paste after a deleted copy lands on the first copy: ${js(p)}`);
-    assert.deepEqual(p, [[x, y], [x, y + 160], [x, y + 320]]);
+    assert.deepEqual(p, [[x, y], [x + 20, y + 20], [x + 40, y + 40]]);
     await entry(page, before, 'Paste');
   });
 
-  // the case qrPasteOntoNext of the same check: the copy nudged 160 px down onto the next place of
-  // the flow, then a paste, which goes after the copy and is moved on 20 px past it
+  // the case qrPasteOntoNext of the same check: the copy nudged 160 px down, then a paste, which
+  // takes the place 20 px off the source that the copy freed
   test(`2: a QR code in the flow pasted after the copy was nudged onto the next place is not put on it (${platform})`, async (t) => {
     const { page, copy, paste, down, boxes } = await load(t, platform);
     const [[x, y]] = await boxes();
     await copy();
     await paste();
-    assert.deepEqual(await boxes(), [[x, y], [x, y + 160]]);
+    assert.deepEqual(await boxes(), [[x, y], [x + 20, y + 20]]);
     await down(16);
-    assert.deepEqual(await boxes(), [[x, y], [x, y + 320]]);
+    assert.deepEqual(await boxes(), [[x, y], [x + 20, y + 180]]);
     const before = await render(page);
     await paste();
     const p = await boxes();
     assert.deepEqual(twice(p.map(js)), [], `a paste after the copy was nudged onto the next place lands on it: ${js(p)}`);
-    assert.deepEqual(p, [[x, y], [x, y + 320], [x + 20, y + 340]]);
+    assert.deepEqual(p, [[x, y], [x + 20, y + 180], [x + 20, y + 20]]);
     await entry(page, before, 'Paste');
   });
 
-  // the places of today stay: two pastes go under the source in the order of the file
+  // two pastes are drawn 20 px and 40 px off the source, in the order of the file
   test(`3: a QR code in the flow pasted twice keeps the places of today (${platform})`, async (t) => {
     const { page, copy, paste, boxes } = await load(t, platform);
     const [[x, y]] = await boxes();
@@ -278,7 +278,7 @@ for (const platform of PLATFORMS) {
     await paste();
     const before = await render(page);
     await paste();
-    assert.deepEqual(await boxes(), [[x, y], [x, y + 160], [x, y + 320]]);
+    assert.deepEqual(await boxes(), [[x, y], [x + 20, y + 20], [x + 40, y + 40]]);
     await entry(page, before, 'Paste');
   });
 }
