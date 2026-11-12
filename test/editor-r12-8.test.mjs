@@ -258,14 +258,14 @@ for (const platform of PLATFORMS) {
     const from = await rowBox(page, 0);
     const last = await rowBox(page, 3);
     await drag(page, { x: from.x, y: from.y }, { dy: last.bottom + 10 - from.y, steps: 8, hold: true });
+    // the figure passes the texts in the flow, hence Send to Back reaches the bottom of the list
     const line = await dropLine(page);
-    const reach = await rowBox(page, 2);
-    assert.ok(line !== null && Math.abs(line - reach.top) <= 2, `the drop line is at ${line}, not at the top of row 2 (${reach.top})`);
+    assert.ok(line !== null && Math.abs(line - last.bottom) <= 2, `the drop line is at ${line}, not at the bottom of row 3 (${last.bottom})`);
     await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: from.x, y: last.bottom + 10, button: 'left', clickCount: 1 });
     await settle(page);
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Reorder');
     const now = (await rows(page)).map((r) => r.replace(' *', ''));
-    assert.deepEqual(now, [start[1], start[0], start[2], start[3]]);
+    assert.deepEqual(now, [start[1], start[2], start[3], start[0]]);
     await undoKey(page);
     await settle(page);
     await byteExact(page);

@@ -147,7 +147,8 @@ for (const platform of PLATFORMS) {
     assert.equal(await drawnAt(page, at), 'img', 'the paragraph is not under the picture before Bring to Front');
     const placed = await boxes(page);
 
-    assert.deepEqual(await orders(page), { front: true, forward: true, backward: false, back: false }, 'the layer commands of the moved paragraph');
+    // the heading in the flow is drawn under the moved paragraph, hence the back commands pass it
+    assert.deepEqual(await orders(page), { front: true, forward: true, backward: true, back: true }, 'the layer commands of the moved paragraph');
     await press(page, KEYS[platform].front);
     await frames(page);
     assert.equal(await drawnAt(page, at), 'p', 'the paragraph is not drawn over the picture after Bring to Front');
@@ -178,7 +179,7 @@ for (const platform of PLATFORMS) {
     await printView(show, deckUrl(file, 'print-pdf&still'));
     assert.equal(await drawnInDeck(show), 'p', 'the print view does not draw the paragraph over the picture');
 
-    // Send to Back puts it under the picture again, without a move on the slide
+    // Send to Back puts it under the picture and the heading, without a move on the slide
     if ((await selected(page))[0] !== 'p') {
       await click(page, at);
       await press(page, 'Escape');
@@ -188,7 +189,7 @@ for (const platform of PLATFORMS) {
     await frames(page);
     assert.equal(await drawnAt(page, at), 'img', 'the paragraph is not drawn under the picture after Send to Back');
     assert.deepEqual(await boxes(page), placed, 'an element is moved on the slide by Send to Back');
-    assert.equal(await render(page), dragged, 'Send to Back does not take the order of Bring to Front off the paragraph');
+    assert.deepEqual(changedTags(front, await render(page)), [tags[0].replace('z-index: 1', 'z-index: -1')], 'Send to Back does not put the paragraph behind the heading');
     assert.deepEqual(errors(page), []);
   });
 }
@@ -217,8 +218,8 @@ for (const platform of PLATFORMS) {
     const front = await render(page);
     assert.deepEqual(changedTags(raised, front), ['<figure class="zone" style="z-index: 1">']);
     await checkEdit(page, front, raised);
-    // Send to Back moves the figure before the list in the file and takes its z-index off, as for a
-    // figure without one
+    // Send to Back puts the figure behind the heading and the list in the flow, with a z-index under
+    // 0 in place of its z-index
     await click(page, img);
     await frames(page);
     assert.deepEqual(await selected(page), ['figure']);
@@ -226,7 +227,7 @@ for (const platform of PLATFORMS) {
     await frames(page);
     assert.equal(await drawnAt(page, at), 'p');
     const back = await render(page);
-    assert.ok(back.includes('<figure class="zone">') && back.indexOf('<figure class="zone">') < back.indexOf('<ul style'), 'Send to Back does not move the figure before the list');
+    assert.deepEqual(changedTags(front, back), ['<figure class="zone" style="z-index: -1">'], 'Send to Back does not put the figure behind the heading and the list');
     await checkEdit(page, back, front);
   });
 
@@ -279,14 +280,17 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(changedTags(nudged, back), ['<ul style="translate: 0px 20px; position: relative; z-index: -1">']);
     assert.deepEqual(await orders(page), { front: true, forward: true, backward: false, back: false });
     await checkEdit(page, back, nudged);
-    // Bring Forward puts the list over the paragraph again, as in the file, and takes the
-    // declarations off
-    await click(page, '.reveal section.present > ul li');
-    await press(page, 'Escape');
-    await frames(page);
-    assert.deepEqual(await selected(page), ['ul']);
-    await press(page, KEYS[platform].forward);
-    await frames(page);
+    // two steps of Bring Forward put the list over the heading, then over the paragraph again as in
+    // the file, and take the declarations off
+    for (const step of [1, 2]) {
+      await click(page, '.reveal section.present > ul li');
+      await press(page, 'Escape');
+      await frames(page);
+      assert.deepEqual(await selected(page), ['ul']);
+      await press(page, KEYS[platform].forward);
+      await frames(page);
+      if (step === 1) assert.notEqual(await render(page), nudged, 'Bring Forward passes the heading and the paragraph at once');
+    }
     assert.equal(await render(page), nudged, 'Bring Forward leaves declarations on the list back in the order of the file');
     const file = `.r13-1-back-${platform}.html`;
     writeFileSync(file, back);
@@ -319,15 +323,16 @@ async function selectP(page) {
   await frames(page);
   assert.deepEqual(await selected(page), ['p']);
 }
-const rowOf = (page, name) => page.evaluate(`(() => { const rs = [...document.querySelectorAll(${js(ROW)})]; const r = rs.find((x) => x.querySelector('.name').textContent.startsWith(${js(name)})).getBoundingClientRect(); const all = rs.map((x) => x.getBoundingClientRect()); return { x: r.left + 60, y: r.top + r.height / 2, top: all[0].top, bottom: all.at(-1).bottom }; })()`);
+const rowOf = (page, name) => page.evaluate(`(() => { const rs = [...document.querySelectorAll(${js(ROW)})]; const r = rs.find((x) => x.querySelector('.name').textContent.startsWith(${js(name)})).getBoundingClientRect(); const all = rs.map((x) => x.getBoundingClientRect()); return { x: r.left + 60, y: r.top + r.height / 2, own: r.top, top: all[0].top, bottom: all.at(-1).bottom }; })()`);
 
 for (const platform of PLATFORMS) {
-  test(`${platform}: a paragraph that is not moved is put back to the style of the file by Send Backward and Send to Back`, async (t) => {
+  test(`${platform}: a paragraph that is not moved is put back to the style of the file by Send Backward and Bring Forward`, async (t) => {
     const page = await load(t, platform);
     await selectP(page);
+    // Bring Forward passes the list, which is a layer since it is moved, and the figure stays over it
     await press(page, KEYS[platform].forward);
     await frames(page);
-    assert.deepEqual(changedTags(page.source, await render(page)), ['<p style="position: relative">']);
+    assert.deepEqual(changedTags(page.source, await render(page)), ['<p style="position: relative; z-index: 1">', '<figure class="zone" style="z-index: 1">']);
     assert.deepEqual(await orders(page), { front: true, forward: true, backward: true, back: true }, 'the commands that put the paragraph back are dimmed');
     await press(page, KEYS[platform].backward);
     await frames(page);
@@ -335,15 +340,24 @@ for (const platform of PLATFORMS) {
     await press(page, KEYS[platform].front);
     await frames(page);
     assert.notEqual(await render(page), page.source);
+    for (const _ of [1, 2]) {
+      await press(page, KEYS[platform].backward);
+      await frames(page);
+    }
+    assert.equal(await render(page), page.source, 'two steps of Send Backward leave a declaration on the paragraph or the figure');
+    // Send to Back passes the heading in the flow, and Bring Forward puts the paragraph back over it
     await press(page, KEYS[platform].back);
     await frames(page);
-    assert.equal(await render(page), page.source, 'Send to Back leaves a declaration on the paragraph');
+    assert.deepEqual(changedTags(page.source, await render(page)), ['<p style="position: relative; z-index: -1">']);
     assert.deepEqual(await orders(page), { front: true, forward: true, backward: false, back: false });
+    await press(page, KEYS[platform].forward);
+    await frames(page);
+    assert.equal(await render(page), page.source, 'Bring Forward leaves a declaration on the paragraph');
     const { text } = await saveAndReopen(page, `r13-1-home-${platform}.html`);
     assert.equal(text, page.source);
   });
 
-  test(`${platform}: a paragraph dragged in the object list to the front and back to the bottom keeps the style of the file`, async (t) => {
+  test(`${platform}: a paragraph dragged in the object list to the front and back over the heading keeps the style of the file`, async (t) => {
     const page = await load(t, platform);
     await press(page, LIST_KEY[platform]);
     await frames(page);
@@ -353,8 +367,10 @@ for (const platform of PLATFORMS) {
     await frames(page);
     assert.ok((await rows(page))[0].startsWith(NAME), `the row of the paragraph is not in front: ${js(await rows(page))}`);
     assert.match(await render(page), /<p style="position: relative; z-index: 1">Export/);
+    // the row of the heading in the flow is the bottom row, under the paragraph in the file
     at = await rowOf(page, NAME);
-    await drag(page, { x: at.x, y: at.y }, { dy: at.bottom - 2 - at.y, steps: 8 });
+    const heading = await rowOf(page, 'Text: Figures are first');
+    await drag(page, { x: at.x, y: at.y }, { dy: heading.own + 2 - at.y, steps: 8 });
     await frames(page);
     assert.equal(await render(page), page.source, 'a drag back to the order of the file leaves a declaration on the paragraph');
   });

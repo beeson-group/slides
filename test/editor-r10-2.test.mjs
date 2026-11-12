@@ -160,10 +160,16 @@ for (const platform of PLATFORMS) {
   test(`${platform}: a drag of a row moves its object by the layers of Bring Forward and Send Backward, and a row that cannot move is not dragged`, async (t) => {
     const page = await load(t, platform);
     await openList(page, platform);
-    // the list, an element in the flow that is not a layer, is not sent behind the other blocks
-    const fixed = await rowBox(page, 1);
+    // the list, an element in the flow, is sent behind the other blocks by a z-index under 0
+    const list = await rowBox(page, 1);
     const last = await rowBox(page, 5);
-    await drag(page, { x: fixed.x, y: fixed.y }, { dy: last.bottom - 2 - fixed.y, steps: 8 });
+    await drag(page, { x: list.x, y: list.y }, { dy: last.bottom - 2 - list.y, steps: 8 });
+    assert.equal(await render(page), page.source.replace('<ol>', '<ol style="position: relative; z-index: -1">'));
+    await undo(page);
+    assert.equal(await render(page), page.source);
+    // the heading at the back of the list cannot move further back, and its row is not dragged
+    const back = await rowBox(page, 5);
+    await drag(page, { x: back.x, y: back.y }, { dy: back.bottom - 2 - back.y, steps: 8 });
     assert.equal(await render(page), page.source);
     assert.equal((await page.evaluate('window.BeesonEditor.status()')).undo, false);
     // the heading is brought in front of the figure by a z-index, which does not move it in the file
@@ -183,7 +189,7 @@ for (const platform of PLATFORMS) {
     // the rows are in the order of the drawing, with the layers over the other blocks
     assert.deepEqual((await rows(page)).slice(0, 2), ['1 Figure: A caption under a zone.', '1 Text: The lead-in of a display *']);
     const from = await rowBox(page, 0);
-    const to = await rowBox(page, 4);
+    const to = await rowBox(page, 1);
     await drag(page, { x: from.x, y: from.y }, { dy: to.bottom - 2 - from.y, steps: 8 });
     assert.deepEqual((await rows(page)).slice(0, 2), ['1 Text: The lead-in of a display', '1 Figure: A caption under a zone. *']);
     const edited = await render(page);
