@@ -85,11 +85,12 @@ jobs:
           - { os: ubuntu-latest, browser: firefox }
           - { os: macos-latest, browser: chrome }
           - { os: macos-latest, browser: safari }
-          - { os: windows-latest, browser: chrome }
+          # npm run pptx records the scene and the traced backdrops of the deck on one runner, with
+          # WebGL and H.264 in software. The demo deck takes 10 minutes on Windows, 16 on Ubuntu, and
+          # over 40 on macOS, hence the other two write the file without a recording
+          - { os: windows-latest, browser: chrome, record: true }
     runs-on: ${{ matrix.os }}
-    # npm run pptx records the scene and the traced backdrops of the demo deck, with WebGL and
-    # H.264 in software on a runner
-    timeout-minutes: 45
+    timeout-minutes: ${{ matrix.record && 45 || 15 }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -112,7 +113,9 @@ jobs:
       - run: npm run pdf
         if: ${{ !cancelled() && matrix.browser == 'chrome' }}
       - run: npm run pptx
-        if: ${{ !cancelled() && matrix.browser == 'chrome' }}
+        if: ${{ !cancelled() && matrix.browser == 'chrome' && matrix.record }}
+      - run: npm run pptx -- --still
+        if: ${{ !cancelled() && matrix.browser == 'chrome' && !matrix.record }}
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: ${{ !cancelled() }}
         with:
