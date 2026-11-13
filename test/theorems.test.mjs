@@ -117,6 +117,6 @@ test('the print view shows each theorem with its head on every page of its slide
   await printView(page, deckUrl(PAGE, 'print-pdf&still'));
   // the slide with a step is printed on two pages, with the same numbers on both
   const pages = await page.evaluate(`[...document.querySelectorAll('.pdf-page')].map((page) => ${THEOREMS('page')})`);
-  assert.deepEqual(pages, [[], EXPECTED.slice(0, 3), EXPECTED.slice(3), EXPECTED.slice(3)]);
+  assert.deepEqual(pages.filter((theorems) => theorems.length), [EXPECTED.slice(0, 3), EXPECTED.slice(3), EXPECTED.slice(3)]);
   assert.deepEqual(page.errors, []);
 });

@@ -12,10 +12,12 @@
 <script src="../../../theme/vendor/mathjax/tex-svg.js"></script>
 </head>
 <body>
-<!-- the deck of test/macros.test.mjs and test/theorems.test.mjs, with the preamble.tex and the tex.js
-     next to it. in each row of the first slide, a formula written with a definition of the preamble
-     is next to the formula that it stands for. the theorems of the other slides are of the kinds of
-     the preamble, of two usual kinds, and of a kind that is not defined -->
+<!-- the deck of test/macros.test.mjs, test/theorems.test.mjs, and test/citations.test.mjs, with the
+     preamble.tex, the references.bib, and the tex.js next to it. in each row of the first slide, a
+     formula written with a definition of the preamble is next to the formula that it stands for.
+     the theorems of the next slides are of the kinds of the preamble, of two usual kinds, and of a
+     kind that is not defined. the citations of the last slides are at steps, of two papers at one
+     place, of a key that is not in the bibliography, in the notes, and on a slide with a footnote -->
 <div class="reveal">
   <div class="slides">
     <section>
@@ -50,6 +52,21 @@
       <p class="theorem" data-kind="proof" data-name="Proof of Theorem 3">The name of a proof is its head.</p>
       <p class="theorem" data-kind="conjecture">A kind that is not defined.</p>
       <p class="theorem">A theorem without a kind.</p>
+    </section>
+    <section>
+      <h2>Citations</h2>
+      <ul>
+        <li>A heteroclinic connection joins two orbits<cite data-key="koon2000"></cite></li>
+        <li class="fragment" data-fragment-index="1">The same tubes connect halo orbits<cite data-key="gomez2004"></cite></li>
+        <li class="fragment" data-fragment-index="2">Both papers<cite data-key="gomez2004, koon2000"></cite> and a book<cite data-key="szebehely1967"></cite></li>
+        <li>A key that is not in the bibliography<cite data-key="lost1999"></cite></li>
+      </ul>
+      <aside class="notes">A citation in the notes is not numbered<cite data-key="szebehely1967"></cite>.</aside>
+    </section>
+    <section>
+      <h2>Under a footnote</h2>
+      <p>The numbers start at 1 on each slide<cite data-key="gomez2004"></cite>.</p>
+      <div class="foot">Earth–Moon system, with a mass ratio of 0.01215.</div>
     </section>
   </div>
 </div>
