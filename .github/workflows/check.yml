@@ -28,36 +28,12 @@ jobs:
       - run: npm run vendor
       - run: npm run build
       - run: npm run typecheck
-      # temporary: on a Windows runner, a file of a test page is refused about once in a run with
-      # net::ERR_NO_BUFFER_SPACE, late in its shard. The processes of Chrome and node, the TCP
-      # connections, and the free memory are written each minute and printed after the tests, to
-      # find what is used up. Take both steps out once the cause is known
-      - if: ${{ runner.os == 'Windows' && github.repository == 'beeson-group/slides' }}
-        continue-on-error: true
-        run: |
-          $sampler = @'
-          while ($true) {
-            $tcp = @(Get-NetTCPConnection -ErrorAction SilentlyContinue)
-            $free = [int]((Get-CimInstance Win32_OperatingSystem).FreePhysicalMemory / 1024)
-            $pool = [int]((Get-CimInstance Win32_PerfFormattedData_PerfOS_Memory).PoolNonpagedBytes / 1MB)
-            $line = '{0} chrome {1} node {2} tcp {3} bound {4} time-wait {5} free {6} MB nonpaged {7} MB' -f (Get-Date -Format 'HH:mm:ss'), @(Get-Process chrome -ErrorAction SilentlyContinue).Count, @(Get-Process node -ErrorAction SilentlyContinue).Count, $tcp.Count, @($tcp | Where-Object { $_.State -eq 'Bound' }).Count, @($tcp | Where-Object { $_.State -eq 'TimeWait' }).Count, $free, $pool
-            Add-Content -Path "$env:RUNNER_TEMP\net.log" -Value $line
-            Start-Sleep -Seconds 60
-          }
-          '@
-          Set-Content -Path "$env:RUNNER_TEMP\net-sampler.ps1" -Value $sampler
-          Start-Process pwsh -WindowStyle Hidden -ArgumentList '-NoProfile', '-File', "$env:RUNNER_TEMP\net-sampler.ps1"
       # the tests read the demo deck, hence a talk made with "Use this template" checks only its deck
       # npm test with the shard of the job, an option that is read only before the files. With
       # --test-force-exit, a test file that leaves a server open after a failed cleanup is ended, and
       # with --test-timeout, a test file that does not end fails by name after 20 minutes
       - run: node --test --test-force-exit --test-timeout=1200000 --test-shard=${{ matrix.shard }}/4 "test/*.test.mjs"
         if: ${{ github.repository == 'beeson-group/slides' }}
-      - if: ${{ always() && runner.os == 'Windows' && github.repository == 'beeson-group/slides' }}
-        continue-on-error: true
-        run: |
-          netsh int ipv4 show dynamicport tcp
-          Get-Content "$env:RUNNER_TEMP\net.log"
 
   # the checks test (ubuntu-latest) and test (windows-latest) are required on main, hence the result
   # of the eight shards is reported under both names. Without always(), the job is skipped after a
