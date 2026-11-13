@@ -3,12 +3,14 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, posix } from 'node:path';
 import { inflateRawSync } from 'node:zlib';
-import { deckUrl, launch, printView } from '../scripts/chrome.mjs';
+import { deckSettled, deckUrl, launch, printView } from '../scripts/chrome.mjs';
 import { pptx, zip } from '../scripts/pptx.mjs';
+import { recordScenes } from '../scripts/scenes.mjs';
+import { stream as mp4Stream } from './helpers/mp4.mjs';
 
 const EMU_PER_PX = 6350;
 
@@ -69,16 +71,24 @@ function assertPackage(parts) {
   for (const [, name] of types.matchAll(/PartName="\/([^"]+)"/g)) assert.ok(parts.has(name), `${name} of the content types exists`);
 }
 
-function exportDeck(deck) {
+// the run of the export of a deck, with options before and after the deck and the output, and the
+// parts of its file. with noH264, the export is run in a browser without an H.264 encoder
+function runExport(deck, before = [], after = [], { noH264 = false } = {}) {
   const folder = mkdtempSync(join(tmpdir(), 'beeson-pptx-'));
   try {
     const output = join(folder, 'deck.pptx');
-    const run = spawnSync(process.execPath, ['scripts/export-pptx.mjs', deck, output], { encoding: 'utf8' });
-    assert.equal(run.status, 0, run.stderr);
-    return unzip(readFileSync(output));
+    const preload = noH264 ? ['--import', './test/helpers/no-h264.mjs'] : [];
+    const run = spawnSync(process.execPath, [...preload, 'scripts/export-pptx.mjs', ...before, deck, output, ...after], { encoding: 'utf8' });
+    return { run, parts: run.status === 0 ? unzip(readFileSync(output)) : null };
   } finally {
     rmSync(folder, { recursive: true, force: true });
   }
+}
+
+function exportDeck(deck, before, after, options) {
+  const { run, parts } = runExport(deck, before, after, options);
+  assert.equal(run.status, 0, run.stderr);
+  return parts;
 }
 
 const slideCount = (parts) => [...parts.keys()].filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name)).length;
@@ -107,6 +117,121 @@ test('a video that is shown on two slides is embedded once, and it starts by its
   assert.match(slide, /<p:cMediaNode vol="80000" mute="1"><p:cTn id="\d+" repeatCount="indefinite"/);
   const ids = [...slide.matchAll(/<p:cTn id="(\d+)"/g)].map((m) => Number(m[1]));
   assert.deepEqual(ids, ids.map((_, n) => n + 1));
+});
+
+// a slide of one still, a recording, three pictures of the words, and a video, with small Buffers
+// in place of the PNGs and MP4s
+const recorded = ({ tops = 3, loop = true } = {}) => ({
+  name: 'Recorded',
+  notes: [],
+  images: [Buffer.from([1])],
+  recording: { data: Buffer.from([2]), poster: Buffer.from([3]), duration: 5000, loop },
+  tops: Array.from({ length: tops }, (_, n) => Buffer.from([10 + n])),
+  videos: [{ data: Buffer.from([4]), poster: Buffer.from([5]), x: 10, y: 20, width: 30, height: 40, duration: 2000, loop: false, muted: false }],
+});
+
+const pictures = (slide) => [...slide.matchAll(/<p:pic><p:nvPicPr><p:cNvPr id="(\d+)" name="([^"]+)"/g)].map((m) => m.slice(1));
+
+// the parts that a picture of a slide points to, in the order of its r:link and r:embed
+function targets(parts, name, shape) {
+  const picture = text(parts, name).match(new RegExp(`<p:cNvPr id="${shape}" [^]*?</p:pic>`))[0];
+  const rels = relationships(parts, name);
+  return [...picture.matchAll(/r:(?:embed|link)="([^"]+)"/g)].map((m) => rels.get(m[1]));
+}
+
+test('a recording is above the still of its slide, under the words, which are under the videos', () => {
+  const parts = unzip(pptx([recorded()]));
+  assertPackage(parts);
+  const name = 'ppt/slides/slide1.xml';
+  const slide = text(parts, name);
+  assert.deepEqual(pictures(slide), [['2', 'Step 1'], ['3', 'Recording'], ['4', 'Words 1'], ['5', 'Words 2'], ['6', 'Words 3'], ['7', 'Video 7']]);
+  const [link, embed, poster] = targets(parts, name, 3);
+  assert.equal(link, embed);
+  assert.deepEqual([...parts.get(link)], [2]);
+  assert.deepEqual([...parts.get(poster)], [3]);
+  assert.ok(slide.match(/<p:cNvPr id="3" [^]*?<\/p:pic>/)[0].includes(box({ x: 0, y: 0, width: 1920, height: 1080 })));
+  assert.deepEqual(targets(parts, name, 5).map((part) => [...parts.get(part)]), [[11]]);
+  assert.deepEqual([...parts.get(targets(parts, name, 7)[0])], [4]);
+});
+
+test('a recording is started first with its slide, muted, and the videos are started with it', () => {
+  const looped = text(unzip(pptx([recorded()])), 'ppt/slides/slide1.xml');
+  assert.deepEqual([...looped.matchAll(/presetClass="mediacall"[^>]*nodeType="(\w+)"[^]*?<p:spTgt spid="(\d+)"/g)].map((m) => m.slice(1)),
+    [['afterEffect', '3'], ['withEffect', '7']]);
+  const nodes = [...looped.matchAll(/<p:cMediaNode ([^>]*)><p:cTn id="\d+"([^>]*)>[^]*?<p:spTgt spid="(\d+)"/g)].map((m) => m.slice(1));
+  assert.deepEqual(nodes, [
+    ['vol="80000" mute="1"', ' repeatCount="indefinite" fill="hold" display="0"', '3'],
+    ['vol="80000"', ' fill="hold" display="0"', '7'],
+  ]);
+  const once = text(unzip(pptx([recorded({ loop: false })])), 'ppt/slides/slide1.xml');
+  assert.ok(once.includes('<p:cMediaNode vol="80000" mute="1"><p:cTn id="') && !once.includes('repeatCount'));
+});
+
+test('a click shows the next picture of the words and hides the one before', () => {
+  const slide = text(unzip(pptx([recorded()])), 'ppt/slides/slide1.xml');
+  // in the main sequence, a click is a lone indefinite condition. the media nodes after the
+  // sequence have one as well
+  const sequence = slide.slice(0, slide.indexOf('<p:prevCondLst>'));
+  const clicks = sequence.split('<p:cond delay="indefinite"/></p:stCondLst>').slice(1);
+  assert.equal(clicks.length, 2);
+  assert.equal(slide.match(/nodeType="clickEffect"/g).length, 2);
+  const swaps = clicks.map((click) => [
+    ...click.matchAll(/presetClass="(entr|exit)"[^>]*nodeType="(\w+)"[^]*?<p:spTgt spid="(\d+)"[^]*?<p:strVal val="(\w+)"/g),
+  ].map((m) => m.slice(1)));
+  assert.deepEqual(swaps, [
+    [['entr', 'clickEffect', '5', 'visible'], ['exit', 'withEffect', '4', 'hidden']],
+    [['entr', 'clickEffect', '6', 'visible'], ['exit', 'withEffect', '5', 'hidden']],
+  ]);
+  const ids = [...slide.matchAll(/<p:cTn id="(\d+)"/g)].map((m) => Number(m[1]));
+  assert.deepEqual(ids, ids.map((_, n) => n + 1));
+});
+
+test('a slide with a recording and one picture of the words does not have a click', () => {
+  const slide = text(unzip(pptx([recorded({ tops: 1 })])), 'ppt/slides/slide1.xml');
+  assert.deepEqual(pictures(slide).map(([, name]) => name), ['Step 1', 'Recording', 'Words 1', 'Video 5']);
+  assert.ok(!slide.includes('clickEffect') && !slide.includes('presetClass="exit"'));
+  assert.match(slide, /presetClass="mediacall"[^>]*nodeType="afterEffect"/);
+});
+
+test('a recording and a video of one Buffer on two slides are each embedded once', () => {
+  const deckSlide = recorded();
+  const parts = unzip(pptx([deckSlide, { ...deckSlide, tops: [Buffer.from([20])] }]));
+  assertPackage(parts);
+  const videos = [...parts.keys()].filter((name) => name.endsWith('.mp4'));
+  assert.equal(videos.length, 2);
+  for (const name of ['ppt/slides/slide1.xml', 'ppt/slides/slide2.xml']) {
+    const shapes = pictures(text(parts, name));
+    const shape = (label) => shapes.find(([, picture]) => picture.startsWith(label))[0];
+    assert.deepEqual(targets(parts, name, shape('Recording')).slice(0, 2), [videos[0], videos[0]]);
+    assert.deepEqual(targets(parts, name, shape('Video')).slice(0, 2), [videos[1], videos[1]]);
+  }
+});
+
+test('a recording is on a slide of one still, and the pictures of the words need a recording', () => {
+  assert.throws(() => pptx([{ ...recorded(), images: [Buffer.from([1]), Buffer.from([2])] }]),
+    /^Error: Recorded: a slide with a recording has one image, the still under it, and not 2$/);
+  assert.throws(() => pptx([{ ...recorded(), recording: undefined }]),
+    /^Error: Recorded: a slide with tops, the pictures of its words, needs a recording under them$/);
+});
+
+test('every XML part of a file with a recording is well formed, as read by xmllint', (t) => {
+  if (spawnSync('xmllint', ['--version']).error) {
+    t.skip('xmllint is not installed');
+    return;
+  }
+  const parts = unzip(pptx([recorded(), { ...recorded({ tops: 1 }), notes: ['A <note> & more'] }]));
+  const folder = mkdtempSync(join(tmpdir(), 'beeson-pptx-'));
+  try {
+    const files = [...parts].filter(([name]) => /\.(xml|rels)$/.test(name)).map(([name, data], n) => {
+      const file = join(folder, `${n}-${posix.basename(name)}`);
+      writeFileSync(file, data);
+      return file;
+    });
+    const run = spawnSync('xmllint', ['--noout', ...files], { encoding: 'utf8' });
+    assert.equal(run.status, 0, run.stderr);
+  } finally {
+    rmSync(folder, { recursive: true, force: true });
+  }
 });
 
 test('videos are placed on their steps of a deck, in the box of their picture', () => {
@@ -157,11 +282,11 @@ test('a video is started on the click of its step, and two videos of one step to
   assert.deepEqual([clips(7), clips(8)], [[a], [b]], 'the second clip is shown in place of the first');
 });
 
-// a tycho viewer of the style play is in the image of each step of its slide, as the still of its
-// first frame, since a scene is not a video of PowerPoint. The stills themselves are checked in the
-// print view, in test/viewers.test.mjs
-test('a tycho viewer of the style play is exported as its still on every step of its slide', () => {
-  const parts = exportDeck('test/pages/viewer-play.html');
+// with --still, a tycho viewer of the style play is in the image of each step of its slide, as the
+// still of its first frame. The stills themselves are checked in the print view, in
+// test/viewers.test.mjs
+test('with --still, a tycho viewer of the style play is exported as its still on every step of its slide', () => {
+  const parts = exportDeck('test/pages/viewer-play.html', [], ['--still']);
   assertPackage(parts);
   assert.equal(slideCount(parts), 10);
   const slides = Array.from({ length: 10 }, (_, n) => text(parts, `ppt/slides/slide${n + 1}.xml`));
@@ -169,8 +294,9 @@ test('a tycho viewer of the style play is exported as its still on every step of
   assert.ok(![...parts.keys()].some((name) => name.endsWith('.mp4')));
 });
 
+// with --still, since the loop of the scene of the demo deck lasts 72 s
 test('the demo deck is exported with a step for each page of its PDF', () => {
-  const parts = exportDeck('index.html');
+  const parts = exportDeck('index.html', ['--still']);
   assertPackage(parts);
   const steps = [...parts.keys()].filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
     .reduce((total, name) => total + text(parts, name).match(/name="Step /g).length, 0);
@@ -280,3 +406,4 @@ test('the picture of each step is its page of the print view, the last page too'
   }
   assert.deepEqual(off, []);
 });
+
