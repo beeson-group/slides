@@ -163,7 +163,7 @@ test('the last step of a slide is shown alone, and a step is added to restore th
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html', 'still'));
+  await page.goto(deckUrl('test-deck.html', 'still'));
   await page.waitFor(deckSettled);
 
   // a slide whose fragments are empty spans, e.g. the steps of a plot, is not dimmed and is left as it is

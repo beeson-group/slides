@@ -157,7 +157,7 @@ const pasteboard = (page) =>
 
 for (const platform of PLATFORMS) {
   test(`the pasteboard is equal on every side of the slide at each zoom past Fit (${platform})`, async (t) => {
-    const page = await load(t, platform, { deck: 'index.html', size: { width: 1600, height: 1000 } });
+    const page = await load(t, platform, { deck: 'test-deck.html', size: { width: 1600, height: 1000 } });
     for (const z of [1, 2, 3]) {
       await page.evaluate(`window.BeesonEditorShell.stage.setZoom(${z})`);
       await frames(page);
@@ -168,7 +168,7 @@ for (const platform of PLATFORMS) {
   });
 
   test(`Zoom to Selection centers a figure at the edge of the slide, with the pasteboard grown (${platform})`, async (t) => {
-    const page = await load(t, platform, { deck: 'index.html', size: { width: 1600, height: 1000 } });
+    const page = await load(t, platform, { deck: 'test-deck.html', size: { width: 1600, height: 1000 } });
     await page.evaluate(`Reveal.slide(Reveal.getIndices(document.querySelector('.reveal .slides section .zone > img').closest('section')).h)`);
     await frames(page);
     const fig = '.reveal section.present .zone > img';
@@ -449,7 +449,7 @@ const STEP2_LIVE = `[...document.querySelectorAll('.reveal section.present p')].
 
 for (const platform of PLATFORMS) {
   test(`the Formula button inserts an inline formula at the caret of a text (${platform})`, async (t) => {
-    const page = await load(t, platform, { deck: 'index.html', n: EQUATIONS });
+    const page = await load(t, platform, { deck: 'test-deck.html', n: EQUATIONS });
     const at = await page.evaluate(`(() => { const r = ${STEP2_LIVE}.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
     await click(page, at);
     await sleep(150);
@@ -476,7 +476,9 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// the empty box of Text Box, Code Box, and Footnote, which is not written into the file
+// the empty box of Text Box, Code Box, and Footnote, which is not written into the file until it is
+// left or typed into. a text box left empty is written as an empty paragraph, and the other boxes
+// are taken off
 const PENDING = `document.querySelector('.reveal section.present .beeson-pending')`;
 // a new box on a slide without room under its text is written with the offset, and the width,
 // that put it in free space
@@ -491,7 +493,7 @@ const INSERTS = [
 for (const platform of PLATFORMS) {
   for (const [id, label, html] of INSERTS) {
     test(`${label} is an entry of the history, and the deck is edited while its empty box is on the slide (${platform})`, async (t) => {
-      const page = await load(t, platform, { deck: 'index.html', n: EQUATIONS });
+      const page = await load(t, platform, { deck: 'test-deck.html', n: EQUATIONS });
       const clean = async () => {
         const s = await status(page);
         assert.equal(await page.evaluate(`!!${PENDING}`), false, 'the empty box is on the slide');
@@ -519,9 +521,15 @@ for (const platform of PLATFORMS) {
       await redo(page);
       await frames(page);
       await boxed();
-      // the box is taken off when the caret leaves it, and so is its entry
       await press(page, 'Escape');
       await sleep(100);
+      if (id === 'insert.text') {
+        assert.equal(await page.evaluate(`!!${PENDING}`), false, 'the box is still held outside the file');
+        assert.equal((await render(page)).match(/<p( [^>]*)?><\/p>/g)?.length, 1, 'the empty box is not written as an empty paragraph');
+        assert.equal(await undoLabel(page, 'edit.undo'), 'Undo Insert Text Box');
+        await undo(page);
+        await sleep(100);
+      }
       await clean();
       // the first input writes the box as an entry over its insert, as in Keynote: one undo leaves
       // the empty box with the caret, and a second takes it off

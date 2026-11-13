@@ -12,7 +12,7 @@ import { click, drag, saveAndReopen } from './helpers/editor.mjs';
 import { declarationProblem } from '../src/editor/model/scope.ts';
 
 const PLATFORMS = ['mac', 'other'];
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 // a table with a cell of two lines, and a table with a row drawn higher than its words
 const ROWS = 'test/pages/editor-r26-6.html';
 const HEIGHTS = 'test/pages/editor-r26-6-heights.html';

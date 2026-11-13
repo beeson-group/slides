@@ -321,9 +321,12 @@ export function install(app: App): void {
       placeCaret(el);
       app.invalidate('content');
     };
-    // the box is kept while the sheet of a formula typed into it is open
+    // the box is kept while the sheet of a formula typed into it is open. a text box left without
+    // text is written as an empty paragraph, as in PowerPoint, and the other boxes are taken off
     el.addEventListener('focusout', () => setTimeout(() => {
-      if (pending?.el === el && document.activeElement !== el && !leaving && !app.math.isOpen()) drop();
+      if (pending?.el !== el || document.activeElement === el || leaving || app.math.isOpen()) return;
+      if (kind === 'text') void write('', 'typing', true).catch(fail);
+      else drop();
     }, 0));
     show();
     own = true;
@@ -354,9 +357,11 @@ export function install(app: App): void {
   // the first text typed into the element of the editor writes it into the file in its place. every
   // input into the box or into the element written for it is taken until the write ends, since the
   // element is not yet a block of the pairing that the typing of text/typing.ts records
-  const write = async (text: string, label = 'typing') => {
+  // with empty, a box left without text is written in place of the entry of its insert, without the
+  // caret, which has left it
+  const write = async (text: string, label = 'typing', empty = false) => {
     const p = pending;
-    if (!p) return;
+    if (!p || writing) return;
     writing = true;
     written = { kind: p.kind, node: null };
     typed = [];
@@ -364,7 +369,7 @@ export function install(app: App): void {
     // the first input is an entry of its own over the insert of the box, as in Keynote and
     // PowerPoint, and its undo leaves the empty box with the caret. a caption is written in place of
     // the entry of its box, which is one entry with the Caption switch that made it
-    const apart = p.kind !== 'caption';
+    const apart = p.kind !== 'caption' && !empty;
     try {
       if (onTop && !apart) {
         keep = true;
@@ -418,7 +423,7 @@ export function install(app: App): void {
         pending = null;
         // the caret of a code box is in its code element, where the typing after the first key goes
         const caret = () => placeCaret(node, p.kind === 'code' ? (node.textContent ?? '').length : null);
-        caret();
+        if (!empty) caret();
         await applyPending(app, p.el, node);
         await overShapes(app, node);
         checkOverlaps(app, app.current(), node);
@@ -624,6 +629,8 @@ export function install(app: App): void {
     const plate = kind === 'text' && slide.matches('.title, .closing') ? { parent: slide, before: slide.querySelector(':scope > .foot, :scope > aside.notes') } : null;
     const { parent, before } = plate ?? columnPlace(a, slide);
     begin(kind, parent, before);
+    // a new text box opens the Format tab, whose Text pane sets the look of its first words
+    if (kind === 'text' && !a.commands.state('shell.format').checked) void a.commands.run('shell.format').catch(fail);
   };
 
   const insertMenu = (order: number) => ({ bar: 'Insert', group: 'element', order });

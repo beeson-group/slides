@@ -68,7 +68,7 @@ test('the units of a CRLF file and of void and nested elements cover the content
 });
 
 test('the units of the demo deck cover its slides byte for byte', () => {
-  const text = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const text = readFileSync(new URL('../test-deck.html', import.meta.url), 'utf8');
   const tokens = tokenize(text);
   const open = tokens.find((t) => t.type === 'start' && t.attrs.some((a) => a.name === 'class' && a.value === 'slides'));
   let depth = 0;
@@ -128,7 +128,7 @@ test('the classes of a stylesheet are read without comments, numbers, and addres
   const css = '/* .nope */ .reveal .slides section.wide > .zone, a.b-c:hover { margin: .5em; background: url(x.png); content: ".q"; }';
   assert.deepEqual(themeClasses(css).sort(), ['b-c', 'reveal', 'slides', 'wide', 'zone']);
   const theme = new Set(themeClasses(readFileSync(new URL('../theme/beeson.css', import.meta.url), 'utf8')));
-  for (const c of ['wide', 'narrow', 'zone', 'plate', 'backdrop', 'qr', 'math', 'caption', 'dots', 'arrows']) assert.ok(theme.has(c), c);
+  for (const c of ['wide', 'narrow', 'zone', 'plate', 'backdrop', 'qr', 'math', 'caption', 'dots', 'dashes']) assert.ok(theme.has(c), c);
   for (const c of ['shape', 'rounded', 'ellipse', 'triangle', 'arrow', 'arrow-both', 'brace', 'plus', 'equals', 'round-s', 'round-l', 'fill-none', 'fill-ground', 'veil', 'weight-6', 'weight-8', 'no-outline', 'flip-x', 'flip-y', 'left']) assert.ok(theme.has(c), c);
 });
 

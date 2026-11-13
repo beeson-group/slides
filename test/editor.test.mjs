@@ -9,7 +9,7 @@ import { test } from 'node:test';
 import { deckSettled, deckUrl, launch, printView } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 
-const deckText = readFileSync('index.html', 'utf8');
+const deckText = readFileSync('test-deck.html', 'utf8');
 // the newline of the file, since a checkout on Windows may turn it into CRLF
 const nl = deckText.includes('\r\n') ? '\r\n' : '\n';
 const ready = 'window.BeesonEditor && window.BeesonEditor.ready.then(() => true)';
@@ -17,7 +17,7 @@ const openDeck = `window.BeesonEditor.open(${JSON.stringify(deckText)})`;
 
 async function editorPage(browser, query = 'edit&still') {
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html', query));
+  await page.goto(deckUrl('test-deck.html', query));
   await page.waitFor(deckSettled);
   await page.waitFor(ready);
   return page;
@@ -35,7 +35,7 @@ const pickStep = (page, i, label) => page.evaluate(`(() => {
 })()`);
 
 const FIGURE_ITEMS = [
-  'Dark and light mode: export one file per mode, mark them <code>for-dark</code> and <code>for-light</code>.',
+  'Dark and light mode: export one file per mode, marked <code>for-dark</code> and <code>for-light</code>.',
   'You might have noticed a toggle on the top right: try clicking it on this slide.',
   'You should give black-on-white plots the class <code>invert</code> to invert them in dark mode.',
 ];
@@ -51,7 +51,7 @@ test('a deck without ?edit does not load the editor, with ?edit it does on file:
   const browser = await launch();
   t.after(() => browser.close());
   const plain = await browser.newPage();
-  await plain.goto(deckUrl('index.html', 'still'));
+  await plain.goto(deckUrl('test-deck.html', 'still'));
   await plain.waitFor(deckSettled);
   assert.equal(await plain.evaluate(`!!document.querySelector('script[src$="editor.js"]') || 'BeesonEditor' in window`), false);
   assert.deepEqual(plain.errors, []);
@@ -63,7 +63,7 @@ test('a deck without ?edit does not load the editor, with ?edit it does on file:
   assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].filter((b) => !b.hidden).map((b) => b.textContent.replace(/^\\d+%/, '%'))`), ['View', '', '%Zoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', '', 'Media', '', 'Preview', '', 'Present', 'Save', 'Format', 'Steps']);
   // the card asks for the file, with the folder of the deck
   assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-card').hidden`), false);
-  assert.match(await page.evaluate(`document.querySelector('.beeson-edit-card p').textContent`), /index\.html in \//);
+  assert.match(await page.evaluate(`document.querySelector('.beeson-edit-card p').textContent`), /test-deck\.html in \//);
   assert.deepEqual(page.errors, []);
 });
 
@@ -197,7 +197,7 @@ test('a save writes the file through a handle, from a served deck', async (t) =>
   const server = await serve('.');
   t.after(() => server.close());
   const page = await browser.newPage();
-  await page.goto(`${server.origin}/index.html?edit&still`);
+  await page.goto(`${server.origin}/test-deck.html?edit&still`);
   await page.waitFor(deckSettled);
   await page.waitFor(ready);
   // the served deck is fetched by the editor itself
@@ -235,13 +235,13 @@ test('without the file pickers, a save is a download of the file with the edits'
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
   await page.evaluate(`[...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === 'Show your steps one at a time').firstChild.data = 'Downloaded'`);
   await page.evaluate('window.BeesonEditor.save()');
-  assert.equal(await page.evaluate('window.__download'), 'index.html');
+  assert.equal(await page.evaluate('window.__download'), 'test-deck.html');
   assert.equal(await page.evaluate('window.__blob.text()'), replaced('<h2>Show your steps one at a time</h2>', '<h2>Downloaded</h2>'));
   const after = await page.evaluate('window.BeesonEditor.status()');
   assert.equal(after.dirty, false);
   // Safari and Firefox put a download into the downloads folder, unless they are set to ask where
   // to save each download, in which case index.html is chosen and replaced in the dialog
-  assert.match(after.message, /^Saved a copy with 1 edit\. Replace index\.html in \/.*, or set the browser to ask where to save each download/);
+  assert.match(after.message, /^Saved a copy with 1 edit\. Replace test-deck\.html in \/.*, or set the browser to ask where to save each download/);
   assert.deepEqual(page.errors, []);
 });
 
@@ -290,7 +290,7 @@ test('the notes are laid in a pane under the slide, and Present opens the deck w
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Present').click()`);
   await until(page, `!!document.querySelector('.beeson-edit-show iframe')?.src`);
   const opened = await page.evaluate(`document.querySelector('.beeson-edit-show iframe').src`);
-  assert.ok(!/[?&]edit(?:[=&]|$)/.test(opened) && /index\.html\?still(?:&|$)/.test(opened), opened);
+  assert.ok(!/[?&]edit(?:[=&]|$)/.test(opened) && /test-deck\.html\?still(?:&|$)/.test(opened), opened);
   assert.deepEqual(page.errors, []);
 });
 
@@ -298,7 +298,7 @@ test('the print view of the PDF and of PowerPoint does not load the editor', asy
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await printView(page, deckUrl('index.html', 'print-pdf&still'));
+  await printView(page, deckUrl('test-deck.html', 'print-pdf&still'));
   assert.equal(await page.evaluate(`!!document.querySelector('script[src$="editor.js"]') || 'BeesonEditor' in window`), false);
   assert.deepEqual(page.errors, []);
 });
@@ -594,7 +594,7 @@ test('Save as writes a chosen file, autosave saves after a pause, and unsaved ed
   const server = await serve('.');
   t.after(() => server.close());
   const page = await browser.newPage({ drafts: true });
-  const url = `${server.origin}/index.html?edit&still`;
+  const url = `${server.origin}/test-deck.html?edit&still`;
   const status = () => page.evaluate('window.BeesonEditor.status()');
   const load = async () => {
     await page.goto(url);
@@ -613,7 +613,7 @@ test('Save as writes a chosen file, autosave saves after a pause, and unsaved ed
   await type(h2, 'Saved as');
   await page.evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 's', metaKey: true, shiftKey: true, bubbles: true, cancelable: true }))`);
   await page.waitFor('!window.BeesonEditor.status().dirty');
-  assert.equal(await page.evaluate('window.__suggested'), 'index.html');
+  assert.equal(await page.evaluate('window.__suggested'), 'test-deck.html');
   assert.equal(await file('saved-as.html'), replaced(`<h2>${h2}</h2>`, '<h2>Saved as</h2>'));
   let s = await status();
   assert.equal(s.file, 'saved-as.html');
@@ -637,7 +637,7 @@ test('Save as writes a chosen file, autosave saves after a pause, and unsaved ed
   s = await status();
   assert.equal(s.recover, true);
   assert.equal(s.dirty, false);
-  assert.match(await page.evaluate(`document.querySelector('.beeson-edit-card.recover p').textContent`), /^Edits of index\.html from .* were kept in this browser/);
+  assert.match(await page.evaluate(`document.querySelector('.beeson-edit-card.recover p').textContent`), /^Edits of test-deck\.html from .* were kept in this browser/);
   assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-card.recover button')].map((b) => b.textContent)`), ['Restore and save', 'Download a copy', 'Discard']);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-card.recover button')].find((b) => b.textContent === 'Discard').click()`);
   s = await status();
@@ -735,7 +735,7 @@ test('E opens the slide in the editor', async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html', 'still', '/3'));
+  await page.goto(deckUrl('test-deck.html', 'still', '/3'));
   await page.waitFor(deckSettled);
   assert.equal(await page.evaluate(`'BeesonEditor' in window`), false);
   await page.evaluate(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'e', keyCode: 69, which: 69, bubbles: true, cancelable: true }))`);
@@ -759,7 +759,7 @@ test('Open with unsaved changes asks first: Cancel keeps them, Open without savi
   const h2 = 'Show your steps one at a time';
   // stubs of the pickers: both give one handle of a file, read as last written
   await page.evaluate(`window.pickerCalls = 0; window.written = null;
-    const handle = { name: 'index.html', getFile: async () => new File([window.written ?? ${JSON.stringify(deckText)}], 'index.html', { type: 'text/html' }), createWritable: async () => ({ write: async (text) => { window.written = text; }, close: async () => {} }) };
+    const handle = { name: 'test-deck.html', getFile: async () => new File([window.written ?? ${JSON.stringify(deckText)}], 'test-deck.html', { type: 'text/html' }), createWritable: async () => ({ write: async (text) => { window.written = text; }, close: async () => {} }) };
     window.showOpenFilePicker = async () => { window.pickerCalls += 1; return [handle]; };
     window.showSaveFilePicker = async () => handle;`);
   const type = (text) => page.evaluate(`(() => { const h = [...document.querySelectorAll('.reveal h2')].find((h) => h.textContent === ${JSON.stringify(h2)}); Reveal.slide(Reveal.getIndices(h.closest('section')).h); h.focus(); const r = document.createRange(); r.selectNodeContents(h); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); document.execCommand('insertText', false, ${JSON.stringify(text)}); })()`);
@@ -821,7 +821,7 @@ test('Open without saving after a save puts the slides back as last saved', asyn
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
   const h2 = 'Show your steps one at a time';
   await page.evaluate(`window.written = null;
-    const handle = { name: 'index.html', getFile: async () => new File([window.written], 'index.html', { type: 'text/html' }), createWritable: async () => ({ write: async (text) => { window.written = text; }, close: async () => {} }) };
+    const handle = { name: 'test-deck.html', getFile: async () => new File([window.written], 'test-deck.html', { type: 'text/html' }), createWritable: async () => ({ write: async (text) => { window.written = text; }, close: async () => {} }) };
     window.showOpenFilePicker = async () => { throw new DOMException('', 'AbortError'); };
     window.showSaveFilePicker = async () => handle;`);
   const type = (text) => page.evaluate(`(() => { const h = [...document.querySelectorAll('.reveal h2')].find((h) => h.textContent.startsWith(${JSON.stringify(h2)})); Reveal.slide(Reveal.getIndices(h.closest('section')).h); h.focus(); const r = document.createRange(); r.selectNodeContents(h); r.collapse(false); const s = getSelection(); s.removeAllRanges(); s.addRange(r); document.execCommand('insertText', false, ${JSON.stringify(text)}); })()`);
@@ -1023,7 +1023,7 @@ test('an undo back to the saved text leaves the deck clean, and Present with uns
   assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Save').classList.contains('on')`), false);
   // Present asks while there are unsaved changes
   await page.evaluate(`window.written = null;
-    const handle = { name: 'index.html', getFile: async () => new File([window.written ?? ${JSON.stringify(deckText)}], 'index.html'), createWritable: async () => ({ write: async (text) => { window.written = text; }, close: async () => {} }) };
+    const handle = { name: 'test-deck.html', getFile: async () => new File([window.written ?? ${JSON.stringify(deckText)}], 'test-deck.html'), createWritable: async () => ({ write: async (text) => { window.written = text; }, close: async () => {} }) };
     window.showSaveFilePicker = async () => handle;`);
   const present = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].find((b) => b.textContent === 'Present').click()`);
   const choose = (text) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-card.ask button')].find((b) => b.textContent === ${JSON.stringify(text)}).click()`);

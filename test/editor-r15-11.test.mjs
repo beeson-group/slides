@@ -125,7 +125,7 @@ async function cutDemoList(page) {
 
 for (const platform of PLATFORMS) {
   test(`two dash lists are joined after Delete of the paragraph between them, and after Backspace in an empty one (${platform})`, async (t) => {
-    const page = await load(t, platform, 'index.html', 2);
+    const page = await load(t, platform, 'test-deck.html', 2);
     await cutDemoList(page);
     const empty = await render(page);
     // Backspace in the empty paragraph takes it off, which gives the list of the file back
@@ -176,7 +176,7 @@ for (const platform of PLATFORMS) {
   });
 
   test(`a dash list and a numbered list are left apart after Delete of the paragraph between them (${platform})`, async (t) => {
-    const page = await load(t, platform, 'index.html', 2);
+    const page = await load(t, platform, 'test-deck.html', 2);
     await cutDemoList(page);
     await type(page, 'Between');
     await caretIn(page, 'When exporting');

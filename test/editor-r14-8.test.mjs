@@ -190,7 +190,7 @@ for (const platform of PLATFORMS) {
   // the first table of a new figure slide fills its plate, and a second table keeps the room of its
   // bars to it, as to a text
   test(`a second table on a new figure slide is put off the first with the room of its bars (${platform})`, async (t) => {
-    const page = await load(t, platform, 3, 'index.html');
+    const page = await load(t, platform, 3, 'test-deck.html');
     await exec(page, 'slide.new');
     await exec(page, 'slide.layout.figure');
     await frames(page);

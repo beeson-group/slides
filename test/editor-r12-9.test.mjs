@@ -32,13 +32,13 @@ const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 async function load(t, platform, n = 0) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  const url = `${server.origin}/index.html?edit&still&theme=light&edit-platform=${platform}`;
+  const url = `${server.origin}/test-deck.html?edit&still&theme=light&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync('index.html', 'utf8');
+  page.source = readFileSync('test-deck.html', 'utf8');
   const s = await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`);
   assert.deepEqual(s.problems, []);
   if (n) await page.evaluate(`Reveal.slide(${n})`);
@@ -150,7 +150,7 @@ for (const platform of PLATFORMS) {
 test('a deck opened by itself does not take Return, Backspace, or a number', async (t) => {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  await page.goto(`${server.origin}/index.html?still#/2`);
+  await page.goto(`${server.origin}/test-deck.html?still#/2`);
   await page.waitFor(deckSettled);
   const here = () => page.evaluate('(() => { const i = Reveal.getIndices(); return [i.h, i.f ?? -1]; })()');
   assert.deepEqual(await here(), [2, -1]);

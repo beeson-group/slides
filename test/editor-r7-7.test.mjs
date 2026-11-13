@@ -12,7 +12,7 @@ import { serve } from '../scripts/webdriver.mjs';
 import { lineText } from '../src/editor/commands/line.ts';
 import { byteExact, click, drag, press, saveAndReopen, selectFigure, type } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
 const PANEL = '#beeson-edit-panel-format';

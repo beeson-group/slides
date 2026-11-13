@@ -34,10 +34,10 @@ after(async () => {
 // has a data-keep of a number
 const KEEP_BEFORE = '<div class="math fragment" data-fragment-index="1" data-keep>';
 const KEEP_AFTER = '<div class="math fragment" data-fragment-index="1" data-keep="3">';
-const demo = () => readFileSync('index.html', 'utf8').replace(KEEP_BEFORE, KEEP_AFTER);
+const demo = () => readFileSync('test-deck.html', 'utf8').replace(KEEP_BEFORE, KEEP_AFTER);
 
 // the editor on a deck served over HTTP, opened with text, with the Steps tab shown
-async function open(t, platform, { deck = 'index.html', text = readFileSync(deck, 'utf8'), width = 1920, height = 1080 } = {}) {
+async function open(t, platform, { deck = 'test-deck.html', text = readFileSync(deck, 'utf8'), width = 1920, height = 1080 } = {}) {
   const page = await browser.newPage({ width, height });
   t.after(() => page.close());
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);

@@ -12,7 +12,7 @@ import { click, press } from './helpers/editor.mjs';
 import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
 
 const PLATFORMS = ['mac', 'other'];
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 // the index of the slide of index.html with the figures
 const FIGURES = 4;
 const LAYOUTS = 'test/pages/editor-layouts.html';

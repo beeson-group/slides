@@ -11,7 +11,7 @@ import { serve } from '../scripts/webdriver.mjs';
 import { click, press, type } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 // the indices of the slides of index.html with the steps, the equations, and the figures
 const STEPS = 2;
 const EQUATIONS = 3;

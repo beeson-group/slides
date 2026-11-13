@@ -221,6 +221,12 @@ for (const platform of PLATFORMS) {
       assert.equal(await undoLabel(page), `Undo Insert ${label}`);
       await press(page, 'Escape');
       await sleep(150);
+      // a text box left empty is written as an empty paragraph in the entry of its insert
+      if (id === 'insert.text') {
+        assert.equal(await undoLabel(page), 'Undo Insert Text Box');
+        await undo(page);
+        await sleep(100);
+      }
       await byteExact(page);
     }
     // the Edit menu reads Undo Typing after a text box is typed, as Keynote does, with Undo Insert
@@ -418,7 +424,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`Dashes and Paragraphs of Format > Text make a line of the notes an item and back (${platform})`, async (t) => {
+  test(`Arrows and Paragraphs of Format > Text make a line of the notes an item and back (${platform})`, async (t) => {
     const page = await load(t, platform, TEXT);
     if (!(await state(page, 'view.notes')).checked) await exec(page, 'view.notes');
     await frames(page);
@@ -426,8 +432,8 @@ for (const platform of PLATFORMS) {
     await caretIn(page, NOTES, 'Notes of');
     await openPath(page, ['Format', 'Text']);
     const items = await lastMenu(page);
-    assert.deepEqual(items.filter((i) => ['Paragraphs', 'Dashes', 'Numbers'].includes(i[0])).map((i) => [i[0], i[2]]), [['Paragraphs', false], ['Dashes', false], ['Numbers', true]]);
-    await choose(page, 'Dashes');
+    assert.deepEqual(items.filter((i) => ['Paragraphs', 'Arrows', 'Numbers'].includes(i[0])).map((i) => [i[0], i[2]]), [['Paragraphs', false], ['Arrows', false], ['Numbers', true]]);
+    await choose(page, 'Arrows');
     assert.equal(await undoLabel(page), 'Undo List Style');
     assert.equal((await state(page, 'text.list.ul')).checked, true);
     const listed = '<aside class="notes"><ul><li>Notes of a content slide.</li></ul></aside>';

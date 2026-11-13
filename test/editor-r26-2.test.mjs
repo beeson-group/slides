@@ -10,7 +10,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, press, saveAndReopen } from './helpers/editor.mjs';
 
-const DEMO = 'index.html';
+const DEMO = 'test-deck.html';
 const DECK = 'test/pages/editor-r22-5.html';
 // a deck of the selections of demo/broucke-sample.js and of drawings with more attributes than an entry
 const SELECTIONS = 'test/pages/editor-r26-2.html';

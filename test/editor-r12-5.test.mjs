@@ -12,7 +12,7 @@ import { serve } from '../scripts/webdriver.mjs';
 import { click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
 import { snapMove } from '../src/editor/canvas/snap.ts';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 // the indexes of the figures slide and of the closing slide with its QR code in index.html
 const FIGURES = 4;
 const CLOSING = 12;

@@ -29,15 +29,15 @@ after(async () => {
 async function open(t, platform, width = 1600) {
   const page = await browser.newPage({ width, height: 1000 });
   t.after(() => page.close());
-  await page.goto(`${server.origin}/index.html?edit&still&edit-platform=${platform}`);
+  await page.goto(`${server.origin}/test-deck.html?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
   // the storage of an earlier test, e.g. the zoom of the notes, is cleared and the page loaded again
   await page.evaluate('localStorage.clear()');
-  await page.goto(`${server.origin}/index.html?edit&still&edit-platform=${platform}`);
+  await page.goto(`${server.origin}/test-deck.html?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync('index.html', 'utf8');
+  page.source = readFileSync('test-deck.html', 'utf8');
   const status = await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(page.source)})`);
   assert.deepEqual(status.problems, []);
   return page;

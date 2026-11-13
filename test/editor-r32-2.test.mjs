@@ -13,7 +13,7 @@ import { click, press, saveAndReopen, type } from './helpers/editor.mjs';
 const PLATFORMS = ['mac', 'other'];
 const SLIDE = '.reveal .slides > section.present';
 const PANEL = '#beeson-edit-panel-format';
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const MOVED = 'test/pages/editor-r32-2.html';
 
 let browser;

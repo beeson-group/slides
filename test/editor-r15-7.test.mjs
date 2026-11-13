@@ -10,7 +10,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, press, saveAndReopen, type } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 // the index of the figures slide in index.html
 const FIGURES = 4;
 const PLATFORMS = ['mac', 'other'];
@@ -430,13 +430,13 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await exportPowerPoint(page), ['PDF…', 'HTML…', 'PowerPoint…']);
     const shown = await card(page, 'pptx');
     assert.ok(shown, 'the card of PowerPoint… is not open');
-    assert.equal(shown.code, 'npm run pptx');
-    assert.match(shown.text, /saved index\.html/);
+    assert.equal(shown.code, 'npm run pptx -- test-deck.html');
+    assert.match(shown.text, /saved test-deck\.html/);
     assert.deepEqual(shown.buttons, ['Copy Command', 'Close']);
     await page.evaluate(`navigator.clipboard.writeText('nothing').then(() => true)`);
     await click(page, await cardButton(page, 'pptx', 'Copy Command'));
     await settle(page);
-    assert.equal(await page.evaluate('navigator.clipboard.readText()'), 'npm run pptx');
+    assert.equal(await page.evaluate('navigator.clipboard.readText()'), 'npm run pptx -- test-deck.html');
     assert.ok(await card(page, 'pptx'), 'Copy Command closes the card');
     await press(page, 'Escape');
     await settle(page);
@@ -469,7 +469,7 @@ for (const platform of PLATFORMS) {
     await exportPowerPoint(page);
     await click(page, await cardButton(page, 'ask', 'Export the saved file'));
     await settle(page);
-    assert.equal((await card(page, 'pptx'))?.code, 'npm run pptx');
+    assert.equal((await card(page, 'pptx'))?.code, 'npm run pptx -- test-deck.html');
     await press(page, 'Escape');
     await settle(page);
     assert.equal(await render(page), edited, 'the edits are not kept');

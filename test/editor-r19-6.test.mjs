@@ -150,7 +150,7 @@ const WHEN = '<li class="fragment" data-fragment-index="3">|When';
 // the caret put into the empty paragraph between two lists: on slide 3 of the demo deck by Return
 // twice at the end of an item, and in the deck of R16.4 directly
 async function emptyBetween(page, deck) {
-  if (deck === 'index.html') {
+  if (deck === 'test-deck.html') {
     await caretIn(page, SAME);
     await press(page, 'Enter');
     await press(page, 'Enter');
@@ -160,7 +160,7 @@ async function emptyBetween(page, deck) {
 
 for (const platform of PLATFORMS) {
   // D14: after the Delete, the focus was on body, and the key was lost
-  for (const [deck, slide, where] of [['index.html', 2, WHEN], ['test/pages/editor-r16-4.html', 0, '<li>|Qtwo</li>']]) {
+  for (const [deck, slide, where] of [['test-deck.html', 2, WHEN], ['test/pages/editor-r16-4.html', 0, '<li>|Qtwo</li>']]) {
     test(`after a forward Delete in the empty paragraph between two lists of ${deck}, a key is typed at the start of the first item of the second list (${platform})`, async (t) => {
       const page = await load(t, platform, deck, slide);
       await emptyBetween(page, deck);
@@ -174,8 +174,8 @@ for (const platform of PLATFORMS) {
   // D14: after the redo, the focus was on body, or in the heading where the caret was put
   for (const away of [false, true]) {
     test(`after a redo of a forward Delete between two lists${away ? ' with the caret in the heading' : ''}, a key is typed at the start of the first item of the second list (${platform})`, async (t) => {
-      const page = await load(t, platform, 'index.html', 2);
-      await emptyBetween(page, 'index.html');
+      const page = await load(t, platform, 'test-deck.html', 2);
+      await emptyBetween(page, 'test-deck.html');
       await press(page, 'Delete');
       await wait(page);
       const joined = await render(page);

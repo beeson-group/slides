@@ -558,7 +558,8 @@ export function install(app: App): void {
     if (add) {
       if (sel.has(el)) click = () => sel.toggle(el);
       else sel.add(el);
-    } else if (sel.has(el)) {
+    } else if (sel.elements().includes(el)) {
+      // the block of a caret is in sel.has() too, but it is not selected as an object
       const several = sel.elements().length > 1;
       const media = locked(el) ? null : mediaIn(el, target);
       const id = groupOf(el);
@@ -648,6 +649,12 @@ export function install(app: App): void {
       if (!el || !sized.length || locked(el)) return;
       ev.preventDefault();
       ev.stopPropagation();
+      // a grip of the block of the caret, which is framed while no object is selected, leaves the text
+      // and selects the block, as Esc does
+      if (!sel.elements().length) {
+        leaveText();
+        sel.set('elements', [el]);
+      }
       const pic = pictureOf(el);
       const f = frameOf(app);
       const all = sel.elements();

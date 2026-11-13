@@ -11,7 +11,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, press, saveAndReopen } from './helpers/editor.mjs';
 
-const DEMO = 'index.html';
+const DEMO = 'test-deck.html';
 const DECK = 'test/pages/editor-r22-5.html';
 const PLATFORMS = ['mac', 'other'];
 const PANEL = '#beeson-edit-panel-format';

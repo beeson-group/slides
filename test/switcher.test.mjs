@@ -49,7 +49,7 @@ async function openDeck(t, theme) {
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html', `theme=${theme}`));
+  await page.goto(deckUrl('test-deck.html', `theme=${theme}`));
   await page.waitFor(deckSettled);
   await page.evaluate(motion);
   return page;
@@ -127,7 +127,7 @@ test('every animation of a slide plays on after a flip of the mode, with the key
   const kinds = new Set();
   let longest = { ms: 0, at: '' };
   // the demo deck does not have a plot, hence a plot is taken from a test deck
-  for (const deck of ['index.html', 'test/pages/plot-reveals.html']) {
+  for (const deck of ['test-deck.html', 'test/pages/plot-reveals.html']) {
     await page.goto(deckUrl(deck, 'theme=dark'));
     await page.waitFor(deckSettled);
     const count = await page.evaluate(`document.querySelectorAll('.reveal .slides > section').length`);
@@ -232,11 +232,11 @@ test('a traced backdrop is drawn on under the old view of a flip, in both direct
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage({ motion: true });
-  await page.goto(deckUrl('index.html', 'theme=dark'));
+  await page.goto(deckUrl('test-deck.html', 'theme=dark'));
   await page.waitFor(deckSettled);
   const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
   const index = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.backdrop[data-strands="demo/broucke-sample.js"]'))`);
-  assert.ok(index > 0, 'the demo deck does not have a slide with the backdrop of demo/broucke-sample.js after its first slide');
+  assert.ok(index > 0, 'test-deck.html does not have a slide with the backdrop of demo/broucke-sample.js after its first slide');
   for (const to of ['light', 'dark']) {
     // the trace is begun again on the slide, and several strands are traced after 1.5 s
     await page.evaluate(`Reveal.slide(${index - 1})`);

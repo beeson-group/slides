@@ -38,7 +38,7 @@ after(async () => {
 
 // the editor on a deck served over HTTP, opened with text, on the slide of the element matched by
 // at, with the Format tab or the Steps tab shown
-async function open(t, platform, { deck = 'index.html', text = readFileSync(deck, 'utf8'), at = 'pre > code', tab = 'format', width = 1600, height = 1000 } = {}) {
+async function open(t, platform, { deck = 'test-deck.html', text = readFileSync(deck, 'utf8'), at = 'pre > code', tab = 'format', width = 1600, height = 1000 } = {}) {
   const page = await browser.newPage({ width, height });
   t.after(() => page.close().catch(() => {}));
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
@@ -128,7 +128,7 @@ for (const platform of PLATFORMS) {
   });
 
   test(`Small keeps the other declarations of the pre, and off gives its tag back byte for byte on ${platform}`, async (t) => {
-    const text = readFileSync('index.html', 'utf8').replace('<pre><code class="language-python"', '<pre style="translate: 0px 12px;"><code class="language-python"');
+    const text = readFileSync('test-deck.html', 'utf8').replace('<pre><code class="language-python"', '<pre style="translate: 0px 12px;"><code class="language-python"');
     const page = await open(t, platform, { text });
     await selectCode(page);
     await click(page, SMALL);
@@ -344,7 +344,7 @@ for (const platform of PLATFORMS) {
   });
 
   test(`the line steps of a code box move with the other steps, and are not split on ${platform}`, async (t) => {
-    const text = readFileSync('index.html', 'utf8').replace(PARA, '<p class="fragment">Copy-paste the code');
+    const text = readFileSync('test-deck.html', 'utf8').replace(PARA, '<p class="fragment">Copy-paste the code');
     const page = await open(t, platform, { text, tab: 'steps' });
     assert.deepEqual(await lineRows(page), ['1 Line 4', '2 Lines 5–7', '3 Lines 8–9']);
     assert.equal((await rows(page)).find((r) => r.text.startsWith('Copy-paste')).step, '0');
@@ -379,7 +379,7 @@ for (const platform of PLATFORMS) {
 
   test(`Play From plays the steps of the slide in place from the chosen step on ${platform}`, async (t) => {
     // the deck is served with the paragraph as a fragment, since the preview plays the page
-    const text = readFileSync('index.html', 'utf8').replace(PARA, '<p class="fragment">Copy-paste the code');
+    const text = readFileSync('test-deck.html', 'utf8').replace(PARA, '<p class="fragment">Copy-paste the code');
     const deck = `.play-from-${process.pid}-${platform}.html`;
     writeFileSync(deck, text);
     t.after(() => rmSync(deck, { force: true }));

@@ -220,7 +220,7 @@ for (const platform of PLATFORMS) {
   // D14: a blank line pasted into a list ended the list and split it in two around a paragraph
   for (const [name, text] of [['one blank line', ' one\n\ntwo'], ['two blank lines', ' one\n\n\ntwo'], ['a line of spaces', ' one\n  \ntwo']]) {
     test(`a paste of several lines with ${name} into a list item makes an item for each line with text, in the same list (${platform})`, async (t) => {
-      const page = await load(t, platform, 'index.html', 2);
+      const page = await load(t, platform, 'test-deck.html', 2);
       await caretIn(page, 'Two elements with the same');
       await exec(page, 'edit.paste', text);
       await frames(page);
@@ -234,7 +234,7 @@ for (const platform of PLATFORMS) {
   }
 
   test(`Return on an empty item still ends the list (${platform})`, async (t) => {
-    const page = await load(t, platform, 'index.html', 2);
+    const page = await load(t, platform, 'test-deck.html', 2);
     await caretIn(page, 'Two elements with the same');
     await press(page, 'Enter');
     await press(page, 'Enter');

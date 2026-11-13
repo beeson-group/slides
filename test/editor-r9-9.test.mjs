@@ -49,13 +49,13 @@ async function load(t, platform, { n = 0, mode = 'light', query = 'edit&still' }
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
   await page.send('Page.setInterceptFileChooserDialog', { enabled: true });
-  const url = `${server.origin}/index.html?${query}&theme=${mode}&edit-platform=${platform}`;
+  const url = `${server.origin}/test-deck.html?${query}&theme=${mode}&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync('index.html', 'utf8');
+  page.source = readFileSync('test-deck.html', 'utf8');
   const s = await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`);
   assert.deepEqual(s.problems, []);
   if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
@@ -537,7 +537,7 @@ const NEW = {
 const PLACES = [
   ['test/pages/editor-layouts.html', [2, 3, 4, 5, 6, 8], ['text', 'code', 'formula', 'qr']],
   ['test/pages/editor-empty-zone.html', [0, 1, 2], ['text', 'code', 'formula', 'qr']],
-  ['index.html', [2, 3, 4], ['text', 'formula', 'qr']],
+  ['test-deck.html', [2, 3, 4], ['text', 'formula', 'qr']],
 ];
 
 for (const platform of PLATFORMS) {
