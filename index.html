@@ -56,8 +56,8 @@ try {
     <li class="fragment" data-fragment-index="3">When exporting to PDF or PPTX, you will get one slide per step.</li>
   </ol>
   <div class="backdrop" data-scene="nest" data-cx="0.97" data-cy="0" data-half="0.5">
-    <span class="lab" data-at="L1" data-dy="-34">\(\LL{1}\)</span>
-    <span class="lab" data-at="L2" data-dy="-34">\(\LL{2}\)</span>
+    <span class="lab" data-at="L1" data-dy="-34">\(\mathcal{L}_1\)</span>
+    <span class="lab" data-at="L2" data-dy="-34">\(\mathcal{L}_2\)</span>
     <span class="lab" data-at="moon" data-dy="36">Moon</span>
   </div>
   <div class="foot">Slides can also have backdrops, like the Lyapunov families on this slide. These always appear at step 0. Preview the backdrop animation by clicking the “Preview” button.</div>
@@ -68,7 +68,7 @@ try {
      colored by a later step with data-highlight, orange for motion and violet with data-tone="violet" for structure -->
 <section>
   <h2>Equations are first class citizens</h2>
-  <p>Add a LaTeX equation by clicking the “Formula” icon. Then type it in <code>tex</code>.</p>
+  <p>Add a LaTeX equation by clicking the “Formula” icon. Then type it directly in <code>tex</code>.</p>
   <div class="math fragment" data-fragment-index="2" data-keep style="translate: 0px 150px">\[\ddot x - \class{coriolis}{2\dot y} = -\frac{\partial \class{potential}{\tilde U}}{\partial x},\qquad \ddot y + \class{coriolis}{2\dot x} = -\frac{\partial \class{potential}{\tilde U}}{\partial y},\]</div>
   <p class="fragment" data-fragment-index="3" style="translate: 0px 146px">where \(\tilde U\) is the effective potential.</p>
   <p class="fragment" data-fragment-index="4" data-highlight="coriolis" style="translate: 0px 152px">The <span class="coriolis">Coriolis terms</span> couple \(x\) and \(y\).</p>
@@ -80,15 +80,15 @@ try {
 <section>
   <h2>Images are first class citizens, too</h2>
   <p>Add an image by clicking on the “Media” dropdown, then selecting “Image”.</p>
-  <ul style="translate: 0px 20px; width: 1047px">
+  <ul style="translate: 0px 20px; width: 1080px">
     <li class="fragment" data-fragment-index="1">You might have noticed a toggle on the top right: try clicking it on this slide.</li>
     <li class="fragment" data-fragment-index="2">To enable support for both dark an light themes, export one image per theme.</li>
     <li class="fragment" data-fragment-index="3">You can do this by exporting with <code>beeson-dark.mplstyle</code> and <code>beeson-light.mplstyle</code>, found in the<code> styles/</code> folder, and marking the images <code>for-dark</code> and <code>for-light</code>.</li>
   </ul>
-  <figure class="zone">
+  <figure class="zone" style="translate: 20px -40px">
     <img class="for-dark" src="demo/figure-dark.png" alt="Zero-velocity curves of the Earth–Moon system, dark version">
     <img class="for-light" src="demo/figure-light.png" alt="Zero-velocity curves of the Earth–Moon system, light version">
-    <figcaption class="caption">Zero-velocity curves at the Jacobi constants of \(\LL{1}\), \(\LL{2}\), and \(\LL{3}\).</figcaption>
+    <figcaption class="caption">Zero-velocity curves at the Jacobi constants of \(\mathcal{L}_1\), \(\mathcal{L}_2\), and \(\mathcal{L}_3\).</figcaption>
   </figure>
   <aside class="notes">A figure exported with the styles in styles/ is transparent and set in the typeface of the slides.</aside>
 </section>
@@ -141,7 +141,7 @@ try {
 <!-- a surface: the graph of a function of src/surfaces.ts, whose stage is set by the steps with data-surface-stage. the terms are colored in blue and red with data-tone and uncolored with data-unhighlight, and the marks are picked out with data-surface-marks, data-surface-accent, and data-surface-violet -->
 <section>
   <h2 style="width: 1000px">Embedding 3D elements</h2>
-  <p style="width: 1000px">Use <code>three.js </code>elements to enhance your explanations. Think 3B1B. Ask your agent!</p>
+  <p style="width: 1000px">Use <code>three.js</code> elements to enhance your explanations. Think 3B1B. Ask your agent!</p>
   <div class="math fragment" data-fragment-index="1" data-surface-stage="wells" data-highlight="ug" data-tone="blue" style="width: 1000px">\[\class{ug}{U_g} = -(1-\mu)/\rho_1 - \mu/\rho_2,\]</div>
   <div class="math fragment" data-fragment-index="2" data-surface-stage="bowl" data-highlight="uc" data-tone="red" style="margin-top: 0">\[\class{uc}{U_c} = -(x^2 + y^2)/2,\]</div>
   <div class="math fragment" data-fragment-index="3" data-surface-stage="sum" style="margin-top: 0">\[\tilde U = \class{ug}{U_g} + \class{uc}{U_c}.\]</div>
@@ -183,7 +183,7 @@ try {
     <li class="fragment" data-fragment-index="2">The video will play “With the slide” by default, and loop indefinitely.</li>
   </ul>
   <ul>
-    <li>Videos are rendered static in PDF outputs, but they do survive PPTX exports.</li>
+    <li class="fragment" data-fragment-index="3">Videos are rendered static in PDF outputs, but they do survive PPTX exports.</li>
   </ul>
   <div class="zone">
     <video class="for-dark" src="demo/clip-dark.mp4" poster="demo/clip-dark.png" muted loop data-autoplay></video>
