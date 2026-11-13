@@ -1,6 +1,8 @@
 # slides
 
-Our all-in-one tool for building HTML slides, built on reveal.js.
+Our all-in-one tool for building HTML slides, built on [reveal.js](https://revealjs.com/).
+
+## A word from the authors
 
 HTML slides are greatly more expressive than any of the alternatives.
 
