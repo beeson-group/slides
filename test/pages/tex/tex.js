@@ -12,6 +12,11 @@ window.beesonTex = {
     "pmat": ["\\begin{pmatrix}","\\end{pmatrix}"],
   },
   "packages": ["physics"],
-  "theorems": {},
+  "theorems": {
+    "theorem": {"title":"Theorem","style":"plain","counter":"theorem"},
+    "lemma": {"title":"Lemma","style":"plain","counter":"theorem"},
+    "definition": {"title":"Definition","style":"definition","counter":"definition"},
+    "note": {"title":"Note","style":"remark","counter":"note"},
+  },
   "references": {},
 };

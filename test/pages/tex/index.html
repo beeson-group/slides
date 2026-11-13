@@ -12,8 +12,10 @@
 <script src="../../../theme/vendor/mathjax/tex-svg.js"></script>
 </head>
 <body>
-<!-- the deck of test/macros.test.mjs, with the preamble.tex and the tex.js next to it: in each row, a
-     formula written with a definition of the preamble, and the formula that it stands for -->
+<!-- the deck of test/macros.test.mjs and test/theorems.test.mjs, with the preamble.tex and the tex.js
+     next to it. in each row of the first slide, a formula written with a definition of the preamble
+     is next to the formula that it stands for. the theorems of the other slides are of the kinds of
+     the preamble, of two usual kinds, and of a kind that is not defined -->
 <div class="reveal">
   <div class="slides">
     <section>
@@ -28,6 +30,26 @@
         <tr data-case="an environment"><td>\(\begin{pmat} a &amp; b \\ c &amp; d \end{pmat}\)</td><td>\(\begin{pmatrix} a &amp; b \\ c &amp; d \end{pmatrix}\)</td></tr>
         <tr data-case="a macro of a package"><td>\(\dv{x}{t}\)</td><td>\(\frac{\mathrm{d}x}{\mathrm{d}t}\)</td></tr>
       </table>
+    </section>
+    <section class="wide">
+      <h2>Theorems</h2>
+      <p class="theorem" data-kind="definition">A periodic orbit \(\gamma\) is hyperbolic if its monodromy matrix has an eigenvalue off the unit circle.</p>
+      <p class="theorem" data-kind="theorem" data-name="stable manifold">Let \(\gamma\) be <em>hyperbolic</em>. Then \(W^s(\gamma)\) is an immersed manifold.</p>
+      <p class="theorem" data-kind="proof">Apply the theorem for maps to the return map of a section through \(\gamma\).</p>
+    </section>
+    <section data-visibility="hidden">
+      <h2>Left out of the show</h2>
+      <p class="theorem" data-kind="lemma">A lemma on a hidden slide is not counted.</p>
+    </section>
+    <section class="wide">
+      <h2>More theorems</h2>
+      <p class="theorem" data-kind="lemma">A lemma is numbered with the theorems.</p>
+      <p class="theorem fragment" data-kind="theorem" data-fragment-index="1">A theorem at a step.</p>
+      <p class="theorem" data-kind="corollary">A usual kind does not have a number.</p>
+      <p class="theorem" data-kind="note">A note is of the remark style.</p>
+      <p class="theorem" data-kind="proof" data-name="Proof of Theorem 3">The name of a proof is its head.</p>
+      <p class="theorem" data-kind="conjecture">A kind that is not defined.</p>
+      <p class="theorem">A theorem without a kind.</p>
     </section>
   </div>
 </div>

@@ -1,4 +1,4 @@
-% the preamble of the deck of test/macros.test.mjs
+% the preamble of the deck of test/macros.test.mjs and test/theorems.test.mjs
 \usepackage{physics}
 \usepackage{xspace}
 \usepackage{bm}
@@ -10,3 +10,11 @@
 \DeclareMathOperator{\sgn}{sgn}
 \DeclareMathOperator*{\argmin}{arg\,min}
 \newenvironment{pmat}{\begin{pmatrix}}{\end{pmatrix}}
+
+% a lemma is numbered with the theorems, a definition and a note by themselves
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\theoremstyle{remark}
+\newtheorem{note}{Note}
