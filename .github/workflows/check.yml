@@ -6,6 +6,12 @@ on:
     branches: [main]
   pull_request:
 
+# a push to a pull request cancels the round of the commit before it. A round on main has a group
+# of its own, hence it is neither cancelled nor held back by a later one
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: true
+
 # the tests and each browser are separate jobs, so that they run on separate runners at once
 jobs:
   test:
