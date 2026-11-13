@@ -10,7 +10,7 @@ So we built our own in-house editor, which combines the best ideas from PowerPoi
 
 The slides (and editor) consist of a single [index.html](/index.html) file, which you open with a double click, from any machine (mobile too), without any requirements other than having a browser.
 
-PRE-RELEASE NOTICE: The template is currently still in beta. View the most up to date version of the template at [beeson-group.github.io/slides](https://beeson-group.github.io/slides/)
+PRE-RELEASE: The template is currently still in beta. View the most up to date version of the template at [beeson-group.github.io/slides](https://beeson-group.github.io/slides/)
 
 ## Using this template
 
