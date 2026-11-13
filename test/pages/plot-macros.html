@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Plot macros deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+</head>
+<body>
+<!-- a plot whose labels use the macros of a preamble, given inline in place of a tex.js -->
+<div class="reveal">
+  <div class="slides">
+    <section>
+      <h2>Before the plot</h2>
+    </section>
+    <section>
+      <h2>A plot with macros in its labels</h2>
+      <div class="plot zone" data-plot="data"></div>
+      <script type="application/json" id="data">{
+        "parameter": { "label": "$\\vb{r}$", "digits": 2 },
+        "duration": 2,
+        "panels": [
+          { "id": "left", "title": "the \\sat family", "x": { "range": [0, 1], "ticks": [0, 1], "title": "$\\LL{2}$ orbit" }, "y": { "range": [0, 1], "ticks": [0, 1] } }
+        ],
+        "marks": [{ "id": "dot", "panel": "left", "kind": "points" }],
+        "tabs": [{ "name": "one", "values": [0, 1], "data": { "dot": [[0, 0], [1, 1]] } }]
+      }</script>
+    </section>
+  </div>
+</div>
+<script>window.beesonTex = { macros: { vb: ['\\boldsymbol{#1}', 1], LL: ['\\mathcal{L}_{#1}', 1], sat: '\\ensuremath{\\mathcal{S}}\\xspace' } };</script>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>
