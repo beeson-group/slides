@@ -138,7 +138,8 @@ test('a page opened with motion is shown without reduced motion', { timeout: 600
 test('a page that is refused a file with net::ERR_NO_BUFFER_SPACE is loaded again', { timeout: 60000 }, async (t) => {
   const { serve } = await import('../scripts/webdriver.mjs');
   const root = mkdtempSync(join(tmpdir(), 'slides-refused-'));
-  writeFileSync(join(root, 'page.html'), `<!doctype html><script>
+  // with an icon in the page, Chrome does not ask the server for a favicon, which it does not have
+  writeFileSync(join(root, 'page.html'), `<!doctype html><link rel="icon" href="data:,"><script>
     const loads = Number(localStorage.getItem('loads') ?? 0) + 1;
     localStorage.setItem('loads', loads);
     if (loads === 1) console.error('Failed to load resource: net::ERR_NO_BUFFER_SPACE ' + location.origin + '/theme/macros.js');
