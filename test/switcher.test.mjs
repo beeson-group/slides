@@ -119,12 +119,13 @@ const flips = {
   })()`,
 };
 
-test('every animation of a slide plays on after a flip of the mode, with the key d or the button', { timeout: 180000 }, async (t) => {
+test('every animation of a slide plays on after a flip of the mode, with the key d or the button', { timeout: 600000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage({ motion: true });
   const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
   const kinds = new Set();
+  let longest = { ms: 0, at: '' };
   // the demo deck does not have a plot, hence a plot is taken from a test deck
   for (const deck of ['test-deck.html', 'test/pages/plot-reveals.html']) {
     await page.goto(deckUrl(deck, 'theme=dark'));
@@ -138,12 +139,27 @@ test('every animation of a slide plays on after a flip of the mode, with the key
       for (const [how, flip] of Object.entries(flips)) {
         const theme = await page.evaluate('Beeson.theme.get()');
         assert.ok(await page.evaluate(flip), `${deck}, slide ${i + 1}: the flip with the ${how} is a view transition`);
-        // the flip takes 450 ms, and an animation is read again after its end. a slow runner may hold a
-        // video for a moment, hence the animations are read until each has advanced, for up to 5 s
-        // a slow runner may end the transition late, hence the mode is read for up to 5 s more
-        await sleep(1000);
-        for (let wait = 0; wait < 5000 && (await page.evaluate('Beeson.theme.get()')) === theme; wait += 250) await sleep(250);
-        assert.notEqual(await page.evaluate('Beeson.theme.get()'), theme);
+        // the flip takes 450 ms, but the mode is set only once the old view is captured, over a second
+        // later on a slow runner. the end of the flip is thus waited for, and an animation is read
+        // again after it. a slow runner may hold a video for a moment, hence the animations are read
+        // until each has advanced, for up to 5 s
+        const flipped = `Beeson.theme.get() !== '${theme}' && !document.documentElement.matches('.to-dark, .to-light')`;
+        const started = Date.now();
+        if (!(await page.waitFor(flipped, 60000).then(() => true, () => false))) {
+          // on a Windows runner, a flip did not end in 15 s, and on two loaded cores a frame of a
+          // surface in software took 2.4 s, hence a flip has 60 s. the state of the page is printed
+          // for a flip that does not end, with the time until its next animation frame
+          const state = await page.evaluate(`(async () => {
+            const t0 = performance.now();
+            const frame = await Promise.race([
+              new Promise((done) => requestAnimationFrame(() => done(Math.round(performance.now() - t0)))),
+              new Promise((done) => setTimeout(() => done('none in 3 s'), 3000)),
+            ]);
+            return { theme: Beeson.theme.get(), classes: document.documentElement.className, visibility: document.visibilityState, frame, transition: !!document.activeViewTransition };
+          })()`);
+          assert.fail(`${deck}, slide ${i + 1}: the flip with the ${how} did not end in 60 s: ${JSON.stringify(state)}, with ${JSON.stringify(before)}`);
+        }
+        if (Date.now() - started > longest.ms) longest = { ms: Date.now() - started, at: `${deck}, slide ${i + 1}, ${how}, ${before.map((a) => a.kind).join(' ')}` };
         let after = await page.evaluate(animations);
         for (let wait = 0; wait < 5000 && after.some((a, k) => !a.ended && a.at === before[k]?.at); wait += 250) {
           await sleep(250);
@@ -159,6 +175,7 @@ test('every animation of a slide plays on after a flip of the mode, with the key
       }
     }
   }
+  t.diagnostic(`the longest flip took ${longest.ms} ms: ${longest.at}`);
   // the two decks have an animation of each kind
   assert.deepEqual([...kinds].sort(), ['backdrop', 'plot', 'scene', 'surface', 'video']);
   assert.deepEqual(page.errors, []);
@@ -218,7 +235,8 @@ test('a traced backdrop is drawn on under the old view of a flip, in both direct
   await page.goto(deckUrl('test-deck.html', 'theme=dark'));
   await page.waitFor(deckSettled);
   const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
-  const index = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('section.figure .backdrop[data-strands="demo/broucke-sample.js"]'))`);
+  const index = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.backdrop[data-strands="demo/broucke-sample.js"]'))`);
+  assert.ok(index > 0, 'test-deck.html does not have a slide with the backdrop of demo/broucke-sample.js after its first slide');
   for (const to of ['light', 'dark']) {
     // the trace is begun again on the slide, and several strands are traced after 1.5 s
     await page.evaluate(`Reveal.slide(${index - 1})`);
@@ -228,21 +246,30 @@ test('a traced backdrop is drawn on under the old view of a flip, in both direct
     const flip = await page.evaluate(heldFlip(100));
     assert.equal(flip.toLight, to === 'light');
     const before = decodePng(await page.screenshot());
-    await sleep(500);
-    const after = decodePng(await page.screenshot());
-    await page.evaluate(`document.documentElement.getAnimations({ subtree: true }).forEach((a) => a.effect?.pseudoElement && a.finish())`);
-    const changed = { old: 0, new: 0 };
     const { left, top, right, bottom } = flip.box;
-    for (let y = Math.max(0, Math.ceil(top)); y < bottom; y++) {
-      for (let x = Math.max(0, Math.ceil(left)); x < Math.min(right, before.width); x++) {
-        const d = Math.hypot(x - flip.x, y - flip.y);
-        if (Math.abs(d - flip.r) < 20) continue;
-        const k = (y * before.width + x) * before.channels;
-        const diff = Math.abs(before.px[k] - after.px[k]) + Math.abs(before.px[k + 1] - after.px[k + 1]) + Math.abs(before.px[k + 2] - after.px[k + 2]);
-        if (diff > 12) changed[(d < flip.r) === flip.toLight ? 'new' : 'old']++;
+    // the pixels of the backdrop that differ between two screenshots, under each view
+    const count = (after) => {
+      const changed = { old: 0, new: 0 };
+      for (let y = Math.max(0, Math.ceil(top)); y < bottom; y++) {
+        for (let x = Math.max(0, Math.ceil(left)); x < Math.min(right, before.width); x++) {
+          const d = Math.hypot(x - flip.x, y - flip.y);
+          if (Math.abs(d - flip.r) < 20) continue;
+          const k = (y * before.width + x) * before.channels;
+          const diff = Math.abs(before.px[k] - after.px[k]) + Math.abs(before.px[k + 1] - after.px[k + 1]) + Math.abs(before.px[k + 2] - after.px[k + 2]);
+          if (diff > 12) changed[(d < flip.r) === flip.toLight ? 'new' : 'old']++;
+        }
       }
+      return changed;
+    };
+    // a screenshot is taken each 500 ms until the old view is changed, for 10 s at most, since a
+    // loaded machine did not draw a frame of the trace in the first 500 ms
+    let changed = { old: 0, new: 0 };
+    for (let n = 0; n < 20 && !changed.old; n++) {
+      await sleep(500);
+      changed = count(decodePng(await page.screenshot()));
     }
-    assert.ok(changed.old > 0, `slide ${index + 1}, a flip to ${to}: of the pixels of the backdrop, ${changed.new} are changed in 500 ms under the new view and ${changed.old} under the old view`);
+    await page.evaluate(`document.documentElement.getAnimations({ subtree: true }).forEach((a) => a.effect?.pseudoElement && a.finish())`);
+    assert.ok(changed.old > 0, `slide ${index + 1}, a flip to ${to}: of the pixels of the backdrop, ${changed.new} are changed in 10 s under the new view and ${changed.old} under the old view`);
   }
   assert.deepEqual(page.errors, []);
 });

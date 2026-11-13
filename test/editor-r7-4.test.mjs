@@ -13,7 +13,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { inflateRawSync } from 'node:zlib';
 import { smartLink } from '../src/editor/text/substitute.ts';
-import { byteExact, click, press, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, press, saveAndReopen, typeKeys } from './helpers/editor.mjs';
 
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
@@ -75,17 +75,6 @@ async function roundTrip(page, edited, undos = 1) {
   assert.equal(text, edited);
   page.source = text;
   return text;
-}
-
-// the characters of a US layout typed as trusted keys, each with its code and Shift
-const KEYS = { '-': ['Minus', 189, 0], ' ': ['Space', 32, 0], '.': ['Period', 190, 0], '/': ['Slash', 191, 0], ':': ['Semicolon', 186, 8], '@': ['Digit2', 50, 8] };
-async function typeKeys(page, text) {
-  for (const c of text) {
-    const [code, keyCode, mods] = KEYS[c] ?? [`Key${c.toUpperCase()}`, c.toUpperCase().charCodeAt(0), /[A-Z]/.test(c) ? 8 : 0];
-    const base = { key: c, code, windowsVirtualKeyCode: keyCode, modifiers: mods };
-    await page.send('Input.dispatchKeyEvent', { type: 'keyDown', ...base, text: c, unmodifiedText: c });
-    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
-  }
 }
 
 // Return with its text, as a keyboard sends it, since press() sends a key without a text, which

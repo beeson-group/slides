@@ -10,7 +10,7 @@ import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
-import { click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
+import { click, drag, press, previewFrames, recordPreview, saveAndReopen, type } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 const PANEL = '#beeson-edit-panel-format';
@@ -290,7 +290,8 @@ const LINES = 'data-line-numbers="1-3|4|5-7|8-9"';
 const lineRows = async (page) => (await rows(page)).filter((r) => r.meta.startsWith('Line')).map((r) => `${r.step} ${r.meta.split(' · ')[0]}`);
 
 // the number of lines of the code box dimmed by the highlight of the editor, or 0 without it
-const dimmed = (page) => page.evaluate(`CSS.highlights.get('beeson-code-dim')?.size ?? 0`);
+const DIMMED = `(CSS.highlights.get('beeson-code-dim')?.size ?? 0)`;
+const dimmed = (page) => page.evaluate(DIMMED);
 
 for (const platform of PLATFORMS) {
   test(`the line steps of a code box are rows of the Steps tab, kept in sync with its Code pane on ${platform}`, async (t) => {
@@ -390,18 +391,16 @@ for (const platform of PLATFORMS) {
     await click(page, await rowPart(page, 'if len(members)'));
     await frames(page);
     assert.equal(await label(), 'Play From');
+    // each frame of the preview is recorded in the page as it is drawn, since a read of its first
+    // step came a step late on a slow runner
+    const state = `({ para: !document.querySelector('.reveal section.present p.fragment').classList.contains('beeson-pv-off'), dimmed: ${DIMMED}, label: document.querySelector(${js(play)}).textContent })`;
+    await recordPreview(page, state);
     await click(page, play);
-    await frames(page);
-    // the slide starts at the step before the chosen one: the paragraph and line 4 are shown
-    const state = () => page.evaluate(`({ step: document.documentElement.dataset.previewStep, playing: document.documentElement.classList.contains('beeson-previewing'), para: !document.querySelector('.reveal section.present p.fragment').classList.contains('beeson-pv-off') })`);
-    assert.deepEqual(await state(), { step: '2', playing: true, para: true });
-    assert.equal(await dimmed(page), 8);
-    assert.equal(await label(), 'Stop');
-    await page.waitFor(`document.documentElement.dataset.previewStep === '3'`, 3000);
-    assert.equal(await dimmed(page), 6);
-    await page.waitFor(`document.documentElement.dataset.previewStep === '4'`, 3000);
-    assert.equal(await dimmed(page), 7);
-    await page.waitFor(`!document.documentElement.classList.contains('beeson-previewing')`, 4000);
+    // the slide starts at the step before the chosen one: the paragraph and line 4 are shown. the
+    // last frame is the last step again, with the dimmed lines restored
+    const played = await previewFrames(page);
+    assert.deepEqual(played[0], { step: '2', playing: true, read: { para: true, dimmed: 8, label: 'Stop' } });
+    assert.deepEqual(played.map((f) => [f.step, f.playing, f.read.dimmed]), [['2', true, 8], ['3', true, 6], ['4', true, 7], ['4', true, 0]]);
     assert.equal(await dimmed(page), 0);
     assert.equal(await label(), 'Play From');
     // the chip menu of a row ends with Play From its step, before the delivery of a list, and a
@@ -413,12 +412,14 @@ for (const platform of PLATFORMS) {
     await click(page, await rowPart(page, 'members.append', '.chip'));
     await page.waitFor(`!!document.querySelector('.beeson-edit-menu')`);
     assert.deepEqual(await menuLabels(page), ['Play From Step 4']);
+    await recordPreview(page, state);
     await choose(page, 'Play From Step 4');
-    assert.deepEqual(await state(), { step: '3', playing: true, para: true });
+    await page.waitFor('window.__preview.length > 0');
+    assert.deepEqual(await page.evaluate('window.__preview[0]'), { step: '3', playing: true, read: { para: true, dimmed: 6, label: 'Stop' } });
     // Esc stops the preview, and the file is not changed
     await press(page, 'Escape');
     await frames(page);
-    assert.equal((await state()).playing, false);
+    assert.equal(await page.evaluate(`document.documentElement.classList.contains('beeson-previewing')`), false);
     assert.equal(await dimmed(page), 0);
     // a row shown with the slide has Play From dimmed
     await click(page, await rowPart(page, 'Code boxes', '.chip'));

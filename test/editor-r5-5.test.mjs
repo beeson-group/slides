@@ -10,7 +10,7 @@ import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { substitution } from '../src/editor/text/substitute.ts';
-import { byteExact, click, press, saveAndReopen, type } from './helpers/editor.mjs';
+import { byteExact, click, press, saveAndReopen, type, typeKeys } from './helpers/editor.mjs';
 
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
@@ -53,17 +53,6 @@ const undo = (page) => page.evaluate('window.BeesonEditor.undo()');
 const redo = (page) => page.evaluate('window.BeesonEditor.redo()');
 const frames = (page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => d(true))))');
 const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
-
-// the characters of a US layout typed as trusted keys, each with its code and Shift
-const KEYS = { '"': ['Quote', 222, 8], "'": ['Quote', 222, 0], '-': ['Minus', 189, 0], ' ': ['Space', 32, 0], '.': ['Period', 190, 0] };
-async function typeKeys(page, text) {
-  for (const c of text) {
-    const [code, keyCode, mods] = KEYS[c] ?? [`Key${c.toUpperCase()}`, c.toUpperCase().charCodeAt(0), 0];
-    const base = { key: c, code, windowsVirtualKeyCode: keyCode, modifiers: mods };
-    await page.send('Input.dispatchKeyEvent', { type: 'keyDown', ...base, text: c, unmodifiedText: c });
-    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
-  }
-}
 
 // the caret put at the end of the first element at selector, with its block focused
 const caretAtEnd = (page, selector) =>

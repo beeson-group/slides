@@ -49,6 +49,23 @@ npm run pdf                                 # slides.pdf, one page per step, wit
 npm run pptx                                # slides.pptx, one click per step, with videos and speaker notes
 ```
 
+## Writing a test
+
+A round is one run of the workflow `check` on a commit, and a flaky test is a test that fails in a round without a fault in the code under test. On a runner of GitHub, with two to four cores, WebGL and video are drawn in software, hence a page is many times slower there than on a laptop.
+
+- Fix a flaky test before the merge. Reproduce its failure first by forcing its condition, e.g. a delay or a pause between two keys, and do not run the failed job again in place of a fix.
+- Do not read a result after a fixed wait. Wait for the state of the page with `page.waitFor`, and read the result once this state is reached.
+- Record the states of a preview or an animation with a clock of its own in the page, e.g. with a `MutationObserver`. Assert the record, since a state may be over before it is read from the test.
+- Wait for the end of an animation, a transition, or a flip of the mode by its state. Give it 60 s on a slide with a surface, a video, or a tycho viewer.
+- Open a page with `motion: true` in a test of an animation, since reduced motion is set on the Windows and macOS runners.
+- Type the keys that are to be one entry of the history with `typeKeys` or `type` of `test/helpers/editor.mjs`, since two keys more than a second apart are two entries.
+- Bound a time by the same time on a smaller case and not by a number of milliseconds, and measure a time over its bound again before the test fails.
+- Give a test a limit longer than the waits inside it added up. Keep one read of a page under a minute on a runner, or give the browser of the file a longer limit with `launch({ timeout })`.
+- Click again until the state is reached when the target may be moved between the read of its place and the click.
+- After a click that loads the page again, wait for the new page with `page.waitFor`. Catch the error Inspected target navigated or closed of the click, which is the answer of Chrome to a read that is in flight at the reload.
+- Find a slide of `test-deck.html` by its content and not by its number, and assert that it is found.
+- Pass `drafts: true` to a page only in a test of the unsaved edits, which are offered on a card to the next page of the same test.
+
 ## Conventions
 
 - The compiled `theme/beeson.js` and `theme/editor.js` are committed, since a talk must be usable without a toolchain. Rebuild them after every change under `src/`. Nothing of the editor is loaded without `?edit`, and it does not fetch anything either.

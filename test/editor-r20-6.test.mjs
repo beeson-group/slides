@@ -374,7 +374,8 @@ for (const platform of PLATFORMS) {
     await page.evaluate('Reveal.slide(2)');
     await frames(page);
     await tap(page, 'Add Backdrop…');
-    assert.equal(await page.evaluate(`!!document.querySelector('.beeson-backdrop-gallery')`), true);
+    // the gallery is drawn once the files of its drawings are answered, e.g. brand/transfer.js
+    await page.waitFor(`!!document.querySelector('.beeson-backdrop-gallery')`);
     await press(page, 'Escape');
     assert.equal(await render(page), page.source);
   });
