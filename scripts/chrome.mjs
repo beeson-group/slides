@@ -131,7 +131,9 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
   function send(method, params = {}, sessionId) {
     const id = nextId++;
     child.stdio[3].write(`${JSON.stringify({ id, method, params, sessionId })}\0`);
-    return answered(new Promise((done, fail) => pending.set(id, { done, fail })), method);
+    // an expression that is not answered is named by its start, to tell which read of a test hung
+    const what = typeof params.expression === 'string' ? `${method} of ${params.expression.slice(0, 300)}` : method;
+    return answered(new Promise((done, fail) => pending.set(id, { done, fail })), what);
   }
 
   // with mobile set, the page is laid out as on a phone, with touch and a coarse pointer, and scale
