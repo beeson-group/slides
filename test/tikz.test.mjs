@@ -72,6 +72,13 @@ test('a TikZ figure is drawn from its output in the mode of the deck, centered i
   assert.deepEqual(errors(page), []);
 });
 
+test('reveal.js is started at once by Beeson.start, before the outputs of the figures are loaded, and a settled deck has its figures drawn', { timeout: 60000 }, async (t) => {
+  const page = await open(t, '', '/1');
+  assert.equal(await page.evaluate('window.startedAtOnce'), true);
+  assert.equal(await page.evaluate(`document.querySelectorAll('.tikz > svg').length`), 3);
+  assert.deepEqual(errors(page), []);
+});
+
 test('two instances of a figure have unique ids, and an output larger than its box is shown smaller as a whole', { timeout: 60000 }, async (t) => {
   const page = await open(t, '', '/2');
   const [zone, small] = await page.evaluate(figures);
