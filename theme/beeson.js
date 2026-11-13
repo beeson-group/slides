@@ -1849,6 +1849,91 @@
     check();
   }
 
+  // src/expand.ts
+  var THEME_MACROS = { ensuremath: ["#1", 1], xspace: "", bm: ["\\boldsymbol{#1}", 1] };
+  var DEPTH = 10;
+  function deckMacros() {
+    const tex = globalThis.window?.beesonTex;
+    return tex ? { ...THEME_MACROS, ...tex.macros } : null;
+  }
+  function argument(s, i) {
+    if (s[i] === "{") {
+      let depth = 0, j = i;
+      for (; j < s.length; j++) {
+        if (s[j] === "{") depth++;
+        else if (s[j] === "}" && --depth === 0) break;
+      }
+      return [s.slice(i + 1, j), j + 1];
+    }
+    const command = /^\\(?:[A-Za-z]+|.)/.exec(s.slice(i));
+    if (command) return [command[0], i + command[0].length];
+    return [s[i] ?? "", i + 1];
+  }
+  function optional(s, i) {
+    if (s[i] !== "[") return null;
+    let depth = 0;
+    for (let j = i + 1; j < s.length; j++) {
+      if (s[j] === "{") depth++;
+      else if (s[j] === "}") depth--;
+      else if (s[j] === "]" && depth === 0) return [s.slice(i + 1, j), j + 1];
+    }
+    return null;
+  }
+  var skipSpaces = (s, i) => {
+    while (s[i] === " " || s[i] === "	" || s[i] === "\n") i++;
+    return i;
+  };
+  function expand(s, macros, depth, math) {
+    if (depth > DEPTH) return s;
+    let out = "";
+    let i = 0;
+    while (i < s.length) {
+      const c = s[i];
+      if (c === "$") {
+        math = !math;
+        out += c;
+        i++;
+        continue;
+      }
+      if (c !== "\\") {
+        out += c;
+        i++;
+        continue;
+      }
+      const name = /^\\([A-Za-z]+)/.exec(s.slice(i))?.[1];
+      const def = name !== void 0 && Object.hasOwn(macros, name) ? macros[name] : void 0;
+      if (name === void 0 || def === void 0) {
+        const keep = name !== void 0 ? name.length + 1 : 2;
+        out += s.slice(i, i + keep);
+        i += keep;
+        continue;
+      }
+      const [body, count = 0, preset] = typeof def === "string" ? [def] : def;
+      let j = i + 1 + name.length;
+      if (math || count) j = skipSpaces(s, j);
+      const args = [];
+      if (preset !== void 0 && count > 0) {
+        const given2 = optional(s, j);
+        args.push(given2 ? given2[0] : preset);
+        if (given2) j = given2[1];
+      }
+      while (args.length < count) {
+        j = skipSpaces(s, j);
+        const [arg, next] = argument(s, j);
+        args.push(arg);
+        j = next;
+      }
+      const filled = body.replace(/#([1-9])/g, (m, k) => args[Number(k) - 1] ?? m);
+      out += name === "ensuremath" && !math ? `$${expand(filled, macros, depth + 1, true)}$` : expand(filled, macros, depth + 1, math);
+      i = j;
+    }
+    return out;
+  }
+  function expandMacros(src, macros) {
+    const all = macros ? { ...THEME_MACROS, ...macros } : deckMacros();
+    return all && src.includes("\\") ? expand(src, all, 0, false) : src;
+  }
+
   // src/plot.ts
   var KINDS = ["points", "trace", "label", "events"];
   var PATCH = ["x", "y", "title", "regions", "curves", "labels"];
@@ -2197,14 +2282,19 @@
   };
   var SCRIPT_GAPS = { B: "\u212C", E: "\u2130", F: "\u2131", H: "\u210B", I: "\u2110", L: "\u2112", M: "\u2133", R: "\u211B" };
   var script = (c) => SCRIPT_GAPS[c] ?? (/^[A-Z]$/.test(c) ? String.fromCodePoint(119964 + c.charCodeAt(0) - 65) : c);
-  function parseMarkup(src) {
+  var STRUCK_GAPS = { C: "\u2102", H: "\u210D", N: "\u2115", P: "\u2119", Q: "\u211A", R: "\u211D", Z: "\u2124" };
+  var struck = (c) => STRUCK_GAPS[c] ?? (/^[A-Z]$/.test(c) ? String.fromCodePoint(120120 + c.charCodeAt(0) - 65) : c);
+  var AS_IS = /* @__PURE__ */ new Set(["boldsymbol", "bm", "mathit", "mathop", "mathfrak", "ensuremath"]);
+  var UPRIGHT = /* @__PURE__ */ new Set(["mathrm", "text", "mathbf", "mathsf", "mathtt", "operatorname", "textrm", "textbf", "textit", "mathnormal"]);
+  var SPACES = { ",": " ", ":": " ", ";": " ", " ": " ", "!": "" };
+  function parseMarkup(src, macros) {
     const runs = [];
     const push = (text, italic, shift) => {
       const last = runs.at(-1);
       if (last && last.italic === italic && last.shift === shift) last.text += text;
       else runs.push({ text, italic, shift });
     };
-    const parts = src.split("$");
+    const parts = expandMacros(src, macros).split("$");
     parts.forEach((part, k) => {
       if (k % 2 === 0) {
         if (part) push(part, false, null);
@@ -2234,19 +2324,19 @@
         if (c === "\\") {
           const m = /^\\([A-Za-z]+)/.exec(s.slice(i));
           if (!m) {
-            push(s[i + 1] ?? "", false, shift);
+            push(SPACES[s[i + 1]] ?? s[i + 1] ?? "", false, shift);
             i += 2;
             continue;
           }
           i += m[0].length;
-          if (m[1] === "mathrm" || m[1] === "text") {
+          if (UPRIGHT.has(m[1]) || AS_IS.has(m[1])) {
             const [g, j] = group2(s, i);
             i = j;
-            math(g, true, shift);
-          } else if (m[1] === "mathcal") {
+            math(g, upright || UPRIGHT.has(m[1]), shift);
+          } else if (m[1] === "mathcal" || m[1] === "mathbb") {
             const [g, j] = group2(s, i);
             i = j;
-            push([...g].map(script).join(""), false, shift);
+            push([...g].map(m[1] === "mathcal" ? script : struck).join(""), false, shift);
           } else {
             const sym = SYMBOLS[m[1]] ?? m[0];
             push(sym, !upright && /^[a-z]+$/.test(m[1]) && /[α-ω]/.test(sym), shift);
