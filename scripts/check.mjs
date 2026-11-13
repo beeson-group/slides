@@ -10,16 +10,19 @@
 // A page error is an uncaught exception, a console.error, or a failed load, e.g. of a missing file
 // or of anything on the network. Finally, the behaviors that a screenshot does not show are checked
 // in pages of their own, among them that every video has a poster, which is the still of the video
-// in a PDF. The script prints a summary and exits nonzero on any error.
+// in a PDF. The tex.js next to the deck must be the one that npm run tex writes from the preamble.tex
+// and the references.bib next to it, and a line of the preamble that is not read is not an error.
+// The script prints a summary and exits nonzero on any error.
 //
 // With --browser firefox or --browser safari, the deck is driven over WebDriver. The console is not
 // read in these browsers, hence a page error is then what is found in the page, with deckProblems.
 // A phone and a pixel ratio cannot be emulated in these browsers, thus they are checked only in Chrome.
 // Automation in Safari refuses a page from file://, hence the deck is served from a local port there.
-import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { deckSettled, deckUrl, launch } from './chrome.mjs';
+import { deckTex } from './tex.mjs';
 import { launch as launchWebDriver, serve } from './webdriver.mjs';
 
 const { values: options } = parseArgs({
@@ -39,7 +42,10 @@ const listSlides = `[...document.querySelectorAll('.reveal .slides > section')].
   return stack.length ? [...stack].map((_, v) => [h, v]) : [[h, 0]];
 })`;
 
-// what is wrong in a settled page, read from the page itself, hence in every browser
+// what is wrong in a settled page, read from the page itself, hence in every browser. a macro that
+// is not defined is drawn by MathJax as its name in red, a citation of a key that is not in the
+// tex.js of the deck as the key, and a theorem of a kind that is not defined under the name of the
+// kind. the three are read on the slide that is shown, so that each is named with its slide
 const deckProblems = `[
   ...[...document.images].filter((image) => image.complete && !image.naturalWidth).map((image) => 'image not loaded: ' + image.src),
   ...[...document.fonts].filter((face) => face.status === 'error').map((face) => 'font not loaded: ' + face.family),
@@ -47,6 +53,9 @@ const deckProblems = `[
   ...[...document.querySelectorAll('tycho-viewer')].map((viewer) => viewer.shadowRoot?.querySelector('.status.error')?.textContent).filter(Boolean),
   ...[...document.querySelectorAll('.plot-error')].map((error) => error.textContent),
   ...[...document.querySelectorAll('.qr-error')].map((error) => error.textContent),
+  ...[...Reveal.getCurrentSlide().querySelectorAll('mjx-container g[data-mml-node="mtext"][fill="red"][data-latex]')].map((name) => name.getAttribute('data-latex')).filter((name) => name.startsWith('\\\\')).map((name) => 'macro not defined: ' + name),
+  ...[...Reveal.getCurrentSlide().querySelectorAll('cite[data-missing]')].flatMap((cite) => cite.dataset.n.split(',').filter((key) => !/^[0-9]+$/.test(key))).map((key) => 'citation of a key that is not in the bibliography: ' + key),
+  ...[...Reveal.getCurrentSlide().querySelectorAll('p.theorem[data-missing]')].map((theorem) => 'theorem of a kind that is not defined: ' + theorem.dataset.kind),
   ...performance.getEntriesByType('resource').map((entry) => entry.name).filter((name) => /^https?:/.test(name) && !name.startsWith(location.origin)).map((name) => 'network load: ' + name),
 ]`;
 
@@ -55,6 +64,11 @@ const videosWithoutPoster = `[...document.querySelectorAll('video:not([poster])'
 
 mkdirSync(options.out, { recursive: true });
 const failures = [];
+// a deck without a preamble.tex, a references.bib, and a tex.js does not have definitions to write
+const fresh = deckTex(options.deck);
+const written = existsSync(fresh.file) ? readFileSync(fresh.file, 'utf8') : null;
+const sources = ['preamble.tex', 'references.bib'].some((name) => existsSync(join(dirname(options.deck), name)));
+if (written === null ? sources : written !== fresh.text) failures.push('tex.js is not the one written from preamble.tex and references.bib: run npm run tex');
 const browser = await (options.browser === 'chrome' ? launch() : launchWebDriver(options.browser));
 const server = options.browser === 'safari' ? await serve(dirname(options.deck)) : null;
 
