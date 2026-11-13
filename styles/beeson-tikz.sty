@@ -1,0 +1,78 @@
+% TikZ and pgfplots style for figures in the Beeson slides. npm run tex loads it with the option
+% dark or light for each mode of a deck. A paper loads it with \usepackage{beeson-tikz}, in the
+% light mode, so that a figure reads the same colors in both.
+%
+% The colors are named after the custom properties of theme/beeson.css: bg, subtle, muted, line,
+% accent, violet, blue, red, and data1 to data8, with ink for --text, since text is a key of TikZ.
+% A figure is shown at 3.6 px per TeX point, hence lines of 0.5556pt are 2 px on a slide, curves
+% of 0.8333pt are 3 px, and text of 10pt is 36 px, the size of a caption.
+%
+% A part is a scope or a curve that a slide shows as a step, written as <g data-part="name"> in the
+% SVG of dvisvgm, as in \begin{scope}[part=moon] or \addplot+[part=x]. A label node at the end of a
+% curve is drawn inside the group of its curve. With another driver than dvisvgm, part does nothing.
+\NeedsTeXFormat{LaTeX2e}
+\ProvidesPackage{beeson-tikz}[2026/11/12 TikZ and pgfplots style of the Beeson slides]
+\newif\ifbeeson@dark
+\DeclareOption{dark}{\beeson@darktrue}
+\DeclareOption{light}{\beeson@darkfalse}
+\ExecuteOptions{light}
+\ProcessOptions\relax
+\RequirePackage{tikz}
+\RequirePackage{pgfplots}
+\pgfplotsset{compat=1.18}
+
+\ifbeeson@dark
+  \definecolor{bg}{HTML}{050505}
+  \definecolor{ink}{HTML}{F2F2EF}
+  \definecolor{subtle}{HTML}{A6A6A0}
+  \definecolor{muted}{HTML}{7C7C76}
+  \definecolor{line}{HTML}{232320}
+  \definecolor{accent}{HTML}{F08050}
+  \definecolor{violet}{HTML}{C94FE6}
+  \definecolor{blue}{HTML}{4F9DF5}
+  \definecolor{red}{HTML}{FF4D4D}
+  \definecolor{data1}{HTML}{E69F00}
+  \definecolor{data2}{HTML}{56B4E9}
+  \definecolor{data3}{HTML}{009E73}
+  \definecolor{data4}{HTML}{F0E442}
+  \definecolor{data5}{HTML}{0072B2}
+  \definecolor{data6}{HTML}{D55E00}
+  \definecolor{data7}{HTML}{CC79A7}
+  \definecolor{data8}{HTML}{F2F2EF}
+\else
+  \definecolor{bg}{HTML}{FAF8F3}
+  \definecolor{ink}{HTML}{141413}
+  \definecolor{subtle}{HTML}{55554F}
+  \definecolor{muted}{HTML}{8A8A84}
+  \definecolor{line}{HTML}{E3E0D8}
+  \definecolor{accent}{HTML}{C8571E}
+  \definecolor{violet}{HTML}{8A2BE2}
+  \definecolor{blue}{HTML}{1F5FD0}
+  \definecolor{red}{HTML}{C41E1E}
+  \definecolor{data1}{HTML}{E69F00}
+  \definecolor{data2}{HTML}{56B4E9}
+  \definecolor{data3}{HTML}{009E73}
+  \definecolor{data4}{HTML}{F0E442}
+  \definecolor{data5}{HTML}{0072B2}
+  \definecolor{data6}{HTML}{D55E00}
+  \definecolor{data7}{HTML}{CC79A7}
+  \definecolor{data8}{HTML}{000000}
+\fi
+
+\tikzset{every picture/.append style={color=ink, line width=0.5556pt}}
+\pgfplotsset{every axis/.append style={
+  axis lines*=left, axis line style={subtle, line width=0.5556pt}, tick style={subtle, line width=0.5556pt},
+  legend style={draw=none, fill=none}, legend cell align=left,
+  cycle list={{accent},{blue},{violet}}, every axis plot/.append style={line width=0.8333pt}}}
+
+\def\beeson@dvisvgm{pgfsys-dvisvgm.def}
+\ifx\pgfsysdriver\beeson@dvisvgm
+  \tikzset{part/.style={execute at begin scope={\special{dvisvgm:raw <g data-part='#1'>}},
+    execute at end scope={\special{dvisvgm:raw </g>}}}}
+  \pgfplotsset{part/.style={execute at begin plot visualization={\special{dvisvgm:raw <g data-part='#1'>}},
+    execute at end plot visualization={\special{dvisvgm:raw </g>}}}}
+\else
+  \tikzset{part/.style={}}
+  \pgfplotsset{part/.style={}}
+\fi
+\endinput
