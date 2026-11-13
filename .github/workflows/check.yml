@@ -8,6 +8,10 @@ on:
   pull_request:
   workflow_dispatch:
 
+# the token of a job can only read the repository, and it is not left in the checkout
+permissions:
+  contents: read
+
 # a push to a pull request cancels the round of the commit before it. A round on main has a group
 # of its own, hence it is neither cancelled nor held back by a later one
 concurrency:
@@ -29,6 +33,8 @@ jobs:
     timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: 22
@@ -74,6 +80,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
       - uses: actions/setup-node@v7
         with:
           node-version: 22
