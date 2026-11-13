@@ -8,7 +8,7 @@ HTML slides are greatly more expressive than any of the alternatives.
 
 But editing raw HTML sucks.
 
-So we built our own in-house editor, which combines the best ideas from PowerPoint, Keynote, and Beamer, all in one place.
+So we built our own in-house editor, which combines the best ideas from PowerPoint, Keynote, and Beamer, all in one place.  
 Minus all the bloat.
 
 The slides (and editor) consist of a single [index.html](/index.html) file, which you open with a double click, from any machine (mobile too), without any requirements other than having a browser.
