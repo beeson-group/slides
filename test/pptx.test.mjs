@@ -7,6 +7,7 @@ import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join, posix } from 'node:path';
 import { inflateRawSync } from 'node:zlib';
+import { deckUrl, launch, printView } from '../scripts/chrome.mjs';
 import { pptx, zip } from '../scripts/pptx.mjs';
 
 const EMU_PER_PX = 6350;
@@ -183,4 +184,99 @@ test('the demo deck is exported with a step for each page of its PDF', () => {
   }
   assert.equal(text(parts, 'ppt/presentation.xml').match(/<p:sldId /g).length, slideCount(parts));
   assert.ok([...parts.keys()].some((name) => name.endsWith('.mp4')));
+});
+
+// runs in Chrome. a and b are { png } or { mp4, time }, where png is the base64 of a PNG or a list
+// of them drawn one over the other, and mp4 is the base64 of an MP4 at a time in s, each with a crop
+// { x, y, width, height } in px of the file or without one. Returns the largest difference of a
+// channel, the shares of the pixels off by more than 8 and by more than 32 in a channel, the mean
+// difference of a channel, and the PSNR in dB over RGB
+async function differences(a, b) {
+  const pixels = async ({ png, mp4, time, crop }) => {
+    let source, over = [];
+    if (png) {
+      [source, ...over] = await Promise.all([png].flat().map(async (data) => {
+        const image = new Image();
+        image.src = `data:image/png;base64,${data}`;
+        await image.decode();
+        return image;
+      }));
+    } else {
+      source = document.createElement('video');
+      source.muted = true;
+      source.src = URL.createObjectURL(new Blob([Uint8Array.from(atob(mp4), (c) => c.charCodeAt(0))], { type: 'video/mp4' }));
+      await new Promise((done, fail) => {
+        source.onloadeddata = done;
+        source.onerror = () => fail(new Error(`the MP4 is not decoded: ${source.error?.message}`));
+      });
+      source.currentTime = time;
+      await new Promise((done) => { source.onseeked = done; });
+    }
+    const { x = 0, y = 0, width = source.videoWidth ?? source.naturalWidth, height = source.videoHeight ?? source.naturalHeight } = crop ?? {};
+    const g = new OffscreenCanvas(width, height).getContext('2d');
+    for (const image of [source, ...over]) g.drawImage(image, x, y, width, height, 0, 0, width, height);
+    return g.getImageData(0, 0, width, height);
+  };
+  const [p, q] = await Promise.all([pixels(a), pixels(b)]);
+  if (p.width !== q.width || p.height !== q.height) return { size: [p.width, p.height, q.width, q.height] };
+  const n = p.width * p.height;
+  let max = 0, few = 0, over = 0, sum = 0, squares = 0;
+  for (let i = 0; i < n; i++) {
+    let most = 0;
+    for (let c = 0; c < 3; c++) {
+      const e = Math.abs(p.data[4 * i + c] - q.data[4 * i + c]);
+      most = Math.max(most, e);
+      sum += e;
+      squares += e * e;
+    }
+    max = Math.max(max, most);
+    if (most > 8) few++;
+    if (most > 32) over++;
+  }
+  return { size: [p.width, p.height], max, few: few / n, over: over / n, mean: sum / (3 * n), psnr: 10 * Math.log10((255 * 255 * 3 * n) / Math.max(squares, 1)) };
+}
+
+const compare = (page, a, b) => page.evaluate(`(${differences})(${JSON.stringify(a)}, ${JSON.stringify(b)})`);
+
+// the height in px and the picture of each .pdf-page of the print view of a deck in page, clipped to
+// the box of the page in the document. with pdfPageHeightOffset=0, a page is as high as its slide,
+// in place of a pixel less
+async function printedSteps(page, deck) {
+  await printView(page, deckUrl(deck, 'print-pdf&still&pdfPageHeightOffset=0'));
+  const boxes = await page.evaluate(`[...document.querySelectorAll('.pdf-page')]
+    .map((step) => ({ y: window.scrollY + step.getBoundingClientRect().top, height: step.getBoundingClientRect().height }))`);
+  const shots = [];
+  for (const { y } of boxes) {
+    await page.evaluate(`window.scrollTo(0, ${y})`);
+    await page.waitFor('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(true))))');
+    shots.push(await page.screenshot({ x: 0, y, width: 1920, height: 1080, scale: 1 }));
+  }
+  return { heights: boxes.map((b) => b.height), shots };
+}
+
+// the picture of PowerPoint slide n of a file of one picture per slide
+const stepOf = (parts, n) => parts.get(relationships(parts, `ppt/slides/slide${n}.xml`).get(
+  text(parts, `ppt/slides/slide${n}.xml`).match(/<a:blip r:embed="([^"]+)"/)[1]));
+
+// each slide of test/pages/print-rows.html has a bar on its first row and another on its last row.
+// by default, a page of the print view is 1079 px high. a picture of 1080 px then ends on the first
+// row of the next page, and on the last page the scroll stops a pixel short of its top
+test('the picture of each step is its page of the print view, the last page too', { timeout: 300000 }, async (t) => {
+  const parts = exportDeck('test/pages/print-rows.html');
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage({ scale: 2 });
+  // every picture is taken before the comparisons, which are made in the same page
+  const { heights, shots } = await printedSteps(page, 'test/pages/print-rows.html');
+  assert.deepEqual(heights, shots.map(() => 1080));
+  assert.equal(slideCount(parts), shots.length);
+  const off = [];
+  for (const [n, shot] of shots.entries()) {
+    const seen = await compare(page, { png: stepOf(parts, n + 1).toString('base64') }, { png: shot.toString('base64') });
+    t.diagnostic(`step ${n + 1}: ${JSON.stringify(seen)}`);
+    // measured on a Mac as equal. a picture with the last row of a slide replaced has 0.09 % of
+    // its pixels off by more than 32
+    if (!(seen.over < 1e-5 && seen.mean < 0.01)) off.push({ step: n + 1, ...seen });
+  }
+  assert.deepEqual(off, []);
 });
