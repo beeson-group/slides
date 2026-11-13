@@ -4,21 +4,21 @@
 
 // ACCENT is the combining character of each accent command of TeX
 const ACCENT: Record<string, string> = {
-  '`': '̀',
-  "'": '́',
-  '^': '̂',
-  '~': '̃',
-  '"': '̈',
-  '=': '̄',
-  '.': '̇',
-  u: '̆',
-  v: '̌',
-  H: '̋',
-  c: '̧',
-  k: '̨',
-  r: '̊',
-  d: '̣',
-  b: '̱',
+  '`': '\u0300',
+  "'": '\u0301',
+  '^': '\u0302',
+  '~': '\u0303',
+  '"': '\u0308',
+  '=': '\u0304',
+  '.': '\u0307',
+  u: '\u0306',
+  v: '\u030c',
+  H: '\u030b',
+  c: '\u0327',
+  k: '\u0328',
+  r: '\u030a',
+  d: '\u0323',
+  b: '\u0331',
 };
 const LETTER: Record<string, string> = { ss: 'ß', o: 'ø', O: 'Ø', l: 'ł', L: 'Ł', ae: 'æ', AE: 'Æ', oe: 'œ', OE: 'Œ', aa: 'å', AA: 'Å', i: 'ı', j: 'ȷ' };
 // the letter under an accent is one letter or a dotless i or j, bare or in braces

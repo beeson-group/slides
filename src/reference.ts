@@ -114,7 +114,7 @@ export const referenceText = (reference: Reference): string => referenceParts(re
 export const referenceLink = (reference: Reference): string => (reference.doi ? `https://doi.org/${reference.doi}` : (reference.url ?? ''));
 
 // lowercase and without the accents, so that gomez finds Gómez
-const fold = (text: string): string => text.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+const fold = (text: string): string => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
 
 const searched = new WeakMap<Entry, string>();
 function searchText(entry: Entry): string {
