@@ -287,7 +287,6 @@ export function compileFigure({ dir, name, source, box = {}, tools = findTools()
     // the target in TeX pt of each dimension of the box that is set
     const target = { width: box.width != null ? box.width / PX_PER_PT : null, height: box.height != null ? box.height / PX_PER_PT : null };
     const boxed = target.width !== null || target.height !== null;
-    const off = (out) => Math.max(...['width', 'height'].map((key) => (target[key] === null ? 0 : Math.abs(out[key] - target[key]) * PX_PER_PT)));
     let fit = {};
     let out;
     if (boxed && axes(source) === 1) {
@@ -296,25 +295,27 @@ export function compileFigure({ dir, name, source, box = {}, tools = findTools()
       fit = { ...target };
       out = pass('light', fit);
       if (out.errors) return out;
-      if (off(out) > SLACK) {
+      if (['width', 'height'].some((key) => target[key] !== null && Math.abs(out[key] - target[key]) * PX_PER_PT > SLACK)) {
         for (const key of ['width', 'height']) if (target[key] !== null) fit[key] = Math.max(10, fit[key] - (out[key] - target[key]));
         out = pass('light', fit);
       }
     } else {
       out = pass('light', fit);
       if (boxed && !out.errors) {
-        // the scale of the coordinates that fills the box in one dimension. a size is a + b scale in
-        // each dimension, since text and lines are not scaled, hence a second pass at the scale
-        // measured from the first two is close to the box
-        const ratio = (out) => Math.min(...['width', 'height'].filter((key) => target[key] !== null).map((key) => target[key] / out[key]));
+        // a drawing is scaled to fill its box in one dimension. its size is a + b scale in each
+        // dimension, since text and lines are not scaled. a and b are measured from the pass at
+        // scale 1 and the pass at the ratio of the box, and a last pass is run at the scale that
+        // they give when the second pass misses the box
+        const keys = ['width', 'height'].filter((key) => target[key] !== null);
+        const gaps = (out) => keys.map((key) => (target[key] - out[key]) * PX_PER_PT);
+        const missed = (out) => Math.min(...gaps(out).map(Math.abs)) > SLACK || Math.min(...gaps(out)) < -SLACK;
         const first = out;
-        const scale = ratio(first);
+        const scale = Math.min(...keys.map((key) => target[key] / first[key]));
         if (Math.abs(scale - 1) > 1e-3) {
           fit = { scale };
           out = pass('light', fit);
-          if (!out.errors && off(out) > SLACK) {
-            const scales = ['width', 'height']
-              .filter((key) => target[key] !== null)
+          if (!out.errors && missed(out)) {
+            const scales = keys
               .map((key) => {
                 const b = (out[key] - first[key]) / (scale - 1);
                 return b > 0 ? 1 + (target[key] - first[key]) / b : scale * (target[key] / out[key]);
