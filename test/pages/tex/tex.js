@@ -11,7 +11,7 @@ window.beesonTex = {
   "environments": {
     "pmat": ["\\begin{pmatrix}","\\end{pmatrix}"],
   },
-  "packages": ["physics","boldsymbol"],
+  "packages": ["physics"],
   "theorems": {},
   "references": {},
 };
