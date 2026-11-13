@@ -150,6 +150,35 @@ export async function press(page, keys) {
   await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
 }
 
+// the code, the key code, and the modifier bits of the symbols of a US layout that typeKeys() types
+const SYMBOLS = {
+  ' ': ['Space', 32, 0],
+  '-': ['Minus', 189, 0],
+  '.': ['Period', 190, 0],
+  '/': ['Slash', 191, 0],
+  "'": ['Quote', 222, 0],
+  '"': ['Quote', 222, BITS.Shift],
+  ':': ['Semicolon', 186, BITS.Shift],
+  '@': ['Digit2', 50, BITS.Shift],
+};
+
+/**
+ * Trusted typing of text key by key on a US layout, each key with its code and Shift. The keys are
+ * sent at once and not each after the answer to the one before, since the typing into a block is
+ * one entry of the history only while its keys are less than 1 s apart, and on a slow runner an
+ * answer took longer.
+ */
+export async function typeKeys(page, text) {
+  const sent = [];
+  for (const c of text) {
+    const [code, keyCode, modifiers] = SYMBOLS[c] ?? [`Key${c.toUpperCase()}`, c.toUpperCase().charCodeAt(0), /[A-Z]/.test(c) ? BITS.Shift : 0];
+    const base = { key: c, code, windowsVirtualKeyCode: keyCode, modifiers };
+    sent.push(page.send('Input.dispatchKeyEvent', { type: 'keyDown', ...base, text: c, unmodifiedText: c }));
+    sent.push(page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base }));
+  }
+  await Promise.all(sent);
+}
+
 /** Trusted typing of text at the caret, as an input method commits it. */
 export async function type(page, text) {
   await page.send('Input.insertText', { text });
