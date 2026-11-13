@@ -593,7 +593,7 @@ test('Save as writes a chosen file, autosave saves after a pause, and unsaved ed
   t.after(() => browser.close());
   const server = await serve('.');
   t.after(() => server.close());
-  const page = await browser.newPage();
+  const page = await browser.newPage({ drafts: true });
   const url = `${server.origin}/index.html?edit&still`;
   const status = () => page.evaluate('window.BeesonEditor.status()');
   const load = async () => {

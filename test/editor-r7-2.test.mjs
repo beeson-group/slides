@@ -54,9 +54,10 @@ async function written(page, names) {
 const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 const ready = 'window.BeesonEditor && window.BeesonEditor.ready.then(() => true)';
 
-// the editor on the slide n of a deck served over HTTP
-async function load(t, platform, { deck = LAYOUTS, n = TEXT, open = true } = {}) {
-  const page = await browser.newPage({ width: 1600, height: 1000 });
+// the editor on the slide n of a deck served over HTTP. with drafts, the page keeps its unsaved
+// edits in the storage of the browser
+async function load(t, platform, { deck = LAYOUTS, n = TEXT, open = true, drafts = false } = {}) {
+  const page = await browser.newPage({ width: 1600, height: 1000, drafts });
   t.after(() => page.close().catch(() => {}));
   page.url = `${server.origin}/${deck}?edit&still&edit-platform=${platform}`;
   await page.goto(page.url);
@@ -263,7 +264,7 @@ for (const platform of PLATFORMS) {
   });
 
   test(`File > Revert to Saved asks first, then shows the file again on the same slide without the draft (${platform})`, async (t) => {
-    const page = await load(t, platform, { open: false });
+    const page = await load(t, platform, { open: false, drafts: true });
     await exec(page, 'file.recent.clear');
     assert.deepEqual((await page.evaluate(`window.BeesonEditor.status()`)).problems, []);
     assert.equal(await render(page), page.source);

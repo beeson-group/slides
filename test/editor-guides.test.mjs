@@ -41,10 +41,10 @@ after(async () => {
 let last = null;
 
 // the editor on slide n of the deck of layouts, or of text, with the storage of the browser
-// cleared unless keep is set
-async function guidesPage(platform, n = MATH, keep = false, text = readFileSync(LAYOUTS, 'utf8')) {
+// cleared unless keep is set. with drafts, the page keeps its unsaved edits in this storage
+async function guidesPage(platform, n = MATH, keep = false, text = readFileSync(LAYOUTS, 'utf8'), drafts = keep) {
   await last?.close().catch(() => {});
-  const page = await browser.newPage();
+  const page = await browser.newPage({ drafts });
   last = page;
   const url = `${server.origin}/${LAYOUTS}?edit&still&edit-platform=${platform}`;
   await page.goto(url);
@@ -180,7 +180,7 @@ for (const platform of PLATFORMS) {
   });
 
   test(`guides are copied, pasted, cleared, hidden, and kept over a reload, on ${platform}`, async () => {
-    let page = await guidesPage(platform);
+    let page = await guidesPage(platform, MATH, false, undefined, true);
     // the guides are shown with the rulers
     await exec(page, 'view.rulers');
     await exec(page, 'view.guides.add', { x: [400], y: [300, 700] });

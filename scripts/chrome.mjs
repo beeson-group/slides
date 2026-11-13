@@ -136,8 +136,10 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
 
   // with mobile set, the page is laid out as on a phone, with touch and a coarse pointer, and scale
   // is the device pixel ratio. with motion set, the page is shown without reduced motion, which is
-  // the setting of the macOS and Windows runners of GitHub, hence a backdrop is traced there too
-  async function newPage({ width = 1920, height = 1080, mobile = false, scale = 1, motion = false } = {}) {
+  // the setting of the macOS and Windows runners of GitHub, hence a backdrop is traced there too.
+  // without drafts, the unsaved edits that the editor keeps in the storage of the browser 1 s after
+  // its last change are not written, since they were offered on a card to the next page of a test
+  async function newPage({ width = 1920, height = 1080, mobile = false, scale = 1, motion = false, drafts = false } = {}) {
     const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
     const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
     const call = (method, params) => send(method, params, sessionId);
@@ -160,6 +162,16 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
     await call('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: scale, mobile });
     if (mobile) await call('Emulation.setTouchEmulationEnabled', { enabled: true });
     if (motion) await call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
+    if (!drafts) {
+      await call('Page.addScriptToEvaluateOnNewDocument', {
+        source: `{
+          const set = Storage.prototype.setItem;
+          Storage.prototype.setItem = function (key, value) {
+            if (!String(key).startsWith('beeson-draft:')) set.call(this, key, value);
+          };
+        }`,
+      });
+    }
 
     async function evaluate(expression) {
       const { result, exceptionDetails } = await call('Runtime.evaluate', {

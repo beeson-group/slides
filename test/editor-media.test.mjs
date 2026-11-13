@@ -62,9 +62,10 @@ const CLEAR = `(async () => {
   return true;
 })()`;
 
-async function load(platform, { clear = true } = {}) {
+// with drafts, the page keeps its unsaved edits in the storage of the browser
+async function load(platform, { clear = true, drafts = false } = {}) {
   await last?.close().catch(() => {});
-  const page = await browser.newPage();
+  const page = await browser.newPage({ drafts });
   last = page;
   await page.send('Page.setInterceptFileChooserDialog', { enabled: true });
   if (clear) {
@@ -78,8 +79,8 @@ async function load(platform, { clear = true } = {}) {
   return page;
 }
 
-async function mediaPage(platform, n = 0) {
-  const page = await load(platform);
+async function mediaPage(platform, n = 0, options = {}) {
+  const page = await load(platform, options);
   const s = await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(page.source)})`);
   assert.deepEqual(s.problems, []);
   if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
@@ -380,7 +381,7 @@ for (const platform of PLATFORMS) {
   });
 
   test(`${platform}: a draft with an image is restored with the image`, async () => {
-    let page = await mediaPage(platform);
+    let page = await mediaPage(platform, 0, { drafts: true });
     await emptyZone(page);
     await dropFiles(page, await centerOf(page, '.reveal section.present > .zone'), [IMAGE]);
     await waitText(page, 'media/figure-light.png');
@@ -392,7 +393,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await page.evaluate(ROWS), [['media/figure-light.png', IMAGE_BYTES]]);
 
     // the tab is closed, and the deck is opened again with the draft offered
-    page = await load(platform, { clear: false });
+    page = await load(platform, { clear: false, drafts: true });
     await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(page.source)})`);
     await page.waitFor(`!!document.querySelector('dialog.recover[open]')`);
     await page.evaluate(`(async () => {
