@@ -120,8 +120,11 @@ const ALL = ['Click', 'Timed one', 'Timed two'];
 test('a click during a delay shows the next step at once, the later delays still play, and Back lands on the step of the click', async (t) => {
   const page = await open(t, 'test/pages/timed-steps.html');
   await page.evaluate('Reveal.slide(1)');
-  await click(page, BLANK);
-  await click(page, BLANK);
+  // the two clicks are sent at once, since on a slow runner the second of two clicks sent one
+  // after the other came after the delays of 300 ms
+  const mouse = (type) => page.send('Input.dispatchMouseEvent', { type, ...BLANK, button: 'left', buttons: type === 'mousePressed' ? 1 : 0, clickCount: 1 });
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', ...BLANK });
+  await Promise.all(['mousePressed', 'mouseReleased', 'mousePressed', 'mouseReleased'].map(mouse));
   assert.deepEqual(await settled(page), { slide: 1, shown: ALL });
   await press(page, 'ArrowLeft');
   assert.deepEqual(await settled(page), { slide: 1, shown: ['Click', 'Timed one'] });
