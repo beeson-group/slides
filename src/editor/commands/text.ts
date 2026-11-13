@@ -491,4 +491,5 @@ function installStyles(app: App, define: Define, menu: MenuOf): void {
   smart('quotes', 'Smart Quotes', 90);
   smart('dashes', 'Smart Dashes', 91);
   smart('links', 'Smart Web and Email Links', 92);
+  smart('markdown', 'Markdown Formatting', 93);
 }

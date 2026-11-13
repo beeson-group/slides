@@ -4,15 +4,17 @@
 // as an a with href. the typed character is one entry of the history and its substitution
 // another, hence an undo takes back only the substitution, as on a Mac. each switch is kept in the
 // local storage of the browser, and all are on unless switched off. a code box, inline code, a
-// link, and the TeX of a formula being typed are left as typed
+// link, and the TeX of a formula being typed are left as typed. with Markdown, a span closed by
+// the mark that opened it is written in the tag of the mark at its closing character, e.g.
+// **bold** as a strong, and the marks are taken off
 
 import type { App } from '../app.ts';
 import { contentWithTex } from '../math.ts';
 import { store, stored } from '../ui/dom.ts';
 
-export type Smart = 'quotes' | 'dashes' | 'links';
+export type Smart = 'quotes' | 'dashes' | 'links' | 'markdown';
 
-const KEYS: Record<Smart, string> = { quotes: 'beeson-edit-smart-quotes', dashes: 'beeson-edit-smart-dashes', links: 'beeson-edit-smart-links' };
+const KEYS: Record<Smart, string> = { quotes: 'beeson-edit-smart-quotes', dashes: 'beeson-edit-smart-dashes', links: 'beeson-edit-smart-links', markdown: 'beeson-edit-smart-markdown' };
 
 export const isSmart = (kind: Smart): boolean => stored(KEYS[kind]) !== 'off';
 
@@ -42,6 +44,32 @@ export function substitution(before: string, typed: string, on: Record<'quotes' 
   // a space typed at the end of a block is a no-break space in Chrome, and it is kept as typed,
   // since a plain space there is dropped once the next character is typed
   if (on.dashes && (typed === ' ' || typed === '\u00a0') && /\S[ \u00a0]-$/u.test(before)) return { remove: 2, insert: `–${typed}` };
+  return null;
+}
+
+// the marks of Markdown and their tags, the double marks first. a span is closed only by the mark
+// that opened it, and its words do not start or end with a space
+const MARKS: [string, string][] = [['**', 'strong'], ['__', 'strong'], ['~~', 's'], ['*', 'em'], ['_', 'em'], ['`', 'code']];
+const escaped = (mark: string) => mark.replace(/\*/g, '\\$&');
+
+// the span of Markdown that the character typed last closes at the end of text, as the start of its
+// opening mark in text, its words, and its tag. null where text does not end with a closed span. a
+// single mark is not doubled at either end, and an underscore opens only after a space or a
+// punctuation mark, hence a name in snake_case is left as typed
+export function markdownSpan(text: string): { start: number; words: string; tag: string } | null {
+  if (inTex(text)) return null;
+  for (const [mark, tag] of MARKS) {
+    if (!text.endsWith(mark)) continue;
+    const m = escaped(mark);
+    const c = escaped(mark[0]);
+    const lead = mark === '_' || mark === '__' ? `(?:^|[\\s([{"'“‘—–-])` : mark.length === 1 ? `(?:^|[^${c}])` : '';
+    const words = mark === '`' ? '[^`]+' : `[^\\s${c}](?:[^${c}]*[^\\s${c}])?`;
+    const found = new RegExp(`${lead}(${m})(${words})${m}$`, 'u').exec(text);
+    if (!found) continue;
+    const start = found.index + found[0].length - found[1].length - found[2].length - mark.length;
+    if (mark.length === 1 && text.charAt(text.length - 2) === mark) continue;
+    return { start, words: found[2], tag };
+  }
   return null;
 }
 
@@ -91,6 +119,39 @@ export function install(app: App): void {
   // the data of the last beforeinput of typing. an insertText of a script, e.g. a paste of plain
   // text by execCommand, comes without a beforeinput, and it is not substituted
   let typed: string | null = null;
+  // the element of the last span of Markdown, whose end the caret is left at. Chrome types at this
+  // caret into the element, hence the first character typed there is put after it by hand, as the
+  // typing style of carry.ts puts its character
+  let exit: { host: Element; el: Element } | null = null;
+  const atEnd = (el: Element, sel: Selection): boolean => {
+    const { anchorNode: n, anchorOffset: o } = sel;
+    if (!sel.isCollapsed || !n) return false;
+    if (n === el.parentNode) return el.parentNode!.childNodes[o - 1] === el;
+    if (n instanceof Text && el.contains(n)) return o === n.length && !n.nextSibling && n.parentNode === el;
+    return n instanceof Text && n.previousSibling === el && o === 0 && !n.data;
+  };
+  document.addEventListener('mousedown', () => (exit = null), true);
+  document.addEventListener('keydown', (ev) => {
+    if (ev.key.length !== 1) exit = null;
+  }, true);
+  document.addEventListener('beforeinput', (ev) => {
+    const sel = window.getSelection();
+    const out = exit;
+    exit = null;
+    if (out && ev.inputType === 'insertText' && ev.data && !ev.defaultPrevented && sel && out.el.isConnected && atEnd(out.el, sel)) {
+      ev.preventDefault();
+      app.history.beforeTyping(out.host);
+      // a space at the end of the block is typed as a no-break space, as Chrome types it, since a
+      // plain space there is not drawn and the caret after it is moved back into the element
+      const text = document.createTextNode(out.el.nextSibling ? ev.data : ev.data.replace(/ $/, '\u00a0'));
+      out.el.after(text);
+      sel.collapse(text, text.length);
+      out.host.normalize();
+      app.history.afterTyping(out.host);
+      app.markDirty();
+      app.invalidate('content');
+    }
+  }, true);
   document.addEventListener('beforeinput', (ev) => {
     typed = ev.inputType === 'insertText' && !ev.defaultPrevented ? ev.data : null;
   });
@@ -112,6 +173,25 @@ export function install(app: App): void {
       app.markDirty();
       app.invalidate('content');
     };
+    // a span of Markdown closed in the text node of the caret, outside a link
+    const md = isSmart('markdown') && /^[*_~`]$/.test(data) && !node.parentElement?.closest('a') ? markdownSpan(node.data.slice(0, offset)) : null;
+    if (md) {
+      const was = contentWithTex(host);
+      const el = document.createElement(md.tag);
+      el.textContent = md.words;
+      const rest = node.splitText(offset);
+      node.deleteData(md.start, offset - md.start);
+      node.after(el);
+      if (rest.data) sel.collapse(rest, 0);
+      else {
+        rest.remove();
+        sel.collapse(el.parentNode!, [...el.parentNode!.childNodes].indexOf(el) + 1);
+      }
+      if (!node.data) node.remove();
+      record('Markdown', was);
+      exit = { host, el };
+      return;
+    }
     const char = data === ' ' ? node.data.charAt(offset - 1) : data;
     const before = textBefore(host, node, offset - 1);
     // an address is made a link only where it is in the text node of the caret, outside a link
