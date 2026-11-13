@@ -16,6 +16,7 @@ import { Steps } from './steps.ts';
 import { Layers } from './layers.ts';
 import { canWrite, fetchSource, install as installFiles } from './file/files.ts';
 import { install as installDrafts } from './file/drafts.ts';
+import { install as installFollow } from './file/follow.ts';
 import { install as installNotes } from './notes.ts';
 import { install as installOverflow } from './overflow.ts';
 import { install as installTyping } from './text/typing.ts';
@@ -131,6 +132,7 @@ installNotes(app);
 installStatusbar(app, layers.box);
 installFiles(app);
 installDrafts(app);
+installFollow(app);
 installOverflow(app);
 installTyping(app);
 installMathPop(app);
@@ -226,6 +228,7 @@ async function init(): Promise<void> {
     app.state = 'waiting';
     app.report();
   }
+  await app.follow.start();
 }
 
 // a call of a test sees the state after every refresh that is due
@@ -250,6 +253,9 @@ function status() {
     draft: app.drafts.hasDraft(),
     recover: app.drafts.offered(),
     pane: app.notes.height(),
+    // the slides marked in the navigator as changed in the file, the slides of the file changed
+    // while the edits are not saved, and whether the file is followed
+    ...app.follow.status(),
   };
 }
 
