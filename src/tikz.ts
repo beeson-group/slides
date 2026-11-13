@@ -103,17 +103,25 @@ function draw(el: HTMLElement, mode: Mode): void {
   syncParts(el);
 }
 
+// every draw started by mountFigures, which a settled deck waits for
+let pending: Promise<void> = Promise.resolve();
+
 /**
  * Draws each TikZ figure of root, and root itself if it is one, in the mode of the deck, once its
  * output is loaded. A figure that is drawn in this mode already is kept. The promise is resolved once
  * every figure is drawn.
  */
 export function mountFigures(root: ParentNode, mode: Mode): Promise<void> {
-  return Promise.all(figuresUnder(root).map(async (el) => {
+  const done = Promise.all(figuresUnder(root).map(async (el) => {
     await load(el.dataset.figure ?? '');
     draw(el, mode);
   })).then(() => undefined);
+  pending = Promise.all([pending, done]).then(() => undefined);
+  return done;
 }
+
+/** Resolves once every figure that mountFigures has started to draw is drawn. */
+export const figuresReady = (): Promise<void> => pending;
 
 /** Draws every TikZ figure of the page again in mode, after a flip of the mode. */
 export function redrawFigures(mode: Mode): void {

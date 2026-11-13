@@ -281,6 +281,8 @@ export const deckSettled = `(async () => {
   await window.MathJax?.startup?.promise;
   // a backdrop drawn from a file of polylines is loaded after the start of the deck
   await Promise.all((window.Beeson?.backdrops ?? []).map((backdrop) => backdrop.ready));
+  // a TikZ figure is drawn once its output is loaded, after the start of the deck
+  await window.Beeson?.figures?.ready;
   await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
   return true;
 })()`;

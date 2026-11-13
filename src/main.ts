@@ -13,7 +13,7 @@ import { mountPlots, type PlotView } from './plot.ts';
 import { markViewers, stillViewers } from './print.ts';
 import { mountQr } from './qr.ts';
 import { mountShapes } from './shapes.ts';
-import { mountFigures, redrawFigures } from './tikz.ts';
+import { figuresReady, mountFigures, redrawFigures } from './tikz.ts';
 import { initScrub } from './scrub.ts';
 import { mount as mountSurfaces } from './surface.ts';
 import type { Surface } from './surface.ts';
@@ -251,9 +251,9 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   mountShapes(document);
   numberTheorems();
   mountCitations();
-  // the TikZ figures are drawn before reveal.js starts, which a settled deck is told by, once their
-  // outputs are loaded
-  await mountFigures(document, get());
+  // the TikZ figures are drawn once their outputs are loaded, without a wait before reveal.js starts,
+  // since the editor is installed on a started deck. a settled deck waits for Beeson.figures.ready
+  void mountFigures(document, get());
   // in the print view, a page is cloned per fragment state after ready, and the clones are
   // mounted here. the viewers are numbered before the clones are made
   markViewers();
@@ -431,6 +431,8 @@ const Beeson = {
   backdrops,
   surfaces,
   plots,
+  // resolved once every TikZ figure that is being drawn is drawn, see scripts/chrome.mjs
+  figures: { get ready(): Promise<void> { return figuresReady(); } },
   // called in a script file of polylines named in data-strands, see src/strands.ts
   strands: register,
   // called by the editor after a structural change of the slides

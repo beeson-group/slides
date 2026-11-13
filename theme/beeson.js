@@ -3610,12 +3610,16 @@
     svg2.setAttribute("aria-hidden", "true");
     syncParts(el);
   }
+  var pending = Promise.resolve();
   function mountFigures(root2, mode2) {
-    return Promise.all(figuresUnder(root2).map(async (el) => {
+    const done = Promise.all(figuresUnder(root2).map(async (el) => {
       await load2(el.dataset.figure ?? "");
       draw2(el, mode2);
     })).then(() => void 0);
+    pending = Promise.all([pending, done]).then(() => void 0);
+    return done;
   }
+  var figuresReady = () => pending;
   function redrawFigures(mode2) {
     for (const el of figuresUnder(document)) if (drawn.has(el)) draw2(el, mode2);
   }
@@ -5619,7 +5623,7 @@ void main() {
     mountShapes(document);
     numberTheorems();
     mountCitations();
-    await mountFigures(document, get());
+    void mountFigures(document, get());
     markViewers();
     deck.on("pdf-ready", () => {
       completeAll();
@@ -5773,6 +5777,10 @@ void main() {
     backdrops,
     surfaces,
     plots,
+    // resolved once every TikZ figure that is being drawn is drawn, see scripts/chrome.mjs
+    figures: { get ready() {
+      return figuresReady();
+    } },
     // called in a script file of polylines named in data-strands, see src/strands.ts
     strands: register,
     // called by the editor after a structural change of the slides
