@@ -551,10 +551,19 @@ for (const platform of PLATFORMS) {
     // the row of the step after the scene is selected, and the preview is played from the step before it, at which the scene is shown
     await click(page, await page.evaluate(`(() => { const b = ${ROW('A later step')}.querySelector('.text').getBoundingClientRect(); return { x: b.left + b.width / 2, y: b.top + b.height / 2 }; })()`));
     await frames(page);
-    await page.evaluate(`window.BeesonEditor.exec('steps.playFrom'); true`);
+    // the scene is read at the first step of the preview, since on a slow runner the page is read
+    // by the test only after the next step
+    await page.evaluate(`(() => {
+      const html = document.documentElement;
+      const v = document.getElementById('play');
+      window.__from = [];
+      new MutationObserver(() => window.__from.push({ playing: v.playing, time: v.time, step: html.dataset.previewStep })).observe(html, { attributes: true, attributeFilter: ['data-preview-step'] });
+      window.BeesonEditor.exec('steps.playFrom');
+      return true;
+    })()`);
     await page.waitFor(`document.documentElement.classList.contains('beeson-previewing')`);
-    await frames(page);
-    const now = await page.evaluate(`({ playing: document.getElementById('play').playing, time: document.getElementById('play').time, step: document.documentElement.dataset.previewStep })`);
+    await page.waitFor('window.__from.length > 0');
+    const now = (await page.evaluate('window.__from'))[0];
     assert.ok(now.playing && now.time < 1, `the scene is not played from its start: ${JSON.stringify(now)}`);
     await page.waitFor(`!document.documentElement.classList.contains('beeson-previewing')`, 20000);
     assert.deepEqual(errors(page), []);
