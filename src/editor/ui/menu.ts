@@ -158,6 +158,11 @@ const LAYOUT: Record<string, Record<string, Place>> = {
   },
 };
 
+// the items of a submenu read when it is opened, e.g. one per kind of theorem in Insert > Theorem,
+// by the menu and the name of the submenu
+const LIVE = new Map<string, (app: App) => MenuItem[]>();
+export const liveSubmenu = (bar: string, submenu: string, items: (app: App) => MenuItem[]) => void LIVE.set(`${bar} > ${submenu}`, items);
+
 // the path of submenus of a command in its menu, and its group and order there
 function placeOf(c: Command): { path: string[]; group: string; order: number } {
   const m = c.menu as NonNullable<Command['menu']>;
@@ -179,6 +184,8 @@ export function menuItems(app: App, bar: string, submenu?: string): MenuItem[] {
     return p ? p.slice(0, p.indexOf(submenu) + 1) : null;
   })();
   if (!at) return [];
+  const live = submenu === undefined ? undefined : LIVE.get(`${bar} > ${submenu}`);
+  if (live) return live(app);
   const inside = placed.filter((x) => at.every((name, i) => x.path[i] === name));
   const entries: Entry[] = inside.filter((x) => x.path.length === at.length).map((x) => ({ group: x.group, order: x.order, item: { command: x.c.id } }));
   const subs = new Map<string, typeof placed>();
@@ -188,7 +195,7 @@ export function menuItems(app: App, bar: string, submenu?: string): MenuItem[] {
     const p = LAYOUT[bar]?.[name] ?? (at.length === 0 ? LAYOUT[bar]?.['*'] : undefined);
     const group = p && (at.length === 0 ? !p.parent : p.parent === at.at(-1)) ? p.group : first.group;
     const order = first.order + (p?.order ?? 0);
-    const item: MenuItem = members.length === 1 && !p?.keep ? { command: first.c.id } : { label: name, items: () => menuItems(app, bar, name), disabled: !canRun(app, members.map((x) => x.c)) };
+    const item: MenuItem = members.length === 1 && !p?.keep && !LIVE.has(`${bar} > ${name}`) ? { command: first.c.id } : { label: name, items: () => menuItems(app, bar, name), disabled: !canRun(app, members.map((x) => x.c)) };
     entries.push({ group, order, item });
   }
   entries.sort((a, b) => a.order - b.order);

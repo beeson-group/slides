@@ -1,8 +1,8 @@
-// the commands of the Insert menu and of the Insert group of the toolbar: a text box, a formula, a
-// code box, a QR code, and a footnote. each element is put at its place in the layout of the
+// the commands of the Insert menu and of the Insert group of the toolbar: a text box, a theorem, a
+// formula, a code box, a QR code, and a footnote. each element is put at its place in the layout of the
 // current slide, i.e. after the last block of the text column, into an empty zone, or on the foot
-// line, and it is selected, with the caret in it for a text. a text box, a code box, and a
-// footnote are put on the page first as an element of the editor only, marked data-generated, which
+// line, and it is selected, with the caret in it for a text. a text box, a theorem, a code box, and
+// a footnote are put on the page first as an element of the editor only, marked data-generated, which
 // the save and the pairing pass over, with a prompt drawn by the stylesheet below. the empty box is
 // an entry of the history, as an insert of Keynote, and the deck is marked edited while it is on the
 // slide. the first input into it writes the element into the file in place of that entry, hence an
@@ -21,6 +21,8 @@ import { docOf } from './slide.ts';
 import { freePlace, placeNew, titlePlace, translateOf } from './place.ts';
 import { checkOverlaps } from '../overflow.ts';
 import { overShapes } from './order.ts';
+import { deckKinds } from './text.ts';
+import { liveSubmenu } from '../ui/menu.ts';
 
 const CSS = `
 /* the caption of a zone keeps the absolute place of the theme under the picture */
@@ -41,10 +43,17 @@ html.beeson-editor .reveal .slides div.math.beeson-empty::before { content: "Cli
 
 // a text element that the first input writes into the file. a caption is a figcaption in a figure
 // and a caption paragraph in a zone
-type Kind = 'text' | 'code' | 'foot' | 'caption';
+type Kind = 'text' | 'theorem' | 'code' | 'foot' | 'caption';
 const captionTag = (host: Element) => (host.localName === 'figure' ? 'figcaption' : 'p');
-const PENDING: Record<Kind, { label: string; prompt: string; make(parent: Element): HTMLElement; html(text: string, parent: Element): string }> = {
+const PENDING: Record<Kind, { label: string; prompt: string; make(parent: Element): HTMLElement; html(text: string, parent: Element, el: HTMLElement): string }> = {
   text: { label: 'Text Box', prompt: 'Click to add text', make: () => document.createElement('p'), html: (t) => `<p>${lines(t)}</p>` },
+  // a theorem shows its head in place of a prompt
+  theorem: {
+    label: 'Theorem',
+    prompt: '',
+    make: () => Object.assign(document.createElement('p'), { className: 'theorem' }),
+    html: (t, _, el) => `<p class="theorem" data-kind="${escape(el.dataset.kind ?? 'theorem').replace(/"/g, '&quot;')}">${lines(t)}</p>`,
+  },
   code: { label: 'Code Box', prompt: 'Click to add code', make: () => document.createElement('pre'), html: (t) => `<pre><code class="language-python">${escape(t)}</code></pre>` },
   foot: {
     label: 'Footnote',
@@ -254,9 +263,14 @@ export function install(app: App): void {
   // an emptied text box is being taken out of the file, which does not drop a new box
   let leaving = false;
 
+  // the heads of the theorems drawn again with a new theorem that is not in the file, or without it
+  const renumber = (kind: Kind) => {
+    if (kind === 'theorem') (window as { Beeson?: { refreshChrome?(): void } }).Beeson?.refreshChrome?.();
+  };
   const take = () => {
     if (!pending) return;
     pending.el.remove();
+    renumber(pending.kind);
     pending = null;
     app.invalidate('content');
   };
@@ -271,14 +285,15 @@ export function install(app: App): void {
     if (last) app.history.discard();
   };
 
-  const begin = (kind: Kind, parent: Element, before: Node | null) => {
+  const begin = (kind: Kind, parent: Element, before: Node | null, attrs: Record<string, string> = {}) => {
     drop();
     const def = PENDING[kind];
     const el = def.make(parent);
+    for (const [name, value] of Object.entries(attrs)) el.setAttribute(name, value);
     el.classList.add('beeson-pending');
     el.setAttribute('data-generated', '');
     el.setAttribute('contenteditable', 'true');
-    el.setAttribute('data-prompt', def.prompt);
+    if (def.prompt) el.setAttribute('data-prompt', def.prompt);
     el.setAttribute('aria-label', def.label);
     const next = before && before.parentNode === parent ? before : null;
     const entry: Entry = {
@@ -303,7 +318,7 @@ export function install(app: App): void {
         const f = titlePlace(app, el);
         el.style.translate = `${f.x}px ${f.y}px`;
         if (f.width) el.style.width = `${f.width}px`;
-      } else if (kind === 'text' || kind === 'code') {
+      } else if (kind === 'text' || kind === 'theorem' || kind === 'code') {
         el.style.translate = '';
         const y = textOffset(app, el);
         el.style.translate = y ? `0px ${y}px` : '';
@@ -318,6 +333,7 @@ export function install(app: App): void {
         if (f?.width) el.style.width = `${f.width}px`;
       }
       pending = { el, kind, parent, show, entry };
+      renumber(kind);
       placeCaret(el);
       app.invalidate('content');
     };
@@ -397,17 +413,18 @@ export function install(app: App): void {
         let prev = p.el.previousElementSibling;
         while (prev && (prev.hasAttribute('data-generated') || !prev.getClientRects().length)) prev = prev.previousElementSibling;
         const prevWas = prev && slideBox(app, prev);
-        const [node] = await docOf(app).insert(def.html(text, p.parent), p.parent, p.el, def.label);
+        const [node] = await docOf(app).insert(def.html(text, p.parent, p.el), p.parent, p.el, def.label);
         written!.node = node;
         made = [node];
         p.el.remove();
+        renumber(p.kind);
         // a space at the end of the text is drawn as the browser types it, as a no-break space, since a
         // plain one is collapsed, and the caret put behind the last word by End would take it off
         const end = node.lastChild;
         if (end instanceof Text && end.data.endsWith(' ')) end.data = `${end.data.slice(0, -1)} `;
         // a text box is written where its empty box was drawn, whose margin from the CSS above may
         // differ from the margin of the theme
-        if (p.kind === 'text') {
+        if (p.kind === 'text' || p.kind === 'theorem') {
           const now = slideBox(app, node);
           const prevNow = prev && slideBox(app, prev);
           x = Math.round(was.left - now.left - (prevWas && prevNow ? prevWas.left - prevNow.left : 0));
@@ -448,7 +465,7 @@ export function install(app: App): void {
   // ones of the history, and else as an entry of its own, as Keynote deletes an empty text box
   const leave = async (node: Element) => {
     const r = recent;
-    if (r?.node !== node || r.kind !== 'text' || writing || !node.isConnected || node.contains(document.activeElement) || node.textContent?.trim() || node.querySelector('img, svg, mjx-container')) return;
+    if (r?.node !== node || (r.kind !== 'text' && r.kind !== 'theorem') || writing || !node.isConnected || node.contains(document.activeElement) || node.textContent?.trim() || node.querySelector('img, svg, mjx-container')) return;
     await app.history.idle();
     const h = app.history;
     if (app.selection.kind === 'elements' && app.selection.elements().includes(node)) app.selection.clear();
@@ -482,7 +499,7 @@ export function install(app: App): void {
       // a click on a row of the navigator shows another slide before the entry is opened, hence a
       // part of the entry shows the slide of the box after the view of the entry at an undo or a redo
       if (node.isConnected) {
-        await h.transact('Delete Text Box', () => {
+        await h.transact(`Delete ${PENDING[r.kind].label}`, () => {
           const show = () => void (slide?.isConnected && app.showSlide(slide));
           h.push({ label: 'show', undo: show, redo: show });
           docOf(app).remove(node);
@@ -638,6 +655,20 @@ export function install(app: App): void {
     enabled: ready,
     run: pendingText('text'),
   });
+  // one item per kind of theorem of the deck, and a key for a theorem of the kind theorem
+  c.define({
+    id: 'insert.theorem',
+    label: 'Theorem',
+    keys: { mac: ['Ctrl+Mod+T'], other: ['Alt+Shift+T'] },
+    in: ['canvas', 'navigator', 'text'],
+    menu: { ...insertMenu(20.5), submenu: 'Theorem' },
+    enabled: ready,
+    run: (a, arg) => {
+      const { parent, before } = columnPlace(a, a.current()!);
+      begin('theorem', parent, before, { 'data-kind': typeof arg === 'string' ? arg : 'theorem' });
+    },
+  });
+  liveSubmenu('Insert', 'Theorem', () => Object.entries(deckKinds()).map(([kind, k]) => ({ command: 'insert.theorem', arg: kind, label: k.title })));
   c.define({
     id: 'insert.formula',
     label: 'Formula',

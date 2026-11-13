@@ -1,16 +1,18 @@
 // the Text pane of the Format tab, for a text with the caret or a selected block, as the Text tab
 // of Keynote: the paragraph style in a pop-up, the Format Painter of PowerPoint, the formats of the
-// words with Change Case, the tone swatches, the alignment, the kind of list, and the link. every control runs a command of commands/text.ts by its id, and a
+// words with Change Case, the tone swatches, the alignment, the kind of list, and the link, and the
+// kind and the name of a theorem. every control runs a command of commands/text.ts by its id, and a
 // control of a command that is not defined is drawn disabled. by the scope rule, only the styles
 // of the type scale and the tones of the theme are offered
 
 import type { App } from '../app.ts';
 import { entering } from '../commands/edit.ts';
+import { deckKinds, theoremOf } from '../commands/text.ts';
 import { kindOf, listKind, type ListKind, selectedBlocks, startList, styleOf, styleWhy } from '../text/blocks.ts';
 import { around, FORMATS, inlineTargets, isTone, type FormatName } from '../text/inline.ts';
 import { injectStyle, make } from '../ui/dom.ts';
-import { openMenu, type MenuItem } from '../ui/menu.ts';
-import { GLYPHS, button, glyph, keepFocus, numberField, row, section, segmented, type Control, type Run } from './controls.ts';
+import { closeMenus, menuOpen, openMenu, type MenuItem } from '../ui/menu.ts';
+import { GLYPHS, button, glyph, keepFocus, note, numberField, row, section, segmented, textField, type Control, type Run } from './controls.ts';
 
 // the glyphs of the alignment of a text, on the grid of GLYPHS
 Object.assign(GLYPHS, {
@@ -269,10 +271,51 @@ const script = (base: string, mark: string, tag: 'sup' | 'sub') => () => {
   return span;
 };
 
+// the kind of the theorem of the pane in a pop-up of the kinds of the deck, its name in a field, and
+// a note on a kind that the preamble does not define
+function theoremSection(app: App, run: Run, el: HTMLElement): Control {
+  const kind = () => el.getAttribute('data-kind') || 'theorem';
+  const b = make('button', 'beeson-edit-select ed-theorem-kind');
+  b.type = 'button';
+  b.setAttribute('aria-haspopup', 'menu');
+  b.setAttribute('aria-expanded', 'false');
+  b.setAttribute('aria-label', 'Kind');
+  const text = make('span', 'value');
+  b.append(text, glyph('chevron-down', 14));
+  const open = (keyboard: boolean) => {
+    const items = Object.entries(deckKinds()).map(([k, { title }]) => ({ label: title, checked: kind() === k, run: () => void run('theorem.kind', { el, value: k }) }));
+    openMenu(app, items, { anchor: b.getBoundingClientRect(), placement: 'below', owner: b, keyboard, label: 'Kind', className: 'select' });
+  };
+  b.addEventListener('pointerdown', (ev) => {
+    ev.preventDefault();
+    if (menuOpen() && b.getAttribute('aria-expanded') === 'true') closeMenus();
+    else open(false);
+  });
+  b.addEventListener('click', (ev) => {
+    if (ev.detail === 0) open(true);
+  });
+  const known = () => Object.hasOwn(deckKinds(), kind());
+  const pop: Control = {
+    el: b,
+    sync: () => {
+      b.disabled = !el.isConnected;
+      text.textContent = known() ? deckKinds()[kind()].title : kind();
+    },
+  };
+  pop.sync();
+  return section('Theorem', [
+    row([pop], 'Kind'),
+    textField(app, { label: 'Name', name: 'theorem-name', placeholder: 'None', value: () => el.getAttribute('data-name') ?? '', enabled: () => el.isConnected, commit: (value) => run('theorem.name', { el, value }) }),
+    note(() => (known() ? '' : `The kind ${kind()} is not defined in the preamble.`), () => true),
+  ]);
+}
+
 export function textPane(app: App, run: Run): Control[] {
   injectStyle('inspector-text', CSS);
+  const theorem = theoremOf(app);
   return [
     stylePopup(app),
+    ...(theorem ? [theoremSection(app, run, theorem)] : []),
     section(null, [row([painter(app, run)])]),
     section('Font', [
       row([segmented(app, run, [

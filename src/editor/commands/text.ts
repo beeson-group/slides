@@ -5,7 +5,8 @@
 // dashes, and links of text/substitute.ts. a key of a disabled command is left to the browser,
 // e.g. Return in a heading, which typing.ts writes as a br. a format is set in a text, or on the
 // whole text of the blocks selected on the canvas. with the caret outside a word, a format, a
-// tone, or a style is kept by text/carry.ts for the text typed next
+// tone, or a style is kept by text/carry.ts for the text typed next. Theorem Kind and Theorem
+// Name of the Text pane write data-kind and data-name of a theorem
 
 import type { App, Region } from '../app.ts';
 import type { Command } from '../commands.ts';
@@ -19,6 +20,18 @@ import { injectStyle } from '../ui/dom.ts';
 import { CONTAINER } from '../canvas/hit.ts';
 import { modeOf, type Mode } from './figure.ts';
 import * as notes from '../notes.ts';
+import { kindsOf, type Kind } from '../../kinds.ts';
+
+// the kinds of theorem of the deck, read at each call, since the tex.js of a deck is written again
+// at a save
+export const deckKinds = (): Record<string, Kind> => kindsOf((window as { beesonTex?: { theorems?: Record<string, Kind> } }).beesonTex?.theorems ?? {});
+
+// the theorem of the file with the caret or selected alone
+export function theoremOf(app: App): HTMLElement | null {
+  const els = app.selection.kind === 'text' ? app.selection.items.slice(0, 1) : app.selection.elements();
+  const el = els.length === 1 ? els[0].closest('p.theorem') : null;
+  return el instanceof HTMLElement && !!app.pairing?.elements.has(el) ? el : null;
+}
 
 const TEXT: Region[] = ['text'];
 const FORMAT: Region[] = ['text', 'canvas'];
@@ -350,6 +363,29 @@ export function install(app: App): void {
     enabled: (a) => inline.inlineTargets(a, true).length > 0,
     run: inline.clearFormatting,
   });
+
+  // arg is the theorem and the value, since a field of the pane commits to the theorem of its pane
+  type Arg = { el?: Element; value?: string };
+  const target = (a: App, arg?: unknown) => {
+    const el = (arg as Arg | undefined)?.el;
+    return el?.isConnected && el.matches('p.theorem') ? el : theoremOf(a);
+  };
+  const theoremAttr = (id: string, label: string, name: string, now: (el: Element) => string) =>
+    define({
+      id,
+      label,
+      undoable: true,
+      enabled: (a) => !!theoremOf(a),
+      run: (a, arg) => {
+        const el = target(a, arg);
+        const value = ((arg as Arg | undefined)?.value ?? '').trim();
+        if (!el || value === now(el)) return;
+        a.doc.setTag(el, { attrs: { [name]: value || null } }, label);
+        a.invalidate('content');
+      },
+    });
+  theoremAttr('theorem.kind', 'Theorem Kind', 'data-kind', (el) => el.getAttribute('data-kind') || 'theorem');
+  theoremAttr('theorem.name', 'Theorem Name', 'data-name', (el) => el.getAttribute('data-name') ?? '');
 }
 
 type Define = (command: Command) => Command;
