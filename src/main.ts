@@ -18,6 +18,7 @@ import type { Surface } from './surface.ts';
 import { fitView, register, strandsFor, type View } from './strands.ts';
 import { scene } from './scenes.ts';
 import { addRestoreSteps, applyAll, applySteps, initSteps, initTimedSteps, typeset, type Internal } from './steps.ts';
+import { numberTheorems } from './theorems.ts';
 import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.ts';
 import { coverAll, initVideos } from './video.ts';
 import { initViewers } from './viewers.ts';
@@ -184,6 +185,8 @@ function mountWithin(root: Element): void {
   remount();
   mountQr(root);
   mountShapes(root);
+  // a theorem added to a slide changes the numbers on the slides after it
+  numberTheorems();
   for (const o of backdrops) if (root.contains(o.el)) { o.fit(); o.complete(); }
   for (const s of surfaces) if (root.contains(s.el)) { s.fit(); s.sync(false); s.draw(); }
   for (const p of plots) if (root.contains(p.el)) { p.fit(); p.syncSteps(); p.still(); }
@@ -238,9 +241,11 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   initSwitcher();
   // the editor counts the slides of the file, hence every slide is numbered while the deck is edited
   if (!EDITING) markUncounted(document);
-  // the QR codes and the shapes are drawn before reveal.js clones the slides of the print view
+  // the QR codes and the shapes are drawn, and the theorems are numbered, before reveal.js clones
+  // the slides of the print view
   mountQr(document);
   mountShapes(document);
+  numberTheorems();
   // in the print view, a page is cloned per fragment state after ready, and the clones are
   // mounted here. the viewers are numbered before the clones are made
   markViewers();
@@ -414,7 +419,11 @@ const Beeson = {
   remount: remountBackdrop,
   preview,
   fitWindow,
-  refreshChrome,
+  // called by the editor after the slides were added, removed, or reordered
+  refreshChrome: (): void => {
+    refreshChrome();
+    numberTheorems();
+  },
   version: __VERSION__,
 };
 

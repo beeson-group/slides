@@ -4776,6 +4776,50 @@ void main() {
     for (const type of ["fragmentshown", "fragmenthidden", "slidechanged"]) deck.on(type, change);
   }
 
+  // src/kinds.ts
+  var usual = (title, style) => ({ title, style, counter: null });
+  var USUAL = {
+    theorem: usual("Theorem", "plain"),
+    lemma: usual("Lemma", "plain"),
+    proposition: usual("Proposition", "plain"),
+    corollary: usual("Corollary", "plain"),
+    definition: usual("Definition", "definition"),
+    example: usual("Example", "definition"),
+    remark: usual("Remark", "remark"),
+    proof: usual("Proof", "remark")
+  };
+  var kindsOf = (theorems) => ({ ...USUAL, ...theorems });
+
+  // src/theorems.ts
+  function theoremHeads(theorems, kinds) {
+    const count = /* @__PURE__ */ new Map();
+    return theorems.map(({ kind: name, name: note, counted = true }) => {
+      const kind = Object.hasOwn(kinds, name) ? kinds[name] : null;
+      if (!kind) return { head: `${name}.`, style: "plain", missing: true };
+      if (name === "proof" && note) return { head: `${note}.`, style: kind.style, missing: false };
+      let number = "";
+      if (kind.counter !== null && counted) {
+        count.set(kind.counter, (count.get(kind.counter) ?? 0) + 1);
+        number = ` ${count.get(kind.counter)}`;
+      }
+      return { head: `${kind.title}${number}${note ? ` (${note})` : ""}.`, style: kind.style, missing: false };
+    });
+  }
+  function numberTheorems() {
+    const tex = window.beesonTex;
+    const theorems = [...document.querySelectorAll(".reveal .slides p.theorem")];
+    const heads = theoremHeads(
+      theorems.map((p) => ({ kind: p.dataset.kind || "theorem", name: p.dataset.name, counted: !p.closest('section[data-visibility="hidden"]') })),
+      kindsOf(tex?.theorems ?? {})
+    );
+    theorems.forEach((p, k) => {
+      const { head, style, missing } = heads[k];
+      if (p.dataset.head !== head) p.dataset.head = head;
+      if (p.dataset.style !== style) p.dataset.style = style;
+      p.toggleAttribute("data-missing", missing);
+    });
+  }
+
   // src/switcher.ts
   var KEY = "beeson-theme";
   var root = document.documentElement;
@@ -5232,6 +5276,7 @@ void main() {
     remount();
     mountQr(root2);
     mountShapes(root2);
+    numberTheorems();
     for (const o of backdrops) if (root2.contains(o.el)) {
       o.fit();
       o.complete();
@@ -5297,6 +5342,7 @@ void main() {
     if (!EDITING) markUncounted(document);
     mountQr(document);
     mountShapes(document);
+    numberTheorems();
     markViewers();
     deck.on("pdf-ready", () => {
       completeAll();
@@ -5451,7 +5497,11 @@ void main() {
     remount: remountBackdrop,
     preview,
     fitWindow,
-    refreshChrome,
+    // called by the editor after the slides were added, removed, or reordered
+    refreshChrome: () => {
+      refreshChrome();
+      numberTheorems();
+    },
     version: "0.9.0-beta.1"
   };
   window.Beeson = Beeson;

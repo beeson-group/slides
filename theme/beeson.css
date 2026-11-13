@@ -163,6 +163,17 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal .small { font-size: 36px; line-height: 1.4; color: var(--muted); }
 .reveal em { font-style: italic; }
 .reveal strong { font-weight: 500; }
+/* a theorem is a paragraph whose head, e.g. Lemma 2 (stable manifold)., is written into data-head by
+   src/theorems.ts, with the style of its kind in data-style. as in amsthm, the head is bold, the
+   words of the plain style are italic with an upright emphasis, the head of the remark style and of
+   a proof is italic, and a proof ends with a square at the right. a kind that is not defined is
+   headed by its name in red */
+.reveal p.theorem::before { content: attr(data-head) " "; font-weight: 500; font-style: normal; }
+.reveal p.theorem[data-style="plain"] { font-style: italic; }
+.reveal p.theorem[data-style="plain"] em { font-style: normal; }
+.reveal p.theorem[data-style="remark"]::before { font-weight: inherit; font-style: italic; }
+.reveal p.theorem[data-kind="proof"]::after { content: ""; float: right; box-sizing: border-box; width: 0.5em; height: 0.5em; margin: 0.5em 0 0 0.5em; border: 0.04em solid currentColor; }
+.reveal p.theorem[data-missing]::before { color: var(--red); }
 .reveal a { color: inherit; text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 0.14em; transition: text-decoration-color 200ms ease-out, color 200ms ease-out; }
 .reveal a:hover { color: var(--accent); }
 .reveal sub, .reveal sup { font-size: 0.7em; line-height: 0; }
