@@ -62,8 +62,41 @@ const CLEAR = `(async () => {
   return true;
 })()`;
 
-// with drafts, the page keeps its unsaved edits in the storage of the browser
-async function load(platform, { clear = true, drafts = false } = {}) {
+// each path of the files kept in IndexedDB with the size of its file
+const ROWS = `new Promise((done) => { const r = indexedDB.open('beeson-media'); r.onsuccess = () => { const q = r.result.transaction('files').objectStore('files').getAll(); q.onsuccess = () => { done(q.result.map((row) => [row.path, row.blob.size])); r.result.close(); }; }; })`;
+
+// the open of a database answered only once window.__release is called, and the writes to an
+// object store recorded in window.__writes, each done once its transaction is complete
+const HOLD = `(() => {
+  const open = IDBFactory.prototype.open;
+  let release;
+  const released = new Promise((done) => { release = done; });
+  window.__release = () => { release(); return true; };
+  window.__writes = [];
+  IDBFactory.prototype.open = function (...args) {
+    const real = open.apply(this, args);
+    return {
+      get result() { return real.result; },
+      get error() { return real.error; },
+      set onupgradeneeded(fn) { real.onupgradeneeded = fn; },
+      set onerror(fn) { real.onerror = fn; },
+      set onsuccess(fn) { real.onsuccess = () => released.then(fn); },
+    };
+  };
+  for (const name of ['put', 'delete']) {
+    const method = IDBObjectStore.prototype[name];
+    IDBObjectStore.prototype[name] = function (...args) {
+      const write = { name, done: false };
+      window.__writes.push(write);
+      this.transaction.addEventListener('complete', () => { write.done = true; });
+      return method.apply(this, args);
+    };
+  }
+})()`;
+
+// with drafts, the page keeps its unsaved edits in the storage of the browser. with hold, the
+// database of the kept files is opened only once window.__release is called
+async function load(platform, { clear = true, drafts = false, hold = false } = {}) {
   await last?.close().catch(() => {});
   const page = await browser.newPage({ drafts });
   last = page;
@@ -72,6 +105,7 @@ async function load(platform, { clear = true, drafts = false } = {}) {
     await page.goto(`${server.origin}/theme/beeson.css`);
     await page.evaluate(CLEAR);
   }
+  if (hold) await page.send('Page.addScriptToEvaluateOnNewDocument', { source: HOLD });
   await page.goto(url(platform));
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
@@ -380,6 +414,18 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
+  test(`${platform}: an image dropped before the kept files are read at the start is kept`, async () => {
+    const page = await mediaPage(platform, 0, { hold: true });
+    await emptyZone(page);
+    await dropFiles(page, await centerOf(page, '.reveal section.present > .zone'), [IMAGE]);
+    await waitText(page, 'media/figure-light.png');
+    // the database is opened only now, for the files of the start and for the image
+    await page.evaluate('window.__release()');
+    await page.waitFor('window.__writes.length === 2 && window.__writes.every((w) => w.done)');
+    assert.deepEqual(await page.evaluate(ROWS), [['media/figure-light.png', IMAGE_BYTES]]);
+    assert.deepEqual(errors(page), []);
+  });
+
   test(`${platform}: a draft with an image is restored with the image`, async () => {
     let page = await mediaPage(platform, 0, { drafts: true });
     await emptyZone(page);
@@ -387,7 +433,6 @@ for (const platform of PLATFORMS) {
     await waitText(page, 'media/figure-light.png');
     const edited = await render(page);
     // the draft is kept a second after the edit, and its file in IndexedDB
-    const ROWS = `new Promise((done) => { const r = indexedDB.open('beeson-media'); r.onsuccess = () => { const q = r.result.transaction('files').objectStore('files').getAll(); q.onsuccess = () => { done(q.result.map((row) => [row.path, row.blob.size])); r.result.close(); }; }; })`;
     await page.waitFor(`!!Object.keys(localStorage).find((k) => k.startsWith('beeson-draft:'))`);
     await page.waitFor(`${ROWS}.then((rows) => rows.length === 1)`);
     assert.deepEqual(await page.evaluate(ROWS), [['media/figure-light.png', IMAGE_BYTES]]);
