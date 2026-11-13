@@ -55,3 +55,16 @@ test('the test step of the check workflow is the test command with the shard of 
   assert.deepEqual(shards, shards?.map((_, k) => k + 1), 'the shards of the matrix are not 1 to their number');
   assert.equal(step?.replace(` --test-shard=\${{ matrix.shard }}/${shards.length}`, ''), command.replaceAll('\\"', '"'));
 });
+
+// the checks required on main are named after the operating system and the browser of a job of
+// check. A job without a name is named after every value of its row, hence a row with a third key
+// is reported under another name, and its required check is waited for without an end
+test('each job of check is reported under the name of its operating system and its browser', () => {
+  const workflow = readFileSync('.github/workflows/check.yml', 'utf8');
+  const job = workflow.slice(workflow.search(/^  check:$/m));
+  const rows = [...job.matchAll(/^ +- \{ (.+) \}$/gm)].map((row) => Object.fromEntries(row[1].split(', ').map((pair) => pair.split(': '))));
+  assert.ok(rows.length >= 5, `the matrix of check has ${rows.length} rows`);
+  const name = /^ {4}name: (.+)$/m.exec(job)?.[1];
+  const names = rows.map((row) => name?.replace(/\$\{\{ matrix\.(\w+) \}\}/g, (_, key) => row[key] ?? '') ?? `check (${Object.values(row).join(', ')})`);
+  assert.deepEqual(names, rows.map((row) => `check (${row.os}, ${row.browser})`));
+});
