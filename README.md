@@ -21,7 +21,7 @@ PRE-RELEASE: The template is currently still in beta. View the most up to date v
 2. (Optional) Modify `README.md` of the new repository with information about your talk, overwriting the text you are reading right now.
 3. To create and edit your slides, open `index.html` (at the root of this repository) in your favorite browser. Then, press the `e` key on your keyboard. This will enter editor mode.
 (This appends the text `?edit` your browser tab's URL bar, e.g. `https://{owner}.github.io/talk-{name-of-your-talk}?edit`. You can reach the editor by typing this out manually too).
-4. When you are happy, click on the save button, which overwrites your repository's local `index.html`. We also support exports to the PDF and PPTX file formats (File > Export To > PDF… in the editor, and `npm run pptx` in a terminal for PPTX).
+4. When you are happy, click on the save button, which overwrites your repository's local `index.html`. We also support exports to the PDF and PPTX file formats (File > Export To > PDF… while in editor mode).
 
 ## Editing with agents
 
