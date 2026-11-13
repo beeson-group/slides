@@ -191,9 +191,15 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
         await answered(loaded, `the load of ${url}`);
       },
       // polls the expression every 50 ms until it is truthy, and fails after timeout ms
+      // an expression evaluated while the page is loaded anew is answered with an error, hence it
+      // is read as not yet true
       async waitFor(expression, timeout = 15000) {
         const start = Date.now();
-        while (!(await evaluate(expression))) {
+        const loading = (error) => {
+          if (!/Inspected target navigated or closed/.test(error.message)) throw error;
+          return false;
+        };
+        while (!(await evaluate(expression).catch(loading))) {
           if (Date.now() - start > timeout) {
             throw new Error(`timed out waiting for ${expression}\n${errors.join('\n')}`);
           }
