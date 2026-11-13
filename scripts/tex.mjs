@@ -9,6 +9,7 @@ import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import vm from 'node:vm';
+import { compileFigures } from './figures.mjs';
 
 // the readers of src/ are TypeScript, which Node reads without a flag from version 22.18 on. under
 // an older Node they are bundled by esbuild, which is installed by npm ci
@@ -104,6 +105,7 @@ function main() {
   writeFileSync(file, text);
   const count = (items, one, many = `${one}s`) => `${Object.keys(items).length} ${Object.keys(items).length === 1 ? one : many}`;
   console.log(`tex.js: ${count(tex.macros, 'macro')}, ${count(tex.environments, 'environment')}, ${count(tex.theorems, 'kind of theorem', 'kinds of theorem')}, and ${count(tex.references, 'reference')}`);
+  compileFigures(deck);
   const short = (statement) => (statement.length > 100 ? `${statement.slice(0, 99)}…` : statement);
   for (const skipped of preamble.skipped) console.log(`${skipped.file}:${skipped.line}: ${short(skipped.text)}: ${skipped.reason}`);
   for (const skipped of bibliography.skipped) console.log(`references.bib:${skipped.line}: ${short(skipped.text)}: ${skipped.reason}`);

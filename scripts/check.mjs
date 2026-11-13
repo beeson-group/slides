@@ -20,6 +20,7 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { basename, dirname, join } from 'node:path';
 import { parseArgs } from 'node:util';
 import { deckSettled, deckUrl, launch } from './chrome.mjs';
+import { figureProblems } from './figures.mjs';
 import { launch as launchWebDriver, serve } from './webdriver.mjs';
 
 const { values: options } = parseArgs({
@@ -54,7 +55,7 @@ const videosWithoutPoster = `[...document.querySelectorAll('video:not([poster])'
   .map((video) => video.getAttribute('src') ?? video.querySelector('source')?.getAttribute('src'))`;
 
 mkdirSync(options.out, { recursive: true });
-const failures = [];
+const failures = figureProblems(options.deck);
 const browser = await (options.browser === 'chrome' ? launch() : launchWebDriver(options.browser));
 const server = options.browser === 'safari' ? await serve(dirname(options.deck)) : null;
 

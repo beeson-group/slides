@@ -11,8 +11,9 @@ import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import { copyFileSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { delimiter, dirname, isAbsolute, join, relative, resolve } from 'node:path';
+import { basename, delimiter, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import vm from 'node:vm';
 
 export const PX_PER_PT = 3.6;
 // dvisvgm writes its sizes in bp
@@ -354,4 +355,100 @@ export function compileFigure({ dir, name, source, box = {}, tools = findTools()
 export function writeFigure(dir, name, text) {
   mkdirSync(join(dir, 'figures'), { recursive: true });
   writeFileSync(join(dir, 'figures', `${name}.js`), text);
+}
+
+/** The figure that the script figures/name.js of the talk in the folder dir holds, or null when it is missing or unreadable. */
+export function readFigure(dir, name) {
+  const text = read(join(dir, 'figures', `${name}.js`));
+  if (text === null) return null;
+  try {
+    const window = {};
+    vm.runInNewContext(text, { window });
+    return window.beesonFigures?.[name] ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The TikZ figures of a deck, each once, with its name, its box, its output and its source as paths
+ * from the folder of the deck, and its state: current, stale, missing (without an output), no source,
+ * or invalid (without a name of letters, digits, - and _). A figure shown twice takes the box of its
+ * first tag. TeX is not run.
+ */
+export function figureStatus(deck) {
+  const dir = dirname(resolve(deck));
+  const seen = new Set();
+  const figures = [];
+  for (const { name, box } of deckFigures(readFileSync(deck, 'utf8'))) {
+    if (!name || !/^[\w-]+$/.test(name)) {
+      figures.push({ name: name || null, box, state: 'invalid' });
+      continue;
+    }
+    if (seen.has(name)) continue;
+    seen.add(name);
+    const entry = { name, box, file: `figures/${name}.js`, source: `figures/${name}.tex` };
+    const source = read(join(dir, entry.source));
+    const figure = source === null ? null : readFigure(dir, name);
+    if (source === null) entry.state = 'no source';
+    else if (!figure) entry.state = read(join(dir, entry.file)) === null ? 'missing' : 'stale';
+    else entry.state = figure.hash === figureHash({ dir, source, box, inputs: Array.isArray(figure.inputs) ? figure.inputs : [] }) ? 'current' : 'stale';
+    figures.push(entry);
+  }
+  return figures;
+}
+
+const problem = (figure, deck) =>
+  ({
+    stale: `${figure.file} is stale, run npm run tex`,
+    missing: `${figure.file} is missing, run npm run tex`,
+    'no source': `${figure.source} is not found, for the TikZ figure ${figure.name} of ${basename(deck)}`,
+    invalid: `${basename(deck)}: a TikZ figure without a name in data-figure, or with a name other than letters, digits, - and _`,
+  })[figure.state];
+
+/** One line for each TikZ figure of a deck that is not current, as npm run check prints it. */
+export function figureProblems(deck) {
+  return figureStatus(deck)
+    .filter((figure) => figure.state !== 'current')
+    .map((figure) => problem(figure, deck));
+}
+
+/**
+ * Compiles each stale or missing TikZ figure of a deck and writes its output, for npm run tex, with
+ * one line for each figure. An output is kept after an error. Returns false, and sets the exit code
+ * to 1, while a figure is not current, e.g. when TeX is not installed.
+ */
+export function compileFigures(deck, { log = console.log, tools = findTools() } = {}) {
+  const dir = dirname(resolve(deck));
+  let current = true;
+  for (const figure of figureStatus(deck)) {
+    if (figure.state === 'current') {
+      log(`${figure.file}: up to date`);
+      continue;
+    }
+    if (figure.state === 'no source' || figure.state === 'invalid') {
+      log(problem(figure, deck));
+      current = false;
+      continue;
+    }
+    const absent = ['latex', 'dvisvgm'].find((tool) => !tools[tool]);
+    if (absent) {
+      log(`${figure.file}: not compiled, since ${absent} is not found. install TeX Live, or put latex and dvisvgm on the PATH`);
+      current = false;
+      continue;
+    }
+    const compiled = compileFigure({ dir, name: figure.name, box: figure.box, tools });
+    if (compiled.errors) {
+      for (const error of compiled.errors) log(`${error.file ?? figure.source}${error.line === null ? '' : `:${error.line}`}: ${error.message}`);
+      log(`${figure.file}: not compiled${figure.state === 'stale' ? ', the last good output is kept' : ''}`);
+      current = false;
+      continue;
+    }
+    writeFigure(dir, figure.name, compiled.text);
+    const { width, height, scale } = compiled.figure;
+    const smaller = scale < 1 ? `, shown at ${scale} of its size, since it does not fit its box` : '';
+    log(`${figure.file}: compiled in ${compiled.seconds.toFixed(1)} s, ${Math.round(width)} by ${Math.round(height)} px${smaller}`);
+  }
+  if (!current) process.exitCode = 1;
+  return current;
 }
