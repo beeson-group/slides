@@ -1,12 +1,13 @@
 // the TikZ figures of a deck in Chrome, drawn by src/tikz.ts from the output of the fixture
 // test/pages/figures/two.js, which is written by hand so that these tests do not need TeX: the SVG
 // of the mode of the deck in its box, the SVG again after a flip, the ids of each drawn instance,
-// and the error in place of a figure without an output
+// the error in place of a figure without an output, and the parts as steps in the show and in the
+// print view
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { after, before, test } from 'node:test';
-import { deckSettled, deckUrl, launch } from '../scripts/chrome.mjs';
+import { deckSettled, deckUrl, launch, printView } from '../scripts/chrome.mjs';
 
 const DECK = 'test/pages/tikz.html';
 
@@ -102,5 +103,50 @@ test('a figure without its output shows an error in its place, which npm run che
   assert.equal(missing.error, 'figure missing is not compiled: run npm run tex');
   assert.deepEqual(missing.ids, []);
   assert.match(readFileSync('scripts/check.mjs', 'utf8'), /querySelectorAll\('\.tikz-error'\)\]\.map\(\(error\) => error\.textContent\)/);
+  assert.deepEqual(errors(page), []);
+});
+
+// the parts of the figure of the slide 1 that are hidden, by the class of src/tikz.ts and by their
+// opacity once the fade of a step has ended
+const hidden = `new Promise((done) => setTimeout(() => done([...Reveal.getCurrentSlide().querySelectorAll('.tikz > svg g[data-part]')]
+  .filter((g) => g.classList.contains('tikz-later') || getComputedStyle(g).opacity === '0')
+  .map((g) => g.dataset.part)), 500))`;
+
+test('a part with a step is hidden until its step and shown from it on, and a part without a step is shown from the start', { timeout: 60000 }, async (t) => {
+  const page = await open(t, '', '/1');
+  assert.deepEqual(await page.evaluate(hidden), ['a', 'b']);
+  // the step of a part is a fragment of its slide without content, hence it is not given the step that restores the dimmed fragments
+  assert.equal(await page.evaluate(`Reveal.getCurrentSlide().querySelectorAll('.fragment').length`), 2);
+  await page.evaluate('Reveal.next()');
+  assert.deepEqual(await page.evaluate(hidden), ['b']);
+  await page.evaluate('Reveal.next()');
+  assert.deepEqual(await page.evaluate(hidden), []);
+  await page.evaluate('Reveal.prev()');
+  assert.deepEqual(await page.evaluate(hidden), ['b']);
+  // a flip of the mode draws the figure again with the parts of the step
+  await page.evaluate(`Beeson.theme.set('light')`);
+  await page.waitFor(`document.querySelector('.tikz > svg [id]').id.startsWith('tikz-two-light-')`);
+  assert.deepEqual(await page.evaluate(hidden), ['b']);
+  assert.deepEqual(errors(page), []);
+});
+
+test('every part is shown when the slide of its figure is entered backwards', { timeout: 60000 }, async (t) => {
+  const page = await open(t, '', '/2');
+  await page.evaluate('Reveal.prev()');
+  assert.equal(await page.evaluate('Reveal.getIndices().h'), 1);
+  assert.deepEqual(await page.evaluate(hidden), []);
+  assert.deepEqual(errors(page), []);
+});
+
+test('the print view has a page for each step of a part, with the parts of the step and ids of its own', { timeout: 60000 }, async (t) => {
+  const page = await browser.newPage();
+  t.after(() => page.close());
+  await printView(page, deckUrl(DECK, 'print-pdf'));
+  const pages = await page.evaluate(`[...document.querySelectorAll('.pdf-page')].map((p) => [...p.querySelectorAll('.tikz > svg g[data-part]')]
+    .filter((g) => g.classList.contains('tikz-later')).map((g) => g.dataset.part).join(' ') || (p.querySelector('.tikz > svg') ? 'all' : '-'))`);
+  // the slides 0, 1 at its three steps, 2, and 3 with the error of a missing output
+  assert.deepEqual(pages, ['-', 'a b', 'b', 'all', 'all', '-']);
+  const ids = await page.evaluate(`[...document.querySelectorAll('[id]')].map((node) => node.id)`);
+  assert.equal(new Set(ids).size, ids.length, 'an id is drawn twice in the print view');
   assert.deepEqual(errors(page), []);
 });
