@@ -228,8 +228,8 @@ for (const platform of PLATFORMS) {
     assert.ok(readout, 'a readout is shown during the resize');
     const during = await fieldsOf(page);
     same('during the resize, the readout and the fields', readout, during);
-    // the held grip is drawn alone, without the frame, as in Keynote (select-move-resize-7)
-    assert.equal(await frameOf(page), null, 'during the resize, the frame of the group is drawn');
+    // the frame is drawn through the resize at the size of the readout
+    same('during the resize, the frame and the fields', await frameOf(page), during);
     await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: se.x - 120, y: se.y - 90, button: 'left', clickCount: 1 });
     await frames(page);
     const done = await fieldsOf(page);
