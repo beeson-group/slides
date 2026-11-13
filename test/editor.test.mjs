@@ -1298,10 +1298,19 @@ test('a row of the slide list rested on shows a preview of its slide, which is h
   // a thumbnail shown whole is not previewed, hence the row is scrolled under the upper edge of the
   // list, where its thumbnail is cut
   await page.evaluate(`(() => { const list = document.querySelector('.beeson-edit-nav .rows'); const f = document.querySelectorAll('.beeson-edit-nav .row')[${at}].querySelector('.frame').getBoundingClientRect(); list.scrollTop += f.top + f.height / 2 - list.getBoundingClientRect().top; })()`);
-  await row('pointerenter');
-  await sleep(100);
-  assert.notEqual((await peek())?.shown, true, 'the preview waits for the pointer to rest');
-  await sleep(400);
+  // the time from the pointer on the row to the preview is measured in the page, since a read 100 ms
+  // after the pointer came later than the 300 ms of the rest on a slow runner
+  const rested = await page.evaluate(`new Promise((done) => {
+    const p = document.querySelector('.beeson-edit-peek');
+    const entered = performance.now();
+    new MutationObserver((_, observer) => {
+      if (p.hidden) return;
+      observer.disconnect();
+      done(performance.now() - entered);
+    }).observe(p, { attributes: true, attributeFilter: ['hidden'] });
+    document.querySelectorAll('.beeson-edit-nav .row')[${at}].dispatchEvent(new PointerEvent('pointerenter', { bubbles: false, pointerId: 1 }));
+  })`);
+  assert.ok(rested >= 290, `the preview is shown ${rested} ms after the pointer, and does not wait for the pointer to rest`);
   const shown = await peek();
   const title = await page.evaluate(`document.querySelectorAll('.reveal .slides > section')[${at}].querySelector('h2').textContent`);
   assert.equal(shown.shown, true);
@@ -1316,7 +1325,7 @@ test('a row of the slide list rested on shows a preview of its slide, which is h
   assert.notEqual((await peek())?.shown, true);
   // a click on the row hides the preview and moves to the slide
   await row('pointerenter');
-  await sleep(500);
+  await page.waitFor(`document.querySelector('.beeson-edit-peek')?.hidden === false`);
   assert.equal((await peek()).shown, true);
   await page.evaluate(`document.querySelectorAll('.beeson-edit-nav .row')[${at}].click()`);
   assert.notEqual((await peek())?.shown, true);
