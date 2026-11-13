@@ -16,7 +16,9 @@ const PLATFORMS = ['mac', 'other'];
 let browser;
 let server;
 before(async () => {
-  browser = await launch({ offline: false });
+  // the test of every slide changed to each layout is one read of 48 s on a runner, and of over the
+  // 120 s in which Chrome must answer by default on two cores, hence the limit of an answer is 8 min
+  browser = await launch({ offline: false, timeout: 480000 });
   server = await serve('.');
 });
 after(async () => {
