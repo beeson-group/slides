@@ -50,5 +50,8 @@ test('a test file that does not end fails after 15 to 30 minutes', () => {
 test('the test step of the check workflow is the test command with the shard of its job', () => {
   const workflow = readFileSync('.github/workflows/check.yml', 'utf8');
   const step = /^ +- run: (node --test .*)$/m.exec(workflow)?.[1];
-  assert.equal(step?.replace(' --test-shard=${{ matrix.shard }}/4', ''), command.replaceAll('\\"', '"'));
+  // the shards of the matrix are counted, hence a shard is not left out when their number is changed
+  const shards = /^ +shard: \[([\d, ]+)\]$/m.exec(workflow)?.[1].split(',').map(Number);
+  assert.deepEqual(shards, shards?.map((_, k) => k + 1), 'the shards of the matrix are not 1 to their number');
+  assert.equal(step?.replace(` --test-shard=\${{ matrix.shard }}/${shards.length}`, ''), command.replaceAll('\\"', '"'));
 });
