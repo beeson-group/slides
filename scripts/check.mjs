@@ -54,6 +54,7 @@ const deckProblems = `[
   ...[...document.querySelectorAll('tycho-viewer')].map((viewer) => viewer.shadowRoot?.querySelector('.status.error')?.textContent).filter(Boolean),
   ...[...document.querySelectorAll('.plot-error')].map((error) => error.textContent),
   ...[...document.querySelectorAll('.qr-error')].map((error) => error.textContent),
+  ...[...document.querySelectorAll('.tikz-error')].map((error) => error.textContent),
   ...[...Reveal.getCurrentSlide().querySelectorAll('mjx-container g[data-mml-node="mtext"][fill="red"][data-latex]')].map((name) => name.getAttribute('data-latex')).filter((name) => name.startsWith('\\\\')).map((name) => 'macro not defined: ' + name),
   ...[...Reveal.getCurrentSlide().querySelectorAll('cite[data-missing]')].flatMap((cite) => cite.dataset.n.split(',').filter((key) => !/^[0-9]+$/.test(key))).map((key) => 'citation of a key that is not in the bibliography: ' + key),
   ...[...Reveal.getCurrentSlide().querySelectorAll('p.theorem[data-missing]')].map((theorem) => 'theorem of a kind that is not defined: ' + theorem.dataset.kind),

@@ -3456,6 +3456,61 @@
     }
   }
 
+  // src/tikz.ts
+  var loads = /* @__PURE__ */ new Map();
+  function load2(name) {
+    if (window.beesonFigures?.[name] || !/^[\w-]+$/.test(name)) return Promise.resolve();
+    let loading = loads.get(name);
+    if (!loading) {
+      loading = new Promise((done) => {
+        const script2 = document.createElement("script");
+        script2.src = `figures/${name}.js`;
+        script2.onload = script2.onerror = () => done();
+        document.head.append(script2);
+      });
+      loads.set(name, loading);
+    }
+    return loading;
+  }
+  var drawn = /* @__PURE__ */ new WeakMap();
+  var instances = 0;
+  var figuresUnder = (root2) => [
+    ...root2 instanceof HTMLElement && root2.matches(".tikz") ? [root2] : [],
+    ...root2.querySelectorAll(".tikz")
+  ];
+  function draw2(el, mode2) {
+    const name = el.dataset.figure ?? "";
+    const key = `${name} ${mode2}`;
+    const state = drawn.get(el);
+    if (state?.key === key && el.querySelector(":scope > svg, :scope > .tikz-error")) return;
+    const n = state?.n ?? ++instances;
+    drawn.set(el, { n, key });
+    for (const old of el.querySelectorAll(":scope > svg, :scope > .tikz-error")) old.remove();
+    const output = window.beesonFigures?.[name];
+    if (!output) {
+      const box2 = document.createElement("div");
+      box2.className = "tikz-error";
+      box2.textContent = name ? `figure ${name} is not compiled: run npm run tex` : "a TikZ figure without a name in data-figure";
+      el.prepend(box2);
+      return;
+    }
+    const prefix = `tikz-${name}-${mode2}-`;
+    el.insertAdjacentHTML("afterbegin", output[mode2].split(prefix).join(`${prefix}${n}-`));
+    const svg2 = el.firstElementChild;
+    svg2.style.width = `${output.width}px`;
+    svg2.style.height = `${output.height}px`;
+    svg2.setAttribute("aria-hidden", "true");
+  }
+  function mountFigures(root2, mode2) {
+    return Promise.all(figuresUnder(root2).map(async (el) => {
+      await load2(el.dataset.figure ?? "");
+      draw2(el, mode2);
+    })).then(() => void 0);
+  }
+  function redrawFigures(mode2) {
+    for (const el of figuresUnder(document)) if (drawn.has(el)) draw2(el, mode2);
+  }
+
   // src/scrub.ts
   function minutes(seconds) {
     const s = Math.max(0, Math.round(seconds));
@@ -5179,21 +5234,21 @@ void main() {
   var running2 = /* @__PURE__ */ new WeakSet();
   var turns2 = /* @__PURE__ */ new WeakMap();
   var turn2 = 0;
-  var loads = /* @__PURE__ */ new WeakMap();
+  var loads2 = /* @__PURE__ */ new WeakMap();
   var sleep3 = (ms) => new Promise((done) => setTimeout(done, ms));
   var loaded = (v) => (v.state ?? null) !== null;
   var failed = (v) => !!v.shadowRoot?.querySelector(".status.error");
   function whenLoaded(v) {
-    let load2 = loads.get(v);
-    if (!load2) {
+    let load3 = loads2.get(v);
+    if (!load3) {
       const until = performance.now() + 6e4;
-      load2 = new Promise((done) => {
+      load3 = new Promise((done) => {
         const poll = () => loaded(v) || failed(v) || performance.now() > until ? done() : setTimeout(poll, 50);
         poll();
       });
-      loads.set(v, load2);
+      loads2.set(v, load3);
     }
-    return load2;
+    return load3;
   }
   var plays2 = (v, slide) => {
     const step2 = v.closest(".fragment.play");
@@ -5385,6 +5440,7 @@ void main() {
     remount();
     mountQr(root2);
     mountShapes(root2);
+    void mountFigures(root2, get());
     numberTheorems();
     mountCitations();
     for (const o of backdrops) if (root2.contains(o.el)) {
@@ -5454,10 +5510,12 @@ void main() {
     mountShapes(document);
     numberTheorems();
     mountCitations();
+    await mountFigures(document, get());
     markViewers();
     deck.on("pdf-ready", () => {
       completeAll();
       mountShapes(document);
+      void mountFigures(document, get());
       mountCitations();
       coverAll(document);
       void typeset2().then(() => applyAll(document));
@@ -5583,6 +5641,7 @@ void main() {
         s.recolor();
         s.draw();
       }
+      redrawFigures(get());
       syncViewers(get());
     });
   }

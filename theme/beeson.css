@@ -533,6 +533,12 @@ html:not([data-theme="light"]) .reveal .slides section.split .panel { box-shadow
 .reveal .plot-value { color: var(--text); }
 .reveal .plot-error { font-size: 28px; color: var(--accent); }
 
+/* ---- TikZ figure: the SVG of figures/name.js in the mode of the deck, centered in its box, see src/tikz.ts ---- */
+.reveal .slides section .tikz { display: flex; align-items: center; justify-content: center; }
+/* an output larger than its box is shown smaller as a whole, since its drawing is kept in its viewBox */
+.reveal .slides section .tikz > svg { display: block; flex: none; max-width: 100%; max-height: 100%; }
+.reveal .tikz-error { font-size: 28px; color: var(--accent); }
+
 /* figure treatments: a white raster figure framed as paper, and a black-on-white line plot inverted in dark mode */
 .reveal img { margin: 0; border: 0; box-shadow: none; background: none; max-width: 100%; max-height: 100%; }
 .reveal .paper { background: var(--paper); padding: 24px; border-radius: 2px; box-sizing: border-box; }

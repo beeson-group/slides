@@ -13,6 +13,7 @@ import { mountPlots, type PlotView } from './plot.ts';
 import { markViewers, stillViewers } from './print.ts';
 import { mountQr } from './qr.ts';
 import { mountShapes } from './shapes.ts';
+import { mountFigures, redrawFigures } from './tikz.ts';
 import { initScrub } from './scrub.ts';
 import { mount as mountSurfaces } from './surface.ts';
 import type { Surface } from './surface.ts';
@@ -186,6 +187,7 @@ function mountWithin(root: Element): void {
   remount();
   mountQr(root);
   mountShapes(root);
+  void mountFigures(root, get());
   // a theorem added to a slide changes the numbers on the slides after it
   numberTheorems();
   mountCitations();
@@ -249,12 +251,17 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   mountShapes(document);
   numberTheorems();
   mountCitations();
+  // the TikZ figures are drawn before reveal.js starts, which a settled deck is told by, once their
+  // outputs are loaded
+  await mountFigures(document, get());
   // in the print view, a page is cloned per fragment state after ready, and the clones are
   // mounted here. the viewers are numbered before the clones are made
   markViewers();
   deck.on('pdf-ready', () => {
     completeAll();
     mountShapes(document);
+    // a clone of a TikZ figure is drawn again with ids of its own
+    void mountFigures(document, get());
     // each page shows the references of the citations of its step
     mountCitations();
     coverAll(document);
@@ -391,6 +398,7 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
     const later = backdrops.filter((o) => !now.includes(o));
     if (later.length) setTimeout(() => { for (const o of later) o.redraw(); }, 600);
     for (const s of surfaces) { s.recolor(); s.draw(); }
+    redrawFigures(get());
     syncViewers(get());
   });
 }
