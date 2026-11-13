@@ -1,10 +1,12 @@
 name: check
 
-# a branch is checked through its pull request, hence a push is checked only on main
+# a branch is checked through its pull request, hence a push is checked only on main. A round on
+# any branch is started by hand under Actions > check > Run workflow
 on:
   push:
     branches: [main]
   pull_request:
+  workflow_dispatch:
 
 # a push to a pull request cancels the round of the commit before it. A round on main has a group
 # of its own, hence it is neither cancelled nor held back by a later one
