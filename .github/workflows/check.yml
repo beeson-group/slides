@@ -66,6 +66,16 @@ jobs:
     steps:
       - run: test "${{ needs.test.result }}" = success
 
+  # one check for the whole round, to require on main in place of the two above: it passes only if
+  # every test shard and every job of check passed
+  pass:
+    needs: [test, check]
+    if: ${{ always() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: test "${{ needs.test.result }}" = success && test "${{ needs.check.result }}" = success
+
   check:
     strategy:
       fail-fast: false
