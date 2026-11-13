@@ -290,10 +290,10 @@ export const deckSettled = `(async () => {
 /** Opens a deck at url in the print view of reveal.js, with ?print-pdf in url, and waits until it can be printed. */
 export async function printView(page, url) {
   await page.goto(url);
-  // loading-scroll-mode is removed from the viewport after the pdf-ready event of reveal.js. The
-  // pages of every step are laid out before this event, which took over 15 s on two loaded cores
+  // loading-scroll-mode is removed from the viewport after the pdf-ready event of reveal.js. on a
+  // slow runner, the pages of the demo deck at a pixel ratio of 2 are laid out in over 15 s
   await page.waitFor(`!!document.querySelector('.pdf-page')
-    && !document.querySelector('.reveal-viewport.loading-scroll-mode')`, 60000);
+    && !document.querySelector('.reveal-viewport.loading-scroll-mode')`, 120000);
   await page.waitFor(deckSettled);
   // reveal.js clones a slide for each of its steps after the load event, which does not wait for
   // the clones, and a video that has not loaded a frame is printed as a black panel. A clone with

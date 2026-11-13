@@ -42,7 +42,7 @@ function pageImages(pdf) {
 // the black panel: a clone of a video had not loaded when the page was printed. The clip is held
 // back on a local port, since a clip on the disk loads before the print on most runs
 // the limit of a test that opens a print view, longer than the waits of printView added up, which
-// are 60 s for the pages, 5 s for each video, 60 s for the frames of the videos, and 15 s twice for
+// are 120 s for the pages, 5 s for each video, 60 s for the frames of the videos, and 15 s twice for
 // the deck
 const PRINT = 300000;
 
