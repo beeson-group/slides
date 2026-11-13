@@ -1,5 +1,5 @@
 // the two TikZ figures of the demo deck, right before its closing slide: a pgfplots axis of
-// figures/decay.tex read from figures/decay.csv and a drawing of figures/orbit.tex, each compiled
+// figures/decay.tex read from figures/decay.csv and a drawing of figures/libration.tex, each compiled
 // to an output that is current, with a step for each of its parts, and drawn in both modes
 
 import assert from 'node:assert/strict';
@@ -10,20 +10,20 @@ import { figureStatus, readFigure } from '../scripts/figures.mjs';
 
 const DECK = 'index.html';
 
-test('the demo deck shows the figures decay and orbit right before its closing slide, each with a current output', () => {
+test('the demo deck shows the figures decay and libration right before its closing slide, each with a current output', () => {
   const html = readFileSync(DECK, 'utf8').replace(/<!--[\s\S]*?-->/g, '');
   const slides = [...html.matchAll(/<section\b[^>]*>[\s\S]*?<\/section>/g)].map((m) => m[0]);
   const closing = slides.findIndex((s) => /^<section class="closing"/.test(s));
   assert.ok(closing >= 2);
   assert.match(slides[closing - 2], /<div class="zone tikz" data-figure="decay"/);
-  assert.match(slides[closing - 1], /<div class="zone tikz" data-figure="orbit"/);
+  assert.match(slides[closing - 1], /<div class="zone tikz" data-figure="libration"/);
   const status = Object.fromEntries(figureStatus(DECK).map((f) => [f.name, f.state]));
-  assert.deepEqual({ decay: status.decay, orbit: status.orbit }, { decay: 'current', orbit: 'current' });
-  // the curves of decay are its two parts, and orbit has at least two parts, each a step of its slide
+  assert.deepEqual({ decay: status.decay, libration: status.libration }, { decay: 'current', libration: 'current' });
+  // the curves of decay are its two parts, and libration has at least two parts, each a step of its slide
   // the output is read in a vm context, hence its arrays are copied into this realm before a strict comparison
   assert.deepEqual([...readFigure('.', 'decay').parts], ['x', 'y']);
-  assert.ok(readFigure('.', 'orbit').parts.length >= 2);
-  for (const [slide, name] of [[slides[closing - 2], 'decay'], [slides[closing - 1], 'orbit']]) {
+  assert.ok(readFigure('.', 'libration').parts.length >= 2);
+  for (const [slide, name] of [[slides[closing - 2], 'decay'], [slides[closing - 1], 'libration']]) {
     const steps = [...slide.matchAll(/<span class="fragment" data-part="([\w-]+)" data-fragment-index="\d+"><\/span>/g)].map((m) => m[1]);
     assert.deepEqual(steps, [...readFigure('.', name).parts].filter((part) => steps.includes(part)));
     assert.ok(steps.length >= 2, `${name} has ${steps.length} steps`);
@@ -57,7 +57,7 @@ test('the figures of the demo deck are drawn in both modes without an error', { 
       error: el.querySelector('.tikz-error')?.textContent ?? null,
       mode: el.querySelector(':scope > svg [id]')?.id.split('-')[2] ?? null,
     }))`);
-    assert.deepEqual(figures, [{ name: 'decay', error: null, mode }, { name: 'orbit', error: null, mode }]);
+    assert.deepEqual(figures, [{ name: 'decay', error: null, mode }, { name: 'libration', error: null, mode }]);
     assert.deepEqual(page.errors, []);
   }
 });

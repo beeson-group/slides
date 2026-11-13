@@ -1,5 +1,5 @@
 % the Earth, the Moon, and the libration points L1 and L2 of the Earth-Moon system in the synodic
-% frame, not to scale, with an orbit around L2 drawn as an ellipse. the points and the orbit are parts
+% frame, not to scale, with an orbit around L2 drawn as an ellipse, i.e. a loop. the points and the loop are parts
 \begin{tikzpicture}
   \draw[subtle, dashed] (-0.6,0) -- (5.7,0);
   \fill[blue] (0,0) circle (0.3);
@@ -12,7 +12,7 @@
       \node[above=4pt] at (\x,0.08) {$\mathcal{L}_\i$};
     }
   \end{scope}
-  \begin{scope}[part=orbit]
+  \begin{scope}[part=loop]
     \draw[accent, line width=0.8333pt] (5,0) ellipse (0.35 and 1.1);
   \end{scope}
 \end{tikzpicture}
