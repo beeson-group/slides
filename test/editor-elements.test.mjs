@@ -228,7 +228,7 @@ const slideOf = (text, h2) => {
   return text.slice(text.lastIndexOf('<section', at), text.indexOf('</section>', at));
 };
 
-test('a text box is a p after the last block of the column, with the caret in it, and an empty one is not written', async (t) => {
+test('a text box is a p after the last block of the column, with the caret in it, and an empty one left by Esc is an empty p', async (t) => {
   const page = await open('mac');
   t.after(() => page.close?.());
   await show(page, '.reveal .slides figure.zone');
@@ -239,11 +239,14 @@ test('a text box is a p after the last block of the column, with the caret in it
   assert.equal(await render(page), page.source, 'the empty text box is written');
   // the empty box is an entry of the history
   assert.equal((await settle(page)).undo, true);
-  // Esc leaves it, and it is taken off the slide with its entry
+  // Esc leaves it, and it is written as an empty p in the entry of its insert, which an undo takes off
   await press(page, 'Escape');
   await settle(page);
   assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-pending').length`), 0);
+  assert.equal((await render(page)).match(/<p( [^>]*)?><\/p>/g)?.length, 1, 'the empty box is not written');
+  await page.evaluate('window.BeesonEditor.undo()');
   assert.equal((await settle(page)).undo, false);
+  assert.equal(await render(page), page.source);
   await page.evaluate(`window.BeesonEditor.exec('insert.text')`);
   await type(page, 'A new text');
   await sleep(100);

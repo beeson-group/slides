@@ -106,7 +106,8 @@ for (const platform of PLATFORMS) {
 }
 
 // D2 of review part 2 of round 7: a new text box left empty after an undo of its first letter left
-// the first letter on the redo stack, whose redo wrote a box without an insert under it
+// the first letter on the redo stack, whose redo wrote a box without an insert under it. the box
+// left empty is written as an empty paragraph in the entry of its insert
 for (const platform of PLATFORMS) {
   test(`a text box left empty after an undo of its first letter leaves nothing to redo (${platform})`, async (t) => {
     for (const leaveBy of ['Escape', 'click']) {
@@ -128,12 +129,15 @@ for (const platform of PLATFORMS) {
         await press(page, 'Escape');
       } else await click(page, { x: 1580, y: 600 });
       await sleep(300);
-      assert.equal(await pendings(page), 0, `the box is kept after ${leaveBy}`);
-      assert.equal(await render(page), older);
+      assert.equal(await pendings(page), 0, `the box is held outside the file after ${leaveBy}`);
+      const left = await render(page);
+      assert.equal(left.match(/<p( [^>]*)?><\/p>/g)?.length, 1, `the empty box is not written after ${leaveBy}`);
       const l = await labels(page);
-      assert.deepEqual({ redo: l.redoOn, undo: l.undo }, { redo: false, undo: 'Undo Typing' }, `the history after the box is left by ${leaveBy}: ${js(l)}`);
+      assert.deepEqual({ redo: l.redoOn, undo: l.undo }, { redo: false, undo: 'Undo Insert Text Box' }, `the history after the box is left by ${leaveBy}: ${js(l)}`);
       await redo(page);
-      assert.equal(await render(page), older, `a redo after the box is left by ${leaveBy} changes the file`);
+      assert.equal(await render(page), left, `a redo after the box is left by ${leaveBy} changes the file`);
+      await undo(page);
+      assert.equal(await render(page), older);
       await undo(page);
       await byteExact(page);
       assert.deepEqual(errors(page), []);

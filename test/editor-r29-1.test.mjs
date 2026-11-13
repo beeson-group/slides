@@ -80,26 +80,27 @@ async function clickAway(page) {
 
 // 1. a new text box, or the empty words of a shape, with the sheet of a new inline formula open,
 // and a click on the formula of the slide, which replaces the sheet with the sheet of this formula.
-// the box or the words are dropped as at a click away, and the file and the history are kept
-// through two clicks away after it
+// the words are dropped as at a click away, and the file and the history are kept through two
+// clicks away after it. the text box is kept as at a click away, written as an empty paragraph in
+// the entry of its insert
 const ROUTES = [
   ['a new text box', async (page) => {
     await click(page, '.beeson-edit-top [data-command="insert.text"]');
     await sleep(300);
     assert.equal(await page.evaluate(`!!document.querySelector(${js(`${SLIDE} .beeson-pending`)})`), true, 'the box is not drawn');
-  }, `${SLIDE} .beeson-pending`],
+  }, `${SLIDE} .beeson-pending`, true],
   ['the empty words of a shape', async (page) => {
     await click(page, `${SLIDE} > .shape`);
     await frames(page);
     await press(page, 'Enter');
     await frames(page);
     assert.equal(await page.evaluate(`!!document.activeElement?.matches(${js(`${SLIDE} > .shape > p`)})`), true, 'the caret is not in the words of the shape');
-  }, `${SLIDE} > .shape > p[data-generated]`],
+  }, `${SLIDE} > .shape > p[data-generated]`, false],
 ];
 
 for (const platform of PLATFORMS) {
-  for (const [name, open, left] of ROUTES) {
-    test(`1: the sheet of a formula in ${name} replaced by the sheet of another formula drops it, and the file and the history are kept (${platform})`, async (t) => {
+  for (const [name, open, left, kept] of ROUTES) {
+    test(`1: the sheet of a formula in ${name} replaced by the sheet of another formula ${kept ? 'keeps it empty' : 'drops it, and the file and the history are kept'} (${platform})`, async (t) => {
       const page = await load(t, platform, FORMULA);
       const label = (await state(page, 'edit.undo')).label;
       await open(page);
@@ -116,9 +117,14 @@ for (const platform of PLATFORMS) {
         await clickAway(page);
         assert.equal(await page.evaluate(`!!document.querySelector('.beeson-math')`), false, 'the sheet is still open');
         assert.equal(await page.evaluate(`document.querySelector(${js(left)})?.outerHTML ?? null`), null, `the box is left after click away ${k}`);
-        assert.equal(await render(page), page.source, 'the file is changed');
-        assert.equal((await state(page, 'edit.undo')).label, label, 'the history has an entry');
-        assert.equal((await status(page)).dirty, false, 'the editor reports unsaved changes');
+        if (kept) {
+          assert.equal((await render(page)).match(/<p( [^>]*)?><\/p>/g)?.length, 1, 'the empty box is not written as an empty paragraph');
+          assert.equal((await state(page, 'edit.undo')).label, 'Undo Insert Text Box');
+        } else {
+          assert.equal(await render(page), page.source, 'the file is changed');
+          assert.equal((await state(page, 'edit.undo')).label, label, 'the history has an entry');
+          assert.equal((await status(page)).dirty, false, 'the editor reports unsaved changes');
+        }
       }
       assert.deepEqual(errors(page), []);
     });

@@ -476,7 +476,9 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// the empty box of Text Box, Code Box, and Footnote, which is not written into the file
+// the empty box of Text Box, Code Box, and Footnote, which is not written into the file until it is
+// left or typed into. a text box left empty is written as an empty paragraph, and the other boxes
+// are taken off
 const PENDING = `document.querySelector('.reveal section.present .beeson-pending')`;
 // a new box on a slide without room under its text is written with the offset, and the width,
 // that put it in free space
@@ -519,9 +521,15 @@ for (const platform of PLATFORMS) {
       await redo(page);
       await frames(page);
       await boxed();
-      // the box is taken off when the caret leaves it, and so is its entry
       await press(page, 'Escape');
       await sleep(100);
+      if (id === 'insert.text') {
+        assert.equal(await page.evaluate(`!!${PENDING}`), false, 'the box is still held outside the file');
+        assert.equal((await render(page)).match(/<p( [^>]*)?><\/p>/g)?.length, 1, 'the empty box is not written as an empty paragraph');
+        assert.equal(await undoLabel(page, 'edit.undo'), 'Undo Insert Text Box');
+        await undo(page);
+        await sleep(100);
+      }
       await clean();
       // the first input writes the box as an entry over its insert, as in Keynote: one undo leaves
       // the empty box with the caret, and a second takes it off
