@@ -1284,8 +1284,10 @@
       this.upTo = this.strands.map(() => 0);
       this.redraw();
     }
-    start() {
-      if (_Orbits.reduced()) {
+    // with force, the backdrop is traced in a still deck too, e.g. in the print view for a recording of
+    // scripts/record.mjs
+    start(force = false) {
+      if (!force && _Orbits.reduced()) {
         this.complete();
         return;
       }
@@ -1396,6 +1398,11 @@
     get span() {
       if (!(this.Tmax > 0)) return this.duration;
       return Math.max(...this.strands.map((s, i) => s.times[s.times.length - 1] / this.Tmax * this.duration + i * this.stagger));
+    }
+    // the seconds after which the frames of a loop repeat, i.e. one revolution of its heads, or 0 for a
+    // backdrop that is not a loop
+    get period() {
+      return this.loop ? LOOP : 0;
     }
     // the seconds into the trace at which its first head is drawn, e.g. at the start of a record of a file
     get headAfter() {
@@ -2793,6 +2800,7 @@
     still3.className = viewer.className;
     still3.classList.add("viewer-still");
     still3.style.cssText = viewer.style.cssText;
+    if (viewer.dataset.still !== void 0) still3.dataset.still = viewer.dataset.still;
     still3.style.position = getComputedStyle(viewer).position;
     viewer.replaceWith(still3);
     return still3;
@@ -5193,6 +5201,12 @@ void main() {
     if (own.length) applySteps(slide);
   }
   var waiting = (o) => o.el.classList.contains("fragment") && !o.el.classList.contains("visible");
+  function animated(o, slide = o.el.closest("section")) {
+    if (waiting(o)) return false;
+    const loop = o.el.hasAttribute("data-loop");
+    if (slide?.hasAttribute("data-auto-animate")) return loop;
+    return loop || o.el.hasAttribute("data-live") || TRACED.some((c) => slide?.classList.contains(c));
+  }
   function playBackdrop(o, slide) {
     o.fit();
     if (still2()) {
@@ -5212,7 +5226,7 @@ void main() {
         o.fit();
         if (loop) o.start();
       }, seconds * 1e3 + 50);
-    } else if (loop || o.el.hasAttribute("data-live") || TRACED.some((c) => slide.classList.contains(c))) {
+    } else if (animated(o, slide)) {
       o.reset();
       o.start();
     } else o.complete();
@@ -5441,6 +5455,7 @@ void main() {
     start: start3,
     theme: { get, set: (theme) => set(theme), toggle: () => toggle() },
     backdrops,
+    animated,
     surfaces,
     plots,
     // called in a script file of polylines named in data-strands, see src/strands.ts

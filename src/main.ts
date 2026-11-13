@@ -146,6 +146,17 @@ function stepPlots(slide: Element): void {
 // a backdrop that is a step of its slide is left blank until its step is shown
 const waiting = (o: Orbits) => o.el.classList.contains('fragment') && !o.el.classList.contains('visible');
 
+// true when the backdrop o is traced or looped at the current step of its slide, and false when it is
+// drawn complete or, as a step to come, left blank. on a slide of a reveal.js auto-animate, a loop is
+// started after the move and a trace is drawn complete. scripts/record.mjs records the backdrops of
+// this predicate in the print view, where each step is a clone of its slide
+function animated(o: Orbits, slide: Element | null = o.el.closest('section')): boolean {
+  if (waiting(o)) return false;
+  const loop = o.el.hasAttribute('data-loop');
+  if (slide?.hasAttribute('data-auto-animate')) return loop;
+  return loop || o.el.hasAttribute('data-live') || TRACED.some((c) => slide?.classList.contains(c));
+}
+
 function playBackdrop(o: Orbits, slide: HTMLElement): void {
   o.fit();
   if (still()) { o.complete(); return; }
@@ -161,7 +172,7 @@ function playBackdrop(o: Orbits, slide: HTMLElement): void {
       o.fit();
       if (loop) o.start();
     }, seconds * 1000 + 50);
-  } else if (loop || o.el.hasAttribute('data-live') || TRACED.some((c) => slide.classList.contains(c))) {
+  } else if (animated(o, slide)) {
     o.reset();
     o.start();
   } else o.complete();
@@ -404,6 +415,7 @@ const Beeson = {
   start,
   theme: { get, set: (theme: 'dark' | 'light') => set(theme), toggle: () => toggle() },
   backdrops,
+  animated,
   surfaces,
   plots,
   // called in a script file of polylines named in data-strands, see src/strands.ts
