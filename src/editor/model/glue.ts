@@ -27,7 +27,7 @@ export type Glue = { els: Element[]; fx: number; fy: number };
 // an end is put at the middle of an edge of the box within this distance of it, in slide px
 export const REACH = 16;
 // the elements that take glue, and the texts that take it once moved as a box
-const TAKES = 'img, video, figure, .zone, .qr, .shape, table, div.math, tycho-viewer';
+const TAKES = 'img, video, figure, .zone, .qr, .tikz, .shape, table, div.math, tycho-viewer';
 const TEXTS = 'h1, h2, h3, p, ul, ol, dl, pre, blockquote, .caption';
 const MIDDLES: [number, number][] = [[0.5, 0], [1, 0.5], [0.5, 1], [0, 0.5]];
 

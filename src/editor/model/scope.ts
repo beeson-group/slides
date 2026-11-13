@@ -29,7 +29,7 @@ export const DATA_ATTRS = [
   'data-stagger', 'data-strands', 'data-strands-color', 'data-strands-colormap', 'data-strands-ramp',
   'data-strands-select', 'data-strands-shade', 'data-surface-accent', 'data-surface-marks', 'data-surface-stage',
   'data-surface-violet', 'data-tone', 'data-turn', 'data-unhighlight', 'data-zoom', 'data-zscale',
-  'data-visibility', 'data-timing', 'data-transition', 'data-group', 'data-locked', 'data-autoslide',
+  'data-visibility', 'data-timing', 'data-figure', 'data-part', 'data-transition', 'data-group', 'data-locked', 'data-autoslide',
   'data-guides', 'data-anchor', 'data-from', 'data-to',
 ];
 
@@ -90,6 +90,8 @@ export function declarationProblem(tag: string, classes: string[], name: string,
   if (name === 'width' && (tag === 'td' || tag === 'th')) return /^\d+px$/.test(value.trim()) ? null : `width ${value} on a ${tag}`;
   // a shape is placed and sized in its style, as a box of Keynote and PowerPoint
   if ((name === 'width' || name === 'height') && tag === 'div' && classes.includes('shape')) return PX.test(value.trim()) ? null : `${name} ${value} on a shape`;
+  // the box of a TikZ figure, in which its output is centered and never enlarged
+  if ((name === 'width' || name === 'height') && tag === 'div' && classes.includes('tikz')) return PX.test(value.trim()) ? null : `${name} ${value} on a TikZ figure`;
   if (name === 'width' && (SIZED_TAGS.has(tag) || classes.includes('qr'))) return null;
   // the box of a backdrop resized by its grips
   if ((name === 'width' || name === 'height') && tag === 'div' && classes.includes('backdrop')) return PX.test(value.trim()) ? null : `${name} ${value} on a backdrop`;

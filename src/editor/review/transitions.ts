@@ -77,7 +77,7 @@ export function paired(app: App, el: Element): boolean {
 // the elements of a slide that Magic Move matches: its heading, its figures, its lines, and its
 // shapes, the outermost of each nest, outside the notes. reveal.js matches an svg only by its
 // data-id, and fades out and in again a line without one
-const FIGURES = 'img, video, figure, .zone, .plate, .qr, tycho-viewer, div.math, table, pre, .backdrop, .surface, svg.line, .shape';
+const FIGURES = 'img, video, figure, .zone, .plate, .qr, .tikz, tycho-viewer, div.math, table, pre, .backdrop, .surface, svg.line, .shape';
 
 export function candidates(slide: Element): Element[] {
   const heading = [...slide.querySelectorAll('h1, h2')].find((h) => !h.closest('aside.notes'));

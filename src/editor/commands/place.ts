@@ -15,7 +15,7 @@ import { inkBox, meets, promptBox, slideBox, takenBox, type Box } from './insert
 import { keepPlaces } from '../canvas/drag.ts';
 
 // what a new element may lie over when nothing else is free: a figure or a drawing, but not a text
-const FIGURE = `${CONTAINER}, img, video, .qr, .surface, .plot, tycho-viewer, svg.line`;
+const FIGURE = `${CONTAINER}, img, video, .qr, .tikz, .surface, .plot, tycho-viewer, svg.line`;
 const SKIP = 'aside.notes, script, style, .backdrop, .col, .panel, .block, [data-generated]:not(.run)';
 // the room around a new element, and the step of the grid on which a free place is looked for, in
 // slide px
@@ -166,7 +166,7 @@ export function freePlace(app: App, el: Element, picture?: HTMLElement): { x: nu
 // what a new table is not put over while another place exists: the figures, the videos,
 // the plots, the QR codes, and the tables, with what is drawn in a plate as large as the slide in
 // place of the plate, and the chrome
-const SOLID = 'figure, .zone, .plate, img, video, .qr, .surface, .plot, tycho-viewer, table, .run, .foot';
+const SOLID = 'figure, .zone, .plate, img, video, .qr, .tikz, .surface, .plot, tycho-viewer, table, .run, .foot';
 
 type Pieces = { solids: Box[]; texts: Box[]; heads?: Box[]; chrome?: Box[] };
 

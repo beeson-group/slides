@@ -14,7 +14,7 @@ import { injectStyle } from './ui/dom.ts';
 import { orientedBox, scaleAt } from './canvas/hit.ts';
 
 // the pictures, tables, and code boxes that a text is not drawn over
-const FIGURE = 'img, video, canvas, iframe, tycho-viewer, .plot, .qr, table, pre';
+const FIGURE = 'img, video, canvas, iframe, tycho-viewer, .plot, .qr, .tikz, table, pre';
 
 // a picture turned by its own rotate or by that of an element around it, on the screen: the center
 // and the half sizes of its picture as it is seen without the rotation, and the angle in radians
@@ -46,7 +46,7 @@ function cuts(r: DOMRect, q: Turned): boolean {
 }
 
 // the names of the figures in the state line, by the words of AGENTS.md
-const KINDS: [string, string][] = [['img', 'picture'], ['video', 'video'], ['.plot', 'plot'], ['.qr', 'QR code'], ['table', 'table'], ['pre', 'code box'], ['tycho-viewer', 'scene']];
+const KINDS: [string, string][] = [['img', 'picture'], ['video', 'video'], ['.plot', 'plot'], ['.qr', 'QR code'], ['.tikz', 'TikZ figure'], ['table', 'table'], ['pre', 'code box'], ['tycho-viewer', 'scene']];
 const kindOf = (f: Element): string => KINDS.find(([s]) => f.matches(s))?.[1] ?? 'figure';
 
 // a check of the overlaps on slide, made by checkOverlaps. scope is null after a change of the

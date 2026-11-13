@@ -10,10 +10,10 @@ import { gripOf, parseStroke, pointsOf, reach, type Point } from './stroke.ts';
 import { stored } from '../ui/dom.ts';
 
 // the outermost of these elements under the pointer is moved, outside the notes and the backdrop
-export const MOVABLE = 'h1, h2, h3, p, ul, ol, dl, table, pre, blockquote, div.math, .caption, .foot, img, video, figure, .zone, .plate, .qr, tycho-viewer, .shape';
+export const MOVABLE = 'h1, h2, h3, p, ul, ol, dl, table, pre, blockquote, div.math, .caption, .foot, img, video, figure, .zone, .plate, .qr, .tikz, tycho-viewer, .shape';
 // an element without text to edit, dragged by itself. a tycho-viewer is turned by a drag, hence it
 // is moved by its handle or its border only
-export const BY_ITSELF = 'img, video, figure, .zone, .plate, .qr, .shape';
+export const BY_ITSELF = 'img, video, figure, .zone, .plate, .qr, .tikz, .shape';
 export const OUTSIDE = 'aside.notes, .backdrop';
 // the elements whose width the editor writes, by the scope rule of the plan
 export const RESIZABLE = 'img, video, .qr, tycho-viewer, .shape';

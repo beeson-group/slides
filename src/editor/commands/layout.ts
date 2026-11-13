@@ -39,7 +39,7 @@ const WRAP: Partial<Record<Layout, { cls: string; takes: Kind[] }>> = {
 // and taken off again at a change to another layout
 const PLATE = '<div class="plate"></div>';
 
-const VISUAL_CLASSES = ['backdrop', 'surface', 'zone', 'plate', 'qr', 'plot'];
+const VISUAL_CLASSES = ['backdrop', 'surface', 'zone', 'plate', 'qr', 'plot', 'tikz'];
 const VISUAL_TAGS = ['figure', 'img', 'video', 'tycho-viewer', 'canvas', 'svg', 'iframe', 'object'];
 const OTHER_TAGS = ['aside', 'script', 'style', 'template', 'link', 'meta', 'noscript'];
 

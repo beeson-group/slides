@@ -23,9 +23,9 @@ export const ACCEPT: Record<Kind | 'any', string> = {
 };
 
 // a box of the layout that takes a figure, i.e. a zone, a plate, or a figure, other than a plot,
-// a viewer of tycho, a surface, or a backdrop, which are drawn by the theme
+// a TikZ figure, a viewer of tycho, a surface, or a backdrop, which are drawn by the theme
 const SLOT = 'figure, .zone, .plate';
-const DRAWN = '[data-plot], tycho-viewer, .surface, .backdrop';
+const DRAWN = '[data-plot], .tikz, tycho-viewer, .surface, .backdrop';
 
 // the attributes and the declarations of an image or a video that the element of the other kind
 // put in its place keeps: its step, its id, its group, its lock, and its place. the alt text, the

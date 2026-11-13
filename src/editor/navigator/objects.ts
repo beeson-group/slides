@@ -121,6 +121,7 @@ export function describeObject(el: Element): { kind: string; icon: string; name:
   if (el.matches('.qr')) return named('QR Code', 'qr');
   if (el.matches('tycho-viewer')) return named('Scene', 'shape');
   if (el.matches('.backdrop')) return named('Backdrop', 'orbit', drawingName(el));
+  if (el.matches('.tikz')) return named('TikZ Figure', 'image', el.getAttribute('data-figure') ?? '');
   if (el.matches(CONTAINER)) {
     const caption = el.querySelector(':scope > figcaption, :scope > .caption');
     const words = caption ? wordsOf(caption) : '';
