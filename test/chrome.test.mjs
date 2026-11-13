@@ -169,7 +169,7 @@ test('a page that is refused a file with net::ERR_NO_BUFFER_SPACE is loaded agai
   writeFileSync(join(root, 'page.html'), `<!doctype html><link rel="icon" href="data:,"><script>
     const loads = Number(localStorage.getItem('loads') ?? 0) + 1;
     localStorage.setItem('loads', loads);
-    if (loads === 1) console.error('Failed to load resource: net::ERR_NO_BUFFER_SPACE ' + location.origin + '/theme/macros.js');
+    if (loads === 1) console.error('Failed to load resource: net::ERR_NO_BUFFER_SPACE ' + location.origin + '/tex.js');
     if (new URLSearchParams(location.search).has('other')) console.error('another error');
   </script>`);
   const browser = await launch({ offline: false });
