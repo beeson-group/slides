@@ -240,9 +240,11 @@ html, body, .reveal-viewport { background: var(--bg); }
 
 /* code: the system monospace, since a monospace face is not vendored with the theme */
 .reveal pre, .reveal code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-.reveal code { font-size: 0.86em; color: var(--subtle); }
+/* inline code: a chip tinted with the text color, with rounded corners and a hairline, as in Obsidian and Jira. a chip
+   broken over two lines is closed at each end */
+.reveal code { font-size: 0.86em; color: var(--text); padding: 0.06em 0.3em; border-radius: 0.3em; background: color-mix(in srgb, var(--text) 9%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 14%, transparent); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .reveal pre { margin: 24px 0; padding: 24px 32px; font-size: 36px; line-height: 1.45; color: var(--text); background: color-mix(in srgb, var(--line) 45%, transparent); border-left: 2px solid var(--line); overflow: hidden; width: auto; box-shadow: none; }
-.reveal pre code { display: block; padding: 0; color: inherit; font-size: inherit; max-height: none; overflow: hidden; white-space: pre; }
+.reveal pre code { display: block; padding: 0; border-radius: 0; background: none; box-shadow: none; color: inherit; font-size: inherit; max-height: none; overflow: hidden; white-space: pre; }
 /* a box of the highlight plugin of reveal.js, i.e. a pre with the class code-wrapper. with data-line-numbers, the lines
    are numbered in a table, and each group of lines after the first is lit in a copy of the code, a fragment stacked
    over the first. the copies are thus opaque and are not dimmed as past steps, and the box is dimmed as a whole once a
@@ -449,7 +451,7 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section.split .panel .foot { color: #7c7c76; }
 /* the style Small in the panel, and code in the colors of the panel, which is dark in both modes */
 .reveal .slides section.split .panel .small, .reveal .slides section.split .panel .small li { font-size: 36px; color: var(--panel-text); }
-.reveal .slides section.split .panel code { color: var(--panel-subtle); }
+.reveal .slides section.split .panel :not(pre) > code { color: var(--panel-text); background: color-mix(in srgb, var(--panel-text) 9%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--panel-text) 14%, transparent); }
 /* on the black canvas the edge of the panel is marked with a hairline */
 html:not([data-theme="light"]) .reveal .slides section.split .panel { box-shadow: 1px 0 0 var(--line); }
 .reveal .slides section.split .zone { left: 880px; top: 120px; width: 920px; height: 800px; }
