@@ -176,19 +176,32 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
       evaluate,
       // sends a command of the DevTools protocol to the page, e.g. Emulation.setCPUThrottlingRate
       send: call,
+      // on a Windows runner of GitHub, about one page in a few thousand is refused one of its
+      // files with net::ERR_NO_BUFFER_SPACE, while ports and memory are free. such a page is loaded
+      // again, twice at most, and the error of the load before is dropped
       async goto(url) {
-        const loaded = new Promise((done) => {
-          const onLoad = ({ method, sessionId: from }) => {
-            if (from === sessionId && method === 'Page.loadEventFired') {
-              listeners.delete(onLoad);
-              done();
-            }
-          };
-          listeners.add(onLoad);
-        });
-        const { errorText } = await call('Page.navigate', { url });
-        if (errorText) throw new Error(`${url}: ${errorText}`);
-        await answered(loaded, `the load of ${url}`);
+        const load = async (method, params) => {
+          const loaded = new Promise((done) => {
+            const onLoad = ({ method: event, sessionId: from }) => {
+              if (from === sessionId && event === 'Page.loadEventFired') {
+                listeners.delete(onLoad);
+                done();
+              }
+            };
+            listeners.add(onLoad);
+          });
+          const { errorText } = await call(method, params);
+          if (errorText) throw new Error(`${url}: ${errorText}`);
+          await answered(loaded, `the load of ${url}`);
+        };
+        const refused = () => {
+          const kept = errors.filter((error) => !error.includes('net::ERR_NO_BUFFER_SPACE'));
+          const found = kept.length < errors.length;
+          errors.splice(0, errors.length, ...kept);
+          return found;
+        };
+        await load('Page.navigate', { url });
+        for (let n = 0; n < 2 && refused(); n++) await load('Page.reload', { ignoreCache: true });
       },
       // polls the expression every 50 ms until it is truthy, and fails after timeout ms
       // an expression evaluated while the page is loaded anew is answered with an error, hence it
