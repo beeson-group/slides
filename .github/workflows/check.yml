@@ -14,8 +14,9 @@ jobs:
       matrix:
         # the macOS runners draw WebGL in SwiftShader, too slowly for the timings of the tests
         os: [ubuntu-latest, windows-latest]
-        # the test files are split over four runners, since the suite is over an hour long on one
-        shard: [1, 2, 3, 4]
+        # the test files are split over seven runners, since the suite is over an hour long on one.
+        # With the five jobs of check, 19 jobs are run at once, under the 20 of the free plan
+        shard: [1, 2, 3, 4, 5, 6, 7]
     runs-on: ${{ matrix.os }}
     timeout-minutes: 45
     steps:
@@ -32,11 +33,11 @@ jobs:
       # npm test with the shard of the job, an option that is read only before the files. With
       # --test-force-exit, a test file that leaves a server open after a failed cleanup is ended, and
       # with --test-timeout, a test file that does not end fails by name after 20 minutes
-      - run: node --test --test-force-exit --test-timeout=1200000 --test-shard=${{ matrix.shard }}/4 "test/*.test.mjs"
+      - run: node --test --test-force-exit --test-timeout=1200000 --test-shard=${{ matrix.shard }}/7 "test/*.test.mjs"
         if: ${{ github.repository == 'beeson-group/slides' }}
 
   # the checks test (ubuntu-latest) and test (windows-latest) are required on main, hence the result
-  # of the eight shards is reported under both names. Without always(), the job is skipped after a
+  # of the fourteen shards is reported under both names. Without always(), the job is skipped after a
   # failed shard, and a skipped check counts as passed
   tests:
     name: test (${{ matrix.os }})
