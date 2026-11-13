@@ -293,10 +293,13 @@ for (const platform of PLATFORMS) {
     assert.ok((await paragraph(page)).endsWith(' typed'));
     assert.equal((await status(page)).dirty, true);
 
-    // Revert loads the page again from the file
+    // Revert loads the page again from the file. a read that Chrome has not answered when the new
+    // page is shown fails with this error, which is thus not a failure of the click on Revert
     await page.evaluate('window.__before = true');
     await choose(page, 'File', 'Revert to Saved');
-    await cardButton(page, 'revert', 'Revert');
+    await cardButton(page, 'revert', 'Revert').catch((error) => {
+      if (!/Inspected target navigated or closed/.test(error.message)) throw error;
+    });
     await page.waitFor(`!window.__before && document.readyState === 'complete'`);
     await page.waitFor(deckSettled);
     await page.waitFor(ready);
