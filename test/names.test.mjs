@@ -12,7 +12,8 @@ const read = (path) => readFileSync(join(root, path), 'utf8');
 const sources = (dir) =>
   readdirSync(join(root, dir), { recursive: true })
     .filter((f) => f.endsWith('.ts'))
-    .map((f) => join(dir, f));
+    // with forward slashes on Windows too, since the paths are matched against OTHER
+    .map((f) => `${dir}/${f.replaceAll('\\', '/')}`);
 
 // the files of the theme, the editor, and the demo deck, the compiled bundles included
 const FILES = ['theme/beeson.css', 'theme/beeson.js', 'theme/editor.js', 'index.html', ...sources('src')];
