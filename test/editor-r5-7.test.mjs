@@ -36,6 +36,9 @@ async function editor(platform, index = 2, deck = LAYOUTS, size) {
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
+  // on a loaded runner, the unsaved edits of the page before are kept in the storage of the browser
+  // before the page is closed, and they would then be offered on a card over the slide
+  await page.evaluate('localStorage.clear()');
   page.source = readFileSync(deck, 'utf8');
   const status = await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(page.source)})`);
   assert.deepEqual(status.problems, []);
