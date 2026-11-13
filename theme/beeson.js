@@ -3592,24 +3592,22 @@
       const { wells, bowl, sum } = effectivePotential(mu);
       const points = librationPoints(mu);
       const C1 = -2 * sum(points[0].x, 0);
-      const one = (layer) => [{ layer, lift: 0 }];
-      const plain = (layer) => () => ({ sheets: one(layer), points: false, level: null });
+      const zero = () => 0;
+      const one = (height, tone) => [{ height, tone, lift: 0 }];
       return {
         x: [-1.5, 1.5],
         y: [-1.5, 1.5],
         floor: -3.2,
         zscale: 1,
-        layers: { flat: () => 0, wells, bowl, sum },
-        tones: { flat: GRAVITATIONAL, wells: GRAVITATIONAL, bowl: CENTRIFUGAL, sum: EFFECTIVE },
         points,
-        initial: "flat",
+        initial: "zero",
         states: {
-          flat: plain("flat"),
-          wells: plain("wells"),
-          bowl: () => ({ sheets: [{ layer: "wells", lift: 0 }, { layer: "bowl", lift: BOWL_LIFT }], points: false, level: null }),
-          sum: plain("sum"),
-          extrema: () => ({ sheets: one("sum"), points: true, level: null }),
-          cut: (a) => ({ sheets: one("sum"), points: true, level: -num3(a.c, C1) / 2 })
+          zero: () => ({ sheets: one(zero, GRAVITATIONAL), points: false, level: null }),
+          gravitational: () => ({ sheets: one(wells, GRAVITATIONAL), points: false, level: null }),
+          centrifugal: () => ({ sheets: [...one(wells, GRAVITATIONAL), { height: bowl, tone: CENTRIFUGAL, lift: BOWL_LIFT }], points: false, level: null }),
+          effective: () => ({ sheets: one(sum, EFFECTIVE), points: false, level: null }),
+          extrema: () => ({ sheets: one(sum, EFFECTIVE), points: true, level: null }),
+          cut: (a) => ({ sheets: one(sum, EFFECTIVE), points: true, level: -num3(a.c, C1) / 2 })
         }
       };
     }
@@ -3893,10 +3891,10 @@ void main() {
       el.prepend(this.canvas);
       el.setAttribute("data-prevent-swipe", "");
       this.labels = [...el.querySelectorAll(".label")];
-      for (const [name, f] of Object.entries(fn.layers)) {
+      for (const f of new Set(Object.values(fn.states).flatMap((state) => state({ ...el.dataset }).sheets.map((sheet) => sheet.height)))) {
         const g = sample(f, fn.x, fn.y, CELLS, CELLS, fn.floor);
-        this.grids.set(name, g);
-        this.ranges.set(name, this.range(g));
+        this.grids.set(f, g);
+        this.ranges.set(f, this.range(g));
         for (const z of g) {
           if (z < this.zmin) this.zmin = z;
           if (z > this.zmax) this.zmax = z;
@@ -3928,8 +3926,13 @@ void main() {
       this.sync(false);
       this.fit();
     }
-    // the color range of a layer: from its 5th percentile, so that the deep wells do not take the
-    // whole ramp, to its maximum, in world units. a flat layer is drawn in the middle of the ramp
+    // the first sheet of the initial state of the function
+    initialSheet() {
+      return this.fn.states[this.fn.initial]({ ...this.el.dataset }).sheets[0];
+    }
+    // the color range of the sampled heights g: from their 5th percentile, so that the deep wells do
+    // not take the whole ramp, to their maximum, in world units. a flat sheet is drawn in the middle
+    // of the ramp
     range(g) {
       const sorted = Float64Array.from(g).sort();
       const lo = sorted[Math.floor(0.05 * (sorted.length - 1))] * this.zscale, hi = sorted[sorted.length - 1] * this.zscale;
@@ -3951,15 +3954,15 @@ void main() {
       this.textures.set(name, t);
       return t;
     }
-    // the ramp of a layer and its range in world units. an unknown ramp is reported, and the ramp
+    // the ramp of sheet and its range in world units. an unknown ramp is reported, and the ramp
     // theme is drawn in its place
-    paintOf(layer) {
-      let { ramp: ramp2, range } = this.fn.tones[layer] ?? { ramp: "theme" };
+    paintOf(sheet) {
+      let { ramp: ramp2, range } = sheet.tone;
       if (ramp2 !== "theme" && !(ramp2 in RAMPS)) {
-        console.error(`beeson: unknown ramp "${ramp2}" of the layer ${layer} of ${this.el.dataset.function}, known: theme, ${Object.keys(RAMPS).join(", ")}`);
+        console.error(`beeson: unknown ramp "${ramp2}" of ${this.el.dataset.function}, known: theme, ${Object.keys(RAMPS).join(", ")}`);
         ramp2 = "theme";
       }
-      const world = range ? [range[0] * this.zscale, range[1] * this.zscale] : this.ranges.get(layer) ?? [-1, 1];
+      const world = range ? [range[0] * this.zscale, range[1] * this.zscale] : this.ranges.get(sheet.height) ?? [-1, 1];
       return { key: `${ramp2}|${world.join("|")}`, texture: this.texture(ramp2), range: world };
     }
     // a sheet, made hidden on first use. the sheets are drawn in their order, before the plane
@@ -3986,7 +3989,7 @@ void main() {
       }
       geometry.setIndex(new THREE.BufferAttribute(index, 1));
       const cell = Math.max(fn.x[1] - fn.x[0], fn.y[1] - fn.y[0]) / 24;
-      const paint = this.paintOf(fn.initial);
+      const paint = this.paintOf(this.initialSheet());
       const uniforms = {
         uMix: { value: 1 },
         uRampA: { value: paint.texture },
@@ -4017,7 +4020,7 @@ void main() {
       group2.visible = false;
       this.scene.add(group2);
       const hidden2 = { lift: 0, alpha: 0 };
-      const s = { group: group2, mesh, depth, layer: "", A: this.zeros, B: this.zeros, from: hidden2, to: hidden2, shown: hidden2, paintA: paint, paintB: paint, toneFrom: 1, tone: 1, now: null };
+      const s = { group: group2, mesh, depth, height: null, A: this.zeros, B: this.zeros, from: hidden2, to: hidden2, shown: hidden2, paintA: paint, paintB: paint, toneFrom: 1, tone: 1, now: null };
       this.sheets[i] = s;
       return s;
     }
@@ -4186,22 +4189,22 @@ void main() {
       this.pointKey = pointKey;
       this.stateName = name;
       this.el.dataset.shown = name;
-      const s = this.zscale, sheets = state.sheets.length ? state.sheets : [{ layer: this.fn.initial, lift: 0 }], main = sheets[0];
-      const grid = (layer) => this.grids.get(layer) ?? this.zeros;
+      const s = this.zscale, sheets = state.sheets.length ? state.sheets : [this.initialSheet()], main = sheets[0];
+      const grid = (height) => this.grids.get(height) ?? this.zeros;
       const first = this.sheets[0];
-      const merge = !first || first.layer !== main.layer;
+      const merge = !first || first.height !== main.height;
       const was = first ? { heights: this.current(first), lift: first.shown.lift, paint: first.tone < 0.5 ? first.paintA : first.paintB } : null;
       const lifts = [];
       for (let i = 0; i < Math.max(this.sheets.length, sheets.length); i++) {
         const sheet = this.sheet(i), next = sheets[i], seen = sheet.shown.alpha > 0;
         if (!next && !seen) {
-          sheet.layer = "";
+          sheet.height = null;
           sheet.from = sheet.to = sheet.shown;
           continue;
         }
         const heights = this.current(sheet);
         if (next) {
-          const paint = this.paintOf(next.layer);
+          const paint = this.paintOf(next);
           if (seen) {
             sheet.A = heights;
             sheet.from = sheet.shown;
@@ -4216,18 +4219,18 @@ void main() {
             sheet.paintA = sheet.paintB = paint;
             sheet.tone = 1;
           }
-          sheet.B = grid(next.layer);
+          sheet.B = grid(next.height);
           sheet.to = { lift: next.lift * s, alpha: 1 };
-          sheet.layer = next.layer;
+          sheet.height = next.height;
           this.repaint(sheet, paint);
           lifts.push(next.lift * s);
         } else {
           sheet.A = heights;
           sheet.from = sheet.shown;
-          sheet.layer = "";
-          sheet.B = merge ? grid(main.layer) : this.zeros;
+          sheet.height = null;
+          sheet.B = merge ? grid(main.height) : this.zeros;
           sheet.to = { lift: main.lift * s, alpha: 0 };
-          this.repaint(sheet, merge ? this.paintOf(main.layer) : sheet.paintB);
+          this.repaint(sheet, merge ? this.paintOf(main) : sheet.paintB);
         }
       }
       const to = {
@@ -4377,7 +4380,7 @@ void main() {
     // the level or the heights have changed
     trace() {
       const lead = this.sheet(0);
-      const key = this.shown.cut > 0 ? `${this.shown.level}|${this.mix}|${lead.layer}` : "";
+      const key = this.shown.cut > 0 ? `${this.shown.level}|${this.mix}|${lead.height ? [...this.grids.keys()].indexOf(lead.height) : -1}` : "";
       if (key === this.drawn) return;
       this.drawn = key;
       const curves2 = key ? levelCurves(this.current(lead), this.fn.x, this.fn.y, CELLS, CELLS, this.shown.level) : [];

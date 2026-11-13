@@ -127,9 +127,9 @@ try {
 <section>
   <h2>Explain concepts, visually</h2>
   <p>The effective potential is the sum of the gravitational and centrifugal potentials</p>
-  <div class="math fragment" data-fragment-index="1" data-surface-state="wells">\[U_g = -(1-\mu)/\rho_1 - \mu/\rho_2,\]</div>
-  <div class="math fragment" data-fragment-index="2" data-surface-state="bowl" style="margin-top: 0">\[U_c = -(x^2 + y^2)/2,\]</div>
-  <div class="math fragment" data-fragment-index="3" data-surface-state="sum" style="margin-top: 0">\[\tilde U = U_g + U_c.\]</div>
+  <div class="math fragment" data-fragment-index="1" data-surface-state="gravitational">\[U_g = -(1-\mu)/\rho_1 - \mu/\rho_2,\]</div>
+  <div class="math fragment" data-fragment-index="2" data-surface-state="centrifugal" style="margin-top: 0">\[U_c = -(x^2 + y^2)/2,\]</div>
+  <div class="math fragment" data-fragment-index="3" data-surface-state="effective" style="margin-top: 0">\[\tilde U = U_g + U_c.\]</div>
   <p class="fragment" data-fragment-index="4" data-surface-state="extrema">Libration points \(\{\LL{i}\}_{i=1}^5\) satisfy \(\nabla_{\boldsymbol{x}} \tilde U= 0\).</p>
   <p class="fragment" data-fragment-index="5" data-surface-state="cut" data-C="3.39">Taking a section gives the zero-velocity curve. Hill's region is the region bounded by this curve, i.e. the points satisfying \(-2\tilde U \ge C\).</p>
   <div class="surface" data-function="effective-potential" data-mu="0.05">
@@ -146,13 +146,13 @@ try {
 <section>
   <h2>Color the terms and the points</h2>
   <p>The effective potential is the sum of two terms</p>
-  <div class="math fragment" data-fragment-index="1" data-surface-state="bowl">\[\tilde U = \class{ug}{U_g} + \class{uc}{U_c}.\]</div>
+  <div class="math fragment" data-fragment-index="1" data-surface-state="centrifugal">\[\tilde U = \class{ug}{U_g} + \class{uc}{U_c}.\]</div>
   <p class="fragment" data-fragment-index="2" data-highlight="ug" data-tone="blue">The <span class="ug">gravitational wells</span> are drawn in blue,</p>
   <p class="fragment" data-fragment-index="3" data-highlight="uc" data-tone="red" style="margin-top: 0">and the <span class="uc">centrifugal dome</span> in red.</p>
   <p class="fragment" data-fragment-index="4" data-unhighlight="ug uc" data-surface-state="extrema">Their sum has three saddles and two maxima.</p>
   <p class="fragment" data-fragment-index="5" data-surface-state="extrema" data-surface-points="L1 L2 L3" data-surface-accent="L1 L2 L3">The saddles lie on the \(x\) axis,</p>
   <p class="fragment" data-fragment-index="6" data-surface-state="extrema" data-surface-points="L4 L5" data-surface-violet="L4 L5" style="margin-top: 0">and the maxima form equilateral triangles.</p>
-  <div class="surface" data-function="effective-potential" data-mu="0.05" data-surface-state="sum">
+  <div class="surface" data-function="effective-potential" data-mu="0.05" data-surface-state="effective">
     <span class="label" data-at="L1">\(\LL{1}\)</span>
     <span class="label" data-at="L2">\(\LL{2}\)</span>
     <span class="label" data-at="L3">\(\LL{3}\)</span>

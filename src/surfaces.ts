@@ -1,33 +1,33 @@
 // the functions drawn by a `.surface`, selected with its data-function attribute and built from its
-// data attributes. a function is given with its rectangle, its floor, the layers drawn at its states
-// and the color ramp of each, its marked points, and its states, i.e. what is shown at each step of
-// the slide
+// data attributes. a function is given with its rectangle, its floor, its marked points, and its
+// states, i.e. what is shown at each step of the slide. a state lists its sheets, each with the
+// height it draws and the color ramp of this height
 
 import { isolines } from './contour.ts';
 import { lagrange } from './orbits.ts';
 
 /** A height z = f(x, y), nondimensional. */
-export type Layer = (x: number, y: number) => number;
+export type Height = (x: number, y: number) => number;
 
-/** A marked point of a surface, drawn on the layer of the state that shows the points. */
+/** A marked point of a surface, drawn on the first sheet of the state that shows the points. */
 export type Point = { name: string; x: number; y: number; kind: 'saddle' | 'maximum' | 'minimum' };
 
-/** A layer drawn at a state, raised by lift, nondimensional. */
-export type Sheet = { layer: string; lift: number };
+/** A height drawn at a state in the color ramp tone, raised by lift, nondimensional. */
+export type Sheet = { height: Height; tone: Tone; lift: number };
 
 /**
  * What a surface shows at one step: its sheets, the points on the first sheet or not, and the
  * height of a cutting plane through the first sheet, or null for no cut. A sheet after the first
  * that is not shown at the next state is merged into the first sheet when the first sheet is given
- * another layer, and is flattened onto the first sheet and faded out otherwise. A sheet is split
+ * another height, and is flattened onto the first sheet and faded out otherwise. A sheet is split
  * from the first in the same way when it is added.
  */
 export type State = { sheets: Sheet[]; points: boolean; level: number | null };
 
 /**
- * The color ramp of a layer: the name of a ramp of RAMPS, or theme for the ramp of the colors of
+ * The color ramp of a sheet: the name of a ramp of RAMPS, or theme for the ramp of the colors of
  * the mode of the deck, and the heights at its two ends, nondimensional. Without range, the ramp is
- * spread from the 5th percentile of the heights of the layer to their maximum.
+ * spread from the 5th percentile of the heights of the sheet to their maximum.
  */
 export type Tone = { ramp: string; range?: [number, number] };
 
@@ -47,14 +47,12 @@ export const RAMPS: Record<string, string[]> = {
 /** The data attributes of the element and of the fragment that sets the state, by their dataset keys. */
 export type Attributes = Record<string, string | undefined>;
 
-/** A function of a surface. The heights of every layer are clamped at floor, a layer without a tone is drawn in the ramp theme, and initial is the state shown before a fragment sets one. */
+/** A function of a surface. The heights of every sheet are clamped at floor, and initial is the state shown before a fragment sets one. */
 export type SurfaceFunction = {
   x: [number, number];
   y: [number, number];
   floor: number;
   zscale: number;
-  layers: Record<string, Layer>;
-  tones: Record<string, Tone>;
   points: Point[];
   states: Record<string, (attributes: Attributes) => State>;
   initial: string;
@@ -68,9 +66,9 @@ const num = (value: string | undefined, fallback: number): number =>
  * The frame is the rotating frame with the primary at (-mu, 0) and the secondary at (1 - mu, 0).
  * The parts are the gravitational wells of the primary and the secondary, and the centrifugal bowl.
  */
-export function effectivePotential(mu: number): { wells: Layer; bowl: Layer; sum: Layer } {
-  const wells: Layer = (x, y) => -(1 - mu) / Math.hypot(x + mu, y) - mu / Math.hypot(x - 1 + mu, y);
-  const bowl: Layer = (x, y) => -(x * x + y * y) / 2;
+export function effectivePotential(mu: number): { wells: Height; bowl: Height; sum: Height } {
+  const wells: Height = (x, y) => -(1 - mu) / Math.hypot(x + mu, y) - mu / Math.hypot(x - 1 + mu, y);
+  const bowl: Height = (x, y) => -(x * x + y * y) / 2;
   return { wells, bowl, sum: (x, y) => wells(x, y) + bowl(x, y) };
 }
 
@@ -92,12 +90,12 @@ export function librationPoints(mu: number): Point[] {
 }
 
 /**
- * The layer f clamped at floor. The wells of the effective potential go to minus infinity at the
+ * The height f clamped at floor. The wells of the effective potential go to minus infinity at the
  * primary and the secondary, hence a surface is drawn above a floor. The clamp is a softplus of
  * width 0.06, so that the bottom of a well is rounded rather than cut flat, and a height 0.3 above
  * the floor is moved by less than 0.001.
  */
-export function clamped(f: Layer, floor: number): Layer {
+export function clamped(f: Height, floor: number): Height {
   const w = 0.06;
   return (x, y) => {
     const s = (f(x, y) - floor) / w;
@@ -105,8 +103,8 @@ export function clamped(f: Layer, floor: number): Layer {
   };
 }
 
-/** The heights of the layer f, clamped at floor, at the (nx + 1) by (ny + 1) corners of the cells of the rectangle, row by row as isolines() of contour.ts reads them. */
-export function sample(f: Layer, x: [number, number], y: [number, number], nx: number, ny: number, floor: number): Float64Array {
+/** The values of the height f, clamped at floor, at the (nx + 1) by (ny + 1) corners of the cells of the rectangle, row by row as isolines() of contour.ts reads them. */
+export function sample(f: Height, x: [number, number], y: [number, number], nx: number, ny: number, floor: number): Float64Array {
   const g = new Float64Array((nx + 1) * (ny + 1)), c = clamped(f, floor);
   const dx = (x[1] - x[0]) / nx, dy = (y[1] - y[0]) / ny;
   for (let j = 0; j <= ny; j++) for (let i = 0; i <= nx; i++) g[j * (nx + 1) + i] = c(x[0] + i * dx, y[0] + j * dy);
@@ -125,7 +123,7 @@ export function levelCurves(g: Float64Array, x: [number, number], y: [number, nu
 const GRAVITATIONAL: Tone = { ramp: 'blues', range: [-3, -1.5] };
 const CENTRIFUGAL: Tone = { ramp: 'reds', range: [-3, -1.5] };
 const EFFECTIVE: Tone = { ramp: 'magma_r', range: [-3, -1.5] };
-// the height by which the bowl is raised above the wells at the state bowl, nondimensional
+// the height by which the bowl is raised above the wells at the state centrifugal, nondimensional
 const BOWL_LIFT = 4;
 
 const FUNCTIONS = {
@@ -139,24 +137,22 @@ const FUNCTIONS = {
     const { wells, bowl, sum } = effectivePotential(mu);
     const points = librationPoints(mu);
     const C1 = -2 * sum(points[0].x, 0);
-    const one = (layer: string): Sheet[] => [{ layer, lift: 0 }];
-    const plain = (layer: string) => (): State => ({ sheets: one(layer), points: false, level: null });
+    const zero: Height = () => 0;
+    const one = (height: Height, tone: Tone): Sheet[] => [{ height, tone, lift: 0 }];
     return {
       x: [-1.5, 1.5],
       y: [-1.5, 1.5],
       floor: -3.2,
       zscale: 1,
-      layers: { flat: () => 0, wells, bowl, sum },
-      tones: { flat: GRAVITATIONAL, wells: GRAVITATIONAL, bowl: CENTRIFUGAL, sum: EFFECTIVE },
       points,
-      initial: 'flat',
+      initial: 'zero',
       states: {
-        flat: plain('flat'),
-        wells: plain('wells'),
-        bowl: () => ({ sheets: [{ layer: 'wells', lift: 0 }, { layer: 'bowl', lift: BOWL_LIFT }], points: false, level: null }),
-        sum: plain('sum'),
-        extrema: () => ({ sheets: one('sum'), points: true, level: null }),
-        cut: (a) => ({ sheets: one('sum'), points: true, level: -num(a.c, C1) / 2 }),
+        zero: () => ({ sheets: one(zero, GRAVITATIONAL), points: false, level: null }),
+        gravitational: () => ({ sheets: one(wells, GRAVITATIONAL), points: false, level: null }),
+        centrifugal: () => ({ sheets: [...one(wells, GRAVITATIONAL), { height: bowl, tone: CENTRIFUGAL, lift: BOWL_LIFT }], points: false, level: null }),
+        effective: () => ({ sheets: one(sum, EFFECTIVE), points: false, level: null }),
+        extrema: () => ({ sheets: one(sum, EFFECTIVE), points: true, level: null }),
+        cut: (a) => ({ sheets: one(sum, EFFECTIVE), points: true, level: -num(a.c, C1) / 2 }),
       },
     };
   },

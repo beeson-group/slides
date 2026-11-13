@@ -73,7 +73,7 @@ test('the cut of the effective potential is at -C/2, with C from data-C or else 
   const f = surfaceFunction('effective-potential', { mu: '0.05' });
   assert.equal(f.states.cut({ c: '3.39' }).level, -1.695);
   assert.equal(f.states.cut({}).level, sum(librationPoints(MU)[0].x, 0));
-  assert.deepEqual(Object.keys(f.states), ['flat', 'wells', 'bowl', 'sum', 'extrema', 'cut']);
+  assert.deepEqual(Object.keys(f.states), ['zero', 'gravitational', 'centrifugal', 'effective', 'extrema', 'cut']);
   assert.equal(surfaceFunction('nothing', {}), null);
 });
 
@@ -92,7 +92,7 @@ const surfaces = (title = TITLE) => `Promise.all([...document.querySelectorAll('
 test('the surface of the demo deck is drawn at each of its states, live and in the print view', { timeout: 120000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
-  const states = ['flat', 'wells', 'bowl', 'sum', 'extrema', 'cut'];
+  const states = ['zero', 'gravitational', 'centrifugal', 'effective', 'extrema', 'cut'];
 
   const page = await browser.newPage();
   await page.goto(deckUrl('test-deck.html', 'still'));
@@ -148,7 +148,7 @@ test('the surface of the demo deck is drawn at each of its states, live and in t
 // a change of state takes 1.4 s, or 2.6 s when the cutting plane is slid. a quick step is taken
 // 0.4 s after the last one, while the surface is still being changed, as when a talk is stepped back
 // in a hurry, and a settled step is taken once the change has ended
-test('the points of the surface are drawn on it or hidden at every step, forward to cut and back to wells', { timeout: 120000 }, async (t) => {
+test('the points of the surface are drawn on it or hidden at every step, forward to cut and back to gravitational', { timeout: 120000 }, async (t) => {
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
@@ -158,8 +158,8 @@ test('the points of the surface are drawn on it or hidden at every step, forward
   const probe = `Beeson.surfaces.find((s) => s.el.closest('section') === Reveal.getCurrentSlide()).probe()`;
   const wait = (ms) => new Promise((done) => setTimeout(done, ms));
   // each state with the index of the fragment that sets it
-  const forward = [['wells', 0], ['bowl', 1], ['sum', 2], ['extrema', 3], ['cut', 4]];
-  const backward = [['extrema', 3], ['sum', 2], ['bowl', 1], ['wells', 0]];
+  const forward = [['gravitational', 0], ['centrifugal', 1], ['effective', 2], ['extrema', 3], ['cut', 4]];
+  const backward = [['extrema', 3], ['effective', 2], ['centrifugal', 1], ['gravitational', 0]];
   const TOLERANCE = 0.02;
   const floating = [], buried = [];
   const look = (where, p) => {
