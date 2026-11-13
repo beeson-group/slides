@@ -142,7 +142,20 @@ test('every animation of a slide plays on after a flip of the mode, with the key
         // later on a slow runner. the end of the flip is thus waited for, and an animation is read
         // again after it. a slow runner may hold a video for a moment, hence the animations are read
         // until each has advanced, for up to 5 s
-        await page.waitFor(`Beeson.theme.get() !== '${theme}' && !document.documentElement.matches('.to-dark, .to-light')`);
+        const flipped = `Beeson.theme.get() !== '${theme}' && !document.documentElement.matches('.to-dark, .to-light')`;
+        if (!(await page.waitFor(flipped).then(() => true, () => false))) {
+          // on a Windows runner, a flip did not end in 15 s, which is not reproduced elsewhere, hence
+          // the state of the page is printed, with the time until its next animation frame
+          const state = await page.evaluate(`(async () => {
+            const t0 = performance.now();
+            const frame = await Promise.race([
+              new Promise((done) => requestAnimationFrame(() => done(Math.round(performance.now() - t0)))),
+              new Promise((done) => setTimeout(() => done('none in 3 s'), 3000)),
+            ]);
+            return { theme: Beeson.theme.get(), classes: document.documentElement.className, visibility: document.visibilityState, frame, transition: !!document.activeViewTransition };
+          })()`);
+          assert.fail(`${deck}, slide ${i + 1}: the flip with the ${how} did not end in 15 s: ${JSON.stringify(state)}, with ${JSON.stringify(before)}`);
+        }
         let after = await page.evaluate(animations);
         for (let wait = 0; wait < 5000 && after.some((a, k) => !a.ended && a.at === before[k]?.at); wait += 250) {
           await sleep(250);
