@@ -43,6 +43,7 @@ jobs:
     needs: test
     if: ${{ always() }}
     strategy:
+      fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
     runs-on: ubuntu-latest
