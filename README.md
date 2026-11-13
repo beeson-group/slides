@@ -8,7 +8,7 @@ HTML slides are greatly more expressive than any of the alternatives.
 
 But editing raw HTML sucks.
 
-So I built our own in-house editor, which combines the best ideas from PowerPoint, Keynote, and Beamer, all in one place.  
+So we built our own in-house editor, which combines the best ideas from PowerPoint, Keynote, and Beamer, all in one place.  
 Minus all the bloat.
 
 The slides (and editor) consist of a single [index.html](/index.html) file, which you open with a double click, from any machine (mobile too), without any requirements other than having a browser. They are themed to the [Beeson Group](https://beeson.princeton.edu/)'s colors. 
@@ -27,7 +27,7 @@ PRE-RELEASE: The template is currently still in beta. View the most up to date v
 
 This tool was built with agents.
 
-To create custom backdrops, animations, or other effects you want in your slides, ask your favorite agent. This repo contains an [AGENTS.md](/AGENTS.md) for this purpose. Collaboration with agents is encouraged to unleash the full expressive power of HTML. I have also been adding useful skills (found at [/.agents/skills/](/.agents/skills/)) which your agent will automatically find and load if it thinks it appropriate. If you don't have access to a coding agent, however, do not worry: you will be able to do everything you know how to do in PowerPoint/Keynote from our editor mode, including creating new slides, modifying, moving, and resizing text boxes or titles, setting up steps to determine the order of appearance of your slide elements in the presentation, and a lot more. You will also be able to accomplish what other slide editor apps do NOT enable you to do: edit LaTeX boxes directly from the slide they appear on (which compile with one click), edit and animate code in code boxes the same way, set up custom QR codes with ease, and, again, a lot more.
+To create custom backdrops, animations, or other effects you want in your slides, ask your favorite agent. This repo contains an [AGENTS.md](/AGENTS.md) for this purpose. Collaboration with agents is encouraged to unleash the full expressive power of HTML. We have also been adding useful skills (found at [/.agents/skills/](/.agents/skills/)) which your agent will automatically find and load if it thinks it appropriate. If you don't have access to a coding agent, however, do not worry: you will be able to do everything you know how to do in PowerPoint/Keynote from our editor mode, including creating new slides, modifying, moving, and resizing text boxes or titles, setting up steps to determine the order of appearance of your slide elements in the presentation, and a lot more. You will also be able to accomplish what other slide editor apps do NOT enable you to do: edit LaTeX boxes directly from the slide they appear on (which compile with one click), edit and animate code in code boxes the same way, set up custom QR codes with ease, and, again, a lot more.
 
 ## Presenting
 
