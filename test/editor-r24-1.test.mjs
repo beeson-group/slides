@@ -11,7 +11,7 @@ import { serve } from '../scripts/webdriver.mjs';
 import { click, saveAndReopen, type } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const LISTS = 'test/pages/editor-r13-3.html';
 
 let browser;

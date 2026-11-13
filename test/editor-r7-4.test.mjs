@@ -13,7 +13,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { inflateRawSync } from 'node:zlib';
 import { smartLink } from '../src/editor/text/substitute.ts';
-import { byteExact, click, press, saveAndReopen } from './helpers/editor.mjs';
+import { byteExact, click, press, saveAndReopen, typeKeys } from './helpers/editor.mjs';
 
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
@@ -75,17 +75,6 @@ async function roundTrip(page, edited, undos = 1) {
   assert.equal(text, edited);
   page.source = text;
   return text;
-}
-
-// the characters of a US layout typed as trusted keys, each with its code and Shift
-const KEYS = { '-': ['Minus', 189, 0], ' ': ['Space', 32, 0], '.': ['Period', 190, 0], '/': ['Slash', 191, 0], ':': ['Semicolon', 186, 8], '@': ['Digit2', 50, 8] };
-async function typeKeys(page, text) {
-  for (const c of text) {
-    const [code, keyCode, mods] = KEYS[c] ?? [`Key${c.toUpperCase()}`, c.toUpperCase().charCodeAt(0), /[A-Z]/.test(c) ? 8 : 0];
-    const base = { key: c, code, windowsVirtualKeyCode: keyCode, modifiers: mods };
-    await page.send('Input.dispatchKeyEvent', { type: 'keyDown', ...base, text: c, unmodifiedText: c });
-    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
-  }
 }
 
 // Return with its text, as a keyboard sends it, since press() sends a key without a text, which
@@ -232,6 +221,12 @@ for (const platform of PLATFORMS) {
       assert.equal(await undoLabel(page), `Undo Insert ${label}`);
       await press(page, 'Escape');
       await sleep(150);
+      // a text box left empty is written as an empty paragraph in the entry of its insert
+      if (id === 'insert.text') {
+        assert.equal(await undoLabel(page), 'Undo Insert Text Box');
+        await undo(page);
+        await sleep(100);
+      }
       await byteExact(page);
     }
     // the Edit menu reads Undo Typing after a text box is typed, as Keynote does, with Undo Insert
@@ -429,7 +424,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`Dashes and Paragraphs of Format > Text make a line of the notes an item and back (${platform})`, async (t) => {
+  test(`Arrows and Paragraphs of Format > Text make a line of the notes an item and back (${platform})`, async (t) => {
     const page = await load(t, platform, TEXT);
     if (!(await state(page, 'view.notes')).checked) await exec(page, 'view.notes');
     await frames(page);
@@ -437,8 +432,8 @@ for (const platform of PLATFORMS) {
     await caretIn(page, NOTES, 'Notes of');
     await openPath(page, ['Format', 'Text']);
     const items = await lastMenu(page);
-    assert.deepEqual(items.filter((i) => ['Paragraphs', 'Dashes', 'Numbers'].includes(i[0])).map((i) => [i[0], i[2]]), [['Paragraphs', false], ['Dashes', false], ['Numbers', true]]);
-    await choose(page, 'Dashes');
+    assert.deepEqual(items.filter((i) => ['Paragraphs', 'Arrows', 'Numbers'].includes(i[0])).map((i) => [i[0], i[2]]), [['Paragraphs', false], ['Arrows', false], ['Numbers', true]]);
+    await choose(page, 'Arrows');
     assert.equal(await undoLabel(page), 'Undo List Style');
     assert.equal((await state(page, 'text.list.ul')).checked, true);
     const listed = '<aside class="notes"><ul><li>Notes of a content slide.</li></ul></aside>';

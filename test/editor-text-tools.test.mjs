@@ -13,7 +13,7 @@ import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
 import { mailtoHref, parseHref, telHref } from '../src/editor/text/link.ts';
 import { nextCase, recase } from '../src/editor/text/inline.ts';
 import { substitution } from '../src/editor/text/substitute.ts';
-import { byteExact, click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
+import { byteExact, click, drag, press, saveAndReopen, type, typeKeys } from './helpers/editor.mjs';
 
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
@@ -142,15 +142,6 @@ const frames = (page) => page.evaluate('new Promise((d) => requestAnimationFrame
 async function raw(page, key, code, keyCode, mods = 0, text) {
   await page.send('Input.dispatchKeyEvent', { type: text ? 'keyDown' : 'rawKeyDown', key, code, windowsVirtualKeyCode: keyCode, modifiers: mods, ...(text ? { text, unmodifiedText: text } : {}) });
   await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: keyCode, modifiers: mods });
-}
-
-// the characters of a US layout typed as keys, each with its code and Shift
-const KEYS = { '"': ['Quote', 222, 8], "'": ['Quote', 222, 0], '-': ['Minus', 189, 0], ' ': ['Space', 32, 0] };
-async function typeKeys(page, text) {
-  for (const c of text) {
-    const [code, keyCode, mods] = KEYS[c] ?? [`Key${c.toUpperCase()}`, c.toUpperCase().charCodeAt(0), 0];
-    await raw(page, c, code, keyCode, mods, c);
-  }
 }
 
 // a click on the button of the Text pane at selector, with count clicks

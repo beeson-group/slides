@@ -203,14 +203,14 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal svg.line marker { overflow: visible; }
 .reveal svg.line marker path { fill: currentColor; stroke: none; }
 
-/* lists: a short orange dash in place of a bullet, numbers in gray */
+/* lists: an orange chevron in place of a bullet, numbers in gray */
 .reveal ul, .reveal ol { display: block; margin: 24px 0 0; padding: 0; list-style: none; }
 .reveal li { position: relative; margin: 0 0 14px; padding-left: 54px; }
-.reveal ul > li::before { content: ""; position: absolute; left: 0; top: 0.72em; width: 28px; height: 2px; background: var(--accent); }
-/* the items of a ul.dots or a ul.arrows take a ring or a chevron in place of the dash, centered
-   on its middle. a nested list without the class keeps the dash */
-.reveal ul.dots > li::before { --mark-width: 14px; top: calc(0.72em - 6px); left: 7px; width: 14px; height: 14px; box-sizing: border-box; border: 2.5px solid var(--accent); border-radius: 50%; background: none; }
-.reveal ul.arrows > li::before { --mark-width: 12px; top: calc(0.72em - 8px); left: 9px; width: 12px; height: 18px; clip-path: polygon(0 0, 30% 0, 100% 50%, 30% 100%, 0 100%, 70% 50%); }
+.reveal ul > li::before { --mark-width: 12px; content: ""; position: absolute; left: 9px; top: calc(0.72em - 8px); width: 12px; height: 18px; background: var(--accent); clip-path: polygon(0 0, 30% 0, 100% 50%, 30% 100%, 0 100%, 70% 50%); }
+/* the items of a ul.dots or a ul.dashes take a ring or a short dash in place of the chevron,
+   centered on its middle. a nested list without the class keeps the chevron */
+.reveal ul.dots > li::before { --mark-width: 14px; top: calc(0.72em - 6px); left: 7px; width: 14px; height: 14px; box-sizing: border-box; border: 2.5px solid var(--accent); border-radius: 50%; background: none; clip-path: none; }
+.reveal ul.dashes > li::before { --mark-width: 28px; top: 0.72em; left: 0; width: 28px; height: 2px; clip-path: none; }
 /* the number is the counter list-item, which a browser starts from the attribute start of an ol.
    it ends where a number of one digit ends, so that the gap before the words is the same for any
    number of digits */
@@ -240,9 +240,11 @@ html, body, .reveal-viewport { background: var(--bg); }
 
 /* code: the system monospace, since a monospace face is not vendored with the theme */
 .reveal pre, .reveal code { font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace; }
-.reveal code { font-size: 0.86em; color: var(--subtle); }
+/* inline code: a chip tinted with the text color, with rounded corners and a hairline, as in Obsidian and Jira. a chip
+   broken over two lines is closed at each end */
+.reveal code { font-size: 0.86em; color: var(--text); padding: 0.06em 0.3em; border-radius: 0.3em; background: color-mix(in srgb, var(--text) 9%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text) 14%, transparent); -webkit-box-decoration-break: clone; box-decoration-break: clone; }
 .reveal pre { margin: 24px 0; padding: 24px 32px; font-size: 36px; line-height: 1.45; color: var(--text); background: color-mix(in srgb, var(--line) 45%, transparent); border-left: 2px solid var(--line); overflow: hidden; width: auto; box-shadow: none; }
-.reveal pre code { display: block; padding: 0; color: inherit; font-size: inherit; max-height: none; overflow: hidden; white-space: pre; }
+.reveal pre code { display: block; padding: 0; border-radius: 0; background: none; box-shadow: none; color: inherit; font-size: inherit; max-height: none; overflow: hidden; white-space: pre; }
 /* a box of the highlight plugin of reveal.js, i.e. a pre with the class code-wrapper. with data-line-numbers, the lines
    are numbered in a table, and each group of lines after the first is lit in a copy of the code, a fragment stacked
    over the first. the copies are thus opaque and are not dimmed as past steps, and the box is dimmed as a whole once a
@@ -452,7 +454,7 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section.split .panel .foot { color: #7c7c76; }
 /* the style Small in the panel, and code in the colors of the panel, which is dark in both modes */
 .reveal .slides section.split .panel .small, .reveal .slides section.split .panel .small li { font-size: 36px; color: var(--panel-text); }
-.reveal .slides section.split .panel code { color: var(--panel-subtle); }
+.reveal .slides section.split .panel :not(pre) > code { color: var(--panel-text); background: color-mix(in srgb, var(--panel-text) 9%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--panel-text) 14%, transparent); }
 /* on the black canvas the edge of the panel is marked with a hairline */
 html:not([data-theme="light"]) .reveal .slides section.split .panel { box-shadow: 1px 0 0 var(--line); }
 .reveal .slides section.split .zone { left: 880px; top: 120px; width: 920px; height: 800px; }

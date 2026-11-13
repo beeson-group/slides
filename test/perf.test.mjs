@@ -36,7 +36,7 @@ for (const [rate, budget] of [
       const browser = await launch();
       t.after(() => browser.close());
       const page = await browser.newPage({ motion: true, scale: 2 });
-      await page.goto(deckUrl('index.html'));
+      await page.goto(deckUrl('test-deck.html'));
       await page.waitFor(deckSettled);
       if (rate > 1) await page.send('Emulation.setCPUThrottlingRate', { rate });
 

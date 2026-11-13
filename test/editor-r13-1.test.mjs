@@ -10,7 +10,7 @@ import { deckSettled, deckUrl, launch, printView } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 // the slide of the demo deck with a paragraph, a list, and a figure in a zone
 const FIGURES = [...readFileSync(DECK, 'utf8').matchAll(/<section[\s\S]*?<\/section>/g)].findIndex((m) => m[0].includes('Figures are first class citizens'));
 const PLATFORMS = ['mac', 'other'];

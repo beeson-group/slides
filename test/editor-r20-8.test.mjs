@@ -13,7 +13,7 @@ import { deckSettled, launch, printView } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { editProblems, textProblems, themeClasses } from '../src/editor/model/scope.ts';
 import { tokenize } from '../src/editor/tokens.ts';
-import { center, click, press, saveAndReopen, selectFigure, selectPicture } from './helpers/editor.mjs';
+import { center, click, press, previewFrames, recordPreview, saveAndReopen, selectFigure, selectPicture } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 const DECK = 'test/pages/editor-r20-8.html';
@@ -248,14 +248,13 @@ for (const platform of PLATFORMS) {
     await roundTrip(page, expected);
     // the element is drawn at full opacity while the slide is edited, since every step is shown
     assert.equal(await style(page, 'p:nth-of-type(2)', 'opacity'), '1');
-    const run = page.evaluate(`Promise.resolve(window.BeesonEditor.exec('steps.preview')).then(() => true)`);
-    const seen = [];
-    for (let k = 0; k <= 3; k++) {
-      await page.waitFor(`document.documentElement.dataset.previewStep === ${js(String(k))}`);
-      await frames(page);
-      seen.push(await page.evaluate(`[...document.querySelectorAll('.reveal section.present p')].map((p) => getComputedStyle(p).opacity)`));
-    }
-    await run;
+    // each frame of the preview is recorded in the page as it is drawn, since the preview goes on
+    // by a clock of 800 ms a step, and a wait for one step from the test may miss it
+    await recordPreview(page, `[...document.querySelectorAll('.reveal section.present p')].map((p) => getComputedStyle(p).opacity)`);
+    await page.evaluate(`Promise.resolve(window.BeesonEditor.exec('steps.preview')).then(() => true)`);
+    const played = await previewFrames(page);
+    const seen = [0, 1, 2, 3].map((k) => played.find((f) => f.step === String(k))?.read);
+    assert.ok(seen.every(Boolean), `the preview did not draw each of its steps 0 to 3: ${js(played.map((f) => f.step))}`);
     assert.deepEqual(seen.map((s) => s[1]), ['1', GHOST, GHOST, GHOST], 'the dimmed Zeta');
     assert.deepEqual(seen.map((s) => s[3]), ['1', '1', '1', GHOST], 'Theta, dimmed at its own step');
     assert.deepEqual(errors(page), []);

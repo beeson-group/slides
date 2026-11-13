@@ -373,7 +373,7 @@ export async function removeJoining(app: App, els: Element[], label: string): Pr
 
 // the tag edit of a list made of kind. a ul does not take the attribute start of a numbered list,
 // and an ol does not take the class of a mark
-const listEdit = (kind: ListKind): TagEdit => ({ ...(kind === 'ol' ? {} : { attrs: { start: null } }), classes: { dots: kind === 'dots', arrows: kind === 'arrows' } });
+const listEdit = (kind: ListKind): TagEdit => ({ ...(kind === 'ol' ? {} : { attrs: { start: null } }), classes: { dots: kind === 'dots', dashes: kind === 'dashes' } });
 
 // the list of the page el made of kind, retagged only where its tag changes
 async function relist(app: App, el: Element, kind: ListKind): Promise<Element> {
@@ -795,10 +795,10 @@ export async function outdent(app: App): Promise<void> {
   selectIn(node, offset);
 }
 
-// a list of dashes, dots, or arrows is a ul, the last two with the class of their mark
-export type ListKind = 'none' | 'ul' | 'dots' | 'arrows' | 'ol';
-const MARKS = ['dots', 'arrows'] as const;
-const tagOf = (kind: ListKind): string => (kind === 'dots' || kind === 'arrows' ? 'ul' : kind);
+// a list of chevrons, dots, or dashes is a ul, the last two with the class of their mark
+export type ListKind = 'none' | 'ul' | 'dots' | 'dashes' | 'ol';
+const MARKS = ['dots', 'dashes'] as const;
+const tagOf = (kind: ListKind): string => (kind === 'dots' || kind === 'dashes' ? 'ul' : kind);
 export const openList = (kind: ListKind): string => (tagOf(kind) === kind ? `<${kind}>` : `<ul class="${kind}">`);
 
 // the kind of the list element list

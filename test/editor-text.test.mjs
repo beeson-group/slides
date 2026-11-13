@@ -198,10 +198,10 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`a list is switched between dashes, numbers, and paragraphs on ${platform}`, async () => {
+  test(`a list is switched between chevrons, numbers, and paragraphs on ${platform}`, async () => {
     const page = await textPage(platform);
     await select(page, '.reveal section.present li', 'A first item', 3);
-    assert.deepEqual(await state(page, 'text.list.ul'), { id: 'text.list.ul', label: 'Dashes', enabled: true, checked: true });
+    assert.deepEqual(await state(page, 'text.list.ul'), { id: 'text.list.ul', label: 'Arrows', enabled: true, checked: true });
     await exec(page, 'text.list.ol');
     const ol = [LIST, LIST.replace(/^<ul>/, '<ol>').replace(/<\/ul>$/, '</ol>')];
     await roundTrip(page, [ol], 'List Style');

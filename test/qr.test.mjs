@@ -222,12 +222,12 @@ test('every printed page of the test deck carries the code of its slide, as draw
 });
 
 test('the code of the demo deck is read back, moved by a drag in the editor, and its offset written into its tag', { timeout: 60000 }, async (t) => {
-  const deckText = readFileSync('index.html', 'utf8');
+  const deckText = readFileSync('test-deck.html', 'utf8');
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
   // Alt is the free modifier of a drag on Windows and Linux, and the copy modifier on a Mac
-  await page.goto(deckUrl('index.html', 'edit&still&edit-platform=other'));
+  await page.goto(deckUrl('test-deck.html', 'edit&still&edit-platform=other'));
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
   const opened = await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(deckText)})`);
@@ -274,7 +274,7 @@ test('the code of the closing slide of the demo deck is 200 px wide at 50 px fro
   t.after(() => browser.close());
   const page = await browser.newPage();
   for (const theme of ['dark', 'light']) {
-    await page.goto(deckUrl('index.html', `theme=${theme}`));
+    await page.goto(deckUrl('test-deck.html', `theme=${theme}`));
     await page.waitFor(deckSettled);
     await page.evaluate(`Reveal.slide(Reveal.getIndices(document.querySelector('.qr').closest('section')).h)`);
     const box = await page.evaluate(`(() => { const qr = document.querySelector('.qr'); return [qr.closest('section').className.includes('closing'), qr.offsetLeft, qr.offsetTop, qr.offsetWidth, qr.offsetHeight]; })()`);

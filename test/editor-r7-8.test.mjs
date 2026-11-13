@@ -14,7 +14,7 @@ import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
 import { numberOf, sortOrder } from '../src/editor/table.ts';
 import { byteExact, click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const THEME = new Set(themeClasses(readFileSync('theme/beeson.css', 'utf8')));
 const PLATFORMS = ['mac', 'other'];
 // the window of the pictures of round 3 on the Mac, and a window of 1920 by 1080 elsewhere

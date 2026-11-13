@@ -35,7 +35,7 @@ let saves = 0;
 
 // load opens the editor on the slide n of deck, served over HTTP, and keeps every window that the
 // page opens in window.__shows
-async function load(t, platform, { deck = 'index.html', n = 0, mode = 'light', width = 1600, height = 1000 } = {}) {
+async function load(t, platform, { deck = 'test-deck.html', n = 0, mode = 'light', width = 1600, height = 1000 } = {}) {
   const page = await browser.newPage({ width, height });
   t.after(() => page.close().catch(() => {}));
   await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: mode }] });
@@ -539,7 +539,7 @@ for (const platform of PLATFORMS) {
   test(`e in the speaker view of a deck opened by itself opens the editor in the window of the show at the slide shown, and closes the speaker view (${platform})`, async (t) => {
     const page = await browser.newPage({ width: 1600, height: 1000 });
     t.after(() => page.close().catch(() => {}));
-    await page.goto(`${server.origin}/index.html?still&edit-platform=${platform}#/2`);
+    await page.goto(`${server.origin}/test-deck.html?still&edit-platform=${platform}#/2`);
     await page.waitFor(deckSettled);
     await page.evaluate(keepSpeaker('window'));
     await press(page, 's');

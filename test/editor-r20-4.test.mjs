@@ -1,6 +1,6 @@
-// tests of R20.4 on both platforms with trusted input: the bullet kinds of a list, i.e. the dash of
-// a ul, the ring of a ul.dots, and the chevron of a ul.arrows, drawn by the theme in the show and
-// in the print view, and written by Dots and Arrows of Format > Text and of the Text pane. after
+// tests of R20.4 on both platforms with trusted input: the bullet kinds of a list, i.e. the chevron
+// of a ul, the ring of a ul.dots, and the dash of a ul.dashes, drawn by the theme in the show and
+// in the print view, and written by Dots and Dashes of Format > Text and of the Text pane. after
 // each edit of the file the text is checked byte for byte after an undo, the edit again after a
 // redo, and after a save and an open
 
@@ -17,7 +17,7 @@ const PLATFORMS = ['mac', 'other'];
 const KINDS = 0;
 const NESTED = 1;
 const APART = 2;
-const ARROWS = 3;
+const DASHES = 3;
 
 let browser;
 let server;
@@ -128,32 +128,32 @@ const marks = (page, selector) => page.evaluate(`(() => {
   });
 })()`);
 
-// checkMarks tests the marks of the items Alpha, Dot one, Arrow one, and Inner dash of the first
-// slide: a dash, a hollow ring, a chevron, and a dash, each in --accent and centered on the middle
-// of the dash, with the text of each item at 54 px
+// checkMarks tests the marks of the items Alpha, Dot one, Dash one, and Inner arrow of the first
+// slide: a chevron, a hollow ring, a dash, and a chevron, each in --accent and centered on the
+// middle of the dash, with the text of each item at 54 px
 function checkMarks(all) {
   const by = Object.fromEntries(all.map((m) => [m.text, m]));
-  const dash = by.Alpha;
-  assert.deepEqual([dash.width, dash.height, dash.clip, dash.round], [28, 2, 'none', '0px'], `the dash changed: ${js(dash)}`);
+  const arrow = by.Alpha;
+  assert.match(arrow.clip, /^polygon\(/, `the chevron is not a polygon: ${js(arrow)}`);
+  assert.equal(arrow.points, 6, `the chevron does not have six points: ${js(arrow)}`);
+  assert.ok(arrow.width > 0 && arrow.height > 0 && arrow.left + arrow.width <= 28, `the chevron is not inside the place of the dash: ${js(arrow)}`);
   const dot = by['Dot one'];
   assert.ok(dot.width === dot.height && dot.width >= 8 && dot.width <= 16 && dot.round === '50%' && dot.clip === 'none', `the dot is not round: ${js(dot)}`);
   assert.ok(dot.hollow && dot.ringAccent && dot.ring >= 2 && dot.ring <= 3, `the dot is not a hollow ring in --accent: ${js(dot)}`);
-  const arrow = by['Arrow one'];
-  assert.match(arrow.clip, /^polygon\(/, `the arrowhead is not a polygon: ${js(arrow)}`);
-  assert.equal(arrow.points, 6, `the arrowhead is not a chevron of six points: ${js(arrow)}`);
-  assert.ok(arrow.width > 0 && arrow.height > 0 && arrow.left + arrow.width <= 28, `the arrowhead is not inside the place of the dash: ${js(arrow)}`);
-  const inner = by['Inner dash'];
-  assert.deepEqual([inner.width, inner.height, inner.clip], [28, 2, 'none'], `a dash list in an arrow list does not keep the dash: ${js(inner)}`);
-  for (const m of [dash, dot, arrow, inner]) {
+  const dash = by['Dash one'];
+  assert.deepEqual([dash.width, dash.height, dash.clip, dash.round], [28, 2, 'none', '0px'], `the dash changed: ${js(dash)}`);
+  const inner = by['Inner arrow'];
+  assert.match(inner.clip, /^polygon\(/, `a plain list in a dash list does not keep the chevron: ${js(inner)}`);
+  for (const m of [arrow, dot, dash, inner]) {
     assert.equal(m.content, '""', `the mark of ${m.text} is a glyph`);
     assert.equal(m.mask, 'none', `the mark of ${m.text} has a mask`);
     assert.ok(m === dot ? m.ringAccent : m.accent, `the mark of ${m.text} is not in --accent`);
     assert.equal(m.pad, '54px', `the text of ${m.text} moved`);
   }
-  for (const m of [dot, arrow]) assert.ok(Math.abs(m.middle - dash.middle) < 0.75, `the mark of ${m.text} is not centered on the dash: ${m.middle} and ${dash.middle}`);
+  for (const m of [arrow, dot]) assert.ok(Math.abs(m.middle - dash.middle) < 0.75, `the mark of ${m.text} is not centered on the dash: ${m.middle} and ${dash.middle}`);
 }
 
-test('the theme draws a dash, a ring, and a chevron in --accent in both modes, in the show and in the print view', async (t) => {
+test('the theme draws a chevron, a ring, and a dash in --accent in both modes, in the show and in the print view', async (t) => {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
   for (const [query, items] of [['still', '.reveal .slides section li'], ['print-pdf&still', '.pdf-page li']]) {
@@ -169,14 +169,14 @@ test('the theme draws a dash, a ring, and a chevron in --accent in both modes, i
   }
 });
 
-test('dots and arrows are classes of the theme in the scope rule', () => {
+test('dots and dashes are classes of the theme in the scope rule', () => {
   const theme = new Set(themeClasses(readFileSync('theme/beeson.css', 'utf8')));
-  for (const c of ['dots', 'arrows']) assert.ok(theme.has(c), c);
+  for (const c of ['dots', 'dashes']) assert.ok(theme.has(c), c);
   assert.deepEqual(editProblems('ul', [], { classes: { dots: true } }, theme), []);
-  assert.deepEqual(editProblems('ul', [], { classes: { arrows: true } }, theme), []);
+  assert.deepEqual(editProblems('ul', [], { classes: { dashes: true } }, theme), []);
 });
 
-const LIST_IDS = ['text.list.none', 'text.list.ul', 'text.list.dots', 'text.list.arrows', 'text.list.ol'];
+const LIST_IDS = ['text.list.none', 'text.list.ul', 'text.list.dots', 'text.list.dashes', 'text.list.ol'];
 const checked = async (page) => {
   const out = [];
   for (const id of LIST_IDS) if ((await state(page, id)).checked) out.push(id.slice(10));
@@ -184,15 +184,15 @@ const checked = async (page) => {
 };
 
 for (const platform of PLATFORMS) {
-  test(`Arrows and Dots set the kind of the list of the caret on its start tag alone, as one entry List Style (${platform})`, async (t) => {
+  test(`Dashes and Dots set the kind of the list of the caret on its start tag alone, as one entry List Style (${platform})`, async (t) => {
     const page = await load(t, platform, KINDS);
     await caretIn(page, 'Bravo');
     assert.deepEqual(await checked(page), ['ul']);
-    await exec(page, 'text.list.arrows');
+    await exec(page, 'text.list.dashes');
     await settle(page);
-    assert.equal(await render(page), page.source.replace('<ul>\n    <li>Alpha', '<ul class="arrows">\n    <li>Alpha'));
+    assert.equal(await render(page), page.source.replace('<ul>\n    <li>Alpha', '<ul class="dashes">\n    <li>Alpha'));
     assert.equal(await undoLabel(page), 'Undo List Style');
-    assert.deepEqual(await checked(page), ['arrows'], 'Dashes is checked on an arrow list');
+    assert.deepEqual(await checked(page), ['dashes'], 'Arrows is checked on a dash list');
     assert.equal(await page.evaluate('getSelection().anchorNode.parentElement.textContent'), 'Bravo', 'the caret left the item');
     await roundTrip(page);
     await caretIn(page, 'Bravo');
@@ -203,7 +203,7 @@ for (const platform of PLATFORMS) {
     await roundTrip(page);
   });
 
-  test(`Dots makes a paragraph a dot list of one item, and Arrows retags a numbered list without its start (${platform})`, async (t) => {
+  test(`Dots makes a paragraph a dot list of one item, and Dashes retags a numbered list without its start (${platform})`, async (t) => {
     const page = await load(t, platform, KINDS);
     await caretIn(page, 'A lone paragraph');
     assert.deepEqual(await checked(page), ['none']);
@@ -213,82 +213,82 @@ for (const platform of PLATFORMS) {
     assert.equal(await undoLabel(page), 'Undo List Style');
     await roundTrip(page);
     await caretIn(page, 'Four');
-    await exec(page, 'text.list.arrows');
+    await exec(page, 'text.list.dashes');
     await settle(page);
-    assert.equal(await render(page), page.source.replace('<ol start="4">\n    <li>Four</li>\n  </ol>', '<ul class="arrows">\n    <li>Four</li>\n  </ul>'));
+    assert.equal(await render(page), page.source.replace('<ol start="4">\n    <li>Four</li>\n  </ol>', '<ul class="dashes">\n    <li>Four</li>\n  </ul>'));
     await roundTrip(page);
   });
 
-  test(`Numbers on an arrow list takes the class off, and Dashes takes the class attribute off (${platform})`, async (t) => {
+  test(`Numbers on a dash list takes the class off, and Arrows takes the class attribute off (${platform})`, async (t) => {
     const page = await load(t, platform, KINDS);
-    const list = '<ul class="arrows">\n    <li>Arrow one\n      <ul>\n        <li>Inner dash</li>\n      </ul>\n    </li>\n    <li>Arrow two</li>\n  </ul>';
+    const list = '<ul class="dashes">\n    <li>Dash one\n      <ul>\n        <li>Inner arrow</li>\n      </ul>\n    </li>\n    <li>Dash two</li>\n  </ul>';
     assert.ok(page.source.includes(list));
-    await caretIn(page, 'Arrow two');
-    assert.deepEqual(await checked(page), ['arrows']);
+    await caretIn(page, 'Dash two');
+    assert.deepEqual(await checked(page), ['dashes']);
     await exec(page, 'text.list.ol');
     await settle(page);
-    assert.equal(await render(page), page.source.replace(list, list.replace('<ul class="arrows">', '<ol>').replace(/<\/ul>$/, '</ol>')));
+    assert.equal(await render(page), page.source.replace(list, list.replace('<ul class="dashes">', '<ol>').replace(/<\/ul>$/, '</ol>')));
     await roundTrip(page);
     await undo(page);
-    await caretIn(page, 'Arrow two');
+    await caretIn(page, 'Dash two');
     await exec(page, 'text.list.ul');
     await settle(page);
-    assert.equal(await render(page), readFileSync(DECK, 'utf8').replace(list, list.replace('<ul class="arrows">', '<ul>')));
+    assert.equal(await render(page), readFileSync(DECK, 'utf8').replace(list, list.replace('<ul class="dashes">', '<ul>')));
     assert.deepEqual(await checked(page), ['ul']);
   });
 
   test(`Dots with the caret at the second level changes only the nested list (${platform})`, async (t) => {
     const page = await load(t, platform, KINDS);
-    await caretIn(page, 'Inner dash');
+    await caretIn(page, 'Inner arrow');
     assert.deepEqual(await checked(page), ['ul']);
     await exec(page, 'text.list.dots');
     await settle(page);
-    assert.equal(await render(page), page.source.replace('<ul>\n        <li>Inner dash', '<ul class="dots">\n        <li>Inner dash'));
+    assert.equal(await render(page), page.source.replace('<ul>\n        <li>Inner arrow', '<ul class="dots">\n        <li>Inner arrow'));
     assert.deepEqual(await checked(page), ['dots']);
     await roundTrip(page);
   });
 
-  test(`Tab in an arrow list writes a nested arrow list, and Shift+Tab with followers keeps the class on their list (${platform})`, async (t) => {
-    const page = await load(t, platform, ARROWS);
+  test(`Tab in a dash list writes a nested dash list, and Shift+Tab with followers keeps the class on their list (${platform})`, async (t) => {
+    const page = await load(t, platform, DASHES);
     const part = (text) => text.slice(text.indexOf('<li>One'), text.indexOf('</section>', text.indexOf('<li>One')));
     await caretIn(page, 'Two');
     await press(page, 'Tab');
     await settle(page);
     const one = await render(page);
-    assert.match(part(one), /^<li>One\s*<ul class="arrows">\s*<li>Two<\/li>\s*<\/ul>\s*<\/li>/, `Tab does not write a nested arrow list: ${part(one)}`);
+    assert.match(part(one), /^<li>One\s*<ul class="dashes">\s*<li>Two<\/li>\s*<\/ul>\s*<\/li>/, `Tab does not write a nested dash list: ${part(one)}`);
     await roundTrip(page);
     await caretIn(page, 'Three');
     await press(page, 'Tab');
     await settle(page);
     const both = await render(page);
-    assert.match(part(both), /^<li>One\s*<ul class="arrows">\s*<li>Two<\/li>\s*<li>Three<\/li>\s*<\/ul>\s*<\/li>/, `Tab does not join the nested list: ${part(both)}`);
+    assert.match(part(both), /^<li>One\s*<ul class="dashes">\s*<li>Two<\/li>\s*<li>Three<\/li>\s*<\/ul>\s*<\/li>/, `Tab does not join the nested list: ${part(both)}`);
     await roundTrip(page);
     // Shift+Tab on Two, whose follower Three goes into a list at the end of Two
     await caretIn(page, 'Two');
     await press(page, 'Shift+Tab');
     await settle(page);
     const out = await render(page);
-    assert.match(part(out), /<\/li>\s*<li>Two\s*<ul class="arrows">\s*<li>Three<\/li>\s*<\/ul>\s*<\/li>/, `the followers lost the kind: ${part(out)}`);
+    assert.match(part(out), /<\/li>\s*<li>Two\s*<ul class="dashes">\s*<li>Three<\/li>\s*<\/ul>\s*<\/li>/, `the followers lost the kind: ${part(out)}`);
     await roundTrip(page);
   });
 
-  test(`Arrows on a list selected as an object sets its nested dash lists and keeps a nested numbered list (${platform})`, async (t) => {
+  test(`Dashes on a list selected as an object sets its nested plain lists and keeps a nested numbered list (${platform})`, async (t) => {
     const page = await load(t, platform, NESTED);
     await click(page, await pointOf(page, 'Top two'));
     await press(page, 'Escape');
     await settle(page);
     assert.deepEqual(await page.evaluate('window.BeesonEditor.selection().map((el) => el.localName)'), ['ul']);
-    await exec(page, 'text.list.arrows');
+    await exec(page, 'text.list.dashes');
     await settle(page);
     const want = page.source
-      .replace('<ul>\n    <li>Top one', '<ul class="arrows">\n    <li>Top one')
-      .replace('<ul>\n        <li>Sub dash', '<ul class="arrows">\n        <li>Sub dash');
+      .replace('<ul>\n    <li>Top one', '<ul class="dashes">\n    <li>Top one')
+      .replace('<ul>\n        <li>Sub arrow', '<ul class="dashes">\n        <li>Sub arrow');
     assert.equal(await render(page), want);
     assert.equal(await undoLabel(page), 'Undo List Style');
-    assert.deepEqual(await page.evaluate('window.BeesonEditor.selection().map((el) => el.localName + "." + el.className)'), ['ul.arrows'], 'the list is not selected again');
-    assert.equal((await state(page, 'text.list.arrows')).checked, true);
+    assert.deepEqual(await page.evaluate('window.BeesonEditor.selection().map((el) => el.localName + "." + el.className)'), ['ul.dashes'], 'the list is not selected again');
+    assert.equal((await state(page, 'text.list.dashes')).checked, true);
     await roundTrip(page);
-    // Dashes takes the class off at both levels
+    // Arrows takes the class off at both levels
     await click(page, await pointOf(page, 'Top two'));
     await press(page, 'Escape');
     await settle(page);
@@ -297,12 +297,12 @@ for (const platform of PLATFORMS) {
     assert.equal(await render(page), readFileSync(DECK, 'utf8'));
   });
 
-  test(`a dash list and an arrow list are not joined after the paragraph between them is deleted (${platform})`, async (t) => {
+  test(`a plain list and a dash list are not joined after the paragraph between them is deleted (${platform})`, async (t) => {
     const page = await load(t, platform, APART);
-    await caretIn(page, 'Arrow item');
-    await exec(page, 'text.list.arrows');
+    await caretIn(page, 'Dash item');
+    await exec(page, 'text.list.dashes');
     await settle(page);
-    assert.equal(await render(page), page.source.replace('<ul>\n    <li>Arrow item', '<ul class="arrows">\n    <li>Arrow item'));
+    assert.equal(await render(page), page.source.replace('<ul>\n    <li>Dash item', '<ul class="dashes">\n    <li>Dash item'));
     await roundTrip(page);
     await caretIn(page, 'Between');
     await press(page, 'Escape');
@@ -327,20 +327,20 @@ for (const platform of PLATFORMS) {
       return { id: b.dataset.command, title: b.title || b.getAttribute('aria-label'), pressed: b.getAttribute('aria-pressed'), marks: b.querySelectorAll('svg path, svg circle').length, width: r.width, x: r.left + r.width / 2, y: r.top + r.height / 2 };
     })`);
     const now = await segments();
-    assert.deepEqual(now.map((s) => s.id), LIST_IDS, 'the segments are not None, Dashes, Dots, Arrows, and Numbers');
-    assert.deepEqual(now.map((s) => s.title), ['Paragraphs', 'Dashes', 'Dots', 'Arrows', 'Numbers']);
+    assert.deepEqual(now.map((s) => s.id), LIST_IDS, 'the segments are not None, Arrows, Dots, Dashes, and Numbers');
+    assert.deepEqual(now.map((s) => s.title), ['Paragraphs', 'Arrows', 'Dots', 'Dashes', 'Numbers']);
     assert.ok(now.every((s) => s.marks > 0 && s.width >= 20), `a segment does not have a drawn mark: ${js(now)}`);
     assert.deepEqual(now.map((s) => s.pressed), ['false', 'true', 'false', 'false', 'false']);
     await click(page, now[3]);
     await settle(page);
-    assert.equal(await render(page), page.source.replace('<ul>\n    <li>Alpha', '<ul class="arrows">\n    <li>Alpha'));
+    assert.equal(await render(page), page.source.replace('<ul>\n    <li>Alpha', '<ul class="dashes">\n    <li>Alpha'));
     assert.equal(await undoLabel(page), 'Undo List Style');
     assert.deepEqual((await segments()).map((s) => s.pressed), ['false', 'false', 'false', 'true', 'false']);
     assert.ok(await page.evaluate(`!!getSelection().anchorNode?.parentElement?.closest('li')`), 'the caret left the text');
     await roundTrip(page);
   });
 
-  test(`Format > Text lists Dots and Arrows between Dashes and Numbers, disabled in the notes, and Arrows in a new text box is written once its text is typed (${platform})`, async (t) => {
+  test(`Format > Text lists Dots and Dashes between Arrows and Numbers, disabled in the notes, and Dashes in a new text box is written once its text is typed (${platform})`, async (t) => {
     const page = await load(t, platform, KINDS);
     await caretIn(page, 'Bravo');
     const text = await page.evaluate(`(() => {
@@ -350,28 +350,28 @@ for (const platform of PLATFORMS) {
       const items = format.find((i) => i.label === 'Text').items;
       return walk(typeof items === 'function' ? items() : items);
     })()`);
-    const at = text.indexOf('Dashes');
-    assert.deepEqual(text.slice(at - 1, at + 4), ['Paragraphs', 'Dashes', 'Dots', 'Arrows', 'Numbers']);
-    for (const id of ['text.list.dots', 'text.list.arrows']) assert.equal((await state(page, id)).enabled, true, `${id} is dimmed in a list`);
-    // the notes take only dashes
+    const at = text.indexOf('Arrows');
+    assert.deepEqual(text.slice(at - 1, at + 4), ['Paragraphs', 'Arrows', 'Dots', 'Dashes', 'Numbers']);
+    for (const id of ['text.list.dots', 'text.list.dashes']) assert.equal((await state(page, id)).enabled, true, `${id} is dimmed in a list`);
+    // the notes take only arrows
     if (!(await state(page, 'view.notes')).checked) await exec(page, 'view.notes');
     await frames(page);
     await click(page, '.reveal section.present > aside.notes');
     await settle(page);
     assert.equal((await state(page, 'text.list.ul')).enabled, true, 'the caret is not in the notes');
-    for (const id of ['text.list.dots', 'text.list.arrows']) assert.equal((await state(page, id)).enabled, false, `${id} is enabled in the notes`);
+    for (const id of ['text.list.dots', 'text.list.dashes']) assert.equal((await state(page, id)).enabled, false, `${id} is enabled in the notes`);
     await exec(page, 'view.notes');
     await frames(page);
     // a new text box on the last slide
-    await page.evaluate(`Reveal.slide(${ARROWS})`);
+    await page.evaluate(`Reveal.slide(${DASHES})`);
     await frames(page);
     await exec(page, 'insert.text');
     await frames(page);
-    await exec(page, 'text.list.arrows');
-    assert.equal((await state(page, 'text.list.arrows')).checked, true);
+    await exec(page, 'text.list.dashes');
+    assert.equal((await state(page, 'text.list.dashes')).checked, true);
     assert.equal((await state(page, 'text.list.ul')).checked, false);
     await type(page, 'Item');
     await settle(page);
-    assert.match(await render(page), /<ul class="arrows"(?: style="[^"]*")?>\s*<li>Item<\/li>\s*<\/ul>/, `the new text is not an arrow list: ${(await render(page)).match(/[^\n]*\n[^\n]*Item[^\n]*\n?[^\n]*/)?.[0]}`);
+    assert.match(await render(page), /<ul class="dashes"(?: style="[^"]*")?>\s*<li>Item<\/li>\s*<\/ul>/, `the new text is not a dash list: ${(await render(page)).match(/[^\n]*\n[^\n]*Item[^\n]*\n?[^\n]*/)?.[0]}`);
   });
 }

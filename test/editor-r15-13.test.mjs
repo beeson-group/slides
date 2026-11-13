@@ -98,7 +98,7 @@ for (const platform of PLATFORMS) {
   // F8: the undo of Return took the caret out of the text and selected the block
   for (const [where, needle] of [['a paragraph', DESIGN], ['a list item', SAME]]) {
     test(`after an undo and a redo of Return in ${where}, the caret stays in the text (${platform})`, async (t) => {
-      const page = await load(t, platform, 'index.html', 2);
+      const page = await load(t, platform, 'test-deck.html', 2);
       await click(page, await pointOf(page, needle));
       await caretIn(page, needle);
       await press(page, 'Enter');
@@ -122,7 +122,7 @@ for (const platform of PLATFORMS) {
 
   // F9: the caret in another item of the same list counted as a caret outside the list
   test(`an undo of typing in one item of a list keeps the caret in the list when it is in another item (${platform})`, async (t) => {
-    const page = await load(t, platform, 'index.html', 2);
+    const page = await load(t, platform, 'test-deck.html', 2);
     await click(page, await pointOf(page, SAME));
     await caretIn(page, SAME);
     await type(page, ' XY');
@@ -145,7 +145,7 @@ const X = '#beeson-edit-num-x';
 for (const platform of PLATFORMS) {
   // F10: the button undid the entry before the typed value, which Tab then entered over the redo
   test(`the toolbar button Undo enters a value typed into a field of the inspector, then undoes it (${platform})`, async (t) => {
-    const page = await load(t, platform, 'index.html', 4);
+    const page = await load(t, platform, 'test-deck.html', 4);
     await click(page, await center(page, `${SLIDE} figure.zone img.for-dark`));
     await press(page, 'ArrowRight');
     await wait(page, 1100);
@@ -337,7 +337,7 @@ for (const platform of PLATFORMS) {
   // the undo selected the figure around the selected video, which drew the pane anew and took the
   // focus off the slider
   test(`an undo and a redo of a change to the selected video keep the selection and the focus on the slider of the inspector (${platform})`, async (t) => {
-    const page = await load(t, platform, 'index.html', 10);
+    const page = await load(t, platform, 'test-deck.html', 10);
     const at = await center(page, ".reveal:not(.beeson-peek) .slides > section.present video");
     await click(page, at);
     await click(page, at);

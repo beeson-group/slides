@@ -24,7 +24,8 @@ const CURSORS = ['ew-resize', 'nwse-resize', 'ns-resize', 'nesw-resize'];
 // elements being moved, the guides and gaps of a snap, the readout, the marquee in screen pixels,
 // the frame of a group at the start of its turn with the angle it is turned by, the angle guide of a
 // turn held at a multiple of 45 degrees, through its center on the screen and reach px past it, and
-// the grip or rotate handle held, drawn alone in its gesture as in Keynote and PowerPoint
+// the grip or rotate handle held. the rotate handle is drawn alone in its gesture, and a grip with
+// the frame and the other grips, which follow the resized box
 export const view: {
   hover: Element | null;
   moving: Element[] | null;
@@ -309,9 +310,18 @@ export class Frames {
   // of them, and a text block, whose grips set its width, none on another figure, and crosses on a
   // locked element
   gripsOf(el: Element | null): 'live' | 'locked' | null {
-    if (!el || !this.app.selection.elements().includes(el)) return null;
+    if (!el || !(this.app.selection.elements().includes(el) || el === this.caretBlock())) return null;
     if (el.hasAttribute('data-locked')) return 'locked';
     return sizedOf(el).length || el.matches('.backdrop') ? 'live' : null;
+  }
+
+  // the block of the caret while nothing is selected as an object, framed with its grips as a text
+  // box being typed into is in Keynote and PowerPoint
+  caretBlock(): Element | null {
+    if (this.app.selection.elements().length) return null;
+    const active = document.activeElement instanceof Element ? document.activeElement : null;
+    const el = movableOf(this.app, active?.closest(HOST) ?? null);
+    return el && sizedOf(el).length ? el : null;
   }
 
   draw(): void {
@@ -323,6 +333,8 @@ export class Frames {
     // a shape keeps its frame while the caret is in its words, as in Keynote
     const words = document.activeElement?.closest('.reveal .slides section .shape [contenteditable="true"]')?.closest('.shape');
     if (!selected.length && words) selected.push(words);
+    const caret = selected.length ? null : this.caretBlock();
+    if (caret) selected.push(caret);
     const scale = frameOf(app).scale;
     // a figure and a backdrop are framed at their edges, where their handles are, and a block 6 px
     // outside its text
@@ -390,7 +402,8 @@ export class Frames {
       if (drawn.has(el)) this.frames[i].hidden = true;
     });
     const held = view.moving ? view.held : null;
-    if (held) for (const f of [...this.frames, this.union, ...this.unions]) f.hidden = true;
+    const turning = !!held && held === this.rotor;
+    if (turning) for (const f of [...this.frames, this.union, ...this.unions]) f.hidden = true;
     const scope = scopeOf();
     const inside = scope.length && selected.length ? membersOf(app, scope[scope.length - 1]).filter((el) => el.getClientRects().length) : [];
     this.entered.hidden = !inside.length;
@@ -424,7 +437,7 @@ export class Frames {
         }
         const b = m.box, deg = m.deg;
         const at = turned(b, deg, h.includes('w') ? b.left : h.includes('e') ? b.left + b.width : b.left + b.width / 2, h.includes('n') ? b.top : h.includes('s') ? b.top + b.height : b.top + b.height / 2);
-        g.hidden = !!held && g !== held;
+        g.hidden = turning;
         g.classList.toggle('locked', m.grips === 'locked');
         // the cursor of a grip on a turned frame points along its turned direction, to the nearest
         // eighth of a turn, while it is not held

@@ -127,7 +127,7 @@ for (const platform of PLATFORMS) {
   // the item
   const CASES = [
     [LISTS, 0, 'Bravo', '<li>Bravo</li>\n    <li>Aone</li>\n    <li>Btwo</li>\n    <li>Cthree</li>\n    <li>Charlie</li>'],
-    ['index.html', 2, SAME, `${FRAG2}${SAME}</li>\n    ${FRAG2}Aone</li>\n    ${FRAG2}Btwo</li>\n    ${FRAG2}Cthree</li>\n    <li class="fragment" data-fragment-index="3">When`],
+    ['test-deck.html', 2, SAME, `${FRAG2}${SAME}</li>\n    ${FRAG2}Aone</li>\n    ${FRAG2}Btwo</li>\n    ${FRAG2}Cthree</li>\n    <li class="fragment" data-fragment-index="3">When`],
   ];
   for (const [deck, slide, needle, items] of CASES) {
     test(`a paste with a blank first line at the end of an item with text starts a new item in the same list in ${deck} (${platform})`, async (t) => {
@@ -207,7 +207,7 @@ for (const platform of PLATFORMS) {
 
   // N30: the undo of typing selected the list as a block, with the focus on the body
   test(`an undo of typing in an item after a click into the heading puts the caret into the item (${platform})`, async (t) => {
-    const page = await load(t, platform, 'index.html', 2);
+    const page = await load(t, platform, 'test-deck.html', 2);
     await caretIn(page, SAME);
     await type(page, ' XY');
     await wait(page, 1200);
@@ -228,7 +228,7 @@ for (const platform of PLATFORMS) {
 for (const platform of PLATFORMS) {
   // N52: Backspace at the start of a paragraph with text after a list did nothing
   test(`Backspace at the start of a paragraph after a list joins its text onto the last item, and the lists around it (${platform})`, async (t) => {
-    const page = await load(t, platform, 'index.html', 2);
+    const page = await load(t, platform, 'test-deck.html', 2);
     await caretIn(page, SAME);
     await press(page, 'Enter');
     await press(page, 'Enter');
@@ -248,7 +248,7 @@ for (const platform of PLATFORMS) {
 
   // N51: a forward Delete in the empty paragraph between two lists did nothing
   test(`a forward Delete in the empty paragraph between two lists takes it off and joins the lists (${platform})`, async (t) => {
-    const page = await load(t, platform, 'index.html', 2);
+    const page = await load(t, platform, 'test-deck.html', 2);
     await caretIn(page, SAME);
     await press(page, 'Enter');
     await press(page, 'Enter');

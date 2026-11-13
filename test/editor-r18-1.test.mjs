@@ -11,7 +11,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
-const SOURCE = readFileSync('index.html', 'utf8');
+const SOURCE = readFileSync('test-deck.html', 'utf8');
 const slideOf = (text, has) => [...text.matchAll(/<section[\s\S]*?<\/section>/g)].findIndex((m) => has(m[0]));
 const STEPS = slideOf(SOURCE, (s) => s.includes('Show your steps one at a time'));
 const FIGURES = slideOf(SOURCE, (s) => s.includes('Figures are first class citizens'));

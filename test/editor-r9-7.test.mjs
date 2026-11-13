@@ -37,13 +37,13 @@ async function load(t, platform, { n = 0, mode = 'light', width = 1600, height =
   const page = await browser.newPage({ width, height });
   t.after(() => page.close().catch(() => {}));
   await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: mode }] });
-  const url = `${server.origin}/index.html?edit&still&theme=${mode}&edit-platform=${platform}`;
+  const url = `${server.origin}/test-deck.html?edit&still&theme=${mode}&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate(`localStorage.clear(); for (const [k, v] of Object.entries(${js(stored)})) localStorage.setItem(k, v); true`);
   await page.goto(url);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync('index.html', 'utf8');
+  page.source = readFileSync('test-deck.html', 'utf8');
   const s = await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`);
   assert.deepEqual(s.problems, []);
   if (n) await page.evaluate(`Reveal.slide(${n})`);
@@ -79,7 +79,7 @@ const BAR = `(() => {
   return { over: t.scrollWidth - t.clientWidth, buttons: bs, off: bs.filter((b) => b.right > innerWidth).map((b) => b.id) };
 })()`;
 
-const TOOLBAR_KEY = 'beeson-edit-toolbar:/index.html';
+const TOOLBAR_KEY = 'beeson-edit-toolbar:/test-deck.html';
 
 // the labels of the items of the open menu
 const menuLabels = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item .label')].map((l) => l.textContent)`);
@@ -379,6 +379,8 @@ for (const [platform, answer] of [['mac', 'save'], ['other', 'cancel']]) {
     const shown = () => page.evaluate(`!!document.querySelector('.beeson-edit-show')`);
     if (answer === 'save') {
       assert.equal(await shown(), true, 'the show is not opened');
+      // the save is written to the file asynchronously, and it may end after 300 ms on a slow runner
+      await page.waitFor('window.BeesonEditor.status().dirty === false').catch(() => {});
       assert.equal(await page.evaluate('window.BeesonEditor.status().dirty'), false, 'the deck is not saved');
     } else assert.equal(await shown(), false);
     assert.deepEqual(errors(page), []);

@@ -177,7 +177,7 @@ test('a QR code is drawn with the logo up to 1273 bytes', () => {
 let saves = 0;
 for (const platform of PLATFORMS) {
   test(`${platform}: the Steps pane lists the videos of slide 12 with the effect Play, offered only for a video after Fade In`, async (t) => {
-    const page = await open(t, platform, { deck: 'index.html', slide: CLICK_SLIDE });
+    const page = await open(t, platform, { deck: 'test-deck.html', slide: CLICK_SLIDE });
     const source = page.source;
     assert.match((await rowOf(page, 'Video')).meta, /Play$/, 'the row of the videos does not read the effect Play');
     const labels = await chipMenu(page, 'Video');
@@ -271,7 +271,7 @@ for (const platform of PLATFORMS) {
   });
 
   test(`${platform}: Start on a click of the Video pane is checked on slide 12, and its uncheck leaves the pair a step with the effect Fade In`, async (t) => {
-    const page = await open(t, platform, { deck: 'index.html', slide: CLICK_SLIDE, pane: 'format' });
+    const page = await open(t, platform, { deck: 'test-deck.html', slide: CLICK_SLIDE, pane: 'format' });
     const source = page.source;
     await selectVideo(page);
     assert.equal((await checkOf(page, 'figure.startOnClick')).checked, true);
@@ -288,7 +288,7 @@ for (const platform of PLATFORMS) {
   });
 
   test(`${platform}: a preview of the steps of slide 12 plays its video at its step and rewinds it at its end`, async (t) => {
-    const page = await open(t, platform, { deck: 'index.html', slide: CLICK_SLIDE });
+    const page = await open(t, platform, { deck: 'test-deck.html', slide: CLICK_SLIDE });
     const VIDEO = `[...document.querySelectorAll('.reveal section.present video')].find((v) => v.getClientRects().length)`;
     await sleep(500);
     assert.deepEqual(await page.evaluate(`(() => { const v = ${VIDEO}; return { paused: v.paused, time: v.currentTime }; })()`), { paused: true, time: 0 }, 'the editor plays the video');
@@ -306,7 +306,7 @@ for (const platform of PLATFORMS) {
   // the show draws a video of the style play with its poster at full opacity before its step, and
   // does not dim it at the later steps
   test(`${platform}: a preview of the Steps pane keeps the video of slide 12 at full opacity before and after its step`, async (t) => {
-    const page = await open(t, platform, { deck: 'index.html', slide: CLICK_SLIDE });
+    const page = await open(t, platform, { deck: 'test-deck.html', slide: CLICK_SLIDE });
     await page.evaluate(`(() => {
       window.__seen = [];
       const look = () => {
@@ -332,7 +332,7 @@ for (const platform of PLATFORMS) {
   // before its step, played from its step on without a dim, and taken down with the layer
   for (const command of ['preview.steps', 'preview.slide']) {
     test(`${platform}: ${command} of the toolbar plays the video of slide 12 at its step, with its poster before it`, async (t) => {
-      const page = await open(t, platform, { deck: 'index.html', slide: CLICK_SLIDE });
+      const page = await open(t, platform, { deck: 'test-deck.html', slide: CLICK_SLIDE });
       await page.evaluate('window.BeesonEditor.preview.step = 700');
       await page.evaluate(`(() => {
         window.__seen = [];
@@ -367,7 +367,7 @@ for (const platform of PLATFORMS) {
 
   // an image dropped on a video replaces it and keeps its step, but not the style play of a video
   test(`${platform}: an image that replaces the video of slide 12 is a step with the effect Fade In`, async (t) => {
-    const page = await open(t, platform, { deck: 'index.html', slide: CLICK_SLIDE });
+    const page = await open(t, platform, { deck: 'test-deck.html', slide: CLICK_SLIDE });
     const source = page.source;
     const at = await page.evaluate(`(() => { const v = [...document.querySelectorAll('.reveal section.present video')].find((v) => v.getClientRects().length); const r = v.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
     const data = { items: [], files: [resolve('demo/figure-dark.png')], dragOperationsMask: 1 };

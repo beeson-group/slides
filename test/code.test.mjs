@@ -36,7 +36,7 @@ test('the code box of the demo deck is colored, and each step lights the next gr
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html', 'theme=dark'));
+  await page.goto(deckUrl('test-deck.html', 'theme=dark'));
   await page.waitFor(deckSettled);
   await page.evaluate(`Reveal.slide(${SLIDE})`);
 
@@ -94,7 +94,7 @@ test('the print view gives each group of lines of the code box a page', { timeou
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await printView(page, deckUrl('index.html', 'print-pdf&still'));
+  await printView(page, deckUrl('test-deck.html', 'print-pdf&still'));
 
   const pages = await page.evaluate(`[...document.querySelectorAll('.pdf-page section')].map((s, i) => [s, i]).filter(([s]) => s.querySelector('pre code')).map(([, i]) => i)`);
   assert.equal(pages.length, EXPECTED.length);

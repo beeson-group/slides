@@ -26,7 +26,7 @@ let last = null;
 
 // the editor on deck served over HTTP, opened with text, at the slide of index, or at the slide of
 // the first element matched by a selector
-async function editor(platform, { deck = 'index.html', text = readFileSync(deck, 'utf8'), index = 0, change = '' } = {}) {
+async function editor(platform, { deck = 'test-deck.html', text = readFileSync(deck, 'utf8'), index = 0, change = '' } = {}) {
   await last?.close().catch(() => {});
   const page = await browser.newPage();
   last = page;
@@ -151,7 +151,7 @@ for (const platform of PLATFORMS) {
 }
 
 // the demo deck with a rehearsed second on each of its first two slides, in a file of its own
-const TIMED = () => readFileSync('index.html', 'utf8').replace('<section class="title">', '<section class="title" data-timing="1">').replace('<section class="section">', '<section class="section" data-timing="1">');
+const TIMED = () => readFileSync('test-deck.html', 'utf8').replace('<section class="title">', '<section class="title" data-timing="1">').replace('<section class="section">', '<section class="section" data-timing="1">');
 
 for (const platform of PLATFORMS) {
   test(`with Use Rehearsed Timings on, a show opened from the editor moves on after the timings on ${platform}`, async (t) => {

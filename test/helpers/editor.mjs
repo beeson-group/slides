@@ -54,7 +54,7 @@ async function platformOf(page) {
  * the root of the repository, and text is the text passed to open(), by default the file itself.
  * With clear, the local storage of the file origin is emptied before the deck is loaded.
  */
-export async function editorPage(browser, { deck = 'index.html', query = 'edit&still', text, page: options, clear = false } = {}) {
+export async function editorPage(browser, { deck = 'test-deck.html', query = 'edit&still', text, page: options, clear = false } = {}) {
   const page = await browser.newPage(options);
   // with clear, a draft that an earlier page of the deck left is dropped, whose card covers the slide
   if (clear) await page.send('Storage.clearDataForOrigin', { origin: 'file://', storageTypes: 'local_storage' });
@@ -150,9 +150,60 @@ export async function press(page, keys) {
   await page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base });
 }
 
+// the code, the key code, and the modifier bits of the symbols of a US layout that typeKeys() types
+const SYMBOLS = {
+  ' ': ['Space', 32, 0],
+  '-': ['Minus', 189, 0],
+  '.': ['Period', 190, 0],
+  '/': ['Slash', 191, 0],
+  "'": ['Quote', 222, 0],
+  '"': ['Quote', 222, BITS.Shift],
+  ':': ['Semicolon', 186, BITS.Shift],
+  '@': ['Digit2', 50, BITS.Shift],
+};
+
+/**
+ * Trusted typing of text key by key on a US layout, each key with its code and Shift. The keys are
+ * sent at once and not each after the answer to the one before, since the typing into a block is
+ * one entry of the history only while its keys are less than 1 s apart, and on a slow runner an
+ * answer took longer.
+ */
+export async function typeKeys(page, text) {
+  const sent = [];
+  for (const c of text) {
+    const [code, keyCode, modifiers] = SYMBOLS[c] ?? [`Key${c.toUpperCase()}`, c.toUpperCase().charCodeAt(0), /[A-Z]/.test(c) ? BITS.Shift : 0];
+    const base = { key: c, code, windowsVirtualKeyCode: keyCode, modifiers };
+    sent.push(page.send('Input.dispatchKeyEvent', { type: 'keyDown', ...base, text: c, unmodifiedText: c }));
+    sent.push(page.send('Input.dispatchKeyEvent', { type: 'keyUp', ...base }));
+  }
+  await Promise.all(sent);
+}
+
 /** Trusted typing of text at the caret, as an input method commits it. */
 export async function type(page, text) {
   await page.send('Input.insertText', { text });
+}
+
+/**
+ * Records the frames of the step preview of the editor in window.__preview from now on. A frame is
+ * { step, playing, read }, with the value of the expression read as the frame is drawn. The preview
+ * goes on by a clock of the page, 800 ms a step, hence a read from the test may come a step late.
+ */
+export async function recordPreview(page, read = 'null') {
+  await page.evaluate(`(() => {
+    const html = document.documentElement;
+    window.__previewObserver?.disconnect();
+    window.__preview = [];
+    window.__previewObserver = new MutationObserver(() => window.__preview.push({ step: html.dataset.previewStep, playing: html.classList.contains('beeson-previewing'), read: ${read} }));
+    window.__previewObserver.observe(html, { attributes: true, attributeFilter: ['data-preview-step'] });
+    return true;
+  })()`);
+}
+
+/** Waits for the end of a preview recorded with recordPreview, and returns its frames. */
+export async function previewFrames(page, timeout = 60000) {
+  await page.waitFor(`window.__preview.length > 0 && !document.documentElement.classList.contains('beeson-previewing')`, timeout);
+  return page.evaluate('window.__preview');
 }
 
 /**

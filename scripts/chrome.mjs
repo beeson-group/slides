@@ -137,7 +137,9 @@ export async function launch({ offline = true, timeout = 120000, wholeFrames = f
   function send(method, params = {}, sessionId) {
     const id = nextId++;
     child.stdio[3].write(`${JSON.stringify({ id, method, params, sessionId })}\0`);
-    return answered(new Promise((done, fail) => pending.set(id, { done, fail })), method);
+    // an expression that is not answered is named by its start, to tell which read of a test hung
+    const what = typeof params.expression === 'string' ? `${method} of ${params.expression.slice(0, 300)}` : method;
+    return answered(new Promise((done, fail) => pending.set(id, { done, fail })), what);
   }
 
   // with mobile set, the page is laid out as on a phone, with touch and a coarse pointer, and scale
@@ -212,10 +214,13 @@ export async function launch({ offline = true, timeout = 120000, wholeFrames = f
           if (errorText) throw new Error(`${url}: ${errorText}`);
           await answered(loaded, `the load of ${url}`);
         };
+        // the other errors of a refused load are dropped with it, since they follow from the file
+        // that is missing, e.g. MathJax without theme/mathjax-config.js asks its CDN for a font
+        const before = errors.length;
         const refused = () => {
-          const kept = errors.filter((error) => !error.includes('net::ERR_NO_BUFFER_SPACE'));
-          const found = kept.length < errors.length;
-          errors.splice(0, errors.length, ...kept);
+          const is = (error) => error.includes('net::ERR_NO_BUFFER_SPACE');
+          const found = errors.some(is);
+          if (found) errors.splice(0, errors.length, ...errors.slice(0, before).filter((error) => !is(error)));
           return found;
         };
         await load('Page.navigate', { url });

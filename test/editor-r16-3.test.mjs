@@ -33,7 +33,7 @@ const undoLabel = (page) => state(page, 'edit.undo').then((s) => s.label);
 const rect = (page, expr) => page.evaluate(`(() => { const el = ${expr}; if (!el) return null; const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
 
 // the editor on slide n of deck in a window of size, served over HTTP, with the storage emptied
-async function load(t, platform, n, deck = 'index.html', size = { width: 1600, height: 1000 }) {
+async function load(t, platform, n, deck = 'test-deck.html', size = { width: 1600, height: 1000 }) {
   const page = await browser.newPage(size);
   t.after(() => page.close().catch(() => {}));
   const url = `${server.origin}/${deck}?edit&still&theme=light&edit-platform=${platform}`;
@@ -176,7 +176,7 @@ for (const platform of PLATFORMS) {
     const ON = { navigator: 'true', slideOnly: 'false', nav: true, inspector: false };
     // Slide Only is the reference, which shows the navigator from the same state
     for (const item of ['Slide Only', 'Navigator']) {
-      const page = await load(t, platform, 1, 'index.html', { width: 800, height: 900 });
+      const page = await load(t, platform, 1, 'test-deck.html', { width: 800, height: 900 });
       // the navigator shown in place of the inspector and turned off again, which gives the
       // inspector back
       await choose(page, 'View', 'Navigator');

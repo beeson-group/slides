@@ -296,13 +296,13 @@ test('with --still, a tycho viewer of the style play is exported as its still on
 
 // with --still, since the loop of the scene of the demo deck lasts 72 s
 test('the demo deck is exported with a step for each page of its PDF', () => {
-  const parts = exportDeck('index.html', ['--still']);
+  const parts = exportDeck('test-deck.html', ['--still']);
   assertPackage(parts);
   const steps = [...parts.keys()].filter((name) => /^ppt\/slides\/slide\d+\.xml$/.test(name))
     .reduce((total, name) => total + text(parts, name).match(/name="Step /g).length, 0);
   const folder = mkdtempSync(join(tmpdir(), 'beeson-pdf-'));
   try {
-    const run = spawnSync(process.execPath, ['scripts/export-pdf.mjs', 'index.html', join(folder, 'deck.pdf')], { encoding: 'utf8' });
+    const run = spawnSync(process.execPath, ['scripts/export-pdf.mjs', 'test-deck.html', join(folder, 'deck.pdf')], { encoding: 'utf8' });
     assert.equal(run.status, 0, run.stderr);
     assert.equal(steps, Number(run.stdout.match(/(\d+) pages/)[1]));
   } finally {

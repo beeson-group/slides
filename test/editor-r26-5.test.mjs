@@ -71,26 +71,27 @@ async function clickAway(page) {
 }
 
 // 1. finding audit-fixes 2. the sheet of an inline formula opened in a new empty text box, or in
-// the empty words of a shape, and closed by a click away without an insert, drops the box or the
-// words as a click away does without the sheet, and the file and the history are left as they were
+// the empty words of a shape, and closed by a click away without an insert, acts as a click away
+// without the sheet. the words of the shape are dropped, and the file and the history are left as
+// they were. the text box is kept, written as an empty paragraph in the entry of its insert
 const ROUTES = [
   ['a new text box', 'test/pages/editor-r23-1.html', 2, async (page) => {
     await click(page, '.beeson-edit-top [data-command="insert.text"]');
     await sleep(300);
     assert.equal(await page.evaluate(`!!document.querySelector(${js(`${SLIDE} .beeson-pending`)})`), true, 'the box is not drawn');
-  }, `${SLIDE} .beeson-pending`],
+  }, `${SLIDE} .beeson-pending`, true],
   ['the empty words of a shape', 'test/pages/editor-r23-2.html', 3, async (page) => {
     await click(page, `${SLIDE} > .shape`);
     await frames(page);
     await press(page, 'Enter');
     await frames(page);
     assert.equal(await page.evaluate(`!!document.activeElement?.matches(${js(`${SLIDE} > .shape > p`)})`), true, 'the caret is not in the words of the shape');
-  }, `${SLIDE} > .shape > p[data-generated]`],
+  }, `${SLIDE} > .shape > p[data-generated]`, false],
 ];
 
 for (const platform of PLATFORMS) {
-  for (const [name, deck, n, open, left] of ROUTES) {
-    test(`1: the sheet of a formula in ${name} closed by a click away drops it, and the file and the history are kept (${platform})`, async (t) => {
+  for (const [name, deck, n, open, left, kept] of ROUTES) {
+    test(`1: the sheet of a formula in ${name} closed by a click away ${kept ? 'keeps it empty' : 'drops it, and the file and the history are kept'} (${platform})`, async (t) => {
       const page = await load(t, platform, deck, n);
       const label = (await state(page, 'edit.undo')).label;
       await open(page);
@@ -102,9 +103,14 @@ for (const platform of PLATFORMS) {
       assert.equal(await page.evaluate(`!!document.querySelector('.beeson-math')`), false, 'the sheet is still open');
       for (const k of [1, 2]) {
         assert.equal(await page.evaluate(`document.querySelector(${js(left)})?.outerHTML ?? null`), null, `the box is left after click away ${k}`);
-        assert.equal(await render(page), page.source, 'the file is changed');
-        assert.equal((await state(page, 'edit.undo')).label, label, 'the history has an entry');
-        assert.equal((await status(page)).dirty, false, 'the editor reports unsaved changes');
+        if (kept) {
+          assert.equal((await render(page)).match(/<p( [^>]*)?><\/p>/g)?.length, 1, 'the empty box is not written as an empty paragraph');
+          assert.equal((await state(page, 'edit.undo')).label, 'Undo Insert Text Box');
+        } else {
+          assert.equal(await render(page), page.source, 'the file is changed');
+          assert.equal((await state(page, 'edit.undo')).label, label, 'the history has an entry');
+          assert.equal((await status(page)).dirty, false, 'the editor reports unsaved changes');
+        }
         await clickAway(page);
       }
       assert.deepEqual(errors(page), []);
@@ -190,7 +196,7 @@ const SPACES = [
 for (const platform of PLATFORMS) {
   for (const [name, n, selector, at, expected] of SPACES) {
     test(`2: a paste of "break " ${name} gives ${js(expected)} (${platform})`, async (t) => {
-      const page = await load(t, platform, 'index.html', n);
+      const page = await load(t, platform, 'test-deck.html', n);
       await caretAt(page, selector, at);
       await paste(page, 'break ');
       const edited = await roundTrip(page);
@@ -361,14 +367,14 @@ async function placed(page, root, selector = 'li') {
   return out;
 }
 
-// 5. finding review-fixes 3. the slide Centered has a centered list of dashes whose first item holds
-// a wider nested list, a centered numbered list with a nested numbered list, a centered list of
-// rings with a nested list, and a list at the left. the slide Shaped has a list of dashes in a
-// shape, which centers its words. every mark starts 54 px before its words as at the left, a ring
-// 47 px, and each mark is drawn as far under the top of its line as before the fix, where the
-// marks of each kind of list were drawn at the left of the item. a nested item is 36 px high
-const CENTERED = [['Short', 54, 36], ['A much longe', 54, 27], ['Bravo', 54, 36], ['A long outer', 54, 1], ['Inner', 54, 1], ['Ring', 47, 30], ['A much longe', 54, 27], ['Plain left', 54, 36]];
-const SHAPED = [['Goal', 54, 36], ['A much longe', 54, 36]];
+// 5. finding review-fixes 3. the slide Centered has a centered list of chevrons whose first item
+// holds a wider nested list, a centered numbered list with a nested numbered list, a centered list
+// of rings with a nested list, and a list at the left. the slide Shaped has a list of chevrons in a
+// shape, which centers its words. every chevron starts 45 px before its words as at the left, a
+// number 54 px, and a ring 47 px, and each mark is drawn as far under the top of its line as at the
+// left of the item. a nested item is 36 px high
+const CENTERED = [['Short', 45, 28], ['A much longe', 45, 19], ['Bravo', 45, 28], ['A long outer', 54, 1], ['Inner', 54, 1], ['Ring', 47, 30], ['A much longe', 45, 19], ['Plain left', 45, 28]];
+const SHAPED = [['Goal', 45, 28], ['A much longe', 45, 28]];
 
 for (const platform of PLATFORMS) {
   for (const where of ['show', 'editor']) {

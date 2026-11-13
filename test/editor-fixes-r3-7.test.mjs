@@ -35,7 +35,7 @@ const saved = () => saveAndReopen(last, `fixes-${++saves}.html`);
 let last = null;
 
 // the editor on deck, served over HTTP, where a save is written into the origin private file system
-async function editor(platform, deck = 'index.html') {
+async function editor(platform, deck = 'test-deck.html') {
   await last?.close().catch(() => {});
   const page = await browser.newPage();
   last = page;

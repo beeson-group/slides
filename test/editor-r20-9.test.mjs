@@ -8,7 +8,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { center, click, press, type } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const PAGE = 'test/pages/editor-r20-9.html';
 const PLATFORMS = ['mac', 'other'];
 const SLIDE = '.reveal .slides > section.present';

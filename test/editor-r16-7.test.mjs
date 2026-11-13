@@ -10,7 +10,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, press } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 // the index of the figures slide in index.html
 const FIGURES = 4;
 const PLATFORMS = ['mac', 'other'];

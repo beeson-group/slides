@@ -12,7 +12,7 @@ import { deckSettled, deckUrl, launch, printView } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const slideOf = (deck, has) => [...readFileSync(deck, 'utf8').matchAll(/<section[\s\S]*?<\/section>/g)].findIndex((m) => has(m[0]));
 // the slide of the demo deck with a heading, a paragraph, a list, and a figure in a zone

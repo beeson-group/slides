@@ -49,7 +49,7 @@ const state = (page, id) => page.evaluate(`window.BeesonEditor.state(${js(id)})`
 const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 
 // the editor on a deck served over HTTP, with the Format tab shown
-async function open(platform, { deck = 'index.html', size = { width: 1440, height: 900 } } = {}) {
+async function open(platform, { deck = 'test-deck.html', size = { width: 1440, height: 900 } } = {}) {
   const page = await browser.newPage(size);
   // an earlier test that keeps its page open 1 s after its last edit leaves a draft in the storage
   // of the origin, and the card of this draft then covers the slide of the next page of the deck

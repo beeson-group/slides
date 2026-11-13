@@ -11,7 +11,7 @@ import { deckSettled, deckUrl, launch } from '../scripts/chrome.mjs';
 const ready = 'window.BeesonEditor && window.BeesonEditor.ready.then(() => true)';
 
 // the editor on a deck, opened with the text of its file
-async function editorPage(browser, file = 'index.html') {
+async function editorPage(browser, file = 'test-deck.html') {
   const text = readFileSync(file, 'utf8');
   const page = await browser.newPage();
   await page.goto(deckUrl(file, 'edit&still'));
@@ -249,7 +249,7 @@ test('the edits of a CRLF file are written with CR LF, and the undos give the fi
   const browser = await launch();
   t.after(() => browser.close());
   const { page } = await editorPage(browser);
-  const text = readFileSync('index.html', 'utf8').replace(/\r?\n/g, '\r\n');
+  const text = readFileSync('test-deck.html', 'utf8').replace(/\r?\n/g, '\r\n');
   assert.deepEqual((await page.evaluate(`${E}.open(${JSON.stringify(text)})`)).problems, []);
   same(await render(page), text, 'the CRLF file');
   await page.evaluate(`(async () => {

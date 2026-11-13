@@ -189,6 +189,34 @@ test('a page that is refused a file with net::ERR_NO_BUFFER_SPACE is loaded agai
   assert.deepEqual(page.errors, ['console.error: another error']);
 });
 
+// without theme/mathjax-config.js, MathJax is started with its default font, which it asks its CDN
+// for. the page of this test reports such an error after the refused file, at its first load only
+test('the errors of a load that is refused a file are dropped with the load', { timeout: 60000 }, async (t) => {
+  const { serve } = await import('../scripts/webdriver.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'slides-refused-'));
+  writeFileSync(join(root, 'page.html'), `<!doctype html><link rel="icon" href="data:,"><script>
+    const loads = Number(localStorage.getItem('loads') ?? 0) + 1;
+    localStorage.setItem('loads', loads);
+    if (new URLSearchParams(location.search).has('before')) console.error('an error of the page before');
+    else if (loads === 2) {
+      console.error('Failed to load resource: net::ERR_NO_BUFFER_SPACE ' + location.origin + '/theme/mathjax-config.js');
+      console.error('Failed to load resource: net::ERR_NAME_NOT_RESOLVED https://cdn.jsdelivr.net/npm/@mathjax/mathjax-newcm-font/svg.js');
+    }
+  </script>`);
+  const browser = await launch({ offline: false });
+  const server = await serve(root);
+  t.after(async () => {
+    await browser.close();
+    server.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+  const page = await browser.newPage();
+  await page.goto(`${server.origin}/page.html?before`);
+  await page.goto(`${server.origin}/page.html`);
+  assert.equal(await page.evaluate(`localStorage.getItem('loads')`), '3', 'the page is not loaded again');
+  assert.deepEqual(page.errors, ['console.error: an error of the page before']);
+});
+
 // in R7.1, the process of a test file of the editor stayed alive for 20 s to 50 s after its last test,
 // since the stderr pipe of Chrome was held open by chrome_crashpad_handler and GoogleUpdater, which
 // inherit it and outlive Chrome, and close() left a timer of 2 s. the timer is found in every run,

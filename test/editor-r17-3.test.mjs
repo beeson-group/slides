@@ -35,13 +35,13 @@ const within = (page, expression, timeout) => page.waitFor(expression, timeout).
 async function load(t, platform, n = 0) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  const url = `${server.origin}/index.html?edit&still&theme=light&edit-platform=${platform}`;
+  const url = `${server.origin}/test-deck.html?edit&still&theme=light&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  const s = await page.evaluate(`window.BeesonEditor.open(${js(readFileSync('index.html', 'utf8'))})`);
+  const s = await page.evaluate(`window.BeesonEditor.open(${js(readFileSync('test-deck.html', 'utf8'))})`);
   assert.deepEqual(s.problems, []);
   if (n) await page.evaluate(`Reveal.slide(${n})`);
   await page.evaluate(`(() => { const real = window.open; window.__shows = []; window.open = function (...a) { const w = real.apply(window, a); window.__shows.push(w); return w; }; return true; })()`);
