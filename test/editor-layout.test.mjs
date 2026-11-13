@@ -99,7 +99,7 @@ const drawnOver = (page) => page.evaluate(`(() => {
   };
   const r = q.getBoundingClientRect();
   const backdrop = top(r.left + r.width / 2, r.top + r.height / 2, s.querySelector(':scope > .backdrop'));
-  return { who: over(s.querySelector('.block > .who')), sub: over(s.querySelector('.block > .sub')), backdrop: backdrop === 'text' ? 'backdrop' : backdrop };
+  return { who: over(s.querySelector('.title-text > .who')), sub: over(s.querySelector('.title-text > .sub')), backdrop: backdrop === 'text' ? 'backdrop' : backdrop };
 })()`);
 
 // the problems of the scope rule in the rendered text that the file did not have before
@@ -150,7 +150,7 @@ test('relayout writes each layout from the parts of a slide, and gives back a sl
   assert.equal(relayout(split, 'content', '  '), math);
   // the block of a title slide takes the heading, made an h1, and the words, and a figure stays out
   const title = relayout(math, 'title', '  ');
-  assert.ok(title.startsWith('<section class="title">\n  <div class="block">\n    <h1>Math, an ordered list, and a zone</h1>\n'));
+  assert.ok(title.startsWith('<section class="title">\n  <div class="title-text">\n    <h1>Math, an ordered list, and a zone</h1>\n'));
   assert.ok(title.includes('\n  </div>\n  <figure class="figure-box fragment"'));
   assert.equal(relayout(title, 'content', '  '), math);
   // a slide without a heading gets an empty one in a wrapper, a slide without words gets the empty
@@ -166,7 +166,7 @@ for (const platform of PLATFORMS) {
     const page = await layoutPage(platform, MATH);
     if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
     await frames(page);
-    await click(page, `${PANEL} .ed-card.ed-chooser`);
+    await click(page, `${PANEL} .ed-chooser`);
     await page.waitFor(`!!document.querySelector('.beeson-edit-layouts')`);
     assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-layouts .tile[aria-selected="true"]').dataset.layout`), 'content');
     assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-edit-layouts .tile .pic').length`), 8);

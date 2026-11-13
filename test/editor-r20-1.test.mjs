@@ -1,6 +1,6 @@
 // tests of R20.1 on both platforms with trusted input: the plot features cut from the editor. a
 // div.plot of a deck is an opaque figure, which is selected, moved, duplicated, deleted, locked,
-// and given a step as other figures are. its JSON block is not written by the editor
+// and given a step as other figures are. its JSON script is not written by the editor
 
 import assert from 'node:assert/strict';
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
@@ -150,7 +150,7 @@ for (const platform of PLATFORMS) {
     await wait(page);
     const copied = await render(page);
     assert.equal(copied.split('data-plot="figure-box-plot"').length, 3, 'Mod+D does not copy the plot once');
-    assert.equal(copied.split(BLOCK).length, 2, 'Mod+D copies the JSON block');
+    assert.equal(copied.split(BLOCK).length, 2, 'Mod+D copies the JSON script');
     assert.equal(await page.evaluate(`document.querySelectorAll('${SLIDE} .plot .plot-body').length`), 2, 'the copy is not drawn from the block');
     await roundTrip(page, source);
     // a delete of the copy gives the file back
@@ -163,13 +163,13 @@ for (const platform of PLATFORMS) {
     await undo(page);
     await wait(page, 100);
     await byteExact(page);
-    // a delete of the plot keeps its JSON block and its step span in the file
+    // a delete of the plot keeps its JSON script and its step span in the file
     await click(page, `${SLIDE} .plot`);
     await press(page, platform === 'mac' ? 'Backspace' : 'Delete');
     await wait(page);
     const deleted = await render(page);
     assert.ok(!deleted.includes(FIGURE_BOX), 'the plot is not deleted');
-    assert.ok(deleted.includes(BLOCK) && deleted.includes(STEP), 'the delete takes the JSON block or the step span');
+    assert.ok(deleted.includes(BLOCK) && deleted.includes(STEP), 'the delete takes the JSON script or the step span');
     await roundTrip(page, source);
     const { text } = await saveAndReopen(page, `r20-1-${++saves}.html`);
     assert.equal(text, deleted);

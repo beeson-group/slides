@@ -407,8 +407,8 @@ for (const platform of PLATFORMS) {
   });
 }
 
-const card = (page, name) => page.evaluate(`(() => { const d = document.querySelector('dialog.beeson-edit-card.${name}'); return d && !d.hidden && d.open ? { text: d.textContent, code: d.querySelector('code')?.textContent ?? null, buttons: [...d.querySelectorAll('.row button')].map((b) => b.textContent) } : null; })()`);
-const cardButton = (page, name, label) => rect(page, `[...document.querySelectorAll('dialog.beeson-edit-card.${name} .row button')].find((b) => b.textContent === ${js(label)})`);
+const card = (page, name) => page.evaluate(`(() => { const d = document.querySelector('dialog.beeson-edit-dialog.${name}'); return d && !d.hidden && d.open ? { text: d.textContent, code: d.querySelector('code')?.textContent ?? null, buttons: [...d.querySelectorAll('.row button')].map((b) => b.textContent) } : null; })()`);
+const cardButton = (page, name, label) => rect(page, `[...document.querySelectorAll('dialog.beeson-edit-dialog.${name} .row button')].find((b) => b.textContent === ${js(label)})`);
 
 // File > Export To > PowerPoint… opens the item of the submenu Export To of the File menu
 async function exportPowerPoint(page) {

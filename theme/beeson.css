@@ -136,7 +136,7 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal .slides section .run,
 .reveal .slides section .foot,
 .reveal .slides section .lockup,
-.reveal .slides section .block,
+.reveal .slides section .title-text,
 .reveal .slides section .sec,
 .reveal .slides section .caption,
 .reveal .slides section .text-column { position: absolute; }
@@ -391,10 +391,10 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section.figure .backdrop,
 .reveal .slides section.figure .surface,
 .reveal .slides section.figure .plate { left: 0; top: 0; width: 1920px; height: 1080px; }
-.reveal .slides section.title .block,
-.reveal .slides section.closing .block { left: 120px; bottom: 150px; width: 1240px; }
-.reveal .slides section.title .block h1,
-.reveal .slides section.closing .block h1 { margin: 0; }
+.reveal .slides section.title .title-text,
+.reveal .slides section.closing .title-text { left: 120px; bottom: 150px; width: 1240px; }
+.reveal .slides section.title .title-text h1,
+.reveal .slides section.closing .title-text h1 { margin: 0; }
 .reveal .slides section.title .sub,
 .reveal .slides section.closing .sub { margin: 30px 0 0; }
 .reveal .slides section.title .who,
@@ -404,7 +404,7 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 /* a QR code on a closing slide, in the lower right corner. the backdrop is drawn over it, and under the words */
 .reveal .slides section.closing .qr { position: absolute; right: 50px; bottom: 50px; width: 200px; }
 .reveal .slides section.closing .backdrop canvas { z-index: 1; pointer-events: none; }
-.reveal .slides section.closing .block { z-index: 2; }
+.reveal .slides section.closing .title-text { z-index: 2; }
 
 /* section: the words at the left, the outline of the talk under them, the backdrop at the right */
 .reveal .slides section.section .sec { left: 120px; top: 360px; width: 900px; }
@@ -461,7 +461,7 @@ html:not([data-theme="light"]) .reveal .slides section.split .text-column { box-
 .reveal .slides section.split .run { display: none; }
 .reveal .slides section.split::after { right: 120px; }
 
-/* ---- plot: an animated 2D plot in a figure box or a plate, drawn from a JSON block, see src/plot.ts ---- */
+/* ---- plot: an animated 2D plot in a figure box or a plate, drawn from a JSON script, see src/plot.ts ---- */
 .reveal .slides section .plot { font-size: 28px; line-height: 1.2; color: var(--subtle); }
 .reveal .plot-body { display: flex; flex-direction: column; gap: 12px; width: 100%; height: 100%; }
 .reveal .plot button { margin: 0; padding: 0; border: 0; background: none; font: inherit; color: inherit; cursor: pointer; }
@@ -685,7 +685,7 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
 .reveal .scrub-tick.now { color: var(--accent); }
 .reveal .scrub-tick.hover { color: var(--text); }
 .reveal .scrub-time { font-size: 0.8em; }
-.reveal .scrub-card {
+.reveal .scrub-heading {
   position: absolute;
   bottom: 3.4em;
   max-width: 60%;
@@ -696,7 +696,7 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
   text-overflow: ellipsis;
   transform: translateX(-50%);
 }
-.reveal .scrub-card:empty { display: none; }
+.reveal .scrub-heading:empty { display: none; }
 .theme-switch {
   position: absolute;
   z-index: 40;

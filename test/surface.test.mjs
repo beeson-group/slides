@@ -204,7 +204,7 @@ test('the points of the surface are drawn on it or hidden at every step, forward
 
 // the demo slide whose surface points are picked out with data-surface-points, data-surface-accent,
 // and data-surface-violet. its surface is at the state extrema from the fragment of index 4 on
-const MARKED = 'Color the terms and the marks';
+const MARKED = 'Color the terms and the points';
 const SADDLES = ['L1', 'L2', 'L3'], MAXIMA = ['L4', 'L5'];
 // the opacity of a point left out of data-surface-points, UNLIT in src/surface.ts
 const UNLIT = 0.18;

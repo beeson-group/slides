@@ -9,7 +9,7 @@ import type { Command } from '../commands.ts';
 import { CONTAINER, RESIZABLE, containerOf, frameRect, linesOf, mediaIn, movableOf, movablesOf, objectsOf, pictureOf, turnable } from '../canvas/hit.ts';
 import type { Place } from '../canvas/drag.ts';
 import { placeOf, record, withCorners, writePlace } from '../canvas/drag.ts';
-import { followAgain } from '../model/glue.ts';
+import { followAgain } from '../model/attach.ts';
 import { view, xy } from '../canvas/frames.ts';
 import { angleOf, drawnUnder, fieldOf, groupAngle, groupOf, leaveGroup, selectIn } from './order.ts';
 import { cornerBoxOf } from './align.ts';

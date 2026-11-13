@@ -61,7 +61,7 @@ for (const platform of PLATFORMS) {
     if (!(await page.evaluate(`window.BeesonEditor.state('view.steps').checked`))) await exec(page, 'view.steps');
     await frames(page);
     const at = await page.evaluate(`(() => {
-      const cards = [...document.querySelectorAll('.beeson-edit-side .rows .card.step')];
+      const cards = [...document.querySelectorAll('.beeson-edit-side .rows .step:not(.plain)')];
       const grip = cards.at(-1).querySelector('.row .grip').getBoundingClientRect();
       const y = (cards[0].getBoundingClientRect().bottom + cards[1].getBoundingClientRect().top) / 2;
       return { x: grip.left + grip.width / 2, y: grip.top + grip.height / 2, to: y };
@@ -71,7 +71,7 @@ for (const platform of PLATFORMS) {
       const box = (el) => { const r = el.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom }; };
       const line = document.querySelector('.beeson-edit-side .drop-line');
       const ghost = document.querySelector('.beeson-steps-ghost');
-      const target = document.querySelectorAll('.beeson-edit-side .rows .card.step')[1];
+      const target = document.querySelectorAll('.beeson-edit-side .rows .step:not(.plain)')[1];
       return { shown: !!line && !line.hidden && !!ghost, line: line && box(line), ghost: ghost && box(ghost), target: box(target) };
     })()`);
     await press(page, 'Escape');

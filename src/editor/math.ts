@@ -1,7 +1,7 @@
 // the formulas of the page, read from MathJax: the TeX of each mjx-container with its delimiters,
 // and the typesetting of a host again after a formula in it was changed
 
-import { fileIndexes, notePlaced } from './layers.ts';
+import { fileIndexes, notePlaced } from './shown-steps.ts';
 
 export type MathInfo = { tex: string; open: string; close: string; display: boolean };
 export type MathLookup = (el: Element) => MathInfo | null;

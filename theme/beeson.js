@@ -2258,7 +2258,7 @@
       try {
         const id = el.dataset.plot ?? "";
         const block = id ? document.getElementById(id) : null;
-        if (text === null && !block) throw new Error(`the JSON block with the id "${id}" is not found`);
+        if (text === null && !block) throw new Error(`the JSON script with the id "${id}" is not found`);
         this.spec = parsePlot(text ?? block?.textContent ?? "");
       } catch (error) {
         const message = `plot ${el.dataset.plot ?? ""}: ${error.message}`;
@@ -3391,9 +3391,9 @@
     track.className = "scrub-track";
     const fill2 = document.createElement("span");
     track.append(fill2);
-    const card = document.createElement("div");
-    card.className = "scrub-card";
-    band.append(track, card);
+    const headingBox = document.createElement("div");
+    headingBox.className = "scrub-heading";
+    band.append(track, headingBox);
     reveal.append(band);
     let ticks = [];
     let hovered = null;
@@ -3441,14 +3441,14 @@
       hovered?.el.classList.remove("hover");
       hovered = t;
       if (!t) {
-        card.textContent = "";
+        headingBox.textContent = "";
         return;
       }
       t.el.classList.add("hover");
-      card.textContent = heading(t.slide);
-      const half = card.offsetWidth / 2;
+      headingBox.textContent = heading(t.slide);
+      const half = headingBox.offsetWidth / 2;
       const x = Math.min(Math.max(t.at * zone.width, half), zone.width - half);
-      card.style.left = `${x}px`;
+      headingBox.style.left = `${x}px`;
     };
     const show2 = (on) => {
       if (on === open2) return;

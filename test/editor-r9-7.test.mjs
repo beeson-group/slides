@@ -371,9 +371,9 @@ for (const [platform, answer] of [['mac', 'save'], ['other', 'cancel']]) {
     await type(page, 'x');
     await press(page, 'Escape');
     void run(page, 'file.present');
-    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-card.ask[open]')`);
+    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-dialog.ask[open]')`);
     await enter(page);
-    await page.waitFor(`!document.querySelector('dialog.beeson-edit-card.ask[open]')`);
+    await page.waitFor(`!document.querySelector('dialog.beeson-edit-dialog.ask[open]')`);
     await sleep(300);
     // the show is played in place, in the frame of .beeson-edit-show over the editor
     const shown = () => page.evaluate(`!!document.querySelector('.beeson-edit-show')`);
@@ -400,7 +400,7 @@ for (const platform of PLATFORMS) {
     const page = await load(t, platform);
     await click(page, '.beeson-edit-bottom .percent');
     await clickItem(page, 'Zoom…');
-    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-card[open] input[name="percent"]')`);
+    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-dialog[open] input[name="percent"]')`);
     assert.equal(await page.evaluate(`document.activeElement.name`), 'percent');
     await page.evaluate(`document.activeElement.select()`);
     await type(page, '140');
@@ -410,7 +410,7 @@ for (const platform of PLATFORMS) {
     // a percentage out of range is clamped to the range of the slider, 10 to 400 percent
     for (const [typed, shown] of [['1000', '400%'], ['5', '10%']]) {
       void run(page, 'zoom.custom');
-      await page.waitFor(`!!document.querySelector('dialog.beeson-edit-card[open] input[name="percent"]')`);
+      await page.waitFor(`!!document.querySelector('dialog.beeson-edit-dialog[open] input[name="percent"]')`);
       await page.evaluate(`document.activeElement.select()`);
       await type(page, typed);
       await enter(page);
@@ -419,7 +419,7 @@ for (const platform of PLATFORMS) {
     }
     // Esc leaves the zoom as it is
     void run(page, 'zoom.custom');
-    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-card[open] input[name="percent"]')`);
+    await page.waitFor(`!!document.querySelector('dialog.beeson-edit-dialog[open] input[name="percent"]')`);
     assert.equal(await page.evaluate(`document.activeElement.value`), '10');
     await type(page, '7');
     await press(page, 'Escape');

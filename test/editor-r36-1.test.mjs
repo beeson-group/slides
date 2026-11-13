@@ -181,30 +181,30 @@ for (const platform of PLATFORMS) {
   // drawn where they were
   test(`1: a heading in the block of a title slide duplicated is put 20 px off its source (${platform})`, async (t) => {
     const { page, boxes, select, selection, duplicate } = await load(t, platform, INDEX, 0);
-    const H1 = ':scope > .block > h1';
+    const H1 = ':scope > .title-text > h1';
     const [h] = await boxes(H1);
-    const rest = await boxes(':scope > .block > :not(h1)');
+    const rest = await boxes(':scope > .title-text > :not(h1)');
     await select(H1);
     assert.deepEqual(await selection(), ['h1']);
     const before = await render(page);
     await duplicate();
     near(await boxes(H1), [h, off(h, 20)], 'the duplicate of the heading is not 20 px off it');
-    near(await boxes(':scope > .block > :not(h1)'), rest, 'the words of the block are not drawn where they were');
+    near(await boxes(':scope > .title-text > :not(h1)'), rest, 'the words of the block are not drawn where they were');
     await entry(page, before, 'Duplicate');
   });
 
   // item 1: the same on the closing slide of the deck, whose block has no offsets
   test(`1: a heading in the block of a closing slide without offsets duplicated is put 20 px off its source (${platform})`, async (t) => {
     const { page, boxes, select, selection, duplicate } = await load(t, platform, FLOW, 2);
-    const H1 = ':scope > .block > h1';
+    const H1 = ':scope > .title-text > h1';
     const [h] = await boxes(H1);
-    const rest = await boxes(':scope > .block > :not(h1)');
+    const rest = await boxes(':scope > .title-text > :not(h1)');
     await select(H1);
     assert.deepEqual(await selection(), ['h1']);
     const before = await render(page);
     await duplicate();
     near(await boxes(H1), [h, off(h, 20)], 'the duplicate of the heading is not 20 px off it');
-    near(await boxes(':scope > .block > :not(h1)'), rest, 'the words of the block are not drawn where they were');
+    near(await boxes(':scope > .title-text > :not(h1)'), rest, 'the words of the block are not drawn where they were');
     await entry(page, before, 'Duplicate');
   });
 

@@ -130,11 +130,11 @@ const CSS = `
 .beeson-edit-inspector .ed-note { color: var(--ed-muted); font: 11px/1.35 var(--ed-font); }
 .beeson-edit-inspector .ed-note.warn { color: var(--ed-guide); }
 .beeson-edit-inspector .ed-note[hidden] { display: none; }
-.beeson-edit-inspector .ed-card { display: flex; align-items: center; gap: 12px; margin: 6px 16px 12px; padding: 10px; border-radius: 9px; background: var(--ed-control); box-shadow: 0 0 0 1px var(--ed-line), 0 1px 2px rgba(0, 0, 0, 0.06); }
-.beeson-edit-inspector .ed-card .thumb { flex: 0 0 auto; display: flex; }
-.beeson-edit-inspector .ed-card .what { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
-.beeson-edit-inspector .ed-card .what span:first-child { color: var(--ed-muted); font-size: 11px; }
-.beeson-edit-inspector .ed-card .what span:last-child { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.beeson-edit-inspector .ed-chooser { display: flex; align-items: center; gap: 12px; margin: 6px 16px 12px; padding: 10px; border-radius: 9px; background: var(--ed-control); box-shadow: 0 0 0 1px var(--ed-line), 0 1px 2px rgba(0, 0, 0, 0.06); }
+.beeson-edit-inspector .ed-chooser .thumb { flex: 0 0 auto; display: flex; }
+.beeson-edit-inspector .ed-chooser .what { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.beeson-edit-inspector .ed-chooser .what span:first-child { color: var(--ed-muted); font-size: 11px; }
+.beeson-edit-inspector .ed-chooser .what span:last-child { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .beeson-edit-inspector .ed-popup { display: flex; align-items: center; justify-content: space-between; width: calc(100% - 32px); height: 40px; margin: 6px 16px 12px; padding: 0 10px 0 12px; border: 0; border-radius: 9px; background: var(--ed-control); box-shadow: 0 0 0 1px var(--ed-line), 0 1px 2px rgba(0, 0, 0, 0.06); color: var(--ed-text); font: 600 16px/1 var(--ed-font); cursor: default; }
 .beeson-edit-inspector .ed-popup:disabled { color: var(--ed-faint); }
 .beeson-edit-inspector .ed-swatches { display: flex; flex: 1; justify-content: space-between; }
@@ -480,9 +480,9 @@ export function numberField(app: App, o: NumberOptions): Control & { input: HTML
   return { el, sync, flush, input };
 }
 
-// the layout card at the top of the Slide pane, with a sketch of the layout
-export function card(sketch: () => SVGSVGElement, caption: string, value: () => string): Control {
-  const el = make('div', 'ed-card');
+// the button of the layout chooser at the top of the Slide pane, with a sketch of the layout
+export function chooserButton(sketch: () => SVGSVGElement, caption: string, value: () => string): Control {
+  const el = make('div', 'ed-chooser');
   const thumb = make('div', 'thumb');
   const what = make('div', 'what');
   const name = make('span');

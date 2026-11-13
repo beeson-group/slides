@@ -146,8 +146,8 @@ export interface Pane {
   refresh(): void;
 }
 
-export interface LayerSwitch {
-  // layers.ts: the layer of the slide that is shown
+export interface ShownStepsSwitch {
+  // shown-steps.ts: the steps of the slide that are shown
   refresh(): void;
   reveal(el: Element): void;
 }
@@ -202,7 +202,7 @@ export class App {
   math!: MathPop;
   typing!: Typing;
   move!: Selector;
-  layers!: LayerSwitch;
+  shownSteps!: ShownStepsSwitch;
   selection!: Selection;
   doc!: Doc;
   nav!: Pane;
@@ -244,7 +244,7 @@ export class App {
     return this.deck()?.getCurrentSlide() ?? null;
   }
 
-  // the slide of el is shown in the layer in which el is seen, e.g. for an undo of a change on
+  // the slide of el is shown at the steps at which el is seen, e.g. for an undo of a change on
   // another slide
   showSlide(el: Element): void {
     if (this.history.quiet) return;
@@ -265,7 +265,7 @@ export class App {
         this.invalidate();
       }
     }
-    this.layers?.reveal(el);
+    this.shownSteps?.reveal(el);
   }
 
   slideNumber(slide: Element | null): number | null {
@@ -368,7 +368,7 @@ export class App {
     const active = document.activeElement;
     if (!(active instanceof Element) || active === document.body) return 'canvas';
     // a popover, e.g. the grid of Insert Table, leaves the toolbar and the commands enabled
-    if (active.closest('.beeson-math, .beeson-edit-card:not([hidden]), dialog[open]:not([data-popover])')) return 'dialog';
+    if (active.closest('.beeson-math, .beeson-edit-dialog:not([hidden]), dialog[open]:not([data-popover])')) return 'dialog';
     // a slider, a checkbox, a button, or a list does not have an undo of its own, hence its region
     // is that of the pane around it
     if (active.matches('textarea, input:not([type=range], [type=checkbox], [type=radio], [type=button], [type=color])')) return 'field';

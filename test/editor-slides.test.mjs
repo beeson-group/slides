@@ -325,7 +325,7 @@ for (const platform of ['mac', 'other']) {
     await settle(page);
     assert.equal((await rows(page)).length, 10);
     const edited = await page.evaluate('window.BeesonEditor.render()');
-    for (const gone of ['Show your steps one at a time', 'Code boxes, you guessed it...', 'Color the terms and the marks']) assert.ok(!edited.includes(gone), gone);
+    for (const gone of ['Show your steps one at a time', 'Code boxes, you guessed it...', 'Color the terms and the points']) assert.ok(!edited.includes(gone), gone);
     await roundTrip(page);
   });
 

@@ -133,8 +133,8 @@ async function choose(page, label) {
   await page.evaluate('window.BeesonEditor.status()');
 }
 
-// the cards of the Steps tab, each with its head of a list and its rows as step and text
-const cards = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .rows .card.step')].map((c) => ({
+// the steps of the Steps pane, each with its head of a list and its rows as step and text
+const cards = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-side .rows .step:not(.plain)')].map((c) => ({
   head: c.querySelector('.list-head')?.querySelector('.chip').textContent ?? null,
   rows: [...c.querySelectorAll('.row')].map((r) => (r.classList.contains('nested') ? '  ' : '') + r.dataset.step + ' ' + r.querySelector('.text').textContent.slice(0, 12)),
 }))`);

@@ -30,7 +30,7 @@ try {
 <!-- title: a plate, with the transfer of the group logo traced at the right and the words at the lower left -->
 <section class="title">
   <div class="backdrop" data-trajectories="brand/transfer.js" data-duration="20" data-cx="-0.84" data-cy="0" data-half="1.128"></div>
-  <div class="block">
+  <div class="title-text">
     <h1 style="translate: 8px -239px">Presenting in HTML</h1>
     <p class="sub" style="translate: 8px -261px">Template for the Beeson group</p>
     <p class="who" style="translate: 8px -54px"><br></p>
@@ -144,7 +144,7 @@ try {
 
 <!-- the same surface, which keeps the camera of the slide before. the terms are colored in blue and red with data-tone and uncolored with data-unhighlight, and the points are picked out with data-surface-points, data-surface-accent, and data-surface-violet -->
 <section>
-  <h2>Color the terms and the marks</h2>
+  <h2>Color the terms and the points</h2>
   <p>The effective potential is the sum of two terms</p>
   <div class="math fragment" data-fragment-index="1" data-surface-state="bowl">\[\tilde U = \class{ug}{U_g} + \class{uc}{U_c}.\]</div>
   <p class="fragment" data-fragment-index="2" data-highlight="ug" data-tone="blue">The <span class="ug">gravitational wells</span> are drawn in blue,</p>
@@ -177,7 +177,7 @@ try {
 </tycho-viewer>
 <!-- tycho-viewer end -->
   <div class="foot" style="translate: 1046px -40px">Earth–Moon \(\LL{1}\) Halo family, see <code>demo/tycho-scene.py</code>.</div>
-  <aside class="notes">The runtime is vendored once in the theme, and the scene and its data are in the slide as two inline blocks. The viewer shows the \(\LL{1}\) halo family of the Earth–Moon system in the rotating frame above, and below in the inertial frames centered on the barycenter and on the Moon. It is a kiosk without controls. While it is in focus, you select a larger or a smaller member with the up and down arrow keys, and you pause it with the space bar.</aside>
+  <aside class="notes">The runtime is vendored once in the theme, and the scene and its data are in the slide as two inline scripts. The viewer shows the \(\LL{1}\) halo family of the Earth–Moon system in the rotating frame above, and below in the inertial frames centered on the barycenter and on the Moon. It is a kiosk without controls. While it is in focus, you select a larger or a smaller member with the up and down arrow keys, and you pause it with the space bar.</aside>
 </section>
 
 <section>
@@ -212,7 +212,7 @@ try {
 
 <section class="closing">
   <div class="backdrop" data-backdrop="tubes" data-cx="0.42" data-cy="0" data-half="0.6"></div>
-  <div class="block">
+  <div class="title-text">
     <h1>Thank you</h1>
     <p class="sub">Questions</p>
     <p class="who"><strong>github.com/beeson-group/slides</strong><br>Please use this template. Any contributions are also appreciated :)</p>

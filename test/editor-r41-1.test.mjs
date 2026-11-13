@@ -215,7 +215,7 @@ for (const platform of PLATFORMS) {
     const texts = await page.evaluate(`(() => {
       const slide = document.querySelector('.reveal .slides > section.present');
       const s = slide.getBoundingClientRect(), k = s.width / slide.offsetWidth;
-      return [...slide.querySelectorAll('.block > *')].map((e) => e.getBoundingClientRect()).map((r) => ({ left: (r.left - s.left) / k, top: (r.top - s.top) / k, right: (r.right - s.left) / k, bottom: (r.bottom - s.top) / k }));
+      return [...slide.querySelectorAll('.title-text > *')].map((e) => e.getBoundingClientRect()).map((r) => ({ left: (r.left - s.left) / k, top: (r.top - s.top) / k, right: (r.right - s.left) / k, bottom: (r.bottom - s.top) / k }));
     })()`);
     assert.ok(b.left >= 0 && b.top >= 0 && b.right <= 1920 && b.bottom <= 1080, `the QR code is not on the slide: ${js(b)}`);
     for (const r of texts) assert.ok(b.right <= r.left || b.left >= r.right || b.bottom <= r.top || b.top >= r.bottom, `the QR code lies over a text: ${js({ b, r })}`);

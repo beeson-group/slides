@@ -110,7 +110,7 @@ for (const platform of PLATFORMS) {
     await slideOf(page, 'div.math[data-keep]');
     assert.deepEqual((await rows(page)).map((r) => r.step), ['0', '1', '2', '3', '', '']);
     const grip = await rowPart(page, 'The Coriolis');
-    const top = await page.evaluate(`document.querySelector('.beeson-edit-side .rows .card.step').getBoundingClientRect().top`);
+    const top = await page.evaluate(`document.querySelector('.beeson-edit-side .rows .step:not(.plain)').getBoundingClientRect().top`);
 
     // a drag shows a line where the row goes and a ghost of the row, and Esc cancels it
     await drag(page, grip, { dy: top - 3 - grip.y, steps: 12, hold: true });
@@ -235,7 +235,7 @@ for (const platform of PLATFORMS) {
 
   test(`Preview plays the steps of the slide and ends on its last layer on ${platform}`, async (t) => {
     const page = await open(t, platform, { deck: 'test/pages/layers.html' });
-    const layers = () => page.evaluate(`[...document.querySelectorAll('.beeson-layers button')].map((b) => (b.getAttribute('aria-pressed') === 'true' ? '*' : '') + b.textContent)`);
+    const layers = () => page.evaluate(`[...document.querySelectorAll('.beeson-shown-steps button')].map((b) => (b.getAttribute('aria-pressed') === 'true' ? '*' : '') + b.textContent)`);
     assert.deepEqual(await layers(), ['*Up to step 2', 'From step 3']);
     // the span in the text of a paragraph is a step of its own, listed on a locked row
     assert.deepEqual((await rows(page)).filter((r) => r.step).map((r) => [r.step, r.text.slice(0, 12)]), [['0', 'The old step'], ['1', 'The old span'], ['2', 'The old lead'], ['2', 'The new lead'], ['3', 'The new step']]);
@@ -258,7 +258,7 @@ for (const platform of PLATFORMS) {
     assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-side .head .play').textContent`), 'Preview Steps');
 
     // Esc stops a preview, which also ends on the last layer
-    await page.evaluate(`[...document.querySelectorAll('.beeson-layers button')][0].click()`);
+    await page.evaluate(`[...document.querySelectorAll('.beeson-shown-steps button')][0].click()`);
     await click(page, '.beeson-edit-side .head .play');
     await page.waitFor(`document.documentElement.classList.contains('beeson-previewing')`);
     await press(page, 'Escape');

@@ -299,11 +299,11 @@ dialog.beeson-edit-presenter::backdrop { background: #000; }
 .beeson-edit-presenter .summary { grid-row: 2; display: none; place-items: center; }
 .beeson-edit-presenter.asking .stage { display: none; }
 .beeson-edit-presenter.asking .summary { display: grid; }
-.beeson-edit-presenter .card { width: min(440px, calc(100vw - 32px)); box-sizing: border-box; padding: 20px 22px 18px; border: 1px solid var(--ed-menu-line); border-radius: 12px; background: var(--ed-panel); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28); }
-.beeson-edit-presenter .card h3 { margin: 0 0 6px; font: 600 14px/1.3 var(--ed-font); }
-.beeson-edit-presenter .card p { margin: 0 0 14px; color: var(--ed-muted); }
-.beeson-edit-presenter .card .buttons { display: flex; justify-content: flex-end; gap: 8px; }
-.beeson-edit-presenter .card .buttons button:not(.primary) { background: var(--ed-pressed); }
+.beeson-edit-presenter .dialog { width: min(440px, calc(100vw - 32px)); box-sizing: border-box; padding: 20px 22px 18px; border: 1px solid var(--ed-menu-line); border-radius: 12px; background: var(--ed-panel); box-shadow: 0 24px 64px rgba(0, 0, 0, 0.28); }
+.beeson-edit-presenter .dialog h3 { margin: 0 0 6px; font: 600 14px/1.3 var(--ed-font); }
+.beeson-edit-presenter .dialog p { margin: 0 0 14px; color: var(--ed-muted); }
+.beeson-edit-presenter .dialog .buttons { display: flex; justify-content: flex-end; gap: 8px; }
+.beeson-edit-presenter .dialog .buttons button:not(.primary) { background: var(--ed-pressed); }
 @media (max-width: 900px) { .beeson-edit-presenter .hint { display: none; } .beeson-edit-presenter .stage { grid-template-columns: 1fr; overflow: auto; } }
 `;
 
@@ -459,9 +459,9 @@ export class Presenter {
     foot.append(nav, slideTime, info);
 
     const summary = make('div', 'summary');
-    const card = make('div', 'card');
-    card.setAttribute('role', 'alertdialog');
-    card.setAttribute('aria-label', 'Keep the new slide timings?');
+    const dialog = make('div', 'dialog');
+    dialog.setAttribute('role', 'alertdialog');
+    dialog.setAttribute('aria-label', 'Keep the new slide timings?');
     const h3 = make('h3', '', 'Keep the new slide timings?');
     const said = make('p');
     const buttons = make('div', 'buttons');
@@ -472,8 +472,8 @@ export class Presenter {
     discard.addEventListener('click', () => this.answer(false));
     keep.addEventListener('click', () => this.answer(true));
     buttons.append(discard, keep);
-    card.append(h3, said, buttons);
-    summary.append(card);
+    dialog.append(h3, said, buttons);
+    summary.append(dialog);
 
     Object.assign(this.blocks, { current: colLeft, next: upcoming, notes, clock, timer: middle });
     this.layout.hidden = true;

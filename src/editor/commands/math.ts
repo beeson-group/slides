@@ -9,7 +9,7 @@
 import type { App } from '../app.ts';
 import { HOST } from '../app.ts';
 import { classesIn, mathLookup, suggestName, unwrapClass, wrapClass } from '../math.ts';
-import { setStep, stepAt } from '../layers.ts';
+import { setStep, stepAt } from '../shown-steps.ts';
 import { describe, modelOf, writePlan, type Model } from '../steps.ts';
 import { openInsert, sheetTarget } from '../text/mathpop.ts';
 import { openContextMenu } from '../ui/menu.ts';

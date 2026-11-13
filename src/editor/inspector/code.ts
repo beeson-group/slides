@@ -5,7 +5,7 @@
 // list dims the other lines of the box
 
 import type { App } from '../app.ts';
-import { stepAt } from '../layers.ts';
+import { stepAt } from '../shown-steps.ts';
 import { modelOf } from '../steps.ts';
 import { COMMON, PLAIN, codeAt, dimLines, hljsOf, languageOf, languages, nameOf, selectedLines, stepsOf } from '../commands/code.ts';
 import { injectStyle, make } from '../ui/dom.ts';

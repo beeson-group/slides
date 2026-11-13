@@ -21,15 +21,15 @@ import { checkOverlaps } from '../overflow.ts';
 export const LABELS: Record<Layout, string> = { title: 'Title', section: 'Section', content: 'Content', narrow: 'Content, Narrow', wide: 'Content, Wide', figure: 'Figure', split: 'Split', closing: 'Closing' };
 
 const LAYOUT_CLASSES = ['title', 'section', 'closing', 'figure', 'split', 'narrow', 'wide'];
-const WRAPPER_CLASSES = ['text-column', 'block', 'sec', 'caption'];
+const WRAPPER_CLASSES = ['text-column', 'title-text', 'sec', 'caption'];
 
 export type Kind = 'heading' | 'words' | 'caption' | 'foot' | 'visual' | 'other';
 
 // the wrapper of each layout that has one, and the kinds of parts that it takes. the words of a
 // figure slide are its caption at the lower left, since the plate takes the rest of the slide
 const WRAP: Partial<Record<Layout, { cls: string; takes: Kind[] }>> = {
-  title: { cls: 'block', takes: ['heading', 'words', 'caption'] },
-  closing: { cls: 'block', takes: ['heading', 'words', 'caption'] },
+  title: { cls: 'title-text', takes: ['heading', 'words', 'caption'] },
+  closing: { cls: 'title-text', takes: ['heading', 'words', 'caption'] },
   section: { cls: 'sec', takes: ['heading', 'words'] },
   split: { cls: 'text-column', takes: ['heading', 'words', 'foot'] },
   figure: { cls: 'caption', takes: ['words'] },

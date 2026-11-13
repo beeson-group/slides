@@ -122,8 +122,8 @@ test('a save of a text that the file changed too asks which to keep, and Cancel 
   edit('<h2>Equations are first class citizens</h2>', '<h2>Equations, by an agent</h2>');
   const both = disk();
   await until(page, 'window.BeesonEditor.status().stale !== null');
-  const card = `(() => { const c = document.querySelector('dialog.beeson-edit-card.conflict'); return c && c.open ? { head: c.querySelector('h3').textContent, text: c.querySelector('p').textContent, buttons: [...c.querySelectorAll('button')].map((b) => b.textContent) } : null; })()`;
-  const press = (label) => page.evaluate(`[...document.querySelectorAll('dialog.beeson-edit-card.conflict button')].find((b) => b.textContent === ${JSON.stringify(label)}).click()`);
+  const card = `(() => { const c = document.querySelector('dialog.beeson-edit-dialog.conflict'); return c && c.open ? { head: c.querySelector('h3').textContent, text: c.querySelector('p').textContent, buttons: [...c.querySelectorAll('button')].map((b) => b.textContent) } : null; })()`;
+  const press = (label) => page.evaluate(`[...document.querySelectorAll('dialog.beeson-edit-dialog.conflict button')].find((b) => b.textContent === ${JSON.stringify(label)}).click()`);
   void page.evaluate('window.BeesonEditor.save()');
   await until(page, `${card} !== null`);
   const shown = await page.evaluate(card);

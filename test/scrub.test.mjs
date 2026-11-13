@@ -76,13 +76,13 @@ test('a click on a tick shows its slide at its first step', { timeout: 60000 }, 
     const slides = Reveal.getSlides();
     const i = slides.findIndex((s, i) => i > 1 && s.querySelector('.fragment'));
     const box = document.querySelector('.scrub').getBoundingClientRect();
-    return { i, h: Reveal.getIndices(slides[i]).h, x: box.left + box.width * parseFloat(ticks[i].style.left) / 100, title: document.querySelector('.scrub-card').textContent };
+    return { i, h: Reveal.getIndices(slides[i]).h, x: box.left + box.width * parseFloat(ticks[i].style.left) / 100, title: document.querySelector('.scrub-heading').textContent };
   })()`);
   assert.ok(target.i > 1, 'the demo deck has a slide with steps after the second');
 
   await mouse('mouseMoved', target.x, 1075);
   assert.ok(await page.evaluate(`document.querySelectorAll('.scrub-tick')[${target.i}].classList.contains('hover')`));
-  assert.notEqual(await page.evaluate(`document.querySelector('.scrub-card').textContent`), '');
+  assert.notEqual(await page.evaluate(`document.querySelector('.scrub-heading').textContent`), '');
   await mouse('mousePressed', target.x, 1075);
   await mouse('mouseReleased', target.x, 1075);
   await page.waitFor(`Reveal.getIndices().h === ${target.h}`);
@@ -195,7 +195,7 @@ test('the title over the band is not cut at its descenders', { timeout: 60000 },
   const { page, mouse } = await openDeck(t);
   await mouse('mouseMoved', 960, 1075);
   const room = await page.evaluate(`(() => {
-    const card = document.querySelector('.scrub-card');
+    const card = document.querySelector('.scrub-heading');
     card.textContent = 'gyp';
     const mark = document.createElement('span');
     mark.style.cssText = 'display: inline-block; width: 0; height: 0';

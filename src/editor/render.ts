@@ -8,7 +8,7 @@ import { RAW_TEXT, type Range } from './tokens.ts';
 import { VOID, contentRange, elementRange, isFragmentRoot, lastEnd, rawRange, type Piece, type Source, type SrcComment, type SrcEl, type SrcNode, type SrcText } from './source.ts';
 import type { MathInfo, MathLookup } from './math.ts';
 import { mergeEdit, renderTag, stateOf, type TagEdit } from './tags.ts';
-import { fragmentIndex } from './layers.ts';
+import { fragmentIndex } from './shown-steps.ts';
 import { indentAt, placeLead, spaceOf, unitsOf, type Child, type Unit } from './model/units.ts';
 import { textStyle } from './model/templates.ts';
 

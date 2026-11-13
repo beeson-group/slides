@@ -209,7 +209,7 @@ export function install(app: App): void {
       const text = await readSettled(handle, read);
       if (text === null || text === diskText || saves !== at || saving) return;
       const changed = changedSlides(diskText, text);
-      if (!app.dirty && !document.querySelector('dialog.beeson-edit-card[open], .beeson-math')) {
+      if (!app.dirty && !document.querySelector('dialog.beeson-edit-dialog[open], .beeson-math')) {
         reload(changed, `Loaded the changes of the file${onSlides(changed)}`);
         return;
       }

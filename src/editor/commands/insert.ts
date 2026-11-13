@@ -30,7 +30,7 @@ html.beeson-editor .reveal .slides .beeson-pending { min-height: 1.4em; min-widt
 html.beeson-editor .reveal .slides p.beeson-pending:not(:first-child):not(.caption) { margin-top: 24px; }
 /* the block of a title or a closing slide is anchored at its bottom and grows upward, hence a box
    there takes the margin of the theme, and the texts above it keep their places at the first key */
-html.beeson-editor .reveal .slides section:is(.title, .closing) .block > p.beeson-pending { margin-top: 0; }
+html.beeson-editor .reveal .slides section:is(.title, .closing) .title-text > p.beeson-pending { margin-top: 0; }
 html.beeson-editor .reveal .slides .foot.beeson-pending { min-width: 13em; }
 html.beeson-editor .reveal .slides .beeson-pending[data-prompt][contenteditable]:empty::before { content: attr(data-prompt); position: absolute; left: 0; top: 0; color: var(--muted, #888); white-space: nowrap; pointer-events: none; }
 html.beeson-editor .reveal .slides pre.beeson-pending { box-sizing: border-box; min-height: calc(1.25em + 48px); padding: 24px; font-size: 22px; line-height: 1.25; }
@@ -153,7 +153,7 @@ export function freeFigureBox(app: App, slide: Element, el: Element): Box | null
   const figureBox = slideBox(app, probe);
   probe.remove();
   if (figureBox.right - figureBox.left < 1 || figureBox.bottom - figureBox.top < 1) return null;
-  const columns = '.col, .text-column, .block';
+  const columns = '.col, .text-column, .title-text';
   for (const other of slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .text-column > *')) {
     if (other === el || other.contains(el) || other.matches('aside.notes, .foot, .run, [data-generated]')) continue;
     const box = other.matches(columns) && !(other instanceof HTMLElement && other.style.translate) ? inkBox(app, other) : takenBox(app, other);

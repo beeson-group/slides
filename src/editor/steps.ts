@@ -1,7 +1,7 @@
 // the Steps tab of the inspector: the steps of the current slide, i.e. which of its elements are
 // reveal.js fragments and in which order, as the Animation Pane of PowerPoint and the Build Order of
-// Keynote. each step is a card with a row per element shown at it, and the elements shown with the
-// slide are listed under the cards. a row is dragged to another place in the order, and its step
+// Keynote. each step is a step with a row per element shown at it, and the elements shown with the
+// slide are listed under the steps. a row is dragged to another place in the order, and its step
 // chip opens a menu of its step, its start, its effect, and Show Last. Preview Steps plays the steps
 // of the slide in place. the number of the step of each element is drawn at its upper left on the
 // slide. every change is a command of commands/steps.ts, written through app.doc as one entry of
@@ -12,7 +12,7 @@ import type { Entry } from './history.ts';
 import type { Pairing } from './render.ts';
 import type { TagEdit, TagState } from './tags.ts';
 import { stepViewers } from '../viewers.ts';
-import { OFF, fragmentIndex, fragmentsOf, type Layers, itemsOf, planOf, remapKeep, showLayer, shownAt, startOf, stepAt, type Item, type Plan, type Start } from './layers.ts';
+import { OFF, fragmentIndex, fragmentsOf, type ShownSteps, itemsOf, planOf, remapKeep, showRange, shownAt, startOf, stepAt, type Item, type Plan, type Start } from './shown-steps.ts';
 import { setPreview } from './canvas/frames.ts';
 import { twinOf } from './canvas/hit.ts';
 import { media as store } from './media/store.ts';
@@ -33,7 +33,7 @@ export type Ctx = {
   record(entry: Entry): void;
   // the TeX of an mjx-container, or null
   tex(el: Element): string | null;
-  // the steps of the slide were changed, which may change its layers
+  // the steps of the slide were changed, which may change the ranges of its steps shown at once
   changed(): void;
 };
 
@@ -536,16 +536,16 @@ ${P} .head button.play[aria-pressed="true"] { background: var(--ed-select); bord
 ${P} .head button:focus-visible, ${P} .chip:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: 1px; }
 ${P} .rows .row:focus-visible { outline: 2px solid var(--ed-focus); outline-offset: -2px; }
 ${P} .rows { position: relative; flex: 1; min-height: 0; overflow: auto; padding: 10px 8px 12px; }
-${P} .card { position: relative; margin: 0 0 6px; border: 1px solid var(--ed-line); border-radius: 8px; background: var(--ed-control); }
-${P} .card.empty { padding: 12px; border-style: dashed; background: transparent; color: var(--ed-muted); text-align: center; }
-${P} .card.plain { background: transparent; }
+${P} .step { position: relative; margin: 0 0 6px; border: 1px solid var(--ed-line); border-radius: 8px; background: var(--ed-control); }
+${P} .step.empty { padding: 12px; border-style: dashed; background: transparent; color: var(--ed-muted); text-align: center; }
+${P} .step.plain { background: transparent; }
 ${P} .section { display: flex; align-items: baseline; justify-content: space-between; margin: 14px 2px 6px; color: var(--ed-muted); font: 600 11px/1.2 var(--ed-font); }
 ${P} .rows .row { position: relative; display: grid; grid-template-columns: 8px 32px minmax(0, 1fr); align-items: center; column-gap: 5px; min-height: 38px; padding: 4px 8px 4px 4px; box-sizing: border-box; cursor: default; outline: none; }
-${P} .rows .card > .row:first-child { border-radius: 7px 7px 0 0; }
-${P} .rows .card > .row:last-child { border-radius: 0 0 7px 7px; }
-${P} .rows .card > .row:only-child { border-radius: 7px; }
-${P} .rows .card > .row + .row::before { content: ""; position: absolute; left: 49px; right: 10px; top: 0; border-top: 1px solid var(--ed-line); }
-${P} .rows .card > .row.with::before { border-top-style: dotted; border-top-color: var(--ed-faint); }
+${P} .rows .step > .row:first-child { border-radius: 7px 7px 0 0; }
+${P} .rows .step > .row:last-child { border-radius: 0 0 7px 7px; }
+${P} .rows .step > .row:only-child { border-radius: 7px; }
+${P} .rows .step > .row + .row::before { content: ""; position: absolute; left: 49px; right: 10px; top: 0; border-top: 1px solid var(--ed-line); }
+${P} .rows .step > .row.with::before { border-top-style: dotted; border-top-color: var(--ed-faint); }
 ${P} .rows .row:hover { background: var(--ed-hover); }
 ${P} .rows .row.selected { background: var(--ed-select); color: var(--ed-on-select); }
 ${P} .rows .row.selected::before, ${P} .rows .row.selected + .row::before { border-top-color: transparent !important; }
@@ -560,8 +560,8 @@ ${P} .chip svg.start { opacity: 1; margin-right: 2px; }
 ${P} .chip[data-start="after"] svg.start { color: var(--ed-guide); }
 ${P} .rows .row.selected .chip svg.start { color: inherit; }
 ${P} .rows .list-head { position: relative; display: grid; grid-template-columns: 8px 52px minmax(0, 1fr); align-items: center; column-gap: 5px; min-height: 38px; padding: 4px 8px 4px 4px; box-sizing: border-box; cursor: default; }
-${P} .rows .card > .row + .list-head::before { content: ""; position: absolute; left: 49px; right: 10px; top: 0; border-top: 1px solid var(--ed-line); }
-${P} .rows .card > .list-head:first-child { border-radius: 7px 7px 0 0; }
+${P} .rows .step > .row + .list-head::before { content: ""; position: absolute; left: 49px; right: 10px; top: 0; border-top: 1px solid var(--ed-line); }
+${P} .rows .step > .list-head:first-child { border-radius: 7px 7px 0 0; }
 ${P} .rows .list-head:hover { background: var(--ed-hover); }
 ${P} .rows .list-head.selected { background: var(--ed-select); color: var(--ed-on-select); }
 ${P} .rows .list-head .chip { width: 52px; }
@@ -712,7 +712,7 @@ export class Steps {
   private effect: HTMLButtonElement | null = null;
   private final: HTMLInputElement | null = null;
   private delay: ReturnType<typeof numberField> | null = null;
-  // the preview that is played, which stop ends on the last layer of the slide
+  // the preview that is played, which stop ends on the last step of the slide
   private playing: { stop(): void; done: Promise<void> } | null = null;
   // the row that a drag has started from, and the step that it is dropped into
   private dragging = false;
@@ -735,7 +735,7 @@ export class Steps {
     head.append(this.play, this.each, this.none);
     this.list.setAttribute('role', 'group');
     this.list.setAttribute('aria-label', 'Steps of the slide');
-    const foot = make('p', 'foot', 'Drag a row to change when it appears. The rows of a card appear together, at one click.');
+    const foot = make('p', 'foot', 'Drag a row to change when it appears. The rows of a step appear together, at one click.');
     this.pane.append(this.slot, head, this.list, this.detail, foot);
     this.list.addEventListener('keydown', (ev) => this.key_(ev));
   }
@@ -842,7 +842,7 @@ export class Steps {
     const at = (i: number) => stepAt(plan, i);
     if (!this.playing) {
       els.forEach((el, i) => {
-        // an element of another layer of the slide is hidden, and so is its number
+        // an element hidden at the steps shown is hidden, and so is its number
         if (at(i) < 0 || el.closest(`.${OFF}`)) return;
         // the number of a pair is drawn at the image of the mode shown
         const twin = m.twins?.get(el);
@@ -884,7 +884,7 @@ export class Steps {
     this.list.replaceChildren();
     this.list.classList.remove('wide');
     if (!els.length) {
-      this.list.append(make('div', 'card empty', 'This slide has no element that can be a step.'));
+      this.list.append(make('div', 'step empty', 'This slide has no element that can be a step.'));
       return;
     }
     const G = plan.groups.length;
@@ -946,47 +946,47 @@ export class Steps {
       this.rows.push(entry);
       return r;
     };
-    const cards: HTMLElement[] = [];
+    const stepBoxes: HTMLElement[] = [];
     const runs = new Map(runsOf(m).map((r) => [r.from, r]));
     const inner = new Set([...runs.values()].flatMap((r) => r.items.slice(1).map((_, j) => r.from + 1 + j)));
     plan.groups.forEach((g, k) => {
       if (inner.has(k)) return;
       const run = runs.get(k);
-      const card = make('div', `card step${run ? ' list' : ''}`);
-      card.dataset.gap = String(k);
-      card.setAttribute('role', 'group');
+      const stepBox = make('div', `step${run ? ' list' : ''}`);
+      stepBox.dataset.gap = String(k);
+      stepBox.setAttribute('role', 'group');
       const n = run ? run.items.length : 1;
-      card.setAttribute('aria-label', n > 1 ? `Steps ${k + 1} to ${k + n}` : `Step ${k + 1}`);
+      stepBox.setAttribute('aria-label', n > 1 ? `Steps ${k + 1} to ${k + n}` : `Step ${k + 1}`);
       const others = [...g].filter((i) => !run?.items.includes(i)).sort((a, b) => a - b);
-      for (const i of others.filter((i) => !run || i < run.items[0])) card.append(row(i, k));
+      for (const i of others.filter((i) => !run || i < run.items[0])) stepBox.append(row(i, k));
       if (run) {
-        card.append(this.head(run, described));
-        run.items.forEach((i, j) => card.append(row(i, k + j)));
+        stepBox.append(this.head(run, described));
+        run.items.forEach((i, j) => stepBox.append(row(i, k + j)));
         for (const r of this.rows.slice(-run.items.length)) r.row.classList.add('nested');
       }
-      for (const i of others.filter((i) => run && i > run.items[0])) card.append(row(i, k));
-      cards.push(card);
+      for (const i of others.filter((i) => run && i > run.items[0])) stepBox.append(row(i, k));
+      stepBoxes.push(stepBox);
     });
     plan.finals.forEach((i, f) => {
-      const card = make('div', 'card step final');
-      card.dataset.gap = String(G);
-      card.setAttribute('role', 'group');
-      card.setAttribute('aria-label', 'Last step');
-      card.append(row(i, G + f));
-      cards.push(card);
+      const stepBox = make('div', 'step final');
+      stepBox.dataset.gap = String(G);
+      stepBox.setAttribute('role', 'group');
+      stepBox.setAttribute('aria-label', 'Last step');
+      stepBox.append(row(i, G + f));
+      stepBoxes.push(stepBox);
     });
-    if (!cards.length) cards.push(make('div', 'card empty step', 'No element of this slide is a step. Choose a step in the menu of a row, or drag a row here.'));
-    this.list.append(...cards);
+    if (!stepBoxes.length) stepBoxes.push(make('div', 'step empty', 'No element of this slide is a step. Choose a step in the menu of a row, or drag a row here.'));
+    this.list.append(...stepBoxes);
     const rest = els.map((_, i) => i).filter((i) => stepAt(plan, i) < 0);
     if (rest.length) {
       const zone = make('div', 'slide-zone');
       const head = make('div', 'section');
       head.append(make('span', '', 'With the slide'), make('span', '', String(rest.length)));
-      const card = make('div', 'card plain');
-      card.setAttribute('role', 'group');
-      card.setAttribute('aria-label', 'With the slide');
-      for (const i of rest) card.append(row(i, -1));
-      zone.append(head, card);
+      const stepBox = make('div', 'step plain');
+      stepBox.setAttribute('role', 'group');
+      stepBox.setAttribute('aria-label', 'With the slide');
+      for (const i of rest) stepBox.append(row(i, -1));
+      zone.append(head, stepBox);
       this.list.append(zone);
     }
     const back = open ? this.rows.find((r) => r.el === open) : null;
@@ -1295,27 +1295,27 @@ export class Steps {
     window.addEventListener('keydown', esc, true);
   }
 
-  // the gap of the plan nearest to y, drawn as a line between the cards, or null over the
+  // the gap of the plan nearest to y, drawn as a line between the steps, or null over the
   // elements shown with the slide. undefined is a drop that does not change the order
   private dropAt(y: number, r: Row, m: Model, line: HTMLElement): number | null | undefined {
     const zone = this.list.querySelector('.slide-zone');
     const lr = this.list.getBoundingClientRect();
-    const cards = [...this.list.querySelectorAll<HTMLElement>('.card.step')];
+    const stepBoxes = [...this.list.querySelectorAll<HTMLElement>('.step:not(.plain)')];
     const zr = zone?.getBoundingClientRect();
-    const lastBottom = cards.length ? cards[cards.length - 1].getBoundingClientRect().bottom : lr.top;
+    const lastBottom = stepBoxes.length ? stepBoxes[stepBoxes.length - 1].getBoundingClientRect().bottom : lr.top;
     const overZone = !!zr && y > Math.max(zr.top - 4, lastBottom + 6);
     zone?.classList.toggle('drop', overZone);
     if (overZone) {
       line.hidden = true;
       return stepAt(m.plan, r.i) < 0 ? undefined : null;
     }
-    // the edges between the cards, each the gap of the card after it
+    // the edges between the steps, each the gap of the step after it
     const edges: { y: number; gap: number }[] = [];
-    cards.forEach((c, k) => {
+    stepBoxes.forEach((c, k) => {
       const b = c.getBoundingClientRect();
-      const before = k ? cards[k - 1].getBoundingClientRect().bottom : b.top - 6;
+      const before = k ? stepBoxes[k - 1].getBoundingClientRect().bottom : b.top - 6;
       edges.push({ y: (before + b.top) / 2, gap: Number(c.dataset.gap ?? 0) });
-      if (k === cards.length - 1) edges.push({ y: b.bottom + 3, gap: m.plan.groups.length });
+      if (k === stepBoxes.length - 1) edges.push({ y: b.bottom + 3, gap: m.plan.groups.length });
     });
     if (!edges.length) return undefined;
     const best = edges.reduce((a, b) => (Math.abs(b.y - y) < Math.abs(a.y - y) ? b : a));
@@ -1356,7 +1356,7 @@ export class Steps {
     if (this.play.textContent === label) return;
     this.play.replaceChildren(icon(on ? 'square' : 'play', 12), label);
     this.play.setAttribute('aria-pressed', String(on));
-    this.play.title = on ? 'Stop the preview' : from !== null ? `Play the steps of the slide in place from step ${from + 1}` : 'Play the steps of the slide in place, and end on its last layer';
+    this.play.title = on ? 'Stop the preview' : from !== null ? `Play the steps of the slide in place from step ${from + 1}` : 'Play the steps of the slide in place, and end on its last step';
   }
 
   get previewing(): boolean {
@@ -1365,7 +1365,7 @@ export class Steps {
 
   // the steps of the current slide are played in place, with the effect of each fragment, from
   // the slide shown up to step from, 0 for the slide without its steps, to its last step, after
-  // which every fragment is restored. the editor then shows the last layer of the slide. a second
+  // which every fragment is restored. the editor then shows the slide at its last step. a second
   // call stops the preview
   preview(from = 0): Promise<void> {
     if (this.playing) {
@@ -1410,7 +1410,7 @@ export class Steps {
         this.playing = null;
         this.setPlaying(false);
         window.removeEventListener('keydown', esc, true);
-        (this.app?.layers as Layers | undefined)?.showLast();
+        (this.app?.shownSteps as ShownSteps | undefined)?.showLast();
         this.app?.invalidate('slide');
         resolve();
       };
@@ -1448,7 +1448,7 @@ export class Steps {
       videos.update((v) => frags.every((f) => !f.el.contains(v) || shownAt(f, k)));
       html.dataset.previewStep = String(k);
     };
-    showLayer(slide, null);
+    showRange(slide, null);
     html.classList.add('beeson-previewing');
     if (this.app) setPreview(this.app, 'steps', true, () => finish());
     this.badges.replaceChildren();

@@ -1,5 +1,5 @@
 // the Slide pane of the Format tab, shown with nothing selected, as the Slide pane of Keynote: the
-// layout of the slide in a card, the width of the text column of a content slide as the class
+// layout of the slide in the button of its chooser, the width of the text column of a content slide as the class
 // narrow or wide of its section, whether the slide is hidden and has a footnote, and the running
 // head, i.e. the data-run of a section slide. the commands of the width, the footnote, and the
 // running head are defined here, the width also in Slide > Text Column
@@ -8,7 +8,7 @@ import type { App } from '../app.ts';
 import type { Command } from '../commands.ts';
 import { contentWithTex } from '../math.ts';
 import { showText, untypeset } from '../typeset.ts';
-import { button, card, checkbox, glyph, note, row, section, segmented, textField, type Control, type Run } from './controls.ts';
+import { button, chooserButton, checkbox, glyph, note, row, section, segmented, textField, type Control, type Run } from './controls.ts';
 import { drawingName, slideBackdrop } from '../commands/backdrop.ts';
 
 const SVG = 'http://www.w3.org/2000/svg';
@@ -168,9 +168,9 @@ export function slidePane(app: App, run: Run): Control[] {
   typesetNotes = [];
   const slide = app.current();
   const layout = paneLayout(app);
-  const layoutCard = card(() => sketch(layoutOf(app.current()), slide ? widthOf(slide) : 'normal'), 'Slide Layout', () => (mixed(app) ? 'Multiple Layouts' : nameOf(app.current())));
-  // the card is the button of the chooser of the layouts of commands/layout.ts
-  const chooser = layoutCard.el;
+  const layoutChooser = chooserButton(() => sketch(layoutOf(app.current()), slide ? widthOf(slide) : 'normal'), 'Slide Layout', () => (mixed(app) ? 'Multiple Layouts' : nameOf(app.current())));
+  // this button is the button of the chooser of the layouts of commands/layout.ts
+  const chooser = layoutChooser.el;
   chooser.classList.add('ed-chooser');
   chooser.setAttribute('role', 'button');
   chooser.setAttribute('aria-haspopup', 'dialog');
@@ -189,7 +189,7 @@ export function slidePane(app: App, run: Run): Control[] {
     ev.preventDefault();
     choose();
   });
-  const parts: Control[] = [layoutCard];
+  const parts: Control[] = [layoutChooser];
   if (layout === 'content') {
     parts.push(section('Text Column', [
       row([segmented(app, run, WIDTHS.map((w) => ({ command: `slide.width.${w}`, icon: `column-${w}`, text: w === 'narrow' ? 'Narrow' : w === 'wide' ? 'Wide' : 'Normal' })), 'Width of the text column')]),

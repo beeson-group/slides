@@ -190,7 +190,7 @@ for (const platform of PLATFORMS) {
     }
     const made = await boxes(page, ':scope > p');
     assert.deepEqual(made.map((b) => b.text), ['First box', 'Second box', 'Third box']);
-    const block = await boxes(page, '.block > *');
+    const block = await boxes(page, '.title-text > *');
     for (const [i, a] of made.entries()) {
       for (const b of made.slice(i + 1)) assert.ok(!meets(a.frame, b.frame), `the box ${b.text} ${js(b.frame)} is put over the frame of ${a.text} ${js(a.frame)}`);
       assert.ok(a.frame.left >= 119.5 && a.frame.right <= 1800.5, `the box ${a.text} ${js(a.frame)} is outside the margins`);

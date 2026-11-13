@@ -17,7 +17,7 @@ import { LAYOUT_GUIDES, snapMove, snapPoint, type Box, type Targets } from '../c
 import { angleOf, locked, placeOf, record, scrollOf, standIns, writePlace, type Place } from '../canvas/drag.ts';
 import { freshGroup, toFront } from './order.ts';
 import { copiedGroups } from '../model/groups.ts';
-import { glueAt, install as installGlue, recorded, relink, setEnd, showTarget, type End, type Glue } from '../model/glue.ts';
+import { attachmentAt, install as installAttach, recorded, relink, setEnd, showTarget, type End, type Attachment } from '../model/attach.ts';
 
 export { distance } from '../canvas/stroke.ts';
 export type { Ends, Point };
@@ -161,12 +161,12 @@ function showStroke(svg: Element, s: Stroke): void {
 type Drawing = { heads: Heads; kind: Kind };
 
 // attach is the attachment of a dragged end at its last move, and from and to that of the ends of a drawn line
-type Grab = { svg: Element; which: 1 | 2; from: Stroke; off: Point; x: number; y: number; moved: boolean; glue?: Glue | null };
+type Grab = { svg: Element; which: 1 | 2; from: Stroke; off: Point; x: number; y: number; moved: boolean; attachment?: Attachment | null };
 type Press =
   | ({ kind: 'end' } & Grab)
   | ({ kind: 'bend' } & Grab)
   | { kind: 'move'; svg: Element; els: Element[]; places: Map<Element, Place>; base: Box; x: number; y: number; scroll: { x: number; y: number }; moved: boolean; click: (() => void) | null }
-  | { kind: 'draw'; draw: Drawing; start: Point; end: Point; x: number; y: number; moved: boolean; from: Glue | null; to: Glue | null };
+  | { kind: 'draw'; draw: Drawing; start: Point; end: Point; x: number; y: number; moved: boolean; from: Attachment | null; to: Attachment | null };
 
 type Grip = HTMLElement & { line?: Element };
 
@@ -183,11 +183,11 @@ export function install(app: App): void {
   const ghosts = standIns();
   const ready = (a: App) => !!a.pairing?.root && !!a.current() && a.region() !== 'dialog';
   const root = document.documentElement;
-  installGlue(app);
+  installAttach(app);
   // the attachment of an end at p, without the free key, with its element outlined
-  const glueOf = (ev: PointerEvent, p: Point, skip: Element[] = []) => {
-    const g = freeMove(ev) ? null : glueAt(app, p, skip);
-    showTarget(app, g?.glue.els ?? null);
+  const attachedTo = (ev: PointerEvent, p: Point, skip: Element[] = []) => {
+    const g = freeMove(ev) ? null : attachmentAt(app, p, skip);
+    showTarget(app, g?.attachment.els ?? null);
     return g;
   };
 
@@ -304,7 +304,7 @@ export function install(app: App): void {
 
   // a new line of the kind between the ends in slide px, on the current slide before its notes,
   // selected
-  const add = async (e: Ends, d: Drawing, glue: Partial<Record<End, Glue | null>> = {}): Promise<Element | null> => {
+  const add = async (e: Ends, d: Drawing, attachment: Partial<Record<End, Attachment | null>> = {}): Promise<Element | null> => {
     const slide = app.current();
     if (!slide) return null;
     const id = app.doc.uniqueId('line');
@@ -313,7 +313,7 @@ export function install(app: App): void {
     const [svg] = await app.history.selecting(label, async () => {
       const made = await app.doc.insert(lineText(withKind(e, d.kind), { id, heads: d.heads }), slide, before, label);
       await toFront(app, made[0]);
-      for (const end of ['from', 'to'] as End[]) if (glue[end]) setEnd(recorded(app), made[0], end, glue[end] as Glue);
+      for (const end of ['from', 'to'] as End[]) if (attachment[end]) setEnd(recorded(app), made[0], end, attachment[end] as Attachment);
       app.selection.set('elements', made);
       return made;
     });
@@ -323,13 +323,13 @@ export function install(app: App): void {
 
   // the stroke of a line as one entry of the history, written into the start tags of its svg and
   // its line or path, with the attachment of a dragged end
-  const setStroke = (svg: Element, s: Stroke, label: string, glue?: { end: End; to: Glue | null }) =>
+  const setStroke = (svg: Element, s: Stroke, label: string, attachment?: { end: End; to: Attachment | null }) =>
     app.history.transact(label, () => {
       const t = strokeText(s);
       const b = t.box;
       app.doc.setTag(svg, { attrs: { width: String(b.width), height: String(b.height) }, translate: b.left || b.top ? { x: b.left, y: b.top } : null }, 'line');
       app.doc.setTag(strokeOf(svg) as Element, { attrs: t.attrs }, 'line');
-      if (glue) setEnd(recorded(app), svg, glue.end, glue.to);
+      if (attachment) setEnd(recorded(app), svg, attachment.end, attachment.to);
       app.invalidate('content');
     });
 
@@ -345,9 +345,9 @@ export function install(app: App): void {
       ev.preventDefault();
       ev.stopPropagation();
       const point = pointAt(ev, null, []);
-      const g = glueOf(ev, point);
+      const g = attachedTo(ev, point);
       const start = g?.at ?? point;
-      press = { kind: 'draw', draw: drawing, start, end: start, x: at.x, y: at.y, moved: false, from: g?.glue ?? null, to: null };
+      press = { kind: 'draw', draw: drawing, start, end: start, x: at.x, y: at.y, moved: false, from: g?.attachment ?? null, to: null };
       return;
     }
     const grip = target.closest('.beeson-line-end') as Grip | null;
@@ -399,17 +399,17 @@ export function install(app: App): void {
     view.guides = [];
     app.stage?.edgeScroll(ev, () => press === p && onMove(ev));
     if (p.kind === 'draw') {
-      const g = glueOf(ev, pointAt(ev, p.start, []));
+      const g = attachedTo(ev, pointAt(ev, p.start, []));
       p.end = g?.at ?? pointAt(ev, p.start, []);
-      p.to = g?.glue ?? null;
+      p.to = g?.attachment ?? null;
       showDraft(p.start, p.end, p.draw);
       readout({ x1: p.start.x, y1: p.start.y, x2: p.end.x, y2: p.end.y }, ev);
     } else if (p.kind === 'end') {
       if (p.svg.isConnected && locked(p.svg)) return;
       const fixed = p.which === 1 ? { x: p.from.x2, y: p.from.y2 } : { x: p.from.x1, y: p.from.y1 };
-      const g = glueOf(ev, pointAt(ev, fixed, [p.svg], p.off));
+      const g = attachedTo(ev, pointAt(ev, fixed, [p.svg], p.off));
       const to = g?.at ?? pointAt(ev, fixed, [p.svg], p.off);
-      p.glue = g?.glue ?? null;
+      p.attachment = g?.attachment ?? null;
       const e = p.which === 1 ? { x1: to.x, y1: to.y, x2: fixed.x, y2: fixed.y } : { x1: fixed.x, y1: fixed.y, x2: to.x, y2: to.y };
       showStroke(p.svg, rebend(p.from, e));
       readout({ x1: fixed.x, y1: fixed.y, x2: to.x, y2: to.y }, ev);
@@ -474,8 +474,8 @@ export function install(app: App): void {
     } else if (p.kind === 'end' || p.kind === 'bend') {
       const s = strokeAt(p.svg);
       showStroke(p.svg, p.from);
-      const glue = p.kind === 'end' ? { end: (p.which === 1 ? 'from' : 'to') as End, to: p.glue ?? null } : undefined;
-      if (p.moved && ev && s) await setStroke(p.svg, s, p.kind === 'bend' ? 'Bend Line' : 'Move Line End', glue);
+      const attachment = p.kind === 'end' ? { end: (p.which === 1 ? 'from' : 'to') as End, to: p.attachment ?? null } : undefined;
+      if (p.moved && ev && s) await setStroke(p.svg, s, p.kind === 'bend' ? 'Bend Line' : 'Move Line End', attachment);
     } else if (!p.moved || !ev || (copying && copyHeld(ev))) {
       const to = p.els.map((el) => placeOf(el).translate);
       for (const el of p.els) {
@@ -639,7 +639,7 @@ export function install(app: App): void {
   // the attachment of an end of the selected lines taken off, which the Line pane runs
   for (const [end, name] of [['from', 'start'], ['to', 'end']] as const) {
     c.define({
-      id: `line.unglue.${name}`,
+      id: `line.detach.${name}`,
       label: `Detach ${name === 'start' ? 'Start' : 'End'}`,
       enabled: (a) => some(a) && selectedLines(a).some((svg) => svg.hasAttribute(`data-${end}`)),
       undoable: true,

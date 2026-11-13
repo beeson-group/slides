@@ -180,7 +180,7 @@ for (const platform of PLATFORMS) {
   test(`item 2: the turns of a line glued at one end are dimmed, and the line is turned after Detach (${platform})`, async (t) => {
     const page = await load(t, platform);
     await select(page, ON_ARROW);
-    await exec(page, 'line.unglue.end');
+    await exec(page, 'line.detach.end');
     await sleep(100);
     assert.deepEqual((await lines(page))[0], { from: 'a1 1 0.5', to: null, rotate: '' });
     await arrangeTab(page);
@@ -188,7 +188,7 @@ for (const platform of PLATFORMS) {
     // Detach of the start leaves a loose line, which the field turns in one entry
     await select(page, ON_ARROW);
     await arrangeTab(page);
-    await exec(page, 'line.unglue.start');
+    await exec(page, 'line.detach.start');
     await sleep(100);
     const loose = await render(page);
     assert.deepEqual((await lines(page))[0], { from: null, to: null, rotate: '' });

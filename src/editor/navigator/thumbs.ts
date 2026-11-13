@@ -5,7 +5,7 @@
 
 import type { App } from '../app.ts';
 import { isRuntimeClass } from '../render.ts';
-import { layersOf, showLayer } from '../layers.ts';
+import { rangesOf, showRange } from '../shown-steps.ts';
 
 // the rules of theme/beeson.css that are written on html or body do not reach into a shadow root,
 // hence they are given here on the wrapper of the clone. every step of the slide is shown
@@ -101,7 +101,7 @@ export function laidOut<T>(slide: HTMLElement, measure: () => T): T {
   }
 }
 
-// a clone of slide for its thumbnail, with every step shown, or the first layer of a slide whose
+// a clone of slide for its thumbnail, with every step shown, or the first range of steps of a slide whose
 // elements are hidden at a step. its canvases are painted from the originals at the scale of the
 // thumbnail. a tycho viewer is replaced by an empty box, since its clone would start a second
 // renderer, and a video shows its poster
@@ -150,8 +150,8 @@ export function cloneSlide(slide: Element, scale: number): HTMLElement {
     for (const c of [...el.classList]) if (isRuntimeClass(c) && !c.startsWith('plot-')) el.classList.remove(c);
   }
   if (window.MathJax) hideTex(clone);
-  const layers = layersOf(clone);
-  showLayer(clone, layers.length > 1 ? layers[0] : null);
+  const ranges = rangesOf(clone);
+  showRange(clone, ranges.length > 1 ? ranges[0] : null);
   clone.classList.add('present');
   clone.style.display = 'block';
   clone.style.top = '0';

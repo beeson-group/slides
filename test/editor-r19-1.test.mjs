@@ -72,7 +72,7 @@ for (const platform of PLATFORMS) {
       const page = await load(t, platform, n);
       const at = `on slide ${n + 1} with a pause of ${pause} ms`;
       await emptied(page, pause);
-      const target = n === 0 ? 'section.present .block h1' : 'section.present h2';
+      const target = n === 0 ? 'section.present .title-text h1' : 'section.present h2';
       await click(page, target);
       await sleep(700);
       assert.deepEqual(await page.evaluate(`(() => { const t = document.querySelector(${js(target)}); const a = getSelection().anchorNode; return { slide: Reveal.getIndices().h, caret: !!a && t.contains(a) }; })()`), { slide: n, caret: true }, `the click does not leave the caret in the text ${at}`);

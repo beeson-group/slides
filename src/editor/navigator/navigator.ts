@@ -8,7 +8,7 @@
 // preview of a slide at 320 px is shown while the pointer rests on its row
 
 import type { App, Pane } from '../app.ts';
-import { layersOf, showLayer } from '../layers.ts';
+import { rangesOf, showRange } from '../shown-steps.ts';
 import { nextShown, transitionOf } from '../review/transitions.ts';
 import { injectStyle, stored, store } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
@@ -724,8 +724,8 @@ export class Navigator implements Pane {
       el.classList.remove('beeson-hover', 'beeson-overflow', 'current-fragment', 'past', 'future');
       if (el.classList.contains('fragment')) el.classList.add('visible');
     }
-    const layers = layersOf(clone);
-    showLayer(clone, layers.length > 1 ? layers[0] : null);
+    const ranges = rangesOf(clone);
+    showRange(clone, ranges.length > 1 ? ranges[0] : null);
     clone.classList.add('present');
     clone.style.display = 'block';
     const deck = document.createElement('div');

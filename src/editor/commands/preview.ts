@@ -12,7 +12,7 @@ import { previewPlays, setPreview, stopPreviews } from '../canvas/frames.ts';
 import { boundKeys, type Command } from '../commands.ts';
 import { showFormat } from '../inspector/inspector.ts';
 import { fallback, matches } from '../keymap.ts';
-import { OFF } from '../layers.ts';
+import { OFF } from '../shown-steps.ts';
 import { drawInto } from '../navigator/thumbs.ts';
 import { showStep, stepsOfSlide } from '../present.ts';
 import { stepVideos } from '../steps.ts';
@@ -46,7 +46,7 @@ const ready = (app: App) => !!app.pairing?.root && !!app.current();
 const backdropOf = (app: App) => (ready(app) ? slideBackdrop(app) : null);
 const hasSteps = (app: App) => ready(app) && stepsOfSlide(app.current()!) > 0;
 const tableShown = (app: App) => !!app.commands.get('view.lightTable') && !!app.commands.state('view.lightTable').checked;
-// the backdrop that a trace on the canvas shows, i.e. not one hidden in the layer of the editor
+// the backdrop that a trace on the canvas shows, i.e. not one hidden at the steps shown in the editor
 const traceable = (app: App) => {
   const el = tableShown(app) ? null : backdropOf(app);
   return el && !el.classList.contains(OFF) ? el : null;

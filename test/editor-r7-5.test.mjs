@@ -351,7 +351,7 @@ for (const platform of PLATFORMS) {
     // the paragraph dragged under the last card is shown after the lines, and the index of the
     // code puts its line steps before it, as the highlight plugin numbers its copies of the code
     const from = await rowPart(page, 'Copy-paste', '.body');
-    const to = await page.evaluate(`(() => { const c = [...document.querySelectorAll('${SIDE} .rows .card.step')].at(-1).getBoundingClientRect(); return c.bottom + 2; })()`);
+    const to = await page.evaluate(`(() => { const c = [...document.querySelectorAll('${SIDE} .rows .step:not(.plain)')].at(-1).getBoundingClientRect(); return c.bottom + 2; })()`);
     await drag(page, from, { dy: to - from.y, steps: 12 });
     await frames(page);
     const moved = await rendered(page);

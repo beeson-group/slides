@@ -58,9 +58,9 @@ const PLACES = (mark) => `(() => {
   const px = (e) => { const r = e.getBoundingClientRect(); return { left: (r.left - S.left) / k, top: (r.top - S.top) / k, right: (r.right - S.left) / k, bottom: (r.bottom - S.top) / k }; };
   const c = Reveal.getCurrentSlide();
   const lines = [];
-  for (const e of c.querySelectorAll('.block > *')) for (const r of e.getClientRects()) lines.push({ left: (r.left - S.left) / k, top: (r.top - S.top) / k });
+  for (const e of c.querySelectorAll('.title-text > *')) for (const r of e.getClientRects()) lines.push({ left: (r.left - S.left) / k, top: (r.top - S.top) / k });
   const box = [...c.querySelectorAll(':scope > p')].filter((p) => p.classList.contains('beeson-pending') || (${js(mark)} && p.textContent.startsWith(${js(mark)})));
-  return { lines, box: box.map(px), inBlock: !!c.querySelector('.block .beeson-pending') };
+  return { lines, box: box.map(px), inBlock: !!c.querySelector('.title-text .beeson-pending') };
 })()`;
 const places = (page, mark = '') => page.evaluate(PLACES(mark));
 const near = (a, b, tol = 0.6) => Math.abs(a - b) <= tol;
@@ -97,7 +97,7 @@ for (const platform of PLATFORMS) {
       // the box is inside the margins of the slide, and off the words of the block and the lockup
       const b = empty.box[0];
       assert.ok(b.left >= 119.5 && b.right <= 1800.5 && b.top >= 0 && b.bottom <= 1080, `the text box ${js(b)} is outside the margins ${at}`);
-      const words = await page.evaluate(`(() => { const s = document.querySelector('.reveal .slides'); const S = s.getBoundingClientRect(), k = S.width / s.offsetWidth; return [...Reveal.getCurrentSlide().querySelectorAll('.block > *')].filter((e) => e.textContent.trim()).map((e) => { const r = e.getBoundingClientRect(); return { left: (r.left - S.left) / k, top: (r.top - S.top) / k, right: (r.right - S.left) / k, bottom: (r.bottom - S.top) / k }; }); })()`);
+      const words = await page.evaluate(`(() => { const s = document.querySelector('.reveal .slides'); const S = s.getBoundingClientRect(), k = S.width / s.offsetWidth; return [...Reveal.getCurrentSlide().querySelectorAll('.title-text > *')].filter((e) => e.textContent.trim()).map((e) => { const r = e.getBoundingClientRect(); return { left: (r.left - S.left) / k, top: (r.top - S.top) / k, right: (r.right - S.left) / k, bottom: (r.bottom - S.top) / k }; }); })()`);
       for (const w of words) assert.ok(!meets(b, w), `the text box ${js(b)} lies over the words ${js(w)} ${at}`);
       if (n === 0) assert.ok(!meets(b, { left: 120, top: 60, right: 560, bottom: 132 }), `the text box ${js(b)} lies over the lockup ${at}`);
       await type(page, 'a');
@@ -116,7 +116,7 @@ for (const platform of PLATFORMS) {
       // the new paragraphs are children of the section, before the foot and the notes
       const slide = written.split(/<section/)[n + 1];
       assert.match(slide, /<p style="[^"]*translate: [\d.-]+px [\d.-]+px[^"]*">a<\/p>/, `the box is not written with its translate ${at}`);
-      assert.ok(slide.indexOf('>a</p>') > slide.indexOf('</div>', slide.indexOf('class="block"')), `the box is written into the block ${at}`);
+      assert.ok(slide.indexOf('>a</p>') > slide.indexOf('</div>', slide.indexOf('class="title-text"')), `the box is written into the block ${at}`);
       if (slide.includes('aside class="notes"')) assert.ok(slide.indexOf('>c</p>') < slide.indexOf('aside class="notes"'), `the box is written after the notes ${at}`);
       await undo(page);
       sameLines(start, await places(page), `an undo ${at}`);

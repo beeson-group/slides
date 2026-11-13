@@ -1,4 +1,4 @@
-// an animated 2D plot in a `.plot` element, drawn as SVG from an inline JSON block named by the
+// an animated 2D plot in a `.plot` element, drawn as SVG from an inline JSON script named by the
 // attribute data-plot. the format is documented in REFERENCE.md. the plot is played in a loop while
 // its slide is shown, and the fragments of its slide reveal its panels and marks with
 // data-plot-show and switch its tab with data-plot-tab. text in the JSON is set in a small markup,
@@ -575,7 +575,7 @@ export class PlotView {
     try {
       const id = el.dataset.plot ?? '';
       const block = id ? document.getElementById(id) : null;
-      if (text === null && !block) throw new Error(`the JSON block with the id "${id}" is not found`);
+      if (text === null && !block) throw new Error(`the JSON script with the id "${id}" is not found`);
       this.spec = parsePlot(text ?? block?.textContent ?? '');
     } catch (error) {
       const message = `plot ${el.dataset.plot ?? ''}: ${(error as Error).message}`;

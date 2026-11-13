@@ -12,7 +12,7 @@
 
 import type { App } from '../app.ts';
 import { mathLookup } from '../math.ts';
-import { fileIndexes } from '../layers.ts';
+import { fileIndexes } from '../shown-steps.ts';
 import { tokenize } from '../tokens.ts';
 import { isRuntimeClass } from '../render.ts';
 import { renderTag, stateOf, translateIn, type TagEdit } from '../tags.ts';

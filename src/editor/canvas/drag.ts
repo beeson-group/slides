@@ -14,7 +14,7 @@ import { LAYOUT_GUIDES, anchored, fitPicture, lockedAxis, resizeBox, snapAngle, 
 import { BY_ITSELF, CONTAINER, RESIZABLE, STRETCHED, aspectOf, bandAt, captionsOf, constrained, containerOf, cssWidth, figureFrame, frameOf, frameRect, hasText, isTextSized, linePoints, linesOf, lineTouches, mediaIn, movableOf, movablesOf, objectOf, objectsOf, onCanvas, orientedBox, pickOf, pictureOf, pictureReach, sizedOf, snapBoxOf, toSlide, turnable, twinOf, unturnedRect, visualRect } from './hit.ts';
 import { groupFrame, overlay, turned, view, wh, xy } from './frames.ts';
 import { enterGroup, settleCopies, freshGroup, groupOf } from '../commands/order.ts';
-import { afterMove, relink } from '../model/glue.ts';
+import { afterMove, relink } from '../model/attach.ts';
 import { copiedGroups, scopeOf, within } from '../model/groups.ts';
 import { cornerBoxOf } from '../commands/align.ts';
 import { backdropAt, pressBackdrop } from '../commands/backdrop.ts';
@@ -131,8 +131,8 @@ export function record(app: App, label: string, changes: { el: Element; from: Pl
     app.invalidate('content');
   };
   // the attached ends of lines follow the moved elements in the same entry
-  const glue = afterMove(app, moved.map((c) => c.el));
-  app.history.push({ label, undo: () => (glue.undo(), apply('from')), redo: () => (apply('to'), glue.redo()) });
+  const attachment = afterMove(app, moved.map((c) => c.el));
+  app.history.push({ label, undo: () => (attachment.undo(), apply('from')), redo: () => (apply('to'), attachment.redo()) });
   return moved;
 }
 

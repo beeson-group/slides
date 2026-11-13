@@ -19,7 +19,7 @@ import { insertPlain, pasteItems, pastesItems, spaced } from '../text/typing.ts'
 import { movableOf, objectsOf } from '../canvas/hit.ts';
 import { fieldOf, settleCopies, freshGroup } from './order.ts';
 import { copiedGroups } from '../model/groups.ts';
-import { relink } from '../model/glue.ts';
+import { relink } from '../model/attach.ts';
 import { withTwins } from '../canvas/hit.ts';
 import { VOID } from '../source.ts';
 import { tokenize } from '../tokens.ts';
@@ -225,7 +225,7 @@ function freshIds(app: App, text: string): string {
 // the container of the text column of slide, i.e. the text column of a split slide, the block of a title
 // or closing slide, the words of a section slide, and else the slide
 export function columnOf(slide: Element): Element {
-  return slide.querySelector(':scope > .text-column, :scope > .block, :scope > .sec') ?? slide;
+  return slide.querySelector(':scope > .text-column, :scope > .title-text, :scope > .sec') ?? slide;
 }
 
 // the copies of a group are a new group, as the copies of a drag with the copy modifier in

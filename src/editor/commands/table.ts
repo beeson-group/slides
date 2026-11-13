@@ -482,14 +482,14 @@ function placeTable(app: App, table: HTMLTableElement): void {
   const floor = Math.min(h - BOTTOM, foot ? foot.top - BOTTOM : Infinity);
   const ground = (el: Element) => el.matches('.plate') && el.getBoundingClientRect().width >= (slide.getBoundingClientRect().width - 1);
   // the words of a block are counted in their place
-  const skip = (el: Element) => el === table || el.matches('aside.notes, script, style, .backdrop, .block, .sec');
+  const skip = (el: Element) => el === table || el.matches('aside.notes, script, style, .backdrop, .title-text, .sec');
   const taken = (els: Element[]) => els.filter((el) => !skip(el)).map((el) => (framed(el) ? slideBox(app, el) : wordBox(app, el))).filter((b): b is SlideBox => !!b);
   const drawn = slide.matches('.title, .section, .closing') ? [] : [...slide.querySelectorAll(':scope > .backdrop')].flatMap((b) => drawnCells(app, b));
   const above = [...parent.children].slice(0, [...parent.children].indexOf(table)).filter((el) => !el.matches('.run, .foot, [data-generated]'));
   const before = taken(above.filter((el) => !ground(el)));
   // the words and the tables of the block of a title, section, or closing slide are counted, also
   // in the block that holds the new table
-  const kids = [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .text-column > *, :scope > .block > *, :scope > .sec > *')].filter((el) => !el.contains(table));
+  const kids = [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .text-column > *, :scope > .title-text > *, :scope > .sec > *')].filter((el) => !el.contains(table));
   const others = taken(kids.flatMap((el) => (ground(el) ? [...el.children].filter((c) => c.getClientRects().length) : [el])));
   const tw = t.right - t.left;
   const th = t.bottom - t.top;

@@ -80,7 +80,7 @@ html.beeson-band, html.beeson-band .reveal * { cursor: move; }
 html.beeson-editing .reveal .slides section img, html.beeson-editing .reveal .slides section video, html.beeson-editing .reveal .slides section .figure-box, html.beeson-editing .reveal .slides section .plate, html.beeson-editing .reveal .slides section .qr, html.beeson-editing .reveal .slides section .shape { cursor: move; }
 html.beeson-editing .reveal .slides section .shape { pointer-events: auto; }
 html.beeson-editing .reveal .slides section [data-locked]:is(img, video, .figure-box, .plate, .qr, .shape), html.beeson-editing .reveal .slides section [data-locked] :is(img, video, .qr) { cursor: default; }
-html.beeson-playing :is(.beeson-overlay, .beeson-line-layer, .beeson-table-bars, .beeson-guides, .beeson-backdrop-cuts, .beeson-glue-target) { visibility: hidden !important; }
+html.beeson-playing :is(.beeson-overlay, .beeson-line-layer, .beeson-table-bars, .beeson-guides, .beeson-backdrop-cuts, .beeson-attach-target) { visibility: hidden !important; }
 html.beeson-playing .reveal .slides, html.beeson-playing .reveal .slides * { caret-color: transparent !important; }
 html.beeson-playing .reveal .beeson-movable:focus-visible { outline: none; }
 `;

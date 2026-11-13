@@ -7,7 +7,7 @@
 // slide is written into custom properties of the elements that read them, which are not
 // inherited, so that a zoom restyles those elements alone. the wheel and a trackpad scroll the
 // canvas past Fit, and a pinch or the wheel with Ctrl zooms about the pointer. every step of a
-// slide is shown, apart from the elements of another layer, and the progress line, the scrubber,
+// slide is shown, apart from the elements hidden at the steps shown, and the progress line, the scrubber,
 // the slide number, and the mode switch of the theme are hidden
 
 import type { App } from '../app.ts';
