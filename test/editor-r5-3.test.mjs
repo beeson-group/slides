@@ -31,7 +31,7 @@ const render = (page) => page.evaluate('window.BeesonEditor.render()');
 const errors = (page) => page.errors.filter((e) => !e.includes('favicon.ico'));
 
 // the editor on a deck served over HTTP, with the storage of the origin emptied first
-async function load(t, platform, { deck = 'index.html', size = { width: 1600, height: 1000 }, scheme } = {}) {
+async function load(t, platform, { deck = 'test-deck.html', size = { width: 1600, height: 1000 }, scheme } = {}) {
   const page = await browser.newPage(size);
   t.after(() => page.close().catch(() => {}));
   if (scheme) await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: scheme }] });

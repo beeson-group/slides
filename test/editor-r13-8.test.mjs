@@ -30,7 +30,7 @@ const render = (page) => page.evaluate('window.BeesonEditor.render()');
 const exec = (page, id) => page.evaluate(`window.BeesonEditor.exec(${js(id)})`).then(() => frames(page));
 
 // the editor on slide n of a deck, served over HTTP
-async function load(t, platform, n = 0, deck = 'index.html') {
+async function load(t, platform, n = 0, deck = 'test-deck.html') {
   const text = readFileSync(deck, 'utf8');
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
@@ -198,7 +198,7 @@ for (const platform of PLATFORMS) {
 test('a deck opened by itself stays at its last slide at a key forward', async (t) => {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  await page.goto(`${server.origin}/index.html?still#/12`);
+  await page.goto(`${server.origin}/test-deck.html?still#/12`);
   await page.waitFor(deckSettled);
   for (const key of ['ArrowRight', 'Space', 'Enter']) await press(page, key);
   await sleep(300);

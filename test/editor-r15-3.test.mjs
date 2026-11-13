@@ -34,10 +34,10 @@ const near = (a, b, tol = 1) => Math.abs(a - b) <= tol;
 
 // the editor on slide n of the demo deck, served over HTTP
 async function load(t, platform, n = 0) {
-  const text = readFileSync('index.html', 'utf8');
+  const text = readFileSync('test-deck.html', 'utf8');
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  const url = `${server.origin}/index.html?edit&still&theme=light&edit-platform=${platform}`;
+  const url = `${server.origin}/test-deck.html?edit&still&theme=light&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
@@ -94,7 +94,7 @@ for (const platform of PLATFORMS) {
 
     const deck = await browser.newPage({ width: 1600, height: 1000 });
     t.after(() => deck.close().catch(() => {}));
-    await deck.goto(`${server.origin}/index.html?still#/${LAST}`);
+    await deck.goto(`${server.origin}/test-deck.html?still#/${LAST}`);
     await deck.waitFor(deckSettled);
     for (let i = 0; i < 3; i++) {
       await click(deck, slidePoint);

@@ -14,7 +14,7 @@ import { click, press, saveAndReopen } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 const MOD = { mac: 4, other: 2 };
-const INDEX = 'index.html';
+const INDEX = 'test-deck.html';
 // a paragraph and a QR code of 320 px in the flow of slide 1, a paragraph in the panel of slide 2, a
 // closing slide, and a heading, a paragraph, a list, and a paragraph without offsets on slide 4
 const FLOW = 'test/pages/editor-r36-1.html';

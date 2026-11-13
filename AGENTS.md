@@ -56,6 +56,7 @@ npm run pptx                                # slides.pptx, one click per step, w
 - The orbit engine is a port of `orbits.ts` of claudiovestini.com (MIT). Do not derive anything in this repository from DyLAN code.
 - The Princeton marks and the group logo in `brand/` are outside the MIT license, see `brand/NOTICE.md`.
 - Colors are the custom properties in `theme/beeson.css`: `--bg`, `--text`, `--subtle`, `--muted`, `--line`, `--accent`, `--violet`, `--blue`, `--red`, and `--data-1` to `--data-8`. The typeface is Latin Modern Roman at 22, 28, 36, 48, 64, and 96 px on the 1920 by 1080 design size, and math is set in the TeX font of MathJax, i.e. Computer Modern, as in a LaTeX document. Body text is 48 px, i.e. the 24 points asked for by the AIAA on a slide 7.5 in high, captions and tables are 36 px, and a code box is 22 px. Orange is used for motion and progress, and violet for structure.
+- The tests of `npm test` are run on a frozen copy of the demo deck, `test-deck.html`, next to `index.html`. The demo deck in `index.html` is thus changed without a change to the tests.
 - Write a talk over the demo deck in `index.html`, and do not copy `theme/` or `brand/` into another folder, since `index.html` is the default deck of `npm run check`, `npm run pdf`, and `npm run pptx`.
 - Read a PowerPoint file from its XML, and do not script PowerPoint, Keynote, or any other desktop app.
 

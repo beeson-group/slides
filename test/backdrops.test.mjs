@@ -55,7 +55,7 @@ test('no backdrop is cut at an edge of its box inside the slide', { timeout: 600
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html', 'still'));
+  await page.goto(deckUrl('test-deck.html', 'still'));
   await page.waitFor(deckSettled);
 
   const cropped = (await page.evaluate(boxes))
@@ -86,7 +86,7 @@ test('a head is drawn on the path of a spacecraft alone', { timeout: 60000 }, as
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage({ motion: true });
-  await page.goto(deckUrl('index.html'));
+  await page.goto(deckUrl('test-deck.html'));
   await page.waitFor(deckSettled);
   // the title slide draws brand/transfer.js, whose spiral carries a head of its own from the start
   await new Promise((done) => setTimeout(done, 800));
@@ -228,7 +228,7 @@ test('the strands of a backdrop with data-stagger are started one after another'
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage({ motion: true });
-  await page.goto(deckUrl('index.html'));
+  await page.goto(deckUrl('test-deck.html'));
   await page.waitFor(deckSettled);
   const stagger = await page.evaluate(`(() => {
     const el = document.querySelector('.backdrop[data-stagger]');
@@ -319,7 +319,7 @@ test('Beeson.remount, Beeson.preview, and Beeson.fitWindow draw a backdrop for t
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html', 'still'));
+  await page.goto(deckUrl('test-deck.html', 'still'));
   await page.waitFor(deckSettled);
   const out = await page.evaluate(`(async () => {
     const el = document.querySelector('.backdrop[data-scene="nest"]');

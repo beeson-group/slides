@@ -85,7 +85,7 @@ const render = (page) => page.evaluate('window.BeesonEditor.render()');
 const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 const js = (v) => JSON.stringify(v);
 
-async function open(platform, deck = 'index.html') {
+async function open(platform, deck = 'test-deck.html') {
   const page = await browser.newPage();
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);

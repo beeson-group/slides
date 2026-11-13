@@ -39,13 +39,13 @@ let saves = 0;
 async function load(t, platform, n = 4) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  const url = `${server.origin}/index.html?edit&still&edit-platform=${platform}`;
+  const url = `${server.origin}/test-deck.html?edit&still&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync('index.html', 'utf8');
+  page.source = readFileSync('test-deck.html', 'utf8');
   const s = await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`);
   assert.deepEqual(s.problems, []);
   await page.evaluate(`Reveal.slide(${n})`);
@@ -101,7 +101,7 @@ const caretAt = (page, selector, needle, k) => page.evaluate(`(() => {
 const ITEM = '.reveal section.present ul > li, .reveal section.present ol > li';
 const PARA = '.reveal section.present > p';
 const ITEMS = [
-  '<li class="fragment" data-fragment-index="1">Dark and light mode: export one file per mode, mark them <code>for-dark</code> and <code>for-light</code>.</li>',
+  '<li class="fragment" data-fragment-index="1">Dark and light mode: export one file per mode, marked <code>for-dark</code> and <code>for-light</code>.</li>',
   '<li class="fragment" data-fragment-index="2">You might have noticed a toggle on the top right: try clicking it on this slide.</li>',
   '<li class="fragment" data-fragment-index="3">You should give black-on-white plots the class <code>invert</code> to invert them in dark mode.</li>',
 ];
@@ -243,7 +243,7 @@ for (const platform of PLATFORMS) {
     await selectBoth(page);
     await modShift(page, platform, ...BIGGER);
     await frames(page);
-    assert.equal(await render(page), readFileSync('index.html', 'utf8'), 'Bigger does not set Body on every block');
+    assert.equal(await render(page), readFileSync('test-deck.html', 'utf8'), 'Bigger does not set Body on every block');
     await undo(page);
     assert.equal(await render(page), page.source);
   });

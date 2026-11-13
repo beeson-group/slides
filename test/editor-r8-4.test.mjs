@@ -37,7 +37,7 @@ let saves = 0;
 
 // the editor on the slide n of a deck served over HTTP, in a window of size, with the Format tab
 // shown unless format is false, and in the mode of the slides given, or else of the system
-async function load(t, platform, { deck = 'index.html', n = 0, size = { width: 1440, height: 900 }, format = true, mode = null, query = '' } = {}) {
+async function load(t, platform, { deck = 'test-deck.html', n = 0, size = { width: 1440, height: 900 }, format = true, mode = null, query = '' } = {}) {
   const page = await browser.newPage(size);
   t.after(() => page.close().catch(() => {}));
   if (mode) await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: mode }] });

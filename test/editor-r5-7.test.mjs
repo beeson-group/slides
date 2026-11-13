@@ -306,7 +306,7 @@ for (const platform of PLATFORMS) {
     // the text of each slide changed to Split alone, while it is shown
     const alone = {};
     for (const title of FOUR) {
-      const page = await editor(platform, 0, 'index.html', { width: 1600, height: 1000 });
+      const page = await editor(platform, 0, 'test-deck.html', { width: 1600, height: 1000 });
       await showSlide(page, title);
       await frames(page);
       await exec(page, 'slide.layout.split');
@@ -314,7 +314,7 @@ for (const platform of PLATFORMS) {
       alone[title] = slideText(await render(page), title);
     }
     assert.ok(alone[FOUR[0]].includes('class="small"'), 'the text of the first slide is not shrunk in a panel');
-    const page = await editor(platform, 0, 'index.html', { width: 1600, height: 1000 });
+    const page = await editor(platform, 0, 'test-deck.html', { width: 1600, height: 1000 });
     await showSlide(page, FOUR.at(-1));
     await frames(page);
     assert.equal(await page.evaluate(`[...document.querySelectorAll('.reveal section h2')].find((h) => h.textContent.startsWith(${JSON.stringify(FOUR[0])})).getBoundingClientRect().height`), 0, 'the first slide is laid out');

@@ -275,10 +275,10 @@ async function stepsPage(platform, width, height) {
   await last?.close().catch(() => {});
   const page = await browser.newPage({ width, height });
   last = page;
-  await page.goto(`${server.origin}/index.html?edit&still&edit-platform=${platform}`);
+  await page.goto(`${server.origin}/test-deck.html?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync('index.html', 'utf8');
+  page.source = readFileSync('test-deck.html', 'utf8');
   assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(page.source)})`)).problems, []);
   await exec(page, 'view.steps');
   await page.evaluate(`Reveal.slide(Reveal.getIndices(document.querySelector('li.fragment').closest('section')).h)`);

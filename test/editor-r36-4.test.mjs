@@ -13,7 +13,7 @@ import { click, press, saveAndReopen } from './helpers/editor.mjs';
 
 const TALK = 'test/pages/editor-r36-4.html';
 const OWN = 'test/pages/editor-r36-4-own.html';
-const DEMO = 'index.html';
+const DEMO = 'test-deck.html';
 const PLATFORMS = ['mac', 'other'];
 const PANEL = '#beeson-edit-panel-format';
 const TILES = '.beeson-backdrop-gallery [data-tile]';

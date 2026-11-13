@@ -28,10 +28,10 @@ const errors = (page) => page.errors.filter((e) => !e.includes('favicon.ico'));
 
 // the editor on index.html, served over HTTP or opened from its file, with query in its URL. the
 // script prepare is run on the page before source is opened
-async function load(t, { query, file = false, source = readFileSync('index.html', 'utf8'), prepare = '' }) {
+async function load(t, { query, file = false, source = readFileSync('test-deck.html', 'utf8'), prepare = '' }) {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  await page.goto(file ? deckUrl('index.html', query) : `${server.origin}/index.html?${query}`);
+  await page.goto(file ? deckUrl('test-deck.html', query) : `${server.origin}/test-deck.html?${query}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
   if (prepare) await page.evaluate(prepare);

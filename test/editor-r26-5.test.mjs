@@ -190,7 +190,7 @@ const SPACES = [
 for (const platform of PLATFORMS) {
   for (const [name, n, selector, at, expected] of SPACES) {
     test(`2: a paste of "break " ${name} gives ${js(expected)} (${platform})`, async (t) => {
-      const page = await load(t, platform, 'index.html', n);
+      const page = await load(t, platform, 'test-deck.html', n);
       await caretAt(page, selector, at);
       await paste(page, 'break ');
       const edited = await roundTrip(page);

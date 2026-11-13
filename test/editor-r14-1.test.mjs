@@ -8,7 +8,7 @@ import { after, before, test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 // the slides of index.html with a list beside a backdrop, and with a figure in a zone
 const STEPS = 2;
 const FIGURES = 4;

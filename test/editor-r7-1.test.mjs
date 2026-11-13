@@ -203,7 +203,7 @@ const grouped = (page) => page.evaluate(`[...document.querySelectorAll('.reveal 
 const DEMO_IMG = '.reveal section.present figure.zone img:not([hidden])';
 for (const platform of PLATFORMS) {
   test(`the readout, the frame, and W and H give one size during and after a resize of a group (${platform})`, async (t) => {
-    const page = await load(t, platform, { deck: 'index.html', n: FIGURES });
+    const page = await load(t, platform, { deck: 'test-deck.html', n: FIGURES });
     await click(page, '.reveal section.present > p');
     await press(page, 'Escape');
     await click(page, DEMO_IMG, { modifiers: 'Shift' });
@@ -254,7 +254,7 @@ const membersOf = (page) =>
 // a group, which Keynote and PowerPoint give as the upper left corner of the group
 for (const platform of PLATFORMS) {
   test(`X and Y give the corner of a group, and a typed X or Y moves the whole group as one entry (${platform})`, async (t) => {
-    const page = await load(t, platform, { deck: 'index.html', n: FIGURES });
+    const page = await load(t, platform, { deck: 'test-deck.html', n: FIGURES });
     await click(page, '.reveal section.present > p');
     await press(page, 'Escape');
     await click(page, DEMO_IMG, { modifiers: 'Shift' });
@@ -303,7 +303,7 @@ for (const platform of PLATFORMS) {
 // box in X and Y, hence X and Y stay empty for a paragraph and an image at different corners
 for (const platform of PLATFORMS) {
   test(`X and Y stay empty for several ungrouped elements at different corners (${platform})`, async (t) => {
-    const page = await load(t, platform, { deck: 'index.html', n: FIGURES });
+    const page = await load(t, platform, { deck: 'test-deck.html', n: FIGURES });
     await click(page, '.reveal section.present > p');
     await press(page, 'Escape');
     await click(page, DEMO_IMG, { modifiers: 'Shift' });

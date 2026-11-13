@@ -68,7 +68,7 @@ test('the units of a CRLF file and of void and nested elements cover the content
 });
 
 test('the units of the demo deck cover its slides byte for byte', () => {
-  const text = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
+  const text = readFileSync(new URL('../test-deck.html', import.meta.url), 'utf8');
   const tokens = tokenize(text);
   const open = tokens.find((t) => t.type === 'start' && t.attrs.some((a) => a.name === 'class' && a.value === 'slides'));
   let depth = 0;

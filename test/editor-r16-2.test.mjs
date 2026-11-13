@@ -13,7 +13,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const slideOf = (text, has) => [...text.matchAll(/<section[\s\S]*?<\/section>/g)].findIndex((m) => has(m[0]));
 const SOURCE = readFileSync(DECK, 'utf8');
 const STEPS = slideOf(SOURCE, (s) => s.includes('Show your steps one at a time'));

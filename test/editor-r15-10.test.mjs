@@ -10,7 +10,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { saveAndReopen } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const LAYOUTS = 'test/pages/editor-layouts.html';
 // slide 5 of index.html, with a figure in its zone and without a free place, and the figure slide
 // of editor-layouts.html with a video in its plate

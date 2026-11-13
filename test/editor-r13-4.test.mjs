@@ -10,7 +10,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { center, click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 // the slides of index.html with an equation and with a figure in a zone
 const EQUATIONS = 3;
 const FIGURES = 4;

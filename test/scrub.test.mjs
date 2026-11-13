@@ -9,7 +9,7 @@ async function openDeck(t, query = '') {
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html', query));
+  await page.goto(deckUrl('test-deck.html', query));
   await page.waitFor(deckSettled);
   const mouse = (type, x, y) => page.send('Input.dispatchMouseEvent', { type, x, y, button: type === 'mouseMoved' ? 'none' : 'left', clickCount: 1 });
   const key = (code, k) => page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', windowsVirtualKeyCode: code, key: k })

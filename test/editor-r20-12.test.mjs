@@ -12,7 +12,7 @@ import { serve } from '../scripts/webdriver.mjs';
 import { click, press, type } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const TABLES = 'test/pages/editor-tables.html';
 const TITLE = 'test/pages/editor-r20-12.html';
 const MOD = { mac: 4, other: 2 };

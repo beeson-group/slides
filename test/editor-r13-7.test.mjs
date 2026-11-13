@@ -36,10 +36,10 @@ async function load(t, platform, scheme, { width = 1600, height = 1000 } = {}) {
   t.after(() => page.close().catch(() => {}));
   await page.send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-color-scheme', value: scheme }] });
   await page.send('Storage.clearDataForOrigin', { origin: server.origin, storageTypes: 'local_storage' });
-  await page.goto(`${server.origin}/index.html?edit&still&theme=${scheme}&edit-platform=${platform}`);
+  await page.goto(`${server.origin}/test-deck.html?edit&still&theme=${scheme}&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
-  page.source = readFileSync('index.html', 'utf8');
+  page.source = readFileSync('test-deck.html', 'utf8');
   const s = await page.evaluate(`window.BeesonEditor.open(${js(page.source)})`);
   assert.deepEqual(s.problems, []);
   await frames(page);

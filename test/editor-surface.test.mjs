@@ -156,7 +156,7 @@ for (const platform of PLATFORMS) {
   });
 
   test(`Use Current View writes the camera to the surface of the next slide that shares it (${platform})`, async () => {
-    const page = await deckPage(platform, 0, 'index.html');
+    const page = await deckPage(platform, 0, 'test-deck.html');
     const first = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.surface'))`);
     await page.evaluate(`Reveal.slide(${first})`);
     await frames(page);

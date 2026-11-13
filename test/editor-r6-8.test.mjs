@@ -150,7 +150,7 @@ const GT = ['if len(members) >= 2:', 'if len(members) &gt;= 2:'];
 
 for (const platform of PLATFORMS) {
   test(`a line typed or deleted in a code box shifts its line steps in one entry (${platform})`, async (t) => {
-    const page = await load(t, platform, { deck: 'index.html' });
+    const page = await load(t, platform, { deck: 'test-deck.html' });
     await page.evaluate(`Reveal.slide(Reveal.getIndices(document.querySelector('pre > code').closest('section')).h)`);
     await frames(page);
     const source = page.source;
@@ -187,7 +187,7 @@ for (const platform of PLATFORMS) {
   });
 
   test(`Return in a code box indents the new line as the line before (${platform})`, async (t) => {
-    const page = await load(t, platform, { deck: 'index.html' });
+    const page = await load(t, platform, { deck: 'test-deck.html' });
     await page.evaluate(`Reveal.slide(Reveal.getIndices(document.querySelector('pre > code').closest('section')).h)`);
     await frames(page);
     const text = await page.evaluate(`document.querySelector('.reveal section.present pre > code').textContent`);
@@ -312,7 +312,7 @@ const boxesOf = (page) =>
 
 for (const platform of PLATFORMS) {
   test(`a new text box is put under a list moved down, without an overlap (${platform})`, async (t) => {
-    const page = await load(t, platform, { deck: 'index.html', n: 4 });
+    const page = await load(t, platform, { deck: 'test-deck.html', n: 4 });
     assert.match(await page.evaluate(`document.querySelector('.reveal section.present > ul').getAttribute('style') ?? ''`), /translate/);
     await exec(page, 'insert.text');
     await frames(page);
@@ -411,7 +411,7 @@ const frameAndCaption = (page) => page.evaluate(`(() => {
 
 for (const platform of PLATFORMS) {
   test(`the frame of a figure selected from its image holds its caption (${platform})`, async (t) => {
-    const page = await load(t, platform, { deck: 'index.html', n: 4 });
+    const page = await load(t, platform, { deck: 'test-deck.html', n: 4 });
     // a second click on the image frames its picture alone
     await selectPicture(page, FIGURE_IMG);
     await frames(page);

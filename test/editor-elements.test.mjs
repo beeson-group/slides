@@ -34,7 +34,7 @@ const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 
 // the editor on a deck served over HTTP, where a save is written into the origin private file
 // system
-async function open(platform, deck = 'index.html') {
+async function open(platform, deck = 'test-deck.html') {
   const page = await browser.newPage();
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);

@@ -95,7 +95,7 @@ test('the surface of the demo deck is drawn at each of its stages, live and in t
   const stages = ['flat', 'wells', 'bowl', 'sum', 'extrema', 'cut'];
 
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html', 'still'));
+  await page.goto(deckUrl('test-deck.html', 'still'));
   await page.waitFor(deckSettled);
   const h = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.surface'))`);
   // the label of each mark shown is at the mark, also after a turn of the camera
@@ -131,7 +131,7 @@ test('the surface of the demo deck is drawn at each of its stages, live and in t
   assert.equal(new Set(live.map((s) => s.digest)).size, stages.length);
 
   const print = await browser.newPage();
-  await printView(print, deckUrl('index.html', 'print-pdf&still'));
+  await printView(print, deckUrl('test-deck.html', 'print-pdf&still'));
   const pages = await print.evaluate(surfaces());
   assert.deepEqual(print.errors, []);
   // the last page is the step that restores the dimmed fragments, at the last stage
@@ -152,7 +152,7 @@ test('the marks of the surface are drawn on it or hidden at every step, forward 
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html'));
+  await page.goto(deckUrl('test-deck.html'));
   await page.waitFor(deckSettled);
   const h = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.surface'))`);
   const probe = `Beeson.surfaces.find((s) => s.el.closest('section') === Reveal.getCurrentSlide()).probe()`;
@@ -232,7 +232,7 @@ test('the marks of a surface are dimmed and colored by data-surface-marks, data-
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html', 'still'));
+  await page.goto(deckUrl('test-deck.html', 'still'));
   await page.waitFor(deckSettled);
   const h = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('h2')?.textContent === ${JSON.stringify(MARKED)})`);
 
@@ -260,7 +260,7 @@ test('the marks of a surface are dimmed and colored by data-surface-marks, data-
   // changed in the frame of the step, and they reach their targets in a few time constants of 0.15 s.
   // the page is set to motion, since a runner may prefer reduced motion, under which the marks jump
   const live = await browser.newPage({ motion: true });
-  await live.goto(deckUrl('index.html'));
+  await live.goto(deckUrl('test-deck.html'));
   await live.waitFor(deckSettled);
   await live.evaluate(`Reveal.slide(${h}, 0, 3)`);
   await live.waitFor(`(${marked}).settled`);
@@ -279,7 +279,7 @@ test('a surface takes the camera of the surface with the same attributes on the 
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html'));
+  await page.goto(deckUrl('test-deck.html'));
   await page.waitFor(deckSettled);
   const index = (title) => `[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('h2')?.textContent === ${JSON.stringify(title)})`;
   const h = await page.evaluate(index(TITLE)), next = await page.evaluate(index(MARKED));

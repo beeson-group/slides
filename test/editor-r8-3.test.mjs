@@ -76,7 +76,7 @@ const canvasOf = (page) => page.evaluate('(() => { const v = window.BeesonEditor
 
 // the editor on the slide n of a deck served over HTTP, in a window of 1600 by 1000 px as in the
 // shoot of the council, with the Format tab shown
-async function load(t, platform, { deck = 'index.html', n = FIGURE, size = { width: 1600, height: 1000 } } = {}) {
+async function load(t, platform, { deck = 'test-deck.html', n = FIGURE, size = { width: 1600, height: 1000 } } = {}) {
   const page = await browser.newPage(size);
   t.after(() => page.close().catch(() => {}));
   const url = `${server.origin}/${deck}?edit&still&edit-platform=${platform}`;

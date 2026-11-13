@@ -33,7 +33,7 @@ const near = (a, b, what, tol = 1) => assert.ok(Math.abs(a - b) <= tol, `${what}
 let saves = 0;
 
 // the editor on slide n of deck, served over HTTP, with the storage of the origin emptied
-async function load(t, platform, n, deck = 'index.html') {
+async function load(t, platform, n, deck = 'test-deck.html') {
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
   const url = `${server.origin}/${deck}?edit&still&theme=light&edit-platform=${platform}`;

@@ -49,7 +49,7 @@ async function openDeck(t, theme) {
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage();
-  await page.goto(deckUrl('index.html', `theme=${theme}`));
+  await page.goto(deckUrl('test-deck.html', `theme=${theme}`));
   await page.waitFor(deckSettled);
   await page.evaluate(motion);
   return page;
@@ -126,7 +126,7 @@ test('every animation of a slide plays on after a flip of the mode, with the key
   const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
   const kinds = new Set();
   // the demo deck does not have a plot, hence a plot is taken from a test deck
-  for (const deck of ['index.html', 'test/pages/plot-reveals.html']) {
+  for (const deck of ['test-deck.html', 'test/pages/plot-reveals.html']) {
     await page.goto(deckUrl(deck, 'theme=dark'));
     await page.waitFor(deckSettled);
     const count = await page.evaluate(`document.querySelectorAll('.reveal .slides > section').length`);
@@ -213,7 +213,7 @@ test('a traced backdrop is drawn on under the old view of a flip, in both direct
   const browser = await launch();
   t.after(() => browser.close());
   const page = await browser.newPage({ motion: true });
-  await page.goto(deckUrl('index.html', 'theme=dark'));
+  await page.goto(deckUrl('test-deck.html', 'theme=dark'));
   await page.waitFor(deckSettled);
   const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
   const index = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('section.figure .backdrop[data-strands="demo/broucke-sample.js"]'))`);

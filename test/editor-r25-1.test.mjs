@@ -11,7 +11,7 @@ import { serve } from '../scripts/webdriver.mjs';
 import { click, saveAndReopen } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const BACKDROP = [...readFileSync(LAYOUTS, 'utf8').matchAll(/<section[\s\S]*?<\/section>/g)].findIndex((m) => m[0].includes('A figure slide with a backdrop'));
 const PANEL = '#beeson-edit-panel-format';

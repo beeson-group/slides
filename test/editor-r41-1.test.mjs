@@ -11,7 +11,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { click, drag } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const PLATFORMS = ['mac', 'other'];
 // the indexes of the title slide and of the closing slide in index.html
 const TITLE = 0;

@@ -11,7 +11,7 @@ import { test } from 'node:test';
 import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 
-const deckText = readFileSync('index.html', 'utf8');
+const deckText = readFileSync('test-deck.html', 'utf8');
 const ready = 'window.BeesonEditor && window.BeesonEditor.ready.then(() => true)';
 // the page after a reload of its own, which a test marks before with window.__before. the editor is
 // ready once the message and the marks of the reload are shown, after its file is read again

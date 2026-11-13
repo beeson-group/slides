@@ -31,10 +31,10 @@ const redo = (page) => press(page, 'Mod+Shift+Z').then(() => sleep(250));
 
 // the editor on slide n of the demo deck, served over HTTP
 async function load(t, platform, n = 0) {
-  const text = readFileSync('index.html', 'utf8');
+  const text = readFileSync('test-deck.html', 'utf8');
   const page = await browser.newPage({ width: 1600, height: 1000 });
   t.after(() => page.close().catch(() => {}));
-  const url = `${server.origin}/index.html?edit&still&theme=light&edit-platform=${platform}`;
+  const url = `${server.origin}/test-deck.html?edit&still&theme=light&edit-platform=${platform}`;
   await page.goto(url);
   await page.evaluate('localStorage.clear()');
   await page.goto(url);

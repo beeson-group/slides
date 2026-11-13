@@ -157,7 +157,7 @@ const pasteboard = (page) =>
 
 for (const platform of PLATFORMS) {
   test(`the pasteboard is equal on every side of the slide at each zoom past Fit (${platform})`, async (t) => {
-    const page = await load(t, platform, { deck: 'index.html', size: { width: 1600, height: 1000 } });
+    const page = await load(t, platform, { deck: 'test-deck.html', size: { width: 1600, height: 1000 } });
     for (const z of [1, 2, 3]) {
       await page.evaluate(`window.BeesonEditorShell.stage.setZoom(${z})`);
       await frames(page);
@@ -168,7 +168,7 @@ for (const platform of PLATFORMS) {
   });
 
   test(`Zoom to Selection centers a figure at the edge of the slide, with the pasteboard grown (${platform})`, async (t) => {
-    const page = await load(t, platform, { deck: 'index.html', size: { width: 1600, height: 1000 } });
+    const page = await load(t, platform, { deck: 'test-deck.html', size: { width: 1600, height: 1000 } });
     await page.evaluate(`Reveal.slide(Reveal.getIndices(document.querySelector('.reveal .slides section .zone > img').closest('section')).h)`);
     await frames(page);
     const fig = '.reveal section.present .zone > img';
@@ -449,7 +449,7 @@ const STEP2_LIVE = `[...document.querySelectorAll('.reveal section.present p')].
 
 for (const platform of PLATFORMS) {
   test(`the Formula button inserts an inline formula at the caret of a text (${platform})`, async (t) => {
-    const page = await load(t, platform, { deck: 'index.html', n: EQUATIONS });
+    const page = await load(t, platform, { deck: 'test-deck.html', n: EQUATIONS });
     const at = await page.evaluate(`(() => { const r = ${STEP2_LIVE}.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
     await click(page, at);
     await sleep(150);
@@ -491,7 +491,7 @@ const INSERTS = [
 for (const platform of PLATFORMS) {
   for (const [id, label, html] of INSERTS) {
     test(`${label} is an entry of the history, and the deck is edited while its empty box is on the slide (${platform})`, async (t) => {
-      const page = await load(t, platform, { deck: 'index.html', n: EQUATIONS });
+      const page = await load(t, platform, { deck: 'test-deck.html', n: EQUATIONS });
       const clean = async () => {
         const s = await status(page);
         assert.equal(await page.evaluate(`!!${PENDING}`), false, 'the empty box is on the slide');

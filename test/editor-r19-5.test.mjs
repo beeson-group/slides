@@ -10,7 +10,7 @@ import { deckSettled, launch } from '../scripts/chrome.mjs';
 import { serve } from '../scripts/webdriver.mjs';
 import { center, click, drag, press, type } from './helpers/editor.mjs';
 
-const DECK = 'index.html';
+const DECK = 'test-deck.html';
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
 // slide 5 of the demo deck, with a heading, a paragraph, a list of three items, and a figure
