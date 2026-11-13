@@ -11,7 +11,7 @@ But editing raw HTML sucks.
 So we built our own in-house editor, which combines the best ideas from PowerPoint, Keynote, and Beamer, all in one place.  
 Minus all the bloat.
 
-The slides (and editor) consist of a single [index.html](/index.html) file, which you open with a double click, from any machine (mobile too), without any requirements other than having a browser.
+The slides (and editor) consist of a single [index.html](/index.html) file, which you open with a double click, from any machine (mobile too), without any requirements other than having a browser. They are themed to the [Beeson Group](https://beeson.princeton.edu/)'s colors. 
 
 PRE-RELEASE: The template is currently still in beta. View the most up to date version of the template at [beeson-group.github.io/slides](https://beeson-group.github.io/slides/)
 
