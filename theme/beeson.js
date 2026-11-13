@@ -3478,12 +3478,30 @@
     ...root2 instanceof HTMLElement && root2.matches(".tikz") ? [root2] : [],
     ...root2.querySelectorAll(".tikz")
   ];
+  function syncParts(el) {
+    const shown = /* @__PURE__ */ new Map();
+    for (const span of el.querySelectorAll(":scope > [data-part]")) {
+      const name = span.dataset.part ?? "";
+      shown.set(name, !!shown.get(name) || !span.classList.contains("fragment") || span.classList.contains("visible"));
+    }
+    for (const g of el.querySelectorAll(":scope > svg g[data-part]")) g.classList.toggle("tikz-later", shown.get(g.dataset.part ?? "") === false);
+  }
+  var watcher = typeof MutationObserver === "undefined" ? null : new MutationObserver((records) => {
+    const figures = /* @__PURE__ */ new Set();
+    for (const r of records) {
+      const target = r.target;
+      if (r.type === "childList" && target.matches(".tikz")) figures.add(target);
+      else if (target.parentElement?.matches(".tikz") && target.matches("[data-part]")) figures.add(target.parentElement);
+    }
+    for (const el of figures) syncParts(el);
+  });
   function draw2(el, mode2) {
     const name = el.dataset.figure ?? "";
     const key = `${name} ${mode2}`;
     const state = drawn.get(el);
     if (state?.key === key && el.querySelector(":scope > svg, :scope > .tikz-error")) return;
     const n = state?.n ?? ++instances;
+    if (!state) watcher?.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ["class", "data-part"] });
     drawn.set(el, { n, key });
     for (const old of el.querySelectorAll(":scope > svg, :scope > .tikz-error")) old.remove();
     const output = window.beesonFigures?.[name];
@@ -3500,6 +3518,7 @@
     svg2.style.width = `${output.width}px`;
     svg2.style.height = `${output.height}px`;
     svg2.setAttribute("aria-hidden", "true");
+    syncParts(el);
   }
   function mountFigures(root2, mode2) {
     return Promise.all(figuresUnder(root2).map(async (el) => {

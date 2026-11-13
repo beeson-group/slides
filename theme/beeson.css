@@ -537,6 +537,9 @@ html:not([data-theme="light"]) .reveal .slides section.split .panel { box-shadow
 .reveal .slides section .tikz { display: flex; align-items: center; justify-content: center; }
 /* an output larger than its box is shown smaller as a whole, since its drawing is kept in its viewBox */
 .reveal .slides section .tikz > svg { display: block; flex: none; max-width: 100%; max-height: 100%; }
+/* a part is hidden until its step, with the fade of a fragment */
+.reveal .tikz > svg g[data-part] { transition: opacity 400ms ease-out; }
+.reveal .tikz > svg g.tikz-later { opacity: 0; }
 .reveal .tikz-error { font-size: 28px; color: var(--accent); }
 
 /* figure treatments: a white raster figure framed as paper, and a black-on-white line plot inverted in dark mode */

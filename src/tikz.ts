@@ -3,7 +3,13 @@
 // the output is a classic script loaded by a script element, since a deck opened from a file
 // cannot read the text of a file next to it, and the element is not written into the file. the SVG
 // of the mode of the deck is drawn inline at its size, centered in the box of the div, and shown
-// smaller as a whole when it is larger than the box, see theme/beeson.css
+// smaller as a whole when it is larger than the box, see theme/beeson.css.
+//
+// a part, a <g data-part="name"> of the SVG, is a step of its slide with a child of the div
+// <span class="fragment" data-part="name" data-fragment-index="2"></span>, which reveal.js counts
+// as a fragment. the group is hidden until its span is shown, and shown from then on. the spans are
+// watched for the class visible, which reveal.js sets in the show and in each page of the print
+// view, and which the editor sets on every fragment, hence every part is shown there
 
 /** The value of window.beesonFigures[name], written by figureScript of scripts/figures.mjs. */
 export type FigureOutput = { hash: string; width: number; height: number; scale: number; parts: string[]; inputs: string[]; dark: string; light: string };
@@ -45,6 +51,29 @@ const figuresUnder = (root: ParentNode): HTMLElement[] => [
   ...root.querySelectorAll<HTMLElement>('.tikz'),
 ];
 
+// the parts of el hidden until their step, with the class tikz-later. a part with several spans
+// is shown from the first of them on, and a part without a span is shown from the start
+function syncParts(el: HTMLElement): void {
+  const shown = new Map<string, boolean>();
+  for (const span of el.querySelectorAll<HTMLElement>(':scope > [data-part]')) {
+    const name = span.dataset.part ?? '';
+    shown.set(name, !!shown.get(name) || !span.classList.contains('fragment') || span.classList.contains('visible'));
+  }
+  for (const g of el.querySelectorAll<SVGGElement>(':scope > svg g[data-part]')) g.classList.toggle('tikz-later', shown.get(g.dataset.part ?? '') === false);
+}
+
+// a change of a span of a part, or a span added or taken off, e.g. by the editor. the class of a
+// group set by syncParts is not a change of a span, hence it is passed over
+const watcher = typeof MutationObserver === 'undefined' ? null : new MutationObserver((records) => {
+  const figures = new Set<HTMLElement>();
+  for (const r of records) {
+    const target = r.target as Element;
+    if (r.type === 'childList' && target.matches('.tikz')) figures.add(target as HTMLElement);
+    else if (target.parentElement?.matches('.tikz') && target.matches('[data-part]')) figures.add(target.parentElement);
+  }
+  for (const el of figures) syncParts(el);
+});
+
 /** Draws the figure el in mode from its output, or the error of a figure without one, in place of what it showed. */
 function draw(el: HTMLElement, mode: Mode): void {
   const name = el.dataset.figure ?? '';
@@ -52,6 +81,7 @@ function draw(el: HTMLElement, mode: Mode): void {
   const state = drawn.get(el);
   if (state?.key === key && el.querySelector(':scope > svg, :scope > .tikz-error')) return;
   const n = state?.n ?? ++instances;
+  if (!state) watcher?.observe(el, { childList: true, subtree: true, attributes: true, attributeFilter: ['class', 'data-part'] });
   drawn.set(el, { n, key });
   for (const old of el.querySelectorAll(':scope > svg, :scope > .tikz-error')) old.remove();
   const output = window.beesonFigures?.[name];
@@ -70,6 +100,7 @@ function draw(el: HTMLElement, mode: Mode): void {
   svg.style.width = `${output.width}px`;
   svg.style.height = `${output.height}px`;
   svg.setAttribute('aria-hidden', 'true');
+  syncParts(el);
 }
 
 /**
