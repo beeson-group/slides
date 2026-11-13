@@ -349,6 +349,9 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section .zone > svg,
 .reveal .slides section .zone > video { display: block; width: 100%; height: 100%; object-fit: contain; }
 .reveal .slides section tycho-viewer.zone { display: block; }
+/* the labels of a viewer inherit the face of the slide, and the recordings of the PowerPoint export
+   set them in this face as well, see scripts/scenes.mjs */
+.reveal tycho-viewer { --tycho-font: "Latin Modern Roman", "STIX Two Text", Georgia, "Times New Roman", serif; }
 /* a viewer in a zone or a plate fills it, as a video does, and so does its still in the print view, see src/print.ts */
 .reveal .slides section .zone > tycho-viewer,
 .reveal .slides section .zone > .viewer-still,
