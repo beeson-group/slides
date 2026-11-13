@@ -132,6 +132,35 @@ test('a page opened with motion is shown without reduced motion', { timeout: 600
   assert.equal(await page.evaluate(`matchMedia('(prefers-reduced-motion: no-preference)').matches`), true);
 });
 
+// on a Windows runner of GitHub, about one page in a few thousand is refused one of its files with
+// net::ERR_NO_BUFFER_SPACE, while ports and memory are free. the page of this test reports the
+// error at its first load only
+test('a page that is refused a file with net::ERR_NO_BUFFER_SPACE is loaded again', { timeout: 60000 }, async (t) => {
+  const { serve } = await import('../scripts/webdriver.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'slides-refused-'));
+  writeFileSync(join(root, 'page.html'), `<!doctype html><script>
+    const loads = Number(localStorage.getItem('loads') ?? 0) + 1;
+    localStorage.setItem('loads', loads);
+    if (loads === 1) console.error('Failed to load resource: net::ERR_NO_BUFFER_SPACE ' + location.origin + '/theme/macros.js');
+    if (new URLSearchParams(location.search).has('other')) console.error('another error');
+  </script>`);
+  const browser = await launch({ offline: false });
+  const server = await serve(root);
+  t.after(async () => {
+    await browser.close();
+    server.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+  const page = await browser.newPage();
+  await page.goto(`${server.origin}/page.html`);
+  assert.equal(await page.evaluate(`localStorage.getItem('loads')`), '2', 'the page is not loaded again');
+  assert.deepEqual(page.errors, []);
+  // another error is kept, and its page is not loaded again
+  await page.goto(`${server.origin}/page.html?other`);
+  assert.equal(await page.evaluate(`localStorage.getItem('loads')`), '3');
+  assert.deepEqual(page.errors, ['console.error: another error']);
+});
+
 // in R7.1, the process of a test file of the editor stayed alive for 20 s to 50 s after its last test,
 // since the stderr pipe of Chrome was held open by chrome_crashpad_handler and GoogleUpdater, which
 // inherit it and outlive Chrome, and close() left a timer of 2 s. the timer is found in every run,
