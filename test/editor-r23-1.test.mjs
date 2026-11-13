@@ -114,9 +114,10 @@ async function selectBlock(page, selector) {
   await frames(page);
 }
 
-// G10. the shape moved between the two slides of the Magic Move is between its two places early in
+// G10. the shape moved between the two slides of the Magic Move is between its two places during
 // the move, and the turned one is between its two angles. the shape left in place stays there at
-// full opacity
+// full opacity. the shapes are read in the page at each frame of the move, since on a slow runner
+// one read sent 160 ms after the move was started was answered after its end
 test('a moved and a turned element glide in a Magic Move of the show, and an element left in place stays', async (t) => {
   const page = await show(t, 0);
   const read = `(() => {
@@ -126,18 +127,28 @@ test('a moved and a turned element glide in a Magic Move of the show, and an ele
     return { moved: box('moved'), still: box('still'), opacity: getComputedStyle(at('still')).opacity, turn: parseFloat(getComputedStyle(at('turned')).rotate) || 0 };
   })()`;
   const from = await page.evaluate(read);
-  await page.evaluate('Reveal.next()');
-  await sleep(160);
-  const mid = await page.evaluate(read);
-  assert.equal(await page.evaluate(`document.querySelector(${js(SLIDE)}).dataset.autoAnimate`), 'running', 'the move has ended before the sample');
-  await sleep(900);
+  const moving = await page.evaluate(`new Promise((done) => {
+    const read = () => ${read};
+    const seen = [];
+    Reveal.next();
+    const start = performance.now();
+    const frame = () => {
+      seen.push(read());
+      if (performance.now() - start < 1060) requestAnimationFrame(frame);
+      else done(seen);
+    };
+    requestAnimationFrame(frame);
+  })`);
   const to = await page.evaluate(read);
   assert.ok(to.moved[0] - from.moved[0] > 100, `the shape is not moved by the slides: ${js([from, to])}`);
+  // the frame in which the moved shape is nearest to the middle of its way
+  const half = (from.moved[0] + to.moved[0]) / 2;
+  const mid = moving.reduce((a, b) => (Math.abs(b.moved[0] - half) < Math.abs(a.moved[0] - half) ? b : a));
   const between = (a, b, v) => v > Math.min(a, b) + 5 && v < Math.max(a, b) - 5;
   assert.ok(between(from.moved[0], to.moved[0], mid.moved[0]) && between(from.moved[1], to.moved[1], mid.moved[1]), `the moved shape is not between its places: ${js([from.moved, mid.moved, to.moved])}`);
   assert.ok(mid.turn > 5 && mid.turn < 85, `the turned shape is not between its angles: ${mid.turn}`);
   assert.equal(to.turn, 90);
-  assert.deepEqual([mid.still, mid.opacity], [from.still, '1'], 'the shape left in place moves or fades');
+  for (const f of moving) assert.deepEqual([f.still, f.opacity], [from.still, '1'], 'the shape left in place moves or fades');
   assert.deepEqual(to.still, from.still);
   assert.deepEqual(errors(page), []);
 });
