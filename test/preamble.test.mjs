@@ -89,18 +89,19 @@ test('an operator and an environment are read', () => {
 });
 
 test('a package is mapped to the extension of MathJax that covers it, and one without an extension is skipped', () => {
+  // the commands of bm and of xspace are macros of theme/mathjax-config.js in every deck
   const p = read([
     '\\usepackage{amsmath, amssymb}',
     '\\usepackage[dvipsnames]{xcolor}',
     '\\usepackage{physics,mathtools}',
-    '\\RequirePackage{bm}',
+    '\\RequirePackage{bm, xspace}',
     '\\usepackage{amsthm}',
     '\\usepackage{tikz}',
     '\\usepackage{siunitx}',
     '\\usepackage{bbm}',
     '\\usepackage{physics}',
   ]);
-  assert.deepEqual(p.packages, ['color', 'physics', 'mathtools', 'boldsymbol']);
+  assert.deepEqual(p.packages, ['color', 'physics', 'mathtools']);
   assert.deepEqual(reasons(p), [
     '6: \\usepackage{tikz} | MathJax does not have an extension for the package tikz',
     '7: \\usepackage{siunitx} | MathJax does not have an extension for the package siunitx',

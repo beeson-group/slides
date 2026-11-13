@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Preamble deck</title>
+<link rel="stylesheet" href="../../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../../theme/beeson.css">
+<script src="tex.js"></script>
+<script src="../../../theme/mathjax-config.js"></script>
+<script src="../../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the deck of test/macros.test.mjs, test/theorems.test.mjs, and test/citations.test.mjs, with the
+     preamble.tex, the references.bib, and the tex.js next to it. in each row of the first slide, a
+     formula written with a definition of the preamble is next to the formula that it stands for.
+     the theorems of the next slides are of the kinds of the preamble, of two usual kinds, and of a
+     kind that is not defined. the citations of the last slides are at steps, of two papers at one
+     place, of a key that is not in the bibliography, in the notes, and on a slide with a footnote -->
+<div class="reveal">
+  <div class="slides">
+    <section>
+      <h2>Macros</h2>
+      <table>
+        <tr data-case="a macro with an argument"><td>\(\vb{x} + \vb{y}\)</td><td>\(\boldsymbol{x} + \boldsymbol{y}\)</td></tr>
+        <tr data-case="a macro of a paper, with ensuremath and xspace"><td>\(\R^3\)</td><td>\(\mathbb{R}^3\)</td></tr>
+        <tr data-case="the bold of the package bm"><td>\(\bm{x}\)</td><td>\(\boldsymbol{x}\)</td></tr>
+        <tr data-case="an optional argument and its default"><td>\(\norm{x} + \norm[1]{y}\)</td><td>\(\lVert x \rVert_{2} + \lVert y \rVert_{1}\)</td></tr>
+        <tr data-case="an operator"><td>\(\sgn x\)</td><td>\(\operatorname{sgn} x\)</td></tr>
+        <tr data-case="an operator with limits"><td>\(\argmin_x f\)</td><td>\(\operatorname*{arg\,min}_x f\)</td></tr>
+        <tr data-case="an environment"><td>\(\begin{pmat} a &amp; b \\ c &amp; d \end{pmat}\)</td><td>\(\begin{pmatrix} a &amp; b \\ c &amp; d \end{pmatrix}\)</td></tr>
+        <tr data-case="a macro of a package"><td>\(\dv{x}{t}\)</td><td>\(\frac{\mathrm{d}x}{\mathrm{d}t}\)</td></tr>
+      </table>
+    </section>
+    <section class="wide">
+      <h2>Theorems</h2>
+      <p class="theorem" data-kind="definition">A periodic orbit \(\gamma\) is hyperbolic if its monodromy matrix has an eigenvalue off the unit circle.</p>
+      <p class="theorem" data-kind="theorem" data-name="stable manifold">Let \(\gamma\) be <em>hyperbolic</em>. Then \(W^s(\gamma)\) is an immersed manifold.</p>
+      <p class="theorem" data-kind="proof">Apply the theorem for maps to the return map of a section through \(\gamma\).</p>
+    </section>
+    <section data-visibility="hidden">
+      <h2>Left out of the show</h2>
+      <p class="theorem" data-kind="lemma">A lemma on a hidden slide is not counted.</p>
+    </section>
+    <section class="wide">
+      <h2>More theorems</h2>
+      <p class="theorem" data-kind="lemma">A lemma is numbered with the theorems.</p>
+      <p class="theorem fragment" data-kind="theorem" data-fragment-index="1">A theorem at a step.</p>
+      <p class="theorem" data-kind="corollary">A usual kind does not have a number.</p>
+      <p class="theorem" data-kind="note">A note is of the remark style.</p>
+      <p class="theorem" data-kind="proof" data-name="Proof of Theorem 3">The name of a proof is its head.</p>
+      <p class="theorem" data-kind="conjecture">A kind that is not defined.</p>
+      <p class="theorem">A theorem without a kind.</p>
+    </section>
+    <section>
+      <h2>Citations</h2>
+      <ul>
+        <li>A heteroclinic connection joins two orbits<cite data-key="koon2000"></cite></li>
+        <li class="fragment" data-fragment-index="1">The same tubes connect halo orbits<cite data-key="gomez2004"></cite></li>
+        <li class="fragment" data-fragment-index="2">Both papers<cite data-key="gomez2004, koon2000"></cite> and a book<cite data-key="szebehely1967"></cite></li>
+        <li>A key that is not in the bibliography<cite data-key="lost1999"></cite></li>
+      </ul>
+      <aside class="notes">A citation in the notes is not numbered<cite data-key="szebehely1967"></cite>.</aside>
+    </section>
+    <section>
+      <h2>Under a footnote</h2>
+      <p>The numbers start at 1 on each slide<cite data-key="gomez2004"></cite>.</p>
+      <div class="foot">Earth–Moon system, with a mass ratio of 0.01215.</div>
+    </section>
+  </div>
+</div>
+<script src="../../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../../theme/vendor/reveal/notes.js"></script>
+<script src="../../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

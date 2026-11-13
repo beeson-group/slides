@@ -135,6 +135,7 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal .slides section .zone,
 .reveal .slides section .run,
 .reveal .slides section .foot,
+.reveal .slides section .refs,
 .reveal .slides section .lockup,
 .reveal .slides section .block,
 .reveal .slides section .sec,
@@ -163,6 +164,17 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal .small { font-size: 36px; line-height: 1.4; color: var(--muted); }
 .reveal em { font-style: italic; }
 .reveal strong { font-weight: 500; }
+/* a theorem is a paragraph whose head, e.g. Lemma 2 (stable manifold)., is written into data-head by
+   src/theorems.ts, with the style of its kind in data-style. as in amsthm, the head is bold, the
+   words of the plain style are italic with an upright emphasis, the head of the remark style and of
+   a proof is italic, and a proof ends with a square at the right. a kind that is not defined is
+   headed by its name in red */
+.reveal p.theorem::before { content: attr(data-head) " "; font-weight: 500; font-style: normal; }
+.reveal p.theorem[data-style="plain"] { font-style: italic; }
+.reveal p.theorem[data-style="plain"] em { font-style: normal; }
+.reveal p.theorem[data-style="remark"]::before { font-weight: inherit; font-style: italic; }
+.reveal p.theorem[data-kind="proof"]::after { content: ""; float: right; box-sizing: border-box; width: 0.5em; height: 0.5em; margin: 0.5em 0 0 0.5em; border: 0.04em solid currentColor; }
+.reveal p.theorem[data-missing]::before { color: var(--red); }
 .reveal a { color: inherit; text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; text-underline-offset: 0.14em; transition: text-decoration-color 200ms ease-out, color 200ms ease-out; }
 .reveal a:hover { color: var(--accent); }
 .reveal sub, .reveal sup { font-size: 0.7em; line-height: 0; }
@@ -276,8 +288,22 @@ html, body, .reveal-viewport { background: var(--bg); }
 
 /* ---- chrome inside the slide ---- */
 .reveal .run { left: 120px; top: 44px; font-size: 22px; font-style: italic; color: var(--muted); }
-.reveal .foot { left: 120px; bottom: 50px; max-width: 1100px; font-size: 28px; line-height: 1.4; color: var(--muted); }
+.reveal .foot, .reveal .refs { left: 120px; bottom: 50px; max-width: 1100px; font-size: 28px; line-height: 1.4; color: var(--muted); }
 .reveal .foot a { text-decoration-thickness: 1px; }
+/* a citation is an empty cite element whose number is written into data-n by src/citations.ts, and
+   a key that is not in the bibliography is drawn in red in place of a number. the references of a
+   slide are in the div refs that src/citations.ts makes, at the line of a footnote, and a footnote
+   is lifted by their height, which is in --refs on the slide. a reference is hidden with the class
+   off until the step of its citation, and it keeps its place */
+.reveal cite[data-key]::after { content: attr(data-n); margin-left: 3px; font-size: 0.55em; line-height: 0; vertical-align: super; font-style: normal; font-weight: 400; color: var(--subtle); }
+.reveal cite[data-missing]::after { color: var(--red); }
+.reveal .foot { bottom: calc(50px + var(--refs, 0px)); }
+.reveal .refs { display: flex; flex-wrap: wrap; column-gap: 44px; }
+.reveal .refs .ref { transition: opacity 400ms ease-out; }
+.reveal .refs .ref.off { opacity: 0; visibility: hidden; }
+.reveal .refs sup { margin-right: 6px; font-size: 0.55em; vertical-align: super; color: var(--subtle); }
+.reveal .refs a { text-decoration: none; }
+.reveal .refs a:hover { text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 1px; }
 .reveal .lockup { height: 72px; width: auto; }
 html:not([data-theme="light"]) .reveal .for-light, html[data-theme="light"] .reveal .for-dark { display: none !important; }
 
@@ -446,7 +472,10 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section.split .panel { left: 0; top: 0; width: 760px; height: 1080px; padding: 120px 80px 0 120px; box-sizing: border-box; background: var(--panel); color: var(--panel-text); }
 .reveal .slides section.split .panel h2 { width: auto; color: inherit; font-size: 64px; margin-bottom: 28px; }
 .reveal .slides section.split .panel p, .reveal .slides section.split .panel li { font-size: 48px; }
-.reveal .slides section.split .panel .foot { color: #7c7c76; }
+.reveal .slides section.split .panel .foot, .reveal .slides section.split > .refs { color: #7c7c76; }
+/* the references of a split slide are on its panel */
+.reveal .slides section.split > .refs { max-width: 560px; }
+.reveal .slides section.split > .refs sup { color: var(--panel-subtle); }
 /* the style Small in the panel, and code in the colors of the panel, which is dark in both modes */
 .reveal .slides section.split .panel .small, .reveal .slides section.split .panel .small li { font-size: 36px; color: var(--panel-text); }
 .reveal .slides section.split .panel code { color: var(--panel-subtle); }
@@ -796,6 +825,7 @@ html.reveal-print .reveal .slides section.section,
 html.reveal-print .reveal .slides section.split { padding: 0 !important; }
 html.reveal-print .reveal .slide-number-pdf { right: 120px; bottom: 50px; font-size: 22px; color: var(--muted); background: transparent; padding: 0; font-family: inherit; }
 html.reveal-print .reveal .slides section .fragment,
+html.reveal-print .reveal .refs .ref,
 html.reveal-print .reveal .slides section video[data-covered],
 html.reveal-print .reveal .slides section video.fragment[data-covered],
 html.reveal-print .reveal .hl-target,
@@ -805,6 +835,7 @@ html.reveal-print .reveal .plot-play { display: none; }
 /* reduced motion: transitions are turned off */
 @media (prefers-reduced-motion: reduce) {
   .reveal .slides section .fragment,
+  .reveal .refs .ref,
   .reveal .slides section video[data-covered],
   .reveal .slides section video.fragment[data-covered],
   .reveal .hl-target,

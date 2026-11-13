@@ -5,14 +5,14 @@
 // it is run by scripts/tex.mjs and by the editor
 
 import { plainText } from './accents.ts';
+import type { Kind, Style } from './kinds.ts';
+
+export { USUAL, kindsOf, type Kind, type Style } from './kinds.ts';
 
 /** A macro in the form of tex.macros of MathJax: the body, the number of arguments, and the default of an optional first argument. */
 export type MacroDef = string | [string, number] | [string, number, string];
 /** An environment in the form of tex.environments of MathJax: the code at its begin and at its end, the number of arguments, and the default of an optional first argument. */
 export type EnvironmentDef = [string, string] | [string, string, number] | [string, string, number, string];
-export type Style = 'plain' | 'definition' | 'remark';
-/** A kind of theorem: the title of its head, its style of amsthm, and the name of its counter, which is null for a kind without a number. */
-export type Kind = { title: string; style: Style; counter: string | null };
 export type Skipped = { file: string; line: number; text: string; reason: string };
 export type Preamble = {
   macros: Record<string, MacroDef>;
@@ -25,21 +25,6 @@ export type Preamble = {
 /** Returns the file that a preamble names in \input, \usepackage, or \documentclass, or null when it is not next to the preamble. */
 export type Resolve = (name: string, kind: 'input' | 'package' | 'class') => { file: string; text: string } | null;
 export type Options = { file?: string; resolve?: Resolve };
-
-const usual = (title: string, style: Style): Kind => ({ title, style, counter: null });
-/** The kinds of theorem of every deck, which are not numbered unless the preamble defines them. */
-export const USUAL: Record<string, Kind> = {
-  theorem: usual('Theorem', 'plain'),
-  lemma: usual('Lemma', 'plain'),
-  proposition: usual('Proposition', 'plain'),
-  corollary: usual('Corollary', 'plain'),
-  definition: usual('Definition', 'definition'),
-  example: usual('Example', 'definition'),
-  remark: usual('Remark', 'remark'),
-  proof: usual('Proof', 'remark'),
-};
-/** The kinds of a deck: the usual ones, replaced and followed by those of its preamble. */
-export const kindsOf = (theorems: Record<string, Kind>): Record<string, Kind> => ({ ...USUAL, ...theorems });
 
 // EXTENSION is the extension of MathJax with the commands of a package of LaTeX. an empty name
 // marks a package whose commands every deck has, from the extension ams or from the theme
@@ -59,7 +44,8 @@ const EXTENSION: Record<string, string> = {
   cancel: 'cancel',
   color: 'color',
   xcolor: 'color',
-  bm: 'boldsymbol',
+  bm: '',
+  xspace: '',
   mhchem: 'mhchem',
   amscd: 'amscd',
   bussproofs: 'bussproofs',

@@ -1,15 +1,21 @@
-// MathJax configuration of a deck. load theme/macros.js, then this file, then
+// MathJax configuration of a deck. load the tex.js of the deck, then this file, then
 // theme/vendor/mathjax/tex-svg.js. the font path is resolved against the URL of this script, hence
 // the same file is used for index.html and for pages in subfolders such as check/
 window.MathJax = {
   loader: {
     // the font of a TeX package is loaded from this folder, in place of the CDN of MathJax
     paths: { fonts: new URL('vendor/mathjax', document.currentScript.src).href },
+    // the extensions for the packages of the preamble. the other ones are loaded at their first macro
+    load: (window.beesonTex?.packages ?? []).map((name) => `[tex]/${name}`),
   },
   tex: {
     inlineMath: [['\\(', '\\)']],
     displayMath: [['\\[', '\\]']],
-    macros: window.beesonMacros ?? {},
+    packages: { '[+]': window.beesonTex?.packages ?? [] },
+    // the macros and the environments of preamble.tex, which npm run tex writes into tex.js, after
+    // three commands of LaTeX that MathJax does not have
+    macros: { ensuremath: ['#1', 1], xspace: '', bm: ['\\boldsymbol{#1}', 1], ...window.beesonTex?.macros },
+    environments: { ...window.beesonTex?.environments },
   },
   output: {
     font: 'mathjax-tex',

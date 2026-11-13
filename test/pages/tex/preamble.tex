@@ -1,0 +1,20 @@
+% the preamble of the deck of test/macros.test.mjs, test/theorems.test.mjs, and test/citations.test.mjs
+\usepackage{physics}
+\usepackage{xspace}
+\usepackage{bm}
+
+\newcommand{\vb}[1]{\boldsymbol{#1}}
+% as in a paper, where the macro is used in the text too
+\newcommand{\R}{\ensuremath{\mathbb{R}}\xspace}
+\newcommand{\norm}[2][2]{\lVert #2 \rVert_{#1}}
+\DeclareMathOperator{\sgn}{sgn}
+\DeclareMathOperator*{\argmin}{arg\,min}
+\newenvironment{pmat}{\begin{pmatrix}}{\end{pmatrix}}
+
+% a lemma is numbered with the theorems, a definition and a note by themselves
+\newtheorem{theorem}{Theorem}
+\newtheorem{lemma}[theorem]{Lemma}
+\theoremstyle{definition}
+\newtheorem{definition}{Definition}
+\theoremstyle{remark}
+\newtheorem{note}{Note}
