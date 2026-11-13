@@ -1519,12 +1519,12 @@
     if (nodes.length) window.MathJax?.typesetClear?.(nodes);
   }
   function fill() {
-    const slides = [...document.querySelectorAll(".reveal .slides section:not(:has(> section))")];
-    const sections = slides.filter((s) => s.classList.contains("section"));
+    const slides2 = [...document.querySelectorAll(".reveal .slides section:not(:has(> section))")];
+    const sections = slides2.filter((s) => s.classList.contains("section"));
     const fresh = [];
     const gone = [];
     let text = "";
-    for (const slide of slides) {
+    for (const slide of slides2) {
       if (slide.classList.contains("section")) text = heading(slide);
       if (slide.classList.contains("closing")) text = APPENDIX;
       const old = slide.querySelector(":scope > div.run[data-generated]");
@@ -1574,6 +1574,115 @@
   }
   function refreshChrome() {
     fill();
+  }
+
+  // src/accents.ts
+  var BASE = String.raw`(?:\{\s*(\\[ij]|[A-Za-z])\s*\}|(\\[ij](?![A-Za-z])|[A-Za-z]))`;
+  var SYMBOL_ACCENT = new RegExp(String.raw`\\([\`'^~"=.])\s*${BASE}`, "g");
+  var LETTER_ACCENT = new RegExp(String.raw`\\([uvHckrdb])(?:\s*\{\s*(\\[ij]|[A-Za-z])\s*\}|\s+(\\[ij](?![A-Za-z])|[A-Za-z]))`, "g");
+
+  // src/reference.ts
+  function referenceParts(reference) {
+    const italic = reference.venue ?? (reference.authors ? "" : reference.title ?? "");
+    const before = reference.authors ? italic ? `${reference.authors}, ` : reference.authors : "";
+    const after = (reference.venue && reference.volume ? ` ${reference.volume}` : "") + (reference.year ? ` (${reference.year})` : "");
+    return [before, italic, after];
+  }
+  var referenceLink = (reference) => reference.doi ? `https://doi.org/${reference.doi}` : reference.url ?? "";
+
+  // src/citations.ts
+  function citedOf(citations, known) {
+    const keys = [];
+    const labels2 = [];
+    const missing = [];
+    for (const cited2 of citations) {
+      const numbers = /* @__PURE__ */ new Set();
+      const lost = /* @__PURE__ */ new Set();
+      for (const key of cited2) {
+        if (!known(key)) {
+          lost.add(key);
+          continue;
+        }
+        if (!keys.includes(key)) keys.push(key);
+        numbers.add(keys.indexOf(key) + 1);
+      }
+      labels2.push([...[...numbers].sort((a, b) => a - b), ...lost].join(","));
+      missing.push(lost.size > 0);
+    }
+    return { labels: labels2, missing, keys };
+  }
+  var keysOf = (cite) => (cite.dataset.key ?? "").split(",").map((key) => key.trim()).filter(Boolean);
+  var citesOf = (slide) => [...slide.querySelectorAll("cite[data-key]")].filter((cite) => !cite.closest("aside.notes"));
+  var refsOf = (slide) => slide.querySelector(":scope > div.refs[data-generated]");
+  var slides = () => [...document.querySelectorAll(".reveal .slides section:not(:has(> section))")];
+  var cited = () => [...document.querySelectorAll(".reveal .slides section > div.refs[data-generated]")].map((refs) => refs.parentElement);
+  var made2 = /* @__PURE__ */ new WeakMap();
+  function referenceEl(number, key, reference) {
+    const ref = document.createElement("span");
+    ref.className = "ref";
+    ref.dataset.key = key;
+    const sup = document.createElement("sup");
+    sup.textContent = String(number);
+    ref.append(sup);
+    const [before, italic, after] = referenceParts(reference);
+    const venue = document.createElement("em");
+    venue.textContent = italic;
+    const link = referenceLink(reference);
+    let words3 = ref;
+    if (link) {
+      const a = document.createElement("a");
+      a.href = link;
+      a.target = "_blank";
+      a.rel = "noopener";
+      ref.append(a);
+      words3 = a;
+    }
+    words3.append(before, ...italic ? [venue] : [], after);
+    return ref;
+  }
+  function mount2(slide, references) {
+    const cites = citesOf(slide);
+    const { labels: labels2, missing, keys } = citedOf(cites.map(keysOf), (key) => Object.hasOwn(references, key));
+    cites.forEach((cite, k) => {
+      if (cite.dataset.n !== labels2[k]) cite.dataset.n = labels2[k];
+      cite.toggleAttribute("data-missing", missing[k]);
+    });
+    let refs = refsOf(slide);
+    if (!keys.length) {
+      refs?.remove();
+      slide.style.removeProperty("--refs");
+      return;
+    }
+    const text = JSON.stringify(keys.map((key) => [key, references[key]]));
+    if (!refs) {
+      refs = document.createElement("div");
+      refs.className = "refs";
+      refs.dataset.generated = "";
+      slide.append(refs);
+    }
+    if (made2.get(refs) !== text) {
+      refs.replaceChildren(...keys.map((key, k) => referenceEl(k + 1, key, references[key])));
+      made2.set(refs, text);
+    }
+  }
+  function sync(slide) {
+    const refs = refsOf(slide);
+    if (!refs) return;
+    const shown = /* @__PURE__ */ new Set();
+    for (const cite of citesOf(slide)) if (getComputedStyle(cite).visibility !== "hidden") for (const key of keysOf(cite)) shown.add(key);
+    for (const ref of refs.children) ref.classList.toggle("off", !shown.has(ref.dataset.key ?? ""));
+    const height = `${refs.offsetHeight}px`;
+    if (refs.offsetHeight && slide.style.getPropertyValue("--refs") !== height) slide.style.setProperty("--refs", height);
+  }
+  function mountCitations() {
+    const references = window.beesonTex?.references ?? {};
+    for (const slide of slides()) {
+      mount2(slide, references);
+      sync(slide);
+    }
+  }
+  function syncCitations(slide) {
+    for (const s of slide ? [slide] : cited()) sync(s);
   }
 
   // src/click.ts
@@ -3393,16 +3502,16 @@
     let zone = band.getBoundingClientRect();
     const build = () => {
       for (const t of ticks) t.el.remove();
-      const slides = deck.getSlides();
+      const slides2 = deck.getSlides();
       const last = Math.max(1, deck.getTotalSlides() - 1);
-      const times = starts(slides.map((s) => s.dataset.timing), deck.getConfig());
-      ticks = slides.map((slide, i) => {
+      const times = starts(slides2.map((s) => s.dataset.timing), deck.getConfig());
+      ticks = slides2.map((slide, i) => {
         const at = Math.min(deck.getSlidePastCount(slide) / last, 1);
         const el = document.createElement("div");
         el.className = "scrub-tick";
         el.style.left = `${at * 100}%`;
         if (i === 0) el.classList.add("first");
-        if (i === slides.length - 1 && slides.length > 1) el.classList.add("last");
+        if (i === slides2.length - 1 && slides2.length > 1) el.classList.add("last");
         const number = document.createElement("span");
         number.textContent = String(deck.getSlidePastCount(slide) + 1);
         el.append(number);
@@ -4582,7 +4691,7 @@ void main() {
       this.settle();
     }
   };
-  function mount2(root2) {
+  function mount3(root2) {
     const out = [];
     for (const el of root2.querySelectorAll(".surface")) {
       const known = CACHE3.get(el);
@@ -4730,20 +4839,20 @@ void main() {
       setTimeout(() => keyFrom = null, 0);
     }, true);
     window.addEventListener("keydown", () => keyFrom = null);
-    const slides = () => deck.getSlides();
+    const slides2 = () => deck.getSlides();
     const here = () => {
       const slide = deck.getCurrentSlide();
       const shown = [...slide.querySelectorAll(".fragment.visible")].map((f) => Number(f.dataset.fragmentIndex)).filter(Number.isFinite);
-      return { slide: slides().indexOf(slide), f: Math.max(-1, ...shown) };
+      return { slide: slides2().indexOf(slide), f: Math.max(-1, ...shown) };
     };
     const before = (at) => {
-      const steps = stepsOf(slides()[at.slide]);
+      const steps = stepsOf(slides2()[at.slide]);
       const k = steps.indexOf(at.f);
       if (k > 0) return { slide: at.slide, f: steps[k - 1] };
-      const prev = slides()[at.slide - 1];
+      const prev = slides2()[at.slide - 1];
       return prev ? { slide: at.slide - 1, f: stepsOf(prev).at(-1) } : null;
     };
-    const delayedAt = (at) => !!at && at.f >= 0 && fragmentsAt(slides()[at.slide], at.f).some(delayed);
+    const delayedAt = (at) => !!at && at.f >= 0 && fragmentsAt(slides2()[at.slide], at.f).some(delayed);
     const same = (a, b) => !!a && !!b && a.slide === b.slide && a.f === b.f;
     const reached2 = /* @__PURE__ */ new Map();
     const byDelay = (at) => reached2.get(`${at.slide}:${at.f}`) ?? delayedAt(before(at));
@@ -4763,7 +4872,7 @@ void main() {
       if (!back) reached2.set(`${now.slide}:${now.f}`, timer);
       if (!back || deck.isOverview()) return;
       if (delayedAt(now)) {
-        held = fragmentsAt(slides()[now.slide], now.f).filter((el) => el.hasAttribute(AUTOSLIDE));
+        held = fragmentsAt(slides2()[now.slide], now.f).filter((el) => el.hasAttribute(AUTOSLIDE));
         for (const el of held) {
           el.setAttribute(HELD, el.getAttribute(AUTOSLIDE));
           el.removeAttribute(AUTOSLIDE);
@@ -5052,18 +5161,18 @@ void main() {
   }
   function initVideos(deck) {
     const speaker2 = deck.isSpeakerNotes();
-    const sync = () => {
+    const sync2 = () => {
       const slide = deck.getCurrentSlide();
       if (slide) syncVideos(slide, speaker2);
     };
     deck.on("slidechanged", (event) => {
       const previous = event.previousSlide;
       if (previous && previous !== deck.getCurrentSlide()) leave(previous);
-      sync();
+      sync2();
     });
-    deck.on("fragmentshown", sync);
-    deck.on("fragmenthidden", sync);
-    sync();
+    deck.on("fragmentshown", sync2);
+    deck.on("fragmenthidden", sync2);
+    sync2();
   }
 
   // src/viewers.ts
@@ -5134,18 +5243,18 @@ void main() {
         if (!running2.has(v)) hold(v);
       });
     }
-    const sync = () => {
+    const sync2 = () => {
       const slide = deck.getCurrentSlide();
       if (slide) stepViewers(slide);
     };
     deck.on("slidechanged", (event) => {
       const previous = event.previousSlide;
       if (previous && previous !== deck.getCurrentSlide()) leave2(previous);
-      sync();
+      sync2();
     });
-    deck.on("fragmentshown", sync);
-    deck.on("fragmenthidden", sync);
-    sync();
+    deck.on("fragmentshown", sync2);
+    deck.on("fragmenthidden", sync2);
+    sync2();
   }
 
   // src/main.ts
@@ -5221,7 +5330,7 @@ void main() {
   function remount() {
     for (const o of mount(document)) if (!backdrops.includes(o)) backdrops.push(o);
     if (document.querySelector(".surface")) {
-      for (const s of mount2(document)) if (!surfaces.includes(s)) surfaces.push(s);
+      for (const s of mount3(document)) if (!surfaces.includes(s)) surfaces.push(s);
     }
     for (const p of mountPlots(document)) if (!plots.includes(p)) plots.push(p);
   }
@@ -5277,6 +5386,7 @@ void main() {
     mountQr(root2);
     mountShapes(root2);
     numberTheorems();
+    mountCitations();
     for (const o of backdrops) if (root2.contains(o.el)) {
       o.fit();
       o.complete();
@@ -5343,10 +5453,12 @@ void main() {
     mountQr(document);
     mountShapes(document);
     numberTheorems();
+    mountCitations();
     markViewers();
     deck.on("pdf-ready", () => {
       completeAll();
       mountShapes(document);
+      mountCitations();
       coverAll(document);
       void typeset2().then(() => applyAll(document));
       syncViewers(get());
@@ -5361,6 +5473,8 @@ void main() {
     await deck.initialize({ ...DEFAULTS, ...editing, ...options, plugins });
     initChrome();
     initSteps(deck);
+    syncCitations();
+    void document.fonts.ready.then(() => syncCitations());
     const { internal } = hooks;
     if (internal) initTimedSteps(deck, forDeck, internal);
     remount();
@@ -5433,10 +5547,12 @@ void main() {
       }
       for (const p of plotsIn(ev.previousSlide)) if (!ev.currentSlide.contains(p.el)) p.leave();
       show(ev.currentSlide);
+      syncCitations();
     });
     const step2 = () => {
       for (const s of surfacesOf(deck.getCurrentSlide())) s.sync(!still2());
       stepPlots(deck.getCurrentSlide());
+      syncCitations(deck.getCurrentSlide());
     };
     deck.on("fragmentshown", step2);
     deck.on("fragmenthidden", step2);

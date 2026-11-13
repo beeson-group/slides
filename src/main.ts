@@ -5,6 +5,7 @@
 
 import { Orbits, mount } from './orbits.ts';
 import { initChrome, refreshChrome } from './chrome.ts';
+import { mountCitations, syncCitations } from './citations.ts';
 import { initClick } from './click.ts';
 import { initCursor, togglePointer } from './cursor.ts';
 import { initFullscreen, toggleFullscreen } from './fullscreen.ts';
@@ -187,6 +188,7 @@ function mountWithin(root: Element): void {
   mountShapes(root);
   // a theorem added to a slide changes the numbers on the slides after it
   numberTheorems();
+  mountCitations();
   for (const o of backdrops) if (root.contains(o.el)) { o.fit(); o.complete(); }
   for (const s of surfaces) if (root.contains(s.el)) { s.fit(); s.sync(false); s.draw(); }
   for (const p of plots) if (root.contains(p.el)) { p.fit(); p.syncSteps(); p.still(); }
@@ -241,17 +243,20 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   initSwitcher();
   // the editor counts the slides of the file, hence every slide is numbered while the deck is edited
   if (!EDITING) markUncounted(document);
-  // the QR codes and the shapes are drawn, and the theorems are numbered, before reveal.js clones
-  // the slides of the print view
+  // the QR codes and the shapes are drawn, and the theorems and the citations are numbered, before
+  // reveal.js clones the slides of the print view
   mountQr(document);
   mountShapes(document);
   numberTheorems();
+  mountCitations();
   // in the print view, a page is cloned per fragment state after ready, and the clones are
   // mounted here. the viewers are numbered before the clones are made
   markViewers();
   deck.on('pdf-ready', () => {
     completeAll();
     mountShapes(document);
+    // each page shows the references of the citations of its step
+    mountCitations();
     coverAll(document);
     void typeset().then(() => applyAll(document));
     syncViewers(get());
@@ -273,6 +278,9 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
 
   initChrome();
   initSteps(deck);
+  // the references are measured once the slides are laid out, and again in the typeface of the deck
+  syncCitations();
+  void document.fonts.ready.then(() => syncCitations());
   // the editor shows every step, and it does not play a delay
   const { internal } = hooks;
   if (internal) initTimedSteps(deck, forDeck, internal);
@@ -345,11 +353,15 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
     }
     for (const p of plotsIn(ev.previousSlide)) if (!ev.currentSlide.contains(p.el)) p.leave();
     show(ev.currentSlide);
+    // every step of a slide before the current one is shown, and none of a slide after it
+    syncCitations();
   });
-  // a step of a slide may set the stage of a surface on it, or the steps of a plot
+  // a step of a slide may set the stage of a surface on it, or the steps of a plot, and it may
+  // show a citation
   const step = () => {
     for (const s of surfacesOf(deck.getCurrentSlide())) s.sync(!still());
     stepPlots(deck.getCurrentSlide());
+    syncCitations(deck.getCurrentSlide());
   };
   deck.on('fragmentshown', step);
   deck.on('fragmenthidden', step);
