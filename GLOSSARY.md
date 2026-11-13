@@ -28,7 +28,7 @@ A rule of slides that is followed by default and may be argued with, as opposed 
 
 A window of the editor that is shown over the deck to ask a question or to give a message, until it is answered or closed.
 
-Avoid "card".
+Avoid "card". The heading over the scrubber of the progress line is not a card either, and its class is `scrub-heading`.
 
 ## Figure box
 
@@ -86,7 +86,7 @@ Avoid "Chapters Table".
 
 The click of the talk at which an element appears, is dimmed, or is hidden, written as a reveal.js fragment.
 
-Avoid "fragment" outside the markup, and avoid "click" and "build".
+Avoid "fragment" outside the markup, and avoid "click" and "build". Avoid "card" for a step in the Steps pane of the editor.
 
 ## Surface point
 
@@ -98,7 +98,7 @@ Avoid "surface mark". The attribute `data-surface-marks` of an old talk is `data
 
 What a surface shows at a step, set on a fragment of its slide.
 
-Avoid "stage". The attribute `data-surface-stage` of an old talk is `data-surface-state`.
+Avoid "stage". The attribute `data-surface-stage` of an old talk is `data-surface-state`. The states `flat`, `wells`, `bowl`, and `sum` of the function `effective-potential` in an old talk are `zero`, `gravitational`, `centrifugal`, and `effective`.
 
 ## Tab
 
@@ -118,7 +118,7 @@ Avoid "panel", the class of the text column of a split slide in an old talk, whi
 
 An element whose text is edited in place in the editor, such as a heading, a paragraph, a list item, a cell of a table, a caption, the footnote, a display of math, a label, or the speaker notes.
 
-Avoid "block".
+Avoid "block". The class `block` of the words of a title or closing slide in an old talk is `title-text`.
 
 ## Tone
 
