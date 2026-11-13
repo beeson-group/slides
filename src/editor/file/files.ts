@@ -220,6 +220,8 @@ export function install(app: App): void {
   // a save in flight, and whether another one was asked for meanwhile
   let saving = false;
   let again = false;
+  // a save after Save as writes the chosen file without a merge
+  let overwrite = false;
   let autosaveTimer = 0;
 
   const problemText = (p: Pairing['problems'][number]): string => `slide ${app.slideNumber(p.slide) ?? '?'}, ${p.tag}: ${p.reason}`;
@@ -263,6 +265,8 @@ export function install(app: App): void {
     if (past) parts.push(`${plural(past, 'text')} run${past === 1 ? 's' : ''} past the slide or into its footnote`);
     if (app.overFigure) parts.push(...coverSentences());
     if (app.autosave && !app.handle && canWrite()) parts.push('autosave starts after the first save');
+    const changed = app.follow?.line();
+    if (changed) parts.push(changed);
     return { text: parts.join('. '), warn: (app.note?.warn ?? false) || problems.length > 0 || app.overflow > 0, title: problems.map(problemText).join('\n') };
   }
 
@@ -342,6 +346,7 @@ export function install(app: App): void {
     const text = await (await handle.getFile()).text();
     app.handle = handle;
     open(text);
+    app.follow.read(text);
     if (app.pairing?.blocks.length) keep(handle);
   }
 
@@ -397,16 +402,6 @@ export function install(app: App): void {
     }
   }
 
-  // the slide shown is kept in the hash through a reload, which reveal.js does not keep up to date
-  // while the deck is edited
-  function keepSlide(): void {
-    const d = app.deck();
-    const current = app.current();
-    if (!d || !current) return;
-    const { h, v } = d.getIndices(current);
-    history.replaceState(history.state, '', `${location.pathname}${location.search}${v ? `#/${h}/${v}` : h ? `#/${h}` : ''}`);
-  }
-
   // the page is loaded again from the file, without the edits and their draft, hence the card of
   // the edits that were not saved is not offered after the reload
   async function revert(): Promise<void> {
@@ -415,7 +410,7 @@ export function install(app: App): void {
     window.clearTimeout(autosaveTimer);
     app.drafts.drop();
     app.dirty = false;
-    keepSlide();
+    keepSlide(app);
     location.reload();
   }
 
@@ -508,10 +503,12 @@ export function install(app: App): void {
       return;
     }
     saving = true;
+    app.follow.begin();
     try {
       await doSave();
     } finally {
       saving = false;
+      app.follow.end();
     }
     if (again) {
       again = false;
@@ -525,13 +522,21 @@ export function install(app: App): void {
       app.report();
       return;
     }
-    const rendered = renderDeck(app.source, app.pairing, mathLookup(), app.tagEdits);
     if (!app.handle && canWrite() && !(await pickTarget(app))) return;
+    // a file changed since it was read, e.g. by an agent, gets the edits merged into it, unless
+    // Save as chose it
+    if (app.handle && !overwrite) {
+      const merged = await app.follow.merge(app.handle);
+      if (merged === 'merged' || merged === 'cancelled') return;
+    }
+    overwrite = false;
+    const rendered = renderDeck(app.source, app.pairing, mathLookup(), app.tagEdits);
     const n = rendered.edits.length;
     const edits = plural(n, 'edit');
     let text: string;
     if (app.handle) {
       const also = await write(app.handle, rendered.text);
+      app.follow.written(rendered.text);
       if (app.handle !== kept) keep(app.handle);
       text = (n ? `Saved ${edits} to ${app.handle.name} at ${clock()}` : `Saved ${app.handle.name} at ${clock()}`) + (also ? `. ${also}` : '');
     } else {
@@ -563,6 +568,7 @@ export function install(app: App): void {
       return;
     }
     if (canWrite() && !(await pickTarget(app))) return;
+    overwrite = canWrite();
     await save();
   }
 
@@ -673,6 +679,16 @@ export function install(app: App): void {
   window.addEventListener('beforeunload', (ev) => { if (app.dirty) ev.preventDefault(); });
 }
 
+// the slide shown is kept in the hash through a reload, which reveal.js does not keep up to date
+// while the deck is edited
+export function keepSlide(app: App): void {
+  const d = app.deck();
+  const current = app.current();
+  if (!d || !current) return;
+  const { h, v } = d.getIndices(current);
+  history.replaceState(history.state, '', `${location.pathname}${location.search}${v ? `#/${h}/${v}` : h ? `#/${h}` : ''}`);
+}
+
 // whether the print view in win can be read by this page, once it is ready to print, after which
 // it is printed. the view is ready as scripts/chrome.mjs waits for it before npm run pdf prints it:
 // a page per step, the fonts, MathJax, and the backdrops loaded, and a frame of each video shown
@@ -720,7 +736,9 @@ export async function fetchSource(app: App): Promise<boolean> {
   try {
     const response = await fetch(location.href.split(/[?#]/)[0], { cache: 'no-store' });
     if (!response.ok) return false;
-    app.files.open(await response.text());
+    const text = await response.text();
+    app.files.open(text);
+    app.follow.read(text);
     return true;
   } catch {
     return false;
