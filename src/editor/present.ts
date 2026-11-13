@@ -383,7 +383,7 @@ export class Presenter {
     clock.setAttribute('aria-label', 'Clock');
     this.options.setAttribute('aria-haspopup', 'dialog');
     this.options.setAttribute('aria-expanded', 'false');
-    this.options.addEventListener('click', () => this.showParts(this.popover.hidden));
+    this.options.addEventListener('click', () => this.showParts(this.popover.hidden !== false));
     const right = make('div', 'group');
     right.append(clock, this.options);
     const top = make('div', 'bar top');
