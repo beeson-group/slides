@@ -1,6 +1,16 @@
 # slides
 
-Our template for HTML slides, built on reveal.js, and themed to the [Beeson Group](https://beeson.princeton.edu/)'s colors (theme `beeson`, available in both dark and light modes). The slides consist of a single [index.html](/index.html) file, which you open with a double click, from any machine (mobile too), without any requirements other than having a browser.
+Our all-in-one tool for building HTML slides, built on reveal.js.
+
+---
+HTML slides are greatly more expressive than any of the alternatives.
+
+But editing raw HTML sucks.
+
+So we built our own in-house editor, which combines the best ideas from PowerPoint, Keynote, and Beamer, all in one place. Minus all the bloat.
+---
+
+The slides (and editor) consist of a single [index.html](/index.html) file, which you open with a double click, from any machine (mobile too), without any requirements other than having a browser.
 
 PRE-RELEASE NOTICE: The template is currently still in beta. View the most up to date version of the template at [beeson-group.github.io/slides](https://beeson-group.github.io/slides/)
 
@@ -22,10 +32,10 @@ To present your slides, click on the Present button at the top of your editor. T
 
 Title, section, and closing slides are never numbered, and the slides after the closing slide default to being the appendix, numbered A1, A2, and so on.
 
-Move the mouse near the bottom edge of the window to magnify the progress line into a scrubber. You can use the scrubber to jump to any numbered slide, forwards or backwards, so you never have to click through your entire presentation to go back to an earlier slide after a question. You can also set the total time you expect your presentation to last (in seconds, as `Beeson.start({ totalTime: 1200 })` at the end of `index.html`): the scrubber will automatically show the target start time for each numbered slide, based on how many steps the slide takes compared to the total presentation steps. You can also edit these timestamps if you know exactly how you want to pace your presentation (the seconds of a slide are its `data-timing`, written by hand or with Play > Rehearse Timings in the editor).
+Move the mouse near the bottom edge of the window to magnify the progress line into a scrubber. You can use the scrubber to jump to any numbered slide, forwards or backwards, so you never have to click through your entire presentation to go back to an earlier slide after a question. You can time a rehearsal of your presentation, setting the total time you expect your presentation to last: the scrubber will then automatically show the target start time for each numbered slide. To access rehersal mode or timestamp settings, open Play > Rehearse Timings while in editor mode.
 
 You can go back to editor mode any time by pressing `e` while in presentation mode.
 
 ## License
 
-The code itself and the `beeson` theme are under the MIT license. The Princeton marks and the group logo in `brand/` are trademarks and are NOT COVERED by this license. See [brand/NOTICE.md](/brand/NOTICE.md) for more information.
+The code itself and the `beeson` theme are [MIT](/LICENSE.md). The Princeton and group logo in `brand/` are trademarks and are NOT COVERED by this license. See [brand/NOTICE.md](/brand/NOTICE.md) for more information.
