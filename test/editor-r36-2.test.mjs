@@ -112,7 +112,7 @@ for (const platform of PLATFORMS) {
     assert.ok(Math.abs(read.h - 876) <= 1, `a typed Width of 601 reads a Height of ${read.h}`);
     assert.deepEqual([read.x, read.y], [1200, 160], 'the typed Width moved the upper left corner of the figure');
     const edited = await render(page);
-    assert.ok(!/<figure class="zone" style="[^"]*translate/.test(edited), 'a translate was written on the figure, whose corner did not move');
+    assert.ok(!/<figure class="figure-box" style="[^"]*translate/.test(edited), 'a translate was written on the figure, whose corner did not move');
     await typeField(page, 'width', 600);
     assert.deepEqual(await fields(page), start);
     near(await boxes(page, 'section.present figure'), first, 'the Width typed back');
@@ -234,7 +234,7 @@ for (const platform of PLATFORMS) {
       assert.equal(typed[id === 'width' ? 'w' : 'h'], value);
       assert.deepEqual([typed.x, typed.y], [start.x, start.y], `a typed ${id} of ${value} reads X ${typed.x} and Y ${typed.y}`);
       const edited = await render(page);
-      const tag = edited.match(/<figure class="zone"[^>]*>/g).at(-1);
+      const tag = edited.match(/<figure class="figure-box"[^>]*>/g).at(-1);
       assert.ok(!/translate/.test(tag), `a translate was written on the figure, whose corner did not move: ${tag}`);
       await typeField(page, id, start[id === 'width' ? 'w' : 'h']);
       assert.deepEqual(await fields(page), start);

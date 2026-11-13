@@ -34,9 +34,9 @@ test('an index is changed in place, with the spacing and the other attributes of
 test('a translation is put into the style, next to the declarations that are there, and taken out again', () => {
   assert.equal(render('<img src="a.png">', { translate: { x: 40, y: -20.25 } }), '<img src="a.png" style="translate: 40px -20px">');
   assert.equal(render('<img src="a.png"/>', { translate: { x: 1, y: 2 } }), '<img src="a.png" style="translate: 1px 2px"/>');
-  assert.equal(render('<div class="zone" style="translate: 40px -20px; opacity: .5">', { translate: { x: 0, y: 8 } }), '<div class="zone" style="opacity: .5; translate: 0px 8px">');
-  assert.equal(render('<div class="zone" style="translate: 40px -20px">', { translate: null }), '<div class="zone">');
-  assert.equal(render('<div class="zone" style="translate: 40px -20px">', { translate: { x: 40, y: -20 } }), null);
+  assert.equal(render('<div class="figure-box" style="translate: 40px -20px; opacity: .5">', { translate: { x: 0, y: 8 } }), '<div class="figure-box" style="opacity: .5; translate: 0px 8px">');
+  assert.equal(render('<div class="figure-box" style="translate: 40px -20px">', { translate: null }), '<div class="figure-box">');
+  assert.equal(render('<div class="figure-box" style="translate: 40px -20px">', { translate: { x: 40, y: -20 } }), null);
   assert.deepEqual(translateIn('color: red; translate: 12px'), { x: 12, y: 0 });
   assert.equal(translateIn('color: red'), null);
 });

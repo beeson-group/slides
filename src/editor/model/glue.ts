@@ -1,11 +1,11 @@
 // connection lines, as the connectors of PowerPoint: each end of a line of commands/line.ts may be
-// glued to an element of its slide, and it then follows every change of the box of the element.
+// attached to an element of its slide, and it then follows every change of the box of the element.
 // the element gets a name in data-anchor, unique on its slide, and the svg of the line names it in
 // data-from for its start and data-to for its end, with the place of the end in the box of the
 // element as two fractions from 0 to 1, e.g. data-to="a1 0 0.5" for the middle of the left edge.
-// a group takes glue as one object, with its name on each member, hence data-anchor is a list of
-// names as data-group is. the theme does not read these attributes. a name is written with the first end glued to its
-// element and taken off with the last. a glued end is put at its place again at the end of each
+// a group takes an attachment as one object, with its name on each member, hence data-anchor is a list of
+// names as data-group is. the theme does not read these attributes. a name is written with the first end attached to its
+// element and taken off with the last. an attached end is put at its place again at the end of each
 // transaction of the history, after each input of typing, and by record() of canvas/drag.ts for a
 // change outside one, in the same entry as the change of the element
 
@@ -26,8 +26,8 @@ export type Glue = { els: Element[]; fx: number; fy: number };
 
 // an end is put at the middle of an edge of the box within this distance of it, in slide px
 export const REACH = 16;
-// the elements that take glue, and the texts that take it once moved as a box
-const TAKES = 'img, video, figure, .zone, .qr, .shape, table, div.math, tycho-viewer';
+// the elements that take an attachment, and the texts that take it once moved as a box
+const TAKES = 'img, video, figure, .figure-box, .qr, .shape, table, div.math, tycho-viewer';
 const TEXTS = 'h1, h2, h3, p, ul, ol, dl, pre, blockquote, .caption';
 const MIDDLES: [number, number][] = [[0.5, 0], [1, 0.5], [0.5, 1], [0, 0.5]];
 
@@ -46,7 +46,7 @@ const shown = (els: Element[]) => {
 };
 const num = (v: number) => String(Math.round(v * 1000) / 1000);
 
-// the name and the place of the glue of an end, or null
+// the name and the place of the attachment of an end, or null
 export function parseEnd(v: string | null): { name: string; fx: number; fy: number } | null {
   const m = /^\s*(\S+)\s+(-?[\d.]+)\s+(-?[\d.]+)\s*$/.exec(v ?? '');
   return m ? { name: m[1], fx: parseFloat(m[2]), fy: parseFloat(m[3]) } : null;
@@ -62,7 +62,7 @@ const translateOf = (el: Element): Translate | null => {
 // mode, or all of them when none is shown
 export const anchorsOf = (slide: Element | null, name: string): Element[] => shown([...(slide?.querySelectorAll(withName(name)) ?? [])]);
 
-// whether el takes glue: a shape, a picture or a figure, a table, a formula, a QR code, a video, and
+// whether el takes an attachment: a shape, a picture or a figure, a table, a formula, a QR code, a video, and
 // a text moved as a box, and not a backdrop, a plate, the chrome, or a line
 export function takesGlue(el: Element): boolean {
   if (el.matches(`${LINE}, .backdrop, .plate, .foot`)) return false;
@@ -91,7 +91,7 @@ export function placeIn(app: App, els: Element[], fx: number, fy: number): Point
   return turn(box, deg, { x: box.left + fx * box.width, y: box.top + fy * box.height });
 }
 
-// the objects of the current slide that take glue outside skip, the topmost first: an element, or
+// the objects of the current slide that take an attachment outside skip, the topmost first: an element, or
 // the members of a group as one object unless the group holds an element of skip
 function objectsOf(app: App, skip: Element[]): Element[][] {
   const near = (a: Element, b: Element) => a === b || a.contains(b) || b.contains(a);
@@ -109,7 +109,7 @@ function objectsOf(app: App, skip: Element[]): Element[][] {
   return out;
 }
 
-// the glue of an end at p in slide px: the topmost object of the current slide that takes glue under
+// the attachment of an end at p in slide px: the topmost object of the current slide that takes an attachment under
 // p, or else the object with the nearest middle of an edge within REACH, outside skip, with p at the
 // middle of its nearest edge within REACH, or at p. at is the point that the end is put at
 export function glueAt(app: App, p: Point, skip: Element[] = []): { glue: Glue; at: Point } | null {
@@ -136,7 +136,7 @@ export function glueAt(app: App, p: Point, skip: Element[] = []): { glue: Glue; 
   return { glue: g, at: turn(box, deg, { x: box.left + g.fx * box.width, y: box.top + g.fy * box.height }) };
 }
 
-// the outline of the element that an end dragged over it is glued to, with the middles of its edges
+// the outline of the element that an end dragged over it is attached to, with the middles of its edges
 let outline: HTMLElement | null = null;
 export function showTarget(app: App, els: Element[] | null): void {
   if (!outline) {
@@ -242,7 +242,7 @@ function tidy(write: Writer, slide: Element | null, name: string): void {
   }
 }
 
-// the end of svg glued to g, or let go with null
+// the end of svg attached to g, or let go with null
 export function setEnd(write: Writer, svg: Element, end: End, g: Glue | null): void {
   const was = parseEnd(svg.getAttribute(attrOf(end)));
   const value = g ? `${nameOf(write, g.els)} ${num(g.fx)} ${num(g.fy)}` : null;
@@ -251,13 +251,13 @@ export function setEnd(write: Writer, svg: Element, end: End, g: Glue | null): v
   if (was) tidy(write, slideOf(svg), was.name);
 }
 
-// the elements of the object of the glue of an end, none for an end without glue
+// the elements of the object of the attachment of an end, none for an end without an attachment
 export function glueOf(svg: Element, end: End): Element[] {
   const g = parseEnd(svg.getAttribute(attrOf(end)));
   return g ? anchorsOf(slideOf(svg), g.name) : [];
 }
 
-// each glued end of the current slide put at its place in the box of its element, and the glue of
+// each attached end of the current slide put at its place in the box of its element, and the attachment of
 // an end whose element is gone taken off. a turned line, and an element that is not laid out, are
 // left as they are
 export function follow(app: App, write: Writer): void {
@@ -284,7 +284,7 @@ export function follow(app: App, write: Writer): void {
   }
 }
 
-// the glue of the moved lines taken off at each end whose element was not moved with them, as a
+// the attachment of the moved lines taken off at each end whose element was not moved with them, as a
 // move of a whole connector in PowerPoint
 function letGo(write: Writer, moved: Element[]): void {
   for (const svg of moved) {
@@ -300,7 +300,7 @@ function letGo(write: Writer, moved: Element[]): void {
 // the patch of the last record() of canvas/drag.ts, to which the nudges of its run are added
 let recent: Patch | null = null;
 
-// the glue after a change of the places of moved, recorded with it by record() of canvas/drag.ts
+// the attachment after a change of the places of moved, recorded with it by record() of canvas/drag.ts
 export function afterMove(app: App, moved: Element[]): Patch {
   const p = new Patch(app);
   letGo(p.write, moved);
@@ -309,13 +309,13 @@ export function afterMove(app: App, moved: Element[]): Patch {
   return p;
 }
 
-// the glued ends followed again after a nudge of the run of the last record()
+// the attached ends followed again after a nudge of the run of the last record()
 export function followAgain(app: App): void {
   if (recent) follow(app, recent.write);
 }
 
-// the copies of one copy of elements glued to each other as their originals are: an end named by
-// a copied line keeps its glue to a copied element, under a name unique on the slide, and the glue
+// the copies of one copy of elements attached to each other as their originals are: an end named by
+// a copied line keeps its attachment to a copied element, under a name unique on the slide, and the attachment
 // to an element that was not copied is taken off, as is the name of a copy that no copied line names
 export function relink(app: App, copies: Element[]): void {
   const write = recorded(app);
@@ -352,8 +352,8 @@ export function relink(app: App, copies: Element[]): void {
   for (const [svg, end, g] of ends) if (g && to.get(g.name) !== g.name) write(svg, { [attrOf(end)]: `${to.get(g.name)} ${num(g.fx)} ${num(g.fy)}` });
 }
 
-// the glue followed at the end of each transaction of the history, in the same entry, and the names
-// that a removed line glued to taken off with it
+// the attachment followed at the end of each transaction of the history, in the same entry, and the names
+// that a removed line attached to taken off with it
 export function install(app: App): void {
   const remove = app.doc.remove.bind(app.doc);
   app.doc.remove = async (el, ...rest) => {
@@ -369,7 +369,7 @@ export function install(app: App): void {
     if (!p.empty) app.history.push({ label: 'glue', undo: () => p.undo(), redo: () => p.redo() });
   });
   // an element pushed by typed words, e.g. a table in the flow under a paragraph that wraps, is
-  // followed in the entry of the typing. a slide without a glued end is not measured
+  // followed in the entry of the typing. a slide without an attached end is not measured
   const typed = new WeakMap<Entry, Patch>();
   app.history.onTyped((entry) => {
     if (!glued(app.current()).length) return;

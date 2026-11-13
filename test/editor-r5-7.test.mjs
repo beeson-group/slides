@@ -1,7 +1,7 @@
 // the fixes of R5.7 on both platforms: every key typed back to back into a new text box, code box,
 // formula, and footnote lands, the Format Painter is dimmed in a code box, the running head of the
 // Slide pane does not leave typeset items of MathJax behind, and a change of layout to Split fits
-// the panel text of every slide changed. each edit of the file is checked byte for byte, after an
+// the text of the text column of every slide changed. each edit of the file is checked byte for byte, after an
 // undo and a redo, and after a save and an open
 
 import assert from 'node:assert/strict';
@@ -37,7 +37,7 @@ async function editor(platform, index = 2, deck = LAYOUTS, size) {
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
   // on a loaded runner, the unsaved edits of the page before are kept in the storage of the browser
-  // before the page is closed, and they would then be offered on a card over the slide
+  // before the page is closed, and they would then be offered on a dialog over the slide
   await page.evaluate('localStorage.clear()');
   page.source = readFileSync(deck, 'utf8');
   const status = await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(page.source)})`);
@@ -277,11 +277,11 @@ const rowOf = (page, title) =>
 const showSlide = (page, title) =>
   page.evaluate(`Reveal.slide(Reveal.getIndices([...document.querySelectorAll('.reveal section h2')].find((h) => h.textContent.startsWith(${JSON.stringify(title)})).closest('section')).h)`);
 
-// the texts of the panel of the current slide that run past its bottom, and the texts marked by
+// the texts of the text column of the current slide that run past its bottom, and the texts marked by
 // overflow.ts
-const panelFit = (page) =>
+const textColumnFit = (page) =>
   page.evaluate(`(() => {
-    const panel = document.querySelector('.reveal section.present > .panel');
+    const panel = document.querySelector('.reveal section.present > .text-column');
     if (!panel) return null;
     const p = panel.getBoundingClientRect();
     const out = [...panel.children].filter((el) => !el.matches('.foot, aside')).filter((el) => el.getBoundingClientRect().bottom > p.bottom + 1).map((el) => el.localName);
@@ -302,7 +302,7 @@ const slideText = (text, title) => text.split('<section').find((t) => t.includes
 const FOUR = ['Show your steps', 'Equations are first', 'Figures are first', 'Code boxes', 'Chapter two', 'Explain concepts', 'Color the terms'];
 
 for (const platform of PLATFORMS) {
-  test(`a change of layout to Split of slides selected in the navigator fits the panel text of each as on the slide shown on ${platform}`, async () => {
+  test(`a change of layout to Split of slides selected in the navigator fits the text of the text column of each as on the slide shown on ${platform}`, async () => {
     // the text of each slide changed to Split alone, while it is shown
     const alone = {};
     for (const title of FOUR) {
@@ -327,10 +327,10 @@ for (const platform of PLATFORMS) {
     await exec(page, 'slide.layout.split');
     await wait(page, 300);
     const split = await render(page);
-    for (const title of FOUR) assert.equal(slideText(split, title), alone[title], `the panel text of ${title} is not fit as on the slide shown`);
+    for (const title of FOUR) assert.equal(slideText(split, title), alone[title], `the text of the text column of ${title} is not fit as on the slide shown`);
     await showSlide(page, FOUR[0]);
     await wait(page, 300);
-    assert.deepEqual(await panelFit(page), { out: [], wrong: [] }, `a text runs past the bottom of the panel of ${FOUR[0]}, or its mark is wrong`);
+    assert.deepEqual(await textColumnFit(page), { out: [], wrong: [] }, `a text runs past the bottom of the panel of ${FOUR[0]}, or its mark is wrong`);
     // the fit is a part of the change of layout, undone and redone with it
     await undo(page);
     assert.equal(await render(page), source);

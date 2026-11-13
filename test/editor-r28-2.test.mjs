@@ -1,5 +1,5 @@
 // the list of backdrops of R28.2 on both platforms: the names of the Family popup, one per drawing
-// of the records of the file and never a value of data-strands-select, and the entry Broucke
+// of the records of the file and never a value of data-trajectories-select, and the entry Broucke
 // Families taken from the first drawing of demo/broucke-sample.js in the deck whose file is found
 
 import assert from 'node:assert/strict';
@@ -24,8 +24,8 @@ const ITEMS = [...FAMILIES, 'Families 7 and 11', 'Families 7 and 11 (Inertial)',
 // the name of the drawing of each slide of the deck NAMES in the Family popup
 const CHECKED = ['Families 7 and 11 (Both Frames)', 'Families 7 and 11 (Both Frames)', 'Families 7 and 11', 'Families 7 and 11 (Both Frames)', 'Family 7 and Family 11 (Inertial)', 'Families 7 and 11 (Thin 1)', 'Families 7 and 11'];
 // the names of the Family popup on the deck SAME, and the name of the drawing of each of its slides
-const SAME_ITEMS = [...FAMILIES, 'Families 7 and 11', 'Families 7 and 11 (Inertial)', 'Families 7 and 11 (Both Frames)', 'No Records'];
-const SAME_CHECKED = ['Families 7 and 11 (Both Frames)', 'Families 7 and 11 (Both Frames)', 'Families 7 and 11', 'Families 7 and 11', 'Families 7 and 11', 'No Records', 'No Records'];
+const SAME_ITEMS = [...FAMILIES, 'Families 7 and 11', 'Families 7 and 11 (Inertial)', 'Families 7 and 11 (Both Frames)', 'No Trajectories'];
+const SAME_CHECKED = ['Families 7 and 11 (Both Frames)', 'Families 7 and 11 (Both Frames)', 'Families 7 and 11', 'Families 7 and 11', 'Families 7 and 11', 'No Trajectories', 'No Trajectories'];
 
 let browser;
 let server;
@@ -124,7 +124,7 @@ const tagOf = (text, heading) => text.match(new RegExp(`${heading.replace(/[.*+?
 
 for (const platform of PLATFORMS) {
   // item 1
-  test(`the Family popup names each drawing once in words, without a value of data-strands-select or empty parentheses (${platform})`, async (t) => {
+  test(`the Family popup names each drawing once in words, without a value of data-trajectories-select or empty parentheses (${platform})`, async (t) => {
     const page = await load(t, platform, NAMES, 0);
     for (const [n, name] of CHECKED.entries()) {
       await page.evaluate(`Reveal.slide(${n})`);
@@ -150,7 +150,7 @@ for (const platform of PLATFORMS) {
     await popupItems(page, 'Family');
     await choose(page, 'Family 7 and Family 11 (Inertial)', page.source);
     const text = await render(page);
-    assert.equal(tagOf(text, '<h2>Both frames'), '<div class="backdrop" data-strands="../../demo/broucke-sample.js" data-strands-select="family=7,frame=pulsating;family=11,frame=inertial" data-strands-color="family" data-strands-ramp="e">');
+    assert.equal(tagOf(text, '<h2>Both frames'), '<div class="backdrop" data-trajectories="../../demo/broucke-sample.js" data-trajectories-select="family=7,frame=pulsating;family=11,frame=inertial" data-trajectories-color="family" data-trajectories-ramp="e">');
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Family');
     assert.equal(await popupText(page, 'Family'), 'Family 7 and Family 11 (Inertial)');
     await undo(page);
@@ -173,7 +173,7 @@ for (const platform of PLATFORMS) {
       assert.deepEqual(items.filter((i) => i[1]).map((i) => i[0]), [name], `slide ${n}`);
       await press(page, 'Escape');
     }
-    assert.deepEqual(await rowNames(page, [0, 2, 5]), ['Backdrop: Broucke Families 7 and 11 (Both Frames)', 'Backdrop: Broucke Families 7 and 11', 'Backdrop: Broucke No Records']);
+    assert.deepEqual(await rowNames(page, [0, 2, 5]), ['Backdrop: Broucke Families 7 and 11 (Both Frames)', 'Backdrop: Broucke Families 7 and 11', 'Backdrop: Broucke No Trajectories']);
   });
 
   test(`a Family item of the records that thin=0|1 draws changes nothing, and Families 7 and 11 writes frame=pulsating (${platform})`, async (t) => {
@@ -185,7 +185,7 @@ for (const platform of PLATFORMS) {
     await popupItems(page, 'Family');
     await choose(page, 'Families 7 and 11', page.source);
     const text = await render(page);
-    assert.equal(tagOf(text, '<h2>Either thin'), '<div class="backdrop" data-strands="../../demo/broucke-sample.js" data-strands-select="frame=pulsating" data-strands-color="family" data-strands-ramp="e">');
+    assert.equal(tagOf(text, '<h2>Either thin'), '<div class="backdrop" data-trajectories="../../demo/broucke-sample.js" data-trajectories-select="frame=pulsating" data-trajectories-color="family" data-trajectories-ramp="e">');
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Family');
     await undo(page);
     assert.equal(await render(page), page.source);
@@ -197,7 +197,7 @@ for (const platform of PLATFORMS) {
     await frames(page);
     await selectBackdrop(page);
     await popupItems(page, 'Family');
-    await choose(page, 'No Records');
+    await choose(page, 'No Trajectories');
     assert.equal(await render(page), text);
   });
 
@@ -212,7 +212,7 @@ for (const platform of PLATFORMS) {
     assert.ok(list.includes('Broucke Families'), list.join(', '));
     await pick(page, 'Broucke Families', page.source);
     const tag = tagOf(await render(page), '<h2>A scene');
-    assert.match(tag, /data-strands="\.\.\/\.\.\/demo\/broucke-sample\.js"/);
+    assert.match(tag, /data-trajectories="\.\.\/\.\.\/demo\/broucke-sample\.js"/);
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Replace Backdrop');
     await undo(page);
     assert.equal(await render(page), page.source);

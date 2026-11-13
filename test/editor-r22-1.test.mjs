@@ -1,7 +1,7 @@
 // the cuts and the View button of R22.1 on both platforms. the accessibility checker and the
 // outline view are cut with their commands, buttons, and menu entries. the View button at the left
 // of the toolbar is a split button whose main part shows and hides the navigator. Light Table is
-// named Chapters Table, Show Guides is cut, and the guides of a slide follow the rulers. the title
+// named Slide Sorter, Show Guides is cut, and the guides of a slide follow the rulers. the title
 // bar does not draw a dash between the name of the file and its state
 
 import assert from 'node:assert/strict';
@@ -15,7 +15,7 @@ const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
 const SECTIONS = [...readFileSync(LAYOUTS, 'utf8').matchAll(/<section[\s\S]*?<\/section>/g)].map((m) => m[0]);
 const MATH = SECTIONS.findIndex((s) => s.includes('<h2>Math, an ordered list, and a zone</h2>'));
-const ZONE = '.reveal .slides section.present figure.zone';
+const FIGURE_BOX = '.reveal .slides section.present figure.figure-box';
 const MATH_TAG = '<section>\n  <h2>Math, an ordered list, and a zone</h2>';
 const VIEW = '.beeson-edit-top [data-command="toolbar.view"]';
 
@@ -132,7 +132,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`the outline view is gone, and the thumbnails, the object list, and the Chapters Table stay (${platform})`, async (t) => {
+  test(`the outline view is gone, and the thumbnails, the object list, and the Slide Sorter stay (${platform})`, async (t) => {
     // the outline view kept in the storage by an earlier editor does not hide the thumbnails
     const page = await load(t, platform, { n: MATH, storage: { 'beeson-outline': '1' } });
     assert.equal(await has(page, 'view.outline'), false);
@@ -178,13 +178,13 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`the arrow of the View button lists Chapters Table, Rulers, and Gridlines with their checks (${platform})`, async (t) => {
+  test(`the arrow of the View button lists Slide Sorter, Rulers, and Gridlines with their checks (${platform})`, async (t) => {
     const page = await load(t, platform, { n: MATH });
     const arrow = '.beeson-edit-split:has(> [data-command="toolbar.view"]) .more';
     await click(page, arrow);
     await frames(page);
     assert.deepEqual(await menuItems(page), [
-      { label: 'Chapters Table', checked: false },
+      { label: 'Slide Sorter', checked: false },
       { label: 'Rulers', checked: false },
       { label: 'Gridlines', checked: false },
     ]);
@@ -195,23 +195,23 @@ for (const platform of PLATFORMS) {
     await click(page, arrow);
     await frames(page);
     assert.deepEqual((await menuItems(page)).map((i) => i.checked), [false, true, false]);
-    await pick(page, 'Chapters Table');
+    await pick(page, 'Slide Sorter');
     await frames(page);
     assert.equal((await state(page, 'view.lightTable')).checked, true);
     assert.ok(await box(page, '.beeson-edit-sorter'));
     // the View menu of the menu bar keeps its entries, apart from the cut ones
     const view = await barMenu(page, 'View');
-    for (const label of ['Navigator', 'Chapters Table', 'Steps', 'Notes', 'Rulers', 'Gridlines']) assert.ok(view.includes(label), `the View menu has no ${label}: ${js(view)}`);
+    for (const label of ['Navigator', 'Slide Sorter', 'Steps', 'Notes', 'Rulers', 'Gridlines']) assert.ok(view.includes(label), `the View menu has no ${label}: ${js(view)}`);
     for (const label of ['Outline', 'Light Table', 'Check Accessibility', 'Show Guides']) assert.ok(!view.includes(label), `the View menu has ${label}`);
     assert.deepEqual(errors(page), []);
   });
 
-  test(`Light Table is named Chapters Table in its command, its table, the keys sheet, and the messages (${platform})`, async (t) => {
+  test(`Light Table is named Slide Sorter in its command, its table, the keys sheet, and the messages (${platform})`, async (t) => {
     const page = await load(t, platform, { n: MATH });
-    assert.equal((await state(page, 'view.lightTable')).label, 'Chapters Table');
+    assert.equal((await state(page, 'view.lightTable')).label, 'Slide Sorter');
     await exec(page, 'view.lightTable');
     await frames(page);
-    assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-sorter').getAttribute('aria-label')`), 'Chapters Table');
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-sorter').getAttribute('aria-label')`), 'Slide Sorter');
     assert.doesNotMatch(await chromeText(page), /light table/i);
     await exec(page, 'view.lightTable');
     await exec(page, 'help.keys');
@@ -223,15 +223,15 @@ for (const platform of PLATFORMS) {
   test(`Show Guides is cut, and the guides are shown and snapped to while the rulers are shown (${platform})`, async (t) => {
     const page = await load(t, platform, { n: MATH });
     assert.equal(await has(page, 'view.guides'), false);
-    // the left edge of the zone, at 1200 slide px, is dragged by 183 slide px toward the guide,
+    // the left edge of the figure box, at 1200 slide px, is dragged by 183 slide px toward the guide,
     // and the translate of the drag is read before an undo
     const move = async () => {
       const k = await page.evaluate(`(() => { const s = document.querySelector('.reveal .slides'); return s.getBoundingClientRect().width / s.offsetWidth; })()`);
-      await selectFigure(page, `${ZONE} > img`);
-      const zone = await box(page, ZONE);
-      await drag(page, { x: zone.left + zone.width / 2, y: zone.top + zone.height / 2 }, { dx: -183 * k, dy: 0, modifiers: 'Shift' });
+      await selectFigure(page, `${FIGURE_BOX} > img`);
+      const figureBox = await box(page, FIGURE_BOX);
+      await drag(page, { x: figureBox.left + figureBox.width / 2, y: figureBox.top + figureBox.height / 2 }, { dx: -183 * k, dy: 0, modifiers: 'Shift' });
       await frames(page);
-      const moved = await page.evaluate(`document.querySelector(${js(ZONE)}).style.translate`);
+      const moved = await page.evaluate(`document.querySelector(${js(FIGURE_BOX)}).style.translate`);
       await page.evaluate('window.BeesonEditor.undo()');
       await frames(page);
       return moved;

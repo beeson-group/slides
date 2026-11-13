@@ -170,7 +170,7 @@ for (const platform of PLATFORMS) {
       await frames(page);
       return rows;
     };
-    const IMAGE = '.reveal section.present figure.zone > img';
+    const IMAGE = '.reveal section.present figure.figure-box > img';
     await context(IMAGE, 'an element');
     await click(page, IMAGE);
     await exec(page, 'arrange.lock');
@@ -252,7 +252,7 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// the deck with an image pair directly in a slide, and a slide with more words than a panel holds
+// the deck with an image pair directly in a slide, and a slide with more words than a text column holds
 const PAIR_DECK = 'test/pages/editor-r8-4.html';
 
 // the start tags of the images of the slide in the text, by their mode
@@ -303,7 +303,7 @@ for (const platform of PLATFORMS) {
       assert.deepEqual({ Lock: keysOf('arrange.lock'), Unlock: keysOf('arrange.unlock'), Rulers: keysOf('view.rulers') }, want);
       if (platform !== 'mac') return;
       // the keys of Keynote and the fallbacks of Safari both reach the page in the headless Chrome
-      const IMAGE = '.reveal section.present figure.zone > img';
+      const IMAGE = '.reveal section.present figure.figure-box > img';
       const locks = browserName === 'safari' ? [['Ctrl+Mod+L', 'Ctrl+Mod+Alt+L'], ['Mod+L', 'Mod+Alt+L']] : [['Mod+L', 'Mod+Alt+L'], ['Ctrl+Mod+L', 'Ctrl+Mod+Alt+L']];
       for (const [lock, unlock] of locks) {
         await click(page, IMAGE);
@@ -327,14 +327,14 @@ for (const platform of PLATFORMS) {
 }
 
 // the start tags of the long paragraph, the note in the style Small, and the list of the slide of
-// the fixture deck with more words than a panel holds
+// the fixture deck with more words than a text column holds
 const fitTags = (text) => ({
   para: text.match(/<p[^>]*>The stable and the unstable/)[0],
   note: text.match(/<p[^>]*>A note in the style Small/)[0],
   list: text.match(/<ul[^>]*>/)[0],
 });
 
-// finding 9: Change Layout to Split set the paragraphs and the lists of an overflowing panel in the
+// finding 9: Change Layout to Split set the paragraphs and the lists of an overflowing text column in the
 // style Small, and a change of layout away from Split left them small. the blocks shrunk by the
 // fit are written without the class, also after an undo and a redo of the change to Split, and a
 // block that was in the style Small before the change to Split keeps it

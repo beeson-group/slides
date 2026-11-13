@@ -82,7 +82,7 @@ const pieces = (page) => page.evaluate(`(() => {
     range.selectNodeContents(n);
     for (const r of range.getClientRects()) if (r.width > 1 && r.height > 1) words.push({ ...px(r), name: owner.localName + ':' + owner.textContent.trim().slice(0, 16) });
   }
-  return { tables: of('table'), figures: of('img, video, .qr, figure, .zone'), words };
+  return { tables: of('table'), figures: of('img, video, .qr, figure, .figure-box'), words };
 })()`);
 const meets = (a, b) => a.left < b.right - 1 && b.left < a.right - 1 && a.top < b.bottom - 1 && b.top < a.bottom - 1;
 const area = (a, b) => Math.max(0, Math.min(a.right, b.right) - Math.max(a.left, b.left)) * Math.max(0, Math.min(a.bottom, b.bottom) - Math.max(a.top, b.top));

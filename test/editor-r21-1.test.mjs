@@ -1,7 +1,7 @@
 // the fixes of R21.1 on both platforms, driven with trusted input: the Text pane formats the words
 // of a selected shape, the alignment of its words reads and sets how they are drawn, an Alt key of
 // a command runs it while a shape is selected, Magic Move pairs a shape with its dimmed copy and a
-// curve by its arrowheads, an outline weight is drawn on a veil, and a press anywhere on the
+// curve by its arrowheads, an outline weight is drawn on a translucent shape, and a press anywhere on the
 // outline of a shape without a fill hits it. each edit is checked byte for byte, after an undo and
 // a redo, and after a save and an open
 
@@ -16,7 +16,7 @@ import { byteExact, click, press, saveAndReopen } from './helpers/editor.mjs';
 const DECK = 'test/pages/editor-r21-1.html';
 const PLATFORMS = ['mac', 'other'];
 const PANEL = '#beeson-edit-panel-format';
-const [WORDS, TRIANGLE, VEILS, FRAME, STEP, CURVE] = [0, 1, 2, 3, 4, 6];
+const [WORDS, TRIANGLE, TRANSLUCENT, FRAME, STEP, CURVE] = [0, 1, 2, 3, 4, 6];
 const SHAPE_P = 'translate: 1100px 400px"><p>Goal</p></div>';
 const PARAGRAPH = 'A paragraph beside a card.';
 
@@ -250,20 +250,20 @@ for (const platform of PLATFORMS) {
   });
 
   test(`V3: an outline of 6 or 8 px set on a veil is drawn, and the Outline control reads the drawn outline of a veil, on ${platform}`, async () => {
-    const page = await shapePage(platform, VEILS);
-    const border = () => page.evaluate(`getComputedStyle(Reveal.getCurrentSlide().querySelector('.shape.veil:not(.equals)')).borderTopWidth`);
+    const page = await shapePage(platform, TRANSLUCENT);
+    const border = () => page.evaluate(`getComputedStyle(Reveal.getCurrentSlide().querySelector('.shape.fill-translucent:not(.equals)')).borderTopWidth`);
     const stroke = () => page.evaluate(`getComputedStyle(Reveal.getCurrentSlide().querySelector('.shape.equals > svg path')).strokeWidth`);
     assert.equal(await border(), '0px');
-    await clickShape(page, '.shape.veil:not(.equals)');
-    assert.deepEqual(await selected(page), ['div.shape.veil']);
+    await clickShape(page, '.shape.fill-translucent:not(.equals)');
+    assert.deepEqual(await selected(page), ['div.shape.fill-translucent']);
     await exec(page, 'shape.weight.8');
     await frames(page);
-    await byteExact(page, [['<div class="shape veil"', '<div class="shape veil weight-8"']]);
+    await byteExact(page, [['<div class="shape fill-translucent"', '<div class="shape fill-translucent weight-8"']]);
     assert.equal(await border(), '8px');
     assert.equal((await state(page, 'shape.weight.8')).checked, true);
     await undo(page);
     await byteExact(page);
-    // a veil without a weight class is drawn without an outline, which the control reads as None
+    // a translucent shape without a weight class is drawn without an outline, which the control reads as None
     assert.equal((await state(page, 'shape.weight.none')).checked, true);
     assert.equal((await state(page, 'shape.weight.3')).checked, false);
     assert.equal((await state(page, 'shape.weight.3')).enabled, false);
@@ -274,7 +274,7 @@ for (const platform of PLATFORMS) {
     await frames(page);
     assert.equal(await stroke(), '6px');
     const { text } = await saveAndReopen(page, `r21-1-v3-${platform}.html`);
-    assert.ok(text.includes('<div class="shape equals veil weight-6"'));
+    assert.ok(text.includes('<div class="shape equals fill-translucent weight-6"'));
     assert.deepEqual(errors(page), []);
   });
 

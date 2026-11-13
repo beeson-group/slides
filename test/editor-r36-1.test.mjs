@@ -15,7 +15,7 @@ import { click, press, saveAndReopen } from './helpers/editor.mjs';
 const PLATFORMS = ['mac', 'other'];
 const MOD = { mac: 4, other: 2 };
 const INDEX = 'test-deck.html';
-// a paragraph and a QR code of 320 px in the flow of slide 1, a paragraph in the panel of slide 2, a
+// a paragraph and a QR code of 320 px in the flow of slide 1, a paragraph in the text column of slide 2, a
 // closing slide, and a heading, a paragraph, a list, and a paragraph without offsets on slide 4
 const FLOW = 'test/pages/editor-r36-1.html';
 
@@ -163,10 +163,10 @@ for (const platform of PLATFORMS) {
     await entry(page, before, 'Duplicate');
   });
 
-  // item 1: a paragraph in the panel of a split slide, i.e. the container of its text column
-  test(`1: a paragraph in the panel of a split slide duplicated is put 20 px off its source (${platform})`, async (t) => {
+  // item 1: a paragraph in the text column of a split slide
+  test(`1: a paragraph in the text column of a split slide duplicated is put 20 px off its source (${platform})`, async (t) => {
     const { page, boxes, select, selection, duplicate } = await load(t, platform, FLOW, 1);
-    const PANEL = ':scope > .panel > p';
+    const PANEL = ':scope > .text-column > p';
     const [p] = await boxes(PANEL);
     await select(PANEL);
     assert.deepEqual(await selection(), ['p']);
@@ -256,11 +256,11 @@ for (const platform of PLATFORMS) {
     await entry(page, before, 'Paste');
   });
 
-  // item 4: a duplicate of the paragraph in the panel after a deleted duplicate takes the place
+  // item 4: a duplicate of the paragraph in the text column after a deleted duplicate takes the place
   // that it freed
   test(`4: a paragraph in the flow duplicated after a deleted duplicate takes the place that it freed (${platform})`, async (t) => {
     const { page, boxes, select, duplicate } = await load(t, platform, FLOW, 1);
-    const PANEL = ':scope > .panel > p';
+    const PANEL = ':scope > .text-column > p';
     const [p] = await boxes(PANEL);
     await select(PANEL);
     await duplicate();

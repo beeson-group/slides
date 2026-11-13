@@ -32,7 +32,7 @@ export type DocHost = {
 // the attributes and the classes of an image of a dark and light pair that are its own, since they
 // name or describe its file or its mode. every other part of a tag edit is written on both images
 const OWN_ATTRS = ['src', 'srcset', 'poster', 'alt'];
-const OWN_CLASSES = ['for-dark', 'for-light', 'paper', 'invert'];
+const OWN_CLASSES = ['for-dark', 'for-light', 'white-figure', 'invert'];
 
 // the part of a normalized edit that is written on the twin of an image as well, or null
 function sharedEdit(e: TagEdit): TagEdit | null {

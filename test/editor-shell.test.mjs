@@ -178,9 +178,9 @@ test('a right-click opens the context menu of a figure, of the slide, and of a s
   const labels = () => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu.context .item .label')].map((l) => l.textContent)`);
   const run = (label) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu.context .item')].find((i) => i.querySelector('.label').textContent === ${JSON.stringify(label)}).click()`);
   // a figure of the slide with the figure
-  await page.evaluate(`Reveal.slide([...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('img.beeson-movable, .zone.beeson-movable, .qr.beeson-movable')))`);
+  await page.evaluate(`Reveal.slide([...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('img.beeson-movable, .figure-box.beeson-movable, .qr.beeson-movable')))`);
   await frames(page);
-  const figure = await page.evaluate(`(() => { const el = [...document.querySelectorAll('.reveal section.present :is(img, .zone, .qr).beeson-movable')].find((e) => e.getBoundingClientRect().width > 40); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
+  const figure = await page.evaluate(`(() => { const el = [...document.querySelectorAll('.reveal section.present :is(img, .figure-box, .qr).beeson-movable')].find((e) => e.getBoundingClientRect().width > 40); const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
   await click(page, figure, { button: 'right' });
   assert.ok((await labels()).includes('Test Element Item'));
   assert.ok(!(await labels()).includes('Test Canvas Item'));

@@ -11,9 +11,9 @@ import { click, drag, editorPage, press, selectFigure } from './helpers/editor.m
 
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 
-// the slide of the demo deck with a paragraph and a figure in a zone
+// the slide of the demo deck with a paragraph and a figure in a figure box
 async function figureSlide(page) {
-  await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .zone > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
+  await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .figure-box > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
   await sleep(200);
 }
 
@@ -24,9 +24,9 @@ const shownFrames = (page) => page.evaluate(`[...document.querySelectorAll('.bee
 // caption while the figure itself is selected
 const boxOf = (page, selector) => page.evaluate(`(() => {
   let el = [...document.querySelectorAll(${JSON.stringify(selector)})].find((e) => e.getBoundingClientRect().width);
-  const caps = el.matches('figure, .zone, .plate') && window.BeesonEditor.selection().includes(el) ? [...el.querySelectorAll(':scope > figcaption, :scope > .caption')].map((c) => c.getBoundingClientRect()).filter((c) => c.width) : [];
+  const caps = el.matches('figure, .figure-box, .plate') && window.BeesonEditor.selection().includes(el) ? [...el.querySelectorAll(':scope > figcaption, :scope > .caption')].map((c) => c.getBoundingClientRect()).filter((c) => c.width) : [];
   const out = (b) => ({ left: Math.min(b.left, ...caps.map((c) => c.left)), top: Math.min(b.top, ...caps.map((c) => c.top)), right: Math.max(b.right, ...caps.map((c) => c.right)), bottom: Math.max(b.bottom, ...caps.map((c) => c.bottom)) });
-  const pic = el.matches('figure, .zone, .plate') ? [...el.querySelectorAll(':scope > img, :scope > video')].find((m) => m.getBoundingClientRect().width) : null;
+  const pic = el.matches('figure, .figure-box, .plate') ? [...el.querySelectorAll(':scope > img, :scope > video')].find((m) => m.getBoundingClientRect().width) : null;
   el = pic ?? el;
   const r = el.getBoundingClientRect();
   const [w, h] = el instanceof HTMLImageElement ? [el.naturalWidth, el.naturalHeight] : el instanceof HTMLVideoElement ? [el.videoWidth, el.videoHeight] : [0, 0];
@@ -45,14 +45,14 @@ test('a click on a button of the status bar keeps the selected figure', async (t
   t.after(() => browser.close());
   const page = await editorPage(browser);
   await figureSlide(page);
-  await click(page, '.reveal section.present .zone > img');
-  const zone = await boxOf(page, '.reveal section.present .zone');
-  assert.ok((await shownFrames(page)).some((f) => around(f, zone)), 'the figure is not selected by a click');
+  await click(page, '.reveal section.present .figure-box > img');
+  const figureBox = await boxOf(page, '.reveal section.present .figure-box');
+  assert.ok((await shownFrames(page)).some((f) => around(f, figureBox)), 'the figure is not selected by a click');
   const steps = await page.evaluate(`(() => { const b = [...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps'); const r = b.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
   await click(page, steps);
   // the pane of the steps narrows the slide, hence the figure is measured again
   await sleep(100);
-  const after = await boxOf(page, '.reveal section.present .zone');
+  const after = await boxOf(page, '.reveal section.present .figure-box');
   assert.ok((await shownFrames(page)).some((f) => around(f, after)), 'the selection is cleared by a click on Steps');
   assert.deepEqual(page.errors, []);
 });
@@ -67,17 +67,17 @@ test('during a drag of a figure, the solid frame is on the figure and not on the
   await page.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }))`);
   const p = await boxOf(page, '.reveal section.present p');
   assert.ok((await shownFrames(page)).some((f) => around(f, p)), 'the paragraph is not selected');
-  await drag(page, '.reveal section.present .zone > img', { dx: 40, dy: 30, modifiers: 'Alt', hold: true });
-  const zone = await boxOf(page, '.reveal section.present .zone');
+  await drag(page, '.reveal section.present .figure-box > img', { dx: 40, dy: 30, modifiers: 'Alt', hold: true });
+  const figureBox = await boxOf(page, '.reveal section.present .figure-box');
   const frames = await shownFrames(page);
   assert.equal(frames.some((f) => around(f, p)), false, 'the frame is left on the paragraph during the drag');
-  assert.ok(frames.some((f) => around(f, zone)), 'the dragged figure does not have a frame');
+  assert.ok(frames.some((f) => around(f, figureBox)), 'the dragged figure does not have a frame');
   assert.deepEqual(page.errors, []);
 });
 
 const P = '.reveal section.present > p';
-const ZONE = '.reveal section.present .zone';
-const IMG = '.reveal section.present .zone > img';
+const FIGURE_BOX = '.reveal section.present .figure-box';
+const IMG = '.reveal section.present .figure-box > img';
 // the selectors whose element has a solid frame, among those given
 async function framed(page, selectors) {
   const frames = await shownFrames(page);
@@ -120,18 +120,18 @@ for (const platform of ['mac', 'other']) {
     const p = await boxOf(page, P);
     await click(page, { x: p.right + 3, y: (p.top + p.bottom) / 2 });
     await click(page, IMG, { modifiers: 'Shift' });
-    assert.deepEqual(await framed(page, [P, ZONE]), [P, ZONE], 'Shift-click does not add the figure');
+    assert.deepEqual(await framed(page, [P, FIGURE_BOX]), [P, FIGURE_BOX], 'Shift-click does not add the figure');
     await click(page, IMG, { modifiers: 'Shift' });
-    assert.deepEqual(await framed(page, [P, ZONE]), [P], 'a second Shift-click does not remove the figure');
+    assert.deepEqual(await framed(page, [P, FIGURE_BOX]), [P], 'a second Shift-click does not remove the figure');
     await click(page, IMG, { modifiers: 'Mod' });
-    assert.deepEqual(await framed(page, [P, ZONE]), [P, ZONE], 'the command modifier does not add the figure');
+    assert.deepEqual(await framed(page, [P, FIGURE_BOX]), [P, FIGURE_BOX], 'the command modifier does not add the figure');
     // a marquee from the margin to the list touches the paragraph and the list, not the heading
     await click(page, await margin(page));
     assert.equal((await shownFrames(page)).length, 0, 'a click on an empty point keeps the selection');
     const ul = await boxOf(page, '.reveal section.present > ul');
     const from = await margin(page);
     await drag(page, from, { dx: p.left + 40 - from.x, dy: ul.top + 10 - from.y });
-    assert.deepEqual(await framed(page, ['.reveal section.present > h2', P, '.reveal section.present > ul', ZONE]), [P, '.reveal section.present > ul']);
+    assert.deepEqual(await framed(page, ['.reveal section.present > h2', P, '.reveal section.present > ul', FIGURE_BOX]), [P, '.reveal section.present > ul']);
     assert.deepEqual(page.errors, []);
   });
 
@@ -140,7 +140,7 @@ for (const platform of ['mac', 'other']) {
     t.after(() => browser.close());
     const page = await editorPage(browser, { query });
     await figureSlide(page);
-    const all = ['h2', 'p', 'ul', '.zone'].map((s) => `.reveal section.present > ${s}`);
+    const all = ['h2', 'p', 'ul', '.figure-box'].map((s) => `.reveal section.present > ${s}`);
     await click(page, await margin(page));
     await press(page, 'Mod+A');
     assert.deepEqual(await framed(page, all), all, `${platform === 'mac' ? '⌘A' : 'Ctrl+A'} does not select every element`);
@@ -191,12 +191,12 @@ test('a drag of two elements writes two translate declarations, undone as one en
   await selectFigure(page, IMG);
   await click(page, { x: p.right + 3, y: (p.top + p.bottom) / 2 }, { modifiers: 'Shift' });
   await drag(page, IMG, { dx: -30, dy: 40, modifiers: 'Alt' });
-  const [tp, tz] = await translates(page, [P, ZONE]);
+  const [tp, tz] = await translates(page, [P, FIGURE_BOX]);
   assert.match(tp, /^-?\d+px \d+px$/);
   assert.equal(tp, tz, 'the two elements are not moved by the same offset');
   const text = await page.evaluate('window.BeesonEditor.render()');
   assert.ok(text.includes(`<p style="translate: ${tp}">Export`), 'the translate of the paragraph is not written');
-  assert.ok(text.includes(`<figure class="zone" style="translate: ${tz}">`), 'the translate of the figure is not written');
+  assert.ok(text.includes(`<figure class="figure-box" style="translate: ${tz}">`), 'the translate of the figure is not written');
   await page.evaluate('window.BeesonEditor.undo()');
   assert.equal(await page.evaluate('window.BeesonEditor.render()'), page.source, 'one undo does not undo the drag of both');
   assert.deepEqual(page.errors, []);
@@ -213,7 +213,7 @@ for (const size of [{ width: 1920, height: 1080 }, { width: 1280, height: 800 }]
     await figureSlide(page);
     await click(page, IMG);
     await click(page, IMG);
-    const img = await boxOf(page, '.reveal section.present .zone > img');
+    const img = await boxOf(page, '.reveal section.present .figure-box > img');
     const before = await page.evaluate(`(() => { const img = [...document.querySelectorAll(${JSON.stringify(IMG)})].find((el) => el.getBoundingClientRect().width); return img.naturalWidth / img.naturalHeight; })()`);
     await drag(page, '.beeson-grip[data-handle="se"]', { dx: -80, dy: -10, modifiers: 'Meta', hold: true });
     const readout = await page.evaluate(`(() => { const o = document.querySelector('.beeson-offset'); return o && !o.hidden && getComputedStyle(o).display !== 'none' ? o.textContent : null; })()`);

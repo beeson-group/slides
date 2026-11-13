@@ -149,7 +149,7 @@ for (const platform of PLATFORMS) {
     await frames(page);
     assert.equal(await render(page), page.source);
     for (const value of ['broucke', 'logo']) {
-      await exec(page, 'backdrop.scene', { value });
+      await exec(page, 'backdrop.builtIn', { value });
       await frames(page);
       assert.equal(await render(page), page.source, value);
     }
@@ -170,7 +170,7 @@ for (const platform of PLATFORMS) {
     await page.waitFor(`window.BeesonEditor.render() !== ${js(page.source)}`);
     await frames(page);
     const text = await render(page);
-    assert.match(text, /<div class="backdrop" data-strands="\.\.\/\.\.\/demo\/broucke-sample\.js" data-strands-select="frame=pulsating,family=7"[^>]*><\/div>\s*<h2>A content slide without a backdrop/);
+    assert.match(text, /<div class="backdrop" data-trajectories="\.\.\/\.\.\/demo\/broucke-sample\.js" data-trajectories-select="frame=pulsating,family=7"[^>]*><\/div>\s*<h2>A content slide without a backdrop/);
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Add Backdrop');
     await undo(page);
     assert.equal(await render(page), page.source);

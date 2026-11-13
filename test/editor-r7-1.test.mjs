@@ -15,7 +15,7 @@ const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
 // the slide of the deck of layouts with an ordered list and a figure with a caption
 const MATH = 3;
-const IMG = '.reveal section.present figure.zone img:not([hidden])';
+const IMG = '.reveal section.present figure.figure-box img:not([hidden])';
 
 let browser;
 let server;
@@ -41,7 +41,7 @@ async function load(t, platform, { deck = LAYOUTS, n = 0, size = { width: 1600, 
   const page = await browser.newPage(size);
   t.after(() => page.close().catch(() => {}));
   // an earlier test that keeps its page open 1 s after its last edit leaves a draft in the storage
-  // of the origin, and the card of this draft then covers the slide of the next page of the deck
+  // of the origin, and the dialog of this draft then covers the slide of the next page of the deck
   await page.send('Storage.clearDataForOrigin', { origin: server.origin, storageTypes: 'local_storage' });
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
@@ -79,7 +79,7 @@ const readoutOf = (page) =>
 
 // item 1 of R7.1: in R6.8, a corner grip of a group of a figure and a paragraph moved by -120 by
 // -90 px gave 1446 × 706 in the readout, the box asked for, while the members reached 1524 × 800,
-// since the height of a zone is set by its layout
+// since the height of a figure box is set by its layout
 for (const platform of PLATFORMS) {
   test(`the readout of a resize of a group gives the size of W and H (${platform})`, async (t) => {
     const page = await load(t, platform, { n: MATH });
@@ -200,7 +200,7 @@ const FIGURES = 4;
 // the image shown of a pair of a dark and a light image, whose figure is added to the selection by
 // a Shift click on it
 const grouped = (page) => page.evaluate(`[...document.querySelectorAll('.reveal section.present [data-group]')].map((e) => e.localName).sort()`);
-const DEMO_IMG = '.reveal section.present figure.zone img:not([hidden])';
+const DEMO_IMG = '.reveal section.present figure.figure-box img:not([hidden])';
 for (const platform of PLATFORMS) {
   test(`the readout, the frame, and W and H give one size during and after a resize of a group (${platform})`, async (t) => {
     const page = await load(t, platform, { deck: 'test-deck.html', n: FIGURES });

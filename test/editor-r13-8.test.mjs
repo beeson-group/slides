@@ -105,7 +105,7 @@ for (const platform of PLATFORMS) {
     const page = await load(t, platform, 10);
     await selectFigure(page, 'video.for-light');
     await exec(page, 'figure.caption');
-    assert.ok(await page.evaluate(`!!Reveal.getCurrentSlide().querySelector('.zone > .caption')`), 'Caption does not show a caption to type into');
+    assert.ok(await page.evaluate(`!!Reveal.getCurrentSlide().querySelector('.figure-box > .caption')`), 'Caption does not show a caption to type into');
     await byteExact(page);
     await sleep(100);
     await page.send('Input.insertText', { text: 'x' });
@@ -118,7 +118,7 @@ for (const platform of PLATFORMS) {
     await exec(page, 'figure.caption');
     await page.evaluate('document.activeElement.blur()');
     await sleep(100);
-    assert.ok(await page.evaluate(`!Reveal.getCurrentSlide().querySelector('.zone > .caption')`), 'an empty caption stays on the page');
+    assert.ok(await page.evaluate(`!Reveal.getCurrentSlide().querySelector('.figure-box > .caption')`), 'an empty caption stays on the page');
     await byteExact(page);
     await byteExact(page);
     await saveAndReopen(page);

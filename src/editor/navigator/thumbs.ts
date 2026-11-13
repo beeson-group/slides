@@ -19,7 +19,7 @@ const CSS = `
 .reveal.beeson-thumb:not([data-theme="light"]) .for-light, .reveal.beeson-thumb[data-theme="light"] .for-dark { display: none !important; }
 .reveal.beeson-thumb[data-theme="dark"] .invert { filter: invert(1) hue-rotate(180deg); }
 .reveal.beeson-thumb[data-theme="light"] .slides section.title::before, .reveal.beeson-thumb[data-theme="light"] .slides section.closing::before { background-image: url("BRAND/lockup-light.png"); }
-.reveal.beeson-thumb:not([data-theme="light"]) .slides section.split .panel { box-shadow: 1px 0 0 var(--line); }
+.reveal.beeson-thumb:not([data-theme="light"]) .slides section.split .text-column { box-shadow: 1px 0 0 var(--line); }
 .reveal.beeson-thumb.no-logo .slides section::after { content: none; }
 .reveal.beeson-thumb.no-lockup .slides section.title::before, .reveal.beeson-thumb.no-lockup .slides section.closing::before { content: none; }
 `;
@@ -130,7 +130,7 @@ export function cloneSlide(slide: Element, scale: number): HTMLElement {
     }
   });
   // a label of a backdrop that is not drawn yet is not placed
-  clone.querySelectorAll<HTMLElement>('.backdrop .lab').forEach((l) => {
+  clone.querySelectorAll<HTMLElement>('.backdrop .label').forEach((l) => {
     if (!l.style.left) l.remove();
   });
   clone.querySelectorAll('tycho-viewer').forEach((v) => {

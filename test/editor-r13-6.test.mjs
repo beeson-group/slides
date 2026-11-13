@@ -133,7 +133,7 @@ async function roundTrip(page, undos = 1) {
 // the part of the file from the h2 of slide 5 to its figure
 const listPart = (text) => {
   const at = text.indexOf('<h2>Figures are first');
-  return text.slice(at, text.indexOf('<figure class="zone">', at));
+  return text.slice(at, text.indexOf('<figure class="figure-box">', at));
 };
 
 // the item "You might..." of slide 5 made the first item of a list nested in "Dark and light..."

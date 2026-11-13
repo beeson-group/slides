@@ -16,7 +16,7 @@ const PLATFORMS = ['mac', 'other'];
 // slide 5 of the demo deck, with a heading, a paragraph, a list of three items, and a figure
 const FIGURES = 4;
 const SLIDE = '.reveal .slides > section.present';
-const IMG = `${SLIDE} figure.zone img.for-dark`;
+const IMG = `${SLIDE} figure.figure-box img.for-dark`;
 
 let browser;
 let server;

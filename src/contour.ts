@@ -1,5 +1,5 @@
 // the level curves of a function sampled on a regular grid, traced with marching squares. used by the
-// zero-velocity curves of the hill backdrop in scenes.ts and by the cut of a surface in surface.ts
+// zero-velocity curves of the hill backdrop in backdrops.ts and by the cut of a surface in surface.ts
 
 /**
  * Returns the curves on which the samples g change sign, each as a list of alternating x and y

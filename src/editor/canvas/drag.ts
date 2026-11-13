@@ -130,7 +130,7 @@ export function record(app: App, label: string, changes: { el: Element; from: Pl
     app.frame(kept.length ? kept : els.filter((el) => el.getClientRects().length && !els.some((o) => o !== el && o.contains(el))));
     app.invalidate('content');
   };
-  // the glued ends of lines follow the moved elements in the same entry
+  // the attached ends of lines follow the moved elements in the same entry
   const glue = afterMove(app, moved.map((c) => c.el));
   app.history.push({ label, undo: () => (glue.undo(), apply('from')), redo: () => (apply('to'), glue.redo()) });
   return moved;
@@ -300,7 +300,7 @@ function cornerOf(app: App, el: Element): { x: number; y: number } {
 }
 
 // the changes of the sizes of els made by change, with the upper left corner of each picture kept
-// where it is, as a typed width of Keynote and PowerPoint keeps it. the layout of a zone or a plate
+// where it is, as a typed width of Keynote and PowerPoint keeps it. the layout of a figure box or a plate
 // puts a picture with a width at another place, and the theme pins the QR code of a closing slide
 // by its lower right corner, hence the offset of its object is changed, as a resize by a grip
 // changes it
@@ -515,7 +515,7 @@ export function install(app: App): void {
     for (const el of els) {
       const up = containerOf(app, el);
       const box = up ? contentRect(up) : null;
-      // a zone around a picture with a width is the box of the picture, which does not snap
+      // a figure box around a picture with a width is the box of the picture, which does not snap
       const v = box && el.matches(RESIZABLE) ? visualRect(el) : null;
       if (box && !(v && Math.abs(v.width - box.width) < 0.5 && Math.abs(v.height - box.height) < 0.5)) frames_.push(toSlide(f, box));
     }
@@ -855,7 +855,7 @@ export function install(app: App): void {
   // figure with its caption or the picture by itself, meets the pointer, and the offset of the
   // pressed element keeps the side of the frame across from the handle in place. the layout of a
   // figure puts the caption under its picture, which can change the margins of the frame, e.g. at
-  // the first width of a picture fitted into its zone, hence the size is fitted again to the
+  // the first width of a picture fitted into its figure box, hence the size is fitted again to the
   // margins measured, up to three times. a picture turned by itself in a figure with a caption is
   // framed upright around both, and the box upright around the picture keeps its aspect
   const resize = (p: Press, ev: PointerEvent, dx: number, dy: number) => {
@@ -1018,7 +1018,7 @@ export function install(app: App): void {
     view.guides = [];
     view.spacing = [];
     // the size that the members reach with the captions under their pictures, as W and H of the
-    // Arrange pane give it, since the layout sets the height of a zone and a text block, which can
+    // Arrange pane give it, since the layout sets the height of a figure box and a text block, which can
     // differ from box
     const reached = toSlide(f, groupFrame(p.els, deg));
     view.readout = { text: wh(reached.width, reached.height), x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
@@ -1120,7 +1120,7 @@ export function install(app: App): void {
       const copies: Element[] = [];
       for (const { el, box } of dropped) {
         const copy = await app.doc.duplicate(el);
-        // before the copy is put where it was dropped, since a plate made a zone is laid out anew
+        // before the copy is put where it was dropped, since a plate made a figure box is laid out anew
         settleCopies(app, [copy]);
         const now = toSlide(frameOf(app), frameRect(copy));
         const t = placeOf(copy).translate ?? { x: 0, y: 0 };

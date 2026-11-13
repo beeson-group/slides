@@ -17,7 +17,7 @@ export type Snap = { dx: number; dy: number; guides: Guide[]; spacing: Spacing[]
 export type Targets = {
   // the other elements of the slide, which are also the neighbors of the equal gaps
   boxes: Box[];
-  // boxes whose edges are lines but which are not neighbors, e.g. the zone around an image
+  // boxes whose edges are lines but which are not neighbors, e.g. the figure box around an image
   frames?: Box[];
   // points that are lines on both axes, e.g. the ends and the middle of a line of commands/line.ts
   points?: { x: number; y: number }[];
@@ -40,8 +40,8 @@ const provided = (): Lines => Object.assign({}, ...providers.map((p) => p()));
 export type Handle = 'nw' | 'n' | 'ne' | 'e' | 'se' | 's' | 'sw' | 'w';
 
 // the edges of the layouts of theme/beeson.css: the margins, the right edges of the narrow,
-// content, and wide columns, the left edge of a zone, the running head, the top of the text, the
-// bottom of a zone, and the bottom of the footnote
+// content, and wide columns, the left edge of a figure box, the running head, the top of the text, the
+// bottom of a figure box, and the bottom of the footnote
 export const LAYOUT_GUIDES: { x: number[]; y: number[] } = { x: [120, 880, 1120, 1200, 1800], y: [44, 120, 920, 1030] };
 
 // two lines closer than this, in slide pixels, are one

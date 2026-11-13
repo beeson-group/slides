@@ -169,9 +169,9 @@ for (const platform of PLATFORMS) {
 
   test(`Zoom to Selection centers a figure at the edge of the slide, with the pasteboard grown (${platform})`, async (t) => {
     const page = await load(t, platform, { deck: 'test-deck.html', size: { width: 1600, height: 1000 } });
-    await page.evaluate(`Reveal.slide(Reveal.getIndices(document.querySelector('.reveal .slides section .zone > img').closest('section')).h)`);
+    await page.evaluate(`Reveal.slide(Reveal.getIndices(document.querySelector('.reveal .slides section .figure-box > img').closest('section')).h)`);
     await frames(page);
-    const fig = '.reveal section.present .zone > img';
+    const fig = '.reveal section.present .figure-box > img';
     await click(page, fig);
     await exec(page, 'zoom.selection');
     await frames(page);
@@ -222,7 +222,7 @@ const SAVE_INTO = (folder) => `(async () => {
   return { text: await (await deck.getFile()).text(), files };
 })()`;
 
-const SPLIT_ZONE = '<div class="zone"></div>';
+const SPLIT_FIGURE_BOX = '<div class="figure-box"></div>';
 const waitText = (page, text) => page.waitFor(`window.BeesonEditor.render().includes(${JSON.stringify(text)})`, 30000);
 
 for (const platform of PLATFORMS) {
@@ -237,8 +237,8 @@ for (const platform of PLATFORMS) {
     assert.equal(await page.evaluate(PASTE_IMAGE), true, 'the paste is left to the browser');
     await waitText(page, 'media/image.png');
     const edited = await render(page);
-    assert.equal(edited, before.replace(SPLIT_ZONE, '<div class="zone">\n    <img src="media/image.png">\n  </div>'));
-    assert.match(await page.evaluate(`document.querySelector('.reveal section.present > .zone > img').getAttribute('src')`), /^blob:/);
+    assert.equal(edited, before.replace(SPLIT_FIGURE_BOX, '<div class="figure-box">\n    <img src="media/image.png">\n  </div>'));
+    assert.match(await page.evaluate(`document.querySelector('.reveal section.present > .figure-box > img').getAttribute('src')`), /^blob:/);
     assert.equal((await status(page)).undo, true);
     await undoRedo(page, before, edited);
     const saved = await page.evaluate(SAVE_INTO(`paste-${platform}`));
@@ -257,7 +257,7 @@ for (const platform of PLATFORMS) {
     await waitText(page, 'media/image.png');
     const edited = await render(page);
     assert.ok(edited.includes('<h2>Text, a list, and a backdrop</h2>'), 'the heading was changed');
-    assert.match(edited, /<figure class="zone">\n {4}<img src="media\/image.png">\n {2}<\/figure>/);
+    assert.match(edited, /<figure class="figure-box">\n {4}<img src="media\/image.png">\n {2}<\/figure>/);
     assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present h2 img').length`), 0);
     await undoRedo(page, page.source, edited);
     assert.deepEqual(errors(page), []);

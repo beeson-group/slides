@@ -64,7 +64,7 @@ export interface Files {
   present(hash?: string, tab?: boolean): Promise<{ win: Window | null } | null>;
   toggleAutosave(): void;
   line(): Line;
-  // the card of the texts that cannot be edited, and the card that asks before Open or Present
+  // the dialog of the texts that cannot be edited, and the dialog that asks before Open or Present
   showProblems(): void;
   closeProblems(): void;
   problemsShown(): boolean;

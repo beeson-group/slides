@@ -110,7 +110,7 @@ const caretIn = (page) => page.evaluate(`(() => {
 // the part of the file from the h2 of slide 5 to its figure
 const listPart = (text) => {
   const at = text.indexOf('<h2>Figures are first');
-  return text.slice(at, text.indexOf('<figure class="zone">', at));
+  return text.slice(at, text.indexOf('<figure class="figure-box">', at));
 };
 
 // the kinds of the blocks of the text column of slide 5, as parent>tag:start

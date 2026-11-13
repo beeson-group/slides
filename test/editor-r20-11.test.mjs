@@ -124,7 +124,7 @@ const drawnAtCenter = (page, selector) => page.evaluate(`(() => {
   document.head.append(style);
   const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
   style.remove();
-  return hit?.closest('.shape') ? 'shape' : hit?.closest('.math, .zone, p') ? 'new' : hit?.localName ?? 'nothing';
+  return hit?.closest('.shape') ? 'shape' : hit?.closest('.math, .figure-box, p') ? 'new' : hit?.localName ?? 'nothing';
 })()`);
 
 // a drag of the element of selector onto the center of the shape of the slide, by the move handle
@@ -149,7 +149,7 @@ async function undoAll(page) {
 // the closing slide of source, and its index
 function manyChildren(n, m, source = SOURCE, title = 'Many children') {
   const ps = Array.from({ length: n }, (_, i) => `  <p style="font-size: 22px; margin: 0">Paragraph number ${i} of a long slide.</p>`).join('\n');
-  const figs = Array.from({ length: m }, (_, i) => `  <div class="zone" style="translate: ${-900 + i * 40}px ${-300 + i * 30}px"><img src="demo/figure-dark.png" alt="f${i}"></div>`).join('\n');
+  const figs = Array.from({ length: m }, (_, i) => `  <div class="figure-box" style="translate: ${-900 + i * 40}px ${-300 + i * 30}px"><img src="demo/figure-dark.png" alt="f${i}"></div>`).join('\n');
   const slide = `<section>\n  <h2>${title}</h2>\n${ps}\n${figs}\n  <div class="foot">A foot.</div>\n</section>\n\n`;
   const text = source.replace('<section class="closing">', `${slide}<section class="closing">`);
   return { text, n: slideOf(text, (s) => s.includes(title)) };
@@ -318,7 +318,7 @@ for (const platform of PLATFORMS) {
     await page.send('DOM.setFileInputFiles', { files: [resolve('demo/figure-light.png')], objectId: result.objectId });
     await page.waitFor('window.__done', 20000);
     await sleep(300);
-    const img = `${S} > .zone img`;
+    const img = `${S} > .figure-box img`;
     assert.ok(await page.evaluate(`!!document.querySelector(${js(img)})`), 'no figure was inserted');
     assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.undo').label`), 'Undo Insert Image');
     await dragOntoShape(page, img);
@@ -490,10 +490,10 @@ for (const platform of PLATFORMS) {
       results.push(await render(page));
       assert.deepEqual(errors(page), []);
       // a page left open keeps its draft 1 s after its last edit, and on a slow machine this draft
-      // was kept after the next page emptied the storage, whose card then took the click on IMG
+      // was kept after the next page emptied the storage, whose dialog then took the click on IMG
       await page.close();
     }
-    assert.match(results[0], /<figure class="zone" style="translate: [^"]+">/);
+    assert.match(results[0], /<figure class="figure-box" style="translate: [^"]+">/);
     assert.equal(results[1], results[0]);
   });
 

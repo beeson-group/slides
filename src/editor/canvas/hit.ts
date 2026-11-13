@@ -10,10 +10,10 @@ import { gripOf, parseStroke, pointsOf, reach, type Point } from './stroke.ts';
 import { stored } from '../ui/dom.ts';
 
 // the outermost of these elements under the pointer is moved, outside the notes and the backdrop
-export const MOVABLE = 'h1, h2, h3, p, ul, ol, dl, table, pre, blockquote, div.math, .caption, .foot, img, video, figure, .zone, .plate, .qr, tycho-viewer, .shape';
+export const MOVABLE = 'h1, h2, h3, p, ul, ol, dl, table, pre, blockquote, div.math, .caption, .foot, img, video, figure, .figure-box, .plate, .qr, tycho-viewer, .shape';
 // an element without text to edit, dragged by itself. a tycho-viewer is turned by a drag, hence it
 // is moved by its handle or its border only
-export const BY_ITSELF = 'img, video, figure, .zone, .plate, .qr, .shape';
+export const BY_ITSELF = 'img, video, figure, .figure-box, .plate, .qr, .shape';
 export const OUTSIDE = 'aside.notes, .backdrop';
 // the elements whose width the editor writes, by the scope rule of the plan
 export const RESIZABLE = 'img, video, .qr, tycho-viewer, .shape';
@@ -29,7 +29,7 @@ export const TEXT_SIZED = 'h1, h2, h3, p, ul, ol, div.math, .caption';
 export const STRETCHED = 'img, video, .shape';
 // a figure whose size is set by its layout. its grips resize the image, video, or QR code that it
 // holds, and a figure that does not hold one is drawn without grips
-export const CONTAINER = 'figure, .zone, .plate';
+export const CONTAINER = 'figure, .figure-box, .plate';
 // the band outside a block in which a press selects the block, in screen pixels
 export const BAND = 6;
 

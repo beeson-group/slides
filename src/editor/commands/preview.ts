@@ -4,7 +4,7 @@
 // canvas as Preview of the Backdrop pane traces it, and the steps are drawn on a layer over the
 // canvas, one per timing.step ms, each by showStep of present.ts as the show draws it. a preview
 // stops at a click on Stop, Esc, a press outside the toolbar and the menus, a change of slide, an
-// edit, and Chapters Table, after which the slide is drawn complete. it does not change the file,
+// edit, and Slide Sorter, after which the slide is drawn complete. it does not change the file,
 // the history, or the selection, which is not drawn while it plays
 
 import type { App } from '../app.ts';
@@ -65,7 +65,7 @@ async function play(app: App, parts: Part[]): Promise<void> {
   current = me;
   setPreview(app, 'play', true, () => halt(app));
   app.invalidate();
-  // Chapters Table stops the preview, and the layer of the steps follows the slide at every frame
+  // Slide Sorter stops the preview, and the layer of the steps follows the slide at every frame
   let place: (() => void) | null = null;
   let frame = 0;
   const follow = () => {
@@ -82,7 +82,7 @@ async function play(app: App, parts: Part[]): Promise<void> {
     ends.push(() => { clearTimeout(t); done(); });
   });
 
-  // the backdrop on the canvas, until its last strand is traced, or after the same seconds for a loop
+  // the backdrop on the canvas, until its last trajectory is traced, or after the same seconds for a loop
   const trace = async (el: HTMLElement) => {
     const o = liveOf(el);
     if (!o) return;
@@ -153,7 +153,7 @@ async function play(app: App, parts: Part[]): Promise<void> {
         const o = theme()?.preview?.(el);
         if (!o) continue;
         traced.push(o);
-        // after the completion that preview of src/main.ts queues once the strands are ready
+        // after the completion that preview of src/main.ts queues once the trajectories are ready
         void o.ready.then(() => {
           if (stopped) return;
           o.reset();

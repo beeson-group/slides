@@ -21,7 +21,7 @@ const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
 const SECTIONS = [...readFileSync(LAYOUTS, 'utf8').matchAll(/<section[\s\S]*?<\/section>/g)].map((m) => m[0]);
 const MATH = SECTIONS.findIndex((s) => s.includes('<h2>Math, an ordered list, and a zone</h2>'));
-const ZONE = '.reveal .slides section.present figure.zone';
+const FIGURE_BOX = '.reveal .slides section.present figure.figure-box';
 // the section tag of the slide of the math, and the same tag with the guides of text
 const MATH_TAG = '<section>\n  <h2>Math, an ordered list, and a zone</h2>';
 const mathGuides = (text) => [MATH_TAG, MATH_TAG.replace('<section>', `<section data-guides="${text}">`)];
@@ -161,13 +161,13 @@ for (const platform of PLATFORMS) {
     await page.evaluate('window.BeesonEditor.redo()');
     await frames(page);
     assert.deepEqual(await guides(page), [['x', 1013]]);
-    // the left edge of the zone, at 1200, snaps to the guide when it is dragged near it, once the
+    // the left edge of the figure box, at 1200, snaps to the guide when it is dragged near it, once the
     // figure is selected apart from its image
-    await selectFigure(page, `${ZONE} > img`);
-    const zone = await box(page, ZONE);
-    await drag(page, { x: zone.left + zone.width / 2, y: zone.top + zone.height / 2 }, { dx: -183 * k, dy: 0, modifiers: 'Shift' });
+    await selectFigure(page, `${FIGURE_BOX} > img`);
+    const figureBox = await box(page, FIGURE_BOX);
+    await drag(page, { x: figureBox.left + figureBox.width / 2, y: figureBox.top + figureBox.height / 2 }, { dx: -183 * k, dy: 0, modifiers: 'Shift' });
     await frames(page);
-    assert.equal(await translateOf(page, ZONE), '-187px');
+    assert.equal(await translateOf(page, FIGURE_BOX), '-187px');
     await undo(page);
     await byteExact(page, [mathGuides('x1013')]);
     // a drag of the guide back onto the ruler removes it
@@ -235,14 +235,14 @@ for (const platform of PLATFORMS) {
     const size = await page.evaluate(`getComputedStyle(document.querySelector('.beeson-grid')).backgroundSize`);
     assert.ok(Math.abs(parseFloat(size) - 40 * k) < 0.01);
     await byteExact(page);
-    // with Snap to Grid, a drag of the zone by 33 slide px is snapped to 40
+    // with Snap to Grid, a drag of the figure box by 33 slide px is snapped to 40
     await exec(page, 'view.grid.snap');
     assert.equal((await state(page, 'view.grid.snap')).checked, true);
-    await selectFigure(page, `${ZONE} > img`);
-    const zone = await box(page, ZONE);
-    await drag(page, { x: zone.left + zone.width / 2, y: zone.top + zone.height / 2 }, { dx: 33 * k, dy: 0, modifiers: 'Shift' });
+    await selectFigure(page, `${FIGURE_BOX} > img`);
+    const figureBox = await box(page, FIGURE_BOX);
+    await drag(page, { x: figureBox.left + figureBox.width / 2, y: figureBox.top + figureBox.height / 2 }, { dx: 33 * k, dy: 0, modifiers: 'Shift' });
     await frames(page);
-    assert.equal(await translateOf(page, ZONE), '40px');
+    assert.equal(await translateOf(page, FIGURE_BOX), '40px');
     await undo(page);
     await byteExact(page);
     // Grid Settings sets the spacing in its sheet
@@ -252,15 +252,15 @@ for (const platform of PLATFORMS) {
     await click(page, 'dialog.beeson-grid-sheet[open] .row button.primary');
     await frames(page);
     assert.ok(Math.abs(parseFloat(await page.evaluate(`getComputedStyle(document.querySelector('.beeson-grid')).backgroundSize`)) - 60 * k) < 0.01);
-    const again = await box(page, ZONE);
+    const again = await box(page, FIGURE_BOX);
     await drag(page, { x: again.left + again.width / 2, y: again.top + again.height / 2 }, { dx: 55 * k, dy: 0, modifiers: 'Shift' });
     await frames(page);
-    assert.equal(await translateOf(page, ZONE), '60px');
+    assert.equal(await translateOf(page, FIGURE_BOX), '60px');
     await undo(page);
-    // the free modifier moves the zone without the snap
+    // the free modifier moves the figure box without the snap
     await drag(page, { x: again.left + again.width / 2, y: again.top + again.height / 2 }, { dx: 33 * k, dy: 0, modifiers: `Shift+${free(platform)}` });
     await frames(page);
-    assert.ok(Math.abs(parseFloat(await translateOf(page, ZONE)) - 33) <= 1);
+    assert.ok(Math.abs(parseFloat(await translateOf(page, FIGURE_BOX)) - 33) <= 1);
     await undo(page);
     await byteExact(page);
     await pressQuote(page, platform);

@@ -169,7 +169,7 @@ export function install(app: App): void {
         if (choice !== 'ours' && choice !== 'theirs') return 'cancelled';
         prefer = choice;
       }
-      // the file is read again after the card, and the edits are rendered again for the changes
+      // the file is read again after the dialog, and the edits are rendered again for the changes
       // made meanwhile outside the slides, e.g. in the Steps pane
       const again = await readText(target);
       const now = (again === null ? null : await readSettled(target, again)) ?? disk;
@@ -190,7 +190,7 @@ export function install(app: App): void {
     }
   }
 
-  // a change without unsaved edits, and without an open card, loads the page again. a change with
+  // a change without unsaved edits, and without an open dialog, loads the page again. a change with
   // unsaved edits is named in the state and marked in the navigator until a save
   async function watch(): Promise<void> {
     if (busy || diskText === null || app.state !== 'loaded' || saving || document.hidden) return;

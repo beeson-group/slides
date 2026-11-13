@@ -285,7 +285,7 @@ test('the code of the closing slide of the demo deck is 200 px wide at 50 px fro
       const [code] = await readSlide(page);
       assert.equal(code.text, 'https://github.com/beeson-group/slides', `${theme}, after ${wait} ms more`);
     }
-    // the strands are drawn over the code: the code is the element under the mouse at its middle,
+    // the trajectories are drawn over the code: the code is the element under the mouse at its middle,
     // and the canvas of the backdrop is painted above it
     const over = await page.evaluate(`(() => {
       const qr = document.querySelector('.qr'), r = qr.getBoundingClientRect();

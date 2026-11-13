@@ -280,7 +280,7 @@ function solve(facts: Fact[], path: Path, options: Choice[][]): { cost: number; 
 }
 
 // whether a child of el with a z-index under 0 is drawn over the ground of el, i.e. whether el
-// makes a stacking context, as a slide does. elsewhere, e.g. in the panel of a split slide or the
+// makes a stacking context, as a slide does. elsewhere, e.g. in the text column of a split slide or the
 // block of a title slide, the child is drawn under its parent, hidden from a click
 function stacks(el: Element): boolean {
   const s = getComputedStyle(el);
@@ -503,20 +503,20 @@ function freshDataIds(app: App, copies: Element[]): void {
 }
 
 // the layout of a figure slide has one plate, and another slide has none, hence a copy of a plate
-// is a plate only as the first plate of a figure slide. elsewhere it is made a zone, the box of
+// is a plate only as the first plate of a figure slide. elsewhere it is made a figure box, the box of
 // the theme for a figure beside other content, since a second plate is laid out under the slide
-function plateToZone(app: App, copies: Element[]): void {
+function plateToFigureBox(app: App, copies: Element[]): void {
   for (const el of copies) {
     const slide = el.closest('section');
     if (!el.matches('.plate') || !slide || (slide.matches('.figure') && slide.querySelector(':scope > .plate') === el)) continue;
-    app.doc.setTag(el, { classes: { plate: false, zone: true } }, 'layout');
+    app.doc.setTag(el, { classes: { plate: false, 'figure-box': true } }, 'layout');
   }
 }
 
 // the copies of a paste, a Duplicate, or a drag with the copy modifier, fitted to their slide
 export function settleCopies(app: App, copies: Element[]): void {
   freshDataIds(app, copies);
-  plateToZone(app, copies);
+  plateToFigureBox(app, copies);
 }
 
 // two elements or more that are not one group already
@@ -608,7 +608,7 @@ function setLock(app: App, on: boolean): void {
 
 export { angleOf };
 
-// whether every one of els is a line with a glued end, which is not turned until each end is
+// whether every one of els is a line with an attached end, which is not turned until each end is
 // detached, as a connection line of Keynote
 export const gluedLines = (els: Element[]): boolean => els.length > 0 && els.every((el) => el.matches(LINE) && (glueOf(el, 'from').length > 0 || glueOf(el, 'to').length > 0));
 

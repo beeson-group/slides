@@ -1,6 +1,6 @@
 // regression tests of R29.1 on both platforms, three leftovers of the skeptics: the sheet of a
 // formula in a new box replaced by the sheet of another formula drops the box, an emptied item or
-// paragraph that had a line break is saved empty, and a line glued to an element pushed by typing
+// paragraph that had a line break is saved empty, and a line attached to an element pushed by typing
 // follows it in the entry of the typing
 
 import assert from 'node:assert/strict';

@@ -14,7 +14,7 @@ import { click, drag, press } from './helpers/editor.mjs';
 const DECK = 'test/pages/editor-r21-2.html';
 const PLATFORMS = ['mac', 'other'];
 const BACK = 'section.present .backdrop';
-const NEST = '<div class="backdrop" data-scene="nest" data-cx="0.97" data-cy="0" data-half="0.5">';
+const NEST = '<div class="backdrop" data-backdrop="nest" data-cx="0.97" data-cy="0" data-half="0.5">';
 
 let browser;
 let server;
@@ -40,7 +40,7 @@ const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((e
 const at = (page, u, v) => page.evaluate(`(() => { const r = document.querySelector('${BACK}').getBoundingClientRect(); return { x: r.left + r.width * ${u}, y: r.top + r.height * ${v} }; })()`);
 const scale = (page) => page.evaluate(`document.querySelector('section.present').getBoundingClientRect().width / 1920`);
 // the start tag of the backdrop of the first slide in a rendered text
-const backTag = (text) => text.match(/<div class="backdrop" data-scene="nest"[^>]*>/)[0];
+const backTag = (text) => text.match(/<div class="backdrop" data-backdrop="nest"[^>]*>/)[0];
 
 // the editor on the deck at slide n. with motion, the page does not ask for reduced motion and the
 // URL is without still, so that a backdrop can be traced

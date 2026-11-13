@@ -230,10 +230,10 @@ test('an undo after a save puts a removed attribute, class, and declaration back
   const browser = await launch();
   t.after(() => browser.close());
   const { page, text } = await editorPage(browser);
-  const tag = '<div class="math fragment" data-fragment-index="2" data-surface-stage="bowl" style="margin-top: 0">';
+  const tag = '<div class="math fragment" data-fragment-index="2" data-surface-state="bowl" style="margin-top: 0">';
   assert.equal(text.split(tag).length, 2);
-  const el = `[...document.querySelectorAll('.reveal div.math')].find((d) => d.dataset.surfaceStage === 'bowl')`;
-  for (const edit of [{ classes: { math: false } }, { attrs: { 'data-fragment-index': null } }, { attrs: { 'data-surface-stage': null } }, { style: { 'margin-top': null } }, { fragment: false, index: null }]) {
+  const el = `[...document.querySelectorAll('.reveal div.math')].find((d) => d.dataset.surfaceState === 'bowl')`;
+  for (const edit of [{ classes: { math: false } }, { attrs: { 'data-fragment-index': null } }, { attrs: { 'data-surface-state': null } }, { style: { 'margin-top': null } }, { fragment: false, index: null }]) {
     await page.evaluate(`${E}.doc.setTag(${el}, ${JSON.stringify(edit)})`);
     const edited = await render(page);
     assert.notEqual(edited, text);
@@ -255,7 +255,7 @@ test('the edits of a CRLF file are written with CR LF, and the undos give the fi
   await page.evaluate(`(async () => {
     const d = ${E}.doc;
     await d.insertSlide('split', ${slide(2)});
-    await d.insertElement('table', ${slide(2)}.querySelector('.zone'));
+    await d.insertElement('table', ${slide(2)}.querySelector('.figure-box'));
     await d.insertElement('qr', ${slide(4)});
     await d.move(${slide(3)}.querySelector(':scope > p'), ${slide(5)}, null);
     await d.retag(${slide(5)}.querySelector(':scope > p'), 'h3');
@@ -263,7 +263,7 @@ test('the edits of a CRLF file are written with CR LF, and the undos give the fi
   })()`);
   const edited = await render(page);
   assert.equal(/[^\r]\n/.test(edited), false);
-  assert.ok(edited.includes('<div class="zone">\r\n    <table>\r\n      <tbody>'));
+  assert.ok(edited.includes('<div class="figure-box">\r\n    <table>\r\n      <tbody>'));
   assert.ok(edited.includes('<h2>Two\r\nlines</h2>'));
   const saved = await page.evaluate(`${E}.open(${JSON.stringify(edited)}, false)`);
   assert.deepEqual(saved.problems, []);

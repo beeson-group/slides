@@ -1,9 +1,9 @@
 // tests of R27.1 on both platforms, connection lines as the connectors of PowerPoint: an end of a
-// line drawn or dragged onto an element is glued to it, written as data-anchor on the element and
+// line drawn or dragged onto an element is attached to it, written as data-anchor on the element and
 // data-from or data-to on the svg, and it follows every change of the box of the element in the
 // same entry of the history. a move of the whole line, a delete of the element, and a copy
-// without the element take the glue off, and a copy with the element glues the copy to the copies.
-// the Line pane names each glued end. each edit is checked byte for byte after an undo and a redo
+// without the element take the attachment off, and a copy with the element attaches the copy to the copies.
+// the Line pane names each attached end. each edit is checked byte for byte after an undo and a redo
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -46,7 +46,7 @@ const call = (page, fn, ...args) => page.evaluate(`(${fn})(${args.map(js).join('
 
 // the page loaded before it in the file is closed first. Within 1 s of the last change of a page,
 // its unsaved edits are kept in the storage of the browser, and they would then be offered on a
-// card over the slide of the next page
+// dialog over the slide of the next page
 let last = null;
 async function load(t, platform, slide = EMPTY, text = SOURCE) {
   await last?.close().catch(() => {});
@@ -76,7 +76,7 @@ function screenOf(p) {
 const screen = (page, x, y) => call(page, screenOf, { x, y });
 const scale = (page) => page.evaluate(`(() => { const s = document.querySelector('.reveal .slides'); return s.getBoundingClientRect().width / s.offsetWidth; })()`);
 
-// the lines of the current slide: their glue and their two ends in slide px, rounded
+// the lines of the current slide: their attachment and their two ends in slide px, rounded
 function linesNow(slide) {
   return [...document.querySelector(slide).querySelectorAll('svg.line')].map((svg) => {
     const [tx, ty] = (svg.style.translate || '0px 0px').split(/\s+/).map((v) => parseFloat(v) || 0);
@@ -98,7 +98,7 @@ const lines = (page) => call(page, linesNow, SLIDE);
 // the names of data-anchor on the slide, in document order, with the kind of each element
 const anchors = (page) => page.evaluate(`[...document.querySelector(${js(SLIDE)}).querySelectorAll('[data-anchor]')].map((el) => el.getAttribute('data-anchor') + ' ' + el.localName)`);
 
-// for each glued end of the current slide, its distance in slide px from its place in the box of
+// for each attached end of the current slide, its distance in slide px from its place in the box of
 // its element, i.e. the box of the style of a shape turned by its rotate, or the box seen of any
 // other element
 function offsets(slide) {
@@ -192,8 +192,8 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// rule 1. an end drawn onto an element is glued at the pointer, or at the middle of the nearest edge
-// within 16 slide px of it. a text in the flow, a line, and a drag with the free key do not glue, and
+// rule 1. an end drawn onto an element is attached at the pointer, or at the middle of the nearest edge
+// within 16 slide px of it. a text in the flow, a line, and a drag with the free key do not attach, and
 // a text moved as a box does. the element under a dragged end is outlined
 for (const platform of PLATFORMS) {
   test(`rule 1: the ends of a drawn line are glued at the pointer or at the middle of an edge (${platform})`, async (t) => {
@@ -237,13 +237,13 @@ for (const platform of PLATFORMS) {
     await redo(page);
     assert.equal(await render(page), after);
 
-    // with the free key, neither end is glued
+    // with the free key, neither end is attached
     await exec(page, 'insert.line');
     await drag(page, await screen(page, 400, 540), { dx: (1300 - 400) * k, dy: (880 - 540) * k, steps: 12, modifiers: free(platform) });
     await sleep(100);
     const loose = (await lines(page)).at(-1);
     assert.deepEqual([loose.from, loose.to], [null, null], 'an end drawn with the free key is glued');
-    // a text in the flow and another line do not take glue, and a text moved as a box does
+    // a text in the flow and another line do not take an attachment, and a text moved as a box does
     await exec(page, 'insert.line');
     await drag(page, await screen(page, 300, 270), { dx: (900 - 300) * k, dy: (950 - 270) * k, steps: 12 });
     await sleep(100);
@@ -264,8 +264,8 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// rule 2. the glue is written into the tags only, as attributes of the editor: a deck without glue
-// and a deck with glue are written byte for byte by an open and a save, and the attributes are in
+// rule 2. the attachment is written into the tags only, as attributes of the editor: a deck without an attachment
+// and a deck with an attachment are written byte for byte by an open and a save, and the attributes are in
 // the scope rule
 for (const platform of PLATFORMS) {
   test(`rule 2: an open and a save keep a deck with and without glue byte for byte (${platform})`, async (t) => {
@@ -284,7 +284,7 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// rule 3. whenever a glued element gets another box, its ends follow in the same entry of the history
+// rule 3. whenever an attached element gets another box, its ends follow in the same entry of the history
 const FOLLOW = [
   ['a drag', async (page) => {
     await drag(page, await screen(page, 399, 500), { dx: 90, dy: 60, steps: 10 });
@@ -314,7 +314,7 @@ const FOLLOW = [
     await click(page, await screen(page, 1306, 880), { modifiers: 'Shift' });
     await exec(page, 'arrange.align.bottom');
   }],
-  // a line glued to the text moved as a box, which Reset Slide puts back into the flow
+  // a line attached to the text moved as a box, which Reset Slide puts back into the flow
   ['Reset Slide', async (page) => {
     await exec(page, 'slide.reset');
   }, async (page) => {
@@ -368,9 +368,9 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// rule 4. a drag of a glued end off its element takes its glue off, a drop on another element
-// glues it there, a move of the whole line takes both off, a delete of the element leaves the line
-// without its glue, and a copy keeps the glue only with the elements
+// rule 4. a drag of an attached end off its element takes its attachment off, a drop on another element
+// attaches it there, a move of the whole line takes both off, a delete of the element leaves the line
+// without its attachment, and a copy keeps the attachment only with the elements
 const endGrip = (page, which) => page.evaluate(`(() => { const g = [...document.querySelectorAll('.beeson-line-end')].find((g) => !g.hidden && g.dataset.end === ${js(which)}); if (!g) return null; const r = g.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; })()`);
 for (const platform of PLATFORMS) {
   test(`rule 4: a dragged end is glued off and on, and a moved line is let go (${platform})`, async (t) => {
@@ -395,7 +395,7 @@ for (const platform of PLATFORMS) {
     [l] = await lines(page);
     assert.equal(l.to, null, 'the head dragged off the ellipse is still glued');
     assert.deepEqual(await anchors(page), ['a1 div']);
-    // with the free key a drop on a box does not glue
+    // with the free key a drop on a box does not attach
     grip = await endGrip(page, '2');
     const target = await screen(page, 1306, 537);
     await drag(page, grip, { dx: target.x - grip.x, dy: target.y - grip.y, steps: 10, modifiers: free(platform) });
@@ -442,7 +442,7 @@ for (const platform of PLATFORMS) {
     await undoRedo(page, SOURCE, await render(page));
     await undo(page);
 
-    // the line copied alone is pasted without glue
+    // the line copied alone is pasted without an attachment
     await click(page, await screen(page, 853, 454));
     await exec(page, 'edit.copy');
     await exec(page, 'edit.paste');
@@ -480,7 +480,7 @@ for (const platform of PLATFORMS) {
       assert.equal(await render(page), SOURCE, `one undo does not take the copies of ${route} off`);
     }
 
-    // Duplicate Slide and a paste of the slide keep the glue of the copy
+    // Duplicate Slide and a paste of the slide keep the attachment of the copy
     for (const route of ['slide.duplicate', 'slide.paste']) {
       if (route === 'slide.paste') await exec(page, 'slide.copy');
       await exec(page, route);
@@ -497,7 +497,7 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// item 5. the Line pane names each glued end, with a button that takes its glue off
+// item 5. the Line pane names each attached end, with a button that takes its attachment off
 for (const platform of PLATFORMS) {
   test(`item 5: the Line pane names the glued ends and takes the glue off (${platform})`, async (t) => {
     const page = await load(t, platform, GLUED);
@@ -537,7 +537,7 @@ async function drawLine(page, a, b) {
   return (await lines(page)).at(-1);
 }
 
-// rule 1. an end is glued to the element under the pointer, even where the middle of an edge of an
+// rule 1. an end is attached to the element under the pointer, even where the middle of an edge of an
 // element above it is within reach. the lower box spans y 600 to 720 and is first in the file, and
 // the upper box spans y 472 to 592
 for (const platform of PLATFORMS) {
@@ -561,8 +561,8 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// rule 1. a group takes glue as one object: an end at the middle of the right edge of the box of the
-// group, between its two members, is glued to the group, whose members share the name, and it
+// rule 1. a group takes an attachment as one object: an end at the middle of the right edge of the box of the
+// group, between its two members, is attached to the group, whose members share the name, and it
 // follows a move of the group. the Line pane names the group
 for (const platform of PLATFORMS) {
   test(`rule 1: a group takes glue as one object at the middle of an edge of its box (${platform})`, async (t) => {
@@ -587,7 +587,7 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// rule 2. a delete or a cut of a glued line takes the names off the elements that it was glued to
+// rule 2. a delete or a cut of an attached line takes the names off the elements that it was attached to
 for (const platform of PLATFORMS) {
   test(`rule 2: a delete or a cut of a glued line takes the names off its elements (${platform})`, async (t) => {
     const page = await load(t, platform, GLUED);
@@ -606,7 +606,7 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// item 5. the row of an end that is not glued is not shown, nor is the section without a glued end
+// item 5. the row of an end that is not attached is not shown, nor is the section without an attached end
 const shownButtons = (page) => page.evaluate(`[...document.querySelectorAll(${js(`${PANEL} [data-command^="line.unglue"]`)})].filter((b) => b.getClientRects().length).map((b) => b.dataset.command)`);
 for (const platform of PLATFORMS) {
   test(`item 5: the Line pane shows a row only for a glued end of one line (${platform})`, async (t) => {

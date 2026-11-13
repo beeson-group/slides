@@ -19,9 +19,9 @@ const PANEL = '#beeson-edit-panel-format';
 
 const DARK = '<img class="for-dark" src="../../demo/figure-dark.png" alt="A figure, dark version">';
 const LIGHT = '<img class="for-light" src="../../demo/figure-light.png" alt="A figure, light version">';
-const PAPER = '<img class="paper" src="../../demo/figure-light.png" alt="A white raster figure">';
-const NEST = '<div class="backdrop" data-scene="nest" data-cx="0.97" data-cy="0" data-half="0.5">';
-const IMG = 'section.present figure.zone img.for-dark';
+const WHITE_FIGURE = '<img class="white-figure" src="../../demo/figure-light.png" alt="A white raster figure">';
+const NEST = '<div class="backdrop" data-backdrop="nest" data-cx="0.97" data-cy="0" data-half="0.5">';
+const IMG = 'section.present figure.figure-box img.for-dark';
 const BAR = 'dialog.beeson-mask-bar';
 
 let browser;
@@ -45,7 +45,7 @@ const redo = (page) => page.evaluate('window.BeesonEditor.redo()');
 const frames = (page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => d(true))))');
 const url = (platform) => `${server.origin}/${LAYOUTS}?edit&still&edit-platform=${platform}`;
 const editing = (page) => page.evaluate(`!!document.querySelector('${BAR}[open]')`);
-// the style written into the tag of the dark image of the zone, or null
+// the style written into the tag of the dark image of the figure box, or null
 const written = async (page) => (await render(page)).match(/<img class="for-dark"[^>]*?(?: style="([^"]*)")?>/)[1] ?? null;
 const styleOf = (page, selector) => page.evaluate(`document.querySelector(${JSON.stringify(selector)}).getAttribute('style')`);
 
@@ -64,7 +64,7 @@ async function maskPage(platform, n) {
   return page;
 }
 
-// the dark image of the zone selected, with a click on the zone and a click into it
+// the dark image of the figure box selected, with a click on the figure box and a click into it
 async function selectImage(page) {
   await click(page, 'section.present p');
   await click(page, IMG);
@@ -183,19 +183,19 @@ for (const platform of PLATFORMS) {
 
   test(`a paper image keeps its class under a mask (${platform})`, async () => {
     const page = await maskPage(platform, 6);
-    const img = 'section.present .plate img.paper';
+    const img = 'section.present .plate img.white-figure';
     await click(page, img, { count: 2 });
     await page.waitFor(`!!document.querySelector('${BAR}[open]')`);
     await zoomTo(page, 1.25);
     await press(page, 'Enter');
     const edited = await render(page);
-    assert.equal(edited, replaced(page.source, PAPER, PAPER.replace('>', ' style="scale: 1.25; clip-path: inset(10%)">')));
+    assert.equal(edited, replaced(page.source, WHITE_FIGURE, WHITE_FIGURE.replace('>', ' style="scale: 1.25; clip-path: inset(10%)">')));
     await checkEdit(page, edited);
   });
 
   test(`the window of a backdrop is dragged and scaled with its labels, and a cut edge is marked (${platform})`, async () => {
     const page = await maskPage(platform, 2);
-    const lab = `(() => { const r = document.querySelector('section.present .backdrop .lab').getBoundingClientRect(); return { x: r.left, y: r.top }; })()`;
+    const lab = `(() => { const r = document.querySelector('section.present .backdrop .label').getBoundingClientRect(); return { x: r.left, y: r.top }; })()`;
     const before = await page.evaluate(lab);
     assert.equal((await state(page, 'backdrop.editWindow')).enabled, true);
     await exec(page, 'backdrop.editWindow');
@@ -212,8 +212,8 @@ for (const platform of PLATFORMS) {
     assert.equal(await editing(page), false);
     assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-mask-cut').length`), 0);
     const edited = await render(page);
-    const tag = edited.match(/<div class="backdrop" data-scene="nest"[^>]*>/)[0];
-    assert.match(tag, /^<div class="backdrop" data-scene="nest" data-cx="[\d.]+" data-cy="0" data-half="0\.25">$/);
+    const tag = edited.match(/<div class="backdrop" data-backdrop="nest"[^>]*>/)[0];
+    assert.match(tag, /^<div class="backdrop" data-backdrop="nest" data-cx="[\d.]+" data-cy="0" data-half="0\.25">$/);
     assert.notEqual(tag, NEST);
     assert.equal(edited, replaced(page.source, NEST, tag));
     const view = () => page.evaluate(`(() => { const o = Beeson.backdrops.find((b) => b.el.matches('section.present .backdrop')); return o.view; })()`);

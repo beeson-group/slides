@@ -98,13 +98,13 @@ const objectNames = (page) => page.evaluate(`[...document.querySelectorAll('.bee
 test('the scope rule takes the width and the height of a shape in px, and the template of a shape is in it', () => {
   assert.equal(declarationProblem('div', ['shape', 'rounded'], 'height', '127px'), null);
   assert.equal(declarationProblem('div', ['shape'], 'width', '525px'), null);
-  assert.notEqual(declarationProblem('div', ['zone'], 'height', '127px'), null);
+  assert.notEqual(declarationProblem('div', ['figure-box'], 'height', '127px'), null);
   assert.notEqual(declarationProblem('div', ['shape'], 'width', '40%'), null);
   assert.ok(ELEMENT_KINDS.includes('shape'));
   const [t] = elementText('shape', { eol: '\n', step: '  ' }, '');
   assert.equal(t, '<div class="shape rounded" style="width: 240px; height: 240px"></div>');
   assert.deepEqual(textProblems(t, THEME), []);
-  for (const c of ['shape', 'rounded', 'ellipse', 'triangle', 'arrow', 'arrow-both', 'brace', 'plus', 'equals', 'round-s', 'round-l', 'fill-none', 'fill-ground', 'veil', 'weight-6', 'weight-8', 'no-outline', 'flip-x', 'flip-y']) assert.ok(THEME.has(c), c);
+  for (const c of ['shape', 'rounded', 'ellipse', 'triangle', 'arrow', 'arrow-both', 'brace', 'plus', 'equals', 'round-s', 'round-l', 'fill-none', 'fill-ground', 'fill-translucent', 'weight-6', 'weight-8', 'no-outline', 'flip-x', 'flip-y']) assert.ok(THEME.has(c), c);
 });
 
 for (const platform of PLATFORMS) {
@@ -272,7 +272,7 @@ for (const platform of PLATFORMS) {
       ['shape.tone.accent', 'shape rounded tone-accent'],
       ['shape.fill.none', 'shape rounded tone-accent fill-none'],
       ['shape.fill.ground', 'shape rounded tone-accent fill-ground'],
-      ['shape.fill.veil', 'shape rounded tone-accent veil'],
+      ['shape.fill.translucent', 'shape rounded tone-accent fill-translucent'],
       ['shape.fill.tint', 'shape rounded tone-accent'],
       ['shape.weight.6', 'shape rounded tone-accent weight-6'],
       ['shape.weight.8', 'shape rounded tone-accent weight-8'],

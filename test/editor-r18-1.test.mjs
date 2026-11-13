@@ -40,7 +40,7 @@ const FRAGFOOT = SOURCE.replace(/<section[\s\S]*?<\/section>/g, (s) => (s.includ
   .replace(FOOT, '<div class="foot fragment" style="translate: 0px -150px">Slides can have backdrops');
 const footLine = SOURCE.split('\n').find((l) => l.includes(FOOT));
 const FOOTFIRST = SOURCE.replace(`${footLine}\n`, '').replace('<h2>Show your steps one at a time</h2>\n', `<h2>Show your steps one at a time</h2>\n${footLine.replace(FOOT, MOVED_FOOT)}\n`);
-const FIGOVER = SOURCE.replace('<figure class="zone">', '<figure class="zone" style="translate: -530px -40px">');
+const FIGOVER = SOURCE.replace('<figure class="figure-box">', '<figure class="figure-box" style="translate: -530px -40px">');
 
 const STEP_EL = { h2: `${S} > h2`, p: `${S} > p`, ul: `${S} > ul`, foot: `${S} > .foot` };
 const STEP_ROWS = { h2: 'Text: Show your steps', p: 'Text: Design the complete', ul: 'Text: Each step is', foot: 'Text: Slides can have' };

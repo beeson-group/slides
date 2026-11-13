@@ -13,11 +13,11 @@ import { byteExact, center, click, drag, press, saveAndReopen } from './helpers/
 const PLATFORMS = ['mac', 'other'];
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATE_SLIDE = 8;
-const ZONE_SLIDE = 12;
+const FIGURE_BOX_SLIDE = 12;
 const SLIDE = '.reveal .slides > section.present';
 const PLATE = '<div class="plot plate" data-plot="plate-plot">';
-const ZONE = '<div class="plot zone" data-plot="zone-plot">';
-const BLOCK = '<script type="application/json" id="zone-plot">';
+const FIGURE_BOX = '<div class="plot figure-box" data-plot="figure-box-plot">';
+const BLOCK = '<script type="application/json" id="figure-box-plot">';
 const STEP = '<span class="fragment" data-fragment-index="2" data-plot-show="right"></span>';
 const IDS = ['plot.editData', 'plot.setData', 'plot.addRow', 'plot.deleteRow', 'plot.addSeries', 'plot.deleteSeries', 'plot.moveSeriesLeft', 'plot.moveSeriesRight', 'plot.moveSeries', 'plot.addTab', 'plot.deleteTab', 'plot.pasteCells', 'plot.clearCells', 'plot.title', 'plot.range', 'plot.scale', 'plot.unit', 'plot.axes', 'plot.tone', 'insert.plot', 'plot.closeData'];
 
@@ -103,7 +103,7 @@ test('the editor is built without the plot commands, the Plot Data window, and t
 
 for (const platform of PLATFORMS) {
   test(`a plot is not inserted or edited by a command, a menu, the toolbar, or Mod+Shift+D (${platform})`, async (t) => {
-    const page = await load(t, platform, ZONE_SLIDE);
+    const page = await load(t, platform, FIGURE_BOX_SLIDE);
     for (const id of IDS) await assert.rejects(state(page, id), /there is no command/, `${id} is still a command`);
     assert.equal(await page.evaluate(`!!document.querySelector('[data-command="insert.plot"]')`), false, 'the toolbar has the button Plot');
     assert.ok(!(await openMenu(page, 'Insert')).includes('Plot'), 'the Insert menu has Plot');
@@ -119,11 +119,11 @@ for (const platform of PLATFORMS) {
   });
 
   test(`a plot in a zone is an opaque figure, moved, duplicated, and deleted with its block kept (${platform})`, async (t) => {
-    const page = await load(t, platform, ZONE_SLIDE);
+    const page = await load(t, platform, FIGURE_BOX_SLIDE);
     const source = page.source;
     await click(page, `${SLIDE} .plot`);
     await wait(page);
-    assert.deepEqual(await selected(page, 'div.plot.zone'), [true]);
+    assert.deepEqual(await selected(page, 'div.plot.figure-box'), [true]);
     assert.equal(await page.evaluate(`document.querySelector('#beeson-edit-panel-format .ed-panes').dataset.pane`), 'arrange');
     assert.equal(await page.evaluate(`!!document.querySelector('#beeson-edit-panel-format .ed-tabs')`), false, 'the Format tab of a plot has more panes than Arrange');
     await click(page, `${SLIDE} .plot`, { button: 'right' });
@@ -137,9 +137,9 @@ for (const platform of PLATFORMS) {
     await drag(page, await center(page, `${SLIDE} .plot`), { dx: -120, dy: 40 });
     await wait(page);
     const moved = await render(page);
-    const tag = moved.match(/<div class="plot zone" data-plot="zone-plot" style="translate: -?\d+px -?\d+px">/);
+    const tag = moved.match(/<div class="plot figure-box" data-plot="figure-box-plot" style="translate: -?\d+px -?\d+px">/);
     assert.ok(tag, 'the drag does not write translate into the tag of the plot');
-    await byteExact(page, [[ZONE, tag[0]]]);
+    await byteExact(page, [[FIGURE_BOX, tag[0]]]);
     await roundTrip(page, source);
     await undo(page);
     await wait(page, 100);
@@ -149,7 +149,7 @@ for (const platform of PLATFORMS) {
     await press(page, 'Mod+D');
     await wait(page);
     const copied = await render(page);
-    assert.equal(copied.split('data-plot="zone-plot"').length, 3, 'Mod+D does not copy the plot once');
+    assert.equal(copied.split('data-plot="figure-box-plot"').length, 3, 'Mod+D does not copy the plot once');
     assert.equal(copied.split(BLOCK).length, 2, 'Mod+D copies the JSON block');
     assert.equal(await page.evaluate(`document.querySelectorAll('${SLIDE} .plot .plot-body').length`), 2, 'the copy is not drawn from the block');
     await roundTrip(page, source);
@@ -168,7 +168,7 @@ for (const platform of PLATFORMS) {
     await press(page, platform === 'mac' ? 'Backspace' : 'Delete');
     await wait(page);
     const deleted = await render(page);
-    assert.ok(!deleted.includes(ZONE), 'the plot is not deleted');
+    assert.ok(!deleted.includes(FIGURE_BOX), 'the plot is not deleted');
     assert.ok(deleted.includes(BLOCK) && deleted.includes(STEP), 'the delete takes the JSON block or the step span');
     await roundTrip(page, source);
     const { text } = await saveAndReopen(page, `r20-1-${++saves}.html`);
@@ -177,7 +177,7 @@ for (const platform of PLATFORMS) {
   });
 
   test(`a plot over a text is reported as a plot, and its row of the Object List reads Plot (${platform})`, async (t) => {
-    const page = await load(t, platform, ZONE_SLIDE);
+    const page = await load(t, platform, FIGURE_BOX_SLIDE);
     await click(page, `${SLIDE} .plot`);
     await wait(page);
     const p = await page.evaluate(`(() => { const r = document.querySelector('${SLIDE} > p').getBoundingClientRect(), s = document.querySelector('${SLIDE}').getBoundingClientRect(), k = 1920 / s.width; return { x: Math.round((r.left - s.left) * k), y: Math.round((r.top - s.top) * k) }; })()`);

@@ -89,7 +89,7 @@ async function undoes(page, before, what) {
 // the start tags of the figure and of its two images in the text, and the computed angles of the three
 async function figureState(page) {
   const text = await render(page);
-  const start = text.indexOf('<figure class="zone"');
+  const start = text.indexOf('<figure class="figure-box"');
   const tags = text.slice(start, text.indexOf('</figure>', start)).match(/<(figure|img)\b[^>]*>/g);
   const turned = await page.evaluate(`(() => { const f = document.querySelector('section.present figure'); return [f, ...f.querySelectorAll('img')].map((el) => getComputedStyle(el).rotate); })()`);
   return { tags, turned };
@@ -179,7 +179,7 @@ for (const platform of PLATFORMS) {
     test(`Esc during a drag of the rotate handle of a ${route} puts the page and the file back (${platform})`, async (t) => {
       const legacy = route.startsWith('figure');
       const page = legacy
-        ? await load(t, platform, LEGACY, `document.querySelectorAll('figure.zone > img').forEach((i) => i.setAttribute('style', 'rotate: 20deg'))`)
+        ? await load(t, platform, LEGACY, `document.querySelectorAll('figure.figure-box > img').forEach((i) => i.setAttribute('style', 'rotate: 20deg'))`)
         : await load(t, platform);
       await click(page, IMG);
       if (!legacy) await click(page, IMG);

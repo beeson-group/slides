@@ -116,7 +116,7 @@ for (const platform of PLATFORMS) {
   test(`three new tables on the section slide of the layouts page lie off each other and off the words (${platform})`, (t) => newTables(t, platform, LAYOUTS, '.section'));
   test(`three new tables on a title slide lie off each other and off the words (${platform})`, (t) => newTables(t, platform, DECK, '.title'));
   test(`three new tables on a closing slide lie off each other, the QR code, and the words (${platform})`, (t) => newTables(t, platform, DECK, '.closing'));
-  // the panel of the split slide of the layouts page is full after two tables, hence a third one is
+  // the text column of the split slide of the layouts page is full after two tables, hence a third one is
   // put by centerPlace of place.ts
   test(`two new tables on a split slide lie off each other, the zone, and the words (${platform})`, (t) => newTables(t, platform, LAYOUTS, '.split', 2));
 }

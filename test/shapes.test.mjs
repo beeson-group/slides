@@ -179,7 +179,7 @@ test('each geometry of the test deck is drawn in both modes, with the outline in
     await page.waitFor(deckSettled);
     const text = await token(page, '--text');
     const accent = await token(page, '--accent');
-    const [plain, rounded, ellipse, veil] = await looks(page);
+    const [plain, rounded, ellipse, translucent] = await looks(page);
     assert.equal(plain.border, `3px solid ${text}`, theme);
     assert.equal(plain.bg, await mixed(page, '--text', 20, 'var(--bg)'), theme);
     assert.equal(plain.radius, '0px');
@@ -194,8 +194,8 @@ test('each geometry of the test deck is drawn in both modes, with the outline in
     assert.equal(ellipse.radius, '50%');
     assert.equal(ellipse.bg, 'rgba(0, 0, 0, 0)');
     assert.equal(ellipse.border, `3px solid ${await token(page, '--red')}`);
-    assert.equal(veil.border.split(' ')[0], '0px');
-    assert.equal(veil.bg, await mixed(page, '--bg', 75, 'transparent'));
+    assert.equal(translucent.border.split(' ')[0], '0px');
+    assert.equal(translucent.bg, await mixed(page, '--bg', 75, 'transparent'));
     await page.evaluate('Reveal.slide(1)');
     await page.waitFor(deckSettled);
     const drawn = await looks(page);

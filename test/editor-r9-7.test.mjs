@@ -354,7 +354,7 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// dialogs-undo-a11y-10: on the Mac, Return on the card of Present with unsaved changes pressed
+// dialogs-undo-a11y-10: on the Mac, Return on the dialog of Present with unsaved changes pressed
 // Cancel, the focused button, though Save and Present is drawn as the default
 for (const [platform, answer] of [['mac', 'save'], ['other', 'cancel']]) {
   test(`Return on the card of Present with unsaved changes presses ${answer === 'save' ? 'the default button' : 'the focused button'} (${platform})`, async (t) => {
@@ -477,7 +477,7 @@ for (const platform of PLATFORMS) {
 
 // shell-10: the View menu and the View popup listed the views in two orders, and the status bar
 // called the navigator Slides. the View button of the toolbar is a split button since R22.1
-const VIEWS = ['Navigator', 'Slide Only', 'Chapters Table', 'Format', 'Steps', 'Notes'];
+const VIEWS = ['Navigator', 'Slide Only', 'Slide Sorter', 'Format', 'Steps', 'Notes'];
 for (const platform of PLATFORMS) {
   test(`the View menu lists the views in the order of Keynote, with one name each (${platform})`, async (t) => {
     const page = await load(t, platform);

@@ -111,7 +111,7 @@ for (const platform of PLATFORMS) {
       assert.deepEqual(sel, ['figure'], `the click does not select the figure ${at}`);
       await press(page, 'ArrowRight');
       await sleep(300);
-      assert.ok((await render(page)).includes('<figure class="zone" style="translate: 1px 0px">'), `ArrowRight does not nudge the figure ${at}`);
+      assert.ok((await render(page)).includes('<figure class="figure-box" style="translate: 1px 0px">'), `ArrowRight does not nudge the figure ${at}`);
       assert.deepEqual(errors(page), []);
       await page.close();
     }

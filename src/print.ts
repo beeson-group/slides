@@ -35,7 +35,7 @@ function box(viewer: Viewer): HTMLDivElement {
   // the number of the viewer names the recording of its scene in scripts/export-pptx.mjs
   if (viewer.dataset.still !== undefined) still.dataset.still = viewer.dataset.still;
   // the still is placed in the box, which is thus positioned as the viewer, e.g. relative as the
-  // runtime sets it for a viewer that is not a zone, in a plate of the class row
+  // runtime sets it for a viewer that is not a figure box, in a plate of the class row
   still.style.position = getComputedStyle(viewer).position;
   viewer.replaceWith(still);
   return still;

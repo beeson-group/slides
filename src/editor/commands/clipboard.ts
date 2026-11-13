@@ -7,7 +7,7 @@
 // the same offset. the keys of the clipboard are taken from the events cut, copy, and paste, which
 // carry the clipboard in every browser, and ⌘D or Ctrl+D duplicates. an image or a video on the clipboard, e.g. a
 // screenshot or an image copied in another app, is put on the slide through the media store of
-// media/store.ts, into an empty zone or a new one, and its file is written under media/ at the save.
+// media/store.ts, into an empty figure box or a new one, and its file is written under media/ at the save.
 // Paste and Match Style pastes the words of the clipboard into a text in the style at the caret,
 // and it is Paste on the slide
 
@@ -86,7 +86,7 @@ function wordsOf(text: string): string {
   return (body.textContent ?? '').replace(/\s+/g, ' ').trim();
 }
 
-// the containers between a slide and el, each as its tag and first class, e.g. ['div.panel']
+// the containers between a slide and el, each as its tag and first class, e.g. ['div.text-column']
 const stepOf = (el: Element): string => el.localName + (el.classList[0] && !el.classList[0].startsWith('beeson') ? `.${CSS.escape(el.classList[0])}` : '');
 
 function pathOf(el: Element): string[] {
@@ -222,10 +222,10 @@ function freshIds(app: App, text: string): string {
   return docOf(app).freshIds(text, (id) => !!document.getElementById(id));
 }
 
-// the container of the text column of slide, i.e. the panel of a split slide, the block of a title
+// the container of the text column of slide, i.e. the text column of a split slide, the block of a title
 // or closing slide, the words of a section slide, and else the slide
 export function columnOf(slide: Element): Element {
-  return slide.querySelector(':scope > .panel, :scope > .block, :scope > .sec') ?? slide;
+  return slide.querySelector(':scope > .text-column, :scope > .block, :scope > .sec') ?? slide;
 }
 
 // the copies of a group are a new group, as the copies of a drag with the copy modifier in
@@ -294,7 +294,7 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
   if (own) {
     // a paste that lands on a source or a copy, which keep holds at its place, is moved on from
     // where it lands, and a paste with a block in the flow from 20 px off its sources. a plate made
-    // a zone by settleCopies is not in the flow
+    // a figure box by settleCopies is not in the flow
     const inflow = flow.map((f, i) => f && inFlow(app, nodes[i]));
     inflow.forEach((f, i) => f && (floating.add(nodes[i]), onto(app, nodes[i], own.sources[i])));
     const others = (i: number) => [own.sources[i], ...older.map((p) => p[i])];
@@ -366,7 +366,7 @@ async function duplicated(app: App, els: Element[]): Promise<Element[]> {
   relink(app, copies);
   keep((el, translate) => doc.setTag(el, { translate }, 'move'));
   // a block in the flow, which the layout puts under its element, is moved onto it first. a plate
-  // made a zone by settleCopies is not in the flow
+  // made a figure box by settleCopies is not in the flow
   const flow = copies.map((dup, i) => !cover[i] && inFlow(app, dup));
   flow.forEach((f, i) => f && (floating.add(copies[i]), onto(app, copies[i], els[i])));
   const boxes = copies.map((c) => boxOf(app, c));

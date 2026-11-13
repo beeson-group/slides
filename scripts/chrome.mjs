@@ -151,7 +151,7 @@ export async function launch({ offline = true, timeout = 120000, wholeFrames = f
   // is the device pixel ratio. with motion set, the page is shown without reduced motion, which is
   // the setting of the macOS and Windows runners of GitHub, hence a backdrop is traced there too.
   // without drafts, the unsaved edits that the editor keeps in the storage of the browser 1 s after
-  // its last change are not written, since they were offered on a card to the next page of a test
+  // its last change are not written, since they were offered on a dialog to the next page of a test
   async function newPage({ width = 1920, height = 1080, mobile = false, scale = 1, motion = false, drafts = false } = {}) {
     const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
     const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });

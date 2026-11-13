@@ -1,5 +1,5 @@
 // regression tests of R9.9 on both platforms with trusted input: the mode, Invert, and Decorative
-// of an image of a pair for the two modes, a picture added beside a filled zone, a video held still
+// of an image of a pair for the two modes, a picture added beside a filled figure box, a video held still
 // while the deck is edited, Distribute Evenly, the selection after a drop onto a picture and after
 // an undo and a redo of an insert, the Size note of a locked figure, the drag of a file that is not
 // a picture, and Undo with the focus on a control of the inspector. after each edit the text is
@@ -158,7 +158,7 @@ const LAID = `(() => {
     });
     return parts.reduce((a, b) => ({ left: Math.min(a.left, b.left), top: Math.min(a.top, b.top), right: Math.max(a.right, b.right), bottom: Math.max(a.bottom, b.bottom) }));
   };
-  const figures = [...slide.querySelectorAll(':scope > figure, :scope > .zone, :scope > .plate')].filter((f) => f.querySelector('img, video')).map(frame);
+  const figures = [...slide.querySelectorAll(':scope > figure, :scope > .figure-box, :scope > .plate')].filter((f) => f.querySelector('img, video')).map(frame);
   const texts = [...slide.querySelectorAll(':scope > h2, :scope > p, :scope > ul, :scope > ol, :scope > .run, :scope > .foot')].filter((t) => t.getClientRects().length).map(ink);
   return { slide: box(s), figures, texts };
 })()`;
@@ -427,7 +427,7 @@ for (const platform of PLATFORMS) {
     const page = await load(t, platform, { n: FIGURE });
     await click(page, await centerOf(page, shownImage));
     await frames(page);
-    assert.deepEqual(await selection(page), ['figure.zone.beeson-movable']);
+    assert.deepEqual(await selection(page), ['figure.figure-box.beeson-movable']);
     await tap(page, 'Arrange');
     assert.ok(!(await notes(page)).some((n) => n.startsWith(NOTE)), 'the note is shown on the figure before the lock');
     await press(page, 'Mod+L');
@@ -536,7 +536,7 @@ const NEW = {
 // whose place is checked on each
 const PLACES = [
   ['test/pages/editor-layouts.html', [2, 3, 4, 5, 6, 8], ['text', 'code', 'formula', 'qr']],
-  ['test/pages/editor-empty-zone.html', [0, 1, 2], ['text', 'code', 'formula', 'qr']],
+  ['test/pages/editor-empty-figure-box.html', [0, 1, 2], ['text', 'code', 'formula', 'qr']],
   ['test-deck.html', [2, 3, 4], ['text', 'formula', 'qr']],
 ];
 
@@ -650,7 +650,7 @@ const TAGGED = `(() => {
 
 for (const platform of PLATFORMS) {
   test(`${platform}: the tag of a file dragged over an empty zone is not drawn over the buttons of its placeholder`, async (t) => {
-    const path = 'test/pages/editor-empty-zone.html';
+    const path = 'test/pages/editor-empty-figure-box.html';
     const page = await browser.newPage({ width: 1600, height: 1000 });
     t.after(() => page.close().catch(() => {}));
     await page.goto(`${server.origin}/${path}?edit&still&theme=light&edit-platform=${platform}`);
@@ -660,7 +660,7 @@ for (const platform of PLATFORMS) {
     await page.evaluate('Reveal.slide(1)');
     await frames(page);
     assert.equal((await page.evaluate(TAGGED)).buttons, 4);
-    const at = await centerOf(page, '.reveal section.present .zone');
+    const at = await centerOf(page, '.reveal section.present .figure-box');
     const data = { items: [], files: [resolve('demo/figure-light.png')], dragOperationsMask: 1 };
     await page.send('Input.dispatchDragEvent', { type: 'dragEnter', x: at.x, y: at.y, data });
     await page.send('Input.dispatchDragEvent', { type: 'dragOver', x: at.x, y: at.y, data });

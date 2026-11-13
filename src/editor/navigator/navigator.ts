@@ -171,7 +171,7 @@ export class Navigator implements Pane {
   // shown at the last paint, whose mark is taken off once another slide is shown
   private changed = new Set<Element>();
   private last: Element | null = null;
-  // the Chapters Table of sorter.ts, whose tile takes the focus in place of a row while it is shown
+  // the Slide Sorter of sorter.ts, whose tile takes the focus in place of a row while it is shown
   table: { shown: boolean; focus(slide: Element | null): void } | null = null;
 
   constructor(app: App) {
@@ -337,7 +337,7 @@ export class Navigator implements Pane {
   }
 
   // the row of slide gets the focus, e.g. after a command run in the navigator, or its tile while
-  // the Chapters Table is shown
+  // the Slide Sorter is shown
   focus(slide: Element | null = this.app.current()): void {
     if (this.table?.shown) {
       this.app.flush();
@@ -706,7 +706,7 @@ export class Navigator implements Pane {
       }
     });
     clone.querySelectorAll('aside.notes').forEach((n) => n.remove());
-    clone.querySelectorAll<HTMLElement>('.backdrop .lab').forEach((l) => {
+    clone.querySelectorAll<HTMLElement>('.backdrop .label').forEach((l) => {
       if (!l.style.left) l.remove();
     });
     clone.querySelectorAll('tycho-viewer').forEach((v) => {

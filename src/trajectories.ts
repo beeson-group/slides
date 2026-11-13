@@ -1,16 +1,16 @@
-// backdrops drawn from a file of polylines next to the deck, named in the attribute data-strands of
+// backdrops drawn from a file of polylines next to the deck, named in the attribute data-trajectories of
 // a `.backdrop`. the format of the file is described in REFERENCE.md under "Backdrops"
 
-import type { Strand, Tone } from './orbits.ts';
+import type { Trajectory, Tone } from './orbits.ts';
 
 // one polyline of a file, e.g. one member of a family in one frame. t or theta, when given, is the
 // clock of each point, e.g. the time or the true anomaly. craft, when true, marks the path of a
-// spacecraft. the look of the strand is set with tone, a color of the theme, color, a CSS color or
+// spacecraft. the look of the trajectory is set with tone, a color of the theme, color, a CSS color or
 // a pair of them for the dark and the light mode in place of the color of the tone, alpha, its
 // opacity, weight, its width in line widths, head, the radius of its head in line widths, start,
 // the clock at which its trace begins, fade, the seconds of its clock from its first point after
 // which its opacity falls to zero at its last point, and glow. the other keys are free
-export type StrandRecord = {
+export type TrajectoryData = {
   points: [number, number][];
   t?: number[];
   theta?: number[];
@@ -25,7 +25,7 @@ export type StrandRecord = {
   glow?: boolean;
   [key: string]: unknown;
 };
-export type StrandFile = { families: StrandRecord[]; bodies: Record<string, unknown>[] };
+export type TrajectoryFile = { families: TrajectoryData[]; bodies: Record<string, unknown>[] };
 // a body drawn as a dot, with the fraction of the total mass that sets its radius when it is known
 export type Dot = { x: number; y: number; mass?: number };
 // the window of a backdrop: its center and its half height, in the units of the file
@@ -33,13 +33,13 @@ export type View = { cx: number; cy: number; half: number };
 // a box in slide pixels
 export type Box = { left: number; top: number; width: number; height: number };
 
-// the fraction of the drawing held in the window of a fitted backdrop, with each strand weighted
+// the fraction of the drawing held in the window of a fitted backdrop, with each trajectory weighted
 // equally along its length. it is the fraction of tubes held in the window of the closing slide of
 // the demo deck
 export const FILL = 0.93;
 // the margin in slide pixels between a drawing and an edge of its box inside the slide
 const MARGIN = 40;
-// the opacity of a strand colored from the palette, a little above the 0.42 of the tones orange and
+// the opacity of a trajectory colored from the palette, a little above the 0.42 of the tones orange and
 // violet, since a member of a family is not overlaid by a dense tube
 const INK_ALPHA = 0.6;
 
@@ -49,16 +49,16 @@ const isObject = (v: unknown): v is Record<string, unknown> => typeof v === 'obj
 const isColorString = (v: unknown): v is string => typeof v === 'string' && v.trim() !== '';
 const isColor = (v: unknown): v is string | [string, string] =>
   isColorString(v) || (Array.isArray(v) && v.length === 2 && v.every(isColorString));
-// the tones of a record of a file. hero and line are the tones of the named scenes only
+// the tones of a trajectory of a file. hero and line are the tones of the built-in backdrops only
 const TONES = ['orange', 'violet', 'text'];
 
-// the records and bodies of a parsed file. throws an Error that says what is malformed
-export function parse(data: unknown): StrandFile {
-  const records = isObject(data) ? data.families : undefined;
-  if (!Array.isArray(records)) throw new Error('it does not have a list "families"');
-  records.forEach((r: unknown, i) => {
+// the trajectories and bodies of a parsed file. throws an Error that says what is malformed
+export function parse(data: unknown): TrajectoryFile {
+  const fileTrajectories = isObject(data) ? data.families : undefined;
+  if (!Array.isArray(fileTrajectories)) throw new Error('it does not have a list "families"');
+  fileTrajectories.forEach((r: unknown, i) => {
     if (!isObject(r) || !Array.isArray(r.points) || r.points.length < 2 || !r.points.every(isPair)) {
-      throw new Error(`its record ${i} does not have a list "points" of at least two [x, y] pairs`);
+      throw new Error(`its trajectory ${i} does not have a list "points" of at least two [x, y] pairs`);
     }
     for (const key of ['t', 'theta']) {
       const clock = r[key];
@@ -66,46 +66,46 @@ export function parse(data: unknown): StrandFile {
         clock !== undefined &&
         (!Array.isArray(clock) || clock.length !== r.points.length || !clock.every(Number.isFinite))
       ) {
-        throw new Error(`the list "${key}" of its record ${i} does not have one number per point`);
+        throw new Error(`the list "${key}" of its trajectory ${i} does not have one number per point`);
       }
     }
     if (r.tone !== undefined && !TONES.includes(r.tone as string)) {
-      throw new Error(`the "tone" of its record ${i} is not orange, violet, or text`);
+      throw new Error(`the "tone" of its trajectory ${i} is not orange, violet, or text`);
     }
     if (r.color !== undefined && !isColor(r.color)) {
-      throw new Error(`the "color" of its record ${i} is not a CSS color or a pair of them for the dark and the light mode`);
+      throw new Error(`the "color" of its trajectory ${i} is not a CSS color or a pair of them for the dark and the light mode`);
     }
     if (r.alpha !== undefined && !(typeof r.alpha === 'number' && r.alpha > 0 && r.alpha <= 1)) {
-      throw new Error(`the "alpha" of its record ${i} is not a number above 0 and up to 1`);
+      throw new Error(`the "alpha" of its trajectory ${i} is not a number above 0 and up to 1`);
     }
     for (const key of ['weight', 'head', 'start', 'fade']) {
       const v = r[key];
       if (v !== undefined && !(typeof v === 'number' && Number.isFinite(v) && v >= 0)) {
-        throw new Error(`the "${key}" of its record ${i} is not a number of zero or more`);
+        throw new Error(`the "${key}" of its trajectory ${i} is not a number of zero or more`);
       }
     }
     if (r.glow !== undefined && typeof r.glow !== 'boolean') {
-      throw new Error(`the "glow" of its record ${i} is not true or false`);
+      throw new Error(`the "glow" of its trajectory ${i} is not true or false`);
     }
   });
   const bodies = isObject(data) && Array.isArray(data.bodies) ? data.bodies.filter(isObject) : [];
-  return { families: records as StrandRecord[], bodies };
+  return { families: fileTrajectories as TrajectoryData[], bodies };
 }
 
 const TERM = /^\s*([^=<>\s]+)\s*(<=|>=|=|<|>)\s*(.*?)\s*$/;
 
-// the records chosen by spec, the value of data-strands-select. spec is a list of groups separated
-// by semicolons, and a record is chosen when it passes every term of a group. the terms of a group
+// the trajectories chosen by spec, the value of data-trajectories-select. spec is a list of groups separated
+// by semicolons, and a trajectory is chosen when it passes every term of a group. the terms of a group
 // are separated by commas, and a term is key=a, or key=a|b for either value, or key<v, key<=v,
 // key>v, or key>=v for a number. throws an Error on a term of another form
-export function select(records: StrandRecord[], spec: string | undefined): StrandRecord[] {
-  if (!spec?.trim()) return records;
+export function select(fileTrajectories: TrajectoryData[], spec: string | undefined): TrajectoryData[] {
+  if (!spec?.trim()) return fileTrajectories;
   const groups = spec.split(';').map(group);
-  return records.filter((r) => groups.some((tests) => tests.every((test) => test(r))));
+  return fileTrajectories.filter((r) => groups.some((tests) => tests.every((test) => test(r))));
 }
 
-function group(spec: string): ((r: StrandRecord) => boolean)[] {
-  return spec.split(',').map((term): ((r: StrandRecord) => boolean) => {
+function group(spec: string): ((r: TrajectoryData) => boolean)[] {
+  return spec.split(',').map((term): ((r: TrajectoryData) => boolean) => {
     const m = TERM.exec(term);
     if (!m || m[3] === '') throw new Error(`"${term.trim()}" is not a term key=value, key<number, or key>number`);
     const [, key, op, value] = m;
@@ -123,20 +123,20 @@ function group(spec: string): ((r: StrandRecord) => boolean)[] {
   });
 }
 
-// the strands of the records chosen from file. with color, the key of data-strands-color, each value
-// of this key takes a pair of colors of the palette, in the order of its first record in the file.
-// with ramp, the key of data-strands-ramp, a strand is colored from the first color of its pair at the
-// smallest value of ramp among the chosen records of its pair to the second at the largest. with
-// shade, the key of data-strands-shade, which is used in place of ramp, a strand is drawn in a shade of
+// the polylines of the trajectories chosen from file. with color, the key of data-trajectories-color, each value
+// of this key takes a pair of colors of the palette, in the order of its first trajectory in the file.
+// with ramp, the key of data-trajectories-ramp, a trajectory is colored from the first color of its pair at the
+// smallest value of ramp among the chosen trajectories of its pair to the second at the largest. with
+// shade, the key of data-trajectories-shade, which is used in place of ramp, a trajectory is drawn in a shade of
 // the first color of its pair, from a lighter shade at the smallest value to a darker at the largest.
-// with map, the colormap of data-strands-colormap, a strand is colored from map at its fraction along
-// ramp instead, and shade is ignored. the clock of a strand is moved by the start of its record, and
-// the look of the record is copied
-export function strandsOf(file: StrandFile, chosen: StrandRecord[], color?: string, ramp?: string, shade?: string, map?: Colormap): Strand[] {
+// with map, the colormap of data-trajectories-colormap, a trajectory is colored from map at its fraction along
+// ramp instead, and shade is ignored. the clock of a trajectory is moved by the start of its trajectory, and
+// the look of the trajectory is copied
+export function trajectoriesOf(file: TrajectoryFile, chosen: TrajectoryData[], color?: string, ramp?: string, shade?: string, map?: Colormap): Trajectory[] {
   if (map) shade = undefined;
   const along = shade ?? ramp;
   const order = color ? [...new Set(file.families.map((r) => String(r[color])))] : [];
-  const pairOf = (r: StrandRecord) => (color ? order.indexOf(String(r[color])) : 0);
+  const pairOf = (r: TrajectoryData) => (color ? order.indexOf(String(r[color])) : 0);
   const range = new Map<number, [number, number]>();
   if (along) {
     for (const r of chosen) {
@@ -155,43 +155,43 @@ export function strandsOf(file: StrandFile, chosen: StrandRecord[], color?: stri
     for (let i = 0; i < n; i++) {
       pts[2 * i] = r.points[i][0];
       pts[2 * i + 1] = r.points[i][1];
-      // without a clock, a strand is traced at a uniform speed along its length
+      // without a clock, a trajectory is traced at a uniform speed along its length
       if (i > 0 && !clock) length += Math.hypot(pts[2 * i] - pts[2 * i - 2], pts[2 * i + 1] - pts[2 * i - 1]);
       times[i] = (clock ? clock[i] - clock[0] : length) + (r.start ?? 0);
     }
-    const strand: Strand = { pts, times, T: times[n - 1] };
-    if (r.craft === true) strand.craft = true;
+    const trajectory: Trajectory = { pts, times, T: times[n - 1] };
+    if (r.craft === true) trajectory.craft = true;
     if (color || along || map) {
       const pair = pairOf(r),
         [lo, hi] = range.get(pair) ?? [0, 0],
         v = along ? r[along] : undefined;
-      strand.ink = { pair, at: typeof v === 'number' && hi > lo ? (v - lo) / (hi - lo) : 0 };
-      if (shade) strand.ink.shade = true;
-      if (map) strand.ink.map = map;
-      strand.alpha = map ? MAP_ALPHA : INK_ALPHA;
+      trajectory.ink = { pair, at: typeof v === 'number' && hi > lo ? (v - lo) / (hi - lo) : 0 };
+      if (shade) trajectory.ink.shade = true;
+      if (map) trajectory.ink.map = map;
+      trajectory.alpha = map ? MAP_ALPHA : INK_ALPHA;
     }
-    if (r.tone) strand.tone = r.tone;
-    if (r.color !== undefined) strand.color = r.color;
-    if (r.alpha !== undefined) strand.alpha = r.alpha;
-    if (r.weight !== undefined) strand.weight = r.weight;
-    if (r.head !== undefined) strand.head = r.head;
-    if (r.fade !== undefined) strand.fade = r.fade;
-    if (r.glow) strand.glow = true;
-    return strand;
+    if (r.tone) trajectory.tone = r.tone;
+    if (r.color !== undefined) trajectory.color = r.color;
+    if (r.alpha !== undefined) trajectory.alpha = r.alpha;
+    if (r.weight !== undefined) trajectory.weight = r.weight;
+    if (r.head !== undefined) trajectory.head = r.head;
+    if (r.fade !== undefined) trajectory.fade = r.fade;
+    if (r.glow) trajectory.glow = true;
+    return trajectory;
   });
 }
 
 // the distance in the units of a file within which two positions of a body are taken as one
 const SAME = 1e-4;
 
-// the bodies of the chosen records, drawn only when every chosen record puts the same bodies at the
+// the bodies of the chosen trajectories, drawn only when every chosen trajectory puts the same bodies at the
 // same positions within SAME, e.g. m1 and m2 of one mass ratio in the rotating-pulsating frame. none
-// is drawn otherwise, e.g. in the inertial frame, where the bodies move, or for records of two mass
-// ratios. a body record of the file is matched to a record when every number, string, or boolean of
-// the body record is equal to the value of the same key in the record, if the record has this key.
-// the positions are read from the object of the body record named by the frame of the record, or
-// from the body record itself. m1 and m2 are given the masses 1 - mu and mu
-export function bodiesOf(file: StrandFile, chosen: StrandRecord[]): Dot[] {
+// is drawn otherwise, e.g. in the inertial frame, where the bodies move, or for trajectories of two mass
+// ratios. a body entry of the file is matched to a trajectory when every number, string, or boolean of
+// the body entry is equal to the value of the same key in the trajectory, if the trajectory has this key.
+// the positions are read from the object of the body entry named by the frame of the trajectory, or
+// from the body entry itself. m1 and m2 are given the masses 1 - mu and mu
+export function bodiesOf(file: TrajectoryFile, chosen: TrajectoryData[]): Dot[] {
   const apart = (a: Dot, b: Dot) => Math.hypot(a.x - b.x, a.y - b.y) > SAME;
   let first: Map<string, Dot> | null = null;
   for (const r of chosen) {
@@ -217,11 +217,11 @@ export function bodiesOf(file: StrandFile, chosen: StrandRecord[]): Dot[] {
   return first ? [...first.values()] : [];
 }
 
-// the window of the box in which FILL of the strands is held, centered on the middle of the
+// the window of the box in which FILL of the trajectories is held, centered on the middle of the
 // drawing. the drawing may run off the slide, but an edge of the box inside the slide is kept
-// MARGIN slide pixels clear of it, as asked in AGENTS.md of every backdrop. null without strands
-export function fitView(strands: Strand[], box: Box, slide: { width: number; height: number }): View | null {
-  // the midpoints of the segments, with weights that sum to 1 on each strand
+// MARGIN slide pixels clear of it, as asked in AGENTS.md of every backdrop. null without trajectories
+export function fitView(trajectories: Trajectory[], box: Box, slide: { width: number; height: number }): View | null {
+  // the midpoints of the segments, with weights that sum to 1 on each trajectory
   const xs: number[] = [],
     ys: number[] = [],
     ws: number[] = [];
@@ -229,7 +229,7 @@ export function fitView(strands: Strand[], box: Box, slide: { width: number; hei
     x1 = -Infinity,
     y0 = Infinity,
     y1 = -Infinity;
-  for (const s of strands) {
+  for (const s of trajectories) {
     const p = s.pts,
       n = p.length / 2;
     let length = 0;
@@ -373,7 +373,7 @@ export function shadeOf(color: string, at: number, bg?: string): string | null {
   return shade(light + (dark - light) * at);
 }
 
-// the colormaps of matplotlib named in data-strands-colormap, as colors at even stops from 0 to 1.
+// the colormaps of matplotlib named in data-trajectories-colormap, as colors at even stops from 0 to 1.
 // the stops were sampled from matplotlib's own viridis, plasma, and Blues_r at 17 stops each.
 // interpolated linearly in sRGB, they stay within 0.6 of matplotlib in OKLab distance times 100 at
 // every point, and they give the ends of colormapEnds() that matplotlib gives on --bg of the dark
@@ -400,11 +400,11 @@ export type Colormap = { name: ColormapName; lo: number; hi: number };
 // the least WCAG contrast of an end of a colormap, drawn opaque, against the background, as in
 // matplotlib figures drawn for the slides, whose dark end is cut in dark mode until it keeps 3:1
 export const MAP_CONTRAST = 3;
-// the opacity of a strand colored from a colormap. it is opaque, hence the color on the slide is the
+// the opacity of a trajectory colored from a colormap. it is opaque, hence the color on the slide is the
 // color of the matplotlib figures, and the MAP_CONTRAST of colormapEnds() holds as drawn
 export const MAP_ALPHA = 1;
 
-// the colormap of spec, the value of data-strands-colormap: a name of COLORMAPS, alone or followed by
+// the colormap of spec, the value of data-trajectories-colormap: a name of COLORMAPS, alone or followed by
 // a lower and an upper end, e.g. viridis 0 0.85. throws an Error that says what is malformed
 export function colormapOf(spec: string): Colormap {
   const [name, ...ends] = spec.trim().split(/\s+/);
@@ -501,9 +501,9 @@ const hex = (c: [number, number, number]) =>
 
 // the data given by the script files that were run, by their absolute URLs
 const given = new Map<string, unknown>();
-const files = new Map<string, Promise<StrandFile | null>>();
+const files = new Map<string, Promise<TrajectoryFile | null>>();
 
-// called in a script file of polylines, i.e. a JSON file wrapped in Beeson.strands( and );, which is
+// called in a script file of polylines, i.e. a JSON file wrapped in Beeson.trajectories( and );, which is
 // read in a deck opened from the disk, where a JSON file cannot be fetched
 export function register(data: unknown): void {
   const script = document.currentScript;
@@ -515,7 +515,7 @@ function read(url: string, path: string): Promise<unknown> {
     if (location.protocol === 'file:') {
       return Promise.reject(
         new Error(
-          `a JSON file cannot be read in a deck opened from the disk. Wrap it in Beeson.strands( and ); and name the .js file in data-strands`,
+          `a JSON file cannot be read in a deck opened from the disk. Wrap it in Beeson.trajectories( and ); and name the .js file in data-trajectories`,
         ),
       );
     }
@@ -529,7 +529,7 @@ function read(url: string, path: string): Promise<unknown> {
     const script = document.createElement('script');
     script.src = url;
     script.onload = () =>
-      given.has(url) ? done(given.get(url)) : fail(new Error(`${path} does not call Beeson.strands`));
+      given.has(url) ? done(given.get(url)) : fail(new Error(`${path} does not call Beeson.trajectories`));
     script.onerror = () => fail(new Error('it was not found'));
     document.head.append(script);
   });
@@ -537,7 +537,7 @@ function read(url: string, path: string): Promise<unknown> {
 
 // the parsed file at path, relative to the deck, read once for all the backdrops that name it. a
 // missing or malformed file is reported in one console warning and given as null
-export function load(path: string): Promise<StrandFile | null> {
+export function load(path: string): Promise<TrajectoryFile | null> {
   const url = new URL(path, document.baseURI).href;
   let out = files.get(url);
   if (!out) {
@@ -552,47 +552,47 @@ export function load(path: string): Promise<StrandFile | null> {
   return out;
 }
 
-// the colormap of the backdrop el from its attribute data-strands-colormap, or undefined without it.
-// a malformed attribute is reported in a warning, and the strands are then colored from the palette
+// the colormap of the backdrop el from its attribute data-trajectories-colormap, or undefined without it.
+// a malformed attribute is reported in a warning, and the trajectories are then colored from the palette
 function colormapFor(el: HTMLElement): Colormap | undefined {
-  const spec = el.dataset.strandsColormap;
+  const spec = el.dataset.trajectoriesColormap;
   if (!spec?.trim()) return undefined;
   let map: Colormap;
   try {
     map = colormapOf(spec);
   } catch (error) {
-    console.warn(`beeson: data-strands-colormap="${spec}" is not used, since ${(error as Error).message}. The strands are colored from the palette`);
+    console.warn(`beeson: data-trajectories-colormap="${spec}" is not used, since ${(error as Error).message}. The trajectories are colored from the palette`);
     return undefined;
   }
-  if (el.dataset.strandsShade)
-    console.warn(`beeson: data-strands-shade="${el.dataset.strandsShade}" is ignored, since data-strands-colormap is given`);
+  if (el.dataset.trajectoriesShade)
+    console.warn(`beeson: data-trajectories-shade="${el.dataset.trajectoriesShade}" is ignored, since data-trajectories-colormap is given`);
   return map;
 }
 
-// the strands and bodies of the backdrop el, from its attributes data-strands, data-strands-select,
-// data-strands-color, data-strands-ramp, data-strands-shade, and data-strands-colormap. never throws,
+// the trajectories and bodies of the backdrop el, from its attributes data-trajectories, data-trajectories-select,
+// data-trajectories-color, data-trajectories-ramp, data-trajectories-shade, and data-trajectories-colormap. never throws,
 // and gives empty lists after a warning
-export async function strandsFor(el: HTMLElement): Promise<{ strands: Strand[]; dots: Dot[] }> {
-  const path = el.dataset.strands ?? '';
+export async function trajectoriesFor(el: HTMLElement): Promise<{ trajectories: Trajectory[]; dots: Dot[] }> {
+  const path = el.dataset.trajectories ?? '';
   const file = await load(path);
-  if (!file) return { strands: [], dots: [] };
+  if (!file) return { trajectories: [], dots: [] };
   try {
-    const chosen = select(file.families, el.dataset.strandsSelect);
+    const chosen = select(file.families, el.dataset.trajectoriesSelect);
     if (!chosen.length)
-      console.warn(`beeson: data-strands-select="${el.dataset.strandsSelect}" does not match a record of ${path}`);
+      console.warn(`beeson: data-trajectories-select="${el.dataset.trajectoriesSelect}" does not match a trajectory of ${path}`);
     return {
-      strands: strandsOf(
+      trajectories: trajectoriesOf(
         file,
         chosen,
-        el.dataset.strandsColor || undefined,
-        el.dataset.strandsRamp || undefined,
-        el.dataset.strandsShade || undefined,
+        el.dataset.trajectoriesColor || undefined,
+        el.dataset.trajectoriesRamp || undefined,
+        el.dataset.trajectoriesShade || undefined,
         colormapFor(el),
       ),
       dots: bodiesOf(file, chosen),
     };
   } catch (error) {
     console.warn(`beeson: the backdrop of ${path} is not drawn, since ${(error as Error).message}`);
-    return { strands: [], dots: [] };
+    return { trajectories: [], dots: [] };
   }
 }

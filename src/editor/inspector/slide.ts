@@ -135,7 +135,7 @@ function sketch(layout: string, width: Width): SVGSVGElement {
       rect(31, 6, 29, 24, faint);
       break;
     default: {
-      // the text column of a wide slide runs over the place of the zone, up to the right margin
+      // the text column of a wide slide runs over the place of the figure box, up to the right margin
       const w = width === 'narrow' ? 22 : width === 'wide' ? 54 : 30;
       words(5, 5, w, 5);
       // the backdrop of a narrow slide runs from 920 px of 1920 to the right edge at full height,

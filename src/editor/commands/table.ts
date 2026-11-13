@@ -40,7 +40,7 @@ import { Dialog } from '../ui/dialog.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { icon } from '../ui/icons.ts';
 import { closeMenus, menuOpen, openMenu, type MenuItem } from '../ui/menu.ts';
-import { columnPlace, freeZone, meets, slideBox, takenBox, type Box as SlideBox } from './insert.ts';
+import { columnPlace, freeFigureBox, meets, slideBox, takenBox, type Box as SlideBox } from './insert.ts';
 import { centerPlace, drawnCells, framed, MARGIN, piecesOf, wordBox } from './place.ts';
 import { checkOverlaps } from '../overflow.ts';
 import { MARK } from './slide.ts';
@@ -403,7 +403,7 @@ async function moveLines(app: App, table: HTMLTableElement, kind: Line, lo: numb
 }
 
 // a table of rows of cells put at its place in the layout of the current slide, and then moved
-// where it fits by placeTable, with every row, or put into the empty zone into. with markup, each
+// where it fits by placeTable, with every row, or put into the empty figure box into. with markup, each
 // cell of rows is HTML rather than text, and heads are the kinds of the cells of tableHtml
 async function insertTable(app: App, rows: string[][], into: Element | null = null, markup = false, heads: boolean[][] | null = null): Promise<HTMLTableElement> {
   const slide = app.current()!;
@@ -445,11 +445,11 @@ async function newTable(app: App, size: Size, into: Element | null = null): Prom
   if (first) placeCaret(first, 0);
 }
 
-// the table picker opened at anchor, e.g. by the table button of the placeholder of an empty zone,
-// whose table is put into the zone
-export function pickTableInto(app: App, zone: Element, anchor: DOMRect): void {
+// the table picker opened at anchor, e.g. by the table button of the placeholder of an empty figure box,
+// whose table is put into the figure box
+export function pickTableInto(app: App, figureBox: Element, anchor: DOMRect): void {
   const fail = (e: unknown) => app.fail(e);
-  const into = (size: Size) => (zone.isConnected ? newTable(app, size, zone) : Promise.resolve()).catch(fail);
+  const into = (size: Size) => (figureBox.isConnected ? newTable(app, size, figureBox) : Promise.resolve()).catch(fail);
   openPicker(app, anchor, (s) => void into(s), (rested) => void askSize(app, rested).then((s) => s && into(s)).catch(fail));
 }
 
@@ -461,7 +461,7 @@ const STEP = 20;
 
 // a new table put where it fits on its slide, with every row, inside the margins of the slide, and
 // with room around it for its bars: under the blocks before it, else at
-// the center of the free area where the layout puts a zone, else at the free place nearest to it.
+// the center of the free area where the layout puts a figure box, else at the free place nearest to it.
 // the space that an element takes is the rule wordBox of place.ts, and a backdrop that is not behind
 // the words of its layout takes its drawn cells. without a free place, the table
 // is put by centerPlace of place.ts at the center of the slide or near it, off the figures and the
@@ -489,7 +489,7 @@ function placeTable(app: App, table: HTMLTableElement): void {
   const before = taken(above.filter((el) => !ground(el)));
   // the words and the tables of the block of a title, section, or closing slide are counted, also
   // in the block that holds the new table
-  const kids = [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *, :scope > .block > *, :scope > .sec > *')].filter((el) => !el.contains(table));
+  const kids = [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .text-column > *, :scope > .block > *, :scope > .sec > *')].filter((el) => !el.contains(table));
   const others = taken(kids.flatMap((el) => (ground(el) ? [...el.children].filter((c) => c.getClientRects().length) : [el])));
   const tw = t.right - t.left;
   const th = t.bottom - t.top;
@@ -509,13 +509,13 @@ function placeTable(app: App, table: HTMLTableElement): void {
   const from = top >= h || parent === slide && slide.matches('.title, .closing') ? center : at(left, top);
   let best: SlideBox | null = null;
   let place: SlideBox | null = null;
-  const zone = free(at(left, top)) ? null : freeZone(app, slide, table);
+  const figureBox = free(at(left, top)) ? null : freeFigureBox(app, slide, table);
   // the free places on a grid of STEP px under the heading of the slide, the nearest one taken
   const under = head ? (headBox?.bottom ?? 0) + room : room;
   for (const d of drawn.length ? [drawn, []] : [drawn]) {
     ink = d;
     place = free(at(left, top)) ? at(left, top) : null;
-    const b = zone && at((zone.left + zone.right - tw) / 2, (zone.top + zone.bottom - th) / 2);
+    const b = figureBox && at((figureBox.left + figureBox.right - tw) / 2, (figureBox.top + figureBox.bottom - th) / 2);
     if (!place && b && free(b)) place = b;
     let near = Infinity;
     for (const y of place ? [] : [from.top, ...Array.from({ length: Math.max(0, Math.floor((floor - th - under) / STEP) + 1) }, (_, i) => under + i * STEP)]) {

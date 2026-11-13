@@ -23,12 +23,12 @@ const REGROUP_KEY = { mac: 'Mod+Alt+J', other: 'Mod+Shift+J' };
 const A = 'section.present img[alt="A first figure"]';
 const B = 'section.present img[alt="A second figure"]';
 const C = 'section.present img[alt="A third figure"]';
-const FIG_A = '<figure class="zone" data-group="g1">';
-const FIG_B = '<figure class="zone" data-group="g1" style="translate: -300px 100px">';
+const FIG_A = '<figure class="figure-box" data-group="g1">';
+const FIG_B = '<figure class="figure-box" data-group="g1" style="translate: -300px 100px">';
 const PARA = '<p>A paragraph beside the figures</p>';
 // the first slide with the figures A and B in g1 inside g2, and the paragraph in g2
-const NESTED = SOURCE.replace(FIG_A, '<figure class="zone" data-group="g2 g1">')
-  .replace(FIG_B, '<figure class="zone" data-group="g2 g1" style="translate: -300px 100px">')
+const NESTED = SOURCE.replace(FIG_A, '<figure class="figure-box" data-group="g2 g1">')
+  .replace(FIG_B, '<figure class="figure-box" data-group="g2 g1" style="translate: -300px 100px">')
   .replace(PARA, '<p data-group="g2">A paragraph beside the figures</p>');
 
 let browser;
@@ -285,7 +285,7 @@ for (const platform of PLATFORMS) {
     await frames(page);
     const deleted = await render(page);
     assert.doesNotMatch(deleted, /A first figure/);
-    assert.match(deleted, /<figure class="zone" data-group="g2 g1" style="translate: -300px 100px">/);
+    assert.match(deleted, /<figure class="figure-box" data-group="g2 g1" style="translate: -300px 100px">/);
     assert.match(deleted, /A third figure/);
     await undo(page);
     assert.equal(await render(page), before);

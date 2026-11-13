@@ -122,7 +122,7 @@ export function install(app: App): void {
     let over = 0;
     const pairs: { text: Element; fig: Element }[] = [];
     if (slide && box.width > 0) {
-      const foot = slide.querySelector(':scope > .foot, :scope > .panel > .foot');
+      const foot = slide.querySelector(':scope > .foot, :scope > .text-column > .foot');
       const past = (r: DOMRect) => r.right > box.right + 1 || r.bottom > box.bottom + 1 || r.left < box.left - 1 || r.top < box.top - 1;
       const meets = (r: DOMRect, b: DOMRect | undefined) => !!b && b.height > 0 && r.bottom > b.top + 1 && r.top < b.bottom - 1 && r.right > b.left + 1 && r.left < b.right - 1;
       const above = slide.matches('.figure') ? [...slide.querySelectorAll(':scope > h2, :scope > .run')].map((e) => e.getBoundingClientRect()) : [];

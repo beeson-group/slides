@@ -12,7 +12,7 @@ const FPS = 60;
 
 // the bounds of the comparisons, above the values measured on a Mac. a channel of a pixel differs
 // by mean on average, by at most max, and by more than 8 in at most a fraction few of the pixels.
-// a frame of the video differs from its composed frame along the hairlines of the strands, whose
+// a frame of the video differs from its composed frame along the hairlines of the trajectories, whose
 // color is halved in H.264 at 4:2:0, by mean 0.55, max 134, and few 0.034 at frame 30 with the
 // software encoder, and by about as much with the encoder of macOS at a quantizer of 10. the still
 // with the picture of the words differs from the print view by at most mean 0.0008, max 99, and

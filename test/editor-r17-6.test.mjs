@@ -2,7 +2,7 @@
 // inspector enters the value as an entry of its own and undoes it, as the Undo of the toolbar does
 // (6e, N29), and the Undo of the toolbar keeps the focus in the field (N32). the report of an
 // overlap comes back after an undo of a drag (N20), and it names three kinds of figures (N13,
-// N22). the well Slide Layout draws Content, Narrow as its tile does (N55), and the card of
+// N22). the well Slide Layout draws Content, Narrow as its tile does (N55), and the dialog of
 // PowerPoint... names the attached file and leaves out a folder that it does not know (N42)
 
 import assert from 'node:assert/strict';
@@ -18,7 +18,7 @@ const PLATFORMS = ['mac', 'other'];
 // slide 5 of the demo deck, with a heading, a paragraph, a list of three items, and a figure
 const FIGURES = 4;
 const SLIDE = '.reveal .slides > section.present';
-const IMG = `${SLIDE} figure.zone img.for-dark`;
+const IMG = `${SLIDE} figure.figure-box img.for-dark`;
 
 let browser;
 let server;
@@ -252,7 +252,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  // N42: over HTTP at the root, the card read 'run in the folder of the deck, i.e. /', and it
+  // N42: over HTTP at the root, the dialog read 'run in the folder of the deck, i.e. /', and it
   // named index.html after the deck was saved into another file
   test(`the card of PowerPoint... names the attached file and leaves out the folder of an address (${platform})`, async (t) => {
     const page = await load(t, platform);
@@ -263,7 +263,7 @@ for (const platform of PLATFORMS) {
       await window.BeesonEditor.save();
       return true;
     })()`);
-    // the card is open until it is closed, hence the command is not awaited
+    // the dialog is open until it is closed, hence the command is not awaited
     await page.evaluate(`void window.BeesonEditor.exec('file.export.pptx'); true`);
     await wait(page);
     const shown = await page.evaluate(`(() => { const d = document.querySelector('dialog.beeson-edit-card.pptx'); return d && d.open ? { text: d.textContent, code: d.querySelector('code')?.textContent ?? null } : null; })()`);

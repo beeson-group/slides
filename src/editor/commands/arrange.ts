@@ -18,14 +18,14 @@ import { groupsOf } from '../model/groups.ts';
 import { onSlides } from './slide.ts';
 import { injectStyle } from '../ui/dom.ts';
 
-// a ghosted step is drawn ghosted while every step is shown at full opacity, as in theme/beeson.css
-const CSS = `html.beeson-editing .reveal .slides section .fragment.ghost { opacity: 0.25 !important; }`;
+// a faint step is drawn faint while every step is shown at full opacity, as in theme/beeson.css
+const CSS = `html.beeson-editing .reveal .slides section .fragment.faint { opacity: 0.25 !important; }`;
 
-// the objects that Ghosted acts on: the figure of a picture selected inside it, a block, a line
-const ghostEls = (app: App): Element[] => movedEls(app).filter((el) => el.localName !== 'section' && !!app.pairing?.elements.get(el)?.open);
-const ghosted = (app: App): boolean => {
-  const els = ghostEls(app);
-  return els.length > 0 && els.every((el) => el.classList.contains('ghost'));
+// the objects that Faint acts on: the figure of a picture selected inside it, a block, a line
+const faintEls = (app: App): Element[] => movedEls(app).filter((el) => el.localName !== 'section' && !!app.pairing?.elements.get(el)?.open);
+const isFaint = (app: App): boolean => {
+  const els = faintEls(app);
+  return els.length > 0 && els.every((el) => el.classList.contains('faint'));
 };
 
 // the nudges of the same elements closer than this, in ms, are one entry of the history
@@ -272,17 +272,17 @@ export function commands(): Command[] {
       run: (app) => step(app, true),
     },
     {
-      // the opacity of Keynote and PowerPoint as one token of the theme, the class ghost, on every
-      // selected object, or off every one when each is ghosted
-      id: 'arrange.ghost',
-      label: 'Ghosted',
+      // the opacity of Keynote and PowerPoint as one token of the theme, the class faint, on every
+      // selected object, or off every one when each is faint
+      id: 'arrange.faint',
+      label: 'Faint',
       in: ['canvas'],
       undoable: true,
-      enabled: (app) => ghostEls(app).length > 0,
-      checked: ghosted,
+      enabled: (app) => faintEls(app).length > 0,
+      checked: isFaint,
       run: (app) => {
-        const on = !ghosted(app);
-        for (const el of ghostEls(app)) if (el.classList.contains('ghost') !== on) app.doc.setTag(el, { classes: { ghost: on } }, 'ghost');
+        const on = !isFaint(app);
+        for (const el of faintEls(app)) if (el.classList.contains('faint') !== on) app.doc.setTag(el, { classes: { faint: on } }, 'faint');
         app.markDirty();
         app.invalidate('content');
       },

@@ -21,8 +21,8 @@ const LAYOUTS = 'test/pages/editor-layouts.html';
 const MULTI = 'test/pages/editor-multi.html';
 const SECTIONS = [...readFileSync(LAYOUTS, 'utf8').matchAll(/<section[\s\S]*?<\/section>/g)].map((m) => m[0]);
 const MATH = SECTIONS.findIndex((s) => s.includes('<h2>Math, an ordered list, and a zone</h2>'));
-const ZONE_IMG = '.reveal section.present .zone > img';
-const FIG = '.reveal section.present figure.zone';
+const FIGURE_BOX_IMG = '.reveal section.present .figure-box > img';
+const FIG = '.reveal section.present figure.figure-box';
 // the folder of the screenshots, which are taken only where it is given
 const SHOTS = process.env.R64_SHOTS ?? null;
 
@@ -71,7 +71,7 @@ const frames = (page) => page.evaluate('new Promise((d) => requestAnimationFrame
 const errors = (page) => page.errors.filter((e) => !e.includes('favicon.ico'));
 const near = (a, b, by = 2) => Math.abs(a - b) <= by;
 
-// the selected elements, each named by its tag and classes, e.g. 'img.for-dark' or 'figure.zone'
+// the selected elements, each named by its tag and classes, e.g. 'img.for-dark' or 'figure.figure-box'
 const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((el) => [el.localName, ...el.classList].filter((c) => !c.startsWith('beeson-') && c !== 'visible' && c !== 'current-fragment').join('.'))`);
 // the shown selection and union frames, in screen px, and the number of shown grips
 const drawn = (page) => page.evaluate(`(() => {
@@ -118,7 +118,7 @@ for (const platform of PLATFORMS) {
   test(`${platform}: an undo and a redo of a resize of an image select the image alone`, async () => {
     for (const mode of ['dark', 'light']) {
       const page = await editor(platform, { mode });
-      await selectPicture(page, ZONE_IMG);
+      await selectPicture(page, FIGURE_BOX_IMG);
       await frames(page);
       assert.deepEqual(await selected(page), [`img.for-${mode}`], 'a second click on the image of a figure does not select the image');
       const ref = await drawn(page);
@@ -146,9 +146,9 @@ for (const platform of PLATFORMS) {
 
   test(`${platform}: an undo and a redo of a resize, a move, and a rotation of a figure select the figure`, async () => {
     const page = await editor(platform);
-    await selectFigure(page, ZONE_IMG);
+    await selectFigure(page, FIGURE_BOX_IMG);
     await frames(page);
-    assert.deepEqual(await selected(page), ['figure.zone.fragment'], 'Esc does not select the figure');
+    assert.deepEqual(await selected(page), ['figure.figure-box.fragment'], 'Esc does not select the figure');
     const ref = await drawn(page);
     // a resize by the lower right grip
     await drag(page, await gripAt(page, 'se'), { dx: -60, dy: -40 });
@@ -157,7 +157,7 @@ for (const platform of PLATFORMS) {
     for (const [step, what] of [[undo, 'undo'], [redo, 'redo']]) {
       await step(page);
       await frames(page);
-      assert.deepEqual(await selected(page), ['figure.zone.fragment'], `the ${what} of the resize does not select the figure`);
+      assert.deepEqual(await selected(page), ['figure.figure-box.fragment'], `the ${what} of the resize does not select the figure`);
       const d = await drawn(page);
       assert.equal(d.frames.length, 1, `after the ${what} of the resize, ${d.frames.length} frames are drawn: ${JSON.stringify(d.frames)}`);
       assert.ok(!d.frames.some((f) => f.left <= 1 && f.top <= 1), `after the ${what} of the resize, a frame is drawn at the corner of the window`);
@@ -170,14 +170,14 @@ for (const platform of PLATFORMS) {
     }
     await undo(page);
     // a move
-    const img = await boxOf(page, ZONE_IMG);
+    const img = await boxOf(page, FIGURE_BOX_IMG);
     await drag(page, { x: img.left + img.width / 2, y: img.top + img.height / 2 }, { dx: -80, dy: 30 });
     await frames(page);
-    assert.match(await render(page), /<figure class="zone fragment" data-fragment-index="2" style="translate: -?\d+px -?\d+px">/);
+    assert.match(await render(page), /<figure class="figure-box fragment" data-fragment-index="2" style="translate: -?\d+px -?\d+px">/);
     for (const [step, what] of [[undo, 'undo'], [redo, 'redo']]) {
       await step(page);
       await frames(page);
-      assert.deepEqual(await selected(page), ['figure.zone.fragment'], `the ${what} of the move does not select the figure`);
+      assert.deepEqual(await selected(page), ['figure.figure-box.fragment'], `the ${what} of the move does not select the figure`);
       const d = await drawn(page);
       assert.equal(d.frames.length, 1, `after the ${what} of the move, ${d.frames.length} frames are drawn`);
       if (what === 'undo') await framedOnce(page, ref, 'after the undo of the move');
@@ -193,7 +193,7 @@ for (const platform of PLATFORMS) {
     for (const [step, what] of [[undo, 'undo'], [redo, 'redo']]) {
       await step(page);
       await frames(page);
-      assert.deepEqual(await selected(page), ['figure.zone.fragment'], `the ${what} of the rotation does not select the figure`);
+      assert.deepEqual(await selected(page), ['figure.figure-box.fragment'], `the ${what} of the rotation does not select the figure`);
       const d = await drawn(page);
       assert.equal(d.frames.length, 1, `after the ${what} of the rotation, ${d.frames.length} frames are drawn`);
     }
@@ -204,12 +204,12 @@ for (const platform of PLATFORMS) {
 
   test(`${platform}: an undo and a redo of a resize of a group select the group`, async () => {
     const page = await editor(platform, { deck: MULTI, n: 0 });
-    await selectFigure(page, ZONE_IMG);
+    await selectFigure(page, FIGURE_BOX_IMG);
     await click(page, '.reveal section.present .qr', { modifiers: 'Shift' });
     await frames(page);
     await exec(page, 'arrange.group');
     await frames(page);
-    const group = ['div.qr', 'figure.zone'];
+    const group = ['div.qr', 'figure.figure-box'];
     assert.deepEqual((await selected(page)).sort(), group, 'the group is not selected');
     const grouped = await render(page);
     const before = await drawn(page);
@@ -234,8 +234,8 @@ for (const platform of PLATFORMS) {
   test(`${platform}: the readout of a move gives the upper left corner of the element in slide px, and the readout of a resize its size`, async () => {
     for (const mode of ['dark', 'light']) {
       const page = await editor(platform, { mode });
-      await selectFigure(page, ZONE_IMG);
-      const img = await boxOf(page, ZONE_IMG);
+      await selectFigure(page, FIGURE_BOX_IMG);
+      const img = await boxOf(page, FIGURE_BOX_IMG);
       const from = { x: img.left + img.width / 2, y: img.top + img.height / 2 };
       await drag(page, from, { dx: -70, dy: 45, hold: true });
       await frames(page);
@@ -323,11 +323,11 @@ for (const platform of PLATFORMS) {
     assert.ok(await caretInLead(page), 'a click on a text block that is not grouped does not put the caret in it');
     await press(page, 'Escape');
     // the paragraph and the figure as a group
-    await selectFigure(page, ZONE_IMG);
+    await selectFigure(page, FIGURE_BOX_IMG);
     await click(page, await leadAt(page), { modifiers: 'Shift' });
     await exec(page, 'arrange.group');
     await frames(page);
-    const group = ['figure.zone.fragment', 'p'];
+    const group = ['figure.figure-box.fragment', 'p'];
     assert.deepEqual((await selected(page)).sort(), group, 'the paragraph and the figure are not grouped');
     await exec(page, 'selection.clear');
     await frames(page);
@@ -351,7 +351,7 @@ for (const platform of PLATFORMS) {
     await frames(page);
     const moved = await render(page);
     assert.match(moved, /<p style="translate: -?\d+px -?\d+px" data-group="g1">The lead-in of a display<\/p>/, 'the paragraph is not moved');
-    assert.match(moved, /<figure class="zone fragment" data-fragment-index="2" style="translate: -?\d+px -?\d+px" data-group="g1">/, 'the figure is not moved with the paragraph');
+    assert.match(moved, /<figure class="figure-box fragment" data-fragment-index="2" style="translate: -?\d+px -?\d+px" data-group="g1">/, 'the figure is not moved with the paragraph');
     await undo(page);
     assert.equal(await render(page), grouped);
     await redo(page);
@@ -365,10 +365,10 @@ for (const platform of PLATFORMS) {
   test(`${platform}: each member of a multiple selection has its own grips, without a frame around all, and the grip of one resizes all`, async () => {
     for (const mode of ['dark', 'light']) {
       const page = await editor(platform, { mode });
-      await selectFigure(page, ZONE_IMG);
+      await selectFigure(page, FIGURE_BOX_IMG);
       await click(page, await leadAt(page), { modifiers: 'Shift' });
       await frames(page);
-      assert.deepEqual((await selected(page)).sort(), ['figure.zone.fragment', 'p'], 'the figure and the paragraph are not selected');
+      assert.deepEqual((await selected(page)).sort(), ['figure.figure-box.fragment', 'p'], 'the figure and the paragraph are not selected');
       const view = await page.evaluate(`(() => {
         const shown = (el) => !el.hidden && getComputedStyle(el).display !== 'none';
         const grips = [...document.querySelectorAll('.beeson-overlay .beeson-grip')].filter(shown);
@@ -385,7 +385,7 @@ for (const platform of PLATFORMS) {
       assert.ok(view.members.some((h) => h.includes('e') && h.includes('w') && !h.includes('n')), `the paragraph does not have the grips of a text block: ${JSON.stringify(view.members)}`);
       await shot(page, `multiple-selection-${mode}-${platform}`);
       // a drag of the lower right grip of the figure resizes the figure and the paragraph
-      const widths = () => page.evaluate(`[${LEAD}, [...document.querySelectorAll(${JSON.stringify(ZONE_IMG)})].find((i) => i.getBoundingClientRect().width)].map((el) => el.getBoundingClientRect().width)`);
+      const widths = () => page.evaluate(`[${LEAD}, [...document.querySelectorAll(${JSON.stringify(FIGURE_BOX_IMG)})].find((i) => i.getBoundingClientRect().width)].map((el) => el.getBoundingClientRect().width)`);
       const before = await widths();
       const se = await page.evaluate(`(() => { const g = [...document.querySelectorAll('.beeson-grip[data-handle="se"]')].filter((g) => !g.hidden).map((g) => g.getBoundingClientRect()).sort((a, b) => b.left - a.left)[0]; return { x: g.left + g.width / 2, y: g.top + g.height / 2 }; })()`);
       await drag(page, se, { dx: -80, dy: -60 });

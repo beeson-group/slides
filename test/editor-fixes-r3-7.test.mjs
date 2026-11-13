@@ -14,7 +14,7 @@ import { byteExact, click, drag, press, saveAndReopen, selectFigure } from './he
 const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
 const PLATFORMS = ['mac', 'other'];
 const LAYOUTS = 'test/pages/editor-layouts.html';
-const IMG = '.reveal section.present .zone > img';
+const IMG = '.reveal section.present .figure-box > img';
 
 let browser;
 let server;
@@ -67,7 +67,7 @@ const pictureOf = (page, selector) => page.evaluate(`(() => {
   return { left, top, right: left + w * s, bottom: top + h * s };
 })()`);
 
-const CAPTION = '.reveal section.present .zone > figcaption';
+const CAPTION = '.reveal section.present .figure-box > figcaption';
 const frameOf = (page) => boxOf(page, '.beeson-frame.selected:not([hidden])');
 
 // the shown grips, each with its handle, its center, and whether it takes the pointer
@@ -76,7 +76,7 @@ const gripsOf = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-
 for (const platform of PLATFORMS) {
   test(`${platform}: a figure, selected with one click on its image, is resized by its grips at the corners of its frame, which holds the picture and the caption`, async () => {
     const page = await editor(platform);
-    await slideOf(page, '.reveal .slides .zone > img');
+    await slideOf(page, '.reveal .slides .figure-box > img');
     await click(page, IMG);
     const grips = await gripsOf(page);
     assert.equal(grips.length, 8, 'a selected figure does not show eight grips');
@@ -124,14 +124,14 @@ for (const platform of PLATFORMS) {
     await click(page, '.reveal section.present .plot.plate');
     assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-frame.selected')].filter((f) => !f.hidden).length`), 1, 'the plot is not selected');
     assert.deepEqual(await gripsOf(page), [], 'a figure that cannot be resized shows grips');
-    // a paper image in a plate is resized from its first click too
-    await slideOf(page, '.reveal .slides .plate > img.paper');
-    await click(page, '.reveal section.present .plate > img.paper');
+    // a white figure in a plate is resized from its first click too
+    await slideOf(page, '.reveal .slides .plate > img.white-figure');
+    await click(page, '.reveal section.present .plate > img.white-figure');
     const grips = await gripsOf(page);
     assert.equal(grips.filter((g) => g.live).length, 8, 'a plate with a paper image does not show live grips');
     const se = grips.find((g) => g.handle === 'se');
     await drag(page, { x: se.x, y: se.y }, { dx: -60, dy: -40 });
-    assert.match(await page.evaluate('window.BeesonEditor.render()'), /<img class="paper"[^>]* style="width: \d+px"/, 'the paper image is not resized');
+    assert.match(await page.evaluate('window.BeesonEditor.render()'), /<img class="white-figure"[^>]* style="width: \d+px"/, 'the paper image is not resized');
     await page.evaluate('window.BeesonEditor.undo()');
     await byteExact(page);
     assert.deepEqual(errorsOf(page), []);
@@ -301,7 +301,7 @@ const TEXT_COMMANDS = ['text.bold', 'text.italic', 'text.superscript', 'text.ton
 for (const platform of PLATFORMS) {
   test(`${platform}: a menu item is enabled only where its command can run, with nothing, a caret, a figure, or two elements selected`, async () => {
     const page = await editor(platform);
-    await page.evaluate(`Reveal.slide([...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.zone > video') && s.querySelector(':scope > p')))`);
+    await page.evaluate(`Reveal.slide([...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.figure-box > video') && s.querySelector(':scope > p')))`);
     await sleep(250);
     const off = (s, names) => names.filter((n) => n in s.subs || n in s.commands).filter((n) => s.subs[n] ?? s.commands[n]);
 
@@ -319,7 +319,7 @@ for (const platform of PLATFORMS) {
 
     await press(page, 'Escape');
     await press(page, 'Escape');
-    await click(page, '.reveal section.present .zone > video');
+    await click(page, '.reveal section.present .figure-box > video');
     await sleep(50);
     const figure = await survey(page);
     assert.deepEqual(figure.wrong, [], 'with a figure selected, a submenu does not follow its items');
@@ -493,7 +493,7 @@ for (const platform of PLATFORMS) {
 for (const platform of PLATFORMS) {
   test(`${platform}: the menu of an image opens with the clipboard, then the items of an image, then the arrange items`, async () => {
     const page = await editor(platform);
-    await slideOf(page, '.reveal .slides .zone > img');
+    await slideOf(page, '.reveal .slides .figure-box > img');
     await click(page, IMG, { button: 'right' });
     await sleep(100);
     const rows = await menuRows(page);
@@ -514,8 +514,8 @@ for (const platform of PLATFORMS) {
     await page.evaluate('window.BeesonEditorShell.closeMenus()');
 
     // a figure of videos does not hold a text, hence Edit Text is not offered on it
-    await slideOf(page, '.reveal .slides .zone > video');
-    await click(page, '.reveal section.present .zone > video', { button: 'right' });
+    await slideOf(page, '.reveal .slides .figure-box > video');
+    await click(page, '.reveal section.present .figure-box > video', { button: 'right' });
     await sleep(100);
     assert.ok(!(await menuRows(page)).some((r) => r.label === 'Edit Text'), 'Edit Text is offered on a figure without a text');
     await page.evaluate('window.BeesonEditorShell.closeMenus()');
@@ -532,7 +532,7 @@ const menuFocus = (page) => page.evaluate(`(() => {
 for (const platform of PLATFORMS) {
   test(`${platform}: a context menu takes the focus, with its first item highlighted when it is opened from the keyboard`, async () => {
     const page = await editor(platform);
-    await slideOf(page, '.reveal .slides .zone > img');
+    await slideOf(page, '.reveal .slides .figure-box > img');
     await click(page, IMG);
     await press(page, 'Shift+F10');
     await sleep(100);
@@ -583,7 +583,7 @@ async function arrangeXY(page) {
 for (const platform of PLATFORMS) {
   test(`${platform}: the position of a dragged figure, its upper left corner in slide px, is shown next to the pointer`, async () => {
     const page = await editor(platform);
-    await slideOf(page, '.reveal .slides .zone > img');
+    await slideOf(page, '.reveal .slides .figure-box > img');
     await selectFigure(page, IMG);
     const pic = await pictureOf(page, IMG);
     const from = { x: (pic.left + pic.right) / 2, y: (pic.top + pic.bottom) / 2 };
@@ -609,7 +609,7 @@ for (const platform of PLATFORMS) {
     await page.evaluate('window.BeesonEditor.undo()');
     await byteExact(page);
     await page.evaluate('window.BeesonEditor.redo()');
-    assert.match(await page.evaluate('window.BeesonEditor.render()'), /class="zone"[^>]* style="translate: -?\d+px -?\d+px"/, 'a redo does not write the move again');
+    assert.match(await page.evaluate('window.BeesonEditor.render()'), /class="figure-box"[^>]* style="translate: -?\d+px -?\d+px"/, 'a redo does not write the move again');
     await saved();
     assert.deepEqual(errorsOf(page), []);
   });
@@ -617,7 +617,7 @@ for (const platform of PLATFORMS) {
 
 const MULTI = 'test/pages/editor-multi.html';
 const QR = '.reveal section.present .qr';
-const ZONE_IMG = '.reveal section.present .zone > img';
+const FIGURE_BOX_IMG = '.reveal section.present .figure-box > img';
 // the box of the first shown element matched by selector, in CSS pixels of the viewport
 const boxOf = (page, selector) => page.evaluate(`(() => { const r = [...document.querySelectorAll(${JSON.stringify(selector)})].find((e) => e.getBoundingClientRect().width).getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; })()`);
 const near = (a, b, by = 2) => Math.abs(a - b) < by;
@@ -626,11 +626,11 @@ for (const platform of PLATFORMS) {
   test(`${platform}: each element of a multiple selection shows its grips, and a grip resizes every element of it`, async () => {
     const page = await editor(platform, MULTI);
     await click(page, QR);
-    await click(page, ZONE_IMG, { modifiers: 'Shift' });
+    await click(page, FIGURE_BOX_IMG, { modifiers: 'Shift' });
     await click(page, '.reveal section.present p', { modifiers: 'Shift' });
     assert.equal(await shownSelected(page), 3, 'the QR code, the image of the figure, and the paragraph are not selected');
     const qr = await boxOf(page, QR);
-    const pic = await pictureOf(page, ZONE_IMG);
+    const pic = await pictureOf(page, FIGURE_BOX_IMG);
     const grips = await gripsOf(page);
     assert.equal(grips.length, 22, 'the QR code and the image do not show eight grips each, and the paragraph six for its width');
     assert.ok(grips.every((g) => g.live), 'a grip of a multiple selection cannot be dragged');
@@ -641,7 +641,7 @@ for (const platform of PLATFORMS) {
     await drag(page, { x: se.x, y: se.y }, { dx: -60, dy: -60 });
     await sleep(50);
     const qrAfter = await boxOf(page, QR);
-    const picAfter = await pictureOf(page, ZONE_IMG);
+    const picAfter = await pictureOf(page, FIGURE_BOX_IMG);
     const k = (qrAfter.right - qrAfter.left) / (qr.right - qr.left);
     assert.ok(k < 0.9, `the QR code is not resized by its grip (${k})`);
     const kPic = (picAfter.right - picAfter.left) / (pic.right - pic.left);
@@ -683,7 +683,7 @@ for (const platform of PLATFORMS) {
     const page = await editor(platform, MULTI);
     // a state kept in the browser does not free an aspect that the scope rule cannot write
     await page.evaluate(`localStorage.setItem('beeson-edit-constrain-qr', 'off')`);
-    await selectFigure(page, ZONE_IMG);
+    await selectFigure(page, FIGURE_BOX_IMG);
     await arrangeXY(page);
     const figure = await constrainOf(page);
     assert.ok(figure, 'the Arrange pane does not have a switch Constrain Proportions');
@@ -691,7 +691,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual([figure.checked, figure.disabled], [true, false], 'the switch of the image of a figure is not on and free');
     assert.deepEqual(figure.notes, [], `a figure, whose size fields size its image, shows a note: ${figure.notes.join(' | ')}`);
     // the image itself, selected with a second click, has the same live size fields
-    await click(page, ZONE_IMG);
+    await click(page, FIGURE_BOX_IMG);
     await arrangeXY(page);
     const image = await constrainOf(page);
     assert.deepEqual([image.checked, image.disabled], [true, false], 'the switch of an image is not on and free, though its height is written');

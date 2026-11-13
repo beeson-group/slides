@@ -61,7 +61,7 @@ test('a deck without ?edit does not load the editor, with ?edit it does on file:
   assert.equal(status.supported, true);
   assert.equal(status.state, 'waiting');
   assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-top button')].filter((b) => !b.hidden).map((b) => b.textContent.replace(/^\\d+%/, '%'))`), ['View', '', '%Zoom', 'Undo', 'Redo', 'Add Slide', 'Table', 'Text', 'Formula', 'Shape', '', 'Media', '', 'Preview', '', 'Present', 'Save', 'Format', 'Steps']);
-  // the card asks for the file, with the folder of the deck
+  // the dialog asks for the file, with the folder of the deck
   assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-card').hidden`), false);
   assert.match(await page.evaluate(`document.querySelector('.beeson-edit-card p').textContent`), /test-deck\.html in \//);
   assert.deepEqual(page.errors, []);
@@ -252,7 +252,7 @@ test('the video slide and the viewer are left alone, and the deck is still while
   const page = await editorPage(browser, 'edit');
   const status = await page.evaluate(openDeck);
   assert.deepEqual(status.problems, []);
-  assert.equal(await page.evaluate(`document.querySelectorAll('video[contenteditable], tycho-viewer[contenteditable], .zone[contenteditable], img[contenteditable]').length`), 0);
+  assert.equal(await page.evaluate(`document.querySelectorAll('video[contenteditable], tycho-viewer[contenteditable], .figure-box[contenteditable], img[contenteditable]').length`), 0);
   assert.equal(await page.evaluate(`!!document.querySelector('.reveal section:has(video) > h2[contenteditable="true"]')`), true);
   assert.equal(await page.evaluate('Reveal.getIndices().h'), 0);
   assert.equal(await page.evaluate('Beeson.backdrops.every((o) => !o.raf)'), true);
@@ -329,7 +329,7 @@ test('a step set in the Steps pane writes the class and the index into the tag o
   t.after(() => browser.close());
   const page = await editorPage(browser);
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
-  await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .zone > img'); const { h, v } = Reveal.getIndices(img.closest('section')); Reveal.slide(h, v); })()`);
+  await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .figure-box > img'); const { h, v } = Reveal.getIndices(img.closest('section')); Reveal.slide(h, v); })()`);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
   await new Promise((done) => setTimeout(done, 300));
   const pick = (i, label) => pickStep(page, i, label);
@@ -341,7 +341,7 @@ test('a step set in the Steps pane writes the class and the index into the tag o
   await pick(5, 'Step 1');
   assert.deepEqual(await rows(), ['', '', '0', '1', '2', '0']);
   assert.deepEqual(await page.evaluate(`[...document.querySelectorAll('.beeson-badge')].map((b) => b.textContent)`), ['1', '2', '3', '1']);
-  const expected = replaced('<figure class="zone">', '<figure class="zone fragment" data-fragment-index="1">');
+  const expected = replaced('<figure class="figure-box">', '<figure class="figure-box fragment" data-fragment-index="1">');
   assert.equal(await page.evaluate('window.BeesonEditor.render()'), expected);
   // the second item goes back with the slide, and the third item takes the second step
   await pick(3, 'With the Slide');
@@ -368,7 +368,7 @@ test('a figure dragged on the slide gets its offset as a translate style in its 
   const page = await editorPage(browser, 'edit&still&edit-platform=other');
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
   const moved = await page.evaluate(`(async () => {
-    const img = document.querySelector('.reveal .slides section .zone > img');
+    const img = document.querySelector('.reveal .slides section .figure-box > img');
     const { h, v } = Reveal.getIndices(img.closest('section'));
     Reveal.slide(h, v);
     await new Promise((done) => setTimeout(done, 200));
@@ -388,17 +388,17 @@ test('a figure dragged on the slide gets its offset as a translate style in its 
     at('pointermove', x + 30 * scale, y + 20 * scale);
     at('pointermove', x + 60 * scale, y + 40 * scale);
     at('pointerup', x + 60 * scale, y + 40 * scale);
-    const translate = img.closest('.zone').style.translate;
+    const translate = img.closest('.figure-box').style.translate;
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true }));
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowUp', shiftKey: true, bubbles: true, cancelable: true }));
-    return { src: img.getAttribute('src'), hovered, translate, nudged: img.closest('.zone').style.translate, slide: Reveal.getIndices().h === h, selected: !document.querySelector('.beeson-frame.selected').hidden };
+    return { src: img.getAttribute('src'), hovered, translate, nudged: img.closest('.figure-box').style.translate, slide: Reveal.getIndices().h === h, selected: !document.querySelector('.beeson-frame.selected').hidden };
   })()`);
   const { src, ...rest } = moved;
   assert.deepEqual(rest, { hovered: true, translate: '60px 40px', nudged: '59px 30px', slide: true, selected: true });
-  // the tag of the figure of this image, which is one of two zones with the same tag
-  const figureAt = deckText.lastIndexOf('<figure class="zone">', deckText.indexOf(src));
+  // the tag of the figure of this image, which is one of two figure boxes with the same tag
+  const figureAt = deckText.lastIndexOf('<figure class="figure-box">', deckText.indexOf(src));
   assert.ok(figureAt > 0);
-  const expected = `${deckText.slice(0, figureAt)}<figure class="zone" style="translate: 59px 30px">${deckText.slice(figureAt + '<figure class="zone">'.length)}`;
+  const expected = `${deckText.slice(0, figureAt)}<figure class="figure-box" style="translate: 59px 30px">${deckText.slice(figureAt + '<figure class="figure-box">'.length)}`;
   assert.equal(await page.evaluate('window.BeesonEditor.render()'), expected);
   // a double click on the handle puts the figure back, and the tag is as in the file again
   await page.evaluate(`document.querySelector('.beeson-handle').dispatchEvent(new MouseEvent('dblclick', { bubbles: true }))`);
@@ -492,11 +492,11 @@ test('one history undoes and redoes the typing, a formula, a step, and a move, w
   await page.evaluate('window.BeesonEditor.undo()');
   assert.equal(await render(), deckText);
   // a step, from the pane
-  await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .zone > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
+  await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .figure-box > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
   await sleep(200);
   await pickStep(page, 5, 'New Step at End');
-  const figureStep = replaced('<figure class="zone">', '<figure class="zone fragment" data-fragment-index="4">');
+  const figureStep = replaced('<figure class="figure-box">', '<figure class="figure-box fragment" data-fragment-index="4">');
   assert.equal(await render(), figureStep);
   await page.evaluate('window.BeesonEditor.undo()');
   assert.equal(await render(), deckText);
@@ -508,7 +508,7 @@ test('one history undoes and redoes the typing, a formula, a step, and a move, w
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
   // a drag, with Alt so that the figure does not snap, and a nudge
   await page.evaluate(`(() => {
-    const img = document.querySelector('.reveal section.present .zone > img');
+    const img = document.querySelector('.reveal section.present .figure-box > img');
     const r = img.getBoundingClientRect();
     const x = r.left + r.width / 2, y = r.top + r.height / 2;
     const at = (type, cx, cy) => document.elementFromPoint(cx, cy).dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: cx, clientY: cy, button: 0, pointerId: 1, altKey: true }));
@@ -523,7 +523,7 @@ test('one history undoes and redoes the typing, a formula, a step, and a move, w
     at('pointerup', x + 60 * scale, y + 40 * scale);
     window.dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowLeft', bubbles: true, cancelable: true }));
   })()`);
-  const translate = () => page.evaluate(`document.querySelector('.reveal section.present .zone').style.translate`);
+  const translate = () => page.evaluate(`document.querySelector('.reveal section.present .figure-box').style.translate`);
   assert.equal(await translate(), '59px 40px');
   await page.evaluate('window.BeesonEditor.undo()');
   assert.equal(await translate(), '60px 40px');
@@ -780,7 +780,7 @@ test('Open with unsaved changes asks first: Cancel keeps them, Open without savi
   assert.equal((await page.evaluate('window.BeesonEditor.status()')).dirty, true);
   assert.equal(await page.evaluate('window.pickerCalls'), 0);
   assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-card.ask').hidden`), true);
-  // Escape on the card is Cancel too
+  // Escape on the dialog is Cancel too
   await open();
   await sleep(100);
   await page.evaluate(`document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true, cancelable: true }))`);
@@ -847,7 +847,7 @@ test('Esc leaves a text and selects its block for the arrow keys, Tab reaches a 
   // Alt is the free modifier of a drag on Windows and Linux, and the copy modifier on a Mac
   const page = await editorPage(browser, 'edit&still&edit-platform=other');
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
-  await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .zone > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
+  await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .figure-box > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
   await sleep(200);
   const key = (k, o = '{}') => page.evaluate(`window.dispatchEvent(new KeyboardEvent('keydown', { key: ${JSON.stringify(k)}, bubbles: true, cancelable: true, ...${o} }))`);
   const selected = () => page.evaluate(`!document.querySelector('.beeson-frame.selected').hidden`);
@@ -866,18 +866,18 @@ test('Esc leaves a text and selects its block for the arrow keys, Tab reaches a 
   assert.equal(await selected(), false);
   assert.equal(await page.evaluate('window.BeesonEditor.render()'), deckText);
   // a figure is in the tab order, and the focus selects it
-  const figure = await page.evaluate(`(() => { const f = document.querySelector('.reveal section.present .zone'); f.focus(); return { tabindex: f.getAttribute('tabindex'), label: f.getAttribute('aria-label'), focused: document.activeElement === f, selected: !document.querySelector('.beeson-frame.selected').hidden, imgInOrder: document.querySelector('.reveal section.present .zone > img').hasAttribute('tabindex') }; })()`);
+  const figure = await page.evaluate(`(() => { const f = document.querySelector('.reveal section.present .figure-box'); f.focus(); return { tabindex: f.getAttribute('tabindex'), label: f.getAttribute('aria-label'), focused: document.activeElement === f, selected: !document.querySelector('.beeson-frame.selected').hidden, imgInOrder: document.querySelector('.reveal section.present .figure-box > img').hasAttribute('tabindex') }; })()`);
   assert.deepEqual(figure, { tabindex: '0', label: 'Figure: the arrow keys move it, Esc deselects it', focused: true, selected: true, imgInOrder: false });
   await key('ArrowLeft');
-  assert.equal(await page.evaluate(`document.querySelector('.reveal section.present .zone').style.translate`), '-1px');
+  assert.equal(await page.evaluate(`document.querySelector('.reveal section.present .figure-box').style.translate`), '-1px');
   await key('Escape');
-  assert.deepEqual(await page.evaluate(`({ selected: !document.querySelector('.beeson-frame.selected').hidden, focused: document.activeElement === document.querySelector('.reveal section.present .zone') })`), { selected: false, focused: false });
+  assert.deepEqual(await page.evaluate(`({ selected: !document.querySelector('.beeson-frame.selected').hidden, focused: document.activeElement === document.querySelector('.reveal section.present .figure-box') })`), { selected: false, focused: false });
   await page.evaluate('window.BeesonEditor.undo()');
   assert.equal(await page.evaluate('window.BeesonEditor.render()'), deckText);
   // the figure dragged to 5 px from the left edge of the paragraph snaps to it, with a guide at the
   // edge while it is dragged, and with Alt it stays where it is dropped
   const drag = (alt) => page.evaluate(`(() => {
-    const img = document.querySelector('.reveal section.present .zone > img'); const zone = img.closest('.zone'); const p = document.querySelector('.reveal section.present p');
+    const img = document.querySelector('.reveal section.present .figure-box > img'); const zone = img.closest('.figure-box'); const p = document.querySelector('.reveal section.present p');
     const z = zone.getBoundingClientRect(), pr = p.getBoundingClientRect(), r = img.getBoundingClientRect();
     const x = r.left + r.width / 2, y = r.top + r.height / 2;
     const at = (type, cx, cy) => document.elementFromPoint(cx, cy).dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: cx, clientY: cy, button: 0, pointerId: 1, altKey: ${alt} }));
@@ -1179,7 +1179,7 @@ test('the slide list and the step chips of the Steps pane carry their names, and
   const page = await editorPage(browser);
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
   assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-nav .rows').getAttribute('aria-label')`), 'Slides');
-  await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .zone > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
+  await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .figure-box > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
   await sleep(300);
   const rows = await page.evaluate(`${IN_ORDER}.map((r) => [r.localName, r.classList[0], r.querySelector('.chip').getAttribute('aria-label')])`);
@@ -1210,7 +1210,7 @@ test('a step is inserted before the others as one entry of the history, and a fo
   t.after(() => browser.close());
   const page = await editorPage(browser);
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
-  await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .zone > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
+  await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .figure-box > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-bottom button')].find((b) => b.textContent === 'Steps').click()`);
   await sleep(300);
   const values = () => page.evaluate(`${STEP_VALUES}`);
@@ -1220,7 +1220,7 @@ test('a step is inserted before the others as one entry of the history, and a fo
   assert.deepEqual(before.slice(0, 6), ['With the Slide', 'Step 1', 'Step 2', 'Step 3', 'New Step at Start', 'New Step at End']);
   await pick(5, 'New Step at Start');
   assert.deepEqual(await values(), ['', '', '1', '2', '3', '0']);
-  let expected = replaced('<figure class="zone">', '<figure class="zone fragment" data-fragment-index="1">');
+  let expected = replaced('<figure class="figure-box">', '<figure class="figure-box fragment" data-fragment-index="1">');
   expected = FIGURE_ITEMS.reduce((text, item, i) => text.replace(stepped(i), `<li class="fragment" data-fragment-index="${i + 2}">${item}</li>`), expected);
   assert.equal(await page.evaluate('window.BeesonEditor.render()'), expected);
   // one undo takes the new step away and puts the other steps back
@@ -1340,12 +1340,12 @@ test('Shift locks a drag to one axis, a run of nudges is one undo, and the offse
   // Alt is the free modifier of a drag on Windows and Linux, and the copy modifier on a Mac
   const page = await editorPage(browser, 'edit&still&edit-platform=other');
   assert.deepEqual((await page.evaluate(openDeck)).problems, []);
-  await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .zone > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
+  await page.evaluate(`(() => { const img = document.querySelector('.reveal .slides section .figure-box > img'); Reveal.slide(Reveal.getIndices(img.closest('section')).h); })()`);
   await sleep(200);
-  const translate = () => page.evaluate(`document.querySelector('.reveal section.present .zone').style.translate`);
+  const translate = () => page.evaluate(`document.querySelector('.reveal section.present .figure-box').style.translate`);
   // a drag by 60 by 20 slide pixels with Shift. with alt true, the figure does not snap
   const drag = (alt) => page.evaluate(`(() => {
-    const img = document.querySelector('.reveal section.present .zone > img');
+    const img = document.querySelector('.reveal section.present .figure-box > img');
     const r = img.getBoundingClientRect();
     const x = r.left + r.width / 2, y = r.top + r.height / 2;
     const at = (type, cx, cy) => document.elementFromPoint(cx, cy).dispatchEvent(new PointerEvent(type, { bubbles: true, cancelable: true, clientX: cx, clientY: cy, button: 0, pointerId: 1, shiftKey: true, altKey: ${alt} }));
@@ -1360,7 +1360,7 @@ test('Shift locks a drag to one axis, a run of nudges is one undo, and the offse
     at('pointerdown', x, y);
     at('pointermove', x + 30 * scale, y + 10 * scale);
     at('pointermove', x + 60 * scale, y + 20 * scale);
-    const zone = img.closest('.zone'), l = label()?.getBoundingClientRect();
+    const zone = img.closest('.figure-box'), l = label()?.getBoundingClientRect();
     // the upper left corner of the figure in slide px, i.e. of its picture with its caption, which
     // the readout gives, and whose frame is drawn 8 px outside it
     const s = document.querySelector('.reveal .slides').getBoundingClientRect(), z = document.querySelector('.beeson-overlay > .beeson-frame.selected:not([hidden])').getBoundingClientRect();

@@ -56,7 +56,7 @@ async function platformOf(page) {
  */
 export async function editorPage(browser, { deck = 'test-deck.html', query = 'edit&still', text, page: options, clear = false } = {}) {
   const page = await browser.newPage(options);
-  // with clear, a draft that an earlier page of the deck left is dropped, whose card covers the slide
+  // with clear, a draft that an earlier page of the deck left is dropped, whose dialog covers the slide
   if (clear) await page.send('Storage.clearDataForOrigin', { origin: 'file://', storageTypes: 'local_storage' });
   await page.goto(deckUrl(deck, query));
   await page.waitFor(deckSettled);

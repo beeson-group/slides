@@ -123,7 +123,7 @@ const SAME = 'Two elements with the same index are shown together.';
 const FRAG2 = '<li class="fragment" data-fragment-index="2">';
 
 for (const platform of PLATFORMS) {
-  // 9f and N47: the blank first line was dropped, hence the first line with text was glued onto
+  // 9f and N47: the blank first line was dropped, hence the first line with text was attached onto
   // the item
   const CASES = [
     [LISTS, 0, 'Bravo', '<li>Bravo</li>\n    <li>Aone</li>\n    <li>Btwo</li>\n    <li>Cthree</li>\n    <li>Charlie</li>'],

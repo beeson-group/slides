@@ -1,6 +1,6 @@
 // the commands of the Insert menu and of the Insert group of the toolbar: a text box, a formula, a
 // code box, a QR code, and a footnote. each element is put at its place in the layout of the
-// current slide, i.e. after the last block of the text column, into an empty zone, or on the foot
+// current slide, i.e. after the last block of the text column, into an empty figure box, or on the foot
 // line, and it is selected, with the caret in it for a text. a text box, a code box, and a
 // footnote are put on the page first as an element of the editor only, marked data-generated, which
 // the save and the pairing pass over, with a prompt drawn by the stylesheet below. the empty box is
@@ -23,8 +23,8 @@ import { checkOverlaps } from '../overflow.ts';
 import { overShapes } from './order.ts';
 
 const CSS = `
-/* the caption of a zone keeps the absolute place of the theme under the picture */
-html.beeson-editor .reveal .slides .beeson-pending:not(.foot):not(.zone > .caption) { position: relative; }
+/* the caption of a figure box keeps the absolute place of the theme under the picture */
+html.beeson-editor .reveal .slides .beeson-pending:not(.foot):not(.figure-box > .caption) { position: relative; }
 html.beeson-editor .reveal .slides .beeson-pending { min-height: 1.4em; min-width: 8em; }
 /* a new text box is put at the gap of the theme between two paragraphs, not at the 14 px of a list item */
 html.beeson-editor .reveal .slides p.beeson-pending:not(:first-child):not(.caption) { margin-top: 24px; }
@@ -40,7 +40,7 @@ html.beeson-editor .reveal .slides div.math.beeson-empty::before { content: "Cli
 `;
 
 // a text element that the first input writes into the file. a caption is a figcaption in a figure
-// and a caption paragraph in a zone
+// and a caption paragraph in a figure box
 type Kind = 'text' | 'code' | 'foot' | 'caption';
 const captionTag = (host: Element) => (host.localName === 'figure' ? 'figcaption' : 'p');
 const PENDING: Record<Kind, { label: string; prompt: string; make(parent: Element): HTMLElement; html(text: string, parent: Element): string }> = {
@@ -82,7 +82,7 @@ export function columnPlace(app: App, slide: Element): { parent: Element; before
   return { parent, before: [...parent.children].find((el) => !el.hasAttribute('data-generated')) ?? null };
 }
 
-// the bottom of the zones and of the text column, in slide px, under which a new figure does not fit
+// the bottom of the figure boxes and of the text column, in slide px, under which a new figure does not fit
 const FLOOR = 920;
 
 // the box of el in slide px
@@ -141,29 +141,29 @@ export function takenBox(app: App, el: Element): Box | null {
   return inkBox(app, el) ?? promptBox(app, el);
 }
 
-// the box where the layout of slide puts a zone, when nothing of the slide but el is drawn there. it
-// is measured on a hidden zone of the theme, taken off at once
-export function freeZone(app: App, slide: Element, el: Element): Box | null {
+// the box where the layout of slide puts a figure box, when nothing of the slide but el is drawn there. it
+// is measured on a hidden figure box of the theme, taken off at once
+export function freeFigureBox(app: App, slide: Element, el: Element): Box | null {
   if (slide.matches('.title, .closing, .figure, .section')) return null;
   const probe = document.createElement('div');
-  probe.className = 'zone';
+  probe.className = 'figure-box';
   probe.setAttribute('data-generated', '');
   probe.style.visibility = 'hidden';
   slide.append(probe);
-  const zone = slideBox(app, probe);
+  const figureBox = slideBox(app, probe);
   probe.remove();
-  if (zone.right - zone.left < 1 || zone.bottom - zone.top < 1) return null;
-  const columns = '.col, .panel, .block';
-  for (const other of slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *')) {
+  if (figureBox.right - figureBox.left < 1 || figureBox.bottom - figureBox.top < 1) return null;
+  const columns = '.col, .text-column, .block';
+  for (const other of slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .text-column > *')) {
     if (other === el || other.contains(el) || other.matches('aside.notes, .foot, .run, [data-generated]')) continue;
     const box = other.matches(columns) && !(other instanceof HTMLElement && other.style.translate) ? inkBox(app, other) : takenBox(app, other);
-    if (box && meets(zone, box)) return null;
+    if (box && meets(figureBox, box)) return null;
   }
-  return zone;
+  return figureBox;
 }
 
 // a new figure that does not fit under the last block of the text column, i.e. over floor, is moved
-// to the center of the free area where the layout puts a zone, and else to the center of the slide,
+// to the center of the free area where the layout puts a figure box, and else to the center of the slide,
 // where Keynote puts a new object, with a translate in slide px
 function centerIfOut(app: App, el: Element, floor = FLOOR): void {
   const b = slideBox(app, el);
@@ -173,9 +173,9 @@ function centerIfOut(app: App, el: Element, floor = FLOOR): void {
   // a formula and a QR code are drawn narrower where they do not fit
   const narrow = el instanceof HTMLElement && el.matches('.math, .qr') ? el : undefined;
   if (b.bottom <= Math.min(floor, h) && b.top >= 0 && b.right <= w) return placeNew(app, el, narrow);
-  const zone = slide ? freeZone(app, slide, el) : null;
-  const fits = zone && b.right - b.left <= zone.right - zone.left && b.bottom - b.top <= zone.bottom - zone.top;
-  const [cx, cy] = fits ? [(zone.left + zone.right) / 2, (zone.top + zone.bottom) / 2] : [w / 2, h / 2];
+  const figureBox = slide ? freeFigureBox(app, slide, el) : null;
+  const fits = figureBox && b.right - b.left <= figureBox.right - figureBox.left && b.bottom - b.top <= figureBox.bottom - figureBox.top;
+  const [cx, cy] = fits ? [(figureBox.left + figureBox.right) / 2, (figureBox.top + figureBox.bottom) / 2] : [w / 2, h / 2];
   const x = Math.round(cx - (b.left + b.right) / 2);
   const y = Math.round(cy - (b.top + b.bottom) / 2);
   docOf(app).setTag(el, { translate: { x, y } }, 'move');
@@ -212,7 +212,7 @@ function centerOffset(app: App, el: HTMLElement): { x: number; y: number } | nul
   const w = slide.offsetWidth || 1920, h = slide.offsetHeight || 1080;
   const b = slideBox(app, el);
   // the footnotes and the prompts of the empty placeholders, which the box is kept off
-  const prompts = [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *')].filter((o) => o !== el && !o.matches('.foot') && !o.textContent?.trim()).map((o) => (o.getClientRects().length ? promptBox(app, o) : null)).filter((p): p is Box => !!p);
+  const prompts = [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .text-column > *')].filter((o) => o !== el && !o.matches('.foot') && !o.textContent?.trim()).map((o) => (o.getClientRects().length ? promptBox(app, o) : null)).filter((p): p is Box => !!p);
   const feet = [...[...slide.querySelectorAll('.foot')].filter((f) => f !== el && f.getClientRects().length).map((f) => slideBox(app, f)), ...prompts];
   if (b.top >= 0 && b.right <= w && b.bottom <= h - MARGIN && !feet.some((f) => meets(b, f))) return null;
   // the visible part of the slide in the canvas, in slide px
@@ -700,10 +700,10 @@ export function install(app: App): void {
     // a QR code fills the empty slot given, as by the icon of its placeholder, else the first one
     run: (a, arg) => a.history.selecting('Insert QR Code', async () => {
       const slide = a.current()!;
-      const zone = arg instanceof Element && slide.contains(arg) && isEmptySlot(a, arg) ? arg : emptySlot(a, slide);
-      const place = zone ? { parent: zone, before: null } : slide.matches('.title, .closing') ? { parent: slide, before: slide.querySelector(':scope > aside.notes') } : columnPlace(a, slide);
+      const figureBox = arg instanceof Element && slide.contains(arg) && isEmptySlot(a, arg) ? arg : emptySlot(a, slide);
+      const place = figureBox ? { parent: figureBox, before: null } : slide.matches('.title, .closing') ? { parent: slide, before: slide.querySelector(':scope > aside.notes') } : columnPlace(a, slide);
       const [node] = await docOf(a).insertElement('qr', place.parent, place.before, { qr: 'https://example.com' });
-      if (!zone) centerIfOut(a, node);
+      if (!figureBox) centerIfOut(a, node);
       checkOverlaps(a, slide, node);
       a.selection.set('elements', [node]);
     }),
@@ -725,7 +725,7 @@ export function install(app: App): void {
       // a slide has one footnote, which gets the caret
       const foot = slide.querySelector('.foot:not([data-generated])');
       if (foot && foot.matches('[contenteditable="true"]')) return placeCaret(foot);
-      const parent = slide.matches('.split') ? (slide.querySelector(':scope > .panel') ?? slide) : slide;
+      const parent = slide.matches('.split') ? (slide.querySelector(':scope > .text-column') ?? slide) : slide;
       begin('foot', parent, parent.querySelector(':scope > aside.notes'));
     },
   });

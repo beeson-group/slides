@@ -59,8 +59,8 @@ test('Edit Text is enabled on an element with a block and not on a figure withou
   const browser = await launch();
   t.after(() => browser.close());
   const page = await editorPage(browser);
-  await showSlideWith(page, '.zone video');
-  await click(page, await centerOf(page, '.reveal section.present .zone video'), { button: 'right' });
+  await showSlideWith(page, '.figure-box video');
+  await click(page, await centerOf(page, '.reveal section.present .figure-box video'), { button: 'right' });
   // an item that a kind of element cannot run is left out of its menu
   assert.notEqual(await contextItem(page, 'Edit Text'), true, 'Edit Text is enabled on a figure of videos');
   await press(page, 'Escape');
@@ -73,8 +73,8 @@ test('Edit Text is enabled on an element with a block and not on a figure withou
   await press(page, 'Escape');
   // a figure with its caption holds a block, which Return edits, and so does a heading selected as
   // an element. the menu of the image of the figure does not offer Edit Text, as in Keynote
-  await showSlideWith(page, 'figure.zone');
-  await click(page, await centerOf(page, '.reveal section.present figure.zone img'), { button: 'right' });
+  await showSlideWith(page, 'figure.figure-box');
+  await click(page, await centerOf(page, '.reveal section.present figure.figure-box img'), { button: 'right' });
   assert.notEqual(await contextItem(page, 'Edit Text'), true, 'Edit Text is offered on the image of a figure');
   await press(page, 'Escape');
   assert.equal(await editText(page), true, 'Edit Text is disabled on a figure with a caption');

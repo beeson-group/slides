@@ -153,8 +153,8 @@ async function checkEditor() {
 }
 
 // read during a trace on the first slide with a backdrop that draws a head, since the heads of a
-// backdrop are cleared at its end. a head is drawn on the path of a spacecraft, on a record with a
-// head of its own, or on every strand with data-heads set to full or small
+// backdrop are cleared at its end. a head is drawn on the path of a spacecraft, on a trajectory with a
+// head of its own, or on every trajectory with data-heads set to full or small
 async function checkHeads() {
   const page = await browser.newPage({ motion: true });
   await page.goto(deckAt());
@@ -176,7 +176,7 @@ async function checkHeads() {
     return headed.headAfter;
   })()`);
   if (after !== null) {
-    // the first head may be due later in the trace, e.g. at the start of a record of a file,
+    // the first head may be due later in the trace, e.g. at the start of a trajectory of a file,
     // hence the canvas is read every quarter second until 15 s after it is due
     let blank = true;
     for (let i = 0; blank && i < 60 + Math.ceil(4 * after); i++) {

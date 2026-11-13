@@ -252,7 +252,7 @@ export function installKeys(app: App): void {
 }
 
 // the keys of the dialogs of today, which are not commands yet: Enter on a formula opens its TeX,
-// and Esc closes the TeX field or a card of a file
+// and Esc closes the TeX field or a dialog of a file
 function dialogKey(app: App, ev: KeyboardEvent): boolean {
   const active = document.activeElement;
   if ((ev.key === 'Enter' || ev.key === ' ') && !app.math.isOpen() && active instanceof Element && active.matches('mjx-container') && app.hostOf(active)) {

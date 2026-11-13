@@ -17,7 +17,7 @@ const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
 // the slide of the deck of layouts with an ordered list and a figure with a caption
 const MATH = 3;
-const IMG = '.reveal section.present figure.zone img:not([hidden])';
+const IMG = '.reveal section.present figure.figure-box img:not([hidden])';
 
 let browser;
 let server;
@@ -43,7 +43,7 @@ async function load(t, platform, { deck = LAYOUTS, n = 0, size = { width: 1600, 
   const page = await browser.newPage(size);
   t.after(() => page.close().catch(() => {}));
   // an earlier test that keeps its page open 1 s after its last edit leaves a draft in the storage
-  // of the origin, and the card of this draft then covers the slide of the next page of the deck
+  // of the origin, and the dialog of this draft then covers the slide of the next page of the deck
   await page.send('Storage.clearDataForOrigin', { origin: server.origin, storageTypes: 'local_storage' });
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);
@@ -111,7 +111,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await page.evaluate(`window.BeesonEditor.selection().map((e) => e.tagName)`), ['FIGURE']);
     await press(page, 'Mod+L');
     await frames(page);
-    const FIG = '<figure class="zone fragment" data-fragment-index="2">';
+    const FIG = '<figure class="figure-box fragment" data-fragment-index="2">';
     await roundTrip(page, [[FIG, FIG.replace('>', ' data-locked>')]]);
     await click(page, IMG, { button: 'right' });
     await frames(page);
@@ -244,7 +244,7 @@ for (const platform of PLATFORMS) {
 const fieldsOf = (page) =>
   page.evaluate(`(() => { const v = (n) => document.querySelector('#beeson-edit-panel-format input[name="' + n + '"]')?.value ?? null; return { w: v('Width'), h: v('Height') }; })()`);
 // groupBoxOf returns the size of the box of the members of the group of the selection, in slide px:
-// a figure is boxed by its drawn picture and its caption, which hangs under its zone, and another
+// a figure is boxed by its drawn picture and its caption, which hangs under its figure box, and another
 // element by its box
 const groupBoxOf = (page) =>
   page.evaluate(`(() => {
@@ -400,13 +400,13 @@ for (const platform of PLATFORMS) {
   });
 }
 
-// item 7: in the trial (state 177), Esc and Edit > Select Figure selected figure.zone, but its frame
+// item 7: in the trial (state 177), Esc and Edit > Select Figure selected figure.figure-box, but its frame
 // stayed on the image, above the caption of the figure. the frame of the figure holds its caption
-const FIGURE_IMG = '.reveal section.present .zone > img:not([hidden])';
+const FIGURE_IMG = '.reveal section.present .figure-box > img:not([hidden])';
 const frameAndCaption = (page) => page.evaluate(`(() => {
   const box = (e) => { const r = e.getBoundingClientRect(); return { left: r.left, top: r.top, right: r.right, bottom: r.bottom }; };
   const frames = [...document.querySelectorAll('.beeson-frame.selected')].filter((f) => !f.hidden && f.getClientRects().length);
-  return { selected: window.BeesonEditor.selection().map((e) => e.tagName), frames: frames.map(box), caption: box(document.querySelector('.reveal section.present figure.zone figcaption')), image: box(document.querySelector('${FIGURE_IMG}')) };
+  return { selected: window.BeesonEditor.selection().map((e) => e.tagName), frames: frames.map(box), caption: box(document.querySelector('.reveal section.present figure.figure-box figcaption')), image: box(document.querySelector('${FIGURE_IMG}')) };
 })()`);
 
 for (const platform of PLATFORMS) {

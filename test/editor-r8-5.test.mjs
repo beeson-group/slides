@@ -1,5 +1,5 @@
 // regression tests of R8.5, the review of a picture with its caption, on both platforms and in both
-// modes, with trusted input. the figures are a pair of images and one image, in a zone of a content
+// modes, with trusted input. the figures are a pair of images and one image, in a figure box of a content
 // slide and in the plate of a figure slide, whose caption is a block of the layout. after each
 // command the text is checked, then byte for byte after an undo and the edit again after a redo,
 // and in the scope rule
@@ -17,7 +17,7 @@ const PLATFORMS = ['mac', 'other'];
 const MODES = ['dark', 'light'];
 const DECK = 'test/pages/editor-r8-5.html';
 // the slides of the deck by what they hold
-const ZONE_PAIR = 0, ZONE_ONE = 1, PLATE_PAIR = 2, PLATE_ONE = 3, EMPTY = 4, STEPPED = 5;
+const FIGURE_BOX_PAIR = 0, FIGURE_BOX_ONE = 1, PLATE_PAIR = 2, PLATE_ONE = 3, EMPTY = 4, STEPPED = 5;
 const NAMES = ['a pair in a zone', 'one image in a zone', 'a pair in a plate', 'one image in a plate', 'a slide without a figure', 'a stepped pair'];
 const IMG = '.reveal section.present img';
 const CAPTION = '.reveal section.present .caption';
@@ -47,7 +47,7 @@ const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 const near = (a, b, by = 2) => Math.abs(a - b) <= by;
 
 // the selected elements, each named by its tag and its first class of the deck
-const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((el) => [el.localName, ...[...el.classList].filter((c) => /^(zone|plate|caption|for-dark|for-light)$/.test(c))].join('.'))`);
+const selected = (page) => page.evaluate(`window.BeesonEditor.selection().map((el) => [el.localName, ...[...el.classList].filter((c) => /^(figure-box|plate|caption|for-dark|for-light)$/.test(c))].join('.'))`);
 const rectOf = (page, selector) => page.evaluate(`(() => {
   const r = [...document.querySelectorAll(${js(selector)})].map((e) => e.getBoundingClientRect()).find((r) => r.width);
   return r ? { left: r.left, top: r.top, right: r.right, bottom: r.bottom, width: r.width, height: r.height, x: r.left + r.width / 2, y: r.top + r.height / 2 } : null;
@@ -97,7 +97,7 @@ const showTab = async (page, name) => {
 
 // the page loaded before it in the file is closed first. Within 1 s of the last change of a page,
 // its unsaved edits are kept in the storage of the browser, and they would then be offered on a
-// card over the slide of the next page
+// dialog over the slide of the next page
 let last = null;
 async function load(t, platform, mode, n) {
   await last?.close().catch(() => {});
@@ -118,8 +118,8 @@ async function load(t, platform, mode, n) {
   await page.evaluate(`Reveal.slide(${n})`);
   await frames(page);
   // the names of the figure and of its shown image in selected()
-  const pair = n === ZONE_PAIR || n === PLATE_PAIR || n === STEPPED;
-  page.parts = { figure: n === PLATE_PAIR || n === PLATE_ONE ? 'div.plate' : 'figure.zone', pic: pair ? `img.for-${mode}` : 'img', images: pair ? 2 : 1 };
+  const pair = n === FIGURE_BOX_PAIR || n === PLATE_PAIR || n === STEPPED;
+  page.parts = { figure: n === PLATE_PAIR || n === PLATE_ONE ? 'div.plate' : 'figure.figure-box', pic: pair ? `img.for-${mode}` : 'img', images: pair ? 2 : 1 };
   return page;
 }
 
@@ -197,7 +197,7 @@ async function turns(t, platform, mode, n, what, act) {
     const was = await selected(page);
     const caption = await rectOf(page, CAPTION);
     const pic = await pictureOf(page);
-    const whole = from === 'figure' && page.parts.figure === 'figure.zone';
+    const whole = from === 'figure' && page.parts.figure === 'figure.figure-box';
     const left = Math.min(pic.left, caption.left), top = Math.min(pic.top, caption.top);
     const c = { x: (left + Math.max(pic.left + pic.width, caption.right)) / 2, y: (top + Math.max(pic.top + pic.height, caption.bottom)) / 2 };
     const asked = await act(page);
@@ -246,7 +246,7 @@ async function turns(t, platform, mode, n, what, act) {
 for (const platform of PLATFORMS) {
   for (const mode of MODES) {
     test(`the rotate handle turns the picture of a figure and leaves its caption, on ${platform} in ${mode} mode`, async (t) => {
-      for (const n of [ZONE_PAIR, ZONE_ONE, PLATE_PAIR]) {
+      for (const n of [FIGURE_BOX_PAIR, FIGURE_BOX_ONE, PLATE_PAIR]) {
         await turns(t, platform, mode, n, 'a turn by the rotate handle', async (page) => {
           assert.equal(await page.evaluate(`!document.querySelector('.beeson-rotor').hidden`), true, 'the rotate handle is not drawn');
           await drag(page, '.beeson-rotor', { dx: 80, dy: 60 });
@@ -256,7 +256,7 @@ for (const platform of PLATFORMS) {
     });
 
     test(`the Angle field turns the picture of a figure and leaves its caption, on ${platform} in ${mode} mode`, async (t) => {
-      for (const n of [ZONE_PAIR, ZONE_ONE, PLATE_PAIR]) {
+      for (const n of [FIGURE_BOX_PAIR, FIGURE_BOX_ONE, PLATE_PAIR]) {
         await turns(t, platform, mode, n, 'a turn by the Angle field', async (page) => {
           await typeField(page, 'angle', 30);
           return 30;
@@ -276,7 +276,7 @@ async function addHeading(page) {
 for (const platform of PLATFORMS) {
   for (const mode of MODES) {
     test(`a group turned by its rotate handle turns the picture of its figure and leaves the caption upright, on ${platform} in ${mode} mode`, async (t) => {
-      for (const n of [ZONE_PAIR, PLATE_PAIR]) {
+      for (const n of [FIGURE_BOX_PAIR, PLATE_PAIR]) {
         const page = await load(t, platform, mode, n);
         await pick(page, 'figure');
         await addHeading(page);
@@ -291,7 +291,7 @@ for (const platform of PLATFORMS) {
         const where = `a turn of a group with ${NAMES[n]}`;
         // a figure with its caption in it is turned with its caption, as one object, and a plate
         // turns its pictures and leaves the caption of the slide upright
-        const whole = n === ZONE_PAIR;
+        const whole = n === FIGURE_BOX_PAIR;
         assert.deepEqual(angles.map((a) => a.split(' ')[0]).sort(), whole ? ['figure', 'h2'] : ['h2', 'img', 'img'], `${where} writes the angle on ${angles.join(', ')}`);
         assert.equal(new Set(angles.map((a) => a.split(' ')[1])).size, 1, `${where} writes the angles ${angles.join(', ')}`);
         const turned = await pictureOf(page);
@@ -318,10 +318,10 @@ async function dropFile(page, at, path) {
 }
 const waitText = (page, text) => page.waitFor(`window.BeesonEditor.render().includes(${js(text)})`, 30000);
 
-// the text of the figure of slide n, i.e. of its zone or plate
+// the text of the figure of slide n, i.e. of its figure box or plate
 function figureOf(text, n) {
   const slide = slideOf(text, n);
-  const at = slide.search(/<(figure|div) class="(zone|plate)/);
+  const at = slide.search(/<(figure|div) class="(figure-box|plate)/);
   const end = slide.indexOf(slide[at + 1] === 'f' ? '</figure>' : '</div>', at);
   return slide.slice(at, end);
 }
@@ -329,14 +329,14 @@ function figureOf(text, n) {
 for (const platform of PLATFORMS) {
   for (const mode of MODES) {
     test(`a file dropped onto the picture of a locked figure does not replace it, on ${platform} in ${mode} mode`, async (t) => {
-      for (const n of [ZONE_PAIR, PLATE_PAIR]) {
+      for (const n of [FIGURE_BOX_PAIR, PLATE_PAIR]) {
         const page = await load(t, platform, mode, n);
         await pick(page, 'figure');
         await exec(page, 'arrange.lock');
         await frames(page);
         page.source = await render(page);
         const locked = figureOf(page.source, n);
-        assert.match(locked, /^<(figure|div) class="(zone|plate)" data-locked>/);
+        assert.match(locked, /^<(figure|div) class="(figure-box|plate)" data-locked>/);
         const pic = await pictureOf(page);
         // as in Keynote, the file is added to the slide beside the locked picture
         const outline = await dropFile(page, pic, 'demo/clip-dark.png');
@@ -348,7 +348,7 @@ for (const platform of PLATFORMS) {
         const edited = await render(page);
         assert.equal(figureOf(edited, n), locked, `a file dropped onto the locked picture of ${NAMES[n]} changes its figure`);
         // since R9.9, the new picture is placed in the free space of the slide, with a translate and a width
-        assert.match(slideOf(edited, n), /<figure class="zone"(?: style="[^"]*")?>\s*<img src="media\/clip-dark\.png"(?: style="[^"]*")?>/, 'the file is not added in a zone of its own');
+        assert.match(slideOf(edited, n), /<figure class="figure-box"(?: style="[^"]*")?>\s*<img src="media\/clip-dark\.png"(?: style="[^"]*")?>/, 'the file is not added in a zone of its own');
         await roundTrip(page, edited);
         assert.deepEqual(errors(page), []);
       }
@@ -371,7 +371,7 @@ for (const platform of PLATFORMS) {
         assert.ok(!videos[0].includes('alt='), `the video ${videos[0]} keeps the alt text of the image`);
         // the image of the other mode is left, and the selection is on the same object
         assert.equal(tagsOf(edited, STEPPED, ['img']).length, 1);
-        assert.deepEqual(await selected(page), [from === 'figure' ? 'figure.zone' : `video.for-${mode}`], `the selection after a Replace from the ${from}`);
+        assert.deepEqual(await selected(page), [from === 'figure' ? 'figure.figure-box' : `video.for-${mode}`], `the selection after a Replace from the ${from}`);
         await roundTrip(page, edited);
         assert.deepEqual(errors(page), []);
       }
@@ -385,7 +385,7 @@ const widthsOf = (text, n) => tagsOf(text, n, ['img']).map((tag) => /\bwidth: (\
 for (const platform of PLATFORMS) {
   for (const mode of MODES) {
     test(`a width typed in the W field and Reset Size keep the upper left corner of the picture of a figure, on ${platform} in ${mode} mode`, async (t) => {
-      for (const n of [ZONE_PAIR, ZONE_ONE, PLATE_PAIR, PLATE_ONE]) {
+      for (const n of [FIGURE_BOX_PAIR, FIGURE_BOX_ONE, PLATE_PAIR, PLATE_ONE]) {
         for (const from of ['figure', 'picture']) {
           const page = await load(t, platform, mode, n);
           await pick(page, from);
@@ -399,11 +399,11 @@ for (const platform of PLATFORMS) {
           assert.ok(written.length === page.parts.images && written.every((w) => w && w === written[0]), `${where} is not written on every image`);
           const sized = await pictureOf(page);
           assert.ok(near(sized.left, pic.left) && near(sized.top, pic.top), `${where} moves the corner of the picture from ${Math.round(pic.left)}, ${Math.round(pic.top)} to ${Math.round(sized.left)}, ${Math.round(sized.top)}`);
-          // the caption of a zone is under the box of its image at the gap of 16 slide px of the
+          // the caption of a figure box is under the box of its image at the gap of 16 slide px of the
           // theme, since the box keeps its letterbox, and the caption of a figure slide stays in
           // its layout
           const under = await rectOf(page, CAPTION);
-          if (n === ZONE_PAIR || n === ZONE_ONE) assert.ok(near(under.top - (await rectOf(page, IMG)).bottom, 16 * sized.k), `${where} leaves the caption away from the box of its picture`);
+          if (n === FIGURE_BOX_PAIR || n === FIGURE_BOX_ONE) assert.ok(near(under.top - (await rectOf(page, IMG)).bottom, 16 * sized.k), `${where} leaves the caption away from the box of its picture`);
           else assert.ok(near(under.top, caption.top) && near(under.left, caption.left), `${where} moves the caption of the layout`);
           assert.equal(await fieldValue(page, 'width'), 400);
           // Reset Size keeps the corner as well
@@ -471,7 +471,7 @@ for (const platform of PLATFORMS) {
         await frames(page);
         edited = await render(page);
         assert.equal(count(slideOf(edited, EMPTY), ID), 2, 'the first copy on another slide does not keep the data-id');
-        assert.deepEqual(await selected(page), ['figure.zone'], 'the pasted figure is not selected');
+        assert.deepEqual(await selected(page), ['figure.figure-box'], 'the pasted figure is not selected');
         await exec(page, 'edit.paste');
         await frames(page);
         const twice = await render(page);
@@ -491,13 +491,13 @@ for (const platform of PLATFORMS) {
 }
 
 // whether the one selected element is the last figure of the slide, i.e. a copy put after its source
-const copySelected = (page) => page.evaluate(`(() => { const s = window.BeesonEditor.selection(); const all = document.querySelectorAll('.reveal section.present figure.zone'); return s.length === 1 && all.length === 2 && s[0] === all[1]; })()`);
+const copySelected = (page) => page.evaluate(`(() => { const s = window.BeesonEditor.selection(); const all = document.querySelectorAll('.reveal section.present figure.figure-box'); return s.length === 1 && all.length === 2 && s[0] === all[1]; })()`);
 
 for (const platform of PLATFORMS) {
   for (const mode of MODES) {
     test(`an undo of Delete, Cut, Duplicate, and Paste of a figure selects what was selected, and a redo the copy, on ${platform} in ${mode} mode`, async (t) => {
       for (const from of ['figure', 'picture']) {
-        const page = await load(t, platform, mode, ZONE_PAIR);
+        const page = await load(t, platform, mode, FIGURE_BOX_PAIR);
         const removals = { Delete: () => press(page, platform === 'mac' ? 'Backspace' : 'Delete'), Cut: () => exec(page, 'edit.cut') };
         for (const [name, act] of Object.entries(removals)) {
           await pick(page, from);
@@ -547,7 +547,7 @@ const flipsOf = (text, n) => tagsOf(text, n, ['img']).map((tag) => /\bscale: (-?
 for (const platform of PLATFORMS) {
   for (const mode of MODES) {
     test(`a flip mirrors the picture of a figure in place, on ${platform} in ${mode} mode`, async (t) => {
-      for (const n of [ZONE_PAIR, PLATE_PAIR, PLATE_ONE]) {
+      for (const n of [FIGURE_BOX_PAIR, PLATE_PAIR, PLATE_ONE]) {
         for (const from of ['figure', 'picture']) {
           const page = await load(t, platform, mode, n);
           for (const [id, scale] of [['arrange.flipHorizontal', '-1 1'], ['arrange.flipVertical', '1 -1']]) {
@@ -564,10 +564,10 @@ for (const platform of PLATFORMS) {
             assert.ok(near(flipped.left, pic.left) && near(flipped.top, pic.top), `${where} moves the picture from ${Math.round(pic.left)}, ${Math.round(pic.top)} to ${Math.round(flipped.left)}, ${Math.round(flipped.top)}`);
             const now = await rectOf(page, CAPTION);
             assert.ok(near(now.left, caption.left, 1) && near(now.top, caption.top, 1), `${where} moves the caption`);
-            // the frame of the selection is drawn at the picture, 8 px outside a figure in a zone,
+            // the frame of the selection is drawn at the picture, 8 px outside a figure in a figure box,
             // which holds its caption
             const frame = await rectOf(page, '.beeson-frame.selected:not([hidden])');
-            const inset = from === 'figure' && n === ZONE_PAIR ? 8 : 0;
+            const inset = from === 'figure' && n === FIGURE_BOX_PAIR ? 8 : 0;
             assert.ok(near(frame.left, flipped.left - inset) && near(frame.top, flipped.top - inset), `the frame after ${where} is at ${Math.round(frame.left)}, ${Math.round(frame.top)}`);
             await roundTrip(page, edited);
           }
@@ -599,9 +599,9 @@ for (const platform of PLATFORMS) {
           let edited = await render(page);
           let where = `Duplicate of ${NAMES[n]} from the ${from}`;
           assert.equal(count(slideOf(edited, n), '<div class="plate">'), 1, `${where} writes a second plate`);
-          assert.equal(count(slideOf(edited, n), '<div class="zone">'), 1, `${where} does not write the copy as a zone`);
+          assert.equal(count(slideOf(edited, n), '<div class="figure-box">'), 1, `${where} does not write the copy as a zone`);
           assert.equal(count(slideOf(edited, n), '<img'), 2 * images, `${where} does not copy every image`);
-          assert.deepEqual(await selected(page), ['div.zone'], `${where} does not select the copy`);
+          assert.deepEqual(await selected(page), ['div.figure-box'], `${where} does not select the copy`);
           assert.equal(await frameInSlide(page), true, `the copy of ${where} is not drawn on the slide`);
           await roundTrip(page, edited);
           // Copy and Paste onto a content slide
@@ -613,9 +613,9 @@ for (const platform of PLATFORMS) {
           await frames(page);
           edited = await render(page);
           where = `Paste of ${NAMES[n]} onto a content slide from the ${from}`;
-          assert.equal(count(slideOf(edited, EMPTY), '<div class="zone">'), 1, `${where} does not write a zone`);
+          assert.equal(count(slideOf(edited, EMPTY), '<div class="figure-box">'), 1, `${where} does not write a zone`);
           assert.equal(count(slideOf(edited, EMPTY), '<img'), images);
-          assert.deepEqual(await selected(page), ['div.zone']);
+          assert.deepEqual(await selected(page), ['div.figure-box']);
           assert.equal(await frameInSlide(page), true, `the copy of ${where} is not drawn on the slide`);
           inScope(edited, SOURCE);
           await undo(page);
@@ -662,7 +662,7 @@ async function chooseItem(page, name) {
 for (const platform of PLATFORMS) {
   for (const mode of MODES) {
     test(`Lock and Unlock of the context menu of a figure and of its picture are written on the figure, on ${platform} in ${mode} mode`, async (t) => {
-      for (const n of [ZONE_PAIR, PLATE_PAIR]) {
+      for (const n of [FIGURE_BOX_PAIR, PLATE_PAIR]) {
         for (const from of ['figure', 'picture']) {
           const page = await load(t, platform, mode, n);
           await pick(page, from);
@@ -671,7 +671,7 @@ for (const platform of PLATFORMS) {
           assert.deepEqual(await selected(page), [from === 'figure' ? page.parts.figure : page.parts.pic], 'a right click changes the selection');
           await chooseItem(page, 'Lock');
           const edited = await render(page);
-          const tag = n === ZONE_PAIR ? '<figure class="zone" data-locked>' : '<div class="plate" data-locked>';
+          const tag = n === FIGURE_BOX_PAIR ? '<figure class="figure-box" data-locked>' : '<div class="plate" data-locked>';
           assert.equal(edited, SOURCE.replace(tag.replace(' data-locked', ''), tag), `Lock of the context menu of ${NAMES[n]} from the ${from} is not written on the figure alone`);
           // the menu of the locked figure lists Unlock with its key, and dims what changes the figure
           await click(page, IMG, { button: 'right' });

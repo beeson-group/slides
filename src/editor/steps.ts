@@ -42,7 +42,7 @@ export type Ctx = {
 // heading and the footnote can be a step too, as any text box in PowerPoint, but One by one
 // leaves them with the slide. a list is a step of its own only when it is shown all at once, and
 // otherwise its items are the steps
-const CANDIDATES = 'h1, h2, h3, p, li, ul.fragment, ol.fragment, table, pre, blockquote, div.math, figure, .zone, .plate, .qr, tycho-viewer, .caption, .foot, img, video, svg.line, .shape';
+const CANDIDATES = 'h1, h2, h3, p, li, ul.fragment, ol.fragment, table, pre, blockquote, div.math, figure, .figure-box, .plate, .qr, tycho-viewer, .caption, .foot, img, video, svg.line, .shape';
 export const WITH_SLIDE = 'h1, h2, h3, .foot';
 const OUTSIDE = 'aside.notes, .backdrop';
 
@@ -72,7 +72,7 @@ export function itemOf(state: TagState): Item {
 
 // the effects of reveal.js that the Steps tab replaces, and the five that it writes: Fade In, the
 // plain fragment, Play, Fade Out, Only at Its Step, and Dim, which semi-fade-out draws at the
-// opacity of a ghost from its step on. Play is the class play of the theme on a video or a tycho
+// opacity of a faint element from its step on. Play is the class play of the theme on a video or a tycho
 // viewer, which shows its poster or its first frame with the slide and starts it at its step, as
 // the animation Play of PowerPoint
 const EFFECT_CLASSES = ['fade-in', 'fade-out', 'fade-up', 'fade-down', 'fade-left', 'fade-right', 'fade-in-then-out', 'fade-in-then-semi-out', 'semi-fade-out', 'current-visible', 'play'];
@@ -373,7 +373,7 @@ export function effectEdit(state: TagState, effect: Effect): TagEdit {
   return out;
 }
 
-const KINDS: [string, string][] = [['h1, h2, h3', 'Heading'], ['.foot', 'Footnote'], ['li', 'Item'], ['ul, ol', 'List'], ['p', 'Paragraph'], ['div.math', 'Formula'], ['table', 'Table'], ['tr', 'Table row'], ['pre, code', 'Code'], ['blockquote', 'Quotation'], ['video', 'Video'], ['tycho-viewer', 'Scene'], ['.qr', 'QR code'], ['.caption', 'Caption'], ['.backdrop', 'Backdrop'], ['.surface', 'Surface'], ['.plot', 'Plot'], ['[data-plot-show], [data-plot-tab]', 'Plot step'], ['[data-surface-stage]', 'Surface step'], ['img, figure, .zone, .plate', 'Figure'], ['svg.line', 'Line'], ['.shape', 'Shape']];
+const KINDS: [string, string][] = [['h1, h2, h3', 'Heading'], ['.foot', 'Footnote'], ['li', 'Item'], ['ul, ol', 'List'], ['p', 'Paragraph'], ['div.math', 'Formula'], ['table', 'Table'], ['tr', 'Table row'], ['pre, code', 'Code'], ['blockquote', 'Quotation'], ['video', 'Video'], ['tycho-viewer', 'Scene'], ['.qr', 'QR code'], ['.caption', 'Caption'], ['.backdrop', 'Backdrop'], ['.surface', 'Surface'], ['.plot', 'Plot'], ['[data-plot-show], [data-plot-tab]', 'Plot step'], ['[data-surface-state]', 'Surface step'], ['img, figure, .figure-box, .plate', 'Figure'], ['svg.line', 'Line'], ['.shape', 'Shape']];
 
 // the text of el with each formula given by its TeX, since an mjx-container does not have text
 function textOf(el: Element, tex: Ctx['tex']): string {
@@ -409,7 +409,7 @@ export function describe(el: Element, tex: Ctx['tex']): { kind: string; text: st
   if (!text && media) text = media.getAttribute('alt') || (store.pathOf(media.getAttribute('src') ?? media.querySelector('source')?.getAttribute('src') ?? null) ?? '').split('/').pop() || '';
   if (!text && el.matches('tycho-viewer')) text = sceneTitle(el);
   if (!text) {
-    const named = [['data-plot-show', 'Show'], ['data-plot-tab', 'Tab'], ['data-surface-stage', 'Stage'], ['data-scene', 'Scene'], ['data-strands', 'Strands']].find(([a]) => el.hasAttribute(a));
+    const named = [['data-plot-show', 'Show'], ['data-plot-tab', 'Tab'], ['data-surface-state', 'State'], ['data-backdrop', 'Backdrop'], ['data-trajectories', 'Trajectories']].find(([a]) => el.hasAttribute(a));
     if (named) text = `${named[1]} ${el.getAttribute(named[0]) ?? ''}`.trim();
   }
   return { kind, text: text.length > 90 ? `${text.slice(0, 90)}…` : text };
@@ -1433,13 +1433,13 @@ export class Steps {
     };
     const frame = (k: number, restored = false) => {
       for (const f of frags) {
-        // a dimmed step is seen from the start, and a ghost keeps its opacity of the theme. a video
+        // a dimmed step is seen from the start, and a faint element keeps its opacity of the theme. a video
         // of the style play shows its poster from the start, and a video is not dimmed, as in the
         // show
         const dims = f.el.classList.contains('semi-fade-out');
         const shown = dims || f.el.classList.contains('play') || shownAt(f, k);
         f.el.classList.toggle('beeson-pv-off', !shown);
-        f.el.classList.toggle('beeson-pv-dim', shown && !dims && !restored && f.kind === 'in' && f.step < k && !nested(f.el) && !held(f, k) && !f.el.matches('.ghost, video, :has(video)'));
+        f.el.classList.toggle('beeson-pv-dim', shown && !dims && !restored && f.kind === 'in' && f.step < k && !nested(f.el) && !held(f, k) && !f.el.matches('.faint, video, :has(video)'));
         f.el.classList.toggle('beeson-pv-ghost', dims && f.step <= k);
       }
       if (restored) {

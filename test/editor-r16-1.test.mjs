@@ -89,7 +89,7 @@ async function undoes(page, before, what) {
 // the start tags of the figure and of its two images in the text, and the computed angles of the three
 async function figureState(page) {
   const text = await render(page);
-  const start = text.indexOf('<figure class="zone"');
+  const start = text.indexOf('<figure class="figure-box"');
   const tags = text.slice(start, text.indexOf('</figure>', start)).match(/<(figure|img)\b[^>]*>/g);
   const turned = await page.evaluate(`(() => { const f = document.querySelector('section.present figure'); return [f, ...f.querySelectorAll('img')].map((el) => getComputedStyle(el).rotate); })()`);
   return { tags, turned };
@@ -181,7 +181,7 @@ for (const platform of PLATFORMS) {
   // -31, and Reset Rotation dimmed
   test(`a figure whose images are turned in the file is made upright by a typed 0 and by Reset Rotation (${platform})`, async (t) => {
     const rest = await uprightFields(t, platform);
-    const page = await load(t, platform, LEGACY, `document.querySelectorAll('figure.zone > img').forEach((i) => i.setAttribute('style', 'rotate: 20deg'))`);
+    const page = await load(t, platform, LEGACY, `document.querySelectorAll('figure.figure-box > img').forEach((i) => i.setAttribute('style', 'rotate: 20deg'))`);
     await click(page, IMG);
     assert.equal(await fieldValue(page, 'angle'), 20, 'the angle of the figure at the open');
     assert.equal(await enabled(page, 'arrange.resetRotation'), true);
@@ -208,7 +208,7 @@ for (const platform of PLATFORMS) {
 
   // G1: the rotate handle of the figure also gives the angle of its images to the figure
   test(`a figure whose images are turned in the file is turned by its rotate handle as one object (${platform})`, async (t) => {
-    const page = await load(t, platform, LEGACY, `document.querySelectorAll('figure.zone > img').forEach((i) => i.setAttribute('style', 'rotate: 20deg'))`);
+    const page = await load(t, platform, LEGACY, `document.querySelectorAll('figure.figure-box > img').forEach((i) => i.setAttribute('style', 'rotate: 20deg'))`);
     await click(page, IMG);
     await dragRotor(page, 40);
     const deg = await fieldValue(page, 'angle');

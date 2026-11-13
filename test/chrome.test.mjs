@@ -133,7 +133,7 @@ test('a page opened with motion is shown without reduced motion', { timeout: 600
 });
 
 // within 1 s of its last change, the editor keeps the unsaved edits of a page in the storage of the
-// browser under a key that starts with beeson-draft:, and offers them on a card over the slide of
+// browser under a key that starts with beeson-draft:, and offers them on a dialog over the slide of
 // the next page of the deck. on a slow runner, the next page of a test file was offered the edits
 // of the page before
 test('a page does not keep the unsaved edits of the editor in the storage, unless it is opened with drafts', { timeout: 60000 }, async (t) => {

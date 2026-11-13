@@ -13,7 +13,7 @@ import { serve } from '../scripts/webdriver.mjs';
 import { click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 
 const DECK = 'test-deck.html';
-// the slides of index.html with a list beside a backdrop and with a figure in a zone
+// the slides of index.html with a list beside a backdrop and with a figure in a figure box
 const STEPS = 2;
 const FIGURES = 4;
 const PLATFORMS = ['mac', 'other'];
@@ -249,7 +249,7 @@ for (const platform of PLATFORMS) {
   // feel-4. a new Content slide holds the texts that its tile in Add Slide shows: a heading, a
   // paragraph, and a dash list, as a new Title & Bullets slide of Keynote holds the placeholders of
   // its thumbnail (K95). the tile is drawn from the same skeleton, with a gray box at the place of
-  // the zone of the layout, which is not written into a new slide
+  // the figure box of the layout, which is not written into a new slide
   test(`a new Content slide holds the paragraph and the list of its tile (${platform})`, async (t) => {
     const page = await load(t, platform, { n: STEPS });
     const before = await render(page);
@@ -264,7 +264,7 @@ for (const platform of PLATFORMS) {
     const slide = await page.evaluate(`(() => { const s = document.querySelector('.reveal .slides > section.present'); return { tags: [...s.children].filter((c) => !c.hasAttribute('data-generated') && !c.matches('aside.notes')).map((c) => c.localName + (c.className ? '.' + [...c.classList].filter((k) => !k.startsWith('beeson')).join('.') : '')), items: s.querySelectorAll(':scope > ul > li').length }; })()`);
     assert.deepEqual(slide.tags.filter((x) => !x.startsWith('div.run') && !x.startsWith('div.foot')), ['h2', 'p', 'ul']);
     const { sampleText } = await import('../src/editor/model/templates.ts');
-    assert.match(sampleText('content'), /<section>\s*<h2>[^<]+<\/h2>\s*<p>[^<]+<\/p>\s*<ul>(\s*<li>[^<]+<\/li>)+\s*<\/ul>\s*<div class="zone"[^>]*><\/div>\s*<\/section>/, 'the Content tile draws the texts of a new slide and the place of its zone');
+    assert.match(sampleText('content'), /<section>\s*<h2>[^<]+<\/h2>\s*<p>[^<]+<\/p>\s*<ul>(\s*<li>[^<]+<\/li>)+\s*<\/ul>\s*<div class="figure-box"[^>]*><\/div>\s*<\/section>/, 'the Content tile draws the texts of a new slide and the place of its zone');
     assert.equal(slide.items, 1);
     // typing into the list item gives a dash item, and Return a second one
     await click(page, '.reveal section.present > ul > li');
@@ -307,16 +307,16 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  // round 5, judge opus, finding 6 (state 302). the list of slide 3 in the black panel of Split is
-  // kept off the footnote of the panel, or else it is marked and named in the status
+  // round 5, judge opus, finding 6 (state 302). the list of slide 3 in the black text column of Split is
+  // kept off the footnote of the text column, or else it is marked and named in the status
   test(`after Change Layout to Split on slide 3, a list over the footnote of the panel is reported (${platform})`, async (t) => {
     const page = await load(t, platform, { n: STEPS });
     await exec(page, 'slide.layout.split');
     await frames(page);
     await frames(page);
-    const [foot] = await boxes(page, ':scope > .panel > .foot');
+    const [foot] = await boxes(page, ':scope > .text-column > .foot');
     assert.ok(foot, 'the footnote is not in the panel');
-    const over = (await boxes(page, ':scope > .panel > ul > li, :scope > .panel > p')).filter((b) => meets(b, foot));
+    const over = (await boxes(page, ':scope > .text-column > ul > li, :scope > .text-column > p')).filter((b) => meets(b, foot));
     const s = await page.evaluate('window.BeesonEditor.status()');
     if (over.length) {
       assert.ok(s.overflow >= over.length, `${over.length} texts lie over the footnote at ${js(foot)}, and the status reads ${s.message}`);

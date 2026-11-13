@@ -396,11 +396,11 @@ export function commands(): Command[] {
       const changes = withCorners(app, els, () => els.map((el, i) => {
         const from = placeOf(el);
         const now = sizeOf(el);
-        // a picture that object-fit contain draws inside a larger box, e.g. the image of a zone
+        // a picture that object-fit contain draws inside a larger box, e.g. the image of a figure box
         // without a width, keeps its box with the ratio of the box, which a width alone would
         // shrink to the picture. the box is written with object-fit contain, since the theme
         // stretches a picture with a width and a height to its box. the box is the content box, and
-        // pad is the padding and border around it, e.g. the paper of a paper image
+        // pad is the padding and border around it, e.g. the frame of a white figure
         const cs = getComputedStyle(el);
         const edge = (side: string) => (parseFloat(cs.getPropertyValue(`padding-${side}`)) || 0) + (parseFloat(cs.getPropertyValue(`border-${side}-width`)) || 0);
         const pad = { w: edge('left') + edge('right'), h: edge('top') + edge('bottom') };

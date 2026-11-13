@@ -1,7 +1,7 @@
 // a new element on a figure slide, on both platforms. the plate of a figure slide is in the flow and
 // as large as the slide, hence a new element is written after it, and what is drawn in the plate
 // stays where the theme puts it. a new table does not have a free place there. it is put off the
-// heading and the caption with the room of its bars, off a paper image, on less than a twentieth
+// heading and the caption with the room of its bars, off a white figure, on less than a twentieth
 // of a video or a plot, and with its bars inside the slide
 
 import assert from 'node:assert/strict';
@@ -149,7 +149,7 @@ for (const platform of PLATFORMS) {
     });
   }
 
-  // on a content slide, the plate of the figure slide is the zone at the right, and its delete
+  // on a content slide, the plate of the figure slide is the figure box at the right, and its delete
   // does not move the elements beside it
   test(`a deleted plate does not write an offset on the element beside it once the slide is a content slide (${platform})`, async (t) => {
     const page = await load(t, platform, 6);
@@ -162,11 +162,11 @@ for (const platform of PLATFORMS) {
     const offset = (text) => /<div class="qr"[^>]*translate: ([^;"]*)/.exec(text)?.[1];
     const written = offset(await render(page));
     assert.ok(written, 'the QR code does not have an offset');
-    await click(page, '.reveal section.present .zone img');
+    await click(page, '.reveal section.present .figure-box img');
     await frames(page);
     await exec(page, 'element.delete');
     await frames(page);
-    assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present .zone').length`), 0, 'the plate was not deleted');
+    assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present .figure-box').length`), 0, 'the plate was not deleted');
     assert.equal(offset(await render(page)), written, 'the delete of the plate changed the offset of the QR code');
     assert.deepEqual(errors(page), []);
   });

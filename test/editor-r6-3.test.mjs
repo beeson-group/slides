@@ -52,7 +52,7 @@ const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
 async function open(platform, { deck = 'test-deck.html', size = { width: 1440, height: 900 } } = {}) {
   const page = await browser.newPage(size);
   // an earlier test that keeps its page open 1 s after its last edit leaves a draft in the storage
-  // of the origin, and the card of this draft then covers the slide of the next page of the deck
+  // of the origin, and the dialog of this draft then covers the slide of the next page of the deck
   await page.send('Storage.clearDataForOrigin', { origin: server.origin, storageTypes: 'local_storage' });
   await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
   await page.waitFor(deckSettled);

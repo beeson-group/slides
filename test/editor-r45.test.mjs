@@ -12,8 +12,8 @@ import { serve } from '../scripts/webdriver.mjs';
 import { click, drag, press } from './helpers/editor.mjs';
 
 const DECK = 'test/pages/editor-r8-5.html';
-// the slide of the deck with one image in a zone
-const ZONE_ONE = 1;
+// the slide of the deck with one image in a figure box
+const FIGURE_BOX_ONE = 1;
 const IMG = '.reveal section.present img';
 
 let browser;
@@ -44,7 +44,7 @@ async function load(t, platform) {
   await page.waitFor(deckSettled);
   await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
   assert.deepEqual((await page.evaluate(`window.BeesonEditor.open(${js(readFileSync(DECK, 'utf8'))})`)).problems, []);
-  await page.evaluate(`Reveal.slide(${ZONE_ONE})`);
+  await page.evaluate(`Reveal.slide(${FIGURE_BOX_ONE})`);
   await frames(page);
   return page;
 }

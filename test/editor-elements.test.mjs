@@ -12,8 +12,8 @@ import { serve } from '../scripts/webdriver.mjs';
 import { byteExact, center, click, drag, press, saveAndReopen, selectFigure, type } from './helpers/editor.mjs';
 
 const LAYOUTS_DECK = 'test/pages/editor-layouts.html';
-const FIGURE = '<figure class="zone">';
-// the index of the slide of the equations in index.html, without a zone or a footnote
+const FIGURE = '<figure class="figure-box">';
+// the index of the slide of the equations in index.html, without a figure box or a footnote
 const EQUATIONS = 3;
 
 let browser;
@@ -72,7 +72,7 @@ const pasteText = (page, text) =>
   })()`);
 
 const figureText = (source) => source.slice(source.indexOf(FIGURE), source.indexOf('</figure>') + '</figure>'.length);
-const withTranslate = (text, t) => text.replace(FIGURE, `<figure class="zone" style="translate: ${t}">`);
+const withTranslate = (text, t) => text.replace(FIGURE, `<figure class="figure-box" style="translate: ${t}">`);
 
 // the edited text, the file after the undos, the edit after the redos, and a save opened again
 let saves = 0;
@@ -93,8 +93,8 @@ for (const platform of ['mac', 'other']) {
   test(`a figure copied and pasted is written once more with translate 20 px larger, twice (${platform})`, async (t) => {
     const page = await open(platform);
     t.after(() => page.close?.());
-    await show(page, '.reveal .slides figure.zone');
-    await selectFigure(page, '.reveal section.present figure.zone img.for-dark');
+    await show(page, '.reveal .slides figure.figure-box');
+    await selectFigure(page, '.reveal section.present figure.figure-box img.for-dark');
     assert.equal(await page.evaluate(`window.BeesonEditor.state('edit.copy').enabled`), true);
     await clipEvent(page, 'copy');
     const clipped = await page.evaluate('window.clipped');
@@ -104,7 +104,7 @@ for (const platform of ['mac', 'other']) {
     const fig = figureText(page.source);
     assert.equal(await render(page), page.source.replace(fig, `${fig}\n  ${withTranslate(fig, '20px 20px')}`));
     // the copy is selected, and a second paste is put 20 px further
-    assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present figure.zone').length`), 2);
+    assert.equal(await page.evaluate(`document.querySelectorAll('.reveal section.present figure.figure-box').length`), 2);
     await pasteText(page, clipped);
     await settle(page);
     assert.equal(await render(page), page.source.replace(fig, `${fig}\n  ${withTranslate(fig, '20px 20px')}\n  ${withTranslate(fig, '40px 40px')}`));
@@ -115,8 +115,8 @@ for (const platform of ['mac', 'other']) {
   test(`a figure pasted on another slide is put into the slide at the same offset (${platform})`, async (t) => {
     const page = await open(platform);
     t.after(() => page.close?.());
-    await show(page, '.reveal .slides figure.zone');
-    await selectFigure(page, '.reveal section.present figure.zone img.for-dark');
+    await show(page, '.reveal .slides figure.figure-box');
+    await selectFigure(page, '.reveal section.present figure.figure-box img.for-dark');
     await clipEvent(page, 'copy');
     const clipped = await page.evaluate('window.clipped');
     await show(page, EQUATIONS);
@@ -132,8 +132,8 @@ for (const platform of ['mac', 'other']) {
   test(`a figure cut is taken off the slide and put back by a paste (${platform})`, async (t) => {
     const page = await open(platform);
     t.after(() => page.close?.());
-    await show(page, '.reveal .slides figure.zone');
-    await selectFigure(page, '.reveal section.present figure.zone img.for-dark');
+    await show(page, '.reveal .slides figure.figure-box');
+    await selectFigure(page, '.reveal section.present figure.figure-box img.for-dark');
     await clipEvent(page, 'cut');
     await settle(page);
     const fig = figureText(page.source);
@@ -149,8 +149,8 @@ for (const platform of ['mac', 'other']) {
   test(`Mod+D duplicates a selected figure with an offset, and a paragraph under itself (${platform})`, async (t) => {
     const page = await open(platform);
     t.after(() => page.close?.());
-    await show(page, '.reveal .slides figure.zone');
-    await selectFigure(page, '.reveal section.present figure.zone img.for-dark');
+    await show(page, '.reveal .slides figure.figure-box');
+    await selectFigure(page, '.reveal section.present figure.figure-box img.for-dark');
     await press(page, 'Mod+D');
     await settle(page);
     const fig = figureText(page.source);
@@ -160,7 +160,7 @@ for (const platform of ['mac', 'other']) {
     // a paragraph, selected by its border, is put after itself and drawn 20 px off itself by an
     // offset, and the list after it, placed with translate, is kept at its place
     await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(page.source)})`);
-    await show(page, '.reveal .slides figure.zone');
+    await show(page, '.reveal .slides figure.figure-box');
     const p = await page.evaluate(`(() => { const r = document.querySelector('.reveal section.present > p').getBoundingClientRect(); return { x: r.right + 3, y: (r.top + r.bottom) / 2 }; })()`);
     await click(page, p);
     await press(page, 'Mod+D');
@@ -173,22 +173,22 @@ for (const platform of ['mac', 'other']) {
   test(`a drag with the copy modifier leaves the figure and writes a copy where it is dropped (${platform})`, async (t) => {
     const page = await open(platform);
     t.after(() => page.close?.());
-    await show(page, '.reveal .slides figure.zone');
+    await show(page, '.reveal .slides figure.figure-box');
     const copyKey = platform === 'mac' ? 'Alt' : 'Ctrl';
-    await selectFigure(page, '.reveal section.present figure.zone img.for-dark');
+    await selectFigure(page, '.reveal section.present figure.figure-box img.for-dark');
     const scale = await page.evaluate('Reveal.getScale()');
-    await drag(page, '.reveal section.present figure.zone img.for-dark', { dx: -200 * scale, dy: 100 * scale, modifiers: copyKey, hold: true });
+    await drag(page, '.reveal section.present figure.figure-box img.for-dark', { dx: -200 * scale, dy: 100 * scale, modifiers: copyKey, hold: true });
     // during the drag the figure stays at its place, and the readout names the copy
     const during = await page.evaluate(`({ standin: !!document.querySelector('.beeson-standin'), copying: document.documentElement.classList.contains('beeson-copying'), readout: document.querySelector('.beeson-offset')?.textContent ?? '' })`);
     assert.deepEqual({ standin: during.standin, copying: during.copying }, { standin: true, copying: true });
     assert.match(during.readout, /^Copy/);
-    const end = await center(page, '.reveal section.present figure.zone img.for-dark');
+    const end = await center(page, '.reveal section.present figure.figure-box img.for-dark');
     await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: end.x, y: end.y, button: 'left', clickCount: 1, modifiers: platform === 'mac' ? 1 : 2 });
     await sleep(300);
     await settle(page);
     const edited = await render(page);
     const fig = figureText(page.source);
-    const m = edited.match(/<figure class="zone" style="translate: (-?\d+)px (-?\d+)px">/);
+    const m = edited.match(/<figure class="figure-box" style="translate: (-?\d+)px (-?\d+)px">/);
     assert.ok(m, 'the copy does not have an offset');
     assert.ok(Math.abs(Number(m[1]) + 200) <= 12 && Math.abs(Number(m[2]) - 100) <= 12, `the copy is at ${m[1]}, ${m[2]}`);
     assert.equal(edited, page.source.replace(fig, `${fig}\n  ${withTranslate(fig, `${m[1]}px ${m[2]}px`)}`), 'the figure is moved, or the copy is not after it');
@@ -200,11 +200,11 @@ for (const platform of ['mac', 'other']) {
   test(`a drag without the copy modifier moves the figure (${platform})`, async (t) => {
     const page = await open(platform);
     t.after(() => page.close?.());
-    await show(page, '.reveal .slides figure.zone');
+    await show(page, '.reveal .slides figure.figure-box');
     const free = platform === 'mac' ? 'Meta' : 'Alt';
-    await selectFigure(page, '.reveal section.present figure.zone img.for-dark');
+    await selectFigure(page, '.reveal section.present figure.figure-box img.for-dark');
     const scale = await page.evaluate('Reveal.getScale()');
-    await drag(page, '.reveal section.present figure.zone img.for-dark', { dx: -100 * scale, dy: 50 * scale, modifiers: free });
+    await drag(page, '.reveal section.present figure.figure-box img.for-dark', { dx: -100 * scale, dy: 50 * scale, modifiers: free });
     await settle(page);
     assert.equal(await render(page), page.source.replace(FIGURE, withTranslate(FIGURE, '-100px 50px')));
     await roundTrip(page);
@@ -214,9 +214,9 @@ for (const platform of ['mac', 'other']) {
 test('a Ctrl-click on a selected figure with edit-platform=other deselects it without a copy', async (t) => {
   const page = await open('other');
   t.after(() => page.close?.());
-  await show(page, '.reveal .slides figure.zone');
-  await selectFigure(page, '.reveal section.present figure.zone img.for-dark');
-  await click(page, '.reveal section.present figure.zone img.for-dark', { modifiers: 'Ctrl' });
+  await show(page, '.reveal .slides figure.figure-box');
+  await selectFigure(page, '.reveal section.present figure.figure-box img.for-dark');
+  await click(page, '.reveal section.present figure.figure-box img.for-dark', { modifiers: 'Ctrl' });
   await settle(page);
   assert.equal(await page.evaluate(`document.querySelectorAll('.beeson-frame.selected:not([hidden])').length`), 0);
   await byteExact(page);
@@ -231,7 +231,7 @@ const slideOf = (text, h2) => {
 test('a text box is a p after the last block of the column, with the caret in it, and an empty one left by Esc is an empty p', async (t) => {
   const page = await open('mac');
   t.after(() => page.close?.());
-  await show(page, '.reveal .slides figure.zone');
+  await show(page, '.reveal .slides figure.figure-box');
   await page.evaluate(`window.BeesonEditor.exec('insert.text')`);
   await settle(page);
   const pending = await page.evaluate(`(() => { const a = document.activeElement; return { tag: a.localName, prompt: getComputedStyle(a, '::before').content, after: a.previousElementSibling.localName, editable: a.isContentEditable }; })()`);
@@ -273,7 +273,7 @@ test('a text box is put into the text column of each layout', async (t) => {
     const where = await page.evaluate(`(() => { const p = document.activeElement; const s = p.closest('section'); return [s.className.split(' ').find((c) => ['title', 'section', 'narrow', 'wide', 'figure', 'split', 'closing'].includes(c)) ?? 'content', p.parentElement === s ? 'section' : p.parentElement.className]; })()`);
     parents[where[0]] = where[1];
   }
-  assert.deepEqual(parents, { title: 'section', section: 'sec', content: 'section', narrow: 'section', wide: 'section', figure: 'section', split: 'panel', closing: 'section' });
+  assert.deepEqual(parents, { title: 'section', section: 'sec', content: 'section', narrow: 'section', wide: 'section', figure: 'section', split: 'text-column', closing: 'section' });
   // the insert of each box and its first input
   await roundTrip(page, 2 * count);
 });
@@ -281,7 +281,7 @@ test('a text box is put into the text column of each layout', async (t) => {
 test('a formula is inserted with Mod+Alt+E, its TeX is applied, and a formula left empty is taken off', async (t) => {
   const page = await open('mac');
   t.after(() => page.close?.());
-  await show(page, '.reveal .slides figure.zone');
+  await show(page, '.reveal .slides figure.figure-box');
   await press(page, 'Mod+Alt+E');
   await sleep(200);
   assert.equal(await page.evaluate(`!!document.querySelector('.beeson-math') && document.activeElement.localName`), 'textarea');
@@ -304,7 +304,7 @@ test('a formula is inserted with Mod+Alt+E, its TeX is applied, and a formula le
 test('Alt+= opens the TeX field of a new formula with edit-platform=other', async (t) => {
   const page = await open('other');
   t.after(() => page.close?.());
-  await show(page, '.reveal .slides figure.zone');
+  await show(page, '.reveal .slides figure.figure-box');
   await page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: '=', code: 'Equal', windowsVirtualKeyCode: 187, modifiers: 1 });
   await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: '=', code: 'Equal', windowsVirtualKeyCode: 187, modifiers: 1 });
   await sleep(200);
@@ -347,15 +347,15 @@ test('a code box and a footnote are written at the first input, and a QR code is
 test('a QR code is put into an empty zone', async (t) => {
   const page = await open('mac', LAYOUTS_DECK);
   t.after(() => page.close?.());
-  await show(page, '.reveal .slides .split .zone video');
-  // the zone of the split slide, emptied of its video
-  await page.evaluate(`window.BeesonEditor.doc.remove(document.querySelector('.reveal section.present .zone video'))`);
+  await show(page, '.reveal .slides .split .figure-box video');
+  // the figure box of the split slide, emptied of its video
+  await page.evaluate(`window.BeesonEditor.doc.remove(document.querySelector('.reveal section.present .figure-box video'))`);
   page.source = await render(page);
   await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(page.source)})`);
-  await show(page, '.reveal .slides .split .zone');
+  await show(page, '.reveal .slides .split .figure-box');
   await page.evaluate(`window.BeesonEditor.exec('insert.qr')`);
   await settle(page);
-  assert.equal(await page.evaluate(`document.querySelector('.reveal section.present .zone > .qr') !== null`), true);
+  assert.equal(await page.evaluate(`document.querySelector('.reveal section.present .figure-box > .qr') !== null`), true);
   await roundTrip(page);
 });
 
@@ -365,7 +365,7 @@ const framedCount = (page) => page.evaluate(`[...document.querySelectorAll('.bee
 test('a press on the pasteboard around the slide clears the selection, and a drag from it draws a marquee', async (t) => {
   const page = await open('mac');
   t.after(() => page.close?.());
-  await show(page, '.reveal .slides figure.zone');
+  await show(page, '.reveal .slides figure.figure-box');
   // a point of the pasteboard halfway between the left edge of the canvas cell and the slide
   const board = await page.evaluate(`(() => {
     const cell = document.querySelector('.beeson-edit-canvas').getBoundingClientRect();
@@ -373,7 +373,7 @@ test('a press on the pasteboard around the slide clears the selection, and a dra
     return { x: (cell.left + slide.left) / 2, y: slide.top + slide.height / 2, slide: slide.left };
   })()`);
   assert.ok(board.slide - board.x >= 8, 'the canvas cell does not have a pasteboard beside the slide');
-  await selectFigure(page, '.reveal section.present figure.zone img.for-dark');
+  await selectFigure(page, '.reveal section.present figure.figure-box img.for-dark');
   assert.equal(await framedCount(page), 1);
   await click(page, board);
   assert.equal(await framedCount(page), 0, 'a press on the pasteboard keeps the selection');

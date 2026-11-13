@@ -64,7 +64,7 @@ for (const platform of PLATFORMS) {
 
   test(`a wheel with Ctrl during the drag of a figure keeps the point grabbed under the pointer (${platform})`, async (t) => {
     const page = await open(t, platform, 4);
-    const IMG = '.reveal section.present figure.zone img.for-dark';
+    const IMG = '.reveal section.present figure.figure-box img.for-dark';
     const box = `(() => { const r = document.querySelector('${IMG}').getBoundingClientRect(); return { left: r.left, top: r.top, width: r.width, scale: window.BeesonEditorShell.stage.scale }; })()`;
     const figure = `document.querySelector('${IMG}').closest('figure')`;
     await click(page, IMG);

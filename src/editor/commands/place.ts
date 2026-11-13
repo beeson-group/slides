@@ -16,7 +16,7 @@ import { keepPlaces } from '../canvas/drag.ts';
 
 // what a new element may lie over when nothing else is free: a figure or a drawing, but not a text
 const FIGURE = `${CONTAINER}, img, video, .qr, .surface, .plot, tycho-viewer, svg.line`;
-const SKIP = 'aside.notes, script, style, .backdrop, .col, .panel, .block, [data-generated]:not(.run)';
+const SKIP = 'aside.notes, script, style, .backdrop, .col, .text-column, .block, [data-generated]:not(.run)';
 // the room around a new element, and the step of the grid on which a free place is looked for, in
 // slide px
 const ROOM = 24;
@@ -106,7 +106,7 @@ export function freePlace(app: App, el: Element, picture?: HTMLElement): { x: nu
   // sooner than over another figure
   const others: { box: Box; text: boolean; ground: boolean }[] = [];
   const num = document.querySelector('.reveal .slide-number');
-  for (const o of [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *, :scope > .block > *'), ...(num ? [num] : [])]) {
+  for (const o of [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .text-column > *, :scope > .block > *'), ...(num ? [num] : [])]) {
     if (o === el || o.contains(el) || el.contains(o) || o.matches(SKIP)) continue;
     const box = boxOf(app, o);
     if (box && box.right - box.left > 1 && box.bottom - box.top > 1) {
@@ -166,7 +166,7 @@ export function freePlace(app: App, el: Element, picture?: HTMLElement): { x: nu
 // what a new table is not put over while another place exists: the figures, the videos,
 // the plots, the QR codes, and the tables, with what is drawn in a plate as large as the slide in
 // place of the plate, and the chrome
-const SOLID = 'figure, .zone, .plate, img, video, .qr, .surface, .plot, tycho-viewer, table, .run, .foot';
+const SOLID = 'figure, .figure-box, .plate, img, video, .qr, .surface, .plot, tycho-viewer, table, .run, .foot';
 
 type Pieces = { solids: Box[]; texts: Box[]; heads?: Box[]; chrome?: Box[] };
 
@@ -184,7 +184,7 @@ export function piecesOf(app: App, el: Element): Pieces {
     if (o.matches('.run, .foot, .slide-number')) out.chrome.push(box);
   };
   const num = document.querySelector('.reveal .slide-number');
-  for (const o of [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .panel > *, :scope > .block > *, :scope > .sec > *'), ...(num ? [num] : [])]) {
+  for (const o of [...slide.querySelectorAll(':scope > *, :scope > .col > *, :scope > .text-column > *, :scope > .block > *, :scope > .sec > *'), ...(num ? [num] : [])]) {
     if (o === el || o.contains(el) || el.contains(o) || o.matches(SKIP)) continue;
     const box = framed(o) ? slideBox(app, o) : boxOf(app, o, true);
     const all = o.matches('.plate') && o.getClientRects().length ? slideBox(app, o) : null;

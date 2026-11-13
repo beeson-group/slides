@@ -1,6 +1,6 @@
 // checks of the tycho viewers of src/viewers.ts in Chrome, on the slides of test/pages/viewer-play.html:
 // a kiosk viewer of the fragment style play, held at its first frame and started at its step, two
-// viewers of a plate of the class row started together, and a viewer in a zone of the style play.
+// viewers of a plate of the class row started together, and a viewer in a figure box of the style play.
 // The pages are shown without reduced motion, under which the runtime starts a kiosk viewer once
 // its scene is loaded, so that the hold before the step is checked. After a step, each state is
 // waited for rather than read after a fixed time. The tests share one Chrome, and each closes its

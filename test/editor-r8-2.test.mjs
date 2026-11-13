@@ -1,5 +1,5 @@
-// regression tests of R8.2 on both platforms with trusted input. the text of a panel fitted by a
-// change of layout to Split is drawn in the color of the panel. the rotate grip of a selected
+// regression tests of R8.2 on both platforms with trusted input. the text of a text column fitted by a
+// change of layout to Split is drawn in the color of the text column. the rotate grip of a selected
 // element is drawn on a stem above the top center of its frame, outside its text, and the handle
 // of a block is drawn clear of the grips. a group is turned by its own rotate grip and by the field
 // Angle of the Arrange pane, each member about the center of the group. a thumbnail of the
@@ -17,7 +17,7 @@ import { textProblems, themeClasses } from '../src/editor/model/scope.ts';
 const PLATFORMS = ['mac', 'other'];
 // the slide of the demo deck with the figure and its caption, under a paragraph and over a list
 const FIGURE = 4;
-const IMG = '.reveal section.present figure.zone > img';
+const IMG = '.reveal section.present figure.figure-box > img';
 const PANEL = '#beeson-edit-panel-format';
 
 let browser;
@@ -94,8 +94,8 @@ async function roundTrip(page, undos = 1) {
 
 const release = (page, at) => page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: at.x, y: at.y, button: 'left', clickCount: 1 });
 
-// finding 1: Change Layout to Split set the panel text in the style Small, which the theme colors
-// gray for a note on a white or black slide, and thus drew it gray on the black panel
+// finding 1: Change Layout to Split set the text of the text column in the style Small, which the theme colors
+// gray for a note on a white or black slide, and thus drew it gray on the black text column
 for (const platform of PLATFORMS) {
   for (const mode of ['dark', 'light']) {
     test(`the text of a panel fitted by Change Layout to Split is drawn in the color of the panel in ${mode} mode (${platform})`, async (t) => {
@@ -104,7 +104,7 @@ for (const platform of PLATFORMS) {
       await sleep(300);
       await frames(page);
       const seen = await page.evaluate(`(() => {
-        const panel = document.querySelector('.reveal section.present > .panel');
+        const panel = document.querySelector('.reveal section.present > .text-column');
         const small = [...panel.querySelectorAll('.small')];
         const texts = [...small, ...small.flatMap((s) => [...s.querySelectorAll('li')])];
         return { panel: getComputedStyle(panel).color, small: small.length, colors: texts.map((e) => [e.localName, e.textContent.trim().slice(0, 24), getComputedStyle(e).color]) };
@@ -197,7 +197,7 @@ for (const platform of PLATFORMS) {
 // the members of the selected group, each with its angle in degrees and its center on the screen. a figure is
 // turned at its picture, i.e. its shown image, since its caption is not turned with it
 const members = (page) => page.evaluate(`window.BeesonEditor.selection().map((el) => {
-  const pic = el.matches('figure, .zone, .plate') ? [...el.querySelectorAll('img, video')].find((m) => m.getBoundingClientRect().width) ?? el : el;
+  const pic = el.matches('figure, .figure-box, .plate') ? [...el.querySelectorAll('img, video')].find((m) => m.getBoundingClientRect().width) ?? el : el;
   const r = pic.getBoundingClientRect();
   const deg = (parseFloat(getComputedStyle(pic).rotate) || 0) + (pic === el ? 0 : parseFloat(getComputedStyle(el).rotate) || 0);
   return { tag: el.localName, deg, x: r.left + r.width / 2, y: r.top + r.height / 2 };
@@ -251,7 +251,7 @@ for (const platform of PLATFORMS) {
     const edited = await render(page);
     assert.match(edited, /<p style="rotate: 90deg; translate: -?\d+px -?\d+px" data-group="g\d+">Export/, 'the paragraph is not written with its offset and its angle');
     // the figure, with its caption in it, is turned as one object, with the angle on the figure
-    assert.match(edited, /<figure class="zone" style="rotate: 90deg; translate: -?\d+px -?\d+px" data-group="g\d+">/, 'the figure is not written with its offset and its angle');
+    assert.match(edited, /<figure class="figure-box" style="rotate: 90deg; translate: -?\d+px -?\d+px" data-group="g\d+">/, 'the figure is not written with its offset and its angle');
     assert.equal(edited.match(/<img class="for-(dark|light)" [^>]*style="[^"]*rotate/g), null, 'the images of the figure are written with an angle');
     assert.deepEqual((await members(page)).map((m) => m.tag).sort(), ['figure', 'p'], 'the group is not selected after the turn');
     inScope(edited, page.source);

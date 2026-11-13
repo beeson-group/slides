@@ -324,7 +324,7 @@ const drawn = (page) => page.evaluate(`(() => {
   return { box: [r.width, r.height].map(round), picture: [r.left + (r.width - w) / 2, r.top + (r.height - h) / 2, w, h].map(round) };
 })()`);
 
-// G8. the picture of 1200 by 1440 px is drawn letterboxed at 600 by 720 px in the zone of 600 by
+// G8. the picture of 1200 by 1440 px is drawn letterboxed at 600 by 720 px in the figure box of 600 by
 // 800 px, hence Oval writes its width, and the figure is moved by the 40 px that the picture rises
 for (const platform of PLATFORMS) {
   test(`G8: Oval on a picture drawn smaller than its box gives the ellipse of the picture, for both pictures of a pair (${platform})`, async (t) => {
@@ -338,8 +338,8 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(now.box, now.picture.slice(2), 'the box of the oval picture is not the picture');
     assert.deepEqual(now.picture, before.picture, 'the picture is moved');
     const expected = edited([
-      ['<figure class="zone">\n    <img class="for-dark" src="../../demo/figure-dark.png" alt="A pair">\n    <img class="for-light" src="../../demo/figure-light.png" alt="A pair">',
-        '<figure class="zone" style="translate: 0px 40px">\n    <img class="for-dark oval" src="../../demo/figure-dark.png" alt="A pair" style="width: 600px">\n    <img class="for-light oval" src="../../demo/figure-light.png" alt="A pair" style="width: 600px">'],
+      ['<figure class="figure-box">\n    <img class="for-dark" src="../../demo/figure-dark.png" alt="A pair">\n    <img class="for-light" src="../../demo/figure-light.png" alt="A pair">',
+        '<figure class="figure-box" style="translate: 0px 40px">\n    <img class="for-dark oval" src="../../demo/figure-dark.png" alt="A pair" style="width: 600px">\n    <img class="for-light oval" src="../../demo/figure-light.png" alt="A pair" style="width: 600px">'],
     ]);
     await roundTrip(page, expected, 'Undo Oval');
     assert.deepEqual(errors(page), []);

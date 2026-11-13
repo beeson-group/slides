@@ -137,7 +137,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual((await selected(page)).sort(), ['h2', 'ol', 'p']);
     // a selection made on the canvas is shown in the list at once
     await press(page, 'Escape');
-    await click(page, '.reveal .slides section.present figure.zone img');
+    await click(page, '.reveal .slides section.present figure.figure-box img');
     assert.deepEqual(await selected(page), ['figure']);
     assert.equal((await rows(page))[0], '1 Figure: A caption under a zone. *');
     assert.equal((await rows(page)).filter((r) => r.endsWith('*')).length, 1);
@@ -194,7 +194,7 @@ for (const platform of PLATFORMS) {
     await drag(page, { x: from.x, y: from.y }, { dy: to.bottom - 2 - from.y, steps: 8 });
     assert.deepEqual((await rows(page)).slice(0, 3), ['1 Text: A first step A final step', '1 Text: The lead-in of a display', '1 Figure: A caption under a zone. *']);
     const edited = await render(page);
-    assert.ok(edited.indexOf('<figure class="zone') < edited.indexOf('The lead-in of a display'));
+    assert.ok(edited.indexOf('<figure class="figure-box') < edited.indexOf('The lead-in of a display'));
     await undo(page);
     assert.equal(await render(page), nudged);
     await redo(page);

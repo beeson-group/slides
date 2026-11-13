@@ -260,7 +260,7 @@ export function install(app: App): void {
   // view.slideOnly is Slide Only of the View menu of Keynote. it hides the navigator and leaves the
   // inspector as it is, since in Keynote the view modes change only what is left of the canvas. a
   // second run shows the navigator again. it is checked while the navigator is not drawn, also where
-  // the width of the window hides it beside the inspector, and it closes the Chapters Table. where the
+  // the width of the window hides it beside the inspector, and it closes the Slide Sorter. where the
   // first run closed the inspector to show the navigator, the second opens that pane of the inspector
   // again, as reopen
   const slideOnly = () => !app.nav.seen;
@@ -335,7 +335,7 @@ export function install(app: App): void {
       return { kind: 'slide', target: slide };
     }
     if (target.closest('.beeson-edit-nav')) return { kind: 'navigator', target: null };
-    // a tile of the Chapters Table stands for its slide, as a row of the navigator does
+    // a tile of the Slide Sorter stands for its slide, as a row of the navigator does
     const tile = target.closest('.beeson-edit-sorter .tile');
     if (tile) return { kind: 'slide', target: tileSlide.get(tile) ?? null };
     if (target.closest('.beeson-edit-canvas')) return { kind: 'canvas', target: app.current() };

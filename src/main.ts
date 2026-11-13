@@ -15,8 +15,8 @@ import { mountShapes } from './shapes.ts';
 import { initScrub } from './scrub.ts';
 import { mount as mountSurfaces } from './surface.ts';
 import type { Surface } from './surface.ts';
-import { fitView, register, strandsFor, type View } from './strands.ts';
-import { scene } from './scenes.ts';
+import { fitView, register, trajectoriesFor, type View } from './trajectories.ts';
+import { builtIn } from './backdrops.ts';
 import { addRestoreSteps, applyAll, applySteps, initSteps, initTimedSteps, typeset, type Internal } from './steps.ts';
 import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.ts';
 import { coverAll, initVideos } from './video.ts';
@@ -226,9 +226,9 @@ function preview(el: HTMLElement): Orbits {
 
 // the window of the drawing of el fitted to box, by default its box on its slide, in slide px
 async function fitWindow(el: HTMLElement, box?: { left: number; top: number; width: number; height: number }): Promise<View | null> {
-  const strands = el.dataset.strands !== undefined ? (await strandsFor(el)).strands : scene(el.dataset.scene ?? '');
+  const trajectories = el.dataset.trajectories !== undefined ? (await trajectoriesFor(el)).trajectories : builtIn(el.dataset.backdrop ?? '');
   const b = box ?? { left: el.offsetLeft, top: el.offsetTop, width: el.offsetWidth, height: el.offsetHeight };
-  return b.width && b.height ? fitView(strands, b, { width: 1920, height: 1080 }) : null;
+  return b.width && b.height ? fitView(trajectories, b, { width: 1920, height: 1080 }) : null;
 }
 
 function completeAll(): void {
@@ -341,10 +341,10 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
     if (!still()) for (const o of within(ev.previousSlide)) if (!ev.currentSlide.contains(o.el)) o.reset();
     const before = surfacesOf(ev.previousSlide);
     for (const s of before) s.stop();
-    // a surface whose data attributes other than data-stage match those of a surface on the slide
+    // a surface whose data attributes other than data-surface-state match those of a surface on the slide
     // before takes its camera, so that the turn of the camera continues across the slide change.
-    // data-shown is left out too, since each surface writes its drawn stage there
-    const key = (s: { el: HTMLElement }) => JSON.stringify(Object.entries(s.el.dataset).filter(([k]) => k !== 'stage' && k !== 'shown').sort());
+    // data-shown is left out too, since each surface writes its drawn state there
+    const key = (s: { el: HTMLElement }) => JSON.stringify(Object.entries(s.el.dataset).filter(([k]) => k !== 'surfaceState' && k !== 'shown').sort());
     for (const s of surfacesOf(ev.currentSlide)) {
       const from = before.find((b) => key(b) === key(s));
       if (from) s.follow(from);
@@ -352,7 +352,7 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
     for (const p of plotsIn(ev.previousSlide)) if (!ev.currentSlide.contains(p.el)) p.leave();
     show(ev.currentSlide);
   });
-  // a step of a slide may set the stage of a surface on it, or the steps of a plot
+  // a step of a slide may set the state of a surface on it, or the steps of a plot
   const step = () => {
     for (const s of surfacesOf(deck.getCurrentSlide())) s.sync(!still());
     stepPlots(deck.getCurrentSlide());
@@ -418,8 +418,8 @@ const Beeson = {
   animated,
   surfaces,
   plots,
-  // called in a script file of polylines named in data-strands, see src/strands.ts
-  strands: register,
+  // called in a script file of polylines named in data-trajectories, see src/trajectories.ts
+  trajectories: register,
   // called by the editor after a structural change of the slides
   mount: mountWithin,
   // called by the editor on a backdrop, see remountBackdrop, preview, and fitWindow

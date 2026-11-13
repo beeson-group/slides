@@ -18,8 +18,8 @@ import { byteExact, click, press, saveAndReopen, typeKeys } from './helpers/edit
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
 const TEXT = 2;
-const ZONE = 3;
-const PAPER = 6;
+const FIGURE_BOX = 3;
+const WHITE_FIGURE = 6;
 const SPLIT = 10;
 const P = '.reveal section.present > p:not(.small)';
 const NOTES = '.reveal section.present > aside.notes';
@@ -214,7 +214,7 @@ for (const platform of PLATFORMS) {
 
   test(`an insert is named Insert and its kind in Undo, while the menu keeps its label (${platform})`, async (t) => {
     // slide 3 does not have a footnote, which Footnote would only give the caret
-    const page = await load(t, platform, ZONE);
+    const page = await load(t, platform, FIGURE_BOX);
     for (const [id, label] of [['insert.text', 'Text Box'], ['insert.code', 'Code Box'], ['insert.footnote', 'Footnote']]) {
       await exec(page, id);
       await frames(page);
@@ -272,23 +272,23 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`Copy Style and Paste Style carry paper, invert, and the mode of a figure to an image and a video (${platform})`, async (t) => {
-    const page = await load(t, platform, PAPER);
+  test(`Copy Style and Paste Style carry white-figure, invert, and the mode of a figure to an image and a video (${platform})`, async (t) => {
+    const page = await load(t, platform, WHITE_FIGURE);
     const copy = platform === 'mac' ? 'Mod+Alt+C' : 'Mod+Shift+C';
     const paste = platform === 'mac' ? 'Mod+Alt+V' : 'Mod+Shift+V';
-    // the image of the zone of slide 3 is shown in one mode only
-    await page.evaluate(`Reveal.slide(${ZONE})`);
+    // the image of the figure box of slide 3 is shown in one mode only
+    await page.evaluate(`Reveal.slide(${FIGURE_BOX})`);
     await frames(page);
-    await click(page, '.reveal section.present .zone > img');
+    await click(page, '.reveal section.present .figure-box > img');
     await frames(page);
     assert.equal((await state(page, 'text.copyStyle')).enabled, true, 'Copy Style is dimmed on an image');
     // the first click selects the figure, whose style is the style of the image shown in it
     assert.deepEqual(await page.evaluate(`window.BeesonEditor.selection().map((e) => e.localName)`), ['figure']);
-    const mode = await page.evaluate(`[...document.querySelectorAll('.reveal section.present .zone > img')].find((e) => e.getBoundingClientRect().width).className`);
+    const mode = await page.evaluate(`[...document.querySelectorAll('.reveal section.present .figure-box > img')].find((e) => e.getBoundingClientRect().width).className`);
     assert.match(mode, /^for-(dark|light)$/);
     await press(page, copy);
-    // on the paper image of slide 6, paper is taken off and the mode is set
-    await page.evaluate(`Reveal.slide(${PAPER})`);
+    // on the white figure of slide 6, white-figure is taken off and the mode is set
+    await page.evaluate(`Reveal.slide(${WHITE_FIGURE})`);
     await frames(page);
     await click(page, '.reveal section.present .plate > img');
     await frames(page);
@@ -296,44 +296,44 @@ for (const platform of PLATFORMS) {
     await press(page, paste);
     await frames(page);
     assert.equal(await undoLabel(page), 'Undo Paste Style');
-    const img = '<img class="paper" src="../../demo/figure-light.png" alt="A white raster figure">';
+    const img = '<img class="white-figure" src="../../demo/figure-light.png" alt="A white raster figure">';
     const styled = page.source.replace(img, `<img class="${mode}" src="../../demo/figure-light.png" alt="A white raster figure">`);
     await roundTrip(page, styled);
-    // the paper style of slide 6 goes to the video of the split slide, which takes only the mode, in a
+    // the white-figure style of slide 6 goes to the video of the split slide, which takes only the mode, in a
     // class written after its attributes
     await page.evaluate(`Reveal.slide(${SPLIT})`);
     await frames(page);
-    await click(page, '.reveal section.present .zone > video');
+    await click(page, '.reveal section.present .figure-box > video');
     await frames(page);
     await press(page, paste);
     await frames(page);
     const video = '<video src="../../demo/clip-dark.mp4" poster="../../demo/clip-dark.png" muted loop></video>';
     await roundTrip(page, page.source.replace(video, `<video src="../../demo/clip-dark.mp4" poster="../../demo/clip-dark.png" muted loop class="${mode}"></video>`));
     // a text style is not pasted on a figure, and a figure style not on a text
-    await caretIn(page, '.reveal section.present .panel > p', 'Words');
+    await caretIn(page, '.reveal section.present .text-column > p', 'Words');
     assert.equal((await state(page, 'text.pasteStyle')).enabled, false, 'the style of a figure is pasted on a text');
     await press(page, copy);
-    await click(page, '.reveal section.present .zone > video');
+    await click(page, '.reveal section.present .figure-box > video');
     await frames(page);
     assert.equal((await state(page, 'text.pasteStyle')).enabled, false, 'the style of a text is pasted on a figure');
     assert.deepEqual(errors(page), []);
   });
 
   test(`the Format Painter carries the style of a figure to the next figure clicked (${platform})`, async (t) => {
-    const page = await load(t, platform, PAPER);
+    const page = await load(t, platform, WHITE_FIGURE);
     await click(page, '.reveal section.present .plate > img');
     await frames(page);
     assert.equal((await state(page, 'text.formatPainter')).enabled, true, 'the Format Painter is dimmed on an image');
     await exec(page, 'text.formatPainter');
-    await page.evaluate(`Reveal.slide(${ZONE})`);
+    await page.evaluate(`Reveal.slide(${FIGURE_BOX})`);
     await frames(page);
-    await click(page, '.reveal section.present .zone > img');
+    await click(page, '.reveal section.present .figure-box > img');
     await sleep(100);
     assert.equal((await state(page, 'text.formatPainter')).checked, false, 'the painter is still armed');
-    const shown = await page.evaluate(`[...document.querySelectorAll('.reveal section.present .zone > img')].find((e) => e.getBoundingClientRect().width).getAttribute('src')`);
+    const shown = await page.evaluate(`[...document.querySelectorAll('.reveal section.present .figure-box > img')].find((e) => e.getBoundingClientRect().width).getAttribute('src')`);
     const name = shown.includes('dark') ? 'dark' : 'light';
     const before = `<img class="for-${name}" src="../../demo/figure-${name}.png"`;
-    await roundTrip(page, page.source.replace(before, `<img class="paper" src="../../demo/figure-${name}.png"`));
+    await roundTrip(page, page.source.replace(before, `<img class="white-figure" src="../../demo/figure-${name}.png"`));
     assert.deepEqual(errors(page), []);
   });
 

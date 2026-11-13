@@ -112,7 +112,7 @@ const caretIn = (page) => page.evaluate(`(() => {
 // the part of the file from the h2 of slide 5 to its figure
 const listPart = (text) => {
   const at = text.indexOf('<h2>Figures are first');
-  return text.slice(at, text.indexOf('<figure class="zone">', at));
+  return text.slice(at, text.indexOf('<figure class="figure-box">', at));
 };
 
 // pressCommand sends a key with the editing command of the browser, which a key event of the

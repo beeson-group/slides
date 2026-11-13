@@ -1,7 +1,7 @@
-// Preview of R26.1 on both platforms. a preview runs until the last strand of a staggered backdrop
+// Preview of R26.1 on both platforms. a preview runs until the last trajectory of a staggered backdrop
 // is traced, for Trace Backdrop, Play Slide, and a backdrop that is a step in Play Steps, and the
 // wait of a loop still ends. a backdrop hidden in the layer that the editor shows is not traced on
-// the canvas. Play Slide, Trace Backdrop, and Play Steps are dimmed in Chapters Table, which stops a
+// the canvas. Play Slide, Trace Backdrop, and Play Steps are dimmed in Slide Sorter, which stops a
 // preview that plays. the layer of Play Steps follows the slide through a zoom, a scroll, the View
 // button, and Rulers, and Esc that stops a preview keeps the selection, while Deselect and its other
 // key still work during a preview
@@ -65,20 +65,20 @@ async function previewPage(platform, n, { motion = false, step = 1000 } = {}) {
 // the drawing of the backdrop of slide n on the canvas
 const orbitOf = (n) => `Beeson.backdrops.find((b) => b.el === document.querySelectorAll('.reveal .slides > section')[${n}].querySelector('.backdrop'))`;
 
-// the seconds from the start of the trace of the backdrop of slide n to the end of its last strand,
-// with strand i started i times data-stagger seconds late
+// the seconds from the start of the trace of the backdrop of slide n to the end of its last trajectory,
+// with trajectory i started i times data-stagger seconds late
 async function spanOf(page, n) {
-  await page.waitFor(`(${orbitOf(n)})?.strands.length > 1`);
+  await page.waitFor(`(${orbitOf(n)})?.trajectories.length > 1`);
   return page.evaluate(`(() => {
     const b = ${orbitOf(n)};
-    const T = Math.max(...b.strands.map((s) => s.T));
-    return Math.max(...b.strands.map((s, i) => (s.times.at(-1) / T) * b.duration + i * b.stagger));
+    const T = Math.max(...b.trajectories.map((s) => s.T));
+    return Math.max(...b.trajectories.map((s, i) => (s.times.at(-1) / T) * b.duration + i * b.stagger));
   })()`);
 }
 
 // runs the command id and records in the page, in ms from the run, when the layer of the steps is
 // added and taken down, when the trace of the backdrop of slide n on the canvas ends and whether
-// each of its strands was traced to its end then, and when Preview is no longer pressed
+// each of its trajectories was traced to its end then, and when Preview is no longer pressed
 async function watch(page, id, n) {
   await page.evaluate(`(() => {
     const w = window.__w = { on: null, off: null, end: null, whole: null, released: null };
@@ -93,7 +93,7 @@ async function watch(page, id, n) {
       if (b?.raf) started = true;
       if (b && started && !b.raf && w.end === null) {
         w.end = t;
-        w.whole = b.strands.every((s, i) => b.idx[i] === s.times.length - 1);
+        w.whole = b.trajectories.every((s, i) => b.idx[i] === s.times.length - 1);
       }
       if (document.querySelector('${MAIN}').getAttribute('aria-pressed') === 'true') seen = true;
       else if (seen && w.released === null) w.released = t;
@@ -130,34 +130,34 @@ const placed = (page) => page.evaluate(`(() => {
 })()`);
 
 for (const platform of PLATFORMS) {
-  test(`Trace Backdrop of a staggered backdrop runs until its last strand is traced (${platform})`, async () => {
+  test(`Trace Backdrop of a staggered backdrop runs until its last trajectory is traced (${platform})`, async () => {
     const page = await previewPage(platform, STAGGER, { motion: true });
     const span = await spanOf(page, STAGGER);
     assert.ok(span > 2, `the trace of the test backdrop takes ${span} s`);
     await watch(page, 'preview.backdrop', STAGGER);
     const w = await watched(page);
     assert.ok(w.end !== null, 'the trace did not end');
-    assert.ok(w.end >= span * 1000 - 150, `the trace ends at ${Math.round(w.end)} ms, before its last strand at ${Math.round(span * 1000)} ms`);
+    assert.ok(w.end >= span * 1000 - 150, `the trace ends at ${Math.round(w.end)} ms, before its last trajectory at ${Math.round(span * 1000)} ms`);
     assert.equal(w.whole, true, 'the trace snaps to the finished drawing');
     assert.ok(w.released >= w.end - 20 && w.released < span * 1000 + 1500, `Preview is released at ${Math.round(w.released)} ms`);
   });
 
-  test(`Play Slide traces a staggered backdrop until its last strand before it plays the steps (${platform})`, async () => {
+  test(`Play Slide traces a staggered backdrop until its last trajectory before it plays the steps (${platform})`, async () => {
     const page = await previewPage(platform, STAGGER, { motion: true, step: 200 });
     const span = await spanOf(page, STAGGER);
     await watch(page, 'preview.slide', STAGGER);
     const w = await watched(page);
     assert.equal(w.whole, true, 'the trace snaps to the finished drawing');
-    assert.ok(w.on !== null && w.on >= span * 1000 - 150, `the steps start at ${Math.round(w.on)} ms, before the last strand at ${Math.round(span * 1000)} ms`);
+    assert.ok(w.on !== null && w.on >= span * 1000 - 150, `the steps start at ${Math.round(w.on)} ms, before the last trajectory at ${Math.round(span * 1000)} ms`);
   });
 
-  test(`Play Steps runs until the last strand of a staggered backdrop that is a step is traced (${platform})`, async () => {
+  test(`Play Steps runs until the last trajectory of a staggered backdrop that is a step is traced (${platform})`, async () => {
     const page = await previewPage(platform, STEPPED, { motion: true, step: 300 });
     const span = await spanOf(page, STEPPED);
     await watch(page, 'preview.steps', null);
     const w = await watched(page);
     // the backdrop is traced from the first step on, one step delay after the start
-    assert.ok(w.off !== null && w.off >= 300 + span * 1000 - 150, `the layer is taken down at ${Math.round(w.off)} ms, before the last strand at ${Math.round(300 + span * 1000)} ms`);
+    assert.ok(w.off !== null && w.off >= 300 + span * 1000 - 150, `the layer is taken down at ${Math.round(w.off)} ms, before the last trajectory at ${Math.round(300 + span * 1000)} ms`);
     assert.ok(w.off < 300 + span * 1000 + 2000, `the layer is taken down at ${Math.round(w.off)} ms`);
   });
 
@@ -167,7 +167,7 @@ for (const platform of PLATFORMS) {
     await watch(page, 'preview.backdrop', null);
     const w = await watched(page);
     // a loop is drawn whole, with its head looped, and its wait ends after data-duration at least
-    assert.ok(w.released >= 1000 - 150 && w.released < span * 1000 + 1500, `the loop is released at ${Math.round(w.released)} ms, with the last strand at ${Math.round(span * 1000)} ms`);
+    assert.ok(w.released >= 1000 - 150 && w.released < span * 1000 + 1500, `the loop is released at ${Math.round(w.released)} ms, with the last trajectory at ${Math.round(span * 1000)} ms`);
   });
 
   test(`a backdrop hidden in the shown layer is not traced by Trace Backdrop or Play Slide (${platform})`, async () => {
@@ -186,12 +186,12 @@ for (const platform of PLATFORMS) {
     await press(page, 'Escape');
   });
 
-  test(`Play Slide, Trace Backdrop, and Play Steps are dimmed in Chapters Table, which stops a preview (${platform})`, async () => {
+  test(`Play Slide, Trace Backdrop, and Play Steps are dimmed in Slide Sorter, which stops a preview (${platform})`, async () => {
     const page = await previewPage(platform, STAGGER, { motion: true, step: 5000 });
     await exec(page, 'view.lightTable');
     await frames(page);
     assert.equal((await state(page, 'view.lightTable')).checked, true);
-    for (const id of ['preview.slide', 'preview.backdrop', 'preview.steps']) assert.equal((await state(page, id)).enabled, false, `${id} in Chapters Table`);
+    for (const id of ['preview.slide', 'preview.backdrop', 'preview.steps']) assert.equal((await state(page, id)).enabled, false, `${id} in Slide Sorter`);
     assert.equal(await page.evaluate(`document.querySelector('${MAIN}').disabled`), true, 'the main part of Preview is not dimmed');
     // the entries of the Play menu
     await click(page, await page.evaluate(`(() => {
@@ -213,9 +213,9 @@ for (const platform of PLATFORMS) {
       await exec(page, 'view.lightTable');
       await frames(page);
       await frames(page);
-      assert.equal(await pressed(page), false, `${id} plays on in Chapters Table`);
-      assert.equal(await layer(page), false, `the layer of ${id} is drawn over Chapters Table`);
-      assert.equal(await rafs(page), 0, `the trace of ${id} runs on in Chapters Table`);
+      assert.equal(await pressed(page), false, `${id} plays on in Slide Sorter`);
+      assert.equal(await layer(page), false, `the layer of ${id} is drawn over Slide Sorter`);
+      assert.equal(await rafs(page), 0, `the trace of ${id} runs on in Slide Sorter`);
       await exec(page, 'view.lightTable');
       await frames(page);
     }

@@ -2,7 +2,7 @@
 // elevation, and zoom, the seconds per turn, and the scale of the heights, each written to an
 // attribute of the start tag, and Use Current View, which writes the camera as it was turned by a
 // drag. a drag on a surface turns its camera, as in the deck, and a drag from its frame moves it.
-// a surface with the attributes of the surface on the slide before, apart from data-stage, is shown
+// a surface with the attributes of the surface on the slide before, apart from data-surface-state, is shown
 // under its camera, hence each write is made to every surface of that chain on the slides around
 
 import type { App } from '../app.ts';
@@ -28,7 +28,7 @@ const follow = () => {
 
 const liveOf = (el: Element | null): Live | null => (el ? ((window as unknown as Page).Beeson?.surfaces?.find((s) => s.el === el) ?? null) : null);
 
-// the surface that the selection is or holds alone in a zone or a plate
+// the surface that the selection is or holds alone in a figure box or a plate
 export function surfaceOf(app: App): HTMLElement | null {
   const el = app.selection.only();
   if (!el) return null;
@@ -40,7 +40,7 @@ export function surfaceOf(app: App): HTMLElement | null {
 }
 
 // the key of main.ts by which a surface takes the camera of the surface on the slide before
-const keyOf = (el: HTMLElement) => JSON.stringify(Object.entries(el.dataset).filter(([k]) => k !== 'stage' && k !== 'shown').sort());
+const keyOf = (el: HTMLElement) => JSON.stringify(Object.entries(el.dataset).filter(([k]) => k !== 'surfaceState' && k !== 'shown').sort());
 
 // the surfaces whose camera is that of el: el, and the surfaces with its key on the slides next to
 // it, in the order of the slides

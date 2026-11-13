@@ -285,7 +285,7 @@ const TABLE_STATE = `(() => {
     const b = ink(el);
     if (b) others.push({ what: el.localName + ':' + el.textContent.trim().slice(0, 24), box: b });
   }
-  for (const el of slide.querySelectorAll('.zone, .plate, .surface, figure img:not([hidden])')) {
+  for (const el of slide.querySelectorAll('.figure-box, .plate, .surface, figure img:not([hidden])')) {
     const r = el.getBoundingClientRect();
     if (r.width && r.height && getComputedStyle(el).display !== 'none') others.push({ what: el.localName + '.' + el.className, box: box(r) });
   }

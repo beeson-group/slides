@@ -110,7 +110,7 @@ for (const platform of PLATFORMS) {
     const cases = [
       ['the display', 3, '.reveal section.present div.math mjx-container', 'div.math'],
       ['an inline formula', 3, '.reveal section.present p mjx-container', 'p.fragment'],
-      ['the formula of a caption', 4, '.reveal section.present figcaption mjx-container', 'figure.zone'],
+      ['the formula of a caption', 4, '.reveal section.present figcaption mjx-container', 'figure.figure-box'],
     ];
     for (const [what, n, sel, owner] of cases) {
       await page.evaluate(`Reveal.slide(${n})`);

@@ -373,10 +373,10 @@ for (const platform of PLATFORMS) {
     const data = { items: [], files: [resolve('demo/figure-dark.png')], dragOperationsMask: 1 };
     for (const type of ['dragEnter', 'dragOver', 'drop']) await page.send('Input.dispatchDragEvent', { type, x: at.x, y: at.y, data });
     // the video is removed after the image is written
-    const ZONE = `window.BeesonEditor.render().split('Starting a video on a click')[1].split('</section>')[0]`;
-    await page.waitFor(`/<img[^>]*figure-dark/.test(${ZONE}) && ${ZONE}.split('<video').length === 2`, 30000);
+    const FIGURE_BOX = `window.BeesonEditor.render().split('Starting a video on a click')[1].split('</section>')[0]`;
+    await page.waitFor(`/<img[^>]*figure-dark/.test(${FIGURE_BOX}) && ${FIGURE_BOX}.split('<video').length === 2`, 30000);
     await frames(page);
-    const img = (await page.evaluate(ZONE)).match(/<img [^>]*>/)?.[0];
+    const img = (await page.evaluate(FIGURE_BOX)).match(/<img [^>]*>/)?.[0];
     assert.match(img ?? '', /^<img class="for-(dark|light) fragment" src="media\/figure-dark\.png" data-fragment-index="1">$/, `the image is written ${img}`);
     assert.match((await rowOf(page, 'Figure')).meta, /On Click · Fade In$/);
     await press(page, 'Mod+Z');
@@ -424,15 +424,15 @@ for (const platform of PLATFORMS) {
 }
 
 // the viewers of test/pages/viewer-play.html: the viewer of its first slide, which is a step of the
-// style play, and the viewer of its third slide, in a zone that is the step
+// style play, and the viewer of its third slide, in a figure box that is the step
 const VIEWERS = 'test/pages/viewer-play.html';
 const scene = (attrs) => `<tycho-viewer theme="dark" kiosk id="play"${attrs}>`;
-const SCENE = scene(' class="zone fragment play" data-fragment-index="2"');
+const SCENE = scene(' class="figure-box fragment play" data-fragment-index="2"');
 const LATER = (n) => `<p class="fragment" data-fragment-index="${n}">A later step.</p>`;
-const INSIDE = '<div class="zone fragment play" data-fragment-index="1">\n        <tycho-viewer theme="dark" kiosk id="inside">';
+const INSIDE = '<div class="figure-box fragment play" data-fragment-index="1">\n        <tycho-viewer theme="dark" kiosk id="inside">';
 const AFTER = (n) => `<p class="fragment" data-fragment-index="${n}">A paragraph after the scene.</p>`;
 
-// the viewer of the slide, or the zone around it, selected with a trusted click, with the Arrange pane shown
+// the viewer of the slide, or the figure box around it, selected with a trusted click, with the Arrange pane shown
 async function selectScene(page) {
   await click(page, '.reveal section.present tycho-viewer');
   await frames(page);
@@ -447,7 +447,7 @@ for (const platform of PLATFORMS) {
     const labels = await chipMenu(page, 'Scene');
     assert.equal(labels[labels.indexOf('Fade In') + 1], 'Play', `the menu of the scene row reads ${labels.join(', ')}`);
     await pick(page, 'Scene', 'Fade In');
-    const faded = source.replace(SCENE, scene(' class="zone fragment" data-fragment-index="2"'));
+    const faded = source.replace(SCENE, scene(' class="figure-box fragment" data-fragment-index="2"'));
     sameText(await rendered(page), faded);
     await undoRedo(page, platform, source, faded);
     await pick(page, 'Scene', 'Play');
@@ -465,7 +465,7 @@ for (const platform of PLATFORMS) {
     await selectScene(page);
     assert.deepEqual(await checkOf(page, 'figure.startOnClick'), { command: 'figure.startOnClick', text: 'Start on a click', checked: true, disabled: false });
     await toggle(page, 'figure.startOnClick');
-    const plain = source.replace(SCENE, scene(' class="zone"')).replace(LATER(3), LATER(2));
+    const plain = source.replace(SCENE, scene(' class="figure-box"')).replace(LATER(3), LATER(2));
     sameText(await rendered(page), plain);
     assert.equal((await checkOf(page, 'figure.startOnClick')).checked, false);
     assert.equal(await undoLabel(page), 'Undo Start on a Click');
@@ -473,7 +473,7 @@ for (const platform of PLATFORMS) {
 
     // a viewer shown with its slide is made the last step of its slide, with the style play
     await toggle(page, 'figure.startOnClick');
-    const last = plain.replace(scene(' class="zone"'), scene(' class="zone fragment play" data-fragment-index="3"'));
+    const last = plain.replace(scene(' class="figure-box"'), scene(' class="figure-box fragment play" data-fragment-index="3"'));
     sameText(await rendered(page), last);
     assert.equal((await checkOf(page, 'figure.startOnClick')).checked, true);
     await undoRedo(page, platform, plain, last);

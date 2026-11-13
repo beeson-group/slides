@@ -19,15 +19,15 @@ const STEP_CLASSES = ['play'];
 
 // the data attributes of AGENTS.md and REFERENCE.md, those of reveal.js that the theme gives a
 // meaning, and data-group and data-locked, which are new and named among the open decisions, and
-// the glue of model/glue.ts, which only the editor reads
+// the attachment of model/glue.ts, which only the editor reads
 export const DATA_ATTRS = [
   'data-at', 'data-auto', 'data-auto-animate', 'data-autoplay', 'data-azimuth', 'data-cx', 'data-cy', 'data-duration',
   'data-dx', 'data-dy', 'data-elevation', 'data-final', 'data-fragment-index', 'data-function', 'data-half',
   'data-heads', 'data-highlight', 'data-id', 'data-keep', 'data-keep-theme', 'data-line-numbers', 'data-live',
   'data-loop', 'data-mu', 'data-plot', 'data-plot-frame', 'data-plot-panels', 'data-plot-paused', 'data-plot-play',
-  'data-plot-show', 'data-plot-tab', 'data-plot-tabs', 'data-qr', 'data-run', 'data-scene', 'data-stage',
-  'data-stagger', 'data-strands', 'data-strands-color', 'data-strands-colormap', 'data-strands-ramp',
-  'data-strands-select', 'data-strands-shade', 'data-surface-accent', 'data-surface-marks', 'data-surface-stage',
+  'data-plot-show', 'data-plot-tab', 'data-plot-tabs', 'data-qr', 'data-run', 'data-backdrop',
+  'data-stagger', 'data-trajectories', 'data-trajectories-color', 'data-trajectories-colormap', 'data-trajectories-ramp',
+  'data-trajectories-select', 'data-trajectories-shade', 'data-surface-accent', 'data-surface-points', 'data-surface-state',
   'data-surface-violet', 'data-tone', 'data-turn', 'data-unhighlight', 'data-zoom', 'data-zscale',
   'data-visibility', 'data-timing', 'data-transition', 'data-group', 'data-locked', 'data-autoslide',
   'data-guides', 'data-anchor', 'data-from', 'data-to',

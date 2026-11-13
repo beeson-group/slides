@@ -12,7 +12,7 @@ import { saveAndReopen } from './helpers/editor.mjs';
 
 const DECK = 'test-deck.html';
 const LAYOUTS = 'test/pages/editor-layouts.html';
-// slide 5 of index.html, with a figure in its zone and without a free place, and the figure slide
+// slide 5 of index.html, with a figure in its figure box and without a free place, and the figure slide
 // of editor-layouts.html with a video in its plate
 const FIGURES = 4;
 const VIDEO = 7;
@@ -94,7 +94,7 @@ for (const platform of PLATFORMS) {
   test(`a new table on slide 5 is put inside the margins at the middle of the slide, off the figure, and a second table off the first (${platform})`, async (t) => {
     const page = await load(t, platform, FIGURES);
     const before = await render(page);
-    const [figure] = await boxes(page, ':scope > figure.zone');
+    const [figure] = await boxes(page, ':scope > figure.figure-box');
     assert.ok(figure, 'slide 5 does not have a figure in its zone');
     await insertTable(page);
     const [table] = await boxes(page, ':scope > table');
@@ -115,7 +115,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  // a table keeps its free place under the code box of slide 6 and at the center of the free zone
+  // a table keeps its free place under the code box of slide 6 and at the center of the free figure box
   // of slide 4
   test(`a new table on a slide with a free place is put there as before (${platform})`, async (t) => {
     for (const [n, place] of [[5, [120, 715, 498, 213]], [3, [1251, 414, 498, 213]]]) {

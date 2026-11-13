@@ -263,7 +263,7 @@ for (const platform of PLATFORMS) {
 
 // finding 11 (check 7 of the laptop tests of round 4): a change of layout forth and back gives the
 // file byte for byte, for every slide of the demo deck, each of which has a footnote, a backdrop,
-// a zone, or notes
+// a figure box, or notes
 const LAYOUTS = ['title', 'section', 'content', 'narrow', 'wide', 'figure', 'split', 'closing'];
 for (const platform of PLATFORMS) {
   test(`every slide of the demo deck changed to each layout and back gives the file byte for byte (${platform})`, async (t) => {

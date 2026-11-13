@@ -1,9 +1,9 @@
 // a modal dialog over the dialog element, which traps Tab, gives the focus back on close, and
-// gives its answer as a Promise. it is shown as a sheet of Keynote, i.e. a card at the top of the
+// gives its answer as a Promise. it is shown as a sheet of Keynote, i.e. a dialog at the top of the
 // window under the toolbar, over a scrim that dims the window in both modes of the chrome. the
-// cards of a file in file/files.ts and file/drafts.ts are dialogs of this kind. a Dialog is kept
+// dialogs of a file in file/files.ts and file/drafts.ts are dialogs of this kind. a Dialog is kept
 // in the page between its opens, with the attribute hidden while it is closed, since the tests
-// read a card by its class and its hidden state
+// read a dialog by its class and its hidden state
 
 import type { App } from '../app.ts';
 import { injectStyle, make } from './dom.ts';

@@ -19,8 +19,8 @@ const TABLES = 'test/pages/editor-tables.html';
 // the slides of the demo deck with the display formula and with the figure and its caption
 const EQUATIONS = 3;
 const FIGURE = 4;
-const IMG = '.reveal section.present figure.zone > img';
-const CAPTION = '.reveal section.present figure.zone > figcaption';
+const IMG = '.reveal section.present figure.figure-box > img';
+const CAPTION = '.reveal section.present figure.figure-box > figcaption';
 const PANEL = '#beeson-edit-panel-format';
 
 let browser;
@@ -124,14 +124,14 @@ function sameOffset(now, before, what) {
 }
 
 // the caption under the picture of an image with a width, at the gap of 16 slide px that the theme
-// puts between the picture and the caption of a zone, which is the size of such a picture
+// puts between the picture and the caption of a figure box, which is the size of such a picture
 function underPicture(now, what) {
   const ok = Math.abs(now.dx) <= 1.5 && Math.abs(now.dy - 16 * now.k) <= 1.5;
   assert.ok(ok, `${what}: the caption is at ${js([now.dx, now.dy])} from the lower left corner of the image, and not under it at the gap of the theme`);
 }
 
 // the caption under the box of an image whose picture object-fit contain draws inside it, e.g.
-// an image of a zone typed to a width, at the gap of 16 slide px of the theme
+// an image of a figure box typed to a width, at the gap of 16 slide px of the theme
 function underBox(now, what) {
   const ok = Math.abs(now.box.dx) <= 1.5 && Math.abs(now.box.dy - 16 * now.k) <= 1.5;
   assert.ok(ok, `${what}: the caption is at ${js([now.box.dx, now.box.dy])} from the lower left corner of the image box, and not under it at the gap of the theme`);
@@ -176,7 +176,7 @@ for (const platform of PLATFORMS) {
     await release(page, { x: from.x - 80, y: from.y + 20 });
     await frames(page);
     sameOffset(await captionFromPicture(page), rest, 'after the drag');
-    assert.match(await render(page), /<figure class="zone[^"]*"[^>]* style="translate: -?\d+px -?\d+px">/, 'the drag of the image does not move its figure');
+    assert.match(await render(page), /<figure class="figure-box[^"]*"[^>]* style="translate: -?\d+px -?\d+px">/, 'the drag of the image does not move its figure');
     await roundTrip(page);
   });
 
@@ -250,7 +250,7 @@ for (const platform of PLATFORMS) {
     // the states with the figure selected, which the states with its image must match
     await selectPicture(page, IMG);
     await exec(page, 'selection.container');
-    assert.deepEqual(await selected(page), ['figure.zone']);
+    assert.deepEqual(await selected(page), ['figure.figure-box']);
     const figure = await states();
     assert.equal(figure.backward && figure.back, true, `Send Backward and Send to Back are dimmed for the figure: ${js(figure)}`);
     await exec(page, 'arrange.order.back');
@@ -300,7 +300,7 @@ for (const platform of PLATFORMS) {
     assert.equal(await pane(page), 'image');
     await press(page, 'Escape');
     await frames(page);
-    assert.deepEqual(await selected(page), ['figure.zone'], 'Esc on the selected image does not select its figure');
+    assert.deepEqual(await selected(page), ['figure.figure-box'], 'Esc on the selected image does not select its figure');
     assert.ok((await tabs(page)).includes('Image'), `the inspector does not offer the Image pane for the figure: ${js(await tabs(page))}`);
     // Select Figure shows the same pane, and Esc on the selected figure clears the selection
     await click(page, '.reveal section.present h2');
@@ -308,7 +308,7 @@ for (const platform of PLATFORMS) {
     await selectPicture(page, IMG);
     await exec(page, 'selection.container');
     await frames(page);
-    assert.deepEqual(await selected(page), ['figure.zone']);
+    assert.deepEqual(await selected(page), ['figure.figure-box']);
     assert.ok((await tabs(page)).includes('Image'));
     await press(page, 'Escape');
     await frames(page);

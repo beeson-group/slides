@@ -1,8 +1,8 @@
 // the tiles of the layout chooser and of the New Slide gallery, and the sketch of the well Slide
 // Layout of the inspector, of R15.14, on both platforms. a tile draws the texts that a new slide of
 // its layout gets, and a gray box at the place where the layout puts a figure or a backdrop: the
-// zone of Content and the backdrop of Content, Narrow. Content, Wide is without a box, in its tile
-// and in the well, since its text column runs over the place of the zone
+// figure box of Content and the backdrop of Content, Narrow. Content, Wide is without a box, in its tile
+// and in the well, since its text column runs over the place of the figure box
 
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -49,7 +49,7 @@ async function load(t, platform, n) {
 }
 
 // the gray boxes of each tile of the gallery of selector, by the layout of the tile: the class and
-// the left, top, width, and height in slide px of each zone, plate, and backdrop of its sample
+// the left, top, width, and height in slide px of each figure box, plate, and backdrop of its sample
 const tiles = (page, selector) => page.evaluate(`(() => {
   const out = {};
   for (const tile of document.querySelectorAll(${js(selector)} + ' .tile')) {
@@ -57,7 +57,7 @@ const tiles = (page, selector) => page.evaluate(`(() => {
     const slide = root.querySelector('section');
     const s = slide.getBoundingClientRect();
     const k = s.width / slide.offsetWidth;
-    out[tile.dataset.layout] = [...slide.querySelectorAll('.zone, .plate, .backdrop')].map((e) => {
+    out[tile.dataset.layout] = [...slide.querySelectorAll('.figure-box, .plate, .backdrop')].map((e) => {
       const r = e.getBoundingClientRect();
       return [e.className, ...[(r.left - s.left) / k, (r.top - s.top) / k, r.width / k, r.height / k].map(Math.round)];
     });
@@ -75,8 +75,8 @@ for (const platform of PLATFORMS) {
       await exec(page, command);
       await frames(page);
       const drawn = await tiles(page, selector);
-      // the zone of a content slide and the backdrop of a narrow slide, as theme/beeson.css places them
-      assert.deepEqual(drawn.content, [['zone', 1200, 120, 600, 800]]);
+      // the figure box of a content slide and the backdrop of a narrow slide, as theme/beeson.css places them
+      assert.deepEqual(drawn.content, [['figure-box', 1200, 120, 600, 800]]);
       assert.deepEqual(drawn.narrow, [['backdrop', 920, 0, 1000, 1080]]);
       assert.deepEqual(drawn.wide, []);
       assert.deepEqual(errors(page), []);
@@ -89,14 +89,14 @@ for (const platform of PLATFORMS) {
     await exec(page, 'slide.new.content');
     await frames(page);
     const made = await render(page);
-    assert.equal((made.match(/class="zone"/g) ?? []).length, (before.match(/class="zone"/g) ?? []).length);
+    assert.equal((made.match(/class="figure-box"/g) ?? []).length, (before.match(/class="figure-box"/g) ?? []).length);
     assert.deepEqual(errors(page), []);
   });
 
   test(`the well Slide Layout draws the block of the figure for Content and Content, Narrow, and not for Content, Wide (${platform})`, async (t) => {
     const page = await load(t, platform, SLIDES.content);
     // the blocks of the sketch that are at least as high as the figure of a content slide, i.e. the
-    // zone of Content and the backdrop of Content, Narrow, whose square left corners are drawn
+    // figure box of Content and the backdrop of Content, Narrow, whose square left corners are drawn
     // by a second rect with rx 0
     const blocks = () => page.evaluate(`(() => {
       const svg = document.querySelector('.beeson-edit-inspector .ed-card .thumb svg');

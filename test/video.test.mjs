@@ -168,7 +168,7 @@ test('a video in a fragment is played from its step on, and it does not call for
   await until(page, 'inside', { playing: true });
   await page.evaluate('Reveal.next()');
   await until(page, 'inside', { playing: true });
-  // a dimmed zone would not come back to full opacity
+  // a dimmed figure box would not come back to full opacity
   await page.waitFor(`getComputedStyle(inside.parentElement).opacity === '1'`).catch(() => {});
   assert.equal(await page.evaluate(`getComputedStyle(inside.parentElement).opacity`), '1');
   await page.evaluate('Reveal.prev()');

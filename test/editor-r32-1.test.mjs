@@ -111,7 +111,7 @@ for (const platform of PLATFORMS) {
   test(`Family 7 chosen on slide 2 keeps Families 7 and 11 in the Family popup, and choosing it gives back the bytes of the demo deck (${platform})`, async (t) => {
     const page = await load(t, platform, DEMO, 1);
     const seven = await pick(page, 'Family', 'Family 7', 'Undo Family');
-    assert.equal(seven, page.source.replace('data-strands-select="frame=pulsating"', 'data-strands-select="frame=pulsating,family=7"'));
+    assert.equal(seven, page.source.replace('data-trajectories-select="frame=pulsating"', 'data-trajectories-select="frame=pulsating,family=7"'));
     await assertFamilies(page, 'Family 7');
     const both = await pick(page, 'Family', 'Families 7 and 11', 'Undo Family');
     assert.equal(both, page.source);
@@ -133,7 +133,7 @@ for (const platform of PLATFORMS) {
     const seven = await pick(page, 'Family', 'Family 7', 'Undo Family');
     await go(page, 2);
     const drawing = await pick(page, 'Drawing', 'Broucke Families', 'Undo Change Drawing');
-    assert.match(tagOf(drawing, STEPS), /data-strands-select="frame=pulsating,family=7"/);
+    assert.match(tagOf(drawing, STEPS), /data-trajectories-select="frame=pulsating,family=7"/);
     await assertFamilies(page, 'Family 7');
     const inertial = await pick(page, 'Family', 'Families 7 and 11 (Inertial)', 'Undo Family');
     assert.equal(tagOf(inertial, STEPS), tagOf(drawing, STEPS).replace('frame=pulsating,family=7', 'frame=inertial'));
@@ -172,7 +172,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(items.find((i) => i[0] === 'Broucke Families'), ['Broucke Families', false, false], js(items));
     await press(page, 'Escape');
     const text = await pick(page, 'Drawing', 'Broucke Families', 'Undo Change Drawing');
-    assert.match(tagOf(text, '<h2>One family</h2>'), /data-strands="\.\.\/\.\.\/demo\/broucke-sample\.js" data-strands-select="frame=pulsating,family=7"/);
+    assert.match(tagOf(text, '<h2>One family</h2>'), /data-trajectories="\.\.\/\.\.\/demo\/broucke-sample\.js" data-trajectories-select="frame=pulsating,family=7"/);
     assert.equal(await popupText(page, 'Drawing'), 'Broucke Families');
   });
 }

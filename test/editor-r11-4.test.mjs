@@ -12,7 +12,7 @@ import { click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
 
 const OUTLINE = 'test/pages/editor-outline.html';
 const LAYOUTS = 'test/pages/editor-layouts.html';
-// the slide of editor-layouts.html with a display, an ordered list, and a zone
+// the slide of editor-layouts.html with a display, an ordered list, and a figure box
 const MATH = 3;
 const PLATFORMS = ['mac', 'other'];
 

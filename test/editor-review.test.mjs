@@ -1,6 +1,6 @@
 // the show and the review of a deck on both platforms: the steps and times of the presenter view,
 // Present at the current slide, the presenter view, a rehearsal that writes data-timing, the
-// transitions None and Fade, Magic Move, and the Chapters Table. each edit is checked byte for
+// transitions None and Fade, Magic Move, and the Slide Sorter. each edit is checked byte for
 // byte, after an undo and a redo, and after a save and an open of the saved text. the system
 // clipboard is not used
 
@@ -222,7 +222,7 @@ for (const platform of PLATFORMS) {
     const occurrences = (s) => text.split(s).length - 1;
     const heading = '<h2 data-id="magic-1">Math, an ordered list, and a zone</h2>';
     assert.equal(occurrences(`<section data-auto-animate>\n  ${heading}`), 2);
-    assert.equal(occurrences('<figure class="zone fragment" data-fragment-index="2" data-id="magic-3">'), 2);
+    assert.equal(occurrences('<figure class="figure-box fragment" data-fragment-index="2" data-id="magic-3">'), 2);
     assert.equal(occurrences('data-id="magic-2"'), 2);
     assert.equal(await page.evaluate(`window.BeesonEditor.state('slide.transition.magic').checked`), false, 'the check is not on the copy');
     await page.evaluate('Reveal.slide(3)');
@@ -241,7 +241,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`the Chapters Table groups the slides under the section slides, and a drag moves a slide on ${platform}`, async () => {
+  test(`the Slide Sorter groups the slides under the section slides, and a drag moves a slide on ${platform}`, async () => {
     const page = await reviewPage(platform, 4);
     await exec(page, 'view.lightTable');
     await frames(page);
@@ -267,7 +267,7 @@ for (const platform of PLATFORMS) {
     await redo(page);
     assert.equal(await render(page), moved);
     await saved(page);
-    // Return shows the slide on the canvas and closes the Chapters Table
+    // Return shows the slide on the canvas and closes the Slide Sorter
     await page.evaluate(`document.querySelector('${tile(3)}').focus()`);
     await press(page, 'Enter');
     await frames(page);
@@ -277,7 +277,7 @@ for (const platform of PLATFORMS) {
   });
 }
 
-test('the groups of the Chapters Table follow the section and closing slides', () => {
+test('the groups of the Slide Sorter follow the section and closing slides', () => {
   const s = (cls = '', h = '') => ({ classList: { contains: (c) => cls.split(' ').includes(c) }, querySelectorAll: () => (h ? [{ textContent: h, closest: () => null }] : []) });
   const deck = [s('title', 'T'), s(), s('section', 'One'), s(), s('section', 'Two'), s('closing', 'Bye'), s(), s('section', 'Late')];
   assert.deepEqual(groupsOf(deck).map((g) => [g.title, g.slides.length]), [['Opening', 2], ['One', 2], ['Two', 2], ['Appendix', 2]]);

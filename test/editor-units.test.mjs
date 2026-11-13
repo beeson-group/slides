@@ -120,21 +120,21 @@ test('an element of each kind is written in the style of its file', () => {
     assert.equal(units.length, 1);
     for (const u of units) assert.match(u, /^<[a-z]/);
   }
-  assert.equal(elementText('image', style, '  ', { src: 'a "b".png' })[0], '<figure class="zone">\n    <img src="a &quot;b&quot;.png" alt="">\n  </figure>');
+  assert.equal(elementText('image', style, '  ', { src: 'a "b".png' })[0], '<figure class="figure-box">\n    <img src="a &quot;b&quot;.png" alt="">\n  </figure>');
   assert.match(elementText('table', style, '', { columns: 3, rows: 2 })[0], /<tr><th><\/th><th><\/th><th><\/th><\/tr>\n    <tr><td>/);
 });
 
 test('the classes of a stylesheet are read without comments, numbers, and addresses', () => {
-  const css = '/* .nope */ .reveal .slides section.wide > .zone, a.b-c:hover { margin: .5em; background: url(x.png); content: ".q"; }';
-  assert.deepEqual(themeClasses(css).sort(), ['b-c', 'reveal', 'slides', 'wide', 'zone']);
+  const css = '/* .nope */ .reveal .slides section.wide > .figure-box, a.b-c:hover { margin: .5em; background: url(x.png); content: ".q"; }';
+  assert.deepEqual(themeClasses(css).sort(), ['b-c', 'figure-box', 'reveal', 'slides', 'wide']);
   const theme = new Set(themeClasses(readFileSync(new URL('../theme/beeson.css', import.meta.url), 'utf8')));
-  for (const c of ['wide', 'narrow', 'zone', 'plate', 'backdrop', 'qr', 'math', 'caption', 'dots', 'dashes']) assert.ok(theme.has(c), c);
-  for (const c of ['shape', 'rounded', 'ellipse', 'triangle', 'arrow', 'arrow-both', 'brace', 'plus', 'equals', 'round-s', 'round-l', 'fill-none', 'fill-ground', 'veil', 'weight-6', 'weight-8', 'no-outline', 'flip-x', 'flip-y', 'left']) assert.ok(theme.has(c), c);
+  for (const c of ['wide', 'narrow', 'figure-box', 'plate', 'backdrop', 'qr', 'math', 'caption', 'dots', 'dashes']) assert.ok(theme.has(c), c);
+  for (const c of ['shape', 'rounded', 'ellipse', 'triangle', 'arrow', 'arrow-both', 'brace', 'plus', 'equals', 'round-s', 'round-l', 'fill-none', 'fill-ground', 'fill-translucent', 'weight-6', 'weight-8', 'no-outline', 'flip-x', 'flip-y', 'left']) assert.ok(theme.has(c), c);
 });
 
 test('the scope rule allows the writes of AGENTS.md and names the others', () => {
-  const theme = new Set(['zone', 'small']);
-  const attrs = tokenize('<p class="zone" style="translate: 1px 2px">').find((t) => t.type === 'start').attrs;
+  const theme = new Set(['figure-box', 'small']);
+  const attrs = tokenize('<p class="figure-box" style="translate: 1px 2px">').find((t) => t.type === 'start').attrs;
   assert.deepEqual(editProblems('p', attrs, { classes: { small: true, fragment: true }, attrs: { 'data-tone': 'violet' } }, theme), []);
   assert.deepEqual(editProblems('p', attrs, { classes: { mine: true }, attrs: { title: 'x' }, style: { color: 'red' } }, theme), ['the class mine', 'the attribute title', 'the declaration color']);
   assert.equal(declarationProblem('img', [], 'width', '40%'), null);

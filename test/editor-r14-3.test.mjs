@@ -163,11 +163,11 @@ for (const platform of PLATFORMS) {
   ]) {
     test(`Edit > Delete and Edit > Select All with the caret in ${what} act on its text, and not on the figure selected on the canvas (${platform})`, async (t) => {
       const page = await load(t, platform);
-      const n = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('figure.zone'))`);
+      const n = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('figure.figure-box'))`);
       await page.evaluate(`Reveal.slide(${n})`);
       await settle(page);
       const at = field(n);
-      const figure = () => rect(page, `[...document.querySelectorAll('.reveal section.present figure.zone img')].find((i) => i.getClientRects().length)`);
+      const figure = () => rect(page, `[...document.querySelectorAll('.reveal section.present figure.figure-box img')].find((i) => i.getClientRects().length)`);
       const figures = (text) => text.split('<figure').length;
       const textOf = () => page.evaluate(`(() => { const f = ${at}; return 'value' in f ? f.value : f.textContent; })()`);
       const choose = async (label) => {

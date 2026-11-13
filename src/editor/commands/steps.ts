@@ -134,7 +134,7 @@ function indexOf(app: App, el: Element): string | null {
 
 // the effect Play of a video or a tycho viewer set or taken off, as Start on a click of the Video
 // pane. a video that is not a step is made the last step of its slide with the effect Play, and a
-// video taken off Play stays a step with the effect Fade In. a video in a zone or a plate is not an
+// video taken off Play stays a step with the effect Fade In. a video in a figure box or a plate is not an
 // item of the steps until it is a step, hence it is given to the model. Play is taken off the step
 // of the style play that the video is or is in
 export function startOnClick(app: App, video: Element, on: boolean): void {

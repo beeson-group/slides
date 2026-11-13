@@ -197,8 +197,8 @@ for (const platform of PLATFORMS) {
 
   test(`a row selects its element, a selected element marks its row, and Alt with an arrow moves a step on ${platform}`, async (t) => {
     const page = await open(t, platform);
-    await slideOf(page, '.reveal .slides section .zone > img');
-    await click(page, '.reveal section.present .zone > img');
+    await slideOf(page, '.reveal .slides section .figure-box > img');
+    await click(page, '.reveal section.present .figure-box > img');
     await page.evaluate('window.BeesonEditor.status()');
     let r = await rows(page);
     assert.deepEqual(r.filter((x) => x.selected).map((x) => x.meta.split(' · ')[0]), ['Figure']);

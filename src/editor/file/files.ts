@@ -1,4 +1,4 @@
-// the file of the deck: open, save, save as, autosave, and present, with the cards that ask for the
+// the file of the deck: open, save, save as, autosave, and present, with the dialogs that ask for the
 // file, ask before Open or Present with unsaved changes, and list the texts that cannot be edited.
 // the file is written through the File System Access API where a browser has it, i.e. in Chrome
 // and Edge, and elsewhere a copy with the edits is put into the downloads of the browser
@@ -341,7 +341,7 @@ export function install(app: App): void {
   };
 
   // a file that is not the deck on the page is not kept for Open Recent, since it is offered on
-  // the card of this page
+  // the dialog of this page
   async function openHandle(handle: FileSystemFileHandle): Promise<void> {
     const text = await (await handle.getFile()).text();
     app.handle = handle;
@@ -379,7 +379,7 @@ export function install(app: App): void {
     return (await h.requestPermission?.(mode)) === 'granted';
   }
 
-  // a deck of Open Recent kept on another page is opened on its page, where the card offers its
+  // a deck of Open Recent kept on another page is opened on its page, where the dialog offers its
   // file. a deck that is missing is taken off the list
   async function openRecent(r: Recent): Promise<void> {
     if (!(await readyToOpen())) return;
@@ -402,7 +402,7 @@ export function install(app: App): void {
     }
   }
 
-  // the page is loaded again from the file, without the edits and their draft, hence the card of
+  // the page is loaded again from the file, without the edits and their draft, hence the dialog of
   // the edits that were not saved is not offered after the reload
   async function revert(): Promise<void> {
     if (!app.dirty) return;
@@ -454,7 +454,7 @@ export function install(app: App): void {
     }
   }
 
-  // the card of the command that writes the PowerPoint file from the saved deck, run in its folder
+  // the dialog of the command that writes the PowerPoint file from the saved deck, run in its folder
   async function exportPptx(): Promise<void> {
     if (!(await savedFirst('pptx'))) return;
     // the attached file is named as it is, and its folder is not known to the page. the folder of
@@ -612,7 +612,7 @@ export function install(app: App): void {
 
   // the saved deck at hash, without the editor, played in place or, with tab, in a new tab. with
   // unsaved changes, the user is asked first. the show in place takes the full screen before the
-  // save, while the click on the card still counts. null is returned when nothing is played
+  // save, while the click on the dialog still counts. null is returned when nothing is played
   async function present(hash = '', tab = false): Promise<{ win: Window | null } | null> {
     const choice = app.dirty ? await askFirst('present') : 'saved';
     if (!choice) return null;
@@ -670,7 +670,7 @@ export function install(app: App): void {
     }
     if (!card.shown) void card.open(last ? 'recent' : 'choose');
   });
-  // the list is read after the start, and the card is updated with it
+  // the list is read after the start, and the dialog is updated with it
   void loadRecents().then(() => app.report()).catch(() => {});
   app.listen('history', () => {
     if (app.dirty) cleanIfSaved();
@@ -730,7 +730,7 @@ async function printWhenReady(win: Window): Promise<boolean> {
   return false;
 }
 
-// the text is fetched when the deck is served, and with file: it is chosen with the card
+// the text is fetched when the deck is served, and with file: it is chosen with the dialog
 export async function fetchSource(app: App): Promise<boolean> {
   if (location.protocol === 'file:') return false;
   try {

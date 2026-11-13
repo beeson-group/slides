@@ -1,6 +1,6 @@
 // the commands of the Slide menu: new slide with the gallery of the layouts, duplicate, delete,
 // hide and show, move up and down, and cut, copy, and paste of slides, and the move and the rename
-// of a section of the Chapters Table. each command acts on the slides selected in the navigator, or on
+// of a section of the Slide Sorter. each command acts on the slides selected in the navigator, or on
 // the current slide, through the document model, and is one entry of the history however many
 // slides it changes
 
@@ -35,7 +35,7 @@ html.beeson-editor .reveal:not(.beeson-peek) .slides section :is(h1, h2)[content
 html.beeson-editor .reveal:not(.beeson-peek) .slides section p.sub[contenteditable="true"]:empty::before { content: "Subtitle"; }
 html.beeson-editor .reveal:not(.beeson-peek) .slides section p.who[contenteditable="true"]:empty::before { content: "Author"; }
 html.beeson-editor .reveal:not(.beeson-peek) .slides section p.caption[contenteditable="true"]:empty::before { content: "Caption"; }
-html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable="true"]:empty::before, html.beeson-editor .reveal:not(.beeson-peek) .slides section .panel > p[contenteditable="true"]:empty::before { content: "Text"; }
+html.beeson-editor .reveal:not(.beeson-peek) .slides section > p[contenteditable="true"]:empty::before, html.beeson-editor .reveal:not(.beeson-peek) .slides section .text-column > p[contenteditable="true"]:empty::before { content: "Text"; }
 .beeson-edit-gallery { --g-bg: var(--ed-panel, #fbfbfd); --g-text: var(--ed-text, #1d1d1f); --g-muted: var(--ed-muted, #6e6e73); --g-line: var(--ed-line, #d2d2d7); --g-select: var(--ed-select, #7a5af8); }
 @media (prefers-color-scheme: dark) {
   .beeson-edit-gallery { --g-bg: var(--ed-panel, #2c2c2e); --g-text: var(--ed-text, #f2f2f7); --g-muted: var(--ed-muted, #a1a1a6); --g-line: var(--ed-line, #48484a); --g-select: var(--ed-select, #9b82ff); }
@@ -68,7 +68,7 @@ function placeAfter(app: App): { root: Element; before: Element | null } {
 }
 
 // the slides shown and selected after a command, with the focus kept in the navigator when the
-// command was run from it, and on the tile of the current slide while the Chapters Table is shown
+// command was run from it, and on the tile of the current slide while the Slide Sorter is shown
 function land(app: App, slides: Element[], current: Element | null, focusNav: boolean): void {
   const nav = navOf(app);
   nav.select(slides, current);
@@ -76,7 +76,7 @@ function land(app: App, slides: Element[], current: Element | null, focusNav: bo
 }
 
 // whether Select All and Delete of the Edit menu act on the slides, i.e. while a row of the navigator
-// or a tile of the Chapters Table has the focus, as in the Slide Sorter of PowerPoint
+// or a tile of the Slide Sorter has the focus, as in the Slide Sorter of PowerPoint
 export function onSlides(app: App): boolean {
   const active = document.activeElement;
   if (active instanceof HTMLElement && (active.isContentEditable || active.matches('input, textarea'))) return false;
@@ -98,7 +98,7 @@ function caretInto(slide: Element): void {
 
 async function newSlide(app: App, layout: NewLayout, before = placeAfter(app).before): Promise<Element> {
   const slide = await docOf(app).insertSlide(layout, before);
-  // the slide is hidden under the Chapters Table, hence its tile takes the focus, as at Duplicate
+  // the slide is hidden under the Slide Sorter, hence its tile takes the focus, as at Duplicate
   if (navOf(app).table?.shown) land(app, [slide], slide, true);
   else {
     navOf(app).select([slide], slide);
@@ -205,7 +205,7 @@ async function pasteSlides(app: App, text: string, focusNav: boolean): Promise<b
   return true;
 }
 
-// a section of the Chapters Table, i.e. a section slide with the slides under it, moved to gap, an
+// a section of the Slide Sorter, i.e. a section slide with the slides under it, moved to gap, an
 // index in the slides of the deck, and the name of a section, i.e. the heading of its section slide
 export type MoveSection = { head: Element; gap: number };
 export type RenameSection = { head: Element; text: string };

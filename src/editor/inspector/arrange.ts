@@ -1,7 +1,7 @@
 // the Arrange pane of the Format tab, as the Arrange tab of Keynote: Align with its reference,
 // Distribute, the size in W and H, the position in X and Y, and the angle, each with its reset,
 // with Flip Horizontal and Flip Vertical for an image, then the order of the elements, Group and
-// Ungroup, Lock and Unlock, and Ghosted. X and Y are the upper left corner of an element on the
+// Ungroup, Lock and Unlock, and Faint. X and Y are the upper left corner of an element on the
 // slide, as in Keynote and in the readout of a move, and W and H its size, in slide pixels. W and H
 // are set on an image, a video, a QR code, and a tycho viewer, and W alone on a text block, whose
 // height follows its wrapped text. the size of every other element is set by its layout
@@ -141,7 +141,7 @@ export function arrangePane(app: App, run: Run): Control[] {
         button(app, run, { command: 'arrange.lock', icon: 'lock', text: 'Lock' }),
         button(app, run, { command: 'arrange.unlock', icon: 'unlock', text: 'Unlock' }),
       ]),
-      row([checkbox(app, run, 'arrange.ghost', 'Ghosted')]),
+      row([checkbox(app, run, 'arrange.faint', 'Faint')]),
     ]),
   ];
 }

@@ -15,7 +15,7 @@ const LAYOUTS = 'test/pages/editor-layouts.html';
 const PLATFORMS = ['mac', 'other'];
 // slides of the deck of layouts: a paragraph and a list, a figure with a raster image, and a video
 const TEXT = 2;
-const PAPER = 6;
+const WHITE_FIGURE = 6;
 const VIDEO = 7;
 const P = '.reveal section.present > p:not(.small)';
 
@@ -130,14 +130,14 @@ for (const platform of PLATFORMS) {
   const mac = platform === 'mac';
 
   test(`Save as Picture… follows Replace Image… in the menu of an image and downloads its file under its own name without a fetch (${platform})`, async (t) => {
-    const page = await load(t, platform, { n: PAPER });
+    const page = await load(t, platform, { n: WHITE_FIGURE });
     await page.evaluate(`(() => {
       window.__saved = [];
       HTMLAnchorElement.prototype.click = function () { window.__saved.push({ name: this.download, href: this.href }); };
       window.__open = [];
       window.open = (...a) => { window.__open.push(a); return null; };
     })()`);
-    await rightClick(page, await point(page, '.reveal section.present img.paper'));
+    await rightClick(page, await point(page, '.reveal section.present img.white-figure'));
     const menu = labels((await rows(page))[0]);
     assert.equal(menu[menu.indexOf('Replace Image…') + 1], 'Save as Picture…');
     assert.ok(menu.indexOf('Size and Position…') > menu.indexOf('Save as Picture…'));
@@ -176,8 +176,8 @@ for (const platform of PLATFORMS) {
   });
 
   test(`Size and Position… opens the Arrange tab with the focus on W, or on X when W is set by the layout (${platform})`, async (t) => {
-    const page = await load(t, platform, { n: PAPER });
-    await rightClick(page, await point(page, '.reveal section.present img.paper'));
+    const page = await load(t, platform, { n: WHITE_FIGURE });
+    await rightClick(page, await point(page, '.reveal section.present img.white-figure'));
     await pick(page, 'Size and Position…');
     await page.waitFor(`document.activeElement && document.activeElement.matches('#beeson-edit-num-width, #beeson-edit-num-x')`, 3000);
     const focus = await page.evaluate(`(() => {
@@ -190,15 +190,15 @@ for (const platform of PLATFORMS) {
     await press(page, 'Escape');
 
     // an image with its own width gets the focus on W
-    const zone = await load(t, platform, { n: 3 });
-    await rightClick(zone, await point(zone, '.reveal section.present figure img', 0.5, 0.4));
-    await pick(zone, 'Size and Position…');
-    await zone.waitFor(`document.activeElement && document.activeElement.matches('#beeson-edit-num-width, #beeson-edit-num-x')`, 3000);
-    const id = await zone.evaluate(`document.activeElement.id`);
-    const width = await zone.evaluate(`!document.querySelector('#beeson-edit-num-width').disabled`);
+    const figureBox = await load(t, platform, { n: 3 });
+    await rightClick(figureBox, await point(figureBox, '.reveal section.present figure img', 0.5, 0.4));
+    await pick(figureBox, 'Size and Position…');
+    await figureBox.waitFor(`document.activeElement && document.activeElement.matches('#beeson-edit-num-width, #beeson-edit-num-x')`, 3000);
+    const id = await figureBox.evaluate(`document.activeElement.id`);
+    const width = await figureBox.evaluate(`!document.querySelector('#beeson-edit-num-width').disabled`);
     assert.equal(id, width ? 'beeson-edit-num-width' : 'beeson-edit-num-x');
-    await byteExact(zone);
-    assert.deepEqual([...errors(page), ...errors(zone)], []);
+    await byteExact(figureBox);
+    assert.deepEqual([...errors(page), ...errors(figureBox)], []);
   });
 
   test(`the menu of a slide has Grid and Guides with Gridlines, Snap to Grid, and Grid Settings…, then Rulers (${platform})`, async (t) => {

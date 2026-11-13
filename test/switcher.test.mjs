@@ -90,12 +90,12 @@ test('a viewer with data-keep-theme keeps its theme through a flip of the mode',
 
 // the animations of the current slide, each with whether it plays and how far it is: the points
 // traced by a backdrop, the azimuth of a surface, the frame of a plot, the time of a video, and the
-// step of a tycho scene. a traced backdrop is counted as playing once every strand is traced to its
+// step of a tycho scene. a traced backdrop is counted as playing once every trajectory is traced to its
 // end, and a backdrop shown complete at once is not
 const animations = `(() => {
   const slide = Reveal.getCurrentSlide();
   const on = (list) => list.filter((x) => slide.contains(x.el));
-  const ended = (o) => !o.loop && o.strands.every((s, k) => o.idx[k] >= s.times.length - 1);
+  const ended = (o) => !o.loop && o.trajectories.every((s, k) => o.idx[k] >= s.times.length - 1);
   return [
     ...on(Beeson.backdrops).map((o) => ({ kind: 'backdrop', playing: !!o.raf || ended(o), at: o.loop ? performance.now() - o.t0 : o.idx.reduce((a, j) => a + j, 0), ended: ended(o) })),
     ...on(Beeson.surfaces).map((s) => ({ kind: 'surface', playing: !!s.raf, at: s.azimuth })),
@@ -235,10 +235,10 @@ test('a traced backdrop is drawn on under the old view of a flip, in both direct
   await page.goto(deckUrl('test-deck.html', 'theme=dark'));
   await page.waitFor(deckSettled);
   const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
-  const index = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.backdrop[data-strands="demo/broucke-sample.js"]'))`);
+  const index = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.backdrop[data-trajectories="demo/broucke-sample.js"]'))`);
   assert.ok(index > 0, 'test-deck.html does not have a slide with the backdrop of demo/broucke-sample.js after its first slide');
   for (const to of ['light', 'dark']) {
-    // the trace is begun again on the slide, and several strands are traced after 1.5 s
+    // the trace is begun again on the slide, and several trajectories are traced after 1.5 s
     await page.evaluate(`Reveal.slide(${index - 1})`);
     await sleep(300);
     await page.evaluate(`Reveal.slide(${index})`);

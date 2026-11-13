@@ -160,7 +160,7 @@ function showStroke(svg: Element, s: Stroke): void {
 
 type Drawing = { heads: Heads; kind: Kind };
 
-// glue is the glue of a dragged end at its last move, and from and to that of the ends of a drawn line
+// attach is the attachment of a dragged end at its last move, and from and to that of the ends of a drawn line
 type Grab = { svg: Element; which: 1 | 2; from: Stroke; off: Point; x: number; y: number; moved: boolean; glue?: Glue | null };
 type Press =
   | ({ kind: 'end' } & Grab)
@@ -184,7 +184,7 @@ export function install(app: App): void {
   const ready = (a: App) => !!a.pairing?.root && !!a.current() && a.region() !== 'dialog';
   const root = document.documentElement;
   installGlue(app);
-  // the glue of an end at p, without the free key, with its element outlined
+  // the attachment of an end at p, without the free key, with its element outlined
   const glueOf = (ev: PointerEvent, p: Point, skip: Element[] = []) => {
     const g = freeMove(ev) ? null : glueAt(app, p, skip);
     showTarget(app, g?.glue.els ?? null);
@@ -322,7 +322,7 @@ export function install(app: App): void {
   };
 
   // the stroke of a line as one entry of the history, written into the start tags of its svg and
-  // its line or path, with the glue of a dragged end
+  // its line or path, with the attachment of a dragged end
   const setStroke = (svg: Element, s: Stroke, label: string, glue?: { end: End; to: Glue | null }) =>
     app.history.transact(label, () => {
       const t = strokeText(s);
@@ -636,7 +636,7 @@ export function install(app: App): void {
       },
     });
   });
-  // the glue of an end of the selected lines taken off, which the Line pane runs
+  // the attachment of an end of the selected lines taken off, which the Line pane runs
   for (const [end, name] of [['from', 'start'], ['to', 'end']] as const) {
     c.define({
       id: `line.unglue.${name}`,

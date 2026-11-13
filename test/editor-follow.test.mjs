@@ -1,6 +1,6 @@
 // the file of the deck followed while the editor is open, on a copy of the demo deck that a test
 // changes on disk, as an agent or a git pull does: the page is loaded again after a change without
-// unsaved edits, a save merges the edits into a changed file, a card asks at a conflict, and the
+// unsaved edits, a save merges the edits into a changed file, a dialog asks at a conflict, and the
 // file is written again without a picker after a reload of the editor
 
 import assert from 'node:assert/strict';

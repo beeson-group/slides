@@ -55,7 +55,7 @@ const BLOCK_TAGS = new Set(['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'li', 'td',
 const INLINE_TAGS = new Set(['a', 'abbr', 'b', 'bdi', 'bdo', 'br', 'cite', 'code', 'data', 'dfn', 'em', 'i', 'img', 'kbd', 'mark', 'q', 's', 'samp', 'small', 'span', 'strong', 'sub', 'sup', 'time', 'u', 'var', 'wbr']);
 
 // a div or a span is a block when its own text is not only white space and its children are
-// inline, e.g. div.foot, div.caption, div.math, and span.lab of the theme
+// inline, e.g. div.foot, div.caption, div.math, and span.label of the theme
 export function isBlock(s: SrcEl): boolean {
   if (BLOCK_TAGS.has(s.tag)) return true;
   if (s.tag !== 'div' && s.tag !== 'span') return false;

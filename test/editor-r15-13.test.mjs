@@ -146,7 +146,7 @@ for (const platform of PLATFORMS) {
   // F10: the button undid the entry before the typed value, which Tab then entered over the redo
   test(`the toolbar button Undo enters a value typed into a field of the inspector, then undoes it (${platform})`, async (t) => {
     const page = await load(t, platform, 'test-deck.html', 4);
-    await click(page, await center(page, `${SLIDE} figure.zone img.for-dark`));
+    await click(page, await center(page, `${SLIDE} figure.figure-box img.for-dark`));
     await press(page, 'ArrowRight');
     await wait(page, 1100);
     const moved = await render(page);

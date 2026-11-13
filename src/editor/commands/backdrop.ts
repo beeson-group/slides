@@ -12,17 +12,17 @@ import type { Handle } from '../canvas/snap.ts';
 import { setPreview, view as frameView } from '../canvas/frames.ts';
 import { begin, editing, extentOf, markCuts, orbitOf, setView, syncBackdrops, windowAttrs } from '../canvas/mask.ts';
 import { injectStyle, make } from '../ui/dom.ts';
-import { select, type StrandRecord } from '../../strands.ts';
+import { select, type TrajectoryData } from '../../trajectories.ts';
 
 type View = { cx: number; cy: number; half: number };
 type Box = { left: number; top: number; width: number; height: number };
-export type Live = { el: HTMLElement; view: View; done: boolean; tracing: boolean; ready: Promise<void>; records?: StrandRecord[] | null; fit(): void; reset(): void; start(): void; complete(): void; destroy(): void };
+export type Live = { el: HTMLElement; view: View; done: boolean; tracing: boolean; ready: Promise<void>; fileTrajectories?: TrajectoryData[] | null; fit(): void; reset(): void; start(): void; complete(): void; destroy(): void };
 type Hooks = { backdrops?: Live[]; remount?(el: HTMLElement): Live; preview?(el: HTMLElement): Live; fitWindow?(el: HTMLElement, box?: Box): Promise<View | null> };
 const hooks = (): Hooks => (window as unknown as { Beeson?: Hooks }).Beeson ?? {};
 
 // the attributes that say what is drawn, which a change of drawing replaces, apart from the window
 // and the motion
-export const DRAWING = ['data-scene', 'data-strands', 'data-strands-select', 'data-strands-color', 'data-strands-ramp', 'data-strands-colormap', 'data-strands-shade', 'data-heads'];
+export const DRAWING = ['data-backdrop', 'data-trajectories', 'data-trajectories-select', 'data-trajectories-color', 'data-trajectories-ramp', 'data-trajectories-colormap', 'data-trajectories-shade', 'data-heads'];
 // the names of the drawings in the list of Media > Backdrop… and wherever a drawing is named, for the
 // owner to confirm. a drawing of a file is named by its file, and a drawing of demo/broucke-sample.js
 // by the numbers of the Broucke families it selects, which are chosen in the entry Broucke Families
@@ -36,9 +36,9 @@ export const NAMES = {
   family: (numbers: string[]) => `${numbers.length === 1 ? 'Family' : 'Families'} ${numbers.length > 1 ? `${numbers.slice(0, -1).join(', ')} and ${numbers.at(-1)}` : numbers[0]}`,
   inertial: 'Inertial',
   both: 'Both Frames',
-  none: 'No Records',
+  none: 'No Trajectories',
 };
-export const SCENES: Record<string, string> = { nest: NAMES.nest, tubes: NAMES.tubes, wideRibbon: NAMES.wideRibbon };
+export const BUILT_IN: Record<string, string> = { nest: NAMES.nest, tubes: NAMES.tubes, wideRibbon: NAMES.wideRibbon };
 // the files of the template that the list draws from, and the families of demo/broucke-sample.js
 const LOGO_FILE = 'brand/transfer.js';
 const BROUCKE_FILE = 'demo/broucke-sample.js';
@@ -46,7 +46,7 @@ const BROUCKE_FAMILIES = ['7', '11'];
 const FRAMES = ['pulsating', 'inertial'];
 // the attributes of the motion of a drawing in the demo deck, which an entry of the list writes
 const MOTION = ['data-duration', 'data-stagger'];
-// the labels of a named scene, with the text and the offsets of the demo deck
+// the labels of a built-in backdrop, with the text and the offsets of the demo deck
 export const LABELS = [
   { at: 'L1', name: 'L1', text: '\\(\\LL{1}\\)', dy: '-34' },
   { at: 'L2', name: 'L2', text: '\\(\\LL{2}\\)', dy: '-34' },
@@ -55,7 +55,7 @@ export const LABELS = [
 ];
 export const COLORMAPS = ['viridis', 'plasma', 'Blues_r'];
 const COLORMAP_NAMES: Record<string, string> = { viridis: 'Viridis', plasma: 'Plasma', Blues_r: 'Blues (Reversed)' };
-// the name of a value of data-strands-colormap, or Palette for none. a value that is not a name of
+// the name of a value of data-trajectories-colormap, or Palette for none. a value that is not a name of
 // COLORMAPS alone is shown as it is written
 export const colormapName = (value: string | null): string => (value === null ? 'Palette' : COLORMAP_NAMES[value] ?? value);
 // the factor of a zoom of the window
@@ -82,7 +82,7 @@ export function slideBackdrop(app: App): HTMLElement | null {
 // the backdrop of the current slide under target, outside its labels
 export function backdropAt(app: App, target: Element): HTMLElement | null {
   const el = target.closest<HTMLElement>('.backdrop');
-  return el && !target.closest('.lab') && app.current()?.contains(el) && open(app, el) ? el : null;
+  return el && !target.closest('.label') && app.current()?.contains(el) && open(app, el) ? el : null;
 }
 
 export const liveOf = (el: Element | null): Live | null => (el ? ((orbitOf(el) as unknown as Live | null) ?? null) : null);
@@ -97,15 +97,15 @@ const valueOf = (arg: unknown) => (arg as { value?: unknown } | undefined)?.valu
 
 const isFile = (path: string, file: string) => path === file || path.endsWith(`/${file}`);
 
-// a term of data-strands-select, as the theme reads it in src/strands.ts
+// a term of data-trajectories-select, as the theme reads it in src/trajectories.ts
 const TERM = /^\s*([^=<>\s]+)\s*(<=|>=|=|<|>)\s*(.*?)\s*$/;
 const OPS: Record<string, string> = { '=': '', '<': 'Below', '<=': 'at Most', '>': 'Above', '>=': 'at Least' };
 const title = (w: string) => (w.length > 1 ? w[0].toUpperCase() + w.slice(1) : w);
 const valuesOf = (v: string) => [...new Set(v.split('|').map((s) => s.trim()))].sort();
 
-// the groups of spec, a value of data-strands-select, each as the pairs of a family and a frame of
+// the groups of spec, a value of data-trajectories-select, each as the pairs of a family and a frame of
 // demo/broucke-sample.js that it selects and its other terms sorted. groups with the same other terms
-// are merged, and a group without a pair is left out, thus two values that draw the same records by
+// are merged, and a group without a pair is left out, thus two values that draw the same trajectories by
 // family and frame have the same groups
 function groupsOf(spec: string | null): { pairs: string[]; rest: string[] }[] {
   const merged = new Map<string, Set<string>>();
@@ -126,14 +126,14 @@ function groupsOf(spec: string | null): { pairs: string[]; rest: string[] }[] {
   return [...merged].filter(([, p]) => p.size).sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([key, p]) => ({ pairs: [...p].sort(), rest: key ? key.split(',') : [] }));
 }
 
-// a term of data-strands-select in words, e.g. Thin 1 for thin=1
+// a term of data-trajectories-select in words, e.g. Thin 1 for thin=1
 function termWords(term: string): string {
   const m = TERM.exec(term);
   if (!m) return term;
   return [title(m[1]), OPS[m[2]], m[2] === '=' ? m[3].split('|').map(title).join(' or ') : m[3]].filter(Boolean).join(' ');
 }
 
-// the name of the Broucke families that spec, a value of data-strands-select, selects, in the Family
+// the name of the Broucke families that spec, a value of data-trajectories-select, selects, in the Family
 // popup of the Backdrop pane: the families of each set of frames, followed by the frames and the
 // other terms in words, e.g. Family 7 and Family 11 (Inertial). two values get one name only when
 // sameSelection holds for them
@@ -152,64 +152,64 @@ export function familyName(spec: string | null): string {
   return groups.join(' or ') || NAMES.none;
 }
 
-// the records of the file of the Broucke drawing el as the theme read them, or null before the file
+// the trajectories of the file of the Broucke drawing el as the theme read them, or null before the file
 // is loaded or when it is missing. they are kept by the URL of the file for a backdrop drawn again
-const recordsByFile = new Map<string, StrandRecord[]>();
-function recordsOf(el: Element | null | undefined): StrandRecord[] | null {
+const fileTrajectoriesByFile = new Map<string, TrajectoryData[]>();
+function fileTrajectoriesOf(el: Element | null | undefined): TrajectoryData[] | null {
   if (!el || !isBroucke(el)) return null;
-  const url = urlOf(el.getAttribute('data-strands') ?? '');
-  const live = liveOf(el)?.records;
-  if (live) recordsByFile.set(url, live);
-  return recordsByFile.get(url) ?? null;
+  const url = urlOf(el.getAttribute('data-trajectories') ?? '');
+  const live = liveOf(el)?.fileTrajectories;
+  if (live) fileTrajectoriesByFile.set(url, live);
+  return fileTrajectoriesByFile.get(url) ?? null;
 }
 
-// the records of records that spec draws, none for a value that the theme does not draw
-function drawn(records: StrandRecord[], spec: string | null): Set<StrandRecord> {
+// the trajectories of fileTrajectories that spec draws, none for a value that the theme does not draw
+function drawn(fileTrajectories: TrajectoryData[], spec: string | null): Set<TrajectoryData> {
   try {
-    return new Set(select(records, spec ?? undefined));
+    return new Set(select(fileTrajectories, spec ?? undefined));
   } catch {
     return new Set();
   }
 }
 const sameSet = <T>(a: Set<T>, b: Set<T>) => a.size === b.size && [...a].every((x) => b.has(x));
 
-// true when the values a and b of data-strands-select draw the same records of the file of el, or
-// without its records, the same records of demo/broucke-sample.js by family and frame with the same
+// true when the values a and b of data-trajectories-select draw the same trajectories of the file of el, or
+// without its trajectories, the same trajectories of demo/broucke-sample.js by family and frame with the same
 // other terms
 export function sameSelection(a: string | null, b: string | null, el?: Element | null): boolean {
-  const records = recordsOf(el);
-  return records ? sameSet(drawn(records, a), drawn(records, b)) : JSON.stringify(groupsOf(a)) === JSON.stringify(groupsOf(b));
+  const fileTrajectories = fileTrajectoriesOf(el);
+  return fileTrajectories ? sameSet(drawn(fileTrajectories, a), drawn(fileTrajectories, b)) : JSON.stringify(groupsOf(a)) === JSON.stringify(groupsOf(b));
 }
 
-// the name of spec, a value of data-strands-select, for the backdrop el: No Records when it draws no
-// record of the file of el, and the name of the families and frames of the records it draws when it
-// draws every record of these, whatever its terms. thus two values that draw the same records get one
+// the name of spec, a value of data-trajectories-select, for the backdrop el: No Trajectories when it draws no
+// trajectory of the file of el, and the name of the families and frames of the trajectories it draws when it
+// draws every trajectory of these, whatever its terms. thus two values that draw the same trajectories get one
 // name, and two that draw others never do
 export function selectionName(spec: string | null, el?: Element | null): string {
-  const records = recordsOf(el);
-  if (!records) return familyName(spec);
-  const chosen = drawn(records, spec);
+  const fileTrajectories = fileTrajectoriesOf(el);
+  if (!fileTrajectories) return familyName(spec);
+  const chosen = drawn(fileTrajectories, spec);
   if (!chosen.size) return NAMES.none;
   const pairs = [...new Set([...chosen].map((r) => `family=${String(r.family)},frame=${String(r.frame)}`))];
   const whole = pairs.join(';');
   const known = groupsOf(whole)[0]?.pairs.length === pairs.length;
-  return known && sameSet(drawn(records, whole), chosen) ? familyName(whole) : familyName(spec);
+  return known && sameSet(drawn(fileTrajectories, whole), chosen) ? familyName(whole) : familyName(spec);
 }
 
-// the name of a drawing of the attributes attrs: the name of its scene, of the logo, or of the
+// the name of a drawing of the attributes attrs: the name of its built-in backdrop, of the logo, or of the
 // Broucke families it selects, or else the name of its file
 function nameOf(attrs: Record<string, string | undefined>, el?: Element): string {
-  const scene = attrs['data-scene'];
-  if (scene !== undefined) return SCENES[scene] ?? scene;
-  const file = attrs['data-strands'] ?? '';
-  const spec = attrs['data-strands-select'] ?? '';
+  const builtIn = attrs['data-backdrop'];
+  if (builtIn !== undefined) return BUILT_IN[builtIn] ?? builtIn;
+  const file = attrs['data-trajectories'] ?? '';
+  const spec = attrs['data-trajectories-select'] ?? '';
   if (isFile(file, LOGO_FILE)) return spec.trim() ? NAMES.logoPart : NAMES.logo;
   if (isFile(file, BROUCKE_FILE)) return `Broucke ${selectionName(spec, el)}`;
   return file.split('/').pop()?.replace(/\.(js|json)$/, '') || 'Backdrop';
 }
 
 // true when el draws demo/broucke-sample.js, i.e. is a backdrop of the entry Broucke Families
-export const isBroucke = (el: Element | null): boolean => !!el && isFile(el.getAttribute('data-strands') ?? '', BROUCKE_FILE);
+export const isBroucke = (el: Element | null): boolean => !!el && isFile(el.getAttribute('data-trajectories') ?? '', BROUCKE_FILE);
 
 // the name of the drawing of el
 export function drawingName(el: Element): string {
@@ -239,7 +239,7 @@ function writeWindow(app: App, el: HTMLElement, view: Partial<View>, label = 'wi
 // the window fitted to the box of el by the theme, or null
 const fitted = async (el: HTMLElement, box?: Box): Promise<View | null> => (await hooks().fitWindow?.(el, box)) ?? null;
 
-// the seconds in which the drawing of the theme traces its last strand, after its stagger
+// the seconds in which the drawing of the theme traces its last trajectory, after its stagger
 export const spanOf = (o: Live): number => (o as Live & { span?: number }).span ?? 20;
 
 // the preview that is traced, which an edit or a change of slide completes. the selection is not
@@ -274,7 +274,7 @@ const drawingEdit = (attrs: Record<string, string>): Record<string, string | nul
 // for a drawing of the deck whose file is not found
 type Entry = { key: string; name: string; attrs: Record<string, string>; motion: Record<string, string>; view: View | null; size: [number, number] | null; missing?: boolean };
 
-// the families of demo/broucke-sample.js in both of its frames, as values of data-strands-select
+// the families of demo/broucke-sample.js in both of its frames, as values of data-trajectories-select
 const FAMILY_SPECS = BROUCKE_FAMILIES.flatMap((n) => [`frame=pulsating,family=${n}`, `frame=inertial,family=${n}`]);
 // the fixed choices of the Family popup: each family in each frame, then all the families of each
 // frame, written as the backdrop of the demo deck writes them
@@ -287,13 +287,13 @@ const FIXED_SPECS = [...FAMILY_SPECS, ...FRAMES.map((fr) => `frame=${fr}`)];
 function builtIn(app: App): Entry[] {
   const file = brouckeFiles(app).find((f) => found.get(urlOf(f)) !== false) ?? BROUCKE_FILE;
   return [
-    { key: 'logo', name: NAMES.logo, attrs: { 'data-strands': LOGO_FILE }, motion: { 'data-duration': '20' }, view: { cx: -0.84, cy: 0, half: 1.128 }, size: [1920, 1080] },
-    { key: 'nest', name: NAMES.nest, attrs: { 'data-scene': 'nest' }, motion: {}, view: { cx: 0.97, cy: 0, half: 0.5 }, size: [720, 1080] },
-    { key: 'tubes', name: NAMES.tubes, attrs: { 'data-scene': 'tubes' }, motion: {}, view: { cx: 0.42, cy: 0, half: 0.6 }, size: [1920, 1080] },
-    { key: 'wideRibbon', name: NAMES.wideRibbon, attrs: { 'data-scene': 'wideRibbon' }, motion: {}, view: { cx: 0.2, cy: 0, half: 1.3 }, size: [1920, 1080] },
+    { key: 'logo', name: NAMES.logo, attrs: { 'data-trajectories': LOGO_FILE }, motion: { 'data-duration': '20' }, view: { cx: -0.84, cy: 0, half: 1.128 }, size: [1920, 1080] },
+    { key: 'nest', name: NAMES.nest, attrs: { 'data-backdrop': 'nest' }, motion: {}, view: { cx: 0.97, cy: 0, half: 0.5 }, size: [720, 1080] },
+    { key: 'tubes', name: NAMES.tubes, attrs: { 'data-backdrop': 'tubes' }, motion: {}, view: { cx: 0.42, cy: 0, half: 0.6 }, size: [1920, 1080] },
+    { key: 'wideRibbon', name: NAMES.wideRibbon, attrs: { 'data-backdrop': 'wideRibbon' }, motion: {}, view: { cx: 0.2, cy: 0, half: 1.3 }, size: [1920, 1080] },
     {
       key: 'broucke', name: NAMES.broucke, view: null, size: null, motion: { 'data-duration': '3', 'data-stagger': '0.6' },
-      attrs: { 'data-strands': file, 'data-strands-select': FAMILY_SPECS[0], 'data-strands-color': 'family', 'data-strands-ramp': 'e', 'data-strands-colormap': 'viridis' },
+      attrs: { 'data-trajectories': file, 'data-trajectories-select': FAMILY_SPECS[0], 'data-trajectories-color': 'family', 'data-trajectories-ramp': 'e', 'data-trajectories-colormap': 'viridis' },
     },
   ];
 }
@@ -302,7 +302,7 @@ function builtIn(app: App): Entry[] {
 export const drawnBy = (entry: Entry, el: Element): boolean =>
   entry.key === 'broucke' ? isBroucke(el) : Object.entries(entry.attrs).every(([k, v]) => el.getAttribute(k) === v);
 
-// the choices of the Family popup of el, as values of data-strands-select with their names: the
+// the choices of the Family popup of el, as values of data-trajectories-select with their names: the
 // fixed choices, which are listed whatever the deck draws, then each other selection of the file in
 // the deck, once per drawing. a choice is the value whose own terms give its name, e.g. frame=pulsating before begin=ray
 export function families(app: App, el: Element): { spec: string | null; name: string }[] {
@@ -315,9 +315,9 @@ export function families(app: App, el: Element): { spec: string | null; name: st
   };
   FIXED_SPECS.forEach(add);
   for (const b of app.slides().querySelectorAll<HTMLElement>('.backdrop')) {
-    if (open(app, b) && isBroucke(b)) add(app.doc.tagState(b).attrs['data-strands-select'] ?? null);
+    if (open(app, b) && isBroucke(b)) add(app.doc.tagState(b).attrs['data-trajectories-select'] ?? null);
   }
-  if (isBroucke(el)) add(el.getAttribute('data-strands-select'));
+  if (isBroucke(el)) add(el.getAttribute('data-trajectories-select'));
   return out;
 }
 
@@ -325,17 +325,17 @@ export function families(app: App, el: Element): { spec: string | null; name: st
 // an earlier call saw, so that the entry Broucke Families keeps its file once no drawing has it
 const seenBroucke: string[] = [];
 function brouckeFiles(app: App): string[] {
-  const now = [...app.slides().querySelectorAll<HTMLElement>('.backdrop')].filter((el) => open(app, el) && isBroucke(el)).map((el) => el.getAttribute('data-strands') ?? '');
+  const now = [...app.slides().querySelectorAll<HTMLElement>('.backdrop')].filter((el) => open(app, el) && isBroucke(el)).map((el) => el.getAttribute('data-trajectories') ?? '');
   for (const f of now) if (!seenBroucke.includes(f)) seenBroucke.push(f);
   return [...new Set([...now, ...seenBroucke])];
 }
 
-// whether the file of strands at an absolute URL is found and has records, as the theme read it
+// whether the file of trajectories at an absolute URL is found and has trajectories, as the theme read it
 const found = new Map<string, boolean>();
 const urlOf = (path: string) => new URL(path, document.baseURI).href;
-const fileOf = (e: Entry) => e.attrs['data-strands'];
+const fileOf = (e: Entry) => e.attrs['data-trajectories'];
 
-// true when the file of strands at path is found next to the deck. the file is read by the theme as
+// true when the file of trajectories at path is found next to the deck. the file is read by the theme as
 // it reads the file of a backdrop, i.e. by a script element, and nothing is fetched by the editor
 async function probe(path: string): Promise<boolean> {
   const url = urlOf(path);
@@ -344,10 +344,10 @@ async function probe(path: string): Promise<boolean> {
   const preview = hooks().preview;
   if (!preview) return true;
   const el = make('div');
-  el.setAttribute('data-strands', path);
+  el.setAttribute('data-trajectories', path);
   const o = preview(el);
   await o.ready;
-  const ok = ((o as unknown as { strands?: unknown[] }).strands?.length ?? 0) > 0;
+  const ok = ((o as unknown as { trajectories?: unknown[] }).trajectories?.length ?? 0) > 0;
   o.destroy();
   found.set(url, ok);
   return ok;
@@ -398,8 +398,8 @@ async function windowFor(entry: Entry, el: HTMLElement): Promise<View | null> {
   return fitted(el);
 }
 
-// the drawing, the motion, and the window of entry put on the backdrop el, with the labels of a named
-// scene taken off for a drawing of a file. an entry without a window leaves the drawing fitted to its
+// the drawing, the motion, and the window of entry put on the backdrop el, with the labels of a built-in
+// backdrop taken off for a drawing of a file. an entry without a window leaves the drawing fitted to its
 // box by the theme
 async function replaceDrawing(app: App, el: HTMLElement, entry: Entry): Promise<void> {
   const motion = Object.fromEntries(MOTION.map((n) => [n, entry.motion[n] ?? null]));
@@ -438,11 +438,11 @@ export async function applyEntry(app: App, entry: Entry): Promise<void> {
   });
 }
 
-// the labels of the points of a named scene taken off el when entry is drawn from a file, since the
+// the labels of the points of a built-in backdrop taken off el when entry is drawn from a file, since the
 // theme would draw them at the points of the Earth and the Moon over the drawing of the file
 async function dropLabels(app: App, el: HTMLElement, entry: Entry): Promise<void> {
-  if (entry.attrs['data-scene'] !== undefined) return;
-  for (const lab of [...el.querySelectorAll(':scope > .lab')].filter((l) => open(app, l))) await app.doc.remove(lab, 'label');
+  if (entry.attrs['data-backdrop'] !== undefined) return;
+  for (const lab of [...el.querySelectorAll(':scope > .label')].filter((l) => open(app, l))) await app.doc.remove(lab, 'label');
 }
 
 // the gallery of Media > Backdrop…, a popover of a tile per entry of the library, drawn by the
@@ -726,12 +726,12 @@ export function commands(): Command[] {
       },
     },
     {
-      // arg { value, el }: a named scene, or the key of an entry of the library. between two named
-      // scenes, which are drawn in one frame, the window, the labels, and the motion are kept. a
+      // arg { value, el }: a built-in backdrop, or the key of an entry of the library. between two built-in
+      // backdrops, which are drawn in one frame, the window, the labels, and the motion are kept. a
       // drawing of a file is drawn in a frame of its own, hence where the old or the new drawing is
       // drawn from a file, the window and the motion of the entry are written as its tile in the
       // gallery writes them. Broucke Families on a backdrop of a family keeps its family
-      id: 'backdrop.scene',
+      id: 'backdrop.builtIn',
       label: 'Backdrop Drawing',
       undoable: true,
       undo: 'Change Drawing',
@@ -746,13 +746,13 @@ export function commands(): Command[] {
         const now = app.doc.tagState(el).attrs;
         const changed = Object.entries(attrs).filter(([k, x]) => (now[k] ?? null) !== x);
         if (!changed.length) return;
-        if (now['data-scene'] === undefined || entry.attrs['data-scene'] === undefined) return replaceDrawing(app, el, entry);
+        if (now['data-backdrop'] === undefined || entry.attrs['data-backdrop'] === undefined) return replaceDrawing(app, el, entry);
         app.doc.setTag(el, { attrs: Object.fromEntries(changed) }, 'drawing');
       },
     },
     {
-      // arg { value, el }: a value of data-strands-select of the Family popup, or null for every
-      // record of the file
+      // arg { value, el }: a value of data-trajectories-select of the Family popup, or null for every
+      // trajectory of the file
       id: 'backdrop.family',
       label: 'Backdrop Family',
       undoable: true,
@@ -764,43 +764,43 @@ export function commands(): Command[] {
         const value = typeof v === 'string' ? v : null;
         if (!el || !isBroucke(el) || !families(app, el).some((f) => f.spec === value)) return;
         endPreview();
-        if (!sameSelection(el.getAttribute('data-strands-select'), value, el)) app.doc.setTag(el, { attrs: { 'data-strands-select': value } }, 'drawing');
+        if (!sameSelection(el.getAttribute('data-trajectories-select'), value, el)) app.doc.setTag(el, { attrs: { 'data-trajectories-select': value } }, 'drawing');
       },
     },
     {
-      // arg { value, el }: a colormap of the strands of a file, or null for the palette
+      // arg { value, el }: a colormap of the trajectories of a file, or null for the palette
       id: 'backdrop.colormap',
       label: 'Backdrop Colormap',
       undoable: true,
       undo: 'Colormap',
-      enabled: (app) => !!targetOf(app, undefined)?.hasAttribute('data-strands'),
+      enabled: (app) => !!targetOf(app, undefined)?.hasAttribute('data-trajectories'),
       run: (app, arg) => {
         const el = targetOf(app, arg);
         const v = valueOf(arg);
         const value = typeof v === 'string' && COLORMAPS.includes(v) ? v : null;
-        if (el && el.getAttribute('data-strands-colormap') !== value) app.doc.setTag(el, { attrs: { 'data-strands-colormap': value } }, 'drawing');
+        if (el && el.getAttribute('data-trajectories-colormap') !== value) app.doc.setTag(el, { attrs: { 'data-trajectories-colormap': value } }, 'drawing');
       },
     },
     {
-      // arg { at, el }: a label of a point of a named scene put on the backdrop, or taken off
+      // arg { at, el }: a label of a point of a built-in backdrop put on the backdrop, or taken off
       id: 'backdrop.label',
       label: 'Backdrop Label',
       undoable: true,
       undo: 'Label',
-      enabled: (app) => !!targetOf(app, undefined)?.hasAttribute('data-scene'),
+      enabled: (app) => !!targetOf(app, undefined)?.hasAttribute('data-backdrop'),
       run: async (app, arg) => {
         const el = targetOf(app, arg);
         const at = (arg as { at?: string } | undefined)?.at;
         const label = LABELS.find((l) => l.at === at);
         if (!el || !label) return;
         endPreview();
-        const lab = [...el.querySelectorAll(':scope > .lab')].find((l) => l.getAttribute('data-at') === at && open(app, l));
+        const lab = [...el.querySelectorAll(':scope > .label')].find((l) => l.getAttribute('data-at') === at && open(app, l));
         if (lab) await app.doc.remove(lab, 'label');
         else {
           // the labels are kept in the order of LABELS
           const after = LABELS.slice(LABELS.indexOf(label) + 1).map((l) => l.at);
-          const before = [...el.querySelectorAll(':scope > .lab')].find((l) => after.includes(l.getAttribute('data-at') ?? '')) ?? null;
-          await app.doc.insert(`<span class="lab" data-at="${label.at}" data-dy="${label.dy}">${label.text}</span>`, el, before, 'label');
+          const before = [...el.querySelectorAll(':scope > .label')].find((l) => after.includes(l.getAttribute('data-at') ?? '')) ?? null;
+          await app.doc.insert(`<span class="label" data-at="${label.at}" data-dy="${label.dy}">${label.text}</span>`, el, before, 'label');
         }
       },
     },
@@ -868,11 +868,11 @@ function watch(app: App): void {
     syncBackdrops();
     app.invalidate('content');
   };
-  new MutationObserver((records) => {
-    for (const r of records) {
+  new MutationObserver((mutations) => {
+    for (const r of mutations) {
       const t = r.target;
       if (!(t instanceof HTMLElement) || !t.matches('.backdrop')) continue;
-      const labs = [...r.addedNodes, ...r.removedNodes].some((n) => n instanceof Element && n.matches('.lab'));
+      const labs = [...r.addedNodes, ...r.removedNodes].some((n) => n instanceof Element && n.matches('.label'));
       // a window alone, e.g. of an undo or of a file opened again, is set without a new drawing
       if (r.type === 'attributes' && WINDOW.includes(r.attributeName ?? '')) moved = true;
       else if (r.attributeName === 'style') boxed.add(t);

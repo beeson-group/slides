@@ -1,6 +1,6 @@
 // tests of R7.2 on both platforms with trusted input: Edit > Paste and Match Style in the Edit menu
 // and in the menu of a text, File > Revert to Saved, File > Open Recent with the decks kept in
-// IndexedDB and on the card of a deck that cannot read itself, and File > Export To with PDF… and
+// IndexedDB and on the dialog of a deck that cannot read itself, and File > Export To with PDF… and
 // HTML…. after each edit the text is checked byte for byte, after an undo and a redo, and after a
 // save and an open. the system clipboard is shared with the other tests, hence readText is a stub
 
@@ -131,7 +131,7 @@ async function choose(page, bar, ...path) {
   await frames(page);
 }
 
-// a trusted click on the button labeled label of the open card with class name
+// a trusted click on the button labeled label of the open dialog with class name
 async function cardButton(page, name, label) {
   const at = await page.evaluate(`(() => {
     const b = [...document.querySelectorAll('dialog.beeson-edit-card.${name}:not([hidden]) button')].find((b) => b.textContent === ${js(label)});

@@ -1,5 +1,5 @@
 // the unsaved edits of the deck, kept in the storage of the browser 1 s after the last change and
-// offered on a card when the deck is opened again, e.g. after a crash or a closed tab. a draft is
+// offered on a dialog when the deck is opened again, e.g. after a crash or a closed tab. a draft is
 // the whole rendered text with its time, under a key of the address of the deck without its query
 // and hash. it is never replayed onto the page: Restore writes it over the file and reloads
 
@@ -66,7 +66,7 @@ export function install(app: App): void {
     store(DRAFT_KEY, null);
   }
 
-  // a draft that differs from the file that was opened is offered on the card
+  // a draft that differs from the file that was opened is offered on the dialog
   function offer(): void {
     const draft = readDraft();
     if (!draft || !app.source || draft.text === app.source.text) {

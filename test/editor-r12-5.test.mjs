@@ -236,7 +236,7 @@ for (const platform of PLATFORMS) {
     await drag(page, rotor, { dx: p0.x - rotor.x + (p0.y - rotor.y), dy: p0.y - rotor.y, steps: 12, modifiers: 'Shift' });
     await frames(page);
     // the figure is turned as one object, its picture and its caption about the center of both
-    const angles = await page.evaluate(`[Reveal.getCurrentSlide().querySelector(':scope > p'), Reveal.getCurrentSlide().querySelector('figure.zone')].map((el) => el.style.rotate)`);
+    const angles = await page.evaluate(`[Reveal.getCurrentSlide().querySelector(':scope > p'), Reveal.getCurrentSlide().querySelector('figure.figure-box')].map((el) => el.style.rotate)`);
     assert.deepEqual(angles, ['90deg', '90deg']);
     const p1 = await centerOf(':scope > p'), i1 = await centerOf('figure img.for-light'), q1 = await centerOf('figcaption');
     const at = (o) => ({ x: c.x - (o.y - c.y), y: c.y + (o.x - c.x) });

@@ -1,5 +1,5 @@
 // the list of backdrops of Media > Backdrop…, on both platforms: the names of the owner for the
-// named scenes, the entry Beeson Logo with the backdrop of the title slide of the demo deck, the
+// built-in backdrops, the entry Beeson Logo with the backdrop of the title slide of the demo deck, the
 // entry Broucke Families with the look of the demo deck and its families, the names of the drawings
 // of a deck, an entry whose file is not next to the deck, and the list in one screen at 1280 by 720
 // px
@@ -24,9 +24,9 @@ const LIST = [
   'Earth Manifolds',
   'Broucke Families',
 ];
-const LOGO = '<div class="backdrop" data-strands="brand/transfer.js" data-duration="20" data-cx="-0.84" data-cy="0" data-half="1.128">';
-const BROUCKE = '<div class="backdrop" data-strands="demo/broucke-sample.js" data-strands-select="frame=pulsating" data-strands-color="family" data-strands-ramp="e" data-strands-colormap="viridis" data-duration="3" data-stagger="0.6">';
-const NEST = '<div class="backdrop" data-scene="nest" data-cx="0.97" data-cy="0" data-half="0.5">';
+const LOGO = '<div class="backdrop" data-trajectories="brand/transfer.js" data-duration="20" data-cx="-0.84" data-cy="0" data-half="1.128">';
+const BROUCKE = '<div class="backdrop" data-trajectories="demo/broucke-sample.js" data-trajectories-select="frame=pulsating" data-trajectories-color="family" data-trajectories-ramp="e" data-trajectories-colormap="viridis" data-duration="3" data-stagger="0.6">';
+const NEST = '<div class="backdrop" data-backdrop="nest" data-cx="0.97" data-cy="0" data-half="0.5">';
 
 let browser;
 let server;
@@ -47,13 +47,13 @@ const render = (page) => page.evaluate('window.BeesonEditor.render()');
 const undo = (page) => page.evaluate('window.BeesonEditor.undo()');
 const redo = (page) => page.evaluate('window.BeesonEditor.redo()');
 const frames = (page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => d(true))))');
-// the number of strands drawn by the backdrop of the current slide, once its file is read
-const strands = (page) => page.evaluate(`(async () => {
+// the number of trajectories drawn by the backdrop of the current slide, once its file is read
+const trajectories = (page) => page.evaluate(`(async () => {
   const el = document.querySelector('section.present .backdrop');
   const o = el && Beeson.backdrops.find((b) => b.el === el);
   if (!o) return -1;
   await o.ready;
-  return o.strands.length;
+  return o.trajectories.length;
 })()`);
 
 // the editor on deck at slide n, in a window of size
@@ -134,7 +134,7 @@ for (const platform of PLATFORMS) {
     ]);
     await page.evaluate('Reveal.slide(2)');
     assert.equal(await paneName(page), 'Lyapunov Families');
-    // the values of data-scene stay
+    // the values of data-backdrop stay
     assert.equal(await render(page), page.source);
   });
 
@@ -150,7 +150,7 @@ for (const platform of PLATFORMS) {
     // the slide is written back as it is in the demo deck
     assert.equal(await render(page), page.source);
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Add Backdrop');
-    assert.ok((await strands(page)) > 100, 'the logo is not drawn');
+    assert.ok((await trajectories(page)) > 100, 'the logo is not drawn');
     await undo(page);
     assert.equal(await render(page), bare);
     await redo(page);
@@ -165,7 +165,7 @@ for (const platform of PLATFORMS) {
     await openList(page, LIST.length);
     await pick(page, 'broucke', page.source);
     assert.equal(tagOf(await render(page), '<section class="section">'), BROUCKE.replace('frame=pulsating', 'frame=pulsating,family=7'));
-    assert.equal(await strands(page), 8);
+    assert.equal(await trajectories(page), 8);
     assert.equal(await paneName(page), 'Broucke Families');
     assert.equal(await familyName(page), 'Family 7');
     await undo(page);
@@ -174,12 +174,12 @@ for (const platform of PLATFORMS) {
     await exec(page, 'backdrop.family', { value: 'frame=inertial,family=11' });
     await page.waitFor(`window.BeesonEditor.render() !== ${JSON.stringify(page.source)}`);
     assert.equal(tagOf(await render(page), '<section class="section">'), BROUCKE.replace('frame=pulsating', 'frame=inertial,family=11'));
-    assert.equal(await strands(page), 8);
+    assert.equal(await trajectories(page), 8);
     assert.equal(await paneName(page), 'Broucke Families');
     assert.equal(await familyName(page), 'Family 11 (Inertial)');
     await undo(page);
-    // in place of a named scene with a window of its own, the drawing is fitted to its box as in the
-    // demo deck, and the labels of the scene are taken off
+    // in place of a built-in backdrop with a window of its own, the drawing is fitted to its box as in the
+    // demo deck, and the labels of the built-in backdrop are taken off
     await page.evaluate('Reveal.slide(2)');
     await frames(page);
     const before = await render(page);
@@ -188,9 +188,9 @@ for (const platform of PLATFORMS) {
     await openList(page, LIST.length);
     await pick(page, 'broucke', before);
     const text = await render(page);
-    assert.equal(tagOf(text, '<h2>Show your steps one at a time'), '<div class="backdrop" data-strands="demo/broucke-sample.js" data-strands-select="frame=pulsating,family=7" data-strands-color="family" data-strands-ramp="e" data-strands-colormap="viridis" data-duration="3" data-stagger="0.6">');
+    assert.equal(tagOf(text, '<h2>Show your steps one at a time'), '<div class="backdrop" data-trajectories="demo/broucke-sample.js" data-trajectories-select="frame=pulsating,family=7" data-trajectories-color="family" data-trajectories-ramp="e" data-trajectories-colormap="viridis" data-duration="3" data-stagger="0.6">');
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Replace Backdrop');
-    assert.equal(await strands(page), 8);
+    assert.equal(await trajectories(page), 8);
     await undo(page);
     assert.equal(await render(page), before);
     await redo(page);

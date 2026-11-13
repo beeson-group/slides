@@ -163,7 +163,7 @@ for (const platform of PLATFORMS) {
     await typeField(page, 'angle', 30);
     assert.equal(await fieldValue(page, 'angle'), 30);
     const edited = await render(page);
-    assert.match(edited, /<figure class="zone" style="[^"]*\brotate: 30deg[^"]*">/, 'the figure is not turned as one object');
+    assert.match(edited, /<figure class="figure-box" style="[^"]*\brotate: 30deg[^"]*">/, 'the figure is not turned as one object');
     assert.doesNotMatch(edited, /<img [^>]*rotate/, 'a picture of the figure is turned by itself');
     const caption = await page.evaluate(`getComputedStyle(document.querySelector(${js(IMG)}).closest('figure')).rotate`);
     assert.equal(caption, '30deg');
@@ -181,7 +181,7 @@ for (const platform of PLATFORMS) {
     const deg = await fieldValue(page, 'angle');
     assert.ok(deg >= 35 && deg <= 45, `the figure is turned to ${deg}°`);
     const turned = await render(page);
-    assert.match(turned, new RegExp(`<figure class="zone" style="[^"]*\\brotate: ${deg}deg[^"]*">`), 'the figure is not turned as one object');
+    assert.match(turned, new RegExp(`<figure class="figure-box" style="[^"]*\\brotate: ${deg}deg[^"]*">`), 'the figure is not turned as one object');
     const before = await fields(page);
     await assertTurnedFrame(page, deg, before);
     // the grip se dragged outward along the turned diagonal of the frame

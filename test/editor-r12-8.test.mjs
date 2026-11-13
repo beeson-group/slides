@@ -100,7 +100,7 @@ for (const platform of PLATFORMS) {
     await press(page, KEYS[platform].lock);
     await settle(page);
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Lock');
-    assert.match(await render(page), /<figure class="zone"[^>]* data-locked/);
+    assert.match(await render(page), /<figure class="figure-box"[^>]* data-locked/);
     await undoKey(page);
     await settle(page);
     await byteExact(page);

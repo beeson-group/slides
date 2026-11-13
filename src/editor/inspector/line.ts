@@ -1,7 +1,7 @@
 // the Line pane of the Format tab, for a selected line or arrow, as the Line section of the Style
 // tab of Keynote: a swatch of each tone of the theme, the arrowheads (none, at the start, at the
 // end, or at both ends), the kind (straight, curved, or elbow, as Connection of Keynote), the weight
-// in px, a dash, and the element that each glued end is glued to. each control runs a command of
+// in px, a dash, and the element that each attached end is attached to. each control runs a command of
 // commands/line.ts by its id
 
 import type { App } from '../app.ts';
@@ -66,9 +66,9 @@ export function swatches(app: App, run: Run, prefix = 'line.tone', label = 'Line
   return { el, sync };
 }
 
-// a row of a glued end of the one selected line, e.g. Start: Rounded Rectangle, with the name of its
-// element or group in the Object List and a button that takes its glue off. it is hidden without
-// glue, as the section is without a row
+// a row of an attached end of the one selected line, e.g. Start: Rounded Rectangle, with the name of its
+// element or group in the Object List and a button that takes its attachment off. it is hidden without
+// an attachment, as the section is without a row
 function glueRow(app: App, run: Run, end: End): Control {
   const label = make('span', 'ed-label');
   const detach = button(app, run, { command: `line.unglue.${end === 'from' ? 'start' : 'end'}`, text: 'Detach' });

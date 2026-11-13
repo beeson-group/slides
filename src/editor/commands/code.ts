@@ -191,8 +191,8 @@ export function linesOf(group: string): Set<number> {
 
 // the scopes of highlight.js that the theme colors in beeson.css, with the property of the color
 const TOKENS: [string, string][] = [
-  ['keyword', 'violet'], ['literal', 'violet'], ['meta', 'violet'], ['built_in', 'strand-3'], ['title', 'accent'],
-  ['params', 'strand-6'], ['string', 'strand-4'], ['number', 'strand-5'], ['comment', 'muted'], ['operator', 'subtle'],
+  ['keyword', 'violet'], ['literal', 'violet'], ['meta', 'violet'], ['built_in', 'trajectory-3'], ['title', 'accent'],
+  ['params', 'trajectory-6'], ['string', 'trajectory-4'], ['number', 'trajectory-5'], ['comment', 'muted'], ['operator', 'subtle'],
 ];
 const NAME = (token: string) => `beeson-code-${token.replace(/_/g, '-')}`;
 const DIM = 'beeson-code-dim';

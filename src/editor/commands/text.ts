@@ -356,12 +356,12 @@ type Define = (command: Command) => Command;
 type MenuOf = (group: string, order: number, submenu?: string) => Command['menu'];
 
 // the style of a figure that Copy Style takes and Paste Style sets, as the Image pane sets it: the
-// classes paper and invert of an image, null when taken from a video, and the mode it is shown in
-type FigureStyle = { paper: boolean | null; invert: boolean | null; mode: Mode };
+// classes white-figure and invert of an image, null when taken from a video, and the mode it is shown in
+type FigureStyle = { whiteFigure: boolean | null; invert: boolean | null; mode: Mode };
 type Copied = { text: inline.TextStyle; center: boolean | null } | { figure: FigureStyle };
 
 // the images and videos of the selected elements: a selected one, or the one shown in a selected
-// figure, zone, or plate
+// figure, figure box, or plate
 function figuresOf(app: App): Element[] {
   if (app.selection.kind !== 'elements') return [];
   const open = (m: Element) => !!app.pairing?.elements.get(m)?.open;
@@ -375,7 +375,7 @@ function figuresOf(app: App): Element[] {
 
 function readFigure(el: Element): FigureStyle {
   const image = el.localName === 'img';
-  return { paper: image ? el.classList.contains('paper') : null, invert: image ? el.classList.contains('invert') : null, mode: modeOf(el) };
+  return { whiteFigure: image ? el.classList.contains('white-figure') : null, invert: image ? el.classList.contains('invert') : null, mode: modeOf(el) };
 }
 
 // the style of the selected figure, else of the text or the block
@@ -387,13 +387,13 @@ function readCopied(app: App): Copied | null {
   return text ? { text, center: block ? centered(block) : null } : null;
 }
 
-// the mode on every figure, and paper and invert on an image, each class changed only where it
+// the mode on every figure, and white-figure and invert on an image, each class changed only where it
 // differs
 function pasteFigure(app: App, style: FigureStyle): void {
   for (const el of figuresOf(app)) {
     const classes: Record<string, boolean> = { 'for-dark': style.mode === 'dark', 'for-light': style.mode === 'light' };
     if (el.localName === 'img') {
-      if (style.paper !== null) classes.paper = style.paper;
+      if (style.whiteFigure !== null) classes['white-figure'] = style.whiteFigure;
       if (style.invert !== null) classes.invert = style.invert;
     }
     const changed = Object.fromEntries(Object.entries(classes).filter(([name, on]) => el.classList.contains(name) !== on));

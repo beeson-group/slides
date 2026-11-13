@@ -151,7 +151,7 @@ export function rangeOf(root: Node, from: [Node, number] | null, to: [Node, numb
   return r;
 }
 
-// a detached copy of the content of host with its formulas as TeX, for a change of a nested item
+// an detached copy of the content of host with its formulas as TeX, for a change of a nested item
 function texCopy(host: Element): HTMLElement {
   const div = document.createElement('div');
   div.innerHTML = rangeTex(host, rangeOf(host, null, null));
@@ -181,7 +181,7 @@ const blank = (r: Range) => !r.toString().trim() && !r.cloneContents().querySele
 // its ghost. a caption, a subtitle, or a footnote is placed by the theme, and Return writes a br in
 // it. a class that reveal.js or the editor sets at run time, e.g. visible on a step while every
 // step is shown, is never a style
-const PLAIN = /^(small|center|ghost|fragment|fade-[\w-]+|semi-fade-out|current-visible|grow|shrink|strike|highlight-[\w-]+)$/;
+const PLAIN = /^(small|center|faint|fragment|fade-[\w-]+|semi-fade-out|current-visible|grow|shrink|strike|highlight-[\w-]+)$/;
 const plainClass = (c: string): boolean => PLAIN.test(c) || isRuntimeClass(c);
 
 type Item = {
@@ -350,7 +350,7 @@ function prevOf(app: App, el: Element): Element | null {
 export async function removeJoining(app: App, els: Element[], label: string): Promise<void> {
   const around: [Element | null, Element | null][] = [];
   for (const el of els) {
-    // an element out of the flow of the column, e.g. a figure of the zone, is not between the lists
+    // an element out of the flow of the column, e.g. a figure of the figure box, is not between the lists
     const inFlow = el.matches('p, h1, h2, h3, h4, h5, h6, ul, ol, div.math, blockquote, pre') && !/^(absolute|fixed)$/.test(getComputedStyle(el).position);
     around.push(inFlow ? [prevOf(app, el), nextOf(app, el)] : [null, null]);
     await app.doc.remove(el, label);

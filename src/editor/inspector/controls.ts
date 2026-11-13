@@ -244,7 +244,7 @@ export function button(app: App, run: Run, item: Item): Control {
   return itemButton(app, run, item, 'ed-btn');
 }
 
-// a checkbox of a switch command, e.g. Paper on an image. checked is given for a command that is
+// a checkbox of a switch command, e.g. White Figure on an image. checked is given for a command that is
 // not a switch, e.g. Hide Slide
 export function checkbox(app: App, run: Run, command: string, text: string, checked?: () => boolean): Control {
   const el = make('label', 'ed-check');

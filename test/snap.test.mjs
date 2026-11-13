@@ -49,7 +49,7 @@ test('a box snaps to the edges and the center of the slide, and to the guides of
     const s = snapMove(box(300, y - 7, 30, 30), targets, T);
     assert.equal(s.dy, 7, `the guide at y = ${y}`);
   }
-  // a dragged box snaps to x = 1200, the left edge of a zone
+  // a dragged box snaps to x = 1200, the left edge of a figure box
   assert.equal(snapMove(box(1192, 400, 300, 200), targets, T).dx, 8);
 });
 
@@ -110,7 +110,7 @@ test('a corner keeps the aspect and follows the diagonal, and an edge changes th
 test('a resize snaps the moved edge to a line and keeps the aspect, and the guides are drawn there', () => {
   const from = box(100, 100, 400, 200);
   const targets = { boxes: [], slide, layout: LAYOUT_GUIDES };
-  // the right edge dragged to 1194 snaps to 1200, the left edge of a zone
+  // the right edge dragged to 1194 snaps to 1200, the left edge of a figure box
   const raw = resizeBox(from, 'se', 694, 347, { aspect: 2, center: false });
   assert.equal(Math.round(raw.left + raw.width), 1194);
   const snapped = snapResize(from, 'se', raw, targets, T, { aspect: 2, center: false });

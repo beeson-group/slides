@@ -15,7 +15,7 @@ import { click, drag, press, saveAndReopen } from './helpers/editor.mjs';
 const DECK = 'test-deck.html';
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const slideOf = (deck, has) => [...readFileSync(deck, 'utf8').matchAll(/<section[\s\S]*?<\/section>/g)].findIndex((m) => has(m[0]));
-// the slide of the demo deck with a heading, a paragraph, a list, and a figure in a zone
+// the slide of the demo deck with a heading, a paragraph, a list, and a figure in a figure box
 const FIGURES = slideOf(DECK, (s) => s.includes('Figures are first class citizens'));
 const TITLE = slideOf(DECK, (s) => s.startsWith('<section class="title"'));
 const SPLIT = slideOf(LAYOUTS, (s) => s.startsWith('<section class="split"'));
@@ -208,7 +208,7 @@ for (const platform of PLATFORMS) {
     // a copy of the demo deck in which the author wrote a position on the list and a z-index on the
     // figure
     const file = `.r15-2-author-${platform}.html`;
-    const authored = readFileSync(DECK, 'utf8').replace('<ul style="translate: 0px 20px">', '<ul style="translate: 0px 20px; position: relative">').replace('<figure class="zone">\n    <img class="for-dark" src="demo/figure-dark.png"', '<figure class="zone" style="z-index: 2">\n    <img class="for-dark" src="demo/figure-dark.png"');
+    const authored = readFileSync(DECK, 'utf8').replace('<ul style="translate: 0px 20px">', '<ul style="translate: 0px 20px; position: relative">').replace('<figure class="figure-box">\n    <img class="for-dark" src="demo/figure-dark.png"', '<figure class="figure-box" style="z-index: 2">\n    <img class="for-dark" src="demo/figure-dark.png"');
     assert.ok(authored.includes('position: relative">') && authored.includes('style="z-index: 2"'));
     writeFileSync(file, authored);
     t.after(() => rmSync(file, { force: true }));
@@ -235,18 +235,18 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
-  test(`${platform}: a text of the panel of a split slide sent to the back is drawn over the panel`, async (t) => {
+  test(`${platform}: a text of the text column of a split slide sent to the back is drawn over the panel`, async (t) => {
     const page = await load(t, platform, { deck: LAYOUTS, n: SPLIT });
     await press(page, LIST_KEY[platform]);
     await frames(page);
-    const P = `${S} .panel > p`;
+    const P = `${S} .text-column > p`;
     await pick(page, P, 'p');
     assert.equal((await orders(page)).back, true, 'Send to Back is dimmed for the paragraph over the heading');
     await press(page, KEYS[platform].back);
     await frames(page);
     const first = await page.evaluate(`document.querySelector(${js(P)}).textContent.trim().split(' ')[0]`);
     assert.ok((await rows(page)).at(-1).startsWith(`Text: ${first}`), 'the paragraph is not at the back of the object list');
-    for (const sel of [P, `${S} .panel > h2`]) {
+    for (const sel of [P, `${S} .text-column > h2`]) {
       const top = await page.evaluate(`(() => {
         const el = document.querySelector(${js(sel)});
         const range = document.createRange();

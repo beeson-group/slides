@@ -1,5 +1,5 @@
 // the window of a drawing chosen in the Drawing popup of the Backdrop pane, R30.2, on both
-// platforms. between two named scenes the window, the labels, and the motion are kept. where the old
+// platforms. between two built-in backdrops the window, the labels, and the motion are kept. where the old
 // or the new drawing is drawn from a file, the window and the motion of the entry are written as the
 // tile of the same entry in the gallery of Media > Backdrop… writes them, so that the drawing is
 // whole in its box
@@ -18,7 +18,7 @@ const MENU = '.beeson-edit-menu.select';
 const TITLE = '<section class="title">';
 const SECTION = '<section class="section">';
 const STEPS = '<h2>Show your steps one at a time';
-const NEST = '<div class="backdrop" data-scene="nest" data-cx="0.97" data-cy="0" data-half="0.5">';
+const NEST = '<div class="backdrop" data-backdrop="nest" data-cx="0.97" data-cy="0" data-half="0.5">';
 
 let browser;
 let server;
@@ -135,11 +135,11 @@ for (const platform of PLATFORMS) {
     await chooseDrawing(page, 'Broucke Families', page.source);
     const text = await render(page);
     const tag = tagOf(text, STEPS);
-    for (const name of ['data-cx', 'data-cy', 'data-half', 'data-scene']) assert.equal(attr(tag, name), null, `${name} is kept in ${tag}`);
-    assert.equal(attr(tag, 'data-strands-select'), 'frame=pulsating,family=7');
+    for (const name of ['data-cx', 'data-cy', 'data-half', 'data-backdrop']) assert.equal(attr(tag, name), null, `${name} is kept in ${tag}`);
+    assert.equal(attr(tag, 'data-trajectories-select'), 'frame=pulsating,family=7');
     assert.equal(attr(tag, 'data-duration'), '3');
     assert.equal(attr(tag, 'data-stagger'), '0.6');
-    assert.doesNotMatch(backdropOf(text, STEPS), /class="lab"/);
+    assert.doesNotMatch(backdropOf(text, STEPS), /class="label"/);
     assert.deepEqual(await cuts(page), []);
     // without a window, the drawing is fitted to its box, and the fields show the fitted window
     const v = await fit(page);
@@ -156,7 +156,7 @@ for (const platform of PLATFORMS) {
     await chooseDrawing(page, 'Beeson Logo', page.source);
     const text = await render(page);
     const tag = tagOf(text, STEPS);
-    assert.equal(attr(tag, 'data-strands'), 'brand/transfer.js');
+    assert.equal(attr(tag, 'data-trajectories'), 'brand/transfer.js');
     assert.equal(attr(tag, 'data-duration'), '20');
     assert.equal(attr(tag, 'data-stagger'), null);
     const v = await fit(page);
@@ -175,8 +175,8 @@ for (const platform of PLATFORMS) {
     await chooseDrawing(page, 'Lyapunov Families', page.source);
     const text = await render(page);
     const tag = tagOf(text, SECTION);
-    assert.equal(attr(tag, 'data-scene'), 'nest');
-    for (const name of ['data-strands', 'data-strands-select', 'data-duration', 'data-stagger']) assert.equal(attr(tag, name), null, `${name} is kept in ${tag}`);
+    assert.equal(attr(tag, 'data-backdrop'), 'nest');
+    for (const name of ['data-trajectories', 'data-trajectories-select', 'data-duration', 'data-stagger']) assert.equal(attr(tag, name), null, `${name} is kept in ${tag}`);
     const v = await fit(page);
     assert.ok(Math.abs(v.cx - 0.936) < 0.01 && Math.abs(v.half - 0.296) < 0.01, `the fitted window is ${js(v)}`);
     for (const [k, name] of [['cx', 'data-cx'], ['cy', 'data-cy'], ['half', 'data-half']]) {
@@ -194,8 +194,8 @@ for (const platform of PLATFORMS) {
     await chooseDrawing(page, 'Cislunar Manifolds', page.source);
     const text = await render(page);
     const tag = tagOf(text, TITLE);
-    // the window is written in place of the window of the logo, and the scene after it
-    assert.equal(tag, '<div class="backdrop" data-cx="0.42" data-cy="0" data-half="0.6" data-scene="tubes">');
+    // the window is written in place of the window of the logo, and the built-in backdrop after it
+    assert.equal(tag, '<div class="backdrop" data-cx="0.42" data-cy="0" data-half="0.6" data-backdrop="tubes">');
     assertFields(await fields(page), tag);
     await checkHistory(page, text);
   });
@@ -211,7 +211,7 @@ for (const platform of PLATFORMS) {
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Family');
     await choosePopup(page, 'Colormap', 'Plasma', family);
     const colormap = await render(page);
-    assert.equal(tagOf(colormap, STEPS), tagOf(family, STEPS).replace('data-strands-colormap="viridis"', 'data-strands-colormap="plasma"'));
+    assert.equal(tagOf(colormap, STEPS), tagOf(family, STEPS).replace('data-trajectories-colormap="viridis"', 'data-trajectories-colormap="plasma"'));
     assert.equal((await state(page, 'edit.undo')).label, 'Undo Colormap');
     assert.deepEqual(await cuts(page), []);
     await undo(page);
