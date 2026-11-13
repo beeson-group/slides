@@ -388,8 +388,11 @@ for (const platform of PLATFORMS) {
     const held = await page.evaluate(CANVAS);
     assert.ok(held.y < before.y - 50, `the canvas is scrolled from ${before.y} to ${held.y} while the marquee is held at its top edge`);
     // the start corner stays on its point of the slide, and the marquee reaches the pointer
-    const corner = await page.evaluate(`window.BeesonEditorShell.stage.toScreen(${js(start)})`);
-    const box = await rectOf(page, '.beeson-marquee');
+    // the two are read in one frame, since the canvas is scrolled on while the marquee is held
+    const { corner, box } = await page.evaluate(`(() => {
+      const r = document.querySelector('.beeson-marquee')?.getBoundingClientRect();
+      return { corner: window.BeesonEditorShell.stage.toScreen(${js(start)}), box: r && { left: r.left, top: r.top, width: r.width, height: r.height } };
+    })()`);
     assert.ok(box && near(box.top + box.height, corner.y) && near(box.left, corner.x) && near(box.top, edge), `the marquee is ${js(box)}, from the start corner ${js(corner)} to the pointer at ${edge}`);
     // the elements covered by the marquee are selected at the release
     await mouse(page, 'mouseReleased', at.x, edge);
