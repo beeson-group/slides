@@ -6,10 +6,10 @@ PRE-RELEASE NOTICE: The template is currently still in beta. View the most up to
 
 ## Using this template
 
-1. From GitHub, click the green 'Use this template' button on the top right angle of this repo's landing page, then 'Create a new repository'. I recommend toggling 'Include all branches' off and naming your repository something like `talk-{name-of-your-talk}`. The name of the repository becomes part of the URL of the slides on GitHub Pages (where your repo's slides are automatically deployed), e.g. `https://OWNER.github.io/talk-{name-of-your-talk}/`, where OWNER is your GitHub username.
+1. From GitHub, click the green 'Use this template' button on the top right angle of this repo's landing page, then 'Create a new repository'. I recommend toggling 'Include all branches' off and naming your repository something like `talk-{name-of-your-talk}`. The name of the repository becomes part of the URL of the slides on GitHub Pages (where your repo's slides are automatically deployed), e.g. `https://{owner}.github.io/talk-{name-of-your-talk}/`, where OWNER is your GitHub username.
 2. (Optional) Modify `README.md` of the new repository with information about your talk, overwriting the text you are reading right now.
 3. To create and edit your slides, open `index.html` (at the root of this repository) in your favorite browser. Then, press the `e` key on your keyboard. This will enter editor mode.
-(This appends the text `?edit` your browser tab's URL bar, e.g. `https://OWNER.github.io/talk-{name-of-your-talk}?edit`. You can reach the editor by typing this out manually too).
+(This appends the text `?edit` your browser tab's URL bar, e.g. `https://{owner}.github.io/talk-{name-of-your-talk}?edit`. You can reach the editor by typing this out manually too).
 4. When you are happy, click on the save button, which overwrites your repository's local `index.html`. We also support exports to the PDF and PPTX file formats (File > Export To > PDF… in the editor, and `npm run pptx` in a terminal for PPTX).
 
 ## Editing with agents
