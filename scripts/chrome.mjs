@@ -97,8 +97,14 @@ export async function launch({ offline = true, timeout = 120000, wholeFrames = f
   const child = spawn(chrome, args, { stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] });
   let stderr = '';
   child.stderr.setEncoding('utf8');
+  // the crashes of the network service of Chrome, which Chrome reports on stderr and starts again
+  let networkCrashes = 0;
+  const onNetworkCrash = new Set();
   child.stderr.on('data', (chunk) => {
     stderr = `${stderr}${chunk}`.slice(-2000);
+    if (!chunk.includes('Network service crashed')) return;
+    networkCrashes++;
+    for (const listener of onNetworkCrash) listener();
   });
   const exited = new Promise((done) => child.once('exit', done));
   // rejected when Chrome exits, so that a request in flight is not left unsettled
@@ -203,9 +209,10 @@ export async function launch({ offline = true, timeout = 120000, wholeFrames = f
       send: call,
       // on a Windows runner of GitHub, about one page in a few thousand is refused one of its
       // files with net::ERR_NO_BUFFER_SPACE, while ports and memory are free. such a page is loaded
-      // again, twice at most, and the error of the load before is dropped
+      // again, twice at most, and the error of the load before is dropped. a load in flight when the
+      // network service of Chrome crashes is lost, and it is made again, twice at most
       async goto(url) {
-        const load = async (method, params) => {
+        const once = async (method, params) => {
           const loaded = new Promise((done) => {
             const onLoad = ({ method: event, sessionId: from }) => {
               if (from === sessionId && event === 'Page.loadEventFired') {
@@ -218,6 +225,26 @@ export async function launch({ offline = true, timeout = 120000, wholeFrames = f
           const { errorText } = await call(method, params);
           if (errorText) throw new Error(`${url}: ${errorText}`);
           await answered(loaded, `the load of ${url}`);
+        };
+        const load = async (method, params) => {
+          for (let n = 0; ; n++) {
+            const seen = networkCrashes;
+            let crash;
+            const crashed = new Promise((done) => onNetworkCrash.add((crash = done)));
+            // a lost load may not be answered, hence it is left once the crash is reported
+            const attempt = once(method, params);
+            attempt.catch(() => {});
+            try {
+              if ((await Promise.race([attempt.then(() => 'loaded'), crashed])) === 'loaded') return;
+            } catch (error) {
+              // the load is reported as aborted before the crash is written to stderr
+              if (networkCrashes === seen && error.message.includes('net::ERR_ABORTED')) await Promise.race([crashed, sleep(2000)]);
+              if (networkCrashes === seen || n === 2) throw error;
+            } finally {
+              onNetworkCrash.delete(crash);
+            }
+            if (n === 2) throw new Error(`${url}: the network service of Chrome crashed three times`);
+          }
         };
         // the other errors of a refused load are dropped with it, since they follow from the file
         // that is missing, e.g. MathJax without theme/mathjax-config.js asks its CDN for a font
