@@ -551,3 +551,112 @@ test('a scene is recorded in a browser whose DevTools calls are each answered in
   assert.deepEqual(mp4Stream(second.recording.data), stream);
 });
 
+// the run and the file of test/pages/record.html exported without and with --still, each made once
+let recordRun, recordStill;
+const recordDeck = () => {
+  recordRun ??= runExport('test/pages/record.html');
+  assert.equal(recordRun.run.status, 0, recordRun.run.stderr);
+  return recordRun;
+};
+const recordStillDeck = () => (recordStill ??= exportDeck('test/pages/record.html', ['--still']));
+
+// the first words of the names of the pictures of PowerPoint slide n
+const kinds = (parts, n) => pictures(text(parts, `ppt/slides/slide${n}.xml`)).map(([, name]) => name.split(' ')[0]);
+
+// the recording of PowerPoint slide n, with the parts of its MP4 and its poster, the stream of the
+// MP4, and whether it is looped, or null for a slide without a recording
+function recordingOf(parts, n) {
+  const name = `ppt/slides/slide${n}.xml`;
+  const slide = text(parts, name);
+  const shape = pictures(slide).find(([, label]) => label === 'Recording')?.[0];
+  if (!shape) return null;
+  const [link, embed, poster] = targets(parts, name, shape);
+  assert.equal(link, embed);
+  const node = [...slide.matchAll(/<p:cMediaNode [^>]*><p:cTn id="\d+"([^>]*)>[^]*?<p:spTgt spid="(\d+)"/g)].find((m) => m[2] === shape);
+  return { part: link, poster, ...mp4Stream(parts.get(link)), looped: node[1].includes('repeatCount="indefinite"') };
+}
+
+// the title of four steps is slide 1, the closing slide 2, and the loop 3. the trace that is a step
+// is on slides 4 and 5, the still backdrop that is a step on 6 and 7, and the two traces on 8
+test('a slide of the deck with a traced backdrop is one PowerPoint slide with its still, its recording, and the words of each step', { timeout: 600000 }, () => {
+  const { run, parts } = recordDeck();
+  assertPackage(parts);
+  assert.match(run.stdout, /recorded backdrops: 5 in \d+\.\d s/);
+  assert.equal(slideCount(parts), 8);
+  assert.deepEqual(kinds(parts, 1), ['Step', 'Recording', 'Words', 'Words', 'Words', 'Words']);
+  const title = recordingOf(parts, 1);
+  // a trace of 1 s ends with the frame at which its clock reaches its end
+  assert.deepEqual({ ...title, part: undefined, poster: undefined, duration: undefined },
+    { width: 3840, height: 2160, fps: 60, frames: 61, keys: [1], looped: false, part: undefined, poster: undefined, duration: undefined });
+  assert.deepEqual(pngSize(parts.get(title.poster)), [3840, 2160]);
+  assert.deepEqual(pngSize(parts.get(targets(parts, 'ppt/slides/slide1.xml', 2)[0])), [3840, 2160]);
+  assert.equal(text(parts, 'ppt/slides/slide1.xml').match(/nodeType="clickEffect"/g).length, 3);
+  assert.deepEqual(kinds(parts, 2), ['Step', 'Recording', 'Words']);
+  assert.deepEqual(kinds(parts, 8), ['Step', 'Recording', 'Words', 'Words']);
+  assert.equal([...parts.keys()].filter((name) => name.endsWith('.mp4')).length, 5);
+});
+
+test('a backdrop that is a step starts a new PowerPoint slide at its step, and the slides before it are not recorded', { timeout: 600000 }, () => {
+  const { parts } = recordDeck();
+  assert.deepEqual(kinds(parts, 4), ['Step']);
+  assert.deepEqual(kinds(parts, 5), ['Step', 'Recording', 'Words']);
+  assert.equal(recordingOf(parts, 5).frames, 61);
+  // a backdrop of a content slide without data-live is drawn complete at its step
+  assert.deepEqual([kinds(parts, 6), kinds(parts, 7)], [['Step'], ['Step']]);
+});
+
+test('a loop is a looped recording of one period', { timeout: 600000 }, () => {
+  const { parts } = recordDeck();
+  const loop = recordingOf(parts, 3);
+  assert.equal(loop.looped, true);
+  // the heads of a loop go round in 9 s, see LOOP in src/orbits.ts
+  assert.equal(loop.frames, 9 * 60);
+  assert.equal(recordingOf(parts, 2).looped, false);
+});
+
+test('with --still, a deck with traced backdrops is exported without a recording, one step per PowerPoint slide', { timeout: 300000 }, () => {
+  const parts = recordStillDeck();
+  assertPackage(parts);
+  assert.equal(slideCount(parts), 12);
+  for (let n = 1; n <= 12; n++) assert.deepEqual(kinds(parts, n), ['Step']);
+  assert.ok(![...parts.keys()].some((name) => name.endsWith('.mp4')));
+});
+
+test('without an H.264 encoder, the export of a traced backdrop fails and names --still', { timeout: 300000 }, () => {
+  const { run } = runExport('test/pages/record.html', [], [], { noH264: true });
+  assert.notEqual(run.status, 0);
+  assert.match(run.stderr, /H\.264/);
+  assert.match(run.stderr, /--still/);
+});
+
+test('a deck without a scene and without a traced backdrop is exported by a browser without an H.264 encoder', { timeout: 300000 }, () => {
+  const { run, parts } = runExport('test/pages/record-none.html', [], [], { noH264: true });
+  assert.equal(run.status, 0, run.stderr);
+  assert.equal(slideCount(parts), 2);
+  assert.ok(![...parts.keys()].some((name) => name.endsWith('.mp4')));
+  assert.doesNotMatch(run.stdout, /recorded/);
+});
+
+// the bound of the still with the picture of the words against the print view in
+// test/record.test.mjs, where a channel of a pixel differs by mean on average, by at most max, and
+// by more than 8 in at most a share few of the pixels
+const LAYERS = { mean: 0.005, max: 160, few: 0.0001 };
+
+test('the still of a recorded slide with the words of a step over it is the picture of the step in the file of --still', { timeout: 600000 }, async (t) => {
+  const { parts } = recordDeck();
+  const still = recordStillDeck();
+  const browser = await launch({ wholeFrames: true });
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  const picture = (file, n, label) => {
+    const name = `ppt/slides/slide${n}.xml`;
+    const shape = pictures(text(file, name)).find(([, l]) => l === label)[0];
+    return file.get(targets(file, name, shape)[0]).toString('base64');
+  };
+  // the third step of the title, and the second step of the two traces, the last page of the deck
+  for (const [n, k, m] of [[1, 3, 3], [8, 2, 12]]) {
+    const seen = await compare(page, { png: [picture(parts, n, 'Step 1'), picture(parts, n, `Words ${k}`)] }, { png: picture(still, m, 'Step 1') });
+    t.diagnostic(`slide ${n}, step ${k}: ${JSON.stringify(seen)}`);
+    assert.ok(seen.mean <= LAYERS.mean && seen.max <= LAYERS.max && seen.few <= LAYERS.few, `slide ${n}, step ${k}: ${JSON.stringify(seen)}`);
+  }
+});
