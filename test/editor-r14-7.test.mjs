@@ -119,7 +119,7 @@ const kinds = (page) => page.evaluate(`[...document.querySelectorAll('.reveal se
 for (const platform of PLATFORMS) {
   // D16: Numbers and Dashes after Paragraphs on a span of items reached only the last paragraph
   for (const [id, tag] of [['text.list.ol', 'ol'], ['text.list.ul', 'ul']]) {
-    test(`${tag === 'ol' ? 'Numbers' : 'Dashes'} after Paragraphs on a span of items acts on every paragraph of the span (${platform})`, async (t) => {
+    test(`${tag === 'ol' ? 'Numbers' : 'Arrows'} after Paragraphs on a span of items acts on every paragraph of the span (${platform})`, async (t) => {
       const page = await load(t, platform);
       await click(page, await pointOf(page, ITEM, 'toggle', 2));
       await press(page, 'Mod+A');

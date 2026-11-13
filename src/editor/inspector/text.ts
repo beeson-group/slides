@@ -297,9 +297,9 @@ export function textPane(app: App, run: Run): Control[] {
     section('Bullets & Lists', [
       row([segmented(app, run, [
         { command: 'text.list.none', icon: 'list-none', title: 'Paragraphs', pressed: listState(app, 'none') },
-        { command: 'text.list.ul', icon: 'list-dash', title: 'Dashes', pressed: listState(app, 'ul') },
+        { command: 'text.list.ul', icon: 'list-arrow', title: 'Arrows', pressed: listState(app, 'ul') },
         { command: 'text.list.dots', icon: 'list-dot', title: 'Dots', pressed: listState(app, 'dots') },
-        { command: 'text.list.arrows', icon: 'list-arrow', title: 'Arrows', pressed: listState(app, 'arrows') },
+        { command: 'text.list.dashes', icon: 'list-dash', title: 'Dashes', pressed: listState(app, 'dashes') },
         { command: 'text.list.ol', icon: 'list-number', title: 'Numbers', pressed: listState(app, 'ol') },
       ], 'List')]),
       row([segmented(app, run, [

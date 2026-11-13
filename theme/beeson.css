@@ -203,14 +203,14 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal svg.line marker { overflow: visible; }
 .reveal svg.line marker path { fill: currentColor; stroke: none; }
 
-/* lists: a short orange dash in place of a bullet, numbers in gray */
+/* lists: an orange chevron in place of a bullet, numbers in gray */
 .reveal ul, .reveal ol { display: block; margin: 24px 0 0; padding: 0; list-style: none; }
 .reveal li { position: relative; margin: 0 0 14px; padding-left: 54px; }
-.reveal ul > li::before { content: ""; position: absolute; left: 0; top: 0.72em; width: 28px; height: 2px; background: var(--accent); }
-/* the items of a ul.dots or a ul.arrows take a ring or a chevron in place of the dash, centered
-   on its middle. a nested list without the class keeps the dash */
-.reveal ul.dots > li::before { --mark-width: 14px; top: calc(0.72em - 6px); left: 7px; width: 14px; height: 14px; box-sizing: border-box; border: 2.5px solid var(--accent); border-radius: 50%; background: none; }
-.reveal ul.arrows > li::before { --mark-width: 12px; top: calc(0.72em - 8px); left: 9px; width: 12px; height: 18px; clip-path: polygon(0 0, 30% 0, 100% 50%, 30% 100%, 0 100%, 70% 50%); }
+.reveal ul > li::before { --mark-width: 12px; content: ""; position: absolute; left: 9px; top: calc(0.72em - 8px); width: 12px; height: 18px; background: var(--accent); clip-path: polygon(0 0, 30% 0, 100% 50%, 30% 100%, 0 100%, 70% 50%); }
+/* the items of a ul.dots or a ul.dashes take a ring or a short dash in place of the chevron,
+   centered on its middle. a nested list without the class keeps the chevron */
+.reveal ul.dots > li::before { --mark-width: 14px; top: calc(0.72em - 6px); left: 7px; width: 14px; height: 14px; box-sizing: border-box; border: 2.5px solid var(--accent); border-radius: 50%; background: none; clip-path: none; }
+.reveal ul.dashes > li::before { --mark-width: 28px; top: 0.72em; left: 0; width: 28px; height: 2px; clip-path: none; }
 /* the number is the counter list-item, which a browser starts from the attribute start of an ol.
    it ends where a number of one digit ends, so that the gap before the words is the same for any
    number of digits */
