@@ -888,8 +888,10 @@ export class Orbits {
     this.redraw();
   }
 
-  start(): void {
-    if (Orbits.reduced()) { this.complete(); return; }
+  // with force, the backdrop is traced in a still deck too, e.g. in the print view for a recording of
+  // scripts/record.mjs
+  start(force = false): void {
+    if (!force && Orbits.reduced()) { this.complete(); return; }
     if (!this.loaded) { this.pending = true; return; }
     if (this.raf || (this.finished && !this.loop)) return;
     this.t0 = performance.now();
@@ -997,6 +999,12 @@ export class Orbits {
   get span(): number {
     if (!(this.Tmax > 0)) return this.duration;
     return Math.max(...this.strands.map((s, i) => (s.times[s.times.length - 1] / this.Tmax) * this.duration + i * this.stagger));
+  }
+
+  // the seconds after which the frames of a loop repeat, i.e. one revolution of its heads, or 0 for a
+  // backdrop that is not a loop
+  get period(): number {
+    return this.loop ? LOOP : 0;
   }
 
   // the seconds into the trace at which its first head is drawn, e.g. at the start of a record of a file

@@ -57,8 +57,11 @@ export async function removeProfile(profile) {
  * Starts Chrome and returns an object with newPage() and close(). With offline set, every host
  * name is mapped to a failed lookup, thus each network load of a deck is reported as an error.
  * Without it, only 127.0.0.1 is reached. A request that is not answered within timeout ms fails.
+ * With wholeFrames set, a frame is drawn only once every layer in it is rastered, which a screenshot
+ * after a scroll and heavy work in the page needs, see scripts/export-pptx.mjs, and text is drawn
+ * without subpixel antialiasing.
  */
-export async function launch({ offline = true, timeout = 120000 } = {}) {
+export async function launch({ offline = true, timeout = 120000, wholeFrames = false } = {}) {
   const chrome = findChrome();
   const profile = mkdtempSync(join(tmpdir(), 'beeson-chrome-'));
   const args = [
@@ -81,6 +84,14 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
     // network, Chrome downloads components and models into the profile in the background, and on
     // Windows such a file is still locked when the profile is removed
     `--host-resolver-rules=MAP * ~NOTFOUND${offline ? '' : ', EXCLUDE 127.0.0.1'}`,
+    // without it, a frame is drawn while the tiles of a layer that the scroll has brought into view
+    // are rastered, and the layer is left out of the frame. a fragment is a layer of its own, with
+    // will-change: opacity in reveal.css
+    ...(wholeFrames ? ['--run-all-compositor-stages-before-draw'] : []),
+    // on Linux and Windows, text over an opaque ground is drawn with subpixel antialiasing, whose
+    // color fringes stay in a picture shown on another screen. the picture of the words of a step,
+    // taken over a transparent ground, has gray edges, hence it differs from the print view there
+    ...(wholeFrames ? ['--disable-lcd-text'] : []),
     'about:blank',
   ];
   const child = spawn(chrome, args, { stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] });

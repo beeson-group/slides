@@ -25,13 +25,15 @@ export function markViewers(): void {
   });
 }
 
-/** Puts an empty box with the class, the style, and the position of a viewer in its place, with the class viewer-still. */
+/** Puts an empty box with the class, the style, the position, and the number of a viewer in its place, with the class viewer-still. */
 function box(viewer: Viewer): HTMLDivElement {
   const still = document.createElement('div');
   still.className = viewer.className;
   // a still is not dimmed at a later step, as a viewer, see theme/beeson.css
   still.classList.add('viewer-still');
   still.style.cssText = viewer.style.cssText;
+  // the number of the viewer names the recording of its scene in scripts/export-pptx.mjs
+  if (viewer.dataset.still !== undefined) still.dataset.still = viewer.dataset.still;
   // the still is placed in the box, which is thus positioned as the viewer, e.g. relative as the
   // runtime sets it for a viewer that is not a zone, in a plate of the class row
   still.style.position = getComputedStyle(viewer).position;
