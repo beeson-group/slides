@@ -185,6 +185,28 @@ export async function type(page, text) {
 }
 
 /**
+ * Records the frames of the step preview of the editor in window.__preview from now on. A frame is
+ * { step, playing, read }, with the value of the expression read as the frame is drawn. The preview
+ * goes on by a clock of the page, 800 ms a step, hence a read from the test may come a step late.
+ */
+export async function recordPreview(page, read = 'null') {
+  await page.evaluate(`(() => {
+    const html = document.documentElement;
+    window.__previewObserver?.disconnect();
+    window.__preview = [];
+    window.__previewObserver = new MutationObserver(() => window.__preview.push({ step: html.dataset.previewStep, playing: html.classList.contains('beeson-previewing'), read: ${read} }));
+    window.__previewObserver.observe(html, { attributes: true, attributeFilter: ['data-preview-step'] });
+    return true;
+  })()`);
+}
+
+/** Waits for the end of a preview recorded with recordPreview, and returns its frames. */
+export async function previewFrames(page, timeout = 60000) {
+  await page.waitFor(`window.__preview.length > 0 && !document.documentElement.classList.contains('beeson-previewing')`, timeout);
+  return page.evaluate('window.__preview');
+}
+
+/**
  * Saves into a file of the origin private file system, opens the saved text again, and returns it
  * with the status after the open, whose problems must be empty. The page must be served over HTTP.
  */
