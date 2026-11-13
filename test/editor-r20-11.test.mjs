@@ -210,8 +210,10 @@ async function layerTimes(page, platform, n) {
 // each time on a slide with 47 rows is bounded by RATIO times the same time on a slide with 9 rows,
 // and SLACK ms for the pauses of a machine that other tests load at once. the bound thus scales
 // with a slower machine. before the fix of F1, the menu took about 970 ms, a command 700 ms, a
-// Shift-click 5 to 12 s, and Bring to Front of 5 about 45 s on the slide with 47 rows
-const RATIO = 4;
+// Shift-click 5 to 12 s, and Bring to Front of 5 about 45 s on the slide with 47 rows, i.e. over
+// 100 times its time with 9 rows. the rows are 5.2 times as many, and on the runners of GitHub
+// Bring to Front took 2 to 5.8 times as long, hence a bound of 4 times failed there
+const RATIO = 8;
 const SLACK = 150;
 
 for (const platform of PLATFORMS) {
