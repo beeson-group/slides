@@ -1,15 +1,16 @@
 // the TikZ figures of a deck: the style of styles/beeson-tikz.sty, whose colors are the custom
-// properties of theme/beeson.css in each mode, and the compile of a figure of scripts/figures.mjs
-// into the SVG of each mode, fitted to its box. a test that runs TeX is skipped where latex or
-// dvisvgm is not installed
+// properties of theme/beeson.css in each mode, the compile of a figure of scripts/figures.mjs into
+// the SVG of each mode, fitted to its box, the hash that tells a stale output without TeX, and the
+// figures of npm run tex. a test that runs TeX is skipped where latex or dvisvgm is not installed
 
 import assert from 'node:assert/strict';
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { test } from 'node:test';
 import vm from 'node:vm';
-import { compileFigure, cutPreamble, deckFigures, figureScript, findTools, finishSvg, wrapperOf } from '../scripts/figures.mjs';
+import { spawnSync } from 'node:child_process';
+import { compileFigure, cutPreamble, deckFigures, figureHash, figureProblems, figureScript, figureStatus, findTools, finishSvg, wrapperOf } from '../scripts/figures.mjs';
 
 const STY = readFileSync('styles/beeson-tikz.sty', 'utf8');
 const CSS = readFileSync('theme/beeson.css', 'utf8');
@@ -218,4 +219,136 @@ test('an error of TeX is given with the file and the line of the source, and wit
   // a macro of the preamble is known in the figure
   writeFileSync(join(dir, 'preamble.tex'), '\\newcommand{\\amp}{\\textit{amplitude}}\n');
   assert.ok(compileFigure({ dir, name: 'decay', source: DECAY.replace('{amplitude}', '{\\amp}') }).figure);
+});
+
+const page = (body) => `<!doctype html>\n<html>\n<head>\n<meta charset="utf-8">\n<script src="tex.js"></script>\n</head>\n<body>\n<div class="reveal"><div class="slides">\n${body}\n</div></div>\n</body>\n</html>\n`;
+// npm run tex on the deck of a folder, with TeX only in the folder texbin when it is given
+const tex = (root, texbin) => {
+  const env = { ...process.env };
+  if (texbin !== undefined) env.BEESON_TEXBIN = texbin;
+  const done = spawnSync(process.execPath, [resolve('scripts/tex.mjs'), join(root, 'index.html')], { encoding: 'utf8', env });
+  return { out: `${done.stdout}${done.stderr}`, status: done.status };
+};
+// an output of a figure as npm run tex would write it for the files of the folder, without TeX
+const output = (root, name, box, inputs = []) => {
+  const hash = figureHash({ dir: root, source: readFileSync(join(root, 'figures', `${name}.tex`), 'utf8'), box, inputs });
+  writeFileSync(join(root, 'figures', `${name}.js`), figureScript(name, { hash, width: 10, height: 10, scale: 1, parts: [], inputs, dark: '<svg></svg>', light: '<svg></svg>' }));
+};
+
+test('the hash of a figure is read with LF line ends, and it changes with the source, the files it reads, the preamble, and the box', (t) => {
+  const root = folder(t, { 'figures/decay.csv': CSV, 'preamble.tex': '\\newcommand{\\amp}{a}\n', 'more.tex': 'x\n' });
+  const base = { dir: root, source: DECAY, box: { width: 600, height: 480 }, inputs: ['figures/decay.csv', 'more.tex'] };
+  const hash = figureHash(base);
+  assert.match(hash, /^[0-9a-f]{16}$/);
+  assert.equal(figureHash({ ...base, source: DECAY.replace(/\n/g, '\r\n') }), hash);
+  writeFileSync(join(root, 'figures/decay.csv'), CSV.replace(/\n/g, '\r\n'));
+  assert.equal(figureHash(base), hash);
+  assert.notEqual(figureHash({ ...base, source: DECAY.replace('amplitude', 'a') }), hash);
+  assert.notEqual(figureHash({ ...base, box: { width: 600, height: 400 } }), hash);
+  assert.notEqual(figureHash({ ...base, box: {} }), hash);
+  writeFileSync(join(root, 'more.tex'), 'y\n');
+  assert.notEqual(figureHash(base), hash);
+  writeFileSync(join(root, 'more.tex'), 'x\n');
+  writeFileSync(join(root, 'figures/decay.csv'), `${CSV}6,0.05,0.4\n`);
+  assert.notEqual(figureHash(base), hash);
+  writeFileSync(join(root, 'figures/decay.csv'), CSV);
+  assert.equal(figureHash(base), hash);
+  rmSync(join(root, 'preamble.tex'));
+  assert.notEqual(figureHash(base), hash);
+});
+
+test('the figures of a deck are listed as current, stale, or missing, without TeX, and each problem is one line', (t) => {
+  const root = folder(t, {
+    'index.html': page(`<section><div class="tikz" data-figure="decay" style="width: 600px; height: 480px"></div></section>
+<section><div class="tikz" data-figure="orbit"></div><div class="tikz" data-figure="lost"></div></section>
+<section><div class="tikz" data-figure="new" style="width: 300px"></div><div class="tikz" data-figure="decay" style="width: 600px; height: 480px"></div><div class="tikz"></div></section>`),
+    'figures/decay.tex': DECAY,
+    'figures/decay.csv': CSV,
+    'figures/orbit.tex': ORBIT,
+    'figures/new.tex': ORBIT,
+  });
+  output(root, 'decay', { width: 600, height: 480 }, ['figures/decay.csv']);
+  output(root, 'orbit', { width: 100, height: null });
+  const deck = join(root, 'index.html');
+  const states = () => Object.fromEntries(figureStatus(deck).map((figure) => [figure.name, figure.state]));
+  // a figure shown twice is listed once
+  assert.deepEqual(figureStatus(deck).map((figure) => figure.name), ['decay', 'orbit', 'lost', 'new', null]);
+  assert.deepEqual(states(), { decay: 'current', orbit: 'stale', lost: 'no source', new: 'missing', null: 'invalid' });
+  assert.deepEqual(figureStatus(deck)[0], { name: 'decay', box: { width: 600, height: 480 }, file: 'figures/decay.js', source: 'figures/decay.tex', state: 'current' });
+  assert.deepEqual(figureProblems(deck), [
+    'figures/orbit.js is stale, run npm run tex',
+    'figures/lost.tex is not found, for the TikZ figure lost of index.html',
+    'figures/new.js is missing, run npm run tex',
+    'index.html: a TikZ figure without a name in data-figure, or with a name other than letters, digits, - and _',
+  ]);
+  // a figure is stale after a change of the data that it reads, and every figure after a change of the preamble
+  writeFileSync(join(root, 'figures/decay.csv'), `${CSV}6,0.05,0.4\n`);
+  assert.equal(states().decay, 'stale');
+  writeFileSync(join(root, 'figures/decay.csv'), CSV);
+  output(root, 'orbit', { width: null, height: null });
+  assert.equal(states().decay, 'current');
+  assert.equal(states().orbit, 'current');
+  writeFileSync(join(root, 'preamble.tex'), '\\newcommand{\\amp}{a}\n');
+  assert.equal(states().decay, 'stale');
+  assert.equal(states().orbit, 'stale');
+  // an output that is not a script of a figure is stale
+  writeFileSync(join(root, 'figures/orbit.js'), 'window.beesonFigures = null;\n');
+  output(root, 'decay', { width: 600, height: 480 }, ['figures/decay.csv']);
+  assert.deepEqual(states(), { decay: 'current', orbit: 'stale', lost: 'no source', new: 'missing', null: 'invalid' });
+  assert.deepEqual(figureProblems(join(root, 'index.html')).length, 4);
+});
+
+test('npm run tex without TeX writes tex.js, lists each stale figure as not compiled, and ends nonzero only while one is stale', (t) => {
+  const root = folder(t, {
+    'index.html': page('<section><div class="tikz" data-figure="decay" style="width: 600px; height: 480px"></div><div class="tikz" data-figure="orbit"></div></section>'),
+    'figures/decay.tex': DECAY,
+    'figures/decay.csv': CSV,
+    'figures/orbit.tex': ORBIT,
+    'texbin/.keep': '',
+  });
+  output(root, 'decay', { width: 600, height: 480 }, ['figures/decay.csv']);
+  const { out, status } = tex(root, join(root, 'texbin'));
+  assert.ok(readFileSync(join(root, 'tex.js'), 'utf8').includes('window.beesonTex'));
+  assert.match(out, /tex\.js: 0 macros/);
+  assert.match(out, /^figures\/decay\.js: up to date$/m);
+  assert.match(out, /^figures\/orbit\.js: not compiled, since latex is not found\. install TeX Live, or put latex and dvisvgm on the PATH$/m);
+  assert.equal(status, 1);
+  output(root, 'orbit', { width: null, height: null });
+  const again = tex(root, join(root, 'texbin'));
+  assert.match(again.out, /^figures\/orbit\.js: up to date$/m);
+  assert.equal(again.status, 0);
+});
+
+test('npm run tex prints nothing of figures for a deck without one', (t) => {
+  const root = folder(t, { 'index.html': page('<section><p>Words</p></section>') });
+  const { out, status } = tex(root, join(root, 'nowhere'));
+  assert.doesNotMatch(out, /figures|not compiled/);
+  assert.equal(status, 0);
+});
+
+test('npm run tex compiles each stale figure, skips one that is up to date, and keeps the last good output after an error', { skip: WITHOUT_TEX }, (t) => {
+  const root = folder(t, {
+    'index.html': page('<section><div class="tikz" data-figure="decay" style="width: 600px; height: 480px"></div><div class="tikz" data-figure="orbit"></div></section>'),
+    'figures/decay.tex': DECAY,
+    'figures/decay.csv': CSV,
+    'figures/orbit.tex': ORBIT,
+  });
+  const first = tex(root);
+  assert.match(first.out, /^figures\/decay\.js: compiled in \d+\.\d s, 600 by 480 px$/m);
+  assert.match(first.out, /^figures\/orbit\.js: compiled in \d+\.\d s, \d+ by \d+ px$/m);
+  assert.equal(first.status, 0);
+  const deck = join(root, 'index.html');
+  assert.deepEqual(figureStatus(deck).map((figure) => figure.state), ['current', 'current']);
+  const good = readFileSync(join(root, 'figures/decay.js'), 'utf8');
+  assert.equal(run(good).decay.inputs[0], 'figures/decay.csv');
+  const second = tex(root);
+  assert.match(second.out, /^figures\/decay\.js: up to date$/m);
+  assert.match(second.out, /^figures\/orbit\.js: up to date$/m);
+  writeFileSync(join(root, 'figures/decay.tex'), DECAY.replace('\\end{tikzpicture}', '\\undefinedmacro\n\\end{tikzpicture}'));
+  const broken = tex(root);
+  assert.match(broken.out, /^figures\/decay\.tex:6: Undefined control sequence$/m);
+  assert.match(broken.out, /^figures\/decay\.js: not compiled, the last good output is kept$/m);
+  assert.equal(broken.status, 1);
+  assert.equal(readFileSync(join(root, 'figures/decay.js'), 'utf8'), good);
+  assert.equal(figureStatus(deck)[0].state, 'stale');
 });
