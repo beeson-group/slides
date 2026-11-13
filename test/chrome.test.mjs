@@ -132,6 +132,33 @@ test('a page opened with motion is shown without reduced motion', { timeout: 600
   assert.equal(await page.evaluate(`matchMedia('(prefers-reduced-motion: no-preference)').matches`), true);
 });
 
+// within 1 s of its last change, the editor keeps the unsaved edits of a page in the storage of the
+// browser under a key that starts with beeson-draft:, and offers them on a card over the slide of
+// the next page of the deck. on a slow runner, the next page of a test file was offered the edits
+// of the page before
+test('a page does not keep the unsaved edits of the editor in the storage, unless it is opened with drafts', { timeout: 60000 }, async (t) => {
+  const { serve } = await import('../scripts/webdriver.mjs');
+  const root = mkdtempSync(join(tmpdir(), 'slides-drafts-'));
+  writeFileSync(join(root, 'page.html'), '<!doctype html><link rel="icon" href="data:,">');
+  const browser = await launch({ offline: false });
+  const server = await serve(root);
+  t.after(async () => {
+    await browser.close();
+    server.close();
+    rmSync(root, { recursive: true, force: true });
+  });
+  const keep = `(localStorage.setItem('beeson-draft:' + location.href, 'edits'), localStorage.setItem('mode', 'dark'), true)`;
+  const kept = `[localStorage.getItem('beeson-draft:' + location.href), localStorage.getItem('mode')]`;
+  const page = await browser.newPage();
+  await page.goto(`${server.origin}/page.html`);
+  await page.evaluate(keep);
+  assert.deepEqual(await page.evaluate(kept), [null, 'dark']);
+  const withDrafts = await browser.newPage({ drafts: true });
+  await withDrafts.goto(`${server.origin}/page.html`);
+  await withDrafts.evaluate(keep);
+  assert.deepEqual(await withDrafts.evaluate(kept), ['edits', 'dark']);
+});
+
 // on a Windows runner of GitHub, about one page in a few thousand is refused one of its files with
 // net::ERR_NO_BUFFER_SPACE, while ports and memory are free. the page of this test reports the
 // error at its first load only
