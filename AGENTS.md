@@ -55,6 +55,7 @@ A round is one run of the workflow `check` on a commit, and a flaky test is a te
 
 - Fix a flaky test before the merge. Reproduce its failure first by forcing its condition, e.g. a delay or a pause between two keys, and do not run the failed job again in place of a fix.
 - Do not read a result after a fixed wait. Wait for the state of the page with `page.waitFor`, and read the result once this state is reached.
+- Record the states of a preview or an animation that goes on by a clock of the page in the page, e.g. with a `MutationObserver`, and assert the record, since a state may be over before it is read from the test.
 - Wait for the end of an animation, a transition, or a flip of the mode by its state. Give it 60 s on a slide with a surface, a video, or a tycho viewer.
 - Open a page with `motion: true` in a test of an animation, since reduced motion is set on the Windows and macOS runners.
 - Type the keys that are to be one entry of the history with `typeKeys` or `type` of `test/helpers/editor.mjs`, since two keys more than a second apart are two entries.
