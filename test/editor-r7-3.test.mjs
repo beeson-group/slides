@@ -141,7 +141,10 @@ for (const platform of PLATFORMS) {
     const menu = labels((await rows(page))[0]);
     assert.equal(menu[menu.indexOf('Replace Image…') + 1], 'Save as Picture…');
     assert.ok(menu.indexOf('Size and Position…') > menu.indexOf('Save as Picture…'));
-    const fetched = await page.evaluate(`performance.getEntriesByType('resource').length`);
+    // the fetches of the picture by a script alone, since another file of the deck may be answered
+    // during the save, and the picture may be drawn again by an img
+    const fetches = () => page.evaluate(`performance.getEntriesByType('resource').filter((r) => r.name.endsWith('/demo/figure-light.png') && ['fetch', 'xmlhttprequest'].includes(r.initiatorType)).length`);
+    const fetched = await fetches();
     await pick(page, 'Save as Picture…');
     assert.equal(await menus(page), 0);
     const saved = await page.evaluate('window.__saved');
@@ -149,7 +152,7 @@ for (const platform of PLATFORMS) {
     assert.equal(saved[0].name, 'figure-light.png');
     assert.equal(saved[0].href, `${server.origin}/demo/figure-light.png`);
     assert.deepEqual(await page.evaluate('window.__open'), []);
-    assert.equal(await page.evaluate(`performance.getEntriesByType('resource').length`), fetched, 'the picture was fetched to be saved');
+    assert.equal(await fetches(), fetched, 'the picture was fetched to be saved');
     const bytes = await page.evaluate(`fetch(${js(saved[0].href)}).then((r) => r.arrayBuffer()).then((b) => [...new Uint8Array(b)])`);
     assert.equal(sha(Buffer.from(bytes)), sha(readFileSync('demo/figure-light.png')));
     await byteExact(page);
