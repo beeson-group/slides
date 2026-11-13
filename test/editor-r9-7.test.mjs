@@ -379,6 +379,8 @@ for (const [platform, answer] of [['mac', 'save'], ['other', 'cancel']]) {
     const shown = () => page.evaluate(`!!document.querySelector('.beeson-edit-show')`);
     if (answer === 'save') {
       assert.equal(await shown(), true, 'the show is not opened');
+      // the save is written to the file asynchronously, and it may end after 300 ms on a slow runner
+      await page.waitFor('window.BeesonEditor.status().dirty === false').catch(() => {});
       assert.equal(await page.evaluate('window.BeesonEditor.status().dirty'), false, 'the deck is not saved');
     } else assert.equal(await shown(), false);
     assert.deepEqual(errors(page), []);
