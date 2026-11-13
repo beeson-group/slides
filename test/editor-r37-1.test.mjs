@@ -513,9 +513,14 @@ for (const platform of PLATFORMS) {
     await page.waitFor(`document.getElementById('play').playing`);
     await page.evaluate(`(() => {
       window.__seen = [];
+      const html = document.documentElement;
       const v = document.getElementById('play');
+      const see = () => window.__seen.push({ step: html.dataset.previewStep, playing: v.playing, time: v.time });
+      // the scene is read at each step and in each frame, since on a slow runner a frame of the
+      // scene can be longer than the 0.8 s of a step
+      new MutationObserver(see).observe(html, { attributes: true, attributeFilter: ['data-preview-step'] });
       const look = () => {
-        if (document.documentElement.classList.contains('beeson-previewing')) window.__seen.push({ step: document.documentElement.dataset.previewStep, playing: v.playing, time: v.time });
+        if (html.classList.contains('beeson-previewing')) see();
         requestAnimationFrame(look);
       };
       requestAnimationFrame(look);
@@ -529,7 +534,7 @@ for (const platform of PLATFORMS) {
     assert.ok(before.length > 0, 'the preview did not show the slide before the step of the scene');
     assert.deepEqual(before.filter((s) => s.playing || s.time !== 0).slice(0, 3), [], 'the scene is played before its step');
     const from = seen.find((s) => s.step === '2' && s.playing);
-    assert.ok(from && from.time < 0.5, `the scene is not played from its start at its step: ${JSON.stringify(from)}`);
+    assert.ok(from && from.time < 0.5, `the scene is not played from its start at its step: ${JSON.stringify(from)}, read ${JSON.stringify(seen.filter((s) => s.step !== '0' && s.step !== '1').slice(0, 4))}`);
     // the editor shows every step, hence the scene is played again after the preview
     await page.waitFor(`document.getElementById('play').playing`);
     sameText(await rendered(page), page.source);
