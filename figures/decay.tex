@@ -1,0 +1,8 @@
+% a damped oscillation, x = exp(-0.12 t) cos t and y = exp(-0.12 t) sin t, read from decay.csv,
+% with each curve as a part and labeled at its end
+\begin{tikzpicture}
+\begin{axis}[xmin=0, xmax=12, ymin=-1, ymax=1, xtick={0,4,8,12}, ytick={-1,0,1}, xlabel={$t$}, ylabel={$x$, $y$}, clip=false]
+  \addplot+[part=x, mark=none] table[x=t, y=x, col sep=comma] {figures/decay.csv} node[pos=1, anchor=west] {$x$};
+  \addplot+[part=y, mark=none] table[x=t, y=y, col sep=comma] {figures/decay.csv} node[pos=1, anchor=west] {$y$};
+\end{axis}
+\end{tikzpicture}

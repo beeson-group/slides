@@ -20,11 +20,12 @@ test('the demo deck shows the figures decay and orbit right before its closing s
   const status = Object.fromEntries(figureStatus(DECK).map((f) => [f.name, f.state]));
   assert.deepEqual({ decay: status.decay, orbit: status.orbit }, { decay: 'current', orbit: 'current' });
   // the curves of decay are its two parts, and orbit has at least two parts, each a step of its slide
-  assert.deepEqual(readFigure('.', 'decay').parts, ['x', 'y']);
+  // the output is read in a vm context, hence its arrays are copied into this realm before a strict comparison
+  assert.deepEqual([...readFigure('.', 'decay').parts], ['x', 'y']);
   assert.ok(readFigure('.', 'orbit').parts.length >= 2);
   for (const [slide, name] of [[slides[closing - 2], 'decay'], [slides[closing - 1], 'orbit']]) {
     const steps = [...slide.matchAll(/<span class="fragment" data-part="([\w-]+)" data-fragment-index="\d+"><\/span>/g)].map((m) => m[1]);
-    assert.deepEqual(steps, readFigure('.', name).parts.filter((part) => steps.includes(part)));
+    assert.deepEqual(steps, [...readFigure('.', name).parts].filter((part) => steps.includes(part)));
     assert.ok(steps.length >= 2, `${name} has ${steps.length} steps`);
   }
   // the data of decay: t from 0 to 12 in steps of 0.1, with x = exp(-0.12 t) cos t and y = exp(-0.12 t) sin t

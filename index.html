@@ -209,6 +209,29 @@ try {
   <aside class="notes">The clip waits on its poster until the first click, and it is played from its start then, together with the clip of the other mode, which is hidden. It is not dimmed at the later steps, since it is still played, and it is paused and rewound to its poster when its step is undone.</aside>
 </section>
 
+<!-- TikZ figures: a div.tikz is drawn from figures/name.js, which npm run tex compiles from figures/name.tex, and a span of a part makes the part a step -->
+<section>
+  <h2>TikZ figures in both modes</h2>
+  <p>Keep a <code>tikzpicture</code> in <code>figures/</code>, and run <code>npm run tex</code> to compile it for both modes.</p>
+  <ul>
+    <li class="fragment" data-fragment-index="1">A pgfplots axis is fitted to the box of its figure.</li>
+    <li class="fragment" data-fragment-index="2">A curve with <code>part=y</code> is a step of its slide.</li>
+  </ul>
+  <div class="zone tikz" data-figure="decay" style="width: 600px; height: 520px; translate: 0px 140px"><span class="fragment" data-part="x" data-fragment-index="1"></span><span class="fragment" data-part="y" data-fragment-index="2"></span></div>
+  <aside class="notes">The figure is read from figures/decay.tex, whose two curves are read from figures/decay.csv. Each curve is a part, and a span with data-part inside the figure shows it at the step of the span.</aside>
+</section>
+
+<section>
+  <h2>A drawing, with its parts as steps</h2>
+  <p>A drawing without an axis is scaled to the box of its figure, and its text stays at the size of a caption.</p>
+  <ul>
+    <li class="fragment" data-fragment-index="1">The libration points \(\LL{1}\) and \(\LL{2}\) are one part.</li>
+    <li class="fragment" data-fragment-index="2">An orbit around \(\LL{2}\) is a second part.</li>
+  </ul>
+  <div class="zone tikz" data-figure="orbit" style="width: 600px; height: 800px"><span class="fragment" data-part="points" data-fragment-index="1"></span><span class="fragment" data-part="orbit" data-fragment-index="2"></span></div>
+  <aside class="notes">The Earth, the Moon, and the libration points of the Earth–Moon system are drawn in the synodic frame, not to scale, and the orbit around L2 is drawn as an ellipse. A scope with part=points or part=orbit in figures/orbit.tex is a part.</aside>
+</section>
+
 <section class="closing">
   <div class="backdrop" data-scene="tubes" data-cx="0.42" data-cy="0" data-half="0.6"></div>
   <div class="block">
