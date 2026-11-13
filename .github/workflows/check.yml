@@ -59,6 +59,21 @@ jobs:
           netsh int ipv4 show dynamicport tcp
           Get-Content "$env:RUNNER_TEMP\net.log"
 
+  # the checks test (ubuntu-latest) and test (windows-latest) are required on main, hence the result
+  # of the eight shards is reported under both names. Without always(), the job is skipped after a
+  # failed shard, and a skipped check counts as passed
+  tests:
+    name: test (${{ matrix.os }})
+    needs: test
+    if: ${{ always() }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: test "${{ needs.test.result }}" = success
+
   check:
     strategy:
       fail-fast: false
