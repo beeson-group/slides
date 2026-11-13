@@ -57,7 +57,7 @@ export function candidates(slide: Element, pairing: Pairing): Element[] {
 // the items of the step model of a slide: its candidates and every other fragment on it, e.g. a
 // row of a table, a span in a paragraph, a backdrop, or a step of a plot, in document order, since
 // their indexes are one order. a fragment that is not paired with a tag, e.g. a span in the text of
-// a block, is locked, since its tag is not written
+// a text element, is locked, since its tag is not written
 // a list of the slide is given in extra with its items, so that a change of its delivery sees both
 export function stepElements(slide: Element, pairing: Pairing, extra: Element[] = []): Element[] {
   const listed = new Set([...candidates(slide, pairing), ...extra]);
@@ -301,7 +301,7 @@ export function startAt(app: App, m: Model, i: number, delays: Map<number, numbe
 export function writePlan(app: App, m: Model, plan: Plan, extra: Map<Element, TagEdit> = new Map(), delays: Map<number, number> = delaysOf(app, m)): boolean {
   const after = itemsOf(m.items, plan);
   const moved = m.els.find((_, i) => m.locked[i] && !m.lines[i] && (after[i].index !== m.items[i].index || after[i].fragment !== m.items[i].fragment || after[i].final !== m.items[i].final));
-  if (moved) throw new Error(`The step of the ${describe(moved, () => null).kind.toLowerCase()} in the text of a block cannot be changed here, and it would be renumbered by this change`);
+  if (moved) throw new Error(`The step of the ${describe(moved, () => null).kind.toLowerCase()} in a text element cannot be changed here, and it would be renumbered by this change`);
   const edits = new Map<Element, TagEdit>(extra);
   const add = (el: Element, e: TagEdit) => edits.set(el, { ...edits.get(el), ...e, attrs: { ...edits.get(el)?.attrs, ...e.attrs } });
   m.els.forEach((el, i) => {
@@ -491,7 +491,7 @@ export function popover(menu: HTMLElement, row: Element, beside = false): void {
   menu.style.top = `${Math.round(top)}px`;
 }
 
-// the menu is moved with its row when the row moves after the menu was opened, e.g. when the block
+// the menu is moved with its row when the row moves after the menu was opened, e.g. when the box
 // of the transition above the rows is hidden at the release of the press that selected the row
 function follow(menu: HTMLElement, row: Element): void {
   const top = row.getBoundingClientRect().top;
@@ -906,7 +906,7 @@ export class Steps {
       chip.setAttribute('aria-expanded', 'false');
       chip.setAttribute('aria-label', `Step of the ${kind.toLowerCase()}${text ? `: ${text}` : ''}`);
       const how = step < 0 ? 'With the slide' : [final ? 'Last' : startLabel(start, delay), effects[i]].join(' · ');
-      chip.title = line ? `Step ${step + 1}, the ${kind.toLowerCase()} of the code box, set in its Code pane. Click to play the steps from it` : locked ? `Step ${step + 1}, set in the text of its block` : step < 0 ? 'Shown with the slide. Click to choose a step' : `Step ${step + 1}, ${final ? 'last' : startLabel(start, delay)}. Click to change its step, start, or effect`;
+      chip.title = line ? `Step ${step + 1}, the ${kind.toLowerCase()} of the code box, set in its Code pane. Click to play the steps from it` : locked ? `Step ${step + 1}, set in its text element` : step < 0 ? 'Shown with the slide. Click to choose a step' : `Step ${step + 1}, ${final ? 'last' : startLabel(start, delay)}. Click to change its step, start, or effect`;
       chip.disabled = locked;
       // the start is marked in the chip as in the Animation Pane of PowerPoint: a number at a click,
       // a plus with the step before, and a clock after it

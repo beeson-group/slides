@@ -13,7 +13,7 @@ export type SelectionKind = 'none' | 'elements' | 'text' | 'slides';
 
 export interface Selection {
   readonly kind: SelectionKind;
-  // the selected elements, the block of the text, or the selected sections, in document order
+  // the selected elements, the text element of the text, or the selected sections, in document order
   readonly items: readonly Element[];
   set(kind: SelectionKind, items: Element[]): void;
   // add and toggle keep the kind, and set it to elements when nothing is selected
@@ -30,7 +30,7 @@ export interface Selection {
   // the one selected element, or null when none or several are selected
   only(): Element | null;
   // read before an undo or a redo, the function that selects the element changed by its entry as a
-  // block, as Keynote does, unless the caret was in its text before the step
+  // text element, as Keynote does, unless the caret was in its text before the step
   changed(): (el: Element) => void;
 }
 
@@ -116,7 +116,7 @@ export function install(app: App): void {
     for (const fn of listeners) fn();
     app.invalidate('selection');
   };
-  const caretBlock = () => (items[0] ? [movableOf(app, items[0]) ?? items[0]] : []);
+  const caretElement = () => (items[0] ? [movableOf(app, items[0]) ?? items[0]] : []);
   const selection: Selection = {
     get kind() {
       return kind;
@@ -125,11 +125,11 @@ export function install(app: App): void {
       return items;
     },
     set,
-    // the block of a caret counts as selected, as in PowerPoint, hence an object added to a text is
-    // selected with its block, and the block toggled from its text stays selected
-    add: (item) => set(kind === 'none' || kind === 'text' ? 'elements' : kind, [...(kind === 'text' ? caretBlock() : items), item]),
+    // the text element of a caret counts as selected, as in PowerPoint, hence an object added to a text is
+    // selected with its text element, and the text element toggled from its text stays selected
+    add: (item) => set(kind === 'none' || kind === 'text' ? 'elements' : kind, [...(kind === 'text' ? caretElement() : items), item]),
     toggle: (item) => {
-      if (kind === 'text') return set('elements', [...caretBlock(), item]);
+      if (kind === 'text') return set('elements', [...caretElement(), item]);
       set(kind === 'none' ? 'elements' : kind, items.includes(item) ? items.filter((i) => i !== item) : [...items, item]);
     },
     clear: () => set('none', []),
@@ -155,21 +155,21 @@ export function install(app: App): void {
       const caret = app.hostOf(document.activeElement);
       const was = caret && movableOf(app, caret);
       return (el) => {
-        const block = el.isConnected && app.current()?.contains(el) && !el.closest('aside.notes') ? movableOf(app, el) : null;
+        const textEl = el.isConnected && app.current()?.contains(el) && !el.closest('aside.notes') ? movableOf(app, el) : null;
         const host = app.hostOf(document.activeElement);
-        // a caret in the block of el is kept, since a list is one text as in Keynote, and so is the
-        // caret put into this block by the step where it takes off the text of the caret, e.g. the
+        // a caret in the text element of el is kept, since a list is one text as in Keynote, and so is the
+        // caret put into this text element by the step where it takes off the text of the caret, e.g. the
         // undo of Return
-        const kept = caret && (caret === el || el.contains(caret) || was === block || (!caret.isConnected && host && movableOf(app, host) === block));
+        const kept = caret && (caret === el || el.contains(caret) || was === textEl || (!caret.isConnected && host && movableOf(app, host) === textEl));
         // el selected, inside a selected element, or around one keeps the selection, and with it the
         // focus in the inspector
         const held = kind === 'elements' && items.some((i) => i === el || i.contains(el) || el.contains(i));
-        if (!block || kept || held) return;
+        if (!textEl || kept || held) return;
         if (host) {
           (host as HTMLElement).blur();
           getSelection()?.removeAllRanges();
         }
-        set('elements', [block]);
+        set('elements', [textEl]);
       };
     },
   };

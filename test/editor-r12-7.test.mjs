@@ -70,8 +70,8 @@ async function range(page, from, to) {
 }
 
 // whether cells are selected as a block, i.e. the outline of the block is shown and no cell has a caret
-const inBlock = (page) => page.evaluate(`(() => {
-  const o = document.querySelector('.beeson-table-bars .cell.block');
+const inRange = (page) => page.evaluate(`(() => {
+  const o = document.querySelector('.beeson-table-bars .cell.range');
   return !!o && !o.hidden && document.activeElement?.localName !== 'td';
 })()`);
 
@@ -117,12 +117,12 @@ for (const platform of PLATFORMS) {
   test(`Edit > Delete on a range of cells clears the cells and keeps the table (${platform})`, async (t) => {
     const page = await load(t, platform);
     await range(page, 'Moon', '2.53e-5');
-    assert.equal(await inBlock(page), true);
+    assert.equal(await inRange(page), true);
     await exec(page, 'element.delete');
     await frames(page);
     assert.equal(await tables(page), 1, 'Delete removed the table');
     assert.equal(await undoLabel(page), 'Undo Delete');
-    assert.equal(await inBlock(page), true, 'the range is not selected after Delete');
+    assert.equal(await inRange(page), true, 'the range is not selected after Delete');
     await roundTrip(page, CLEARED);
   });
 
@@ -166,7 +166,7 @@ for (const platform of PLATFORMS) {
     assert.ok(!out.html.includes('<!--beeson-->'), 'the copy holds the table as an element of the editor');
     assert.ok(!out.html.includes('Titan') && !out.html.includes('Body'), 'the copy holds cells outside the range');
     assert.match(out.html, /<table[^>]*>[\s\S]*<td>Moon<\/td>[\s\S]*<td>Jupiter<\/td>[\s\S]*<\/table>/);
-    assert.equal(await inBlock(page), true);
+    assert.equal(await inRange(page), true);
     await byteExact(page);
   });
 
@@ -178,7 +178,7 @@ for (const platform of PLATFORMS) {
     assert.equal(out.prevented, true);
     assert.equal(await tables(page), 1, 'the paste added a table');
     assert.equal(await undoLabel(page), 'Undo Paste');
-    assert.equal(await inBlock(page), true, 'the pasted cells are not selected');
+    assert.equal(await inRange(page), true, 'the pasted cells are not selected');
     await roundTrip(page, FILLED);
   });
 
@@ -199,13 +199,13 @@ for (const platform of PLATFORMS) {
     await press(page, 'Backspace');
     await frames(page);
     assert.equal(await undoLabel(page), 'Undo Clear Cells');
-    assert.equal(await inBlock(page), true, 'the range is a caret after Backspace');
+    assert.equal(await inRange(page), true, 'the range is a caret after Backspace');
     await press(page, 'Mod+Z');
     await frames(page);
-    assert.equal(await inBlock(page), true, 'the range is a caret after an undo of the clear');
+    assert.equal(await inRange(page), true, 'the range is a caret after an undo of the clear');
     await press(page, 'Mod+Shift+Z');
     await frames(page);
-    assert.equal(await inBlock(page), true, 'the range is a caret after a redo of the clear');
+    assert.equal(await inRange(page), true, 'the range is a caret after a redo of the clear');
   });
 
   test(`an undo in the Rows field after a commit undoes the count of the table (${platform})`, async (t) => {

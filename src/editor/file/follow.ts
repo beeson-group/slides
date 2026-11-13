@@ -239,7 +239,7 @@ export function install(app: App): void {
         if (text !== app.source?.text) return;
       } else if (app.state === 'waiting') {
         app.files.open(text);
-        if (!app.pairing?.blocks.length) {
+        if (!app.pairing?.texts.length) {
           app.source = null;
           app.saved = null;
           app.pairing = null;

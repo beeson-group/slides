@@ -1,8 +1,8 @@
-// the typing into the blocks of the slides. a block paired with the file is made editable, and the
-// input of the browser is filtered so that a block holds only what the file can hold: a line is a
+// the typing into the text elements of the slides. a text element paired with the file is made editable, and the
+// input of the browser is filtered so that a text element holds only what the file can hold: a line is a
 // br, or a newline in a pre, a paste is plain text, and ⌘B and ⌘I write strong and em. the typing
-// is recorded in the history as the content of the block before and after, and an undo puts the
-// block back with restoreHost
+// is recorded in the history as the content of the text element before and after, and an undo puts the
+// text element back with restoreHost
 
 import type { App, Typing } from '../app.ts';
 import { setContentWithTex } from '../math.ts';
@@ -145,7 +145,7 @@ export function toggleFormat(host: Element, tag: 'strong' | 'em'): void {
   host.normalize();
 }
 
-// a line in a block is a br, or a newline in a pre, and a paste is plain text, so that the text
+// a line in a text element is a br, or a newline in a pre, and a paste is plain text, so that the text
 // of a slide stays what the file can hold
 export function insertPlain(host: Element, text: string): void {
   const pre = host.closest('pre');
@@ -241,7 +241,7 @@ export function spaced(host: Element, text: string): string {
   return (word.test(before) || close.test(before) ? ' ' : '') + (!next || /\s/.test(next) || close.test(next) ? text.slice(0, -1) : text);
 }
 
-// Chrome drops a space after the caret where the space is not drawn, i.e. at the start of a block,
+// Chrome drops a space after the caret where the space is not drawn, i.e. at the start of a text element,
 // when it types there. text is put into the text node instead, so that the space is kept and drawn,
 // as in Keynote and PowerPoint. false where the caret is not before such a space
 function typeBeforeSpace(host: Element, text: string): boolean {
@@ -297,10 +297,10 @@ export function install(app: App): void {
     }
   }
 
-  // marks the blocks of the pairing editable, and the formulas in them as one unit each. a block
-  // that stays a block is left alone, so that a save does not take the focus
+  // marks the text elements of the pairing editable, and the formulas in them as one unit each. a text element
+  // that stays a text element is left alone, so that a save does not take the focus
   function attach(): void {
-    const next = app.pairing ? app.pairing.blocks.map((b) => b.live) : [];
+    const next = app.pairing ? app.pairing.texts.map((b) => b.live) : [];
     for (const h of hosts) if (!next.includes(h)) h.removeAttribute('contenteditable');
     for (const h of next) if (h.getAttribute('contenteditable') !== 'true') h.setAttribute('contenteditable', 'true');
     hosts = next;
@@ -311,8 +311,8 @@ export function install(app: App): void {
     app.notes.ensure();
   }
 
-  // a block is put back to a content of the history, on its slide, with the caret at the end of
-  // the text that changed. a block framed as an object stays framed without a caret, e.g. a
+  // a text element is put back to a content of the history, on its slide, with the caret at the end of
+  // the text that changed. a text element framed as an object stays framed without a caret, e.g. a
   // paragraph after Apply of the TeX of its inline formula
   async function restoreHost(host: Element, content: string): Promise<void> {
     app.showSlide(host);
@@ -379,7 +379,7 @@ export function install(app: App): void {
     const k = s?.focusOffset ?? 0;
     if (!s?.isCollapsed || !(n instanceof Text) || k === 0 || n.parentElement?.closest('pre, code')) return;
     // a word that was the whole text of an inline element leaves the caret at the end of n, and
-    // the character after it is read from the next text of the block
+    // the character after it is read from the next text of the text element
     let next = n.data[k];
     const host = next === undefined ? app.hostOf(n.parentElement) : null;
     if (host) {

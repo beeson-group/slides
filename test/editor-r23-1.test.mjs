@@ -108,7 +108,7 @@ async function caretIn(page, selector) {
 }
 
 // the block of selector selected as an object, by a click into its text and Esc
-async function selectBlock(page, selector) {
+async function selectTextElement(page, selector) {
   await caretIn(page, selector);
   await press(page, 'Escape');
   await frames(page);
@@ -268,7 +268,7 @@ for (const platform of PLATFORMS) {
     const page = await load(t, platform, 3);
     await exec(page, 'view.steps');
     await frames(page);
-    await selectBlock(page, 'p');
+    await selectTextElement(page, 'p');
     const control = await page.evaluate(`(() => { const b = document.querySelector(${js(EFFECT)}); return b && { disabled: b.disabled, text: b.textContent }; })()`);
     assert.deepEqual(control, { disabled: false, text: '—' }, 'the Effect control is not enabled for an element shown with the slide');
     await click(page, EFFECT);
@@ -366,7 +366,7 @@ for (const platform of PLATFORMS) {
       page = await load(t, platform, 6);
       const [own, text] = await colors(page, selector);
       assert.notEqual(own, text, `${selector} is drawn in the text color`);
-      await selectBlock(page, selector);
+      await selectTextElement(page, selector);
       assert.equal((await state(page, 'text.tone.text')).checked, false, `Text is checked on ${selector}`);
       await exec(page, 'text.tone.text');
       await frames(page);
@@ -378,7 +378,7 @@ for (const platform of PLATFORMS) {
     }
     page = await load(t, platform, 6);
     // on a block in the text color, Text takes the tone of its words off
-    await selectBlock(page, 'p');
+    await selectTextElement(page, 'p');
     await exec(page, 'text.tone.text');
     await roundTrip(page, edited([['<p>Body words <span class="tone-accent">in orange</span> here.</p>', '<p>Body words in orange here.</p>']]), 'Undo Text Color');
     assert.deepEqual(errors(page), []);

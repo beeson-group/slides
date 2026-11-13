@@ -60,7 +60,7 @@ const PLACES = (mark) => `(() => {
   const lines = [];
   for (const e of c.querySelectorAll('.title-text > *')) for (const r of e.getClientRects()) lines.push({ left: (r.left - S.left) / k, top: (r.top - S.top) / k });
   const box = [...c.querySelectorAll(':scope > p')].filter((p) => p.classList.contains('beeson-pending') || (${js(mark)} && p.textContent.startsWith(${js(mark)})));
-  return { lines, box: box.map(px), inBlock: !!c.querySelector('.title-text .beeson-pending') };
+  return { lines, box: box.map(px), inTitleText: !!c.querySelector('.title-text .beeson-pending') };
 })()`;
 const places = (page, mark = '') => page.evaluate(PLACES(mark));
 const near = (a, b, tol = 0.6) => Math.abs(a - b) <= tol;
@@ -92,7 +92,7 @@ for (const platform of PLATFORMS) {
       await sleep(300);
       const empty = await places(page);
       assert.equal(empty.box.length, 1, `Text does not add a text box as a child of the section ${at}`);
-      assert.equal(empty.inBlock, false, `the text box is put into the block ${at}`);
+      assert.equal(empty.inTitleText, false, `the text box is put into the title text ${at}`);
       sameLines(start, empty, `the insert ${at}`);
       // the box is inside the margins of the slide, and off the words of the block and the lockup
       const b = empty.box[0];

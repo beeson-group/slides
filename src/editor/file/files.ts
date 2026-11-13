@@ -255,7 +255,7 @@ export function install(app: App): void {
     if (app.state === 'waiting') return plain('Choose the file of this deck to start editing');
     const pairing = app.pairing;
     if (!pairing) return plain(app.note?.text ?? 'Loading', app.note?.warn ?? false);
-    if (!pairing.blocks.length) return plain('This file is not the deck on the page', true);
+    if (!pairing.texts.length) return plain('This file is not the deck on the page', true);
     const problems = pairing.problems;
     const parts = [app.dirty ? 'Unsaved changes' : app.note?.text ?? 'No unsaved changes'];
     // a warning, e.g. an error of a save or of a draft, is shown with unsaved changes too
@@ -270,8 +270,8 @@ export function install(app: App): void {
     return { text: parts.join('. '), warn: (app.note?.warn ?? false) || problems.length > 0 || app.overflow > 0, title: problems.map(problemText).join('\n') };
   }
 
-  // pairs the text of the file with the page and makes the paired blocks editable. the state
-  // reports the blocks that could not be paired. a fresh file starts the history anew and is
+  // pairs the text of the file with the page and makes the paired text elements editable. the state
+  // reports the text elements that could not be paired. a fresh file starts the history anew and is
   // checked against the edits kept in the storage, and the text of a save is paired again in place
   function open(text: string, fresh = true): void {
     app.tagEdits.clear();
@@ -285,7 +285,7 @@ export function install(app: App): void {
       app.pairing = pair(app.source, app.slides(), mathLookup());
       app.state = 'loaded';
       app.dirty = false;
-      if (!app.pairing.blocks.length) app.pairing.problems.push({ slide: null, tag: 'slides', reason: 'nothing on the page was found in the file' });
+      if (!app.pairing.texts.length) app.pairing.problems.push({ slide: null, tag: 'slides', reason: 'nothing on the page was found in the file' });
     } catch (error) {
       app.source = null;
       app.saved = null;
@@ -347,7 +347,7 @@ export function install(app: App): void {
     app.handle = handle;
     open(text);
     app.follow.read(text);
-    if (app.pairing?.blocks.length) keep(handle);
+    if (app.pairing?.texts.length) keep(handle);
   }
 
   async function openFile(): Promise<void> {

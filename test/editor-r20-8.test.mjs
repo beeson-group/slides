@@ -107,7 +107,7 @@ async function caretIn(page, selector) {
 
 // the block of selector selected as an object, by a click into its text and Esc, or added to the
 // selection by a click with Shift
-async function selectBlock(page, selector, modifiers = '') {
+async function selectTextElement(page, selector, modifiers = '') {
   if (modifiers) await click(page, await center(page, `.reveal section.present ${selector}`), { modifiers });
   else {
     await caretIn(page, selector);
@@ -155,8 +155,8 @@ for (const platform of PLATFORMS) {
 
   test(`Center acts on a list and a display selected as objects, on a caption, and on a small paragraph, and draws the display centered (${platform})`, async (t) => {
     const page = await load(t, platform);
-    await selectBlock(page, 'ul');
-    await selectBlock(page, 'div.math', 'Shift');
+    await selectTextElement(page, 'ul');
+    await selectTextElement(page, 'div.math', 'Shift');
     assert.equal(await page.evaluate('window.BeesonEditor.selection().length'), 2);
     await exec(page, 'text.align.center');
     await frames(page);
@@ -201,7 +201,7 @@ for (const platform of PLATFORMS) {
   test(`Faint writes the class ghost on a figure, a block, and a line, and each is drawn at the ghost opacity (${platform})`, async (t) => {
     const page = await load(t, platform);
     await selectFigure(page, '.reveal section.present figure img');
-    await selectBlock(page, 'p', 'Shift');
+    await selectTextElement(page, 'p', 'Shift');
     await showPane(page, 'Arrange');
     assert.equal(await page.evaluate(`document.querySelector('${PANEL} [data-command="arrange.faint"]')?.checked`), false);
     await click(page, `${PANEL} label:has(> [data-command="arrange.faint"])`);
@@ -226,7 +226,7 @@ for (const platform of PLATFORMS) {
 
   test(`Reset Slide keeps the class ghost, and a ghosted step is drawn ghosted in the editor (${platform})`, async (t) => {
     const page = await load(t, platform);
-    await selectBlock(page, 'p');
+    await selectTextElement(page, 'p');
     await exec(page, 'arrange.faint');
     await exec(page, 'slide.reset');
     await frames(page);
@@ -240,7 +240,7 @@ for (const platform of PLATFORMS) {
   test(`Dim of the Steps pane writes semi-fade-out, and Preview Steps draws the element dimmed from its step on (${platform})`, async (t) => {
     const page = await load(t, platform, 2);
     await still(page);
-    await selectBlock(page, 'p:nth-of-type(4)');
+    await selectTextElement(page, 'p:nth-of-type(4)');
     await exec(page, 'steps.effect', { effect: 'dim' });
     await frames(page);
     const expected = edited([['<p class="fragment" data-fragment-index="3">Theta', '<p class="fragment semi-fade-out" data-fragment-index="3">Theta']]);

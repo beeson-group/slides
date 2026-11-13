@@ -1,4 +1,4 @@
-// the Text pane of the Format tab, for a text with the caret or a selected block, as the Text tab
+// the Text pane of the Format tab, for a text with the caret or a selected text element, as the Text tab
 // of Keynote: the paragraph style in a pop-up, the Format Painter of PowerPoint, the formats of the
 // words with Change Case, the tone swatches, the alignment, the kind of list, and the link. every control runs a command of commands/text.ts by its id, and a
 // control of a command that is not defined is drawn disabled. by the scope rule, only the styles
@@ -6,7 +6,7 @@
 
 import type { App } from '../app.ts';
 import { entering } from '../commands/edit.ts';
-import { kindOf, listKind, type ListKind, selectedBlocks, startList, styleOf, styleWhy } from '../text/blocks.ts';
+import { kindOf, listKind, type ListKind, selectedTextElements, startList, styleOf, styleWhy } from '../text/elements.ts';
 import { around, FORMATS, inlineTargets, isTone, type FormatName } from '../text/inline.ts';
 import { injectStyle, make } from '../ui/dom.ts';
 import { openMenu, type MenuItem } from '../ui/menu.ts';
@@ -100,7 +100,7 @@ const TONES: [string, string, string][] = [
   ['red', 'Red', '--red'],
 ];
 
-// for several selected blocks, a value of each text of the blocks outside a formula, as the mixed
+// for several selected text elements, a value of each text of the text elements outside a formula, as the mixed
 // state of a control of Keynote is read, and else null
 function perText<T>(app: App, value: (host: Element, text: Node) => T): T[] | null {
   if (app.selection.kind !== 'elements' || app.selection.elements().length < 2) return null;
@@ -114,7 +114,7 @@ function perText<T>(app: App, value: (host: Element, text: Node) => T): T[] | nu
   });
 }
 
-// a format on every text of several blocks, on none, or on some
+// a format on every text of several text elements, on none, or on some
 function formatState(app: App, name: FormatName): () => boolean | 'mixed' | null {
   return () => {
     const on = perText(app, (host, n) => !!around(host, n, FORMATS[name].match));
@@ -123,13 +123,13 @@ function formatState(app: App, name: FormatName): () => boolean | 'mixed' | null
   };
 }
 
-// the tones of the texts of several blocks, with text for the text color of the theme
+// the tones of the texts of several text elements, with text for the text color of the theme
 const tonesOf = (app: App): Set<string> | null => {
   const tones = perText(app, (host, n) => around(host, n, isTone)?.classList[0].slice(5) ?? 'text');
   return tones && new Set(tones);
 };
 
-// the kind of list of each of several blocks, or null when they share one or one has none
+// the kind of list of each of several text elements, or null when they share one or one has none
 function listState(app: App, kind: ListKind): () => boolean | 'mixed' | null {
   return () => {
     const els = app.selection.kind === 'elements' ? app.selection.elements() : [];
@@ -139,9 +139,9 @@ function listState(app: App, kind: ListKind): () => boolean | 'mixed' | null {
   };
 }
 
-// the name of a block that is not in the paragraph styles, e.g. a heading
-function tagName(app: App, block?: Element): string {
-  const host = block ?? (app.selection.kind === 'text' ? app.selection.items[0] : app.selection.only());
+// the name of a text element that is not in the paragraph styles, e.g. a heading
+function tagName(app: App, textEl?: Element): string {
+  const host = textEl ?? (app.selection.kind === 'text' ? app.selection.items[0] : app.selection.only());
   const el = host?.closest('h1, h2, h3, li, td, th, p, div') ?? host;
   switch (el?.localName) {
     case 'h1': return 'Title';
@@ -174,9 +174,9 @@ function stylePopup(app: App): Control {
   });
   const sync = () => {
     const on = ids.find((id) => app.commands.state(id).checked);
-    // several blocks of different styles show Mixed, as in Keynote
-    const blocks = app.selection.kind === 'elements' && app.selection.elements().length > 1 ? selectedBlocks(app) : [];
-    const names = new Set(blocks.map((el) => {
+    // several text elements of different styles show Mixed, as in Keynote
+    const textEls = app.selection.kind === 'elements' && app.selection.elements().length > 1 ? selectedTextElements(app) : [];
+    const names = new Set(textEls.map((el) => {
       const s = styleOf(app, el);
       return s && app.commands.get(`text.style.${s}`) ? app.commands.label(`text.style.${s}`) : tagName(app, el);
     }));

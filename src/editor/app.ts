@@ -49,7 +49,7 @@ export type Line = { text: string; warn: boolean; title: string };
 
 export type Event = 'report' | 'history' | 'dirty' | 'slide' | 'resize';
 
-// a block of text paired with the file is editable in place
+// a text element paired with the file is editable in place
 export const HOST = '[contenteditable="true"]';
 
 // the services of the modules, each set by the module named in its comment
@@ -121,7 +121,7 @@ export interface MathPop {
 }
 
 export interface Typing {
-  // text/typing.ts: the editable blocks, and a block put back by the history
+  // text/typing.ts: the editable text elements, and a text element put back by the history
   attach(): void;
   markMath(root: Element): void;
   restoreHost(host: Element, content: string): Promise<void>;
@@ -297,7 +297,7 @@ export class App {
     this.selection.set('elements', els);
   }
 
-  // the editable block around target, on a slide
+  // the editable text element around target, on a slide
   hostOf(target: EventTarget | null): Element | null {
     const host = target instanceof Element ? target.closest(HOST) : null;
     return host && this.slides().contains(host) ? host : null;
@@ -375,7 +375,7 @@ export class App {
     if (active.closest('aside.notes')) return 'notes';
     // a formula, or a text without a caret, focused in an object that is framed takes the keys of the
     // slide, e.g. a new display after its TeX field is closed. a caret in a text keeps the keys of the
-    // text, also where an undo framed its block
+    // text, also where an undo framed its text element
     if (this.caretHost() || (this.hostOf(active) && !(this.selection.kind === 'elements' && this.selection.items.some((el) => el.contains(active))))) return 'text';
     if (active.closest('.beeson-edit-nav')) return 'navigator';
     // the object list of navigator/objects.ts takes its own keys, as a pane of controls

@@ -2,7 +2,7 @@
 // selected, they act on the elements, and in the navigator on the slides, through the commands of
 // commands/slide.ts. the text on the clipboard is the format of commands/slide.ts: the mark
 // <!--beeson-->, then each element as it is written into the file. a paste on the slide of its
-// source is put after the source, and drawn 20 px off it when it would cover it or is a block in
+// source is put after the source, and drawn 20 px off it when it would cover it or is a text element in
 // the flow. a paste on another slide is put into the container on the same path from its slide, at
 // the same offset. the keys of the clipboard are taken from the events cut, copy, and paste, which
 // carry the clipboard in every browser, and ⌘D or Ctrl+D duplicates. an image or a video on the clipboard, e.g. a
@@ -28,7 +28,7 @@ import { keepPlaces } from '../canvas/drag.ts';
 import { MARK, docOf, slidesIn } from './slide.ts';
 import { cellAt, clearRange, pasteAtCell, pasteRange, pasteTable, rangeText, selectedRange } from './table.ts';
 import { display } from '../keymap.ts';
-import { removeJoining } from '../text/blocks.ts';
+import { removeJoining } from '../text/elements.ts';
 
 // the offset of a paste or a duplicate that would cover its source, in slide pixels
 export const STEP = 20;
@@ -40,10 +40,10 @@ export function selectedElements(app: App): Element[] {
   return els.filter((el) => !els.some((o) => o !== el && o.contains(el)));
 }
 
-// the element that Esc selects in a text of the slide, i.e. the block of the caret, which Duplicate
+// the element that Esc selects in a text of the slide, i.e. the text element of the caret, which Duplicate
 // duplicates, as Keynote and PowerPoint duplicate a text box. in a cell, Esc selects the cell,
 // which is not duplicated
-function caretBlock(app: App): Element | null {
+function caretElement(app: App): Element | null {
   const host = app.selection.kind === 'text' ? app.hostOf(document.activeElement) : null;
   const el = host && !host.closest('td, th') ? movableOf(app, host) ?? host : null;
   return el && app.pairing?.elements.get(el)?.open ? el : null;
@@ -149,7 +149,7 @@ function boxOf(app: App, el: Element): Box {
 const same = (p: Box, q: Box, d = 0): boolean => Math.abs(p.x + d - q.x) < 1 && Math.abs(p.y + d - q.y) < 1 && Math.abs(p.w - q.w) < 1 && Math.abs(p.h - q.h) < 1;
 
 // whether the boxes of a and b are the same within a slide pixel, i.e. a copy a covers its source b.
-// a block of the text column is put under its source by the layout, and is not offset
+// a text element of the text column is put under its source by the layout, and is not offset
 export function covers(app: App, a: Element, b: Element): boolean {
   return same(boxOf(app, a), boxOf(app, b));
 }
@@ -165,7 +165,7 @@ export function shift(app: App, el: Element, n: number): void {
   docOf(app).setTag(el, { translate: { x: t.x + STEP * n, y: t.y + STEP * n } }, 'move');
 }
 
-// whether el is a block in the flow of the current slide or of its text column, whose copy the
+// whether el is a text element in the flow of the current slide or of its text column, whose copy the
 // layout puts under its source
 function inFlow(app: App, el: Element): boolean {
   const slide = app.current();
@@ -175,7 +175,7 @@ function inFlow(app: App, el: Element): boolean {
 
 // keepPlaces of canvas/drag.ts, which holds the siblings of near with an offset at their places,
 // and also the siblings without one in the flow of the slide or of its text column, which a copy in
-// the flow moves down, or up in a block anchored at its bottom, e.g. the block of a title slide
+// the flow moves down, or up in a text element anchored at its bottom, e.g. the title text of a title slide
 function keepAll(app: App, near: Element[]): (move: (el: Element, translate: Translate) => void) => void {
   const keep = keepPlaces(app, near);
   const slide = app.current();
@@ -222,7 +222,7 @@ function freshIds(app: App, text: string): string {
   return docOf(app).freshIds(text, (id) => !!document.getElementById(id));
 }
 
-// the container of the text column of slide, i.e. the text column of a split slide, the block of a title
+// the container of the text column of slide, i.e. the text column of a split slide, the title text of a title
 // or closing slide, the words of a section slide, and else the slide
 export function columnOf(slide: Element): Element {
   return slide.querySelector(':scope > .text-column, :scope > .title-text, :scope > .sec') ?? slide;
@@ -280,7 +280,7 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
     nodes.push(node);
     grounds.push(ground);
   }
-  // a block in the flow, which the layout puts under its source, is placed with the others of its
+  // a text element in the flow, which the layout puts under its source, is placed with the others of its
   // paste once it is moved onto its source
   const flow = nodes.map((n, i) => !!own && !grounds[i] && !covers(app, n, own.sources[i]) && inFlow(app, n));
   if (on && own && !flow.some(Boolean)) placeOwn(app, own, on, nodes, grounds);
@@ -293,7 +293,7 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
   keep((el, translate) => doc.setTag(el, { translate }, 'move'));
   if (own) {
     // a paste that lands on a source or a copy, which keep holds at its place, is moved on from
-    // where it lands, and a paste with a block in the flow from 20 px off its sources. a plate made
+    // where it lands, and a paste with a text element in the flow from 20 px off its sources. a plate made
     // a figure box by settleCopies is not in the flow
     const inflow = flow.map((f, i) => f && inFlow(app, nodes[i]));
     inflow.forEach((f, i) => f && (floating.add(nodes[i]), onto(app, nodes[i], own.sources[i])));
@@ -309,7 +309,7 @@ async function pasted(app: App, texts: string[]): Promise<Element[]> {
 
 // a paste on a slide without the sources is put at the place of the sources, then moved in steps
 // of 20 px to the first place that a copy of the clipboard on this slide does not take now. a copy
-// that is deleted or undone does not take a place, and a block of the text column, which the layout
+// that is deleted or undone does not take a place, and a text element of the text column, which the layout
 // puts after the copies before it, is not moved
 function placeAway(app: App, on: Away, nodes: Element[], grounds: boolean[]): void {
   const boxes = nodes.map((n) => boxOf(app, n));
@@ -322,7 +322,7 @@ function placeAway(app: App, on: Away, nodes: Element[], grounds: boolean[]): vo
 // a paste on the slide of its sources is moved by one step more than the pastes there before it
 // where it covers its source, and else not, then on to the first place that a source or a copy of
 // the clipboard on this slide does not take now. a copy that is not at the place of the sources at
-// the copy, e.g. a block of the text column, is not moved
+// the copy, e.g. a text element of the text column, is not moved
 function placeOwn(app: App, own: Clip, on: Away, nodes: Element[], grounds: boolean[]): void {
   const boxes = nodes.map((n) => boxOf(app, n));
   const cover = nodes.map((n, i) => !grounds[i] && covers(app, n, own.sources[i]));
@@ -345,7 +345,7 @@ const duplicates = new WeakMap<Element, Element[]>();
 
 // the copies of els, each after its element. a copy that covers its element is moved by 20 px, and
 // on to the first place that the element, the element it was first duplicated from, or a duplicate
-// of the latter on this slide does not take now. a copy of a block in the flow, which the layout
+// of the latter on this slide does not take now. a copy of a text element in the flow, which the layout
 // puts under its element, is moved onto it and then in the same way. an undo selects els again, and
 // a redo the copies
 export function duplicateElements(app: App, els: Element[]): Promise<Element[]> {
@@ -365,7 +365,7 @@ async function duplicated(app: App, els: Element[]): Promise<Element[]> {
   settleCopies(app, copies);
   relink(app, copies);
   keep((el, translate) => doc.setTag(el, { translate }, 'move'));
-  // a block in the flow, which the layout puts under its element, is moved onto it first. a plate
+  // a text element in the flow, which the layout puts under its element, is moved onto it first. a plate
   // made a figure box by settleCopies is not in the flow
   const flow = copies.map((dup, i) => !cover[i] && inFlow(app, dup));
   flow.forEach((f, i) => f && (floating.add(copies[i]), onto(app, copies[i], els[i])));
@@ -560,16 +560,16 @@ export function install(app: App): void {
     menu: menu(30, 'select'),
     context: ['element'],
     // in the navigator, the key duplicates the slide whatever the canvas selected
-    enabled: (a) => (inNavigator(a) ? a.commands.enabled('slide.duplicate') : ready(a) && !selectedRange(a) && (a.selection.kind === 'text' ? !!caretBlock(a) : selectedElements(a).length > 0 || a.commands.enabled('slide.duplicate'))),
-    runsAs: (a) => (!inNavigator(a) && (selectedElements(a).length || caretBlock(a)) ? 'edit.duplicate' : 'slide.duplicate'),
+    enabled: (a) => (inNavigator(a) ? a.commands.enabled('slide.duplicate') : ready(a) && !selectedRange(a) && (a.selection.kind === 'text' ? !!caretElement(a) : selectedElements(a).length > 0 || a.commands.enabled('slide.duplicate'))),
+    runsAs: (a) => (!inNavigator(a) && (selectedElements(a).length || caretElement(a)) ? 'edit.duplicate' : 'slide.duplicate'),
     undoable: true,
     run: async (a) => {
       if (inNavigator(a)) return a.commands.run('slide.duplicate');
-      // in a text, the block of the caret is selected first, as by Esc
-      const block = caretBlock(a);
-      if (block) {
+      // in a text, the text element of the caret is selected first, as by Esc
+      const textEl = caretElement(a);
+      if (textEl) {
         (document.activeElement as HTMLElement | null)?.blur();
-        a.selection.set('elements', [block]);
+        a.selection.set('elements', [textEl]);
       }
       const els = selectedElements(a);
       if (els.length) await duplicateElements(a, els);
@@ -583,7 +583,7 @@ export function install(app: App): void {
   const onClip = (ev: ClipboardEvent) => {
     if (ev.defaultPrevented || !ready(app)) return;
     // an image pasted on the slide, or into a text when it comes without a text, e.g. a
-    // screenshot, is put on the slide, since a block of the theme does not hold an image
+    // screenshot, is put on the slide, since a text element of the theme does not hold an image
     if (ev.type === 'paste' && (app.region() === 'canvas' || app.region() === 'text')) {
       const data = ev.clipboardData;
       const text = data?.getData('text/plain') ?? '';

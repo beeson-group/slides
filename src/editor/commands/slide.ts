@@ -11,7 +11,7 @@ import { NEW_LAYOUTS, type Layout, type NewLayout } from '../model/templates.ts'
 import { droppedOrder, isHidden, type MoveTo, type Navigator } from '../navigator/navigator.ts';
 import { groupsOf, sectionHeading } from '../navigator/sorter.ts';
 import { drawInto } from '../navigator/thumbs.ts';
-import { setOwnTex } from '../text/blocks.ts';
+import { setOwnTex } from '../text/elements.ts';
 import { tokenize } from '../tokens.ts';
 import { nextShown, setTransition, transitionOf } from '../review/transitions.ts';
 import { sample } from './layout.ts';
@@ -28,7 +28,7 @@ const COLUMNS = 3;
 
 const LABELS: Record<NewLayout, string> = { title: 'Title', section: 'Section', content: 'Content', titleOnly: 'Title Only', narrow: 'Content, Narrow', wide: 'Content, Wide', figure: 'Figure', split: 'Split', closing: 'Closing' };
 
-// the prompts of the empty blocks of a new slide, which are not written into the file
+// the prompts of the empty text elements of a new slide, which are not written into the file
 const CSS = `
 html.beeson-editor .reveal:not(.beeson-peek) .slides section :is(h1, h2, p)[contenteditable="true"]:empty::before { color: var(--muted, #888); pointer-events: none; }
 html.beeson-editor .reveal:not(.beeson-peek) .slides section :is(h1, h2)[contenteditable="true"]:empty::before { content: "Title"; }
@@ -83,13 +83,13 @@ export function onSlides(app: App): boolean {
   return app.region() === 'navigator' || !!active?.closest('.beeson-edit-sorter .tile');
 }
 
-// the caret is put into the first empty heading of slide, or else at the start of its first block
+// the caret is put into the first empty heading of slide, or else at the start of its first text element
 function caretInto(slide: Element): void {
-  const block = slide.querySelector<HTMLElement>('h1[contenteditable="true"], h2[contenteditable="true"]') ?? slide.querySelector<HTMLElement>('[contenteditable="true"]');
-  if (!block) return;
-  block.focus({ preventScroll: true });
+  const textEl = slide.querySelector<HTMLElement>('h1[contenteditable="true"], h2[contenteditable="true"]') ?? slide.querySelector<HTMLElement>('[contenteditable="true"]');
+  if (!textEl) return;
+  textEl.focus({ preventScroll: true });
   const range = document.createRange();
-  range.selectNodeContents(block);
+  range.selectNodeContents(textEl);
   range.collapse(true);
   const sel = getSelection();
   sel?.removeAllRanges();

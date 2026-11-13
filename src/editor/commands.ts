@@ -233,7 +233,7 @@ export function installKeys(app: App): void {
     if (ev.isComposing || ev.keyCode === 229) return;
     if (dialogKey(app, ev)) return;
     const region = app.region();
-    // the handle of a block is outside the slide, and its keys are those of the canvas
+    // the handle of a text element is outside the slide, and its keys are those of the canvas
     const active = document.activeElement;
     const onBar = region === 'canvas' && active instanceof Element && active !== document.body && active !== document.documentElement && !active.closest('.reveal, .beeson-handle');
     const command = app.commands.forKey(ev, region, !onBar);

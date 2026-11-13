@@ -1,5 +1,5 @@
 // what a pointer press on the slide hits: the movable element under it, the band of 6 screen px
-// outside a block, i.e. inside its hover frame, which selects the block as a box, and the image or
+// outside a text element, i.e. inside its hover frame, which selects the text element as a box, and the image or
 // video inside a figure. the boxes of the slide are read here, in slide pixels from the upper left
 // of the slide, from the live scale and box of the slides of reveal.js
 
@@ -22,7 +22,7 @@ export const RESIZABLE = 'img, video, .qr, tycho-viewer, .shape';
 // Keynote do not turn a table, and a backdrop
 export const turnable = (el: Element): boolean => !el.hasAttribute('data-locked') && !el.closest('table') && !el.matches('.backdrop');
 
-// the text blocks whose width their grips set, as a text box of Keynote and PowerPoint, with the
+// the text elements whose width their grips set, as a text box of Keynote and PowerPoint, with the
 // height set by their wrapped text
 export const TEXT_SIZED = 'h1, h2, h3, p, ul, ol, div.math, .caption';
 // the pictures and shapes whose height the editor writes as well, which a resize stretches
@@ -30,7 +30,7 @@ export const STRETCHED = 'img, video, .shape';
 // a figure whose size is set by its layout. its grips resize the image, video, or QR code that it
 // holds, and a figure that does not hold one is drawn without grips
 export const CONTAINER = 'figure, .figure-box, .plate';
-// the band outside a block in which a press selects the block, in screen pixels
+// the band outside a text element in which a press selects the text element, in screen pixels
 export const BAND = 6;
 
 // the origin of the slide on the screen and the screen pixels per slide pixel
@@ -215,7 +215,7 @@ export function orientedBox(el: Element, scale: number, deg: number): Box {
 }
 
 // the ratio of width to height that a resize of el keeps: the picture of an image or a video, and
-// the box of a QR code. a tycho viewer keeps its height and a text block its wrapped text, hence
+// the box of a QR code. a tycho viewer keeps its height and a text element its wrapped text, hence
 // neither has one
 export function aspectOf(el: Element): number | null {
   if (el.matches('tycho-viewer') || isTextSized(el)) return null;
@@ -223,7 +223,7 @@ export function aspectOf(el: Element): number | null {
   return p.width && p.height ? p.width / p.height : null;
 }
 
-// whether el is a text block whose width is set by its grips
+// whether el is a text element whose width is set by its grips
 export const isTextSized = (el: Element): boolean => el.matches(TEXT_SIZED) && !el.matches(RESIZABLE);
 
 // the kind of a picture, by which the switch Constrain Proportions is kept in the browser
@@ -245,7 +245,7 @@ export function cssWidth(el: Element, w: number): number {
   return w - n(s.paddingLeft) - n(s.paddingRight) - n(s.borderLeftWidth) - n(s.borderRightWidth);
 }
 
-// the elements whose width a resize of el writes: el itself, a text block, or the images, videos,
+// the elements whose width a resize of el writes: el itself, a text element, or the images, videos,
 // and QR codes that a figure holds, e.g. the image of each mode. a figure that holds two shown
 // pictures, or none, is not resized
 export function sizedOf(el: Element): Element[] {
@@ -437,7 +437,7 @@ export function onCanvas(target: Element | null, app?: App, at?: { x: number; y:
   return at.x >= v.left && at.x < v.right && at.y >= v.top && at.y < v.bottom;
 }
 
-// the block whose band holds the point x, y in screen pixels, the nearest edge first
+// the text element whose band holds the point x, y in screen pixels, the nearest edge first
 export function bandAt(app: App, x: number, y: number): Element | null {
   let best: { el: Element; d: number } | null = null;
   for (const el of movablesOf(app)) {

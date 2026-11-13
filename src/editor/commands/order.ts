@@ -281,7 +281,7 @@ function solve(facts: Fact[], path: Path, options: Choice[][]): { cost: number; 
 
 // whether a child of el with a z-index under 0 is drawn over the ground of el, i.e. whether el
 // makes a stacking context, as a slide does. elsewhere, e.g. in the text column of a split slide or the
-// block of a title slide, the child is drawn under its parent, hidden from a click
+// title text of a title slide, the child is drawn under its parent, hidden from a click
 function stacks(el: Element): boolean {
   const s = getComputedStyle(el);
   return (s.position !== 'static' && s.zIndex !== 'auto') || s.transform !== 'none' || s.translate !== 'none' || s.rotate !== 'none' || s.scale !== 'none' || Number(s.opacity) < 1 || s.isolation === 'isolate' || s.filter !== 'none';
@@ -591,13 +591,13 @@ function regroup(app: App): void {
   app.selection.set('elements', u.els);
 }
 
-// the elements of a lock or an unlock. a caret or a range in the text of a locked block unlocks
-// the block, since a click into the text of a locked block puts the caret there
+// the elements of a lock or an unlock. a caret or a range in the text of a locked text element
+// unlocks it, since a click into the text of a locked text element puts the caret there
 function lockTargets(app: App, on: boolean): Element[] {
   const els = objectEls(app);
   if (on || app.selection.kind !== 'text') return els;
-  const blocks = app.selection.items.map((el) => el.closest('[data-locked]')).filter((el): el is Element => !!el);
-  return [...new Set([...els, ...blocks])];
+  const locked = app.selection.items.map((el) => el.closest('[data-locked]')).filter((el): el is Element => !!el);
+  return [...new Set([...els, ...locked])];
 }
 
 function setLock(app: App, on: boolean): void {
@@ -828,7 +828,7 @@ export function commands(app: App): Command[] {
   return list;
 }
 
-// the commands that change the elements of the selection or the text of a block of it, which a
+// the commands that change the elements of the selection or the text of a text element of it, which a
 // lock turns off, as Keynote does until a locked object is unlocked. Copy, Duplicate, and the
 // commands that select or show the selection are kept, and so are Lock and Unlock
 const CHANGES = new RegExp([
@@ -864,7 +864,7 @@ export function install(app: App): void {
   // Delete skips a locked element, hence it is turned off only when every selected element is locked
   app.commands.veto((a, c) => c.id === 'element.delete' && !inField(a, c.id) && a.selection.kind !== 'text' && a.selection.elements().length > 0 && a.selection.elements().every((el) => !!el.closest('[data-locked]')));
   // typing, a drop, and the keys that delete or break a line do not go through a command, hence
-  // they are cancelled before the browser changes the text of a locked block
+  // they are cancelled before the browser changes the text of a locked text element
   document.addEventListener('beforeinput', (ev) => {
     if (ev.target instanceof Element && ev.target.closest('.reveal .slides [data-locked]')) ev.preventDefault();
   }, true);

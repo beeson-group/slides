@@ -350,7 +350,7 @@ export class Presenter {
   private readonly endMark = make('div', 'end-mark', 'End of the show');
   // the element of each part, the overlay of its frames while the display is customized, and the
   // drag of a frame or of its corner, with the layout that it changes
-  private readonly blocks: Record<string, HTMLElement> = {};
+  private readonly regions: Record<string, HTMLElement> = {};
   private readonly layout = make('div', 'layout');
   private readonly frames: Record<string, HTMLElement> = {};
   private press: { id: string; resize: boolean; x: number; y: number; from: Spot; box: { width: number; height: number }; layout: Layout } | null = null;
@@ -475,7 +475,7 @@ export class Presenter {
     dialog.append(h3, said, buttons);
     summary.append(dialog);
 
-    Object.assign(this.blocks, { current: colLeft, next: upcoming, notes, clock, timer: middle });
+    Object.assign(this.regions, { current: colLeft, next: upcoming, notes, clock, timer: middle });
     this.layout.hidden = true;
     for (const [id, text] of PARTS) {
       const frame = make('div', 'frame');
@@ -690,7 +690,7 @@ export class Presenter {
     for (const [id] of PARTS) {
       const s = layout ? layout[id] ?? SPOTS[id] : null;
       const text = TEXTS.includes(id);
-      Object.assign(this.blocks[id].style, {
+      Object.assign(this.regions[id].style, {
         left: s ? `${s.x * 100}%` : '',
         top: s ? `${s.y * 100}%` : '',
         width: s?.w !== undefined && !text ? `${s.w * 100}%` : '',
@@ -712,7 +712,7 @@ export class Presenter {
     const d = this.el.getBoundingClientRect();
     const out: Layout = { ...SPOTS };
     for (const [id] of PARTS) {
-      const el = this.blocks[id];
+      const el = this.regions[id];
       if (!seen(el)) continue;
       const r = el.getBoundingClientRect();
       const s: Spot = { x: (r.left - d.left) / d.width, y: (r.top - d.top) / d.height };
@@ -729,9 +729,9 @@ export class Presenter {
     const d = this.el.getBoundingClientRect();
     for (const [id] of PARTS) {
       const frame = this.frames[id];
-      frame.hidden = !seen(this.blocks[id]);
+      frame.hidden = !seen(this.regions[id]);
       if (frame.hidden) continue;
-      const r = this.blocks[id].getBoundingClientRect();
+      const r = this.regions[id].getBoundingClientRect();
       Object.assign(frame.style, { left: `${r.left - d.left}px`, top: `${r.top - d.top}px`, width: `${r.width}px`, height: `${r.height}px` });
     }
   }
@@ -747,7 +747,7 @@ export class Presenter {
     const layout = this.measured();
     this.applyLayout(layout);
     const d = this.el.getBoundingClientRect();
-    const r = this.blocks[id].getBoundingClientRect();
+    const r = this.regions[id].getBoundingClientRect();
     this.press = { id, resize: !!target.closest('.grip'), x: ev.clientX, y: ev.clientY, from: { ...layout[id] }, box: { width: r.width / d.width, height: r.height / d.height }, layout };
     this.layout.setPointerCapture(ev.pointerId);
   }

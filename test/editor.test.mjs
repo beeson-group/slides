@@ -73,7 +73,7 @@ test('every block of the demo deck is paired, and a save without an edit is byte
   const page = await editorPage(browser);
   const status = await page.evaluate(openDeck);
   assert.deepEqual(status.problems, []);
-  assert.ok(status.blocks > 30, `${status.blocks} blocks`);
+  assert.ok(status.texts > 30, `${status.texts} texts`);
   assert.equal(status.sections, (deckText.match(/<section/g) ?? []).length);
   assert.equal(await page.evaluate('window.BeesonEditor.render()'), deckText);
   // the same file with Windows line endings is written back with them
@@ -600,7 +600,7 @@ test('Save as writes a chosen file, autosave saves after a pause, and unsaved ed
     await page.goto(url);
     await page.waitFor(deckSettled);
     await page.waitFor(ready);
-    await page.waitFor('window.BeesonEditor.status().blocks > 0');
+    await page.waitFor('window.BeesonEditor.status().texts > 0');
   };
   // the guard against leaving with unsaved changes would hold the navigation of the test
   const leave = () => page.evaluate(`window.addEventListener('beforeunload', (e) => e.stopImmediatePropagation(), true)`);
@@ -650,7 +650,7 @@ test('Save as writes a chosen file, autosave saves after a pause, and unsaved ed
   assert.equal((await status()).recover, true);
   await page.evaluate(`(async () => { window.__before = true; const root = await navigator.storage.getDirectory(); window.BeesonEditor.attach(await root.getFileHandle('restored.html', { create: true })); })()`);
   await page.evaluate(`[...document.querySelectorAll('.beeson-edit-dialog.recover button')].find((b) => b.textContent === 'Restore and save').click()`);
-  await until(page, '!window.__before && !!window.BeesonEditor && window.BeesonEditor.status().blocks > 0');
+  await until(page, '!window.__before && !!window.BeesonEditor && window.BeesonEditor.status().texts > 0');
   assert.equal(await file('restored.html'), replaced(`<h2>${h2}</h2>`, '<h2>Drafted twice</h2>'));
   s = await status();
   assert.deepEqual([s.recover, s.draft, s.dirty], [false, false, false]);
@@ -859,7 +859,7 @@ test('Esc leaves a text and selects its block for the arrow keys, Tab reaches a 
   assert.equal(await page.evaluate(`document.querySelector('.reveal section.present p').style.translate`), '1px 10px');
   // Enter on the handle, which Tab reaches, puts the block back
   await page.evaluate(`document.querySelector('.beeson-handle').focus()`);
-  assert.deepEqual(await page.evaluate(`(() => { const h = document.querySelector('.beeson-handle'); return { focused: document.activeElement === h, role: h.getAttribute('role'), label: h.getAttribute('aria-label') }; })()`), { focused: true, role: 'button', label: 'Move the block: the arrow keys nudge it, Enter puts it back' });
+  assert.deepEqual(await page.evaluate(`(() => { const h = document.querySelector('.beeson-handle'); return { focused: document.activeElement === h, role: h.getAttribute('role'), label: h.getAttribute('aria-label') }; })()`), { focused: true, role: 'button', label: 'Move the text element: the arrow keys nudge it, Enter puts it back' });
   await page.evaluate(`document.querySelector('.beeson-handle').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }))`);
   assert.equal(await page.evaluate(`document.querySelector('.reveal section.present p').style.translate`), '');
   await key('Escape');

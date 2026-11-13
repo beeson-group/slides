@@ -34,7 +34,7 @@ const steps = (from: number, to: number, edges: number[]) => {
 // the texts whose words a new table is kept off
 const WORDS = 'h1, h2, h3, h4, p, ul, ol, dl, blockquote, div.math';
 
-// the space that el takes by its words: the box of the text of a block, also of one moved by a
+// the space that el takes by its words: the box of the text of a text element, also of one moved by a
 // translate, whose box is as wide as its column, or the box of its prompt, and else takenBox
 export const wordBox = (app: App, el: Element): Box | null =>
   !el.getClientRects().length ? null : el.matches(WORDS) ? inkBox(app, el) ?? promptBox(app, el) : takenBox(app, el);
@@ -84,7 +84,7 @@ export function drawnCells(app: App, backdrop: Element): Box[] {
 }
 
 // whether el is a new text box of a title or closing slide, a child of the section outside the
-// block, whose words grow into its frame, hence it takes the space of its frame and not of its words
+// text element, whose words grow into its frame, hence it takes the space of its frame and not of its words
 export const framed = (el: Element) => el.matches(WORDS) && el.getClientRects().length > 0 && !!el.parentElement?.matches('section.title, section.closing');
 
 // the box of el, by its words with words
@@ -258,7 +258,7 @@ export function placeNew(app: App, el: Element, picture?: HTMLElement): void {
 // the plate of a figure slide is in the flow and as large as the slide, hence an element with an
 // offset that is written beside it moves when the plate is taken off the slide. keepBeside measures
 // these elements before the removal of outer, and through move, the function that it returns gives
-// each of them the offset that keeps its drawn place. on another slide, a plate is a block of the
+// each of them the offset that keeps its drawn place. on another slide, a plate is an element of the
 // text column, and the elements after it move up with the column
 export function keepBeside(app: App, outer: Element[]): (move: (el: Element, translate: { x: number; y: number }) => void) => void {
   return keepPlaces(app, outer.filter((el) => el.matches('section.figure .plate')), outer);
@@ -267,7 +267,7 @@ export function keepBeside(app: App, outer: Element[]): (move: (el: Element, tra
 // the offset in slide px of a new text box el of a title or closing slide, a child of the section
 // drawn at its top left, with the width in px that it is drawn at when it is drawn smaller. the
 // place is the free one inside the margins nearest to the center of the slide, off the words of
-// the block, the other elements, the chrome, and the lockup drawn by the theme, with room, and off
+// the text element, the other elements, the chrome, and the lockup drawn by the theme, with room, and off
 // the drawn cells of the backdrop while such a place exists, with room under it for three lines.
 // the box is drawn as small as 0.35 of its width before it lies over the drawing, and it is put at
 // the center when every place covers words

@@ -1,6 +1,6 @@
 // the Format tab of the inspector, whose panes follow the selection as in the Format inspector of
-// Keynote: the Slide pane with nothing selected, Text and Arrange for a text or a block, Image,
-// Video, or QR with Arrange for a picture, Text and Arrange for several text blocks, and Arrange
+// Keynote: the Slide pane with nothing selected, Text and Arrange for a text or a text element, Image,
+// Video, or QR with Arrange for a picture, Text and Arrange for several text elements, and Arrange
 // alone for a figure around an image or a video, for another element, or for several others.
 // with more than one pane, the panes are tabs of a segmented control, and the tab chosen last is
 // kept for the next selection that has it. the panes are built again only when the selection or
@@ -32,8 +32,8 @@ import { lockedSelection } from '../commands/order.ts';
 export type PaneKind = 'slide' | 'table' | 'text' | 'image' | 'video' | 'qr' | 'formula' | 'code' | 'surface' | 'line' | 'shape' | 'backdrop' | 'arrange';
 const TAB_NAMES: Record<PaneKind, string> = { slide: 'Slide', table: 'Table', text: 'Text', image: 'Image', video: 'Video', qr: 'QR Code', formula: 'Formula', code: 'Code', surface: 'Surface', line: 'Line', shape: 'Shape', backdrop: 'Backdrop', arrange: 'Arrange' };
 const isCode = (el: Element | undefined) => !!el?.closest('pre')?.querySelector(':scope > code');
-// a block of words, which the Text pane formats together with others, as text boxes in Keynote
-const TEXT_BLOCK = 'h1, h2, h3, p, ul, ol, div.foot';
+// a text element with words, which the Text pane formats together with others, as text boxes in Keynote
+const TEXT_ELEMENT = 'h1, h2, h3, p, ul, ol, div.foot';
 
 // the panes of the selection, and the elements that tell one selection from another
 function viewOf(app: App): { tabs: PaneKind[]; items: readonly Element[] } {
@@ -45,7 +45,7 @@ function viewOf(app: App): { tabs: PaneKind[]; items: readonly Element[] } {
   if (!els.length) return { tabs: ['slide'], items: [app.current()].filter((s): s is Element => !!s) };
   if (selectedLines(app).length === els.length) return { tabs: ['line', 'arrange'], items: els };
   if (selectedShapes(app).length) return { tabs: els.some(hasText) ? ['shape', 'text', 'arrange'] : ['shape', 'arrange'], items: els };
-  if (els.length > 1) return { tabs: els.every((el) => el.matches(TEXT_BLOCK) && hasText(el)) ? ['text', 'arrange'] : ['arrange'], items: els };
+  if (els.length > 1) return { tabs: els.every((el) => el.matches(TEXT_ELEMENT) && hasText(el)) ? ['text', 'arrange'] : ['arrange'], items: els };
   const el = els[0];
   if (el.localName === 'table') return { tabs: ['table', 'arrange'], items: els };
   // a backdrop is placed by the layout of its slide, hence without the Arrange pane
@@ -175,7 +175,7 @@ export function install(app: App): void {
   installAlign(app);
   installFigure(app);
   for (const c of slideCommands()) app.commands.define(c);
-  // the states of the Text pane follow the range in a block, which moves without a refresh of app
+  // the states of the Text pane follow the range in a text element, which moves without a refresh of app
   let pending = false;
   document.addEventListener('selectionchange', () => {
     if (pending || !shown?.root.isConnected) return;

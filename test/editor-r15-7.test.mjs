@@ -103,7 +103,7 @@ const state = (page) => page.evaluate(`(() => {
   const a = document.activeElement;
   return {
     slides: document.querySelectorAll('.reveal .slides > section').length,
-    blocks: Reveal.getCurrentSlide().children.length,
+    children: Reveal.getCurrentSlide().children.length,
     selected: window.BeesonEditor.selection().map((el) => el.tagName.toLowerCase()),
     focus: a === document.body ? 'body' : a.tagName.toLowerCase() + (a.isContentEditable ? ' editable' : ''),
     words: getSelection().toString(),
@@ -180,11 +180,11 @@ for (const platform of PLATFORMS) {
     await caret();
     await press(page, 'Mod+Shift+A');
     await settle(page);
-    assert.deepEqual(await state(page), { slides: 13, blocks: 7, selected: [], focus: 'body', words: '' }, 'Mod+Shift+A leaves the text with nothing selected, as Edit > Deselect does');
+    assert.deepEqual(await state(page), { slides: 13, children: 7, selected: [], focus: 'body', words: '' }, 'Mod+Shift+A leaves the text with nothing selected, as Edit > Deselect does');
     assert.equal(await prevented(page, 'a'), true);
     await caret();
     await choose(page, 'Edit', 'Deselect');
-    assert.deepEqual(await state(page), { slides: 13, blocks: 7, selected: [], focus: 'body', words: '' });
+    assert.deepEqual(await state(page), { slides: 13, children: 7, selected: [], focus: 'body', words: '' });
     // Esc in a text still selects its block
     await caret();
     await press(page, 'Escape');
@@ -220,7 +220,7 @@ for (const platform of PLATFORMS) {
     await watchKeys(page);
     await newFormula(page);
     const inserted = await render(page);
-    assert.deepEqual(await state(page), { slides: 13, blocks: 7, selected: ['div'], focus: 'div editable', words: '' });
+    assert.deepEqual(await state(page), { slides: 13, children: 7, selected: ['div'], focus: 'div editable', words: '' });
     assert.deepEqual(await itemsIn(page, 'Edit', ['Duplicate', 'Deselect', 'Delete']), {
       Duplicate: { keys: K.duplicate, dimmed: false },
       Deselect: { keys: K.deselect, dimmed: false },

@@ -142,12 +142,12 @@ async function checkEditor() {
   const text = readFileSync(options.deck, 'utf8');
   const opened = await page.evaluate(`window.BeesonEditor.open(${JSON.stringify(text)})`);
   for (const problem of opened.problems) failures.push(`editor: slide ${problem.slide}, ${problem.tag}: ${problem.reason}`);
-  if (opened.blocks && (await page.evaluate('window.BeesonEditor.render()')) !== text) {
+  if (opened.texts && (await page.evaluate('window.BeesonEditor.render()')) !== text) {
     failures.push('editor: the deck written back without an edit differs from the file');
   }
   // a save writes the file in place with the file pickers of Chrome and Edge, and elsewhere it is
   // a download of the file
-  console.log(`editor: ${opened.blocks} texts on ${opened.sections} slides, saved ${opened.supported ? 'in place' : 'as a download'}`);
+  console.log(`editor: ${opened.texts} texts on ${opened.sections} slides, saved ${opened.supported ? 'in place' : 'as a download'}`);
   for (const error of [...page.errors, ...(await page.evaluate(deckProblems))]) failures.push(`editor: ${error}`);
   await page.close();
 }

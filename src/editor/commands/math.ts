@@ -17,8 +17,8 @@ import { openContextMenu } from '../ui/menu.ts';
 export type Tone = 'accent' | 'violet' | 'blue' | 'red';
 export const TONES: [Tone, string][] = [['accent', 'Orange'], ['violet', 'Violet'], ['blue', 'Blue'], ['red', 'Red']];
 
-// the inline formula focused last in a text, by its block and its place among the formulas of the
-// block, since a formula is replaced by a new container when its block is typeset again
+// the inline formula focused last in a text, by its text element and its place among the formulas of the
+// text element, since a formula is replaced by a new container when its text element is typeset again
 let focused: { host: Element; index: number } | null = null;
 // the formula of the context menu that is open, which Edit Formula… of this menu edits
 let pointed: Element | null = null;
@@ -91,10 +91,10 @@ export function colorSteps(app: App, container: Element): ColorStep[] {
     const d = describe(els[0], (el) => mathLookup()(el)?.tex ?? null);
     out.push({ step: k, label: `Step ${k + 1}: ${d.kind}, ${d.text}`, els });
   });
-  const block = displayOf(container) ?? container.closest(HOST);
+  const textEl = displayOf(container) ?? container.closest(HOST);
   m.els.forEach((el, i) => {
     if (m.locked[i] || stepAt(m.plan, i) >= 0 || el.contains(container) || el.matches('h1, h2, h3, .foot')) return;
-    if (block && !(block.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
+    if (textEl && !(textEl.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING)) return;
     const d = describe(el, (e) => mathLookup()(e)?.tex ?? null);
     out.push({ step: null, label: `New Step: ${d.kind}, ${d.text}`, with: el });
   });

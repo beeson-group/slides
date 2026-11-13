@@ -12,7 +12,7 @@ import { hasRange, inText, keepCopies } from './clipboard.ts';
 import { keepBeside } from './place.ts';
 import { docOf, onSlides } from './slide.ts';
 import { clearRange, selectedRange } from './table.ts';
-import { removeJoining } from '../text/blocks.ts';
+import { removeJoining } from '../text/elements.ts';
 
 // the selected elements that are in the file, with the figure of a picture selected inside it, and
 // without the slides

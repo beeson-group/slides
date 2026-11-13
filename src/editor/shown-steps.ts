@@ -23,7 +23,7 @@ export function setIndexReader(read: (el: Element) => string | null): void {
 }
 export const fragmentIndex = (el: Element): string | null => readIndex(el);
 
-// the index of each element that the editor put into a block from a text, as the text gives it,
+// the index of each element that the editor put into a text element from a text, as the text gives it,
 // i.e. in the numbers of the file. reveal.js numbers it again with the page, and the element does
 // not have a tag in the file, hence this index is the one written for it
 const placed = new WeakMap<Element, string>();

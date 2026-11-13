@@ -272,7 +272,7 @@ const boxOf = (r: { left: number; top: number; right: number; bottom: number }):
 const TEXT = 'h1, h2, h3, h4, p, ul, ol, dl, table, pre, blockquote, div.math, figcaption, .caption, .foot';
 
 // the boxes of the lines of the text and of the formulas of el, on the screen. the empty part of
-// a block, e.g. the right of a short line, is left out, since a popover may be put over it
+// a text element, e.g. the right of a short line, is left out, since a popover may be put over it
 export function inkBoxes(el: Element): Box[] {
   const out: Box[] = [];
   const range = document.createRange();
@@ -293,7 +293,7 @@ export function inkBoxes(el: Element): Box[] {
   return out;
 }
 
-// the lines of the text of the blocks of slide, which a popover is kept off
+// the lines of the text of the text elements of slide, which a popover is kept off
 export function slideInk(slide: Element | null): Box[] {
   if (!slide) return [];
   return [...slide.querySelectorAll(TEXT)].filter((el) => !el.parentElement?.closest(TEXT) && !el.closest('aside.notes')).flatMap(inkBoxes);
@@ -327,7 +327,7 @@ export function placeBeside(pop: HTMLElement, target: Box | DOMRectReadOnly, opt
   return p.side;
 }
 
-// the popover of the editor put by the rule of every popover: beside the block of target, which
+// the popover of the editor put by the rule of every popover: beside the text element of target, which
 // is kept clear also where it is empty, since a text typed there grows into it, off the lines of
 // the text of the current slide, and inside the canvas. the boxes are read once, since a target
 // may be typeset again while the popover is open. the function returned stops it

@@ -559,7 +559,7 @@ export function install(app: App): void {
       if (sel.has(el)) click = () => sel.toggle(el);
       else sel.add(el);
     } else if (sel.elements().includes(el)) {
-      // the block of a caret is in sel.has() too, but it is not selected as an object
+      // the text element of a caret is in sel.has() too, but it is not selected as an object
       const several = sel.elements().length > 1;
       const media = locked(el) ? null : mediaIn(el, target);
       const id = groupOf(el);
@@ -649,8 +649,8 @@ export function install(app: App): void {
       if (!el || !sized.length || locked(el)) return;
       ev.preventDefault();
       ev.stopPropagation();
-      // a grip of the block of the caret, which is framed while no object is selected, leaves the text
-      // and selects the block, as Esc does
+      // a grip of the text element of the caret, which is framed while no object is selected, leaves the text
+      // and selects the text element, as Esc does
       if (!sel.elements().length) {
         leaveText();
         sel.set('elements', [el]);
@@ -697,11 +697,11 @@ export function install(app: App): void {
     const el = pickOf(app, target);
     const host = app.hostOf(target);
     if (el && host) {
-      // a click into a text puts the caret there, and with Shift or the command modifier the block
-      // is added to the selection as a box. a block of a group is selected with its group at the
+      // a click into a text puts the caret there, and with Shift or the command modifier the text element
+      // is added to the selection as a box. a text element of a group is selected with its group at the
       // first click and by itself at the second, and only the third puts the caret in it, as in
       // Keynote and PowerPoint. a shape is selected at the first click on its words, as a group
-      // is, and inside an entered group, a block is selected at the first click
+      // is, and inside an entered group, a text element is selected at the first click
       const grouped = !!groupOf(el) || el.matches('.shape') || (scopeOf().length > 0 && within(el));
       // a press in the text that is edited puts the caret there or selects words
       const editing = host.contains(document.activeElement);
@@ -904,7 +904,7 @@ export function install(app: App): void {
       view.guides = snapped.guides;
       view.spacing = snapped.sizes;
     }
-    // the offset that puts the side of the frame across from the handle where it was. a text block
+    // the offset that puts the side of the frame across from the handle where it was. a text element
     // keeps its top, and its wrapped text sets its height
     const frame = framed();
     const box = anchored(p.base, h, frame.width, frame.height, o.center);
@@ -1004,7 +1004,7 @@ export function install(app: App): void {
         if ((p.from.get(s)?.height ?? null) !== null) (s as HTMLElement).style.height = `${Math.round(m.base.height * k)}px`;
       }
       const seen = toSlide(f, orientedBox(m.pic, f.scale, m.deg));
-      // a text block keeps the place of its top, under its wrapped text
+      // a text element keeps the place of its top, under its wrapped text
       const text = isTextSized(m.pic);
       const cx = ax + (m.base.left + m.base.width / 2 - ax) * k;
       const y0 = text ? m.base.top : m.base.top + m.base.height / 2;
@@ -1018,7 +1018,7 @@ export function install(app: App): void {
     view.guides = [];
     view.spacing = [];
     // the size that the members reach with the captions under their pictures, as W and H of the
-    // Arrange pane give it, since the layout sets the height of a figure box and a text block, which can
+    // Arrange pane give it, since the layout sets the height of a figure box and a text element, which can
     // differ from box
     const reached = toSlide(f, groupFrame(p.els, deg));
     view.readout = { text: wh(reached.width, reached.height), x: ev.clientX + 14, y: ev.clientY + 18, at: 'pointer' };
@@ -1046,7 +1046,7 @@ export function install(app: App): void {
       const from = p.from.get(m.el) as Place;
       if (m.group) {
         // a member of a group is scaled about the side or the corner of the frame of its group across
-        // from handle, as a grip of the group scales it, and a text block keeps the place of its top
+        // from handle, as a grip of the group scales it, and a text element keeps the place of its top
         const b = m.group.box;
         const { x: ax, y: ay } = turned(b, m.group.deg, center || !sx ? b.left + b.width / 2 : sx > 0 ? b.left : b.left + b.width, center || !sy ? b.top + b.height / 2 : sy > 0 ? b.top : b.top + b.height);
         const text = isTextSized(m.pic);
@@ -1163,7 +1163,7 @@ export function install(app: App): void {
     return ev.clientX >= r.left - 28 && ev.clientX <= r.right + 6 && ev.clientY >= r.top - 28 && ev.clientY <= r.bottom + 6;
   };
 
-  // the handle of a block puts it back at its place in the file with a double click or Enter
+  // the handle of a text element puts it back at its place in the file with a double click or Enter
   const reset = () => {
     const el = frames.current();
     if (!el) return;

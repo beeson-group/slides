@@ -1,6 +1,6 @@
 // Flip Horizontal and Flip Vertical of an image, in the Arrange menu, its context menu, and the
 // Arrange pane. a flip is the sign of the declaration scale, e.g. scale: -1 1, which keeps the zoom
-// of a mask of canvas/mask.ts. the picture is mirrored where it is. a video, a QR code, and a block
+// of a mask of canvas/mask.ts. the picture is mirrored where it is. a video, a QR code, and a text element
 // are not flipped. a shape drawn with an svg of src/shapes.ts is flipped by its class flip-x or
 // flip-y, and a shape of CSS, which a flip does not change, is not
 

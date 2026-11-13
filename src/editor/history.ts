@@ -1,8 +1,8 @@
-// one history of undo and redo for every change made in the editor: the typing in a block, a
+// one history of undo and redo for every change made in the editor: the typing in a text element, a
 // formula, a step, and a move, as in Keynote and PowerPoint, where ⌘Z undoes the last change of
-// any kind. the browser keeps a history of its own for each block that is typed into, hence the
-// keys are taken before it, and the typing is recorded here as the content of the block before
-// and after. the typing into one block within a short time is one entry. an undo or a redo asked
+// any kind. the browser keeps a history of its own for each text element that is typed into, hence the
+// keys are taken before it, and the typing is recorded here as the content of the text element before
+// and after. the typing into one text element within a short time is one entry. an undo or a redo asked
 // for while another one runs is queued, and the changes made in a transaction are one entry
 
 // els are the elements that the entry changes, and selects is the step at which a part of a
@@ -19,13 +19,13 @@ function caretAtEnd(host: Element): void {
 
 export type Entry = { label: string; undo(): Promise<void> | void; redo(): Promise<void> | void; els?: readonly Element[]; selects?: 'undo' | 'redo' };
 
-// the typing into a block is coalesced while the keystrokes are closer than this, in ms
+// the typing into a text element is coalesced while the keystrokes are closer than this, in ms
 const PAUSE = 1000;
 
 export class History {
   private done: Entry[] = [];
   private undone: Entry[] = [];
-  // the typing in progress: the block, its content before and after, and the time of the last key
+  // the typing in progress: the text element, its content before and after, and the time of the last key
   private typing: { host: Element; state: { before: string; after: string }; entry: Entry; at: number } | null = null;
   private busy = false;
   private still = false;
@@ -35,7 +35,7 @@ export class History {
   private open: Entry[] | null = null;
   // resolved at the end of the open transaction
   private closed: Promise<void> = Promise.resolve();
-  // the content of each block as it was last seen, for an input that is not announced before it
+  // the content of each text element as it was last seen, for an input that is not announced before it
   // happens, e.g. a replacement from the spelling menu or a script
   private readonly known = new WeakMap<Element, string>();
   // the entries of each transaction, for an amend of it
@@ -287,7 +287,7 @@ export class History {
     this.onChange();
   }
 
-  // the typing that follows is a new entry, e.g. after the block was left
+  // the typing that follows is a new entry, e.g. after the text element was left
   break(): void {
     this.typing = null;
   }

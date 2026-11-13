@@ -3,7 +3,7 @@
 // with Flip Horizontal and Flip Vertical for an image, then the order of the elements, Group and
 // Ungroup, Lock and Unlock, and Faint. X and Y are the upper left corner of an element on the
 // slide, as in Keynote and in the readout of a move, and W and H its size, in slide pixels. W and H
-// are set on an image, a video, a QR code, and a tycho viewer, and W alone on a text block, whose
+// are set on an image, a video, a QR code, and a tycho viewer, and W alone on a text element, whose
 // height follows its wrapped text. the size of every other element is set by its layout
 
 import type { App } from '../app.ts';

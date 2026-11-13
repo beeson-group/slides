@@ -1,6 +1,6 @@
 // the speaker notes of the current slide, in a pane under the canvas as in PowerPoint and Keynote,
 // in the font of the chrome and at a zoom of their own. the text that is edited is the aside.notes
-// of the slide, so that the typing, the history, find, and the save treat it as any other block.
+// of the slide, so that the typing, the history, find, and the save treat it as any other text element.
 // lay() sets the aside over the box of the pane, in the slide px of its section, at every zoom and
 // scroll of the canvas, and its font is divided by the scale of the slide, hence its text keeps
 // its size on the screen. while the notes are shown, a slide without notes gets an empty aside to
@@ -150,7 +150,7 @@ export function install(app: App): void {
 
   function ensure(): HTMLElement | null {
     const slide = app.current();
-    if (!slide || !app.pairing?.blocks.length || !shown()) return null;
+    if (!slide || !app.pairing?.texts.length || !shown()) return null;
     let aside = slide.querySelector<HTMLElement>(':scope > aside.notes');
     if (!aside) {
       aside = make('aside', 'notes');

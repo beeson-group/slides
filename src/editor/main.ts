@@ -45,7 +45,7 @@ import { install as installNavigateCommands } from './commands/navigate.ts';
 import { install as installArrangeCommands } from './commands/arrange.ts';
 import { install as installSlideCommands } from './commands/slide.ts';
 import { install as installDeleteCommands } from './commands/delete.ts';
-import { install as installBlocks } from './text/blocks.ts';
+import { install as installTextElements } from './text/elements.ts';
 import { install as installLink } from './text/link.ts';
 import { install as installTextCommands } from './commands/text.ts';
 import { install as installSubstitute } from './text/substitute.ts';
@@ -159,7 +159,7 @@ installNavigator(app);
 installThumbs(app);
 installSlideCommands(app);
 installDeleteCommands(app);
-installBlocks(app);
+installTextElements(app);
 installLink(app);
 installTextCommands(app);
 installSubstitute(app);
@@ -240,7 +240,7 @@ function status() {
     supported: canWrite(),
     dirty: app.dirty,
     file: app.handle?.name ?? null,
-    blocks: app.pairing?.blocks.length ?? 0,
+    texts: app.pairing?.texts.length ?? 0,
     sections: app.pairing?.sections.length ?? 0,
     // the elements whose step or place was changed since the last save
     tags: app.tagEdits.size,
