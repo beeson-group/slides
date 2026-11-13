@@ -138,10 +138,11 @@ test('every animation of a slide plays on after a flip of the mode, with the key
       for (const [how, flip] of Object.entries(flips)) {
         const theme = await page.evaluate('Beeson.theme.get()');
         assert.ok(await page.evaluate(flip), `${deck}, slide ${i + 1}: the flip with the ${how} is a view transition`);
-        // the flip takes 450 ms, and an animation is read again after its end. a slow runner may hold a
-        // video for a moment, hence the animations are read until each has advanced, for up to 5 s
-        await sleep(1000);
-        assert.notEqual(await page.evaluate('Beeson.theme.get()'), theme);
+        // the flip takes 450 ms, but the mode is set only once the old view is captured, over a second
+        // later on a slow runner. the end of the flip is thus waited for, and an animation is read
+        // again after it. a slow runner may hold a video for a moment, hence the animations are read
+        // until each has advanced, for up to 5 s
+        await page.waitFor(`Beeson.theme.get() !== '${theme}' && !document.documentElement.matches('.to-dark, .to-light')`);
         let after = await page.evaluate(animations);
         for (let wait = 0; wait < 5000 && after.some((a, k) => !a.ended && a.at === before[k]?.at); wait += 250) {
           await sleep(250);
