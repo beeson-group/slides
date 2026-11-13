@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Recordings at their edges</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+</head>
+<body>
+<!-- the traced backdrops of test/record.test.mjs at the edges of the recorder: a backdrop that is not
+     drawn in the dark mode, and a trace over a filled shape on a slide whose plot gets a tick of the
+     scrubber at a step, hence the pages of its two steps differ by an element -->
+<div class="reveal">
+  <div class="slides">
+    <section class="title">
+      <div class="backdrop for-light" data-scene="tubes" data-cx="0.42" data-cy="0" data-half="0.6" data-duration="1"></div>
+      <div class="block">
+        <h1>A backdrop that is not drawn</h1>
+      </div>
+    </section>
+    <section>
+      <h2>A plot stepped over a trace</h2>
+      <div class="shape tone-violet" style="translate: 1000px 560px; width: 880px; height: 480px"></div>
+      <div class="backdrop" data-scene="nest" data-cx="0.97" data-cy="0" data-half="0.5" data-duration="1" data-live></div>
+      <div class="plot" data-plot="data" style="width: 900px; height: 500px"></div>
+      <span class="fragment" data-plot-show="right"></span>
+      <script type="application/json" id="data">{
+        "parameter": { "label": "$t$", "digits": 2 },
+        "duration": 1,
+        "panels": [
+          { "id": "left", "x": { "range": [0, 1], "ticks": [0, 1] }, "y": { "range": [0, 1], "ticks": [0, 1] } },
+          { "id": "right", "x": { "range": [0, 1] }, "y": { "range": [-1, 1] } }
+        ],
+        "marks": [
+          { "id": "dot", "panel": "left", "kind": "points" },
+          { "id": "event", "panel": "right", "kind": "events" }
+        ],
+        "tabs": [
+          { "name": "one", "values": [0, 0.5, 1], "data": { "dot": [[0, 0], [0.5, 0.5], [1, 1]], "event": [{ "frame": 1, "at": [0.5, 1], "text": "top" }] } }
+        ]
+      }</script>
+    </section>
+  </div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>
