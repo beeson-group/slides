@@ -194,6 +194,7 @@ export function escape(source: Source, text: string, keepNbsp: boolean): string 
 function serializeNew(source: Source, el: Element, math: MathLookup): string {
   const tag = el.localName;
   const attrs = [...el.attributes]
+    .filter((a) => !isRuntimeAttr(el, a.name))
     .map((a) => ({ name: a.name, value: a.name === 'data-fragment-index' ? (fragmentIndex(el) ?? a.value) : a.name === 'class' ? [...el.classList].filter((c) => !isRuntimeClass(c)).join(' ') : a.value }))
     .filter((a) => a.name !== 'class' || a.value)
     .map((a) => (a.value === '' ? ` ${a.name}` : ` ${a.name}="${a.value.replace(/&/g, '&amp;').replace(/"/g, '&quot;')}"`))
@@ -269,6 +270,15 @@ function serializeChildren(source: Source, s: SrcEl, el: Element, math: MathLook
 const RUNTIME_PREFIX = /^(beeson-|hl-|plot-)/;
 const RUNTIME_CLASSES = new Set(['visible', 'current-fragment', 'present', 'past', 'future', 'disabled', 'enabled', 'stack']);
 export const isRuntimeClass = (c: string): boolean => RUNTIME_PREFIX.test(c) || RUNTIME_CLASSES.has(c);
+// the attributes that the theme writes at run time on a theorem and on a citation, see
+// src/theorems.ts and src/citations.ts
+const RUNTIME_ATTRS: Record<string, string[]> = { p: ['data-head', 'data-style', 'data-missing'], cite: ['data-n', 'data-missing'] };
+const numbered = (el: Element): boolean => el.localName === 'cite' || el.matches('p.theorem');
+export const isRuntimeAttr = (el: Element, name: string): boolean => numbered(el) && RUNTIME_ATTRS[el.localName].includes(name);
+// these attributes taken off a copy of the page, whose HTML is then written as the file has it
+export function stripRuntime(root: ParentNode): void {
+  for (const el of root.querySelectorAll('cite, p.theorem')) for (const name of RUNTIME_ATTRS[el.localName]) el.removeAttribute(name);
+}
 // the declarations and the attributes of an element inside a block that are compared with the
 // file, i.e. those that the editor writes under the scope rule
 const LIVE_STYLE = ['translate', 'rotate', 'width', 'font-size', 'text-align'];

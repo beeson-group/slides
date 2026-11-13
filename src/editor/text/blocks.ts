@@ -14,7 +14,7 @@ import type { App } from '../app.ts';
 import { mathLookup } from '../math.ts';
 import { fileIndexes } from '../layers.ts';
 import { tokenize } from '../tokens.ts';
-import { isRuntimeClass } from '../render.ts';
+import { isRuntimeClass, stripRuntime } from '../render.ts';
 import { renderTag, stateOf, translateIn, type TagEdit } from '../tags.ts';
 import { textStyle } from '../model/templates.ts';
 import { injectStyle } from '../ui/dom.ts';
@@ -128,6 +128,7 @@ export function rangeTex(root: Element, range: Range): string {
   div.append(range.cloneContents());
   const indexed = '[data-fragment-index]';
   fileIndexes([...root.querySelectorAll(indexed)].filter((el) => range.intersectsNode(el)), [...div.querySelectorAll(indexed)]);
+  stripRuntime(div);
   const lookup = mathLookup();
   const outer = (m: Element) => !m.parentElement?.closest('mjx-container');
   const live = [...root.querySelectorAll('mjx-container')].filter((m) => outer(m) && range.intersectsNode(m));

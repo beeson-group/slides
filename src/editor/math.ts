@@ -2,6 +2,7 @@
 // and the typesetting of a host again after a formula in it was changed
 
 import { fileIndexes, notePlaced } from './layers.ts';
+import { stripRuntime } from './render.ts';
 
 export type MathInfo = { tex: string; open: string; close: string; display: boolean };
 export type MathLookup = (el: Element) => MathInfo | null;
@@ -104,6 +105,7 @@ function withTex(host: Element, replace?: ReadonlyMap<Element, string>, edit?: (
   const copy = host.cloneNode(true) as Element;
   const indexed = '[data-fragment-index]';
   fileIndexes([...host.querySelectorAll(indexed)], [...copy.querySelectorAll(indexed)]);
+  stripRuntime(copy);
   const lookup = mathLookup();
   const live = [...host.querySelectorAll('mjx-container')];
   const copies = [...copy.querySelectorAll('mjx-container')];

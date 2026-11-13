@@ -431,10 +431,12 @@ const Beeson = {
   remount: remountBackdrop,
   preview,
   fitWindow,
-  // called by the editor after the slides were added, removed, or reordered
+  // called by the editor after the slides were added, removed, or reordered, a tag was edited, or
+  // a text was put back, with the theorems and the citations numbered again
   refreshChrome: (): void => {
     refreshChrome();
     numberTheorems();
+    mountCitations();
   },
   version: __VERSION__,
 };

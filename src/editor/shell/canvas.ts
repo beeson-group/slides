@@ -79,6 +79,7 @@ html.beeson-editor .beeson-badges { clip-path: var(--ed-cell-clip, none) !import
 html.beeson-editor .reveal .progress, html.beeson-editor .reveal .scrub, html.beeson-editor .reveal .slide-number, html.beeson-editor .theme-switch { display: none !important; }
 html.beeson-editing .reveal .slides section .fragment { visibility: visible !important; opacity: 1 !important; transition: none !important; }
 html.beeson-editing .reveal .slides section .fragment.beeson-off { visibility: hidden !important; }
+html.beeson-editing .reveal .slides section > .refs[data-generated] { pointer-events: none; }
 `;
 
 const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));

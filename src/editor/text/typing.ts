@@ -319,6 +319,8 @@ export function install(app: App): void {
     if (host.matches('aside.notes') && !app.notes.shown()) app.notes.toggle();
     const before = host.textContent ?? '';
     await setContentWithTex(host, content);
+    // the content of the history is written without the heads and the numbers of the theme
+    (window as { Beeson?: { refreshChrome?(): void } }).Beeson?.refreshChrome?.();
     markMath(host);
     history.track(host);
     app.markDirty();

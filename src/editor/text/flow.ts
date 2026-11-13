@@ -7,7 +7,7 @@
 // whole span. a place is a block and a visible offset of blocks.ts in it
 
 import type { App } from '../app.ts';
-import { besideBlock, canIndent, canOutdent, canSplit, endOf, indent, offsetIn, outdent, pointAt, rangeOf, rangeTex, selectIn, split, type Target } from './blocks.ts';
+import { besideBlock, canIndent, canOutdent, canSplit, endOf, indent, offsetIn, outdent, pointAt, rangeOf, rangeTex, selectIn, split, textTarget, type Target } from './blocks.ts';
 import { injectStyle } from '../ui/dom.ts';
 
 export type Place = [Element, number];
@@ -381,6 +381,16 @@ export function install(app: App): void {
       ev.stopImmediatePropagation();
       ev.clipboardData?.setData('text/plain', spanTargets(app).map((t) => t.range.toString().trim()).join('\n'));
       if (kind === 'cut') void app.history.transact('Cut', () => removeSpan(app)).catch((e) => app.fail(e));
+    }, true);
+    // words of a theorem or with a citation are copied as the file has them, since the browser
+    // would copy the head of the theorem and the numbers of the citations that the theme writes
+    document.addEventListener(kind, (ev) => {
+      const t = span ? null : textTarget(app);
+      if (!t || t.range.collapsed || !(t.host.matches('p.theorem') || t.range.cloneContents().querySelector('cite'))) return;
+      ev.preventDefault();
+      ev.clipboardData?.setData('text/plain', t.range.toString());
+      ev.clipboardData?.setData('text/html', rangeTex(t.host, t.range));
+      if (kind === 'cut') document.execCommand('delete');
     }, true);
   }
 }
