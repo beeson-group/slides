@@ -61,6 +61,7 @@ A round is one run of the workflow `check` on a commit, and a flaky test is a te
 - Bound a time by the same time on a smaller case and not by a number of milliseconds, and measure a time over its bound again before the test fails.
 - Give a test a limit longer than the waits inside it added up. Keep one read of a page under a minute on a runner, or give the browser of the file a longer limit with `launch({ timeout })`.
 - Click again until the state is reached when the target may be moved between the read of its place and the click.
+- After a click that loads the page again, wait for the new page with `page.waitFor`. Catch the error Inspected target navigated or closed of the click, which is the answer of Chrome to a read that is in flight at the reload.
 - Find a slide of the demo deck by its content and not by its number, and assert that it is found.
 - Pass `drafts: true` to a page only in a test of the unsaved edits, which are offered on a card to the next page of the same test.
 
