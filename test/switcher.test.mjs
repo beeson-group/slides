@@ -235,7 +235,8 @@ test('a traced backdrop is drawn on under the old view of a flip, in both direct
   await page.goto(deckUrl('index.html', 'theme=dark'));
   await page.waitFor(deckSettled);
   const sleep = (ms) => new Promise((done) => setTimeout(done, ms));
-  const index = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('section.figure .backdrop[data-strands="demo/broucke-sample.js"]'))`);
+  const index = await page.evaluate(`[...document.querySelectorAll('.reveal .slides > section')].findIndex((s) => s.querySelector('.backdrop[data-strands="demo/broucke-sample.js"]'))`);
+  assert.ok(index > 0, 'the demo deck does not have a slide with the backdrop of demo/broucke-sample.js after its first slide');
   for (const to of ['light', 'dark']) {
     // the trace is begun again on the slide, and several strands are traced after 1.5 s
     await page.evaluate(`Reveal.slide(${index - 1})`);
