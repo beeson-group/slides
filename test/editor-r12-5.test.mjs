@@ -15,7 +15,7 @@ import { snapMove } from '../src/editor/canvas/snap.ts';
 const DECK = 'index.html';
 // the indexes of the figures slide and of the closing slide with its QR code in index.html
 const FIGURES = 4;
-const CLOSING = 12;
+const CLOSING = 14;
 const PLATFORMS = ['mac', 'other'];
 
 let browser;

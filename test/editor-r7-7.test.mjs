@@ -117,7 +117,7 @@ for (const platform of PLATFORMS) {
     const page = await load(t, platform, { deck: DECK, n: 4 });
     await exec(page, 'view.lightTable');
     await frames(page);
-    assert.deepEqual(await heads(page), ['Opening 1 slide', 'Chapter one 5 slides', 'Chapter two 7 slides']);
+    assert.deepEqual(await heads(page), ['Opening 1 slide', 'Chapter one 5 slides', 'Chapter two 9 slides']);
     // a click on a head selects the slides of its section, as in PowerPoint
     await click(page, await nameAt(page, 'Chapter one'));
     await frames(page);
@@ -134,10 +134,10 @@ for (const platform of PLATFORMS) {
     await page.waitFor(`document.querySelectorAll('.reveal .slides > section')[1].querySelector('h2')?.textContent === 'Chapter two'`);
     await frames(page);
     // the closing slide moves with Chapter two, hence Chapter one follows it as the appendix
-    assert.deepEqual(await heads(page), ['Opening 1 slide', 'Chapter two 7 slides', 'Appendix 5 slides']);
-    assert.deepEqual(await picked(page), [2, 3, 4, 5, 6, 7, 8]);
+    assert.deepEqual(await heads(page), ['Opening 1 slide', 'Chapter two 9 slides', 'Appendix 5 slides']);
+    assert.deepEqual(await picked(page), [2, 3, 4, 5, 6, 7, 8, 9, 10]);
     assert.equal(await undoLabel(page), 'Undo Move Section');
-    await roundTrip(page, reordered(page.source, [0, 6, 7, 8, 9, 10, 11, 12, 1, 2, 3, 4, 5]));
+    await roundTrip(page, reordered(page.source, [0, 6, 7, 8, 9, 10, 11, 12, 13, 14, 1, 2, 3, 4, 5]));
     // a drop where the section already is leaves the file and the history alone
     await frames(page);
     const before = await undoLabel(page);
@@ -172,7 +172,7 @@ for (const platform of PLATFORMS) {
     await press(page, 'Enter');
     await page.waitFor(`document.querySelectorAll('.reveal .slides > section')[1].querySelector('h2').textContent === 'Part one'`);
     await frames(page);
-    assert.deepEqual(await heads(page), ['Opening 1 slide', 'Part one 5 slides', 'Chapter two 7 slides']);
+    assert.deepEqual(await heads(page), ['Opening 1 slide', 'Part one 5 slides', 'Chapter two 9 slides']);
     assert.equal(await undoLabel(page), 'Undo Rename Section');
     await byteExact(page, [['<h2>Chapter one</h2>', '<h2>Part one</h2>']]);
     await roundTrip(page, await render(page));
@@ -206,7 +206,7 @@ for (const platform of PLATFORMS) {
     await press(page, 'ArrowDown');
     assert.equal(await page.evaluate(`document.activeElement.dataset.layout`), 'split');
     await press(page, 'Space');
-    await page.waitFor(`document.querySelectorAll('.reveal .slides > section').length === 14`);
+    await page.waitFor(`document.querySelectorAll('.reveal .slides > section').length === 16`);
     assert.equal(await page.evaluate(`document.querySelectorAll('.reveal .slides > section')[5].matches('.split')`), true);
     await roundTrip(page, await render(page));
     assert.deepEqual(errors(page), []);

@@ -435,7 +435,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await page.evaluate(SEG), ['fade']);
     assert.match(await page.evaluate(`document.querySelector('${segment('fade')}').title`), /next slide/);
     // the last slide is not left for another slide, hence it has no transition
-    await goTo(12);
+    await goTo(14);
     assert.deepEqual(await page.evaluate(SEG), [], 'the last slide shows a transition');
     assert.equal(await page.evaluate(`[...document.querySelectorAll('.beeson-edit-transition [data-command^="slide.transition."]')].every((b) => b.disabled)`), true);
     await roundTrip(page, 3);

@@ -70,7 +70,7 @@ const meets = (a, b) => a.top < b.bottom - 0.5 && b.top < a.bottom - 0.5 && a.le
 // texts of the block moved down by 48 px, and the box was held in its place over the last line
 for (const platform of PLATFORMS) {
   test(`the first key in a new text box of a title or a closing slide moves no text, and the box does not lie over a text (${platform})`, async (t) => {
-    for (const n of [0, 12]) {
+    for (const n of [0, 14]) {
       const page = await load(t, platform, n);
       await click(page, '.beeson-edit-top [data-command="insert.text"]');
       await wait(page, 200);

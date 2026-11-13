@@ -11,7 +11,7 @@ import { serve } from '../scripts/webdriver.mjs';
 import { press } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
-const LAST = 12;
+const LAST = 14;
 
 let browser;
 let server;

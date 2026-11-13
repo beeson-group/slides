@@ -173,18 +173,18 @@ for (const platform of PLATFORMS) {
     await press(page, 'Mod+D');
     await settle(page);
     assert.equal(await prevented(page, 'd'), true, 'the browser does not get Mod+D');
-    assert.equal((await state(page)).slides, 13, 'Mod+D in a text does not duplicate the slide');
+    assert.equal((await state(page)).slides, 15, 'Mod+D in a text does not duplicate the slide');
     assert.equal(await render(page), copied, 'Mod+D in a text does not duplicate the block of the caret');
     assert.equal(await undoLabel(page), 'Undo Duplicate');
     await checkEdit(page, `r15-7-duplicate-${platform}.html`);
     await caret();
     await press(page, 'Mod+Shift+A');
     await settle(page);
-    assert.deepEqual(await state(page), { slides: 13, blocks: 7, selected: [], focus: 'body', words: '' }, 'Mod+Shift+A leaves the text with nothing selected, as Edit > Deselect does');
+    assert.deepEqual(await state(page), { slides: 15, blocks: 7, selected: [], focus: 'body', words: '' }, 'Mod+Shift+A leaves the text with nothing selected, as Edit > Deselect does');
     assert.equal(await prevented(page, 'a'), true);
     await caret();
     await choose(page, 'Edit', 'Deselect');
-    assert.deepEqual(await state(page), { slides: 13, blocks: 7, selected: [], focus: 'body', words: '' });
+    assert.deepEqual(await state(page), { slides: 15, blocks: 7, selected: [], focus: 'body', words: '' });
     // Esc in a text still selects its block
     await caret();
     await press(page, 'Escape');
@@ -208,7 +208,7 @@ for (const platform of PLATFORMS) {
     await press(page, K.press);
     await settle(page);
     const s = await state(page);
-    assert.equal(s.slides, 13);
+    assert.equal(s.slides, 15);
     assert.equal(await page.evaluate(`Reveal.getCurrentSlide().querySelector(':scope > p').textContent.includes('matplotlib')`), false);
     await checkEdit(page, `r15-7-delete-${platform}.html`);
     assert.deepEqual(errors(page), []);
@@ -220,7 +220,7 @@ for (const platform of PLATFORMS) {
     await watchKeys(page);
     await newFormula(page);
     const inserted = await render(page);
-    assert.deepEqual(await state(page), { slides: 13, blocks: 7, selected: ['div'], focus: 'div editable', words: '' });
+    assert.deepEqual(await state(page), { slides: 15, blocks: 7, selected: ['div'], focus: 'div editable', words: '' });
     assert.deepEqual(await itemsIn(page, 'Edit', ['Duplicate', 'Deselect', 'Delete']), {
       Duplicate: { keys: K.duplicate, dimmed: false },
       Deselect: { keys: K.deselect, dimmed: false },
@@ -229,7 +229,7 @@ for (const platform of PLATFORMS) {
     await press(page, 'Mod+D');
     await settle(page);
     const s = await state(page);
-    assert.equal(s.slides, 13, 'Mod+D does not duplicate the slide');
+    assert.equal(s.slides, 15, 'Mod+D does not duplicate the slide');
     assert.equal(await page.evaluate(`Reveal.getCurrentSlide().querySelectorAll(':scope > div.math').length`), 2);
     assert.equal(await prevented(page, 'd'), true);
     await checkEdit(page, `r15-7-formula-${platform}.html`, inserted);
@@ -298,7 +298,7 @@ for (const platform of PLATFORMS) {
     await click(page, row);
     await press(page, K.press);
     await settle(page);
-    assert.equal((await state(page)).slides, 12);
+    assert.equal((await state(page)).slides, 14);
     assert.equal(await undoLabel(page), 'Undo Delete Slide');
     await undo(page);
     await settle(page);
@@ -358,7 +358,7 @@ for (const platform of PLATFORMS) {
     await click(page, await rect(page, `document.querySelectorAll('.beeson-edit-nav .row')[3]`));
     await settle(page);
     await choose(page, 'Edit', 'Delete');
-    assert.equal((await state(page)).slides, 12);
+    assert.equal((await state(page)).slides, 14);
     assert.equal(await undoLabel(page), 'Undo Delete Slide');
     assert.equal(await firstEditItem(page), 'Undo Delete Slide');
     await undo(page);
@@ -378,7 +378,7 @@ for (const platform of PLATFORMS) {
     await click(page, await below(page));
     await settle(page);
     await choose(page, 'Edit', 'Duplicate');
-    assert.equal((await state(page)).slides, 14);
+    assert.equal((await state(page)).slides, 16);
     assert.equal(await undoLabel(page), 'Undo Duplicate Slide');
     await checkEdit(page, `r15-7-duplicate-slide-${platform}.html`);
     assert.deepEqual(errors(page), []);

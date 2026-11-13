@@ -15,7 +15,7 @@ const DECK = 'index.html';
 const PLATFORMS = ['mac', 'other'];
 // the indexes of the title slide and of the closing slide in index.html
 const TITLE = 0;
-const CLOSING = 12;
+const CLOSING = 14;
 // the deck of layouts, with the indexes of its title slide and of its content slide with math
 const LAYOUTS = 'test/pages/editor-layouts.html';
 const LAYOUT_TITLE = 0;

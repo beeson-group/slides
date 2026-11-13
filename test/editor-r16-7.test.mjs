@@ -85,7 +85,7 @@ for (const platform of PLATFORMS) {
     await press(page, 'Mod+D');
     await settle(page);
     assert.equal(await figures(page), 2);
-    assert.equal(await slides(page), 13);
+    assert.equal(await slides(page), 15);
     assert.equal(await undoLabel(page), 'Undo Duplicate');
     await undo(page);
     assert.equal(await render(page), page.source);
@@ -95,7 +95,7 @@ for (const platform of PLATFORMS) {
     await openBar(page, 'Slide');
     await click(page, await rect(page, `(${findItem})('Duplicate Slide')`));
     await settle(page);
-    assert.equal(await slides(page), 14);
+    assert.equal(await slides(page), 16);
     assert.equal(await undoLabel(page), 'Undo Duplicate Slide');
     await undo(page);
     assert.equal(await render(page), page.source);
@@ -112,7 +112,7 @@ for (const platform of PLATFORMS) {
     await settle(page);
     await press(page, 'Mod+D');
     await settle(page);
-    assert.equal(await slides(page), 14);
+    assert.equal(await slides(page), 16);
     assert.equal(await undoLabel(page), 'Undo Duplicate Slide');
     await undo(page);
     assert.equal(await render(page), page.source);
@@ -130,7 +130,7 @@ for (const platform of PLATFORMS) {
     await settle(page);
     await press(page, 'Mod+D');
     await settle(page);
-    assert.equal(await slides(page), 14);
+    assert.equal(await slides(page), 16);
     assert.equal(await undoLabel(page), 'Undo Duplicate Slide');
     await undo(page);
     assert.equal(await render(page), page.source);

@@ -11,7 +11,7 @@ import { byteExact, click, press, type } from './helpers/editor.mjs';
 
 const PLATFORMS = ['mac', 'other'];
 const FIGURES = 4;
-const LAST = 12;
+const LAST = 14;
 
 let browser;
 let server;
@@ -63,20 +63,20 @@ async function present(t, platform, n) {
   return page;
 }
 
-// a point of the slide shown by the show, on the heading of slide 12 and away from its video
+// a point of the slide shown by the show, on the heading of slide 14 and away from its video
 const slidePoint = { x: 400, y: 180 };
 
 // finding opus 3 of round 6: a click past the last step of the last slide left the show up, while a
-// key forward ended it. a click plays the steps of slide 12 first, and a deck opened by itself
+// key forward ended it. a click plays the steps of slide 14 first, and a deck opened by itself
 // stays at its last slide at a click
 for (const platform of PLATFORMS) {
   test(`the show played by Present returns to the editor at a click past its last step (${platform})`, async (t) => {
     const page = await present(t, platform, LAST - 1);
     const at = () => page.evaluate(`${SHOW}.Reveal.getIndices().h`);
-    assert.equal(await page.evaluate(`${SHOW}.Reveal.availableFragments().next`), true, 'slide 12 does not have steps');
+    assert.equal(await page.evaluate(`${SHOW}.Reveal.availableFragments().next`), true, 'slide 14 does not have steps');
     await click(page, slidePoint);
     await sleep(300);
-    assert.equal(await at(), LAST - 1, 'a step of slide 12 is skipped');
+    assert.equal(await at(), LAST - 1, 'a step of slide 14 is skipped');
     for (let i = 0; i < 10 && (await at()) < LAST; i++) {
       await click(page, slidePoint);
       await sleep(300);
