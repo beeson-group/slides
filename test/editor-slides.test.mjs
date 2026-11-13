@@ -58,6 +58,19 @@ const row = async (page, i, scroll = true) =>
     return { x: b.left + b.width / 2, y: b.top + b.height / 2 };
   })()`);
 
+// a click on row i of the navigator, made again until row i is the current one. at a paint of the
+// navigator, the row of the current slide is scrolled into view. with a paint between the reading
+// of the place of row i and the click, the rows are moved under the click
+async function pick(page, i) {
+  for (let n = 0; n < 3; n++) {
+    await settle(page);
+    await click(page, await row(page, i));
+    await settle(page);
+    if ((await rows(page))[i].current) return;
+  }
+  assert.fail(`row ${i} of the navigator is not the current one after three clicks`);
+}
+
 const titles = async (page) => (await rows(page)).map((r) => r.title);
 const settle = (page) => page.evaluate('new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(() => done(window.BeesonEditor.status()))))');
 
@@ -321,9 +334,9 @@ for (const platform of ['mac', 'other']) {
     t.after(() => page.close?.());
     const key = (commands, keyName, code, keyCode) =>
       page.send('Input.dispatchKeyEvent', { type: 'rawKeyDown', key: keyName, code, windowsVirtualKeyCode: keyCode, modifiers: mod === 'Meta' ? 4 : 2, commands }).then(() => page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: keyName, code, windowsVirtualKeyCode: keyCode, modifiers: mod === 'Meta' ? 4 : 2 }));
-    await click(page, await row(page, 3));
+    await pick(page, 3);
     await key(['copy'], 'c', 'KeyC', 67);
-    await click(page, await row(page, 12));
+    await pick(page, 12);
     await key(['paste'], 'v', 'KeyV', 86);
     await settle(page);
     const list = await rows(page);
