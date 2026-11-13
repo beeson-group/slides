@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Preamble deck</title>
+<link rel="stylesheet" href="../../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../../theme/beeson.css">
+<script src="tex.js"></script>
+<script src="../../../theme/mathjax-config.js"></script>
+<script src="../../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the deck of test/macros.test.mjs, with the preamble.tex and the tex.js next to it: in each row, a
+     formula written with a definition of the preamble, and the formula that it stands for -->
+<div class="reveal">
+  <div class="slides">
+    <section>
+      <h2>Macros</h2>
+      <table>
+        <tr data-case="a macro with an argument"><td>\(\vb{x} + \vb{y}\)</td><td>\(\boldsymbol{x} + \boldsymbol{y}\)</td></tr>
+        <tr data-case="a macro of a paper, with ensuremath and xspace"><td>\(\R^3\)</td><td>\(\mathbb{R}^3\)</td></tr>
+        <tr data-case="the bold of the package bm"><td>\(\bm{x}\)</td><td>\(\boldsymbol{x}\)</td></tr>
+        <tr data-case="an optional argument and its default"><td>\(\norm{x} + \norm[1]{y}\)</td><td>\(\lVert x \rVert_{2} + \lVert y \rVert_{1}\)</td></tr>
+        <tr data-case="an operator"><td>\(\sgn x\)</td><td>\(\operatorname{sgn} x\)</td></tr>
+        <tr data-case="an operator with limits"><td>\(\argmin_x f\)</td><td>\(\operatorname*{arg\,min}_x f\)</td></tr>
+        <tr data-case="an environment"><td>\(\begin{pmat} a &amp; b \\ c &amp; d \end{pmat}\)</td><td>\(\begin{pmatrix} a &amp; b \\ c &amp; d \end{pmatrix}\)</td></tr>
+        <tr data-case="a macro of a package"><td>\(\dv{x}{t}\)</td><td>\(\frac{\mathrm{d}x}{\mathrm{d}t}\)</td></tr>
+      </table>
+    </section>
+  </div>
+</div>
+<script src="../../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../../theme/vendor/reveal/notes.js"></script>
+<script src="../../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>
