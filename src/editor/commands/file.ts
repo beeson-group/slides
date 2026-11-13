@@ -1,0 +1,162 @@
+// the commands of the File menu, in the groups of the File menu of Keynote: Open… and Open Recent,
+// then Save, Save As…, Autosave, and Revert to Saved, then Export To, and Print… last. Save and
+// Save As take their keys everywhere, so that the save page dialog of the browser is never opened.
+// Present and Present from Start have the keys of PowerPoint, since F5 reloads the page in a
+// browser
+
+import type { App } from '../app.ts';
+import { EVERYWHERE, OUTSIDE_DIALOGS, type Command } from '../commands.ts';
+import { canPick, canWrite, fileActions } from '../file/files.ts';
+import { clearRecents, MAX_RECENT, recentLabel, recents } from '../file/recent.ts';
+import { playTimings, usingTimings } from '../present.ts';
+import { showIndices } from '../show.ts';
+
+// the saved deck from a slide, played in place or, with tab, in a new tab, with the window of the
+// show, or null when it is not played. with Use Rehearsed Timings on, the show is moved on after
+// the timings of its slides
+export async function presentAt(app: App, fromStart: boolean, tab = false): Promise<{ win: Window | null } | null> {
+  const { h, v } = fromStart ? { h: 0, v: 0 } : showIndices(app, app.current());
+  // the first slide is opened without a hash
+  const shown = await app.files.present(v ? `#/${h}/${v}` : h ? `#/${h}` : '', tab);
+  if (shown?.win && usingTimings()) void playTimings(shown.win);
+  return shown;
+}
+
+export function install(app: App): void {
+  const c = app.commands;
+  const both = (...keys: string[]) => ({ mac: keys, other: keys });
+  c.define({
+    id: 'file.open',
+    label: 'Open…',
+    keys: both('Mod+O'),
+    in: OUTSIDE_DIALOGS,
+    menu: { bar: 'File', group: 'open', order: 10 },
+    run: (a) => a.files.openFile(),
+  });
+  c.define({
+    id: 'file.save',
+    label: 'Save',
+    keys: both('Mod+S'),
+    in: EVERYWHERE,
+    menu: { bar: 'File', group: 'save', order: 20 },
+    toolbar: { group: 'save', order: 50, icon: 'save' },
+    run: (a) => a.files.save(),
+  });
+  c.define({
+    id: 'file.saveAs',
+    label: 'Save As…',
+    keys: both('Mod+Shift+S'),
+    in: EVERYWHERE,
+    menu: { bar: 'File', group: 'save', order: 21 },
+    run: (a) => a.files.saveAs(),
+  });
+  c.define({
+    id: 'file.autosave',
+    label: 'Autosave',
+    menu: { bar: 'File', group: 'save', order: 22 },
+    enabled: () => canWrite(),
+    checked: (a) => a.autosave,
+    run: (a) => a.files.toggleAutosave(),
+  });
+  c.define({
+    id: 'file.revert',
+    label: 'Revert to Saved',
+    menu: { bar: 'File', group: 'save', order: 23 },
+    enabled: (a) => a.dirty && a.state === 'loaded',
+    run: () => fileActions().revert(),
+  });
+
+  // Open Recent lists the decks of file/recent.ts, which the menus read at each open, hence the
+  // place of each item is a getter. without a deck, or in a browser without the open picker, i.e.
+  // in Firefox and Safari, Open Recent is a dimmed item
+  const listed = () => (canPick() ? recents() : []);
+  const recent = (order: number, group = 'open'): Command['menu'] => ({ bar: 'File', group, order, submenu: 'Open Recent' });
+  c.define({
+    id: 'file.recent.none',
+    label: 'Open Recent',
+    get menu() {
+      return listed().length ? undefined : { bar: 'File', group: 'open', order: 11 };
+    },
+    enabled: () => false,
+    run: () => {},
+  });
+  for (let i = 0; i < MAX_RECENT; i++) {
+    c.define({
+      id: `file.recent.${i + 1}`,
+      label: () => {
+        const r = listed()[i];
+        return r ? recentLabel(r) : '';
+      },
+      get menu() {
+        return listed()[i] ? recent(11 + i / 100) : undefined;
+      },
+      enabled: (a) => !!listed()[i] && a.state !== 'starting',
+      run: async () => {
+        const r = listed()[i];
+        if (r) await fileActions().openRecent(r);
+      },
+    });
+  }
+  c.define({
+    id: 'file.recent.clear',
+    label: 'Clear Menu',
+    get menu() {
+      return listed().length ? recent(11.5, 'clear') : undefined;
+    },
+    run: () => clearRecents(),
+  });
+
+  // Export To of Keynote. PDF… prints the saved file in its print view, and HTML… writes a copy of
+  // the deck with its edits. a page cannot write a PowerPoint file, since scripts/export-pptx.mjs
+  // builds each step from a screenshot of headless Chrome, hence PowerPoint… shows its command
+  const exportTo = (order: number): Command['menu'] => ({ bar: 'File', group: 'export', order, submenu: 'Export To' });
+  c.define({
+    id: 'file.export.pdf',
+    label: 'PDF…',
+    menu: exportTo(40),
+    enabled: (a) => a.state === 'loaded',
+    run: () => fileActions().exportPdf(),
+  });
+  c.define({
+    id: 'file.export.html',
+    label: 'HTML…',
+    menu: exportTo(41),
+    enabled: (a) => a.state === 'loaded' && !!a.pairing,
+    run: () => fileActions().exportHtml(),
+  });
+  c.define({
+    id: 'file.export.pptx',
+    label: 'PowerPoint…',
+    menu: exportTo(42),
+    enabled: (a) => a.state === 'loaded',
+    run: () => fileActions().exportPptx(),
+  });
+  // Print… of the File menu of Keynote, last in the menu, prints the print view of PDF…. the key is
+  // taken everywhere, since the print of the browser would print the editor
+  c.define({
+    id: 'file.print',
+    label: 'Print…',
+    keys: both('Mod+P'),
+    in: EVERYWHERE,
+    menu: { bar: 'File', group: 'print', order: 60 },
+    enabled: (a) => a.state === 'loaded',
+    run: () => fileActions().exportPdf('print'),
+  });
+  c.define({
+    id: 'file.present',
+    label: 'Present',
+    keys: both('Mod+Enter'),
+    in: OUTSIDE_DIALOGS,
+    menu: { bar: 'File', group: 'present', order: 30 },
+    toolbar: { group: 'present', order: 40, icon: 'present' },
+    run: async (a) => void (await presentAt(a, false)),
+  });
+  c.define({
+    id: 'file.presentStart',
+    label: 'Present from Start',
+    keys: both('Mod+Shift+Enter'),
+    in: OUTSIDE_DIALOGS,
+    menu: { bar: 'File', group: 'present', order: 31 },
+    run: async (a) => void (await presentAt(a, true)),
+  });
+}

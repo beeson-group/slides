@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor lists joined deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the deck of the tests of R16.4: an empty paragraph between two numbered lists, an empty
+     paragraph after the last list, a paragraph between two locked lists, and a figure of the zone
+     between two lists in the file -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>An empty paragraph between lists</h2>
+  <ol>
+    <li>Pone</li>
+  </ol>
+  <p></p>
+  <ol start="2">
+    <li>Qtwo</li>
+  </ol>
+</section>
+
+<section>
+  <h2>An empty paragraph after a list</h2>
+  <ul>
+    <li>Bone</li>
+    <li>Btwo</li>
+  </ul>
+  <p></p>
+</section>
+
+<section>
+  <h2>Locked lists</h2>
+  <ul data-locked>
+    <li>Hone</li>
+  </ul>
+  <p>Middle three</p>
+  <ul data-locked>
+    <li>Ione</li>
+  </ul>
+</section>
+
+<section>
+  <h2>A figure between lists</h2>
+  <ul>
+    <li>Tone</li>
+  </ul>
+  <figure class="zone"><img src="../../brand/favicon-192x192.png" alt="" style="width: 300px"></figure>
+  <ul>
+    <li>Uone</li>
+  </ul>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

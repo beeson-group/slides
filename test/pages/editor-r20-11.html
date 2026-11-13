@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor layers and shapes deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the deck of the tests of R20.11: a shape over the words of the text column, a shape beside free room for new elements, and a line to keep through Reset Slide -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>Words under a shape</h2>
+  <p>A paragraph of the text column, with a shape drawn over its words.</p>
+  <ul>
+    <li>A first item</li>
+    <li>A second item</li>
+  </ul>
+  <div class="shape rounded tone-accent" style="width: 900px; height: 300px; translate: 80px 200px"></div>
+</section>
+
+<section>
+  <h2>Room for new elements</h2>
+  <p>A short paragraph.</p>
+  <div class="foot">A foot before the shape, as a shape is written after it.</div>
+  <div class="shape tone-blue" style="width: 700px; height: 600px; translate: 1100px 300px"></div>
+</section>
+
+<section>
+  <h2>A line and a nudge</h2>
+  <p style="translate: 40px 20px">A moved paragraph.</p>
+  <svg class="line" width="400" height="1" style="translate: 700px 600px"><defs><marker id="r20-11-arrow" orient="auto-start-reverse"><path d="M-4-2.5 1 0-4 2.5z"></path></marker></defs><line x1="0" y1="0" x2="400" y2="0" marker-end="url(#r20-11-arrow)"></line></svg>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

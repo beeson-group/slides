@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+  <head>
+    <meta charset="utf-8" />
+    <title>A looped backdrop from a file</title>
+    <link rel="stylesheet" href="../../theme/vendor/reveal/reset.css" />
+    <link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css" />
+    <link rel="stylesheet" href="../../theme/beeson.css" />
+  </head>
+  <body>
+    <!-- a backdrop of a file with data-loop, for test/strands.test.mjs -->
+    <div class="reveal">
+      <div class="slides">
+        <section class="figure">
+          <div class="backdrop" data-strands="../../demo/broucke-sample.js" data-strands-select="family=7,frame=pulsating" data-loop></div>
+        </section>
+      </div>
+    </div>
+    <script src="../../theme/vendor/reveal/reveal.js"></script>
+    <script src="../../theme/beeson.js"></script>
+    <script>
+      Beeson.start({});
+    </script>
+  </body>
+</html>

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor hand-built slides deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the deck of the tests of R23.2: a grouped card with a display and a label placed with translate, two arrows of two tones, a shape with words, an empty shape, and the empty placeholders of a new content slide over a text box -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>Cards</h2>
+  <div class="shape rounded" style="width: 400px; height: 240px; translate: 200px 420px" data-group="g1"></div>
+  <div class="math center" style="width: 400px; translate: 200px 260px" data-group="g1">\[a^2 + b^2\]</div>
+  <p class="center" style="width: 400px; translate: 200px 40px" data-group="g1">Label</p>
+</section>
+
+<section>
+  <h2>Arrows</h2>
+  <svg class="line tone-accent" width="300" height="1" style="translate: 300px 500px"><defs><marker id="line-1" orient="auto-start-reverse"><path d="M-4-2.5 1 0-4 2.5z"></path></marker></defs><line x1="0" y1="0" x2="300" y2="0" marker-end="url(#line-1)"></line></svg>
+  <svg class="line tone-blue" width="300" height="1" style="translate: 300px 700px"><defs><marker id="line-2" orient="auto-start-reverse"><path d="M-4-2.5 1 0-4 2.5z"></path></marker></defs><line x1="0" y1="0" x2="300" y2="0" marker-end="url(#line-2)"></line></svg>
+</section>
+
+<section>
+  <h2>Words</h2>
+  <div class="shape rounded tone-violet" style="width: 500px; height: 160px; translate: 600px 400px"><p>Build</p></div>
+</section>
+
+<section>
+  <h2>Hollow</h2>
+  <div class="shape rounded" style="width: 400px; height: 240px; translate: 600px 400px"></div>
+</section>
+
+<section>
+  <h2>Prompts</h2>
+  <p></p>
+  <ul>
+    <li></li>
+  </ul>
+  <p style="translate: 300px 200px">Under the prompts</p>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

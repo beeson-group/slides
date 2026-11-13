@@ -1,0 +1,337 @@
+// tests of R7.6 on both platforms with trusted input: Slide Only in the View menu and the View
+// button, the tick at 100% of the zoom slider, the sheet Customize Toolbar with its layout kept for
+// the deck, and the scopes of Find. the settings do not change the file, and after an edit of the
+// file the text is checked byte for byte, after an undo and a redo, and after a save and an open
+
+import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
+import { after, before, test } from 'node:test';
+import { deckSettled, launch } from '../scripts/chrome.mjs';
+import { serve } from '../scripts/webdriver.mjs';
+import { byteExact, center, click, drag, press, saveAndReopen, type } from './helpers/editor.mjs';
+
+const LAYOUTS = 'test/pages/editor-layouts.html';
+const PLATFORMS = ['mac', 'other'];
+const DARK = 'alt="A figure, dark version"';
+const LIGHT = 'alt="A figure, light version"';
+
+let browser;
+let server;
+before(async () => {
+  browser = await launch({ offline: false });
+  server = await serve('.');
+});
+after(async () => {
+  await browser?.close();
+  server?.close();
+});
+
+const js = (v) => JSON.stringify(v);
+const exec = (page, id, arg) => page.evaluate(`window.BeesonEditor.exec(${js(id)}${arg === undefined ? '' : `, ${js(arg)}`})`);
+const state = (page, id) => page.evaluate(`window.BeesonEditor.state(${js(id)})`);
+const render = (page) => page.evaluate('window.BeesonEditor.render()');
+const frames = (page) => page.evaluate('new Promise((d) => requestAnimationFrame(() => requestAnimationFrame(() => d(true))))');
+const errors = (page) => page.errors.filter((e) => !e.includes('/favicon.ico'));
+const boxOf = (page, selector) => page.evaluate(`(() => { const r = document.querySelector(${js(selector)}).getBoundingClientRect(); return { x: r.left, y: r.top, w: r.width, h: r.height, right: r.right, bottom: r.bottom }; })()`);
+
+// the editor on the slide n of a deck served over HTTP, opened with text after change is run on the
+// page. with clear, the storage of the origin is emptied before the editor is loaded
+async function load(t, platform, { deck = LAYOUTS, n = 0, text = readFileSync(deck, 'utf8'), change = '', clear = true, size = { width: 1600, height: 1000 } } = {}) {
+  const page = await browser.newPage(size);
+  t.after(() => page.close().catch(() => {}));
+  if (clear) await page.send('Storage.clearDataForOrigin', { origin: server.origin, storageTypes: 'local_storage' });
+  await page.goto(`${server.origin}/${deck}?edit&still&edit-platform=${platform}`);
+  await page.waitFor(deckSettled);
+  await page.waitFor('window.BeesonEditor && window.BeesonEditor.ready.then(() => true)');
+  page.source = text;
+  if (change) await page.evaluate(change);
+  const s = await page.evaluate(`window.BeesonEditor.open(${js(text)})`);
+  assert.deepEqual(s.problems, []);
+  if (!(await state(page, 'shell.format')).checked) await exec(page, 'shell.format');
+  await page.evaluate(`Reveal.slide(${n})`);
+  await frames(page);
+  return page;
+}
+
+// roundTrip checks the edits in the text, then the text before byte for byte after an undo, the
+// edit after a redo, and an open of the saved edit without problems
+let saves = 0;
+async function roundTrip(page, edits) {
+  await byteExact(page, edits);
+  const edited = await render(page);
+  await page.evaluate('window.BeesonEditor.undo()');
+  await byteExact(page);
+  await page.evaluate('window.BeesonEditor.redo()');
+  assert.equal(await render(page), edited);
+  const { text } = await saveAndReopen(page, `r7-6-${++saves}.html`);
+  assert.equal(text, edited);
+  page.source = text;
+}
+
+// the labels of the items of the open menu
+const menuLabels = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-menu .item')].map((i) => i.querySelector('.label')?.textContent ?? '')`);
+
+// a trusted click on the item labeled label of the open menu
+async function choose(page, label) {
+  const at = await page.evaluate(`(() => {
+    const items = [...document.querySelectorAll('.beeson-edit-menu .item')];
+    const text = (i) => i.querySelector('.label')?.textContent ?? '';
+    const item = items.find((i) => text(i) === ${js(label)}) ?? items.find((i) => text(i).startsWith(${js(label)}));
+    if (!item) return null;
+    const r = item.getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  })()`);
+  assert.ok(at, `the open menu has no item ${label}`);
+  await click(page, at);
+  await frames(page);
+}
+
+async function openBar(page, bar) {
+  await click(page, await page.evaluate(`(() => {
+    const r = [...document.querySelectorAll('.beeson-edit-menubar [role=menuitem]')].find((b) => b.textContent.trim() === ${js(bar)}).getBoundingClientRect();
+    return { x: r.left + r.width / 2, y: r.top + r.height / 2 };
+  })()`));
+  await frames(page);
+}
+
+const panes = async (page) => ({
+  navigator: (await state(page, 'view.navigator')).checked,
+  format: (await state(page, 'shell.format')).checked,
+  steps: (await state(page, 'view.steps')).checked,
+  slideOnly: (await state(page, 'view.slideOnly')).checked,
+});
+
+// the ids of the buttons of the toolbar, in their order
+const toolbarIds = (page) => page.evaluate(`[...document.querySelectorAll('.beeson-edit-top [data-command]')].map((b) => b.dataset.command)`);
+const KEY = `beeson-edit-toolbar:/${LAYOUTS}`;
+const kept = (page) => page.evaluate(`JSON.parse(localStorage.getItem(${js(KEY)}) ?? 'null')`);
+
+for (const platform of PLATFORMS) {
+  test(`Slide Only of the View menu hides the navigator and leaves the inspector open, and the View button shows the navigator again (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    const canvas = await boxOf(page, '.beeson-edit-canvas');
+    assert.deepEqual(await panes(page), { navigator: true, format: true, steps: false, slideOnly: false });
+    await openBar(page, 'View');
+    const labels = await menuLabels(page);
+    assert.equal(labels[labels.indexOf('Navigator') + 1], 'Slide Only');
+    await choose(page, 'Slide Only');
+    assert.deepEqual(await panes(page), { navigator: false, format: true, steps: false, slideOnly: true });
+    const wide = await boxOf(page, '.beeson-edit-canvas');
+    assert.ok(wide.w > canvas.w + 150, `the canvas is ${wide.w} px wide in Slide Only and ${canvas.w} px before`);
+    // the View button of the toolbar is not pressed in Slide Only, and its main part shows the
+    // navigator again
+    const view = '.beeson-edit-top [data-command="toolbar.view"]';
+    assert.equal(await page.evaluate(`document.querySelector(${js(view)}).getAttribute('aria-pressed')`), 'false');
+    await click(page, view);
+    await frames(page);
+    assert.deepEqual(await panes(page), { navigator: true, format: true, steps: false, slideOnly: false });
+    assert.equal(await page.evaluate(`document.querySelector(${js(view)}).getAttribute('aria-pressed')`), 'true');
+    assert.equal((await boxOf(page, '.beeson-edit-canvas')).w, canvas.w);
+    // the Steps tab is kept open through Slide Only
+    await exec(page, 'view.steps');
+    await openBar(page, 'View');
+    await choose(page, 'Slide Only');
+    assert.deepEqual(await panes(page), { navigator: false, format: false, steps: true, slideOnly: true });
+    await openBar(page, 'View');
+    await choose(page, 'Slide Only');
+    assert.deepEqual(await panes(page), { navigator: true, format: false, steps: true, slideOnly: false });
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`a drag of the zoom slider near its tick at 100% snaps to 100% (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    const slider = '.beeson-edit-bottom .slider input';
+    const thumb = async () => {
+      const r = await boxOf(page, slider);
+      const v = Number(await page.evaluate(`document.querySelector(${js(slider)}).value`));
+      return { x: r.x + 7 + ((r.w - 14) * v) / 1000, y: r.y + r.h / 2 };
+    };
+    const tick = await center(page, '.beeson-edit-bottom .slider .tick');
+    const readout = () => page.evaluate(`document.querySelector('.beeson-edit-top [data-command="toolbar.zoom"] .readout').textContent`);
+    assert.match(await readout(), /^\d+%$/);
+    // a drag that ends 3 px past the tick gives 100%, with the thumb on the tick
+    let from = await thumb();
+    await drag(page, from, { dx: tick.x + 3 - from.x, dy: 0, steps: 12 });
+    await frames(page);
+    assert.equal(await readout(), '100%');
+    assert.ok(Math.abs((await thumb()).x - tick.x) < 1, `the thumb is at ${(await thumb()).x} and the tick at ${tick.x}`);
+    // a drag that ends 12 px past the tick does not snap
+    from = await thumb();
+    await drag(page, from, { dx: 12, dy: 0, steps: 6 });
+    await frames(page);
+    assert.ok(Number((await readout()).replace('%', '')) > 110, await readout());
+    // the arrow keys move the slider past the tick
+    await page.evaluate(`document.querySelector(${js(slider)}).focus()`);
+    for (let i = 0; i < 3; i++) await press(page, 'ArrowLeft');
+    assert.notEqual(await readout(), '100%');
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`Customize Toolbar adds and removes items by drags, sets Show, keeps the layout for the deck, and the default set restores it (${platform})`, async (t) => {
+    let page = await load(t, platform);
+    const defaults = await toolbarIds(page);
+    assert.deepEqual(defaults.slice(0, 3), ['toolbar.view', 'toolbar.zoom', 'edit.undo']);
+    await openBar(page, 'View');
+    const labels = await menuLabels(page);
+    assert.equal(labels[labels.length - 1], 'Customize Toolbar…');
+    await choose(page, 'Customize Toolbar…');
+    assert.equal(await page.evaluate(`!document.querySelector('.beeson-edit-customize').hidden`), true);
+    const items = await page.evaluate(`[...document.querySelectorAll('.beeson-edit-customize .palette .item')].map((i) => i.dataset.item)`);
+    for (const id of ['toolbar.view', 'insert.table', 'file.present', 'find.open', 'arrange.lock', 'separator', 'space']) assert.ok(items.includes(id), `the sheet has no item ${id}`);
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-customize .foot .show').textContent`), 'Icon and Text');
+    // a button of the toolbar does not run its command while the sheet is open
+    await click(page, '.beeson-edit-top [data-command="slide.gallery"]');
+    assert.equal(await render(page), page.source);
+
+    // Find dragged from the sheet onto the left half of Redo is put before it
+    const find = await center(page, '.beeson-edit-customize .item[data-item="find.open"]');
+    const redo = await boxOf(page, '.beeson-edit-top [data-command="edit.redo"]');
+    await drag(page, find, { dx: redo.x + 6 - find.x, dy: redo.y + redo.h / 2 - find.y, steps: 14 });
+    await frames(page);
+    let ids = await toolbarIds(page);
+    assert.equal(ids[ids.indexOf('edit.redo') - 1], 'find.open');
+    // Table dragged from the toolbar into the sheet is taken off
+    const table = await center(page, '.beeson-edit-top [data-command="insert.table"]');
+    await drag(page, table, { dx: 0, dy: 260, steps: 10 });
+    await frames(page);
+    ids = await toolbarIds(page);
+    assert.ok(!ids.includes('insert.table'));
+    assert.ok(ids.includes('find.open'));
+
+    // Show Icon Only hides the labels, and the layout is kept for this deck
+    await click(page, '.beeson-edit-customize .foot .show');
+    await frames(page);
+    assert.deepEqual(await menuLabels(page), ['Icon and Text', 'Icon Only', 'Text Only']);
+    await choose(page, 'Icon Only');
+    const label = () => page.evaluate(`getComputedStyle(document.querySelector('.beeson-edit-top [data-command="file.present"] .label')).display`);
+    const glyph = () => page.evaluate(`getComputedStyle(document.querySelector('.beeson-edit-top [data-command="file.present"] .beeson-icon')).display`);
+    assert.equal(await label(), 'none');
+    let saved = await kept(page);
+    assert.equal(saved.show, 'icon');
+    assert.ok(saved.items.includes('find.open') && !saved.items.includes('insert.table'));
+    await click(page, '.beeson-edit-customize .foot .done');
+    await frames(page);
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-customize').hidden`), true);
+    // the new button runs its command once the sheet is closed
+    await click(page, '.beeson-edit-top [data-command="find.open"]');
+    await page.waitFor(`!document.querySelector('.beeson-find').hidden`);
+    await press(page, 'Escape');
+    assert.equal(await render(page), page.source);
+    assert.equal((await page.evaluate('window.BeesonEditor.status()')).dirty, false);
+
+    // the layout is shown again when the deck is opened again, and not on another deck
+    const layout = await toolbarIds(page);
+    await page.close();
+    const other = await load(t, platform, { deck: 'index.html', clear: false });
+    assert.deepEqual((await toolbarIds(other)).slice(0, 3), ['toolbar.view', 'toolbar.zoom', 'edit.undo']);
+    assert.ok(!(await toolbarIds(other)).includes('find.open'));
+    await other.close();
+    page = await load(t, platform, { clear: false });
+    assert.deepEqual(await toolbarIds(page), layout);
+    assert.equal(await label(), 'none');
+
+    // Text Only hides the icons, and the default set dragged into the toolbar restores it
+    await exec(page, 'view.customizeToolbar');
+    await click(page, '.beeson-edit-customize .foot .show');
+    await choose(page, 'Text Only');
+    assert.equal(await glyph(), 'none');
+    assert.notEqual(await label(), 'none');
+    const row = await center(page, '.beeson-edit-customize .default');
+    const bar = await boxOf(page, '.beeson-edit-top');
+    await drag(page, row, { dx: bar.x + bar.w / 2 - row.x, dy: bar.y + bar.h / 2 - row.y, steps: 12 });
+    await frames(page);
+    await click(page, '.beeson-edit-customize .foot .done');
+    await frames(page);
+    assert.deepEqual(await toolbarIds(page), defaults);
+    saved = await kept(page);
+    assert.deepEqual(saved, { items: null, show: 'text' });
+    // with Icon and Text and the default set, nothing is kept
+    await exec(page, 'view.customizeToolbar');
+    await click(page, '.beeson-edit-customize .foot .show');
+    await choose(page, 'Icon and Text');
+    await press(page, 'Escape');
+    assert.equal(await kept(page), null);
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`Customize Toolbar works from the keyboard: Return adds an item, Delete takes one off, and Esc closes the sheet (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    const defaults = await toolbarIds(page);
+    await exec(page, 'view.customizeToolbar');
+    assert.equal(await page.evaluate(`document.activeElement.matches('.beeson-edit-customize .item')`), true);
+    await page.evaluate(`document.querySelector('.beeson-edit-customize .item[data-item="arrange.lock"]').focus()`);
+    await press(page, 'Enter');
+    let ids = await toolbarIds(page);
+    // an item added from the keyboard is put before the space, i.e. after Present
+    assert.equal(ids[ids.indexOf('file.present') + 1], 'arrange.lock');
+    await page.evaluate(`document.querySelector('.beeson-edit-top [data-command="arrange.lock"]').focus()`);
+    await press(page, 'Delete');
+    assert.deepEqual(await toolbarIds(page), defaults);
+    await page.evaluate(`document.querySelector('.beeson-edit-top [data-command="edit.undo"]').focus()`);
+    await press(page, 'Backspace');
+    assert.ok(!(await toolbarIds(page)).includes('edit.undo'));
+    // Return on the default set puts it back
+    await page.evaluate(`document.querySelector('.beeson-edit-customize .default').focus()`);
+    await press(page, 'Enter');
+    assert.deepEqual(await toolbarIds(page), defaults);
+    await press(page, 'Escape');
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-edit-customize').hidden`), true);
+    assert.equal(await kept(page), null);
+    assert.equal(await render(page), page.source);
+    assert.deepEqual(errors(page), []);
+  });
+
+  test(`the gear menu of Find sets the scope to the slides and notes, the notes only, or the alt texts (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await press(page, 'Mod+F');
+    await type(page, 'slide');
+    const count = () => page.evaluate(`document.querySelector('.beeson-find .count').textContent`);
+    const total = (c) => (c === 'Not found' ? 0 : Number(c.split(' of ')[1]));
+    const all = total(await count());
+    // the notes of the deck, as the panel counts them
+    const notes = [...page.source.matchAll(/<aside class="notes">([\s\S]*?)<\/aside>/g)].reduce((n, m) => n + (m[1].match(/slide/gi)?.length ?? 0), 0);
+    assert.ok(notes > 0 && all > notes, `${all} matches in all and ${notes} in the notes`);
+    await click(page, '.beeson-find .gear');
+    await frames(page);
+    const labels = await menuLabels(page);
+    for (const l of ['Slides and Notes', 'Notes Only', 'Alt Texts']) assert.ok(labels.includes(l), `the gear menu has no ${l}`);
+    assert.ok(labels.indexOf('Alt Texts') < labels.indexOf('Search TeX of Formulas'));
+    await choose(page, 'Notes Only');
+    assert.equal(total(await count()), notes);
+    assert.equal((await state(page, 'find.scopeNotes')).checked, true);
+    assert.equal((await state(page, 'find.scopeAll')).checked, false);
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-find .search input').placeholder`), 'Find in Notes');
+    // the current match is in the notes, which are shown
+    assert.equal(await page.evaluate(`!!getSelection().anchorNode?.parentElement?.closest('aside.notes') || [...CSS.highlights.get('beeson-find-current') ?? []].some((r) => r.startContainer.parentElement.closest('aside.notes'))`), true);
+
+    // in the scope of the alt texts, TeX is dimmed, and the alt texts of the images are found
+    await click(page, '.beeson-find .gear');
+    await choose(page, 'Alt Texts');
+    assert.equal((await state(page, 'find.tex')).enabled, false);
+    await click(page, '.beeson-find .search .clear');
+    await type(page, 'version');
+    assert.equal(await count(), '1 of 2');
+    assert.equal(await page.evaluate(`document.querySelector('.beeson-find .search input').placeholder`), 'Find in Alt Texts');
+    // the image of the current match is selected on its slide
+    const slide = await page.evaluate(`Reveal.getIndices().h`);
+    assert.equal(slide, await page.evaluate(`Reveal.getIndices(document.querySelector('.reveal img[alt="A figure, dark version"]').closest('section')).h`));
+    // Replace All writes the alt texts as one entry of the history
+    await exec(page, 'find.replace');
+    await page.evaluate(`document.querySelector('.beeson-find .replace input').focus()`);
+    await type(page, 'variant');
+    await click(page, '.beeson-find .actions button:first-child');
+    await page.waitFor(`window.BeesonEditor.render() !== ${js(page.source)}`);
+    assert.equal(await count(), '2 replaced');
+    await roundTrip(page, [[DARK, 'alt="A figure, dark variant"'], [LIGHT, 'alt="A figure, light variant"']]);
+    // in the scope of the slides and the notes, the alt texts are not searched
+    await click(page, '.beeson-find .gear');
+    await choose(page, 'Slides and Notes');
+    await click(page, '.beeson-find .search .clear');
+    await type(page, 'variant');
+    assert.equal(await count(), 'Not found');
+    assert.deepEqual(errors(page), []);
+  });
+}

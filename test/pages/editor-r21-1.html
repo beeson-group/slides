@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor shape fixes deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the deck of the tests of R21.1: a shape with words, an empty triangle, two veils, a frame without a fill, a shape with a step and its dimmed copy, and a curved arrow and a headless curve -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>Words</h2>
+  <p>A paragraph beside a card.</p>
+  <div class="shape rounded tone-accent" style="width: 500px; height: 300px; translate: 1100px 400px"><p>Goal</p></div>
+</section>
+
+<section>
+  <h2>Triangle</h2>
+  <div class="shape triangle" style="width: 200px; height: 160px; translate: 1360px 260px"></div>
+</section>
+
+<section>
+  <h2>Veils</h2>
+  <div class="shape veil" style="width: 400px; height: 200px; translate: 300px 400px"></div>
+  <div class="shape equals veil" style="width: 200px; height: 200px; translate: 1000px 400px"></div>
+</section>
+
+<section>
+  <h2>A frame</h2>
+  <div class="shape rounded fill-none" style="width: 1200px; height: 500px; translate: 200px 300px"><p>Framed</p></div>
+</section>
+
+<section>
+  <h2>A step</h2>
+  <div class="shape rounded tone-accent fragment" style="width: 400px; height: 200px; translate: 300px 400px" data-fragment-index="1"><p>Goal</p></div>
+</section>
+
+<section>
+  <h2>A dimmed step</h2>
+  <div class="shape rounded tone-accent fragment semi-fade-out" style="width: 400px; height: 200px; translate: 900px 400px" data-fragment-index="1"><p>Goal</p></div>
+</section>
+
+<section>
+  <h2>A curved arrow</h2>
+  <svg class="line" width="400" height="50" style="translate: 100px 450px"><defs><marker id="line-1" orient="auto-start-reverse"><path d="M-4-2.5 1 0-4 2.5z"></path></marker></defs><path d="M0 50 Q200 -50 400 50" marker-end="url(#line-1)"></path></svg>
+</section>
+
+<section>
+  <h2>A headless curve</h2>
+  <svg class="line" width="400" height="50" style="translate: 500px 450px"><path d="M0 50 Q200 -50 400 50"></path></svg>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor list of backdrops deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the drawings named in the list of backdrops, for test/editor-r22-5.test.mjs. the files of the
+     template are not next to this deck, i.e. brand/transfer.js and demo/broucke-sample.js under
+     test/pages/ are missing, and the drawings of the deck name them with ../../ -->
+<div class="reveal">
+<div class="slides">
+
+<section class="title">
+  <div class="backdrop" data-scene="tubes" data-cx="0.42" data-cy="0" data-half="0.6"></div>
+  <div class="block">
+    <h1>Backdrops</h1>
+    <p class="sub">A deck for the list of backdrops</p>
+  </div>
+</section>
+
+<section>
+  <h2>Two families</h2>
+  <p>A paragraph beside the drawing.</p>
+  <div class="backdrop" data-strands="../../demo/broucke-sample.js" data-strands-select="family=7|11,frame=pulsating" data-strands-color="family" data-strands-ramp="e" data-strands-colormap="viridis"></div>
+</section>
+
+<section>
+  <h2>One family in the inertial frame</h2>
+  <p>A paragraph beside the drawing.</p>
+  <div class="backdrop" data-strands="../../demo/broucke-sample.js" data-strands-select="frame=inertial,family=11" data-strands-color="family" data-strands-ramp="e"></div>
+</section>
+
+<section>
+  <h2>One family</h2>
+  <p>A paragraph beside the drawing.</p>
+  <div class="backdrop" data-strands="../../demo/broucke-sample.js" data-strands-select="frame=pulsating,family=7"></div>
+</section>
+
+<section>
+  <h2>The logo</h2>
+  <p>A paragraph beside the drawing.</p>
+  <div class="backdrop" data-strands="../../brand/transfer.js"></div>
+</section>
+
+<section>
+  <h2>A missing file</h2>
+  <p>A paragraph beside the drawing.</p>
+  <div class="backdrop" data-strands="missing.js" data-strands-select="family=7"></div>
+</section>
+
+<section>
+  <h2>A content slide without a backdrop</h2>
+  <p>A paragraph alone.</p>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

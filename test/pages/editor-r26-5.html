@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor texts and lists deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the deck of the tests of R26.5: a list and a paragraph to empty, a text paired by data-id, centered and nested lists, a list in a shape, and numbered lists from 1, 9, 12, and 123 -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>Items</h2>
+  <ul>
+    <li>One</li>
+    <li>Two</li>
+  </ul>
+  <p>Gone soon</p>
+</section>
+
+<section>
+  <h2>Pair</h2>
+  <p id="intro" data-id="intro" style="translate: 900px 300px">Intro</p>
+</section>
+
+<section>
+  <h2>Centered</h2>
+  <ul class="center">
+    <li>Short<ul><li>A much longer inner item of the nested list here</li></ul></li>
+    <li>Bravo</li>
+  </ul>
+  <ol class="center">
+    <li>A long outer item of the numbered list here<ol><li>Inner</li></ol></li>
+  </ol>
+  <ul class="dots center">
+    <li>Ring<ul><li>A much longer inner item of the dotted list</li></ul></li>
+  </ul>
+  <ul>
+    <li>Plain left</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Shaped</h2>
+  <div class="shape rounded tone-accent" style="width: 900px; height: 360px; translate: 800px 400px"><ul><li>Goal</li><li>A much longer second goal</li></ul></div>
+</section>
+
+<section>
+  <h2>Numbers</h2>
+  <ol>
+    <li>One</li>
+  </ol>
+  <ol start="9">
+    <li>Nine</li>
+  </ol>
+  <ol start="12">
+    <li>Twelve</li>
+  </ol>
+  <ol start="123">
+    <li>Many</li>
+  </ol>
+</section>
+
+<section>
+  <h2>Nested</h2>
+  <ul>
+    <li>Top<ul><li>Nested item</li></ul></li>
+  </ul>
+  <p>Below</p>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

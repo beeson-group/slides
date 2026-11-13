@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor pastes on other slides deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the deck of the tests of R31.1: a shape, an arrow, and a group of two shapes copied onto two other slides -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>Source</h2>
+  <p>Some words.</p>
+  <div class="shape tone-blue" style="width: 300px; height: 200px; translate: 1200px 300px"><p>Box</p></div>
+  <svg class="line" width="300" height="1" style="translate: 1200px 700px"><defs><marker id="r31-arrow" orient="auto-start-reverse"><path d="M-4-2.5 1 0-4 2.5z"></path></marker></defs><line x1="0" y1="0" x2="300" y2="0" marker-end="url(#r31-arrow)"></line></svg>
+  <div class="shape tone-red" data-group="g1" style="width: 150px; height: 100px; translate: 200px 650px"></div>
+  <div class="shape tone-red ellipse" data-group="g1" style="width: 150px; height: 100px; translate: 400px 650px"></div>
+</section>
+
+<section>
+  <h2>Target</h2>
+  <p>Other words.</p>
+</section>
+
+<section>
+  <h2>Third</h2>
+  <p>More words.</p>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

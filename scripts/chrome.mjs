@@ -55,8 +55,8 @@ export async function removeProfile(profile) {
 
 /**
  * Starts Chrome and returns an object with newPage() and close(). With offline set, every host
- * name is mapped to a failed lookup, thus each network load of a deck is reported as an error. A
- * request that is not answered within timeout ms fails.
+ * name is mapped to a failed lookup, thus each network load of a deck is reported as an error.
+ * Without it, only 127.0.0.1 is reached. A request that is not answered within timeout ms fails.
  */
 export async function launch({ offline = true, timeout = 120000 } = {}) {
   const chrome = findChrome();
@@ -77,7 +77,10 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
     ...(process.env.CI && process.platform === 'darwin' ? ['--use-angle=swiftshader'] : []),
     // the sandbox of Chrome cannot be started on the Ubuntu runners of GitHub, and the pages are local
     ...(process.platform === 'linux' ? ['--no-sandbox'] : []),
-    ...(offline ? ['--host-resolver-rules=MAP * ~NOTFOUND'] : []),
+    // without offline, only the server of scripts/webdriver.mjs at 127.0.0.1 is reached. With the
+    // network, Chrome downloads components and models into the profile in the background, and on
+    // Windows such a file is still locked when the profile is removed
+    `--host-resolver-rules=MAP * ~NOTFOUND${offline ? '' : ', EXCLUDE 127.0.0.1'}`,
     'about:blank',
   ];
   const child = spawn(chrome, args, { stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] });
@@ -133,8 +136,10 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
 
   // with mobile set, the page is laid out as on a phone, with touch and a coarse pointer, and scale
   // is the device pixel ratio. with motion set, the page is shown without reduced motion, which is
-  // the setting of the macOS and Windows runners of GitHub, hence a backdrop is traced there too
-  async function newPage({ width = 1920, height = 1080, mobile = false, scale = 1, motion = false } = {}) {
+  // the setting of the macOS and Windows runners of GitHub, hence a backdrop is traced there too.
+  // without drafts, the unsaved edits that the editor keeps in the storage of the browser 1 s after
+  // its last change are not written, since they were offered on a card to the next page of a test
+  async function newPage({ width = 1920, height = 1080, mobile = false, scale = 1, motion = false, drafts = false } = {}) {
     const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
     const { sessionId } = await send('Target.attachToTarget', { targetId, flatten: true });
     const call = (method, params) => send(method, params, sessionId);
@@ -157,6 +162,16 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
     await call('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: scale, mobile });
     if (mobile) await call('Emulation.setTouchEmulationEnabled', { enabled: true });
     if (motion) await call('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
+    if (!drafts) {
+      await call('Page.addScriptToEvaluateOnNewDocument', {
+        source: `{
+          const set = Storage.prototype.setItem;
+          Storage.prototype.setItem = function (key, value) {
+            if (!String(key).startsWith('beeson-draft:')) set.call(this, key, value);
+          };
+        }`,
+      });
+    }
 
     async function evaluate(expression) {
       const { result, exceptionDetails } = await call('Runtime.evaluate', {
@@ -173,24 +188,43 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
       evaluate,
       // sends a command of the DevTools protocol to the page, e.g. Emulation.setCPUThrottlingRate
       send: call,
+      // on a Windows runner of GitHub, about one page in a few thousand is refused one of its
+      // files with net::ERR_NO_BUFFER_SPACE, while ports and memory are free. such a page is loaded
+      // again, twice at most, and the error of the load before is dropped
       async goto(url) {
-        const loaded = new Promise((done) => {
-          const onLoad = ({ method, sessionId: from }) => {
-            if (from === sessionId && method === 'Page.loadEventFired') {
-              listeners.delete(onLoad);
-              done();
-            }
-          };
-          listeners.add(onLoad);
-        });
-        const { errorText } = await call('Page.navigate', { url });
-        if (errorText) throw new Error(`${url}: ${errorText}`);
-        await answered(loaded, `the load of ${url}`);
+        const load = async (method, params) => {
+          const loaded = new Promise((done) => {
+            const onLoad = ({ method: event, sessionId: from }) => {
+              if (from === sessionId && event === 'Page.loadEventFired') {
+                listeners.delete(onLoad);
+                done();
+              }
+            };
+            listeners.add(onLoad);
+          });
+          const { errorText } = await call(method, params);
+          if (errorText) throw new Error(`${url}: ${errorText}`);
+          await answered(loaded, `the load of ${url}`);
+        };
+        const refused = () => {
+          const kept = errors.filter((error) => !error.includes('net::ERR_NO_BUFFER_SPACE'));
+          const found = kept.length < errors.length;
+          errors.splice(0, errors.length, ...kept);
+          return found;
+        };
+        await load('Page.navigate', { url });
+        for (let n = 0; n < 2 && refused(); n++) await load('Page.reload', { ignoreCache: true });
       },
       // polls the expression every 50 ms until it is truthy, and fails after timeout ms
+      // an expression evaluated while the page is loaded anew is answered with an error, hence it
+      // is read as not yet true
       async waitFor(expression, timeout = 15000) {
         const start = Date.now();
-        while (!(await evaluate(expression))) {
+        const loading = (error) => {
+          if (!/Inspected target navigated or closed/.test(error.message)) throw error;
+          return false;
+        };
+        while (!(await evaluate(expression).catch(loading))) {
           if (Date.now() - start > timeout) {
             throw new Error(`timed out waiting for ${expression}\n${errors.join('\n')}`);
           }
@@ -222,11 +256,16 @@ export async function launch({ offline = true, timeout = 120000 } = {}) {
   }
 
   async function close() {
+    let timer;
     try {
-      await Promise.race([send('Browser.close').catch(() => {}), sleep(2000)]);
+      await Promise.race([send('Browser.close').catch(() => {}), new Promise((done) => (timer = setTimeout(done, 2000)))]);
     } finally {
+      clearTimeout(timer);
       child.kill();
       await exited;
+      // chrome_crashpad_handler and GoogleUpdater inherit the stderr of Chrome and outlive it, and an
+      // open pipe would keep this process alive until they exit
+      for (const stream of child.stdio) stream?.destroy();
       await removeProfile(profile);
     }
   }
@@ -254,13 +293,25 @@ export async function printView(page, url) {
     && !document.querySelector('.reveal-viewport.loading-scroll-mode')`);
   await page.waitFor(deckSettled);
   // reveal.js clones a slide for each of its steps after the load event, which does not wait for
-  // the clones, and a video that has not loaded a frame is printed as a black panel. A hidden video
-  // is not printed, and it may not load a frame at all. A tycho viewer is replaced by its still in
+  // the clones, and a video that has not loaded a frame is printed as a black panel. A clone with
+  // preload none or metadata is printed black as well when its server answers Range requests, hence
+  // every video is loaded with preload auto. The videos are loaded one after the other, since on a
+  // slow machine some of the videos that are loaded at once do not get a frame. A hidden video is not
+  // printed, and it may not load a frame at all. A tycho viewer is replaced by its still in
   // src/print.ts, unless it shows an error
-  await page.evaluate(`document.querySelectorAll('video[preload="none"]').forEach((video) => {
-    video.preload = 'auto';
-    video.load();
-  })`);
+  await page.evaluate(`(async () => {
+    for (const video of document.querySelectorAll('video')) {
+      if (video.preload === 'auto') continue;
+      video.preload = 'auto';
+      video.load();
+      if (!video.getClientRects().length) continue;
+      await new Promise((done) => {
+        video.addEventListener('loadeddata', done, { once: true });
+        video.addEventListener('error', done, { once: true });
+        setTimeout(done, 5000);
+      });
+    }
+  })()`);
   await page.waitFor(`[...document.querySelectorAll('video')].every((video) => video.readyState >= 2 || video.error || !video.getClientRects().length)
     && [...document.querySelectorAll('tycho-viewer')].every((viewer) => viewer.shadowRoot?.querySelector('.status.error'))
     && [...document.images].every((image) => image.complete)`, 60000);

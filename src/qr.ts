@@ -440,9 +440,10 @@ export function svgOf(code: Code, label: string): SVGSVGElement {
   return svg;
 }
 
-/** Draws the code of each div.qr under root that is not drawn yet, or a message in its place for a text that is empty or too long. */
+/** Draws the code of root, if it is a div.qr, and of each div.qr under it, that is not drawn yet, or a message in its place for a text that is empty or too long. */
 export function mountQr(root: ParentNode): void {
-  for (const el of root.querySelectorAll<HTMLElement>('.qr[data-qr]')) {
+  const own = root instanceof HTMLElement && root.matches('.qr[data-qr]') ? [root] : [];
+  for (const el of [...own, ...root.querySelectorAll<HTMLElement>('.qr[data-qr]')]) {
     if (el.querySelector(':scope > svg, :scope > .qr-error')) continue;
     const text = el.dataset.qr ?? '';
     try {

@@ -1,2 +1,5 @@
+# every text file is checked out with LF on every OS, since the tests of the editor compare the text
+# of the decks, and a deck with CRLF is covered by a test of its own in test/editor.test.mjs
+* text=auto eol=lf
 # kept byte for byte, since the vendored files and theme/beeson.js are written with LF on every OS
 theme/** -text

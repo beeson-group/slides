@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor Broucke missing deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- a first drawing of demo/broucke-sample.js whose file is missing, before one whose file is
+     found, for test/editor-r28-2.test.mjs -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>A missing file first</h2>
+  <p>A paragraph beside the drawing.</p>
+  <div class="backdrop" data-strands="missing/demo/broucke-sample.js" data-strands-select="frame=pulsating"></div>
+</section>
+
+<section>
+  <h2>The rotating frame</h2>
+  <p>A paragraph beside the drawing.</p>
+  <div class="backdrop" data-strands="../../demo/broucke-sample.js" data-strands-select="frame=pulsating" data-strands-color="family" data-strands-ramp="e"></div>
+</section>
+
+<section>
+  <h2>A scene</h2>
+  <p>A paragraph beside the drawing.</p>
+  <div class="backdrop" data-scene="nest" data-cx="0.97" data-cy="0" data-half="0.5"></div>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

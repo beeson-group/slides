@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor size round trip deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the figure of slide 5 of index.html with a width, a letterboxed figure without a caption, a
+     picture alone, a shape, a turned figure with a caption, and a pillarboxed pair with a caption
+     on a split slide, each typed to a size and back -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>A figure with a width</h2>
+  <figure class="zone">
+    <img src="../../demo/figure-light.png" alt="Curves" style="width: 500px">
+    <figcaption class="caption">Zero-velocity curves at the Jacobi constants of \(\LL{1}\), \(\LL{2}\), and \(\LL{3}\).</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>A figure without a caption</h2>
+  <figure class="zone">
+    <img src="../../demo/figure-light.png" alt="Curves">
+  </figure>
+</section>
+
+<section>
+  <h2>A picture alone</h2>
+  <img src="../../demo/figure-light.png" alt="Curves" style="width: 400px; translate: 1200px 120px">
+</section>
+
+<section>
+  <h2>A shape</h2>
+  <div class="shape rounded tone-accent" style="width: 400px; height: 160px; translate: 1200px 260px"><p>Goal</p></div>
+</section>
+
+<section>
+  <h2>A turned figure</h2>
+  <figure class="zone" style="rotate: 20deg">
+    <img src="../../demo/figure-light.png" alt="Curves">
+    <figcaption class="caption">Zero-velocity curves at the Jacobi constants.</figcaption>
+  </figure>
+</section>
+
+<section class="split">
+  <div class="panel"><h2>A pillarboxed figure</h2></div>
+  <figure class="zone">
+    <img class="for-dark" src="../../demo/figure-dark.png" alt="Curves dark">
+    <img class="for-light" src="../../demo/figure-light.png" alt="Curves light">
+    <figcaption class="caption">A caption under a pillarboxed picture.</figcaption>
+  </figure>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor curved and elbow lines deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the deck of the tests of R20.3: an empty slide with notes, and a slide with a straight arrow in a group with a paragraph, shown at a step -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>Curves</h2>
+  <aside class="notes">Notes.</aside>
+</section>
+
+<section>
+  <h2>A grouped arrow</h2>
+  <p data-group="g1" style="translate: 0px 600px">A label.</p>
+  <svg class="line fragment" width="400" height="1" style="translate: 300px 500px" data-group="g1" data-fragment-index="1"><defs><marker id="line-1" orient="auto-start-reverse"><path d="M-4-2.5 1 0-4 2.5z"></path></marker></defs><line x1="0" y1="0" x2="400" y2="0" marker-end="url(#line-1)"></line></svg>
+  <aside class="notes">More notes.</aside>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

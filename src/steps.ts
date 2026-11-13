@@ -9,7 +9,7 @@
 // data-keep is held at full opacity through the next step, or through the step of its value, and a
 // fragment is held as well while the current step highlights a class in it
 
-import type { Deck } from './reveal.d.ts';
+import type { Deck, SlideEvent } from './reveal.d.ts';
 
 export type Tone = 'accent' | 'violet' | 'blue' | 'red';
 const TONES: Tone[] = ['accent', 'violet', 'blue', 'red'];
@@ -53,6 +53,9 @@ export function resolve(steps: Step[], current: number): { held: boolean[]; lit:
 
 const words = (s: string | null | undefined) => (s ?? '').split(/\s+/).filter(Boolean);
 
+// a slide whose last step dims the steps before it and moves on by a delay, see addRestoreSteps
+const MOVES_ON = 'data-moves-on';
+
 const hasContent = (f: Element) => f.children.length > 0 || (f.textContent ?? '').trim() !== '';
 
 // a copy of a code box, made by the highlight plugin of reveal.js for each group of lines after the
@@ -69,7 +72,10 @@ const holdsVideo = (f: Element) => f.matches('video, tycho-viewer') || !!f.query
  * dims a fragment with content, or a code box. A fragment without data-fragment-index is placed by
  * reveal.js after every indexed one, in the order of the page, hence the added step is the last of
  * its slide. A slide with a fragment marked data-final, e.g. a QR code shown once the text is
- * complete, is left without the added step, since its last step restores every fragment.
+ * complete, is left without the added step, since its last step restores every fragment. A slide
+ * whose last step has a delay is left without it too and marked with data-moves-on, since the
+ * delay moves on to the next slide, and the slide keeps the look of its last step through the
+ * transition, as in PowerPoint.
  */
 export function addRestoreSteps(root: ParentNode): void {
   for (const slide of root.querySelectorAll<HTMLElement>('.reveal .slides section')) {
@@ -82,6 +88,10 @@ export function addRestoreSteps(root: ParentNode): void {
     const boxes = new Set(frags.filter(isCopy).map((f) => f.parentElement));
     const dimsBox = [...boxes].some((box) => !last.some((f) => f.parentElement === box && isCopy(f)));
     if (!dimsBox && !frags.some((f) => !last.includes(f) && hasContent(f) && !isCopy(f) && !holdsVideo(f))) continue;
+    if (last.some(delayed)) {
+      slide.setAttribute(MOVES_ON, '');
+      continue;
+    }
     const restore = document.createElement('span');
     restore.className = 'fragment';
     restore.setAttribute('data-restore', '');
@@ -96,7 +106,7 @@ export function addRestoreSteps(root: ParentNode): void {
  */
 export function applySteps(slide: Element): void {
   const frags = [...slide.querySelectorAll<HTMLElement>('.fragment')];
-  if (!slide.querySelector('section')) slide.toggleAttribute('data-complete', frags.every((f) => f.classList.contains('visible')));
+  if (!slide.querySelector('section')) slide.toggleAttribute('data-complete', !slide.hasAttribute(MOVES_ON) && frags.every((f) => f.classList.contains('visible')));
   const names = [...new Set(frags.flatMap((f) => words(f.dataset.highlight)))];
   if (!names.length && !frags.some((f) => f.hasAttribute('data-keep'))) return;
   const select = (name: string) => `.${CSS.escape(name)}`;
@@ -139,4 +149,128 @@ export function initSteps(deck: Deck): void {
   for (const type of ['fragmentshown', 'fragmenthidden', 'slidechanged']) deck.on(type, mark);
   mark();
   void typeset().then(mark);
+  // reveal.js takes current-fragment off every fragment of a slide it leaves forward, hence the
+  // last step of a slide marked data-moves-on is current again for the transition
+  deck.on('slidechanged', (event) => {
+    const { previousSlide: from, currentSlide: to } = event as SlideEvent;
+    if (!from?.hasAttribute(MOVES_ON) || !to || deck.getSlides().indexOf(to) < deck.getSlides().indexOf(from)) return;
+    const frags = [...from.querySelectorAll<HTMLElement>('.fragment')];
+    const last = Math.max(...frags.map((f) => Number(f.dataset.fragmentIndex)).filter(Number.isFinite));
+    for (const f of frags) if (Number(f.dataset.fragmentIndex) === last) f.classList.add('current-fragment');
+  });
+}
+
+// a step that starts After Previous is shown by reveal.js a delay after the step before, with
+// data-autoslide on a fragment of the step before. as in PowerPoint and Keynote, a key during a
+// delay shows the next step at once, and the later delays still play. going back, a timed step
+// does not play again by itself: Back skips the steps reached by a delay to the last step reached
+// by a key, and the delay of the step it lands on is set aside in HELD until the step changes again
+const AUTOSLIDE = 'data-autoslide';
+const HELD = 'data-autoslide-held';
+
+// a step of the deck: the index of its slide in getSlides and its fragment index, -1 before the first
+type At = { slide: number; f: number };
+
+// the fragment indices of the steps of a slide, -1 for the slide without a fragment shown
+const stepsOf = (slide: Element): number[] => [-1, ...new Set([...slide.querySelectorAll<HTMLElement>('.fragment')].map((f) => Number(f.dataset.fragmentIndex)).filter(Number.isFinite))].sort((a, b) => a - b);
+const fragmentsAt = (slide: Element, f: number) => [...slide.querySelectorAll<HTMLElement>('.fragment')].filter((el) => Number(el.dataset.fragmentIndex) === f);
+const delayed = (el: Element) => (parseInt(el.getAttribute(AUTOSLIDE) ?? el.getAttribute(HELD) ?? '', 10) || 0) > 0;
+
+/** The object of reveal.js that its controllers call, which is passed to the init of a plugin. */
+export type Internal = { cueAutoSlide(): void };
+
+/**
+ * Plays the timed steps of a deck shown without the editor as PowerPoint and Keynote play them.
+ * forDeck tells whether a key press is for the deck, rather than for a field, and internal is the
+ * object of reveal.js that its keyboard calls at the end of a key.
+ */
+export function initTimedSteps(deck: Deck, forDeck: (ev: KeyboardEvent) => boolean, internal: Internal): void {
+  // both are read by reveal.js at each input and at the end of each delay. without
+  // autoSlideStoppable, an input does not pause the delays, and the key A of reveal.js is bound
+  // here in its place. reveal.js moves the deck on at the end of a delay with autoSlideMethod
+  const config = deck.getConfig();
+  const method = config.autoSlideMethod;
+  let timer = false;
+  config.autoSlideStoppable = false;
+  config.autoSlideMethod = () => {
+    timer = true;
+    try {
+      if (typeof method === 'function') method();
+      else deck.next();
+    } finally {
+      timer = false;
+    }
+  };
+  deck.addKeyBinding({ keyCode: 65, key: 'A', description: 'Pause and resume the timed steps' }, (ev: KeyboardEvent) => {
+    if (forDeck(ev)) deck.toggleAutoSlide(!deck.isAutoSliding());
+  });
+  // reveal.js starts the delay of the step again at the end of every key. as in PowerPoint and
+  // Keynote, a key that does nothing to the show, e.g. D, leaves the running delay alone, hence the
+  // delay is cued at a key only when the step, the overview, or the pause has changed
+  const cue = internal.cueAutoSlide.bind(internal);
+  const state = () => {
+    const { h, v, f } = deck.getIndices();
+    return `${h}/${v}/${f}/${deck.isOverview()}/${deck.isPaused()}`;
+  };
+  let keyFrom: string | null = null;
+  internal.cueAutoSlide = () => {
+    if (keyFrom === null || keyFrom !== state()) cue();
+  };
+  window.addEventListener('keydown', () => {
+    keyFrom = state();
+    setTimeout(() => (keyFrom = null), 0);
+  }, true);
+  window.addEventListener('keydown', () => (keyFrom = null));
+
+  const slides = () => deck.getSlides();
+  const here = (): At => {
+    const slide = deck.getCurrentSlide();
+    const shown = [...slide.querySelectorAll<HTMLElement>('.fragment.visible')].map((f) => Number(f.dataset.fragmentIndex)).filter(Number.isFinite);
+    return { slide: slides().indexOf(slide), f: Math.max(-1, ...shown) };
+  };
+  // the step before at, or null for the first step of the deck
+  const before = (at: At): At | null => {
+    const steps = stepsOf(slides()[at.slide]);
+    const k = steps.indexOf(at.f);
+    if (k > 0) return { slide: at.slide, f: steps[k - 1] };
+    const prev = slides()[at.slide - 1];
+    return prev ? { slide: at.slide - 1, f: stepsOf(prev).at(-1)! } : null;
+  };
+  const delayedAt = (at: At | null) => !!at && at.f >= 0 && fragmentsAt(slides()[at.slide], at.f).some(delayed);
+  const same = (a: At | null, b: At | null) => !!a && !!b && a.slide === b.slide && a.f === b.f;
+  // whether each step was last reached going forward by a delay, or by a key. a step not reached
+  // yet, e.g. one gone back to from a slide shown with the scrubber, is taken as reached by a delay
+  // when the step before it has a delay
+  const reached = new Map<string, boolean>();
+  const byDelay = (at: At) => reached.get(`${at.slide}:${at.f}`) ?? delayedAt(before(at));
+
+  let last = here();
+  let held: Element[] = [];
+  const change = () => {
+    const now = here();
+    if (same(now, last)) return;
+    for (const el of held) {
+      el.setAttribute(AUTOSLIDE, el.getAttribute(HELD) ?? '');
+      el.removeAttribute(HELD);
+    }
+    held = [];
+    const from = last;
+    last = now;
+    const back = now.slide < from.slide || (now.slide === from.slide && now.f < from.f);
+    if (!back) reached.set(`${now.slide}:${now.f}`, timer);
+    if (!back || deck.isOverview()) return;
+    if (delayedAt(now)) {
+      held = fragmentsAt(slides()[now.slide], now.f).filter((el) => el.hasAttribute(AUTOSLIDE));
+      for (const el of held) {
+        el.setAttribute(HELD, el.getAttribute(AUTOSLIDE)!);
+        el.removeAttribute(AUTOSLIDE);
+      }
+    }
+    // the delay of the step may have been started before this event, and it is cued again without it
+    internal.cueAutoSlide();
+    if (!delayedAt(now)) return;
+    // a step reached by a delay is skipped after one step back
+    if (same(before(from), now) && byDelay(now)) setTimeout(() => deck.prev(), 0);
+  };
+  for (const type of ['fragmentshown', 'fragmenthidden', 'slidechanged']) deck.on(type, change);
 }

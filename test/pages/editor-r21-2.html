@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor backdrop fixes deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the backdrops of the tests of the fixes of a backdrop as an element of the editor -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>A content slide with a backdrop</h2>
+  <p>A paragraph beside the drawing.</p>
+  <div class="backdrop" data-scene="nest" data-cx="0.97" data-cy="0" data-half="0.5"></div>
+</section>
+
+<section>
+  <h2>A content slide with a looping backdrop</h2>
+  <p>A paragraph beside the loop.</p>
+  <div class="backdrop" data-scene="nest" data-cx="0.97" data-cy="0" data-half="0.5" data-loop></div>
+</section>
+
+<section>
+  <h2>A content slide without a backdrop</h2>
+  <p>A paragraph alone.</p>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

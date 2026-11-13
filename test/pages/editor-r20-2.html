@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor shapes deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the deck of the tests of R20.2: an empty content slide, a slide with each kind of shape, a frame without a fill, and a shape on a content slide to change and reset -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>Empty</h2>
+  <p>A slide to draw shapes on.</p>
+  <aside class="notes">Notes of the empty slide.</aside>
+</section>
+
+<section>
+  <h2>Every shape</h2>
+  <div class="shape rounded tone-accent weight-6" style="width: 400px; height: 160px; translate: 120px 260px"><p>Goal</p></div>
+  <div class="shape" style="width: 300px; height: 160px; translate: 600px 260px"></div>
+  <div class="shape ellipse tone-red fill-none" style="width: 300px; height: 160px; translate: 980px 260px"></div>
+  <div class="shape triangle" style="width: 200px; height: 160px; translate: 1360px 260px"></div>
+  <div class="shape arrow tone-blue" style="width: 300px; height: 120px; translate: 120px 520px"></div>
+  <div class="shape arrow-both" style="width: 300px; height: 120px; translate: 500px 520px"></div>
+  <div class="shape brace flip-x" style="width: 80px; height: 300px; translate: 880px 480px"></div>
+  <div class="shape plus" style="width: 140px; height: 140px; translate: 1040px 520px"></div>
+  <div class="shape equals veil" style="width: 140px; height: 140px; translate: 1260px 520px"></div>
+</section>
+
+<section>
+  <h2>A frame</h2>
+  <div class="shape rounded fill-none" style="width: 1200px; height: 500px; translate: 200px 300px"><p>Framed</p></div>
+</section>
+
+<section>
+  <h2>A card</h2>
+  <p>A paragraph beside a card.</p>
+  <div class="shape rounded" style="width: 500px; height: 300px; translate: 1100px 400px; rotate: 30deg"><p>Card</p></div>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

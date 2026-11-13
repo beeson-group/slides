@@ -4,8 +4,8 @@
 // nondimensional, in the rotating frame
 
 import { scene } from './scenes.ts';
-import { colormapColor, fitView, mix, shadeOf, strandsFor } from './strands.ts';
-import type { Colormap, Dot } from './strands.ts';
+import { colormapColor, fitView, load, mix, shadeOf, strandsFor } from './strands.ts';
+import type { Colormap, Dot, StrandRecord } from './strands.ts';
 
 export type Member = { s: Float64Array; path: number[]; times: number[]; t: number };
 export type Tone = 'orange' | 'violet' | 'text' | 'hero' | 'line';
@@ -479,6 +479,8 @@ export class Orbits {
   private trail: HTMLCanvasElement | null = null;
   // resolved when the strands are in place, at once for a named scene and after the load of a file
   readonly ready: Promise<void>;
+  // the records of the file once it is loaded, which the editor reads to tell two selections apart
+  records: StrandRecord[] | null = null;
 
   static of(el: HTMLElement): Orbits | undefined {
     return CACHE.get(el);
@@ -522,7 +524,12 @@ export class Orbits {
     this.order();
     CACHE.set(el, this);
     this.fit();
-    this.ready = file ? strandsFor(el).then(({ strands, dots }) => this.install(strands, dots)) : Promise.resolve();
+    this.ready = file
+      ? Promise.all([strandsFor(el), load(el.dataset.strands ?? '')]).then(([{ strands, dots }, f]) => {
+          this.records = f?.families ?? null;
+          this.install(strands, dots);
+        })
+      : Promise.resolve();
   }
 
   private install(strands: Strand[], dots: Dot[]): void {
@@ -945,22 +952,27 @@ export class Orbits {
     if (this.pointer) this.glowing(ctx, c);
   }
 
+  // the head of the first strand of a scene, or of each strand of a file, which has no strands and no
+  // paths before it is loaded
   private loopHead(ctx: CanvasRenderingContext2D, c: Colors, now: number): void {
-    const s = this.strands[0], p = this.paths[0].px, n = s.times.length;
-    const tau = this.raf && this.t0 !== null ? ((((now - this.t0) / 1000) % LOOP) / LOOP) * s.T : this.finished ? 0.37 * s.T : 0;
-    let j = 0;
-    while (j < n - 1 && s.times[j + 1] <= tau) j++;
-    // a trail over the last tenth of the period, brighter toward the head
-    const back = 0.1 * s.T;
-    ctx.lineWidth = this.lw * 1.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = c.accent;
-    for (let k = j; k > 0 && s.times[k] > tau - back; k--) {
-      const a = 1 - (tau - s.times[k]) / back;
-      ctx.globalAlpha = 0.85 * a * a;
-      ctx.beginPath(); ctx.moveTo(p[2 * (k - 1)], p[2 * (k - 1) + 1]); ctx.lineTo(p[2 * k], p[2 * k + 1]); ctx.stroke();
+    const count = this.dots === null ? Math.min(1, this.strands.length) : this.strands.length;
+    for (let i = 0; i < count && this.paths[i]; i++) {
+      const s = this.strands[i], p = this.paths[i].px, n = s.times.length;
+      const tau = this.raf && this.t0 !== null ? ((((now - this.t0) / 1000) % LOOP) / LOOP) * s.T : this.finished ? 0.37 * s.T : 0;
+      let j = 0;
+      while (j < n - 1 && s.times[j + 1] <= tau) j++;
+      // a trail over the last tenth of the period, brighter toward the head
+      const back = 0.1 * s.T;
+      ctx.lineWidth = this.lw * 1.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round'; ctx.strokeStyle = c.accent;
+      for (let k = j; k > 0 && s.times[k] > tau - back; k--) {
+        const a = 1 - (tau - s.times[k]) / back;
+        ctx.globalAlpha = 0.85 * a * a;
+        ctx.beginPath(); ctx.moveTo(p[2 * (k - 1)], p[2 * (k - 1) + 1]); ctx.lineTo(p[2 * k], p[2 * k + 1]); ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      const [X, Y] = this.at(i, j, tau);
+      ctx.fillStyle = c.accent; ctx.beginPath(); ctx.arc(X, Y, 3 * this.lw, 0, 2 * Math.PI); ctx.fill();
     }
-    ctx.globalAlpha = 1;
-    const [X, Y] = this.at(0, j, tau);
-    ctx.fillStyle = c.accent; ctx.beginPath(); ctx.arc(X, Y, 3 * this.lw, 0, 2 * Math.PI); ctx.fill();
   }
 
   // the flight time reached by strand i at the time now, which is negative before its start
@@ -978,6 +990,13 @@ export class Orbits {
   // true when a head is drawn on at least one strand during a trace
   get headed(): boolean {
     return this.strands.some((_, i) => this.headOf(i) > 0);
+  }
+
+  // the seconds into the trace at which its last strand is traced to its end, with strand i started
+  // i times the stagger late
+  get span(): number {
+    if (!(this.Tmax > 0)) return this.duration;
+    return Math.max(...this.strands.map((s, i) => (s.times[s.times.length - 1] / this.Tmax) * this.duration + i * this.stagger));
   }
 
   // the seconds into the trace at which its first head is drawn, e.g. at the start of a record of a file

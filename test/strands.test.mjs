@@ -502,3 +502,48 @@ test('a colormap is painted for the background of each mode, and a colormap of a
   const plasma = await page.evaluate(painted('plasma'));
   assert.ok(plasma.maps.every((name) => name === 'plasma') && plasma.shades.every((shade) => shade === null));
 });
+
+// the centers of the heads painted on the head canvas of the first backdrop at two frames, read from
+// the calls of arc on its context
+const loopHeads = `(async () => {
+  const b = Beeson.backdrops[0];
+  await b.ready;
+  const [, head] = b.canvases;
+  const ctx = head.getContext('2d');
+  const arc = ctx.arc;
+  let seen = [];
+  ctx.arc = function (x, y, ...rest) { seen.push([x, y]); return arc.call(this, x, y, ...rest); };
+  const frame = () => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+  await frame();
+  seen = [];
+  await frame();
+  const first = seen;
+  await new Promise((done) => setTimeout(done, 300));
+  seen = [];
+  await frame();
+  ctx.arc = arc;
+  return { strands: b.strands.length, tracing: b.tracing, first, later: seen };
+})()`;
+
+test('a backdrop of a file with data-loop loops a head on each of its strands', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  // without reduced motion, which is the setting of the Windows runner of GitHub, and under which
+  // a backdrop is drawn complete
+  const page = await browser.newPage({ motion: true });
+  await page.goto(deckUrl('test/pages/strands-loop.html'));
+  await page.waitFor('document.readyState === "complete"');
+  await page.evaluate('new Promise((done) => setTimeout(done, 500))');
+  assert.deepEqual(page.errors.filter((e) => !/Failed to load resource/.test(e)), []);
+  await page.waitFor(deckSettled);
+  const seen = await page.evaluate(loopHeads);
+  assert.equal(seen.strands, 8);
+  assert.ok(seen.tracing);
+  // one head per strand at a frame, each drawn once
+  const heads = (calls) => new Set(calls.slice(-seen.strands).map(([x, y]) => `${x.toFixed(1)} ${y.toFixed(1)}`)).size;
+  assert.ok(seen.first.length >= seen.strands && seen.first.length % seen.strands === 0, `${seen.first.length} heads`);
+  assert.equal(heads(seen.first), seen.strands);
+  // the heads move along their strands
+  assert.notDeepEqual(seen.later.slice(-seen.strands), seen.first.slice(-seen.strands));
+  assert.deepEqual(page.errors.filter((e) => !/Failed to load resource/.test(e)), []);
+});

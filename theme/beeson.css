@@ -32,6 +32,7 @@ html[data-theme="dark"] {
   --strand-8: #f2f2ef;
   --panel: #050505;
   --panel-text: #f2f2ef;
+  --panel-subtle: #a6a6a0;
   --paper: #ffffff;
   /* a QR code is drawn dark on a light tile in both modes, since many scanners do not read an
      inverted code */
@@ -166,13 +167,64 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal a:hover { color: var(--accent); }
 .reveal sub, .reveal sup { font-size: 0.7em; line-height: 0; }
 
+/* words in a color of the palette, set with Text Color of the editor. tone-text gives the words of
+   a block drawn in another color, e.g. a small paragraph, the text color */
+.reveal .tone-text { color: var(--text); }
+.reveal .tone-accent { color: var(--accent); }
+.reveal .tone-violet { color: var(--violet); }
+.reveal .tone-blue { color: var(--blue); }
+.reveal .tone-red { color: var(--red); }
+.reveal .tone-subtle { color: var(--subtle); }
+.reveal .tone-muted { color: var(--muted); }
+
+/* a text block centered with Center of the editor. reveal.js reads the class center on a section, hence the
+   editor writes it only on a text block */
+.reveal .center { text-align: center; }
+
+/* a line or an arrow on a slide, set with Insert > Line of the editor: an svg as large as the box of
+   its line, or of the path of a curve or an elbow, placed at the upper left of the slide and moved
+   by its translate, stroked in --text or in the tone of its class at the width of a mark of a plot.
+   an arrowhead is the marker of the svg, drawn in the same color */
+.reveal .slides section svg.line { position: absolute; left: 0; top: 0; margin: 0; overflow: visible; pointer-events: none; color: var(--text); }
+.reveal .slides section svg.line.tone-accent { color: var(--accent); }
+.reveal .slides section svg.line.tone-violet { color: var(--violet); }
+.reveal .slides section svg.line.tone-blue { color: var(--blue); }
+.reveal .slides section svg.line.tone-red { color: var(--red); }
+.reveal .slides section svg.line.tone-muted { color: var(--muted); }
+/* the weight in px of the stroke of a line and of the outline of a shape, 3 without a class */
+.reveal :where(svg.line, .shape) { --weight: 3px; }
+.reveal :where(svg.line, .shape).weight-2 { --weight: 2px; }
+.reveal :where(svg.line, .shape).weight-6 { --weight: 6px; }
+.reveal :where(svg.line, .shape).weight-8 { --weight: 8px; }
+.reveal svg.line > line, .reveal svg.line > path { stroke: currentColor; stroke-width: var(--weight); stroke-linecap: butt; fill: none; }
+/* a dash of three weights with a gap of two. the head of an arrow is in units of the stroke
+   width, hence it grows with the weight */
+.reveal svg.line.dashed > line, .reveal svg.line.dashed > path { stroke-dasharray: calc(3 * var(--weight)) calc(2 * var(--weight)); }
+.reveal svg.line marker { overflow: visible; }
+.reveal svg.line marker path { fill: currentColor; stroke: none; }
+
 /* lists: a short orange dash in place of a bullet, numbers in gray */
 .reveal ul, .reveal ol { display: block; margin: 24px 0 0; padding: 0; list-style: none; }
 .reveal li { position: relative; margin: 0 0 14px; padding-left: 54px; }
 .reveal ul > li::before { content: ""; position: absolute; left: 0; top: 0.72em; width: 28px; height: 2px; background: var(--accent); }
-.reveal ol { counter-reset: item; }
-.reveal ol > li { counter-increment: item; }
-.reveal ol > li::before { content: counter(item); position: absolute; left: 0; top: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* the items of a ul.dots or a ul.arrows take a ring or a chevron in place of the dash, centered
+   on its middle. a nested list without the class keeps the dash */
+.reveal ul.dots > li::before { --mark-width: 14px; top: calc(0.72em - 6px); left: 7px; width: 14px; height: 14px; box-sizing: border-box; border: 2.5px solid var(--accent); border-radius: 50%; background: none; }
+.reveal ul.arrows > li::before { --mark-width: 12px; top: calc(0.72em - 8px); left: 9px; width: 12px; height: 18px; clip-path: polygon(0 0, 30% 0, 100% 50%, 30% 100%, 0 100%, 70% 50%); }
+/* the number is the counter list-item, which a browser starts from the attribute start of an ol.
+   it ends where a number of one digit ends, so that the gap before the words is the same for any
+   number of digits */
+.reveal ol > li::before { --mark-width: 1ch; content: counter(list-item); position: absolute; right: calc(100% - 1ch); top: 0; color: var(--muted); font-variant-numeric: tabular-nums; }
+/* an empty item, e.g. the placeholder of a new slide left empty, is drawn without its mark */
+.reveal li:empty::before { content: none; }
+/* an empty paragraph or item takes the height of a line, as in the editor, where its prompt is
+   drawn, so that an element placed with translate under it is drawn at the same place in both */
+.reveal .slides section :is(p, li):empty { min-height: 1lh; }
+/* in a centered list, nested lists too, and in a list of a shape not aligned to the left, the mark
+   is drawn in the line before the words and centered with them. its box, --mark-width wide,
+   starts 54 px before the words, and the mark is drawn where it is drawn at the left */
+.reveal :is(ul.center, ol.center, .shape > :is(ul, ol):not(.left)) li { padding-left: 0; }
+.reveal :is(ul.center, ol.center, .shape > :is(ul, ol):not(.left)) li::before { position: relative; right: auto; display: inline-block; vertical-align: top; margin-right: calc(54px - var(--mark-width, 28px)); }
 .reveal li ul, .reveal li ol { margin-top: 10px; font-size: 36px; }
 .reveal .outline { font-size: 36px; line-height: 1.7; color: var(--muted); margin: 48px 0 0; }
 .reveal .outline > li { margin: 0; padding-left: 42px; }
@@ -183,6 +235,7 @@ html, body, .reveal-viewport { background: var(--bg); }
 /* math: the size of the MathJax output is inherited, and a display block is a little larger and left aligned */
 .reveal .math { margin: 28px 0 4px; font-size: 52px; }
 .reveal mjx-container[display="true"] { margin: 0 !important; text-align: left !important; }
+.reveal .math.center mjx-container[display="true"] { text-align: center !important; }
 .reveal mjx-container { color: inherit; }
 
 /* code: the system monospace, since a monospace face is not vendored with the theme */
@@ -214,8 +267,9 @@ html, body, .reveal-viewport { background: var(--bg); }
 .reveal .hljs-comment { color: var(--muted); font-style: italic; }
 .reveal .hljs-operator { color: var(--subtle); }
 
-/* tables: hairlines, without fills */
+/* tables: hairlines on the color of the slide, which hides what a table is moved over */
 .reveal table { margin: 24px 0 0; border-collapse: collapse; font-size: 36px; line-height: 1.4; }
+.reveal .slides section > table, .reveal .slides section > .col > table { position: relative; z-index: 1; background: var(--bg); }
 .reveal th, .reveal td { padding: 10px 40px 10px 0; text-align: left; vertical-align: top; border-bottom: 1px solid var(--line); font-weight: inherit; }
 .reveal th { color: var(--subtle); font-style: italic; }
 .reveal tr:last-child td { border-bottom: 0; }
@@ -317,6 +371,9 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section.wide > .math,
 .reveal .slides section.wide > pre,
 .reveal .slides section.wide > .col { max-width: 1680px; width: auto; }
+/* a text block with a width in its style, e.g. one sized in the editor, is wrapped at that width,
+   past the text column */
+.reveal .slides section > :is(h2, p, ul, ol, .math)[style*="width:"] { max-width: none; }
 
 /* title and closing, plate: the backdrop over the whole slide, the words in a block at the lower left */
 .reveal .slides section.title,
@@ -351,7 +408,7 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 
 /* figure, plate: a figure or backdrop over the whole slide, the head at the top left, the caption at the lower left */
 .reveal .slides section.figure > h2 { position: absolute; left: 120px; top: 100px; width: 1200px; margin: 0; }
-.reveal .slides section.figure .caption { left: 120px; bottom: 130px; width: 900px; margin: 0; }
+.reveal .slides section.figure > .caption { left: 120px; bottom: 130px; width: 900px; margin: 0; }
 .reveal .slides section.figure .plate { display: block; padding: 200px 120px 250px; box-sizing: border-box; }
 .reveal .slides section.figure .plate > img,
 .reveal .slides section.figure .plate > svg,
@@ -362,6 +419,17 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section .zone:has(> img.paper) { display: flex; justify-content: center; align-items: center; }
 .reveal .slides section.figure .plate > img.paper,
 .reveal .slides section .zone > img.paper { width: auto; height: auto; max-width: 100%; max-height: 100%; min-width: 0; min-height: 0; }
+/* a picture with a width in its style, e.g. one sized in the editor, is drawn at that size, past
+   the box of its zone or plate, and with a height in its style as well it is stretched to it */
+.reveal .slides section img[style*="width:"],
+.reveal .slides section video[style*="width:"] { max-width: none !important; max-height: none !important; flex-shrink: 0; }
+.reveal .slides section img[style*="width:"]:not([style*="height:"]),
+.reveal .slides section video[style*="width:"]:not([style*="height:"]) { height: auto !important; }
+.reveal .slides section img[style*="width:"][style*="height:"]:not([style*="object-fit"]),
+.reveal .slides section video[style*="width:"][style*="height:"]:not([style*="object-fit"]) { object-fit: fill !important; }
+/* a zone around a picture with a width is the size of the picture, hence its caption is under the
+   picture and as wide as it. the still of a viewer in the print view keeps the box of its viewer */
+.reveal .slides section .zone:not(.viewer-still):has(> img[style*="width:"], > video[style*="width:"], > .qr[style*="width:"]) { width: auto; height: auto; }
 /* the videos of a zone or a plate are stacked in one place, and a video under a later one that is shown is hidden
    once the later one has faded in, see src/video.ts. in a plate of the class row, the figures are side by side,
    each in an equal share of the plate */
@@ -379,6 +447,9 @@ body.no-lockup .reveal .slides section.closing::before { content: none; }
 .reveal .slides section.split .panel h2 { width: auto; color: inherit; font-size: 64px; margin-bottom: 28px; }
 .reveal .slides section.split .panel p, .reveal .slides section.split .panel li { font-size: 48px; }
 .reveal .slides section.split .panel .foot { color: #7c7c76; }
+/* the style Small in the panel, and code in the colors of the panel, which is dark in both modes */
+.reveal .slides section.split .panel .small, .reveal .slides section.split .panel .small li { font-size: 36px; color: var(--panel-text); }
+.reveal .slides section.split .panel code { color: var(--panel-subtle); }
 /* on the black canvas the edge of the panel is marked with a hairline */
 html:not([data-theme="light"]) .reveal .slides section.split .panel { box-shadow: 1px 0 0 var(--line); }
 .reveal .slides section.split .zone { left: 880px; top: 120px; width: 920px; height: 800px; }
@@ -438,6 +509,9 @@ html:not([data-theme="light"]) .reveal .slides section.split .panel { box-shadow
 .reveal .paper { background: var(--paper); padding: 24px; border-radius: 2px; box-sizing: border-box; }
 .reveal .paper > img { background: var(--paper); }
 html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); }
+/* a picture clipped to the ellipse of its box. the crop of the editor writes its inset with the same
+   round 50% on an oval picture, which cuts the ellipse of the cropped box */
+.reveal img.oval { clip-path: inset(0 round 50%); }
 /* a QR code, square at the width of its div, with the quiet zone of four modules inside its tile */
 .reveal .qr { position: relative; width: 320px; aspect-ratio: 1; }
 .reveal .qr > svg { display: block; width: 100%; height: 100%; }
@@ -446,6 +520,40 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
 .reveal .qr .qr-eye { fill: var(--qr-eye); }
 .reveal .qr .qr-logo { position: absolute; left: 50%; top: 50%; translate: -50% -50%; aspect-ratio: 1; border-radius: 50%; background: var(--qr-logo) center / contain no-repeat; }
 .reveal .qr-error { font-size: 28px; color: var(--accent); }
+
+/* ---- shapes: a box placed and sized in its style, set with Insert > Shape of the editor, with an outline of 3 px in
+   its tone over a tint of the tone and its words centered. the other geometries are an svg that beeson.js draws ---- */
+.reveal .slides section .shape { position: absolute; left: 0; top: 0; margin: 0; box-sizing: border-box; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 12px 24px; color: var(--text); border: var(--weight) solid currentColor; background: color-mix(in srgb, currentColor 20%, var(--bg)); pointer-events: none; }
+.reveal .slides section .shape.tone-accent { color: var(--accent); }
+.reveal .slides section .shape.tone-violet { color: var(--violet); }
+.reveal .slides section .shape.tone-blue { color: var(--blue); }
+.reveal .slides section .shape.tone-red { color: var(--red); }
+.reveal .slides section .shape.tone-muted { color: var(--muted); }
+/* the words keep the color of the text, under the specificity of a tone of the words */
+.reveal .slides section .shape > :not(svg) { margin: 0; position: relative; }
+.reveal :where(.shape) > :where(:not(svg)) { color: var(--text); }
+.reveal .slides section .shape a { pointer-events: auto; }
+/* the words of a shape aligned left with Align Left of the editor */
+.reveal .slides section .shape > .left { align-self: stretch; text-align: left; }
+.reveal .slides section .shape.rounded { border-radius: 24px; }
+.reveal .slides section .shape.rounded.round-s { border-radius: 12px; }
+.reveal .slides section .shape.rounded.round-l { border-radius: 48px; }
+.reveal .slides section .shape.ellipse { border-radius: 50%; }
+.reveal .slides section .shape.no-outline { --weight: 0px; }
+.reveal .slides section .shape.fill-none { background: none; }
+.reveal .slides section .shape.fill-ground { background: var(--bg); }
+.reveal .slides section .shape.veil { background: color-mix(in srgb, var(--bg) 75%, transparent); }
+.reveal .slides section .shape.veil:not(.weight-6, .weight-8) { --weight: 0px; }
+.reveal .slides section .shape:is(.triangle, .arrow, .arrow-both, .brace, .plus, .equals) { border: 0; background: none; }
+.reveal .slides section .shape > svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.reveal .slides section .shape > svg path { fill: color-mix(in srgb, currentColor 20%, var(--bg)); stroke: currentColor; stroke-width: var(--weight); stroke-linejoin: miter; }
+.reveal .slides section .shape.fill-none > svg path, .reveal .slides section .shape.brace > svg path { fill: none; }
+.reveal .slides section .shape.fill-ground > svg path { fill: var(--bg); }
+.reveal .slides section .shape.veil > svg path { fill: color-mix(in srgb, var(--bg) 75%, transparent); }
+/* a flip mirrors the drawing and not the words */
+.reveal .slides section .shape.flip-x > svg { scale: -1 1; }
+.reveal .slides section .shape.flip-y > svg { scale: 1 -1; }
+.reveal .slides section .shape.flip-x.flip-y > svg { scale: -1 -1; }
 .reveal img:hover, .reveal .zone:hover > img { transition: filter 200ms ease-out; }
 
 /* ---- steps: a new element is faded in, the earlier ones are dimmed until the slide is complete ---- */
@@ -469,6 +577,11 @@ html[data-theme="dark"] .reveal .invert { filter: invert(1) hue-rotate(180deg); 
 /* stepped math: a held fragment is not dimmed, and the classes named by a shown data-highlight are colored. the
    colors are important, since the tone of a mark of a plot is set in its style attribute */
 .reveal .slides section:not([data-complete]) .fragment.visible[data-held]:not(.current-fragment) { opacity: 1; }
+/* a dimmed step, Dim of the editor, is drawn from its step on at the opacity of a ghost, also on the complete
+   slide. a ghost is an element set with Ghosted of the editor, and its opacity is important, since the steps
+   set the opacity of a fragment */
+.reveal .slides section .fragment.visible.semi-fade-out:not([data-held]) { opacity: 0.25; }
+.reveal .slides section .ghost { opacity: 0.25 !important; }
 .reveal .hl-target { transition: color 400ms ease-out; }
 .reveal .hl-accent { color: var(--accent) !important; }
 .reveal .hl-violet { color: var(--violet) !important; }
@@ -669,7 +782,13 @@ html.to-dark::view-transition-old(flip-deck), html.to-dark::view-transition-new(
 
 /* ---- print (?print-pdf) and stills (?still): everything drawn complete, without the chrome outside the slide ---- */
 html.reveal-print .theme-switch, html.reveal-print .pointer-dot { display: none; }
+/* a page is one piece for the printer, hence a figure taller than the rest of its slide is cut at the
+   edge of the page and not continued on a page of its own */
+html.reveal-print .reveal .pdf-page { overflow: hidden; contain: size; }
 html.reveal-print .reveal .slides section { height: 1080px !important; padding: 120px 120px 0 120px !important; }
+/* a slide stacks its elements by their z-index, as in the show, hence one sent behind the others is not
+   drawn under the background of its page */
+html.reveal-print .reveal .slides section { isolation: isolate; }
 html.reveal-print .reveal .slides section.title,
 html.reveal-print .reveal .slides section.closing,
 html.reveal-print .reveal .slides section.figure,

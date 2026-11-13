@@ -8,7 +8,8 @@
 // slide with a video. A video is placed over its image as a PowerPoint video, and it would be
 // restarted on a new PowerPoint slide, hence the steps that show it are stacked on one PowerPoint
 // slide under the video, and each later step is shown on a click. The notes of a slide are copied
-// to each of its PowerPoint slides.
+// to each of its PowerPoint slides, and each item of a list in the notes is a paragraph of its own
+// after a dash.
 // Keynote opens this file too. The script exits nonzero on a JavaScript error in the page, and on a
 // video without an MP4 source, since MP4 is the one format that plays in every version of PowerPoint.
 import { writeFileSync } from 'node:fs';
@@ -26,7 +27,14 @@ const [deck = 'index.html', output = 'slides.pptx'] = process.argv.slice(2);
 const listSteps = `[...document.querySelectorAll('.pdf-page')].map((step) => {
   const page = step.getBoundingClientRect();
   const notes = [...step.querySelectorAll('aside.notes')]
-    .flatMap((aside) => aside.textContent.split(/\\n\\s*\\n/))
+    .flatMap((aside) => {
+      const copy = aside.cloneNode(true);
+      for (const li of copy.querySelectorAll('li')) {
+        li.prepend('\\n\\n– ');
+        li.append('\\n\\n');
+      }
+      return copy.textContent.split(/\\n\\s*\\n/);
+    })
     .map((text) => text.replace(/\\s+/g, ' ').trim())
     .filter(Boolean);
   const videos = [...step.querySelectorAll('video')]

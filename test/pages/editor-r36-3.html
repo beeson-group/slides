@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor glued line turns deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the deck of the tests of R36.3: a slide of two boxes joined by a glued curved arrow, with an ellipse and a loose line, and a slide of the same arrow turned by 20 degrees in the file -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>Glued</h2>
+  <div class="shape rounded" style="width: 241px; height: 148px; translate: 279px 463px" data-anchor="a1"><p>Goal</p></div>
+  <div class="shape rounded" style="width: 241px; height: 148px; translate: 1186px 463px" data-anchor="a2"></div>
+  <div class="shape ellipse" style="width: 240px; height: 160px; translate: 1186px 800px"></div>
+  <svg class="line" width="666" height="83" style="translate: 520px 454px" data-from="a1 1 0.5" data-to="a2 0 0.5"><defs><marker id="line-1" orient="auto-start-reverse"><path d="M-4-2.5 1 0-4 2.5z"></path></marker></defs><path d="M0 83 Q333 -83 666 83" marker-end="url(#line-1)"></path></svg>
+  <svg class="line" width="400" height="1" style="translate: 700px 950px"><defs><marker id="line-2" orient="auto-start-reverse"><path d="M-4-2.5 1 0-4 2.5z"></path></marker></defs><line x1="0" y1="0" x2="400" y2="0"></line></svg>
+</section>
+
+<section>
+  <h2>Turned</h2>
+  <div class="shape rounded" style="width: 241px; height: 148px; translate: 279px 463px" data-anchor="a1"><p>Goal</p></div>
+  <div class="shape rounded" style="width: 241px; height: 148px; translate: 1186px 463px" data-anchor="a2"></div>
+  <svg class="line" width="666" height="83" style="translate: 520px 454px; rotate: 20deg" data-from="a1 1 0.5" data-to="a2 0 0.5"><defs><marker id="line-3" orient="auto-start-reverse"><path d="M-4-2.5 1 0-4 2.5z"></path></marker></defs><path d="M0 83 Q333 -83 666 83" marker-end="url(#line-3)"></path></svg>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

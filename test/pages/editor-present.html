@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Present deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+</head>
+<body>
+<!-- the second slide is hidden, hence the show has one slide less than the editor before each
+     slide after it. the third slide has two steps that dim the step before them, and the fourth
+     slide has a timing of one second -->
+<div class="reveal">
+  <div class="slides">
+    <section>
+      <h2>One</h2>
+      <p>The first slide.</p>
+    </section>
+    <section data-visibility="hidden">
+      <h2>Two</h2>
+      <p>The hidden slide.</p>
+    </section>
+    <section>
+      <h2>Three</h2>
+      <p class="fragment" data-fragment-index="0">The first step.</p>
+      <p class="fragment" data-fragment-index="1">The second step.</p>
+    </section>
+    <section data-timing="1">
+      <h2>Four</h2>
+      <p>The fourth slide.</p>
+    </section>
+    <section>
+      <h2>Five</h2>
+      <p>The last slide.</p>
+    </section>
+  </div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

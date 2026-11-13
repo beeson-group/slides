@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor bullet kinds deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the decks of the tests of R20.4: a list of each kind, a numbered list with a start number, a
+     paragraph, a list with a nested dash list and a nested numbered list, two dash lists around a
+     paragraph, and an arrow list to indent -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>List kinds</h2>
+  <ul>
+    <li>Alpha</li>
+    <li>Bravo</li>
+  </ul>
+  <ul class="dots">
+    <li>Dot one</li>
+  </ul>
+  <ul class="arrows">
+    <li>Arrow one
+      <ul>
+        <li>Inner dash</li>
+      </ul>
+    </li>
+    <li>Arrow two</li>
+  </ul>
+  <ol start="4">
+    <li>Four</li>
+  </ol>
+  <p>A lone paragraph</p>
+  <aside class="notes">Notes of the kinds.</aside>
+</section>
+
+<section>
+  <h2>A nested list</h2>
+  <ul>
+    <li>Top one
+      <ul>
+        <li>Sub dash</li>
+      </ul>
+    </li>
+    <li>Top two
+      <ol>
+        <li>Sub number</li>
+      </ol>
+    </li>
+  </ul>
+</section>
+
+<section>
+  <h2>Two kinds apart</h2>
+  <ul>
+    <li>Dash item</li>
+  </ul>
+  <p>Between</p>
+  <ul>
+    <li>Arrow item</li>
+  </ul>
+</section>
+
+<section>
+  <h2>Indented arrows</h2>
+  <ul class="arrows">
+    <li>One</li>
+    <li>Two</li>
+    <li>Three</li>
+  </ul>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

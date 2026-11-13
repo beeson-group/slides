@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <title>Figures in a zone and in a plate</title>
+  <link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+  <link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+  <link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+  <link rel="stylesheet" href="../../theme/beeson.css">
+</head>
+<body>
+  <div class="reveal"><div class="slides">
+    <section>
+      <h2>A pair in a zone</h2>
+      <p style="translate: 0px 40px">A paragraph drawn under the figure.</p>
+      <figure class="zone">
+        <img class="for-dark" src="../../demo/figure-dark.png" alt="A figure, dark version">
+        <img class="for-light" src="../../demo/figure-light.png" alt="A figure, light version">
+        <figcaption class="caption">A caption under the pair.</figcaption>
+      </figure>
+      <p style="translate: 0px 80px">A paragraph drawn over the figure.</p>
+    </section>
+    <section>
+      <h2>One image in a zone</h2>
+      <p style="translate: 0px 40px">A paragraph drawn under the figure.</p>
+      <figure class="zone">
+        <img src="../../demo/figure-light.png" alt="A figure in both modes">
+        <figcaption class="caption">A caption under the one image.</figcaption>
+      </figure>
+      <p style="translate: 0px 80px">A paragraph drawn over the figure.</p>
+    </section>
+    <section class="figure">
+      <h2>A pair in a plate</h2>
+      <div class="plate">
+        <img class="for-dark" src="../../demo/figure-dark.png" alt="A plate, dark version">
+        <img class="for-light" src="../../demo/figure-light.png" alt="A plate, light version">
+      </div>
+      <p class="caption">A caption of the pair in a plate.</p>
+    </section>
+    <section class="figure">
+      <h2>One image in a plate</h2>
+      <div class="plate">
+        <img src="../../demo/figure-light.png" alt="A plate in both modes">
+      </div>
+      <p class="caption">A caption of the one image in a plate.</p>
+    </section>
+    <section>
+      <h2>A slide to paste onto</h2>
+      <p>A paragraph of the slide.</p>
+    </section>
+    <section>
+      <h2>A pair with a step and an id</h2>
+      <figure class="zone">
+        <img class="for-dark fragment" data-fragment-index="1" data-id="curves" style="translate: 12px 8px; width: 500px" src="../../demo/figure-dark.png" alt="A stepped figure, dark version">
+        <img class="for-light fragment" data-fragment-index="1" data-id="curves" style="translate: 12px 8px; width: 500px" src="../../demo/figure-light.png" alt="A stepped figure, light version">
+        <figcaption class="caption">A caption under the stepped pair.</figcaption>
+      </figure>
+    </section>
+  </div></div>
+  <script src="../../theme/vendor/reveal/reveal.js"></script>
+  <script src="../../theme/vendor/reveal/notes.js"></script>
+  <script src="../../theme/beeson.js"></script>
+  <script>Beeson.start({});</script>
+</body>
+</html>

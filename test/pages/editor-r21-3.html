@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor groups, layers, and lines deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+</head>
+<body>
+<!-- the deck of the tests of R21.3: a group of a figure and a line, nested groups, a shape on a slide with a backdrop, and a group entered for a copy -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>A group with a line</h2>
+  <p>A paragraph above the group.</p>
+  <figure class="zone" data-group="g6">
+    <img style="width: 200px" src="../../demo/figure-dark.png" alt="A figure in the group">
+  </figure>
+  <svg class="line" width="300" height="1" style="translate: 600px 700px" data-group="g6"><defs><marker id="r21-3-arrow" orient="auto-start-reverse"><path d="M-4-2.5 1 0-4 2.5z"></path></marker></defs><line x1="0" y1="0" x2="300" y2="0" marker-end="url(#r21-3-arrow)"></line></svg>
+</section>
+
+<section>
+  <h2>Three levels of groups</h2>
+  <div class="shape tone-accent" data-group="g5 g4 g3" style="width: 200px; height: 150px; translate: 100px 300px"></div>
+  <div class="shape tone-blue" data-group="g5 g4 g3" style="width: 200px; height: 150px; translate: 400px 300px"></div>
+  <div class="shape tone-violet" data-group="g5 g4" style="width: 200px; height: 150px; translate: 700px 300px"></div>
+  <div class="shape tone-red" data-group="g5" style="width: 200px; height: 150px; translate: 1000px 300px"></div>
+</section>
+
+<section>
+  <h2>A shape over a backdrop</h2>
+  <p>A paragraph of the text column.</p>
+  <div class="backdrop" data-scene="nest" data-cx="0.97" data-cy="0" data-half="0.5"></div>
+  <div class="shape tone-blue" style="width: 400px; height: 200px; translate: 1100px 350px"></div>
+  <div class="shape rounded tone-accent" style="width: 400px; height: 200px; translate: 1300px 400px"></div>
+</section>
+
+<section>
+  <h2>An entered group</h2>
+  <p data-group="g2" style="translate: 0px 0px">A paragraph of the outer group.</p>
+  <div class="shape tone-accent" data-group="g2 g1" style="width: 200px; height: 150px; translate: 300px 500px"></div>
+  <div class="shape tone-blue" data-group="g2 g1" style="width: 200px; height: 150px; translate: 600px 500px"></div>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

@@ -311,3 +311,45 @@ test('a backdrop that is a step is traced from its step on', { timeout: 60000 },
   await wait(600);
   assert.deepEqual(await page.evaluate(state), { tracing: false, done: false, opacity: '0' });
 });
+
+// the hooks of the editor: Beeson.remount draws a backdrop again from its attributes in place of
+// its drawing, Beeson.preview draws a div outside the slides without taking it into
+// Beeson.backdrops, and Beeson.fitWindow gives the window of a drawing fitted to the box
+test('Beeson.remount, Beeson.preview, and Beeson.fitWindow draw a backdrop for the editor', { timeout: 60000 }, async (t) => {
+  const browser = await launch();
+  t.after(() => browser.close());
+  const page = await browser.newPage();
+  await page.goto(deckUrl('index.html', 'still'));
+  await page.waitFor(deckSettled);
+  const out = await page.evaluate(`(async () => {
+    const el = document.querySelector('.backdrop[data-scene="nest"]');
+    const { h, v } = Reveal.getIndices(el.closest('section'));
+    Reveal.slide(h, v);
+    const before = Beeson.backdrops.find((b) => b.el === el).strands.length;
+    el.dataset.scene = 'tubes';
+    const o = Beeson.remount(el);
+    await o.ready;
+    const after = Beeson.backdrops.filter((b) => b.el === el);
+    const div = document.createElement('div');
+    div.style.cssText = 'position: fixed; left: 0; top: 0; width: 192px; height: 108px';
+    div.dataset.scene = 'nest';
+    div.dataset.half = '0.5';
+    div.dataset.cx = '0.97';
+    document.body.append(div);
+    const p = Beeson.preview(div);
+    await p.ready;
+    const count = Beeson.backdrops.length;
+    const inked = (() => { const c = p.canvases[0], d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n; })();
+    const fitted = await Beeson.fitWindow(el);
+    p.destroy();
+    return { before, entries: after.length, same: after[0] === o, strands: o.strands.length, done: o.done, canvases: el.querySelectorAll(':scope > canvas').length, previewIn: Beeson.backdrops.includes(p), count, inked, fitted };
+  })()`);
+  assert.equal(out.entries, 1);
+  assert.equal(out.same, true);
+  assert.ok(out.strands > out.before, `${out.strands} strands of tubes, ${out.before} of nest`);
+  assert.equal(out.done, true);
+  assert.equal(out.canvases, 2);
+  assert.equal(out.previewIn, false);
+  assert.ok(out.inked > 100, `${out.inked} pixels of the preview are drawn`);
+  assert.ok(out.fitted && out.fitted.half > 0 && Number.isFinite(out.fitted.cx), JSON.stringify(out.fitted));
+});

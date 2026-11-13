@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor fit deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- a figure with a caption of two lines, a table whose columns are narrower than their words on
+     one line, and a table whose first row is one merged cell -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>Two lines</h2>
+  <p>Words.</p>
+  <figure class="zone">
+    <img src="../../demo/figure-light.png" alt="Curves">
+    <figcaption class="caption">Zero-velocity curves<br>of the system.</figcaption>
+  </figure>
+</section>
+
+<section>
+  <h2>Narrow columns</h2>
+  <table>
+    <tbody>
+      <tr><th style="width: 90px">Family</th><th style="width: 90px">Period in days</th></tr>
+      <tr><td>Distant retrograde</td><td>2.92</td></tr>
+      <tr><td>Halo</td><td>14.8</td></tr>
+    </tbody>
+  </table>
+</section>
+
+<section>
+  <h2>Merged head</h2>
+  <table>
+    <tbody>
+      <tr><th colspan="2">Families</th></tr>
+      <tr><td>Halo</td><td>14.8</td></tr>
+    </tbody>
+  </table>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

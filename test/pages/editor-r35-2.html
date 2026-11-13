@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor steps and objects deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the deck of the tests of R35.2: a dark and light pair of pictures in the section with one alt, a group of three shapes beside a fourth shape, and a pair whose alts differ -->
+<div class="reveal">
+<div class="slides">
+
+<section>
+  <h2>Twins</h2>
+  <p>A paragraph.</p>
+  <img class="for-dark fragment" data-fragment-index="1" src="../../demo/figure-dark.png" alt="A figure" style="width: 480px; translate: 1100px 300px">
+  <img class="for-light fragment" data-fragment-index="1" src="../../demo/figure-light.png" alt="A figure" style="width: 480px; translate: 1100px 300px">
+</section>
+
+<section>
+  <h2>Groups</h2>
+  <p>A paragraph.</p>
+  <div class="shape" data-group="g1" style="width: 300px; height: 160px; translate: 200px 500px"><p>Alpha</p></div>
+  <div class="shape" data-group="g1" style="width: 300px; height: 160px; translate: 600px 500px"><p>Beta</p></div>
+  <div class="shape" data-group="g1" style="width: 300px; height: 160px; translate: 1000px 500px"><p>Gamma</p></div>
+  <div class="shape" style="width: 300px; height: 160px; translate: 1400px 500px"><p>Delta</p></div>
+</section>
+
+<section>
+  <h2>Other twins</h2>
+  <p>A paragraph.</p>
+  <img class="for-dark fragment" data-fragment-index="1" src="../../demo/figure-dark.png" alt="A figure, dark" style="width: 480px; translate: 1100px 300px">
+  <img class="for-light fragment" data-fragment-index="1" src="../../demo/figure-light.png" alt="A figure, light" style="width: 480px; translate: 1100px 300px">
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

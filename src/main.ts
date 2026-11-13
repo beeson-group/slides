@@ -1,19 +1,23 @@
 // the entry point of beeson.js. window.Beeson.start() is called in a deck to initialize reveal.js
 // with the defaults of the theme, and to start the orbit backdrops, the surfaces, the plots, the QR
-// codes, the fragment steps, the videos and the tycho viewers at their steps, the mode switch, and the pointer
+// codes, the fragment steps, the videos and the tycho viewers at their steps, the mode switch, the pointer,
+// and the click that moves the show on
 
 import { Orbits, mount } from './orbits.ts';
-import { initChrome } from './chrome.ts';
+import { initChrome, refreshChrome } from './chrome.ts';
+import { initClick } from './click.ts';
 import { initCursor, togglePointer } from './cursor.ts';
 import { initFullscreen, toggleFullscreen } from './fullscreen.ts';
 import { mountPlots, type PlotView } from './plot.ts';
 import { markViewers, stillViewers } from './print.ts';
 import { mountQr } from './qr.ts';
+import { mountShapes } from './shapes.ts';
 import { initScrub } from './scrub.ts';
 import { mount as mountSurfaces } from './surface.ts';
 import type { Surface } from './surface.ts';
-import { register } from './strands.ts';
-import { addRestoreSteps, applyAll, applySteps, initSteps, typeset } from './steps.ts';
+import { fitView, register, strandsFor, type View } from './strands.ts';
+import { scene } from './scenes.ts';
+import { addRestoreSteps, applyAll, applySteps, initSteps, initTimedSteps, typeset, type Internal } from './steps.ts';
 import { forDeck, get, initSwitcher, initTheme, set, toggle } from './switcher.ts';
 import { coverAll, initVideos } from './video.ts';
 import { initViewers } from './viewers.ts';
@@ -51,11 +55,17 @@ const DEFAULTS: RevealOptions = {
   autoAnimateDuration: 0.5,
   autoAnimateEasing: 'ease-out',
   autoAnimateUnmatched: true,
+  // the list of reveal.js with translate and rotate, which the editor writes for a move and a turn.
+  // with center off, reveal.js measures an element by its offset, which does not count them
+  autoAnimateStyles: ['opacity', 'color', 'background-color', 'padding', 'font-size', 'line-height', 'letter-spacing', 'border-width', 'border-color', 'border-radius', 'outline', 'outline-offset', 'translate', 'rotate'],
   progress: true,
   slideNumber: (slide: HTMLElement) => numberOf(slide),
   controls: false,
   center: false,
   pdfSeparateFragments: true,
+  // one page per step, as in Keynote and PowerPoint, with what runs past the slide cut off in the
+  // print styles of theme/beeson.css
+  pdfMaxPagesPerSlide: 1,
   // off with 0, since the chrome, the mode button, and the viewer are lost in the scroll view that
   // reveal.js would start in a narrow window
   scrollActivationWidth: 0,
@@ -71,8 +81,43 @@ const plots: PlotView[] = [];
 // with the URL parameter edit, the in-place editor is loaded, and the deck is drawn still while it
 // is edited, without the traced backdrops and the tint at the pointer
 const EDITING = new URLSearchParams(location.search).has('edit');
+// with the parameter from-editor, the deck is the show that the editor plays in a frame. Esc and E
+// return to the editor, F takes the stage of the editor into full screen and out, and S warns the
+// editor that the speaker view leaves full screen, hence the keys are posted to the editor
+const PLAYED = !EDITING && window.parent !== window && new URLSearchParams(location.search).has('from-editor');
+// the frame of the current slide in the speaker view of reveal.js, with receiver in its address, is
+// sent the keys of the speaker view, and it posts them to the deck that opened the speaker view
+const RECEIVER = window.parent !== window && /receiver/i.test(location.search);
+// with from-editor, the deck in a tab of its own is the show of Presenter View, which posts to the
+// editor that opened it
+const TAB = !EDITING && window.parent === window && !!window.opener && new URLSearchParams(location.search).has('from-editor');
+// the show played by the editor, in its frame or its tab, and the current slide of its speaker
+// view, end at a click or a key forward past the last step. the speaker view gives its frame of the
+// upcoming slide controls=false
+const ENDS = (PLAYED || TAB) && !/controls=false/.test(location.search);
+const toEditor = (eventName: string, state: unknown = window.Reveal.getState()) => (RECEIVER ? window.parent.opener : TAB ? window.opener : window.parent)?.postMessage(JSON.stringify({ namespace: 'beeson', eventName, state }), '*');
+// the speaker view opened by the show, which is closed with the show
+let speaker: Window | null = null;
+
+// E or Esc posted by the speaker view is taken as a key of the deck, and the speaker view is known
+// by the messages that it posts to the deck. a window of another origin is reached by postMessage,
+// and its opener and parent are read. the editor is given the state of the speaker view, which the
+// deck takes over only after a delay
+function fromSpeaker(ev: MessageEvent): void {
+  let m: { namespace?: string; eventName?: string; state?: unknown } | null = null;
+  try {
+    const from = ev.source as Window | null;
+    if (from?.opener === window) speaker = from;
+    if (from?.parent?.opener === window && typeof ev.data === 'string') m = JSON.parse(ev.data);
+  } catch {
+    return;
+  }
+  if (m?.namespace === 'beeson' && m.eventName === 'edit') (PLAYED || TAB ? toEditor('edit', m.state ?? window.Reveal.getState()) : edit());
+}
 
 function edit(): void {
+  // the speaker view does not follow the editor, hence it is closed with the show
+  speaker?.close();
   const params = new URLSearchParams(location.search);
   params.set('edit', '');
   location.href = `${location.href.split(/[?#]/)[0]}?${params.toString().replace(/=(?=&|$)/g, '')}${location.hash}`;
@@ -133,6 +178,48 @@ function show(slide: HTMLElement): void {
   }
 }
 
+// the backdrops, surfaces, plots, and QR codes under root drawn still, for content added to the page
+// by the editor after the start
+function mountWithin(root: Element): void {
+  remount();
+  mountQr(root);
+  mountShapes(root);
+  for (const o of backdrops) if (root.contains(o.el)) { o.fit(); o.complete(); }
+  for (const s of surfaces) if (root.contains(s.el)) { s.fit(); s.sync(false); s.draw(); }
+  for (const p of plots) if (root.contains(p.el)) { p.fit(); p.syncSteps(); p.still(); }
+  const slide = root.closest('.reveal .slides section');
+  if (slide) applySteps(slide);
+}
+
+// the backdrop el drawn complete by a new Orbits in place of its drawing, at its index of
+// backdrops, after a change of its drawing or of its labels in the editor
+function remountBackdrop(el: HTMLElement): Orbits {
+  const at = backdrops.findIndex((o) => o.el === el);
+  (at >= 0 ? backdrops[at] : Orbits.of(el))?.destroy();
+  const o = new Orbits(el);
+  if (at >= 0) backdrops.splice(at, 1, o);
+  else backdrops.push(o);
+  o.complete();
+  void o.ready.then(() => o.complete());
+  return o;
+}
+
+// a drawing of the attributes of el, a div outside the slides, drawn complete for a tile of the
+// gallery of the editor, and left out of backdrops. the caller destroys it
+function preview(el: HTMLElement): Orbits {
+  const o = new Orbits(el);
+  o.complete();
+  void o.ready.then(() => o.complete());
+  return o;
+}
+
+// the window of the drawing of el fitted to box, by default its box on its slide, in slide px
+async function fitWindow(el: HTMLElement, box?: { left: number; top: number; width: number; height: number }): Promise<View | null> {
+  const strands = el.dataset.strands !== undefined ? (await strandsFor(el)).strands : scene(el.dataset.scene ?? '');
+  const b = box ?? { left: el.offsetLeft, top: el.offsetTop, width: el.offsetWidth, height: el.offsetHeight };
+  return b.width && b.height ? fitView(strands, b, { width: 1920, height: 1080 }) : null;
+}
+
 function completeAll(): void {
   remount();
   for (const o of backdrops) { o.fit(); o.complete(); }
@@ -151,13 +238,15 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   initSwitcher();
   // the editor counts the slides of the file, hence every slide is numbered while the deck is edited
   if (!EDITING) markUncounted(document);
-  // the QR codes are drawn before reveal.js clones the slides of the print view
+  // the QR codes and the shapes are drawn before reveal.js clones the slides of the print view
   mountQr(document);
+  mountShapes(document);
   // in the print view, a page is cloned per fragment state after ready, and the clones are
   // mounted here. the viewers are numbered before the clones are made
   markViewers();
   deck.on('pdf-ready', () => {
     completeAll();
+    mountShapes(document);
     coverAll(document);
     void typeset().then(() => applyAll(document));
     syncViewers(get());
@@ -166,28 +255,73 @@ async function start(options: Partial<RevealOptions> = {}): Promise<void> {
   // the editor lists the steps written in the file, and it does not show the added ones. the steps
   // are added in a plugin, since the plugins are initialized in order before the fragments are
   // sorted, and the copies of a code box are made by the highlight plugin before this one
-  if (!EDITING) plugins.push({ id: 'beeson-restore', init: () => addRestoreSteps(document) });
-  await deck.initialize({ ...DEFAULTS, ...options, plugins });
+  // the init of a plugin is given the object of reveal.js that its controllers call
+  const hooks: { internal?: Internal } = {};
+  if (!EDITING) plugins.push({ id: 'beeson-restore', init: (reveal: unknown) => { hooks.internal = reveal as Internal; addRestoreSteps(document); } });
+  // a hidden slide is removed from the page by reveal.js unless showHiddenSlides is set, and it
+  // must be on the page to be edited
+  // the show in the frame of the editor posts its events to the editor. the option is not in the
+  // address, which the speaker view copies into its frame of the upcoming slide, whose events
+  // would then move the show a step on
+  const editing: Partial<RevealOptions> = EDITING ? { showHiddenSlides: true } : PLAYED && !RECEIVER ? { postMessageEvents: true } : {};
+  await deck.initialize({ ...DEFAULTS, ...editing, ...options, plugins });
 
   initChrome();
   initSteps(deck);
+  // the editor shows every step, and it does not play a delay
+  const { internal } = hooks;
+  if (internal) initTimedSteps(deck, forDeck, internal);
   remount();
   initCursor(() => backdrops, () => deck.getCurrentSlide(), !EDITING);
   deck.addKeyBinding({ keyCode: 68, key: 'D', description: 'Switch dark and light' }, (ev) => { if (forDeck(ev)) toggle(); });
   deck.addKeyBinding({ keyCode: 80, key: 'P', description: 'Pointer' }, (ev) => { if (forDeck(ev)) togglePointer(); });
   // F enters full screen as in reveal.js, and it leaves it too
-  deck.addKeyBinding(70, (ev) => { if (forDeck(ev)) toggleFullscreen(); });
+  deck.addKeyBinding(70, (ev) => { if (forDeck(ev)) (PLAYED ? toEditor('fullscreen') : toggleFullscreen()); });
   deck.registerKeyboardShortcut('F', 'Full screen on and off');
   // the print view is not shown on a screen, and the editor keeps the bottom of the window
-  if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) { initFullscreen(); initScrub(deck); }
-  // the videos and the viewers of the style play are played at their steps, and not while the deck is
-  // edited, when every step is shown
   if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) {
+    if (!PLAYED) initFullscreen();
+    initScrub(deck);
+    // the videos and the viewers of the style play are played at their steps, and not while the deck
+    // is edited, when every step is shown
     initVideos(deck);
     initViewers(deck);
+    // a click on a slide moves the show on, as in PowerPoint and Keynote, and a click past the end
+    // of the show played from the editor returns to the editor, as a key forward does below
+    if (internal) initClick(deck, () => internal.cueAutoSlide(), ENDS ? () => toEditor('edit') : undefined);
   }
-  // E opens the same slide in the editor, and the other parameters of the address are kept
-  if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: 'E', description: 'Edit the deck' }, (ev) => { if (forDeck(ev)) edit(); });
+  // E opens the same slide in the editor, and the other parameters of the address are kept. the
+  // frame of the upcoming slide in the speaker view is a step ahead of the show, hence it posts a
+  // null state, and the deck that opened the speaker view gives the editor its own state
+  if (PLAYED || TAB) for (const keyCode of [27, 69]) deck.addKeyBinding(keyCode, (ev) => { if (forDeck(ev)) toEditor('edit', ENDS ? undefined : null); });
+  else if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: 'E', description: 'Edit the deck' }, (ev) => { if (forDeck(ev)) (RECEIVER ? toEditor('edit') : edit()); });
+  if (PLAYED) document.addEventListener('keydown', (ev) => { if (ev.keyCode === 83 && forDeck(ev)) toEditor('speaker'); }, true);
+  let typed = '';
+  if (PLAYED && !RECEIVER) {
+    // Return and Backspace move the show, and a slide number typed before Return goes to its
+    // slide before its steps, as in PowerPoint and in the presenter display of the editor. the
+    // frames of the speaker view are left with the keys of reveal.js
+    document.addEventListener('keydown', (ev) => { if (!/^[0-9]$/.test(ev.key) && ev.key !== 'Enter') typed = ''; }, true);
+    for (let d = 0; d < 10; d++) for (const keyCode of [48 + d, 96 + d]) deck.addKeyBinding(keyCode, (ev) => { if (forDeck(ev)) typed = (typed + d).slice(-4); });
+    deck.addKeyBinding(13, (ev) => {
+      if (deck.isOverview()) deck.toggleOverview(false);
+      else if (forDeck(ev)) (typed ? deck.slide(Number(typed) - 1, 0, -1) : deck.next());
+      typed = '';
+    });
+    deck.addKeyBinding(8, (ev) => { if (forDeck(ev)) deck.prev(); });
+  }
+  // a key forward at the last step of the last slide returns to the editor, as the presenter
+  // display ends the show there
+  if (ENDS) document.addEventListener('keydown', (ev) => {
+    if (!['ArrowRight', 'ArrowDown', 'PageDown', ' ', 'Enter', 'n', 'N'].includes(ev.key) || (ev.key === 'Enter' && typed)) return;
+    if (!forDeck(ev) || deck.isOverview() || !deck.isLastSlide() || deck.availableFragments().next) return;
+    ev.preventDefault();
+    ev.stopImmediatePropagation();
+    toEditor('edit');
+  }, true);
+  if (!EDITING && !RECEIVER) window.addEventListener('message', fromSpeaker);
+  // the editor ends the show by taking its frame away, or by closing its tab
+  if (PLAYED || TAB) window.addEventListener('pagehide', () => speaker?.close());
 
   if (still()) completeAll();
   else show(deck.getCurrentSlide());
@@ -274,6 +408,13 @@ const Beeson = {
   plots,
   // called in a script file of polylines named in data-strands, see src/strands.ts
   strands: register,
+  // called by the editor after a structural change of the slides
+  mount: mountWithin,
+  // called by the editor on a backdrop, see remountBackdrop, preview, and fitWindow
+  remount: remountBackdrop,
+  preview,
+  fitWindow,
+  refreshChrome,
   version: __VERSION__,
 };
 

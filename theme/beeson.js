@@ -450,7 +450,7 @@
     const script2 = document.currentScript;
     if (script2 instanceof HTMLScriptElement && script2.src) given.set(script2.src, data);
   }
-  function read(url, path) {
+  function read(url, path2) {
     if (!/\.js$/i.test(new URL(url).pathname)) {
       if (location.protocol === "file:") {
         return Promise.reject(
@@ -468,17 +468,17 @@
     return new Promise((done, fail2) => {
       const script2 = document.createElement("script");
       script2.src = url;
-      script2.onload = () => given.has(url) ? done(given.get(url)) : fail2(new Error(`${path} does not call Beeson.strands`));
+      script2.onload = () => given.has(url) ? done(given.get(url)) : fail2(new Error(`${path2} does not call Beeson.strands`));
       script2.onerror = () => fail2(new Error("it was not found"));
       document.head.append(script2);
     });
   }
-  function load(path) {
-    const url = new URL(path, document.baseURI).href;
+  function load(path2) {
+    const url = new URL(path2, document.baseURI).href;
     let out = files.get(url);
     if (!out) {
-      out = read(url, path).then(parse).catch((error) => {
-        console.warn(`beeson: the backdrop file ${path} is not drawn, since ${error.message}`);
+      out = read(url, path2).then(parse).catch((error) => {
+        console.warn(`beeson: the backdrop file ${path2} is not drawn, since ${error.message}`);
         return null;
       });
       files.set(url, out);
@@ -500,13 +500,13 @@
     return map;
   }
   async function strandsFor(el) {
-    const path = el.dataset.strands ?? "";
-    const file = await load(path);
+    const path2 = el.dataset.strands ?? "";
+    const file = await load(path2);
     if (!file) return { strands: [], dots: [] };
     try {
       const chosen = select(file.families, el.dataset.strandsSelect);
       if (!chosen.length)
-        console.warn(`beeson: data-strands-select="${el.dataset.strandsSelect}" does not match a record of ${path}`);
+        console.warn(`beeson: data-strands-select="${el.dataset.strandsSelect}" does not match a record of ${path2}`);
       return {
         strands: strandsOf(
           file,
@@ -519,7 +519,7 @@
         dots: bodiesOf(file, chosen)
       };
     } catch (error) {
-      console.warn(`beeson: the backdrop of ${path} is not drawn, since ${error.message}`);
+      console.warn(`beeson: the backdrop of ${path2} is not drawn, since ${error.message}`);
       return { strands: [], dots: [] };
     }
   }
@@ -580,11 +580,11 @@
     for (let i = 0; i < 6; i++) s[i] += dt / 6 * (K1[i] + 2 * K2[i] + 2 * K3[i] + K4[i]);
     return dt;
   }
-  function toCrossing(s0, h, tmin, tmax, path, times, count = 1, axis2 = 1) {
+  function toCrossing(s0, h, tmin, tmax, path2, times, count = 1, axis2 = 1) {
     const s = Float64Array.from(s0);
     let t = 0;
     const record = () => {
-      if (path) path.push(s[0], s[1], s[2]);
+      if (path2) path2.push(s[0], s[1], s[2]);
       if (times) times.push(t);
     };
     record();
@@ -606,14 +606,14 @@
     }
     return { s, t, hit: false };
   }
-  function propagate(s0, h, tmax, path, times, stop3, t0 = 0) {
+  function propagate(s0, h, tmax, path2, times, stop3, t0 = 0) {
     const s = Float64Array.from(s0);
     let t = 0;
-    path.push(s[0], s[1], s[2]);
+    path2.push(s[0], s[1], s[2]);
     times.push(t0);
     while (t < tmax) {
       t += step(s, h);
-      path.push(s[0], s[1], s[2]);
+      path2.push(s[0], s[1], s[2]);
       times.push(t0 + t);
       if (stop3 && stop3(s)) break;
     }
@@ -621,14 +621,14 @@
   }
   function correct(s0, free, target, h, tmin, tmax, iters, count = 1, axis2 = 1) {
     const s = Float64Array.from(s0);
-    let path = [], times = [];
+    let path2 = [], times = [];
     for (let it = 0; it < iters; it++) {
-      path = [];
+      path2 = [];
       times = [];
-      const base = toCrossing(s, h, tmin, tmax, path, times, count, axis2);
+      const base = toCrossing(s, h, tmin, tmax, path2, times, count, axis2);
       if (!base.hit) return null;
       const f = target.map((i) => base.s[i]);
-      if (f.every((v) => Math.abs(v) < 1e-6)) return { s, path, times, t: base.t };
+      if (f.every((v) => Math.abs(v) < 1e-6)) return { s, path: path2, times, t: base.t };
       const J = [];
       for (let j = 0; j < free.length; j++) {
         const d = 1e-6;
@@ -647,10 +647,10 @@
       if (!dx.every((v) => Math.abs(v) < 0.1)) return null;
       for (let j = 0; j < free.length; j++) s[free[j]] -= dx[j];
     }
-    path = [];
+    path2 = [];
     times = [];
-    const r = toCrossing(s, h, tmin, tmax, path, times, count, axis2);
-    return r.hit ? { s, path, times, t: r.t } : null;
+    const r = toCrossing(s, h, tmin, tmax, path2, times, count, axis2);
+    return r.hit ? { s, path: path2, times, t: r.t } : null;
   }
   function family(guess, p, values, free, target, h, tmin, tmax, skip, count = 1, axis2 = 1) {
     const out = [];
@@ -740,11 +740,11 @@
     }
     return { pts, times: tt, T: 2 * T };
   }
-  function open(path, times) {
+  function open(path2, times) {
     const n = times.length, pts = new Float64Array(2 * n);
     for (let i = 0; i < n; i++) {
-      pts[2 * i] = path[3 * i];
-      pts[2 * i + 1] = path[3 * i + 1];
+      pts[2 * i] = path2[3 * i];
+      pts[2 * i + 1] = path2[3 * i + 1];
     }
     return { pts, times: Float32Array.from(times), T: times[n - 1] };
   }
@@ -816,17 +816,17 @@
     for (let k = 0, m = 0; k < n; k++) if (mark[k]) keep[m++] = k;
     return { px, keep, ctl };
   }
-  function pointOn(path, j, f) {
-    const p = path.px, n = p.length / 2;
+  function pointOn(path2, j, f) {
+    const p = path2.px, n = p.length / 2;
     if (j >= n - 1) return [p[2 * n - 2], p[2 * n - 1]];
     const x1 = p[2 * j], y1 = p[2 * j + 1], x2 = p[2 * j + 2], y2 = p[2 * j + 3];
-    if (!curved(path.ctl, j)) return [x1 + f * (x2 - x1), y1 + f * (y2 - y1)];
-    const c = path.ctl, k = 4 * j, g = 1 - f;
+    if (!curved(path2.ctl, j)) return [x1 + f * (x2 - x1), y1 + f * (y2 - y1)];
+    const c = path2.ctl, k = 4 * j, g = 1 - f;
     const w0 = g * g * g, w1 = 3 * g * g * f, w2 = 3 * g * f * f, w3 = f * f * f;
     return [w0 * x1 + w1 * c[k] + w2 * c[k + 2] + w3 * x2, w0 * y1 + w1 * c[k + 1] + w2 * c[k + 3] + w3 * y2];
   }
-  function trace(pen, path, j, f, from = 0) {
-    const { px: p, keep, ctl } = path, n = p.length / 2;
+  function trace(pen, path2, j, f, from = 0) {
+    const { px: p, keep, ctl } = path2, n = p.length / 2;
     pen.moveTo(p[2 * from], p[2 * from + 1]);
     let last = from, lo = 0, hi = keep.length;
     while (lo < hi) {
@@ -845,10 +845,10 @@
       const x1 = p[2 * j], y1 = p[2 * j + 1], k = 4 * j;
       const ax = x1 + f * (ctl[k] - x1), ay = y1 + f * (ctl[k + 1] - y1);
       const mx = ctl[k] + f * (ctl[k + 2] - ctl[k]), my = ctl[k + 1] + f * (ctl[k + 3] - ctl[k + 1]);
-      const [ex, ey] = pointOn(path, j, f);
+      const [ex, ey] = pointOn(path2, j, f);
       pen.bezierCurveTo(ax, ay, ax + f * (mx - ax), ay + f * (my - ay), ex, ey);
     } else {
-      const [x, y] = pointOn(path, j, f);
+      const [x, y] = pointOn(path2, j, f);
       pen.lineTo(x, y);
     }
   }
@@ -893,6 +893,8 @@
       // a canvas outside the page with the bodies and the strands before cached up to upTo, copied onto
       // the base canvas at every frame of a trace, or null outside a trace
       this.trail = null;
+      // the records of the file once it is loaded, which the editor reads to tell two selections apart
+      this.records = null;
       this.el = el;
       const file = el.dataset.strands !== void 0;
       this.strands = file ? [] : scene(el.dataset.scene ?? "");
@@ -922,7 +924,10 @@
       this.order();
       CACHE.set(el, this);
       this.fit();
-      this.ready = file ? strandsFor(el).then(({ strands, dots }) => this.install(strands, dots)) : Promise.resolve();
+      this.ready = file ? Promise.all([strandsFor(el), load(el.dataset.strands ?? "")]).then(([{ strands, dots }, f]) => {
+        this.records = f?.families ?? null;
+        this.install(strands, dots);
+      }) : Promise.resolve();
     }
     static of(el) {
       return CACHE.get(el);
@@ -1153,11 +1158,11 @@
     // in bands of equal time, which begin and end at its points, at an opacity that falls to zero at its
     // last point. a stroke from a later point draws the pixels of the same bands beyond this point
     stroke(ctx, i, j, f, from = 0) {
-      const path = this.paths[i], ends = this.bands[i];
+      const path2 = this.paths[i], ends = this.bands[i];
       const part = (a2, b, g) => {
         if (b < from || b === from && !(g > 0)) return;
         ctx.beginPath();
-        trace(ctx, path, b, g, Math.max(a2, from));
+        trace(ctx, path2, b, g, Math.max(a2, from));
         ctx.stroke();
       };
       let a = ends ? Math.min(ends[0], j) : j;
@@ -1342,30 +1347,35 @@
       else if (this.raf && this.t0 !== null && !this.finished) this.heads(ctx, c, now);
       if (this.pointer) this.glowing(ctx, c);
     }
+    // the head of the first strand of a scene, or of each strand of a file, which has no strands and no
+    // paths before it is loaded
     loopHead(ctx, c, now) {
-      const s = this.strands[0], p = this.paths[0].px, n = s.times.length;
-      const tau = this.raf && this.t0 !== null ? (now - this.t0) / 1e3 % LOOP / LOOP * s.T : this.finished ? 0.37 * s.T : 0;
-      let j = 0;
-      while (j < n - 1 && s.times[j + 1] <= tau) j++;
-      const back = 0.1 * s.T;
-      ctx.lineWidth = this.lw * 1.4;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.strokeStyle = c.accent;
-      for (let k = j; k > 0 && s.times[k] > tau - back; k--) {
-        const a = 1 - (tau - s.times[k]) / back;
-        ctx.globalAlpha = 0.85 * a * a;
+      const count = this.dots === null ? Math.min(1, this.strands.length) : this.strands.length;
+      for (let i = 0; i < count && this.paths[i]; i++) {
+        const s = this.strands[i], p = this.paths[i].px, n = s.times.length;
+        const tau = this.raf && this.t0 !== null ? (now - this.t0) / 1e3 % LOOP / LOOP * s.T : this.finished ? 0.37 * s.T : 0;
+        let j = 0;
+        while (j < n - 1 && s.times[j + 1] <= tau) j++;
+        const back = 0.1 * s.T;
+        ctx.lineWidth = this.lw * 1.4;
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.strokeStyle = c.accent;
+        for (let k = j; k > 0 && s.times[k] > tau - back; k--) {
+          const a = 1 - (tau - s.times[k]) / back;
+          ctx.globalAlpha = 0.85 * a * a;
+          ctx.beginPath();
+          ctx.moveTo(p[2 * (k - 1)], p[2 * (k - 1) + 1]);
+          ctx.lineTo(p[2 * k], p[2 * k + 1]);
+          ctx.stroke();
+        }
+        ctx.globalAlpha = 1;
+        const [X, Y] = this.at(i, j, tau);
+        ctx.fillStyle = c.accent;
         ctx.beginPath();
-        ctx.moveTo(p[2 * (k - 1)], p[2 * (k - 1) + 1]);
-        ctx.lineTo(p[2 * k], p[2 * k + 1]);
-        ctx.stroke();
+        ctx.arc(X, Y, 3 * this.lw, 0, 2 * Math.PI);
+        ctx.fill();
       }
-      ctx.globalAlpha = 1;
-      const [X, Y] = this.at(0, j, tau);
-      ctx.fillStyle = c.accent;
-      ctx.beginPath();
-      ctx.arc(X, Y, 3 * this.lw, 0, 2 * Math.PI);
-      ctx.fill();
     }
     // the flight time reached by strand i at the time now, which is negative before its start
     clock(i, now) {
@@ -1380,6 +1390,12 @@
     // true when a head is drawn on at least one strand during a trace
     get headed() {
       return this.strands.some((_, i) => this.headOf(i) > 0);
+    }
+    // the seconds into the trace at which its last strand is traced to its end, with strand i started
+    // i times the stagger late
+    get span() {
+      if (!(this.Tmax > 0)) return this.duration;
+      return Math.max(...this.strands.map((s, i) => s.times[s.times.length - 1] / this.Tmax * this.duration + i * this.stagger));
     }
     // the seconds into the trace at which its first head is drawn, e.g. at the start of a record of a file
     get headAfter() {
@@ -1478,32 +1494,141 @@
 
   // src/chrome.ts
   var OWN = ["title", "section", "closing"];
-  var heading = (slide) => slide.dataset.run ?? (slide.querySelector("h2") ?? slide.querySelector("h1"))?.textContent?.trim() ?? "";
+  function sourceText(el) {
+    const items = window.MathJax?.startup?.document?.getMathItemsWithin([el]) ?? [];
+    if (!items.length) return el.textContent ?? "";
+    const tex = new Map(items.filter((i) => i.typesetRoot).map((i) => [i.typesetRoot, `${i.start.delim ?? ""}${i.math}${i.end.delim ?? ""}`]));
+    const copy = el.cloneNode(true);
+    const roots = [...el.querySelectorAll("mjx-container")];
+    [...copy.querySelectorAll("mjx-container")].forEach((m, k) => m.replaceWith(tex.get(roots[k]) ?? m.textContent ?? ""));
+    return copy.textContent ?? "";
+  }
+  var heading = (slide) => {
+    if (slide.dataset.run !== void 0) return slide.dataset.run;
+    const h = slide.querySelector("h2") ?? slide.querySelector("h1");
+    return h ? sourceText(h).trim() : "";
+  };
   var APPENDIX = "Appendix slides";
-  function initChrome() {
+  var made = /* @__PURE__ */ new WeakMap();
+  function typeset(nodes) {
+    const mj = window.MathJax;
+    if (!nodes.length || !mj?.typesetPromise) return;
+    void Promise.resolve(mj.startup?.promise).then(() => mj.typesetPromise(nodes.filter((n) => n.isConnected)));
+  }
+  function untypeset(nodes) {
+    if (nodes.length) window.MathJax?.typesetClear?.(nodes);
+  }
+  function fill() {
     const slides = [...document.querySelectorAll(".reveal .slides section:not(:has(> section))")];
     const sections = slides.filter((s) => s.classList.contains("section"));
+    const fresh = [];
+    const gone = [];
     let text = "";
     for (const slide of slides) {
       if (slide.classList.contains("section")) text = heading(slide);
       if (slide.classList.contains("closing")) text = APPENDIX;
-      if (OWN.some((c) => slide.classList.contains(c)) || slide.querySelector(".run") || !text) continue;
+      const old = slide.querySelector(":scope > div.run[data-generated]");
+      const wanted = !OWN.some((c) => slide.classList.contains(c)) && !slide.querySelector(".run:not([data-generated])") && !!text;
+      if (old && wanted && made.get(old) === text) {
+        if (old.nextElementSibling) slide.append(old);
+        continue;
+      }
+      if (old) {
+        gone.push(old);
+        old.remove();
+      }
+      if (!wanted) continue;
       const run = document.createElement("div");
       run.className = "run";
+      run.dataset.generated = "";
       run.textContent = text;
+      made.set(run, text);
       slide.append(run);
+      fresh.push(run);
     }
     for (const list2 of document.querySelectorAll(".reveal ul.outline[data-auto]")) {
       const home = list2.closest("section");
-      list2.replaceChildren(
-        ...sections.map((s) => {
-          const li = document.createElement("li");
-          li.textContent = heading(s);
-          if (s === home) li.className = "now";
-          return li;
-        })
-      );
+      const names = sections.map(heading);
+      const items = [...list2.children];
+      const same = items.length === names.length && items.every((li, k) => made.get(li) === names[k]);
+      if (same) {
+        items.forEach((li, k) => li.classList.toggle("now", sections[k] === home));
+        continue;
+      }
+      gone.push(...items);
+      const lis = sections.map((s, k) => {
+        const li = document.createElement("li");
+        li.textContent = names[k];
+        made.set(li, names[k]);
+        if (s === home) li.className = "now";
+        return li;
+      });
+      list2.replaceChildren(...lis);
+      fresh.push(...lis);
     }
+    untypeset(gone);
+    typeset(fresh);
+  }
+  function initChrome() {
+    fill();
+  }
+  function refreshChrome() {
+    fill();
+  }
+
+  // src/click.ts
+  var OWN2 = [
+    "a[href]",
+    "button",
+    "input",
+    "select",
+    "textarea",
+    "label",
+    "summary",
+    "iframe",
+    "video",
+    "audio",
+    '[contenteditable]:not([contenteditable="false"])',
+    ".plot",
+    ".surface",
+    "tycho-viewer",
+    ".qr",
+    ".run",
+    ".foot",
+    ".slide-number",
+    ".progress",
+    ".scrub",
+    ".theme-switch",
+    ".r-overlay"
+  ].join(", ");
+  var SLOP = 4;
+  var selected = () => String(window.getSelection() ?? "");
+  function initClick(deck, cue, end) {
+    const root2 = deck.getRevealElement();
+    let down = null;
+    document.addEventListener("pointerdown", (ev) => {
+      down = ev.isPrimary && ev.button === 0 ? { x: ev.clientX, y: ev.clientY, text: selected() } : null;
+    }, true);
+    document.addEventListener("click", (ev) => {
+      const from = down;
+      down = null;
+      if (!from || ev.button !== 0 || ev.defaultPrevented || ev.ctrlKey || ev.metaKey || ev.altKey || ev.shiftKey) return;
+      if (Math.hypot(ev.clientX - from.x, ev.clientY - from.y) > SLOP) return;
+      const text = selected();
+      if (text && text !== from.text) return;
+      const target = ev.target instanceof Element ? ev.target : null;
+      if (!target || !root2.contains(target)) return;
+      const own = target.closest(OWN2);
+      if (own instanceof HTMLMediaElement && !own.controls) {
+        if (own.paused) void own.play().catch(() => {
+        });
+        else own.pause();
+      }
+      if (own || deck.isOverview() || deck.isPaused()) return;
+      if (end && deck.isLastSlide() && !deck.availableFragments().next) return end();
+      deck.next();
+      cue();
+    });
   }
 
   // src/cursor.ts
@@ -1619,70 +1744,70 @@
   var KINDS = ["points", "trace", "label", "events"];
   var PATCH = ["x", "y", "title", "regions", "curves", "labels"];
   var MARGIN2 = [52, 20, 84, 76];
-  function fail(path, what) {
-    throw new Error(`${path}: ${what}`);
+  function fail(path2, what) {
+    throw new Error(`${path2}: ${what}`);
   }
   var isObject2 = (v) => typeof v === "object" && v !== null && !Array.isArray(v);
-  function num(v, path, fallback) {
+  function num(v, path2, fallback) {
     if (v === void 0 && fallback !== void 0) return fallback;
-    if (typeof v !== "number" || !Number.isFinite(v)) fail(path, "a number is expected");
+    if (typeof v !== "number" || !Number.isFinite(v)) fail(path2, "a number is expected");
     return v;
   }
-  function str(v, path, fallback) {
+  function str(v, path2, fallback) {
     if (v === void 0 && fallback !== void 0) return fallback;
-    if (typeof v !== "string") fail(path, "a string is expected");
+    if (typeof v !== "string") fail(path2, "a string is expected");
     return v;
   }
-  function list(v, path, fallback) {
+  function list(v, path2, fallback) {
     if (v === void 0 && fallback !== void 0) return fallback;
-    if (!Array.isArray(v)) fail(path, "a list is expected");
+    if (!Array.isArray(v)) fail(path2, "a list is expected");
     return v;
   }
-  function pair(v, path) {
-    const a = list(v, path);
-    if (a.length !== 2) fail(path, "a pair [x, y] is expected");
-    return [num(a[0], `${path}[0]`), num(a[1], `${path}[1]`)];
+  function pair(v, path2) {
+    const a = list(v, path2);
+    if (a.length !== 2) fail(path2, "a pair [x, y] is expected");
+    return [num(a[0], `${path2}[0]`), num(a[1], `${path2}[1]`)];
   }
-  var pairs = (v, path) => list(v, path).map((p, i) => pair(p, `${path}[${i}]`));
-  function anchor(v, path) {
-    const a = str(v, path, "middle");
-    if (a !== "start" && a !== "middle" && a !== "end") fail(path, "start, middle, or end is expected");
+  var pairs = (v, path2) => list(v, path2).map((p, i) => pair(p, `${path2}[${i}]`));
+  function anchor(v, path2) {
+    const a = str(v, path2, "middle");
+    if (a !== "start" && a !== "middle" && a !== "end") fail(path2, "start, middle, or end is expected");
     return a;
   }
-  function item(o, path, tone) {
-    const cls = str(o.class, `${path}.class`, "").split(/\s+/).filter(Boolean);
-    return { id: o.id === void 0 ? null : str(o.id, `${path}.id`), tone: str(o.tone, `${path}.tone`, tone), cls };
+  function item(o, path2, tone) {
+    const cls = str(o.class, `${path2}.class`, "").split(/\s+/).filter(Boolean);
+    return { id: o.id === void 0 ? null : str(o.id, `${path2}.id`), tone: str(o.tone, `${path2}.tone`, tone), cls };
   }
-  function axis(v, path) {
-    if (!isObject2(v)) fail(path, "an axis { range, ticks, title } is expected");
-    const range = pair(v.range, `${path}.range`);
-    if (!(range[1] > range[0])) fail(`${path}.range`, "the second end must be larger than the first");
-    const scale = str(v.scale, `${path}.scale`, "linear");
-    if (scale !== "linear" && scale !== "asinh") fail(`${path}.scale`, "linear or asinh is expected");
-    const unit = num(v.unit, `${path}.unit`, 1);
-    if (!(unit > 0)) fail(`${path}.unit`, "a positive number is expected");
-    const ticks = list(v.ticks, `${path}.ticks`, []).map((t, i) => {
-      const p = `${path}.ticks[${i}]`;
+  function axis(v, path2) {
+    if (!isObject2(v)) fail(path2, "an axis { range, ticks, title } is expected");
+    const range = pair(v.range, `${path2}.range`);
+    if (!(range[1] > range[0])) fail(`${path2}.range`, "the second end must be larger than the first");
+    const scale = str(v.scale, `${path2}.scale`, "linear");
+    if (scale !== "linear" && scale !== "asinh") fail(`${path2}.scale`, "linear or asinh is expected");
+    const unit = num(v.unit, `${path2}.unit`, 1);
+    if (!(unit > 0)) fail(`${path2}.unit`, "a positive number is expected");
+    const ticks = list(v.ticks, `${path2}.ticks`, []).map((t, i) => {
+      const p = `${path2}.ticks[${i}]`;
       if (typeof t === "number") return { at: num(t, p), text: formatNumber(t) };
       if (!isObject2(t)) fail(p, "a number or a tick { at, text } is expected");
       const at = num(t.at, `${p}.at`);
       return { at, text: str(t.text, `${p}.text`, formatNumber(at)) };
     });
-    return { range, ticks, title: str(v.title, `${path}.title`, ""), scale, unit };
+    return { range, ticks, title: str(v.title, `${path2}.title`, ""), scale, unit };
   }
   function scaled(a, v) {
     return a.scale === "asinh" ? Math.asinh(v / a.unit) : v;
   }
-  function regions(v, path) {
-    return list(v, path, []).map((r, i) => {
-      const p = `${path}[${i}]`;
+  function regions(v, path2) {
+    return list(v, path2, []).map((r, i) => {
+      const p = `${path2}[${i}]`;
       if (!isObject2(r)) fail(p, "a region is expected");
       return { ...item(r, p, "violet"), points: pairs(r.points, `${p}.points`), opacity: num(r.opacity, `${p}.opacity`, 0.12) };
     });
   }
-  function curves(v, path) {
-    return list(v, path, []).map((c, i) => {
-      const p = `${path}[${i}]`;
+  function curves(v, path2) {
+    return list(v, path2, []).map((c, i) => {
+      const p = `${path2}[${i}]`;
       if (!isObject2(c)) fail(p, "a curve is expected");
       let circle = null;
       if (c.circle !== void 0) {
@@ -1694,75 +1819,75 @@
       return { ...item(c, p, "subtle"), points: circle ? null : pairs(c.points, `${p}.points`), circle, width: num(c.width, `${p}.width`, 2), dash };
     });
   }
-  function labels(v, path) {
-    return list(v, path, []).map((l, i) => {
-      const p = `${path}[${i}]`;
+  function labels(v, path2) {
+    return list(v, path2, []).map((l, i) => {
+      const p = `${path2}[${i}]`;
       if (!isObject2(l)) fail(p, "a label is expected");
       return { ...item(l, p, "subtle"), at: pair(l.at, `${p}.at`), text: str(l.text, `${p}.text`), anchor: anchor(l.anchor, `${p}.anchor`), dx: num(l.dx, `${p}.dx`, 0), dy: num(l.dy, `${p}.dy`, 0) };
     });
   }
-  function panel(v, path) {
-    if (!isObject2(v)) fail(path, "a panel is expected");
+  function panel(v, path2) {
+    if (!isObject2(v)) fail(path2, "a panel is expected");
     let margin = [...MARGIN2];
     if (v.margin !== void 0) {
-      const m = list(v.margin, `${path}.margin`).map((x, i) => num(x, `${path}.margin[${i}]`));
-      if (m.length !== 4) fail(`${path}.margin`, "a margin [top, right, bottom, left] is expected");
+      const m = list(v.margin, `${path2}.margin`).map((x, i) => num(x, `${path2}.margin[${i}]`));
+      if (m.length !== 4) fail(`${path2}.margin`, "a margin [top, right, bottom, left] is expected");
       margin = [m[0], m[1], m[2], m[3]];
     }
-    const size = num(v.size, `${path}.size`, 1);
-    if (!(size > 0)) fail(`${path}.size`, "a positive number is expected");
+    const size = num(v.size, `${path2}.size`, 1);
+    if (!(size > 0)) fail(`${path2}.size`, "a positive number is expected");
     return {
-      id: str(v.id, `${path}.id`),
-      x: axis(v.x, `${path}.x`),
-      y: axis(v.y, `${path}.y`),
+      id: str(v.id, `${path2}.id`),
+      x: axis(v.x, `${path2}.x`),
+      y: axis(v.y, `${path2}.y`),
       equal: v.equal === true,
       axes: v.axes !== false,
-      title: str(v.title, `${path}.title`, ""),
-      regions: regions(v.regions, `${path}.regions`),
-      curves: curves(v.curves, `${path}.curves`),
-      labels: labels(v.labels, `${path}.labels`),
+      title: str(v.title, `${path2}.title`, ""),
+      regions: regions(v.regions, `${path2}.regions`),
+      curves: curves(v.curves, `${path2}.curves`),
+      labels: labels(v.labels, `${path2}.labels`),
       size,
       margin
     };
   }
-  function patch(v, path) {
-    if (!isObject2(v)) fail(path, "a panel is expected");
-    for (const key of Object.keys(v)) if (!PATCH.includes(key)) fail(`${path}.${key}`, `one of ${PATCH.join(", ")} is expected`);
+  function patch(v, path2) {
+    if (!isObject2(v)) fail(path2, "a panel is expected");
+    for (const key of Object.keys(v)) if (!PATCH.includes(key)) fail(`${path2}.${key}`, `one of ${PATCH.join(", ")} is expected`);
     const out = {};
-    if (v.x !== void 0) out.x = axis(v.x, `${path}.x`);
-    if (v.y !== void 0) out.y = axis(v.y, `${path}.y`);
-    if (v.title !== void 0) out.title = str(v.title, `${path}.title`);
-    if (v.regions !== void 0) out.regions = regions(v.regions, `${path}.regions`);
-    if (v.curves !== void 0) out.curves = curves(v.curves, `${path}.curves`);
-    if (v.labels !== void 0) out.labels = labels(v.labels, `${path}.labels`);
+    if (v.x !== void 0) out.x = axis(v.x, `${path2}.x`);
+    if (v.y !== void 0) out.y = axis(v.y, `${path2}.y`);
+    if (v.title !== void 0) out.title = str(v.title, `${path2}.title`);
+    if (v.regions !== void 0) out.regions = regions(v.regions, `${path2}.regions`);
+    if (v.curves !== void 0) out.curves = curves(v.curves, `${path2}.curves`);
+    if (v.labels !== void 0) out.labels = labels(v.labels, `${path2}.labels`);
     return out;
   }
-  function markData(m, v, frames, path) {
-    const perFrame = (n) => n === 1 || n === frames || fail(path, `${n} frames are given, and the tab has ${frames} values`);
+  function markData(m, v, frames, path2) {
+    const perFrame = (n) => n === 1 || n === frames || fail(path2, `${n} frames are given, and the tab has ${frames} values`);
     if (m.kind === "points") {
-      const a = list(v, path).map((f, i) => list(f, `${path}[${i}]`).map((x, j) => num(x, `${path}[${i}][${j}]`)));
+      const a = list(v, path2).map((f, i) => list(f, `${path2}[${i}]`).map((x, j) => num(x, `${path2}[${i}][${j}]`)));
       perFrame(a.length);
-      a.forEach((f, i) => f.length % 2 === 0 || fail(`${path}[${i}]`, "pairs of x and y are expected"));
+      a.forEach((f, i) => f.length % 2 === 0 || fail(`${path2}[${i}]`, "pairs of x and y are expected"));
       return a;
     }
     if (m.kind === "trace") {
       const given2 = isObject2(v) ? v : { points: v };
-      const points = pairs(given2.points, isObject2(v) ? `${path}.points` : path);
+      const points = pairs(given2.points, isObject2(v) ? `${path2}.points` : path2);
       perFrame(points.length);
-      const ghost = num(given2.ghost, `${path}.ghost`, points.length - 1);
-      if (!Number.isInteger(ghost) || ghost < 0 || ghost > points.length - 1) fail(`${path}.ghost`, `a frame from 0 to ${points.length - 1} is expected`);
+      const ghost = num(given2.ghost, `${path2}.ghost`, points.length - 1);
+      if (!Number.isInteger(ghost) || ghost < 0 || ghost > points.length - 1) fail(`${path2}.ghost`, `a frame from 0 to ${points.length - 1} is expected`);
       return { points, ghost };
     }
     if (m.kind === "label") {
-      if (!isObject2(v)) fail(path, "a label { at, text } is expected");
-      const at = Array.isArray(v.at) && Array.isArray(v.at[0]) ? pairs(v.at, `${path}.at`) : [pair(v.at, `${path}.at`)];
-      const text = Array.isArray(v.text) ? v.text.map((t, i) => str(t, `${path}.text[${i}]`)) : [str(v.text, `${path}.text`)];
+      if (!isObject2(v)) fail(path2, "a label { at, text } is expected");
+      const at = Array.isArray(v.at) && Array.isArray(v.at[0]) ? pairs(v.at, `${path2}.at`) : [pair(v.at, `${path2}.at`)];
+      const text = Array.isArray(v.text) ? v.text.map((t, i) => str(t, `${path2}.text[${i}]`)) : [str(v.text, `${path2}.text`)];
       perFrame(at.length);
       perFrame(text.length);
       return { at, text };
     }
-    return list(v, path).map((e, i) => {
-      const p = `${path}[${i}]`;
+    return list(v, path2).map((e, i) => {
+      const p = `${path2}[${i}]`;
       if (!isObject2(e)) fail(p, "an event { frame, at, text } is expected");
       const frame = num(e.frame, `${p}.frame`);
       if (frame < 0 || frame > frames - 1) fail(`${p}.frame`, `a frame from 0 to ${frames - 1} is expected`);
@@ -1866,10 +1991,10 @@
     if (a.length !== b.length) return nearest(frames, v);
     return a.map((x, k) => x + f * (b[k] - x));
   }
-  function traceTo(path, u) {
-    const n = path.length, v = clamp(u, 0, n - 1), i = Math.floor(v), f = v - i;
-    const out = path.slice(0, i + 1);
-    if (f > 0 && i < n - 1) out.push([path[i][0] + f * (path[i + 1][0] - path[i][0]), path[i][1] + f * (path[i + 1][1] - path[i][1])]);
+  function traceTo(path2, u) {
+    const n = path2.length, v = clamp(u, 0, n - 1), i = Math.floor(v), f = v - i;
+    const out = path2.slice(0, i + 1);
+    if (f > 0 && i < n - 1) out.push([path2[i][0] + f * (path2[i + 1][0] - path2[i][0]), path2[i][1] + f * (path2[i + 1][1] - path2[i][1])]);
     return out;
   }
   function passLength(n, duration, times) {
@@ -2058,10 +2183,10 @@
   var toneColor = (tone) => /^[a-z][a-z0-9-]*$/.test(tone) ? `var(--${tone})` : tone;
   var words = (s) => (s ?? "").split(/\s+/).filter(Boolean);
   var GAP = 56;
-  function cells(sizes, total, gap) {
-    const free = total - gap * (sizes.length - 1), sum = sizes.reduce((a, b) => a + b, 0);
+  function cells(sizes2, total, gap) {
+    const free = total - gap * (sizes2.length - 1), sum = sizes2.reduce((a, b) => a + b, 0);
     let at = 0;
-    return sizes.map((size) => {
+    return sizes2.map((size) => {
       const cell = [at, free * size / sum];
       at += cell[1] + gap;
       return cell;
@@ -2109,12 +2234,25 @@
       this.live = false;
       this.el = el;
       CACHE2.set(el, this);
+      this.load(null);
+    }
+    /** Draws the plot again from text, or from its block when text is null, e.g. while the editor changes its data. A fault is shown in place of the plot. */
+    reload(text = null) {
+      this.pause();
+      this.spec = null;
+      this.W = this.H = 0;
+      this.tabButtons = [];
+      this.stepTab = null;
+      this.load(text);
+    }
+    load(text) {
+      const el = this.el;
       for (const old of el.querySelectorAll(":scope > .plot-body, :scope > .plot-error")) old.remove();
       try {
         const id = el.dataset.plot ?? "";
         const block = id ? document.getElementById(id) : null;
-        if (!block) throw new Error(`the JSON block with the id "${id}" is not found`);
-        this.spec = parsePlot(block.textContent ?? "");
+        if (text === null && !block) throw new Error(`the JSON block with the id "${id}" is not found`);
+        this.spec = parsePlot(text ?? block?.textContent ?? "");
       } catch (error) {
         const message = `plot ${el.dataset.plot ?? ""}: ${error.message}`;
         const box2 = document.createElement("div");
@@ -3039,7 +3177,8 @@
     return svg2;
   }
   function mountQr(root2) {
-    for (const el of root2.querySelectorAll(".qr[data-qr]")) {
+    const own = root2 instanceof HTMLElement && root2.matches(".qr[data-qr]") ? [root2] : [];
+    for (const el of [...own, ...root2.querySelectorAll(".qr[data-qr]")]) {
       if (el.querySelector(":scope > svg, :scope > .qr-error")) continue;
       const text = el.dataset.qr ?? "";
       try {
@@ -3059,6 +3198,152 @@
         box2.textContent = `QR code: ${error.message}`;
         el.append(box2);
       }
+    }
+  }
+
+  // src/shapes.ts
+  var SVG3 = "http://www.w3.org/2000/svg";
+  var DRAWN = ["triangle", "arrow", "arrow-both", "brace", "plus", "equals"];
+  var num2 = (v) => String(Math.round(v * 100) / 100);
+  var path = (parts) => parts.map((p) => typeof p === "number" ? num2(p) : p).join(" ").replace(/ ?([A-Z]) ?/g, "$1");
+  var dir = (deg) => [Math.cos(deg * Math.PI / 180), Math.sin(deg * Math.PI / 180)];
+  var HOOK = [dir(16), 0.4, 0.5, 0.95];
+  var CUSP = [dir(40), 0.4, 0.5, 1];
+  function shapePath(kind, w, h, s) {
+    const i = s / 2;
+    const l = i, t = i, r = w - i, b = h - i, cx = w / 2, cy = h / 2, m = Math.min(w, h);
+    switch (kind) {
+      case "triangle":
+        return path(["M", cx, t, "L", r, b, "L", l, b, "Z"]);
+      case "arrow": {
+        const x1 = r - m / 2, y1 = cy - (b - t) / 4, y2 = cy + (b - t) / 4;
+        return path(["M", l, y1, "L", x1, y1, "L", x1, t, "L", r, cy, "L", x1, b, "L", x1, y2, "L", l, y2, "Z"]);
+      }
+      case "arrow-both": {
+        const x1 = l + m / 2, x2 = r - m / 2, y1 = cy - (b - t) / 4, y2 = cy + (b - t) / 4;
+        return path(["M", l, cy, "L", x1, t, "L", x1, y1, "L", x2, y1, "L", x2, t, "L", r, cy, "L", x2, b, "L", x2, y2, "L", x1, y2, "L", x1, b, "Z"]);
+      }
+      case "brace": {
+        const W = r - l, xs = l + 0.508 * W, k = Math.min(1, 0.5 * (cy - t) / ((HOOK[3] + CUSP[3]) * W)) || 0, y1 = t + k * HOOK[3] * W, y2 = cy - k * CUSP[3] * W;
+        const miter = Math.hypot(1, CUSP[0][0] / (k * CUSP[0][1])), xc = w - i * (miter <= 4 ? miter : 1 / miter);
+        const half = [[l + HOOK[1] * W * HOOK[0][0], t + k * HOOK[1] * W * HOOK[0][1]], [xs, y1 - k * HOOK[2] * W], [xs, y1], [xs, y2], [xs, y2 + k * CUSP[2] * W], [xc - CUSP[1] * W * CUSP[0][0], cy - k * CUSP[1] * W * CUSP[0][1]]];
+        const low = half.map(([x, y]) => [x, 2 * cy - y]);
+        return path([
+          "M",
+          l,
+          t,
+          "C",
+          ...half[0],
+          ...half[1],
+          ...half[2],
+          "L",
+          ...half[3],
+          "C",
+          ...half[4],
+          ...half[5],
+          xc,
+          cy,
+          "C",
+          ...low[5],
+          ...low[4],
+          ...low[3],
+          "L",
+          ...low[2],
+          "C",
+          ...low[1],
+          ...low[0],
+          l,
+          b
+        ]);
+      }
+      case "plus": {
+        const p = 0.3675 * w, q = 0.3675 * h, k = 0.1176 * m;
+        return path([
+          "M",
+          cx - p,
+          cy - k,
+          "L",
+          cx - k,
+          cy - k,
+          "L",
+          cx - k,
+          cy - q,
+          "L",
+          cx + k,
+          cy - q,
+          "L",
+          cx + k,
+          cy - k,
+          "L",
+          cx + p,
+          cy - k,
+          "L",
+          cx + p,
+          cy + k,
+          "L",
+          cx + k,
+          cy + k,
+          "L",
+          cx + k,
+          cy + q,
+          "L",
+          cx - k,
+          cy + q,
+          "L",
+          cx - k,
+          cy + k,
+          "L",
+          cx - p,
+          cy + k,
+          "Z"
+        ]);
+      }
+      case "equals": {
+        const p = 0.3675 * w, g = 0.0588 * h, bar = 0.2352 * h;
+        const rect = (y0, y1) => ["M", cx - p, y0, "L", cx + p, y0, "L", cx + p, y1, "L", cx - p, y1, "Z"];
+        return path([...rect(cy - g - bar, cy - g), ...rect(cy + g, cy + g + bar)]);
+      }
+      default:
+        return "";
+    }
+  }
+  var kindOf = (el) => DRAWN.find((k) => el.classList.contains(k)) ?? null;
+  function draw(el) {
+    const kind = kindOf(el);
+    let svg2 = el.querySelector(":scope > svg");
+    if (!kind) {
+      svg2?.remove();
+      return;
+    }
+    const style = getComputedStyle(el);
+    const w = el.offsetWidth || parseFloat(style.width) || 0, h = el.offsetHeight || parseFloat(style.height) || 0;
+    const s = parseFloat(style.getPropertyValue("--weight")) || 0;
+    if (!svg2) {
+      svg2 = document.createElementNS(SVG3, "svg");
+      svg2.setAttribute("aria-hidden", "true");
+      svg2.append(document.createElementNS(SVG3, "path"));
+      el.prepend(svg2);
+    }
+    svg2.setAttribute("viewBox", `0 0 ${num2(w || 1)} ${num2(h || 1)}`);
+    svg2.querySelector("path")?.setAttribute("d", shapePath(kind, w, h, s));
+  }
+  var sizes = null;
+  var classes = null;
+  var watched = /* @__PURE__ */ new WeakSet();
+  function mountShapes(root2) {
+    sizes ?? (sizes = new ResizeObserver((entries) => {
+      for (const e of entries) draw(e.target);
+    }));
+    classes ?? (classes = new MutationObserver((records) => {
+      for (const r of records) draw(r.target);
+    }));
+    const own = root2 instanceof HTMLElement && root2.matches(".shape") ? [root2] : [];
+    for (const el of [...own, ...root2.querySelectorAll(".reveal .slides section .shape")]) {
+      draw(el);
+      if (watched.has(el)) continue;
+      watched.add(el);
+      sizes.observe(el);
+      classes.observe(el, { attributes: true, attributeFilter: ["class"] });
     }
   }
 
@@ -3096,8 +3381,8 @@
     band.setAttribute("aria-hidden", "true");
     const track = document.createElement("div");
     track.className = "scrub-track";
-    const fill = document.createElement("span");
-    track.append(fill);
+    const fill2 = document.createElement("span");
+    track.append(fill2);
     const card = document.createElement("div");
     card.className = "scrub-card";
     band.append(track, card);
@@ -3139,7 +3424,7 @@
       ticks.forEach((t, i) => t.el.classList.toggle("quiet", i % k !== 0 && i !== ticks.length - 1));
     };
     const mark = () => {
-      fill.style.transform = `scaleX(${deck.getTotalSlides() < 2 ? 0 : deck.getProgress()})`;
+      fill2.style.transform = `scaleX(${deck.getTotalSlides() < 2 ? 0 : deck.getProgress()})`;
       const current = deck.getCurrentSlide();
       for (const t of ticks) t.el.classList.toggle("now", t.slide === current);
     };
@@ -3251,7 +3536,7 @@
     reds: ["#fff5f0", "#fee0d2", "#fcbba1", "#fc9272", "#fb6a4a", "#ef3b2c", "#cb181d", "#a50f15", "#67000d"],
     magma_r: ["#fcfdbf", "#fdda9c", "#feb67c", "#fc9065", "#f56b5c", "#e24d66", "#c43c75", "#a3307e", "#832681", "#641a80"]
   };
-  var num2 = (value, fallback) => value !== void 0 && value.trim() !== "" && Number.isFinite(Number(value)) ? Number(value) : fallback;
+  var num3 = (value, fallback) => value !== void 0 && value.trim() !== "" && Number.isFinite(Number(value)) ? Number(value) : fallback;
   function effectivePotential(mu) {
     const wells = (x, y) => -(1 - mu) / Math.hypot(x + mu, y) - mu / Math.hypot(x - 1 + mu, y);
     const bowl = (x, y) => -(x * x + y * y) / 2;
@@ -3295,7 +3580,7 @@
     // intersection of the plane with the surface is the zero-velocity curve, and Hill's region is
     // where the surface is under the plane. C is the value at L1 when data-C is not given
     "effective-potential": (attributes) => {
-      const mu = num2(attributes.mu, 0.05);
+      const mu = num3(attributes.mu, 0.05);
       const { wells, bowl, sum } = effectivePotential(mu);
       const marks = librationPoints(mu);
       const C1 = -2 * sum(marks[0].x, 0);
@@ -3316,7 +3601,7 @@
           bowl: () => ({ sheets: [{ layer: "wells", lift: 0 }, { layer: "bowl", lift: BOWL_LIFT }], marks: false, level: null }),
           sum: plain("sum"),
           extrema: () => ({ sheets: one("sum"), marks: true, level: null }),
-          cut: (a) => ({ sheets: one("sum"), marks: true, level: -num2(a.c, C1) / 2 })
+          cut: (a) => ({ sheets: one("sum"), marks: true, level: -num3(a.c, C1) / 2 })
         }
       };
     }
@@ -3342,7 +3627,7 @@
   var ease = (t) => t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2;
   var lerp = (a, b, t) => a + (b - a) * t;
   var clamp2 = (v, a, b) => Math.min(b, Math.max(a, v));
-  var num3 = (v, fallback) => v !== void 0 && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : fallback;
+  var num4 = (v, fallback) => v !== void 0 && v.trim() !== "" && Number.isFinite(Number(v)) ? Number(v) : fallback;
   var mix3 = (a, b, t) => [lerp(a[0], b[0], t), lerp(a[1], b[1], t), lerp(a[2], b[2], t)];
   function rgb(css, fallback) {
     const s = css.trim();
@@ -3587,12 +3872,12 @@ void main() {
       this.fn = fn;
       this.THREE = THREE;
       this.groove = new THREE.Vector3();
-      this.zscale = num3(el.dataset.zscale, fn.zscale);
-      const turn3 = num3(el.dataset.turn, TURN);
+      this.zscale = num4(el.dataset.zscale, fn.zscale);
+      const turn3 = num4(el.dataset.turn, TURN);
       this.rate = turn3 > 0 ? 2 * Math.PI / turn3 : 0;
-      this.azimuth = num3(el.dataset.azimuth, -60) * Math.PI / 180;
-      this.elevation = num3(el.dataset.elevation, 32) * Math.PI / 180;
-      this.zoom = num3(el.dataset.zoom, 1);
+      this.azimuth = num4(el.dataset.azimuth, -60) * Math.PI / 180;
+      this.elevation = num4(el.dataset.elevation, 32) * Math.PI / 180;
+      this.zoom = num4(el.dataset.zoom, 1);
       for (const old of el.querySelectorAll(":scope > canvas.surface-image")) old.remove();
       this.canvas = document.createElement("canvas");
       this.canvas.className = "surface-image";
@@ -3817,7 +4102,7 @@ void main() {
     target() {
       let best = null, index = -Infinity;
       for (const f of this.el.closest("section")?.querySelectorAll(".fragment.visible[data-surface-stage]") ?? []) {
-        const i = num3(f.dataset.fragmentIndex, 0);
+        const i = num4(f.dataset.fragmentIndex, 0);
         if (i >= index) {
           best = f;
           index = i;
@@ -4031,7 +4316,7 @@ void main() {
         const lab = this.labels.find((l) => l.dataset.at === this.fn.marks[i].name);
         if (!lab) return null;
         this.markAt(i, p).project(camera);
-        const x = (p.x + 1) / 2 * this.w + num3(lab.dataset.dx, 0), y = (1 - p.y) / 2 * this.h + num3(lab.dataset.dy, -34);
+        const x = (p.x + 1) / 2 * this.w + num4(lab.dataset.dx, 0), y = (1 - p.y) / 2 * this.h + num4(lab.dataset.dy, -34);
         return Math.hypot(parseFloat(lab.style.left) - x, parseFloat(lab.style.top) - y);
       };
       return {
@@ -4168,7 +4453,7 @@ void main() {
       const now = performance.now(), dt = (now - this.seenAt) / 1e3;
       this.seenAt = now;
       const lit = this.points.geometry.getAttribute("lit");
-      const fill = this.points.geometry.getAttribute("fill");
+      const fill2 = this.points.geometry.getAttribute("fill");
       const k = dt > 0.25 ? 1 : 1 - Math.exp(-dt / DIMMING);
       const f = !this.active || dt > 0.25 ? 1 : 1 - Math.exp(-dt / MARK_FADE);
       this.fn.marks.forEach((m, i) => {
@@ -4179,15 +4464,15 @@ void main() {
         this.lit[i] += (this.litTo[i] - this.lit[i]) * f;
         lit.setX(i, this.lit[i]);
         for (let c = 0; c < 3; c++) this.fill[3 * i + c] += (this.fillTo[3 * i + c] - this.fill[3 * i + c]) * f;
-        fill.setXYZ(i, this.fill[3 * i], this.fill[3 * i + 1], this.fill[3 * i + 2]);
+        fill2.setXYZ(i, this.fill[3 * i], this.fill[3 * i + 1], this.fill[3 * i + 2]);
       });
-      position.needsUpdate = seen.needsUpdate = lit.needsUpdate = fill.needsUpdate = true;
+      position.needsUpdate = seen.needsUpdate = lit.needsUpdate = fill2.needsUpdate = true;
       for (const lab of this.labels) {
         const i = this.fn.marks.findIndex((m) => m.name === lab.dataset.at);
         if (i < 0) continue;
         this.markAt(i, p).project(this.camera);
-        lab.style.left = `${(p.x + 1) / 2 * this.w + num3(lab.dataset.dx, 0)}px`;
-        lab.style.top = `${(1 - p.y) / 2 * this.h + num3(lab.dataset.dy, -34)}px`;
+        lab.style.left = `${(p.x + 1) / 2 * this.w + num4(lab.dataset.dx, 0)}px`;
+        lab.style.top = `${(1 - p.y) / 2 * this.h + num4(lab.dataset.dy, -34)}px`;
         lab.style.opacity = String(this.shown.marks ** 2 * this.seen[i] * this.lit[i]);
       }
     }
@@ -4215,12 +4500,9 @@ void main() {
       });
       el.addEventListener("pointermove", (ev) => {
         if (!this.drag) return;
-        const scale = el.getBoundingClientRect().width / (el.offsetWidth || 1) || 1;
-        const dx = (ev.clientX - this.drag.x) / scale, dy = (ev.clientY - this.drag.y) / scale;
+        const { x, y } = this.drag;
         this.drag = { x: ev.clientX, y: ev.clientY };
-        this.azimuth -= dx * 5e-3;
-        this.elevation = clamp2(this.elevation + dy * 4e-3, 0.12, 1.45);
-        if (!this.raf) this.draw();
+        this.turn(ev.clientX - x, ev.clientY - y);
       });
       const end = () => {
         if (!this.drag) return;
@@ -4244,6 +4526,40 @@ void main() {
         s.shown = s.to;
         s.tone = 1;
       }
+    }
+    /** Turns the camera as a drag by dx and dy screen pixels does. */
+    turn(dx, dy) {
+      const scale = this.el.getBoundingClientRect().width / (this.el.offsetWidth || 1) || 1;
+      this.azimuth -= dx / scale * 5e-3;
+      this.elevation = clamp2(this.elevation + dy / scale * 4e-3, 0.12, 1.45);
+      if (!this.raf) this.draw();
+    }
+    /** The camera drawn now and the values read from the attributes of the element, with the angles in degrees, e.g. for the editor. */
+    view() {
+      const d = this.el.dataset, deg = 180 / Math.PI;
+      return {
+        azimuth: this.azimuth * deg,
+        elevation: this.elevation * deg,
+        zoom: this.zoom,
+        written: { azimuth: num4(d.azimuth, -60), elevation: num4(d.elevation, 32), zoom: num4(d.zoom, 1), turn: num4(d.turn, TURN), zscale: num4(d.zscale, this.fn.zscale) }
+      };
+    }
+    /** Reads the camera, the turn, and the scale of the heights from the attributes of the element again, e.g. after the editor changed them. */
+    configure() {
+      const w = this.view().written;
+      this.rate = w.turn > 0 ? 2 * Math.PI / w.turn : 0;
+      this.azimuth = w.azimuth * Math.PI / 180;
+      this.elevation = w.elevation * Math.PI / 180;
+      this.zoom = w.zoom;
+      if (w.zscale !== this.zscale) {
+        this.zscale = w.zscale;
+        for (const [name, g] of this.grids) this.ranges.set(name, this.range(g));
+        this.normals = /* @__PURE__ */ new WeakMap();
+        this.drawn = "";
+        this.stageName = "";
+        this.sync(false);
+      }
+      this.draw();
     }
     /** Takes the azimuth, the elevation, and the pause after a drag of the camera of other. */
     follow(other) {
@@ -4306,6 +4622,7 @@ void main() {
     return { held, lit };
   }
   var words2 = (s) => (s ?? "").split(/\s+/).filter(Boolean);
+  var MOVES_ON = "data-moves-on";
   var hasContent = (f) => f.children.length > 0 || (f.textContent ?? "").trim() !== "";
   var isCopy = (f) => f.matches("pre > code.fragment");
   var holdsVideo = (f) => f.matches("video, tycho-viewer") || !!f.querySelector("video, tycho-viewer");
@@ -4318,6 +4635,10 @@ void main() {
       const boxes = new Set(frags.filter(isCopy).map((f) => f.parentElement));
       const dimsBox = [...boxes].some((box2) => !last.some((f) => f.parentElement === box2 && isCopy(f)));
       if (!dimsBox && !frags.some((f) => !last.includes(f) && hasContent(f) && !isCopy(f) && !holdsVideo(f))) continue;
+      if (last.some(delayed)) {
+        slide.setAttribute(MOVES_ON, "");
+        continue;
+      }
       const restore = document.createElement("span");
       restore.className = "fragment";
       restore.setAttribute("data-restore", "");
@@ -4327,7 +4648,7 @@ void main() {
   }
   function applySteps(slide) {
     const frags = [...slide.querySelectorAll(".fragment")];
-    if (!slide.querySelector("section")) slide.toggleAttribute("data-complete", frags.every((f) => f.classList.contains("visible")));
+    if (!slide.querySelector("section")) slide.toggleAttribute("data-complete", !slide.hasAttribute(MOVES_ON) && frags.every((f) => f.classList.contains("visible")));
     const names = [...new Set(frags.flatMap((f) => words2(f.dataset.highlight)))];
     if (!names.length && !frags.some((f) => f.hasAttribute("data-keep"))) return;
     const select2 = (name) => `.${CSS.escape(name)}`;
@@ -4356,7 +4677,7 @@ void main() {
   function applyAll(root2) {
     for (const slide of root2.querySelectorAll(".reveal .slides section")) applySteps(slide);
   }
-  var typeset = () => window.MathJax?.startup?.promise ?? Promise.resolve();
+  var typeset2 = () => window.MathJax?.startup?.promise ?? Promise.resolve();
   function initSteps(deck) {
     const mark = () => {
       const slide = deck.getCurrentSlide();
@@ -4364,7 +4685,95 @@ void main() {
     };
     for (const type of ["fragmentshown", "fragmenthidden", "slidechanged"]) deck.on(type, mark);
     mark();
-    void typeset().then(mark);
+    void typeset2().then(mark);
+    deck.on("slidechanged", (event) => {
+      const { previousSlide: from, currentSlide: to } = event;
+      if (!from?.hasAttribute(MOVES_ON) || !to || deck.getSlides().indexOf(to) < deck.getSlides().indexOf(from)) return;
+      const frags = [...from.querySelectorAll(".fragment")];
+      const last = Math.max(...frags.map((f) => Number(f.dataset.fragmentIndex)).filter(Number.isFinite));
+      for (const f of frags) if (Number(f.dataset.fragmentIndex) === last) f.classList.add("current-fragment");
+    });
+  }
+  var AUTOSLIDE = "data-autoslide";
+  var HELD = "data-autoslide-held";
+  var stepsOf = (slide) => [-1, ...new Set([...slide.querySelectorAll(".fragment")].map((f) => Number(f.dataset.fragmentIndex)).filter(Number.isFinite))].sort((a, b) => a - b);
+  var fragmentsAt = (slide, f) => [...slide.querySelectorAll(".fragment")].filter((el) => Number(el.dataset.fragmentIndex) === f);
+  var delayed = (el) => (parseInt(el.getAttribute(AUTOSLIDE) ?? el.getAttribute(HELD) ?? "", 10) || 0) > 0;
+  function initTimedSteps(deck, forDeck2, internal) {
+    const config = deck.getConfig();
+    const method = config.autoSlideMethod;
+    let timer = false;
+    config.autoSlideStoppable = false;
+    config.autoSlideMethod = () => {
+      timer = true;
+      try {
+        if (typeof method === "function") method();
+        else deck.next();
+      } finally {
+        timer = false;
+      }
+    };
+    deck.addKeyBinding({ keyCode: 65, key: "A", description: "Pause and resume the timed steps" }, (ev) => {
+      if (forDeck2(ev)) deck.toggleAutoSlide(!deck.isAutoSliding());
+    });
+    const cue = internal.cueAutoSlide.bind(internal);
+    const state = () => {
+      const { h, v, f } = deck.getIndices();
+      return `${h}/${v}/${f}/${deck.isOverview()}/${deck.isPaused()}`;
+    };
+    let keyFrom = null;
+    internal.cueAutoSlide = () => {
+      if (keyFrom === null || keyFrom !== state()) cue();
+    };
+    window.addEventListener("keydown", () => {
+      keyFrom = state();
+      setTimeout(() => keyFrom = null, 0);
+    }, true);
+    window.addEventListener("keydown", () => keyFrom = null);
+    const slides = () => deck.getSlides();
+    const here = () => {
+      const slide = deck.getCurrentSlide();
+      const shown = [...slide.querySelectorAll(".fragment.visible")].map((f) => Number(f.dataset.fragmentIndex)).filter(Number.isFinite);
+      return { slide: slides().indexOf(slide), f: Math.max(-1, ...shown) };
+    };
+    const before = (at) => {
+      const steps = stepsOf(slides()[at.slide]);
+      const k = steps.indexOf(at.f);
+      if (k > 0) return { slide: at.slide, f: steps[k - 1] };
+      const prev = slides()[at.slide - 1];
+      return prev ? { slide: at.slide - 1, f: stepsOf(prev).at(-1) } : null;
+    };
+    const delayedAt = (at) => !!at && at.f >= 0 && fragmentsAt(slides()[at.slide], at.f).some(delayed);
+    const same = (a, b) => !!a && !!b && a.slide === b.slide && a.f === b.f;
+    const reached2 = /* @__PURE__ */ new Map();
+    const byDelay = (at) => reached2.get(`${at.slide}:${at.f}`) ?? delayedAt(before(at));
+    let last = here();
+    let held = [];
+    const change = () => {
+      const now = here();
+      if (same(now, last)) return;
+      for (const el of held) {
+        el.setAttribute(AUTOSLIDE, el.getAttribute(HELD) ?? "");
+        el.removeAttribute(HELD);
+      }
+      held = [];
+      const from = last;
+      last = now;
+      const back = now.slide < from.slide || now.slide === from.slide && now.f < from.f;
+      if (!back) reached2.set(`${now.slide}:${now.f}`, timer);
+      if (!back || deck.isOverview()) return;
+      if (delayedAt(now)) {
+        held = fragmentsAt(slides()[now.slide], now.f).filter((el) => el.hasAttribute(AUTOSLIDE));
+        for (const el of held) {
+          el.setAttribute(HELD, el.getAttribute(AUTOSLIDE));
+          el.removeAttribute(AUTOSLIDE);
+        }
+      }
+      internal.cueAutoSlide();
+      if (!delayedAt(now)) return;
+      if (same(before(from), now) && byDelay(now)) setTimeout(() => deck.prev(), 0);
+    };
+    for (const type of ["fragmentshown", "fragmenthidden", "slidechanged"]) deck.on(type, change);
   }
 
   // src/switcher.ts
@@ -4579,11 +4988,11 @@ void main() {
       if (!running.has(v)) v.pause();
     });
   }
-  function syncVideos(slide, speaker = false) {
+  function syncVideos(slide, speaker2 = false) {
     cover(slide);
     const starts2 = [];
     for (const v of slide.querySelectorAll("video")) {
-      if (!plays(v, slide) || speaker && !v.muted) continue;
+      if (!plays(v, slide) || speaker2 && !v.muted) continue;
       guard(v);
       if (stepShown(v, slide) && !v.hasAttribute("data-covered")) {
         if (!running.has(v)) starts2.push(v);
@@ -4598,10 +5007,10 @@ void main() {
     }
   }
   function initVideos(deck) {
-    const speaker = deck.isSpeakerNotes();
+    const speaker2 = deck.isSpeakerNotes();
     const sync = () => {
       const slide = deck.getCurrentSlide();
-      if (slide) syncVideos(slide, speaker);
+      if (slide) syncVideos(slide, speaker2);
     };
     deck.on("slidechanged", (event) => {
       const previous = event.previousSlide;
@@ -4660,11 +5069,11 @@ void main() {
     turns2.delete(v);
     hold(v);
   }
-  function stepViewers(slide) {
+  function stepViewers(slide, shown = (v) => stepShown(v, slide)) {
     const starts2 = [];
     for (const v of slide.querySelectorAll("tycho-viewer")) {
       if (!plays2(v, slide)) continue;
-      if (stepShown(v, slide)) {
+      if (shown(v)) {
         if (!running2.has(v)) starts2.push(v);
       } else stop2(v);
     }
@@ -4721,11 +5130,17 @@ void main() {
     autoAnimateDuration: 0.5,
     autoAnimateEasing: "ease-out",
     autoAnimateUnmatched: true,
+    // the list of reveal.js with translate and rotate, which the editor writes for a move and a turn.
+    // with center off, reveal.js measures an element by its offset, which does not count them
+    autoAnimateStyles: ["opacity", "color", "background-color", "padding", "font-size", "line-height", "letter-spacing", "border-width", "border-color", "border-radius", "outline", "outline-offset", "translate", "rotate"],
     progress: true,
     slideNumber: (slide) => numberOf(slide),
     controls: false,
     center: false,
     pdfSeparateFragments: true,
+    // one page per step, as in Keynote and PowerPoint, with what runs past the slide cut off in the
+    // print styles of theme/beeson.css
+    pdfMaxPagesPerSlide: 1,
     // off with 0, since the chrome, the mode button, and the viewer are lost in the scroll view that
     // reveal.js would start in a narrow window
     scrollActivationWidth: 0
@@ -4735,7 +5150,25 @@ void main() {
   var surfaces = [];
   var plots = [];
   var EDITING = new URLSearchParams(location.search).has("edit");
+  var PLAYED = !EDITING && window.parent !== window && new URLSearchParams(location.search).has("from-editor");
+  var RECEIVER = window.parent !== window && /receiver/i.test(location.search);
+  var TAB = !EDITING && window.parent === window && !!window.opener && new URLSearchParams(location.search).has("from-editor");
+  var ENDS = (PLAYED || TAB) && !/controls=false/.test(location.search);
+  var toEditor = (eventName, state = window.Reveal.getState()) => (RECEIVER ? window.parent.opener : TAB ? window.opener : window.parent)?.postMessage(JSON.stringify({ namespace: "beeson", eventName, state }), "*");
+  var speaker = null;
+  function fromSpeaker(ev) {
+    let m = null;
+    try {
+      const from = ev.source;
+      if (from?.opener === window) speaker = from;
+      if (from?.parent?.opener === window && typeof ev.data === "string") m = JSON.parse(ev.data);
+    } catch {
+      return;
+    }
+    if (m?.namespace === "beeson" && m.eventName === "edit") PLAYED || TAB ? toEditor("edit", m.state ?? window.Reveal.getState()) : edit();
+  }
   function edit() {
+    speaker?.close();
     const params = new URLSearchParams(location.search);
     params.set("edit", "");
     location.href = `${location.href.split(/[?#]/)[0]}?${params.toString().replace(/=(?=&|$)/g, "")}${location.hash}`;
@@ -4795,6 +5228,48 @@ void main() {
       if (!still2()) s.start();
     }
   }
+  function mountWithin(root2) {
+    remount();
+    mountQr(root2);
+    mountShapes(root2);
+    for (const o of backdrops) if (root2.contains(o.el)) {
+      o.fit();
+      o.complete();
+    }
+    for (const s of surfaces) if (root2.contains(s.el)) {
+      s.fit();
+      s.sync(false);
+      s.draw();
+    }
+    for (const p of plots) if (root2.contains(p.el)) {
+      p.fit();
+      p.syncSteps();
+      p.still();
+    }
+    const slide = root2.closest(".reveal .slides section");
+    if (slide) applySteps(slide);
+  }
+  function remountBackdrop(el) {
+    const at = backdrops.findIndex((o2) => o2.el === el);
+    (at >= 0 ? backdrops[at] : Orbits.of(el))?.destroy();
+    const o = new Orbits(el);
+    if (at >= 0) backdrops.splice(at, 1, o);
+    else backdrops.push(o);
+    o.complete();
+    void o.ready.then(() => o.complete());
+    return o;
+  }
+  function preview(el) {
+    const o = new Orbits(el);
+    o.complete();
+    void o.ready.then(() => o.complete());
+    return o;
+  }
+  async function fitWindow(el, box2) {
+    const strands = el.dataset.strands !== void 0 ? (await strandsFor(el)).strands : scene(el.dataset.scene ?? "");
+    const b = box2 ?? { left: el.offsetLeft, top: el.offsetTop, width: el.offsetWidth, height: el.offsetHeight };
+    return b.width && b.height ? fitView(strands, b, { width: 1920, height: 1080 }) : null;
+  }
   function completeAll() {
     remount();
     for (const o of backdrops) {
@@ -4821,18 +5296,27 @@ void main() {
     initSwitcher();
     if (!EDITING) markUncounted(document);
     mountQr(document);
+    mountShapes(document);
     markViewers();
     deck.on("pdf-ready", () => {
       completeAll();
+      mountShapes(document);
       coverAll(document);
-      void typeset().then(() => applyAll(document));
+      void typeset2().then(() => applyAll(document));
       syncViewers(get());
       void stillViewers();
     });
-    if (!EDITING) plugins.push({ id: "beeson-restore", init: () => addRestoreSteps(document) });
-    await deck.initialize({ ...DEFAULTS, ...options, plugins });
+    const hooks = {};
+    if (!EDITING) plugins.push({ id: "beeson-restore", init: (reveal) => {
+      hooks.internal = reveal;
+      addRestoreSteps(document);
+    } });
+    const editing = EDITING ? { showHiddenSlides: true } : PLAYED && !RECEIVER ? { postMessageEvents: true } : {};
+    await deck.initialize({ ...DEFAULTS, ...editing, ...options, plugins });
     initChrome();
     initSteps(deck);
+    const { internal } = hooks;
+    if (internal) initTimedSteps(deck, forDeck, internal);
     remount();
     initCursor(() => backdrops, () => deck.getCurrentSlide(), !EDITING);
     deck.addKeyBinding({ keyCode: 68, key: "D", description: "Switch dark and light" }, (ev) => {
@@ -4842,20 +5326,51 @@ void main() {
       if (forDeck(ev)) togglePointer();
     });
     deck.addKeyBinding(70, (ev) => {
-      if (forDeck(ev)) toggleFullscreen();
+      if (forDeck(ev)) PLAYED ? toEditor("fullscreen") : toggleFullscreen();
     });
     deck.registerKeyboardShortcut("F", "Full screen on and off");
     if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) {
-      initFullscreen();
+      if (!PLAYED) initFullscreen();
       initScrub(deck);
-    }
-    if (!EDITING && !deck.isPrintView() && !/print-pdf/.test(location.search)) {
       initVideos(deck);
       initViewers(deck);
+      if (internal) initClick(deck, () => internal.cueAutoSlide(), ENDS ? () => toEditor("edit") : void 0);
     }
-    if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: "E", description: "Edit the deck" }, (ev) => {
-      if (forDeck(ev)) edit();
+    if (PLAYED || TAB) for (const keyCode of [27, 69]) deck.addKeyBinding(keyCode, (ev) => {
+      if (forDeck(ev)) toEditor("edit", ENDS ? void 0 : null);
     });
+    else if (!EDITING) deck.addKeyBinding({ keyCode: 69, key: "E", description: "Edit the deck" }, (ev) => {
+      if (forDeck(ev)) RECEIVER ? toEditor("edit") : edit();
+    });
+    if (PLAYED) document.addEventListener("keydown", (ev) => {
+      if (ev.keyCode === 83 && forDeck(ev)) toEditor("speaker");
+    }, true);
+    let typed = "";
+    if (PLAYED && !RECEIVER) {
+      document.addEventListener("keydown", (ev) => {
+        if (!/^[0-9]$/.test(ev.key) && ev.key !== "Enter") typed = "";
+      }, true);
+      for (let d = 0; d < 10; d++) for (const keyCode of [48 + d, 96 + d]) deck.addKeyBinding(keyCode, (ev) => {
+        if (forDeck(ev)) typed = (typed + d).slice(-4);
+      });
+      deck.addKeyBinding(13, (ev) => {
+        if (deck.isOverview()) deck.toggleOverview(false);
+        else if (forDeck(ev)) typed ? deck.slide(Number(typed) - 1, 0, -1) : deck.next();
+        typed = "";
+      });
+      deck.addKeyBinding(8, (ev) => {
+        if (forDeck(ev)) deck.prev();
+      });
+    }
+    if (ENDS) document.addEventListener("keydown", (ev) => {
+      if (!["ArrowRight", "ArrowDown", "PageDown", " ", "Enter", "n", "N"].includes(ev.key) || ev.key === "Enter" && typed) return;
+      if (!forDeck(ev) || deck.isOverview() || !deck.isLastSlide() || deck.availableFragments().next) return;
+      ev.preventDefault();
+      ev.stopImmediatePropagation();
+      toEditor("edit");
+    }, true);
+    if (!EDITING && !RECEIVER) window.addEventListener("message", fromSpeaker);
+    if (PLAYED || TAB) window.addEventListener("pagehide", () => speaker?.close());
     if (still2()) completeAll();
     else show(deck.getCurrentSlide());
     deck.on("slidechanged", (event) => {
@@ -4930,6 +5445,13 @@ void main() {
     plots,
     // called in a script file of polylines named in data-strands, see src/strands.ts
     strands: register,
+    // called by the editor after a structural change of the slides
+    mount: mountWithin,
+    // called by the editor on a backdrop, see remountBackdrop, preview, and fitWindow
+    remount: remountBackdrop,
+    preview,
+    fitWindow,
+    refreshChrome,
     version: "0.9.0-beta.1"
   };
   window.Beeson = Beeson;

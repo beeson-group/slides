@@ -1,0 +1,275 @@
+// the Slide pane of the Format tab, shown with nothing selected, as the Slide pane of Keynote: the
+// layout of the slide in a card, the width of the text column of a content slide as the class
+// narrow or wide of its section, whether the slide is hidden and has a footnote, and the running
+// head, i.e. the data-run of a section slide. the commands of the width, the footnote, and the
+// running head are defined here, the width also in Slide > Text Column
+
+import type { App } from '../app.ts';
+import type { Command } from '../commands.ts';
+import { contentWithTex } from '../math.ts';
+import { showText, untypeset } from '../typeset.ts';
+import { button, card, checkbox, glyph, note, row, section, segmented, textField, type Control, type Run } from './controls.ts';
+import { drawingName, slideBackdrop } from '../commands/backdrop.ts';
+
+const SVG = 'http://www.w3.org/2000/svg';
+
+export type Width = 'narrow' | 'normal' | 'wide';
+const WIDTHS: Width[] = ['narrow', 'normal', 'wide'];
+const LAYOUT_CLASSES = ['title', 'section', 'closing', 'figure', 'split'];
+const LAYOUT_NAMES: Record<string, string> = { title: 'Title', section: 'Section', closing: 'Closing', figure: 'Figure', split: 'Split', content: 'Content' };
+
+export const layoutOf = (slide: Element | null): string => LAYOUT_CLASSES.find((c) => slide?.classList.contains(c)) ?? 'content';
+export const widthOf = (slide: Element): Width => (slide.classList.contains('narrow') ? 'narrow' : slide.classList.contains('wide') ? 'wide' : 'normal');
+
+// the slides of the commands: those selected in the navigator, else the current one
+function slidesOf(app: App): Element[] {
+  const picked = app.selection.kind === 'slides' ? [...app.selection.items] : [app.current()].filter((s): s is Element => !!s);
+  return picked.filter((s) => !!app.pairing?.elements.get(s)?.open);
+}
+
+const contentSlides = (app: App) => {
+  const list = slidesOf(app);
+  return list.length && list.every((s) => layoutOf(s) === 'content') ? list : [];
+};
+
+// the name of the layout of a slide, with the width of a content slide
+const nameOf = (s: Element | null) => {
+  const name = LAYOUT_NAMES[layoutOf(s)];
+  return s && layoutOf(s) === 'content' && widthOf(s) !== 'normal' ? `${name}, ${widthOf(s) === 'narrow' ? 'Narrow' : 'Wide'}` : name;
+};
+const isHidden = (s: Element) => s.getAttribute('data-visibility') === 'hidden';
+
+const footOf = (slide: Element | null) => slide?.querySelector('.foot:not([data-generated])') ?? null;
+
+export function commands(): Command[] {
+  const list: Command[] = WIDTHS.map((w, i) => ({
+    id: `slide.width.${w}`,
+    label: w === 'narrow' ? 'Narrow' : w === 'wide' ? 'Wide' : 'Normal',
+    menu: { bar: 'Slide', group: 'width', order: 60 + i, submenu: 'Text Column' },
+    undoable: true,
+    undo: 'Text Column Width',
+    enabled: (app) => contentSlides(app).length > 0,
+    checked: (app) => {
+      const list = contentSlides(app);
+      return list.length > 0 && list.every((s) => widthOf(s) === w);
+    },
+    run: (app) => {
+      for (const s of contentSlides(app)) {
+        if (widthOf(s) === w) continue;
+        const classes: Record<string, boolean> = {};
+        if (s.classList.contains('narrow') !== (w === 'narrow')) classes.narrow = w === 'narrow';
+        if (s.classList.contains('wide') !== (w === 'wide')) classes.wide = w === 'wide';
+        app.doc.setTag(s, { classes }, 'width');
+      }
+      app.relayout();
+    },
+  }));
+  list.push({
+    // arg is { value, el }. an empty text takes data-run off, and the heading is the running head
+    id: 'slide.runningHead',
+    label: 'Running Head',
+    undoable: true,
+    enabled: (app) => layoutOf(app.current()) === 'section' && slidesOf(app).length > 0,
+    run: (app, arg) => {
+      const a = (arg ?? {}) as { value?: string; el?: Element };
+      const slide = a.el?.isConnected ? a.el : app.current();
+      if (!slide || typeof a.value !== 'string') return;
+      const value = a.value.trim() ? a.value : null;
+      if (slide.getAttribute('data-run') !== value) app.doc.setTag(slide, { attrs: { 'data-run': value } }, 'running head');
+    },
+  });
+  list.push({
+    // the footnote of the slide is added by insert.footnote of the Insert menu, with the caret in it,
+    // and taken off with its text
+    id: 'slide.footnote',
+    label: 'Footnote',
+    undoable: true,
+    enabled: (app) => !!app.pairing && (!!footOf(app.current()) || !!app.commands.get('insert.footnote')),
+    checked: (app) => !!footOf(app.current()),
+    run: async (app) => {
+      const foot = footOf(app.current());
+      if (foot && app.pairing?.elements.get(foot)?.open) await app.doc.remove(foot, 'remove footnote');
+      else if (!foot) await app.commands.run('insert.footnote');
+    },
+  });
+  return list;
+}
+
+// a sketch of a layout, in the tokens of the chrome: the slide, its words, and its figure
+function sketch(layout: string, width: Width): SVGSVGElement {
+  const svg = document.createElementNS(SVG, 'svg');
+  svg.setAttribute('viewBox', '0 0 64 36');
+  svg.setAttribute('width', '64');
+  svg.setAttribute('height', '36');
+  svg.setAttribute('aria-hidden', 'true');
+  const rect = (x: number, y: number, w: number, h: number, fill: string, r = 0.75) => {
+    const el = document.createElementNS(SVG, 'rect');
+    for (const [k, v] of Object.entries({ x, y, width: w, height: h, rx: r, fill })) el.setAttribute(k, String(v));
+    svg.append(el);
+  };
+  rect(0.5, 0.5, 63, 35, 'var(--ed-panel)', 3);
+  const frame = document.createElementNS(SVG, 'rect');
+  for (const [k, v] of Object.entries({ x: 0.5, y: 0.5, width: 63, height: 35, rx: 3, fill: 'none', stroke: 'var(--ed-line)' })) frame.setAttribute(k, String(v));
+  const ink = 'var(--ed-muted)', faint = 'var(--ed-faint)';
+  const words = (x: number, y: number, w: number, lines: number) => {
+    rect(x, y, w * 0.8, 2.6, ink);
+    for (let i = 0; i < lines; i++) rect(x, y + 5 + i * 3.2, i === lines - 1 ? w * 0.6 : w, 1.4, faint);
+  };
+  switch (layout) {
+    case 'title':
+    case 'closing':
+      rect(30, 4, 30, 24, faint, 10);
+      words(5, 20, 22, 2);
+      break;
+    case 'section':
+      rect(34, 3, 26, 30, faint, 13);
+      words(5, 8, 22, 3);
+      break;
+    case 'figure':
+      rect(4, 4, 56, 21, faint);
+      rect(4, 28, 30, 1.4, ink);
+      rect(4, 31, 20, 1.4, faint);
+      break;
+    case 'split':
+      rect(0.5, 0.5, 26, 35, ink, 3);
+      rect(31, 6, 29, 24, faint);
+      break;
+    default: {
+      // the text column of a wide slide runs over the place of the zone, up to the right margin
+      const w = width === 'narrow' ? 22 : width === 'wide' ? 54 : 30;
+      words(5, 5, w, 5);
+      // the backdrop of a narrow slide runs from 920 px of 1920 to the right edge at full height,
+      // as in its tile, and its left corners are square
+      if (width === 'narrow') {
+        rect(920 / 30, 0.5, 63.5 - 920 / 30, 35, faint, 3);
+        rect(920 / 30, 0.5, 3, 35, faint, 0);
+      } else if (width !== 'wide') rect(w + 9, 6, 59 - (w + 9), 24, faint);
+    }
+  }
+  svg.append(frame);
+  return svg;
+}
+
+// the typeset notes of the Slide pane shown last, whose formulas are taken out of the list of
+// MathJax when the pane is built again, since the inspector drops the old pane
+let typesetNotes: HTMLElement[] = [];
+
+// the selected slides of several layouts show Multiple Layouts, and the controls of one layout
+// are shown only when every selected slide has it
+const mixed = (app: App) => new Set(slidesOf(app).map(nameOf)).size > 1;
+
+// the layout whose sections the Slide pane shows, which inspector.ts adds to the key of the pane,
+// hence the pane is built again when the selected slides or their layouts change it
+export const paneLayout = (app: App): string => (mixed(app) ? 'mixed' : layoutOf(app.current()));
+
+// the Slide pane for the current slide
+export function slidePane(app: App, run: Run): Control[] {
+  untypeset(typesetNotes);
+  typesetNotes = [];
+  const slide = app.current();
+  const layout = paneLayout(app);
+  const layoutCard = card(() => sketch(layoutOf(app.current()), slide ? widthOf(slide) : 'normal'), 'Slide Layout', () => (mixed(app) ? 'Multiple Layouts' : nameOf(app.current())));
+  // the card is the button of the chooser of the layouts of commands/layout.ts
+  const chooser = layoutCard.el;
+  chooser.classList.add('ed-chooser');
+  chooser.setAttribute('role', 'button');
+  chooser.setAttribute('aria-haspopup', 'dialog');
+  chooser.tabIndex = 0;
+  chooser.title = 'Change the layout of the slide';
+  chooser.style.cursor = 'pointer';
+  const chevron = glyph('chevron-down', 14);
+  chevron.style.marginLeft = 'auto';
+  chooser.append(chevron);
+  const choose = () => {
+    if (app.commands.get('slide.layoutChooser') && app.commands.enabled('slide.layoutChooser')) void run('slide.layoutChooser', chooser);
+  };
+  chooser.addEventListener('click', choose);
+  chooser.addEventListener('keydown', (ev) => {
+    if (ev.key !== 'Enter' && ev.key !== ' ') return;
+    ev.preventDefault();
+    choose();
+  });
+  const parts: Control[] = [layoutCard];
+  if (layout === 'content') {
+    parts.push(section('Text Column', [
+      row([segmented(app, run, WIDTHS.map((w) => ({ command: `slide.width.${w}`, icon: `column-${w}`, text: w === 'narrow' ? 'Narrow' : w === 'wide' ? 'Wide' : 'Normal' })), 'Width of the text column')]),
+      note(() => 'The width of the column of words, 1000 px when normal.'),
+    ]));
+  }
+  const hidden = checkbox(app, run, 'slide.hide', 'Hidden in the show', () => slidesOf(app).every(isHidden));
+  const box = hidden.el.querySelector('input')!;
+  const sync = hidden.sync;
+  hidden.sync = () => {
+    sync();
+    box.indeterminate = slidesOf(app).some(isHidden) && !box.checked;
+  };
+  hidden.sync();
+  if (layout !== 'mixed') {
+    // the backdrop of the slide, selected from here as well as by a click on it. the pane is kept
+    // while the slide and the selection stay the same, hence the row is made again at a sync for
+    // another backdrop, e.g. once the file is opened, and at an undo of Add Backdrop
+    const sec = section('Backdrop', []);
+    let back: HTMLElement | null | undefined;
+    let line: Control | null = null;
+    const sync = () => {
+      const now = slideBackdrop(app);
+      if (now !== back || !line) {
+        back = now;
+        line?.el.remove();
+        line = now
+          ? row([note(() => drawingName(now)), button(app, run, { command: 'backdrop.select', text: 'Select' })])
+          : row([button(app, run, { command: 'backdrop.choose', text: 'Add Backdrop…' })]);
+        sec.el.append(line.el);
+      }
+      line.sync();
+    };
+    sync();
+    parts.push({ el: sec.el, sync });
+  }
+  parts.push(section('Appearance', [
+    hidden,
+    checkbox(app, run, 'slide.footnote', 'Footnote'),
+  ]));
+  if (layout === 'section') {
+    parts.push(section(null, [textField(app, {
+      label: 'Running Head',
+      name: 'running-head',
+      placeholder: () => {
+        const h = app.current()?.querySelector('h2');
+        return h ? sourceText(h) : '';
+      },
+      value: () => app.current()?.getAttribute('data-run') ?? '',
+      enabled: () => app.commands.enabled('slide.runningHead'),
+      commit: (value) => run('slide.runningHead', { value, el: slide }),
+      hint: () => ({ text: 'Shown at the top of the slides of this section. Leave it empty to show the heading.', warn: false }),
+    })]));
+  } else if (!['title', 'closing', 'mixed'].includes(layout)) {
+    parts.push(section('Running Head', [typesetNote(() => {
+      const el = app.current()?.querySelector(':scope > .run[data-generated]');
+      const run = el ? sourceText(el) : '';
+      return run ? `“${run}”, from the last section slide` : 'None before the first section slide';
+    }, 'running-head')]));
+  }
+  return parts;
+}
+
+// the text of el with its formulas as their TeX, as the file has it
+function sourceText(el: Element): string {
+  const t = document.createElement('template');
+  t.innerHTML = contentWithTex(el);
+  return (t.content.textContent ?? '').replace(/\s+/g, ' ').trim();
+}
+
+// a note whose text is typeset, e.g. a running head with math
+function typesetNote(text: () => string, name: string): Control {
+  const { el } = note(() => '');
+  el.classList.add(name);
+  typesetNotes.push(el);
+  const sync = () => {
+    const t = text();
+    showText(el, t);
+    el.hidden = !t;
+  };
+  sync();
+  return { el, sync };
+}

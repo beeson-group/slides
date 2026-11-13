@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Slideshow click deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+</head>
+<body>
+<!-- a slide of two steps with an element of each kind that takes a click of its own, placed apart
+     so that each is clicked at its center: a paragraph to select, a link, a video, a QR code, a
+     plot, a surface, and a tycho viewer without its runtime. the second slide comes after it -->
+<div class="reveal">
+  <div class="slides">
+    <section>
+      <h2>Clicks</h2>
+      <p id="text" style="position: absolute; left: 100px; top: 220px; width: 800px; margin: 0">A paragraph of plain text to select with a drag.</p>
+      <p style="position: absolute; left: 100px; top: 380px; margin: 0"><a id="link" href="https://example.com/">A link</a></p>
+      <p class="fragment" style="position: absolute; left: 100px; top: 480px; margin: 0">One</p>
+      <p class="fragment" style="position: absolute; left: 400px; top: 480px; margin: 0">Two</p>
+      <video id="video" src="../../demo/clip-dark.mp4" poster="../../demo/clip-dark.png" muted loop style="position: absolute; left: 1000px; top: 120px; width: 400px; height: 225px; margin: 0"></video>
+      <div class="qr" data-qr="https://example.com/" style="position: absolute; left: 1500px; top: 120px; width: 300px; margin: 0"></div>
+      <div class="plot" data-plot="data" style="position: absolute; left: 1000px; top: 500px; width: 400px; height: 300px; margin: 0"></div>
+      <div class="surface" data-function="effective-potential" data-mu="0.05" style="position: absolute; left: 1450px; top: 500px; right: auto; bottom: auto; width: 400px; height: 300px; margin: 0"></div>
+      <tycho-viewer style="position: absolute; left: 100px; top: 600px; width: 400px; height: 300px; display: block"></tycho-viewer>
+      <script type="application/json" id="data">{
+        "parameter": { "label": "$t$", "digits": 2 },
+        "duration": 2,
+        "panels": [{ "id": "left", "x": { "range": [0, 1] }, "y": { "range": [0, 1] } }],
+        "marks": [{ "id": "dot", "panel": "left", "kind": "points" }],
+        "tabs": [
+          { "name": "one", "values": [0, 1], "data": { "dot": [[0, 0], [1, 1]] } },
+          { "name": "two", "values": [0, 1], "data": { "dot": [[1, 0], [0, 1]] } }
+        ]
+      }</script>
+      <div class="foot">A footnote of the slide.</div>
+    </section>
+    <section>
+      <h2>Next</h2>
+      <p>The slide after.</p>
+    </section>
+  </div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/vendor/three/three.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>

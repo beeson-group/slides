@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<title>Editor audit fixes deck</title>
+<link rel="stylesheet" href="../../theme/vendor/reveal/reset.css">
+<link rel="stylesheet" href="../../theme/vendor/reveal/reveal.css">
+<link rel="stylesheet" href="../../theme/vendor/fonts/stix-two-text.css">
+<link rel="stylesheet" href="../../theme/beeson.css">
+<script src="../../theme/macros.js"></script>
+<script src="../../theme/mathjax-config.js"></script>
+<script src="../../theme/vendor/mathjax/tex-svg.js"></script>
+</head>
+<body>
+<!-- the deck of the tests of R23.1: a Magic Move with a moved, a still, and a turned shape, an empty slide, a slide with a step, empty items of every kind of list, a pair of pictures, and the text styles -->
+<div class="reveal">
+<div class="slides">
+
+<section data-auto-animate>
+  <h2>Glide</h2>
+  <div class="shape rounded tone-accent" style="width: 300px; height: 160px; translate: 200px 600px" data-id="moved"></div>
+  <div class="shape rounded tone-violet" style="width: 300px; height: 160px; translate: 1200px 600px" data-id="still"></div>
+  <div class="shape rounded tone-blue" style="width: 200px; height: 200px; translate: 700px 300px" data-id="turned"></div>
+</section>
+
+<section data-auto-animate>
+  <h2>Glide</h2>
+  <div class="shape rounded tone-accent" style="width: 300px; height: 160px; translate: 800px 300px" data-id="moved"></div>
+  <div class="shape rounded tone-violet" style="width: 300px; height: 160px; translate: 1200px 600px" data-id="still"></div>
+  <div class="shape rounded tone-blue" style="width: 200px; height: 200px; translate: 700px 300px; rotate: 90deg" data-id="turned"></div>
+</section>
+
+<section>
+  <h2>Empty</h2>
+</section>
+
+<section>
+  <h2>Steps</h2>
+  <p>Alpha stays with the slide.</p>
+  <p class="fragment" data-fragment-index="1">Beta comes at a click.</p>
+</section>
+
+<section>
+  <h2>Lists</h2>
+  <ul>
+    <li>A dash</li>
+    <li></li>
+  </ul>
+  <ul class="dots">
+    <li></li>
+  </ul>
+  <ul class="arrows">
+    <li></li>
+  </ul>
+  <ol>
+    <li></li>
+  </ol>
+</section>
+
+<section>
+  <h2>Pictures</h2>
+  <figure class="zone">
+    <img class="for-dark" src="../../demo/figure-dark.png" alt="A pair">
+    <img class="for-light" src="../../demo/figure-light.png" alt="A pair">
+  </figure>
+</section>
+
+<section>
+  <h2>Colors</h2>
+  <p>Body words <span class="tone-accent">in orange</span> here.</p>
+  <p class="small">Small words here.</p>
+  <p class="caption">Caption words here.</p>
+  <div class="foot">Footnote words here.</div>
+</section>
+
+</div>
+</div>
+<script src="../../theme/vendor/reveal/reveal.js"></script>
+<script src="../../theme/vendor/reveal/notes.js"></script>
+<script src="../../theme/beeson.js"></script>
+<script>Beeson.start({});</script>
+</body>
+</html>
