@@ -62,8 +62,8 @@ export function startShow(app: App): Stage {
   let full = false;
   // the time until which the show goes on out of full screen, set at F
   let keep = 0;
-  // set at S, since the browser leaves full screen for the speaker view, which on a slow machine
-  // happens seconds later. the show goes on at the next exit from full screen
+  // set at S, since the browser leaves full screen for the speaker view, on a slow machine seconds
+  // later, and the exit may also reach the editor before S. the show goes on at the next exit
   let speaker = false;
 
   const ours = () => !!fullscreen() && el.contains(fullscreen());
@@ -115,9 +115,10 @@ export function startShow(app: App): Stage {
   // the frame posts them before the change, which is waited for a moment
   const onChange = () => {
     if (ours()) full = true;
-    else if (speaker) speaker = false;
     else if (full) setTimeout(() => {
-      if (!ours() && performance.now() > keep && document.hasFocus()) end();
+      if (ours()) return;
+      if (speaker) speaker = false;
+      else if (performance.now() > keep && document.hasFocus()) end();
     }, 100);
   };
   // a key that reaches the editor while the show is up, e.g. after a click outside the frame
