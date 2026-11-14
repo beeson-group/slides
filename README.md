@@ -1,5 +1,7 @@
 # slides
 
+[![DOI](https://zenodo.org/badge/1448300505.svg)](https://zenodo.org/badge/latestdoi/1448300505)
+
 Our all-in-one tool for building HTML slides, built on [reveal.js](https://revealjs.com/).
 
 ## A word from the authors
