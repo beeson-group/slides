@@ -411,6 +411,42 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(errors(page), []);
   });
 
+  test(`Clear Menu at the start of the editor is kept when the read of Open Recent answers after it (${platform})`, async (t) => {
+    const page = await load(t, platform);
+    await exec(page, 'file.recent.clear');
+    const name = `recent-late-${platform}.html`;
+    await page.evaluate(`(async () => {
+      const root = await navigator.storage.getDirectory();
+      const w = await (await root.getFileHandle(${js(name)}, { create: true })).createWritable();
+      await w.write(${js(page.source)});
+      await w.close();
+      window.showOpenFilePicker = async () => [await root.getFileHandle(${js(name)})];
+    })()`);
+    await choose(page, 'File', 'Open…');
+    await written(page, [name]);
+    // the database answers 1 s late, as on a slow runner, hence the menu is cleared while the
+    // read of the start is in flight
+    const { identifier } = await page.send('Page.addScriptToEvaluateOnNewDocument', {
+      source: `{
+        const open = IDBFactory.prototype.open;
+        IDBFactory.prototype.open = function (...args) {
+          const ask = open.apply(this, args);
+          let fn = null;
+          Object.defineProperty(ask, 'onsuccess', { get: () => fn, set: (f) => { fn = f; } });
+          ask.addEventListener('success', (ev) => setTimeout(() => fn?.call(ask, ev), 1000));
+          return ask;
+        };
+      }`,
+    });
+    t.after(() => page.send('Page.removeScriptToEvaluateOnNewDocument', { identifier }).catch(() => {}));
+    await page.goto(page.url);
+    await page.waitFor(ready);
+    await exec(page, 'file.recent.clear');
+    await wait(page, 3000);
+    assert.deepEqual((await menuLabels(page, 'File')).slice(0, 2), ['Open…', 'Open Recent']);
+    await written(page, []);
+  });
+
   test(`the card of a deck that cannot read itself offers the file of the deck kept for Open Recent (${platform})`, async (t) => {
     const page = await load(t, platform);
     await exec(page, 'file.recent.clear');
