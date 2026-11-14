@@ -60,9 +60,11 @@ export function startShow(app: App): Stage {
   let at: At | null = null;
   let loads = 0;
   let full = false;
-  // the time until which the show goes on out of full screen, set at F and at the speaker view of S,
-  // which the browser opens out of full screen
+  // the time until which the show goes on out of full screen, set at F
   let keep = 0;
+  // set at S, since the browser leaves full screen for the speaker view, which on a slow machine
+  // happens seconds later. the show goes on at the next exit from full screen
+  let speaker = false;
 
   const ours = () => !!fullscreen() && el.contains(fullscreen());
   const enter = () => {
@@ -101,7 +103,7 @@ export function startShow(app: App): Stage {
     if (typeof m.state?.indexh === 'number') at = { h: m.state.indexh, v: m.state.indexv ?? 0 };
     if (m.namespace !== 'beeson') return;
     if (m.eventName === 'edit') end();
-    else if (m.eventName === 'speaker') keep = performance.now() + 2000;
+    else if (m.eventName === 'speaker') speaker = true;
     // the key in the frame lets the editor ask for full screen, in Chrome and Firefox
     else if (m.eventName === 'fullscreen' && !ours()) enter();
     else if (m.eventName === 'fullscreen') {
@@ -113,6 +115,7 @@ export function startShow(app: App): Stage {
   // the frame posts them before the change, which is waited for a moment
   const onChange = () => {
     if (ours()) full = true;
+    else if (speaker) speaker = false;
     else if (full) setTimeout(() => {
       if (!ours() && performance.now() > keep && document.hasFocus()) end();
     }, 100);
