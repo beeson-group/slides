@@ -10,14 +10,14 @@ authors:
     family-names: Vestini
     affiliation: Princeton University
     orcid: "https://orcid.org/0009-0005-6154-0574"
-  - given-names: Ryne
-    family-names: Beeson
-    affiliation: Princeton University
-    orcid: "https://orcid.org/0000-0003-2176-0976"
   - given-names: Jannik
     family-names: Graebner
     affiliation: Princeton University
     orcid: "https://orcid.org/0009-0003-2497-124X"
+  - given-names: Ryne
+    family-names: Beeson
+    affiliation: Princeton University
+    orcid: "https://orcid.org/0000-0003-2176-0976"
 keywords:
   - slides
   - presentations
