@@ -1,10 +1,11 @@
 name: pr-agent
 
 # PR-Agent, the open-source reviewer of the-pr-agent/pr-agent, describes, reviews, and improves
-# every pull request with a model on the NRP gateway, and it answers the commands of a PR comment,
-# such as /review, /improve, /describe, and /ask. The model and its key are set here, since the key
-# is a secret, and the knobs that belong to the repository are in .pr_agent.toml. The image is
-# pinned to a release, and a bump follows a read of its changelog
+# every pull request that a branch of this repository opens, with a model on the NRP gateway, and
+# it answers the commands of a PR comment, such as /review, /improve, /describe, and /ask. The
+# model and its key are set here, since the key is a secret, and the knobs that belong to the
+# repository are in .pr_agent.toml. The image is pinned to a release, and a bump follows a read of
+# its changelog
 on:
   pull_request:
     types: [opened, reopened, ready_for_review, synchronize]
@@ -18,27 +19,43 @@ permissions:
   pull-requests: write
 
 # a new push to a pull request cancels the review of the commit before it, since it would describe
-# and review a head that no longer exists
+# and review a head that no longer exists. The issue number of a pull request is its number, hence
+# a run that a comment started shares the group with the runs of the same pull request
 concurrency:
-  group: pr-agent-${{ github.event.pull_request.number || github.run_id }}
+  group: pr-agent-${{ github.event.pull_request.number || github.event.issue.number || github.run_id }}
   cancel-in-progress: true
 
 jobs:
   pr_agent_job:
     # a bot does not review the work of a bot. Anyone can comment on a pull request of a public
-    # repository, hence a command in a comment is taken only from an owner, a member, or a
-    # collaborator, and only on a pull request, since the action reads the number of an issue as
-    # the number of a pull request
+    # repository, hence a run is started by a comment only on a pull request, only when it opens
+    # with a command, and only from an owner, a member, or a collaborator, since the action reads
+    # the number of an issue as the number of a pull request. A comment without a command starts
+    # nothing, hence it does not cancel the review that is running either
     if: >-
       ${{ github.event.sender.type != 'Bot' &&
       (github.event_name != 'issue_comment' ||
       (github.event.issue.pull_request &&
+      startsWith(github.event.comment.body, '/') &&
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association))) }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
+      # the association of a comment and the role of the sender say nothing about their access to
+      # this repository, hence the effective permission is checked before the step that holds the
+      # NRP key. A person without write access, an org member with read access above all, then
+      # starts a run in which the step of the key is skipped
+      - name: Check the sender's permission
+        id: permission
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          SENDER: ${{ github.event.sender.login }}
+        run: |
+          perm="$(gh api "repos/${{ github.repository }}/collaborators/$SENDER/permission" --jq .permission)"
+          echo "permission=$perm" >> "$GITHUB_OUTPUT"
       - name: PR Agent action step
         id: pragent
+        if: ${{ contains(fromJSON('["write", "maintain", "admin"]'), steps.permission.outputs.permission) }}
         uses: docker://pragent/pr-agent:0.50.0-github_action
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
