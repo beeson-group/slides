@@ -109,9 +109,9 @@ const ASK = {
     discard: ['Open without saving', 'Put the slides back as saved, then choose a file'],
   },
   present: {
-    text: 'Save them into the file first, present the saved file without them, or go on editing.',
+    text: 'Save them into the file first, discard them and present the saved file, or go on editing.',
     save: ['Save and present', 'Save the edits into the file, then play the show'],
-    discard: ['Present the saved file', 'Play the show of the deck as saved, and keep the edits here'],
+    discard: ['Discard changes', 'Put the slides back as saved, then play the show'],
   },
   export: {
     text: 'The PDF is printed from the file. Save the edits into it first, export the saved file without them, or go on editing.',
@@ -611,13 +611,15 @@ export function install(app: App): void {
   }
 
   // the saved deck at hash, without the editor, played in place or, with tab, in a new tab. with
-  // unsaved changes, the user is asked first. the show in place takes the full screen before the
-  // save, while the click on the dialog still counts. null is returned when nothing is played
+  // unsaved changes, the user is asked to save or discard them first. the show in place takes the
+  // full screen before the save, while the click on the dialog still counts. null is returned when
+  // nothing is played
   async function present(hash = '', tab = false): Promise<{ win: Window | null } | null> {
     const choice = app.dirty ? await askFirst('present') : 'saved';
     if (!choice) return null;
     const show = tab ? null : startShow(app);
     if (choice === 'save') await save();
+    if (choice === 'discard') await discardEdits();
     if (choice === 'save' && app.dirty) {
       show?.end();
       return null;
