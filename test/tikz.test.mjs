@@ -81,24 +81,24 @@ test('reveal.js is started at once by Beeson.start, before the outputs of the fi
 
 test('two instances of a figure have unique ids, and an output larger than its box is shown smaller as a whole', { timeout: 60000 }, async (t) => {
   const page = await open(t, '', '/2');
-  const [zone, small] = await page.evaluate(figures);
+  const [boxed, small] = await page.evaluate(figures);
   const ids = await page.evaluate(`[...document.querySelectorAll('[id]')].map((node) => node.id)`);
   assert.equal(new Set(ids).size, ids.length, 'an id is drawn twice');
-  assert.ok(zone.ids.length > 0 && small.ids.length > 0);
-  assert.ok(zone.ids.every((id) => !small.ids.includes(id)));
+  assert.ok(boxed.ids.length > 0 && small.ids.length > 0);
+  assert.ok(boxed.ids.every((id) => !small.ids.includes(id)));
   // every reference of an SVG is to an id of the same SVG
   const foreign = await page.evaluate(`[...document.querySelectorAll('.tikz > svg')].flatMap((svg) => {
     const own = new Set([...svg.querySelectorAll('[id]')].map((node) => node.id));
     return [...svg.outerHTML.matchAll(/(?:href=['"]#|url\\(#)([^'")]+)/g)].map((m) => m[1]).filter((id) => !own.has(id));
   })`);
   assert.deepEqual(foreign, []);
-  // a zone without a box in the style of its figure keeps the output at its size
-  near(zone.svg.width, 300, 'the width of the figure in the zone');
-  near(zone.drawing.x, zone.box.x, 'the center of the figure in the zone');
+  // a figure box without a size in the style of its figure keeps the output at its size
+  near(boxed.svg.width, 300, 'the width of the figure in the figure box');
+  near(boxed.drawing.x, boxed.box.x, 'the center of the figure in the figure box');
   // in a box of 150 by 50 px, the drawing is shown at a quarter of its size, inside the box
   near(small.box.width, 150, 'the width of the small box');
-  near(small.drawing.width, zone.drawing.width / 4, 'the width of the smaller figure');
-  near(small.drawing.height, zone.drawing.height / 4, 'the height of the smaller figure');
+  near(small.drawing.width, boxed.drawing.width / 4, 'the width of the smaller figure');
+  near(small.drawing.height, boxed.drawing.height / 4, 'the height of the smaller figure');
   near(small.drawing.x, small.box.x, 'the center of the smaller figure');
   assert.ok(small.svg.width <= 150.5 && small.svg.height <= 50.5, `the smaller figure is ${small.svg.width} by ${small.svg.height} px`);
   assert.deepEqual(errors(page), []);

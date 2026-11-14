@@ -15,8 +15,8 @@ test('the demo deck shows the figures decay and libration right before its closi
   const slides = [...html.matchAll(/<section\b[^>]*>[\s\S]*?<\/section>/g)].map((m) => m[0]);
   const closing = slides.findIndex((s) => /^<section class="closing"/.test(s));
   assert.ok(closing >= 2);
-  assert.match(slides[closing - 2], /<div class="zone tikz" data-figure="decay"/);
-  assert.match(slides[closing - 1], /<div class="zone tikz" data-figure="libration"/);
+  assert.match(slides[closing - 2], /<div class="figure-box tikz" data-figure="decay"/);
+  assert.match(slides[closing - 1], /<div class="figure-box tikz" data-figure="libration"/);
   const status = Object.fromEntries(figureStatus(DECK).map((f) => [f.name, f.state]));
   assert.deepEqual({ decay: status.decay, libration: status.libration }, { decay: 'current', libration: 'current' });
   // the curves of decay are its two parts, and libration has at least two parts, each a step of its slide

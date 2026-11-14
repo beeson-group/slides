@@ -121,7 +121,7 @@ test('a preamble is cut at \\begin{document}, without its \\documentclass, with 
 });
 
 test('a TikZ figure of a deck is read with its name and the box of its style, without those of a comment or a script', () => {
-  const html = `<section><div class="zone tikz" data-figure="decay" style="width: 600px; height: 480px; translate: 10px 0"></div>
+  const html = `<section><div class="figure-box tikz" data-figure="decay" style="width: 600px; height: 480px; translate: 10px 0"></div>
 <div data-figure='orbit' class=tikz style="min-width: 20px;width:300.5px"></div><div class="tikz" data-figure="plain"></div>
 <!-- <div class="tikz" data-figure="comment"></div> --><div class="tikzpicture" data-figure="no"></div>
 <script type="application/json">{"a": "<div class=\\"tikz\\" data-figure=\\"script\\"></div>"}</script></section>`;

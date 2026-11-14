@@ -96,7 +96,7 @@ function draw(el: HTMLElement, mode: Mode): void {
   const prefix = `tikz-${name}-${mode}-`;
   el.insertAdjacentHTML('afterbegin', output[mode].split(prefix).join(`${prefix}${n}-`));
   const svg = el.firstElementChild as SVGSVGElement;
-  // the size of the output in the style, which the rule of a zone for a picture would stretch
+  // the size of the output in the style, which the rule of a figure box for a picture would stretch
   svg.style.width = `${output.width}px`;
   svg.style.height = `${output.height}px`;
   svg.setAttribute('aria-hidden', 'true');

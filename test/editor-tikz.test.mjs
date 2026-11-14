@@ -1,5 +1,5 @@
 // the TikZ figures of test/pages/tikz.html in the editor, with trusted input: every part shown, a
-// figure in a zone and a bare div.tikz selected and moved by themselves as figures, the file written
+// figure in a figure box and a bare div.tikz selected and moved by themselves as figures, the file written
 // back with every byte outside the moved tag, the row of the step of a part in the Steps pane, and
 // the width and the height of a div.tikz in the scope rule of the editor
 
@@ -13,7 +13,7 @@ import { byteExact, center, click, drag, editorPage } from './helpers/editor.mjs
 
 const DECK = 'test/pages/tikz.html';
 const SLIDE = '.reveal .slides > section.present';
-const ZONE = '<div class="zone tikz" data-figure="two" style="width: 600px; height: 400px">';
+const BOX = '<div class="figure-box tikz" data-figure="two" style="width: 600px; height: 400px">';
 const BARE = '<div class="tikz" data-figure="two" style="width: 150px; height: 50px">';
 
 let browser;
@@ -47,22 +47,22 @@ test('a TikZ figure is shown with every part in the editor, moved as a figure, a
   assert.deepEqual(await selected(page, 'div.tikz'), [true]);
   await drag(page, await center(page, `${SLIDE} .tikz`), { dx: -120, dy: 40 });
   await wait(page);
-  const moved = (await render(page)).match(/<div class="zone tikz" data-figure="two" style="width: 600px; height: 400px; translate: -?\d+px -?\d+px">/);
+  const moved = (await render(page)).match(/<div class="figure-box tikz" data-figure="two" style="width: 600px; height: 400px; translate: -?\d+px -?\d+px">/);
   assert.ok(moved, 'the drag does not write translate into the tag of the figure');
-  await byteExact(page, [[ZONE, moved[0]]]);
+  await byteExact(page, [[BOX, moved[0]]]);
   assert.ok(!(await render(page)).includes('<svg'), 'the SVG of the figure is written into the file');
 
-  // a div.tikz outside a zone is moved by itself as well
+  // a div.tikz outside a figure box is moved by itself as well
   await page.evaluate('Reveal.slide(2)');
   await wait(page);
-  await click(page, `${SLIDE} div.tikz:not(.zone)`);
+  await click(page, `${SLIDE} div.tikz:not(.figure-box)`);
   await wait(page);
-  assert.deepEqual(await selected(page, 'div.tikz:not(.zone)'), [true]);
-  await drag(page, await center(page, `${SLIDE} div.tikz:not(.zone)`), { dx: 60, dy: 80 });
+  assert.deepEqual(await selected(page, 'div.tikz:not(.figure-box)'), [true]);
+  await drag(page, await center(page, `${SLIDE} div.tikz:not(.figure-box)`), { dx: 60, dy: 80 });
   await wait(page);
   const bare = (await render(page)).match(/<div class="tikz" data-figure="two" style="width: 150px; height: 50px; translate: -?\d+px -?\d+px">/);
   assert.ok(bare, 'the drag does not write translate into the tag of the bare figure');
-  await byteExact(page, [[ZONE, moved[0]], [BARE, bare[0]]]);
+  await byteExact(page, [[BOX, moved[0]], [BARE, bare[0]]]);
   assert.deepEqual(errors(page), []);
 });
 
@@ -85,7 +85,7 @@ test('the scope rule of the editor allows a width and a height in px on a div.ti
   const attrs = (html) => tokenize(html).find((x) => x.type === 'start').attrs;
   assert.deepEqual(editProblems('div', attrs('<div class="tikz" data-figure="decay">'), { style: { width: '600px', height: '480px' } }, theme), []);
   assert.deepEqual(editProblems('div', attrs('<div class="tikz" data-figure="decay">'), { style: { width: '50%' } }, theme), ['width 50% on a TikZ figure']);
-  assert.deepEqual(textProblems(`${ZONE}<span class="fragment" data-part="a" data-fragment-index="1"></span></div>`, theme), []);
+  assert.deepEqual(textProblems(`${BOX}<span class="fragment" data-part="a" data-fragment-index="1"></span></div>`, theme), []);
   // a div that is not a TikZ figure keeps the rule
-  assert.deepEqual(editProblems('div', attrs('<div class="zone">'), { style: { height: '480px' } }, theme), ['height 480px on a div']);
+  assert.deepEqual(editProblems('div', attrs('<div class="figure-box">'), { style: { height: '480px' } }, theme), ['height 480px on a div']);
 });
