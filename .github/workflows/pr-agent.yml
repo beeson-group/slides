@@ -9,6 +9,7 @@ on:
   pull_request:
     types: [opened, reopened, ready_for_review, synchronize]
   issue_comment:  # zizmor: ignore[dangerous-triggers] a command is taken only from an owner, a member, or a collaborator, see the guard below
+    types: [created]
 
 # the token of the job comments on the pull request, and it does not need more than that
 permissions:
