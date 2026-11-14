@@ -173,7 +173,7 @@ for (const platform of PLATFORMS) {
     assert.deepEqual(await rowNames(page, SHOWN.map((_, n) => n)), ROWS);
   });
 
-  test(`each pick replaces the whole selection with one of the eight as one entry of the history, keeping the frame and the branch (${platform})`, async (t) => {
+  test(`each pick replaces the whole selection with one of the eight as one entry of the history, keeping the frame, and keeping the branch in Frame (${platform})`, async (t) => {
     const page = await load(t, platform, PICKS, 0);
     await selectBackdrop(page);
     const tag = (select) => `<div class="backdrop" data-trajectories="../../demo/broucke-sample.js" data-trajectories-select="${select}" data-trajectories-color="family" data-trajectories-ramp="e">`;
